@@ -1,3 +1,8 @@
+<img width="1246" height="1325" alt="Снимок экрана 2025-11-19 215532" src="https://github.com/user-attachments/assets/87149afa-f66e-413c-80f3-38518375865d" />
+
+
+<img width="1232" height="1325" alt="Снимок экрана 2025-11-19 215616" src="https://github.com/user-attachments/assets/527aea9e-221e-4781-a8ee-61888319579e" />
+
 # 🚀 Xkeen UI — Панель управления Xray / Mihomo для Keenetic
 
 Полнофункциональная вебпанель для роутеров **Keenetic**, включающая:
