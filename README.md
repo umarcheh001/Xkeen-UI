@@ -18,7 +18,7 @@
 Загрузите архив на устройство в каталог `/opt` (например через WinSCP), затем выполните:
 
 ```sh
-cd /opt && tar -xzf xkeen-ui-routing-autoport-backup-uirestore-full.tar.gz && cd xkeen-ui && sh install.sh
+cd /opt && tar -xzf xkeen-ui-routing.tar.gz && cd xkeen-ui && sh install.sh
 ```
 
 Скрипт:
