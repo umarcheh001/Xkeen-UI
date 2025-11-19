@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Xkeen UI — Бэкапы Xray конфигов</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Бэкапы Xray конфигов (05_routing / 03_inbounds / 04_outbounds)</h1>
+      <p>Каталог: <code>{{ backup_dir }}</code></p>
+    </header>
+
+    <section class="card">
+      <div class="actions" style="justify-content: space-between;">
+        <a href="/" class="btn-link">← Назад к панели</a>
+      </div>
+
+      {% if backups %}
+      <table>
+        <thead>
+          <tr>
+            <th>Имя файла</th>
+            <th>Размер</th>
+            <th>Создан</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for b in backups %}
+          <tr>
+            <td><code>{{ b.name }}</code></td>
+            <td>{{ (b.size // 1024) }} КБ</td>
+            <td>{{ b.mtime }}</td>
+            <td>
+              <form method="post" action="/restore" onsubmit="return confirm('Восстановить этот бэкап и перезапустить xkeen?');">
+                <input type="hidden" name="filename" value="{{ b.name }}">
+                <button type="submit">⏪ Восстановить</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <p class="status">Бэкапов пока нет. Создай первый через кнопку «Создать бэкап» в главной панели.</p>
+      {% endif %}
+    </section>
+
+    <footer>
+      <small>Xkeen UI — управление бэкапами.</small>
+    </footer>
+  </div>
+</body>
+</html>

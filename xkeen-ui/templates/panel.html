@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Xkeen UI — Routing / Inbounds / Outbounds</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- CodeMirror & JSON lint -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/lint/lint.min.css">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsonlint/1.6.0/jsonlint.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/lint/lint.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/lint/json-lint.min.js"></script>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Xkeen UI</h1>
+      <p>Маршрутизация, режим inbounds и VLESS outbounds в одной панели.</p>
+
+      <div class="top-tabs">
+        <button class="top-tab-btn active" data-view="routing" onclick="showView('routing')">
+          Маршрутизация (05_routing.json)
+        </button>
+        <button class="top-tab-btn" data-view="mihomo" onclick="showView('mihomo')">
+          Mihomo config.yaml
+        </button>
+        <button class="top-tab-btn" data-view="xkeen" onclick="showView('xkeen')">
+          Порты и исключения XKeen
+        </button>
+        <button class="top-tab-btn" data-view="commands" onclick="showView('commands')">
+          КОМАНДЫ XKeen
+        </button>
+      </div>
+    </header>
+
+    <div id="view-routing" class="view-section">
+<!-- Routing editor + Mihomo config -->
+    <div class="layout-2col">
+      <div class="layout-main">
+
+        <!-- Сворачиваемый блок routing -->
+        <section class="card">
+          <div class="commands-header" onclick="toggleRoutingCard()">
+            <h2>Маршрутизация (05_routing.json)</h2>
+            <span id="routing-arrow">▼</span>
+          </div>
+
+          <div id="routing-body">
+            <p>Файл: <code>{{ routing_file }}</code></p>
+
+            <textarea id="routing-editor" spellcheck="false"></textarea>
+
+            <div id="routing-error" class="error"></div>
+
+            <div class="actions">
+              <button id="routing-save-btn" disabled>💾 Сохранить routing</button>
+              <button id="routing-format-btn">✨ Автоформат JSON</button>
+              <button id="routing-strip-btn">🧹 Очистить комментарии</button>
+              <button id="routing-sort-btn">📑 Упорядочить правила</button>
+              <button id="routing-backup-btn">📦 Создать бэкап</button>
+              <button id="routing-restore-auto-btn">⏪ Восстановить routing из авто-бэкапа</button>
+              <button id="routing-restart-btn">♻️ Перезапустить xkeen</button>
+            </div>
+
+            <div id="routing-status" class="status"></div>
+          </div>
+        </section>
+
+        
+
+      </div>
+
+      <div class="layout-side">
+
+
+    <!-- Inbounds mode -->
+    <section class="card">
+      <h2>Режим работы inbounds (03_inbounds.json)</h2>
+      <p>Файл: <code>{{ inbounds_file }}</code></p>
+
+      <div class="inbounds-modes">
+        <label class="mode-item">
+          <input type="radio" name="inbounds_mode" value="mixed">
+          <div>
+            <strong>Mixed</strong><br>
+            <small>UDP через TProxy, TCP через Redirect. Баланс скорости и совместимости (рекомендуемый режим).</small>
+          </div>
+        </label>
+
+        <label class="mode-item">
+          <input type="radio" name="inbounds_mode" value="tproxy">
+          <div>
+            <strong>TProxy</strong><br>
+            <small>TCP+UDP через TProxy. Максимальная совместимость, но самый медленный и ресурсоёмкий.</small>
+          </div>
+        </label>
+
+        <label class="mode-item">
+          <input type="radio" name="inbounds_mode" value="redirect">
+          <div>
+            <strong>Redirect</strong><br>
+            <small>Только TCP через Redirect. Самый быстрый, но не подходит для игр и стриминга.</small>
+          </div>
+        </label>
+      </div>
+
+      <label class="toggle">
+        <input type="checkbox" id="inbounds-autorestart" checked>
+        Перезапускать xkeen после смены режима
+      </label>
+
+      <div class="actions">
+        <button id="inbounds-save-btn">💾 Сохранить режим inbounds</button>
+        <button id="inbounds-backup-btn">📦 Создать бэкап 03_inbounds.json</button>
+        <button id="inbounds-restore-auto-btn">⏪ Восстановить 03_inbounds.json из авто-бэкапа</button>
+      </div>
+
+      <div id="inbounds-status" class="status"></div>
+    </section>
+
+    <!-- Outbounds VLESS editor -->
+    <section class="card">
+      <h2>Прокси (04_outbounds.json)</h2>
+      <p>Файл: <code>{{ outbounds_file }}</code></p>
+      <p>Укажи VLESS ссылку, на основе которой будет собран конфиг outbounds.</p>
+
+      <input id="outbounds-url" type="text" placeholder="vless://uuid@host:port?encryption=none&flow=xtls-rprx-vision&security=reality&pbk=...&sni=...&fp=chrome&sid=...&spx=%2F">
+
+      <div class="actions">
+        <button id="outbounds-save-btn">💾 Сохранить VLESS ссылку</button>
+        <button id="outbounds-backup-btn">📦 Создать бэкап 04_outbounds.json</button>
+        <button id="outbounds-restore-auto-btn">⏪ Восстановить 04_outbounds.json из авто-бэкапа</button>
+      </div>
+
+      <div id="outbounds-status" class="status"></div>
+    </section>
+
+    <!-- Backups list -->
+    <section class="card">
+      <h2>Бэкапы Xray конфигов (routing / inbounds / outbounds)</h2>
+      <p>Каталог бэкапов: <code>{{ backup_dir }}</code></p>
+
+      <table id="backups-table">
+        <thead>
+          <tr>
+            <th>Имя файла</th>
+            <th>Размер</th>
+            <th>Создан</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        </tbody>
+      </table>
+
+      <div id="backups-status" class="status"></div>
+
+      <div class="hint">
+        <a href="/backups">Открыть страницу бэкапов →</a>
+      </div>
+    </section>
+
+    <!-- Help block -->
+    <section class="card">
+      <h2>Справка и ссылки</h2>
+      <ul class="links">
+        <li><a href="https://github.com/Corvus-Malus/XKeen" target="_blank" rel="noopener">GitHub Corvus-Malus/XKeen</a></li>
+        <li><a href="https://jameszero.net/faq-xkeen.htm" target="_blank" rel="noopener">FAQ по XKeen (jameszero.net)</a></li>
+        <li><a href="https://t.me/c/2138190368/23" target="_blank" rel="noopener">Telegram чат XKeen</a></li>
+        <li><a href="https://github.com/jameszeroX/XKeen" target="_blank" rel="noopener">GitHub jameszeroX/XKeen</a></li>
+        <li><a href="https://github.com/jameszeroX/XKeen/tree/main/test" target="_blank" rel="noopener">XKeen beta</a></li>
+      </ul>
+    </section>
+
+
+
+
+    
+
+
+
+
+      
+
+      </div>
+    </div>
+</div>
+
+<div id="view-mihomo" class="view-section" style="display:none;">
+  <!-- Новый сворачиваемый блок для Mihomo config.yaml -->
+        <section class="card">
+          <div class="commands-header" onclick="toggleMihomoCard()">
+            <h2>Mihomo config.yaml</h2>
+            <span id="mihomo-arrow">▼</span>
+          </div>
+
+          <div id="mihomo-body">
+            <p>Файл: <code>/opt/etc/mihomo/config.yaml</code></p>
+
+            <textarea id="mihomo-editor" spellcheck="false"></textarea>
+
+            <div id="mihomo-status" class="status"></div>
+
+            <div class="actions">
+              <button id="mihomo-save-btn">💾 Сохранить config.yaml</button>
+              <button id="mihomo-template-btn">🆕 Новый config (шаблон umarcheh001)</button>
+              <button id="mihomo-restart-btn">🔄 Перезапустить xkeen</button>
+
+              <button id="mihomo-configurator-btn"
+                      data-configurator-url="{{ url_for('static', filename='mihomo-configurator.html') }}">
+                🧩 Запустить конфигуратор
+              </button>
+            </div>
+
+            <div class="actions mihomo-templates-row">
+              <label for="mihomo-template-select">Шаблоны:</label>
+              <select id="mihomo-template-select" class="mihomo-template-select"></select>
+              <button id="mihomo-templates-refresh-btn">🔄 Обновить список</button>
+              <button id="mihomo-template-load-btn">📥 Загрузить шаблон в редактор</button>
+              <button id="mihomo-template-savefromeditor-btn">💾 Сохранить редактор как шаблон</button>
+            </div>
+
+            <div class="hint">
+              <p>Шаблоны хранятся в каталоге <code>/opt/etc/mihomo/templates</code>. Можно положить туда свои <code>.yaml</code> и редактировать их из панели.</p>
+              <p>Полезные репозитории с провайдерами правил и листами:</p>
+              <ul>
+                <li><a href="https://github.com/Anton111111/rule-lists/releases" target="_blank" rel="noopener">Anton111111 / rule-lists</a></li>
+                <li><a href="https://github.com/legiz-ru/mihomo-rule-sets" target="_blank" rel="noopener">legiz-ru / mihomo-rule-sets</a></li>
+                <li><a href="https://github.com/MetaCubeX/meta-rules-dat" target="_blank" rel="noopener">MetaCubeX / meta-rules-dat</a></li>
+                <li><a href="https://github.com/v2fly/domain-list-community/tree/master/data" target="_blank" rel="noopener">v2fly / domain-list-community</a></li>
+              </ul>
+            </div>
+          </div>
+        </section>
+</div>
+
+<div id="view-xkeen" class="view-section" style="display:none;">
+  <!-- XKeen: порты и исключения -->
+      <section class="card commands-card">
+        <div class="commands-header" onclick="toggleXkeenSettings()">
+          <h2>Порты и исключения XKeen</h2>
+          <span id="xkeen-arrow">▼</span>
+        </div>
+        <div id="xkeen-body">
+          <p>Файлы из каталога <code>/opt/etc/xkeen</code>:</p>
+
+          <h3>port_proxying.lst</h3>
+          <p class="small">
+            Порты и диапазоны, которые нужно отправлять через прокси.
+          </p>
+          <textarea id="port-proxying-editor"
+                    class="xkeen-textarea"
+                    spellcheck="false"
+                    rows="8"
+                    placeholder="Например:\n80\n443\n596:599\nКаждая строка — порт или диапазон портов."></textarea>
+          <div class="actions">
+            <button id="port-proxying-save-btn">💾 Сохранить port_proxying.lst</button>
+          </div>
+          <div id="port-proxying-status" class="status"></div>
+
+          <hr>
+
+          <h3>port_exclude.lst</h3>
+          <p class="small">
+            Порты, которые нужно исключить из проксирования.<br>
+            <strong>Важно:</strong> одновременно использовать список проксируемых портов и исключения нельзя,
+            приоритет у портов проксирования.
+          </p>
+          <textarea id="port-exclude-editor"
+                    class="xkeen-textarea"
+                    spellcheck="false"
+                    rows="8"
+                    placeholder="Порты для исключения из проксирования.\nНапример:\n22\n25\n80:89"></textarea>
+          <div class="actions">
+            <button id="port-exclude-save-btn">💾 Сохранить port_exclude.lst</button>
+          </div>
+          <div id="port-exclude-status" class="status"></div>
+
+          <hr>
+
+          <h3>ip_exclude.lst</h3>
+          <p class="small">
+            IP и подсети, которые нужно исключить из проксирования (по одной в строке).
+          </p>
+          <textarea id="ip-exclude-editor"
+                    class="xkeen-textarea"
+                    spellcheck="false"
+                    rows="8"
+                    placeholder="Например:\n192.168.0.0/16\n2001:db8::/32"></textarea>
+          <div class="actions">
+            <button id="ip-exclude-save-btn">💾 Сохранить ip_exclude.lst</button>
+          </div>
+          <div id="ip-exclude-status" class="status"></div>
+        </div>
+      </section>
+</div>
+
+<div id="view-commands" class="view-section" style="display:none;">
+  <!-- XKeen commands -->
+<section class="card commands-card">
+  <div class="commands-header" onclick="toggleCommands()">
+    <h2>КОМАНДЫ XKeen</h2>
+    <span id="commands-arrow">▼</span>
+  </div>
+
+  <div id="commands-body" style="display: none;">
+  {% for group in command_groups %}
+    <div class="command-group">
+      <div class="command-group-title">{{ group.title }}</div>
+      <ul class="command-list">
+        {% for cmd in group['items'] %}
+          <li class="command-item"
+              data-flag="{{ cmd.flag }}"
+              data-label="xkeen {{ cmd.flag }}"
+              data-command="{{ (cmd.flag ~ ' ' ~ cmd.desc)|lower }}">
+            <div class="command-item-top">
+              <span class="command-item-icon">▶</span>
+              <span class="command-item-code"><code>xkeen {{ cmd.flag }}</code></span>
+            </div>
+            <div class="command-item-desc">{{ cmd.desc }}</div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endfor %}
+  </div>
+</section>
+  <!-- Restart log -->
+    <section class="card log-card">
+      <div class="log-header-row">
+        <h2>Журнал</h2>
+        <div class="log-header-actions">
+          <button type="button" class="btn-secondary log-btn" onclick="clearLog()">Очистить</button>
+          <button type="button" class="btn-secondary log-btn" onclick="copyLog()">Копировать</button>
+        </div>
+      </div>
+      <pre id="restart-log" class="log-block"></pre>
+    </section>
+</div>
+
+
+
+    <!-- Мини-терминал XKeen -->
+    <div id="terminal-overlay" class="terminal-overlay" style="display:none;">
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <span>Терминал XKeen</span>
+          <button type="button" class="terminal-close" onclick="hideTerminal()">×</button>
+        </div>
+        <input id="terminal-command" class="terminal-command" type="text" readonly>
+        <pre id="terminal-output" class="terminal-output"></pre>
+        <div class="terminal-input-row">
+          <input id="terminal-input"
+                 class="terminal-input"
+                 type="text"
+                 placeholder="Текст для подтверждения (например: yes). Пусто — просто Enter.">
+          <button type="button" class="terminal-send" onclick="sendTerminalInput()">Отправить</button>
+        </div>
+      </div>
+    </div>
+
+
+    <footer>
+      <small>Xkeen UI — /opt/etc/xray/configs/03_inbounds.json, 04_outbounds.json, 05_routing.json</small>
+    </footer>
+  </div>
+
+  <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>

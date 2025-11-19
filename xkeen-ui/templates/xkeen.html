@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Xkeen UI — Настройки XKeen</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- CodeMirror for XKeen text files -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Xkeen — настройки</h1>
+      <p>Порты и IP-исключения для /opt/etc/xkeen.</p>
+      <p><a href="{{ url_for('index') }}">← Вернуться к основной панели</a></p>
+    </header>
+
+    <div class="layout-single">
+      
+      <section class="card commands-card">
+        <div class="commands-header" onclick="toggleXkeenSettings()">
+          <h2>Порты и исключения XKeen</h2>
+          <span id="xkeen-arrow">▼</span>
+        </div>
+        <div id="xkeen-body">
+          <p>Файлы из каталога <code>/opt/etc/xkeen</code>:</p>
+
+          <h3>port_proxying.lst</h3>
+          <p class="small">
+            Порты и диапазоны, которые нужно отправлять через прокси.
+          </p>
+          <textarea id="port-proxying-editor"
+                    class="xkeen-textarea"
+                    spellcheck="false"
+                    rows="10"
+                    placeholder="Например:
+80
+443
+596:599
+Каждая строка — порт или диапазон портов."></textarea>
+          <div class="actions">
+            <button id="port-proxying-save-btn">💾 Сохранить port_proxying.lst</button>
+          </div>
+          <div id="port-proxying-status" class="status"></div>
+
+          <hr>
+
+          <h3>port_exclude.lst</h3>
+          <p class="small">
+            Порты, которые нужно исключить из проксирования.<br>
+            <strong>Важно:</strong> одновременно использовать список проксируемых портов и исключения нельзя,
+            приоритет у портов проксирования.
+          </p>
+          <textarea id="port-exclude-editor"
+                    class="xkeen-textarea"
+                    spellcheck="false"
+                    rows="10"
+                    placeholder="Порты для исключения из проксирования.
+Например:
+22
+25
+80:89"></textarea>
+          <div class="actions">
+            <button id="port-exclude-save-btn">💾 Сохранить port_exclude.lst</button>
+          </div>
+          <div id="port-exclude-status" class="status"></div>
+
+          <hr>
+
+          <h3>ip_exclude.lst</h3>
+          <p class="small">
+            IP и подсети, которые нужно исключить из проксирования (по одной в строке).
+          </p>
+          <textarea id="ip-exclude-editor"
+                    class="xkeen-textarea"
+                    spellcheck="false"
+                    rows="10"
+                    placeholder="Например:
+192.168.0.0/16
+2001:db8::/32"></textarea>
+          <div class="actions">
+            <button id="ip-exclude-save-btn">💾 Сохранить ip_exclude.lst</button>
+          </div>
+          <div id="ip-exclude-status" class="status"></div>
+        </div>
+      </section>
+
+    </div>
+
+    <footer>
+      <small>Xkeen UI — страница настроек XKeen</small>
+    </footer>
+  </div>
+
+  <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,520 @@
+# =============================================================
+# Mihomo / Clash Meta — полный конфиг
+# DNS управляется роутером Keenetic (dns: не используем)
+# =============================================================
+
+redir-port: 1182
+tproxy-port: 1181
+mixed-port: 1080
+allow-lan: true
+log-level: silent
+geodata-mode: true
+geo-auto-update: true
+geo-update-interval: 72
+find-process-mode: off
+ipv6: false
+
+external-controller: "0.0.0.0:9090"
+secret: "admin"
+external-ui: ui
+external-ui-url: "https://github.com/Zephyruso/zashboard/releases/download/v2.1.0/dist-no-fonts.zip"
+
+profile:
+  store-selected: true
+
+sniffer:
+  enable: true
+  parse-pure-ip: true
+  sniff:
+    HTTP:
+    TLS:
+    QUIC:
+
+# Геоданные (используются GEOSITE / GEOIP-правилами)
+geox-url:
+  geosite: "https://github.com/jameszeroX/zkeen-domains/releases/latest/download/zkeen.dat"
+  geoip: "https://github.com/jameszeroX/zkeen-ip/releases/latest/download/zkeenip.dat"
+
+# =============================================================
+# 1. PROXY PROVIDERS (ПОДПИСКИ)
+# =============================================================
+proxy-providers:
+
+  my-vless-sub:
+    type: http
+    url: http://вашаподписка # Введите url вашей подписки
+    path: ./proxy_providers/my-vless-sub.yaml
+    interval: 3600
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+      timeout: 8000
+      lazy: true
+      expected-status: 204
+    override:
+      tfo: true
+      mptcp: true
+      udp: true
+
+  second-sub:
+    type: http
+    url: http://вашаподписка # Введите url вашей подписки
+    path: ./proxy_providers/second-sub.yaml
+    interval: 3600
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+      timeout: 8000
+      lazy: true
+      expected-status: 204
+    override:
+      tfo: true
+      mptcp: true
+      udp: true
+
+  third-sub:
+    type: http
+    url: http://вашаподписка # Введите url вашей подписки
+    path: ./proxy_providers/third-sub.yaml
+    interval: 3600
+    health-check:
+      enable: true
+      url: http://www.gstatic.com/generate_204
+      interval: 300
+      timeout: 8000
+      lazy: true
+      expected-status: 204
+    override:
+      tfo: true
+      mptcp: true
+      udp: true
+
+# =============================================================
+# 2. PROXY GROUPS (ГРУППЫ)
+# =============================================================
+proxy-groups:
+
+  # Автовыбор лучшего узла по задержке
+  - name: Auto-VPN
+    type: url-test
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Rocket.png"
+    use:
+      - my-vless-sub
+      - second-sub
+      - third-sub
+    url: "http://www.gstatic.com/generate_204"
+    interval: 300
+    tolerance: 50
+    lazy: true
+
+  # Основная группа для ручного выбора
+  - name: Proxy-Selector
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Proxy.png"
+    use:
+      - my-vless-sub
+      - second-sub
+      - third-sub
+    proxies:
+      - Auto-VPN
+      - DIRECT
+    default: DIRECT
+
+  - name: DOMAINS
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Puzzle.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+
+  - name: OTHER
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+
+  - name: Ru-Traffic
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Russia.png"
+    use:
+      - my-vless-sub
+      - second-sub
+      - third-sub
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+    default: DIRECT
+
+  - name: Ad-Filter
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/AdBlack.png"
+    proxies:
+      - REJECT
+      - DIRECT
+    default: REJECT
+
+  - name: ECH-Refilter
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Direct.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+    default: Proxy-Selector
+
+  - name: META
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Facebook.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+
+  - name: AMAZON
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Amazon.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+
+  - name: FASTLY
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+
+  - name: AKAMAI
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+
+  - name: GOOGLE
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+
+  - name: CLOUDFLARE
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Cloudflare.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: CDN77
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: DIGITALOCEAN
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: HETZNER
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: GCORE
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: LINODE
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: MEGA
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: ORACLE
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: OVH
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: VULTR
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: Telegram
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Telegram.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+
+  - name: Discord
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Discord.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+
+  - name: Steam
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Steam.png"
+    proxies:
+      - Proxy-Selector
+      - DIRECT
+
+  - name: YouTube
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png"
+    use:
+      - my-vless-sub
+      - second-sub
+      - third-sub
+    proxies:
+      - Proxy-Selector
+    default: Proxy-Selector
+
+  - name: Torrent-Traffic
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Download.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: POLITIC
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Media.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+  - name: Global-Default
+    type: select
+    icon: "https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Final.png"
+    proxies:
+      - DIRECT
+      - Proxy-Selector
+
+# =============================================================
+# 3. RULE PROVIDERS
+# =============================================================
+rule-providers:
+
+  discord_voiceips:
+    type: http
+    behavior: ipcidr
+    format: mrs
+    url: "https://raw.githubusercontent.com/legiz-ru/mihomo-rule-sets/main/other/discord-voice-ip-list.mrs"
+    path: ./rule-sets/discord-voice-ip-list.mrs
+    interval: 86400
+
+  discord_domains:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/discord.mrs"
+    path: ./rule-sets/discord_domains.mrs
+    interval: 86400
+
+  gaming-ips:
+    type: http
+    behavior: ipcidr
+    format: yaml
+    url: "https://raw.githubusercontent.com/OMchik33/custom-rules/main/mihomo/gaming-ips.yaml"
+    path: ./rule-sets/gaming-ips.yaml
+    interval: 86400
+
+  ru-app-list:
+    type: http
+    behavior: classical
+    format: yaml
+    url: "https://github.com/legiz-ru/mihomo-rule-sets/raw/main/other/ru-app-list.yaml"
+    path: ./rule-sets/ru-app-list.yaml
+    interval: 86400
+
+  steam-domain:
+    type: http
+    behavior: domain
+    format: yaml
+    url: "https://raw.githubusercontent.com/OMchik33/custom-rules/refs/heads/main/mihomo/gaming-domains.yaml"
+    path: ./rule-sets/steam-domain.yaml
+    interval: 86400
+
+  refilter_noech:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://github.com/legiz-ru/mihomo-rule-sets/raw/main/re-filter/re-filter-noech.mrs"
+    path: ./re-filter/noech.mrs
+    interval: 86400
+
+  refilter_ech:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://github.com/legiz-ru/mihomo-rule-sets/raw/main/re-filter/re-filter-ech.mrs"
+    path: ./re-filter/ech.mrs
+    interval: 86400
+
+  refilter_ipsum:
+    type: http
+    behavior: ipcidr
+    format: mrs
+    url: "https://github.com/legiz-ru/mihomo-rule-sets/raw/main/re-filter/ip-rule.mrs"
+    path: ./re-filter/ip-rule.mrs
+    interval: 86400
+
+  torrent-clients:
+    type: http
+    behavior: classical
+    format: yaml
+    url: "https://github.com/legiz-ru/mihomo-rule-sets/raw/main/other/torrent-clients.yaml"
+    path: ./rule-sets/torrent-clients.yaml
+    interval: 86400
+
+  torrent-trackers:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://raw.githubusercontent.com/legiz-ru/mihomo-rule-sets/main/other/torrent-trackers.mrs"
+    path: ./rule-sets/torrent-trackers.mrs
+    interval: 86400
+
+  torrent-websites:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://raw.githubusercontent.com/legiz-ru/mihomo-rule-sets/main/other/torrent-websites.mrs"
+    path: ./rule-sets/torrent-websites.mrs
+    interval: 86400
+
+  oisd_big:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://github.com/legiz-ru/mihomo-rule-sets/raw/main/oisd/big.mrs"
+    path: ./oisd/big.mrs
+    interval: 86400
+
+  oisd_small:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://github.com/legiz-ru/mihomo-rule-sets/raw/main/oisd/small.mrs"
+    path: ./oisd/small.mrs
+    interval: 86400
+
+  oisd_nsfw_small:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://github.com/legiz-ru/mihomo-rule-sets/raw/main/oisd/nsfw_small.mrs"
+    path: ./oisd/nsfw_small.mrs
+    interval: 86400
+
+  oisd_nsfw_big:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://github.com/legiz-ru/mihomo-rule-sets/raw/main/oisd/nsfw.mrs"
+    path: ./oisd/nsfw_big.mrs
+    interval: 86400
+
+# =============================================================
+# 4. RULES
+# =============================================================
+rules:
+
+  # Локальная сеть и DNS в обход прокси
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - DST-PORT,53,DIRECT
+
+  # Реклама / NSFW (oisd — режем в Ad-Filter)
+  - RULE-SET,oisd_small,Ad-Filter
+  - RULE-SET,oisd_big,Ad-Filter
+  - RULE-SET,oisd_nsfw_small,Ad-Filter
+  - RULE-SET,oisd_nsfw_big,Ad-Filter
+
+  # IP-чекеры — всегда через VPN (Proxy-Selector)
+  - OR,((DOMAIN,ipwho.is),(DOMAIN,api.ip.sb),(DOMAIN,ipapi.co),(DOMAIN,ipinfo.io),(DOMAIN,2ip.io),(DOMAIN,2ip.ru)),Proxy-Selector
+
+  # ================== ПРИОРИТЕТ: ИГРЫ / МЕССЕНДЖЕРЫ / СТРИМ ==================
+
+  # Discord — домены, GEOIP, голос, STUN/WebRTC и диапазоны портов
+  - OR,((RULE-SET,discord_domains),(GEOIP,DISCORD),(RULE-SET,discord_voiceips),(DST-PORT,3478-3480),(DST-PORT,5222-5223),(DST-PORT,5228),(DST-PORT,5242),(DST-PORT,50000-50100)),Discord
+
+  # Steam и общий игровой трафик — домены, IP-сети, игровые порты
+  - OR,((RULE-SET,steam-domain),(RULE-SET,gaming-ips),(DST-PORT,3659),(DST-PORT,14000-14016),(DST-PORT,18000),(DST-PORT,20000-26000),(DST-PORT,21000-21500),(DST-PORT,23000-24000),(DST-PORT,27015),(DST-PORT,27031-27036),(DST-PORT,27036)),Steam
+
+  # YouTube — стриминг/видеоконтент, важен для игр и медиаконтента
+  - OR,((GEOSITE,YOUTUBE),(GEOIP,YOUTUBE)),YouTube
+
+  # Telegram (часто используется для игровых комьюнити/каналов)
+  - GEOIP,TELEGRAM,Telegram
+
+  # Игровые CDN / дата-центры — много игр, лаунчеров и античитов сидят здесь
+  - GEOIP,AKAMAI,AKAMAI
+  - GEOIP,AMAZON,AMAZON
+  - GEOIP,CDN77,CDN77
+  - GEOIP,CLOUDFLARE,CLOUDFLARE
+  - GEOIP,DIGITALOCEAN,DIGITALOCEAN
+  - GEOIP,FASTLY,FASTLY
+  - GEOIP,GCORE,GCORE
+  - GEOIP,HETZNER,HETZNER
+  - GEOIP,LINODE,LINODE
+  - GEOIP,ORACLE,ORACLE
+  - GEOIP,OVH,OVH
+  - GEOIP,VULTR,VULTR
+
+  # ================== ПРОЧИЙ СПЕЦИАЛЬНЫЙ ТРАФИК ==================
+
+  # Торренты
+  - OR,((RULE-SET,torrent-clients),(RULE-SET,torrent-trackers)),Torrent-Traffic
+  - RULE-SET,torrent-websites,Torrent-Traffic
+
+  # Российские приложения и IP-сети
+  - RULE-SET,ru-app-list,Ru-Traffic
+  - GEOIP,RU,Ru-Traffic
+
+  # Re-filter / ECH
+  - RULE-SET,refilter_ech,ECH-Refilter
+  - RULE-SET,refilter_noech,ECH-Refilter
+  - RULE-SET,refilter_ipsum,ECH-Refilter
+
+  # Основные GeoSite-категории (всё остальное по доменным спискам)
+  - GEOSITE,DOMAINS,DOMAINS
+  - GEOSITE,OTHER,OTHER
+  - GEOSITE,POLITIC,POLITIC
+
+  # Финальное правило — всё, что не матчнулось выше
+  - MATCH,Global-Default
