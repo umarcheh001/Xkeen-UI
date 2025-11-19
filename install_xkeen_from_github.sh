@@ -1,52 +1,34 @@
 #!/bin/sh
 set -e
 
-REPO_OWNER="umarcheh001"
-REPO_NAME="Xkeen-UI"
-BRANCH="main"
+ARCHIVE_URL="https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.0.0/xkeen-ui-routing.tar.gz"
+ARCHIVE_NAME="xkeen-ui-routing.tar.gz"
 
-ARCHIVE_NAME="xkeen-ui-routing.tar.gz" 
+echo "=== Xkeen-UI: установка из релиза GitHub ==="
 
-INSTALL_DIR="/opt"
+# Entware
+cd /opt || { echo "Нет /opt – нужна установленная Entware"; exit 1; }
 
-echo "=== Xkeen-UI: установка из GitHub ==="
-
-# Проверка Entware
-if [ ! -d "$INSTALL_DIR" ]; then
-    echo "/opt отсутствует — установи Entware."
-    exit 1
-fi
-
-cd "$INSTALL_DIR"
-
-# Выбор загрузчика
-if command -v wget >/dev/null; then
-    DL="wget -O"
-elif command -v curl >/dev/null; then
-    DL="curl -L -o"
+# Качаем архив любым доступным качальщиком
+if command -v wget >/dev/null 2>&1; then
+    echo "[*] Скачиваю архив через wget..."
+    wget -O "$ARCHIVE_NAME" "$ARCHIVE_URL"
+elif command -v curl >/dev/null 2>&1; then
+    echo "[*] Скачиваю архив через curl..."
+    curl -L -o "$ARCHIVE_NAME" "$ARCHIVE_URL"
 else
-    echo "Нужен wget или curl"
+    echo "Нужен wget или curl (как минимум один из них)."
     exit 1
 fi
 
-URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/raw/${BRANCH}/${ARCHIVE_NAME}"
-
-echo "[*] Скачиваю архив: $URL"
-$DL "$ARCHIVE_NAME" "$URL"
-
-echo "[*] Распаковка..."
-TOP_DIR=$(tar -tzf "$ARCHIVE_NAME" | head -n 1 | cut -d/ -f1)
+echo "[*] Распаковка архива..."
 tar -xzf "$ARCHIVE_NAME"
 
-cd "$TOP_DIR"
+echo "[*] Перехожу в каталог xkeen-ui..."
+cd xkeen-ui
 
-# Вложенная директория panel?
-if [ -d "xkeen-ui" ]; then
-    cd xkeen-ui
-fi
-
-if [ ! -f "install.sh" ]; then
-    echo "install.sh не найден!"
+if [ ! -f install.sh ]; then
+    echo "install.sh не найден в ./xkeen-ui"
     exit 1
 fi
 
