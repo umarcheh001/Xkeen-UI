@@ -13,29 +13,23 @@ fi
 
 cd /opt || exit 1
 
-echo "[*] Скачиваю архив панели..."
+# Проверяем, что есть curl
+if ! command -v curl >/dev/null 2>&1; then
+    echo "Ошибка: не найден curl. Установи curl в Entware (opkg install curl)."
+    exit 1
+fi
 
-if command -v curl >/dev/null 2>&1; then
-    curl -L -o "$ARCHIVE_NAME" "$ARCHIVE_URL" || {
-        echo "Ошибка скачивания через curl."
-        exit 1
-    }
-elif command -v wget >/dev/null 2>&1; then
-    # На некоторых роутерах wget не умеет https — тогда тоже упадём
-    wget -O "$ARCHIVE_NAME" "$ARCHIVE_URL" || {
-        echo "Ошибка скачивания через wget."
-        exit 1
-    }
-else
-    echo "Нужен curl или wget для загрузки."
+echo "[*] Скачиваю архив панели..."
+if ! curl -L -o "$ARCHIVE_NAME" "$ARCHIVE_URL"; then
+    echo "Ошибка скачивания архива."
     exit 1
 fi
 
 echo "[*] Распаковка архива..."
-tar -xzf "$ARCHIVE_NAME" || {
+if ! tar -xzf "$ARCHIVE_NAME"; then
     echo "Ошибка распаковки архива."
     exit 1
-}
+fi
 
 # В архиве у тебя папка xkeen-ui
 if [ -d xkeen-ui ]; then
