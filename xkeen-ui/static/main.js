@@ -899,7 +899,13 @@ function clearLog() {
   const logEl = document.getElementById('restart-log');
   if (!logEl) return;
   logEl.textContent = '';
+  try {
+    fetch('/api/restart-log/clear', { method: 'POST' });
+  } catch (e) {
+    console.error(e);
+  }
 }
+
 
 function copyLog() {
   const logEl = document.getElementById('restart-log');
