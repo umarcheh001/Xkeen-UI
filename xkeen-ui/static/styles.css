@@ -110,6 +110,13 @@ textarea#routing-editor {
   gap: 8px;
 }
 
+.actions button {
+  flex: 1 1 210px;
+  text-align: center;
+  white-space: normal;
+}
+
+
 button {
   border: none;
   border-radius: 9999px;
@@ -608,4 +615,9 @@ button.top-tab-btn.active {
 
 .view-section {
   margin-top: 16px;
+}
+/* Fix terminal overflow */
+.terminal-window,
+.terminal-window * {
+    box-sizing: border-box;
 }
