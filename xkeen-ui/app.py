@@ -169,9 +169,65 @@ app.secret_key = "xkeen-ui-key-change-me"
 # ---------- helpers ----------
 
 def load_json(path, default=None):
+    def strip_json_comments(s):
+        """Удаляем // и /* */ комментарии вне строк."""
+        res = []
+        in_string = False
+        escape = False
+        i = 0
+        length = len(s)
+
+        while i < length:
+            ch = s[i]
+
+            # Внутри строки — просто копируем символы, следим за экранированием
+            if in_string:
+                res.append(ch)
+                if escape:
+                    escape = False
+                elif ch == '\\':
+                    escape = True
+                elif ch == '"':
+                    in_string = False
+                i += 1
+                continue
+
+            # Начало строки
+            if ch == '"':
+                in_string = True
+                res.append(ch)
+                i += 1
+                continue
+
+            # Однострочный комментарий // ...
+            if ch == '/' and i + 1 < length and s[i + 1] == '/':
+                # пропускаем до конца строки
+                i += 2
+                while i < length and s[i] != '\n':
+                    i += 1
+                continue
+
+            # Многострочный комментарий /* ... */
+            if ch == '/' and i + 1 < length and s[i + 1] == '*':
+                i += 2
+                while i + 1 < length and not (s[i] == '*' and s[i + 1] == '/'):
+                    i += 1
+                i += 2
+                continue
+
+            # Обычный символ
+            res.append(ch)
+            i += 1
+
+        return ''.join(res)
+
     try:
         with open(path, "r") as f:
-            return json.load(f)
+            raw = f.read()
+        cleaned = strip_json_comments(raw)
+        if not cleaned.strip():
+            return default
+        return json.loads(cleaned)
     except (FileNotFoundError, json.JSONDecodeError):
         return default
 
@@ -849,6 +905,18 @@ def api_run_command():
 def api_restart_log():
     lines = read_restart_log(limit=100)
     return jsonify({"lines": lines}), 200
+
+
+
+@app.post("/api/restart-log/clear")
+def api_restart_log_clear():
+    try:
+        if os.path.isfile(RESTART_LOG_FILE):
+            with open(RESTART_LOG_FILE, "w") as f:
+                f.write("")
+        return jsonify({"ok": True}), 200
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ---------- API: xkeen text configs (/opt/etc/xkeen/*.lst) ----------
