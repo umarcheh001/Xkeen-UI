@@ -331,8 +331,9 @@ footer {
 
 .log-header-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
 }
 
 .log-btn {
@@ -387,11 +388,24 @@ footer {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   grid-auto-rows: auto;
   column-gap: 8px;
   row-gap: 4px;
 }
+
+@media (max-width: 900px) {
+  .command-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .command-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 .command-item {
   display: flex;
@@ -587,8 +601,8 @@ footer {
 
 .top-tabs {
   margin-top: 12px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 
@@ -596,8 +610,8 @@ button.top-tab-btn {
   border-radius: 9999px;
   padding: 6px 14px;
   font-size: 13px;
-  text-align: left;
-  justify-content: space-between;
+  text-align: center;
+  justify-content: center;
   display: flex;
   align-items: center;
   background: #020617;
@@ -605,7 +619,10 @@ button.top-tab-btn {
   color: #e5e7eb;
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.7);
   cursor: pointer;
+  white-space: nowrap;
+  flex: 1 1 0;
 }
+
 
 button.top-tab-btn.active {
   background: linear-gradient(135deg, #1d4ed8, #2563eb);
@@ -620,4 +637,158 @@ button.top-tab-btn.active {
 .terminal-window,
 .terminal-window * {
     box-sizing: border-box;
+}
+
+/* Live Xray logs */
+.xray-log-block {
+  max-height: 420px;
+}
+
+.xray-log-filter,
+.xray-log-select {
+  min-width: 140px;
+  padding: 6px 10px;
+  border-radius: 9999px;
+  border: 1px solid #374151;
+  background: #020617;
+  color: #e5e7eb;
+  font-size: 12px;
+}
+
+.xray-log-filter::placeholder {
+  color: #6b7280;
+}
+
+
+/* Live Xray logs */
+.xray-log-block {
+  max-height: 420px;
+  color: #e5e7eb;
+}
+
+.xray-log-block .log-line {
+  display: block;
+}
+
+.xray-log-block .log-line-info {
+  color: #93c5fd;
+}
+
+.xray-log-block .log-line-warning {
+  color: #fbbf24;
+}
+
+.xray-log-block .log-line-error {
+  color: #f87171;
+}
+
+.xray-log-select {
+  min-width: 140px;
+  padding: 6px 10px;
+  border-radius: 9999px;
+  border: 1px solid #374151;
+  background: #020617;
+  color: #e5e7eb;
+  font-size: 12px;
+}
+
+
+.log-btn.icon-only {
+  font-size: 18px;
+  line-height: 1;
+  padding-inline: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+
+/* Backup action buttons in backups table */
+.backup-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+button.backup-icon-btn {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button.backup-icon-btn .backup-icon,
+.backup-icon-btn .backup-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* More prominent style for delete backup button */
+button.backup-icon-btn.backup-delete-btn {
+  background: linear-gradient(135deg, #b91c1c, #ef4444);
+  border-color: #b91c1c;
+}
+
+/* Xray logs status lamp */
+.xray-log-lamp {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  margin-left: 8px;
+  background: #6b7280;
+  box-shadow: none;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+  vertical-align: middle;
+}
+
+.xray-log-lamp[data-state="on"] {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.7);
+}
+
+.xray-log-lamp[data-state="off"] {
+  background: #4b5563;
+  box-shadow: none;
+}
+
+.xray-log-lamp[data-state="error"] {
+  background: #f97316;
+  box-shadow: 0 0 6px rgba(249, 115, 22, 0.7);
+}
+
+.xray-log-lamp.pulse {
+  transform: scale(1.2);
+}
+
+/* Mobile layout tweaks */
+@media (max-width: 640px) {
+  .top-tabs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .top-tabs .top-tab-btn {
+    width: 100%;
+  }
+
+  table {
+    font-size: 12px;
+  }
+
+  th,
+  td {
+    padding: 6px 4px;
+  }
+
+  .backup-actions {
+    justify-content: flex-end;
+  }
 }
