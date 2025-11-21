@@ -36,6 +36,9 @@
         <button class="top-tab-btn" data-view="xkeen" onclick="showView('xkeen')">
           Порты и исключения XKeen
         </button>
+        <button class="top-tab-btn" data-view="xray-logs" onclick="showView('xray-logs')">
+          Live логи Xray
+        </button>
         <button class="top-tab-btn" data-view="commands" onclick="showView('commands')">
           КОМАНДЫ XKeen
         </button>
@@ -84,7 +87,12 @@
 
     <!-- Inbounds mode -->
     <section class="card">
-      <h2>Режим работы inbounds (03_inbounds.json)</h2>
+      <div class="commands-header" onclick="toggleInboundsCard()">
+        <h2>Режим работы inbounds (03_inbounds.json)</h2>
+        <span id="inbounds-arrow">▼</span>
+      </div>
+
+      <div id="inbounds-body" style="display:none;">
       <p>Файл: <code>{{ inbounds_file }}</code></p>
 
       <div class="inbounds-modes">
@@ -125,11 +133,17 @@
       </div>
 
       <div id="inbounds-status" class="status"></div>
+      </div>
     </section>
 
     <!-- Outbounds VLESS editor -->
     <section class="card">
-      <h2>Прокси (04_outbounds.json)</h2>
+      <div class="commands-header" onclick="toggleOutboundsCard()">
+        <h2>Прокси (04_outbounds.json)</h2>
+        <span id="outbounds-arrow">▼</span>
+      </div>
+
+      <div id="outbounds-body" style="display:none;">
       <p>Файл: <code>{{ outbounds_file }}</code></p>
       <p>Укажи VLESS ссылку, на основе которой будет собран конфиг outbounds.</p>
 
@@ -142,6 +156,7 @@
       </div>
 
       <div id="outbounds-status" class="status"></div>
+      </div>
     </section>
 
     <!-- Backups list -->
@@ -348,6 +363,29 @@
 </div>
 
 
+
+
+    <div id="view-xray-logs" class="view-section" style="display:none;">
+      <section class="card log-card">
+        <div class="log-header-row">
+          <h2>Live логи Xray <span id="xray-log-lamp" class="xray-log-lamp" data-state="unknown" title="Статус логов Xray неизвестен"></span></h2>
+          <div class="log-header-actions">
+            <select id="xray-log-file" class="xray-log-select" onchange="xrayLogChangeFile()">
+              <option value="error">error.log</option>
+              <option value="access">access.log</option>
+            </select>
+            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsView()" title="Просмотреть логи" aria-label="Просмотреть логи">🔍</button>
+            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsEnable()" title="Включить логи" aria-label="Включить логи">▶</button>
+            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsDisable()" title="Остановить логи" aria-label="Остановить логи">⏹</button>
+            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsClearScreen()" title="Очистить журнал" aria-label="Очистить журнал">🧹</button>
+            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsClear()" title="Очистить логфайлы" aria-label="Очистить логфайлы">🗑</button>
+            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsCopy()" title="Скопировать" aria-label="Скопировать">📋</button>
+          </div>
+        </div>
+        <pre id="xray-log-output" class="log-block xray-log-block"></pre>
+        <div id="xray-log-status" class="status"></div>
+      </section>
+    </div>
 
     <!-- Мини-терминал XKeen -->
     <div id="terminal-overlay" class="terminal-overlay" style="display:none;">
