@@ -1,4 +1,3 @@
-\
 #!/bin/sh
 set -e
 
@@ -26,10 +25,40 @@ echo "========================================"
 echo "  Xkeen Web UI — УСТАНОВКА"
 echo "========================================"
 
-# Проверка наличия Python
+# Проверка наличия Python + автоустановка через Entware при отсутствии
 if [ ! -x "$PYTHON_BIN" ]; then
-  echo "[!] Не найден Python3 по пути $PYTHON_BIN"
-  echo "    Установи python3 через Entware и попробуй снова."
+  echo "[*] Python3 не найден по пути $PYTHON_BIN."
+  echo "[*] Пытаюсь установить python3 через Entware (opkg)..."
+
+  # Пытаемся найти opkg
+  if command -v opkg >/dev/null 2>&1; then
+    OPKG_BIN="$(command -v opkg)"
+  elif [ -x "/opt/bin/opkg" ]; then
+    OPKG_BIN="/opt/bin/opkg"
+  else
+    echo "[!] Не найден пакетный менеджер opkg Entware."
+    echo "    Установи Entware и python3 вручную, затем запусти установщик ещё раз."
+    exit 1
+  fi
+
+  # Обновляем списки пакетов и ставим python3
+  if ! "$OPKG_BIN" update; then
+    echo "[!] Не удалось выполнить 'opkg update'."
+    echo "    Проверь подключение к интернету и репозитории Entware."
+    exit 1
+  fi
+
+  if ! "$OPKG_BIN" install python3; then
+    echo "[!] Установка python3 через opkg завершилась с ошибкой."
+    echo "    Попробуй установить python3 вручную, затем перезапусти установщик."
+    exit 1
+  fi
+fi
+
+# Финальная проверка, что python3 появился
+if [ ! -x "$PYTHON_BIN" ]; then
+  echo "[!] Python3 по пути $PYTHON_BIN не найден даже после установки."
+  echo "    Проверь установку python3 в Entware и путь к бинарнику."
   exit 1
 fi
 
@@ -272,3 +301,27 @@ echo "Файлы UI:           $UI_DIR"
 echo "Init script:        $INIT_SCRIPT"
 echo "Логи:               $LOG_DIR/xkeen-ui.log"
 echo "========================================"
+
+# --- ОЧИСТКА УСТАНОВОЧНЫХ ФАЙЛОВ ---
+
+INSTALL_SRC_DIR="$SRC_DIR"
+INSTALL_PARENT_DIR="$(dirname "$INSTALL_SRC_DIR")"
+
+echo "[*] Очищаю установочные файлы..."
+
+# Удаляем архив(ы) вида xkeen-ui*.tar.gz / xkeen-ui-*.tar.gz в родительской директории установщика
+if [ -n "$INSTALL_PARENT_DIR" ] && [ -d "$INSTALL_PARENT_DIR" ]; then
+  for ARCH in "$INSTALL_PARENT_DIR"/xkeen-ui*.tar.gz "$INSTALL_PARENT_DIR"/xkeen-ui-*.tar.gz; do
+    [ -f "$ARCH" ] || continue
+    echo "[*] Удаляю архив: $ARCH"
+    rm -f "$ARCH" || echo "[!] Не удалось удалить архив $ARCH"
+  done
+fi
+
+# Удаляем исходную директорию с установщиком, если это не рабочая директория панели
+if [ "$INSTALL_SRC_DIR" != "$UI_DIR" ] && [ -d "$INSTALL_SRC_DIR" ]; then
+  echo "[*] Удаляю временную директорию установки: $INSTALL_SRC_DIR"
+  # Меняем текущую директорию, чтобы можно было удалить INSTALL_SRC_DIR
+  cd / || cd "$UI_DIR" || true
+  rm -rf "$INSTALL_SRC_DIR" || echo "[!] Не удалось удалить директорию $INSTALL_SRC_DIR"
+fi
