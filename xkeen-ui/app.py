@@ -16,6 +16,11 @@ RESTART_LOG_FILE = "/opt/etc/xkeen-ui/restart.log"
 PORT_PROXYING_FILE = "/opt/etc/xkeen/port_proxying.lst"
 PORT_EXCLUDE_FILE = "/opt/etc/xkeen/port_exclude.lst"
 IP_EXCLUDE_FILE = "/opt/etc/xkeen/ip_exclude.lst"
+XRAY_LOG_CONFIG_FILE = "/opt/etc/xray/configs/01_log.json"
+XRAY_ACCESS_LOG = "/opt/var/log/xray/access.log"
+XRAY_ERROR_LOG = "/opt/var/log/xray/error.log"
+XRAY_ACCESS_LOG_SAVED = XRAY_ACCESS_LOG + ".saved"
+XRAY_ERROR_LOG_SAVED = XRAY_ERROR_LOG + ".saved"
 
 MIHOMO_CONFIG_FILE = "/opt/etc/mihomo/config.yaml"
 MIHOMO_TEMPLATES_DIR = "/opt/etc/mihomo/templates"
@@ -345,6 +350,27 @@ def append_restart_log(ok, source="api"):
         pass
 
 
+
+def append_restart_log_block(text):
+    """Append arbitrary text block to restart log file.
+
+    Used to store output of xkeen -restart/-start/-stop so that it is
+    visible in the XKeen commands journal in the web UI.
+    """
+    if not text:
+        return
+    log_dir = os.path.dirname(RESTART_LOG_FILE)
+    if log_dir and not os.path.isdir(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+    try:
+        with open(RESTART_LOG_FILE, "a") as f:
+            f.write(text)
+            if not text.endswith("\n"):
+                f.write("\n")
+    except Exception:
+        pass
+
+
 def read_restart_log(limit=100):
     if not os.path.isfile(RESTART_LOG_FILE):
         return []
@@ -354,6 +380,42 @@ def read_restart_log(limit=100):
         return lines[-limit:]
     except Exception:
         return []
+
+def tail_lines(path, max_lines=800):
+    """Возвращает последние max_lines строк файла (для live-логов)."""
+    try:
+        with open(path, "r") as f:
+            lines = f.readlines()
+        if max_lines and len(lines) > max_lines:
+            lines = lines[-max_lines:]
+        return lines
+    except FileNotFoundError:
+        return []
+    except Exception:
+        return []
+
+
+def load_xray_log_config():
+    """Читает или создаёт конфиг логов Xray (01_log.json)."""
+    default = {
+        "log": {
+            "access": XRAY_ACCESS_LOG,
+            "error": XRAY_ERROR_LOG,
+            "loglevel": "none",
+        }
+    }
+    cfg = load_json(XRAY_LOG_CONFIG_FILE, default=default) or {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    log_cfg = cfg.get("log")
+    if not isinstance(log_cfg, dict):
+        log_cfg = {}
+    log_cfg.setdefault("access", XRAY_ACCESS_LOG)
+    log_cfg.setdefault("error", XRAY_ERROR_LOG)
+    log_cfg.setdefault("loglevel", "none")
+    cfg["log"] = log_cfg
+    return cfg
+
 
 
 def restart_xkeen(source="api"):
@@ -716,6 +778,21 @@ def api_save_mihomo_template():
 
 
 
+
+@app.post("/delete-backup")
+def delete_backup_from_backups_page():
+    filename = request.form.get("filename")
+    if filename:
+        path = os.path.join(BACKUP_DIR, filename)
+        if os.path.isfile(path):
+            try:
+                os.remove(path)
+            except OSError:
+                # Ignore deletion error and just return to the backups page
+                pass
+    return redirect(url_for("backups_page"))
+
+
 # ---------- API: restart xkeen ----------
 @app.post("/api/restart-xkeen")
 def api_restart_xkeen():
@@ -795,6 +872,26 @@ def api_restore_backup():
 
     target_file = _detect_backup_target_file(filename)
     save_json(target_file, data)
+    return jsonify({"ok": True}), 200
+
+
+
+@app.post("/api/delete-backup")
+def api_delete_backup():
+    payload = request.get_json(silent=True) or {}
+    filename = payload.get("filename")
+    if not filename:
+        return jsonify({"ok": False, "error": "filename is required"}), 400
+
+    path = os.path.join(BACKUP_DIR, filename)
+    if not os.path.isfile(path):
+        return jsonify({"ok": False, "error": "backup not found"}), 404
+
+    try:
+        os.remove(path)
+    except OSError:
+        return jsonify({"ok": False, "error": "failed to delete backup"}), 500
+
     return jsonify({"ok": True}), 200
 
 
@@ -894,9 +991,22 @@ def api_run_command():
             cleaned.append(line)
         output = "\n".join(cleaned).strip()
 
+        # For proxy client control commands, also store output
+        # in restart.log so it is visible in the XKeen commands journal.
+        if flag in ("-restart", "-start", "-stop"):
+            ts = time.strftime("%Y-%m-%d %H:%M:%S")
+            lines = []
+            lines.append(f"[{ts}] $ xkeen {flag}\n")
+            if output:
+                for l in output.splitlines():
+                    lines.append(l + "\n")
+            lines.append(f"[{ts}] exit_code={proc.returncode}\n\n")
+            append_restart_log_block("".join(lines))
+
         return jsonify({"exit_code": proc.returncode, "output": output}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 
 # ---------- API: restart log ----------
@@ -917,6 +1027,132 @@ def api_restart_log_clear():
         return jsonify({"ok": True}), 200
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ---------- API: Xray live logs ----------
+
+@app.get("/api/xray-logs")
+def api_xray_logs():
+    """
+    Псевдо-tail логов Xray.
+    query:
+      file=error|access (или error.log/access.log)
+      max_lines=число (по умолчанию 800)
+    """
+    file_name = request.args.get("file", "error")
+    try:
+        max_lines = int(request.args.get("max_lines", 800))
+    except (TypeError, ValueError):
+        max_lines = 800
+
+    # Если логирование выключено (loglevel=none), читаем "снимок" из .saved файлов,
+    # чтобы не потерять накопленные логи после перезапуска.
+    cfg = load_xray_log_config()
+    log_cfg = cfg.get("log", {})
+    loglevel = str(log_cfg.get("loglevel", "none")).lower()
+
+    if file_name in ("error", "error.log"):
+        if loglevel == "none" and os.path.isfile(XRAY_ERROR_LOG_SAVED):
+            path = XRAY_ERROR_LOG_SAVED
+        else:
+            path = XRAY_ERROR_LOG
+    else:
+        if loglevel == "none" and os.path.isfile(XRAY_ACCESS_LOG_SAVED):
+            path = XRAY_ACCESS_LOG_SAVED
+        else:
+            path = XRAY_ACCESS_LOG
+
+    lines = tail_lines(path, max_lines=max_lines)
+    return jsonify({"lines": lines}), 200
+
+
+@app.post("/api/xray-logs/clear")
+def api_xray_logs_clear():
+    """
+    Очищает логфайлы Xray.
+    body JSON: {"file": "error"|"access"} — если не задано, чистим оба.
+    """
+    data = request.get_json(silent=True) or {}
+    file_name = data.get("file")
+
+    targets = []
+    if file_name in ("error", "error.log"):
+        targets = [XRAY_ERROR_LOG]
+    elif file_name in ("access", "access.log"):
+        targets = [XRAY_ACCESS_LOG]
+    else:
+        targets = [XRAY_ACCESS_LOG, XRAY_ERROR_LOG]
+
+    # Чистим и основные файлы, и их "снимки" (.saved)
+    for path in targets:
+        for actual in (path, path + ".saved"):
+            try:
+                os.makedirs(os.path.dirname(actual), exist_ok=True)
+                with open(actual, "w") as f:
+                    f.write("")
+            except Exception:
+                # просто игнорируем, роутер может быть в readonly и т.п.
+                pass
+
+    return jsonify({"ok": True}), 200
+
+
+@app.get("/api/xray-logs/status")
+def api_xray_logs_status():
+    """Возвращает текущий loglevel и пути для логов Xray."""
+    cfg = load_xray_log_config()
+    log_cfg = cfg.get("log", {})
+    return jsonify(
+        {
+            "loglevel": log_cfg.get("loglevel", "none"),
+            "access": log_cfg.get("access", XRAY_ACCESS_LOG),
+            "error": log_cfg.get("error", XRAY_ERROR_LOG),
+        }
+    ), 200
+
+
+@app.post("/api/xray-logs/enable")
+def api_xray_logs_enable():
+    """
+    Включает логи Xray: loglevel != none.
+    body JSON: {"loglevel": "warning"|"info"|...} — опционально, по умолчанию warning.
+    После смены конфига выполняет xkeen -restart.
+    """
+    data = request.get_json(silent=True) or {}
+    level = data.get("loglevel") or "warning"
+
+    cfg = load_xray_log_config()
+    cfg["log"]["access"] = XRAY_ACCESS_LOG
+    cfg["log"]["error"] = XRAY_ERROR_LOG
+    cfg["log"]["loglevel"] = level
+    save_json(XRAY_LOG_CONFIG_FILE, cfg)
+
+    restarted = restart_xkeen(source="xray-logs-enable")
+    return jsonify({"ok": True, "loglevel": level, "restarted": restarted}), 200
+
+
+@app.post("/api/xray-logs/disable")
+def api_xray_logs_disable():
+    """
+    Отключает логи Xray (loglevel = none).
+    Перед перезапуском сохраняет текущие логи в *.saved, чтобы их можно было просмотреть после остановки.
+    """
+    # Делаем "снимок" текущих логов
+    try:
+        if os.path.isfile(XRAY_ACCESS_LOG):
+            shutil.copy2(XRAY_ACCESS_LOG, XRAY_ACCESS_LOG_SAVED)
+        if os.path.isfile(XRAY_ERROR_LOG):
+            shutil.copy2(XRAY_ERROR_LOG, XRAY_ERROR_LOG_SAVED)
+    except Exception:
+        # если не получилось — не критично
+        pass
+
+    cfg = load_xray_log_config()
+    cfg["log"]["loglevel"] = "none"
+    save_json(XRAY_LOG_CONFIG_FILE, cfg)
+
+    restarted = restart_xkeen(source="xray-logs-disable")
+    return jsonify({"ok": True, "restarted": restarted}), 200
 
 
 # ---------- API: xkeen text configs (/opt/etc/xkeen/*.lst) ----------
