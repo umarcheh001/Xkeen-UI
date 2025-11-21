@@ -8,6 +8,28 @@ let ipExcludeEditor = null;
 let currentCommandFlag = null;
 let currentCommandLabel = null;
 
+let xrayLogTimer = null;
+let xrayLogCurrentFile = 'error';
+let xrayLogLastLines = [];
+
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function getXrayLogLineClass(line) {
+  const lower = (line || '').toLowerCase();
+  if (lower.includes('error')) return 'log-line log-line-error';
+  if (lower.includes('warning') || lower.includes('warn')) return 'log-line log-line-warning';
+  if (lower.includes('info')) return 'log-line log-line-info';
+  return 'log-line';
+}
+
+
 function openTerminalForFlag(flag, label) {
   const overlay = document.getElementById('terminal-overlay');
   const cmdEl = document.getElementById('terminal-command');
@@ -785,10 +807,27 @@ async function loadBackups() {
       tr.appendChild(mtimeTd);
 
       const actionTd = document.createElement('td');
-      const btn = document.createElement('button');
-      btn.textContent = 'Восстановить';
-      btn.addEventListener('click', () => restoreBackup(b.name));
-      actionTd.appendChild(btn);
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'backup-actions';
+
+      const restoreBtn = document.createElement('button');
+      restoreBtn.type = 'button';
+      restoreBtn.className = 'backup-icon-btn';
+      restoreBtn.title = 'Восстановить бэкап';
+      restoreBtn.innerHTML = '<img src="/static/icons/restore.svg" alt="Восстановить" class="backup-icon">';
+      restoreBtn.addEventListener('click', () => restoreBackup(b.name));
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'backup-icon-btn backup-delete-btn';
+      deleteBtn.title = 'Удалить бэкап';
+      deleteBtn.innerHTML = '<img src="/static/icons/trash.svg" alt="Удалить" class="backup-icon">';
+      deleteBtn.addEventListener('click', () => deleteBackup(b.name));
+
+      actionsDiv.appendChild(restoreBtn);
+      actionsDiv.appendChild(deleteBtn);
+
+      actionTd.appendChild(actionsDiv);
       tr.appendChild(actionTd);
 
       tableBody.appendChild(tr);
@@ -843,6 +882,38 @@ async function restoreBackup(filename) {
   } catch (e) {
     console.error(e);
     if (statusEl) statusEl.textContent = 'Ошибка восстановления бэкапа.';
+  }
+}
+
+
+async function deleteBackup(filename) {
+  const statusEl = document.getElementById('backups-status');
+
+  if (!confirm('Удалить бэкап ' + filename + '? Это действие необратимо.')) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/delete-backup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      if (statusEl) {
+        statusEl.textContent = data.error || 'Не удалось удалить бэкап.';
+      }
+      return;
+    }
+
+    if (statusEl) {
+      statusEl.textContent = 'Бэкап удалён: ' + filename;
+    }
+    await loadBackups();
+  } catch (e) {
+    console.error(e);
+    if (statusEl) statusEl.textContent = 'Ошибка при удалении бэкапа.';
   }
 }
 
@@ -939,6 +1010,202 @@ function fallbackCopyText(text) {
   document.body.removeChild(ta);
 }
 
+
+function setXrayLogLampState(state, level) {
+  const lamp = document.getElementById('xray-log-lamp');
+  if (!lamp) return;
+
+  lamp.dataset.state = state;
+
+  if (state === 'on') {
+    lamp.title = level
+      ? `Логи включены (loglevel=${level})`
+      : 'Логи включены';
+    lamp.classList.add('pulse');
+    setTimeout(() => lamp.classList.remove('pulse'), 300);
+  } else if (state === 'off') {
+    lamp.title = 'Логи отключены (loglevel=none)';
+    lamp.classList.remove('pulse');
+  } else if (state === 'error') {
+    lamp.title = 'Не удалось получить статус логов Xray';
+    lamp.classList.remove('pulse');
+  } else {
+    lamp.title = 'Статус логов Xray неизвестен';
+    lamp.classList.remove('pulse');
+  }
+}
+
+async function refreshXrayLogStatus() {
+  try {
+    const res = await fetch('/api/xray-logs/status');
+    if (!res.ok) throw new Error('status http error');
+    const data = await res.json().catch(() => ({}));
+    const level = String(data.loglevel || 'none').toLowerCase();
+    const state = level === 'none' ? 'off' : 'on';
+    setXrayLogLampState(state, level);
+  } catch (e) {
+    console.error('xray log status error', e);
+    setXrayLogLampState('error');
+  }
+}
+
+// ---------- Xray live logs ----------
+
+async function fetchXrayLogsOnce() {
+  const outputEl = document.getElementById('xray-log-output');
+  if (!outputEl) return;
+
+  const statusEl = document.getElementById('xray-log-status');
+
+  const file = xrayLogCurrentFile || 'error';
+
+  try {
+    const res = await fetch(`/api/xray-logs?file=${encodeURIComponent(file)}&max_lines=800`);
+    if (!res.ok) {
+      if (statusEl) statusEl.textContent = 'Не удалось загрузить логи Xray.';
+      return;
+    }
+    const data = await res.json();
+    xrayLogLastLines = data.lines || [];
+    applyXrayLogFilterToOutput();
+    if (statusEl) statusEl.textContent = '';
+    refreshXrayLogStatus();
+  } catch (e) {
+    console.error(e);
+    if (statusEl) statusEl.textContent = 'Ошибка чтения логов Xray.';
+  }
+}
+
+function applyXrayLogFilterToOutput() {
+  const outputEl = document.getElementById('xray-log-output');
+  if (!outputEl) return;
+
+  const lines = xrayLogLastLines || [];
+  const html = lines
+    .map((line) => {
+      const cls = getXrayLogLineClass(line);
+      return '<span class="' + cls + '">' + escapeHtml(line) + '</span>';
+    })
+    .join('');
+  outputEl.innerHTML = html;
+  outputEl.scrollTop = outputEl.scrollHeight;
+}
+
+function xrayLogApplyFilter() {
+  applyXrayLogFilterToOutput();
+}
+
+function startXrayLogAuto() {
+  const outputEl = document.getElementById('xray-log-output');
+  if (!outputEl) return;
+  if (xrayLogTimer) return;
+  fetchXrayLogsOnce();
+  xrayLogTimer = setInterval(fetchXrayLogsOnce, 2000);
+}
+
+function stopXrayLogAuto() {
+  if (xrayLogTimer) {
+    clearInterval(xrayLogTimer);
+    xrayLogTimer = null;
+  }
+}
+
+function xrayLogsView() {
+  // Одноразовая подгрузка логов из файлов
+  fetchXrayLogsOnce();
+}
+
+function xrayLogsClearScreen() {
+  // Очищаем только окно вывода, файлы не трогаем
+  const outputEl = document.getElementById('xray-log-output');
+  if (outputEl) {
+    outputEl.innerHTML = '';
+  }
+  xrayLogLastLines = [];
+}
+
+function xrayLogChangeFile() {
+  const selectEl = document.getElementById('xray-log-file');
+  if (selectEl) {
+    xrayLogCurrentFile = selectEl.value || 'error';
+  }
+  fetchXrayLogsOnce();
+}
+
+async function xrayLogsEnable() {
+  const statusEl = document.getElementById('xray-log-status');
+  try {
+    const res = await fetch('/api/xray-logs/enable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loglevel: 'warning' }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error();
+    if (statusEl) {
+      statusEl.textContent = 'Логи включены (loglevel=' + (data.loglevel || 'warning') + '). Xray перезапущен.';
+    }
+    setXrayLogLampState('on', data.loglevel || 'warning');
+  } catch (e) {
+    console.error(e);
+    if (statusEl) statusEl.textContent = 'Не удалось включить логи.';
+  }
+}
+
+async function xrayLogsDisable() {
+  // Сразу останавливаем автообновление, чтобы сохранить последний снимок логов
+  stopXrayLogAuto();
+  const statusEl = document.getElementById('xray-log-status');
+  try {
+    const res = await fetch('/api/xray-logs/disable', { method: 'POST' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error();
+    if (statusEl) {
+      statusEl.textContent = 'Логи остановлены (loglevel=none). Xray перезапущен.';
+    }
+    setXrayLogLampState('off', 'none');
+  } catch (e) {
+    console.error(e);
+    if (statusEl) statusEl.textContent = 'Не удалось остановить логи.';
+  }
+}
+
+async function xrayLogsClear() {
+  const statusEl = document.getElementById('xray-log-status');
+  try {
+    const file = xrayLogCurrentFile || 'error';
+    const res = await fetch('/api/xray-logs/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file }),
+    });
+    if (!res.ok) throw new Error();
+    xrayLogLastLines = [];
+    applyXrayLogFilterToOutput();
+    if (statusEl) statusEl.textContent = 'Логфайлы очищены.';
+  } catch (e) {
+    console.error(e);
+    if (statusEl) statusEl.textContent = 'Не удалось очистить логфайлы.';
+  }
+}
+
+function xrayLogsCopy() {
+  const outputEl = document.getElementById('xray-log-output');
+  if (!outputEl) return;
+  const text = outputEl.textContent || '';
+  if (!text) return;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => alert('Логи Xray скопированы в буфер обмена'),
+      () => fallbackCopyText(text)
+    );
+  } else {
+    fallbackCopyText(text);
+  }
+}
+
+
 function toggleCommands() {
   const body = document.getElementById('commands-body');
   const arrow = document.getElementById('commands-arrow');
@@ -954,6 +1221,7 @@ function showView(name) {
     routing: document.getElementById('view-routing'),
     mihomo: document.getElementById('view-mihomo'),
     xkeen: document.getElementById('view-xkeen'),
+    'xray-logs': document.getElementById('view-xray-logs'),
     commands: document.getElementById('view-commands'),
   };
 
@@ -979,6 +1247,13 @@ function showView(name) {
     if (typeof ipExcludeEditor !== 'undefined' && ipExcludeEditor && ipExcludeEditor.refresh) {
       ipExcludeEditor.refresh();
     }
+  }
+
+  if (name === 'xray-logs') {
+    startXrayLogAuto();
+    refreshXrayLogStatus();
+  } else {
+    stopXrayLogAuto();
   }
 }
 
@@ -1013,6 +1288,44 @@ function toggleMihomoCard() {
 }
 
 
+
+
+
+function toggleInboundsCard() {
+  const body = document.getElementById('inbounds-body');
+  const arrow = document.getElementById('inbounds-arrow');
+  if (!body || !arrow) return;
+
+  const willOpen = body.style.display === 'none';
+  body.style.display = willOpen ? 'block' : 'none';
+  arrow.textContent = willOpen ? '▲' : '▼';
+
+  try {
+    if (window.localStorage) {
+      localStorage.setItem('xkeen_inbounds_open', willOpen ? '1' : '0');
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+function toggleOutboundsCard() {
+  const body = document.getElementById('outbounds-body');
+  const arrow = document.getElementById('outbounds-arrow');
+  if (!body || !arrow) return;
+
+  const willOpen = body.style.display === 'none';
+  body.style.display = willOpen ? 'block' : 'none';
+  arrow.textContent = willOpen ? '▲' : '▼';
+
+  try {
+    if (window.localStorage) {
+      localStorage.setItem('xkeen_outbounds_open', willOpen ? '1' : '0');
+    }
+  } catch (e) {
+    // ignore
+  }
+}
 
 function toggleXkeenSettings() {
   const body = document.getElementById('xkeen-body');
@@ -1318,7 +1631,44 @@ document.addEventListener('DOMContentLoaded', () => {
   const outboundsBackupBtn = document.getElementById('outbounds-backup-btn');
   const outboundsRestoreAutoBtn = document.getElementById('outbounds-restore-auto-btn');
 
-  const mihomoLoadBtn = document.getElementById('mihomo-load-btn');
+  
+  const inboundsBody = document.getElementById('inbounds-body');
+  const inboundsArrow = document.getElementById('inbounds-arrow');
+  const outboundsBody = document.getElementById('outbounds-body');
+  const outboundsArrow = document.getElementById('outbounds-arrow');
+
+  // Инициализация состояния сворачиваемых блоков inbounds/outbounds с учётом localStorage
+  if (inboundsBody && inboundsArrow) {
+    let inbOpen = false;
+    try {
+      if (window.localStorage) {
+        const stored = localStorage.getItem('xkeen_inbounds_open');
+        if (stored === '1') inbOpen = true;
+        else if (stored === '0') inbOpen = false;
+      }
+    } catch (e) {
+      // ignore
+    }
+    inboundsBody.style.display = inbOpen ? 'block' : 'none';
+    inboundsArrow.textContent = inbOpen ? '▲' : '▼';
+  }
+
+  if (outboundsBody && outboundsArrow) {
+    let outOpen = false;
+    try {
+      if (window.localStorage) {
+        const stored = localStorage.getItem('xkeen_outbounds_open');
+        if (stored === '1') outOpen = true;
+        else if (stored === '0') outOpen = false;
+      }
+    } catch (e) {
+      // ignore
+    }
+    outboundsBody.style.display = outOpen ? 'block' : 'none';
+    outboundsArrow.textContent = outOpen ? '▲' : '▼';
+  }
+
+const mihomoLoadBtn = document.getElementById('mihomo-load-btn');
   const mihomoSaveBtn = document.getElementById('mihomo-save-btn');
   const mihomoTemplateBtn = document.getElementById('mihomo-template-btn');
   const mihomoRestartBtn = document.getElementById('mihomo-restart-btn');
@@ -1459,5 +1809,6 @@ document.addEventListener('DOMContentLoaded', () => {
 loadPortProxying();
   loadPortExclude();
   loadIpExclude();
+  refreshXrayLogStatus();
 
 });
