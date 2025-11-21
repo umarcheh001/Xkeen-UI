@@ -24,17 +24,6 @@
 ```sh
 cd /opt && tar -xzf xkeen-ui-routing.tar.gz && cd xkeen-ui && sh install.sh
 ```
-Онлайн установка:
-```sh
-cd /opt && URL=$(curl -s https://api.github.com/repos/umarcheh001/Xkeen-UI/releases/latest | grep browser_download_url | grep '.tar.gz"' | head -n 1 | cut -d '"' -f 4) && curl -L "$URL" -o xkeen-ui-latest.tar.gz && tar -xzf xkeen-ui-latest.tar.gz && cd xkeen-ui && sh install.sh
-```
-
-или:
-```sh
-curl -sL https://raw.githubusercontent.com/umarcheh001/Xkeen-UI/main/install_xkeen_from_github.sh \
-  | tr -d '\r' \
-  | sh
-```
 
 Скрипт:
 
