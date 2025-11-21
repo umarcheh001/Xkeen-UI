@@ -35,10 +35,33 @@
             <td>{{ (b.size // 1024) }} КБ</td>
             <td>{{ b.mtime }}</td>
             <td>
-              <form method="post" action="/restore" onsubmit="return confirm('Восстановить этот бэкап и перезапустить xkeen?');">
-                <input type="hidden" name="filename" value="{{ b.name }}">
-                <button type="submit">⏪ Восстановить</button>
-              </form>
+              <div class="backup-actions">
+                <form method="post"
+                      action="/restore"
+                      onsubmit="return confirm('Восстановить этот бэкап и перезапустить xkeen?');">
+                  <input type="hidden" name="filename" value="{{ b.name }}">
+                  <button type="submit"
+                          class="backup-icon-btn"
+                          title="Восстановить бэкап">
+                    <img src="{{ url_for('static', filename='icons/restore.svg') }}"
+                         alt="Восстановить"
+                         class="backup-icon">
+                  </button>
+                </form>
+
+                <form method="post"
+                      action="/delete-backup"
+                      onsubmit="return confirm('Удалить этот бэкап? Это действие необратимо.');">
+                  <input type="hidden" name="filename" value="{{ b.name }}">
+                  <button type="submit"
+                          class="backup-icon-btn backup-delete-btn"
+                          title="Удалить бэкап">
+                    <img src="{{ url_for('static', filename='icons/trash.svg') }}"
+                         alt="Удалить"
+                         class="backup-icon">
+                  </button>
+                </form>
+              </div>
             </td>
           </tr>
         {% endfor %}
