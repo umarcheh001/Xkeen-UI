@@ -15,9 +15,9 @@ fi
 
 # Бинарники curl/wget
 if command -v curl >/dev/null 2>&1; then
-  DL="curl -fSL"
+  HAVE_CURL=1
 elif command -v wget >/dev/null 2>&1; then
-  DL="wget -O-"
+  HAVE_WGET=1
 else
   echo "[!] Не найден ни curl, ни wget. Установи один из них через Entware:"
   echo "    opkg update && opkg install curl"
@@ -42,12 +42,16 @@ fi
 
 echo "[*] Скачиваю архив:"
 echo "    $URL"
-curl -fSL "$URL" -o "$TARBALL_NAME"
+
+if [ "$HAVE_CURL" = "1" ]; then
+  curl -fSL "$URL" -o "$TARBALL_NAME"
+else
+  wget -O "$TARBALL_NAME" "$URL"
+fi
 
 echo "[*] Распаковываю архив..."
 tar -xzf "$TARBALL_NAME"
 
-# Если архив всегда создаёт папку xkeen-ui:
 cd xkeen-ui
 
 echo "[*] Запускаю install.sh..."
