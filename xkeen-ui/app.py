@@ -350,27 +350,6 @@ def append_restart_log(ok, source="api"):
         pass
 
 
-
-def append_restart_log_block(text):
-    """Append arbitrary text block to restart log file.
-
-    Used to store output of xkeen -restart/-start/-stop so that it is
-    visible in the XKeen commands journal in the web UI.
-    """
-    if not text:
-        return
-    log_dir = os.path.dirname(RESTART_LOG_FILE)
-    if log_dir and not os.path.isdir(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-    try:
-        with open(RESTART_LOG_FILE, "a") as f:
-            f.write(text)
-            if not text.endswith("\n"):
-                f.write("\n")
-    except Exception:
-        pass
-
-
 def read_restart_log(limit=100):
     if not os.path.isfile(RESTART_LOG_FILE):
         return []
@@ -991,22 +970,9 @@ def api_run_command():
             cleaned.append(line)
         output = "\n".join(cleaned).strip()
 
-        # For proxy client control commands, also store output
-        # in restart.log so it is visible in the XKeen commands journal.
-        if flag in ("-restart", "-start", "-stop"):
-            ts = time.strftime("%Y-%m-%d %H:%M:%S")
-            lines = []
-            lines.append(f"[{ts}] $ xkeen {flag}\n")
-            if output:
-                for l in output.splitlines():
-                    lines.append(l + "\n")
-            lines.append(f"[{ts}] exit_code={proc.returncode}\n\n")
-            append_restart_log_block("".join(lines))
-
         return jsonify({"exit_code": proc.returncode, "output": output}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 
 # ---------- API: restart log ----------
