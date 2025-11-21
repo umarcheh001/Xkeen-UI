@@ -25,6 +25,15 @@
 cd /opt && tar -xzf xkeen-ui-routing.tar.gz && cd xkeen-ui && sh install.sh
 ```
 
+Онлайн установка:
+
+```sh
+cd /opt && \
+curl -fSL "https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.0.4/xkeen-ui-routing.tar.gz" -o xkeen-ui-routing.tar.gz && \
+tar xzf xkeen-ui-routing.tar.gz && \
+sh xkeen-ui/install.sh
+``` 
+
 Скрипт:
 
 1. проверит, свободен ли порт **8088**;
