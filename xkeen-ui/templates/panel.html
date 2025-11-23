@@ -43,7 +43,23 @@
           КОМАНДЫ XKeen
         </button>
       </div>
-    </header>
+    
+<div class="global-toggle-row">
+  <label class="global-autorestart-toggle">
+    <input type="checkbox" id="global-autorestart-xkeen" checked>
+    <span>Авто‑перезапуск xkeen</span>
+  </label>
+</div>
+
+<div class="xkeen-ctrl-row">
+  <div class="xkeen-ctrl-group">
+    <button id="xkeen-start-btn" class="xkeen-ctrl-btn">Start xkeen</button>
+    <button id="xkeen-stop-btn" class="xkeen-ctrl-btn">Stop xkeen</button>
+    <button id="xkeen-restart-btn" class="xkeen-ctrl-btn">Restart xkeen</button>
+  </div>
+</div>
+
+</header>
 
     <div id="view-routing" class="view-section">
 <!-- Routing editor + Mihomo config -->
@@ -65,18 +81,28 @@
             <div id="routing-error" class="error"></div>
 
             <div class="actions">
-              <button id="routing-save-btn" disabled>💾 Сохранить routing</button>
-              <button id="routing-format-btn">✨ Автоформат JSON</button>
-              <button id="routing-strip-btn">🧹 Очистить комментарии</button>
-              <button id="routing-sort-btn">📑 Упорядочить правила</button>
-              <button id="routing-backup-btn">📦 Создать бэкап</button>
-              <button id="routing-restore-auto-btn">⏪ Восстановить routing из авто-бэкапа</button>
-              <button id="routing-restart-btn">♻️ Перезапустить xkeen</button>
+  <button id="routing-save-btn" disabled>💾 Save routing</button>
+  <button id="routing-format-btn">✨ Format JSON</button>
+  <button id="routing-backup-btn">📦 Backup</button>
+  <button id="routing-restore-auto-btn">⏪ Restore autobackup</button>
+  <button id="routing-export-local-btn">⬇️ Экспорт</button>
+  <button id="routing-import-local-btn">⬆️ Импорт</button>
+</div>
+
+<input type="file"
+       id="local-config-file-input"
+       accept="application/json"
+       style="display:none">
+
+
+            <div class="actions">
+              <button id="github-export-btn">⬆️ Выгрузить в репозитарий</button>
+              <button id="github-open-catalog-btn">📂 Каталог конфигураций</button>
             </div>
 
             <div id="routing-status" class="status"></div>
           </div>
-        </section>
+</section>
 
         
 
@@ -127,9 +153,9 @@
       </label>
 
       <div class="actions">
-        <button id="inbounds-save-btn">💾 Сохранить режим inbounds</button>
-        <button id="inbounds-backup-btn">📦 Создать бэкап 03_inbounds.json</button>
-        <button id="inbounds-restore-auto-btn">⏪ Восстановить 03_inbounds.json из авто-бэкапа</button>
+        <button id="inbounds-save-btn">💾 Save inbounds</button>
+        <button id="inbounds-backup-btn">📦 Backup 03_inbounds.json</button>
+        <button id="inbounds-restore-auto-btn">⏪ Restore inbounds</button>
       </div>
 
       <div id="inbounds-status" class="status"></div>
@@ -150,9 +176,9 @@
       <input id="outbounds-url" type="text" placeholder="vless://uuid@host:port?encryption=none&flow=xtls-rprx-vision&security=reality&pbk=...&sni=...&fp=chrome&sid=...&spx=%2F">
 
       <div class="actions">
-        <button id="outbounds-save-btn">💾 Сохранить VLESS ссылку</button>
-        <button id="outbounds-backup-btn">📦 Создать бэкап 04_outbounds.json</button>
-        <button id="outbounds-restore-auto-btn">⏪ Восстановить 04_outbounds.json из авто-бэкапа</button>
+        <button id="outbounds-save-btn">💾 Save VLESS</button>
+        <button id="outbounds-backup-btn">📦 Backup 04_outbounds.json</button>
+        <button id="outbounds-restore-auto-btn">⏪ Restore outbounds</button>
       </div>
 
       <div id="outbounds-status" class="status"></div>
@@ -226,7 +252,7 @@
             <div id="mihomo-status" class="status"></div>
 
             <div class="actions">
-              <button id="mihomo-save-btn">💾 Сохранить config.yaml</button>
+              <button id="mihomo-save-btn">💾 Save config.yaml</button>
               <button id="mihomo-template-btn">🆕 Новый config (шаблон umarcheh001)</button>
               <button id="mihomo-restart-btn">🔄 Перезапустить xkeen</button>
 
@@ -407,11 +433,56 @@
     </div>
 
 
+
+
+
+    <div id="github-export-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title">Выгрузка конфигурации</span>
+          <button type="button" class="modal-close" id="github-export-cancel-btn-header">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="github-export-form">
+            <input id="github-export-tag-input" type="text" placeholder="Тэг конфигурации (опционально)">
+            <textarea id="github-export-desc-input" rows="3" placeholder="Описание конфигурации (опционально)"></textarea>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button id="github-export-cancel-btn">Отмена</button>
+          <button id="github-export-confirm-btn">Выгрузить</button>
+        </div>
+      </div>
+    </div>
+
+
+    <div id="github-catalog-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title">Каталог конфигураций</span>
+          <button type="button" class="modal-close" id="github-catalog-close-btn-header">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="github-catalog-list">Загрузка...</div>
+        </div>
+        <div class="modal-actions">
+          <button id="github-catalog-close-btn">Закрыть</button>
+          <a id="github-repo-link" href="{{ github_repo_url }}" target="_blank">Открыть репозиторий на GitHub</a>
+        </div>
+      </div>
+    </div>
+
+
+    <div id="toast-container"></div>
+
     <footer>
       <small>Xkeen UI — /opt/etc/xray/configs/03_inbounds.json, 04_outbounds.json, 05_routing.json</small>
     </footer>
   </div>
 
+  <script>
+    window.XKEEN_GITHUB_REPO_URL = "{{ github_repo_url|e }}";
+  </script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>
