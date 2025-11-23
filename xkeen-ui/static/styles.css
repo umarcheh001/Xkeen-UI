@@ -118,25 +118,33 @@ textarea#routing-editor {
 
 
 button {
-  border: none;
   border-radius: 9999px;
   padding: 6px 14px;
   font-size: 13px;
   cursor: pointer;
-  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  background: #020617;
+  border: 1px solid #1f2937;
   color: #e5e7eb;
-  transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
-  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.7);
+  transition:
+    background 0.15s ease,
+    transform 0.05s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
 }
 
 button:hover {
-  background: linear-gradient(135deg, #2563eb, #3b82f6);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+  background: #020617;
+  border-color: #4b5563;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.9);
+  transform: translateY(-1px);
 }
 
 button:active {
-  transform: scale(0.97);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.6);
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  border-color: #2563eb;
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
 }
 
 button:disabled {
@@ -792,3 +800,230 @@ button.backup-icon-btn.backup-delete-btn {
     justify-content: flex-end;
   }
 }
+
+
+/* GitHub catalog modal */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: #020617;
+  border-radius: 12px;
+  border: 1px solid #334155;
+  padding: 12px 14px 14px 14px;
+  max-width: 520px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.8);
+}
+
+
+.modal-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+.github-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.github-config-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.04);
+}
+
+.github-config-title {
+  font-weight: 600;
+}
+
+.github-config-meta {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+
+.github-export-form {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.github-export-form input,
+.github-export-form textarea {
+  width: 100%;
+  background: #111827;
+  border: 1px solid #374151;
+  color: #e5e7eb;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #1f2937;
+}
+
+.modal-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: #e5e7eb;
+}
+
+.modal-body {
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+
+#toast-container {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  min-width: 260px;
+  max-width: 360px;
+  background: #020617;
+  border-radius: 10px;
+  border: 1px solid #22c55e;
+  box-shadow: 0 18px 40px rgba(22, 163, 74, 0.4);
+  padding: 10px 12px;
+  font-size: 0.86rem;
+  color: #e5e7eb;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.toast-error {
+  border-color: #ef4444;
+  box-shadow: 0 18px 40px rgba(239, 68, 68, 0.4);
+}
+
+.toast-icon {
+  font-size: 1.1rem;
+  margin-top: 1px;
+}
+
+.toast-message {
+  flex: 1;
+}
+
+
+/* Global auto-restart toggle in header */
+.global-toggle-row {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.global-autorestart-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #9ca3af;
+  user-select: none;
+}
+
+.global-autorestart-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.global-autorestart-toggle span {
+  cursor: pointer;
+}
+
+
+.xkeen-ctrl-row {
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+
+.xkeen-ctrl-group {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.xkeen-ctrl-btn {
+  padding: 3px 10px;
+  font-size: 11px;
+  border-radius: 9999px;
+  border: 1px solid #1f2937;
+  background: #020617;
+  color: #e5e7eb;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.7);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    transform 0.05s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.xkeen-ctrl-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  border-color: #2563eb;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.6);
+  transform: translateY(-1px);
+}
+
+.xkeen-ctrl-btn:active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.7);
+}
+
