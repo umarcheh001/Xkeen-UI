@@ -327,22 +327,22 @@ async function saveMihomoConfig() {
     const res = await fetch('/api/mihomo-config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, restart: shouldAutoRestartAfterSave() }),
     });
 
     const data = await res.json();
 
     if (!res.ok || !data.ok) {
       if (statusEl) {
-        statusEl.textContent = (data && data.error) || 'Не удалось сохранить config.yaml.';
+        statusEl.textContent = (data && data.error) || 'Failed to save config.yaml.';
       }
       return;
     }
 
     if (statusEl) {
-      let msg = 'config.yaml сохранён.';
+      let msg = 'config.yaml saved.';
       if (data.restarted) {
-        msg += ' XKeen перезапущен.';
+        msg += ' xkeen restarted.';
       }
       statusEl.textContent = msg;
     }
@@ -428,25 +428,316 @@ async function saveRouting() {
     routingEditor.setValue(JSON.stringify(obj, null, 2));
     setRoutingError('', null);
 
-    const res = await fetch('/api/routing', {
+    const restart = shouldAutoRestartAfterSave();
+    const res = await fetch('/api/routing?restart=' + (restart ? '1' : '0'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(obj)
     });
     const data = await res.json();
     if (res.ok && data.ok) {
-      let msg = 'Routing сохранён.';
+      let msg = 'Routing saved.';
       if (data.restarted) {
-        msg += ' xkeen перезапущен.';
+        msg += ' xkeen restarted.';
       }
       if (statusEl) statusEl.textContent = msg;
     } else {
-      if (statusEl) statusEl.textContent = 'Ошибка сохранения: ' + (data.error || 'неизвестная ошибка');
+      if (statusEl) statusEl.textContent = 'Save error: ' + (data.error || 'неизвестная ошибка');
     }
   } catch (e) {
     console.error(e);
     setRoutingError('Ошибка JSON: ' + e.message, null);
     if (statusEl) statusEl.textContent = 'Ошибка: некорректный JSON.';
+  }
+}
+
+
+function openGithubExportModal() {
+  const modal = document.getElementById('github-export-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+}
+
+function closeGithubExportModal() {
+  const modal = document.getElementById('github-export-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+}
+
+
+function showToast(message, isError = false) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast' + (isError ? ' toast-error' : '');
+  const icon = document.createElement('div');
+  icon.className = 'toast-icon';
+  icon.textContent = isError ? '⚠️' : '✅';
+  const text = document.createElement('div');
+  text.className = 'toast-message';
+  text.textContent = message;
+
+  toast.appendChild(icon);
+  toast.appendChild(text);
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(4px)';
+    setTimeout(() => {
+      toast.remove();
+    }, 200);
+  }, 3200);
+}
+
+// ---------- Local file import/export ----------
+
+async function exportUserConfigsToFile() {
+  const statusEl = document.getElementById('routing-status');
+  if (statusEl) statusEl.textContent = 'Экспорт локальной конфигурации в файл...';
+
+  try {
+    const res = await fetch('/api/local/export-configs', {
+      method: 'GET',
+    });
+
+    if (!res.ok) {
+      const errText = 'Ошибка экспорта: ' + (res.statusText || ('HTTP ' + res.status));
+      if (statusEl) statusEl.textContent = errText;
+      showToast(errText, true);
+      return;
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date();
+    const fname = 'xkeen-config-' +
+      ts.getFullYear().toString() +
+      String(ts.getMonth() + 1).padStart(2, '0') +
+      String(ts.getDate()).padStart(2, '0') + '-' +
+      String(ts.getHours()).padStart(2, '0') +
+      String(ts.getMinutes()).padStart(2, '0') +
+      String(ts.getSeconds()).padStart(2, '0') +
+      '.json';
+
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    const okMsg = 'Конфигурация выгружена в файл ' + fname;
+    if (statusEl) statusEl.textContent = okMsg;
+    showToast(okMsg, false);
+  } catch (e) {
+    console.error(e);
+    const errMsg = 'Ошибка экспорта (см. консоль браузера).';
+    if (statusEl) statusEl.textContent = errMsg;
+    showToast(errMsg, true);
+  }
+}
+
+async function importUserConfigsFromFile(file) {
+  const statusEl = document.getElementById('routing-status');
+  if (statusEl) statusEl.textContent = 'Загрузка конфигурации из файла...';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch('/api/local/import-configs', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+
+    if (res.ok && data && data.ok) {
+      const msg = 'Конфигурация загружена из файла. Не забудьте перезапустить xkeen после проверки.';
+      if (statusEl) statusEl.textContent = msg;
+      showToast(msg, false);
+
+      try {
+        await loadRouting();
+        await loadInboundsMode();
+        await loadPortProxying();
+        await loadPortExclude();
+        await loadIpExclude();
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      const errMsg = 'Ошибка импорта: ' + ((data && data.error) || 'неизвестная ошибка');
+      if (statusEl) statusEl.textContent = errMsg;
+      showToast(errMsg, true);
+    }
+  } catch (e) {
+    console.error(e);
+    const errMsg = 'Ошибка импорта (см. консоль браузера).';
+    if (statusEl) statusEl.textContent = errMsg;
+    showToast(errMsg, true);
+  }
+}
+
+// ---------- GitHub / config-server integration ----------
+
+async function exportUserConfigsToGithub() {
+  const statusEl = document.getElementById('routing-status');
+  const tagInput = document.getElementById('github-export-tag-input');
+  const descInput = document.getElementById('github-export-desc-input');
+
+  const tag = tagInput ? tagInput.value.trim() : '';
+  const desc = descInput ? descInput.value.trim() : '';
+
+  const payload = {
+    title: 'XKeen config ' + new Date().toLocaleString(),
+    description: desc,
+    tags: tag ? [tag] : [],
+  };
+
+  if (statusEl) statusEl.textContent = 'Выгрузка конфигураций на сервер...';
+
+  try {
+    const res = await fetch('/api/github/export-configs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      const id = data.id || (data.server_response && data.server_response.id);
+      const okMsg = 'Конфигурация выгружена. ID: ' + (id || 'неизвестно');
+      if (statusEl) statusEl.textContent = okMsg;
+      showToast(okMsg, false);
+
+      if (tagInput) tagInput.value = '';
+      if (descInput) descInput.value = '';
+      closeGithubExportModal();
+    } else {
+      const errMsg = 'Ошибка выгрузки: ' + ((data && data.error) || 'неизвестная ошибка');
+      if (statusEl) statusEl.textContent = errMsg;
+      showToast(errMsg, true);
+    }
+  } catch (e) {
+    console.error(e);
+    if (statusEl) statusEl.textContent = 'Ошибка выгрузки (см. консоль браузера).';
+  }
+}
+
+async function loadGithubConfigsCatalog() {
+  const listEl = document.getElementById('github-catalog-list');
+  if (!listEl) return;
+
+  listEl.textContent = 'Загрузка...';
+
+  try {
+    const res = await fetch('/api/github/configs');
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      listEl.textContent =
+        'Ошибка загрузки каталога: ' + ((data && data.error) || 'неизвестная ошибка');
+      return;
+    }
+
+    const items = data.items || [];
+    if (!items.length) {
+      listEl.textContent = 'Конфигураций пока нет.';
+      return;
+    }
+
+    const container = document.createElement('div');
+    container.className = 'github-config-list';
+
+    items
+      .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+      .forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'github-config-row';
+
+        const title = document.createElement('div');
+        title.className = 'github-config-title';
+        title.textContent = item.title || item.id;
+
+        const meta = document.createElement('div');
+        meta.className = 'github-config-meta';
+        const dt = item.created_at ? new Date(item.created_at * 1000) : null;
+        const tags = (item.tags || []).join(', ');
+        meta.textContent =
+          (dt ? dt.toLocaleString() : '') + (tags ? ' • ' + tags : '');
+
+        const btn = document.createElement('button');
+        btn.textContent = 'Загрузить';
+        btn.addEventListener('click', () => {
+          importUserConfigById(item.id);
+        });
+
+        row.appendChild(title);
+        row.appendChild(meta);
+        row.appendChild(btn);
+        container.appendChild(row);
+      });
+
+    listEl.innerHTML = '';
+    listEl.appendChild(container);
+  } catch (e) {
+    console.error(e);
+    listEl.textContent = 'Ошибка загрузки каталога (см. консоль).';
+  }
+}
+
+async function importUserConfigById(cfgId) {
+  const statusEl = document.getElementById('routing-status');
+  if (statusEl) statusEl.textContent = 'Загрузка конфигурации ' + cfgId + '...';
+
+  try {
+    const res = await fetch('/api/github/import-configs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cfg_id: cfgId }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      const msg = 'Конфигурация ' + (data.cfg_id || cfgId) + ' загружена. Не забудьте перезапустить xkeen после проверки.';
+      if (statusEl) statusEl.textContent = msg;
+      showToast(msg, false);
+
+      await loadRouting();
+      await loadInboundsMode();
+      await loadPortProxying();
+      await loadPortExclude();
+      await loadIpExclude();
+    } else {
+      const errMsg = 'Ошибка загрузки: ' + ((data && data.error) || 'неизвестная ошибка');
+      if (statusEl) statusEl.textContent = errMsg;
+      showToast(errMsg, true);
+    }
+  } catch (e) {
+    console.error(e);
+    if (statusEl) statusEl.textContent = 'Ошибка загрузки (см. консоль).';
+  }
+}
+
+function openGithubCatalogModal() {
+  const modal = document.getElementById('github-catalog-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  loadGithubConfigsCatalog();
+}
+
+function closeGithubCatalogModal() {
+  const modal = document.getElementById('github-catalog-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+}
+
+function openGithubRepository() {
+  const url = window.XKEEN_GITHUB_REPO_URL;
+  if (url) {
+    window.open(url, '_blank');
+  } else {
+    alert('URL репозитария не настроен на сервере (XKEEN_GITHUB_REPO_URL).');
   }
 }
 
@@ -551,7 +842,54 @@ async function restartXkeen() {
   }
 }
 
+function shouldAutoRestartAfterSave() {
+  const cb = document.getElementById('global-autorestart-xkeen');
+  return !!(cb && cb.checked);
+}
+function controlXkeen(action) {
+  const statusEl = document.getElementById('routing-status');
+  const map = {
+    start: '/api/xkeen/start',
+    stop: '/api/xkeen/stop',
+    restart: '/api/restart'
+  };
+  const url = map[action];
+  if (!url) return;
+
+  if (statusEl) statusEl.textContent = 'xkeen: ' + action + '...';
+
+  fetch(url, { method: 'POST' })
+    .then(res => res.json().catch(() => ({})))
+    .then(data => {
+      const ok = !data || data.ok !== false;
+      const base = action === 'start'
+        ? 'xkeen started.'
+        : action === 'stop'
+        ? 'xkeen stopped.'
+        : 'xkeen restarted.';
+      const err = action === 'start'
+        ? 'Failed to start xkeen.'
+        : action === 'stop'
+        ? 'Failed to stop xkeen.'
+        : 'Failed to restart xkeen.';
+      const msg = ok ? base : err;
+      if (statusEl) statusEl.textContent = msg;
+      showToast(msg, !ok);
+      if (action === 'restart') {
+        try { loadRestartLog(); } catch (e) {}
+      }
+    })
+    .catch(e => {
+      console.error(e);
+      const msg = 'xkeen control error.';
+      if (statusEl) statusEl.textContent = msg;
+      showToast(msg, true);
+    });
+}
+
+
 // ---------- inbounds ----------
+
 
 async function loadInboundsMode() {
   const statusEl = document.getElementById('inbounds-status');
@@ -605,11 +943,11 @@ async function saveInboundsMode() {
     if (res.ok && data.ok) {
       let msg = 'Режим сохранён: ' + data.mode + '.';
       if (data.restarted) {
-        msg += ' xkeen перезапущен.';
+        msg += ' xkeen restarted.';
       }
       if (statusEl) statusEl.textContent = msg;
     } else {
-      if (statusEl) statusEl.textContent = 'Ошибка сохранения: ' + (data.error || 'неизвестная ошибка');
+      if (statusEl) statusEl.textContent = 'Save error: ' + (data.error || 'неизвестная ошибка');
     }
   } catch (e) {
     console.error(e);
@@ -661,21 +999,21 @@ async function saveOutbounds() {
     const res = await fetch('/api/outbounds', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url, restart: shouldAutoRestartAfterSave() })
     });
     const data = await res.json();
     if (res.ok && data.ok) {
-      let msg = 'Ссылка сохранена, конфиг 04_outbounds.json обновлён.';
+      let msg = 'Outbounds saved.';
       if (data.restarted) {
-        msg += ' xkeen перезапущен.';
+        msg += ' xkeen restarted.';
       }
       if (statusEl) statusEl.textContent = msg;
     } else {
-      if (statusEl) statusEl.textContent = 'Ошибка сохранения: ' + (data.error || 'неизвестная ошибка');
+      if (statusEl) statusEl.textContent = 'Save error: ' + (data.error || 'неизвестная ошибка');
     }
   } catch (e) {
     console.error(e);
-    if (statusEl) statusEl.textContent = 'Ошибка сохранения outbounds.';
+    if (statusEl) statusEl.textContent = 'Failed to save outbounds.';
   }
 }
 
@@ -1404,21 +1742,21 @@ async function savePortProxying() {
     const res = await fetch('/api/xkeen/port-proxying', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, restart: shouldAutoRestartAfterSave() }),
     });
     const data = await res.json();
     if (res.ok && data.ok) {
-      let msg = 'port_proxying.lst сохранён.';
+      let msg = 'port_proxying.lst saved.';
       if (data.restarted) {
-        msg += ' xkeen перезапущен.';
+        msg += ' xkeen restarted.';
       }
       if (statusEl) statusEl.textContent = msg;
     } else {
-      if (statusEl) statusEl.textContent = 'Ошибка сохранения port_proxying.lst: ' + (data.error || res.status);
+      if (statusEl) statusEl.textContent = 'Save error: ' + (data.error || res.status);
     }
   } catch (e) {
     console.error(e);
-    if (statusEl) statusEl.textContent = 'Ошибка сохранения port_proxying.lst.';
+    if (statusEl) statusEl.textContent = 'Failed to save port_proxying.lst.';
   }
 }
 
@@ -1462,21 +1800,21 @@ async function savePortExclude() {
     const res = await fetch('/api/xkeen/port-exclude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, restart: shouldAutoRestartAfterSave() }),
     });
     const data = await res.json();
     if (res.ok && data.ok) {
-      let msg = 'port_exclude.lst сохранён.';
+      let msg = 'port_exclude.lst saved.';
       if (data.restarted) {
-        msg += ' xkeen перезапущен.';
+        msg += ' xkeen restarted.';
       }
       if (statusEl) statusEl.textContent = msg;
     } else {
-      if (statusEl) statusEl.textContent = 'Ошибка сохранения port_exclude.lst: ' + (data.error || res.status);
+      if (statusEl) statusEl.textContent = 'Save error: ' + (data.error || res.status);
     }
   } catch (e) {
     console.error(e);
-    if (statusEl) statusEl.textContent = 'Ошибка сохранения port_exclude.lst.';
+    if (statusEl) statusEl.textContent = 'Failed to save port_exclude.lst.';
   }
 }
 
@@ -1520,21 +1858,21 @@ async function saveIpExclude() {
     const res = await fetch('/api/xkeen/ip-exclude', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, restart: shouldAutoRestartAfterSave() }),
     });
     const data = await res.json();
     if (res.ok && data.ok) {
-      let msg = 'ip_exclude.lst сохранён.';
+      let msg = 'ip_exclude.lst saved.';
       if (data.restarted) {
-        msg += ' xkeen перезапущен.';
+        msg += ' xkeen restarted.';
       }
       if (statusEl) statusEl.textContent = msg;
     } else {
-      if (statusEl) statusEl.textContent = 'Ошибка сохранения ip_exclude.lst: ' + (data.error || res.status);
+      if (statusEl) statusEl.textContent = 'Save error: ' + (data.error || res.status);
     }
   } catch (e) {
     console.error(e);
-    if (statusEl) statusEl.textContent = 'Ошибка сохранения ip_exclude.lst.';
+    if (statusEl) statusEl.textContent = 'Failed to save ip_exclude.lst.';
   }
 }
 
@@ -1542,6 +1880,46 @@ async function saveIpExclude() {
 
 
 document.addEventListener('DOMContentLoaded', () => {
+  const xkeenStartBtn = document.getElementById('xkeen-start-btn');
+  const xkeenStopBtn = document.getElementById('xkeen-stop-btn');
+  const xkeenRestartBtn = document.getElementById('xkeen-restart-btn');
+
+  if (xkeenStartBtn) xkeenStartBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    controlXkeen('start');
+  });
+  if (xkeenStopBtn) xkeenStopBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    controlXkeen('stop');
+  });
+  if (xkeenRestartBtn) xkeenRestartBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    controlXkeen('restart');
+  });
+
+  const globalAutorestartCb = document.getElementById('global-autorestart-xkeen');
+  if (globalAutorestartCb) {
+    try {
+      if (window.localStorage) {
+        const stored = localStorage.getItem('xkeen_global_autorestart');
+        if (stored === '1') globalAutorestartCb.checked = true;
+        else if (stored === '0') globalAutorestartCb.checked = false;
+      }
+    } catch (e) {
+      // ignore localStorage errors
+    }
+
+    globalAutorestartCb.addEventListener('change', () => {
+      try {
+        if (!window.localStorage) return;
+        localStorage.setItem('xkeen_global_autorestart', globalAutorestartCb.checked ? '1' : '0');
+      } catch (e) {
+        // ignore
+      }
+    });
+  }
+
+
   const routingTextarea = document.getElementById('routing-editor');
   if (routingTextarea && window.CodeMirror) {
     routingEditor = CodeMirror.fromTextArea(routingTextarea, {
@@ -1620,10 +1998,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const routingRestoreAutoBtn = document.getElementById('routing-restore-auto-btn');
   const restartBtn = document.getElementById('routing-restart-btn');
   const fmtBtn = document.getElementById('routing-format-btn');
-  const stripBtn = document.getElementById('routing-strip-btn');
-  const sortBtn = document.getElementById('routing-sort-btn');
+  const githubExportBtn = document.getElementById('github-export-btn');
+  const githubOpenCatalogBtn = document.getElementById('github-open-catalog-btn');
+  const localExportBtn = document.getElementById('routing-export-local-btn');
+  const localImportBtn = document.getElementById('routing-import-local-btn');
+  const localConfigFileInput = document.getElementById('local-config-file-input');
 
-  const inboundsSaveBtn = document.getElementById('inbounds-save-btn');
+
+const inboundsSaveBtn = document.getElementById('inbounds-save-btn');
   const inboundsBackupBtn = document.getElementById('inbounds-backup-btn');
   const inboundsRestoreAutoBtn = document.getElementById('inbounds-restore-auto-btn');
 
@@ -1705,13 +2087,65 @@ const mihomoLoadBtn = document.getElementById('mihomo-load-btn');
     e.preventDefault();
     autoFormatRouting();
   });
-  if (stripBtn) stripBtn.addEventListener('click', (e) => {
+
+  if (localExportBtn) localExportBtn.addEventListener('click', (e) => {
     e.preventDefault();
-    clearRoutingComments()
+    exportUserConfigsToFile();
   });
-  if (sortBtn) sortBtn.addEventListener('click', (e) => {
+
+  if (localImportBtn && localConfigFileInput) {
+    localImportBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      localConfigFileInput.value = '';
+      localConfigFileInput.click();
+    });
+
+    localConfigFileInput.addEventListener('change', () => {
+      const file = localConfigFileInput.files && localConfigFileInput.files[0];
+      if (!file) return;
+      importUserConfigsFromFile(file);
+    });
+  }
+
+
+if (githubExportBtn) githubExportBtn.addEventListener('click', (e) => {
     e.preventDefault();
-    sortRoutingRules();
+    openGithubExportModal();
+  });
+
+  if (githubOpenCatalogBtn) githubOpenCatalogBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    openGithubCatalogModal();
+  });
+
+  const githubCatalogCloseBtn = document.getElementById('github-catalog-close-btn');
+  if (githubCatalogCloseBtn) githubCatalogCloseBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeGithubCatalogModal();
+  });
+
+
+  const githubCatalogCloseBtnHeader = document.getElementById('github-catalog-close-btn-header');
+  if (githubCatalogCloseBtnHeader) githubCatalogCloseBtnHeader.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeGithubCatalogModal();
+  });
+
+  const githubExportCancelBtnHeader = document.getElementById('github-export-cancel-btn-header');
+  if (githubExportCancelBtnHeader) githubExportCancelBtnHeader.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeGithubExportModal();
+  });
+  const githubExportConfirmBtn = document.getElementById('github-export-confirm-btn');
+  if (githubExportConfirmBtn) githubExportConfirmBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    exportUserConfigsToGithub();
+  });
+
+  const githubExportCancelBtn = document.getElementById('github-export-cancel-btn');
+  if (githubExportCancelBtn) githubExportCancelBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeGithubExportModal();
   });
   if (inboundsSaveBtn) inboundsSaveBtn.addEventListener('click', (e) => {
     e.preventDefault();
