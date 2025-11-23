@@ -5,6 +5,8 @@ import os
 import time
 import shutil
 import subprocess
+import urllib.request
+import urllib.error
 from urllib.parse import urlparse, parse_qs, unquote, quote
 
 ROUTING_FILE = "/opt/etc/xray/configs/05_routing.json"
@@ -25,6 +27,168 @@ XRAY_ERROR_LOG_SAVED = XRAY_ERROR_LOG + ".saved"
 MIHOMO_CONFIG_FILE = "/opt/etc/mihomo/config.yaml"
 MIHOMO_TEMPLATES_DIR = "/opt/etc/mihomo/templates"
 MIHOMO_DEFAULT_TEMPLATE = "/opt/etc/mihomo/templates/umarcheh001.yaml"
+
+XRAY_CONFIG_DIR = os.path.dirname(ROUTING_FILE)
+XKEEN_CONFIG_DIR = os.path.dirname(PORT_PROXYING_FILE)
+
+GITHUB_OWNER = os.environ.get("XKEEN_GITHUB_OWNER", "umarcheh001")
+GITHUB_REPO = os.environ.get("XKEEN_GITHUB_REPO", "xkeen-community-configs")
+GITHUB_BRANCH = os.environ.get("XKEEN_GITHUB_BRANCH", "main")
+
+# URL сервера конфигураций (FastAPI), например: http://144.31.17.58:8000
+CONFIG_SERVER_BASE = os.environ.get("XKEEN_CONFIG_SERVER_BASE", "http://144.31.17.58:8000")
+
+GITHUB_REPO_URL = os.environ.get(
+    "XKEEN_GITHUB_REPO_URL",
+    f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}",
+)
+
+
+def build_user_configs_bundle():
+    """Собирает *.json (кроме 04_outbounds.json) и *.lst в один объект."""
+    files = []
+
+    # Все JSON-конфиги Xray, кроме OUTBOUNDS_FILE
+    if os.path.isdir(XRAY_CONFIG_DIR):
+        for fname in sorted(os.listdir(XRAY_CONFIG_DIR)):
+            if not fname.endswith(".".join(["json"])):
+                # простой способ, но на всякий случай: только .json
+                if not fname.endswith(".json"):
+                    continue
+            full_path = os.path.join(XRAY_CONFIG_DIR, fname)
+            # пропускаем 04_outbounds.json
+            if os.path.abspath(full_path) == os.path.abspath(OUTBOUNDS_FILE):
+                continue
+
+            data = load_json(full_path, default=None)
+            if data is not None:
+                files.append(
+                    {
+                        "path": f"xray/{fname}",
+                        "kind": "json",
+                        "content": data,
+                    }
+                )
+
+    # *.lst из /opt/etc/xkeen
+    lst_files = {
+        "xkeen/port_proxying.lst": PORT_PROXYING_FILE,
+        "xkeen/port_exclude.lst": PORT_EXCLUDE_FILE,
+        "xkeen/ip_exclude.lst": IP_EXCLUDE_FILE,
+    }
+
+    for logical_path, real_path in lst_files.items():
+        content = load_text(real_path, default="")
+        files.append(
+            {
+                "path": logical_path,
+                "kind": "text",
+                "content": content,
+            }
+        )
+
+    bundle = {
+        "version": 1,
+        "generated_at": int(time.time()),
+        "files": files,
+        "repo": {
+            "owner": GITHUB_OWNER,
+            "name": GITHUB_REPO,
+        },
+    }
+    return bundle
+
+
+def apply_user_configs_bundle(bundle):
+    """Принимает bundle и раскладывает файлы по своим местам."""
+    if not isinstance(bundle, dict):
+        raise ValueError("bundle must be a dict")
+
+    files = bundle.get("files", [])
+    if not isinstance(files, list):
+        raise ValueError("bundle.files must be a list")
+
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+
+        path = item.get("path")
+        kind = item.get("kind")
+        content = item.get("content")
+
+        if not path or kind not in ("json", "text"):
+            continue
+
+        basename = os.path.basename(path)
+        real_path = None
+
+        # JSON-конфиги
+        if basename.endswith(".json"):
+            # Не пишем в 04_outbounds.json
+            if basename == os.path.basename(OUTBOUNDS_FILE):
+                continue
+            real_path = os.path.join(XRAY_CONFIG_DIR, basename)
+        # LST-файлы
+        elif basename == os.path.basename(PORT_PROXYING_FILE):
+            real_path = PORT_PROXYING_FILE
+        elif basename == os.path.basename(PORT_EXCLUDE_FILE):
+            real_path = PORT_EXCLUDE_FILE
+        elif basename == os.path.basename(IP_EXCLUDE_FILE):
+            real_path = IP_EXCLUDE_FILE
+
+        if not real_path:
+            # неизвестный файл — пропускаем
+            continue
+
+        if kind == "json":
+            if not isinstance(content, (dict, list)):
+                # невалидный контент для JSON
+                continue
+            save_json(real_path, content)
+        else:
+            # text
+            if not isinstance(content, str):
+                content = str(content)
+            save_text(real_path, content)
+
+
+def _config_server_request(path: str, method: str = "GET", payload=None):
+    """HTTP-запрос к серверу конфигураций (FastAPI)."""
+    base = CONFIG_SERVER_BASE.rstrip("/")
+    url = base + path
+
+    data = None
+    headers = {}
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+
+    req = urllib.request.Request(url, data=data, headers=headers or None, method=method)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        raw = resp.read().decode("utf-8", errors="replace")
+        return json.loads(raw)
+
+
+def _github_raw_get(path: str) -> str | None:
+    """
+    Читает файл из публичного GitHub-репозитория через raw.githubusercontent.com.
+    Возвращает строку или None, если файла нет (404).
+    """
+    base = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/{GITHUB_BRANCH}"
+    url = base.rstrip("/") + "/" + path.lstrip("/")
+
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "xkeen-ui"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None
+        raise
 
 
 COMMAND_GROUPS = [
@@ -636,6 +800,7 @@ def index():
         outbounds_file=OUTBOUNDS_FILE,
         backup_dir=BACKUP_DIR,
         command_groups=COMMAND_GROUPS,
+        github_repo_url=GITHUB_REPO_URL,
     )
 
 
@@ -664,7 +829,13 @@ def api_set_routing():
     if payload is None:
         return jsonify({"ok": False, "error": "invalid json"}), 400
     save_json(ROUTING_FILE, payload)
-    restarted = restart_xkeen(source="routing")
+    restart_arg = request.args.get("restart", None)
+    restart_flag = True
+    if restart_arg is not None:
+        restart_arg = restart_arg.strip().lower()
+        restart_flag = restart_arg in ("1", "true", "yes", "on", "y")
+    restarted = restart_flag and restart_xkeen(source="routing")
+
     return jsonify({"ok": True, "restarted": restarted}), 200
 
 
@@ -685,7 +856,9 @@ def api_set_mihomo_config():
     data = request.get_json(silent=True) or {}
     content = data.get("content", "")
     save_text(MIHOMO_CONFIG_FILE, content)
-    restarted = restart_xkeen(source="mihomo-config")
+    restart_flag = bool(data.get("restart", True))
+    restarted = restart_flag and restart_xkeen(source="mihomo-config")
+
     return jsonify({"ok": True, "restarted": restarted}), 200
 
 
@@ -770,6 +943,29 @@ def delete_backup_from_backups_page():
                 # Ignore deletion error and just return to the backups page
                 pass
     return redirect(url_for("backups_page"))
+
+
+
+@app.post("/api/xkeen/start")
+def api_xkeen_start():
+    try:
+        subprocess.check_call(["xkeen", "-start"])
+        append_restart_log(True, source="api-start")
+        return jsonify({"ok": True}), 200
+    except Exception:
+        append_restart_log(False, source="api-start")
+        return jsonify({"ok": False}), 500
+
+
+@app.post("/api/xkeen/stop")
+def api_xkeen_stop():
+    try:
+        subprocess.check_call(["xkeen", "-stop"])
+        append_restart_log(True, source="api-stop")
+        return jsonify({"ok": True}), 200
+    except Exception:
+        append_restart_log(False, source="api-stop")
+        return jsonify({"ok": False}), 500
 
 
 # ---------- API: restart xkeen ----------
@@ -1153,7 +1349,9 @@ def api_set_port_proxying():
     payload = request.get_json(silent=True) or {}
     content = payload.get("content", "")
     save_text(PORT_PROXYING_FILE, content)
-    restarted = restart_xkeen(source="port-proxying")
+    restart_flag = bool(payload.get("restart", True))
+    restarted = restart_flag and restart_xkeen(source="port-proxying")
+
     return jsonify({"ok": True, "restarted": restarted}), 200
 
 
@@ -1168,7 +1366,9 @@ def api_set_port_exclude():
     payload = request.get_json(silent=True) or {}
     content = payload.get("content", "")
     save_text(PORT_EXCLUDE_FILE, content)
-    restarted = restart_xkeen(source="port-exclude")
+    restart_flag = bool(payload.get("restart", True))
+    restarted = restart_flag and restart_xkeen(source="port-exclude")
+
     return jsonify({"ok": True, "restarted": restarted}), 200
 
 
@@ -1183,7 +1383,9 @@ def api_set_ip_exclude():
     payload = request.get_json(silent=True) or {}
     content = payload.get("content", "")
     save_text(IP_EXCLUDE_FILE, content)
-    restarted = restart_xkeen(source="ip-exclude")
+    restart_flag = bool(payload.get("restart", True))
+    restarted = restart_flag and restart_xkeen(source="ip-exclude")
+
     return jsonify({"ok": True, "restarted": restarted}), 200
 
 
@@ -1211,8 +1413,10 @@ def api_set_inbounds():
     else:
         data = REDIRECT_INBOUNDS
 
+    restart_flag = bool(payload.get("restart", True))
     save_inbounds(data)
-    restarted = restart_xkeen(source="inbounds")
+    restarted = restart_flag and restart_xkeen(source="inbounds")
+
 
     return jsonify({"ok": True, "mode": mode, "restarted": restarted}), 200
 
@@ -1240,8 +1444,173 @@ def api_set_outbounds():
         return jsonify({"ok": False, "error": str(e)}), 400
 
     save_outbounds(cfg)
-    restarted = restart_xkeen(source="outbounds")
+    restart_flag = bool(payload.get("restart", True))
+    restarted = restart_flag and restart_xkeen(source="outbounds")
+
     return jsonify({"ok": True, "restarted": restarted}), 200
+
+# ---------- API: Local configs import/export ----------
+
+@app.get("/api/local/export-configs")
+def api_local_export_configs():
+    """Экспорт всех пользовательских конфигураций (кроме 04_outbounds.json)
+    в один JSON-файл, используя build_user_configs_bundle()."""
+    bundle = build_user_configs_bundle()
+    filename = time.strftime("xkeen-config-%Y%m%d-%H%M%S.json")
+
+    resp = app.response_class(
+        response=json.dumps(bundle, ensure_ascii=False, indent=2),
+        status=200,
+        mimetype="application/json",
+    )
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+@app.post("/api/local/import-configs")
+def api_local_import_configs():
+    """Импорт конфигураций из локального JSON-файла bundle."""
+    file = request.files.get("file")
+    if not file or file.filename == "":
+        return jsonify({"ok": False, "error": "no file uploaded"}), 400
+
+    try:
+        raw = file.read().decode("utf-8", errors="replace")
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"read failed: {e}"}), 400
+
+    try:
+        bundle = json.loads(raw)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"invalid json: {e}"}), 400
+
+    if not isinstance(bundle, dict):
+        return jsonify({"ok": False, "error": "bundle must be a dict"}), 400
+
+    try:
+        apply_user_configs_bundle(bundle)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"apply failed: {e}"}), 500
+
+    return jsonify({"ok": True}), 200
+
+
+# ---------- API: GitHub / config server integration ----------
+
+@app.post("/api/github/export-configs")
+def api_github_export_configs():
+    if not CONFIG_SERVER_BASE:
+        return jsonify({"ok": False, "error": "CONFIG_SERVER_BASE is not configured"}), 500
+
+    bundle = build_user_configs_bundle()
+
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()
+    description = (data.get("description") or "").strip()
+    tags = data.get("tags") or []
+
+    if not title:
+        title = f"XKeen config {time.strftime('%Y-%m-%d %H:%M:%S')}"
+
+    upload_payload = {
+        "title": title,
+        "description": description,
+        "tags": tags,
+        "bundle": bundle,
+    }
+
+    try:
+        server_resp = _config_server_request("/upload", method="POST", payload=upload_payload)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"upload failed: {e}"}), 500
+
+    ok = bool(server_resp.get("ok"))
+    cfg_id = server_resp.get("id")
+
+    if not ok or not cfg_id:
+        return jsonify({"ok": False, "error": "upload failed on config server", "server_response": server_resp}), 500
+
+    return jsonify({"ok": True, "id": cfg_id, "server_response": server_resp}), 200
+
+
+@app.get("/api/github/configs")
+def api_github_list_configs():
+    """Возвращает список конфигов из GitHub (configs/index.json)."""
+    try:
+        raw = _github_raw_get("configs/index.json")
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"github index failed: {e}"}), 500
+
+    if not raw:
+        items = []
+    else:
+        try:
+            items = json.loads(raw)
+            if not isinstance(items, list):
+                items = []
+        except Exception:
+            items = []
+
+    return jsonify({"ok": True, "items": items}), 200
+
+
+@app.post("/api/github/import-configs")
+def api_github_import_configs():
+    """
+    Если в теле есть cfg_id — загружаем именно его.
+    Если нет — берём самый свежий из configs/index.json в GitHub-репозитории.
+    """
+    payload = request.get_json(silent=True) or {}
+    cfg_id = (payload.get("cfg_id") or "").strip()
+
+    # Если id не указан — читаем index.json из репозитория и выбираем последнюю конфигурацию.
+    if not cfg_id:
+        try:
+            raw_index = _github_raw_get("configs/index.json")
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"github index failed: {e}"}), 500
+
+        if not raw_index:
+            return jsonify({"ok": False, "error": "no configs found in repo"}), 404
+
+        try:
+            items = json.loads(raw_index)
+            if not isinstance(items, list) or not items:
+                return jsonify({"ok": False, "error": "no configs found in repo"}), 404
+        except Exception:
+            return jsonify({"ok": False, "error": "invalid index.json in repo"}), 500
+
+        latest = max(items, key=lambda it: int(it.get("created_at", 0) or 0))
+        cfg_id = latest.get("id")
+        if not cfg_id:
+            return jsonify({"ok": False, "error": "latest config has no id"}), 500
+
+    # Загружаем bundle.json выбранной конфигурации
+    try:
+        raw_bundle = _github_raw_get(f"configs/{cfg_id}/bundle.json")
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"github get {cfg_id} failed: {e}"}), 500
+
+    if not raw_bundle:
+        return jsonify({"ok": False, "error": f"config {cfg_id} not found in repo"}), 404
+
+    try:
+        bundle = json.loads(raw_bundle)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"invalid bundle JSON for {cfg_id}: {e}"}), 500
+
+    if not isinstance(bundle, dict):
+        return jsonify({"ok": False, "error": "invalid bundle structure from repo"}), 500
+
+    try:
+        apply_user_configs_bundle(bundle)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"apply failed: {e}"}), 500
+
+    # Не перезапускаем xkeen автоматически — пользователь может внести правки.
+    return jsonify({"ok": True, "cfg_id": cfg_id}), 200
+
+
 
 
 if __name__ == "__main__":
