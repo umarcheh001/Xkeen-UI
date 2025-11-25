@@ -30,6 +30,13 @@ sh install.sh
 cd /opt && curl -fSL "https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.0.5/xkeen-ui-routing.tar.gz" -o xkeen-ui-routing.tar.gz && tar -xzf xkeen-ui-routing.tar.gz && sh xkeen-ui/install.sh
 ```
 
+Если ругается на отсутствие Flask:
+
+```sh
+opkg update && opkg install python3 python3-pip && /opt/bin/python3 -m pip install --upgrade pip flask
+
+```
+
 Скрипт:
 
 - найдёт или установит `python3` в Entware;
