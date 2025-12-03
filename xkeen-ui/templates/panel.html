@@ -21,12 +21,44 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+  <div id="global-xkeen-spinner">
+    <div class="global-spinner-box">
+      <div class="global-spinner-icon"></div>
+      <div class="global-spinner-text" id="global-xkeen-spinner-text">
+        Применяем изменения и перезапускаем xkeen…
+      </div>
+    </div>
+  </div>
+
+
   <div class="container">
     <header>
-      <h1>Xkeen UI</h1>
+      <div class="header-main">
+        <div class="header-title-group">
+          <h1>Xkeen UI</h1>
+          <span
+            id="xkeen-service-lamp"
+            class="service-status-lamp"
+            data-state="pending"
+            title="Проверка статуса..."
+          ></span>
+          <span id="xkeen-service-text" class="service-status-text">
+            Проверка статуса...
+          </span>
+        </div>
+
+        <button
+          id="xkeen-core-text"
+          type="button"
+          class="service-core-text"
+        ></button>
+
+        <div id="last-load" class="last-load-badge"></div>
+      </div>
+
       <p>Маршрутизация, режим inbounds и VLESS outbounds в одной панели.</p>
 
-      <div class="top-tabs">
+<div class="top-tabs">
         <button class="top-tab-btn active" data-view="routing" onclick="showView('routing')">
           Маршрутизация (05_routing.json)
         </button>
@@ -41,6 +73,9 @@
         </button>
         <button class="top-tab-btn" data-view="commands" onclick="showView('commands')">
           КОМАНДЫ XKeen
+        </button>
+        <button class="top-tab-btn" type="button" onclick="window.location.href='/mihomo_generator'">
+          Mihomo генератор
         </button>
       </div>
     
@@ -75,6 +110,8 @@
 
           <div id="routing-body">
             <p>Файл: <code>{{ routing_file }}</code></p>
+
+            <div id="routing-help-line">💡 Справка</div>
 
             <textarea id="routing-editor" spellcheck="false"></textarea>
 
@@ -153,6 +190,7 @@
       </label>
 
       <div class="actions">
+        <button id="inbounds-open-editor-btn">📝 Открыть в редакторе</button>
         <button id="inbounds-save-btn">💾 Save inbounds</button>
         <button id="inbounds-backup-btn">📦 Backup 03_inbounds.json</button>
         <button id="inbounds-restore-auto-btn">⏪ Restore inbounds</button>
@@ -176,6 +214,7 @@
       <input id="outbounds-url" type="text" placeholder="vless://uuid@host:port?encryption=none&flow=xtls-rprx-vision&security=reality&pbk=...&sni=...&fp=chrome&sid=...&spx=%2F">
 
       <div class="actions">
+        <button id="outbounds-open-editor-btn">📝 Открыть в редакторе</button>
         <button id="outbounds-save-btn">💾 Save VLESS</button>
         <button id="outbounds-backup-btn">📦 Backup 04_outbounds.json</button>
         <button id="outbounds-restore-auto-btn">⏪ Restore outbounds</button>
@@ -237,53 +276,137 @@
 </div>
 
 <div id="view-mihomo" class="view-section" style="display:none;">
-  <!-- Новый сворачиваемый блок для Mihomo config.yaml -->
-        <section class="card">
-          <div class="commands-header" onclick="toggleMihomoCard()">
-            <h2>Mihomo config.yaml</h2>
-            <span id="mihomo-arrow">▼</span>
-          </div>
+  <section class="card">
+    <div class="commands-header" onclick="toggleMihomoCard()">
+      <h2>Mihomo config.yaml</h2>
+      <span id="mihomo-arrow">▼</span>
+    </div>
 
-          <div id="mihomo-body">
-            <p>Файл: <code>/opt/etc/mihomo/config.yaml</code></p>
+    <div id="mihomo-body">
+      <p class="small">
+        Активный файл: <code>/opt/etc/mihomo/config.yaml</code>
+      </p>
 
-            <textarea id="mihomo-editor" spellcheck="false"></textarea>
+      <!-- Основной редактор config.yaml -->
+      <textarea id="mihomo-editor" spellcheck="false"></textarea>
+      <div id="mihomo-status" class="status"></div>
 
-            <div id="mihomo-status" class="status"></div>
+      <!-- Шаблоны config.yaml -->
+      <div class="actions mihomo-templates-row">
+        <select id="mihomo-template-select" class="mihomo-template-select">
+          <option value="">— выбери шаблон —</option>
+        </select>
 
+        <button id="mihomo-template-load-btn"
+                type="button"
+                title="Загрузить выбранный шаблон">
+          📂 Шаблон
+        </button>
+
+        <button id="mihomo-load-btn"
+                title="Загрузить текущий config.yaml">
+          📥 Конфиг
+        </button>
+        <button id="mihomo-save-btn"
+                title="Сохранить (авто‑бэкап, авто‑перезапуск по галке)">
+          💾 Сохранить
+        </button>
+        <button id="mihomo-save-restart-btn"
+                title="Сохранить и перезапустить mihomo">
+          💾💥 Рестарт
+        </button>
+      </div>
+
+      <hr>
+
+      
+      
+<!-- Профили и бэкапы Mihomo -->
+      <div class="commands-header" id="mihomo-profiles-link" style="cursor:pointer;">
+        <h3>🗂️ Профили и бэкапы Mihomo</h3>
+        <span id="mihomo-profiles-arrow">▼</span>
+      </div>
+
+      <div id="mihomo-profiles-panel" style="display:none; margin-top:8px;">
+        <div class="mihomo-grid">
+          <div class="mihomo-column">
+            <h4>Профили</h4>
             <div class="actions">
-              <button id="mihomo-save-btn">💾 Save config.yaml</button>
-              <button id="mihomo-template-btn">🆕 Новый config (шаблон umarcheh001)</button>
-              <button id="mihomo-restart-btn">🔄 Перезапустить xkeen</button>
-
-              <button id="mihomo-configurator-btn"
-                      data-configurator-url="{{ url_for('static', filename='mihomo-configurator.html') }}">
-                🧩 Запустить конфигуратор
+              <button id="mihomo-refresh-profiles-btn" class="icon-btn">
+                🔄 Обновить список профилей
               </button>
             </div>
+            <table class="xkeen-table">
+              <thead>
+                <tr>
+                  <th>Профиль</th>
+                  <th>Активен</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody id="mihomo-profiles-list"></tbody>
+            </table>
 
-            <div class="actions mihomo-templates-row">
-              <label for="mihomo-template-select">Шаблоны:</label>
-              <select id="mihomo-template-select" class="mihomo-template-select"></select>
-              <button id="mihomo-templates-refresh-btn">🔄 Обновить список</button>
-              <button id="mihomo-template-load-btn">📥 Загрузить шаблон в редактор</button>
-              <button id="mihomo-template-savefromeditor-btn">💾 Сохранить редактор как шаблон</button>
-            </div>
-
-            <div class="hint">
-              <p>Шаблоны хранятся в каталоге <code>/opt/etc/mihomo/templates</code>. Можно положить туда свои <code>.yaml</code> и редактировать их из панели.</p>
-              <p>Полезные репозитории с провайдерами правил и листами:</p>
-              <ul>
-                <li><a href="https://github.com/Anton111111/rule-lists/releases" target="_blank" rel="noopener">Anton111111 / rule-lists</a></li>
-                <li><a href="https://github.com/legiz-ru/mihomo-rule-sets" target="_blank" rel="noopener">legiz-ru / mihomo-rule-sets</a></li>
-                <li><a href="https://github.com/MetaCubeX/meta-rules-dat" target="_blank" rel="noopener">MetaCubeX / meta-rules-dat</a></li>
-                <li><a href="https://github.com/v2fly/domain-list-community/tree/master/data" target="_blank" rel="noopener">v2fly / domain-list-community</a></li>
-              </ul>
-            </div>
+            <h5 style="margin-top:12px;">Создать профиль из редактора</h5>
+            <input id="mihomo-new-profile-name"
+                   class="xkeen-input"
+                   type="text"
+                   placeholder="Имя профиля (без .yaml)">
+            <button id="mihomo-save-profile-btn"
+                    title="Сохранить текущий config.yaml как профиль">
+              💾 Профиль
+            </button>
           </div>
-        </section>
-</div>
 
+          <div class="mihomo-column">
+            <h4>Бэкапы</h4>
+            <div class="actions">
+              <button id="mihomo-refresh-backups-btn" class="icon-btn">
+                🔄 Обновить список бэкапов
+              </button>
+            </div>
+            <div class="small" style="margin-top:6px;">
+              <label>
+                <input type="checkbox" id="mihomo-backups-active-only" checked>
+                Только для активного профиля
+              </label>
+              <span id="mihomo-backups-active-profile-label" style="margin-left:8px;"></span>
+            </div>
+            <div class="small" style="margin-top: 6px;">
+              <label>
+                Оставить не более
+                <input
+                  id="mihomo-backups-clean-limit"
+                  class="xkeen-input"
+                  type="number"
+                  min="0"
+                  value="5"
+                  style="width: 64px; margin: 0 4px;"
+                >
+                бэкапов
+              </label>
+              <button id="mihomo-backups-clean-btn" class="icon-btn" title="Очистить бэкапы">🧹</button>
+              <span class="hint">
+                0 — удалить все бэкапы (с учётом фильтра профиля).
+              </span>
+            </div>
+            <table class="xkeen-table">
+              <thead>
+                <tr>
+                  <th>Файл</th>
+                  <th>Профиль</th>
+                  <th>Создан</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody id="mihomo-backups-list"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
 <div id="view-xkeen" class="view-section" style="display:none;">
   <!-- XKeen: порты и исключения -->
       <section class="card commands-card">
@@ -348,12 +471,11 @@
 <div id="view-commands" class="view-section" style="display:none;">
   <!-- XKeen commands -->
 <section class="card commands-card">
-  <div class="commands-header" onclick="toggleCommands()">
+  <div class="commands-header">
     <h2>КОМАНДЫ XKeen</h2>
-    <span id="commands-arrow">▼</span>
   </div>
 
-  <div id="commands-body" style="display: none;">
+  <div id="commands-body">
   {% for group in command_groups %}
     <div class="command-group">
       <div class="command-group-title">{{ group.title }}</div>
@@ -362,12 +484,9 @@
           <li class="command-item"
               data-flag="{{ cmd.flag }}"
               data-label="xkeen {{ cmd.flag }}"
-              data-command="{{ (cmd.flag ~ ' ' ~ cmd.desc)|lower }}">
-            <div class="command-item-top">
-              <span class="command-item-icon">▶</span>
-              <span class="command-item-code"><code>xkeen {{ cmd.flag }}</code></span>
-            </div>
-            <div class="command-item-desc">{{ cmd.desc }}</div>
+              data-tooltip="{{ cmd.desc }}">
+            <span class="command-item-icon">▶</span>
+            <span class="command-item-code"><code>xkeen {{ cmd.flag }}</code></span>
           </li>
         {% endfor %}
       </ul>
@@ -408,6 +527,25 @@
             <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsCopy()" title="Скопировать" aria-label="Скопировать">📋</button>
           </div>
         </div>
+        <div class="log-filter-row">
+          <input
+            id="xray-log-filter"
+            type="text"
+            class="xray-log-filter"
+            placeholder="Фильтр по логам (пример: error xray)"
+          />
+          <button
+            id="xray-log-filter-clear"
+            type="button"
+            class="btn-secondary log-btn"
+            title="Очистить фильтр"
+            aria-label="Очистить фильтр"
+          >
+            ✖
+          </button>
+        </div>
+
+
         <pre id="xray-log-output" class="log-block xray-log-block"></pre>
         <div id="xray-log-status" class="status"></div>
       </section>
@@ -436,7 +574,32 @@
 
 
 
-    <div id="github-export-modal" class="modal hidden">
+    
+    <div id="core-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title">Выбор ядра XKeen</span>
+          <button type="button" class="modal-close" id="core-modal-close-btn">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description">
+            Выберите ядро, которое будет использоваться сервисом xkeen.
+            При смене ядра сервис будет перезапущен.
+          </p>
+          <div class="core-select-row">
+            <button type="button" class="core-option" data-core="xray">xray</button>
+            <button type="button" class="core-option" data-core="mihomo">mihomo</button>
+          </div>
+          <p id="core-modal-status" class="modal-hint" style="margin-top: 8px; font-size: 0.85rem; color: #9ca3af;"></p>
+        </div>
+        <div class="modal-actions">
+          <button id="core-modal-cancel-btn">Отмена</button>
+          <button id="core-modal-confirm-btn">Применить</button>
+        </div>
+      </div>
+    </div>
+
+<div id="github-export-modal" class="modal hidden">
       <div class="modal-content">
         <div class="modal-header">
           <span class="modal-title">Выгрузка конфигурации</span>
@@ -484,5 +647,25 @@
     window.XKEEN_GITHUB_REPO_URL = "{{ github_repo_url|e }}";
   </script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
+
+    <!-- Модальный JSON-редактор для 03_inbounds.json / 04_outbounds.json -->
+    <div id="json-editor-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title" id="json-editor-title">Редактор JSON</span>
+          <button type="button" class="modal-close" id="json-editor-close-btn">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="json-editor-file-label"></p>
+          <textarea id="json-editor-textarea" spellcheck="false"></textarea>
+          <div id="json-editor-error" class="error"></div>
+        </div>
+        <div class="modal-actions">
+          <button id="json-editor-save-btn">💾 Сохранить</button>
+          <button id="json-editor-cancel-btn">Отмена</button>
+        </div>
+      </div>
+    </div>
+
 </body>
 </html>
