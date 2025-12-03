@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Маршрутизация Xray — комментарии и примеры (05_routing.jsonc)</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px;
+      line-height: 1.5;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    h1, h2, h3 {
+      color: #fbbf24;
+    }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: #020617;
+      border-radius: 8px;
+      padding: 12px 14px;
+      overflow: auto;
+      border: 1px solid #1f2937;
+    }
+    .card {
+      background: #020617;
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 20px;
+      border: 1px solid #1f2937;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #1d283a;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    details {
+      margin: 10px 0;
+      background: #020617;
+      border-radius: 8px;
+      border: 1px solid #1f2937;
+      padding: 6px 10px;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: #fbbf24;
+    }
+    a {
+      color: #93c5fd;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #1f2937;
+      margin: 24px 0;
+    }
+  
+    @media (max-width: 640px) {
+      body {
+        padding: 12px;
+        max-width: 100%;
+      }
+      h1 {
+        font-size: 20px;
+      }
+      h2 {
+        font-size: 18px;
+      }
+      h3 {
+        font-size: 16px;
+      }
+      pre {
+        font-size: 12px;
+        padding: 10px 12px;
+      }
+      .card {
+        padding: 12px;
+      }
+      ul {
+        padding-left: 20px;
+      }
+      button.back-to-panel {
+        width: 100%;
+        max-width: 320px;
+      }
+    }
+
+  </style>
+</head>
+<body>
+  <button type="button" class="back-to-panel" onclick="window.location.href='/'" style="margin-bottom: 16px; padding: 6px 12px; border-radius: 6px; border: 1px solid #374151; background:#111827; color:#e5e7eb; cursor:pointer;">
+    ← Вернуться к панели
+  </button>
+
+  <h1>Маршрутизация Xray (05_routing.jsonc)</h1>
+  <p>Эта страница объясняет, как правильно писать комментарии и правила в файле <code>05_routing.jsonc</code>, чтобы панель XKeen UI могла его загрузить и применить.</p>
+
+  <div class="card">
+    <div class="tag">Кратко</div>
+    <ul>
+      <li>Поддерживаются комментарии: <code>//</code>, <code>#</code>, <code>/* ... */</code>.</li>
+      <li>При сохранении комментарии удаляются, а файл проверяется как обычный JSON.</li>
+      <li>После удаления комментариев не должно быть синтаксических ошибок (висячих запятых, незакрытых скобок и т.п.).</li>
+    </ul>
+  </div>
+
+  <h2>1. Виды поддерживаемых комментариев</h2>
+
+  <h3>1.1. Однострочный комментарий <code>//</code></h3>
+  <pre><code>// Комментарий целой строки
+{
+  "rules": [
+    // Комментарий перед правилом
+    { "type": "field", "outboundTag": "proxy" } // Комментарий в конце строки
+  ]
+}</code></pre>
+
+  <h3>1.2. Однострочный комментарий <code>#</code></h3>
+  <pre><code># Комментарий целой строки
+{
+  "domainStrategy": "AsIs",  # Комментарий в конце строки
+  "rules": [
+    # комментарий внутри списка
+    { "type": "field", "outboundTag": "direct" }
+  ]
+}</code></pre>
+
+  <h3>1.3. Многострочный комментарий <code>/* ... */</code></h3>
+  <pre><code>{
+  /*
+    Большой блок комментария:
+    - можно описать, что делает конфиг
+    - кто его правил
+    - когда вносились изменения
+  */
+  "rules": [
+    {
+      "type": "field",
+      "ip": ["geoip:private"],
+      "outboundTag": "direct"
+    }
+  ]
+}</code></pre>
+
+  <p><strong>Важно:</strong> каждый многострочный комментарий должен быть закрыт <code>*/</code>. Незакрытый блок-сomментарий сломает весь файл.</p>
+
+  <hr>
+
+  <h2>2. Типичные ошибки</h2>
+
+  <h3>2.1. Висячая запятая перед закрывающей скобкой</h3>
+  <p>После удаления комментариев JSON не должен содержать лишних запятых.</p>
+
+  <p><strong>Неправильно:</strong></p>
+  <pre><code>{
+  "rules": [
+    { "type": "field", "outboundTag": "proxy" }, // последний элемент,
+  ] # после удаления комментариев останется лишняя запятая
+}</code></pre>
+
+  <p><strong>Правильно:</strong></p>
+  <pre><code>{
+  "rules": [
+    { "type": "field", "outboundTag": "proxy" } // последний элемент, без запятой
+  ]
+}</code></pre>
+
+  <h3>2.2. Незакрытый многострочный комментарий</h3>
+
+  <p><strong>Неправильно:</strong></p>
+  <pre><code>{
+  /* Начали писать
+     большой комментарий и забыли закрыть
+  "rules": [
+    ...
+  ]
+}</code></pre>
+
+  <p><strong>Правильно:</strong></p>
+  <pre><code>{
+  /* Всё ОК */
+  "rules": [
+    ...
+  ]
+}</code></pre>
+
+  <h3>2.3. Комментарии внутри строк</h3>
+  <p>Последовательности <code>//</code>, <code>#</code> и <code>/*</code> внутри строк не считаются комментариями:</p>
+  <pre><code>{
+  "note": "это просто текст // а не комментарий"
+}</code></pre>
+
+  <hr>
+
+  <h2>3. Как устроены правила маршрутизации</h2>
+
+  <p>Внутри поля <code>"rules"</code> каждый объект — это отдельное правило. Основные поля:</p>
+  <ul>
+    <li><code>"type": "field"</code> — тип правила (обычно его не меняют).</li>
+    <li><code>"domain": [...]</code> — список доменов или групп доменов (<code>geosite:...</code>).</li>
+    <li><code>"ip": [...]</code> — список IP или групп IP (<code>geoip:...</code>).</li>
+    <li><code>"outboundTag": "proxy"</code> — тег, который должен существовать в <code>04_outbounds.json</code>.</li>
+  </ul>
+
+  <p>Пример: отправить Netflix через прокси:</p>
+  <pre><code>{
+  "type": "field",
+  "domain": [
+    "geosite:netflix",
+    "netflix.com"
+  ],
+  "outboundTag": "proxy"
+}</code></pre>
+
+  <p>Пример: локальные сети в обход прокси:</p>
+  <pre><code>{
+  "type": "field",
+  "ip": [
+    "geoip:private"
+  ],
+  "outboundTag": "direct"
+}</code></pre>
+
+  <hr>
+
+  <h2>4. Готовый пример 05_routing.jsonc</h2>
+
+  <p>Ниже — рабочий шаблон <code>05_routing.jsonc</code>, который можно использовать как базу и редактировать под себя.</p>
+
+  <pre><code>/*
+ * 05_routing.jsonc — пример с комментариями
+ *
+ * Поддерживаются комментарии:
+ *   // однострочный комментарий
+ *   # однострочный комментарий
+ *   /* многострочный комментарий *\/
+ *
+ * После удаления комментариев файл превращается в обычный валидный JSON.
+ * Следи только за тем, чтобы не было "висячих" запятых после последнего элемента.
+ */
+
+# Общие настройки маршрутизатора Xray
+{
+  // Как обрабатывать домены (AsIs / IPIfNonMatch / IPOnDemand)
+  "domainStrategy": "AsIs",
+
+  // Как сопоставлять домены (plain / vdomain / mph / hybrid)
+  "domainMatcher": "hybrid",
+
+  // Основные правила маршрутизации
+  "rules": [
+    // ===================== ЛОКАЛЬНЫЕ СЕТИ / ЛОКАЛЬНЫЕ ДОМЕНЫ =====================
+
+    {
+      // Весь приватный диапазон IP → direct
+      "type": "field",
+      "ip": [
+        "geoip:private",         // RFC1918, локальные сети
+        "geoip:cn"               // пример: Китай напрямую (можно удалить, если не нужно)
+      ],
+      "outboundTag": "direct"    // тег должен существовать в 04_outbounds.json
+    },
+
+    {
+      // Локальные домены, типа router.local, *.lan и т.п.
+      "type": "field",
+      "domain": [
+        "geosite:private"
+      ],
+      "outboundTag": "direct"
+    },
+
+    // ===================== БЛОКИРОВКА РЕКЛАМЫ / НЕНУЖНЫЙ ТРАФИК =====================
+
+    {
+      // Рекламные домены по готовым спискам
+      "type": "field",
+      "domain": [
+        "geosite:category-ads-all"  // списки рекламы (если импортированы в geosite)
+      ],
+      "outboundTag": "block"        // тег block должен быть настроен в outbounds
+    },
+
+    // ===================== СТРИМИНГ / МЕДИА ЧЕРЕЗ ПРОКСИ =====================
+
+    {
+      /*
+       * Стриминговые сервисы → proxy
+       * сюда можно добавлять свои геосайты и домены
+       */
+      "type": "field",
+      "domain": [
+        // Сервисы из geosite
+        "geosite:netflix",
+        "geosite:disney",
+        "geosite:youtube",
+
+        // Прямые домены (пример)
+        "netflix.com",
+        "youtube.com"
+      ],
+      "outboundTag": "proxy"
+    },
+
+    // ===================== РАБОТА / VPN ДЛЯ ОФИСА =====================
+
+    {
+      /*
+       * Пример: рабочие ресурсы через отдельный прокси
+       * Можно удалить или раскомментировать и дописать свои домены.
+       */
+      "type": "field",
+      "domain": [
+        "corp.example.com",
+        "jira.example.com",
+        "vpn.example.com"
+      ],
+      "outboundTag": "work-proxy"   // не забудь добавить этот тег в outbounds
+    },
+
+    // ===================== ПРИМЕРЫ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ =====================
+
+    /*
+    {
+      // Пример: игры в Steam идут напрямую
+      "type": "field",
+      "domain": [
+        "store.steampowered.com",
+        "api.steampowered.com"
+      ],
+      "outboundTag": "direct"
+    },
+    */
+
+    /*
+    {
+      // Пример: какие-то сайты всегда через VPN
+      "type": "field",
+      "domain": [
+        "mybank.com",
+        "secure.example.org"
+      ],
+      "outboundTag": "proxy"
+    },
+    */
+
+    // ===================== ПРАВИЛО ПО УМОЛЧАНИЮ =====================
+
+    {
+      /*
+       * Фоллбэк: всё, что не попало ни под одно правило выше,
+       * идёт через proxy (можно сменить на direct, если нужно).
+       */
+      "type": "field",
+      "outboundTag": "proxy"
+    }
+  ]
+}</code></pre>
+
+  <hr>
+
+  <h2>5. Советы</h2>
+  <ul>
+    <li>Если сомневаетесь — закомментируйте правило, а не удаляйте его.</li>
+    <li>После правок убедитесь, что:
+      <ul>
+        <li>все скобки <code>{}</code> и <code>[]</code> закрыты;</li>
+        <li>строки в двойных кавычках <code>"..."</code>;</li>
+        <li>нет лишней запятой перед <code>]</code> или <code>}</code>.</li>
+      </ul>
+    </li>
+  </ul>
+
+</body>
+</html>
