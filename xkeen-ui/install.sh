@@ -62,6 +62,67 @@ if [ ! -x "$PYTHON_BIN" ]; then
   exit 1
 fi
 
+# Проверка наличия Flask и при необходимости автоустановка
+echo "[*] Проверяю наличие Flask для Python3..."
+
+if ! "$PYTHON_BIN" - << 'EOF'
+try:
+    import flask  # noqa
+except Exception:
+    raise SystemExit(1)
+EOF
+then
+  echo "[*] Flask не найден. Пытаюсь установить зависимости через Entware и pip..."
+
+  # Пытаемся найти opkg
+  if command -v opkg >/dev/null 2>&1; then
+    OPKG_BIN="$(command -v opkg)"
+  elif [ -x "/opt/bin/opkg" ]; then
+    OPKG_BIN="/opt/bin/opkg"
+  else
+    echo "[!] Не найден пакетный менеджер opkg Entware."
+    echo "    Установи Entware вручную или поставь Flask так:"
+    echo "      opkg update && opkg install python3 python3-pip"
+    echo "      $PYTHON_BIN -m pip install --upgrade pip flask"
+    exit 1
+  fi
+
+  # Обновляем списки пакетов и ставим python3 + pip (на случай, если их не было)
+  if ! "$OPKG_BIN" update; then
+    echo "[!] Не удалось выполнить 'opkg update' при установке Flask."
+    echo "    Проверь подключение к интернету и репозитории Entware."
+    exit 1
+  fi
+
+  if ! "$OPKG_BIN" install python3 python3-pip; then
+    echo "[!] Установка python3 и python3-pip через opkg завершилась с ошибкой."
+    echo "    Попробуй установить их вручную, затем запусти установщик ещё раз."
+    exit 1
+  fi
+
+  # Устанавливаем/обновляем pip и Flask через pip
+  if ! "$PYTHON_BIN" -m pip install --upgrade pip flask; then
+    echo "[!] Не удалось установить Flask через pip."
+    echo "    Попробуй вручную:"
+    echo "      opkg update && opkg install python3 python3-pip"
+    echo "      $PYTHON_BIN -m pip install --upgrade pip flask"
+    exit 1
+  fi
+
+  # Повторная проверка импорта Flask
+  if ! "$PYTHON_BIN" - << 'EOF'
+try:
+    import flask  # noqa
+except Exception:
+    raise SystemExit(1)
+EOF
+  then
+    echo "[!] Flask по-прежнему не виден из $PYTHON_BIN после установки."
+    echo "    Проверь окружение Python и попробуй установить Flask вручную."
+    exit 1
+  fi
+fi
+
 # Функция проверки использования порта
 is_port_in_use() {
   PORT_CHECK="$1"
@@ -165,22 +226,27 @@ else
   rm -f "$UI_DIR/install.sh"
 fi
 
-# Если вместе с панелью пришли шаблоны Mihomo — скопируем их в системный каталог,
-# не перезаписывая уже существующие.
+# Устанавливаем новый единый шаблон Mihomo.
+# Старые шаблоны (config_2.yaml, umarcheh001.yaml) удаляются, чтобы не мешать.
 if [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
-  echo "[*] Обновляю шаблоны Mihomo в $MIHOMO_TEMPLATES_DIR..."
+  echo "[*] Устанавливаю шаблон Mihomo в $MIHOMO_TEMPLATES_DIR..."
   mkdir -p "$MIHOMO_TEMPLATES_DIR"
-  for f in "$SRC_MIHOMO_TEMPLATES"/*.yaml "$SRC_MIHOMO_TEMPLATES"/*.yml; do
-    [ -e "$f" ] || continue
-    base=$(basename "$f")
-    dest="$MIHOMO_TEMPLATES_DIR/$base"
-    if [ -f "$dest" ]; then
-      echo "[*] Шаблон $base уже существует, пропускаю."
-    else
-      cp "$f" "$dest"
-      echo "[*] Скопирован шаблон $base в $MIHOMO_TEMPLATES_DIR"
+
+  # Удаляем старые шаблоны, если остались от предыдущих установок
+  for old in config_2.yaml umarcheh001.yaml; do
+    if [ -f "$MIHOMO_TEMPLATES_DIR/$old" ]; then
+      rm -f "$MIHOMO_TEMPLATES_DIR/$old" && echo "[*] Удалён старый шаблон $old"
     fi
   done
+
+  # Копируем актуальный шаблон custom.yaml с перезаписью
+  SRC_CUSTOM="$SRC_MIHOMO_TEMPLATES/custom.yaml"
+  if [ -f "$SRC_CUSTOM" ]; then
+    cp -f "$SRC_CUSTOM" "$MIHOMO_TEMPLATES_DIR/custom.yaml"
+    echo "[*] Установлен шаблон custom.yaml в $MIHOMO_TEMPLATES_DIR"
+  else
+    echo "[!] Не найден шаблон custom.yaml в $SRC_MIHOMO_TEMPLATES"
+  fi
 fi
 
 
@@ -230,6 +296,9 @@ start_service() {
   fi
 
   echo "Запуск Xkeen Web UI..."
+  # Окружение для проверки конфигов Mihomo через mihomo -t
+  export MIHOMO_ROOT="/opt/etc/mihomo"
+  export MIHOMO_VALIDATE_CMD='/opt/sbin/mihomo -t -d {root} -f {config}'
   nohup "$PYTHON_BIN" "$APP_PY" >> "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   echo "Запущено, PID $(cat "$PID_FILE")."
