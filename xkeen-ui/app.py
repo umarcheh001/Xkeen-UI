@@ -1,7 +1,9 @@
 #!/opt/bin/python3
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 import json
+import datetime
 import os
+import re
 import time
 import shutil
 import subprocess
@@ -9,7 +11,74 @@ import urllib.request
 import urllib.error
 from urllib.parse import urlparse, parse_qs, unquote, quote
 
+from typing import Any, Dict, Tuple
+from mihomo_server_core import CONFIG_PATH, validate_config
+
+
+def api_error(message: str, status: int = 400, *, ok: bool | None = None):
+    """Return a JSON error response in a consistent format.
+
+    If ``ok`` is not None, include it in the payload (typically ``False``).
+    """
+    payload: Dict[str, Any] = {"error": message}
+    if ok is not None:
+        payload["ok"] = ok
+    return jsonify(payload), status
+
+
+
+
+
+from routes_routing import create_routing_blueprint
+from routes_backup import create_backups_blueprint
+from routes_service import create_service_blueprint
+from services.xkeen import append_restart_log as _svc_append_restart_log, read_restart_log as _svc_read_restart_log, restart_xkeen as _svc_restart_xkeen
+from services.xray_logs import load_xray_log_config as _svc_load_xray_log_config, tail_lines as _svc_tail_lines, adjust_log_timezone as _svc_adjust_log_timezone
+from services.mihomo import (
+    parse_state_from_payload as _mihomo_parse_state,
+    list_profiles_for_api as _mh_list_profiles_for_api,
+    get_profile_content_for_api as _mh_get_profile_content_for_api,
+    create_profile_from_content as _mh_create_profile_from_content,
+    delete_profile_by_name as _mh_delete_profile_by_name,
+    activate_profile as _mh_activate_profile,
+)
+from services.mihomo_backups import (
+    list_backups_for_profile as _mh_list_backups_for_profile,
+    get_backup_content as _mh_get_backup_content,
+    restore_backup_file as _mh_restore_backup_file,
+    delete_backup_file as _mh_delete_backup_file,
+    clean_backups_for_api as _mh_clean_backups_for_api,
+)
+
+
+
+
+
+
+
+try:
+    import yaml as _yaml_for_mihomo
+except Exception:  # PyYAML is optional on router
+    _yaml_for_mihomo = None
+
+
+def _mihomo_validate_yaml_syntax(cfg: str):
+    """
+    Optional fast YAML-syntax validation for Mihomo configs (similar to isValidYAML in Go UI).
+
+    Returns (ok: bool, error_message: str). If PyYAML is not available, always returns (True, "").
+    """
+    if _yaml_for_mihomo is None:
+        return True, ""
+    try:
+        _yaml_for_mihomo.safe_load(cfg)
+        return True, ""
+    except Exception as e:  # pragma: no cover - depends on PyYAML details
+        return False, str(e)
+
+
 ROUTING_FILE = "/opt/etc/xray/configs/05_routing.json"
+ROUTING_FILE_RAW = "/opt/etc/xray/configs/05_routing.jsonc"
 INBOUNDS_FILE = "/opt/etc/xray/configs/03_inbounds.json"
 OUTBOUNDS_FILE = "/opt/etc/xray/configs/04_outbounds.json"
 BACKUP_DIR = "/opt/etc/xray/configs/backups"
@@ -24,9 +93,22 @@ XRAY_ERROR_LOG = "/opt/var/log/xray/error.log"
 XRAY_ACCESS_LOG_SAVED = XRAY_ACCESS_LOG + ".saved"
 XRAY_ERROR_LOG_SAVED = XRAY_ERROR_LOG + ".saved"
 
-MIHOMO_CONFIG_FILE = "/opt/etc/mihomo/config.yaml"
+# Сдвиг временных меток в логах Xray/Mihomo (в часах).
+# По умолчанию +3, как в оригинальном Go UI (MSK), можно переопределить переменной окружения XKEEN_XRAY_LOG_TZ_OFFSET.
+_XRAY_LOG_TZ_ENV = os.environ.get("XKEEN_XRAY_LOG_TZ_OFFSET", "3")
+try:
+    XRAY_LOG_TZ_OFFSET_HOURS = int(_XRAY_LOG_TZ_ENV)
+except ValueError:
+    XRAY_LOG_TZ_OFFSET_HOURS = 3
+
+# Простейший кэш для логов, чтобы не перечитывать файл, если он не менялся.
+# Ключ: путь к файлу, значение: словарь с полями size, mtime, lines.
+LOG_CACHE = {}
+
+
+MIHOMO_CONFIG_FILE = str(CONFIG_PATH)
 MIHOMO_TEMPLATES_DIR = "/opt/etc/mihomo/templates"
-MIHOMO_DEFAULT_TEMPLATE = "/opt/etc/mihomo/templates/umarcheh001.yaml"
+MIHOMO_DEFAULT_TEMPLATE = os.path.join(MIHOMO_TEMPLATES_DIR, "custom.yaml")
 
 XRAY_CONFIG_DIR = os.path.dirname(ROUTING_FILE)
 XKEEN_CONFIG_DIR = os.path.dirname(PORT_PROXYING_FILE)
@@ -337,9 +419,69 @@ app.secret_key = "xkeen-ui-key-change-me"
 
 # ---------- helpers ----------
 
+def strip_json_comments_text(s):
+    """Удаляем //, # и /* */ комментарии вне строк."""
+    res = []
+    in_string = False
+    escape = False
+    i = 0
+    length = len(s)
+
+    while i < length:
+        ch = s[i]
+
+        # Внутри строки — просто копируем символы, следим за экранированием
+        if in_string:
+            res.append(ch)
+            if escape:
+                escape = False
+            elif ch == '\\':
+                escape = True
+            elif ch == '"':
+                in_string = False
+            i += 1
+            continue
+
+        # Начало строки
+        if ch == '"':
+            in_string = True
+            res.append(ch)
+            i += 1
+            continue
+
+        # Однострочный комментарий // ...
+        if ch == '/' and i + 1 < length and s[i + 1] == '/':
+            # пропускаем до конца строки
+            i += 2
+            while i < length and s[i] != '\n':
+                i += 1
+            continue
+
+        # Однострочный комментарий # ...
+        if ch == '#':
+            # пропускаем до конца строки
+            i += 1
+            while i < length and s[i] != '\n':
+                i += 1
+            continue
+
+        # Многострочный комментарий /* ... */
+        if ch == '/' and i + 1 < length and s[i + 1] == '*':
+            i += 2
+            while i + 1 < length and not (s[i] == '*' and s[i + 1] == '/'):
+                i += 1
+            i += 2
+            continue
+
+        # Обычный символ
+        res.append(ch)
+        i += 1
+
+    return ''.join(res)
+
 def load_json(path, default=None):
     def strip_json_comments(s):
-        """Удаляем // и /* */ комментарии вне строк."""
+        """Удаляем //, # и /* */ комментарии вне строк."""
         res = []
         in_string = False
         escape = False
@@ -372,6 +514,14 @@ def load_json(path, default=None):
             if ch == '/' and i + 1 < length and s[i + 1] == '/':
                 # пропускаем до конца строки
                 i += 2
+                while i < length and s[i] != '\n':
+                    i += 1
+                continue
+
+            # Однострочный комментарий # ...
+            if ch == '#':
+                # пропускаем до конца строки
+                i += 1
                 while i < length and s[i] != '\n':
                     i += 1
                 continue
@@ -499,76 +649,44 @@ def list_backups():
 
 
 def append_restart_log(ok, source="api"):
-    line = "[{ts}] source={src} result={res}\n".format(
-        ts=time.strftime("%Y-%m-%d %H:%M:%S"),
-        src=source,
-        res="OK" if ok else "FAIL",
-    )
-    log_dir = os.path.dirname(RESTART_LOG_FILE)
-    if log_dir and not os.path.isdir(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-    try:
-        with open(RESTART_LOG_FILE, "a") as f:
-            f.write(line)
-    except Exception:
-        pass
+    """Thin wrapper around services.xkeen.append_restart_log using global RESTART_LOG_FILE."""
+    return _svc_append_restart_log(RESTART_LOG_FILE, ok, source=source)
+
 
 
 def read_restart_log(limit=100):
-    if not os.path.isfile(RESTART_LOG_FILE):
-        return []
-    try:
-        with open(RESTART_LOG_FILE, "r") as f:
-            lines = f.readlines()
-        return lines[-limit:]
-    except Exception:
-        return []
+    """Thin wrapper around services.xkeen.read_restart_log using global RESTART_LOG_FILE."""
+    return _svc_read_restart_log(RESTART_LOG_FILE, limit=limit)
+
+
 
 def tail_lines(path, max_lines=800):
-    """Возвращает последние max_lines строк файла (для live-логов)."""
-    try:
-        with open(path, "r") as f:
-            lines = f.readlines()
-        if max_lines and len(lines) > max_lines:
-            lines = lines[-max_lines:]
-        return lines
-    except FileNotFoundError:
-        return []
-    except Exception:
-        return []
+    """Wrapper around services.xray_logs.tail_lines using LOG_CACHE."""
+    return _svc_tail_lines(path, max_lines=max_lines, cache=LOG_CACHE)
+
+
+
+def adjust_log_timezone(lines, offset_hours: int = XRAY_LOG_TZ_OFFSET_HOURS):
+    """Wrapper around services.xray_logs.adjust_log_timezone."""
+    return _svc_adjust_log_timezone(lines, offset_hours)
+
 
 
 def load_xray_log_config():
-    """Читает или создаёт конфиг логов Xray (01_log.json)."""
-    default = {
-        "log": {
-            "access": XRAY_ACCESS_LOG,
-            "error": XRAY_ERROR_LOG,
-            "loglevel": "none",
-        }
-    }
-    cfg = load_json(XRAY_LOG_CONFIG_FILE, default=default) or {}
-    if not isinstance(cfg, dict):
-        cfg = {}
-    log_cfg = cfg.get("log")
-    if not isinstance(log_cfg, dict):
-        log_cfg = {}
-    log_cfg.setdefault("access", XRAY_ACCESS_LOG)
-    log_cfg.setdefault("error", XRAY_ERROR_LOG)
-    log_cfg.setdefault("loglevel", "none")
-    cfg["log"] = log_cfg
-    return cfg
+    """Wrapper around services.xray_logs.load_xray_log_config using global paths."""
+    return _svc_load_xray_log_config(
+        load_json,
+        XRAY_LOG_CONFIG_FILE,
+        XRAY_ACCESS_LOG,
+        XRAY_ERROR_LOG,
+    )
 
 
 
 def restart_xkeen(source="api"):
-    try:
-        subprocess.check_call(XKEEN_RESTART_CMD)
-        append_restart_log(True, source=source)
-        return True
-    except Exception:
-        append_restart_log(False, source=source)
-        return False
+    """Thin wrapper around services.xkeen.restart_xkeen using global XKEEN_RESTART_CMD/RESTART_LOG_FILE."""
+    return _svc_restart_xkeen(XKEEN_RESTART_CMD, RESTART_LOG_FILE, source=source)
+
 
 
 # ---------- INBOUNDS presets (03_inbounds.json) ----------
@@ -809,34 +927,17 @@ def index():
 def xkeen_page():
     return render_template("xkeen.html")
 
+@app.get("/mihomo_generator")
+def mihomo_generator_page():
+    return render_template("mihomo_generator.html")
 
-@app.get("/backups")
-def backups_page():
-    return render_template("backups.html", backups=list_backups(), backup_dir=BACKUP_DIR)
+
+
 
 
 # ---------- API: routing (05_routing.json) ----------
 
-@app.get("/api/routing")
-def api_get_routing():
-    data = load_json(ROUTING_FILE, default={})
-    return jsonify(data), 200
 
-
-@app.post("/api/routing")
-def api_set_routing():
-    payload = request.get_json(silent=True)
-    if payload is None:
-        return jsonify({"ok": False, "error": "invalid json"}), 400
-    save_json(ROUTING_FILE, payload)
-    restart_arg = request.args.get("restart", None)
-    restart_flag = True
-    if restart_arg is not None:
-        restart_arg = restart_arg.strip().lower()
-        restart_flag = restart_arg in ("1", "true", "yes", "on", "y")
-    restarted = restart_flag and restart_xkeen(source="routing")
-
-    return jsonify({"ok": True, "restarted": restarted}), 200
 
 
 # ---------- API: mihomo config.yaml ----------
@@ -845,9 +946,7 @@ def api_set_routing():
 def api_get_mihomo_config():
     content = load_text(MIHOMO_CONFIG_FILE, default=None)
     if content is None:
-        return jsonify(
-            {"ok": False, "error": f"Файл {MIHOMO_CONFIG_FILE} не найден"}
-        ), 404
+        return api_error(f"Файл {MIHOMO_CONFIG_FILE} не найден", 404, ok=False)
     return jsonify({"ok": True, "content": content}), 200
 
 
@@ -855,20 +954,42 @@ def api_get_mihomo_config():
 def api_set_mihomo_config():
     data = request.get_json(silent=True) or {}
     content = data.get("content", "")
-    save_text(MIHOMO_CONFIG_FILE, content)
+
+    try:
+        # Сохраняем конфиг через mihomo_server_core, чтобы перед записью делался бэкап
+        ensure_mihomo_layout()
+        save_config(content)
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
     restart_flag = bool(data.get("restart", True))
     restarted = restart_flag and restart_xkeen(source="mihomo-config")
 
     return jsonify({"ok": True, "restarted": restarted}), 200
 
 
+
+
+@app.post("/api/mihomo/preview")
+def api_mihomo_preview():
+    """Generate Mihomo config preview from UI state without saving or restart.
+
+    The payload format matches /api/mihomo/generate_apply, but this
+    endpoint only returns the generated config text.
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        cfg = mihomo_svc.generate_preview(data)
+    except Exception as exc:  # pragma: no cover - defensive
+        return api_error(f"Ошибка генерации предпросмотра: {exc}", 400, ok=False)
+    return jsonify({"ok": True, "content": cfg}), 200
+
+
 @app.get("/api/mihomo-config/template")
 def api_get_mihomo_default_template():
     content = load_text(MIHOMO_DEFAULT_TEMPLATE, default=None)
     if content is None:
-        return jsonify(
-            {"ok": False, "error": f"Файл шаблона {MIHOMO_DEFAULT_TEMPLATE} не найден"}
-        ), 404
+        return api_error(f"Файл шаблона {MIHOMO_DEFAULT_TEMPLATE} не найден", 404, ok=False)
     return jsonify({"ok": True, "content": content}), 200
 
 
@@ -902,11 +1023,11 @@ def api_get_mihomo_template():
     name = request.args.get("name", "").strip()
     path = _safe_template_path(name)
     if not path:
-        return jsonify({"ok": False, "error": "invalid template name"}), 400
+        return api_error("invalid template name", 400, ok=False)
 
     content = load_text(path, default=None)
     if content is None:
-        return jsonify({"ok": False, "error": "template not found"}), 404
+        return api_error("template not found", 404, ok=False)
 
     return jsonify({"ok": True, "content": content, "name": os.path.basename(path)}), 200
 
@@ -919,7 +1040,7 @@ def api_save_mihomo_template():
 
     path = _safe_template_path(name)
     if not path:
-        return jsonify({"ok": False, "error": "invalid template name"}), 400
+        return api_error("invalid template name", 400, ok=False)
 
     d = os.path.dirname(path)
     if not os.path.isdir(d):
@@ -942,189 +1063,28 @@ def delete_backup_from_backups_page():
             except OSError:
                 # Ignore deletion error and just return to the backups page
                 pass
-    return redirect(url_for("backups_page"))
+    return redirect(url_for("backups.backups_page"))
 
 
 
-@app.post("/api/xkeen/start")
-def api_xkeen_start():
-    try:
-        subprocess.check_call(["xkeen", "-start"])
-        append_restart_log(True, source="api-start")
-        return jsonify({"ok": True}), 200
-    except Exception:
-        append_restart_log(False, source="api-start")
-        return jsonify({"ok": False}), 500
 
 
-@app.post("/api/xkeen/stop")
-def api_xkeen_stop():
-    try:
-        subprocess.check_call(["xkeen", "-stop"])
-        append_restart_log(True, source="api-stop")
-        return jsonify({"ok": True}), 200
-    except Exception:
-        append_restart_log(False, source="api-stop")
-        return jsonify({"ok": False}), 500
-
-
-# ---------- API: restart xkeen ----------
-@app.post("/api/restart-xkeen")
-def api_restart_xkeen():
-    restarted = restart_xkeen(source="manual-mihomo")
-    return jsonify({"ok": True, "restarted": restarted}), 200
-
-
-# ---------- API: backups ----------
-
-@app.post("/api/backup")
-def api_create_backup():
-    data = load_json(ROUTING_FILE, default=None)
-    if data is None:
-        return jsonify({"ok": False, "error": "routing file missing or invalid"}), 400
-
-    if not os.path.isdir(BACKUP_DIR):
-        os.makedirs(BACKUP_DIR, exist_ok=True)
-
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    fname = f"05_routing-{ts}.json"
-    path = os.path.join(BACKUP_DIR, fname)
-    save_json(path, data)
-    return jsonify({"ok": True, "filename": fname}), 200
-
-
-@app.post("/api/backup-inbounds")
-def api_create_backup_inbounds():
-    data = load_json(INBOUNDS_FILE, default=None)
-    if data is None:
-        return jsonify({"ok": False, "error": "inbounds file missing or invalid"}), 400
-
-    if not os.path.isdir(BACKUP_DIR):
-        os.makedirs(BACKUP_DIR, exist_ok=True)
-
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    fname = f"03_inbounds-{ts}.json"
-    path = os.path.join(BACKUP_DIR, fname)
-    save_json(path, data)
-    return jsonify({"ok": True, "filename": fname}), 200
-
-
-@app.post("/api/backup-outbounds")
-def api_create_backup_outbounds():
-    data = load_json(OUTBOUNDS_FILE, default=None)
-    if data is None:
-        return jsonify({"ok": False, "error": "outbounds file missing or invalid"}), 400
-
-    if not os.path.isdir(BACKUP_DIR):
-        os.makedirs(BACKUP_DIR, exist_ok=True)
-
-    ts = time.strftime("%Y%m%d-%H%M%S")
-    fname = f"04_outbounds-{ts}.json"
-    path = os.path.join(BACKUP_DIR, fname)
-    save_json(path, data)
-    return jsonify({"ok": True, "filename": fname}), 200
-
-
-@app.get("/api/backups")
-def api_list_backups():
-    return jsonify(list_backups()), 200
-
-
-@app.post("/api/restore")
-def api_restore_backup():
-    payload = request.get_json(silent=True) or {}
-    filename = payload.get("filename")
-    if not filename:
-        return jsonify({"ok": False, "error": "filename is required"}), 400
-
-    path = os.path.join(BACKUP_DIR, filename)
-    if not os.path.isfile(path):
-        return jsonify({"ok": False, "error": "backup not found"}), 404
-
-    data = load_json(path, default=None)
-    if data is None:
-        return jsonify({"ok": False, "error": "backup file invalid"}), 400
-
-    target_file = _detect_backup_target_file(filename)
-    save_json(target_file, data)
-    return jsonify({"ok": True}), 200
-
-
-
-@app.post("/api/delete-backup")
-def api_delete_backup():
-    payload = request.get_json(silent=True) or {}
-    filename = payload.get("filename")
-    if not filename:
-        return jsonify({"ok": False, "error": "filename is required"}), 400
-
-    path = os.path.join(BACKUP_DIR, filename)
-    if not os.path.isfile(path):
-        return jsonify({"ok": False, "error": "backup not found"}), 404
-
-    try:
-        os.remove(path)
-    except OSError:
-        return jsonify({"ok": False, "error": "failed to delete backup"}), 500
-
-    return jsonify({"ok": True}), 200
-
-
-@app.post("/api/restore-auto")
-def api_restore_auto_backup():
-    payload = request.get_json(silent=True) or {}
-    target = (payload.get("target") or "").strip()
-    if target not in ("routing", "inbounds", "outbounds"):
-        return jsonify({"ok": False, "error": "invalid target"}), 400
-
-    if target == "routing":
-        config_path = ROUTING_FILE
-    elif target == "inbounds":
-        config_path = INBOUNDS_FILE
-    else:
-        config_path = OUTBOUNDS_FILE
-
-    backup_path, mtime = _find_latest_auto_backup_for(config_path)
-    if not backup_path:
-        return jsonify({"ok": False, "error": "auto-backup not found"}), 404
-
-    data = load_json(backup_path, default=None)
-    if data is None:
-        return jsonify({"ok": False, "error": "auto-backup file invalid"}), 400
-
-    save_json(config_path, data)
-    filename = os.path.basename(backup_path)
-    return jsonify(
-        {
-            "ok": True,
-            "filename": filename,
-            "target": target,
-        }
-    ), 200
-
-
-@app.post("/restore")
-def restore_from_backups_page():
-    filename = request.form.get("filename")
-    if not filename:
-        return redirect(url_for("backups_page"))
-    path = os.path.join(BACKUP_DIR, filename)
-    if os.path.isfile(path):
-        data = load_json(path, default=None)
-        if data is not None:
-            target_file = _detect_backup_target_file(filename)
-            save_json(target_file, data)
-            restart_xkeen(source="backups-page")
-    return redirect(url_for("backups_page"))
 
 # ---------- API: restart xkeen ----------
 
 @app.post("/api/restart")
 def api_restart():
+    """
+    Restart xkeen via API button.
+
+    To keep frontend logic consistent, this endpoint always returns a JSON object
+    with a boolean "restarted" flag along with "ok".
+    """
     ok = restart_xkeen(source="api-button")
-    if ok:
-        return jsonify({"ok": True}), 200
-    return jsonify({"ok": False}), 500
+    # Even on failure we still include the "restarted" flag so the UI
+    # can reliably check for it.
+    payload = {"ok": bool(ok), "restarted": bool(ok)}
+    return jsonify(payload), (200 if ok else 500)
 
 
 
@@ -1133,9 +1093,9 @@ def api_run_command():
     data = request.get_json(silent=True) or {}
     flag = str(data.get("flag", "")).strip()
     if not flag:
-        return jsonify({"error": "empty flag"}), 400
+        return api_error("empty flag", 400, ok=False)
     if flag not in ALLOWED_FLAGS:
-        return jsonify({"error": "flag not allowed"}), 400
+        return api_error("flag not allowed", 400, ok=False)
 
     stdin_data = data.get("stdin")
     cmd = [XKEEN_BIN, flag]
@@ -1150,10 +1110,7 @@ def api_run_command():
         )
         output = proc.stdout or ""
 
-        # strip ANSI escape codes
-        import re as _re
-        ansi = _re.compile(r"\x1B[@-_][0-?]*[ -/]*[@-~]")
-        output = ansi.sub("", output)
+        # keep ANSI escape codes for colorized output in UI
 
         # remove Entware / opkg noise
         cleaned = []
@@ -1168,7 +1125,7 @@ def api_run_command():
 
         return jsonify({"exit_code": proc.returncode, "output": output}), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return api_error(str(e), 500, ok=False)
 
 
 # ---------- API: restart log ----------
@@ -1188,7 +1145,7 @@ def api_restart_log_clear():
                 f.write("")
         return jsonify({"ok": True}), 200
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return api_error(str(e), 500, ok=False)
 
 
 # ---------- API: Xray live logs ----------
@@ -1225,6 +1182,7 @@ def api_xray_logs():
             path = XRAY_ACCESS_LOG
 
     lines = tail_lines(path, max_lines=max_lines)
+    lines = adjust_log_timezone(lines)
     return jsonify({"lines": lines}), 200
 
 
@@ -1252,6 +1210,9 @@ def api_xray_logs_clear():
                 os.makedirs(os.path.dirname(actual), exist_ok=True)
                 with open(actual, "w") as f:
                     f.write("")
+                # сбрасываем кэш для очищенного файла
+                if actual in LOG_CACHE:
+                    LOG_CACHE.pop(actual, None)
             except Exception:
                 # просто игнорируем, роутер может быть в readonly и т.п.
                 pass
@@ -1395,16 +1356,36 @@ def api_set_ip_exclude():
 def api_get_inbounds():
     mode = detect_inbounds_mode()
     data = load_inbounds()
-    return jsonify({"mode": mode, "config": data}), 200
+    try:
+        pretty = json.dumps(data, ensure_ascii=False, indent=2) if data is not None else "{}"
+    except Exception:
+        pretty = "{}"
+    return jsonify({"mode": mode, "config": data, "text": pretty}), 200
 
 
 @app.post("/api/inbounds")
 def api_set_inbounds():
     payload = request.get_json(silent=True) or {}
+
+    # Новый режим: прямое сохранение произвольного конфига
+    if "config" in payload:
+        data = payload.get("config")
+        if not isinstance(data, dict):
+            return api_error("config must be object", 400, ok=False)
+
+        restart_flag = bool(payload.get("restart", True))
+        save_inbounds(data)
+        # после ручного редактирования пробуем определить режим (mixed/tproxy/redirect/custom)
+        mode = detect_inbounds_mode()
+        restarted = restart_flag and restart_xkeen(source="inbounds")
+
+        return jsonify({"ok": True, "mode": mode, "restarted": restarted}), 200
+
+    # Старый режим: выбор предустановленного режима по полю mode
     mode = payload.get("mode")
 
     if mode not in ("mixed", "tproxy", "redirect"):
-        return jsonify({"ok": False, "error": "invalid mode"}), 400
+        return api_error("invalid mode", 400, ok=False)
 
     if mode == "mixed":
         data = MIXED_INBOUNDS
@@ -1417,7 +1398,6 @@ def api_set_inbounds():
     save_inbounds(data)
     restarted = restart_flag and restart_xkeen(source="inbounds")
 
-
     return jsonify({"ok": True, "mode": mode, "restarted": restarted}), 200
 
 
@@ -1429,19 +1409,31 @@ def api_get_outbounds():
     url = None
     if cfg:
         url = build_vless_url_from_config(cfg)
-    return jsonify({"url": url, "config": cfg}), 200
+    try:
+        pretty = json.dumps(cfg, ensure_ascii=False, indent=2) if cfg is not None else "{}"
+    except Exception:
+        pretty = "{}"
+    return jsonify({"url": url, "config": cfg, "text": pretty}), 200
 
 
 @app.post("/api/outbounds")
 def api_set_outbounds():
     payload = request.get_json(silent=True) or {}
-    url = (payload.get("url") or "").strip()
-    if not url:
-        return jsonify({"ok": False, "error": "url is required"}), 400
-    try:
-        cfg = build_outbounds_config_from_vless(url)
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+
+    # Новый режим: прямое сохранение произвольного конфига
+    if "config" in payload:
+        cfg = payload.get("config")
+        if not isinstance(cfg, dict):
+            return api_error("config must be object", 400, ok=False)
+    else:
+        # Старый режим: собираем конфиг из VLESS-ссылки
+        url = (payload.get("url") or "").strip()
+        if not url:
+            return api_error("url is required", 400, ok=False)
+        try:
+            cfg = build_outbounds_config_from_vless(url)
+        except Exception as e:
+            return api_error(str(e), 400, ok=False)
 
     save_outbounds(cfg)
     restart_flag = bool(payload.get("restart", True))
@@ -1472,25 +1464,25 @@ def api_local_import_configs():
     """Импорт конфигураций из локального JSON-файла bundle."""
     file = request.files.get("file")
     if not file or file.filename == "":
-        return jsonify({"ok": False, "error": "no file uploaded"}), 400
+        return api_error("no file uploaded", 400, ok=False)
 
     try:
         raw = file.read().decode("utf-8", errors="replace")
     except Exception as e:
-        return jsonify({"ok": False, "error": f"read failed: {e}"}), 400
+        return api_error(f"read failed: {e}", 400, ok=False)
 
     try:
         bundle = json.loads(raw)
     except Exception as e:
-        return jsonify({"ok": False, "error": f"invalid json: {e}"}), 400
+        return api_error(f"invalid json: {e}", 400, ok=False)
 
     if not isinstance(bundle, dict):
-        return jsonify({"ok": False, "error": "bundle must be a dict"}), 400
+        return api_error("bundle must be a dict", 400, ok=False)
 
     try:
         apply_user_configs_bundle(bundle)
     except Exception as e:
-        return jsonify({"ok": False, "error": f"apply failed: {e}"}), 500
+        return api_error(f"apply failed: {e}", 500, ok=False)
 
     return jsonify({"ok": True}), 200
 
@@ -1500,7 +1492,7 @@ def api_local_import_configs():
 @app.post("/api/github/export-configs")
 def api_github_export_configs():
     if not CONFIG_SERVER_BASE:
-        return jsonify({"ok": False, "error": "CONFIG_SERVER_BASE is not configured"}), 500
+        return api_error("CONFIG_SERVER_BASE is not configured", 500, ok=False)
 
     bundle = build_user_configs_bundle()
 
@@ -1522,13 +1514,14 @@ def api_github_export_configs():
     try:
         server_resp = _config_server_request("/upload", method="POST", payload=upload_payload)
     except Exception as e:
-        return jsonify({"ok": False, "error": f"upload failed: {e}"}), 500
+        return api_error(f"upload failed: {e}", 500, ok=False)
 
     ok = bool(server_resp.get("ok"))
     cfg_id = server_resp.get("id")
 
     if not ok or not cfg_id:
-        return jsonify({"ok": False, "error": "upload failed on config server", "server_response": server_resp}), 500
+        payload = {"error": "upload failed on config server", "ok": False, "server_response": server_resp}
+        return jsonify(payload), 500
 
     return jsonify({"ok": True, "id": cfg_id, "server_response": server_resp}), 200
 
@@ -1539,7 +1532,7 @@ def api_github_list_configs():
     try:
         raw = _github_raw_get("configs/index.json")
     except Exception as e:
-        return jsonify({"ok": False, "error": f"github index failed: {e}"}), 500
+        return api_error(f"github index failed: {e}", 500, ok=False)
 
     if not raw:
         items = []
@@ -1568,48 +1561,422 @@ def api_github_import_configs():
         try:
             raw_index = _github_raw_get("configs/index.json")
         except Exception as e:
-            return jsonify({"ok": False, "error": f"github index failed: {e}"}), 500
+            return api_error(f"github index failed: {e}", 500, ok=False)
 
         if not raw_index:
-            return jsonify({"ok": False, "error": "no configs found in repo"}), 404
+            return api_error("no configs found in repo", 404, ok=False)
 
         try:
             items = json.loads(raw_index)
             if not isinstance(items, list) or not items:
-                return jsonify({"ok": False, "error": "no configs found in repo"}), 404
+                return api_error("no configs found in repo", 404, ok=False)
         except Exception:
-            return jsonify({"ok": False, "error": "invalid index.json in repo"}), 500
+            return api_error("invalid index.json in repo", 500, ok=False)
 
         latest = max(items, key=lambda it: int(it.get("created_at", 0) or 0))
         cfg_id = latest.get("id")
         if not cfg_id:
-            return jsonify({"ok": False, "error": "latest config has no id"}), 500
+            return api_error("latest config has no id", 500, ok=False)
 
     # Загружаем bundle.json выбранной конфигурации
     try:
         raw_bundle = _github_raw_get(f"configs/{cfg_id}/bundle.json")
     except Exception as e:
-        return jsonify({"ok": False, "error": f"github get {cfg_id} failed: {e}"}), 500
+        return api_error(f"github get {cfg_id} failed: {e}", 500, ok=False)
 
     if not raw_bundle:
-        return jsonify({"ok": False, "error": f"config {cfg_id} not found in repo"}), 404
+        return api_error(f"config {cfg_id} not found in repo", 404, ok=False)
 
     try:
         bundle = json.loads(raw_bundle)
     except Exception as e:
-        return jsonify({"ok": False, "error": f"invalid bundle JSON for {cfg_id}: {e}"}), 500
+        return api_error(f"invalid bundle JSON for {cfg_id}: {e}", 500, ok=False)
 
     if not isinstance(bundle, dict):
-        return jsonify({"ok": False, "error": "invalid bundle structure from repo"}), 500
+        return api_error("invalid bundle structure from repo", 500, ok=False)
 
     try:
         apply_user_configs_bundle(bundle)
     except Exception as e:
-        return jsonify({"ok": False, "error": f"apply failed: {e}"}), 500
+        return api_error(f"apply failed: {e}", 500, ok=False)
 
     # Не перезапускаем xkeen автоматически — пользователь может внести правки.
     return jsonify({"ok": True, "cfg_id": cfg_id}), 200
 
+# ---------- API: mihomo universal generator backend ----------
+
+from mihomo_server_core import (
+    ensure_mihomo_layout,
+    get_active_profile_name,
+    save_config,
+    restart_mihomo_and_get_log,
+    validate_config,
+)
+import xkeen_mihomo_service as mihomo_svc
+
+
+def _mihomo_get_state_from_request():
+    """Obtain Mihomo state from the current HTTP request via service parser."""
+    data = request.get_json(silent=True) or {}
+    return _mihomo_parse_state(data)
+
+
+
+
+@app.post("/api/mihomo/generate")
+def api_mihomo_generate():
+    try:
+        state = _mihomo_get_state_from_request()
+        cfg = mihomo_svc.generate_config_from_state(state)
+        return app.response_class(cfg, mimetype="text/plain; charset=utf-8")
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+@app.post("/api/mihomo/download")
+def api_mihomo_download():
+    try:
+        state = _mihomo_get_state_from_request()
+        cfg = mihomo_svc.generate_config_from_state(state)
+        return app.response_class(
+            cfg,
+            mimetype="application/x-yaml",
+            headers={"Content-Disposition": "attachment; filename=config.yaml"},
+        )
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+@app.post("/api/mihomo/save")
+def api_mihomo_save():
+    try:
+        state = _mihomo_get_state_from_request()
+        cfg, active_profile = mihomo_svc.generate_and_save_config(state)
+        return jsonify(
+            {
+                "ok": True,
+                "active_profile": active_profile,
+                "config_length": len(cfg),
+            }
+        )
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+@app.post("/api/mihomo/restart")
+def api_mihomo_restart():
+    try:
+        state = _mihomo_get_state_from_request()
+        cfg, log = mihomo_svc.generate_save_and_restart(state)
+        return jsonify(
+            {"ok": True, "config_length": len(cfg), "log": log}
+        )
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+@app.post("/api/mihomo/generate_apply")
+def api_mihomo_generate_apply():
+    """Endpoint used by mihomo_generator.html to generate+apply config.
+
+    Expects JSON:
+      {
+        "state": {...},
+        "configOverride": "yaml from editor (optional)"
+      }
+
+    If configOverride is non-empty, it will be used as final config.yaml.
+    Otherwise the config is generated from state using build_full_config().
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        # Если есть configOverride из редактора – предварительно проверим синтаксис YAML.
+        cfg_override = (data.get("configOverride") or "")
+        if cfg_override.strip():
+            ok_yaml, yaml_err = _mihomo_validate_yaml_syntax(cfg_override)
+            if not ok_yaml:
+                return api_error(f"Invalid YAML syntax: {yaml_err}", 400, ok=False)
+
+        cfg, log = mihomo_svc.generate_save_and_restart(data)
+        return jsonify(
+            {
+                "ok": True,
+                "config_length": len(cfg),
+                "log": log,
+            }
+        )
+    except FileNotFoundError as e:
+        return api_error(str(e), 404, ok=False)
+    except ValueError as e:
+        return api_error(str(e), 400, ok=False)
+    except Exception as e:
+        return api_error(str(e), 500, ok=False)
+
+
+
+
+
+
+@app.post("/api/mihomo/save_raw")
+def api_mihomo_save_raw():
+    """
+    Сохранить произвольный YAML как активный профиль mihomo (с бэкапом).
+    Ожидает JSON: { "config": "yaml..." }.
+    """
+    data = request.get_json(silent=True) or {}
+    cfg = (data.get("config") or "").rstrip()
+    if not cfg:
+        return api_error("config is required", 400, ok=False)
+    # Быстрая проверка синтаксиса YAML (если установлен PyYAML), по аналогии с isValidYAML в Go-версии XKeen UI.
+    ok_yaml, yaml_err = _mihomo_validate_yaml_syntax(cfg)
+    if not ok_yaml:
+        return api_error(f"Invalid YAML syntax: {yaml_err}", 400, ok=False)
+    try:
+        ensure_mihomo_layout()
+        save_config(cfg)
+        active = get_active_profile_name()
+        return jsonify(
+            {"ok": True, "active_profile": active, "config_length": len(cfg)}
+        )
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+@app.post("/api/mihomo/restart_raw")
+def api_mihomo_restart_raw():
+    """
+    Сохранить произвольный YAML и перезапустить mihomo (xkeen -restart).
+    Ожидает JSON: { "config": "yaml..." }.
+    """
+    data = request.get_json(silent=True) or {}
+    cfg = (data.get("config") or "").rstrip()
+    if not cfg:
+        return api_error("config is required", 400, ok=False)
+    # Перед сохранением и перезапуском тоже проверяем синтаксис YAML (если доступен PyYAML).
+    ok_yaml, yaml_err = _mihomo_validate_yaml_syntax(cfg)
+    if not ok_yaml:
+        return api_error(f"Invalid YAML syntax: {yaml_err}", 400, ok=False)
+    try:
+        ensure_mihomo_layout()
+        log = restart_mihomo_and_get_log(cfg)
+        return jsonify(
+            {
+                "ok": True,
+                "config_length": len(cfg),
+                "log": log,
+            }
+        )
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+
+@app.post("/api/mihomo/validate_raw")
+def api_mihomo_validate_raw():
+    """
+    Лёгкая проверка YAML-конфига Mihomo БЕЗ рестарта сервиса.
+
+    Ожидает JSON: { "config": "yaml..." }.
+
+    Если "config" пустой — валидируется текущий активный config.yaml.
+    Если не пустой — валидируется присланный текст (без сохранения и рестарта).
+    """
+    data = request.get_json(silent=True) or {}
+    cfg = (data.get("config") or "").rstrip()
+
+    try:
+        ensure_mihomo_layout()
+
+        # Если конфиг не прислали – читаем активный config.yaml
+        if not cfg:
+            try:
+                with open(MIHOMO_CONFIG_FILE, "r", encoding="utf-8") as f:
+                    cfg = f.read()
+            except FileNotFoundError:
+                return api_error("active config.yaml not found", 404, ok=False)
+
+        # Проверяем конфиг только через внешнее ядро Mihomo (mihomo -t)
+        log_lines = []
+        rc = 0
+
+        try:
+            mh_log = validate_config(new_content=cfg)
+        except Exception as e:
+            mh_log = f"Failed to run mihomo validate: {e}"
+
+        if mh_log:
+            log_lines.append(mh_log)
+
+            # Пытаемся вытащить exit code из вывода validate_config
+            m = re.search(r"\[exit code:\s*(\d+)\]", mh_log)
+            if m:
+                rc = int(m.group(1))
+
+        log = "\n".join(log_lines)
+
+        return jsonify({"ok": rc == 0, "log": log})
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+
+@app.get("/api/mihomo/profiles")
+def api_mihomo_profiles_list():
+    """List Mihomo profiles (name + is_active) via service layer."""
+    try:
+        infos = _mh_list_profiles_for_api()
+        return jsonify(infos)
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+@app.get("/api/mihomo/profiles/<name>")
+def api_mihomo_profiles_get(name: str):
+    """Return raw YAML content of the given Mihomo profile."""
+    try:
+        content = _mh_get_profile_content_for_api(name)
+        return app.response_class(content, mimetype="text/plain; charset=utf-8")
+    except FileNotFoundError:
+        return api_error("profile not found", 404, ok=False)
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+@app.put("/api/mihomo/profiles/<name>")
+def api_mihomo_profiles_put(name: str):
+    """Create a new Mihomo profile with given YAML content."""
+    content = request.data.decode("utf-8", errors="ignore")
+    if not content.strip():
+        return api_error("empty content", 400, ok=False)
+    try:
+        _mh_create_profile_from_content(name, content)
+        return jsonify({"ok": True})
+    except FileExistsError:
+        return api_error("profile already exists", 409, ok=False)
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+@app.delete("/api/mihomo/profiles/<name>")
+def api_mihomo_profiles_delete(name: str):
+    """Delete Mihomo profile."""
+    try:
+        _mh_delete_profile_by_name(name)
+        return jsonify({"ok": True})
+    except RuntimeError as e:
+        # For example: attempt to delete active profile.
+        return api_error(str(e), 400, ok=False)
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+@app.post("/api/mihomo/profiles/<name>/activate")
+def api_mihomo_profiles_activate(name: str):
+    "Activate given Mihomo profile and restart xkeen."
+    try:
+        _mh_activate_profile(name)
+        restarted = restart_xkeen(source="mihomo-profile-activate")
+        return jsonify({"ok": True, "restarted": restarted})
+    except FileNotFoundError:
+        return api_error("profile not found", 404, ok=False)
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+@app.post("/api/mihomo/backups/clean")
+def api_mihomo_backups_clean():
+    """
+    Remove old Mihomo config backups, keeping at most `limit` newest ones.
+    """
+    data = request.get_json(silent=True) or {}
+    limit = data.get("limit", 5)
+    profile = (data.get("profile") or "").strip() or None
+
+    try:
+        limit = int(limit)
+    except Exception:
+        return api_error("limit must be an integer", 400, ok=False)
+    if limit < 0:
+        return api_error("limit must be >= 0", 400, ok=False)
+
+    try:
+        result = _mh_clean_backups_for_api(limit, profile)
+        return jsonify(result)
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+@app.get("/api/mihomo/backups")
+def api_mihomo_backups_list():
+    profile = request.args.get("profile") or None
+    infos = _mh_list_backups_for_profile(profile)
+    return jsonify(infos)
+
+
+@app.get("/api/mihomo/backups/<filename>")
+def api_mihomo_backup_get(filename: str):
+    try:
+        content = _mh_get_backup_content(filename)
+        return app.response_class(content, mimetype="text/plain; charset=utf-8")
+    except FileNotFoundError:
+        return api_error("backup not found", 404, ok=False)
+
+
+@app.delete("/api/mihomo/backups/<filename>")
+def api_mihomo_backup_delete(filename: str):
+    try:
+        _mh_delete_backup_file(filename)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+@app.post("/api/mihomo/backups/<filename>/restore")
+def api_mihomo_backup_restore(filename: str):
+    try:
+        _mh_restore_backup_file(filename)
+        # Перезапуск после восстановления бэкапа, чтобы конфиг применился
+        restarted = restart_xkeen(source="mihomo-backup-restore")
+        return jsonify({"ok": True, "restarted": restarted})
+    except FileNotFoundError:
+        return api_error("backup not found", 404, ok=False)
+    except Exception as e:
+        return api_error(str(e), 400, ok=False)
+
+
+
+
+# ---------- Blueprints registration ----------
+
+
+routing_bp = create_routing_blueprint(
+    ROUTING_FILE=ROUTING_FILE,
+    ROUTING_FILE_RAW=ROUTING_FILE_RAW,
+    load_json=load_json,
+    strip_json_comments_text=strip_json_comments_text,
+    restart_xkeen=restart_xkeen,
+)
+app.register_blueprint(routing_bp)
+
+backups_bp = create_backups_blueprint(
+    BACKUP_DIR=BACKUP_DIR,
+    ROUTING_FILE=ROUTING_FILE,
+    ROUTING_FILE_RAW=ROUTING_FILE_RAW,
+    INBOUNDS_FILE=INBOUNDS_FILE,
+    OUTBOUNDS_FILE=OUTBOUNDS_FILE,
+    load_json=load_json,
+    save_json=save_json,
+    list_backups=list_backups,
+    _detect_backup_target_file=_detect_backup_target_file,
+    _find_latest_auto_backup_for=_find_latest_auto_backup_for,
+    strip_json_comments_text=strip_json_comments_text,
+    restart_xkeen=restart_xkeen,
+)
+app.register_blueprint(backups_bp)
+
+service_bp = create_service_blueprint(
+    restart_xkeen=restart_xkeen,
+    append_restart_log=append_restart_log,
+    XRAY_ERROR_LOG=XRAY_ERROR_LOG,
+)
+app.register_blueprint(service_bp)
 
 
 
