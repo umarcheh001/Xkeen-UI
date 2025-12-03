@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <g fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Внешний круг для стилистики, как у иконок в шапке -->
+    <circle cx="12" cy="12" r="9" />
+    <!-- Стрелка восстановления -->
+    <path d="M8 10H5V7" />
+    <path d="M5 7l3.5 3.5A5.5 5.5 0 1 0 17.5 9" />
+  </g>
+</svg>
