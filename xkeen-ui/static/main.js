@@ -1,17 +1,213 @@
 let routingEditor = null;
 let routingErrorMarker = null;
 let mihomoEditor = null;
+let mihomoActiveProfileName = null;
 let portProxyingEditor = null;
 let portExcludeEditor = null;
 let ipExcludeEditor = null;
+let jsonModalEditor = null;
+let jsonModalCurrentTarget = null; // 'inbounds' или 'outbounds'
+
 
 let currentCommandFlag = null;
 let currentCommandLabel = null;
 
 let xrayLogTimer = null;
 let xrayLogCurrentFile = 'error';
+
+// ---------- Global XKeen overlay spinner ----------
+let xkeenSpinnerDepth = 0;
+
+function showGlobalXkeenSpinner(message) {
+  const overlay = document.getElementById('global-xkeen-spinner');
+  if (!overlay) return;
+
+  const textEl = document.getElementById('global-xkeen-spinner-text');
+  if (textEl && message) {
+    textEl.textContent = message;
+  }
+
+  xkeenSpinnerDepth += 1;
+  overlay.classList.add('is-active');
+}
+
+function hideGlobalXkeenSpinner() {
+  const overlay = document.getElementById('global-xkeen-spinner');
+  if (!overlay) return;
+
+  xkeenSpinnerDepth = Math.max(0, xkeenSpinnerDepth - 1);
+  if (xkeenSpinnerDepth === 0) {
+    overlay.classList.remove('is-active');
+  }
+}
+
+// Hook fetch to show spinner for XKeen start/restart related actions
+(function () {
+  const origFetch = window.fetch;
+  if (!origFetch) {
+    return;
+  }
+
+  function parseUrl(url) {
+    try {
+      return new URL(url, window.location.origin);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function bodyHasRestartFlag(body) {
+    if (!body) return false;
+    try {
+      if (typeof body === 'string') {
+        const parsed = JSON.parse(body);
+        return !!parsed.restart;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return false;
+  }
+
+  function shouldShowSpinner(url, init) {
+    if (!url) return null;
+
+    const method = (init && init.method ? String(init.method).toUpperCase() : 'GET');
+    const loc = parseUrl(url);
+    const path = loc ? loc.pathname : url;
+    const searchParams = loc ? loc.searchParams : null;
+    const body = init && init.body;
+
+    // Explicit start / restart endpoints
+    if (path === '/api/xkeen/start' && method === 'POST') {
+      return { message: 'Запуск xkeen...' };
+    }
+    if ((path === '/api/restart' || path === '/api/restart-xkeen') && method === 'POST') {
+      return { message: 'Перезапуск xkeen...' };
+    }
+
+    // Routing save with optional restart arg (?restart=1/0/true/false)
+    if (path === '/api/routing' && method === 'POST') {
+      let restart = true;
+      if (searchParams && searchParams.has('restart')) {
+        const v = String(searchParams.get('restart') || '').trim().toLowerCase();
+        restart = ['1', 'true', 'yes', 'on', 'y'].includes(v);
+      }
+      if (restart) {
+        return { message: 'Применение routing и перезапуск xkeen...' };
+      }
+      return null;
+    }
+
+    // Mihomo config / inbounds / outbounds with JSON body { ..., restart: true }
+    if (
+      (path === '/api/mihomo-config' ||
+       path === '/api/inbounds' ||
+       path === '/api/outbounds') &&
+      method === 'POST'
+    ) {
+      if (bodyHasRestartFlag(body)) {
+        return { message: 'Применение настроек и перезапуск xkeen...' };
+      }
+      return null;
+    }
+
+    // Generator apply endpoint
+    if (path === '/api/mihomo/generate_apply' && method === 'POST') {
+      return { message: 'Применение профиля и перезапуск xkeen...' };
+    }
+
+    return null;
+  }
+
+
+  function handleXkeenRestartFromResponse(url, response) {
+    if (!response || !response.headers || typeof response.clone !== 'function') return;
+
+    const ct = response.headers.get && response.headers.get('Content-Type')
+      ? String(response.headers.get('Content-Type') || '')
+      : '';
+    if (!ct || ct.indexOf('application/json') === -1) {
+      return;
+    }
+
+    try {
+      response.clone().json().then(function (data) {
+        if (!data || !data.restarted) return;
+
+        let msg = 'xkeen restarted.';
+        if (typeof url === 'string' && url) {
+          if (url.indexOf('/api/routing') !== -1) {
+            msg = 'Routing saved. xkeen restarted.';
+          } else if (url.indexOf('/api/xkeen/port-proxying') !== -1) {
+            msg = 'port_proxying.lst saved. xkeen restarted.';
+          } else if (url.indexOf('/api/xkeen/port-exclude') !== -1) {
+            msg = 'port_exclude.lst saved. xkeen restarted.';
+          } else if (url.indexOf('/api/xkeen/ip-exclude') !== -1) {
+            msg = 'ip_exclude.lst saved. xkeen restarted.';
+          } else if (url.indexOf('/api/mihomo-config') !== -1) {
+            msg = 'config.yaml saved. xkeen restarted.';
+          }
+        }
+
+        if (typeof showToast === 'function') {
+          showToast(msg, false);
+        }
+      }).catch(function () {
+        // ignore JSON parse errors
+      });
+    } catch (e) {
+      // ignore runtime errors
+    }
+  }
+
+  window.fetch = function (input, init) {
+    const url = (typeof input === 'string')
+      ? input
+      : (input && input.url ? input.url : '');
+
+    const spinnerConfig = shouldShowSpinner(url, init);
+
+    if (!spinnerConfig) {
+      return origFetch(input, init).then(function (res) {
+        try {
+          handleXkeenRestartFromResponse(url, res);
+        } catch (e) {
+          // ignore handler errors
+        }
+        return res;
+      });
+    }
+
+    showGlobalXkeenSpinner(spinnerConfig.message);
+
+    return origFetch(input, init)
+      .then(function (res) {
+        hideGlobalXkeenSpinner();
+        try {
+          handleXkeenRestartFromResponse(url, res);
+        } catch (e) {
+          // ignore handler errors
+        }
+        return res;
+      })
+      .catch(function (err) {
+        hideGlobalXkeenSpinner();
+        throw err;
+      });
+  };
+})();
+
 let xrayLogLastLines = [];
 
+
+function openRoutingHelp() {
+  try {
+    window.location.href = '/static/routing-comments-help.html';
+  } catch (e) {
+    window.location.href = '/static/routing-comments-help.html';
+  }
+}
 
 function escapeHtml(str) {
   if (str == null) return '';
@@ -23,11 +219,47 @@ function escapeHtml(str) {
 
 function getXrayLogLineClass(line) {
   const lower = (line || '').toLowerCase();
-  if (lower.includes('error')) return 'log-line log-line-error';
-  if (lower.includes('warning') || lower.includes('warn')) return 'log-line log-line-warning';
-  if (lower.includes('info')) return 'log-line log-line-info';
+
+  if (
+    lower.includes('error') ||
+    lower.includes('fail') ||
+    lower.includes('failed') ||
+    lower.includes('fatal')
+  ) {
+    return 'log-line log-line-error';
+  }
+
+  if (lower.includes('warning') || lower.includes('warn')) {
+    return 'log-line log-line-warning';
+  }
+
+  if (lower.includes('info')) {
+    return 'log-line log-line-info';
+  }
+
   return 'log-line';
 }
+
+function parseXrayLogLine(line) {
+  if (!line || !line.trim()) {
+    return '';
+  }
+
+  const cls = getXrayLogLineClass(line);
+  let processed = escapeHtml(line);
+
+  // Подсветка типичных уровней для Xray
+  processed = processed
+    .replace(/\[Info\]/g, '<span style="color:#3b82f6;">[Info]</span>')
+    .replace(/\[Warning\]/g, '<span style="color:#f59e0b;">[Warning]</span>')
+    .replace(/\[Error\]/g, '<span style="color:#ef4444;">[Error]</span>')
+    .replace(/level=(info)/gi, 'level=<span style="color:#3b82f6;">$1</span>')
+    .replace(/level=(warning)/gi, 'level=<span style="color:#f59e0b;">$1</span>')
+    .replace(/level=(error)/gi, 'level=<span style="color:#ef4444;">$1</span>');
+
+  return '<span class="' + cls + '">' + processed + '</span>';
+}
+
 
 
 function openTerminalForFlag(flag, label) {
@@ -81,12 +313,13 @@ async function sendTerminalInput() {
       appendToLog('Ошибка: ' + msg + '\n');
       return;
     }
-    const out = (data.output || '').trim();
+    const rawOut = data.output || '';
     if (outputEl) {
-      outputEl.textContent = out || '(нет вывода)';
+      const html = ansiToHtml(rawOut || '(нет вывода)').replace(/\n/g, '<br>');
+      outputEl.innerHTML = html;
     }
     appendToLog(`$ xkeen ${flag}\n`);
-    if (out) appendToLog(out + '\n');
+    if (rawOut) appendToLog(rawOut + '\n');
     if (typeof data.exit_code === 'number') {
       appendToLog(`(код завершения: ${data.exit_code})\n`);
     }
@@ -98,12 +331,83 @@ async function sendTerminalInput() {
 }
 
 
-function stripJsonComments(text) {
-  text = text.replace(/\/\*[\s\S]*?\*\//g, '');
-  text = text.replace(/(^|[^:])\/\/.*$/gm, '$1');
-  return text;
-}
 
+function stripJsonComments(text) {
+  let result = '';
+  let inString = false;
+  let stringChar = null; // '"' or '\''
+  let inSingleLineComment = false;
+  let inMultiLineComment = false;
+  let prevChar = '';
+  const length = text.length;
+
+  for (let i = 0; i < length; i++) {
+    const char = text[i];
+    const nextChar = i + 1 < length ? text[i + 1] : '';
+
+    // already inside a single-line comment
+    if (inSingleLineComment) {
+      if (char === '\n') {
+        inSingleLineComment = false;
+        result += char; // keep newline
+      }
+      continue;
+    }
+
+    // already inside a multi-line comment
+    if (inMultiLineComment) {
+      if (char === '*' && nextChar === '/') {
+        inMultiLineComment = false;
+        i++; // skip '/'
+      }
+      continue;
+    }
+
+    // inside string literal
+    if (inString) {
+      result += char;
+      if (char === stringChar && prevChar !== '\\') {
+        inString = false;
+        stringChar = null;
+      }
+      prevChar = char;
+      continue;
+    }
+
+    // not in string/comment — check for comment start
+    if (char === '/' && nextChar === '/') {
+      inSingleLineComment = true;
+      i++; // skip second '/'
+      continue;
+    }
+    // '#' — однострочный комментарий (вся строка до конца)
+    if (char === '#') {
+      inSingleLineComment = true;
+      // символ '#' не добавляем в результат
+      continue;
+    }
+    if (char === '/' && nextChar === '*') {
+      inMultiLineComment = true;
+      i++; // skip '*'
+      continue;
+    }
+
+    // start of string
+    if (char === '"' || char === '\'') {
+      inString = true;
+      stringChar = char;
+      result += char;
+      prevChar = char;
+      continue;
+    }
+
+    // normal character
+    result += char;
+    prevChar = char;
+  }
+
+  return result;
+}
 function setRoutingError(msg, line) {
   const errEl = document.getElementById('routing-error');
   const saveBtn = document.getElementById('routing-save-btn');
@@ -297,6 +601,7 @@ async function loadMihomoConfig() {
       }
       return;
     }
+    updateLastActivity('loaded', 'config.yaml');
 
     const content = data.content || '';
     const len = (content && content.length) || 0;
@@ -346,6 +651,7 @@ async function saveMihomoConfig() {
       }
       statusEl.textContent = msg;
     }
+    updateLastActivity('saved', 'config.yaml');
   } catch (e) {
     console.error(e);
     if (statusEl) statusEl.textContent = 'Ошибка сохранения config.yaml.';
@@ -355,15 +661,74 @@ async function saveMihomoConfig() {
 async function newMihomoConfigFromTemplate() {
   const statusEl = document.getElementById('mihomo-status');
 
-  const confirmed = window.confirm(
-    'Заменить содержимое редактора шаблоном umarcheh001?'
-  );
-  if (!confirmed) return;
-
-  if (statusEl) statusEl.textContent = 'Загрузка шаблона...';
+  if (statusEl) statusEl.textContent = 'Получение списка шаблонов...';
 
   try {
-    const res = await fetch('/api/mihomo-config/template');
+    const listRes = await fetch('/api/mihomo-templates');
+    const listData = await listRes.json();
+    if (!listRes.ok || !listData.ok) {
+      if (statusEl) {
+        statusEl.textContent = (listData && listData.error) || 'Не удалось получить список шаблонов.';
+      }
+      return;
+    }
+
+    const templates = Array.isArray(listData.templates) ? listData.templates : [];
+    if (!templates.length) {
+      if (statusEl) statusEl.textContent = 'Шаблоны не найдены.';
+      return;
+    }
+
+    let chosenTemplate = null;
+
+    if (templates.length === 1) {
+      const only = templates[0];
+      const confirmedSingle = window.confirm(
+        'Заменить содержимое редактора шаблоном ' + (only.name || 'template') + '?'
+      );
+      if (!confirmedSingle) {
+        if (statusEl) statusEl.textContent = 'Загрузка шаблона отменена.';
+        return;
+      }
+      chosenTemplate = only.name;
+    } else {
+      const listText = templates
+        .map((t, idx) => (idx + 1) + ') ' + (t.name || 'template-' + (idx + 1)))
+        .join('\n');
+
+      const input = window.prompt(
+        'Выберите номер шаблона для загрузки в редактор (текущее содержимое будет ЗАМЕНЕНО):\n\n' +
+        listText +
+        '\n\nВведите номер шаблона:'
+      );
+      if (!input) {
+        if (statusEl) statusEl.textContent = 'Загрузка шаблона отменена.';
+        return;
+      }
+      const num = parseInt(input, 10);
+      if (!Number.isFinite(num) || num < 1 || num > templates.length) {
+        if (statusEl) statusEl.textContent = 'Некорректный номер шаблона.';
+        return;
+      }
+      const tpl = templates[num - 1];
+      const confirmReplace = window.confirm(
+        'Заменить содержимое редактора шаблоном ' + (tpl.name || 'template') + '?'
+      );
+      if (!confirmReplace) {
+        if (statusEl) statusEl.textContent = 'Загрузка шаблона отменена.';
+        return;
+      }
+      chosenTemplate = tpl.name;
+    }
+
+    if (!chosenTemplate) {
+      if (statusEl) statusEl.textContent = 'Шаблон не выбран.';
+      return;
+    }
+
+    if (statusEl) statusEl.textContent = 'Загрузка шаблона...';
+
+    const res = await fetch('/api/mihomo-template?name=' + encodeURIComponent(chosenTemplate));
     const data = await res.json();
 
     if (!res.ok || !data.ok) {
@@ -375,7 +740,7 @@ async function newMihomoConfigFromTemplate() {
 
     const content = data.content || '';
     const len = (content && content.length) || 0;
-    console.log('mihomo config length', len);
+    console.log('mihomo config template length', len);
     if (mihomoEditor) {
       mihomoEditor.setValue(content);
       mihomoEditor.scrollTo(0, 0);
@@ -385,7 +750,7 @@ async function newMihomoConfigFromTemplate() {
     }
 
     if (statusEl) {
-      statusEl.textContent = 'Шаблон загружен в редактор. Не забудьте сохранить config.yaml.';
+      statusEl.textContent = 'Шаблон ' + chosenTemplate + ' загружен в редактор. Не забудьте сохранить config.yaml.';
     }
   } catch (e) {
     console.error(e);
@@ -400,15 +765,20 @@ async function loadRouting() {
       if (statusEl) statusEl.textContent = 'Не удалось загрузить routing.';
       return;
     }
-    const data = await res.json();
+    const text = await res.text();
     if (routingEditor) {
-      routingEditor.setValue(JSON.stringify(data, null, 2));
+      routingEditor.setValue(text);
       routingEditor.scrollTo(0, 0);
     } else {
       const ta = document.getElementById('routing-editor');
-      if (ta) ta.value = JSON.stringify(data, null, 2);
+      if (ta) ta.value = text;
     }
+    routingSavedContent = text;
+    routingIsDirty = false;
+    const saveBtn = document.getElementById('routing-save-btn');
+    if (saveBtn) saveBtn.classList.remove('dirty');
     if (statusEl) statusEl.textContent = 'Routing загружен.';
+    updateLastActivity('loaded', 'routing');
     validateRoutingContent();
   } catch (e) {
     console.error(e);
@@ -420,34 +790,58 @@ async function loadRouting() {
 async function saveRouting() {
   const statusEl = document.getElementById('routing-status');
   if (!routingEditor) return;
-  const text = routingEditor.getValue();
-  const cleaned = stripJsonComments(text);
+  const rawText = routingEditor.getValue();
+  const cleaned = stripJsonComments(rawText);
+
+  // Validate JSON (comments are allowed and stripped before parsing)
+  try {
+    JSON.parse(cleaned);
+    setRoutingError('', null);
+  } catch (e) {
+    console.error(e);
+    setRoutingError('Ошибка JSON: ' + e.message, null);
+    if (statusEl) statusEl.textContent = 'Ошибка: некорректный JSON.';
+    if (typeof showToast === 'function') {
+      showToast('Ошибка: некорректный JSON.', true);
+    }
+    return;
+  }
+
+  const restart = shouldAutoRestartAfterSave();
 
   try {
-    const obj = JSON.parse(cleaned);
-    routingEditor.setValue(JSON.stringify(obj, null, 2));
-    setRoutingError('', null);
-
-    const restart = shouldAutoRestartAfterSave();
     const res = await fetch('/api/routing?restart=' + (restart ? '1' : '0'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(obj)
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: rawText
     });
     const data = await res.json();
     if (res.ok && data.ok) {
+      routingSavedContent = rawText;
+      routingIsDirty = false;
+      const saveBtn = document.getElementById('routing-save-btn');
+      if (saveBtn) saveBtn.classList.remove('dirty');
+
       let msg = 'Routing saved.';
       if (data.restarted) {
         msg += ' xkeen restarted.';
       }
       if (statusEl) statusEl.textContent = msg;
+      updateLastActivity('saved', 'routing');
     } else {
-      if (statusEl) statusEl.textContent = 'Save error: ' + (data.error || 'неизвестная ошибка');
+      const msg = 'Save error: ' + ((data && data.error) || 'неизвестная ошибка');
+      if (statusEl) statusEl.textContent = msg;
+      if (typeof showToast === 'function') {
+        showToast(msg, true);
+      }
     }
   } catch (e) {
     console.error(e);
     setRoutingError('Ошибка JSON: ' + e.message, null);
-    if (statusEl) statusEl.textContent = 'Ошибка: некорректный JSON.';
+    if (statusEl) statusEl.textContent = 'Ошибка при сохранении routing.';
+    if (typeof showToast === 'function') {
+      showToast('Ошибка при сохранении routing.', true);
+    }
   }
 }
 
@@ -489,6 +883,31 @@ function showToast(message, isError = false) {
       toast.remove();
     }, 200);
   }, 3200);
+}
+
+function updateLastActivity(kind, targetLabel) {
+  const badge = document.getElementById('last-load');
+  if (!badge) return;
+
+  const now = new Date();
+  const t = now.toLocaleTimeString('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+
+  let text;
+  if (kind === 'loaded') {
+    text = 'Загружено ' + (targetLabel || '') + ' в ' + t;
+  } else if (kind === 'saved') {
+    text = 'Сохранено ' + (targetLabel || '') + ' в ' + t;
+  } else {
+    text = (targetLabel || 'Состояние') + ': ' + t;
+  }
+
+  badge.textContent = text.trim();
+  badge.className = 'last-load-badge last-load-' + (kind || 'info');
 }
 
 // ---------- Local file import/export ----------
@@ -737,7 +1156,7 @@ function openGithubRepository() {
   if (url) {
     window.open(url, '_blank');
   } else {
-    alert('URL репозитария не настроен на сервере (XKEEN_GITHUB_REPO_URL).');
+    showToast('URL репозитария не настроен на сервере (XKEEN_GITHUB_REPO_URL).', true);
   }
 }
 
@@ -812,15 +1231,27 @@ async function createBackup() {
     const res = await fetch('/api/backup', { method: 'POST' });
     const data = await res.json();
     if (res.ok && data.ok) {
-      if (statusEl) statusEl.textContent = 'Бэкап создан: ' + data.filename;
+      const msg = 'Бэкап создан: ' + data.filename;
+      if (statusEl) statusEl.textContent = msg;
       if (backupsStatusEl) backupsStatusEl.textContent = '';
+      if (typeof showToast === 'function') {
+        showToast(msg, false);
+      }
       await loadBackups();
     } else {
-      if (statusEl) statusEl.textContent = 'Ошибка создания бэкапа: ' + (data.error || 'неизвестная ошибка');
+      const msg = 'Ошибка создания бэкапа: ' + (data.error || 'неизвестная ошибка');
+      if (statusEl) statusEl.textContent = msg;
+      if (typeof showToast === 'function') {
+        showToast(msg, true);
+      }
     }
   } catch (e) {
     console.error(e);
-    if (statusEl) statusEl.textContent = 'Ошибка создания бэкапа.';
+    const msg = 'Ошибка создания бэкапа.';
+    if (statusEl) statusEl.textContent = msg;
+    if (typeof showToast === 'function') {
+      showToast(msg, true);
+    }
   }
 }
 
@@ -858,10 +1289,11 @@ function controlXkeen(action) {
 
   if (statusEl) statusEl.textContent = 'xkeen: ' + action + '...';
 
-  fetch(url, { method: 'POST' })
+  return fetch(url, { method: 'POST' })
     .then(res => res.json().catch(() => ({})))
     .then(data => {
       const ok = !data || data.ok !== false;
+      try { refreshXkeenServiceStatus(); } catch (e) {}
       const base = action === 'start'
         ? 'xkeen started.'
         : action === 'stop'
@@ -884,6 +1316,7 @@ function controlXkeen(action) {
       const msg = 'xkeen control error.';
       if (statusEl) statusEl.textContent = msg;
       showToast(msg, true);
+      try { refreshXkeenServiceStatus(); } catch (e2) {}
     });
 }
 
@@ -914,6 +1347,7 @@ async function loadInboundsMode() {
         statusEl.textContent = 'Режим не определён (файл отсутствует или повреждён).';
       }
     }
+    updateLastActivity('loaded', 'inbounds');
   } catch (e) {
     console.error(e);
     if (statusEl) statusEl.textContent = 'Ошибка загрузки inbounds.';
@@ -946,6 +1380,7 @@ async function saveInboundsMode() {
         msg += ' xkeen restarted.';
       }
       if (statusEl) statusEl.textContent = msg;
+      updateLastActivity('saved', 'inbounds');
     } else {
       if (statusEl) statusEl.textContent = 'Save error: ' + (data.error || 'неизвестная ошибка');
     }
@@ -975,6 +1410,7 @@ async function loadOutbounds() {
       input.value = data.url;
       if (statusEl) statusEl.textContent = 'Текущая ссылка загружена.';
     } else {
+    updateLastActivity('loaded', 'outbounds');
       if (statusEl) statusEl.textContent = 'Файл outbounds отсутствует или не содержит VLESS-конфиг.';
     }
   } catch (e) {
@@ -1008,6 +1444,7 @@ async function saveOutbounds() {
         msg += ' xkeen restarted.';
       }
       if (statusEl) statusEl.textContent = msg;
+      updateLastActivity('saved', 'outbounds');
     } else {
       if (statusEl) statusEl.textContent = 'Save error: ' + (data.error || 'неизвестная ошибка');
     }
@@ -1082,9 +1519,12 @@ async function restoreFromAutoBackup(target) {
     });
     const data = await res.json();
     if (res.ok && data.ok) {
+      const fname = data.filename || '';
       if (statusEl) {
-        const fname = data.filename || '';
         statusEl.textContent = 'Файл ' + label + ' восстановлен из авто-бэкапа ' + fname;
+      }
+      if (typeof showToast === 'function') {
+        showToast('Файл ' + label + ' восстановлен из авто-бэкапа ' + fname, false);
       }
       if (target === 'routing') {
         await loadRouting();
@@ -1094,11 +1534,19 @@ async function restoreFromAutoBackup(target) {
         await loadOutbounds();
       }
     } else {
-      if (statusEl) statusEl.textContent = 'Ошибка восстановления из авто-бэкапа: ' + (data.error || 'неизвестная ошибка');
+      const msg = 'Ошибка восстановления из авто-бэкапа: ' + (data.error || 'неизвестная ошибка');
+      if (statusEl) statusEl.textContent = msg;
+      if (typeof showToast === 'function') {
+        showToast(msg, true);
+      }
     }
   } catch (e) {
     console.error(e);
-    if (statusEl) statusEl.textContent = 'Ошибка восстановления из авто-бэкапа.';
+    const msg = 'Ошибка восстановления из авто-бэкапа.';
+    if (statusEl) statusEl.textContent = msg;
+    if (typeof showToast === 'function') {
+      showToast(msg, true);
+    }
   }
 }
 
@@ -1202,7 +1650,11 @@ async function restoreBackup(filename) {
     });
     const data = await res.json();
     if (res.ok && data.ok) {
-      if (statusEl) statusEl.textContent = 'Бэкап восстановлен: ' + filename;
+      const msg = 'Бэкап восстановлен: ' + filename;
+      if (statusEl) statusEl.textContent = msg;
+      if (typeof showToast === 'function') {
+        showToast(msg, false);
+      }
 
       if (target === 'routing') {
         if (routingStatusEl) routingStatusEl.textContent = 'Routing восстановлён из бэкапа ' + filename;
@@ -1215,14 +1667,21 @@ async function restoreBackup(filename) {
         await loadOutbounds();
       }
     } else {
-      if (statusEl) statusEl.textContent = 'Ошибка восстановления: ' + (data.error || 'неизвестная ошибка');
+      const msg = 'Ошибка восстановления: ' + (data.error || 'неизвестная ошибка');
+      if (statusEl) statusEl.textContent = msg;
+      if (typeof showToast === 'function') {
+        showToast(msg, true);
+      }
     }
   } catch (e) {
     console.error(e);
-    if (statusEl) statusEl.textContent = 'Ошибка восстановления бэкапа.';
+    const msg = 'Ошибка восстановления бэкапа.';
+    if (statusEl) statusEl.textContent = msg;
+    if (typeof showToast === 'function') {
+      showToast(msg, true);
+    }
   }
 }
-
 
 async function deleteBackup(filename) {
   const statusEl = document.getElementById('backups-status');
@@ -1239,19 +1698,31 @@ async function deleteBackup(filename) {
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
+      const msg = data.error || 'Не удалось удалить бэкап.';
       if (statusEl) {
-        statusEl.textContent = data.error || 'Не удалось удалить бэкап.';
+        statusEl.textContent = msg;
+      }
+      if (typeof showToast === 'function') {
+        showToast(msg, true);
       }
       return;
     }
 
+    const msg = 'Бэкап удалён: ' + filename;
     if (statusEl) {
-      statusEl.textContent = 'Бэкап удалён: ' + filename;
+      statusEl.textContent = msg;
+    }
+    if (typeof showToast === 'function') {
+      showToast(msg, false);
     }
     await loadBackups();
   } catch (e) {
     console.error(e);
-    if (statusEl) statusEl.textContent = 'Ошибка при удалении бэкапа.';
+    const msg = 'Ошибка при удалении бэкапа.';
+    if (statusEl) statusEl.textContent = msg;
+    if (typeof showToast === 'function') {
+      showToast(msg, true);
+    }
   }
 }
 
@@ -1263,19 +1734,26 @@ async function loadRestartLog() {
   try {
     const res = await fetch('/api/restart-log');
     if (!res.ok) {
-      logEl.textContent = 'Не удалось загрузить журнал.';
+      const msg = 'Не удалось загрузить журнал.';
+      logEl.dataset.rawText = msg;
+      renderLogFromRaw(msg);
       return;
     }
     const data = await res.json();
     const lines = data.lines || [];
+    let text;
     if (!lines.length) {
-      logEl.textContent = 'Журнал пуст.';
+      text = 'Журнал пуст.';
     } else {
-      logEl.textContent = lines.join('');
+      text = lines.join('');
     }
+    logEl.dataset.rawText = text;
+    renderLogFromRaw(text);
   } catch (e) {
     console.error(e);
-    logEl.textContent = 'Ошибка загрузки журнала.';
+    const msg = 'Ошибка загрузки журнала.';
+    logEl.dataset.rawText = msg;
+    renderLogFromRaw(msg);
   }
 }
 
@@ -1294,20 +1772,155 @@ async function runXkeenFlag(flag, stdinValue) {
   return { res, data };
 }
 
+async function runInstantXkeenFlag(flag, label) {
+  appendToLog(`$ xkeen ${flag}\n`);
+  try {
+    const { res, data } = await runXkeenFlag(flag, '\n');
+    if (!res.ok) {
+      const msg = data.error || ('HTTP ' + res.status);
+      appendToLog('Ошибка: ' + msg + '\n');
+      if (typeof showToast === 'function') {
+        showToast(msg, true);
+      }
+      return;
+    }
+    const out = (data.output || '').trim();
+    if (out) {
+      appendToLog(out + '\n');
+    } else {
+      appendToLog('(нет вывода)\n');
+    }
+    if (typeof data.exit_code === 'number') {
+      appendToLog('(код завершения: ' + data.exit_code + ')\n');
+    }
+  } catch (e) {
+    console.error(e);
+    const msg = 'Ошибка выполнения команды: ' + String(e);
+    appendToLog(msg + '\n');
+    if (typeof showToast === 'function') {
+      showToast(msg, true);
+    }
+  }
+}
+
+function ansiToHtml(text) {
+  if (!text) return '';
+  // Escape HTML special chars
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const ansiRegex = /\x1b\[([0-9;]+)m/g;
+  const ANSI_COLOR_MAP = {
+    30: '#000000', // black
+    31: '#ff5555', // red
+    32: '#50fa7b', // green
+    33: '#f1fa8c', // yellow
+    34: '#bd93f9', // blue
+    35: '#ff79c6', // magenta
+    36: '#8be9fd', // cyan
+    37: '#f8f8f2', // white / light gray
+    90: '#4c566a', // bright black
+    91: '#ff6e6e',
+    92: '#69ff94',
+    93: '#ffffa5',
+    94: '#d6acff',
+    95: '#ff92df',
+    96: '#a4ffff',
+    97: '#ffffff'
+  };
+  let result = '';
+  let lastIndex = 0;
+  let openSpan = false;
+  let currentStyle = '';
+
+  function closeSpan() {
+    if (openSpan) {
+      result += '</span>';
+      openSpan = false;
+    }
+  }
+
+  let match;
+  while ((match = ansiRegex.exec(escaped)) !== null) {
+    if (match.index > lastIndex) {
+      result += escaped.slice(lastIndex, match.index);
+    }
+    lastIndex = ansiRegex.lastIndex;
+
+    const codes = match[1].split(';').map(function (c) { return parseInt(c, 10) || 0; });
+    let style = currentStyle;
+    let reset = false;
+
+    codes.forEach(function (code) {
+      if (code === 0) {
+        style = '';
+        reset = true;
+      } else if (code === 1) {
+        style = style.replace(/font-weight:[^;]+;?/g, '') + 'font-weight:bold;';
+      } else if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
+        const color = ANSI_COLOR_MAP[code];
+        if (color) {
+          style = style.replace(/color:[^;]+;?/g, '') + 'color:' + color + ';';
+        }
+      }
+    });
+
+    if (reset || style !== currentStyle) {
+      closeSpan();
+      currentStyle = style;
+      if (style) {
+        result += '<span style="' + style + '">';
+        openSpan = true;
+      }
+    }
+  }
+
+  if (lastIndex < escaped.length) {
+    result += escaped.slice(lastIndex);
+  }
+  closeSpan();
+
+  return result;
+}
+
+function renderLogFromRaw(rawText) {
+  const logEl = document.getElementById('restart-log');
+  if (!logEl) return;
+
+  const text = rawText || '';
+  const lines = text.split(/\r?\n/);
+
+  const html = lines
+    .map((line) => {
+      const cls = getXrayLogLineClass(line);
+      const inner = ansiToHtml(line || '');
+      return '<span class="' + cls + '">' + inner + '</span>';
+    })
+    .join('<br>');
+
+  logEl.innerHTML = html;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
 function appendToLog(text) {
   const logEl = document.getElementById('restart-log');
   if (!logEl || !text) return;
-  if (logEl.textContent && !logEl.textContent.endsWith('\n')) {
-    logEl.textContent += '\n';
+  const current = logEl.dataset.rawText || '';
+  let raw = current;
+  if (raw && !raw.endsWith('\n')) {
+    raw += '\n';
   }
-  logEl.textContent += text;
-  logEl.scrollTop = logEl.scrollHeight;
+  raw += text;
+  logEl.dataset.rawText = raw;
+  renderLogFromRaw(raw);
 }
 
 function clearLog() {
   const logEl = document.getElementById('restart-log');
   if (!logEl) return;
-  logEl.textContent = '';
+  logEl.dataset.rawText = '';
+  logEl.innerHTML = '';
   try {
     fetch('/api/restart-log/clear', { method: 'POST' });
   } catch (e) {
@@ -1319,11 +1932,11 @@ function clearLog() {
 function copyLog() {
   const logEl = document.getElementById('restart-log');
   if (!logEl) return;
-  const text = logEl.textContent || '';
+  const text = logEl.dataset.rawText || '';
   if (!text) return;
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(
-      () => alert('Журнал скопирован в буфер обмена'),
+      () => showToast('Журнал скопирован в буфер обмена', false),
       () => fallbackCopyText(text)
     );
   } else {
@@ -1341,9 +1954,9 @@ function fallbackCopyText(text) {
   ta.select();
   try {
     document.execCommand('copy');
-    alert('Журнал скопирован в буфер обмена');
+    showToast('Журнал скопирован в буфер обмена', false);
   } catch (e) {
-    alert('Не удалось скопировать журнал');
+    showToast('Не удалось скопировать журнал', true);
   }
   document.body.removeChild(ta);
 }
@@ -1387,6 +2000,212 @@ async function refreshXrayLogStatus() {
   }
 }
 
+
+// ---------- Xkeen service status (header lamp) ----------
+
+function setXkeenServiceStatus(state, core) {
+  const lamp = document.getElementById('xkeen-service-lamp');
+  const textEl = document.getElementById('xkeen-service-text');
+  const coreEl = document.getElementById('xkeen-core-text');
+
+  if (!lamp || !textEl || !coreEl) return;
+
+  lamp.dataset.state = state;
+
+  let text;
+  switch (state) {
+    case 'running':
+      text = 'Сервис запущен';
+      break;
+    case 'stopped':
+      text = 'Сервис остановлен';
+      break;
+    case 'pending':
+      text = 'Проверка статуса...';
+      break;
+    case 'error':
+      text = 'Ошибка статуса';
+      break;
+    default:
+      text = 'Статус неизвестен';
+  }
+
+  textEl.textContent = text;
+
+  if (core && state === 'running') {
+    const label = core === 'mihomo' ? 'mihomo' : 'xray';
+    coreEl.textContent = `Ядро: ${label}`;
+    coreEl.dataset.core = label;
+    coreEl.classList.add('has-core');
+    lamp.title = `${text} (ядро: ${label})`;
+  } else {
+    coreEl.textContent = '';
+    coreEl.dataset.core = '';
+    coreEl.classList.remove('has-core');
+    lamp.title = text;
+  }
+}
+
+async function refreshXkeenServiceStatus() {
+  const lamp = document.getElementById('xkeen-service-lamp');
+  if (!lamp) return;
+
+  // Показать промежуточное состояние
+  setXkeenServiceStatus('pending');
+
+  try {
+    const res = await fetch('/api/xkeen/status');
+    if (!res.ok) throw new Error('status http error: ' + res.status);
+    const data = await res.json().catch(() => ({}));
+
+    const running = !!data.running;
+    const core = data.core || null;
+
+    setXkeenServiceStatus(running ? 'running' : 'stopped', core);
+  } catch (e) {
+    console.error('xkeen status error', e);
+    setXkeenServiceStatus('error');
+  }
+}
+
+
+// ---------- Xkeen core selection (modal) ----------
+
+let xkeenCoreModalLoading = false;
+
+function openXkeenCoreModal() {
+  const modal = document.getElementById('core-modal');
+  const statusEl = document.getElementById('core-modal-status');
+  const confirmBtn = document.getElementById('core-modal-confirm-btn');
+  const coreButtons = document.querySelectorAll('#core-modal .core-option');
+
+  if (!modal || !statusEl || !confirmBtn || !coreButtons.length) return;
+
+  modal.classList.remove('hidden');
+  statusEl.textContent = 'Загрузка списка ядер...';
+  confirmBtn.disabled = true;
+
+  coreButtons.forEach(btn => {
+    btn.disabled = true;
+    btn.classList.remove('active');
+    btn.style.display = 'inline-block';
+  });
+
+  xkeenCoreModalLoading = true;
+
+  fetch('/api/xkeen/core')
+    .then(res => res.json().catch(() => ({})))
+    .then(data => {
+      xkeenCoreModalLoading = false;
+
+      const ok = data && data.ok !== false;
+      if (!ok) {
+        statusEl.textContent = data && data.error
+          ? `Ошибка: ${data.error}`
+          : 'Не удалось получить список ядер';
+        return;
+      }
+
+      const cores = Array.isArray(data.cores) ? data.cores : [];
+      const current = data.currentCore || null;
+
+      if (cores.length < 2) {
+        statusEl.textContent = cores.length
+          ? 'Доступно только одно ядро — переключение не требуется'
+          : 'Не найдено ни одного ядра';
+        confirmBtn.disabled = true;
+        coreButtons.forEach(btn => { btn.disabled = true; });
+        return;
+      }
+
+      statusEl.textContent = 'Выберите ядро XKeen:';
+
+      coreButtons.forEach(btn => {
+        const value = btn.getAttribute('data-core');
+        if (!value || !cores.includes(value)) {
+          btn.style.display = 'none';
+          return;
+        }
+        btn.disabled = false;
+        if (value === current) {
+          btn.classList.add('active');
+        }
+      });
+
+      confirmBtn.disabled = false;
+    })
+    .catch(err => {
+      console.error('core list error', err);
+      xkeenCoreModalLoading = false;
+      statusEl.textContent = 'Ошибка загрузки списка ядер';
+      confirmBtn.disabled = true;
+    });
+}
+
+function closeXkeenCoreModal() {
+  const modal = document.getElementById('core-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+}
+
+async function confirmXkeenCoreChange() {
+  if (xkeenCoreModalLoading) return;
+
+  const statusEl = document.getElementById('core-modal-status');
+  const confirmBtn = document.getElementById('core-modal-confirm-btn');
+  const coreButtons = document.querySelectorAll('#core-modal .core-option');
+
+  if (!statusEl || !confirmBtn || !coreButtons.length) return;
+
+  let selectedCore = null;
+  coreButtons.forEach(btn => {
+    if (btn.classList.contains('active') && !btn.disabled && btn.style.display !== 'none') {
+      selectedCore = btn.getAttribute('data-core');
+    }
+  });
+
+  if (!selectedCore) {
+    statusEl.textContent = 'Пожалуйста, выберите ядро';
+    return;
+  }
+
+  statusEl.textContent = `Смена ядра на ${selectedCore}...`;
+  confirmBtn.disabled = true;
+  coreButtons.forEach(btn => { btn.disabled = true; });
+
+  try {
+    const res = await fetch('/api/xkeen/core', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ core: selectedCore })
+    });
+    const data = await res.json().catch(() => ({}));
+    const ok = data && data.ok !== false;
+
+    if (!ok) {
+      statusEl.textContent = data && data.error
+        ? `Ошибка: ${data.error}`
+        : 'Не удалось сменить ядро';
+      confirmBtn.disabled = false;
+      coreButtons.forEach(btn => { btn.disabled = false; });
+      showToast('Не удалось сменить ядро', true);
+      return;
+    }
+
+    showToast(`Ядро изменено на ${selectedCore}`, false);
+    closeXkeenCoreModal();
+    try { refreshXkeenServiceStatus(); } catch (e) {}
+  } catch (err) {
+    console.error('core change error', err);
+    statusEl.textContent = 'Ошибка при смене ядра';
+    confirmBtn.disabled = false;
+    coreButtons.forEach(btn => { btn.disabled = false; });
+    showToast('Не удалось сменить ядро (ошибка сети)', true);
+  }
+}
+
+
+
 // ---------- Xray live logs ----------
 
 async function fetchXrayLogsOnce() {
@@ -1418,16 +2237,38 @@ function applyXrayLogFilterToOutput() {
   const outputEl = document.getElementById('xray-log-output');
   if (!outputEl) return;
 
-  const lines = xrayLogLastLines || [];
-  const html = lines
-    .map((line) => {
-      const cls = getXrayLogLineClass(line);
-      return '<span class="' + cls + '">' + escapeHtml(line) + '</span>';
-    })
-    .join('');
+  const filterEl = document.getElementById('xray-log-filter');
+  const rawFilter = (filterEl && filterEl.value || '').trim().toLowerCase();
+
+  // Разбиваем фильтр на слова, применяем AND-логику:
+  // "error xray" -> строки, содержащие и "error", и "xray"
+  const terms = rawFilter
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const sourceLines = xrayLogLastLines || [];
+  const filtered = terms.length
+    ? sourceLines.filter((line) => {
+        const lower = (line || '').toLowerCase();
+        return terms.every((t) => lower.includes(t));
+      })
+    : sourceLines;
+
+  const wasAtBottom =
+    outputEl.scrollTop + outputEl.clientHeight >= outputEl.scrollHeight - 5;
+
+  const html = filtered
+    .map((line) => parseXrayLogLine(line))
+    .join('\n');
+
   outputEl.innerHTML = html;
-  outputEl.scrollTop = outputEl.scrollHeight;
+
+  if (wasAtBottom) {
+    outputEl.scrollTop = outputEl.scrollHeight;
+  }
 }
+
 
 function xrayLogApplyFilter() {
   applyXrayLogFilterToOutput();
@@ -1535,7 +2376,7 @@ function xrayLogsCopy() {
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(
-      () => alert('Логи Xray скопированы в буфер обмена'),
+      () => showToast('Логи Xray скопированы в буфер обмена', false),
       () => fallbackCopyText(text)
     );
   } else {
@@ -1692,6 +2533,24 @@ function initCommandClicks() {
       const flag = el.getAttribute('data-flag');
       const label = el.getAttribute('data-label') || ('xkeen ' + flag);
       if (!flag) return;
+
+      // Для -start / -stop / -restart выполняем команду сразу,
+      // без подтверждения и без мини-терминала – вывод идёт прямо в журнал.
+      if (flag === '-start' || flag === '-stop' || flag === '-restart') {
+        // не даём запускать команду повторно в течение короткого времени
+        if (el.classList.contains('loading')) return;
+        el.classList.add('loading');
+        try {
+          runInstantXkeenFlag(flag, label);
+        } finally {
+          // через несколько секунд снимаем блокировку и спиннер даже если сервер не ответил
+          setTimeout(() => {
+            el.classList.remove('loading');
+          }, 7000);
+        }
+        return;
+      }
+
       if (!confirm(`Выполнить команду: ${label}?`)) return;
       openTerminalForFlag(flag, label);
     });
@@ -1879,6 +2738,142 @@ async function saveIpExclude() {
 
 
 
+
+async function openJsonEditor(target) {
+  const modal = document.getElementById('json-editor-modal');
+  const titleEl = document.getElementById('json-editor-title');
+  const fileLabelEl = document.getElementById('json-editor-file-label');
+  const errorEl = document.getElementById('json-editor-error');
+  const textarea = document.getElementById('json-editor-textarea');
+
+  if (!modal || !textarea) return;
+
+  jsonModalCurrentTarget = target;
+  if (errorEl) errorEl.textContent = '';
+
+  let url;
+  let title;
+  let fileLabel;
+
+  if (target === 'inbounds') {
+    url = '/api/inbounds';
+    title = 'Редактор 03_inbounds.json';
+    fileLabel = 'Файл: 03_inbounds.json';
+  } else if (target === 'outbounds') {
+    url = '/api/outbounds';
+    title = 'Редактор 04_outbounds.json';
+    fileLabel = 'Файл: 04_outbounds.json';
+  } else {
+    return;
+  }
+
+  if (titleEl) titleEl.textContent = title;
+  if (fileLabelEl) fileLabelEl.textContent = fileLabel;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      if (errorEl) errorEl.textContent = 'Не удалось загрузить конфиг.';
+      return;
+    }
+    const data = await res.json();
+    const cfg = data && data.config ? data.config : null;
+    const text = (data && data.text)
+      ? data.text
+      : (cfg ? JSON.stringify(cfg, null, 2) : '{}');
+
+    textarea.value = text || '';
+
+    modal.classList.remove('hidden');
+  } catch (e) {
+    console.error(e);
+    if (errorEl) errorEl.textContent = 'Ошибка загрузки конфига.';
+  }
+}
+
+function closeJsonEditor() {
+  const modal = document.getElementById('json-editor-modal');
+  const errorEl = document.getElementById('json-editor-error');
+  if (modal) modal.classList.add('hidden');
+  if (errorEl) errorEl.textContent = '';
+  jsonModalCurrentTarget = null;
+}
+
+async function saveJsonEditor() {
+  const modal = document.getElementById('json-editor-modal');
+  const errorEl = document.getElementById('json-editor-error');
+  const textarea = document.getElementById('json-editor-textarea');
+
+  if (!jsonModalCurrentTarget) return;
+
+  const target = jsonModalCurrentTarget;
+  let text;
+
+  if (jsonModalEditor) {
+    text = jsonModalEditor.getValue();
+  } else if (textarea) {
+    text = textarea.value || '';
+  } else {
+    return;
+  }
+
+  let config;
+  try {
+    config = JSON.parse(text);
+  } catch (e) {
+    if (errorEl) errorEl.textContent = 'Ошибка парсинга JSON: ' + e.message;
+    return;
+  }
+
+  const url = target === 'inbounds' ? '/api/inbounds' : '/api/outbounds';
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        config,
+        restart: shouldAutoRestartAfterSave(),
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      if (errorEl) {
+        errorEl.textContent =
+          'Ошибка сохранения: ' + ((data && data.error) || 'неизвестная ошибка');
+      }
+      return;
+    }
+
+    if (modal) modal.classList.add('hidden');
+    jsonModalCurrentTarget = null;
+    if (errorEl) errorEl.textContent = '';
+
+    try {
+      if (target === 'inbounds') {
+        loadInboundsMode();
+      } else {
+        loadOutbounds();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    showToast(
+      target === 'inbounds'
+        ? '03_inbounds.json сохранён.'
+        : '04_outbounds.json сохранён.'
+    );
+  } catch (e) {
+    console.error(e);
+    if (errorEl) errorEl.textContent = 'Ошибка сохранения.';
+  } finally {
+    loadRestartLog();
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const xkeenStartBtn = document.getElementById('xkeen-start-btn');
   const xkeenStopBtn = document.getElementById('xkeen-stop-btn');
@@ -1894,8 +2889,67 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   if (xkeenRestartBtn) xkeenRestartBtn.addEventListener('click', (e) => {
     e.preventDefault();
-    controlXkeen('restart');
+    if (xkeenRestartBtn.disabled) return;
+    xkeenRestartBtn.disabled = true;
+    xkeenRestartBtn.classList.add('loading');
+    const p = controlXkeen('restart');
+    if (p && typeof p.finally === 'function') {
+      p.finally(() => {
+        xkeenRestartBtn.disabled = false;
+        xkeenRestartBtn.classList.remove('loading');
+      });
+    } else {
+      // safety fallback
+      setTimeout(() => {
+        xkeenRestartBtn.disabled = false;
+        xkeenRestartBtn.classList.remove('loading');
+      }, 2500);
+    }
   });
+
+  // Управление выбором ядра (modal)
+  const coreTextEl = document.getElementById('xkeen-core-text');
+  const coreModal = document.getElementById('core-modal');
+  const coreModalCloseBtn = document.getElementById('core-modal-close-btn');
+  const coreModalCancelBtn = document.getElementById('core-modal-cancel-btn');
+  const coreModalConfirmBtn = document.getElementById('core-modal-confirm-btn');
+  const coreOptionButtons = document.querySelectorAll('#core-modal .core-option');
+
+  if (coreTextEl) {
+    coreTextEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      openXkeenCoreModal();
+    });
+  }
+  if (coreModalCloseBtn) {
+    coreModalCloseBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeXkeenCoreModal();
+    });
+  }
+  if (coreModalCancelBtn) {
+    coreModalCancelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeXkeenCoreModal();
+    });
+  }
+  if (coreModalConfirmBtn) {
+    coreModalConfirmBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      confirmXkeenCoreChange();
+    });
+  }
+  if (coreOptionButtons && coreOptionButtons.length) {
+    coreOptionButtons.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (btn.disabled) return;
+        coreOptionButtons.forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+  }
+
 
   const globalAutorestartCb = document.getElementById('global-autorestart-xkeen');
   if (globalAutorestartCb) {
@@ -2003,17 +3057,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const localExportBtn = document.getElementById('routing-export-local-btn');
   const localImportBtn = document.getElementById('routing-import-local-btn');
   const localConfigFileInput = document.getElementById('local-config-file-input');
+  const routingHelpLine = document.getElementById('routing-help-line');
 
 
 const inboundsSaveBtn = document.getElementById('inbounds-save-btn');
   const inboundsBackupBtn = document.getElementById('inbounds-backup-btn');
   const inboundsRestoreAutoBtn = document.getElementById('inbounds-restore-auto-btn');
+  const inboundsOpenEditorBtn = document.getElementById('inbounds-open-editor-btn');
 
   const outboundsSaveBtn = document.getElementById('outbounds-save-btn');
   const outboundsBackupBtn = document.getElementById('outbounds-backup-btn');
   const outboundsRestoreAutoBtn = document.getElementById('outbounds-restore-auto-btn');
+  const outboundsOpenEditorBtn = document.getElementById('outbounds-open-editor-btn');
 
-  
+  const jsonEditorCloseBtn = document.getElementById('json-editor-close-btn');
+  const jsonEditorCancelBtn = document.getElementById('json-editor-cancel-btn');
+  const jsonEditorSaveBtn = document.getElementById('json-editor-save-btn');
+
   const inboundsBody = document.getElementById('inbounds-body');
   const inboundsArrow = document.getElementById('inbounds-arrow');
   const outboundsBody = document.getElementById('outbounds-body');
@@ -2056,6 +3116,7 @@ const mihomoLoadBtn = document.getElementById('mihomo-load-btn');
   const mihomoRestartBtn = document.getElementById('mihomo-restart-btn');
   const mihomoConfiguratorBtn = document.getElementById('mihomo-configurator-btn');
   const mihomoTemplatesRefreshBtn = document.getElementById('mihomo-templates-refresh-btn');
+  const mihomoProfilesLink = document.getElementById('mihomo-profiles-link');
   const mihomoTemplateLoadBtn = document.getElementById('mihomo-template-load-btn');
   const mihomoTemplateSaveFromEditorBtn = document.getElementById('mihomo-template-savefromeditor-btn');
 
@@ -2064,6 +3125,11 @@ const mihomoLoadBtn = document.getElementById('mihomo-load-btn');
   const portProxyingSaveBtn = document.getElementById('port-proxying-save-btn');
   const portExcludeSaveBtn = document.getElementById('port-exclude-save-btn');
   const ipExcludeSaveBtn = document.getElementById('ip-exclude-save-btn');
+
+  if (routingHelpLine) routingHelpLine.addEventListener('click', (e) => {
+    e.preventDefault();
+    openRoutingHelp();
+  });
 
   if (saveBtn) saveBtn.addEventListener('click', (e) => {
     e.preventDefault();
@@ -2159,6 +3225,11 @@ if (githubExportBtn) githubExportBtn.addEventListener('click', (e) => {
     e.preventDefault();
     restoreFromAutoBackup('inbounds');
   });
+  if (inboundsOpenEditorBtn) inboundsOpenEditorBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    openJsonEditor('inbounds');
+  });
+
   if (outboundsSaveBtn) outboundsSaveBtn.addEventListener('click', (e) => {
     e.preventDefault();
     saveOutbounds();
@@ -2171,7 +3242,23 @@ if (githubExportBtn) githubExportBtn.addEventListener('click', (e) => {
     e.preventDefault();
     restoreFromAutoBackup('outbounds');
   });
+  if (outboundsOpenEditorBtn) outboundsOpenEditorBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    openJsonEditor('outbounds');
+  });
 
+  if (jsonEditorCloseBtn) jsonEditorCloseBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeJsonEditor();
+  });
+  if (jsonEditorCancelBtn) jsonEditorCancelBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeJsonEditor();
+  });
+  if (jsonEditorSaveBtn) jsonEditorSaveBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    saveJsonEditor();
+  });
 
   if (mihomoSaveBtn) mihomoSaveBtn.addEventListener('click', (e) => {
     e.preventDefault();
@@ -2184,6 +3271,12 @@ if (githubExportBtn) githubExportBtn.addEventListener('click', (e) => {
   if (mihomoConfiguratorBtn) mihomoConfiguratorBtn.addEventListener('click', (e) => {
     e.preventDefault();
     const url = mihomoConfiguratorBtn.dataset.configuratorUrl || '/static/mihomo-configurator.html';
+    window.open(url, '_blank');
+  });
+  if (mihomoProfilesLink && mihomoConfiguratorBtn) mihomoProfilesLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    const baseUrl = mihomoConfiguratorBtn.dataset.configuratorUrl || '/static/mihomo-configurator.html';
+    const url = baseUrl + '#profiles';
     window.open(url, '_blank');
   });
 
@@ -2234,15 +3327,583 @@ if (githubExportBtn) githubExportBtn.addEventListener('click', (e) => {
 
   loadMihomoConfig();
   loadMihomoTemplatesList();
-  
+
   if (mihomoRestartBtn) mihomoRestartBtn.addEventListener('click', async (e)=>{
     e.preventDefault();
     await fetch('/api/restart-xkeen',{method:'POST'});
-    alert('Xkeen перезапущен');
   });
-loadPortProxying();
+
+  loadPortProxying();
   loadPortExclude();
   loadIpExclude();
   refreshXrayLogStatus();
 
+  // Статус сервиса xkeen в шапке
+  refreshXkeenServiceStatus();
+  setInterval(() => {
+    refreshXkeenServiceStatus();
+  }, 15000);
+});
+
+
+// ---------- Mihomo generator: VLESS/WireGuard → proxy, proxy-groups, profiles & backups ----------
+
+function getMihomoEditorText() {
+  if (typeof mihomoEditor !== 'undefined' && mihomoEditor) {
+    return mihomoEditor.getValue();
+  }
+  const ta = document.getElementById('mihomo-editor');
+  return ta ? ta.value : '';
+}
+
+function setMihomoEditorText(text) {
+  if (typeof mihomoEditor !== 'undefined' && mihomoEditor) {
+    mihomoEditor.setValue(text || '');
+    mihomoEditor.scrollTo(0, 0);
+  } else {
+    const ta = document.getElementById('mihomo-editor');
+    if (ta) ta.value = text || '';
+  }
+}
+
+function setMihomoStatus(msg, isError) {
+  const el = document.getElementById('mihomo-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = isError ? '#f87171' : '#9ca3af';
+}
+
+async function saveMihomoAndRestart() {
+  const ta = document.getElementById('mihomo-editor');
+  const content = (typeof mihomoEditor !== 'undefined' && mihomoEditor)
+    ? mihomoEditor.getValue()
+    : (ta ? ta.value : '');
+  if (!content.trim()) {
+    setMihomoStatus('config.yaml пустой, сохранять нечего.', true);
+    return;
+  }
+  setMihomoStatus('Сохранение config.yaml и перезапуск mihomo...');
+  try {
+    const res = await fetch('/api/mihomo-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, restart: true }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      setMihomoStatus((data && data.error) || 'Ошибка сохранения config.yaml.', true);
+      return;
+    }
+    let msg = 'config.yaml сохранён.';
+    if (data.restarted) {
+      msg += ' xkeen перезапущен.';
+    }
+    setMihomoStatus(msg, false);
+  } catch (e) {
+    console.error(e);
+    setMihomoStatus('Ошибка сохранения config.yaml.', true);
+  }
+}
+
+
+function updateMihomoBackupsFilterUI() {
+  const label = document.getElementById('mihomo-backups-active-profile-label');
+  const checkbox = document.getElementById('mihomo-backups-active-only');
+  if (!label || !checkbox) return;
+  if (mihomoActiveProfileName) {
+    label.textContent = 'Активный профиль: ' + mihomoActiveProfileName;
+    checkbox.disabled = false;
+  } else {
+    label.textContent = 'Активный профиль не выбран';
+    checkbox.disabled = true;
+  }
+}
+
+function getMihomoBackupsFilterProfile() {
+  const checkbox = document.getElementById('mihomo-backups-active-only');
+  if (!checkbox || !checkbox.checked) return null;
+  if (!mihomoActiveProfileName) return null;
+  return mihomoActiveProfileName;
+}
+
+function formatMihomoBackupDate(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) {
+    return value;
+  }
+  try {
+    return d.toLocaleString();
+  } catch (e) {
+    return value;
+  }
+}
+
+function parseMihomoBackupFilename(filename) {
+  // Ожидаем: <base>_YYYYMMDD_HHMMSS.yaml
+  const m = filename && filename.match(/^(.+?)_(\d{8})_(\d{6})\.yaml$/);
+  if (!m) {
+    return { profile: null, created: null };
+  }
+
+  const base = m[1];
+  const profile = base.endsWith('.yaml') ? base : base + '.yaml';
+
+  let created = null;
+  try {
+    const year = Number(m[2].slice(0, 4));
+    const month = Number(m[2].slice(4, 6)) - 1; // 0–11
+    const day = Number(m[2].slice(6, 8));
+    const hours = Number(m[3].slice(0, 2));
+    const minutes = Number(m[3].slice(2, 4));
+    const seconds = Number(m[3].slice(4, 6));
+    const d = new Date(year, month, day, hours, minutes, seconds);
+    if (!Number.isNaN(d.getTime())) {
+      created = d;
+    }
+  } catch (e) {
+    created = null;
+  }
+
+  return { profile, created };
+}
+
+async function mihomoLoadProfiles() {
+  const tbody = document.getElementById('mihomo-profiles-list');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="3">Загрузка...</td></tr>';
+
+  try {
+    const res = await fetch('/api/mihomo/profiles');
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      tbody.innerHTML = '<tr><td colspan="3">Ошибка загрузки профилей</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    mihomoActiveProfileName = null;
+    data.forEach((p) => {
+      const tr = document.createElement('tr');
+      tr.dataset.name = p.name;
+      if (p.is_active) {
+        mihomoActiveProfileName = p.name;
+      }
+      tr.innerHTML = [
+        '<td>' + p.name + '</td>',
+        '<td>' + (p.is_active ? 'да' : '') + '</td>',
+        '<td>' +
+          '<button data-action="load" title="В редактор">📥</button> ' +
+          '<button data-action="activate">✅ Активировать</button> ' +
+          '<button data-action="delete">🗑️ Удалить</button>' +
+        '</td>',
+      ].join('');
+      tbody.appendChild(tr);
+    });
+    updateMihomoBackupsFilterUI();
+  } catch (e) {
+    console.error(e);
+    tbody.innerHTML = '<tr><td colspan="3">Ошибка загрузки профилей</td></tr>';
+  }
+}
+
+async function mihomoLoadBackups() {
+  const tbody = document.getElementById('mihomo-backups-list');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="4">Загрузка...</td></tr>';
+
+  try {
+    let url = '/api/mihomo/backups';
+    const profile = getMihomoBackupsFilterProfile();
+    if (profile) {
+      url += '?profile=' + encodeURIComponent(profile);
+    }
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      tbody.innerHTML = '<tr><td colspan="4">Ошибка загрузки бэкапов</td></tr>';
+      return;
+    }
+    tbody.innerHTML = '';
+    data.forEach((b) => {
+      const tr = document.createElement('tr');
+      tr.dataset.filename = b.filename;
+
+      const created = formatMihomoBackupDate(b.created_at);
+
+      const isOwnProfile =
+        !mihomoActiveProfileName ||
+        !b.profile ||
+        mihomoActiveProfileName === b.profile;
+
+      const restoreAttrs = isOwnProfile
+        ? ' title="Восстановить"'
+        : ' disabled title="Восстановить: активный профиль (' + mihomoActiveProfileName +
+          ') не совпадает с профилем бэкапа (' + b.profile + ')"';
+
+      tr.innerHTML = [
+        '<td>' +
+          '<div class="backup-filename-marquee" title="' + b.filename + '">' +
+            '<span class="backup-filename-marquee-inner">' + b.filename + '</span>' +
+          '</div>' +
+        '</td>',
+        '<td>' + (b.profile || '') + '</td>',
+        '<td>' + created + '</td>',
+        '<td>' +
+          '<button data-action="preview" title="В редактор">👁️</button> ' +
+          '<button data-action="restore"' + restoreAttrs + '>⏪</button> ' +
+          '<button data-action="delete" title="Удалить бэкап">🗑️</button>' +
+        '</td>',
+      ].join('');
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    console.error(e);
+    tbody.innerHTML = '<tr><td colspan="4">Ошибка загрузки бэкапов</td></tr>';
+  }
+}
+
+async function mihomoCreateProfileFromEditor() {
+  const nameInput = document.getElementById('mihomo-new-profile-name');
+  const name = (nameInput && nameInput.value || '').trim();
+  const cfg = getMihomoEditorText().trim();
+
+  if (!name || !cfg) {
+    setMihomoStatus('Имя профиля и config.yaml не должны быть пустыми.', true);
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/mihomo/profiles/' + encodeURIComponent(name), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      body: cfg,
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      setMihomoStatus(data.error || 'Ошибка создания профиля.', true);
+      return;
+    }
+    setMihomoStatus('Профиль ' + name + ' создан.', false);
+    mihomoLoadProfiles();
+  } catch (e) {
+    console.error(e);
+    setMihomoStatus('Ошибка создания профиля.', true);
+  }
+}
+
+function attachMihomoProfilesHandlers() {
+  const tbody = document.getElementById('mihomo-profiles-list');
+  if (!tbody) return;
+  tbody.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const tr = btn.closest('tr');
+    const name = tr && tr.dataset.name;
+    const action = btn.dataset.action;
+    if (!name || !action) return;
+
+    if (action === 'load') {
+      try {
+        const res = await fetch('/api/mihomo/profiles/' + encodeURIComponent(name));
+        const text = await res.text();
+        if (!res.ok) {
+          setMihomoStatus('Ошибка загрузки профиля ' + name, true);
+          return;
+        }
+        setMihomoEditorText(text);
+        setMihomoStatus('Профиль ' + name + ' загружен в редактор.', false);
+      } catch (err) {
+        console.error(err);
+        setMihomoStatus('Ошибка загрузки профиля.', true);
+      }
+    } else if (action === 'activate') {
+      try {
+        const res = await fetch('/api/mihomo/profiles/' + encodeURIComponent(name) + '/activate', {
+  method: 'POST',
+});
+const data = await res.json();
+if (!res.ok || data.error) {
+  setMihomoStatus(data.error || 'Ошибка активации профиля.', true);
+  return;
+}
+let msg = 'Профиль ' + name + ' активирован.';
+if (data.restarted) {
+  msg += ' xkeen перезапущен.';
+}
+setMihomoStatus(msg, false);
+mihomoLoadProfiles();
+} catch (err) {
+        console.error(err);
+        setMihomoStatus('Ошибка активации профиля.', true);
+      }
+    } else if (action === 'delete') {
+      if (!window.confirm('Удалить профиль ' + name + '?')) return;
+      try {
+        const res = await fetch('/api/mihomo/profiles/' + encodeURIComponent(name), {
+          method: 'DELETE',
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          setMihomoStatus(data.error || 'Ошибка удаления профиля.', true);
+          return;
+        }
+        setMihomoStatus('Профиль ' + name + ' удалён.', false);
+        mihomoLoadProfiles();
+      } catch (err) {
+        console.error(err);
+        setMihomoStatus('Ошибка удаления профиля.', true);
+      }
+    }
+  });
+}
+
+function attachMihomoBackupsHandlers() {
+  const tbody = document.getElementById('mihomo-backups-list');
+  if (!tbody) return;
+  tbody.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn || btn.disabled) return;
+    const tr = btn.closest('tr');
+    const filename = tr && tr.dataset.filename;
+    const action = btn.dataset.action;
+    if (!filename || !action) return;
+
+    if (action === 'preview') {
+      try {
+        const res = await fetch('/api/mihomo/backups/' + encodeURIComponent(filename));
+        const text = await res.text();
+        if (!res.ok) {
+          setMihomoStatus('Ошибка загрузки бэкапа ' + filename, true);
+          return;
+        }
+        setMihomoEditorText(text);
+
+        const info = parseMihomoBackupFilename(filename);
+        let msg = 'Бэкап';
+
+        if (info.profile) {
+          msg += ' профиля ' + info.profile;
+        } else {
+          msg += ' ' + filename;
+        }
+
+        if (info.created instanceof Date && !Number.isNaN(info.created.getTime())) {
+          try {
+            msg += ' от ' + info.created.toLocaleString();
+          } catch (e) {
+            // игнорируем, если браузер что-то не умеет
+          }
+        }
+
+        msg += ' загружен в редактор (не применён).';
+
+        setMihomoStatus(msg, false);
+      } catch (err) {
+        console.error(err);
+        setMihomoStatus('Ошибка загрузки бэкапа.', true);
+      }
+    } else if (action === 'restore') {
+      if (!window.confirm('Восстановить конфиг из бэкапа ' + filename + '?')) return;
+      try {
+        const res = await fetch('/api/mihomo/backups/' + encodeURIComponent(filename) + '/restore', {
+          method: 'POST',
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          setMihomoStatus(data.error || 'Ошибка восстановления бэкапа.', true);
+          return;
+        }
+        let msg = 'Бэкап ' + filename + ' восстановлен.';
+        if (data.restarted) {
+          msg += ' xkeen перезапущен.';
+        } else {
+          msg += ' Загрузите config.yaml ещё раз.';
+        }
+        setMihomoStatus(msg, false);
+      } catch (err) {
+        console.error(err);
+        setMihomoStatus('Ошибка восстановления бэкапа.', true);
+      }
+    } else if (action === 'delete') {
+      if (!window.confirm('Удалить бэкап ' + filename + '? Это действие необратимо.')) return;
+      try {
+        const res = await fetch('/api/mihomo/backups/' + encodeURIComponent(filename), {
+          method: 'DELETE',
+        });
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (e) {
+          data = null;
+        }
+        if (!res.ok || (data && data.error)) {
+          const msg = (data && data.error) || 'Ошибка удаления бэкапа.';
+          setMihomoStatus(msg, true);
+          return;
+        }
+        setMihomoStatus('Бэкап ' + filename + ' удалён.', false);
+        // Обновим таблицу бэкапов
+        mihomoLoadBackups();
+      } catch (err) {
+        console.error(err);
+        setMihomoStatus('Ошибка удаления бэкапа.', true);
+      }
+    }
+  });
+}
+
+
+async function mihomoCleanBackups() {
+  const limitInput = document.getElementById('mihomo-backups-clean-limit');
+  const raw = (limitInput && limitInput.value) || '5';
+  let limit = parseInt(raw, 10);
+
+  if (Number.isNaN(limit) || limit < 0) {
+    setMihomoStatus('Лимит должен быть целым числом ≥ 0.', true);
+    return;
+  }
+
+  const profile = getMihomoBackupsFilterProfile();
+
+  if (!window.confirm(
+    'Очистить бэкапы' +
+      (profile ? ' для профиля ' + profile : ' для всех профилей') +
+      ', оставив не более ' + limit + ' шт.?'
+  )) {
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/mihomo/backups/clean', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limit, profile }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      setMihomoStatus(data.error || 'Ошибка очистки бэкапов.', true);
+      return;
+    }
+
+    const remaining = (data.remaining && data.remaining.length) || 0;
+    let msg = 'Очистка бэкапов выполнена. Осталось ' + remaining + ' файлов.';
+    if (profile) {
+      msg += ' Профиль: ' + profile + '.';
+    }
+    setMihomoStatus(msg, false);
+
+    mihomoLoadBackups();
+  } catch (e) {
+    console.error(e);
+    setMihomoStatus('Ошибка очистки бэкапов.', true);
+  }
+}
+
+function initMihomoGeneratorUI() {
+  const loadBtn = document.getElementById('mihomo-load-btn');
+  const saveRestartBtn = document.getElementById('mihomo-save-restart-btn');
+  const profilesHeader = document.getElementById('mihomo-profiles-link');
+  const profilesPanel = document.getElementById('mihomo-profiles-panel');
+  const profilesArrow = document.getElementById('mihomo-profiles-arrow');
+  const refreshProfilesBtn = document.getElementById('mihomo-refresh-profiles-btn');
+  const refreshBackupsBtn = document.getElementById('mihomo-refresh-backups-btn');
+  const saveProfileBtn = document.getElementById('mihomo-save-profile-btn');
+  const backupsFilterCheckbox = document.getElementById('mihomo-backups-active-only');
+  const backupsCleanBtn = document.getElementById('mihomo-backups-clean-btn');
+
+  if (loadBtn) {
+    loadBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      loadMihomoConfig();
+    });
+  }
+
+  if (saveRestartBtn) {
+    saveRestartBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      saveMihomoAndRestart();
+    });
+  }
+
+  if (profilesHeader && profilesPanel) {
+    profilesHeader.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const visible = profilesPanel.style.display !== 'none';
+      profilesPanel.style.display = visible ? 'none' : 'block';
+      if (profilesArrow) {
+        profilesArrow.textContent = visible ? '▼' : '▲';
+      }
+      if (!visible) {
+        await mihomoLoadProfiles();
+        await mihomoLoadBackups();
+      }
+    });
+  }
+
+  if (refreshProfilesBtn) {
+    refreshProfilesBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      mihomoLoadProfiles();
+    });
+  }
+
+  if (refreshBackupsBtn) {
+    refreshBackupsBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      mihomoLoadBackups();
+    });
+  }
+
+  
+  if (backupsCleanBtn) {
+    backupsCleanBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      mihomoCleanBackups();
+    });
+  }
+
+  if (backupsFilterCheckbox) {
+    backupsFilterCheckbox.addEventListener('change', () => {
+      mihomoLoadBackups();
+    });
+  }
+
+  if (saveProfileBtn) {
+    saveProfileBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      mihomoCreateProfileFromEditor();
+    });
+  }
+
+  attachMihomoProfilesHandlers();
+  attachMihomoBackupsHandlers();
+}
+window.addEventListener('DOMContentLoaded', initMihomoGeneratorUI);
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  const filterEl = document.getElementById('xray-log-filter');
+  const clearBtn = document.getElementById('xray-log-filter-clear');
+
+  if (filterEl) {
+    filterEl.addEventListener('input', () => {
+      applyXrayLogFilterToOutput();
+    });
+
+    filterEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        filterEl.blur();
+      }
+    });
+  }
+
+  if (clearBtn && filterEl) {
+    clearBtn.addEventListener('click', () => {
+      filterEl.value = '';
+      applyXrayLogFilterToOutput();
+      filterEl.focus();
+    });
+  }
 });
