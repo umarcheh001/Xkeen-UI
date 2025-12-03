@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <g fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Внешний круг, как у иконки restore -->
+    <circle cx="12" cy="12" r="9" />
+    <!-- Корзина -->
+    <path d="M9 10v6a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-6" />
+    <path d="M8 10h8" />
+    <!-- Крышка -->
+    <path d="M10 8h4" />
+    <path d="M11 6h2" />
+    <!-- Ручка -->
+    <path d="M10 10v6" />
+    <path d="M14 10v6" />
+  </g>
+</svg>
