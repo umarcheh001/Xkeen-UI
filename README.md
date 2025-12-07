@@ -27,7 +27,7 @@ sh install.sh
 ### Онлайн установка
 
 ```sh
-cd /opt && curl -fSL "https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.1.3/xkeen-ui-routing.tar.gz" -o xkeen-ui-routing.tar.gz && tar -xzf xkeen-ui-routing.tar.gz && sh xkeen-ui/install.sh
+cd /opt && curl -fSL "https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.1.4/xkeen-ui-routing.tar.gz" -o xkeen-ui-routing.tar.gz && tar -xzf xkeen-ui-routing.tar.gz && sh xkeen-ui/install.sh
 ```
 
 Если ругается на отсутствие Flask:
@@ -191,4 +191,8 @@ sh /opt/etc/xkeen-ui/uninstall.sh
 - `XKEEN_GITHUB_REPO_URL` (опционально, ссылка в UI).
 
 
-<img width="1070" height="1303" alt="Снимок экрана 2025-11-25 231637" src="https://github.com/user-attachments/assets/9b8f99ea-0702-4c86-a00b-d2596b08375e" />
+
+<img width="871" height="1278" alt="Снимок экрана 2025-12-07 202311" src="https://github.com/user-attachments/assets/7cfcf833-f644-40c6-8216-a654cd47bddc" />
+
+
+
