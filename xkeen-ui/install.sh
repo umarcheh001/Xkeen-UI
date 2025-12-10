@@ -9,6 +9,17 @@ PYTHON_BIN="/opt/bin/python3"
 LOG_DIR="/opt/var/log"
 RUN_DIR="/opt/var/run"
 
+# Определяем архитектуру устройства, чтобы решить, устанавливать ли gevent
+ARCH="$(uname -m 2>/dev/null || echo unknown)"
+WANT_GEVENT=1
+case "$ARCH" in
+  mipsel*|mips*)
+    # На слабых MIPS/MIPSEL-роутерах сборка gevent/greenlet часто не проходит.
+    # В этом случае панель будет работать через HTTP-пуллинг без gevent.
+    WANT_GEVENT=0
+    ;;
+esac
+
 MIHOMO_TEMPLATES_DIR="/opt/etc/mihomo/templates"
 SRC_MIHOMO_TEMPLATES="$SRC_DIR/opt/etc/mihomo/templates"
 
@@ -25,12 +36,12 @@ echo "========================================"
 echo "  Xkeen Web UI — УСТАНОВКА"
 echo "========================================"
 
-# Проверка наличия Python + автоустановка через Entware при отсутствии
+# --- Python3 ---
+
 if [ ! -x "$PYTHON_BIN" ]; then
   echo "[*] Python3 не найден по пути $PYTHON_BIN."
   echo "[*] Пытаюсь установить python3 через Entware (opkg)..."
 
-  # Пытаемся найти opkg
   if command -v opkg >/dev/null 2>&1; then
     OPKG_BIN="$(command -v opkg)"
   elif [ -x "/opt/bin/opkg" ]; then
@@ -41,89 +52,125 @@ if [ ! -x "$PYTHON_BIN" ]; then
     exit 1
   fi
 
-  # Обновляем списки пакетов и ставим python3
   if ! "$OPKG_BIN" update; then
     echo "[!] Не удалось выполнить 'opkg update'."
-    echo "    Проверь подключение к интернету и репозитории Entware."
     exit 1
   fi
 
   if ! "$OPKG_BIN" install python3; then
     echo "[!] Установка python3 через opkg завершилась с ошибкой."
-    echo "    Попробуй установить python3 вручную, затем перезапусти установщик."
     exit 1
   fi
 fi
 
-# Финальная проверка, что python3 появился
 if [ ! -x "$PYTHON_BIN" ]; then
   echo "[!] Python3 по пути $PYTHON_BIN не найден даже после установки."
-  echo "    Проверь установку python3 в Entware и путь к бинарнику."
   exit 1
 fi
 
-# Проверка наличия Flask и при необходимости автоустановка
-echo "[*] Проверяю наличие Flask для Python3..."
+# --- Flask + gevent ---
 
-if ! "$PYTHON_BIN" - << 'EOF'
-try:
-    import flask  # noqa
-except Exception:
-    raise SystemExit(1)
-EOF
-then
-  echo "[*] Flask не найден. Пытаюсь установить зависимости через Entware и pip..."
+echo "[*] Проверяю наличие Flask/gevent для Python3..."
 
-  # Пытаемся найти opkg
+# Flask обязателен, gevent/geventwebsocket — опциональны (только для WebSocket-логов)
+
+NEED_FLASK=0
+NEED_GEVENT=0
+
+# Проверяем flask
+if ! "$PYTHON_BIN" -c "import flask" >/dev/null 2>&1; then
+  NEED_FLASK=1
+fi
+
+# Проверяем gevent и geventwebsocket (только если архитектура позволяет)
+if [ "$WANT_GEVENT" -eq 1 ]; then
+  for MOD in gevent geventwebsocket; do
+    if ! "$PYTHON_BIN" -c "import $MOD" >/dev/null 2>&1; then
+      NEED_GEVENT=1
+      break
+    fi
+  done
+else
+  echo "[*] Архитектура $ARCH: пропускаю установку gevent/gevent-websocket, будет использован HTTP-пулинг."
+fi
+
+if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
+  echo "[*] Flask и/или gevent не найдены. Пытаюсь установить зависимости через Entware и pip..."
+
   if command -v opkg >/dev/null 2>&1; then
     OPKG_BIN="$(command -v opkg)"
   elif [ -x "/opt/bin/opkg" ]; then
     OPKG_BIN="/opt/bin/opkg"
   else
     echo "[!] Не найден пакетный менеджер opkg Entware."
-    echo "    Установи Entware вручную или поставь Flask так:"
+    echo "    Поставь зависимости вручную:"
     echo "      opkg update && opkg install python3 python3-pip"
-    echo "      $PYTHON_BIN -m pip install --upgrade pip flask"
+    if [ "$WANT_GEVENT" -eq 1 ]; then
+      echo "      $PYTHON_BIN -m pip install --upgrade pip flask gevent gevent-websocket"
+    else
+      echo "      $PYTHON_BIN -m pip install --upgrade pip flask"
+    fi
+    echo "    После этого запусти установщик ещё раз."
     exit 1
   fi
 
-  # Обновляем списки пакетов и ставим python3 + pip (на случай, если их не было)
   if ! "$OPKG_BIN" update; then
-    echo "[!] Не удалось выполнить 'opkg update' при установке Flask."
-    echo "    Проверь подключение к интернету и репозитории Entware."
+    echo "[!] Не удалось выполнить 'opkg update' при установке зависимостей."
     exit 1
   fi
 
   if ! "$OPKG_BIN" install python3 python3-pip; then
     echo "[!] Установка python3 и python3-pip через opkg завершилась с ошибкой."
-    echo "    Попробуй установить их вручную, затем запусти установщик ещё раз."
     exit 1
   fi
 
-  # Устанавливаем/обновляем pip и Flask через pip
-  if ! "$PYTHON_BIN" -m pip install --upgrade pip flask; then
-    echo "[!] Не удалось установить Flask через pip."
-    echo "    Попробуй вручную:"
-    echo "      opkg update && opkg install python3 python3-pip"
-    echo "      $PYTHON_BIN -m pip install --upgrade pip flask"
-    exit 1
+  # pip может не суметь собрать gevent/gevent-websocket на слабых роутерах (mipsel),
+  # поэтому ошибка здесь НЕ фатальная — продолжаем установку без WebSocket.
+  PIP_PKGS="flask"
+  if [ "$WANT_GEVENT" -eq 1 ]; then
+    PIP_PKGS="$PIP_PKGS gevent gevent-websocket"
   fi
-
-  # Повторная проверка импорта Flask
-  if ! "$PYTHON_BIN" - << 'EOF'
-try:
-    import flask  # noqa
-except Exception:
-    raise SystemExit(1)
-EOF
-  then
-    echo "[!] Flask по-прежнему не виден из $PYTHON_BIN после установки."
-    echo "    Проверь окружение Python и попробуй установить Flask вручную."
-    exit 1
+  if ! "$PYTHON_BIN" -m pip install --upgrade pip $PIP_PKGS; then
+    echo "[!] Не удалось полностью установить Flask и/или gevent через pip."
+    echo "    Продолжаю установку, но WebSocket может быть недоступен."
   fi
 fi
 
-# Функция проверки использования порта
+# Финальная проверка: flask обязателен
+if ! "$PYTHON_BIN" -c "import flask" >/dev/null 2>&1; then
+  echo "[!] Модуль flask по-прежнему не виден из $PYTHON_BIN."
+  echo "    Без него панель не запустится. Завершаю установку."
+  exit 1
+fi
+
+# gevent/geventwebsocket — опциональны: предупреждаем, но НЕ падаем
+if [ "$WANT_GEVENT" -eq 1 ]; then
+  MISSING_GEVENT=""
+  for MOD in gevent geventwebsocket; do
+    if ! "$PYTHON_BIN" -c "import $MOD" >/dev/null 2>&1; then
+      if [ -z "$MISSING_GEVENT" ]; then
+        MISSING_GEVENT="$MOD"
+      else
+        MISSING_GEVENT="$MISSING_GEVENT $MOD"
+      fi
+    fi
+  done
+
+  if [ -n "$MISSING_GEVENT" ]; then
+    echo "[!] Следующие модули gevent недоступны: $MISSING_GEVENT"
+    echo "    Продолжаю установку без WebSocket; логи Xray будут отображаться через HTTP-пулинг."
+  else
+    echo "[*] Flask и gevent найдены, WebSocket для логов Xray будет использован."
+  fi
+else
+  echo "[*] gevent/gevent-websocket не устанавливались для архитектуры $ARCH."
+  echo "    Логи Xray будут отображаться через HTTP-пулинг."
+fi
+
+echo "[*] Python-зависимости в порядке."
+
+# --- Функции ---
+
 is_port_in_use() {
   PORT_CHECK="$1"
   if command -v netstat >/dev/null 2>&1; then
@@ -134,7 +181,6 @@ is_port_in_use() {
   fi
 }
 
-# Функция создания бэкапа конфиг-файла
 backup_config_file() {
   SRC="$1"
   NAME="$(basename "$SRC")"
@@ -158,16 +204,27 @@ backup_config_file() {
   echo "[backup] $SRC -> $DEST" >> "$LOG_DIR/xkeen-ui.log"
 }
 
-# Пытаемся обнаружить уже установленную панель и её порт
-EXISTING_APP="$UI_DIR/app.py"
-EXISTING_PORT=""
-FIRST_INSTALL="no"
+# --- Определяем существующую установку и её порт ---
 
-if [ -f "$EXISTING_APP" ]; then
+EXISTING_APP="$UI_DIR/app.py"
+EXISTING_RUN="$UI_DIR/run_server.py"
+EXISTING_PORT=""
+FIRST_INSTALL="yes"
+
+if [ -f "$EXISTING_APP" ] || [ -f "$EXISTING_RUN" ]; then
+  FIRST_INSTALL="no"
+fi
+
+# 1) Пробуем вытащить порт из run_server.py (WSGIServer(("0.0.0.0", PORT ...))
+if [ -f "$EXISTING_RUN" ]; then
+  EXISTING_PORT=$(grep -E '"0\.0\.0\.0",[[:space:]]*[0-9]+' "$EXISTING_RUN" 2>/dev/null | \
+    sed -E 's/.*"0\.0\.0\.0",[[:space:]]*([0-9]+).*/\1/' | tail -n 1 || true)
+fi
+
+# 2) Если не нашлось, пробуем старый способ — из app.py (app.run(... port=PORT ...))
+if [ -z "$EXISTING_PORT" ] && [ -f "$EXISTING_APP" ]; then
   EXISTING_PORT=$(grep -E 'app.run\(.*port *= *[0-9]+' "$EXISTING_APP" 2>/dev/null | \
     sed -E 's/.*port *= *([0-9]+).*/\1/' | tail -n 1 || true)
-else
-  FIRST_INSTALL="yes"
 fi
 
 if [ -n "$EXISTING_PORT" ]; then
@@ -194,7 +251,6 @@ else
 
       if [ -z "$PANEL_PORT" ]; then
         echo "[!] Не удалось найти свободный порт в диапазоне 8100–8199."
-        echo "    Установщик не может автоматически подобрать порт."
         exit 1
       fi
     fi
@@ -203,7 +259,8 @@ else
   echo "[install] Текущий порт панели: $PANEL_PORT" >> "$LOG_DIR/xkeen-ui.log"
 fi
 
-# На самой первой установке делаем автоматические бэкапы конфигов Xray
+# --- Бэкапы Xray на самой первой установке ---
+
 if [ "$FIRST_INSTALL" = "yes" ]; then
   echo "[*] Первая установка: создаю бэкапы конфигов Xray в $BACKUP_DIR..."
   backup_config_file "$ROUTING_FILE"
@@ -213,11 +270,12 @@ else
   echo "[*] Это не первая установка, автоматические бэкапы конфигов пропущены."
 fi
 
+# --- Копирование файлов панели ---
+
 echo "[*] Создаю директории..."
 mkdir -p "$UI_DIR" "$INIT_DIR" "$LOG_DIR" "$RUN_DIR" "$BACKUP_DIR"
 
 echo "[*] Копирую файлы панели в $UI_DIR..."
-# Копируем всё содержимое каталога xkeen-ui, кроме самого install.sh (чтобы не путать)
 if command -v rsync >/dev/null 2>&1; then
   rsync -a "$SRC_DIR"/ "$UI_DIR"/ --exclude "install.sh"
 else
@@ -226,20 +284,18 @@ else
   rm -f "$UI_DIR/install.sh"
 fi
 
-# Устанавливаем новый единый шаблон Mihomo.
-# Старые шаблоны (config_2.yaml, umarcheh001.yaml) удаляются, чтобы не мешать.
+# --- Шаблоны Mihomo ---
+
 if [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
   echo "[*] Устанавливаю шаблон Mihomo в $MIHOMO_TEMPLATES_DIR..."
   mkdir -p "$MIHOMO_TEMPLATES_DIR"
 
-  # Удаляем старые шаблоны, если остались от предыдущих установок
   for old in config_2.yaml umarcheh001.yaml; do
     if [ -f "$MIHOMO_TEMPLATES_DIR/$old" ]; then
       rm -f "$MIHOMO_TEMPLATES_DIR/$old" && echo "[*] Удалён старый шаблон $old"
     fi
   done
 
-  # Копируем актуальный шаблон custom.yaml с перезаписью
   SRC_CUSTOM="$SRC_MIHOMO_TEMPLATES/custom.yaml"
   if [ -f "$SRC_CUSTOM" ]; then
     cp -f "$SRC_CUSTOM" "$MIHOMO_TEMPLATES_DIR/custom.yaml"
@@ -247,25 +303,43 @@ if [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
   else
     echo "[!] Не найден шаблон custom.yaml в $SRC_MIHOMO_TEMPLATES"
   fi
+  SRC_ZKEEN="$SRC_MIHOMO_TEMPLATES/zkeen.yaml"
+  if [ -f "$SRC_ZKEEN" ]; then
+    cp -f "$SRC_ZKEEN" "$MIHOMO_TEMPLATES_DIR/zkeen.yaml"
+    echo "[*] Установлен шаблон zkeen.yaml в $MIHOMO_TEMPLATES_DIR"
+  else
+    echo "[!] Не найден шаблон zkeen.yaml в $SRC_MIHOMO_TEMPLATES"
+  fi
 fi
 
+# --- Обновление порта в run_server.py / app.py ---
 
+RUN_SERVER="$UI_DIR/run_server.py"
 APP_FILE="$UI_DIR/app.py"
 
-if [ ! -f "$APP_FILE" ]; then
-  echo "[!] Не найден app.py в $APP_FILE"
-  exit 1
+echo "[*] Обновляю порт в run_server.py / app.py..."
+UPDATED=0
+
+if [ -f "$RUN_SERVER" ] && grep -q 'WSGIServer(("0.0.0.0"' "$RUN_SERVER"; then
+  if sed -i -E "s/(WSGIServer\\(\\(\"0\\.0\\.0\\.0\",[[:space:]]*)[0-9]+/\\1${PANEL_PORT}/" "$RUN_SERVER"; then
+    echo "[*] Порт в run_server.py обновлён на $PANEL_PORT."
+    UPDATED=1
+  fi
 fi
 
-echo "[*] Обновляю порт в app.py..."
-# Меняем порт только если в файле есть app.run(...)
-if grep -q 'app.run' "$APP_FILE"; then
-  # Универсальная замена числа после port=
-  sed -i -E "s/(app.run\([^)]*port *= *)[0-9]+/\1${PANEL_PORT}/" "$APP_FILE"
-else
-  echo "[!] Внимание: не удалось найти 'app.run' в app.py"
-  echo "    Порт может остаться по умолчанию, проверь вручную."
+if [ "$UPDATED" -eq 0 ] && [ -f "$APP_FILE" ] && grep -q 'app.run' "$APP_FILE"; then
+  if sed -i -E "s/(app.run\([^)]*port *= *)[0-9]+/\1${PANEL_PORT}/" "$APP_FILE"; then
+    echo "[*] Порт в app.py обновлён на $PANEL_PORT."
+    UPDATED=1
+  fi
 fi
+
+if [ "$UPDATED" -eq 0 ]; then
+  echo "[!] Внимание: не удалось автоматически изменить порт ни в run_server.py, ни в app.py."
+  echo "    Порт может остаться по умолчанию, проверь файлы вручную."
+fi
+
+# --- Init-скрипт ---
 
 echo "[*] Создаю init-скрипт $INIT_SCRIPT..."
 
@@ -275,6 +349,7 @@ cat > "$INIT_SCRIPT" << 'EOF'
 ENABLED=yes
 UI_DIR="/opt/etc/xkeen-ui"
 PYTHON_BIN="/opt/bin/python3"
+RUN_SERVER="$UI_DIR/run_server.py"
 APP_PY="$UI_DIR/app.py"
 LOG_FILE="/opt/var/log/xkeen-ui.log"
 PID_FILE="/opt/var/run/xkeen-ui.pid"
@@ -285,8 +360,13 @@ start_service() {
     return 1
   fi
 
-  if [ ! -f "$APP_PY" ]; then
-    echo "app.py не найден по пути $APP_PY"
+  TARGET=""
+  if [ -f "$RUN_SERVER" ]; then
+    TARGET="$RUN_SERVER"
+  elif [ -f "$APP_PY" ]; then
+    TARGET="$APP_PY"
+  else
+    echo "Не найден ни run_server.py, ни app.py в $UI_DIR"
     return 1
   fi
 
@@ -296,10 +376,9 @@ start_service() {
   fi
 
   echo "Запуск Xkeen Web UI..."
-  # Окружение для проверки конфигов Mihomo через mihomo -t
   export MIHOMO_ROOT="/opt/etc/mihomo"
   export MIHOMO_VALIDATE_CMD='/opt/sbin/mihomo -t -d {root} -f {config}'
-  nohup "$PYTHON_BIN" "$APP_PY" >> "$LOG_FILE" 2>&1 &
+  nohup "$PYTHON_BIN" "$TARGET" >> "$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   echo "Запущено, PID $(cat "$PID_FILE")."
 }
@@ -318,7 +397,7 @@ stop_service() {
     fi
     rm -f "$PID_FILE"
   else
-    pkill -f "$APP_PY" 2>/dev/null || true
+    pkill -f "$RUN_SERVER" 2>/dev/null || pkill -f "$APP_PY" 2>/dev/null || true
   fi
 }
 
@@ -378,7 +457,6 @@ INSTALL_PARENT_DIR="$(dirname "$INSTALL_SRC_DIR")"
 
 echo "[*] Очищаю установочные файлы..."
 
-# Удаляем архив(ы) вида xkeen-ui*.tar.gz / xkeen-ui-*.tar.gz в родительской директории установщика
 if [ -n "$INSTALL_PARENT_DIR" ] && [ -d "$INSTALL_PARENT_DIR" ]; then
   for ARCH in "$INSTALL_PARENT_DIR"/xkeen-ui*.tar.gz "$INSTALL_PARENT_DIR"/xkeen-ui-*.tar.gz; do
     [ -f "$ARCH" ] || continue
@@ -387,10 +465,8 @@ if [ -n "$INSTALL_PARENT_DIR" ] && [ -d "$INSTALL_PARENT_DIR" ]; then
   done
 fi
 
-# Удаляем исходную директорию с установщиком, если это не рабочая директория панели
 if [ "$INSTALL_SRC_DIR" != "$UI_DIR" ] && [ -d "$INSTALL_SRC_DIR" ]; then
   echo "[*] Удаляю временную директорию установки: $INSTALL_SRC_DIR"
-  # Меняем текущую директорию, чтобы можно было удалить INSTALL_SRC_DIR
   cd / || cd "$UI_DIR" || true
   rm -rf "$INSTALL_SRC_DIR" || echo "[!] Не удалось удалить директорию $INSTALL_SRC_DIR"
 fi
