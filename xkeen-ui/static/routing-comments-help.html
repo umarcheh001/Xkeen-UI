@@ -10,91 +10,188 @@
       max-width: 960px;
       margin: 0 auto;
       padding: 24px;
-      line-height: 1.5;
-      background: #0f172a;
-      color: #e5e7eb;
+      line-height: 1.6;
+      background: #f5f5f7;
+      color: #111827;
     }
-    h1, h2, h3 {
-      color: #fbbf24;
+
+    h1 {
+      font-size: 26px;
+      margin: 0 0 12px;
+      color: #111827;
     }
-    code, pre {
+
+    h2 {
+      font-size: 20px;
+      margin: 24px 0 8px;
+      color: #111827;
+    }
+
+    h3 {
+      font-size: 16px;
+      margin: 20px 0 6px;
+      color: #111827;
+    }
+
+    p {
+      margin: 0 0 12px;
+      color: #374151;
+    }
+
+    ul {
+      padding-left: 20px;
+      margin: 8px 0 12px;
+      color: #374151;
+    }
+
+    code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 13px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      background: #f3f4f6;
+      color: #111827;
     }
+
     pre {
-      background: #020617;
-      border-radius: 8px;
+      margin: 12px 0 16px;
       padding: 12px 14px;
+      border-radius: 10px;
+      background: #11182708;
+      border: 1px solid #e5e7eb;
       overflow: auto;
-      border: 1px solid #1f2937;
     }
+
+    pre code {
+      padding: 0;
+      background: transparent;
+      border-radius: 0;
+      display: block;
+      white-space: pre;
+    }
+
     .card {
-      background: #020617;
+      background: #ffffff;
       border-radius: 12px;
       padding: 16px 18px;
-      margin-bottom: 20px;
-      border: 1px solid #1f2937;
+      margin: 16px 0 20px;
+      border: 1px solid #d1d5db;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
     }
+
     .tag {
       display: inline-block;
       font-size: 11px;
-      padding: 2px 6px;
+      padding: 2px 8px;
       border-radius: 999px;
-      background: #1d283a;
-      color: #9ca3af;
+      background: #eff6ff;
+      color: #1f2937;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 4px;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
     }
-    details {
-      margin: 10px 0;
-      background: #020617;
-      border-radius: 8px;
-      border: 1px solid #1f2937;
-      padding: 6px 10px;
-    }
-    summary {
-      cursor: pointer;
-      font-weight: 600;
-      color: #fbbf24;
-    }
-    a {
-      color: #93c5fd;
-    }
+
     hr {
       border: none;
-      border-top: 1px solid #1f2937;
+      border-top: 1px solid #e5e7eb;
       margin: 24px 0;
     }
-  
+
+    button.back-to-panel {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 16px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      background: #ffffff;
+      color: #111827;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+    }
+
+    button.back-to-panel:hover {
+      background: #f3f4f6;
+    }
+
+    button.back-to-panel:active {
+      transform: translateY(1px);
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+    }
+
     @media (max-width: 640px) {
       body {
-        padding: 12px;
-        max-width: 100%;
+        padding: 16px;
       }
-      h1 {
-        font-size: 20px;
-      }
-      h2 {
-        font-size: 18px;
-      }
-      h3 {
-        font-size: 16px;
-      }
+
       pre {
         font-size: 12px;
         padding: 10px 12px;
       }
+
       .card {
         padding: 12px;
       }
-      ul {
-        padding-left: 20px;
-      }
+
       button.back-to-panel {
         width: 100%;
         max-width: 320px;
+        justify-content: center;
       }
+    }
+  
+    /* Подсветка комментариев в примерах кода */
+    .code-comment {
+      color: #6b7280;
+      font-style: italic;
+    }
+    html[data-theme="dark"] .code-comment {
+      color: #9ca3af;
+    }
+
+    /* Тёмная тема для этой страницы помощи */
+    html[data-theme="dark"] body {
+      background: #020617;
+      color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] h1,
+    html[data-theme="dark"] h2,
+    html[data-theme="dark"] h3 {
+      color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] p,
+    html[data-theme="dark"] ul,
+    html[data-theme="dark"] li {
+      color: #d1d5db;
+    }
+
+    html[data-theme="dark"] code {
+      background: #020617;
+      color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] pre {
+      background: #020617;
+      border-color: #1f2937;
+    }
+
+    html[data-theme="dark"] .card {
+      background: #020617;
+      border-color: #1f2937;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.85);
+    }
+
+    html[data-theme="dark"] .tag {
+      background: #1f2937;
+      color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] hr {
+      border-top-color: #374151;
     }
 
   </style>
@@ -382,6 +479,82 @@
       </ul>
     </li>
   </ul>
+
+
+<script>
+(function () {
+  const THEME_KEY = 'xkeen-theme';
+
+  function applyTheme(theme) {
+    const next = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+  }
+
+  function getInitialTheme() {
+    try {
+      const stored = window.localStorage && localStorage.getItem(THEME_KEY);
+      if (stored === 'light' || stored === 'dark') {
+        return stored;
+      }
+    } catch (e) {}
+
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function highlightCodeBlock(codeEl) {
+    const text = codeEl.textContent || '';
+    let html = escapeHtml(text);
+
+    // Многострочные комментарии /* ... */
+    html = html.replace(/\/\*[\s\S]*?\*\//g, function (m) {
+      return '<span class="code-comment">' + escapeHtml(m) + '</span>';
+    });
+
+    // Однострочные комментарии //
+    html = html.replace(/(\/\/.*$)/gm, '<span class="code-comment">$1</span>');
+
+    // Строки, начинающиеся с #
+    html = html.replace(/(^|\n)(\s*#.*)$/gm, function (_, start, comment) {
+      return start + '<span class="code-comment">' + escapeHtml(comment) + '</span>';
+    });
+
+    codeEl.innerHTML = html;
+  }
+
+  function init() {
+    const initialTheme = getInitialTheme();
+    applyTheme(initialTheme);
+
+    document.querySelectorAll('pre code').forEach(function (codeEl) {
+      highlightCodeBlock(codeEl);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  // Слушаем переключение темы из основной панели
+  window.addEventListener('storage', function (e) {
+    if (e.key === THEME_KEY && e.newValue) {
+      applyTheme(e.newValue);
+    }
+  });
+})();
+</script>
+
 
 </body>
 </html>
