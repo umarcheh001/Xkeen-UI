@@ -9,11 +9,52 @@ let jsonModalEditor = null;
 let jsonModalCurrentTarget = null; // 'inbounds' или 'outbounds'
 
 
+
+// Global capability flags reported by backend
+let HAS_WS = false;
+
+// Initialize capabilities (WebSocket support, etc.)
+async function initCapabilities() {
+  try {
+    const resp = await fetch('/api/capabilities', { cache: 'no-store' });
+    if (!resp.ok) throw new Error('http ' + resp.status);
+    const data = await resp.json().catch(() => ({}));
+    HAS_WS = !!data.websocket;
+  } catch (e) {
+    // On error we assume WS is not available and fall back to HTTP polling.
+    HAS_WS = false;
+  }
+}
+
+
 let currentCommandFlag = null;
 let currentCommandLabel = null;
 
 let xrayLogTimer = null;
 let xrayLogCurrentFile = 'error';
+let xrayLogLastLines = [];
+let xrayLogWs = null;
+let xrayLogUseWebSocket = true;
+let xrayLogWsEverOpened = false;
+let xrayLogWsClosingManually = false;
+
+
+function wsDebug(msg, extra) {
+  try {
+    fetch('/api/ws-debug', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        msg: msg,
+        extra: extra || {}
+      }),
+      keepalive: true
+    });
+  } catch (e) {
+    // молча игнорируем ошибки отладчика
+  }
+}
+
 
 // ---------- Global XKeen overlay spinner ----------
 let xkeenSpinnerDepth = 0;
@@ -198,8 +239,6 @@ function hideGlobalXkeenSpinner() {
   };
 })();
 
-let xrayLogLastLines = [];
-
 
 function openRoutingHelp() {
   try {
@@ -257,8 +296,53 @@ function parseXrayLogLine(line) {
     .replace(/level=(warning)/gi, 'level=<span style="color:#f59e0b;">$1</span>')
     .replace(/level=(error)/gi, 'level=<span style="color:#ef4444;">$1</span>');
 
+  // --- Направления/маршруты (в скобках) ---
+  // Используем более широкие паттерны, чтобы захватывать ->, >> и другие варианты стрелок.
+
+  processed = processed
+    // tproxy -> vless-reality   /   tproxy >> vless-reality   /   любые символы между
+    .replace(
+      /\[(?:tproxy)[^\]]*vless-reality[^\]]*\]/gi,
+      '<span class="log-route log-route-tproxy-vless">$&</span>'
+    )
+    // redirect -> vless-reality
+    .replace(
+      /\[(?:redirect)[^\]]*vless-reality[^\]]*\]/gi,
+      '<span class="log-route log-route-redirect-vless">$&</span>'
+    )
+    // redirect -> direct
+    .replace(
+      /\[(?:redirect)[^\]]*direct[^\]]*\]/gi,
+      '<span class="log-route log-route-redirect-direct">$&</span>'
+    )
+    // [reject ...]
+    .replace(
+      /\[(?:reject)[^\]]*\]/gi,
+      '<span class="log-route log-route-reject">$&</span>'
+    )
+    // и просто слово reject/rejected
+    .replace(
+      /\breject(ed)?\b/gi,
+      '<span class="log-route log-route-reject">$&</span>'
+    );
+
+  // --- IP-адреса (включая порт) ---
+  processed = processed.replace(
+    /\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g,
+    '<span class="log-ip">$&</span>'
+  );
+
+  // --- Домены вида something.example.com ---
+  // Защита от попадания внутрь уже вставленных span-ов
+  processed = processed.replace(
+    /(^|[^">])((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})/g,
+    '$1<span class="log-domain">$2</span>'
+  );
+
   return '<span class="' + cls + '">' + processed + '</span>';
 }
+
+
 
 
 
@@ -301,25 +385,44 @@ async function sendTerminalInput() {
   // Пустая строка — просто Enter, иначе добавляем перевод строки в конец
   const stdinValue = (raw === '' ? '\n' : raw + '\n');
 
+  let buffer = '';
+
   if (outputEl) {
     outputEl.textContent = 'Выполнение команды...';
   }
 
   try {
-    const { res, data } = await runXkeenFlag(flag, stdinValue);
+    const { res, data } = await runXkeenFlag(flag, stdinValue, {
+      onChunk(chunk) {
+        buffer += chunk;
+        if (outputEl) {
+          const html = ansiToHtml(buffer || '(нет вывода)').replace(/\n/g, '<br>');
+          outputEl.innerHTML = html;
+          outputEl.scrollTop = outputEl.scrollHeight;
+        }
+      }
+    });
+
     if (!res.ok) {
       const msg = data.error || ('HTTP ' + res.status);
       if (outputEl) outputEl.textContent = 'Ошибка: ' + msg;
       appendToLog('Ошибка: ' + msg + '\n');
       return;
     }
-    const rawOut = data.output || '';
+
+    const rawOut = data.output || buffer || '';
     if (outputEl) {
       const html = ansiToHtml(rawOut || '(нет вывода)').replace(/\n/g, '<br>');
       outputEl.innerHTML = html;
+      outputEl.scrollTop = outputEl.scrollHeight;
     }
+
     appendToLog(`$ xkeen ${flag}\n`);
-    if (rawOut) appendToLog(rawOut + '\n');
+    if (rawOut) {
+      appendToLog(rawOut + '\n');
+    } else {
+      appendToLog('(нет вывода)\n');
+    }
     if (typeof data.exit_code === 'number') {
       appendToLog(`(код завершения: ${data.exit_code})\n`);
     }
@@ -329,9 +432,6 @@ async function sendTerminalInput() {
     appendToLog('Ошибка выполнения команды: ' + String(e) + '\n');
   }
 }
-
-
-
 function stripJsonComments(text) {
   let result = '';
   let inString = false;
@@ -1569,6 +1669,7 @@ async function loadBackups() {
 
     if (!backups.length) {
       const tr = document.createElement('tr');
+      tr.classList.add('backups-empty-row');
       const td = document.createElement('td');
       td.colSpan = 4;
       td.textContent = 'Бэкапов пока нет.';
@@ -1758,24 +1859,231 @@ async function loadRestartLog() {
 }
 
 
-async function runXkeenFlag(flag, stdinValue) {
+async function runXkeenFlag(flag, stdinValue, options = {}) {
   const body = { flag };
   if (typeof stdinValue === 'string') {
     body.stdin = stdinValue;
   }
-  const res = await fetch('/api/run-command', {
+
+  // Шаг 1: создаём задачу на бэкенде
+  const createRes = await fetch('/api/run-command', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-  const data = await res.json().catch(() => ({}));
-  return { res, data };
-}
+  const createData = await createRes.json().catch(() => ({}));
 
+  if (!createRes.ok || createData.ok === false) {
+    return { res: createRes, data: createData };
+  }
+
+  const jobId = createData.job_id;
+  if (!jobId) {
+    // на всякий случай
+    return {
+      res: createRes,
+      data: {
+        ok: false,
+        error: 'no job_id returned from /api/run-command'
+      }
+    };
+  }
+
+  // Шаг 2: ждём завершения задачи, опрашивая /api/run-command/<job_id>
+  const finalData = await waitForCommandJob(jobId, options || {});
+  return { res: createRes, data: finalData };
+}
+async function waitForCommandJob(jobId, options = {}) {
+  const start = Date.now();
+  const MAX_WAIT_MS = 300 * 1000; // 5 минут максимального ожидания на стороне клиента
+
+  const onChunk = (options && typeof options.onChunk === 'function') ? options.onChunk : null;
+
+  let accOutput = '';
+  let wsResult = null;
+
+  // Попытка сначала использовать WebSocket, если он доступен
+  if (HAS_WS && typeof WebSocket !== 'undefined') {
+    const proto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
+    const url = `${proto}//${location.host}/ws/command-status?job_id=${encodeURIComponent(jobId)}`;
+
+    try {
+      wsResult = await new Promise((resolve) => {
+        let resolved = false;
+        let ws = null;
+
+        const finishWith = (result) => {
+          if (resolved) return;
+          resolved = true;
+          try {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.close();
+            }
+          } catch (e) {
+            // ignore
+          }
+          resolve(result);
+        };
+
+        const timeoutId = setTimeout(() => {
+          finishWith({
+            ok: false,
+            status: 'error',
+            error: 'Client-side timeout while waiting for command result (WS)',
+            job_id: jobId,
+            output: accOutput
+          });
+        }, MAX_WAIT_MS);
+
+        try {
+          ws = new WebSocket(url);
+        } catch (e) {
+          clearTimeout(timeoutId);
+          // Если не удалось создать WebSocket — вернём null и перейдём к HTTP-поллингу
+          return finishWith(null);
+        }
+
+        ws.onmessage = (event) => {
+          let msg;
+          try {
+            msg = JSON.parse(event.data);
+          } catch (e) {
+            return;
+          }
+
+          if (msg.type === 'chunk') {
+            if (typeof msg.data === 'string') {
+              const chunk = msg.data;
+              accOutput += chunk;
+              if (onChunk) {
+                try {
+                  onChunk(chunk, { via: 'ws', jobId });
+                } catch (e) {
+                  console.error('onChunk handler (ws) failed:', e);
+                }
+              }
+            }
+          } else if (msg.type === 'done') {
+            clearTimeout(timeoutId);
+            const status = msg.status || 'finished';
+            const exitCode = (typeof msg.exit_code === 'number') ? msg.exit_code : null;
+            const error = msg.error || null;
+            finishWith({
+              ok: status === 'finished' && exitCode === 0 && !error,
+              status,
+              exit_code: exitCode,
+              output: accOutput,
+              job_id: jobId,
+              error
+            });
+          } else if (msg.type === 'error') {
+            clearTimeout(timeoutId);
+            finishWith({
+              ok: false,
+              status: 'error',
+              error: msg.message || 'WebSocket command error',
+              job_id: jobId,
+              output: accOutput
+            });
+          }
+        };
+
+        ws.onerror = () => {
+          clearTimeout(timeoutId);
+          // вернём null, чтобы ниже перейти на HTTP-поллинг
+          finishWith(null);
+        };
+
+        ws.onclose = () => {
+          clearTimeout(timeoutId);
+          // если ещё не успели вернуть результат, тоже падаем на HTTP-поллинг
+          finishWith(wsResult);
+        };
+      });
+
+      if (wsResult) {
+        return wsResult;
+      }
+      // Если wsResult === null — продолжаем ниже через HTTP-поллинг
+    } catch (e) {
+      console.error('waitForCommandJob WS error:', e);
+      // Падаем обратно на HTTP-поллинг
+    }
+  }
+
+  // HTTP-поллинг: /api/run-command/<job_id>
+  let lastLen = 0;
+
+  while (true) {
+    const res = await fetch(`/api/run-command/${encodeURIComponent(jobId)}`);
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || data.ok === false) {
+      if (!data.error) {
+        data.error = 'HTTP ' + res.status;
+      }
+      // в HTTP-ветке гарантируем возврат накопленного вывода
+      if (accOutput && typeof data.output !== 'string') {
+        data.output = accOutput;
+      }
+      return data;
+    }
+
+    const output = (typeof data.output === 'string') ? data.output : '';
+    if (output.length > lastLen) {
+      const chunk = output.slice(lastLen);
+      lastLen = output.length;
+      if (chunk) {
+        accOutput += chunk;
+        if (onChunk) {
+          try {
+            onChunk(chunk, { via: 'http', jobId });
+          } catch (e) {
+            console.error('onChunk handler (http) failed:', e);
+          }
+        }
+      }
+    }
+
+    const status = data.status;
+    if (status === 'finished' || status === 'error') {
+      const finalData = Object.assign({}, data);
+      // всегда возвращаем финальный вывод из accOutput, если он есть
+      if (accOutput) {
+        finalData.output = accOutput;
+      }
+      return finalData;
+    }
+
+    if (Date.now() - start > MAX_WAIT_MS) {
+      return {
+        ok: false,
+        status: 'error',
+        error: 'Client-side timeout while waiting for command result',
+        job_id: jobId,
+        output: accOutput
+      };
+    }
+
+    // ждём чуть-чуть перед следующим опросом
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
 async function runInstantXkeenFlag(flag, label) {
   appendToLog(`$ xkeen ${flag}\n`);
+
+  // Буфер для случая, если нужно будет показать вывод после завершения
+  let liveBuffer = '';
+
   try {
-    const { res, data } = await runXkeenFlag(flag, '\n');
+    const { res, data } = await runXkeenFlag(flag, '\n', {
+      onChunk(chunk) {
+        liveBuffer += chunk;
+        // Показываем стриминговый вывод сразу в лог
+        appendToLog(chunk);
+      }
+    });
+
     if (!res.ok) {
       const msg = data.error || ('HTTP ' + res.status);
       appendToLog('Ошибка: ' + msg + '\n');
@@ -1784,12 +2092,22 @@ async function runInstantXkeenFlag(flag, label) {
       }
       return;
     }
-    const out = (data.output || '').trim();
-    if (out) {
-      appendToLog(out + '\n');
+
+    // Если стриминга не было (onChunk не вызывался), показываем финальный вывод как раньше
+    if (!liveBuffer) {
+      const out = (data.output || '').trim();
+      if (out) {
+        appendToLog(out + '\n');
+      } else {
+        appendToLog('(нет вывода)\n');
+      }
     } else {
-      appendToLog('(нет вывода)\n');
+      // Стриминг уже напечатал весь текст, просто завершим переносом строки, если нужно
+      if (!liveBuffer.endsWith('\n')) {
+        appendToLog('\n');
+      }
     }
+
     if (typeof data.exit_code === 'number') {
       appendToLog('(код завершения: ' + data.exit_code + ')\n');
     }
@@ -1802,7 +2120,6 @@ async function runInstantXkeenFlag(flag, label) {
     }
   }
 }
-
 function ansiToHtml(text) {
   if (!text) return '';
   // Escape HTML special chars
@@ -2208,7 +2525,7 @@ async function confirmXkeenCoreChange() {
 
 // ---------- Xray live logs ----------
 
-async function fetchXrayLogsOnce() {
+async function fetchXrayLogsOnce(source = 'manual') {
   const outputEl = document.getElementById('xray-log-output');
   if (!outputEl) return;
 
@@ -2217,7 +2534,7 @@ async function fetchXrayLogsOnce() {
   const file = xrayLogCurrentFile || 'error';
 
   try {
-    const res = await fetch(`/api/xray-logs?file=${encodeURIComponent(file)}&max_lines=800`);
+    const res = await fetch(`/api/xray-logs?file=${encodeURIComponent(file)}&max_lines=800&source=${encodeURIComponent(source)}`);
     if (!res.ok) {
       if (statusEl) statusEl.textContent = 'Не удалось загрузить логи Xray.';
       return;
@@ -2232,6 +2549,150 @@ async function fetchXrayLogsOnce() {
     if (statusEl) statusEl.textContent = 'Ошибка чтения логов Xray.';
   }
 }
+
+
+function xrayLogConnectWs() {
+  if (!HAS_WS || !('WebSocket' in window)) {
+    xrayLogUseWebSocket = false;
+    return;
+  }
+
+  // Если уже есть живой или подключающийся WebSocket — ничего не делаем
+  if (
+    xrayLogWs &&
+    (xrayLogWs.readyState === WebSocket.OPEN ||
+      xrayLogWs.readyState === WebSocket.CONNECTING)
+  ) {
+    return;
+  }
+
+  const statusEl = document.getElementById('xray-log-status');
+  const file = xrayLogCurrentFile || 'error';
+
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = window.location.host;
+  const url =
+    proto + '//' + host + '/ws/xray-logs?file=' + encodeURIComponent(file);
+
+  wsDebug('WS: connecting', { url: url, file: file });
+
+  try {
+    // при новой попытке подключения сбрасываем флаги
+    xrayLogWsClosingManually = false;
+    xrayLogWsEverOpened = false;
+    xrayLogWs = new WebSocket(url);
+  } catch (e) {
+    console.error('Failed to create WebSocket for logs', e);
+    xrayLogUseWebSocket = false;
+    if (statusEl) {
+      statusEl.textContent = 'Не удалось создать WebSocket, использую HTTP.';
+    }
+    // HTTP-поллинг при необходимости включит startXrayLogAuto()
+    return;
+  }
+
+  xrayLogWs.onopen = function () {
+    wsDebug('WS: open', { file: file });
+    xrayLogWsEverOpened = true;
+
+    // Как только WebSocket успешно подключился, выключаем HTTP-polling,
+    // чтобы логи шли только по одному каналу.
+    if (xrayLogTimer) {
+      clearInterval(xrayLogTimer);
+      xrayLogTimer = null;
+    }
+
+    if (statusEl) statusEl.textContent = 'WebSocket для логов подключён.';
+  };
+
+  xrayLogWs.onmessage = function (event) {
+    let data = null;
+    try {
+      data = JSON.parse(event.data);
+    } catch (e) {
+      console.warn('Invalid WebSocket payload for xray logs', e);
+      return;
+    }
+
+    // Новый протокол: { type: "init", lines: [...] } и { type: "line", line: "..." }
+    if (data && data.type === 'init' && Array.isArray(data.lines)) {
+      xrayLogLastLines = data.lines;
+    } else if (data && data.type === 'line' && typeof data.line === 'string') {
+      xrayLogLastLines.push(data.line);
+      if (xrayLogLastLines.length > 800) {
+        xrayLogLastLines = xrayLogLastLines.slice(-800);
+      }
+    } else if (Array.isArray(data.lines)) {
+      // Backward compatibility with старым протоколом без поля type
+      xrayLogLastLines = data.lines;
+    } else if (data.line) {
+      xrayLogLastLines.push(data.line);
+      if (xrayLogLastLines.length > 800) {
+        xrayLogLastLines = xrayLogLastLines.slice(-800);
+      }
+    }
+
+    applyXrayLogFilterToOutput();
+  };
+
+  xrayLogWs.onclose = function () {
+    const viewEl = document.getElementById('view-xray-logs');
+    const isVisible = viewEl && viewEl.style.display !== 'none';
+
+    wsDebug('WS: close', {
+      file: file,
+      manual: xrayLogWsClosingManually,
+      everOpened: xrayLogWsEverOpened,
+    });
+
+    xrayLogWs = null;
+
+    // Если мы сами закрыли сокет (смена вкладки/файла или стоп) —
+    // ничего не делаем и не включаем HTTP.
+    if (xrayLogWsClosingManually || !isVisible) {
+      if (statusEl) statusEl.textContent = 'WebSocket для логов закрыт.';
+      return;
+    }
+
+    // Если соединение так и не открылось — считаем, что WebSocket недоступен
+    // и переключаемся на HTTP.
+    if (!xrayLogWsEverOpened) {
+      xrayLogUseWebSocket = false;
+      if (statusEl) {
+        statusEl.textContent = 'WebSocket недоступен, использую HTTP.';
+      }
+      if (!xrayLogTimer) {
+        fetchXrayLogsOnce('fallback_ws');
+        xrayLogTimer = setInterval(fetchXrayLogsOnce, 2000);
+      }
+      return;
+    }
+
+    // Был рабочий WebSocket, который отвалился сам по себе —
+    // пробуем переподключиться, но НЕ включаем HTTP, чтобы не было дублей.
+    if (statusEl) {
+      statusEl.textContent =
+        'WebSocket для логов разорван, пытаюсь переподключиться...';
+    }
+
+    setTimeout(function () {
+      const stillVisibleEl = document.getElementById('view-xray-logs');
+      const stillVisible =
+        stillVisibleEl && stillVisibleEl.style.display !== 'none';
+
+      if (!xrayLogWs && xrayLogUseWebSocket && stillVisible) {
+        xrayLogConnectWs();
+      }
+    }, 1000);
+  };
+
+  xrayLogWs.onerror = function () {
+    wsDebug('WS: error', { file: file });
+    console.warn('WebSocket error in xray logs');
+    // Здесь не включаем HTTP: окончательное решение принимает onclose.
+  };
+}
+
 
 function applyXrayLogFilterToOutput() {
   const outputEl = document.getElementById('xray-log-output');
@@ -2277,21 +2738,58 @@ function xrayLogApplyFilter() {
 function startXrayLogAuto() {
   const outputEl = document.getElementById('xray-log-output');
   if (!outputEl) return;
+
+  // Если уже есть живой или подключающийся WebSocket — просто ничего не делаем
+  if (
+    xrayLogUseWebSocket &&
+    xrayLogWs &&
+    (xrayLogWs.readyState === WebSocket.OPEN ||
+      xrayLogWs.readyState === WebSocket.CONNECTING)
+  ) {
+    return;
+  }
+
+  // Пробуем WebSocket
+  if (HAS_WS && xrayLogUseWebSocket && 'WebSocket' in window) {
+    // Перед попыткой WebSocket гарантированно выключаем HTTP-polling,
+    // чтобы не было одновременной работы двух механизмов.
+    if (xrayLogTimer) {
+      clearInterval(xrayLogTimer);
+      xrayLogTimer = null;
+    }
+    xrayLogConnectWs();
+    return;
+  }
+
+  // Фоллбек: старый добрый HTTP-polling (только если WebSocket недоступен)
   if (xrayLogTimer) return;
-  fetchXrayLogsOnce();
+  fetchXrayLogsOnce('manual');
   xrayLogTimer = setInterval(fetchXrayLogsOnce, 2000);
 }
+
 
 function stopXrayLogAuto() {
   if (xrayLogTimer) {
     clearInterval(xrayLogTimer);
     xrayLogTimer = null;
   }
+
+  if (xrayLogWs) {
+    // помечаем, что закрытие сокета инициировано нами,
+    // чтобы onclose не включал HTTP-фоллбек
+    xrayLogWsClosingManually = true;
+    try {
+      xrayLogWs.close();
+    } catch (e) {
+      // ignore
+    }
+    xrayLogWs = null;
+  }
 }
 
 function xrayLogsView() {
   // Одноразовая подгрузка логов из файлов
-  fetchXrayLogsOnce();
+  fetchXrayLogsOnce('manual');
 }
 
 function xrayLogsClearScreen() {
@@ -2308,7 +2806,37 @@ function xrayLogChangeFile() {
   if (selectEl) {
     xrayLogCurrentFile = selectEl.value || 'error';
   }
-  fetchXrayLogsOnce();
+
+  // очищаем текущий буфер и перерисовываем окно
+  xrayLogLastLines = [];
+  applyXrayLogFilterToOutput();
+
+  // если используем WebSocket — пересоздаём соединение с новым file=...
+  if (HAS_WS && xrayLogUseWebSocket && 'WebSocket' in window) {
+    // Перед переключением файла через WebSocket выключаем HTTP-polling,
+    // чтобы не было параллельного чтения по HTTP.
+    if (xrayLogTimer) {
+      clearInterval(xrayLogTimer);
+      xrayLogTimer = null;
+    }
+
+    if (xrayLogWs) {
+      // закрываем текущий сокет по инициативе клиента,
+      // чтобы onclose не запускал HTTP-фоллбек
+      xrayLogWsClosingManually = true;
+      try {
+        xrayLogWs.close();
+      } catch (e) {
+        // ignore
+      }
+      xrayLogWs = null;
+    }
+    xrayLogConnectWs();
+    return;
+  }
+
+  // иначе остаётся HTTP
+  fetchXrayLogsOnce('manual');
 }
 
 async function xrayLogsEnable() {
@@ -2875,6 +3403,8 @@ async function saveJsonEditor() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialize backend-reported capabilities (WebSocket support, etc.)
+  initCapabilities();
   const xkeenStartBtn = document.getElementById('xkeen-start-btn');
   const xkeenStopBtn = document.getElementById('xkeen-stop-btn');
   const xkeenRestartBtn = document.getElementById('xkeen-restart-btn');
@@ -3373,6 +3903,87 @@ function setMihomoStatus(msg, isError) {
   el.style.color = isError ? '#f87171' : '#9ca3af';
 }
 
+
+
+function mihomoFormatLogHtml(text) {
+  if (!text) return "";
+  const lines = String(text).replace(/\r\n/g, "\n").split("\n");
+  return lines.map((line) => {
+    const safe = escapeHtml(line);
+    let cls = "log-line";
+    if (/fatal|panic/i.test(line)) cls += " log-fatal";
+    else if (/error|\berr\b|err\[/i.test(line)) cls += " log-error";
+    else if (/warn/i.test(line)) cls += " log-warn";
+    else if (/info/i.test(line)) cls += " log-info";
+    else if (/debug/i.test(line)) cls += " log-debug";
+    return '<div class="' + cls + '">' + (safe || "&nbsp;") + "</div>";
+  }).join("");
+}
+
+function showMihomoValidationModal(text) {
+  const modal = document.getElementById('mihomo-validation-modal');
+  const body = document.getElementById('mihomo-validation-modal-body');
+  if (!modal || !body) return;
+
+  const raw = text == null ? '' : String(text);
+  body.innerHTML = mihomoFormatLogHtml(raw);
+
+  modal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+
+function hideMihomoValidationModal() {
+  const modal = document.getElementById('mihomo-validation-modal');
+  if (!modal) return;
+
+  modal.classList.add('hidden');
+  document.body.classList.remove('modal-open');
+}
+
+window.hideMihomoValidationModal = hideMihomoValidationModal;
+
+async function validateMihomoConfigFromEditor() {
+  const ta = document.getElementById('mihomo-editor');
+  const content = (typeof mihomoEditor !== 'undefined' && mihomoEditor)
+    ? mihomoEditor.getValue()
+    : (ta ? ta.value : '');
+  if (!content || !content.trim()) {
+    setMihomoStatus('config.yaml пустой, проверять нечего.', true);
+    return;
+  }
+
+  setMihomoStatus('Проверяю конфиг через mihomo...', false);
+
+  try {
+    const res = await fetch('/api/mihomo/validate_raw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: content }),
+    });
+    const data = await res.json();
+    const log = data && data.log ? data.log : '';
+    if (typeof log === 'string' && log.trim()) {
+      showMihomoValidationModal(log);
+    }
+
+    if (!res.ok) {
+      setMihomoStatus('Ошибка проверки конфига: ' + (data && (data.error || res.status)), true);
+      return;
+    }
+
+    const firstLine = (log.split('\n').find((l) => l.trim()) || '').trim();
+    if (data.ok) {
+      const msg = firstLine || 'mihomo сообщает, что конфиг валиден (exit code 0).';
+      setMihomoStatus(msg, false);
+    } else {
+      const msg = firstLine || 'mihomo сообщил об ошибке при проверке конфига.';
+      setMihomoStatus('В таком виде конфиг не будет работать: ' + msg, true);
+    }
+  } catch (e) {
+    setMihomoStatus('Ошибка сети при проверке конфига: ' + e, true);
+  }
+}
+
 async function saveMihomoAndRestart() {
   const ta = document.getElementById('mihomo-editor');
   const content = (typeof mihomoEditor !== 'undefined' && mihomoEditor)
@@ -3803,6 +4414,7 @@ async function mihomoCleanBackups() {
 function initMihomoGeneratorUI() {
   const loadBtn = document.getElementById('mihomo-load-btn');
   const saveRestartBtn = document.getElementById('mihomo-save-restart-btn');
+  const validateBtn = document.getElementById('mihomo-validate-btn');
   const profilesHeader = document.getElementById('mihomo-profiles-link');
   const profilesPanel = document.getElementById('mihomo-profiles-panel');
   const profilesArrow = document.getElementById('mihomo-profiles-arrow');
@@ -3823,6 +4435,13 @@ function initMihomoGeneratorUI() {
     saveRestartBtn.addEventListener('click', (e) => {
       e.preventDefault();
       saveMihomoAndRestart();
+    });
+  }
+
+  if (validateBtn) {
+    validateBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      validateMihomoConfigFromEditor();
     });
   }
 
@@ -3907,3 +4526,64 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// === Theme toggle ===
+(function () {
+  const THEME_KEY = 'xkeen-theme';
+
+  function applyTheme(theme) {
+    const html = document.documentElement;
+    const next = theme === 'light' ? 'light' : 'dark';
+
+    html.setAttribute('data-theme', next);
+
+    const btn = document.getElementById('theme-toggle-btn');
+    if (!btn) return;
+
+    btn.dataset.theme = next;
+
+    const isLight = next === 'light';
+    const icon = isLight ? '☾' : '☀';
+    const label = isLight ? 'Тёмная тема' : 'Светлая тема';
+
+    btn.innerHTML = `
+      <span class="theme-toggle-icon">${icon}</span>
+      <span class="theme-toggle-text">${label}</span>
+    `;
+  }
+
+  function getInitialTheme() {
+    try {
+      const stored = localStorage.getItem(THEME_KEY);
+      if (stored === 'light' || stored === 'dark') {
+        return stored;
+      }
+    } catch (e) {
+      // localStorage might be unavailable; ignore
+    }
+
+    if (window.matchMedia &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  }
+
+  function initThemeToggle() {
+    let current = getInitialTheme();
+    applyTheme(current);
+
+    const btn = document.getElementById('theme-toggle-btn');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+      current = current === 'light' ? 'dark' : 'light';
+      try {
+        localStorage.setItem(THEME_KEY, current);
+      } catch (e) {}
+      applyTheme(current);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', initThemeToggle);
+})();
