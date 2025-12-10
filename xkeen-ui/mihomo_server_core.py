@@ -172,22 +172,31 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
     yaml_lines.append(f"  server: {server}")
     yaml_lines.append(f"  port: {port}")
     yaml_lines.append(f"  uuid: {uuid}")
-
+    
     if flow:
         yaml_lines.append(f"  flow: {flow}")
-
-    # --- новое: encryption из URL ---
-    if encryption:
-        yaml_lines.append(f"  encryption: {encryption}")
-
+    
+    # --- encryption ---
+    enc = (encryption or "").strip()
+    if not enc or enc.lower() == "none":
+        yaml_lines.append('  encryption: ""')
+    else:
+        yaml_lines.append(f"  encryption: {enc}")
+    
     yaml_lines.append(f"  network: {type_}")
-
+    yaml_lines.append("  udp: true")
+    
     # TLS / Reality
-    if security.lower() == 'reality':
-        yaml_lines.append('  tls: true')
-        yaml_lines.append('  reality-opts:')
+    sec = security.lower()
+    if sec == "reality":
+        yaml_lines.append("  tls: true")
+        # Enable TCP Fast Open and xudp packet encoding for Reality/TCP
+        if type_ == "tcp":
+            yaml_lines.append("  tfo: true")
+            yaml_lines.append("  packet-encoding: xudp")
         if sni:
-            yaml_lines.append(f"    server-name: {sni}")
+            yaml_lines.append(f"  servername: {sni}")
+        yaml_lines.append("  reality-opts:")
         if 'pbk' in qs:
             yaml_lines.append(f"    public-key: {qs['pbk']}")
         if 'sid' in qs:
@@ -197,8 +206,8 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
             yaml_lines.append(f"    spider-x: {spx}")
         if fp:
             yaml_lines.append(f"  client-fingerprint: {fp}")
-    elif security.lower() == 'tls':
-        yaml_lines.append('  tls: true')
+    elif sec == "tls":
+        yaml_lines.append("  tls: true")
         if sni:
             yaml_lines.append(f"  servername: {sni}")
         if fp:
@@ -458,7 +467,7 @@ def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Itera
             return
         if current_group not in groups_set:
             return
-        if group_has_proxies or not group_has_include_all:
+        if group_has_proxies:
             return
         indent = group_include_indent or "    "
         quoted = proxy_name if (proxy_name.startswith('"') or proxy_name.startswith("'")) else f'"{proxy_name}"'
@@ -667,9 +676,24 @@ def apply_proxy_insert(
     #    proxies live under the "Пример VLESS..." block and do not visually
     #    mix into the subscription header.
     if not inserted:
-        marker = "Подключение С использованием подписки"
+        # Some templates (e.g. legacy router profiles) use a different
+        # Russian wording for the subscription header. Support both the
+        # old marker and the ZKeen-style header so that manual proxies
+        # appear in the logical place between the VLESS example and the
+        # subscription section.
+        markers = (
+            "подключение с использованием подписки",
+            "подписки",
+        )
         for idx, line in enumerate(lines):
-            if marker in line:
+            lower = line.lower()
+
+            # Skip the 'Пример VLESS...' comment so we don't insert manual proxies
+            # before the example block itself.
+            if "пример vless" in lower:
+                continue
+
+            if any(marker in lower for marker in markers):
                 insert_at = idx
                 # If the line above looks like a decorative header border for this
                 # subscription section (a line of #'s), shift insertion point one
