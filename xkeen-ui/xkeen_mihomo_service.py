@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Tuple
 
-from mihomo_config_generator import build_full_config
+from mihomo_config_generator import build_full_config, get_profile_rule_presets
 from mihomo_server_core import (
     ensure_mihomo_layout,
     get_active_profile_name,
@@ -131,9 +131,21 @@ def generate_preview(payload: Dict[str, Any]) -> str:
 
     return build_full_config(state)
 
+
+def get_profile_defaults(profile: str | None) -> Dict[str, Any]:
+    """Expose profile-specific default rule presets for the frontend.
+
+    This is a thin wrapper around :func:`get_profile_rule_presets` from
+    :mod:`mihomo_config_generator` so that the Flask app does not need
+    to know the internal details of how presets are computed.
+    """
+    return get_profile_rule_presets(profile)
+
+
 __all__ = [
     "generate_config_from_state",
     "generate_and_save_config",
     "generate_save_and_restart",
     "generate_preview",
+    "get_profile_defaults",
 ]
