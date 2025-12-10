@@ -1,4 +1,24 @@
 #!/opt/bin/python3
+import time  # needed for gevent fallback stubs
+
+try:
+    from geventwebsocket import WebSocketError  # type: ignore
+    import gevent  # type: ignore
+    HAS_GEVENT = True
+except Exception:  # gevent/geventwebsocket are optional
+    HAS_GEVENT = False
+
+    class WebSocketError(Exception):
+        """Fallback WebSocketError when geventwebsocket is not installed."""
+        pass
+
+    class _GeventStub:
+        @staticmethod
+        def sleep(seconds: float) -> None:
+            time.sleep(seconds)
+
+    gevent = _GeventStub()
+
 from flask import Flask, request, jsonify, render_template, redirect, url_for
 import json
 import datetime
@@ -6,12 +26,16 @@ import os
 import re
 import time
 import shutil
+import logging
 import subprocess
 import urllib.request
 import urllib.error
 from urllib.parse import urlparse, parse_qs, unquote, quote
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
+from dataclasses import dataclass, field
+import threading
+import uuid
 from mihomo_server_core import CONFIG_PATH, validate_config
 
 
@@ -412,9 +436,164 @@ COMMAND_GROUPS = [
 ALLOWED_FLAGS = {item["flag"] for group in COMMAND_GROUPS for item in group["items"]}
 XKEEN_BIN = "xkeen"
 
+COMMAND_TIMEOUT = 300  # seconds for background xkeen jobs
+
+
+@dataclass
+class CommandJob:
+    id: str
+    flag: str
+    status: str = "queued"  # "queued" | "running" | "finished" | "error"
+    exit_code: int | None = None
+    output: str = ""
+    created_at: float = field(default_factory=time.time)
+    finished_at: float | None = None
+    error: str | None = None
+
+
+JOBS: Dict[str, CommandJob] = {}
+JOBS_LOCK = threading.Lock()
+MAX_JOB_AGE = 3600  # seconds to keep finished jobs
+
+
+def _cleanup_old_jobs() -> None:
+    """Remove finished jobs older than MAX_JOB_AGE."""
+    now = time.time()
+    with JOBS_LOCK:
+        old_ids = [
+            job_id
+            for job_id, job in JOBS.items()
+            if job.finished_at is not None and (now - job.finished_at) > MAX_JOB_AGE
+        ]
+        for job_id in old_ids:
+            JOBS.pop(job_id, None)
+
+
+def _run_command_job(job_id: str, stdin_data: str | None) -> None:
+    """Run xkeen command in background and store result in JOBS."""
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            return
+        job.status = "running"
+
+    cmd = [XKEEN_BIN, job.flag]
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=stdin_data if stdin_data is not None else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=COMMAND_TIMEOUT,
+        )
+        output = proc.stdout or ""
+
+        # keep ANSI escape codes for colorized output in UI
+
+        # remove Entware / opkg noise
+        cleaned: list[str] = []
+        for line in output.splitlines():
+            low = line.lower()
+            if "collected errors" in low:
+                continue
+            if "opkg_conf" in low or "opkg" in low:
+                continue
+            cleaned.append(line)
+        output = "\n".join(cleaned).strip()
+
+        with JOBS_LOCK:
+            job = JOBS.get(job_id)
+            if not job:
+                return
+            job.status = "finished"
+            job.exit_code = proc.returncode
+            job.output = output
+            job.finished_at = time.time()
+    except subprocess.TimeoutExpired:
+        with JOBS_LOCK:
+            job = JOBS.get(job_id)
+            if not job:
+                return
+            job.status = "error"
+            job.error = f"timeout after {COMMAND_TIMEOUT}s"
+            job.finished_at = time.time()
+    except Exception as e:  # pragma: no cover - defensive
+        with JOBS_LOCK:
+            job = JOBS.get(job_id)
+            if not job:
+                return
+            job.status = "error"
+            job.error = str(e)
+            job.finished_at = time.time()
+
+
+def _create_command_job(flag: str, stdin_data: str | None) -> CommandJob:
+    """Create CommandJob, start background thread and return the job object."""
+    job_id = uuid.uuid4().hex[:12]
+    job = CommandJob(id=job_id, flag=flag)
+    with JOBS_LOCK:
+        JOBS[job_id] = job
+
+    _cleanup_old_jobs()
+
+    t = threading.Thread(target=_run_command_job, args=(job_id, stdin_data), daemon=True)
+    t.start()
+    return job
+
+
+def _get_command_job(job_id: str) -> CommandJob | None:
+    with JOBS_LOCK:
+        return JOBS.get(job_id)
+
+
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = "xkeen-ui-key-change-me"
+
+
+
+WS_DEBUG_LOG = "/opt/var/log/ws.log"
+
+
+def _setup_ws_debug_logger():
+    os.makedirs(os.path.dirname(WS_DEBUG_LOG), exist_ok=True)
+
+    logger = logging.getLogger("wsdebug")
+    logger.setLevel(logging.DEBUG)
+
+    if not logger.handlers:
+        handler = logging.FileHandler(WS_DEBUG_LOG, encoding="utf-8")
+        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
+    return logger
+
+
+_ws_logger = _setup_ws_debug_logger()
+
+
+def ws_debug(msg: str, **extra):
+    """
+    Простая обёртка для логирования событий WebSocket/HTTP логов.
+    ws_debug("text", key="value", ...)
+    """
+    if extra:
+        try:
+            tail = ", ".join(f"{k}={v}" for k, v in extra.items())
+        except Exception:
+            tail = repr(extra)
+        full = f"{msg} | {tail}"
+    else:
+        full = msg
+
+    try:
+        _ws_logger.debug(full)
+    except Exception:
+        # Не даём отладчику ломать основной код
+        pass
 
 
 # ---------- helpers ----------
@@ -985,6 +1164,24 @@ def api_mihomo_preview():
     return jsonify({"ok": True, "content": cfg}), 200
 
 
+@app.get("/api/mihomo/profile_defaults")
+def api_mihomo_profile_defaults():
+    """Return profile-specific presets for the Mihomo generator UI.
+
+    Currently this exposes only ``enabledRuleGroups`` – the list of rule
+    packages that should be checked by default for the selected profile.
+    """
+    profile = request.args.get("profile")
+    try:
+        data = mihomo_svc.get_profile_defaults(profile)
+    except Exception as exc:  # pragma: no cover - defensive
+        return api_error(f"Ошибка получения пресета профиля Mihomo: {exc}", 400, ok=False)
+
+    resp = {"ok": True}
+    resp.update(data)
+    return jsonify(resp), 200
+
+
 @app.get("/api/mihomo-config/template")
 def api_get_mihomo_default_template():
     content = load_text(MIHOMO_DEFAULT_TEMPLATE, default=None)
@@ -1098,37 +1295,40 @@ def api_run_command():
         return api_error("flag not allowed", 400, ok=False)
 
     stdin_data = data.get("stdin")
-    cmd = [XKEEN_BIN, flag]
-    try:
-        proc = subprocess.run(
-            cmd,
-            input=stdin_data if stdin_data is not None else None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=300,
-        )
-        output = proc.stdout or ""
+    if not isinstance(stdin_data, str):
+        stdin_data = None
 
-        # keep ANSI escape codes for colorized output in UI
-
-        # remove Entware / opkg noise
-        cleaned = []
-        for line in output.splitlines():
-            low = line.lower()
-            if "collected errors" in low:
-                continue
-            if "opkg_conf" in low or "opkg" in low:
-                continue
-            cleaned.append(line)
-        output = "\n".join(cleaned).strip()
-
-        return jsonify({"exit_code": proc.returncode, "output": output}), 200
-    except Exception as e:
-        return api_error(str(e), 500, ok=False)
+    job = _create_command_job(flag, stdin_data)
+    return jsonify(
+        {
+            "ok": True,
+            "job_id": job.id,
+            "flag": job.flag,
+            "status": job.status,
+        }
+    ), 202
 
 
-# ---------- API: restart log ----------
+@app.get("/api/run-command/<job_id>")
+def api_run_command_status(job_id: str):
+    _cleanup_old_jobs()
+    job = _get_command_job(job_id)
+    if job is None:
+        return api_error("job not found", 404, ok=False)
+
+    return jsonify(
+        {
+            "ok": True,
+            "job_id": job.id,
+            "flag": job.flag,
+            "status": job.status,
+            "exit_code": job.exit_code,
+            "output": job.output,
+            "created_at": job.created_at,
+            "finished_at": job.finished_at,
+            "error": job.error,
+        }
+    ), 200
 
 @app.get("/api/restart-log")
 def api_restart_log():
@@ -1163,6 +1363,15 @@ def api_xray_logs():
         max_lines = int(request.args.get("max_lines", 800))
     except (TypeError, ValueError):
         max_lines = 800
+    source = request.args.get("source", "manual")
+    ws_debug(
+        "api_xray_logs: HTTP tail requested",
+        file=file_name,
+        max_lines=max_lines,
+        source=source,
+        client=request.remote_addr or "unknown",
+    )
+
 
     # Если логирование выключено (loglevel=none), читаем "снимок" из .saved файлов,
     # чтобы не потерять накопленные логи после перезапуска.
@@ -1218,6 +1427,34 @@ def api_xray_logs_clear():
                 pass
 
     return jsonify({"ok": True}), 200
+
+
+
+def _resolve_xray_log_path_for_ws(file_name: str) -> str | None:
+    """
+    Возвращает путь к лог-файлу для WebSocket-стрима
+    с учётом loglevel=none и *.saved.
+    """
+    file_name = (file_name or "error").lower()
+
+    cfg = load_xray_log_config()
+    log_cfg = cfg.get("log", {})
+    loglevel = str(log_cfg.get("loglevel", "none")).lower()
+
+    if file_name in ("error", "error.log"):
+        if loglevel == "none" and os.path.isfile(XRAY_ERROR_LOG_SAVED):
+            return XRAY_ERROR_LOG_SAVED
+        return XRAY_ERROR_LOG
+
+    if file_name in ("access", "access.log"):
+        if loglevel == "none" and os.path.isfile(XRAY_ACCESS_LOG_SAVED):
+            return XRAY_ACCESS_LOG_SAVED
+        return XRAY_ACCESS_LOG
+
+    # дефолт — error
+    if loglevel == "none" and os.path.isfile(XRAY_ERROR_LOG_SAVED):
+        return XRAY_ERROR_LOG_SAVED
+    return XRAY_ERROR_LOG
 
 
 @app.get("/api/xray-logs/status")
@@ -1971,14 +2208,252 @@ backups_bp = create_backups_blueprint(
 )
 app.register_blueprint(backups_bp)
 
+
+# Глобальный список WebSocket-подписчиков на сервисные события.
+# Наполняется в run_server.py при подключении к /ws/events.
+EVENT_SUBSCRIBERS: list = []
+
+
+def broadcast_event(event: dict) -> None:
+    """Отправить событие всем активным WebSocket-подписчикам.
+
+    Работает только на устройствах с gevent/geventwebsocket, где
+    есть обработчик /ws/events. На остальных устройствах список
+    подписчиков будет пустым, и функция просто залогирует событие.
+    """
+    try:
+        payload = {"type": "event", **(event or {})}
+    except Exception:
+        payload = {"type": "event", "raw": repr(event)}
+    try:
+        data = json.dumps(payload, ensure_ascii=False)
+    except Exception as e:
+        ws_debug("broadcast_event: failed to encode payload", error=str(e))
+        return
+
+    dead: list = []
+    for ws in list(EVENT_SUBSCRIBERS):
+        try:
+            ws.send(data)
+        except Exception as e:  # noqa: BLE001
+            dead.append(ws)
+            ws_debug("broadcast_event: failed to send to subscriber", error=str(e))
+
+    # Удаляем отвалившихся подписчиков
+    for ws in dead:
+        try:
+            EVENT_SUBSCRIBERS.remove(ws)
+        except ValueError:
+            # уже удалён где-то ещё
+            pass
+        except Exception:
+            pass
+
+    ws_debug(
+        "broadcast_event: dispatched",
+        event=event,
+        subscribers=len(EVENT_SUBSCRIBERS),
+        removed=len(dead),
+    )
+
+
 service_bp = create_service_blueprint(
     restart_xkeen=restart_xkeen,
     append_restart_log=append_restart_log,
     XRAY_ERROR_LOG=XRAY_ERROR_LOG,
+    broadcast_event=broadcast_event,
 )
 app.register_blueprint(service_bp)
 
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8088)
+@app.route("/ws/xray-logs")
+def ws_xray_logs():
+    """
+    WebSocket-стрим логов Xray.
+
+    query:
+      file=error|access (или error.log/access.log)
+
+    Сервер читает файл по мере появления новых строк и
+    шлёт JSON:
+      {"type": "line", "line": "<строка>"}
+    первые несколько строк можно отдать пачкой:
+      {"type": "init", "lines": ["...", "...", ...]}
+    """
+    file_name = request.args.get("file", "error")
+    client_ip = request.remote_addr or "unknown"
+
+    ws_debug("ws_xray_logs: handler called", client=client_ip, file=file_name)
+
+    ws = request.environ.get("wsgi.websocket")
+    if ws is None:
+        # обычный HTTP-запрос сюда не должен попадать
+        ws_debug(
+            "ws_xray_logs: no WebSocket in environ, returning 400",
+            path=request.path,
+            method=request.method,
+        )
+        return "Expected WebSocket", 400
+
+    path = _resolve_xray_log_path_for_ws(file_name)
+    ws_debug("ws_xray_logs: resolved log path", path=path)
+
+    if not path or not os.path.isfile(path):
+        ws_debug("ws_xray_logs: logfile not found", path=path)
+        try:
+            ws.send(json.dumps({"type": "init", "lines": [], "error": "logfile not found"}, ensure_ascii=False))
+        except Exception as e:
+            ws_debug("ws_xray_logs: failed to send 'not found' message", error=str(e))
+        return ""
+
+    sent_lines = 0
+
+    try:
+        # 1) Отдаём “снимок” последних строк
+        try:
+            last_lines = tail_lines(path, max_lines=800)
+            last_lines = adjust_log_timezone(last_lines)
+            ws_debug(
+                "ws_xray_logs: initial snapshot ready",
+                lines_count=len(last_lines),
+                path=path,
+            )
+        except Exception as e:
+            ws_debug(
+                "ws_xray_logs: failed to read initial snapshot",
+                error=str(e),
+                path=path,
+            )
+            last_lines = []
+
+        try:
+            ws.send(json.dumps({"type": "init", "lines": last_lines}, ensure_ascii=False))
+            sent_lines += len(last_lines)
+            ws_debug(
+                "ws_xray_logs: initial snapshot sent",
+                total_sent=sent_lines,
+            )
+        except WebSocketError as e:
+            ws_debug(
+                "ws_xray_logs: WebSocketError on initial send, closing",
+                error=str(e),
+            )
+            return ""
+        except Exception as e:
+            ws_debug(
+                "ws_xray_logs: unexpected error on initial send, closing",
+                error=str(e),
+            )
+            return ""
+
+        # 2) Дальше ведём себя как tail -f
+        with open(path, "r") as f:
+            f.seek(0, os.SEEK_END)
+            ws_debug(
+                "ws_xray_logs: entering tail loop",
+                path=path,
+                start_pos=f.tell(),
+            )
+
+            while True:
+                line = f.readline()
+                if not line:
+                    # нет новых данных — подождём
+                    gevent.sleep(0.3)
+                    continue
+
+                try:
+                    adj = adjust_log_timezone([line])
+                    ws.send(json.dumps({"type": "line", "line": adj[0]}, ensure_ascii=False))
+                    sent_lines += 1
+
+                    # каждые 100 строк отметимся
+                    if sent_lines % 100 == 0:
+                        ws_debug(
+                            "ws_xray_logs: still streaming",
+                            total_sent=sent_lines,
+                            path=path,
+                        )
+
+                except WebSocketError as e:
+                    ws_debug(
+                        "ws_xray_logs: WebSocketError while streaming, client probably closed",
+                        error=str(e),
+                        total_sent=sent_lines,
+                    )
+                    break
+                except Exception as e:
+                    ws_debug(
+                        "ws_xray_logs: error while streaming single line",
+                        error=str(e),
+                    )
+                    continue
+
+    finally:
+        ws_debug(
+            "ws_xray_logs: closing WebSocket",
+            client=client_ip,
+            total_sent=sent_lines,
+        )
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+    return ""
+
+
+
+
+@app.get("/api/capabilities")
+def api_capabilities():
+    """
+    Возвращает возможности бэкенда для фронтенда.
+    Сейчас используется только наличие поддержки WebSocket (gevent).
+    """
+    return jsonify({
+        "websocket": bool(HAS_GEVENT),
+    })
+
+
+@app.post("/api/ws-debug")
+def api_ws_debug():
+    """
+    Принимает отладочные события с фронта и пишет их в ws.log.
+    body JSON: { "msg": "...", "extra": { ... } }
+    """
+    data = request.get_json(silent=True) or {}
+    msg = data.get("msg", "")
+    extra = data.get("extra") or {}
+    extra["remote_addr"] = request.remote_addr or "unknown"
+    ws_debug("FRONTEND: " + str(msg), **extra)
+    return jsonify({"ok": True})
+# ---------- Simple WS debug logger override ----------
+
+WS_DEBUG_LOG = "/opt/var/log/ws.log"
+
+
+def ws_debug(msg: str, **extra):
+    """
+    Простая реализация ws_debug: пишет одну строку в /opt/var/log/ws.log.
+    Предыдущая версия, использующая logging, перекрывается этой функцией.
+    """
+    if extra:
+        try:
+            tail = ", ".join(f"{k}={v}" for k, v in extra.items())
+        except Exception:
+            tail = repr(extra)
+        full = f"{msg} | {tail}"
+    else:
+        full = msg
+
+    try:
+        import os
+        os.makedirs(os.path.dirname(WS_DEBUG_LOG), exist_ok=True)
+        with open(WS_DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(full + "\n")
+    except Exception:
+        # отладчик не должен ломать основной код
+        pass
+
