@@ -21,6 +21,13 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+  <button
+    type="button"
+    id="theme-toggle-btn"
+    class="theme-toggle-btn theme-toggle-floating"
+    aria-label="Переключить тему"
+  ></button>
+
   <div id="global-xkeen-spinner">
     <div class="global-spinner-box">
       <div class="global-spinner-icon"></div>
@@ -60,22 +67,22 @@
 
 <div class="top-tabs">
         <button class="top-tab-btn active" data-view="routing" onclick="showView('routing')">
-          Маршрутизация (05_routing.json)
+          Роутинг Xray
         </button>
         <button class="top-tab-btn" data-view="mihomo" onclick="showView('mihomo')">
-          Mihomo config.yaml
+          Роутинг Mihomo
         </button>
         <button class="top-tab-btn" data-view="xkeen" onclick="showView('xkeen')">
-          Порты и исключения XKeen
+          Порты и Исключения
         </button>
         <button class="top-tab-btn" data-view="xray-logs" onclick="showView('xray-logs')">
           Live логи Xray
         </button>
         <button class="top-tab-btn" data-view="commands" onclick="showView('commands')">
-          КОМАНДЫ XKeen
+          Команды
         </button>
         <button class="top-tab-btn" type="button" onclick="window.location.href='/mihomo_generator'">
-          Mihomo генератор
+          Mihomo Генератор
         </button>
       </div>
     
@@ -104,7 +111,7 @@
         <!-- Сворачиваемый блок routing -->
         <section class="card">
           <div class="commands-header" onclick="toggleRoutingCard()">
-            <h2>Маршрутизация (05_routing.json)</h2>
+            <h2>Роутинг Xray</h2>
             <span id="routing-arrow">▼</span>
           </div>
 
@@ -278,7 +285,7 @@
 <div id="view-mihomo" class="view-section" style="display:none;">
   <section class="card">
     <div class="commands-header" onclick="toggleMihomoCard()">
-      <h2>Mihomo config.yaml</h2>
+      <h2>Роутинг Mihomo</h2>
       <span id="mihomo-arrow">▼</span>
     </div>
 
@@ -310,6 +317,11 @@
         <button id="mihomo-save-btn"
                 title="Сохранить (авто‑бэкап, авто‑перезапуск по галке)">
           💾 Сохранить
+        </button>
+        <button id="mihomo-validate-btn"
+                type="button"
+                title="Проверить config.yaml через mihomo (без сохранения и рестарта)">
+          🩺 Проверка
         </button>
         <button id="mihomo-save-restart-btn"
                 title="Сохранить и перезапустить mihomo">
@@ -411,7 +423,7 @@
   <!-- XKeen: порты и исключения -->
       <section class="card commands-card">
         <div class="commands-header" onclick="toggleXkeenSettings()">
-          <h2>Порты и исключения XKeen</h2>
+          <h2>Порты и Исключения</h2>
           <span id="xkeen-arrow">▼</span>
         </div>
         <div id="xkeen-body">
@@ -472,7 +484,7 @@
   <!-- XKeen commands -->
 <section class="card commands-card">
   <div class="commands-header">
-    <h2>КОМАНДЫ XKeen</h2>
+    <h2>Команды</h2>
   </div>
 
   <div id="commands-body">
@@ -666,6 +678,17 @@
         </div>
       </div>
     </div>
+
+
+<div id="mihomo-validation-modal" class="modal hidden" onclick="if (event.target === this) hideMihomoValidationModal();">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="modal-title">Результат проверки конфигурации Mihomo</span>
+      <button type="button" class="modal-close" onclick="hideMihomoValidationModal()">×</button>
+    </div>
+    <div id="mihomo-validation-modal-body" class="modal-body modal-body-logs"></div>
+  </div>
+</div>
 
 </body>
 </html>
