@@ -7,6 +7,13 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+  <button
+    type="button"
+    id="theme-toggle-btn"
+    class="theme-toggle-btn theme-toggle-floating"
+    aria-label="Переключить тему"
+  ></button>
+
   <div class="container">
     <header>
       <h1>Бэкапы Xray конфигов (05_routing / 03_inbounds / 04_outbounds)</h1>
@@ -76,5 +83,6 @@
       <small>Xkeen UI — управление бэкапами.</small>
     </footer>
   </div>
+  <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>
