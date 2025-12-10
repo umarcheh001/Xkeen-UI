@@ -77,7 +77,7 @@ else:
 # Map "profile" + optional explicit template to actual filename.
 # Сейчас используется один общий шаблон custom.yaml для всех профилей.
 DEFAULT_TEMPLATES: Dict[str, str] = {
-    "router_zkeen": "custom.yaml",
+    "router_zkeen": "zkeen.yaml",
     "router": "custom.yaml",          # backward compatible profile name
     "router_custom": "custom.yaml",
     "app": "custom.yaml",             # legacy / fallback
@@ -85,11 +85,11 @@ DEFAULT_TEMPLATES: Dict[str, str] = {
 
 # Provider names in both templates, in desired order.
 ROUTER_PROVIDER_NAMES: List[str] = [
-    "my-vless-sub",
-    "second-sub",
-    "third-sub",
-    "fourth-sub",
-    "fifth-sub",
+    "proxy-sub",
+    "proxy-sub-2",
+    "proxy-sub-3",
+    "proxy-sub-4",
+    "proxy-sub-5",
 ]
 
 
@@ -124,9 +124,61 @@ RULE_GROUP_ID_TO_GROUP_NAMES: Dict[str, Sequence[str]] = {
 
     # Специальная группа для QUIC-трафика
     "QUIC": ("QUIC",),
+# Дополнительные группы для профиля ZKeen (GEOIP/GEOSITE и Ru-Traffic)
+"RuTraffic": ("Ru-Traffic", "ru-ips@ipcidr"),
+"DigitalOcean": ("DigitalOcean",),
+"Gcore": ("Gcore",),
+"Hetzner": ("Hetzner",),
+"Linode": ("Linode",),
+"Oracle": ("Oracle",),
+"Ovh": ("Ovh", "OVH"),
+"Vultr": ("Vultr",),
+"Colocrossing": ("Colocrossing",),
+"Contabo": ("Contabo",),
+"Mega": ("Mega",),
+"Scaleway": ("Scaleway",),
+"DOMAINS": ("DOMAINS",),
+"OTHER": ("OTHER",),
+"POLITIC": ("POLITIC",),
+
 }
 
 
+
+
+
+
+# Rule-group IDs that must always remain enabled in all profiles.
+# These correspond to the core ZKeen domain lists (DOMAINS/OTHER/POLITIC)
+# that are part of the base skeleton and should not be toggled via the UI.
+ALWAYS_ENABLED_RULE_IDS: Set[str] = {
+    "DOMAINS",
+    "OTHER",
+    "POLITIC",
+}
+
+
+
+# IDs of rule packages that are specific to the ZKeen router profile only.
+# These correspond to additional GEOIP/GEOSITE and Ru-Traffic related groups
+# which are not available for generic/custom router profiles.
+ZKEEN_ONLY_RULE_IDS: Set[str] = {
+    "RuTraffic",
+    "DigitalOcean",
+    "Gcore",
+    "Hetzner",
+    "Linode",
+    "Oracle",
+    "Ovh",
+    "Vultr",
+    "Colocrossing",
+    "Contabo",
+    "Mega",
+    "Scaleway",
+    "DOMAINS",
+    "OTHER",
+    "POLITIC",
+}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -304,7 +356,7 @@ def _filter_proxy_group_uses(content: str, subscriptions: Sequence[str]) -> str:
                 use_indent = indent
                 # Always keep the 'use:' line itself if we have active providers.
                 if active_providers:
-                    out_lines.append(line)
+                    out_lines.append(" " * indent + "use:")
                 # If no active providers – we skip the whole block, including 'use:'.
                 continue
 
@@ -373,6 +425,39 @@ def _maybe_strip_example_vless(content: str, state: Dict[str, Any], subscription
 
 
 
+
+def _ensure_empty_proxy_providers_map(content: str) -> str:
+    """If proxy-providers block has no children, turn it into `proxy-providers: {}`.
+
+    Some templates contain a bare `proxy-providers:` section that expects
+    subscription-based providers to be injected. When the user does not
+    configure any subscriptions, all providers are removed, and Mihomo
+    requires this section to be an empty mapping instead of a bare key.
+    """
+    lines = content.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() == "proxy-providers:":
+            # Look ahead to see if there is any non-empty, non-comment child line.
+            j = i + 1
+            has_child = False
+            while j < len(lines):
+                stripped = lines[j].strip()
+                # Skip blank lines and comments.
+                if not stripped or stripped.startswith("#"):
+                    j += 1
+                    continue
+                # If the next meaningful line starts with indentation,
+                # we treat it as a child of proxy-providers.
+                if lines[j].startswith(" "):
+                    has_child = True
+                break
+            if not has_child:
+                lines[i] = lines[i].rstrip() + " {}"
+            break
+    return "\n".join(lines)
+
+
+
 def _comment_block(block: str) -> str:
     """Comment every non-empty line in a block."""
     commented_lines: List[str] = []
@@ -414,9 +499,11 @@ def _apply_rule_group_filtering(content: str, enabled_ids: Sequence[str]) -> str
         enabled_ids = []
     enabled_set: Set[str] = {str(x) for x in enabled_ids}
 
-    # Базовая группа блокировок и QUIC должны всегда присутствовать в конфиге,
-    # даже если явный список enabledRuleGroups пуст или пользователь их не выбирал.
+    # Базовая группа блокировок, QUIC и некоторые вспомогательные списки
+    # (DOMAINS/OTHER/POLITIC) должны всегда присутствовать в конфиге, даже если
+    # явный список enabledRuleGroups пуст или пользователь их не выбирал.
     enabled_set.update({"Blocked", "QUIC"})
+    enabled_set.update(ALWAYS_ENABLED_RULE_IDS)
 
     result = content
 
@@ -493,6 +580,18 @@ def _apply_rule_group_filtering(content: str, enabled_ids: Sequence[str]) -> str
         result = "\n".join(new_lines)
 
     # 3) Remove rule-providers that became unused for disabled packages.
+    # В некоторых профилях (например, router_zkeen) часть пакетов объявляет
+    # только rule-providers и нигде не используется в RULE-SET строках.
+    # Для выключенных пакетов такие провайдеры тоже нужно убрать из базового
+    # скелета, иначе они всегда будут торчать в rule-providers даже при
+    # пустом списке выбранных групп.
+    for gid, group_names in RULE_GROUP_ID_TO_GROUP_NAMES.items():
+        if gid in enabled_set:
+            continue
+        for gname in group_names:
+            if gname and "@" in gname:
+                providers_to_remove.add(gname)
+
     if providers_to_remove:
         # Providers that correspond to enabled rule-group packages must
         # always stay in the config, even if they appear in some mixed
@@ -666,6 +765,8 @@ def build_router_config(state: Dict[str, Any]) -> str:
     content = _replace_provider_urls(content, subs)
     content = _filter_proxy_group_uses(content, subs)
     content = _maybe_strip_example_vless(content, state, subs)
+    if not subs:
+        content = _ensure_empty_proxy_providers_map(content)
 
     # 2) rule-group packages
     enabled_ids = state.get("enabledRuleGroups") or []
@@ -706,8 +807,59 @@ def build_full_config(state: Dict[str, Any]) -> str:
     return build_router_config(state)
 
 
+
+def get_profile_rule_presets(profile: str | None) -> Dict[str, Any]:
+    """Return profile-specific rule-group presets for the Mihomo generator UI.
+
+    This exposes two lists for the selected profile:
+
+    * ``availableRuleGroups`` – which optional rule packages are even
+      meaningful for this profile and should be shown as checkboxes.
+    * ``enabledRuleGroups`` – which of those packages should be enabled
+      by default when the user selects the profile in the UI.
+
+    Mandatory packages (``"Blocked"``, ``"QUIC"``) are always enforced
+    server-side and therefore never exposed to the UI.
+    """
+    # Normalise profile name exactly the same way as the main generator.
+    norm = _normalise_profile_name(profile)
+
+    # All rule IDs that are meaningful for the UI (everything except the
+    # mandatory packages which are always enabled internally).
+    ui_candidate_ids: List[str] = [
+        gid for gid in RULE_GROUP_ID_TO_GROUP_NAMES.keys()
+        if gid not in {"Blocked", "QUIC"} and gid not in ALWAYS_ENABLED_RULE_IDS
+    ]
+
+    # Available packages depend on the profile. ZKeen and router_custom
+    # profiles expose the full set, while simpler router profiles hide the
+    # ZKeen-only extras (GEOIP/GEOSITE helpers, Ru-Traffic, etc.).
+    if norm in {"router_zkeen", "router_custom"}:
+        available: Sequence[str] = ui_candidate_ids
+    else:
+        available = [
+            gid for gid in ui_candidate_ids
+            if gid not in ZKEEN_ONLY_RULE_IDS
+        ]
+
+    # Profile-specific defaults. For more "advanced" profiles like
+    # router_custom we keep everything unchecked so that the user explicitly
+    # opts in. Simpler profiles enable all available packages by default.
+    if norm == "router_custom":
+        enabled: Sequence[str] = []
+    else:
+        enabled = available
+
+    return {
+        "profile": norm,
+        "availableRuleGroups": list(available),
+        "enabledRuleGroups": list(enabled),
+    }
+
+
 __all__ = [
     "build_full_config",
     "build_router_config",
     "build_app_config",
+    "get_profile_rule_presets",
 ]
