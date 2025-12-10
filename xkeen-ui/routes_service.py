@@ -26,9 +26,24 @@ def create_service_blueprint(
     restart_xkeen: Callable[..., bool],
     append_restart_log: Callable[[str, bool, str], None] | Callable[..., None],
     XRAY_ERROR_LOG: str,
+    broadcast_event: Callable[[dict], None] | None = None,
 ) -> Blueprint:
     """Create blueprint with xkeen service-control endpoints."""
     bp = Blueprint("service", __name__)
+
+    # Локальный шорткат: безопасно вызываем broadcast_event, даже если он не передан.
+    def _emit_event(event: dict) -> None:
+        if broadcast_event is None:
+            return
+        try:
+            broadcast_event(event)
+        except Exception as e:  # noqa: BLE001
+            # Ошибки в канале событий не должны ломать API.
+            try:
+                # Логируем через стандартный stderr, Flask сам подхватит.
+                print(f"[broadcast_event error] {e}")
+            except Exception:
+                pass
 
     @bp.post("/api/xkeen/start")
     def api_xkeen_start() -> Any:
@@ -120,8 +135,14 @@ def create_service_blueprint(
                 return jsonify({"ok": False, "error": str(e)}), 400
             except RuntimeError as e:
                 return jsonify({"ok": False, "error": str(e)}), 500
+
+            # Уведомляем всех WS-подписчиков о смене ядра.
+            _emit_event({"event": "core_changed", "core": core, "ok": True})
+
             return jsonify({"ok": True, "core": core}), 200
         except Exception as e:
+            # Ошибку смены ядра также можно пробрасывать как событие (необязательно).
+            _emit_event({"event": "core_change_error", "core": core, "ok": False, "error": str(e)})
             return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -129,6 +150,10 @@ def create_service_blueprint(
     @bp.post("/api/restart-xkeen")
     def api_restart_xkeen() -> Any:
         restarted = restart_xkeen(source="manual-mihomo")
+
+        # Сообщаем подписчикам, что произошёл перезапуск xkeen.
+        _emit_event({"event": "xkeen_restarted", "ok": bool(restarted)})
+
         return jsonify({"ok": True, "restarted": restarted}), 200
 
     return bp
