@@ -43,6 +43,7 @@ MAX_BACKUPS_PER_PROFILE = int(os.environ.get('MIHOMO_MAX_BACKUPS', '20'))
 
 # Command used to restart mihomo via XKeen wrapper.
 RESTART_CMD = os.environ.get('MIHOMO_RESTART_CMD', 'xkeen -restart')
+RESTART_TIMEOUT = int(os.environ.get('MIHOMO_RESTART_TIMEOUT', '60'))
 
 
 # === Utility dataclasses ===
@@ -994,7 +995,11 @@ def save_config(new_content: str) -> BackupInfo:
 
 
 def restart_mihomo_and_get_log(new_content: Optional[str] = None) -> str:
-    """Optionally save new content, restart mihomo via RESTART_CMD, and return its log output."""
+    """Optionally save new content, restart mihomo via RESTART_CMD, and return its log output.
+
+    To avoid hard UI freezes when the restart command hangs, this function
+    enforces a timeout (see RESTART_TIMEOUT / MIHOMO_RESTART_TIMEOUT).
+    """
     if new_content is not None:
         save_config(new_content)
 
@@ -1002,24 +1007,39 @@ def restart_mihomo_and_get_log(new_content: Optional[str] = None) -> str:
     env.setdefault('TERM', 'xterm-256color')  # for colored output, if any
 
     try:
-        proc = subprocess.run(RESTART_CMD, shell=True, capture_output=True, text=True, env=env)
+        proc = subprocess.run(
+            RESTART_CMD,
+            shell=True,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=RESTART_TIMEOUT,
+        )
+        out = proc.stdout or ''
+        err = proc.stderr or ''
+        rc = proc.returncode
+    except subprocess.TimeoutExpired as e:  # pragma: no cover - system-dependent
+        # Restart command did not finish in time. We still return a synthetic log
+        # so that the UI can show a clear error instead of hanging forever.
+        out = (e.stdout or '') if hasattr(e, 'stdout') else ''
+        base_err = (e.stderr or '') if hasattr(e, 'stderr') else ''
+        timeout_note = f"\n[ERROR] Restart command timed out after {getattr(e, 'timeout', RESTART_TIMEOUT)} seconds"
+        err = (base_err + timeout_note).lstrip("\n")
+        rc = -1
     except Exception as e:  # pragma: no cover - system-dependent
         return f'Failed to execute restart command: {e}'
 
-    out = proc.stdout or ''
-    err = proc.stderr or ''
-    rc = proc.returncode
-
-    log = []
-    log.append(f'$ {RESTART_CMD}')
+    log: list[str] = []
+    log.append(f"$ {RESTART_CMD}")
     if out:
         log.append(out)
     if err:
         log.append('--- STDERR ---')
         log.append(err)
-    log.append(f'\n[exit code: {rc}]\n')
+    log.append(f"\n[exit code: {rc}]\n")
 
     return "\n".join(log)
+
 
 
 # === 5. VALIDATE CONFIG VIA MIHOMO CORE (optional) ===
