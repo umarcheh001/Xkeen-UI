@@ -194,6 +194,61 @@
       border-top-color: #374151;
     }
 
+  
+    /* === Подсветка кода как в редакторе JSON (CodeMirror material-darker + правки XKeen) === */
+    :root {
+      --xk-code-bg: #f9fafb;
+      --xk-code-fg: #111827;
+      --xk-code-border: #d1d5db;
+
+      --xk-comment: #6b7280;
+      --xk-property: #1f2937;
+      --xk-string: #b91c1c;
+      --xk-number: #047857;
+      --xk-atom: #047857;
+      --xk-keyword: #7c3aed;
+      --xk-punct: #111827;
+    }
+
+    html[data-theme="dark"] {
+      --xk-code-bg: #020617;
+      --xk-code-fg: #e5e7eb;
+      --xk-code-border: #111827;
+
+      --xk-comment: #64748b;
+      --xk-property: #60a5fa;
+      --xk-string: #a3e635;
+      --xk-number: #f97316;
+      --xk-atom: #22d3ee;
+      --xk-keyword: #facc15;
+      --xk-punct: #9ca3af;
+    }
+
+    /* Кодовые блоки */
+    pre {
+      background: var(--xk-code-bg);
+      border: 1px solid var(--xk-code-border);
+      border-radius: 8px;
+    }
+
+    pre code {
+      color: var(--xk-code-fg);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    /* Токены */
+    pre code .cm-comment { color: var(--xk-comment); }
+    html[data-theme="dark"] pre code .cm-comment { font-style: italic; }
+
+    pre code .cm-property { color: var(--xk-property); }
+    pre code .cm-string { color: var(--xk-string); }
+    pre code .cm-number { color: var(--xk-number); }
+    pre code .cm-atom { color: var(--xk-atom); }
+    pre code .cm-keyword { color: var(--xk-keyword); }
+    pre code .cm-punctuation,
+    pre code .cm-bracket { color: var(--xk-punct); }
+
   </style>
 </head>
 <body>
@@ -513,22 +568,148 @@
 
   function highlightCodeBlock(codeEl) {
     const text = codeEl.textContent || '';
-    let html = escapeHtml(text);
+    const len = text.length;
+    let i = 0;
+    let out = '';
 
-    // Многострочные комментарии /* ... */
-    html = html.replace(/\/\*[\s\S]*?\*\//g, function (m) {
-      return '<span class="code-comment">' + escapeHtml(m) + '</span>';
-    });
+    function wrap(cls, raw) {
+      return '<span class="' + cls + '">' + escapeHtml(raw) + '</span>';
+    }
 
-    // Однострочные комментарии //
-    html = html.replace(/(\/\/.*$)/gm, '<span class="code-comment">$1</span>');
+    function isDigit(ch) {
+      return ch >= '0' && ch <= '9';
+    }
 
-    // Строки, начинающиеся с #
-    html = html.replace(/(^|\n)(\s*#.*)$/gm, function (_, start, comment) {
-      return start + '<span class="code-comment">' + escapeHtml(comment) + '</span>';
-    });
+    function isWordStart(ch) {
+      return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_';
+    }
 
-    codeEl.innerHTML = html;
+    while (i < len) {
+      const ch = text[i];
+      const next = i + 1 < len ? text[i + 1] : '';
+
+      // Line comments: // ... or # ...
+      if (ch === '/' && next === '/') {
+        let j = i + 2;
+        while (j < len && text[j] !== '\n') j++;
+        out += wrap('cm-comment', text.slice(i, j));
+        i = j;
+        continue;
+      }
+      if (ch === '#') {
+        let j = i + 1;
+        while (j < len && text[j] !== '\n') j++;
+        out += wrap('cm-comment', text.slice(i, j));
+        i = j;
+        continue;
+      }
+
+      // Block comments: /* ... */
+      if (ch === '/' && next === '*') {
+        const end = text.indexOf('*/', i + 2);
+        const j = end === -1 ? len : end + 2;
+        out += wrap('cm-comment', text.slice(i, j));
+        i = j;
+        continue;
+      }
+
+      // Strings: "..."
+      if (ch === '"') {
+        let j = i + 1;
+        let esc = false;
+        while (j < len) {
+          const c = text[j];
+          if (esc) {
+            esc = false;
+          } else if (c === '\\') {
+            esc = true;
+          } else if (c === '"') {
+            j++;
+            break;
+          }
+          j++;
+        }
+        const raw = text.slice(i, j);
+
+        // Determine whether this is a property name (look ahead for ':')
+        let k = j;
+        while (k < len && (text[k] === ' ' || text[k] === '\t' || text[k] === '\r' || text[k] === '\n')) k++;
+        const cls = (k < len && text[k] === ':') ? 'cm-property' : 'cm-string';
+
+        out += wrap(cls, raw);
+        i = j;
+        continue;
+      }
+
+      // Numbers
+      if (ch === '-' || isDigit(ch)) {
+        let j = i;
+        if (text[j] === '-') j++;
+        let hasDigits = false;
+        while (j < len && isDigit(text[j])) {
+          hasDigits = true;
+          j++;
+        }
+        if (j < len && text[j] === '.') {
+          j++;
+          while (j < len && isDigit(text[j])) {
+            hasDigits = true;
+            j++;
+          }
+        }
+        if (hasDigits && j < len && (text[j] === 'e' || text[j] === 'E')) {
+          let k = j + 1;
+          if (k < len && (text[k] === '+' || text[k] === '-')) k++;
+          let expDigits = 0;
+          while (k < len && isDigit(text[k])) {
+            expDigits++;
+            k++;
+          }
+          if (expDigits > 0) j = k;
+        }
+        if (hasDigits) {
+          out += wrap('cm-number', text.slice(i, j));
+          i = j;
+          continue;
+        }
+      }
+
+      // Words (true/false/null)
+      if (isWordStart(ch)) {
+        let j = i + 1;
+        while (j < len) {
+          const c = text[j];
+          if (isWordStart(c) || isDigit(c)) j++;
+          else break;
+        }
+        const raw = text.slice(i, j);
+        if (raw === 'true' || raw === 'false' || raw === 'null') {
+          out += wrap('cm-atom', raw);
+        } else {
+          out += escapeHtml(raw);
+        }
+        i = j;
+        continue;
+      }
+
+      // Brackets and punctuation
+      if (ch === '{' || ch === '}' || ch === '[' || ch === ']') {
+        out += wrap('cm-bracket', ch);
+        i++;
+        continue;
+      }
+      if (ch === ':' || ch === ',') {
+        out += wrap('cm-punctuation', ch);
+        i++;
+        continue;
+      }
+
+      // Default: raw char
+      out += escapeHtml(ch);
+      i++;
+    }
+
+    codeEl.innerHTML = out;
   }
 
   function init() {
