@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Xkeen UI — Первичная настройка</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <style>
+    .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .auth-card { width: 100%; max-width: 520px; }
+    .auth-title { margin: 0 0 6px; font-size: 22px; }
+    .auth-sub { margin: 0 0 16px; color: #9ca3af; font-size: 13px; }
+    .auth-row { display: grid; gap: 8px; margin: 12px 0; }
+    .auth-row label { font-size: 12px; color: #9ca3af; }
+    .auth-row input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0b1220; color: #e5e7eb; }
+    .auth-actions { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 14px; }
+    .auth-btn { border: 1px solid #1f2937; background: linear-gradient(135deg, #22c55e, #16a34a); color: white; padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+    .auth-btn:hover { filter: brightness(1.05); }
+    .auth-error { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #ef444466; background: rgba(239, 68, 68, 0.12); color: #fecaca; font-size: 13px; }
+    .auth-hint { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #38bdf866; background: rgba(56, 189, 248, 0.08); color: #bae6fd; font-size: 13px; }
+    .auth-hint ul { margin: 8px 0 0; padding-left: 18px; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="card auth-card">
+      <h1 class="auth-title">Первичная настройка</h1>
+      <p class="auth-sub">Задайте логин и пароль администратора. Они будут сохранены на роутере.</p>
+
+      <form method="post" action="{{ url_for('setup') }}" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="auth-row">
+          <label for="username">Логин (3–32 символа, латиница/цифры/_.-)</label>
+          <input id="username" name="username" type="text" value="{{ username or '' }}" autofocus required>
+        </div>
+
+        <div class="auth-row">
+          <label for="password">Пароль (минимум 8 символов)</label>
+          <input id="password" name="password" type="password" required>
+        </div>
+
+        <div class="auth-row">
+          <label for="password2">Повтор пароля</label>
+          <input id="password2" name="password2" type="password" required>
+        </div>
+
+        <div class="auth-actions">
+          <button class="auth-btn" type="submit">Сохранить и войти</button>
+          <a href="{{ url_for('login') }}">У меня уже есть доступ</a>
+        </div>
+      </form>
+
+      <div class="auth-hint">
+        <strong>Подсказка:</strong>
+        <ul>
+          <li>Не используйте пароль от Wi‑Fi/админки роутера.</li>
+          <li>После установки можно будет добавить дополнительные меры безопасности.</li>
+        </ul>
+      </div>
+
+      {% if error %}
+        <div class="auth-error">{{ error }}</div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
