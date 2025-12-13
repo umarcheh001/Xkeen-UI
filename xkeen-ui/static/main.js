@@ -1,5 +1,562 @@
+
+
+function stripJsonComments(s) {
+  let res = [];
+  let inString = false;
+  let escape = false;
+  let i = 0;
+  const length = s.length;
+
+  while (i < length) {
+    const ch = s[i];
+
+    // Inside string literal
+    if (inString) {
+      res.push(ch);
+      if (escape) {
+        escape = false;
+      } else if (ch === '\\') {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      i++;
+      continue;
+    }
+
+    // Start of string literal
+    if (ch === '"') {
+      inString = true;
+      res.push(ch);
+      i++;
+      continue;
+    }
+
+    // Single-line comment //
+    if (ch === '/' && i + 1 < length && s[i + 1] === '/') {
+      i += 2;
+      while (i < length && s[i] !== '\n') i++;
+      continue;
+    }
+
+    // Single-line comment starting with #
+    if (ch === '#') {
+      i++;
+      while (i < length && s[i] !== '\n') i++;
+      continue;
+    }
+
+    // Multi-line comment /* ... */
+    if (ch === '/' && i + 1 < length && s[i + 1] === '*') {
+      i += 2;
+      while (i + 1 < length && !(s[i] === '*' && s[i + 1] === '/')) i++;
+      i += 2;
+      continue;
+    }
+
+    // Regular character
+    res.push(ch);
+    i++;
+  }
+
+  return res.join('');
+}
+
+
+// --------------------
+// CSRF header injection for same-origin fetch()
+// --------------------
+
+const CSRF_TOKEN = (() => {
+  try {
+    const el = document.querySelector('meta[name="csrf-token"]');
+    return (el && el.getAttribute('content')) ? el.getAttribute('content') : '';
+  } catch (e) {
+    return '';
+  }
+})();
+
+(function patchFetchForCsrf() {
+  try {
+    if (!window.fetch) return;
+    const origFetch = window.fetch.bind(window);
+    window.fetch = function (url, options) {
+      const opts = options || {};
+      try {
+        const method = (opts.method || 'GET').toUpperCase();
+        // Ensure cookies are sent to same-origin endpoints
+        if (typeof opts.credentials === 'undefined') {
+          opts.credentials = 'same-origin';
+        }
+        // Add CSRF token for mutating requests
+        if (CSRF_TOKEN && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+          const headers = new Headers(opts.headers || {});
+          if (!headers.has('X-CSRF-Token')) {
+            headers.set('X-CSRF-Token', CSRF_TOKEN);
+          }
+          opts.headers = headers;
+        }
+      } catch (e) {
+        // ignore
+      }
+      return origFetch(url, opts);
+    };
+  } catch (e) {
+    // ignore
+  }
+})();
+
+
+// --------------------
+// CodeMirror shared helpers
+// --------------------
+
+function buildCmExtraKeysCommon(opts) {
+  const o = opts || {};
+  const noFs = !!o.noFullscreen;
+  const keys = {
+    'Ctrl-/': 'toggleComment',
+    'Cmd-/': 'toggleComment',
+  };
+
+  if (!noFs) {
+    keys['F11'] = function (cm) {
+      try {
+        cm.setOption('fullScreen', !cm.getOption('fullScreen'));
+      } catch (e) {
+        // ignore
+      }
+    };
+    keys['Esc'] = function (cm) {
+      try {
+        if (cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
+      } catch (e) {
+        // ignore
+      }
+    };
+  }
+
+  return keys;
+}
+
+
+
+// --------------------
+// CodeMirror mouse toolbar (overlay buttons with hotkey tooltips)
+// --------------------
+
+function xkeenPrettyKey(key) {
+  // Examples:
+  //  - "Shift-Ctrl-G" -> "Shift+Ctrl+G"
+  //  - "Cmd-F" -> "⌘+F"
+  if (!key) return '';
+  const parts = String(key).split('-').filter(Boolean);
+  const map = {
+    Cmd: '⌘',
+    Command: '⌘',
+    Ctrl: 'Ctrl',
+    Control: 'Ctrl',
+    Shift: 'Shift',
+    Alt: 'Alt',
+    Option: 'Alt',
+    Mod: 'Mod',
+  };
+  return parts.map((p) => (map[p] || p)).join('+');
+}
+
+function xkeenKeysForCommand(cm, commandName) {
+  try {
+    const extra = (cm && cm.getOption) ? (cm.getOption('extraKeys') || {}) : {};
+    const keys = [];
+    for (const k in extra) {
+      if (!Object.prototype.hasOwnProperty.call(extra, k)) continue;
+      if (extra[k] === commandName) keys.push(k);
+    }
+    return keys;
+  } catch (e) {
+    return [];
+  }
+}
+
+function xkeenHasCmCommand(name) {
+  try {
+    return !!(window.CodeMirror && CodeMirror.commands && typeof CodeMirror.commands[name] === 'function');
+  } catch (e) {
+    return false;
+  }
+}
+
+function xkeenHintForCommand(cm, commandName, fallback) {
+  try {
+    const keys = xkeenKeysForCommand(cm, commandName).map(xkeenPrettyKey);
+    if (keys.length) return keys.join(' / ');
+  } catch (e) {}
+  return fallback || '';
+}
+
+// --------------------
+// CodeMirror help drawer (toolbar "?" button)
+// --------------------
+
+function xkeenEnsureCmHelpDrawer() {
+  if (document.getElementById('xkeen-cm-help-overlay')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'xkeen-cm-help-overlay';
+  overlay.className = 'xkeen-cm-help-overlay';
+
+  const drawer = document.createElement('div');
+  drawer.id = 'xkeen-cm-help-drawer';
+  drawer.className = 'xkeen-cm-help-drawer';
+  drawer.setAttribute('role', 'dialog');
+  drawer.setAttribute('aria-modal', 'true');
+  drawer.setAttribute('aria-label', 'Справка по редактору');
+
+  drawer.innerHTML = `
+    <div class="xkeen-cm-help-head">
+      <div class="xkeen-cm-help-title">Справка по редактору</div>
+      <button type="button" class="xkeen-cm-help-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="xkeen-cm-help-body" id="xkeen-cm-help-body"></div>
+  `;
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(drawer);
+
+  function close() {
+    overlay.classList.remove('is-open');
+    drawer.classList.remove('is-open');
+  }
+
+  overlay.addEventListener('click', close);
+  drawer.querySelector('.xkeen-cm-help-close').addEventListener('click', close);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (drawer.classList.contains('is-open')) {
+        e.preventDefault();
+        close();
+      }
+    }
+  }, { passive: false });
+}
+
+function xkeenHelpBlock(title, html) {
+  return `
+    <section class="xkeen-cm-help-section">
+      <h3>${title}</h3>
+      ${html}
+    </section>
+  `;
+}
+
+function xkeenBuildCmHelpHTML(cm) {
+  const blocks = [];
+  const readOnly = !!(cm && cm.getOption && cm.getOption('readOnly'));
+
+  blocks.push(xkeenHelpBlock('Что это такое', `
+    <p>Это встроенный редактор кода. Ниже — только те возможности, которые реально включены в <b>этом</b> редакторе.</p>
+    ${readOnly ? '<p><b>Примечание:</b> этот редактор открыт <b>только для чтения</b>. Поиск работает, а изменения текста недоступны.</p>' : ''}
+  `));
+
+  // Search / replace (addon/search + addon/dialog)
+  const hasSearch = xkeenHasCmCommand('findPersistent') || xkeenHasCmCommand('find');
+  if (hasSearch) {
+    const kFind = xkeenHintForCommand(cm, 'findPersistent', 'Ctrl+F');
+    const kNext = xkeenHintForCommand(cm, 'findNext', 'Ctrl+G');
+    const kPrev = xkeenHintForCommand(cm, 'findPrev', 'Shift+Ctrl+G');
+
+    blocks.push(xkeenHelpBlock('Поиск', `
+      <ul>
+        <li><b>Открыть поиск:</b> кнопка <b>«Поиск»</b> (лупа) или <b>${kFind}</b>.</li>
+        <li><b>Следующее совпадение:</b> кнопка <b>«Следующее»</b> (стрелка вниз) или <b>${kNext}</b>.</li>
+        <li><b>Предыдущее совпадение:</b> кнопка <b>«Предыдущее»</b> (стрелка вверх) или <b>${kPrev}</b>.</li>
+        <li>Введите текст в поле поиска и нажмите <b>Enter</b>. Закрыть панель поиска — <b>Esc</b>.</li>
+      </ul>
+    `));
+  }
+
+  const hasReplace = xkeenHasCmCommand('replace') || xkeenHasCmCommand('replaceAll');
+  if (hasReplace) {
+    const kReplace = xkeenHintForCommand(cm, 'replace', 'Ctrl+H');
+    const kReplaceAll = xkeenHintForCommand(cm, 'replaceAll', 'Shift+Ctrl+H');
+    blocks.push(xkeenHelpBlock('Замена', `
+      ${readOnly ? '<p>Этот редактор в режиме <b>только чтение</b>, поэтому замена недоступна.</p>' : `
+      <ul>
+        <li><b>Открыть замену:</b> кнопка <b>«Замена»</b> (две стрелки) или <b>${kReplace}</b>.</li>
+        ${kReplaceAll ? `<li><b>Заменить всё:</b> <b>${kReplaceAll}</b> (если назначено в этом редакторе).</li>` : ''}
+        <li>Сначала задайте <b>что искать</b>, затем <b>на что заменить</b>. Обычно <b>Enter</b> заменяет текущее совпадение, затем можно перейти к следующему.</li>
+      </ul>
+      `}
+    `));
+  }
+
+  // Comment addon
+  if (xkeenHasCmCommand('toggleComment')) {
+    const kCmt = xkeenHintForCommand(cm, 'toggleComment', 'Ctrl+/');
+    blocks.push(xkeenHelpBlock('Комментарии', `
+      ${readOnly ? '<p>Редактирование отключено, поэтому комментирование недоступно.</p>' : `
+      <ul>
+        <li><b>Закомментировать/раскомментировать:</b> кнопка <b>«Коммент»</b> (облачко) или <b>${kCmt}</b>.</li>
+        <li>Работает для текущей строки или для выделенного блока строк.</li>
+      </ul>
+      `}
+    `));
+  }
+
+  // Fullscreen addon
+  const canFS = (cm && cm.getOption && typeof cm.getOption('fullScreen') !== 'undefined');
+  if (canFS) {
+    blocks.push(xkeenHelpBlock('Фулскрин', `
+      <ul>
+        <li><b>Во весь экран:</b> кнопка <b>«Фулскрин»</b> или <b>F11</b>.</li>
+        <li><b>Выйти:</b> <b>Esc</b> (или повторно F11).</li>
+      </ul>
+    `));
+  }
+
+  // Visual helpers (options/addons)
+  try {
+    if (cm && cm.getOption) {
+      const v = [];
+      if (cm.getOption('matchBrackets')) v.push('<li><b>Парные скобки:</b> курсор рядом со скобкой подсвечивает её пару.</li>');
+      if (cm.getOption('autoCloseBrackets')) v.push('<li><b>Автозакрытие скобок/кавычек:</b> при вводе автоматически добавляется закрывающий символ.</li>');
+      if (cm.getOption('styleActiveLine')) v.push('<li><b>Активная строка:</b> подсвечивается строка, где стоит курсор.</li>');
+      if (cm.getOption('showIndentGuides')) v.push('<li><b>Линии отступов:</b> помогают визуально видеть уровни вложенности.</li>');
+      if (cm.getOption('highlightSelectionMatches')) v.push('<li><b>Совпадения выделения:</b> выделите слово — одинаковые места подсветятся.</li>');
+      if (cm.getOption('showTrailingSpace')) v.push('<li><b>Пробелы в конце строки:</b> подсвечиваются, чтобы их было легко убрать.</li>');
+      if (cm.getOption('foldGutter')) v.push('<li><b>Сворачивание блоков:</b> в левом поле (gutter) появляются маркеры — кликайте, чтобы свернуть/развернуть блок.</li>');
+      if (cm.getOption('lint')) v.push('<li><b>Проверка ошибок:</b> проблемы подсвечиваются/маркируются слева; наведите на маркер, чтобы увидеть подсказку.</li>');
+      if (v.length) {
+        blocks.push(xkeenHelpBlock('Подсказки и подсветка', `<ul>${v.join('')}</ul>`));
+      }
+    }
+  } catch (e) {}
+
+  blocks.push(xkeenHelpBlock('Подсказка', `
+    <p>Если вы забыли горячие клавиши, наведите мышью на кнопки панели над редактором — в подсказке показываются актуальные сочетания.</p>
+  `));
+
+  return blocks.join('');
+}
+
+function xkeenOpenCmHelp(cm) {
+  xkeenEnsureCmHelpDrawer();
+  const overlay = document.getElementById('xkeen-cm-help-overlay');
+  const drawer = document.getElementById('xkeen-cm-help-drawer');
+  const body = document.getElementById('xkeen-cm-help-body');
+  if (!overlay || !drawer || !body) return;
+  body.innerHTML = xkeenBuildCmHelpHTML(cm);
+  overlay.classList.add('is-open');
+  drawer.classList.add('is-open');
+}
+
+function xkeenSyncCmToolbarFullscreen(cm) {
+  try {
+    if (!cm || !cm.getWrapperElement) return;
+    const wrapper = cm.getWrapperElement();
+    const bar = cm._xkeenToolbarEl;
+    if (!wrapper || !bar) return;
+
+    const isFs = !!(cm.getOption && cm.getOption('fullScreen')) || wrapper.classList.contains('CodeMirror-fullscreen');
+    bar.classList.toggle('is-fullscreen', isFs);
+  } catch (e) {
+    // ignore
+  }
+}
+
+function xkeenAttachCmToolbar(cm, items) {
+  if (!cm || !cm.getWrapperElement) return;
+  const wrapper = cm.getWrapperElement();
+  if (!wrapper) return;
+
+  const parent = wrapper.parentNode;
+
+  // Stable id to attach a toolbar to a specific editor wrapper
+  const cmId = (wrapper.dataset && wrapper.dataset.xkeenCmId) ? wrapper.dataset.xkeenCmId : ('xkcm_' + Math.random().toString(36).slice(2));
+  try { if (wrapper.dataset) wrapper.dataset.xkeenCmId = cmId; } catch (_) {}
+
+  // Avoid duplicates (toolbar now lives next to the editor, not inside it)
+  if (parent && parent.querySelector && parent.querySelector('.xkeen-cm-toolbar[data-cm-for="' + cmId + '"]')) return;
+
+  const bar = document.createElement('div');
+  bar.className = 'xkeen-cm-toolbar';
+  bar.setAttribute('role', 'toolbar');
+  bar.dataset.cmFor = cmId;
+
+  (items || []).forEach((it) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'xkeen-cm-tool' + ((it && (it.id === 'help' || it.isHelp)) ? ' is-help' : '');
+    btn.setAttribute('aria-label', it.label || it.id || 'Action');
+
+    // SVG icon (preferred), fallback to text
+    if (it.svg) btn.innerHTML = it.svg;
+    else btn.textContent = it.icon || '•';
+
+    // Tooltip: show real keybindings from extraKeys when possible
+    let hint = '';
+    if (it.command) {
+      const keys = xkeenKeysForCommand(cm, it.command).map(xkeenPrettyKey);
+      if (keys.length) hint = keys.join(' / ');
+    }
+    if (!hint && it.fallbackHint) hint = it.fallbackHint;
+
+    const tip = (it.label || '') + (hint ? ` (${hint})` : '');
+    if (tip.trim()) {
+      // Custom tooltip (CSS ::after). Do NOT set `title` to avoid duplicate native browser tooltip.
+      btn.dataset.tip = tip;
+    }
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // IMPORTANT:
+      // Some CodeMirror commands (find/replace) open a dialog via addon/dialog.
+      // The dialog closes on focus-out. If we force focus back to the editor
+      // right after running the command, the dialog immediately closes and it
+      // looks like the button doesn't work.
+      try {
+        if (typeof it.onClick === 'function') it.onClick(cm);
+        else if (it.command && cm.execCommand) cm.execCommand(it.command);
+      } catch (err) {
+        console.error('CM toolbar action failed', it.id, err);
+      }
+      // Keep focus where it belongs:
+      // - If a dialog is open (either already open or just opened), do NOT
+      //   steal focus from its input.
+      // - Otherwise, return focus to the editor for convenience.
+      const dialogIsOpen = wrapper.classList && wrapper.classList.contains('dialog-opened');
+      // If a dialog is open, keep focus in the dialog input.
+      // Otherwise, return focus to the editor for convenience.
+      if (!dialogIsOpen) {
+        try { cm.focus(); } catch (_) {}
+      }
+      xkeenSyncCmToolbarFullscreen(cm);
+    });
+
+    bar.appendChild(btn);
+  });
+
+  // Place toolbar ABOVE the editor (outside CodeMirror), so it doesn't cover code.
+  if (parent && parent.insertBefore) {
+    parent.insertBefore(bar, wrapper);
+  } else {
+    // Fallback: keep previous behavior
+    wrapper.appendChild(bar);
+  }
+
+  // Keep reference for fullscreen sync
+  cm._xkeenToolbarEl = bar;
+
+  // Sync toolbar position in fullscreen mode (F11 / Esc or button)
+  try {
+    if (cm && typeof cm.setOption === 'function' && !cm._xkeenSetOptionWrapped) {
+      const origSetOption = cm.setOption.bind(cm);
+      cm.setOption = function (opt, val) {
+        origSetOption(opt, val);
+        if (opt === 'fullScreen') xkeenSyncCmToolbarFullscreen(cm);
+      };
+      cm._xkeenSetOptionWrapped = true;
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Initial sync
+  xkeenSyncCmToolbarFullscreen(cm);
+}
+// Minimal inline SVG icons (no external deps)
+const XKEEN_CM_ICONS = {
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
+  down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>',
+  up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>',
+  replace: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>',
+  comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path></svg>',
+  fullscreen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>',
+  help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+};
+
+const XKEEN_CM_TOOLBAR_DEFAULT = [
+  { id: 'find', svg: XKEEN_CM_ICONS.search, label: 'Поиск', command: 'findPersistent', fallbackHint: 'Ctrl+F' },
+  { id: 'next', svg: XKEEN_CM_ICONS.down, label: 'Следующее', command: 'findNext', fallbackHint: 'Ctrl+G' },
+  { id: 'prev', svg: XKEEN_CM_ICONS.up, label: 'Предыдущее', command: 'findPrev', fallbackHint: 'Shift+Ctrl+G' },
+  { id: 'replace', svg: XKEEN_CM_ICONS.replace, label: 'Замена', command: 'replace', fallbackHint: 'Ctrl+H' },
+  { id: 'comment', svg: XKEEN_CM_ICONS.comment, label: 'Коммент', command: 'toggleComment', fallbackHint: 'Ctrl+/' },
+  { id: 'help', svg: XKEEN_CM_ICONS.help, label: 'Справка', fallbackHint: '?', isHelp: true, onClick: (cm) => xkeenOpenCmHelp(cm) },
+  {
+    id: 'fs',
+    svg: XKEEN_CM_ICONS.fullscreen,
+    label: 'Фулскрин',
+    fallbackHint: 'F11 / Esc',
+    onClick: (cm) => {
+      try {
+        cm.setOption('fullScreen', !cm.getOption('fullScreen'));
+      } catch (e) {
+        // ignore
+      }
+    },
+  },
+];
+
+const XKEEN_CM_TOOLBAR_MINI = [
+  { id: 'find', svg: XKEEN_CM_ICONS.search, label: 'Поиск', command: 'findPersistent', fallbackHint: 'Ctrl+F' },
+  { id: 'help', svg: XKEEN_CM_ICONS.help, label: 'Справка', fallbackHint: '?', isHelp: true, onClick: (cm) => xkeenOpenCmHelp(cm) },
+  {
+    id: 'fs',
+    svg: XKEEN_CM_ICONS.fullscreen,
+    label: 'Фулскрин',
+    fallbackHint: 'F11 / Esc',
+    onClick: (cm) => {
+      try {
+        cm.setOption('fullScreen', !cm.getOption('fullScreen'));
+      } catch (e) {
+        // ignore
+      }
+    },
+  },
+];
+
+
 let routingEditor = null;
 let routingErrorMarker = null;
+
+function setRoutingError(message, line) {
+  const errorEl = document.getElementById('routing-error');
+  if (errorEl) {
+    errorEl.textContent = message || '';
+  }
+
+  if (!routingEditor || !routingEditor.getDoc) {
+    return;
+  }
+
+  // Clear previous marker
+  if (routingErrorMarker && typeof routingErrorMarker.clear === 'function') {
+    routingErrorMarker.clear();
+    routingErrorMarker = null;
+  }
+
+  if (typeof line !== 'number' || line < 0) {
+    return;
+  }
+
+  try {
+    const doc = routingEditor.getDoc();
+    const lineText = doc.getLine(line) || '';
+    routingErrorMarker = doc.markText(
+      { line: line, ch: 0 },
+      { line: line, ch: lineText.length },
+      { className: 'cm-error-line' }
+    );
+    if (routingEditor.scrollIntoView) {
+      routingEditor.scrollIntoView({ line: line, ch: 0 }, 200);
+    }
+  } catch (e) {
+    console.error('setRoutingError failed', e);
+  }
+}
+
 let mihomoEditor = null;
 let mihomoActiveProfileName = null;
 let portProxyingEditor = null;
@@ -24,11 +581,1025 @@ async function initCapabilities() {
     // On error we assume WS is not available and fall back to HTTP polling.
     HAS_WS = false;
   }
+
+  // Apply capability-dependent UI (e.g., hide PTY button if WS is unavailable)
+  try { terminalApplyWsCapabilityUi(); } catch (e) {}
+
 }
+
+// Apply capability-dependent UI (e.g., hide PTY button if WS is not supported)
+function terminalApplyWsCapabilityUi() {
+  // Button in "Команды" header that opens Interactive PTY shell
+  const ptyBtn = document.getElementById('terminal-open-pty-btn');
+  if (ptyBtn) {
+    if (HAS_WS) {
+      ptyBtn.style.display = '';
+      ptyBtn.disabled = false;
+    } else {
+      // Hide to avoid confusing users on devices without gevent-websocket
+      ptyBtn.style.display = 'none';
+    }
+  }
+}
+
+// Terminal retry controls (reserved for future auto-reconnect/backoff logic)
+let terminalRetryTimer = null;
+let terminalRetryIsActive = false;
+
+function terminalStopRetry() {
+  // Stops any pending auto-retry timer (if such logic is enabled).
+  const hadActive = !!terminalRetryTimer || !!terminalRetryIsActive;
+
+  terminalRetryIsActive = false;
+  if (terminalRetryTimer) {
+    try { clearTimeout(terminalRetryTimer); } catch (e) {}
+    terminalRetryTimer = null;
+  }
+
+  // Keep the button visible; just inform the user.
+  try {
+    if (typeof showToast === 'function') {
+      showToast(hadActive ? 'Retry stopped' : 'No retry in progress', 'info');
+    }
+  } catch (e) {}
+}
+
+
 
 
 let currentCommandFlag = null;
 let currentCommandLabel = null;
+let currentCommandMode = 'shell'; // 'shell' | 'xkeen' | 'pty'
+
+let ptyWs = null;
+let ptyDisposables = [];
+let ptyPrevConvertEol = null;
+
+
+// PTY reconnect state (per-tab via sessionStorage)
+const XKEEN_PTY_SESSION_KEY = 'xkeen_pty_session_id_v1';
+const XKEEN_PTY_LASTSEQ_KEY = 'xkeen_pty_last_seq_v1';
+let ptySessionId = null;
+let ptyLastSeq = 0;
+
+function ptyLoadSessionState() {
+  try {
+    const sid = sessionStorage.getItem(XKEEN_PTY_SESSION_KEY);
+    if (sid) ptySessionId = String(sid);
+  } catch (e) {}
+  try {
+    const ls = sessionStorage.getItem(XKEEN_PTY_LASTSEQ_KEY);
+    if (ls) ptyLastSeq = Math.max(0, parseInt(ls, 10) || 0);
+  } catch (e) {}
+}
+
+function ptySaveSessionState() {
+  try { if (ptySessionId) sessionStorage.setItem(XKEEN_PTY_SESSION_KEY, String(ptySessionId)); } catch (e) {}
+  try { sessionStorage.setItem(XKEEN_PTY_LASTSEQ_KEY, String(ptyLastSeq || 0)); } catch (e) {}
+}
+
+function ptyClearSessionState() {
+  ptySessionId = null;
+  ptyLastSeq = 0;
+  try { sessionStorage.removeItem(XKEEN_PTY_SESSION_KEY); } catch (e) {}
+  try { sessionStorage.removeItem(XKEEN_PTY_LASTSEQ_KEY); } catch (e) {}
+}
+
+// Load on startup
+ptyLoadSessionState();
+
+let xkeenTerm = null;
+let xkeenTermFitAddon = null;
+let xkeenTermResizeObserver = null;
+
+// XTerm addons (loaded from static/xterm)
+let xkeenTermSearchAddon = null;
+let xkeenTermSearchResultsDisposable = null;
+let xkeenTermWebLinksAddon = null;
+
+// Terminal search UI state
+let xkeenTerminalSearchTerm = '';
+let xkeenTerminalSearchResultIndex = -1;
+let xkeenTerminalSearchResultCount = 0;
+let xkeenTerminalSearchDebounce = null;
+let xkeenTerminalSearchKeysBound = false;
+
+const XKEEN_TERM_SEARCH_DECORATIONS = {
+  matchBackground: 'rgba(255, 255, 0, 0.20)',
+  matchBorder: 'rgba(255, 255, 255, 0.30)',
+  matchOverviewRuler: 'rgba(255, 255, 0, 0.65)',
+  activeMatchBackground: 'rgba(255, 165, 0, 0.28)',
+  activeMatchBorder: 'rgba(255, 255, 255, 0.60)',
+  activeMatchColorOverviewRuler: 'rgba(255, 165, 0, 0.95)',
+};
+
+// ---------------- Terminal output filters (ANSI + log highlighting) ----------------
+const XKEEN_TERM_PREF_ANSI_FILTER_KEY = 'xkeen_term_ansi_filter_v1';
+const XKEEN_TERM_PREF_LOG_HL_KEY = 'xkeen_term_log_hl_v1';
+
+// If true: incoming output is stripped from ANSI escape sequences before rendering
+let xkeenTerminalAnsiFilter = false;
+
+// If true: highlight WARN/ERR words in output (works best with ANSI filter ON)
+let xkeenTerminalLogHighlight = true;
+
+function terminalLoadOutputPrefs() {
+  try {
+    const rawA = localStorage.getItem(XKEEN_TERM_PREF_ANSI_FILTER_KEY);
+    if (rawA != null) xkeenTerminalAnsiFilter = (rawA === '1' || rawA === 'true');
+  } catch (e) {}
+  try {
+    const rawH = localStorage.getItem(XKEEN_TERM_PREF_LOG_HL_KEY);
+    if (rawH != null) xkeenTerminalLogHighlight = !(rawH === '0' || rawH === 'false');
+  } catch (e) {}
+}
+
+function terminalSaveOutputPrefs() {
+  try { localStorage.setItem(XKEEN_TERM_PREF_ANSI_FILTER_KEY, xkeenTerminalAnsiFilter ? '1' : '0'); } catch (e) {}
+  try { localStorage.setItem(XKEEN_TERM_PREF_LOG_HL_KEY, xkeenTerminalLogHighlight ? '1' : '0'); } catch (e) {}
+}
+
+function terminalApplyOutputPrefUi() {
+  const btnAnsi = document.getElementById('terminal-btn-ansi');
+  const btnHl = document.getElementById('terminal-btn-loghl');
+
+  if (btnAnsi) {
+    btnAnsi.classList.toggle('is-active', !!xkeenTerminalAnsiFilter);
+    btnAnsi.title = xkeenTerminalAnsiFilter ? 'ANSI filter: ON (strip ANSI from incoming output)' : 'ANSI filter: OFF (pass-through)';
+  }
+  if (btnHl) {
+    btnHl.classList.toggle('is-active', !!xkeenTerminalLogHighlight);
+    btnHl.title = xkeenTerminalLogHighlight ? 'Highlight WARN/ERR: ON' : 'Highlight WARN/ERR: OFF';
+  }
+}
+
+function terminalToggleAnsiFilter() {
+  xkeenTerminalAnsiFilter = !xkeenTerminalAnsiFilter;
+  terminalSaveOutputPrefs();
+  terminalApplyOutputPrefUi();
+  try { if (typeof showToast === 'function') showToast(xkeenTerminalAnsiFilter ? 'ANSI filter: ON' : 'ANSI filter: OFF', 'info'); } catch (e) {}
+}
+
+function terminalToggleLogHighlight() {
+  xkeenTerminalLogHighlight = !xkeenTerminalLogHighlight;
+  terminalSaveOutputPrefs();
+  terminalApplyOutputPrefUi();
+  try { if (typeof showToast === 'function') showToast(xkeenTerminalLogHighlight ? 'Highlight WARN/ERR: ON' : 'Highlight WARN/ERR: OFF', 'info'); } catch (e) {}
+}
+
+// Basic ANSI stripper (CSI + OSC). For log usage it's usually enough.
+function terminalStripAnsi(text) {
+  if (!text) return '';
+  const s = String(text);
+  // OSC (ESC ] ... BEL or ESC \\)
+  const noOsc = s.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '');
+  // CSI (ESC [ ... final)
+  return noOsc.replace(/\x1b\[[0-9;?]*[@-~]/g, '');
+}
+
+function terminalHighlightWarnErr(text) {
+  if (!text) return '';
+  const s = String(text);
+  const RESET = '\x1b[0m';
+  const YELLOW = '\x1b[33;1m';
+  const RED = '\x1b[31;1m';
+
+  // Keep it conservative: highlight standalone level tokens.
+  return s
+    .replace(/\b(WARN(?:ING)?)\b/g, `${YELLOW}$1${RESET}`)
+    .replace(/\b(ERR|ERROR|FATAL|CRIT(?:ICAL)?)\b/g, `${RED}$1${RESET}`);
+}
+
+function terminalProcessOutputChunk(chunk) {
+  let out = String(chunk || '');
+  if (!out) return out;
+
+  if (xkeenTerminalAnsiFilter) {
+    out = terminalStripAnsi(out);
+  }
+  if (xkeenTerminalLogHighlight) {
+    out = terminalHighlightWarnErr(out);
+  }
+  return out;
+}
+
+// Load persisted output prefs on startup
+terminalLoadOutputPrefs();
+
+let terminalHistory = [];
+let terminalHistoryIndex = -1;
+const TERMINAL_HISTORY_LIMIT = 50;
+
+// Terminal chrome state
+let xkeenTerminalIsFullscreen = false;
+let xkeenTerminalGeomBeforeFullscreen = null;
+
+// Keep a flag so toolbar buttons can know whether PTY is active
+function isPtyActive() {
+  return currentCommandMode === 'pty' && !!xkeenTerm;
+}
+
+// ---------------- Terminal connection status lamp + uptime ----------------
+let terminalConnState = 'disconnected'; // connected|connecting|disconnected|error
+let terminalUptimeStartMs = null;
+let terminalUptimeTimer = null;
+
+function terminalFormatUptime(ms) {
+  const total = Math.max(0, Math.floor((ms || 0) / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
+  return `${pad(m)}:${pad(s)}`;
+}
+
+function terminalUpdateUptimeUi() {
+  const el = document.getElementById('terminal-uptime');
+  if (!el) return;
+  if (!terminalUptimeStartMs) {
+    el.textContent = '00:00';
+    return;
+  }
+  const ms = Date.now() - terminalUptimeStartMs;
+  el.textContent = terminalFormatUptime(ms);
+}
+
+function terminalStopUptimeTimer() {
+  if (terminalUptimeTimer) {
+    try { clearInterval(terminalUptimeTimer); } catch (e) {}
+    terminalUptimeTimer = null;
+  }
+  terminalUptimeStartMs = null;
+  terminalUpdateUptimeUi();
+}
+
+function terminalStartUptimeTimer() {
+  terminalUptimeStartMs = Date.now();
+  terminalUpdateUptimeUi();
+  if (terminalUptimeTimer) {
+    try { clearInterval(terminalUptimeTimer); } catch (e) {}
+  }
+  terminalUptimeTimer = setInterval(terminalUpdateUptimeUi, 1000);
+}
+
+function terminalSetConnState(state, detail) {
+  terminalConnState = state || 'error';
+
+  // New lamp (preferred): uses same visuals as xkeen service lamp.
+  const lamp = document.getElementById('terminal-conn-lamp');
+  if (lamp) {
+    const map = {
+      connected: 'running',
+      connecting: 'pending',
+      disconnected: 'stopped',
+      error: 'error',
+    };
+    const mapped = map[terminalConnState] || 'error';
+    lamp.setAttribute('data-state', mapped);
+    lamp.title = detail || ('Terminal: ' + terminalConnState);
+  }
+
+  // Backward compatibility: old badge if still present.
+  const badge = document.getElementById('terminal-conn-badge');
+  if (badge) {
+    badge.setAttribute('data-state', terminalConnState);
+    badge.textContent = (terminalConnState === 'connected') ? 'Connected'
+                    : (terminalConnState === 'connecting') ? 'Connecting'
+                    : (terminalConnState === 'disconnected') ? 'Disconnected'
+                    : 'Error';
+  }
+
+  // Uptime: only for connected state
+  if (terminalConnState === 'connected') {
+    if (!terminalUptimeStartMs) terminalStartUptimeTimer();
+  } else {
+    terminalStopUptimeTimer();
+  }
+}
+
+function loadTerminalHistory() {
+  try {
+    if (!window.localStorage) return;
+    const raw = localStorage.getItem('xkeen_terminal_history');
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      terminalHistory = parsed.slice(-TERMINAL_HISTORY_LIMIT);
+      terminalHistoryIndex = terminalHistory.length;
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+function saveTerminalHistory() {
+  try {
+    if (!window.localStorage) return;
+    const data = terminalHistory.slice(-TERMINAL_HISTORY_LIMIT);
+    localStorage.setItem('xkeen_terminal_history', JSON.stringify(data));
+  } catch (e) {
+    // ignore
+  }
+}
+
+function pushTerminalHistory(cmd) {
+  const text = (cmd || '').trim();
+  if (!text) return;
+  if (terminalHistory.length && terminalHistory[terminalHistory.length - 1] === text) {
+    terminalHistoryIndex = terminalHistory.length;
+    return;
+  }
+  terminalHistory.push(text);
+  if (terminalHistory.length > TERMINAL_HISTORY_LIMIT) {
+    terminalHistory = terminalHistory.slice(-TERMINAL_HISTORY_LIMIT);
+  }
+  terminalHistoryIndex = terminalHistory.length;
+  saveTerminalHistory();
+}
+
+/**
+ * Инициализация XTerm.js для мини-терминала XKeen.
+ * Если xterm.js не загружен, возвращает null и код переходит в режим <pre>.
+ */
+function initXkeenTerm() {
+  if (typeof Terminal === 'undefined') {
+    // xterm.js не загрузился (например, нет доступа к CDN) — работаем через обычный <pre>.
+    return null;
+  }
+
+  const outputEl = document.getElementById('terminal-output');
+  if (!outputEl) {
+    return null;
+  }
+
+  if (!xkeenTerm) {
+    try {
+      xkeenTerm = new Terminal({
+        convertEol: true,
+        cursorBlink: false,
+        scrollback: 2000,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        fontSize: 12,
+      });
+
+      if (typeof FitAddon !== 'undefined' && FitAddon && typeof FitAddon.FitAddon === 'function') {
+        xkeenTermFitAddon = new FitAddon.FitAddon();
+        xkeenTerm.loadAddon(xkeenTermFitAddon);
+      }
+
+      // XTerm Search addon: highlight all matches + stable next/prev
+      if (typeof SearchAddon !== 'undefined' && SearchAddon && typeof SearchAddon.SearchAddon === 'function') {
+        try {
+          xkeenTermSearchAddon = new SearchAddon.SearchAddon({ highlightLimit: 2000 });
+          xkeenTerm.loadAddon(xkeenTermSearchAddon);
+          try { if (xkeenTermSearchResultsDisposable && xkeenTermSearchResultsDisposable.dispose) xkeenTermSearchResultsDisposable.dispose(); } catch (e) {}
+          try {
+            xkeenTermSearchResultsDisposable = xkeenTermSearchAddon.onDidChangeResults((ev) => {
+              xkeenTerminalSearchResultIndex = (ev && typeof ev.resultIndex === 'number') ? ev.resultIndex : -1;
+              xkeenTerminalSearchResultCount = (ev && typeof ev.resultCount === 'number') ? ev.resultCount : 0;
+              try { terminalSearchUpdateCounter(); } catch (e) {}
+            });
+          } catch (e) {
+            xkeenTermSearchResultsDisposable = null;
+          }
+        } catch (e) {
+          xkeenTermSearchAddon = null;
+          xkeenTermSearchResultsDisposable = null;
+        }
+      }
+
+      // XTerm WebLinks addon: clickable URLs
+      if (typeof WebLinksAddon !== 'undefined' && WebLinksAddon && typeof WebLinksAddon.WebLinksAddon === 'function') {
+        try {
+          xkeenTermWebLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
+            try {
+              const w = window.open(uri, '_blank', 'noopener,noreferrer');
+              if (w) {
+                try { w.opener = null; } catch (e) {}
+              }
+            } catch (e) {
+              // ignore
+            }
+          }, {});
+          xkeenTerm.loadAddon(xkeenTermWebLinksAddon);
+        } catch (e) {
+          xkeenTermWebLinksAddon = null;
+        }
+      }
+
+      xkeenTerm.open(outputEl);
+
+      // Apply toolbar state (ANSI filter + log highlight)
+      try { terminalApplyOutputPrefUi(); } catch (e) {}
+
+      if (xkeenTermFitAddon && typeof xkeenTermFitAddon.fit === 'function') {
+        xkeenTermFitAddon.fit();
+      }
+
+      if (typeof ResizeObserver !== 'undefined') {
+        xkeenTermResizeObserver = new ResizeObserver(() => {
+          if (xkeenTermFitAddon && typeof xkeenTermFitAddon.fit === 'function') {
+            xkeenTermFitAddon.fit();
+          }
+        });
+        xkeenTermResizeObserver.observe(outputEl);
+      }
+
+      xkeenTerm.writeln('XKeen терминал готов.');
+    } catch (e) {
+      console.error('Не удалось инициализировать xterm.js', e);
+      xkeenTerm = null;
+      xkeenTermFitAddon = null;
+      xkeenTermResizeObserver = null;
+      xkeenTermSearchAddon = null;
+      xkeenTermSearchResultsDisposable = null;
+      xkeenTermWebLinksAddon = null;
+      return null;
+    }
+  } else if (xkeenTerm && typeof xkeenTerm.clear === 'function') {
+    xkeenTerm.clear();
+    xkeenTerm.writeln('XKeen терминал готов.');
+    try { terminalApplyOutputPrefUi(); } catch (e) {}
+  }
+
+  return xkeenTerm;
+}
+
+/**
+ * Безопасная запись текста в терминал XKeen (без переноса строк).
+ */
+function xkeenTermWrite(text) {
+  if (!xkeenTerm) return;
+  const t = String(text || '');
+  if (!t) return;
+  const out = terminalProcessOutputChunk(t);
+  // xterm ожидает \r\n для переноса строки
+  xkeenTerm.write(out.replace(/\n/g, '\r\n'));
+}
+
+/**
+ * Запись строки с переносом.
+ */
+function xkeenTermWriteln(text) {
+  if (!xkeenTerm) return;
+  const t = String(text || '');
+  const out = terminalProcessOutputChunk(t);
+  xkeenTerm.write(out.replace(/\n/g, '\r\n') + '\r\n');
+}
+
+// ---------------- Terminal search (xterm-addon-search) ----------------
+function terminalSearchGetEls() {
+  const row = document.getElementById('terminal-search-row');
+  const input = document.getElementById('terminal-search-input');
+  const counter = document.getElementById('terminal-search-counter');
+  return { row, input, counter };
+}
+
+function terminalIsOpen() {
+  const overlay = document.getElementById('terminal-overlay');
+  if (!overlay) return false;
+  return overlay.style.display !== 'none' && overlay.style.display !== '';
+}
+
+function terminalSearchUpdateCounter() {
+  const { counter } = terminalSearchGetEls();
+  if (!counter) return;
+  const total = Number(xkeenTerminalSearchResultCount || 0);
+  const idx0 = Number(xkeenTerminalSearchResultIndex || -1);
+  const cur = (total > 0 && idx0 >= 0) ? Math.min(total, idx0 + 1) : 0;
+  counter.textContent = `${cur}/${total}`;
+}
+
+function terminalSearchClear(opts = {}) {
+  const silent = !!opts.silent;
+  xkeenTerminalSearchTerm = '';
+  xkeenTerminalSearchResultIndex = -1;
+  xkeenTerminalSearchResultCount = 0;
+  try {
+    const { input } = terminalSearchGetEls();
+    if (input) input.value = '';
+  } catch (e) {}
+
+  try {
+    if (xkeenTerm && typeof xkeenTerm.clearSelection === 'function') xkeenTerm.clearSelection();
+  } catch (e) {}
+
+  try {
+    if (xkeenTermSearchAddon && typeof xkeenTermSearchAddon.clearDecorations === 'function') {
+      xkeenTermSearchAddon.clearDecorations();
+    }
+  } catch (e) {}
+
+  try { terminalSearchUpdateCounter(); } catch (e) {}
+  if (!silent) {
+    try { showToast('Поиск очищен', 'info'); } catch (e) {}
+  }
+}
+
+function terminalSearchRun(direction) {
+  const { input } = terminalSearchGetEls();
+  const term = input ? String(input.value || '').trim() : String(xkeenTerminalSearchTerm || '').trim();
+  xkeenTerminalSearchTerm = term;
+
+  if (!term) {
+    terminalSearchClear({ silent: true });
+    return;
+  }
+
+  if (!xkeenTerm || !xkeenTermSearchAddon) {
+    try { showToast('Поиск недоступен: xterm-addon-search не загружен', 'error'); } catch (e) {}
+    return;
+  }
+
+  const opts = {
+    caseSensitive: false,
+    regex: false,
+    wholeWord: false,
+    decorations: XKEEN_TERM_SEARCH_DECORATIONS,
+  };
+
+  let ok = false;
+  try {
+    if (direction === 'prev') ok = xkeenTermSearchAddon.findPrevious(term, opts);
+    else ok = xkeenTermSearchAddon.findNext(term, opts);
+  } catch (e) {
+    ok = false;
+  }
+
+  if (!ok) {
+    // counter will likely be 0/0; keep it consistent
+    xkeenTerminalSearchResultIndex = -1;
+    xkeenTerminalSearchResultCount = 0;
+    try { terminalSearchUpdateCounter(); } catch (e) {}
+    try { showToast('Совпадений не найдено', 'info'); } catch (e) {}
+  }
+
+  try { if (xkeenTerm && typeof xkeenTerm.focus === 'function') xkeenTerm.focus(); } catch (e) {}
+}
+
+function terminalSearchNext() {
+  terminalSearchRun('next');
+}
+
+function terminalSearchPrev() {
+  terminalSearchRun('prev');
+}
+
+function terminalSearchFocus(selectAll = true) {
+  const { input } = terminalSearchGetEls();
+  if (!input) return;
+  try {
+    input.focus();
+    if (selectAll) input.select();
+  } catch (e) {}
+}
+
+function terminalSearchDebouncedHighlight() {
+  const { input } = terminalSearchGetEls();
+  if (!input) return;
+  const term = String(input.value || '').trim();
+  xkeenTerminalSearchTerm = term;
+
+  if (xkeenTerminalSearchDebounce) {
+    try { clearTimeout(xkeenTerminalSearchDebounce); } catch (e) {}
+    xkeenTerminalSearchDebounce = null;
+  }
+
+  if (!term) {
+    terminalSearchClear({ silent: true });
+    return;
+  }
+
+  // Debounce to avoid heavy scanning on each keystroke
+  xkeenTerminalSearchDebounce = setTimeout(() => {
+    if (!xkeenTerm || !xkeenTermSearchAddon) return;
+    try {
+      // noScroll: keep viewport stable while typing
+      xkeenTermSearchAddon.findNext(term, {
+        caseSensitive: false,
+        regex: false,
+        wholeWord: false,
+        noScroll: true,
+        decorations: XKEEN_TERM_SEARCH_DECORATIONS,
+      });
+    } catch (e) {}
+  }, 150);
+}
+
+// ---------------- Terminal toolbar helpers (PTY + clipboard + fullscreen) ----------------
+function xkeenGetTerminalWindowEl() {
+  const overlay = document.getElementById('terminal-overlay');
+  return overlay ? overlay.querySelector('.terminal-window') : null;
+}
+
+function terminalUpdateFullscreenBtn() {
+  const btn = document.getElementById('terminal-btn-fullscreen');
+  if (!btn) return;
+  if (xkeenTerminalIsFullscreen) {
+    btn.textContent = '🗗';
+    btn.title = 'Restore';
+    btn.setAttribute('aria-label', 'Restore');
+  } else {
+    btn.textContent = '⛶';
+    btn.title = 'Fullscreen';
+    btn.setAttribute('aria-label', 'Fullscreen');
+  }
+}
+
+function terminalSetFullscreen(on) {
+  const win = xkeenGetTerminalWindowEl();
+  if (!win) return;
+
+  if (on && !xkeenTerminalIsFullscreen) {
+    // remember geometry before fullscreen
+    try {
+      const r = win.getBoundingClientRect();
+      xkeenTerminalGeomBeforeFullscreen = { w: Math.round(r.width), h: Math.round(r.height), x: Math.round(r.left), y: Math.round(r.top) };
+    } catch (e) {
+      xkeenTerminalGeomBeforeFullscreen = null;
+    }
+
+    xkeenTerminalIsFullscreen = true;
+    win.classList.add('is-fullscreen');
+    // ensure fixed positioning (CSS sets left/top/width/height)
+    try {
+      win.style.position = 'fixed';
+    } catch (e) {}
+
+    terminalUpdateFullscreenBtn();
+    try { if (xkeenTermFitAddon && xkeenTermFitAddon.fit) xkeenTermFitAddon.fit(); } catch (e) {}
+    return;
+  }
+
+  if (!on && xkeenTerminalIsFullscreen) {
+    xkeenTerminalIsFullscreen = false;
+    win.classList.remove('is-fullscreen');
+
+    // restore previous geometry (best-effort)
+    try {
+      if (xkeenTerminalGeomBeforeFullscreen) {
+        xkeenApplyTerminalGeom(xkeenTerminalGeomBeforeFullscreen);
+        xkeenScheduleTerminalSave();
+      }
+    } catch (e) {}
+
+    terminalUpdateFullscreenBtn();
+    try { if (xkeenTermFitAddon && xkeenTermFitAddon.fit) xkeenTermFitAddon.fit(); } catch (e) {}
+  }
+}
+
+function terminalToggleFullscreen() {
+  terminalSetFullscreen(!xkeenTerminalIsFullscreen);
+}
+
+// Font size & cursor blink controls (used by toolbar buttons in panel.html)
+function terminalFontInc() {
+  if (!xkeenTerm) return;
+  let cur = 12;
+  try {
+    cur = (typeof xkeenTerm.getOption === 'function')
+      ? (xkeenTerm.getOption('fontSize') || 12)
+      : ((xkeenTerm.options && xkeenTerm.options.fontSize) || 12);
+  } catch (e) {}
+  const next = Math.min(32, cur + 1);
+  try {
+    if (typeof xkeenTerm.setOption === 'function') xkeenTerm.setOption('fontSize', next);
+    else if (xkeenTerm.options) xkeenTerm.options.fontSize = next;
+  } catch (e) {}
+  try { if (xkeenTermFitAddon && xkeenTermFitAddon.fit) xkeenTermFitAddon.fit(); } catch (e) {}
+}
+
+function terminalFontDec() {
+  if (!xkeenTerm) return;
+  let cur = 12;
+  try {
+    cur = (typeof xkeenTerm.getOption === 'function')
+      ? (xkeenTerm.getOption('fontSize') || 12)
+      : ((xkeenTerm.options && xkeenTerm.options.fontSize) || 12);
+  } catch (e) {}
+  const next = Math.max(8, cur - 1);
+  try {
+    if (typeof xkeenTerm.setOption === 'function') xkeenTerm.setOption('fontSize', next);
+    else if (xkeenTerm.options) xkeenTerm.options.fontSize = next;
+  } catch (e) {}
+  try { if (xkeenTermFitAddon && xkeenTermFitAddon.fit) xkeenTermFitAddon.fit(); } catch (e) {}
+}
+
+function terminalToggleCursorBlink() {
+  if (!xkeenTerm) return;
+  let cur = false;
+  try {
+    cur = (typeof xkeenTerm.getOption === 'function')
+      ? !!xkeenTerm.getOption('cursorBlink')
+      : !!(xkeenTerm.options && xkeenTerm.options.cursorBlink);
+  } catch (e) {}
+  const next = !cur;
+  try {
+    if (typeof xkeenTerm.setOption === 'function') xkeenTerm.setOption('cursorBlink', next);
+    else if (xkeenTerm.options) xkeenTerm.options.cursorBlink = next;
+  } catch (e) {}
+}
+
+
+function xkeenPtyDisconnect(opts = {}) {
+  const sendClose = (opts.sendClose !== false);
+  if (sendClose) {
+    // Explicit close: terminate remote PTY session and forget session_id
+    try { ptyClearSessionState(); } catch (e) {}
+  }
+  if (ptyWs) {
+    try { if (sendClose) ptyWs.send(JSON.stringify({ type: 'close' })); } catch (e) {}
+    try { ptyWs.close(); } catch (e) {}
+    ptyWs = null;
+  }
+  try { ptyDisposables.forEach(d => d && d.dispose && d.dispose()); } catch (e) {}
+  ptyDisposables = [];
+}
+
+async function xkeenPtyConnect(term, opts = {}) {
+  if (!term) return;
+  const preserveScreen = !!opts.preserveScreen;
+
+  // reset old connection/listeners
+  xkeenPtyDisconnect({ sendClose: false });
+
+  if (!preserveScreen) {
+    try { if (typeof term.clear === 'function') term.clear(); } catch (e) {}
+  }
+  xkeenTermWriteln('[PTY] Подключение...');
+  try { terminalSetConnState('connecting', 'PTY: подключение...'); } catch (e) {}
+
+  // token
+  let token = '';
+  try {
+    const r = await fetch('/api/ws-token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const j = await r.json();
+    if (!r.ok || !j || !j.ok) {
+      throw new Error((j && j.error) ? j.error : ('HTTP ' + r.status));
+    }
+    token = j.token || '';
+  } catch (e) {
+    xkeenTermWriteln('[PTY] Ошибка получения токена: ' + (e && e.message ? e.message : String(e)));
+    try { terminalSetConnState('error', 'PTY: ошибка токена'); } catch (e2) {}
+    return;
+  }
+
+const proto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
+
+// session_id + last_seq enable true reconnect to the same PTY (server keeps PTY by session_id)
+const qs = new URLSearchParams();
+qs.set('token', token);
+try {
+  // Always send current terminal size so server can set PTY winsize early
+  qs.set('cols', String(term && term.cols ? term.cols : 0));
+  qs.set('rows', String(term && term.rows ? term.rows : 0));
+} catch (e) {}
+
+// If we already have a session_id (same tab) — ask server to reattach to it
+if (ptySessionId) qs.set('session_id', String(ptySessionId));
+
+// If we preserve screen, request only missed output; otherwise request buffered output from the beginning (best effort)
+const resumeFrom = preserveScreen ? (ptyLastSeq || 0) : 0;
+qs.set('last_seq', String(resumeFrom));
+
+const url = `${proto}//${location.host}/ws/pty?${qs.toString()}`;
+
+  try {
+    ptyWs = new WebSocket(url);
+  } catch (e) {
+    ptyWs = null;
+    xkeenTermWriteln('[PTY] WebSocket недоступен: ' + (e && e.message ? e.message : String(e)));
+    try { terminalSetConnState('error', 'PTY: WebSocket недоступен'); } catch (e2) {}
+    return;
+  }
+
+  const sendResize = () => {
+    try {
+      if (!ptyWs || ptyWs.readyState !== WebSocket.OPEN) return;
+      ptyWs.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+    } catch (e) {}
+  };
+
+  ptyWs.onopen = () => {
+    xkeenTermWriteln('[PTY] Соединение установлено.');
+    try { terminalSetConnState('connected', 'PTY: подключено'); } catch (e) {}
+    try { if (xkeenTermFitAddon && xkeenTermFitAddon.fit) xkeenTermFitAddon.fit(); } catch (e) {}
+    sendResize();
+  };
+
+  ptyWs.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    if (!msg) return;
+
+    if (msg.type === 'output' && typeof msg.data === 'string') {
+      // PTY output must be passed through without log/ANSI post-processing by default
+      term.write(msg.data);
+      // track last seen sequence number (for lossless reconnect)
+      try {
+        if (msg.seq != null) {
+          const s = parseInt(msg.seq, 10);
+          if (!isNaN(s) && s > (ptyLastSeq || 0)) {
+            ptyLastSeq = s;
+            ptySaveSessionState();
+          }
+        }
+      } catch (e) {}
+    } else if (msg.type === 'init') {
+      // server returns session_id (store for reconnect)
+      try {
+        if (msg.session_id) {
+          ptySessionId = String(msg.session_id);
+          ptySaveSessionState();
+        }
+      } catch (e) {}
+      if (msg.shell) xkeenTermWriteln('[PTY] Shell: ' + msg.shell);
+      if (msg.reused) xkeenTermWriteln('[PTY] Reattached to existing session.');
+    } else if (msg.type === 'exit') {
+      xkeenTermWriteln('\r\n[PTY] Завершено (code=' + msg.code + ').');
+      try { terminalSetConnState('disconnected', 'PTY: shell завершился'); } catch (e) {}
+      // session ended server-side
+      try { ptyClearSessionState(); } catch (e) {}
+    } else if (msg.type === 'error') {
+      xkeenTermWriteln('[PTY] Ошибка: ' + (msg.message || 'unknown'));
+      try { terminalSetConnState('error', 'PTY: ошибка'); } catch (e) {}
+    }
+  };
+
+  ptyWs.onclose = () => {
+    xkeenTermWriteln('\r\n[PTY] Соединение закрыто.');
+    try { terminalSetConnState('disconnected', 'PTY: соединение закрыто'); } catch (e) {}
+  };
+
+  // User input
+  try {
+    ptyDisposables.push(term.onData((data) => {
+      if (ptyWs && ptyWs.readyState === WebSocket.OPEN) {
+        ptyWs.send(JSON.stringify({ type: 'input', data }));
+      }
+    }));
+  } catch (e) {}
+
+  // Resize events
+  try {
+    ptyDisposables.push(term.onResize(() => {
+      sendResize();
+    }));
+  } catch (e) {}
+}
+
+function terminalSendRaw(data) {
+  if (ptyWs && ptyWs.readyState === WebSocket.OPEN) {
+    try { ptyWs.send(JSON.stringify({ type: 'input', data: String(data || '') })); } catch (e) {}
+  }
+}
+
+function terminalSendCtrlC() { terminalSendRaw('\x03'); try { xkeenTerm && xkeenTerm.focus && xkeenTerm.focus(); } catch (e) {} }
+function terminalSendCtrlD() { terminalSendRaw('\x04'); try { xkeenTerm && xkeenTerm.focus && xkeenTerm.focus(); } catch (e) {} }
+
+async function terminalCopy() {
+  // Prefer xterm selection; fallback to visible viewport; fallback to <pre> text.
+  let text = '';
+  try {
+    if (xkeenTerm && typeof xkeenTerm.getSelection === 'function') {
+      text = xkeenTerm.getSelection() || '';
+    }
+  } catch (e) {}
+
+  if (!text && xkeenTerm && xkeenTerm.buffer && xkeenTerm.buffer.active) {
+    try {
+      const buf = xkeenTerm.buffer.active;
+      const start = (typeof buf.viewportY === 'number') ? buf.viewportY : (typeof buf.baseY === 'number' ? buf.baseY : 0);
+      const end = start + (xkeenTerm.rows || 0);
+      const lines = [];
+      for (let i = start; i < end; i++) {
+        const line = buf.getLine(i);
+        if (!line) continue;
+        lines.push(line.translateToString(true));
+      }
+      text = lines.join('\n');
+    } catch (e) {}
+  }
+
+  if (!text) {
+    const pre = document.getElementById('terminal-output');
+    if (pre) text = pre.innerText || pre.textContent || '';
+  }
+
+  text = String(text || '');
+  if (!text.trim()) {
+    try { showToast('Нечего копировать', 'info'); } catch (e) {}
+    return;
+  }
+
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      try { showToast('Скопировано в буфер', 'success'); } catch (e) {}
+      return;
+    }
+  } catch (e) {
+    // fall through
+  }
+
+  // Fallback for older browsers
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    try { showToast('Скопировано в буфер', 'success'); } catch (e) {}
+  } catch (e) {
+    try { showToast('Не удалось скопировать', 'error'); } catch (e2) {}
+  }
+}
+
+async function terminalPaste() {
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      // PTY: paste into terminal (preferred)
+      if (ptyWs && ptyWs.readyState === WebSocket.OPEN) {
+        terminalSendRaw(text);
+        try { xkeenTerm && xkeenTerm.focus && xkeenTerm.focus(); } catch (e) {}
+        return;
+      }
+
+      // Non-PTY fallback: paste into command/confirm inputs (useful on mobile)
+      const cmdEl = document.getElementById('terminal-command');
+      const inputEl = document.getElementById('terminal-input');
+      const active = document.activeElement;
+      const target = (active && (active === cmdEl || active === inputEl)) ? active : (cmdEl && cmdEl.style.display !== 'none' ? cmdEl : inputEl);
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        try {
+          const start = target.selectionStart ?? target.value.length;
+          const end = target.selectionEnd ?? target.value.length;
+          const before = target.value.slice(0, start);
+          const after = target.value.slice(end);
+          target.value = before + text + after;
+          const pos = start + text.length;
+          target.selectionStart = target.selectionEnd = pos;
+          target.focus();
+          return;
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // Last resort: show toast
+      try { showToast('Нет активной сессии PTY — вставка в терминал недоступна', 'info'); } catch (e) {}
+      return;
+    }
+  } catch (e) {
+    // fall through
+  }
+  try { showToast('Вставка из буфера недоступна в этом браузере', 'info'); } catch (e) {}
+}
+
+function terminalClear() {
+  // Clear screen without breaking the PTY session.
+  try { if (xkeenTerm && typeof xkeenTerm.clear === 'function') xkeenTerm.clear(); } catch (e) {}
+  try {
+    const pre = document.getElementById('terminal-output');
+    if (!xkeenTerm && pre) pre.textContent = '';
+  } catch (e) {}
+
+  // Ask the remote shell to clear too (keeps session alive).
+  // "clear" is more explicit than Ctrl+L and works in busybox/ash and most shells.
+  if (ptyWs && ptyWs.readyState === WebSocket.OPEN) {
+    terminalSendRaw('clear\r');
+  }
+}
+
+function terminalReconnect() {
+  if (currentCommandMode !== 'pty') {
+    openTerminal('', 'pty');
+    return;
+  }
+  if (!xkeenTerm) return;
+  xkeenTermWriteln('\r\n[PTY] Reconnect...');
+  xkeenPtyConnect(xkeenTerm, { preserveScreen: true });
+}
+
+function terminalNewSession() {
+  // Open a new browser tab and auto-open PTY terminal there.
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('terminal', 'pty');
+    window.open(url.toString(), '_blank');
+  } catch (e) {
+    // fallback: same tab
+    openTerminal('', 'pty');
+  }
+}
+
 
 let xrayLogTimer = null;
 let xrayLogCurrentFile = 'error';
@@ -346,190 +1917,533 @@ function parseXrayLogLine(line) {
 
 
 
-function openTerminalForFlag(flag, label) {
+function openTerminal(initialCommand, mode = 'shell') {
   const overlay = document.getElementById('terminal-overlay');
   const cmdEl = document.getElementById('terminal-command');
   const inputEl = document.getElementById('terminal-input');
   const outputEl = document.getElementById('terminal-output');
 
-  currentCommandFlag = flag || null;
-  currentCommandLabel = label || (flag ? ('xkeen ' + flag) : 'xkeen');
+  currentCommandMode = mode;
 
-  if (cmdEl) cmdEl.value = currentCommandLabel;
-  if (inputEl) inputEl.value = '';
-  if (outputEl) outputEl.textContent = '';
+  if (mode === 'xkeen') {
+    const m = (initialCommand || '').match(/^xkeen\s+(.+)$/);
+    currentCommandFlag = m ? m[1].trim() : null;
+    currentCommandLabel = initialCommand || (currentCommandFlag ? ('xkeen ' + currentCommandFlag) : 'xkeen');
+  } else {
+    currentCommandFlag = null;
+    currentCommandLabel = null;
+  }
 
-  if (overlay) {
+  if (cmdEl) {
+    cmdEl.value = initialCommand || '';
+    try {
+      cmdEl.focus();
+      cmdEl.select();
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  if (inputEl) {
+    inputEl.value = '';
+  }
+
+  // Инициализируем xterm.js (если загружен); иначе останется старый <pre>-режим.
+  const term = initXkeenTerm();
+  if (!term && outputEl) {
+    // Фоллбек: просто очищаем вывод.
+    outputEl.textContent = '';
+  }
+
+  
+  // PTY mode: полноценный интерактивный shell через WebSocket (/ws/pty)
+  if (mode === 'pty') {
+    // Скрываем поля "команда" и "подтверждение"
+    if (cmdEl) cmdEl.style.display = 'none';
+    const inputRow = document.querySelector('.terminal-input-row');
+    if (inputRow) inputRow.style.display = 'none';
+
+    // Требуется xterm.js
+    if (!term) {
+      if (outputEl) outputEl.textContent = 'xterm.js недоступен — PTY режим невозможен.';
+    } else {
+      // Переводим xterm в "сырое" отображение (для escape-seq)
+      try {
+        if (ptyPrevConvertEol === null && typeof term.getOption === 'function') {
+          ptyPrevConvertEol = term.getOption('convertEol');
+        }
+        if (typeof term.setOption === 'function') {
+          term.setOption('convertEol', false);
+        }
+      } catch (e) {}
+
+	      // Connect (or reconnect) PTY using shared helper
+	      terminalUpdateFullscreenBtn();
+	      xkeenPtyConnect(term, { preserveScreen: false });
+    }
+  } else {
+    // не PTY: показываем стандартные поля
+    try { terminalSetConnState('disconnected', 'Terminal: не в PTY режиме'); } catch (e) {}
+    if (cmdEl) cmdEl.style.display = '';
+    const inputRow = document.querySelector('.terminal-input-row');
+    if (inputRow) inputRow.style.display = '';
+  }
+
+if (overlay) {
     overlay.style.display = 'flex';
   }
+
+  // Restore terminal window geometry (size/position)
+  try {
+    xkeenTerminalUiOnOpen();
+  } catch (e) { /* ignore */ }
+
+  // Если есть предварительная команда (например, клик по "Команды"),
+  // покажем её в терминале как подсказку.
+  if (term && initialCommand) {
+    xkeenTermWriteln('$ ' + initialCommand);
+  }
+}
+
+function openTerminalForFlag(flag, label) {
+  if (!flag) return;
+  const initial = label || ('xkeen ' + flag);
+  openTerminal(initial, 'xkeen');
 }
 
 function hideTerminal() {
   const overlay = document.getElementById('terminal-overlay');
   if (overlay) overlay.style.display = 'none';
+
+  // Clear search highlights/state
+  try { terminalSearchClear({ silent: true }); } catch (e) {}
+
+  // Exit fullscreen if it was enabled
+  try { terminalSetFullscreen(false); } catch (e) {}
+
+  // cleanup PTY session if active
+  xkeenPtyDisconnect({ sendClose: true });
+  try { terminalSetConnState('disconnected', 'PTY: отключено'); } catch (e) {}
+
+  // restore xterm option
+  try {
+    if (xkeenTerm && ptyPrevConvertEol !== null && typeof xkeenTerm.setOption === 'function') {
+      xkeenTerm.setOption('convertEol', ptyPrevConvertEol);
+    }
+  } catch (e) {}
+  ptyPrevConvertEol = null;
+
+  // restore inputs visibility
+  const cmdEl = document.getElementById('terminal-command');
+  if (cmdEl) cmdEl.style.display = '';
+  const inputRow = document.querySelector('.terminal-input-row');
+  if (inputRow) inputRow.style.display = '';
+
   currentCommandFlag = null;
   currentCommandLabel = null;
+  currentCommandMode = 'shell';
+}
+
+
+
+// ---------------- Terminal window chrome (resize + drag + persist) ----------------
+const XKEEN_TERMINAL_GEOM_KEY = 'xkeen_terminal_geom_v1';
+let xkeenTerminalChromeInited = false;
+let xkeenTerminalResizeObserver = null;
+let xkeenTerminalSaveTimer = null;
+
+let xkeenTerminalDragging = false;
+let xkeenTerminalDragOffsetX = 0;
+let xkeenTerminalDragOffsetY = 0;
+let xkeenTerminalDragWidth = 0;
+let xkeenTerminalDragHeight = 0;
+
+function xkeenGetTerminalEls() {
+  const overlay = document.getElementById('terminal-overlay');
+  const win = overlay ? overlay.querySelector('.terminal-window') : null;
+  const header = win ? win.querySelector('.terminal-header') : null;
+  return { overlay, win, header };
+}
+
+function xkeenReadTerminalGeom() {
+  try {
+    const raw = localStorage.getItem(XKEEN_TERMINAL_GEOM_KEY);
+    if (!raw) return null;
+    const j = JSON.parse(raw);
+    if (!j || typeof j !== 'object') return null;
+
+    const w = Number(j.w);
+    const h = Number(j.h);
+    const x = Number(j.x);
+    const y = Number(j.y);
+
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w < 200 || h < 150) return null;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return { w, h, x: null, y: null };
+
+    return { w, h, x, y };
+  } catch (e) {
+    return null;
+  }
+}
+
+function xkeenClampTerminalPos(x, y, w, h) {
+  const pad = 8;
+  const maxX = Math.max(pad, window.innerWidth - w - pad);
+  const maxY = Math.max(pad, window.innerHeight - h - pad);
+  const clampedX = Math.min(Math.max(pad, x), maxX);
+  const clampedY = Math.min(Math.max(pad, y), maxY);
+  return { x: clampedX, y: clampedY };
+}
+
+function xkeenApplyTerminalGeom(geom) {
+  const { win } = xkeenGetTerminalEls();
+  if (!win || !geom) return;
+
+  // Ensure fixed positioning so we can drag freely.
+  win.style.position = 'fixed';
+
+  // Size
+  if (Number.isFinite(geom.w)) win.style.width = Math.round(geom.w) + 'px';
+  if (Number.isFinite(geom.h)) win.style.height = Math.round(geom.h) + 'px';
+
+  // Position
+  const w = win.getBoundingClientRect().width || geom.w || 520;
+  const h = win.getBoundingClientRect().height || geom.h || 360;
+
+  let x = geom.x;
+  let y = geom.y;
+
+  // If no saved position, center
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    x = Math.round((window.innerWidth - w) / 2);
+    y = Math.round((window.innerHeight - h) / 2);
+  }
+
+  const p = xkeenClampTerminalPos(x, y, w, h);
+  win.style.left = Math.round(p.x) + 'px';
+  win.style.top = Math.round(p.y) + 'px';
+}
+
+function xkeenSaveTerminalGeomNow() {
+  if (xkeenTerminalIsFullscreen) return;
+  const { win } = xkeenGetTerminalEls();
+  if (!win) return;
+
+  const rect = win.getBoundingClientRect();
+  if (!rect || !Number.isFinite(rect.width) || !Number.isFinite(rect.height)) return;
+
+  const geom = {
+    w: Math.round(rect.width),
+    h: Math.round(rect.height),
+    x: Math.round(rect.left),
+    y: Math.round(rect.top),
+  };
+
+  try {
+    localStorage.setItem(XKEEN_TERMINAL_GEOM_KEY, JSON.stringify(geom));
+  } catch (e) {
+    // ignore quota / privacy mode
+  }
+}
+
+function xkeenScheduleTerminalSave() {
+  if (xkeenTerminalSaveTimer) {
+    clearTimeout(xkeenTerminalSaveTimer);
+  }
+  xkeenTerminalSaveTimer = setTimeout(() => {
+    xkeenTerminalSaveTimer = null;
+    xkeenSaveTerminalGeomNow();
+  }, 150);
+}
+
+function xkeenEnsureTerminalChrome() {
+  if (xkeenTerminalChromeInited) return;
+  xkeenTerminalChromeInited = true;
+
+  const { win, header } = xkeenGetTerminalEls();
+  if (!win || !header) return;
+
+  // Drag handlers
+  header.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+	    if (xkeenTerminalIsFullscreen) return;
+	    if (e.target && e.target.closest && e.target.closest('.terminal-toolbar')) return;
+
+    const rect = win.getBoundingClientRect();
+
+    // Freeze current geometry in styles
+    win.style.position = 'fixed';
+    win.style.left = Math.round(rect.left) + 'px';
+    win.style.top = Math.round(rect.top) + 'px';
+    win.style.width = Math.round(rect.width) + 'px';
+    win.style.height = Math.round(rect.height) + 'px';
+
+    xkeenTerminalDragging = true;
+    xkeenTerminalDragOffsetX = e.clientX - rect.left;
+    xkeenTerminalDragOffsetY = e.clientY - rect.top;
+    xkeenTerminalDragWidth = rect.width;
+    xkeenTerminalDragHeight = rect.height;
+
+    document.documentElement.style.userSelect = 'none';
+    document.documentElement.style.cursor = 'move';
+
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!xkeenTerminalDragging) return;
+
+    let newX = e.clientX - xkeenTerminalDragOffsetX;
+    let newY = e.clientY - xkeenTerminalDragOffsetY;
+
+    const p = xkeenClampTerminalPos(newX, newY, xkeenTerminalDragWidth, xkeenTerminalDragHeight);
+    win.style.left = Math.round(p.x) + 'px';
+    win.style.top = Math.round(p.y) + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!xkeenTerminalDragging) return;
+    xkeenTerminalDragging = false;
+    document.documentElement.style.userSelect = '';
+    document.documentElement.style.cursor = '';
+    xkeenScheduleTerminalSave();
+  });
+
+  // Persist resizing
+  if (typeof ResizeObserver !== 'undefined') {
+    xkeenTerminalResizeObserver = new ResizeObserver(() => {
+	      if (xkeenTerminalIsFullscreen) return;
+      // Keep the terminal inside viewport if user shrunk the window
+      try {
+        const r = win.getBoundingClientRect();
+        const p = xkeenClampTerminalPos(r.left, r.top, r.width, r.height);
+        win.style.position = 'fixed';
+        win.style.left = Math.round(p.x) + 'px';
+        win.style.top = Math.round(p.y) + 'px';
+      } catch (e) {}
+
+      xkeenScheduleTerminalSave();
+    });
+    xkeenTerminalResizeObserver.observe(win);
+  }
+
+  // If viewport size changes (rotate / resize), keep window in bounds
+  window.addEventListener('resize', () => {
+	    if (xkeenTerminalIsFullscreen) return;
+    const r = win.getBoundingClientRect();
+    const p = xkeenClampTerminalPos(r.left, r.top, r.width, r.height);
+    win.style.position = 'fixed';
+    win.style.left = Math.round(p.x) + 'px';
+    win.style.top = Math.round(p.y) + 'px';
+    xkeenScheduleTerminalSave();
+  });
+}
+
+function xkeenTerminalUiOnOpen() {
+  const { overlay, win } = xkeenGetTerminalEls();
+  if (!overlay || !win) return;
+
+  // Ensure handlers attached once
+  xkeenEnsureTerminalChrome();
+
+  // Apply saved geometry after the element is visible/layouted
+  requestAnimationFrame(() => {
+    const saved = xkeenReadTerminalGeom();
+    if (saved) {
+      xkeenApplyTerminalGeom(saved);
+    } else {
+      // Center & persist initial geometry (so next open is stable)
+      const rect = win.getBoundingClientRect();
+      const x = Math.round((window.innerWidth - rect.width) / 2);
+      const y = Math.round((window.innerHeight - rect.height) / 2);
+      xkeenApplyTerminalGeom({ w: rect.width, h: rect.height, x, y });
+      xkeenScheduleTerminalSave();
+    }
+  });
+}
+function isXkeenRestartCommand(cmdText) {
+  const txt = (cmdText || '').trim();
+
+  if (currentCommandMode === 'xkeen' && currentCommandFlag === '-restart') {
+    return true;
+  }
+
+  return /^xkeen\s+-restart(\s|$)/.test(txt);
 }
 
 async function sendTerminalInput() {
-  const inputEl = document.getElementById('terminal-input');
-  const outputEl = document.getElementById('terminal-output');
-  const flag = currentCommandFlag;
-
-  if (!flag) {
-    if (outputEl) outputEl.textContent = 'Нет выбранной команды.';
+  if (currentCommandMode === 'pty') {
+    // В PTY режиме ввод идёт напрямую в xterm (onData)
     return;
   }
 
+  const cmdEl = document.getElementById('terminal-command');
+  const inputEl = document.getElementById('terminal-input');
+  const outputEl = document.getElementById('terminal-output');
+
+  const cmdText = cmdEl ? cmdEl.value.trim() : '';
+  if (!cmdText) {
+    if (typeof Terminal !== 'undefined') {
+      const term = initXkeenTerm();
+      if (term) {
+        xkeenTermWriteln('[Ошибка] Введите команду.');
+        return;
+      }
+    }
+    if (outputEl) {
+      outputEl.textContent = 'Введите команду.';
+    }
+    return;
+  }
+
+  // Добавляем команду в локальную историю
+  pushTerminalHistory(cmdText);
+
+  // Если запрошен специальный режим перезапуска xkeen — обрабатываем отдельно.
+  if (isXkeenRestartCommand(cmdText)) {
+    if (typeof Terminal !== 'undefined') {
+      const term = initXkeenTerm();
+      if (term) {
+        xkeenTermWriteln('');
+        xkeenTermWriteln('[xkeen] Выполняем перезапуск (xkeen -restart)...');
+      }
+    } else if (outputEl) {
+      outputEl.textContent = 'Отправляем xkeen -restart...';
+    }
+
+    try {
+      await controlXkeen('restart');
+
+      let logText = '';
+      try {
+        const logRes = await fetch('/api/restart-log');
+        const logData = await logRes.json().catch(() => ({}));
+        const lines = (logData && logData.lines) || [];
+        if (!lines.length) {
+          logText = 'Журнал пуст.';
+        } else {
+          logText = lines.join('');
+        }
+      } catch (e) {
+        console.error(e);
+        logText = 'Не удалось загрузить журнал перезапуска.';
+      }
+
+      if (typeof Terminal !== 'undefined') {
+        const term = initXkeenTerm();
+        if (term) {
+          xkeenTermWriteln('');
+          xkeenTermWriteln(logText || '(нет вывода)');
+        }
+      } else if (outputEl) {
+        const html = ansiToHtml(logText || '(нет вывода)').replace(/\n/g, '<br>');
+        outputEl.innerHTML = html;
+        outputEl.scrollTop = outputEl.scrollHeight;
+      }
+
+      appendToLog('[terminal] xkeen -restart\n' + (logText || '(нет вывода)') + '\n');
+    } catch (e) {
+      console.error(e);
+      const msg = 'Ошибка при перезапуске xkeen.';
+      if (typeof Terminal !== 'undefined') {
+        const term = initXkeenTerm();
+        if (term) {
+          xkeenTermWriteln('');
+          xkeenTermWriteln('[Ошибка] ' + msg);
+        }
+      } else if (outputEl) {
+        outputEl.textContent = msg;
+      }
+      appendToLog('[terminal] xkeen -restart: ' + String(e) + '\n');
+    }
+
+    return;
+  }
+
+  // Обычный режим выполнения команды
   let raw = inputEl ? inputEl.value : '';
-  // Пустая строка — просто Enter, иначе добавляем перевод строки в конец
   const stdinValue = (raw === '' ? '\n' : raw + '\n');
 
   let buffer = '';
 
-  if (outputEl) {
+  let useXterm = false;
+  if (typeof Terminal !== 'undefined') {
+    const term = initXkeenTerm();
+    if (term) {
+      useXterm = true;
+      xkeenTermWriteln('');
+      xkeenTermWriteln('$ ' + cmdText);
+    }
+  }
+
+  if (!useXterm && outputEl) {
     outputEl.textContent = 'Выполнение команды...';
   }
 
   try {
-    const { res, data } = await runXkeenFlag(flag, stdinValue, {
-      onChunk(chunk) {
-        buffer += chunk;
-        if (outputEl) {
-          const html = ansiToHtml(buffer || '(нет вывода)').replace(/\n/g, '<br>');
-          outputEl.innerHTML = html;
-          outputEl.scrollTop = outputEl.scrollHeight;
-        }
+    const onChunk = (chunk) => {
+      buffer += chunk;
+      if (useXterm && xkeenTerm) {
+        xkeenTermWrite(chunk);
+      } else if (outputEl) {
+        const html = ansiToHtml(buffer || '(нет вывода)').replace(/\n/g, '<br>');
+        outputEl.innerHTML = html;
+        outputEl.scrollTop = outputEl.scrollHeight;
       }
-    });
+    };
 
-    if (!res.ok) {
-      const msg = data.error || ('HTTP ' + res.status);
-      if (outputEl) outputEl.textContent = 'Ошибка: ' + msg;
+    let runner;
+    if (currentCommandMode === 'xkeen' && currentCommandFlag) {
+      runner = runXkeenFlag(currentCommandFlag, stdinValue, { onChunk });
+    } else {
+      runner = runShellCommand(cmdText, stdinValue, { onChunk });
+    }
+
+    const { res, data } = await runner;
+
+    if (!res.ok || !data.ok) {
+      const msg = (data && data.error) ? data.error : ('HTTP ' + res.status);
+      if (useXterm && xkeenTerm) {
+        xkeenTermWriteln('');
+        xkeenTermWriteln('[Ошибка] ' + msg);
+      } else if (outputEl) {
+        outputEl.textContent = 'Ошибка: ' + msg;
+      }
       appendToLog('Ошибка: ' + msg + '\n');
       return;
     }
 
     const rawOut = data.output || buffer || '';
-    if (outputEl) {
+
+    if (useXterm && xkeenTerm) {
+      if (!buffer && rawOut) {
+        xkeenTermWrite(rawOut);
+      }
+      xkeenTermWriteln('');
+      xkeenTermWriteln('[exit_code=' + (data.exit_code != null ? data.exit_code : 0) + ']');
+    } else if (outputEl) {
       const html = ansiToHtml(rawOut || '(нет вывода)').replace(/\n/g, '<br>');
       outputEl.innerHTML = html;
       outputEl.scrollTop = outputEl.scrollHeight;
     }
 
-    appendToLog(`$ xkeen ${flag}\n`);
-    if (rawOut) {
-      appendToLog(rawOut + '\n');
-    } else {
-      appendToLog('(нет вывода)\n');
-    }
-    if (typeof data.exit_code === 'number') {
-      appendToLog(`(код завершения: ${data.exit_code})\n`);
-    }
+    appendToLog(
+      '[terminal] ' +
+      (currentCommandLabel || cmdText) +
+      '\n' +
+      (rawOut || '(нет вывода)') +
+      '\n'
+    );
   } catch (e) {
     console.error(e);
-    if (outputEl) outputEl.textContent = 'Ошибка выполнения команды.';
-    appendToLog('Ошибка выполнения команды: ' + String(e) + '\n');
-  }
-}
-function stripJsonComments(text) {
-  let result = '';
-  let inString = false;
-  let stringChar = null; // '"' or '\''
-  let inSingleLineComment = false;
-  let inMultiLineComment = false;
-  let prevChar = '';
-  const length = text.length;
-
-  for (let i = 0; i < length; i++) {
-    const char = text[i];
-    const nextChar = i + 1 < length ? text[i + 1] : '';
-
-    // already inside a single-line comment
-    if (inSingleLineComment) {
-      if (char === '\n') {
-        inSingleLineComment = false;
-        result += char; // keep newline
-      }
-      continue;
+    const msg = 'Ошибка: ' + String(e && e.message ? e.message : e);
+    if (useXterm && xkeenTerm) {
+      xkeenTermWriteln('');
+      xkeenTermWriteln('[Ошибка] ' + msg);
+    } else if (outputEl) {
+      outputEl.textContent = msg;
     }
-
-    // already inside a multi-line comment
-    if (inMultiLineComment) {
-      if (char === '*' && nextChar === '/') {
-        inMultiLineComment = false;
-        i++; // skip '/'
-      }
-      continue;
-    }
-
-    // inside string literal
-    if (inString) {
-      result += char;
-      if (char === stringChar && prevChar !== '\\') {
-        inString = false;
-        stringChar = null;
-      }
-      prevChar = char;
-      continue;
-    }
-
-    // not in string/comment — check for comment start
-    if (char === '/' && nextChar === '/') {
-      inSingleLineComment = true;
-      i++; // skip second '/'
-      continue;
-    }
-    // '#' — однострочный комментарий (вся строка до конца)
-    if (char === '#') {
-      inSingleLineComment = true;
-      // символ '#' не добавляем в результат
-      continue;
-    }
-    if (char === '/' && nextChar === '*') {
-      inMultiLineComment = true;
-      i++; // skip '*'
-      continue;
-    }
-
-    // start of string
-    if (char === '"' || char === '\'') {
-      inString = true;
-      stringChar = char;
-      result += char;
-      prevChar = char;
-      continue;
-    }
-
-    // normal character
-    result += char;
-    prevChar = char;
-  }
-
-  return result;
-}
-function setRoutingError(msg, line) {
-  const errEl = document.getElementById('routing-error');
-  const saveBtn = document.getElementById('routing-save-btn');
-
-  if (routingErrorMarker && routingEditor) {
-    routingEditor.removeLineClass(routingErrorMarker, 'background', 'cm-error-line');
-    routingErrorMarker = null;
-  }
-
-  if (!errEl) return;
-
-  if (msg) {
-    errEl.textContent = msg;
-    if (saveBtn) saveBtn.disabled = true;
-    if (routingEditor && typeof line === 'number' && line >= 0) {
-      const handle = routingEditor.getLineHandle(line);
-      routingEditor.addLineClass(handle, 'background', 'cm-error-line');
-      routingErrorMarker = handle;
-    }
-  } else {
-    errEl.textContent = '';
-    if (saveBtn) saveBtn.disabled = false;
+    appendToLog('[terminal] ' + msg + '\n');
   }
 }
 
@@ -1406,7 +3320,12 @@ function controlXkeen(action) {
         : 'Failed to restart xkeen.';
       const msg = ok ? base : err;
       if (statusEl) statusEl.textContent = msg;
-      showToast(msg, !ok);
+      // For restart we rely on the global "restarted" handler to show success toast
+      // to avoid duplicate notifications. However, if restart fails, we still want
+      // a visible error message.
+      if (!ok || action !== 'restart') {
+        showToast(msg, !ok);
+      }
       if (action === 'restart') {
         try { loadRestartLog(); } catch (e) {}
       }
@@ -1859,6 +3778,34 @@ async function loadRestartLog() {
 }
 
 
+async function runShellCommand(cmd, stdinValue, options = {}) {
+  const body = { cmd };
+  if (typeof stdinValue === 'string') {
+    body.stdin = stdinValue;
+  }
+
+  const createRes = await fetch('/api/run-command', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const createData = await createRes.json().catch(() => ({}));
+
+  if (!createRes.ok || createData.ok === false) {
+    return { res: createRes, data: createData };
+  }
+
+  const jobId = createData.job_id;
+  if (!jobId) {
+    return {
+      res: createRes,
+      data: { ok: false, error: 'no job_id returned from /api/run-command' }
+    };
+  }
+
+  const finalData = await waitForCommandJob(jobId, options || {});
+  return { res: createRes, data: finalData };
+}
 async function runXkeenFlag(flag, stdinValue, options = {}) {
   const body = { flag };
   if (typeof stdinValue === 'string') {
@@ -2122,8 +4069,14 @@ async function runInstantXkeenFlag(flag, label) {
 }
 function ansiToHtml(text) {
   if (!text) return '';
+  // Remove non-color ANSI control sequences (leave only SGR ...m, e.g. colors)
+  const stripped = String(text).replace(/\x1b\[[0-9;?]*[@-~]/g, function (seq) {
+    var finalChar = seq.charAt(seq.length - 1);
+    return finalChar === 'm' ? seq : '';
+  });
+
   // Escape HTML special chars
-  let escaped = text
+  let escaped = stripped
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
@@ -3061,29 +5014,14 @@ function initCommandClicks() {
       const flag = el.getAttribute('data-flag');
       const label = el.getAttribute('data-label') || ('xkeen ' + flag);
       if (!flag) return;
-
-      // Для -start / -stop / -restart выполняем команду сразу,
-      // без подтверждения и без мини-терминала – вывод идёт прямо в журнал.
-      if (flag === '-start' || flag === '-stop' || flag === '-restart') {
-        // не даём запускать команду повторно в течение короткого времени
-        if (el.classList.contains('loading')) return;
-        el.classList.add('loading');
-        try {
-          runInstantXkeenFlag(flag, label);
-        } finally {
-          // через несколько секунд снимаем блокировку и спиннер даже если сервер не ответил
-          setTimeout(() => {
-            el.classList.remove('loading');
-          }, 7000);
-        }
-        return;
-      }
-
-      if (!confirm(`Выполнить команду: ${label}?`)) return;
+      // Любая команда из списка "Команды" теперь используется как подсказка:
+      // просто открываем терминал XKeen с предзаполненной строкой.
       openTerminalForFlag(flag, label);
     });
   });
 }
+
+// ---------- ini
 
 
 // ---------- init ----------
@@ -3306,11 +5244,51 @@ async function openJsonEditor(target) {
     }
     const data = await res.json();
     const cfg = data && data.config ? data.config : null;
-    const text = (data && data.text)
+    const finalText = (data && data.text)
       ? data.text
       : (cfg ? JSON.stringify(cfg, null, 2) : '{}');
 
-    textarea.value = text || '';
+    if (window.CodeMirror) {
+      if (!jsonModalEditor) {
+        jsonModalEditor = CodeMirror.fromTextArea(textarea, {
+          mode: { name: 'javascript', json: true },
+          theme: (document.documentElement.getAttribute('data-theme') === 'light' ? 'default' : 'material-darker'),
+          lineNumbers: true,
+          styleActiveLine: true,
+          showIndentGuides: true,
+          matchBrackets: true,
+          showTrailingSpace: true,
+          rulers: [{ column: 120 }],
+          lineWrapping: true,
+          gutters: ['CodeMirror-lint-markers'],
+          lint: true,
+          tabSize: 2,
+          indentUnit: 2,
+          indentWithTabs: false,
+          extraKeys: Object.assign({}, buildCmExtraKeysCommon({ noFullscreen: true }), {
+            'Ctrl-F': 'findPersistent',
+            'Cmd-F': 'findPersistent',
+            'Ctrl-G': 'findNext',
+            'Cmd-G': 'findNext',
+            'Shift-Ctrl-G': 'findPrev',
+            'Shift-Cmd-G': 'findPrev',
+            'Ctrl-H': 'replace',
+            'Shift-Ctrl-H': 'replaceAll',
+          }),
+          viewportMargin: Infinity,
+        });
+
+        if (jsonModalEditor.getWrapperElement) {
+          jsonModalEditor.getWrapperElement().classList.add('xkeen-cm');
+        }
+      }
+
+      jsonModalEditor.setValue(finalText || '');
+      setTimeout(() => jsonModalEditor.refresh(), 0);
+      jsonModalEditor.focus();
+    } else {
+      textarea.value = finalText || '';
+    }
 
     modal.classList.remove('hidden');
   } catch (e) {
@@ -3503,6 +5481,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const cmExtraKeysCommon = buildCmExtraKeysCommon();
+
 
   const routingTextarea = document.getElementById('routing-editor');
   if (routingTextarea && window.CodeMirror) {
@@ -3510,15 +5490,37 @@ document.addEventListener('DOMContentLoaded', () => {
       mode: { name: 'javascript', json: true },
       theme: 'material-darker',
       lineNumbers: true,
+      styleActiveLine: true,
+          showIndentGuides: true,
+      matchBrackets: true,
+      autoCloseBrackets: true,
+      highlightSelectionMatches: true,
+      showTrailingSpace: true,
+      rulers: [{ column: 120 }],
       lineWrapping: true,
-      gutters: ['CodeMirror-lint-markers'],
+      foldGutter: true,
+      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers'],
       lint: true,
+      tabSize: 2,
+      indentUnit: 2,
+      indentWithTabs: false,
+      extraKeys: Object.assign({}, cmExtraKeysCommon, {
+        'Ctrl-F': 'findPersistent',
+        'Cmd-F': 'findPersistent',
+        'Ctrl-G': 'findNext',
+        'Cmd-G': 'findNext',
+        'Shift-Ctrl-G': 'findPrev',
+        'Shift-Cmd-G': 'findPrev',
+        'Ctrl-H': 'replace',
+        'Shift-Ctrl-H': 'replaceAll',
+      }),
       // Render all lines to avoid internal virtual scrolling glitches
       viewportMargin: Infinity,
     });
     // Slightly smaller minimum height for compact screens
     if (routingEditor.getWrapperElement) {
       routingEditor.getWrapperElement().classList.add('xkeen-cm');
+      xkeenAttachCmToolbar(routingEditor, XKEEN_CM_TOOLBAR_DEFAULT);
     }
     routingEditor.on('change', () => {
       validateRoutingContent();
@@ -3530,34 +5532,36 @@ document.addEventListener('DOMContentLoaded', () => {
   const portExcludeTextarea = document.getElementById('port-exclude-editor');
   const ipExcludeTextarea = document.getElementById('ip-exclude-editor');
 
+  // XKeen ports/exclusions are simple list editors.
+  // Keep CodeMirror config minimal here to avoid requiring extra addons
+  // (fold/search/closebrackets/highlightSelectionMatches, etc.).
+  const xkeenBasicEditorOpts = {
+    mode: 'shell',
+    theme: 'material-darker',
+    lineNumbers: true,
+    styleActiveLine: true,
+    showIndentGuides: true,
+    matchBrackets: true,
+    showTrailingSpace: true,
+    lineWrapping: true,
+    tabSize: 2,
+    indentUnit: 2,
+    indentWithTabs: false,
+    extraKeys: buildCmExtraKeysCommon({ noFullscreen: true }),
+    // Render all lines to avoid internal virtual scrolling glitches
+    viewportMargin: Infinity,
+  };
+
   if (portProxyingTextarea && window.CodeMirror) {
-    portProxyingEditor = CodeMirror.fromTextArea(portProxyingTextarea, {
-      mode: 'shell',
-      theme: 'material-darker',
-      lineNumbers: true,
-      lineWrapping: true,
-      viewportMargin: Infinity,
-    });
+    portProxyingEditor = CodeMirror.fromTextArea(portProxyingTextarea, { ...xkeenBasicEditorOpts });
     portProxyingEditor.getWrapperElement().classList.add('xkeen-cm');
   }
   if (portExcludeTextarea && window.CodeMirror) {
-    portExcludeEditor = CodeMirror.fromTextArea(portExcludeTextarea, {
-      mode: 'shell',
-      theme: 'material-darker',
-      lineNumbers: true,
-      lineWrapping: true,
-      viewportMargin: Infinity,
-    });
+    portExcludeEditor = CodeMirror.fromTextArea(portExcludeTextarea, { ...xkeenBasicEditorOpts });
     portExcludeEditor.getWrapperElement().classList.add('xkeen-cm');
   }
   if (ipExcludeTextarea && window.CodeMirror) {
-    ipExcludeEditor = CodeMirror.fromTextArea(ipExcludeTextarea, {
-      mode: 'shell',
-      theme: 'material-darker',
-      lineNumbers: true,
-      lineWrapping: true,
-      viewportMargin: Infinity,
-    });
+    ipExcludeEditor = CodeMirror.fromTextArea(ipExcludeTextarea, { ...xkeenBasicEditorOpts });
     ipExcludeEditor.getWrapperElement().classList.add('xkeen-cm');
   }
 
@@ -3568,12 +5572,35 @@ document.addEventListener('DOMContentLoaded', () => {
       mode: 'yaml',
       theme: 'material-darker',
       lineNumbers: true,
+      styleActiveLine: true,
+          showIndentGuides: true,
+      matchBrackets: true,
+      autoCloseBrackets: true,
+      highlightSelectionMatches: true,
+      showTrailingSpace: true,
+      rulers: [{ column: 100 }],
       lineWrapping: true,
+      foldGutter: true,
+      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
+      tabSize: 2,
+      indentUnit: 2,
+      indentWithTabs: false,
+      extraKeys: Object.assign({}, cmExtraKeysCommon, {
+        'Ctrl-F': 'findPersistent',
+        'Cmd-F': 'findPersistent',
+        'Ctrl-G': 'findNext',
+        'Cmd-G': 'findNext',
+        'Shift-Ctrl-G': 'findPrev',
+        'Shift-Cmd-G': 'findPrev',
+        'Ctrl-H': 'replace',
+        'Shift-Ctrl-H': 'replaceAll',
+      }),
       // Render all lines and rely on outer scroll to avoid broken scrollbars
       viewportMargin: Infinity,
     });
     if (mihomoEditor.getWrapperElement) {
       mihomoEditor.getWrapperElement().classList.add('xkeen-cm');
+      xkeenAttachCmToolbar(mihomoEditor, XKEEN_CM_TOOLBAR_DEFAULT);
     }
   }
 
@@ -3873,6 +5900,148 @@ if (githubExportBtn) githubExportBtn.addEventListener('click', (e) => {
   setInterval(() => {
     refreshXkeenServiceStatus();
   }, 15000);
+});
+
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  const cmdEl = document.getElementById('terminal-command');
+  const inputEl = document.getElementById('terminal-input');
+  const historyBtn = document.getElementById('terminal-history-btn');
+  const searchEl = document.getElementById('terminal-search-input');
+
+  // Загрузка сохранённой истории команд
+  try {
+    loadTerminalHistory();
+  } catch (e) {
+    // ignore
+  }
+
+  if (cmdEl) {
+    cmdEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        // Отправляем команду так же, как по кнопке "Отправить"
+        void sendTerminalInput();
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        hideTerminal();
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'l' || e.key === 'L')) {
+        e.preventDefault();
+        // Очистка терминала (Ctrl+L)
+        if (typeof Terminal !== 'undefined') {
+          const term = initXkeenTerm();
+          if (term && typeof term.clear === 'function') {
+            term.clear();
+          }
+        }
+        const out = document.getElementById('terminal-output');
+        if (out && !out.querySelector('.xterm')) {
+          out.textContent = '';
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (!terminalHistory.length) return;
+        e.preventDefault();
+
+        if (e.key === 'ArrowUp') {
+          if (terminalHistoryIndex <= 0) {
+            terminalHistoryIndex = 0;
+          } else {
+            terminalHistoryIndex -= 1;
+          }
+        } else {
+          // ArrowDown
+          if (terminalHistoryIndex < 0) {
+            return;
+          } else if (terminalHistoryIndex >= terminalHistory.length - 1) {
+            terminalHistoryIndex = terminalHistory.length;
+            cmdEl.value = '';
+            return;
+          } else {
+            terminalHistoryIndex += 1;
+          }
+        }
+
+        if (terminalHistoryIndex >= 0 && terminalHistoryIndex < terminalHistory.length) {
+          cmdEl.value = terminalHistory[terminalHistoryIndex];
+          const len = cmdEl.value.length;
+          try {
+            cmdEl.setSelectionRange(len, len);
+          } catch (e2) {
+            // ignore
+          }
+        }
+      }
+    });
+  }
+
+  // Terminal search UI (xterm-addon-search)
+  if (searchEl) {
+    searchEl.addEventListener('input', () => {
+      try { terminalSearchDebouncedHighlight(); } catch (e) {}
+    });
+    searchEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) terminalSearchPrev();
+        else terminalSearchNext();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        terminalSearchClear({ silent: true });
+        try { xkeenTerm && xkeenTerm.focus && xkeenTerm.focus(); } catch (e2) {}
+        return;
+      }
+    });
+  }
+
+  // Global search hotkeys while terminal is open
+  if (!xkeenTerminalSearchKeysBound) {
+    xkeenTerminalSearchKeysBound = true;
+    document.addEventListener('keydown', (e) => {
+      try {
+        if (!terminalIsOpen()) return;
+        // Ctrl+F / Cmd+F
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+          e.preventDefault();
+          terminalSearchFocus(true);
+          try { terminalSearchDebouncedHighlight(); } catch (e2) {}
+          return;
+        }
+        // F3 / Shift+F3
+        if (e.key === 'F3') {
+          e.preventDefault();
+          if (e.shiftKey) terminalSearchPrev();
+          else terminalSearchNext();
+          return;
+        }
+      } catch (e2) {
+        // ignore
+      }
+    }, true);
+  }
+
+  if (historyBtn) {
+    historyBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!terminalHistory.length) {
+        alert('История команд пуста.');
+        return;
+      }
+      const lines = terminalHistory.slice().reverse().join('\n');
+      alert(lines);
+    });
+  }
 });
 
 
@@ -4537,6 +6706,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     html.setAttribute('data-theme', next);
 
+    // Sync CodeMirror theme with panel theme (light -> default, dark -> material-darker)
+    const cmTheme = next === 'light' ? 'default' : 'material-darker';
+    const editors = [
+      routingEditor,
+      portProxyingEditor,
+      portExcludeEditor,
+      ipExcludeEditor,
+      mihomoEditor,
+      jsonModalEditor,
+    ];
+
+    // Allow pages (e.g. Mihomo generator) to register extra editors
+    try {
+      if (window.__xkeenEditors && Array.isArray(window.__xkeenEditors)) {
+        window.__xkeenEditors.forEach((cm) => editors.push(cm));
+      }
+    } catch (e) {}
+
+    // De-dup & apply
+    try {
+      const uniq = Array.from(new Set(editors.filter(Boolean)));
+      uniq.forEach((cm) => {
+        if (!cm || !cm.setOption) return;
+        try {
+          cm.setOption('theme', cmTheme);
+          if (cm.refresh) cm.refresh();
+        } catch (e) {
+          // ignore CodeMirror errors
+        }
+      });
+    } catch (e) {}
+
+    // Notify other scripts about theme changes
+    try {
+      document.dispatchEvent(new CustomEvent('xkeen-theme-change', { detail: { theme: next, cmTheme } }));
+    } catch (e) {}
+
+
     const btn = document.getElementById('theme-toggle-btn');
     if (!btn) return;
 
@@ -4587,3 +6794,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('DOMContentLoaded', initThemeToggle);
 })();
+
+// Auto-open terminal from URL query (used by "New session" button)
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const url = new URL(window.location.href);
+    const mode = String(url.searchParams.get('terminal') || '').toLowerCase();
+    if (mode !== 'pty' && mode !== 'shell') return;
+
+    // Let the rest of the UI initialize first.
+    setTimeout(() => {
+      try { openTerminal('', mode); } catch (e) {}
+    }, 50);
+  } catch (e) {
+    // ignore
+  }
+});
