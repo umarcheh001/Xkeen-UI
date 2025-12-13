@@ -4,30 +4,59 @@
   <meta charset="utf-8">
   <title>Xkeen UI — Routing / Inbounds / Outbounds</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
 
   <!-- CodeMirror & JSON lint -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/lint/lint.min.css">
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsonlint/1.6.0/jsonlint.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/lint/lint.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/lint/json-lint.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/codemirror.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/theme/material-darker.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/lint/lint.min.css') }}">
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script src="{{ url_for('static', filename='codemirror/codemirror.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/display/indent-guides.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/selection/active-line.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/edit/matchbrackets.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/mode/javascript/javascript.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/mode/shell/shell.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/mode/yaml/yaml.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/lint/lint.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='jsonlint/jsonlint.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/lint/json-lint.min.js') }}"></script>
+  <!-- CodeMirror addons: folding, search, dialog, autoclose -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/fold/foldgutter.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/dialog/dialog.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/display/fullscreen.css') }}">
+
+  <script src="{{ url_for('static', filename='codemirror/addon/fold/foldcode.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/fold/brace-fold.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/fold/indent-fold.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/fold/foldgutter.js') }}"></script>
+
+  <script src="{{ url_for('static', filename='codemirror/addon/search/searchcursor.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/search/search.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/search/match-highlighter.js') }}"></script>
+
+  <script src="{{ url_for('static', filename='codemirror/addon/dialog/dialog.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/edit/closebrackets.js') }}"></script>
+
+  <!-- Quality-of-life addons: fullscreen, comments, trailing spaces, rulers -->
+  <script src="{{ url_for('static', filename='codemirror/addon/display/fullscreen.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/comment/comment.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
+
+
+
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
+  <script src="{{ url_for('static', filename='xterm/xterm.js') }}"></script>
+  <script src="{{ url_for('static', filename='xterm/xterm-addon-fit.js') }}"></script>
+  <!-- XTerm.js official addons (локально) -->
+  <script src="{{ url_for('static', filename='xterm/xterm-addon-search.js') }}"></script>
+  <script src="{{ url_for('static', filename='xterm/xterm-addon-web-links.js') }}"></script>
 </head>
 <body>
-  <button
-    type="button"
-    id="theme-toggle-btn"
-    class="theme-toggle-btn theme-toggle-floating"
-    aria-label="Переключить тему"
-  ></button>
-
   <div id="global-xkeen-spinner">
     <div class="global-spinner-box">
       <div class="global-spinner-icon"></div>
@@ -54,13 +83,30 @@
           </span>
         </div>
 
-        <button
-          id="xkeen-core-text"
-          type="button"
-          class="service-core-text"
-        ></button>
+        <div class="header-center">
+          <button
+            id="xkeen-core-text"
+            type="button"
+            class="service-core-text"
+          ></button>
+        </div>
 
-        <div id="last-load" class="last-load-badge"></div>
+        <div class="header-right">
+          <div class="header-actions">
+            <button
+              type="button"
+              id="theme-toggle-btn"
+              class="theme-toggle-btn theme-toggle-header"
+              aria-label="Переключить тему"
+            ></button>
+
+            <a
+              href="{{ url_for('logout') }}"
+              class="service-core-text"
+              title="Выйти из панели"
+            >Выйти</a>
+          </div>
+        </div>
       </div>
 
       <p>Маршрутизация, режим inbounds и VLESS outbounds в одной панели.</p>
@@ -86,18 +132,18 @@
         </button>
       </div>
     
-<div class="global-toggle-row">
-  <label class="global-autorestart-toggle">
-    <input type="checkbox" id="global-autorestart-xkeen" checked>
-    <span>Авто‑перезапуск xkeen</span>
-  </label>
-</div>
-
 <div class="xkeen-ctrl-row">
   <div class="xkeen-ctrl-group">
     <button id="xkeen-start-btn" class="xkeen-ctrl-btn">Start xkeen</button>
     <button id="xkeen-stop-btn" class="xkeen-ctrl-btn">Stop xkeen</button>
     <button id="xkeen-restart-btn" class="xkeen-ctrl-btn">Restart xkeen</button>
+  </div>
+  <div class="global-toggle-right">
+    <label class="global-autorestart-toggle">
+      <input type="checkbox" id="global-autorestart-xkeen" checked>
+      <span>Авто‑перезапуск xkeen</span>
+    </label>
+    <div id="last-load" class="last-load-badge"></div>
   </div>
 </div>
 
@@ -125,7 +171,7 @@
             <div id="routing-error" class="error"></div>
 
             <div class="actions">
-  <button id="routing-save-btn" disabled>💾 Save routing</button>
+  <button id="routing-save-btn">💾 Save routing</button>
   <button id="routing-format-btn">✨ Format JSON</button>
   <button id="routing-backup-btn">📦 Backup</button>
   <button id="routing-restore-auto-btn">⏪ Restore autobackup</button>
@@ -485,6 +531,8 @@
 <section class="card commands-card">
   <div class="commands-header">
     <h2>Команды</h2>
+    <button type="button" class="btn-secondary" onclick="openTerminal('', 'shell')">Открыть терминал</button>
+    <button type="button" class="btn-secondary" id="terminal-open-pty-btn" onclick="openTerminal('', 'pty')">Interactive Shell</button>
   </div>
 
   <div id="commands-body">
@@ -567,17 +615,61 @@
     <div id="terminal-overlay" class="terminal-overlay" style="display:none;">
       <div class="terminal-window">
         <div class="terminal-header">
-          <span>Терминал XKeen</span>
-          <button type="button" class="terminal-close" onclick="hideTerminal()">×</button>
+	          <div class="terminal-header-left">
+	            <span>Терминал XKeen</span>
+	            <span id="terminal-conn-lamp" class="service-status-lamp terminal-conn-lamp" data-state="stopped" title="Terminal: disconnected" aria-label="Terminal status"></span>
+	            <span id="terminal-uptime" class="terminal-uptime" title="Uptime">00:00</span>
+	          </div>
+	          <div class="terminal-toolbar" aria-label="Terminal toolbar">
+	            <button type="button" class="terminal-tool-btn" id="terminal-btn-fullscreen" onclick="terminalToggleFullscreen()" title="Fullscreen / Restore" aria-label="Fullscreen / Restore">⛶</button>
+	            <button type="button" class="terminal-tool-btn" onclick="terminalReconnect()" title="Reconnect" aria-label="Reconnect">🔌</button>
+	            <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-stop-retry" onclick="terminalStopRetry()" title="Stop retry" aria-label="Stop retry">Stop retry</button>
+	            <button type="button" class="terminal-tool-btn" onclick="terminalNewSession()" title="New session" aria-label="New session">➕</button>
+	            <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" onclick="terminalSendCtrlC()" title="Send Ctrl+C" aria-label="Send Ctrl+C">^C</button>
+	            <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" onclick="terminalSendCtrlD()" title="Send Ctrl+D" aria-label="Send Ctrl+D">^D</button>
+	            <button type="button" class="terminal-close" onclick="hideTerminal()" title="Close" aria-label="Close">×</button>
+	          </div>
         </div>
-        <input id="terminal-command" class="terminal-command" type="text" readonly>
+        <input id="terminal-command"
+               class="terminal-command"
+               type="text"
+               placeholder="Команда (например: ls -la /)">
+	        <div class="terminal-search-row" id="terminal-search-row" aria-label="Terminal search">
+	          <input id="terminal-search-input"
+	                 class="terminal-search-input"
+	                 type="text"
+	                 placeholder="Поиск в терминале (Ctrl+F / F3)"
+	                 autocomplete="off"
+	                 spellcheck="false">
+	          <button type="button" class="terminal-search-btn" id="terminal-search-prev" onclick="terminalSearchPrev()" title="Предыдущее (Shift+F3)" aria-label="Previous match">↑</button>
+	          <button type="button" class="terminal-search-btn" id="terminal-search-next" onclick="terminalSearchNext()" title="Следующее (F3 / Enter)" aria-label="Next match">↓</button>
+	          <span id="terminal-search-counter" class="terminal-search-counter" title="Совпадения" aria-label="Match count">0/0</span>
+	          <button type="button" class="terminal-search-btn" id="terminal-search-clear" onclick="terminalSearchClear()" title="Очистить" aria-label="Clear search">×</button>
+	        </div>
         <pre id="terminal-output" class="terminal-output"></pre>
+        <div class="terminal-footer" aria-label="Terminal footer toolbar">
+          <div class="terminal-footer-group" aria-label="Отображение">
+            <span class="terminal-footer-label">Вид</span>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-font-dec" onclick="terminalFontDec()" title="Font −" aria-label="Font minus">A−</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-font-inc" onclick="terminalFontInc()" title="Font +" aria-label="Font plus">A+</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-cursorblink" onclick="terminalToggleCursorBlink()" title="Cursor blink" aria-label="Cursor blink">▮</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-ansi" onclick="terminalToggleAnsiFilter()" title="Hide/Show ANSI from output" aria-label="Toggle ANSI filter">ANSI</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-loghl" onclick="terminalToggleLogHighlight()" title="Highlight WARN/ERR" aria-label="Highlight WARN/ERR">W/E</button>
+          </div>
+          <div class="terminal-footer-group" aria-label="Буфер обмена">
+            <span class="terminal-footer-label">Буфер</span>
+            <button type="button" class="terminal-tool-btn" onclick="terminalCopy()" title="Copy" aria-label="Copy">📋</button>
+            <button type="button" class="terminal-tool-btn" onclick="terminalPaste()" title="Paste" aria-label="Paste">📥</button>
+            <button type="button" class="terminal-tool-btn" onclick="terminalClear()" title="Clear" aria-label="Clear">🧹</button>
+          </div>
+        </div>
         <div class="terminal-input-row">
           <input id="terminal-input"
                  class="terminal-input"
                  type="text"
                  placeholder="Текст для подтверждения (например: yes). Пусто — просто Enter.">
           <button type="button" class="terminal-send" onclick="sendTerminalInput()">Отправить</button>
+          <button type="button" class="terminal-history-btn" id="terminal-history-btn">⌚ История</button>
         </div>
       </div>
     </div>
