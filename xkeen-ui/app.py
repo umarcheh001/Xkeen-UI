@@ -19,10 +19,11 @@ except Exception:  # gevent/geventwebsocket are optional
 
     gevent = _GeventStub()
 
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 import json
 import datetime
 import os
+import sys
 import re
 import time
 import shutil
@@ -36,6 +37,32 @@ from typing import Any, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 import threading
 import uuid
+
+# --- Dev/macOS fallback for MIHOMO_ROOT (must happen before importing mihomo_server_core) ---
+# On router MIHOMO_ROOT is typically /opt/etc/mihomo.
+# In development (e.g. macOS) /opt may be missing or not writable.
+if "MIHOMO_ROOT" not in os.environ:
+    _router_mh = "/opt/etc/mihomo"
+    if not os.path.isdir(_router_mh):
+        _here = os.path.dirname(os.path.abspath(__file__))
+        _bundled = os.path.join(_here, "opt", "etc", "mihomo")
+        if os.path.isdir(_bundled):
+            os.environ["MIHOMO_ROOT"] = _bundled
+        else:
+            _home = os.path.expanduser("~")
+            _xdg = os.environ.get("XDG_CONFIG_HOME")
+            if _xdg:
+                _base = os.path.join(_xdg, "xkeen-ui")
+            elif sys.platform == "darwin":
+                _base = os.path.join(_home, "Library", "Application Support", "xkeen-ui")
+            else:
+                _base = os.path.join(_home, ".config", "xkeen-ui")
+            os.environ["MIHOMO_ROOT"] = os.path.join(_base, "mihomo")
+        try:
+            os.makedirs(os.environ["MIHOMO_ROOT"], exist_ok=True)
+        except Exception:
+            pass
+
 from mihomo_server_core import CONFIG_PATH, validate_config
 
 
@@ -101,19 +128,87 @@ def _mihomo_validate_yaml_syntax(cfg: str):
         return False, str(e)
 
 
-ROUTING_FILE = "/opt/etc/xray/configs/05_routing.json"
-ROUTING_FILE_RAW = "/opt/etc/xray/configs/05_routing.jsonc"
-INBOUNDS_FILE = "/opt/etc/xray/configs/03_inbounds.json"
-OUTBOUNDS_FILE = "/opt/etc/xray/configs/04_outbounds.json"
-BACKUP_DIR = "/opt/etc/xray/configs/backups"
+
+
+def _get_ui_state_dir() -> str:
+    """Return a writable directory for UI state (auth, secret key, logs).
+
+    Router default: /opt/etc/xkeen-ui
+    Dev/macOS fallback: XDG/~/Library/Application Support/xkeen-ui (or ~/.config/xkeen-ui)
+
+    Override with env:
+    - XKEEN_UI_STATE_DIR (preferred)
+    - XKEEN_UI_DIR (legacy)
+    """
+    env_dir = os.environ.get("XKEEN_UI_STATE_DIR") or os.environ.get("XKEEN_UI_DIR")
+    if env_dir:
+        return env_dir
+
+    default_dir = "/opt/etc/xkeen-ui"
+    # Try router default first, but never fail hard if it's not writable (e.g., on macOS dev).
+    try:
+        os.makedirs(default_dir, exist_ok=True)
+        test_path = os.path.join(default_dir, ".writetest")
+        with open(test_path, "w", encoding="utf-8") as f:
+            f.write("")
+        os.remove(test_path)
+        return default_dir
+    except Exception:
+        pass
+
+    home = os.path.expanduser("~")
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        fallback = os.path.join(xdg, "xkeen-ui")
+    elif sys.platform == "darwin":
+        fallback = os.path.join(home, "Library", "Application Support", "xkeen-ui")
+    else:
+        fallback = os.path.join(home, ".config", "xkeen-ui")
+
+    try:
+        os.makedirs(fallback, exist_ok=True)
+    except Exception:
+        # Last resort: current working directory
+        fallback = os.path.abspath("./xkeen-ui-state")
+        os.makedirs(fallback, exist_ok=True)
+    return fallback
+
+
+UI_STATE_DIR = _get_ui_state_dir()
+def _choose_base_dir(default_dir: str, fallback_dir: str) -> str:
+    """Choose ``default_dir`` if it is writable, otherwise use ``fallback_dir``.
+
+    This is used to make the UI runnable on macOS/dev where /opt is missing or not writable.
+    """
+    try:
+        os.makedirs(default_dir, exist_ok=True)
+        test_path = os.path.join(default_dir, ".writetest")
+        with open(test_path, "w", encoding="utf-8") as f:
+            f.write("")
+        os.remove(test_path)
+        return default_dir
+    except Exception:
+        os.makedirs(fallback_dir, exist_ok=True)
+        return fallback_dir
+
+
+BASE_ETC_DIR = _choose_base_dir("/opt/etc", os.path.join(UI_STATE_DIR, "etc"))
+BASE_VAR_DIR = _choose_base_dir("/opt/var", os.path.join(UI_STATE_DIR, "var"))
+
+
+ROUTING_FILE = os.path.join(BASE_ETC_DIR, "xray", "configs", "05_routing.json")
+ROUTING_FILE_RAW = os.path.join(BASE_ETC_DIR, "xray", "configs", "05_routing.jsonc")
+INBOUNDS_FILE = os.path.join(BASE_ETC_DIR, "xray", "configs", "03_inbounds.json")
+OUTBOUNDS_FILE = os.path.join(BASE_ETC_DIR, "xray", "configs", "04_outbounds.json")
+BACKUP_DIR = os.path.join(BASE_ETC_DIR, "xray", "configs", "backups")
 XKEEN_RESTART_CMD = ["xkeen", "-restart"]
-RESTART_LOG_FILE = "/opt/etc/xkeen-ui/restart.log"
-PORT_PROXYING_FILE = "/opt/etc/xkeen/port_proxying.lst"
-PORT_EXCLUDE_FILE = "/opt/etc/xkeen/port_exclude.lst"
-IP_EXCLUDE_FILE = "/opt/etc/xkeen/ip_exclude.lst"
-XRAY_LOG_CONFIG_FILE = "/opt/etc/xray/configs/01_log.json"
-XRAY_ACCESS_LOG = "/opt/var/log/xray/access.log"
-XRAY_ERROR_LOG = "/opt/var/log/xray/error.log"
+RESTART_LOG_FILE = os.environ.get("XKEEN_RESTART_LOG_FILE", os.path.join(UI_STATE_DIR, "restart.log"))
+PORT_PROXYING_FILE = os.path.join(BASE_ETC_DIR, "xkeen", "port_proxying.lst")
+PORT_EXCLUDE_FILE = os.path.join(BASE_ETC_DIR, "xkeen", "port_exclude.lst")
+IP_EXCLUDE_FILE = os.path.join(BASE_ETC_DIR, "xkeen", "ip_exclude.lst")
+XRAY_LOG_CONFIG_FILE = os.path.join(BASE_ETC_DIR, "xray", "configs", "01_log.json")
+XRAY_ACCESS_LOG = os.path.join(BASE_VAR_DIR, "log", "xray", "access.log")
+XRAY_ERROR_LOG = os.path.join(BASE_VAR_DIR, "log", "xray", "error.log")
 XRAY_ACCESS_LOG_SAVED = XRAY_ACCESS_LOG + ".saved"
 XRAY_ERROR_LOG_SAVED = XRAY_ERROR_LOG + ".saved"
 
@@ -131,8 +226,27 @@ LOG_CACHE = {}
 
 
 MIHOMO_CONFIG_FILE = str(CONFIG_PATH)
-MIHOMO_TEMPLATES_DIR = "/opt/etc/mihomo/templates"
+MIHOMO_ROOT_DIR = os.path.dirname(MIHOMO_CONFIG_FILE)
+# Allow override in env, but default to MIHOMO_ROOT/templates.
+MIHOMO_TEMPLATES_DIR = os.environ.get("MIHOMO_TEMPLATES_DIR", os.path.join(MIHOMO_ROOT_DIR, "templates"))
 MIHOMO_DEFAULT_TEMPLATE = os.path.join(MIHOMO_TEMPLATES_DIR, "custom.yaml")
+
+# In dev/macOS we may have no templates under MIHOMO_ROOT yet; copy bundled ones if present.
+try:
+    os.makedirs(MIHOMO_TEMPLATES_DIR, exist_ok=True)
+    _bundled_templates = os.path.join(os.path.dirname(os.path.abspath(__file__)), "opt", "etc", "mihomo", "templates")
+    if os.path.isdir(_bundled_templates):
+        # Copy only if target is empty/missing files.
+        existing = set(os.listdir(MIHOMO_TEMPLATES_DIR))
+        for _name in os.listdir(_bundled_templates):
+            if _name in existing:
+                continue
+            _src = os.path.join(_bundled_templates, _name)
+            _dst = os.path.join(MIHOMO_TEMPLATES_DIR, _name)
+            if os.path.isfile(_src):
+                shutil.copy2(_src, _dst)
+except Exception:
+    pass
 
 XRAY_CONFIG_DIR = os.path.dirname(ROUTING_FILE)
 XKEEN_CONFIG_DIR = os.path.dirname(PORT_PROXYING_FILE)
@@ -438,11 +552,15 @@ XKEEN_BIN = "xkeen"
 
 COMMAND_TIMEOUT = 300  # seconds for background xkeen jobs
 
+ALLOW_FULL_SHELL = bool(int(os.getenv("XKEEN_ALLOW_SHELL", "1")))
+SHELL_BIN = "/bin/sh"
+
 
 @dataclass
 class CommandJob:
     id: str
-    flag: str
+    flag: str | None = None
+    cmd: str | None = None
     status: str = "queued"  # "queued" | "running" | "finished" | "error"
     exit_code: int | None = None
     output: str = ""
@@ -470,14 +588,26 @@ def _cleanup_old_jobs() -> None:
 
 
 def _run_command_job(job_id: str, stdin_data: str | None) -> None:
-    """Run xkeen command in background and store result in JOBS."""
+    """Run xkeen or shell command in background and store result in JOBS."""
     with JOBS_LOCK:
         job = JOBS.get(job_id)
         if not job:
             return
         job.status = "running"
 
-    cmd = [XKEEN_BIN, job.flag]
+    if job.cmd:
+        cmd = [SHELL_BIN, "-c", job.cmd]
+    elif job.flag:
+        cmd = [XKEEN_BIN, job.flag]
+    else:
+        with JOBS_LOCK:
+            job = JOBS.get(job_id)
+            if not job:
+                return
+            job.status = "error"
+            job.error = "empty command"
+            job.finished_at = time.time()
+        return
 
     try:
         proc = subprocess.run(
@@ -529,10 +659,10 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
             job.finished_at = time.time()
 
 
-def _create_command_job(flag: str, stdin_data: str | None) -> CommandJob:
+def _create_command_job(flag: str | None, stdin_data: str | None, cmd: str | None = None) -> CommandJob:
     """Create CommandJob, start background thread and return the job object."""
     job_id = uuid.uuid4().hex[:12]
-    job = CommandJob(id=job_id, flag=flag)
+    job = CommandJob(id=job_id, flag=flag, cmd=cmd)
     with JOBS_LOCK:
         JOBS[job_id] = job
 
@@ -550,7 +680,189 @@ def _get_command_job(job_id: str) -> CommandJob | None:
 
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
-app.secret_key = "xkeen-ui-key-change-me"
+
+# --------------------
+# Auth / first-run setup
+# --------------------
+
+from werkzeug.security import generate_password_hash, check_password_hash
+
+AUTH_DIR = UI_STATE_DIR
+AUTH_FILE = os.path.join(AUTH_DIR, "auth.json")
+SECRET_KEY_FILE = os.path.join(AUTH_DIR, "secret.key")
+
+
+def _atomic_write(path: str, data: str, *, mode: int = 0o600) -> None:
+    d = os.path.dirname(path)
+    if d and not os.path.isdir(d):
+        os.makedirs(d, exist_ok=True)
+    tmp = f"{path}.tmp.{uuid.uuid4().hex}"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(data)
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except Exception:
+            pass
+    try:
+        os.chmod(tmp, mode)
+    except Exception:
+        pass
+    os.replace(tmp, path)
+
+
+def _load_or_create_secret_key() -> str:
+    """Load secret key from disk, or create a new one.
+
+    This is critical for session security. We keep it on disk with 0600 perms (see UI_STATE_DIR).
+    """
+    try:
+        with open(SECRET_KEY_FILE, "r", encoding="utf-8") as f:
+            key = (f.read() or "").strip()
+            if key:
+                return key
+    except FileNotFoundError:
+        pass
+    except Exception:
+        # If the file is unreadable for some reason, fall back to a fresh key.
+        pass
+
+    # Create a new random key
+    try:
+        raw = os.urandom(32)
+    except Exception:
+        # Very old/broken environments – still better than a constant string.
+        raw = (uuid.uuid4().hex + uuid.uuid4().hex).encode("utf-8")
+    key = raw.hex()
+    try:
+        _atomic_write(SECRET_KEY_FILE, key + "\n", mode=0o600)
+    except Exception:
+        # As a last resort: keep the generated key in memory.
+        pass
+    return key
+
+
+app.secret_key = os.environ.get("XKEEN_UI_SECRET_KEY") or _load_or_create_secret_key()
+
+# Cookie hardening (HTTPS may be unavailable on routers; keep Secure off by default)
+app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
+app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+
+
+def _auth_load() -> Optional[Dict[str, Any]]:
+    try:
+        with open(AUTH_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return None
+        return data
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def auth_is_configured() -> bool:
+    data = _auth_load() or {}
+    return bool((data.get("username") or "").strip()) and bool((data.get("password_hash") or "").strip())
+
+
+def _ensure_csrf_token() -> str:
+    tok = session.get("csrf")
+    if not tok:
+        tok = uuid.uuid4().hex
+        session["csrf"] = tok
+    return tok
+
+
+def _is_logged_in() -> bool:
+    return bool(session.get("auth"))
+
+
+def _json_unauthorized():
+    return jsonify({"ok": False, "error": "unauthorized"}), 401
+
+
+def _csrf_failed():
+    return jsonify({"ok": False, "error": "csrf_failed"}), 403
+
+
+def _check_csrf() -> bool:
+    expected = session.get("csrf")
+    if not expected:
+        return False
+
+    # HTML forms
+    form_tok = (request.form.get("csrf_token") or "").strip()
+    if form_tok and form_tok == expected:
+        return True
+
+    # JS fetches
+    hdr = (request.headers.get("X-CSRF-Token") or "").strip()
+    if hdr and hdr == expected:
+        return True
+
+    return False
+
+
+@app.context_processor
+def _inject_auth_context():
+    # Available in all templates
+    return {
+        "csrf_token": _ensure_csrf_token(),
+        "auth_user": session.get("user"),
+        "auth_configured": auth_is_configured(),
+    }
+
+
+@app.before_request
+def _auth_guard():
+    """Global access control.
+
+    - If credentials are not configured: force /setup.
+    - If configured but user is not logged in: force /login.
+    - For mutating requests (POST/PUT/DELETE/PATCH) when logged in: require CSRF token.
+    """
+
+    path = request.path or ""
+
+    # Always allow static and websocket endpoints
+    if path.startswith("/static/") or path.startswith("/ws/"):
+        return None
+
+    # Auth endpoints must be reachable
+    auth_open_paths = {
+        "/login",
+        "/logout",
+        "/setup",
+        "/api/auth/status",
+        "/api/auth/login",
+        "/api/auth/logout",
+        "/api/auth/setup",
+    }
+    if path in auth_open_paths:
+        return None
+
+    # If first-run setup is not done yet – force setup
+    if not auth_is_configured():
+        if path.startswith("/api/"):
+            return jsonify({"ok": False, "error": "not_configured"}), 428
+        return redirect(url_for("setup"))
+
+    # If configured but not logged in – force login
+    if not _is_logged_in():
+        if path.startswith("/api/"):
+            return _json_unauthorized()
+        return redirect(url_for("login", next=path))
+
+    # Logged in: CSRF protection for mutating calls
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        if not _check_csrf():
+            if path.startswith("/api/"):
+                return _csrf_failed()
+            return "csrf_failed", 403
+
+    return None
 
 
 
@@ -1086,6 +1398,192 @@ def save_outbounds(cfg):
     save_json(OUTBOUNDS_FILE, cfg)
 
 
+# ---------- routes: Auth / Setup ----------
+
+
+def _auth_save(username: str, password: str) -> None:
+    username = (username or "").strip()
+    pw_hash = generate_password_hash(password)
+    payload = {
+        "version": 1,
+        "created_at": int(time.time()),
+        "username": username,
+        "password_hash": pw_hash,
+    }
+    _atomic_write(AUTH_FILE, json.dumps(payload, ensure_ascii=False, indent=2) + "\n", mode=0o600)
+
+
+def _validate_username(username: str) -> Optional[str]:
+    u = (username or "").strip()
+    if len(u) < 3 or len(u) > 32:
+        return "Логин должен быть длиной 3–32 символа"
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", u):
+        return "Логин может содержать только латиницу, цифры и символы _ . -"
+    return None
+
+
+def _validate_password(password: str) -> Optional[str]:
+    p = password or ""
+    if len(p) < 8:
+        return "Пароль должен быть не короче 8 символов"
+    if p.strip() != p:
+        return "Пароль не должен начинаться/заканчиваться пробелами"
+    return None
+
+
+@app.get("/api/auth/status")
+def api_auth_status():
+    return jsonify({
+        "ok": True,
+        "configured": auth_is_configured(),
+        "logged_in": _is_logged_in(),
+        "user": session.get("user"),
+    })
+
+
+@app.get("/setup")
+def setup():
+    if auth_is_configured():
+        # Setup already done
+        if _is_logged_in():
+            return redirect(url_for("index"))
+        return redirect(url_for("login"))
+    return render_template("setup.html")
+
+
+@app.post("/setup")
+def setup_post():
+    if auth_is_configured():
+        return redirect(url_for("login"))
+    if not _check_csrf():
+        return render_template("setup.html", error="Ошибка безопасности: CSRF")
+
+    username = (request.form.get("username") or "").strip()
+    password = request.form.get("password") or ""
+    password2 = request.form.get("password2") or ""
+
+    err = _validate_username(username) or _validate_password(password)
+    if not err and password != password2:
+        err = "Пароли не совпадают"
+
+    if err:
+        return render_template("setup.html", error=err, username=username)
+
+    try:
+        _auth_save(username, password)
+    except Exception as e:
+        return render_template("setup.html", error=f"Не удалось сохранить учётные данные: {e}")
+
+    # Immediately log in after setup
+    session.clear()
+    _ensure_csrf_token()
+    session["auth"] = True
+    session["user"] = username
+    return redirect(url_for("index"))
+
+
+@app.get("/login")
+def login():
+    if not auth_is_configured():
+        return redirect(url_for("setup"))
+    if _is_logged_in():
+        return redirect(url_for("index"))
+    return render_template("login.html")
+
+
+@app.post("/login")
+def login_post():
+    if not auth_is_configured():
+        return redirect(url_for("setup"))
+    if not _check_csrf():
+        return render_template("login.html", error="Ошибка безопасности: CSRF")
+
+    username = (request.form.get("username") or "").strip()
+    password = request.form.get("password") or ""
+    rec = _auth_load() or {}
+
+    ok = False
+    try:
+        ok = (username == (rec.get("username") or "")) and check_password_hash((rec.get("password_hash") or ""), password)
+    except Exception:
+        ok = False
+
+    if not ok:
+        return render_template("login.html", error="Неверный логин или пароль", username=username)
+
+    session.clear()
+    _ensure_csrf_token()
+    session["auth"] = True
+    session["user"] = username
+
+    next_path = (request.args.get("next") or "").strip()
+    if next_path.startswith("/") and not next_path.startswith("//"):
+        return redirect(next_path)
+    return redirect(url_for("index"))
+
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.post("/api/auth/login")
+def api_auth_login():
+    if not auth_is_configured():
+        return jsonify({"ok": False, "error": "not_configured"}), 428
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    if not _check_csrf():
+        return _csrf_failed()
+
+    rec = _auth_load() or {}
+    try:
+        ok = (username == (rec.get("username") or "")) and check_password_hash((rec.get("password_hash") or ""), password)
+    except Exception:
+        ok = False
+    if not ok:
+        return jsonify({"ok": False, "error": "invalid_credentials"}), 401
+
+    session.clear()
+    _ensure_csrf_token()
+    session["auth"] = True
+    session["user"] = username
+    return jsonify({"ok": True})
+
+
+@app.post("/api/auth/logout")
+def api_auth_logout():
+    if not _check_csrf():
+        return _csrf_failed()
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/auth/setup")
+def api_auth_setup():
+    if auth_is_configured():
+        return jsonify({"ok": False, "error": "already_configured"}), 409
+    if not _check_csrf():
+        return _csrf_failed()
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    password2 = data.get("password2") or ""
+    err = _validate_username(username) or _validate_password(password)
+    if not err and password != password2:
+        err = "password_mismatch"
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    _auth_save(username, password)
+    session.clear()
+    _ensure_csrf_token()
+    session["auth"] = True
+    session["user"] = username
+    return jsonify({"ok": True})
+
+
 # ---------- routes: UI ----------
 
 @app.get("/")
@@ -1285,28 +1783,91 @@ def api_restart():
 
 
 
+
+# ------------------------------
+# One-time WebSocket tokens (for PTY shell)
+# ------------------------------
+import secrets as _secrets
+PTY_WS_TOKENS = {}  # token -> expires_ts (unix time)
+
+def issue_pty_ws_token(ttl_seconds: int = 60) -> str:
+    token = _secrets.token_urlsafe(24)
+    PTY_WS_TOKENS[token] = time.time() + int(ttl_seconds)
+    return token
+
+def validate_pty_ws_token(token: str) -> bool:
+    try:
+        token = (token or "").strip()
+    except Exception:
+        token = ""
+    if not token:
+        return False
+    exp = PTY_WS_TOKENS.get(token)
+    if not exp:
+        return False
+    now = time.time()
+    if now > float(exp):
+        PTY_WS_TOKENS.pop(token, None)
+        return False
+    # One-time use
+    PTY_WS_TOKENS.pop(token, None)
+    return True
+
+
+@app.post("/api/ws-token")
+def api_ws_token():
+    # Requires login + CSRF (enforced by _auth_guard)
+    ttl = 60
+    try:
+        data = request.get_json(silent=True) or {}
+        if isinstance(data, dict) and data.get("ttl"):
+            ttl = max(10, min(300, int(data.get("ttl"))))
+    except Exception:
+        ttl = 60
+    token = issue_pty_ws_token(ttl_seconds=ttl)
+    return jsonify({"ok": True, "token": token, "ttl": ttl})
+
+
 @app.post("/api/run-command")
 def api_run_command():
     data = request.get_json(silent=True) or {}
-    flag = str(data.get("flag", "")).strip()
-    if not flag:
-        return api_error("empty flag", 400, ok=False)
-    if flag not in ALLOWED_FLAGS:
-        return api_error("flag not allowed", 400, ok=False)
+
+    flag = str(data.get("flag", "") or "").strip()
+    cmd = str(data.get("cmd", "") or "").strip()
 
     stdin_data = data.get("stdin")
     if not isinstance(stdin_data, str):
         stdin_data = None
 
-    job = _create_command_job(flag, stdin_data)
-    return jsonify(
-        {
-            "ok": True,
-            "job_id": job.id,
-            "flag": job.flag,
-            "status": job.status,
-        }
-    ), 202
+    # Legacy mode: xkeen <flag>
+    if flag:
+        if flag not in ALLOWED_FLAGS:
+            return api_error("flag not allowed", 400, ok=False)
+        job = _create_command_job(flag=flag, stdin_data=stdin_data, cmd=None)
+        return jsonify(
+            {
+                "ok": True,
+                "job_id": job.id,
+                "flag": job.flag,
+                "status": job.status,
+            }
+        ), 202
+
+    # Full shell mode: arbitrary command, if enabled
+    if cmd:
+        if not ALLOW_FULL_SHELL:
+            return api_error("shell disabled by config", 403, ok=False)
+        job = _create_command_job(flag=None, stdin_data=stdin_data, cmd=cmd)
+        return jsonify(
+            {
+                "ok": True,
+                "job_id": job.id,
+                "cmd": job.cmd,
+                "status": job.status,
+            }
+        ), 202
+
+    return api_error("empty flag/cmd", 400, ok=False)
 
 
 @app.get("/api/run-command/<job_id>")
