@@ -229,10 +229,46 @@ fi
 
 if [ -n "$EXISTING_PORT" ]; then
   PANEL_PORT="$EXISTING_PORT"
-  echo "[*] Обнаружена существующая установка, сохраняю порт: $PANEL_PORT"
-  echo "[install] Текущий порт панели: $PANEL_PORT" >> "$LOG_DIR/xkeen-ui.log"
-else
-  # Выбираем порт заново (первая установка или не удалось прочитать порт)
+  USE_EXISTING=1
+
+  # Если порт занят, проверяем, не нашей ли панелью (чтобы при переустановке не менять порт)
+  if is_port_in_use "$PANEL_PORT"; then
+    OUR_PANEL=0
+    PID_FILE="$RUN_DIR/xkeen-ui.pid"
+
+    # 1) Проверка по PID-файлу
+    if [ -f "$PID_FILE" ]; then
+      PID="$(cat "$PID_FILE" 2>/dev/null || true)"
+      if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
+        if [ -r "/proc/$PID/cmdline" ]; then
+          CMDLINE="$(tr '\000' ' ' < "/proc/$PID/cmdline" 2>/dev/null || true)"
+          echo "$CMDLINE" | grep -Eq "$UI_DIR/run_server.py|$UI_DIR/app.py" && OUR_PANEL=1
+        else
+          # Если /proc недоступен, считаем, что PID относится к нашей панели
+          OUR_PANEL=1
+        fi
+      fi
+    fi
+
+    # 2) Страховка: поиск процесса по командной строке (если PID-файл отсутствует/некорректен)
+    if [ "$OUR_PANEL" -eq 0 ] && command -v ps >/dev/null 2>&1; then
+      ps w 2>/dev/null | grep -v grep | grep -Eq "$UI_DIR/run_server.py|$UI_DIR/app.py" && OUR_PANEL=1
+    fi
+
+    if [ "$OUR_PANEL" -ne 1 ]; then
+      echo "[*] Обнаружена существующая установка, но порт $PANEL_PORT занят другим процессом. Выбираю новый порт..."
+      USE_EXISTING=0
+    fi
+  fi
+
+  if [ "$USE_EXISTING" -eq 1 ]; then
+    echo "[*] Обнаружена существующая установка, сохраняю порт: $PANEL_PORT"
+    echo "[install] Текущий порт панели: $PANEL_PORT" >> "$LOG_DIR/xkeen-ui.log"
+  fi
+fi
+
+if [ -z "$EXISTING_PORT" ] || [ "${USE_EXISTING:-0}" -eq 0 ]; then
+  # Выбираем порт заново (первая установка или не удалось прочитать порт / порт занят другим сервисом)
   PANEL_PORT="$DEFAULT_PORT"
   if is_port_in_use "$PANEL_PORT"; then
     echo "[*] Порт $PANEL_PORT уже занят, пробую $ALT_PORT..."
@@ -284,6 +320,25 @@ else
   rm -f "$UI_DIR/install.sh"
 fi
 
+echo "[*] Проверяю наличие локальных файлов xterm для веб-терминала..."
+XTERM_DIR="$UI_DIR/static/xterm"
+XTERM_MISSING=0
+
+for f in xterm.js xterm-addon-fit.js xterm.css; do
+  if [ ! -f "$XTERM_DIR/$f" ]; then
+    echo "[!] Не найден файл: $XTERM_DIR/$f"
+    XTERM_MISSING=1
+  fi
+done
+
+if [ "$XTERM_MISSING" -ne 0 ]; then
+  echo "[!] Критическая ошибка: отсутствуют один или несколько файлов xterm для терминала в веб-панели."
+  echo "    Убедись, что архив с панелью содержит каталог static/xterm"
+  echo "    с файлами xterm.js, xterm-addon-fit.js и xterm.css, и запусти установку снова."
+  exit 1
+fi
+
+
 # --- Шаблоны Mihomo ---
 
 if [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
@@ -312,6 +367,7 @@ if [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
   fi
 fi
 
+\
 # --- Обновление порта в run_server.py / app.py ---
 
 RUN_SERVER="$UI_DIR/run_server.py"
@@ -320,15 +376,33 @@ APP_FILE="$UI_DIR/app.py"
 echo "[*] Обновляю порт в run_server.py / app.py..."
 UPDATED=0
 
-if [ -f "$RUN_SERVER" ] && grep -q 'WSGIServer(("0.0.0.0"' "$RUN_SERVER"; then
-  if sed -i -E "s/(WSGIServer\\(\\(\"0\\.0\\.0\\.0\",[[:space:]]*)[0-9]+/\\1${PANEL_PORT}/" "$RUN_SERVER"; then
+# run_server.py (текущая версия панели)
+if [ -f "$RUN_SERVER" ]; then
+  CHANGED_RUN=0
+
+  # Обновляем порт в ("0.0.0.0", PORT) — может быть на новой строке, поэтому ищем просто кортеж
+  if grep -q '"0\.0\.0\.0",[[:space:]]*[0-9]\+' "$RUN_SERVER"; then
+    if sed -i -E "s/(\"0\.0\.0\.0\",[[:space:]]*)[0-9]+/\1${PANEL_PORT}/g" "$RUN_SERVER"; then
+      CHANGED_RUN=1
+    fi
+  fi
+
+  # Обновляем fallback app.run(... port=PORT) внутри run_server.py (если есть)
+  if grep -q 'app\.run' "$RUN_SERVER"; then
+    if sed -i -E "s/(app\.run\([^)]*port[[:space:]]*=[[:space:]]*)[0-9]+/\1${PANEL_PORT}/g" "$RUN_SERVER"; then
+      CHANGED_RUN=1
+    fi
+  fi
+
+  if [ "$CHANGED_RUN" -eq 1 ]; then
     echo "[*] Порт в run_server.py обновлён на $PANEL_PORT."
     UPDATED=1
   fi
 fi
 
-if [ "$UPDATED" -eq 0 ] && [ -f "$APP_FILE" ] && grep -q 'app.run' "$APP_FILE"; then
-  if sed -i -E "s/(app.run\([^)]*port *= *)[0-9]+/\1${PANEL_PORT}/" "$APP_FILE"; then
+# app.py (для старых версий, где запуск был через app.run)
+if [ -f "$APP_FILE" ] && grep -q 'app\.run' "$APP_FILE"; then
+  if sed -i -E "s/(app\.run\([^)]*port[[:space:]]*=[[:space:]]*)[0-9]+/\1${PANEL_PORT}/g" "$APP_FILE"; then
     echo "[*] Порт в app.py обновлён на $PANEL_PORT."
     UPDATED=1
   fi
