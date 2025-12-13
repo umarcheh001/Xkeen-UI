@@ -41,11 +41,56 @@ header p {
 }
 
 .header-main {
-  display: flex;
+  /* 3 зоны: слева заголовок, по центру выбор ядра, справа действия */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 10px;
+}
+
+.header-title-group { justify-self: start; }
+.header-center { justify-self: center; }
+.header-right { justify-self: end; }
+
+@media (max-width: 900px) {
+  .header-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .header-center {
+    order: 3;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+}
+
+/* Правая группа в шапке: версия/ядро + действия (выйти + тема) */
+.header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+/* Держим «Выйти» и переключатель темы рядом (как единый блок) */
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.theme-toggle-header {
+  /* в шапке кнопка не плавающая */
+  position: static;
+  top: auto;
+  right: auto;
 }
 
 .header-title-group {
@@ -146,6 +191,11 @@ header p {
   background: rgba(15, 23, 42, 0.9);
 }
 
+/* Когда бейдж стоит рядом с кнопками управления — используем gap вместо margin */
+.xkeen-ctrl-row .last-load-badge {
+  margin-left: 0;
+}
+
 .last-load-badge.last-load-loaded {
   border-color: #22c55e66;
   color: #bbf7d0;
@@ -234,7 +284,7 @@ textarea#routing-editor {
   width: 100%;
   min-height: 260px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 13px;
+  font-size: 14px;
   padding: 8px;
   border-radius: 8px;
   border: 1px solid #374151;
@@ -249,7 +299,7 @@ textarea#routing-editor {
   width: 100%;
   min-height: 200px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 13px;
+  font-size: 14px;
   padding: 8px;
   border-radius: 8px;
   border: 1px solid #374151;
@@ -261,17 +311,42 @@ textarea#routing-editor {
 
 .CodeMirror {
   border-radius: 8px;
-  border: 1px solid #374151;
+  border: 1px solid #111827;
   background: #020617;
   /* Let CodeMirror grow with content; avoid conflicting manual resize */
   height: auto;
   min-height: 260px;
-  font-size: 13px;
+  font-family: "JetBrains Mono", "Fira Code", Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+
+  font-size: 14px;
 }
 
 /* Make scrolling predictable and avoid white gaps */
 .CodeMirror-scroll {
   max-height: 70vh;
+  background-color: #020617;
+  overflow: auto !important;
+}
+
+/*
+  Fullscreen (CodeMirror addon/display/fullscreen)
+  ------------------------------------------------
+  We intentionally cap editor height in normal mode via `max-height: 70vh`.
+  But in fullscreen CodeMirror only adds `.CodeMirror-fullscreen` on the
+  wrapper; without overrides the scroll area stays capped, so fullscreen looks
+  "crooked" (big empty space below/aside).
+*/
+.CodeMirror.CodeMirror-fullscreen {
+  /* Make sure the editor overlays the whole UI (sidebar/header, etc.) */
+  z-index: 10000;
+  border-radius: 0;
+}
+
+.CodeMirror.CodeMirror-fullscreen .CodeMirror-scroll {
+  max-height: none !important;
+  height: 100% !important;
 }
 
 .cm-error-line {
@@ -295,7 +370,7 @@ textarea#routing-editor {
 button {
   border-radius: 9999px;
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
   background: #020617;
   border: 1px solid #1f2937;
@@ -371,7 +446,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
   margin-top: 10px;
   color: #9ca3af;
 }
@@ -389,7 +464,7 @@ button:disabled {
   background: #020617;
   color: #e5e7eb;
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: 14px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
@@ -402,7 +477,7 @@ button:disabled {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 thead {
@@ -690,8 +765,57 @@ footer {
   color: #e5e7eb;
 }
 
+/* Комментарии: приглушённые серо-синие в тёмной теме */
 .cm-s-material-darker .cm-comment {
-  color: #facc15; /* ярко-жёлтые комментарии */
+  color: #64748b;
+  font-style: italic;
+}
+
+/* Ключи JSON/YAML (названия полей) */
+.cm-s-material-darker .cm-property {
+  color: #60a5fa;
+}
+
+/* Строки (пути, значения) */
+.cm-s-material-darker .cm-string {
+  color: #a3e635;
+}
+
+/* Числа */
+.cm-s-material-darker .cm-number {
+  color: #f97316;
+}
+
+/* true / false / null и прочие атомы */
+.cm-s-material-darker .cm-atom {
+  color: #22d3ee;
+}
+
+/* Скобки, запятые, двоеточия */
+.cm-s-material-darker .cm-punctuation,
+.cm-s-material-darker .cm-bracket {
+  color: #9ca3af;
+}
+
+/* Ключевые слова */
+.cm-s-material-darker .cm-keyword {
+  color: #facc15;
+}
+
+/* Имена и переменные */
+.cm-s-material-darker .cm-def,
+.cm-s-material-darker .cm-variable,
+.cm-s-material-darker .cm-variable-2 {
+  color: #e5e7eb;
+}
+
+/* Цвет номера строки и курсор */
+.cm-s-material-darker .CodeMirror-linenumber {
+  color: #4b5563;
+}
+
+.cm-s-material-darker .CodeMirror-cursor {
+  border-left: 2px solid #facc15;
 }
 
 /* Более заметное выделение текста в редакторах CodeMirror */
@@ -711,17 +835,278 @@ footer {
   background: rgba(96, 165, 250, 0.45) !important;
 }
 
+/* === CodeMirror cosmetics (enabled addons need CSS to be visible) ===
+   - match-highlighter: .cm-matchhighlight
+   - trailing-space:    .cm-trailingspace
+   - rulers:            .CodeMirror-ruler (.CodeMirror-rulers wrapper)
+*/
+.cm-s-material-darker .cm-matchhighlight,
+.xkeen-cm .cm-matchhighlight {
+  background: rgba(34, 211, 238, 0.18);
+  border-radius: 2px;
+}
 
+.cm-s-material-darker .cm-trailingspace,
+.xkeen-cm .cm-trailingspace {
+  background: rgba(248, 113, 113, 0.28);
+}
 
-/* Убираем белые полосы прокрутки внутри редактора */
-.CodeMirror-scroll {
-  background-color: #020617;
-  overflow: auto !important;
+.cm-s-material-darker .CodeMirror-rulers,
+.xkeen-cm .CodeMirror-rulers {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.cm-s-material-darker .CodeMirror-ruler,
+.xkeen-cm .CodeMirror-ruler {
+  /* Hide CodeMirror rulers (thin vertical guide line) */
+  border-left: 0 !important;
 }
 
 
+
+
+
 .xkeen-cm {
+  /* CodeMirror wrapper */
   min-height: 160px;
+}
+
+
+/* --- CodeMirror mouse toolbar (overlay) --- */
+.xkeen-cm-toolbar {
+  /* Toolbar sits above the editor (outside CodeMirror) */
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 0 0 6px 0;
+  padding-right: 6px;
+  /* Ensure tooltips and the toolbar itself can overlap the editor */
+  z-index: 50;
+  overflow: visible;
+}
+
+/* When editor is in fullscreen, keep toolbar visible */
+.xkeen-cm-toolbar.is-fullscreen {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 10050;
+}
+
+
+.xkeen-cm-tool {
+  position: relative;
+  width: 30px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.72);
+  color: rgba(226, 232, 240, 0.95);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  user-select: none;
+}
+
+.xkeen-cm-tool svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.xkeen-cm-tool:hover {
+  border-color: rgba(148, 163, 184, 0.45);
+  background: rgba(2, 6, 23, 0.88);
+}
+
+.xkeen-cm-tool:active {
+  transform: translateY(1px);
+}
+
+.xkeen-cm-tool:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.75);
+  outline-offset: 2px;
+}
+
+/* Red "?" help button */
+.xkeen-cm-tool.is-help {
+  color: rgba(239, 68, 68, 0.98);
+}
+
+.xkeen-cm-tool.is-help:hover {
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
+/* Tooltip (hover + keyboard focus) */
+.xkeen-cm-tool[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 9999;
+  white-space: nowrap;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.95);
+  color: rgba(226, 232, 240, 0.98);
+  font-size: 12px;
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.xkeen-cm-tool[data-tip]:hover::after,
+.xkeen-cm-tool[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Light theme */
+html[data-theme="light"] .xkeen-cm-tool {
+  background: rgba(255, 255, 255, 0.85);
+  color: rgba(15, 23, 42, 0.95);
+  border-color: rgba(15, 23, 42, 0.18);
+}
+
+html[data-theme="light"] .xkeen-cm-tool.is-help {
+  color: rgba(220, 38, 38, 0.98);
+}
+
+html[data-theme="light"] .xkeen-cm-tool[data-tip]::after {
+  background: rgba(255, 255, 255, 0.98);
+  color: rgba(15, 23, 42, 0.95);
+  border-color: rgba(15, 23, 42, 0.18);
+}
+
+/* --- CodeMirror help drawer (slides in from the right) --- */
+.xkeen-cm-help-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 10040;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+
+.xkeen-cm-help-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.xkeen-cm-help-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(460px, 92vw);
+  z-index: 10041;
+  transform: translateX(100%);
+  transition: transform 0.18s ease;
+  border-left: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.98);
+  color: rgba(226, 232, 240, 0.95);
+  box-shadow: -24px 0 48px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+
+.xkeen-cm-help-drawer.is-open {
+  transform: translateX(0);
+}
+
+.xkeen-cm-help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.xkeen-cm-help-title {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.xkeen-cm-help-close {
+  width: 34px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.65);
+  color: rgba(226, 232, 240, 0.95);
+  cursor: pointer;
+}
+
+.xkeen-cm-help-close:hover {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.xkeen-cm-help-body {
+  padding: 12px 14px 18px;
+  overflow: auto;
+}
+
+.xkeen-cm-help-section {
+  padding: 10px 10px;
+  margin: 0 0 10px 0;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.xkeen-cm-help-section h3 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+}
+
+.xkeen-cm-help-section p {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.xkeen-cm-help-section ul {
+  margin: 8px 0 0 18px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+html[data-theme="light"] .xkeen-cm-help-overlay {
+  background: rgba(15, 23, 42, 0.35);
+}
+
+html[data-theme="light"] .xkeen-cm-help-drawer {
+  background: rgba(255, 255, 255, 0.98);
+  color: rgba(15, 23, 42, 0.95);
+  border-left-color: rgba(15, 23, 42, 0.12);
+  box-shadow: -24px 0 48px rgba(0, 0, 0, 0.18);
+}
+
+html[data-theme="light"] .xkeen-cm-help-head {
+  border-bottom-color: rgba(15, 23, 42, 0.12);
+}
+
+html[data-theme="light"] .xkeen-cm-help-close {
+  background: rgba(255, 255, 255, 0.9);
+  color: rgba(15, 23, 42, 0.95);
+  border-color: rgba(15, 23, 42, 0.16);
+}
+
+html[data-theme="light"] .xkeen-cm-help-section {
+  background: rgba(248, 250, 252, 0.8);
+  border-color: rgba(15, 23, 42, 0.12);
 }
 
 /* Мини-терминал XKeen */
@@ -736,14 +1121,42 @@ footer {
 }
 
 .terminal-window {
-  width: 480px;
-  max-width: 95%;
+  width: 520px;
+  height: 360px;
+
+  min-width: 360px;
+  min-height: 240px;
+
+  max-width: 95vw;
+  max-height: 90vh;
+
   background: #020617;
   border-radius: 12px;
   border: 1px solid #334155;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
   padding: 12px 14px;
-  font-size: 13px;
+  font-size: 14px;
+
+  /* resizable + layout */
+  display: flex;
+  flex-direction: column;
+  resize: both;
+  overflow: hidden;
+  position: relative;
+}
+
+.terminal-window::after {
+  /* визуальная "ручка" в правом нижнем углу */
+  content: "";
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid rgba(148, 163, 184, 0.35);
+  border-bottom: 2px solid rgba(148, 163, 184, 0.35);
+  pointer-events: none;
+  border-radius: 2px;
 }
 
 .terminal-header {
@@ -751,6 +1164,105 @@ footer {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
+
+  /* drag handle */
+  cursor: move;
+  user-select: none;
+}
+
+.terminal-header-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.terminal-conn-lamp {
+  margin-left: 10px;
+}
+
+.terminal-conn-badge {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  line-height: 1.2;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(2, 6, 23, 0.6);
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+
+.terminal-conn-badge[data-state="connected"] {
+  border-color: rgba(52, 211, 153, 0.45);
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.terminal-conn-badge[data-state="connecting"] {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+}
+
+.terminal-conn-badge[data-state="disconnected"] {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+
+.terminal-uptime {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #9ca3af;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  white-space: nowrap;
+}
+
+.terminal-tool-btn-danger {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(127, 29, 29, 0.40);
+  color: #fecaca;
+}
+
+.terminal-tool-btn-danger:hover {
+  background: rgba(153, 27, 27, 0.55);
+}
+
+.terminal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.terminal-tool-btn {
+  border-radius: 9999px;
+  padding: 4px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(2, 6, 23, 0.6);
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.terminal-tool-btn:hover {
+  background: rgba(17, 24, 39, 0.85);
+}
+
+.terminal-tool-btn:active {
+  transform: translateY(1px);
+}
+
+.terminal-tool-btn.is-active {
+  border-color: rgba(59, 130, 246, 0.65);
+  background: rgba(30, 64, 175, 0.35);
+}
+
+.terminal-tool-btn-kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  padding: 4px 7px;
 }
 
 .terminal-header span {
@@ -766,6 +1278,21 @@ footer {
   line-height: 1;
 }
 
+.terminal-window.is-fullscreen {
+  position: fixed !important;
+  left: 8px !important;
+  top: 8px !important;
+  width: calc(100vw - 16px) !important;
+  height: calc(100vh - 16px) !important;
+  max-width: none !important;
+  max-height: none !important;
+  resize: none !important;
+}
+
+.terminal-window.is-fullscreen::after {
+  display: none;
+}
+
 .terminal-command {
   width: 100%;
   background: #020617;
@@ -778,20 +1305,102 @@ footer {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+.terminal-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.terminal-search-input {
+  flex: 1 1 220px;
+  min-width: 140px;
+  background: #020617;
+  border-radius: 9999px;
+  border: 1px solid #374151;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #e5e7eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.terminal-search-btn {
+  border-radius: 9999px;
+  padding: 4px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(2, 6, 23, 0.6);
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.terminal-search-btn:hover {
+  background: rgba(17, 24, 39, 0.85);
+}
+
+.terminal-search-btn:active {
+  transform: translateY(1px);
+}
+
+.terminal-search-counter {
+  min-width: 52px;
+  text-align: center;
+  font-size: 11px;
+  color: #9ca3af;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 .terminal-output {
   width: 100%;
   background: #020617;
   border-radius: 6px;
   border: 1px solid #1f2937;
   padding: 6px 8px;
-  margin-bottom: 8px;
-  max-height: 260px;
+  margin-bottom: 6px;
+
+  /* растягиваемое окно: вывод занимает всё оставшееся место */
+  flex: 1 1 auto;
+  min-height: 140px;
+  max-height: none;
+
   overflow: auto;
   white-space: pre-wrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
   color: #e5e7eb;
 }
+
+.terminal-output:has(.xterm) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.terminal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.terminal-footer-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.terminal-footer-label {
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 600;
+  user-select: none;
+  margin-right: 2px;
+}
+
 
 .terminal-input-row {
   display: flex;
@@ -804,7 +1413,7 @@ footer {
   border-radius: 9999px;
   border: 1px solid #374151;
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: 14px;
   color: #e5e7eb;
 }
 
@@ -814,11 +1423,25 @@ footer {
   border: none;
   background: #2563eb;
   color: #f9fafb;
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
 }
 .terminal-send:hover {
   background: #1d4ed8;
+}
+
+
+.terminal-history-btn {
+  border-radius: 9999px;
+  padding: 6px 10px;
+  border: 1px solid #4b5563;
+  background: transparent;
+  color: #e5e7eb;
+  font-size: 14px;
+  cursor: pointer;
+}
+.terminal-history-btn:hover {
+  background: #111827;
 }
 
 
@@ -837,7 +1460,7 @@ footer {
   min-width: 180px;
   border-radius: 9999px;
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: 14px;
   border: 1px solid #374151;
   background: #020617;
   color: #e5e7eb;
@@ -861,7 +1484,7 @@ footer {
 button.top-tab-btn {
   border-radius: 9999px;
   padding: 6px 14px;
-  font-size: 13px;
+  font-size: 14px;
   text-align: center;
   justify-content: center;
   display: flex;
@@ -1216,6 +1839,11 @@ button.backup-icon-btn.backup-delete-btn {
   margin-top: 8px;
   display: flex;
   justify-content: flex-end;
+  align-items: flex-start;
+}
+
+/* Справа: чекбокс авто‑перезапуска + бейдж "Загружено ..." строго под ним */
+Lpx;
 }
 
 .global-autorestart-toggle {
@@ -1239,15 +1867,30 @@ button.backup-icon-btn.backup-delete-btn {
 
 
 .xkeen-ctrl-row {
-  margin-top: 6px;
+  margin-top: 8px;
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 
+
+
+/* Бейдж справа: под чекбоксом и выровнен по правому краю */
+.global-toggle-right .last-load-badge {
+  margin-left: 0;
+  align-self: flex-end;
+}
 .xkeen-ctrl-group {
   display: inline-flex;
   gap: 4px;
+}
+
+/* Бейдж «Загружено ...» теперь стоит рядом с кнопками управления */
+.xkeen-ctrl-row .last-load-badge {
+  margin-left: 0;
 }
 
 .xkeen-ctrl-btn {
@@ -1290,6 +1933,11 @@ button.backup-icon-btn.backup-delete-btn {
   to   { transform: translateY(-50%) rotate(360deg); }
 }
 
+
+@keyframes xkeen-global-spinner {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 .xkeen-ctrl-btn.loading {
   position: relative;
   color: #9ca3af;
@@ -1336,7 +1984,7 @@ textarea#json-editor-textarea {
   max-height: 60vh;
   height: 260px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 13px;
+  font-size: 14px;
   padding: 8px;
   border-radius: 8px;
   border: 1px solid #374151;
@@ -1377,7 +2025,7 @@ textarea#json-editor-textarea {
   display: inline-block;
   margin-top: -4px;
   margin-bottom: 4px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 #mihomo-profiles-link:hover {
@@ -1435,7 +2083,7 @@ textarea#json-editor-textarea {
   background: #020617;
   color: #e5e7eb;
   box-sizing: border-box;
-  font-size: 13px;
+  font-size: 14px;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
@@ -1464,7 +2112,7 @@ textarea#json-editor-textarea {
 .xkeen-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
   margin-top: 8px;
 }
 
@@ -1565,12 +2213,14 @@ button.icon-btn {
 }
 
 .global-spinner-icon {
+  display: inline-block;
+  flex-shrink: 0;
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  border: 2px solid rgba(148, 163, 184, 0.7);
-  border-top-color: #e5e7eb;
-  animation: xkeen-spinner 0.8s linear infinite;
+  border: 2px solid rgba(34, 197, 94, 0.35);
+  border-top-color: #22c55e;
+  animation: xkeen-global-spinner 0.8s linear infinite;
 }
 
 .global-spinner-text {
@@ -1845,6 +2495,34 @@ html[data-theme="light"] .cm-s-material-darker .CodeMirror-line > span > span::s
   background: rgba(148, 163, 184, 0.35) !important;
 }
 
+/* Light theme: softer selection (avoid "dirty" dark blocks) */
+html[data-theme="light"] .xkeen-cm .CodeMirror-selected,
+html[data-theme="light"] .xkeen-cm .CodeMirror-line::selection,
+html[data-theme="light"] .xkeen-cm .CodeMirror-line > span::selection,
+html[data-theme="light"] .xkeen-cm .CodeMirror-line > span > span::selection {
+  background: rgba(10, 132, 255, 0.22) !important;
+}
+html[data-theme="light"] .xkeen-cm ::selection {
+  background: rgba(10, 132, 255, 0.22) !important;
+}
+
+
+/* Светлая тема: make CodeMirror cosmetics clearly visible */
+html[data-theme="light"] .cm-s-material-darker .cm-matchhighlight,
+html[data-theme="light"] .xkeen-cm .cm-matchhighlight {
+  background: rgba(59, 130, 246, 0.14);
+}
+
+html[data-theme="light"] .cm-s-material-darker .cm-trailingspace,
+html[data-theme="light"] .xkeen-cm .cm-trailingspace {
+  background: rgba(220, 38, 38, 0.16);
+}
+
+html[data-theme="light"] .cm-s-material-darker .CodeMirror-ruler,
+html[data-theme="light"] .xkeen-cm .CodeMirror-ruler {
+  border-left-color: rgba(17, 24, 39, 0.12);
+}
+
 
 /* === Светлая тема: читаемые «Команды» и модальные окна === */
 
@@ -1959,10 +2637,36 @@ html[data-theme="light"] .terminal-command {
   border-color: #e5e7eb;
 }
 
+html[data-theme="light"] .terminal-search-input {
+  background: #ffffff;
+  color: #111827;
+  border-color: #d1d5db;
+}
+
+html[data-theme="light"] .terminal-search-btn {
+  background: rgba(248, 250, 252, 0.9);
+  color: #111827;
+  border-color: rgba(15, 23, 42, 0.16);
+}
+
+html[data-theme="light"] .terminal-search-btn:hover {
+  background: rgba(226, 232, 240, 0.9);
+}
+
 html[data-theme="light"] .terminal-input {
   background: #ffffff;
   color: #111827;
   border-color: #d1d5db;
+}
+
+html[data-theme="light"] .terminal-tool-btn {
+  background: rgba(248, 250, 252, 0.9);
+  color: #111827;
+  border-color: rgba(15, 23, 42, 0.16);
+}
+
+html[data-theme="light"] .terminal-tool-btn:hover {
+  background: rgba(226, 232, 240, 0.9);
 }
 
 /* Светлая тема: режим работы inbounds */
@@ -2016,3 +2720,70 @@ html[data-theme="light"] tbody tr:hover {
   background: #f3f4f6;
 }
 
+
+
+/* Подсветка текущей строки в редакторах CodeMirror (как в современных IDE) */
+.cm-s-material-darker .CodeMirror-activeline-background,
+.xkeen-cm .CodeMirror-activeline-background {
+  background: #111827;
+}
+
+
+/* Light theme: active line highlight must be light (avoid dark bars) */
+html[data-theme="light"] .xkeen-cm .CodeMirror-activeline-background,
+html[data-theme="light"] .cm-s-material-darker .CodeMirror-activeline-background,
+html[data-theme="light"] .cm-s-default .CodeMirror-activeline-background {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+
+
+/* Indent guides rendered via overlay (spaces & tabs at line start). */
+.xkeen-cm .cm-indent-guide {
+  position: relative;
+}
+
+.xkeen-cm .cm-indent-guide::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -2px;
+  bottom: -2px;
+  border-left: 1px solid rgba(55, 65, 81, 0.8);
+  opacity: 0.9;
+}
+/* Вертикальные направляющие отступов (indent guides) для JSON/YAML редакторов */
+.xkeen-cm .CodeMirror-code .cm-tab {
+  position: relative;
+}
+
+.xkeen-cm .CodeMirror-code .cm-tab::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -2px;
+  bottom: -2px;
+  border-left: 1px solid rgba(55, 65, 81, 0.85);
+  opacity: 0.7;
+}
+
+
+/* Light theme: indent guides should be subtle */
+html[data-theme="light"] .xkeen-cm .cm-indent-guide::before,
+html[data-theme="light"] .xkeen-cm .CodeMirror-code .cm-tab::before {
+  border-left-color: rgba(17, 24, 39, 0.12);
+  opacity: 0.7;
+}
+
+
+
+
+
+html[data-theme="light"] .terminal-conn-badge {
+  background: rgba(255, 255, 255, 0.75);
+  color: #334155;
+}
+
+html[data-theme="light"] .terminal-uptime {
+  color: #475569;
+}
