@@ -4,14 +4,47 @@
   <meta charset="utf-8">
   <title>Xkeen UI — Mihomo генератор</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
 
   <!-- CodeMirror for YAML editing -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/codemirror.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/theme/material-darker.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/lint/lint.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/fold/foldgutter.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/dialog/dialog.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/display/fullscreen.css') }}">
+
+  <script src="{{ url_for('static', filename='codemirror/codemirror.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/display/indent-guides.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/selection/active-line.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/edit/matchbrackets.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/edit/closebrackets.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/comment/comment.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/display/fullscreen.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/mode/yaml/yaml.min.js') }}"></script>
+
+  <!-- Lint (optional for YAML; safe to load) -->
+  <script src="{{ url_for('static', filename='codemirror/addon/lint/lint.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='jsonlint/jsonlint.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/lint/json-lint.min.js') }}"></script>
+
+  <!-- Folding -->
+  <script src="{{ url_for('static', filename='codemirror/addon/fold/foldcode.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/fold/brace-fold.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/fold/indent-fold.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/fold/foldgutter.js') }}"></script>
+
+  <!-- Search + Dialog -->
+  <script src="{{ url_for('static', filename='codemirror/addon/search/searchcursor.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/search/search.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/search/match-highlighter.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/dialog/dialog.js') }}"></script>
+
+
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <style>
     body {
       background: #020617;
@@ -203,7 +236,15 @@
       border: 1px solid #374151;
       height: auto;
       min-height: 340px;
-      max-height: 70vh;
+    }
+
+    /* Fullscreen (CodeMirror addon/display/fullscreen)
+       IMPORTANT: do not constrain the wrapper height in fullscreen.
+       Normal-height limiting is handled globally via .CodeMirror-scroll.
+    */
+    .CodeMirror.CodeMirror-fullscreen {
+      max-height: none !important;
+      height: auto !important;
     }
     .preview-actions {
       display: flex;
@@ -211,6 +252,35 @@
       gap: 6px;
       justify-content: flex-end;
       margin-bottom: 6px;
+    }
+
+    .preview-head-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .preview-head-top h2 {
+      margin: 0;
+    }
+    .preview-toolbar-host {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex: 0 0 auto;
+      min-width: 0;
+    }
+    /* Toolbar moved into header: no extra spacing */
+    .preview-toolbar-host .xkeen-cm-toolbar {
+      margin: 0;
+      padding-right: 0;
+    }
+    .btn-icon {
+      padding-left: 9px;
+      padding-right: 9px;
+      min-width: 34px;
+      justify-content: center;
     }
     .hint {
       font-size: 12px;
@@ -364,13 +434,6 @@
   </style>
 </head>
 <body>
-  <button
-    type="button"
-    id="theme-toggle-btn"
-    class="theme-toggle-btn theme-toggle-floating"
-    aria-label="Переключить тему"
-  ></button>
-
   <div id="global-xkeen-spinner">
     <div class="global-spinner-box">
       <div class="global-spinner-icon"></div>
@@ -384,10 +447,20 @@
   <div class="container">
     <header>
       <h1>Mihomo — генератор конфига</h1>
-      <p>
-        Новый генератор для профилей роутера (bazy ZKeen / кастомные провайдеры).
-        <a href="{{ url_for('index') }}">← Назад в основную панель</a>
-      </p>
+      <p>Новый генератор для профилей роутера (bazy ZKeen / кастомные провайдеры).</p>
+
+      <div class="actions" style="justify-content: space-between; align-items: center;">
+        <a href="{{ url_for('index') }}" class="btn-link">← Назад в основную панель</a>
+        <div class="header-actions">
+          <button
+            type="button"
+            id="theme-toggle-btn"
+            class="theme-toggle-btn theme-toggle-header"
+            aria-label="Переключить тему"
+          ></button>
+          <a href="{{ url_for('logout') }}" class="btn-link" title="Выйти из панели">Выйти</a>
+        </div>
+      </div>
     </header>
 
     <div class="generator-layout">
@@ -459,19 +532,18 @@
       <!-- RIGHT CARD -->
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;">
-          <div>
-            <h2>Предпросмотр config.yaml</h2>
+          <div style="flex:1;min-width:0;">
+            <div class="preview-head-top">
+              <h2>Предпросмотр</h2>
+              <!-- Toolbar (Поиск/Фулскрин/и т.д.) будет подключён к CodeMirror и вставлен сюда -->
+              <div id="previewToolbarHost" class="preview-toolbar-host"></div>
+            </div>
             <small>
               По умолчанию загружен базовый скелет. Можно доработать вручную при включённом «Редактирование».
             </small>
             <div id="stateSummary" class="hint" style="margin-top:4px;">
               Профиль: router_custom · Rule-групп: 0 · Подписок: 0 · Прокси: 0
             </div>
-          </div>
-                  <div class="preview-actions">
-            <button type="button" id="generateBtn" class="btn btn-primary">
-              ⚙️ Демо
-            </button>
           </div>
         </div>
 
@@ -489,6 +561,9 @@
               <input type="checkbox" id="editToggle">
               Редактирование
             </label>
+            <button type="button" id="generateBtn" class="btn btn-primary btn-icon" title="Демо: сгенерировать/обновить предпросмотр" aria-label="Демо">
+              ⚙️
+            </button>
             <button type="button" id="copyBtn" class="btn" title="Копировать в буфер обмена">
               📋
             </button>
@@ -847,18 +922,86 @@ proxy-groups:
 
 
   // ----- CodeMirror init -----
+  function getCurrentCmTheme() {
+    try {
+      return (document.documentElement.getAttribute('data-theme') === 'light') ? 'default' : 'material-darker';
+    } catch (e) {
+      return 'material-darker';
+    }
+  }
+
   function initEditor() {
     if (editor) return;
     previewTextarea.value = SKELETON;
     editor = CodeMirror.fromTextArea(previewTextarea, {
       mode: "text/x-yaml",
-      theme: "material-darker",
+      theme: getCurrentCmTheme(),
       lineNumbers: true,
+      styleActiveLine: true,
+      showIndentGuides: true,
+      matchBrackets: true,
+      autoCloseBrackets: true,
+      highlightSelectionMatches: true,
       lineWrapping: true,
-      readOnly: "nocursor"
+      foldGutter: true,
+      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
+      tabSize: 2,
+      indentUnit: 2,
+      indentWithTabs: false,
+      viewportMargin: Infinity,
+      extraKeys: Object.assign({}, (typeof buildCmExtraKeysCommon === 'function' ? buildCmExtraKeysCommon() : {}), {
+        'Ctrl-F': 'findPersistent',
+        'Cmd-F': 'findPersistent',
+        'Ctrl-G': 'findNext',
+        'Cmd-G': 'findNext',
+        'Shift-Ctrl-G': 'findPrev',
+        'Shift-Cmd-G': 'findPrev',
+        'Ctrl-H': 'replace',
+        'Shift-Ctrl-H': 'replaceAll'
+      }),
+      // Preview is read-only, но с курсором и поиском
+      readOnly: true
     });
+
+    // Mark as XKeen editor so shared CSS fixes apply in light theme
+    try {
+      const w = editor.getWrapperElement && editor.getWrapperElement();
+      if (w) w.classList.add('xkeen-cm');
+    } catch (e) {}
+
+    // Register in global list so main.js theme toggle can sync it
+    try {
+      window.__xkeenEditors = window.__xkeenEditors || [];
+      window.__xkeenEditors.push(editor);
+    } catch (e) {}
+
+    // Attach the same toolbar as in other editors (search/fullscreen/etc.)
+    try {
+      if (typeof xkeenAttachCmToolbar === 'function') {
+        const items = (typeof XKEEN_CM_TOOLBAR_DEFAULT !== 'undefined') ? XKEEN_CM_TOOLBAR_DEFAULT : null;
+        xkeenAttachCmToolbar(editor, items);
+        // Move toolbar to the header, next to "Предпросмотр"
+        const host = document.getElementById('previewToolbarHost');
+        if (host && editor._xkeenToolbarEl) {
+          host.appendChild(editor._xkeenToolbarEl);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
     editor.setValue(SKELETON);
   }
+
+  // React on theme changes (main.js dispatches xkeen-theme-change)
+  document.addEventListener('xkeen-theme-change', (e) => {
+    if (!editor) return;
+    const cmTheme = (e && e.detail && e.detail.cmTheme) ? e.detail.cmTheme : getCurrentCmTheme();
+    try {
+      editor.setOption('theme', cmTheme);
+      editor.refresh();
+    } catch (err) {}
+  });
 
   // ----- subscriptions -----
   function createSubscriptionRow(value) {
@@ -1417,7 +1560,7 @@ proxy-groups:
       editor.setOption("readOnly", false);
       setStatus("Режим редактирования включён.", "ok");
     } else {
-      editor.setOption("readOnly", "nocursor");
+      editor.setOption("readOnly", true);
       setStatus("Редактирование выключено, конфиг защищён от случайных правок.", null);
     }
   }
@@ -1425,6 +1568,7 @@ proxy-groups:
   // ----- init -----
   document.addEventListener("DOMContentLoaded", () => {
     initEditor();
+    try { setEditable(!!(editToggle && editToggle.checked)); } catch (e) {}
     addInitialSubscriptionRow();
     loadProfileDefaults(profileSelect && profileSelect.value);
     setStatus("Скелет загружен. Заполните поля слева и нажмите «Применить».", null);
@@ -1456,5 +1600,7 @@ proxy-groups:
     <div id="validationModalBody" class="modal-body modal-body-logs"></div>
   </div>
 </div>
+
+<div id="toast-container"></div>
 </body>
-</html>
+      </html>
