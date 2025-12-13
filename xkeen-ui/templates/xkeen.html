@@ -4,24 +4,27 @@
   <meta charset="utf-8">
   <title>Xkeen UI — Настройки XKeen</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
 
     <!-- CodeMirror for XKeen text files -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/codemirror.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/theme/material-darker.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/display/fullscreen.css') }}">
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script src="{{ url_for('static', filename='codemirror/codemirror.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/display/indent-guides.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/selection/active-line.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/edit/matchbrackets.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/comment/comment.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/display/fullscreen.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/mode/shell/shell.min.js') }}"></script>
+
+
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-  <button
-    type="button"
-    id="theme-toggle-btn"
-    class="theme-toggle-btn theme-toggle-floating"
-    aria-label="Переключить тему"
-  ></button>
-
   <div id="global-xkeen-spinner">
     <div class="global-spinner-box">
       <div class="global-spinner-icon"></div>
@@ -36,7 +39,18 @@
     <header>
       <h1>Xkeen — настройки</h1>
       <p>Порты и IP-исключения для /opt/etc/xkeen.</p>
-      <p><a href="{{ url_for('index') }}">← Вернуться к основной панели</a></p>
+      <div class="actions" style="justify-content: space-between; align-items: center;">
+        <a href="{{ url_for('index') }}" class="btn-link">← Вернуться к основной панели</a>
+        <div class="header-actions">
+          <button
+            type="button"
+            id="theme-toggle-btn"
+            class="theme-toggle-btn theme-toggle-header"
+            aria-label="Переключить тему"
+          ></button>
+          <a href="{{ url_for('logout') }}" class="btn-link" title="Выйти из панели">Выйти</a>
+        </div>
+      </div>
     </header>
 
     <div class="layout-single">
@@ -110,6 +124,8 @@
       </section>
 
     </div>
+
+    <div id="toast-container"></div>
 
     <footer>
       <small>Xkeen UI — страница настроек XKeen</small>
