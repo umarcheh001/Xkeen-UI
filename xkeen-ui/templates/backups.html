@@ -4,15 +4,18 @@
   <meta charset="utf-8">
   <title>Xkeen UI — Бэкапы Xray конфигов</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-  <button
-    type="button"
-    id="theme-toggle-btn"
-    class="theme-toggle-btn theme-toggle-floating"
-    aria-label="Переключить тему"
-  ></button>
+  <div id="global-xkeen-spinner">
+    <div class="global-spinner-box">
+      <div class="global-spinner-icon"></div>
+      <div class="global-spinner-text" id="global-xkeen-spinner-text">
+        Применяем изменения и перезапускаем xkeen…
+      </div>
+    </div>
+  </div>
 
   <div class="container">
     <header>
@@ -23,6 +26,15 @@
     <section class="card">
       <div class="actions" style="justify-content: space-between;">
         <a href="/" class="btn-link">← Назад к панели</a>
+        <div class="header-actions">
+          <button
+            type="button"
+            id="theme-toggle-btn"
+            class="theme-toggle-btn theme-toggle-header"
+            aria-label="Переключить тему"
+          ></button>
+          <a href="{{ url_for('logout') }}" class="btn-link" title="Выйти из панели">Выйти</a>
+        </div>
       </div>
 
       {% if backups %}
@@ -44,8 +56,8 @@
             <td>
               <div class="backup-actions">
                 <form method="post"
-                      action="/restore"
-                      onsubmit="return confirm('Восстановить этот бэкап и перезапустить xkeen?');">
+                      action="/restore">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="filename" value="{{ b.name }}">
                   <button type="submit"
                           class="backup-icon-btn"
@@ -57,8 +69,8 @@
                 </form>
 
                 <form method="post"
-                      action="/delete-backup"
-                      onsubmit="return confirm('Удалить этот бэкап? Это действие необратимо.');">
+                      action="/delete-backup">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                   <input type="hidden" name="filename" value="{{ b.name }}">
                   <button type="submit"
                           class="backup-icon-btn backup-delete-btn"
@@ -79,10 +91,146 @@
       {% endif %}
     </section>
 
+    <div id="backups-status" class="status"></div>
+
+    <div id="toast-container"></div>
+
     <footer>
       <small>Xkeen UI — управление бэкапами.</small>
     </footer>
   </div>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
+  <script>
+  (function () {
+    function initBackupsPageEnhancements() {
+      const table = document.querySelector('#backups-table tbody');
+      const statusEl = document.getElementById('backups-status');
+
+      const restoreForms = document.querySelectorAll('form[action="/restore"]');
+      const deleteForms = document.querySelectorAll('form[action="/delete-backup"]');
+
+      restoreForms.forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+
+          var filenameInput = form.querySelector('input[name="filename"]');
+          var filename = filenameInput ? filenameInput.value : '';
+          if (!filename) {
+            if (statusEl) statusEl.textContent = 'Не указан файл бэкапа.';
+            if (typeof showToast === 'function') {
+              showToast('Не указан файл бэкапа.', true);
+            }
+            return;
+          }
+
+          if (!confirm('Восстановить этот бэкап и перезапустить xkeen?')) {
+            return;
+          }
+
+          fetch('/api/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: filename })
+          })
+          .then(function (res) { return res.json().catch(function () { return {}; }); })
+          .then(function (data) {
+            if (!data || data.ok !== true) {
+              var msgErr = 'Ошибка восстановления бэкапа: ' + (data && data.error ? data.error : 'неизвестная ошибка');
+              if (statusEl) statusEl.textContent = msgErr;
+              if (typeof showToast === 'function') {
+                showToast(msgErr, true);
+              }
+              return;
+            }
+
+            var msg = 'Бэкап восстановлен: ' + filename;
+            if (statusEl) statusEl.textContent = msg;
+            if (typeof showToast === 'function') {
+              showToast(msg, false);
+            }
+
+            // Теперь перезапускаем xkeen через API.
+            return fetch('/api/restart', { method: 'POST' });
+          })
+          .catch(function (err) {
+            console.error(err);
+            var msg = 'Ошибка при запросе восстановления бэкапа.';
+            if (statusEl) statusEl.textContent = msg;
+            if (typeof showToast === 'function') {
+              showToast(msg, true);
+            }
+          });
+        });
+      });
+
+      deleteForms.forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+
+          var filenameInput = form.querySelector('input[name="filename"]');
+          var filename = filenameInput ? filenameInput.value : '';
+          if (!filename) {
+            if (statusEl) statusEl.textContent = 'Не указан файл бэкапа.';
+            if (typeof showToast === 'function') {
+              showToast('Не указан файл бэкапа.', true);
+            }
+            return;
+          }
+
+          if (!confirm('Удалить этот бэкап? Это действие необратимо.')) {
+            return;
+          }
+
+          fetch('/api/delete-backup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: filename })
+          })
+          .then(function (res) { return res.json().catch(function () { return {}; }); })
+          .then(function (data) {
+            if (!data || data.ok !== true) {
+              var msgErr = 'Ошибка удаления бэкапа: ' + (data && data.error ? data.error : 'неизвестная ошибка');
+              if (statusEl) statusEl.textContent = msgErr;
+              if (typeof showToast === 'function') {
+                showToast(msgErr, true);
+              }
+              return;
+            }
+
+            var msg = 'Бэкап удалён: ' + filename;
+            if (statusEl) statusEl.textContent = msg;
+            if (typeof showToast === 'function') {
+              showToast(msg, false);
+            }
+
+            var row = form.closest('tr');
+            if (row && row.parentNode) {
+              row.parentNode.removeChild(row);
+            }
+
+            if (table && !table.children.length) {
+              // Если все строки удалены, можно обновить статус.
+              statusEl.textContent = 'Бэкапов пока нет.';
+            }
+          })
+          .catch(function (err) {
+            console.error(err);
+            var msg = 'Ошибка при запросе удаления бэкапа.';
+            if (statusEl) statusEl.textContent = msg;
+            if (typeof showToast === 'function') {
+              showToast(msg, true);
+            }
+          });
+        });
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initBackupsPageEnhancements);
+    } else {
+      initBackupsPageEnhancements();
+    }
+  })();
+  </script>
 </body>
 </html>
