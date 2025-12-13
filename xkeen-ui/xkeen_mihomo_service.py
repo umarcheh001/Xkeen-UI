@@ -21,6 +21,14 @@ from mihomo_server_core import (
     restart_mihomo_and_get_log,
 )
 
+import os
+import re
+
+from services.xkeen import append_restart_log as _svc_append_restart_log
+
+RESTART_LOG_FILE = os.environ.get("XKEEN_RESTART_LOG_FILE", "/opt/etc/xkeen-ui/restart.log")
+
+
 
 def generate_config_from_state(state: Dict[str, Any]) -> str:
     """Return full mihomo config.yaml text for given UI state (no disk I/O).
@@ -78,14 +86,14 @@ def generate_save_and_restart(payload: Dict[str, Any]) -> Tuple[str, str]:
 
          If ``configOverride`` is a non-empty string, it is used *as is* as
          the final config.yaml (manual edit in the web editor wins).
-         Otherwise the config is generated from ``payload["state"]`` using
+         Otherwise the config is generated from ``payload['state']`` using
          :func:`build_full_config`.
 
     Returns:
         (config_yaml, restart_log)
     """
     # Detect whether we were given a plain state dict (old API) or an extended
-    # payload (new API with manual override support).
+    # payload (new API) with manual override support.
     if "profile" in payload and "state" not in payload and "configOverride" not in payload:
         state: Dict[str, Any] = payload
         override = ""
@@ -107,6 +115,22 @@ def generate_save_and_restart(payload: Dict[str, Any]) -> Tuple[str, str]:
 
     ensure_mihomo_layout()
     log = restart_mihomo_and_get_log(cfg)
+
+    # Log restart result into the common restart.log so that all restarts are tracked.
+    try:
+        ok_restart = False
+        match = re.search(r"\[exit code:\s*(-?\d+)\]", log)
+        if match:
+            try:
+                ok_restart = int(match.group(1)) == 0
+            except Exception:
+                ok_restart = False
+
+        _svc_append_restart_log(RESTART_LOG_FILE, ok_restart, source="mihomo-config")
+    except Exception:
+        # Logging errors must not affect the main flow.
+        pass
+
     return cfg, log
 
 
