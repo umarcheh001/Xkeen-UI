@@ -230,4 +230,5 @@ rm -f /opt/etc/xkeen-ui/auth.json
 
 ---
 
+![xkeen-ui-demo](https://github.com/user-attachments/assets/89e55119-d875-4b9b-af94-4bfc0d2a2da7)
 
