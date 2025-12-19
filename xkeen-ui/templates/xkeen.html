@@ -132,6 +132,17 @@
     </footer>
   </div>
 
+	<!-- Modularization scaffold (no behavior changes yet) -->
+	<script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/local_io.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/service_status.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/features/xkeen_texts.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pages/xkeen.init.js') }}"></script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 </body>
 </html>
