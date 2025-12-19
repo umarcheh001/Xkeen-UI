@@ -42,6 +42,9 @@
   <!-- Quality-of-life addons: fullscreen, comments, trailing spaces, rulers -->
   <script src="{{ url_for('static', filename='codemirror/addon/display/fullscreen.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/comment/comment.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/comment/continuecomment.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/fold/comment-fold.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/addon/mode/overlay.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
 
@@ -112,19 +115,19 @@
       <p>Маршрутизация, режим inbounds и VLESS outbounds в одной панели.</p>
 
 <div class="top-tabs">
-        <button class="top-tab-btn active" data-view="routing" onclick="showView('routing')">
+        <button class="top-tab-btn active" data-view="routing">
           Роутинг Xray
         </button>
-        <button class="top-tab-btn" data-view="mihomo" onclick="showView('mihomo')">
+        <button class="top-tab-btn" data-view="mihomo">
           Роутинг Mihomo
         </button>
-        <button class="top-tab-btn" data-view="xkeen" onclick="showView('xkeen')">
+        <button class="top-tab-btn" data-view="xkeen">
           Порты и Исключения
         </button>
-        <button class="top-tab-btn" data-view="xray-logs" onclick="showView('xray-logs')">
+        <button class="top-tab-btn" data-view="xray-logs">
           Live логи Xray
         </button>
-        <button class="top-tab-btn" data-view="commands" onclick="showView('commands')">
+        <button class="top-tab-btn" data-view="commands">
           Команды
         </button>
         <button class="top-tab-btn" type="button" onclick="window.location.href='/mihomo_generator'">
@@ -156,7 +159,7 @@
 
         <!-- Сворачиваемый блок routing -->
         <section class="card">
-          <div class="commands-header" onclick="toggleRoutingCard()">
+          <div class="commands-header" id="routing-header">
             <h2>Роутинг Xray</h2>
             <span id="routing-arrow">▼</span>
           </div>
@@ -203,7 +206,7 @@
 
     <!-- Inbounds mode -->
     <section class="card">
-      <div class="commands-header" onclick="toggleInboundsCard()">
+      <div class="commands-header" id="inbounds-header">
         <h2>Режим работы inbounds (03_inbounds.json)</h2>
         <span id="inbounds-arrow">▼</span>
       </div>
@@ -255,7 +258,7 @@
 
     <!-- Outbounds VLESS editor -->
     <section class="card">
-      <div class="commands-header" onclick="toggleOutboundsCard()">
+      <div class="commands-header" id="outbounds-header">
         <h2>Прокси (04_outbounds.json)</h2>
         <span id="outbounds-arrow">▼</span>
       </div>
@@ -531,8 +534,8 @@
 <section class="card commands-card">
   <div class="commands-header">
     <h2>Команды</h2>
-    <button type="button" class="btn-secondary" onclick="openTerminal('', 'shell')">Открыть терминал</button>
-    <button type="button" class="btn-secondary" id="terminal-open-pty-btn" onclick="openTerminal('', 'pty')">Interactive Shell</button>
+    <button type="button" class="btn-secondary" id="terminal-open-shell-btn">Открыть терминал</button>
+    <button type="button" class="btn-secondary btn-interactive-shell" id="terminal-open-pty-btn" title="Интерактивная оболочка (PTY)">Interactive Shell</button>
   </div>
 
   <div id="commands-body">
@@ -559,8 +562,8 @@
       <div class="log-header-row">
         <h2>Журнал</h2>
         <div class="log-header-actions">
-          <button type="button" class="btn-secondary log-btn" onclick="clearLog()">Очистить</button>
-          <button type="button" class="btn-secondary log-btn" onclick="copyLog()">Копировать</button>
+          <button type="button" class="btn-secondary log-btn" id="restart-log-clear-btn">Очистить</button>
+          <button type="button" class="btn-secondary log-btn" id="restart-log-copy-btn">Копировать</button>
         </div>
       </div>
       <pre id="restart-log" class="log-block"></pre>
@@ -617,17 +620,32 @@
         <div class="terminal-header">
 	          <div class="terminal-header-left">
 	            <span>Терминал XKeen</span>
-	            <span id="terminal-conn-lamp" class="service-status-lamp terminal-conn-lamp" data-state="stopped" title="Terminal: disconnected" aria-label="Terminal status"></span>
-	            <span id="terminal-uptime" class="terminal-uptime" title="Uptime">00:00</span>
+	            <span id="terminal-conn-lamp" class="service-status-lamp terminal-conn-lamp" data-state="stopped" title="Терминал: отключено" aria-label="Статус терминала"></span>
+	            <span id="terminal-uptime" class="terminal-uptime" title="Аптайм">00:00</span>
 	          </div>
 	          <div class="terminal-toolbar" aria-label="Terminal toolbar">
-	            <button type="button" class="terminal-tool-btn" id="terminal-btn-fullscreen" onclick="terminalToggleFullscreen()" title="Fullscreen / Restore" aria-label="Fullscreen / Restore">⛶</button>
-	            <button type="button" class="terminal-tool-btn" onclick="terminalReconnect()" title="Reconnect" aria-label="Reconnect">🔌</button>
-	            <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-stop-retry" onclick="terminalStopRetry()" title="Stop retry" aria-label="Stop retry">Stop retry</button>
-	            <button type="button" class="terminal-tool-btn" onclick="terminalNewSession()" title="New session" aria-label="New session">➕</button>
-	            <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" onclick="terminalSendCtrlC()" title="Send Ctrl+C" aria-label="Send Ctrl+C">^C</button>
-	            <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" onclick="terminalSendCtrlD()" title="Send Ctrl+D" aria-label="Send Ctrl+D">^D</button>
-	            <button type="button" class="terminal-close" onclick="hideTerminal()" title="Close" aria-label="Close">×</button>
+	            <button type="button" class="terminal-tool-btn" id="terminal-btn-fullscreen" title="Полный экран / обычный режим" aria-label="Полный экран / обычный режим">⛶</button>
+	            <button type="button" class="terminal-tool-btn" id="terminal-btn-reconnect" title="Переподключиться" aria-label="Переподключиться">🔌</button>
+	            <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-stop-retry" title="Остановить автоподключение" aria-label="Остановить автоподключение">Остановить</button>
+	            <button type="button" class="terminal-tool-btn" id="terminal-btn-new-session" title="Новая сессия" aria-label="Новая сессия">➕</button>
+	            <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" id="terminal-btn-ctrlc" title="Отправить Ctrl+C" aria-label="Отправить Ctrl+C">^C</button>
+	            <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" id="terminal-btn-ctrld" title="Отправить Ctrl+D" aria-label="Отправить Ctrl+D">^D</button>
+	            <button type="button" class="terminal-tool-btn" id="terminal-btn-minimize" title="Свернуть (скрыть окно, не разрывая WS)" aria-label="Свернуть">🗕</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-detach" title="Отсоединиться (оставить PTY живым)" aria-label="Отсоединиться">⏸</button>
+	            <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-kill" title="Завершить PTY-сессию" aria-label="Завершить PTY">⏻</button>
+	            <button type="button" class="terminal-tool-btn" id="terminal-btn-signals" title="Сигналы (SIG*)" aria-label="Сигналы">☠</button>
+	            <button type="button" class="terminal-tool-btn" id="terminal-btn-retry-now" title="Повторить сейчас" aria-label="Повторить сейчас">↻</button>
+	            <button type="button" class="terminal-tool-btn" id="terminal-btn-ssh" title="Профили SSH" aria-label="Профили SSH">SSH</button>
+		            <button type="button" class="terminal-tool-btn" id="terminal-history-btn" title="История команд" aria-label="История">⌚</button>
+
+	            <div id="terminal-signals-menu" class="terminal-signals-menu hidden" role="menu" aria-label="Меню сигналов">
+	              <button type="button" class="terminal-signals-item" data-terminal-signal="INT" title="Отправить SIGINT">SIGINT</button>
+	              <button type="button" class="terminal-signals-item" data-terminal-signal="TERM" title="Отправить SIGTERM">SIGTERM</button>
+	              <button type="button" class="terminal-signals-item" data-terminal-signal="HUP" title="Отправить SIGHUP">SIGHUP</button>
+	              <button type="button" class="terminal-signals-item terminal-tool-btn-danger" data-terminal-signal="KILL" title="Отправить SIGKILL">SIGKILL</button>
+	              <button type="button" class="terminal-signals-item" data-terminal-signal="QUIT" title="Отправить SIGQUIT">SIGQUIT</button>
+	            </div>
+            <button type="button" class="terminal-close" id="terminal-btn-close" title="Закрыть" aria-label="Закрыть">×</button>
 	          </div>
         </div>
         <input id="terminal-command"
@@ -641,26 +659,46 @@
 	                 placeholder="Поиск в терминале (Ctrl+F / F3)"
 	                 autocomplete="off"
 	                 spellcheck="false">
-	          <button type="button" class="terminal-search-btn" id="terminal-search-prev" onclick="terminalSearchPrev()" title="Предыдущее (Shift+F3)" aria-label="Previous match">↑</button>
-	          <button type="button" class="terminal-search-btn" id="terminal-search-next" onclick="terminalSearchNext()" title="Следующее (F3 / Enter)" aria-label="Next match">↓</button>
-	          <span id="terminal-search-counter" class="terminal-search-counter" title="Совпадения" aria-label="Match count">0/0</span>
-	          <button type="button" class="terminal-search-btn" id="terminal-search-clear" onclick="terminalSearchClear()" title="Очистить" aria-label="Clear search">×</button>
+	          <button type="button" class="terminal-search-btn" id="terminal-search-prev" title="Предыдущее (Shift+F3)" aria-label="Предыдущее совпадение">↑</button>
+	          <button type="button" class="terminal-search-btn" id="terminal-search-next" title="Следующее (F3 / Enter)" aria-label="Следующее совпадение">↓</button>
+	          <span id="terminal-search-counter" class="terminal-search-counter" title="Совпадения" aria-label="Количество совпадений">0/0</span>
+	          <button type="button" class="terminal-search-btn" id="terminal-search-clear" title="Очистить" aria-label="Очистить поиск">×</button>
 	        </div>
         <pre id="terminal-output" class="terminal-output"></pre>
         <div class="terminal-footer" aria-label="Terminal footer toolbar">
           <div class="terminal-footer-group" aria-label="Отображение">
             <span class="terminal-footer-label">Вид</span>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-font-dec" onclick="terminalFontDec()" title="Font −" aria-label="Font minus">A−</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-font-inc" onclick="terminalFontInc()" title="Font +" aria-label="Font plus">A+</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-cursorblink" onclick="terminalToggleCursorBlink()" title="Cursor blink" aria-label="Cursor blink">▮</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-ansi" onclick="terminalToggleAnsiFilter()" title="Hide/Show ANSI from output" aria-label="Toggle ANSI filter">ANSI</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-loghl" onclick="terminalToggleLogHighlight()" title="Highlight WARN/ERR" aria-label="Highlight WARN/ERR">W/E</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-font-dec" title="Шрифт −" aria-label="Шрифт меньше">A−</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-font-inc" title="Шрифт +" aria-label="Шрифт больше">A+</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-cursorblink" title="Мигание курсора" aria-label="Мигание курсора">▮</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-ansi" title="ANSI-фильтр (скрыть/показать ANSI-коды)" aria-label="ANSI-фильтр">ANSI</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-loghl" title="Подсветка WARN/ERR" aria-label="Подсветка WARN/ERR">W/E</button>
+<button type="button" class="terminal-tool-btn" id="terminal-btn-follow" title="Автопрокрутка: ВКЛ" aria-label="Автопрокрутка">⇣ Follow</button>
+<button type="button" class="terminal-tool-btn" id="terminal-btn-bottom" title="В конец" aria-label="В конец">↓ bottom</button>
           </div>
-          <div class="terminal-footer-group" aria-label="Буфер обмена">
+	        <div class="terminal-footer-group" id="terminal-buffer-group" aria-label="Буфер обмена">
             <span class="terminal-footer-label">Буфер</span>
-            <button type="button" class="terminal-tool-btn" onclick="terminalCopy()" title="Copy" aria-label="Copy">📋</button>
-            <button type="button" class="terminal-tool-btn" onclick="terminalPaste()" title="Paste" aria-label="Paste">📥</button>
-            <button type="button" class="terminal-tool-btn" onclick="terminalClear()" title="Clear" aria-label="Clear">🧹</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-copy" title="Копировать" aria-label="Копировать">📋</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-copyall" title="Копировать весь буфер" aria-label="Копировать весь буфер">📋 All</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-download" title="Скачать вывод (.txt)" aria-label="Скачать вывод">⬇️ .txt</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-paste" title="Вставить" aria-label="Вставить">📥</button>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-clear" title="Очистить" aria-label="Очистить">🧹</button>
+          </div>
+
+          <div class="terminal-footer-group terminal-footer-group-commands" id="terminal-commands-group" aria-label="Команды">
+            <span class="terminal-footer-label">Команды</span>
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-commands" title="Быстрые команды" aria-label="Быстрые команды">⋯ Команды</button>
+            <div id="terminal-commands-menu" class="terminal-commands-menu hidden" role="menu" aria-label="Меню команд">
+              <div class="terminal-commands-head">
+                <div class="terminal-commands-title">Быстрые команды</div>
+                <div class="terminal-commands-mode" role="group" aria-label="Mode">
+                  <button type="button" class="terminal-commands-mode-btn" id="terminal-qc-mode-insert" title="Вставить (lite) или набрать в PTY">Insert</button>
+                  <button type="button" class="terminal-commands-mode-btn" id="terminal-qc-mode-run" title="Выполнить (PTY или lite)">Run</button>
+                </div>
+              </div>
+              <div class="terminal-commands-list" id="terminal-commands-list"></div>
+              <div class="terminal-commands-hint">Клик — по режиму. Ctrl/⌘+клик — Run, Shift+клик — Insert.</div>
+            </div>
           </div>
         </div>
         <div class="terminal-input-row">
@@ -668,8 +706,29 @@
                  class="terminal-input"
                  type="text"
                  placeholder="Текст для подтверждения (например: yes). Пусто — просто Enter.">
-          <button type="button" class="terminal-send" onclick="sendTerminalInput()">Отправить</button>
-          <button type="button" class="terminal-history-btn" id="terminal-history-btn">⌚ История</button>
+          <button type="button" class="terminal-send" id="terminal-send-btn">Отправить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- History drawer for terminal commands -->
+    <div id="terminal-history-modal" class="modal modal-drawer hidden" aria-label="История терминала">
+      <div class="modal-content terminal-history-content">
+        <div class="modal-header">
+          <span class="modal-title">История команд</span>
+          <button type="button" class="modal-close" id="terminal-history-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <input id="terminal-history-filter" class="terminal-history-filter" type="text" placeholder="Фильтр (например: iptables, log, ping)" autocomplete="off" spellcheck="false">
+          <div id="terminal-history-list" class="terminal-history-list" role="list"></div>
+          <div class="terminal-history-hint">Клик — вставить в поле команды. Двойной клик — выполнить.</div>
+        </div>
+	        <div class="modal-actions">
+	          <!-- In the history drawer, action buttons should share the same sizing/style.
+	               `terminal-tool-btn` is a compact toolbar style, so we keep only the danger palette here. -->
+	          <button type="button" id="terminal-history-clear-btn" class="terminal-tool-btn-danger" title="Очистить историю команд">🗑 Очистить</button>
+          <button type="button" id="terminal-history-insert-btn" title="Вставить выбранную команду в поле команды">Вставить</button>
+          <button type="button" id="terminal-history-run-btn" title="Выполнить выбранную команду">Выполнить</button>
         </div>
       </div>
     </div>
@@ -699,6 +758,23 @@
         <div class="modal-actions">
           <button id="core-modal-cancel-btn">Отмена</button>
           <button id="core-modal-confirm-btn">Применить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shared confirm modal (replaces browser confirm alerts) -->
+    <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Подтверждение">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-title" id="confirm-modal-title">Подтверждение</span>
+          <button type="button" class="modal-close" id="confirm-modal-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="confirm-modal-message" class="modal-description"></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="confirm-modal-cancel-btn">Отменить</button>
+          <button type="button" id="confirm-modal-ok-btn" class="btn-danger">OK</button>
         </div>
       </div>
     </div>
@@ -748,8 +824,53 @@
   </div>
 
   <script>
-    window.XKEEN_GITHUB_REPO_URL = "{{ github_repo_url|e }}";
+	    window.XKEEN_GITHUB_REPO_URL = "{{ github_repo_url|e }}";
+	    // Files shown in UI (used by last-load badge and other helpers)
+	    window.XKEEN_FILES = {
+	      routing: "{{ routing_file|e }}",
+	      inbounds: "{{ inbounds_file|e }}",
+	      outbounds: "{{ outbounds_file|e }}",
+	      mihomo: "/opt/etc/mihomo/config.yaml",
+	    };
   </script>
+  <!-- Modularization scaffold (no behavior changes yet) -->
+  <script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/confirm_modal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
+	  <script src="{{ url_for('static', filename='js/ui/last_activity.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/util/tab_id.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/util/ansi.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/backups.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/local_io.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/github.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/service_status.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/xray_logs.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/restart_log.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_panel.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/commands_list.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/outbounds.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/features/xkeen_texts.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/_core.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/capabilities.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/pty.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/lite_runner.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/search.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/history.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/quick_commands.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/chrome.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/terminal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/xray_tail.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/pages/panel.init.js') }}"></script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 
     <!-- Модальный JSON-редактор для 03_inbounds.json / 04_outbounds.json -->
@@ -779,6 +900,95 @@
       <button type="button" class="modal-close" onclick="hideMihomoValidationModal()">×</button>
     </div>
     <div id="mihomo-validation-modal-body" class="modal-body modal-body-logs"></div>
+  </div>
+</div>
+
+<div id="ssh-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="SSH profiles">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="modal-title">SSH профили</span>
+      <button type="button" class="modal-close" id="ssh-modal-close-btn" aria-label="Close">×</button>
+    </div>
+
+    <div class="modal-body">
+      <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+        <button type="button" id="ssh-add-btn">➕ Добавить</button>
+        <button type="button" id="ssh-delete-selected-btn" disabled>🗑 Удалить</button>
+        <button type="button" id="ssh-export-btn">📤 Export</button>
+        <button type="button" id="ssh-import-btn">📥 Import</button>
+      </div>
+
+      <div id="ssh-profiles-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+
+      <hr style="border:0; border-top:1px solid #334155; margin:12px 0;">
+
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <label style="opacity:.85;">Команда (будет отправлена в PTY)</label>
+        <input id="ssh-command-preview" class="terminal-input" style="width:100%;" placeholder="ssh user@host -p 22" />
+        <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+          <button type="button" id="ssh-copy-preview-btn">📋 Copy</button>
+          <button type="button" id="ssh-run-preview-btn">▶ Run</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SSH profile editor (no browser prompts/alerts) -->
+<div id="ssh-edit-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="SSH profile editor">
+  <div class="modal-content" style="max-width:640px;">
+    <div class="modal-header">
+      <span class="modal-title" id="ssh-edit-title">SSH профиль</span>
+      <button type="button" class="modal-close" id="ssh-edit-close-btn" aria-label="Close">×</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="ssh-form-grid">
+        <label for="ssh-edit-name">Название</label>
+        <input id="ssh-edit-name" class="terminal-input" placeholder="Напр. Домашний роутер" />
+
+        <label for="ssh-edit-host">Host *</label>
+        <input id="ssh-edit-host" class="terminal-input" placeholder="IP или DNS" />
+
+        <label for="ssh-edit-user">User</label>
+        <input id="ssh-edit-user" class="terminal-input" placeholder="root" />
+
+        <label for="ssh-edit-port">Port</label>
+        <input id="ssh-edit-port" class="terminal-input" placeholder="22" inputmode="numeric" />
+
+        <label for="ssh-edit-key">Key path</label>
+        <input id="ssh-edit-key" class="terminal-input" placeholder="/opt/home/user/.ssh/id_ed25519" />
+
+        <label for="ssh-edit-jump">ProxyJump</label>
+        <input id="ssh-edit-jump" class="terminal-input" placeholder="user@jump-host" />
+      </div>
+      <div id="ssh-edit-error" class="error"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="ssh-edit-cancel-btn">Отмена</button>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" id="ssh-edit-delete-btn">🗑 Удалить</button>
+        <button type="button" class="btn-primary" id="ssh-edit-save-btn">💾 Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Small confirm modal for delete -->
+<div id="ssh-confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Confirm">
+  <div class="modal-content" style="max-width:420px;">
+    <div class="modal-header">
+      <span class="modal-title">Подтверждение</span>
+      <button type="button" class="modal-close" id="ssh-confirm-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="ssh-confirm-text" style="white-space:pre-wrap;"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="ssh-confirm-cancel-btn">Отмена</button>
+      <button type="button" id="ssh-confirm-ok" class="btn-primary">OK</button>
+    </div>
   </div>
 </div>
 
