@@ -909,9 +909,19 @@ footer {
   background: rgba(2, 6, 23, 0.72);
   color: rgba(226, 232, 240, 0.95);
   cursor: pointer;
-  display: grid;
-  place-items: center;
-  line-height: 1;
+  /*
+    Reset generic <button> styles (padding/line-height/appearance) so SVG icons
+    are centered *exactly* inside fixed-size square buttons.
+  */
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  line-height: 0;
+  font-size: 0;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   user-select: none;
 }
 
@@ -919,11 +929,33 @@ footer {
   width: 16px;
   height: 16px;
   display: block;
+  flex: 0 0 auto;
+  pointer-events: none;
 }
 
 .xkeen-cm-tool:hover {
   border-color: rgba(148, 163, 184, 0.45);
   background: rgba(2, 6, 23, 0.88);
+}
+
+/* Disabled state (e.g. replace/comment in readOnly mode) */
+.xkeen-cm-tool:disabled,
+.xkeen-cm-tool.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.50);
+}
+
+.xkeen-cm-tool:disabled:hover,
+.xkeen-cm-tool.is-disabled:hover {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.50);
+}
+
+.xkeen-cm-tool:disabled:active,
+.xkeen-cm-tool.is-disabled:active {
+  transform: none;
 }
 
 .xkeen-cm-tool:active {
@@ -975,6 +1007,12 @@ html[data-theme="light"] .xkeen-cm-tool {
   background: rgba(255, 255, 255, 0.85);
   color: rgba(15, 23, 42, 0.95);
   border-color: rgba(15, 23, 42, 0.18);
+}
+
+html[data-theme="light"] .xkeen-cm-tool:disabled,
+html[data-theme="light"] .xkeen-cm-tool.is-disabled {
+  background: rgba(255, 255, 255, 0.65);
+  border-color: rgba(15, 23, 42, 0.10);
 }
 
 html[data-theme="light"] .xkeen-cm-tool.is-help {
@@ -1228,12 +1266,22 @@ html[data-theme="light"] .xkeen-cm-help-section {
   background: rgba(153, 27, 27, 0.55);
 }
 
+/* Keep danger buttons "danger" even in active state (override global button:active gradient). */
+.terminal-tool-btn-danger:active {
+  background: rgba(153, 27, 27, 0.70);
+  border-color: rgba(248, 113, 113, 0.75);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.25);
+  transform: translateY(1px) scale(0.99);
+}
+
 .terminal-toolbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
   flex-wrap: wrap;
+
+  position: relative;
 }
 
 .terminal-tool-btn {
@@ -1405,6 +1453,10 @@ html[data-theme="light"] .xkeen-cm-help-section {
 .terminal-input-row {
   display: flex;
   gap: 8px;
+}
+
+.terminal-input-row.confirm-hidden {
+  justify-content: flex-end;
 }
 
 .terminal-input {
@@ -1698,6 +1750,80 @@ button.backup-icon-btn.backup-delete-btn {
   flex-direction: column;
 }
 
+/* Terminal history drawer (right-side modal) */
+.modal.modal-drawer {
+  justify-content: flex-end;
+  align-items: stretch;
+}
+
+.modal.modal-drawer .modal-content {
+  max-width: 420px;
+  width: min(92vw, 420px);
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+  border-left: 1px solid #334155;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.terminal-history-filter {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 10px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: rgba(255,255,255,0.04);
+  color: inherit;
+  outline: none;
+}
+
+.terminal-history-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: auto;
+  max-height: calc(100vh - 220px);
+  padding-right: 4px;
+}
+
+.terminal-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(51,65,85,0.7);
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+}
+
+.terminal-history-item:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+.terminal-history-item.selected {
+  border-color: rgba(56,189,248,0.85);
+  box-shadow: 0 0 0 2px rgba(56,189,248,0.15);
+}
+
+.terminal-history-cmd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9rem;
+  word-break: break-word;
+  white-space: pre-wrap;
+  opacity: 0.95;
+}
+
+.terminal-history-hint {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
 
 
 .modal-actions {
@@ -1791,6 +1917,71 @@ button.backup-icon-btn.backup-delete-btn {
   overflow-x: hidden;
 }
 
+/*
+  JSON editor modal: avoid "double scroll" (outer modal-body + inner CodeMirror).
+  Keep modal-body non-scrollable and let CodeMirror stretch & scroll.
+*/
+#json-editor-modal .modal-content {
+  /*
+    IMPORTANT:
+    `.modal-content` has `max-height: 80vh` globally, but no explicit `height`.
+    If the JSON content doesn't immediately force the modal to reach its max-height,
+    CodeMirror can end up with an effectively unbounded height (because the global
+    `.CodeMirror { height: auto; }` rule lets it grow with content). In that case
+    the extra lines get clipped by the modal layout, and the internal scrollbar may
+    not appear.
+
+    Setting an explicit height for the JSON editor modal guarantees that CodeMirror
+    always has a bounded area and shows the same vertical scrollbar behavior for
+    both 03_inbounds.json and 04_outbounds.json.
+  */
+  height: 80vh;
+}
+
+/* JSON editor modal: let the scroll area use the available height (no global cap) */
+#json-editor-modal .CodeMirror-scroll {
+  max-height: none !important;
+  height: 100% !important;
+}
+
+#json-editor-modal .modal-body {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* CodeMirror wrapper inside JSON editor modal should occupy remaining height */
+#json-editor-modal .CodeMirror {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100% !important; /* override CodeMirror's default 300px */
+}
+
+/* Keep fallback textarea usable if CodeMirror fails to load */
+#json-editor-modal textarea#json-editor-textarea {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+/* Routing help modal (iframe): avoid "double scroll" (outer modal-body + inner iframe) */
+#xkeen-routing-help-modal .modal-content {
+  height: 80vh;
+}
+
+#xkeen-routing-help-modal .modal-body {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#xkeen-routing-help-modal iframe {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 
 
 
@@ -1843,7 +2034,11 @@ button.backup-icon-btn.backup-delete-btn {
 }
 
 /* Справа: чекбокс авто‑перезапуска + бейдж "Загружено ..." строго под ним */
-Lpx;
+.global-toggle-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .global-autorestart-toggle {
@@ -2786,4 +2981,283 @@ html[data-theme="light"] .terminal-conn-badge {
 
 html[data-theme="light"] .terminal-uptime {
   color: #475569;
+}
+
+
+/* PTY terminal: signals menu + small button variants */
+.terminal-signals-menu{
+  position:absolute;
+  top:34px;
+  right:8px;
+  z-index:80;
+  background:#020617;
+  border:1px solid #334155;
+  border-radius:10px;
+  padding:8px;
+  box-shadow:0 18px 50px rgba(15,23,42,.8);
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:140px;
+}
+.terminal-signals-menu.hidden{ display:none; }
+
+/* Terminal: Xray logs mini-menu (runs tail -f inside PTY) */
+.terminal-xraylogs-menu{
+  position:absolute;
+  top:34px;
+  right:48px;
+  z-index:85;
+  background:#020617;
+  border:1px solid #334155;
+  border-radius:12px;
+  padding:10px;
+  box-shadow:0 18px 50px rgba(15,23,42,.8);
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-width:220px;
+}
+.terminal-xraylogs-menu.hidden{ display:none; }
+
+.terminal-xraylogs-row{ display:flex; align-items:center; gap:8px; }
+.terminal-xraylogs-actions{ display:flex; gap:8px; }
+.terminal-xraylogs-actions > button{ flex:1 1 auto; }
+.terminal-xraylogs-hint{
+  font-size:11px;
+  color:#9ca3af;
+  line-height:1.25;
+}
+.terminal-xraylogs-hint code{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  color:#cbd5e1;
+}
+
+.terminal-signals-item{
+  width:100%;
+  text-align:left;
+  padding:8px 10px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.04);
+  color:inherit;
+  cursor:pointer;
+}
+.terminal-signals-item:hover{
+  background:rgba(255,255,255,.08);
+}
+
+
+
+/* Terminal: Quick commands menu (footer) */
+.terminal-footer-group-commands{ position: relative; }
+
+.terminal-commands-menu{
+  position:absolute;
+  bottom: 34px;
+  right: 0;
+  z-index: 90;
+  background:#020617;
+  border:1px solid #334155;
+  border-radius:12px;
+  padding:10px;
+  box-shadow:0 18px 50px rgba(15,23,42,.8);
+  min-width: 280px;
+  max-width: 360px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.terminal-commands-menu.hidden{ display:none; }
+
+.terminal-commands-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+
+.terminal-commands-title{
+  font-size: 12px;
+  color: #cbd5e1;
+  font-weight: 700;
+  user-select: none;
+}
+
+.terminal-commands-mode{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+
+.terminal-commands-mode-btn{
+  padding:6px 10px;
+  border-radius:9999px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.04);
+  color:inherit;
+  cursor:pointer;
+  font-size:12px;
+}
+.terminal-commands-mode-btn:hover{ background:rgba(255,255,255,.08); }
+.terminal-commands-mode-btn.is-active{
+  background:rgba(37,99,235,.35);
+  border-color: rgba(37,99,235,.60);
+}
+
+.terminal-commands-list{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  max-height: 260px;
+  overflow:auto;
+  padding-right: 2px;
+}
+
+.terminal-commands-item{
+  width:100%;
+  text-align:left;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.04);
+  color:inherit;
+  cursor:pointer;
+}
+.terminal-commands-item:hover{ background:rgba(255,255,255,.08); }
+
+.terminal-commands-item-label{
+  display:block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: inherit;
+}
+
+.terminal-commands-item-desc{
+  display:block;
+  margin-top: 2px;
+  font-size: 11px;
+  color:#94a3b8;
+}
+
+.terminal-commands-hint{
+  font-size: 10px;
+  color:#94a3b8;
+  opacity: .95;
+}
+
+html[data-theme="light"] .terminal-commands-menu{
+  background:#ffffff;
+  border-color: rgba(15,23,42,.15);
+  box-shadow:0 18px 50px rgba(15,23,42,.18);
+}
+html[data-theme="light"] .terminal-commands-title{ color:#0f172a; }
+html[data-theme="light"] .terminal-commands-mode-btn,
+html[data-theme="light"] .terminal-commands-item{
+  background: rgba(15,23,42,.04);
+  border-color: rgba(15,23,42,.12);
+  color:#0f172a;
+}
+html[data-theme="light"] .terminal-commands-item:hover,
+html[data-theme="light"] .terminal-commands-mode-btn:hover{
+  background: rgba(15,23,42,.08);
+}
+html[data-theme="light"] .terminal-commands-item-desc,
+html[data-theme="light"] .terminal-commands-hint{ color:#475569; }
+html[data-theme="light"] .terminal-commands-mode-btn.is-active{
+  background: rgba(37,99,235,.14);
+  border-color: rgba(37,99,235,.35);
+}
+/* Optional semantic button helpers (used in SSH modal) */
+.btn-secondary{
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(51,65,85,0.9);
+}
+.btn-primary{
+  background: rgba(37,99,235,0.18);
+  border: 1px solid rgba(37,99,235,0.55);
+}
+
+/* Destructive action button (used in confirm modals) */
+.btn-danger{
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(127, 29, 29, 0.40);
+  color: #fecaca;
+}
+.btn-danger:hover{
+  background: rgba(153, 27, 27, 0.55);
+}
+/* Keep danger buttons "danger" even in active state (override global button:active gradient). */
+.btn-danger:active{
+  background: rgba(153, 27, 27, 0.70);
+  border-color: rgba(248, 113, 113, 0.75);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.25);
+  transform: translateY(1px) scale(0.99);
+}
+
+html[data-theme="light"] .btn-danger{
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.10);
+  color: #991b1b;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+}
+html[data-theme="light"] .btn-danger:hover{
+  background: rgba(239, 68, 68, 0.16);
+}
+html[data-theme="light"] .btn-danger:active{
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.55);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.18);
+}
+
+/* Highlighted button for PTY terminal */
+.btn-interactive-shell{
+  background: rgba(249,115,22,0.24);
+  border: 1px solid rgba(249,115,22,0.75);
+  box-shadow: 0 0 0 2px rgba(249,115,22,0.12);
+  color: #ffffff;
+  font-weight: 600;
+}
+.btn-interactive-shell:hover{
+  background: rgba(249,115,22,0.34);
+}
+html[data-theme="light"] .btn-interactive-shell{
+  background: rgba(249,115,22,0.20);
+  border-color: rgba(249,115,22,0.70);
+  color: #0f172a;
+  box-shadow: 0 0 0 2px rgba(249,115,22,0.10);
+}
+html[data-theme="light"] .btn-interactive-shell:hover{
+  background: rgba(249,115,22,0.28);
+}
+
+/* SSH editor layout */
+.ssh-form-grid{
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px 12px;
+  align-items: center;
+}
+.ssh-form-grid label{
+  opacity: 0.9;
+  font-size: 0.95rem;
+}
+.ssh-form-grid input{
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* SSH profile row selection */
+.github-config-row.is-selected{
+  border: 1px solid rgba(56,189,248,0.85);
+  box-shadow: 0 0 0 2px rgba(56,189,248,0.12);
+}
+
+/* Disabled button hint */
+button:disabled{
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 520px){
+  .ssh-form-grid{
+    grid-template-columns: 1fr;
+  }
 }
