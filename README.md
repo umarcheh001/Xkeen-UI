@@ -72,7 +72,7 @@ sh install.sh
 
 ```sh
 cd /opt \
-  && curl -fSL "https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.2.5/xkeen-ui-routing.tar.gz" -o xkeen-ui-routing.tar.gz \
+  && curl -fSL "https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.2.6/xkeen-ui-routing.tar.gz" -o xkeen-ui-routing.tar.gz \
   && tar -xzf xkeen-ui-routing.tar.gz \
   && sh xkeen-ui/install.sh
 ```
