@@ -119,6 +119,16 @@ except Exception:
     _GeventSemaphore = None
 
 
+def _make_lock():
+    """Return a gevent-friendly lock when possible."""
+    try:
+        if _GeventSemaphore:
+            return _GeventSemaphore(1)
+    except Exception:
+        pass
+    return threading.Lock()
+
+
 PTY_MAX_BUF_CHARS = int(os.environ.get("XKEEN_PTY_MAX_BUF_CHARS", "65536"))
 PTY_IDLE_TTL_SECONDS = int(os.environ.get("XKEEN_PTY_IDLE_TTL_SECONDS", "1800"))  # 30 min
 
@@ -136,7 +146,7 @@ class PtySession:
     buf_chars: int = 0
     ws: object | None = None  # currently attached websocket (single client)
     closed: bool = False
-    lock: object = field(default_factory=threading.Lock)
+    lock: object = field(default_factory=_make_lock)
     reader_g: object | None = None
 
     def is_alive(self) -> bool:
@@ -384,6 +394,19 @@ def _pty_cleanup_sessions(now: float | None = None) -> None:
                     sess.close(kill=True)
                 except Exception:
                     pass
+
+
+def _pty_cleanup_loop():
+    """Periodic cleanup for detached/expired PTY sessions."""
+    while True:
+        try:
+            _pty_cleanup_sessions()
+        except Exception:
+            pass
+        try:
+            _gevent_sleep(60.0) if GEVENT_AVAILABLE else time.sleep(60.0)
+        except Exception:
+            time.sleep(60.0)
 
 
 def _pty_create_session(rows0: int = 0, cols0: int = 0) -> PtySession:
@@ -790,6 +813,12 @@ def application(environ, start_response):
         except Exception:
             cur_seq, replaced_old = 0, False
 
+        # Snapshot sequence at attach time to avoid duplicate delivery of live output during replay
+        try:
+            replay_upto = int(cur_seq or 0)
+        except Exception:
+            replay_upto = 0
+
         # Init packet (client stores session_id + can request replay by last_seq)
         try:
             ws.send(
@@ -818,9 +847,15 @@ def application(environ, start_response):
 
         # Replay buffered output that client missed
         try:
-            if last_seq < int(cur_seq or 0):
+            if last_seq < int(replay_upto or 0):
                 chunks = sess.replay_since(last_seq)
                 for s, t in chunks:
+                    # Only replay chunks that existed at attach time.
+                    try:
+                        if int(s) > int(replay_upto):
+                            break
+                    except Exception:
+                        pass
                     try:
                         ws.send(json.dumps({"type": "output", "data": t, "seq": int(s)}, ensure_ascii=False))
                     except Exception:
@@ -982,6 +1017,12 @@ def application(environ, start_response):
 
 if __name__ == "__main__":
     if GEVENT_AVAILABLE:
+        try:
+            if _gspawn:
+                _gspawn(_pty_cleanup_loop)
+        except Exception:
+            pass
+
         server = pywsgi.WSGIServer(
             ("0.0.0.0", 8088),
             application,
