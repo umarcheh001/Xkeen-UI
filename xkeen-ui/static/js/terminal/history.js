@@ -5,6 +5,13 @@
   window.XKeen = window.XKeen || {};
   window.XKeen.terminal = window.XKeen.terminal || {};
   const core = (window.XKeen.terminal && window.XKeen.terminal._core) ? window.XKeen.terminal._core : null;
+  function getCtx() {
+    try {
+      const C = window.XKeen.terminal.core;
+      if (C && typeof C.getCtx === 'function') return C.getCtx();
+    } catch (e) {}
+    return null;
+  }
   const state = (core && core.state) ? core.state : (window.XKeen.terminal.__historyState = (window.XKeen.terminal.__historyState || {}));
 
   const KEY = 'xkeen_terminal_history'; // keep legacy key for backward compatibility
@@ -14,7 +21,9 @@
     items: [],
     index: 0,
     selected: '',
-    uiBound: false,
+    uiDisposers: null,
+    escHandler: null,
+    cmdKeysOff: null,
     // PTY capture state
     ptyLine: '',
     ptyCursor: 0,
@@ -30,25 +39,37 @@
         return XKeen.ui.modal.syncBodyScrollLock();
       }
     } catch (e) {}
-    // fallback
-    try {
-      const anyOpen = document.querySelector('.modal:not(.hidden), .terminal-overlay:not([style*="display:none"])');
-      if (anyOpen) document.body.classList.add('modal-open');
-      else document.body.classList.remove('modal-open');
-    } catch (e) {}
   }
 
-  function getEls() {
+  function byId(id, ctx) {
+    if (!ctx) ctx = getCtx();
+    try {
+      if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id);
+    } catch (e0) {}
+    try { if (core && typeof core.byId === 'function') return core.byId(id); } catch (e1) {}
+    return null;
+  }
+
+  function toast(msg, kind, ctx) {
+    if (!ctx) ctx = getCtx();
+    try {
+      if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') return ctx.ui.toast(msg, kind);
+    } catch (e0) {}
+    try { if (typeof window.showToast === 'function') return window.showToast(String(msg || ''), kind || 'info'); } catch (e) {}
+  }
+
+  function getEls(ctx) {
+    if (!ctx) ctx = getCtx();
     return {
-      modal: document.getElementById('terminal-history-modal'),
-      closeBtn: document.getElementById('terminal-history-close-btn'),
-      filter: document.getElementById('terminal-history-filter'),
-      list: document.getElementById('terminal-history-list'),
-      insertBtn: document.getElementById('terminal-history-insert-btn'),
-      runBtn: document.getElementById('terminal-history-run-btn'),
-      clearBtn: document.getElementById('terminal-history-clear-btn'),
-      openBtn: document.getElementById('terminal-history-btn'),
-      cmdEl: document.getElementById('terminal-command'),
+      modal: byId('terminal-history-modal', ctx),
+      closeBtn: byId('terminal-history-close-btn', ctx),
+      filter: byId('terminal-history-filter', ctx),
+      list: byId('terminal-history-list', ctx),
+      insertBtn: byId('terminal-history-insert-btn', ctx),
+      runBtn: byId('terminal-history-run-btn', ctx),
+      clearBtn: byId('terminal-history-clear-btn', ctx),
+      openBtn: byId('terminal-history-btn', ctx),
+      cmdEl: byId('terminal-command', ctx),
     };
   }
 
@@ -130,30 +151,38 @@
 
   function isPtyActive() {
     try {
-      if (core && typeof core.getMode === 'function') return (core.getMode() === 'pty');
+      // Source of truth: ctx/core state
+      const ctx = (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core && window.XKeen.terminal.core.getCtx)
+        ? window.XKeen.terminal.core.getCtx()
+        : null;
+      const m1 = ctx && ctx.core && typeof ctx.core.getMode === 'function' ? ctx.core.getMode() : null;
+      const m2 = ctx && ctx.state ? ctx.state.mode : null;
+      const mode = (m1 || m2 || '').toString();
+      return mode === 'pty';
     } catch (e) {}
-    // fallback to legacy helper
-    try {
-      if (typeof window.isPtyActive === 'function') return !!window.isPtyActive();
-    } catch (e) {}
+    // Fallback: existing core adapter
+    try { if (core && typeof core.getMode === 'function') return (core.getMode() === 'pty'); } catch (e2) {}
     return false;
   }
 
   function sendToPty(raw) {
-    // Prefer new module API
+    // New API: ctx.transport is the only supported transport access.
     try {
-      if (window.XKeen && XKeen.terminal && XKeen.terminal.pty && typeof XKeen.terminal.pty.sendRaw === 'function') {
-        XKeen.terminal.pty.sendRaw(raw);
-        return true;
+      const ctx = (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core && window.XKeen.terminal.core.getCtx)
+        ? window.XKeen.terminal.core.getCtx()
+        : null;
+      if (ctx && ctx.transport) {
+        // Force PTY preference — history's "run" must go to PTY when available.
+        if (ctx.transport.kind === 'pty') return !!ctx.transport.send(raw, { prefer: 'pty' });
       }
     } catch (e) {}
-    // Legacy fallback (if still present in terminal.js)
+
+    // Last resort: modular PTY object (should be removed once terminal.js is fully modular).
     try {
-      if (typeof window.terminalSendRaw === 'function') {
-        window.terminalSendRaw(raw);
-        return true;
-      }
-    } catch (e) {}
+      const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+      if (P && typeof P.sendRaw === 'function') { P.sendRaw(raw); return true; }
+    } catch (e2) {}
+
     return false;
   }
 
@@ -177,15 +206,24 @@
       }
     }
 
-    // Lite: run via lite_runner flow (reads #terminal-command)
+    // Lite: route through unified executor (Stage C) so builtins also work.
+    close();
+    try {
+      const T = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal : null;
+      if (T && typeof T.execCommand === 'function') {
+        void T.execCommand(cmd, { source: 'history' });
+        return;
+      }
+    } catch (e) {}
+
+    // Fallback to legacy lite_runner flow
     try {
       const { cmdEl } = getEls();
       if (cmdEl) cmdEl.value = cmd;
-      const inputEl = document.getElementById('terminal-input');
+      const inputEl = byId('terminal-input');
       if (inputEl) inputEl.value = '';
     } catch (e) {}
 
-    close();
     try {
       if (window.XKeen && XKeen.terminal && XKeen.terminal.lite_runner && typeof XKeen.terminal.lite_runner.sendTerminalInput === 'function') {
         void XKeen.terminal.lite_runner.sendTerminalInput();
@@ -288,9 +326,9 @@
 
   // ArrowUp/ArrowDown in #terminal-command: browse history items (lite input field)
   function bindCmdHistoryKeys(cmdEl) {
-    if (!cmdEl) return;
+    if (!cmdEl) return null;
 
-    cmdEl.addEventListener('keydown', (e) => {
+    const handler = (e) => {
       try {
         if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
 
@@ -318,7 +356,12 @@
           try { cmdEl.setSelectionRange(len, len); } catch (e2) {}
         }
       } catch (e2) {}
-    }, true);
+    };
+
+    cmdEl.addEventListener('keydown', handler, true);
+    return () => {
+      try { cmdEl.removeEventListener('keydown', handler, true); } catch (e) {}
+    };
   }
 
   // ---------------- PTY typed-lines capture ----------------
@@ -463,58 +506,78 @@
   }
 
   function attachTerm(term) {
-    // Attach PTY input capture to xterm instance (safe to call multiple times)
-    if (!term) term = state.xterm || state.term || null;
-    if (!term || typeof term.onData !== 'function') return;
-
+    // Attach PTY typed-line capture.
+    // Stage 2: input events are proxied by xterm_manager through ctx.events.
     if (H.ptyDisposable && typeof H.ptyDisposable.dispose === 'function') return;
 
+    const ctx = getCtx();
     try {
+      if (ctx && ctx.events && typeof ctx.events.on === 'function') {
+        const off = ctx.events.on('xterm:data', (payload) => {
+          try {
+            const data = payload && typeof payload.data === 'string' ? payload.data : String(payload || '');
+            consumePtyInput(data);
+          } catch (e) {}
+        });
+        H.ptyDisposable = { dispose: () => { try { off(); } catch (e) {} } };
+        return;
+      }
+    } catch (e) {}
+
+    // Fallback: bind directly to xterm instance (older builds)
+    try {
+      if (!term) term = state.xterm || state.term || null;
+      if (!term || typeof term.onData !== 'function') return;
       H.ptyDisposable = term.onData((data) => {
         try { consumePtyInput(data); } catch (e) {}
       });
-    } catch (e) {
+    } catch (e2) {
       H.ptyDisposable = null;
     }
   }
 
-  function bindUiOnce() {
-    if (H.uiBound) return;
-    H.uiBound = true;
+  function bindUi(ctx) {
+    if (H.uiDisposers && H.uiDisposers.length) return;
 
-    const { modal, closeBtn, filter, insertBtn, runBtn, clearBtn, openBtn, cmdEl } = getEls();
+    const { modal, closeBtn, filter, insertBtn, runBtn, clearBtn, openBtn } = getEls(ctx);
 
-    if (openBtn) openBtn.addEventListener('click', (e) => { try { e.preventDefault(); } catch (e2) {} open(); });
-
-    if (closeBtn) closeBtn.addEventListener('click', (e) => { try { e.preventDefault(); } catch (e2) {} close(); });
-    if (insertBtn) insertBtn.addEventListener('click', (e) => { try { e.preventDefault(); } catch (e2) {} insertSelected(); });
-    if (runBtn) runBtn.addEventListener('click', (e) => { try { e.preventDefault(); } catch (e2) {} runSelected(); });
-    if (clearBtn) clearBtn.addEventListener('click', (e) => { try { e.preventDefault(); } catch (e2) {} clearAll(); });
-    if (filter) filter.addEventListener('input', () => { try { render(); } catch (e) {} });
-
-    if (modal) {
-      modal.addEventListener('mousedown', (e) => {
-        try { if (e.target === modal) close(); } catch (e2) {}
+    const disposers = [];
+    function on(el, ev, fn, opts) {
+      if (!el || !el.addEventListener) return;
+      el.addEventListener(ev, fn, opts);
+      disposers.push(() => {
+        try { el.removeEventListener(ev, fn, opts); } catch (e) {}
       });
     }
 
-    document.addEventListener('keydown', (e) => {
-      try {
-        if (e.key !== 'Escape') return;
-        const { modal: m } = getEls();
-        if (!m || m.classList.contains('hidden')) return;
-        close();
-      } catch (e2) {}
-    });
+    if (openBtn) on(openBtn, 'click', (e) => { try { e.preventDefault(); } catch (e2) {} open(); });
+    if (closeBtn) on(closeBtn, 'click', (e) => { try { e.preventDefault(); } catch (e2) {} close(); });
+    if (insertBtn) on(insertBtn, 'click', (e) => { try { e.preventDefault(); } catch (e2) {} insertSelected(); });
+    if (runBtn) on(runBtn, 'click', (e) => { try { e.preventDefault(); } catch (e2) {} runSelected(); });
+    if (clearBtn) on(clearBtn, 'click', (e) => { try { e.preventDefault(); } catch (e2) {} clearAll(); });
+    if (filter) on(filter, 'input', () => { try { render(); } catch (e) {} });
 
-    // command input history keys
-    try { bindCmdHistoryKeys(cmdEl); } catch (e) {}
+    if (modal) {
+      on(modal, 'mousedown', (e) => {
+        try { if (e && e.target === modal) close(); } catch (e2) {}
+      });
+    }
+
+    H.uiDisposers = disposers;
+  }
+
+  function unbindUi() {
+    const ds = H.uiDisposers || null;
+    H.uiDisposers = null;
+    if (!ds) return;
+    ds.forEach((d) => { try { if (typeof d === 'function') d(); } catch (e) {} });
   }
 
   function init() {
     try { if (!H.items || !H.items.length) load(); } catch (e) {}
-    try { bindUiOnce(); } catch (e) {}
-    try { attachTerm(state.xterm || state.term); } catch (e) {}
+    // Backward compatibility: bind UI once if someone calls history.init() directly.
+    try { bindUi(getCtx()); } catch (e2) {}
+    try { attachTerm(state.xterm || state.term); } catch (e3) {}
   }
 
   // Export
@@ -537,5 +600,56 @@
     attachTerm,
     consumePtyInput,
     markSensitiveFromOutput,
+
+    // Stage E: registry plugin factory
+    createModule: (ctx) => ({
+      id: 'history',
+      priority: 65,
+
+      init: () => { try { if (!H.items || !H.items.length) load(); } catch (e) {} },
+
+      onOpen: () => {
+        try { bindUi(ctx); } catch (e) {}
+
+        // Escape closes the history modal when it is open.
+        try {
+          if (!H.escHandler) {
+            H.escHandler = (e) => {
+              try {
+                if (!e || e.key !== 'Escape') return;
+                const { modal: m } = getEls(ctx);
+                if (!m || m.classList.contains('hidden')) return;
+                close();
+              } catch (e2) {}
+            };
+            document.addEventListener('keydown', H.escHandler);
+          }
+        } catch (e) {}
+
+        // command input history keys
+        try {
+          const { cmdEl } = getEls(ctx);
+          if (!H.cmdKeysOff) H.cmdKeysOff = bindCmdHistoryKeys(cmdEl);
+        } catch (e) {}
+      },
+
+      onClose: () => {
+        try { if (isOpen()) close(); } catch (e) {}
+        try { unbindUi(); } catch (e0) {}
+
+        try { if (H.escHandler) document.removeEventListener('keydown', H.escHandler); } catch (e2) {}
+        H.escHandler = null;
+
+        try { if (H.cmdKeysOff) H.cmdKeysOff(); } catch (e3) {}
+        H.cmdKeysOff = null;
+      },
+
+      attachTerm: (_ctx, term) => { try { attachTerm(term); } catch (e) {} },
+
+      detachTerm: () => {
+        try { if (H.ptyDisposable && typeof H.ptyDisposable.dispose === 'function') H.ptyDisposable.dispose(); } catch (e) {}
+        H.ptyDisposable = null;
+      },
+    }),
   };
 })();
