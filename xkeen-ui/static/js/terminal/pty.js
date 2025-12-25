@@ -1,4 +1,4 @@
-// Terminal PTY subsystem: WebSocket transport + session + retry/backoff + signals menu
+// Terminal PTY subsystem: WebSocket transport + session + retry/backoff + signals
 (function () {
   'use strict';
 
@@ -7,6 +7,38 @@
 
   const core = window.XKeen.terminal._core || null;
   const caps = window.XKeen.terminal.capabilities || null;
+
+  // Milestone A: PTY communicates with the rest of the terminal via ctx.events
+  // (instead of pushing hook functions into core.*).
+  function getCtx() {
+    try {
+      const C = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core
+        ? window.XKeen.terminal.core
+        : null;
+      if (C && typeof C.getCtx === 'function') return C.getCtx();
+    } catch (e) {}
+    return null;
+  }
+
+  function getEvents() {
+    try {
+      const ctx = getCtx();
+      if (ctx && ctx.events && typeof ctx.events.emit === 'function') return ctx.events;
+    } catch (e) {}
+    return { on: () => () => {}, off: () => {}, emit: () => {} };
+  }
+
+  function getUi() {
+    try {
+      const ctx = getCtx();
+      if (ctx && ctx.ui) return ctx.ui;
+    } catch (e) {}
+    return null;
+  }
+
+  function emit(eventName, payload) {
+    try { getEvents().emit(eventName, payload); } catch (e) {}
+  }
 
   const state = (core && core.state) ? core.state : (window.XKeen.terminal.__pty_state = window.XKeen.terminal.__pty_state || {});
 
@@ -29,13 +61,76 @@
     return base + '__' + tabId();
   }
 
+
+// Legacy sessionStorage formats (older terminal.js used ':' suffix, oldest used plain key).
+// To avoid migrating cloned sessionStorage into a newly opened tab, we only migrate on reload/back-forward.
+function ptyLegacyKeyColon(base) {
+  return base + ':' + tabId();
+}
+function ptyLegacyKeyPlain(base) {
+  return String(base);
+}
+function isReloadLikeNavigation() {
+  try {
+    if (window.performance && typeof window.performance.getEntriesByType === 'function') {
+      const nav = window.performance.getEntriesByType('navigation')[0];
+      const t = nav && nav.type;
+      if (t) return (t === 'reload' || t === 'back_forward');
+    }
+  } catch (e) {}
+  try {
+    // Legacy API: 0=navigate,1=reload,2=back_forward
+    const pn = window.performance && window.performance.navigation;
+    if (pn && typeof pn.type === 'number') {
+      return (pn.type === 1 || pn.type === 2);
+    }
+  } catch (e) {}
+  return false;
+}
+function tryMigrateLegacyKey(base) {
+  if (!isReloadLikeNavigation()) return null;
+  try {
+    // 1) Namespaced old format: base:tabId
+    const colonKey = ptyLegacyKeyColon(base);
+    let v = null;
+    try { v = sessionStorage.getItem(colonKey); } catch (e) { v = null; }
+    if (v != null && v !== '') {
+      // Only migrate if new key is empty
+      const nk = ptyStorageKey(base);
+      const existing = sessionStorage.getItem(nk);
+      if (existing == null || existing === '') {
+        sessionStorage.setItem(nk, String(v));
+      }
+      try { sessionStorage.removeItem(colonKey); } catch (e) {}
+      return v;
+    }
+
+    // 2) Oldest global format: base
+    const plainKey = ptyLegacyKeyPlain(base);
+    try { v = sessionStorage.getItem(plainKey); } catch (e) { v = null; }
+    if (v != null && v !== '') {
+      const nk = ptyStorageKey(base);
+      const existing = sessionStorage.getItem(nk);
+      if (existing == null || existing === '') {
+        sessionStorage.setItem(nk, String(v));
+      }
+      try { sessionStorage.removeItem(plainKey); } catch (e) {}
+      return v;
+    }
+  } catch (e) {}
+  return null;
+}
+
+
   function loadSessionState() {
     try {
-      const sid = sessionStorage.getItem(ptyStorageKey(KEY_BASE_SID));
+      let sid = sessionStorage.getItem(ptyStorageKey(KEY_BASE_SID));
+      if ((sid == null || sid === '') && typeof tryMigrateLegacyKey === 'function') sid = tryMigrateLegacyKey(KEY_BASE_SID);
       if (sid) state.ptySessionId = String(sid);
     } catch (e) {}
     try {
-      const ls = sessionStorage.getItem(ptyStorageKey(KEY_BASE_SEQ));
+      let ls = sessionStorage.getItem(ptyStorageKey(KEY_BASE_SEQ));
+      if ((ls == null || ls === '') && typeof tryMigrateLegacyKey === 'function') ls = tryMigrateLegacyKey(KEY_BASE_SEQ);
       if (ls != null) state.ptyLastSeq = Math.max(0, parseInt(ls, 10) || 0);
     } catch (e) {}
   }
@@ -46,11 +141,16 @@
   }
 
   function clearSessionState() {
-    state.ptySessionId = null;
-    state.ptyLastSeq = 0;
-    try { sessionStorage.removeItem(ptyStorageKey(KEY_BASE_SID)); } catch (e) {}
-    try { sessionStorage.removeItem(ptyStorageKey(KEY_BASE_SEQ)); } catch (e) {}
-  }
+  state.ptySessionId = null;
+  state.ptyLastSeq = 0;
+  try { sessionStorage.removeItem(ptyStorageKey(KEY_BASE_SID)); } catch (e) {}
+  try { sessionStorage.removeItem(ptyStorageKey(KEY_BASE_SEQ)); } catch (e) {}
+  // Also drop legacy keys (best effort)
+  try { sessionStorage.removeItem(ptyLegacyKeyColon(KEY_BASE_SID)); } catch (e) {}
+  try { sessionStorage.removeItem(ptyLegacyKeyColon(KEY_BASE_SEQ)); } catch (e) {}
+  try { sessionStorage.removeItem(ptyLegacyKeyPlain(KEY_BASE_SID)); } catch (e) {}
+  try { sessionStorage.removeItem(ptyLegacyKeyPlain(KEY_BASE_SEQ)); } catch (e) {}
+}
 
   // --------------------
   // UI helpers
@@ -58,10 +158,6 @@
   function overlayOpen() {
     try { return core && typeof core.terminalIsOverlayOpen === 'function' ? core.terminalIsOverlayOpen() : true; } catch (e) {}
     return true;
-  }
-
-  function setConnState(cs, detail) {
-    try { if (core && typeof core.setConnState === 'function') core.setConnState(cs, detail); } catch (e) {}
   }
 
   function safeWrite(term, s) {
@@ -106,157 +202,90 @@
   }
 
   // --------------------
-  // Retry/backoff
+  // Retry/backoff (delegated to modules/reconnect_controller.js)
   // --------------------
-  const RETRY_CFG = {
-    baseMs: 800,
-    factor: 1.8,
-    maxMs: 20000,
-    jitter: 0.15,
-  };
+  function getReconnectController() {
+    try {
+      const ctx = getCtx();
+      if (ctx && ctx.reconnect && typeof ctx.reconnect.getRetryState === 'function') return ctx.reconnect;
+    } catch (e) {}
+    try {
+      const mod = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.reconnect_controller : null;
+      const ctx2 = getCtx();
+      if (mod && typeof mod.createController === 'function' && ctx2) {
+        // Ensure a singleton controller even if registry did not run yet.
+        ctx2.reconnect = ctx2.reconnect || mod.createController(ctx2);
+        return ctx2.reconnect;
+      }
+    } catch (e2) {}
+    return null;
+  }
 
-  function updateRetryUi() {
-    // Best effort: toggle button + text if present
-    try {
-      const btn = document.getElementById('terminal-btn-stop-retry');
-      if (btn) btn.classList.toggle('hidden', !state.ptyRetryActive);
-    } catch (e) {}
-    try {
-      const btnNow = document.getElementById('terminal-btn-retry-now');
-      if (btnNow) btnNow.classList.toggle('hidden', !state.ptyRetryActive);
-    } catch (e) {}
+  function getRetryState() {
+    const rc = getReconnectController();
+    if (rc && typeof rc.getRetryState === 'function') return rc.getRetryState();
+    return { active: false, blocked: false, attempt: 0, nextAt: 0 };
   }
 
   function resetRetry(opts = {}) {
-    if (state.ptyRetryTimer) {
-      try { clearTimeout(state.ptyRetryTimer); } catch (e) {}
-      state.ptyRetryTimer = null;
-    }
-    state.ptyRetryAttempt = 0;
-    state.ptyRetryNextAt = 0;
-    if (opts && opts.unblock) state.ptyRetryBlocked = false;
-    state.ptyRetryActive = false;
-    updateRetryUi();
+    const rc = getReconnectController();
+    if (rc && typeof rc.resetRetry === 'function') return rc.resetRetry(opts || {});
   }
 
   function stopRetry(opts = {}) {
-    state.ptyRetryBlocked = true;
-    if (state.ptyRetryTimer) {
-      try { clearTimeout(state.ptyRetryTimer); } catch (e) {}
-      state.ptyRetryTimer = null;
-    }
-    state.ptyRetryActive = false;
-    state.ptyRetryNextAt = 0;
-    updateRetryUi();
-    if (!opts.silent) {
-      try { safeWriteln(state.xterm || null, '\r\n[PTY] Auto-retry stopped.'); } catch (e) {}
-    }
+    const rc = getReconnectController();
+    if (rc && typeof rc.stopRetry === 'function') return rc.stopRetry(opts || {});
   }
 
   function scheduleRetry(reason, opts = {}) {
-    if (state.ptyRetryBlocked) return;
-    if (!overlayOpen()) return;
-    const term = state.xterm || null;
-    if (!term) return;
-
-    // Only retry in PTY mode if we know it; otherwise allow caller to force.
-    if (!opts.force) {
-      try {
-        if (core && typeof core.getMode === 'function' && core.getMode() !== 'pty') return;
-      } catch (e) {}
-    }
-
-    state.ptyRetryActive = true;
-    if (state.ptyRetryTimer) {
-      updateRetryUi();
-      return;
-    }
-
-    const maxAttempts = (opts && typeof opts.maxAttempts === 'number') ? opts.maxAttempts : 0;
-    if (maxAttempts > 0 && (state.ptyRetryAttempt || 0) >= maxAttempts) {
-      state.ptyRetryActive = false;
-      updateRetryUi();
-      setConnState('error', 'PTY: retry limit reached');
-      try { safeWriteln(term, '\r\n[PTY] Auto-retry stopped (max attempts reached).'); } catch (e) {}
-      return;
-    }
-
-    state.ptyRetryAttempt = (state.ptyRetryAttempt || 0) + 1;
-
-    const base = Math.max(100, RETRY_CFG.baseMs);
-    const factor = Math.max(1.1, RETRY_CFG.factor);
-    const cap = Math.max(base, RETRY_CFG.maxMs);
-    const jitter = Math.max(0, Math.min(0.5, RETRY_CFG.jitter));
-
-    let delay = Math.floor(base * (factor ** Math.max(0, (state.ptyRetryAttempt || 1) - 1)));
-    delay = Math.min(cap, delay);
-    if (jitter > 0) {
-      const r = (Math.random() * 2 - 1) * jitter;
-      delay = Math.max(100, Math.floor(delay * (1 + r)));
-    }
-
-    state.ptyRetryNextAt = Date.now() + delay;
-    updateRetryUi();
-
-    try {
-      const sec = (delay / 1000).toFixed(1);
-      safeWriteln(term, `\r\n[PTY] Auto-retry in ${sec}s (attempt ${state.ptyRetryAttempt})${reason ? ' — ' + reason : ''}`);
-    } catch (e) {}
-
-    state.ptyRetryTimer = setTimeout(() => {
-      state.ptyRetryTimer = null;
-      state.ptyRetryNextAt = 0;
-
-      if (state.ptyRetryBlocked) return;
-      if (!overlayOpen()) return;
-      try {
-        if (!opts.force) {
-          if (core && typeof core.getMode === 'function' && core.getMode() !== 'pty') return;
-        }
-      } catch (e) {}
-
-      const t = state.xterm || null;
-      if (!t) return;
-      connect(t, { preserveScreen: true, isAutoRetry: true });
-    }, delay);
+    const rc = getReconnectController();
+    if (rc && typeof rc.scheduleRetry === 'function') return rc.scheduleRetry(reason, opts || {});
   }
 
   function retryNow() {
-    if (state.ptyRetryBlocked) state.ptyRetryBlocked = false;
-    if (state.ptyRetryTimer) {
-      try { clearTimeout(state.ptyRetryTimer); } catch (e) {}
-      state.ptyRetryTimer = null;
-    }
-    state.ptyRetryNextAt = 0;
-    const term = state.xterm || null;
-    if (!term) return;
-    connect(term, { preserveScreen: true, isManualRetry: true });
+    const rc = getReconnectController();
+    if (rc && typeof rc.retryNow === 'function') return rc.retryNow();
   }
 
-  // --------------------
+// --------------------
   // WS connect / disconnect
   // --------------------
   function disconnect(opts = {}) {
     stopKeepalive();
 
     const ws = state.ptyWs;
+    const sendClose = (opts && opts.sendClose !== false);
+
+    // Ask backend to terminate PTY session when this is an explicit user disconnect.
+    try {
+      if (ws && sendClose && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'close' }));
+      }
+    } catch (e) {}
+
     if (ws) {
       try { ws.__xkeen_manual_close = true; } catch (e) {}
       try { ws.close(); } catch (e) {}
     }
     state.ptyWs = null;
 
-    // dispose xterm subscriptions if any
+    // dispose subscriptions if any
     try {
       const arr = state.ptyDisposables || [];
-      arr.forEach((d) => { try { d && d.dispose && d.dispose(); } catch (e) {} });
+      arr.forEach((d) => {
+        try {
+          if (!d) return;
+          if (typeof d === 'function') return d();
+          if (d && typeof d.dispose === 'function') return d.dispose();
+        } catch (e) {}
+      });
     } catch (e) {}
     state.ptyDisposables = [];
 
     if (opts && opts.clearSession) {
       clearSessionState();
     }
-    setConnState('disconnected', 'PTY: отключено');
+    try { emit('pty:disconnected', { reason: (opts && opts.reason) ? String(opts.reason) : 'disconnect' }); } catch (e) {}
   }
 
   async function fetchWsToken() {
@@ -279,11 +308,19 @@
     state.xterm = term;
 
     // Capability gate
+    // NOTE: capabilities are fetched asynchronously on page load.
+    // A new session tab may try to connect before /api/capabilities finishes.
+    // If so, wait for initCapabilities() once and re-check.
     try {
       if (caps && typeof caps.hasWs === 'function' && !caps.hasWs()) {
-        safeWriteln(term, '[PTY] WebSocket не поддерживается на этом устройстве.');
-        setConnState('error', 'PTY: WS не поддерживается');
-        return;
+        if (typeof caps.initCapabilities === 'function') {
+          try { await caps.initCapabilities(); } catch (e0) {}
+        }
+        if (caps && typeof caps.hasWs === 'function' && !caps.hasWs()) {
+          safeWriteln(term, '[PTY] WebSocket не поддерживается на этом устройстве.');
+          try { emit('pty:error', { message: 'ws unsupported' }); } catch (e2) {}
+          return;
+        }
       }
     } catch (e) {}
 
@@ -295,7 +332,7 @@
       try { if (typeof term.clear === 'function') term.clear(); } catch (e) {}
     }
     safeWriteln(term, '[PTY] Подключение...');
-    setConnState('connecting', 'PTY: подключение...');
+    try { emit('pty:connecting', { reason: 'connect' }); } catch (e2) {}
 
     loadSessionState();
 
@@ -305,8 +342,7 @@
       token = await fetchWsToken();
     } catch (e) {
       safeWriteln(term, '[PTY] Ошибка получения токена: ' + (e && e.message ? e.message : String(e)));
-      setConnState('error', 'PTY: ошибка токена');
-      scheduleRetry('token');
+      try { emit('pty:error', { message: 'token', detail: (e && e.message ? e.message : String(e || '')) }); } catch (e2) {}
       return;
     }
 
@@ -320,7 +356,16 @@
     } catch (e) {}
 
     if (state.ptySessionId) qs.set('session_id', String(state.ptySessionId));
-    if (state.ptyLastSeq) qs.set('last_seq', String(state.ptyLastSeq || 0));
+
+    // If we preserve screen, request only missed output; otherwise request buffered output from the beginning.
+    const resumeFrom = preserveScreen ? (state.ptyLastSeq || 0) : 0;
+    qs.set('last_seq', String(resumeFrom));
+    try {
+      if (!preserveScreen) {
+        state.ptyLastSeq = 0;
+        saveSessionState();
+      }
+    } catch (e) {}
 
     const url = `${proto}//${location.host}/ws/pty?${qs.toString()}`;
 
@@ -329,28 +374,31 @@
       ws = new WebSocket(url);
     } catch (e) {
       safeWriteln(term, '[PTY] WebSocket недоступен: ' + (e && e.message ? e.message : String(e)));
-      setConnState('error', 'PTY: WebSocket недоступен');
-      scheduleRetry('ws ctor');
+      try { emit('pty:error', { message: 'ws ctor', detail: (e && e.message ? e.message : String(e || '')) }); } catch (e2) {}
       return;
     }
 
     state.ptyWs = ws;
     state.ptyDisposables = state.ptyDisposables || [];
 
-    const sendResize = () => {
+    const sendResize = (colsOverride, rowsOverride) => {
       try {
         if (!state.ptyWs || state.ptyWs.readyState !== WebSocket.OPEN) return;
-        state.ptyWs.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+        const cols = Number(colsOverride || (term && term.cols) || 0);
+        const rows = Number(rowsOverride || (term && term.rows) || 0);
+        if (!cols || !rows) return;
+        state.ptyWs.send(JSON.stringify({ type: 'resize', cols: cols, rows: rows }));
       } catch (e) {}
     };
 
     ws.onopen = () => {
       resetRetry({ unblock: true });
       safeWriteln(term, '[PTY] Соединение установлено.');
-      setConnState('connected', 'PTY: подключено');
       try { if (state.fitAddon && state.fitAddon.fit) state.fitAddon.fit(); } catch (e) {}
       sendResize();
       startKeepalive();
+
+      try { emit('pty:connected', { ws: ws, sessionId: state.ptySessionId || null }); } catch (e) {}
     };
 
     ws.onmessage = (ev) => {
@@ -359,7 +407,28 @@
       if (!msg) return;
 
       if (msg.type === 'output' && typeof msg.data === 'string') {
-        safeWrite(term, msg.data);
+        // De-dup by seq to survive reconnect+replay races.
+        // If backend replays chunks that were already delivered live, ignore them here.
+        try {
+          if (msg.seq != null) {
+            const s0 = parseInt(msg.seq, 10);
+            const last0 = parseInt(state.ptyLastSeq || 0, 10) || 0;
+            if (!isNaN(s0) && s0 > 0 && s0 <= last0) return;
+          }
+        } catch (e) {}
+
+        const rawOut = msg.data;
+
+        // Stage 5: output is delivered through the transport bus.
+        // The output controller decides whether/how to post-process and render it.
+        try {
+          emit('transport:message', {
+            chunk: rawOut,
+            source: 'pty',
+            seq: (msg.seq != null) ? msg.seq : null,
+            ts: Date.now(),
+          });
+        } catch (e) {}
 
         // Track seq for lossless reconnect
         try {
@@ -371,59 +440,68 @@
             }
           }
         } catch (e) {}
-
-        // session id from server
+      } else if (msg.type === 'init') {
+        // Server returns session_id (store for reconnect)
         try {
-          if (msg.session_id != null) {
+          if (msg.session_id) {
             state.ptySessionId = String(msg.session_id);
             saveSessionState();
           }
         } catch (e) {}
-
         if (msg.shell) safeWriteln(term, '[PTY] Shell: ' + msg.shell);
         if (msg.reused) safeWriteln(term, '[PTY] Reattached to existing session.');
       } else if (msg.type === 'exit') {
         stopRetry({ silent: true });
         safeWriteln(term, '\r\n[PTY] Завершено (code=' + msg.code + ').');
-        setConnState('disconnected', 'PTY: shell завершился');
         clearSessionState();
         stopKeepalive();
+
+        try { emit('pty:disconnected', { reason: 'exit', code: msg.code }); } catch (e) {}
       } else if (msg.type === 'error') {
         safeWriteln(term, '[PTY] Ошибка: ' + (msg.message || 'unknown'));
-        setConnState('error', 'PTY: ошибка');
+        try { emit('pty:error', { message: msg.message || 'unknown' }); } catch (e) {}
       }
     };
 
     ws.onerror = () => {
-      setConnState('error', 'PTY: websocket error');
       try { safeWriteln(term, '\r\n[PTY] Ошибка WebSocket.'); } catch (e) {}
-      scheduleRetry('onerror');
+      try { emit('pty:error', { message: 'websocket error' }); } catch (e) {}
     };
 
     ws.onclose = (ev) => {
       stopKeepalive();
       try { if (ev && ev.target && ev.target.__xkeen_manual_close) return; } catch (e) {}
       safeWriteln(term, '\r\n[PTY] Соединение закрыто.');
-      setConnState('disconnected', 'PTY: соединение закрыто');
-      scheduleRetry('onclose');
+      try { emit('pty:disconnected', { reason: 'onclose', code: (ev && typeof ev.code === 'number') ? ev.code : null }); } catch (e) {}
     };
 
-    // User input
+    // Resize is proxied by xterm_manager through ctx.events (Stage 2)
     try {
-      if (typeof term.onData === 'function') {
-        state.ptyDisposables.push(term.onData((data) => {
-          if (state.ptyWs && state.ptyWs.readyState === WebSocket.OPEN) {
-            try { state.ptyWs.send(JSON.stringify({ type: 'input', data: String(data || '') })); } catch (e) {}
-          }
-        }));
-      }
-    } catch (e) {}
+      const E = getEvents();
 
-    // Resize
-    try {
-      if (typeof term.onResize === 'function') {
-        state.ptyDisposables.push(term.onResize(() => sendResize()));
-      }
+      let lastSentCols = 0;
+      let lastSentRows = 0;
+      const onResize = (payload) => {
+        try {
+          // Ignore if not in PTY mode.
+          try {
+            if (core && typeof core.getMode === 'function' && core.getMode() !== 'pty') return;
+          } catch (e2) {}
+
+          const cols = payload && payload.cols ? Number(payload.cols) : (term && term.cols ? Number(term.cols) : 0);
+          const rows = payload && payload.rows ? Number(payload.rows) : (term && term.rows ? Number(term.rows) : 0);
+          if (!cols || !rows) return;
+          if (cols === lastSentCols && rows === lastSentRows) return;
+          lastSentCols = cols;
+          lastSentRows = rows;
+          sendResize(cols, rows);
+        } catch (e) {}
+      };
+      const offResize = E.on('xterm:resize', onResize);
+      if (offResize) state.ptyDisposables.push({ dispose: offResize });
+      // Backward-compatible name (older modules emit ui:resize)
+      const offUiResize = E.on('ui:resize', onResize);
+      if (offUiResize) state.ptyDisposables.push({ dispose: offUiResize });
     } catch (e) {}
   }
 
@@ -435,23 +513,16 @@
   }
 
   // --------------------
-  // Signals menu
+  // Signals (UI menu moved to terminal overflow menu)
   // --------------------
-  function hideSignalsMenu() {
-    const m = document.getElementById('terminal-signals-menu');
-    if (!m) return;
-    m.classList.add('hidden');
-  }
+  function hideSignalsMenu() { /* deprecated */ }
 
   function toggleSignalsMenu(ev) {
-    if (ev && ev.stopPropagation) ev.stopPropagation();
-    const m = document.getElementById('terminal-signals-menu');
-    if (!m) return;
-    m.classList.toggle('hidden');
+    // deprecated
+    try { if (ev && ev.stopPropagation) ev.stopPropagation(); } catch (e) {}
   }
 
   function sendSignal(name) {
-    hideSignalsMenu();
     const ws = state.ptyWs;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       try { if (typeof showToast === 'function') showToast('PTY не подключён', 'info'); } catch (e) {}
@@ -463,25 +534,19 @@
     } catch (e) {}
   }
 
-  function initSignalsMenuAutoClose() {
-    // click outside closes menu
-    document.addEventListener('click', () => {
-      try { hideSignalsMenu(); } catch (e) {}
-    });
-    // stop propagation inside menu
-    const m = document.getElementById('terminal-signals-menu');
-    if (m) {
-      m.addEventListener('click', (e) => {
-        try { e.stopPropagation(); } catch (e2) {}
-      });
-    }
-  }
+  function initSignalsMenuAutoClose() { /* deprecated */ }
 
   // Export
   window.XKeen.terminal.pty = {
     connect,
     disconnect,
     sendRaw,
+
+    // accessors (so UI does not touch _core.state)
+    getWs: () => {
+      try { return state.ptyWs || null; } catch (e) { return null; }
+    },
+    getRetryState,
 
     // retry/backoff
     scheduleRetry,
@@ -493,7 +558,7 @@
     getSessionId: () => (state.ptySessionId || null),
     clearSession: clearSessionState,
 
-    // signals menu
+    // signals
     sendSignal,
     hideSignalsMenu,
     toggleSignalsMenu,
