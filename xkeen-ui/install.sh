@@ -169,6 +169,41 @@ fi
 
 echo "[*] Python-зависимости в порядке."
 
+
+# --- lftp (для файлового менеджера) ---
+
+echo "[*] Проверяю наличие lftp для файлового менеджера..."
+
+if ! command -v lftp >/dev/null 2>&1; then
+  echo "[*] lftp не найден. Пытаюсь установить lftp через Entware (opkg)..."
+
+  if command -v opkg >/dev/null 2>&1; then
+    OPKG_BIN="$(command -v opkg)"
+  elif [ -x "/opt/bin/opkg" ]; then
+    OPKG_BIN="/opt/bin/opkg"
+  else
+    echo "[!] Не найден пакетный менеджер opkg Entware."
+    echo "    Установи Entware и lftp вручную, затем запусти установщик ещё раз."
+    exit 1
+  fi
+
+  if ! "$OPKG_BIN" update; then
+    echo "[!] Не удалось выполнить 'opkg update' при установке lftp."
+    exit 1
+  fi
+
+  if ! "$OPKG_BIN" install lftp; then
+    echo "[!] Установка lftp через opkg завершилась с ошибкой."
+    exit 1
+  fi
+fi
+
+if ! command -v lftp >/dev/null 2>&1; then
+  echo "[!] lftp не найден даже после установки."
+  exit 1
+fi
+
+
 # --- Функции ---
 
 is_port_in_use() {
