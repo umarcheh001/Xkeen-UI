@@ -9,6 +9,25 @@
   const caps = window.XKeen.terminal.capabilities || null;
   const state = (core && core.state) ? core.state : (window.XKeen.terminal.__lite_state = window.XKeen.terminal.__lite_state || {});
 
+  function getCtx() {
+    try {
+      const C = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core ? window.XKeen.terminal.core : null;
+      if (C && typeof C.getCtx === 'function') return C.getCtx();
+    } catch (e) {}
+    return null;
+  }
+
+  function byId(id) {
+    try {
+      const ctx = getCtx();
+      if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id);
+    } catch (e0) {}
+    try {
+      if (core && typeof core.byId === 'function') return core.byId(id);
+    } catch (e1) {}
+    return null;
+  }
+
   // --------------------
   // ANSI helpers (lite output only)
   // --------------------
@@ -76,7 +95,7 @@
   }
 
   function confirmIsVisible() {
-    const inputEl = document.getElementById('terminal-input');
+    const inputEl = byId('terminal-input');
     if (!inputEl) return false;
     if (inputEl.style && inputEl.style.display === 'none') return false;
     if (inputEl.offsetParent === null) return false;
@@ -84,7 +103,7 @@
   }
 
   function setConfirmVisible(visible, opts = {}) {
-    const inputEl = document.getElementById('terminal-input');
+    const inputEl = byId('terminal-input');
     if (!inputEl) return;
 
     const row = inputEl.closest ? inputEl.closest('.terminal-input-row') : null;
@@ -157,12 +176,15 @@
     // In PTY mode, input is handled by xterm.onData() in PTY transport.
     try { if (core && typeof core.getMode === 'function' && core.getMode() === 'pty') return; } catch (e) {}
 
-    const cmdEl = document.getElementById('terminal-command');
-    const inputEl = document.getElementById('terminal-input');
-    const outputEl = document.getElementById('terminal-output');
+    const cmdEl = byId('terminal-command');
+    const inputEl = byId('terminal-input');
+    const outputEl = byId('terminal-output');
 
     const cmdText = cmdEl ? String(cmdEl.value || '').trim() : '';
-    const stdinValue = inputEl ? String(inputEl.value || '') : '';
+
+    // IMPORTANT: many CLI prompts require a trailing newline. Keep legacy behavior.
+    const rawStdin = inputEl ? String(inputEl.value || '') : '';
+    const stdinValue = (rawStdin === '' ? '\n' : rawStdin + '\n');
 
     const term = state.xterm || null;
     const useXterm = getUseXterm();
@@ -174,6 +196,23 @@
         outputEl.textContent = 'Ошибка: введите команду.';
       }
       return;
+    }
+    // Stage C: route builtin/special commands via command router (so lite_runner can be used standalone).
+    try {
+      if (window.XKeen && XKeen.terminal && XKeen.terminal.core && typeof XKeen.terminal.core.getCtx === 'function') {
+        const ctx = XKeen.terminal.core.getCtx();
+        if (ctx && ctx.router && typeof ctx.router.route === 'function') {
+          const r = await ctx.router.route(cmdText, {
+            source: 'lite_runner',
+            mode: state.currentCommandMode,
+            flag: state.currentCommandFlag,
+            label: state.currentCommandLabel,
+          });
+          if (r && r.handled) return;
+        }
+      }
+    } catch (e) {
+      try { console.error(e); } catch (_) {}
     }
 
     // Hide confirm input once used (unless caller wants it kept)
@@ -271,5 +310,17 @@
     // confirm UI helpers (kept here because they are lite-only)
     confirmIsVisible,
     setConfirmVisible,
+
+    // Stage 8.4: registry plugin factory (legacy compat)
+    createModule: (ctx) => {
+      try { if (ctx) ctx.lite_runner = window.XKeen.terminal.lite_runner; } catch (e) {}
+      return {
+        id: 'lite_runner',
+        priority: 95,
+        init: () => {},
+        onOpen: () => {},
+        onClose: () => {},
+      };
+    },
   };
 })();
