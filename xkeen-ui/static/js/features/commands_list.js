@@ -8,6 +8,8 @@
   const CL = XKeen.features.commandsList;
 
   function hasTerminalApi() {
+    // Stage 8.2: prefer the stable public API.
+    if (XKeen.terminal && XKeen.terminal.api && typeof XKeen.terminal.api.open === 'function') return true;
     return !!(XKeen.terminal && typeof XKeen.terminal.open === 'function');
   }
 
@@ -25,24 +27,49 @@
   }
 
   function isPtyConnected() {
+    // New API: ctx/transport
     try {
-      const leg = XKeen.terminal && XKeen.terminal._legacy;
-      if (leg && typeof leg.isPtyConnected === 'function') return !!leg.isPtyConnected();
+      const ctx = (XKeen.terminal && XKeen.terminal.core && typeof XKeen.terminal.core.getCtx === 'function')
+        ? XKeen.terminal.core.getCtx()
+        : null;
+      if (ctx && ctx.transport && ctx.transport.kind === 'pty' && typeof ctx.transport.isConnected === 'function') {
+        return !!ctx.transport.isConnected();
+      }
+      const st = ctx && ctx.core && ctx.core.state ? ctx.core.state : null;
+      const ws = st ? st.ptyWs : null;
+      return !!(ws && ws.readyState === WebSocket.OPEN);
     } catch (e) {}
     return false;
   }
 
   function sendPtyRaw(payload) {
+    const data = String(payload == null ? '' : payload);
+
+    // New API: ctx.transport
     try {
-      const leg = XKeen.terminal && XKeen.terminal._legacy;
-      if (leg && typeof leg.sendPtyRaw === 'function') return leg.sendPtyRaw(String(payload || ''));
-    } catch (e) {}
+      const ctx = (XKeen.terminal && XKeen.terminal.core && typeof XKeen.terminal.core.getCtx === 'function')
+        ? XKeen.terminal.core.getCtx()
+        : null;
+      if (ctx && ctx.transport && typeof ctx.transport.send === 'function') {
+        if (ctx.transport.kind === 'pty') return !!ctx.transport.send(data, { prefer: 'pty', allowWhenDisconnected: false, source: 'commands_list' });
+      }
+    } catch (e0) {}
+    // Backward compatibility fallback: send via modular PTY if present.
+    try {
+      const pty = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+      if (pty && typeof pty.sendRaw === 'function') { pty.sendRaw(data); return true; }
+    } catch (e2) {}
+    return false;
   }
 
   function focusTerminal() {
     try {
-      const leg = XKeen.terminal && XKeen.terminal._legacy;
-      if (leg && typeof leg.focus === 'function') return leg.focus();
+      const ctx = (XKeen.terminal && XKeen.terminal.core && typeof XKeen.terminal.core.getCtx === 'function')
+        ? XKeen.terminal.core.getCtx()
+        : null;
+      const st = ctx && ctx.core && ctx.core.state ? ctx.core.state : null;
+      const t = st ? (st.term || st.xterm) : null;
+      if (t && typeof t.focus === 'function') return t.focus();
     } catch (e) {}
   }
 
@@ -62,7 +89,9 @@
   async function openPtyAndRun(cmd) {
     // Open full Interactive Shell (PTY) and execute the command inside PTY.
     try {
-      if (hasTerminalApi()) {
+      if (XKeen.terminal && XKeen.terminal.api && typeof XKeen.terminal.api.open === 'function') {
+        XKeen.terminal.api.open('pty');
+      } else if (hasTerminalApi()) {
         XKeen.terminal.open(null, { cmd: '', mode: 'pty' });
       } else if (typeof window.openTerminal === 'function') {
         window.openTerminal('', 'pty');
@@ -107,6 +136,10 @@
         // No WS => keep old: open terminal with suggested command (does not auto-execute).
         if (hasTerminalApi()) {
           try {
+            if (XKeen.terminal && XKeen.terminal.api && typeof XKeen.terminal.api.open === 'function') {
+              XKeen.terminal.api.open({ cmd: label, mode: 'xkeen' });
+              return;
+            }
             XKeen.terminal.open(null, { cmd: label, mode: 'xkeen' });
             return;
           } catch (e) {}
