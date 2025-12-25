@@ -8,6 +8,14 @@
 
   const core = window.XKeen.terminal._core || null;
 
+  function getCtx() {
+    try {
+      const C = window.XKeen.terminal.core;
+      if (C && typeof C.getCtx === 'function') return C.getCtx();
+    } catch (e) {}
+    return null;
+  }
+
   // --------------------
   // Storage
   // --------------------
@@ -40,52 +48,63 @@
       .replace(/>/g, '&gt;');
   }
 
-  function byId(id) {
+  function byId(id, ctx) {
+    try {
+      if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id);
+    } catch (e0) {}
     try {
       if (core && typeof core.byId === 'function') return core.byId(id);
     } catch (e) {}
-    return document.getElementById(id);
+    return null;
   }
 
-  function getMode() {
-    // Prefer core state (future), fall back to legacy terminal.js bridge.
+  function getMode(ctx) {
+    try {
+      const m = ctx && ctx.state ? ctx.state.mode : null;
+      if (m) return m;
+    } catch (e0) {}
+    // Prefer core state (single source of truth is ctx/core).
     try {
       if (core && typeof core.getMode === 'function') return core.getMode();
-    } catch (e) {}
-    try {
-      const leg = window.XKeen && window.XKeen.terminal && window.XKeen.terminal._legacy;
-      if (leg && typeof leg.getMode === 'function') return leg.getMode();
     } catch (e) {}
     return 'shell';
   }
 
-  function isPtyConnected() {
-    // Prefer new PTY module if used; otherwise consult legacy bridge.
+  function isPtyConnected(ctx) {
+    // Determine whether there is an actual open PTY WebSocket.
+    // Supports both legacy terminal.js PTY (internal ptyWs) and the new pty.js module (core.state.ptyWs).
     try {
-      const pty = window.XKeen.terminal.pty;
-      // no explicit isConnected API in pty.js, but sendRaw will throw if not ready.
-      // We'll still try legacy for a clearer check.
-      if (pty && typeof pty.sendRaw === 'function') {
-        // best effort: if a ws exists in shared state (pty.js keeps it in its closure)
-        // so we can't check here. fall through.
+      // ctx.transport.isConnected() in lite mode is always true — here we mean *PTY websocket*.
+      if (ctx && ctx.transport && typeof ctx.transport.isConnected === 'function') {
+        if (ctx.transport.kind === 'pty') return !!ctx.transport.isConnected();
       }
-    } catch (e) {}
+    } catch (e0) {}
     try {
-      const leg = window.XKeen && window.XKeen.terminal && window.XKeen.terminal._legacy;
-      if (leg && typeof leg.isPtyConnected === 'function') return !!leg.isPtyConnected();
+      const st = (core && core.state) ? core.state : null;
+      const ws = st ? st.ptyWs : null;
+      if (ws && ws.readyState === WebSocket.OPEN) return true;
     } catch (e) {}
     return false;
   }
 
-  function focusTerminal() {
+  function focusTerminal(ctx) {
+    const c = ctx || getCtx();
     try {
-      const leg = window.XKeen && window.XKeen.terminal && window.XKeen.terminal._legacy;
-      if (leg && typeof leg.focus === 'function') return leg.focus();
-    } catch (e) {}
+      if (c && c.xterm && typeof c.xterm.getRefs === 'function') {
+        const r = c.xterm.getRefs();
+        const t = r && (r.term || r.xterm) ? (r.term || r.xterm) : null;
+        if (t && typeof t.focus === 'function') return t.focus();
+      }
+    } catch (e0) {}
+    try {
+      const st = c && c.core && c.core.state ? c.core.state : null;
+      const t = st ? (st.term || st.xterm) : null;
+      if (t && typeof t.focus === 'function') return t.focus();
+    } catch (e1) {}
     try {
       const t = (core && core.state) ? (core.state.term || core.state.xterm) : null;
       if (t && typeof t.focus === 'function') t.focus();
-    } catch (e) {}
+    } catch (e2) {}
   }
 
   // --------------------
@@ -100,16 +119,16 @@
     }
   }
 
-  function qcSetMode(mode) {
+  function qcSetMode(mode, ctx) {
     const m = (mode === 'run') ? 'run' : 'insert';
     try { localStorage.setItem(XKEEN_TERMINAL_QC_MODE_KEY, m); } catch (e) {}
-    try { qcUpdateModeUi(); } catch (e) {}
+    try { qcUpdateModeUi(ctx); } catch (e) {}
   }
 
-  function qcUpdateModeUi() {
+  function qcUpdateModeUi(ctx) {
     const mode = qcGetMode();
-    const bInsert = byId('terminal-qc-mode-insert');
-    const bRun = byId('terminal-qc-mode-run');
+    const bInsert = byId('terminal-qc-mode-insert', ctx);
+    const bRun = byId('terminal-qc-mode-run', ctx);
     if (bInsert) bInsert.classList.toggle('is-active', mode === 'insert');
     if (bRun) bRun.classList.toggle('is-active', mode === 'run');
   }
@@ -117,13 +136,13 @@
   // --------------------
   // Menu show/hide
   // --------------------
-  function hideMenu() {
-    const m = byId('terminal-commands-menu');
+  function hideMenu(ctx) {
+    const m = byId('terminal-commands-menu', ctx);
     if (!m) return;
     m.classList.add('hidden');
   }
 
-  function toggleMenu(ev) {
+  function toggleMenu(ev, ctx) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
     // close other menus if the PTY module is in use
     try {
@@ -131,12 +150,12 @@
       if (pty && typeof pty.hideSignalsMenu === 'function') pty.hideSignalsMenu();
     } catch (e) {}
 
-    const m = byId('terminal-commands-menu');
+    const m = byId('terminal-commands-menu', ctx);
     if (!m) return;
     const willShow = m.classList.contains('hidden');
     if (willShow) {
-      try { ensureMenuBuilt(); } catch (e) {}
-      try { qcUpdateModeUi(); } catch (e) {}
+      try { ensureMenuBuilt(ctx); } catch (e) {}
+      try { qcUpdateModeUi(ctx); } catch (e) {}
     }
     m.classList.toggle('hidden');
   }
@@ -144,8 +163,8 @@
   // --------------------
   // Insert/run actions
   // --------------------
-  function insertIntoLite(cmd, selectToken) {
-    const cmdEl = byId('terminal-command');
+  function insertIntoLite(cmd, selectToken, ctx) {
+    const cmdEl = byId('terminal-command', ctx);
     if (!cmdEl) return;
 
     cmdEl.style.display = '';
@@ -165,60 +184,91 @@
     } catch (e) {}
   }
 
-  function sendPtyRaw(payload) {
-    // Prefer PTY module when used; otherwise use legacy terminal.js bridge.
+  function sendPtyRaw(payload, ctx) {
+    const data = String(payload == null ? '' : payload);
+
+    // Stage B: unified transport
     try {
-      const pty = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.pty;
-      if (pty && typeof pty.sendRaw === 'function') return pty.sendRaw(String(payload || ''));
-    } catch (e) {}
+      if (ctx && ctx.transport && typeof ctx.transport.send === 'function') {
+        return !!ctx.transport.send(data, { prefer: 'pty', allowWhenDisconnected: false });
+      }
+    } catch (e0) {}
+
+    // Backward compatibility fallback (should be removed once terminal.js is fully modular)
     try {
-      const leg = window.XKeen && window.XKeen.terminal && window.XKeen.terminal._legacy;
-      if (leg && typeof leg.sendPtyRaw === 'function') return leg.sendPtyRaw(String(payload || ''));
+      const st = (core && core.state) ? core.state : null;
+      const ws = st ? st.ptyWs : null;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const pty = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.pty;
+        if (pty && typeof pty.sendRaw === 'function') { pty.sendRaw(data); return true; }
+      }
     } catch (e) {}
+
+    return false;
   }
 
-  function runLite() {
-    // Prefer lite_runner module (refactor target). Fallback to legacy.
+  function runLite(ctx) {
+    // Prefer Stage C unified execCommand (router -> transport). Fallback to lite_runner/legacy.
+    try {
+      const T = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal : null;
+      const cmdEl = byId('terminal-command', ctx);
+      const cmd = cmdEl ? String(cmdEl.value || '') : '';
+      if (T && typeof T.execCommand === 'function') {
+        return T.execCommand(cmd, { source: 'quick_commands' });
+      }
+    } catch (e0) {}
     try {
       const lr = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.lite_runner;
       if (lr && typeof lr.sendTerminalInput === 'function') return lr.sendTerminalInput();
     } catch (e) {}
+  }
+
+  function qcInsert(cmd, selectToken, ctx) {
+    hideMenu(ctx);
+    if (getMode(ctx) === 'pty') {
+      if (!isPtyConnected(ctx)) {
+        try {
+          if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') ctx.ui.toast('PTY не подключён', 'info');
+          else if (typeof window.showToast === 'function') window.showToast('PTY не подключён', 'info');
+        } catch (e) {}
+        return;
+      }
+      try { sendPtyRaw(String(cmd || ''), ctx); } catch (e) {}
+      focusTerminal(ctx);
+      return;
+    }
+    insertIntoLite(cmd, selectToken, ctx);
+  }
+
+  function qcRun(cmd, ctx) {
+    hideMenu(ctx);
+    if (getMode(ctx) === 'pty') {
+      if (!isPtyConnected(ctx)) {
+        try {
+          if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') ctx.ui.toast('PTY не подключён', 'info');
+          else if (typeof window.showToast === 'function') window.showToast('PTY не подключён', 'info');
+        } catch (e) {}
+        return;
+      }
+      try { sendPtyRaw(String(cmd || '') + '\r', ctx); } catch (e) {}
+      focusTerminal(ctx);
+      return;
+    }
+    // Lite/shell/xkeen: route through unified executor so builtins also work.
     try {
-      const leg = window.XKeen && window.XKeen.terminal && window.XKeen.terminal._legacy;
-      if (leg && typeof leg.runLite === 'function') return leg.runLite();
+      const T = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal : null;
+      if (T && typeof T.execCommand === 'function') {
+        void T.execCommand(String(cmd || ''), { source: 'quick_commands' });
+        focusTerminal(ctx);
+        return;
+      }
     } catch (e) {}
+
+    insertIntoLite(cmd, null, ctx);
+    try { void runLite(ctx); } catch (e) {}
   }
 
-  function qcInsert(cmd, selectToken) {
-    hideMenu();
-    if (getMode() === 'pty') {
-      if (!isPtyConnected()) {
-        try { if (typeof window.showToast === 'function') window.showToast('PTY не подключён', 'info'); } catch (e) {}
-        return;
-      }
-      try { sendPtyRaw(String(cmd || '')); } catch (e) {}
-      focusTerminal();
-      return;
-    }
-    insertIntoLite(cmd, selectToken);
-  }
-
-  function qcRun(cmd) {
-    hideMenu();
-    if (getMode() === 'pty') {
-      if (!isPtyConnected()) {
-        try { if (typeof window.showToast === 'function') window.showToast('PTY не подключён', 'info'); } catch (e) {}
-        return;
-      }
-      try { sendPtyRaw(String(cmd || '') + '\r'); } catch (e) {}
-      focusTerminal();
-      return;
-    }
-    insertIntoLite(cmd, null);
-    try { void runLite(); } catch (e) {}
-  }
-
-  function handleItemClick(ev, item) {
+  function handleItemClick(ev, item, ctx) {
     const cmd = item && item.cmd ? item.cmd : '';
     const selectToken = item && item.select ? item.select : null;
 
@@ -226,23 +276,23 @@
     const forceRun = !!(ev && (ev.ctrlKey || ev.metaKey));
     const forceInsert = !!(ev && ev.shiftKey);
 
-    if (forceRun) return qcRun(cmd);
-    if (forceInsert) return qcInsert(cmd, selectToken);
+    if (forceRun) return qcRun(cmd, ctx);
+    if (forceInsert) return qcInsert(cmd, selectToken, ctx);
 
     const mode = qcGetMode();
-    if (mode === 'run') return qcRun(cmd);
-    return qcInsert(cmd, selectToken);
+    if (mode === 'run') return qcRun(cmd, ctx);
+    return qcInsert(cmd, selectToken, ctx);
   }
 
   // --------------------
   // Build menu list
   // --------------------
   let menuBuilt = false;
-  function ensureMenuBuilt() {
+  function ensureMenuBuilt(ctx) {
     if (menuBuilt) return;
     menuBuilt = true;
 
-    const list = byId('terminal-commands-list');
+    const list = byId('terminal-commands-list', ctx);
     if (!list) return;
     list.innerHTML = '';
 
@@ -259,7 +309,7 @@
 
       btn.addEventListener('click', (ev) => {
         try { ev.stopPropagation(); } catch (e) {}
-        handleItemClick(ev, q);
+        handleItemClick(ev, q, ctx);
       });
       list.appendChild(btn);
     });
@@ -268,61 +318,105 @@
   }
 
   // --------------------
-  // Auto-close
+  // Auto-close (bound only while overlay is open)
   // --------------------
-  let autoCloseInited = false;
-  function initAutoClose() {
-    if (autoCloseInited) return;
-    autoCloseInited = true;
+  let autoCloseBound = false;
+  let autoCloseDocClick = null;
+  let autoCloseDocKey = null;
+  let menuClickStopBound = false;
+  let menuClickStopHandler = null;
 
-    document.addEventListener('click', (ev) => {
+  function bindAutoClose(ctx) {
+    if (autoCloseBound) return;
+    autoCloseBound = true;
+
+    autoCloseDocClick = (ev) => {
       try {
-        const menu = byId('terminal-commands-menu');
-        const btn = byId('terminal-btn-commands');
+        const menu = byId('terminal-commands-menu', ctx);
+        const btn = byId('terminal-btn-commands', ctx);
         const t = ev && ev.target ? ev.target : null;
         if (menu && t && menu.contains(t)) return;
         if (btn && t && btn.contains(t)) return;
       } catch (e) {}
-      hideMenu();
-    }, true);
+      hideMenu(ctx);
+    };
+    document.addEventListener('click', autoCloseDocClick, true);
 
-    document.addEventListener('keydown', (e) => {
-      if (e && e.key === 'Escape') hideMenu();
-    }, true);
+    autoCloseDocKey = (e) => {
+      if (e && e.key === 'Escape') hideMenu(ctx);
+    };
+    document.addEventListener('keydown', autoCloseDocKey, true);
 
-    // Stop propagation inside the menu itself
+    // Stop propagation inside the menu itself (bind once per open; removed on close)
     try {
-      const m = byId('terminal-commands-menu');
-      if (m) {
-        m.addEventListener('click', (e) => {
-          try { e.stopPropagation(); } catch (e2) {}
-        });
+      if (!menuClickStopBound) {
+        const m = byId('terminal-commands-menu', ctx);
+        if (m) {
+          menuClickStopHandler = (e) => {
+            try { e.stopPropagation(); } catch (e2) {}
+          };
+          m.addEventListener('click', menuClickStopHandler);
+          menuClickStopBound = true;
+        }
       }
     } catch (e) {}
+  }
+
+  function unbindAutoClose(ctx) {
+    if (!autoCloseBound) return;
+    autoCloseBound = false;
+    try { if (autoCloseDocClick) document.removeEventListener('click', autoCloseDocClick, true); } catch (e) {}
+    try { if (autoCloseDocKey) document.removeEventListener('keydown', autoCloseDocKey, true); } catch (e) {}
+    autoCloseDocClick = null;
+    autoCloseDocKey = null;
+
+    try {
+      if (menuClickStopBound) {
+        const m = byId('terminal-commands-menu', ctx || getCtx());
+        if (m && menuClickStopHandler) m.removeEventListener('click', menuClickStopHandler);
+      }
+    } catch (e2) {}
+    menuClickStopHandler = null;
+    menuClickStopBound = false;
   }
 
   // --------------------
   // Public init (bind UI)
   // --------------------
   let inited = false;
-  function init() {
+  let uiDisposers = [];
+
+  function on(el, ev, fn, opts) {
+    if (!el || !el.addEventListener) return;
+    el.addEventListener(ev, fn, opts);
+    uiDisposers.push(() => {
+      try { el.removeEventListener(ev, fn, opts); } catch (e) {}
+    });
+  }
+
+  function disposeUi() {
+    const ds = uiDisposers.splice(0, uiDisposers.length);
+    ds.forEach((d) => { try { if (typeof d === 'function') d(); } catch (e) {} });
+    inited = false;
+  }
+
+  function init(ctx) {
     if (inited) return true;
     inited = true;
 
-    initAutoClose();
     // Prepare mode UI (buttons may exist even if menu isn't opened yet)
-    try { qcUpdateModeUi(); } catch (e) {}
+    try { qcUpdateModeUi(ctx); } catch (e) {}
 
-    // Wire buttons (idempotent if init called once by entrypoint)
+    // Wire buttons (re-bindable; removed on terminal close)
     try {
-      const btn = byId('terminal-btn-commands');
-      if (btn) btn.addEventListener('click', toggleMenu);
+      const btn = byId('terminal-btn-commands', ctx);
+      if (btn) on(btn, 'click', (ev) => toggleMenu(ev, ctx));
     } catch (e) {}
     try {
-      const bIns = byId('terminal-qc-mode-insert');
-      if (bIns) bIns.addEventListener('click', () => qcSetMode('insert'));
-      const bRun = byId('terminal-qc-mode-run');
-      if (bRun) bRun.addEventListener('click', () => qcSetMode('run'));
+      const bIns = byId('terminal-qc-mode-insert', ctx);
+      if (bIns) on(bIns, 'click', () => qcSetMode('insert', ctx));
+      const bRun = byId('terminal-qc-mode-run', ctx);
+      if (bRun) on(bRun, 'click', () => qcSetMode('run', ctx));
     } catch (e) {}
 
     return true;
@@ -330,17 +424,39 @@
 
   // Export
   window.XKeen.terminal.quick_commands = {
-    init,
+    init: () => init(getCtx()),
     // actions
-    toggleMenu,
-    hideMenu,
-    insert: qcInsert,
-    run: qcRun,
+    toggleMenu: (ev) => toggleMenu(ev, getCtx()),
+    hideMenu: () => hideMenu(getCtx()),
+    insert: (cmd, selectToken) => qcInsert(cmd, selectToken, getCtx()),
+    run: (cmd) => qcRun(cmd, getCtx()),
     // mode
     getMode: qcGetMode,
-    setMode: qcSetMode,
-    updateModeUi: qcUpdateModeUi,
+    setMode: (mode) => qcSetMode(mode, getCtx()),
+    updateModeUi: () => qcUpdateModeUi(getCtx()),
     // data
     TERMINAL_QUICK_COMMANDS,
+    // Stage E: registry plugin factory
+    createModule: (ctx) => ({
+      id: 'quick_commands',
+      priority: 75,
+      init: () => { try { init(ctx); } catch (e) {} },
+      onOpen: () => {
+        try { init(ctx); } catch (e0) {}
+        try { bindAutoClose(ctx); } catch (e) {}
+      },
+      onClose: () => {
+        try { hideMenu(ctx); } catch (e2) {}
+        try {
+          // clear menu DOM to drop per-item listeners
+          const list = byId('terminal-commands-list', ctx);
+          if (list) list.innerHTML = '';
+          menuBuilt = false;
+        } catch (e3) {}
+        try { unbindAutoClose(ctx); } catch (e) {}
+        try { disposeUi(); } catch (e4) {}
+      },
+      onModeChange: () => { try { qcUpdateModeUi(ctx); } catch (e) {} },
+    }),
   };
 })();
