@@ -44,38 +44,41 @@
   // --------------------
   // Overlay visible?
   // --------------------
+  function getOverlayController() {
+    try {
+      const C = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.core : null;
+      const ctx = (C && typeof C.getCtx === 'function') ? C.getCtx() : null;
+      const oc = ctx ? (ctx.overlay || ctx.overlayCtrl) : null;
+      if (oc) return oc;
+    } catch (e) {}
+    try {
+      return (window.XKeen && window.XKeen.terminal) ? (window.XKeen.terminal.overlay || null) : null;
+    } catch (e2) {}
+    return null;
+  }
+
   function terminalIsOverlayOpen() {
+    // Stage 8.3.4: moved to modules/overlay_controller.js
+    try {
+      const oc = getOverlayController();
+      if (oc && typeof oc.isOpen === 'function') return !!oc.isOpen();
+    } catch (e) {}
+    // Minimal fallback.
     const overlay = getOverlay();
     if (!overlay) return false;
-
-    // Robust cross-browser visibility check.
-    // NOTE: using `offsetParent !== null` breaks for `position: fixed` elements
-    // (e.g. Chrome returns null even when visible).
-    try {
-      if (!overlay.isConnected) return false;
-      const cs = window.getComputedStyle(overlay);
-      if (!cs) return false;
-      if (cs.display === 'none') return false;
-      if (cs.visibility === 'hidden') return false;
-
-      // If element is rendered it should have client rects; keep a safe fallback.
-      const rects = overlay.getClientRects ? overlay.getClientRects() : null;
-      if (rects && rects.length === 0) {
-        const w = overlay.offsetWidth || 0;
-        const h = overlay.offsetHeight || 0;
-        if (w === 0 && h === 0) return false;
-      }
-      return true;
-    } catch (e) {
-      // Best-effort fallback: rely on computed display.
-      return overlay.style.display !== 'none';
-    }
+    try { return overlay.style.display !== 'none'; } catch (e2) {}
+    return true;
   }
 
   // Prevent background page scrolling when any modal/overlay is open.
   // Uses the existing CSS rule: body.modal-open { overflow: hidden; }
   function syncBodyScrollLock() {
-    // moved to ui/modal.js (XKeen.ui.modal.syncBodyScrollLock)
+    // Stage 8.3.4: moved to modules/overlay_controller.js
+    try {
+      const oc = getOverlayController();
+      if (oc && typeof oc.syncBodyScrollLock === 'function') return oc.syncBodyScrollLock();
+    } catch (e) {}
+    // fallback: global modal helper
     try {
       if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
         return XKeen.ui.modal.syncBodyScrollLock();
@@ -129,6 +132,16 @@
   function setConnState(connState, detail) {
     state.connState = connState || 'error';
 
+    // Stage 8.3.5: prefer the status controller (single source of truth for lamp + uptime).
+    try {
+      const T = (window.XKeen && window.XKeen.terminal) ? window.XKeen.terminal : null;
+      const sc = T ? (T.status || null) : null;
+      if (sc && typeof sc.setConnState === 'function' && sc !== window.XKeen.terminal._core) {
+        sc.setConnState(String(state.connState || 'error'), detail);
+        return;
+      }
+    } catch (e0) {}
+
     // New lamp (preferred): uses same visuals as xkeen service lamp.
     const lamp = byId('terminal-conn-lamp');
     if (lamp) {
@@ -150,16 +163,6 @@
       lamp.title = detail || ('Терминал: ' + (stateRu[state.connState] || state.connState));
     }
 
-    // Backward compatibility: old badge if still present.
-    const badge = byId('terminal-conn-badge');
-    if (badge) {
-      badge.setAttribute('data-state', state.connState);
-      badge.textContent = (state.connState === 'connected') ? 'Подключено'
-                      : (state.connState === 'connecting') ? 'Подключение…'
-                      : (state.connState === 'disconnected') ? 'Отключено'
-                      : 'Ошибка';
-    }
-
     // Uptime: only for connected state
     if (state.connState === 'connected') {
       if (!uptimeStartMs) startUptimeTimer();
@@ -178,8 +181,41 @@
     return true;
   }
 
+  // --------------------
+  // XTerm refs setters (UI should not poke into state directly) (UI should not poke into state directly)
+  // --------------------
+  function setXtermRefs(refs) {
+    if (!refs) return;
+    try {
+      const allowed = {
+        term: 1,
+        xterm: 1,
+        fitAddon: 1,
+        searchAddon: 1,
+        webLinksAddon: 1,
+        webglAddon: 1,
+        serializeAddon: 1,
+        unicode11Addon: 1,
+        clipboardAddon: 1,
+        ligaturesAddon: 1,
+      };
+      Object.keys(refs).forEach((k) => {
+        if (!allowed[k]) return;
+        state[k] = refs[k];
+      });
+    } catch (e) {}
+  }
+
+  function getXtermRef(name) {
+    try { return state ? state[name] : null; } catch (e) {}
+    return null;
+  }
+
+
   window.XKeen.terminal._core = {
     state,
+    setXtermRefs,
+    getXtermRef,
     init,
     byId,
     getOverlay,
