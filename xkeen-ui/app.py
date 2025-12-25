@@ -83,6 +83,7 @@ def api_error(message: str, status: int = 400, *, ok: bool | None = None):
 from routes_routing import create_routing_blueprint
 from routes_backup import create_backups_blueprint
 from routes_service import create_service_blueprint
+from routes_remotefs import create_remotefs_blueprint
 from services.xkeen import append_restart_log as _svc_append_restart_log, read_restart_log as _svc_read_restart_log, restart_xkeen as _svc_restart_xkeen
 from services.xray_logs import load_xray_log_config as _svc_load_xray_log_config, tail_lines as _svc_tail_lines, adjust_log_timezone as _svc_adjust_log_timezone
 from services.mihomo import (
@@ -1588,8 +1589,17 @@ def api_auth_setup():
 
 @app.get("/")
 def index():
+    # machine info for conditional UI (e.g. hide Files tab on MIPS)
+    try:
+        _machine = os.uname().machine
+    except Exception:
+        _machine = ''
+    _is_mips = str(_machine).lower().startswith('mips')
     return render_template(
         "panel.html",
+        machine=_machine,
+        is_mips=_is_mips,
+
         routing_file=ROUTING_FILE,
         inbounds_file=INBOUNDS_FILE,
         outbounds_file=OUTBOUNDS_FILE,
@@ -2740,6 +2750,60 @@ def api_mihomo_backup_restore(filename: str):
 
 
 
+def _detect_machine_arch() -> str:
+    try:
+        return (os.uname().machine or "").strip()
+    except Exception:
+        try:
+            import platform
+            return (platform.machine() or "").strip()
+        except Exception:
+            return ""
+
+
+def _is_mips_arch(machine: str) -> bool:
+    m = (machine or "").lower()
+    return m.startswith("mips")
+
+
+def _which_lftp() -> str | None:
+    # Prefer Entware location
+    candidates = ["/opt/bin/lftp", "/usr/bin/lftp", "/bin/lftp"]
+    for c in candidates:
+        try:
+            if os.path.isfile(c) and os.access(c, os.X_OK):
+                return c
+        except Exception:
+            pass
+
+    # Try PATH (ensure /opt/bin is included)
+    try:
+        path = os.environ.get("PATH", "")
+        if "/opt/bin" not in path.split(":"):
+            os.environ["PATH"] = "/opt/bin:" + path
+    except Exception:
+        pass
+
+    try:
+        return shutil.which("lftp")
+    except Exception:
+        return None
+
+
+REMOTEFS_MACHINE_ARCH = _detect_machine_arch()
+REMOTEFS_LFTP_BIN = _which_lftp()
+REMOTEFS_SUPPORTED = bool(REMOTEFS_LFTP_BIN) and (not _is_mips_arch(REMOTEFS_MACHINE_ARCH))
+REMOTEFS_ENABLED = REMOTEFS_SUPPORTED and (os.getenv("XKEEN_REMOTEFM_ENABLE", "1").strip().lower() not in ("0", "false", "no", "off"))
+
+REMOTEFS_DISABLED_REASON = None
+if not REMOTEFS_LFTP_BIN:
+    REMOTEFS_DISABLED_REASON = "lftp_missing"
+elif _is_mips_arch(REMOTEFS_MACHINE_ARCH):
+    REMOTEFS_DISABLED_REASON = "arch_mips_disabled"
+elif not REMOTEFS_ENABLED:
+    REMOTEFS_DISABLED_REASON = "disabled"
+
+
 
 # ---------- Blueprints registration ----------
 
@@ -2825,6 +2889,25 @@ service_bp = create_service_blueprint(
     broadcast_event=broadcast_event,
 )
 app.register_blueprint(service_bp)
+
+# RemoteFS blueprint (optional; disabled on MIPS and when lftp is missing)
+if REMOTEFS_ENABLED:
+    try:
+        remotefs_bp = create_remotefs_blueprint(
+            enabled=True,
+            lftp_bin=REMOTEFS_LFTP_BIN or "lftp",
+            max_sessions=int(os.getenv("XKEEN_REMOTEFM_MAX_SESSIONS", "6")),
+            ttl_seconds=int(os.getenv("XKEEN_REMOTEFM_SESSION_TTL", "900")),
+            max_upload_mb=int(os.getenv("XKEEN_REMOTEFM_MAX_UPLOAD_MB", "200")),
+            tmp_dir=str(os.getenv("XKEEN_REMOTEFM_TMP_DIR", "/tmp") or "/tmp"),
+        )
+        app.register_blueprint(remotefs_bp)
+    except Exception as _e:
+        try:
+            ws_debug("remotefs init failed", error=str(_e))
+        except Exception:
+            pass
+
 
 
 
@@ -2967,17 +3050,70 @@ def ws_xray_logs():
 
 
 
+
+
+# ---------- RemoteFS (SFTP/FTP/FTPS) capability detection ----------
+
+
+
 @app.get("/api/capabilities")
 def api_capabilities():
     """
     Возвращает возможности бэкенда для фронтенда.
-    Сейчас используется только наличие поддержки WebSocket (gevent).
+
+    Используется фронтом для условного показа функционала.
     """
+    """
+    Возвращает возможности бэкенда для фронтенда.
+
+    - websocket: наличие поддержки WebSocket (gevent).
+    - remoteFs: возможности удалённого файлового менеджера (SFTP/FTP/FTPS).
+    
+    Фичу можно выключить переменной окружения XKEEN_REMOTEFM_ENABLE=0.
+    На MIPS (mips/mipsel/...) фича по умолчанию отключена.
+    """
+
+    remote = {
+        "enabled": bool(REMOTEFS_ENABLED),
+        "supported": bool(REMOTEFS_SUPPORTED),
+        "arch": REMOTEFS_MACHINE_ARCH,
+        "backend": "lftp" if REMOTEFS_LFTP_BIN else None,
+        "reason": REMOTEFS_DISABLED_REASON,
+        "protocols": {
+            "sftp": bool(REMOTEFS_LFTP_BIN) and not _is_mips_arch(REMOTEFS_MACHINE_ARCH),
+            "ftp": bool(REMOTEFS_LFTP_BIN) and not _is_mips_arch(REMOTEFS_MACHINE_ARCH),
+            "ftps": bool(REMOTEFS_LFTP_BIN) and not _is_mips_arch(REMOTEFS_MACHINE_ARCH),
+        },
+        "limits": {
+            "max_sessions": int(os.getenv("XKEEN_REMOTEFM_MAX_SESSIONS", "6") or "6"),
+            "session_ttl_seconds": int(os.getenv("XKEEN_REMOTEFM_SESSION_TTL", "900") or "900"),
+            "max_upload_mb": int(os.getenv("XKEEN_REMOTEFM_MAX_UPLOAD_MB", "200") or "200"),
+        },
+        "fileops": {
+            "enabled": bool(REMOTEFS_ENABLED),
+            "ws": bool(HAS_GEVENT and REMOTEFS_ENABLED),
+            "workers": int(os.getenv("XKEEN_FILEOPS_WORKERS", "1") or "1"),
+            "max_jobs": int(os.getenv("XKEEN_FILEOPS_MAX_JOBS", "100") or "100"),
+            "job_ttl_seconds": int(os.getenv("XKEEN_FILEOPS_JOB_TTL", "3600") or "3600"),
+            "ops": ["copy", "move", "delete"],
+            "remote_to_remote": bool(REMOTEFS_ENABLED),
+            "remote_to_remote_direct": (os.getenv("XKEEN_FILEOPS_REMOTE2REMOTE_DIRECT", "1") or "1") not in ("0", "false", "no", "off", "-"),
+            "fxp": (os.getenv("XKEEN_FILEOPS_FXP", "1") or "1") not in ("0", "false", "no", "off", "-"),
+            "spool_max_mb": int(os.getenv("XKEEN_FILEOPS_SPOOL_MAX_MB", os.getenv("XKEEN_REMOTEFM_MAX_UPLOAD_MB", "200")) or "200"),
+            "overwrite_modes": ["replace", "skip", "ask"],
+            "supports_dry_run": True,
+            "supports_decisions": True,
+        },
+        "fs_admin": {
+            "local": {"chmod": True, "chown": True, "touch": True, "stat_batch": True},
+            "remote": {"chmod": True, "chown": False, "touch": True, "stat_batch": True},
+        },
+    }
+
     return jsonify({
         "websocket": bool(HAS_GEVENT),
+        "remoteFs": remote,
     })
-
-
 @app.post("/api/ws-debug")
 def api_ws_debug():
     """
@@ -2990,15 +3126,15 @@ def api_ws_debug():
     extra["remote_addr"] = request.remote_addr or "unknown"
     ws_debug("FRONTEND: " + str(msg), **extra)
     return jsonify({"ok": True})
-# ---------- Simple WS debug logger override ----------
+# ---------- Simple WS debug logger (alternative) ----------
 
 WS_DEBUG_LOG = "/opt/var/log/ws.log"
 
 
-def ws_debug(msg: str, **extra):
+def ws_debug_simple(msg: str, **extra):
     """
-    Простая реализация ws_debug: пишет одну строку в /opt/var/log/ws.log.
-    Предыдущая версия, использующая logging, перекрывается этой функцией.
+    Альтернативная реализация: пишет одну строку в /opt/var/log/ws.log без logging.
+    (Не используется по умолчанию, чтобы не перекрывать основную ws_debug.)
     """
     if extra:
         try:
