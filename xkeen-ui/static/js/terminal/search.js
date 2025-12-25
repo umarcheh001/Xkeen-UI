@@ -4,7 +4,17 @@
 
   window.XKeen = window.XKeen || {};
   window.XKeen.terminal = window.XKeen.terminal || {};
+
   const core = (window.XKeen.terminal && window.XKeen.terminal._core) ? window.XKeen.terminal._core : null;
+
+  function getCtx() {
+    try {
+      const C = window.XKeen.terminal.core;
+      if (C && typeof C.getCtx === 'function') return C.getCtx();
+    } catch (e) {}
+    return null;
+  }
+
   const state = (core && core.state) ? core.state : (window.XKeen.terminal.__searchState = (window.XKeen.terminal.__searchState || {}));
 
   const S = state.search = state.search || {
@@ -13,51 +23,80 @@
     resultCount: 0,
     debounce: null,
     keysBound: false,
-    uiBound: false,
+    keysHandler: null,
+    uiDisposers: null,
     resultsDisposable: null,
   };
 
   // Decorations: keep in this module (pure UI feature)
   const DECOR = {
-    matchBackground: 'rgba(255, 255, 0, 0.20)',
-    matchBorder: 'rgba(255, 255, 255, 0.30)',
-    matchOverviewRuler: 'rgba(255, 255, 0, 0.65)',
-    activeMatchBackground: 'rgba(255, 165, 0, 0.28)',
-    activeMatchBorder: 'rgba(255, 255, 255, 0.60)',
-    activeMatchColorOverviewRuler: 'rgba(255, 165, 0, 0.95)',
+    // IDE-подсветка:
+    // - все совпадения: мягкий серо-синий фон (не "съедает" белый текст)
+    // - активное совпадение: ярче + заметная рамка
+    matchBackground: 'rgba(120, 160, 210, 0.18)',
+    matchBorder: 'rgba(140, 200, 255, 0.25)',
+    matchOverviewRuler: 'rgba(120, 190, 255, 0.70)',
+    activeMatchBackground: 'rgba(0, 170, 255, 0.45)',
+    activeMatchBorder: 'rgba(255, 255, 255, 0.85)',
+    activeMatchColorOverviewRuler: 'rgba(0, 170, 255, 1.00)',
   };
 
-  function getTerm() {
-    return state.xterm || state.term || null;
+  function getTerm(ctx) {
+    // Prefer ctx.xterm refs
+    try {
+      if (ctx && ctx.xterm && typeof ctx.xterm.getRefs === 'function') {
+        const r = ctx.xterm.getRefs();
+        const t = r && (r.term || r.xterm) ? (r.term || r.xterm) : null;
+        if (t) return t;
+      }
+    } catch (e0) {}
+    try {
+      return state.xterm || state.term || null;
+    } catch (e) {}
+    return null;
   }
 
   function getAddon() {
     return state.searchAddon || null;
   }
 
-  function getEls() {
-    const row = document.getElementById('terminal-search-row');
-    const input = document.getElementById('terminal-search-input');
-    const counter = document.getElementById('terminal-search-counter');
-    const prev = document.getElementById('terminal-search-prev');
-    const next = document.getElementById('terminal-search-next');
-    const clearBtn = document.getElementById('terminal-search-clear');
-    return { row, input, counter, prev, next, clearBtn };
+  function byId(id, ctx) {
+    try { if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id); } catch (e0) {}
+    try { return document.getElementById(id); } catch (e1) {}
+    return null;
+  }
+
+  function getEls(ctx) {
+    const c = ctx || getCtx();
+    return {
+      row: byId('terminal-search-row', c),
+      input: byId('terminal-search-input', c),
+      counter: byId('terminal-search-counter', c),
+      prev: byId('terminal-search-prev', c),
+      next: byId('terminal-search-next', c),
+      clearBtn: byId('terminal-search-clear', c),
+    };
+  }
+
+  function toast(msg, kind) {
+    try {
+      const ctx = getCtx();
+      if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') return ctx.ui.toast(String(msg || ''), kind || 'info');
+    } catch (e0) {}
+    try { if (typeof window.showToast === 'function') window.showToast(String(msg || ''), kind || 'info'); } catch (e) {}
   }
 
   function isOverlayOpen() {
     try {
       if (core && typeof core.terminalIsOverlayOpen === 'function') return core.terminalIsOverlayOpen();
     } catch (e) {}
-    // fallback
     const overlay = document.getElementById('terminal-overlay');
     if (!overlay) return false;
     return overlay.style.display !== 'none';
   }
 
-
-  function updateCounter() {
-    const { counter } = getEls();
+  function updateCounter(ctx) {
+    const { counter } = getEls(ctx);
     if (!counter) return;
 
     const total = Number(S.resultCount || 0);
@@ -66,7 +105,7 @@
     counter.textContent = `${cur}/${total}`;
   }
 
-  function clear(opts = {}) {
+  function clear(opts = {}, ctx) {
     const silent = !!(opts && opts.silent);
 
     S.term = '';
@@ -74,17 +113,17 @@
     S.resultCount = 0;
 
     try {
-      const { input } = getEls();
+      const { input } = getEls(ctx);
       if (input) input.value = '';
     } catch (e) {}
 
-    const term = getTerm();
+    const term = getTerm(ctx);
     try { if (term && typeof term.clearSelection === 'function') term.clearSelection(); } catch (e) {}
 
     const addon = getAddon();
     try { addon && typeof addon.clearDecorations === 'function' && addon.clearDecorations(); } catch (e) {}
 
-    try { updateCounter(); } catch (e) {}
+    try { updateCounter(ctx); } catch (e) {}
     if (!silent) toast('Поиск очищен', 'info');
   }
 
@@ -124,36 +163,36 @@
     }
   }
 
-  function attachTerm(term) {
-    if (!term) term = getTerm();
-    if (!term) return;
+  function attachTerm(term, ctx) {
+    const t = term || getTerm(ctx);
+    if (!t) return;
 
-    // Keep reference in core state for other modules
+    // Keep reference in core state for other modules (legacy)
     try {
-      state.term = term;
-      state.xterm = term;
+      state.term = t;
+      state.xterm = t;
     } catch (e) {}
 
-    const addon = state.searchAddon || ensureAddon(term);
+    const addon = state.searchAddon || ensureAddon(t);
     if (addon) {
       state.searchAddon = addon;
       bindResults(addon);
       // sync counter on attach
-      try { updateCounter(); } catch (e) {}
+      try { updateCounter(ctx); } catch (e) {}
     }
   }
 
-  function run(direction) {
-    const { input } = getEls();
+  function run(direction, ctx) {
+    const { input } = getEls(ctx);
     const termStr = input ? String(input.value || '').trim() : String(S.term || '').trim();
     S.term = termStr;
 
     if (!termStr) {
-      clear({ silent: true });
+      clear({ silent: true }, ctx);
       return;
     }
 
-    const term = getTerm();
+    const term = getTerm(ctx);
     const addon = getAddon();
     if (!term || !addon) {
       toast('Поиск недоступен: xterm-addon-search не загружен', 'error');
@@ -177,18 +216,18 @@
     if (!ok) {
       S.resultIndex = -1;
       S.resultCount = 0;
-      try { updateCounter(); } catch (e) {}
+      try { updateCounter(ctx); } catch (e) {}
       toast('Совпадений не найдено', 'info');
     }
 
     try { term && typeof term.focus === 'function' && term.focus(); } catch (e) {}
   }
 
-  function next() { run('next'); }
-  function prev() { run('prev'); }
+  function next(ctx) { run('next', ctx); }
+  function prev(ctx) { run('prev', ctx); }
 
-  function focus(selectAll = true) {
-    const { input } = getEls();
+  function focus(selectAll = true, ctx) {
+    const { input } = getEls(ctx);
     if (!input) return;
     try {
       input.focus();
@@ -196,8 +235,8 @@
     } catch (e) {}
   }
 
-  function debouncedHighlight() {
-    const { input } = getEls();
+  function debouncedHighlight(ctx) {
+    const { input } = getEls(ctx);
     if (!input) return;
 
     const termStr = String(input.value || '').trim();
@@ -209,12 +248,12 @@
     }
 
     if (!termStr) {
-      clear({ silent: true });
+      clear({ silent: true }, ctx);
       return;
     }
 
     S.debounce = setTimeout(() => {
-      const term = getTerm();
+      const term = getTerm(ctx);
       const addon = getAddon();
       if (!term || !addon) return;
       try {
@@ -229,80 +268,137 @@
     }, 150);
   }
 
-  function bindUiOnce() {
-    if (S.uiBound) return;
-    S.uiBound = true;
+  function bindUi(ctx) {
+    if (S.uiDisposers && S.uiDisposers.length) return;
 
-    const { input, prev, next, clearBtn } = getEls();
+    const { input, prev: prevBtn, next: nextBtn, clearBtn } = getEls(ctx);
+
+    const disposers = [];
+    function on(el, ev, fn, opts) {
+      if (!el || !el.addEventListener) return;
+      el.addEventListener(ev, fn, opts);
+      disposers.push(() => {
+        try { el.removeEventListener(ev, fn, opts); } catch (e) {}
+      });
+    }
 
     // Buttons
-    if (prev) prev.addEventListener('click', (e) => { try { e.preventDefault(); } catch (e2) {} prev(); });
-    if (next) next.addEventListener('click', (e) => { try { e.preventDefault(); } catch (e2) {} next(); });
-    if (clearBtn) clearBtn.addEventListener('click', (e) => { try { e.preventDefault(); } catch (e2) {} clear(); });
+    if (prevBtn) on(prevBtn, 'click', (e) => { try { e.preventDefault(); } catch (e2) {} prev(ctx); });
+    if (nextBtn) on(nextBtn, 'click', (e) => { try { e.preventDefault(); } catch (e2) {} next(ctx); });
+    if (clearBtn) on(clearBtn, 'click', (e) => { try { e.preventDefault(); } catch (e2) {} clear({}, ctx); });
 
     // Input handlers
     if (input) {
-      input.addEventListener('input', () => { try { debouncedHighlight(); } catch (e) {} });
+      on(input, 'input', () => { try { debouncedHighlight(ctx); } catch (e) {} });
 
-      input.addEventListener('keydown', (e) => {
+      on(input, 'keydown', (e) => {
+        if (!e) return;
         if (e.key === 'Enter') {
           e.preventDefault();
-          if (e.shiftKey) prev();
-          else next();
+          if (e.shiftKey) prev(ctx);
+          else next(ctx);
           return;
         }
         if (e.key === 'Escape') {
           e.preventDefault();
-          clear({ silent: true });
-          try { const term = getTerm(); term && term.focus && term.focus(); } catch (e2) {}
+          clear({ silent: true }, ctx);
+          try { const term = getTerm(ctx); term && term.focus && term.focus(); } catch (e2) {}
           return;
         }
       });
     }
 
-    // Global hotkeys while overlay is open
-    if (!S.keysBound) {
-      S.keysBound = true;
-      document.addEventListener('keydown', (e) => {
-        try {
-          if (!isOverlayOpen()) return;
+    S.uiDisposers = disposers;
+  }
 
-          if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
-            e.preventDefault();
-            focus(true);
-            try { debouncedHighlight(); } catch (e2) {}
-            return;
-          }
+  function unbindUi() {
+    const ds = S.uiDisposers || null;
+    S.uiDisposers = null;
+    if (!ds) return;
+    ds.forEach((d) => { try { if (typeof d === 'function') d(); } catch (e) {} });
+  }
 
-          if (e.key === 'F3') {
-            e.preventDefault();
-            if (e.shiftKey) prev();
-            else next();
-            return;
-          }
-        } catch (e2) {}
-      }, true);
-    }
+  function bindHotkeys(ctx) {
+    if (S.keysBound) return;
+    S.keysBound = true;
+    S.keysHandler = (e) => {
+      try {
+        if (!isOverlayOpen()) return;
+
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+          e.preventDefault();
+          // Built-in overlay search row
+          focus(true, ctx);
+          try { debouncedHighlight(ctx); } catch (e2) {}
+          return;
+        }
+
+        if (e.key === 'F3') {
+          e.preventDefault();
+          if (e.shiftKey) prev(ctx);
+          else next(ctx);
+          return;
+        }
+      } catch (e2) {}
+    };
+    try { document.addEventListener('keydown', S.keysHandler, true); } catch (e) {}
+  }
+
+  function unbindHotkeys() {
+    if (!S.keysBound) return;
+    S.keysBound = false;
+    try {
+      if (S.keysHandler) document.removeEventListener('keydown', S.keysHandler, true);
+    } catch (e) {}
+    S.keysHandler = null;
   }
 
   function init() {
-    // UI bindings
-    try { bindUiOnce(); } catch (e) {}
-
-    // Try to attach to term if already created
-    try { attachTerm(getTerm()); } catch (e) {}
+    // For backward compatibility: bind search UI once (do not bind global hotkeys here)
+    try { bindUi(getCtx()); } catch (e) {}
+    try { attachTerm(null, getCtx()); } catch (e2) {}
   }
 
   // Export
   window.XKeen.terminal.search = {
     init,
-    attachTerm,
-    updateCounter,
-    clear,
-    next,
-    prev,
-    focus,
-    debouncedHighlight,
+    attachTerm: (term) => attachTerm(term, getCtx()),
+    updateCounter: () => updateCounter(getCtx()),
+    clear: (opts) => clear(opts || {}, getCtx()),
+    next: () => next(getCtx()),
+    prev: () => prev(getCtx()),
+    focus: (selectAll) => focus(selectAll !== false, getCtx()),
+    debouncedHighlight: () => debouncedHighlight(getCtx()),
     getEls, // mostly for tests/debug
+
+    // Stage 8.4: registry plugin factory
+    createModule: (ctx) => ({
+      id: 'search',
+      priority: 60,
+
+      init: () => {
+        // no DOM subscriptions here; only prepare state and try to attach xterm if already present
+        try { attachTerm(null, ctx); } catch (e) {}
+      },
+
+      onOpen: () => {
+        try { bindUi(ctx); } catch (e) {}
+        try { bindHotkeys(ctx); } catch (e2) {}
+      },
+
+      onClose: () => {
+        try { unbindHotkeys(); } catch (e) {}
+        try { clear({ silent: true }, ctx); } catch (e2) {}
+        try { unbindUi(); } catch (e3) {}
+      },
+
+      attachTerm: (_ctx, term) => { try { attachTerm(term, ctx); } catch (e) {} },
+
+      detachTerm: () => {
+        try { if (S.resultsDisposable && typeof S.resultsDisposable.dispose === 'function') S.resultsDisposable.dispose(); } catch (e) {}
+        S.resultsDisposable = null;
+        try { state.searchAddon = null; } catch (e2) {}
+      },
+    }),
   };
 })();
