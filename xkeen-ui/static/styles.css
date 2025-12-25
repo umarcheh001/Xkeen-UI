@@ -1218,36 +1218,6 @@ html[data-theme="light"] .xkeen-cm-help-section {
   margin-left: 10px;
 }
 
-.terminal-conn-badge {
-  margin-left: 10px;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-size: 11px;
-  line-height: 1.2;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(2, 6, 23, 0.6);
-  color: #cbd5e1;
-  white-space: nowrap;
-}
-
-.terminal-conn-badge[data-state="connected"] {
-  border-color: rgba(52, 211, 153, 0.45);
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-}
-
-.terminal-conn-badge[data-state="connecting"] {
-  border-color: rgba(251, 191, 36, 0.45);
-  background: rgba(245, 158, 11, 0.14);
-  color: #fbbf24;
-}
-
-.terminal-conn-badge[data-state="disconnected"] {
-  border-color: rgba(248, 113, 113, 0.45);
-  background: rgba(239, 68, 68, 0.12);
-  color: #fca5a5;
-}
-
 .terminal-uptime {
   margin-left: 8px;
   font-size: 11px;
@@ -1281,7 +1251,18 @@ html[data-theme="light"] .xkeen-cm-help-section {
   gap: 6px;
   flex-wrap: wrap;
 
+  /* Override the header drag cursor inside toolbar/menus.
+     Buttons still show pointer via .terminal-tool-btn { cursor: pointer; } */
+  cursor: default;
+
   position: relative;
+}
+
+/* Dropdown menus should not look like drag handles */
+.terminal-overflow-menu,
+.terminal-view-menu,
+.terminal-buffer-menu {
+  cursor: default;
 }
 
 .terminal-tool-btn {
@@ -1423,6 +1404,15 @@ html[data-theme="light"] .xkeen-cm-help-section {
 .terminal-output:has(.xterm) {
   padding: 0;
   overflow: hidden;
+}
+
+/* xterm-addon-search match decorations (improves readability on dark background) */
+.xterm-find-result-decoration {
+  border-radius: 3px;
+}
+.xterm-find-active-result-decoration {
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
 }
 
 .terminal-footer {
@@ -1966,6 +1956,39 @@ button.backup-icon-btn.backup-delete-btn {
   overflow: auto;
 }
 
+
+/* File manager text editor modal: avoid "double scroll" (outer modal-body + inner CodeMirror) */
+#fm-editor-modal .modal-content {
+  height: 80vh;
+  max-width: 980px;
+}
+
+#fm-editor-modal .modal-body {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#fm-editor-modal .CodeMirror-scroll {
+  max-height: none !important;
+  height: 100% !important;
+}
+
+#fm-editor-modal .CodeMirror {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100% !important;
+}
+
+/* Keep fallback textarea usable if CodeMirror fails to load */
+#fm-editor-modal textarea#fm-editor-textarea {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+
 /* Routing help modal (iframe): avoid "double scroll" (outer modal-body + inner iframe) */
 #xkeen-routing-help-modal .modal-content {
   height: 80vh;
@@ -2033,7 +2056,22 @@ button.backup-icon-btn.backup-delete-btn {
   align-items: flex-start;
 }
 
-/* Справа: чекбокс авто‑перезапуска + бейдж "Загружено ..." строго под ним */
+/* Справа: чекбокс авто‑перезапуска + бейдж "Загружено ...
+.fm-help-body{
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.fm-help-body h3{
+  margin: 14px 0 6px 0;
+  font-size: 1rem;
+}
+.fm-help-body ul{
+  margin: 6px 0 0 18px;
+}
+.fm-help-body li{
+  margin: 4px 0;
+}
+" строго под ним */
 .global-toggle-right {
   display: flex;
   flex-direction: column;
@@ -2083,7 +2121,22 @@ button.backup-icon-btn.backup-delete-btn {
   gap: 4px;
 }
 
-/* Бейдж «Загружено ...» теперь стоит рядом с кнопками управления */
+/* Бейдж «Загружено ...
+.fm-help-body{
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.fm-help-body h3{
+  margin: 14px 0 6px 0;
+  font-size: 1rem;
+}
+.fm-help-body ul{
+  margin: 6px 0 0 18px;
+}
+.fm-help-body li{
+  margin: 4px 0;
+}
+» теперь стоит рядом с кнопками управления */
 .xkeen-ctrl-row .last-load-badge {
   margin-left: 0;
 }
@@ -2974,33 +3027,11 @@ html[data-theme="light"] .xkeen-cm .CodeMirror-code .cm-tab::before {
 
 
 
-html[data-theme="light"] .terminal-conn-badge {
-  background: rgba(255, 255, 255, 0.75);
-  color: #334155;
-}
-
 html[data-theme="light"] .terminal-uptime {
   color: #475569;
 }
 
 
-/* PTY terminal: signals menu + small button variants */
-.terminal-signals-menu{
-  position:absolute;
-  top:34px;
-  right:8px;
-  z-index:80;
-  background:#020617;
-  border:1px solid #334155;
-  border-radius:10px;
-  padding:8px;
-  box-shadow:0 18px 50px rgba(15,23,42,.8);
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-  min-width:140px;
-}
-.terminal-signals-menu.hidden{ display:none; }
 
 /* Terminal: Xray logs mini-menu (runs tail -f inside PTY) */
 .terminal-xraylogs-menu{
@@ -3020,18 +3051,127 @@ html[data-theme="light"] .terminal-uptime {
 }
 .terminal-xraylogs-menu.hidden{ display:none; }
 
-.terminal-xraylogs-row{ display:flex; align-items:center; gap:8px; }
-.terminal-xraylogs-actions{ display:flex; gap:8px; }
-.terminal-xraylogs-actions > button{ flex:1 1 auto; }
-.terminal-xraylogs-hint{
+/* Terminal: grouped menus (overflow / view / buffer) */
+.terminal-overflow-menu{
+  position:absolute;
+  top:34px;
+  right:8px;
+  z-index:90;
+  background:#020617;
+  border:1px solid #334155;
+  border-radius:12px;
+  padding:10px;
+  box-shadow:0 18px 50px rgba(15,23,42,.8);
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-width:240px;
+  max-width:340px;
+  /* allow scrolling when the menu is taller than the terminal modal */
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.terminal-overflow-menu.hidden{ display:none; }
+
+.terminal-menu-section{ display:flex; flex-direction:column; gap:6px; }
+.terminal-menu-title{
   font-size:11px;
   color:#9ca3af;
-  line-height:1.25;
+  font-weight:700;
+  letter-spacing:.02em;
+  user-select:none;
+  margin-bottom:2px;
 }
-.terminal-xraylogs-hint code{
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 11px;
-  color:#cbd5e1;
+.terminal-menu-title-inline{ margin-top:2px; }
+.terminal-menu-sep{ height:1px; background:rgba(148,163,184,0.18); margin:2px 0; }
+
+/* Menus anchored to footer groups */
+.terminal-footer-group-view,
+.terminal-footer-group-buffer{ position: relative; }
+
+.terminal-view-menu,
+.terminal-buffer-menu{
+  position:absolute;
+  bottom:34px;
+  left:0;
+  z-index:90;
+  background:#020617;
+  border:1px solid #334155;
+  border-radius:12px;
+  padding:10px;
+  box-shadow:0 18px 50px rgba(15,23,42,.8);
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:220px;
+  max-width:320px;
+  /* these menus can also grow depending on options */
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.terminal-view-menu.hidden,
+.terminal-buffer-menu.hidden{ display:none; }
+
+/* Menu item look: reuse terminal-tool-btn but make it block-like inside menus */
+.terminal-overflow-menu .terminal-tool-btn,
+.terminal-view-menu .terminal-tool-btn,
+.terminal-buffer-menu .terminal-tool-btn{
+  width:100%;
+  text-align:left;
+  border-radius:10px;
+  padding:8px 10px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  line-height:1.2;
+}
+
+/* Nested Xray menu is shown inline inside the overflow menu */
+.terminal-overflow-menu .terminal-xraylogs-menu{
+  position: static;
+  top:auto;
+  right:auto;
+  z-index:auto;
+  box-shadow:none;
+  min-width: unset;
+}
+
+
+.terminal-xraylogs-row{ display:flex; align-items:center; gap:8px; }
+
+/* Xray logs controls: keep them compact (icon buttons) */
+.terminal-xraylogs-actions{ display:flex; gap:8px; justify-content:flex-start; }
+.terminal-xraylogs-actions > button{ flex:0 0 auto; }
+
+/*
+  IMPORTANT:
+  Inside .terminal-overflow-menu we style .terminal-tool-btn as full-width "menu items".
+  Xray log buttons are *not* menu items; they must stay compact.
+  Add a higher-specificity override so icon buttons don't stretch.
+*/
+.terminal-overflow-menu .terminal-xraylogs-actions .terminal-tool-btn{
+  width:34px;
+  height:28px;
+  text-align:center;
+  border-radius:9999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:0;
+  padding:0; /* icon buttons manage their own sizing */
+}
+
+.terminal-xraylogs-iconbtn{
+  width:34px;
+  height:28px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:13px;
+  line-height:1;
 }
 
 .terminal-signals-item{
@@ -3260,4 +3400,374 @@ button:disabled{
   .ssh-form-grid{
     grid-template-columns: 1fr;
   }
+}
+
+
+/* ----------------------------- File manager (two-panel) ----------------------------- */
+.fm-card{
+  padding: 14px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  /* Like the terminal window: allow user resize */
+  resize: both;
+  overflow: hidden;
+  position: relative;
+  min-height: 420px;
+  height: clamp(420px, 70vh, 760px);
+  max-height: 90vh;
+  max-width: 100%;
+}
+
+/*
+  File manager has two panels with fixed/min column widths.
+  In the default 960px container this can cause a horizontal scrollbar.
+
+  On wide screens we expand the file manager card ~2cm on each side
+  (≈ +4cm total) relative to the main container, without affecting the header.
+*/
+@media (min-width: 1120px){
+  .fm-card{
+    width: calc(100% + 4cm);
+    margin-left: -2cm;
+    margin-right: -2cm;
+    max-width: none;
+  }
+}
+
+.fm-card::after{
+  /* bottom-right resize hint */
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid rgba(148, 163, 184, 0.30);
+  border-bottom: 2px solid rgba(148, 163, 184, 0.30);
+  pointer-events: none;
+  border-radius: 2px;
+}
+
+.fm-card::before{
+  /* bottom-left resize hint (visual; browser handle is still bottom-right) */
+  content: "";
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  width: 14px;
+  height: 14px;
+  border-left: 2px solid rgba(148, 163, 184, 0.18);
+  border-bottom: 2px solid rgba(148, 163, 184, 0.18);
+  pointer-events: none;
+  border-radius: 2px;
+}
+
+.fm-card.is-fullscreen{
+  position: fixed !important;
+  left: 8px !important;
+  top: 8px !important;
+  width: calc(100vw - 16px) !important;
+  height: calc(100vh - 16px) !important;
+  /* Reset the "wider-than-container" offsets used in normal mode */
+  margin: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+  resize: none !important;
+  z-index: 45;
+}
+
+.fm-card.is-fullscreen::after,
+.fm-card.is-fullscreen::before{
+  display: none;
+}
+.fm-header{ display:flex; align-items:center; justify-content:space-between; gap: 12px; margin-bottom: 10px; }
+.fm-header h2{ margin: 0; }
+.fm-header-actions{ display:flex; gap: 8px; align-items:center; }
+
+.fm-two{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.fm-panel{
+  border: 1px solid rgba(51,65,85,0.85);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(15,23,42,0.10);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.fm-panel-active{
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.22);
+}
+
+.fm-panel-bar{
+  display:flex;
+  gap: 8px;
+  align-items:center;
+  padding: 8px;
+  border-bottom: 1px solid rgba(51,65,85,0.6);
+  background: rgba(2,6,23,0.28);
+}
+.fm-target-select{
+  min-width: 92px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(51,65,85,0.9);
+  background: rgba(255,255,255,0.02);
+  color: inherit;
+}
+.fm-path-input{
+  flex: 1;
+  min-width: 80px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(51,65,85,0.9);
+  background: rgba(255,255,255,0.02);
+  color: inherit;
+}
+
+.fm-list{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+  overscroll-behavior: contain;
+}
+.fm-list.is-loading{ opacity: 0.65; pointer-events: none; }
+
+.fm-list.is-drop-target{
+  outline: 2px dashed rgba(56,189,248,0.55);
+  outline-offset: -2px;
+}
+
+.fm-row.is-drop-target{
+  background: rgba(56,189,248,0.10);
+  outline: 1px dashed rgba(56,189,248,0.65);
+}
+
+.fm-row[draggable="true"]{ cursor: grab; }
+.fm-row[draggable="true"]:active{ cursor: grabbing; }
+
+.fm-row{
+  display:grid;
+  grid-template-columns: 28px minmax(160px, 1fr) minmax(64px, 92px) minmax(72px, 100px) minmax(120px, 150px);
+  gap: 10px;
+  align-items:center;
+  padding: 6px 10px;
+  user-select:none;
+}
+.fm-row-header{
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  opacity: 0.85;
+  background: rgba(2,6,23,0.55);
+  border-bottom: 1px solid rgba(51,65,85,0.6);
+}
+.fm-row:not(.fm-row-header){
+  cursor: default;
+}
+.fm-row:not(.fm-row-header):hover{
+  background: rgba(255,255,255,0.04);
+}
+.fm-row.is-selected{
+  background: rgba(37,99,235,0.18);
+}
+.fm-row.is-focused{
+  outline: 1px solid rgba(56,189,248,0.55);
+}
+
+.fm-cell{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.fm-cell.fm-check{ display:flex; align-items:center; justify-content:center; }
+.fm-check-input{ width:16px; height:16px; margin:0; cursor:pointer; }
+.fm-cell.fm-name{ display:flex; gap:8px; align-items:center; }
+.fm-ico{ width: 18px; text-align:center; opacity: 0.95; }
+.fm-name-text{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.fm-hints{
+  display:flex;
+  gap: 14px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.fm-hints-text{
+  display:flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  opacity: 0.85;
+}
+
+.fm-help-btn{
+  margin-left: auto;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.1;
+}
+
+.fm-help-body{
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.fm-help-body h3{
+  margin: 14px 0 6px 0;
+  font-size: 1rem;
+}
+.fm-help-body ul{
+  margin: 6px 0 0 18px;
+}
+.fm-help-body li{
+  margin: 4px 0;
+}
+
+.fm-dropop-list{
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(51,65,85,0.85);
+  background: rgba(255,255,255,0.03);
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
+/* Context menu (ПКМ) */
+.fm-context-menu{
+  position: fixed;
+  z-index: 60;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(51,65,85,0.85);
+  background: rgba(2,6,23,0.92);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  backdrop-filter: blur(6px);
+}
+.fm-context-menu.hidden{ display:none; }
+
+.fm-context-item{
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.fm-context-item:hover{
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(51,65,85,0.55);
+}
+.fm-context-item:active{
+  background: rgba(255,255,255,0.10);
+}
+.fm-context-kbd{
+  font-size: 12px;
+  opacity: 0.75;
+}
+.fm-context-sep{
+  height: 1px;
+  margin: 6px 6px;
+  background: rgba(51,65,85,0.60);
+}
+
+html[data-theme="light"] .fm-context-menu{
+  background: rgba(255,255,255,0.96);
+  border-color: rgba(15,23,42,0.18);
+  box-shadow: 0 10px 30px rgba(2,6,23,0.12);
+}
+html[data-theme="light"] .fm-context-item:hover{
+  background: rgba(15,23,42,0.06);
+  border-color: rgba(15,23,42,0.12);
+}
+html[data-theme="light"] .fm-context-sep{
+  background: rgba(15,23,42,0.12);
+}
+
+/* Connect form */
+.fm-form-grid{
+  display:grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px 12px;
+  align-items:center;
+}
+
+/* Conflicts */
+.fm-conflicts-table{
+  display:grid;
+  gap: 6px;
+}
+.fm-conflicts-row{
+  display:grid;
+  grid-template-columns: 1fr 1fr 140px;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(51,65,85,0.65);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.02);
+}
+.fm-conflicts-head{
+  font-size: 12px;
+  opacity: 0.85;
+  background: rgba(2,6,23,0.35);
+}
+.fm-conflicts-footer{ margin-top: 10px; }
+
+/* Progress */
+.fm-progress-line{ font-weight: 600; margin-bottom: 10px; }
+.fm-progress-bar{ height: 10px; border-radius: 999px; background: rgba(51,65,85,0.55); overflow:hidden; }
+.fm-progress-bar-inner{ height: 100%; width: 0%; background: rgba(37,99,235,0.55); }
+.fm-progress-meta{ margin-top: 8px; font-size: 12px; opacity: 0.85; }
+.fm-progress-details{ margin-top: 10px; max-height: 260px; overflow:auto; background: rgba(2,6,23,0.35); border: 1px solid rgba(51,65,85,0.55); border-radius: 12px; padding: 10px; }
+
+/* Ops list */
+.fm-ops-table{ display:grid; gap: 6px; }
+.fm-ops-row{ display:grid; grid-template-columns: 110px 90px 90px 1fr 170px; gap: 10px; padding: 8px 10px; border: 1px solid rgba(51,65,85,0.65); border-radius: 12px; background: rgba(255,255,255,0.02); align-items:center; }
+.fm-ops-head{ font-size: 12px; opacity: 0.85; background: rgba(2,6,23,0.35); }
+
+@media (max-width: 920px){
+  .fm-card{ resize: none; }
+  .fm-two{ grid-template-columns: 1fr; }
+  .fm-row{ grid-template-columns: 28px minmax(140px, 1fr) minmax(56px, 84px) minmax(64px, 92px) minmax(108px, 140px); }
+  .fm-form-grid{ grid-template-columns: 1fr; }
+  .fm-conflicts-row{ grid-template-columns: 1fr; }
+  .fm-ops-row{ grid-template-columns: 1fr; }
+}
+
+html[data-theme="light"] .fm-panel{
+  background: rgba(15,23,42,0.04);
+  border-color: rgba(15,23,42,0.18);
+}
+html[data-theme="light"] .fm-panel-bar,
+html[data-theme="light"] .fm-row-header{
+  background: rgba(15,23,42,0.06);
+  border-color: rgba(15,23,42,0.12);
+}
+html[data-theme="light"] .fm-row:not(.fm-row-header):hover{
+  background: rgba(15,23,42,0.05);
+}
+html[data-theme="light"] .fm-row.is-selected{
+  background: rgba(37,99,235,0.12);
+}
+html[data-theme="light"] .fm-progress-details{
+  background: rgba(15,23,42,0.04);
+  border-color: rgba(15,23,42,0.12);
 }
