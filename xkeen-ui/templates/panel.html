@@ -19,6 +19,10 @@
   <script src="{{ url_for('static', filename='codemirror/mode/javascript/javascript.min.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/mode/shell/shell.min.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/mode/yaml/yaml.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/mode/properties/properties.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/mode/toml/toml.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/mode/nginx/nginx.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='codemirror/mode/xml/xml.min.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/lint/lint.min.js') }}"></script>
   <script src="{{ url_for('static', filename='jsonlint/jsonlint.min.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/lint/json-lint.min.js') }}"></script>
@@ -58,6 +62,13 @@
   <!-- XTerm.js official addons (локально) -->
   <script src="{{ url_for('static', filename='xterm/xterm-addon-search.js') }}"></script>
   <script src="{{ url_for('static', filename='xterm/xterm-addon-web-links.js') }}"></script>
+  <!-- Extra XTerm.js addons (локально) -->
+  <script src="{{ url_for('static', filename='xterm/xterm-addon-webgl.js') }}"></script>
+  <script src="{{ url_for('static', filename='xterm/xterm-addon-unicode11.js') }}"></script>
+  <script src="{{ url_for('static', filename='xterm/xterm-addon-serialize.js') }}"></script>
+  <script src="{{ url_for('static', filename='xterm/xterm-addon-clipboard.js') }}"></script>
+  <!-- Ligatures for XTerm.js (font ligatures + safe fallback ligatures) -->
+  <script src="{{ url_for('static', filename='xterm/xterm-addon-ligatures.js') }}"></script>
 </head>
 <body>
   <div id="global-xkeen-spinner">
@@ -129,6 +140,9 @@
         </button>
         <button class="top-tab-btn" data-view="commands">
           Команды
+        </button>
+        <button class="top-tab-btn" data-view="files" id="top-tab-files" {% if is_mips %}style="display:none;"{% endif %}>
+          Файлы
         </button>
         <button class="top-tab-btn" type="button" onclick="window.location.href='/mihomo_generator'">
           Mihomo Генератор
@@ -572,6 +586,67 @@
 
 
 
+<div id="view-files" class="view-section" style="display:none;">
+  <section class="card fm-card">
+    <div class="fm-header">
+      <h2>Файловый менеджер</h2>
+      <div class="fm-header-actions">
+        <button type="button" class="btn-secondary" id="fm-refresh-all-btn">⟳ Обновить</button>
+        <button type="button" class="btn-secondary" id="fm-ops-btn">🧾 Операции</button>
+      </div>
+    </div>
+
+    <div id="fm-disabled-note" class="status" style="display:none;"></div>
+
+    <div class="fm-two" id="fm-root">
+      <div class="fm-panel" data-side="left">
+        <div class="fm-panel-bar">
+          <select class="fm-target-select" aria-label="Target">
+            <option value="local">local</option>
+            <option value="remote">remote</option>
+          </select>
+          <button type="button" class="btn-secondary fm-connect-btn">Connect…</button>
+          <button type="button" class="btn-secondary fm-disconnect-btn" style="display:none;">Disconnect</button>
+          <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" />
+          <button type="button" class="btn-secondary fm-up-btn" title="Вверх">↑</button>
+          <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">⟳</button>
+        </div>
+        <div class="fm-list" tabindex="0" role="listbox" aria-label="Left panel"></div>
+      </div>
+
+      <div class="fm-panel" data-side="right">
+        <div class="fm-panel-bar">
+          <select class="fm-target-select" aria-label="Target">
+            <option value="local">local</option>
+            <option value="remote">remote</option>
+          </select>
+          <button type="button" class="btn-secondary fm-connect-btn">Connect…</button>
+          <button type="button" class="btn-secondary fm-disconnect-btn" style="display:none;">Disconnect</button>
+          <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" />
+          <button type="button" class="btn-secondary fm-up-btn" title="Вверх">↑</button>
+          <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">⟳</button>
+        </div>
+        <div class="fm-list" tabindex="0" role="listbox" aria-label="Right panel"></div>
+      </div>
+    </div>
+    <div class="fm-hints">
+      <div class="fm-hints-text">
+        <span><b>Tab</b> — смена панели</span>
+        <span><b>Enter</b> — открыть</span>
+        <span><b>Backspace</b> — вверх</span>
+        <span><b>F7</b> — новая папка</span>
+        <span><b>Shift+F7</b> — новый файл</span>
+        <span><b>F2</b> — Rename</span>
+        <span><b>ПКМ</b> — контекстное меню</span>
+        <span><b>F5</b> — Copy</span>
+        <span><b>F6</b> — Move</span>
+        <span><b>Drag&Drop</b> — выбрать Move / Copy</span>
+        <span><b>F8</b> — Delete</span>
+      </div>
+      <button type="button" class="btn-secondary fm-help-btn" id="fm-help-btn" title="Справка (F1)" aria-label="Справка">❓ Справка</button>
+    </div>
+  </section>
+</div>
 
     <div id="view-xray-logs" class="view-section" style="display:none;">
       <section class="card log-card">
@@ -622,31 +697,73 @@
 	            <span>Терминал XKeen</span>
 	            <span id="terminal-conn-lamp" class="service-status-lamp terminal-conn-lamp" data-state="stopped" title="Терминал: отключено" aria-label="Статус терминала"></span>
 	            <span id="terminal-uptime" class="terminal-uptime" title="Аптайм">00:00</span>
-	          </div>
+</div>
 	          <div class="terminal-toolbar" aria-label="Terminal toolbar">
-	            <button type="button" class="terminal-tool-btn" id="terminal-btn-fullscreen" title="Полный экран / обычный режим" aria-label="Полный экран / обычный режим">⛶</button>
-	            <button type="button" class="terminal-tool-btn" id="terminal-btn-reconnect" title="Переподключиться" aria-label="Переподключиться">🔌</button>
-	            <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-stop-retry" title="Остановить автоподключение" aria-label="Остановить автоподключение">Остановить</button>
-	            <button type="button" class="terminal-tool-btn" id="terminal-btn-new-session" title="Новая сессия" aria-label="Новая сессия">➕</button>
-	            <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" id="terminal-btn-ctrlc" title="Отправить Ctrl+C" aria-label="Отправить Ctrl+C">^C</button>
-	            <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" id="terminal-btn-ctrld" title="Отправить Ctrl+D" aria-label="Отправить Ctrl+D">^D</button>
-	            <button type="button" class="terminal-tool-btn" id="terminal-btn-minimize" title="Свернуть (скрыть окно, не разрывая WS)" aria-label="Свернуть">🗕</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-detach" title="Отсоединиться (оставить PTY живым)" aria-label="Отсоединиться">⏸</button>
-	            <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-kill" title="Завершить PTY-сессию" aria-label="Завершить PTY">⏻</button>
-	            <button type="button" class="terminal-tool-btn" id="terminal-btn-signals" title="Сигналы (SIG*)" aria-label="Сигналы">☠</button>
-	            <button type="button" class="terminal-tool-btn" id="terminal-btn-retry-now" title="Повторить сейчас" aria-label="Повторить сейчас">↻</button>
-	            <button type="button" class="terminal-tool-btn" id="terminal-btn-ssh" title="Профили SSH" aria-label="Профили SSH">SSH</button>
-		            <button type="button" class="terminal-tool-btn" id="terminal-history-btn" title="История команд" aria-label="История">⌚</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-fullscreen" title="Полный экран / обычный режим" aria-label="Полный экран / обычный режим">⛶</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-overflow" title="Меню терминала" aria-label="Меню терминала">⋯</button>
 
-	            <div id="terminal-signals-menu" class="terminal-signals-menu hidden" role="menu" aria-label="Меню сигналов">
-	              <button type="button" class="terminal-signals-item" data-terminal-signal="INT" title="Отправить SIGINT">SIGINT</button>
-	              <button type="button" class="terminal-signals-item" data-terminal-signal="TERM" title="Отправить SIGTERM">SIGTERM</button>
-	              <button type="button" class="terminal-signals-item" data-terminal-signal="HUP" title="Отправить SIGHUP">SIGHUP</button>
-	              <button type="button" class="terminal-signals-item terminal-tool-btn-danger" data-terminal-signal="KILL" title="Отправить SIGKILL">SIGKILL</button>
-	              <button type="button" class="terminal-signals-item" data-terminal-signal="QUIT" title="Отправить SIGQUIT">SIGQUIT</button>
-	            </div>
-            <button type="button" class="terminal-close" id="terminal-btn-close" title="Закрыть" aria-label="Закрыть">×</button>
-	          </div>
+              <div id="terminal-overflow-menu" class="terminal-overflow-menu hidden" role="menu" aria-label="Меню терминала">
+                <div class="terminal-menu-section" aria-label="Сессия">
+                  <div class="terminal-menu-title">Сессия</div>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-reconnect" title="Переподключиться" aria-label="Переподключиться">🔌 Переподключиться</button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-retry-now" title="Повторить сейчас" aria-label="Повторить сейчас">↻ Повторить сейчас</button>
+                  <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-stop-retry" title="Остановить автоподключение" aria-label="Остановить автоподключение">⏹ Остановить автоподключение</button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-new-session" title="Новая сессия" aria-label="Новая сессия">➕ Новая сессия</button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-detach" title="Отсоединиться (оставить PTY живым)" aria-label="Отсоединиться">⏸ Отсоединиться</button>
+                  <button type="button" class="terminal-tool-btn terminal-tool-btn-danger" id="terminal-btn-kill" title="Завершить PTY-сессию" aria-label="Завершить PTY">⏻ Завершить сессию</button>
+                </div>
+
+                <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+                <div class="terminal-menu-section" aria-label="Сигналы">
+                  <div class="terminal-menu-title">Сигналы</div>
+                  <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" id="terminal-btn-ctrlc" title="Отправить Ctrl+C" aria-label="Отправить Ctrl+C">Ctrl+C</button>
+                  <button type="button" class="terminal-tool-btn terminal-tool-btn-kbd" id="terminal-btn-ctrld" title="Отправить Ctrl+D" aria-label="Отправить Ctrl+D">Ctrl+D</button>
+                  <button type="button" class="terminal-signals-item terminal-pty-only" data-terminal-signal="INT" title="Отправить SIGINT">SIGINT</button>
+                  <button type="button" class="terminal-signals-item terminal-pty-only" data-terminal-signal="TERM" title="Отправить SIGTERM">SIGTERM</button>
+                  <button type="button" class="terminal-signals-item terminal-pty-only" data-terminal-signal="HUP" title="Отправить SIGHUP">SIGHUP</button>
+                  <button type="button" class="terminal-signals-item terminal-tool-btn-danger terminal-pty-only" data-terminal-signal="KILL" title="Отправить SIGKILL">SIGKILL</button>
+                  <button type="button" class="terminal-signals-item terminal-pty-only" data-terminal-signal="QUIT" title="Отправить SIGQUIT">SIGQUIT</button>
+                </div>
+
+                <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+                <div class="terminal-menu-section" aria-label="Инструменты">
+                  <div class="terminal-menu-title">Инструменты</div>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-xraylogs" data-menu-keepopen="1" title="Логи Xray (tail -f в PTY)" aria-label="Логи Xray">📜 Логи Xray</button>
+                  <div id="terminal-xraylogs-menu" class="terminal-xraylogs-menu hidden" role="menu" aria-label="Логи Xray">
+                    <div class="terminal-xraylogs-row">
+                      <select id="terminal-xraylogs-file" class="xray-log-select" title="Файл лога" aria-label="Файл лога">
+                        <option value="error">error.log</option>
+                        <option value="access">access.log</option>
+                      </select>
+                      <select id="terminal-xraylogs-level" class="xray-log-select" title="Уровень" aria-label="Уровень">
+                        <option value="warning">warning</option>
+                        <option value="info">info</option>
+                        <option value="debug">debug</option>
+                      </select>
+                    </div>
+                    <div class="terminal-xraylogs-actions">
+                      <button type="button" class="terminal-tool-btn terminal-xraylogs-iconbtn" id="terminal-xraylogs-start" title="Старт" aria-label="Запустить tail">▶</button>
+                      <button type="button" class="terminal-tool-btn terminal-tool-btn-danger terminal-xraylogs-iconbtn" id="terminal-xraylogs-stop" title="Стоп (остановить tail)" aria-label="Остановить tail">■</button>
+                      <button type="button" class="terminal-tool-btn terminal-tool-btn-danger terminal-xraylogs-iconbtn" id="terminal-xraylogs-disable" title="Отключить логи" aria-label="Отключить логи">⛔</button>
+                    </div>
+                  </div>
+
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-ssh" title="Профили SSH" aria-label="Профили SSH">SSH Профили</button>
+                  <button type="button" class="terminal-tool-btn" id="terminal-history-btn" title="История команд" aria-label="История">⌚ История</button>
+                </div>
+
+                <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+                <div class="terminal-menu-section" aria-label="Окно">
+                  <div class="terminal-menu-title">Окно</div>
+                  <button type="button" class="terminal-tool-btn" id="terminal-btn-minimize" title="Свернуть (скрыть окно, не разрывая WS)" aria-label="Свернуть">🗕 Свернуть</button>
+                </div>
+              </div>
+
+              <button type="button" class="terminal-close" id="terminal-btn-close" title="Закрыть" aria-label="Закрыть">×</button>
+            </div>
         </div>
         <input id="terminal-command"
                class="terminal-command"
@@ -664,25 +781,37 @@
 	          <span id="terminal-search-counter" class="terminal-search-counter" title="Совпадения" aria-label="Количество совпадений">0/0</span>
 	          <button type="button" class="terminal-search-btn" id="terminal-search-clear" title="Очистить" aria-label="Очистить поиск">×</button>
 	        </div>
+        <div id="terminal-xterm" class="terminal-output hidden"></div>
         <pre id="terminal-output" class="terminal-output"></pre>
         <div class="terminal-footer" aria-label="Terminal footer toolbar">
-          <div class="terminal-footer-group" aria-label="Отображение">
-            <span class="terminal-footer-label">Вид</span>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-font-dec" title="Шрифт −" aria-label="Шрифт меньше">A−</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-font-inc" title="Шрифт +" aria-label="Шрифт больше">A+</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-cursorblink" title="Мигание курсора" aria-label="Мигание курсора">▮</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-ansi" title="ANSI-фильтр (скрыть/показать ANSI-коды)" aria-label="ANSI-фильтр">ANSI</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-loghl" title="Подсветка WARN/ERR" aria-label="Подсветка WARN/ERR">W/E</button>
-<button type="button" class="terminal-tool-btn" id="terminal-btn-follow" title="Автопрокрутка: ВКЛ" aria-label="Автопрокрутка">⇣ Follow</button>
-<button type="button" class="terminal-tool-btn" id="terminal-btn-bottom" title="В конец" aria-label="В конец">↓ bottom</button>
+          <div class="terminal-footer-group terminal-footer-group-view" aria-label="Отображение">
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-view-menu" title="Вид" aria-label="Вид">👁 Вид</button>
+            <div id="terminal-view-menu" class="terminal-view-menu hidden" role="menu" aria-label="Вид">
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-font-dec" title="Шрифт −" aria-label="Шрифт меньше">A− Шрифт меньше</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-font-inc" title="Шрифт +" aria-label="Шрифт больше">A+ Шрифт больше</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-cursorblink" title="Мигание курсора" aria-label="Мигание курсора">▮ Мигание курсора</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-ansi" title="ANSI-фильтр (скрыть/показать ANSI-коды)" aria-label="ANSI-фильтр">ANSI ANSI-фильтр</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-loghl" title="Подсветка логов" aria-label="Подсветка логов">📝 Подсветка логов</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-follow" title="Автопрокрутка" aria-label="Автопрокрутка">⇣ Следить</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-bottom" title="В конец" aria-label="В конец">↓ В конец</button>
+            </div>
           </div>
-	        <div class="terminal-footer-group" id="terminal-buffer-group" aria-label="Буфер обмена">
-            <span class="terminal-footer-label">Буфер</span>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-copy" title="Копировать" aria-label="Копировать">📋</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-copyall" title="Копировать весь буфер" aria-label="Копировать весь буфер">📋 All</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-download" title="Скачать вывод (.txt)" aria-label="Скачать вывод">⬇️ .txt</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-paste" title="Вставить" aria-label="Вставить">📥</button>
-            <button type="button" class="terminal-tool-btn" id="terminal-btn-clear" title="Очистить" aria-label="Очистить">🧹</button>
+
+          <div class="terminal-footer-group terminal-footer-group-buffer" id="terminal-buffer-group" aria-label="Буфер обмена">
+            <button type="button" class="terminal-tool-btn" id="terminal-btn-buffer-menu" title="Буфер" aria-label="Буфер">📋 Буфер</button>
+            <div id="terminal-buffer-menu" class="terminal-buffer-menu hidden" role="menu" aria-label="Буфер">
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-copy" title="Копировать" aria-label="Копировать">📋 Копировать</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-copyall" title="Копировать весь буфер" aria-label="Копировать весь буфер">📋 Копировать всё</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-paste" title="Вставить" aria-label="Вставить">📥 Вставить</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-clear" title="Очистить" aria-label="Очистить">🧹 Очистить</button>
+
+              <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+              <div class="terminal-menu-title terminal-menu-title-inline">⬇️ Скачать</div>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-download" title="Скачать вывод (.txt)" aria-label="Скачать вывод">.txt</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-download-html" title="Скачать вывод (.html, с цветами)" aria-label="Скачать вывод HTML">.html</button>
+              <button type="button" class="terminal-tool-btn" id="terminal-btn-snapshot-vt" title="Снапшот VT (с ESC-последовательностями)" aria-label="Снапшот VT">VT (snapshot)</button>
+            </div>
           </div>
 
           <div class="terminal-footer-group terminal-footer-group-commands" id="terminal-commands-group" aria-label="Команды">
@@ -779,6 +908,33 @@
       </div>
     </div>
 
+    <!-- File manager: text file viewer/editor -->
+    <div id="fm-editor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Редактор файла">
+      <div class="modal-content" style="max-width: 980px;">
+        <div class="modal-header">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <span class="modal-title" id="fm-editor-title">Файл</span>
+            <span id="fm-editor-subtitle" class="modal-hint" style="margin:0; font-size: 0.82rem; opacity:0.75;"></span>
+          </div>
+          <button type="button" class="modal-close" id="fm-editor-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="fm-editor-warning" class="status" style="display:none;"></div>
+          <div id="fm-editor-error" class="error" style="display:none;"></div>
+          <textarea id="fm-editor-textarea" spellcheck="false"></textarea>
+        </div>
+        <div class="modal-actions">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button type="button" class="btn-secondary" id="fm-editor-download-btn">Скачать</button>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button type="button" id="fm-editor-cancel-btn">Закрыть</button>
+            <button type="button" id="fm-editor-save-btn">Сохранить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
 <div id="github-export-modal" class="modal hidden">
       <div class="modal-content">
         <div class="modal-header">
@@ -860,16 +1016,46 @@
   <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/outbounds.js') }}"></script>
     <script src="{{ url_for('static', filename='js/features/xkeen_texts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/features/file_manager.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/_core.js') }}"></script>
+  <!-- Terminal refactor (Wave 3): Stage A (events/ui/api) + Stage B (transport adapters) -->
+  <script src="{{ url_for('static', filename='js/terminal/core/events.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/logger.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/config.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/ui.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/transport/pty_transport.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/transport/lite_transport.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/transport/index.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/state.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/registry.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/commands/registry.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/commands/router.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/commands/builtins/xkeen_restart.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/session_controller.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/context.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/public_api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/output_controller.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/input_controller.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/capabilities.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/pty.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/core/xterm_manager.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/lite_runner.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/search.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/history.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/quick_commands.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/chrome.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/terminal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/modules/overlay_controller.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/modules/status_controller.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/modules/terminal_controller.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/modules/ui_controller.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/modules/buffer_actions.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/modules/ssh_profiles.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/modules/reconnect_controller.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/modules/output_prefs.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/modules/confirm_prompt.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/xray_tail.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/terminal.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pages/panel.init.js') }}"></script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 
@@ -988,6 +1174,270 @@
     <div class="modal-actions" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="ssh-confirm-cancel-btn">Отмена</button>
       <button type="button" id="ssh-confirm-ok" class="btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- File Manager: Connect modal -->
+<div id="fm-connect-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Remote connect">
+  <div class="modal-content" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">Подключение к серверу</span>
+      <button type="button" class="modal-close" id="fm-connect-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-form-grid">
+        <label for="fm-proto">Протокол</label>
+        <select id="fm-proto" class="terminal-input">
+          <option value="sftp">SFTP</option>
+          <option value="ftp">FTP</option>
+          <option value="ftps">FTPS</option>
+        </select>
+
+        <label for="fm-host">Host *</label>
+        <input id="fm-host" class="terminal-input" placeholder="example.com" />
+
+        <label for="fm-port">Port</label>
+        <input id="fm-port" class="terminal-input" placeholder="22" inputmode="numeric" />
+
+        <label for="fm-user">User</label>
+        <input id="fm-user" class="terminal-input" placeholder="root" />
+
+        <label for="fm-pass">Password</label>
+        <input id="fm-pass" class="terminal-input" type="password" placeholder="" />
+
+        <label for="fm-hostkey-policy">SFTP host key</label>
+        <select id="fm-hostkey-policy" class="terminal-input">
+          <option value="accept_new">accept_new (рекомендуется)</option>
+          <option value="reject_new">reject_new (строго)</option>
+          <option value="accept_any">accept_any (небезопасно)</option>
+        </select>
+
+        <label for="fm-tls-verify">FTPS TLS verify</label>
+        <select id="fm-tls-verify" class="terminal-input">
+          <option value="strict">strict (проверять сертификат + hostname)</option>
+          <option value="ca">ca (сертификат без hostname)</option>
+          <option value="none">none (небезопасно)</option>
+        </select>
+      </div>
+      <div id="fm-connect-error" class="error"></div>
+      <div id="fm-connect-warn" class="status" style="display:none;"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-connect-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-connect-ok-btn">Connect</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: create folder / file -->
+<div id="fm-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Create">
+  <div class="modal-content" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title" id="fm-create-title">Создать</span>
+      <button type="button" class="modal-close" id="fm-create-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-form-grid">
+        <label for="fm-create-name">Имя *</label>
+        <input id="fm-create-name" class="terminal-input" placeholder="example.txt" spellcheck="false" />
+
+        <label></label>
+        <div id="fm-create-dest" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+
+        <label></label>
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input id="fm-create-parents" type="checkbox" checked />
+          <span>Создать родителей (mkdir -p)</span>
+        </label>
+
+        <label></label>
+        <label id="fm-create-createonly-row" style="display:flex; gap:8px; align-items:center;">
+          <input id="fm-create-createonly" type="checkbox" checked />
+          <span>Не перезаписывать если существует</span>
+        </label>
+      </div>
+      <div id="fm-create-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-create-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-create-ok-btn">Создать</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- File Manager: rename file / folder -->
+<div id="fm-rename-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Rename">
+  <div class="modal-content" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title" id="fm-rename-title">Переименовать</span>
+      <button type="button" class="modal-close" id="fm-rename-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-form-grid">
+        <label for="fm-rename-name">Новое имя *</label>
+        <input id="fm-rename-name" class="terminal-input" placeholder="new-name" spellcheck="false" />
+
+        <label></label>
+        <div id="fm-rename-src" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+      </div>
+      <div class="status" style="margin-top:10px; opacity:.8;">Подсказка: переименование работает только в текущем каталоге (без "/" и "\").</div>
+      <div id="fm-rename-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-rename-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-rename-ok-btn">Переименовать</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- File Manager: drag&drop operation (move/copy) -->
+
+<div id="fm-dropop-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Move or Copy">
+  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-header">
+      <span class="modal-title">Операция при перетаскивании</span>
+      <button type="button" class="modal-close" id="fm-dropop-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="fm-dropop-text" class="status" style="margin:0 0 10px 0;"></div>
+      <pre id="fm-dropop-list" class="fm-dropop-list" style="margin:0;"></pre>
+      <div class="status" style="margin-top:10px; opacity:.8;">Подсказка: Ctrl во время Drag&Drop меняет выбор по умолчанию.</div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-dropop-cancel-btn">Отмена</button>
+      <button type="button" class="btn-secondary" id="fm-dropop-copy-btn">Копировать</button>
+      <button type="button" class="btn-primary" id="fm-dropop-move-btn">Переместить</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: conflicts modal (overwrite=ask) -->
+<div id="fm-conflicts-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Conflicts">
+  <div class="modal-content" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title">Конфликты при копировании</span>
+      <button type="button" class="modal-close" id="fm-conflicts-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="fm-conflicts-list" class="fm-conflicts-list"></div>
+      <div class="fm-conflicts-footer">
+        <label style="display:flex; gap:8px; align-items:center;">
+          <span style="opacity:.85;">Действие по умолчанию:</span>
+          <select id="fm-conflicts-default" class="terminal-input" style="max-width:220px;">
+            <option value="replace">Заменить все</option>
+            <option value="skip">Пропустить все</option>
+          </select>
+        </label>
+      </div>
+      <div id="fm-conflicts-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-conflicts-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-conflicts-ok-btn">Продолжить</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: progress modal -->
+<div id="fm-progress-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Progress">
+  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-header">
+      <span class="modal-title">Операция</span>
+      <button type="button" class="modal-close" id="fm-progress-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-progress-line" id="fm-progress-title"></div>
+      <div class="fm-progress-bar"><div class="fm-progress-bar-inner" id="fm-progress-bar-inner"></div></div>
+      <div class="fm-progress-meta" id="fm-progress-meta"></div>
+      <pre class="fm-progress-details" id="fm-progress-details"></pre>
+      <div id="fm-progress-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-progress-cancel-btn">Отменить</button>
+      <button type="button" class="btn-primary" id="fm-progress-ok-btn">Скрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: operations list -->
+<div id="fm-ops-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Operations">
+  <div class="modal-content" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title">Операции</span>
+      <button type="button" class="modal-close" id="fm-ops-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-bottom:8px;">
+        <button type="button" class="btn-secondary" id="fm-ops-refresh-btn">⟳ Обновить</button>
+      </div>
+      <div id="fm-ops-list" class="fm-ops-list"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- File Manager: help modal -->
+<div id="fm-help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Справка по файловому менеджеру">
+  <div class="modal-content" style="max-width:780px;">
+    <div class="modal-header">
+      <span class="modal-title">Справка: файловый менеджер</span>
+      <button type="button" class="modal-close" id="fm-help-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-help-body" id="fm-help-body">
+        <p>Двухпанельный менеджер (как Total Commander): действия применяются к <b>активной панели</b> и текущему выделению.</p>
+
+        <h3>Панели</h3>
+        <ul>
+          <li><b>Target</b>: <b>local</b> — файлы на роутере (в пределах разрешённых корней), <b>remote</b> — подключение к серверу (SFTP/FTP/FTPS).</li>
+          <li><b>Connect…</b>/<b>Disconnect</b> — открыть/закрыть remote-сессию.</li>
+          <li>Поле пути: введите путь и нажмите <b>Enter</b> для перехода.</li>
+          <li><b>↑</b> — перейти в родительский каталог, <b>⟳</b> — обновить список.</li>
+        </ul>
+
+        <h3>Выделение и навигация</h3>
+        <ul>
+          <li>Клик — фокус + выделение; <b>двойной клик</b> или <b>Enter</b> — открыть файл/папку.</li>
+          <li><b>↑/↓</b> — перемещение фокуса по списку.</li>
+          <li><b>Ctrl</b> (или клик по чекбоксу) — добавить/убрать из выделения; <b>Shift</b> — выделить диапазон.</li>
+          <li><b>ПКМ</b> — контекстное меню (открыть/скачать/копировать/переместить/переименовать/удалить/создать…).</li>
+        </ul>
+
+        <h3>Операции</h3>
+        <ul>
+          <li><b>➕ Папка</b> / <b>➕ Файл</b> — создание в активной панели.</li>
+          <li><b>⬆ Upload</b> — загрузка файлов с компьютера в активный каталог.</li>
+          <li><b>⬇ Download</b> — скачать выделенное (папка/несколько элементов скачиваются как <b>.zip</b>).</li>
+          <li><b>F5</b> — копировать из активной панели в другую, <b>F6</b> — переместить.</li>
+          <li>Если в назначении есть файлы с теми же именами — появится окно <b>«Конфликты»</b> (заменить/пропустить).</li>
+          <li><b>F2</b> — переименовать (только в текущем каталоге), <b>F8</b> — удалить.</li>
+          <li><b>Drag&amp;Drop</b>: перетаскивание между панелями (по умолчанию move; удерживайте <b>Ctrl</b> для copy) или выбор действия в диалоге.</li>
+          <li><b>Операции</b> — список фоновых задач (копирование/перемещение/удаление/загрузка) и их прогресс.</li>
+        </ul>
+
+        <h3>Горячие клавиши</h3>
+        <ul>
+          <li><b>Tab</b> — смена активной панели</li>
+          <li><b>Enter</b> — открыть</li>
+          <li><b>Backspace</b> — вверх</li>
+          <li><b>F7</b> — новая папка</li>
+          <li><b>Shift+F7</b> — новый файл</li>
+          <li><b>F2</b> — переименовать</li>
+          <li><b>F5</b> — копировать</li>
+          <li><b>F6</b> — переместить</li>
+          <li><b>F8</b> — удалить</li>
+          <li><b>F1</b> — открыть эту справку</li>
+          <li><b>Esc</b> — закрыть окно/выйти из полноэкранного режима</li>
+        </ul>
+      </div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-help-ok-btn">Закрыть</button>
     </div>
   </div>
 </div>
