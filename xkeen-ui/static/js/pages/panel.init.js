@@ -31,6 +31,7 @@
       xkeen: document.getElementById('view-xkeen'),
       'xray-logs': document.getElementById('view-xray-logs'),
       commands: document.getElementById('view-commands'),
+      files: document.getElementById('view-files'),
     };
 
     // hide/show sections
@@ -71,6 +72,15 @@
       } else if (typeof window.stopXrayLogAuto === 'function') {
         safe(() => window.stopXrayLogAuto());
       }
+    }
+
+    // file manager: refresh when tab becomes visible
+    if (name === 'files') {
+      try {
+        if (window.XKeen && XKeen.features && XKeen.features.fileManager && typeof XKeen.features.fileManager.onShow === 'function') {
+          safe(() => XKeen.features.fileManager.onShow());
+        }
+      } catch (e) {}
     }
   }
 
@@ -129,6 +139,12 @@
     safe(() => {
       if (window.XKeen && XKeen.features && XKeen.features.commandsList && typeof XKeen.features.commandsList.init === 'function') {
         XKeen.features.commandsList.init();
+      }
+    });
+
+    safe(() => {
+      if (window.XKeen && XKeen.features && XKeen.features.fileManager && typeof XKeen.features.fileManager.init === 'function') {
+        XKeen.features.fileManager.init();
       }
     });
 
