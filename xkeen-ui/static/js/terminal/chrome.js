@@ -6,12 +6,21 @@
   window.XKeen = window.XKeen || {};
   window.XKeen.terminal = window.XKeen.terminal || {};
 
+  function getCtx() {
+    try {
+      const C = window.XKeen.terminal.core;
+      if (C && typeof C.getCtx === 'function') return C.getCtx();
+    } catch (e) {}
+    return null;
+  }
+
   const core = window.XKeen.terminal._core || null;
   const state = (core && core.state) ? core.state : (window.XKeen.terminal.__chrome_state = window.XKeen.terminal.__chrome_state || {});
 
   const GEOM_KEY = 'xkeen_terminal_geom_v1';
 
-  let inited = false;
+  let openBound = false;
+  let openDisposers = [];
   let resizeObserver = null;
   let saveTimer = null;
 
@@ -25,11 +34,15 @@
   let isFullscreen = false;
   let geomBeforeFullscreen = null;
 
-  function byId(id) {
+  function byId(id, ctx) {
+    if (!ctx) ctx = getCtx();
+    try {
+      if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id);
+    } catch (e0) {}
     try {
       if (core && typeof core.byId === 'function') return core.byId(id);
     } catch (e) {}
-    return document.getElementById(id);
+    return null;
   }
 
   function syncBodyScrollLock() {
@@ -193,22 +206,42 @@
 
   function minimize() {
     const { overlay } = getEls();
-    if (overlay) overlay.style.display = 'none';
-    syncBodyScrollLock();
+    let usedController = false;
+    try {
+      const ctx = getCtx();
+      const oc = ctx ? (ctx.overlay || ctx.overlayCtrl) : null;
+      if (oc && typeof oc.hide === 'function') {
+        usedController = true;
+        oc.hide();
+      }
+    } catch (e) {}
+    if (!usedController) {
+      if (overlay) overlay.style.display = 'none';
+      syncBodyScrollLock();
+    }
     try {
       const pty = window.XKeen && XKeen.terminal ? XKeen.terminal.pty : null;
       if (pty && typeof pty.hideSignalsMenu === 'function') pty.hideSignalsMenu();
     } catch (e) {}
   }
 
-  function ensureChrome() {
-    if (inited) return;
-    inited = true;
+  function addOpenListener(el, ev, fn, opts) {
+    if (!el || typeof el.addEventListener !== 'function') return;
+    el.addEventListener(ev, fn, opts);
+    openDisposers.push(() => {
+      try { el.removeEventListener(ev, fn, opts); } catch (e) {}
+    });
+  }
+
+  function bindWhileOpen() {
+    if (openBound) return;
+    openBound = true;
+    openDisposers = [];
 
     const { win, header } = getEls();
     if (!win || !header) return;
 
-    header.addEventListener('mousedown', (e) => {
+    const onHeaderDown = (e) => {
       if (e.button !== 0) return;
       if (isFullscreen) return;
       if (e.target && e.target.closest && e.target.closest('.terminal-toolbar')) return;
@@ -229,24 +262,27 @@
       document.documentElement.style.userSelect = 'none';
       document.documentElement.style.cursor = 'move';
       try { e.preventDefault(); } catch (e2) {}
-    });
+    };
+    addOpenListener(header, 'mousedown', onHeaderDown);
 
-    document.addEventListener('mousemove', (e) => {
+    const onDocMove = (e) => {
       if (!dragging) return;
       let newX = e.clientX - dragOffsetX;
       let newY = e.clientY - dragOffsetY;
       const p = clampPos(newX, newY, dragWidth, dragHeight);
       win.style.left = Math.round(p.x) + 'px';
       win.style.top = Math.round(p.y) + 'px';
-    });
+    };
+    addOpenListener(document, 'mousemove', onDocMove);
 
-    document.addEventListener('mouseup', () => {
+    const onDocUp = () => {
       if (!dragging) return;
       dragging = false;
       document.documentElement.style.userSelect = '';
       document.documentElement.style.cursor = '';
       scheduleSave();
-    });
+    };
+    addOpenListener(document, 'mouseup', onDocUp);
 
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => {
@@ -263,9 +299,13 @@
         fitXterm();
       });
       try { resizeObserver.observe(win); } catch (e) {}
+      openDisposers.push(() => {
+        try { if (resizeObserver) resizeObserver.disconnect(); } catch (e) {}
+        resizeObserver = null;
+      });
     }
 
-    window.addEventListener('resize', () => {
+    const onWinResize = () => {
       if (isFullscreen) return;
       try {
         const r = win.getBoundingClientRect();
@@ -275,12 +315,27 @@
         win.style.top = Math.round(p.y) + 'px';
       } catch (e) {}
       scheduleSave();
-    });
+    };
+    addOpenListener(window, 'resize', onWinResize);
+  }
+
+  function unbindWhileOpen() {
+    if (!openBound) return;
+    openBound = false;
+    dragging = false;
+    try {
+      document.documentElement.style.userSelect = '';
+      document.documentElement.style.cursor = '';
+    } catch (e) {}
+    try {
+      (openDisposers || []).forEach((fn) => { try { fn(); } catch (e) {} });
+    } catch (e2) {}
+    openDisposers = [];
   }
 
   // Call when overlay becomes visible
   function onOpen() {
-    ensureChrome();
+    bindWhileOpen();
     updateFullscreenBtn();
 
     requestAnimationFrame(() => {
@@ -300,13 +355,22 @@
   }
 
   window.XKeen.terminal.chrome = {
-    init: ensureChrome,
+    init: () => {},
     onOpen,
+    onClose: unbindWhileOpen,
     minimize,
     setFullscreen,
     toggleFullscreen,
     updateFullscreenBtn,
     isFullscreen: () => !!isFullscreen,
     saveGeomNow,
+    // Stage E: registry plugin factory
+    createModule: (ctx) => ({
+      id: 'chrome',
+      priority: 55,
+      init: () => {},
+      onOpen: () => { try { onOpen(ctx); } catch (e) {} },
+      onClose: () => { try { unbindWhileOpen(); } catch (e) {} },
+    }),
   };
 })();
