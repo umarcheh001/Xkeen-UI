@@ -7,24 +7,66 @@
   const core = (window.XKeen.terminal && window.XKeen.terminal._core) ? window.XKeen.terminal._core : null;
 
   let HAS_WS = false;
+  let INIT_PROMISE = null;
 
-  async function initCapabilities() {
+  function getCtx() {
     try {
-      const resp = await fetch('/api/capabilities', { cache: 'no-store' });
-      if (!resp.ok) throw new Error('http ' + resp.status);
-      const data = await resp.json().catch(() => ({}));
-      HAS_WS = !!(data && data.websocket);
-    } catch (e) {
-      // On error we assume WS is not available and fall back to HTTP mode.
-      HAS_WS = false;
-    }
-
-    try {
-      if (core && core.state) core.state.hasWs = HAS_WS;
+      const C = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core ? window.XKeen.terminal.core : null;
+      if (C && typeof C.getCtx === 'function') return C.getCtx();
     } catch (e) {}
+    return null;
+  }
 
-    try { applyWsCapabilityUi(); } catch (e) {}
-    return HAS_WS;
+  function byId(id) {
+    try {
+      const ctx = getCtx();
+      if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id);
+    } catch (e) {}
+    try {
+      if (core && typeof core.byId === 'function') return core.byId(id);
+    } catch (e2) {}
+    return null;
+  }
+
+  function setVisible(el, on) {
+    try {
+      const ctx = getCtx();
+      if (ctx && ctx.ui && ctx.ui.set && typeof ctx.ui.set.visible === 'function') return ctx.ui.set.visible(el, !!on);
+    } catch (e) {}
+    if (!el) return;
+    try { el.style.display = on ? '' : 'none'; } catch (e2) {}
+  }
+
+  function setEnabled(el, on) {
+    try {
+      const ctx = getCtx();
+      if (ctx && ctx.ui && ctx.ui.set && typeof ctx.ui.set.enabled === 'function') return ctx.ui.set.enabled(el, !!on);
+    } catch (e) {}
+    if (!el) return;
+    try { el.disabled = !on; } catch (e2) {}
+  }
+
+  function initCapabilities() {
+    if (INIT_PROMISE) return INIT_PROMISE;
+    INIT_PROMISE = (async () => {
+      try {
+        const resp = await fetch('/api/capabilities', { cache: 'no-store' });
+        if (!resp.ok) throw new Error('http ' + resp.status);
+        const data = await resp.json().catch(() => ({}));
+        HAS_WS = !!(data && data.websocket);
+      } catch (e) {
+        // On error we assume WS is not available and fall back to HTTP mode.
+        HAS_WS = false;
+      }
+
+      try {
+        if (core && core.state) core.state.hasWs = HAS_WS;
+      } catch (e) {}
+
+      try { applyWsCapabilityUi(); } catch (e) {}
+      return HAS_WS;
+    })();
+    return INIT_PROMISE;
   }
 
   // Apply capability-dependent UI.
@@ -33,8 +75,8 @@
   // - If WS is NOT available: show ONLY the lite HTTP terminal button.
   function applyWsCapabilityUi() {
     // Buttons in "Команды" header
-    const shellBtn = document.getElementById('terminal-open-shell-btn');
-    const ptyBtn = document.getElementById('terminal-open-pty-btn');
+    const shellBtn = byId('terminal-open-shell-btn');
+    const ptyBtn = byId('terminal-open-pty-btn');
 
     // If markup changed, best-effort: do nothing.
     if (!shellBtn && !ptyBtn) return;
@@ -42,22 +84,22 @@
     if (HAS_WS) {
       // Powerful routers: keep only PTY (Interactive Shell)
       if (ptyBtn) {
-        ptyBtn.style.display = '';
-        ptyBtn.disabled = false;
+        setVisible(ptyBtn, true);
+        setEnabled(ptyBtn, true);
       }
       if (shellBtn) {
-        shellBtn.style.display = 'none';
-        shellBtn.disabled = true;
+        setVisible(shellBtn, false);
+        setEnabled(shellBtn, false);
       }
     } else {
       // Weak routers: keep only lite terminal
       if (ptyBtn) {
-        ptyBtn.style.display = 'none';
-        ptyBtn.disabled = true;
+        setVisible(ptyBtn, false);
+        setEnabled(ptyBtn, false);
       }
       if (shellBtn) {
-        shellBtn.style.display = '';
-        shellBtn.disabled = false;
+        setVisible(shellBtn, true);
+        setEnabled(shellBtn, true);
       }
     }
   }
