@@ -1372,9 +1372,24 @@
       <button type="button" class="modal-close" id="fm-ops-close-btn" aria-label="Close">×</button>
     </div>
     <div class="modal-body">
-      <div style="display:flex; gap:8px; justify-content:flex-end; margin-bottom:8px;">
-        <button type="button" class="btn-secondary" id="fm-ops-refresh-btn">⟳ Обновить</button>
+      <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:8px;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <label style="display:flex; align-items:center; gap:6px; opacity:.9;">
+            <span style="font-size:12px;">Фильтр</span>
+            <select id="fm-ops-filter" class="terminal-input" style="height:32px;">
+              <option value="all">Все</option>
+              <option value="active">Активные</option>
+              <option value="errors">Ошибки</option>
+              <option value="finished">Завершённые</option>
+            </select>
+          </label>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" id="fm-ops-clear-btn">🧹 Очистить историю</button>
+          <button type="button" class="btn-secondary" id="fm-ops-refresh-btn">⟳ Обновить</button>
+        </div>
       </div>
+      <div id="fm-ops-summary" style="font-size:12px; opacity:.85; margin:6px 0 10px 0;"></div>
       <div id="fm-ops-list" class="fm-ops-list"></div>
     </div>
   </div>
