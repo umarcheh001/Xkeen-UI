@@ -4304,6 +4304,55 @@ def create_remotefs_blueprint(
         return jsonify({'ok': True, 'job': job.to_dict()})
 
 
+    @bp.post('/api/fileops/jobs/clear')
+    def api_fileops_clear_jobs() -> Any:
+        """Clear finished jobs from the in-memory history.
+
+        This endpoint is optional for the UI: the client can fall back to local hiding
+        if it doesn't exist.
+
+        Body: {"scope": "history"|"finished"|"errors"|"all"}
+          - history (default): done + error + canceled
+          - finished: done + canceled
+          - errors: error
+          - all: all non-active jobs (done/error/canceled)
+        """
+        if (resp := _require_enabled()) is not None:
+            return resp
+
+        try:
+            data = request.get_json(silent=True) or {}
+        except Exception:
+            data = {}
+        scope = str((data or {}).get('scope') or 'history').strip().lower()
+        if scope not in ('history', 'finished', 'errors', 'all'):
+            scope = 'history'
+
+        def _should_delete(state: str) -> bool:
+            st = (state or '').strip().lower()
+            if st in ('running', 'queued'):
+                return False
+            if scope == 'errors':
+                return st == 'error'
+            if scope == 'finished':
+                return st in ('done', 'canceled')
+            # history / all
+            return st in ('done', 'error', 'canceled')
+
+        deleted = 0
+        try:
+            with jobmgr._lock:
+                to_del = [jid for jid, j in jobmgr._jobs.items() if _should_delete(getattr(j, 'state', '') or '')]
+                for jid in to_del:
+                    jobmgr._jobs.pop(jid, None)
+                    deleted += 1
+        except Exception:
+            # If something goes wrong, be safe and do nothing.
+            deleted = 0
+
+        return jsonify({'ok': True, 'deleted': deleted})
+
+
     @bp.post('/api/fileops/jobs/<job_id>/cancel')
     def api_fileops_cancel_job(job_id: str) -> Any:
         if (resp := _require_enabled()) is not None:
