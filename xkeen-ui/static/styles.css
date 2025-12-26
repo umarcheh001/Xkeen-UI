@@ -327,8 +327,34 @@ box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
 .CodeMirror-scroll {
   max-height: 70vh;
   background-color: #020617;
+
+  /* Keep scrolling predictable */
   overflow: auto !important;
 }
+
+/*
+  IMPORTANT (auto-height CodeMirror)
+  ---------------------------------
+  Our UI uses `height: auto` on the `.CodeMirror` wrapper + `max-height` on
+  `.CodeMirror-scroll`.
+
+  CodeMirror 5 default CSS uses `margin-bottom: -50px` on `.CodeMirror-scroll`
+  as part of its scrollbar layout hack. When the wrapper height is auto, that
+  negative margin makes the wrapper shorter and the last visible line gets
+  clipped in some editors.
+
+  Fix: neutralize the negative bottom margin for our editors and keep a small
+  bottom padding so the last line is always fully visible.
+*/
+.xkeen-cm .CodeMirror-scroll {
+  margin-bottom: 0 !important;
+  padding-bottom: 12px !important;
+}
+
+.xkeen-cm .CodeMirror-gutter {
+  margin-bottom: 0 !important;
+}
+
 
 /*
   Fullscreen (CodeMirror addon/display/fullscreen)
@@ -1720,6 +1746,11 @@ button.backup-icon-btn.backup-delete-btn {
   align-items: center;
   justify-content: center;
   z-index: 60;
+}
+
+/* Confirm dialog must stay above other modals (e.g. file manager operations modal). */
+#confirm-modal {
+  z-index: 70;
 }
 
 .modal.hidden {
@@ -3413,6 +3444,13 @@ button:disabled{
   resize: both;
   overflow: hidden;
   position: relative;
+  /*
+    Browser resize handle is only bottom-right.
+    We add our own bottom-left handle (JS) that resizes from the left
+    by widening the card and shifting it with a CSS variable.
+  */
+  --fm-shift-x: 0px;
+  transform: translateX(var(--fm-shift-x));
   min-height: 420px;
   height: clamp(420px, 70vh, 760px);
   max-height: 90vh;
@@ -3463,6 +3501,19 @@ button:disabled{
   border-radius: 2px;
 }
 
+.fm-resize-handle-left{
+  /* Actual draggable area for bottom-left resize (implemented in JS) */
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  width: 22px;
+  height: 22px;
+  cursor: nesw-resize;
+  z-index: 3;
+  background: transparent;
+  touch-action: none;
+}
+
 .fm-card.is-fullscreen{
   position: fixed !important;
   left: 8px !important;
@@ -3474,7 +3525,13 @@ button:disabled{
   max-width: none !important;
   max-height: none !important;
   resize: none !important;
+  transform: none !important;
+  --fm-shift-x: 0px !important;
   z-index: 45;
+}
+
+.fm-card.is-fullscreen .fm-resize-handle-left{
+  display: none;
 }
 
 .fm-card.is-fullscreen::after,
@@ -3736,15 +3793,19 @@ html[data-theme="light"] .fm-context-sep{
 .fm-progress-bar{ height: 10px; border-radius: 999px; background: rgba(51,65,85,0.55); overflow:hidden; }
 .fm-progress-bar-inner{ height: 100%; width: 0%; background: rgba(37,99,235,0.55); }
 .fm-progress-meta{ margin-top: 8px; font-size: 12px; opacity: 0.85; }
+.fm-mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.fm-progress-extra{ margin-top: 8px; display:flex; justify-content:space-between; gap: 10px; align-items:center; flex-wrap:wrap; font-size: 12px; }
+.fm-progress-extra-right{ opacity: 0.85; }
 .fm-progress-details{ margin-top: 10px; max-height: 260px; overflow:auto; background: rgba(2,6,23,0.35); border: 1px solid rgba(51,65,85,0.55); border-radius: 12px; padding: 10px; }
 
 /* Ops list */
 .fm-ops-table{ display:grid; gap: 6px; }
-.fm-ops-row{ display:grid; grid-template-columns: 110px 90px 90px 1fr 170px; gap: 10px; padding: 8px 10px; border: 1px solid rgba(51,65,85,0.65); border-radius: 12px; background: rgba(255,255,255,0.02); align-items:center; }
+.fm-ops-row{ display:grid; grid-template-columns: 110px 80px 90px 120px 1fr 170px; gap: 10px; padding: 8px 10px; border: 1px solid rgba(51,65,85,0.65); border-radius: 12px; background: rgba(255,255,255,0.02); align-items:center; }
 .fm-ops-head{ font-size: 12px; opacity: 0.85; background: rgba(2,6,23,0.35); }
 
 @media (max-width: 920px){
   .fm-card{ resize: none; }
+  .fm-resize-handle-left{ display:none; }
   .fm-two{ grid-template-columns: 1fr; }
   .fm-row{ grid-template-columns: 28px minmax(140px, 1fr) minmax(56px, 84px) minmax(64px, 92px) minmax(108px, 140px); }
   .fm-form-grid{ grid-template-columns: 1fr; }
