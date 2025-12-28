@@ -18,6 +18,9 @@ import json
 import uuid
 import shutil
 import subprocess
+import base64
+import hashlib
+import shlex
 import threading
 import queue
 import secrets
@@ -27,6 +30,35 @@ from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 
 from flask import Blueprint, request, jsonify, current_app, Response, send_file
+
+# --- core.log helpers (never fail) ---
+try:
+    from services.logging_setup import core_logger as _get_core_logger
+    _CORE_LOGGER = _get_core_logger()
+except Exception:
+    _CORE_LOGGER = None
+
+
+def _core_log(level: str, msg: str, **extra) -> None:
+    if _CORE_LOGGER is None:
+        return
+    try:
+        if extra:
+            try:
+                tail = ", ".join(f"{k}={v}" for k, v in extra.items())
+            except Exception:
+                tail = repr(extra)
+            full = f"{msg} | {tail}"
+        else:
+            full = msg
+        fn = getattr(_CORE_LOGGER, str(level or "info").lower(), None)
+        if callable(fn):
+            fn(full)
+        else:
+            _CORE_LOGGER.info(full)
+    except Exception:
+        pass
+
 
 import zipfile
 
@@ -67,6 +99,34 @@ def _lftp_quote(s: str) -> str:
     # Use double quotes + backslash escaping for common specials.
     s = s.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{s}"'
+
+
+def _sanitize_download_filename(name: str, *, default: str = "download") -> str:
+    """Sanitize filename for Content-Disposition header (prevent header injection)."""
+    s = (name or "").strip()
+    try:
+        s = os.path.basename(s)
+    except Exception:
+        pass
+    # Strip header-breaking characters.
+    s = s.replace("\r", "").replace("\n", "").replace('"', "")
+    if not s:
+        s = default
+    # Keep header reasonably small.
+    if len(s) > 180:
+        s = s[:180]
+    return s
+
+
+def _content_disposition_attachment(filename: str) -> str:
+    """Build a safe Content-Disposition attachment header value."""
+    fn = _sanitize_download_filename(filename)
+    # RFC 5987 filename* improves UTF-8 handling in modern browsers.
+    try:
+        fn_star = _url_quote(fn, safe='')
+        return f'attachment; filename="{fn}"; filename*=UTF-8\'\'{fn_star}'
+    except Exception:
+        return f'attachment; filename="{fn}"'
 
 
 def _zip_directory(src_dir: str, zip_path: str, *, root_name: str) -> None:
@@ -360,16 +420,18 @@ def _normalize_security_options(protocol: str, options: Dict[str, Any], *, known
     # --- FTPS TLS verification ---
     tls_mode: str
     tls_raw = opt.get('tls_verify', opt.get('tls', None))
+    if tls_raw is None:
+        tls_raw = opt.get('tls_verify_mode', None)
     if isinstance(tls_raw, dict):
         tls_mode = str(tls_raw.get('verify', 'none') or 'none').strip().lower()
-        ca_file = tls_raw.get('ca_file')
+        ca_file = tls_raw.get('ca_file') or tls_raw.get('tls_ca_file')
     else:
         # backward compat: bool
         if isinstance(tls_raw, bool):
             tls_mode = 'strict' if tls_raw else 'none'
         else:
             tls_mode = str(tls_raw or 'none').strip().lower()
-        ca_file = opt.get('ca_file')
+        ca_file = opt.get('tls_ca_file') or opt.get('ca_file')
 
     if tls_mode not in _TLS_VERIFY_MODES:
         tls_mode = 'none'
@@ -453,7 +515,7 @@ def _parse_ls_line(line: str, *, now_ts: Optional[float] = None) -> Optional[Dic
 
     perm = parts[0]
     # Must start with a file type char + 9 mode chars
-    if not re.match(r"^[bcdlps-][rwxStTs-]{9}$", perm):
+    if not re.match(r"^[bcdlps-][rwxStTs-]{9}[@+.]?$", perm):
         return None
 
     # Locate month token
@@ -551,7 +613,11 @@ def _local_allowed_roots() -> List[str]:
     if env:
         roots = [r for r in env.split(':') if r.strip()]
     else:
-        roots = ['/opt/var', '/tmp']
+        # Default allowlist:
+        # - /opt/etc : configs (xray/mihomo) and other Entware settings
+        # - /opt/var : runtime/cache/logs
+        # - /tmp     : RAM disk and mount points (/tmp/mnt)
+        roots = ['/opt/etc', '/opt/var', '/tmp']
     out: List[str] = []
     for r in roots:
         try:
@@ -565,6 +631,7 @@ def _local_allowed_roots() -> List[str]:
 
 
 def _local_is_allowed(real_path: str, roots: List[str]) -> bool:
+    """Check whether a *resolved* path stays inside one of the allowed roots."""
     try:
         rp = os.path.realpath(real_path)
     except Exception:
@@ -578,21 +645,110 @@ def _local_is_allowed(real_path: str, roots: List[str]) -> bool:
     return False
 
 
-def _local_resolve(path: str, roots: List[str]) -> str:
+def _local_norm_abs(path: str, roots: List[str]) -> str:
+    """Normalize user-supplied local path to an absolute path without resolving symlinks.
+
+    We still enforce a *lexical* containment check (commonpath) against allowed roots
+    to prevent obvious `..` escapes. Symlink-escape prevention is handled separately.
+    """
     if not roots:
         raise PermissionError('no_local_roots')
+
     p = (path or '').strip()
     if not p:
         p = roots[0]
     if not p.startswith('/'):
         # treat relative as relative to first root
         p = os.path.join(roots[0], p)
-    rp = os.path.realpath(p)
+
+    # Collapse /./ and /../ safely (lexical only; does not resolve symlinks).
+    p = os.path.normpath(p)
+
+    # Ensure lexical containment in allowed roots.
+    allowed = False
+    for root in roots:
+        try:
+            if os.path.commonpath([p, root]) == root:
+                allowed = True
+                break
+        except Exception:
+            continue
+    if not allowed:
+        raise PermissionError('path_not_allowed')
+
+    return p
+
+
+def _local_resolve_follow(path: str, roots: List[str]) -> str:
+    """Resolve a local path *following* symlinks (realpath), ensuring it stays in roots."""
+    ap = _local_norm_abs(path, roots)
+    rp = os.path.realpath(ap)
     if not _local_is_allowed(rp, roots):
         raise PermissionError('path_not_allowed')
     return rp
 
 
+def _local_resolve_nofollow(path: str, roots: List[str]) -> str:
+    """Resolve a local path without following the final component.
+
+    Returns a normalized absolute path (no realpath on the final component), while still
+    preventing symlink escapes via parent directories:
+      - lexical containment check (abs path within roots)
+      - realpath(parent) containment check (parents cannot escape via symlinks)
+
+    This is appropriate for operations that must act on the entry itself (rename/unlink),
+    not on the symlink target.
+    """
+    ap = _local_norm_abs(path, roots)
+
+    # If the entry itself is a root, allow (parent would be '/', which may be outside roots).
+    for root in roots:
+        if ap == root:
+            return ap
+
+    parent = os.path.dirname(ap) or '/'
+    pr = os.path.realpath(parent)
+    if not _local_is_allowed(pr, roots):
+        raise PermissionError('path_not_allowed')
+    return ap
+
+
+# --- protected paths (Keenetic /tmp/mnt mount labels) ---
+# /tmp/mnt usually contains auto-created mountpoint directories and/or label symlinks.
+# Even with safe symlink handling, deleting/renaming these top-level entries is almost
+# always a footgun (it can break disk labels in UI and confuse users).
+#
+# Set XKEEN_PROTECT_MNT_LABELS=0 to disable this protection.
+_PROTECT_MNT_LABELS = str(os.getenv('XKEEN_PROTECT_MNT_LABELS', '1') or '1').strip().lower() not in ('0', 'false', 'no', 'off')
+_PROTECTED_MNT_ROOT = str(os.getenv('XKEEN_PROTECTED_MNT_ROOT', '/tmp/mnt') or '/tmp/mnt').strip() or '/tmp/mnt'
+
+def _local_is_protected_entry_abs(ap: str) -> bool:
+    """Return True if `ap` is a protected mount-label entry (or /tmp/mnt itself)."""
+    if not _PROTECT_MNT_LABELS:
+        return False
+    try:
+        apn = os.path.normpath(ap)
+    except Exception:
+        apn = ap
+    try:
+        mroot = os.path.normpath(_PROTECTED_MNT_ROOT)
+    except Exception:
+        mroot = _PROTECTED_MNT_ROOT
+    if apn == mroot:
+        return True
+    try:
+        if os.path.dirname(apn) == mroot:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+
+
+# Backwards-compatible name used across the codebase: follow symlinks.
+def _local_resolve(path: str, roots: List[str]) -> str:
+    return _local_resolve_follow(path, roots)
 def _local_item_from_stat(name: str, st: os.stat_result, *, is_dir: bool, is_link: bool, link_dir: bool = False) -> Dict[str, Any]:
     ftype = 'other'
     if is_dir:
@@ -614,6 +770,688 @@ def _local_item_from_stat(name: str, st: os.stat_result, *, is_dir: bool, is_lin
             'link_dir': bool(link_dir) if is_link else False,
     }
 
+
+
+def _local_remove_entry(path: str, roots: List[str], *, recursive: bool = True) -> None:
+    """Remove a local filesystem entry safely.
+
+    - If `path` is a symlink: remove the symlink itself (never the target).
+    - If `path` is a directory: refuse to delete mountpoints; otherwise rmdir/rmtree.
+    - Otherwise: unlink the file.
+
+    `roots` enforcement:
+      - lexical check for `path` within roots (via _local_norm_abs)
+      - realpath(parent) check (prevents symlink escapes in parent components)
+      - for non-symlink files/dirs, realpath(path) must also stay within roots.
+    """
+    ap = _local_resolve_nofollow(path, roots)
+
+    if _local_is_protected_entry_abs(ap):
+        raise PermissionError('protected_path')
+
+    try:
+        st = os.lstat(ap)
+    except FileNotFoundError:
+        return
+
+    # Symlink: delete the link itself (do NOT follow).
+    try:
+        if stat.S_ISLNK(st.st_mode):
+            os.unlink(ap)
+            return
+    except Exception:
+        # fall through to best-effort handling
+        pass
+
+    # Directory: guard mountpoints.
+    try:
+        if stat.S_ISDIR(st.st_mode):
+            rp = os.path.realpath(ap)
+            if not _local_is_allowed(rp, roots):
+                raise PermissionError('path_not_allowed')
+            try:
+                if os.path.ismount(rp):
+                    raise PermissionError('refuse_delete_mountpoint')
+            except PermissionError:
+                raise
+            except Exception:
+                pass
+            if recursive:
+                shutil.rmtree(ap)
+            else:
+                os.rmdir(ap)
+            return
+    except PermissionError:
+        raise
+    except Exception:
+        # fall through to unlink
+        pass
+
+    # File/other: ensure resolved target stays in roots.
+    rp = os.path.realpath(ap)
+    if not _local_is_allowed(rp, roots):
+        raise PermissionError('path_not_allowed')
+    os.unlink(ap)
+
+
+# --- local trash (recycle bin) support ---
+# By default, local deletes are *soft* deletes: the entry is moved into TRASH_DIR
+# ("Корзина") with a small metadata file that stores the original location.
+# When deleting inside the trash directory, we perform a hard delete.
+
+_TRASH_DIR = str(os.getenv('XKEEN_TRASH_DIR', '/opt/var/trash') or '/opt/var/trash').strip() or '/opt/var/trash'
+_TRASH_META_DIRNAME = '.xkeen_trashinfo'
+
+
+# Trash policy:
+# - Default max size: 3 GiB (configurable)
+# - Auto-purge: delete items older than 30 days (configurable)
+# - Never allow overflow: if trash is full or the item is larger than max size,
+#   the delete operation becomes a hard delete for that item.
+#
+# Environment overrides:
+#   XKEEN_TRASH_MAX_BYTES / XKEEN_TRASH_MAX_GB
+#   XKEEN_TRASH_TTL_DAYS
+#   XKEEN_TRASH_WARN_RATIO          (e.g. 0.9)
+#   XKEEN_TRASH_STATS_CACHE_SECONDS (e.g. 10)
+#   XKEEN_TRASH_PURGE_INTERVAL_SECONDS (e.g. 3600)
+
+_TRASH_MAX_BYTES_DEFAULT = 3 * 1024 * 1024 * 1024
+_TRASH_TTL_DAYS_DEFAULT = 30
+_TRASH_WARN_RATIO_DEFAULT = 0.90
+_TRASH_STATS_CACHE_SECONDS_DEFAULT = 10
+_TRASH_PURGE_INTERVAL_SECONDS_DEFAULT = 3600
+
+_TRASH_MAINT_LOCK = threading.Lock()
+_TRASH_LAST_PURGE_TS = 0.0
+_TRASH_STATS_CACHE: Dict[str, Any] = {'ts': 0.0, 'data': None}
+
+def _read_int_env(name: str, default: int) -> int:
+    try:
+        v = str(os.getenv(name, '') or '').strip()
+        if not v:
+            return int(default)
+        return int(float(v))
+    except Exception:
+        return int(default)
+
+def _read_float_env(name: str, default: float) -> float:
+    try:
+        v = str(os.getenv(name, '') or '').strip()
+        if not v:
+            return float(default)
+        return float(v)
+    except Exception:
+        return float(default)
+
+def _trash_cfg() -> Dict[str, Any]:
+    max_bytes = None
+    # Prefer explicit bytes.
+    try:
+        b = str(os.getenv('XKEEN_TRASH_MAX_BYTES', '') or '').strip()
+        if b:
+            max_bytes = max(0, int(float(b)))
+    except Exception:
+        max_bytes = None
+    # Fallback: GB
+    if max_bytes is None:
+        try:
+            gb = str(os.getenv('XKEEN_TRASH_MAX_GB', '') or '').strip()
+            if gb:
+                max_bytes = max(0, int(float(gb) * 1024 * 1024 * 1024))
+        except Exception:
+            max_bytes = None
+    if max_bytes is None or max_bytes <= 0:
+        max_bytes = int(_TRASH_MAX_BYTES_DEFAULT)
+
+    ttl_days = _read_int_env('XKEEN_TRASH_TTL_DAYS', _TRASH_TTL_DAYS_DEFAULT)
+    if ttl_days < 0:
+        ttl_days = 0
+
+    warn_ratio = _read_float_env('XKEEN_TRASH_WARN_RATIO', _TRASH_WARN_RATIO_DEFAULT)
+    if warn_ratio <= 0 or warn_ratio > 1.0:
+        warn_ratio = float(_TRASH_WARN_RATIO_DEFAULT)
+
+    stats_cache_s = _read_int_env('XKEEN_TRASH_STATS_CACHE_SECONDS', _TRASH_STATS_CACHE_SECONDS_DEFAULT)
+    if stats_cache_s < 0:
+        stats_cache_s = _TRASH_STATS_CACHE_SECONDS_DEFAULT
+
+    purge_interval_s = _read_int_env('XKEEN_TRASH_PURGE_INTERVAL_SECONDS', _TRASH_PURGE_INTERVAL_SECONDS_DEFAULT)
+    if purge_interval_s < 60:
+        purge_interval_s = max(60, _TRASH_PURGE_INTERVAL_SECONDS_DEFAULT)
+
+    return {
+        'max_bytes': int(max_bytes),
+        'ttl_days': int(ttl_days),
+        'warn_ratio': float(warn_ratio),
+        'stats_cache_seconds': int(stats_cache_s),
+        'purge_interval_seconds': int(purge_interval_s),
+    }
+
+def _tree_size_bytes(path: str, *, max_items: int = 250_000) -> tuple[int | None, bool]:
+    """Best-effort size for a local entry (no symlink following).
+
+    Returns (bytes|None, truncated). If truncated=True or bytes is None, treat as unknown.
+    """
+    try:
+        st = os.lstat(path)
+    except Exception:
+        return None, True
+
+    try:
+        if stat.S_ISREG(st.st_mode) or stat.S_ISLNK(st.st_mode) or stat.S_ISCHR(st.st_mode) or stat.S_ISBLK(st.st_mode) or stat.S_ISFIFO(st.st_mode) or stat.S_ISSOCK(st.st_mode):
+            return int(getattr(st, 'st_size', 0) or 0), False
+    except Exception:
+        pass
+
+    if not stat.S_ISDIR(st.st_mode):
+        try:
+            return int(getattr(st, 'st_size', 0) or 0), False
+        except Exception:
+            return None, True
+
+    total = 0
+    items = 0
+    truncated = False
+
+    def _scan_dir(d: str) -> None:
+        nonlocal total, items, truncated
+        if truncated:
+            return
+        try:
+            with os.scandir(d) as it:
+                for entry in it:
+                    if truncated:
+                        return
+                    items += 1
+                    if items > max_items:
+                        truncated = True
+                        return
+                    try:
+                        st2 = entry.stat(follow_symlinks=False)
+                    except Exception:
+                        continue
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            _scan_dir(entry.path)
+                        else:
+                            total += int(getattr(st2, 'st_size', 0) or 0)
+                    except Exception:
+                        continue
+        except Exception:
+            truncated = True
+
+    try:
+        _scan_dir(path)
+    except Exception:
+        truncated = True
+
+    if truncated:
+        return None, True
+    return int(total), False
+
+def _trash_item_deleted_ts(meta_dir: str, name: str, entry_path: str) -> int | None:
+    """Best-effort deleted timestamp for a trash entry."""
+    try:
+        mp = _trash_meta_path(meta_dir, name)
+        if os.path.exists(mp):
+            try:
+                with open(mp, 'r', encoding='utf-8') as fp:
+                    meta = json.load(fp) if fp else {}
+                ts = int((meta or {}).get('deleted_ts') or 0)
+                if ts > 0:
+                    return ts
+            except Exception:
+                pass
+    except Exception:
+        pass
+    try:
+        st = os.lstat(entry_path)
+        return int(getattr(st, 'st_mtime', 0) or 0)
+    except Exception:
+        return None
+
+def _trash_hard_delete_path(p: str) -> bool:
+    try:
+        if os.path.isdir(p) and not os.path.islink(p):
+            shutil.rmtree(p)
+        else:
+            os.unlink(p)
+        return True
+    except Exception:
+        return False
+
+def _local_trash_purge_expired(roots: List[str], *, ttl_days: int) -> Dict[str, Any]:
+    """Delete expired trash entries (older than ttl_days)."""
+    if ttl_days <= 0:
+        return {'purged': 0, 'meta_purged': 0, 'errors': []}
+    try:
+        trash_root, meta_dir = _local_trash_dirs(roots)
+    except Exception:
+        return {'purged': 0, 'meta_purged': 0, 'errors': []}
+
+    now = int(time.time())
+    ttl_s = int(ttl_days) * 86400
+
+    purged = 0
+    meta_purged = 0
+    errors: List[Dict[str, Any]] = []
+
+    # Purge entries
+    try:
+        with os.scandir(trash_root) as it:
+            for entry in it:
+                if entry.name == _TRASH_META_DIRNAME:
+                    continue
+                name = entry.name
+                ep = entry.path
+                ts = _trash_item_deleted_ts(meta_dir, name, ep)
+                if ts is None:
+                    continue
+                if (now - int(ts)) < ttl_s:
+                    continue
+                ok = _trash_hard_delete_path(ep)
+                if ok:
+                    purged += 1
+                else:
+                    errors.append({'path': ep, 'error': 'delete_failed'})
+                # Best-effort remove metadata too
+                try:
+                    mp = _trash_meta_path(meta_dir, name)
+                    if os.path.exists(mp) and _trash_hard_delete_path(mp):
+                        meta_purged += 1
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # Cleanup orphaned metadata
+    try:
+        with os.scandir(meta_dir) as it:
+            for entry in it:
+                try:
+                    if not entry.is_file(follow_symlinks=False):
+                        continue
+                    if not entry.name.endswith('.json'):
+                        continue
+                    name = entry.name[:-5]
+                    if not name:
+                        continue
+                    if not os.path.exists(os.path.join(trash_root, name)):
+                        if _trash_hard_delete_path(entry.path):
+                            meta_purged += 1
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    return {'purged': int(purged), 'meta_purged': int(meta_purged), 'errors': errors}
+
+def _local_trash_used_bytes(roots: List[str], *, max_items: int = 500_000) -> tuple[int | None, bool]:
+    """Compute total bytes currently stored in trash (excluding metadata dir)."""
+    try:
+        trash_root, _meta = _local_trash_dirs(roots)
+    except Exception:
+        return None, True
+
+    total = 0
+    items = 0
+    truncated = False
+
+    def _scan(p: str) -> None:
+        nonlocal total, items, truncated
+        if truncated:
+            return
+        try:
+            st = os.lstat(p)
+        except Exception:
+            truncated = True
+            return
+        try:
+            if stat.S_ISDIR(st.st_mode) and not os.path.islink(p):
+                with os.scandir(p) as it:
+                    for e in it:
+                        if truncated:
+                            return
+                        # skip metadata dir anywhere (just in case)
+                        if e.name == _TRASH_META_DIRNAME:
+                            continue
+                        items += 1
+                        if items > max_items:
+                            truncated = True
+                            return
+                        _scan(e.path)
+            else:
+                total += int(getattr(st, 'st_size', 0) or 0)
+        except Exception:
+            truncated = True
+
+    try:
+        with os.scandir(trash_root) as it:
+            for entry in it:
+                if entry.name == _TRASH_META_DIRNAME:
+                    continue
+                items += 1
+                if items > max_items:
+                    truncated = True
+                    break
+                _scan(entry.path)
+    except Exception:
+        truncated = True
+
+    if truncated:
+        return None, True
+    return int(total), False
+
+def _local_trash_stats(roots: List[str], *, force_refresh: bool = False, force_purge: bool = False) -> Dict[str, Any]:
+    """Return cached trash stats and run periodic maintenance (auto-purge)."""
+    cfg = _trash_cfg()
+    now = float(time.time())
+    max_bytes = int(cfg['max_bytes'])
+
+    with _TRASH_MAINT_LOCK:
+        global _TRASH_LAST_PURGE_TS
+        cache_ts = float(_TRASH_STATS_CACHE.get('ts') or 0.0)
+        cache_data = _TRASH_STATS_CACHE.get('data')
+
+        purged_info: Dict[str, Any] | None = None
+
+        if force_purge or (now - float(_TRASH_LAST_PURGE_TS or 0.0) > float(cfg['purge_interval_seconds'])):
+            purged_info = _local_trash_purge_expired(roots, ttl_days=int(cfg['ttl_days']))
+            _TRASH_LAST_PURGE_TS = now
+            # After purge, refresh stats
+            force_refresh = True
+
+        if (not force_refresh) and cache_data and (now - cache_ts) <= float(cfg['stats_cache_seconds']):
+            # attach last purge info if we did it in this call
+            if purged_info is not None:
+                try:
+                    cache_data = dict(cache_data)
+                    cache_data['purge'] = purged_info
+                except Exception:
+                    pass
+            return cache_data
+
+        used, trunc = _local_trash_used_bytes(roots)
+        used_i = int(used or 0) if used is not None else None
+
+        pct = None
+        if used_i is not None and max_bytes > 0:
+            try:
+                pct = float(used_i) / float(max_bytes)
+            except Exception:
+                pct = None
+
+        is_full = bool(used_i is not None and max_bytes > 0 and used_i >= max_bytes)
+        is_near = bool(pct is not None and pct >= float(cfg['warn_ratio']))
+
+        data = {
+            'max_bytes': max_bytes,
+            'ttl_days': int(cfg['ttl_days']),
+            'used_bytes': used_i,
+            'truncated': bool(trunc),
+            'percent': (round(pct * 100.0, 1) if pct is not None else None),
+            'ratio': pct,
+            'is_full': is_full,
+            'is_near_full': is_near,
+            'purge': purged_info,
+            'ts': int(now),
+        }
+
+        _TRASH_STATS_CACHE['ts'] = now
+        _TRASH_STATS_CACHE['data'] = data
+        return data
+
+
+def _local_trash_dirs(roots: List[str]) -> tuple[str, str]:
+    """Return (trash_root_abs, meta_dir_abs), ensuring they are allowed and exist."""
+    # Enforce that trash is inside the local allowlist roots.
+    trash_ap = _local_norm_abs(_TRASH_DIR, roots)
+    # Parent must stay inside roots (prevents symlink escapes in parent components).
+    _ = _local_resolve_nofollow(trash_ap, roots)
+
+    # Do not allow trash to be a protected mount-label entry.
+    if _local_is_protected_entry_abs(trash_ap):
+        raise PermissionError('protected_path')
+
+    meta_dir = os.path.join(trash_ap, _TRASH_META_DIRNAME)
+    try:
+        os.makedirs(meta_dir, exist_ok=True)
+        os.makedirs(trash_ap, exist_ok=True)
+    except Exception:
+        # Re-raise as a predictable error; UI will show it in job error field.
+        raise RuntimeError('trash_unavailable')
+    return trash_ap, meta_dir
+
+
+def _local_is_in_trash_abs(ap: str, roots: List[str]) -> bool:
+    """Return True if an absolute, normalized path is under the trash root (lexical check)."""
+    try:
+        trash_ap = _local_norm_abs(_TRASH_DIR, roots)
+        apn = os.path.normpath(ap)
+        tn = os.path.normpath(trash_ap)
+        return os.path.commonpath([apn, tn]) == tn
+    except Exception:
+        return False
+
+
+def _trash_safe_name(base: str) -> str:
+    s = (base or 'item').replace('/', '_').replace('\x00', '')
+    # Keep reasonably short to avoid NAME_MAX issues on embedded FS.
+    if len(s) > 120:
+        s = s[:120]
+    return s
+
+
+def _trash_meta_path(meta_dir: str, trash_name: str) -> str:
+    return os.path.join(meta_dir, f"{trash_name}.json")
+
+
+def _next_available_path(dst_path: str) -> str:
+    """Return a non-existing path by adding " (restored N)" before extension."""
+    if not os.path.exists(dst_path):
+        return dst_path
+    ddir = os.path.dirname(dst_path) or '.'
+    base = os.path.basename(dst_path)
+    stem, ext = os.path.splitext(base)
+    for i in range(2, 10000):
+        cand = os.path.join(ddir, f"{stem} (restored {i}){ext}")
+        if not os.path.exists(cand):
+            return cand
+    raise RuntimeError('dst_name_exhausted')
+
+
+def _local_move_to_trash(path: str, roots: List[str]) -> Dict[str, Any]:
+    """Move a local entry to trash and write metadata for restore."""
+    ap = _local_resolve_nofollow(path, roots)
+
+    if _local_is_protected_entry_abs(ap):
+        raise PermissionError('protected_path')
+
+    # Do not allow trashing of allowlist roots themselves.
+    for r in roots:
+        try:
+            if os.path.normpath(ap) == os.path.normpath(r):
+                raise PermissionError('refuse_trash_root')
+        except PermissionError:
+            raise
+        except Exception:
+            continue
+
+    trash_root, meta_dir = _local_trash_dirs(roots)
+
+    # Refuse moving the trash directory itself or its meta dir.
+    try:
+        apn = os.path.normpath(ap)
+        tn = os.path.normpath(trash_root)
+        mn = os.path.normpath(meta_dir)
+        if apn == tn or apn == mn or os.path.commonpath([apn, mn]) == mn:
+            raise PermissionError('refuse_trash_internal')
+    except PermissionError:
+        raise
+    except Exception:
+        pass
+
+    # Already in trash => treat as hard delete (caller decides).
+    if _local_is_in_trash_abs(ap, roots):
+        raise RuntimeError('already_in_trash')
+
+    base = _trash_safe_name(os.path.basename(ap.rstrip('/')) or 'item')
+    ts = int(time.time())
+    uid = uuid.uuid4().hex[:8]
+
+    # Ensure unique name.
+    for attempt in range(40):
+        suffix = uid if attempt == 0 else (uid + '-' + uuid.uuid4().hex[:4])
+        trash_name = f"{base}.{ts}.{suffix}"
+        dst = os.path.join(trash_root, trash_name)
+        if not os.path.exists(dst):
+            break
+    else:
+        raise RuntimeError('trash_name_exhausted')
+
+    # Move (rename when possible, copy+delete across FS).
+    shutil.move(ap, dst)
+
+    meta = {
+        'orig_path': ap,
+        'trash_name': trash_name,
+        'deleted_ts': ts,
+    }
+    try:
+        with open(_trash_meta_path(meta_dir, trash_name), 'w', encoding='utf-8') as fp:
+            json.dump(meta, fp, ensure_ascii=False)
+    except Exception:
+        # Metadata failure should not lose user's data; best-effort ignore.
+        pass
+
+    return {'trash_path': dst, 'trash_name': trash_name, 'orig_path': ap}
+
+
+
+def _local_soft_delete(path: str, roots: List[str], *, hard: bool = False) -> Dict[str, Any]:
+    """Default delete behavior for local FS: move to trash (soft delete).
+
+    Policy:
+      - If hard=True OR the target is already inside the trash directory -> hard delete.
+      - Auto-purge expired trash entries (TTL).
+      - If trash is full OR the entry is larger than the trash limit -> hard delete (do not overflow).
+    """
+    ap = _local_resolve_nofollow(path, roots)
+
+    # Deleting inside trash (or explicit permanent) always means hard delete.
+    if hard or _local_is_in_trash_abs(ap, roots):
+        _local_remove_entry(ap, roots, recursive=True)
+        return {'mode': 'hard', 'path': ap, 'reason': 'permanent'}
+
+    # Run periodic purge and get fresh stats for decision making.
+    stats = _local_trash_stats(roots, force_refresh=True, force_purge=False)
+    max_bytes = int(stats.get('max_bytes') or _TRASH_MAX_BYTES_DEFAULT)
+
+    # Determine entry size (best-effort). If unknown -> refuse moving to trash (avoid overflow).
+    item_bytes, trunc = _tree_size_bytes(ap)
+    if item_bytes is None or trunc:
+        _local_remove_entry(ap, roots, recursive=True)
+        return {
+            'mode': 'hard',
+            'path': ap,
+            'reason': 'too_large_for_trash',
+            'item_bytes': None,
+            'trash': stats,
+        }
+
+    if item_bytes > max_bytes:
+        _local_remove_entry(ap, roots, recursive=True)
+        return {
+            'mode': 'hard',
+            'path': ap,
+            'reason': 'too_large_for_trash',
+            'item_bytes': int(item_bytes),
+            'trash': stats,
+        }
+
+    used = stats.get('used_bytes')
+    # If used is unknown/truncated, be safe and treat as full.
+    if used is None or bool(stats.get('truncated')):
+        _local_remove_entry(ap, roots, recursive=True)
+        return {
+            'mode': 'hard',
+            'path': ap,
+            'reason': 'trash_full',
+            'item_bytes': int(item_bytes),
+            'trash': stats,
+        }
+
+    used_i = int(used or 0)
+    if used_i + int(item_bytes) > max_bytes:
+        _local_remove_entry(ap, roots, recursive=True)
+        return {
+            'mode': 'hard',
+            'path': ap,
+            'reason': 'trash_full',
+            'item_bytes': int(item_bytes),
+            'trash': stats,
+        }
+
+    info = _local_move_to_trash(ap, roots)
+    info['mode'] = 'trash'
+    info['item_bytes'] = int(item_bytes)
+    # refresh stats after move (best-effort; cached)
+    try:
+        info['trash'] = _local_trash_stats(roots, force_refresh=True, force_purge=False)
+    except Exception:
+        info['trash'] = stats
+    return info
+
+
+def _local_restore_from_trash(path: str, roots: List[str]) -> Dict[str, Any]:
+    """Restore a trashed entry back to its original path (or a non-conflicting variant)."""
+    trash_root, meta_dir = _local_trash_dirs(roots)
+
+    ap = _local_resolve_nofollow(path, roots)
+    if not _local_is_in_trash_abs(ap, roots):
+        raise PermissionError('not_in_trash')
+
+    name = os.path.basename(ap.rstrip('/'))
+    if not name or name in ('.', '..'):
+        raise RuntimeError('bad_trash_entry')
+
+    meta_path = _trash_meta_path(meta_dir, name)
+    if not os.path.exists(meta_path):
+        raise RuntimeError('no_trash_metadata')
+
+    try:
+        with open(meta_path, 'r', encoding='utf-8') as fp:
+            meta = json.load(fp)
+    except Exception:
+        raise RuntimeError('bad_trash_metadata')
+
+    orig = str((meta or {}).get('orig_path') or '').strip()
+    if not orig:
+        raise RuntimeError('bad_trash_metadata')
+
+    # Validate destination is within roots and parents do not escape via symlinks.
+    dst = _local_resolve_nofollow(orig, roots)
+
+    # Ensure destination directory exists.
+    try:
+        parent = os.path.dirname(dst) or '/'
+        os.makedirs(parent, exist_ok=True)
+    except Exception:
+        pass
+
+    dst_final = _next_available_path(dst)
+
+    # Move back.
+    shutil.move(ap, dst_final)
+
+    # Remove metadata (best-effort).
+    try:
+        os.remove(meta_path)
+    except Exception:
+        pass
+
+    return {'from': ap, 'to': dst_final, 'orig': orig}
 @dataclass
 class RemoteFsSession:
     session_id: str
@@ -622,10 +1460,17 @@ class RemoteFsSession:
     port: int
     username: str
     auth_type: str
-    password: str
     options: Dict[str, Any]
     created_ts: float
     last_used_ts: float
+    # For password auth
+    password: str = ''
+    # For SFTP key auth
+    key_path: str = ''           # path on device (or temp file)
+    key_is_temp: bool = False    # whether key_path should be deleted on session close
+    # Optional: passphrase via SSH_ASKPASS (stored only in RAM; helper file is temp)
+    askpass_path: str = ''
+    env: Dict[str, str] | None = None
 
 
 class RemoteFsManager:
@@ -661,7 +1506,24 @@ class RemoteFsManager:
         with self._lock:
             dead = [sid for sid, s in self._sessions.items() if (now - s.last_used_ts) > self.ttl_seconds]
             for sid in dead:
-                self._sessions.pop(sid, None)
+                s = self._sessions.pop(sid, None)
+                if s:
+                    self._cleanup_session_secrets(s)
+
+    def _cleanup_session_secrets(self, s: RemoteFsSession) -> None:
+        """Best-effort removal of temp secret material (uploaded private keys / askpass helpers)."""
+        # Uploaded private key (temp file)
+        try:
+            if s.key_is_temp and s.key_path and os.path.isfile(s.key_path):
+                os.remove(s.key_path)
+        except Exception:
+            pass
+        # SSH_ASKPASS helper script (temp file)
+        try:
+            if s.askpass_path and os.path.isfile(s.askpass_path):
+                os.remove(s.askpass_path)
+        except Exception:
+            pass
 
     def _touch(self, sid: str) -> None:
         with self._lock:
@@ -674,7 +1536,7 @@ class RemoteFsManager:
         with self._lock:
             return self._sessions.get(sid)
 
-    def create(self, protocol: str, host: str, port: int, username: str, auth_type: str, password: str, options: Dict[str, Any]) -> RemoteFsSession:
+    def create(self, protocol: str, host: str, port: int, username: str, auth_type: str, auth: Dict[str, Any], options: Dict[str, Any]) -> RemoteFsSession:
         if not self.enabled:
             raise RuntimeError("feature_disabled")
         self.cleanup()
@@ -689,17 +1551,76 @@ class RemoteFsManager:
                 port=port,
                 username=username,
                 auth_type=auth_type,
-                password=password,
                 options=options,
                 created_ts=_now(),
                 last_used_ts=_now(),
             )
+
+            # --- Auth material (never persisted except temp files under /tmp) ---
+            if auth_type == 'password':
+                s.password = str(auth.get('password', '') or '')
+            elif auth_type == 'key':
+                # key_path: existing path on device, OR uploaded key data -> temp file
+                key_path = str(auth.get('key_path', '') or '').strip()
+                key_data = auth.get('key_data') or auth.get('key')
+                if key_data and isinstance(key_data, (bytes, bytearray)):
+                    key_data = key_data.decode('utf-8', errors='replace')
+                key_data = str(key_data or '')
+
+                if key_data:
+                    # Write key to a private temp file (0600) and delete on session close.
+                    tmp_key = os.path.join(self.tmp_dir or '/tmp', f"rfs_key_{sid}.key")
+                    os.makedirs(os.path.dirname(tmp_key) or '.', exist_ok=True)
+                    with open(tmp_key, 'w', encoding='utf-8') as f:
+                        f.write(key_data)
+                        if not key_data.endswith('\n'):
+                            f.write('\n')
+                    try:
+                        os.chmod(tmp_key, 0o600)
+                    except Exception:
+                        pass
+                    s.key_path = tmp_key
+                    s.key_is_temp = True
+                else:
+                    s.key_path = key_path
+                    s.key_is_temp = False
+
+                passphrase = str(auth.get('passphrase', '') or '')
+                if passphrase:
+                    # SSH_ASKPASS helper (Python) + env, lives only for the session.
+                    askpass = os.path.join(self.tmp_dir or '/tmp', f"rfs_askpass_{sid}.py")
+                    os.makedirs(os.path.dirname(askpass) or '.', exist_ok=True)
+                    with open(askpass, 'w', encoding='utf-8') as f:
+                        f.write(
+                            "#!/usr/bin/env python3\n"
+                            "import os, base64, sys\n"
+                            "b = os.environ.get('RFS_PASSPHRASE_B64','')\n"
+                            "try:\n"
+                            "    sys.stdout.write(base64.b64decode(b.encode()).decode('utf-8', errors='ignore'))\n"
+                            "except Exception:\n"
+                            "    pass\n"
+                        )
+                    try:
+                        os.chmod(askpass, 0o700)
+                    except Exception:
+                        pass
+                    s.askpass_path = askpass
+                    s.env = {
+                        'DISPLAY': '1',
+                        'SSH_ASKPASS': askpass,
+                        'SSH_ASKPASS_REQUIRE': 'force',
+                        'RFS_PASSPHRASE_B64': base64.b64encode(passphrase.encode('utf-8')).decode('ascii'),
+                    }
+
             self._sessions[sid] = s
             return s
 
     def close(self, sid: str) -> bool:
         with self._lock:
-            return self._sessions.pop(sid, None) is not None
+            s = self._sessions.pop(sid, None)
+            if s:
+                self._cleanup_session_secrets(s)
+            return s is not None
 
     # --------------------------- lftp runner ---------------------------
 
@@ -734,7 +1655,13 @@ class RemoteFsManager:
             strict = "accept-new" if hostkey_policy == "accept_new" else ("yes" if hostkey_policy == "reject_new" else "no")
             if kh:
                 # lftp will add -l/-p itself; connect-program must support them.
-                connect_prog = "ssh -a -x -oLogLevel=ERROR "                                f"-oUserKnownHostsFile={kh} -oGlobalKnownHostsFile=/dev/null -oStrictHostKeyChecking={strict}"
+                connect_prog = "ssh -a -x -oLogLevel=ERROR " \
+                               f"-oUserKnownHostsFile={shlex.quote(kh)} -oGlobalKnownHostsFile=/dev/null -oStrictHostKeyChecking={strict}"
+
+                # SFTP key auth: add identity file and force IdentitiesOnly for predictability.
+                if s.auth_type == 'key' and s.key_path:
+                    connect_prog += f" -oIdentitiesOnly=yes -i {shlex.quote(s.key_path)}"
+
                 parts.append(f"set sftp:connect-program {_lftp_quote(connect_prog)}")
 
         # --- FTPS TLS verification ---
@@ -751,11 +1678,18 @@ class RemoteFsManager:
                 parts.append(f"set ssl:ca-file {_lftp_quote(str(ca_file))}")
 
         # open
-        if s.auth_type != "password":
+        if s.auth_type == "password":
+            parts.append(
+                f"open -u {_lftp_quote(s.username)},{_lftp_quote(s.password)} {url}"
+            )
+        elif s.auth_type == 'key' and s.protocol == 'sftp':
+            # Put username into URL for broad lftp compatibility.
+            user_enc = _url_quote(s.username, safe='')
+            parts.append(
+                f"open sftp://{user_enc}@{s.host}:{int(s.port)}"
+            )
+        else:
             raise RuntimeError("unsupported_auth")
-        parts.append(
-            f"open -u {_lftp_quote(s.username)},{_lftp_quote(s.password)} {url}"
-        )
 
         parts.extend(commands)
         parts.append("bye")
@@ -766,6 +1700,11 @@ class RemoteFsManager:
         env = os.environ.copy()
         env.setdefault("LC_ALL", "C")
         env.setdefault("LANG", "C")
+        try:
+            if s.env:
+                env.update({k: str(v) for k, v in s.env.items() if v is not None})
+        except Exception:
+            pass
 
         # NOTE: do not log script (contains password)
         p = subprocess.Popen(
@@ -782,6 +1721,11 @@ class RemoteFsManager:
         env = os.environ.copy()
         env.setdefault("LC_ALL", "C")
         env.setdefault("LANG", "C")
+        try:
+            if s.env:
+                env.update({k: str(v) for k, v in s.env.items() if v is not None})
+        except Exception:
+            pass
         p = subprocess.Popen(
             [self.lftp_bin, "-c", script],
             stdout=subprocess.PIPE,
@@ -803,7 +1747,8 @@ def create_remotefs_blueprint(
     max_sessions: int = 6,
     tmp_dir: str = "/tmp",
     max_upload_mb: int = 200,
-) -> Blueprint:
+    return_mgr: bool = False,
+) -> Blueprint | Tuple[Blueprint, RemoteFsManager]:
     bp = Blueprint("remotefs", __name__)
 
     # Persistent state for security material (known_hosts, CA bundle reference)
@@ -880,6 +1825,7 @@ def create_remotefs_blueprint(
         """Capabilities for the remote file manager (security defaults, modes)."""
         if (resp := _require_enabled()) is not None:
             return resp
+        _core_log("info", "remotefs.session_create", sid=s.session_id, protocol=s.protocol, host=s.host, port=s.port, username=s.username, auth=auth_type)
         return jsonify({
             "ok": True,
             "security": {
@@ -887,6 +1833,10 @@ def create_remotefs_blueprint(
                     "hostkey_policies": list(_HOSTKEY_POLICIES),
                     "default_policy": "accept_new",
                     "known_hosts_path": mgr.known_hosts_path,
+                    "auth_types": ["password", "key"],
+                    "supports_key_upload": True,
+                    "supports_key_path": True,
+                    "supports_passphrase": True,
                 },
                 "ftps": {
                     "tls_verify_modes": list(_TLS_VERIFY_MODES),
@@ -908,12 +1858,231 @@ def create_remotefs_blueprint(
                 },
                 "remote": {
                     "chmod": True,
-                    "chown": False,
+                    "chown": True,
+                    "chown_protocols": ["sftp"],
                     "touch": True,
                     "stat_batch": True,
                 },
             },
         })
+
+    # --------------------------- known_hosts helpers & UI endpoints ---------------------------
+
+    def _ssh_key_fingerprint_sha256(key_b64: str) -> str:
+        """Compute OpenSSH-like SHA256 fingerprint from base64 key blob."""
+        try:
+            blob = base64.b64decode((key_b64 or '').encode('ascii'), validate=False)
+            h = hashlib.sha256(blob).digest()
+            return 'SHA256:' + base64.b64encode(h).decode('ascii').rstrip('=')
+        except Exception:
+            return ''
+
+    def _read_known_hosts_entries(path: str) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        try:
+            _ensure_known_hosts_file(path)
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.read().splitlines()
+        except Exception:
+            return out
+
+        for idx, raw in enumerate(lines):
+            line = (raw or '').strip()
+            if not line or line.startswith('#'):
+                continue
+            # known_hosts format: hosts keytype key [comment]
+            parts = line.split()
+            if len(parts) < 3:
+                out.append({
+                    'idx': idx,
+                    'hosts': parts[0] if parts else '',
+                    'key_type': parts[1] if len(parts) > 1 else '',
+                    'fingerprint': '',
+                    'comment': ' '.join(parts[3:]) if len(parts) > 3 else '',
+                    'raw': raw,
+                    'bad': True,
+                })
+                continue
+            hosts, key_type, key_b64 = parts[0], parts[1], parts[2]
+            fp = _ssh_key_fingerprint_sha256(key_b64)
+            out.append({
+                'idx': idx,
+                'hosts': hosts,
+                'key_type': key_type,
+                'fingerprint': fp,
+                'comment': ' '.join(parts[3:]) if len(parts) > 3 else '',
+                'raw': raw,
+                'hashed': hosts.startswith('|1|'),
+                'bad': False if fp else True,
+            })
+        return out
+
+    @bp.get('/api/remotefs/known_hosts')
+    def api_remotefs_known_hosts_list() -> Any:
+        if (resp := _require_enabled()) is not None:
+            return resp
+        kh = (mgr.known_hosts_path or '').strip()
+        if not kh:
+            return error_response('known_hosts_unavailable', 404, ok=False)
+        entries = _read_known_hosts_entries(kh)
+        return jsonify({'ok': True, 'path': kh, 'entries': entries})
+
+    @bp.get('/api/remotefs/known_hosts/fingerprint')
+    def api_remotefs_known_hosts_fingerprint() -> Any:
+        if (resp := _require_enabled()) is not None:
+            return resp
+        kh = (mgr.known_hosts_path or '').strip()
+        if not kh:
+            return error_response('known_hosts_unavailable', 404, ok=False)
+        host = str(request.args.get('host', '') or '').strip()
+        if not host:
+            return error_response('host_required', 400, ok=False)
+        port_raw = str(request.args.get('port', '') or '').strip()
+        try:
+            port = int(port_raw) if port_raw else 22
+        except Exception:
+            port = 22
+
+        # Match entries by hosts field tokens.
+        want_tokens = set()
+        if port and int(port) != 22:
+            want_tokens.add(f'[{host}]:{int(port)}')
+        want_tokens.add(host)
+
+        matches: List[Dict[str, Any]] = []
+        for e in _read_known_hosts_entries(kh):
+            hosts_field = str(e.get('hosts') or '')
+            tokens = set([t.strip() for t in hosts_field.split(',') if t.strip()])
+            if tokens & want_tokens:
+                matches.append({'idx': e.get('idx'), 'hosts': hosts_field, 'key_type': e.get('key_type'), 'fingerprint': e.get('fingerprint'), 'comment': e.get('comment')})
+
+        return jsonify({'ok': True, 'path': kh, 'host': host, 'port': port, 'matches': matches})
+
+    @bp.post('/api/remotefs/known_hosts/clear')
+    def api_remotefs_known_hosts_clear() -> Any:
+        if (resp := _require_enabled()) is not None:
+            return resp
+        kh = (mgr.known_hosts_path or '').strip()
+        if not kh:
+            return error_response('known_hosts_unavailable', 404, ok=False)
+        try:
+            _ensure_known_hosts_file(kh)
+            with open(kh, 'w', encoding='utf-8') as f:
+                f.write('')
+            try:
+                os.chmod(kh, 0o600)
+            except Exception:
+                pass
+            _core_log("info", "remotefs.known_hosts_clear", path=kh, remote_addr=str(request.remote_addr or ""))
+            return jsonify({'ok': True, 'path': kh})
+        except Exception:
+            return error_response('clear_failed', 500, ok=False)
+
+    @bp.post('/api/remotefs/known_hosts/delete')
+    def api_remotefs_known_hosts_delete() -> Any:
+        if (resp := _require_enabled()) is not None:
+            return resp
+        kh = (mgr.known_hosts_path or '').strip()
+        if not kh:
+            return error_response('known_hosts_unavailable', 404, ok=False)
+        data = request.get_json(silent=True) or {}
+        idx = data.get('idx', None)
+        host = str(data.get('host', '') or '').strip()
+        port = data.get('port', None)
+
+        def _read_all_lines() -> List[str]:
+            try:
+                _ensure_known_hosts_file(kh)
+                with open(kh, 'r', encoding='utf-8', errors='replace') as f:
+                    return f.read().splitlines()
+            except Exception:
+                return []
+
+        def _write_all_lines(lines: List[str]) -> None:
+            _ensure_known_hosts_file(kh)
+            with open(kh, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(lines) + ('\n' if lines else ''))
+            try:
+                os.chmod(kh, 0o600)
+            except Exception:
+                pass
+
+        # Prefer robust deletion by host (handles hashed entries) if host provided.
+        if host:
+            target = host
+            if port is not None:
+                try:
+                    p = int(port)
+                    if p != 22:
+                        target = f'[{host}]:{p}'
+                except Exception:
+                    target = host
+
+            before = _read_all_lines()
+            before_n = len(before)
+
+            # 1) Try ssh-keygen -R (best effort, supports hashed entries)
+            try:
+                subprocess.run(['ssh-keygen', '-R', target, '-f', kh], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                after = _read_all_lines()
+                deleted_count = max(0, before_n - len(after))
+                try:
+                    os.chmod(kh, 0o600)
+                except Exception:
+                    pass
+                return jsonify({'ok': True, 'path': kh, 'target': target, 'deleted_count': deleted_count, 'method': 'ssh-keygen'})
+            except Exception:
+                pass
+
+            # 2) Fallback: remove non-hashed entries by token match in the hosts field.
+            deleted_count = 0
+            new_lines: List[str] = []
+            for raw in before:
+                line = (raw or '').strip()
+                if not line or line.startswith('#'):
+                    new_lines.append(raw)
+                    continue
+                parts = line.split()
+                if not parts:
+                    new_lines.append(raw)
+                    continue
+                hosts_field = parts[0]
+                tokens = [t.strip() for t in hosts_field.split(',') if t.strip()]
+                if target in tokens:
+                    deleted_count += 1
+                    continue
+                new_lines.append(raw)
+
+            try:
+                if deleted_count:
+                    _write_all_lines(new_lines)
+                else:
+                    # Ensure file exists with safe perms.
+                    _ensure_known_hosts_file(kh)
+            except Exception:
+                return error_response('delete_failed', 500, ok=False)
+
+            _core_log("info", "remotefs.known_hosts_delete", method="manual", target=target, deleted_count=int(deleted_count), path=kh, remote_addr=str(request.remote_addr or ""))
+            return jsonify({'ok': True, 'path': kh, 'target': target, 'deleted_count': deleted_count, 'method': 'manual'})
+
+        if idx is None:
+            return error_response('idx_or_host_required', 400, ok=False)
+
+        try:
+            idx_i = int(idx)
+        except Exception:
+            return error_response('bad_idx', 400, ok=False)
+
+        try:
+            lines = _read_all_lines()
+            if idx_i < 0 or idx_i >= len(lines):
+                return error_response('idx_out_of_range', 400, ok=False)
+            lines.pop(idx_i)
+            _write_all_lines(lines)
+            _core_log("info", "remotefs.known_hosts_delete", method="idx", idx=idx_i, deleted_count=1, path=kh, remote_addr=str(request.remote_addr or ""))
+            return jsonify({'ok': True, 'path': kh, 'deleted_count': 1})
+        except Exception:
+            return error_response('delete_failed', 500, ok=False)
 
     @bp.post("/api/remotefs/sessions")
     def api_remotefs_create_session() -> Any:
@@ -929,18 +2098,46 @@ def create_remotefs_blueprint(
         if not host:
             return error_response("host_required", 400, ok=False)
 
-        port = int(data.get("port") or (22 if protocol == "sftp" else 21))
+        port_raw = data.get("port")
+        default_port = 22 if protocol == "sftp" else 21
+        try:
+            if port_raw is None or str(port_raw).strip() == '':
+                port = int(default_port)
+            else:
+                port = int(port_raw)
+        except Exception:
+            return error_response("bad_port", 400, ok=False)
+        if port <= 0 or port > 65535:
+            return error_response("bad_port", 400, ok=False)
         username = str(data.get("username", "")).strip()
         if not username:
             return error_response("username_required", 400, ok=False)
 
         auth = data.get("auth") or {}
         auth_type = str(auth.get("type", "password")).strip().lower()
-        password = str(auth.get("password", ""))
-        if auth_type != "password":
+        if auth_type not in ("password", "key"):
             return error_response("unsupported_auth", 400, ok=False)
-        if not password:
-            return error_response("password_required", 400, ok=False)
+
+        # Auth validation (keep backend strict; UI can guide users)
+        if auth_type == "password":
+            password = str(auth.get("password", ""))
+            if not password:
+                return error_response("password_required", 400, ok=False)
+        else:
+            # key auth is only supported for SFTP
+            if protocol != 'sftp':
+                return error_response("unsupported_auth", 400, ok=False)
+            key_path = str(auth.get('key_path', '') or '').strip()
+            key_data = auth.get('key_data') or auth.get('key')
+            if key_data and isinstance(key_data, (bytes, bytearray)):
+                key_data = key_data.decode('utf-8', errors='replace')
+            key_data = str(key_data or '')
+            if not key_path and not key_data:
+                return error_response("key_required", 400, ok=False)
+            # Basic guardrails (avoid huge JSON payloads)
+            if key_data and len(key_data) > 128_000:
+                return error_response("key_too_large", 400, ok=False)
+            password = ''
 
         options = data.get("options") or {}
         if not isinstance(options, dict):
@@ -955,7 +2152,8 @@ def create_remotefs_blueprint(
         )
 
         try:
-            s = mgr.create(protocol, host, port, username, auth_type, password, options)
+            # Pass auth dict to manager (keeps secrets in RAM, uploaded keys in temp files)
+            s = mgr.create(protocol, host, port, username, auth_type, auth, options)
         except RuntimeError as e:
             msg = str(e)
             if msg == "too_many_sessions":
@@ -971,6 +2169,7 @@ def create_remotefs_blueprint(
             tail = (err.decode("utf-8", errors="replace")[-800:]).strip()
             info = _classify_connect_error(tail)
             # Provide extra context for UI.
+            _core_log("warning", "remotefs.session_create_failed", protocol=protocol, host=host, port=port, username=username, kind=info.get("kind"), hint=info.get("hint"))
             return error_response(
                 "connect_failed",
                 400,
@@ -1005,6 +2204,7 @@ def create_remotefs_blueprint(
         if (resp := _require_enabled()) is not None:
             return resp
         closed = mgr.close(sid)
+        _core_log("info", "remotefs.session_close", sid=sid, closed=bool(closed))
         return jsonify({"ok": True, "closed": bool(closed)})
 
     @bp.get("/api/remotefs/sessions/<sid>/list")
@@ -1073,6 +2273,7 @@ def create_remotefs_blueprint(
         if rc != 0:
             tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
             return error_response("mkdir_failed", 400, ok=False, details=tail)
+        _core_log("info", "remotefs.mkdir", sid=sid, path=path, parents=bool(parents))
         return jsonify({"ok": True})
 
     @bp.post("/api/remotefs/sessions/<sid>/rename")
@@ -1089,6 +2290,7 @@ def create_remotefs_blueprint(
         if rc != 0:
             tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
             return error_response("rename_failed", 400, ok=False, details=tail)
+        _core_log("info", "remotefs.rename", sid=sid, src=src, dst=dst)
         return jsonify({"ok": True})
 
     @bp.delete("/api/remotefs/sessions/<sid>/remove")
@@ -1107,11 +2309,14 @@ def create_remotefs_blueprint(
             if rc != 0:
                 tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
                 return error_response("remove_failed", 400, ok=False, details=tail)
-            return jsonify({"ok": True})
+            _core_log("info", "remotefs.remove", sid=sid, path=path, recursive=True)
+            _core_log("info", "remotefs.remove", sid=sid, path=path, recursive=False, rmdir=True)
+        return jsonify({"ok": True})
 
         # non-recursive: try rm then rmdir
         rc, out, err = mgr._run_lftp(s, [f"rm {_lftp_quote(path)}"], capture=True)
         if rc == 0:
+            _core_log("info", "remotefs.remove", sid=sid, path=path, recursive=False)
             return jsonify({"ok": True})
         rc2, out2, err2 = mgr._run_lftp(s, [f"rmdir {_lftp_quote(path)}"], capture=True)
         if rc2 != 0:
@@ -1187,7 +2392,7 @@ def create_remotefs_blueprint(
 
         filename = os.path.basename(path.rstrip("/")) or "download"
         headers = {
-            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Disposition": _content_disposition_attachment(filename),
             "Cache-Control": "no-store",
         }
         if isinstance(size_bytes, int) and size_bytes >= 0:
@@ -1252,6 +2457,7 @@ def create_remotefs_blueprint(
             if rc != 0:
                 tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
                 return error_response("remote_put_failed", 400, ok=False, details=tail)
+            _core_log("info", "remotefs.upload", sid=sid, path=remote_path, bytes=int(total))
             return jsonify({"ok": True, "bytes": total})
         finally:
             try:
@@ -1602,8 +2808,16 @@ def create_remotefs_blueprint(
             pass
 
     def _ensure_local_path_allowed(path: str) -> str:
+        """Resolve local path following symlinks (content operations)."""
         try:
-            return _local_resolve(path, LOCALFS_ROOTS)
+            return _local_resolve_follow(path, LOCALFS_ROOTS)
+        except PermissionError as e:
+            raise RuntimeError(str(e))
+
+    def _ensure_local_path_allowed_nofollow(path: str) -> str:
+        """Resolve local path without following the final component (rename/unlink)."""
+        try:
+            return _local_resolve_nofollow(path, LOCALFS_ROOTS)
         except PermissionError as e:
             raise RuntimeError(str(e))
 
@@ -1619,6 +2833,86 @@ def create_remotefs_blueprint(
                     return int(item.get('size') or 0)
                 except Exception:
                     return None
+        return None
+
+
+    def _parse_df_free_bytes(text: str) -> int | None:
+        """Parse lftp `df` output and return available bytes (best-effort).
+
+        We expect something similar to POSIX df output, but formats vary by protocol.
+        """
+        try:
+            lines = [ln.strip() for ln in (text or '').splitlines() if ln.strip()]
+            if not lines:
+                return None
+            # Drop header-like lines
+            data_lines = [ln for ln in lines if not re.search(r"\bFilesystem\b|\bMounted\b|\bUse%\b", ln, re.I)]
+            if not data_lines:
+                data_lines = lines[-1:]
+
+            # Use the last data line
+            ln = data_lines[-1]
+            parts = re.split(r"\s+", ln)
+            # Extract purely integer tokens
+            nums: List[int] = []
+            for tok in parts:
+                if tok.isdigit():
+                    try:
+                        nums.append(int(tok))
+                    except Exception:
+                        pass
+            # Typical: <fs> <blocks> <used> <avail> <use%> <mnt>
+            if len(nums) >= 3:
+                return int(nums[2])
+            # Sometimes: <blocks> <used> <avail> ...
+            if len(nums) == 2:
+                # no reliable mapping
+                return None
+            return None
+        except Exception:
+            return None
+
+
+    def _remote_free_bytes(sess: RemoteFsSession, path: str) -> int | None:
+        """Return free bytes on remote filesystem for a given path (best-effort).
+
+        If protocol/server doesn't support df, returns None.
+        """
+        p = str(path or '').strip() or '.'
+        # Try byte-precise first; fall back to KiB blocks.
+        for cmd, mul in ((f"df -B1 {_lftp_quote(p)}", 1), (f"df -k {_lftp_quote(p)}", 1024)):
+            try:
+                rc, out, err = mgr._run_lftp(sess, [cmd], capture=True)
+                if rc != 0:
+                    continue
+                txt = (out or b'').decode('utf-8', errors='replace')
+                avail = _parse_df_free_bytes(txt)
+                if avail is None:
+                    continue
+                return int(avail) * int(mul)
+            except Exception:
+                continue
+        return None
+
+
+    def _remote_du_bytes(sess: RemoteFsSession, path: str) -> int | None:
+        """Best-effort remote directory size in bytes.
+
+        Works only when lftp supports `du -b` for the given protocol.
+        """
+        p = str(path or '').strip() or '.'
+        # Prefer explicit bytes.
+        for cmd in (f"du -sb {_lftp_quote(p)}", f"du -s -b {_lftp_quote(p)}"):
+            try:
+                rc, out, err = mgr._run_lftp(sess, [cmd], capture=True)
+                if rc != 0:
+                    continue
+                txt = (out or b'').decode('utf-8', errors='replace')
+                m = re.search(r"(^|\s)(\d+)(\s|$)", txt.strip())
+                if m:
+                    return int(m.group(2))
+            except Exception:
+                continue
         return None
 
     def _remote_is_dir(sess: RemoteFsSession, rpath: str) -> bool | None:
@@ -1776,6 +3070,39 @@ def create_remotefs_blueprint(
         if default_action not in (None, 'replace', 'skip'):
             default_action = None
 
+        # Free space check on remote destination before mirror/put (best-effort).
+        # Enabled by default; silently skipped if protocol/server doesn't support `df`.
+        check_free_space = bool(opts.get('check_free_space', True))
+
+        def _check_remote_free(ds_sess: RemoteFsSession, dst_path: str, need_bytes: int, *, label: str = 'remote') -> None:
+            if not check_free_space:
+                return
+            try:
+                nb = int(need_bytes or 0)
+            except Exception:
+                nb = 0
+            if nb <= 0:
+                return
+            try:
+                free_b = _remote_free_bytes(ds_sess, dst_path)
+            except Exception:
+                free_b = None
+            if free_b is None:
+                return
+            if int(free_b) < nb:
+                # Attach some context for UI/logs.
+                try:
+                    _progress_set(job, current={
+                        'path': str(dst_path),
+                        'name': os.path.basename(str(dst_path).rstrip('/')) or str(dst_path),
+                        'phase': 'precheck',
+                        'is_dir': True,
+                    },
+                    check={'need_bytes': int(nb), 'free_bytes': int(free_b), 'where': str(label)})
+                except Exception:
+                    pass
+                raise RuntimeError('remote_no_space')
+
         src_target = src['target']
         dst_target = dst['target']
 
@@ -1839,9 +3166,9 @@ def create_remotefs_blueprint(
                     dpath = dst_path
                     # ensure parent exists
                     if dst_target == 'local':
-                        dp0 = _ensure_local_path_allowed(dpath)
-                        os.makedirs(os.path.dirname(dp0) or '/tmp', exist_ok=True)
-                        dpath = dp0
+                        dp_abs = _ensure_local_path_allowed_nofollow(dpath)
+                        os.makedirs(os.path.dirname(dp_abs) or '/tmp', exist_ok=True)
+                        dpath = dp_abs
                     else:
                         ds0 = mgr.get(dst.get('sid'))
                         if not ds0:
@@ -1853,8 +3180,12 @@ def create_remotefs_blueprint(
                 # --- same-target fast path for move ---
                 if job.op == 'move' and src_target == dst_target:
                     if src_target == 'local':
-                        sp = _ensure_local_path_allowed(spath)
-                        dp = _ensure_local_path_allowed(dpath)
+                        sp = _ensure_local_path_allowed_nofollow(spath)
+                        dp = _ensure_local_path_allowed_nofollow(dpath)
+
+                        # Protect Keenetic /tmp/mnt mount labels from being moved/renamed.
+                        if _local_is_protected_entry_abs(sp) or _local_is_protected_entry_abs(dp):
+                            raise RuntimeError('protected_path')
 
                         # Moving onto itself is a no-op; never delete the source.
                         if _same_local(sp, dp):
@@ -1867,10 +3198,9 @@ def create_remotefs_blueprint(
                                 mark_done();
                                 continue
                             try:
-                                if os.path.isdir(dp):
-                                    shutil.rmtree(dp)
-                                else:
-                                    os.remove(dp)
+                                _local_remove_entry(dp, LOCALFS_ROOTS, recursive=True)
+                            except PermissionError as e:
+                                raise RuntimeError(str(e))
                             except Exception:
                                 pass
                         # shutil.move uses os.rename when possible, but also supports cross-device moves (EXDEV)
@@ -1904,7 +3234,9 @@ def create_remotefs_blueprint(
                     ss = mgr.get(src['sid'])
                     if not ss:
                         raise RuntimeError('session_not_found')
-                    dp = _ensure_local_path_allowed(dpath)
+                    dp = _ensure_local_path_allowed_nofollow(dpath)
+                    if _local_is_protected_entry_abs(dp):
+                        raise RuntimeError('protected_path')
                     # overwrite policy
                     if os.path.exists(dp):
                         action = _decide_overwrite_action(spath=str(spath), sname=str(sname), dpath=str(dp))
@@ -1912,10 +3244,9 @@ def create_remotefs_blueprint(
                             mark_done();
                             continue
                         try:
-                            if os.path.isdir(dp):
-                                shutil.rmtree(dp)
-                            else:
-                                os.remove(dp)
+                            _local_remove_entry(dp, LOCALFS_ROOTS, recursive=True)
+                        except PermissionError as e:
+                            raise RuntimeError(str(e))
                         except Exception:
                             pass
                     # directory: mirror; file: cat stream
@@ -1977,6 +3308,14 @@ def create_remotefs_blueprint(
                         raise RuntimeError('session_not_found')
                     sp = _ensure_local_path_allowed(spath)
                     if is_dir:
+                        # Pre-check free space on remote destination (best-effort).
+                        try:
+                            need_b = _dir_size_bytes(sp)
+                            _check_remote_free(ds, dpath, int(need_b), label=f"{ds.protocol}://{ds.host}")
+                        except RuntimeError:
+                            raise
+                        except Exception:
+                            pass
                         # mirror -R local_dir -> remote_dir
                         cmd = f"mirror -R --verbose -- {_lftp_quote(sp)} {_lftp_quote(dpath)}"
                         proc = mgr._popen_lftp(ds, [cmd])
@@ -1993,6 +3332,14 @@ def create_remotefs_blueprint(
                             size_total = 0
                         if (job.progress.get('bytes_total', 0) or 0) == 0 and size_total:
                             _progress_set(job, bytes_total=int(size_total))
+                        # Pre-check free space on remote destination (best-effort).
+                        try:
+                            if size_total:
+                                _check_remote_free(ds, dpath, int(size_total), label=f"{ds.protocol}://{ds.host}")
+                        except RuntimeError:
+                            raise
+                        except Exception:
+                            pass
                         # overwrite policy (best-effort)
                         if _remote_exists(ds, dpath):
                             action = _decide_overwrite_action(spath=str(spath), sname=str(sname), dpath=str(dpath))
@@ -2011,12 +3358,15 @@ def create_remotefs_blueprint(
 
                 elif src_target == 'local' and dst_target == 'local':
                     sp = _ensure_local_path_allowed(spath)
-                    dp = _ensure_local_path_allowed(dpath)
+                    dp = _ensure_local_path_allowed_nofollow(dpath)
 
                     # COPY onto itself is a common UX case when both panels point to the same dir.
                     # Never delete the source; instead, auto-pick a free "(2)/(3)…" name.
                     if _same_local(sp, dp):
                         dp = _next_copy_path_local(dp)
+
+                    if _local_is_protected_entry_abs(dp):
+                        raise RuntimeError('protected_path')
 
                     if os.path.exists(dp):
                         action = _decide_overwrite_action(spath=str(spath), sname=str(sname), dpath=str(dp))
@@ -2024,10 +3374,9 @@ def create_remotefs_blueprint(
                             mark_done();
                             continue
                         try:
-                            if os.path.isdir(dp):
-                                shutil.rmtree(dp)
-                            else:
-                                os.remove(dp)
+                            _local_remove_entry(dp, LOCALFS_ROOTS, recursive=True)
+                        except PermissionError as e:
+                            raise RuntimeError(str(e))
                         except Exception:
                             pass
                     if is_dir:
@@ -2219,6 +3568,15 @@ def create_remotefs_blueprint(
                         # For FTP/FTPS pairs try lftp URL-form mirror first (FXP when possible).
                         if FILEOPS_REMOTE2REMOTE_DIRECT and ss.protocol in ('ftp', 'ftps') and ds.protocol in ('ftp', 'ftps'):
                             try:
+                                # Pre-check free space on destination (best-effort).
+                                try:
+                                    need_b = _remote_du_bytes(ss, spath) or 0
+                                    if need_b:
+                                        _check_remote_free(ds, dpath, int(need_b), label=f"{ds.protocol}://{ds.host}")
+                                except RuntimeError:
+                                    raise
+                                except Exception:
+                                    pass
                                 src_url = _url_for_session_path(ss, spath)
                                 dst_url = _url_for_session_path(ds, dpath)
                                 _progress_set(job, current={'path': spath, 'name': sname, 'phase': 'fxp', 'is_dir': True})
@@ -2305,6 +3663,15 @@ def create_remotefs_blueprint(
                                 job._proc = None
 
                             _progress_set(job, current={'path': spath, 'name': sname, 'phase': 'upload', 'is_dir': True})
+                            # Pre-check free space on destination before mirror -R (best-effort).
+                            try:
+                                need_b = int(last_sz or 0) or _dir_size_bytes(tmpd)
+                                if need_b:
+                                    _check_remote_free(ds, dpath, int(need_b), label=f"{ds.protocol}://{ds.host}")
+                            except RuntimeError:
+                                raise
+                            except Exception:
+                                pass
                             proc2 = _popen_lftp_quiet(ds, [f"mirror -R -- {_lftp_quote(tmpd)} {_lftp_quote(dpath)}"])
                             job._proc = proc2
                             try:
@@ -2341,12 +3708,8 @@ def create_remotefs_blueprint(
                 # If move across targets (or across different remote sessions): delete source after copy
                 if job.op == 'move' and (src_target != dst_target or (src_target == 'remote' and src.get('sid') != dst.get('sid'))):
                     if src_target == 'local':
-                        sp = _ensure_local_path_allowed(spath)
                         try:
-                            if os.path.isdir(sp):
-                                shutil.rmtree(sp)
-                            else:
-                                os.remove(sp)
+                            _local_remove_entry(spath, LOCALFS_ROOTS, recursive=True)
                         except Exception:
                             pass
                     else:
@@ -2391,6 +3754,22 @@ def create_remotefs_blueprint(
 
         _progress_set(job, files_total=len(sources), files_done=0, bytes_done=0, bytes_total=0)
 
+        trash_summary = {'moved': 0, 'permanent': 0, 'trash_full': 0, 'too_large': 0}
+        last_trash_stats: Dict[str, Any] | None = None
+
+        def _add_note(msg: str) -> None:
+            try:
+                notes = job.progress.get('notes') if isinstance(job.progress, dict) else None
+                if not isinstance(notes, list):
+                    notes = []
+                notes.append(str(msg))
+                # keep last 50 notes
+                notes = notes[-50:]
+                _progress_set(job, notes=notes)
+            except Exception:
+                pass
+
+
         def mark_done():
             _progress_set(job, files_done=(job.progress.get('files_done', 0) or 0) + 1)
 
@@ -2406,15 +3785,37 @@ def create_remotefs_blueprint(
                 _progress_set(job, current={'path': spath, 'name': sname, 'phase': 'delete', 'is_dir': is_dir})
 
                 if src_target == 'local':
-                    sp = _ensure_local_path_allowed(spath)
+                    # Default behaviour: move to trash (/opt/var/trash) with restore metadata.
+                    # When deleting inside the trash directory, we do a hard delete.
+                    opts = spec.get('options') or {}
+                    hard = bool(opts.get('hard') or opts.get('permanent') or opts.get('force'))
                     try:
-                        if os.path.isdir(sp):
-                            shutil.rmtree(sp)
-                        else:
-                            os.remove(sp)
-                    except FileNotFoundError:
-                        pass
+                        info = _local_soft_delete(spath, LOCALFS_ROOTS, hard=hard)
+                        try:
+                            if isinstance(info, dict) and isinstance(info.get('trash'), dict):
+                                last_trash_stats = info.get('trash')  # type: ignore
+                        except Exception:
+                            pass
+                        try:
+                            mode = str((info or {}).get('mode') or '')
+                            reason = str((info or {}).get('reason') or '')
+                            if mode == 'trash':
+                                trash_summary['moved'] += 1
+                            else:
+                                trash_summary['permanent'] += 1
+                                if reason == 'trash_full':
+                                    trash_summary['trash_full'] += 1
+                                    _add_note(f"Корзина заполнена — {sname or spath} удалён(о) навсегда")
+                                elif reason == 'too_large_for_trash':
+                                    trash_summary['too_large'] += 1
+                                    _add_note(f"Слишком большой для корзины — {sname or spath} удалён(о) навсегда")
+                        except Exception:
+                            pass
+
+                    except PermissionError as e:
+                        raise RuntimeError(str(e))
                     except Exception:
+                        # best-effort: ignore unexpected local delete failures
                         pass
                     mark_done();
                 else:
@@ -2427,6 +3828,23 @@ def create_remotefs_blueprint(
                     else:
                         mgr._run_lftp(ss, [f"rm {_lftp_quote(spath)}"], capture=True)
                     mark_done();
+
+            # Attach trash summary (for UI notifications)
+            if src_target == 'local':
+                notice = None
+                try:
+                    if trash_summary.get('trash_full', 0):
+                        # Trash is full: further deletes will be permanent.
+                        pct = None
+                        if last_trash_stats and last_trash_stats.get('percent') is not None:
+                            pct = last_trash_stats.get('percent')
+                        notice = f"Корзина заполнена{f' ({pct}%)' if pct is not None else ''}. Удаляемые файлы будут удаляться сразу — очистите корзину."
+                    elif last_trash_stats and last_trash_stats.get('is_near_full'):
+                        pct = last_trash_stats.get('percent')
+                        notice = f"Корзина почти заполнена{f' ({pct}%)' if pct is not None else ''}. Рекомендуется очистить корзину."
+                except Exception:
+                    notice = None
+                _progress_set(job, trash={'summary': trash_summary, 'stats': last_trash_stats, 'notice': notice})
 
             _job_set_state(job, 'done')
             job.finished_ts = _now()
@@ -2693,1439 +4111,6 @@ def create_remotefs_blueprint(
         spec['sources'] = sources
 
 
-    @bp.get('/api/fs/list')
-    def api_fs_list() -> Any:
-        if (resp := _require_enabled()) is not None:
-            return resp
-        target = str(request.args.get('target', '') or '').strip().lower()
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-
-        if target == 'local':
-            path = request.args.get('path', '')
-            try:
-                rp = _local_resolve(path, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-            if not os.path.isdir(rp):
-                return error_response('not_a_directory', 400, ok=False)
-            # Special UX for Keenetic mounts: /tmp/mnt contains both
-            #  - real mountpoint folders (often UUID-like)
-            #  - symlinks with user-friendly volume labels pointing to them
-            # In the UI we want to show labels, not raw UUID folders.
-            is_tmp_mnt_root = os.path.normpath(rp) == '/tmp/mnt'
-
-            def _looks_like_uuid(name: str) -> bool:
-                try:
-                    n = str(name or '')
-                    # Canonical UUID with dashes
-                    if re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', n):
-                        return True
-                    # Some systems may expose long hex-only mount ids
-                    if re.match(r'^[0-9a-fA-F]{24,}$', n):
-                        return True
-                except Exception:
-                    return False
-                return False
-
-            items_all: List[Dict[str, Any]] = []
-            mnt_uuid_dirs: List[Dict[str, Any]] = []
-            disk_labels: List[Dict[str, Any]] = []
-            try:
-                with os.scandir(rp) as it:
-                    for entry in it:
-                        try:
-                            st = entry.stat(follow_symlinks=False)
-                            is_link = entry.is_symlink()
-                            is_dir = entry.is_dir(follow_symlinks=False)
-                            link_dir = False
-                            if is_link:
-                                # If a symlink points to a directory (e.g. /tmp/mnt/LABEL -> /tmp/mnt/<uuid>),
-                                # expose it as a "directory-like link" for the UI, but keep type="link".
-                                try:
-                                    target_real = os.path.realpath(os.path.join(rp, entry.name))
-                                    if _local_is_allowed(target_real, LOCALFS_ROOTS) and os.path.isdir(target_real):
-                                        link_dir = True
-                                except Exception:
-                                    link_dir = False
-                            item = _local_item_from_stat(entry.name, st, is_dir=is_dir, is_link=is_link, link_dir=link_dir)
-
-                            if is_tmp_mnt_root:
-                                # Collect for later filtering.
-                                if is_link and link_dir:
-                                    disk_labels.append(item)
-                                elif (not is_link) and is_dir and _looks_like_uuid(entry.name):
-                                    mnt_uuid_dirs.append(item)
-                                else:
-                                    items_all.append(item)
-                            else:
-                                items_all.append(item)
-                        except Exception:
-                            continue
-            except Exception:
-                return error_response('list_failed', 400, ok=False)
-
-            items: List[Dict[str, Any]]
-            if is_tmp_mnt_root and disk_labels:
-                # Show friendly labels; hide raw UUID mount folders.
-                items = disk_labels + items_all
-            else:
-                # If there are no labels, don't hide anything.
-                items = mnt_uuid_dirs + disk_labels + items_all
-
-            return jsonify({'ok': True, 'target': 'local', 'path': rp, 'roots': LOCALFS_ROOTS, 'items': items})
-
-        # remote
-        sid = str(request.args.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-        rpath = str(request.args.get('path', '.') or '.').strip()
-        # Normalize remote path for stability: collapse duplicate slashes and strip trailing slashes.
-        if rpath not in ('.', '/'): 
-            try:
-                rpath = re.sub(r'/+', '/', rpath).rstrip('/') or '/'
-            except Exception:
-                pass
-
-        cmd = "cls -l" if (not rpath or rpath in ('.',)) else f"cls -l {_lftp_quote(rpath)}"
-        rc, out, err = mgr._run_lftp(s, [cmd], capture=True)
-        if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('list_failed', 400, ok=False, details=tail)
-        text = out.decode('utf-8', errors='replace')
-        items: List[Dict[str, Any]] = []
-        for line in text.splitlines():
-            item = _parse_ls_line(line)
-            if item is not None:
-                items.append(item)
-        return jsonify({'ok': True, 'target': 'remote', 'sid': sid, 'path': rpath, 'items': items})
-
-
-    @bp.get('/api/fs/download')
-    def api_fs_download() -> Any:
-        """Download a file from local sandbox or remote session.
-
-        Query params:
-          target=local|remote
-          path=<full path>
-          sid=<remote session id> (for target=remote)
-        """
-        if (resp := _require_enabled()) is not None:
-            return resp
-        target = str(request.args.get('target', '') or '').strip().lower()
-        path = str(request.args.get('path', '') or '').strip()
-        archive = str(request.args.get('archive', '') or request.args.get('as', '') or '').strip().lower()
-        want_zip = archive in ('zip', '1', 'true', 'yes', 'on')
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-        if not path:
-            return error_response('path_required', 400, ok=False)
-
-        if target == 'local':
-            try:
-                rp = _local_resolve(path, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-            if os.path.isdir(rp):
-                if not want_zip:
-                    return error_response('not_a_file', 400, ok=False)
-
-                # Create zip in tmp and stream it back, then cleanup.
-                base = os.path.basename(rp.rstrip('/')) or 'download'
-                zip_name = base + '.zip'
-                tmp_zip = os.path.join(mgr.tmp_dir, f"xkeen_zip_local_{uuid.uuid4().hex}.zip")
-                try:
-                    _zip_directory(rp, tmp_zip, root_name=base)
-                    size_bytes = None
-                    try:
-                        size_bytes = int(os.path.getsize(tmp_zip))
-                    except Exception:
-                        size_bytes = None
-
-                    def _gen_zip_local():
-                        fp = None
-                        try:
-                            fp = open(tmp_zip, 'rb')
-                            while True:
-                                chunk = fp.read(64 * 1024)
-                                if not chunk:
-                                    break
-                                yield chunk
-                        finally:
-                            try:
-                                if fp:
-                                    fp.close()
-                            except Exception:
-                                pass
-                            try:
-                                if os.path.exists(tmp_zip):
-                                    os.remove(tmp_zip)
-                            except Exception:
-                                pass
-
-                    headers = {
-                        'Content-Disposition': f'attachment; filename="{zip_name}"',
-                        'Cache-Control': 'no-store',
-                    }
-                    if isinstance(size_bytes, int) and size_bytes >= 0:
-                        headers['Content-Length'] = str(size_bytes)
-                    return Response(_gen_zip_local(), mimetype='application/zip', headers=headers)
-                except Exception as e:
-                    try:
-                        if os.path.exists(tmp_zip):
-                            os.remove(tmp_zip)
-                    except Exception:
-                        pass
-                    return error_response('zip_failed', 400, ok=False)
-
-            # file
-            if not os.path.isfile(rp):
-                return error_response('not_a_file', 400, ok=False)
-            resp2 = send_file(rp, as_attachment=True, download_name=os.path.basename(rp), mimetype='application/octet-stream', conditional=True)
-            try:
-                resp2.headers['Cache-Control'] = 'no-store'
-            except Exception:
-                pass
-            return resp2
-
-        # remote
-        sid = str(request.args.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-
-        # Mirror /api/remotefs/sessions/<sid>/download
-        # (kept here for unified client API).
-        rc, out, err = mgr._run_lftp(s, [f"cls -ld {_lftp_quote(path)}"], capture=True)
-        if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('not_found', 404, ok=False, details=tail)
-
-        is_dir = False
-        size_bytes: int | None = None
-        try:
-            text = (out or b'').decode('utf-8', errors='replace')
-            for line in text.splitlines():
-                item = _parse_ls_line(line)
-                if not item:
-                    continue
-                is_dir = (str(item.get('type') or '') == 'dir')
-                sz = item.get('size', None)
-                try:
-                    size_bytes = int(sz)
-                except Exception:
-                    size_bytes = None
-                break
-        except Exception:
-            is_dir = False
-            size_bytes = None
-
-        if is_dir:
-            if not want_zip:
-                return error_response('not_a_file', 400, ok=False)
-
-            base = os.path.basename(path.rstrip('/')) or 'download'
-            zip_name = base + '.zip'
-            tmp_root = os.path.join(mgr.tmp_dir, f"xkeen_zip_remote_{sid}_{uuid.uuid4().hex}")
-            tmp_dir = os.path.join(tmp_root, base)
-            tmp_zip = os.path.join(mgr.tmp_dir, f"xkeen_zip_remote_{sid}_{uuid.uuid4().hex}.zip")
-            try:
-                os.makedirs(tmp_dir, exist_ok=True)
-
-                # Use lftp mirror to fetch the folder into tmp_dir.
-                cmd = f"mirror --verbose -- {_lftp_quote(path)} {_lftp_quote(tmp_dir)}"
-                script = mgr._build_lftp_script(s, [cmd])
-                env = os.environ.copy()
-                env.setdefault('LC_ALL', 'C')
-                env.setdefault('LANG', 'C')
-                proc = subprocess.Popen([mgr.lftp_bin, '-c', script], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=env, bufsize=0)
-                _out, _err = proc.communicate()
-                if int(proc.returncode or 0) != 0:
-                    tail = ((_err or b'').decode('utf-8', errors='replace')[-400:]).strip()
-                    raise RuntimeError('mirror_failed:' + tail)
-
-                _zip_directory(tmp_dir, tmp_zip, root_name=base)
-                zsize = None
-                try:
-                    zsize = int(os.path.getsize(tmp_zip))
-                except Exception:
-                    zsize = None
-
-                def _gen_zip_remote():
-                    fp = None
-                    try:
-                        fp = open(tmp_zip, 'rb')
-                        while True:
-                            chunk = fp.read(64 * 1024)
-                            if not chunk:
-                                break
-                            yield chunk
-                    finally:
-                        try:
-                            if fp:
-                                fp.close()
-                        except Exception:
-                            pass
-                        try:
-                            if os.path.exists(tmp_zip):
-                                os.remove(tmp_zip)
-                        except Exception:
-                            pass
-                        try:
-                            shutil.rmtree(tmp_root, ignore_errors=True)
-                        except Exception:
-                            pass
-
-                headers = {
-                    'Content-Disposition': f'attachment; filename="{zip_name}"',
-                    'Cache-Control': 'no-store',
-                }
-                if isinstance(zsize, int) and zsize >= 0:
-                    headers['Content-Length'] = str(zsize)
-                return Response(_gen_zip_remote(), mimetype='application/zip', headers=headers)
-
-            except Exception as e:
-                try:
-                    if os.path.exists(tmp_zip):
-                        os.remove(tmp_zip)
-                except Exception:
-                    pass
-                try:
-                    shutil.rmtree(tmp_root, ignore_errors=True)
-                except Exception:
-                    pass
-                # Best-effort: include tail in details if available
-                msg = str(e)
-                det = None
-                if 'mirror_failed:' in msg:
-                    det = msg.split('mirror_failed:', 1)[1].strip()[-400:]
-                return error_response('zip_failed', 400, ok=False, details=det)
-
-        p = mgr._popen_lftp(s, [f"cat {_lftp_quote(path)}"])
-        stdout = p.stdout
-        stderr = p.stderr
-
-        def _gen():
-            try:
-                assert stdout is not None
-                while True:
-                    chunk = stdout.read(64 * 1024)
-                    if not chunk:
-                        break
-                    yield chunk
-            finally:
-                try:
-                    if stdout:
-                        stdout.close()
-                except Exception:
-                    pass
-                try:
-                    if stderr:
-                        stderr.close()
-                except Exception:
-                    pass
-                try:
-                    p.wait(timeout=1)
-                except Exception:
-                    pass
-
-        filename = os.path.basename(path.rstrip('/')) or 'download'
-        headers = {
-            'Content-Disposition': f'attachment; filename="{filename}"',
-            'Cache-Control': 'no-store',
-        }
-        if isinstance(size_bytes, int) and size_bytes >= 0:
-            headers['Content-Length'] = str(size_bytes)
-        return Response(_gen(), mimetype='application/octet-stream', headers=headers)
-
-
-    
-    @bp.get('/api/fs/read')
-    def api_fs_read() -> Any:
-        """Read a text file (UTF-8) from local sandbox or remote session.
-
-        Query params:
-          target=local|remote
-          path=<full path>
-          sid=<remote session id> (for target=remote)
-
-        Returns JSON:
-          { ok: true, text: "...", truncated: bool, size: int|null }
-        """
-        if (resp := _require_enabled()) is not None:
-            return resp
-
-        target = str(request.args.get('target', '') or '').strip().lower()
-        path = str(request.args.get('path', '') or '').strip()
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-        if not path:
-            return error_response('path_required', 400, ok=False)
-
-        # Keep reads bounded to protect embedded devices.
-        MAX_BYTES = 1024 * 1024  # 1 MiB
-        size_bytes: Optional[int] = None
-        truncated = False
-
-        def _decode_utf8_or_415(raw: bytes) -> Any:
-            # Heuristic: if NUL byte exists -> binary
-            if b'\x00' in raw:
-                return None
-            try:
-                return raw.decode('utf-8')
-            except Exception:
-                return None
-
-        if target == 'local':
-            try:
-                rp = _local_resolve(path, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-
-            if os.path.isdir(rp):
-                return error_response('not_a_file', 400, ok=False)
-            if not os.path.isfile(rp):
-                return error_response('not_found', 404, ok=False)
-
-            try:
-                size_bytes = int(os.path.getsize(rp))
-            except Exception:
-                size_bytes = None
-
-            try:
-                with open(rp, 'rb') as fp:
-                    raw = fp.read(MAX_BYTES + 1)
-            except Exception:
-                return error_response('read_failed', 400, ok=False)
-
-            if len(raw) > MAX_BYTES:
-                raw = raw[:MAX_BYTES]
-                truncated = True
-
-            text = _decode_utf8_or_415(raw)
-            if text is None:
-                return error_response('not_text', 415, ok=False, binary=True, size=size_bytes)
-
-            return jsonify({'ok': True, 'target': 'local', 'path': rp, 'text': text, 'truncated': truncated, 'size': size_bytes})
-
-        # remote
-        sid = str(request.args.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-
-        # Best-effort size + dir detection via `cls -l`
-        is_dir = False
-        try:
-            rc, out, err = mgr._run_lftp(s, [f"cls -l {_lftp_quote(path)}"], capture=True)
-            if rc == 0:
-                text_ls = (out or b'').decode('utf-8', errors='replace')
-                for line in text_ls.splitlines():
-                    item = _parse_ls_line(line)
-                    if not item:
-                        continue
-                    is_dir = (str(item.get('type') or '') == 'dir')
-                    try:
-                        size_bytes = int(item.get('size'))  # type: ignore[arg-type]
-                    except Exception:
-                        size_bytes = None
-                    break
-        except Exception:
-            is_dir = False
-
-        if is_dir:
-            return error_response('not_a_file', 400, ok=False)
-
-        # Stream cat and stop after MAX_BYTES
-        raw = b''
-        p2 = None
-        stdout = None
-        stderr = None
-        try:
-            p2 = mgr._popen_lftp(s, [f"cat {_lftp_quote(path)}"])
-            stdout = p2.stdout
-            stderr = p2.stderr
-            if stdout is None:
-                raise RuntimeError('no_stdout')
-            chunks = []
-            total = 0
-            while True:
-                chunk = stdout.read(64 * 1024)
-                if not chunk:
-                    break
-                chunks.append(chunk)
-                total += len(chunk)
-                if total > MAX_BYTES:
-                    truncated = True
-                    break
-            raw = b''.join(chunks)
-            if truncated and len(raw) > MAX_BYTES:
-                raw = raw[:MAX_BYTES]
-        except Exception:
-            return error_response('read_failed', 400, ok=False)
-        finally:
-            try:
-                if stdout:
-                    stdout.close()
-            except Exception:
-                pass
-            try:
-                if stderr:
-                    stderr.close()
-            except Exception:
-                pass
-            try:
-                if p2:
-                    # If truncated, terminate quickly.
-                    if truncated:
-                        try:
-                            p2.terminate()
-                        except Exception:
-                            pass
-                    try:
-                        p2.wait(timeout=1)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-        text = _decode_utf8_or_415(raw)
-        if text is None:
-            return error_response('not_text', 415, ok=False, binary=True, size=size_bytes)
-
-        return jsonify({'ok': True, 'target': 'remote', 'sid': sid, 'path': path, 'text': text, 'truncated': truncated, 'size': size_bytes})
-
-
-    @bp.post('/api/fs/write')
-    def api_fs_write() -> Any:
-        """Write a text file (UTF-8) to local sandbox or remote session.
-
-        JSON body:
-          {
-            "target": "local"|"remote",
-            "path": "...",
-            "sid": "..." (for remote),
-            "text": "..."
-          }
-        """
-        if (resp := _require_enabled()) is not None:
-            return resp
-
-        data = request.get_json(silent=True) or {}
-        target = str(data.get('target') or '').strip().lower()
-        path_s = str(data.get('path') or '').strip()
-        text = data.get('text', None)
-
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-        if not path_s:
-            return error_response('path_required', 400, ok=False)
-        if not isinstance(text, str):
-            return error_response('text_required', 400, ok=False)
-
-        # Keep writes bounded.
-        MAX_WRITE = 2 * 1024 * 1024  # 2 MiB
-        raw = text.encode('utf-8', errors='strict')
-        if len(raw) > MAX_WRITE:
-            return error_response('too_large', 413, ok=False, max_bytes=MAX_WRITE)
-
-        os.makedirs(mgr.tmp_dir, exist_ok=True)
-
-        if target == 'local':
-            try:
-                rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-
-            if os.path.isdir(rp):
-                return error_response('not_a_file', 400, ok=False)
-
-            parent = os.path.dirname(rp)
-            if parent and not os.path.isdir(parent):
-                return error_response('parent_not_found', 400, ok=False)
-
-            tmp_path = os.path.join(mgr.tmp_dir, f"xkeen_write_local_{uuid.uuid4().hex}.tmp")
-            try:
-                with open(tmp_path, 'wb') as fp:
-                    fp.write(raw)
-                try:
-                    os.replace(tmp_path, rp)
-                except Exception:
-                    shutil.move(tmp_path, rp)
-            except Exception:
-                try:
-                    if os.path.exists(tmp_path):
-                        os.remove(tmp_path)
-                except Exception:
-                    pass
-                return error_response('write_failed', 400, ok=False)
-
-            return jsonify({'ok': True, 'bytes': len(raw)})
-
-        # remote
-        sid = str(data.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-
-        tmp_path = os.path.join(mgr.tmp_dir, f"xkeen_write_remote_{sid}_{uuid.uuid4().hex}.tmp")
-        try:
-            with open(tmp_path, 'wb') as fp:
-                fp.write(raw)
-            rc, out, err = mgr._run_lftp(
-                s,
-                [f"put {_lftp_quote(tmp_path)} -o {_lftp_quote(path_s)}"],
-                capture=True,
-            )
-            if rc != 0:
-                tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-                return error_response('remote_put_failed', 400, ok=False, details=tail)
-            return jsonify({'ok': True, 'bytes': len(raw)})
-        except Exception:
-            return error_response('write_failed', 400, ok=False)
-        finally:
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-
-
-    @bp.post('/api/fs/archive')
-    def api_fs_archive() -> Any:
-        """Download multiple selected files/folders as a ZIP archive.
-
-        Query params:
-          target=local|remote
-          sid=<remote session id> (for target=remote)
-
-        JSON body:
-          {
-            "items": [{"path": "...", "name": "...", "is_dir": true|false}, ...],
-            "zip_name": "something.zip",
-            "root_name": "folder_inside_zip"
-          }
-        """
-        if (resp := _require_enabled()) is not None:
-            return resp
-
-        target = str(request.args.get('target', '') or '').strip().lower()
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-
-        data = request.get_json(silent=True) or {}
-        items_raw = data.get('items', None)
-        if items_raw is None:
-            items_raw = data.get('paths', None)
-        if not isinstance(items_raw, list) or not items_raw:
-            return error_response('items_required', 400, ok=False)
-
-        # Limit to avoid accidental huge archives on routers.
-        if len(items_raw) > 200:
-            return error_response('too_many_items', 400, ok=False, max_items=200)
-
-        def _sanitize_zip_filename(name: str) -> str:
-            n = os.path.basename(str(name or '').strip()) or 'selection.zip'
-            # remove quotes / odd chars
-            n = n.replace('"', '').replace("'", '')
-            if not n.lower().endswith('.zip'):
-                n += '.zip'
-            return n
-
-        def _sanitize_root_name(name: str) -> str:
-            s = str(name or '').strip()
-            if not s:
-                return 'selection'
-            s = s.replace('\\', '/')
-            s = s.strip('/').strip()
-            # single folder name
-            s = os.path.basename(s) or 'selection'
-            s = re.sub(r'[^0-9A-Za-z._-]+', '_', s)[:64] or 'selection'
-            return s
-
-        zip_name = _sanitize_zip_filename(data.get('zip_name') or data.get('name') or 'selection.zip')
-        root_name = _sanitize_root_name(data.get('root_name') or os.path.splitext(zip_name)[0] or 'selection')
-
-        # Normalize item list
-        items: List[Dict[str, Any]] = []
-        for it in items_raw:
-            if isinstance(it, str):
-                path = str(it).strip()
-                if not path:
-                    continue
-                items.append({'path': path, 'name': os.path.basename(path.rstrip('/')) or path, 'is_dir': None})
-            elif isinstance(it, dict):
-                path = str(it.get('path') or '').strip()
-                if not path:
-                    continue
-                name = str(it.get('name') or os.path.basename(path.rstrip('/')) or path).strip()
-                is_dir = it.get('is_dir', None)
-                if isinstance(is_dir, str):
-                    is_dir = is_dir.strip().lower() in ('1', 'true', 'yes', 'on')
-                elif not isinstance(is_dir, bool):
-                    is_dir = None
-                items.append({'path': path, 'name': name, 'is_dir': is_dir})
-        if not items:
-            return error_response('items_required', 400, ok=False)
-
-        os.makedirs(mgr.tmp_dir, exist_ok=True)
-        tmp_zip = os.path.join(mgr.tmp_dir, f"xkeen_zip_selection_{uuid.uuid4().hex}.zip")
-
-        if target == 'local':
-            resolved: List[Tuple[str, str]] = []
-            try:
-                for it in items:
-                    try:
-                        rp = _local_resolve(it['path'], LOCALFS_ROOTS)
-                    except PermissionError as e:
-                        raise RuntimeError(str(e))
-                    if not os.path.exists(rp):
-                        raise RuntimeError('not_found')
-                    resolved.append((rp, str(it.get('name') or it['path'])))
-                _zip_selection_local(resolved, tmp_zip, root_name=root_name)
-                zsize = None
-                try:
-                    zsize = int(os.path.getsize(tmp_zip))
-                except Exception:
-                    zsize = None
-
-                def _gen_zip_local_sel():
-                    fp = None
-                    try:
-                        fp = open(tmp_zip, 'rb')
-                        while True:
-                            chunk = fp.read(64 * 1024)
-                            if not chunk:
-                                break
-                            yield chunk
-                    finally:
-                        try:
-                            if fp:
-                                fp.close()
-                        except Exception:
-                            pass
-                        try:
-                            if os.path.exists(tmp_zip):
-                                os.remove(tmp_zip)
-                        except Exception:
-                            pass
-
-                headers = {
-                    'Content-Disposition': f'attachment; filename="{zip_name}"',
-                    'Cache-Control': 'no-store',
-                }
-                if isinstance(zsize, int) and zsize >= 0:
-                    headers['Content-Length'] = str(zsize)
-                return Response(_gen_zip_local_sel(), mimetype='application/zip', headers=headers)
-
-            except Exception as e:
-                try:
-                    if os.path.exists(tmp_zip):
-                        os.remove(tmp_zip)
-                except Exception:
-                    pass
-                msg = str(e) or 'zip_failed'
-                if 'Permission' in msg or 'forbidden' in msg:
-                    return error_response(msg, 403, ok=False)
-                if msg == 'not_found':
-                    return error_response('not_found', 404, ok=False)
-                return error_response('zip_failed', 400, ok=False)
-
-        # remote
-        sid = str(request.args.get('sid') or '').strip()
-        if not sid:
-            try:
-                if os.path.exists(tmp_zip):
-                    os.remove(tmp_zip)
-            except Exception:
-                pass
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            try:
-                if os.path.exists(tmp_zip):
-                    os.remove(tmp_zip)
-            except Exception:
-                pass
-            return resp
-
-        tmp_root = os.path.join(mgr.tmp_dir, f"xkeen_zip_multi_{sid}_{uuid.uuid4().hex}")
-        tmp_payload = os.path.join(tmp_root, root_name)
-        try:
-            os.makedirs(tmp_payload, exist_ok=True)
-
-            # Download each item into tmp_payload (dir: mirror, file: cat stream)
-            for it in items:
-                rpath = str(it.get('path') or '').strip()
-                if not rpath:
-                    continue
-                # normalize remote path a bit
-                if rpath not in ('.', '/'):
-                    try:
-                        rpath = re.sub(r'/+', '/', rpath).rstrip('/') or '/'
-                    except Exception:
-                        pass
-                base = os.path.basename(str(it.get('name') or '').strip() or rpath.rstrip('/')) or 'item'
-                base = base.replace('..', '_').replace('/', '_').replace('\\', '_') or 'item'
-                dest = os.path.join(tmp_payload, base)
-
-                is_dir = it.get('is_dir', None)
-                if is_dir is None:
-                    # fallback stat
-                    v = _remote_is_dir(s, rpath)
-                    if v is None:
-                        raise RuntimeError('not_found')
-                    is_dir = bool(v)
-
-                if is_dir:
-                    os.makedirs(dest, exist_ok=True)
-                    cmd = f"mirror --verbose -- {_lftp_quote(rpath)} {_lftp_quote(dest)}"
-                    script = mgr._build_lftp_script(s, [cmd])
-                    env = os.environ.copy()
-                    env.setdefault('LC_ALL', 'C')
-                    env.setdefault('LANG', 'C')
-                    proc = subprocess.Popen([mgr.lftp_bin, '-c', script], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=env, bufsize=0)
-                    _out, _err = proc.communicate()
-                    if int(proc.returncode or 0) != 0:
-                        tail = ((_err or b'').decode('utf-8', errors='replace')[-400:]).strip()
-                        raise RuntimeError('mirror_failed:' + tail)
-                else:
-                    os.makedirs(os.path.dirname(dest) or tmp_payload, exist_ok=True)
-                    tmp_part = dest + '.part.' + uuid.uuid4().hex[:6]
-                    p2 = mgr._popen_lftp(s, [f"cat {_lftp_quote(rpath)}"])
-                    stdout = p2.stdout
-                    stderr = p2.stderr
-                    try:
-                        with open(tmp_part, 'wb') as fp:
-                            while True:
-                                chunk = stdout.read(64 * 1024) if stdout else b''
-                                if not chunk:
-                                    break
-                                fp.write(chunk)
-                        rc = p2.wait()
-                        if int(rc or 0) != 0:
-                            raise RuntimeError('download_failed')
-                        os.replace(tmp_part, dest)
-                    finally:
-                        try:
-                            if stdout: stdout.close()
-                        except Exception:
-                            pass
-                        try:
-                            if stderr: stderr.close()
-                        except Exception:
-                            pass
-                        try:
-                            if os.path.exists(tmp_part):
-                                os.remove(tmp_part)
-                        except Exception:
-                            pass
-
-            _zip_directory(tmp_payload, tmp_zip, root_name=root_name)
-            zsize = None
-            try:
-                zsize = int(os.path.getsize(tmp_zip))
-            except Exception:
-                zsize = None
-
-            def _gen_zip_remote_sel():
-                fp = None
-                try:
-                    fp = open(tmp_zip, 'rb')
-                    while True:
-                        chunk = fp.read(64 * 1024)
-                        if not chunk:
-                            break
-                        yield chunk
-                finally:
-                    try:
-                        if fp:
-                            fp.close()
-                    except Exception:
-                        pass
-                    try:
-                        if os.path.exists(tmp_zip):
-                            os.remove(tmp_zip)
-                    except Exception:
-                        pass
-                    try:
-                        shutil.rmtree(tmp_root, ignore_errors=True)
-                    except Exception:
-                        pass
-
-            headers = {
-                'Content-Disposition': f'attachment; filename="{zip_name}"',
-                'Cache-Control': 'no-store',
-            }
-            if isinstance(zsize, int) and zsize >= 0:
-                headers['Content-Length'] = str(zsize)
-            return Response(_gen_zip_remote_sel(), mimetype='application/zip', headers=headers)
-
-        except Exception as e:
-            try:
-                if os.path.exists(tmp_zip):
-                    os.remove(tmp_zip)
-            except Exception:
-                pass
-            try:
-                shutil.rmtree(tmp_root, ignore_errors=True)
-            except Exception:
-                pass
-            msg = str(e) or ''
-            det = None
-            if 'mirror_failed:' in msg:
-                det = msg.split('mirror_failed:', 1)[1].strip()[-400:]
-                return error_response('zip_failed', 400, ok=False, details=det)
-            if msg == 'not_found':
-                return error_response('not_found', 404, ok=False)
-            return error_response('zip_failed', 400, ok=False)
-
-    @bp.post('/api/fs/upload')
-    def api_fs_upload() -> Any:
-        """Upload a file to local sandbox or remote session.
-
-        Query params:
-          target=local|remote
-          path=<full destination path (including filename) OR directory>
-          sid=<remote session id> (for target=remote)
-
-        multipart: file=<file>
-        """
-        if (resp := _require_enabled()) is not None:
-            return resp
-
-        target = str(request.args.get('target', '') or '').strip().lower()
-        path = str(request.args.get('path', '') or '').strip()
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-        if not path:
-            return error_response('path_required', 400, ok=False)
-        if 'file' not in request.files:
-            return error_response('file_required', 400, ok=False)
-        f = request.files['file']
-        if not f:
-            return error_response('file_required', 400, ok=False)
-
-        # Normalize filename for directory uploads
-        raw_name = str(getattr(f, 'filename', '') or '').strip()
-        safe_fn = os.path.basename(raw_name) if raw_name else 'upload.bin'
-        if not safe_fn:
-            safe_fn = 'upload.bin'
-
-        max_bytes = int(mgr.max_upload_mb) * 1024 * 1024
-        os.makedirs(mgr.tmp_dir, exist_ok=True)
-
-        if target == 'local':
-            # If user passed a directory, append file name.
-            dest = path
-            if dest.endswith('/'):
-                dest = dest.rstrip('/') + '/' + safe_fn
-            else:
-                try:
-                    # If dest exists and is directory.
-                    rp_probe = _local_resolve(dest, LOCALFS_ROOTS)
-                    if os.path.isdir(rp_probe):
-                        dest = os.path.join(dest, safe_fn)
-                except Exception:
-                    pass
-
-            try:
-                rp = _local_resolve(dest, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-
-            parent = os.path.dirname(rp)
-            if parent and not os.path.isdir(parent):
-                return error_response('parent_not_found', 400, ok=False)
-
-            tmp_path = os.path.join(mgr.tmp_dir, f"xkeen_upload_local_{uuid.uuid4().hex}.tmp")
-            total = 0
-            try:
-                with open(tmp_path, 'wb') as outfp:
-                    while True:
-                        chunk = f.stream.read(64 * 1024)
-                        if not chunk:
-                            break
-                        total += len(chunk)
-                        if total > max_bytes:
-                            raise ValueError('too_large')
-                        outfp.write(chunk)
-            except ValueError as e:
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
-                if str(e) == 'too_large':
-                    return error_response('upload_too_large', 413, ok=False, max_mb=mgr.max_upload_mb)
-                return error_response('upload_failed', 400, ok=False)
-            except Exception:
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
-                return error_response('upload_failed', 400, ok=False)
-
-            try:
-                # Try atomic replace
-                os.replace(tmp_path, rp)
-            except Exception:
-                try:
-                    shutil.move(tmp_path, rp)
-                except Exception:
-                    try:
-                        os.remove(tmp_path)
-                    except Exception:
-                        pass
-                    return error_response('upload_failed', 400, ok=False)
-            return jsonify({'ok': True, 'bytes': total, 'path': rp})
-
-        # remote
-        sid = str(request.args.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-
-        remote_path = path
-        if remote_path.endswith('/'):
-            remote_path = remote_path.rstrip('/') + '/' + safe_fn
-
-        tmp_path = os.path.join(mgr.tmp_dir, f"xkeen_upload_{sid}_{uuid.uuid4().hex}.tmp")
-        total = 0
-        try:
-            with open(tmp_path, 'wb') as outfp:
-                while True:
-                    chunk = f.stream.read(64 * 1024)
-                    if not chunk:
-                        break
-                    total += len(chunk)
-                    if total > max_bytes:
-                        raise ValueError('too_large')
-                    outfp.write(chunk)
-        except ValueError as e:
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-            if str(e) == 'too_large':
-                return error_response('upload_too_large', 413, ok=False, max_mb=mgr.max_upload_mb)
-            return error_response('upload_failed', 400, ok=False)
-        except Exception:
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-            return error_response('upload_failed', 400, ok=False)
-
-        try:
-            rc, out, err = mgr._run_lftp(
-                s,
-                [f"put {_lftp_quote(tmp_path)} -o {_lftp_quote(remote_path)}"],
-                capture=True,
-            )
-            if rc != 0:
-                tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-                return error_response('remote_put_failed', 400, ok=False, details=tail)
-            return jsonify({'ok': True, 'bytes': total})
-        finally:
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-
-
-    @bp.post('/api/fs/mkdir')
-    def api_fs_mkdir() -> Any:
-        if (resp := _require_enabled()) is not None:
-            return resp
-        data = request.get_json(silent=True) or {}
-        target = str(data.get('target') or '').strip().lower()
-        path_s = str(data.get('path') or '').strip()
-        parents = bool(data.get('parents', False))
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-        if not path_s:
-            return error_response('path_required', 400, ok=False)
-
-        if target == 'local':
-            try:
-                rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-            try:
-                if parents:
-                    os.makedirs(rp, exist_ok=True)
-                else:
-                    os.mkdir(rp)
-            except FileExistsError:
-                return error_response('exists', 409, ok=False)
-            except Exception:
-                return error_response('mkdir_failed', 400, ok=False)
-            return jsonify({'ok': True})
-
-        sid = str(data.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-        cmd = f"mkdir {'-p ' if parents else ''}{_lftp_quote(path_s)}"
-        rc, out, err = mgr._run_lftp(s, [cmd], capture=True)
-        if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('mkdir_failed', 400, ok=False, details=tail)
-        return jsonify({'ok': True})
-
-
-    @bp.post('/api/fs/rename')
-    def api_fs_rename() -> Any:
-        if (resp := _require_enabled()) is not None:
-            return resp
-        data = request.get_json(silent=True) or {}
-        target = str(data.get('target') or '').strip().lower()
-        src_p = str(data.get('src') or '').strip()
-        dst_p = str(data.get('dst') or '').strip()
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-        if not src_p or not dst_p:
-            return error_response('src_dst_required', 400, ok=False)
-
-        if target == 'local':
-            try:
-                sp = _local_resolve(src_p, LOCALFS_ROOTS)
-                dp = _local_resolve(dst_p, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-            try:
-                os.rename(sp, dp)
-            except FileNotFoundError:
-                return error_response('not_found', 404, ok=False)
-            except Exception:
-                return error_response('rename_failed', 400, ok=False)
-            return jsonify({'ok': True})
-
-        sid = str(data.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-        rc, out, err = mgr._run_lftp(s, [f"mv {_lftp_quote(src_p)} {_lftp_quote(dst_p)}"], capture=True)
-        if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('rename_failed', 400, ok=False, details=tail)
-        return jsonify({'ok': True})
-
-
-    @bp.delete('/api/fs/remove')
-    def api_fs_remove() -> Any:
-        if (resp := _require_enabled()) is not None:
-            return resp
-        target = str(request.args.get('target') or '').strip().lower()
-        path_s = str(request.args.get('path') or '').strip()
-        recursive = (request.args.get('recursive', '0') or '') in ('1', 'true', 'yes', 'on')
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-        if not path_s:
-            return error_response('path_required', 400, ok=False)
-
-        if target == 'local':
-            try:
-                rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-            if not os.path.exists(rp):
-                return error_response('not_found', 404, ok=False)
-            try:
-                if os.path.isdir(rp) and not os.path.islink(rp):
-                    if not recursive:
-                        os.rmdir(rp)
-                    else:
-                        shutil.rmtree(rp)
-                else:
-                    os.remove(rp)
-            except Exception:
-                return error_response('remove_failed', 400, ok=False)
-            return jsonify({'ok': True})
-
-        sid = str(request.args.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-        if recursive:
-            rc, out, err = mgr._run_lftp(s, [f"rm -r {_lftp_quote(path_s)}"], capture=True)
-            if rc != 0:
-                tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-                return error_response('remove_failed', 400, ok=False, details=tail)
-            return jsonify({'ok': True})
-        rc, out, err = mgr._run_lftp(s, [f"rm {_lftp_quote(path_s)}"], capture=True)
-        if rc == 0:
-            return jsonify({'ok': True})
-        rc2, out2, err2 = mgr._run_lftp(s, [f"rmdir {_lftp_quote(path_s)}"], capture=True)
-        if rc2 != 0:
-            tail = (err2.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('remove_failed', 400, ok=False, details=tail)
-        return jsonify({'ok': True})
-
-
-    def _parse_mode_value(mode_v: Any) -> int:
-        if mode_v is None:
-            raise RuntimeError('mode_required')
-        if isinstance(mode_v, int):
-            return int(mode_v)
-        s = str(mode_v).strip().lower()
-        if not s:
-            raise RuntimeError('mode_required')
-        # common: "644" / "0755" / "0o755"
-        if s.startswith('0o'):
-            return int(s, 8)
-        if re.match(r'^[0-7]{3,4}$', s):
-            return int(s, 8)
-        return int(s, 10)
-
-
-    @bp.post('/api/fs/chmod')
-    def api_fs_chmod() -> Any:
-        if (resp := _require_enabled()) is not None:
-            return resp
-        data = request.get_json(silent=True) or {}
-        target = str(data.get('target') or '').strip().lower()
-        path_s = str(data.get('path') or '').strip()
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-        if not path_s:
-            return error_response('path_required', 400, ok=False)
-        try:
-            mode_i = _parse_mode_value(data.get('mode'))
-        except RuntimeError as e:
-            return error_response(str(e), 400, ok=False)
-        except Exception:
-            return error_response('bad_mode', 400, ok=False)
-
-        if target == 'local':
-            try:
-                rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-            try:
-                os.chmod(rp, mode_i)
-            except Exception:
-                return error_response('chmod_failed', 400, ok=False)
-            return jsonify({'ok': True, 'target': 'local', 'path': rp, 'mode': mode_i})
-
-        sid = str(data.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-        rc, out, err = mgr._run_lftp(s, [f"chmod {mode_i:o} {_lftp_quote(path_s)}"], capture=True)
-        if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('chmod_failed', 400, ok=False, details=tail)
-        return jsonify({'ok': True, 'target': 'remote', 'sid': sid, 'path': path_s, 'mode': mode_i})
-
-
-    @bp.post('/api/fs/chown')
-    def api_fs_chown() -> Any:
-        if (resp := _require_enabled()) is not None:
-            return resp
-        data = request.get_json(silent=True) or {}
-        target = str(data.get('target') or '').strip().lower()
-        path_s = str(data.get('path') or '').strip()
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-        if not path_s:
-            return error_response('path_required', 400, ok=False)
-        uid = data.get('uid')
-        gid = data.get('gid')
-        try:
-            uid_i = int(uid)
-            gid_i = int(gid) if gid is not None else -1
-        except Exception:
-            return error_response('bad_owner', 400, ok=False)
-
-        if target == 'local':
-            try:
-                rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-            try:
-                os.chown(rp, uid_i, gid_i)
-            except Exception:
-                return error_response('chown_failed', 400, ok=False)
-            return jsonify({'ok': True, 'target': 'local', 'path': rp, 'uid': uid_i, 'gid': gid_i})
-
-        # Remote chown is protocol-dependent; we only attempt it for SFTP (best-effort).
-        sid = str(data.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-        if getattr(s, 'protocol', None) != 'sftp':
-            return error_response('not_supported', 400, ok=False)
-        owner = f"{uid_i}:{gid_i}" if gid_i >= 0 else str(uid_i)
-        rc, out, err = mgr._run_lftp(s, [f"chown {owner} {_lftp_quote(path_s)}"], capture=True)
-        if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('chown_failed', 400, ok=False, details=tail)
-        return jsonify({'ok': True, 'target': 'remote', 'sid': sid, 'path': path_s, 'uid': uid_i, 'gid': gid_i})
-
-
-    @bp.post('/api/fs/touch')
-    def api_fs_touch() -> Any:
-        if (resp := _require_enabled()) is not None:
-            return resp
-        data = request.get_json(silent=True) or {}
-        target = str(data.get('target') or '').strip().lower()
-        path_s = str(data.get('path') or '').strip()
-        create_parents = bool(data.get('parents', True))
-        create_only = bool(data.get('create_only', True))
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-        if not path_s:
-            return error_response('path_required', 400, ok=False)
-
-        if target == 'local':
-            try:
-                rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
-            try:
-                if create_parents:
-                    os.makedirs(os.path.dirname(rp) or '/tmp', exist_ok=True)
-                # "touch" is used by the web UI to create empty files.
-                # In "create_only" mode we MUST NOT modify an existing file.
-                if create_only and os.path.exists(rp):
-                    return jsonify({'ok': True, 'target': 'local', 'path': rp, 'skipped': True})
-                if not os.path.exists(rp):
-                    with open(rp, 'a', encoding='utf-8'):
-                        pass
-                os.utime(rp, None)
-            except Exception:
-                return error_response('touch_failed', 400, ok=False)
-            return jsonify({'ok': True, 'target': 'local', 'path': rp})
-
-        sid = str(data.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-
-        # Avoid destructive overwrite by default.
-        if create_only and _remote_exists(s, path_s):
-            return jsonify({'ok': True, 'target': 'remote', 'sid': sid, 'path': path_s, 'skipped': True})
-        if create_parents:
-            parent = os.path.dirname(path_s.rstrip('/'))
-            if parent and parent not in ('', '.'):
-                mgr._run_lftp(s, [f"mkdir -p {_lftp_quote(parent)}"], capture=True)
-        # Create an empty file via uploading /dev/null
-        rc, out, err = mgr._run_lftp(s, [f"put /dev/null -o {_lftp_quote(path_s)}"], capture=True)
-        if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('touch_failed', 400, ok=False, details=tail)
-        return jsonify({'ok': True, 'target': 'remote', 'sid': sid, 'path': path_s})
-
-
-    @bp.post('/api/fs/stat-batch')
-    def api_fs_stat_batch() -> Any:
-        if (resp := _require_enabled()) is not None:
-            return resp
-        data = request.get_json(silent=True) or {}
-        target = str(data.get('target') or '').strip().lower()
-        if target not in ('local', 'remote'):
-            return error_response('bad_target', 400, ok=False)
-
-        paths: List[str] = []
-        if isinstance(data.get('paths'), list):
-            cwd = str(data.get('cwd') or '').strip() or ''
-            for n in data.get('paths'):
-                nm = str(n or '').strip()
-                if not nm:
-                    continue
-                if cwd:
-                    full = (cwd.rstrip('/') + '/' + nm) if target == 'remote' else os.path.join(cwd, nm)
-                else:
-                    full = nm
-                paths.append(full)
-        elif data.get('path'):
-            paths = [str(data.get('path') or '').strip()]
-        if not paths:
-            return error_response('no_paths', 400, ok=False)
-        if len(paths) > 200:
-            return error_response('too_many_paths', 400, ok=False)
-
-        if target == 'local':
-            out_items: List[Dict[str, Any]] = []
-            for p in paths:
-                try:
-                    rp = _local_resolve(p, LOCALFS_ROOTS)
-                except PermissionError:
-                    out_items.append({'path': p, 'exists': False, 'error': 'forbidden'})
-                    continue
-                if not os.path.exists(rp):
-                    out_items.append({'path': rp, 'exists': False})
-                    continue
-                try:
-                    st = os.lstat(rp)
-                    out_items.append({
-                        'path': rp,
-                        'exists': True,
-                        'type': 'dir' if os.path.isdir(rp) else ('link' if os.path.islink(rp) else 'file'),
-                        'size': int(getattr(st, 'st_size', 0) or 0),
-                        'mode': int(getattr(st, 'st_mode', 0) or 0),
-                        'uid': int(getattr(st, 'st_uid', -1) or -1),
-                        'gid': int(getattr(st, 'st_gid', -1) or -1),
-                        'mtime': int(getattr(st, 'st_mtime', 0) or 0),
-                        'atime': int(getattr(st, 'st_atime', 0) or 0),
-                    })
-                except Exception:
-                    out_items.append({'path': rp, 'exists': False, 'error': 'stat_failed'})
-            return jsonify({'ok': True, 'target': 'local', 'items': out_items})
-
-        sid = str(data.get('sid') or '').strip()
-        if not sid:
-            return error_response('sid_required', 400, ok=False)
-        s, resp = _get_session_or_404(sid)
-        if resp is not None:
-            return resp
-        out_items: List[Dict[str, Any]] = []
-        for p in paths:
-            rc, out, err = mgr._run_lftp(s, [f"cls -ld {_lftp_quote(p)}"], capture=True)
-            if rc != 0:
-                out_items.append({'path': p, 'exists': False})
-                continue
-            text = out.decode('utf-8', errors='replace').strip().splitlines()
-            line = text[-1] if text else ''
-            item = _parse_ls_line(line)
-            if not item:
-                out_items.append({'path': p, 'exists': True})
-                continue
-            out_items.append({
-                'path': p,
-                'exists': True,
-                'type': item.get('type'),
-                'size': item.get('size'),
-                'perm': item.get('perm'),
-                'mtime': item.get('mtime'),
-            })
-        return jsonify({'ok': True, 'target': 'remote', 'sid': sid, 'items': out_items})
-
-
-
 
     @bp.post('/api/fileops/ws-token')
     def api_fileops_ws_token() -> Any:
@@ -4272,6 +4257,25 @@ def create_remotefs_blueprint(
             spec = {'src': data['src'], 'dst': data['dst'], 'sources': data['sources'], 'options': data.get('options') or {}, 'bytes_total': data.get('bytes_total') or 0}
             _progress_set(job, bytes_total=spec['bytes_total'], files_total=len(spec['sources']))
             jobmgr.submit(job, _run_job_copy_move, spec)
+        try:
+            src = data.get('src') or {}
+            dst = data.get('dst') or {}
+            _core_log(
+                "info",
+                "fileops.job_create",
+                job_id=job.job_id,
+                op=op,
+                sources=int(len(data.get('sources') or [])),
+                bytes_total=int(data.get('bytes_total') or 0),
+                src_target=str(src.get('target') or ''),
+                src_sid=str(src.get('sid') or ''),
+                src_path=str(src.get('path') or ''),
+                dst_target=str(dst.get('target') or ''),
+                dst_sid=str(dst.get('sid') or ''),
+                dst_path=str(dst.get('path') or ''),
+            )
+        except Exception:
+            pass
 
         return jsonify({'ok': True, 'job_id': job.job_id, 'job': job.to_dict()})
 
@@ -4349,7 +4353,7 @@ def create_remotefs_blueprint(
         except Exception:
             # If something goes wrong, be safe and do nothing.
             deleted = 0
-
+        _core_log("info", "fileops.jobs_clear", deleted=int(deleted), scope=str(scope))
         return jsonify({'ok': True, 'deleted': deleted})
 
 
@@ -4360,7 +4364,10 @@ def create_remotefs_blueprint(
         ok = jobmgr.cancel(job_id)
         if not ok:
             return error_response('job_not_found', 404, ok=False)
+        _core_log("info", "fileops.job_cancel", job_id=job_id)
         return jsonify({'ok': True, 'canceled': True})
 
 
+    if return_mgr:
+        return bp, mgr
     return bp
