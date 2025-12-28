@@ -19,6 +19,7 @@ so the same module can be reused both on router and in development.
 from __future__ import annotations
 
 import os
+import sys
 import re
 import shutil
 import subprocess
@@ -32,11 +33,55 @@ from urllib.parse import unquote
 # === Base paths and constants ===
 
 # Root directory where mihomo config and profiles live.
-# For XKeen this is usually /opt/etc/mihomo, но можно переопределить через env.
-MIHOMO_ROOT = Path(os.environ.get('MIHOMO_ROOT', '/opt/etc/mihomo')).resolve()
-CONFIG_PATH = MIHOMO_ROOT / 'config.yaml'
-PROFILES_DIR = MIHOMO_ROOT / 'profiles'
-BACKUP_DIR = MIHOMO_ROOT / 'backup'
+# For XKeen this is usually /opt/etc/mihomo on the router.
+# In development (macOS/Linux desktop) /opt may be missing or not writable,
+# so we automatically fall back to a user-writable directory.
+def _mh_is_writable_dir(p: Path) -> bool:
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+        t = p / ".writetest"
+        t.write_text("", encoding="utf-8")
+        t.unlink()
+        return True
+    except Exception:
+        return False
+
+
+def _mh_default_root() -> Path:
+    router = Path("/opt/etc/mihomo")
+    if _mh_is_writable_dir(router):
+        return router
+
+    home = os.path.expanduser("~")
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    if xdg:
+        base = Path(xdg) / "xkeen-ui"
+    elif sys.platform == "darwin":
+        base = Path(home) / "Library" / "Application Support" / "xkeen-ui"
+    else:
+        base = Path(home) / ".config" / "xkeen-ui"
+    return base / "etc" / "mihomo"
+
+
+_env_root = (os.environ.get("MIHOMO_ROOT") or "").strip()
+if _env_root:
+    MIHOMO_ROOT = Path(_env_root).expanduser().resolve()
+else:
+    MIHOMO_ROOT = _mh_default_root().resolve()
+
+# Keep env in sync for templates/UI that may read it later.
+os.environ.setdefault("MIHOMO_ROOT", str(MIHOMO_ROOT))
+
+CONFIG_PATH = MIHOMO_ROOT / "config.yaml"
+PROFILES_DIR = MIHOMO_ROOT / "profiles"
+BACKUP_DIR = MIHOMO_ROOT / "backup"
+
+# Best-effort: ensure layout exists.
+try:
+    PROFILES_DIR.mkdir(parents=True, exist_ok=True)
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
 
 # How many backups we try to keep per active profile (best-effort, не строго).
 MAX_BACKUPS_PER_PROFILE = int(os.environ.get('MIHOMO_MAX_BACKUPS', '20'))
