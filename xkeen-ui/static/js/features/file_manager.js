@@ -7,6 +7,64 @@
 
   const FM = XKeen.features.fileManager;
 
+  // -------------------------- preferences (localStorage) --------------------------
+  const FM_LS = {
+    sort: 'xkeen.fm.sort',          // JSON: { key: 'name'|'size'|'perm'|'mtime', dir: 'asc'|'desc', dirsFirst: true }
+    showHidden: 'xkeen.fm.dotfiles', // '1'|'0'
+    mask: 'xkeen.fm.mask'           // last used selection mask (glob)
+  };
+
+  function lsGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  function lsSet(key, val) {
+    try { localStorage.setItem(key, String(val)); } catch (e) {}
+  }
+
+  function loadSortPref() {
+    const raw = lsGet(FM_LS.sort);
+    if (!raw) return { key: 'name', dir: 'asc', dirsFirst: true };
+    try {
+      const o = JSON.parse(raw);
+      const key = String(o && o.key || 'name');
+      const dir = String(o && o.dir || 'asc');
+      const dirsFirst = (o && typeof o.dirsFirst === 'boolean') ? !!o.dirsFirst : true;
+      if (!['name', 'size', 'perm', 'mtime'].includes(key)) return { key: 'name', dir: 'asc', dirsFirst: true };
+      if (!['asc', 'desc'].includes(dir)) return { key, dir: 'asc', dirsFirst };
+      return { key, dir, dirsFirst };
+    } catch (e) {
+      return { key: 'name', dir: 'asc', dirsFirst: true };
+    }
+  }
+
+  function saveSortPref(p) {
+    const o = {
+      key: (p && p.key) || 'name',
+      dir: (p && p.dir) || 'asc',
+      dirsFirst: (p && typeof p.dirsFirst === 'boolean') ? !!p.dirsFirst : true,
+    };
+    lsSet(FM_LS.sort, JSON.stringify(o));
+  }
+
+  function loadShowHiddenPref() {
+    const raw = lsGet(FM_LS.showHidden);
+    return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+  }
+
+  function saveShowHiddenPref(on) {
+    lsSet(FM_LS.showHidden, on ? '1' : '0');
+  }
+
+  function loadMaskPref() {
+    const raw = lsGet(FM_LS.mask);
+    return raw ? String(raw) : '';
+  }
+
+  function saveMaskPref(v) {
+    lsSet(FM_LS.mask, String(v || ''));
+  }
+
   // -------------------------- fullscreen --------------------------
   // File manager fullscreen is implemented the same way as the terminal chrome:
   // we just toggle a CSS class on the card (no browser Fullscreen API).
@@ -57,6 +115,149 @@
 
   function fmToggleFullscreen() {
     fmSetFullscreen(!fmIsFullscreen);
+  }
+
+  // -------------------------- bottom-left resize handle --------------------------
+  // The CSS `resize: both` only gives a browser handle on the bottom-right.
+  // We add our own draggable zone on the bottom-left corner so the card can be
+  // resized from the left side (keeping the right edge visually fixed).
+  function getFmShiftX(card) {
+    try {
+      const v = window.getComputedStyle(card).getPropertyValue('--fm-shift-x');
+      const n = parseFloat(String(v || '').trim());
+      return isFinite(n) ? n : 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function wireLeftResizeHandle() {
+    const card = fmCardEl();
+    if (!card) return;
+
+    let handle = qs('.fm-resize-handle-left', card);
+    if (!handle) {
+      try {
+        handle = document.createElement('div');
+        handle.className = 'fm-resize-handle-left';
+        handle.setAttribute('aria-hidden', 'true');
+        card.appendChild(handle);
+      } catch (e) {
+        return;
+      }
+    }
+
+    // avoid double-wire
+    try {
+      if (handle.dataset && handle.dataset.fmWire === '1') return;
+      if (handle.dataset) handle.dataset.fmWire = '1';
+    } catch (e) {}
+
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startW = 0;
+    let startH = 0;
+    let startShiftX = 0;
+    let prevBodyUserSelect = '';
+    let prevBodyCursor = '';
+
+    function canResizeNow() {
+      try {
+        if (fmIsFullscreen) return false;
+        // On narrow screens we disable resize entirely (see CSS media query).
+        if (window.matchMedia && window.matchMedia('(max-width: 920px)').matches) return false;
+        return true;
+      } catch (e) {
+        return !fmIsFullscreen;
+      }
+    }
+
+    function startDrag(ev) {
+      try {
+        if (!canResizeNow()) return;
+        if (ev && ev.pointerType === 'mouse' && ev.button !== 0) return;
+        const r = card.getBoundingClientRect();
+        startX = ev.clientX;
+        startY = ev.clientY;
+        startW = r.width;
+        startH = r.height;
+        startShiftX = getFmShiftX(card);
+
+        // Ensure pixel-based sizing so the drag math stays stable.
+        card.style.width = Math.round(startW) + 'px';
+        card.style.height = Math.round(startH) + 'px';
+        card.style.setProperty('--fm-shift-x', startShiftX + 'px');
+
+        dragging = true;
+
+        // UX: prevent text selection while resizing.
+        prevBodyUserSelect = document.body.style.userSelect || '';
+        prevBodyCursor = document.body.style.cursor || '';
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'nesw-resize';
+
+        try { handle.setPointerCapture(ev.pointerId); } catch (e) {}
+        ev.preventDefault();
+        ev.stopPropagation();
+      } catch (e) {}
+    }
+
+    function onMove(ev) {
+      if (!dragging) return;
+      try {
+        let dx = ev.clientX - startX;
+        let dy = ev.clientY - startY;
+
+        // When dragging the left handle:
+        //  - width grows when mouse goes left (dx < 0)
+        //  - we shift the card by dx so the right edge stays visually fixed
+        let w = startW - dx;
+        let h = startH + dy;
+
+        // Clamp to something sane (avoid collapsing the layout too far).
+        const minW = 520;
+        const minH = 420;
+        const maxH = Math.round(window.innerHeight * 0.90);
+
+        if (w < minW) {
+          w = minW;
+          dx = startW - w;
+        }
+        if (h < minH) h = minH;
+        if (isFinite(maxH) && maxH > 0 && h > maxH) h = maxH;
+
+        const shiftX = startShiftX + dx;
+        card.style.width = Math.round(w) + 'px';
+        card.style.height = Math.round(h) + 'px';
+        card.style.setProperty('--fm-shift-x', Math.round(shiftX) + 'px');
+
+        ev.preventDefault();
+        ev.stopPropagation();
+      } catch (e) {}
+    }
+
+    function endDrag(ev) {
+      if (!dragging) return;
+      dragging = false;
+      try {
+        document.body.style.userSelect = prevBodyUserSelect;
+        document.body.style.cursor = prevBodyCursor;
+      } catch (e) {}
+      try {
+        if (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+        }
+      } catch (e) {}
+    }
+
+    // Pointer events cover mouse + touch and are well supported on modern browsers.
+    handle.addEventListener('pointerdown', startDrag, { passive: false });
+    handle.addEventListener('pointermove', onMove, { passive: false });
+    handle.addEventListener('pointerup', endDrag, { passive: false });
+    handle.addEventListener('pointercancel', endDrag, { passive: false });
+    handle.addEventListener('lostpointercapture', endDrag, { passive: false });
   }
 
   // -------------------------- small helpers --------------------------
@@ -123,8 +324,12 @@
   }
 
   function fmtSize(bytes) {
-    const n = Number(bytes || 0);
-    if (!isFinite(n) || n <= 0) return '';
+    // NOTE: 0-byte files are valid and should be shown as "0 B".
+    // Keep empty for missing/invalid/negative values.
+    if (bytes === null || bytes === undefined || bytes === '') return '';
+    const n = Number(bytes);
+    if (!isFinite(n) || n < 0) return '';
+    if (n === 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     let v = n;
     let u = 0;
@@ -369,6 +574,143 @@ function parentRemote(cwd) {
     if (details && detailsText != null) details.textContent = String(detailsText);
   }
 
+  // -------------------------- progress modal helpers --------------------------
+  function _pad2(n) {
+    const v = Math.floor(Math.abs(Number(n || 0)));
+    return (v < 10 ? '0' : '') + String(v);
+  }
+
+  function _fmtTimeFromSec(tsSec) {
+    const ts = Number(tsSec || 0);
+    if (!isFinite(ts) || ts <= 0) return '';
+    const d = new Date(ts * 1000);
+    return `${_pad2(d.getHours())}:${_pad2(d.getMinutes())}:${_pad2(d.getSeconds())}`;
+  }
+
+  function _fmtDateFromSec(tsSec) {
+    const ts = Number(tsSec || 0);
+    if (!isFinite(ts) || ts <= 0) return '';
+    const d = new Date(ts * 1000);
+    return `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}`;
+  }
+
+  function _isSameLocalDay(tsA, tsB) {
+    try {
+      const a = new Date(Number(tsA || 0) * 1000);
+      const b = new Date(Number(tsB || 0) * 1000);
+      return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _fmtWhenFromSec(tsSec) {
+    const ts = Number(tsSec || 0);
+    if (!isFinite(ts) || ts <= 0) return '';
+    const nowSec = _nowMs() / 1000;
+    const time = _fmtTimeFromSec(ts);
+    if (_isSameLocalDay(ts, nowSec)) return time;
+    return `${_fmtDateFromSec(ts)} ${time}`;
+  }
+
+  function _fmtDurationSec(seconds) {
+    const s = Math.max(0, Math.round(Number(seconds || 0)));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    if (h > 0) return `${h}h ${m}m ${r}s`;
+    if (m > 0) return `${m}m ${r}s`;
+    return `${r}s`;
+  }
+
+  async function _copyText(text) {
+    const v = String(text || '');
+    if (!v) return;
+    try {
+      if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(v);
+        toast('Скопировано', 'success');
+        return;
+      }
+    } catch (e) {}
+    // Fallback
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = v;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      toast('Скопировано', 'success');
+    } catch (e2) {
+      // ignore
+    }
+  }
+
+  function _ensureProgressExtra() {
+    const modal = el('fm-progress-modal');
+    const meta = el('fm-progress-meta');
+    if (!modal || !meta) return;
+    if (el('fm-progress-extra')) return;
+
+    const wrap = document.createElement('div');
+    wrap.id = 'fm-progress-extra';
+    wrap.className = 'fm-progress-extra';
+    wrap.innerHTML = `
+      <div class="fm-progress-extra-left">
+        <span style="opacity:.85;">Job:</span>
+        <span id="fm-progress-jobid" class="fm-mono" style="margin-left:6px;"></span>
+        <button type="button" class="btn-secondary" id="fm-progress-copyid-btn" style="padding:4px 10px;">Копировать</button>
+      </div>
+      <div class="fm-progress-extra-right" id="fm-progress-times"></div>
+    `;
+
+    // Insert after the meta line.
+    meta.parentNode.insertBefore(wrap, meta.nextSibling);
+
+    const copyBtn = el('fm-progress-copyid-btn');
+    if (copyBtn) {
+      copyBtn.onclick = (e) => {
+        try { e.preventDefault(); } catch (e2) {}
+        const jid = el('fm-progress-jobid') ? String(el('fm-progress-jobid').textContent || '') : '';
+        _copyText(jid);
+      };
+    }
+  }
+
+  function _setProgressExtra(job) {
+    _ensureProgressExtra();
+    const jidEl = el('fm-progress-jobid');
+    const copyBtn = el('fm-progress-copyid-btn');
+    const timesEl = el('fm-progress-times');
+    const wrap = el('fm-progress-extra');
+
+    const jobId = String(job && job.job_id || '');
+    if (jidEl) jidEl.textContent = jobId;
+    if (copyBtn) copyBtn.style.display = jobId ? '' : 'none';
+    if (wrap) wrap.style.display = jobId ? 'flex' : 'none';
+
+    const created = Number(job && job.created_ts || 0);
+    const started = Number(job && job.started_ts || 0);
+    const finished = Number(job && job.finished_ts || 0);
+    const now = _nowMs() / 1000;
+
+    let dur = 0;
+    if (started > 0 && finished > 0) dur = finished - started;
+    else if (started > 0 && (!finished || finished <= 0)) dur = now - started;
+    else if (created > 0 && finished > 0) dur = finished - created;
+
+    const parts = [];
+    if (created) parts.push(`создано ${_fmtWhenFromSec(created)}`);
+    if (started) parts.push(`старт ${_fmtWhenFromSec(started)}`);
+    if (finished) parts.push(`финиш ${_fmtWhenFromSec(finished)}`);
+    if (dur > 0) parts.push(`длительность ${_fmtDurationSec(dur)}`);
+
+    if (timesEl) timesEl.textContent = parts.join('   ');
+  }
+
   function _resetTransferState() {
     S.transfer.xhr = null;
     S.transfer.kind = '';
@@ -422,6 +764,26 @@ function parentRemote(cwd) {
     _ensureProgressDetailsToggle();
     _setProgressDetailsAvailable(false);
     _clearProgressAutoClose();
+
+    // Reset progress modal action buttons in case it was previously opened in a "view-only" mode.
+    try {
+      const cbtn = el('fm-progress-cancel-btn');
+      if (cbtn) cbtn.style.display = '';
+      const okBtn = el('fm-progress-ok-btn');
+      if (okBtn) okBtn.textContent = 'Скрыть';
+    } catch (e) {}
+
+    // Hide job metadata block for transfers.
+    try {
+      _ensureProgressExtra();
+      const wrap = el('fm-progress-extra');
+      const jid = el('fm-progress-jobid');
+      const times = el('fm-progress-times');
+      if (jid) jid.textContent = '';
+      if (times) times.textContent = '';
+      if (wrap) wrap.style.display = 'none';
+    } catch (e) {}
+
     modalOpen(el('fm-progress-modal'));
     _resetTransferState();
     _setProgressUi({
@@ -467,7 +829,7 @@ function parentRemote(cwd) {
     _setProgressUi({ errorText: message || 'transfer_failed' });
   }
 
-  function xhrDownloadFile({ url, filenameHint, titleLabel, method, body, headers }) {
+  function xhrDownloadFile({ url, filenameHint, titleLabel, method, body, headers, _confirmRetry }) {
   _openTransferModal(titleLabel || 'Download', filenameHint || '');
 
   const xhr = new XMLHttpRequest();
@@ -531,7 +893,33 @@ function parentRemote(cwd) {
     _finishTransferUi({ ok: false, message: 'Ошибка сети', detailsText: 'network_error', showDetails: true });
   };
 
-  xhr.onload = () => {
+  const _readXhrText = (xhr) => new Promise((resolve) => {
+    try {
+      const r = xhr && xhr.response;
+      if (r && typeof Blob !== 'undefined' && r instanceof Blob) {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result || ''));
+        fr.onerror = () => resolve('');
+        try { fr.readAsText(r); } catch (e) { resolve(''); }
+        return;
+      }
+    } catch (e) {}
+    try { resolve(String((xhr && xhr.responseText) || '')); } catch (e) { resolve(''); }
+  });
+
+  const _addConfirmParam = (u) => {
+    try {
+      const U = new URL(String(u || ''), window.location.origin);
+      U.searchParams.set('confirm', '1');
+      return U.pathname + U.search;
+    } catch (e) {
+      // fallback for odd relative URLs
+      if (String(u || '').indexOf('?') >= 0) return String(u) + '&confirm=1';
+      return String(u) + '?confirm=1';
+    }
+  };
+
+  xhr.onload = async () => {
     if (xhr.status >= 200 && xhr.status < 300) {
       const cd = xhr.getResponseHeader('Content-Disposition');
       const name = _parseContentDispositionFilename(cd) || filenameHint || 'download';
@@ -554,13 +942,52 @@ function parentRemote(cwd) {
       return;
     }
 
+    const raw = await _readXhrText(xhr);
+    let j = null;
+    try { j = JSON.parse(String(raw || '')); } catch (e) { j = null; }
+
+    // Confirm-required flow (server-side size estimation is truncated/unknown).
+    if (xhr.status === 409 && j && String(j.error || '') === 'confirm_required' && !_confirmRetry) {
+      let ok = true;
+      const msgText = String(j.message || 'Размер архива не удалось оценить точно. Продолжить?');
+      try {
+        if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
+          ok = await XKeen.ui.confirm({
+            title: 'Подтверждение',
+            message: msgText,
+            okText: 'Продолжить',
+            cancelText: 'Отмена',
+            danger: true,
+          });
+        } else {
+          ok = window.confirm(msgText);
+        }
+      } catch (e) { ok = true; }
+
+      if (!ok) {
+        _finishTransferUi({ ok: false, message: 'Отменено', showDetails: false, detailsText: 'Отменено пользователем' });
+        return;
+      }
+
+      // Retry same request with confirm=1
+      try { modalClose(el('fm-progress-modal')); } catch (e) {}
+      const newUrl = _addConfirmParam(url);
+      xhrDownloadFile({ url: newUrl, filenameHint, titleLabel, method, body, headers, _confirmRetry: true });
+      return;
+    }
+
     let msg = `HTTP ${xhr.status}`;
-    try {
-      const txt = String(xhr.responseText || '');
-      const j = JSON.parse(txt);
-      msg = String(j.error || j.message || msg);
-    } catch (e) {}
-    _finishTransferUi({ ok: false, message: msg, detailsText: (xhr && (xhr.responseText || '')) || '' });
+    if (j) {
+      msg = String(j.message || j.error || msg);
+      if (String(j.error || '') === 'zip_too_large' && j.estimated_bytes != null && j.max_bytes != null) {
+        try { msg = `Архив слишком большой: ${fmtSize(Number(j.estimated_bytes))} > лимит ${fmtSize(Number(j.max_bytes))}`; } catch (e) {}
+      } else if (String(j.error || '') === 'tmp_no_space' && j.free_bytes != null && j.required_bytes != null) {
+        try { msg = `Недостаточно места в /tmp: нужно ${fmtSize(Number(j.required_bytes))}, доступно ${fmtSize(Number(j.free_bytes))}`; } catch (e) {}
+      } else if (String(j.error || '') === 'tmp_limit_exceeded') {
+        msg = String(j.message || 'Превышен лимит использования /tmp при создании архива');
+      }
+    }
+    _finishTransferUi({ ok: false, message: msg, detailsText: raw || '', showDetails: true });
   };
 
   try {
@@ -569,6 +996,157 @@ function parentRemote(cwd) {
     try { xhr.send(); } catch (e2) {}
   }
 }
+
+  // -------------------------- upload conflicts (same-name) --------------------------
+  // Upload now refuses to overwrite by default (server returns 409 exists).
+  // We resolve the conflict client-side via a small modal.
+  let _uploadConflictBound = false;
+  let _uploadConflictResolver = null;
+  let _uploadConflictEscHandler = null;
+
+  function _ensureUploadConflictModal() {
+    const modal = el('fm-upload-conflict-modal');
+    const title = el('fm-upload-conflict-title');
+    const message = el('fm-upload-conflict-message');
+    const overwriteBtn = el('fm-upload-conflict-overwrite-btn');
+    const renameBtn = el('fm-upload-conflict-rename-btn');
+    const skipBtn = el('fm-upload-conflict-skip-btn');
+    const closeBtn = el('fm-upload-conflict-close-btn');
+
+    if (!modal || !title || !message || !overwriteBtn || !renameBtn || !skipBtn || !closeBtn) return null;
+
+    function closeWith(choice) {
+      try { modalClose(modal); } catch (e) {}
+      if (_uploadConflictEscHandler) {
+        try { document.removeEventListener('keydown', _uploadConflictEscHandler); } catch (e) {}
+        _uploadConflictEscHandler = null;
+      }
+      const r = _uploadConflictResolver;
+      _uploadConflictResolver = null;
+      if (typeof r === 'function') {
+        try { r(String(choice || 'skip')); } catch (e) {}
+      }
+    }
+
+    if (!_uploadConflictBound) {
+      _uploadConflictBound = true;
+
+      overwriteBtn.addEventListener('click', (e) => { e.preventDefault(); closeWith('overwrite'); });
+      renameBtn.addEventListener('click', (e) => { e.preventDefault(); closeWith('rename'); });
+      skipBtn.addEventListener('click', (e) => { e.preventDefault(); closeWith('skip'); });
+      closeBtn.addEventListener('click', (e) => { e.preventDefault(); closeWith('skip'); });
+
+      modal.addEventListener('click', (e) => {
+        // Click on backdrop closes.
+        if (e.target === modal) closeWith('skip');
+      });
+    }
+
+    // ESC closes as skip.
+    _uploadConflictEscHandler = (e) => {
+      if (e && (e.key === 'Escape' || e.key === 'Esc')) closeWith('skip');
+    };
+
+    return { modal, title, message, overwriteBtn, renameBtn, skipBtn };
+  }
+
+  function _sanitizeUploadName(name) {
+    let s = String(name || '').trim();
+    if (!s) s = 'upload.bin';
+    // Prevent path traversal / odd separators.
+    s = s.replace(/[\\/]+/g, '_');
+    s = s.replace(/\s+/g, ' ').trim();
+    if (s === '.' || s === '..') s = 'upload.bin';
+    if (!s) s = 'upload.bin';
+    return s;
+  }
+
+  function _splitNameExt(name) {
+    const s = _sanitizeUploadName(name);
+    const lastDot = s.lastIndexOf('.');
+    // Treat dotfiles like ".env" as "no extension".
+    if (lastDot > 0 && lastDot < s.length - 1) {
+      return { base: s.slice(0, lastDot), ext: s.slice(lastDot) };
+    }
+    return { base: s, ext: '' };
+  }
+
+  function _buildRenameCandidates(name, maxN) {
+    const { base, ext } = _splitNameExt(name);
+    const out = [];
+    const nmax = Math.max(1, Math.min(200, Number(maxN || 40)));
+    for (let i = 1; i <= nmax; i++) {
+      out.push(`${base} (${i})${ext}`);
+    }
+    return out;
+  }
+
+  async function _pickFirstFreeName(side, desiredName) {
+    const p = S.panels[side];
+    if (!p) return _sanitizeUploadName(desiredName);
+    const candidates = _buildRenameCandidates(desiredName, 60);
+    const fullPaths = candidates.map((nm) => (p.target === 'remote' ? joinRemote(p.cwd, nm) : joinLocal(p.cwd, nm)));
+
+    // Try an accurate check via /api/fs/stat-batch (best effort).
+    try {
+      const payload = { target: p.target, paths: fullPaths };
+      if (p.target === 'remote') payload.sid = p.sid;
+      const { res, data } = await fetchJson('/api/fs/stat-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res && res.ok && data && data.ok && Array.isArray(data.items) && data.items.length === fullPaths.length) {
+        for (let i = 0; i < data.items.length; i++) {
+          const it = data.items[i];
+          if (!it || !it.exists) return candidates[i];
+        }
+      }
+    } catch (e) {}
+
+    // Fallback to current panel listing.
+    try {
+      const existing = new Set((p.items || []).map((it) => safeName(it && it.name)));
+      for (const nm of candidates) {
+        if (!existing.has(nm)) return nm;
+      }
+    } catch (e) {}
+
+    return candidates[candidates.length - 1] || (_sanitizeUploadName(desiredName) + ' (1)');
+  }
+
+  async function _askUploadConflict({ name, cwd, target, existingType }) {
+    const ui = _ensureUploadConflictModal();
+    const nm = _sanitizeUploadName(name);
+    const dir = (String(target || '').toLowerCase() === 'remote')
+      ? (normRemotePath(cwd) || '.')
+      : (String(cwd || '').trim() || '/');
+    const kind = (existingType === 'dir') ? 'папка' : 'файл';
+
+    if (!ui) {
+      // Fallback: simple confirm => overwrite? Cancel => skip.
+      const ok = window.confirm(`В папке ${dir} уже есть ${kind} «${nm}». Перезаписать?`);
+      return ok ? 'overwrite' : 'skip';
+    }
+
+    // Close previous if any.
+    if (typeof _uploadConflictResolver === 'function') {
+      try { _uploadConflictResolver('skip'); } catch (e) {}
+      _uploadConflictResolver = null;
+    }
+
+    ui.title.textContent = (existingType === 'dir') ? 'Папка уже существует' : 'Файл уже существует';
+    ui.message.textContent = `В папке ${dir} уже есть ${kind} «${nm}». Что сделать с загружаемым файлом?`;
+    try { ui.overwriteBtn.disabled = (existingType === 'dir'); } catch (e) {}
+
+    modalOpen(ui.modal);
+    try { document.addEventListener('keydown', _uploadConflictEscHandler); } catch (e) {}
+    setTimeout(() => {
+      try { ui.skipBtn.focus(); } catch (e) {}
+    }, 0);
+
+    return new Promise((resolve) => { _uploadConflictResolver = resolve; });
+  }
 
 async function xhrUploadFiles({ side, files }) {
     const p = S.panels[side];
@@ -582,101 +1160,168 @@ async function xhrUploadFiles({ side, files }) {
     // Upload sequentially for predictable UI.
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const label = `${file.name} (${i + 1}/${files.length})`;
-      _openTransferModal('Upload', label);
+      const originalName = _sanitizeUploadName(file && file.name);
+      if (!originalName) continue;
 
-      const dir = (() => {
-        if (p.target === 'remote') {
-          const c = normRemotePath(p.cwd);
-          if (!c || c === '.') return './';
-          return c.endsWith('/') ? c : (c + '/');
+      const nameToType = new Map();
+      try { (p.items || []).forEach((it) => { if (it && it.name) nameToType.set(safeName(it.name), String(it.type || 'file')); }); } catch (e) {}
+      const existingSet = new Set(Array.from(nameToType.keys()));
+
+      let finalName = originalName;
+      let overwrite = false;
+
+      // Preflight conflict resolution using current listing.
+      while (existingSet.has(finalName) && !overwrite) {
+        const choice = await _askUploadConflict({ name: finalName, cwd: p.cwd, target: p.target, existingType: nameToType.get(finalName) || 'file' });
+        if (choice === 'skip') {
+          try { toast('Пропущено: ' + originalName, 'info'); } catch (e) {}
+          finalName = '';
+          break;
         }
-        const c = String(p.cwd || '');
-        return c.endsWith('/') ? c : (c + '/');
-      })();
+        if (choice === 'overwrite') {
+          overwrite = true;
+          break;
+        }
+        // rename
+        finalName = await _pickFirstFreeName(side, finalName);
+        overwrite = false;
+      }
 
-      const url = (() => {
-        const base = `/api/fs/upload?target=${encodeURIComponent(p.target)}&path=${encodeURIComponent(dir)}`;
-        if (p.target === 'remote') return base + `&sid=${encodeURIComponent(p.sid)}`;
-        return base;
-      })();
+      if (!finalName) continue;
 
-      const xhr = new XMLHttpRequest();
-      S.transfer.xhr = xhr;
-      S.transfer.kind = 'upload';
+      let attempt = 0;
+      let uploadedOk = false;
+      let skipped = false;
+      let hardFail = false;
+      while (attempt < 3) {
+        attempt++;
 
-      _bindProgressCancel(() => {
-        try { xhr.abort(); } catch (e) {}
-        _finishTransferUi({ ok: false, message: 'Отменено', showDetails: false, detailsText: 'Отменено пользователем' });
-      });
+        const destPath = (p.target === 'remote') ? joinRemote(p.cwd, finalName) : joinLocal(p.cwd, finalName);
+        const label = (finalName === originalName)
+          ? `${finalName} (${i + 1}/${files.length})`
+          : `${originalName} → ${finalName} (${i + 1}/${files.length})`;
 
-      xhr.open('POST', url, true);
-      // CSRF
-      try {
-        const tok = getCsrfToken();
-        if (tok) xhr.setRequestHeader('X-CSRF-Token', tok);
-      } catch (e) {}
+        _openTransferModal('Upload', label);
 
-      xhr.upload.onprogress = (ev) => {
-        const loaded = Number(ev.loaded || 0);
-        const total = Number(ev.total || 0);
-        const speed = _transferSpeedBytesPerSec(loaded);
-        const pct = (ev.lengthComputable && total > 0) ? Math.round((loaded / total) * 100) : 0;
-        const eta = (ev.lengthComputable && total > 0 && speed > 1) ? (total - loaded) / speed : 0;
-        const metaParts = [];
-        if (ev.lengthComputable && total > 0) metaParts.push(`${fmtSize(loaded)} / ${fmtSize(total)} (${pct}%)`);
-        else metaParts.push(`${fmtSize(loaded)}`);
-        const sp = _fmtSpeed(speed);
-        if (sp) metaParts.push(sp);
-        const et = _fmtEta(eta);
-        if (et) metaParts.push('ETA ' + et);
-        _setProgressUi({ pct, metaText: metaParts.join('   ') });
-      };
+        const url = (() => {
+          let u = `/api/fs/upload?target=${encodeURIComponent(p.target)}&path=${encodeURIComponent(destPath)}`;
+          if (p.target === 'remote') u += `&sid=${encodeURIComponent(p.sid)}`;
+          if (overwrite) u += '&overwrite=1';
+          return u;
+        })();
 
-      xhr.upload.onloadend = () => {
+        const xhr = new XMLHttpRequest();
+        S.transfer.xhr = xhr;
+        S.transfer.kind = 'upload';
+
+        _bindProgressCancel(() => {
+          try { xhr.abort(); } catch (e) {}
+          _finishTransferUi({ ok: false, message: 'Отменено', showDetails: false, detailsText: 'Отменено пользователем' });
+        });
+
+        xhr.open('POST', url, true);
+        // CSRF
         try {
-          // Request body sent; server may still be processing.
-          _setProgressUi({ pct: 100, metaText: 'Передано, завершаю на роутере…' });
+          const tok = getCsrfToken();
+          if (tok) xhr.setRequestHeader('X-CSRF-Token', tok);
         } catch (e) {}
-      };
 
-      const form = new FormData();
-      form.append('file', file, file.name);
-
-      const ok = await new Promise((resolve) => {
-        xhr.onerror = () => resolve(false);
-        xhr.onabort = () => resolve(false);
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const j = JSON.parse(String(xhr.responseText || '{}'));
-              if (j && j.ok) return resolve(true);
-              return resolve(false);
-            } catch (e) {
-              return resolve(true);
-            }
-          }
-          resolve(false);
+        xhr.upload.onprogress = (ev) => {
+          const loaded = Number(ev.loaded || 0);
+          const total = Number(ev.total || 0);
+          const speed = _transferSpeedBytesPerSec(loaded);
+          const pct = (ev.lengthComputable && total > 0) ? Math.round((loaded / total) * 100) : 0;
+          const eta = (ev.lengthComputable && total > 0 && speed > 1) ? (total - loaded) / speed : 0;
+          const metaParts = [];
+          if (ev.lengthComputable && total > 0) metaParts.push(`${fmtSize(loaded)} / ${fmtSize(total)} (${pct}%)`);
+          else metaParts.push(`${fmtSize(loaded)}`);
+          const sp = _fmtSpeed(speed);
+          if (sp) metaParts.push(sp);
+          const et = _fmtEta(eta);
+          if (et) metaParts.push('ETA ' + et);
+          _setProgressUi({ pct, metaText: metaParts.join('   ') });
         };
-        xhr.send(form);
-      });
 
-      if (!ok) {
+        xhr.upload.onloadend = () => {
+          try { _setProgressUi({ pct: 100, metaText: 'Передано, завершаю на роутере…' }); } catch (e) {}
+        };
+
+        const form = new FormData();
+        form.append('file', file, finalName);
+
+        const result = await new Promise((resolve) => {
+          xhr.onerror = () => resolve({ ok: false, status: xhr.status || 0, text: '' });
+          xhr.onabort = () => resolve({ ok: false, status: xhr.status || 0, text: '' });
+          xhr.onload = () => {
+            const text = String(xhr.responseText || '');
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                const j = JSON.parse(text || '{}');
+                if (j && j.ok) return resolve({ ok: true, status: xhr.status, text, json: j });
+              } catch (e) {}
+              return resolve({ ok: true, status: xhr.status, text });
+            }
+            let j = null;
+            try { j = JSON.parse(text || '{}'); } catch (e) { j = null; }
+            return resolve({ ok: false, status: xhr.status, text, json: j });
+          };
+          xhr.send(form);
+        });
+
+        if (result && result.ok) {
+          _setProgressUi({ pct: 100, metaText: 'Завершено' });
+          _finishTransferUi({ ok: true });
+          try { toast('Загружено: ' + finalName, 'success'); } catch (e) {}
+          uploadedOk = true;
+          break;
+        }
+
+        // Conflict returned by server (race / stale listing): ask and retry.
+        const err = String((result && result.json && (result.json.error || result.json.message)) || '');
+        if (result && result.status === 409 && (err === 'exists' || err === 'not_a_file')) {
+          try { modalClose(el('fm-progress-modal')); } catch (e) {}
+          const exType = String((result.json && result.json.type) || (err === 'not_a_file' ? 'dir' : 'file'));
+          const choice = await _askUploadConflict({ name: finalName, cwd: p.cwd, target: p.target, existingType: exType });
+          if (choice === 'skip') {
+            try { toast('Пропущено: ' + originalName, 'info'); } catch (e) {}
+            skipped = true;
+            break;
+          }
+          if (choice === 'overwrite') {
+            overwrite = true;
+            continue;
+          }
+          // rename
+          overwrite = false;
+          finalName = await _pickFirstFreeName(side, finalName);
+          continue;
+        }
+
+        // Real error.
         let msg = 'upload_failed';
         try {
-          const j = JSON.parse(String(xhr.responseText || '{}'));
-          msg = String(j.error || j.message || msg);
+          const j = result && result.json;
+          msg = String((j && (j.error || j.message)) || msg);
         } catch (e) {}
-        _finishTransferUi({ ok: false, message: msg, detailsText: (xhr && (xhr.responseText || '')) || '' });
-        // stop batch if one failed
+        _finishTransferUi({ ok: false, message: msg, detailsText: (result && result.text) || '' });
+        hardFail = true;
         break;
       }
 
-      // Server may still be processing remote put; show a small hint.
-      _setProgressUi({ pct: 100, metaText: 'Завершено' });
-      _finishTransferUi({ ok: true });
-      try { toast('Загружено: ' + file.name, 'success'); } catch (e) {}
-      await listPanel(side, { fromInput: false });
+      if (uploadedOk) {
+        await listPanel(side, { fromInput: false });
+        continue;
+      }
+
+      // No success.
+      if (skipped) {
+        continue;
+      }
+
+      // If we hit a real error OR retried conflicts too many times, stop the batch.
+      if (hardFail || attempt >= 3) {
+        break;
+      }
     }
   }
 
@@ -685,22 +1330,33 @@ async function xhrUploadFiles({ side, files }) {
     enabled: false,
     caps: null,
     remoteCaps: null,
+    prefs: {
+      sort: loadSortPref(),
+      showHidden: loadShowHiddenPref(),
+    },
     activeSide: 'left',
     create: { kind: '', side: 'left' },
     rename: { side: 'left', oldName: '' },
     ctxMenu: { shown: false, side: 'left', name: '', isDir: false },
     dropOp: { resolve: null }, // drag&drop move/copy choice modal
     panels: {
-      left: { target: 'local', sid: '', cwd: '/opt/var', roots: [], items: [], selected: new Set(), focusName: '', anchorName: '' },
+      left: { target: 'local', sid: '', cwd: '/opt/var', roots: [], items: [], selected: new Set(), focusName: '', anchorName: '', filter: '' },
       // Keenetic-friendly default: right panel opens at disk list (/tmp/mnt)
-      right: { target: 'local', sid: '', cwd: '/tmp/mnt', roots: [], items: [], selected: new Set(), focusName: '', anchorName: '' },
+      right: { target: 'local', sid: '', cwd: '/tmp/mnt', roots: [], items: [], selected: new Set(), focusName: '', anchorName: '', filter: '' },
     },
     connectForSide: 'left',
     pending: null, // { op, payload, conflicts }
     ws: { socket: null, jobId: '', token: '', pollTimer: null },
     jobStats: {}, // job_id -> { lastTsMs, lastBytes, speed }
     transfer: { xhr: null, kind: '', startedAtMs: 0, lastAtMs: 0, lastLoaded: 0, speed: 0 },
+    renderToken: { left: 0, right: 0 },
     autoDiskDone: false,
+    opsUi: {
+      filter: 'all',
+      hiddenIds: null, // Set<string>
+      lastJobs: [],
+    },
+    trashUi: { lastLevel: '', lastTsMs: 0, lastNotice: '' },
   };
 
   function panelEl(side) {
@@ -718,6 +1374,9 @@ async function xhrUploadFiles({ side, files }) {
       pathInput: qs('.fm-path-input', root),
       upBtn: qs('.fm-up-btn', root),
       refreshBtn: qs('.fm-refresh-btn', root),
+      clearTrashBtn: qs('.fm-clear-trash-btn', root),
+      filterInput: qs('.fm-filter-input', root),
+      filterClearBtn: qs('.fm-filter-clear-btn', root),
       list: qs('.fm-list', root),
     };
   }
@@ -730,28 +1389,437 @@ async function xhrUploadFiles({ side, files }) {
       if (!d) return;
       try { d.root.classList.toggle('fm-panel-active', s === side); } catch (e) {}
     });
+
+    // Keep footer navigation button ("Очистить корзину") in sync
+    // with the currently active panel.
+    try { updateFmFooterNavButtons(); } catch (e) {}
+  }
+
+  function updateFmFooterNavButtons() {
+    const clearTrashBtn = el('fm-clear-trash-active-btn');
+    if (!clearTrashBtn) return;
+
+    // "Очистить корзину" is only relevant for local /opt/var/trash.
+    let isTrash = false;
+    try {
+      const p = S && S.panels ? S.panels[S.activeSide] : null;
+      isTrash = isTrashPanel(p);
+    } catch (e) { isTrash = false; }
+
+    try {
+      if (clearTrashBtn) clearTrashBtn.classList.toggle('hidden', !isTrash);
+    } catch (e) {}
   }
 
   function otherSide(side) {
     return side === 'left' ? 'right' : 'left';
   }
 
-  function sortItems(items) {
+  function isDirLike(it) {
+    try {
+      const t = String(it && it.type || '');
+      return (t === 'dir') || (t === 'link' && !!(it && it.link_dir));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isHiddenName(name) {
+    const n = String(name || '');
+    // keep '.' and '..' (even if they ever appear) as not-hidden
+    if (n === '.' || n === '..') return false;
+    return n.startsWith('.');
+  }
+
+  function cmpStr(a, b) {
+    const aa = String(a || '').toLowerCase();
+    const bb = String(b || '').toLowerCase();
+    return aa.localeCompare(bb);
+  }
+
+  function sortItems(items, sortPref) {
     const arr = Array.from(items || []);
+    const pref = sortPref || (S && S.prefs && S.prefs.sort) || { key: 'name', dir: 'asc', dirsFirst: true };
+    const key = String(pref.key || 'name');
+    const dir = String(pref.dir || 'asc');
+    const mul = (dir === 'desc') ? -1 : 1;
+    const dirsFirst = (pref && typeof pref.dirsFirst === 'boolean') ? !!pref.dirsFirst : true;
+
+    const keyFn = (it) => {
+      if (!it) return null;
+      if (key === 'size') {
+        if (isDirLike(it)) return null; // sort dirs by name fallback
+        const n = Number(it.size);
+        return isFinite(n) ? n : 0;
+      }
+      if (key === 'mtime') {
+        const n = Number(it.mtime);
+        return isFinite(n) ? n : 0;
+      }
+      if (key === 'perm') {
+        return String(it.perm || '');
+      }
+      // name
+      return String(it.name || '');
+    };
+
     arr.sort((a, b) => {
-      const ad = ((a && a.type) === 'dir') || (((a && a.type) === 'link') && !!(a && a.link_dir));
-      const bd = ((b && b.type) === 'dir') || (((b && b.type) === 'link') && !!(b && b.link_dir));
-      if (ad && !bd) return -1;
-      if (!ad && bd) return 1;
-      const an = String((a && a.name) || '').toLowerCase();
-      const bn = String((b && b.name) || '').toLowerCase();
-      return an.localeCompare(bn);
+      const ad = isDirLike(a);
+      const bd = isDirLike(b);
+      if (dirsFirst) {
+        if (ad && !bd) return -1;
+        if (!ad && bd) return 1;
+      }
+
+      // For size sorting, directories don't have a meaningful size – sort them by name
+      // but still respect the current direction.
+      if (key === 'size' && ad && bd) {
+        const c = cmpStr(a && a.name, b && b.name);
+        if (c) return c * mul;
+      }
+
+      const av = keyFn(a);
+      const bv = keyFn(b);
+
+      // number compare
+      if (typeof av === 'number' || typeof bv === 'number') {
+        const an = (typeof av === 'number') ? av : 0;
+        const bn = (typeof bv === 'number') ? bv : 0;
+        if (an !== bn) return (an < bn ? -1 : 1) * mul;
+      } else {
+        const c = cmpStr(av, bv);
+        if (c) return c * mul;
+      }
+
+      // deterministic fallback: name asc, then type
+      const cn = cmpStr(a && a.name, b && b.name);
+      if (cn) return cn;
+      return cmpStr(a && a.type, b && b.type);
     });
+
     return arr;
   }
 
-  // Keenetic mounts: /tmp/mnt contains UUID-like mount folders + user-friendly label symlinks.
-  // We want to show only labels in the root list (like firmware UI).
+  function visibleSortedItems(side) {
+    const p = S.panels[side];
+    if (!p) return [];
+    const sorted = sortItems(p.items || [], S.prefs.sort);
+
+    // Hidden files toggle
+    let out = S.prefs.showHidden ? sorted : sorted.filter((it) => !isHiddenName(it && it.name));
+
+    // Quick filter for current folder (substring match, supports multiple terms separated by spaces)
+    const q = String(p.filter || '').trim().toLowerCase();
+    if (q) {
+      const terms = q.split(/\s+/).map((x) => x.trim()).filter(Boolean);
+      if (terms.length) {
+        out = out.filter((it) => {
+          const nm = String(it && it.name || '').toLowerCase();
+          return terms.every((t) => nm.includes(t));
+        });
+      }
+    }
+
+    return out;
+  }
+
+  function setShowHidden(on) {
+    const v = !!on;
+    S.prefs.showHidden = v;
+    saveShowHiddenPref(v);
+
+    // If we hide dotfiles, drop them from selection/focus to avoid acting on invisible items.
+    if (!v) {
+      ['left', 'right'].forEach((side) => {
+        const p = S.panels[side];
+        if (!p) return;
+        let changed = false;
+        try {
+          for (const nm of Array.from(p.selected || [])) {
+            if (isHiddenName(nm)) { p.selected.delete(nm); changed = true; }
+          }
+        } catch (e) {}
+
+        try {
+          if (p.focusName && isHiddenName(p.focusName)) {
+            const vis = visibleSortedItems(side);
+            p.focusName = vis.length ? safeName(vis[0] && vis[0].name) : '';
+            changed = true;
+          }
+        } catch (e) {}
+
+        if (changed) {
+          try { p.anchorName = p.focusName || ''; } catch (e) {}
+        }
+      });
+    }
+
+    try { renderPanel('left'); } catch (e) {}
+    try { renderPanel('right'); } catch (e) {}
+  }
+
+  // -------------------------- selection helpers --------------------------
+  function _visibleNames(side) {
+    try {
+      return visibleSortedItems(side).map((it) => safeName(it && it.name)).filter(Boolean);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function selectAllVisible(side) {
+    const p = S.panels[side];
+    if (!p) return;
+    const names = _visibleNames(side);
+    p.selected.clear();
+    names.forEach((n) => p.selected.add(n));
+    if (!p.focusName && names.length) p.focusName = names[0];
+    p.anchorName = p.focusName || '';
+    renderPanel(side);
+    try { toast(`Выбрано: ${names.length}`, 'info'); } catch (e) {}
+  }
+
+  function invertSelectionVisible(side) {
+    const p = S.panels[side];
+    if (!p) return;
+    const names = _visibleNames(side);
+    if (!names.length) return;
+    const next = new Set(p.selected || []);
+    names.forEach((n) => {
+      if (next.has(n)) next.delete(n);
+      else next.add(n);
+    });
+    p.selected = next;
+    if (!p.focusName && names.length) p.focusName = names[0];
+    p.anchorName = p.focusName || '';
+    renderPanel(side);
+  }
+
+  function _globToRegExp(glob) {
+    // Simple glob -> RegExp (supports *, ?). No path separators expected (names only).
+    const g = String(glob || '').trim();
+    if (!g) return null;
+    const esc = (s) => s.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    let rx = '';
+    for (const ch of g) {
+      if (ch === '*') rx += '.*';
+      else if (ch === '?') rx += '.';
+      else rx += esc(ch);
+    }
+    try { return new RegExp('^' + rx + '$', 'i'); } catch (e) { return null; }
+  }
+
+  function _splitMasks(text) {
+    const s = String(text || '').trim();
+    if (!s) return [];
+    // Accept comma/semicolon/space separated masks (e.g. *.log,*.json)
+    return s.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+  }
+
+  function applySelectByMask(side, maskText) {
+    const p = S.panels[side];
+    if (!p) return;
+    const masks = _splitMasks(maskText);
+    if (!masks.length) {
+      try { toast('Введите маску (например: *.log)', 'info'); } catch (e) {}
+      return;
+    }
+    saveMaskPref(masks.join(' '));
+
+    const regs = masks.map(_globToRegExp).filter(Boolean);
+    if (!regs.length) {
+      try { toast('Неверная маска', 'error'); } catch (e) {}
+      return;
+    }
+
+    const names = _visibleNames(side);
+    const matched = names.filter((n) => regs.some((r) => r.test(String(n))));
+    p.selected.clear();
+    matched.forEach((n) => p.selected.add(n));
+    if (matched.length) {
+      // Keep focus on the first matched item for fast next actions.
+      p.focusName = matched[0];
+      p.anchorName = p.focusName || '';
+      renderPanel(side);
+      try { toast(`Выбрано по маске: ${matched.length}`, 'success'); } catch (e) {}
+    } else {
+      renderPanel(side);
+      try { toast('По маске ничего не найдено', 'info'); } catch (e) {}
+    }
+  }
+
+  function openMaskModal() {
+    const modal = el('fm-mask-modal');
+    const inp = el('fm-mask-pattern');
+    const err = el('fm-mask-error');
+    const side = S.activeSide || 'left';
+    if (!modal || !inp) {
+      // Fallback (should rarely happen)
+      const v = prompt('Выделить по маске (пример: *.log *.json):', loadMaskPref() || '*.log');
+      if (v !== null) applySelectByMask(side, v);
+      return;
+    }
+    try { if (err) err.textContent = ''; } catch (e) {}
+    try { inp.value = loadMaskPref() || '*.log'; } catch (e) {}
+    try { modalOpen(modal); } catch (e) { modal.classList.remove('hidden'); }
+    try { inp.focus(); inp.select(); } catch (e) {}
+  }
+
+  function copyFullPaths(side) {
+    const p = S.panels[side];
+    if (!p) return;
+    const names = getSelectionNames(side);
+    if (!names.length) {
+      _copyText(String(p.cwd || ''));
+      return;
+    }
+    const full = names.map((nm) => (p.target === 'remote' ? joinRemote(p.cwd, nm) : joinLocal(p.cwd, nm)));
+    _copyText(full.join('\n'));
+  }
+
+  // -------------------------- bookmarks / quick paths --------------------------
+  const FM_BOOKMARKS_LOCAL = [
+    { label: '/opt/var', value: '/opt/var' },
+    { label: '🗑 Корзина (/opt/var/trash)', value: '/opt/var/trash' },
+    { label: '/opt/etc', value: '/opt/etc' },
+    { label: '/tmp/mnt (диски)', value: '/tmp/mnt' },
+    { label: '/opt/etc/xray', value: '/opt/etc/xray' },
+    { label: '/opt/etc/mihomo', value: '/opt/etc/mihomo' },
+  ];
+
+  const FM_BOOKMARKS_REMOTE = [
+    { label: '~ (home)', value: '.' },
+    { label: '/', value: '/' },
+    { label: '/opt', value: '/opt' },
+    { label: '/etc', value: '/etc' },
+    { label: '/etc/init.d', value: '/etc/init.d' },
+    { label: '/var', value: '/var' },
+    { label: '/var/log', value: '/var/log' },
+    { label: '/tmp', value: '/tmp' },
+    { label: '/home', value: '/home' },
+    { label: '/root', value: '/root' },
+    { label: '/usr', value: '/usr' },
+    { label: '/bin', value: '/bin' },
+    { label: '/sbin', value: '/sbin' },
+    { label: '/proc', value: '/proc' },
+    { label: '/sys', value: '/sys' },
+  ];
+
+
+  const FM_TRASH_PATH = '/opt/var/trash';
+
+  function isTrashPanel(p) {
+    try {
+      const cwd = String((p && p.cwd) || '').replace(/\/+$/, '');
+      // Show trash UI not only for the root folder itself, but also for any
+      // nested folder inside it.
+      return !!p
+        && String(p.target || 'local') === 'local'
+        && (cwd === FM_TRASH_PATH || cwd.startsWith(FM_TRASH_PATH + '/'));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _bookmarksForPanel(p) {
+    const target = String(p && p.target || 'local');
+    if (target === 'remote') return FM_BOOKMARKS_REMOTE;
+    // Local: filter/disable based on sandbox roots returned by backend.
+    const roots = Array.isArray(p && p.roots) ? p.roots : [];
+    return FM_BOOKMARKS_LOCAL.map((b) => {
+      const val = String(b && b.value || '');
+      const allowed = !roots.length || isAllowedLocalPath(val, roots);
+      return Object.assign({}, b, { _allowed: allowed });
+    });
+  }
+
+  function ensureBookmarksSelect(side) {
+    const pd = panelDom(side);
+    const p = S.panels[side];
+    if (!pd || !p) return;
+    const bar = qs('.fm-panel-bar', pd.root);
+    if (!bar) return;
+
+    let sel = qs('.fm-bookmarks-select', bar);
+    if (!sel) {
+      sel = document.createElement('select');
+      sel.className = 'fm-bookmarks-select';
+      sel.title = 'Быстрые пути';
+      sel.setAttribute('aria-label', 'Быстрые пути');
+      sel.addEventListener('change', async () => {
+        const v = String(sel.value || '').trim();
+        sel.value = '';
+        if (!v) return;
+        try { setActiveSide(side); } catch (e) {}
+        try { pd.pathInput && (pd.pathInput.value = (p.target === 'remote' && v === '.') ? '~' : v); } catch (e) {}
+        await listPanel(side, { fromInput: true });
+      });
+
+      // Place it after the target selector to avoid stealing width from the path input.
+      try {
+        if (pd.targetSelect && pd.targetSelect.parentElement === bar) {
+          bar.insertBefore(sel, pd.targetSelect.nextSibling);
+        } else {
+          bar.insertBefore(sel, bar.firstChild);
+        }
+      } catch (e) {
+        try { bar.appendChild(sel); } catch (e2) {}
+      }
+    }
+
+    // Update options depending on target.
+    const opts = _bookmarksForPanel(p);
+    const sig = String(p.target) + ':' + String(opts.length) + ':' + String((p.roots || []).join('|'));
+    if (sel.dataset.sig !== sig) {
+      sel.dataset.sig = sig;
+      sel.innerHTML = '';
+      const ph = document.createElement('option');
+      ph.value = '';
+      ph.textContent = '📌';
+      sel.appendChild(ph);
+
+      // Remote: plain list. Local: show unavailable in a separate group (disabled).
+      if (String(p.target) === 'remote') {
+        (opts || []).forEach((o) => {
+          const opt = document.createElement('option');
+          opt.value = String(o.value || '');
+          opt.textContent = String(o.label || o.value || '');
+          sel.appendChild(opt);
+        });
+      } else {
+        const allowed = (opts || []).filter((o) => o && o._allowed);
+        const denied = (opts || []).filter((o) => o && !o._allowed);
+
+        const g1 = document.createElement('optgroup');
+        g1.label = 'Доступно';
+        allowed.forEach((o) => {
+          const opt = document.createElement('option');
+          opt.value = String(o.value || '');
+          opt.textContent = String(o.label || o.value || '');
+          g1.appendChild(opt);
+        });
+        sel.appendChild(g1);
+
+        if (denied.length) {
+          const g2 = document.createElement('optgroup');
+          g2.label = 'Недоступно (sandbox)';
+          denied.forEach((o) => {
+            const opt = document.createElement('option');
+            opt.value = String(o.value || '');
+            opt.textContent = '⛔ ' + String(o.label || o.value || '');
+            opt.disabled = true;
+            g2.appendChild(opt);
+          });
+          sel.appendChild(g2);
+        }
+      }
+    }
+  }
+
+  // Keenetic mounts: /tmp/mnt may contain both UUID-like mount folders and
+  // user-friendly label symlinks. The *backend* is responsible for returning
+  // a "pretty" list (labels first, UUID folders hidden when labels exist).
+  // Frontend only uses this check for UI details (icons, auto-enter).
   function isTmpMntRoot(panel) {
     try {
       return !!panel && panel.target === 'local' && String(panel.cwd || '').replace(/\/+$/, '') === '/tmp/mnt';
@@ -760,40 +1828,13 @@ async function xhrUploadFiles({ side, files }) {
     }
   }
 
-  function looksLikeUuidName(name) {
-    const n = String(name || '').trim();
-    if (!n) return false;
-    // 8-4-4-4-12 canonical UUID
-    if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(n)) return true;
-    // long hex-only ids
-    if (/^[0-9a-fA-F]{24,}$/.test(n)) return true;
-    return false;
-  }
-
-  function beautifyTmpMntRootItems(items) {
-    const arr = Array.from(items || []);
-    const diskLabels = arr.filter((it) => String(it && it.type) === 'link' && !!(it && it.link_dir));
-    if (diskLabels.length) {
-      // Hide raw mount folders (UUID-like dirs). Keep only disk labels + any non-UUID extras.
-      const extras = arr.filter((it) => {
-        const t = String(it && it.type);
-        const nm = safeName(it && it.name);
-        if (t === 'dir' && looksLikeUuidName(nm)) return false;
-        // If there are label symlinks, root list should primarily be labels.
-        // Keep any non-UUID entries (dirs, files, other links) as "extras".
-        return true;
-      });
-      // Prefer labels. Extras (e.g. unexpected files) appended.
-      return diskLabels.concat(extras.filter((x) => diskLabels.indexOf(x) < 0));
-    }
-    // If no labels exist, don't hide anything (otherwise user may see an empty list).
-    return arr;
-  }
-
   function renderPanel(side) {
     const pd = panelDom(side);
     const p = S.panels[side];
     if (!pd || !p) return;
+
+    // Ensure quick paths dropdown exists and is synced with current target.
+    try { ensureBookmarksSelect(side); } catch (e) {}
 
     if (pd.targetSelect && String(pd.targetSelect.value) !== String(p.target)) {
       try { pd.targetSelect.value = p.target; } catch (e) {}
@@ -808,6 +1849,17 @@ async function xhrUploadFiles({ side, files }) {
         pd.pathInput.value = String(p.cwd || '');
       }
     }
+
+    // Filter input (client-side filter for current folder)
+    try { if (pd.filterInput) pd.filterInput.value = String(p.filter || ''); } catch (e) {}
+    try { if (pd.filterClearBtn) pd.filterClearBtn.classList.toggle('hidden', !String(p.filter || '').trim()); } catch (e) {}
+
+    // Trash UI (extra column + "clear" button)
+    const isTrash = isTrashPanel(p);
+    try { pd.root.classList.toggle('is-trash', !!isTrash); } catch (e) {}
+    try { if (pd.clearTrashBtn) pd.clearTrashBtn.classList.toggle('hidden', !isTrash); } catch (e) {}
+    // Footer navigation buttons depend on the active panel + current cwd.
+    try { updateFmFooterNavButtons(); } catch (e) {}
 
     // Buttons visibility
     const isRemote = p.target === 'remote';
@@ -831,17 +1883,65 @@ async function xhrUploadFiles({ side, files }) {
     // Preserve focus if possible
     const focusName = p.focusName;
 
-    const frag = document.createDocumentFragment();
+    // Cancel any in-flight incremental render for this side
+    try { S.renderToken[side] = (Number(S.renderToken[side] || 0) + 1); } catch (e) {}
+    const myToken = Number(S.renderToken[side] || 0);
 
-    // header row
+    // header row (sortable columns)
     const header = document.createElement('div');
     header.className = 'fm-row fm-row-header';
-    header.innerHTML = '<div class="fm-cell fm-check"></div><div class="fm-cell fm-name">Имя</div><div class="fm-cell fm-size">Размер</div><div class="fm-cell fm-perm">Права</div><div class="fm-cell fm-mtime">Изм.</div>';
-    frag.appendChild(header);
+    const showTrashFrom = isTrashPanel(p);
+    header.innerHTML = [
+      '<div class="fm-cell fm-check"></div>',
+      '<div class="fm-cell fm-name fm-sort-cell" data-sort="name">Имя <span class="fm-sort-ind" aria-hidden="true"></span></div>',
+      ...(showTrashFrom ? ['<div class="fm-cell fm-from" title="Откуда удалено">Откуда удалено</div>'] : []),
+      '<div class="fm-cell fm-size fm-sort-cell" data-sort="size">Размер <span class="fm-sort-ind" aria-hidden="true"></span></div>',
+      '<div class="fm-cell fm-perm fm-sort-cell" data-sort="perm">Права <span class="fm-sort-ind" aria-hidden="true"></span></div>',
+      '<div class="fm-cell fm-mtime fm-sort-cell" data-sort="mtime">Изм. <span class="fm-sort-ind" aria-hidden="true"></span></div>',
+    ].join('');
+
+    const updateHeaderSortUi = () => {
+      try {
+        const pref = S.prefs.sort || { key: 'name', dir: 'asc' };
+        const key = String(pref.key || 'name');
+        const dir = String(pref.dir || 'asc');
+        const ind = (dir === 'desc') ? '▼' : '▲';
+        qsa('.fm-sort-cell', header).forEach((c) => {
+          const k = String(c.dataset.sort || '');
+          const active = (k === key);
+          c.classList.toggle('is-sort-active', active);
+          const sp = qs('.fm-sort-ind', c);
+          if (sp) sp.textContent = active ? ind : '';
+        });
+      } catch (e) {}
+    };
+
+    header.addEventListener('click', (e) => {
+      const cell = e && e.target && e.target.closest ? e.target.closest('.fm-sort-cell') : null;
+      if (!cell) return;
+      const k = String(cell.dataset.sort || '');
+      if (!k) return;
+      const cur = S.prefs.sort || { key: 'name', dir: 'asc', dirsFirst: true };
+      const next = Object.assign({}, cur);
+      if (String(cur.key) === k) {
+        next.dir = (String(cur.dir) === 'asc') ? 'desc' : 'asc';
+      } else {
+        next.key = k;
+        next.dir = 'asc';
+      }
+      S.prefs.sort = next;
+      saveSortPref(next);
+      updateHeaderSortUi();
+      // Re-render both panels to reflect the new global sort.
+      try { renderPanel('left'); } catch (e2) {}
+      try { renderPanel('right'); } catch (e2) {}
+    });
 
     const tmpMntRoot = isTmpMntRoot(p);
-    const items = sortItems(p.items);
-    items.forEach((it) => {
+    const items = visibleSortedItems(side);
+    updateHeaderSortUi();
+
+    const buildRow = (it) => {
       const row = document.createElement('div');
       const name = safeName(it && it.name);
       const type = String((it && it.type) || '');
@@ -852,7 +1952,6 @@ async function xhrUploadFiles({ side, files }) {
       row.tabIndex = -1;
       row.dataset.name = name;
       row.dataset.type = type;
-      // enable drag from row (DnD between panels)
       row.setAttribute('draggable', 'true');
 
       const selected = p.selected.has(name);
@@ -862,10 +1961,11 @@ async function xhrUploadFiles({ side, files }) {
       const size = isDir ? 'DIR' : fmtSize(it && it.size);
       const perm = safeName(it && it.perm);
       const mtime = fmtTime(it && it.mtime);
+      const trashFrom = safeName(it && it.trash_from);
+      const fromCell = showTrashFrom
+        ? '<div class="fm-cell fm-from"><span class="fm-from-text"></span></div>'
+        : '';
       const isDiskLabel = tmpMntRoot && type === 'link' && linkDir;
-      // Keenetic-like visuals:
-      // - disk labels in /tmp/mnt root -> "disk" icon
-      // - symlink to directory -> show as normal folder (avoid name shift from 🔗📁)
       const ico = (type === 'dir') ? '📁'
         : (type === 'link'
           ? (linkDir ? (isDiskLabel ? '💽' : '📁') : '🔗')
@@ -873,6 +1973,7 @@ async function xhrUploadFiles({ side, files }) {
       row.innerHTML = `
         <div class="fm-cell fm-check"><input type="checkbox" class="fm-check-input" aria-label="Выбрать" /></div>
         <div class="fm-cell fm-name"><span class="fm-ico">${ico}</span><span class="fm-name-text"></span></div>
+        ${fromCell}
         <div class="fm-cell fm-size">${size}</div>
         <div class="fm-cell fm-perm">${perm ? perm : ''}</div>
         <div class="fm-cell fm-mtime">${mtime}</div>
@@ -881,12 +1982,50 @@ async function xhrUploadFiles({ side, files }) {
         const t = qs('.fm-name-text', row);
         if (t) t.textContent = name;
       } catch (e) {}
+      if (showTrashFrom) {
+        try {
+          const ft = qs('.fm-from-text', row);
+          if (ft) ft.textContent = trashFrom || '';
+          const fc = qs('.fm-cell.fm-from', row);
+          if (fc) fc.title = trashFrom || '';
+        } catch (e) {}
+      }
       try { const cb = qs('.fm-check-input', row); if (cb) cb.checked = !!selected; } catch (e) {}
-      frag.appendChild(row);
-    });
+      return row;
+    };
 
     list.innerHTML = '';
-    list.appendChild(frag);
+    list.appendChild(header);
+
+    // Large directories: incremental/batched render to avoid freezing the UI.
+    const BIG = 1000;
+    const BATCH = 250;
+    if (!items || items.length <= BIG) {
+      const frag = document.createDocumentFragment();
+      (items || []).forEach((it) => frag.appendChild(buildRow(it)));
+      list.appendChild(frag);
+    } else {
+      let idx = 0;
+      const pump = () => {
+        if (Number(S.renderToken[side] || 0) !== myToken) return;
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < BATCH && idx < items.length; i += 1, idx += 1) {
+          frag.appendChild(buildRow(items[idx]));
+        }
+        list.appendChild(frag);
+        if (idx < items.length) {
+          requestAnimationFrame(pump);
+        } else {
+          // Ensure focus row visible
+          try {
+            const f = qs('.fm-row.is-focused', list);
+            if (f && typeof f.scrollIntoView === 'function') f.scrollIntoView({ block: 'nearest' });
+          } catch (e) {}
+        }
+      };
+      requestAnimationFrame(pump);
+      return; // focus handling moved into pump()
+    }
 
     // Ensure focus row visible
     try {
@@ -960,12 +2099,31 @@ async function xhrUploadFiles({ side, files }) {
       const details = data && (data.details || data.hint) ? String(data.details || data.hint) : '';
       if (msg === 'path_not_allowed') {
         // Local sandbox boundary — not an actual error for UX.
-        toast('FM: достигнут предел sandbox', 'info');
+        toast('FM: путь вне sandbox (см. XKEEN_LOCALFM_ROOTS)', 'info');
       } else {
         toast('FM: ' + msg + (details ? (' — ' + details) : ''), 'error');
       }
       return false;
     }
+
+
+    // Trash usage warnings (local only)
+    try {
+      const t = data && data.trash ? data.trash : null;
+      if (t && (t.is_full || t.is_near_full) && (t.percent !== null && t.percent !== undefined)) {
+        const now = _nowMs();
+        const level = t.is_full ? 'full' : 'near';
+        if (!S.trashUi) S.trashUi = { lastLevel: '', lastTsMs: 0, lastNotice: '' };
+        // Show at most once per 10 minutes per level.
+        if (S.trashUi.lastLevel !== level || (now - (S.trashUi.lastTsMs || 0)) > 10 * 60 * 1000) {
+          S.trashUi.lastLevel = level;
+          S.trashUi.lastTsMs = now;
+          const pct = Number(t.percent || 0);
+          if (t.is_full) toast(`Корзина заполнена (${pct}%). Удаляемые файлы будут удаляться сразу — очистите корзину.`, 'error');
+          else toast(`Корзина почти заполнена (${pct}%). Рекомендуется очистить корзину.`, 'info');
+        }
+      }
+    } catch (e) {}
 
     p.roots = Array.isArray(data.roots) ? data.roots : (p.roots || []);
     if (p.target === 'local') {
@@ -977,10 +2135,7 @@ async function xhrUploadFiles({ side, files }) {
 
     let nextItems = Array.isArray(data.items) ? data.items : [];
 
-    // Keenetic-like view for /tmp/mnt root: show only disk labels (symlink dirs), hide UUID mount folders.
-    if (isTmpMntRoot(p)) {
-      nextItems = beautifyTmpMntRootItems(nextItems);
-    }
+    // Backend is the single source of truth for /tmp/mnt root prettification.
 
     // If user has exactly one disk label, auto-enter it on first load of the right panel.
     // (Keeps dual-pane UX: left stays /opt/var; right opens the only disk.)
@@ -1055,7 +2210,7 @@ async function xhrUploadFiles({ side, files }) {
     const to = safeName(toName || '');
     if (!from || !to) return;
 
-    const items = sortItems(p.items || []);
+    const items = visibleSortedItems(side);
     const names = items.map((it) => safeName(it && it.name));
     const a = names.indexOf(from);
     const b = names.indexOf(to);
@@ -1086,7 +2241,7 @@ async function xhrUploadFiles({ side, files }) {
   function focusNext(side, delta) {
     const p = S.panels[side];
     if (!p || !p.items || !p.items.length) return;
-    const items = sortItems(p.items);
+    const items = visibleSortedItems(side);
     let idx = items.findIndex((it) => safeName(it && it.name) === p.focusName);
     if (idx < 0) idx = 0;
     idx = Math.max(0, Math.min(items.length - 1, idx + delta));
@@ -1095,7 +2250,232 @@ async function xhrUploadFiles({ side, files }) {
   }
 
 
-  // -------------------------- text file viewer/editor (CodeMirror modal) --------------------------
+  // -------------------------- properties (moved to ПКМ menu) --------------------------
+  let propsReqId = 0;
+
+  function _kvRow(k, v) {
+    const key = _htmlEscape(k);
+    const val = (v === null || v === undefined || v === '') ? '—' : _htmlEscape(v);
+    return `<div class="fm-props-k">${key}</div><div class="fm-props-v">${val}</div>`;
+  }
+
+  async function fmBuildPropsHtml(side, reqId) {
+    const p = S.panels[side];
+    if (!p) return { metaText: '', html: '<div class="fm-props-empty">Нет данных.</div>' };
+
+    const names = getSelectionNames(side);
+    const selCount = (p.selected && p.selected.size) ? p.selected.size : 0;
+
+    const metaText = `${side === 'left' ? 'левая' : 'правая'} панель • ${selCount ? ('выделено: ' + selCount) : (names.length ? 'фокус' : 'нет выбора')}`;
+
+    if (!names.length) {
+      return { metaText, html: '<div class="fm-props-empty">Ничего не выбрано.</div>' };
+    }
+
+    // Remote target requires an active session.
+    if (p.target === 'remote' && !p.sid) {
+      return { metaText, html: '<div class="fm-props-empty">Remote: нет соединения.</div>' };
+    }
+
+    // NOTE: /api/fs/stat-batch expects full paths. Build them from the panel cwd.
+    const fullPaths = names.map((nm) => (p.target === 'remote' ? joinRemote(p.cwd, nm) : joinLocal(p.cwd, nm)));
+    const payload = { target: p.target, paths: fullPaths };
+    if (p.target === 'remote') payload.sid = p.sid;
+
+    let j = null;
+    try {
+      const { res, data } = await fetchJson('/api/fs/stat-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (reqId !== propsReqId) return null; // outdated
+      if (!res || !res.ok || !data || !data.ok) {
+        return { metaText, html: '<div class="fm-props-empty">Не удалось получить свойства.</div>' };
+      }
+      j = data;
+    } catch (e) {
+      if (reqId !== propsReqId) return null;
+      return { metaText, html: '<div class="fm-props-empty">Ошибка запроса свойств.</div>' };
+    }
+
+    const items = Array.from((j && j.items) || []).filter((x) => x && x.exists);
+    if (!items.length) {
+      return { metaText, html: '<div class="fm-props-empty">Файлы не найдены.</div>' };
+    }
+
+    // Aggregation: total size for files/links; directories are unknown.
+    let totalBytes = 0;
+    let hasUnknownDir = false;
+    let countFile = 0, countDir = 0, countLink = 0;
+    items.forEach((it) => {
+      const t = String(it.type || '');
+      if (t === 'dir') { countDir++; hasUnknownDir = true; return; }
+      if (t === 'link') countLink++; else countFile++;
+      const n = Number(it.size);
+      if (isFinite(n) && n >= 0) totalBytes += n;
+    });
+
+    const totalLine = (() => {
+      const base = fmtSize(totalBytes);
+      if (hasUnknownDir) return `${base || '0 B'} + папки (неизвестно)`;
+      return base || '0 B';
+    })();
+
+    if (items.length === 1) {
+      const it = items[0];
+      const name = safeName(names[0]);
+      const path = safeName(it.path || '');
+      const t = safeName(it.type || '');
+      const perm = safeName(it.perm || '');
+      const mtime = fmtTime(it.mtime);
+      const uid = (it.uid === undefined || it.uid === null) ? '' : String(it.uid);
+      const gid = (it.gid === undefined || it.gid === null) ? '' : String(it.gid);
+      const linkTarget = safeName(it.link_target || '');
+
+      const rows = [
+        _kvRow('Имя', name),
+        _kvRow('Путь', path),
+        _kvRow('Тип', t),
+        _kvRow('Размер', `${fmtSize(it.size)} (${Number(it.size) || 0} B)`),
+        _kvRow('Изменён', mtime),
+        _kvRow('Права', perm),
+      ];
+      if (uid || gid) rows.push(_kvRow('UID/GID', `${uid || '—'}:${gid || '—'}`));
+      if (t === 'link') rows.push(_kvRow('Symlink →', linkTarget || '—'));
+
+      return { metaText, html: `<div class="fm-props-grid">${rows.join('')}</div>` };
+    }
+
+    const rows = [
+      _kvRow('Выделено', String(items.length)),
+      _kvRow('Файлы/Папки/Ссылки', `${countFile}/${countDir}/${countLink}`),
+      _kvRow('Сумма размеров', totalLine),
+    ];
+
+    return { metaText, html: `<div class="fm-props-grid">${rows.join('')}</div>` };
+  }
+
+  async function openPropsModal(side) {
+    const s = String(side || S.activeSide || 'left');
+    const modal = el('fm-props-modal');
+    const metaEl = el('fm-props-modal-meta');
+    const bodyEl = el('fm-props-modal-body');
+
+    if (!modal || !metaEl || !bodyEl) {
+      toast('FM: модалка "Свойства" не найдена', 'error');
+      return;
+    }
+
+    const p = S.panels[s];
+    if (!p) return;
+
+    const reqId = ++propsReqId;
+
+    // Show early so it feels instant.
+    metaEl.textContent = `${s === 'left' ? 'левая' : 'правая'} панель`;
+    bodyEl.innerHTML = '<div class="fm-props-empty">Загрузка…</div>';
+    modalOpen(modal);
+
+    const out = await fmBuildPropsHtml(s, reqId);
+    if (!out || reqId !== propsReqId) return;
+
+    metaEl.textContent = String(out.metaText || '');
+    bodyEl.innerHTML = String(out.html || '');
+  }
+
+  function closePropsModal() {
+    modalClose(el('fm-props-modal'));
+  }
+
+  // -------------------------- checksum modal (md5/sha256) --------------------------
+  let hashReqId = 0;
+
+  async function openHashModal(side) {
+    const s = String(side || S.activeSide || 'left');
+    const modal = el('fm-hash-modal');
+    const metaEl = el('fm-hash-meta');
+    const md5El = el('fm-hash-md5');
+    const shaEl = el('fm-hash-sha256');
+    const sizeEl = el('fm-hash-size');
+    const errEl = el('fm-hash-error');
+
+    if (!modal || !metaEl || !md5El || !shaEl || !sizeEl) {
+      toast('FM: модалка "Checksum" не найдена', 'error');
+      return;
+    }
+
+    const p = S.panels[s];
+    if (!p) return;
+
+    const names = getSelectionNames(s);
+    if (!names || names.length !== 1) {
+      toast('Выберите один файл', 'info');
+      return;
+    }
+
+    // Remote target requires an active session.
+    if (p.target === 'remote' && !p.sid) {
+      toast('Remote: нет соединения', 'error');
+      return;
+    }
+
+    const name = safeName(names[0]);
+    const fullPath = (p.target === 'remote') ? joinRemote(p.cwd, name) : joinLocal(p.cwd, name);
+
+    const reqId = ++hashReqId;
+
+    // Reset UI and open early.
+    try { if (errEl) errEl.textContent = ''; } catch (e) {}
+    metaEl.textContent = `${p.target === 'remote' ? 'remote' : 'local'} • ${fullPath}`;
+    md5El.value = '...';
+    shaEl.value = '...';
+    sizeEl.value = '...';
+    modalOpen(modal);
+
+    const qs = new URLSearchParams();
+    qs.set('target', String(p.target || 'local'));
+    qs.set('path', String(fullPath || ''));
+    if (p.target === 'remote') qs.set('sid', String(p.sid || ''));
+
+    let j = null;
+    try {
+      const { res, data } = await fetchJson('/api/fs/checksum?' + qs.toString(), { method: 'GET' });
+      if (reqId !== hashReqId) return;
+      if (!res || !res.ok || !data || !data.ok) {
+        const emsg = (data && (data.error || data.message)) ? String(data.error || data.message) : 'Не удалось вычислить checksum.';
+        if (errEl) errEl.textContent = emsg;
+        md5El.value = '';
+        shaEl.value = '';
+        sizeEl.value = '';
+        return;
+      }
+      j = data;
+    } catch (e) {
+      if (reqId !== hashReqId) return;
+      if (errEl) errEl.textContent = 'Ошибка запроса checksum.';
+      md5El.value = '';
+      shaEl.value = '';
+      sizeEl.value = '';
+      return;
+    }
+
+    try {
+      md5El.value = String(j.md5 || '');
+      shaEl.value = String(j.sha256 || '');
+      const sz = Number(j.size);
+      sizeEl.value = isFinite(sz) && sz >= 0 ? `${fmtSize(sz)} (${sz} B)` : '';
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  function closeHashModal() {
+    modalClose(el('fm-hash-modal'));
+  }
+
+// -------------------------- text file viewer/editor (CodeMirror modal) --------------------------
   const FM_EDITOR = {
     wired: false,
     cm: null,
@@ -1219,6 +2599,53 @@ async function xhrUploadFiles({ side, files }) {
     }
   }
 
+  // -------------------------- CodeMirror lazy assets (modes / JSON lint) --------------------------
+  function fmModeName(mode) {
+    try {
+      if (!mode) return '';
+      if (typeof mode === 'string') {
+        // MIME-like values do not map to a mode file.
+        if (mode.includes('/')) return '';
+        return mode;
+      }
+      if (typeof mode === 'object' && mode.name) return String(mode.name || '');
+    } catch (e) {}
+    return '';
+  }
+
+  function fmJsonLintAvailable() {
+    try {
+      if (!window.jsonlint) return false;
+      if (!window.CodeMirror) return false;
+      const h = window.CodeMirror.helpers;
+      return !!(h && h.lint && h.lint.json);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function fmEnsureCmAssets({ mode, jsonLint } = {}) {
+    // Uses XKeen.cmLoader if present (panel.html), otherwise best-effort.
+    const modeName = fmModeName(mode);
+    const wantJsonLint = !!jsonLint;
+
+    try {
+      if (window.XKeen && XKeen.cmLoader) {
+        if (modeName && typeof XKeen.cmLoader.ensureMode === 'function') {
+          await XKeen.cmLoader.ensureMode(modeName);
+        }
+        if (wantJsonLint && typeof XKeen.cmLoader.ensureJsonLint === 'function') {
+          await XKeen.cmLoader.ensureJsonLint();
+        }
+      }
+    } catch (e) {}
+
+    return {
+      modeOk: !modeName || (window.CodeMirror && window.CodeMirror.modes && window.CodeMirror.modes[modeName]),
+      jsonLintOk: !wantJsonLint || fmJsonLintAvailable(),
+    };
+  }
+
   function fmEnsureEditorCm() {
     if (FM_EDITOR.cm) return FM_EDITOR.cm;
     const ui = fmEditorEls();
@@ -1243,7 +2670,8 @@ async function xhrUploadFiles({ side, files }) {
       autoCloseBrackets: true,
       showTrailingSpace: true,
       foldGutter: true,
-      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers'],
+      // Lint gutter is enabled only when needed (e.g. JSON).
+      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
       lint: false,
       highlightSelectionMatches: { showToken: /\w/, minChars: 2 },
 
@@ -1342,7 +2770,7 @@ async function xhrUploadFiles({ side, files }) {
   }
 
   
-  function fmEditorOpen(ctx, text) {
+  async function fmEditorOpen(ctx, text) {
     const ui = fmEditorEls();
     if (!ui) return false;
 
@@ -1373,9 +2801,25 @@ async function xhrUploadFiles({ side, files }) {
 
     if (cm) {
       try {
-        const mode = fmGuessCmMode(ctx && ctx.name, text);
+        let mode = fmGuessCmMode(ctx && ctx.name, text);
         const isJson = !!(mode && typeof mode === 'object' && mode.json);
-        const canLintJson = isJson && !!window.jsonlint;
+
+        // Lazy-load mode + JSON linter only when needed.
+        const ensured = await fmEnsureCmAssets({ mode, jsonLint: isJson });
+        if (!ensured.modeOk) {
+          // Fallback to plain text if the requested mode isn't bundled.
+          mode = 'text/plain';
+        }
+
+        const canLintJson = isJson && ensured.jsonLintOk;
+
+        // Enable / disable lint gutter dynamically.
+        try {
+          const gutters = canLintJson
+            ? ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']
+            : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'];
+          cm.setOption('gutters', gutters);
+        } catch (e) {}
 
         cm.setOption('mode', mode);
         cm.setOption('lint', canLintJson);
@@ -1626,6 +3070,7 @@ async function xhrUploadFiles({ side, files }) {
 
   // Multiple selection -> ZIP archive of selected files/folders.
   if (names.length > 1) {
+    try { toast('ZIP создаётся во временной папке /tmp и может занять много места', 'info'); } catch (e) {}
     const items = [];
     for (const nm of names) {
       const it = (p.items || []).find(x => safeName(x && x.name) === safeName(nm));
@@ -1680,6 +3125,7 @@ async function xhrUploadFiles({ side, files }) {
 
   // Directory: download as ZIP archive
   if (isDir) {
+    try { toast('ZIP создаётся во временной папке /tmp и может занять много места', 'info'); } catch (e) {}
     const fullPath = (p.target === 'remote') ? joinRemote(p.cwd, it.name) : joinLocal(p.cwd, it.name);
     const url = (p.target === 'remote')
       ? `/api/fs/download?target=remote&sid=${encodeURIComponent(p.sid)}&path=${encodeURIComponent(fullPath)}&archive=zip`
@@ -1728,6 +3174,194 @@ async function goUp(side) {
   }
 
   // -------------------------- connect / disconnect --------------------------
+  // Remote connection profiles (localStorage)
+  // Store without password: { id, proto, host, port, user, updatedAt }
+  const _LS_REMOTE_PROFILES_KEY = 'xkeen.fm.remoteProfiles.v1';
+  const _LS_REMOTE_PROFILES_LAST_KEY = 'xkeen.fm.remoteProfiles.last.v1';
+  // Remember "remember profile" checkbox state (UX: user doesn't have to re-check every time)
+  const _LS_REMOTE_PROFILES_REMEMBER_FLAG_KEY = 'xkeen.fm.remoteProfiles.rememberFlag.v1';
+
+  function _lsGetJson(key, fallback) {
+    try {
+      const raw = window.localStorage ? window.localStorage.getItem(key) : null;
+      if (!raw) return fallback;
+      const j = JSON.parse(raw);
+      return (j == null) ? fallback : j;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function _lsSetJson(key, val) {
+    try {
+      if (!window.localStorage) return;
+      window.localStorage.setItem(key, JSON.stringify(val));
+    } catch (e) {}
+  }
+
+  function _loadRememberProfileFlag() {
+    try {
+      return !!_lsGetJson(_LS_REMOTE_PROFILES_REMEMBER_FLAG_KEY, false);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _saveRememberProfileFlag(v) {
+    try { _lsSetJson(_LS_REMOTE_PROFILES_REMEMBER_FLAG_KEY, !!v); } catch (e) {}
+  }
+
+  function _profileSig(p) {
+    try {
+      const proto = String(p && (p.proto || p.protocol) || '').trim().toLowerCase();
+      const host = String(p && p.host || '').trim().toLowerCase();
+      const port = String(p && (p.port == null ? '' : p.port) || '').trim();
+      const user = String(p && (p.user || p.username) || '').trim().toLowerCase();
+      return `${proto}://${user}@${host}:${port}`;
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function _loadRemoteProfiles() {
+    const arr = _lsGetJson(_LS_REMOTE_PROFILES_KEY, []);
+    if (!Array.isArray(arr)) return [];
+    // sanitize
+    const out = [];
+    for (const it of arr) {
+      if (!it) continue;
+      const proto = String(it.proto || it.protocol || '').trim().toLowerCase();
+      const host = String(it.host || '').trim();
+      const user = String(it.user || it.username || '').trim();
+      let port = it.port;
+      try { if (port != null && port !== '') port = parseInt(String(port), 10); } catch (e) { port = null; }
+      const id = String(it.id || '') || _profileSig({ proto, host, user, port });
+      if (!proto || !host || !user) continue;
+      out.push({ id, proto, host, user, port: (port && isFinite(port)) ? port : null, updatedAt: Number(it.updatedAt || 0) || 0 });
+    }
+    // sort by last used
+    out.sort((a, b) => (Number(b.updatedAt || 0) - Number(a.updatedAt || 0)));
+    return out;
+  }
+
+  function _saveRemoteProfiles(list) {
+    const arr = Array.isArray(list) ? list.slice(0, 50) : [];
+    _lsSetJson(_LS_REMOTE_PROFILES_KEY, arr);
+  }
+
+  function _fmtProfileLabel(p) {
+    const proto = String(p && p.proto || '').toLowerCase();
+    const user = String(p && p.user || '').trim();
+    const host = String(p && p.host || '').trim();
+    const port = (p && p.port) ? String(p.port) : '';
+    const p2 = port ? `:${port}` : '';
+    return `${proto}://${user}@${host}${p2}`;
+  }
+
+  function _renderRemoteProfilesSelect(selectedId) {
+    const sel = el('fm-conn-profile');
+    const delBtn = el('fm-conn-profile-del-btn');
+    if (!sel) return;
+
+    const profiles = _loadRemoteProfiles();
+    const cur = String(selectedId || sel.value || '').trim();
+
+    sel.innerHTML = '';
+    const opt0 = document.createElement('option');
+    opt0.value = '';
+    opt0.textContent = '—';
+    sel.appendChild(opt0);
+
+    for (const p of profiles) {
+      const opt = document.createElement('option');
+      opt.value = String(p.id || '');
+      opt.textContent = _fmtProfileLabel(p);
+      sel.appendChild(opt);
+    }
+
+    // restore selection
+    const exists = [...sel.options].some(o => String(o.value) === cur);
+    sel.value = exists ? cur : '';
+
+    // enable delete only if something selected
+    if (delBtn) delBtn.disabled = !sel.value;
+  }
+
+  function _applyProfileToConnectInputs(p) {
+    if (!p) return;
+    try { if (el('fm-proto')) el('fm-proto').value = String(p.proto || 'sftp'); } catch (e) {}
+    try { if (el('fm-host')) el('fm-host').value = String(p.host || ''); } catch (e) {}
+    try { if (el('fm-user')) el('fm-user').value = String(p.user || ''); } catch (e) {}
+    try {
+      const portEl = el('fm-port');
+      if (portEl) portEl.value = (p.port != null && p.port !== '') ? String(p.port) : '';
+    } catch (e) {}
+    try {
+      // reset auth UI to sane defaults for the new proto
+      if (el('fm-auth-type')) el('fm-auth-type').value = 'password';
+      if (el('fm-pass')) el('fm-pass').value = '';
+      if (el('fm-passphrase')) el('fm-passphrase').value = '';
+      if (el('fm-key-path')) el('fm-key-path').value = '';
+      if (el('fm-key-file')) { try { el('fm-key-file').value = ''; } catch (e2) {} }
+    } catch (e) {}
+    try { updateConnectAuthUi(); } catch (e) {}
+    try { updateHostKeyFingerprintPreview(); } catch (e) {}
+  }
+
+  function _getConnectProfileFromInputs() {
+    const proto = String((el('fm-proto') && el('fm-proto').value) || 'sftp').trim().toLowerCase();
+    const host = String((el('fm-host') && el('fm-host').value) || '').trim();
+    const user = String((el('fm-user') && el('fm-user').value) || '').trim();
+    const portRaw = String((el('fm-port') && el('fm-port').value) || '').trim();
+    let port = null;
+    try { if (portRaw) port = parseInt(portRaw, 10); } catch (e) { port = null; }
+    return { proto, host, user, port: (port && isFinite(port)) ? port : null };
+  }
+
+  function _rememberConnectProfileIfNeeded() {
+    const cb = el('fm-remember-profile');
+    if (!cb || !cb.checked) return;
+
+    const p = _getConnectProfileFromInputs();
+    if (!p || !p.proto || !p.host || !p.user) return;
+
+    const id = _profileSig(p);
+    const now = Date.now();
+    const list = _loadRemoteProfiles();
+    const idx = list.findIndex(x => String(x && x.id) === id);
+    const isNew = idx < 0;
+    const entry = { id, proto: p.proto, host: p.host, user: p.user, port: p.port, updatedAt: now };
+    if (idx >= 0) list.splice(idx, 1);
+    list.unshift(entry);
+    // keep last 20
+    _saveRemoteProfiles(list.slice(0, 20));
+    _lsSetJson(_LS_REMOTE_PROFILES_LAST_KEY, id);
+
+    try { _renderRemoteProfilesSelect(id); } catch (e) {}
+    // Small UX hint: users often miss that this is stored locally in the browser.
+    try { if (isNew) toast('Профиль сохранён (в браузере)', 'info'); } catch (e) {}
+  }
+
+  function _loadLastProfileId() {
+    try {
+      const v = _lsGetJson(_LS_REMOTE_PROFILES_LAST_KEY, '');
+      return String(v || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function _findRemoteProfileById(id) {
+    const key = String(id || '').trim();
+    if (!key) return null;
+    try {
+      const list = _loadRemoteProfiles();
+      return list.find(p => String(p && p.id) === key) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function loadRemoteCaps() {
     try {
       const { res, data } = await fetchJson('/api/remotefs/capabilities', { method: 'GET' });
@@ -1743,6 +3377,7 @@ async function goUp(side) {
 
     const hk = el('fm-hostkey-policy');
     const tls = el('fm-tls-verify');
+    const authType = el('fm-auth-type');
 
     try {
       const sftp = caps.security.sftp || {};
@@ -1755,6 +3390,20 @@ async function goUp(side) {
           hk.appendChild(opt);
         });
         hk.value = String(sftp.default_policy || 'accept_new');
+      }
+
+      // Auth types (SFTP)
+      if (authType && Array.isArray(sftp.auth_types) && sftp.auth_types.length) {
+        authType.innerHTML = '';
+        sftp.auth_types.forEach((t) => {
+          const opt = document.createElement('option');
+          opt.value = String(t);
+          opt.textContent = String(t);
+          authType.appendChild(opt);
+        });
+        if (![...authType.options].some(o => o.value === authType.value)) {
+          authType.value = String(sftp.auth_types.includes('password') ? 'password' : sftp.auth_types[0]);
+        }
       }
     } catch (e) {}
 
@@ -1773,6 +3422,268 @@ async function goUp(side) {
     } catch (e) {}
   }
 
+  // -------------------------- connect modal: auth UI toggles --------------------------
+  function _labelForInput(inputId) {
+    try { return document.querySelector(`label[for="${inputId}"]`) || el(inputId + '-label'); } catch (e) { return el(inputId + '-label'); }
+  }
+
+  function _toggleRow(inputId, showIt) {
+    const inp = el(inputId);
+    const lbl = _labelForInput(inputId);
+    if (lbl) lbl.style.display = showIt ? '' : 'none';
+    if (inp) inp.style.display = showIt ? '' : 'none';
+  }
+
+  function updateConnectAuthUi() {
+    const proto = String((el('fm-proto') && el('fm-proto').value) || 'sftp');
+    const authType = String((el('fm-auth-type') && el('fm-auth-type').value) || 'password');
+
+    const isSftp = proto === 'sftp';
+    const useKey = isSftp && authType === 'key';
+
+    // Auth type selector itself only makes sense for SFTP
+    _toggleRow('fm-auth-type', isSftp);
+
+    // Password row
+    _toggleRow('fm-pass', !useKey);
+
+    // Key rows
+    _toggleRow('fm-key-file', useKey);
+    _toggleRow('fm-key-path', useKey);
+    _toggleRow('fm-passphrase', useKey);
+
+    // Host key UI only for SFTP
+    try {
+      const hkLbl = _labelForInput('fm-hostkey-policy');
+      const hk = el('fm-hostkey-policy');
+      if (hkLbl) hkLbl.style.display = isSftp ? '' : 'none';
+      if (hk) {
+        // Note: hostkey-policy control is wrapped in a div in template.
+        const wrap = hk.parentElement;
+        if (wrap) wrap.style.display = isSftp ? '' : 'none';
+      }
+    } catch (e) {}
+
+    try {
+      const fpLbl = el('fm-hostkey-fp-label');
+      const fpRow = el('fm-hostkey-row');
+      const fp = el('fm-hostkey-fp');
+      const rm = el('fm-hostkey-remove-btn');
+      if (fpLbl) fpLbl.style.display = isSftp ? '' : 'none';
+      if (fpRow) fpRow.style.display = isSftp ? 'flex' : 'none';
+      if (fp) fp.style.display = isSftp ? '' : 'none';
+      if (rm) rm.style.display = isSftp ? '' : 'none';
+    } catch (e) {}
+
+    // TLS verify only for FTPS
+    _toggleRow('fm-tls-verify', proto === 'ftps');
+  }
+
+  function _htmlEscape(s) {
+    const str = String(s == null ? '' : s);
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+
+function _ruPlural(n, one, few, many) {
+  // Russian plural forms: 1 строка, 2-4 строки, 5-20 строк, etc.
+  try {
+    const nn = Math.abs(parseInt(n, 10) || 0);
+    const mod100 = nn % 100;
+    const mod10 = nn % 10;
+    if (mod100 > 10 && mod100 < 20) return many;
+    if (mod10 === 1) return one;
+    if (mod10 >= 2 && mod10 <= 4) return few;
+    return many;
+  } catch (e) {
+    return many;
+  }
+}
+
+function _toastHostkeyDeleteResult(deletedCount, prefix) {
+  const p = String(prefix || 'Hostkey').trim();
+  try {
+    if (typeof deletedCount !== 'number') {
+      toast(p + ': готово', 'success');
+      return;
+    }
+    if (deletedCount <= 0) {
+      toast(p + ': совпадений не найдено', 'info');
+      return;
+    }
+    const w = _ruPlural(deletedCount, 'строка', 'строки', 'строк');
+    toast(`${p}: удалено ${deletedCount} ${w}`, 'success');
+  } catch (e) {}
+}
+
+  async function updateHostKeyFingerprintPreview() {
+    const proto = String((el('fm-proto') && el('fm-proto').value) || 'sftp');
+    const fpEl = el('fm-hostkey-fp');
+    if (!fpEl) return;
+    if (proto !== 'sftp') { fpEl.textContent = ''; return; }
+
+    const host = String((el('fm-host') && el('fm-host').value) || '').trim();
+    if (!host) { fpEl.textContent = ''; return; }
+    const portRaw = String((el('fm-port') && el('fm-port').value) || '').trim();
+    const port = portRaw ? portRaw : '22';
+    try {
+      const { res, data } = await fetchJson(`/api/remotefs/known_hosts/fingerprint?host=${encodeURIComponent(host)}&port=${encodeURIComponent(port)}`, { method: 'GET' });
+      if (res && res.ok && data && data.ok) {
+        const m = Array.isArray(data.matches) ? data.matches : [];
+        if (!m.length) {
+          fpEl.textContent = 'Нет записи (ещё не добавлялся)';
+        } else {
+          // Show first match + count.
+          const first = m[0] || {};
+          const extra = (m.length > 1) ? ` (+${m.length - 1})` : '';
+          fpEl.textContent = `${String(first.key_type || '')}  ${String(first.fingerprint || '')}${extra}`.trim();
+        }
+      } else {
+        fpEl.textContent = '';
+      }
+    } catch (e) {
+      fpEl.textContent = '';
+    }
+  }
+
+  async function removeHostKeyForCurrentHost() {
+    const proto = String((el('fm-proto') && el('fm-proto').value) || 'sftp');
+    if (proto !== 'sftp') return;
+    const host = String((el('fm-host') && el('fm-host').value) || '').trim();
+    if (!host) return;
+    const portRaw = String((el('fm-port') && el('fm-port').value) || '').trim();
+    let port = 22;
+    try { if (portRaw) port = parseInt(portRaw, 10) || 22; } catch (e) {}
+
+    const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
+      ? XKeen.ui.confirm({
+        title: 'known_hosts',
+        message: `Удалить hostkey для ${host}${(port && port !== 22) ? (':' + port) : ''}?`,
+        okText: 'Удалить',
+        cancelText: 'Отмена',
+        danger: true
+      })
+      : Promise.resolve(window.confirm('Delete hostkey?')));
+    if (!ok) return;
+
+    try {
+      const { res, data } = await fetchJson('/api/remotefs/known_hosts/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host: host, port: port })
+      });
+      const n = (data && typeof data.deleted_count === 'number') ? data.deleted_count : null;
+      _toastHostkeyDeleteResult(n, 'Hostkey');
+    } catch (e) {
+      try { toast('Hostkey: ошибка удаления', 'error'); } catch (e2) {}
+    }
+
+    try { await updateHostKeyFingerprintPreview(); } catch (e) {}
+    // If known_hosts modal is open, refresh it too
+    try {
+      const khModal = el('fm-knownhosts-modal');
+      if (khModal && !khModal.classList.contains('hidden')) {
+        await loadKnownHostsIntoModal();
+      }
+    } catch (e) {}
+  }
+
+  // -------------------------- known_hosts modal --------------------------
+  async function loadKnownHostsIntoModal() {
+    const body = el('fm-knownhosts-body');
+    const pathEl = el('fm-knownhosts-path');
+    const errEl = el('fm-knownhosts-error');
+    const hintEl = el('fm-knownhosts-hashed-hint');
+    if (errEl) errEl.textContent = '';
+    if (hintEl) { hintEl.textContent = ''; hintEl.style.display = 'none'; }
+    if (body) body.innerHTML = '<div class="fm-empty">Загрузка…</div>';
+    try {
+      const { res, data } = await fetchJson('/api/remotefs/known_hosts', { method: 'GET' });
+      if (!res || !res.ok || !data || !data.ok) {
+        if (body) body.innerHTML = '';
+        if (errEl) errEl.textContent = (data && (data.error || data.message)) ? String(data.error || data.message) : 'known_hosts_failed';
+        return;
+      }
+      if (pathEl) pathEl.textContent = String(data.path || '');
+      const entries = Array.isArray(data.entries) ? data.entries : [];
+      if (!entries.length) {
+        if (body) body.innerHTML = '<div class="fm-empty">known_hosts пуст</div>';
+        if (hintEl) { hintEl.textContent = ''; hintEl.style.display = 'none'; }
+        return;
+      }
+
+      // hashed entries hide the hostname (OpenSSH feature). Warn the user and suggest deletion by host if they know it.
+      try {
+        const hasHashed = entries.some((e) => !!e && !!e.hashed);
+        if (hintEl && hasHashed) {
+          hintEl.textContent = 'Есть hashed записи (|1|…). Имя хоста скрыто. Удалить можно по индексу (кнопка «Запись») или через «Удалить по host», если знаете хост.';
+          hintEl.style.display = '';
+        }
+      } catch (e) {}
+      const rows = entries.map((e) => {
+        const idx = String(e.idx);
+        const rawHosts = String(e.hosts || '');
+        const hostsEsc = _htmlEscape(rawHosts);
+        const kt = _htmlEscape(e.key_type || '');
+        const fp = _htmlEscape(e.fingerprint || '');
+        const bad = e.bad ? ' style="opacity:.7;"' : '';
+        const isHashed = !!e.hashed;
+
+        // Try to take the first host token for a convenient "delete by host" action.
+        let firstTok = '';
+        try {
+          firstTok = rawHosts.split(',').map((s) => String(s || '').trim()).filter(Boolean)[0] || '';
+        } catch (e2) {}
+        const canByHost = !!firstTok && !isHashed;
+
+        const hostCell = isHashed
+          ? `<span style="display:inline-block; padding:1px 6px; border:1px solid currentColor; border-radius:999px; font-size:12px; opacity:.75; margin-right:6px;" title="hashed entry: имя хоста скрыто">hashed</span><span style="font-family:monospace;">${hostsEsc}</span>`
+          : hostsEsc;
+
+        const byHostBtn = canByHost
+          ? `<button type="button" class="btn-secondary" data-kh-action="delete_host" data-kh-host="${_htmlEscape(firstTok)}" title="Удалить hostkey для ${_htmlEscape(firstTok)}">Hostkey</button>`
+          : `<button type="button" class="btn-secondary" disabled title="Для hashed записи используйте «Удалить по host» сверху">Hostkey</button>`;
+
+        return `<tr${bad}>
+          <td style="white-space:nowrap;">${idx}</td>
+          <td style="max-width:360px; overflow:hidden; text-overflow:ellipsis;">${hostCell}</td>
+          <td style="white-space:nowrap;">${kt}</td>
+          <td style="font-family:monospace; max-width:240px; overflow:hidden; text-overflow:ellipsis;">${fp}</td>
+          <td style="text-align:right; white-space:nowrap; display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
+            ${byHostBtn}
+            <button type="button" class="btn-secondary" data-kh-action="delete" data-kh-idx="${idx}" title="Удалить конкретную строку">Запись</button>
+          </td>
+        </tr>`;
+      }).join('');
+      if (body) {
+        body.innerHTML = `
+          <table class="table" style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left;">#</th>
+                <th style="text-align:left;">Host</th>
+                <th style="text-align:left;">Type</th>
+                <th style="text-align:left;">Fingerprint</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+    } catch (e) {
+      if (body) body.innerHTML = '';
+      if (errEl) errEl.textContent = 'known_hosts_failed';
+    }
+  }
+
+  function openKnownHostsModal() {
+    const errEl = el('fm-knownhosts-error');
+    if (errEl) errEl.textContent = '';
+    modalOpen(el('fm-knownhosts-modal'));
+    loadKnownHostsIntoModal();
+  }
+
   async function connectRemoteToSide(side) {
     S.connectForSide = side;
 
@@ -1783,6 +3694,29 @@ async function goUp(side) {
     if (warnEl) { warnEl.textContent = ''; hide(warnEl); }
 
     applyCapsToConnectModal();
+
+    // Persisted UX: remember checkbox state across modal openings (stored in browser localStorage).
+    try {
+      const cb = el('fm-remember-profile');
+      if (cb) cb.checked = _loadRememberProfileFlag();
+    } catch (e) {}
+
+    // Profiles UI (localStorage)
+    try {
+      const lastId = _loadLastProfileId();
+      _renderRemoteProfilesSelect(lastId);
+      // Autofill from last profile only if host/user fields are empty
+      const h0 = String((el('fm-host') && el('fm-host').value) || '').trim();
+      const u0 = String((el('fm-user') && el('fm-user').value) || '').trim();
+      if ((!h0 || !u0) && lastId) {
+        const pr = _findRemoteProfileById(lastId);
+        if (pr) _applyProfileToConnectInputs(pr);
+      }
+    } catch (e) {}
+
+    // Ensure correct field visibility (auth / proto dependent)
+    try { updateConnectAuthUi(); } catch (e) {}
+    try { updateHostKeyFingerprintPreview(); } catch (e) {}
     modalOpen(el('fm-connect-modal'));
 
     // focus host
@@ -1801,6 +3735,8 @@ async function goUp(side) {
     const portRaw = String((el('fm-port') && el('fm-port').value) || '').trim();
     const user = String((el('fm-user') && el('fm-user').value) || '').trim();
     const pass = String((el('fm-pass') && el('fm-pass').value) || '');
+    const authTypeRaw = String((el('fm-auth-type') && el('fm-auth-type').value) || 'password');
+    const authType = (proto === 'sftp') ? authTypeRaw : 'password';
 
     const hkPolicy = String((el('fm-hostkey-policy') && el('fm-hostkey-policy').value) || 'accept_new');
     const tlsVerify = String((el('fm-tls-verify') && el('fm-tls-verify').value) || 'none');
@@ -1818,9 +3754,45 @@ async function goUp(side) {
       if (errEl) errEl.textContent = 'User обязателен';
       return;
     }
-    if (!pass) {
-      if (errEl) errEl.textContent = 'Password обязателен';
-      return;
+    // Auth validation depends on mode
+    let auth = null;
+    if (authType === 'password') {
+      if (!pass) {
+        if (errEl) errEl.textContent = 'Password обязателен';
+        return;
+      }
+      auth = { type: 'password', password: pass };
+    } else {
+      const keyPath = String((el('fm-key-path') && el('fm-key-path').value) || '').trim();
+      const passphrase = String((el('fm-passphrase') && el('fm-passphrase').value) || '');
+      const f = el('fm-key-file') && el('fm-key-file').files ? el('fm-key-file').files[0] : null;
+
+      let keyData = '';
+      if (f) {
+        try {
+          if (typeof f.text === 'function') {
+            keyData = await f.text();
+          } else {
+            keyData = await new Promise((resolve, reject) => {
+              try {
+                const r = new FileReader();
+                r.onload = () => resolve(String(r.result || ''));
+                r.onerror = () => reject(new Error('read_failed'));
+                r.readAsText(f);
+              } catch (e) { reject(e); }
+            });
+          }
+        } catch (e) {
+          if (errEl) errEl.textContent = 'Не удалось прочитать ключ';
+          return;
+        }
+      }
+
+      if (!keyData && !keyPath) {
+        if (errEl) errEl.textContent = 'Укажите ключ (upload) или путь к ключу';
+        return;
+      }
+      auth = { type: 'key', key_data: keyData || undefined, key_path: keyData ? undefined : keyPath, passphrase: passphrase || undefined };
     }
 
     let port = null;
@@ -1834,8 +3806,9 @@ async function goUp(side) {
       // server also accepts legacy sftp:auto-confirm, but we are using new model.
     }
     if (proto === 'ftps') {
-      // Backend expects tls_verify_mode
+      // Keep compatibility with different backend schemas.
       options.tls_verify_mode = tlsVerify;
+      options.tls_verify = tlsVerify;
     }
 
     const payload = {
@@ -1843,7 +3816,7 @@ async function goUp(side) {
       host,
       port: port || undefined,
       username: user,
-      auth: { type: 'password', password: pass },
+      auth,
       options,
     };
 
@@ -1876,17 +3849,44 @@ async function goUp(side) {
 
     p.target = 'remote';
     p.sid = String(data.session_id || '');
+    p.rproto = String(proto || '');
     // Use '.' as home for maximum compatibility (some SFTP servers/chroots do not expose '/').
     p.cwd = '.';
     p.items = [];
     p.selected.clear();
     p.focusName = '';
 
+    // Save connection profile (without password) if requested.
+    try { _rememberConnectProfileIfNeeded(); } catch (e) {}
+
     modalClose(el('fm-connect-modal'));
 
     toast('Подключено: ' + user + '@' + host, 'success');
     renderPanel(side);
     await listPanel(side, { fromInput: false });
+  }
+
+  // Choose a local directory to show after remote disconnect.
+  // Keenetic UX:
+  //  - default: /opt
+  //  - if multiple disks are attached: /tmp/mnt (disk picker)
+  async function pickLocalCwdAfterRemoteDisconnect() {
+    // Fallback: /opt (even if disk detection fails).
+    const fallback = '/opt';
+    try {
+      const url = `/api/fs/list?target=local&path=${encodeURIComponent('/tmp/mnt')}`;
+      const { res, data } = await fetchJson(url, { method: 'GET' });
+      if (!res || !res.ok || !data || !data.ok) return fallback;
+
+      const items = Array.isArray(data.items) ? data.items : [];
+      // Disk entries are "dir" or directory-like symlinks returned by the backend.
+      const disks = items.filter((it) => {
+        const t = String(it && it.type);
+        return (t === 'dir') || (t === 'link' && !!(it && it.link_dir));
+      });
+      if (disks.length > 1) return '/tmp/mnt';
+    } catch (e) {}
+    return fallback;
   }
 
   async function disconnectSide(side) {
@@ -1901,12 +3901,22 @@ async function goUp(side) {
 
     const sid = p.sid;
     await fetchJson(`/api/remotefs/sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' });
+
+    // Reset remote session state.
     p.sid = '';
+    p.rproto = '';
     p.items = [];
     p.selected.clear();
     p.focusName = '';
+
+    // Switch panel back to local and go to a sensible Keenetic directory.
+    p.target = 'local';
+    p.cwd = await pickLocalCwdAfterRemoteDisconnect();
+
     renderPanel(side);
     toast('Отключено', 'info');
+    // Load the new local directory immediately.
+    await listPanel(side, { fromInput: false });
   }
 
   // -------------------------- fileops --------------------------
@@ -1918,7 +3928,11 @@ async function goUp(side) {
     const sources = names.map((n) => ({
       path: (src.target === 'remote') ? joinRemote(src.cwd, n) : joinLocal(src.cwd, n),
       name: n,
-      is_dir: !!(src.items || []).find((it) => safeName(it && it.name) === n && String(it.type) === 'dir'),
+      is_dir: !!(src.items || []).find((it) => {
+        if (safeName(it && it.name) !== n) return false;
+        const t = String((it && it.type) || '');
+        return t === 'dir' || (t === 'link' && !!(it && it.link_dir));
+      }),
     }));
 
     const payload = {
@@ -1980,7 +3994,12 @@ async function goUp(side) {
     S.ws.token = '';
   }
 
-  function updateProgressModal(job) {
+  // Update the progress modal UI.
+  // opts:
+  //   - viewOnly: do not auto-close on success (used when user opens a finished job from the Operations list)
+  function updateProgressModal(job, opts) {
+    opts = opts || {};
+    const viewOnly = !!opts.viewOnly;
     const title = el('fm-progress-title');
     const bar = el('fm-progress-bar-inner');
     const meta = el('fm-progress-meta');
@@ -1994,15 +4013,29 @@ async function goUp(side) {
       const op = String(job.op || 'op');
       const st = String(job.state || '');
       const stLower = st.toLowerCase();
-      // Details button should appear only on failure.
-      _setProgressDetailsAvailable(stLower === 'error');
-      // Disable cancel once finished.
+      const finished = (stLower === 'done' || stLower === 'error' || stLower === 'canceled');
+
+      // Job id + timestamps block
+      try { _setProgressExtra(job); } catch (e) {}
+
+      // Details button:
+      // - errors: always
+      // - viewOnly (user opens completed job from Operations): allow inspecting raw JSON even for "done"
+      _setProgressDetailsAvailable(stLower === 'error' || !!viewOnly);
+
+      // Action buttons: hide cancel for finished/view-only states; make label explicit.
       try {
         const cbtn = el('fm-progress-cancel-btn');
-        if (cbtn) cbtn.disabled = (stLower === 'done' || stLower === 'error' || stLower === 'canceled');
+        if (cbtn) {
+          cbtn.disabled = finished;
+          cbtn.style.display = (finished || viewOnly) ? 'none' : '';
+        }
+        const okBtn = el('fm-progress-ok-btn');
+        if (okBtn) okBtn.textContent = (finished || viewOnly) ? 'Закрыть' : 'Скрыть';
       } catch (e) {}
       // Auto-close modal after successful completion.
-      if (stLower === 'done') {
+      // When user is just viewing a finished operation from the Operations list, we must NOT auto-close.
+      if (stLower === 'done' && !viewOnly) {
         _clearProgressAutoClose();
         _scheduleProgressAutoClose(650);
       } else {
@@ -2061,12 +4094,53 @@ async function goUp(side) {
       }
 
       if (job.state === 'error' && err) {
-        err.textContent = String(job.error || (job.last_error && job.last_error.message) || 'error');
+        let msg = String(job.error || (job.last_error && job.last_error.message) || 'error');
+        try {
+          if (msg === 'remote_no_space') {
+            const chk = job && job.progress && job.progress.check ? job.progress.check : null;
+            const need = chk && typeof chk.need_bytes === 'number' ? chk.need_bytes : null;
+            const free = chk && typeof chk.free_bytes === 'number' ? chk.free_bytes : null;
+            if (need != null && free != null) {
+              msg = `Недостаточно места на удалённом диске: нужно ${fmtSize(need)}, свободно ${fmtSize(free)}`;
+            } else {
+              msg = 'Недостаточно места на удалённом диске';
+            }
+          }
+        } catch (e2) {}
+        err.textContent = msg;
       }
     } catch (e) {
       if (details) details.textContent = '';
     }
   }
+
+
+function _maybeTrashToast(job) {
+  try {
+    if (!job) return;
+    const op = String(job.op || '').toLowerCase();
+    if (op !== 'delete') return;
+    const pr = job.progress || {};
+    const t = pr.trash || null;
+    const notice = t && t.notice ? String(t.notice) : '';
+    if (!notice) return;
+
+    const now = _nowMs();
+    if (!S.trashUi) S.trashUi = { lastLevel: '', lastTsMs: 0, lastNotice: '' };
+    // Avoid spamming the same notice frequently.
+    if (S.trashUi.lastNotice === notice && (now - (S.trashUi.lastTsMs || 0)) < 60 * 1000) return;
+
+    S.trashUi.lastNotice = notice;
+    S.trashUi.lastTsMs = now;
+
+    let level = 'info';
+    try {
+      const sum = t && t.summary ? t.summary : {};
+      if ((sum.trash_full || 0) > 0 || (t.stats && t.stats.is_full)) level = 'error';
+    } catch (e) {}
+    toast(notice, level);
+  } catch (e) {}
+}
 
   async function startJobPolling(jobId) {
     if (!jobId) return;
@@ -2091,6 +4165,7 @@ async function goUp(side) {
               if (st === 'done') toast(label + ': завершено', 'success');
               else if (st === 'canceled') toast(label + ': отменено', 'info');
               else if (st === 'error') toast(label + ': ошибка', 'error');
+              try { _maybeTrashToast(job); } catch (e) {}
             } catch (e3) {}
 
             setTimeout(() => {
@@ -2163,6 +4238,7 @@ async function goUp(side) {
               if (st === 'done') toast(label + ': завершено', 'success');
               else if (st === 'canceled') toast(label + ': отменено', 'info');
               else if (st === 'error') toast(label + ': ошибка', 'error');
+              try { _maybeTrashToast(job); } catch (e) {}
             } catch (e) {}
             // refresh panels on finish
             setTimeout(() => {
@@ -2467,6 +4543,111 @@ async function runCopyMoveWithPayload(op, basePayload) {
     await executeJob(payload);
   }
 
+  async function runRestore() {
+    const side = S.activeSide;
+    const p = S.panels[side];
+    if (!p) return;
+    if (String(p.target || 'local') !== 'local') {
+      toast('Восстановление работает только для local (корзина)', 'info');
+      return;
+    }
+    if (!isTrashPanel(p)) {
+      toast('Восстановление доступно только из /opt/var/trash', 'info');
+      return;
+    }
+
+    const names = getSelectionNames(side);
+    if (!names.length) return;
+
+    const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
+      ? XKeen.ui.confirm({
+          title: 'Восстановить',
+          message: `Восстановить (${names.length})?
+${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`,
+          okText: 'Восстановить',
+          cancelText: 'Отмена',
+        })
+      : Promise.resolve(window.confirm('Restore?')));
+
+
+    if (!ok) return;
+
+    const paths = names.map((nm) => joinLocal(p.cwd, nm));
+    try {
+      const { res, data } = await fetchJson('/api/fs/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: 'local', paths }),
+      });
+      if (!res || !res.ok || !data || !data.ok) {
+        toast('Ошибка восстановления', 'error');
+        return;
+      }
+      const nOk = Array.isArray(data.restored) ? data.restored.length : 0;
+      const nErr = Array.isArray(data.errors) ? data.errors.length : 0;
+      if (nOk) toast(`Восстановлено: ${nOk}${nErr ? `, ошибок: ${nErr}` : ''}`, nErr ? 'info' : 'success');
+      else toast(nErr ? `Не восстановлено, ошибок: ${nErr}` : 'Нечего восстанавливать', nErr ? 'error' : 'info');
+
+      // Refresh current trash view (items should disappear from here)
+      await listPanel(side, { fromInput: true });
+
+      // Optimistic UI: clear selection
+      p.selected.clear();
+    } catch (e) {
+      toast('Ошибка восстановления', 'error');
+    }
+  }
+
+  async function runClearTrash(side) {
+    side = (side === 'left' || side === 'right') ? side : S.activeSide;
+    const p = S.panels[side];
+    if (!p) return;
+    if (String(p.target || 'local') !== 'local') {
+      toast('Очистка корзины работает только для local', 'info');
+      return;
+    }
+    if (!isTrashPanel(p)) {
+      toast('Очистка корзины доступна только из /opt/var/trash', 'info');
+      return;
+    }
+
+    const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
+      ? XKeen.ui.confirm({
+          title: 'Очистить корзину',
+          message: 'Удалить ВСЕ содержимое корзины без возможности восстановления?',
+          okText: 'Очистить',
+          cancelText: 'Отмена',
+          danger: true,
+        })
+      : Promise.resolve(window.confirm('Clear trash?')));
+
+    if (!ok) return;
+
+    try {
+      const { res, data } = await fetchJson('/api/fs/trash/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: 'local' }),
+      });
+      if (!res || !res.ok || !data || !data.ok) {
+        toast('Ошибка очистки корзины', 'error');
+        return;
+      }
+      const n = Number(data.deleted || 0);
+      toast(n ? `Корзина очищена: ${n}` : 'Корзина очищена', 'success');
+
+      // Refresh trash view(s)
+      await listPanel(side, { fromInput: true });
+      try { p.selected.clear(); } catch (e) {}
+      try {
+        const o = otherSide(side);
+        if (o && isTrashPanel(S.panels[o])) await listPanel(o, { fromInput: true });
+      } catch (e) {}
+    } catch (e) {
+      toast('Ошибка очистки корзины', 'error');
+    }
+  }
+
   async function runDelete() {
     const side = S.activeSide;
     const p = S.panels[side];
@@ -2479,8 +4660,17 @@ async function runCopyMoveWithPayload(op, basePayload) {
     const names = getSelectionNames(side);
     if (!names.length) return;
 
+    const inTrash = isTrashPanel(p);
+    const title = inTrash ? 'Удалить навсегда' : 'В корзину';
+    const okText = inTrash ? 'Удалить' : 'В корзину';
+    const msg = inTrash
+      ? `Удалить навсегда (${names.length})?
+${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`
+      : `Переместить в корзину (${names.length})?
+${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
+
     const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
-      ? XKeen.ui.confirm({ title: 'Delete', message: `Удалить (${names.length})?\n${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`, okText: 'Delete', cancelText: 'Отмена', danger: true })
+      ? XKeen.ui.confirm({ title, message: msg, okText, cancelText: 'Отмена', danger: true })
       : Promise.resolve(window.confirm('Delete?')));
 
     if (!ok) return;
@@ -2493,26 +4683,132 @@ async function runCopyMoveWithPayload(op, basePayload) {
   }
 
   // -------------------------- ops list modal --------------------------
+
+  function _opsHiddenStorageKey() {
+    return 'xkeen_fm_ops_hidden_jobs_v1';
+  }
+
+  function _opsEnsureHidden() {
+    if (S.opsUi.hiddenIds && typeof S.opsUi.hiddenIds.has === 'function') return S.opsUi.hiddenIds;
+    const set = new Set();
+    try {
+      const raw = localStorage.getItem(_opsHiddenStorageKey()) || '';
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) arr.forEach((x) => { if (x) set.add(String(x)); });
+      }
+    } catch (e) {}
+    S.opsUi.hiddenIds = set;
+    return set;
+  }
+
+  function _opsSaveHidden() {
+    try {
+      const set = _opsEnsureHidden();
+      localStorage.setItem(_opsHiddenStorageKey(), JSON.stringify(Array.from(set).slice(0, 500)));
+    } catch (e) {}
+  }
+
+  function _opsIsHidden(jobId) {
+    try { return _opsEnsureHidden().has(String(jobId || '')); } catch (e) { return false; }
+  }
+
+  function _opsHideMany(jobIds) {
+    const set = _opsEnsureHidden();
+    let n = 0;
+    (jobIds || []).forEach((jid) => {
+      const k = String(jid || '');
+      if (k && !set.has(k)) { set.add(k); n += 1; }
+    });
+    if (n) _opsSaveHidden();
+    return n;
+  }
+
+  function _opsApplyUiFilter(jobs) {
+    const filter = String((S.opsUi && S.opsUi.filter) || 'all');
+    const out = [];
+    (jobs || []).forEach((j) => {
+      const jid = String(j && (j.job_id || '') || '');
+      if (!jid) return;
+      if (_opsIsHidden(jid)) return;
+      const st = String(j && (j.state || '') || '').toLowerCase();
+      const isActive = (st === 'running' || st === 'queued');
+      const isErr = (st === 'error');
+      const isFinished = (st === 'done' || st === 'canceled');
+
+      if (filter === 'active' && !isActive) return;
+      if (filter === 'errors' && !isErr) return;
+      if (filter === 'finished' && !isFinished) return;
+      out.push(j);
+    });
+    return out;
+  }
+
+  async function clearOpsHistory(scope) {
+    scope = String(scope || 'history');
+    // Try server-side cleanup first (preferred).
+    try {
+      const { res, data } = await fetchJson('/api/fileops/jobs/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope }),
+      });
+      if (res && res.ok && data && data.ok) {
+        const n = Number(data.deleted || 0);
+        toast(n ? `История очищена: ${n}` : 'История очищена', 'success');
+        await refreshOpsList();
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
   function renderOpsList(jobs) {
     const box = el('fm-ops-list');
     if (!box) return;
 
     box.innerHTML = '';
+
+    // Cache for re-render (filter changes).
+    try { S.opsUi.lastJobs = Array.from(jobs || []); } catch (e) { S.opsUi.lastJobs = jobs || []; }
+
+    const total = (jobs || []).length;
+    const hiddenCount = (() => {
+      try {
+        const set = _opsEnsureHidden();
+        let n = 0;
+        (jobs || []).forEach((j) => { const jid = String(j && (j.job_id || '') || ''); if (jid && set.has(jid)) n += 1; });
+        return n;
+      } catch (e) { return 0; }
+    })();
+
+    const filtered = _opsApplyUiFilter(jobs || []);
+
+    const summary = el('fm-ops-summary');
+    if (summary) {
+      const shown = filtered.length;
+      summary.textContent = hiddenCount
+        ? `Показано: ${shown} из ${total}. Скрыто: ${hiddenCount}.`
+        : `Показано: ${shown} из ${total}.`;
+    }
+
     const list = document.createElement('div');
     list.className = 'fm-ops-table';
 
     const head = document.createElement('div');
     head.className = 'fm-ops-row fm-ops-head';
-    head.innerHTML = '<div>Job</div><div>Op</div><div>State</div><div>Progress</div><div></div>';
+    head.innerHTML = '<div>Job</div><div>Операция</div><div>Статус</div><div>Когда</div><div>Прогресс</div><div></div>';
     list.appendChild(head);
 
-    (jobs || []).forEach((j) => {
+    (filtered || []).forEach((j) => {
       const row = document.createElement('div');
       row.className = 'fm-ops-row';
 
       const jobId = safeName(j.job_id || '');
       const op = safeName(j.op || '');
       const st = safeName(j.state || '');
+      const whenTs = Number(j.started_ts || j.created_ts || 0);
+      const whenText = whenTs ? _fmtWhenFromSec(whenTs) : '';
       const pr = j.progress || {};
       const filesDone = Number(pr.files_done || 0);
       const filesTotal = Number(pr.files_total || 0);
@@ -2529,10 +4825,31 @@ async function runCopyMoveWithPayload(op, basePayload) {
       const openBtn = document.createElement('button');
       openBtn.type = 'button';
       openBtn.className = 'btn-secondary';
-      openBtn.textContent = 'Open';
+      openBtn.textContent = 'Открыть';
       openBtn.onclick = async () => {
         modalClose(el('fm-ops-modal'));
         modalOpen(el('fm-progress-modal'));
+        // If the job is already finished, treat this as a "view" action:
+        // do not re-watch the job (otherwise we get an instant toast + auto-close).
+        const stLower = String(j.state || '').toLowerCase();
+        const finished = (stLower === 'done' || stLower === 'error' || stLower === 'canceled');
+
+        if (finished) {
+          // Stop any previous watcher and show the last known state.
+          try { closeJobWs(); } catch (e) {}
+          try { _clearProgressAutoClose(); } catch (e) {}
+
+          // Best-effort: fetch the latest snapshot from the server (in case the list is stale).
+          let snapshot = j;
+          try {
+            const { res, data } = await fetchJson(`/api/fileops/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' });
+            if (res && res.ok && data && data.ok && data.job) snapshot = data.job;
+          } catch (e) {}
+
+          updateProgressModal(snapshot, { viewOnly: true });
+          return;
+        }
+
         updateProgressModal(j);
         await watchJob(jobId);
       };
@@ -2542,7 +4859,7 @@ async function runCopyMoveWithPayload(op, basePayload) {
         const cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
         cancelBtn.className = 'btn-secondary';
-        cancelBtn.textContent = 'Cancel';
+        cancelBtn.textContent = 'Отменить';
         cancelBtn.onclick = () => cancelJob(jobId);
         btns.appendChild(cancelBtn);
       }
@@ -2550,6 +4867,7 @@ async function runCopyMoveWithPayload(op, basePayload) {
       row.appendChild((() => { const d = document.createElement('div'); d.textContent = jobId.slice(0, 8) + (jobId.length > 8 ? '…' : ''); d.title = jobId; return d; })());
       row.appendChild((() => { const d = document.createElement('div'); d.textContent = op; return d; })());
       row.appendChild((() => { const d = document.createElement('div'); d.textContent = st; return d; })());
+      row.appendChild((() => { const d = document.createElement('div'); d.textContent = whenText; return d; })());
       row.appendChild((() => { const d = document.createElement('div'); d.textContent = progText; return d; })());
       row.appendChild(btns);
 
@@ -2624,6 +4942,13 @@ async function runCopyMoveWithPayload(op, basePayload) {
       });
     }
 
+    if (pd.clearTrashBtn) {
+      pd.clearTrashBtn.addEventListener('click', async (e) => {
+        try { e.preventDefault(); } catch (e2) {}
+        await runClearTrash(side);
+      });
+    }
+
     if (pd.pathInput) {
       pd.pathInput.addEventListener('keydown', async (e) => {
         if (e.key === 'Enter') {
@@ -2632,6 +4957,61 @@ async function runCopyMoveWithPayload(op, basePayload) {
         }
       });
     }
+    // Quick filter input (client-side, current folder only)
+    let _fltTimer = null;
+    const _applyFilter = () => {
+      try {
+        const v = String((pd.filterInput && pd.filterInput.value) || '');
+        p.filter = v;
+      } catch (e) {
+        p.filter = '';
+      }
+
+      // Keep focus on a visible item (avoid acting on hidden-by-filter focus)
+      try {
+        const vis = visibleSortedItems(side);
+        const focus = String(p.focusName || '');
+        if (focus && !vis.some((it) => safeName(it && it.name) === focus)) {
+          p.focusName = vis.length ? safeName(vis[0] && vis[0].name) : '';
+          p.anchorName = p.focusName || '';
+        }
+      } catch (e) {}
+
+      renderPanel(side);
+    };
+
+    if (pd.filterInput) {
+      pd.filterInput.addEventListener('input', () => {
+        try { if (_fltTimer) clearTimeout(_fltTimer); } catch (e) {}
+        _fltTimer = setTimeout(_applyFilter, 60);
+      });
+
+      pd.filterInput.addEventListener('keydown', (e) => {
+        if (!e) return;
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          try { pd.filterInput.value = ''; } catch (e2) {}
+          p.filter = '';
+          _applyFilter();
+        }
+        if (e.key === 'Enter') {
+          // jump back to list
+          try { e.preventDefault(); } catch (e2) {}
+          try { if (pd.list) pd.list.focus(); } catch (e3) {}
+        }
+      });
+    }
+
+    if (pd.filterClearBtn) {
+      pd.filterClearBtn.addEventListener('click', (e) => {
+        try { e.preventDefault(); } catch (e2) {}
+        try { if (pd.filterInput) pd.filterInput.value = ''; } catch (e3) {}
+        p.filter = '';
+        _applyFilter();
+        try { if (pd.filterInput) pd.filterInput.focus(); } catch (e4) {}
+      });
+    }
+
 
     if (pd.list) {
       pd.list.addEventListener('click', async (e) => {
@@ -3177,7 +5557,417 @@ async function runCopyMoveWithPayload(op, basePayload) {
     closeRenameModal();
   }
 
-  // -------------------------- Drag&Drop: choose Move or Copy --------------------------
+  
+
+  // -------------------------- chmod / chown --------------------------
+  function _fsAdminCaps(panel) {
+    try {
+      const rf = (S.caps && S.caps.remoteFs) ? S.caps.remoteFs : null;
+      const fa = (rf && rf.fs_admin) ? rf.fs_admin : null;
+      if (!panel) return null;
+      return (panel.target === 'remote') ? (fa && fa.remote) : (fa && fa.local);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function _parsePermStringToMode(permStr) {
+    // permStr examples: -rw-r--r--, drwxr-xr-x+, lrwxrwxrwx
+    let s = String(permStr || '').trim();
+    if (!s) return null;
+    // drop ACL markers
+    s = s.replace(/[@+\.]$/, '');
+    if (s.length < 10) return null;
+    const p = s.slice(1, 10);
+    const tri = [p.slice(0, 3), p.slice(3, 6), p.slice(6, 9)];
+
+    function digit(t) {
+      const r = t[0] === 'r' ? 4 : 0;
+      const w = t[1] === 'w' ? 2 : 0;
+      const xch = t[2];
+      const x = (xch === 'x' || xch === 's' || xch === 't') ? 1 : 0;
+      return r + w + x;
+    }
+
+    const u = digit(tri[0]);
+    const g = digit(tri[1]);
+    const o = digit(tri[2]);
+
+    const suid = (tri[0][2] === 's' || tri[0][2] === 'S') ? 4 : 0;
+    const sgid = (tri[1][2] === 's' || tri[1][2] === 'S') ? 2 : 0;
+    const sticky = (tri[2][2] === 't' || tri[2][2] === 'T') ? 1 : 0;
+    const sp = suid + sgid + sticky;
+
+    const modeStr = (sp ? String(sp) : '') + String(u) + String(g) + String(o);
+    return modeStr;
+  }
+
+  function _parseModeInputToParts(modeStr) {
+    const raw = String(modeStr || '').trim().toLowerCase();
+    if (!raw) return null;
+    let s = raw;
+    if (s.startsWith('0o')) s = s.slice(2);
+    if (s.startsWith('0') && s.length > 1) {
+      // keep leading zero only if it makes 4 digits like 0755
+      // in practice, 0755 -> 755 (octal)
+      while (s.length > 1 && s[0] === '0') s = s.slice(1);
+    }
+    if (!/^[0-7]{3,4}$/.test(s)) return null;
+    const sp = (s.length === 4) ? s[0] : '0';
+    const last3 = (s.length === 4) ? s.slice(1) : s;
+    return { sp, last3, norm: (sp !== '0' ? sp : '') + last3 };
+  }
+
+  function _chmodSetChecksFromLast3(last3) {
+    const d = String(last3 || '000');
+    if (!/^[0-7]{3}$/.test(d)) return;
+    const u = parseInt(d[0], 8);
+    const g = parseInt(d[1], 8);
+    const o = parseInt(d[2], 8);
+
+    const set = (id, on) => {
+      const x = el(id);
+      if (x) x.checked = !!on;
+    };
+
+    set('fm-perm-ur', !!(u & 4));
+    set('fm-perm-uw', !!(u & 2));
+    set('fm-perm-ux', !!(u & 1));
+
+    set('fm-perm-gr', !!(g & 4));
+    set('fm-perm-gw', !!(g & 2));
+    set('fm-perm-gx', !!(g & 1));
+
+    set('fm-perm-or', !!(o & 4));
+    set('fm-perm-ow', !!(o & 2));
+    set('fm-perm-ox', !!(o & 1));
+  }
+
+  function _chmodGetLast3FromChecks() {
+    const get = (id) => {
+      const x = el(id);
+      return !!(x && x.checked);
+    };
+
+    const u = (get('fm-perm-ur') ? 4 : 0) + (get('fm-perm-uw') ? 2 : 0) + (get('fm-perm-ux') ? 1 : 0);
+    const g = (get('fm-perm-gr') ? 4 : 0) + (get('fm-perm-gw') ? 2 : 0) + (get('fm-perm-gx') ? 1 : 0);
+    const o = (get('fm-perm-or') ? 4 : 0) + (get('fm-perm-ow') ? 2 : 0) + (get('fm-perm-ox') ? 1 : 0);
+
+    return '' + u + g + o;
+  }
+
+  function _chmodSyncFromModeInput() {
+    const inp = el('fm-chmod-mode');
+    if (!inp) return;
+    const parts = _parseModeInputToParts(inp.value);
+    if (!parts) return;
+    try { if (!S.chmod) S.chmod = {}; } catch (e) {}
+    try { S.chmod.sp = parts.sp; } catch (e) {}
+    _chmodSetChecksFromLast3(parts.last3);
+  }
+
+  function _chmodSyncToModeInput() {
+    const inp = el('fm-chmod-mode');
+    if (!inp) return;
+    const last3 = _chmodGetLast3FromChecks();
+    let sp = '0';
+    try { sp = String((S.chmod && S.chmod.sp) || '0'); } catch (e) { sp = '0'; }
+    if (!/^[0-7]$/.test(sp)) sp = '0';
+    const val = (sp !== '0' ? (sp + last3) : last3);
+    try { inp.value = val; } catch (e) {}
+  }
+
+  function _fmtPanelLabel(side) {
+    const p = S.panels[side];
+    const tgt = String(p.target || 'local');
+    const sid = (tgt === 'remote' && p.sid) ? ` (${p.sid})` : '';
+    const cwd = (tgt === 'remote') ? (String(p.cwd || '').trim() || '.') : String(p.cwd || '');
+    return `${side.toUpperCase()} • ${tgt}${sid} • ${cwd}`;
+  }
+
+  function openChmodModal() {
+    const modal = el('fm-chmod-modal');
+    if (!modal) return;
+    const side = S.activeSide;
+    const p = S.panels[side];
+    if (!p) return;
+
+    const caps = _fsAdminCaps(p) || {};
+    if (caps && caps.chmod === false) {
+      toast('chmod недоступен', 'info');
+      return;
+    }
+
+    const names = getSelectionNames(side);
+    if (!names.length) {
+      toast('Выберите файл/папку', 'info');
+      return;
+    }
+    if (p.target === 'remote' && !p.sid) {
+      toast('Remote: нет активной сессии (Connect…)', 'info');
+      return;
+    }
+
+    // store context
+    try {
+      S.chmod = { side, names: Array.from(names), sp: '0' };
+    } catch (e) {
+      S.chmod = { side, names: Array.from(names) };
+    }
+
+    // title/source
+    const src = el('fm-chmod-src');
+    if (src) src.textContent = _fmtPanelLabel(side);
+
+    const listEl = el('fm-chmod-list');
+    if (listEl) {
+      const shown = names.slice(0, 20);
+      listEl.textContent = shown.join('\n') + (names.length > 20 ? '\n…' : '');
+    }
+
+    const err = el('fm-chmod-error');
+    if (err) err.textContent = '';
+
+    // Try prefill mode from permissions if all selected have same perm.
+    let preMode = '';
+    try {
+      const items = Array.from(p.items || []);
+      const perms = names.map((n) => {
+        const it = items.find((x) => safeName(x && x.name) === n);
+        return safeName(it && it.perm);
+      }).filter((x) => !!x);
+      if (perms.length === names.length) {
+        const first = perms[0];
+        if (perms.every((x) => x === first)) {
+          const parsed = _parsePermStringToMode(first);
+          if (parsed) preMode = parsed;
+        }
+      }
+    } catch (e) {}
+
+    const modeInp = el('fm-chmod-mode');
+    if (modeInp) {
+      try { modeInp.value = preMode || ''; } catch (e) {}
+    }
+
+    // sync checkboxes
+    try {
+      const parts = _parseModeInputToParts(preMode || '');
+      if (parts) {
+        try { S.chmod.sp = parts.sp; } catch (e) {}
+        _chmodSetChecksFromLast3(parts.last3);
+      } else {
+        try { S.chmod.sp = '0'; } catch (e) {}
+        _chmodSetChecksFromLast3('000');
+      }
+    } catch (e) {}
+
+    modalOpen(modal);
+    try { setTimeout(() => { try { modeInp && modeInp.focus(); } catch (e) {} }, 0); } catch (e) {}
+  }
+
+  function closeChmodModal() {
+    modalClose(el('fm-chmod-modal'));
+  }
+
+  async function doChmodFromModal() {
+    const modal = el('fm-chmod-modal');
+    if (!modal) return;
+
+    const errEl = el('fm-chmod-error');
+    if (errEl) errEl.textContent = '';
+
+    const side = String((S.chmod && S.chmod.side) || S.activeSide || 'left');
+    const p = S.panels[side];
+    if (!p) return;
+    const names = Array.isArray(S.chmod && S.chmod.names) ? S.chmod.names : getSelectionNames(side);
+
+    const modeInp = el('fm-chmod-mode');
+    const modeRaw = String((modeInp && modeInp.value) || '').trim();
+    const parts = _parseModeInputToParts(modeRaw);
+    if (!parts) {
+      if (errEl) errEl.textContent = 'Введите mode (например 755).';
+      return;
+    }
+
+    // Optional confirm for big batches
+    if (names.length >= 8) {
+      const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
+        ? XKeen.ui.confirm({
+          title: 'chmod',
+          message: `Применить chmod ${parts.norm} к ${names.length} элементам?`,
+          okText: 'Применить',
+          cancelText: 'Отмена',
+          danger: false,
+        })
+        : Promise.resolve(window.confirm(`chmod ${parts.norm} для ${names.length} элементов?`)));
+      if (!ok) return;
+    }
+
+    if (p.target === 'remote' && !p.sid) {
+      toast('Remote: нет активной сессии (Connect…)', 'info');
+      return;
+    }
+
+    for (const n of names) {
+      const path = (p.target === 'remote') ? joinRemote(p.cwd, n) : joinLocal(p.cwd, n);
+      const body = { target: p.target, path, mode: parts.norm };
+      if (p.target === 'remote') body.sid = p.sid;
+      const { res, data } = await fetchJson('/api/fs/chmod', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res || !res.ok || !data || !data.ok) {
+        const msg = data && (data.error || data.message) ? String(data.error || data.message) : 'chmod_failed';
+        const details = data && data.details ? String(data.details) : '';
+        if (errEl) errEl.textContent = details ? (msg + ': ' + details) : msg;
+        toast('FM: ' + msg, 'error');
+        return;
+      }
+    }
+
+    toast('chmod применён', 'success');
+    await listPanel(side, { fromInput: false });
+    closeChmodModal();
+  }
+
+  function openChownModal() {
+    const modal = el('fm-chown-modal');
+    if (!modal) return;
+    const side = S.activeSide;
+    const p = S.panels[side];
+    if (!p) return;
+
+    const caps = _fsAdminCaps(p) || {};
+    if (caps && caps.chown === false) {
+      toast('chown недоступен', 'info');
+      return;
+    }
+    // Remote: only SFTP
+    if (p.target === 'remote') {
+      const protos = Array.isArray(caps.chown_protocols) ? caps.chown_protocols.map((x) => String(x).trim().toLowerCase()) : ['sftp'];
+      const rproto = String((p.rproto || '')).toLowerCase();
+      if (rproto && !protos.includes(rproto)) {
+        toast('chown доступен только для SFTP', 'info');
+        return;
+      }
+    }
+
+    const names = getSelectionNames(side);
+    if (!names.length) {
+      toast('Выберите файл/папку', 'info');
+      return;
+    }
+    if (p.target === 'remote' && !p.sid) {
+      toast('Remote: нет активной сессии (Connect…)', 'info');
+      return;
+    }
+
+    try { S.chown = { side, names: Array.from(names) }; } catch (e) { S.chown = { side, names: Array.from(names) }; }
+
+    const src = el('fm-chown-src');
+    if (src) src.textContent = _fmtPanelLabel(side);
+
+    const listEl = el('fm-chown-list');
+    if (listEl) {
+      const shown = names.slice(0, 20);
+      listEl.textContent = shown.join('\n') + (names.length > 20 ? '\n…' : '');
+    }
+
+    const err = el('fm-chown-error');
+    if (err) err.textContent = '';
+
+    const uidInp = el('fm-chown-uid');
+    const gidInp = el('fm-chown-gid');
+    if (uidInp) { try { uidInp.value = ''; } catch (e) {} }
+    if (gidInp) { try { gidInp.value = ''; } catch (e) {} }
+
+    modalOpen(modal);
+    try { setTimeout(() => { try { uidInp && uidInp.focus(); } catch (e) {} }, 0); } catch (e) {}
+  }
+
+  function closeChownModal() {
+    modalClose(el('fm-chown-modal'));
+  }
+
+  async function doChownFromModal() {
+    const modal = el('fm-chown-modal');
+    if (!modal) return;
+
+    const errEl = el('fm-chown-error');
+    if (errEl) errEl.textContent = '';
+
+    const side = String((S.chown && S.chown.side) || S.activeSide || 'left');
+    const p = S.panels[side];
+    if (!p) return;
+
+    const names = Array.isArray(S.chown && S.chown.names) ? S.chown.names : getSelectionNames(side);
+
+    const uidRaw = String((el('fm-chown-uid') && el('fm-chown-uid').value) || '').trim();
+    const gidRaw = String((el('fm-chown-gid') && el('fm-chown-gid').value) || '').trim();
+
+    if (!uidRaw || !/^\d+$/.test(uidRaw)) {
+      if (errEl) errEl.textContent = 'Введите UID (число).';
+      return;
+    }
+    if (gidRaw && !/^\d+$/.test(gidRaw)) {
+      if (errEl) errEl.textContent = 'GID должен быть числом или пустым.';
+      return;
+    }
+
+    // Remote support check
+    if (p.target === 'remote') {
+      const rproto = String((p.rproto || '')).toLowerCase();
+      if (rproto && rproto !== 'sftp') {
+        if (errEl) errEl.textContent = 'Remote chown поддерживается только для SFTP.';
+        return;
+      }
+      if (!p.sid) {
+        toast('Remote: нет активной сессии (Connect…)', 'info');
+        return;
+      }
+    }
+
+    if (names.length >= 8) {
+      const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
+        ? XKeen.ui.confirm({
+          title: 'chown',
+          message: `Применить chown ${uidRaw}${gidRaw ? ':' + gidRaw : ''} к ${names.length} элементам?`,
+          okText: 'Применить',
+          cancelText: 'Отмена',
+          danger: true,
+        })
+        : Promise.resolve(window.confirm(`chown ${uidRaw}${gidRaw ? ':' + gidRaw : ''} для ${names.length} элементов?`)));
+      if (!ok) return;
+    }
+
+    for (const n of names) {
+      const path = (p.target === 'remote') ? joinRemote(p.cwd, n) : joinLocal(p.cwd, n);
+      const body = { target: p.target, path, uid: parseInt(uidRaw, 10) };
+      if (gidRaw) body.gid = parseInt(gidRaw, 10);
+      else body.gid = null; // do not change
+      if (p.target === 'remote') body.sid = p.sid;
+
+      const { res, data } = await fetchJson('/api/fs/chown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res || !res.ok || !data || !data.ok) {
+        const msg = data && (data.error || data.message) ? String(data.error || data.message) : 'chown_failed';
+        const details = data && data.details ? String(data.details) : '';
+        if (errEl) errEl.textContent = details ? (msg + ': ' + details) : msg;
+        toast('FM: ' + msg, 'error');
+        return;
+      }
+    }
+
+    toast('chown применён', 'success');
+    await listPanel(side, { fromInput: false });
+    closeChownModal();
+  }
+// -------------------------- Drag&Drop: choose Move or Copy --------------------------
   function _panelLabel(side, target, sid, path) {
     const s = String(side || '').toUpperCase();
     const t = String(target || 'local');
@@ -3345,8 +6135,39 @@ async function runCopyMoveWithPayload(op, basePayload) {
     const connectOk = el('fm-connect-ok-btn');
     const connectCancel = el('fm-connect-cancel-btn');
     const connectClose = el('fm-connect-close-btn');
+    const profileSel = el('fm-conn-profile');
+    const profileDelBtn = el('fm-conn-profile-del-btn');
+    const protoSel = el('fm-proto');
+    const authTypeSel = el('fm-auth-type');
+    const hostInp = el('fm-host');
+    const portInp = el('fm-port');
+    const khBtn = el('fm-knownhosts-btn');
+    const hkRemoveBtn = el('fm-hostkey-remove-btn');
+    const rememberCb = el('fm-remember-profile');
 
-    const closeConnect = () => modalClose(el('fm-connect-modal'));
+    const closeConnect = () => {
+      modalClose(el('fm-connect-modal'));
+
+      // UX fix:
+      // When a user switches a panel to "remote", we open the connect dialog.
+      // If they cancel/close it (changed their mind), roll the panel back to "local"
+      // so the target selector doesn't get stuck on "remote".
+      try {
+        const side = String(S && S.connectForSide ? S.connectForSide : '');
+        const p = (S && S.panels) ? S.panels[side] : null;
+        if (p && String(p.target || '') === 'remote' && !String(p.sid || '')) {
+          p.target = 'local';
+          p.sid = '';
+          // Keep current local cwd; if missing, choose a sensible default per side.
+          if (!p.cwd) p.cwd = (side === 'right') ? '/tmp/mnt' : '/opt/var';
+          try { renderPanel(side); } catch (e) {}
+          // Best-effort refresh to restore local listing if remote mode cleared it.
+          setTimeout(() => {
+            try { listPanel(side, { fromInput: false }); } catch (e) {}
+          }, 0);
+        }
+      } catch (e) {}
+    };
 
     if (connectOk) connectOk.addEventListener('click', (e) => { e.preventDefault(); doConnect(); });
     if (connectCancel) connectCancel.addEventListener('click', (e) => { e.preventDefault(); closeConnect(); });
@@ -3358,6 +6179,161 @@ async function runCopyMoveWithPayload(op, basePayload) {
         if (e.target === modal) closeConnect();
       });
     }
+
+    // Dynamic connect UI toggles
+    const scheduleFp = (() => {
+      let t = null;
+      return () => {
+        try { if (t) clearTimeout(t); } catch (e) {}
+        t = setTimeout(() => { try { updateHostKeyFingerprintPreview(); } catch (e2) {} }, 250);
+      };
+    })();
+
+    if (protoSel) protoSel.addEventListener('change', () => { try { updateConnectAuthUi(); } catch (e) {} scheduleFp(); });
+    if (authTypeSel) authTypeSel.addEventListener('change', () => { try { updateConnectAuthUi(); } catch (e) {} });
+    if (hostInp) hostInp.addEventListener('input', () => scheduleFp());
+    if (portInp) portInp.addEventListener('input', () => scheduleFp());
+    if (khBtn) khBtn.addEventListener('click', (e) => { e.preventDefault(); openKnownHostsModal(); });
+    if (hkRemoveBtn) hkRemoveBtn.addEventListener('click', (e) => { e.preventDefault(); removeHostKeyForCurrentHost(); });
+    if (rememberCb) rememberCb.addEventListener('change', () => {
+      try { _saveRememberProfileFlag(!!rememberCb.checked); } catch (e) {}
+    });
+
+    // Connection profiles
+    if (profileSel) profileSel.addEventListener('change', () => {
+      const id = String(profileSel.value || '').trim();
+      try { if (profileDelBtn) profileDelBtn.disabled = !id; } catch (e) {}
+      if (!id) return;
+      try {
+        const pr = _findRemoteProfileById(id);
+        if (pr) {
+          _applyProfileToConnectInputs(pr);
+          _lsSetJson(_LS_REMOTE_PROFILES_LAST_KEY, id);
+        }
+      } catch (e) {}
+    });
+    if (profileDelBtn) profileDelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const sel = el('fm-conn-profile');
+      const id = sel ? String(sel.value || '').trim() : '';
+      if (!id) return;
+      try {
+        const list = _loadRemoteProfiles();
+        const next = list.filter(p => String(p && p.id) !== id);
+        _saveRemoteProfiles(next);
+        // if deleting last-used profile, clear last marker
+        const lastId = _loadLastProfileId();
+        if (String(lastId || '') === id) _lsSetJson(_LS_REMOTE_PROFILES_LAST_KEY, '');
+        _renderRemoteProfilesSelect('');
+      } catch (e2) {
+        try { _renderRemoteProfilesSelect(''); } catch (e3) {}
+      }
+    });
+
+    // known_hosts modal buttons
+    const khModal = el('fm-knownhosts-modal');
+    const khClose = el('fm-knownhosts-close-btn');
+    const khOk = el('fm-knownhosts-ok-btn');
+    const khRefresh = el('fm-knownhosts-refresh-btn');
+    const khClear = el('fm-knownhosts-clear-btn');
+    const khRemoveHost = el('fm-knownhosts-remove-host');
+    const khRemoveHostBtn = el('fm-knownhosts-remove-host-btn');
+    const khBody = el('fm-knownhosts-body');
+    const closeKh = () => modalClose(el('fm-knownhosts-modal'));
+    if (khClose) khClose.addEventListener('click', (e) => { e.preventDefault(); closeKh(); });
+    if (khOk) khOk.addEventListener('click', (e) => { e.preventDefault(); closeKh(); });
+    if (khModal) khModal.addEventListener('click', (e) => { if (e.target === khModal) closeKh(); });
+    if (khRefresh) khRefresh.addEventListener('click', (e) => { e.preventDefault(); loadKnownHostsIntoModal(); });
+    if (khClear) khClear.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
+        ? XKeen.ui.confirm({ title: 'known_hosts', message: 'Очистить known_hosts? Это удалит все запомненные host key.', okText: 'Очистить', cancelText: 'Отмена', danger: true })
+        : Promise.resolve(window.confirm('Clear known_hosts?')));
+      if (!ok) return;
+      try {
+        await fetchJson('/api/remotefs/known_hosts/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        await loadKnownHostsIntoModal();
+        scheduleFp();
+      } catch (e2) {}
+    });
+
+    async function deleteKnownHostByInput() {
+      const raw = String((khRemoveHost && khRemoveHost.value) || '').trim();
+      if (!raw) return;
+
+      // Parse host[:port] with IPv6-safe bracket notation support.
+      let payload = null;
+      try {
+        const m = raw.match(/^\[([^\]]+)\]:(\d{1,5})$/);
+        if (m) {
+          payload = { host: String(m[1] || '').trim(), port: parseInt(m[2], 10) };
+        } else {
+          const m2 = raw.match(/^([^:]+):(\d{1,5})$/);
+          if (m2) payload = { host: String(m2[1] || '').trim(), port: parseInt(m2[2], 10) };
+          else payload = { host: raw };
+        }
+      } catch (e) {
+        payload = { host: raw };
+      }
+      if (!payload || !payload.host) return;
+
+      const label = payload.port ? `${payload.host}:${payload.port}` : String(payload.host);
+      const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
+        ? XKeen.ui.confirm({ title: 'known_hosts', message: `Удалить hostkey для ${label}?`, okText: 'Удалить', cancelText: 'Отмена', danger: true })
+        : Promise.resolve(window.confirm('Delete hostkey?')));
+      if (!ok) return;
+
+      try {
+        const { res, data } = await fetchJson('/api/remotefs/known_hosts/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const n = (data && typeof data.deleted_count === 'number') ? data.deleted_count : null;
+        _toastHostkeyDeleteResult(n, 'Hostkey');
+        if (khRemoveHost) khRemoveHost.value = '';
+        await loadKnownHostsIntoModal();
+        scheduleFp();
+      } catch (e) {}
+    }
+
+    if (khRemoveHostBtn) khRemoveHostBtn.addEventListener('click', (e) => { e.preventDefault(); deleteKnownHostByInput(); });
+    if (khRemoveHost) khRemoveHost.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); deleteKnownHostByInput(); }
+    });
+    if (khBody) khBody.addEventListener('click', async (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest('button[data-kh-action]') : null;
+      if (!btn) return;
+      const act = String(btn.getAttribute('data-kh-action') || '');
+      const idx = String(btn.getAttribute('data-kh-idx') || '');
+
+      if (act === 'delete' && idx !== '') {
+        e.preventDefault();
+        const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
+          ? XKeen.ui.confirm({ title: 'known_hosts', message: `Удалить запись #${idx}?`, okText: 'Удалить', cancelText: 'Отмена', danger: true })
+          : Promise.resolve(window.confirm('Delete entry?')));
+        if (!ok) return;
+        try {
+          await fetchJson('/api/remotefs/known_hosts/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ idx: parseInt(idx, 10) }) });
+          await loadKnownHostsIntoModal();
+          scheduleFp();
+        } catch (e2) {}
+        return;
+      }
+
+      if (act === 'delete_host') {
+        const hostTok = String(btn.getAttribute('data-kh-host') || '').trim();
+        if (!hostTok) return;
+        e.preventDefault();
+        const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
+          ? XKeen.ui.confirm({ title: 'known_hosts', message: `Удалить hostkey для ${hostTok}?`, okText: 'Удалить', cancelText: 'Отмена', danger: true })
+          : Promise.resolve(window.confirm('Delete hostkey?')));
+        if (!ok) return;
+        try {
+          const { res, data } = await fetchJson('/api/remotefs/known_hosts/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ host: hostTok }) });
+          const n = (data && typeof data.deleted_count === 'number') ? data.deleted_count : null;
+          _toastHostkeyDeleteResult(n, 'Hostkey');
+          await loadKnownHostsIntoModal();
+          scheduleFp();
+        } catch (e2) {}
+      }
+    });
 
     // create modal buttons
     const createOk = el('fm-create-ok-btn');
@@ -3398,6 +6374,117 @@ async function runCopyMoveWithPayload(op, basePayload) {
 
     const rnm = el('fm-rename-modal');
     if (rnm) rnm.addEventListener('click', (e) => { if (e.target === rnm) closeRename(); });
+
+    // select by mask modal
+    const maskOk = el('fm-mask-ok-btn');
+    const maskCancel = el('fm-mask-cancel-btn');
+    const maskClose = el('fm-mask-close-btn');
+    const maskInp = el('fm-mask-pattern');
+    const closeMask = () => { try { modalClose(el('fm-mask-modal')); } catch (e) { try { el('fm-mask-modal') && el('fm-mask-modal').classList.add('hidden'); } catch (e2) {} } };
+    const doMask = () => {
+      const side = S.activeSide || 'left';
+      const v = String((maskInp && maskInp.value) || '').trim();
+      if (!v) { try { const err = el('fm-mask-error'); if (err) err.textContent = 'Введите маску (например: *.log)'; } catch (e) {} return; }
+      try { applySelectByMask(side, v); } catch (e) {}
+      closeMask();
+    };
+    if (maskOk) maskOk.addEventListener('click', (e) => { e.preventDefault(); doMask(); });
+    if (maskCancel) maskCancel.addEventListener('click', (e) => { e.preventDefault(); closeMask(); });
+    if (maskClose) maskClose.addEventListener('click', (e) => { e.preventDefault(); closeMask(); });
+    if (maskInp) maskInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doMask(); } });
+    const msm = el('fm-mask-modal');
+    if (msm) msm.addEventListener('click', (e) => { if (e.target === msm) closeMask(); });
+
+    // properties modal
+    const propsClose = el('fm-props-close-btn');
+    const propsClose2 = el('fm-props-close-btn2');
+    const closeProps = () => closePropsModal();
+
+    if (propsClose) propsClose.addEventListener('click', (e) => { e.preventDefault(); closeProps(); });
+    if (propsClose2) propsClose2.addEventListener('click', (e) => { e.preventDefault(); closeProps(); });
+
+    const prm = el('fm-props-modal');
+    if (prm) prm.addEventListener('click', (e) => { if (e.target === prm) closeProps(); });
+
+    // checksum modal
+    const hashClose = el('fm-hash-close-btn');
+    const hashClose2 = el('fm-hash-close-btn2');
+    const hashCopyMd5 = el('fm-hash-copy-md5');
+    const hashCopySha = el('fm-hash-copy-sha256');
+    const hashCopyAll = el('fm-hash-copy-all');
+    const closeHash = () => closeHashModal();
+    if (hashClose) hashClose.addEventListener('click', (e) => { e.preventDefault(); closeHash(); });
+    if (hashClose2) hashClose2.addEventListener('click', (e) => { e.preventDefault(); closeHash(); });
+    const hashm = el('fm-hash-modal');
+    if (hashm) hashm.addEventListener('click', (e) => { if (e.target === hashm) closeHash(); });
+    if (hashCopyMd5) hashCopyMd5.addEventListener('click', (e) => {
+      e.preventDefault();
+      const v = String((el('fm-hash-md5') && el('fm-hash-md5').value) || '').trim();
+      if (v) _copyText(v);
+      toast(v ? 'MD5 скопирован' : 'Нет данных', v ? 'success' : 'info');
+    });
+    if (hashCopySha) hashCopySha.addEventListener('click', (e) => {
+      e.preventDefault();
+      const v = String((el('fm-hash-sha256') && el('fm-hash-sha256').value) || '').trim();
+      if (v) _copyText(v);
+      toast(v ? 'SHA256 скопирован' : 'Нет данных', v ? 'success' : 'info');
+    });
+    if (hashCopyAll) hashCopyAll.addEventListener('click', (e) => {
+      e.preventDefault();
+      const meta = String((el('fm-hash-meta') && el('fm-hash-meta').textContent) || '').trim();
+      const md5 = String((el('fm-hash-md5') && el('fm-hash-md5').value) || '').trim();
+      const sha = String((el('fm-hash-sha256') && el('fm-hash-sha256').value) || '').trim();
+      const size = String((el('fm-hash-size') && el('fm-hash-size').value) || '').trim();
+      const out = [meta, md5 && ('MD5: ' + md5), sha && ('SHA256: ' + sha), size && ('Size: ' + size)].filter(Boolean).join('\n');
+      if (out) _copyText(out);
+      toast(out ? 'Checksum скопирован' : 'Нет данных', out ? 'success' : 'info');
+    });
+
+    // chmod modal
+    const chmodOk = el('fm-chmod-ok-btn');
+    const chmodCancel = el('fm-chmod-cancel-btn');
+    const chmodClose = el('fm-chmod-close-btn');
+    const chmodMode = el('fm-chmod-mode');
+    const closeChmod = () => closeChmodModal();
+
+    if (chmodOk) chmodOk.addEventListener('click', (e) => { e.preventDefault(); doChmodFromModal(); });
+    if (chmodCancel) chmodCancel.addEventListener('click', (e) => { e.preventDefault(); closeChmod(); });
+    if (chmodClose) chmodClose.addEventListener('click', (e) => { e.preventDefault(); closeChmod(); });
+    if (chmodMode) chmodMode.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); doChmodFromModal(); }
+    });
+    if (chmodMode) chmodMode.addEventListener('input', () => { try { _chmodSyncFromModeInput(); } catch (e) {} });
+
+    // checkbox sync
+    ['fm-perm-ur','fm-perm-uw','fm-perm-ux','fm-perm-gr','fm-perm-gw','fm-perm-gx','fm-perm-or','fm-perm-ow','fm-perm-ox'].forEach((id) => {
+      const cb = el(id);
+      if (cb) cb.addEventListener('change', () => { try { _chmodSyncToModeInput(); } catch (e) {} });
+    });
+
+    const chm = el('fm-chmod-modal');
+    if (chm) chm.addEventListener('click', (e) => { if (e.target === chm) closeChmod(); });
+
+    // chown modal
+    const chownOk = el('fm-chown-ok-btn');
+    const chownCancel = el('fm-chown-cancel-btn');
+    const chownClose = el('fm-chown-close-btn');
+    const chownUid = el('fm-chown-uid');
+    const chownGid = el('fm-chown-gid');
+    const closeChown = () => closeChownModal();
+
+    if (chownOk) chownOk.addEventListener('click', (e) => { e.preventDefault(); doChownFromModal(); });
+    if (chownCancel) chownCancel.addEventListener('click', (e) => { e.preventDefault(); closeChown(); });
+    if (chownClose) chownClose.addEventListener('click', (e) => { e.preventDefault(); closeChown(); });
+    if (chownUid) chownUid.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); doChownFromModal(); }
+    });
+    if (chownGid) chownGid.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); doChownFromModal(); }
+    });
+
+    const cho = el('fm-chown-modal');
+    if (cho) cho.addEventListener('click', (e) => { if (e.target === cho) closeChown(); });
+
 
     // drag&drop move/copy modal
     const dropMove = el('fm-dropop-move-btn');
@@ -3455,14 +6542,53 @@ async function runCopyMoveWithPayload(op, basePayload) {
     const opsBtn = el('fm-ops-btn');
     const opsClose = el('fm-ops-close-btn');
     const opsRefresh = el('fm-ops-refresh-btn');
+    const opsFilter = el('fm-ops-filter');
+    const opsClear = el('fm-ops-clear-btn');
 
     if (opsBtn) opsBtn.addEventListener('click', async (e) => {
       e.preventDefault();
+      // Sync UI controls with in-memory state.
+      try { if (opsFilter) opsFilter.value = String(S.opsUi.filter || 'all'); } catch (e0) {}
       await refreshOpsList();
       modalOpen(el('fm-ops-modal'));
     });
     if (opsClose) opsClose.addEventListener('click', (e) => { e.preventDefault(); modalClose(el('fm-ops-modal')); });
     if (opsRefresh) opsRefresh.addEventListener('click', (e) => { e.preventDefault(); refreshOpsList(); });
+
+    if (opsFilter) opsFilter.addEventListener('change', () => {
+      try { S.opsUi.filter = String(opsFilter.value || 'all'); } catch (e) { S.opsUi.filter = 'all'; }
+      renderOpsList(S.opsUi.lastJobs || []);
+    });
+
+    if (opsClear) opsClear.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
+        ? XKeen.ui.confirm({
+          title: 'Очистить историю',
+          message: 'Удалить завершённые и неудачные операции из списка?\n(Активные операции останутся.)',
+          okText: 'Очистить',
+          cancelText: 'Отмена',
+          danger: true,
+        })
+        : Promise.resolve(window.confirm('Очистить историю операций?')));
+      if (!ok) return;
+
+      const serverOk = await clearOpsHistory('history');
+      if (serverOk) return;
+
+      // Fallback: hide locally (persisted in localStorage).
+      const jobs = S.opsUi.lastJobs || [];
+      const idsToHide = [];
+      (jobs || []).forEach((j) => {
+        const jid = String(j && (j.job_id || '') || '');
+        if (!jid) return;
+        const st = String(j && (j.state || '') || '').toLowerCase();
+        if (st === 'done' || st === 'error' || st === 'canceled') idsToHide.push(jid);
+      });
+      const n = _opsHideMany(idsToHide);
+      toast(n ? `Скрыто: ${n}` : 'Нечего очищать', n ? 'success' : 'info');
+      renderOpsList(jobs);
+    });
 
     const om = el('fm-ops-modal');
     if (om) om.addEventListener('click', (e) => { if (e.target === om) modalClose(om); });
@@ -3506,7 +6632,7 @@ async function runCopyMoveWithPayload(op, basePayload) {
         closedAny = true;
       }
 
-      ['fm-help-modal', 'fm-ops-modal', 'fm-progress-modal', 'fm-conflicts-modal', 'fm-rename-modal', 'fm-create-modal', 'fm-connect-modal'].forEach((id) => {
+      ['fm-help-modal', 'fm-ops-modal', 'fm-progress-modal', 'fm-conflicts-modal', 'fm-props-modal', 'fm-hash-modal', 'fm-rename-modal', 'fm-create-modal', 'fm-connect-modal', 'fm-chmod-modal', 'fm-chown-modal'].forEach((id) => {
         const m = el(id);
         if (m && !m.classList.contains('hidden')) {
           modalClose(m);
@@ -3528,6 +6654,12 @@ async function runCopyMoveWithPayload(op, basePayload) {
     const actions = view ? qs('.fm-header-actions', view) : null;
     if (!actions) return;
 
+    // Buttons for file operations should be located at the bottom-right of the
+    // file manager card ("+Папка", "+Файл", Download, Upload). If the footer
+    // container is not present (older markup), fall back to the header actions.
+    const footerActions = view ? qs('.fm-footer-actions', view) : null;
+    const fileActions = footerActions || actions;
+
     // Fullscreen toggle (similar UX to terminal)
     if (!el('fm-fullscreen-btn')) {
       const fsBtn = document.createElement('button');
@@ -3548,6 +6680,45 @@ async function runCopyMoveWithPayload(op, basePayload) {
       }
     }
 
+    // "Show hidden files" (dotfiles) toggle
+    if (!el('fm-dotfiles-toggle')) {
+      const wrap = document.createElement('label');
+      wrap.className = 'fm-toggle';
+      wrap.id = 'fm-dotfiles-wrap';
+      wrap.title = 'Показать/скрыть файлы, начинающиеся с точки (.)';
+      wrap.innerHTML = [
+        '<input type="checkbox" id="fm-dotfiles-toggle" />',
+        '<span class="fm-toggle-slider" aria-hidden="true"></span>',
+        '<span class="fm-toggle-label">Скрытые</span>',
+      ].join('');
+
+      try {
+        const cb = qs('#fm-dotfiles-toggle', wrap);
+        if (cb) {
+          cb.checked = !!(S && S.prefs && S.prefs.showHidden);
+          cb.addEventListener('change', () => setShowHidden(!!cb.checked));
+        }
+      } catch (e) {}
+
+      try {
+        // Place right after fullscreen button (near the rest of view options).
+        const fsBtn = el('fm-fullscreen-btn');
+        if (fsBtn && fsBtn.parentElement) {
+          fsBtn.parentElement.insertBefore(wrap, fsBtn.nextSibling);
+        } else {
+          actions.insertBefore(wrap, actions.firstChild);
+        }
+      } catch (e) {
+        try { actions.appendChild(wrap); } catch (e2) {}
+      }
+    } else {
+      // keep in sync if pref changed programmatically
+      try {
+        const cb = el('fm-dotfiles-toggle');
+        if (cb) cb.checked = !!(S && S.prefs && S.prefs.showHidden);
+      } catch (e) {}
+    }
+
     // Ensure button state matches current DOM state.
     try {
       const card = fmCardEl();
@@ -3556,6 +6727,31 @@ async function runCopyMoveWithPayload(op, basePayload) {
     } catch (e) {}
 
     // Create folder / file buttons
+    // "Вверх" is now located in the top panel bars (next to "Обновить").
+    // In the footer we keep only "Очистить корзину" (active panel).
+
+    if (!el('fm-clear-trash-active-btn')) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn-secondary hidden';
+      b.id = 'fm-clear-trash-active-btn';
+      b.textContent = '🧹 Очистить корзину';
+      b.title = 'Очистить корзину (активная панель)';
+      b.setAttribute('aria-label', 'Очистить корзину');
+      b.addEventListener('click', async (e) => {
+        try { e.preventDefault(); } catch (e2) {}
+        await runClearTrash(S.activeSide);
+      });
+      try {
+        fileActions.insertBefore(b, fileActions.firstChild);
+      } catch (e) {
+        try { fileActions.appendChild(b); } catch (e2) {}
+      }
+    }
+
+    // Initial state
+    try { updateFmFooterNavButtons(); } catch (e) {}
+
     if (!el('fm-mkdir-btn')) {
       const b = document.createElement('button');
       b.type = 'button';
@@ -3567,7 +6763,7 @@ async function runCopyMoveWithPayload(op, basePayload) {
         try { e.preventDefault(); } catch (e2) {}
         openCreateModal('dir');
       });
-      try { actions.appendChild(b); } catch (e2) {}
+      try { fileActions.appendChild(b); } catch (e2) {}
     }
 
     if (!el('fm-touch-btn')) {
@@ -3581,7 +6777,7 @@ async function runCopyMoveWithPayload(op, basePayload) {
         try { e.preventDefault(); } catch (e2) {}
         openCreateModal('file');
       });
-      try { actions.appendChild(b); } catch (e2) {}
+      try { fileActions.appendChild(b); } catch (e2) {}
     }
 
     // Upload / download buttons are injected at runtime.
@@ -3619,9 +6815,16 @@ async function runCopyMoveWithPayload(op, basePayload) {
       downloadSelection(S.activeSide);
     };
 
-    actions.appendChild(downBtn);
-    actions.appendChild(upBtn);
-    actions.appendChild(fileInput);
+    fileActions.appendChild(downBtn);
+    fileActions.appendChild(upBtn);
+    fileActions.appendChild(fileInput);
+
+    // Place navigation buttons at the far right of the footer actions.
+    // Re-appending moves existing nodes without duplicating them.
+    try {
+      const trashNav = el('fm-clear-trash-active-btn');
+      if (trashNav && trashNav.parentElement === fileActions) fileActions.appendChild(trashNav);
+    } catch (e) {}
   }
 
 
@@ -3678,24 +6881,77 @@ async function runCopyMoveWithPayload(op, basePayload) {
   function buildCtxMenu(menu, opts) {
     if (!menu) return;
     const o = opts || {};
+    const side = String((o.side) || S.activeSide || 'left');
+    const p = (S.panels && S.panels[side]) ? S.panels[side] : null;
     const hasRow = !!o.hasRow;
     const isDir = !!o.isDir;
+    const hasSelection = !!(p && getSelectionNames(side).length);
+    const inTrash = !!(p && isTrashPanel(p));
+
+    // Capabilities (best-effort; default allow)
+    let canChmod = true;
+    let canChown = true;
+    try {
+      const rf = (S.caps && S.caps.remoteFs) ? S.caps.remoteFs : null;
+      const fa = (rf && rf.fs_admin) ? rf.fs_admin : null;
+      const local = (fa && fa.local) ? fa.local : {};
+      const remote = (fa && fa.remote) ? fa.remote : {};
+      const isRemote = !!p && String(p.target) === 'remote';
+      canChmod = isRemote ? !!remote.chmod : !!local.chmod;
+      canChown = isRemote ? !!remote.chown : !!local.chown;
+      const protos = Array.isArray(remote.chown_protocols) ? remote.chown_protocols.map(String) : [];
+      if (isRemote && protos.length) {
+        const rproto = String((p && p.rproto) || '').trim().toLowerCase();
+        if (rproto) {
+          canChown = canChown && protos.includes(rproto);
+        } else {
+          // If protocol is unknown on the UI side, keep menu visible only if SFTP is allowed.
+          canChown = canChown && protos.includes('sftp');
+        }
+      }
+      // Remote requires active session.
+      if (isRemote && (!p || !p.sid)) {
+        canChmod = false;
+        canChown = false;
+      }
+    } catch (e) {
+      // keep defaults
+    }
 
     menu.innerHTML = '';
+
+    if (!hasRow && hasSelection) {
+      menu.appendChild(_ctxBtn('Свойства…', 'props', ''));
+      menu.appendChild(_ctxSep());
+    }
 
     if (hasRow) {
       menu.appendChild(_ctxBtn(isDir ? 'Открыть папку' : 'Открыть', 'open', 'Enter'));
       menu.appendChild(_ctxBtn('Скачать', 'download', ''));
+      menu.appendChild(_ctxBtn('Копировать полный путь', 'copy_path', 'Ctrl+Shift+C'));
       menu.appendChild(_ctxSep());
       menu.appendChild(_ctxBtn('Копировать', 'copy', 'F5'));
       menu.appendChild(_ctxBtn('Переместить', 'move', 'F6'));
       menu.appendChild(_ctxBtn('Переименовать', 'rename', 'F2'));
-      menu.appendChild(_ctxBtn('Удалить', 'delete', 'F8'));
+      menu.appendChild(_ctxBtn('Свойства…', 'props', ''));
+      if (!isDir) menu.appendChild(_ctxBtn('Checksum (MD5/SHA256)…', 'checksum', ''));
+      if (canChmod) menu.appendChild(_ctxBtn('Права (chmod)…', 'chmod', ''));
+      if (canChown) menu.appendChild(_ctxBtn('Владелец (chown)…', 'chown', ''));
+      if (inTrash) menu.appendChild(_ctxBtn('Восстановить', 'restore', ''));
+      menu.appendChild(_ctxBtn(inTrash ? 'Удалить навсегда' : 'В корзину', 'delete', 'F8'));
       menu.appendChild(_ctxSep());
     }
 
     menu.appendChild(_ctxBtn('Создать папку', 'mkdir', 'F7'));
     menu.appendChild(_ctxBtn('Создать файл', 'touch', 'Shift+F7'));
+    menu.appendChild(_ctxSep());
+    menu.appendChild(_ctxBtn('Выделить всё', 'select_all', 'Ctrl+A'));
+    menu.appendChild(_ctxBtn('Инвертировать выделение', 'invert_sel', 'Ctrl+I'));
+    menu.appendChild(_ctxBtn('Выделить по маске…', 'mask_sel', 'Ctrl+M'));
+    if (!hasRow) {
+      // For an empty-area menu, provide path copy (cwd/selection).
+      menu.appendChild(_ctxBtn('Копировать полный путь', 'copy_path', 'Ctrl+Shift+C'));
+    }
     menu.appendChild(_ctxSep());
     menu.appendChild(_ctxBtn('Загрузить (Upload)…', 'upload', ''));
     menu.appendChild(_ctxBtn('Вверх', 'up', 'Backspace'));
@@ -3714,7 +6970,7 @@ async function runCopyMoveWithPayload(op, basePayload) {
     // store context for actions
     try { S.ctxMenu = { shown: true, side, name, isDir, hasRow }; } catch (e) {}
 
-    buildCtxMenu(m, { hasRow, isDir });
+    buildCtxMenu(m, { side, hasRow, isDir });
 
     // Position (fixed to viewport)
     try {
@@ -3783,14 +7039,32 @@ async function runCopyMoveWithPayload(op, basePayload) {
           await openFocused(side);
         } else if (act === 'download') {
           downloadSelection(side);
+        } else if (act === 'copy_path') {
+          copyFullPaths(side);
         } else if (act === 'copy') {
           await runCopyMove('copy');
         } else if (act === 'move') {
           await runCopyMove('move');
         } else if (act === 'rename') {
           openRenameModal();
+        } else if (act === 'props') {
+          await openPropsModal(side);
+        } else if (act === 'checksum') {
+          await openHashModal(side);
+        } else if (act === 'chmod') {
+          openChmodModal();
+        } else if (act === 'chown') {
+          openChownModal();
+        } else if (act === 'restore') {
+          await runRestore();
         } else if (act === 'delete') {
           await runDelete();
+        } else if (act === 'select_all') {
+          selectAllVisible(side);
+        } else if (act === 'invert_sel') {
+          invertSelectionVisible(side);
+        } else if (act === 'mask_sel') {
+          openMaskModal();
         } else if (act === 'mkdir') {
           openCreateModal('dir');
         } else if (act === 'touch') {
@@ -3819,15 +7093,30 @@ async function runCopyMoveWithPayload(op, basePayload) {
       hideCtxMenu();
     }, true);
 
-    document.addEventListener('wheel', () => {
+    // Do NOT close the menu when user scrolls over it (wheel/trackpad) —
+    // it's too easy to dismiss the menu accidentally.
+    // Still close it on wheel/scroll happening outside of the menu.
+    document.addEventListener('wheel', (e) => {
       const mm = el('fm-context-menu');
       if (!mm || mm.classList.contains('hidden')) return;
-      hideCtxMenu();
-    }, { capture: true, passive: true });
 
-    document.addEventListener('scroll', () => {
+      // When the pointer is over the menu, keep it open and prevent the
+      // underlying panel/page from scrolling (otherwise a scroll event would
+      // fire and close the menu anyway).
+      if (e && e.target && mm.contains(e.target)) {
+        try { e.preventDefault(); } catch (e2) {}
+        try { e.stopPropagation(); } catch (e3) {}
+        return;
+      }
+
+      hideCtxMenu();
+    }, { capture: true, passive: false });
+
+    document.addEventListener('scroll', (e) => {
       const mm = el('fm-context-menu');
       if (!mm || mm.classList.contains('hidden')) return;
+      // Allow scrolling inside the context menu without dismissing it.
+      if (e && e.target && mm.contains(e.target)) return;
       hideCtxMenu();
     }, true);
 
@@ -3859,6 +7148,30 @@ async function runCopyMoveWithPayload(op, basePayload) {
       if (k === 'Escape' && fmIsFullscreen) {
         e.preventDefault();
         fmSetFullscreen(false);
+        return;
+      }
+
+      const ctrl = !!(e.ctrlKey || e.metaKey);
+
+      // Total Commander-ish мелочи
+      if (ctrl && (k === 'a' || k === 'A')) {
+        e.preventDefault();
+        selectAllVisible(S.activeSide);
+        return;
+      }
+      if (ctrl && (k === 'i' || k === 'I')) {
+        e.preventDefault();
+        invertSelectionVisible(S.activeSide);
+        return;
+      }
+      if (ctrl && (k === 'm' || k === 'M')) {
+        e.preventDefault();
+        openMaskModal();
+        return;
+      }
+      if (ctrl && e.shiftKey && (k === 'c' || k === 'C')) {
+        e.preventDefault();
+        copyFullPaths(S.activeSide);
         return;
       }
 
@@ -4020,6 +7333,9 @@ async function runCopyMoveWithPayload(op, basePayload) {
     });
 
     setActiveSide('left');
+
+    // Adds the bottom-left resize handle (so the card can be resized to the left).
+    wireLeftResizeHandle();
 
     wirePanel('left');
     wirePanel('right');
