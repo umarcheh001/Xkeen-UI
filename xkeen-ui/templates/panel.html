@@ -19,13 +19,9 @@
   <script src="{{ url_for('static', filename='codemirror/mode/javascript/javascript.min.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/mode/shell/shell.min.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/mode/yaml/yaml.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/mode/properties/properties.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/mode/toml/toml.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/mode/nginx/nginx.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/mode/xml/xml.min.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/lint/lint.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='jsonlint/jsonlint.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/lint/json-lint.min.js') }}"></script>
+
+  <!-- NOTE: extra modes / JSON linter are lazy-loaded (see js/ui/codemirror_loader.js) -->
   <!-- CodeMirror addons: folding, search, dialog, autoclose -->
   <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/fold/foldgutter.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/dialog/dialog.css') }}">
@@ -115,6 +111,12 @@
             ></button>
 
             <a
+              href="{{ url_for('devtools_page') }}"
+              class="service-core-text"
+              title="DevTools"
+            >DevTools</a>
+
+            <a
               href="{{ url_for('logout') }}"
               class="service-core-text"
               title="Выйти из панели"
@@ -125,7 +127,7 @@
 
       <p>Маршрутизация, режим inbounds и VLESS outbounds в одной панели.</p>
 
-<div class="top-tabs">
+<div class="top-tabs header-tabs">
         <button class="top-tab-btn active" data-view="routing">
           Роутинг Xray
         </button>
@@ -146,6 +148,10 @@
         </button>
         <button class="top-tab-btn" type="button" onclick="window.location.href='/mihomo_generator'">
           Mihomo Генератор
+        </button>
+
+        <button class="top-tab-btn" type="button" id="top-tab-donate">
+          💰 Донат
         </button>
       </div>
     
@@ -354,7 +360,7 @@
 
     <div id="mihomo-body">
       <p class="small">
-        Активный файл: <code>/opt/etc/mihomo/config.yaml</code>
+        Активный файл: <code>{{ mihomo_config_file|e }}</code>
       </p>
 
       <!-- Основной редактор config.yaml -->
@@ -591,7 +597,6 @@
     <div class="fm-header">
       <h2>Файловый менеджер</h2>
       <div class="fm-header-actions">
-        <button type="button" class="btn-secondary" id="fm-refresh-all-btn">⟳ Обновить</button>
         <button type="button" class="btn-secondary" id="fm-ops-btn">🧾 Операции</button>
       </div>
     </div>
@@ -601,30 +606,38 @@
     <div class="fm-two" id="fm-root">
       <div class="fm-panel" data-side="left">
         <div class="fm-panel-bar">
-          <select class="fm-target-select" aria-label="Target">
-            <option value="local">local</option>
-            <option value="remote">remote</option>
+          <select class="fm-target-select" aria-label="Target" title="local / remote">
+            <option value="local">L</option>
+            <option value="remote">R</option>
           </select>
           <button type="button" class="btn-secondary fm-connect-btn">Connect…</button>
           <button type="button" class="btn-secondary fm-disconnect-btn" style="display:none;">Disconnect</button>
           <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" />
-          <button type="button" class="btn-secondary fm-up-btn" title="Вверх">↑</button>
+          <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">↑</button>
           <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">⟳</button>
+          <div class="fm-filter-wrap">
+            <input class="terminal-input fm-filter-input" type="text" placeholder="Фильтр…" title="Фильтр по имени в текущей папке" autocomplete="off" spellcheck="false" />
+            <button type="button" class="btn-secondary fm-filter-clear-btn hidden" title="Очистить фильтр">✖</button>
+          </div>
         </div>
         <div class="fm-list" tabindex="0" role="listbox" aria-label="Left panel"></div>
       </div>
 
       <div class="fm-panel" data-side="right">
         <div class="fm-panel-bar">
-          <select class="fm-target-select" aria-label="Target">
-            <option value="local">local</option>
-            <option value="remote">remote</option>
+          <select class="fm-target-select" aria-label="Target" title="local / remote">
+            <option value="local">L</option>
+            <option value="remote">R</option>
           </select>
           <button type="button" class="btn-secondary fm-connect-btn">Connect…</button>
           <button type="button" class="btn-secondary fm-disconnect-btn" style="display:none;">Disconnect</button>
           <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" />
-          <button type="button" class="btn-secondary fm-up-btn" title="Вверх">↑</button>
+          <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">↑</button>
           <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">⟳</button>
+          <div class="fm-filter-wrap">
+            <input class="terminal-input fm-filter-input" type="text" placeholder="Фильтр…" title="Фильтр по имени в текущей папке" autocomplete="off" spellcheck="false" />
+            <button type="button" class="btn-secondary fm-filter-clear-btn hidden" title="Очистить фильтр">✖</button>
+          </div>
         </div>
         <div class="fm-list" tabindex="0" role="listbox" aria-label="Right panel"></div>
       </div>
@@ -634,6 +647,10 @@
         <span><b>Tab</b> — смена панели</span>
         <span><b>Enter</b> — открыть</span>
         <span><b>Backspace</b> — вверх</span>
+        <span><b>Ctrl+A</b> — выделить всё</span>
+        <span><b>Ctrl+I</b> — инвертировать</span>
+        <span><b>Ctrl+M</b> — выделить по маске</span>
+        <span><b>Ctrl+Shift+C</b> — копировать полный путь</span>
         <span><b>F7</b> — новая папка</span>
         <span><b>Shift+F7</b> — новый файл</span>
         <span><b>F2</b> — Rename</span>
@@ -641,9 +658,13 @@
         <span><b>F5</b> — Copy</span>
         <span><b>F6</b> — Move</span>
         <span><b>Drag&Drop</b> — выбрать Move / Copy</span>
-        <span><b>F8</b> — Delete</span>
+        <span><b>F8</b> — в корзину (в корзине — удалить навсегда)</span>
       </div>
+    </div>
+
+    <div class="fm-footer">
       <button type="button" class="btn-secondary fm-help-btn" id="fm-help-btn" title="Справка (F1)" aria-label="Справка">❓ Справка</button>
+      <div class="fm-footer-actions" aria-label="File manager actions"></div>
     </div>
   </section>
 </div>
@@ -908,6 +929,27 @@
       </div>
     </div>
 
+    <!-- File manager: upload conflict (same-name file already exists) -->
+    <div id="fm-upload-conflict-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Конфликт при загрузке">
+      <div class="modal-content" style="max-width: 720px;">
+        <div class="modal-header">
+          <span class="modal-title" id="fm-upload-conflict-title">Файл уже существует</span>
+          <button type="button" class="modal-close" id="fm-upload-conflict-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="fm-upload-conflict-message" class="modal-description"></p>
+          <p class="modal-hint" style="margin:8px 0 0; opacity:0.75; font-size: 0.85rem;">
+            «Переименовать» сохранит оба файла, добавив к имени номер (например, <code>file (1).txt</code>).
+          </p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="fm-upload-conflict-skip-btn" class="btn-secondary">Пропустить</button>
+          <button type="button" id="fm-upload-conflict-rename-btn">Переименовать</button>
+          <button type="button" id="fm-upload-conflict-overwrite-btn" class="btn-danger">Перезаписать</button>
+        </div>
+      </div>
+    </div>
+
     <!-- File manager: text file viewer/editor -->
     <div id="fm-editor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Редактор файла">
       <div class="modal-content" style="max-width: 980px;">
@@ -972,10 +1014,67 @@
     </div>
 
 
+    <!-- Donate modal (💰 Донат) -->
+    <div id="donate-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Поддержать проект">
+      <div class="modal-content donate-modal-content">
+        <div class="modal-header">
+          <span class="modal-title">💰 Поддержать проект</span>
+          <button type="button" class="modal-close" id="donate-modal-close-btn" title="Закрыть">×</button>
+        </div>
+
+        <div class="modal-body">
+          <p class="donate-lead">
+            Если вам понравилась панель, вы можете поддержать проект и купить автору кофе ☕
+          </p>
+
+          <div class="donate-coins" role="list">
+            <div class="donate-coin" role="listitem">
+              <div class="donate-coin-title">USDT <span class="donate-coin-sub">(сеть TON)</span></div>
+              <button type="button" class="donate-address xk-tooltip" data-tooltip="Копировать" data-copy="UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L" aria-label="Скопировать адрес USDT (TON)">
+                <span class="donate-address-text">UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L</span>
+                <span class="donate-address-icon" aria-hidden="true">⧉</span>
+              </button>
+            </div>
+
+            <div class="donate-coin" role="listitem">
+              <div class="donate-coin-title">TONCOIN</div>
+              <button type="button" class="donate-address xk-tooltip" data-tooltip="Копировать" data-copy="UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L" aria-label="Скопировать адрес TONCOIN">
+                <span class="donate-address-text">UQBm03wCEyD99CkEjjrfbtk08WrlgKqfyQGoueAwvhMEYV7L</span>
+                <span class="donate-address-icon" aria-hidden="true">⧉</span>
+              </button>
+            </div>
+
+            <div class="donate-coin" role="listitem">
+              <div class="donate-coin-title">BITCOIN</div>
+              <button type="button" class="donate-address xk-tooltip" data-tooltip="Копировать" data-copy="bc1quhqk7l53vgmm9djyfktl6sflcvk83wgw0zqka6" aria-label="Скопировать адрес BITCOIN">
+                <span class="donate-address-text">bc1quhqk7l53vgmm9djyfktl6sflcvk83wgw0zqka6</span>
+                <span class="donate-address-icon" aria-hidden="true">⧉</span>
+              </button>
+            </div>
+
+            <div class="donate-coin" role="listitem">
+              <div class="donate-coin-title">Ethereum <span class="donate-coin-sub">(сеть Ethereum)</span></div>
+              <button type="button" class="donate-address xk-tooltip" data-tooltip="Копировать" data-copy="0x8BA4b535ef7C990B96bc982083f9bFB392134F5e" aria-label="Скопировать адрес Ethereum">
+                <span class="donate-address-text">0x8BA4b535ef7C990B96bc982083f9bFB392134F5e</span>
+                <span class="donate-address-icon" aria-hidden="true">⧉</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="donate-hint">Нажмите на адрес, чтобы скопировать в буфер обмена.</div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="donate-modal-ok-btn" class="btn-secondary">Понятно</button>
+        </div>
+      </div>
+    </div>
+
+
     <div id="toast-container"></div>
 
     <footer>
-      <small>Xkeen UI — /opt/etc/xray/configs/03_inbounds.json, 04_outbounds.json, 05_routing.json</small>
+      <small>Xkeen UI — {{ inbounds_file|e }}, {{ outbounds_file|e }}, {{ routing_file|e }}</small>
     </footer>
   </div>
 
@@ -986,7 +1085,7 @@
 	      routing: "{{ routing_file|e }}",
 	      inbounds: "{{ inbounds_file|e }}",
 	      outbounds: "{{ outbounds_file|e }}",
-	      mihomo: "/opt/etc/mihomo/config.yaml",
+	      mihomo: "{{ mihomo_config_file|e }}",
 	    };
   </script>
   <!-- Modularization scaffold (no behavior changes yet) -->
@@ -998,6 +1097,7 @@
   <script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
 	  <script src="{{ url_for('static', filename='js/ui/last_activity.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/tab_id.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/ansi.js') }}"></script>
@@ -1056,6 +1156,7 @@
   <script src="{{ url_for('static', filename='js/terminal/modules/confirm_prompt.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/xray_tail.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/terminal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/donate.js') }}"></script>
   <script src="{{ url_for('static', filename='js/pages/panel.init.js') }}"></script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 
@@ -1188,6 +1289,14 @@
     </div>
     <div class="modal-body">
       <div class="fm-form-grid">
+        <label for="fm-conn-profile">Профиль</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="fm-conn-profile" class="terminal-input" style="flex:1;">
+            <option value="">—</option>
+          </select>
+          <button type="button" class="btn-secondary" id="fm-conn-profile-del-btn" title="Удалить выбранный профиль" aria-label="Удалить профиль">×</button>
+        </div>
+
         <label for="fm-proto">Протокол</label>
         <select id="fm-proto" class="terminal-input">
           <option value="sftp">SFTP</option>
@@ -1204,15 +1313,45 @@
         <label for="fm-user">User</label>
         <input id="fm-user" class="terminal-input" placeholder="root" />
 
-        <label for="fm-pass">Password</label>
+        <label for="fm-auth-type" id="fm-auth-type-label">Auth</label>
+        <select id="fm-auth-type" class="terminal-input">
+          <option value="password">password</option>
+          <option value="key">key (SFTP)</option>
+        </select>
+
+        <label for="fm-pass" id="fm-pass-label">Password</label>
         <input id="fm-pass" class="terminal-input" type="password" placeholder="" />
 
+        <label for="fm-key-file" id="fm-key-file-label">Private key</label>
+        <input id="fm-key-file" class="terminal-input" type="file" />
+
+        <label for="fm-key-path" id="fm-key-path-label">Key path (на роутере)</label>
+        <input id="fm-key-path" class="terminal-input" placeholder="/opt/etc/ssh/id_rsa" spellcheck="false" />
+
+        <label for="fm-passphrase" id="fm-passphrase-label">Passphrase</label>
+        <input id="fm-passphrase" class="terminal-input" type="password" placeholder="(если нужно)" />
+
         <label for="fm-hostkey-policy">SFTP host key</label>
-        <select id="fm-hostkey-policy" class="terminal-input">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="fm-hostkey-policy" class="terminal-input" style="flex:1;">
           <option value="accept_new">accept_new (рекомендуется)</option>
           <option value="reject_new">reject_new (строго)</option>
           <option value="accept_any">accept_any (небезопасно)</option>
-        </select>
+          </select>
+          <button type="button" class="btn-secondary" id="fm-knownhosts-btn" title="Управление known_hosts">known_hosts…</button>
+        </div>
+
+        <label id="fm-hostkey-fp-label">Host key fingerprint</label>
+        <div id="fm-hostkey-row" style="display:flex; gap:8px; align-items:center;">
+          <div id="fm-hostkey-fp" class="status" style="margin:0; padding:8px 10px; opacity:.85; flex:1;">&nbsp;</div>
+          <button
+            type="button"
+            class="btn-secondary btn-icon xk-tooltip"
+            id="fm-hostkey-remove-btn"
+            aria-label="Удалить hostkey"
+            data-tooltip="Удалить hostkey для этого host (запись из known_hosts)"
+          >🗑</button>
+        </div>
 
         <label for="fm-tls-verify">FTPS TLS verify</label>
         <select id="fm-tls-verify" class="terminal-input">
@@ -1220,6 +1359,12 @@
           <option value="ca">ca (сертификат без hostname)</option>
           <option value="none">none (небезопасно)</option>
         </select>
+
+        <label for="fm-remember-profile">Запомнить профиль</label>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <input id="fm-remember-profile" type="checkbox" />
+          <span style="opacity:.85;">host/user/port/proto (без пароля, хранится в браузере)</span>
+        </div>
       </div>
       <div id="fm-connect-error" class="error"></div>
       <div id="fm-connect-warn" class="status" style="display:none;"></div>
@@ -1227,6 +1372,37 @@
     <div class="modal-actions" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="fm-connect-cancel-btn">Отмена</button>
       <button type="button" class="btn-primary" id="fm-connect-ok-btn">Connect</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: known_hosts management -->
+<div id="fm-knownhosts-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="known_hosts">
+  <div class="modal-content" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title">SFTP: known_hosts</span>
+      <button type="button" class="modal-close" id="fm-knownhosts-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="fm-knownhosts-path" class="status" style="margin:0 0 10px 0; padding:8px 10px; opacity:.85;">&nbsp;</div>
+
+      <div class="form-row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 10px 0;">
+        <label for="fm-knownhosts-remove-host" style="min-width:170px;">Удалить по host</label>
+        <input id="fm-knownhosts-remove-host" class="terminal-input" placeholder="example.com[:2222] или [2001:db8::1]:2222" style="flex:1; min-width:260px;" />
+        <button type="button" class="btn-secondary" id="fm-knownhosts-remove-host-btn">Удалить</button>
+      </div>
+
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-bottom:10px; flex-wrap:wrap;">
+        <button type="button" class="btn-secondary" id="fm-knownhosts-refresh-btn">Обновить</button>
+        <button type="button" class="btn-danger" id="fm-knownhosts-clear-btn">Очистить known_hosts</button>
+      </div>
+      <div id="fm-knownhosts-error" class="error"></div>
+      <div id="fm-knownhosts-hashed-hint" class="status" style="display:none; margin:0 0 10px 0; opacity:.75;"></div>
+      <div id="fm-knownhosts-body" style="max-height:380px; overflow:auto;"></div>
+      <div class="status" style="margin-top:10px; opacity:.75;">Подсказка: если сервер перевыпустил ключ — удалите соответствующую запись и подключитесь снова.</div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-knownhosts-ok-btn">Закрыть</button>
     </div>
   </div>
 </div>
@@ -1293,7 +1469,168 @@
   </div>
 </div>
 
+<!-- File Manager: select by mask -->
+<div id="fm-mask-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Select by mask">
+  <div class="modal-content" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">Выделить по маске</span>
+      <button type="button" class="modal-close" id="fm-mask-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-form-grid">
+        <label for="fm-mask-pattern">Маска *</label>
+        <input id="fm-mask-pattern" class="terminal-input fm-mono" placeholder="*.log *.json" spellcheck="false" />
 
+        <label></label>
+        <div class="status" style="margin:0; padding:8px 10px;">Пример: <span class="fm-mono">*.log</span>, <span class="fm-mono">*.json</span></div>
+      </div>
+      <div id="fm-mask-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-mask-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-mask-ok-btn">Выделить</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- File Manager: properties -->
+<div id="fm-props-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Properties">
+  <div class="modal-content" style="max-width:720px;">
+    <div class="modal-header">
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <span class="modal-title">Свойства</span>
+        <span id="fm-props-modal-meta" class="status" style="margin:0; padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;"></span>
+      </div>
+      <button type="button" class="modal-close" id="fm-props-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="fm-props-modal-body"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-props-close-btn2">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: checksum (md5/sha256) -->
+<div id="fm-hash-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Checksum">
+  <div class="modal-content" style="max-width:760px;">
+    <div class="modal-header">
+      <div style="display:flex; flex-direction:column; gap:2px;">
+        <span class="modal-title">Checksum</span>
+        <span id="fm-hash-meta" class="status" style="margin:0; padding:0; background:transparent; border:none; opacity:.75; font-size:0.82rem;"></span>
+      </div>
+      <button type="button" class="modal-close" id="fm-hash-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-form-grid" style="grid-template-columns: 120px 1fr auto; align-items:center;">
+        <label for="fm-hash-md5">MD5</label>
+        <input id="fm-hash-md5" class="terminal-input fm-mono" readonly />
+        <button type="button" class="btn-secondary" id="fm-hash-copy-md5">Copy</button>
+
+        <label for="fm-hash-sha256">SHA256</label>
+        <input id="fm-hash-sha256" class="terminal-input fm-mono" readonly />
+        <button type="button" class="btn-secondary" id="fm-hash-copy-sha256">Copy</button>
+
+        <label for="fm-hash-size">Размер</label>
+        <input id="fm-hash-size" class="terminal-input fm-mono" readonly />
+        <button type="button" class="btn-secondary" id="fm-hash-copy-all">Copy all</button>
+      </div>
+      <div id="fm-hash-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-hash-close-btn2">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: chmod modal -->
+<div id="fm-chmod-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Chmod">
+  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-header">
+      <span class="modal-title" id="fm-chmod-title">Права доступа (chmod)</span>
+      <button type="button" class="modal-close" id="fm-chmod-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-form-grid" style="grid-template-columns: 160px 1fr;">
+        <label></label>
+        <div id="fm-chmod-src" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+
+        <label>Выбрано</label>
+        <pre id="fm-chmod-list" class="fm-dropop-list" style="margin:0; max-height:160px;"></pre>
+
+        <label for="fm-chmod-mode">Mode *</label>
+        <input id="fm-chmod-mode" class="terminal-input fm-mono" placeholder="755" spellcheck="false" />
+
+        <label></label>
+        <div class="status" style="margin:0; opacity:.8;">Подсказка: можно вводить <span class="fm-mono">644</span>, <span class="fm-mono">0755</span> или <span class="fm-mono">0o755</span>.</div>
+
+        <label></label>
+        <div class="fm-perms-grid" aria-label="Права">
+          <div></div>
+          <div class="fm-perms-head">User</div>
+          <div class="fm-perms-head">Group</div>
+          <div class="fm-perms-head">Other</div>
+
+          <div class="fm-perms-rowlabel">Read</div>
+          <label class="fm-perms-cell"><input type="checkbox" id="fm-perm-ur" /> r</label>
+          <label class="fm-perms-cell"><input type="checkbox" id="fm-perm-gr" /> r</label>
+          <label class="fm-perms-cell"><input type="checkbox" id="fm-perm-or" /> r</label>
+
+          <div class="fm-perms-rowlabel">Write</div>
+          <label class="fm-perms-cell"><input type="checkbox" id="fm-perm-uw" /> w</label>
+          <label class="fm-perms-cell"><input type="checkbox" id="fm-perm-gw" /> w</label>
+          <label class="fm-perms-cell"><input type="checkbox" id="fm-perm-ow" /> w</label>
+
+          <div class="fm-perms-rowlabel">Exec</div>
+          <label class="fm-perms-cell"><input type="checkbox" id="fm-perm-ux" /> x</label>
+          <label class="fm-perms-cell"><input type="checkbox" id="fm-perm-gx" /> x</label>
+          <label class="fm-perms-cell"><input type="checkbox" id="fm-perm-ox" /> x</label>
+        </div>
+      </div>
+      <div id="fm-chmod-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-chmod-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-chmod-ok-btn">Применить</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: chown modal -->
+<div id="fm-chown-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Chown">
+  <div class="modal-content" style="max-width:620px;">
+    <div class="modal-header">
+      <span class="modal-title" id="fm-chown-title">Владелец (chown)</span>
+      <button type="button" class="modal-close" id="fm-chown-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-form-grid" style="grid-template-columns: 160px 1fr;">
+        <label></label>
+        <div id="fm-chown-src" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+
+        <label>Выбрано</label>
+        <pre id="fm-chown-list" class="fm-dropop-list" style="margin:0; max-height:160px;"></pre>
+
+        <label for="fm-chown-uid">UID *</label>
+        <input id="fm-chown-uid" class="terminal-input fm-mono" placeholder="0" inputmode="numeric" />
+
+        <label for="fm-chown-gid">GID</label>
+        <input id="fm-chown-gid" class="terminal-input fm-mono" placeholder="0 (или пусто — не менять)" inputmode="numeric" />
+
+        <label></label>
+        <div class="status" style="margin:0; opacity:.8;">Подсказка: для remote операция доступна только для <b>SFTP</b>.</div>
+      </div>
+      <div id="fm-chown-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-chown-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-chown-ok-btn">Применить</button>
+    </div>
+  </div>
+</div>
 
 <!-- File Manager: drag&drop operation (move/copy) -->
 
@@ -1430,7 +1767,7 @@
           <li><b>⬇ Download</b> — скачать выделенное (папка/несколько элементов скачиваются как <b>.zip</b>).</li>
           <li><b>F5</b> — копировать из активной панели в другую, <b>F6</b> — переместить.</li>
           <li>Если в назначении есть файлы с теми же именами — появится окно <b>«Конфликты»</b> (заменить/пропустить).</li>
-          <li><b>F2</b> — переименовать (только в текущем каталоге), <b>F8</b> — удалить.</li>
+          <li><b>F2</b> — переименовать (только в текущем каталоге), <b>F8</b> — в корзину (в корзине — удалить навсегда).</li>
           <li><b>Drag&amp;Drop</b>: перетаскивание между панелями (по умолчанию move; удерживайте <b>Ctrl</b> для copy) или выбор действия в диалоге.</li>
           <li><b>Операции</b> — список фоновых задач (копирование/перемещение/удаление/загрузка) и их прогресс.</li>
         </ul>
@@ -1440,12 +1777,16 @@
           <li><b>Tab</b> — смена активной панели</li>
           <li><b>Enter</b> — открыть</li>
           <li><b>Backspace</b> — вверх</li>
+          <li><b>Ctrl+A</b> — выделить всё</li>
+          <li><b>Ctrl+I</b> — инвертировать выделение</li>
+          <li><b>Ctrl+M</b> — выделить по маске</li>
+          <li><b>Ctrl+Shift+C</b> — копировать полный путь</li>
           <li><b>F7</b> — новая папка</li>
           <li><b>Shift+F7</b> — новый файл</li>
           <li><b>F2</b> — переименовать</li>
           <li><b>F5</b> — копировать</li>
           <li><b>F6</b> — переместить</li>
-          <li><b>F8</b> — удалить</li>
+          <li><b>F8</b> — в корзину (в корзине — удалить навсегда)</li>
           <li><b>F1</b> — открыть эту справку</li>
           <li><b>Esc</b> — закрыть окно/выйти из полноэкранного режима</li>
         </ul>
