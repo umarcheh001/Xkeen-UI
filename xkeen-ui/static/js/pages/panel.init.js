@@ -151,6 +151,12 @@
     safe(() => {
       if (window.XKeen && XKeen.terminal && typeof XKeen.terminal.init === 'function') XKeen.terminal.init();
     });
+
+    safe(() => {
+      if (window.XKeen && XKeen.features && XKeen.features.donate && typeof XKeen.features.donate.init === 'function') {
+        XKeen.features.donate.init();
+      }
+    });
   }
 
   function init() {
