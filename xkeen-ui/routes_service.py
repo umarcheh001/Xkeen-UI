@@ -6,6 +6,35 @@ import subprocess
 from flask import Blueprint, request, jsonify
 from typing import Any, Callable, Dict, Optional
 
+# --- core.log helpers (never fail) ---
+try:
+    from services.logging_setup import core_logger as _get_core_logger
+    _CORE_LOGGER = _get_core_logger()
+except Exception:
+    _CORE_LOGGER = None
+
+
+def _core_log(level: str, msg: str, **extra) -> None:
+    if _CORE_LOGGER is None:
+        return
+    try:
+        if extra:
+            try:
+                tail = ", ".join(f"{k}={v}" for k, v in extra.items())
+            except Exception:
+                tail = repr(extra)
+            full = f"{msg} | {tail}"
+        else:
+            full = msg
+        fn = getattr(_CORE_LOGGER, str(level or "info").lower(), None)
+        if callable(fn):
+            fn(full)
+        else:
+            _CORE_LOGGER.info(full)
+    except Exception:
+        pass
+
+
 
 
 def error_response(message: str, status: int = 400, *, ok: bool | None = None) -> Any:
@@ -41,7 +70,7 @@ def create_service_blueprint(
             # Ошибки в канале событий не должны ломать API.
             try:
                 # Логируем через стандартный stderr, Flask сам подхватит.
-                print(f"[broadcast_event error] {e}")
+                _core_log("warning", "broadcast_event error", error=str(e))
             except Exception:
                 pass
 
@@ -50,9 +79,11 @@ def create_service_blueprint(
         try:
             subprocess.check_call(["xkeen", "-start"])
             append_restart_log(True, source="api-start")
+            _core_log("info", "xkeen.start", source="api-start")
             return jsonify({"ok": True}), 200
         except Exception:
             append_restart_log(False, source="api-start")
+            _core_log("error", "xkeen.start_failed", source="api-start")
             return jsonify({"ok": False}), 500
 
 
@@ -61,9 +92,11 @@ def create_service_blueprint(
         try:
             subprocess.check_call(["xkeen", "-stop"])
             append_restart_log(True, source="api-stop")
+            _core_log("info", "xkeen.stop", source="api-stop")
             return jsonify({"ok": True}), 200
         except Exception:
             append_restart_log(False, source="api-stop")
+            _core_log("error", "xkeen.stop_failed", source="api-stop")
             return jsonify({"ok": False}), 500
 
 
@@ -104,6 +137,7 @@ def create_service_blueprint(
                 }
             ), 200
         except Exception as e:
+            _core_log("error", "xkeen.core_set_failed", error=str(e))
             return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -139,6 +173,7 @@ def create_service_blueprint(
             # Уведомляем всех WS-подписчиков о смене ядра.
             _emit_event({"event": "core_changed", "core": core, "ok": True})
 
+            _core_log("info", "xkeen.core_set", core=core)
             return jsonify({"ok": True, "core": core}), 200
         except Exception as e:
             # Ошибку смены ядра также можно пробрасывать как событие (необязательно).
@@ -150,6 +185,7 @@ def create_service_blueprint(
     @bp.post("/api/restart-xkeen")
     def api_restart_xkeen() -> Any:
         restarted = restart_xkeen(source="manual-mihomo")
+        _core_log("info", "xkeen.restart", source="manual-mihomo", restarted=bool(restarted))
 
         # Сообщаем подписчикам, что произошёл перезапуск xkeen.
         _emit_event({"event": "xkeen_restarted", "ok": bool(restarted)})
