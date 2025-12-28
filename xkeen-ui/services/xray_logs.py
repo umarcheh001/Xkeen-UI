@@ -61,6 +61,106 @@ def tail_lines(path: str, max_lines: int = 800, cache: Dict[str, Dict[str, Any]]
     return lines
 
 
+
+# ---------------------------------------------------------------------------
+# Fast tail / incremental follow helpers (generic, used by DevTools)
+# ---------------------------------------------------------------------------
+
+def tail_lines_fast(path: str, max_lines: int = 800, max_bytes: int = 256 * 1024) -> List[str]:
+    """Return last *max_lines* lines efficiently.
+
+    Unlike tail_lines(), this avoids reading the whole file into memory.
+    It reads from the end of the file in binary blocks.
+
+    Returns decoded UTF-8 lines (with original line breaks when present).
+    """
+    try:
+        os.stat(path)
+    except (FileNotFoundError, OSError):
+        return []
+
+    max_lines = max(1, int(max_lines or 800))
+    max_bytes = max(16 * 1024, int(max_bytes or 256 * 1024))
+
+    block = 4096
+    buf = b""
+
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            pos = f.tell()
+
+            while pos > 0 and buf.count(b"\n") <= max_lines and len(buf) < max_bytes:
+                step = block if pos >= block else pos
+                pos -= step
+                f.seek(pos, os.SEEK_SET)
+                buf = f.read(step) + buf
+
+        parts = buf.splitlines(True)  # keepends=True
+        if len(parts) > max_lines:
+            parts = parts[-max_lines:]
+        return [p.decode("utf-8", "replace") for p in parts]
+    except (FileNotFoundError, OSError):
+        return []
+
+
+def read_new_lines(
+    path: str,
+    offset: int,
+    *,
+    carry: bytes = b"",
+    max_bytes: int = 128 * 1024,
+) -> tuple[List[str], int, bytes]:
+    """Read and return complete lines starting from byte *offset*.
+
+    This is meant for "follow"/incremental log streaming:
+      * reads up to max_bytes from the file starting at offset
+      * prepends optional carry (an unfinished last line from previous read)
+      * returns only complete lines (keeping line endings)
+      * returns updated offset and carry for the next call
+
+    Returns: (lines, new_offset, new_carry)
+    """
+    try:
+        st = os.stat(path)
+    except (FileNotFoundError, OSError):
+        return [], int(offset or 0), b""
+
+    size = int(getattr(st, "st_size", 0) or 0)
+    offset = int(offset or 0)
+    if offset < 0:
+        offset = 0
+    if offset > size:
+        offset = size
+
+    max_bytes = max(4 * 1024, int(max_bytes or 128 * 1024))
+
+    try:
+        with open(path, "rb") as f:
+            f.seek(offset, os.SEEK_SET)
+            data = f.read(max_bytes)
+            new_offset = f.tell()
+    except (FileNotFoundError, OSError):
+        return [], offset, b""
+
+    buf = (carry or b"") + (data or b"")
+    if not buf:
+        return [], new_offset, b""
+
+    parts = buf.splitlines(True)
+    new_carry = b""
+
+    if parts:
+        last = parts[-1]
+        if not last.endswith(b"\n") and not last.endswith(b"\r"):
+            new_carry = last
+            parts = parts[:-1]
+
+    lines = [p.decode("utf-8", "replace") for p in parts]
+    return lines, new_offset, new_carry
+
+
+
 def adjust_log_timezone(lines: List[str], offset_hours: int) -> List[str]:
     """Shift timestamps in Xray/Mihomo logs by offset_hours hours."""
 
