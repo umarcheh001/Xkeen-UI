@@ -19,7 +19,18 @@ except Exception:  # gevent/geventwebsocket are optional
 
     gevent = _GeventStub()
 
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+# True only when the app is served via gevent-websocket handler (run_server.py).
+# When running under Flask/werkzeug dev server, WS routes exist but upgrades are not supported.
+WS_RUNTIME = False
+
+
+def set_ws_runtime(enabled: bool = True) -> None:
+    """Mark WebSocket runtime as actually active (called by run_server.py)."""
+    global WS_RUNTIME
+    WS_RUNTIME = bool(enabled)
+
+
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, g
 import json
 import datetime
 import os
@@ -40,10 +51,24 @@ import uuid
 
 # --- Dev/macOS fallback for MIHOMO_ROOT (must happen before importing mihomo_server_core) ---
 # On router MIHOMO_ROOT is typically /opt/etc/mihomo.
-# In development (e.g. macOS) /opt may be missing or not writable.
+# In development (e.g. macOS) /opt may exist but be not writable; we must check writability.
+def _mh_is_writable_dir(path: str) -> bool:
+    try:
+        os.makedirs(path, exist_ok=True)
+        test_path = os.path.join(path, ".writetest")
+        with open(test_path, "w", encoding="utf-8") as f:
+            f.write("")
+        os.remove(test_path)
+        return True
+    except Exception:
+        return False
+
+
 if "MIHOMO_ROOT" not in os.environ:
     _router_mh = "/opt/etc/mihomo"
-    if not os.path.isdir(_router_mh):
+    if _mh_is_writable_dir(_router_mh):
+        os.environ["MIHOMO_ROOT"] = _router_mh
+    else:
         _here = os.path.dirname(os.path.abspath(__file__))
         _bundled = os.path.join(_here, "opt", "etc", "mihomo")
         if os.path.isdir(_bundled):
@@ -57,7 +82,7 @@ if "MIHOMO_ROOT" not in os.environ:
                 _base = os.path.join(_home, "Library", "Application Support", "xkeen-ui")
             else:
                 _base = os.path.join(_home, ".config", "xkeen-ui")
-            os.environ["MIHOMO_ROOT"] = os.path.join(_base, "mihomo")
+            os.environ["MIHOMO_ROOT"] = os.path.join(_base, "etc", "mihomo")
         try:
             os.makedirs(os.environ["MIHOMO_ROOT"], exist_ok=True)
         except Exception:
@@ -84,8 +109,11 @@ from routes_routing import create_routing_blueprint
 from routes_backup import create_backups_blueprint
 from routes_service import create_service_blueprint
 from routes_remotefs import create_remotefs_blueprint
+from routes_fs import create_fs_blueprint
+from routes_devtools import create_devtools_blueprint
 from services.xkeen import append_restart_log as _svc_append_restart_log, read_restart_log as _svc_read_restart_log, restart_xkeen as _svc_restart_xkeen
 from services.xray_logs import load_xray_log_config as _svc_load_xray_log_config, tail_lines as _svc_tail_lines, adjust_log_timezone as _svc_adjust_log_timezone
+from services import devtools as _svc_devtools
 from services.mihomo import (
     parse_state_from_payload as _mihomo_parse_state,
     list_profiles_for_api as _mh_list_profiles_for_api,
@@ -195,6 +223,54 @@ def _choose_base_dir(default_dir: str, fallback_dir: str) -> str:
 
 BASE_ETC_DIR = _choose_base_dir("/opt/etc", os.path.join(UI_STATE_DIR, "etc"))
 BASE_VAR_DIR = _choose_base_dir("/opt/var", os.path.join(UI_STATE_DIR, "var"))
+
+# --- UI logging (core/access/ws) ---
+# Split + rotation are configured via env and are safe to disable.
+from services.logging_setup import setup_logging as _setup_ui_logging, get_log_dir as _get_ui_log_dir, get_paths as _ui_log_paths, core_logger as _get_core_logger
+
+UI_LOG_DIR = _get_ui_log_dir(os.path.join(BASE_VAR_DIR, "log", "xkeen-ui"))
+_setup_ui_logging(UI_LOG_DIR)
+UI_CORE_LOG, UI_ACCESS_LOG, UI_WS_LOG = _ui_log_paths(UI_LOG_DIR)
+# Core logger helper (writes to core.log).
+_CORE_LOGGER = None
+try:
+    _CORE_LOGGER = _get_core_logger()
+except Exception:
+    _CORE_LOGGER = None
+
+
+def _core_log(level: str, msg: str, **extra) -> None:
+    """Write structured-ish messages into core.log (never raises)."""
+    if _CORE_LOGGER is None:
+        return
+    try:
+        if extra:
+            try:
+                tail = ", ".join(f"{k}={v}" for k, v in extra.items())
+            except Exception:
+                tail = repr(extra)
+            full = f"{msg} | {tail}"
+        else:
+            full = msg
+        fn = getattr(_CORE_LOGGER, str(level or "info").lower(), None)
+        if callable(fn):
+            fn(full)
+        else:
+            _CORE_LOGGER.info(full)
+    except Exception:
+        pass
+
+
+_core_log(
+    "info",
+    "xkeen-ui init",
+    pid=os.getpid(),
+    ui_state_dir=UI_STATE_DIR,
+    ui_log_dir=UI_LOG_DIR,
+    base_etc_dir=BASE_ETC_DIR,
+    base_var_dir=BASE_VAR_DIR,
+    ws_runtime=bool(WS_RUNTIME),
+)
 
 
 ROUTING_FILE = os.path.join(BASE_ETC_DIR, "xray", "configs", "05_routing.json")
@@ -867,26 +943,9 @@ def _auth_guard():
 
 
 
-WS_DEBUG_LOG = "/opt/var/log/ws.log"
 
-
-def _setup_ws_debug_logger():
-    os.makedirs(os.path.dirname(WS_DEBUG_LOG), exist_ok=True)
-
-    logger = logging.getLogger("wsdebug")
-    logger.setLevel(logging.DEBUG)
-
-    if not logger.handlers:
-        handler = logging.FileHandler(WS_DEBUG_LOG, encoding="utf-8")
-        formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-    return logger
-
-
-_ws_logger = _setup_ws_debug_logger()
-
+# --- WS debug logger (optional) ---
+from services.logging_setup import ws_logger as _get_ws_logger, ws_enabled as _ws_enabled
 
 def ws_debug(msg: str, **extra):
     """
@@ -902,11 +961,68 @@ def ws_debug(msg: str, **extra):
     else:
         full = msg
 
+    if not _ws_enabled():
+        return
+
     try:
-        _ws_logger.debug(full)
+        _get_ws_logger().debug(full)
+        return
     except Exception:
-        # Не даём отладчику ломать основной код
+        # Не даём отладчику ломать основной код.
+        # Fallback: append to the same ws.log path (respects XKEEN_LOG_DIR).
+        try:
+            import os
+            os.makedirs(os.path.dirname(UI_WS_LOG) or ".", exist_ok=True)
+            with open(UI_WS_LOG, "a", encoding="utf-8") as f:
+                f.write(full + "\n")
+        except Exception:
+            pass
+
+
+
+# --- Access log (optional) ---
+from services.logging_setup import access_enabled as _access_enabled, access_logger as _get_access_logger
+
+@app.after_request
+def _access_log_after_request(response):
+    try:
+        if not _access_enabled():
+            return response
+        path = request.path or ""
+        if path.startswith("/static/") or path.startswith("/ws/"):
+            return response
+
+        # Basic combined-like line without cookies/auth details
+        method = request.method or ""
+        status = getattr(response, "status_code", 0) or 0
+        client = request.headers.get("X-Forwarded-For") or request.remote_addr or ""
+        # Request duration (best-effort)
+        dt_ms = None
+        try:
+            t0 = getattr(g, "_xkeen_t0", None)
+            if t0:
+                dt_ms = int((time.time() - float(t0)) * 1000.0)
+        except Exception:
+            dt_ms = None
+
+        url = path
+        if dt_ms is None:
+            line = f"{client} {method} {url} -> {status}"
+        else:
+            line = f"{client} {method} {url} -> {status} ({dt_ms}ms)"
+        _get_access_logger().info(line)
+    except Exception:
+        # Logging must never affect response
         pass
+    return response
+
+@app.before_request
+def _access_log_before_request():
+    try:
+        g._xkeen_t0 = time.time()
+    except Exception:
+        pass
+    return None
 
 
 # ---------- helpers ----------
@@ -1601,6 +1717,7 @@ def index():
         is_mips=_is_mips,
 
         routing_file=ROUTING_FILE,
+        mihomo_config_file=MIHOMO_CONFIG_FILE,
         inbounds_file=INBOUNDS_FILE,
         outbounds_file=OUTBOUNDS_FILE,
         backup_dir=BACKUP_DIR,
@@ -1617,6 +1734,11 @@ def xkeen_page():
 @app.get("/mihomo_generator")
 def mihomo_generator_page():
     return render_template("mihomo_generator.html")
+
+
+@app.get("/devtools")
+def devtools_page():
+    return render_template("devtools.html")
 
 
 
@@ -2890,17 +3012,36 @@ service_bp = create_service_blueprint(
 )
 app.register_blueprint(service_bp)
 
+devtools_bp = create_devtools_blueprint(UI_STATE_DIR)
+app.register_blueprint(devtools_bp)
+
+# Filesystem facade blueprint (always enabled for local file manager)
+try:
+    fs_bp = create_fs_blueprint(
+        tmp_dir=str(os.getenv("XKEEN_REMOTEFM_TMP_DIR", "/tmp") or "/tmp"),
+        max_upload_mb=int(os.getenv("XKEEN_REMOTEFM_MAX_UPLOAD_MB", "200") or "200"),
+    )
+    app.register_blueprint(fs_bp)
+except Exception as _e:
+    try:
+        ws_debug("fs blueprint init failed", error=str(_e))
+    except Exception:
+        pass
+
+
 # RemoteFS blueprint (optional; disabled on MIPS and when lftp is missing)
 if REMOTEFS_ENABLED:
     try:
-        remotefs_bp = create_remotefs_blueprint(
+        remotefs_bp, remotefs_mgr = create_remotefs_blueprint(
             enabled=True,
             lftp_bin=REMOTEFS_LFTP_BIN or "lftp",
             max_sessions=int(os.getenv("XKEEN_REMOTEFM_MAX_SESSIONS", "6")),
             ttl_seconds=int(os.getenv("XKEEN_REMOTEFM_SESSION_TTL", "900")),
             max_upload_mb=int(os.getenv("XKEEN_REMOTEFM_MAX_UPLOAD_MB", "200")),
             tmp_dir=str(os.getenv("XKEEN_REMOTEFM_TMP_DIR", "/tmp") or "/tmp"),
+            return_mgr=True,
         )
+        app.extensions["xkeen.remotefs_mgr"] = remotefs_mgr
         app.register_blueprint(remotefs_bp)
     except Exception as _e:
         try:
@@ -3049,6 +3190,273 @@ def ws_xray_logs():
 
 
 
+@app.route("/ws/devtools-logs")
+def ws_devtools_logs():
+    """WebSocket tail -f for DevTools logs.
+
+    query:
+      name=<log name from /api/devtools/logs>
+      lines=<initial snapshot lines, default 400>
+      cursor=<optional resume cursor from HTTP tail>
+
+    Server sends JSON messages:
+      init:   {"type":"init","mode":"full",  "name":...,"path":...,"lines":[...],"cursor":...,"exists":bool,"size":int,"mtime":float,"ino":int}
+      append: {"type":"append","mode":"append","name":...,"lines":[...],"cursor":...,"exists":bool,"size":int,"mtime":float,"ino":int}
+
+    Notes:
+      - When cursor is valid and file inode matches, initial message can be "append".
+      - On rotation/truncate, server falls back to sending "init" snapshot.
+    """
+
+    name = (request.args.get("name") or "").strip()
+    cursor_in = request.args.get("cursor")
+    try:
+        lines_req = int(request.args.get("lines", "400") or "400")
+    except Exception:
+        lines_req = 400
+    lines_req = max(1, min(5000, int(lines_req or 400)))
+
+    client_ip = request.remote_addr or "unknown"
+    ws_debug("ws_devtools_logs: handler called", client=client_ip, name=name)
+
+    ws = request.environ.get("wsgi.websocket")
+    if ws is None:
+        ws_debug("ws_devtools_logs: no WebSocket in environ, returning 400", path=request.path)
+        return "Expected WebSocket", 400
+
+    if not name:
+        try:
+            ws.send(json.dumps({"type": "error", "error": "missing_name"}, ensure_ascii=False))
+        except Exception:
+            pass
+        try:
+            ws.close()
+        except Exception:
+            pass
+        return ""
+
+    sent_msgs = 0
+
+    def _stat_meta(p: str):
+        meta = {"size": 0, "mtime": 0.0, "ino": 0, "exists": False}
+        try:
+            st = os.stat(p)
+            meta = {
+                "size": int(getattr(st, "st_size", 0) or 0),
+                "mtime": float(getattr(st, "st_mtime", 0.0) or 0.0),
+                "ino": int(getattr(st, "st_ino", 0) or 0),
+                "exists": True,
+            }
+        except Exception:
+            pass
+        return meta
+
+    def _send(payload: dict):
+        nonlocal sent_msgs
+        try:
+            ws.send(json.dumps(payload, ensure_ascii=False))
+            sent_msgs += 1
+            return True
+        except WebSocketError as e:
+            ws_debug("ws_devtools_logs: WebSocketError on send", error=str(e), client=client_ip)
+            return False
+        except Exception as e:
+            ws_debug("ws_devtools_logs: error on send", error=str(e), client=client_ip)
+            return False
+
+    try:
+        # Initial snapshot (or resume-append if cursor is valid)
+        try:
+            path, lns, new_cursor, mode = _svc_devtools.tail_log(name, lines=lines_req, cursor=cursor_in)
+        except ValueError:
+            _send({"type": "error", "error": "unknown_log", "name": name})
+            return ""
+
+        meta = _stat_meta(path)
+        init_type = "append" if mode == "append" else "init"
+        if not _send({
+            "type": init_type,
+            "mode": mode,
+            "name": name,
+            "path": path,
+            "lines": lns,
+            "cursor": new_cursor,
+            **meta,
+        }):
+            return ""
+
+        # If the file does not exist – nothing to follow.
+        if not meta.get("exists"):
+            ws_debug("ws_devtools_logs: log file missing, closing", name=name, path=path)
+            return ""
+
+        # Decode cursor state for follow loop.
+        cur = None
+        try:
+            cur = _svc_devtools._decode_cursor(new_cursor)  # type: ignore[attr-defined]
+        except Exception:
+            cur = None
+        ino = int((cur or {}).get("ino", 0) or 0)
+        off = int((cur or {}).get("off", meta.get("size", 0) or 0) or 0)
+        try:
+            carry = _svc_devtools._b64d(str((cur or {}).get("carry", "")))  # type: ignore[attr-defined]
+        except Exception:
+            carry = b""
+
+        # Follow
+        f = None
+        try:
+            f = open(path, "rb", buffering=0)
+            try:
+                f.seek(off, os.SEEK_SET)
+            except Exception:
+                try:
+                    f.seek(0, os.SEEK_END)
+                    off = int(f.tell() or 0)
+                except Exception:
+                    off = int(meta.get("size", 0) or 0)
+        except Exception as e:
+            ws_debug("ws_devtools_logs: failed to open log for follow", error=str(e), path=path)
+            return ""
+
+        last_stat_check = time.time()
+        idle_sleep = 0.10  # fast enough for "instant", low CPU load
+
+        while True:
+            try:
+                chunk = f.read(64 * 1024)
+            except Exception:
+                chunk = b""
+
+            if chunk:
+                off += len(chunk)
+                buf = (carry or b"") + chunk
+                parts = buf.splitlines(True)
+                new_carry = b""
+                if parts:
+                    last = parts[-1]
+                    if not last.endswith(b"\n") and not last.endswith(b"\r"):
+                        new_carry = last
+                        parts = parts[:-1]
+                carry = new_carry
+
+                if parts:
+                    lines_out = [p.decode("utf-8", "replace") for p in parts]
+                    try:
+                        cur_str = _svc_devtools._encode_cursor({"ino": ino, "off": int(off), "carry": _svc_devtools._b64e(carry)})  # type: ignore[attr-defined]
+                    except Exception:
+                        cur_str = new_cursor
+                    new_cursor = cur_str
+                    meta_now = _stat_meta(path)
+                    if not _send({
+                        "type": "append",
+                        "mode": "append",
+                        "name": name,
+                        "path": path,
+                        "lines": lines_out,
+                        "cursor": new_cursor,
+                        **meta_now,
+                    }):
+                        break
+
+                idle_sleep = 0.05
+                continue
+
+            # No data at EOF: wait a bit.
+            gevent.sleep(idle_sleep)
+            if idle_sleep < 0.25:
+                idle_sleep = min(0.25, idle_sleep * 1.3)
+
+            # Periodic rotation/truncate checks.
+            now = time.time()
+            if now - last_stat_check < 1.0:
+                continue
+            last_stat_check = now
+
+            try:
+                st = os.stat(path)
+            except Exception:
+                ws_debug("ws_devtools_logs: log file disappeared", name=name, path=path)
+                _send({"type": "init", "mode": "full", "name": name, "path": path, "lines": [], "cursor": "", "exists": False, "size": 0, "mtime": 0.0, "ino": 0})
+                break
+
+            cur_ino = int(getattr(st, "st_ino", 0) or 0)
+            cur_size = int(getattr(st, "st_size", 0) or 0)
+
+            rotated = (ino and cur_ino and cur_ino != ino)
+            truncated = (cur_size < int(off or 0))
+
+            if rotated or truncated:
+                ws_debug(
+                    "ws_devtools_logs: rotation/truncate detected", 
+                    name=name, path=path, rotated=rotated, truncated=truncated,
+                    old_ino=ino, new_ino=cur_ino, old_off=off, new_size=cur_size,
+                )
+
+                # Send a fresh snapshot and reset follow state.
+                try:
+                    path2, lns2, new_cur2, _mode2 = _svc_devtools.tail_log(name, lines=lines_req, cursor=None)
+                except Exception:
+                    # if something goes wrong, just re-seek to end
+                    lns2, new_cur2, path2 = [], None, path
+
+                meta2 = _stat_meta(path2)
+                if new_cur2:
+                    try:
+                        cur2 = _svc_devtools._decode_cursor(new_cur2)  # type: ignore[attr-defined]
+                    except Exception:
+                        cur2 = None
+                    ino = int((cur2 or {}).get("ino", meta2.get("ino", 0) or 0) or 0)
+                    off = int((cur2 or {}).get("off", meta2.get("size", 0) or 0) or 0)
+                    try:
+                        carry = _svc_devtools._b64d(str((cur2 or {}).get("carry", "")))  # type: ignore[attr-defined]
+                    except Exception:
+                        carry = b""
+                    new_cursor = new_cur2
+                else:
+                    ino = meta2.get("ino", 0) or 0
+                    off = meta2.get("size", 0) or 0
+                    carry = b""
+                    try:
+                        new_cursor = _svc_devtools._encode_cursor({"ino": int(ino), "off": int(off), "carry": ""})  # type: ignore[attr-defined]
+                    except Exception:
+                        new_cursor = ""
+
+                _send({
+                    "type": "init",
+                    "mode": "full",
+                    "name": name,
+                    "path": path2,
+                    "lines": lns2,
+                    "cursor": new_cursor,
+                    **meta2,
+                })
+
+                try:
+                    if f:
+                        f.close()
+                except Exception:
+                    pass
+                try:
+                    f = open(path2, "rb", buffering=0)
+                    try:
+                        f.seek(off, os.SEEK_SET)
+                    except Exception:
+                        f.seek(0, os.SEEK_END)
+                        off = int(f.tell() or 0)
+                except Exception:
+                    break
+
+    finally:
+        ws_debug("ws_devtools_logs: closing", client=client_ip, name=name, sent_msgs=sent_msgs)
+        try:
+            ws.close()
+        except Exception:
+            pass
+
+    return ""
+
+
 
 
 
@@ -3073,6 +3481,46 @@ def api_capabilities():
     На MIPS (mips/mipsel/...) фича по умолчанию отключена.
     """
 
+    # Runtime/environment info (router vs dev).
+    # Can be overridden by env: XKEEN_RUNTIME=router|dev
+    rt_env = (os.environ.get('XKEEN_RUNTIME') or os.environ.get('XKEEN_ENV') or '').strip().lower()
+    if rt_env in ('router','dev','desktop','mac'):
+        rt_mode = 'router' if rt_env == 'router' else 'dev'
+    else:
+        # Heuristics: Keenetic/Entware markers + platform.
+        try:
+            is_darwin = (sys.platform == 'darwin')
+        except Exception:
+            is_darwin = False
+        if is_darwin:
+            rt_mode = 'dev'
+        else:
+            # /proc/ndm and ndmc are common on Keenetic; opkg indicates Entware
+            has_ndm = os.path.exists('/proc/ndm') or os.path.exists('/opt/etc/ndm')
+            has_ndmc = bool(shutil.which('ndmc'))
+            has_opkg = os.path.exists('/opt/bin/opkg')
+            rt_mode = 'router' if (has_ndm or has_ndmc or has_opkg or str(BASE_ETC_DIR).startswith('/opt/')) else 'dev'
+
+    runtime = {
+        'mode': rt_mode,
+        'platform': sys.platform,
+        'ws_runtime': bool(WS_RUNTIME),
+        'ui_state_dir': UI_STATE_DIR,
+        'base_etc_dir': BASE_ETC_DIR,
+        'base_var_dir': BASE_VAR_DIR,
+        'ui_log_dir': UI_LOG_DIR,
+        'mihomo_root_dir': MIHOMO_ROOT_DIR,
+        'mihomo_config_file': MIHOMO_CONFIG_FILE,
+    }
+
+    files = {
+        'routing': ROUTING_FILE,
+        'inbounds': INBOUNDS_FILE,
+        'outbounds': OUTBOUNDS_FILE,
+        'mihomo': MIHOMO_CONFIG_FILE,
+        'restart_log': RESTART_LOG_FILE,
+    }
+
     remote = {
         "enabled": bool(REMOTEFS_ENABLED),
         "supported": bool(REMOTEFS_SUPPORTED),
@@ -3091,7 +3539,7 @@ def api_capabilities():
         },
         "fileops": {
             "enabled": bool(REMOTEFS_ENABLED),
-            "ws": bool(HAS_GEVENT and REMOTEFS_ENABLED),
+            "ws": bool(WS_RUNTIME and REMOTEFS_ENABLED),
             "workers": int(os.getenv("XKEEN_FILEOPS_WORKERS", "1") or "1"),
             "max_jobs": int(os.getenv("XKEEN_FILEOPS_MAX_JOBS", "100") or "100"),
             "job_ttl_seconds": int(os.getenv("XKEEN_FILEOPS_JOB_TTL", "3600") or "3600"),
@@ -3106,12 +3554,14 @@ def api_capabilities():
         },
         "fs_admin": {
             "local": {"chmod": True, "chown": True, "touch": True, "stat_batch": True},
-            "remote": {"chmod": True, "chown": False, "touch": True, "stat_batch": True},
+            "remote": {"chmod": True, "chown": True, "chown_protocols": ["sftp"], "touch": True, "stat_batch": True},
         },
     }
 
     return jsonify({
-        "websocket": bool(HAS_GEVENT),
+        "websocket": bool(WS_RUNTIME),
+        "runtime": runtime,
+        "files": files,
         "remoteFs": remote,
     })
 @app.post("/api/ws-debug")
@@ -3126,31 +3576,3 @@ def api_ws_debug():
     extra["remote_addr"] = request.remote_addr or "unknown"
     ws_debug("FRONTEND: " + str(msg), **extra)
     return jsonify({"ok": True})
-# ---------- Simple WS debug logger (alternative) ----------
-
-WS_DEBUG_LOG = "/opt/var/log/ws.log"
-
-
-def ws_debug_simple(msg: str, **extra):
-    """
-    Альтернативная реализация: пишет одну строку в /opt/var/log/ws.log без logging.
-    (Не используется по умолчанию, чтобы не перекрывать основную ws_debug.)
-    """
-    if extra:
-        try:
-            tail = ", ".join(f"{k}={v}" for k, v in extra.items())
-        except Exception:
-            tail = repr(extra)
-        full = f"{msg} | {tail}"
-    else:
-        full = msg
-
-    try:
-        import os
-        os.makedirs(os.path.dirname(WS_DEBUG_LOG), exist_ok=True)
-        with open(WS_DEBUG_LOG, "a", encoding="utf-8") as f:
-            f.write(full + "\n")
-    except Exception:
-        # отладчик не должен ломать основной код
-        pass
-
