@@ -8,6 +8,35 @@ from flask import Blueprint, request, jsonify, current_app
 from typing import Any, Callable, Dict, Optional
 
 
+# --- core.log helpers (never fail) ---
+try:
+    from services.logging_setup import core_logger as _get_core_logger
+    _CORE_LOGGER = _get_core_logger()
+except Exception:
+    _CORE_LOGGER = None
+
+
+def _core_log(level: str, msg: str, **extra) -> None:
+    if _CORE_LOGGER is None:
+        return
+    try:
+        if extra:
+            try:
+                tail = ", ".join(f"{k}={v}" for k, v in extra.items())
+            except Exception:
+                tail = repr(extra)
+            full = f"{msg} | {tail}"
+        else:
+            full = msg
+        fn = getattr(_CORE_LOGGER, str(level or "info").lower(), None)
+        if callable(fn):
+            fn(full)
+        else:
+            _CORE_LOGGER.info(full)
+    except Exception:
+        pass
+
+
 
 def error_response(message: str, status: int = 400, *, ok: bool | None = None) -> Any:
     """Return a JSON error response for this blueprint.
@@ -40,15 +69,52 @@ def create_routing_blueprint(
     def api_get_routing() -> Any:
         """Return routing config as raw text with comments if available.
 
-        - If ROUTING_FILE_RAW exists, return its contents.
-        - Else, read ROUTING_FILE and return it as text.
+        Selection rules:
+
+        - If both ROUTING_FILE and ROUTING_FILE_RAW exist:
+          - If ROUTING_FILE is newer than ROUTING_FILE_RAW (edited externally),
+            return ROUTING_FILE.
+          - Otherwise return ROUTING_FILE_RAW.
+        - If only ROUTING_FILE_RAW exists, return it.
+        - Else, read ROUTING_FILE and return a pretty-printed JSON.
+
+        Additionally, disable HTTP caching so the editor always gets fresh data.
         """
-        # Prefer raw file with comments if it exists
-        if os.path.exists(ROUTING_FILE_RAW):
+        def _no_cache(resp: Any) -> Any:
+            # Avoid stale data due to browser/proxy caching.
             try:
-                with open(ROUTING_FILE_RAW, "r") as f:
+                resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+                resp.headers["Pragma"] = "no-cache"
+                resp.headers["Expires"] = "0"
+            except Exception:
+                pass
+            return resp
+
+        raw_exists = os.path.exists(ROUTING_FILE_RAW)
+        main_exists = os.path.exists(ROUTING_FILE)
+
+        # If the main JSON was edited outside of the UI after JSONC was created,
+        # show the main file to avoid the UI "sticking" to the older *.jsonc.
+        if raw_exists and main_exists:
+            try:
+                st_raw = os.stat(ROUTING_FILE_RAW)
+                st_main = os.stat(ROUTING_FILE)
+                raw_mtime_ns = getattr(st_raw, "st_mtime_ns", int(st_raw.st_mtime * 1_000_000_000))
+                main_mtime_ns = getattr(st_main, "st_mtime_ns", int(st_main.st_mtime * 1_000_000_000))
+                if main_mtime_ns > raw_mtime_ns:
+                    with open(ROUTING_FILE, "r", encoding="utf-8") as f:
+                        text = f.read()
+                    return _no_cache(current_app.response_class(text, mimetype="application/json"))
+            except Exception:
+                # Any failure -> fall back to the normal preference order.
+                pass
+
+        # Prefer raw file with comments if it exists
+        if raw_exists:
+            try:
+                with open(ROUTING_FILE_RAW, "r", encoding="utf-8") as f:
                     raw = f.read()
-                return current_app.response_class(raw, mimetype="application/json")
+                return _no_cache(current_app.response_class(raw, mimetype="application/json"))
             except FileNotFoundError:
                 pass
 
@@ -58,7 +124,7 @@ def create_routing_blueprint(
             text = ""
         else:
             text = json.dumps(data, ensure_ascii=False, indent=2)
-        return current_app.response_class(text, mimetype="application/json")
+        return _no_cache(current_app.response_class(text, mimetype="application/json"))
 
 
     @bp.post("/api/routing")
@@ -115,6 +181,7 @@ def create_routing_blueprint(
             restart_arg = restart_arg.strip().lower()
             restart_flag = restart_arg in ("1", "true", "yes", "on", "y")
         restarted = restart_flag and restart_xkeen(source="routing")
+        _core_log("info", "routing.save", restarted=bool(restarted), restart_flag=bool(restart_flag), remote_addr=str(request.remote_addr or ""))
 
         return jsonify({"ok": True, "restarted": restarted}), 200
 
