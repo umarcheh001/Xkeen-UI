@@ -56,8 +56,28 @@
     return null;
   }
 
-  function ensureEditor(textarea) {
+  function jsonLintAvailable() {
+    try {
+      if (!window.jsonlint) return false;
+      if (!window.CodeMirror) return false;
+      const h = window.CodeMirror.helpers;
+      return !!(h && h.lint && h.lint.json);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function ensureEditor(textarea) {
     if (_cm || !window.CodeMirror || !textarea) return _cm;
+
+    // Lazy-load JSON linter (jsonlint + addon/lint/json-lint) if available.
+    try {
+      if (window.XKeen && XKeen.cmLoader && typeof XKeen.cmLoader.ensureJsonLint === 'function') {
+        await XKeen.cmLoader.ensureJsonLint();
+      }
+    } catch (e) {}
+
+    const canLint = jsonLintAvailable();
 
     _cm = CodeMirror.fromTextArea(textarea, {
       mode: { name: 'javascript', json: true },
@@ -70,7 +90,7 @@
       rulers: [{ column: 120 }],
       lineWrapping: true,
       gutters: ['CodeMirror-lint-markers'],
-      lint: true,
+      lint: canLint,
       tabSize: 2,
       indentUnit: 2,
       indentWithTabs: false,
@@ -167,7 +187,7 @@
         ? data.text
         : (data && data.config ? JSON.stringify(data.config, null, 2) : '{}');
 
-      const cm = ensureEditor(textarea);
+      const cm = await ensureEditor(textarea);
       if (cm) {
         try { cm.setOption('theme', cmThemeFromPage()); } catch (e) {}
         cm.setValue(finalText || '');
