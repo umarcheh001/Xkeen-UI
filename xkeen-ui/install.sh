@@ -460,7 +460,11 @@ UI_DIR="/opt/etc/xkeen-ui"
 PYTHON_BIN="/opt/bin/python3"
 RUN_SERVER="$UI_DIR/run_server.py"
 APP_PY="$UI_DIR/app.py"
-LOG_FILE="/opt/var/log/xkeen-ui.log"
+
+LOG_DIR_DEFAULT="/opt/var/log/xkeen-ui"
+LOG_DIR="$LOG_DIR_DEFAULT"
+STDOUT_LOG="$LOG_DIR/stdout.log"
+STDERR_LOG="$LOG_DIR/stderr.log"
 PID_FILE="/opt/var/run/xkeen-ui.pid"
 
 start_service() {
@@ -487,7 +491,23 @@ start_service() {
   echo "Запуск Xkeen Web UI..."
   export MIHOMO_ROOT="/opt/etc/mihomo"
   export MIHOMO_VALIDATE_CMD='/opt/sbin/mihomo -t -d {root} -f {config}'
-  nohup "$PYTHON_BIN" "$TARGET" >> "$LOG_FILE" 2>&1 &
+  export PYTHONUNBUFFERED=1
+
+  # Optional env overrides persisted by DevTools
+  ENV_FILE_DEFAULT="$UI_DIR/devtools.env"
+  ENV_FILE="${XKEEN_UI_ENV_FILE:-$ENV_FILE_DEFAULT}"
+  if [ -f "$ENV_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+  fi
+
+  # Re-resolve log dir after env overrides (DevTools can set XKEEN_LOG_DIR)
+  LOG_DIR="${XKEEN_LOG_DIR:-$LOG_DIR_DEFAULT}"
+  STDOUT_LOG="$LOG_DIR/stdout.log"
+  STDERR_LOG="$LOG_DIR/stderr.log"
+  mkdir -p "$LOG_DIR" 2>/dev/null || true
+
+  nohup "$PYTHON_BIN" "$TARGET" >> "$STDOUT_LOG" 2>> "$STDERR_LOG" &
   echo $! > "$PID_FILE"
   echo "Запущено, PID $(cat "$PID_FILE")."
 }
@@ -556,7 +576,8 @@ printf '\033[1;32mОткрой в браузере:  %s\033[0m\n' "$PANEL_URL"
 echo "Текущий порт панели: $PANEL_PORT"
 echo "Файлы UI:           $UI_DIR"
 echo "Init script:        $INIT_SCRIPT"
-echo "Логи:               $LOG_DIR/xkeen-ui.log"
+echo "Логи (install):     $LOG_DIR/xkeen-ui.log"
+echo "Логи (runtime):     /opt/var/log/xkeen-ui/core.log (и access.log/ws.log)"
 echo "========================================"
 
 # --- ОЧИСТКА УСТАНОВОЧНЫХ ФАЙЛОВ ---
