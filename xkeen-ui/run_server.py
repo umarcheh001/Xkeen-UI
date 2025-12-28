@@ -41,6 +41,19 @@ from app import (
 )
 
 
+# Mark WebSocket runtime as actually active (used by /api/capabilities).
+try:
+    import app as _appmod  # noqa
+    try:
+        if hasattr(_appmod, 'set_ws_runtime'):
+            _appmod.set_ws_runtime(True)
+        else:
+            _appmod.WS_RUNTIME = True
+    except Exception:
+        pass
+except Exception:
+    pass
+
 
 
 def _pty_set_winsize(fd, rows, cols):
