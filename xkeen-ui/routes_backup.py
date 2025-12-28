@@ -9,6 +9,35 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from typing import Any, Callable, Dict, Optional
 
 
+# --- core.log helpers (never fail) ---
+try:
+    from services.logging_setup import core_logger as _get_core_logger
+    _CORE_LOGGER = _get_core_logger()
+except Exception:
+    _CORE_LOGGER = None
+
+
+def _core_log(level: str, msg: str, **extra) -> None:
+    if _CORE_LOGGER is None:
+        return
+    try:
+        if extra:
+            try:
+                tail = ", ".join(f"{k}={v}" for k, v in extra.items())
+            except Exception:
+                tail = repr(extra)
+            full = f"{msg} | {tail}"
+        else:
+            full = msg
+        fn = getattr(_CORE_LOGGER, str(level or "info").lower(), None)
+        if callable(fn):
+            fn(full)
+        else:
+            _CORE_LOGGER.info(full)
+    except Exception:
+        pass
+
+
 
 def error_response(message: str, status: int = 400, *, ok: bool | None = None) -> Any:
     """Return a JSON error response for this blueprint.
@@ -86,6 +115,7 @@ def create_backups_blueprint(
             payload = data
 
         save_json(path, payload)
+        _core_log("info", "backup.create", kind="routing", filename=fname, remote_addr=str(request.remote_addr or ""))
         return jsonify({"ok": True, "filename": fname}), 200
 
 
@@ -102,6 +132,7 @@ def create_backups_blueprint(
         fname = f"03_inbounds-{ts}.json"
         path = os.path.join(BACKUP_DIR, fname)
         save_json(path, data)
+        _core_log("info", "backup.create", kind="inbounds", filename=fname, remote_addr=str(request.remote_addr or ""))
         return jsonify({"ok": True, "filename": fname}), 200
 
 
@@ -118,6 +149,7 @@ def create_backups_blueprint(
         fname = f"04_outbounds-{ts}.json"
         path = os.path.join(BACKUP_DIR, fname)
         save_json(path, data)
+        _core_log("info", "backup.create", kind="outbounds", filename=fname, remote_addr=str(request.remote_addr or ""))
         return jsonify({"ok": True, "filename": fname}), 200
 
 
@@ -142,7 +174,32 @@ def create_backups_blueprint(
             return jsonify({"ok": False, "error": "backup file invalid"}), 400
 
         target_file = _detect_backup_target_file(filename)
-        save_json(target_file, data)
+
+        # Keep behavior consistent with the /restore page handler:
+        # routing backups created by /api/backup may include raw JSONC with comments.
+        # In that case restore ROUTING_FILE_RAW and rebuild cleaned ROUTING_FILE.
+        if target_file == ROUTING_FILE and isinstance(data, dict) and "__xkeen_raw_jsonc__" in data:
+            raw = data.get("__xkeen_raw_jsonc__") or ""
+            try:
+                # 1) Restore raw JSONC with comments
+                with open(ROUTING_FILE_RAW, "w") as f:
+                    f.write(raw)
+
+                # 2) Rebuild cleaned JSON into ROUTING_FILE from raw text
+                cleaned = strip_json_comments_text(raw)
+                if cleaned.strip():
+                    obj = json.loads(cleaned)
+                    save_json(ROUTING_FILE, obj)
+            except Exception:
+                # Fallback: if anything goes wrong, at least restore the cleaned data
+                cleaned_obj = data.get("__xkeen_data__")
+                if cleaned_obj is not None:
+                    save_json(ROUTING_FILE, cleaned_obj)
+        else:
+            save_json(target_file, data)
+
+        _core_log("info", "backup.restore", filename=filename, target=str(target_file), remote_addr=str(request.remote_addr or ""))
+
         return jsonify({"ok": True}), 200
 
 
