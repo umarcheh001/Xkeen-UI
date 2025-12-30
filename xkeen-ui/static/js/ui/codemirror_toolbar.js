@@ -89,6 +89,93 @@
     }
   }
 
+  function xkeenModeSupportsComment(cm) {
+    try {
+      if (!cm || typeof cm.getMode !== 'function') return false;
+      const m = cm.getMode();
+      if (!m) return false;
+      // Most modes expose either lineComment or blockCommentStart/End.
+      return !!(m.lineComment || m.blockCommentStart);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function xkeenCanFullscreen(cm) {
+    try {
+      return !!(cm && cm.getOption && typeof cm.getOption('fullScreen') !== 'undefined');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function xkeenDetectCmCapabilities(cm) {
+    // Capabilities are based on actually loaded addons + the current mode.
+    // Toolbars and help must only expose actions that will work.
+    const caps = {
+      find: false,
+      findNext: false,
+      findPrev: false,
+      replace: false,
+      replaceAll: false,
+      comment: false,
+      fullscreen: false,
+    };
+    try {
+      caps.find = xkeenHasCmCommand('findPersistent') || xkeenHasCmCommand('find');
+      caps.findNext = xkeenHasCmCommand('findNext');
+      caps.findPrev = xkeenHasCmCommand('findPrev');
+      caps.replace = xkeenHasCmCommand('replace');
+      caps.replaceAll = xkeenHasCmCommand('replaceAll');
+      caps.comment = xkeenHasCmCommand('toggleComment') && xkeenModeSupportsComment(cm);
+      caps.fullscreen = xkeenCanFullscreen(cm);
+    } catch (e) {}
+    return caps;
+  }
+
+  function xkeenFilterToolbarItems(cm, items) {
+    const caps = xkeenDetectCmCapabilities(cm);
+    const out = [];
+
+    (items || []).forEach((it) => {
+      if (!it) return;
+
+      // Always keep custom actions (no command) — we can't auto-detect them.
+      if (!it.command) {
+        // But hide fullscreen toggler if addon isn't present.
+        if ((it.id === 'fs' || it.id === 'fullscreen') && !caps.fullscreen) return;
+        out.push(it);
+        return;
+      }
+
+      const cmd = String(it.command || '');
+
+      // Map known actions to capability flags.
+      if (cmd === 'findPersistent' || cmd === 'find') {
+        if (!caps.find) return;
+
+        // If findPersistent isn't available but find is, transparently swap.
+        if (cmd === 'findPersistent' && !xkeenHasCmCommand('findPersistent') && xkeenHasCmCommand('find')) {
+          out.push(Object.assign({}, it, { command: 'find' }));
+        } else {
+          out.push(it);
+        }
+        return;
+      }
+      if (cmd === 'findNext') { if (!caps.findNext) return; out.push(it); return; }
+      if (cmd === 'findPrev') { if (!caps.findPrev) return; out.push(it); return; }
+      if (cmd === 'replace') { if (!caps.replace) return; out.push(it); return; }
+      if (cmd === 'replaceAll') { if (!caps.replaceAll) return; out.push(it); return; }
+      if (cmd === 'toggleComment') { if (!caps.comment) return; out.push(it); return; }
+
+      // Generic: keep only if the command exists.
+      if (!xkeenHasCmCommand(cmd)) return;
+      out.push(it);
+    });
+
+    return out;
+  }
+
   function xkeenHintForCommand(cm, commandName, fallback) {
     try {
       const keys = xkeenKeysForCommand(cm, commandName).map(xkeenPrettyKey);
@@ -156,14 +243,31 @@
     const blocks = [];
     const readOnly = !!(cm && cm.getOption && cm.getOption('readOnly'));
 
+    // If the toolbar is attached, use the *actual* actions shown in this editor.
+    // This keeps help in sync with dynamic toolbars.
+    const toolbarItems = (cm && cm._xkeenToolbarItems) ? cm._xkeenToolbarItems : null;
+    const hasActionId = (id) => {
+      try { return !!(toolbarItems && toolbarItems.some((it) => it && it.id === id)); } catch (e) { return false; }
+    };
+    const hasActionCmd = (cmd) => {
+      try { return !!(toolbarItems && toolbarItems.some((it) => it && it.command === cmd)); } catch (e) { return false; }
+    };
+    const caps = xkeenDetectCmCapabilities(cm);
+
+    const showFind = toolbarItems ? (hasActionId('find') || hasActionCmd('findPersistent') || hasActionCmd('find')) : caps.find;
+    const showNext = toolbarItems ? (hasActionId('next') || hasActionCmd('findNext')) : caps.findNext;
+    const showPrev = toolbarItems ? (hasActionId('prev') || hasActionCmd('findPrev')) : caps.findPrev;
+    const showReplace = toolbarItems ? (hasActionId('replace') || hasActionCmd('replace') || hasActionCmd('replaceAll')) : (caps.replace || caps.replaceAll);
+    const showComment = toolbarItems ? (hasActionId('comment') || hasActionCmd('toggleComment')) : caps.comment;
+    const showFs = toolbarItems ? (hasActionId('fs') || hasActionId('fullscreen')) : caps.fullscreen;
+
     blocks.push(xkeenHelpBlock('Что это такое', `
       <p>Это встроенный редактор кода. Ниже — только те возможности, которые реально включены в <b>этом</b> редакторе.</p>
       ${readOnly ? '<p><b>Примечание:</b> этот редактор открыт <b>только для чтения</b>. Поиск работает, а изменения текста недоступны.</p>' : ''}
     `));
 
-    // Search / replace (addon/search + addon/dialog)
-    const hasSearch = xkeenHasCmCommand('findPersistent') || xkeenHasCmCommand('find');
-    if (hasSearch) {
+    // Search (addon/search + addon/dialog)
+    if (showFind) {
       const kFind = xkeenHintForCommand(cm, 'findPersistent', 'Ctrl+F');
       const kNext = xkeenHintForCommand(cm, 'findNext', 'Ctrl+G');
       const kPrev = xkeenHintForCommand(cm, 'findPrev', 'Shift+Ctrl+G');
@@ -171,15 +275,14 @@
       blocks.push(xkeenHelpBlock('Поиск', `
         <ul>
           <li><b>Открыть поиск:</b> кнопка <b>«Поиск»</b> (лупа) или <b>${kFind}</b>.</li>
-          <li><b>Следующее совпадение:</b> кнопка <b>«Следующее»</b> (стрелка вниз) или <b>${kNext}</b>.</li>
-          <li><b>Предыдущее совпадение:</b> кнопка <b>«Предыдущее»</b> (стрелка вверх) или <b>${kPrev}</b>.</li>
+          ${showNext ? `<li><b>Следующее совпадение:</b> кнопка <b>«Следующее»</b> (стрелка вниз) или <b>${kNext}</b>.</li>` : ''}
+          ${showPrev ? `<li><b>Предыдущее совпадение:</b> кнопка <b>«Предыдущее»</b> (стрелка вверх) или <b>${kPrev}</b>.</li>` : ''}
           <li>Введите текст в поле поиска и нажмите <b>Enter</b>. Закрыть панель поиска — <b>Esc</b>.</li>
         </ul>
       `));
     }
 
-    const hasReplace = xkeenHasCmCommand('replace') || xkeenHasCmCommand('replaceAll');
-    if (hasReplace) {
+    if (showReplace) {
       const kReplace = xkeenHintForCommand(cm, 'replace', 'Ctrl+H');
       const kReplaceAll = xkeenHintForCommand(cm, 'replaceAll', 'Shift+Ctrl+H');
       blocks.push(xkeenHelpBlock('Замена', `
@@ -193,8 +296,8 @@
       `));
     }
 
-    // Comment addon
-    if (xkeenHasCmCommand('toggleComment')) {
+    // Comment addon (only when the current mode supports comment strings)
+    if (showComment) {
       const kCmt = xkeenHintForCommand(cm, 'toggleComment', 'Ctrl+/');
       blocks.push(xkeenHelpBlock('Комментарии', `
         ${readOnly ? '<p>Редактирование отключено, поэтому комментирование недоступно.</p>' : `
@@ -207,8 +310,7 @@
     }
 
     // Fullscreen addon
-    const canFS = (cm && cm.getOption && typeof cm.getOption('fullScreen') !== 'undefined');
-    if (canFS) {
+    if (showFs) {
       blocks.push(xkeenHelpBlock('Фулскрин', `
         <ul>
           <li><b>Во весь экран:</b> кнопка <b>«Фулскрин»</b> или <b>F11</b>.</li>
@@ -291,16 +393,22 @@
     }
   }
 
-  function xkeenAttachCmToolbar(cm, items) {
+  function xkeenAttachCmToolbar(cm, items, opts) {
     if (!cm || !cm.getWrapperElement) return;
     const wrapper = cm.getWrapperElement();
     if (!wrapper) return;
 
+    const force = !!(opts && opts.force);
+
     // If a toolbar is already attached to this CodeMirror instance, do not
-    // create another one (some pages move the toolbar into a different host).
+    // create another one (some pages move the toolbar into a different host),
+    // unless we explicitly force a rebuild (e.g. after mode changes).
     try {
-      if (cm._xkeenToolbarEl && (cm._xkeenToolbarEl.isConnected || document.body.contains(cm._xkeenToolbarEl))) {
+      if (!force && cm._xkeenToolbarEl && (cm._xkeenToolbarEl.isConnected || document.body.contains(cm._xkeenToolbarEl))) {
         return;
+      }
+      if (force && cm._xkeenToolbarEl && cm._xkeenToolbarEl.parentNode) {
+        cm._xkeenToolbarEl.parentNode.removeChild(cm._xkeenToolbarEl);
       }
     } catch (e) {
       // ignore
@@ -315,18 +423,31 @@
     try { if (wrapper.dataset) wrapper.dataset.xkeenCmId = cmId; } catch (_) {}
 
     // Avoid duplicates
-    if (parent && parent.querySelector && parent.querySelector('.xkeen-cm-toolbar[data-cm-for="' + cmId + '"]')) return;
+    if (!force && parent && parent.querySelector && parent.querySelector('.xkeen-cm-toolbar[data-cm-for="' + cmId + '"]')) return;
+
+    // Store base items so we can rebuild dynamically (e.g. when mode changes)
+    const baseItems = Array.isArray(items) ? items : [];
+    cm._xkeenToolbarItemsBase = baseItems;
+
+    // Filter out actions that are not available (missing addons or unsupported mode)
+    const effectiveItems = xkeenFilterToolbarItems(cm, baseItems);
 
     const bar = document.createElement('div');
     bar.className = 'xkeen-cm-toolbar';
     bar.setAttribute('role', 'toolbar');
     bar.dataset.cmFor = cmId;
 
-    (items || []).forEach((it) => {
+    (effectiveItems || []).forEach((it) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'xkeen-cm-tool' + ((it && (it.id === 'help' || it.isHelp)) ? ' is-help' : '');
       btn.setAttribute('aria-label', it.label || it.id || 'Action');
+
+      // For help/debugging: keep a stable id/command on the element.
+      try {
+        if (it.id) btn.dataset.actionId = String(it.id);
+        if (it.command) btn.dataset.command = String(it.command);
+      } catch (e) {}
 
       // Some actions make no sense in readOnly mode (replace/comment). Keep them
       // visible for a consistent UI, but disable when editor is readOnly.
@@ -394,6 +515,7 @@
     }
 
     cm._xkeenToolbarEl = bar;
+    cm._xkeenToolbarItems = effectiveItems;
 
     // Sync toolbar in fullscreen mode
     try {
@@ -403,6 +525,13 @@
           origSetOption(opt, val);
           if (opt === 'fullScreen') xkeenSyncCmToolbarFullscreen(cm);
           if (opt === 'readOnly') xkeenSyncCmToolbarReadonly(cm);
+          // Mode changes (e.g. in file manager) can affect which toolbar actions
+          // make sense (comments, etc). Rebuild the toolbar in-place.
+          if (opt === 'mode') {
+            try {
+              xkeenAttachCmToolbar(cm, cm._xkeenToolbarItemsBase || baseItems, { force: true });
+            } catch (e) {}
+          }
         };
         cm._xkeenSetOptionWrapped = true;
       }
