@@ -330,6 +330,10 @@
         const menu = byId(id);
         if (!menu) return;
         try { if (!menu.hasAttribute('tabindex')) menu.setAttribute('tabindex', '-1'); } catch (e) {}
+
+
+
+
         on(menu, 'wheel', (e) => {
           try {
             const t = e && e.target;
@@ -347,6 +351,87 @@
       });
     }
 
+
+    // --------------------
+    // Overflow menu: collapsible sections (Session / Signals / Tools)
+    // --------------------
+    function initOverflowMenuCollapsibles() {
+      const menu = byId('terminal-overflow-menu');
+      if (!menu) return;
+    
+      const secs = menu.querySelectorAll('.terminal-menu-section[data-collapsible="1"]');
+      secs.forEach((sec) => {
+        const title = sec.querySelector('.terminal-menu-title');
+        if (!title) return;
+    
+        // Accessibility: treat title like a button.
+        try { title.setAttribute('role', 'button'); } catch (e2) {}
+        try { if (!title.hasAttribute('tabindex')) title.setAttribute('tabindex', '0'); } catch (e3) {}
+    
+        const key = (() => {
+          try {
+            const k = sec.getAttribute('data-section');
+            if (k) return 'xkeen.term.menu.' + String(k);
+          } catch (e4) {}
+          try {
+            const t = (title.textContent || '').trim();
+            if (t) return 'xkeen.term.menu.' + t;
+          } catch (e5) {}
+          return null;
+        })();
+    
+        // Restore persisted state.
+        try {
+          if (key && window.localStorage) {
+            const v = localStorage.getItem(key);
+            if (v === 'collapsed') sec.classList.add('collapsed');
+            else if (v === 'expanded') sec.classList.remove('collapsed');
+          }
+        } catch (e6) {}
+    
+        function apply() {
+          const collapsed = sec.classList.contains('collapsed');
+    
+          try { title.setAttribute('aria-expanded', String(!collapsed)); } catch (e7) {}
+    
+          // Persist state.
+          try {
+            if (key && window.localStorage) {
+              localStorage.setItem(key, collapsed ? 'collapsed' : 'expanded');
+            }
+          } catch (e8) {}
+    
+          // If the Tools section is collapsed while a nested submenu is open — close it.
+          if (collapsed) {
+            try {
+              const nested = sec.querySelectorAll('[role="menu"]');
+              nested.forEach((el) => {
+                try { if (el && !el.classList.contains('hidden')) el.classList.add('hidden'); } catch (e9) {}
+              });
+            } catch (e10) {}
+          }
+    
+          // Menu max-height fit may need recalculation after expand/collapse.
+          try { requestAnimationFrame(refitOpenGroupedMenus); } catch (e11) {}
+        }
+    
+        function toggle(ev) {
+          try { ev && ev.preventDefault && ev.preventDefault(); } catch (e12) {}
+          try { ev && ev.stopPropagation && ev.stopPropagation(); } catch (e13) {}
+          try { sec.classList.toggle('collapsed'); } catch (e14) {}
+          apply();
+        }
+    
+        // Init + bind
+        apply();
+        on(title, 'click', toggle);
+        on(title, 'keydown', (e) => {
+          const k = e && e.key;
+          if (k === 'Enter' || k === ' ') toggle(e);
+        });
+      });
+    }
+    
     // --------------------
     // Retry UI (Stop auto-retry button)
     // --------------------
@@ -600,6 +685,9 @@
       initGroupedMenusAutoClose();
       initMenuWheelFix();
 
+
+      // Collapsible overflow sections (Session / Signals / Tools)
+      initOverflowMenuCollapsibles();
       // Buttons and hotkeys
       bindButtons();
       bindHotkeys();
