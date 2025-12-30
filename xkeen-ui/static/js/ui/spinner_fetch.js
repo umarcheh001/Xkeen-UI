@@ -120,9 +120,9 @@
       return { message: 'Применение профиля и перезапуск xkeen...' };
     }
 
-    // Xray logs enable/disable always restarts xkeen
+    // Xray logs enable/disable restarts ONLY Xray core (no xkeen-ui restart)
     if ((path === '/api/xray-logs/enable' || path === '/api/xray-logs/disable') && method === 'POST') {
-      return { message: 'Применение настроек логов и перезапуск xkeen...' };
+      return { message: 'Применение настроек логов и перезапуск Xray...' };
     }
 
     // xkeen *.lst endpoints (restart controlled by JSON body.restart; backend defaults restart=true)
@@ -178,8 +178,8 @@
       if (path === '/api/xkeen/port-exclude') return 'port_exclude.lst сохранён и xkeen перезапущен.';
       if (path === '/api/xkeen/ip-exclude') return 'ip_exclude.lst сохранён и xkeen перезапущен.';
 
-      if (path === '/api/xray-logs/enable') return 'Логи Xray включены и xkeen перезапущен.';
-      if (path === '/api/xray-logs/disable') return 'Логи Xray выключены и xkeen перезапущен.';
+      if (path === '/api/xray-logs/enable') return 'Логи Xray включены и Xray перезапущен.';
+      if (path === '/api/xray-logs/disable') return 'Логи Xray выключены и Xray перезапущен.';
 
       if (path === '/api/xkeen/core') return 'Ядро переключено и xkeen перезапущен.';
 
@@ -233,6 +233,31 @@
     }
   }
 
+  // Show a toast when ONLY Xray core has been restarted (no xkeen-ui restart).
+  function handleXrayRestartFromResponse(url, response) {
+    if (!response || !response.headers || typeof response.clone !== 'function') return;
+
+    const ct = response.headers.get && response.headers.get('Content-Type')
+      ? String(response.headers.get('Content-Type') || '')
+      : '';
+    if (!ct || ct.indexOf('application/json') === -1) return;
+
+    try {
+      response.clone().json().then(function (data) {
+        if (!data || !data.xray_restarted) return;
+
+        const msg = restartToastMessageForUrl(url) || 'Xray перезапущен.';
+        if (typeof window.showToast === 'function') {
+          window.showToast(msg, false);
+        } else if (XKeen.ui && typeof XKeen.ui.showToast === 'function') {
+          XKeen.ui.showToast(msg, false);
+        }
+      }).catch(function () {});
+    } catch (e) {
+      // ignore
+    }
+  }
+
   function injectCsrfAndCredentials(input, init) {
     const opts = init ? Object.assign({}, init) : {};
 
@@ -272,6 +297,7 @@
     if (!spinnerConfig) {
       return origFetch(input, opts).then(function (res) {
         try { handleXkeenRestartFromResponse(url, res); } catch (e) {}
+        try { handleXrayRestartFromResponse(url, res); } catch (e) {}
         return res;
       });
     }
@@ -282,6 +308,7 @@
       .then(function (res) {
         hideGlobalXkeenSpinner();
         try { handleXkeenRestartFromResponse(url, res); } catch (e) {}
+        try { handleXrayRestartFromResponse(url, res); } catch (e) {}
         return res;
       })
       .catch(function (err) {
