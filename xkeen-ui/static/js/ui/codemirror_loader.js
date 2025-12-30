@@ -119,6 +119,10 @@
   // ------------------------ public API ------------------------
   const MODE_TO_FILE = {
     javascript: 'mode/javascript/javascript.min.js',
+    // JSON with comments (JSONC) — implemented as a wrapper around
+    // the built-in javascript(json:true) mode.
+    // Uses the same underlying mode file.
+    jsonc: 'mode/javascript/javascript.min.js',
     yaml: 'mode/yaml/yaml.min.js',
     shell: 'mode/shell/shell.min.js',
     toml: 'mode/toml/toml.min.js',
@@ -126,6 +130,36 @@
     xml: 'mode/xml/xml.min.js',
     nginx: 'mode/nginx/nginx.min.js',
   };
+
+  // jsonc mode is a tiny wrapper around javascript(json:true), but with
+  // comment metadata enabled so toggleComment works.
+  function defineJsoncModeIfPossible() {
+    try {
+      if (!window.CodeMirror) return false;
+      if (window.CodeMirror.modes && window.CodeMirror.modes.jsonc) return true;
+      if (!(window.CodeMirror.modes && window.CodeMirror.modes.javascript)) return false;
+
+      window.CodeMirror.defineMode('jsonc', function (config, parserConfig) {
+        const base = window.CodeMirror.getMode(config, { name: 'javascript', json: true });
+        // In CodeMirror's JS mode, json:true nulls out these fields. Restore them.
+        const lc = (parserConfig && parserConfig.lineComment) ? parserConfig.lineComment : '//';
+        base.lineComment = lc;
+        base.blockCommentStart = (parserConfig && parserConfig.blockCommentStart) ? parserConfig.blockCommentStart : '/*';
+        base.blockCommentEnd = (parserConfig && parserConfig.blockCommentEnd) ? parserConfig.blockCommentEnd : '*/';
+        base.blockCommentContinue = (parserConfig && parserConfig.blockCommentContinue) ? parserConfig.blockCommentContinue : ' * ';
+        return base;
+      });
+
+      // Optional: MIME alias for editors that use MIME-like values.
+      try {
+        window.CodeMirror.defineMIME('application/jsonc', { name: 'jsonc' });
+      } catch (e) {}
+
+      return !!(window.CodeMirror.modes && window.CodeMirror.modes.jsonc);
+    } catch (e) {
+      return false;
+    }
+  }
 
   function modeLoaded(name) {
     try {
@@ -154,11 +188,24 @@
   L.ensureMode = async function ensureMode(modeName) {
     const n = String(modeName || '').trim();
     if (!n || n === 'text/plain') return true;
+
+    // jsonc is a derived mode; if javascript is already present we can
+    // define it without loading anything.
+    if (n === 'jsonc') {
+      if (defineJsoncModeIfPossible()) return true;
+    }
+
     if (modeLoaded(n)) return true;
 
     const rel = MODE_TO_FILE[n];
     if (!rel) return false;
     const ok = await loadScriptOnce(CM_ROOT + rel);
+
+    // If we just loaded javascript for jsonc, register the derived mode.
+    if (ok && n === 'jsonc') {
+      defineJsoncModeIfPossible();
+    }
+
     return ok && modeLoaded(n);
   };
 
@@ -196,4 +243,8 @@
     if (wantJsonLint) out.jsonLintOk = await L.ensureJsonLint();
     return out;
   };
+
+  // Best-effort: if panel templates already loaded javascript mode,
+  // define jsonc immediately so editors can use it synchronously.
+  try { defineJsoncModeIfPossible(); } catch (e) {}
 })();
