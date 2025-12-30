@@ -1399,7 +1399,7 @@ async function xhrUploadFiles({ side, files }) {
     const clearTrashBtn = el('fm-clear-trash-active-btn');
     if (!clearTrashBtn) return;
 
-    // "Очистить корзину" is only relevant for local /opt/var/trash.
+    // "Очистить корзину" is only relevant for the local trash root.
     let isTrash = false;
     try {
       const p = S && S.panels ? S.panels[S.activeSide] : null;
@@ -1678,14 +1678,24 @@ async function xhrUploadFiles({ side, files }) {
   }
 
   // -------------------------- bookmarks / quick paths --------------------------
-  const FM_BOOKMARKS_LOCAL = [
-    { label: '/opt/var', value: '/opt/var' },
-    { label: '🗑 Корзина (/opt/var/trash)', value: '/opt/var/trash' },
-    { label: '/opt/etc', value: '/opt/etc' },
-    { label: '/tmp/mnt (диски)', value: '/tmp/mnt' },
-    { label: '/opt/etc/xray', value: '/opt/etc/xray' },
-    { label: '/opt/etc/mihomo', value: '/opt/etc/mihomo' },
-  ];
+  // Trash root is provided by backend (trash_root). Keep a sane default for older builds.
+  let FM_TRASH_PATH = '/opt/var/trash';
+
+  function _getTrashRoot() {
+    try { return String(FM_TRASH_PATH || '/opt/var/trash').replace(/\/+$/, ''); } catch (e) { return '/opt/var/trash'; }
+  }
+
+  function _localBookmarks() {
+    const tr = _getTrashRoot();
+    return [
+      { label: '/opt/var', value: '/opt/var' },
+      { label: `🗑 Корзина (${tr})`, value: tr },
+      { label: '/opt/etc', value: '/opt/etc' },
+      { label: '/tmp/mnt (диски)', value: '/tmp/mnt' },
+      { label: '/opt/etc/xray', value: '/opt/etc/xray' },
+      { label: '/opt/etc/mihomo', value: '/opt/etc/mihomo' },
+    ];
+  }
 
   const FM_BOOKMARKS_REMOTE = [
     { label: '~ (home)', value: '.' },
@@ -1706,16 +1716,16 @@ async function xhrUploadFiles({ side, files }) {
   ];
 
 
-  const FM_TRASH_PATH = '/opt/var/trash';
 
   function isTrashPanel(p) {
     try {
       const cwd = String((p && p.cwd) || '').replace(/\/+$/, '');
+      const tr = _getTrashRoot();
       // Show trash UI not only for the root folder itself, but also for any
       // nested folder inside it.
       return !!p
         && String(p.target || 'local') === 'local'
-        && (cwd === FM_TRASH_PATH || cwd.startsWith(FM_TRASH_PATH + '/'));
+        && (cwd === tr || cwd.startsWith(tr + '/'));
     } catch (e) {
       return false;
     }
@@ -1726,7 +1736,7 @@ async function xhrUploadFiles({ side, files }) {
     if (target === 'remote') return FM_BOOKMARKS_REMOTE;
     // Local: filter/disable based on sandbox roots returned by backend.
     const roots = Array.isArray(p && p.roots) ? p.roots : [];
-    return FM_BOOKMARKS_LOCAL.map((b) => {
+    return _localBookmarks().map((b) => {
       const val = String(b && b.value || '');
       const allowed = !roots.length || isAllowedLocalPath(val, roots);
       return Object.assign({}, b, { _allowed: allowed });
@@ -2125,6 +2135,13 @@ async function xhrUploadFiles({ side, files }) {
       }
     } catch (e) {}
 
+
+    // Update dynamic trash root from backend (local only).
+    try {
+      if (p.target === 'local' && data && data.trash_root) {
+        FM_TRASH_PATH = String(data.trash_root || FM_TRASH_PATH).replace(/\/+$/, '');
+      }
+    } catch (e) {}
     p.roots = Array.isArray(data.roots) ? data.roots : (p.roots || []);
     if (p.target === 'local') {
       p.cwd = String(data.path || desired || '');
@@ -2556,7 +2573,9 @@ async function xhrUploadFiles({ side, files }) {
     const ext = n.includes('.') ? n.split('.').pop() : '';
 
     // Extension-first mapping.
-    if (ext === 'json' || ext === 'jsonc') return { name: 'javascript', json: true };
+    // .json is strict JSON (no editor commenting). .jsonc is JSON-with-comments.
+    if (ext === 'json') return { name: 'javascript', json: true };
+    if (ext === 'jsonc') return { name: 'jsonc', json: true };
     if (ext === 'js' || ext === 'ts') return 'javascript';
     if (ext === 'yaml' || ext === 'yml') return 'yaml';
     if (ext === 'sh' || ext === 'bash') return 'shell';
@@ -4552,7 +4571,7 @@ async function runCopyMoveWithPayload(op, basePayload) {
       return;
     }
     if (!isTrashPanel(p)) {
-      toast('Восстановление доступно только из /opt/var/trash', 'info');
+      toast(`Восстановление доступно только из ${_getTrashRoot()}`, 'info');
       return;
     }
 
@@ -4607,7 +4626,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`,
       return;
     }
     if (!isTrashPanel(p)) {
-      toast('Очистка корзины доступна только из /opt/var/trash', 'info');
+      toast(`Очистка корзины доступна только из ${_getTrashRoot()}`, 'info');
       return;
     }
 
