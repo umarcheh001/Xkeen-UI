@@ -625,7 +625,9 @@ function closeHelp() {
     });
 
     const cm = window.CodeMirror.fromTextArea(textarea, {
-      mode: { name: 'javascript', json: true },
+      // Routing supports JSON with comments (raw *.jsonc is saved alongside the
+      // cleaned JSON for xray), so enable commenting in the editor.
+      mode: { name: 'jsonc' },
       theme: 'material-darker',
       lineNumbers: true,
       styleActiveLine: true,
