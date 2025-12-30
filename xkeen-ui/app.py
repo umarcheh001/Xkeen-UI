@@ -30,16 +30,20 @@ def set_ws_runtime(enabled: bool = True) -> None:
     WS_RUNTIME = bool(enabled)
 
 
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, g
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, g, send_file, send_from_directory
 import json
+import base64
 import datetime
 import os
 import sys
 import re
 import time
+import signal
 import shutil
 import logging
 import subprocess
+import select
+import codecs
 import urllib.request
 import urllib.error
 from urllib.parse import urlparse, parse_qs, unquote, quote
@@ -112,7 +116,8 @@ from routes_remotefs import create_remotefs_blueprint
 from routes_fs import create_fs_blueprint
 from routes_devtools import create_devtools_blueprint
 from services.xkeen import append_restart_log as _svc_append_restart_log, read_restart_log as _svc_read_restart_log, restart_xkeen as _svc_restart_xkeen
-from services.xray_logs import load_xray_log_config as _svc_load_xray_log_config, tail_lines as _svc_tail_lines, adjust_log_timezone as _svc_adjust_log_timezone
+from services.xray_logs import load_xray_log_config as _svc_load_xray_log_config, tail_lines as _svc_tail_lines, tail_lines_fast as _svc_tail_lines_fast, read_new_lines as _svc_read_new_lines, adjust_log_timezone as _svc_adjust_log_timezone
+from services.xray import restart_xray_core as _svc_restart_xray_core
 from services import devtools as _svc_devtools
 from services.mihomo import (
     parse_state_from_payload as _mihomo_parse_state,
@@ -686,46 +691,180 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
             job.finished_at = time.time()
         return
 
+    # Stream output while the command is running so /ws/command-status can actually stream.
+    # Note: we run the command in its own process group so we can terminate the whole tree on timeout.
+    COMMAND_MAX_OUTPUT_CHARS = int(os.environ.get("XKEEN_COMMAND_MAX_OUTPUT_CHARS", "1048576"))  # 1 MiB
+
+    def _is_noise_line(line: str) -> bool:
+        low = (line or "").lower()
+        if "collected errors" in low:
+            return True
+        if "opkg_conf" in low or "opkg" in low:
+            return True
+        return False
+
+    def _append_output(chunk: str) -> None:
+        if not chunk:
+            return
+        with JOBS_LOCK:
+            j = JOBS.get(job_id)
+            if not j:
+                return
+            # Prevent unbounded RAM usage on chatty commands.
+            if COMMAND_MAX_OUTPUT_CHARS > 0 and len(j.output) >= COMMAND_MAX_OUTPUT_CHARS:
+                # Mark once.
+                if "[output truncated]" not in j.output:
+                    j.output += "\n[output truncated]\n"
+                return
+            if COMMAND_MAX_OUTPUT_CHARS > 0:
+                room = COMMAND_MAX_OUTPUT_CHARS - len(j.output)
+                if room <= 0:
+                    return
+                if len(chunk) > room:
+                    j.output += chunk[:room]
+                    if "[output truncated]" not in j.output:
+                        j.output += "\n[output truncated]\n"
+                    return
+            j.output += chunk
+
+    started = time.time()
+    proc: subprocess.Popen | None = None
+    exit_code: int | None = None
+    timed_out = False
+
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
-            input=stdin_data if stdin_data is not None else None,
+            stdin=subprocess.PIPE if stdin_data is not None else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
-            timeout=COMMAND_TIMEOUT,
+            text=False,
+            close_fds=True,
+            preexec_fn=os.setsid,
         )
-        output = proc.stdout or ""
 
-        # keep ANSI escape codes for colorized output in UI
+        if stdin_data is not None and proc.stdin is not None:
+            try:
+                proc.stdin.write(stdin_data.encode("utf-8", errors="ignore"))
+            except Exception:
+                pass
+            try:
+                proc.stdin.close()
+            except Exception:
+                pass
 
-        # remove Entware / opkg noise
-        cleaned: list[str] = []
-        for line in output.splitlines():
-            low = line.lower()
-            if "collected errors" in low:
-                continue
-            if "opkg_conf" in low or "opkg" in low:
-                continue
-            cleaned.append(line)
-        output = "\n".join(cleaned).strip()
+        if proc.stdout is None:
+            raise RuntimeError("no stdout")
+
+        fd = proc.stdout.fileno()
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        carry = ""
+
+        while True:
+            # Timeout check
+            if (time.time() - started) > float(COMMAND_TIMEOUT):
+                timed_out = True
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except Exception:
+                    try:
+                        proc.terminate()
+                    except Exception:
+                        pass
+                try:
+                    # Give it a bit to exit
+                    proc.wait(timeout=1.0)
+                except Exception:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except Exception:
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                break
+
+            # Read available output (non-blocking-ish)
+            try:
+                r, _, _ = select.select([fd], [], [], 0.2)
+            except Exception:
+                r = [fd]
+
+            if r:
+                try:
+                    data = os.read(fd, 4096)
+                except Exception:
+                    data = b""
+                if not data:
+                    break
+
+                txt = decoder.decode(data)
+                if txt:
+                    carry += txt
+                    while "\n" in carry:
+                        line, carry = carry.split("\n", 1)
+                        if _is_noise_line(line):
+                            continue
+                        _append_output(line + "\n")
+
+            # If process exited and no more buffered data is coming, we can finish.
+            try:
+                if proc.poll() is not None:
+                    # Drain whatever is left (best effort)
+                    try:
+                        while True:
+                            r2, _, _ = select.select([fd], [], [], 0)
+                            if not r2:
+                                break
+                            data2 = os.read(fd, 4096)
+                            if not data2:
+                                break
+                            txt2 = decoder.decode(data2)
+                            if txt2:
+                                carry += txt2
+                                while "\n" in carry:
+                                    line, carry = carry.split("\n", 1)
+                                    if _is_noise_line(line):
+                                        continue
+                                    _append_output(line + "\n")
+                    except Exception:
+                        pass
+                    break
+            except Exception:
+                pass
+
+        # Flush decoder + remaining partial line
+        try:
+            tail = decoder.decode(b"", final=True)
+        except Exception:
+            tail = ""
+        if tail:
+            carry += tail
+        if carry:
+            # last line without newline
+            if not _is_noise_line(carry):
+                _append_output(carry)
+
+        try:
+            exit_code = proc.wait(timeout=0.2)
+        except Exception:
+            try:
+                exit_code = proc.poll()
+            except Exception:
+                exit_code = None
 
         with JOBS_LOCK:
             job = JOBS.get(job_id)
             if not job:
                 return
-            job.status = "finished"
-            job.exit_code = proc.returncode
-            job.output = output
+            if timed_out:
+                job.status = "error"
+                job.error = f"timeout after {COMMAND_TIMEOUT}s"
+            else:
+                job.status = "finished"
+            job.exit_code = int(exit_code) if exit_code is not None else None
             job.finished_at = time.time()
-    except subprocess.TimeoutExpired:
-        with JOBS_LOCK:
-            job = JOBS.get(job_id)
-            if not job:
-                return
-            job.status = "error"
-            job.error = f"timeout after {COMMAND_TIMEOUT}s"
-            job.finished_at = time.time()
+
     except Exception as e:  # pragma: no cover - defensive
         with JOBS_LOCK:
             job = JOBS.get(job_id)
@@ -734,6 +873,21 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
             job.status = "error"
             job.error = str(e)
             job.finished_at = time.time()
+    finally:
+        try:
+            if proc is not None:
+                try:
+                    if proc.stdout:
+                        proc.stdout.close()
+                except Exception:
+                    pass
+                try:
+                    if proc.stdin:
+                        proc.stdin.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
 
 def _create_command_job(flag: str | None, stdin_data: str | None, cmd: str | None = None) -> CommandJob:
@@ -757,6 +911,12 @@ def _get_command_job(job_id: str) -> CommandJob | None:
 
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+
+@app.route("/favicon.ico")
+def favicon():
+    # Serve favicon at the root (some browsers request /favicon.ico by default)
+    return send_from_directory(app.static_folder, "favicon.ico", mimetype="image/vnd.microsoft.icon")
+
 
 # --------------------
 # Auth / first-run setup
@@ -1294,6 +1454,18 @@ def load_xray_log_config():
 def restart_xkeen(source="api"):
     """Thin wrapper around services.xkeen.restart_xkeen using global XKEEN_RESTART_CMD/RESTART_LOG_FILE."""
     return _svc_restart_xkeen(XKEEN_RESTART_CMD, RESTART_LOG_FILE, source=source)
+
+
+def restart_xray_core() -> tuple[bool, str]:
+    """Restart only Xray core process (no xkeen-ui restart).
+
+    Returns:
+        (ok, detail)
+    """
+    try:
+        return _svc_restart_xray_core()
+    except Exception as e:  # noqa: BLE001
+        return False, str(e)
 
 
 
@@ -1917,47 +2089,119 @@ def api_restart():
 
 
 # ------------------------------
-# One-time WebSocket tokens (for PTY shell)
+# One-time WebSocket tokens
 # ------------------------------
 import secrets as _secrets
-PTY_WS_TOKENS = {}  # token -> expires_ts (unix time)
 
-def issue_pty_ws_token(ttl_seconds: int = 60) -> str:
+# token -> (expires_ts, scope)
+# scope is used to avoid cross-using tokens between endpoints.
+WS_TOKENS: Dict[str, Tuple[float, str]] = {}
+WS_TOKENS_LOCK = threading.Lock()
+
+WS_TOKEN_SCOPES = {"pty", "cmd"}
+
+
+def _cleanup_ws_tokens_locked(now: float) -> None:
+    """Remove expired tokens (lock must be held)."""
+    try:
+        dead = [t for t, (exp, _scope) in WS_TOKENS.items() if float(exp) < float(now)]
+        for t in dead:
+            WS_TOKENS.pop(t, None)
+    except Exception:
+        # Never fail hard on cleanup
+        pass
+
+
+def issue_ws_token(scope: str = "pty", ttl_seconds: int = 60) -> str:
+    """Issue a one-time token for a given WS endpoint scope."""
+    try:
+        scope = (scope or "pty").strip().lower()
+    except Exception:
+        scope = "pty"
+    if scope not in WS_TOKEN_SCOPES:
+        scope = "pty"
+
+    try:
+        ttl = int(ttl_seconds)
+    except Exception:
+        ttl = 60
+    ttl = max(10, min(300, ttl))
+
     token = _secrets.token_urlsafe(24)
-    PTY_WS_TOKENS[token] = time.time() + int(ttl_seconds)
+    exp = time.time() + ttl
+
+    with WS_TOKENS_LOCK:
+        # Opportunistic cleanup to prevent unbounded growth.
+        if len(WS_TOKENS) > 1024:
+            _cleanup_ws_tokens_locked(time.time())
+        WS_TOKENS[token] = (float(exp), scope)
+
     return token
 
-def validate_pty_ws_token(token: str) -> bool:
+
+def validate_ws_token(token: str, scope: str = "pty") -> bool:
+    """Validate and consume (one-time) WS token."""
     try:
         token = (token or "").strip()
     except Exception:
         token = ""
     if not token:
         return False
-    exp = PTY_WS_TOKENS.get(token)
-    if not exp:
+
+    try:
+        scope = (scope or "pty").strip().lower()
+    except Exception:
+        scope = "pty"
+    if scope not in WS_TOKEN_SCOPES:
+        scope = "pty"
+
+    # Atomic one-time consume under lock.
+    with WS_TOKENS_LOCK:
+        rec = WS_TOKENS.pop(token, None)
+
+    if not rec:
         return False
-    now = time.time()
-    if now > float(exp):
-        PTY_WS_TOKENS.pop(token, None)
+    exp, tok_scope = rec
+    if time.time() > float(exp):
         return False
-    # One-time use
-    PTY_WS_TOKENS.pop(token, None)
+    if tok_scope != scope:
+        return False
     return True
+
+
+# Backward-compatible helpers (PTY)
+def issue_pty_ws_token(ttl_seconds: int = 60) -> str:
+    return issue_ws_token(scope="pty", ttl_seconds=ttl_seconds)
+
+
+def validate_pty_ws_token(token: str) -> bool:
+    return validate_ws_token(token, scope="pty")
+
+
+def validate_cmd_ws_token(token: str) -> bool:
+    return validate_ws_token(token, scope="cmd")
 
 
 @app.post("/api/ws-token")
 def api_ws_token():
     # Requires login + CSRF (enforced by _auth_guard)
     ttl = 60
+    scope = "pty"
     try:
         data = request.get_json(silent=True) or {}
         if isinstance(data, dict) and data.get("ttl"):
             ttl = max(10, min(300, int(data.get("ttl"))))
+        if isinstance(data, dict) and data.get("scope"):
+            scope = str(data.get("scope") or "pty").strip().lower()
     except Exception:
         ttl = 60
-    token = issue_pty_ws_token(ttl_seconds=ttl)
-    return jsonify({"ok": True, "token": token, "ttl": ttl})
+        scope = "pty"
+
+    if scope not in WS_TOKEN_SCOPES:
+        scope = "pty"
+
+    token = issue_ws_token(scope=scope, ttl_seconds=ttl)
+    return jsonify({"ok": True, "token": token, "ttl": ttl, "scope": scope})
 
 
 @app.post("/api/run-command")
@@ -2043,50 +2287,143 @@ def api_restart_log_clear():
 
 # ---------- API: Xray live logs ----------
 
+# Cursor helpers for incremental HTTP tail (DevTools-like)
+def _xray_b64e(data: bytes) -> str:
+    if not data:
+        return ""
+    try:
+        return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+    except Exception:
+        return ""
+
+
+def _xray_b64d(s: str) -> bytes:
+    if not s:
+        return b""
+    try:
+        pad = "=" * (-len(s) % 4)
+        return base64.urlsafe_b64decode((s + pad).encode("ascii"))
+    except Exception:
+        return b""
+
+
+def _xray_encode_cursor(obj: Dict[str, Any]) -> str:
+    try:
+        raw = json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    except Exception:
+        return ""
+
+
+def _xray_decode_cursor(cur: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not cur:
+        return None
+    try:
+        pad = "=" * (-len(cur) % 4)
+        raw = base64.urlsafe_b64decode((cur + pad).encode("ascii"))
+    except Exception:
+        return None
+    try:
+        obj = json.loads(raw.decode("utf-8", "ignore"))
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
 @app.get("/api/xray-logs")
 def api_xray_logs():
     """
-    Псевдо-tail логов Xray.
+    Псевдо-tail логов Xray (HTTP).
+
     query:
       file=error|access (или error.log/access.log)
-      max_lines=число (по умолчанию 800)
+      max_lines=число (по умолчанию 800, 50–5000)
+      cursor=строка (опционально) — инкрементальный курсор (DevTools-like)
+      source=строка — для debug-логов
     """
     file_name = request.args.get("file", "error")
+    cursor = request.args.get("cursor")
     try:
         max_lines = int(request.args.get("max_lines", 800))
     except (TypeError, ValueError):
         max_lines = 800
+
+    # sanity clamp
+    if max_lines < 50:
+        max_lines = 50
+    if max_lines > 5000:
+        max_lines = 5000
+
     source = request.args.get("source", "manual")
     ws_debug(
         "api_xray_logs: HTTP tail requested",
         file=file_name,
         max_lines=max_lines,
+        cursor=bool(cursor),
         source=source,
         client=request.remote_addr or "unknown",
     )
 
+    path = _resolve_xray_log_path_for_ws(file_name)
+    if not path or not os.path.isfile(path):
+        return jsonify({"lines": [], "mode": "full", "cursor": "", "exists": False, "size": 0, "mtime": 0.0, "ino": 0}), 200
 
-    # Если логирование выключено (loglevel=none), читаем "снимок" из .saved файлов,
-    # чтобы не потерять накопленные логи после перезапуска.
-    cfg = load_xray_log_config()
-    log_cfg = cfg.get("log", {})
-    loglevel = str(log_cfg.get("loglevel", "none")).lower()
+    try:
+        st = os.stat(path)
+        ino = int(getattr(st, "st_ino", 0) or 0)
+        size = int(getattr(st, "st_size", 0) or 0)
+        mtime = float(getattr(st, "st_mtime", 0.0) or 0.0)
+    except Exception:
+        return jsonify({"lines": [], "mode": "full", "cursor": "", "exists": False, "size": 0, "mtime": 0.0, "ino": 0}), 200
 
-    if file_name in ("error", "error.log"):
-        if loglevel == "none" and os.path.isfile(XRAY_ERROR_LOG_SAVED):
-            path = XRAY_ERROR_LOG_SAVED
-        else:
-            path = XRAY_ERROR_LOG
-    else:
-        if loglevel == "none" and os.path.isfile(XRAY_ACCESS_LOG_SAVED):
-            path = XRAY_ACCESS_LOG_SAVED
-        else:
-            path = XRAY_ACCESS_LOG
+    # Try incremental append mode first (when cursor matches the same file inode)
+    cur = _xray_decode_cursor(cursor)
+    if cur and int(cur.get("ino", -1)) == ino:
+        try:
+            off = int(cur.get("off", 0) or 0)
+        except Exception:
+            off = 0
 
-    lines = tail_lines(path, max_lines=max_lines)
+        if 0 <= off <= size:
+            carry = _xray_b64d(str(cur.get("carry", "")))
+            new_lines, new_off, new_carry = _svc_read_new_lines(path, off, carry=carry, max_bytes=128 * 1024)
+            new_cursor = _xray_encode_cursor({"ino": ino, "off": int(new_off), "carry": _xray_b64e(new_carry)})
+
+            new_lines = adjust_log_timezone(new_lines)
+
+            return (
+                jsonify(
+                    {
+                        "lines": new_lines,
+                        "mode": "append",
+                        "cursor": new_cursor,
+                        "exists": True,
+                        "size": size,
+                        "mtime": mtime,
+                        "ino": ino,
+                    }
+                ),
+                200,
+            )
+
+    # Full tail snapshot
+    lines = _svc_tail_lines_fast(path, max_lines=max_lines, max_bytes=256 * 1024)
     lines = adjust_log_timezone(lines)
-    return jsonify({"lines": lines}), 200
+    new_cursor = _xray_encode_cursor({"ino": ino, "off": size, "carry": ""})
 
+    return (
+        jsonify(
+            {
+                "lines": lines,
+                "mode": "full",
+                "cursor": new_cursor,
+                "exists": True,
+                "size": size,
+                "mtime": mtime,
+                "ino": ino,
+            }
+        ),
+        200,
+    )
 
 @app.post("/api/xray-logs/clear")
 def api_xray_logs_clear():
@@ -2122,6 +2459,22 @@ def api_xray_logs_clear():
     return jsonify({"ok": True}), 200
 
 
+
+@app.get("/api/xray-logs/download")
+def api_xray_logs_download():
+    """Download current Xray log file (error/access)."""
+    file_name = request.args.get("file", "error")
+    path = _resolve_xray_log_path_for_ws(file_name)
+    if not path or not os.path.isfile(path):
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    # normalize download name
+    base = "error" if str(file_name or "").lower() in ("error", "error.log") else "access"
+    try:
+        return send_file(path, as_attachment=True, download_name=f"xray-{base}.log")
+    except TypeError:
+        # Flask < 2.0
+        return send_file(path, as_attachment=True, attachment_filename=f"xray-{base}.log")
 
 def _resolve_xray_log_path_for_ws(file_name: str) -> str | None:
     """
@@ -2169,10 +2522,16 @@ def api_xray_logs_enable():
     """
     Включает логи Xray: loglevel != none.
     body JSON: {"loglevel": "warning"|"info"|...} — опционально, по умолчанию warning.
-    После смены конфига выполняет xkeen -restart.
+    После смены конфига перезапускает только процесс Xray (без перезапуска xkeen-ui).
     """
     data = request.get_json(silent=True) or {}
-    level = data.get("loglevel") or "warning"
+    level = str(data.get("loglevel") or "warning").strip().lower()
+
+    # Xray supports: debug/info/warning/error/none. We keep a strict allowlist here
+    # so the UI selector (and API clients) can't write arbitrary values.
+    allowed = {"debug", "info", "warning", "error", "none"}
+    if level not in allowed:
+        level = "warning"
 
     cfg = load_xray_log_config()
     cfg["log"]["access"] = XRAY_ACCESS_LOG
@@ -2180,15 +2539,28 @@ def api_xray_logs_enable():
     cfg["log"]["loglevel"] = level
     save_json(XRAY_LOG_CONFIG_FILE, cfg)
 
-    restarted = restart_xkeen(source="xray-logs-enable")
-    return jsonify({"ok": True, "loglevel": level, "restarted": restarted}), 200
+    ok, detail = restart_xray_core()
+    nonfatal = str(detail or '') == 'xray not running'
+    resp_ok = bool(ok or nonfatal)
+    # IMPORTANT: keep "restarted" for backward compatibility (it historically meant xkeen restart).
+    # We intentionally avoid xkeen restart here.
+    return (
+        jsonify({
+            "ok": resp_ok,
+            "loglevel": level,
+            "restarted": False,
+            "xray_restarted": bool(ok),
+            "detail": detail,
+        }),
+        200 if resp_ok else 500,
+    )
 
 
 @app.post("/api/xray-logs/disable")
 def api_xray_logs_disable():
     """
     Отключает логи Xray (loglevel = none).
-    Перед перезапуском сохраняет текущие логи в *.saved, чтобы их можно было просмотреть после остановки.
+    Перед применением сохраняет текущие логи в *.saved, чтобы их можно было просмотреть после остановки.
     """
     # Делаем "снимок" текущих логов
     try:
@@ -2204,8 +2576,18 @@ def api_xray_logs_disable():
     cfg["log"]["loglevel"] = "none"
     save_json(XRAY_LOG_CONFIG_FILE, cfg)
 
-    restarted = restart_xkeen(source="xray-logs-disable")
-    return jsonify({"ok": True, "restarted": restarted}), 200
+    ok, detail = restart_xray_core()
+    nonfatal = str(detail or '') == 'xray not running'
+    resp_ok = bool(ok or nonfatal)
+    return (
+        jsonify({
+            "ok": resp_ok,
+            "restarted": False,
+            "xray_restarted": bool(ok),
+            "detail": detail,
+        }),
+        200 if resp_ok else 500,
+    )
 
 
 # ---------- API: xkeen text configs (/opt/etc/xkeen/*.lst) ----------
@@ -3069,7 +3451,14 @@ def ws_xray_logs():
     file_name = request.args.get("file", "error")
     client_ip = request.remote_addr or "unknown"
 
-    ws_debug("ws_xray_logs: handler called", client=client_ip, file=file_name)
+    try:
+        max_lines = int((request.args.get("max_lines", "800") or "800").strip())
+    except Exception:
+        max_lines = 800
+    # sanity clamp (keep in sync with /api/xray-logs)
+    max_lines = max(50, min(5000, int(max_lines or 800)))
+
+    ws_debug("ws_xray_logs: handler called", client=client_ip, file=file_name, max_lines=max_lines)
 
     ws = request.environ.get("wsgi.websocket")
     if ws is None:
@@ -3097,7 +3486,7 @@ def ws_xray_logs():
     try:
         # 1) Отдаём “снимок” последних строк
         try:
-            last_lines = tail_lines(path, max_lines=800)
+            last_lines = tail_lines(path, max_lines=max_lines)
             last_lines = adjust_log_timezone(last_lines)
             ws_debug(
                 "ws_xray_logs: initial snapshot ready",
