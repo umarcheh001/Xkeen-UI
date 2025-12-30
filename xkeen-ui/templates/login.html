@@ -5,19 +5,29 @@
   <title>Xkeen UI — Вход</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
+  <!-- Apply typography prefs ASAP (stored in localStorage) -->
+  <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
+
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
+  <meta name="theme-color" content="#0f172a">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20251230c') }}">
   <style>
     .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
     .auth-card { width: 100%; max-width: 420px; }
-    .auth-title { margin: 0 0 6px; font-size: 22px; }
-    .auth-sub { margin: 0 0 16px; color: #9ca3af; font-size: 13px; }
+    .auth-title { margin: 0 0 6px; font-size: calc(22px * var(--xk-font-scale)); }
+    .auth-sub { margin: 0 0 16px; color: #9ca3af; font-size: calc(13px * var(--xk-font-scale)); }
     .auth-row { display: grid; gap: 8px; margin: 12px 0; }
-    .auth-row label { font-size: 12px; color: #9ca3af; }
+    .auth-row label { font-size: calc(12px * var(--xk-font-scale)); color: #9ca3af; }
     .auth-row input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #1f2937; background: #0b1220; color: #e5e7eb; }
     .auth-actions { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: 14px; }
     .auth-btn { border: 1px solid #1f2937; background: linear-gradient(135deg, #1d4ed8, #2563eb); color: white; padding: 10px 14px; border-radius: 10px; cursor: pointer; }
     .auth-btn:hover { filter: brightness(1.05); }
-    .auth-error { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #ef444466; background: rgba(239, 68, 68, 0.12); color: #fecaca; font-size: 13px; }
+    .auth-error { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid #ef444466; background: rgba(239, 68, 68, 0.12); color: #fecaca; font-size: calc(13px * var(--xk-font-scale)); }
   </style>
 </head>
 <body>
