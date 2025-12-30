@@ -33,7 +33,7 @@ from app import (
     app,
     ws_debug,
     _resolve_xray_log_path_for_ws,
-    validate_pty_ws_token,
+    validate_ws_token,
     tail_lines,
     adjust_log_timezone,
     _get_command_job,
@@ -326,24 +326,34 @@ class PtySession:
         except Exception:
             pass
 
-        if kill:
-            try:
-                if self.proc is not None and self.proc.poll() is None:
+        # Terminate process tree + reap child to avoid zombies.
+        try:
+            if self.proc is not None:
+                if kill and self.proc.poll() is None:
                     try:
                         os.killpg(self.proc.pid, signal.SIGTERM)
                     except Exception:
                         pass
                     try:
-                        _gevent_sleep(0.2) if GEVENT_AVAILABLE else time.sleep(0.2)
+                        self.proc.wait(timeout=1.0)
                     except Exception:
-                        pass
-                    if self.proc.poll() is None:
+                        # Still running -> hard kill
                         try:
                             os.killpg(self.proc.pid, signal.SIGKILL)
                         except Exception:
                             pass
-            except Exception:
-                pass
+                        try:
+                            self.proc.wait(timeout=1.0)
+                        except Exception:
+                            pass
+                else:
+                    # Not killing (or already exited) – still reap if possible.
+                    try:
+                        self.proc.wait(timeout=0.2)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         try:
             os.close(self.master_fd)
@@ -485,11 +495,18 @@ def application(environ, start_response):
         # Тут уже точно WebSocket
         ws = environ["wsgi.websocket"]
 
-        # Разбираем ?file=error|access
+        # Разбираем query
         params = parse_qs(qs or "")
         file_name = (params.get("file", ["error"])[0] or "error").lower()
 
-        ws_debug("ws_raw: handler entered", client=client_ip, file=file_name)
+        # max_lines (used by UI for "lines" input + "load more" reconnect)
+        try:
+            max_lines = int((params.get("max_lines", ["800"])[0] or "800").strip())
+        except Exception:
+            max_lines = 800
+        max_lines = max(50, min(5000, int(max_lines or 800)))
+
+        ws_debug("ws_raw: handler entered", client=client_ip, file=file_name, max_lines=max_lines)
 
         path_log = _resolve_xray_log_path_for_ws(file_name)
         ws_debug("ws_raw: resolved log path", path=path_log)
@@ -506,7 +523,7 @@ def application(environ, start_response):
         try:
             # 1) начальный снимок
             try:
-                last_lines = tail_lines(path_log, max_lines=800)
+                last_lines = tail_lines(path_log, max_lines=max_lines)
                 last_lines = adjust_log_timezone(last_lines)
                 ws_debug(
                     "ws_raw: initial snapshot ready",
@@ -610,8 +627,21 @@ def application(environ, start_response):
 
         ws = environ["wsgi.websocket"]
 
-        # Parse ?job_id=<id>
+        # Token required (issued via /api/ws-token with scope=cmd)
         params = parse_qs(qs or "")
+        token = (params.get("token", [""])[0] or "").strip()
+        if not validate_ws_token(token, scope="cmd"):
+            try:
+                ws.send(json.dumps({"type": "error", "message": "unauthorized"}, ensure_ascii=False))
+            except Exception:
+                pass
+            try:
+                ws.close()
+            except Exception:
+                pass
+            return []
+
+        # Parse ?job_id=<id>
         job_id = (params.get("job_id", [""])[0] or "").strip()
 
         if not job_id:
@@ -749,7 +779,7 @@ def application(environ, start_response):
         # Token required (issued via /api/ws-token)
         params = parse_qs(qs or "")
         token = (params.get("token", [""])[0] or "").strip()
-        if not validate_pty_ws_token(token):
+        if not validate_ws_token(token, scope="pty"):
             try:
                 ws.send(json.dumps({"type": "error", "message": "unauthorized"}, ensure_ascii=False))
             except Exception:
@@ -912,6 +942,16 @@ def application(environ, start_response):
                             sess.resize(rows, cols)
                     except Exception:
                         pass
+                elif t == "ping":
+                    # client keepalive
+                    try:
+                        sess.last_activity_ts = time.time()
+                    except Exception:
+                        pass
+                    try:
+                        ws.send(json.dumps({"type": "pong"}, ensure_ascii=False))
+                    except Exception:
+                        pass
                 elif t == "signal":
                     name = (obj.get("name") or "").upper()
                     sig = {
@@ -968,7 +1008,7 @@ def application(environ, start_response):
                     except Exception:
                         pass
                     try:
-                        sess.close(kill=False)
+                        sess.close(kill=True)
                     except Exception:
                         pass
                     with _pty_sessions_lock():
