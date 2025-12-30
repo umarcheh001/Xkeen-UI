@@ -17,12 +17,26 @@
   XKeen.ui = XKeen.ui || {};
   XKeen.util = XKeen.util || {};
 
-  const MAX_LINES = 800;
-  const POLL_MS = 2000;
+  const DEFAULT_MAX_LINES = 800;
+  const DEFAULT_POLL_MS = 2000;
+  const LOAD_MORE_STEP = 400;
+  const MAX_MAX_LINES = 5000;
+
+  let _maxLines = DEFAULT_MAX_LINES;
+  let _pollMs = DEFAULT_POLL_MS;
+  let _follow = true;
+
+  // HTTP incremental tail cursor (DevTools-like)
+  let _cursor = '';
+
+  // UI pause: freeze rendering while keeping buffer updated
+  let _paused = false;
+  let _pendingCount = 0;
 
   let _inited = false;
 
   let _timer = null;
+  let _statusTimer = null;
   let _currentFile = 'error';
   let _lastLines = [];
 
@@ -30,6 +44,9 @@
   let _useWs = true;
   let _wsEverOpened = false;
   let _wsClosingManually = false;
+  let _streaming = false; // live stream (auto-update) state
+
+  const ALLOWED_LOGLEVELS = ['warning', 'info', 'debug', 'error'];
 
   function $(id) {
     return document.getElementById(id);
@@ -69,7 +86,31 @@
     return s;
   }
 
-  function fallbackCopyText(text) {
+  // Base64 helpers (avoid putting raw IP/hosts into HTML attributes)
+  function b64Encode(str) {
+    try {
+      // Most log tokens are ASCII (ip/domain/port)
+      return window.btoa(String(str || ''));
+    } catch (e) {
+      try {
+        return window.btoa(unescape(encodeURIComponent(String(str || ''))));
+      } catch (e2) {}
+    }
+    return '';
+  }
+
+  function b64Decode(b64) {
+    try {
+      return window.atob(String(b64 || ''));
+    } catch (e) {
+      try {
+        return decodeURIComponent(escape(window.atob(String(b64 || ''))));
+      } catch (e2) {}
+    }
+    return '';
+  }
+
+  function fallbackCopyText(text, okMsg) {
     try {
       const ta = document.createElement('textarea');
       ta.value = text;
@@ -81,7 +122,7 @@
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      toast('Логи Xray скопированы в буфер обмена', false);
+      toast(okMsg || 'Логи Xray скопированы в буфер обмена', false);
     } catch (e) {
       toast('Не удалось скопировать логи', true);
     }
@@ -104,30 +145,73 @@
     return !!(viewEl && viewEl.style.display !== 'none');
   }
 
+  // ---------- UI: header badge (global loglevel reminder) ----------
+
+  function setXrayHeaderBadgeState(state, level) {
+    const badge = $('xray-logs-badge');
+    if (!badge) return;
+
+    const st = (state === 'on') ? 'on' : 'off';
+    badge.dataset.state = st;
+
+    const lvl = level ? String(level) : '';
+    if (st === 'on') {
+      badge.title = lvl ? `Логи Xray включены (loglevel=${lvl}).` : 'Логи Xray включены.';
+    } else {
+      badge.title = 'Логи Xray выключены.';
+    }
+  }
+
   // ---------- UI: lamp + rendering ----------
 
-  function setXrayLogLampState(state, level) {
+  function setXrayLogLampState(state) {
     const lamp = $('xray-log-lamp');
     if (!lamp) return;
 
     lamp.dataset.state = String(state || '');
-    const lvl = level ? String(level) : '';
 
     if (state === 'on') {
-      lamp.title = lvl ? `Логи включены (loglevel=${lvl})` : 'Логи включены';
-      lamp.classList.add('pulse');
-      setTimeout(() => lamp.classList.remove('pulse'), 300);
+      lamp.title = 'Автообновление логов включено';
     } else if (state === 'off') {
-      lamp.title = 'Логи отключены (loglevel=none)';
-      lamp.classList.remove('pulse');
+      lamp.title = 'Автообновление логов выключено';
     } else if (state === 'error') {
-      lamp.title = 'Не удалось получить статус логов Xray';
-      lamp.classList.remove('pulse');
+      lamp.title = 'Ошибка автообновления логов';
     } else {
-      lamp.title = 'Статус логов Xray неизвестен';
-      lamp.classList.remove('pulse');
+      lamp.title = 'Автообновление логов: неизвестно';
     }
   }
+
+
+  function updateXrayLogStats() {
+  const el = $('xray-log-stats');
+  if (!el) return;
+
+  const lines = Array.isArray(_lastLines) ? _lastLines.length : 0;
+  const max = _maxLines || DEFAULT_MAX_LINES;
+
+  let transport = '';
+  try {
+    if (_ws && typeof WebSocket !== 'undefined') {
+      if (_ws.readyState === WebSocket.OPEN) transport = 'WS';
+      else if (_ws.readyState === WebSocket.CONNECTING) transport = 'WS…';
+    }
+  } catch (e) {}
+
+  // When streaming without WS, we're polling over HTTP.
+  if (!transport && _streaming) transport = 'HTTP';
+
+  const parts = [];
+  parts.push(lines + '/' + max);
+  if (transport) parts.push(transport);
+
+  if (_paused) {
+    const n = Math.max(0, parseInt(_pendingCount || 0, 10) || 0);
+    parts.push(n ? ('PAUSED +' + n) : 'PAUSED');
+  }
+
+  el.textContent = parts.join(' • ');
+    try { updatePauseButton(); } catch (e) {}
+}
 
   async function refreshXrayLogStatus() {
     try {
@@ -136,10 +220,20 @@
       const data = await res.json().catch(() => ({}));
       const level = String(data.loglevel || 'none').toLowerCase();
       const state = level === 'none' ? 'off' : 'on';
-      setXrayLogLampState(state, level);
+      // ВАЖНО: индикатор в карточке Live логов показывает только автообновление,
+      // а глобальный статус логирования отображаем в шапке (badge).
+      setXrayHeaderBadgeState(state, level);
+
+      // Sync "loglevel" selector with current runtime state (when known).
+      // If logging is disabled (none) — keep the user's last selection.
+      const lvlSel = $('xray-log-level');
+      if (lvlSel && level && level !== 'none' && ALLOWED_LOGLEVELS.includes(level)) {
+        lvlSel.value = level;
+      }
     } catch (e) {
       console.error('xray log status error', e);
-      setXrayLogLampState('error');
+      // Do not show the badge when status is unknown.
+      setXrayHeaderBadgeState('off', 'none');
     }
   }
 
@@ -163,24 +257,33 @@
       return 'log-line log-line-info';
     }
 
+    if (lower.includes('debug')) {
+      return 'log-line log-line-debug';
+    }
+
     return 'log-line';
   }
 
-  function parseXrayLogLine(line) {
+  function parseXrayLogLine(line, idx) {
     const clean = normalizeLogLine(line);
     if (!clean || !String(clean).trim()) return '';
 
     const cls = getXrayLogLineClass(clean);
     let processed = escapeHtml(clean);
 
+    // Timestamp highlight (common Xray format: YYYY/MM/DD HH:MM:SS(.ms) or YYYY-MM-DD ...)
+    processed = processed.replace(/^(\d{4}[\/-]\d{2}[\/-]\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)/, '<span class="log-ts">$1</span>');
+
     // Typical Xray levels
     processed = processed
       .replace(/\[Info\]/g, '<span style="color:#3b82f6;">[Info]</span>')
       .replace(/\[Warning\]/g, '<span style="color:#f59e0b;">[Warning]</span>')
       .replace(/\[Error\]/g, '<span style="color:#ef4444;">[Error]</span>')
+      .replace(/\[Debug\]/g, '<span style="color:#a1a1aa;">[Debug]</span>')
       .replace(/level=(info)/gi, 'level=<span style="color:#3b82f6;">$1</span>')
       .replace(/level=(warning)/gi, 'level=<span style="color:#f59e0b;">$1</span>')
-      .replace(/level=(error)/gi, 'level=<span style="color:#ef4444;">$1</span>');
+      .replace(/level=(error)/gi, 'level=<span style="color:#ef4444;">$1</span>')
+      .replace(/level=(debug)/gi, 'level=<span style="color:#a1a1aa;">$1</span>');
 
     // Route highlights (in brackets)
     processed = processed
@@ -190,70 +293,140 @@
       .replace(/\[(?:reject)[^\]]*\]/gi, '<span class="log-route log-route-reject">$&</span>')
       .replace(/\breject(ed)?\b/gi, '<span class="log-route log-route-reject">$&</span>');
 
-    // IPv4 (+ optional port)
-    processed = processed.replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, '<span class="log-ip">$&</span>');
+    const linkTitle = 'Клик: копировать • Shift+клик: добавить в фильтр';
 
-    // Domains (avoid hitting inside already injected tags)
-    processed = processed.replace(/(^|[^">])((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})/g, '$1<span class="log-domain">$2</span>');
+    // IPv4 (+ optional port) -> clickable token
+    processed = processed.replace(/\b((?:\d{1,3}\.){3}\d{1,3})(?::(\d+))?\b/g, (m, ip, port) => {
+      const raw = String(ip || '') + (port ? (':' + String(port)) : '');
+      const b64 = b64Encode(raw);
+      if (!b64) return '<span class="log-ip">' + m + '</span>';
+      return '<a href="#" class="log-link log-ip" data-kind="ip" data-b64="' + b64 + '" title="' + linkTitle + '">' + m + '</a>';
+    });
 
-    return '<span class="' + cls + '">' + processed + '</span>';
+    // Domains (avoid hitting inside already injected tags) -> clickable token
+    processed = processed.replace(/(^|[^">])((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(?::(\d+))?/g, (m, pfx, host, port) => {
+      const vis = String(host || '') + (port ? (':' + String(port)) : '');
+      const b64 = b64Encode(vis);
+      if (!b64) return String(pfx || '') + '<span class="log-domain">' + vis + '</span>';
+      return String(pfx || '') + '<a href="#" class="log-link log-domain" data-kind="domain" data-b64="' + b64 + '" title="' + linkTitle + '">' + vis + '</a>';
+    });
+
+    const dataIdx = (idx === undefined || idx === null) ? '' : (' data-idx="' + String(idx) + '"');
+    return '<span class="' + cls + '"' + dataIdx + '>' + processed + '</span>';
   }
 
   function applyXrayLogFilterToOutput() {
-    const outputEl = $('xray-log-output');
-    if (!outputEl) return;
+  const outputEl = $('xray-log-output');
+  if (!outputEl) return;
 
-    const filterEl = $('xray-log-filter');
-    const rawFilter = ((filterEl && filterEl.value) || '').trim().toLowerCase();
+  const filterEl = $('xray-log-filter');
+  const rawFilter = ((filterEl && filterEl.value) || '').trim().toLowerCase();
 
-    const terms = rawFilter
-      .split(/\s+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+  const terms = rawFilter
+    .split(/\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
-    const sourceLines = (_lastLines || []).map(normalizeLogLine);
-    const filtered = terms.length
-      ? sourceLines.filter((line) => {
-          const lower = String(line || '').toLowerCase();
-          return terms.every((t) => lower.includes(t));
-        })
-      : sourceLines;
+  const src = Array.isArray(_lastLines) ? _lastLines : [];
+  const entries = src.map((line, idx) => ({ idx, line: normalizeLogLine(line) }));
 
-    const wasAtBottom = outputEl.scrollTop + outputEl.clientHeight >= outputEl.scrollHeight - 5;
-    // Each line is rendered as a block-level <span>. Adding extra '\n' creates empty rows in <pre>.
-    outputEl.innerHTML = filtered.map((line) => parseXrayLogLine(line)).join('');
-    if (wasAtBottom) outputEl.scrollTop = outputEl.scrollHeight;
-  }
+  const filtered = terms.length
+    ? entries.filter((e) => {
+        const lower = String(e.line || '').toLowerCase();
+        return terms.every((t) => lower.includes(t));
+      })
+    : entries;
+
+  const wasAtBottom = outputEl.scrollTop + outputEl.clientHeight >= outputEl.scrollHeight - 5;
+  const shouldScroll = _follow ? true : wasAtBottom;
+
+  // Each line is rendered as a block-level <span>. Extra line breaks create empty rows in <pre>.
+  outputEl.innerHTML = filtered.map((e) => parseXrayLogLine(e.line, e.idx)).join('');
+  if (shouldScroll) outputEl.scrollTop = outputEl.scrollHeight;
+  updateXrayLogStats();
+}
 
   // ---------- Data sources: HTTP + WebSocket ----------
 
-  async function fetchXrayLogsOnce(source = 'manual') {
-    const outputEl = $('xray-log-output');
-    if (!outputEl) return;
+  async function fetchXrayLogsOnce(source = 'manual', opts = {}) {
+  const outputEl = $('xray-log-output');
+  if (!outputEl) return;
 
-    const statusEl = $('xray-log-status');
-    const file = _currentFile || 'error';
+  const statusEl = $('xray-log-status');
+  const file = _currentFile || 'error';
 
-    try {
-      const res = await fetch(
-        `/api/xray-logs?file=${encodeURIComponent(file)}&max_lines=${MAX_LINES}&source=${encodeURIComponent(source)}`
-      );
-      if (!res.ok) {
-        if (statusEl) statusEl.textContent = 'Не удалось загрузить логи Xray.';
-        return;
-      }
-      const data = await res.json().catch(() => ({}));
-      _lastLines = data.lines || [];
-      applyXrayLogFilterToOutput();
-      if (statusEl) statusEl.textContent = '';
-      refreshXrayLogStatus();
-    } catch (e) {
-      console.error(e);
-      if (statusEl) statusEl.textContent = 'Ошибка чтения логов Xray.';
+  const resetCursor = !!(opts && opts.resetCursor);
+  const forceRender = !!(opts && opts.forceRender);
+
+  const cur = resetCursor ? '' : (_cursor || '');
+
+  try {
+    const params = new URLSearchParams();
+    params.set('file', file);
+    params.set('max_lines', String(_maxLines || DEFAULT_MAX_LINES));
+    params.set('source', String(source || 'manual'));
+    if (cur) params.set('cursor', cur);
+
+    const res = await fetch('/api/xray-logs?' + params.toString());
+    if (!res.ok) {
+      if (statusEl) statusEl.textContent = 'Не удалось загрузить логи Xray.';
+      return;
     }
+
+    const data = await res.json().catch(() => ({}));
+    const mode = String((data && data.mode) || 'full').toLowerCase();
+    const lines = Array.isArray(data && data.lines) ? data.lines : [];
+    const newCur = String((data && data.cursor) || '');
+
+    if (newCur) _cursor = newCur;
+
+    if (mode === 'append') {
+      if (lines.length) {
+        for (const ln of lines) _lastLines.push(ln);
+        if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
+
+        if (_paused && !forceRender && source === 'poll') {
+          _pendingCount += lines.length;
+          updateXrayLogStats();
+        } else {
+          _pendingCount = 0;
+          if (_paused) {
+        if (data && typeof data.line === 'string') _pendingCount += 1;
+        updateXrayLogStats();
+      } else {
+        _pendingCount = 0;
+        applyXrayLogFilterToOutput();
+      }
+        }
+      } else {
+        // still update meta/stats (cursor/transport)
+        updateXrayLogStats();
+      }
+    } else {
+      _lastLines = lines;
+      if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
+
+      if (_paused && !forceRender && source === 'poll') {
+        // keep buffer updated but don't repaint
+        _pendingCount = Math.max(0, _pendingCount);
+        updateXrayLogStats();
+      } else {
+        _pendingCount = 0;
+        applyXrayLogFilterToOutput();
+      }
+    }
+
+    if (statusEl) statusEl.textContent = '';
+    refreshXrayLogStatus();
+  } catch (e) {
+    console.error(e);
+    if (statusEl) statusEl.textContent = 'Ошибка чтения логов Xray.';
   }
+}
 
   function xrayLogConnectWs() {
+    // Don't connect if streaming is not enabled.
+    if (!_streaming) return;
     if (!_useWs || !('WebSocket' in window)) {
       _useWs = false;
       return;
@@ -269,7 +442,7 @@
 
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const url = proto + '//' + host + '/ws/xray-logs?file=' + encodeURIComponent(file);
+    const url = proto + '//' + host + '/ws/xray-logs?file=' + encodeURIComponent(file) + '&max_lines=' + encodeURIComponent(String(_maxLines || DEFAULT_MAX_LINES));
 
     wsDebug('WS: connecting', { url: url, file: file });
 
@@ -295,6 +468,7 @@
       }
 
       if (statusEl) statusEl.textContent = 'WebSocket для логов подключён.';
+      try { updateXrayLogStats(); } catch (e) {}
     };
 
     _ws.onmessage = function (event) {
@@ -310,12 +484,12 @@
         _lastLines = data.lines;
       } else if (data && data.type === 'line' && typeof data.line === 'string') {
         _lastLines.push(data.line);
-        if (_lastLines.length > MAX_LINES) _lastLines = _lastLines.slice(-MAX_LINES);
+        if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
       } else if (Array.isArray(data.lines)) {
         _lastLines = data.lines;
       } else if (data && typeof data.line === 'string') {
         _lastLines.push(data.line);
-        if (_lastLines.length > MAX_LINES) _lastLines = _lastLines.slice(-MAX_LINES);
+        if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
       }
 
       applyXrayLogFilterToOutput();
@@ -327,6 +501,7 @@
       wsDebug('WS: close', { file: file, manual: _wsClosingManually, everOpened: _wsEverOpened });
 
       _ws = null;
+      try { updateXrayLogStats(); } catch (e) {}
 
       // closed by us (tab switch/file change/stop) or view hidden
       if (_wsClosingManually || !visible) {
@@ -339,8 +514,8 @@
         _useWs = false;
         if (statusEl) statusEl.textContent = 'WebSocket недоступен, использую HTTP.';
         if (!_timer) {
-          fetchXrayLogsOnce('fallback_ws');
-          _timer = setInterval(() => fetchXrayLogsOnce('poll'), POLL_MS);
+          fetchXrayLogsOnce('fallback_ws', { resetCursor: true, forceRender: true });
+          _timer = setInterval(() => fetchXrayLogsOnce('poll'), _pollMs);
         }
         return;
       }
@@ -350,7 +525,7 @@
 
       setTimeout(() => {
         const stillVisible = isLogsViewVisible();
-        if (!_ws && _useWs && stillVisible) xrayLogConnectWs();
+        if (!_ws && _useWs && stillVisible && _streaming) xrayLogConnectWs();
       }, 1000);
     };
 
@@ -366,6 +541,21 @@
   function startXrayLogAuto() {
     const outputEl = $('xray-log-output');
     if (!outputEl) return;
+
+    _streaming = true;
+    _paused = false;
+    _pendingCount = 0;
+    try { updatePauseButton(); } catch (e) {}
+
+    // UI: этот индикатор показывает только автообновление (stream), а не loglevel.
+    setXrayLogLampState('on');
+
+    // Sync UI toggle
+    try {
+      const liveEl = $('xray-log-live');
+      if (liveEl) liveEl.checked = true;
+    } catch (e) {}
+    try { updateXrayLogStats(); } catch (e) {}
 
     // If WS already open/connecting - nothing to do
     if (_useWs && _ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) {
@@ -383,11 +573,24 @@
     }
 
     if (_timer) return;
-    fetchXrayLogsOnce('manual');
-    _timer = setInterval(() => fetchXrayLogsOnce('poll'), POLL_MS);
+    fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
+    _timer = setInterval(() => fetchXrayLogsOnce('poll'), _pollMs);
   }
 
   function stopXrayLogAuto() {
+    // UI: автообновление остановлено
+    _streaming = false;
+    _paused = false;
+    _pendingCount = 0;
+    try { updatePauseButton(); } catch (e) {}
+    setXrayLogLampState('off');
+
+    // Sync UI toggle
+    try {
+      const liveEl = $('xray-log-live');
+      if (liveEl) liveEl.checked = false;
+    } catch (e) {}
+    try { updateXrayLogStats(); } catch (e) {}
     if (_timer) {
       try { clearInterval(_timer); } catch (e) {}
       _timer = null;
@@ -397,19 +600,22 @@
       _wsClosingManually = true;
       try { _ws.close(); } catch (e) {}
       _ws = null;
+      try { updateXrayLogStats(); } catch (e) {}
     }
   }
 
   // ---------- Actions (wired from HTML) ----------
 
   function xrayLogsView() {
-    fetchXrayLogsOnce('manual');
+    fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
   }
 
   function xrayLogsClearScreen() {
     const outputEl = $('xray-log-output');
     if (outputEl) outputEl.innerHTML = '';
     _lastLines = [];
+    _cursor = '';
+    _pendingCount = 0;
   }
 
   function xrayLogChangeFile() {
@@ -418,10 +624,12 @@
 
     // clear buffer + redraw
     _lastLines = [];
+    _cursor = '';
+    _pendingCount = 0;
     applyXrayLogFilterToOutput();
 
-    // If WS in use, reconnect for the new file (avoid HTTP dupes)
-    if (_useWs && 'WebSocket' in window) {
+    // If streaming is enabled and WS in use, reconnect for the new file (avoid HTTP dupes)
+    if (_streaming && _useWs && 'WebSocket' in window) {
       if (_timer) {
         try { clearInterval(_timer); } catch (e) {}
         _timer = null;
@@ -431,21 +639,26 @@
         _wsClosingManually = true;
         try { _ws.close(); } catch (e) {}
         _ws = null;
+      try { updateXrayLogStats(); } catch (e) {}
       }
       xrayLogConnectWs();
       return;
     }
 
-    fetchXrayLogsOnce('manual');
+    fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
   }
 
   async function xrayLogsEnable() {
     const statusEl = $('xray-log-status');
     try {
+      const lvlSel = $('xray-log-level');
+      const selected = String((lvlSel && lvlSel.value) || 'warning').toLowerCase();
+      const loglevel = ALLOWED_LOGLEVELS.includes(selected) ? selected : 'warning';
+
       const res = await fetch('/api/xray-logs/enable', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loglevel: 'warning' }),
+        body: JSON.stringify({ loglevel }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error('http ' + res.status);
@@ -454,9 +667,13 @@
         statusEl.textContent =
           'Логи включены (loglevel=' + (data.loglevel || 'warning') + '). Xray перезапущен.';
       }
-      setXrayLogLampState('on', data.loglevel || 'warning');
-      // Resume stream if the tab is visible
-      if (isLogsViewVisible()) startXrayLogAuto();
+      try { await refreshXrayLogStatus(); } catch (e) {}
+      setXrayHeaderBadgeState('on', data.loglevel || 'warning');
+      // Resume stream only if the user enabled Live mode
+      const liveEl = $('xray-log-live');
+      const shouldStart = !liveEl || !!liveEl.checked;
+      if (isLogsViewVisible() && shouldStart) startXrayLogAuto();
+      try { updateXrayLogStats(); } catch (e) {}
     } catch (e) {
       console.error(e);
       if (statusEl) statusEl.textContent = 'Не удалось включить логи.';
@@ -473,7 +690,8 @@
       if (!res.ok) throw new Error('http ' + res.status);
 
       if (statusEl) statusEl.textContent = 'Логи остановлены (loglevel=none). Xray перезапущен.';
-      setXrayLogLampState('off', 'none');
+      try { await refreshXrayLogStatus(); } catch (e) {}
+      setXrayHeaderBadgeState('off', 'none');
     } catch (e) {
       console.error(e);
       if (statusEl) statusEl.textContent = 'Не удалось остановить логи.';
@@ -492,6 +710,8 @@
       if (!res.ok) throw new Error('http ' + res.status);
 
       _lastLines = [];
+      _cursor = '';
+      _pendingCount = 0;
       applyXrayLogFilterToOutput();
       if (statusEl) statusEl.textContent = 'Логфайлы очищены.';
     } catch (e) {
@@ -517,7 +737,482 @@
     }
   }
 
+function updatePauseButton() {
+  const btn = $('xray-log-pause');
+  if (!btn) return;
+
+  if (!_streaming) {
+    btn.disabled = true;
+    btn.textContent = '⏸ Pause';
+    btn.title = 'Пауза доступна только в Live режиме.';
+    btn.dataset.state = 'off';
+    return;
+  }
+
+  btn.disabled = false;
+
+  if (_paused) {
+    const n = Math.max(0, parseInt(_pendingCount || 0, 10) || 0);
+    btn.textContent = n ? `▶ Resume (+${n})` : '▶ Resume';
+    btn.title = 'Возобновить обновление экрана (накопленные строки будут показаны).';
+    btn.dataset.state = 'on';
+  } else {
+    btn.textContent = '⏸ Pause';
+    btn.title = 'Пауза: заморозить вывод (строки продолжают собираться).';
+    btn.dataset.state = 'off';
+  }
+}
+
+function xrayLogsTogglePause() {
+  if (!_streaming) return;
+
+  _paused = !_paused;
+  if (_paused) {
+    _pendingCount = 0;
+  } else {
+    _pendingCount = 0;
+    applyXrayLogFilterToOutput();
+  }
+
+  updatePauseButton();
+  updateXrayLogStats();
+}
+
+function copyToClipboard(text, okMsg) {
+  if (!text) return;
+  const msg = okMsg || 'Скопировано в буфер обмена';
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => toast(msg, false),
+      () => fallbackCopyText(text, msg)
+    );
+  } else {
+    fallbackCopyText(text, msg);
+  }
+
+}
+
+function handleLogTokenClick(linkEl, e) {
+  try {
+    if (!linkEl) return;
+
+    const kind = String(linkEl.getAttribute('data-kind') || '').toLowerCase();
+    const b64 = String(linkEl.getAttribute('data-b64') || '');
+    const token = String((b64 ? b64Decode(b64) : (linkEl.textContent || '')) || '').trim();
+    if (!token) return;
+
+    // Shift+Click -> add token to filter (AND semantics: space-separated terms)
+    if (e && e.shiftKey) {
+      const filterEl = $('xray-log-filter');
+      if (filterEl) {
+        const cur = String(filterEl.value || '').trim();
+        const parts = cur ? cur.split(/\s+/).filter(Boolean) : [];
+        if (!parts.includes(token)) parts.push(token);
+        filterEl.value = parts.join(' ');
+        try { applyXrayLogFilterToOutput(); } catch (e2) {}
+        toast((kind === 'ip' ? 'IP' : 'Домен') + ' добавлен в фильтр', false);
+        try { filterEl.focus(); } catch (e3) {}
+        return;
+      }
+      // If filter UI is missing — fallback to copy
+    }
+
+    copyToClipboard(token, (kind === 'ip' ? 'IP' : 'Домен') + ' скопирован');
+  } catch (err) {
+    // Safe fallback
+    try { copyToClipboard(String(linkEl && linkEl.textContent || '').trim(), 'Скопировано'); } catch (e2) {}
+  }
+}
+
+function xrayLogsCopySelection() {
+  try {
+    const sel = window.getSelection && window.getSelection();
+    const text = sel ? String(sel.toString() || '') : '';
+    if (!text.trim()) {
+      toast('Нет выделенного текста', true);
+      return;
+    }
+    copyToClipboard(text, 'Выделение скопировано');
+  } catch (e) {
+    toast('Не удалось скопировать выделение', true);
+  }
+}
+
+async function xrayLogsDownload() {
+  const file = _currentFile || 'error';
+  try {
+    const res = await fetch('/api/xray-logs/download?file=' + encodeURIComponent(file));
+    if (!res.ok) throw new Error('http ' + res.status);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    a.href = url;
+    a.download = 'xray-' + file + '.log';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error(e);
+    toast('Не удалось скачать лог', true);
+  }
+}
+
+// ------- Line actions (context menu + context modal) -------
+
+let _lineMenuEl = null;
+let _lineMenuIdx = null;
+
+function ensureLineMenu() {
+  if (_lineMenuEl && _lineMenuEl.isConnected) return _lineMenuEl;
+
+  const menu = document.createElement('div');
+  menu.id = 'xray-line-menu';
+  menu.className = 'dt-log-menu-panel xray-line-menu hidden';
+  menu.innerHTML = `
+    <button type="button" class="btn-secondary dt-log-btn" id="xray-line-menu-copy">Copy line</button>
+    <button type="button" class="btn-secondary dt-log-btn" id="xray-line-menu-context">Context ±20</button>
+  `;
+  document.body.appendChild(menu);
+
+  menu.addEventListener('click', (e) => {
+    e.preventDefault();
+    const t = e.target;
+    if (!t || !t.id) return;
+
+    if (t.id === 'xray-line-menu-copy') {
+      if (_lineMenuIdx != null) {
+        const line = normalizeLogLine((_lastLines || [])[_lineMenuIdx] || '');
+        copyToClipboard(line, 'Строка скопирована');
+      }
+      closeLineMenu();
+      return;
+    }
+
+    if (t.id === 'xray-line-menu-context') {
+      if (_lineMenuIdx != null) {
+        openXrayContextModal(_lineMenuIdx, 20);
+      }
+      closeLineMenu();
+      return;
+    }
+  });
+
+  // close on outside click
+  document.addEventListener('click', (e) => {
+    if (!menu.classList.contains('hidden')) {
+      if (e.target && menu.contains(e.target)) return;
+      closeLineMenu();
+    }
+  });
+
+  // close on scroll/resize
+  window.addEventListener('scroll', () => closeLineMenu(), { passive: true });
+  window.addEventListener('resize', () => closeLineMenu(), { passive: true });
+
+  _lineMenuEl = menu;
+  return menu;
+}
+
+function closeLineMenu() {
+  try {
+    if (_lineMenuEl) _lineMenuEl.classList.add('hidden');
+    _lineMenuIdx = null;
+  } catch (e) {}
+}
+
+function openLineMenu(pageX, pageY, idx) {
+  const menu = ensureLineMenu();
+  _lineMenuIdx = idx;
+
+  // fit into viewport
+  const vw = window.innerWidth || 0;
+  const vh = window.innerHeight || 0;
+  menu.style.left = '0px';
+  menu.style.top = '0px';
+  menu.classList.remove('hidden');
+
+  // measure
+  const rect = menu.getBoundingClientRect();
+  const w = rect.width || 220;
+  const h = rect.height || 120;
+
+  let x = pageX;
+  let y = pageY;
+
+  // pageX/pageY are page coords; for fixed positioning we need client coords.
+  // We'll prefer client coords when available.
+  try {
+    x = Math.min(Math.max(8, pageX), vw - w - 8);
+    y = Math.min(Math.max(8, pageY), vh - h - 8);
+  } catch (e) {}
+
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+}
+
+function openXrayContextModal(idx, radius) {
+  const modal = $('xray-context-modal');
+  const out = $('xray-context-output');
+  const title = $('xray-context-title');
+  if (!modal || !out) return;
+
+  const r = Math.max(1, Math.min(200, parseInt(radius || 20, 10) || 20));
+  const src = Array.isArray(_lastLines) ? _lastLines : [];
+
+  const center = Math.max(0, Math.min(src.length - 1, parseInt(idx || 0, 10) || 0));
+  const start = Math.max(0, center - r);
+  const end = Math.min(src.length, center + r + 1);
+
+  const lines = [];
+  for (let i = start; i < end; i++) {
+    const mark = i === center ? '▶ ' : '  ';
+    lines.push(mark + normalizeLogLine(src[i] || ''));
+  }
+
+  if (title) {
+    const file = _currentFile || 'error';
+    title.textContent = `Xray ${file}.log — context (±${r})`;
+  }
+
+  out.textContent = lines.join('\n');
+  modal.classList.remove('hidden');
+  try { XKeen.ui.modal && XKeen.ui.modal.syncBodyScrollLock && XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
+}
+
+function closeXrayContextModal() {
+  const modal = $('xray-context-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  try { XKeen.ui.modal && XKeen.ui.modal.syncBodyScrollLock && XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
+}
+
+function copyXrayContextModal() {
+  const out = $('xray-context-output');
+  if (!out) return;
+  const text = out.textContent || '';
+  if (!text.trim()) return;
+  copyToClipboard(text, 'Контекст скопирован');
+}
+
   // ---------- Init / wiring ----------
+
+
+  function closeXrayMoreMenu() {
+    const more = $('xray-log-more');
+    if (more && more.open) more.open = false;
+  }
+
+  function restartXrayHttpPollingTimer() {
+    // Only relevant for HTTP polling mode (when WS is not active)
+    if (!_streaming) return;
+
+    const wsActive =
+      _ws && typeof WebSocket !== 'undefined' &&
+      (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING);
+
+    if (wsActive) return;
+
+    if (_timer) {
+      try { clearInterval(_timer); } catch (e) {}
+      _timer = null;
+    }
+    // Fetch immediately and then poll
+    fetchXrayLogsOnce('poll');
+    _timer = setInterval(() => fetchXrayLogsOnce('poll'), _pollMs);
+  }
+
+  function bindControlsUi() {
+  const liveEl = $('xray-log-live');
+  const intervalEl = $('xray-log-interval');
+  const followEl = $('xray-log-follow');
+  const loadMoreBtn = $('xray-log-load-more');
+
+  const pauseBtn = $('xray-log-pause');
+  const linesInput = $('xray-log-lines');
+  const copySelBtn = $('xray-log-copy-selection');
+  const dlBtn = $('xray-log-download');
+  const outputEl = $('xray-log-output');
+
+  if (liveEl) {
+    liveEl.addEventListener('change', () => {
+      if (liveEl.checked) startXrayLogAuto();
+      else stopXrayLogAuto();
+      try { updateXrayLogStats(); } catch (e) {}
+    });
+  }
+
+  if (intervalEl) {
+    // init from UI (keep default if empty)
+    try {
+      const v = parseInt(intervalEl.value, 10);
+      if (isFinite(v) && v >= 500) _pollMs = v;
+    } catch (e) {}
+
+    intervalEl.addEventListener('change', () => {
+      try {
+        const v = parseInt(intervalEl.value, 10);
+        if (isFinite(v) && v >= 500) _pollMs = v;
+      } catch (e) {}
+      // If we're in HTTP polling mode and streaming is on — restart timer with the new interval.
+      try { restartXrayHttpPollingTimer(); } catch (e) {}
+      try { updateXrayLogStats(); } catch (e) {}
+    });
+  }
+
+  if (followEl) {
+    // init from UI (default checked in HTML)
+    _follow = !!followEl.checked;
+    followEl.addEventListener('change', () => {
+      _follow = !!followEl.checked;
+      if (_follow) {
+        try {
+          const out = $('xray-log-output');
+          if (out) out.scrollTop = out.scrollHeight;
+        } catch (e) {}
+      }
+    });
+  }
+
+  if (pauseBtn) {
+    pauseBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      xrayLogsTogglePause();
+    });
+  }
+
+  if (linesInput) {
+    // init
+    try { linesInput.value = String(_maxLines || DEFAULT_MAX_LINES); } catch (e) {}
+    linesInput.addEventListener('change', () => {
+      try {
+        let v = parseInt(linesInput.value, 10);
+        if (!isFinite(v)) v = DEFAULT_MAX_LINES;
+        if (v < 50) v = 50;
+        if (v > MAX_MAX_LINES) v = MAX_MAX_LINES;
+        _maxLines = v;
+        try { linesInput.value = String(v); } catch (e2) {}
+
+        // Reset cursor to avoid missing older tail window.
+        _cursor = '';
+        _pendingCount = 0;
+
+        // If WS is active — reconnect to get a new snapshot.
+        const wsActive =
+          _ws && typeof WebSocket !== 'undefined' &&
+          (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING);
+
+        if (_streaming && wsActive) {
+          try {
+            _wsClosingManually = true;
+            _ws.close();
+          } catch (e3) {}
+          _ws = null;
+          try { updateXrayLogStats(); } catch (e4) {}
+          xrayLogConnectWs();
+        } else {
+          fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
+        }
+
+        try { updateXrayLogStats(); } catch (e5) {}
+        closeXrayMoreMenu();
+      } catch (e) {}
+    });
+  }
+
+  if (copySelBtn) {
+    copySelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      xrayLogsCopySelection();
+      closeXrayMoreMenu();
+    });
+  }
+
+  if (dlBtn) {
+    dlBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      xrayLogsDownload();
+      closeXrayMoreMenu();
+    });
+  }
+
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      _maxLines = Math.min((_maxLines || DEFAULT_MAX_LINES) + LOAD_MORE_STEP, MAX_MAX_LINES);
+      // Reset cursor because the "window back" changed.
+      _cursor = '';
+      _pendingCount = 0;
+
+      // If WS is active — reconnect to get a bigger initial snapshot.
+      const wsActive =
+        _ws && typeof WebSocket !== 'undefined' &&
+        (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING);
+
+      if (_streaming && wsActive) {
+        try {
+          _wsClosingManually = true;
+          _ws.close();
+        } catch (e2) {}
+        _ws = null;
+        try { updateXrayLogStats(); } catch (e) {}
+        xrayLogConnectWs();
+      } else {
+        fetchXrayLogsOnce('load_more', { resetCursor: true, forceRender: true });
+      }
+
+      try { updateXrayLogStats(); } catch (e3) {}
+      closeXrayMoreMenu();
+    });
+  }
+
+  if (outputEl) {
+    outputEl.addEventListener('contextmenu', (e) => {
+      const t = e.target;
+      const lineEl = t && t.closest ? t.closest('.log-line') : null;
+      if (!lineEl) return;
+      const idxStr = lineEl.getAttribute('data-idx');
+      const idx = parseInt(idxStr || '', 10);
+      if (!isFinite(idx)) return;
+
+      e.preventDefault();
+      closeLineMenu();
+      openLineMenu(e.clientX || 0, e.clientY || 0, idx);
+    });
+
+    // Clickable tokens (IP/domains): click -> copy, Shift+Click -> add to filter
+    // Alt+Click (on line) opens context immediately
+    outputEl.addEventListener('click', (e) => {
+      const t = e.target;
+      const linkEl = t && t.closest ? t.closest('.log-link') : null;
+      if (linkEl && outputEl.contains(linkEl)) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeLineMenu();
+        handleLogTokenClick(linkEl, e);
+        return;
+      }
+
+      if (!e.altKey) return;
+
+      const lineEl = t && t.closest ? t.closest('.log-line') : null;
+      if (!lineEl) return;
+      const idxStr = lineEl.getAttribute('data-idx');
+      const idx = parseInt(idxStr || '', 10);
+      if (!isFinite(idx)) return;
+
+      e.preventDefault();
+      closeLineMenu();
+      openXrayContextModal(idx, 20);
+    });
+  }
+
+  // Initial stats
+  try { updatePauseButton(); } catch (e) {}
+  try { updateXrayLogStats(); } catch (e) {}
+}
 
   function bindFilterUi() {
     const filterEl = $('xray-log-filter');
@@ -550,21 +1245,56 @@
     if (_inited) return;
     _inited = true;
 
+    // По умолчанию автообновление выключено
+    _streaming = false;
+    try { setXrayLogLampState('off'); } catch (e) {}
+
     // sync current file from UI
     const selectEl = $('xray-log-file');
     if (selectEl) _currentFile = selectEl.value || _currentFile;
 
+    try { bindControlsUi(); } catch (e) {}
     try { bindFilterUi(); } catch (e) {}
+
+    // Context modal buttons
+    try {
+      const close1 = $('xray-context-close-btn');
+      const close2 = $('xray-context-close-btn2');
+      const copyBtn = $('xray-context-copy-btn');
+      if (close1) close1.addEventListener('click', (e) => { e.preventDefault(); closeXrayContextModal(); });
+      if (close2) close2.addEventListener('click', (e) => { e.preventDefault(); closeXrayContextModal(); });
+      if (copyBtn) copyBtn.addEventListener('click', (e) => { e.preventDefault(); copyXrayContextModal(); });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeXrayContextModal();
+      });
+    } catch (e) {}
 
     // Clean up WS on page unload
     try {
       window.addEventListener('beforeunload', () => {
         try { stopXrayLogAuto(); } catch (e) {}
+        try { if (_statusTimer) clearInterval(_statusTimer); } catch (e2) {}
+        _statusTimer = null;
       });
     } catch (e) {}
 
     // initial status refresh (safe on pages without logs)
     try { refreshXrayLogStatus(); } catch (e) {}
+
+    // Also poll status in background to keep the header badge up to date
+    // even when the user does not open the "Live логи Xray" tab.
+    try {
+      if (!_statusTimer) _statusTimer = setInterval(() => {
+        try { void refreshXrayLogStatus(); } catch (e) {}
+      }, 10000);
+    } catch (e) {}
+
+    // Refresh once when tab becomes active again
+    try {
+      document.addEventListener('visibilitychange', () => {
+        try { if (!document.hidden) void refreshXrayLogStatus(); } catch (e) {}
+      });
+    } catch (e) {}
   }
 
   const api = {
