@@ -5,7 +5,17 @@
   <title>Xkeen UI — DevTools</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20251228g') }}">
+  
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
+  <meta name="theme-color" content="#0f172a">
+  <!-- Apply typography prefs ASAP (stored in localStorage) -->
+  <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20251230c') }}">
 </head>
 <body>
   <div id="global-xkeen-spinner">
@@ -146,6 +156,62 @@
               <span class="dt-switch-slider" aria-hidden="true"></span>
               <span class="dt-switch-label">Отключить кнопку 💰Донат</span>
             </label>
+
+            <div style="margin-top:12px;">
+              <div class="small" style="margin-bottom:8px; opacity:0.9;">
+                Типографика (локально, сохраняется в браузере).
+              </div>
+
+              <div class="dt-logging-grid" role="group" aria-label="Typography settings">
+                <label class="dt-logging-field">
+                  <span class="dt-logging-label">Размер UI</span>
+                  <select id="dt-typo-scale" class="dt-pill-field" title="Масштаб текста интерфейса.">
+                    <option value="0.9">90%</option>
+                    <option value="1">100%</option>
+                    <option value="1.1">110%</option>
+                    <option value="1.2">120%</option>
+                    <option value="1.3">130%</option>
+                  </select>
+                </label>
+
+                <label class="dt-logging-field">
+                  <span class="dt-logging-label">Шрифт UI</span>
+                  <select id="dt-typo-family" class="dt-pill-field" title="Шрифт интерфейса.">
+                    <option value="">По умолчанию (system)</option>
+                    <option value="system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif">System UI</option>
+                    <option value="Arial, Helvetica, sans-serif">Arial</option>
+                    <option value="Tahoma, Verdana, sans-serif">Tahoma</option>
+                    <option value="Verdana, Geneva, sans-serif">Verdana</option>
+                  </select>
+                </label>
+
+                <label class="dt-logging-field">
+                  <span class="dt-logging-label">Моно: размер</span>
+                  <select id="dt-typo-mono-scale" class="dt-pill-field" title="Масштаб моноширинного (логи/редакторы).">
+                    <option value="auto">как UI</option>
+                    <option value="0.9">90%</option>
+                    <option value="1">100%</option>
+                    <option value="1.1">110%</option>
+                    <option value="1.2">120%</option>
+                    <option value="1.3">130%</option>
+                  </select>
+                </label>
+
+                <label class="dt-logging-field">
+                  <span class="dt-logging-label">Моно: шрифт</span>
+                  <select id="dt-typo-mono-family" class="dt-pill-field" title="Шрифт для логов/редакторов.">
+                    <option value="">По умолчанию (monospace)</option>
+                    <option value="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace">System monospace</option>
+                    <option value="Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace">Consolas</option>
+                    <option value="&quot;Courier New&quot;, monospace">Courier New</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="dt-logging-actions">
+                <button type="button" id="dt-typo-reset" class="btn-secondary" title="Сбросить настройки типографики.">Reset</button>
+              </div>
+            </div>
           </section>
 
         </div>
@@ -357,6 +423,7 @@
   <script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/confirm_modal.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/donate.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/typography.js', v='20251230c') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools.js', v='20251228g') }}"></script>
   <script src="{{ url_for('static', filename='js/pages/devtools.init.js') }}"></script>
 </body>
