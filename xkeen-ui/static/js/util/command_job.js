@@ -58,10 +58,26 @@
     // WS first (best effort)
     if (canWs && typeof WebSocket !== 'undefined') {
       const proto = (location.protocol === 'https:') ? 'wss:' : 'ws:';
-      const url = `${proto}//${location.host}/ws/command-status?job_id=${encodeURIComponent(jobId)}`;
 
+      // One-time WS token (scoped).
+      let wsToken = '';
       try {
-        const wsResult = await new Promise((resolve) => {
+        const tr = await fetch('/api/ws-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope: 'cmd' })
+        });
+        const tj = await tr.json().catch(() => ({}));
+        if (tr.ok && tj && tj.ok && tj.token) wsToken = String(tj.token || '');
+      } catch (e) {
+        // ignore, will fallback to HTTP
+      }
+
+      if (wsToken) {
+        const url = `${proto}//${location.host}/ws/command-status?job_id=${encodeURIComponent(jobId)}&token=${encodeURIComponent(wsToken)}`;
+
+        try {
+          const wsResult = await new Promise((resolve) => {
           let resolved = false;
           let ws = null;
 
@@ -117,8 +133,9 @@
           ws.onclose = () => { clearTimeout(timeoutId); finish(null); };
         });
 
-        if (wsResult) return wsResult;
-      } catch (e) {}
+          if (wsResult) return wsResult;
+        } catch (e) {}
+      }
     }
 
     // HTTP polling fallback
