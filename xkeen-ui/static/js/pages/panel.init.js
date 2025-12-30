@@ -57,16 +57,18 @@
       });
     }
 
-    // xray logs auto start/stop
+    // xray logs: do NOT auto-start streaming when opening the tab.
+    // The blinking lamp must indicate an explicitly enabled live stream.
     if (name === 'xray-logs') {
       if (window.XKeen && XKeen.features && XKeen.features.xrayLogs) {
-        if (typeof XKeen.features.xrayLogs.start === 'function') safe(() => XKeen.features.xrayLogs.start());
+        if (typeof XKeen.features.xrayLogs.viewOnce === 'function') safe(() => XKeen.features.xrayLogs.viewOnce());
         if (typeof XKeen.features.xrayLogs.refreshStatus === 'function') safe(() => XKeen.features.xrayLogs.refreshStatus());
       } else {
-        if (typeof window.startXrayLogAuto === 'function') safe(() => window.startXrayLogAuto());
+        if (typeof window.fetchXrayLogsOnce === 'function') safe(() => window.fetchXrayLogsOnce('manual'));
         if (typeof window.refreshXrayLogStatus === 'function') safe(() => window.refreshXrayLogStatus());
       }
     } else {
+      // Leaving the tab stops any active stream.
       if (window.XKeen && XKeen.features && XKeen.features.xrayLogs && typeof XKeen.features.xrayLogs.stop === 'function') {
         safe(() => XKeen.features.xrayLogs.stop());
       } else if (typeof window.stopXrayLogAuto === 'function') {
