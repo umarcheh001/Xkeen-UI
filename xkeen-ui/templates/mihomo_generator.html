@@ -6,7 +6,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
 
-  <!-- CodeMirror for YAML editing -->
+  
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
+  <meta name="theme-color" content="#0f172a">
+<!-- CodeMirror for YAML editing -->
 
   <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/codemirror.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/theme/material-darker.min.css') }}">
@@ -43,8 +50,10 @@
   <script src="{{ url_for('static', filename='codemirror/addon/search/match-highlighter.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/dialog/dialog.js') }}"></script>
 
+  <!-- Apply typography prefs ASAP (stored in localStorage) -->
+  <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20251230c') }}">
   <style>
     body {
       background: #020617;
@@ -444,7 +453,8 @@
   </div>
 
 
-  <div class="container">
+  <!-- Wider container (match DevTools page width) -->
+  <div class="container container-wide">
     <header>
       <h1>Mihomo — генератор конфига</h1>
       <p>Новый генератор для профилей роутера (bazy ZKeen / кастомные провайдеры).</p>
