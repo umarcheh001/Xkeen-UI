@@ -91,6 +91,45 @@ RESTART_CMD = os.environ.get('MIHOMO_RESTART_CMD', 'xkeen -restart')
 RESTART_TIMEOUT = int(os.environ.get('MIHOMO_RESTART_TIMEOUT', '60'))
 
 
+
+
+
+
+# === YAML safety helpers (avoid broken YAML / injection via plain scalars) ===
+# We build YAML by concatenating strings (router-friendly, no PyYAML dependency),
+# so we must quote/escape values that can break YAML syntax.
+_YAML_KEYWORDS = {"null", "~", "true", "false", "yes", "no", "on", "off"}
+_YAML_NEEDS_QUOTING_RE = re.compile(r"""[\s:#\[\]{}&,*>!%`"'|@?]""")
+
+
+def _yaml_str(v) -> str:
+    """Return a YAML-safe scalar for arbitrary values.
+
+    - Replaces newlines (prevents multiline injection)
+    - Quotes when YAML-plain would be ambiguous/broken
+    Uses single quotes; inside them YAML escapes by doubling: ' -> ''
+    """
+    if v is None:
+        return "''"
+    s = str(v)
+    s = s.replace("\r", "").replace("\n", " ")
+
+    low = s.strip().lower()
+    if (
+        s == ""
+        or low in _YAML_KEYWORDS
+        or _YAML_NEEDS_QUOTING_RE.search(s)
+        or s[:1] in "-?:&*"  # YAML indicators at start
+    ):
+        return "'" + s.replace("'", "''") + "'"
+    return s
+
+
+def _yaml_list(items) -> str:
+    """YAML flow-style list with safe string scalars."""
+    return "[" + ", ".join(_yaml_str(x) for x in items) + "]"
+
+
 # === Utility dataclasses ===
 
 @dataclass
@@ -213,23 +252,23 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
         spx = _safe_unquote(spx)
 
     yaml_lines: List[str] = []
-    yaml_lines.append(f"- name: {name}")
+    yaml_lines.append(f"- name: {_yaml_str(name)}")
     yaml_lines.append('  type: vless')
-    yaml_lines.append(f"  server: {server}")
+    yaml_lines.append(f"  server: {_yaml_str(server)}")
     yaml_lines.append(f"  port: {port}")
-    yaml_lines.append(f"  uuid: {uuid}")
+    yaml_lines.append(f"  uuid: {_yaml_str(uuid)}")
     
     if flow:
-        yaml_lines.append(f"  flow: {flow}")
+        yaml_lines.append(f"  flow: {_yaml_str(flow)}")
     
     # --- encryption ---
     enc = (encryption or "").strip()
     if not enc or enc.lower() == "none":
         yaml_lines.append('  encryption: ""')
     else:
-        yaml_lines.append(f"  encryption: {enc}")
+        yaml_lines.append(f"  encryption: {_yaml_str(enc)}")
     
-    yaml_lines.append(f"  network: {type_}")
+    yaml_lines.append(f"  network: {_yaml_str(type_)}")
     yaml_lines.append("  udp: true")
     
     # TLS / Reality
@@ -241,26 +280,27 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
             yaml_lines.append("  tfo: true")
             yaml_lines.append("  packet-encoding: xudp")
         if sni:
-            yaml_lines.append(f"  servername: {sni}")
+            yaml_lines.append(f"  servername: {_yaml_str(sni)}")
         yaml_lines.append("  reality-opts:")
         if 'pbk' in qs:
-            yaml_lines.append(f"    public-key: {qs['pbk']}")
+            yaml_lines.append(f"    public-key: {_yaml_str(qs['pbk'])}")
         if 'sid' in qs:
-            yaml_lines.append(f"    short-id: {qs['sid']}")
+            yaml_lines.append(f"    short-id: {_yaml_str(qs['sid'])}")
         # --- новое: spx → spider-x ---
         if spx:
-            yaml_lines.append(f"    spider-x: {spx}")
+            yaml_lines.append(f"    spider-x: {_yaml_str(spx)}")
         if fp:
-            yaml_lines.append(f"  client-fingerprint: {fp}")
+            yaml_lines.append(f"  client-fingerprint: {_yaml_str(fp)}")
     elif sec == "tls":
         yaml_lines.append("  tls: true")
         if sni:
-            yaml_lines.append(f"  servername: {sni}")
+            yaml_lines.append(f"  servername: {_yaml_str(sni)}")
         if fp:
-            yaml_lines.append(f"  client-fingerprint: {fp}")
+            yaml_lines.append(f"  client-fingerprint: {_yaml_str(fp)}")
         if alpn:
             # alpn может быть 'h2,http/1.1' → получится alpn: [h2,http/1.1]
-            yaml_lines.append(f"  alpn: [{alpn}]")
+            alpn_items = [x.strip() for x in alpn.split(',') if x.strip()]
+            yaml_lines.append(f"  alpn: {_yaml_list(alpn_items)}")
 
     # ws / grpc opts
     if type_ == 'ws':
@@ -269,17 +309,17 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
             path = _safe_unquote(path)
         host = qs.get('host') or sni or ''
         yaml_lines.append('  ws-opts:')
-        yaml_lines.append(f"    path: {path}")
+        yaml_lines.append(f"    path: {_yaml_str(path)}")
         if host:
             yaml_lines.append('    headers:')
-            yaml_lines.append(f"      Host: {host}")
+            yaml_lines.append(f"      Host: {_yaml_str(host)}")
     elif type_ == 'grpc':
         service_name = qs.get('serviceName') or qs.get('service_name') or ''
         if service_name:
             service_name = _safe_unquote(service_name)
         yaml_lines.append('  grpc-opts:')
         if service_name:
-            yaml_lines.append(f"    grpc-service-name: {service_name}")
+            yaml_lines.append(f"    grpc-service-name: {_yaml_str(service_name)}")
 
     yaml = "\n".join(yaml_lines) + "\n"
     return ProxyParseResult(name=name, yaml=yaml)
@@ -339,22 +379,21 @@ def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyP
             amz[key] = peer[key]
 
     yaml_lines: List[str] = []
-    yaml_lines.append(f"- name: {name}")
+    yaml_lines.append(f"- name: {_yaml_str(name)}")
     yaml_lines.append("  type: wireguard")
-    yaml_lines.append(f"  server: {host}")
+    yaml_lines.append(f"  server: {_yaml_str(host)}")
     yaml_lines.append(f"  port: {port}")
-    yaml_lines.append(f"  ip: {ip_v4}") if ip_v4 else None
+    yaml_lines.append(f"  ip: {_yaml_str(ip_v4)}") if ip_v4 else None
     if ip_v6:
-        yaml_lines.append(f"  ipv6: {ip_v6}")
-    yaml_lines.append(f"  private-key: {iface['PrivateKey']}")
-    yaml_lines.append(f"  public-key: {peer['PublicKey']}")
+        yaml_lines.append(f"  ipv6: {_yaml_str(ip_v6)}")
+    yaml_lines.append(f"  private-key: {_yaml_str(iface['PrivateKey'])}")
+    yaml_lines.append(f"  public-key: {_yaml_str(peer['PublicKey'])}")
 
     if 'PresharedKey' in peer:
-        yaml_lines.append(f"  preshared-key: {peer['PresharedKey']}")
+        yaml_lines.append(f"  preshared-key: {_yaml_str(peer['PresharedKey'])}")
 
     if dns_list:
-        dns_str = ', '.join(dns_list)
-        yaml_lines.append(f"  dns: [{dns_str}]")
+        yaml_lines.append(f"  dns: {_yaml_list(dns_list)}")
 
     if mtu:
         yaml_lines.append(f"  mtu: {mtu}")
@@ -363,12 +402,13 @@ def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyP
         yaml_lines.append(f"  persistent-keepalive: {keepalive}")
 
     if allowed_ips:
-        yaml_lines.append(f"  allowed-ips: [{allowed_ips}]")
+        items = [x.strip() for x in allowed_ips.split(',') if x.strip()]
+        yaml_lines.append(f"  allowed-ips: {_yaml_list(items)}")
 
     if amz:
         yaml_lines.append("  amnezia-wg-option:")
         for k, v in amz.items():
-            yaml_lines.append(f"    {k}: {v}")
+            yaml_lines.append(f"    {k}: {v}" if str(v).isdigit() else f"    {k}: {_yaml_str(v)}")
 
     yaml = "\n".join(yaml_lines) + "\n"
     return ProxyParseResult(name=name, yaml=yaml)
