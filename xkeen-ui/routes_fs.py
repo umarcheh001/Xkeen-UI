@@ -1910,7 +1910,7 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
             except Exception:
                 return error_response('mkdir_failed', 400, ok=False)
             _core_log("info", "fs.mkdir", target="local", path=path_s, parents=bool(parents))
-        return jsonify({'ok': True})
+            return jsonify({'ok': True})
 
         sid = str(data.get('sid') or '').strip()
         if not sid:
@@ -2054,7 +2054,7 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
             except Exception:
                 return error_response('rename_failed', 400, ok=False)
             _core_log("info", "fs.rename", target="local", src=src_p, dst=dst_p)
-        return jsonify({'ok': True})
+            return jsonify({'ok': True})
 
         sid = str(data.get('sid') or '').strip()
         if not sid:
