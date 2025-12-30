@@ -96,6 +96,8 @@ def _lftp_quote(s: str) -> str:
     but lftp still parses its own quoting.
     """
     s = "" if s is None else str(s)
+    # Strip ASCII control characters that could break lftp scripts (e.g. CR/LF).
+    s = re.sub(r'[\x00-\x1f\x7f]', '', s)
     # Use double quotes + backslash escaping for common specials.
     s = s.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{s}"'
@@ -1818,14 +1820,12 @@ def create_remotefs_blueprint(
         mgr._touch(sid)
         return s, None
 
-    
 
     @bp.get("/api/remotefs/capabilities")
     def api_remotefs_capabilities() -> Any:
         """Capabilities for the remote file manager (security defaults, modes)."""
         if (resp := _require_enabled()) is not None:
             return resp
-        _core_log("info", "remotefs.session_create", sid=s.session_id, protocol=s.protocol, host=s.host, port=s.port, username=s.username, auth=auth_type)
         return jsonify({
             "ok": True,
             "security": {
@@ -2183,6 +2183,8 @@ def create_remotefs_blueprint(
                 },
                 warnings=warnings,
             )
+
+        _core_log("info", "remotefs.session_create", sid=s.session_id, protocol=s.protocol, host=s.host, port=s.port, username=s.username, auth=auth_type)
 
         return jsonify({
             "ok": True,
@@ -3380,7 +3382,7 @@ def create_remotefs_blueprint(
                         except Exception:
                             pass
                     if is_dir:
-                        shutil.copytree(sp, dp, dirs_exist_ok=True)
+                        shutil.copytree(sp, dp, dirs_exist_ok=True, symlinks=True, ignore_dangling_symlinks=True)
                         mark_done();
                     else:
                         os.makedirs(os.path.dirname(dp) or '/tmp', exist_ok=True)
