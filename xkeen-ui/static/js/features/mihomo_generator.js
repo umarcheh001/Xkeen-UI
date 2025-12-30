@@ -245,14 +245,13 @@
             " · Прокси: " + proxies;
         }
       
-        // Мини-валидация состояния перед предпросмотром / применением
+                // Мини-валидация состояния перед предпросмотром / применением
         function validateState(state, mode) {
           const warnings = [];
           const errors = [];
           const subs = state.subscriptions || [];
           const proxies = state.proxies || [];
-          const defaultGroups = state.defaultGroups || [];
-      
+
           // Нет ни одного источника прокси
           if (!subs.length && !proxies.length) {
             if (mode === "apply") {
@@ -261,28 +260,97 @@
               warnings.push("Нет ни одной подписки и ни одного узла-прокси – конфиг будет без прокси.");
             }
           }
-      
+
           // Профиль app – просто предупреждение
           if (state.profile === "app") {
             warnings.push("Профиль «app»: прозрачная маршрутизация роутера отключена, конфиг работает как обычный клиент.");
           }
-      
-          // Неизвестные группы по умолчанию
-          if (defaultGroups.length) {
-            const knownIds = new Set(RULE_GROUP_PRESETS.map(p => p.id));
-            const builtins = new Set(["Proxy-Selector", "Auto-VPN", "Global-Default"]);
-            const unknown = defaultGroups.filter(g => !knownIds.has(g) && !builtins.has(g));
-            if (unknown.length) {
-              warnings.push(
-                "Неизвестные группы по умолчанию: " +
-                unknown.join(", ") +
-                ". Убедитесь, что такие proxy-groups существуют в шаблоне."
-              );
-            }
-          }
-      
+
+          // Проверку групп по умолчанию делаем по фактически сгенерированному YAML (после предпросмотра),
+          // чтобы не ловить ложные предупреждения для пользовательских proxy-groups.
           return { valid: errors.length === 0, warnings, errors };
         }
+
+        // ---- YAML helpers: validate default proxy-groups against generated config ----
+        function _yamlParseScalar(raw) {
+          if (raw == null) return "";
+          let s = String(raw).trim();
+          if (!s) return "";
+
+          // Strip inline comment for plain scalars
+          if (!(s.startsWith("'") || s.startsWith('"'))) {
+            const idx = s.indexOf(" #");
+            if (idx !== -1) s = s.slice(0, idx).trim();
+          }
+
+          if (s.startsWith("'") && s.endsWith("'") && s.length >= 2) {
+            return s.slice(1, -1).replace(/''/g, "'");
+          }
+
+          if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) {
+            let inner = s.slice(1, -1);
+            inner = inner
+              .replace(/\\\\/g, "\\")
+              .replace(/\\\"/g, '"')
+              .replace(/\\n/g, "\n")
+              .replace(/\\r/g, "\r")
+              .replace(/\\t/g, "\t");
+            return inner;
+          }
+
+          return s;
+        }
+
+        function _extractProxyGroupNamesFromYaml(yamlText) {
+          const names = new Set();
+          if (typeof yamlText !== "string" || !yamlText.trim()) return names;
+
+          const lines = yamlText.split(/\r?\n/);
+          let inSection = false;
+          let baseIndent = 0;
+
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+
+            if (!inSection) {
+              // Only accept top-level "proxy-groups:"
+              if (/^proxy-groups\s*:/.test(line)) {
+                inSection = true;
+                baseIndent = (line.match(/^(\s*)/)?.[1] || "").length;
+              }
+              continue;
+            }
+
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith("#")) continue;
+
+            const indent = (line.match(/^(\s*)/)?.[1] || "").length;
+
+            // Stop when we reach a new top-level key
+            if (indent <= baseIndent && /^[A-Za-z0-9_.-]+\s*:/.test(line)) break;
+
+            const m = line.match(/^\s*-\s*name\s*:\s*(.+?)\s*$/);
+            if (m) {
+              const name = _yamlParseScalar(m[1]);
+              if (name) names.add(name);
+            }
+          }
+          return names;
+        }
+
+        function validateDefaultGroupsAgainstConfig(defaultGroups, yamlText) {
+          const unknown = [];
+          if (!Array.isArray(defaultGroups) || !defaultGroups.length) return { unknown };
+
+          const known = _extractProxyGroupNamesFromYaml(yamlText);
+          if (!known || !known.size) return { unknown }; // can't parse, do not warn
+
+          defaultGroups.forEach(g => {
+            if (g && !known.has(g)) unknown.push(g);
+          });
+          return { unknown };
+        }
+
       
         // Автопредпросмотр для профиля / шаблона / списков групп
         autoPreviewOnChange(profileSelect, ["change"]);
@@ -834,7 +902,21 @@
                 return;
               }
               editor.setValue(cfg);
-              setStatus("Предпросмотр сгенерирован на сервере без сохранения и перезапуска.", "ok");
+
+              // Проверяем группы по умолчанию по фактически сгенерированному YAML
+              const dg = (state && Array.isArray(state.defaultGroups)) ? state.defaultGroups : [];
+              const dgCheck = validateDefaultGroupsAgainstConfig(dg, cfg);
+              if (dgCheck.unknown && dgCheck.unknown.length) {
+                const warnMsg =
+                  "Неизвестные группы по умолчанию: " +
+                  dgCheck.unknown.join(", ") +
+                  ". Убедитесь, что такие proxy-groups существуют в шаблоне.";
+                setStatus(warnMsg, null);
+                if (manual) try { toast(warnMsg, 'info'); } catch (e) {}
+              } else {
+                setStatus("Предпросмотр сгенерирован на сервере без сохранения и перезапуска.", "ok");
+              }
+
               if (manual) try { toast("Предпросмотр обновлён.", 'success'); } catch (e) {}
             })
             .catch(err => {
@@ -957,6 +1039,16 @@
           // Обновляем сводку и выполняем мини-валидацию
           updateStateSummary(state);
           const { valid, warnings, errors } = validateState(state, "apply");
+          // Проверяем группы по умолчанию по текущему YAML (в редакторе)
+          const dg = (state && Array.isArray(state.defaultGroups)) ? state.defaultGroups : [];
+          const dgCheck = validateDefaultGroupsAgainstConfig(dg, cfg);
+          if (dgCheck.unknown && dgCheck.unknown.length) {
+            warnings.push(
+              "Неизвестные группы по умолчанию: " +
+              dgCheck.unknown.join(", ") +
+              ". Убедитесь, что такие proxy-groups существуют в шаблоне."
+            );
+          }
           if (!valid && errors.length) {
             setStatus(errors.join(" "), "err");
             if (notify) try { toast(errors.join(" "), 'error'); } catch (e) {}
