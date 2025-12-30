@@ -292,7 +292,7 @@ function tryMigrateLegacyKey(base) {
     const r = await fetch('/api/ws-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: '{}',
+      body: JSON.stringify({ scope: 'pty' }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j || !j.ok) {
