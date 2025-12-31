@@ -390,13 +390,7 @@
           updateXrayLogStats();
         } else {
           _pendingCount = 0;
-          if (_paused) {
-        if (data && typeof data.line === 'string') _pendingCount += 1;
-        updateXrayLogStats();
-      } else {
-        _pendingCount = 0;
-        applyXrayLogFilterToOutput();
-      }
+          applyXrayLogFilterToOutput();
         }
       } else {
         // still update meta/stats (cursor/transport)
@@ -470,7 +464,6 @@
       if (statusEl) statusEl.textContent = 'WebSocket для логов подключён.';
       try { updateXrayLogStats(); } catch (e) {}
     };
-
     _ws.onmessage = function (event) {
       let data = null;
       try {
@@ -480,18 +473,37 @@
         return;
       }
 
+      let added = 0;
+
       if (data && data.type === 'init' && Array.isArray(data.lines)) {
+        // Initial snapshot (tail window). Treat as a full replace, not "new lines".
         _lastLines = data.lines;
+      } else if (data && data.type === 'append' && Array.isArray(data.lines)) {
+        // Future-proof: batch append
+        for (const ln of data.lines) _lastLines.push(ln);
+        added = data.lines.length;
       } else if (data && data.type === 'line' && typeof data.line === 'string') {
         _lastLines.push(data.line);
-        if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
+        added = 1;
       } else if (Array.isArray(data.lines)) {
+        // Unknown payload shape: assume full snapshot
         _lastLines = data.lines;
       } else if (data && typeof data.line === 'string') {
+        // Unknown payload shape: single line
         _lastLines.push(data.line);
-        if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
+        added = 1;
       }
 
+      if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
+
+      // PAUSE must work in WS mode too: keep buffering but don't repaint.
+      if (_paused) {
+        if (added) _pendingCount += added;
+        updateXrayLogStats();
+        return;
+      }
+
+      _pendingCount = 0;
       applyXrayLogFilterToOutput();
     };
 
