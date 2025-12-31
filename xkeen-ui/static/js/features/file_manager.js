@@ -11,7 +11,10 @@
   const FM_LS = {
     sort: 'xkeen.fm.sort',          // JSON: { key: 'name'|'size'|'perm'|'mtime', dir: 'asc'|'desc', dirsFirst: true }
     showHidden: 'xkeen.fm.dotfiles', // '1'|'0'
-    mask: 'xkeen.fm.mask'           // last used selection mask (glob)
+    mask: 'xkeen.fm.mask',          // last used selection mask (glob)
+    // persisted card geometry (user resize)
+    // JSON: { w: number(px), h: number(px), shiftX: number(px) }
+    geom: 'xkeen.fm.geom_v1'
   };
 
   function lsGet(key) {
@@ -63,6 +66,203 @@
 
   function saveMaskPref(v) {
     lsSet(FM_LS.mask, String(v || ''));
+  }
+
+  // -------------------------- card geometry (persisted resize) --------------------------
+  // Like terminal window chrome: remember last user size of the file manager card.
+  // We persist only after the user actually resizes (via native bottom-right handle
+  // or our custom bottom-left handle).
+  const FM_GEOM = {
+    minW: 520,
+    minH: 420,
+  };
+
+  let fmGeomTouched = false;
+  let fmGeomAppliedOnce = false;
+  let fmGeomSaveTimer = null;
+  let fmGeomRO = null;
+  let fmNativeResizeActive = false;
+
+  function fmCanResizeNow() {
+    try {
+      if (fmIsFullscreen) return false;
+      // On narrow screens we disable resize entirely (see CSS media query).
+      if (window.matchMedia && window.matchMedia('(max-width: 920px)').matches) return false;
+      return true;
+    } catch (e) {
+      return !fmIsFullscreen;
+    }
+  }
+
+  function fmReadGeom() {
+    const raw = lsGet(FM_LS.geom);
+    if (!raw) return null;
+    try {
+      const j = JSON.parse(raw);
+      if (!j || typeof j !== 'object') return null;
+      const w = Number(j.w);
+      const h = Number(j.h);
+      const shiftX = Number(j.shiftX || 0);
+      if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
+      if (w < FM_GEOM.minW || h < FM_GEOM.minH) return null;
+      if (!Number.isFinite(shiftX)) return { w, h, shiftX: 0 };
+      return { w, h, shiftX };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function fmClampGeom(g) {
+    if (!g) return null;
+    let w = Number(g.w);
+    let h = Number(g.h);
+    let shiftX = Number(g.shiftX || 0);
+    if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
+
+    // Clamp to viewport so we don't create unusable layouts after a screen change.
+    const maxW = Math.max(FM_GEOM.minW, Math.round(window.innerWidth * 0.98));
+    const maxH = Math.max(FM_GEOM.minH, Math.round(window.innerHeight * 0.90));
+    if (w < FM_GEOM.minW) w = FM_GEOM.minW;
+    if (h < FM_GEOM.minH) h = FM_GEOM.minH;
+    if (Number.isFinite(maxW) && maxW > 0 && w > maxW) w = maxW;
+    if (Number.isFinite(maxH) && maxH > 0 && h > maxH) h = maxH;
+
+    const maxShift = Math.max(0, Math.round(window.innerWidth * 0.55));
+    if (!Number.isFinite(shiftX)) shiftX = 0;
+    if (shiftX > maxShift) shiftX = maxShift;
+    if (shiftX < -maxShift) shiftX = -maxShift;
+
+    return { w, h, shiftX };
+  }
+
+  function fmApplyGeom(g) {
+    const card = fmCardEl();
+    if (!card || !g) return;
+    if (!fmCanResizeNow()) return;
+
+    const gg = fmClampGeom(g);
+    if (!gg) return;
+
+    try {
+      card.style.width = Math.round(gg.w) + 'px';
+      card.style.height = Math.round(gg.h) + 'px';
+      card.style.setProperty('--fm-shift-x', Math.round(gg.shiftX) + 'px');
+    } catch (e) {}
+  }
+
+  function fmSaveGeomNow() {
+    if (!fmCanResizeNow()) return;
+    const card = fmCardEl();
+    if (!card) return;
+
+    let r = null;
+    try { r = card.getBoundingClientRect(); } catch (e) { r = null; }
+    if (!r || !Number.isFinite(r.width) || !Number.isFinite(r.height)) return;
+
+    const w = Math.round(r.width);
+    const h = Math.round(r.height);
+    if (w < FM_GEOM.minW || h < FM_GEOM.minH) return;
+
+    const geom = fmClampGeom({ w, h, shiftX: getFmShiftX(card) });
+    if (!geom) return;
+
+    fmGeomTouched = true;
+    try {
+      lsSet(FM_LS.geom, JSON.stringify(geom));
+    } catch (e) {
+      // ignore quota / privacy mode
+    }
+  }
+
+  function fmScheduleSaveGeom() {
+    if (!fmGeomTouched) return;
+    if (fmGeomSaveTimer) {
+      try { clearTimeout(fmGeomSaveTimer); } catch (e) {}
+    }
+    fmGeomSaveTimer = setTimeout(() => {
+      fmGeomSaveTimer = null;
+      fmSaveGeomNow();
+    }, 180);
+  }
+
+  function fmWireGeomPersistence() {
+    const card = fmCardEl();
+    if (!card) return;
+
+    // avoid double-wire
+    try {
+      if (card.dataset && card.dataset.fmGeomWire === '1') return;
+      if (card.dataset) card.dataset.fmGeomWire = '1';
+    } catch (e) {}
+
+    const stored = fmReadGeom();
+    fmGeomTouched = !!stored;
+
+    // Apply stored geometry once when resize is available.
+    if (stored && fmCanResizeNow()) {
+      fmApplyGeom(stored);
+      fmGeomAppliedOnce = true;
+    }
+
+    // Save future resize changes (native handle and left handle both affect size).
+    try {
+      if (window.ResizeObserver) {
+        fmGeomRO = new ResizeObserver(() => {
+          if (!fmCanResizeNow()) return;
+          // Start persisting only after the browser (or our handle) actually
+          // wrote pixel-based inline sizing. This avoids locking in the default
+          // responsive CSS layout before the user interacts.
+          if (!fmGeomTouched) {
+            try {
+              const hasInline = !!(card.style && (card.style.width || card.style.height || card.style.getPropertyValue('--fm-shift-x')));
+              if (!hasInline) return;
+              fmGeomTouched = true;
+            } catch (e) { return; }
+          }
+          fmScheduleSaveGeom();
+        });
+        fmGeomRO.observe(card);
+      }
+    } catch (e) {}
+
+    // Detect native bottom-right resize drag (the browser handle is not a DOM node).
+    try {
+      card.addEventListener('pointerdown', (ev) => {
+        try {
+          if (!fmCanResizeNow()) return;
+          if (ev && ev.pointerType === 'mouse' && ev.button !== 0) return;
+          const r = card.getBoundingClientRect();
+          const pad = 28;
+          const nearRight = (r.right - ev.clientX) >= 0 && (r.right - ev.clientX) < pad;
+          const nearBottom = (r.bottom - ev.clientY) >= 0 && (r.bottom - ev.clientY) < pad;
+          if (!nearRight || !nearBottom) return;
+
+          fmGeomTouched = true;
+          fmNativeResizeActive = true;
+        } catch (e) {}
+      }, { passive: true });
+
+      const endNative = () => {
+        if (!fmNativeResizeActive) return;
+        fmNativeResizeActive = false;
+        fmScheduleSaveGeom();
+      };
+      window.addEventListener('pointerup', endNative, { passive: true });
+      window.addEventListener('pointercancel', endNative, { passive: true });
+    } catch (e) {}
+
+    // If the page is loaded on a narrow screen, apply stored geometry later
+    // when the viewport becomes wide enough again.
+    try {
+      window.addEventListener('resize', () => {
+        if (fmGeomAppliedOnce) return;
+        const g = fmReadGeom();
+        if (!g) return;
+        if (!fmCanResizeNow()) return;
+        fmApplyGeom(g);
+        fmGeomAppliedOnce = true;
+      }, { passive: true });
+    } catch (e) {}
   }
 
   // -------------------------- fullscreen --------------------------
@@ -191,6 +391,9 @@
 
         dragging = true;
 
+        // Mark geometry as user-touched so we start persisting changes.
+        fmGeomTouched = true;
+
         // UX: prevent text selection while resizing.
         prevBodyUserSelect = document.body.style.userSelect || '';
         prevBodyCursor = document.body.style.cursor || '';
@@ -249,6 +452,12 @@
           ev.preventDefault();
           ev.stopPropagation();
         }
+      } catch (e) {}
+
+      // Persist final geometry after a resize from the left corner.
+      try {
+        fmGeomTouched = true;
+        fmScheduleSaveGeom();
       } catch (e) {}
     }
 
@@ -7355,6 +7564,9 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
 
     // Adds the bottom-left resize handle (so the card can be resized to the left).
     wireLeftResizeHandle();
+
+    // Persist card geometry (user resize) similarly to the terminal window.
+    fmWireGeomPersistence();
 
     wirePanel('left');
     wirePanel('right');
