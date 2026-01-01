@@ -29,6 +29,8 @@
     'xkeen-theme',
     'xkeen-typography-v1',
     'xkeen-layout-v1',
+    // branding cache (current builds)
+    'xkeen-branding-cache-v1',
     // legacy only (older builds)
     'xkeen-branding-v1',
     'xkeen_ui_hide_donate',
@@ -72,6 +74,15 @@
     return prefs;
   }
 
+  function csrfToken() {
+    try {
+      const el = document.querySelector('meta[name="csrf-token"]');
+      return (el && el.getAttribute('content')) ? String(el.getAttribute('content') || '') : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   async function fetchRouterBranding() {
     if (!window.fetch) return null;
     try {
@@ -98,11 +109,11 @@
 
   async function exportToTextarea() {
     const ta = byId('dt-ui-prefs-export-text');
-    if (!ta) return null;
+    if (!ta) return { text: null, obj: null };
     const obj = await buildExportObject();
     const txt = JSON.stringify(obj, null, 2);
     ta.value = txt;
-    return txt;
+    return { text: txt, obj };
   }
 
   async function copyToClipboard(text) {
@@ -238,9 +249,12 @@
     if (!cfg || typeof cfg !== 'object') return false;
     if (!window.fetch) return false;
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      const tok = csrfToken();
+      if (tok) headers['X-CSRF-Token'] = tok;
       const r = await fetch('/api/devtools/branding', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ config: cfg }),
       });
       const j = await r.json().catch(() => ({}));
@@ -253,7 +267,10 @@
   async function resetRouterBranding() {
     if (!window.fetch) return false;
     try {
-      const r = await fetch('/api/devtools/branding/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const headers = { 'Content-Type': 'application/json' };
+      const tok = csrfToken();
+      if (tok) headers['X-CSRF-Token'] = tok;
+      const r = await fetch('/api/devtools/branding/reset', { method: 'POST', headers, body: '{}' });
       const j = await r.json().catch(() => ({}));
       return !!(r.ok && j && j.ok);
     } catch (e) {
@@ -289,8 +306,9 @@
     if (exportBtn) {
       exportBtn.addEventListener('click', async () => {
         try {
-          const txt = await exportToTextarea();
-          const obj = await buildExportObject();
+          const res = await exportToTextarea();
+          const obj = (res && res.obj) ? res.obj : {};
+          const txt = res ? res.text : '';
           setStatus('Exported (' + Object.keys(obj.prefs || {}).length + ' keys)');
           if (txt) toast('Экспорт: готово');
         } catch (e) {
@@ -302,7 +320,7 @@
     if (copyBtn) {
       copyBtn.addEventListener('click', async () => {
         try {
-          const txt = (exportTa && exportTa.value) ? exportTa.value : await exportToTextarea();
+          const txt = (exportTa && exportTa.value) ? exportTa.value : (await exportToTextarea()).text;
           const ok = await copyToClipboard(txt || '');
           if (ok) {
             setStatus('Copied to clipboard');
@@ -320,7 +338,7 @@
     if (dlBtn) {
       dlBtn.addEventListener('click', async () => {
         try {
-          const txt = (exportTa && exportTa.value) ? exportTa.value : await exportToTextarea();
+          const txt = (exportTa && exportTa.value) ? exportTa.value : (await exportToTextarea()).text;
           const ts = new Date();
           const pad = (n) => String(n).padStart(2, '0');
           const name = `xkeen-ui-prefs-${ts.getFullYear()}${pad(ts.getMonth()+1)}${pad(ts.getDate())}-${pad(ts.getHours())}${pad(ts.getMinutes())}${pad(ts.getSeconds())}.json`;
