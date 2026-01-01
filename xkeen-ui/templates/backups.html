@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>Xkeen UI — Бэкапы Xray конфигов</title>
+  <title>Xkeen UI — DevTools</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   
@@ -14,72 +14,1088 @@
   <meta name="theme-color" content="#0f172a">
   <!-- Apply typography prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20251230c') }}">
+  <!-- Apply layout prefs ASAP (stored in localStorage) -->
+  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101b') }}"></script>
+
+  <!-- Env-driven visibility filters (section whitelist) -->
+  <script>
+    window.XKeen = window.XKeen || {};
+    window.XKeen.env = window.XKeen.env || {};
+    window.XKeen.env.panelSectionsWhitelist = {{ panel_sections_whitelist|tojson }};
+    window.XKeen.env.devtoolsSectionsWhitelist = {{ devtools_sections_whitelist|tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101b') }}"></script>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101b') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='devtools.css', v='20260101e') }}">
+  <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
+  {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
+  {% if custom_css_enabled and not safe_mode %}
+  <link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
+  {% endif %}
 </head>
 <body>
   <div id="global-xkeen-spinner">
     <div class="global-spinner-box">
       <div class="global-spinner-icon"></div>
       <div class="global-spinner-text" id="global-xkeen-spinner-text">
-        Применяем изменения и перезапускаем xkeen…
+        Выполняем действие…
       </div>
     </div>
   </div>
 
-  <!-- Wider container (match DevTools page width) -->
-  <div class="container container-wide">
+  <div class="container container-wide dt-container">
     <header>
-      <h1>Бэкапы Xray конфигов (05_routing / 03_inbounds / 04_outbounds)</h1>
-      <p>Каталог: <code>{{ backup_dir }}</code></p>
-    </header>
+      <h1>DevTools</h1>
+      <p>Диагностика панели: управление сервисом UI, логи, переменные окружения (whitelist).</p>
 
-    <section class="card">
-      <div class="actions" style="justify-content: space-between;">
-        <a href="/" class="btn-link">← Назад к панели</a>
+      <div class="actions" style="justify-content: space-between; align-items: center;">
+        <a href="{{ url_for('index') }}" class="btn-link">← Вернуться к основной панели</a>
         <div class="header-actions">
           <button
             type="button"
             id="theme-toggle-btn"
             class="theme-toggle-btn theme-toggle-header"
-            aria-label="Переключить тему"
+            aria-label="Переключить тему" title="Переключить светлую/тёмную тему"
           ></button>
-          <a href="{{ url_for('devtools_page') }}" class="btn-link" title="DevTools">DevTools</a>
           <a href="{{ url_for('logout') }}" class="btn-link" title="Выйти из панели">Выйти</a>
         </div>
       </div>
+    </header>
 
-      <table id="backups-table">
-        <thead>
-          <tr>
-            <th>Имя файла</th>
-            <th>Размер</th>
-            <th>Создан</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="backups-empty-row">
-            <td colspan="4">Загрузка списка бэкапов…</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <div class="top-tabs dt-tabs" role="tablist" aria-label="DevTools tabs">
+      <button type="button" id="dt-tab-btn-tools" class="top-tab-btn active" data-xk-section="tools dt-tab-btn-tools" role="tab" aria-selected="true" aria-controls="dt-tab-tools" title="Открыть вкладку Tools (инструменты DevTools).">Tools</button>
+      <button type="button" id="dt-tab-btn-logs" class="top-tab-btn" data-xk-section="logs dt-tab-btn-logs" role="tab" aria-selected="false" aria-controls="dt-tab-logs" title="Открыть вкладку Logs (логи панели).">Logs</button>
+    </div>
 
-    <div id="backups-status" class="status"></div>
+    <div id="dt-tab-tools" class="view-section" data-xk-section="tools dt-tab-tools" role="tabpanel" aria-labelledby="dt-tab-btn-tools">
 
-    <div id="toast-container"></div>
+      <div class="layout-2col dt-tools-layout">
+        <!-- Left column: compact diagnostics blocks -->
+        <div class="layout-side dt-tools-left">
+
+          <section class="card" id="dt-service-card" data-xk-section="service dt-service-card">
+            <h2 style="margin-top:0;">Сервис панели</h2>
+            <div class="dt-service-actions" aria-label="UI controls">
+              <button type="button" id="dt-ui-start" class="xkeen-ctrl-btn dt-ui-action" title="Запустить сервис веб‑панели (UI).">Start</button>
+              <button type="button" id="dt-ui-stop" class="xkeen-ctrl-btn dt-ui-action" title="Остановить сервис UI. Текущая вкладка может оборваться — это нормально.">Stop</button>
+              <button type="button" id="dt-ui-restart" class="xkeen-ctrl-btn dt-ui-action" title="Перезапустить сервис UI (часть настроек применяется после перезапуска). Вкладка может оборваться — это нормально.">Restart</button>
+            </div>
+            <div class="dt-service-actions-secondary">
+              <button type="button" id="dt-ui-refresh" class="btn-secondary" title="Обновить статус сервиса UI.">Refresh</button>
+            </div>
+
+            <div id="dt-ui-status" class="status" style="margin-top:10px;">Загрузка…</div>
+            <p class="small" style="margin-top:8px; opacity:0.9;">
+              Примечание: Stop/Restart могут оборвать текущую вкладку — это нормально.
+            </p>
+          </section>
+
+                    <details class="card dt-logging-card dt-collapsible" id="dt-logging-card" data-xk-section="logging dt-logging-card" open>
+            <summary class="dt-collapsible-summary">
+              <h2 style="margin:0;">Логирование</h2>
+              <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+            </summary>
+            <div class="dt-collapsible-body">
+
+            <div class="small" style="margin-bottom:8px; opacity:0.9;">
+              Настройки логов (часть применяется сразу, часть — после Restart UI).
+            </div>
+
+            <div class="dt-logging-grid" role="group" aria-label="Logging settings">
+              <label class="dt-logging-field">
+                <span class="dt-logging-label">Core level</span>
+                <select
+                  id="dt-log-core-level"
+                  class="dt-pill-field"
+                  title="Уровень логирования core.log: ERROR/WARNING/INFO/DEBUG."
+                >
+                  <option value="ERROR">ERROR</option>
+                  <option value="WARNING">WARNING</option>
+                  <option value="INFO">INFO</option>
+                  <option value="DEBUG">DEBUG</option>
+                </select>
+              </label>
+
+              <label class="dt-switch dt-logging-switch" title="Включить/выключить core.log. При выключении записи в core.log не ведутся.">
+                <input id="dt-log-core-enable" type="checkbox" aria-label="Core log">
+                <span class="dt-switch-slider" aria-hidden="true"></span>
+                <span class="dt-switch-label">Core log</span>
+              </label>
+
+              <label class="dt-switch dt-logging-switch" title="Включить подробный лог WebSocket (ws.log). Может сильно увеличить объём логов.">
+                <input id="dt-log-ws-enable" type="checkbox" aria-label="WS debug">
+                <span class="dt-switch-slider" aria-hidden="true"></span>
+                <span class="dt-switch-label">WS debug</span>
+              </label>
+
+              <label class="dt-logging-field">
+                <span class="dt-logging-label">Rotate (MB)</span>
+                <input
+                  id="dt-log-rotate-mb"
+                  class="dt-pill-field"
+                  type="number"
+                  min="1"
+                  max="50"
+                  value="2"
+                  inputmode="numeric"
+                  title="Максимальный размер лога перед ротацией, в МБ."
+                >
+              </label>
+
+              <label class="dt-logging-field">
+                <span class="dt-logging-label">Backups</span>
+                <input
+                  id="dt-log-rotate-backups"
+                  class="dt-pill-field"
+                  type="number"
+                  min="1"
+                  max="20"
+                  value="3"
+                  inputmode="numeric"
+                  title="Сколько архивных файлов лога хранить после ротации."
+                >
+              </label>
+            </div>
+
+            <div class="dt-logging-actions">
+              <button type="button" id="dt-log-settings-save" class="btn-secondary" title="Сохранить настройки логирования в env‑файл и применить (часть — после Restart UI).">Save</button>
+            </div>
+
+            <div class="small" style="margin-top:8px; opacity:0.85;">
+              Файлы логов: core/ws. Смотреть можно в блоке «Логи панели».
+            </div>
+            </div>
+          </details>
+
+                    <details class="card  dt-collapsible" id="dt-ui-prefs-card" data-xk-section="ui interface dt-ui-prefs-card" open>
+            <summary class="dt-collapsible-summary">
+              <h2 style="margin:0;">Интерфейс</h2>
+              <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+            </summary>
+            <div class="dt-collapsible-body">
+
+            <div class="small" style="margin-bottom:10px; opacity:0.9;">
+              Локальные настройки этой вкладки (сохраняются в браузере).
+            </div>
+
+            <label class="dt-switch" title="Спрятать кнопку 💰 Донат в шапке основной панели.">
+              <input id="dt-hide-donate-toggle" type="checkbox" aria-label="Отключить кнопку 💰 Донат">
+              <span class="dt-switch-slider" aria-hidden="true"></span>
+              <span class="dt-switch-label">Отключить кнопку 💰Донат</span>
+            </label>
+
+            <div style="margin-top:12px;">
+              <div class="small" style="margin-bottom:8px; opacity:0.9;">
+                Типографика (локально, сохраняется в браузере).
+              </div>
+
+              <div class="dt-logging-grid" role="group" aria-label="Typography settings">
+                <label class="dt-logging-field">
+                  <span class="dt-logging-label">Размер UI</span>
+                  <select id="dt-typo-scale" class="dt-pill-field" title="Масштаб текста интерфейса.">
+                    <option value="0.9">90%</option>
+                    <option value="1">100%</option>
+                    <option value="1.1">110%</option>
+                    <option value="1.2">120%</option>
+                    <option value="1.3">130%</option>
+                  </select>
+                </label>
+
+                <label class="dt-logging-field">
+                  <span class="dt-logging-label">Шрифт UI</span>
+                  <select id="dt-typo-family" class="dt-pill-field" title="Шрифт интерфейса.">
+                    <option value="">По умолчанию (system)</option>
+                    <option value="system-ui, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif">System UI</option>
+                    <option value="Arial, Helvetica, sans-serif">Arial</option>
+                    <option value="Tahoma, Verdana, sans-serif">Tahoma</option>
+                    <option value="Verdana, Geneva, sans-serif">Verdana</option>
+                  </select>
+                </label>
+
+                <label class="dt-logging-field">
+                  <span class="dt-logging-label">Моно: размер</span>
+                  <select id="dt-typo-mono-scale" class="dt-pill-field" title="Масштаб моноширинного (логи/редакторы).">
+                    <option value="auto">как UI</option>
+                    <option value="0.9">90%</option>
+                    <option value="1">100%</option>
+                    <option value="1.1">110%</option>
+                    <option value="1.2">120%</option>
+                    <option value="1.3">130%</option>
+                  </select>
+                </label>
+
+                <label class="dt-logging-field">
+                  <span class="dt-logging-label">Моно: шрифт</span>
+                  <select id="dt-typo-mono-family" class="dt-pill-field" title="Шрифт для логов/редакторов.">
+                    <option value="">По умолчанию (monospace)</option>
+                    <option value="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace">System monospace</option>
+                    <option value="Consolas, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace">Consolas</option>
+                    <option value="&quot;Courier New&quot;, monospace">Courier New</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="dt-logging-actions">
+                <button type="button" id="dt-typo-reset" class="btn-secondary" title="Сбросить настройки типографики.">Reset</button>
+              </div>
+            </div>
+            </div>
+          </details>
+
+          <details class="card dt-collapsible" id="dt-branding-card" data-xk-section="branding dt-branding-card" open>
+            <summary class="dt-collapsible-summary">
+              <h2 style="margin:0;">Шапка / Брендинг</h2>
+              <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+            </summary>
+            <div class="dt-collapsible-body">
+              <div class="small" style="margin-bottom:10px; opacity:0.9;">
+                Настройки шапки основной панели (глобально, сохраняются на роутере в UI_STATE_DIR). Применяются на всех устройствах.
+              </div>
+
+              <div class="dt-logging-grid" role="group" aria-label="Branding settings">
+                <label class="dt-logging-field" style="grid-column: 1 / -1;">
+                  <span class="dt-logging-label">Заголовок панели</span>
+                  <input id="dt-branding-title" type="text" class="dt-pill-field" placeholder="Xkeen UI" autocomplete="off">
+                </label>
+              </div>
+
+              <div class="dt-branding-split">
+                <div class="dt-branding-block">
+                  <div class="small" style="opacity:0.9; margin-bottom:6px;"><b>Лого</b> (URL или upload)</div>
+                  <div class="dt-branding-row">
+                    <input id="dt-branding-logo-url" type="url" class="dt-pill-field" placeholder="https://... или data:image/..." autocomplete="off">
+                    <label id="dt-branding-logo-upload-btn" class="btn-secondary dt-btn-like dt-file-label" role="button" tabindex="0" title="Загрузить файл логотипа (изображение).">
+                      Upload
+                      <input id="dt-branding-logo-file" type="file" accept="image/*" class="dt-file-input-overlay">
+                    </label>
+                    <button type="button" id="dt-branding-logo-clear" class="btn-secondary" title="Очистить логотип (убрать URL/файл).">Clear</button>
+                  </div>
+                  <img id="dt-branding-logo-preview" class="dt-branding-preview hidden" alt="Logo preview">
+                </div>
+
+                <div class="dt-branding-block">
+                  <div class="small" style="opacity:0.9; margin-bottom:6px;"><b>Favicon</b> (URL или upload)</div>
+                  <div class="dt-branding-row">
+                    <input id="dt-branding-favicon-url" type="url" class="dt-pill-field" placeholder="https://... или data:image/..." autocomplete="off">
+                    <label id="dt-branding-favicon-upload-btn" class="btn-secondary dt-btn-like dt-file-label" role="button" tabindex="0" title="Загрузить файл favicon (.ico или изображение).">
+                      Upload
+                      <input id="dt-branding-favicon-file" type="file" accept="image/*,.ico" class="dt-file-input-overlay">
+                    </label>
+                    <button type="button" id="dt-branding-favicon-clear" class="btn-secondary" title="Очистить favicon (убрать URL/файл).">Clear</button>
+                  </div>
+                  <img id="dt-branding-favicon-preview" class="dt-branding-preview hidden" alt="Favicon preview">
+                </div>
+              </div>
+
+              <div style="margin-top:12px;">
+                <div class="small" style="margin-bottom:8px; opacity:0.9;"><b>Переименование вкладок</b> (например “Mihomo” → “Proxy”)</div>
+                <div id="dt-branding-tab-rename" class="dt-rename-list" role="group" aria-label="Tab renaming">
+                  <div class="dt-rename-row">
+                    <span class="dt-rename-label">Роутинг Xray</span>
+                    <input class="dt-pill-field dt-rename-input" data-tab-key="view:routing" placeholder="Роутинг Xray" autocomplete="off">
+                  </div>
+                  <div class="dt-rename-row">
+                    <span class="dt-rename-label">Роутинг Mihomo</span>
+                    <input class="dt-pill-field dt-rename-input" data-tab-key="view:mihomo" placeholder="Роутинг Mihomo" autocomplete="off">
+                  </div>
+                  <div class="dt-rename-row">
+                    <span class="dt-rename-label">Порты и Исключения</span>
+                    <input class="dt-pill-field dt-rename-input" data-tab-key="view:xkeen" placeholder="Порты и Исключения" autocomplete="off">
+                  </div>
+                  <div class="dt-rename-row">
+                    <span class="dt-rename-label">Live логи Xray</span>
+                    <input class="dt-pill-field dt-rename-input" data-tab-key="view:xray-logs" placeholder="Live логи Xray" autocomplete="off">
+                  </div>
+                  <div class="dt-rename-row">
+                    <span class="dt-rename-label">Команды</span>
+                    <input class="dt-pill-field dt-rename-input" data-tab-key="view:commands" placeholder="Команды" autocomplete="off">
+                  </div>
+                  <div class="dt-rename-row">
+                    <span class="dt-rename-label">Файлы</span>
+                    <input class="dt-pill-field dt-rename-input" data-tab-key="view:files" placeholder="Файлы" autocomplete="off">
+                  </div>
+                  <div class="dt-rename-row">
+                    <span class="dt-rename-label">Mihomo Генератор</span>
+                    <input class="dt-pill-field dt-rename-input" data-tab-key="id:top-tab-mihomo-generator" placeholder="Mihomo Генератор" autocomplete="off">
+                  </div>
+                  <div class="dt-rename-row">
+                    <span class="dt-rename-label">💰 Донат</span>
+                    <input class="dt-pill-field dt-rename-input" data-tab-key="id:top-tab-donate" placeholder="💰 Донат" autocomplete="off">
+                  </div>
+                </div>
+              </div>
+
+              <div class="dt-logging-actions" style="margin-top:12px;">
+                <button type="button" id="dt-branding-save" class="btn-secondary" title="Сохранить и применить настройки брендинга (на роутере).">Save</button>
+                <button type="button" id="dt-branding-reset" class="btn-secondary" title="Сбросить брендинг по умолчанию (на роутере).">Reset</button>
+              </div>
+              <div id="dt-branding-status" class="small" style="margin-top:8px; opacity:0.85;"></div>
+            </div>
+          </details>
+
+          <details class="card dt-collapsible" id="dt-ui-prefs-io-card" data-xk-section="ui export import dt-ui-prefs-io-card" open>
+            <summary class="dt-collapsible-summary">
+              <h2 style="margin:0;">Экспорт / Импорт UI‑настроек</h2>
+              <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+            </summary>
+            <div class="dt-collapsible-body">
+              <div class="small" style="margin-bottom:10px; opacity:0.9;">
+                Экспорт/импорт локальных UI‑предпочтений (тема, типографика, скрытые элементы, layout, брендинг, DevTools‑сворачивания).
+              </div>
+
+              <div class="dt-actions-grid" aria-label="Export actions">
+                <button type="button" id="dt-ui-prefs-export" class="btn-secondary" title="Собрать текущие UI‑настройки в JSON ниже.">Export JSON</button>
+                <button type="button" id="dt-ui-prefs-copy" class="btn-secondary" title="Скопировать JSON в буфер обмена.">Copy</button>
+                <button type="button" id="dt-ui-prefs-download" class="btn-secondary" title="Скачать JSON файлом.">Download</button>
+              </div>
+
+              <textarea id="dt-ui-prefs-export-text" class="dt-codearea" rows="6" spellcheck="false" placeholder="Нажмите Export JSON…" readonly></textarea>
+
+              <div style="margin-top:12px;">
+                <div class="small" style="margin-bottom:6px; opacity:0.9;"><b>Import JSON</b> (вставьте или загрузите файл)</div>
+                <textarea id="dt-ui-prefs-import-text" class="dt-codearea" rows="6" spellcheck="false" placeholder='{ "kind": "xkeen-ui-prefs", "prefs": { ... } }'></textarea>
+                <div class="dt-actions-grid" style="margin-top:8px;" aria-label="Import actions">
+                  <button type="button" id="dt-ui-prefs-import" class="btn-secondary" title="Применить JSON из поля выше (перезапишет UI‑настройки).">Import JSON</button>
+                  <label id="dt-ui-prefs-import-file-btn" class="btn-secondary dt-btn-like dt-file-label" role="button" tabindex="0" title="Загрузить JSON из файла и вставить в поле импорта.">
+                    Import from file
+                    <input id="dt-ui-prefs-import-file" type="file" accept="application/json" class="dt-file-input-overlay">
+                  </label>
+                </div>
+              </div>
+
+              <div style="margin-top:12px;">
+                <div class="small" style="margin-bottom:6px; opacity:0.9;"><b>Reset all UI prefs</b></div>
+                <button type="button" id="dt-ui-prefs-resetall" class="btn-danger" title="Полный сброс UI‑настроек (в браузере): тема/типографика/layout/скрытия/перетасовка вкладок и т.д.">Reset all</button>
+              </div>
+
+              <div id="dt-ui-prefs-io-status" class="small" style="margin-top:8px; opacity:0.85;"></div>
+            </div>
+          </details>
+
+          <details class="card dt-collapsible" id="dt-layout-card" data-xk-section="layout dt-layout-card" open>
+            <summary class="dt-collapsible-summary">
+              <h2 style="margin:0;">Layout‑твики</h2>
+              <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+            </summary>
+            <div class="dt-collapsible-body">
+              <div class="small" style="margin-bottom:10px; opacity:0.9;">
+                Настройки раскладки/плотности UI (локально, сохраняется в браузере).
+              </div>
+
+              <label class="dt-switch" title="Компактный режим: меньше padding/отступов почти везде.">
+                <input id="dt-layout-compact" type="checkbox" aria-label="Compact mode">
+                <span class="dt-switch-slider" aria-hidden="true"></span>
+                <span class="dt-switch-label">Compact mode (меньше отступов)</span>
+              </label>
+
+              <label class="dt-switch" style="margin-top:10px;" title="Спрятать подсказки/описания (small‑текст, help‑строки).">
+                <input id="dt-layout-hide-hints" type="checkbox" aria-label="Скрыть подсказки">
+                <span class="dt-switch-slider" aria-hidden="true"></span>
+                <span class="dt-switch-label">Скрыть подсказки/описания</span>
+              </label>
+
+              <label class="dt-switch" style="margin-top:10px;" title="Скрывать вкладки/блоки, которые выключены feature flags (например XKEEN_REMOTEFM_ENABLE=0).">
+                <input id="dt-layout-hide-unused" type="checkbox" aria-label="Скрыть неиспользуемое">
+                <span class="dt-switch-slider" aria-hidden="true"></span>
+                <span class="dt-switch-label">Скрыть неиспользуемые вкладки/карточки</span>
+              </label>
+
+              <div style="margin-top:12px;">
+                <label class="dt-logging-field" style="max-width: 420px;">
+                  <span class="dt-logging-label">Ширина контейнера</span>
+                  <select id="dt-layout-container" class="dt-pill-field" title="Фиксированная / резиновая / максимальная ширина">
+                    <option value="fluid">Резиновая (до 1600px)</option>
+                    <option value="fixed">Фиксированная (960px)</option>
+                    <option value="max">Макс ширина (почти во весь экран)</option>
+                  </select>
+                </label>
+              </div>
+
+              <hr style="border:0; border-top:1px solid #334155; margin:12px 0;">
+
+              <div class="small" style="margin-bottom:8px; opacity:0.9;">
+                Вкладки основной панели: перетаскивайте для перестановки, ⭐ закрепляет вкладку слева.
+              </div>
+              <ul class="dt-tab-list" id="dt-layout-tab-list" aria-label="Tab order editor"></ul>
+
+              <div class="dt-logging-actions" style="justify-content:flex-end;">
+                <button type="button" class="btn-secondary" id="dt-layout-tabs-reset" title="Сбросить порядок/избранные вкладок.">Reset tabs</button>
+              </div>
+            </div>
+          </details>
+
+                    <details class="card  dt-collapsible" id="dt-theme-editor-card" data-xk-section="theme dt-theme-editor-card" open>
+            <summary class="dt-collapsible-summary">
+              <h2 style="margin:0;">Тема и CSS‑переменные (глобально)</h2>
+              <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+            </summary>
+            <div class="dt-collapsible-body">
+
+            <div class="small" style="margin-bottom:10px; opacity:0.9;">
+              Редактор безопасных CSS‑переменных: <code>--bg</code>, <code>--card-bg</code>, <code>--text</code>, <code>--muted</code>, <code>--accent</code>, <code>--border</code>, <code>--radius</code>, <code>--shadow</code>.
+              <br>
+              <span style="opacity:0.9;">Save globally сохраняет на роутере (в <code>UI_STATE_DIR/custom_theme.css</code>) и автоматически подключается на всех страницах.</span>
+            </div>
+
+            <div class="dt-theme-target" role="tablist" aria-label="Target theme">
+              <button type="button" id="dt-theme-target-dark" class="dt-chip-btn active" aria-selected="true" title="Редактировать настройки для тёмной темы.">Dark</button>
+              <button type="button" id="dt-theme-target-light" class="dt-chip-btn" aria-selected="false" title="Редактировать настройки для светлой темы.">Light</button>
+            </div>
+
+            <div class="dt-theme-grid" role="group" aria-label="Theme colors">
+              <div class="dt-theme-field">
+                <div class="dt-theme-name">--bg</div>
+                <div class="dt-theme-inputs">
+                  <input type="color" id="dt-theme-bg-color" class="dt-theme-color" aria-label="--bg picker">
+                  <input type="text" id="dt-theme-bg-text" class="dt-pill-field dt-theme-text" placeholder="#0f172a" spellcheck="false">
+                </div>
+              </div>
+
+              <div class="dt-theme-field">
+                <div class="dt-theme-name">--card-bg</div>
+                <div class="dt-theme-inputs">
+                  <input type="color" id="dt-theme-card-bg-color" class="dt-theme-color" aria-label="--card-bg picker">
+                  <input type="text" id="dt-theme-card-bg-text" class="dt-pill-field dt-theme-text" placeholder="#020617" spellcheck="false">
+                </div>
+              </div>
+
+              <div class="dt-theme-field">
+                <div class="dt-theme-name">--text</div>
+                <div class="dt-theme-inputs">
+                  <input type="color" id="dt-theme-text-color" class="dt-theme-color" aria-label="--text picker">
+                  <input type="text" id="dt-theme-text-text" class="dt-pill-field dt-theme-text" placeholder="#e5e7eb" spellcheck="false">
+                </div>
+              </div>
+
+              <div class="dt-theme-field">
+                <div class="dt-theme-name">--muted</div>
+                <div class="dt-theme-inputs">
+                  <input type="color" id="dt-theme-muted-color" class="dt-theme-color" aria-label="--muted picker">
+                  <input type="text" id="dt-theme-muted-text" class="dt-pill-field dt-theme-text" placeholder="#9ca3af" spellcheck="false">
+                </div>
+              </div>
+
+              <div class="dt-theme-field">
+                <div class="dt-theme-name">--accent</div>
+                <div class="dt-theme-inputs">
+                  <input type="color" id="dt-theme-accent-color" class="dt-theme-color" aria-label="--accent picker">
+                  <input type="text" id="dt-theme-accent-text" class="dt-pill-field dt-theme-text" placeholder="#60a5fa" spellcheck="false">
+                </div>
+              </div>
+
+              <div class="dt-theme-field">
+                <div class="dt-theme-name">--border</div>
+                <div class="dt-theme-inputs">
+                  <input type="color" id="dt-theme-border-color" class="dt-theme-color" aria-label="--border picker">
+                  <input type="text" id="dt-theme-border-text" class="dt-pill-field dt-theme-text" placeholder="#1f2937" spellcheck="false">
+                </div>
+              </div>
+            </div>
+
+            <div class="dt-theme-sliders" role="group" aria-label="Theme sliders">
+              <label class="dt-theme-slider">
+                <span class="dt-theme-slider-name">Радиус</span>
+                <input type="range" id="dt-theme-radius" min="0" max="32" step="1" aria-label="Radius">
+                <span class="dt-theme-slider-val" id="dt-theme-radius-val">—</span>
+              </label>
+
+              <label class="dt-theme-slider">
+                <span class="dt-theme-slider-name">Тень</span>
+                <input type="range" id="dt-theme-shadow" min="0" max="0.7" step="0.01" aria-label="Shadow alpha">
+                <span class="dt-theme-slider-val" id="dt-theme-shadow-val">—</span>
+              </label>
+
+              <label class="dt-theme-slider">
+                <span class="dt-theme-slider-name">Плотность</span>
+                <input type="range" id="dt-theme-density" min="0.75" max="1.35" step="0.01" aria-label="Density">
+                <span class="dt-theme-slider-val" id="dt-theme-density-val">—</span>
+              </label>
+
+              <label class="dt-theme-slider">
+                <span class="dt-theme-slider-name">Контраст</span>
+                <input type="range" id="dt-theme-contrast" min="0.85" max="1.25" step="0.01" aria-label="Contrast">
+                <span class="dt-theme-slider-val" id="dt-theme-contrast-val">—</span>
+              </label>
+            </div>
+
+            <div class="dt-logging-actions" style="margin-top:12px; gap:10px; flex-wrap:wrap;">
+              <label class="dt-switch" title="Применять изменения сразу (preview).">
+                <input id="dt-theme-live-preview" type="checkbox" checked aria-label="Live preview">
+                <span class="dt-switch-slider" aria-hidden="true"></span>
+                <span class="dt-switch-label">Live preview</span>
+              </label>
+
+              <button type="button" id="dt-theme-save" class="btn-secondary" title="Сохранить на роутере и подключить глобально.">Save globally</button>
+              <button type="button" id="dt-theme-reset" class="btn-secondary" title="Удалить global custom_theme.css и вернуться к стандартной теме.">Reset global</button>
+            </div>
+
+            <div class="small" id="dt-theme-status" style="margin-top:10px; opacity:0.85;"></div>
+            </div>
+          </details>
+
+          <details class="card dt-collapsible" id="dt-custom-css-card" data-xk-section="css custom-css dt-custom-css-card" open>
+            <summary class="dt-collapsible-summary">
+              <h2 style="margin:0;">Custom CSS (глобально)</h2>
+              <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+            </summary>
+            <div class="dt-collapsible-body">
+              <div class="small" style="margin-bottom:10px; opacity:0.9;">
+                Редактор <code>custom.css</code> (хранится на роутере в <code>UI_STATE_DIR/custom.css</code> и применяется на всех страницах).
+                <br>
+                <b>Safety:</b> принимается только CSS (без JS‑вставок). Если панель «сломалась» из‑за стилей — откройте страницу с <code>?safe=1</code>, чтобы загрузиться без <code>custom.css</code>.
+              </div>
+
+              {% if safe_mode %}
+              <div class="small" style="margin-bottom:10px; color:#fca5a5;">
+                Safe mode активен: <code>custom.css</code> сейчас не подключается. Уберите <code>?safe=1</code>, чтобы применить стили.
+              </div>
+              {% else %}
+              <div class="small" style="margin-bottom:10px; opacity:0.85;">
+                <a class="btn-link" href="{{ url_for('devtools_page') }}?safe=1" title="Открыть DevTools без custom.css.">Загрузить DevTools без кастомизации (?safe=1)</a>
+              </div>
+              {% endif %}
+
+              <div class="small" id="dt-custom-css-meta" style="margin-bottom:8px; opacity:0.85;"></div>
+
+              <div class="dt-custom-css-editor" id="dt-custom-css-editor-wrap">
+                <textarea id="dt-custom-css-textarea" class="xkeen-textarea" spellcheck="false" placeholder="/* Ваш CSS */"></textarea>
+              </div>
+
+              <div class="dt-custom-css-actions" style="margin-top:12px; gap:10px; flex-wrap:wrap; display:flex;">
+                <button type="button" id="dt-custom-css-save" title="Сохранить custom.css и включить.">Save</button>
+                <button type="button" id="dt-custom-css-disable" class="btn-secondary" title="Отключить custom.css (файл останется на диске).">Disable</button>
+                <button type="button" id="dt-custom-css-reset" class="btn-secondary" title="Удалить custom.css и сбросить.">Reset</button>
+                <button type="button" id="dt-custom-css-help-btn" class="btn-secondary" title="Открыть справку по Custom CSS.">Справка</button>
+              </div>
+
+              <div class="small" id="dt-custom-css-status" style="margin-top:10px; opacity:0.85;"></div>
+            </div>
+          </details>
+
+        </div>
+
+        <!-- Right column: ENV whitelist editor -->
+        <div class="layout-main dt-tools-right">
+          <section class="card" id="dt-env-card" data-xk-section="env dt-env-card">
+            <div style="display:flex; justify-content: space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+              <h2 style="margin-top:0;">ENV (whitelist)</h2>
+              <button type="button" id="dt-env-help-btn" class="btn-secondary" title="Открыть справку по ENV (whitelist).">Справка</button>
+            </div>
+            <div class="small" id="dt-env-file" style="margin-bottom:10px; opacity:0.9;"></div>
+            <div class="small" style="margin-bottom:10px; opacity:0.9;">
+              Значения сохраняются в env-файл. Часть настроек применяется только после Restart UI.
+            </div>
+            <div class="dt-env-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Current</th>
+                    <th>Value</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="dt-env-tbody">
+                  <tr><td colspan="4">Загрузка…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    
+<div id="dt-tab-logs" class="view-section" data-xk-section="logs dt-tab-logs" role="tabpanel" aria-labelledby="dt-tab-btn-logs" style="display:none;">
+  <section class="card dt-logs-card" data-xk-section="logs dt-logs-card">
+    <h2 style="margin-top:0;">Логи панели</h2>
+
+    <div class="dt-logs-layout">
+      <!-- Left: log list -->
+      <aside class="dt-logs-sidebar" aria-label="Log list">
+        <div class="dt-logs-sidebar-top">
+          <div class="small" style="opacity:0.9;">Logs</div>
+          <button type="button" id="dt-log-list-refresh" class="btn-secondary dt-log-btn" title="Обновить список логов.">Refresh</button>
+        </div>
+
+        <div id="dt-log-list" class="dt-log-list" role="listbox" aria-label="Список логов">
+          <div class="small" style="opacity:0.85;">Загрузка…</div>
+        </div>
+
+        <div class="small" id="dt-log-list-status" style="margin-top:8px; opacity:0.8;"></div>
+      </aside>
+
+      <!-- Right: current log view -->
+      <div class="dt-logs-main">
+        <div class="dt-log-topbar" aria-label="Log controls">
+          <div class="small dt-log-current" style="white-space:nowrap;">
+            Log: <strong id="dt-log-current-name">—</strong>
+          </div>
+
+          <!-- Hidden legacy select (kept for backward compatibility with existing JS logic) -->
+          <select id="dt-log-select" style="display:none;"></select>
+
+          <div class="dt-log-topbar-actions">
+            <button type="button" id="dt-log-refresh" class="btn-secondary dt-log-btn" title="Загрузить хвост выбранного лога.">Refresh</button>
+            <button type="button" id="dt-log-copy" class="btn-secondary dt-log-btn" title="Скопировать все видимые строки (с учётом фильтров).">Copy</button>
+
+            <details class="dt-log-menu" id="dt-log-more">
+              <summary class="btn-secondary dt-log-btn" title="Дополнительно" aria-label="Дополнительно">⋯</summary>
+              <div class="dt-log-menu-panel" role="menu" aria-label="Дополнительные действия">
+                <label class="small dt-log-menu-row">
+                  lines
+                  <input id="dt-log-lines" type="number" min="50" max="2000" value="400" class="dt-log-lines-input" title="Сколько последних строк показать (50–2000).">
+                </label>
+                <button type="button" id="dt-log-load-more" class="btn-secondary dt-log-btn" title="Подгрузить более старые строки (увеличить окно назад).">Load more</button>
+                <button type="button" id="dt-log-download" class="btn-secondary dt-log-btn" title="Скачать выбранный лог‑файл.">Download</button>
+                <button type="button" id="dt-log-clear" class="btn-danger dt-log-btn" title="Очистить (обнулить) выбранный лог‑файл.">Clear</button>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <div class="dt-log-controls" aria-label="Log filters">
+          <div class="dt-log-search-group">
+            <input
+              id="dt-log-search"
+              type="text"
+              class="xray-log-filter dt-log-filter"
+              placeholder="Фильтр по логам (пример: error vpn)"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button
+              id="dt-log-filter-clear"
+              type="button"
+              class="btn-secondary dt-log-btn"
+              title="Очистить фильтр"
+              aria-label="Очистить фильтр"
+            >✖</button>
+          </div>
+
+          <label class="dt-switch" title="Live режим (tail -f): авто‑подтягивание новых строк.">
+            <input id="dt-log-live" type="checkbox" />
+            <span class="dt-switch-slider" aria-hidden="true"></span>
+            <span class="dt-switch-label">Live</span>
+          </label>
+          <!-- Legacy Auto checkbox (kept for backward compatibility with existing JS logic) -->
+          <input id="dt-log-auto" type="checkbox" style="display:none;" />
+
+          <div class="dt-log-interval" title="Интервал авто‑обновления.">
+            <span class="dt-log-interval-label">every</span>
+            <select id="dt-log-interval" class="xray-log-select">
+              <option value="1000">1s</option>
+              <option value="2000">2s</option>
+              <option value="5000" selected>5s</option>
+              <option value="10000">10s</option>
+              <option value="30000">30s</option>
+            </select>
+          </div>
+
+          <label class="dt-switch" title="Авто‑прокрутка в конец при обновлении.">
+            <input id="dt-log-follow" type="checkbox" checked />
+            <span class="dt-switch-slider" aria-hidden="true"></span>
+            <span class="dt-switch-label">Follow</span>
+          </label>
+
+          <span class="small dt-log-stats" id="dt-log-stats" aria-live="polite"></span>
+        </div>
+
+<div class="small" id="dt-log-path" style="margin:8px 0; opacity:0.9;"></div>
+        <pre id="dt-log-view" class="log-block xray-log-block dt-log-view" data-raw-text="" title="Просмотр лога (только чтение)." style="margin:0;"></pre>
+      </div>
+    </div>
+  </section>
+</div>
+
+      <!-- Shared confirm modal (replaces browser confirm alerts) -->
+      <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Подтверждение">
+        <div class="modal-content">
+          <div class="modal-header">
+            <span class="modal-title" id="confirm-modal-title">Подтверждение</span>
+            <button type="button" class="modal-close" id="confirm-modal-close-btn" title="Закрыть">×</button>
+          </div>
+          <div class="modal-body">
+            <p id="confirm-modal-message" class="modal-description"></p>
+          </div>
+          <div class="modal-actions">
+            <button type="button" id="confirm-modal-cancel-btn" title="Отменить действие и закрыть окно подтверждения.">Отменить</button>
+            <button type="button" id="confirm-modal-ok-btn" class="btn-danger" title="Подтвердить действие.">OK</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log line context modal (Stage 8) -->
+      <div id="dt-log-context-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Контекст лога">
+        <div class="modal-content" style="max-width: 980px;">
+          <div class="modal-header">
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <span class="modal-title" id="dt-log-context-title">Context</span>
+              <span id="dt-log-context-subtitle" class="modal-hint" style="margin:0; font-size: 0.82rem; opacity:0.75;"></span>
+            </div>
+            <button type="button" class="modal-close" id="dt-log-context-close-btn" title="Закрыть">×</button>
+          </div>
+          <div class="modal-body modal-body-logs">
+            <pre id="dt-log-context-body" class="log-block" style="margin:0; white-space:pre-wrap;"></pre>
+          </div>
+          <div class="modal-actions" style="justify-content: space-between;">
+            <button type="button" id="dt-log-context-copy-btn" class="btn-secondary" title="Скопировать весь показанный контекст.">Copy context</button>
+            <button type="button" id="dt-log-context-ok-btn" title="Закрыть окно.">Закрыть</button>
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- Custom CSS help modal -->
+      <div id="dt-custom-css-help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Справка: Custom CSS">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <span class="modal-title">Справка: Custom CSS</span>
+              <span class="modal-hint" style="margin:0; font-size: 0.82rem; opacity:0.75;">Как пользоваться редактором, как откатиться (Safe mode) и примеры готовых правок.</span>
+            </div>
+            <button type="button" class="modal-close" id="dt-custom-css-help-close-btn" title="Закрыть">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="dt-help">
+              <div class="small" style="opacity:0.9; margin-bottom: 10px;">
+                Этот редактор сохраняет файл <code>UI_STATE_DIR/custom.css</code> на роутере и подключает его <b>на всех страницах</b> (включая <code>/login</code> и <code>/setup</code>).
+                Если что-то “сломалось” — откройте любую страницу с <code>?safe=1</code>: тогда <code>custom.css</code> <b>не загрузится</b>.
+                <br>
+                Ограничения: до <b>250 000</b> символов. Отключение хранится флажком <code>UI_STATE_DIR/custom_css.disabled</code> (кнопка <b>Disable</b>).
+              </div>
+
+              <div class="dt-help-toolbar">
+                <div class="dt-help-search-group">
+                  <input id="dt-custom-css-help-search" type="text" class="dt-help-search-input" placeholder="Поиск по справке (текст/код)…" autocomplete="off" spellcheck="false" />
+                  <button type="button" id="dt-custom-css-help-search-clear" class="btn-secondary dt-help-search-clear" title="Очистить поиск" aria-label="Очистить поиск">✖</button>
+                </div>
+                <div class="small" id="dt-custom-css-help-search-status" style="margin-top:6px; opacity:0.8;"></div>
+              </div>
+
+
+              <details open>
+                <summary><b>Быстрый старт</b></summary>
+                <div class="small" style="margin-top:8px; opacity:0.9;">
+                  <ol style="margin:8px 0 0 18px;">
+                    <li>Впишите CSS в редактор.</li>
+                    <li>Нажмите <b>Save</b> — сохранит и включит.</li>
+                    <li>Если эффекта нет — обновите страницу (Ctrl+F5) или проверьте, что вы не в <code>?safe=1</code>.</li>
+                    <li><b>Disable</b> — выключает применение (файл остаётся).</li>
+                    <li><b>Reset</b> — удаляет CSS и сбрасывает всё.</li>
+                  </ol>
+                </div>
+              </details>
+
+              <details>
+                <summary><b>Как найти нужный селектор</b></summary>
+                <div class="small" style="margin-top:8px; opacity:0.9;">
+                  <ol style="margin:8px 0 0 18px;">
+                    <li>Откройте панель в браузере → нажмите правой кнопкой по элементу → <b>Inspect / Исследовать</b>.</li>
+                    <li>Вкладка <b>Elements</b> покажет HTML и классы (например <code>.card</code>, <code>.btn-secondary</code>).</li>
+                    <li>Вкладка <b>Styles</b> показывает, какие правила применяются и чем их можно переопределить.</li>
+                    <li>Лучше “сужать” селектор: вместо <code>div</code> используйте классы/ID, чтобы не ломать всё подряд.</li>
+                  </ol>
+                </div>
+              </details>
+
+              <details>
+                <summary><b>Слои, темы и приоритет</b></summary>
+                <div class="small" style="margin-top:8px; opacity:0.9;">
+                  <ul style="margin:8px 0 0 18px;">
+                    <li><b>База:</b> стили из <code>/static/styles.css</code> + стили конкретной страницы.</li>
+                    <li><b>Theme editor:</b> если вы сохраняли тему в DevTools → “Тема и CSS‑переменные”, подключается <code>/ui/custom-theme.css</code> (файл <code>UI_STATE_DIR/custom_theme.css</code>).</li>
+                    <li><b>Custom CSS:</b> этот редактор управляет <code>/ui/custom.css</code> (файл <code>UI_STATE_DIR/custom.css</code>). Он подключается <b>последним</b> и обычно перекрывает всё остальное.</li>
+                    <li>Если правило не “берётся” — чаще всего нужно либо сделать селектор более специфичным, либо добавить <code>!important</code>.</li>
+                    <li>Текущая тема хранится в атрибуте <code>data-theme</code> на <code>&lt;html&gt;</code>: <code>dark</code> или <code>light</code>. Можно писать правила выборочно:
+                      <code>html[data-theme=&quot;dark&quot;] ...</code> и <code>html[data-theme=&quot;light&quot;] ...</code>.</li>
+                  </ul>
+                </div>
+              </details>
+
+              <details open id="dt-custom-css-help-examples">
+                <summary><b>Примеры (копируйте и правьте)</b></summary>
+                <div class="small" style="margin-top:8px; opacity:0.9;">
+                  Ниже — набор типовых твиков. Каждый пример можно вставить целиком или по частям.
+                </div>
+
+                <h3 style="margin:14px 0 6px;">1) Увеличить шрифт (правильный способ для этой панели)</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Глобальный масштаб текста */
+:root{
+  --xk-font-scale: 1.35;      /* интерфейс */
+  --xk-mono-font-scale: 1.20; /* редакторы/логи/терминал */
+}</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">2) Увеличить только таблицы и мелкие подписи (не раздувая всё)</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Точечно: таблицы + "small" */
+table, .small{
+  font-size: calc(1em * 1.12);
+}
+/* Инпуты/селекты */
+input, select, textarea{
+  font-size: calc(1em * 1.08);
+}</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">3) “Компактный” режим (меньше отступов)</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Компактнее карточки и секции */
+.card{
+  padding: 12px 12px 14px !important;
+}
+.container, .container-wide{
+  padding: 16px !important;
+}
+/* Чуть плотнее списки */
+ul, ol{ margin: 8px 0; }</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">4) Больше контраста: границы/разделители заметнее</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Усилить границы */
+.card, input, select, textarea, .CodeMirror{
+  border-width: 2px !important;
+}
+/* Чуть темнее/ярче border (если используете Theme editor — это будет поверх) */
+:root{
+  --border: rgba(148,163,184,.45);
+}</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">5) Сделать кнопки крупнее и удобнее на тач-экране</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">button{
+  padding: 10px 14px !important;
+  border-radius: 12px !important;
+}
+button.btn-secondary{
+  opacity: 0.95;
+}</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">6) Убрать/уменьшить анимации (если раздражают)</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Минимум анимаций */
+*{
+  transition: none !important;
+  animation: none !important;
+  scroll-behavior: auto !important;
+}</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">7) Подсветить активные/важные элементы</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Пример: выделить primary-кнопки */
+button:not(.btn-secondary){
+  box-shadow: 0 0 0 2px rgba(96,165,250,.25) !important;
+}
+/* Ссылки */
+a{ text-decoration-thickness: 2px; }</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">8) Спрятать “лишний” блок по селектору</h3>
+                <div class="small" style="opacity:0.9; margin: 6px 0;">
+                  Сначала найдите селектор через Inspect (например <code>#donate-card</code> или <code>.dt-logs-sidebar</code>).
+                </div>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Пример: скрыть конкретную карточку */
+#donate-card{ display: none !important; }
+
+/* Пример: скрыть боковую панель списка логов (DevTools) */
+.dt-logs-sidebar{ display: none !important; }</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">9) Сделать редакторы выше (меньше скролла)</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* CodeMirror-редакторы */
+.CodeMirror{
+  height: 520px !important;
+}
+/* Textarea (если где-то без CodeMirror) */
+textarea.xkeen-textarea{
+  min-height: 520px !important;
+}</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">10) Отладочный “красный контур” для понимания разметки</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Временно: покажет границы элементов */
+.card{ outline: 1px dashed rgba(252,165,165,.45); outline-offset: 2px; }
+button{ outline: 1px dashed rgba(134,239,172,.35); outline-offset: 2px; }</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">11) Разные правила для тёмной и светлой темы</h3>
+                <div class="small" style="opacity:0.9; margin: 6px 0;">
+                  Подсказка: у <code>&lt;html&gt;</code> есть атрибут <code>data-theme</code>. Так можно делать правки только для одной темы.
+                </div>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Только тёмная тема */
+html[data-theme="dark"] .card{
+  background: rgba(2,6,23,.92) !important;
+}
+
+/* Только светлая тема */
+html[data-theme="light"] .card{
+  background: #ffffff !important;
+}
+
+/* Пример: разные цвета ссылок */
+html[data-theme="dark"] a{ color: #34d399 !important; }
+html[data-theme="light"] a{ color: #2563eb !important; }</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">12) Быстро подкрутить “тему” через CSS‑переменные</h3>
+                <div class="small" style="opacity:0.9; margin: 6px 0;">
+                  Эти переменные активно используются, если вы включали DevTools → “Тема и CSS‑переменные” (файл <code>custom_theme.css</code>).
+                  Если тему не сохраняли — используйте селекторы из других примеров.
+                </div>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Переопределяем переменные поверх Theme editor */
+html[data-theme="dark"]{
+  --accent: #34d399;
+  --border: rgba(148,163,184,.35);
+  --radius: 16px;
+  --radius-sm: 12px;
+}
+
+html[data-theme="light"]{
+  --accent: #2563eb;
+  --border: rgba(51,65,85,.25);
+}</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">13) Сделать шапку/вкладки “липкими” (sticky) при скролле</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Шапка остаётся сверху при прокрутке */
+header{
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(10px);
+}
+
+/* Вкладки (если хотите отдельно) */
+.top-tabs{
+  position: sticky;
+  top: 0;
+  z-index: 49;
+}</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">14) Кастомный скроллбар (Chrome/Edge/Safari)</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Тонкая настройка полос прокрутки */
+*::-webkit-scrollbar{ width: 12px; height: 12px; }
+*::-webkit-scrollbar-track{ background: rgba(2,6,23,.35); }
+*::-webkit-scrollbar-thumb{
+  background: rgba(148,163,184,.35);
+  border-radius: 999px;
+  border: 3px solid rgba(2,6,23,.35);
+}
+*::-webkit-scrollbar-thumb:hover{ background: rgba(148,163,184,.55); }</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">15) Скрыть вкладку “💰 Донат” и сделать вкладки удобнее</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Главная панель: спрятать вкладку доната */
+#top-tab-donate{ display: none !important; }
+
+/* Вкладки: больше клика и перенос текста, если названия длинные */
+.top-tab-btn{
+  padding: 10px 14px !important;
+  min-height: 44px;
+  white-space: normal;
+}</textarea>
+                </div>
+
+                <h3 style="margin:14px 0 6px;">16) Логи/терминал: без переноса строк + горизонтальный скролл</h3>
+                <div class="dt-help-code-wrap">
+                  <textarea class="dt-help-code" readonly spellcheck="false">/* Логи */
+.log-block{
+  white-space: pre !important;
+  overflow-x: auto !important;
+  line-height: 1.35;
+}
+
+/* Чуть меньше “дерганий” при обновлении */
+.log-block{ scroll-behavior: auto !important; }</textarea>
+                </div>
+              </details>
+
+              <details>
+                <summary><b>Safe mode и аварийный откат</b></summary>
+                <div class="small" style="margin-top:8px; opacity:0.9;">
+                  <ul style="margin:8px 0 0 18px;">
+                    <li>Добавьте <code>?safe=1</code> к адресу — панель загрузится без <code>custom.css</code>.</li>
+                    <li>Зайдите в DevTools → Custom CSS → нажмите <b>Disable</b> (временно) или <b>Reset</b> (полный сброс).</li>
+                    <li>Если “перекрыли” клики (например сделали <code>pointer-events:none</code>) — safe mode поможет зайти обратно.</li>
+                  </ul>
+                </div>
+              </details>
+
+              <details>
+                <summary><b>Ограничения безопасности</b></summary>
+                <div class="small" style="margin-top:8px; opacity:0.9;">
+                  Разрешён только CSS. Попытки вставить JS (например <code>&lt;script&gt;</code> или <code>javascript:</code>) будут отклонены при сохранении.
+                </div>
+              </details>
+            </div>
+          </div>
+          <div class="modal-actions" style="justify-content:flex-end;">
+            <button type="button" id="dt-custom-css-help-ok-btn" title="Закрыть справку.">Закрыть</button>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ENV help modal -->
+      <div id="dt-env-help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Справка: ENV whitelist">
+        <div class="modal-content">
+          <div class="modal-header">
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <span class="modal-title">Справка: ENV (whitelist)</span>
+              <span class="modal-hint" style="margin:0; font-size: 0.82rem; opacity:0.75;">Что означают переменные, как применять изменения и как сбросить всё по умолчанию.</span>
+            </div>
+            <button type="button" class="modal-close" id="dt-env-help-close-btn" title="Закрыть">×</button>
+          </div>
+          <div class="modal-body">
+            <div id="dt-env-help-body"></div>
+          </div>
+          <div class="modal-actions" style="justify-content:flex-end;">
+            <button type="button" id="dt-env-help-ok-btn" title="Закрыть справку.">Закрыть</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="toast-container"></div>
 
     <footer>
-      <small>Xkeen UI — управление бэкапами.</small>
+      <small>Xkeen UI — DevTools.</small>
     </footer>
   </div>
-	<!-- Modular: page init + feature logic (no main.js on this page) -->
-	<script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/features/backups.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/pages/backups.init.js') }}"></script>
+
+  <!-- Modular: init + feature logic -->
+  <script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/confirm_modal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/donate.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/typography.js', v='20251230c') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/layout_prefs.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/branding_prefs.js', v='20260101e') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/ui_prefs_io.js', v='20260101e') }}"></script>
+  <script src="{{ url_for('static', filename='js/util/ansi.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/devtools.js', v='20260101d') }}"></script>
+  <script src="{{ url_for('static', filename='js/pages/devtools.init.js') }}"></script>
 </body>
 </html>
