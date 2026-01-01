@@ -484,6 +484,9 @@
 
   function show(node) {
     if (!node) return;
+    try {
+      if (node.dataset && node.dataset.xkForceHidden === '1') return;
+    } catch (e) {}
     try { node.style.display = ''; } catch (e) {}
   }
 
@@ -7478,15 +7481,31 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
       const arch = String(rf.arch || '').toLowerCase();
       const isMips = arch.startsWith('mips') || String(rf.reason || '') === 'arch_mips_disabled';
 
-      // Show the "Files" tab on non-MIPS even if remote is disabled (local manager is still useful).
-      if (!isMips) {
-        if (tabBtn) show(tabBtn);
-      } else {
-        if (tabBtn) hide(tabBtn);
-      }
+      // UI layout tweak: when "Hide unused tabs/cards" is enabled, hide Files
+      // tab entirely if remote FS is disabled by env (XKEEN_REMOTEFM_ENABLE=0).
+      // On MIPS it remains hidden as before.
+      let hideUnused = false;
+      try {
+        const L = (window.XKeen && window.XKeen.ui && window.XKeen.ui.layout) ? window.XKeen.ui.layout : null;
+        if (L && typeof L.load === 'function') hideUnused = !!(L.load() || {}).hideUnused;
+        else {
+          const raw = localStorage.getItem('xkeen-layout-v1');
+          hideUnused = raw ? !!(JSON.parse(raw) || {}).hideUnused : false;
+        }
+      } catch (e) {}
 
+      // Default behavior: show the tab on non-MIPS even if remote is disabled
+      // (local manager is still useful). If the user enabled "hideUnused",
+      // then hide the tab when remote FS is disabled.
       const enabled = !!rf.enabled;
       const supported = !!rf.supported;
+      const featureUsable = !!enabled && !!supported;
+
+      if (tabBtn) {
+        if (isMips) hide(tabBtn);
+        else if (hideUnused && !featureUsable) hide(tabBtn);
+        else show(tabBtn);
+      }
       S.enabled = enabled;
 
       // Disable remote target option if remote backend isn't supported.
