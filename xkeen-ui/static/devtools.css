@@ -18,7 +18,7 @@ details.dt-collapsible > summary::-webkit-details-marker {
 
 details.dt-collapsible > summary:focus-visible {
   border-radius: 12px;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.35);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .dt-collapsible-icon {
@@ -65,6 +65,41 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   .dt-theme-slider {
     grid-template-columns: 82px minmax(0, 1fr) 64px;
   }
+/* Theme editor: collapsible groups inside the main Theme card */
+.dt-theme-groups{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+details.dt-theme-group{
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+}
+
+details.dt-theme-group > summary{
+  padding: 10px 12px;
+}
+
+details.dt-theme-group[open] > summary{
+  border-bottom: 1px solid var(--border);
+}
+
+details.dt-theme-group .dt-collapsible-body{
+  margin-top: 0;
+  padding: 10px 12px 12px;
+}
+
+details.dt-theme-group h3{
+  font-size: calc(14px * var(--xk-font-scale));
+  line-height: 1.2;
+}
+
+details.dt-theme-group .dt-collapsible-icon{
+  font-size: calc(16px * var(--xk-font-scale));
+}
+
 }
 
 
@@ -73,8 +108,8 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   width: 100%;
   min-height: 340px;
   resize: vertical;
-  font-family: var(--mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
-  font-size: calc(0.95rem * var(--xk-mono-scale, 1));
+  font-family: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+  font-size: calc(0.95rem * var(--xk-mono-font-scale, 1));
   line-height: 1.35;
 }
 
@@ -99,11 +134,11 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
 }
 
 .dt-custom-css-badge.is-on {
-  color: #86efac;
+  color: var(--sem-success);
 }
 
 .dt-custom-css-badge.is-off {
-  color: #fca5a5;
+  color: var(--sem-error);
 }
 
 
@@ -144,6 +179,27 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   overflow: hidden !important;
 }
 
+
+/* Help (ENV whitelist)
+
+  The ENV help dialog is content-heavy (long text + a big table). In some setups
+  (e.g. when the page container is transformed, or the modal layer is centered
+  inside a scrollable area), the dialog can end up partially below the viewport.
+
+  To make it robust, we pin the modal to the top with safe padding and allow the
+  body to scroll inside the dialog.
+*/
+
+#dt-env-help-modal{
+  align-items: flex-start;
+  padding: 4vh 12px;
+  overflow-y: auto;
+}
+
+#dt-env-help-modal .modal-content{
+  max-height: 92vh;
+}
+
 .dt-help details > summary {
   cursor: pointer;
   user-select: none;
@@ -155,7 +211,7 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   min-height: 120px;
   resize: vertical;
   font-family: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
-  font-size: calc(0.92rem * var(--xk-mono-scale, 1));
+  font-size: calc(0.92rem * var(--xk-mono-font-scale, 1));
   line-height: 1.35;
 }
 
@@ -198,7 +254,7 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
 }
 
 .dt-help-search-input:focus{
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.25);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .dt-help-search-clear{
@@ -261,7 +317,6 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
 .dt-tab-label{
   flex: 1;
   min-width: 0;
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -273,7 +328,7 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
 }
 
 .dt-tab-item.is-dragging{ opacity: 0.65; }
-.dt-tab-item.is-drop-target{ outline: 2px dashed rgba(96, 165, 250, 0.55); outline-offset: 2px; }
+.dt-tab-item.is-drop-target{ outline: 2px dashed color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
 
 /* Branding + UI prefs import/export (DevTools) */
 
@@ -366,7 +421,7 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   background: rgba(255, 255, 255, 0.03);
   color: var(--text);
   font-family: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
-  font-size: calc(0.92rem * var(--xk-mono-scale, 1));
+  font-size: calc(0.92rem * var(--xk-mono-font-scale, 1));
   line-height: 1.35;
   box-sizing: border-box;
   max-width: 100%;
@@ -394,15 +449,19 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   padding: 6px 14px;
   font-size: calc(14px * var(--xk-font-scale));
   cursor: pointer;
-  background: #020617;
-  border: 1px solid #1f2937;
-  color: #e5e7eb;
+  background: var(--editor-btn-bg, #020617);
+  border: 1px solid var(--editor-btn-border, #1f2937);
+  color: var(--editor-btn-text, #e5e7eb);
+  /* fallback */
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.7);
+  /* prefer theme-aware */
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--editor-btn-border, #1f2937) 55%, transparent);
   transition:
     background 0.15s ease,
     transform 0.05s ease,
     box-shadow 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    color 0.15s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -411,26 +470,33 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
 }
 
 .dt-btn-like:hover {
-  background: #020617;
-  border-color: #4b5563;
+  background: var(--editor-btn-hover-bg, var(--editor-btn-bg, #020617));
+  border-color: var(--editor-btn-hover-border, var(--editor-btn-border-hover, var(--editor-btn-border, #1f2937)));
+  color: var(--editor-btn-hover-text, var(--editor-btn-text, #e5e7eb));
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.9);
   transform: translateY(-1px);
 }
 
 .dt-btn-like:active {
-  background: linear-gradient(135deg, #1d4ed8, #2563eb);
-  border-color: #2563eb;
+  background: linear-gradient(135deg, var(--editor-btn-active-from, #1d4ed8), var(--editor-btn-active-to, #2563eb));
+  border-color: var(--editor-btn-active-to, #2563eb);
   transform: translateY(1px) scale(0.99);
+  /* fallback */
   box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+  /* prefer theme-aware */
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--editor-btn-active-to, #2563eb) 45%, transparent);
 }
 
 .dt-btn-like:focus {
   outline: none;
 }
 
+.dt-btn-like:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+  outline-offset: 2px;
+}
 .dt-file-label {
   position: relative;
-  overflow: hidden;
 }
 
 /*
@@ -446,10 +512,6 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   cursor: pointer;
 }
 
-.dt-btn-like:focus-visible {
-  outline: 2px solid rgba(37, 99, 235, 0.65);
-  outline-offset: 2px;
-}
 
 
 
