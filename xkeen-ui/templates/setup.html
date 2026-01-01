@@ -14,8 +14,15 @@
   <meta name="theme-color" content="#0f172a">
   <!-- Apply typography prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20251230c') }}">
-  <style>
+  <!-- Apply layout prefs ASAP (stored in localStorage) -->
+  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101b') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101b') }}">
+  <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
+  {% if custom_css_enabled and not safe_mode %}
+  <link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
+  {% endif %}
+<style>
     .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
     .auth-card { width: 100%; max-width: 520px; }
     .auth-title { margin: 0 0 6px; font-size: 22px; }
