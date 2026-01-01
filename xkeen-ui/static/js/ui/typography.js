@@ -60,10 +60,29 @@
 
     const root = document.documentElement;
     try {
-      root.style.setProperty('--xk-font-scale', String(scale));
-      root.style.setProperty('--xk-mono-font-scale', String(monoScale));
-      if (p.fontFamily) root.style.setProperty('--xk-font-family', String(p.fontFamily));
-      if (p.monoFamily) root.style.setProperty('--xk-mono-font-family', String(p.monoFamily));
+      // IMPORTANT:
+      // Global theme (custom_theme.css) also defines --xk-font-scale / --xk-mono-font-scale.
+      // If we always set defaults (1.0) inline on :root, it will *override* global theme
+      // and Theme editor sliders will look like they "do nothing".
+      // So: when typography prefs are effectively "neutral", remove inline overrides.
+
+      const ff = String(p.fontFamily || '').trim();
+      const mff = String(p.monoFamily || '').trim();
+      const isNeutral = (scale === 1) && (monoScale === 1) && !ff && !mff;
+
+      if (isNeutral) {
+        root.style.removeProperty('--xk-font-scale');
+        root.style.removeProperty('--xk-mono-font-scale');
+        root.style.removeProperty('--xk-font-family');
+        root.style.removeProperty('--xk-mono-font-family');
+      } else {
+        root.style.setProperty('--xk-font-scale', String(scale));
+        root.style.setProperty('--xk-mono-font-scale', String(monoScale));
+        if (ff) root.style.setProperty('--xk-font-family', ff);
+        else root.style.removeProperty('--xk-font-family');
+        if (mff) root.style.setProperty('--xk-mono-font-family', mff);
+        else root.style.removeProperty('--xk-mono-font-family');
+      }
     } catch (e) {}
 
     try {
