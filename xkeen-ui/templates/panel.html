@@ -15,6 +15,17 @@
   <meta name="theme-color" content="#0f172a">
   <!-- Apply typography prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
+  <!-- Apply layout prefs ASAP (stored in localStorage) -->
+  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101b') }}"></script>
+  <!-- Env-driven visibility filters (section whitelist) -->
+  <script>
+    window.XKeen = window.XKeen || {};
+    window.XKeen.env = window.XKeen.env || {};
+    window.XKeen.env.panelSectionsWhitelist = {{ panel_sections_whitelist|tojson }};
+    window.XKeen.env.devtoolsSectionsWhitelist = {{ devtools_sections_whitelist|tojson }};
+  </script>
+  <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101b') }}"></script>
 <!-- CodeMirror & JSON lint -->
 
   <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/codemirror.min.css') }}">
@@ -59,8 +70,13 @@
 
 
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20251230c') }}">
-  <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101b') }}">
+  <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
+  {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
+  {% if custom_css_enabled and not safe_mode %}
+  <link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
+  {% endif %}
+<!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
   <script src="{{ url_for('static', filename='xterm/xterm.js') }}"></script>
   <script src="{{ url_for('static', filename='xterm/xterm-addon-fit.js') }}"></script>
@@ -91,7 +107,8 @@
     <header>
       <div class="header-main">
         <div class="header-title-group">
-          <h1>Xkeen UI</h1>
+          <img id="xk-brand-logo" class="xk-brand-logo hidden" alt="Logo" />
+          <h1 id="xk-brand-title" data-xk-brand-title>Xkeen UI</h1>
           <span
             id="xkeen-service-lamp"
             class="service-status-lamp"
@@ -143,29 +160,29 @@
       <p>Маршрутизация, режим inbounds и VLESS outbounds в одной панели.</p>
 
 <div class="top-tabs header-tabs">
-        <button class="top-tab-btn active" data-view="routing">
+        <button class="top-tab-btn active" data-view="routing" data-xk-section="routing">
           Роутинг Xray
         </button>
-        <button class="top-tab-btn" data-view="mihomo">
+        <button class="top-tab-btn" data-view="mihomo" data-xk-section="mihomo">
           Роутинг Mihomo
         </button>
-        <button class="top-tab-btn" data-view="xkeen">
+        <button class="top-tab-btn" data-view="xkeen" data-xk-section="xkeen">
           Порты и Исключения
         </button>
-        <button class="top-tab-btn" data-view="xray-logs">
+        <button class="top-tab-btn" data-view="xray-logs" data-xk-section="xray-logs">
           Live логи Xray
         </button>
-        <button class="top-tab-btn" data-view="commands">
+        <button class="top-tab-btn" data-view="commands" data-xk-section="commands">
           Команды
         </button>
-        <button class="top-tab-btn" data-view="files" id="top-tab-files" {% if is_mips %}style="display:none;"{% endif %}>
+        <button class="top-tab-btn" data-view="files" data-xk-section="files" id="top-tab-files" {% if is_mips %}style="display:none;"{% endif %}>
           Файлы
         </button>
-        <button class="top-tab-btn" type="button" onclick="window.location.href='/mihomo_generator'">
+        <button class="top-tab-btn" type="button" data-xk-section="mihomo-generator" id="top-tab-mihomo-generator" onclick="window.location.href='/mihomo_generator'">
           Mihomo Генератор
         </button>
 
-        <button class="top-tab-btn" type="button" id="top-tab-donate">
+        <button class="top-tab-btn" type="button" data-xk-section="donate" id="top-tab-donate">
           💰 Донат
         </button>
       </div>
@@ -187,7 +204,7 @@
 
 </header>
 
-    <div id="view-routing" class="view-section">
+    <div id="view-routing" class="view-section" data-xk-section="routing">
 <!-- Routing editor + Mihomo config -->
     <div class="layout-2col routing-layout">
       <div class="layout-main">
@@ -366,7 +383,7 @@
     </div>
 </div>
 
-<div id="view-mihomo" class="view-section" style="display:none;">
+<div id="view-mihomo" class="view-section" style="display:none;" data-xk-section="mihomo">
   <section class="card">
     <div class="commands-header" onclick="toggleMihomoCard()">
       <h2>Роутинг Mihomo</h2>
@@ -503,7 +520,7 @@
     </div>
   </section>
 </div>
-<div id="view-xkeen" class="view-section" style="display:none;">
+<div id="view-xkeen" class="view-section" style="display:none;" data-xk-section="xkeen">
   <!-- XKeen: порты и исключения -->
       <section class="card commands-card">
         <div class="commands-header" onclick="toggleXkeenSettings()">
@@ -564,7 +581,7 @@
       </section>
 </div>
 
-<div id="view-commands" class="view-section" style="display:none;">
+<div id="view-commands" class="view-section" style="display:none;" data-xk-section="commands">
   <!-- XKeen commands -->
 <section class="card commands-card">
   <div class="commands-header">
@@ -607,7 +624,7 @@
 
 
 
-<div id="view-files" class="view-section" style="display:none;">
+<div id="view-files" class="view-section" style="display:none;" data-xk-section="files">
   <section class="card fm-card">
     <div class="fm-header">
       <h2>Файловый менеджер</h2>
@@ -684,7 +701,7 @@
   </section>
 </div>
 
-    <div id="view-xray-logs" class="view-section" style="display:none;">
+    <div id="view-xray-logs" class="view-section" style="display:none;" data-xk-section="xray-logs">
       <section class="card log-card">
         <div class="log-header-row">
           <h2>Live логи Xray <span id="xray-log-lamp" class="xray-log-lamp" data-state="unknown" title="Статус логов Xray неизвестен"></span></h2>
