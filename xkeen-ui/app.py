@@ -30,7 +30,7 @@ def set_ws_runtime(enabled: bool = True) -> None:
     WS_RUNTIME = bool(enabled)
 
 
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, g, send_file, send_from_directory
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, g, send_file, send_from_directory, Response
 import json
 import base64
 import datetime
@@ -1045,10 +1045,48 @@ def _check_csrf() -> bool:
 @app.context_processor
 def _inject_auth_context():
     # Available in all templates
+    v = 0
+    try:
+        cpath = os.path.join(UI_STATE_DIR, "custom_theme.css")
+        if os.path.isfile(cpath):
+            v = int(os.path.getmtime(cpath) or 0)
+    except Exception:
+        v = 0
+
+    # Global Custom CSS (optional) — stored in UI_STATE_DIR/custom.css.
+    css_v = 0
+    css_enabled = False
+    try:
+        css_path = os.path.join(UI_STATE_DIR, "custom.css")
+        css_disabled_flag = os.path.join(UI_STATE_DIR, "custom_css.disabled")
+        if os.path.isfile(css_path):
+            css_v = int(os.path.getmtime(css_path) or 0)
+            css_enabled = not os.path.isfile(css_disabled_flag)
+    except Exception:
+        css_v = 0
+        css_enabled = False
+
+    # Safe mode (URL query): ?safe=1
+    safe_mode = False
+    try:
+        sv = str(request.args.get("safe", "") or "").strip().lower()
+        safe_mode = sv in ("1", "true", "yes", "on", "y")
+    except Exception:
+        safe_mode = False
+
+    panel_sections = str(os.environ.get("XKEEN_UI_PANEL_SECTIONS_WHITELIST") or "").strip()
+    devtools_sections = str(os.environ.get("XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST") or "").strip()
+
     return {
+        "panel_sections_whitelist": panel_sections,
+        "devtools_sections_whitelist": devtools_sections,
         "csrf_token": _ensure_csrf_token(),
         "auth_user": session.get("user"),
         "auth_configured": auth_is_configured(),
+        "custom_theme_v": v,
+        "custom_css_v": css_v,
+        "custom_css_enabled": bool(css_enabled),
+        "safe_mode": bool(safe_mode),
     }
 
 
@@ -1063,8 +1101,8 @@ def _auth_guard():
 
     path = request.path or ""
 
-    # Always allow static and websocket endpoints
-    if path.startswith("/static/") or path.startswith("/ws/"):
+    # Always allow static assets
+    if path.startswith("/static/") or path in ("/ui/custom-theme.css", "/ui/custom.css", "/ui/branding.json"):
         return None
 
     # Auth endpoints must be reachable
@@ -1082,13 +1120,13 @@ def _auth_guard():
 
     # If first-run setup is not done yet – force setup
     if not auth_is_configured():
-        if path.startswith("/api/"):
+        if path.startswith("/api/") or path.startswith("/ws/"):
             return jsonify({"ok": False, "error": "not_configured"}), 428
         return redirect(url_for("setup"))
 
     # If configured but not logged in – force login
     if not _is_logged_in():
-        if path.startswith("/api/"):
+        if path.startswith("/api/") or path.startswith("/ws/"):
             return _json_unauthorized()
         return redirect(url_for("login", next=path))
 
@@ -1102,6 +1140,90 @@ def _auth_guard():
     return None
 
 
+@app.get("/ui/custom-theme.css")
+def custom_theme_css():
+    """Serve global UI custom theme (generated in DevTools).
+
+    Stored on disk in UI_STATE_DIR/custom_theme.css and auto-included by templates.
+    This endpoint is intentionally public (like /static) so it works on /login and /setup.
+    """
+
+    path = os.path.join(UI_STATE_DIR, "custom_theme.css")
+    try:
+        if os.path.isfile(path):
+            resp = send_file(path, mimetype="text/css")
+        else:
+            resp = Response("/* no custom theme */\n", mimetype="text/css")
+    except Exception:
+        resp = Response("/* custom theme failed */\n", mimetype="text/css")
+
+    try:
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+    except Exception:
+        pass
+    return resp
+
+
+@app.get("/ui/custom.css")
+def custom_css():
+    """Serve global UI custom CSS (authored in DevTools).
+
+    Stored on disk in UI_STATE_DIR/custom.css.
+    Can be disabled via UI_STATE_DIR/custom_css.disabled.
+    This endpoint is intentionally public (like /static) so it works on /login and /setup.
+    """
+
+    css_path = os.path.join(UI_STATE_DIR, "custom.css")
+    disabled_flag = os.path.join(UI_STATE_DIR, "custom_css.disabled")
+
+    try:
+        if os.path.isfile(disabled_flag):
+            resp = Response("/* custom css disabled */\n", mimetype="text/css")
+        elif os.path.isfile(css_path):
+            resp = send_file(css_path, mimetype="text/css")
+        else:
+            resp = Response("/* no custom css */\n", mimetype="text/css")
+    except Exception:
+        resp = Response("/* custom css failed */\n", mimetype="text/css")
+
+    try:
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+    except Exception:
+        pass
+    return resp
+
+
+@app.get("/ui/branding.json")
+def ui_branding_json():
+    """Serve global UI branding config (created in DevTools).
+
+    Stored on disk in UI_STATE_DIR/branding.json.
+    Public (like /static) so it works on /login and /setup.
+    """
+
+    try:
+        from services import branding as _branding
+
+        data = _branding.branding_get(UI_STATE_DIR)
+        payload = {
+            "ok": True,
+            "version": int(data.get("version") or 0),
+            "config": data.get("config") or {},
+        }
+        resp = Response(json.dumps(payload, ensure_ascii=False), mimetype="application/json")
+    except Exception:
+        resp = Response("{\"ok\":false,\"error\":\"branding_failed\"}\n", mimetype="application/json")
+
+    try:
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+    except Exception:
+        pass
+    return resp
 
 
 # --- WS debug logger (optional) ---
@@ -3470,6 +3592,19 @@ def ws_xray_logs():
         )
         return "Expected WebSocket", 400
 
+    # Defense in depth: WS endpoints must be authenticated (auth_guard handles it too).
+    if auth_is_configured() and not _is_logged_in():
+        try:
+            ws.send(json.dumps({"type": "error", "error": "unauthorized"}, ensure_ascii=False))
+        except Exception:
+            pass
+        try:
+            ws.close()
+        except Exception:
+            pass
+        return ""
+
+
     path = _resolve_xray_log_path_for_ws(file_name)
     ws_debug("ws_xray_logs: resolved log path", path=path)
 
@@ -3612,6 +3747,19 @@ def ws_devtools_logs():
     if ws is None:
         ws_debug("ws_devtools_logs: no WebSocket in environ, returning 400", path=request.path)
         return "Expected WebSocket", 400
+
+    # Defense in depth: WS endpoints must be authenticated (auth_guard handles it too).
+    if auth_is_configured() and not _is_logged_in():
+        try:
+            ws.send(json.dumps({"type": "error", "error": "unauthorized"}, ensure_ascii=False))
+        except Exception:
+            pass
+        try:
+            ws.close()
+        except Exception:
+            pass
+        return ""
+
 
     if not name:
         try:
@@ -3838,6 +3986,11 @@ def ws_devtools_logs():
 
     finally:
         ws_debug("ws_devtools_logs: closing", client=client_ip, name=name, sent_msgs=sent_msgs)
+        try:
+            if f:
+                f.close()
+        except Exception:
+            pass
         try:
             ws.close()
         except Exception:
