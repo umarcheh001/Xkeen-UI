@@ -55,6 +55,7 @@ def _redact_env_updates(updates: dict) -> dict:
 
 
 from services import devtools as dt
+from services import branding as br
 
 try:
     from services.logging_setup import refresh_runtime_from_env as _refresh_logging
@@ -126,6 +127,83 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
             }
         )
 
+    
+
+    # --- Theme editor (global custom theme stored in UI_STATE_DIR) ---
+
+    @bp.get("/api/devtools/theme")
+    def api_devtools_theme_get() -> Any:
+        data = dt.theme_get(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/theme")
+    def api_devtools_theme_set() -> Any:
+        payload = request.get_json(silent=True) or {}
+        cfg_in = payload.get("config") if isinstance(payload, dict) else None
+        if cfg_in is None:
+            cfg_in = payload
+        data = dt.theme_set(ui_state_dir, cfg_in)
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/theme/reset")
+    def api_devtools_theme_reset() -> Any:
+        data = dt.theme_reset(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
+
+    # --- Branding (global, stored in UI_STATE_DIR/branding.json) ---
+
+    @bp.get("/api/devtools/branding")
+    def api_devtools_branding_get() -> Any:
+        data = br.branding_get(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/branding")
+    def api_devtools_branding_set() -> Any:
+        payload = request.get_json(silent=True) or {}
+        cfg_in = payload.get("config") if isinstance(payload, dict) else None
+        if cfg_in is None:
+            cfg_in = payload
+        data = br.branding_set(ui_state_dir, cfg_in)
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/branding/reset")
+    def api_devtools_branding_reset() -> Any:
+        data = br.branding_reset(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
+
+    # --- Custom CSS editor (global custom.css stored in UI_STATE_DIR) ---
+
+    @bp.get("/api/devtools/custom_css")
+    def api_devtools_custom_css_get() -> Any:
+        data = dt.custom_css_get(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/custom_css/save")
+    def api_devtools_custom_css_save() -> Any:
+        payload = request.get_json(silent=True) or {}
+        css = None
+        if isinstance(payload, dict):
+            css = payload.get("css")
+            if css is None:
+                css = payload.get("content")
+        try:
+            data = dt.custom_css_set(ui_state_dir, css)
+        except ValueError as e:
+            return jsonify({"ok": False, "error": str(e) or "invalid"}), 400
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/custom_css/disable")
+    def api_devtools_custom_css_disable() -> Any:
+        data = dt.custom_css_disable(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/custom_css/reset")
+    def api_devtools_custom_css_reset() -> Any:
+        data = dt.custom_css_reset(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
     @bp.get("/api/devtools/logs")
     def api_devtools_logs_list() -> Any:
         return jsonify({"ok": True, "logs": dt.list_logs()})
@@ -164,6 +242,8 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         path = dt._resolve_log_path(name)  # type: ignore[attr-defined]
         if not path:
             return jsonify({"ok": False, "error": "unknown_log"}), 404
+        if not os.path.isfile(path):
+            return jsonify({"ok": False, "error": "not_found"}), 404
         try:
             return send_file(path, as_attachment=True, download_name=f"{name}.log")
         except TypeError:
