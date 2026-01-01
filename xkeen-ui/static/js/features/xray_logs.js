@@ -276,14 +276,14 @@
 
     // Typical Xray levels
     processed = processed
-      .replace(/\[Info\]/g, '<span style="color:#3b82f6;">[Info]</span>')
-      .replace(/\[Warning\]/g, '<span style="color:#f59e0b;">[Warning]</span>')
-      .replace(/\[Error\]/g, '<span style="color:#ef4444;">[Error]</span>')
-      .replace(/\[Debug\]/g, '<span style="color:#a1a1aa;">[Debug]</span>')
-      .replace(/level=(info)/gi, 'level=<span style="color:#3b82f6;">$1</span>')
-      .replace(/level=(warning)/gi, 'level=<span style="color:#f59e0b;">$1</span>')
-      .replace(/level=(error)/gi, 'level=<span style="color:#ef4444;">$1</span>')
-      .replace(/level=(debug)/gi, 'level=<span style="color:#a1a1aa;">$1</span>');
+      .replace(/\[Info\]/g, '<span class="log-lvl log-lvl-info">[Info]</span>')
+      .replace(/\[Warning\]/g, '<span class="log-lvl log-lvl-warning">[Warning]</span>')
+      .replace(/\[Error\]/g, '<span class="log-lvl log-lvl-error">[Error]</span>')
+      .replace(/\[Debug\]/g, '<span class="log-lvl log-lvl-debug">[Debug]</span>')
+      .replace(/level=(info)/gi, 'level=<span class="log-lvl log-lvl-info">$1</span>')
+      .replace(/level=(warning)/gi, 'level=<span class="log-lvl log-lvl-warning">$1</span>')
+      .replace(/level=(error)/gi, 'level=<span class="log-lvl log-lvl-error">$1</span>')
+      .replace(/level=(debug)/gi, 'level=<span class="log-lvl log-lvl-debug">$1</span>');
 
     // Route highlights (in brackets)
     processed = processed
