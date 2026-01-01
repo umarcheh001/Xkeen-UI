@@ -211,19 +211,23 @@
   function initControls() {
     const elCompact = byId('dt-layout-compact');
     const elHideHints = byId('dt-layout-hide-hints');
+    const elHideCardDesc = byId('dt-layout-hide-card-desc');
     const elHideUnused = byId('dt-layout-hide-unused');
     const elContainer = byId('dt-layout-container');
+    const elDescScale = byId('dt-layout-desc-scale');
     const elResetTabs = byId('dt-layout-tabs-reset');
 
-    if (!elCompact && !elHideHints && !elHideUnused && !elContainer && !elResetTabs) return;
+    if (!elCompact && !elHideHints && !elHideCardDesc && !elHideUnused && !elContainer && !elDescScale && !elResetTabs) return;
 
     const sync = () => {
       const p = loadPrefs();
       try {
         if (elCompact) elCompact.checked = !!p.compact;
         if (elHideHints) elHideHints.checked = !!p.hideHints;
+        if (elHideCardDesc) elHideCardDesc.checked = !!p.hideCardDesc;
         if (elHideUnused) elHideUnused.checked = !!p.hideUnused;
         if (elContainer) elContainer.value = String(p.container || 'fluid');
+        if (elDescScale) elDescScale.value = String((typeof p.cardDescScale === 'number' || typeof p.cardDescScale === 'string') ? p.cardDescScale : 1);
       } catch (e) {}
       renderTabs(p);
     };
@@ -236,14 +240,16 @@
         ...p,
         compact: elCompact ? !!elCompact.checked : !!p.compact,
         hideHints: elHideHints ? !!elHideHints.checked : !!p.hideHints,
+        hideCardDesc: elHideCardDesc ? !!elHideCardDesc.checked : !!p.hideCardDesc,
         hideUnused: elHideUnused ? !!elHideUnused.checked : !!p.hideUnused,
         container: elContainer ? String(elContainer.value || 'fluid') : String(p.container || 'fluid'),
+        cardDescScale: elDescScale ? Number(elDescScale.value || 1) : (typeof p.cardDescScale === 'number' ? p.cardDescScale : 1),
       };
       saveApply(next);
       toast('Layout: применено');
     };
 
-    [elCompact, elHideHints, elHideUnused, elContainer].forEach((el) => {
+    [elCompact, elHideHints, elHideCardDesc, elHideUnused, elContainer, elDescScale].forEach((el) => {
       if (!el) return;
       if (el.dataset && el.dataset.xkeenWired === '1') return;
       el.addEventListener('change', onChange);
