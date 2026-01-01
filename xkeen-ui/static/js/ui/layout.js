@@ -13,6 +13,10 @@
   const DEFAULTS = Object.freeze({
     compact: false,
     hideHints: false,
+    // Hide helper/description texts inside cards (e.g. inbounds mode explanations).
+    hideCardDesc: false,
+    // Scale for card description texts (multiplier, 1 = default)
+    cardDescScale: 1,
     hideUnused: false,
     // fixed | fluid | max
     container: 'fluid',
@@ -20,6 +24,16 @@
     tabOrder: [],
     tabFav: [],
   });
+
+  function _num(v, def) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : def;
+  }
+
+  function _clamp(n, lo, hi) {
+    const x = _num(n, lo);
+    return Math.max(lo, Math.min(hi, x));
+  }
 
   function _bool(v, def) {
     if (typeof v === 'boolean') return v;
@@ -48,9 +62,12 @@
       const obj = JSON.parse(raw);
       const container = _str(obj.container, DEFAULTS.container);
       const safeContainer = ['fixed', 'fluid', 'max'].includes(container) ? container : DEFAULTS.container;
+      const descScale = _clamp(obj.cardDescScale, 0.7, 1.6);
       return {
         compact: _bool(obj.compact, DEFAULTS.compact),
         hideHints: _bool(obj.hideHints, DEFAULTS.hideHints),
+        hideCardDesc: _bool(obj.hideCardDesc, DEFAULTS.hideCardDesc),
+        cardDescScale: descScale,
         hideUnused: _bool(obj.hideUnused, DEFAULTS.hideUnused),
         container: safeContainer,
         tabOrder: _arr(obj.tabOrder),
@@ -77,8 +94,15 @@
     try {
       root.dataset.xkCompact = p.compact ? '1' : '0';
       root.dataset.xkHideHints = p.hideHints ? '1' : '0';
+      root.dataset.xkHideCardDesc = p.hideCardDesc ? '1' : '0';
       root.dataset.xkHideUnused = p.hideUnused ? '1' : '0';
       root.dataset.xkContainer = String(p.container || DEFAULTS.container);
+    } catch (e) {}
+
+    // Card description scale
+    try {
+      const s = _clamp(p.cardDescScale, 0.7, 1.6);
+      root.style.setProperty('--xk-card-desc-scale', String(s));
     } catch (e) {}
 
     // CSS variables (for container widths)
