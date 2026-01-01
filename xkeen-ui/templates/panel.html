@@ -16,8 +16,8 @@
   <!-- Apply typography prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
   <!-- Apply layout prefs ASAP (stored in localStorage) -->
-  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101b') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101f') }}"></script>
   <!-- Env-driven visibility filters (section whitelist) -->
   <script>
     window.XKeen = window.XKeen || {};
@@ -25,7 +25,7 @@
     window.XKeen.env.panelSectionsWhitelist = {{ panel_sections_whitelist|tojson }};
     window.XKeen.env.devtoolsSectionsWhitelist = {{ devtools_sections_whitelist|tojson }};
   </script>
-  <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
 <!-- CodeMirror & JSON lint -->
 
   <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/codemirror.min.css') }}">
@@ -70,7 +70,7 @@
 
 
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101b') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101e') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
   {% if custom_css_enabled and not safe_mode %}
@@ -271,7 +271,7 @@
           <input type="radio" name="inbounds_mode" value="mixed">
           <div>
             <strong>Mixed</strong><br>
-            <small>UDP через TProxy, TCP через Redirect. Баланс скорости и совместимости (рекомендуемый режим).</small>
+            <small class="xk-card-desc">UDP через TProxy, TCP через Redirect. Баланс скорости и совместимости (рекомендуемый режим).</small>
           </div>
         </label>
 
@@ -279,7 +279,7 @@
           <input type="radio" name="inbounds_mode" value="tproxy">
           <div>
             <strong>TProxy</strong><br>
-            <small>TCP+UDP через TProxy. Максимальная совместимость, но самый медленный и ресурсоёмкий.</small>
+            <small class="xk-card-desc">TCP+UDP через TProxy. Максимальная совместимость, но самый медленный и ресурсоёмкий.</small>
           </div>
         </label>
 
@@ -287,7 +287,7 @@
           <input type="radio" name="inbounds_mode" value="redirect">
           <div>
             <strong>Redirect</strong><br>
-            <small>Только TCP через Redirect. Самый быстрый, но не подходит для игр и стриминга.</small>
+            <small class="xk-card-desc">Только TCP через Redirect. Самый быстрый, но не подходит для игр и стриминга.</small>
           </div>
         </label>
       </div>
@@ -317,7 +317,7 @@
 
       <div id="outbounds-body" style="display:none;">
       <p>Файл: <code>{{ outbounds_file }}</code></p>
-      <p>Укажи VLESS ссылку, на основе которой будет собран конфиг outbounds.</p>
+      <p class="xk-card-desc">Укажи VLESS ссылку, на основе которой будет собран конфиг outbounds.</p>
 
       <input id="outbounds-url" type="text" placeholder="vless://uuid@host:port?encryption=none&flow=xtls-rprx-vision&security=reality&pbk=...&sni=...&fp=chrome&sid=...&spx=%2F">
 
@@ -352,7 +352,7 @@
 
       <div id="backups-status" class="status"></div>
 
-      <div class="hint">
+      <div class="hint xk-card-desc">
         <a href="/backups">Открыть страницу бэкапов →</a>
       </div>
     </section>
@@ -391,7 +391,7 @@
     </div>
 
     <div id="mihomo-body">
-      <p class="small">
+      <p class="small xk-card-desc">
         Активный файл: <code>{{ mihomo_config_file|e }}</code>
       </p>
 
@@ -499,7 +499,7 @@
                 бэкапов
               </label>
               <button id="mihomo-backups-clean-btn" class="icon-btn" title="Очистить бэкапы">🧹</button>
-              <span class="hint">
+              <span class="hint xk-card-desc">
                 0 — удалить все бэкапы (с учётом фильтра профиля).
               </span>
             </div>
@@ -531,7 +531,7 @@
           <p>Файлы из каталога <code>/opt/etc/xkeen</code>:</p>
 
           <h3>port_proxying.lst</h3>
-          <p class="small">
+          <p class="small xk-card-desc">
             Порты и диапазоны, которые нужно отправлять через прокси.
           </p>
           <textarea id="port-proxying-editor"
@@ -547,7 +547,7 @@
           <hr>
 
           <h3>port_exclude.lst</h3>
-          <p class="small">
+          <p class="small xk-card-desc">
             Порты, которые нужно исключить из проксирования.<br>
             <strong>Важно:</strong> одновременно использовать список проксируемых портов и исключения нельзя,
             приоритет у портов проксирования.
@@ -565,7 +565,7 @@
           <hr>
 
           <h3>ip_exclude.lst</h3>
-          <p class="small">
+          <p class="small xk-card-desc">
             IP и подсети, которые нужно исключить из проксирования (по одной в строке).
           </p>
           <textarea id="ip-exclude-editor"
