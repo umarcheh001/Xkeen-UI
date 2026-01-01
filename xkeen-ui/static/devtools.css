@@ -1,0 +1,464 @@
+/* DevTools-only overrides and components */
+
+/* Collapsible cards (Logging / Interface / Theme) */
+details.dt-collapsible > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  outline: none;
+}
+
+details.dt-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.dt-collapsible > summary:focus-visible {
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.35);
+}
+
+.dt-collapsible-icon {
+  opacity: 0.75;
+  transition: transform 0.18s ease;
+  transform-origin: center;
+  font-size: calc(18px * var(--xk-font-scale));
+  line-height: 1;
+}
+
+details.dt-collapsible:not([open]) .dt-collapsible-icon {
+  transform: rotate(-90deg);
+}
+
+.dt-collapsible-body {
+  margin-top: 10px;
+}
+
+/* Theme editor: sliders in ONE column to avoid overlap */
+.dt-theme-sliders {
+  display: flex !important;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dt-theme-slider {
+  display: grid !important;
+  grid-template-columns: 92px minmax(0, 1fr) 70px;
+  align-items: center;
+  gap: 10px;
+}
+
+.dt-theme-slider-name,
+.dt-theme-slider-val {
+  width: auto !important;
+}
+
+.dt-theme-slider input[type="range"] {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .dt-theme-slider {
+    grid-template-columns: 82px minmax(0, 1fr) 64px;
+  }
+}
+
+
+/* Custom CSS editor */
+.dt-custom-css-editor textarea {
+  width: 100%;
+  min-height: 340px;
+  resize: vertical;
+  font-family: var(--mono-font, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+  font-size: calc(0.95rem * var(--xk-mono-scale, 1));
+  line-height: 1.35;
+}
+
+.dt-custom-css-editor .CodeMirror {
+  height: 340px;
+  border-radius: 12px;
+}
+
+.dt-custom-css-actions button {
+  white-space: nowrap;
+}
+
+.dt-custom-css-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: calc(12px * var(--xk-font-scale));
+  opacity: 0.9;
+}
+
+.dt-custom-css-badge.is-on {
+  color: #86efac;
+}
+
+.dt-custom-css-badge.is-off {
+  color: #fca5a5;
+}
+
+
+/* Help (Custom CSS) */
+
+/*
+  Help modal is content-heavy (many examples). When CodeMirror snippets are lazily
+  initialized, the dialog height may change; if the modal is vertically centered,
+  it can appear to "jump" and even go partially off-screen on smaller viewports.
+  For the help dialog we pin it to the top with safe padding.
+*/
+
+#dt-custom-css-help-modal{
+  align-items: flex-start;
+  padding: 4vh 12px;
+}
+
+#dt-custom-css-help-modal .modal-content{
+  max-width: 980px;
+  width: min(92vw, 980px);
+  max-height: 92vh;
+}
+
+/*
+  CodeMirror adds native scrollbar containers even when lineWrapping is on.
+  On some platforms this looks like a "weird grey bar" below each snippet.
+  We render help snippets as auto-height blocks and hide those extra scrollbars.
+*/
+
+#dt-custom-css-help-modal .dt-help-code-wrap .CodeMirror-hscrollbar,
+#dt-custom-css-help-modal .dt-help-code-wrap .CodeMirror-vscrollbar,
+#dt-custom-css-help-modal .dt-help-code-wrap .CodeMirror-scrollbar-filler,
+#dt-custom-css-help-modal .dt-help-code-wrap .CodeMirror-gutter-filler{
+  display: none !important;
+}
+
+#dt-custom-css-help-modal .dt-help-code-wrap .CodeMirror-scroll{
+  overflow: hidden !important;
+}
+
+.dt-help details > summary {
+  cursor: pointer;
+  user-select: none;
+  margin: 10px 0 0;
+}
+
+.dt-help-code-wrap textarea.dt-help-code {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  font-family: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+  font-size: calc(0.92rem * var(--xk-mono-scale, 1));
+  line-height: 1.35;
+}
+
+/* CodeMirror snippets inside help: auto-height, no huge gutter */
+.dt-help-code-wrap .CodeMirror {
+  height: auto;
+  border-radius: 12px;
+}
+
+.dt-help-code-wrap .CodeMirror-scroll {
+  min-height: 110px;
+  height: auto;
+}
+
+.dt-help-code-wrap .CodeMirror-gutters {
+  opacity: 0.5;
+}
+
+
+/* Help toolbar (search) + insert buttons */
+.dt-help-toolbar{
+  margin: 8px 0 12px;
+}
+
+.dt-help-search-group{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dt-help-search-input{
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+  outline: none;
+}
+
+.dt-help-search-input:focus{
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.25);
+}
+
+.dt-help-search-clear{
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+.dt-help h3.dt-help-example-title{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dt-help-insert-btn{
+  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: calc(12px * var(--xk-font-scale));
+  opacity: 0.95;
+}
+
+@media (max-width: 520px){
+  .dt-help h3.dt-help-example-title{
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+
+/* --------------------------------------------------------------
+   Layout tweaks: tab order editor
+   -------------------------------------------------------------- */
+
+.dt-tab-list{
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dt-tab-item{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+}
+
+.dt-tab-handle{
+  cursor: grab;
+  user-select: none;
+  opacity: 0.85;
+}
+
+.dt-tab-label{
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-tab-star{
+  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.dt-tab-item.is-dragging{ opacity: 0.65; }
+.dt-tab-item.is-drop-target{ outline: 2px dashed rgba(96, 165, 250, 0.55); outline-offset: 2px; }
+
+/* Branding + UI prefs import/export (DevTools) */
+
+.dt-branding-split {
+  display: grid;
+  /* On desktop DevTools uses a narrow left column (<=420px) — two columns will overflow. */
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* When DevTools collapses to one column (<=1024px), the card becomes wide enough for two columns. */
+@media (max-width: 1024px) {
+  .dt-branding-split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .dt-branding-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Allow grid children to shrink without forcing overflow. */
+.dt-branding-split > * {
+  min-width: 0;
+}
+.dt-branding-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.dt-branding-row .dt-pill-field {
+  /* Make URL field take the full row on narrow cards; buttons wrap below. */
+  flex: 1 1 100%;
+  min-width: 0;
+  width: auto;
+}
+
+.dt-branding-preview {
+  margin-top: 8px;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px;
+}
+
+.dt-rename-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dt-rename-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(220px, 2fr);
+  gap: 10px;
+  align-items: center;
+}
+
+@media (max-width: 760px) {
+  .dt-rename-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dt-rename-label {
+  font-size: calc(0.92rem * var(--xk-font-scale));
+  opacity: 0.9;
+}
+
+.dt-rename-input {
+  width: 100%;
+}
+
+.dt-codearea {
+  width: 100%;
+  margin-top: 8px;
+  resize: vertical;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-family: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+  font-size: calc(0.92rem * var(--xk-mono-scale, 1));
+  line-height: 1.35;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/*
+  Multi-action button rows (Export/Import etc.).
+  Use a responsive grid so buttons don't become full-width skyscrapers.
+*/
+.dt-actions-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+/*
+  Make non-<button> elements (e.g., <label>) look and behave like buttons.
+  Needed for robust file pickers on embedded WebViews (label-for is more reliable than input.click()).
+*/
+.dt-btn-like {
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: calc(14px * var(--xk-font-scale));
+  cursor: pointer;
+  background: #020617;
+  border: 1px solid #1f2937;
+  color: #e5e7eb;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.7);
+  transition:
+    background 0.15s ease,
+    transform 0.05s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dt-btn-like:hover {
+  background: #020617;
+  border-color: #4b5563;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.9);
+  transform: translateY(-1px);
+}
+
+.dt-btn-like:active {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  border-color: #2563eb;
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+}
+
+.dt-btn-like:focus {
+  outline: none;
+}
+
+.dt-file-label {
+  position: relative;
+  overflow: hidden;
+}
+
+/*
+  The real <input type="file"> sits on top of the label and catches the click.
+  This is the most robust way to open file picker in embedded WebViews.
+*/
+.dt-file-input-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dt-btn-like:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.65);
+  outline-offset: 2px;
+}
+
+
+
+/* Legacy: keep for any other pages that still use it */
+.dt-file-input {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
