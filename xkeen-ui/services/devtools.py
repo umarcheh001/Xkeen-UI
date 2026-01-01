@@ -34,6 +34,9 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_UI_STATE_DIR",
     "XKEEN_UI_SECRET_KEY",  # shown as "(set)" only
     "XKEEN_RESTART_LOG_FILE",
+    # UI layout/visibility (optional)
+    "XKEEN_UI_PANEL_SECTIONS_WHITELIST",
+    "XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST",
     # UI logging (core/access/ws)
     "XKEEN_LOG_DIR",
     "XKEEN_LOG_CORE_ENABLE",
@@ -853,3 +856,765 @@ def ui_action(action: str) -> Dict[str, Any]:
         return {"ok": False, "action": action, "error": "managed_externally"}
     return {"ok": False, "action": action, "error": "init_script_missing"}
 
+
+
+# ---------------------------------------------------------------------------
+# Global theme editor (safe CSS variables)
+# ---------------------------------------------------------------------------
+
+THEME_CONFIG_JSON = "custom_theme.json"
+THEME_CONFIG_CSS = "custom_theme.css"
+
+# Defaults match the built-in dark/light palettes in static/styles.css.
+_DEFAULT_THEME_CONFIG: Dict[str, Any] = {
+    # Global typography (applies to both themes)
+    "font_scale": 1.00,
+    "mono_scale": 1.00,
+    "dark": {
+        "bg": "#0f172a",
+        "card_bg": "#020617",
+        "text": "#e5e7eb",
+        "muted": "#9ca3af",
+        "accent": "#60a5fa",
+        "border": "#1f2937",
+        # Semantic colors (levels, states)
+        "sem_success": "#22c55e",
+        "sem_info": "#93c5fd",
+        "sem_warning": "#fbbf24",
+        "sem_error": "#f87171",
+        "sem_debug": "#a1a1aa",
+        # Editor/action buttons (Save/Backup/Restore/etc.)
+        "editor_btn_bg": "#020617",
+        "editor_btn_text": "#e5e7eb",
+        "editor_btn_border": "#1f2937",
+        "editor_btn_hover_bg": "#020617",
+        "editor_btn_hover_text": "#e5e7eb",
+        "editor_btn_hover_border": "#4b5563",
+        "editor_btn_active_from": "#1d4ed8",
+        "editor_btn_active_to": "#2563eb",
+        "header_btn_bg": "#020617",
+        "header_btn_text": "#e5e7eb",
+        "header_btn_border": "#374151",
+        "header_btn_hover_bg": "#020617",
+        "header_btn_hover_text": "#e5e7eb",
+        "header_btn_hover_border": "#374151",
+        # Modals
+        "modal_overlay": "#0f172abf",
+        "modal_bg": "#020617",
+        "modal_text": "#e5e7eb",
+        "modal_muted": "#9ca3af",
+        # Body area inside modal (optional separate surface)
+        "modal_body_bg": "#020617",
+        "modal_body_border": "#1f2937",
+        # Tables inside modals
+        "modal_table_head_bg": "#0b1220",
+        "modal_table_head_text": "#9ca3af",
+        "modal_table_border": "#1f2937",
+        "modal_table_row_hover_bg": "#0b1220",
+        # Lists inside modals
+        "modal_list_marker": "#9ca3af",
+        "modal_border": "#334155",
+        "modal_header_border": "#1f2937",
+        "modal_close": "#9ca3af",
+        "modal_close_hover": "#e5e7eb",
+        "header_tab_bg": "#020617",
+        "header_tab_text": "#e5e7eb",
+        "header_tab_border": "#1f2937",
+        "header_tab_active_bg": "#2563eb",
+        "header_tab_active_text": "#ffffff",
+        "radius": 12,
+        "shadow": 0.40,
+        "density": 1.00,
+        "contrast": 1.00,
+    },
+    "light": {
+        "bg": "#f5f5f7",
+        "card_bg": "#ffffff",
+        "text": "#111827",
+        "muted": "#4b5563",
+        "accent": "#0a84ff",
+        "border": "#d1d5db",
+        # Semantic colors (levels, states)
+        "sem_success": "#16a34a",
+        "sem_info": "#2563eb",
+        "sem_warning": "#b45309",
+        "sem_error": "#dc2626",
+        "sem_debug": "#6b7280",
+        # Editor/action buttons (Save/Backup/Restore/etc.)
+        "editor_btn_bg": "#ffffff",
+        "editor_btn_text": "#111827",
+        "editor_btn_border": "#d1d5db",
+        "editor_btn_hover_bg": "#ffffff",
+        "editor_btn_hover_text": "#111827",
+        "editor_btn_hover_border": "#4b5563",
+        "editor_btn_active_from": "#1d4ed8",
+        "editor_btn_active_to": "#2563eb",
+        "header_btn_bg": "#ffffff",
+        "header_btn_text": "#111827",
+        "header_btn_border": "#d1d5db",
+        "header_btn_hover_bg": "#ffffff",
+        "header_btn_hover_text": "#111827",
+        "header_btn_hover_border": "#d1d5db",
+        # Modals
+        "modal_overlay": "#0f172a59",
+        "modal_bg": "#ffffff",
+        "modal_text": "#111827",
+        "modal_muted": "#6b7280",
+        # Body area inside modal (optional separate surface)
+        "modal_body_bg": "#f9fafb",
+        "modal_body_border": "#e5e7eb",
+        # Tables inside modals
+        "modal_table_head_bg": "#f3f4f6",
+        "modal_table_head_text": "#6b7280",
+        "modal_table_border": "#e5e7eb",
+        "modal_table_row_hover_bg": "#eff6ff",
+        # Lists inside modals
+        "modal_list_marker": "#6b7280",
+        "modal_border": "#d1d5db",
+        "modal_header_border": "#e5e7eb",
+        "modal_close": "#6b7280",
+        "modal_close_hover": "#111827",
+        "header_tab_bg": "#ffffff",
+        "header_tab_text": "#111827",
+        "header_tab_border": "#d1d5db",
+        "header_tab_active_bg": "#0a84ff",
+        "header_tab_active_text": "#ffffff",
+        "radius": 12,
+        "shadow": 0.08,
+        "density": 1.00,
+        "contrast": 1.00,
+    },
+}
+
+_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?([0-9a-fA-F]{2})?$")
+
+
+def _theme_json_path(ui_state_dir: str) -> str:
+    return os.path.join(ui_state_dir, THEME_CONFIG_JSON)
+
+
+def _theme_css_path(ui_state_dir: str) -> str:
+    return os.path.join(ui_state_dir, THEME_CONFIG_CSS)
+
+
+def _expand_short_hex(c: str) -> str:
+    c = (c or "").strip()
+    if len(c) == 4 and c.startswith("#"):
+        # #RGB -> #RRGGBB
+        r, g, b = c[1], c[2], c[3]
+        return f"#{r}{r}{g}{g}{b}{b}".lower()
+    return c.lower()
+
+
+def _sanitize_color(v: Any, fallback: str) -> str:
+    s = str(v or "").strip()
+    if not s:
+        return fallback
+    if not s.startswith("#"):
+        return fallback
+    if not _COLOR_RE.match(s):
+        return fallback
+    s = _expand_short_hex(s)
+    # Normalize #RRGGBB or #RRGGBBAA
+    if len(s) in (7, 9):
+        return s
+    return fallback
+
+
+def _clamp_float(v: Any, lo: float, hi: float, fallback: float) -> float:
+    try:
+        x = float(v)
+    except Exception:
+        return fallback
+    if x < lo:
+        return lo
+    if x > hi:
+        return hi
+    return x
+
+
+def _clamp_int(v: Any, lo: int, hi: int, fallback: int) -> int:
+    try:
+        x = int(float(v))
+    except Exception:
+        return fallback
+    if x < lo:
+        return lo
+    if x > hi:
+        return hi
+    return x
+
+
+def _sanitize_theme_config(cfg_in: Any) -> Dict[str, Any]:
+    """Sanitize incoming config.
+
+    NOTE: Keep it very conservative – allow only hex colors + numeric knobs.
+    """
+    cfg: Dict[str, Any] = json.loads(json.dumps(_DEFAULT_THEME_CONFIG))
+
+    if not isinstance(cfg_in, dict):
+        return cfg
+
+    # Global typography (0.85..1.50)
+    if isinstance(cfg_in.get("font_scale"), (int, float, str)):
+        cfg["font_scale"] = round(_clamp_float(cfg_in.get("font_scale"), 0.85, 1.50, float(cfg.get("font_scale") or 1.0)), 3)
+    if isinstance(cfg_in.get("mono_scale"), (int, float, str)):
+        cfg["mono_scale"] = round(_clamp_float(cfg_in.get("mono_scale"), 0.85, 1.50, float(cfg.get("mono_scale") or 1.0)), 3)
+
+    for theme in ("dark", "light"):
+        src = cfg_in.get(theme)
+        if not isinstance(src, dict):
+            continue
+        dst = cfg.get(theme, {})
+
+        dst["bg"] = _sanitize_color(src.get("bg"), dst["bg"])
+        dst["card_bg"] = _sanitize_color(src.get("card_bg"), dst["card_bg"])
+        dst["text"] = _sanitize_color(src.get("text"), dst["text"])
+        dst["muted"] = _sanitize_color(src.get("muted"), dst["muted"])
+        dst["accent"] = _sanitize_color(src.get("accent"), dst["accent"])
+        dst["border"] = _sanitize_color(src.get("border"), dst["border"])
+        dst["sem_success"] = _sanitize_color(src.get("sem_success"), dst["sem_success"])
+        dst["sem_info"] = _sanitize_color(src.get("sem_info"), dst["sem_info"])
+        dst["sem_warning"] = _sanitize_color(src.get("sem_warning"), dst["sem_warning"])
+        dst["sem_error"] = _sanitize_color(src.get("sem_error"), dst["sem_error"])
+        dst["sem_debug"] = _sanitize_color(src.get("sem_debug"), dst["sem_debug"])
+        dst["editor_btn_bg"] = _sanitize_color(src.get("editor_btn_bg"), dst["editor_btn_bg"])
+        dst["editor_btn_text"] = _sanitize_color(src.get("editor_btn_text"), dst["editor_btn_text"])
+        dst["editor_btn_border"] = _sanitize_color(src.get("editor_btn_border"), dst["editor_btn_border"])
+        dst["editor_btn_hover_bg"] = _sanitize_color(src.get("editor_btn_hover_bg"), dst["editor_btn_hover_bg"])
+        dst["editor_btn_hover_text"] = _sanitize_color(src.get("editor_btn_hover_text"), dst["editor_btn_hover_text"])
+        dst["editor_btn_hover_border"] = _sanitize_color(src.get("editor_btn_hover_border"), dst["editor_btn_hover_border"])
+        dst["editor_btn_active_from"] = _sanitize_color(src.get("editor_btn_active_from"), dst["editor_btn_active_from"])
+        dst["editor_btn_active_to"] = _sanitize_color(src.get("editor_btn_active_to"), dst["editor_btn_active_to"])
+        dst["header_btn_bg"] = _sanitize_color(src.get("header_btn_bg"), dst["header_btn_bg"])
+        dst["header_btn_text"] = _sanitize_color(src.get("header_btn_text"), dst["header_btn_text"])
+        dst["header_btn_border"] = _sanitize_color(src.get("header_btn_border"), dst["header_btn_border"])
+        dst["header_btn_hover_bg"] = _sanitize_color(src.get("header_btn_hover_bg"), dst["header_btn_hover_bg"])
+        dst["header_btn_hover_text"] = _sanitize_color(src.get("header_btn_hover_text"), dst["header_btn_hover_text"])
+        dst["header_btn_hover_border"] = _sanitize_color(src.get("header_btn_hover_border"), dst["header_btn_hover_border"])
+        dst["modal_overlay"] = _sanitize_color(src.get("modal_overlay"), dst["modal_overlay"])
+        dst["modal_bg"] = _sanitize_color(src.get("modal_bg"), dst["modal_bg"])
+        dst["modal_text"] = _sanitize_color(src.get("modal_text"), dst["modal_text"])
+        dst["modal_muted"] = _sanitize_color(src.get("modal_muted"), dst["modal_muted"])
+        dst["modal_body_bg"] = _sanitize_color(src.get("modal_body_bg"), dst["modal_body_bg"])
+        dst["modal_body_border"] = _sanitize_color(src.get("modal_body_border"), dst["modal_body_border"])
+        dst["modal_table_head_bg"] = _sanitize_color(src.get("modal_table_head_bg"), dst["modal_table_head_bg"])
+        dst["modal_table_head_text"] = _sanitize_color(src.get("modal_table_head_text"), dst["modal_table_head_text"])
+        dst["modal_table_border"] = _sanitize_color(src.get("modal_table_border"), dst["modal_table_border"])
+        dst["modal_table_row_hover_bg"] = _sanitize_color(src.get("modal_table_row_hover_bg"), dst["modal_table_row_hover_bg"])
+        dst["modal_list_marker"] = _sanitize_color(src.get("modal_list_marker"), dst["modal_list_marker"])
+        dst["modal_border"] = _sanitize_color(src.get("modal_border"), dst["modal_border"])
+        dst["modal_header_border"] = _sanitize_color(src.get("modal_header_border"), dst["modal_header_border"])
+        dst["modal_close"] = _sanitize_color(src.get("modal_close"), dst["modal_close"])
+        dst["modal_close_hover"] = _sanitize_color(src.get("modal_close_hover"), dst["modal_close_hover"])
+        dst["header_tab_bg"] = _sanitize_color(src.get("header_tab_bg"), dst["header_tab_bg"])
+        dst["header_tab_text"] = _sanitize_color(src.get("header_tab_text"), dst["header_tab_text"])
+        dst["header_tab_border"] = _sanitize_color(src.get("header_tab_border"), dst["header_tab_border"])
+        dst["header_tab_active_bg"] = _sanitize_color(src.get("header_tab_active_bg"), dst["header_tab_active_bg"])
+        dst["header_tab_active_text"] = _sanitize_color(src.get("header_tab_active_text"), dst["header_tab_active_text"])
+
+        dst["radius"] = _clamp_int(src.get("radius"), 0, 32, int(dst["radius"]))
+        # shadow is alpha (0..0.7)
+        dst["shadow"] = round(_clamp_float(src.get("shadow"), 0.0, 0.7, float(dst["shadow"])), 3)
+        # density: compact/spacious (0.75..1.35)
+        dst["density"] = round(_clamp_float(src.get("density"), 0.75, 1.35, float(dst["density"])), 3)
+        # contrast: (0.85..1.25)
+        dst["contrast"] = round(_clamp_float(src.get("contrast"), 0.85, 1.25, float(dst["contrast"])), 3)
+
+        cfg[theme] = dst
+
+    return cfg
+
+
+def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
+    """Generate safe CSS overrides.
+
+    The file is loaded on every page after styles.css.
+    """
+
+    def _radius_sm(r: int) -> int:
+        try:
+            return max(4, min(24, int(round(r * 0.75))))
+        except Exception:
+            return 8
+
+    dark = cfg.get("dark") or {}
+    light = cfg.get("light") or {}
+
+    # Global typography
+    font_scale = float(cfg.get("font_scale") or 1.0)
+    mono_scale = float(cfg.get("mono_scale") or 1.0)
+
+    dark_rs = _radius_sm(int(dark.get("radius") or 12))
+    light_rs = _radius_sm(int(light.get("radius") or 12))
+
+    css: List[str] = []
+    css.append("/* Generated by Xkeen UI DevTools — Theme editor */")
+    css.append("/* Safe override layer: only CSS variables + a few core selectors. */")
+    css.append("")
+
+    # Fallback (no data-theme attribute -> behave like dark)
+    css.append(":root {")
+    css.append(f"  --xk-font-scale: {font_scale};")
+    css.append(f"  --xk-mono-font-scale: {mono_scale};")
+    css.append(f"  --bg: {dark.get('bg')};")
+    css.append(f"  --card-bg: {dark.get('card_bg')};")
+    css.append(f"  --text: {dark.get('text')};")
+    css.append(f"  --muted: {dark.get('muted')};")
+    css.append(f"  --accent: {dark.get('accent')};")
+    css.append(f"  --border: {dark.get('border')};")
+    css.append(f"  --sem-success: {dark.get('sem_success')};")
+    css.append(f"  --sem-info: {dark.get('sem_info')};")
+    css.append(f"  --sem-warning: {dark.get('sem_warning')};")
+    css.append(f"  --sem-error: {dark.get('sem_error')};")
+    css.append(f"  --sem-debug: {dark.get('sem_debug')};")
+    css.append(f"  --editor-btn-bg: {dark.get('editor_btn_bg')};")
+    css.append(f"  --editor-btn-text: {dark.get('editor_btn_text')};")
+    css.append(f"  --editor-btn-border: {dark.get('editor_btn_border')};")
+    css.append(f"  --editor-btn-hover-bg: {dark.get('editor_btn_hover_bg')};")
+    css.append(f"  --editor-btn-hover-text: {dark.get('editor_btn_hover_text')};")
+    css.append(f"  --editor-btn-hover-border: {dark.get('editor_btn_hover_border')};")
+    # Back-compat alias used by core button styles (styles.css)
+    css.append(f"  --editor-btn-border-hover: {dark.get('editor_btn_hover_border')};")
+    css.append(f"  --editor-btn-active-from: {dark.get('editor_btn_active_from')};")
+    css.append(f"  --editor-btn-active-to: {dark.get('editor_btn_active_to')};")
+    css.append(f"  --header-btn-bg: {dark.get('header_btn_bg')};")
+    css.append(f"  --header-btn-text: {dark.get('header_btn_text')};")
+    css.append(f"  --header-btn-border: {dark.get('header_btn_border')};")
+    css.append(f"  --header-btn-hover-bg: {dark.get('header_btn_hover_bg')};")
+    css.append(f"  --header-btn-hover-text: {dark.get('header_btn_hover_text')};")
+    css.append(f"  --header-btn-hover-border: {dark.get('header_btn_hover_border')};")
+    css.append(f"  --modal-overlay: {dark.get('modal_overlay')};")
+    css.append(f"  --modal-bg: {dark.get('modal_bg')};")
+    css.append(f"  --modal-text: {dark.get('modal_text')};")
+    css.append(f"  --modal-muted: {dark.get('modal_muted')};")
+    css.append(f"  --modal-body-bg: {dark.get('modal_body_bg')};")
+    css.append(f"  --modal-body-border: {dark.get('modal_body_border')};")
+    css.append(f"  --modal-table-head-bg: {dark.get('modal_table_head_bg')};")
+    css.append(f"  --modal-table-head-text: {dark.get('modal_table_head_text')};")
+    css.append(f"  --modal-table-border: {dark.get('modal_table_border')};")
+    css.append(f"  --modal-table-row-hover-bg: {dark.get('modal_table_row_hover_bg')};")
+    css.append(f"  --modal-list-marker: {dark.get('modal_list_marker')};")
+    css.append(f"  --modal-border: {dark.get('modal_border')};")
+    css.append(f"  --modal-header-border: {dark.get('modal_header_border')};")
+    css.append(f"  --modal-close: {dark.get('modal_close')};")
+    css.append(f"  --modal-close-hover: {dark.get('modal_close_hover')};")
+    css.append(f"  --header-tab-bg: {dark.get('header_tab_bg')};")
+    css.append(f"  --header-tab-text: {dark.get('header_tab_text')};")
+    css.append(f"  --header-tab-border: {dark.get('header_tab_border')};")
+    css.append(f"  --header-tab-active-bg: {dark.get('header_tab_active_bg')};")
+    css.append(f"  --header-tab-active-text: {dark.get('header_tab_active_text')};")
+    css.append(f"  --radius: {int(dark.get('radius') or 12)}px;")
+    css.append(f"  --radius-sm: {dark_rs}px;")
+    css.append(f"  --shadow: {float(dark.get('shadow') or 0.4)};")
+    css.append("  --shadow-rgb: 0, 0, 0;")
+    css.append(f"  --density: {float(dark.get('density') or 1.0)};")
+    css.append(f"  --contrast: {float(dark.get('contrast') or 1.0)};")
+    css.append("}")
+    css.append("")
+
+    css.append('html[data-theme="dark"] {')
+    css.append(f"  --bg: {dark.get('bg')};")
+    css.append(f"  --card-bg: {dark.get('card_bg')};")
+    css.append(f"  --text: {dark.get('text')};")
+    css.append(f"  --muted: {dark.get('muted')};")
+    css.append(f"  --accent: {dark.get('accent')};")
+    css.append(f"  --border: {dark.get('border')};")
+    css.append(f"  --sem-success: {dark.get('sem_success')};")
+    css.append(f"  --sem-info: {dark.get('sem_info')};")
+    css.append(f"  --sem-warning: {dark.get('sem_warning')};")
+    css.append(f"  --sem-error: {dark.get('sem_error')};")
+    css.append(f"  --sem-debug: {dark.get('sem_debug')};")
+    css.append(f"  --editor-btn-bg: {dark.get('editor_btn_bg')};")
+    css.append(f"  --editor-btn-text: {dark.get('editor_btn_text')};")
+    css.append(f"  --editor-btn-border: {dark.get('editor_btn_border')};")
+    css.append(f"  --editor-btn-hover-bg: {dark.get('editor_btn_hover_bg')};")
+    css.append(f"  --editor-btn-hover-text: {dark.get('editor_btn_hover_text')};")
+    css.append(f"  --editor-btn-hover-border: {dark.get('editor_btn_hover_border')};")
+    css.append(f"  --editor-btn-border-hover: {dark.get('editor_btn_hover_border')};")
+    css.append(f"  --editor-btn-active-from: {dark.get('editor_btn_active_from')};")
+    css.append(f"  --editor-btn-active-to: {dark.get('editor_btn_active_to')};")
+    css.append(f"  --header-btn-bg: {dark.get('header_btn_bg')};")
+    css.append(f"  --header-btn-text: {dark.get('header_btn_text')};")
+    css.append(f"  --header-btn-border: {dark.get('header_btn_border')};")
+    css.append(f"  --header-btn-hover-bg: {dark.get('header_btn_hover_bg')};")
+    css.append(f"  --header-btn-hover-text: {dark.get('header_btn_hover_text')};")
+    css.append(f"  --header-btn-hover-border: {dark.get('header_btn_hover_border')};")
+    css.append(f"  --modal-overlay: {dark.get('modal_overlay')};")
+    css.append(f"  --modal-bg: {dark.get('modal_bg')};")
+    css.append(f"  --modal-text: {dark.get('modal_text')};")
+    css.append(f"  --modal-muted: {dark.get('modal_muted')};")
+    css.append(f"  --modal-body-bg: {dark.get('modal_body_bg')};")
+    css.append(f"  --modal-body-border: {dark.get('modal_body_border')};")
+    css.append(f"  --modal-table-head-bg: {dark.get('modal_table_head_bg')};")
+    css.append(f"  --modal-table-head-text: {dark.get('modal_table_head_text')};")
+    css.append(f"  --modal-table-border: {dark.get('modal_table_border')};")
+    css.append(f"  --modal-table-row-hover-bg: {dark.get('modal_table_row_hover_bg')};")
+    css.append(f"  --modal-list-marker: {dark.get('modal_list_marker')};")
+    css.append(f"  --modal-border: {dark.get('modal_border')};")
+    css.append(f"  --modal-header-border: {dark.get('modal_header_border')};")
+    css.append(f"  --modal-close: {dark.get('modal_close')};")
+    css.append(f"  --modal-close-hover: {dark.get('modal_close_hover')};")
+    css.append(f"  --header-tab-bg: {dark.get('header_tab_bg')};")
+    css.append(f"  --header-tab-text: {dark.get('header_tab_text')};")
+    css.append(f"  --header-tab-border: {dark.get('header_tab_border')};")
+    css.append(f"  --header-tab-active-bg: {dark.get('header_tab_active_bg')};")
+    css.append(f"  --header-tab-active-text: {dark.get('header_tab_active_text')};")
+    css.append(f"  --radius: {int(dark.get('radius') or 12)}px;")
+    css.append(f"  --radius-sm: {dark_rs}px;")
+    css.append(f"  --shadow: {float(dark.get('shadow') or 0.4)};")
+    css.append("  --shadow-rgb: 0, 0, 0;")
+    css.append(f"  --density: {float(dark.get('density') or 1.0)};")
+    css.append(f"  --contrast: {float(dark.get('contrast') or 1.0)};")
+    css.append("}")
+    css.append("")
+
+    css.append('html[data-theme="light"] {')
+    css.append(f"  --bg: {light.get('bg')};")
+    css.append(f"  --card-bg: {light.get('card_bg')};")
+    css.append(f"  --text: {light.get('text')};")
+    css.append(f"  --muted: {light.get('muted')};")
+    css.append(f"  --accent: {light.get('accent')};")
+    css.append(f"  --border: {light.get('border')};")
+    css.append(f"  --sem-success: {light.get('sem_success')};")
+    css.append(f"  --sem-info: {light.get('sem_info')};")
+    css.append(f"  --sem-warning: {light.get('sem_warning')};")
+    css.append(f"  --sem-error: {light.get('sem_error')};")
+    css.append(f"  --sem-debug: {light.get('sem_debug')};")
+    css.append(f"  --editor-btn-bg: {light.get('editor_btn_bg')};")
+    css.append(f"  --editor-btn-text: {light.get('editor_btn_text')};")
+    css.append(f"  --editor-btn-border: {light.get('editor_btn_border')};")
+    css.append(f"  --editor-btn-hover-bg: {light.get('editor_btn_hover_bg')};")
+    css.append(f"  --editor-btn-hover-text: {light.get('editor_btn_hover_text')};")
+    css.append(f"  --editor-btn-hover-border: {light.get('editor_btn_hover_border')};")
+    css.append(f"  --editor-btn-border-hover: {light.get('editor_btn_hover_border')};")
+    css.append(f"  --editor-btn-active-from: {light.get('editor_btn_active_from')};")
+    css.append(f"  --editor-btn-active-to: {light.get('editor_btn_active_to')};")
+    css.append(f"  --header-btn-bg: {light.get('header_btn_bg')};")
+    css.append(f"  --header-btn-text: {light.get('header_btn_text')};")
+    css.append(f"  --header-btn-border: {light.get('header_btn_border')};")
+    css.append(f"  --header-btn-hover-bg: {light.get('header_btn_hover_bg')};")
+    css.append(f"  --header-btn-hover-text: {light.get('header_btn_hover_text')};")
+    css.append(f"  --header-btn-hover-border: {light.get('header_btn_hover_border')};")
+    css.append(f"  --modal-overlay: {light.get('modal_overlay')};")
+    css.append(f"  --modal-bg: {light.get('modal_bg')};")
+    css.append(f"  --modal-text: {light.get('modal_text')};")
+    css.append(f"  --modal-muted: {light.get('modal_muted')};")
+    css.append(f"  --modal-body-bg: {light.get('modal_body_bg')};")
+    css.append(f"  --modal-body-border: {light.get('modal_body_border')};")
+    css.append(f"  --modal-table-head-bg: {light.get('modal_table_head_bg')};")
+    css.append(f"  --modal-table-head-text: {light.get('modal_table_head_text')};")
+    css.append(f"  --modal-table-border: {light.get('modal_table_border')};")
+    css.append(f"  --modal-table-row-hover-bg: {light.get('modal_table_row_hover_bg')};")
+    css.append(f"  --modal-list-marker: {light.get('modal_list_marker')};")
+    css.append(f"  --modal-border: {light.get('modal_border')};")
+    css.append(f"  --modal-header-border: {light.get('modal_header_border')};")
+    css.append(f"  --modal-close: {light.get('modal_close')};")
+    css.append(f"  --modal-close-hover: {light.get('modal_close_hover')};")
+    css.append(f"  --header-tab-bg: {light.get('header_tab_bg')};")
+    css.append(f"  --header-tab-text: {light.get('header_tab_text')};")
+    css.append(f"  --header-tab-border: {light.get('header_tab_border')};")
+    css.append(f"  --header-tab-active-bg: {light.get('header_tab_active_bg')};")
+    css.append(f"  --header-tab-active-text: {light.get('header_tab_active_text')};")
+    css.append(f"  --radius: {int(light.get('radius') or 12)}px;")
+    css.append(f"  --radius-sm: {light_rs}px;")
+    css.append(f"  --shadow: {float(light.get('shadow') or 0.08)};")
+    css.append("  --shadow-rgb: 15, 23, 42;")
+    css.append(f"  --density: {float(light.get('density') or 1.0)};")
+    css.append(f"  --contrast: {float(light.get('contrast') or 1.0)};")
+    css.append("}")
+    css.append("")
+
+    css.append("/* Core surfaces */")
+    css.append("body {")
+    css.append("  background: var(--bg) !important;")
+    css.append("  color: var(--text) !important;")
+    css.append("  filter: contrast(var(--contrast));")
+    css.append("}")
+    css.append("a { color: var(--accent) !important; }")
+    css.append("header p, .card p, .hint, .modal-hint, .small { color: var(--muted) !important; }")
+    css.append("")
+
+    css.append(".container { padding: calc(24px * var(--density)) !important; }")
+    css.append(".card {")
+    css.append("  background: var(--card-bg) !important;")
+    css.append("  border-color: var(--border) !important;")
+    css.append("  border-radius: var(--radius) !important;")
+    css.append("  padding: calc(16px * var(--density)) calc(16px * var(--density)) calc(20px * var(--density)) !important;")
+    css.append("  box-shadow: 0 10px 30px rgba(var(--shadow-rgb), var(--shadow)) !important;")
+    css.append("}")
+    css.append(".modal {")
+    css.append("  background: var(--modal-overlay) !important;")
+    css.append("}")
+    css.append(".modal-content {")
+    css.append("  background: var(--modal-bg) !important;")
+    css.append("  color: var(--modal-text) !important;")
+    css.append("  border-color: var(--modal-border) !important;")
+    css.append("  border-radius: var(--radius) !important;")
+    css.append("  box-shadow: 0 10px 30px rgba(var(--shadow-rgb), var(--shadow)) !important;")
+    css.append("}")
+    css.append(".modal-header { border-bottom-color: var(--modal-header-border) !important; }")
+    css.append(".modal-close { color: var(--modal-close) !important; }")
+    css.append(".modal-close:hover { color: var(--modal-close-hover) !important; }")
+    css.append(".modal-content .modal-hint, .modal-content .hint, .modal-content .small { color: var(--modal-muted) !important; }")
+    css.append(".modal-body { background: var(--modal-body-bg) !important; }")
+    css.append(".modal-body-logs { background: var(--modal-body-bg) !important; border: 1px solid var(--modal-body-border) !important; border-radius: var(--radius-sm) !important; padding: calc(8px * var(--density)) !important; }")
+    css.append(".modal-content table { background: transparent !important; color: var(--modal-text) !important; }")
+    css.append(".modal-content thead { background: var(--modal-table-head-bg) !important; }")
+    css.append(".modal-content th { color: var(--modal-table-head-text) !important; border-bottom-color: var(--modal-table-border) !important; }")
+    css.append(".modal-content td { border-bottom-color: var(--modal-table-border) !important; }")
+    css.append(".modal-content tbody tr:hover { background: var(--modal-table-row-hover-bg) !important; }")
+    css.append(".modal-content ul li::marker, .modal-content ol li::marker { color: var(--modal-list-marker) !important; }")
+    css.append("")
+
+    css.append("input, select, textarea, .xkeen-textarea, .CodeMirror {")
+    css.append("  border-color: var(--border) !important;")
+    css.append("  border-radius: var(--radius-sm) !important;")
+    css.append("  background: var(--card-bg) !important;")
+    css.append("  color: var(--text) !important;")
+    css.append("}")
+    css.append("button { border-radius: var(--radius-sm) !important; }")
+
+    css.append("")
+    css.append("/* Header buttons / tabs */")
+    css.append("header .service-core-text, header .theme-toggle-btn.theme-toggle-header, header .header-actions .btn-link { background: var(--header-btn-bg) !important; border-color: var(--header-btn-border) !important; color: var(--header-btn-text) !important; }")
+    css.append("header .service-core-text:hover, header .theme-toggle-btn.theme-toggle-header:hover, header .header-actions .btn-link:hover { background: var(--header-btn-hover-bg) !important; border-color: var(--header-btn-hover-border) !important; color: var(--header-btn-hover-text) !important; }")
+    css.append("header .top-tabs.header-tabs .top-tab-btn { background: var(--header-tab-bg) !important; border-color: var(--header-tab-border) !important; color: var(--header-tab-text) !important; }")
+    css.append("header .top-tabs.header-tabs .top-tab-btn:hover, header .top-tabs.header-tabs .top-tab-btn.active { background: var(--header-tab-active-bg) !important; border-color: var(--header-tab-active-bg) !important; color: var(--header-tab-active-text) !important; }")
+
+    css.append("")
+    return "\n".join(css) + "\n"
+
+
+def _atomic_write_text(path: str, text: str, mode: int = 0o644) -> None:
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8", errors="ignore") as f:
+        f.write(text)
+    try:
+        os.chmod(tmp, mode)
+    except Exception:
+        pass
+    os.replace(tmp, path)
+
+
+def theme_get(ui_state_dir: str) -> Dict[str, Any]:
+    """Load current theme config (or defaults)."""
+    cfg = json.loads(json.dumps(_DEFAULT_THEME_CONFIG))
+    exists = False
+    jpath = _theme_json_path(ui_state_dir)
+    cpath = _theme_css_path(ui_state_dir)
+
+    try:
+        if os.path.isfile(jpath):
+            with open(jpath, "r", encoding="utf-8", errors="ignore") as f:
+                raw = json.load(f)
+            cfg = _sanitize_theme_config(raw)
+            exists = True
+        elif os.path.isfile(cpath):
+            # If only CSS exists (older version), still report exists.
+            exists = True
+    except Exception:
+        cfg = json.loads(json.dumps(_DEFAULT_THEME_CONFIG))
+
+    version = 0
+    try:
+        if os.path.isfile(cpath):
+            version = int(os.path.getmtime(cpath) or 0)
+    except Exception:
+        version = 0
+
+    return {
+        "config": cfg,
+        "exists": bool(exists),
+        "version": version,
+        "css_file": cpath,
+        "json_file": jpath,
+    }
+
+
+def theme_set(ui_state_dir: str, cfg_in: Any) -> Dict[str, Any]:
+    """Validate + persist theme config as JSON + generated CSS."""
+    cfg = _sanitize_theme_config(cfg_in)
+    jpath = _theme_json_path(ui_state_dir)
+    cpath = _theme_css_path(ui_state_dir)
+
+    _atomic_write_text(jpath, json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", mode=0o600)
+    _atomic_write_text(cpath, _theme_css_from_config(cfg), mode=0o644)
+
+    version = 0
+    try:
+        version = int(os.path.getmtime(cpath) or 0)
+    except Exception:
+        version = 0
+
+    return {
+        "config": cfg,
+        "exists": True,
+        "version": version,
+        "css_file": cpath,
+        "json_file": jpath,
+    }
+
+
+def theme_reset(ui_state_dir: str) -> Dict[str, Any]:
+    """Remove saved custom theme (JSON + CSS)."""
+    jpath = _theme_json_path(ui_state_dir)
+    cpath = _theme_css_path(ui_state_dir)
+
+    for fp in (jpath, cpath):
+        try:
+            if os.path.exists(fp):
+                os.remove(fp)
+        except Exception:
+            pass
+
+    return theme_get(ui_state_dir)
+
+
+# ---------------------------------------------------------------------------
+# Custom CSS editor (DevTools) — UI_STATE_DIR/custom.css (+ disable flag)
+# ---------------------------------------------------------------------------
+
+
+def _custom_css_path(ui_state_dir: str) -> str:
+    return os.path.join(ui_state_dir, "custom.css")
+
+
+def _custom_css_disabled_flag(ui_state_dir: str) -> str:
+    return os.path.join(ui_state_dir, "custom_css.disabled")
+
+
+_CUSTOM_CSS_MAX_CHARS = 250_000
+
+
+def _sanitize_custom_css(text: Any) -> str:
+    """Best-effort safety: accept only CSS, reject obvious JS vectors.
+
+    Notes:
+      - This is an admin-only feature, so the goal is to prevent accidental
+        injection like pasting a <script> block or javascript: URLs.
+      - CSS can still do a lot visually; safe-mode is the recovery mechanism.
+    """
+    s = "" if text is None else str(text)
+    if len(s) > _CUSTOM_CSS_MAX_CHARS:
+        raise ValueError("too_large")
+
+    # Normalize line endings and strip BOM.
+    try:
+        s = s.replace("\r\n", "\n").replace("\r", "\n")
+        if s.startswith("\ufeff"):
+            s = s.lstrip("\ufeff")
+    except Exception:
+        pass
+
+    # Reject common non-CSS pastes.
+    lowered = s.lower()
+    if "<script" in lowered or "</script" in lowered:
+        raise ValueError("unsafe_css")
+
+    # Reject javascript: URLs (including inside url(...)).
+    if re.search(r"javascript\s*:", lowered, re.IGNORECASE):
+        raise ValueError("unsafe_css")
+
+    # Legacy IE-only JS execution inside CSS.
+    if re.search(r"expression\s*\(", lowered, re.IGNORECASE):
+        raise ValueError("unsafe_css")
+
+    return s
+
+
+def custom_css_get(ui_state_dir: str) -> Dict[str, Any]:
+    """Load current custom.css content + meta (enabled/exists/version)."""
+    css_path = _custom_css_path(ui_state_dir)
+    disabled_flag = _custom_css_disabled_flag(ui_state_dir)
+
+    enabled = False
+    exists = False
+    version = 0
+    size = 0
+    content = ""
+    truncated = False
+
+    try:
+        if os.path.isfile(css_path):
+            exists = True
+            try:
+                version = int(os.path.getmtime(css_path) or 0)
+            except Exception:
+                version = 0
+
+            try:
+                size = int(os.path.getsize(css_path) or 0)
+            except Exception:
+                size = 0
+
+            # Read with a hard cap to avoid huge payloads.
+            try:
+                with open(css_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read(_CUSTOM_CSS_MAX_CHARS + 1)
+                if len(content) > _CUSTOM_CSS_MAX_CHARS:
+                    content = content[:_CUSTOM_CSS_MAX_CHARS]
+                    truncated = True
+            except Exception:
+                content = ""
+
+        enabled = exists and (not os.path.isfile(disabled_flag))
+    except Exception:
+        enabled = False
+        exists = False
+
+    return {
+        "enabled": bool(enabled),
+        "exists": bool(exists),
+        "version": int(version or 0),
+        "size": int(size or 0),
+        "truncated": bool(truncated),
+        "css": content,
+        "css_file": css_path,
+        "disabled_flag": disabled_flag,
+        "max_chars": int(_CUSTOM_CSS_MAX_CHARS),
+    }
+
+
+def custom_css_set(ui_state_dir: str, css_text: Any) -> Dict[str, Any]:
+    """Persist custom.css and enable it."""
+    css_path = _custom_css_path(ui_state_dir)
+    disabled_flag = _custom_css_disabled_flag(ui_state_dir)
+
+    css = _sanitize_custom_css(css_text)
+    _atomic_write_text(css_path, css if css.endswith("\n") else (css + "\n"), mode=0o644)
+
+    # Enable by removing disable flag.
+    try:
+        if os.path.exists(disabled_flag):
+            os.remove(disabled_flag)
+    except Exception:
+        pass
+
+    return custom_css_get(ui_state_dir)
+
+
+def custom_css_disable(ui_state_dir: str) -> Dict[str, Any]:
+    """Disable custom CSS without deleting the file."""
+    disabled_flag = _custom_css_disabled_flag(ui_state_dir)
+    try:
+        _atomic_write_text(disabled_flag, "disabled\n", mode=0o644)
+    except Exception:
+        pass
+    return custom_css_get(ui_state_dir)
+
+
+def custom_css_reset(ui_state_dir: str) -> Dict[str, Any]:
+    """Delete custom.css and disable flag."""
+    css_path = _custom_css_path(ui_state_dir)
+    disabled_flag = _custom_css_disabled_flag(ui_state_dir)
+
+    for fp in (css_path, disabled_flag):
+        try:
+            if os.path.exists(fp):
+                os.remove(fp)
+        except Exception:
+            pass
+
+    return custom_css_get(ui_state_dir)
