@@ -210,7 +210,6 @@ async function loadUiStatus() {
   let _logWs = null;
   let _logWsName = '';
   let _logWsEverOpened = false;
-  let _logWsClosingManually = false;
   let _logWsReconnectAttempt = 0;
   let _logWsReconnectTimer = null;
   let _logWsDisabled = false;
@@ -1520,13 +1519,13 @@ function _logWsStop(manual) {
   _logWsClearReconnectTimer();
   _logWsReconnectAttempt = 0;
   if (_logWs) {
-    try { _logWsClosingManually = !!manual; } catch (e) {}
+    // Mark this socket as intentionally closed to avoid reconnect/polling fallback.
+    try { _logWs.__xkManualClose = !!manual; } catch (e) {}
     try { _logWs.close(); } catch (e) {}
   }
   _logWs = null;
   _logWsName = '';
   _logWsEverOpened = false;
-  _logWsClosingManually = false;
 }
 
 function _logWsScheduleReconnect() {
@@ -1617,13 +1616,13 @@ function _logWsConnect(isReconnect) {
 
   // Close previous socket (if any).
   if (_logWs) {
-    try { _logWsClosingManually = true; } catch (e) {}
+    // Mark old socket as intentionally closed so its onclose won't trigger reconnect/polling.
+    try { _logWs.__xkManualClose = true; } catch (e) {}
     try { _logWs.close(); } catch (e) {}
   }
   _logWs = null;
   _logWsName = name;
   _logWsEverOpened = false;
-  _logWsClosingManually = false;
 
   const url = _logWsBuildUrl(name);
   let ws;
@@ -1638,6 +1637,7 @@ function _logWsConnect(isReconnect) {
   _logWs = ws;
 
   ws.onopen = () => {
+    if (_logWs !== ws) return;
     _logWsEverOpened = true;
     _logWsReconnectAttempt = 0;
     // WS заменяет polling – убираем интервальный fetch.
@@ -1645,6 +1645,7 @@ function _logWsConnect(isReconnect) {
   };
 
   ws.onmessage = (ev) => {
+    if (_logWs !== ws) return;
     let data;
     try { data = JSON.parse(ev && ev.data ? ev.data : '{}'); } catch (e) { return; }
     if (!data) return;
@@ -1694,11 +1695,11 @@ function _logWsConnect(isReconnect) {
   };
 
   ws.onclose = () => {
-    const wasManual = !!_logWsClosingManually;
+    if (_logWs !== ws) return;
+    const wasManual = !!ws.__xkManualClose;
     const ever = !!_logWsEverOpened;
     _logWs = null;
     _logWsEverOpened = false;
-    _logWsClosingManually = false;
 
     if (wasManual) return;
     if (!_logWsDesired()) return;
@@ -1799,22 +1800,46 @@ function stopLogAutoRefresh() {
   }
 
   function setActiveTab(tabName) {
-    _activeTab = (tabName === 'logs') ? 'logs' : 'tools';
     const btnTools = byId('dt-tab-btn-tools');
     const btnLogs = byId('dt-tab-btn-logs');
     const tabTools = byId('dt-tab-tools');
     const tabLogs = byId('dt-tab-logs');
 
+    function isForceHidden(el) {
+      try { return !!(el && el.dataset && el.dataset.xkForceHidden === '1'); } catch (e) { return false; }
+    }
+
+    const toolsForced = isForceHidden(btnTools) || isForceHidden(tabTools) || (btnTools && btnTools.style.display === 'none');
+    const logsForced = isForceHidden(btnLogs) || isForceHidden(tabLogs) || (btnLogs && btnLogs.style.display === 'none');
+
+    let next = (tabName === 'logs') ? 'logs' : 'tools';
+    if (next === 'tools' && toolsForced && !logsForced) next = 'logs';
+    if (next === 'logs' && logsForced && !toolsForced) next = 'tools';
+    if ((next === 'tools' && toolsForced) || (next === 'logs' && logsForced)) {
+      // Both are hidden or requested one is hidden and the other is also hidden.
+      // Hide panels and stop any streaming.
+      try { if (tabTools) tabTools.style.display = 'none'; } catch (e) {}
+      try { if (tabLogs) tabLogs.style.display = 'none'; } catch (e) {}
+      try { _stopLogStreamingAll(); } catch (e) {}
+      try { stopLogListPolling(); } catch (e) {}
+      return;
+    }
+
+    _activeTab = next;
+
     if (btnTools) {
-      btnTools.classList.toggle('active', _activeTab === 'tools');
-      btnTools.setAttribute('aria-selected', _activeTab === 'tools' ? 'true' : 'false');
+      const active = (_activeTab === 'tools') && !toolsForced;
+      btnTools.classList.toggle('active', active);
+      btnTools.setAttribute('aria-selected', active ? 'true' : 'false');
     }
     if (btnLogs) {
-      btnLogs.classList.toggle('active', _activeTab === 'logs');
-      btnLogs.setAttribute('aria-selected', _activeTab === 'logs' ? 'true' : 'false');
+      const active = (_activeTab === 'logs') && !logsForced;
+      btnLogs.classList.toggle('active', active);
+      btnLogs.setAttribute('aria-selected', active ? 'true' : 'false');
     }
-    if (tabTools) tabTools.style.display = (_activeTab === 'tools') ? '' : 'none';
-    if (tabLogs) tabLogs.style.display = (_activeTab === 'logs') ? '' : 'none';
+
+    if (tabTools) tabTools.style.display = ((_activeTab === 'tools') && !toolsForced) ? '' : 'none';
+    if (tabLogs) tabLogs.style.display = ((_activeTab === 'logs') && !logsForced) ? '' : 'none';
 
     // Pause auto-refresh when Logs tab is hidden.
     if (_activeTab === 'logs') {
@@ -2639,6 +2664,8 @@ function _wireLogLineActions() {
     'XKEEN_UI_ENV_FILE': 'Путь к env‑файлу DevTools (по умолчанию <UI_STATE_DIR>/devtools.env). Обычно менять не нужно. Эта переменная отображается только для информации (read‑only).',
     'XKEEN_UI_SECRET_KEY': 'Секретный ключ Flask/сессий. При смене ключа текущие сессии станут недействительными. Значение не отображается.',
     'XKEEN_RESTART_LOG_FILE': 'Файл, куда пишутся сообщения/ошибки при запуске/перезапуске UI (для диагностики). По умолчанию: <UI_STATE_DIR>/restart.log.',
+    'XKEEN_UI_PANEL_SECTIONS_WHITELIST': 'Whitelist видимых секций/вкладок на основной панели (/). Формат: ключи через запятую. Пусто/не задано = показывать всё. Ключи: routing,mihomo,xkeen,xray-logs,commands,files,mihomo-generator,donate. Пример: routing,mihomo,xray-logs,commands. (Секция “Files” может быть скрыта и по архитектуре/feature flags.)',
+    'XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST': 'Whitelist видимых секций DevTools (/devtools). Формат: ключи через запятую. Пусто/не задано = показывать всё. Ключи: tools,logs,service,logging,ui,layout,theme,css,env. Пример: service,logging,ui,layout,theme,css,env (или просто tools,env).',
     'XKEEN_LOG_DIR': 'Каталог UI‑логов: core.log / access.log / ws.log. По умолчанию: /opt/var/log/xkeen-ui.',
     'XKEEN_LOG_CORE_ENABLE': 'Включить/выключить core.log. Значения: 1/0. При 0 core.log не пишется (полезно для экономии flash).',
     'XKEEN_LOG_CORE_LEVEL': 'Уровень логирования core.log: ERROR / WARNING / INFO / DEBUG.',
@@ -2704,6 +2731,8 @@ function _wireLogLineActions() {
     'XKEEN_UI_STATE_DIR',
     'XKEEN_UI_ENV_FILE',
     'XKEEN_UI_SECRET_KEY',
+    'XKEEN_UI_PANEL_SECTIONS_WHITELIST',
+    'XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST',
     'XKEEN_LOG_DIR',
     'XKEEN_GITHUB_OWNER',
     'XKEEN_GITHUB_REPO',
@@ -2903,6 +2932,1146 @@ function _wireLogLineActions() {
   }
 
 
+
+
+  // --- Theme editor (global custom theme) ---------------------------------
+
+  const _THEME_DEFAULT_CONFIG = {
+    dark: {
+      bg: '#0f172a',
+      card_bg: '#020617',
+      text: '#e5e7eb',
+      muted: '#9ca3af',
+      accent: '#60a5fa',
+      border: '#1f2937',
+      radius: 12,
+      shadow: 0.40,
+      density: 1.00,
+      contrast: 1.00,
+    },
+    light: {
+      bg: '#f5f5f7',
+      card_bg: '#ffffff',
+      text: '#111827',
+      muted: '#4b5563',
+      accent: '#0a84ff',
+      border: '#d1d5db',
+      radius: 12,
+      shadow: 0.08,
+      density: 1.00,
+      contrast: 1.00,
+    },
+  };
+
+  let _themeCfg = JSON.parse(JSON.stringify(_THEME_DEFAULT_CONFIG));
+  let _themeSelected = 'dark';
+  let _themeMeta = { exists: false, version: 0 };
+  let _themeLoaded = false;
+  let _themePreviewEl = null;
+
+  const _THEME_COLOR_FIELDS = [
+    { key: 'bg', id: 'bg' },
+    { key: 'card_bg', id: 'card-bg' },
+    { key: 'text', id: 'text' },
+    { key: 'muted', id: 'muted' },
+    { key: 'accent', id: 'accent' },
+    { key: 'border', id: 'border' },
+  ];
+
+  function _isHexColor(s) {
+    if (!s) return false;
+    const v = String(s).trim();
+    return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?([0-9a-fA-F]{2})?$/.test(v);
+  }
+
+  function _expandShortHex(v) {
+    const s = String(v || '').trim();
+    if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+      return ('#' + s[1] + s[1] + s[2] + s[2] + s[3] + s[3]).toLowerCase();
+    }
+    return s.toLowerCase();
+  }
+
+  function _toColorPickerValue(v) {
+    // <input type=color> expects #RRGGBB. Drop alpha if present.
+    if (!_isHexColor(v)) return '#000000';
+    let s = _expandShortHex(v);
+    if (s.length === 9) s = s.slice(0, 7);
+    if (s.length !== 7) return '#000000';
+    return s;
+  }
+
+  function _setCustomThemeLinkVersion(version) {
+    const link = document.getElementById('xk-custom-theme-link');
+    if (!link) return;
+    try {
+      const u = new URL(link.getAttribute('href') || link.href || '', window.location.href);
+      u.searchParams.set('v', String(version || 0));
+      link.href = u.toString();
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  function _themeStatus(msg, isErr) {
+    const el = byId('dt-theme-status');
+    if (!el) return;
+    try {
+      el.textContent = msg || '';
+      el.style.color = isErr ? '#fca5a5' : '';
+    } catch (e) {
+      el.textContent = msg || '';
+    }
+  }
+
+  function _themeSetSelected(theme) {
+    const t = theme === 'light' ? 'light' : 'dark';
+    _themeSelected = t;
+
+    const bDark = byId('dt-theme-target-dark');
+    const bLight = byId('dt-theme-target-light');
+
+    if (bDark) {
+      bDark.classList.toggle('active', t === 'dark');
+      bDark.setAttribute('aria-selected', t === 'dark' ? 'true' : 'false');
+    }
+    if (bLight) {
+      bLight.classList.toggle('active', t === 'light');
+      bLight.setAttribute('aria-selected', t === 'light' ? 'true' : 'false');
+    }
+
+    _themeSyncUiFromState();
+  }
+
+  function _themeSyncUiFromState() {
+    const t = _themeSelected;
+    const cfg = (_themeCfg && _themeCfg[t]) ? _themeCfg[t] : {};
+
+    for (const f of _THEME_COLOR_FIELDS) {
+      const c = byId(`dt-theme-${f.id}-color`);
+      const tx = byId(`dt-theme-${f.id}-text`);
+      const v = cfg[f.key];
+      if (c) {
+        try { c.value = _toColorPickerValue(v); } catch (e) {}
+      }
+      if (tx) {
+        try { tx.value = String(v || ''); } catch (e) {}
+      }
+    }
+
+    const radius = byId('dt-theme-radius');
+    const shadow = byId('dt-theme-shadow');
+    const density = byId('dt-theme-density');
+    const contrast = byId('dt-theme-contrast');
+
+    const rv = byId('dt-theme-radius-val');
+    const sv = byId('dt-theme-shadow-val');
+    const dv = byId('dt-theme-density-val');
+    const cv = byId('dt-theme-contrast-val');
+
+    if (radius) { try { radius.value = String(cfg.radius ?? 12); } catch (e) {} }
+    if (shadow) { try { shadow.value = String(cfg.shadow ?? 0.4); } catch (e) {} }
+    if (density) { try { density.value = String(cfg.density ?? 1.0); } catch (e) {} }
+    if (contrast) { try { contrast.value = String(cfg.contrast ?? 1.0); } catch (e) {} }
+
+    if (rv) rv.textContent = `${parseInt(cfg.radius ?? 12, 10)}px`;
+    if (sv) sv.textContent = `${Number(cfg.shadow ?? 0.4).toFixed(2)}`;
+    if (dv) dv.textContent = `${Number(cfg.density ?? 1.0).toFixed(2)}`;
+    if (cv) cv.textContent = `${Number(cfg.contrast ?? 1.0).toFixed(2)}`;
+  }
+
+  function _themeUpdateState(key, val) {
+    if (!_themeCfg[_themeSelected]) _themeCfg[_themeSelected] = {};
+    _themeCfg[_themeSelected][key] = val;
+  }
+
+  function _themeRadiusSm(r) {
+    const x = Math.round(Number(r || 12) * 0.75);
+    return Math.max(4, Math.min(24, x));
+  }
+
+  function _themeBuildCss(cfg) {
+    const d = cfg && cfg.dark ? cfg.dark : _THEME_DEFAULT_CONFIG.dark;
+    const l = cfg && cfg.light ? cfg.light : _THEME_DEFAULT_CONFIG.light;
+
+    const dRs = _themeRadiusSm(d.radius);
+    const lRs = _themeRadiusSm(l.radius);
+
+    const lines = [];
+    lines.push('/* Preview layer (not saved) — Xkeen UI DevTools Theme Editor */');
+    lines.push(':root {');
+    lines.push(`  --bg: ${d.bg};`);
+    lines.push(`  --card-bg: ${d.card_bg};`);
+    lines.push(`  --text: ${d.text};`);
+    lines.push(`  --muted: ${d.muted};`);
+    lines.push(`  --accent: ${d.accent};`);
+    lines.push(`  --border: ${d.border};`);
+    lines.push(`  --radius: ${parseInt(d.radius ?? 12, 10)}px;`);
+    lines.push(`  --radius-sm: ${dRs}px;`);
+    lines.push(`  --shadow: ${Number(d.shadow ?? 0.4)};`);
+    lines.push('  --shadow-rgb: 0, 0, 0;');
+    lines.push(`  --density: ${Number(d.density ?? 1.0)};`);
+    lines.push(`  --contrast: ${Number(d.contrast ?? 1.0)};`);
+    lines.push('}');
+
+    lines.push('html[data-theme="dark"] {');
+    lines.push(`  --bg: ${d.bg};`);
+    lines.push(`  --card-bg: ${d.card_bg};`);
+    lines.push(`  --text: ${d.text};`);
+    lines.push(`  --muted: ${d.muted};`);
+    lines.push(`  --accent: ${d.accent};`);
+    lines.push(`  --border: ${d.border};`);
+    lines.push(`  --radius: ${parseInt(d.radius ?? 12, 10)}px;`);
+    lines.push(`  --radius-sm: ${dRs}px;`);
+    lines.push(`  --shadow: ${Number(d.shadow ?? 0.4)};`);
+    lines.push('  --shadow-rgb: 0, 0, 0;');
+    lines.push(`  --density: ${Number(d.density ?? 1.0)};`);
+    lines.push(`  --contrast: ${Number(d.contrast ?? 1.0)};`);
+    lines.push('}');
+
+    lines.push('html[data-theme="light"] {');
+    lines.push(`  --bg: ${l.bg};`);
+    lines.push(`  --card-bg: ${l.card_bg};`);
+    lines.push(`  --text: ${l.text};`);
+    lines.push(`  --muted: ${l.muted};`);
+    lines.push(`  --accent: ${l.accent};`);
+    lines.push(`  --border: ${l.border};`);
+    lines.push(`  --radius: ${parseInt(l.radius ?? 12, 10)}px;`);
+    lines.push(`  --radius-sm: ${lRs}px;`);
+    lines.push(`  --shadow: ${Number(l.shadow ?? 0.08)};`);
+    lines.push('  --shadow-rgb: 15, 23, 42;');
+    lines.push(`  --density: ${Number(l.density ?? 1.0)};`);
+    lines.push(`  --contrast: ${Number(l.contrast ?? 1.0)};`);
+    lines.push('}');
+
+    lines.push('body { background: var(--bg) !important; color: var(--text) !important; filter: contrast(var(--contrast)); }');
+    lines.push('a { color: var(--accent) !important; }');
+    lines.push('header p, .card p, .hint, .modal-hint, .small { color: var(--muted) !important; }');
+    lines.push('.container { padding: calc(24px * var(--density)) !important; }');
+    lines.push('.card { background: var(--card-bg) !important; border-color: var(--border) !important; border-radius: var(--radius) !important; padding: calc(16px * var(--density)) calc(16px * var(--density)) calc(20px * var(--density)) !important; box-shadow: 0 10px 30px rgba(var(--shadow-rgb), var(--shadow)) !important; }');
+    lines.push('.modal { border-color: var(--border) !important; border-radius: var(--radius) !important; box-shadow: 0 10px 30px rgba(var(--shadow-rgb), var(--shadow)) !important; }');
+    lines.push('input, select, textarea, .xkeen-textarea, .CodeMirror { border-color: var(--border) !important; border-radius: var(--radius-sm) !important; background: var(--card-bg) !important; color: var(--text) !important; }');
+    lines.push('button { border-radius: var(--radius-sm) !important; }');
+
+    return lines.join('\n') + '\n';
+  }
+
+  function _themeEnsurePreviewStyle() {
+    if (_themePreviewEl && document.head.contains(_themePreviewEl)) return _themePreviewEl;
+    let el = document.getElementById('xk-theme-preview-style');
+    if (!el) {
+      el = document.createElement('style');
+      el.id = 'xk-theme-preview-style';
+      document.head.appendChild(el);
+    }
+    _themePreviewEl = el;
+    return el;
+  }
+
+  function _themeRemovePreviewStyle() {
+    const el = document.getElementById('xk-theme-preview-style');
+    if (el && el.parentNode) {
+      try { el.parentNode.removeChild(el); } catch (e) {}
+    }
+    _themePreviewEl = null;
+  }
+
+  function _themeApplyPreview() {
+    const live = byId('dt-theme-live-preview');
+    const isLive = !!(live && live.checked);
+    if (!isLive) return;
+
+    const el = _themeEnsurePreviewStyle();
+    try { el.textContent = _themeBuildCss(_themeCfg); } catch (e) { el.textContent = ''; }
+
+    _themeStatus('Preview: применено (не сохранено).', false);
+  }
+
+  async function _themeLoadFromServer() {
+    const card = byId('dt-theme-editor-card');
+    if (!card) return;
+
+    _themeLoaded = false;
+    try {
+      const resp = await getJSON('/api/devtools/theme');
+      if (!resp || !resp.ok) throw new Error((resp && resp.error) ? resp.error : 'theme_get_failed');
+      if (resp.config) _themeCfg = resp.config;
+      _themeMeta.exists = !!resp.exists;
+      _themeMeta.version = resp.version || 0;
+
+      _setCustomThemeLinkVersion(_themeMeta.version);
+      _themeSyncUiFromState();
+
+      const saved = _themeMeta.exists ? `Сохранено (v=${_themeMeta.version || 0})` : 'Не сохранено (используется стандартная тема)';
+      _themeStatus(saved, false);
+    } catch (e) {
+      _themeStatus('Не удалось загрузить theme config: ' + (e && e.message ? e.message : String(e)), true);
+    } finally {
+      _themeLoaded = true;
+    }
+  }
+
+  async function _themeSaveToServer() {
+    const btn = byId('dt-theme-save');
+    if (btn) btn.disabled = true;
+    try {
+      const resp = await postJSON('/api/devtools/theme', { config: _themeCfg });
+      if (!resp || !resp.ok) throw new Error((resp && resp.error) ? resp.error : 'theme_save_failed');
+
+      _themeCfg = resp.config || _themeCfg;
+      _themeMeta.exists = !!resp.exists;
+      _themeMeta.version = resp.version || 0;
+
+      _setCustomThemeLinkVersion(_themeMeta.version);
+      _themeRemovePreviewStyle();
+
+      toast('Theme saved globally');
+      _themeStatus(`Сохранено (v=${_themeMeta.version || 0}). Обновите другие страницы, чтобы применилось.`, false);
+    } catch (e) {
+      toast('Theme save failed', true);
+      _themeStatus('Save failed: ' + (e && e.message ? e.message : String(e)), true);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function _themeResetOnServer() {
+    if (!confirm('Удалить global custom theme и вернуться к стандартным стилям?')) return;
+
+    const btn = byId('dt-theme-reset');
+    if (btn) btn.disabled = true;
+    try {
+      const resp = await postJSON('/api/devtools/theme/reset', {});
+      if (!resp || !resp.ok) throw new Error((resp && resp.error) ? resp.error : 'theme_reset_failed');
+
+      _themeCfg = resp.config || JSON.parse(JSON.stringify(_THEME_DEFAULT_CONFIG));
+      _themeMeta.exists = !!resp.exists;
+      _themeMeta.version = resp.version || 0;
+
+      _setCustomThemeLinkVersion(_themeMeta.version);
+      _themeRemovePreviewStyle();
+      _themeSyncUiFromState();
+
+      toast('Theme reset');
+      _themeStatus('Сброшено. Используется стандартная тема.', false);
+    } catch (e) {
+      toast('Theme reset failed', true);
+      _themeStatus('Reset failed: ' + (e && e.message ? e.message : String(e)), true);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function _wireThemeEditor() {
+    const card = byId('dt-theme-editor-card');
+    if (!card) return;
+
+    const bDark = byId('dt-theme-target-dark');
+    const bLight = byId('dt-theme-target-light');
+
+    if (bDark) bDark.addEventListener('click', () => _themeSetSelected('dark'));
+    if (bLight) bLight.addEventListener('click', () => _themeSetSelected('light'));
+
+    for (const f of _THEME_COLOR_FIELDS) {
+      const c = byId(`dt-theme-${f.id}-color`);
+      const tx = byId(`dt-theme-${f.id}-text`);
+
+      if (c) {
+        c.addEventListener('input', () => {
+          const v = String(c.value || '').trim();
+          _themeUpdateState(f.key, v);
+          if (tx) tx.value = v;
+          _themeApplyPreview();
+        });
+      }
+
+      if (tx) {
+        tx.addEventListener('input', () => {
+          const raw = String(tx.value || '').trim();
+          if (_isHexColor(raw)) {
+            const v = _expandShortHex(raw);
+            _themeUpdateState(f.key, v);
+            if (c) c.value = _toColorPickerValue(v);
+          }
+          _themeApplyPreview();
+        });
+      }
+    }
+
+    const radius = byId('dt-theme-radius');
+    const shadow = byId('dt-theme-shadow');
+    const density = byId('dt-theme-density');
+    const contrast = byId('dt-theme-contrast');
+
+    const rv = byId('dt-theme-radius-val');
+    const sv = byId('dt-theme-shadow-val');
+    const dv = byId('dt-theme-density-val');
+    const cv = byId('dt-theme-contrast-val');
+
+    function updSlider() {
+      const cfg = _themeCfg[_themeSelected] || {};
+      if (radius) cfg.radius = parseInt(radius.value || '12', 10);
+      if (shadow) cfg.shadow = Number(shadow.value || 0.4);
+      if (density) cfg.density = Number(density.value || 1.0);
+      if (contrast) cfg.contrast = Number(contrast.value || 1.0);
+
+      if (rv) rv.textContent = `${parseInt(cfg.radius ?? 12, 10)}px`;
+      if (sv) sv.textContent = `${Number(cfg.shadow ?? 0.4).toFixed(2)}`;
+      if (dv) dv.textContent = `${Number(cfg.density ?? 1.0).toFixed(2)}`;
+      if (cv) cv.textContent = `${Number(cfg.contrast ?? 1.0).toFixed(2)}`;
+
+      _themeApplyPreview();
+    }
+
+    if (radius) radius.addEventListener('input', updSlider);
+    if (shadow) shadow.addEventListener('input', updSlider);
+    if (density) density.addEventListener('input', updSlider);
+    if (contrast) contrast.addEventListener('input', updSlider);
+
+    const live = byId('dt-theme-live-preview');
+    if (live) {
+      live.addEventListener('change', () => {
+        if (!live.checked) {
+          _themeRemovePreviewStyle();
+          _themeStatus(_themeMeta.exists ? `Сохранено (v=${_themeMeta.version || 0}). Preview выключен.` : 'Preview выключен.', false);
+        } else {
+          _themeApplyPreview();
+        }
+      });
+    }
+
+    const save = byId('dt-theme-save');
+    if (save) save.addEventListener('click', () => _themeSaveToServer());
+
+    const reset = byId('dt-theme-reset');
+    if (reset) reset.addEventListener('click', () => _themeResetOnServer());
+
+    // Initial load
+    _themeLoadFromServer();
+  }
+
+
+  // ------------------------- Custom CSS editor (global custom.css) -------------------------
+
+  let _customCssEditor = null;
+  let _customCssMeta = { enabled: false, exists: false, version: 0, size: 0, truncated: false, css: '' };
+  let _customCssLoading = false;
+
+  function _isSafeMode() {
+    try {
+      const sp = new URLSearchParams(window.location.search || '');
+      const v = String(sp.get('safe') || '').trim().toLowerCase();
+      return ['1', 'true', 'yes', 'on', 'y'].includes(v);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _renderCustomCssMeta(meta) {
+    const el = byId('dt-custom-css-meta');
+    if (!el) return;
+    const m = meta || _customCssMeta || {};
+    const enabled = !!m.enabled;
+    const exists = !!m.exists;
+    const v = Number(m.version || 0);
+    const size = Number(m.size || 0);
+    const age = _formatAgeRu(v);
+
+    const badge = `<span class="dt-custom-css-badge ${enabled ? 'is-on' : 'is-off'}">${enabled ? '● Enabled' : '● Disabled'}</span>`;
+    const parts = [];
+    parts.push(badge);
+    parts.push(exists ? ('size: ' + _formatBytes(size)) : 'empty');
+    if (v) parts.push(age);
+    if (m.truncated) parts.push('⚠️ показан не весь файл');
+    try {
+      el.innerHTML = parts.join(' &nbsp;•&nbsp; ');
+    } catch (e) {
+      el.textContent = `${enabled ? 'Enabled' : 'Disabled'} • ${exists ? _formatBytes(size) : 'empty'}${v ? ' • ' + age : ''}`;
+    }
+  }
+
+  function _customCssStatus(text, isErr) {
+    const el = byId('dt-custom-css-status');
+    if (!el) return;
+    el.textContent = String(text || '');
+    el.style.color = isErr ? '#fca5a5' : '';
+  }
+
+  function _customCssGetValue() {
+    try {
+      if (_customCssEditor && typeof _customCssEditor.getValue === 'function') {
+        return String(_customCssEditor.getValue() || '');
+      }
+    } catch (e) {}
+    const ta = byId('dt-custom-css-textarea');
+    return ta ? String(ta.value || '') : '';
+  }
+
+  function _customCssSetValue(text) {
+    const v = String(text || '');
+    try {
+      if (_customCssEditor && typeof _customCssEditor.setValue === 'function') {
+        _customCssEditor.setValue(v);
+        return;
+      }
+    } catch (e) {}
+    const ta = byId('dt-custom-css-textarea');
+    if (ta) ta.value = v;
+  }
+
+  function _ensureCustomCssLink(version) {
+    if (_isSafeMode()) return; // never auto-apply in safe mode
+    try {
+      let link = document.getElementById('xk-custom-css-link');
+      const hrefBase = '/ui/custom.css';
+      const v = Number(version || 0) || Math.floor(Date.now() / 1000);
+      const href = hrefBase + '?v=' + encodeURIComponent(String(v));
+
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.id = 'xk-custom-css-link';
+        link.href = href;
+        document.head.appendChild(link);
+        return;
+      }
+
+      // Replace href to bust cache.
+      link.href = href;
+    } catch (e) {}
+  }
+
+  function _removeCustomCssLink() {
+    try {
+      const link = document.getElementById('xk-custom-css-link');
+      if (link && link.parentNode) link.parentNode.removeChild(link);
+    } catch (e) {}
+  }
+
+  async function _ensureCustomCssEditor() {
+    const ta = byId('dt-custom-css-textarea');
+    if (!ta) return null;
+    if (_customCssEditor) return _customCssEditor;
+
+    // Attempt to lazy-load CodeMirror (optional). Fallback to textarea if it fails.
+    try {
+      const cmTheme = (document.documentElement.getAttribute('data-theme') === 'light') ? 'default' : 'material-darker';
+      const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
+      const paths = (loader && typeof loader.getPaths === 'function') ? loader.getPaths() : null;
+
+      if (paths && paths.codemirrorRoot && loader && typeof loader.loadCssOnce === 'function' && typeof loader.loadScriptOnce === 'function') {
+        await loader.loadCssOnce(paths.codemirrorRoot + 'codemirror.min.css');
+        if (cmTheme === 'material-darker') {
+          await loader.loadCssOnce(paths.codemirrorRoot + 'theme/material-darker.min.css');
+        }
+        await loader.loadScriptOnce(paths.codemirrorRoot + 'codemirror.min.js');
+      }
+
+      if (window.CodeMirror && typeof window.CodeMirror.fromTextArea === 'function') {
+        // Minimal CSS highlighting: overlay-based mode (CSS mode is not bundled).
+        try {
+          if (loader && typeof loader.loadScriptOnce === 'function' && paths && paths.codemirrorRoot) {
+            await loader.loadScriptOnce(paths.codemirrorRoot + 'addon/mode/overlay.js');
+          }
+        } catch (e) {}
+
+        try {
+          if (window.CodeMirror && window.CodeMirror.overlayMode && !(window.CodeMirror.modes && window.CodeMirror.modes.xk_csslite)) {
+            window.CodeMirror.defineMode('xk_csslite', function (config) {
+              const base = window.CodeMirror.getMode(config, 'text/plain');
+              const overlay = {
+                token: function (stream) {
+                  // Block comments /* ... */
+                  if (stream.match('/*')) {
+                    while ((stream.next()) != null) {
+                      if (stream.current().endsWith('*/')) break;
+                      if (stream.peek() === '*' ) {
+                        stream.next();
+                        if (stream.peek() === '/') { stream.next(); break; }
+                      }
+                    }
+                    return 'comment';
+                  }
+
+                  // Strings
+                  if (stream.match(/"(?:[^\\"]|\\.)*"/)) return 'string';
+                  if (stream.match(/'(?:[^\\']|\\.)*'/)) return 'string';
+
+                  // @rules
+                  if (stream.match(/@[a-zA-Z_-][\w-]*/)) return 'keyword';
+
+                  // !important
+                  if (stream.match(/!important\b/)) return 'keyword';
+
+                  // Hex colors (#rgb, #rrggbb, #rrggbbaa)
+                  if (stream.match(/#[0-9a-fA-F]{3,8}\b/)) return 'atom';
+
+                  // Numbers with common units
+                  if (stream.match(/[0-9]+(?:\.[0-9]+)?(?:px|rem|em|%|vh|vw|vmin|vmax|s|ms)?\b/)) return 'number';
+
+                  // Property name (foo-bar:) — highlight before colon
+                  if (stream.match(/[a-zA-Z_-][\w-]*(?=\s*:)/)) return 'property';
+
+                  stream.next();
+                  return null;
+                }
+              };
+              return window.CodeMirror.overlayMode(base, overlay);
+            });
+          }
+        } catch (e) {}
+        _customCssEditor = window.CodeMirror.fromTextArea(ta, {
+          mode: (window.CodeMirror.modes && window.CodeMirror.modes.xk_csslite) ? 'xk_csslite' : 'text/plain',
+          lineNumbers: true,
+          lineWrapping: true,
+          indentUnit: 2,
+          tabSize: 2,
+          theme: cmTheme,
+          extraKeys: {
+            'Ctrl-S': () => _customCssSaveToServer(),
+            'Cmd-S': () => _customCssSaveToServer(),
+          },
+        });
+
+        // Register for theme sync (theme.js listens to xkeen-editors-ready).
+        try {
+          window.__xkeenEditors = window.__xkeenEditors || [];
+          window.__xkeenEditors.push(_customCssEditor);
+          document.dispatchEvent(new CustomEvent('xkeen-editors-ready'));
+        } catch (e) {}
+
+        // Fix first render when the block is collapsed.
+        setTimeout(() => { try { _customCssEditor.refresh(); } catch (e) {} }, 0);
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    return _customCssEditor;
+  }
+
+  async function _customCssLoadFromServer() {
+    if (_customCssLoading) return;
+    _customCssLoading = true;
+    try {
+      const data = await getJSON('/api/devtools/custom_css');
+      _customCssMeta = data || _customCssMeta;
+      _customCssSetValue((_customCssMeta && typeof _customCssMeta.css !== 'undefined') ? _customCssMeta.css : '');
+      _renderCustomCssMeta(_customCssMeta);
+      _customCssStatus(_customCssMeta.enabled ? 'Включено.' : 'Отключено.', false);
+      if (_customCssMeta.truncated) {
+        _customCssStatus('⚠️ Файл большой: показан не весь текст (лимит ' + (_customCssMeta.max_chars || 0) + ' символов).', true);
+      }
+    } catch (e) {
+      _customCssStatus('Ошибка загрузки: ' + (e && e.message ? e.message : String(e)), true);
+    } finally {
+      _customCssLoading = false;
+    }
+  }
+
+  function _prettyCustomCssError(err) {
+    const msg = String(err || '');
+    if (msg === 'unsafe_css') return 'Отклонено: найден потенциально опасный фрагмент (JS/"javascript:"). Разрешён только CSS.';
+    if (msg === 'too_large') return 'Отклонено: файл слишком большой.';
+    return msg || 'Ошибка';
+  }
+
+  async function _customCssSaveToServer() {
+    const text = _customCssGetValue();
+    try {
+      const data = await postJSON('/api/devtools/custom_css/save', { css: text });
+      _customCssMeta = data || _customCssMeta;
+      _renderCustomCssMeta(_customCssMeta);
+      toast('Custom CSS saved');
+      if (_isSafeMode()) {
+        _customCssStatus('Сохранено. Safe mode активен — стили не применяются, пока есть ?safe=1.', false);
+      } else {
+        _customCssStatus('Сохранено и включено.', false);
+        _ensureCustomCssLink(_customCssMeta.version || 0);
+      }
+    } catch (e) {
+      const em = _prettyCustomCssError(e && e.message ? e.message : String(e));
+      _customCssStatus('Save failed: ' + em, true);
+      toast('Save failed: ' + em, true);
+    }
+  }
+
+  async function _customCssDisableOnServer() {
+    try {
+      const data = await postJSON('/api/devtools/custom_css/disable', {});
+      _customCssMeta = data || _customCssMeta;
+      _renderCustomCssMeta(_customCssMeta);
+      _removeCustomCssLink();
+      toast('Custom CSS disabled');
+      _customCssStatus('Отключено.', false);
+    } catch (e) {
+      _customCssStatus('Disable failed: ' + (e && e.message ? e.message : String(e)), true);
+      toast('Disable failed', true);
+    }
+  }
+
+  async function _customCssResetOnServer() {
+    const ok = await (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function'
+      ? XKeen.ui.confirm({
+          title: 'Reset custom.css?',
+          message: 'Удалить custom.css и отключить кастомизацию? Это действие необратимо.',
+          okText: 'Reset',
+          cancelText: 'Отменить',
+          danger: true,
+        })
+      : Promise.resolve(window.confirm('Удалить custom.css? Это действие необратимо.')));
+    if (!ok) return;
+
+    try {
+      const data = await postJSON('/api/devtools/custom_css/reset', {});
+      _customCssMeta = data || _customCssMeta;
+      _customCssSetValue('');
+      _renderCustomCssMeta(_customCssMeta);
+      _removeCustomCssLink();
+      toast('Custom CSS reset');
+      _customCssStatus('Сброшено.', false);
+    } catch (e) {
+      _customCssStatus('Reset failed: ' + (e && e.message ? e.message : String(e)), true);
+      toast('Reset failed', true);
+    }
+  }
+
+  function _wireCustomCssEditor() {
+    const card = byId('dt-custom-css-card');
+    const ta = byId('dt-custom-css-textarea');
+    if (!card || !ta) return;
+
+    const btnSave = byId('dt-custom-css-save');
+    const btnDisable = byId('dt-custom-css-disable');
+    const btnReset = byId('dt-custom-css-reset');
+
+    if (btnSave) btnSave.addEventListener('click', () => _customCssSaveToServer());
+    if (btnDisable) btnDisable.addEventListener('click', () => _customCssDisableOnServer());
+    if (btnReset) btnReset.addEventListener('click', () => _customCssResetOnServer());
+
+    // Create CodeMirror only when the block is opened (or on init if already open).
+    async function ensureAndRefresh() {
+      await _ensureCustomCssEditor();
+      try { if (_customCssEditor && _customCssEditor.refresh) _customCssEditor.refresh(); } catch (e) {}
+    }
+
+    card.addEventListener('toggle', () => {
+      if (card.open) ensureAndRefresh();
+    });
+
+    if (card.open) {
+      ensureAndRefresh();
+    }
+
+    // Initial load of content/meta.
+    _customCssLoadFromServer();
+  }
+
+
+
+// --- Custom CSS help modal -------------------------------------------
+
+let _customCssHelpEditors = [];
+let _customCssHelpIndex = null;
+let _customCssHelpExtrasWired = false;
+
+
+function _showCustomCssHelpModal() {
+  const modal = byId('dt-custom-css-help-modal');
+  if (!modal) return;
+  try { modal.classList.remove('hidden'); } catch (e) {}
+  if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+    try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
+  } else {
+    try { document.body.classList.add('modal-open'); } catch (e) {}
+  }
+
+  // Lazy-highlight snippets when opened.
+  _ensureCustomCssHelpHighlights();
+  _wireCustomCssHelpExtras();
+  try { const si = byId('dt-custom-css-help-search'); if (si) { si.focus(); si.select && si.select(); } } catch (e) {}
+}
+
+function _hideCustomCssHelpModal() {
+  const modal = byId('dt-custom-css-help-modal');
+  if (!modal) return;
+  try { modal.classList.add('hidden'); } catch (e) {}
+  if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+    try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
+  } else {
+    try { document.body.classList.remove('modal-open'); } catch (e) {}
+  }
+}
+
+async function _ensureCustomCssHelpHighlights() {
+  const modal = byId('dt-custom-css-help-modal');
+  if (!modal) return;
+
+  // Ensure CodeMirror + our CSS-lite mode exist (also upgrades the main editor).
+  await _ensureCustomCssEditor();
+  if (!window.CodeMirror || typeof window.CodeMirror.fromTextArea !== 'function') return;
+
+  const cmTheme = (document.documentElement.getAttribute('data-theme') === 'light') ? 'default' : 'material-darker';
+  const nodes = modal.querySelectorAll('textarea.dt-help-code');
+  if (!nodes || !nodes.length) return;
+
+  for (const ta of nodes) {
+    if (!ta || (ta.dataset && ta.dataset.cmInited === '1')) continue;
+    try { if (ta.dataset) ta.dataset.cmInited = '1'; } catch (e) {}
+    try {
+      const cm = window.CodeMirror.fromTextArea(ta, {
+        mode: (window.CodeMirror.modes && window.CodeMirror.modes.xk_csslite) ? 'xk_csslite' : 'text/plain',
+        readOnly: true,
+        lineNumbers: false,
+        lineWrapping: true,
+        indentUnit: 2,
+        tabSize: 2,
+        theme: cmTheme,
+        cursorBlinkRate: -1,
+        viewportMargin: Infinity,
+      });
+      _customCssHelpEditors.push(cm);
+    } catch (e) {}
+  }
+
+  // Refresh (dialog is now visible).
+  setTimeout(() => {
+    try {
+      for (const cm of _customCssHelpEditors) {
+        try { cm.refresh(); } catch (e) {}
+      }
+    } catch (e) {}
+  }, 0);
+}
+
+
+function _wireCustomCssHelpExtras() {
+  if (_customCssHelpExtrasWired) return;
+  _customCssHelpExtrasWired = true;
+  _wireCustomCssHelpInsertButtons();
+  _wireCustomCssHelpSearch();
+}
+
+function _buildCustomCssHelpIndex() {
+  if (_customCssHelpIndex) return _customCssHelpIndex;
+  const modal = byId('dt-custom-css-help-modal');
+  if (!modal) return null;
+  const root = modal.querySelector('.dt-help') || modal;
+  const details = Array.from(root.querySelectorAll('details')) || [];
+  let examples = byId('dt-custom-css-help-examples');
+  if (!examples) {
+    examples = details.find((d) => {
+      try {
+        const s = d.querySelector('summary');
+        return s && String(s.textContent || '').includes('Примеры');
+      } catch (e) { return false; }
+    }) || null;
+  }
+
+  const groups = [];
+  if (examples) {
+    const headers = Array.from(examples.querySelectorAll('h3')) || [];
+    for (const h3 of headers) {
+      const nodes = [h3];
+      let n = h3.nextElementSibling;
+      while (n && !(n.tagName && String(n.tagName).toLowerCase() === 'h3')) {
+        nodes.push(n);
+        n = n.nextElementSibling;
+      }
+      let ta = null;
+      for (const nd of nodes) {
+        try {
+          const t = nd.querySelector ? nd.querySelector('textarea.dt-help-code') : null;
+          if (t) { ta = t; break; }
+        } catch (e) {}
+      }
+      const code = ta ? String(ta.value || '') : '';
+      groups.push({ h3, nodes, code });
+    }
+  }
+
+  _customCssHelpIndex = { modal, root, details, examples, groups };
+  return _customCssHelpIndex;
+}
+
+async function _insertSnippetIntoCustomCssEditor(snippet) {
+  const code = String(snippet || '');
+  if (!code.trim()) return;
+
+  // Ensure the main editor block is visible/open.
+  const card = byId('dt-custom-css-card');
+  try { if (card && !card.open) card.open = true; } catch (e) {}
+
+  // Ensure editor exists (CodeMirror optional).
+  try { await _ensureCustomCssEditor(); } catch (e) {}
+
+  // CodeMirror path
+  try {
+    if (_customCssEditor && typeof _customCssEditor.getDoc === 'function') {
+      const doc = _customCssEditor.getDoc();
+      const sel = String(doc.getSelection ? (doc.getSelection() || '') : '');
+      let ins = code;
+
+      if (!sel) {
+        const cur = doc.getCursor ? doc.getCursor() : null;
+        const full = String(_customCssEditor.getValue ? (_customCssEditor.getValue() || '') : '');
+        if (full.trim().length > 0 && cur) {
+          try {
+            let prevChar = '';
+            if (cur.ch > 0) {
+              prevChar = doc.getRange({ line: cur.line, ch: cur.ch - 1 }, cur) || '';
+            } else if (cur.line > 0) {
+              const prevLine = String(doc.getLine(cur.line - 1) || '');
+              prevChar = prevLine.slice(-1);
+            }
+            if (prevChar && prevChar !== '\n') ins = '\n\n' + ins;
+            else if (full && !ins.startsWith('\n')) ins = '\n' + ins;
+          } catch (e) {}
+        }
+      }
+
+      if (typeof doc.replaceSelection === 'function') {
+        doc.replaceSelection(ins, 'end');
+      } else if (typeof _customCssEditor.replaceSelection === 'function') {
+        _customCssEditor.replaceSelection(ins, 'end');
+      }
+
+      try { _customCssEditor.focus(); } catch (e) {}
+      toast('Вставлено в редактор');
+      return;
+    }
+  } catch (e) {}
+
+  // Fallback: textarea
+  const ta = byId('dt-custom-css-textarea');
+  if (!ta) return;
+  try {
+    const start = Number(ta.selectionStart || 0);
+    const end = Number(ta.selectionEnd || 0);
+    const v = String(ta.value || '');
+    let ins = code;
+    if (v.trim().length > 0 && start > 0) {
+      const prev = v.charAt(start - 1);
+      if (prev && prev !== '\n') ins = '\n\n' + ins;
+      else if (!ins.startsWith('\n')) ins = '\n' + ins;
+    }
+    if (typeof ta.setRangeText === 'function') {
+      ta.setRangeText(ins, start, end, 'end');
+    } else {
+      // Old fallback
+      ta.value = v.slice(0, start) + ins + v.slice(end);
+    }
+    ta.focus();
+    toast('Вставлено в редактор');
+  } catch (e) {}
+}
+
+function _wireCustomCssHelpInsertButtons() {
+  const modal = byId('dt-custom-css-help-modal');
+  if (!modal) return;
+  const areas = Array.from(modal.querySelectorAll('textarea.dt-help-code')) || [];
+  for (const ta of areas) {
+    if (!ta) continue;
+    try {
+      if (ta.dataset && ta.dataset.insertWired === '1') continue;
+      if (ta.dataset) ta.dataset.insertWired = '1';
+    } catch (e) {}
+
+    let codeWrap = null;
+    try { codeWrap = ta.closest('.dt-help-code-wrap'); } catch (e) {}
+    let h3 = null;
+    let prev = codeWrap ? codeWrap.previousElementSibling : null;
+
+    // Some examples have extra helper text between <h3> and the code block.
+    while (prev) {
+      const tg = prev.tagName ? String(prev.tagName).toLowerCase() : '';
+      if (tg === 'h3') { h3 = prev; break; }
+      prev = prev.previousElementSibling;
+    }
+    if (!h3) continue;
+
+    try { h3.classList.add('dt-help-example-title'); } catch (e) {}
+    try {
+      if (h3.querySelector && h3.querySelector('.dt-help-insert-btn')) continue;
+    } catch (e) {}
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-secondary dt-help-insert-btn';
+    btn.textContent = 'Вставить в редактор';
+    btn.title = 'Вставить этот пример в редактор Custom CSS (в позицию курсора).';
+
+    btn.addEventListener('click', async (ev) => {
+      ev && ev.preventDefault && ev.preventDefault();
+      await _insertSnippetIntoCustomCssEditor(String(ta.value || ''));
+      // Keep modal open: user may вставлять несколько примеров.
+    });
+
+    try { h3.appendChild(btn); } catch (e) {}
+  }
+}
+
+function _wireCustomCssHelpSearch() {
+  const modal = byId('dt-custom-css-help-modal');
+  if (!modal) return;
+
+  const input = byId('dt-custom-css-help-search');
+  const clearBtn = byId('dt-custom-css-help-search-clear');
+  const status = byId('dt-custom-css-help-search-status');
+
+  if (!input) return;
+
+  try {
+    if (input.dataset && input.dataset.wired === '1') return;
+    if (input.dataset) input.dataset.wired = '1';
+  } catch (e) {}
+
+  function setStatus(t) {
+    if (!status) return;
+    status.textContent = String(t || '');
+  }
+
+  function apply(q) {
+    const idx = _buildCustomCssHelpIndex();
+    if (!idx) return;
+    const qq = String(q || '').trim().toLowerCase();
+
+    // Reset: show everything
+    if (!qq) {
+      try {
+        for (const d of idx.details) d.style.display = '';
+      } catch (e) {}
+      try {
+        // show all nodes inside examples
+        for (const g of idx.groups) {
+          for (const n of g.nodes) n.style.display = '';
+        }
+      } catch (e) {}
+      setStatus('');
+      try {
+        // Refresh CodeMirror to fix layout after filtering
+        for (const cm of _customCssHelpEditors) { try { cm.refresh(); } catch (e) {} }
+      } catch (e) {}
+      return;
+    }
+
+    // Filter examples
+    let shownGroups = 0;
+    for (const g of idx.groups) {
+      const title = String(g.h3 && g.h3.textContent ? g.h3.textContent : '');
+      const hay = (title + '\n' + String(g.code || '') + '\n' + String(g.nodes.map(n => n && n.textContent ? n.textContent : '').join('\n'))).toLowerCase();
+      const match = hay.includes(qq);
+      for (const n of g.nodes) {
+        try { n.style.display = match ? '' : 'none'; } catch (e) {}
+      }
+      if (match) shownGroups += 1;
+    }
+
+    // Sections: hide those without matches (but keep examples section if any example matched)
+    for (const d of idx.details) {
+      if (idx.examples && d === idx.examples) {
+        try { d.style.display = shownGroups > 0 ? '' : 'none'; } catch (e) {}
+        if (shownGroups > 0) { try { d.open = true; } catch (e) {} }
+        continue;
+      }
+      try {
+        const text = String(d.textContent || '').toLowerCase();
+        const match = text.includes(qq);
+        d.style.display = match ? '' : 'none';
+        if (match) d.open = true;
+      } catch (e) {}
+    }
+
+    setStatus(`Найдено примеров: ${shownGroups}`);
+
+    // Scroll to first match
+    try {
+      const first = idx.groups.find(g => g.nodes && g.nodes.length && g.nodes[0].style.display !== 'none');
+      if (first && first.h3 && typeof first.h3.scrollIntoView === 'function') {
+        first.h3.scrollIntoView({ block: 'nearest' });
+      }
+    } catch (e) {}
+
+    // Refresh CodeMirror (help snippets) after display changes
+    setTimeout(() => {
+      try { for (const cm of _customCssHelpEditors) { try { cm.refresh(); } catch (e) {} } } catch (e) {}
+    }, 0);
+  }
+
+  input.addEventListener('input', () => apply(input.value));
+
+  input.addEventListener('keydown', (e) => {
+    if (!e) return;
+    if (e.key === 'Enter') {
+      apply(input.value);
+      return;
+    }
+    if (e.key === 'Escape' || e.key === 'Esc') {
+      if (String(input.value || '').length) {
+        input.value = '';
+        apply('');
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      input.value = '';
+      apply('');
+      try { input.focus(); } catch (e) {}
+    });
+  }
+
+  // Ctrl+F inside modal focuses search, instead of browser find.
+  document.addEventListener('keydown', (e) => {
+    try {
+      const isOpen = modal && !modal.classList.contains('hidden');
+      if (!isOpen) return;
+    } catch (e2) { return; }
+
+    if (!e) return;
+    const key = String(e.key || '').toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && key === 'f') {
+      try { input.focus(); input.select && input.select(); } catch (e3) {}
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+
+  // Initial index build (once)
+  _buildCustomCssHelpIndex();
+}
+
+
+function _wireCustomCssHelp() {
+  const btn = byId('dt-custom-css-help-btn');
+  const modal = byId('dt-custom-css-help-modal');
+  const btnClose = byId('dt-custom-css-help-close-btn');
+  const btnOk = byId('dt-custom-css-help-ok-btn');
+
+  if (btn) btn.addEventListener('click', () => _showCustomCssHelpModal());
+  if (btnClose) btnClose.addEventListener('click', () => _hideCustomCssHelpModal());
+  if (btnOk) btnOk.addEventListener('click', () => _hideCustomCssHelpModal());
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e && e.target === modal) _hideCustomCssHelpModal();
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!e) return;
+    if (e.key !== 'Escape' && e.key !== 'Esc') return;
+    try {
+      const isOpen = modal && !modal.classList.contains('hidden');
+      if (isOpen) _hideCustomCssHelpModal();
+    } catch (e2) {}
+  });
+}
+
+
   function renderEnv(items, envFile) {
     const tbody = byId('dt-env-tbody');
     const envFileEl = byId('dt-env-file');
@@ -3075,12 +4244,38 @@ function _wireLogLineActions() {
 
   // ------------------------- Init wiring -------------------------
 
+
+function _wireCollapsibles() {
+  // Make selected DevTools blocks collapsible and remember state in localStorage.
+  const els = Array.from(document.querySelectorAll('details.dt-collapsible[id]'));
+  if (!els.length) return;
+
+  els.forEach((el) => {
+    const id = String(el.id || '').trim();
+    if (!id) return;
+    const key = `xk.devtools.collapse.${id}.open`;
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved === '0') el.open = false;
+      if (saved === '1') el.open = true;
+    } catch (e) {}
+
+    el.addEventListener('toggle', () => {
+      try { localStorage.setItem(key, el.open ? '1' : '0'); } catch (e) {}
+    });
+  });
+}
+
+
   function init() {
     // Tabs
     const tabTools = byId('dt-tab-btn-tools');
     const tabLogs = byId('dt-tab-btn-logs');
     if (tabTools) tabTools.addEventListener('click', () => setActiveTab('tools'));
     if (tabLogs) tabLogs.addEventListener('click', () => setActiveTab('logs'));
+
+    // Collapsible cards (Logging / Interface / Theme)
+    try { _wireCollapsibles(); } catch (e) {}
 
     // UI service
     const btnStart = byId('dt-ui-start');
@@ -3509,6 +4704,13 @@ if (searchEl) {
     // ENV help
     _wireEnvHelp();
 
+    // Theme editor
+    _wireThemeEditor();
+
+    // Custom CSS editor
+    _wireCustomCssEditor();
+    _wireCustomCssHelp();
+
     // Initial loads
     loadUiStatus();
     loadLogList().then(() => loadLogTail());
@@ -3517,7 +4719,17 @@ if (searchEl) {
     // Ensure tab state is consistent with the initial HTML
     _updateTailControlsUi();
     setActiveTab('tools');
+
+    // If section whitelist hid one of the tabs, switch to the first visible one.
+    try {
+      const bTools = byId('dt-tab-btn-tools');
+      const bLogs = byId('dt-tab-btn-logs');
+      const toolsHidden = !!(bTools && (bTools.style.display === 'none' || (bTools.dataset && bTools.dataset.xkForceHidden === '1')));
+      const logsHidden = !!(bLogs && (bLogs.style.display === 'none' || (bLogs.dataset && bLogs.dataset.xkForceHidden === '1')));
+      if (toolsHidden && !logsHidden) setActiveTab('logs');
+      else if (logsHidden && !toolsHidden) setActiveTab('tools');
+    } catch (e) {}
   }
 
-  XK.features.devtools = XK.features.devtools || { init };
+  XK.features.devtools = XK.features.devtools || { init, setActiveTab };
 })();
