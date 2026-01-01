@@ -23,7 +23,7 @@
   }
 
   function showView(viewName) {
-    const name = String(viewName || 'routing');
+    let name = String(viewName || 'routing');
 
     const sections = {
       routing: document.getElementById('view-routing'),
@@ -34,15 +34,37 @@
       files: document.getElementById('view-files'),
     };
 
+    function isForceHidden(el) {
+      try { return !!(el && el.dataset && el.dataset.xkForceHidden === '1'); } catch (e) { return false; }
+    }
+
+    // If the requested view is not available (e.g. hidden by env whitelist),
+    // fall back to the first available one.
+    try {
+      const requestedEl = sections[name];
+      if (!requestedEl || isForceHidden(requestedEl)) {
+        const first = Object.keys(sections).find((k) => {
+          const el = sections[k];
+          return !!(el && !isForceHidden(el));
+        });
+        name = first || 'routing';
+      }
+    } catch (e) {}
+
     // hide/show sections
     Object.entries(sections).forEach(([key, el]) => {
       if (!el) return;
+      if (isForceHidden(el)) {
+        el.style.display = 'none';
+        return;
+      }
       el.style.display = key === name ? 'block' : 'none';
     });
 
-    // active tab state
+    // active tab state (ignore hidden tabs)
     document.querySelectorAll('.top-tab-btn[data-view]').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.view === name);
+      const hidden = (btn.style.display === 'none') || (btn.dataset && btn.dataset.xkForceHidden === '1');
+      btn.classList.toggle('active', !hidden && btn.dataset.view === name);
     });
 
     // refresh editors when tab becomes visible
