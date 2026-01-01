@@ -15,9 +15,9 @@
   <!-- Apply typography prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
   <!-- Apply layout prefs ASAP (stored in localStorage) -->
-  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101b') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101b') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101e') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   {% if custom_css_enabled and not safe_mode %}
   <link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
@@ -42,7 +42,7 @@
   <div class="auth-wrap">
     <div class="card auth-card">
       <h1 class="auth-title">Первичная настройка</h1>
-      <p class="auth-sub">Задайте логин и пароль администратора. Они будут сохранены на роутере.</p>
+      <p class="auth-sub xk-card-desc">Задайте логин и пароль администратора. Они будут сохранены на роутере.</p>
 
       <form method="post" action="{{ url_for('setup') }}" autocomplete="off">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -68,7 +68,7 @@
         </div>
       </form>
 
-      <div class="auth-hint">
+      <div class="auth-hint xk-card-desc">
         <strong>Подсказка:</strong>
         <ul>
           <li>Не используйте пароль от Wi‑Fi/админки роутера.</li>
