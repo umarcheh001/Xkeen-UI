@@ -59,8 +59,41 @@ a:hover {
 
 /* DevTools (and other wide pages): use most of the screen width */
 .container-wide {
-  max-width: min(1600px, 96vw);
+  max-width: var(--xk-container-max-width, min(1600px, 96vw));
 }
+
+/* --------------------------------------------------------------
+   Layout preferences (stored in localStorage via js/ui/layout.js)
+   -------------------------------------------------------------- */
+
+/* Compact mode: tighter spacing */
+html[data-xk-compact="1"] .container { padding: 16px; }
+html[data-xk-compact="1"] header { margin-bottom: 16px; }
+html[data-xk-compact="1"] .card {
+  padding: 12px 12px 14px;
+  margin-bottom: 12px;
+}
+html[data-xk-compact="1"] .card h2 { margin-bottom: 6px; }
+html[data-xk-compact="1"] .card p { margin-bottom: 8px; }
+html[data-xk-compact="1"] .actions { gap: 8px; }
+
+/* Hide hints/descriptions (keep statuses/errors visible) */
+html[data-xk-hide-hints="1"] header p { display: none !important; }
+html[data-xk-hide-hints="1"] .small { display: none !important; }
+html[data-xk-hide-hints="1"] #routing-help-line { display: none !important; }
+
+/* Favorites marker for pinned tabs */
+.top-tab-btn.xk-tab-fav::after {
+  content: "★";
+  margin-left: 6px;
+  font-size: calc(12px * var(--xk-font-scale));
+  opacity: 0.85;
+}
+
+/* Drag&drop UX for top tabs */
+.top-tab-btn.xk-tab-dragging { opacity: 0.6; }
+.top-tab-btn.xk-tab-drop-target,
+.top-tab-btn.xk-tab-drop { outline: 2px dashed rgba(96, 165, 250, 0.55); outline-offset: 2px; }
 
 
 header {
@@ -145,6 +178,20 @@ header p {
   align-items: center;
   gap: 8px;
 }
+
+/* Optional branding logo in header (configured in DevTools) */
+.xk-brand-logo {
+  width: 28px;
+  height: 28px;
+  max-width: 28px;
+  max-height: 28px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.12);
+  padding: 2px;
+  flex: 0 0 auto;
+}
+
 
 .service-status-text {
   display: none; /* текст статуса убран, остаётся только всплывающая подсказка на лампочке */
@@ -2957,6 +3004,97 @@ html[data-theme="light"] .dt-env-help-table thead th {
   width: 100%;
 }
 
+
+
+/* DevTools: theme editor */
+.dt-theme-target {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0 12px;
+}
+
+.dt-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .dt-theme-grid { grid-template-columns: 1fr; }
+}
+
+.dt-theme-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dt-theme-name {
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.1;
+  opacity: 0.88;
+}
+
+.dt-theme-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dt-theme-color {
+  width: 44px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #374151;
+  background: transparent;
+  padding: 0;
+}
+
+.dt-theme-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 10px;
+}
+
+.dt-theme-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 9px;
+}
+
+.dt-theme-sliders {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .dt-theme-sliders { grid-template-columns: 1fr; }
+}
+
+.dt-theme-slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dt-theme-slider-name {
+  width: 86px;
+  font-size: calc(12px * var(--xk-font-scale));
+  opacity: 0.88;
+}
+
+.dt-theme-slider input[type="range"] {
+  flex: 1 1 auto;
+}
+
+.dt-theme-slider-val {
+  width: 64px;
+  text-align: right;
+  font-size: calc(12px * var(--xk-font-scale));
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
 /* DevTools: toolbars shouldn't force buttons to stretch full width */
 .actions.dt-log-toolbar button {
   flex: 0 0 auto;
@@ -4008,6 +4146,11 @@ html[data-theme="light"] .xray-log-select {
 html[data-theme="light"] .dt-pill-field {
   background: #ffffff;
   color: #111827;
+  border-color: #d1d5db;
+}
+
+/* DevTools theme editor */
+html[data-theme="light"] .dt-theme-color {
   border-color: #d1d5db;
 }
 
@@ -5396,3 +5539,4 @@ html[data-theme="light"] .fm-progress-details{
   background: rgba(15,23,42,0.04);
   border-color: rgba(15,23,42,0.12);
 }
+
