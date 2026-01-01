@@ -53,10 +53,10 @@
   <!-- Apply typography prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
   <!-- Apply layout prefs ASAP (stored in localStorage) -->
-  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101b') }}"></script>
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101b') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101e') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   {% if custom_css_enabled and not safe_mode %}
   <link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
@@ -303,6 +303,11 @@
       color: #9ca3af;
       margin-top: 6px;
     }
+    /* Allow Layout‑твики → «Размер описаний» to affect helper texts on this page,
+       even though .hint is defined locally (after global styles.css). */
+    .hint.xk-card-desc {
+      font-size: calc(12px * var(--xk-font-scale) * var(--xk-card-desc-scale, 1));
+    }
     header a {
       color: #93c5fd;
     }
@@ -467,7 +472,7 @@
       <p>Новый генератор для профилей роутера (bazy ZKeen / кастомные провайдеры).</p>
 
       <div class="actions" style="justify-content: space-between; align-items: center;">
-        <a href="{{ url_for('index') }}" class="btn-link">← Назад в основную панель</a>
+        <a href="{{ url_for('index') }}" class="btn-link">← Назад</a>
         <div class="header-actions">
           <button
             type="button"
@@ -485,7 +490,7 @@
       <!-- LEFT CARD -->
       <div class="card">
         <h2>Исходные данные</h2>
-        <small>Профиль, шаблон, подписки, пакеты групп/правил и узлы.</small>
+        <small class="xk-card-desc">Профиль, шаблон, подписки, пакеты групп/правил и узлы.</small>
 
         <div style="height:8px"></div>
 
@@ -505,7 +510,7 @@
           <button type="button" id="addSubscriptionBtn" class="btn btn-ghost btn-xs">
             + Добавить подписку
           </button>
-          <div class="hint">
+          <div class="hint xk-card-desc">
             Первые 5 подписок заполнят провайдеры:
             my-vless-sub, second-sub, third-sub, fourth-sub, fifth-sub.
           </div>
@@ -514,7 +519,7 @@
         <div style="margin-top:10px">
           <label for="defaultGroupsInput">Группы по умолчанию для узлов</label>
           <input id="defaultGroupsInput" type="text" value="Заблок. сервисы" placeholder="Заблок. сервисы,YouTube">
-          <div class="hint">
+          <div class="hint xk-card-desc">
             Если у узла не заданы свои группы, будут использованы эти.
           </div>
         </div>
@@ -528,7 +533,7 @@
             </label>
           </div>
           <div id="ruleGroupsList" class="rule-groups-grid"></div>
-          <div class="hint">
+          <div class="hint xk-card-desc">
             Отмеченные пакеты останутся в шаблоне, остальные группы/правила генератор закомментирует.
           </div>
         </div>
@@ -541,7 +546,7 @@
           <button type="button" id="addProxyBtn" class="btn btn-ghost btn-xs">
             + Добавить узел
           </button>
-          <div class="hint">
+          <div class="hint xk-card-desc">
             Поддерживаются VLESS ссылки, WireGuard-конфиги и готовые YAML-блоки proxy.
           </div>
         </div>
@@ -556,7 +561,7 @@
               <!-- Toolbar (Поиск/Фулскрин/и т.д.) будет подключён к CodeMirror и вставлен сюда -->
               <div id="previewToolbarHost" class="preview-toolbar-host"></div>
             </div>
-            <small>
+            <small class="xk-card-desc">
               По умолчанию загружен базовый скелет. Можно доработать вручную при включённом «Редактирование».
             </small>
             <div id="stateSummary" class="hint" style="margin-top:4px;">
@@ -566,7 +571,7 @@
         </div>
 
         <textarea id="previewTextarea" style="display:none;"></textarea>
-        <div class="hint">
+        <div class="hint xk-card-desc">
           Режим <strong>Редактирование</strong> позволяет вручную править yaml, который затем уходит на роутер.
         </div>
 
