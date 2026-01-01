@@ -15,8 +15,8 @@
   <!-- Apply typography prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
   <!-- Apply layout prefs ASAP (stored in localStorage) -->
-  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101b') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101f') }}"></script>
 
   <!-- Env-driven visibility filters (section whitelist) -->
   <script>
@@ -25,10 +25,10 @@
     window.XKeen.env.panelSectionsWhitelist = {{ panel_sections_whitelist|tojson }};
     window.XKeen.env.devtoolsSectionsWhitelist = {{ devtools_sections_whitelist|tojson }};
   </script>
-  <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101b') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='devtools.css', v='20260101e') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101e') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='devtools.css', v='20260101f') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
   {% if custom_css_enabled and not safe_mode %}
@@ -51,7 +51,7 @@
       <p>Диагностика панели: управление сервисом UI, логи, переменные окружения (whitelist).</p>
 
       <div class="actions" style="justify-content: space-between; align-items: center;">
-        <a href="{{ url_for('index') }}" class="btn-link">← Вернуться к основной панели</a>
+        <a href="{{ url_for('index') }}" class="btn-link">← Назад</a>
         <div class="header-actions">
           <button
             type="button"
@@ -169,7 +169,7 @@
             </div>
           </details>
 
-                    <details class="card  dt-collapsible" id="dt-ui-prefs-card" data-xk-section="ui interface dt-ui-prefs-card" open>
+                    <details class="card dt-collapsible" id="dt-ui-prefs-card" data-xk-section="ui interface dt-ui-prefs-card" open>
             <summary class="dt-collapsible-summary">
               <h2 style="margin:0;">Интерфейс</h2>
               <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
@@ -396,6 +396,27 @@
                 <span class="dt-switch-label">Скрыть подсказки/описания</span>
               </label>
 
+              <label class="dt-switch" style="margin-top:10px;" title="Спрятать описательные тексты внутри карточек (например подписи под режимами inbounds).">
+                <input id="dt-layout-hide-card-desc" type="checkbox" aria-label="Скрыть описания в карточках">
+                <span class="dt-switch-slider" aria-hidden="true"></span>
+                <span class="dt-switch-label">Скрыть описания в карточках</span>
+              </label>
+
+              <div style="margin-top:12px;">
+                <label class="dt-logging-field" style="max-width: 420px;">
+                  <span class="dt-logging-label">Размер описаний</span>
+                  <select id="dt-layout-desc-scale" class="dt-pill-field" title="Масштаб описательных текстов внутри карточек.">
+                    <option value="0.8">80%</option>
+                    <option value="0.9">90%</option>
+                    <option value="1">100%</option>
+                    <option value="1.1">110%</option>
+                    <option value="1.2">120%</option>
+                    <option value="1.3">130%</option>
+                    <option value="1.4">140%</option>
+                  </select>
+                </label>
+              </div>
+
               <label class="dt-switch" style="margin-top:10px;" title="Скрывать вкладки/блоки, которые выключены feature flags (например XKEEN_REMOTEFM_ENABLE=0).">
                 <input id="dt-layout-hide-unused" type="checkbox" aria-label="Скрыть неиспользуемое">
                 <span class="dt-switch-slider" aria-hidden="true"></span>
@@ -426,75 +447,441 @@
             </div>
           </details>
 
-                    <details class="card  dt-collapsible" id="dt-theme-editor-card" data-xk-section="theme dt-theme-editor-card" open>
+                    <details class="card dt-collapsible" id="dt-theme-editor-card" data-xk-section="theme dt-theme-editor-card" open>
             <summary class="dt-collapsible-summary">
               <h2 style="margin:0;">Тема и CSS‑переменные (глобально)</h2>
               <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
             </summary>
             <div class="dt-collapsible-body">
 
-            <div class="small" style="margin-bottom:10px; opacity:0.9;">
-              Редактор безопасных CSS‑переменных: <code>--bg</code>, <code>--card-bg</code>, <code>--text</code>, <code>--muted</code>, <code>--accent</code>, <code>--border</code>, <code>--radius</code>, <code>--shadow</code>.
-              <br>
-              <span style="opacity:0.9;">Save globally сохраняет на роутере (в <code>UI_STATE_DIR/custom_theme.css</code>) и автоматически подключается на всех страницах.</span>
-            </div>
-
             <div class="dt-theme-target" role="tablist" aria-label="Target theme">
               <button type="button" id="dt-theme-target-dark" class="dt-chip-btn active" aria-selected="true" title="Редактировать настройки для тёмной темы.">Dark</button>
               <button type="button" id="dt-theme-target-light" class="dt-chip-btn" aria-selected="false" title="Редактировать настройки для светлой темы.">Light</button>
             </div>
 
-            <div class="dt-theme-grid" role="group" aria-label="Theme colors">
-              <div class="dt-theme-field">
-                <div class="dt-theme-name">--bg</div>
-                <div class="dt-theme-inputs">
-                  <input type="color" id="dt-theme-bg-color" class="dt-theme-color" aria-label="--bg picker">
-                  <input type="text" id="dt-theme-bg-text" class="dt-pill-field dt-theme-text" placeholder="#0f172a" spellcheck="false">
-                </div>
-              </div>
+                        <div class="dt-theme-groups" role="group" aria-label="Theme variable groups">
+              <details class="dt-theme-group dt-collapsible" open id="dt-theme-group-base">
+                <summary class="dt-collapsible-summary">
+                  <h3 style="margin:0;">Базовые цвета</h3>
+                  <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+                </summary>
+                <div class="dt-collapsible-body">
+                  <div class="dt-theme-grid" role="group" aria-label="Базовые цвета">
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-bg-color" class="dt-theme-color" aria-label="--bg picker">
+                        <input type="text" id="dt-theme-bg-text" class="dt-pill-field dt-theme-text" placeholder="#0f172a" spellcheck="false">
+                      </div>
+                    </div>
 
-              <div class="dt-theme-field">
-                <div class="dt-theme-name">--card-bg</div>
-                <div class="dt-theme-inputs">
-                  <input type="color" id="dt-theme-card-bg-color" class="dt-theme-color" aria-label="--card-bg picker">
-                  <input type="text" id="dt-theme-card-bg-text" class="dt-pill-field dt-theme-text" placeholder="#020617" spellcheck="false">
-                </div>
-              </div>
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--card-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-card-bg-color" class="dt-theme-color" aria-label="--card-bg picker">
+                        <input type="text" id="dt-theme-card-bg-text" class="dt-pill-field dt-theme-text" placeholder="#020617" spellcheck="false">
+                      </div>
+                    </div>
 
-              <div class="dt-theme-field">
-                <div class="dt-theme-name">--text</div>
-                <div class="dt-theme-inputs">
-                  <input type="color" id="dt-theme-text-color" class="dt-theme-color" aria-label="--text picker">
-                  <input type="text" id="dt-theme-text-text" class="dt-pill-field dt-theme-text" placeholder="#e5e7eb" spellcheck="false">
-                </div>
-              </div>
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--text</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-text-color" class="dt-theme-color" aria-label="--text picker">
+                        <input type="text" id="dt-theme-text-text" class="dt-pill-field dt-theme-text" placeholder="#e5e7eb" spellcheck="false">
+                      </div>
+                    </div>
 
-              <div class="dt-theme-field">
-                <div class="dt-theme-name">--muted</div>
-                <div class="dt-theme-inputs">
-                  <input type="color" id="dt-theme-muted-color" class="dt-theme-color" aria-label="--muted picker">
-                  <input type="text" id="dt-theme-muted-text" class="dt-pill-field dt-theme-text" placeholder="#9ca3af" spellcheck="false">
-                </div>
-              </div>
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--muted</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-muted-color" class="dt-theme-color" aria-label="--muted picker">
+                        <input type="text" id="dt-theme-muted-text" class="dt-pill-field dt-theme-text" placeholder="#9ca3af" spellcheck="false">
+                      </div>
+                    </div>
 
-              <div class="dt-theme-field">
-                <div class="dt-theme-name">--accent</div>
-                <div class="dt-theme-inputs">
-                  <input type="color" id="dt-theme-accent-color" class="dt-theme-color" aria-label="--accent picker">
-                  <input type="text" id="dt-theme-accent-text" class="dt-pill-field dt-theme-text" placeholder="#60a5fa" spellcheck="false">
-                </div>
-              </div>
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--accent</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-accent-color" class="dt-theme-color" aria-label="--accent picker">
+                        <input type="text" id="dt-theme-accent-text" class="dt-pill-field dt-theme-text" placeholder="#60a5fa" spellcheck="false">
+                      </div>
+                    </div>
 
-              <div class="dt-theme-field">
-                <div class="dt-theme-name">--border</div>
-                <div class="dt-theme-inputs">
-                  <input type="color" id="dt-theme-border-color" class="dt-theme-color" aria-label="--border picker">
-                  <input type="text" id="dt-theme-border-text" class="dt-pill-field dt-theme-text" placeholder="#1f2937" spellcheck="false">
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--border</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-border-color" class="dt-theme-color" aria-label="--border picker">
+                        <input type="text" id="dt-theme-border-text" class="dt-pill-field dt-theme-text" placeholder="#1f2937" spellcheck="false">
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </details>
+
+              <details class="dt-theme-group dt-collapsible" open id="dt-theme-group-semantic">
+                <summary class="dt-collapsible-summary">
+                  <h3 style="margin:0;">Семантические цвета</h3>
+                  <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+                </summary>
+                <div class="dt-collapsible-body">
+                  <div class="dt-theme-grid" role="group" aria-label="Семантические цвета">
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--sem-success</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-sem-success-color" class="dt-theme-color" aria-label="--sem-success picker">
+                        <input type="text" id="dt-theme-sem-success-text" class="dt-pill-field dt-theme-text" placeholder="#22c55e" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--sem-info</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-sem-info-color" class="dt-theme-color" aria-label="--sem-info picker">
+                        <input type="text" id="dt-theme-sem-info-text" class="dt-pill-field dt-theme-text" placeholder="#93c5fd" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--sem-warning</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-sem-warning-color" class="dt-theme-color" aria-label="--sem-warning picker">
+                        <input type="text" id="dt-theme-sem-warning-text" class="dt-pill-field dt-theme-text" placeholder="#fbbf24" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--sem-error</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-sem-error-color" class="dt-theme-color" aria-label="--sem-error picker">
+                        <input type="text" id="dt-theme-sem-error-text" class="dt-pill-field dt-theme-text" placeholder="#f87171" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--sem-debug</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-sem-debug-color" class="dt-theme-color" aria-label="--sem-debug picker">
+                        <input type="text" id="dt-theme-sem-debug-text" class="dt-pill-field dt-theme-text" placeholder="#a1a1aa" spellcheck="false">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="dt-theme-group dt-collapsible" open id="dt-theme-group-editor-buttons">
+                <summary class="dt-collapsible-summary">
+                  <h3 style="margin:0;">Кнопки (редакторы / формы)</h3>
+                  <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+                </summary>
+                <div class="dt-collapsible-body">
+                  <div class="dt-theme-grid" role="group" aria-label="Кнопки (редакторы / формы)">
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--editor-btn-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-editor-btn-bg-color" class="dt-theme-color" aria-label="--editor-btn-bg picker">
+                        <input type="text" id="dt-theme-editor-btn-bg-text" class="dt-pill-field dt-theme-text" placeholder="#020617" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--editor-btn-text</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-editor-btn-text-color" class="dt-theme-color" aria-label="--editor-btn-text picker">
+                        <input type="text" id="dt-theme-editor-btn-text-text" class="dt-pill-field dt-theme-text" placeholder="#e5e7eb" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--editor-btn-border</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-editor-btn-border-color" class="dt-theme-color" aria-label="--editor-btn-border picker">
+                        <input type="text" id="dt-theme-editor-btn-border-text" class="dt-pill-field dt-theme-text" placeholder="#1f2937" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--editor-btn-hover-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-editor-btn-hover-bg-color" class="dt-theme-color" aria-label="--editor-btn-hover-bg picker">
+                        <input type="text" id="dt-theme-editor-btn-hover-bg-text" class="dt-pill-field dt-theme-text" placeholder="#020617" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--editor-btn-hover-text</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-editor-btn-hover-text-color" class="dt-theme-color" aria-label="--editor-btn-hover-text picker">
+                        <input type="text" id="dt-theme-editor-btn-hover-text-text" class="dt-pill-field dt-theme-text" placeholder="#e5e7eb" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--editor-btn-hover-border</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-editor-btn-hover-border-color" class="dt-theme-color" aria-label="--editor-btn-hover-border picker">
+                        <input type="text" id="dt-theme-editor-btn-hover-border-text" class="dt-pill-field dt-theme-text" placeholder="#4b5563" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--editor-btn-active-from</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-editor-btn-active-from-color" class="dt-theme-color" aria-label="--editor-btn-active-from picker">
+                        <input type="text" id="dt-theme-editor-btn-active-from-text" class="dt-pill-field dt-theme-text" placeholder="#1d4ed8" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--editor-btn-active-to</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-editor-btn-active-to-color" class="dt-theme-color" aria-label="--editor-btn-active-to picker">
+                        <input type="text" id="dt-theme-editor-btn-active-to-text" class="dt-pill-field dt-theme-text" placeholder="#2563eb" spellcheck="false">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="dt-theme-group dt-collapsible" open id="dt-theme-group-header-buttons">
+                <summary class="dt-collapsible-summary">
+                  <h3 style="margin:0;">Кнопки (шапка)</h3>
+                  <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+                </summary>
+                <div class="dt-collapsible-body">
+                  <div class="dt-theme-grid" role="group" aria-label="Кнопки (шапка)">
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-btn-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-btn-bg-color" class="dt-theme-color" aria-label="--header-btn-bg picker">
+                        <input type="text" id="dt-theme-header-btn-bg-text" class="dt-pill-field dt-theme-text" placeholder="#020617" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-btn-text</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-btn-text-color" class="dt-theme-color" aria-label="--header-btn-text picker">
+                        <input type="text" id="dt-theme-header-btn-text-text" class="dt-pill-field dt-theme-text" placeholder="#e5e7eb" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-btn-border</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-btn-border-color" class="dt-theme-color" aria-label="--header-btn-border picker">
+                        <input type="text" id="dt-theme-header-btn-border-text" class="dt-pill-field dt-theme-text" placeholder="#374151" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-btn-hover-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-btn-hover-bg-color" class="dt-theme-color" aria-label="--header-btn-hover-bg picker">
+                        <input type="text" id="dt-theme-header-btn-hover-bg-text" class="dt-pill-field dt-theme-text" placeholder="#020617" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-btn-hover-text</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-btn-hover-text-color" class="dt-theme-color" aria-label="--header-btn-hover-text picker">
+                        <input type="text" id="dt-theme-header-btn-hover-text-text" class="dt-pill-field dt-theme-text" placeholder="#e5e7eb" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-btn-hover-border</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-btn-hover-border-color" class="dt-theme-color" aria-label="--header-btn-hover-border picker">
+                        <input type="text" id="dt-theme-header-btn-hover-border-text" class="dt-pill-field dt-theme-text" placeholder="#374151" spellcheck="false">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="dt-theme-group dt-collapsible" id="dt-theme-group-modals">
+                <summary class="dt-collapsible-summary">
+                  <h3 style="margin:0;">Модальные окна</h3>
+                  <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+                </summary>
+                <div class="dt-collapsible-body">
+                  <div class="dt-theme-grid" role="group" aria-label="Модальные окна">
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-overlay</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-overlay-color" class="dt-theme-color" aria-label="--modal-overlay picker">
+                        <input type="text" id="dt-theme-modal-overlay-text" class="dt-pill-field dt-theme-text" placeholder="#0f172abf" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-bg-color" class="dt-theme-color" aria-label="--modal-bg picker">
+                        <input type="text" id="dt-theme-modal-bg-text" class="dt-pill-field dt-theme-text" placeholder="#020617" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-text</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-text-color" class="dt-theme-color" aria-label="--modal-text picker">
+                        <input type="text" id="dt-theme-modal-text-text" class="dt-pill-field dt-theme-text" placeholder="#e5e7eb" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-muted</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-muted-color" class="dt-theme-color" aria-label="--modal-muted picker">
+                        <input type="text" id="dt-theme-modal-muted-text" class="dt-pill-field dt-theme-text" placeholder="#9ca3af" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-body-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-body-bg-color" class="dt-theme-color" aria-label="--modal-body-bg picker">
+                        <input type="text" id="dt-theme-modal-body-bg-text" class="dt-pill-field dt-theme-text" placeholder="#020617" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-body-border</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-body-border-color" class="dt-theme-color" aria-label="--modal-body-border picker">
+                        <input type="text" id="dt-theme-modal-body-border-text" class="dt-pill-field dt-theme-text" placeholder="#1f2937" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-table-head-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-table-head-bg-color" class="dt-theme-color" aria-label="--modal-table-head-bg picker">
+                        <input type="text" id="dt-theme-modal-table-head-bg-text" class="dt-pill-field dt-theme-text" placeholder="#0b1220" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-table-head-text</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-table-head-text-color" class="dt-theme-color" aria-label="--modal-table-head-text picker">
+                        <input type="text" id="dt-theme-modal-table-head-text-text" class="dt-pill-field dt-theme-text" placeholder="#9ca3af" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-table-border</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-table-border-color" class="dt-theme-color" aria-label="--modal-table-border picker">
+                        <input type="text" id="dt-theme-modal-table-border-text" class="dt-pill-field dt-theme-text" placeholder="#1f2937" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-table-row-hover-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-table-row-hover-bg-color" class="dt-theme-color" aria-label="--modal-table-row-hover-bg picker">
+                        <input type="text" id="dt-theme-modal-table-row-hover-bg-text" class="dt-pill-field dt-theme-text" placeholder="#0b1220" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-list-marker</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-list-marker-color" class="dt-theme-color" aria-label="--modal-list-marker picker">
+                        <input type="text" id="dt-theme-modal-list-marker-text" class="dt-pill-field dt-theme-text" placeholder="#9ca3af" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-border</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-border-color" class="dt-theme-color" aria-label="--modal-border picker">
+                        <input type="text" id="dt-theme-modal-border-text" class="dt-pill-field dt-theme-text" placeholder="#334155" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-header-border</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-header-border-color" class="dt-theme-color" aria-label="--modal-header-border picker">
+                        <input type="text" id="dt-theme-modal-header-border-text" class="dt-pill-field dt-theme-text" placeholder="#1f2937" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-close</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-close-color" class="dt-theme-color" aria-label="--modal-close picker">
+                        <input type="text" id="dt-theme-modal-close-text" class="dt-pill-field dt-theme-text" placeholder="#9ca3af" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--modal-close-hover</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-modal-close-hover-color" class="dt-theme-color" aria-label="--modal-close-hover picker">
+                        <input type="text" id="dt-theme-modal-close-hover-text" class="dt-pill-field dt-theme-text" placeholder="#e5e7eb" spellcheck="false">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="dt-theme-group dt-collapsible" id="dt-theme-group-header-tabs">
+                <summary class="dt-collapsible-summary">
+                  <h3 style="margin:0;">Вкладки (шапка)</h3>
+                  <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+                </summary>
+                <div class="dt-collapsible-body">
+                  <div class="dt-theme-grid" role="group" aria-label="Вкладки (шапка)">
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-tab-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-tab-bg-color" class="dt-theme-color" aria-label="--header-tab-bg picker">
+                        <input type="text" id="dt-theme-header-tab-bg-text" class="dt-pill-field dt-theme-text" placeholder="#020617" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-tab-text</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-tab-text-color" class="dt-theme-color" aria-label="--header-tab-text picker">
+                        <input type="text" id="dt-theme-header-tab-text-text" class="dt-pill-field dt-theme-text" placeholder="#e5e7eb" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-tab-border</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-tab-border-color" class="dt-theme-color" aria-label="--header-tab-border picker">
+                        <input type="text" id="dt-theme-header-tab-border-text" class="dt-pill-field dt-theme-text" placeholder="#1f2937" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-tab-active-bg</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-tab-active-bg-color" class="dt-theme-color" aria-label="--header-tab-active-bg picker">
+                        <input type="text" id="dt-theme-header-tab-active-bg-text" class="dt-pill-field dt-theme-text" placeholder="#2563eb" spellcheck="false">
+                      </div>
+                    </div>
+
+                    <div class="dt-theme-field">
+                      <div class="dt-theme-name">--header-tab-active-text</div>
+                      <div class="dt-theme-inputs">
+                        <input type="color" id="dt-theme-header-tab-active-text-color" class="dt-theme-color" aria-label="--header-tab-active-text picker">
+                        <input type="text" id="dt-theme-header-tab-active-text-text" class="dt-pill-field dt-theme-text" placeholder="#ffffff" spellcheck="false">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
             </div>
 
-            <div class="dt-theme-sliders" role="group" aria-label="Theme sliders">
+<div class="dt-theme-sliders" role="group" aria-label="Theme sliders">
               <label class="dt-theme-slider">
                 <span class="dt-theme-slider-name">Радиус</span>
                 <input type="range" id="dt-theme-radius" min="0" max="32" step="1" aria-label="Radius">
@@ -544,12 +931,12 @@
               <div class="small" style="margin-bottom:10px; opacity:0.9;">
                 Редактор <code>custom.css</code> (хранится на роутере в <code>UI_STATE_DIR/custom.css</code> и применяется на всех страницах).
                 <br>
-                <b>Safety:</b> принимается только CSS (без JS‑вставок). Если панель «сломалась» из‑за стилей — откройте страницу с <code>?safe=1</code>, чтобы загрузиться без <code>custom.css</code>.
+	                <b>Safety:</b> принимается только CSS (без JS‑вставок). Если панель «сломалась» из‑за стилей — откройте страницу с <code>?safe=1</code> (или <code>safe=true/yes/on</code>), чтобы загрузиться без <code>custom.css</code>.
               </div>
 
               {% if safe_mode %}
               <div class="small" style="margin-bottom:10px; color:#fca5a5;">
-                Safe mode активен: <code>custom.css</code> сейчас не подключается. Уберите <code>?safe=1</code>, чтобы применить стили.
+			    Safe mode активен: <code>custom.css</code> сейчас не подключается. Уберите параметр <code>safe</code> из URL, чтобы применить стили.
               </div>
               {% else %}
               <div class="small" style="margin-bottom:10px; opacity:0.85;">
@@ -762,10 +1149,14 @@
           <div class="modal-body">
             <div class="dt-help">
               <div class="small" style="opacity:0.9; margin-bottom: 10px;">
-                Этот редактор сохраняет файл <code>UI_STATE_DIR/custom.css</code> на роутере и подключает его <b>на всех страницах</b> (включая <code>/login</code> и <code>/setup</code>).
-                Если что-то “сломалось” — откройте любую страницу с <code>?safe=1</code>: тогда <code>custom.css</code> <b>не загрузится</b>.
-                <br>
-                Ограничения: до <b>250 000</b> символов. Отключение хранится флажком <code>UI_STATE_DIR/custom_css.disabled</code> (кнопка <b>Disable</b>).
+	                Этот редактор сохраняет файл <code>UI_STATE_DIR/custom.css</code> на роутере и подключает его <b>на всех страницах</b> (включая <code>/login</code> и <code>/setup</code>).
+	                На роутере <code>UI_STATE_DIR</code> обычно <code>/opt/etc/xkeen-ui</code> (можно переопределить через env <code>XKEEN_UI_STATE_DIR</code> / <code>XKEEN_UI_DIR</code>). При желании можно править файл и напрямую по SSH: <code>UI_STATE_DIR/custom.css</code>.
+	                Файл отдаётся по URL <code>/ui/custom.css</code> и подключается с версией <code>?v=</code> (обновляется при сохранении).
+	                <br>
+	                Если что-то “сломалось” — откройте любую страницу с <code>?safe=1</code> (также подходят <code>safe=true/yes/on</code>): тогда <code>custom.css</code> <b>не загрузится</b>.
+	                Safe mode выключает только global Custom CSS; <code>custom_theme.css</code> и локальные настройки интерфейса (типографика/лейаут) остаются.
+	                <br>
+	                Ограничения: до <b>250 000</b> символов. Отключение хранится файлом-флажком <code>UI_STATE_DIR/custom_css.disabled</code> (кнопка <b>Disable</b>).
               </div>
 
               <div class="dt-help-toolbar">
@@ -783,7 +1174,7 @@
                   <ol style="margin:8px 0 0 18px;">
                     <li>Впишите CSS в редактор.</li>
                     <li>Нажмите <b>Save</b> — сохранит и включит.</li>
-                    <li>Если эффекта нет — обновите страницу (Ctrl+F5) или проверьте, что вы не в <code>?safe=1</code>.</li>
+	                    <li>Если эффекта нет — обновите страницу (Ctrl+F5) или проверьте, что в адресе нет параметра <code>safe</code>.</li>
                     <li><b>Disable</b> — выключает применение (файл остаётся).</li>
                     <li><b>Reset</b> — удаляет CSS и сбрасывает всё.</li>
                   </ol>
@@ -807,6 +1198,7 @@
                 <div class="small" style="margin-top:8px; opacity:0.9;">
                   <ul style="margin:8px 0 0 18px;">
                     <li><b>База:</b> стили из <code>/static/styles.css</code> + стили конкретной страницы.</li>
+	                    <li><b>Локальные настройки интерфейса:</b> блок DevTools → “Интерфейс” сохраняется <b>в браузере</b> и применяет правки через <code>data-*</code> на <code>&lt;html&gt;</code> (например <code>data-xk-compact</code>, <code>data-xk-hide-hints</code>, <code>data-xk-container</code>) и через <b>inline</b> CSS‑переменные (<code>--xk-font-scale</code>, <code>--xk-container-max-width</code> и т. д.). Если он включён, он может перекрыть ваши переменные: либо сбросьте его кнопкой <b>Reset</b>, либо используйте <code>!important</code> для переменных.</li>
                     <li><b>Theme editor:</b> если вы сохраняли тему в DevTools → “Тема и CSS‑переменные”, подключается <code>/ui/custom-theme.css</code> (файл <code>UI_STATE_DIR/custom_theme.css</code>).</li>
                     <li><b>Custom CSS:</b> этот редактор управляет <code>/ui/custom.css</code> (файл <code>UI_STATE_DIR/custom.css</code>). Он подключается <b>последним</b> и обычно перекрывает всё остальное.</li>
                     <li>Если правило не “берётся” — чаще всего нужно либо сделать селектор более специфичным, либо добавить <code>!important</code>.</li>
@@ -822,7 +1214,10 @@
                   Ниже — набор типовых твиков. Каждый пример можно вставить целиком или по частям.
                 </div>
 
-                <h3 style="margin:14px 0 6px;">1) Увеличить шрифт (правильный способ для этой панели)</h3>
+	                <h3 style="margin:14px 0 6px;">1) Увеличить шрифт глобально (через CSS‑переменные)</h3>
+	                <div class="small" style="opacity:0.9; margin: 6px 0;">
+	                  Если вы меняли DevTools → “Интерфейс → Типографика”, там значения ставятся <i>inline</i> на <code>&lt;html&gt;</code> и могут перекрывать <code>:root</code> из CSS. Для этого примера поставьте там 100% / “как UI” / “по умолчанию” или нажмите <b>Reset</b>.
+	                </div>
                 <div class="dt-help-code-wrap">
                   <textarea class="dt-help-code" readonly spellcheck="false">/* Глобальный масштаб текста */
 :root{
@@ -1026,15 +1421,104 @@ header{
 /* Чуть меньше “дерганий” при обновлении */
 .log-block{ scroll-behavior: auto !important; }</textarea>
                 </div>
+
+	                <h3 style="margin:14px 0 6px;">17) Применять правила только в DevTools (не трогая /login и основную панель)</h3>
+	                <div class="dt-help-code-wrap">
+	                  <textarea class="dt-help-code" readonly spellcheck="false">/* Трюк: у DevTools есть уникальная обёртка .dt-container.
+   Всё внутри неё не повлияет на /login, /setup и главную панель. */
+
+.dt-container .card{ 
+  border-radius: 18px; 
+}
+
+.dt-container .dt-collapsible-summary{
+  gap: 12px;
+}</textarea>
+	                </div>
+
+	                <h3 style="margin:14px 0 6px;">18) DevTools → Tools: изменить пропорции колонок (левая/правая)</h3>
+	                <div class="dt-help-code-wrap">
+	                  <textarea class="dt-help-code" readonly spellcheck="false">/* По умолчанию: слева (260–420px), справа — всё остальное.
+   Можно сделать левую колонку шире/уже: */
+
+.dt-tools-layout{
+  grid-template-columns: minmax(340px, 560px) minmax(0, 1fr) !important;
+}
+
+/* Альтернатива (узкая слева):
+.dt-tools-layout{
+  grid-template-columns: minmax(240px, 340px) minmax(0, 1fr) !important;
+}
+*/</textarea>
+	                </div>
+
+	                <h3 style="margin:14px 0 6px;">19) Глобально: ширина контейнера (и как перебить Layout‑настройки)</h3>
+	                <div class="dt-help-code-wrap">
+	                  <textarea class="dt-help-code" readonly spellcheck="false">/* Панель использует переменную --xk-container-max-width.
+   Её может выставлять локальный Layout (inline), поэтому добавляем !important. */
+
+:root{
+  --xk-container-max-width: min(1900px, 98vw) !important;
+}</textarea>
+	                </div>
+
+	                <h3 style="margin:14px 0 6px;">20) DevTools Logs: “зебра” строк + мягкий фон для WARNING/ERROR</h3>
+	                <div class="dt-help-code-wrap">
+	                  <textarea class="dt-help-code" readonly spellcheck="false">/* Зебра (работает как в DevTools Logs, так и в контекст‑модалке) */
+.dt-log-view .log-line:nth-child(2n),
+#dt-log-context-body .log-line:nth-child(2n){
+  background: rgba(255,255,255,.03);
+}
+
+/* Чуть заметнее уровни */
+.dt-log-view .log-line-error,
+#dt-log-context-body .log-line-error{
+	  background: rgba(248,113,113,.12);
+	  background: color-mix(in srgb, var(--sem-error, #f87171) 14%, transparent);
+}
+
+.dt-log-view .log-line-warning,
+#dt-log-context-body .log-line-warning{
+	  background: rgba(251,191,36,.10);
+	  background: color-mix(in srgb, var(--sem-warning, #fbbf24) 14%, transparent);
+}</textarea>
+	                </div>
+
+	                <h3 style="margin:14px 0 6px;">21) DevTools Logs: мигающий индикатор “есть новые строки” в списке логов</h3>
+	                <div class="dt-help-code-wrap">
+	                  <textarea class="dt-help-code" readonly spellcheck="false">@keyframes dtLogDotPulse{
+  0%,100%{ transform: scale(1); opacity: 1; }
+  50%{ transform: scale(1.65); opacity: 0.6; }
+}
+
+.dt-log-item.has-new .dt-log-dot{
+  animation: dtLogDotPulse 1.2s ease-in-out infinite;
+}</textarea>
+	                </div>
+
+	                <h3 style="margin:14px 0 6px;">22) Реагировать на локальные переключатели “Интерфейс” (compact/hide hints)</h3>
+	                <div class="dt-help-code-wrap">
+	                  <textarea class="dt-help-code" readonly spellcheck="false">/* Layout‑настройки ставят data‑атрибуты на <html>. Можно привязаться к ним: */
+
+html[data-xk-compact="1"] .top-tab-btn{
+  padding: 8px 10px !important;
+}
+
+/* Пример: когда подсказки скрыты — уменьшим отступы в карточках */
+html[data-xk-hide-hints="1"] .card{
+  padding-top: 12px;
+}</textarea>
+	                </div>
               </details>
 
               <details>
                 <summary><b>Safe mode и аварийный откат</b></summary>
                 <div class="small" style="margin-top:8px; opacity:0.9;">
                   <ul style="margin:8px 0 0 18px;">
-                    <li>Добавьте <code>?safe=1</code> к адресу — панель загрузится без <code>custom.css</code>.</li>
-                    <li>Зайдите в DevTools → Custom CSS → нажмите <b>Disable</b> (временно) или <b>Reset</b> (полный сброс).</li>
-                    <li>Если “перекрыли” клики (например сделали <code>pointer-events:none</code>) — safe mode поможет зайти обратно.</li>
+	                    <li>Добавьте <code>?safe=1</code> (или <code>safe=true/yes/on</code>) к адресу — страница загрузится без <code>custom.css</code>. Работает везде, включая <code>/login</code> и <code>/setup</code> (если редирект мешает — откройте напрямую <code>/login?safe=1</code>).</li>
+	                    <li>Safe mode отключает <b>только</b> global Custom CSS. Если вы хотите «обнулить» тему — используйте DevTools → “Тема и CSS‑переменные” → <b>Reset global</b>.</li>
+	                    <li>Зайдите в DevTools → Custom CSS → нажмите <b>Disable</b> (временно) или <b>Reset</b> (полный сброс).</li>
+	                    <li>Если “перекрыли” клики (например сделали <code>pointer-events:none</code>) — safe mode поможет зайти обратно.</li>
                   </ul>
                 </div>
               </details>
@@ -1042,7 +1526,7 @@ header{
               <details>
                 <summary><b>Ограничения безопасности</b></summary>
                 <div class="small" style="margin-top:8px; opacity:0.9;">
-                  Разрешён только CSS. Попытки вставить JS (например <code>&lt;script&gt;</code> или <code>javascript:</code>) будут отклонены при сохранении.
+	                  Разрешён только CSS. Попытки вставить JS (например <code>&lt;script&gt;</code>, <code>javascript:</code> или <code>expression(...)</code>) будут отклонены при сохранении.
                 </div>
               </details>
             </div>
@@ -1091,11 +1575,11 @@ header{
   <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/donate.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/typography.js', v='20251230c') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/layout_prefs.js', v='20260101b') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/branding_prefs.js', v='20260101e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/ui_prefs_io.js', v='20260101e') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/layout_prefs.js', v='20260101c') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/branding_prefs.js', v='20260101f') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/ui_prefs_io.js', v='20260101f') }}"></script>
   <script src="{{ url_for('static', filename='js/util/ansi.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools.js', v='20260101d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/devtools.js', v='20260101f') }}"></script>
   <script src="{{ url_for('static', filename='js/pages/devtools.init.js') }}"></script>
 </body>
 </html>
