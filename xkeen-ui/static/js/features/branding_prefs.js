@@ -11,7 +11,12 @@
 
   function toast(msg, isErr) {
     try {
-      if (typeof window.toast === 'function') return window.toast(String(msg || ''), isErr ? 'error' : 'info');
+      // Prefer unified toast API if present.
+      const kind = isErr ? 'error' : 'info';
+      if (typeof window.toast === 'function') return window.toast(String(msg || ''), kind);
+      if (typeof window.showToast === 'function') return window.showToast(String(msg || ''), kind);
+      if (XK && XK.ui && typeof XK.ui.toast === 'function') return XK.ui.toast(String(msg || ''), kind);
+      if (XK && XK.ui && typeof XK.ui.showToast === 'function') return XK.ui.showToast(String(msg || ''), kind);
     } catch (e) {}
     try { console.log('[xkeen]', msg); } catch (e) {}
   }
@@ -146,8 +151,104 @@
   }
 
   async function wire() {
-    const branding = XK.ui && XK.ui.branding;
-    if (!branding) return;
+    const branding = (XK.ui && XK.ui.branding) ? XK.ui.branding : null;
+
+    // Fallback implementation (in case branding.js isn't loaded for some reason).
+    const FALLBACK_KEY = 'xkeen-branding-cache-v1';
+
+    function metaCsrf() {
+      try {
+        const el = document.querySelector('meta[name="csrf-token"]');
+        return (el && el.getAttribute('content')) ? String(el.getAttribute('content') || '') : '';
+      } catch (e) { return ''; }
+    }
+
+    function normalize(raw) {
+      const o = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
+      const tab = (o.tabRename && typeof o.tabRename === 'object' && !Array.isArray(o.tabRename)) ? o.tabRename : {};
+      const tabRename = {};
+      try {
+        Object.keys(tab).forEach((k) => {
+          const kk = String(k || '').trim();
+          const vv = String(tab[k] || '').trim();
+          if (!kk || !vv) return;
+          tabRename[kk] = vv;
+        });
+      } catch (e) {}
+      return {
+        title: String(o.title || '').trim(),
+        logoSrc: String(o.logoSrc || '').trim(),
+        faviconSrc: String(o.faviconSrc || '').trim(),
+        tabRename,
+      };
+    }
+
+    function saveCache(cfg) {
+      try {
+        const key = (branding && branding.KEY) ? branding.KEY : FALLBACK_KEY;
+        localStorage.setItem(key, JSON.stringify(normalize(cfg)));
+      } catch (e) {}
+    }
+
+    function applyFallback(cfg) {
+      // If the proper module exists, use it.
+      try {
+        if (branding && typeof branding.apply === 'function') {
+          branding.apply(cfg);
+          return;
+        }
+      } catch (e) {}
+
+      // Best-effort: update the visible top tabs on the panel page (if present).
+      try {
+        const mp = (cfg && cfg.tabRename) ? cfg.tabRename : {};
+        const container = document.querySelector('.top-tabs.header-tabs');
+        if (container) {
+          Array.from(container.querySelectorAll('.top-tab-btn')).forEach((btn) => {
+            const view = btn && btn.dataset && btn.dataset.view ? String(btn.dataset.view) : '';
+            const key = view ? ('view:' + view) : (btn && btn.id ? ('id:' + String(btn.id)) : '');
+            const next = (key && mp && typeof mp[key] === 'string') ? String(mp[key] || '').trim() : '';
+            if (next) {
+              try { btn.textContent = next; } catch (e2) {}
+            }
+          });
+        }
+      } catch (e) {}
+    }
+
+    async function saveToRouter(cfg) {
+      if (!window.fetch) return { ok: false, error: 'fetch_unavailable', config: cfg };
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        const tok = metaCsrf();
+        if (tok) headers['X-CSRF-Token'] = tok;
+        const r = await fetch('/api/devtools/branding', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ config: normalize(cfg) }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) ? String(j.error) : 'save_failed');
+        return { ok: true, config: (j && j.config) ? j.config : cfg, version: j.version || 0 };
+      } catch (e) {
+        return { ok: false, error: (e && e.message) ? e.message : String(e), config: cfg };
+      }
+    }
+
+    async function resetOnRouter() {
+      if (!window.fetch) return { ok: false, error: 'fetch_unavailable' };
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        const tok = metaCsrf();
+        if (tok) headers['X-CSRF-Token'] = tok;
+        const r = await fetch('/api/devtools/branding/reset', { method: 'POST', headers, body: '{}' });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) ? String(j.error) : 'reset_failed');
+        return { ok: true, config: (j && j.config) ? j.config : {}, version: j.version || 0 };
+      } catch (e) {
+        return { ok: false, error: (e && e.message) ? e.message : String(e) };
+      }
+    }
 
     const titleEl = byId('dt-branding-title');
 
@@ -166,13 +267,21 @@
     const saveBtn = byId('dt-branding-save');
     const resetBtn = byId('dt-branding-reset');
 
-    // Prefer router-stored branding (global)
+    // Prefer router proof (global). If branding module exists, let it sync.
+    // Otherwise we still load from router directly and hydrate the form.
     try {
       if (branding && typeof branding.refreshFromRouter === 'function') {
         await branding.refreshFromRouter();
+        syncFormFromPrefs(branding.load());
+      } else {
+        const cfg = await loadFromRouter();
+        syncFormFromPrefs(cfg || {});
+        saveCache(cfg || {});
+        applyFallback(cfg || {});
       }
-    } catch (e) {}
-    syncFormFromPrefs(branding.load());
+    } catch (e) {
+      try { syncFormFromPrefs((branding && branding.load) ? branding.load() : {}); } catch (e2) {}
+    }
 
     const onUrlChange = () => {
       _logoSrc = (logoUrlEl && String(logoUrlEl.value || '').trim()) || _logoSrc;
@@ -279,7 +388,20 @@
       saveBtn.addEventListener('click', async () => {
         try {
           const next = gatherPrefs();
-          const res = await branding.save(next);
+          let res = null;
+
+          if (branding && typeof branding.save === 'function') {
+            res = await branding.save(next);
+          } else {
+            // Fallback: POST directly, but still keep local cache so the UI can reflect changes.
+            const r = await saveToRouter(next);
+            const cfg = normalize((r && r.config) ? r.config : next);
+            saveCache(cfg);
+            applyFallback(cfg);
+            syncFormFromPrefs(cfg);
+            res = r;
+          }
+
           if (res && res.ok) {
             setStatus('Брендинг сохранён на роутере');
             toast('Брендинг сохранён');
@@ -289,6 +411,7 @@
           }
         } catch (e) {
           setStatus('Save failed: ' + (e && e.message ? e.message : String(e)), true);
+          toast('Save failed', true);
         }
       });
     }
@@ -298,8 +421,17 @@
         try {
           const ok = window.confirm('Сбросить брендинг на роутере (глобально)?');
           if (!ok) return;
-          const res = await branding.reset();
-          syncFormFromPrefs(branding.load());
+          let res = null;
+          if (branding && typeof branding.reset === 'function') {
+            res = await branding.reset();
+            syncFormFromPrefs(branding.load());
+          } else {
+            res = await resetOnRouter();
+            const cfg = normalize((res && res.config) ? res.config : {});
+            saveCache(cfg);
+            applyFallback(cfg);
+            syncFormFromPrefs(cfg);
+          }
           if (res && res.ok) {
             setStatus('Брендинг сброшен на роутере');
             toast('Брендинг: сброшено');
@@ -309,6 +441,7 @@
           }
         } catch (e) {
           setStatus('Reset failed: ' + (e && e.message ? e.message : String(e)), true);
+          toast('Reset failed', true);
         }
       });
     }
