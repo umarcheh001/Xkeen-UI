@@ -16,6 +16,9 @@
 
   <!-- Apply typography prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
+  <!-- Apply layout prefs ASAP (stored in localStorage) -->
+  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101b') }}"></script>
 <!-- CodeMirror for XKeen text files -->
 
   <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/codemirror.min.css') }}">
@@ -32,7 +35,11 @@
   <script src="{{ url_for('static', filename='codemirror/mode/shell/shell.min.js') }}"></script>
 
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20251230c') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101b') }}">
+<link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
+{% if custom_css_enabled and not safe_mode %}
+<link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
+{% endif %}
 </head>
 <body>
   <div id="global-xkeen-spinner">
