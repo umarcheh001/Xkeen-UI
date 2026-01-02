@@ -707,13 +707,13 @@
           <h2>Live логи Xray <span id="xray-log-lamp" class="xray-log-lamp" data-state="unknown" title="Статус логов Xray неизвестен"></span></h2>
           <div class="log-header-actions">
             <select id="xray-log-file" class="xray-log-select" onchange="xrayLogChangeFile()">
+              <option value="access" selected>access.log</option>
               <option value="error">error.log</option>
-              <option value="access">access.log</option>
             </select>
             <select
               id="xray-log-level"
               class="xray-log-select"
-              title="Уровень логирования Xray (loglevel). Влияет на количество строк в error.log."
+              title="Уровень логирования Xray (loglevel) для error.log. Это минимальный уровень: debug включает info/warning/error, info включает warning/error и т.д. При смене уровня, если логи уже включены, уровень применяется сразу. Также используется как фильтр отображения в окне."
             >
               <option value="warning" selected>warning</option>
               <option value="info">info</option>
