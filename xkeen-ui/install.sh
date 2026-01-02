@@ -258,7 +258,7 @@ fi
 is_port_in_use() {
   PORT_CHECK="$1"
   if command -v netstat >/dev/null 2>&1; then
-    netstat -tln 2>/dev/null | awk '{print $4}' | grep -q ":${PORT_CHECK}$"
+    netstat -tln 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]${PORT_CHECK}$"
   else
     # Если netstat недоступен, считаем, что порт свободен
     return 1
@@ -636,13 +636,11 @@ INSTALL_PARENT_DIR="$(dirname "$INSTALL_SRC_DIR")"
 
 echo "[*] Очищаю установочные файлы..."
 
-if [ -n "$INSTALL_PARENT_DIR" ] && [ -d "$INSTALL_PARENT_DIR" ]; then
-  for ARCH in "$INSTALL_PARENT_DIR"/xkeen-ui*.tar.gz "$INSTALL_PARENT_DIR"/xkeen-ui-*.tar.gz; do
-    [ -f "$ARCH" ] || continue
-    echo "[*] Удаляю архив: $ARCH"
-    rm -f "$ARCH" || echo "[!] Не удалось удалить архив $ARCH"
-  done
-fi
+for ARCHIVE in "$INSTALL_PARENT_DIR"/xkeen-ui*.tar.gz "$INSTALL_PARENT_DIR"/xkeen-ui-*.tar.gz; do
+  [ -f "$ARCHIVE" ] || continue
+  echo "[*] Удаляю архив: $ARCHIVE"
+  rm -f "$ARCHIVE" || echo "[!] Не удалось удалить архив $ARCHIVE"
+done
 
 if [ "$INSTALL_SRC_DIR" != "$UI_DIR" ] && [ -d "$INSTALL_SRC_DIR" ]; then
   echo "[*] Удаляю временную директорию установки: $INSTALL_SRC_DIR"
