@@ -22,6 +22,10 @@
   const LOAD_MORE_STEP = 400;
   const MAX_MAX_LINES = 5000;
 
+  // Persist per-page UI state (file/interval/follow/live/lines/filter + log window height)
+  // so the user doesn't have to reconfigure the Live logs view every time.
+  const STORAGE_KEY = 'xkeen.ui.xrayLogs.v1';
+
   let _maxLines = DEFAULT_MAX_LINES;
   let _pollMs = DEFAULT_POLL_MS;
   let _follow = true;
@@ -37,7 +41,7 @@
 
   let _timer = null;
   let _statusTimer = null;
-  let _currentFile = 'error';
+  let _currentFile = 'access';
   let _lastLines = [];
 
   let _ws = null;
@@ -48,8 +52,167 @@
 
   const ALLOWED_LOGLEVELS = ['warning', 'info', 'debug', 'error'];
 
+  let _activeLogLevel = 'none'; // last known active loglevel from /api/xray-logs/status
+  let _applyLevelTimer = null;
+
+  let _saveTimer = null;
+  let _resizeObserver = null;
+
   function $(id) {
     return document.getElementById(id);
+  }
+
+  function readStoredUiState() {
+    try {
+      if (!window.localStorage) return {};
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return (obj && typeof obj === 'object') ? obj : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function writeStoredUiState(next) {
+    try {
+      if (!window.localStorage) return;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next || {}));
+    } catch (e) {}
+  }
+
+  function collectUiState() {
+    const fileSel = $('xray-log-file');
+    const lvlSel = $('xray-log-level');
+    const liveEl = $('xray-log-live');
+    const intervalEl = $('xray-log-interval');
+    const followEl = $('xray-log-follow');
+    const linesInput = $('xray-log-lines');
+    const filterEl = $('xray-log-filter');
+    const outputEl = $('xray-log-output');
+
+    let height = null;
+    try {
+      if (outputEl) height = Math.round(outputEl.getBoundingClientRect().height);
+    } catch (e) {}
+
+    let maxLines = _maxLines;
+    try {
+      const v = parseInt((linesInput && linesInput.value) || '', 10);
+      if (isFinite(v)) maxLines = v;
+    } catch (e) {}
+
+    let pollMs = _pollMs;
+    try {
+      const v = parseInt((intervalEl && intervalEl.value) || '', 10);
+      if (isFinite(v)) pollMs = v;
+    } catch (e) {}
+
+    return {
+      file: String((fileSel && fileSel.value) || _currentFile || 'access'),
+      loglevel: String((lvlSel && lvlSel.value) || ''),
+      live: !!(liveEl && liveEl.checked),
+      follow: !!(followEl && followEl.checked),
+      pollMs: pollMs,
+      maxLines: maxLines,
+      filter: String((filterEl && filterEl.value) || ''),
+      height: height,
+      ts: Date.now(),
+    };
+  }
+
+  function scheduleSaveUiState() {
+    try {
+      if (_saveTimer) clearTimeout(_saveTimer);
+    } catch (e) {}
+
+    _saveTimer = setTimeout(() => {
+      _saveTimer = null;
+      const prev = readStoredUiState();
+      const cur = collectUiState();
+      // merge (keep any unknown future fields)
+      writeStoredUiState(Object.assign({}, prev || {}, cur || {}));
+    }, 120);
+  }
+
+  function applyStoredUiState() {
+    const st = readStoredUiState();
+    if (!st || typeof st !== 'object') return;
+
+    // file (default: access)
+    const file = String(st.file || '').toLowerCase();
+    const fileNorm = (file === 'access' || file === 'access.log') ? 'access' : (file === 'error' || file === 'error.log') ? 'error' : '';
+    const fileSel = $('xray-log-file');
+    if (fileSel && fileNorm) fileSel.value = fileNorm;
+    if (fileNorm) _currentFile = fileNorm;
+
+    // loglevel selector (UI preference)
+    const lvlSel = $('xray-log-level');
+    const lvl = String(st.loglevel || '').toLowerCase();
+    if (lvlSel && ALLOWED_LOGLEVELS.includes(lvl)) lvlSel.value = lvl;
+
+    // live/follow toggles
+    const liveEl = $('xray-log-live');
+    if (liveEl && typeof st.live === 'boolean') liveEl.checked = !!st.live;
+
+    const followEl = $('xray-log-follow');
+    if (followEl && typeof st.follow === 'boolean') followEl.checked = !!st.follow;
+
+    // interval + internal poll
+    const intervalEl = $('xray-log-interval');
+    try {
+      const v = parseInt(st.pollMs, 10);
+      if (isFinite(v) && v >= 500) {
+        _pollMs = v;
+        if (intervalEl) intervalEl.value = String(v);
+      }
+    } catch (e) {}
+
+    // max lines + internal window
+    try {
+      let v = parseInt(st.maxLines, 10);
+      if (!isFinite(v)) v = DEFAULT_MAX_LINES;
+      if (v < 50) v = 50;
+      if (v > MAX_MAX_LINES) v = MAX_MAX_LINES;
+      _maxLines = v;
+      const linesInput = $('xray-log-lines');
+      if (linesInput) linesInput.value = String(v);
+    } catch (e) {}
+
+    // filter
+    const filterEl = $('xray-log-filter');
+    if (filterEl && typeof st.filter === 'string') filterEl.value = st.filter;
+
+    // log window height
+    const outputEl = $('xray-log-output');
+    try {
+      let h = parseInt(st.height, 10);
+      if (isFinite(h)) {
+        // Keep consistent with CSS min-height.
+        if (h < 420) h = 420;
+        if (outputEl) outputEl.style.height = String(h) + 'px';
+      }
+    } catch (e) {}
+  }
+
+  function _isErrorFileName(name) {
+    const f = String(name || '').toLowerCase();
+    return f === 'error' || f === 'error.log';
+  }
+
+  function updateLoglevelUiForCurrentFile() {
+    const lvlSel = $('xray-log-level');
+    if (!lvlSel) return;
+
+    const isError = _isErrorFileName(_currentFile);
+    lvlSel.disabled = !isError;
+    lvlSel.title = isError ? 'Уровень логирования применим к error.log' : 'Уровни доступны только для error.log';
+  }
+
+  function syncCurrentFileFromUi() {
+    const selectEl = $('xray-log-file');
+    if (selectEl) _currentFile = selectEl.value || _currentFile || 'access';
+    updateLoglevelUiForCurrentFile();
   }
 
 
@@ -219,19 +382,18 @@
       if (!res.ok) throw new Error('status http error');
       const data = await res.json().catch(() => ({}));
       const level = String(data.loglevel || 'none').toLowerCase();
+      _activeLogLevel = level;
       const state = level === 'none' ? 'off' : 'on';
       // ВАЖНО: индикатор в карточке Live логов показывает только автообновление,
       // а глобальный статус логирования отображаем в шапке (badge).
       setXrayHeaderBadgeState(state, level);
 
-      // Sync "loglevel" selector with current runtime state (when known).
-      // If logging is disabled (none) — keep the user's last selection.
-      const lvlSel = $('xray-log-level');
-      if (lvlSel && level && level !== 'none' && ALLOWED_LOGLEVELS.includes(level)) {
-        lvlSel.value = level;
-      }
+      // ВАЖНО: не "подкручиваем" селектор loglevel под текущее состояние.
+      // Селектор — это *желательный* уровень для действия "▶ Включить логи".
+      // Текущий активный уровень показываем в бейдже в шапке (xray-logs-badge).
     } catch (e) {
       console.error('xray log status error', e);
+      _activeLogLevel = 'none';
       // Do not show the badge when status is unknown.
       setXrayHeaderBadgeState('off', 'none');
     }
@@ -262,6 +424,28 @@
     }
 
     return 'log-line';
+  }
+
+
+  // Detect Xray log level for view-side filtering.
+  // We prefer exact markers like [Info]/[Debug]/[Warning]/[Error].
+  function detectXrayLogLevel(line) {
+    const s = String(line || '');
+    let m = s.match(/\[(debug|info|warning|error)\]/i);
+    if (m && m[1]) return String(m[1]).toLowerCase();
+    m = s.match(/\blevel=(debug|info|warning|error)\b/i);
+    if (m && m[1]) return String(m[1]).toLowerCase();
+    return '';
+  }
+
+  const LOGLEVEL_ORDER = { debug: 0, info: 1, warning: 2, error: 3 };
+
+  function shouldIncludeLineByLevel(line, threshold) {
+    const th = String(threshold || '').toLowerCase();
+    if (!(th in LOGLEVEL_ORDER)) return true;
+    const lvl = detectXrayLogLevel(line);
+    if (!lvl || !(lvl in LOGLEVEL_ORDER)) return true; // unknown lines: keep
+    return LOGLEVEL_ORDER[lvl] >= LOGLEVEL_ORDER[th];
   }
 
   function parseXrayLogLine(line, idx) {
@@ -295,24 +479,113 @@
 
     const linkTitle = 'Клик: копировать • Shift+клик: добавить в фильтр';
 
+    // Extra token highlights (protocols/ports/tags/uuid/email/sni/alpn/path)
+    // NOTE: This is best-effort string processing; we avoid matching inside existing HTML tags
+    // by keeping replacements ordered (we inject <a>/<span> before the generic domain/IP matchers).
+
+    // UUID
+    processed = processed.replace(/\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/gi, (m, uuid) => {
+      const raw = String(uuid || '').trim();
+      const b64 = b64Encode(raw);
+      if (!b64) return '<span class="log-uuid">' + m + '</span>';
+      return '<a href="#" class="log-link log-uuid" data-kind="uuid" data-b64="' + b64 + '" title="' + linkTitle + '">' + m + '</a>';
+    });
+
+    // Email (user@domain) — keep whole email as a single clickable token
+    processed = processed.replace(/\b([A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})\b/g, (m, email) => {
+      const raw = String(email || '').trim();
+      const b64 = b64Encode(raw);
+      if (!b64) return '<span class="log-email">' + m + '</span>';
+      return '<a href="#" class="log-link log-email" data-kind="email" data-b64="' + b64 + '" title="' + linkTitle + '">' + m + '</a>';
+    });
+
+    // inbound/outbound tags (inbound: xxx | inboundTag=xxx)
+    processed = processed.replace(/\b(inbound(?:Tag)?)(\s*[:=]\s*)([A-Za-z0-9_.-]{1,64})/gi, (m, k, sep, tag) => {
+      const raw = String(tag || '').trim();
+      const b64 = b64Encode(raw);
+      const cls = 'log-link log-inbound';
+      if (!b64) return String(k || '') + String(sep || '') + '<span class="log-inbound">' + String(tag || '') + '</span>';
+      return String(k || '') + String(sep || '') + '<a href="#" class="' + cls + '" data-kind="inbound" data-b64="' + b64 + '" title="' + linkTitle + '">' + String(tag || '') + '</a>';
+    });
+    processed = processed.replace(/\b(outbound(?:Tag)?)(\s*[:=]\s*)([A-Za-z0-9_.-]{1,64})/gi, (m, k, sep, tag) => {
+      const raw = String(tag || '').trim();
+      const b64 = b64Encode(raw);
+      const cls = 'log-link log-outbound';
+      if (!b64) return String(k || '') + String(sep || '') + '<span class="log-outbound">' + String(tag || '') + '</span>';
+      return String(k || '') + String(sep || '') + '<a href="#" class="' + cls + '" data-kind="outbound" data-b64="' + b64 + '" title="' + linkTitle + '">' + String(tag || '') + '</a>';
+    });
+
+    // SNI/serverName (domain[:port])
+    processed = processed.replace(/\b(sni|serverName|servername)(\s*[:=]\s*)([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)(?::(\d{1,5}))?/gi, (m, k, sep, host, port) => {
+      const raw = String(host || '') + (port ? (':' + String(port)) : '');
+      const b64 = b64Encode(raw);
+      const portHtml = port ? (':<span class="log-port">' + String(port) + '</span>') : '';
+      const vis = String(host || '') + portHtml;
+      if (!b64) return String(k || '') + String(sep || '') + '<span class="log-sni">' + vis + '</span>';
+      return String(k || '') + String(sep || '') + '<a href="#" class="log-link log-domain log-sni" data-kind="sni" data-b64="' + b64 + '" title="' + linkTitle + '">' + vis + '</a>';
+    });
+
+    // ALPN value
+    processed = processed.replace(/\b(alpn)(\s*[:=]\s*)([A-Za-z0-9_./-]{1,32})/gi, (m, k, sep, val) => {
+      return String(k || '') + String(sep || '') + '<span class="log-alpn">' + String(val || '') + '</span>';
+    });
+
+    // Path / URI / URL (value starts with '/')
+    processed = processed.replace(/\b(path|uri|url|requestURI)(\s*[:=]\s*)(\/[\w\-._~%!$&'()*+,;=:@\/?#[\]]{1,2000})/gi, (m, k, sep, pth) => {
+      const raw = String(pth || '').trim();
+      const b64 = b64Encode(raw);
+      if (!b64) return String(k || '') + String(sep || '') + '<span class="log-path">' + String(pth || '') + '</span>';
+      return String(k || '') + String(sep || '') + '<a href="#" class="log-link log-path" data-kind="path" data-b64="' + b64 + '" title="' + linkTitle + '">' + String(pth || '') + '</a>';
+    });
+
+    // HTTP methods (avoid matching inside injected tags by excluding '>' prefix)
+    processed = processed.replace(/(^|[^>])\b(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD|CONNECT|TRACE)\b/g, '$1<span class="log-method">$2</span>');
+
+    // Protocol / transport keywords (avoid matching inside injected tags by excluding '>' prefix)
+    processed = processed.replace(/(^|[^>])\b(tcp|udp|ws|grpc|http|https|tls|quic|h2|h3|http\/1\.1|http\/2)\b/gi, '$1<span class="log-proto">$2</span>');
+
     // IPv4 (+ optional port) -> clickable token
-    processed = processed.replace(/\b((?:\d{1,3}\.){3}\d{1,3})(?::(\d+))?\b/g, (m, ip, port) => {
+    processed = processed.replace(/\b((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?\b/g, (m, ip, port) => {
       const raw = String(ip || '') + (port ? (':' + String(port)) : '');
       const b64 = b64Encode(raw);
-      if (!b64) return '<span class="log-ip">' + m + '</span>';
-      return '<a href="#" class="log-link log-ip" data-kind="ip" data-b64="' + b64 + '" title="' + linkTitle + '">' + m + '</a>';
+      const vis = String(ip || '') + (port ? (':<span class="log-port">' + String(port) + '</span>') : '');
+      if (!b64) return '<span class="log-ip">' + vis + '</span>';
+      return '<a href="#" class="log-link log-ip" data-kind="ip" data-b64="' + b64 + '" title="' + linkTitle + '">' + vis + '</a>';
     });
 
     // Domains (avoid hitting inside already injected tags) -> clickable token
-    processed = processed.replace(/(^|[^">])((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(?::(\d+))?/g, (m, pfx, host, port) => {
-      const vis = String(host || '') + (port ? (':' + String(port)) : '');
-      const b64 = b64Encode(vis);
+    processed = processed.replace(/(^|[^">@])((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(?::(\d{1,5}))?/g, (m, pfx, host, port) => {
+      const raw = String(host || '') + (port ? (':' + String(port)) : '');
+      const b64 = b64Encode(raw);
+      const vis = String(host || '') + (port ? (':<span class="log-port">' + String(port) + '</span>') : '');
       if (!b64) return String(pfx || '') + '<span class="log-domain">' + vis + '</span>';
       return String(pfx || '') + '<a href="#" class="log-link log-domain" data-kind="domain" data-b64="' + b64 + '" title="' + linkTitle + '">' + vis + '</a>';
     });
 
     const dataIdx = (idx === undefined || idx === null) ? '' : (' data-idx="' + String(idx) + '"');
     return '<span class="' + cls + '"' + dataIdx + '>' + processed + '</span>';
+  }
+  // ---------- View filtering by Xray log level ----------
+
+  const XRAY_LEVEL_ORDER = { debug: 0, info: 1, warning: 2, error: 3 };
+
+  function detectXrayLevel(line) {
+    const s = String(line || '');
+    // Primary: Xray format uses [Info]/[Warning]/[Error]/[Debug]
+    let m = s.match(/\[(debug|info|warning|error)\]/i);
+    if (m && m[1]) return String(m[1]).toLowerCase();
+    // Secondary: sometimes logs contain level=info etc
+    m = s.match(/\blevel=(debug|info|warning|error)\b/i);
+    if (m && m[1]) return String(m[1]).toLowerCase();
+    return '';
+  }
+
+  function shouldKeepLineForLevel(line, threshold) {
+    const thr = String(threshold || '').toLowerCase();
+    if (!thr || !(thr in XRAY_LEVEL_ORDER)) return true;
+    const lvl = detectXrayLevel(line);
+    if (!lvl || !(lvl in XRAY_LEVEL_ORDER)) return true; // unknown -> keep
+    return XRAY_LEVEL_ORDER[lvl] >= XRAY_LEVEL_ORDER[thr];
   }
 
   function applyXrayLogFilterToOutput() {
@@ -322,13 +595,25 @@
   const filterEl = $('xray-log-filter');
   const rawFilter = ((filterEl && filterEl.value) || '').trim().toLowerCase();
 
+  // The loglevel selector also acts as a *view filter* (threshold) so that
+  // switching warning/info/error immediately hides lower-level lines, even if
+  // they are still present in the file buffer.
+  const lvlSel = $('xray-log-level');
+  const selectedLevel = String((lvlSel && lvlSel.value) || '').trim().toLowerCase();
+  const isErrorFile = _isErrorFileName(_currentFile);
+  const levelFilter = (isErrorFile && ALLOWED_LOGLEVELS.includes(selectedLevel)) ? selectedLevel : '';
+
   const terms = rawFilter
     .split(/\s+/)
     .map((s) => s.trim())
     .filter(Boolean);
 
   const src = Array.isArray(_lastLines) ? _lastLines : [];
-  const entries = src.map((line, idx) => ({ idx, line: normalizeLogLine(line) }));
+  let entries = src.map((line, idx) => ({ idx, line: normalizeLogLine(line) }));
+
+  if (levelFilter) {
+    entries = entries.filter((e) => shouldKeepLineForLevel(e.line, levelFilter));
+  }
 
   const filtered = terms.length
     ? entries.filter((e) => {
@@ -353,7 +638,7 @@
   if (!outputEl) return;
 
   const statusEl = $('xray-log-status');
-  const file = _currentFile || 'error';
+  const file = _currentFile || 'access';
 
   const resetCursor = !!(opts && opts.resetCursor);
   const forceRender = !!(opts && opts.forceRender);
@@ -432,7 +717,7 @@
     }
 
     const statusEl = $('xray-log-status');
-    const file = _currentFile || 'error';
+    const file = _currentFile || 'access';
 
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
@@ -440,10 +725,13 @@
 
     wsDebug('WS: connecting', { url: url, file: file });
 
+    let ws = null;
+
     try {
       _wsClosingManually = false;
       _wsEverOpened = false;
-      _ws = new WebSocket(url);
+      ws = new WebSocket(url);
+      _ws = ws;
     } catch (e) {
       console.error('Failed to create WebSocket for logs', e);
       _useWs = false;
@@ -451,7 +739,8 @@
       return;
     }
 
-    _ws.onopen = function () {
+    ws.onopen = function () {
+      if (ws !== _ws) return;
       wsDebug('WS: open', { file: file });
       _wsEverOpened = true;
 
@@ -464,7 +753,8 @@
       if (statusEl) statusEl.textContent = 'WebSocket для логов подключён.';
       try { updateXrayLogStats(); } catch (e) {}
     };
-    _ws.onmessage = function (event) {
+    ws.onmessage = function (event) {
+      if (ws !== _ws) return;
       let data = null;
       try {
         data = JSON.parse(event.data);
@@ -507,7 +797,8 @@
       applyXrayLogFilterToOutput();
     };
 
-    _ws.onclose = function () {
+    ws.onclose = function () {
+      if (ws !== _ws) return;
       const visible = isLogsViewVisible();
 
       wsDebug('WS: close', { file: file, manual: _wsClosingManually, everOpened: _wsEverOpened });
@@ -541,7 +832,8 @@
       }, 1000);
     };
 
-    _ws.onerror = function () {
+    ws.onerror = function () {
+      if (ws !== _ws) return;
       wsDebug('WS: error', { file: file });
       console.warn('WebSocket error in xray logs');
       // Do not switch to HTTP here; onclose decides.
@@ -597,11 +889,8 @@
     try { updatePauseButton(); } catch (e) {}
     setXrayLogLampState('off');
 
-    // Sync UI toggle
-    try {
-      const liveEl = $('xray-log-live');
-      if (liveEl) liveEl.checked = false;
-    } catch (e) {}
+    // IMPORTANT: do NOT force-toggle the "Live" checkbox here.
+    // The checkbox is treated as a user preference and is persisted via localStorage.
     try { updateXrayLogStats(); } catch (e) {}
     if (_timer) {
       try { clearInterval(_timer); } catch (e) {}
@@ -632,7 +921,9 @@
 
   function xrayLogChangeFile() {
     const selectEl = $('xray-log-file');
-    if (selectEl) _currentFile = selectEl.value || 'error';
+    if (selectEl) _currentFile = selectEl.value || 'access';
+    updateLoglevelUiForCurrentFile();
+    try { scheduleSaveUiState(); } catch (e) {}
 
     // clear buffer + redraw
     _lastLines = [];
@@ -663,9 +954,13 @@
   async function xrayLogsEnable() {
     const statusEl = $('xray-log-status');
     try {
+      // Pick the desired loglevel from the selector (UI preference).
       const lvlSel = $('xray-log-level');
       const selected = String((lvlSel && lvlSel.value) || 'warning').toLowerCase();
       const loglevel = ALLOWED_LOGLEVELS.includes(selected) ? selected : 'warning';
+
+      // Ensure we use the currently selected file.
+      try { syncCurrentFileFromUi(); } catch (e) {}
 
       const res = await fetch('/api/xray-logs/enable', {
         method: 'POST',
@@ -679,12 +974,42 @@
         statusEl.textContent =
           'Логи включены (loglevel=' + (data.loglevel || 'warning') + '). Xray перезапущен.';
       }
+
+      // Persist current selectors (file/loglevel/...) right away.
+      try { scheduleSaveUiState(); } catch (e) {}
+
       try { await refreshXrayLogStatus(); } catch (e) {}
       setXrayHeaderBadgeState('on', data.loglevel || 'warning');
-      // Resume stream only if the user enabled Live mode
+
+      // After enabling, the backend may switch from *.saved to live files.
+      // Force a fresh snapshot / reconnect so the stream starts immediately
+      // (without requiring manual toggling between access/error).
+      _cursor = '';
+      _pendingCount = 0;
+
       const liveEl = $('xray-log-live');
-      const shouldStart = !liveEl || !!liveEl.checked;
-      if (isLogsViewVisible() && shouldStart) startXrayLogAuto();
+      const wantStream = !!(liveEl && liveEl.checked);
+      const visible = isLogsViewVisible();
+
+      if (visible) {
+        // Always show current file content once.
+        fetchXrayLogsOnce('enable', { resetCursor: true, forceRender: true });
+      }
+
+      if (visible && wantStream) {
+        // Force-restart any active transport (WS/HTTP) so startXrayLogAuto won't early-return.
+        if (_timer) {
+          try { clearInterval(_timer); } catch (e) {}
+          _timer = null;
+        }
+        if (_ws) {
+          _wsClosingManually = true;
+          try { _ws.close(); } catch (e) {}
+          _ws = null;
+        }
+        startXrayLogAuto();
+      }
+
       try { updateXrayLogStats(); } catch (e) {}
     } catch (e) {
       console.error(e);
@@ -713,7 +1038,7 @@
   async function xrayLogsClear() {
     const statusEl = $('xray-log-status');
     try {
-      const file = _currentFile || 'error';
+      const file = _currentFile || 'access';
       const res = await fetch('/api/xray-logs/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -814,6 +1139,20 @@ function handleLogTokenClick(linkEl, e) {
     const token = String((b64 ? b64Decode(b64) : (linkEl.textContent || '')) || '').trim();
     if (!token) return;
 
+    const kindLabel = (() => {
+      switch (kind) {
+        case 'ip': return 'IP';
+        case 'domain': return 'Домен';
+        case 'email': return 'Email';
+        case 'uuid': return 'UUID';
+        case 'inbound': return 'Inbound tag';
+        case 'outbound': return 'Outbound tag';
+        case 'sni': return 'SNI';
+        case 'path': return 'Path';
+        default: return 'Токен';
+      }
+    })();
+
     // Shift+Click -> add token to filter (AND semantics: space-separated terms)
     if (e && e.shiftKey) {
       const filterEl = $('xray-log-filter');
@@ -823,14 +1162,14 @@ function handleLogTokenClick(linkEl, e) {
         if (!parts.includes(token)) parts.push(token);
         filterEl.value = parts.join(' ');
         try { applyXrayLogFilterToOutput(); } catch (e2) {}
-        toast((kind === 'ip' ? 'IP' : 'Домен') + ' добавлен в фильтр', false);
+        toast(kindLabel + ' добавлен в фильтр', false);
         try { filterEl.focus(); } catch (e3) {}
         return;
       }
       // If filter UI is missing — fallback to copy
     }
 
-    copyToClipboard(token, (kind === 'ip' ? 'IP' : 'Домен') + ' скопирован');
+    copyToClipboard(token, kindLabel + ' скопирован');
   } catch (err) {
     // Safe fallback
     try { copyToClipboard(String(linkEl && linkEl.textContent || '').trim(), 'Скопировано'); } catch (e2) {}
@@ -852,7 +1191,7 @@ function xrayLogsCopySelection() {
 }
 
 async function xrayLogsDownload() {
-  const file = _currentFile || 'error';
+  const file = _currentFile || 'access';
   try {
     const res = await fetch('/api/xray-logs/download?file=' + encodeURIComponent(file));
     if (!res.ok) throw new Error('http ' + res.status);
@@ -984,7 +1323,7 @@ function openXrayContextModal(idx, radius) {
   }
 
   if (title) {
-    const file = _currentFile || 'error';
+    const file = _currentFile || 'access';
     title.textContent = `Xray ${file}.log — context (±${r})`;
   }
 
@@ -1036,6 +1375,8 @@ function copyXrayContextModal() {
   }
 
   function bindControlsUi() {
+  const fileSel = $('xray-log-file');
+  const lvlSel = $('xray-log-level');
   const liveEl = $('xray-log-live');
   const intervalEl = $('xray-log-interval');
   const followEl = $('xray-log-follow');
@@ -1052,6 +1393,40 @@ function copyXrayContextModal() {
       if (liveEl.checked) startXrayLogAuto();
       else stopXrayLogAuto();
       try { updateXrayLogStats(); } catch (e) {}
+      try { scheduleSaveUiState(); } catch (e) {}
+    });
+  }
+
+  if (fileSel) {
+    fileSel.addEventListener('change', () => {
+      try { scheduleSaveUiState(); } catch (e) {}
+    });
+  }  if (lvlSel) {
+    lvlSel.addEventListener('change', () => {
+      try { scheduleSaveUiState(); } catch (e) {}
+      // Re-apply view filters immediately when the threshold changes.
+      try { applyXrayLogFilterToOutput(); } catch (e) {}
+
+      // If Xray logging is already enabled, changing loglevel should apply immediately
+      // (restart only Xray core) so the user doesn't have to press ▶ manually.
+      try {
+        const isErrorFile = _isErrorFileName(_currentFile);
+        if (!isErrorFile) return;
+        const desired = String(lvlSel.value || '').trim().toLowerCase();
+        const active = String(_activeLogLevel || 'none').trim().toLowerCase();
+        if (ALLOWED_LOGLEVELS.includes(desired) && active && active !== 'none' && desired !== active) {
+          if (_applyLevelTimer) {
+            try { clearTimeout(_applyLevelTimer); } catch (e) {}
+            _applyLevelTimer = null;
+          }
+          const statusEl = $('xray-log-status');
+          if (statusEl) statusEl.textContent = 'Применяю loglevel=' + desired + '...';
+          _applyLevelTimer = setTimeout(() => {
+            _applyLevelTimer = null;
+            xrayLogsEnable();
+          }, 250);
+        }
+      } catch (e) {}
     });
   }
 
@@ -1070,6 +1445,7 @@ function copyXrayContextModal() {
       // If we're in HTTP polling mode and streaming is on — restart timer with the new interval.
       try { restartXrayHttpPollingTimer(); } catch (e) {}
       try { updateXrayLogStats(); } catch (e) {}
+      try { scheduleSaveUiState(); } catch (e) {}
     });
   }
 
@@ -1084,6 +1460,7 @@ function copyXrayContextModal() {
           if (out) out.scrollTop = out.scrollHeight;
         } catch (e) {}
       }
+      try { scheduleSaveUiState(); } catch (e) {}
     });
   }
 
@@ -1129,6 +1506,7 @@ function copyXrayContextModal() {
 
         try { updateXrayLogStats(); } catch (e5) {}
         closeXrayMoreMenu();
+        try { scheduleSaveUiState(); } catch (e6) {}
       } catch (e) {}
     });
   }
@@ -1177,7 +1555,18 @@ function copyXrayContextModal() {
 
       try { updateXrayLogStats(); } catch (e3) {}
       closeXrayMoreMenu();
+      try { scheduleSaveUiState(); } catch (e4) {}
     });
+  }
+
+  // Persist log window height (user-resizable via CSS resize:vertical)
+  if (outputEl && !_resizeObserver && typeof ResizeObserver !== 'undefined') {
+    try {
+      _resizeObserver = new ResizeObserver(() => {
+        try { scheduleSaveUiState(); } catch (e) {}
+      });
+      _resizeObserver.observe(outputEl);
+    } catch (e) {}
   }
 
   if (outputEl) {
@@ -1231,7 +1620,10 @@ function copyXrayContextModal() {
     const clearBtn = $('xray-log-filter-clear');
 
     if (filterEl) {
-      filterEl.addEventListener('input', () => applyXrayLogFilterToOutput());
+      filterEl.addEventListener('input', () => {
+        applyXrayLogFilterToOutput();
+        try { scheduleSaveUiState(); } catch (e) {}
+      });
       filterEl.addEventListener(
         'keydown',
         (e) => {
@@ -1248,6 +1640,7 @@ function copyXrayContextModal() {
       clearBtn.addEventListener('click', () => {
         filterEl.value = '';
         applyXrayLogFilterToOutput();
+        try { scheduleSaveUiState(); } catch (e) {}
         try { filterEl.focus(); } catch (e) {}
       });
     }
@@ -1261,9 +1654,12 @@ function copyXrayContextModal() {
     _streaming = false;
     try { setXrayLogLampState('off'); } catch (e) {}
 
-    // sync current file from UI
-    const selectEl = $('xray-log-file');
-    if (selectEl) _currentFile = selectEl.value || _currentFile;
+    // Restore UI preferences for this page (file/live/follow/interval/lines/filter/height)
+    // BEFORE wiring listeners, so we don't accidentally trigger actions.
+    try { applyStoredUiState(); } catch (e) {}
+
+    // Sync current file from UI (after restore)
+    try { syncCurrentFileFromUi(); } catch (e) {}
 
     try { bindControlsUi(); } catch (e) {}
     try { bindFilterUi(); } catch (e) {}
