@@ -11,6 +11,15 @@
   --sem-error: #f87171;
   --sem-debug: #a1a1aa;
 
+  /* Xray logs highlight (token colors) — dark defaults */
+  --log-ts: #94a3b8;
+  --log-ip: #fde68a;
+  --log-domain: #6ee7b7;
+  --log-route-tproxy-vless: #22c55e;
+  --log-route-redirect-vless: #38bdf8;
+  --log-route-redirect-direct: #a855f7;
+  --log-route-reject: #f97373;
+
 }
 
 /* Semantic colors: light theme defaults */
@@ -20,6 +29,15 @@ html[data-theme="light"] {
   --sem-warning: #b45309;
   --sem-error: #dc2626;
   --sem-debug: #6b7280;
+
+  /* Xray logs highlight (token colors) — light defaults */
+  --log-ts: #64748b;
+  --log-ip: #a16207;
+  --log-domain: #047857;
+  --log-route-tproxy-vless: #16a34a;
+  --log-route-redirect-vless: #0284c7;
+  --log-route-redirect-direct: #7c3aed;
+  --log-route-reject: #dc2626;
 }
 
 
@@ -1439,6 +1457,16 @@ html[data-theme="light"] .xkeen-cm-help-section {
   resize: both;
   overflow: hidden;
   position: relative;
+
+  /* Allow the underlying page to scroll while the terminal is open,
+     but prevent "scroll chaining" from the terminal buffer to the page. */
+  overscroll-behavior: contain;
+}
+
+/* Prevent wheel/touch scroll from leaking to the page when the xterm viewport
+   hits the top/bottom of its scrollback buffer (especially on trackpads). */
+.terminal-window .xterm-viewport {
+  overscroll-behavior: contain;
 }
 
 .terminal-window::after {
@@ -2425,11 +2453,20 @@ button.backup-icon-btn.backup-delete-btn {
   align-items: center;
   justify-content: center;
   z-index: 60;
+
+  /*
+    Safety net for modals that end up larger than the viewport (or if a modal
+    is positioned incorrectly by custom scripts/styles).
+    The overlay becomes scrollable so the header/close button stays reachable.
+  */
+  padding: 24px;
+  box-sizing: border-box;
+  overflow: auto;
 }
 
 /* Confirm dialog must stay above other modals (e.g. file manager operations modal). */
 #confirm-modal {
-  z-index: 70;
+  z-index: 130;
 }
 
 .modal.hidden {
@@ -2454,6 +2491,16 @@ button.backup-icon-btn.backup-delete-btn {
 .modal.modal-drawer {
   justify-content: flex-end;
   align-items: stretch;
+
+  /* Drawer should stick to the edge without extra padding/scroll on overlay. */
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Ensure regular modals are centered even if some page styles override flex alignment. */
+.modal:not(.modal-drawer) {
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .modal.modal-drawer .modal-content {
@@ -2588,6 +2635,10 @@ button.backup-icon-btn.backup-delete-btn {
   margin-bottom: 10px;
   padding-bottom: 6px;
   border-bottom: 1px solid #1f2937;
+
+  /* Drag handle for draggable modals (buttons override cursor as needed). */
+  cursor: move;
+  user-select: none;
 }
 
 .modal-title {
@@ -3831,25 +3882,25 @@ button.icon-btn {
 }
 
 .log-route-tproxy-vless {
-  color: #22c55e; /* зелёный: tproxy -> vless-reality */
+  color: var(--log-route-tproxy-vless, #22c55e); /* tproxy -> vless-reality */
 }
 
 .log-route-redirect-vless {
-  color: #38bdf8; /* голубой: redirect -> vless-reality */
+  color: var(--log-route-redirect-vless, #38bdf8); /* redirect -> vless-reality */
 }
 
 .log-route-redirect-direct {
-  color: #a855f7; /* фиолетовый: redirect -> direct */
+  color: var(--log-route-redirect-direct, #a855f7); /* redirect -> direct */
 }
 
 .log-route-reject {
-  color: #f97373; /* красный: reject */
+  color: var(--log-route-reject, #f97373); /* reject */
   font-weight: 600;
 }
 
 
 .log-ts {
-  color: #94a3b8; /* timestamp */
+  color: var(--log-ts, #94a3b8); /* timestamp */
 }
 
 .log-link {
@@ -3876,11 +3927,54 @@ html[data-theme="light"] .log-link:hover {
 
 
 .log-ip {
-  color: #fde68a; /* тёплый жёлтый для IP */
+  color: var(--log-ip, #fde68a); /* IP */
 }
 
 .log-domain {
-  color: #6ee7b7; /* мятный для доменов */
+  color: var(--log-domain, #6ee7b7); /* domain */
+}
+
+.log-proto {
+  color: var(--log-proto, #7dd3fc); /* protocol/transport */
+  font-weight: 500;
+}
+
+.log-port {
+  color: var(--log-port, #fb923c); /* port */
+  font-weight: 500;
+}
+
+.log-uuid {
+  color: var(--log-uuid, #f472b6); /* uuid/id */
+}
+
+.log-email {
+  color: var(--log-email, #22d3ee); /* email */
+}
+
+.log-inbound {
+  color: var(--log-inbound, #818cf8); /* inbound tag */
+}
+
+.log-outbound {
+  color: var(--log-outbound, #f0abfc); /* outbound tag */
+}
+
+.log-method {
+  color: var(--log-method, #fbbf24); /* HTTP method */
+  font-weight: 600;
+}
+
+.log-path {
+  color: var(--log-path, #bef264); /* path/uri/url */
+}
+
+.log-sni {
+  color: var(--log-sni, #5eead4); /* sni/serverName */
+}
+
+.log-alpn {
+  color: var(--log-alpn, #93c5fd); /* alpn */
 }
 
 /* === Темы: тёмная / светлая === */
