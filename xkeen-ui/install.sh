@@ -32,9 +32,58 @@ BACKUP_DIR="/opt/etc/xray/configs/backups"
 DEFAULT_PORT=8088
 ALT_PORT=8091
 
+# Максимальное количество попыток выполнения opkg. Если переменная не задана извне — используется значение по умолчанию (3)
+: "${OPKG_MAX_RETRIES:=3}"
+
+# Задержка в секундах между повторными попытками opkg. Используется только при неудачной попытке, по умолчанию 5 секунд
+: "${OPKG_RETRY_DELAY:=5}"
+
 echo "========================================"
 echo "  Xkeen Web UI — УСТАНОВКА"
 echo "========================================"
+
+# --- OPKG ---
+opkg_retry() {
+  OPKG_ACTION="$1"   # Действие opkg: install / update / remove / upgrade
+  shift              # Убираем действие из аргументов
+
+  if [ -z "${OPKG_BIN:-}" ]; then
+    echo "[!] OPKG_BIN не задан для opkg_retry." >&2
+    return 1
+  fi
+
+  if [ -z "$OPKG_ACTION" ]; then
+    echo "[!] Не указано действие opkg." >&2
+    return 2
+  fi
+
+  local TRY=1     # Номер текущей попытки
+  local RC=0      # Код возврата последнего вызова opkg
+  local OUTPUT    # Захваченный stdout+stderr opkg для логирования и проксирования
+
+
+  while [ "$TRY" -le "$OPKG_MAX_RETRIES" ]; do
+    OUTPUT="$("$OPKG_BIN" "$OPKG_ACTION" "$@" 2>&1)"
+    RC=$?
+
+    if [ "$RC" -eq 0 ]; then
+      printf '%s\n' "$OUTPUT"
+      return 0
+    fi
+
+    # Если есть текст ошибки opkg - выводим его
+    [ -n "$OUTPUT" ] && printf '%s\n' "$OUTPUT" >&2
+
+    if [ "$TRY" -lt "$OPKG_MAX_RETRIES" ]; then
+      echo "[!] Повтор через ${OPKG_RETRY_DELAY}с (rc=$RC, попытка $TRY/$OPKG_MAX_RETRIES)..." >&2
+      sleep "$OPKG_RETRY_DELAY" 2>/dev/null || true
+    fi
+
+    TRY=$((TRY + 1))
+  done
+
+  return "$RC"
+}
 
 # --- Python3 ---
 
@@ -52,12 +101,12 @@ if [ ! -x "$PYTHON_BIN" ]; then
     exit 1
   fi
 
-  if ! "$OPKG_BIN" update; then
+  if ! opkg_retry update; then
     echo "[!] Не удалось выполнить 'opkg update'."
     exit 1
   fi
 
-  if ! "$OPKG_BIN" install python3; then
+  if ! opkg_retry install python3; then
     echo "[!] Установка python3 через opkg завершилась с ошибкой."
     exit 1
   fi
@@ -114,12 +163,12 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
     exit 1
   fi
 
-  if ! "$OPKG_BIN" update; then
+  if ! opkg_retry update; then
     echo "[!] Не удалось выполнить 'opkg update' при установке зависимостей."
     exit 1
   fi
 
-  if ! "$OPKG_BIN" install python3 python3-pip; then
+  if ! opkg_retry install python3 python3-pip; then
     echo "[!] Установка python3 и python3-pip через opkg завершилась с ошибкой."
     exit 1
   fi
@@ -187,12 +236,12 @@ if ! command -v lftp >/dev/null 2>&1; then
     exit 1
   fi
 
-  if ! "$OPKG_BIN" update; then
+  if ! opkg_retry update; then
     echo "[!] Не удалось выполнить 'opkg update' при установке lftp."
     exit 1
   fi
 
-  if ! "$OPKG_BIN" install lftp; then
+  if ! opkg_retry install lftp; then
     echo "[!] Установка lftp через opkg завершилась с ошибкой."
     exit 1
   fi
