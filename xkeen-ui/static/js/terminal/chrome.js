@@ -121,6 +121,27 @@
     win.style.top = Math.round(p.y) + 'px';
   }
 
+  // Extra safety: some browsers/layouts can yield transient geometry during open
+  // (e.g. when max-height clamps after we set explicit height). Re-clamp using
+  // the *actual* rendered rect, ensuring the header stays reachable.
+  function ensureInViewportNow() {
+    if (isFullscreen) return;
+    const { win } = getEls();
+    if (!win) return;
+    try {
+      const r = win.getBoundingClientRect();
+      const w = r.width || 520;
+      const h = r.height || 360;
+      const p = clampPos(r.left, r.top, w, h);
+      // Only write styles if we actually need to move.
+      if (Math.abs(p.x - r.left) > 1 || Math.abs(p.y - r.top) > 1) {
+        win.style.position = 'fixed';
+        win.style.left = Math.round(p.x) + 'px';
+        win.style.top = Math.round(p.y) + 'px';
+      }
+    } catch (e) {}
+  }
+
   function saveGeomNow() {
     if (isFullscreen) return;
     const { win } = getEls();
@@ -351,13 +372,26 @@
         applyGeom({ w: rect.width, h: rect.height, x, y });
         scheduleSave();
       }
+
+      // Clamp once more after layout settles (fixes rare "window jumped off-screen" cases).
+      try { ensureInViewportNow(); } catch (e) {}
+      try { setTimeout(() => { try { ensureInViewportNow(); } catch (e2) {} }, 60); } catch (e3) {}
     });
+  }
+
+  // Public helper: clamp the terminal window into the current viewport.
+  // Some call sites open the terminal indirectly (e.g. command chips) and in
+  // rare cases late layout changes can still end up slightly off-screen.
+  function ensureInViewport() {
+    try { ensureInViewportNow(); } catch (e) {}
+    try { setTimeout(() => { try { ensureInViewportNow(); } catch (e2) {} }, 0); } catch (e3) {}
   }
 
   window.XKeen.terminal.chrome = {
     init: () => {},
     onOpen,
     onClose: unbindWhileOpen,
+    ensureInViewport,
     minimize,
     setFullscreen,
     toggleFullscreen,
