@@ -73,6 +73,21 @@
     } catch (e) {}
   }
 
+  // Best-effort fix for rare cases when the terminal window opens slightly
+  // outside of the viewport (e.g. header ends up above the top edge).
+  function clampTerminalViewportSoon() {
+    const run = () => {
+      try {
+        const ch = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.chrome;
+        if (ch && typeof ch.ensureInViewport === 'function') return ch.ensureInViewport();
+        if (ch && typeof ch.onOpen === 'function') return ch.onOpen();
+      } catch (e) {}
+    };
+    try { setTimeout(run, 0); } catch (e0) {}
+    try { setTimeout(run, 120); } catch (e1) {}
+    try { setTimeout(run, 360); } catch (e2) {}
+  }
+
 
   function waitForPtyConnected(timeoutMs = 6000, intervalMs = 150) {
     const deadline = Date.now() + Math.max(500, timeoutMs);
@@ -98,6 +113,9 @@
       }
     } catch (e) {}
 
+    // Safety: ensure the window is visible even if it opened with a stale/buggy geometry.
+    clampTerminalViewportSoon();
+
     const ok = await waitForPtyConnected();
     if (!ok) {
       toast('PTY не подключён (WebSocket недоступен или не успел подключиться)', 'info');
@@ -108,6 +126,7 @@
       // Use \r to match Enter for PTY.
       sendPtyRaw(String(cmd || '') + '\r');
       focusTerminal();
+      clampTerminalViewportSoon();
       return true;
     } catch (e) {
       toast('Не удалось отправить команду в PTY', 'error');
@@ -138,16 +157,21 @@
           try {
             if (XKeen.terminal && XKeen.terminal.api && typeof XKeen.terminal.api.open === 'function') {
               XKeen.terminal.api.open({ cmd: label, mode: 'xkeen' });
+              clampTerminalViewportSoon();
               return;
             }
             XKeen.terminal.open(null, { cmd: label, mode: 'xkeen' });
+            clampTerminalViewportSoon();
             return;
           } catch (e) {}
         }
 
         // Very old fallback: global openTerminal.
         try {
-          if (typeof window.openTerminal === 'function') window.openTerminal(label, 'xkeen');
+          if (typeof window.openTerminal === 'function') {
+            window.openTerminal(label, 'xkeen');
+            clampTerminalViewportSoon();
+          }
         } catch (e) {}
       });
     });
