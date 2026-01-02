@@ -883,6 +883,24 @@ _DEFAULT_THEME_CONFIG: Dict[str, Any] = {
         "sem_warning": "#fbbf24",
         "sem_error": "#f87171",
         "sem_debug": "#a1a1aa",
+        # Xray logs highlight (token colors)
+        "log_ts": "#94a3b8",
+        "log_ip": "#fde68a",
+        "log_domain": "#6ee7b7",
+        "log_proto": "#7dd3fc",
+        "log_port": "#fb923c",
+        "log_uuid": "#f472b6",
+        "log_email": "#22d3ee",
+        "log_inbound": "#818cf8",
+        "log_outbound": "#f0abfc",
+        "log_method": "#fbbf24",
+        "log_path": "#bef264",
+        "log_sni": "#5eead4",
+        "log_alpn": "#93c5fd",
+        "log_route_tproxy_vless": "#22c55e",
+        "log_route_redirect_vless": "#38bdf8",
+        "log_route_redirect_direct": "#a855f7",
+        "log_route_reject": "#f97373",
         # Editor/action buttons (Save/Backup/Restore/etc.)
         "editor_btn_bg": "#020617",
         "editor_btn_text": "#e5e7eb",
@@ -940,6 +958,24 @@ _DEFAULT_THEME_CONFIG: Dict[str, Any] = {
         "sem_warning": "#b45309",
         "sem_error": "#dc2626",
         "sem_debug": "#6b7280",
+        # Xray logs highlight (token colors)
+        "log_ts": "#64748b",
+        "log_ip": "#a16207",
+        "log_domain": "#047857",
+        "log_proto": "#0369a1",
+        "log_port": "#c2410c",
+        "log_uuid": "#be185d",
+        "log_email": "#0e7490",
+        "log_inbound": "#4338ca",
+        "log_outbound": "#a21caf",
+        "log_method": "#92400e",
+        "log_path": "#3f6212",
+        "log_sni": "#0f766e",
+        "log_alpn": "#1d4ed8",
+        "log_route_tproxy_vless": "#16a34a",
+        "log_route_redirect_vless": "#0284c7",
+        "log_route_redirect_direct": "#7c3aed",
+        "log_route_reject": "#dc2626",
         # Editor/action buttons (Save/Backup/Restore/etc.)
         "editor_btn_bg": "#ffffff",
         "editor_btn_text": "#111827",
@@ -1078,6 +1114,24 @@ def _sanitize_theme_config(cfg_in: Any) -> Dict[str, Any]:
         dst["sem_warning"] = _sanitize_color(src.get("sem_warning"), dst["sem_warning"])
         dst["sem_error"] = _sanitize_color(src.get("sem_error"), dst["sem_error"])
         dst["sem_debug"] = _sanitize_color(src.get("sem_debug"), dst["sem_debug"])
+        # Xray logs highlight (token colors)
+        dst["log_ts"] = _sanitize_color(src.get("log_ts"), dst["log_ts"])
+        dst["log_ip"] = _sanitize_color(src.get("log_ip"), dst["log_ip"])
+        dst["log_domain"] = _sanitize_color(src.get("log_domain"), dst["log_domain"])
+        dst["log_proto"] = _sanitize_color(src.get("log_proto"), dst["log_proto"])
+        dst["log_port"] = _sanitize_color(src.get("log_port"), dst["log_port"])
+        dst["log_uuid"] = _sanitize_color(src.get("log_uuid"), dst["log_uuid"])
+        dst["log_email"] = _sanitize_color(src.get("log_email"), dst["log_email"])
+        dst["log_inbound"] = _sanitize_color(src.get("log_inbound"), dst["log_inbound"])
+        dst["log_outbound"] = _sanitize_color(src.get("log_outbound"), dst["log_outbound"])
+        dst["log_method"] = _sanitize_color(src.get("log_method"), dst["log_method"])
+        dst["log_path"] = _sanitize_color(src.get("log_path"), dst["log_path"])
+        dst["log_sni"] = _sanitize_color(src.get("log_sni"), dst["log_sni"])
+        dst["log_alpn"] = _sanitize_color(src.get("log_alpn"), dst["log_alpn"])
+        dst["log_route_tproxy_vless"] = _sanitize_color(src.get("log_route_tproxy_vless"), dst["log_route_tproxy_vless"])
+        dst["log_route_redirect_vless"] = _sanitize_color(src.get("log_route_redirect_vless"), dst["log_route_redirect_vless"])
+        dst["log_route_redirect_direct"] = _sanitize_color(src.get("log_route_redirect_direct"), dst["log_route_redirect_direct"])
+        dst["log_route_reject"] = _sanitize_color(src.get("log_route_reject"), dst["log_route_reject"])
         dst["editor_btn_bg"] = _sanitize_color(src.get("editor_btn_bg"), dst["editor_btn_bg"])
         dst["editor_btn_text"] = _sanitize_color(src.get("editor_btn_text"), dst["editor_btn_text"])
         dst["editor_btn_border"] = _sanitize_color(src.get("editor_btn_border"), dst["editor_btn_border"])
@@ -1168,6 +1222,23 @@ def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
     css.append(f"  --sem-warning: {dark.get('sem_warning')};")
     css.append(f"  --sem-error: {dark.get('sem_error')};")
     css.append(f"  --sem-debug: {dark.get('sem_debug')};")
+    css.append(f"  --log-ts: {dark.get('log_ts')};")
+    css.append(f"  --log-ip: {dark.get('log_ip')};")
+    css.append(f"  --log-domain: {dark.get('log_domain')};")
+    css.append(f"  --log-proto: {dark.get('log_proto')};")
+    css.append(f"  --log-port: {dark.get('log_port')};")
+    css.append(f"  --log-uuid: {dark.get('log_uuid')};")
+    css.append(f"  --log-email: {dark.get('log_email')};")
+    css.append(f"  --log-inbound: {dark.get('log_inbound')};")
+    css.append(f"  --log-outbound: {dark.get('log_outbound')};")
+    css.append(f"  --log-method: {dark.get('log_method')};")
+    css.append(f"  --log-path: {dark.get('log_path')};")
+    css.append(f"  --log-sni: {dark.get('log_sni')};")
+    css.append(f"  --log-alpn: {dark.get('log_alpn')};")
+    css.append(f"  --log-route-tproxy-vless: {dark.get('log_route_tproxy_vless')};")
+    css.append(f"  --log-route-redirect-vless: {dark.get('log_route_redirect_vless')};")
+    css.append(f"  --log-route-redirect-direct: {dark.get('log_route_redirect_direct')};")
+    css.append(f"  --log-route-reject: {dark.get('log_route_reject')};")
     css.append(f"  --editor-btn-bg: {dark.get('editor_btn_bg')};")
     css.append(f"  --editor-btn-text: {dark.get('editor_btn_text')};")
     css.append(f"  --editor-btn-border: {dark.get('editor_btn_border')};")
@@ -1225,6 +1296,23 @@ def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
     css.append(f"  --sem-warning: {dark.get('sem_warning')};")
     css.append(f"  --sem-error: {dark.get('sem_error')};")
     css.append(f"  --sem-debug: {dark.get('sem_debug')};")
+    css.append(f"  --log-ts: {dark.get('log_ts')};")
+    css.append(f"  --log-ip: {dark.get('log_ip')};")
+    css.append(f"  --log-domain: {dark.get('log_domain')};")
+    css.append(f"  --log-proto: {dark.get('log_proto')};")
+    css.append(f"  --log-port: {dark.get('log_port')};")
+    css.append(f"  --log-uuid: {dark.get('log_uuid')};")
+    css.append(f"  --log-email: {dark.get('log_email')};")
+    css.append(f"  --log-inbound: {dark.get('log_inbound')};")
+    css.append(f"  --log-outbound: {dark.get('log_outbound')};")
+    css.append(f"  --log-method: {dark.get('log_method')};")
+    css.append(f"  --log-path: {dark.get('log_path')};")
+    css.append(f"  --log-sni: {dark.get('log_sni')};")
+    css.append(f"  --log-alpn: {dark.get('log_alpn')};")
+    css.append(f"  --log-route-tproxy-vless: {dark.get('log_route_tproxy_vless')};")
+    css.append(f"  --log-route-redirect-vless: {dark.get('log_route_redirect_vless')};")
+    css.append(f"  --log-route-redirect-direct: {dark.get('log_route_redirect_direct')};")
+    css.append(f"  --log-route-reject: {dark.get('log_route_reject')};")
     css.append(f"  --editor-btn-bg: {dark.get('editor_btn_bg')};")
     css.append(f"  --editor-btn-text: {dark.get('editor_btn_text')};")
     css.append(f"  --editor-btn-border: {dark.get('editor_btn_border')};")
@@ -1281,6 +1369,23 @@ def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
     css.append(f"  --sem-warning: {light.get('sem_warning')};")
     css.append(f"  --sem-error: {light.get('sem_error')};")
     css.append(f"  --sem-debug: {light.get('sem_debug')};")
+    css.append(f"  --log-ts: {light.get('log_ts')};")
+    css.append(f"  --log-ip: {light.get('log_ip')};")
+    css.append(f"  --log-domain: {light.get('log_domain')};")
+    css.append(f"  --log-proto: {light.get('log_proto')};")
+    css.append(f"  --log-port: {light.get('log_port')};")
+    css.append(f"  --log-uuid: {light.get('log_uuid')};")
+    css.append(f"  --log-email: {light.get('log_email')};")
+    css.append(f"  --log-inbound: {light.get('log_inbound')};")
+    css.append(f"  --log-outbound: {light.get('log_outbound')};")
+    css.append(f"  --log-method: {light.get('log_method')};")
+    css.append(f"  --log-path: {light.get('log_path')};")
+    css.append(f"  --log-sni: {light.get('log_sni')};")
+    css.append(f"  --log-alpn: {light.get('log_alpn')};")
+    css.append(f"  --log-route-tproxy-vless: {light.get('log_route_tproxy_vless')};")
+    css.append(f"  --log-route-redirect-vless: {light.get('log_route_redirect_vless')};")
+    css.append(f"  --log-route-redirect-direct: {light.get('log_route_redirect_direct')};")
+    css.append(f"  --log-route-reject: {light.get('log_route_reject')};")
     css.append(f"  --editor-btn-bg: {light.get('editor_btn_bg')};")
     css.append(f"  --editor-btn-text: {light.get('editor_btn_text')};")
     css.append(f"  --editor-btn-border: {light.get('editor_btn_border')};")
