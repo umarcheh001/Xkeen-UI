@@ -508,6 +508,21 @@
       // Restore terminal window geometry (chrome)
       try { chromeOnOpen(); } catch (e11) {}
 
+      // Extra safety: after late layout changes (xterm attach, PTY connect)
+      // the window can end up slightly off-screen in some environments.
+      // Re-clamp it a couple of times.
+      try {
+        const clamp = () => {
+          try {
+            const ch = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.chrome : null;
+            if (ch && typeof ch.ensureInViewport === 'function') return ch.ensureInViewport();
+            if (ch && typeof ch.onOpen === 'function') return ch.onOpen();
+          } catch (e) {}
+        };
+        setTimeout(clamp, 80);
+        setTimeout(clamp, 240);
+      } catch (e11b) {}
+
       // Registry: onOpen + attachTerm (when present)
       try {
         const reg = getRegistry(c);
