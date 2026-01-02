@@ -617,10 +617,26 @@ chmod +x "$INIT_SCRIPT"
 echo "[*] Запускаю сервис..."
 "$INIT_SCRIPT" restart || true
 
+
+ROUTER_IP=""
+
+# Пытаемся получить IPv4 адрес LAN (br0) — основной интерфейс Keenetic
+if command -v ip >/dev/null 2>&1; then
+  ROUTER_IP="$(ip -4 addr show br0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n 1)"
+fi
+
+# Fallback: берём первый не-loopback IPv4
+if [ -z "$ROUTER_IP" ] && command -v ip >/dev/null 2>&1; then
+  ROUTER_IP="$(ip -4 addr show 2>/dev/null | awk '/inet / && $2 !~ /^127\./{print $2}' | cut -d/ -f1 | head -n 1)"
+fi
+
+# Последний fallback
+[ -z "$ROUTER_IP" ] && ROUTER_IP="<IP_роутера>"
+
 echo "========================================"
 echo "  ✔ Xkeen Web UI установлен"
 echo "========================================"
-PANEL_URL="http://<IP_роутера>:${PANEL_PORT}/"
+PANEL_URL="http://${ROUTER_IP}:${PANEL_PORT}/"
 printf '\033[1;32mОткрой в браузере:  %s\033[0m\n' "$PANEL_URL"
 echo "Текущий порт панели: $PANEL_PORT"
 echo "Файлы UI:           $UI_DIR"
