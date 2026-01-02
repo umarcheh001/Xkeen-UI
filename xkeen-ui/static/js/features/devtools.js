@@ -2951,6 +2951,24 @@ function _wireLogLineActions() {
       sem_warning: '#fbbf24',
       sem_error: '#f87171',
       sem_debug: '#a1a1aa',
+      // Xray logs highlight (token colors)
+      log_ts: '#94a3b8',
+      log_ip: '#fde68a',
+      log_domain: '#6ee7b7',
+      log_proto: '#7dd3fc',
+      log_port: '#fb923c',
+      log_uuid: '#f472b6',
+      log_email: '#22d3ee',
+      log_inbound: '#818cf8',
+      log_outbound: '#f0abfc',
+      log_method: '#fbbf24',
+      log_path: '#bef264',
+      log_sni: '#5eead4',
+      log_alpn: '#93c5fd',
+      log_route_tproxy_vless: '#22c55e',
+      log_route_redirect_vless: '#38bdf8',
+      log_route_redirect_direct: '#a855f7',
+      log_route_reject: '#f97373',
       // Editor/action buttons (Save/Backup/Restore/etc.)
       editor_btn_bg: '#020617',
       editor_btn_text: '#e5e7eb',
@@ -3005,6 +3023,24 @@ function _wireLogLineActions() {
       sem_warning: '#b45309',
       sem_error: '#dc2626',
       sem_debug: '#6b7280',
+      // Xray logs highlight (token colors)
+      log_ts: '#64748b',
+      log_ip: '#a16207',
+      log_domain: '#047857',
+      log_proto: '#0369a1',
+      log_port: '#c2410c',
+      log_uuid: '#be185d',
+      log_email: '#0e7490',
+      log_inbound: '#4338ca',
+      log_outbound: '#a21caf',
+      log_method: '#92400e',
+      log_path: '#3f6212',
+      log_sni: '#0f766e',
+      log_alpn: '#1d4ed8',
+      log_route_tproxy_vless: '#16a34a',
+      log_route_redirect_vless: '#0284c7',
+      log_route_redirect_direct: '#7c3aed',
+      log_route_reject: '#dc2626',
       // Editor/action buttons (Save/Backup/Restore/etc.)
       editor_btn_bg: '#ffffff',
       editor_btn_text: '#111827',
@@ -3066,6 +3102,23 @@ function _wireLogLineActions() {
     { key: 'sem_warning', id: 'sem-warning' },
     { key: 'sem_error', id: 'sem-error' },
     { key: 'sem_debug', id: 'sem-debug' },
+    { key: 'log_ts', id: 'log-ts' },
+    { key: 'log_ip', id: 'log-ip' },
+    { key: 'log_domain', id: 'log-domain' },
+    { key: 'log_proto', id: 'log-proto' },
+    { key: 'log_port', id: 'log-port' },
+    { key: 'log_uuid', id: 'log-uuid' },
+    { key: 'log_email', id: 'log-email' },
+    { key: 'log_inbound', id: 'log-inbound' },
+    { key: 'log_outbound', id: 'log-outbound' },
+    { key: 'log_method', id: 'log-method' },
+    { key: 'log_path', id: 'log-path' },
+    { key: 'log_sni', id: 'log-sni' },
+    { key: 'log_alpn', id: 'log-alpn' },
+    { key: 'log_route_tproxy_vless', id: 'log-route-tproxy-vless' },
+    { key: 'log_route_redirect_vless', id: 'log-route-redirect-vless' },
+    { key: 'log_route_redirect_direct', id: 'log-route-redirect-direct' },
+    { key: 'log_route_reject', id: 'log-route-reject' },
     { key: 'editor_btn_bg', id: 'editor-btn-bg' },
     { key: 'editor_btn_text', id: 'editor-btn-text' },
     { key: 'editor_btn_border', id: 'editor-btn-border' },
@@ -3115,6 +3168,23 @@ function _wireLogLineActions() {
     '--sem-warning': 'Семантика: предупреждение',
     '--sem-error': 'Семантика: ошибка / danger',
     '--sem-debug': 'Семантика: debug / muted',
+    '--log-ts': 'Xray логи: timestamp / время',
+    '--log-ip': 'Xray логи: IP адреса',
+    '--log-domain': 'Xray логи: домены (хосты)',
+    '--log-proto': 'Xray логи: протокол/transport (tcp/udp/ws/grpc/...)',
+    '--log-port': 'Xray логи: порты (:443, port=443)',
+    '--log-uuid': 'Xray логи: UUID / id',
+    '--log-email': 'Xray логи: email (user@domain)',
+    '--log-inbound': 'Xray логи: inbound tag',
+    '--log-outbound': 'Xray логи: outbound tag',
+    '--log-method': 'Xray логи: HTTP method (GET/POST...)',
+    '--log-path': 'Xray логи: path/uri/url',
+    '--log-sni': 'Xray логи: SNI / serverName',
+    '--log-alpn': 'Xray логи: ALPN',
+    '--log-route-tproxy-vless': 'Xray логи: [tproxy -> vless-reality]',
+    '--log-route-redirect-vless': 'Xray логи: [redirect -> vless-reality]',
+    '--log-route-redirect-direct': 'Xray логи: [redirect -> direct]',
+    '--log-route-reject': 'Xray логи: reject',
     '--editor-btn-bg': 'Кнопки в редакторах: фон',
     '--editor-btn-text': 'Кнопки в редакторах: текст',
     '--editor-btn-border': 'Кнопки в редакторах: рамка',
@@ -3325,6 +3395,23 @@ function _wireLogLineActions() {
     lines.push(`  --sem-warning: ${d.sem_warning};`);
     lines.push(`  --sem-error: ${d.sem_error};`);
     lines.push(`  --sem-debug: ${d.sem_debug};`);
+    lines.push(`  --log-ts: ${d.log_ts};`);
+    lines.push(`  --log-ip: ${d.log_ip};`);
+    lines.push(`  --log-domain: ${d.log_domain};`);
+    lines.push(`  --log-proto: ${d.log_proto};`);
+    lines.push(`  --log-port: ${d.log_port};`);
+    lines.push(`  --log-uuid: ${d.log_uuid};`);
+    lines.push(`  --log-email: ${d.log_email};`);
+    lines.push(`  --log-inbound: ${d.log_inbound};`);
+    lines.push(`  --log-outbound: ${d.log_outbound};`);
+    lines.push(`  --log-method: ${d.log_method};`);
+    lines.push(`  --log-path: ${d.log_path};`);
+    lines.push(`  --log-sni: ${d.log_sni};`);
+    lines.push(`  --log-alpn: ${d.log_alpn};`);
+    lines.push(`  --log-route-tproxy-vless: ${d.log_route_tproxy_vless};`);
+    lines.push(`  --log-route-redirect-vless: ${d.log_route_redirect_vless};`);
+    lines.push(`  --log-route-redirect-direct: ${d.log_route_redirect_direct};`);
+    lines.push(`  --log-route-reject: ${d.log_route_reject};`);
     lines.push(`  --editor-btn-bg: ${d.editor_btn_bg};`);
     lines.push(`  --editor-btn-text: ${d.editor_btn_text};`);
     lines.push(`  --editor-btn-border: ${d.editor_btn_border};`);
@@ -3380,6 +3467,23 @@ function _wireLogLineActions() {
     lines.push(`  --sem-warning: ${d.sem_warning};`);
     lines.push(`  --sem-error: ${d.sem_error};`);
     lines.push(`  --sem-debug: ${d.sem_debug};`);
+    lines.push(`  --log-ts: ${d.log_ts};`);
+    lines.push(`  --log-ip: ${d.log_ip};`);
+    lines.push(`  --log-domain: ${d.log_domain};`);
+    lines.push(`  --log-proto: ${d.log_proto};`);
+    lines.push(`  --log-port: ${d.log_port};`);
+    lines.push(`  --log-uuid: ${d.log_uuid};`);
+    lines.push(`  --log-email: ${d.log_email};`);
+    lines.push(`  --log-inbound: ${d.log_inbound};`);
+    lines.push(`  --log-outbound: ${d.log_outbound};`);
+    lines.push(`  --log-method: ${d.log_method};`);
+    lines.push(`  --log-path: ${d.log_path};`);
+    lines.push(`  --log-sni: ${d.log_sni};`);
+    lines.push(`  --log-alpn: ${d.log_alpn};`);
+    lines.push(`  --log-route-tproxy-vless: ${d.log_route_tproxy_vless};`);
+    lines.push(`  --log-route-redirect-vless: ${d.log_route_redirect_vless};`);
+    lines.push(`  --log-route-redirect-direct: ${d.log_route_redirect_direct};`);
+    lines.push(`  --log-route-reject: ${d.log_route_reject};`);
     lines.push(`  --editor-btn-bg: ${d.editor_btn_bg};`);
     lines.push(`  --editor-btn-text: ${d.editor_btn_text};`);
     lines.push(`  --editor-btn-border: ${d.editor_btn_border};`);
@@ -3435,6 +3539,23 @@ function _wireLogLineActions() {
     lines.push(`  --sem-warning: ${l.sem_warning};`);
     lines.push(`  --sem-error: ${l.sem_error};`);
     lines.push(`  --sem-debug: ${l.sem_debug};`);
+    lines.push(`  --log-ts: ${l.log_ts};`);
+    lines.push(`  --log-ip: ${l.log_ip};`);
+    lines.push(`  --log-domain: ${l.log_domain};`);
+    lines.push(`  --log-proto: ${l.log_proto};`);
+    lines.push(`  --log-port: ${l.log_port};`);
+    lines.push(`  --log-uuid: ${l.log_uuid};`);
+    lines.push(`  --log-email: ${l.log_email};`);
+    lines.push(`  --log-inbound: ${l.log_inbound};`);
+    lines.push(`  --log-outbound: ${l.log_outbound};`);
+    lines.push(`  --log-method: ${l.log_method};`);
+    lines.push(`  --log-path: ${l.log_path};`);
+    lines.push(`  --log-sni: ${l.log_sni};`);
+    lines.push(`  --log-alpn: ${l.log_alpn};`);
+    lines.push(`  --log-route-tproxy-vless: ${l.log_route_tproxy_vless};`);
+    lines.push(`  --log-route-redirect-vless: ${l.log_route_redirect_vless};`);
+    lines.push(`  --log-route-redirect-direct: ${l.log_route_redirect_direct};`);
+    lines.push(`  --log-route-reject: ${l.log_route_reject};`);
     lines.push(`  --editor-btn-bg: ${l.editor_btn_bg};`);
     lines.push(`  --editor-btn-text: ${l.editor_btn_text};`);
     lines.push(`  --editor-btn-border: ${l.editor_btn_border};`);
