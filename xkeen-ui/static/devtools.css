@@ -65,6 +65,7 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
   .dt-theme-slider {
     grid-template-columns: 82px minmax(0, 1fr) 64px;
   }
+}
 /* Theme editor: collapsible groups inside the main Theme card */
 .dt-theme-groups{
   display: flex;
@@ -100,7 +101,6 @@ details.dt-theme-group .dt-collapsible-icon{
   font-size: calc(16px * var(--xk-font-scale));
 }
 
-}
 
 
 /* Custom CSS editor */
