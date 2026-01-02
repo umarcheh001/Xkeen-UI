@@ -79,15 +79,32 @@
       });
     }
 
-    // xray logs: do NOT auto-start streaming when opening the tab.
-    // The blinking lamp must indicate an explicitly enabled live stream.
+    // xray logs: always refresh snapshot when opening the tab.
+    // If the user explicitly enabled the "Live" toggle (persisted preference),
+    // resume streaming while the tab is visible.
     if (name === 'xray-logs') {
       if (window.XKeen && XKeen.features && XKeen.features.xrayLogs) {
         if (typeof XKeen.features.xrayLogs.viewOnce === 'function') safe(() => XKeen.features.xrayLogs.viewOnce());
         if (typeof XKeen.features.xrayLogs.refreshStatus === 'function') safe(() => XKeen.features.xrayLogs.refreshStatus());
+
+        // If the user has the "Live" toggle enabled (persisted preference),
+        // resume streaming when the tab becomes visible again.
+        try {
+          const liveEl = document.getElementById('xray-log-live');
+          if (liveEl && liveEl.checked && typeof XKeen.features.xrayLogs.start === 'function') {
+            safe(() => XKeen.features.xrayLogs.start());
+          }
+        } catch (e) {}
       } else {
         if (typeof window.fetchXrayLogsOnce === 'function') safe(() => window.fetchXrayLogsOnce('manual'));
         if (typeof window.refreshXrayLogStatus === 'function') safe(() => window.refreshXrayLogStatus());
+
+        try {
+          const liveEl = document.getElementById('xray-log-live');
+          if (liveEl && liveEl.checked && typeof window.startXrayLogAuto === 'function') {
+            safe(() => window.startXrayLogAuto());
+          }
+        } catch (e) {}
       }
     } else {
       // Leaving the tab stops any active stream.
