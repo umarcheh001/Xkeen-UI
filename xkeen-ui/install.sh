@@ -379,6 +379,10 @@ if [ -z "$EXISTING_PORT" ] || [ "${USE_EXISTING:-0}" -eq 0 ]; then
   echo "[install] Текущий порт панели: $PANEL_PORT" >> "$LOG_DIR/xkeen-ui.log"
 fi
 
+# --- Создание директорий ---
+echo "[*] Создаю директории..."
+mkdir -p "$UI_DIR" "$INIT_DIR" "$LOG_DIR" "$RUN_DIR" "$BACKUP_DIR"
+
 # --- Бэкапы Xray на самой первой установке ---
 
 if [ "$FIRST_INSTALL" = "yes" ]; then
@@ -391,9 +395,6 @@ else
 fi
 
 # --- Копирование файлов панели ---
-
-echo "[*] Создаю директории..."
-mkdir -p "$UI_DIR" "$INIT_DIR" "$LOG_DIR" "$RUN_DIR" "$BACKUP_DIR"
 
 echo "[*] Копирую файлы панели в $UI_DIR..."
 if command -v rsync >/dev/null 2>&1; then
@@ -451,7 +452,6 @@ if [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
   fi
 fi
 
-\
 # --- Обновление порта в run_server.py / app.py ---
 
 RUN_SERVER="$UI_DIR/run_server.py"
