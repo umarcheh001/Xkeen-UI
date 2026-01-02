@@ -97,9 +97,10 @@
         }
       } catch (e) {}
 
-      // Fallback: keep body.modal-open in sync with terminal overlay and other visible modals.
+      // Fallback: keep body.modal-open in sync with other visible modals.
+      // The terminal overlay should *not* lock page scrolling.
       try {
-        const open = isOpen() || fallbackAnyModalVisible();
+        const open = fallbackAnyModalVisible();
         if (document && document.body && document.body.classList) {
           document.body.classList.toggle('modal-open', !!open);
         }
