@@ -21,6 +21,8 @@ import shutil
 import subprocess
 import time
 import hashlib
+import zipfile
+import tarfile
 from typing import Any, Dict, List, Optional, Tuple
 
 from flask import Blueprint, request, jsonify, current_app, Response, send_file
@@ -493,13 +495,15 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
 
         confirm = str(request.args.get('confirm', '') or '').strip().lower() in ('1', 'true', 'yes', 'on')
 
-        confirm = str(request.args.get('confirm', '') or '').strip().lower() in ('1', 'true', 'yes', 'on')
         dry_run = str(request.args.get('dry_run', '') or request.args.get('preflight', '') or '').strip().lower() in ('1', 'true', 'yes', 'on')
 
         if target == 'local':
-            path = request.args.get('path', '')
+            path_in = str(request.args.get('path', '') or '')
             try:
-                rp = _local_resolve(path, LOCALFS_ROOTS)
+                # Keep a non-realpath absolute path for UI/breadcrumbs (preserves /tmp/mnt/<LABEL> symlinks),
+                # while still resolving realpath for security checks and actual FS access.
+                ap = _local_norm_abs(path_in, LOCALFS_ROOTS)
+                rp = _local_resolve(path_in, LOCALFS_ROOTS)
             except PermissionError as e:
                 return error_response(str(e), 403, ok=False)
             if not os.path.isdir(rp):
@@ -605,7 +609,7 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
                 # If there are no labels, don't hide anything.
                 items = mnt_uuid_dirs + disk_labels + items_all
 
-            out = {'ok': True, 'target': 'local', 'path': rp, 'roots': LOCALFS_ROOTS, 'items': items}
+            out = {'ok': True, 'target': 'local', 'path': ap, 'realpath': rp, 'roots': LOCALFS_ROOTS, 'items': items}
             if trash_root:
                 out['trash_root'] = trash_root
             # Trash usage stats (for UI warnings)
@@ -1677,6 +1681,459 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
                 return error_response('not_found', 404, ok=False)
             return error_response('zip_failed', 400, ok=False)
 
+    # -------------------------- local archive create / extract --------------------------
+    def _sanitize_archive_filename(name: str, fmt: str) -> str:
+        """Sanitize archive filename (leaf only) and enforce extension."""
+        n = os.path.basename(str(name or '').strip())
+        n = n.replace('"', '').replace("'", '')
+        # collapse spaces
+        n = re.sub(r'\s+', ' ', n).strip()
+        if not n:
+            n = 'archive'
+
+        f = str(fmt or '').strip().lower()
+        if f in ('tgz', 'tar.gz', 'tar_gz', 'targz'):
+            ext = '.tar.gz'
+            # strip existing known archive extensions
+            n = re.sub(r'(\.(zip|tgz|tar\.gz))$', '', n, flags=re.IGNORECASE)
+            return (n or 'archive') + ext
+        # default zip
+        ext = '.zip'
+        n = re.sub(r'(\.(zip|tgz|tar\.gz))$', '', n, flags=re.IGNORECASE)
+        return (n or 'archive') + ext
+
+
+    def _join_local_cwd(cwd: str, leaf: str) -> str:
+        # cwd is expected to be an absolute local path in sandbox.
+        c = str(cwd or '').strip() or '/'
+        if not c.startswith('/'):
+            c = '/' + c
+        c = re.sub(r'/+', '/', c)
+        if len(c) > 1:
+            c = c.rstrip('/')
+        return c + '/' + str(leaf or '').lstrip('/').replace('\\', '/')
+
+
+    @bp.post('/api/fs/archive/create')
+    def api_fs_archive_create() -> Any:
+        """Create an archive file (.zip/.tar.gz) on the local filesystem.
+
+        JSON body:
+          {
+            "target": "local",
+            "cwd": "/opt/var",
+            "name": "my-archive" | "my-archive.zip" | "my-archive.tar.gz",
+            "format": "zip" | "tar.gz" | "tgz",
+            "overwrite": false,
+            "items": [ {"path": "/opt/var/a"}, {"path": "/opt/var/b"} ]
+          }
+        """
+        if (resp := _require_enabled()) is not None:
+            return resp
+
+        data = request.get_json(silent=True) or {}
+        target = str(data.get('target') or 'local').strip().lower()
+        if target != 'local':
+            return error_response('only_local_supported', 400, ok=False)
+
+        cwd = str(data.get('cwd') or '').strip() or '/'
+        fmt = str(data.get('format') or 'zip').strip().lower()
+        overwrite = bool(str(data.get('overwrite') or '').strip().lower() in ('1', 'true', 'yes', 'on') or data.get('overwrite') is True)
+
+        items_raw = data.get('items')
+        if not isinstance(items_raw, list) or not items_raw:
+            return error_response('items_required', 400, ok=False)
+
+        # normalize items -> resolved absolute paths
+        items: List[Tuple[str, str]] = []  # (realpath, arc_base)
+        for it in items_raw:
+            pth = ''
+            if isinstance(it, str):
+                pth = str(it).strip()
+            elif isinstance(it, dict):
+                pth = str(it.get('path') or '').strip()
+            if not pth:
+                continue
+
+            # UI обычно шлёт абсолютные пути; но поддержим и относительные к cwd
+            if not pth.startswith('/'):
+                pth = _join_local_cwd(cwd, pth)
+            try:
+                rp = _local_resolve(pth, LOCALFS_ROOTS)
+            except PermissionError as e:
+                return error_response(str(e) or 'forbidden', 403, ok=False)
+            except Exception:
+                return error_response('bad_path', 400, ok=False)
+            if not os.path.exists(rp):
+                return error_response('not_found', 404, ok=False)
+
+            base = os.path.basename(rp.rstrip('/')) or 'item'
+            base = base.replace('..', '_').replace('/', '_').replace('\\', '_') or 'item'
+            items.append((rp, base))
+
+        if not items:
+            return error_response('items_required', 400, ok=False)
+
+        # output archive path
+        name = _sanitize_archive_filename(data.get('name') or 'archive', fmt)
+        out_path = _join_local_cwd(cwd, name)
+        try:
+            rp_out = _local_resolve(out_path, LOCALFS_ROOTS)
+        except PermissionError as e:
+            return error_response(str(e) or 'forbidden', 403, ok=False)
+        except Exception:
+            return error_response('bad_path', 400, ok=False)
+
+        if os.path.exists(rp_out) and not overwrite:
+            return error_response('exists', 409, ok=False)
+
+        os.makedirs(os.path.dirname(rp_out) or '/', exist_ok=True)
+        os.makedirs(TMP_DIR, exist_ok=True)
+        tmp_out = os.path.join(TMP_DIR, f"xkeen_archive_create_{uuid.uuid4().hex}.tmp")
+
+        try:
+            if fmt in ('tgz', 'tar.gz', 'tar_gz', 'targz'):
+                with tarfile.open(tmp_out, mode='w:gz') as tf:
+                    for rp, base in items:
+                        tf.add(rp, arcname=base, recursive=True)
+            else:
+                # zip
+                with zipfile.ZipFile(tmp_out, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+                    for rp, base in items:
+                        if os.path.isdir(rp):
+                            # include empty dirs
+                            for root, dirs, files in os.walk(rp):
+                                rel_root = os.path.relpath(root, rp)
+                                rel_root = '' if rel_root == '.' else rel_root
+                                # ensure directory entry
+                                arc_dir = (base + ('/' + rel_root if rel_root else '')).rstrip('/') + '/'
+                                if arc_dir != base + '/':
+                                    # we'll still write dirs when empty; zip doesn't need explicit dir entries otherwise
+                                    pass
+                                if not dirs and not files:
+                                    try:
+                                        zf.writestr(arc_dir, b'')
+                                    except Exception:
+                                        pass
+
+                                for fn in files:
+                                    src = os.path.join(root, fn)
+                                    rel = os.path.join(rel_root, fn) if rel_root else fn
+                                    arc = base + '/' + rel.replace('\\', '/')
+                                    zf.write(src, arc)
+                        else:
+                            zf.write(rp, base)
+
+            try:
+                os.replace(tmp_out, rp_out)
+            except Exception:
+                shutil.move(tmp_out, rp_out)
+
+            sz = None
+            try:
+                sz = int(os.path.getsize(rp_out))
+            except Exception:
+                sz = None
+
+            _core_log('info', 'fs.archive.create', target='local', cwd=cwd, name=name, format=fmt, bytes=sz)
+            return jsonify({'ok': True, 'path': out_path, 'name': name, 'bytes': sz})
+        except Exception as e:
+            try:
+                if os.path.exists(tmp_out):
+                    os.remove(tmp_out)
+            except Exception:
+                pass
+            msg = str(e) or 'archive_create_failed'
+            return error_response('archive_create_failed', 400, ok=False, details=msg[-400:])
+
+
+    def _is_safe_extract_path(dest_root_abs: str, rel_name: str) -> bool:
+        # Reject absolute paths and path traversal.
+        if not rel_name:
+            return False
+        rn = rel_name.replace('\\', '/')
+        if rn.startswith('/'):
+            return False
+        # normalise and ensure it stays within dest
+        out = os.path.abspath(os.path.join(dest_root_abs, rn))
+        dest_root_abs = os.path.abspath(dest_root_abs)
+        if out == dest_root_abs:
+            return True
+        return out.startswith(dest_root_abs.rstrip(os.sep) + os.sep)
+
+
+    def _zipinfo_is_symlink(zinfo: zipfile.ZipInfo) -> bool:
+        try:
+            # Unix attributes are stored in the top 16 bits of external_attr
+            mode = (zinfo.external_attr >> 16) & 0xFFFF
+            return stat.S_ISLNK(mode)
+        except Exception:
+            return False
+
+
+    @bp.post('/api/fs/archive/extract')
+    def api_fs_archive_extract() -> Any:
+        """Extract .zip/.tar.gz archives on the local filesystem.
+
+        JSON body:
+          {
+            "target": "local",
+            "archive": "/opt/var/a.zip",
+            "dest": "/opt/var/out" | "out" (relative to cwd),
+            "cwd": "/opt/var" (optional for relative dest),
+            "create_dest": true,
+            "overwrite": false
+          }
+        """
+        if (resp := _require_enabled()) is not None:
+            return resp
+
+        data = request.get_json(silent=True) or {}
+        target = str(data.get('target') or 'local').strip().lower()
+        if target != 'local':
+            return error_response('only_local_supported', 400, ok=False)
+
+        arch = str(data.get('archive') or '').strip()
+        if not arch:
+            return error_response('archive_required', 400, ok=False)
+
+        cwd = str(data.get('cwd') or '').strip() or '/'
+        dest = str(data.get('dest') or '').strip() or ''
+        if not dest:
+            # default: extract into cwd
+            dest = cwd
+        if not dest.startswith('/'):
+            dest = _join_local_cwd(cwd, dest)
+
+        create_dest = bool(str(data.get('create_dest') or '').strip().lower() in ('1', 'true', 'yes', 'on') or data.get('create_dest') is True)
+        overwrite = bool(str(data.get('overwrite') or '').strip().lower() in ('1', 'true', 'yes', 'on') or data.get('overwrite') is True)
+
+        try:
+            rp_arch = _local_resolve(arch, LOCALFS_ROOTS)
+        except PermissionError as e:
+            return error_response(str(e) or 'forbidden', 403, ok=False)
+        except Exception:
+            return error_response('bad_path', 400, ok=False)
+
+        if not os.path.isfile(rp_arch):
+            return error_response('not_found', 404, ok=False)
+
+        try:
+            rp_dest = _local_resolve(dest, LOCALFS_ROOTS)
+        except PermissionError as e:
+            return error_response(str(e) or 'forbidden', 403, ok=False)
+        except Exception:
+            return error_response('bad_path', 400, ok=False)
+
+        if not os.path.exists(rp_dest):
+            if not create_dest:
+                return error_response('dest_not_found', 404, ok=False)
+            try:
+                os.makedirs(rp_dest, exist_ok=True)
+            except Exception:
+                return error_response('mkdir_failed', 400, ok=False)
+
+        if not os.path.isdir(rp_dest):
+            return error_response('dest_not_dir', 400, ok=False)
+
+        dest_root_abs = os.path.abspath(rp_dest)
+
+        lower = rp_arch.lower()
+        extracted = 0
+        skipped = 0
+        renamed = 0
+
+        def _unique_leaf(parent_abs: str, leaf: str, *, is_dir: bool) -> str:
+            """Return a non-conflicting leaf name inside parent_abs using " (N)" suffix."""
+            base = os.path.basename(str(leaf or '').strip())
+            if not base:
+                base = 'item'
+            if is_dir:
+                stem = base
+                ext = ''
+            else:
+                stem, ext = os.path.splitext(base)
+                if not stem:
+                    # for names like ".env" keep as stem
+                    stem = base
+                    ext = ''
+
+            # Try a reasonable number of candidates.
+            for i in range(1, 201):
+                cand = f"{stem} ({i}){ext}" if not is_dir else f"{stem} ({i})"
+                if not os.path.exists(os.path.join(parent_abs, cand)):
+                    return cand
+            # Fallback (very unlikely)
+            return f"{stem} ({uuid.uuid4().hex[:6]}){ext}" if not is_dir else f"{stem} ({uuid.uuid4().hex[:6]})"
+
+        # Map conflicting directory prefixes to new names when a file blocks directory creation.
+        _dir_map: dict[str, str] = {}
+
+        def _apply_dir_map(rel: str) -> str:
+            r = str(rel or '').lstrip('/')
+            if not _dir_map or not r:
+                return r
+            # Apply longest prefix first; allow chaining.
+            for _ in range(0, 5):
+                changed = False
+                for k in sorted(_dir_map.keys(), key=len, reverse=True):
+                    if r == k:
+                        r = _dir_map[k]
+                        changed = True
+                        break
+                    if r.startswith(k + '/'):
+                        r = _dir_map[k] + r[len(k):]
+                        changed = True
+                        break
+                if not changed:
+                    break
+            return r
+
+        def _ensure_parent_dirs(rel: str) -> str:
+            """Ensure parent dirs exist for rel (relative). If a file blocks a dir, remap that dir."""
+            nonlocal renamed
+            r = _apply_dir_map(rel)
+            parts = [p for p in r.split('/') if p]
+            if len(parts) <= 1:
+                return r
+            cur_abs = dest_root_abs
+            prefix_parts: list[str] = []
+            for i, part in enumerate(parts[:-1]):
+                prefix_parts.append(part)
+                cur_abs = os.path.join(cur_abs, part)
+                if os.path.exists(cur_abs):
+                    if os.path.isdir(cur_abs):
+                        continue
+                    # File where directory is expected -> remap this prefix.
+                    parent_abs = os.path.dirname(cur_abs)
+                    new_part = _unique_leaf(parent_abs, part, is_dir=True)
+                    old_prefix = '/'.join(prefix_parts)
+                    new_prefix = '/'.join(prefix_parts[:-1] + [new_part])
+                    _dir_map[old_prefix] = new_prefix
+                    renamed += 1
+                    return _ensure_parent_dirs(rel)
+                try:
+                    os.mkdir(cur_abs)
+                except FileExistsError:
+                    if os.path.exists(cur_abs) and not os.path.isdir(cur_abs):
+                        parent_abs = os.path.dirname(cur_abs)
+                        new_part = _unique_leaf(parent_abs, part, is_dir=True)
+                        old_prefix = '/'.join(prefix_parts)
+                        new_prefix = '/'.join(prefix_parts[:-1] + [new_part])
+                        _dir_map[old_prefix] = new_prefix
+                        renamed += 1
+                        return _ensure_parent_dirs(rel)
+                except Exception:
+                    raise
+            return _apply_dir_map(rel)
+
+        try:
+            if lower.endswith('.zip'):
+                with zipfile.ZipFile(rp_arch, 'r') as zf:
+                    for zi in zf.infolist():
+                        nm = (zi.filename or '').replace('\\', '/')
+                        # common prefixes like "./"
+                        while nm.startswith('./'):
+                            nm = nm[2:]
+                        if not nm or nm in ('.', './'):
+                            continue
+                        # directory entry: create it (useful for empty dirs)
+                        if nm.endswith('/'):
+                            if _is_safe_extract_path(dest_root_abs, nm):
+                                try:
+                                    # Ensure directory exists; if a file blocks a dir component, remap with suffix.
+                                    _ensure_parent_dirs(nm.rstrip('/') + '/_')
+                                except Exception:
+                                    pass
+                            continue
+                        if _zipinfo_is_symlink(zi):
+                            skipped += 1
+                            continue
+                        if not _is_safe_extract_path(dest_root_abs, nm):
+                            skipped += 1
+                            continue
+                        rel = _ensure_parent_dirs(nm)
+                        rel = _apply_dir_map(rel)
+                        out = os.path.abspath(os.path.join(dest_root_abs, rel))
+
+                        # If the destination exists and overwrite is off -> pick a new name with suffix.
+                        # If overwrite is on, we only overwrite regular files; for any type mismatch we still rename.
+                        if os.path.exists(out):
+                            parent_abs = os.path.dirname(out) or dest_root_abs
+                            leaf = os.path.basename(out)
+                            if (not overwrite) or os.path.isdir(out):
+                                new_leaf = _unique_leaf(parent_abs, leaf, is_dir=False)
+                                rel_parent = '/'.join([p for p in rel.split('/')[:-1] if p])
+                                rel = (rel_parent + '/' + new_leaf) if rel_parent else new_leaf
+                                out = os.path.abspath(os.path.join(dest_root_abs, rel))
+                                renamed += 1
+
+                        os.makedirs(os.path.dirname(out) or dest_root_abs, exist_ok=True)
+                        with zf.open(zi, 'r') as src, open(out, 'wb') as dst_fp:
+                            shutil.copyfileobj(src, dst_fp, length=256 * 1024)
+                        extracted += 1
+
+            elif lower.endswith('.tar.gz') or lower.endswith('.tgz'):
+                with tarfile.open(rp_arch, 'r:gz') as tf:
+                    for ti in tf.getmembers():
+                        nm = (ti.name or '').replace('\\', '/')
+                        # common prefixes like "./"
+                        while nm.startswith('./'):
+                            nm = nm[2:]
+                        if not nm or nm in ('.', './'):
+                            continue
+                        # create directory entries explicitly (covers empty dirs)
+                        if ti.isdir() or nm.endswith('/'):
+                            if _is_safe_extract_path(dest_root_abs, nm):
+                                try:
+                                    # Ensure directory exists; if a file blocks a dir component, remap with suffix.
+                                    _ensure_parent_dirs(nm.rstrip('/') + '/_')
+                                except Exception:
+                                    pass
+                            continue
+                        # skip symlinks/hardlinks
+                        if ti.issym() or ti.islnk():
+                            skipped += 1
+                            continue
+                        if not _is_safe_extract_path(dest_root_abs, nm):
+                            skipped += 1
+                            continue
+                        rel = _ensure_parent_dirs(nm)
+                        rel = _apply_dir_map(rel)
+                        out = os.path.abspath(os.path.join(dest_root_abs, rel))
+
+                        # If the destination exists and overwrite is off -> pick a new name with suffix.
+                        # If overwrite is on, we only overwrite regular files; for any type mismatch we still rename.
+                        if os.path.exists(out):
+                            parent_abs = os.path.dirname(out) or dest_root_abs
+                            leaf = os.path.basename(out)
+                            if (not overwrite) or os.path.isdir(out):
+                                new_leaf = _unique_leaf(parent_abs, leaf, is_dir=False)
+                                rel_parent = '/'.join([p for p in rel.split('/')[:-1] if p])
+                                rel = (rel_parent + '/' + new_leaf) if rel_parent else new_leaf
+                                out = os.path.abspath(os.path.join(dest_root_abs, rel))
+                                renamed += 1
+
+                        os.makedirs(os.path.dirname(out) or dest_root_abs, exist_ok=True)
+                        src = tf.extractfile(ti)
+                        if src is None:
+                            skipped += 1
+                            continue
+                        with src, open(out, 'wb') as dst_fp:
+                            shutil.copyfileobj(src, dst_fp, length=256 * 1024)
+                        extracted += 1
+
+            else:
+                return error_response('unsupported_archive', 400, ok=False)
+
+            _core_log('info', 'fs.archive.extract', target='local', archive=arch, dest=dest, extracted=extracted, skipped=skipped, renamed=renamed)
+            return jsonify({'ok': True, 'archive': arch, 'dest': dest, 'extracted': extracted, 'skipped': skipped, 'renamed': renamed})
+
+        except Exception as e:
+            msg = str(e) or 'extract_failed'
+            return error_response('extract_failed', 400, ok=False, details=msg[-400:])
+
+
     @bp.post('/api/fs/upload')
     def api_fs_upload() -> Any:
         """Upload a file to local sandbox or remote session.
@@ -1745,7 +2202,7 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
             try:
                 if os.path.lexists(rp):
                     if os.path.isdir(rp):
-                        return error_response('not_a_file', 400, ok=False)
+                        return error_response('not_a_file', 409, ok=False, target='local', path=rp, type='dir')
                     if not overwrite:
                         etype = 'file'
                         try:
@@ -1831,7 +2288,7 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
             try:
                 isdir = _remote_is_dir(s, remote_path)
                 if isdir is True:
-                    return error_response('not_a_file', 400, ok=False, target='remote', path=remote_path, type='dir')
+                    return error_response('not_a_file', 409, ok=False, target='remote', path=remote_path, type='dir')
                 if isdir is False:
                     return error_response('exists', 409, ok=False, target='remote', path=remote_path, type='file')
             except Exception:
@@ -2306,6 +2763,9 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
             return resp
         data = request.get_json(silent=True) or {}
         target = str(data.get('target') or '').strip().lower()
+        # When true, directories will include a best-effort deep size (size of contents).
+        # This can be expensive on routers, so the UI should only enable it when needed.
+        deep = bool(data.get('deep', False))
         if target not in ('local', 'remote'):
             return error_response('bad_target', 400, ok=False)
 
@@ -2327,6 +2787,73 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
             return error_response('no_paths', 400, ok=False)
         if len(paths) > 200:
             return error_response('too_many_paths', 400, ok=False)
+
+        # -------- local helpers --------
+        def _local_dir_size_bytes(path_abs: str, timeout_s: float = 3.0) -> tuple[int | None, str | None]:
+            """Return (bytes, error). Best-effort and time-bounded.
+
+            Prefer `du` if available (fast). Fallback to a Python scandir walk.
+            We do NOT follow symlinks to avoid loops.
+            """
+            import time
+            import subprocess
+            from subprocess import PIPE
+
+            # 1) Try du -sb (GNU/coreutils). Some busybox builds also support -b.
+            try:
+                cp = subprocess.run(['du', '-sb', path_abs], stdout=PIPE, stderr=PIPE, text=True, timeout=timeout_s)
+                if cp.returncode == 0 and cp.stdout:
+                    tok = cp.stdout.strip().split()[0]
+                    if tok.isdigit():
+                        return int(tok), None
+            except Exception:
+                pass
+
+            # 2) Try du -sk (busybox-friendly). Convert KiB -> bytes.
+            try:
+                cp = subprocess.run(['du', '-sk', path_abs], stdout=PIPE, stderr=PIPE, text=True, timeout=timeout_s)
+                if cp.returncode == 0 and cp.stdout:
+                    tok = cp.stdout.strip().split()[0]
+                    if tok.isdigit():
+                        return int(tok) * 1024, None
+            except Exception:
+                pass
+
+            # 3) Fallback: scandir walk with deadline.
+            deadline = time.monotonic() + float(timeout_s)
+            total = 0
+            stack = [path_abs]
+            try:
+                while stack:
+                    if time.monotonic() > deadline:
+                        return None, 'timeout'
+                    d = stack.pop()
+                    try:
+                        with os.scandir(d) as it:
+                            for ent in it:
+                                if time.monotonic() > deadline:
+                                    return None, 'timeout'
+                                try:
+                                    st = ent.stat(follow_symlinks=False)
+                                except Exception:
+                                    continue
+                                mode_i = int(getattr(st, 'st_mode', 0) or 0)
+                                # Do not follow symlinks. Count the symlink itself (small) as-is.
+                                if stat.S_ISLNK(mode_i):
+                                    total += int(getattr(st, 'st_size', 0) or 0)
+                                    continue
+                                if stat.S_ISDIR(mode_i):
+                                    stack.append(ent.path)
+                                else:
+                                    total += int(getattr(st, 'st_size', 0) or 0)
+                    except PermissionError:
+                        continue
+                    except FileNotFoundError:
+                        continue
+                return int(total), None
+            except Exception:
+                return None, 'failed'
+
 
         if target == 'local':
             out_items: List[Dict[str, Any]] = []
@@ -2369,12 +2896,19 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
                         except Exception:
                             link_dir = False
 
+                    size_deep = None
+                    size_deep_err = None
+                    if deep and is_dir and not is_link:
+                        size_deep, size_deep_err = _local_dir_size_bytes(ap, timeout_s=3.0)
+
                     out_items.append({
                         'path': ap,
                         'path_real': os.path.realpath(ap),
                         'exists': True,
                         'type': 'link' if is_link else ('dir' if is_dir else 'file'),
                         'size': int(getattr(st, 'st_size', 0) or 0),
+                        'size_deep': int(size_deep) if isinstance(size_deep, int) else None,
+                        'size_deep_error': size_deep_err,
                         'mode': mode_i,
                         'perm': perm_s,
                         'uid': int(getattr(st, 'st_uid', -1) or -1),
