@@ -59,6 +59,18 @@
     };
   }
 
+  // Read CSRF token from the <meta> tag injected by templates.
+  // We still rely on spinner_fetch.js in most pages, but keeping this here
+  // makes branding save/reset work even if fetch wrappers are not loaded.
+  function csrfToken() {
+    try {
+      const el = document.querySelector('meta[name="csrf-token"]');
+      return (el && el.getAttribute('content')) ? String(el.getAttribute('content') || '') : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   function load() {
     // Sync load from cache for immediate UI (then we refresh from router asynchronously).
     let raw = null;
@@ -115,9 +127,12 @@
     }
 
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      const tok = csrfToken();
+      if (tok) headers['X-CSRF-Token'] = tok;
       const r = await fetch(API_SET, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ config: cfg }),
       });
       const j = await r.json().catch(() => ({}));
@@ -145,7 +160,10 @@
     }
 
     try {
-      const r = await fetch(API_RESET, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const headers = { 'Content-Type': 'application/json' };
+      const tok = csrfToken();
+      if (tok) headers['X-CSRF-Token'] = tok;
+      const r = await fetch(API_RESET, { method: 'POST', headers, body: '{}' });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j || j.ok === false) {
         throw new Error((j && j.error) ? String(j.error) : 'reset_failed');
