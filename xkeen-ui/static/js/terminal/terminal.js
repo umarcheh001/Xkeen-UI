@@ -148,6 +148,9 @@
           if (builtins && typeof builtins.registerXkeenRestart === 'function') {
             builtins.registerXkeenRestart(ctx.commandRegistry || ctx.router);
           }
+          if (builtins && typeof builtins.registerSysmon === 'function') {
+            builtins.registerSysmon(ctx.commandRegistry || ctx.router);
+          }
         } catch (e0) {}
         try {
           if (ctx.commandRegistry && ctx.router && typeof ctx.commandRegistry.bindToRouter === 'function') {
