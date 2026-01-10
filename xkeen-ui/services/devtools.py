@@ -865,6 +865,22 @@ def ui_action(action: str) -> Dict[str, Any]:
 THEME_CONFIG_JSON = "custom_theme.json"
 THEME_CONFIG_CSS = "custom_theme.css"
 
+# Bump when generated CSS structure changes (used for auto-regeneration).
+# NOTE: Bump marker when generator behavior changes so existing on-disk
+# custom_theme.css is regenerated automatically.
+THEME_CSS_VERSION = 5
+THEME_CSS_MARKER = "/* xkeen-ui custom theme v5 */"
+
+# Independent optional themes (DevTools): Terminal (xterm.js) and CodeMirror.
+TERMINAL_THEME_CONFIG_JSON = "terminal_theme.json"
+TERMINAL_THEME_CONFIG_CSS = "terminal_theme.css"
+TERMINAL_THEME_CSS_MARKER = "/* xkeen-ui terminal theme v2 */"
+
+CODEMIRROR_THEME_CONFIG_JSON = "codemirror_theme.json"
+CODEMIRROR_THEME_CONFIG_CSS = "codemirror_theme.css"
+# Bump when generated CSS structure changes (used for auto-regeneration).
+CODEMIRROR_THEME_CSS_MARKER = "/* xkeen-ui codemirror theme v3 */"
+
 # Defaults match the built-in dark/light palettes in static/styles.css.
 _DEFAULT_THEME_CONFIG: Dict[str, Any] = {
     # Global typography (applies to both themes)
@@ -940,6 +956,34 @@ _DEFAULT_THEME_CONFIG: Dict[str, Any] = {
         "header_tab_border": "#1f2937",
         "header_tab_active_bg": "#2563eb",
         "header_tab_active_text": "#ffffff",
+
+        # File manager (FM)
+        "fm_panel_bg": "#020617eb",
+        "fm_panel_border": "#1f2937",
+        "fm_panel_bar_bg": "#020617b8",
+        "fm_panel_bar_border": "#1f293799",
+        "fm_input_bg": "#020617",
+        "fm_input_border": "#1f2937",
+        "fm_row_header_bg": "#0206178c",
+        "fm_row_header_border": "#1f293799",
+        "fm_row_hover_bg": "#020617d9",
+        "fm_row_selected_bg": "#2563eb2e",
+        "fm_row_focus_outline": "#60a5fa8c",
+        "fm_props_bg": "#020617d1",
+        "fm_props_border": "#1f2937",
+        "fm_menu_bg": "#020617eb",
+        "fm_menu_border": "#334155",
+        "fm_menu_item_hover_bg": "#60a5fa1f",
+        "fm_menu_item_hover_border": "#33415599",
+        "fm_menu_sep": "#33415599",
+        "fm_btn_bg": "#020617",
+        "fm_btn_text": "#e5e7eb",
+        "fm_btn_border": "#1f2937",
+        "fm_btn_hover_bg": "#020617",
+        "fm_btn_hover_text": "#e5e7eb",
+        "fm_btn_hover_border": "#4b5563",
+        "fm_btn_active_from": "#1d4ed8",
+        "fm_btn_active_to": "#2563eb",
         "radius": 12,
         "shadow": 0.40,
         "density": 1.00,
@@ -1015,10 +1059,226 @@ _DEFAULT_THEME_CONFIG: Dict[str, Any] = {
         "header_tab_border": "#d1d5db",
         "header_tab_active_bg": "#0a84ff",
         "header_tab_active_text": "#ffffff",
+
+        # File manager (FM)
+        "fm_panel_bg": "#020617eb",
+        "fm_panel_border": "#1f2937",
+        "fm_panel_bar_bg": "#020617b8",
+        "fm_panel_bar_border": "#1f293799",
+        "fm_input_bg": "#020617",
+        "fm_input_border": "#1f2937",
+        "fm_row_header_bg": "#0206178c",
+        "fm_row_header_border": "#1f293799",
+        "fm_row_hover_bg": "#020617d9",
+        "fm_row_selected_bg": "#2563eb2e",
+        "fm_row_focus_outline": "#60a5fa8c",
+        "fm_props_bg": "#020617d1",
+        "fm_props_border": "#1f2937",
+        "fm_menu_bg": "#020617eb",
+        "fm_menu_border": "#334155",
+        "fm_menu_item_hover_bg": "#60a5fa1f",
+        "fm_menu_item_hover_border": "#33415599",
+        "fm_menu_sep": "#33415599",
+        "fm_btn_bg": "#020617",
+        "fm_btn_text": "#e5e7eb",
+        "fm_btn_border": "#1f2937",
+        "fm_btn_hover_bg": "#020617",
+        "fm_btn_hover_text": "#e5e7eb",
+        "fm_btn_hover_border": "#4b5563",
+        "fm_btn_active_from": "#1d4ed8",
+        "fm_btn_active_to": "#2563eb",
         "radius": 12,
         "shadow": 0.08,
         "density": 1.00,
         "contrast": 1.00,
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# Independent themes: Terminal (xterm.js) and CodeMirror
+# ---------------------------------------------------------------------------
+
+_DEFAULT_TERMINAL_THEME_CONFIG: Dict[str, Any] = {
+    "enabled": False,
+    "dark": {
+        "background": "#020617",
+        "foreground": "#e5e7eb",
+        "cursor": "#60a5fa",
+        "cursor_accent": "#020617",
+        # Optional separate cursor colors when cursorBlink=true in xterm options.
+        "cursor_blink": "#60a5fa",
+        "cursor_blink_accent": "#020617",
+        # Selection colors (#RRGGBBAA allowed)
+        "selection": "#60a5fa52",  # ~0.32 alpha
+        "selection_foreground": "#e5e7eb",
+        # Scrollbar colors for xterm viewport
+        "scrollbar_track": "#0b1220",
+        "scrollbar_thumb": "#475569cc",
+        "scrollbar_thumb_hover": "#64748bcc",
+        "palette": {
+            "black": "#0b1220",
+            "red": "#f87171",
+            "green": "#22c55e",
+            "yellow": "#fbbf24",
+            "blue": "#60a5fa",
+            "magenta": "#f472b6",
+            "cyan": "#22d3ee",
+            "white": "#e5e7eb",
+            "brightBlack": "#334155",
+            "brightRed": "#fecaca",
+            "brightGreen": "#bbf7d0",
+            "brightYellow": "#fef08a",
+            "brightBlue": "#bfdbfe",
+            "brightMagenta": "#fbcfe8",
+            "brightCyan": "#cffafe",
+            "brightWhite": "#ffffff",
+        },
+    },
+    "light": {
+        "background": "#ffffff",
+        "foreground": "#111827",
+        "cursor": "#0a84ff",
+        "cursor_accent": "#ffffff",
+        "cursor_blink": "#0a84ff",
+        "cursor_blink_accent": "#ffffff",
+        "selection": "#0a84ff38",  # ~0.22 alpha
+        "selection_foreground": "#111827",
+        "scrollbar_track": "#f3f4f6",
+        "scrollbar_thumb": "#9ca3afcc",
+        "scrollbar_thumb_hover": "#6b7280cc",
+        "palette": {
+            "black": "#111827",
+            "red": "#dc2626",
+            "green": "#16a34a",
+            "yellow": "#b45309",
+            "blue": "#2563eb",
+            "magenta": "#a21caf",
+            "cyan": "#0e7490",
+            "white": "#e5e7eb",
+            "brightBlack": "#4b5563",
+            "brightRed": "#fecaca",
+            "brightGreen": "#bbf7d0",
+            "brightYellow": "#fef08a",
+            "brightBlue": "#bfdbfe",
+            "brightMagenta": "#fbcfe8",
+            "brightCyan": "#cffafe",
+            "brightWhite": "#ffffff",
+        },
+    },
+}
+
+_DEFAULT_CODEMIRROR_THEME_CONFIG: Dict[str, Any] = {
+    "enabled": False,
+    "dark": {
+        "background": "#020617",
+        "text": "#e5e7eb",
+        "gutter_bg": "#020617",
+        "gutter_text": "#9ca3af",
+        "cursor": "#60a5fa",
+        "selection": "#60a5fa38",
+        # Selected text color (used for ::selection + CodeMirror-selectedtext)
+        "selection_text": "#e5e7eb",
+        "active_line": "#60a5fa17",
+        # Search match highlight (addon/search/match-highlighter)
+        "search_match": "#fbbf2440",
+        # Rulers (addon/display/rulers)
+        "ruler": "#334155",
+        # Indent guides (addon/display/indent-guides + cm-tab guides)
+        "indent_guide": "#47556980",
+        # Trailing spaces highlight (addon/edit/trailingspace)
+        "trailingspace": "#f8717126",
+        # Lint tooltip + line highlights (addon/lint)
+        "lint_tooltip_bg": "#0b1220",
+        "lint_tooltip_text": "#e5e7eb",
+        "lint_tooltip_border": "#334155",
+        "lint_error_line": "#f8717114",
+        "lint_warning_line": "#fbbf2414",
+        "bracket_bg": "#60a5fa2e",
+        "bracket_border": "#60a5fa73",
+        "bad_bracket_bg": "#f871712e",
+        "bad_bracket_border": "#f871718c",
+        "dialog_bg": "#020617",
+        "dialog_text": "#e5e7eb",
+        "dialog_border": "#1f2937",
+        "dialog_input_bg": "#020617",
+        "dialog_input_text": "#e5e7eb",
+        "dialog_btn_bg": "#020617",
+        "dialog_btn_text": "#e5e7eb",
+        "dialog_btn_border": "#1f2937",
+        "tokens": {
+            "keyword": "#93c5fd",
+            "string": "#bbf7d0",
+            "number": "#fde68a",
+            "comment": "#a1a1aa",
+            "atom": "#fbcfe8",
+            "def": "#bfdbfe",
+            "variable": "#e5e7eb",
+            "variable2": "#22d3ee",
+            "builtin": "#fbbf24",
+            "meta": "#c7d2fe",
+            "tag": "#fca5a5",
+            "attribute": "#86efac",
+            "error": "#f87171",
+            "property": "#c7d2fe",
+            "operator": "#e5e7eb",
+            "qualifier": "#fde68a",
+            "bracket": "#9ca3af",
+            "link": "#60a5fa",
+            "header": "#fbbf24",
+        },
+    },
+    "light": {
+        "background": "#ffffff",
+        "text": "#111827",
+        "gutter_bg": "#ffffff",
+        "gutter_text": "#6b7280",
+        "cursor": "#0a84ff",
+        "selection": "#0a84ff2e",
+        "selection_text": "#111827",
+        "active_line": "#0a84ff14",
+        "search_match": "#f59e0b33",
+        "ruler": "#d1d5db",
+        "indent_guide": "#1118271f",
+        "trailingspace": "#dc26261f",
+        "lint_tooltip_bg": "#fff7ed",
+        "lint_tooltip_text": "#111827",
+        "lint_tooltip_border": "#d1d5db",
+        "lint_error_line": "#dc262614",
+        "lint_warning_line": "#f59e0b14",
+        "bracket_bg": "#0a84ff2e",
+        "bracket_border": "#0a84ff73",
+        "bad_bracket_bg": "#dc26262e",
+        "bad_bracket_border": "#dc26268c",
+        "dialog_bg": "#ffffff",
+        "dialog_text": "#111827",
+        "dialog_border": "#d1d5db",
+        "dialog_input_bg": "#f9fafb",
+        "dialog_input_text": "#111827",
+        "dialog_btn_bg": "#ffffff",
+        "dialog_btn_text": "#111827",
+        "dialog_btn_border": "#d1d5db",
+        "tokens": {
+            "keyword": "#1d4ed8",
+            "string": "#047857",
+            "number": "#a16207",
+            "comment": "#6b7280",
+            "atom": "#a21caf",
+            "def": "#0f766e",
+            "variable": "#111827",
+            "variable2": "#0369a1",
+            "builtin": "#b45309",
+            "meta": "#4338ca",
+            "tag": "#dc2626",
+            "attribute": "#16a34a",
+            "error": "#dc2626",
+            "property": "#4338ca",
+            "operator": "#111827",
+            "qualifier": "#a16207",
+            "bracket": "#6b7280",
+            "link": "#2563eb",
+            "header": "#b45309",
+        },
     },
 }
 
@@ -1167,6 +1427,33 @@ def _sanitize_theme_config(cfg_in: Any) -> Dict[str, Any]:
         dst["header_tab_active_bg"] = _sanitize_color(src.get("header_tab_active_bg"), dst["header_tab_active_bg"])
         dst["header_tab_active_text"] = _sanitize_color(src.get("header_tab_active_text"), dst["header_tab_active_text"])
 
+        dst["fm_panel_bg"] = _sanitize_color(src.get("fm_panel_bg"), dst["fm_panel_bg"])
+        dst["fm_panel_border"] = _sanitize_color(src.get("fm_panel_border"), dst["fm_panel_border"])
+        dst["fm_panel_bar_bg"] = _sanitize_color(src.get("fm_panel_bar_bg"), dst["fm_panel_bar_bg"])
+        dst["fm_panel_bar_border"] = _sanitize_color(src.get("fm_panel_bar_border"), dst["fm_panel_bar_border"])
+        dst["fm_input_bg"] = _sanitize_color(src.get("fm_input_bg"), dst["fm_input_bg"])
+        dst["fm_input_border"] = _sanitize_color(src.get("fm_input_border"), dst["fm_input_border"])
+        dst["fm_row_header_bg"] = _sanitize_color(src.get("fm_row_header_bg"), dst["fm_row_header_bg"])
+        dst["fm_row_header_border"] = _sanitize_color(src.get("fm_row_header_border"), dst["fm_row_header_border"])
+        dst["fm_row_hover_bg"] = _sanitize_color(src.get("fm_row_hover_bg"), dst["fm_row_hover_bg"])
+        dst["fm_row_selected_bg"] = _sanitize_color(src.get("fm_row_selected_bg"), dst["fm_row_selected_bg"])
+        dst["fm_row_focus_outline"] = _sanitize_color(src.get("fm_row_focus_outline"), dst["fm_row_focus_outline"])
+        dst["fm_props_bg"] = _sanitize_color(src.get("fm_props_bg"), dst["fm_props_bg"])
+        dst["fm_props_border"] = _sanitize_color(src.get("fm_props_border"), dst["fm_props_border"])
+        dst["fm_menu_bg"] = _sanitize_color(src.get("fm_menu_bg"), dst["fm_menu_bg"])
+        dst["fm_menu_border"] = _sanitize_color(src.get("fm_menu_border"), dst["fm_menu_border"])
+        dst["fm_menu_item_hover_bg"] = _sanitize_color(src.get("fm_menu_item_hover_bg"), dst["fm_menu_item_hover_bg"])
+        dst["fm_menu_item_hover_border"] = _sanitize_color(src.get("fm_menu_item_hover_border"), dst["fm_menu_item_hover_border"])
+        dst["fm_menu_sep"] = _sanitize_color(src.get("fm_menu_sep"), dst["fm_menu_sep"])
+        dst["fm_btn_bg"] = _sanitize_color(src.get("fm_btn_bg"), dst["fm_btn_bg"])
+        dst["fm_btn_text"] = _sanitize_color(src.get("fm_btn_text"), dst["fm_btn_text"])
+        dst["fm_btn_border"] = _sanitize_color(src.get("fm_btn_border"), dst["fm_btn_border"])
+        dst["fm_btn_hover_bg"] = _sanitize_color(src.get("fm_btn_hover_bg"), dst["fm_btn_hover_bg"])
+        dst["fm_btn_hover_text"] = _sanitize_color(src.get("fm_btn_hover_text"), dst["fm_btn_hover_text"])
+        dst["fm_btn_hover_border"] = _sanitize_color(src.get("fm_btn_hover_border"), dst["fm_btn_hover_border"])
+        dst["fm_btn_active_from"] = _sanitize_color(src.get("fm_btn_active_from"), dst["fm_btn_active_from"])
+        dst["fm_btn_active_to"] = _sanitize_color(src.get("fm_btn_active_to"), dst["fm_btn_active_to"])
+
         dst["radius"] = _clamp_int(src.get("radius"), 0, 32, int(dst["radius"]))
         # shadow is alpha (0..0.7)
         dst["shadow"] = round(_clamp_float(src.get("shadow"), 0.0, 0.7, float(dst["shadow"])), 3)
@@ -1203,6 +1490,7 @@ def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
     light_rs = _radius_sm(int(light.get("radius") or 12))
 
     css: List[str] = []
+    css.append(THEME_CSS_MARKER)
     css.append("/* Generated by Xkeen UI DevTools — Theme editor */")
     css.append("/* Safe override layer: only CSS variables + a few core selectors. */")
     css.append("")
@@ -1275,6 +1563,32 @@ def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
     css.append(f"  --header-tab-border: {dark.get('header_tab_border')};")
     css.append(f"  --header-tab-active-bg: {dark.get('header_tab_active_bg')};")
     css.append(f"  --header-tab-active-text: {dark.get('header_tab_active_text')};")
+    css.append(f"  --fm-panel-bg: {dark.get('fm_panel_bg')};")
+    css.append(f"  --fm-panel-border: {dark.get('fm_panel_border')};")
+    css.append(f"  --fm-panel-bar-bg: {dark.get('fm_panel_bar_bg')};")
+    css.append(f"  --fm-panel-bar-border: {dark.get('fm_panel_bar_border')};")
+    css.append(f"  --fm-input-bg: {dark.get('fm_input_bg')};")
+    css.append(f"  --fm-input-border: {dark.get('fm_input_border')};")
+    css.append(f"  --fm-row-header-bg: {dark.get('fm_row_header_bg')};")
+    css.append(f"  --fm-row-header-border: {dark.get('fm_row_header_border')};")
+    css.append(f"  --fm-row-hover-bg: {dark.get('fm_row_hover_bg')};")
+    css.append(f"  --fm-row-selected-bg: {dark.get('fm_row_selected_bg')};")
+    css.append(f"  --fm-row-focus-outline: {dark.get('fm_row_focus_outline')};")
+    css.append(f"  --fm-props-bg: {dark.get('fm_props_bg')};")
+    css.append(f"  --fm-props-border: {dark.get('fm_props_border')};")
+    css.append(f"  --fm-menu-bg: {dark.get('fm_menu_bg')};")
+    css.append(f"  --fm-menu-border: {dark.get('fm_menu_border')};")
+    css.append(f"  --fm-menu-item-hover-bg: {dark.get('fm_menu_item_hover_bg')};")
+    css.append(f"  --fm-menu-item-hover-border: {dark.get('fm_menu_item_hover_border')};")
+    css.append(f"  --fm-menu-sep: {dark.get('fm_menu_sep')};")
+    css.append(f"  --fm-btn-bg: {dark.get('fm_btn_bg')};")
+    css.append(f"  --fm-btn-text: {dark.get('fm_btn_text')};")
+    css.append(f"  --fm-btn-border: {dark.get('fm_btn_border')};")
+    css.append(f"  --fm-btn-hover-bg: {dark.get('fm_btn_hover_bg')};")
+    css.append(f"  --fm-btn-hover-text: {dark.get('fm_btn_hover_text')};")
+    css.append(f"  --fm-btn-hover-border: {dark.get('fm_btn_hover_border')};")
+    css.append(f"  --fm-btn-active-from: {dark.get('fm_btn_active_from')};")
+    css.append(f"  --fm-btn-active-to: {dark.get('fm_btn_active_to')};")
     css.append(f"  --radius: {int(dark.get('radius') or 12)}px;")
     css.append(f"  --radius-sm: {dark_rs}px;")
     css.append(f"  --shadow: {float(dark.get('shadow') or 0.4)};")
@@ -1348,6 +1662,32 @@ def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
     css.append(f"  --header-tab-border: {dark.get('header_tab_border')};")
     css.append(f"  --header-tab-active-bg: {dark.get('header_tab_active_bg')};")
     css.append(f"  --header-tab-active-text: {dark.get('header_tab_active_text')};")
+    css.append(f"  --fm-panel-bg: {dark.get('fm_panel_bg')};")
+    css.append(f"  --fm-panel-border: {dark.get('fm_panel_border')};")
+    css.append(f"  --fm-panel-bar-bg: {dark.get('fm_panel_bar_bg')};")
+    css.append(f"  --fm-panel-bar-border: {dark.get('fm_panel_bar_border')};")
+    css.append(f"  --fm-input-bg: {dark.get('fm_input_bg')};")
+    css.append(f"  --fm-input-border: {dark.get('fm_input_border')};")
+    css.append(f"  --fm-row-header-bg: {dark.get('fm_row_header_bg')};")
+    css.append(f"  --fm-row-header-border: {dark.get('fm_row_header_border')};")
+    css.append(f"  --fm-row-hover-bg: {dark.get('fm_row_hover_bg')};")
+    css.append(f"  --fm-row-selected-bg: {dark.get('fm_row_selected_bg')};")
+    css.append(f"  --fm-row-focus-outline: {dark.get('fm_row_focus_outline')};")
+    css.append(f"  --fm-props-bg: {dark.get('fm_props_bg')};")
+    css.append(f"  --fm-props-border: {dark.get('fm_props_border')};")
+    css.append(f"  --fm-menu-bg: {dark.get('fm_menu_bg')};")
+    css.append(f"  --fm-menu-border: {dark.get('fm_menu_border')};")
+    css.append(f"  --fm-menu-item-hover-bg: {dark.get('fm_menu_item_hover_bg')};")
+    css.append(f"  --fm-menu-item-hover-border: {dark.get('fm_menu_item_hover_border')};")
+    css.append(f"  --fm-menu-sep: {dark.get('fm_menu_sep')};")
+    css.append(f"  --fm-btn-bg: {dark.get('fm_btn_bg')};")
+    css.append(f"  --fm-btn-text: {dark.get('fm_btn_text')};")
+    css.append(f"  --fm-btn-border: {dark.get('fm_btn_border')};")
+    css.append(f"  --fm-btn-hover-bg: {dark.get('fm_btn_hover_bg')};")
+    css.append(f"  --fm-btn-hover-text: {dark.get('fm_btn_hover_text')};")
+    css.append(f"  --fm-btn-hover-border: {dark.get('fm_btn_hover_border')};")
+    css.append(f"  --fm-btn-active-from: {dark.get('fm_btn_active_from')};")
+    css.append(f"  --fm-btn-active-to: {dark.get('fm_btn_active_to')};")
     css.append(f"  --radius: {int(dark.get('radius') or 12)}px;")
     css.append(f"  --radius-sm: {dark_rs}px;")
     css.append(f"  --shadow: {float(dark.get('shadow') or 0.4)};")
@@ -1421,6 +1761,32 @@ def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
     css.append(f"  --header-tab-border: {light.get('header_tab_border')};")
     css.append(f"  --header-tab-active-bg: {light.get('header_tab_active_bg')};")
     css.append(f"  --header-tab-active-text: {light.get('header_tab_active_text')};")
+    css.append(f"  --fm-panel-bg: {light.get('fm_panel_bg')};")
+    css.append(f"  --fm-panel-border: {light.get('fm_panel_border')};")
+    css.append(f"  --fm-panel-bar-bg: {light.get('fm_panel_bar_bg')};")
+    css.append(f"  --fm-panel-bar-border: {light.get('fm_panel_bar_border')};")
+    css.append(f"  --fm-input-bg: {light.get('fm_input_bg')};")
+    css.append(f"  --fm-input-border: {light.get('fm_input_border')};")
+    css.append(f"  --fm-row-header-bg: {light.get('fm_row_header_bg')};")
+    css.append(f"  --fm-row-header-border: {light.get('fm_row_header_border')};")
+    css.append(f"  --fm-row-hover-bg: {light.get('fm_row_hover_bg')};")
+    css.append(f"  --fm-row-selected-bg: {light.get('fm_row_selected_bg')};")
+    css.append(f"  --fm-row-focus-outline: {light.get('fm_row_focus_outline')};")
+    css.append(f"  --fm-props-bg: {light.get('fm_props_bg')};")
+    css.append(f"  --fm-props-border: {light.get('fm_props_border')};")
+    css.append(f"  --fm-menu-bg: {light.get('fm_menu_bg')};")
+    css.append(f"  --fm-menu-border: {light.get('fm_menu_border')};")
+    css.append(f"  --fm-menu-item-hover-bg: {light.get('fm_menu_item_hover_bg')};")
+    css.append(f"  --fm-menu-item-hover-border: {light.get('fm_menu_item_hover_border')};")
+    css.append(f"  --fm-menu-sep: {light.get('fm_menu_sep')};")
+    css.append(f"  --fm-btn-bg: {light.get('fm_btn_bg')};")
+    css.append(f"  --fm-btn-text: {light.get('fm_btn_text')};")
+    css.append(f"  --fm-btn-border: {light.get('fm_btn_border')};")
+    css.append(f"  --fm-btn-hover-bg: {light.get('fm_btn_hover_bg')};")
+    css.append(f"  --fm-btn-hover-text: {light.get('fm_btn_hover_text')};")
+    css.append(f"  --fm-btn-hover-border: {light.get('fm_btn_hover_border')};")
+    css.append(f"  --fm-btn-active-from: {light.get('fm_btn_active_from')};")
+    css.append(f"  --fm-btn-active-to: {light.get('fm_btn_active_to')};")
     css.append(f"  --radius: {int(light.get('radius') or 12)}px;")
     css.append(f"  --radius-sm: {light_rs}px;")
     css.append(f"  --shadow: {float(light.get('shadow') or 0.08)};")
@@ -1434,16 +1800,40 @@ def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
     css.append("body {")
     css.append("  background: var(--bg) !important;")
     css.append("  color: var(--text) !important;")
-    css.append("  filter: contrast(var(--contrast));")
+    css.append("}")
+
+    # Safety override: neutralize any legacy `filter: contrast()` rules from older theme versions.
+    # NOTE: A filter on an ancestor affects all descendants and cannot be "canceled" from inside.
+    # Therefore we must explicitly reset it on the usual top-level containers.
+    css.append("html, body, .container { filter: none !important; }")
+    css.append(".container > :not(.modal):not(.terminal-overlay):not(.xkeen-cm-help-overlay):not(.xkeen-cm-help-drawer) { filter: none !important; }")
+    css.append(".modal-content, .terminal-window, .xkeen-cm-help-drawer, .global-spinner-box { filter: none !important; }")
+    css.append("")
+
+    # Contrast (safe):
+    # Do NOT use CSS `filter: contrast()` on containers. It breaks transparency and alters embedded widgets (CodeMirror, file manager).
+    # Instead, gently adjust a couple of core tokens (border + muted) via color-mix when available.
+    css.append("/* Contrast (safe): no CSS filter; only token adjustments */")
+    css.append(":root { --xk-border: var(--border); --xk-muted: var(--muted); }")
+    css.append("@supports (color: color-mix(in srgb, black 50%, white)) {")
+    css.append("  :root {")
+    css.append("    --xk-contrast-hi: clamp(0, calc(var(--contrast) - 1), 1);")
+    css.append("    --xk-contrast-lo: clamp(0, calc(1 - var(--contrast)), 1);")
+    css.append("    --xk-contrast-hi-p: calc(var(--xk-contrast-hi) * 55%);")
+    css.append("    --xk-contrast-lo-p: calc(var(--xk-contrast-lo) * 55%);")
+    css.append("    --xk-border: color-mix(in srgb, color-mix(in srgb, var(--border) calc(100% - var(--xk-contrast-hi-p)), var(--text) var(--xk-contrast-hi-p)) calc(100% - var(--xk-contrast-lo-p)), var(--bg) var(--xk-contrast-lo-p));")
+    css.append("    --xk-muted: color-mix(in srgb, color-mix(in srgb, var(--muted) calc(100% - var(--xk-contrast-hi-p)), var(--text) var(--xk-contrast-hi-p)) calc(100% - var(--xk-contrast-lo-p)), var(--bg) var(--xk-contrast-lo-p));")
+    css.append("  }")
     css.append("}")
     css.append("a { color: var(--accent) !important; }")
-    css.append("header p, .card p, .hint, .modal-hint, .small { color: var(--muted) !important; }")
+    css.append("header p, .card p, .hint, .modal-hint, .small { color: var(--xk-muted, var(--muted)) !important; }")
     css.append("")
+
 
     css.append(".container { padding: calc(24px * var(--density)) !important; }")
     css.append(".card {")
     css.append("  background: var(--card-bg) !important;")
-    css.append("  border-color: var(--border) !important;")
+    css.append("  border-color: var(--xk-border, var(--border)) !important;")
     css.append("  border-radius: var(--radius) !important;")
     css.append("  padding: calc(16px * var(--density)) calc(16px * var(--density)) calc(20px * var(--density)) !important;")
     css.append("  box-shadow: 0 10px 30px rgba(var(--shadow-rgb), var(--shadow)) !important;")
@@ -1473,7 +1863,7 @@ def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
     css.append("")
 
     css.append("input, select, textarea, .xkeen-textarea, .CodeMirror {")
-    css.append("  border-color: var(--border) !important;")
+    css.append("  border-color: var(--xk-border, var(--border)) !important;")
     css.append("  border-radius: var(--radius-sm) !important;")
     css.append("  background: var(--card-bg) !important;")
     css.append("  color: var(--text) !important;")
@@ -1487,6 +1877,129 @@ def _theme_css_from_config(cfg: Dict[str, Any]) -> str:
     css.append("header .top-tabs.header-tabs .top-tab-btn { background: var(--header-tab-bg) !important; border-color: var(--header-tab-border) !important; color: var(--header-tab-text) !important; }")
     css.append("header .top-tabs.header-tabs .top-tab-btn:hover, header .top-tabs.header-tabs .top-tab-btn.active { background: var(--header-tab-active-bg) !important; border-color: var(--header-tab-active-bg) !important; color: var(--header-tab-active-text) !important; }")
 
+    css.append("")
+    css.append("/* Global tables */")
+    css.append("table { background: transparent !important; color: var(--text) !important; }")
+    css.append("thead { background: var(--modal-table-head-bg) !important; }")
+    css.append("th, td { border-bottom-color: var(--xk-border, var(--border)) !important; }")
+    css.append("th { color: var(--xk-muted, var(--muted)) !important; background: transparent !important; }")
+    css.append("tbody tr:hover { background: color-mix(in srgb, var(--card-bg) 92%, transparent) !important; }")
+    css.append("")
+
+    css.append("/* Footer */")
+    css.append("footer { color: var(--xk-muted, var(--muted)) !important; }")
+    css.append("")
+
+    css.append("/* Logs blocks (outside modals) */")
+    css.append(".log-block, .terminal-output { background: var(--card-bg) !important; color: var(--text) !important; border-color: var(--xk-border, var(--border)) !important; }")
+    css.append("")
+
+    css.append("/* Toast notifications */")
+    css.append(".toast { background: var(--card-bg) !important; color: var(--text) !important; border-color: var(--sem-success) !important; box-shadow: 0 18px 40px color-mix(in srgb, var(--sem-success) 40%, transparent) !important; }")
+    css.append(".toast-error { border-color: var(--sem-error) !important; box-shadow: 0 18px 40px color-mix(in srgb, var(--sem-error) 40%, transparent) !important; }")
+    css.append("")
+    css.append("/* Global spinner overlay */")
+    css.append("#global-xkeen-spinner { background: var(--modal-overlay) !important; }")
+    css.append(".global-spinner-box { background: var(--modal-bg) !important; border-color: var(--modal-border) !important; border-radius: var(--radius) !important; box-shadow: 0 18px 38px rgba(var(--shadow-rgb), var(--shadow)) !important; }")
+    css.append(".global-spinner-text { color: var(--modal-text) !important; }")
+    css.append(".global-spinner-icon { border-color: color-mix(in srgb, var(--sem-success) 35%, transparent) !important; border-top-color: var(--sem-success) !important; }")
+    css.append("")
+
+    css.append("/* Tooltips */")
+    css.append(".xk-tooltip::after, .command-item::after, .xkeen-cm-tool[data-tip]::after { background: var(--modal-bg) !important; color: var(--modal-text) !important; border-color: var(--xk-border, var(--border)) !important; box-shadow: 0 10px 25px rgba(var(--shadow-rgb), var(--shadow)) !important; }")
+    css.append(".xk-tooltip::before, .command-item::before { border-color: transparent transparent var(--modal-bg) transparent !important; }")
+    css.append("")
+
+    css.append("/* CodeMirror surfaces */")
+    css.append(".CodeMirror-scroll { background: var(--card-bg) !important; }")
+    css.append("")
+
+    css.append("/* CodeMirror: make BOTH built-in themes (default + material-darker) follow global vars */")
+    css.append(".CodeMirror, .cm-s-default.CodeMirror, .cm-s-material-darker.CodeMirror { background: var(--card-bg) !important; color: var(--text) !important; }")
+    css.append(".CodeMirror-gutters { background: var(--card-bg) !important; border-right-color: var(--xk-border, var(--border)) !important; }")
+    css.append(".CodeMirror-linenumber { color: color-mix(in srgb, var(--muted) 78%, transparent) !important; }")
+    css.append(".CodeMirror-cursor { border-left-color: var(--accent) !important; }")
+    css.append(".CodeMirror-selected, div.CodeMirror-selected { background: color-mix(in srgb, var(--accent) 22%, transparent) !important; }")
+    css.append(".CodeMirror-focused .CodeMirror-selected, .CodeMirror-focused div.CodeMirror-selected { background: color-mix(in srgb, var(--accent) 28%, transparent) !important; }")
+    css.append(".CodeMirror-activeline-background { background: color-mix(in srgb, var(--accent) 9%, transparent) !important; }")
+    css.append(".CodeMirror-activeline-gutter { background: color-mix(in srgb, var(--accent) 7%, transparent) !important; }")
+    css.append(".CodeMirror-matchingbracket { color: var(--text) !important; background: color-mix(in srgb, var(--accent) 18%, transparent) !important; outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent) !important; }")
+    css.append(".CodeMirror-nonmatchingbracket { color: var(--text) !important; background: color-mix(in srgb, var(--sem-error) 18%, transparent) !important; outline: 1px solid color-mix(in srgb, var(--sem-error) 55%, transparent) !important; }")
+    css.append(".cm-searching { background: color-mix(in srgb, var(--sem-warning) 35%, transparent) !important; color: var(--text) !important; }")
+    css.append(".cm-searching.cm-searching-selected { background: color-mix(in srgb, var(--sem-warning) 50%, transparent) !important; }")
+    css.append("")
+
+    css.append("/* CodeMirror tokens: drive syntax colors from semantic/global vars */")
+    css.append(".cm-s-default .cm-comment, .cm-s-material-darker .cm-comment { color: color-mix(in srgb, var(--muted) 82%, transparent) !important; font-style: italic; }")
+    css.append(".cm-s-default .cm-string, .cm-s-material-darker .cm-string, .cm-s-default .cm-string-2, .cm-s-material-darker .cm-string-2 { color: color-mix(in srgb, var(--sem-success) 82%, var(--text) 18%) !important; }")
+    css.append(".cm-s-default .cm-number, .cm-s-material-darker .cm-number { color: color-mix(in srgb, var(--sem-warning) 86%, var(--text) 14%) !important; }")
+    css.append(".cm-s-default .cm-keyword, .cm-s-material-darker .cm-keyword { color: var(--accent) !important; font-weight: 600; }")
+    css.append(".cm-s-default .cm-builtin, .cm-s-material-darker .cm-builtin { color: color-mix(in srgb, var(--sem-info) 88%, var(--text) 12%) !important; }")
+    css.append(".cm-s-default .cm-def, .cm-s-material-darker .cm-def { color: color-mix(in srgb, var(--sem-info) 78%, var(--text) 22%) !important; }")
+    css.append(".cm-s-default .cm-property, .cm-s-material-darker .cm-property { color: color-mix(in srgb, var(--sem-info) 70%, var(--text) 30%) !important; }")
+    css.append(".cm-s-default .cm-atom, .cm-s-material-darker .cm-atom { color: var(--sem-warning) !important; }")
+    css.append(".cm-s-default .cm-tag, .cm-s-material-darker .cm-tag { color: var(--accent) !important; }")
+    css.append(".cm-s-default .cm-attribute, .cm-s-material-darker .cm-attribute { color: var(--sem-warning) !important; }")
+    css.append(".cm-s-default .cm-qualifier, .cm-s-material-darker .cm-qualifier { color: color-mix(in srgb, var(--sem-warning) 70%, var(--text) 30%) !important; }")
+    css.append(".cm-s-default .cm-variable, .cm-s-material-darker .cm-variable { color: var(--text) !important; }")
+    css.append(".cm-s-default .cm-variable-2, .cm-s-material-darker .cm-variable-2 { color: color-mix(in srgb, var(--sem-info) 75%, var(--text) 25%) !important; }")
+    css.append(".cm-s-default .cm-variable-3, .cm-s-material-darker .cm-variable-3 { color: color-mix(in srgb, var(--sem-success) 70%, var(--text) 30%) !important; }")
+    css.append(".cm-s-default .cm-operator, .cm-s-material-darker .cm-operator { color: var(--text) !important; }")
+    css.append(".cm-s-default .cm-meta, .cm-s-material-darker .cm-meta { color: color-mix(in srgb, var(--muted) 88%, var(--text) 12%) !important; }")
+    css.append(".cm-s-default .cm-link, .cm-s-material-darker .cm-link { color: var(--accent) !important; text-decoration: underline; }")
+    css.append(".cm-s-default .cm-error, .cm-s-material-darker .cm-error { color: var(--sem-error) !important; }")
+    css.append("")
+
+    css.append("/* CodeMirror dialogs (search / replace) */")
+    css.append(".CodeMirror-dialog { background: var(--modal-bg) !important; color: var(--modal-text) !important; border-bottom: 1px solid var(--modal-header-border) !important; }")
+    css.append(".CodeMirror-dialog input { background: var(--modal-body-bg) !important; color: var(--modal-text) !important; border: 1px solid var(--modal-body-border) !important; border-radius: var(--radius-sm) !important; }")
+    css.append(".CodeMirror-dialog input:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 26%, transparent) !important; }")
+    css.append(".CodeMirror-dialog .CodeMirror-search-hint { color: var(--modal-muted) !important; }")
+    css.append(".CodeMirror-dialog button { background: var(--editor-btn-bg) !important; color: var(--editor-btn-text) !important; border: 1px solid var(--editor-btn-border) !important; border-radius: var(--radius-sm) !important; }")
+    css.append(".CodeMirror-dialog button:hover { background: var(--editor-btn-hover-bg) !important; color: var(--editor-btn-hover-text) !important; border-color: var(--editor-btn-hover-border) !important; }")
+    css.append("")
+
+    css.append("/* xterm.js wrapper: CSS follows global vars; palette is set in JS from CSS vars */")
+    css.append(".xterm, .xterm .xterm-viewport { background: var(--card-bg) !important; color: var(--text) !important; }")
+    css.append(".xterm .xterm-selection div { background: color-mix(in srgb, var(--accent) 28%, transparent) !important; }")
+    css.append("")
+
+    css.append("/* CodeMirror toolbar + help drawer */")
+    css.append(".xkeen-cm-tool { background: color-mix(in srgb, var(--editor-btn-bg) 82%, transparent) !important; color: var(--editor-btn-text) !important; border-color: color-mix(in srgb, var(--editor-btn-border) 85%, transparent) !important; }")
+    css.append(".xkeen-cm-tool:hover { background: color-mix(in srgb, var(--editor-btn-hover-bg) 88%, transparent) !important; color: var(--editor-btn-hover-text) !important; border-color: color-mix(in srgb, var(--editor-btn-hover-border) 85%, transparent) !important; }")
+    css.append(".xkeen-cm-tool:disabled, .xkeen-cm-tool.is-disabled { border-color: color-mix(in srgb, var(--editor-btn-border) 60%, transparent) !important; }")
+    css.append(".xkeen-cm-tool.is-help { color: var(--sem-error) !important; }")
+    css.append(".xkeen-cm-tool.is-help:hover { border-color: color-mix(in srgb, var(--sem-error) 65%, transparent) !important; }")
+    css.append(".xkeen-cm-help-overlay { background: var(--modal-overlay) !important; }")
+    css.append(".xkeen-cm-help-drawer { background: var(--modal-bg) !important; color: var(--modal-text) !important; border-left-color: var(--xk-border, var(--border)) !important; box-shadow: -24px 0 48px rgba(var(--shadow-rgb), var(--shadow)) !important; }")
+    css.append(".xkeen-cm-help-head { border-bottom-color: var(--modal-header-border) !important; }")
+    css.append(".xkeen-cm-help-close { background: var(--editor-btn-bg) !important; color: var(--editor-btn-text) !important; border-color: var(--editor-btn-border) !important; }")
+    css.append(".xkeen-cm-help-close:hover { background: var(--editor-btn-hover-bg) !important; color: var(--editor-btn-hover-text) !important; border-color: var(--editor-btn-hover-border) !important; }")
+    css.append(".xkeen-cm-help-section { background: color-mix(in srgb, var(--modal-body-bg) 88%, transparent) !important; border-color: color-mix(in srgb, var(--modal-body-border) 85%, transparent) !important; }")
+    css.append("")
+
+    css.append("/* Service status lamp */")
+    css.append(".service-status-lamp[data-state=\"stopped\"] { background: var(--sem-error) !important; box-shadow: 0 0 4px color-mix(in srgb, var(--sem-error) 70%, transparent) !important; }")
+    css.append(".service-status-lamp[data-state=\"pending\"] { background: var(--sem-warning) !important; box-shadow: 0 0 6px color-mix(in srgb, var(--sem-warning) 70%, transparent) !important; }")
+    css.append(".service-status-lamp[data-state=\"error\"] { background: var(--sem-warning) !important; box-shadow: 0 0 6px color-mix(in srgb, var(--sem-warning) 70%, transparent) !important; }")
+    css.append("")
+
+    css.append("/* Menus / popovers */")
+    css.append(".dt-log-menu-panel, .xray-line-menu { background: color-mix(in srgb, var(--modal-bg) 92%, transparent) !important; color: var(--text) !important; border-color: var(--xk-border, var(--border)) !important; box-shadow: 0 18px 50px rgba(var(--shadow-rgb), var(--shadow)) !important; }")
+    css.append(".fm-context-menu { background: var(--fm-menu-bg, color-mix(in srgb, var(--modal-bg) 92%, transparent)) !important; color: var(--text) !important; border-color: var(--fm-menu-border, var(--modal-border, var(--xk-border, var(--border)))) !important; box-shadow: 0 18px 50px rgba(var(--shadow-rgb), var(--shadow)) !important; }")
+    css.append(".fm-context-item:hover { background: var(--fm-menu-item-hover-bg, color-mix(in srgb, var(--accent) 12%, transparent)) !important; border-color: var(--fm-menu-item-hover-border, color-mix(in srgb, var(--xk-border, var(--border)) 60%, transparent)) !important; }")
+    css.append(".fm-context-sep { background: var(--fm-menu-sep, color-mix(in srgb, var(--xk-border, var(--border)) 60%, transparent)) !important; }")
+    css.append("")
+
+    css.append("/* Destructive buttons */")
+    css.append(".btn-danger { border-color: color-mix(in srgb, var(--sem-error) 60%, transparent) !important; background: color-mix(in srgb, var(--sem-error) 18%, transparent) !important; color: color-mix(in srgb, var(--sem-error) 25%, white) !important; }")
+    css.append(".btn-danger:hover { background: color-mix(in srgb, var(--sem-error) 26%, transparent) !important; }")
+    css.append("")
+
+    css.append("/* Focus rings (global) */")
+    css.append("input:focus, select:focus, textarea:focus, .xkeen-textarea:focus, .dt-pill-field:focus, .dt-log-lines-input:focus { outline: none !important; border-color: var(--accent) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent) !important; }")
+    css.append("button:focus-visible, .xkeen-cm-tool:focus-visible, .btn-link:focus-visible, .top-tab-btn:focus-visible, summary:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent) !important; outline-offset: 2px !important; }")
+    css.append(".dt-log-menu[open] > summary { border-color: var(--accent) !important; box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 22%, transparent) !important; }")
     css.append("")
     return "\n".join(css) + "\n"
 
@@ -1503,6 +2016,15 @@ def _atomic_write_text(path: str, text: str, mode: int = 0o644) -> None:
     os.replace(tmp, path)
 
 
+def _file_has_marker(path: str, marker: str) -> bool:
+    try:
+        with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+            head = f.read(4096)
+        return str(marker or "") in head
+    except Exception:
+        return False
+
+
 def theme_get(ui_state_dir: str) -> Dict[str, Any]:
     """Load current theme config (or defaults)."""
     cfg = json.loads(json.dumps(_DEFAULT_THEME_CONFIG))
@@ -1516,6 +2038,13 @@ def theme_get(ui_state_dir: str) -> Dict[str, Any]:
                 raw = json.load(f)
             cfg = _sanitize_theme_config(raw)
             exists = True
+
+            # Keep generated CSS in sync with current generator version.
+            try:
+                if not os.path.isfile(cpath) or not _file_has_marker(cpath, THEME_CSS_MARKER):
+                    _atomic_write_text(cpath, _theme_css_from_config(cfg), mode=0o644)
+            except Exception:
+                pass
         elif os.path.isfile(cpath):
             # If only CSS exists (older version), still report exists.
             exists = True
@@ -1575,6 +2104,504 @@ def theme_reset(ui_state_dir: str) -> Dict[str, Any]:
             pass
 
     return theme_get(ui_state_dir)
+
+
+# ---------------------------------------------------------------------------
+# Independent themes (optional): Terminal (xterm.js) and CodeMirror
+# ---------------------------------------------------------------------------
+
+
+def _terminal_theme_json_path(ui_state_dir: str) -> str:
+    return os.path.join(ui_state_dir, TERMINAL_THEME_CONFIG_JSON)
+
+
+def _terminal_theme_css_path(ui_state_dir: str) -> str:
+    return os.path.join(ui_state_dir, TERMINAL_THEME_CONFIG_CSS)
+
+
+def _codemirror_theme_json_path(ui_state_dir: str) -> str:
+    return os.path.join(ui_state_dir, CODEMIRROR_THEME_CONFIG_JSON)
+
+
+def _codemirror_theme_css_path(ui_state_dir: str) -> str:
+    return os.path.join(ui_state_dir, CODEMIRROR_THEME_CONFIG_CSS)
+
+
+_TERM_BASE_KEYS = ("background", "foreground", "cursor", "cursor_accent", "cursor_blink", "cursor_blink_accent", "selection", "selection_foreground", "scrollbar_track", "scrollbar_thumb", "scrollbar_thumb_hover")
+_TERM_PALETTE_KEYS = (
+    "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",
+    "brightBlack", "brightRed", "brightGreen", "brightYellow", "brightBlue", "brightMagenta", "brightCyan", "brightWhite",
+)
+
+
+def _sanitize_terminal_theme_config(cfg_in: Any) -> Dict[str, Any]:
+    base = json.loads(json.dumps(_DEFAULT_TERMINAL_THEME_CONFIG))
+    src = cfg_in if isinstance(cfg_in, dict) else {}
+
+    # enabled
+    try:
+        ev = src.get("enabled")
+        if isinstance(ev, bool):
+            base["enabled"] = ev
+        elif ev is not None:
+            s = str(ev).strip().lower()
+            base["enabled"] = s in ("1", "true", "yes", "on", "y")
+    except Exception:
+        pass
+
+    for mode in ("dark", "light"):
+        t_def = base.get(mode) or {}
+        t_in = src.get(mode) if isinstance(src.get(mode), dict) else {}
+
+        # base colors
+        for k in _TERM_BASE_KEYS:
+            try:
+                t_def[k] = _sanitize_color(t_in.get(k), t_def.get(k))
+            except Exception:
+                pass
+
+        # palette
+        pal_def = t_def.get("palette") if isinstance(t_def.get("palette"), dict) else {}
+        pal_in = t_in.get("palette") if isinstance(t_in.get("palette"), dict) else {}
+        for pk in _TERM_PALETTE_KEYS:
+            try:
+                pal_def[pk] = _sanitize_color(pal_in.get(pk), pal_def.get(pk))
+            except Exception:
+                pass
+        t_def["palette"] = pal_def
+        base[mode] = t_def
+
+    return base
+
+
+def _camel_to_kebab(s: str) -> str:
+    out = []
+    for ch in str(s or ""):
+        if ch.isupper():
+            out.append("-" + ch.lower())
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _terminal_theme_css_from_config(cfg: Dict[str, Any]) -> str:
+    lines: List[str] = []
+    lines.append(TERMINAL_THEME_CSS_MARKER)
+    lines.append("/* Generated by DevTools: Terminal (xterm.js) */")
+    lines.append("")
+
+    if not (cfg or {}).get("enabled"):
+        lines.append("/* disabled */")
+        lines.append("")
+        return "\n".join(lines) + "\n"
+
+    for mode in ("dark", "light"):
+        t = (cfg or {}).get(mode) if isinstance((cfg or {}).get(mode), dict) else {}
+        pal = t.get("palette") if isinstance(t.get("palette"), dict) else {}
+        sel = f":root[data-theme=\"{mode}\"]"
+        lines.append(f"{sel} {{")
+        lines.append("  --xk-term-enabled: 1;")
+        lines.append(f"  --xk-term-background: {t.get('background')};")
+        lines.append(f"  --xk-term-foreground: {t.get('foreground')};")
+        lines.append(f"  --xk-term-cursor: {t.get('cursor')};")
+        lines.append(f"  --xk-term-cursor-accent: {t.get('cursor_accent')};")
+
+        lines.append(f"  --xk-term-cursor-blink: {t.get('cursor_blink')};")
+
+        lines.append(f"  --xk-term-cursor-blink-accent: {t.get('cursor_blink_accent')};")
+        lines.append(f"  --xk-term-selection: {t.get('selection')};")
+
+        lines.append(f"  --xk-term-selection-foreground: {t.get('selection_foreground')};")
+
+        lines.append(f"  --xk-term-scrollbar-track: {t.get('scrollbar_track')};")
+
+        lines.append(f"  --xk-term-scrollbar-thumb: {t.get('scrollbar_thumb')};")
+
+        lines.append(f"  --xk-term-scrollbar-thumb-hover: {t.get('scrollbar_thumb_hover')};")
+        for pk in _TERM_PALETTE_KEYS:
+            v = pal.get(pk)
+            name = _camel_to_kebab(pk)
+            lines.append(f"  --xk-term-{name}: {v};")
+        lines.append("}")
+        lines.append("")
+
+    # Extra styling for xterm viewport (scrollbar/background); only present when theme is enabled.
+    lines.append("/* Extra styling for xterm viewport */")
+    lines.append(".terminal-window .xterm, .terminal-window .xterm .xterm-viewport { background-color: var(--xk-term-background) !important; }")
+    lines.append(".terminal-window .xterm .xterm-viewport { scrollbar-color: var(--xk-term-scrollbar-thumb) var(--xk-term-scrollbar-track); scrollbar-width: thin; }")
+    lines.append(".terminal-window .xterm .xterm-viewport::-webkit-scrollbar { width: 10px; height: 10px; }")
+    lines.append(".terminal-window .xterm .xterm-viewport::-webkit-scrollbar-track { background: var(--xk-term-scrollbar-track); }")
+    lines.append(".terminal-window .xterm .xterm-viewport::-webkit-scrollbar-thumb { background: var(--xk-term-scrollbar-thumb); border-radius: 10px; border: 2px solid var(--xk-term-scrollbar-track); }")
+    lines.append(".terminal-window .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--xk-term-scrollbar-thumb-hover); }")
+    lines.append(".terminal-window .xterm .xterm-viewport::-webkit-scrollbar-corner { background: var(--xk-term-scrollbar-track); }")
+    lines.append("")
+
+    return "\n".join(lines) + "\n"
+
+
+_CM_BASE_KEYS = (
+    "background", "text",
+    "gutter_bg", "gutter_text",
+    "cursor", "selection", "active_line",
+    "selection_text",
+    "search_match",
+    "ruler",
+    "indent_guide",
+    "trailingspace",
+    "lint_tooltip_bg", "lint_tooltip_text", "lint_tooltip_border",
+    "lint_error_line", "lint_warning_line",
+    "bracket_bg", "bracket_border",
+    "bad_bracket_bg", "bad_bracket_border",
+    "dialog_bg", "dialog_text", "dialog_border",
+    "dialog_input_bg", "dialog_input_text",
+    "dialog_btn_bg", "dialog_btn_text", "dialog_btn_border",
+)
+
+_CM_TOKEN_KEYS = (
+    "keyword", "string", "number", "comment", "atom", "def",
+    "variable", "variable2", "builtin", "meta", "tag", "attribute", "error",
+    "property", "operator", "qualifier", "bracket", "link", "header",
+)
+
+
+def _sanitize_codemirror_theme_config(cfg_in: Any) -> Dict[str, Any]:
+    base = json.loads(json.dumps(_DEFAULT_CODEMIRROR_THEME_CONFIG))
+    src = cfg_in if isinstance(cfg_in, dict) else {}
+
+    # enabled
+    try:
+        ev = src.get("enabled")
+        if isinstance(ev, bool):
+            base["enabled"] = ev
+        elif ev is not None:
+            s = str(ev).strip().lower()
+            base["enabled"] = s in ("1", "true", "yes", "on", "y")
+    except Exception:
+        pass
+
+    for mode in ("dark", "light"):
+        t_def = base.get(mode) or {}
+        t_in = src.get(mode) if isinstance(src.get(mode), dict) else {}
+
+        for k in _CM_BASE_KEYS:
+            try:
+                t_def[k] = _sanitize_color(t_in.get(k), t_def.get(k))
+            except Exception:
+                pass
+
+        tok_def = t_def.get("tokens") if isinstance(t_def.get("tokens"), dict) else {}
+        tok_in = t_in.get("tokens") if isinstance(t_in.get("tokens"), dict) else {}
+        for tk in _CM_TOKEN_KEYS:
+            try:
+                tok_def[tk] = _sanitize_color(tok_in.get(tk), tok_def.get(tk))
+            except Exception:
+                pass
+        t_def["tokens"] = tok_def
+        base[mode] = t_def
+
+    return base
+
+
+def _codemirror_theme_css_from_config(cfg: Dict[str, Any]) -> str:
+    lines: List[str] = []
+    lines.append(CODEMIRROR_THEME_CSS_MARKER)
+    lines.append("/* Generated by DevTools: CodeMirror */")
+    lines.append("")
+
+    if not (cfg or {}).get("enabled"):
+        lines.append("/* disabled */")
+        lines.append("")
+        return "\n".join(lines) + "\n"
+
+    def rule(sel: str, body: List[str]) -> None:
+        lines.append(f"{sel} {{")
+        for ln in body:
+            lines.append("  " + ln)
+        lines.append("}")
+
+    for mode in ("dark", "light"):
+        t = (cfg or {}).get(mode) if isinstance((cfg or {}).get(mode), dict) else {}
+        tok = t.get("tokens") if isinstance(t.get("tokens"), dict) else {}
+        r = f":root[data-theme=\"{mode}\"]"
+
+        # Surfaces
+        rule(
+            f"{r} .CodeMirror, {r} .cm-s-default.CodeMirror, {r} .cm-s-material-darker.CodeMirror",
+            [f"background: {t.get('background')} !important;", f"color: {t.get('text')} !important;"],
+        )
+
+        # IMPORTANT: the visible editor surface is the scroll element. Our global
+        # Theme generator may set `.CodeMirror-scroll { background: ... !important; }`,
+        # which would visually override the wrapper background. Keep scroll bg in sync
+        # with the configured editor background.
+        rule(
+            f"{r} .CodeMirror-scroll",
+            [f"background: {t.get('background')} !important;"],
+        )
+        rule(
+            f"{r} .CodeMirror-gutters",
+            [f"background: {t.get('gutter_bg')} !important;", "border-right: 1px solid var(--border) !important;"],
+        )
+        rule(f"{r} .CodeMirror-linenumber", [f"color: {t.get('gutter_text')} !important;"])
+        rule(f"{r} .CodeMirror-cursor", [f"border-left-color: {t.get('cursor')} !important;"])
+        rule(
+            f"{r} .CodeMirror-selected, {r} div.CodeMirror-selected",
+            [f"background: {t.get('selection')} !important;"],
+        )
+
+        # Native selection (when CodeMirror uses ::selection) + selected text color.
+        rule(
+            f"{r} .CodeMirror-line::selection, {r} .CodeMirror-line > span::selection, {r} .CodeMirror-line > span > span::selection",
+            [
+                f"background: {t.get('selection')} !important;",
+                f"color: {t.get('selection_text')} !important;",
+            ],
+        )
+        rule(
+            f"{r} .CodeMirror-line::-moz-selection, {r} .CodeMirror-line > span::-moz-selection, {r} .CodeMirror-line > span > span::-moz-selection",
+            [
+                f"background: {t.get('selection')} !important;",
+                f"color: {t.get('selection_text')} !important;",
+            ],
+        )
+        rule(
+            f"{r} span.CodeMirror-selectedtext",
+            [f"color: {t.get('selection_text')} !important;"],
+        )
+
+        # Search match highlight (match-highlighter addon uses .cm-searching)
+        rule(
+            f"{r} .cm-searching",
+            [f"background-color: {t.get('search_match')} !important;"],
+        )
+
+        # Rulers (addon/display/rulers)
+        rule(
+            f"{r} .CodeMirror-ruler",
+            [f"border-left-color: {t.get('ruler')} !important;"],
+        )
+
+        # Indent guides (addon/display/indent-guides + cm-tab guides in our UI)
+        rule(
+            f"{r} .xkeen-cm .cm-indent-guide::before, {r} .xkeen-cm .CodeMirror-code .cm-tab::before",
+            [f"border-left-color: {t.get('indent_guide')} !important;"],
+        )
+
+        # Trailing spaces highlight (addon/edit/trailingspace)
+        rule(
+            f"{r} .cm-trailingspace",
+            [f"background-color: {t.get('trailingspace')} !important;"],
+        )
+
+        # Lint addon (tooltip + highlighted lines)
+        rule(
+            f"{r} .CodeMirror-lint-tooltip",
+            [
+                f"background-color: {t.get('lint_tooltip_bg')} !important;",
+                f"color: {t.get('lint_tooltip_text')} !important;",
+                f"border-color: {t.get('lint_tooltip_border')} !important;",
+            ],
+        )
+        rule(
+            f"{r} .CodeMirror-lint-line-error",
+            [f"background-color: {t.get('lint_error_line')} !important;"],
+        )
+        rule(
+            f"{r} .CodeMirror-lint-line-warning",
+            [f"background-color: {t.get('lint_warning_line')} !important;"],
+        )
+        rule(
+            f"{r} .CodeMirror-activeline-background",
+            [f"background: {t.get('active_line')} !important;"],
+        )
+        rule(
+            f"{r} .CodeMirror-activeline-gutter",
+            [f"background: {t.get('active_line')} !important;"],
+        )
+        rule(
+            f"{r} .CodeMirror-matchingbracket",
+            [
+                f"background: {t.get('bracket_bg')} !important;",
+                f"outline: 1px solid {t.get('bracket_border')} !important;",
+                "color: inherit !important;",
+            ],
+        )
+        rule(
+            f"{r} .CodeMirror-nonmatchingbracket",
+            [
+                f"background: {t.get('bad_bracket_bg')} !important;",
+                f"outline: 1px solid {t.get('bad_bracket_border')} !important;",
+                "color: inherit !important;",
+            ],
+        )
+
+        # Tokens
+        token_map = {
+            "keyword": ".cm-keyword",
+            "string": ".cm-string",
+            "number": ".cm-number",
+            "comment": ".cm-comment",
+            "atom": ".cm-atom",
+            "def": ".cm-def",
+            "variable": ".cm-variable",
+            "variable2": ".cm-variable-2",
+            "builtin": ".cm-builtin",
+            "meta": ".cm-meta",
+            "tag": ".cm-tag",
+            "attribute": ".cm-attribute",
+            "error": ".cm-error",
+            "property": ".cm-property",
+            "operator": ".cm-operator",
+            "qualifier": ".cm-qualifier",
+            "bracket": ".cm-bracket",
+            "link": ".cm-link",
+            "header": ".cm-header",
+        }
+        for k, sel in token_map.items():
+            if tok.get(k):
+                rule(f"{r} .CodeMirror {sel}", [f"color: {tok.get(k)} !important;"])
+
+        # Dialog (search/replace)
+        rule(
+            f"{r} .CodeMirror-dialog",
+            [
+                f"background: {t.get('dialog_bg')} !important;",
+                f"color: {t.get('dialog_text')} !important;",
+                f"border-bottom: 1px solid {t.get('dialog_border')} !important;",
+            ],
+        )
+        rule(
+            f"{r} .CodeMirror-dialog input",
+            [
+                f"background: {t.get('dialog_input_bg')} !important;",
+                f"color: {t.get('dialog_input_text')} !important;",
+                f"border: 1px solid {t.get('dialog_border')} !important;",
+            ],
+        )
+        rule(
+            f"{r} .CodeMirror-dialog button",
+            [
+                f"background: {t.get('dialog_btn_bg')} !important;",
+                f"color: {t.get('dialog_btn_text')} !important;",
+                f"border: 1px solid {t.get('dialog_btn_border')} !important;",
+            ],
+        )
+
+        lines.append("")
+
+    return "\n".join(lines) + "\n"
+
+
+def terminal_theme_get(ui_state_dir: str) -> Dict[str, Any]:
+    cfg = json.loads(json.dumps(_DEFAULT_TERMINAL_THEME_CONFIG))
+    exists = False
+    jpath = _terminal_theme_json_path(ui_state_dir)
+    cpath = _terminal_theme_css_path(ui_state_dir)
+
+    try:
+        if os.path.isfile(jpath):
+            with open(jpath, "r", encoding="utf-8", errors="ignore") as f:
+                raw = json.load(f)
+            cfg = _sanitize_terminal_theme_config(raw)
+            exists = True
+            try:
+                if not os.path.isfile(cpath) or not _file_has_marker(cpath, TERMINAL_THEME_CSS_MARKER):
+                    _atomic_write_text(cpath, _terminal_theme_css_from_config(cfg), mode=0o644)
+            except Exception:
+                pass
+        elif os.path.isfile(cpath):
+            exists = True
+    except Exception:
+        cfg = json.loads(json.dumps(_DEFAULT_TERMINAL_THEME_CONFIG))
+
+    version = 0
+    try:
+        if os.path.isfile(cpath):
+            version = int(os.path.getmtime(cpath) or 0)
+    except Exception:
+        version = 0
+
+    return {"config": cfg, "exists": bool(exists), "version": version, "css_file": cpath, "json_file": jpath}
+
+
+def terminal_theme_set(ui_state_dir: str, cfg_in: Any) -> Dict[str, Any]:
+    cfg = _sanitize_terminal_theme_config(cfg_in)
+    jpath = _terminal_theme_json_path(ui_state_dir)
+    cpath = _terminal_theme_css_path(ui_state_dir)
+    _atomic_write_text(jpath, json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", mode=0o600)
+    _atomic_write_text(cpath, _terminal_theme_css_from_config(cfg), mode=0o644)
+    version = 0
+    try:
+        version = int(os.path.getmtime(cpath) or 0)
+    except Exception:
+        version = 0
+    return {"config": cfg, "exists": True, "version": version, "css_file": cpath, "json_file": jpath}
+
+
+def terminal_theme_reset(ui_state_dir: str) -> Dict[str, Any]:
+    for fp in (_terminal_theme_json_path(ui_state_dir), _terminal_theme_css_path(ui_state_dir)):
+        try:
+            if os.path.exists(fp):
+                os.remove(fp)
+        except Exception:
+            pass
+    return terminal_theme_get(ui_state_dir)
+
+
+def codemirror_theme_get(ui_state_dir: str) -> Dict[str, Any]:
+    cfg = json.loads(json.dumps(_DEFAULT_CODEMIRROR_THEME_CONFIG))
+    exists = False
+    jpath = _codemirror_theme_json_path(ui_state_dir)
+    cpath = _codemirror_theme_css_path(ui_state_dir)
+
+    try:
+        if os.path.isfile(jpath):
+            with open(jpath, "r", encoding="utf-8", errors="ignore") as f:
+                raw = json.load(f)
+            cfg = _sanitize_codemirror_theme_config(raw)
+            exists = True
+            try:
+                if not os.path.isfile(cpath) or not _file_has_marker(cpath, CODEMIRROR_THEME_CSS_MARKER):
+                    _atomic_write_text(cpath, _codemirror_theme_css_from_config(cfg), mode=0o644)
+            except Exception:
+                pass
+        elif os.path.isfile(cpath):
+            exists = True
+    except Exception:
+        cfg = json.loads(json.dumps(_DEFAULT_CODEMIRROR_THEME_CONFIG))
+
+    version = 0
+    try:
+        if os.path.isfile(cpath):
+            version = int(os.path.getmtime(cpath) or 0)
+    except Exception:
+        version = 0
+
+    return {"config": cfg, "exists": bool(exists), "version": version, "css_file": cpath, "json_file": jpath}
+
+
+def codemirror_theme_set(ui_state_dir: str, cfg_in: Any) -> Dict[str, Any]:
+    cfg = _sanitize_codemirror_theme_config(cfg_in)
+    jpath = _codemirror_theme_json_path(ui_state_dir)
+    cpath = _codemirror_theme_css_path(ui_state_dir)
+    _atomic_write_text(jpath, json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", mode=0o600)
+    _atomic_write_text(cpath, _codemirror_theme_css_from_config(cfg), mode=0o644)
+    version = 0
+    try:
+        version = int(os.path.getmtime(cpath) or 0)
+    except Exception:
+        version = 0
+    return {"config": cfg, "exists": True, "version": version, "css_file": cpath, "json_file": jpath}
+
+
+def codemirror_theme_reset(ui_state_dir: str) -> Dict[str, Any]:
+    for fp in (_codemirror_theme_json_path(ui_state_dir), _codemirror_theme_css_path(ui_state_dir)):
+        try:
+            if os.path.exists(fp):
+                os.remove(fp)
+        except Exception:
+            pass
+    return codemirror_theme_get(ui_state_dir)
 
 
 # ---------------------------------------------------------------------------
