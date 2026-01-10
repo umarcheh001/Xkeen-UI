@@ -15,6 +15,8 @@
     hideHints: false,
     // Hide helper/description texts inside cards (e.g. inbounds mode explanations).
     hideCardDesc: false,
+    // Hide File Manager bottom hotkeys hints bar.
+    hideFmHotkeys: false,
     // Scale for card description texts (multiplier, 1 = default)
     cardDescScale: 1,
     hideUnused: false,
@@ -67,6 +69,7 @@
         compact: _bool(obj.compact, DEFAULTS.compact),
         hideHints: _bool(obj.hideHints, DEFAULTS.hideHints),
         hideCardDesc: _bool(obj.hideCardDesc, DEFAULTS.hideCardDesc),
+        hideFmHotkeys: _bool(obj.hideFmHotkeys, DEFAULTS.hideFmHotkeys),
         cardDescScale: descScale,
         hideUnused: _bool(obj.hideUnused, DEFAULTS.hideUnused),
         container: safeContainer,
@@ -95,6 +98,7 @@
       root.dataset.xkCompact = p.compact ? '1' : '0';
       root.dataset.xkHideHints = p.hideHints ? '1' : '0';
       root.dataset.xkHideCardDesc = p.hideCardDesc ? '1' : '0';
+      root.dataset.xkHideFmHotkeys = p.hideFmHotkeys ? '1' : '0';
       root.dataset.xkHideUnused = p.hideUnused ? '1' : '0';
       root.dataset.xkContainer = String(p.container || DEFAULTS.container);
     } catch (e) {}
