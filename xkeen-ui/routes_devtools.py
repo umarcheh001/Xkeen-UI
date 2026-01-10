@@ -151,6 +151,47 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         return jsonify({"ok": True, **data})
 
 
+    # --- Independent themes (Terminal / CodeMirror) ---
+
+    @bp.get("/api/devtools/terminal_theme")
+    def api_devtools_terminal_theme_get() -> Any:
+        data = dt.terminal_theme_get(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/terminal_theme")
+    def api_devtools_terminal_theme_set() -> Any:
+        payload = request.get_json(silent=True) or {}
+        cfg_in = payload.get("config") if isinstance(payload, dict) else None
+        if cfg_in is None:
+            cfg_in = payload
+        data = dt.terminal_theme_set(ui_state_dir, cfg_in)
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/terminal_theme/reset")
+    def api_devtools_terminal_theme_reset() -> Any:
+        data = dt.terminal_theme_reset(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
+    @bp.get("/api/devtools/codemirror_theme")
+    def api_devtools_codemirror_theme_get() -> Any:
+        data = dt.codemirror_theme_get(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/codemirror_theme")
+    def api_devtools_codemirror_theme_set() -> Any:
+        payload = request.get_json(silent=True) or {}
+        cfg_in = payload.get("config") if isinstance(payload, dict) else None
+        if cfg_in is None:
+            cfg_in = payload
+        data = dt.codemirror_theme_set(ui_state_dir, cfg_in)
+        return jsonify({"ok": True, **data})
+
+    @bp.post("/api/devtools/codemirror_theme/reset")
+    def api_devtools_codemirror_theme_reset() -> Any:
+        data = dt.codemirror_theme_reset(ui_state_dir)
+        return jsonify({"ok": True, **data})
+
+
     # --- Branding (global, stored in UI_STATE_DIR/branding.json) ---
 
     @bp.get("/api/devtools/branding")
