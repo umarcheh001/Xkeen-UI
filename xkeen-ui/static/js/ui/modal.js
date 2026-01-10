@@ -29,9 +29,23 @@
         }
       })();
 
+      const xrayFsOpen = (() => {
+        try {
+          const card = document.querySelector('.log-card.is-fullscreen');
+          if (!card || !card.isConnected) return false;
+          const cs = window.getComputedStyle(card);
+          if (!cs) return false;
+          if (cs.display === 'none') return false;
+          if (cs.visibility === 'hidden') return false;
+          return true;
+        } catch (e) {
+          return false;
+        }
+      })();
+
       // NOTE: Terminal overlay (#terminal-overlay) is *not* treated as a modal for scroll-lock.
       // We intentionally keep the page scrollable while the terminal window is open.
-      if (anyModal || fmFsOpen) {
+      if (anyModal || fmFsOpen || xrayFsOpen) {
         document.body.classList.add('modal-open');
       } else {
         document.body.classList.remove('modal-open');
@@ -49,6 +63,150 @@
   // while keeping the confirm dialog on top (#confirm-modal is higher in CSS).
   const Z_BASE = 90; // keep above .modal (60)
   let _z = Z_BASE;
+  
+  // Persisted geometry (position + size)
+  const STORAGE_PREFIX = 'xk.modal.state.v1.';
+  const MIN_W = 260;
+  const MIN_H = 160;
+
+  function modalKey(modalEl) {
+    if (!modalEl) return '';
+    try {
+      if (modalEl.dataset && modalEl.dataset.modalKey) return STORAGE_PREFIX + String(modalEl.dataset.modalKey);
+    } catch (e) {}
+    try {
+      if (modalEl.id) return STORAGE_PREFIX + String(modalEl.id);
+    } catch (e2) {}
+    return '';
+  }
+
+  function canRemember(modalEl) {
+    if (!modalEl) return false;
+    try {
+      if (modalEl.id === 'confirm-modal') return false;
+      if (modalEl.classList && modalEl.classList.contains('modal-drawer')) return false;
+      if (modalEl.dataset && modalEl.dataset.modalNopos === '1') return false;
+      if (modalEl.dataset && modalEl.dataset.modalRemember === '0') return false;
+    } catch (e) {}
+    return !!modalKey(modalEl);
+  }
+
+  function canResize(modalEl) {
+    if (!modalEl) return false;
+    try {
+      if (modalEl.id === 'confirm-modal') return false;
+      if (modalEl.classList && modalEl.classList.contains('modal-drawer')) return false;
+      if (modalEl.dataset && modalEl.dataset.modalNoresize === '1') return false;
+    } catch (e) {}
+    return true;
+  }
+
+  function loadState(modalEl) {
+    if (!canRemember(modalEl)) return null;
+    const key = modalKey(modalEl);
+    if (!key) return null;
+
+    let raw = null;
+    try { raw = localStorage.getItem(key); } catch (e) {}
+    if (!raw) return null;
+    try {
+      const obj = JSON.parse(raw);
+      if (!obj || obj.v !== 1) return null;
+      const x = Number(obj.x), y = Number(obj.y), w = Number(obj.w), h = Number(obj.h);
+      if (![x, y, w, h].every((n) => Number.isFinite(n))) return null;
+      return { v: 1, x, y, w, h };
+    } catch (e2) {
+      return null;
+    }
+  }
+
+  function saveState(modalEl, contentEl) {
+    if (!canRemember(modalEl) || !contentEl) return;
+    let r = null;
+    try { r = contentEl.getBoundingClientRect(); } catch (e) { r = null; }
+    if (!r) return;
+
+    const w = Math.max(MIN_W, r.width || MIN_W);
+    const h = Math.max(MIN_H, r.height || MIN_H);
+    const p = clampPos(r.left, r.top, w, h, PAD);
+
+    const key = modalKey(modalEl);
+    if (!key) return;
+    const payload = { v: 1, x: Math.round(p.x), y: Math.round(p.y), w: Math.round(w), h: Math.round(h) };
+    try { localStorage.setItem(key, JSON.stringify(payload)); } catch (e2) {}
+  }
+
+  function applyState(modalEl, contentEl, state) {
+    if (!modalEl || !contentEl || !state) return false;
+    if (!canRemember(modalEl)) return false;
+
+    const viewMaxW = Math.max(200, window.innerWidth - PAD * 2);
+    const viewMaxH = Math.max(150, window.innerHeight - PAD * 2);
+
+    const w = Math.min(viewMaxW, Math.max(MIN_W, Number(state.w) || MIN_W));
+    const h = Math.min(viewMaxH, Math.max(MIN_H, Number(state.h) || MIN_H));
+    const p = clampPos(Number(state.x) || PAD, Number(state.y) || PAD, w, h, PAD);
+
+    try {
+      contentEl.style.position = 'fixed';
+      contentEl.style.left = Math.round(p.x) + 'px';
+      contentEl.style.top = Math.round(p.y) + 'px';
+      contentEl.style.width = Math.round(w) + 'px';
+      contentEl.style.height = Math.round(h) + 'px';
+      contentEl.style.maxWidth = 'none';
+      contentEl.style.maxHeight = 'none';
+      contentEl.style.transform = 'none';
+      contentEl.dataset.xkDragged = '1';
+    } catch (e) {
+      return false;
+    }
+    return true;
+  }
+
+  function refreshEmbeds(contentEl) {
+    if (!contentEl) return;
+
+    // CodeMirror refresh for editors in modals.
+    try {
+      contentEl.querySelectorAll('.CodeMirror').forEach((cmEl) => {
+        try {
+          const inst = cmEl && cmEl.CodeMirror;
+          if (inst && typeof inst.refresh === 'function') inst.refresh();
+        } catch (e2) {}
+      });
+    } catch (e) {}
+
+    // Notify others.
+    try {
+      document.dispatchEvent(new CustomEvent('xkeen-modal-resize', { detail: { modal: modalElId(contentEl) } }));
+    } catch (e3) {}
+  }
+
+  function modalElId(contentEl) {
+    try {
+      const m = contentEl.closest('.modal');
+      if (m && m.id) return String(m.id);
+    } catch (e) {}
+    return '';
+  }
+
+  function ensureResizer(modalEl) {
+    if (!modalEl) return;
+    if (!canResize(modalEl)) return;
+    const content = getContent(modalEl);
+    if (!content) return;
+    try {
+      if (content.querySelector('.modal-resizer')) return;
+    } catch (e) {}
+    try {
+      const h = document.createElement('div');
+      h.className = 'modal-resizer';
+      h.setAttribute('role', 'button');
+      h.setAttribute('aria-label', 'Resize');
+      h.tabIndex = 0;
+      content.appendChild(h);
+    } catch (e2) {}
+  }
 
   function isVisibleModal(modalEl) {
     if (!modalEl) return false;
@@ -87,6 +245,8 @@
       contentEl.style.width = '';
       contentEl.style.height = '';
       contentEl.style.transform = '';
+      contentEl.style.maxWidth = '';
+      contentEl.style.maxHeight = '';
     } catch (e) {}
     try { delete contentEl.dataset.xkDragged; } catch (e2) {}
   }
@@ -111,8 +271,10 @@
     if (!(outTop || outLeft || outRight || outBottom)) return;
 
     // Freeze current geometry to fixed positioning, then clamp.
-    const w = Math.max(200, r.width || 520);
-    const h = Math.max(150, r.height || 320);
+    const viewMaxW = Math.max(200, window.innerWidth - PAD * 2);
+    const viewMaxH = Math.max(150, window.innerHeight - PAD * 2);
+    const w = Math.min(viewMaxW, Math.max(200, r.width || 520));
+    const h = Math.min(viewMaxH, Math.max(150, r.height || 320));
     const p = clampPos(r.left, r.top, w, h, PAD);
 
     try {
@@ -121,6 +283,8 @@
       content.style.top = Math.round(p.y) + 'px';
       content.style.width = Math.round(w) + 'px';
       content.style.height = Math.round(h) + 'px';
+      content.style.maxWidth = 'none';
+      content.style.maxHeight = 'none';
       content.style.transform = 'none';
       content.dataset.xkDragged = '1';
     } catch (e2) {}
@@ -141,11 +305,23 @@
     const content = getContent(modalEl);
     if (!content) return;
 
-    // Reset any previous dragged position so the default flex centering works.
-    // (This also fixes cases where a modal got stuck off-screen.)
-    if (!(modalEl.classList && modalEl.classList.contains('modal-drawer'))) {
-      resetContentPosition(content);
+    // Restore user geometry if saved.
+    let applied = false;
+    try {
+      const st = loadState(modalEl);
+      if (st) applied = applyState(modalEl, content, st);
+    } catch (e0) {}
+
+    // If nothing saved, reset any previous dragged/resized position so default flex centering works.
+    // (Also fixes cases where a modal got stuck off-screen.)
+    if (!applied) {
+      if (!(modalEl.classList && modalEl.classList.contains('modal-drawer'))) {
+        resetContentPosition(content);
+      }
     }
+
+    // Add resize handle (if enabled for this modal).
+    try { ensureResizer(modalEl); } catch (e1) {}
 
     bringModalToFront(modalEl);
 
@@ -153,10 +329,11 @@
     try {
       requestAnimationFrame(() => {
         ensureContentInViewport(modalEl);
+        if (applied) refreshEmbeds(content);
       });
     } catch (e) {
-      // Fallback
       try { ensureContentInViewport(modalEl); } catch (e2) {}
+      if (applied) { try { refreshEmbeds(content); } catch (e3) {} }
     }
 
     // Keep body scroll lock correct.
@@ -169,6 +346,7 @@
 
   // ---------------- Drag handling (delegated) ----------------
   let drag = null;
+  let resize = null;
 
   function isInteractiveTarget(t) {
     if (!t || !t.closest) return false;
@@ -192,6 +370,8 @@
       contentEl.style.top = Math.round(r.top) + 'px';
       contentEl.style.width = Math.round(w) + 'px';
       contentEl.style.height = Math.round(h) + 'px';
+      contentEl.style.maxWidth = 'none';
+      contentEl.style.maxHeight = 'none';
       contentEl.style.transform = 'none';
       contentEl.dataset.xkDragged = '1';
     } catch (err2) {}
@@ -240,6 +420,10 @@
 
   function endDrag() {
     if (!drag) return;
+
+    try { saveState(drag.modal, drag.content); } catch (e0) {}
+    try { refreshEmbeds(drag.content); } catch (e1) {}
+
     try {
       document.documentElement.style.userSelect = '';
       document.documentElement.style.cursor = '';
@@ -252,6 +436,121 @@
     drag = null;
   }
 
+
+
+  // ---------------- Resize handling (bottom-right handle) ----------------
+  let _resizeRaf = 0;
+
+  function scheduleRefresh(contentEl) {
+    if (!contentEl) return;
+    try {
+      if (_resizeRaf) return;
+      _resizeRaf = requestAnimationFrame(() => {
+        _resizeRaf = 0;
+        refreshEmbeds(contentEl);
+      });
+    } catch (e) {
+      try { refreshEmbeds(contentEl); } catch (e2) {}
+    }
+  }
+
+  function startResize(e, modalEl, contentEl) {
+    if (!contentEl) return;
+    let r;
+    try { r = contentEl.getBoundingClientRect(); } catch (err) { r = null; }
+    if (!r) return;
+
+    const w = Math.max(MIN_W, r.width || MIN_W);
+    const h = Math.max(MIN_H, r.height || MIN_H);
+
+    try {
+      contentEl.style.position = 'fixed';
+      contentEl.style.left = Math.round(r.left) + 'px';
+      contentEl.style.top = Math.round(r.top) + 'px';
+      contentEl.style.width = Math.round(w) + 'px';
+      contentEl.style.height = Math.round(h) + 'px';
+      contentEl.style.maxWidth = 'none';
+      contentEl.style.maxHeight = 'none';
+      contentEl.style.transform = 'none';
+      contentEl.dataset.xkDragged = '1';
+    } catch (err2) {}
+
+    bringModalToFront(modalEl);
+
+    const clientX = (e && typeof e.clientX === 'number') ? e.clientX : 0;
+    const clientY = (e && typeof e.clientY === 'number') ? e.clientY : 0;
+
+    resize = {
+      modal: modalEl,
+      content: contentEl,
+      pointerId: (e && typeof e.pointerId === 'number') ? e.pointerId : null,
+      startX: clientX,
+      startY: clientY,
+      left: r.left,
+      top: r.top,
+      startW: w,
+      startH: h,
+    };
+
+    try {
+      document.documentElement.style.userSelect = 'none';
+      document.documentElement.style.cursor = 'se-resize';
+    } catch (err3) {}
+
+    try {
+      if (contentEl.setPointerCapture && resize.pointerId != null) {
+        contentEl.setPointerCapture(resize.pointerId);
+      }
+    } catch (err4) {}
+
+    try { e.preventDefault(); } catch (err5) {}
+  }
+
+  function moveResize(e) {
+    if (!resize || !resize.content) return;
+
+    const clientX = (e && typeof e.clientX === 'number') ? e.clientX : 0;
+    const clientY = (e && typeof e.clientY === 'number') ? e.clientY : 0;
+
+    const dx = clientX - resize.startX;
+    const dy = clientY - resize.startY;
+
+    const left = Number.parseFloat(resize.content.style.left) || resize.left || PAD;
+    const top = Number.parseFloat(resize.content.style.top) || resize.top || PAD;
+
+    const maxW = Math.max(MIN_W, window.innerWidth - left - PAD);
+    const maxH = Math.max(MIN_H, window.innerHeight - top - PAD);
+
+    const w = Math.max(MIN_W, Math.min(maxW, resize.startW + dx));
+    const h = Math.max(MIN_H, Math.min(maxH, resize.startH + dy));
+
+    try {
+      resize.content.style.width = Math.round(w) + 'px';
+      resize.content.style.height = Math.round(h) + 'px';
+    } catch (err) {}
+
+    scheduleRefresh(resize.content);
+  }
+
+  function endResize() {
+    if (!resize) return;
+
+    try { saveState(resize.modal, resize.content); } catch (e0) {}
+    try { refreshEmbeds(resize.content); } catch (e1) {}
+
+    try {
+      document.documentElement.style.userSelect = '';
+      document.documentElement.style.cursor = '';
+    } catch (e) {}
+
+    try {
+      if (resize.content && resize.content.releasePointerCapture && resize.pointerId != null) {
+        resize.content.releasePointerCapture(resize.pointerId);
+      }
+    } catch (e2) {}
+
+    resize = null;
+  }
   function bindDelegatedDrag() {
     // Use Pointer Events when available (works for mouse + touch).
     const downEv = (window.PointerEvent ? 'pointerdown' : 'mousedown');
@@ -262,6 +561,24 @@
     document.addEventListener(downEv, (e) => {
       // Left mouse button only (touch has button==0 too in pointer events).
       if (e && typeof e.button === 'number' && e.button !== 0) return;
+
+      // Resize handle (bottom-right corner)
+      const rz = e.target && e.target.closest ? e.target.closest('.modal-resizer') : null;
+      if (rz) {
+        const modalEl = rz.closest('.modal');
+        if (!isVisibleModal(modalEl)) return;
+        if (modalEl.classList && modalEl.classList.contains('modal-drawer')) return;
+        if (modalEl.dataset && modalEl.dataset.modalNoresize === '1') return;
+
+        const contentEl = getContent(modalEl);
+        if (!contentEl) return;
+
+        // Cancel any active drag.
+        if (drag) endDrag();
+
+        startResize(e, modalEl, contentEl);
+        return;
+      }
 
       const header = e.target && e.target.closest ? e.target.closest('.modal-header') : null;
       if (!header) return;
@@ -275,22 +592,28 @@
       const contentEl = getContent(modalEl);
       if (!contentEl) return;
 
+      // Cancel any active resize.
+      if (resize) endResize();
+
       startDrag(e, modalEl, contentEl);
     }, { passive: false, capture: true });
 
     document.addEventListener(moveEv, (e) => {
-      if (!drag) return;
-      moveDrag(e);
+      if (resize) {
+        moveResize(e);
+        return;
+      }
+      if (drag) moveDrag(e);
     }, { passive: true });
 
     document.addEventListener(upEv, () => {
-      if (!drag) return;
-      endDrag();
+      if (resize) endResize();
+      if (drag) endDrag();
     }, { passive: true });
 
     document.addEventListener(cancelEv, () => {
-      if (!drag) return;
-      endDrag();
+      if (resize) endResize();
+      if (drag) endDrag();
     }, { passive: true });
 
     // Keep open modals inside viewport when window resizes.
@@ -352,6 +675,15 @@
   // Public helpers (optional)
   Modal.ensureInViewport = function (modalEl) { try { ensureContentInViewport(modalEl); } catch (e) {} };
   Modal.resetPosition = function (modalEl) { try { resetContentPosition(getContent(modalEl)); } catch (e) {} };
+
+  Modal.saveState = function (modalEl) { try { saveState(modalEl, getContent(modalEl)); } catch (e) {} };
+  Modal.forgetState = function (modalElOrId) {
+    try {
+      const id = (typeof modalElOrId === 'string') ? modalElOrId : (modalElOrId && modalElOrId.id ? modalElOrId.id : '');
+      if (!id) return;
+      localStorage.removeItem(STORAGE_PREFIX + id);
+    } catch (e) {}
+  };
 
   // Init
   try {
