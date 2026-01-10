@@ -25,7 +25,7 @@
     const el = byId('dt-branding-status');
     if (!el) return;
     el.textContent = msg ? String(msg) : '';
-    try { el.style.color = isErr ? '#fca5a5' : ''; } catch (e) {}
+    try { el.style.color = isErr ? 'var(--sem-error, #fca5a5)' : ''; } catch (e) {}
   }
 
   function isDataUrl(s) {
