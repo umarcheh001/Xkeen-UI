@@ -20,7 +20,7 @@
     const el = byId('dt-ui-prefs-io-status');
     if (!el) return;
     el.textContent = msg ? String(msg) : '';
-    try { el.style.color = isErr ? '#fca5a5' : ''; } catch (e) {}
+    try { el.style.color = isErr ? 'var(--sem-error, #fca5a5)' : ''; } catch (e) {}
   }
 
   // Note: branding is global now (stored on the router), so we export it separately
