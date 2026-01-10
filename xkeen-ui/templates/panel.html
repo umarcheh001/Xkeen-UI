@@ -17,7 +17,7 @@
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
   <!-- Apply layout prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101f') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}"></script>
   <!-- Env-driven visibility filters (section whitelist) -->
   <script>
     window.XKeen = window.XKeen || {};
@@ -70,8 +70,10 @@
 
 
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101e') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260110a') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
+  <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
+  <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
   {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
   {% if custom_css_enabled and not safe_mode %}
   <link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
@@ -596,17 +598,53 @@
       <div class="command-group-title">{{ group.title }}</div>
       <ul class="command-list">
         {% for cmd in group['items'] %}
-          <li class="command-item"
-              data-flag="{{ cmd.flag }}"
-              data-label="xkeen {{ cmd.flag }}"
-              data-tooltip="{{ cmd.desc }}">
-            <span class="command-item-icon">▶</span>
-            <span class="command-item-code"><code>xkeen {{ cmd.flag }}</code></span>
+          <li class="command-item-wrap">
+            <button type="button"
+                    class="command-item xkeen-ctrl-btn"
+                    data-flag="{{ cmd.flag }}"
+                    data-label="xkeen {{ cmd.flag }}"
+                    data-tooltip="{{ cmd.desc }}">
+              <code>xkeen {{ cmd.flag }}</code>
+            </button>
           </li>
         {% endfor %}
       </ul>
     </div>
   {% endfor %}
+
+    <div class="command-group">
+      <div class="command-group-title">Утилиты панели</div>
+      <ul class="command-list">
+        <li class="command-item-wrap">
+          <button type="button"
+                  class="command-item xkeen-ctrl-btn"
+                  data-flag="__sysmon"
+                  data-label="sysmon"
+                  data-tooltip="Мониторинг роутера (базовый): CPU/RAM/диски/сеть/температура">
+            <code>sysmon</code>
+          </button>
+        </li>
+        <li class="command-item-wrap">
+          <button type="button"
+                  class="command-item xkeen-ctrl-btn"
+                  data-flag="__sysmon_short"
+                  data-label="sysmon --short"
+                  data-tooltip="Мониторинг (коротко): только ключевые показатели">
+            <code>sysmon --short</code>
+          </button>
+        </li>
+        <li class="command-item-wrap">
+          <button type="button"
+                  class="command-item xkeen-ctrl-btn"
+                  data-flag="__sysmon_full"
+                  data-label="sysmon --full"
+                  data-tooltip="Мониторинг (расширенно): сеть/DNS/HTTPS/conntrack/ошибки интерфейсов/логи">
+            <code>sysmon --full</code>
+          </button>
+        </li>
+      </ul>
+    </div>
+
   </div>
 </section>
   <!-- Restart log -->
@@ -634,6 +672,15 @@
     </div>
 
     <div id="fm-disabled-note" class="status" style="display:none;"></div>
+
+    <!-- Busy overlay: shown when opening remote files (SFTP) so the user sees progress and
+         doesn't click "open" multiple times while content is loading into the editor. -->
+    <div id="fm-open-overlay" class="fm-busy-overlay hidden" role="status" aria-live="polite" aria-hidden="true">
+      <div class="fm-busy-box">
+        <div class="fm-busy-spinner" aria-hidden="true"></div>
+        <div class="fm-busy-text" id="fm-open-overlay-text">Открываю файл…</div>
+      </div>
+    </div>
 
     <div class="fm-two" id="fm-root">
       <div class="fm-panel" data-side="left">
@@ -726,6 +773,7 @@
             <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsClearScreen()" title="Очистить журнал" aria-label="Очистить журнал">🧹</button>
             <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsClear()" title="Очистить логфайлы" aria-label="Очистить логфайлы">🗑</button>
             <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsCopy()" title="Скопировать" aria-label="Скопировать">📋</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-fullscreen" title="Полный экран" aria-label="Полный экран">⛶</button>
           </div>
         </div>
         <div class="log-filter-row">
@@ -1006,7 +1054,7 @@
             <button type="button" class="core-option" data-core="xray">xray</button>
             <button type="button" class="core-option" data-core="mihomo">mihomo</button>
           </div>
-          <p id="core-modal-status" class="modal-hint" style="margin-top: 8px; font-size: 0.85rem; color: #9ca3af;"></p>
+          <p id="core-modal-status" class="modal-hint" style="margin-top: 8px; font-size: 0.85rem; color: var(--modal-muted, var(--muted, #9ca3af));"></p>
         </div>
         <div class="modal-actions">
           <button id="core-modal-cancel-btn">Отмена</button>
@@ -1202,6 +1250,7 @@
   <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260105c') }}"></script>
   <script src="{{ url_for('static', filename='js/util/tab_id.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/ansi.js') }}"></script>
     <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
@@ -1219,6 +1268,10 @@
   <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/outbounds.js') }}"></script>
     <script src="{{ url_for('static', filename='js/features/xkeen_texts.js') }}"></script>
+    <!-- File Manager (split into small modules) -->
+    <script src="{{ url_for('static', filename='js/features/file_manager/prefs.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/features/file_manager/chrome.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/features/file_manager/editor.js') }}"></script>
     <script src="{{ url_for('static', filename='js/features/file_manager.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/_core.js') }}"></script>
   <!-- Terminal refactor (Wave 3): Stage A (events/ui/api) + Stage B (transport adapters) -->
@@ -1235,6 +1288,7 @@
   <script src="{{ url_for('static', filename='js/terminal/commands/registry.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/commands/router.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/commands/builtins/xkeen_restart.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/terminal/commands/builtins/sysmon.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/core/session_controller.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/core/context.js') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/core/public_api.js') }}"></script>
@@ -1568,6 +1622,82 @@
     <div class="modal-actions" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="fm-rename-cancel-btn">Отмена</button>
       <button type="button" class="btn-primary" id="fm-rename-ok-btn">Переименовать</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: archive create -->
+<div id="fm-archive-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Archive">
+  <div class="modal-content" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title" id="fm-archive-title">Архивировать</span>
+      <button type="button" class="modal-close" id="fm-archive-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-form-grid" style="grid-template-columns: 160px 1fr;">
+        <label></label>
+        <div id="fm-archive-src" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+
+        <label>Выбрано</label>
+        <pre id="fm-archive-list" class="fm-dropop-list" style="margin:0; max-height:180px;"></pre>
+
+        <label for="fm-archive-name">Имя архива *</label>
+        <input id="fm-archive-name" class="terminal-input fm-mono" placeholder="archive.zip" spellcheck="false" />
+
+        <label for="fm-archive-format">Формат</label>
+        <select id="fm-archive-format" class="terminal-input" style="max-width:220px;">
+          <option value="zip">.zip</option>
+          <option value="tar.gz">.tar.gz</option>
+        </select>
+
+        <label></label>
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input id="fm-archive-overwrite" type="checkbox" />
+          <span>Перезаписать если существует</span>
+        </label>
+      </div>
+      <div id="fm-archive-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-archive-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-archive-ok-btn">Создать архив</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: archive extract -->
+<div id="fm-extract-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Extract">
+  <div class="modal-content" style="max-width:680px;">
+    <div class="modal-header">
+      <span class="modal-title" id="fm-extract-title">Распаковать</span>
+      <button type="button" class="modal-close" id="fm-extract-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-form-grid" style="grid-template-columns: 160px 1fr;">
+        <label>Архив</label>
+        <div id="fm-extract-archive" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+
+        <label for="fm-extract-dest">Папка назначения *</label>
+        <input id="fm-extract-dest" class="terminal-input fm-mono" placeholder="./out" spellcheck="false" />
+
+        <label></label>
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input id="fm-extract-create-dest" type="checkbox" checked />
+          <span>Создать папку, если нет</span>
+        </label>
+
+        <label></label>
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input id="fm-extract-overwrite" type="checkbox" />
+          <span>Перезаписывать существующие файлы</span>
+        </label>
+      </div>
+      <div class="status" style="margin-top:10px; opacity:.75;">Поддерживаются архивы: <span class="fm-mono">.zip</span>, <span class="fm-mono">.tar.gz</span>.</div>
+      <div id="fm-extract-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-extract-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-extract-ok-btn">Распаковать</button>
     </div>
   </div>
 </div>
