@@ -123,6 +123,14 @@
         }
       } catch (e) {}
     }
+
+    // Ensure body scroll-lock state stays correct when switching tabs.
+    // (e.g. when leaving a fullscreen card view).
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+        XKeen.ui.modal.syncBodyScrollLock();
+      }
+    } catch (e) {}
   }
 
   function wireTabs() {
