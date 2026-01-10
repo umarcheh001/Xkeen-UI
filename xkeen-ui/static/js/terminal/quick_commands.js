@@ -33,6 +33,10 @@
     { label: 'dmesg -w', cmd: 'dmesg -w', desc: 'Kernel log (follow)' },
     { label: 'nslookup …', cmd: 'nslookup example.com', select: 'example.com', desc: 'DNS lookup (замени домен)' },
     { label: 'ping -c 3 …', cmd: 'ping -c 3 8.8.8.8', select: '8.8.8.8', desc: 'Проверка ICMP (замени адрес)' },
+    { label: 'sysmon', cmd: 'sysmon', desc: 'Мониторинг роутера (базовый)' },
+    { label: 'sysmon --short', cmd: 'sysmon --short', desc: 'Мониторинг (коротко, только главное)' },
+    { label: 'sysmon --full', cmd: 'sysmon --full', desc: 'Мониторинг (расширенная диагностика)' },
+    { label: 'sysmon --json', cmd: 'sysmon --json', desc: 'Мониторинг (JSON для парсинга/логов)' },
   ];
 
   // --------------------
