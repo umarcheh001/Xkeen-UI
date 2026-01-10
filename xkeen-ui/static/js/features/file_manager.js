@@ -7,467 +7,37 @@
 
   const FM = XKeen.features.fileManager;
 
-  // -------------------------- preferences (localStorage) --------------------------
-  const FM_LS = {
-    sort: 'xkeen.fm.sort',          // JSON: { key: 'name'|'size'|'perm'|'mtime', dir: 'asc'|'desc', dirsFirst: true }
-    showHidden: 'xkeen.fm.dotfiles', // '1'|'0'
-    mask: 'xkeen.fm.mask',          // last used selection mask (glob)
-    // persisted card geometry (user resize)
-    // JSON: { w: number(px), h: number(px), shiftX: number(px) }
-    geom: 'xkeen.fm.geom_v1'
-  };
+  // File Manager split: prefs + chrome + editor are in separate scripts.
+  // Here we keep thin wrappers/aliases so the rest of this file stays readable.
+  FM.api = FM.api || {};
 
-  function lsGet(key) {
-    try { return localStorage.getItem(key); } catch (e) { return null; }
-  }
+  const PREFS = FM.prefs || {};
+  const CHROME = FM.chrome || {};
+  const EDITOR = FM.editor || {};
 
-  function lsSet(key, val) {
-    try { localStorage.setItem(key, String(val)); } catch (e) {}
-  }
+  // --- prefs (localStorage)
+  const loadSortPref = PREFS.loadSortPref || (() => ({ key: 'name', dir: 'asc', dirsFirst: true }));
+  const saveSortPref = PREFS.saveSortPref || (() => {});
+  const loadShowHiddenPref = PREFS.loadShowHiddenPref || (() => false);
+  const saveShowHiddenPref = PREFS.saveShowHiddenPref || (() => {});
+  const loadMaskPref = PREFS.loadMaskPref || (() => '');
+  const saveMaskPref = PREFS.saveMaskPref || (() => {});
 
-  function loadSortPref() {
-    const raw = lsGet(FM_LS.sort);
-    if (!raw) return { key: 'name', dir: 'asc', dirsFirst: true };
-    try {
-      const o = JSON.parse(raw);
-      const key = String(o && o.key || 'name');
-      const dir = String(o && o.dir || 'asc');
-      const dirsFirst = (o && typeof o.dirsFirst === 'boolean') ? !!o.dirsFirst : true;
-      if (!['name', 'size', 'perm', 'mtime'].includes(key)) return { key: 'name', dir: 'asc', dirsFirst: true };
-      if (!['asc', 'desc'].includes(dir)) return { key, dir: 'asc', dirsFirst };
-      return { key, dir, dirsFirst };
-    } catch (e) {
-      return { key: 'name', dir: 'asc', dirsFirst: true };
-    }
-  }
+  // --- chrome (fullscreen + geometry)
+  function fmCardEl() { return (CHROME && typeof CHROME.cardEl === 'function') ? CHROME.cardEl() : null; }
+  function fmSetFullscreen(on) { try { if (CHROME && typeof CHROME.setFullscreen === 'function') CHROME.setFullscreen(on); } catch (e) {} }
+  function fmToggleFullscreen() { try { if (CHROME && typeof CHROME.toggleFullscreen === 'function') CHROME.toggleFullscreen(); } catch (e) {} }
+  function fmIsFullscreenNow() { try { return (CHROME && typeof CHROME.isFullscreen === 'function') ? !!CHROME.isFullscreen() : false; } catch (e) { return false; } }
+  function fmSyncFullscreenFromDom() { try { if (CHROME && typeof CHROME.syncFromDom === 'function') CHROME.syncFromDom(); } catch (e) {} }
+  function fmWireGeomPersistence() { try { if (CHROME && typeof CHROME.wireGeomPersistence === 'function') CHROME.wireGeomPersistence(); } catch (e) {} }
+  function wireLeftResizeHandle() { try { if (CHROME && typeof CHROME.wireLeftResizeHandle === 'function') CHROME.wireLeftResizeHandle(); } catch (e) {} }
 
-  function saveSortPref(p) {
-    const o = {
-      key: (p && p.key) || 'name',
-      dir: (p && p.dir) || 'asc',
-      dirsFirst: (p && typeof p.dirsFirst === 'boolean') ? !!p.dirsFirst : true,
-    };
-    lsSet(FM_LS.sort, JSON.stringify(o));
-  }
-
-  function loadShowHiddenPref() {
-    const raw = lsGet(FM_LS.showHidden);
-    return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
-  }
-
-  function saveShowHiddenPref(on) {
-    lsSet(FM_LS.showHidden, on ? '1' : '0');
-  }
-
-  function loadMaskPref() {
-    const raw = lsGet(FM_LS.mask);
-    return raw ? String(raw) : '';
-  }
-
-  function saveMaskPref(v) {
-    lsSet(FM_LS.mask, String(v || ''));
-  }
-
-  // -------------------------- card geometry (persisted resize) --------------------------
-  // Like terminal window chrome: remember last user size of the file manager card.
-  // We persist only after the user actually resizes (via native bottom-right handle
-  // or our custom bottom-left handle).
-  const FM_GEOM = {
-    minW: 520,
-    minH: 420,
-  };
-
-  let fmGeomTouched = false;
-  let fmGeomAppliedOnce = false;
-  let fmGeomSaveTimer = null;
-  let fmGeomRO = null;
-  let fmNativeResizeActive = false;
-
-  function fmCanResizeNow() {
-    try {
-      if (fmIsFullscreen) return false;
-      // On narrow screens we disable resize entirely (see CSS media query).
-      if (window.matchMedia && window.matchMedia('(max-width: 920px)').matches) return false;
-      return true;
-    } catch (e) {
-      return !fmIsFullscreen;
-    }
-  }
-
-  function fmReadGeom() {
-    const raw = lsGet(FM_LS.geom);
-    if (!raw) return null;
-    try {
-      const j = JSON.parse(raw);
-      if (!j || typeof j !== 'object') return null;
-      const w = Number(j.w);
-      const h = Number(j.h);
-      const shiftX = Number(j.shiftX || 0);
-      if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
-      if (w < FM_GEOM.minW || h < FM_GEOM.minH) return null;
-      if (!Number.isFinite(shiftX)) return { w, h, shiftX: 0 };
-      return { w, h, shiftX };
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function fmClampGeom(g) {
-    if (!g) return null;
-    let w = Number(g.w);
-    let h = Number(g.h);
-    let shiftX = Number(g.shiftX || 0);
-    if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
-
-    // Clamp to viewport so we don't create unusable layouts after a screen change.
-    const maxW = Math.max(FM_GEOM.minW, Math.round(window.innerWidth * 0.98));
-    const maxH = Math.max(FM_GEOM.minH, Math.round(window.innerHeight * 0.90));
-    if (w < FM_GEOM.minW) w = FM_GEOM.minW;
-    if (h < FM_GEOM.minH) h = FM_GEOM.minH;
-    if (Number.isFinite(maxW) && maxW > 0 && w > maxW) w = maxW;
-    if (Number.isFinite(maxH) && maxH > 0 && h > maxH) h = maxH;
-
-    const maxShift = Math.max(0, Math.round(window.innerWidth * 0.55));
-    if (!Number.isFinite(shiftX)) shiftX = 0;
-    if (shiftX > maxShift) shiftX = maxShift;
-    if (shiftX < -maxShift) shiftX = -maxShift;
-
-    return { w, h, shiftX };
-  }
-
-  function fmApplyGeom(g) {
-    const card = fmCardEl();
-    if (!card || !g) return;
-    if (!fmCanResizeNow()) return;
-
-    const gg = fmClampGeom(g);
-    if (!gg) return;
-
-    try {
-      card.style.width = Math.round(gg.w) + 'px';
-      card.style.height = Math.round(gg.h) + 'px';
-      card.style.setProperty('--fm-shift-x', Math.round(gg.shiftX) + 'px');
-    } catch (e) {}
-  }
-
-  function fmSaveGeomNow() {
-    if (!fmCanResizeNow()) return;
-    const card = fmCardEl();
-    if (!card) return;
-
-    let r = null;
-    try { r = card.getBoundingClientRect(); } catch (e) { r = null; }
-    if (!r || !Number.isFinite(r.width) || !Number.isFinite(r.height)) return;
-
-    const w = Math.round(r.width);
-    const h = Math.round(r.height);
-    if (w < FM_GEOM.minW || h < FM_GEOM.minH) return;
-
-    const geom = fmClampGeom({ w, h, shiftX: getFmShiftX(card) });
-    if (!geom) return;
-
-    fmGeomTouched = true;
-    try {
-      lsSet(FM_LS.geom, JSON.stringify(geom));
-    } catch (e) {
-      // ignore quota / privacy mode
-    }
-  }
-
-  function fmScheduleSaveGeom() {
-    if (!fmGeomTouched) return;
-    if (fmGeomSaveTimer) {
-      try { clearTimeout(fmGeomSaveTimer); } catch (e) {}
-    }
-    fmGeomSaveTimer = setTimeout(() => {
-      fmGeomSaveTimer = null;
-      fmSaveGeomNow();
-    }, 180);
-  }
-
-  function fmWireGeomPersistence() {
-    const card = fmCardEl();
-    if (!card) return;
-
-    // avoid double-wire
-    try {
-      if (card.dataset && card.dataset.fmGeomWire === '1') return;
-      if (card.dataset) card.dataset.fmGeomWire = '1';
-    } catch (e) {}
-
-    const stored = fmReadGeom();
-    fmGeomTouched = !!stored;
-
-    // Apply stored geometry once when resize is available.
-    if (stored && fmCanResizeNow()) {
-      fmApplyGeom(stored);
-      fmGeomAppliedOnce = true;
-    }
-
-    // Save future resize changes (native handle and left handle both affect size).
-    try {
-      if (window.ResizeObserver) {
-        fmGeomRO = new ResizeObserver(() => {
-          if (!fmCanResizeNow()) return;
-          // Start persisting only after the browser (or our handle) actually
-          // wrote pixel-based inline sizing. This avoids locking in the default
-          // responsive CSS layout before the user interacts.
-          if (!fmGeomTouched) {
-            try {
-              const hasInline = !!(card.style && (card.style.width || card.style.height || card.style.getPropertyValue('--fm-shift-x')));
-              if (!hasInline) return;
-              fmGeomTouched = true;
-            } catch (e) { return; }
-          }
-          fmScheduleSaveGeom();
-        });
-        fmGeomRO.observe(card);
-      }
-    } catch (e) {}
-
-    // Detect native bottom-right resize drag (the browser handle is not a DOM node).
-    try {
-      card.addEventListener('pointerdown', (ev) => {
-        try {
-          if (!fmCanResizeNow()) return;
-          if (ev && ev.pointerType === 'mouse' && ev.button !== 0) return;
-          const r = card.getBoundingClientRect();
-          const pad = 28;
-          const nearRight = (r.right - ev.clientX) >= 0 && (r.right - ev.clientX) < pad;
-          const nearBottom = (r.bottom - ev.clientY) >= 0 && (r.bottom - ev.clientY) < pad;
-          if (!nearRight || !nearBottom) return;
-
-          fmGeomTouched = true;
-          fmNativeResizeActive = true;
-        } catch (e) {}
-      }, { passive: true });
-
-      const endNative = () => {
-        if (!fmNativeResizeActive) return;
-        fmNativeResizeActive = false;
-        fmScheduleSaveGeom();
-      };
-      window.addEventListener('pointerup', endNative, { passive: true });
-      window.addEventListener('pointercancel', endNative, { passive: true });
-    } catch (e) {}
-
-    // If the page is loaded on a narrow screen, apply stored geometry later
-    // when the viewport becomes wide enough again.
-    try {
-      window.addEventListener('resize', () => {
-        if (fmGeomAppliedOnce) return;
-        const g = fmReadGeom();
-        if (!g) return;
-        if (!fmCanResizeNow()) return;
-        fmApplyGeom(g);
-        fmGeomAppliedOnce = true;
-      }, { passive: true });
-    } catch (e) {}
-  }
-
-  // -------------------------- fullscreen --------------------------
-  // File manager fullscreen is implemented the same way as the terminal chrome:
-  // we just toggle a CSS class on the card (no browser Fullscreen API).
-  let fmIsFullscreen = false;
-
-  function fmCardEl() {
-    try {
-      const view = el('view-files');
-      if (!view) return null;
-      return qs('.fm-card', view);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function syncScrollLock() {
-    try {
-      if (XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.toggle('modal-open', !!fmIsFullscreen);
-      }
-    } catch (e) {}
-  }
-
-  function updateFmFullscreenBtn() {
-    const btn = el('fm-fullscreen-btn');
-    if (!btn) return;
-    if (fmIsFullscreen) {
-      btn.textContent = '🗗';
-      btn.title = 'Восстановить';
-      btn.setAttribute('aria-label', 'Восстановить');
-    } else {
-      btn.textContent = '⛶';
-      btn.title = 'Полный экран';
-      btn.setAttribute('aria-label', 'Полный экран');
-    }
-  }
-
-  function fmSetFullscreen(on) {
-    const card = fmCardEl();
-    if (!card) return;
-    fmIsFullscreen = !!on;
-    try { card.classList.toggle('is-fullscreen', fmIsFullscreen); } catch (e) {}
-    updateFmFullscreenBtn();
-    syncScrollLock();
-  }
-
-  function fmToggleFullscreen() {
-    fmSetFullscreen(!fmIsFullscreen);
-  }
-
-  // -------------------------- bottom-left resize handle --------------------------
-  // The CSS `resize: both` only gives a browser handle on the bottom-right.
-  // We add our own draggable zone on the bottom-left corner so the card can be
-  // resized from the left side (keeping the right edge visually fixed).
-  function getFmShiftX(card) {
-    try {
-      const v = window.getComputedStyle(card).getPropertyValue('--fm-shift-x');
-      const n = parseFloat(String(v || '').trim());
-      return isFinite(n) ? n : 0;
-    } catch (e) {
-      return 0;
-    }
-  }
-
-  function wireLeftResizeHandle() {
-    const card = fmCardEl();
-    if (!card) return;
-
-    let handle = qs('.fm-resize-handle-left', card);
-    if (!handle) {
-      try {
-        handle = document.createElement('div');
-        handle.className = 'fm-resize-handle-left';
-        handle.setAttribute('aria-hidden', 'true');
-        card.appendChild(handle);
-      } catch (e) {
-        return;
-      }
-    }
-
-    // avoid double-wire
-    try {
-      if (handle.dataset && handle.dataset.fmWire === '1') return;
-      if (handle.dataset) handle.dataset.fmWire = '1';
-    } catch (e) {}
-
-    let dragging = false;
-    let startX = 0;
-    let startY = 0;
-    let startW = 0;
-    let startH = 0;
-    let startShiftX = 0;
-    let prevBodyUserSelect = '';
-    let prevBodyCursor = '';
-
-    function canResizeNow() {
-      try {
-        if (fmIsFullscreen) return false;
-        // On narrow screens we disable resize entirely (see CSS media query).
-        if (window.matchMedia && window.matchMedia('(max-width: 920px)').matches) return false;
-        return true;
-      } catch (e) {
-        return !fmIsFullscreen;
-      }
-    }
-
-    function startDrag(ev) {
-      try {
-        if (!canResizeNow()) return;
-        if (ev && ev.pointerType === 'mouse' && ev.button !== 0) return;
-        const r = card.getBoundingClientRect();
-        startX = ev.clientX;
-        startY = ev.clientY;
-        startW = r.width;
-        startH = r.height;
-        startShiftX = getFmShiftX(card);
-
-        // Ensure pixel-based sizing so the drag math stays stable.
-        card.style.width = Math.round(startW) + 'px';
-        card.style.height = Math.round(startH) + 'px';
-        card.style.setProperty('--fm-shift-x', startShiftX + 'px');
-
-        dragging = true;
-
-        // Mark geometry as user-touched so we start persisting changes.
-        fmGeomTouched = true;
-
-        // UX: prevent text selection while resizing.
-        prevBodyUserSelect = document.body.style.userSelect || '';
-        prevBodyCursor = document.body.style.cursor || '';
-        document.body.style.userSelect = 'none';
-        document.body.style.cursor = 'nesw-resize';
-
-        try { handle.setPointerCapture(ev.pointerId); } catch (e) {}
-        ev.preventDefault();
-        ev.stopPropagation();
-      } catch (e) {}
-    }
-
-    function onMove(ev) {
-      if (!dragging) return;
-      try {
-        let dx = ev.clientX - startX;
-        let dy = ev.clientY - startY;
-
-        // When dragging the left handle:
-        //  - width grows when mouse goes left (dx < 0)
-        //  - we shift the card by dx so the right edge stays visually fixed
-        let w = startW - dx;
-        let h = startH + dy;
-
-        // Clamp to something sane (avoid collapsing the layout too far).
-        const minW = 520;
-        const minH = 420;
-        const maxH = Math.round(window.innerHeight * 0.90);
-
-        if (w < minW) {
-          w = minW;
-          dx = startW - w;
-        }
-        if (h < minH) h = minH;
-        if (isFinite(maxH) && maxH > 0 && h > maxH) h = maxH;
-
-        const shiftX = startShiftX + dx;
-        card.style.width = Math.round(w) + 'px';
-        card.style.height = Math.round(h) + 'px';
-        card.style.setProperty('--fm-shift-x', Math.round(shiftX) + 'px');
-
-        ev.preventDefault();
-        ev.stopPropagation();
-      } catch (e) {}
-    }
-
-    function endDrag(ev) {
-      if (!dragging) return;
-      dragging = false;
-      try {
-        document.body.style.userSelect = prevBodyUserSelect;
-        document.body.style.cursor = prevBodyCursor;
-      } catch (e) {}
-      try {
-        if (ev) {
-          ev.preventDefault();
-          ev.stopPropagation();
-        }
-      } catch (e) {}
-
-      // Persist final geometry after a resize from the left corner.
-      try {
-        fmGeomTouched = true;
-        fmScheduleSaveGeom();
-      } catch (e) {}
-    }
-
-    // Pointer events cover mouse + touch and are well supported on modern browsers.
-    handle.addEventListener('pointerdown', startDrag, { passive: false });
-    handle.addEventListener('pointermove', onMove, { passive: false });
-    handle.addEventListener('pointerup', endDrag, { passive: false });
-    handle.addEventListener('pointercancel', endDrag, { passive: false });
-    handle.addEventListener('lostpointercapture', endDrag, { passive: false });
-  }
+  // --- editor (CodeMirror modal)
+  function wireEditorModal() { try { if (EDITOR && typeof EDITOR.wire === 'function') EDITOR.wire(); } catch (e) {} }
+  function fmEditorOpen(ctx, text) { try { return (EDITOR && typeof EDITOR.open === 'function') ? EDITOR.open(ctx, text) : false; } catch (e) { return false; } }
+  function fmEditorRequestClose() { try { return (EDITOR && typeof EDITOR.requestClose === 'function') ? EDITOR.requestClose() : undefined; } catch (e) {} }
+  function fmEditorDownload() { try { if (EDITOR && typeof EDITOR.download === 'function') EDITOR.download(); } catch (e) {} }
+  function fmEditorSave() { try { return (EDITOR && typeof EDITOR.save === 'function') ? EDITOR.save() : undefined; } catch (e) {} }
 
   // -------------------------- small helpers --------------------------
   function el(id) {
@@ -533,6 +103,149 @@
     if (!view) return false;
     const cs = window.getComputedStyle(view);
     return !!cs && cs.display !== 'none' && cs.visibility !== 'hidden';
+  }
+
+  // -------------------------- UX: busy overlay for slow remote open --------------------------
+  function _fmBusyEls() {
+    const overlay = el('fm-open-overlay');
+    const text = el('fm-open-overlay-text');
+    // Prefer FM.chrome.cardEl(), but fall back to a simple query.
+    let card = null;
+    try { card = fmCardEl(); } catch (e) { card = null; }
+    if (!card) {
+      try { card = qs('.fm-card', el('view-files')); } catch (e) { card = null; }
+    }
+    return { overlay, text, card };
+  }
+
+  function fmSetOpenBusy(on, msg) {
+    const ui = _fmBusyEls();
+    if (!ui || !ui.overlay) return;
+    const isOn = !!on;
+    try { S.openBusy = isOn; } catch (e) {}
+    try { S.openBusySinceMs = isOn ? Date.now() : 0; } catch (e) {}
+
+    if (isOn) {
+      try { if (ui.text && msg) ui.text.textContent = String(msg); } catch (e) {}
+      try { ui.overlay.classList.remove('hidden'); } catch (e) {}
+      try { ui.overlay.setAttribute('aria-hidden', 'false'); } catch (e) {}
+      try { if (ui.card) ui.card.classList.add('fm-busy'); } catch (e) {}
+    } else {
+      try { ui.overlay.classList.add('hidden'); } catch (e) {}
+      try { ui.overlay.setAttribute('aria-hidden', 'true'); } catch (e) {}
+      try { if (ui.card) ui.card.classList.remove('fm-busy'); } catch (e) {}
+    }
+  }
+
+  // -------------------------- Terminal integration --------------------------
+  function _shSingleQuote(s) {
+    // Safe single-quoted string for POSIX shells:  abc'd  ->  'abc'\''d'
+    const x = String(s == null ? '' : s).replace(/[\r\n]+/g, '');
+    return "'" + x.replace(/'/g, "'\\''") + "'";
+  }
+
+  function _terminalApi() {
+    try {
+      const T = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal : null;
+      const api = T && T.api ? T.api : null;
+      if (!api) return null;
+      if (typeof api.open !== 'function') return null;
+      if (typeof api.send !== 'function') return null;
+      return api;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function _terminalChooseMode() {
+    // Prefer interactive PTY if backend supports WebSocket.
+    try {
+      const T = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal : null;
+      const caps = T && T.capabilities ? T.capabilities : null;
+      if (caps && typeof caps.initCapabilities === 'function') {
+        await Promise.resolve(caps.initCapabilities());
+      }
+      if (caps && typeof caps.hasWs === 'function') {
+        return caps.hasWs() ? 'pty' : 'shell';
+      }
+    } catch (e) {}
+    return 'pty';
+  }
+
+  function _sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+  }
+
+  async function _waitFor(fn, timeoutMs, stepMs) {
+    const t0 = Date.now();
+    const timeout = Math.max(0, Number(timeoutMs) || 0);
+    const step = Math.max(25, Number(stepMs) || 100);
+    while (Date.now() - t0 <= timeout) {
+      try {
+        if (fn && fn()) return true;
+      } catch (e) {}
+      await _sleep(step);
+    }
+    return false;
+  }
+
+  async function fmOpenTerminalHere(side, opts) {
+    const s = String(side || S.activeSide || 'left');
+    const p = (S.panels && S.panels[s]) ? S.panels[s] : null;
+    if (!p) return false;
+
+    if (String(p.target || 'local') !== 'local') {
+      try { toast('Terminal here доступен только для локальной панели', 'info'); } catch (e) {}
+      return false;
+    }
+
+    const api = _terminalApi();
+    if (!api) {
+      try { toast('Терминал недоступен (api не найден)', 'error'); } catch (e) {}
+      return false;
+    }
+
+    let cwd = String(p.cwd || '/') || '/';
+    try {
+      const o = opts || {};
+      const name = String(o.name || '').trim();
+      const isDir = !!o.isDir;
+      if (name && isDir) cwd = joinLocal(cwd, name);
+    } catch (e) {}
+
+    // Normalize local path
+    cwd = String(cwd || '/');
+    if (!cwd.startsWith('/')) cwd = '/' + cwd;
+    cwd = cwd.replace(/\/+/g, '/');
+    if (cwd.length > 1) cwd = cwd.replace(/\/+$/, '');
+
+    const q = _shSingleQuote(cwd);
+    const mode = await _terminalChooseMode();
+
+    try {
+      if (mode === 'shell') {
+        // Lite terminal can't keep state; prefill a safe prefix for the user.
+        await Promise.resolve(api.open({ mode: 'shell', cmd: `cd -- ${q} && ` }));
+        try { toast('Lite терминал: добавляй команды после "&&"', 'info'); } catch (e2) {}
+        return true;
+      }
+
+      // PTY mode: open + wait for WS + cd/pwd
+      await Promise.resolve(api.open({ mode: 'pty', cmd: '' }));
+
+      try {
+        if (typeof api.isConnected === 'function') {
+          // Give the session a moment to connect.
+          await _waitFor(() => api.isConnected(), 2500, 100);
+        }
+      } catch (e3) {}
+
+      await Promise.resolve(api.send(`cd -- ${q} && pwd`, { source: 'file_manager_terminal_here' }));
+      return true;
+    } catch (e4) {
+      try { toast('Терминал: не удалось открыть', 'error'); } catch (e5) {}
+      return false;
+    }
   }
 
   function fmtSize(bytes) {
@@ -670,6 +383,8 @@ function parentRemote(cwd) {
       } else {
         headers = new Headers(headers || {});
       }
+
+  try { FM.api.fetchJson = fetchJson; } catch (e) {}
     } catch (e) {
       headers = new Headers();
     }
@@ -1064,6 +779,8 @@ function parentRemote(cwd) {
         if (v == null) continue;
         xhr.setRequestHeader(String(k), String(v));
       }
+
+  try { FM.api.xhrDownloadFile = xhrDownloadFile; } catch (e) {}
     }
   } catch (e) {}
 
@@ -1542,6 +1259,9 @@ async function xhrUploadFiles({ side, files }) {
     enabled: false,
     caps: null,
     remoteCaps: null,
+    // UX guard: when opening a remote file for the editor, lock UI to prevent double-open spam.
+    openBusy: false,
+    openBusySinceMs: 0,
     prefs: {
       sort: loadSortPref(),
       showHidden: loadShowHiddenPref(),
@@ -1549,6 +1269,8 @@ async function xhrUploadFiles({ side, files }) {
     activeSide: 'left',
     create: { kind: '', side: 'left' },
     rename: { side: 'left', oldName: '' },
+    archive: { side: 'left', names: [], fmt: 'zip' },
+    extract: { side: 'left', name: '' },
     ctxMenu: { shown: false, side: 'left', name: '', isDir: false },
     dropOp: { resolve: null }, // drag&drop move/copy choice modal
     panels: {
@@ -2401,6 +2123,9 @@ async function xhrUploadFiles({ side, files }) {
     return true;
   }
 
+  try { FM.api.listPanel = listPanel; } catch (e) {}
+
+
   async function refreshAll() {
     await Promise.all([listPanel('left', { fromInput: true }), listPanel('right', { fromInput: true })]);
   }
@@ -2481,10 +2206,111 @@ async function xhrUploadFiles({ side, files }) {
 
   // -------------------------- properties (moved to ПКМ menu) --------------------------
   let propsReqId = 0;
+let propsDeepReqId = 0;
+const _dirSizeCache = new Map();
+const _DIRSIZE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function _dirSizeCacheGet(pathAbs) {
+  try {
+    const k = String(pathAbs || '');
+    if (!k) return null;
+    const v = _dirSizeCache.get(k);
+    if (!v) return null;
+    const age = Date.now() - (v.ts || 0);
+    if (age > _DIRSIZE_CACHE_TTL_MS) {
+      _dirSizeCache.delete(k);
+      return null;
+    }
+    return v;
+  } catch (e) {
+    return null;
+  }
+}
+
+function _dirSizeCacheSet(pathAbs, bytes, err) {
+  try {
+    const k = String(pathAbs || '');
+    if (!k) return;
+    _dirSizeCache.set(k, { ts: Date.now(), bytes: (typeof bytes === 'number' ? bytes : null), err: err ? String(err) : '' });
+  } catch (e) {}
+}
+
+async function fmPropsRecalcDirSize(side, pathAbs) {
+  const s = String(side || S.activeSide || 'left');
+  const p = S.panels[s];
+  if (!p) return;
+
+  if (p.target !== 'local') {
+    toast('Размер содержимого доступен только для local', 'info');
+    return;
+  }
+
+  const full = String(pathAbs || '').trim();
+  if (!full) return;
+
+  const valEl = el('fm-props-dirsize-val');
+  const noteEl = el('fm-props-dirsize-note');
+  const btnEl = el('fm-props-dirsize-recalc-btn');
+  if (!valEl || !btnEl) return;
+
+  btnEl.disabled = true;
+  try { btnEl.textContent = 'Считаю…'; } catch (e) {}
+  if (noteEl) noteEl.textContent = '';
+  valEl.textContent = '…';
+
+  const reqId = ++propsDeepReqId;
+
+  try {
+    const payload = { target: 'local', paths: [full], deep: true };
+    const { res, data } = await fetchJson('/api/fs/stat-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (reqId !== propsDeepReqId) return;
+
+    if (!res || !res.ok || !data || !data.ok || !data.items || !data.items.length) {
+      throw new Error('bad_response');
+    }
+
+    const it = data.items[0];
+    const bytes = (it && it.size_deep !== null && it.size_deep !== undefined) ? Number(it.size_deep) : NaN;
+    const err = String((it && it.size_deep_error) || '');
+
+    if (isFinite(bytes) && bytes >= 0) {
+      _dirSizeCacheSet(full, bytes, err);
+      valEl.textContent = `${fmtSize(bytes)} (${Math.max(0, Math.trunc(bytes))} B)`;
+      if (noteEl) noteEl.textContent = err ? (`• ${err}`) : '';
+    } else {
+      _dirSizeCacheSet(full, null, err || 'не удалось');
+      valEl.textContent = 'Не удалось рассчитать';
+      if (noteEl) noteEl.textContent = err ? (`• ${err}`) : '';
+    }
+  } catch (e) {
+    if (reqId !== propsDeepReqId) return;
+    _dirSizeCacheSet(full, null, 'ошибка');
+    valEl.textContent = 'Не удалось рассчитать';
+    if (noteEl) noteEl.textContent = '• ошибка';
+  } finally {
+    if (reqId === propsDeepReqId) {
+      btnEl.disabled = false;
+      try { btnEl.textContent = 'Пересчитать'; } catch (e) {}
+    }
+  }
+}
+
 
   function _kvRow(k, v) {
     const key = _htmlEscape(k);
     const val = (v === null || v === undefined || v === '') ? '—' : _htmlEscape(v);
+    return `<div class="fm-props-k">${key}</div><div class="fm-props-v">${val}</div>`;
+  }
+
+
+  function _kvRowHtml(k, vHtml) {
+    const key = _htmlEscape(k);
+    const val = (vHtml === null || vHtml === undefined || vHtml === '') ? '—' : String(vHtml);
     return `<div class="fm-props-k">${key}</div><div class="fm-props-v">${val}</div>`;
   }
 
@@ -2510,6 +2336,8 @@ async function xhrUploadFiles({ side, files }) {
     const fullPaths = names.map((nm) => (p.target === 'remote' ? joinRemote(p.cwd, nm) : joinLocal(p.cwd, nm)));
     const payload = { target: p.target, paths: fullPaths };
     if (p.target === 'remote') payload.sid = p.sid;
+    // NOTE: deep directory size (size of contents) can be expensive on routers.
+    // We calculate it only on demand via the "Пересчитать" button in the modal.
 
     let j = null;
     try {
@@ -2534,13 +2362,19 @@ async function xhrUploadFiles({ side, files }) {
       return { metaText, html: '<div class="fm-props-empty">Файлы не найдены.</div>' };
     }
 
-    // Aggregation: total size for files/links; directories are unknown.
+    // Aggregation: total size for files/links; directories use deep size if provided.
     let totalBytes = 0;
     let hasUnknownDir = false;
     let countFile = 0, countDir = 0, countLink = 0;
     items.forEach((it) => {
       const t = String(it.type || '');
-      if (t === 'dir') { countDir++; hasUnknownDir = true; return; }
+      if (t === 'dir') {
+        countDir++;
+        const dn = Number((it && it.size_deep !== null && it.size_deep !== undefined) ? it.size_deep : NaN);
+        if (isFinite(dn) && dn >= 0) totalBytes += dn;
+        else hasUnknownDir = true;
+        return;
+      }
       if (t === 'link') countLink++; else countFile++;
       const n = Number(it.size);
       if (isFinite(n) && n >= 0) totalBytes += n;
@@ -2564,13 +2398,35 @@ async function xhrUploadFiles({ side, files }) {
       const linkTarget = safeName(it.link_target || '');
 
       const rows = [
-        _kvRow('Имя', name),
-        _kvRow('Путь', path),
-        _kvRow('Тип', t),
-        _kvRow('Размер', `${fmtSize(it.size)} (${Number(it.size) || 0} B)`),
-        _kvRow('Изменён', mtime),
-        _kvRow('Права', perm),
-      ];
+  _kvRow('Имя', name),
+  _kvRow('Путь', path),
+  _kvRow('Тип', t),
+];
+
+if (t === 'dir') {
+  const entryBytes = Number(it.size);
+  const cache = _dirSizeCacheGet(path);
+  const cachedBytes = cache && typeof cache.bytes === 'number' ? Number(cache.bytes) : NaN;
+  const cachedErr = cache ? String(cache.err || '') : '';
+  const isLocal = (p.target === 'local');
+  const sizeText = (!isLocal) ? 'недоступно' : ((isFinite(cachedBytes) && cachedBytes >= 0)
+    ? `${fmtSize(cachedBytes)} (${Math.max(0, Math.trunc(cachedBytes))} B)`
+    : 'не рассчитан');
+  const noteHtml = (isLocal && cachedErr) ? _htmlEscape(`• ${cachedErr}`) : '';
+  const canRecalc = isLocal;
+  const btnHtml = canRecalc
+    ? `<button type="button" class="btn-secondary fm-props-recalc-btn" id="fm-props-dirsize-recalc-btn" data-side="${_htmlEscape(side)}" data-path="${_htmlEscape(path)}">Пересчитать</button>`
+    : '';
+  const valHtml = `<div class="fm-props-actions"><span id="fm-props-dirsize-val">${_htmlEscape(sizeText)}</span>${btnHtml}<span id="fm-props-dirsize-note" class="fm-props-dirsize-note">${noteHtml}</span></div>`;
+  rows.push(_kvRowHtml('Размер содержимого', valHtml));
+  rows.push(_kvRow('Размер записи', `${fmtSize(entryBytes)} (${isFinite(entryBytes) ? Math.max(0, Math.trunc(entryBytes)) : 0} B)`));
+} else {
+  const sizeBytes = Number(it.size);
+  rows.push(_kvRow('Размер', `${fmtSize(sizeBytes)} (${isFinite(sizeBytes) ? Math.max(0, Math.trunc(sizeBytes)) : 0} B)`));
+}
+
+rows.push(_kvRow('Изменён', mtime));
+rows.push(_kvRow('Права', perm));
       if (uid || gid) rows.push(_kvRow('UID/GID', `${uid || '—'}:${gid || '—'}`));
       if (t === 'link') rows.push(_kvRow('Symlink →', linkTarget || '—'));
 
@@ -2704,480 +2560,9 @@ async function xhrUploadFiles({ side, files }) {
     modalClose(el('fm-hash-modal'));
   }
 
-// -------------------------- text file viewer/editor (CodeMirror modal) --------------------------
-  const FM_EDITOR = {
-    wired: false,
-    cm: null,
-    ctx: null,          // { target, sid, path, name, side, truncated, readOnly }
-    dirty: false,
-    lastSaved: '',
-  };
+  // -------------------------- text editor (CodeMirror modal) --------------------------
+  // Moved to js/features/file_manager/editor.js (FM.editor.*)
 
-  function fmEditorEls() {
-    const modal = el('fm-editor-modal');
-    if (!modal) return null;
-    return {
-      modal,
-      title: el('fm-editor-title'),
-      subtitle: el('fm-editor-subtitle'),
-      textarea: el('fm-editor-textarea'),
-      saveBtn: el('fm-editor-save-btn'),
-      cancelBtn: el('fm-editor-cancel-btn'),
-      closeBtn: el('fm-editor-close-btn'),
-      downloadBtn: el('fm-editor-download-btn'),
-      warn: el('fm-editor-warning'),
-      err: el('fm-editor-error'),
-    };
-  }
-
-  
-  function fmSampleText(text, maxLen = 4000) {
-    const s = String(text == null ? '' : text);
-    if (!s) return '';
-    // Keep only the head; enough for heuristics, safe for big logs.
-    return s.length > maxLen ? s.slice(0, maxLen) : s;
-  }
-
-  function fmLooksLikeJson(text) {
-    const s = fmSampleText(text, 5000).trimStart();
-    if (!s) return false;
-    const c = s[0];
-    if (c !== '{' && c !== '[') return false;
-    // Avoid obvious non-JSON (nginx blocks etc.)
-    if (/\b(server|location|upstream)\b\s*\{/i.test(s.slice(0, 2000))) return false;
-    return true;
-  }
-
-  function fmLooksLikeYaml(text) {
-    const s = fmSampleText(text, 3000);
-    if (!s) return false;
-    // YAML doc start or "key: value" patterns near top.
-    if (/^\s*---\s*(\r?\n|$)/.test(s)) return true;
-    return /^\s*[A-Za-z0-9_\-\."']+\s*:\s*[^\n]*$/m.test(s.slice(0, 1200));
-  }
-
-  function fmLooksLikeShell(text) {
-    const s = fmSampleText(text, 3000);
-    if (!s) return false;
-    if (/^\s*#!.*\b(sh|bash|ash|zsh)\b/i.test(s)) return true;
-    // Common shell-ish patterns in logs/scripts.
-    return /^\s*(export\s+\w+|set\s+-[a-zA-Z]+|\w+=.+|\$(\{|\w))/m.test(s.slice(0, 1200));
-  }
-
-  function fmLooksLikeXml(text) {
-    const s = fmSampleText(text, 4000).trimStart();
-    if (!s) return false;
-    if (s.startsWith('<?xml')) return true;
-    return /^<\w[\w\-:.]*[\s>]/.test(s);
-  }
-
-  function fmLooksLikeNginx(text) {
-    const s = fmSampleText(text, 6000);
-    if (!s) return false;
-    // Nginx conf typically has blocks with braces + directives.
-    if (!/[{}]/.test(s)) return false;
-    return /\b(http|events|server|location|upstream|map)\b\s*\{/i.test(s) ||
-           /\b(listen|server_name|proxy_pass|root|include)\b/i.test(s);
-  }
-
-  function fmGuessCmMode(name, text) {
-    const n = String(name || '').toLowerCase();
-    const ext = n.includes('.') ? n.split('.').pop() : '';
-
-    // Extension-first mapping.
-    // .json is strict JSON (no editor commenting). .jsonc is JSON-with-comments.
-    if (ext === 'json') return { name: 'javascript', json: true };
-    if (ext === 'jsonc') return { name: 'jsonc', json: true };
-    if (ext === 'js' || ext === 'ts') return 'javascript';
-    if (ext === 'yaml' || ext === 'yml') return 'yaml';
-    if (ext === 'sh' || ext === 'bash') return 'shell';
-    if (ext === 'toml') return 'toml';
-    if (ext === 'ini' || ext === 'cfg') return 'properties';
-    if (ext === 'xml') return 'xml';
-    if (ext === 'nginx') return 'nginx';
-
-    // .conf is ambiguous: try detect nginx, otherwise treat as ini/properties.
-    if (ext === 'conf') {
-      if (fmLooksLikeNginx(text)) return 'nginx';
-      return 'properties';
-    }
-
-    // Logs / plain text: try quick heuristics so even *.txt can be highlighted.
-    if (ext === 'log' || ext === 'txt' || ext === '') {
-      if (fmLooksLikeJson(text)) return { name: 'javascript', json: true };
-      if (fmLooksLikeYaml(text)) return 'yaml';
-      if (fmLooksLikeShell(text)) return 'shell';
-      if (fmLooksLikeXml(text)) return 'xml';
-      if (fmLooksLikeNginx(text)) return 'nginx';
-      return 'text/plain';
-    }
-
-    // Keep compatibility for other extensions (modes may or may not be present).
-    if (ext === 'py') return 'python';
-    if (ext === 'css') return 'css';
-    if (ext === 'html' || ext === 'htm') return 'htmlmixed';
-    if (ext === 'md' || ext === 'markdown') return 'markdown';
-
-    return 'text/plain';
-  }
-
-  function fmCurrentCmTheme() {
-    try {
-      const t = document.documentElement.getAttribute('data-theme');
-      return (t === 'light') ? 'default' : 'material-darker';
-    } catch (e) {
-      return 'material-darker';
-    }
-  }
-
-  // -------------------------- CodeMirror lazy assets (modes / JSON lint) --------------------------
-  function fmModeName(mode) {
-    try {
-      if (!mode) return '';
-      if (typeof mode === 'string') {
-        // MIME-like values do not map to a mode file.
-        if (mode.includes('/')) return '';
-        return mode;
-      }
-      if (typeof mode === 'object' && mode.name) return String(mode.name || '');
-    } catch (e) {}
-    return '';
-  }
-
-  function fmJsonLintAvailable() {
-    try {
-      if (!window.jsonlint) return false;
-      if (!window.CodeMirror) return false;
-      const h = window.CodeMirror.helpers;
-      return !!(h && h.lint && h.lint.json);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  async function fmEnsureCmAssets({ mode, jsonLint } = {}) {
-    // Uses XKeen.cmLoader if present (panel.html), otherwise best-effort.
-    const modeName = fmModeName(mode);
-    const wantJsonLint = !!jsonLint;
-
-    try {
-      if (window.XKeen && XKeen.cmLoader) {
-        if (modeName && typeof XKeen.cmLoader.ensureMode === 'function') {
-          await XKeen.cmLoader.ensureMode(modeName);
-        }
-        if (wantJsonLint && typeof XKeen.cmLoader.ensureJsonLint === 'function') {
-          await XKeen.cmLoader.ensureJsonLint();
-        }
-      }
-    } catch (e) {}
-
-    return {
-      modeOk: !modeName || (window.CodeMirror && window.CodeMirror.modes && window.CodeMirror.modes[modeName]),
-      jsonLintOk: !wantJsonLint || fmJsonLintAvailable(),
-    };
-  }
-
-  function fmEnsureEditorCm() {
-    if (FM_EDITOR.cm) return FM_EDITOR.cm;
-    const ui = fmEditorEls();
-    if (!ui || !ui.textarea) return null;
-    if (!window.CodeMirror || typeof window.CodeMirror.fromTextArea !== 'function') return null;
-
-    
-    const cm = window.CodeMirror.fromTextArea(ui.textarea, {
-      lineNumbers: true,
-      lineWrapping: true,
-      theme: fmCurrentCmTheme(),
-      mode: 'text/plain',
-
-      tabSize: 2,
-      indentUnit: 2,
-      indentWithTabs: false,
-
-      // Addons (loaded globally in panel.html)
-      showIndentGuides: true,
-      styleActiveLine: true,
-      matchBrackets: true,
-      autoCloseBrackets: true,
-      showTrailingSpace: true,
-      foldGutter: true,
-      // Lint gutter is enabled only when needed (e.g. JSON).
-      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
-      lint: false,
-      highlightSelectionMatches: { showToken: /\w/, minChars: 2 },
-
-      // Keep reasonable performance on big logs, but show a bit more context.
-      viewportMargin: 50,
-
-      extraKeys: {
-        'Ctrl-S': () => { fmEditorSave(); },
-        'Cmd-S': () => { fmEditorSave(); },
-
-        'Ctrl-F': 'findPersistent',
-        'Cmd-F': 'findPersistent',
-        'Ctrl-H': 'replace',
-        'Cmd-Alt-F': 'replace',
-        'Ctrl-G': 'findNext',
-        'Cmd-G': 'findNext',
-        'Shift-Ctrl-G': 'findPrev',
-        'Shift-Cmd-G': 'findPrev',
-
-        'Esc': () => { fmEditorRequestClose(); },
-      },
-    });
-
-    // Register for theme sync (theme.js reads window.__xkeenEditors)
-    try {
-      window.__xkeenEditors = window.__xkeenEditors || [];
-      window.__xkeenEditors.push(cm);
-    } catch (e) {}
-
-    // Attach toolbar if available
-    try {
-      if (window.xkeenAttachCmToolbar && window.XKEEN_CM_TOOLBAR_DEFAULT) {
-        window.xkeenAttachCmToolbar(cm, window.XKEEN_CM_TOOLBAR_DEFAULT);
-      }
-    } catch (e) {}
-
-    cm.on('change', () => {
-      try {
-        const v = cm.getValue();
-        FM_EDITOR.dirty = (FM_EDITOR.ctx && !FM_EDITOR.ctx.readOnly) ? (v !== FM_EDITOR.lastSaved) : false;
-        const ui2 = fmEditorEls();
-        if (ui2 && ui2.saveBtn) ui2.saveBtn.disabled = !FM_EDITOR.dirty || !!(FM_EDITOR.ctx && FM_EDITOR.ctx.readOnly);
-      } catch (e) {}
-    });
-
-    FM_EDITOR.cm = cm;
-    return cm;
-  }
-
-  function fmEditorSetInfo({ subtitle, warn, err } = {}) {
-    const ui = fmEditorEls();
-    if (!ui) return;
-    try {
-      if (ui.subtitle) ui.subtitle.textContent = String(subtitle || '');
-    } catch (e) {}
-    try {
-      if (ui.warn) {
-        if (warn) { ui.warn.style.display = ''; ui.warn.textContent = String(warn); }
-        else { ui.warn.style.display = 'none'; ui.warn.textContent = ''; }
-      }
-    } catch (e) {}
-    try {
-      if (ui.err) {
-        if (err) { ui.err.style.display = ''; ui.err.textContent = String(err); }
-        else { ui.err.style.display = 'none'; ui.err.textContent = ''; }
-      }
-    } catch (e) {}
-  }
-
-
-  function fmEditorKickRefresh(cm, focus = true) {
-    if (!cm) return;
-
-    const doRefresh = () => { try { cm.refresh(); } catch (e) {} };
-
-    // Ensure initial position at the top (useful for logs).
-    try { cm.scrollTo(0, 0); } catch (e) {}
-    try { cm.setCursor({ line: 0, ch: 0 }); } catch (e) {}
-
-    // CodeMirror часто инициализируется в скрытой модалке (display:none),
-    // поэтому делаем несколько refresh после открытия (в т.ч. после загрузки шрифтов).
-    doRefresh();
-    try { requestAnimationFrame(doRefresh); } catch (e) { setTimeout(doRefresh, 0); }
-    setTimeout(doRefresh, 0);
-    setTimeout(doRefresh, 50);
-    setTimeout(doRefresh, 150);
-    setTimeout(doRefresh, 300);
-
-    try {
-      if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(doRefresh).catch(() => {});
-      }
-    } catch (e) {}
-
-    if (focus) setTimeout(() => { try { cm.focus(); } catch (e) {} }, 0);
-  }
-
-  
-  async function fmEditorOpen(ctx, text) {
-    const ui = fmEditorEls();
-    if (!ui) return false;
-
-    FM_EDITOR.ctx = ctx || null;
-    FM_EDITOR.lastSaved = String(text || '');
-    FM_EDITOR.dirty = false;
-
-    try { if (ui.title) ui.title.textContent = String((ctx && ctx.name) || 'Файл'); } catch (e) {}
-
-    const subtitle = [];
-    try {
-      if (ctx && ctx.path) subtitle.push(String(ctx.path));
-      if (ctx && ctx.target === 'remote' && ctx.sid) subtitle.push('remote');
-      if (ctx && ctx.target === 'local') subtitle.push('local');
-      if (ctx && ctx.truncated) subtitle.push('частично');
-    } catch (e) {}
-    fmEditorSetInfo({
-      subtitle: subtitle.join(' • '),
-      warn: (ctx && ctx.truncated) ? 'Файл открыт частично (ограничение размера). Сохранение отключено.' : '',
-      err: '',
-    });
-
-    // ВАЖНО: сначала открываем модалку, иначе CodeMirror измерит нулевые размеры и визуально будет "пустым" до клика.
-    modalOpen(ui.modal);
-
-    const cm = fmEnsureEditorCm();
-    const ro = !!(ctx && ctx.readOnly);
-
-    if (cm) {
-      try {
-        let mode = fmGuessCmMode(ctx && ctx.name, text);
-        const isJson = !!(mode && typeof mode === 'object' && mode.json);
-
-        // Lazy-load mode + JSON linter only when needed.
-        const ensured = await fmEnsureCmAssets({ mode, jsonLint: isJson });
-        if (!ensured.modeOk) {
-          // Fallback to plain text if the requested mode isn't bundled.
-          mode = 'text/plain';
-        }
-
-        const canLintJson = isJson && ensured.jsonLintOk;
-
-        // Enable / disable lint gutter dynamically.
-        try {
-          const gutters = canLintJson
-            ? ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']
-            : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'];
-          cm.setOption('gutters', gutters);
-        } catch (e) {}
-
-        cm.setOption('mode', mode);
-        cm.setOption('lint', canLintJson);
-        cm.setOption('readOnly', ro ? 'nocursor' : false);
-
-        cm.setValue(String(text || ''));
-        cm.clearHistory();
-
-        fmEditorKickRefresh(cm, true);
-      } catch (e) {}
-    } else if (ui.textarea) {
-      ui.textarea.value = String(text || '');
-      setTimeout(() => { try { ui.textarea.focus(); } catch (e) {} }, 0);
-    }
-
-    // Save button starts disabled; it becomes enabled only after edits (handled in cm.on('change')).
-    try { if (ui.saveBtn) ui.saveBtn.disabled = true; } catch (e) {}
-
-    return true;
-  }
-
-  async function fmEditorRequestClose() {
-    const ui = fmEditorEls();
-    if (!ui) return;
-    const has = !!FM_EDITOR.ctx;
-
-    if (has && FM_EDITOR.dirty) {
-      let ok = true;
-      try {
-        if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-          ok = await XKeen.ui.confirm({
-            title: 'Несохранённые изменения',
-            message: 'Закрыть файл без сохранения?',
-            okText: 'Закрыть',
-            cancelText: 'Отмена',
-            danger: true,
-          });
-        } else {
-          ok = window.confirm('Закрыть файл без сохранения?');
-        }
-      } catch (e) {
-        ok = true;
-      }
-      if (!ok) return;
-    }
-
-    // Reset editor state
-    try { FM_EDITOR.ctx = null; } catch (e) {}
-    try { FM_EDITOR.dirty = false; } catch (e) {}
-    try { FM_EDITOR.lastSaved = ''; } catch (e) {}
-
-    modalClose(ui.modal);
-  }
-
-  function fmEditorDownload() {
-    const ctx = FM_EDITOR.ctx;
-    if (!ctx) return;
-
-    const target = String(ctx.target || 'local');
-    const path = String(ctx.path || '');
-    const sid = String(ctx.sid || '');
-    const name = String(ctx.name || 'download');
-
-    const url = `/api/fs/download?target=${encodeURIComponent(target)}&path=${encodeURIComponent(path)}${target === 'remote' ? `&sid=${encodeURIComponent(sid)}` : ''}`;
-    xhrDownloadFile({ url, filenameHint: name, titleLabel: 'Download' });
-  }
-
-  async function fmEditorSave() {
-    const ctx = FM_EDITOR.ctx;
-    const ui = fmEditorEls();
-    if (!ctx || !ui) return;
-    if (ctx.readOnly) return;
-
-    const cm = FM_EDITOR.cm;
-    const text = cm ? String(cm.getValue() || '') : String((ui.textarea && ui.textarea.value) || '');
-    try { if (ui.saveBtn) ui.saveBtn.disabled = true; } catch (e) {}
-
-    const payload = { target: ctx.target, path: ctx.path, sid: ctx.sid || '', text };
-    let out = null;
-    try {
-      const { res, data } = await fetchJson('/api/fs/write', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      out = { res, data };
-    } catch (e) {
-      out = null;
-    }
-
-    if (!out || !out.res || out.res.status < 200 || out.res.status >= 300 || !(out.data && out.data.ok)) {
-      const errMsg = (out && out.data && out.data.error) ? String(out.data.error) : 'save_failed';
-      fmEditorSetInfo({ err: 'Не удалось сохранить: ' + errMsg });
-      try { toast('FM: не удалось сохранить файл', 'error'); } catch (e) {}
-      try { if (ui.saveBtn) ui.saveBtn.disabled = false; } catch (e2) {}
-      return;
-    }
-
-    // Update dirty state + refresh panels
-    FM_EDITOR.lastSaved = text;
-    FM_EDITOR.dirty = false;
-    fmEditorSetInfo({ err: '' });
-    try { toast('Сохранено: ' + (ctx.name || 'файл'), 'success'); } catch (e) {}
-
-    try {
-      if (ui.saveBtn) ui.saveBtn.disabled = true;
-    } catch (e) {}
-
-    try {
-      if (ctx.side) await listPanel(ctx.side, { fromInput: true });
-    } catch (e) {}
-  }
-
-  function wireEditorModal() {
-    if (FM_EDITOR.wired) return;
-    const ui = fmEditorEls();
-    if (!ui) return;
-    FM_EDITOR.wired = true;
-
-    if (ui.cancelBtn) ui.cancelBtn.addEventListener('click', (e) => { e.preventDefault(); fmEditorRequestClose(); });
-    if (ui.closeBtn) ui.closeBtn.addEventListener('click', (e) => { e.preventDefault(); fmEditorRequestClose(); });
-    if (ui.downloadBtn) ui.downloadBtn.addEventListener('click', (e) => { e.preventDefault(); fmEditorDownload(); });
-    if (ui.saveBtn) ui.saveBtn.addEventListener('click', (e) => { e.preventDefault(); fmEditorSave(); });
-
-    // Backdrop click: НЕ закрываем редактор по клику вне окна.
-    // Закрытие доступно через Esc или кнопки "Закрыть".
-  }
 
   async function tryOpenItemInEditor(side, it, fullPath) {
     const name = safeName(it && it.name);
@@ -3199,6 +2584,12 @@ async function xhrUploadFiles({ side, files }) {
 
     const url = `/api/fs/read?target=${encodeURIComponent(target)}&path=${encodeURIComponent(fullPath)}${target === 'remote' ? `&sid=${encodeURIComponent(sid)}` : ''}`;
 
+    const showBusy = (target === 'remote');
+    if (showBusy) {
+      // Display a spinner overlay to make it clear that the file is being fetched over the network.
+      try { fmSetOpenBusy(true, `Открываю: ${name}…`); } catch (e) {}
+    }
+
     let out = null;
     try {
       out = await fetchJson(url, { method: 'GET' });
@@ -3206,35 +2597,46 @@ async function xhrUploadFiles({ side, files }) {
       out = null;
     }
 
-    if (!out || !out.res) return false;
-    if (out.res.status === 415 && out.data && out.data.error === 'not_text') {
-      return false;
-    }
-    if (out.res.status < 200 || out.res.status >= 300 || !(out.data && out.data.ok)) {
-      const errMsg = (out.data && out.data.error) ? String(out.data.error) : `HTTP ${out.res.status}`;
-      try { toast('FM: не удалось открыть файл: ' + errMsg, 'error'); } catch (e) {}
-      return false;
-    }
+    try {
+      if (!out || !out.res) return false;
+      if (out.res.status === 415 && out.data && out.data.error === 'not_text') {
+        return false;
+      }
+      if (out.res.status < 200 || out.res.status >= 300 || !(out.data && out.data.ok)) {
+        const errMsg = (out.data && out.data.error) ? String(out.data.error) : `HTTP ${out.res.status}`;
+        try { toast('FM: не удалось открыть файл: ' + errMsg, 'error'); } catch (e) {}
+        return false;
+      }
 
-    const text = String(out.data.text || '');
-    const truncated = !!out.data.truncated;
-    const ctx = {
-      target,
-      sid: target === 'remote' ? sid : '',
-      path: fullPath,
-      name,
-      side,
-      truncated,
-      readOnly: truncated, // avoid accidental overwrite of partial content
-    };
+      const text = String(out.data.text || '');
+      const truncated = !!out.data.truncated;
+      const ctx = {
+        target,
+        sid: target === 'remote' ? sid : '',
+        path: fullPath,
+        name,
+        side,
+        truncated,
+        readOnly: truncated, // avoid accidental overwrite of partial content
+      };
 
-    wireEditorModal();
-    return fmEditorOpen(ctx, text);
+      wireEditorModal();
+      // Editor.open is async (loads modes/lint). Await to keep the busy overlay until the editor is ready.
+      return await fmEditorOpen(ctx, text);
+    } finally {
+      if (showBusy) {
+        try { fmSetOpenBusy(false); } catch (e) {}
+      }
+    }
   }
 
   async function openFocused(side) {
     const p = S.panels[side];
     if (!p) return;
+
+    // Guard against rapid repeated "open" clicks while a remote file is still loading.
+    try { if (S.openBusy) return; } catch (e) {}
+
     const it = getFocusedItem(side);
     if (!it) return;
     const type = String((it && it.type) || '');
@@ -5788,6 +5190,385 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     closeRenameModal();
   }
 
+
+  // -------------------------- archive create / extract --------------------------
+  function _isArchiveFileName(n) {
+    const s = String(n || '').toLowerCase();
+    return s.endsWith('.zip') || s.endsWith('.tar.gz') || s.endsWith('.tgz');
+  }
+
+  function _stripArchiveExt(n) {
+    const s = String(n || '').trim();
+    if (!s) return '';
+    return s
+      .replace(/\.(zip)$/i, '')
+      .replace(/\.(tgz)$/i, '')
+      .replace(/\.(tar\.gz)$/i, '');
+  }
+
+  function _ensureArchiveExt(name, fmt) {
+    const f = String(fmt || 'zip').toLowerCase();
+    const base = _stripArchiveExt(String(name || '').trim()) || 'archive';
+    return (f === 'tar.gz' || f === 'tgz' || f === 'tar_gz') ? (base + '.tar.gz') : (base + '.zip');
+  }
+
+  function _defaultArchiveBase(side, names) {
+    const p = S.panels[side];
+    const sel = Array.isArray(names) ? names.map(safeName).filter(Boolean) : [];
+    if (sel.length === 1) {
+      const one = sel[0];
+      // Prefer stripping existing extension for files.
+      return _stripArchiveExt(one) || one;
+    }
+    // Use current directory leaf
+    const cwd = String((p && p.cwd) || '').trim();
+    if (p && p.target === 'remote') {
+      const c = normRemotePath(cwd);
+      if (!c || c === '.' || c === '/') return 'selection';
+      const parts = c.split('/').filter(Boolean);
+      return parts.length ? (parts[parts.length - 1] + '_selection') : 'selection';
+    }
+    const c = cwd.replace(/\/+$/, '');
+    if (!c || c === '/') return 'selection';
+    const idx = c.lastIndexOf('/');
+    const leaf = (idx >= 0) ? (c.slice(idx + 1) || 'selection') : (c || 'selection');
+    return leaf + '_selection';
+  }
+
+  function openArchiveModal() {
+    const modal = el('fm-archive-modal');
+    if (!modal) return;
+
+    const side = S.activeSide;
+    const p = S.panels[side];
+    if (!p) return;
+
+    if (p.target !== 'local') {
+      toast('Архивация доступна только для local панели', 'info');
+      return;
+    }    let names = getSelectionNames(side);
+    if (!names.length) {
+      const fn = safeName(p.focusName || '');
+      if (fn) names = [fn];
+    }
+    if (!names.length) {
+      toast('Выберите файлы/папки для архивирования', 'info');
+      return;
+    }
+
+    const prevFmt = String((S.archive && S.archive.fmt) || 'zip').toLowerCase();
+    const fmt0 = (prevFmt === 'tar.gz') ? 'tar.gz' : 'zip';
+    S.archive = { side, names: names.slice(), fmt: fmt0 };
+
+    const srcEl = el('fm-archive-src');
+    const listEl = el('fm-archive-list');
+    const nameInp = el('fm-archive-name');
+    const fmtSel = el('fm-archive-format');
+    const ow = el('fm-archive-overwrite');
+    const err = el('fm-archive-error');
+    const titleEl = el('fm-archive-title');
+
+    if (err) err.textContent = '';
+    if (ow) ow.checked = false;
+    if (fmtSel) {
+      try { fmtSel.value = fmt0; } catch (e) {}
+    }
+    if (titleEl) {
+      titleEl.textContent = (names.length === 1) ? 'Архивировать' : `Архивировать (${names.length})`;
+    }
+    if (srcEl) {
+      srcEl.textContent = `${side.toUpperCase()} • local • ${_displayCwd(p)}`;
+    }
+    if (listEl) {
+      listEl.textContent = names.map(n => '• ' + safeName(n)).join('\n');
+    }
+    if (nameInp) {
+      const base = _defaultArchiveBase(side, names);
+      const suggested = _ensureArchiveExt(base, fmt0);
+      try { nameInp.value = suggested; } catch (e) {}
+      try { nameInp.setAttribute('spellcheck', 'false'); } catch (e) {}
+    }
+
+    modalOpen(modal);
+    try { setTimeout(() => { try { nameInp && nameInp.focus(); nameInp && nameInp.select && nameInp.select(); } catch (e) {} }, 0); } catch (e) {}
+  }
+
+  function closeArchiveModal() {
+    modalClose(el('fm-archive-modal'));
+  }
+
+  async function doArchiveFromModal() {
+    const err = el('fm-archive-error');
+    if (err) err.textContent = '';
+
+    const side = String((S.archive && S.archive.side) || S.activeSide || 'left');
+    const p = S.panels[side];
+    if (!p) return;
+
+    if (p.target !== 'local') {
+      toast('Архивация доступна только для local панели', 'info');
+      return;
+    }
+
+    const names = Array.isArray(S.archive && S.archive.names) ? S.archive.names.slice() : [];
+    if (!names.length) {
+      if (err) err.textContent = 'Нет выбранных элементов.';
+      return;
+    }
+
+    const nameInp = el('fm-archive-name');
+    const fmtSel = el('fm-archive-format');
+    const ow = el('fm-archive-overwrite');
+    const fmt = String((fmtSel && fmtSel.value) || 'zip').trim().toLowerCase();
+    let nm = String((nameInp && nameInp.value) || '').trim();
+    nm = _ensureArchiveExt(nm || 'archive', fmt);
+
+    // leaf only
+    if (_isBadLeafName(nm)) {
+      if (err) err.textContent = 'Введите имя архива без "/" и "\\".';
+      return;
+    }
+
+    const items = [];
+    for (const n of names) {
+      const leaf = safeName(n);
+      if (!leaf) continue;
+      items.push({ path: joinLocal(p.cwd, leaf) });
+    }
+    if (!items.length) {
+      if (err) err.textContent = 'Нет выбранных элементов.';
+      return;
+    }
+
+    const body = {
+      target: 'local',
+      cwd: String(p.cwd || ''),
+      name: nm,
+      format: fmt,
+      overwrite: !!(ow && ow.checked),
+      items,
+    };
+
+    const { res, data } = await fetchJson('/api/fs/archive/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res || !res.ok || !data || !data.ok) {
+      const msg = data && (data.error || data.message) ? String(data.error || data.message) : 'archive_create_failed';
+      if (err) err.textContent = msg;
+      toast('FM: ' + msg, 'error');
+      return;
+    }
+
+    toast('Архив создан: ' + (data.name || nm), 'success');
+    closeArchiveModal();
+
+    // Refresh and focus created archive
+    try {
+      const created = safeName(String(data.name || nm));
+      p.focusName = created;
+      p.selected.clear();
+      p.selected.add(created);
+      p.anchorName = created;
+    } catch (e) {}
+    await listPanel(side, { fromInput: false });
+  }
+
+  function openExtractModal() {
+    const modal = el('fm-extract-modal');
+    if (!modal) return;
+
+    const titleEl = el('fm-extract-title');
+
+    const side = S.activeSide;
+    const p = S.panels[side];
+    if (!p) return;
+
+    if (p.target !== 'local') {
+      toast('Распаковка доступна только для local панели', 'info');
+      return;
+    }    const names = getSelectionNames(side);
+    if (names.length > 1) {
+      toast('Для распаковки выберите один архив', 'info');
+      return;
+    }
+    const name = safeName(names.length === 1 ? names[0] : (p.focusName || ''));
+    if (!name) {
+      toast('Выберите архив для распаковки', 'info');
+      return;
+    }
+    if (!_isArchiveFileName(name)) {
+      toast('Выбранный файл не похож на архив (.zip/.tar.gz)', 'info');
+      return;
+    }
+
+    S.extract = { side, name };
+    if (titleEl) titleEl.textContent = 'Распаковать';
+
+    const archEl = el('fm-extract-archive');
+    const destInp = el('fm-extract-dest');
+    const mk = el('fm-extract-create-dest');
+    const ow = el('fm-extract-overwrite');
+    const err = el('fm-extract-error');
+
+    if (err) err.textContent = '';
+    if (mk) mk.checked = true;
+    if (ow) ow.checked = false;
+
+    const full = joinLocal(p.cwd, name);
+    if (archEl) archEl.textContent = `${side.toUpperCase()} • local • ${full}`;
+
+    if (destInp) {
+      let base = _stripArchiveExt(name) || (name.replace(/\.[^.]+$/, '') || 'out');
+
+      // For archives like "file.txt.zip" suggest a nicer folder name ("file")
+      // and avoid common conflicts (e.g. the original file "file.txt" exists).
+      try {
+        const m = String(base || '').match(/^(.*)\.([A-Za-z]{1,5})$/);
+        if (m && m[1] != null && m[2] != null) {
+          const ext = String(m[2] || '').toLowerCase();
+          const known = new Set(['txt','log','json','yaml','yml','conf','ini','cfg','sh','md','csv','xml','html','js','css','py','lua','db','sqlite','dat','bin']);
+          if (known.has(ext)) base = String(m[1] || base);
+        }
+      } catch (e) {}
+
+      let suggested = String(base || 'out').trim() || 'out';
+
+      // Avoid conflicts with existing items in the current folder.
+      try {
+        const existing = new Set((p.items || []).map((it) => safeName(it && it.name)));
+        if (existing.has(suggested)) {
+          const candidates = _buildRenameCandidates(suggested, 60);
+          for (const nm of candidates) {
+            if (!existing.has(nm)) { suggested = nm; break; }
+          }
+        }
+      } catch (e) {}
+
+      try { destInp.value = suggested; } catch (e) {}
+      try { destInp.setAttribute('spellcheck', 'false'); } catch (e) {}
+
+      // UX: if the user disables "Создать папку", we extract into current directory.
+      // In that mode the destination input is informational only, so we disable it.
+      try {
+        if (mk) {
+          mk.onchange = () => {
+            const on = !!mk.checked;
+            try { destInp.disabled = !on; } catch (e) {}
+            try {
+              if (!on) {
+                if (!destInp.dataset.prevValue) destInp.dataset.prevValue = String(destInp.value || '');
+                destInp.value = '';
+                destInp.placeholder = 'Текущая папка';
+              } else {
+                const pv = String(destInp.dataset.prevValue || '');
+                if (pv) destInp.value = pv;
+                destInp.placeholder = '';
+              }
+            } catch (e) {}
+          };
+          // Initialize once
+          mk.onchange();
+        }
+      } catch (e) {}
+    }
+
+    modalOpen(modal);
+    try { setTimeout(() => { try { destInp && destInp.focus(); destInp && destInp.select && destInp.select(); } catch (e) {} }, 0); } catch (e) {}
+  }
+
+  function closeExtractModal() {
+    modalClose(el('fm-extract-modal'));
+  }
+
+  async function doExtractFromModal() {
+    const err = el('fm-extract-error');
+    if (err) err.textContent = '';
+
+    const side = String((S.extract && S.extract.side) || S.activeSide || 'left');
+    const p = S.panels[side];
+    const name = safeName((S.extract && S.extract.name) || '');
+    if (!p || !name) return;
+
+    if (p.target !== 'local') {
+      toast('Распаковка доступна только для local панели', 'info');
+      return;
+    }
+    if (!_isArchiveFileName(name)) {
+      if (err) err.textContent = 'Неподдерживаемый архив.';
+      return;
+    }
+
+    const destInp = el('fm-extract-dest');
+    const mk = el('fm-extract-create-dest');
+    const ow = el('fm-extract-overwrite');
+    const createDest = !!(mk && mk.checked);
+
+    // If the user does NOT want to create a destination folder,
+    // extraction should happen in the current directory (where the archive is).
+    // In that mode we ignore the "dest" input (it's only a folder name hint).
+    const destRaw = String((destInp && destInp.value) || '').trim();
+    if (createDest && !destRaw) {
+      if (err) err.textContent = 'Введите папку назначения.';
+      return;
+    }
+
+    // allow relative to cwd, or absolute
+    const dest = createDest ? destRaw : '';
+
+    const body = {
+      target: 'local',
+      cwd: String(p.cwd || ''),
+      archive: joinLocal(p.cwd, name),
+      dest,
+      create_dest: createDest,
+      overwrite: !!(ow && ow.checked),
+    };
+
+    const { res, data } = await fetchJson('/api/fs/archive/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res || !res.ok || !data || !data.ok) {
+      let msg = data && (data.details || data.error || data.message) ? String(data.details || data.error || data.message) : 'extract_failed';
+      if (msg === 'dest_not_dir') msg = 'Папка назначения не является папкой (уже есть файл с таким именем).';
+      if (err) err.textContent = msg;
+      toast('FM: ' + msg, 'error');
+      return;
+    }
+
+    const nExtracted = (data && typeof data.extracted === 'number') ? data.extracted : null;
+    const nSkipped = (data && typeof data.skipped === 'number') ? data.skipped : null;
+    const nRenamed = (data && typeof data.renamed === 'number') ? data.renamed : null;
+    const extra = (nExtracted != null)
+      ? ` (${nExtracted}`
+        + `${(nSkipped != null && nSkipped) ? `, пропущено ${nSkipped}` : ''}`
+        + `${(nRenamed != null && nRenamed) ? `, переименовано ${nRenamed}` : ''}`
+        + `)`
+      : '';
+    toast('Распаковано' + extra, 'success');
+
+    closeExtractModal();
+
+    // Refresh; try to focus destination folder (leaf) when we actually create/extract into a folder.
+    if (createDest) {
+      try {
+        const leaf = safeName(destRaw.replace(/\\/g, '/').replace(/\/+$/, '').split('/').filter(Boolean).pop() || '');
+        if (leaf) {
+          p.focusName = leaf;
+          p.selected.clear();
+          p.selected.add(leaf);
+          p.anchorName = leaf;
+        }
+      } catch (e) {}
+    }
+    await listPanel(side, { fromInput: false });
+  }
+
   
 
   // -------------------------- chmod / chown --------------------------
@@ -6606,6 +6387,43 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     const rnm = el('fm-rename-modal');
     if (rnm) rnm.addEventListener('click', (e) => { if (e.target === rnm) closeRename(); });
 
+    // archive create modal buttons
+    const archOk = el('fm-archive-ok-btn');
+    const archCancel = el('fm-archive-cancel-btn');
+    const archClose = el('fm-archive-close-btn');
+    const archName = el('fm-archive-name');
+    const archFmt = el('fm-archive-format');
+    const closeArch = () => closeArchiveModal();
+    if (archOk) archOk.addEventListener('click', (e) => { e.preventDefault(); doArchiveFromModal(); });
+    if (archCancel) archCancel.addEventListener('click', (e) => { e.preventDefault(); closeArch(); });
+    if (archClose) archClose.addEventListener('click', (e) => { e.preventDefault(); closeArch(); });
+    if (archName) archName.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doArchiveFromModal(); } });
+    if (archFmt) archFmt.addEventListener('change', (e) => {
+      try {
+        const fmt = String(archFmt.value || 'zip').trim().toLowerCase();
+        if (archName) {
+          const v = String(archName.value || '').trim();
+          archName.value = _ensureArchiveExt(v || 'archive', fmt);
+        }
+        if (S.archive) S.archive.fmt = fmt;
+      } catch (e2) {}
+    });
+    const am = el('fm-archive-modal');
+    if (am) am.addEventListener('click', (e) => { if (e.target === am) closeArch(); });
+
+    // archive extract modal buttons
+    const exOk = el('fm-extract-ok-btn');
+    const exCancel = el('fm-extract-cancel-btn');
+    const exClose = el('fm-extract-close-btn');
+    const exDest = el('fm-extract-dest');
+    const closeEx = () => closeExtractModal();
+    if (exOk) exOk.addEventListener('click', (e) => { e.preventDefault(); doExtractFromModal(); });
+    if (exCancel) exCancel.addEventListener('click', (e) => { e.preventDefault(); closeEx(); });
+    if (exClose) exClose.addEventListener('click', (e) => { e.preventDefault(); closeEx(); });
+    if (exDest) exDest.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doExtractFromModal(); } });
+    const xm = el('fm-extract-modal');
+    if (xm) xm.addEventListener('click', (e) => { if (e.target === xm) closeEx(); });
+
     // select by mask modal
     const maskOk = el('fm-mask-ok-btn');
     const maskCancel = el('fm-mask-cancel-btn');
@@ -6636,6 +6454,19 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
 
     const prm = el('fm-props-modal');
     if (prm) prm.addEventListener('click', (e) => { if (e.target === prm) closeProps(); });
+
+    const propsBody = el('fm-props-modal-body');
+    if (propsBody) propsBody.addEventListener('click', (e) => {
+      try {
+        const btn = (e && e.target && e.target.closest) ? e.target.closest('.fm-props-recalc-btn') : null;
+        if (!btn) return;
+        e.preventDefault();
+        const s = String(btn.getAttribute('data-side') || S.activeSide || 'left');
+        const pth = String(btn.getAttribute('data-path') || '');
+        if (!pth) return;
+        fmPropsRecalcDirSize(s, pth);
+      } catch (e2) {}
+    });
 
     // checksum modal
     const hashClose = el('fm-hash-close-btn');
@@ -6863,7 +6694,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
         closedAny = true;
       }
 
-      ['fm-help-modal', 'fm-ops-modal', 'fm-progress-modal', 'fm-conflicts-modal', 'fm-props-modal', 'fm-hash-modal', 'fm-rename-modal', 'fm-create-modal', 'fm-connect-modal', 'fm-chmod-modal', 'fm-chown-modal'].forEach((id) => {
+      ['fm-help-modal', 'fm-ops-modal', 'fm-progress-modal', 'fm-conflicts-modal', 'fm-props-modal', 'fm-hash-modal', 'fm-rename-modal', 'fm-create-modal', 'fm-archive-modal', 'fm-extract-modal', 'fm-connect-modal', 'fm-chmod-modal', 'fm-chown-modal'].forEach((id) => {
         const m = el(id);
         if (m && !m.classList.contains('hidden')) {
           modalClose(m);
@@ -6873,7 +6704,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
 
       // If no modal was closed, treat ESC as "exit fullscreen".
       try {
-        if (!closedAny && fmIsFullscreen && isFilesViewVisible() && !isTextInputActive() && !document.querySelector('.modal:not(.hidden)')) {
+        if (!closedAny && fmIsFullscreenNow() && isFilesViewVisible() && !isTextInputActive() && !document.querySelector('.modal:not(.hidden)')) {
           fmSetFullscreen(false);
         }
       } catch (e2) {}
@@ -6950,12 +6781,35 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
       } catch (e) {}
     }
 
+    // "Terminal here" (open terminal at active folder)
+    if (!el('fm-terminal-here-btn')) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn-secondary';
+      b.id = 'fm-terminal-here-btn';
+      b.textContent = '⌨ Terminal here';
+      b.title = 'Открыть терминал в текущей папке (PTY)';
+      b.setAttribute('aria-label', 'Открыть терминал в текущей папке');
+      b.addEventListener('click', async (e) => {
+        try { e.preventDefault(); } catch (e2) {}
+        await fmOpenTerminalHere(S.activeSide, {});
+      });
+
+      try {
+        // Place next to fullscreen + view toggles.
+        const fsBtn = el('fm-fullscreen-btn');
+        if (fsBtn && fsBtn.parentElement) {
+          fsBtn.parentElement.insertBefore(b, fsBtn.nextSibling);
+        } else {
+          actions.appendChild(b);
+        }
+      } catch (e) {
+        try { actions.appendChild(b); } catch (e2) {}
+      }
+    }
+
     // Ensure button state matches current DOM state.
-    try {
-      const card = fmCardEl();
-      fmIsFullscreen = !!(card && card.classList && card.classList.contains('is-fullscreen'));
-      updateFmFullscreenBtn();
-    } catch (e) {}
+    try { fmSyncFullscreenFromDom(); } catch (e) {}
 
     // Create folder / file buttons
     // "Вверх" is now located in the top panel bars (next to "Обновить").
@@ -7114,10 +6968,30 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     const o = opts || {};
     const side = String((o.side) || S.activeSide || 'left');
     const p = (S.panels && S.panels[side]) ? S.panels[side] : null;
+    const isRemotePanel = !!p && String(p.target || 'local') === 'remote';
     const hasRow = !!o.hasRow;
     const isDir = !!o.isDir;
-    const hasSelection = !!(p && getSelectionNames(side).length);
+
+    const rowName = safeName(o.name || '');
+    const selNames = p ? (getSelectionNames(side) || []) : [];
+    const hasSelection = !!(selNames && selNames.length);
     const inTrash = !!(p && isTrashPanel(p));
+
+    // Archive actions (local only): prefer selection, fallback to the row item.
+    const candNames = (selNames && selNames.length) ? selNames : (rowName ? [rowName] : []);
+    const canArchive = (!isRemotePanel) && !inTrash && (candNames.length > 0);
+    let canExtract = false;
+    try {
+      if ((!isRemotePanel) && !inTrash && candNames.length === 1) {
+        const nm = safeName(candNames[0]);
+        if (nm && _isArchiveFileName(nm)) {
+          const it = (p && p.items) ? (p.items || []).find(x => safeName(x && x.name) === nm) : null;
+          const t = String((it && it.type) || '');
+          const isD = (t === 'dir') || (t === 'link' && !!(it && it.link_dir));
+          canExtract = !isD;
+        }
+      }
+    } catch (e) { canExtract = false; }
 
     // Capabilities (best-effort; default allow)
     let canChmod = true;
@@ -7127,7 +7001,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
       const fa = (rf && rf.fs_admin) ? rf.fs_admin : null;
       const local = (fa && fa.local) ? fa.local : {};
       const remote = (fa && fa.remote) ? fa.remote : {};
-      const isRemote = !!p && String(p.target) === 'remote';
+      const isRemote = isRemotePanel;
       canChmod = isRemote ? !!remote.chmod : !!local.chmod;
       canChown = isRemote ? !!remote.chown : !!local.chown;
       const protos = Array.isArray(remote.chown_protocols) ? remote.chown_protocols.map(String) : [];
@@ -7152,13 +7026,21 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     menu.innerHTML = '';
 
     if (!hasRow && hasSelection) {
+      menu.appendChild(_ctxBtn('Скачать', 'download', ''));
+      if (canArchive) menu.appendChild(_ctxBtn('Архивировать…', 'archive_create', ''));
+      if (canExtract) menu.appendChild(_ctxBtn('Распаковать…', 'archive_extract', ''));
       menu.appendChild(_ctxBtn('Свойства…', 'props', ''));
       menu.appendChild(_ctxSep());
     }
 
     if (hasRow) {
       menu.appendChild(_ctxBtn(isDir ? 'Открыть папку' : 'Открыть', 'open', 'Enter'));
+      if (!isRemotePanel) {
+        menu.appendChild(_ctxBtn(isDir ? 'Терминал здесь' : 'Терминал в папке', 'terminal_here', ''));
+      }
       menu.appendChild(_ctxBtn('Скачать', 'download', ''));
+      if (canArchive) menu.appendChild(_ctxBtn('Архивировать…', 'archive_create', ''));
+      if (canExtract) menu.appendChild(_ctxBtn('Распаковать…', 'archive_extract', ''));
       menu.appendChild(_ctxBtn('Копировать полный путь', 'copy_path', 'Ctrl+Shift+C'));
       menu.appendChild(_ctxSep());
       menu.appendChild(_ctxBtn('Копировать', 'copy', 'F5'));
@@ -7185,6 +7067,9 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     }
     menu.appendChild(_ctxSep());
     menu.appendChild(_ctxBtn('Загрузить (Upload)…', 'upload', ''));
+    if (!hasRow && !isRemotePanel) {
+      menu.appendChild(_ctxBtn('Терминал здесь', 'terminal_here', ''));
+    }
     menu.appendChild(_ctxBtn('Вверх', 'up', 'Backspace'));
     menu.appendChild(_ctxBtn('Обновить', 'refresh', '⟳'));
   }
@@ -7201,7 +7086,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     // store context for actions
     try { S.ctxMenu = { shown: true, side, name, isDir, hasRow }; } catch (e) {}
 
-    buildCtxMenu(m, { side, hasRow, isDir });
+    buildCtxMenu(m, { side, hasRow, isDir, name });
 
     // Position (fixed to viewport)
     try {
@@ -7268,8 +7153,14 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
       try {
         if (act === 'open') {
           await openFocused(side);
+        } else if (act === 'terminal_here') {
+          await fmOpenTerminalHere(side, { name: String(ctx.name || ''), isDir: !!ctx.isDir });
         } else if (act === 'download') {
           downloadSelection(side);
+        } else if (act === 'archive_create') {
+          openArchiveModal();
+        } else if (act === 'archive_extract') {
+          openExtractModal();
         } else if (act === 'copy_path') {
           copyFullPaths(side);
         } else if (act === 'copy') {
@@ -7376,11 +7267,20 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
       const k = e.key;
 
       // Exit FM fullscreen quickly
-      if (k === 'Escape' && fmIsFullscreen) {
+      if (k === 'Escape' && fmIsFullscreenNow()) {
         e.preventDefault();
         fmSetFullscreen(false);
         return;
       }
+
+      // While a remote file is being opened for the editor, block FM hotkeys to avoid
+      // accidental repeated opens or other operations.
+      try {
+        if (S.openBusy) {
+          e.preventDefault();
+          return;
+        }
+      } catch (e0) {}
 
       const ctrl = !!(e.ctrlKey || e.metaKey);
 
