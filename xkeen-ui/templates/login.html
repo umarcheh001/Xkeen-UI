@@ -10,7 +10,7 @@
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
   <!-- Apply layout prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/branding.js', v='20260101b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}"></script>
 
   <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
@@ -18,8 +18,10 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
   <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
   <meta name="theme-color" content="#0f172a">
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260101e') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260110a') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
+  <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
+  <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
   {% if custom_css_enabled and not safe_mode %}
   <link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
   {% endif %}
