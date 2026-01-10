@@ -58,6 +58,11 @@
   let _saveTimer = null;
   let _resizeObserver = null;
 
+  // Fullscreen for the Xray logs card is implemented as a CSS class on the card.
+  // (Same UX approach as File Manager / Terminal).
+  let _isFullscreen = false;
+  let _heightBeforeFullscreen = null;
+
   function $(id) {
     return document.getElementById(id);
   }
@@ -95,6 +100,12 @@
     try {
       if (outputEl) height = Math.round(outputEl.getBoundingClientRect().height);
     } catch (e) {}
+
+    // When fullscreen is active we intentionally keep the persisted height stable,
+    // so we don't store the (huge) fullscreen height and later apply it in normal mode.
+    if (_isFullscreen && _heightBeforeFullscreen != null) {
+      height = _heightBeforeFullscreen;
+    }
 
     let maxLines = _maxLines;
     try {
@@ -306,6 +317,89 @@
   function isLogsViewVisible() {
     const viewEl = $('view-xray-logs');
     return !!(viewEl && viewEl.style.display !== 'none');
+  }
+
+  // ---------- UI: fullscreen (card-level) ----------
+
+  function _xrayCardEl() {
+    try {
+      const view = $('view-xray-logs');
+      if (!view) return null;
+      return view.querySelector ? view.querySelector('.log-card') : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function _syncBodyScrollLock() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+        XKeen.ui.modal.syncBodyScrollLock();
+      } else {
+        document.body.classList.toggle('modal-open', !!_isFullscreen);
+      }
+    } catch (e) {}
+  }
+
+  function _updateFullscreenBtn() {
+    const btn = $('xray-log-fullscreen');
+    if (!btn) return;
+    if (_isFullscreen) {
+      btn.textContent = '🗗';
+      btn.title = 'Восстановить';
+      btn.setAttribute('aria-label', 'Восстановить');
+    } else {
+      btn.textContent = '⛶';
+      btn.title = 'Полный экран';
+      btn.setAttribute('aria-label', 'Полный экран');
+    }
+  }
+
+  function _setFullscreen(on) {
+    const card = _xrayCardEl();
+    if (!card) return;
+
+    const next = !!on;
+    if (next === _isFullscreen) return;
+
+    // Snapshot current (persisted) height so we don't overwrite it in fullscreen.
+    if (next) {
+      try {
+        const st = readStoredUiState();
+        const h = parseInt(st && st.height, 10);
+        if (isFinite(h)) _heightBeforeFullscreen = h;
+      } catch (e) {}
+
+      if (_heightBeforeFullscreen == null) {
+        try {
+          const out = $('xray-log-output');
+          if (out) _heightBeforeFullscreen = Math.round(out.getBoundingClientRect().height);
+        } catch (e2) {}
+      }
+    }
+
+    _isFullscreen = next;
+    try { card.classList.toggle('is-fullscreen', _isFullscreen); } catch (e3) {}
+    _updateFullscreenBtn();
+    _syncBodyScrollLock();
+  }
+
+  function _toggleFullscreen() {
+    _setFullscreen(!_isFullscreen);
+  }
+
+  function _bindFullscreenUi() {
+    try {
+      const btn = $('xray-log-fullscreen');
+      if (btn && !btn.dataset.bound) {
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          _toggleFullscreen();
+        });
+      }
+      _updateFullscreenBtn();
+    } catch (e) {}
   }
 
   // ---------- UI: header badge (global loglevel reminder) ----------
@@ -1663,6 +1757,7 @@ function copyXrayContextModal() {
 
     try { bindControlsUi(); } catch (e) {}
     try { bindFilterUi(); } catch (e) {}
+    try { _bindFullscreenUi(); } catch (e) {}
 
     // Context modal buttons
     try {
@@ -1673,7 +1768,10 @@ function copyXrayContextModal() {
       if (close2) close2.addEventListener('click', (e) => { e.preventDefault(); closeXrayContextModal(); });
       if (copyBtn) copyBtn.addEventListener('click', (e) => { e.preventDefault(); copyXrayContextModal(); });
       document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeXrayContextModal();
+        if (e.key !== 'Escape') return;
+        try { closeXrayContextModal(); } catch (e2) {}
+        // If the Xray logs card is fullscreen — ESC also restores it.
+        try { if (_isFullscreen) _setFullscreen(false); } catch (e3) {}
       });
     } catch (e) {}
 
