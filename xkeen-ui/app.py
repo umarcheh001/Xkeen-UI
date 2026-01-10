@@ -113,6 +113,7 @@ from routes_routing import create_routing_blueprint
 from routes_backup import create_backups_blueprint
 from routes_service import create_service_blueprint
 from routes_remotefs import create_remotefs_blueprint
+from routes_fileops import create_fileops_blueprint
 from routes_fs import create_fs_blueprint
 from routes_devtools import create_devtools_blueprint
 from services.xkeen import append_restart_log as _svc_append_restart_log, read_restart_log as _svc_read_restart_log, restart_xkeen as _svc_restart_xkeen
@@ -606,6 +607,7 @@ COMMAND_GROUPS = [
             {"flag": "-d",       "desc": "Установить задержку автозапуска прокси-клиента"},
             {"flag": "-fd",      "desc": "Вкл/выкл контроль файловых дескрипторов прокси-клиента"},
             {"flag": "-diag",    "desc": "Выполнить диагностику"},
+            {"flag": "-ipv6",    "desc": "Вкл/выкл IPv6 в KeeneticOS 5+ (параметр -ipv6; sysctl net.ipv6.conf.all/default.disable_ipv6). По умолчанию IPv6 включён"},
             {"flag": "-channel", "desc": "Переключить канал обновлений XKeen (Stable / Dev)"},
             {"flag": "-xray",    "desc": "Переключить XKeen на ядро Xray"},
             {"flag": "-mihomo",  "desc": "Переключить XKeen на ядро Mihomo"},
@@ -1053,6 +1055,22 @@ def _inject_auth_context():
     except Exception:
         v = 0
 
+    # Independent themes (optional)
+    term_v = 0
+    cm_v = 0
+    try:
+        tp = os.path.join(UI_STATE_DIR, "terminal_theme.css")
+        if os.path.isfile(tp):
+            term_v = int(os.path.getmtime(tp) or 0)
+    except Exception:
+        term_v = 0
+    try:
+        cp = os.path.join(UI_STATE_DIR, "codemirror_theme.css")
+        if os.path.isfile(cp):
+            cm_v = int(os.path.getmtime(cp) or 0)
+    except Exception:
+        cm_v = 0
+
     # Global Custom CSS (optional) — stored in UI_STATE_DIR/custom.css.
     css_v = 0
     css_enabled = False
@@ -1084,6 +1102,8 @@ def _inject_auth_context():
         "auth_user": session.get("user"),
         "auth_configured": auth_is_configured(),
         "custom_theme_v": v,
+        "terminal_theme_v": term_v,
+        "codemirror_theme_v": cm_v,
         "custom_css_v": css_v,
         "custom_css_enabled": bool(css_enabled),
         "safe_mode": bool(safe_mode),
@@ -1102,7 +1122,13 @@ def _auth_guard():
     path = request.path or ""
 
     # Always allow static assets
-    if path.startswith("/static/") or path in ("/ui/custom-theme.css", "/ui/custom.css", "/ui/branding.json"):
+    if path.startswith("/static/") or path in (
+        "/ui/custom-theme.css",
+        "/ui/custom.css",
+        "/ui/branding.json",
+        "/ui/terminal-theme.css",
+        "/ui/codemirror-theme.css",
+    ):
         return None
 
     # Auth endpoints must be reachable
@@ -1149,6 +1175,13 @@ def custom_theme_css():
     """
 
     path = os.path.join(UI_STATE_DIR, "custom_theme.css")
+    # If the user saved a theme in DevTools, keep generated CSS up to date.
+    try:
+        if os.path.isfile(os.path.join(UI_STATE_DIR, "custom_theme.json")):
+            _svc_devtools.theme_get(UI_STATE_DIR)
+    except Exception:
+        pass
+
     try:
         if os.path.isfile(path):
             resp = send_file(path, mimetype="text/css")
@@ -1186,6 +1219,70 @@ def custom_css():
             resp = Response("/* no custom css */\n", mimetype="text/css")
     except Exception:
         resp = Response("/* custom css failed */\n", mimetype="text/css")
+
+    try:
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+    except Exception:
+        pass
+    return resp
+
+
+@app.get("/ui/terminal-theme.css")
+def terminal_theme_css():
+    """Serve optional Terminal (xterm.js) theme CSS.
+
+    Stored on disk in UI_STATE_DIR/terminal_theme.css (generated from terminal_theme.json).
+    Public (like /static) so it works on /login and /setup.
+    """
+
+    path = os.path.join(UI_STATE_DIR, "terminal_theme.css")
+    try:
+        if os.path.isfile(os.path.join(UI_STATE_DIR, "terminal_theme.json")):
+            _svc_devtools.terminal_theme_get(UI_STATE_DIR)
+    except Exception:
+        pass
+
+    try:
+        if os.path.isfile(path):
+            resp = send_file(path, mimetype="text/css")
+        else:
+            resp = Response("/* no terminal theme */\n", mimetype="text/css")
+    except Exception:
+        resp = Response("/* terminal theme failed */\n", mimetype="text/css")
+
+    try:
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+    except Exception:
+        pass
+    return resp
+
+
+@app.get("/ui/codemirror-theme.css")
+def codemirror_theme_css():
+    """Serve optional CodeMirror theme CSS.
+
+    Stored on disk in UI_STATE_DIR/codemirror_theme.css (generated from codemirror_theme.json).
+    Public (like /static) so it works on /login and /setup.
+    """
+
+    path = os.path.join(UI_STATE_DIR, "codemirror_theme.css")
+    try:
+        if os.path.isfile(os.path.join(UI_STATE_DIR, "codemirror_theme.json")):
+            _svc_devtools.codemirror_theme_get(UI_STATE_DIR)
+    except Exception:
+        pass
+
+    try:
+        if os.path.isfile(path):
+            resp = send_file(path, mimetype="text/css")
+        else:
+            resp = Response("/* no codemirror theme */\n", mimetype="text/css")
+    except Exception:
+        resp = Response("/* codemirror theme failed */\n", mimetype="text/css")
 
     try:
         resp.headers["Cache-Control"] = "no-store, max-age=0"
@@ -2032,7 +2129,15 @@ def mihomo_generator_page():
 
 @app.get("/devtools")
 def devtools_page():
-    return render_template("devtools.html")
+    # Avoid stale cached HTML holding on to old static asset versions
+    try:
+        from flask import make_response
+        resp = make_response(render_template("devtools.html"))
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        return resp
+    except Exception:
+        return render_template("devtools.html")
 
 
 
@@ -3534,6 +3639,7 @@ except Exception as _e:
 
 
 # RemoteFS blueprint (optional; disabled on MIPS and when lftp is missing)
+remotefs_mgr = None
 if REMOTEFS_ENABLED:
     try:
         remotefs_bp, remotefs_mgr = create_remotefs_blueprint(
@@ -3553,6 +3659,19 @@ if REMOTEFS_ENABLED:
         except Exception:
             pass
 
+# FileOps blueprint (always enabled for local file manager copy/move/delete)
+try:
+    fileops_bp = create_fileops_blueprint(
+        remotefs_mgr=remotefs_mgr,
+        tmp_dir=str(os.getenv("XKEEN_REMOTEFM_TMP_DIR", "/tmp") or "/tmp"),
+        max_upload_mb=int(os.getenv("XKEEN_REMOTEFM_MAX_UPLOAD_MB", "200")),
+    )
+    app.register_blueprint(fileops_bp)
+except Exception as _e:
+    try:
+        ws_debug("fileops init failed", error=str(_e))
+    except Exception:
+        pass
 
 
 
