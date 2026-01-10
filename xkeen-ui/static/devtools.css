@@ -74,9 +74,9 @@ details.dt-collapsible:not([open]) .dt-collapsible-icon {
 }
 
 details.dt-theme-group{
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, #1f2937);
   border-radius: 14px;
-  background: rgba(255,255,255,0.03);
+  background: color-mix(in srgb, var(--card-bg, #020617) 92%, var(--text, #e5e7eb) 8%);
 }
 
 details.dt-theme-group > summary{
@@ -84,7 +84,7 @@ details.dt-theme-group > summary{
 }
 
 details.dt-theme-group[open] > summary{
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border, #1f2937);
 }
 
 details.dt-theme-group .dt-collapsible-body{
@@ -99,6 +99,21 @@ details.dt-theme-group h3{
 
 details.dt-theme-group .dt-collapsible-icon{
   font-size: calc(16px * var(--xk-font-scale));
+}
+
+/* Terminal / CodeMirror: compact toolbar (Enabled + Dark/Light on one line) */
+.dt-theme-actions{
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 6px 0 10px;
+}
+
+/* dt-theme-target has its own margins in the global Theme editor; reset inside the toolbar */
+.dt-theme-actions .dt-theme-target{
+  margin: 0;
 }
 
 
@@ -127,7 +142,7 @@ details.dt-theme-group .dt-collapsible-icon{
   align-items: center;
   gap: 6px;
   padding: 2px 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, #1f2937);
   border-radius: 999px;
   font-size: calc(12px * var(--xk-font-scale));
   opacity: 0.9;
@@ -247,8 +262,8 @@ details.dt-theme-group .dt-collapsible-icon{
   min-width: 0;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border, #1f2937);
+  background: color-mix(in srgb, var(--card-bg, #020617) 92%, var(--text, #e5e7eb) 8%);
   color: var(--text);
   outline: none;
 }
@@ -303,9 +318,9 @@ details.dt-theme-group .dt-collapsible-icon{
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, #1f2937);
   border-radius: 12px;
-  background: rgba(255,255,255,0.03);
+  background: color-mix(in srgb, var(--card-bg, #020617) 92%, var(--text, #e5e7eb) 8%);
 }
 
 .dt-tab-handle{
@@ -377,7 +392,7 @@ details.dt-theme-group .dt-collapsible-icon{
   width: 72px;
   height: 72px;
   object-fit: contain;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, #1f2937);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
   padding: 6px;
@@ -417,7 +432,7 @@ details.dt-theme-group .dt-collapsible-icon{
   resize: vertical;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, #1f2937);
   background: rgba(255, 255, 255, 0.03);
   color: var(--text);
   font-family: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
