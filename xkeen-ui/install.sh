@@ -24,10 +24,32 @@ MIHOMO_TEMPLATES_DIR="/opt/etc/mihomo/templates"
 SRC_MIHOMO_TEMPLATES="$SRC_DIR/opt/etc/mihomo/templates"
 
 # Файлы/директории Xray (используются панелью, но сами не трогаются)
-ROUTING_FILE="/opt/etc/xray/configs/05_routing.json"
-INBOUNDS_FILE="/opt/etc/xray/configs/03_inbounds.json"
-OUTBOUNDS_FILE="/opt/etc/xray/configs/04_outbounds.json"
-BACKUP_DIR="/opt/etc/xray/configs/backups"
+#
+# В некоторых сборках/профилях части конфига могут называться иначе.
+# Например для Hysteria2 используются *_hys2.json:
+#   03_inbounds_hys2.json / 04_outbounds_hys2.json / 05_routing_hys2.json
+#
+XRAY_CONFIG_DIR="/opt/etc/xray/configs"
+
+pick_xray_file() {
+  DEF="$1"
+  ALT="$2"
+  if [ -f "$XRAY_CONFIG_DIR/$DEF" ]; then
+    echo "$XRAY_CONFIG_DIR/$DEF"
+    return 0
+  fi
+  if [ -f "$XRAY_CONFIG_DIR/$ALT" ]; then
+    echo "$XRAY_CONFIG_DIR/$ALT"
+    return 0
+  fi
+  # default for new installs
+  echo "$XRAY_CONFIG_DIR/$DEF"
+}
+
+ROUTING_FILE="$(pick_xray_file 05_routing.json 05_routing_hys2.json)"
+INBOUNDS_FILE="$(pick_xray_file 03_inbounds.json 03_inbounds_hys2.json)"
+OUTBOUNDS_FILE="$(pick_xray_file 04_outbounds.json 04_outbounds_hys2.json)"
+BACKUP_DIR="$XRAY_CONFIG_DIR/backups"
 
 DEFAULT_PORT=8088
 ALT_PORT=8091
