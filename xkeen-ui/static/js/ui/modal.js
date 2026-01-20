@@ -195,17 +195,58 @@
     if (!canResize(modalEl)) return;
     const content = getContent(modalEl);
     if (!content) return;
+
+    // Existing handle? Normalize it (helps when CSS is cached or partially overridden).
     try {
-      if (content.querySelector('.modal-resizer')) return;
+      const existing = content.querySelector('.modal-resizer');
+      if (existing) {
+        try { normalizeResizer(modalEl, existing); } catch (e0) {}
+        return;
+      }
     } catch (e) {}
+
     try {
       const h = document.createElement('div');
       h.className = 'modal-resizer';
       h.setAttribute('role', 'button');
-      h.setAttribute('aria-label', 'Resize');
       h.tabIndex = 0;
       content.appendChild(h);
+      try { normalizeResizer(modalEl, h); } catch (e1) {}
     } catch (e2) {}
+  }
+
+  // Ensure the resize handle is always bottom-right and doesn't show an extra tooltip.
+  function normalizeResizer(modalEl, handleEl) {
+    if (!handleEl) return;
+
+    // Always force a correct bottom-right geometry via inline styles
+    // (protects against cached/old CSS that can leave the handle in normal flow).
+    try {
+      handleEl.style.position = 'absolute';
+      handleEl.style.right = (modalEl && modalEl.id === 'xkeen-routing-help-modal') ? '10px' : '6px';
+      handleEl.style.bottom = (modalEl && modalEl.id === 'xkeen-routing-help-modal') ? '10px' : '6px';
+      handleEl.style.left = 'auto';
+      handleEl.style.top = 'auto';
+      handleEl.style.zIndex = '50';
+      handleEl.style.touchAction = 'none';
+      handleEl.style.userSelect = 'none';
+    } catch (e) {}
+
+    // Remove tooltip specifically in the routing help modal.
+    // The panel's tooltip system can auto-generate hints from aria-label/title.
+    if (modalEl && modalEl.id === 'xkeen-routing-help-modal') {
+      try { handleEl.removeAttribute('title'); } catch (e2) {}
+      // Keep it focusable for keyboard, but remove label to avoid any tooltip.
+      try { handleEl.removeAttribute('aria-label'); } catch (e3) {}
+      try { handleEl.removeAttribute('role'); } catch (e3a) {}
+      try { handleEl.setAttribute('aria-hidden', 'true'); } catch (e4) {}
+      try { handleEl.dataset.xkNoTooltip = '1'; } catch (e5) {}
+    } else {
+      // For other modals keep a minimal label for accessibility (no visible tooltip).
+      try {
+        if (!handleEl.getAttribute('aria-label')) handleEl.setAttribute('aria-label', 'Resize');
+      } catch (e6) {}
+    }
   }
 
   function isVisibleModal(modalEl) {
@@ -354,7 +395,7 @@
     return !!t.closest('button, a, input, textarea, select, label, .cm-toolbar, .CodeMirror');
   }
 
-  function startDrag(e, modalEl, contentEl) {
+  function startDrag(e, modalEl, contentEl, handleEl) {
     if (!contentEl) return;
     let r;
     try { r = contentEl.getBoundingClientRect(); } catch (err) { r = null; }
@@ -384,6 +425,7 @@
     drag = {
       modal: modalEl,
       content: contentEl,
+      handle: handleEl || null,
       pointerId: (e && typeof e.pointerId === 'number') ? e.pointerId : null,
       offX: clientX - r.left,
       offY: clientY - r.top,
@@ -396,9 +438,11 @@
       document.documentElement.style.cursor = 'move';
     } catch (err3) {}
 
+    // Capture pointer on the actual handle element to keep drag smooth even over iframes.
     try {
-      if (contentEl.setPointerCapture && drag.pointerId != null) {
-        contentEl.setPointerCapture(drag.pointerId);
+      const cap = drag.handle || contentEl;
+      if (cap && cap.setPointerCapture && drag.pointerId != null) {
+        cap.setPointerCapture(drag.pointerId);
       }
     } catch (err4) {}
 
@@ -428,9 +472,11 @@
       document.documentElement.style.userSelect = '';
       document.documentElement.style.cursor = '';
     } catch (e) {}
+    // Release pointer capture from the same element we captured on.
     try {
-      if (drag.content && drag.content.releasePointerCapture && drag.pointerId != null) {
-        drag.content.releasePointerCapture(drag.pointerId);
+      const cap = drag.handle || drag.content;
+      if (cap && cap.releasePointerCapture && drag.pointerId != null) {
+        cap.releasePointerCapture(drag.pointerId);
       }
     } catch (e2) {}
     drag = null;
@@ -454,7 +500,7 @@
     }
   }
 
-  function startResize(e, modalEl, contentEl) {
+  function startResize(e, modalEl, contentEl, handleEl) {
     if (!contentEl) return;
     let r;
     try { r = contentEl.getBoundingClientRect(); } catch (err) { r = null; }
@@ -483,6 +529,7 @@
     resize = {
       modal: modalEl,
       content: contentEl,
+      handle: handleEl || null,
       pointerId: (e && typeof e.pointerId === 'number') ? e.pointerId : null,
       startX: clientX,
       startY: clientY,
@@ -497,9 +544,11 @@
       document.documentElement.style.cursor = 'se-resize';
     } catch (err3) {}
 
+    // Capture pointer on the actual handle element to keep resize smooth even over iframes.
     try {
-      if (contentEl.setPointerCapture && resize.pointerId != null) {
-        contentEl.setPointerCapture(resize.pointerId);
+      const cap = resize.handle || contentEl;
+      if (cap && cap.setPointerCapture && resize.pointerId != null) {
+        cap.setPointerCapture(resize.pointerId);
       }
     } catch (err4) {}
 
@@ -543,9 +592,11 @@
       document.documentElement.style.cursor = '';
     } catch (e) {}
 
+    // Release pointer capture from the same element we captured on.
     try {
-      if (resize.content && resize.content.releasePointerCapture && resize.pointerId != null) {
-        resize.content.releasePointerCapture(resize.pointerId);
+      const cap = resize.handle || resize.content;
+      if (cap && cap.releasePointerCapture && resize.pointerId != null) {
+        cap.releasePointerCapture(resize.pointerId);
       }
     } catch (e2) {}
 
@@ -576,7 +627,7 @@
         // Cancel any active drag.
         if (drag) endDrag();
 
-        startResize(e, modalEl, contentEl);
+        startResize(e, modalEl, contentEl, rz);
         return;
       }
 
@@ -595,7 +646,7 @@
       // Cancel any active resize.
       if (resize) endResize();
 
-      startDrag(e, modalEl, contentEl);
+      startDrag(e, modalEl, contentEl, header);
     }, { passive: false, capture: true });
 
     document.addEventListener(moveEv, (e) => {
