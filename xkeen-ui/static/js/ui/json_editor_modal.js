@@ -41,15 +41,28 @@
     const titleEl = el('json-editor-title');
     const fileLabelEl = el('json-editor-file-label');
 
+    function _baseName(p, fallback) {
+      try {
+        if (!p) return fallback;
+        const parts = String(p).split('/');
+        const b = parts[parts.length - 1];
+        return b || fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
     if (target === 'inbounds') {
-      if (titleEl) titleEl.textContent = 'Редактор 03_inbounds.json';
-      if (fileLabelEl) fileLabelEl.textContent = 'Файл: 03_inbounds.json';
+      const base = _baseName(window.XKEEN_FILES && window.XKEEN_FILES.inbounds, '03_inbounds.json');
+      if (titleEl) titleEl.textContent = 'Редактор ' + base;
+      if (fileLabelEl) fileLabelEl.textContent = 'Файл: ' + base;
       return '/api/inbounds';
     }
 
     if (target === 'outbounds') {
-      if (titleEl) titleEl.textContent = 'Редактор 04_outbounds.json';
-      if (fileLabelEl) fileLabelEl.textContent = 'Файл: 04_outbounds.json';
+      const base = _baseName(window.XKEEN_FILES && window.XKEEN_FILES.outbounds, '04_outbounds.json');
+      if (titleEl) titleEl.textContent = 'Редактор ' + base;
+      if (fileLabelEl) fileLabelEl.textContent = 'Файл: ' + base;
       return '/api/outbounds';
     }
 
@@ -266,9 +279,25 @@
       } catch (e) {
         console.error(e);
       }
-
       if (!data || !data.restarted) {
-      toast(target === 'inbounds' ? '03_inbounds.json сохранён.' : '04_outbounds.json сохранён.', false);
+        // Show correct file name (supports *_hys2 variants)
+        function _baseName(p, fallback) {
+          try {
+            if (!p) return fallback;
+            const parts = String(p).split(/[\\/]/);
+            const b = parts[parts.length - 1];
+            return b || fallback;
+          } catch (e) {
+            return fallback;
+          }
+        }
+
+        const files = (window.XKEEN_FILES && typeof window.XKEEN_FILES === 'object') ? window.XKEEN_FILES : {};
+        const label = target === 'inbounds'
+          ? _baseName(files.inbounds, '03_inbounds.json')
+          : _baseName(files.outbounds, '04_outbounds.json');
+
+        toast(label + ' сохранён.', false);
       }
 
       try {
