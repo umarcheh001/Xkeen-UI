@@ -33,6 +33,408 @@ done
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# --- Keenetic RCI helpers (borrowed from KeenKit, trimmed; no firmware/OTA actions) ---
+rci_request() {
+  # Usage: rci_request "show/version"
+  # Returns raw JSON or empty string. Works with curl/wget.
+  ep="$1"
+  [ -z "$ep" ] && return 1
+  url="http://127.0.0.1:79/rci/${ep}"
+  if have curl; then
+    curl -fsS --max-time 2 "$url" 2>/dev/null
+    return $?
+  fi
+  if have wget; then
+    wget -q -T 2 -O - "$url" 2>/dev/null
+    return $?
+  fi
+  return 1
+}
+
+rci_json_str() {
+  # Extract "key": "value" from a one-level JSON snippet (best-effort).
+  # Usage: rci_json_str "$json" key
+  j="$1"; k="$2"
+  [ -z "$j" ] || [ -z "$k" ] && { echo ""; return 1; }
+  printf '%s' "$j" | grep -o "\"$k\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" 2>/dev/null | head -n1 | cut -d'"' -f4
+}
+
+rci_json_num() {
+  # Extract "key": "123" OR "key": 123
+  j="$1"; k="$2"
+  [ -z "$j" ] || [ -z "$k" ] && { echo ""; return 1; }
+  v="$(printf '%s' "$j" | grep -o "\"$k\"[[:space:]]*:[[:space:]]*\"*[0-9]\+\"*" 2>/dev/null | head -n1 | grep -o '[0-9]\+' 2>/dev/null)"
+  printf '%s' "$v"
+}
+
+get_device_name() {
+  j="$(rci_request "show/version" 2>/dev/null || true)"
+  rci_json_str "$j" device
+}
+
+get_fw_title() {
+  j="$(rci_request "show/version" 2>/dev/null || true)"
+  rci_json_str "$j" title
+}
+
+get_hw_id() {
+  j="$(rci_request "show/version" 2>/dev/null || true)"
+  rci_json_str "$j" hw_id
+}
+
+get_uptime_rci() {
+  j="$(rci_request "show/system" 2>/dev/null || true)"
+  rci_json_num "$j" uptime
+}
+
+get_ram_usage_rci() {
+  # Returns "used / total MB" from show/system memory field if present.
+  j="$(rci_request "show/system" 2>/dev/null || true)"
+  mem="$(rci_json_str "$j" memory 2>/dev/null || true)"
+
+  case "$mem" in
+    */*)
+      used="${mem%%/*}"
+      total="${mem##*/}"
+      ;;
+    *)
+      used=""; total=""
+      ;;
+  esac
+  case "$used" in ''|*[!0-9]*) used="";; esac
+  case "$total" in ''|*[!0-9]*) total="";; esac
+  [ -n "$used" ] && [ -n "$total" ] || return 1
+  [ "$total" -gt 0 ] 2>/dev/null || return 1
+
+  # Keenetic/RCI may return KB or bytes depending on firmware/build.
+  if [ "$total" -ge 100000000 ] 2>/dev/null; then
+    # bytes -> MiB
+    um=$((used/1048576))
+    tm=$((total/1048576))
+  else
+    # KB -> MiB
+    um=$((used/1024))
+    tm=$((total/1024))
+  fi
+
+  echo "${um} / ${tm} MB"
+  return 0
+}
+
+
+get_boot_current() {
+  # Dual image slot if present (0/1). Not all devices have it.
+  if [ -r /proc/dual_image/boot_current ]; then
+    v="$(cat /proc/dual_image/boot_current 2>/dev/null | tr -d '\r\n')"
+    case "$v" in 0|1) echo "$v"; return 0;; esac
+  fi
+  echo ""
+  return 1
+}
+
+get_arch_short() {
+  # KeenKit-style arch label
+  if command -v opkg >/dev/null 2>&1; then
+    a="$(opkg print-architecture 2>/dev/null | grep -oE 'aarch64-3|mipsel-3|mips-3' | head -n1 || true)"
+    case "$a" in
+      aarch64-3) echo "aarch64"; return 0;;
+      mipsel-3)  echo "mipsel";  return 0;;
+      mips-3)    echo "mips";    return 0;;
+    esac
+  fi
+  uname -m 2>/dev/null | sed 's/-.*//' || true
+}
+
+
+get_cpu_soc() {
+  # Try to extract SoC id from NDM libs (fast, but optional).
+  # Falls back to /proc/cpuinfo model name later.
+  if have strings && [ -r /lib/libndmMwsController.so ]; then
+    soc="$(strings /lib/libndmMwsController.so 2>/dev/null | grep -Eo 'EN[0-9]{2,6}[A-Za-z0-9_-]*|MT[0-9]{3,6}[A-Za-z0-9_-]*|IPQ[0-9]{3,6}[A-Za-z0-9_-]*' | head -n1)"
+    [ -n "$soc" ] && { echo "$soc"; return 0; }
+  fi
+  echo ""
+  return 1
+}
+
+get_radio_temp_c() {
+  # Usage: get_radio_temp_c WifiMaster0
+  r="$1"
+  [ -z "$r" ] && { echo ""; return 1; }
+  j="$(rci_request "show/interface/${r}" 2>/dev/null || true)"
+  t="$(rci_json_num "$j" temperature 2>/dev/null || true)"
+  case "$t" in ''|*[!0-9]*) echo ""; return 1;; esac
+  echo "$t"
+  return 0
+}
+
+get_wifi_temps_summary() {
+  # Returns "Wi-Fi: 2.4G 55°C, 5G 62°C" (best-effort)
+  t0="$(get_radio_temp_c WifiMaster0 2>/dev/null || true)"
+  t1="$(get_radio_temp_c WifiMaster1 2>/dev/null || true)"
+  msg=""
+  if [ -n "$t0" ]; then msg="2.4G ${t0}°C"; fi
+  if [ -n "$t1" ]; then
+    [ -n "$msg" ] && msg="${msg}, "
+    msg="${msg}5G ${t1}°C"
+  fi
+  [ -n "$msg" ] && printf 'Wi-Fi: %s' "$msg"
+}
+
+get_modem_info() {
+  command -v ndmc >/dev/null 2>&1 || return 0
+
+  # collect modem interfaces (UsbQmiN / UsbLteN)
+  ifaces="$(ndmc -c "show interface" 2>/dev/null | awk '
+    /^[[:space:]]*id:[[:space:]]*Usb(Qmi|Lte)[0-9]+/ {print $2}
+  ' | sort -u)"
+
+  [ -z "$ifaces" ] && return 0
+
+  out=""
+  for iface in $ifaces; do
+    info="$(ndmc -c "show interface $iface" 2>/dev/null)" || continue
+
+    plugged="$(printf '%s\n' "$info" | awk -F': ' '/^[[:space:]]*plugged:/ {print $2; exit}')"
+    [ "$plugged" = "no" ] && continue
+
+    # take the LAST "product:" (on some devices there are multiple occurrences)
+    product="$(printf '%s\n' "$info" | awk -F': ' '/^[[:space:]]*product:/ {p=$2} END{print p}')"
+    [ -z "$product" ] && product="$iface"
+
+    # parse all carrier blocks (including inactive ones) -> B<band>@<bw> МГц
+    bands="$(printf '%s\n' "$info" | awk '
+      BEGIN{out=""; incar=0; band=""; bw=""}
+      /^[[:space:]]*carrier, id =/ {incar=1; band=""; bw=""; next}
+      incar && /^[[:space:]]*band:/ {band=$2; next}
+      incar && /^[[:space:]]*bandwidth:/ {
+        bw=$2
+        if (band != "" && bw != "") {
+          key="B" band "@" bw " МГц"
+          if (!(key in seen)) {
+            seen[key]=1
+            if (out != "") out=out " + "
+            out=out key
+          }
+        }
+        incar=0
+        next
+      }
+      END{print out}
+    ')"
+
+    # fallback: single band/bandwidth (older firmwares)
+    if [ -z "$bands" ]; then
+      bands="$(printf '%s\n' "$info" | awk '
+        /^[[:space:]]*band:/ {band=$2}
+        /^[[:space:]]*bandwidth:/ {bw=$2}
+        END{ if (band != "" && bw != "") print "B" band "@" bw " МГц"; else print "" }
+      ')"
+    fi
+
+    line="$product"
+    [ -n "$bands" ] && line="$line | $bands"
+
+    if [ -z "$out" ]; then
+      out="$line"
+    else
+      out="$out\n$line"
+    fi
+  done
+
+  [ -n "$out" ] && printf '%b\n' "$out"
+  return 0
+}
+
+
+
+list_modem_ifaces() {
+  # Return list of modem interface names (space-separated): UsbQmi0 UsbQmi1 ...
+  have ndmc || return 1
+  ndmc -c "show interface" 2>/dev/null \
+    | tr -d '\r' \
+    | grep -oE 'Usb(Qmi|Mbim|Ndis|Lte|Eth|Modem|Cdc|Rndis|Ras|Serial)[0-9]+' \
+    | sort -u
+}
+
+get_iface_state_ndmc() {
+  # $1 = interface name (ndm). prints: up|down|"" (best-effort)
+  ifc="$1"
+  [ -z "$ifc" ] && { echo ""; return 1; }
+  have ndmc || { echo ""; return 1; }
+  out="$(ndmc -c "show interface $ifc" 2>/dev/null | tr -d '\r' || true)"
+  st="$(printf '%s\n' "$out" | awk '
+    {
+      k=tolower($1); gsub(/:$/, "", k);
+      if ((k=="state" || k=="link") && NF>=2) { print $2; exit; }
+    }')"
+  st_l="$(printf '%s' "$st" | tr 'A-Z' 'a-z')"
+  case "$st_l" in
+    up|down) echo "$st_l"; return 0;;
+  esac
+  echo ""
+  return 1
+}
+
+get_modem_details() {
+  # $1 = modem iface (UsbQmi0 ...). prints compact details for UI.
+  ifc="$1"
+  [ -z "$ifc" ] && { echo ""; return 1; }
+  have ndmc || { echo ""; return 1; }
+
+  out="$(ndmc -c "show interface $ifc" 2>/dev/null | tr -d '\r' || true)"
+  [ -z "$out" ] && { echo ""; return 1; }
+
+  # Keys vary by firmware/case. Try several common ones.
+  product="$(printf '%s\n' "$out" | awk -F': ' '
+    {
+      k=tolower($1)
+      if (k=="model" || k=="product") { print $2; exit }
+    }')"
+  tech="$(printf '%s\n' "$out" | awk -F': ' '
+    {
+      k=tolower($1)
+      if (k=="technology" || k=="tech") { print $2; exit }
+    }')"
+  oper="$(printf '%s\n' "$out" | awk -F': ' '
+    {
+      k=tolower($1)
+      if (k=="operator" || k=="provider" || k=="network") { print $2; exit }
+    }')"
+  sig="$(printf '%s\n' "$out" | awk -F': ' '
+    {
+      k=tolower($1)
+      if (k=="signal level" || k=="signal" || k=="rssi" || k=="rsrp" || k=="rsrq" || k=="sinr") {
+        if (k=="signal level" || k=="signal") { print $2; exit }
+        else { print toupper($1) ": " $2; exit }
+      }
+    }')"
+
+  # Extra: LTE band if present (nice-to-have, compact)
+  band="$(printf '%s\n' "$out" | awk -F': ' '
+    {
+      k=tolower($1)
+      if (k=="band") { print $2; exit }
+    }')"
+
+  line=""
+  [ -n "$product" ] && line="$product"
+  [ -n "$tech" ] && line="${line}${line:+ | }${tech}"
+  [ -n "$oper" ] && line="${line}${line:+ | }${oper}"
+  [ -n "$band" ] && line="${line}${line:+ | }B${band}"
+  [ -n "$sig" ] && line="${line}${line:+ | }${sig}"
+
+  echo "$line"
+  return 0
+}
+
+guess_wan_modem() {
+  # $1 = WAN linux iface (e.g., qmi_br1). prints modem iface name (UsbQmiX) if can be inferred.
+  wan="$1"
+  [ -z "$wan" ] && { echo ""; return 1; }
+  have ndmc || { echo ""; return 1; }
+
+  # 1) Try to find modem directly in WAN interface description.
+  out="$(ndmc -c "show interface $wan" 2>/dev/null | tr -d '\r' || true)"
+  m="$(printf '%s\n' "$out" | grep -oE 'Usb(Qmi|Mbim|Ndis|Lte|Eth)[0-9]+' | head -n1 || true)"
+  [ -n "$m" ] && { echo "$m"; return 0; }
+
+  # 2) Otherwise, try reverse lookup: pick modem whose "show interface" mentions WAN name.
+  for ifc in $(list_modem_ifaces 2>/dev/null); do
+    outm="$(ndmc -c "show interface $ifc" 2>/dev/null | tr -d '\r' || true)"
+    echo "$outm" | grep -q "$wan" || continue
+    echo "$ifc"
+    return 0
+  done
+
+  echo ""
+  return 1
+}
+
+
+
+
+get_opkg_storage_rci() {
+  # Returns "used/total" for OPKG disk (best-effort, requires RCI).
+  jdisk="$(rci_request "show/sc/opkg/disk" 2>/dev/null || true)"
+  disk="$(rci_json_str "$jdisk" disk 2>/dev/null || true)"
+  disk="${disk%/}"
+  disk="${disk%:}"
+  [ -z "$disk" ] && { echo ""; return 1; }
+
+  jls="$(rci_request "ls" 2>/dev/null || true)"
+  # Cheap parse: just search free/total near the disk name
+  free="$(printf '%s\n' "$jls" | grep -A12 "\"${disk}\"" 2>/dev/null | grep -o '"free"[[:space:]]*:[[:space:]]*[0-9]\+' 2>/dev/null | head -n1 | grep -o '[0-9]\+')"
+  total="$(printf '%s\n' "$jls" | grep -A12 "\"${disk}\"" 2>/dev/null | grep -o '"total"[[:space:]]*:[[:space:]]*[0-9]\+' 2>/dev/null | head -n1 | grep -o '[0-9]\+')"
+  case "$free" in ''|*[!0-9]*) free="";; esac
+  case "$total" in ''|*[!0-9]*) total="";; esac
+  if [ -n "$free" ] && [ -n "$total" ] && [ "$total" -gt 0 ] 2>/dev/null; then
+    used=$((total - free))
+    [ "$used" -lt 0 ] 2>/dev/null && used=0
+    echo "$(human_bytes "$used")/$(human_bytes "$total")"
+    return 0
+  fi
+  echo ""
+  return 1
+}
+
+print_device_summary() {
+  section "УСТРОЙСТВО"
+
+  label_w=13
+  _kv() {
+    k="$1"; v="$2"
+    [ -n "$v" ] || return 0
+    pad="$(printf "%-${label_w}s" "$k")"
+    _out "${CYAN}${pad}${NC}  $v"
+  }
+
+  model_line="$(get_device_model_line 2>/dev/null || true)"
+  [ -z "$model_line" ] && model_line="$(get_model 2>/dev/null || true)"
+
+  soc="$(get_cpu_soc 2>/dev/null || true)"
+  arch="$(get_arch_short 2>/dev/null || true)"
+  wifi_max="$(get_wifi_temp_max_c 2>/dev/null || true)"
+  cput="$(read_temp_c 2>/dev/null || true)"
+
+  ramr="$(get_ram_usage_rci 2>/dev/null || true)"
+  [ -z "$ramr" ] && ramr="$(get_ram_usage 2>/dev/null || true)"
+
+  opkg="$(get_opkg_storage 2>/dev/null || true)"
+  up="$(get_uptime_human 2>/dev/null || true)"
+
+  modem_lines="$(get_modem_info 2>/dev/null || true)"
+
+  _kv "Модель:" "$model_line"
+
+  proc_line="$soc"
+  [ -n "$arch" ] && proc_line="$proc_line ($arch)"
+  [ -n "$wifi_max" ] && proc_line="$proc_line | Wi-Fi: ${wifi_max}°C"
+  [ -n "$cput" ] && proc_line="$proc_line | CPU: ${cput}°C"
+  _kv "Процессор:" "$proc_line"
+
+  if [ -n "$modem_lines" ]; then
+    first_line="$(printf '%s\n' "$modem_lines" | head -n 1)"
+    rest="$(printf '%s\n' "$modem_lines" | tail -n +2)"
+    _kv "Модем:" "$first_line"
+    if [ -n "$rest" ]; then
+      indent="$(printf "%-${label_w}s" "")"
+      printf '%s\n' "$rest" | while IFS= read -r l; do
+        [ -n "$l" ] || continue
+        _out "${CYAN}${indent}${NC}  $l"
+      done
+    fi
+  fi
+
+  _kv "ОЗУ:" "$ramr"
+  _kv "OPKG:" "$opkg"
+  _kv "Время работы:" "$up"
+
+  _out ""
+}
+
+
+
 # Colors only when stdout is a TTY
 if [ "$NO_COLOR" -eq 0 ] && [ -t 1 ]; then
   RED='\033[0;31m'
@@ -576,6 +978,11 @@ START_TS="$(date +%s 2>/dev/null || echo '')"
 
 hdr
 
+# 0) УСТРОЙСТВО (best-effort)
+_out "=== УСТРОЙСТВО ==="
+print_device_summary 2>/dev/null || true
+_out ""
+
 # 1) ДИСКИ
 _out "=== ДИСКИ ==="
 check_df /opt "/opt" || true
@@ -686,6 +1093,24 @@ else
   log "Шлюз: неизвестно"
 fi
 [ -n "$IFACE" ] && log "Интерфейс: ${CYAN}${IFACE}${NC}${SRCIP:+, src ${SRCIP}}"
+
+# Map active WAN interface to modem (best-effort)
+WAN_MODEM="$(guess_wan_modem "$IFACE" 2>/dev/null || true)"
+WAN_MODEM_DETAILS=""
+if [ -n "$WAN_MODEM" ]; then
+  log "WAN↔модем: ${CYAN}${IFACE}${NC} → ${CYAN}${WAN_MODEM}${NC}"
+  WAN_MODEM_DETAILS="$(get_modem_details "$WAN_MODEM" 2>/dev/null || true)"
+  if [ "$MODE" = "full" ]; then
+    [ -n "$WAN_MODEM_DETAILS" ] && log "Модем (активный): ${CYAN}${WAN_MODEM_DETAILS}${NC}"
+  fi
+fi
+
+# JSON
+[ -n "$IFACE" ] && json_add wan_iface "$IFACE" s
+[ -n "$GW" ] && json_add wan_gw "$GW" s
+[ -n "$SRCIP" ] && json_add wan_src "$SRCIP" s
+[ -n "$WAN_MODEM" ] && json_add wan_modem "$WAN_MODEM" s
+[ -n "$WAN_MODEM_DETAILS" ] && json_add wan_modem_details "$WAN_MODEM_DETAILS" s
 
 # DNS servers
 if [ -r /etc/resolv.conf ]; then
