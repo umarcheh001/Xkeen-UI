@@ -17,7 +17,7 @@
   <!-- Apply layout prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260110a') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260119d') }}">
 <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
 <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
 <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -38,8 +38,18 @@
   <!-- Wider container (match DevTools page width) -->
   <div class="container container-wide">
     <header>
-      <h1>Бэкапы Xray конфигов (05_routing / 03_inbounds / 04_outbounds)</h1>
+      <h1>Бэкапы Xray конфигов (05_routing* / 03_inbounds* / 04_outbounds*)</h1>
       <p>Каталог: <code>{{ backup_dir }}</code></p>
+
+      <p class="xk-card-desc" style="margin-top: 6px;">
+        Активные файлы:
+        <code>{{ inbounds_file }}</code>
+        · <code>{{ outbounds_file }}</code>
+        · <code>{{ routing_file }}</code>
+        <span class="xray-profile-badge" data-profile="{{ xray_profile|e }}" style="vertical-align: middle;">
+          {% if xray_profile == 'hys2' %}Hysteria2{% else %}Обычный{% endif %}
+        </span>
+      </p>
 
       <div class="actions" style="justify-content: space-between; align-items: center;">
         <a href="{{ url_for('index') }}" class="btn-link">← Назад</a>
@@ -87,6 +97,7 @@
 	<script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
 	<script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/features/backups.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/pages/backups.init.js') }}"></script>
