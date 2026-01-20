@@ -1271,6 +1271,7 @@ async function xhrUploadFiles({ side, files }) {
     rename: { side: 'left', oldName: '' },
     archive: { side: 'left', names: [], fmt: 'zip' },
     extract: { side: 'left', name: '' },
+    archiveList: { side: 'left', name: '' },
     ctxMenu: { shown: false, side: 'left', name: '', isDir: false },
     dropOp: { resolve: null }, // drag&drop move/copy choice modal
     panels: {
@@ -1619,7 +1620,7 @@ async function xhrUploadFiles({ side, files }) {
     try { return String(FM_TRASH_PATH || '/opt/var/trash').replace(/\/+$/, ''); } catch (e) { return '/opt/var/trash'; }
   }
 
-  function _localBookmarks() {
+  function _defaultLocalBookmarks() {
     const tr = _getTrashRoot();
     return [
       { label: '/opt/var', value: '/opt/var' },
@@ -1629,6 +1630,16 @@ async function xhrUploadFiles({ side, files }) {
       { label: '/opt/etc/xray', value: '/opt/etc/xray' },
       { label: '/opt/etc/mihomo', value: '/opt/etc/mihomo' },
     ];
+  }
+
+  function _localBookmarks() {
+    const defs = _defaultLocalBookmarks();
+    try {
+      if (FM && FM.prefs && typeof FM.prefs.loadBookmarksLocal === 'function') {
+        return FM.prefs.loadBookmarksLocal(defs);
+      }
+    } catch (e) {}
+    return defs;
   }
 
   const FM_BOOKMARKS_REMOTE = [
@@ -1711,9 +1722,62 @@ async function xhrUploadFiles({ side, files }) {
       }
     }
 
+    // Extra: user bookmarks for local target (quick add + manage)
+    let addBtn = qs('.fm-bookmarks-add', bar);
+    if (!addBtn) {
+      addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'fm-bookmarks-btn fm-bookmarks-add';
+      addBtn.textContent = '⭐';
+      addBtn.title = 'Добавить текущую папку в избранное';
+      addBtn.setAttribute('aria-label', 'Добавить в избранное');
+      addBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        addLocalBookmarkFromPanel(side);
+      });
+      try {
+        const ref = sel.nextSibling;
+        bar.insertBefore(addBtn, ref);
+      } catch (e) {
+        try { bar.appendChild(addBtn); } catch (e2) {}
+      }
+    }
+
+    let editBtn = qs('.fm-bookmarks-edit', bar);
+    if (!editBtn) {
+      editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'fm-bookmarks-btn fm-bookmarks-edit';
+      editBtn.textContent = '⚙';
+      editBtn.title = 'Управление избранным';
+      editBtn.setAttribute('aria-label', 'Управление избранным');
+      editBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openBookmarksManager(side);
+      });
+      try {
+        const ref = sel.nextSibling;
+        bar.insertBefore(editBtn, ref);
+      } catch (e) {
+        try { bar.appendChild(editBtn); } catch (e2) {}
+      }
+    }
+
+    const isLocalTarget = String(p.target) === 'local';
+    try { addBtn.disabled = !isLocalTarget; } catch (e) {}
+    try { editBtn.disabled = !isLocalTarget; } catch (e) {}
+
     // Update options depending on target.
     const opts = _bookmarksForPanel(p);
-    const sig = String(p.target) + ':' + String(opts.length) + ':' + String((p.roots || []).join('|'));
+    let bmSig = '';
+    try {
+      if (String(p.target) !== 'remote' && FM && FM.prefs && FM.prefs.keys && FM.prefs.keys.bookmarksLocal && typeof FM.prefs.lsGet === 'function') {
+        bmSig = String(FM.prefs.lsGet(FM.prefs.keys.bookmarksLocal) || '');
+      }
+    } catch (e) { bmSig = ''; }
+    const sig = String(p.target) + ':' + String(opts.length) + ':' + String((p.roots || []).join('|')) + ':' + bmSig;
     if (sel.dataset.sig !== sig) {
       sel.dataset.sig = sig;
       sel.innerHTML = '';
@@ -1759,6 +1823,260 @@ async function xhrUploadFiles({ side, files }) {
       }
     }
   }
+
+  // -------------------------- user bookmarks (local) --------------------------
+  let _bmModalBound = false;
+  let _bmEditingSide = 'left';
+  let _bmDraft = [];
+
+  function _loadLocalBookmarksForEdit() {
+    const defs = _defaultLocalBookmarks();
+    try {
+      if (FM && FM.prefs && typeof FM.prefs.loadBookmarksLocal === 'function') {
+        return FM.prefs.loadBookmarksLocal(defs);
+      }
+    } catch (e) {}
+    return defs;
+  }
+
+  function _saveLocalBookmarksFromEdit(list) {
+    try {
+      if (FM && FM.prefs && typeof FM.prefs.saveBookmarksLocal === 'function') {
+        FM.prefs.saveBookmarksLocal(list);
+      }
+    } catch (e) {}
+  }
+
+  function _refreshBookmarksUi() {
+    try {
+      ['left', 'right'].forEach((s) => {
+        const pd = panelDom(s);
+        const bar = pd && pd.root ? qs('.fm-panel-bar', pd.root) : null;
+        const sel = bar ? qs('.fm-bookmarks-select', bar) : null;
+        if (sel) sel.dataset.sig = '';
+      });
+    } catch (e) {}
+    try { ensureBookmarksSelect('left'); } catch (e) {}
+    try { ensureBookmarksSelect('right'); } catch (e) {}
+  }
+
+  function addLocalBookmarkFromPanel(side) {
+    const p = S.panels[side];
+    if (!p) return;
+    if (String(p.target) !== 'local') {
+      try { toast('Избранное доступно только для local', 'info'); } catch (e) {}
+      return;
+    }
+    const path = String(p.cwd || '').trim() || '/';
+    const list = _loadLocalBookmarksForEdit();
+    if (list.some((b) => String(b && b.value || '') === path)) {
+      try { toast('Уже в избранном: ' + path, 'info'); } catch (e) {}
+      return;
+    }
+    list.push({ label: path, value: path });
+    _saveLocalBookmarksFromEdit(list);
+    _refreshBookmarksUi();
+    try { toast('Добавлено в избранное: ' + path, 'success'); } catch (e) {}
+  }
+
+  function _ensureBookmarksModal() {
+    const modal = el('fm-bookmarks-modal');
+    const title = el('fm-bookmarks-title');
+    const listBox = el('fm-bookmarks-list');
+    const addRowBtn = el('fm-bookmarks-add-row-btn');
+    const addCurBtn = el('fm-bookmarks-add-current-btn');
+    const resetBtn = el('fm-bookmarks-reset-btn');
+    const cancelBtn = el('fm-bookmarks-cancel-btn');
+    const saveBtn = el('fm-bookmarks-save-btn');
+    const closeBtn = el('fm-bookmarks-close-btn');
+    const err = el('fm-bookmarks-error');
+
+    if (!modal || !title || !listBox || !addRowBtn || !addCurBtn || !resetBtn || !cancelBtn || !saveBtn || !closeBtn) return null;
+
+    function close() {
+      try { modalClose(modal); } catch (e) {}
+    }
+
+    function readDraftFromDom() {
+      const rows = qsa('.fm-bm-row', listBox);
+      const out = [];
+      rows.forEach((r) => {
+        const label = String((qs('input.fm-bm-label', r) || {}).value || '').trim();
+        const value = String((qs('input.fm-bm-path', r) || {}).value || '').trim();
+        if (!value) return;
+        out.push({ label: label || value, value });
+      });
+      return out;
+    }
+
+    function setError(msg) {
+      if (!err) return;
+      err.textContent = msg ? String(msg) : '';
+      try { err.style.display = msg ? '' : 'none'; } catch (e) {}
+    }
+
+    function render() {
+      listBox.innerHTML = '';
+      const rows = Array.isArray(_bmDraft) ? _bmDraft : [];
+      rows.forEach((it, idx) => {
+        const row = document.createElement('div');
+        row.className = 'fm-bm-row';
+
+        const inLabel = document.createElement('input');
+        inLabel.className = 'terminal-input fm-bm-label';
+        inLabel.placeholder = 'Имя';
+        inLabel.value = String((it && it.label) || '');
+
+        const inPath = document.createElement('input');
+        inPath.className = 'terminal-input fm-bm-path';
+        inPath.placeholder = '/opt/var';
+        inPath.spellcheck = false;
+        inPath.value = String((it && it.value) || '');
+
+        const up = document.createElement('button');
+        up.type = 'button';
+        up.className = 'btn-secondary fm-bm-mini';
+        up.textContent = '↑';
+        up.title = 'Вверх';
+        up.disabled = idx === 0;
+        up.addEventListener('click', (e) => {
+          e.preventDefault();
+          _bmDraft = readDraftFromDom();
+          if (idx <= 0) return;
+          const tmp = _bmDraft[idx - 1];
+          _bmDraft[idx - 1] = _bmDraft[idx];
+          _bmDraft[idx] = tmp;
+          render();
+        });
+
+        const down = document.createElement('button');
+        down.type = 'button';
+        down.className = 'btn-secondary fm-bm-mini';
+        down.textContent = '↓';
+        down.title = 'Вниз';
+        down.disabled = idx >= rows.length - 1;
+        down.addEventListener('click', (e) => {
+          e.preventDefault();
+          _bmDraft = readDraftFromDom();
+          if (idx >= _bmDraft.length - 1) return;
+          const tmp = _bmDraft[idx + 1];
+          _bmDraft[idx + 1] = _bmDraft[idx];
+          _bmDraft[idx] = tmp;
+          render();
+        });
+
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn-secondary fm-bm-mini';
+        del.textContent = '✖';
+        del.title = 'Удалить';
+        del.addEventListener('click', (e) => {
+          e.preventDefault();
+          _bmDraft = readDraftFromDom();
+          _bmDraft.splice(idx, 1);
+          render();
+        });
+
+        row.appendChild(inLabel);
+        row.appendChild(inPath);
+        row.appendChild(up);
+        row.appendChild(down);
+        row.appendChild(del);
+        listBox.appendChild(row);
+      });
+
+      if (!rows.length) {
+        const empty = document.createElement('div');
+        empty.className = 'status';
+        empty.style.margin = '8px 0 0 0';
+        empty.style.opacity = '0.85';
+        empty.textContent = 'Список пуст. Добавь закладку кнопкой «+» или «Добавить текущую».';
+        listBox.appendChild(empty);
+      }
+    }
+
+    function addCurrentToDraft() {
+      const p = S.panels[_bmEditingSide];
+      const path = (p && String(p.cwd || '').trim()) || '/';
+      _bmDraft = readDraftFromDom();
+      if (_bmDraft.some((b) => String(b && b.value || '') === path)) {
+        try { toast('Уже есть: ' + path, 'info'); } catch (e) {}
+        return;
+      }
+      _bmDraft.push({ label: path, value: path });
+      render();
+    }
+
+    if (!_bmModalBound) {
+      _bmModalBound = true;
+
+      closeBtn.addEventListener('click', (e) => { e.preventDefault(); close(); });
+      cancelBtn.addEventListener('click', (e) => { e.preventDefault(); close(); });
+      modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+      addRowBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        _bmDraft = readDraftFromDom();
+        _bmDraft.push({ label: '', value: '' });
+        render();
+      });
+
+      addCurBtn.addEventListener('click', (e) => { e.preventDefault(); addCurrentToDraft(); });
+
+      resetBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        _bmDraft = _defaultLocalBookmarks();
+        setError('');
+        render();
+      });
+
+      saveBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const list = readDraftFromDom();
+        const seen = new Set();
+        const out = [];
+        for (const it of list) {
+          const value = String(it.value || '').trim();
+          if (!value) continue;
+          if (seen.has(value)) continue;
+          seen.add(value);
+          out.push({ label: String(it.label || value).trim() || value, value });
+        }
+        if (!out.length) {
+          setError('Нужно добавить хотя бы один путь.');
+          return;
+        }
+        setError('');
+        _saveLocalBookmarksFromEdit(out);
+        close();
+        _refreshBookmarksUi();
+        try { toast('Избранное сохранено', 'success'); } catch (e) {}
+      });
+    }
+
+    return { modal, title, listBox, err, render, setError };
+  }
+
+  function openBookmarksManager(side) {
+    const p = S.panels[side];
+    if (!p) return;
+    if (String(p.target) !== 'local') {
+      try { toast('Избранное доступно только для local', 'info'); } catch (e) {}
+      return;
+    }
+    const ui = _ensureBookmarksModal();
+    if (!ui) {
+      try { toast('Окно "Избранное" не найдено в шаблоне', 'error'); } catch (e) {}
+      return;
+    }
+    _bmEditingSide = side;
+    _bmDraft = _loadLocalBookmarksForEdit();
+    try { ui.title.textContent = 'Избранное (local)'; } catch (e) {}
+    try { ui.setError(''); } catch (e) {}
+    try { ui.render(); } catch (e) {}
+    modalOpen(ui.modal);
+  }
+
 
   // Keenetic mounts: /tmp/mnt may contain both UUID-like mount folders and
   // user-friendly label symlinks. The *backend* is responsible for returning
@@ -5194,7 +5512,15 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
   // -------------------------- archive create / extract --------------------------
   function _isArchiveFileName(n) {
     const s = String(n || '').toLowerCase();
-    return s.endsWith('.zip') || s.endsWith('.tar.gz') || s.endsWith('.tgz');
+    return s.endsWith('.zip')
+      || s.endsWith('.tar')
+      || s.endsWith('.tar.gz')
+      || s.endsWith('.tgz')
+      || s.endsWith('.tar.bz2')
+      || s.endsWith('.tbz')
+      || s.endsWith('.tbz2')
+      || s.endsWith('.tar.xz')
+      || s.endsWith('.txz');
   }
 
   function _stripArchiveExt(n) {
@@ -5203,7 +5529,12 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     return s
       .replace(/\.(zip)$/i, '')
       .replace(/\.(tgz)$/i, '')
-      .replace(/\.(tar\.gz)$/i, '');
+      .replace(/\.(tar\.gz)$/i, '')
+      .replace(/\.(tar\.bz2)$/i, '')
+      .replace(/\.(tbz2?)$/i, '')
+      .replace(/\.(tar\.xz)$/i, '')
+      .replace(/\.(txz)$/i, '')
+      .replace(/\.(tar)$/i, '');
   }
 
   function _ensureArchiveExt(name, fmt) {
@@ -5400,7 +5731,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
       return;
     }
     if (!_isArchiveFileName(name)) {
-      toast('Выбранный файл не похож на архив (.zip/.tar.gz)', 'info');
+      toast('Выбранный файл не похож на архив (.zip/.tar/.tar.gz)', 'info');
       return;
     }
 
@@ -5410,11 +5741,15 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     const archEl = el('fm-extract-archive');
     const destInp = el('fm-extract-dest');
     const mk = el('fm-extract-create-dest');
+    const strip = el('fm-extract-strip-top');
+    const flat = el('fm-extract-flatten');
     const ow = el('fm-extract-overwrite');
     const err = el('fm-extract-error');
 
     if (err) err.textContent = '';
     if (mk) mk.checked = true;
+    if (strip) strip.checked = false;
+    if (flat) { flat.checked = false; flat.disabled = true; }
     if (ow) ow.checked = false;
 
     const full = joinLocal(p.cwd, name);
@@ -5450,22 +5785,27 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
       try { destInp.value = suggested; } catch (e) {}
       try { destInp.setAttribute('spellcheck', 'false'); } catch (e) {}
 
-      // UX: if the user disables "Создать папку", we extract into current directory.
+      // UX: if the user disables "Распаковать в отдельную папку", we extract into current directory.
       // In that mode the destination input is informational only, so we disable it.
       try {
         if (mk) {
           mk.onchange = () => {
             const on = !!mk.checked;
             try { destInp.disabled = !on; } catch (e) {}
+            try { const pb = el('fm-extract-dest-pick-btn'); if (pb) pb.disabled = !on; } catch (e) {}
             try {
               if (!on) {
                 if (!destInp.dataset.prevValue) destInp.dataset.prevValue = String(destInp.value || '');
                 destInp.value = '';
                 destInp.placeholder = 'Текущая папка';
+                // Common expectation: if we extract directly into current folder,
+                // we usually don't want an extra single top-level directory from the archive.
+                try { if (strip) strip.checked = true; } catch (e2) {}
               } else {
                 const pv = String(destInp.dataset.prevValue || '');
                 if (pv) destInp.value = pv;
                 destInp.placeholder = '';
+                try { if (strip) strip.checked = false; } catch (e2) {}
               }
             } catch (e) {}
           };
@@ -5481,7 +5821,276 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
 
   function closeExtractModal() {
     modalClose(el('fm-extract-modal'));
+    try { if (S.extract) S.extract.items = null; } catch (e) {}
   }
+  
+
+  // -------------------------- folder picker modal --------------------------
+
+  function _fpIsDir(it) {
+    const type = String((it && it.type) || '');
+    const linkDir = !!(it && it.link_dir);
+    return type === 'dir' || (type === 'link' && linkDir);
+  }
+
+  function _parentLocalPath(path) {
+    try {
+      let s = String(path || '').replace(/\\/g, '/');
+      s = s.replace(/\/+$/, '');
+      if (!s || s === '/') return '/';
+      const idx = s.lastIndexOf('/');
+      if (idx <= 0) return '/';
+      return s.slice(0, idx) || '/';
+    } catch (e) {
+      return '/';
+    }
+  }
+
+  function _isAllowedLocalPath(pth, roots) {
+    try {
+      let p = String(pth || '').replace(/\\/g, '/');
+      p = p.replace(/\/+$/, '');
+      if (!p) p = '/';
+      const rs = Array.isArray(roots) ? roots : [];
+      for (const r0 of rs) {
+        let r = String(r0 || '').replace(/\\/g, '/');
+        r = r.replace(/\/+$/, '');
+        if (!r) continue;
+        if (p === r || p.startsWith(r + '/')) return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function closeFolderPicker() {
+    try { modalClose(el('fm-folder-picker-modal')); } catch (e) {}
+    try { S.folderPicker = null; } catch (e) {}
+  }
+
+  function _folderPickerPick(path) {
+    const fp = S.folderPicker;
+    if (!fp) return;
+    try {
+      if (typeof fp.onPick === 'function') fp.onPick(String(path || ''));
+    } catch (e) {}
+    closeFolderPicker();
+  }
+
+  function _folderPickerChosenPath() {
+    const fp = S.folderPicker;
+    if (!fp) return '';
+    let base = String(fp.path || '').trim();
+    if (!base) base = (fp.roots && fp.roots[0]) ? String(fp.roots[0]) : '/opt/var';
+    const sel = safeName(fp.selected || '');
+    if (sel && sel !== '..') {
+      try {
+        if (fp.target === 'remote') {
+          return normRemotePath(base.replace(/\/+$/, '') + '/' + sel);
+        }
+      } catch (e) {}
+      return joinLocal(base, sel);
+    }
+    return base;
+  }
+
+  function renderFolderPicker() {
+    const fp = S.folderPicker;
+    if (!fp) return;
+    const list = el('fm-folder-picker-list');
+    const pathInp = el('fm-folder-picker-path');
+    const status = el('fm-folder-picker-status');
+
+    try { if (pathInp) pathInp.value = String(fp.path || ''); } catch (e) {}
+
+    if (status) {
+      const t = (fp.target === 'remote') ? 'REMOTE' : 'LOCAL';
+      status.textContent = `${t} • ${fp.path || ''}`;
+    }
+
+    if (!list) return;
+    list.innerHTML = '';
+
+    const mkRow = (name, isUp) => {
+      const row = document.createElement('div');
+      row.className = 'fm-row is-dir';
+      row.tabIndex = -1;
+      row.dataset.name = name;
+      row.dataset.up = isUp ? '1' : '0';
+      row.innerHTML = `<div class="fm-cell fm-name"><span class="fm-ico">${isUp ? '↩' : '📁'}</span><span class="fm-name-text"></span></div>`;
+      try {
+        const t = qs('.fm-name-text', row);
+        if (t) t.textContent = name;
+      } catch (e) {}
+      return row;
+    };
+
+    // Up entry (only when it makes sense inside allowed roots)
+    try {
+      const cur = String(fp.path || '').replace(/\/+$/, '') || '/';
+      if (fp.target === 'remote') {
+        if (cur && cur !== '/' && cur !== '.') list.appendChild(mkRow('..', true));
+      } else {
+        const parent = _parentLocalPath(cur);
+        if (parent && parent !== cur && _isAllowedLocalPath(parent, fp.roots)) {
+          list.appendChild(mkRow('..', true));
+        }
+      }
+    } catch (e) {}
+
+    const frag = document.createDocumentFragment();
+    for (const it of (fp.items || [])) {
+      const nm = safeName(it && it.name);
+      if (!nm) continue;
+      frag.appendChild(mkRow(nm, false));
+    }
+    list.appendChild(frag);
+
+    // Click / double click (event delegation)
+    list.onclick = (e) => {
+      const row = e && e.target ? e.target.closest('.fm-row') : null;
+      if (!row) return;
+      const nm = safeName(row.dataset.name || '');
+      if (!nm) return;
+      try { fp.selected = nm; } catch (e2) {}
+
+      // highlight
+      try {
+        Array.from(list.querySelectorAll('.fm-row')).forEach((r) => r.classList.remove('is-selected'));
+        row.classList.add('is-selected');
+      } catch (e3) {}
+    };
+
+    list.ondblclick = (e) => {
+      const row = e && e.target ? e.target.closest('.fm-row') : null;
+      if (!row) return;
+      const nm = safeName(row.dataset.name || '');
+      if (!nm) return;
+      const isUp = row.dataset.up === '1' || nm === '..';
+      if (isUp) {
+        try {
+          if (fp.target === 'remote') {
+            // Remote: let backend normalize
+            fp.path = '..';
+          } else {
+            fp.path = _parentLocalPath(String(fp.path || ''));
+          }
+          fp.selected = '';
+        } catch (e2) {}
+        loadFolderPicker(false);
+        return;
+      }
+
+      // Enter directory
+      try {
+        if (fp.target === 'remote') fp.path = normRemotePath(String(fp.path || '.') + '/' + nm);
+        else fp.path = joinLocal(String(fp.path || ''), nm);
+        fp.selected = '';
+      } catch (e4) {}
+      loadFolderPicker(false);
+    };
+  }
+
+  async function loadFolderPicker(fromInput) {
+    const fp = S.folderPicker;
+    if (!fp) return;
+
+    const err = el('fm-folder-picker-error');
+    if (err) err.textContent = '';
+
+    const pathInp = el('fm-folder-picker-path');
+    let desired = String(fp.path || '').trim();
+
+    if (fromInput && pathInp) {
+      const v = String(pathInp.value || '').trim();
+      if (v) desired = v;
+    }
+
+    if (!desired) desired = (fp.roots && fp.roots[0]) ? String(fp.roots[0]) : '/opt/var';
+
+    const url = (fp.target === 'remote' && fp.sid)
+      ? `/api/fs/list?target=remote&sid=${encodeURIComponent(fp.sid)}&path=${encodeURIComponent(desired || '.')}`
+      : `/api/fs/list?target=local&path=${encodeURIComponent(desired || '')}`;
+
+    const { res, data } = await fetchJson(url, { method: 'GET' });
+    if (!res || !res.ok || !data || !data.ok) {
+      const msg = data && (data.error || data.message) ? String(data.error || data.message) : 'list_failed';
+      if (err) err.textContent = msg;
+      toast('FM: ' + msg, 'error');
+      return;
+    }
+
+    fp.roots = Array.isArray(data.roots) ? data.roots : (fp.roots || []);
+    fp.path = String(data.path || desired || '');
+    fp.items = (Array.isArray(data.items) ? data.items : []).filter(_fpIsDir);
+    fp.items.sort((a, b) => safeName(a && a.name).localeCompare(safeName(b && b.name)));
+    fp.selected = '';
+
+    renderFolderPicker();
+  }
+
+  function openFolderPicker(opts) {
+    const modal = el('fm-folder-picker-modal');
+    if (!modal) return;
+
+    const titleEl = el('fm-folder-picker-title');
+    if (titleEl) titleEl.textContent = String((opts && opts.title) || 'Выбор папки');
+
+    const target = String((opts && opts.target) || 'local');
+    const sid = String((opts && opts.sid) || '');
+    const startPath = String((opts && opts.path) || '');
+
+    S.folderPicker = {
+      target: (target === 'remote') ? 'remote' : 'local',
+      sid,
+      path: startPath,
+      items: [],
+      roots: [],
+      selected: '',
+      onPick: (opts && opts.onPick) ? opts.onPick : null,
+    };
+
+    const err = el('fm-folder-picker-error');
+    if (err) err.textContent = '';
+
+    modalOpen(modal);
+    loadFolderPicker(false);
+
+    try {
+      setTimeout(() => {
+        try {
+          const pi = el('fm-folder-picker-path');
+          if (pi) {
+            pi.focus();
+            pi.select && pi.select();
+          }
+        } catch (e) {}
+      }, 0);
+    } catch (e) {}
+  }
+
+function openExtractModalWithItems(side, name, items) {
+    const s0 = String(side || S.activeSide || 'left');
+    const p = S.panels && S.panels[s0] ? S.panels[s0] : null;
+    const nm = safeName(name || '');
+    if (!p || !nm) {
+      openExtractModal();
+      return;
+    }
+    try { S.activeSide = s0; } catch (e) {}
+    try { p.focusName = nm; p.selected && p.selected.clear && p.selected.clear(); p.selected && p.selected.add && p.selected.add(nm); p.anchorName = nm; } catch (e) {}
+    openExtractModal();
+    const sel = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (sel.length) {
+      try { if (S.extract) S.extract.items = sel; } catch (e) {}
+      try { const t = el('fm-extract-title'); if (t) t.textContent = `Распаковать выбранное (${sel.length})`; } catch (e) {}
+      // Enable extra options when extracting selected items.
+      try {
+        const flat = el('fm-extract-flatten');
+        if (flat) flat.disabled = false;
+      } catch (e) {}
+    }
+  }
+
 
   async function doExtractFromModal() {
     const err = el('fm-extract-error');
@@ -5503,8 +6112,12 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
 
     const destInp = el('fm-extract-dest');
     const mk = el('fm-extract-create-dest');
+    const strip = el('fm-extract-strip-top');
+    const flat = el('fm-extract-flatten');
     const ow = el('fm-extract-overwrite');
     const createDest = !!(mk && mk.checked);
+    const stripTopDir = !!(strip && strip.checked);
+    const flatten = !!(flat && !flat.disabled && flat.checked);
 
     // If the user does NOT want to create a destination folder,
     // extraction should happen in the current directory (where the archive is).
@@ -5524,8 +6137,15 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
       archive: joinLocal(p.cwd, name),
       dest,
       create_dest: createDest,
+      strip_top_dir: stripTopDir,
+      flatten,
       overwrite: !!(ow && ow.checked),
     };
+
+    try {
+      const items = (S.extract && Array.isArray(S.extract.items)) ? S.extract.items : null;
+      if (items && items.length) body.items = items;
+    } catch (e) {}
 
     const { res, data } = await fetchJson('/api/fs/archive/extract', {
       method: 'POST',
@@ -5571,7 +6191,356 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
 
   
 
-  // -------------------------- chmod / chown --------------------------
+  
+
+  // -------------------------- archive: view contents --------------------------
+  function openArchiveListModal() {
+    const modal = el('fm-archive-list-modal');
+    if (!modal) return;
+
+    const titleEl = el('fm-archive-list-title');
+    const pathEl = el('fm-archive-list-path');
+    const bodyEl = el('fm-archive-list-body');
+    const metaEl = el('fm-archive-list-meta');
+    const errEl = el('fm-archive-list-error');
+
+    const side = S.activeSide;
+    const p = S.panels[side];
+    if (!p) return;
+
+    if (p.target !== 'local') {
+      toast('Просмотр архивов доступен только для local панели', 'info');
+      return;
+    }
+
+    const names = getSelectionNames(side);
+    if (names.length > 1) {
+      toast('Для просмотра выберите один архив', 'info');
+      return;
+    }
+
+    const name = safeName(names.length === 1 ? names[0] : (p.focusName || ''));
+    if (!name) {
+      toast('Выберите архив', 'info');
+      return;
+    }
+
+    if (!_isArchiveFileName(name)) {
+      toast('Выбранный файл не похож на архив', 'info');
+      return;
+    }
+
+    S.archiveList = { side, name };
+    S.archiveListItems = [];
+    S.archiveListTruncated = false;
+    S.archiveListSel = new Set();
+    S.archiveListFilter = "";
+
+    if (titleEl) titleEl.textContent = 'Содержимое архива';
+
+    const full = joinLocal(p.cwd, name);
+    if (pathEl) pathEl.textContent = `${side.toUpperCase()} • local • ${full}`;
+    if (bodyEl) bodyEl.textContent = 'Загрузка…';
+    if (metaEl) metaEl.textContent = '';
+    if (errEl) errEl.textContent = '';
+    const filterInp = el('fm-archive-list-filter');
+    if (filterInp) { try { filterInp.value = ''; } catch (e) {} }
+
+    try {
+      const f = el('fm-archive-list-filter');
+      if (f) f.value = '';
+    } catch (e) {}
+
+    modalOpen(modal);
+    try { setTimeout(() => { try { modal && modal.focus && modal.focus(); } catch (e) {} }, 0); } catch (e) {}
+
+    loadArchiveListFromModal();
+  }
+
+  function closeArchiveListModal() {
+    modalClose(el('fm-archive-list-modal'));
+  }
+  function _archiveItemKey(it) {
+    const nm = safeName(it && it.name);
+    if (!nm) return '';
+    const isDir = !!(it && it.is_dir);
+    return nm + (isDir ? '/' : '');
+  }
+
+  function _renderArchiveListTable(items, { filter } = {}) {
+    const sel = (S.archiveListSel instanceof Set) ? S.archiveListSel : new Set();
+    const f = String(filter || '').trim().toLowerCase();
+
+    const table = document.createElement('table');
+    table.className = 'fm-mono';
+    table.style.width = '100%';
+    table.style.borderCollapse = 'collapse';
+
+    const thead = document.createElement('thead');
+    const hr = document.createElement('tr');
+    const cols = [
+      { w: '36px', text: '' },
+      { w: '120px', text: 'Дата' },
+      { w: '80px', text: 'Размер' },
+      { w: '40px', text: 'Тип' },
+      { w: '', text: 'Путь' },
+    ];
+    for (const c of cols) {
+      const th = document.createElement('th');
+      th.textContent = c.text;
+      th.style.textAlign = 'left';
+      th.style.fontWeight = '600';
+      th.style.padding = '6px 8px';
+      th.style.opacity = '0.8';
+      th.style.borderBottom = '1px solid rgba(255,255,255,0.08)';
+      if (c.w) th.style.width = c.w;
+      hr.appendChild(th);
+    }
+    thead.appendChild(hr);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+
+    let shown = 0;
+    for (const it of (items || [])) {
+      const key = _archiveItemKey(it);
+      if (!key) continue;
+      if (f && !String(key).toLowerCase().includes(f)) continue;
+      shown += 1;
+
+      const isDir = !!(it && it.is_dir);
+      const isLink = !!(it && it.is_link);
+
+      const tr = document.createElement('tr');
+      tr.dataset.archiveKey = key;
+      tr.style.cursor = 'pointer';
+      tr.style.borderBottom = '1px solid rgba(255,255,255,0.04)';
+      if (sel.has(key)) tr.style.background = 'rgba(255,255,255,0.05)';
+
+      const td0 = document.createElement('td');
+      td0.style.padding = '4px 8px';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.archiveKey = key;
+      cb.checked = sel.has(key);
+      cb.addEventListener('click', (e) => { e.stopPropagation(); });
+      td0.appendChild(cb);
+
+      const td1 = document.createElement('td');
+      td1.style.padding = '4px 8px';
+      td1.style.whiteSpace = 'nowrap';
+      td1.textContent = fmtTime(it && it.mtime) || '';
+
+      const td2 = document.createElement('td');
+      td2.style.padding = '4px 8px';
+      td2.style.textAlign = 'right';
+      td2.textContent = isDir ? '' : (fmtSize(it && it.size) || '');
+
+      const td3 = document.createElement('td');
+      td3.style.padding = '4px 8px';
+      td3.textContent = isDir ? 'd' : (isLink ? 'l' : '-');
+
+      const td4 = document.createElement('td');
+      td4.style.padding = '4px 8px';
+      td4.style.wordBreak = 'break-word';
+      td4.textContent = safeName(it && it.name) + (isDir ? '/' : '');
+
+      tr.appendChild(td0);
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      tr.appendChild(td3);
+      tr.appendChild(td4);
+
+      const syncRowStyle = () => {
+        try { tr.style.background = cb.checked ? 'rgba(255,255,255,0.05)' : ''; } catch (e) {}
+      };
+
+      const applySel = () => {
+        try {
+          const k = String(cb.dataset.archiveKey || '');
+          if (cb.checked) sel.add(k); else sel.delete(k);
+        } catch (e2) {}
+        try { _updateArchiveListMeta(); } catch (e3) {}
+        syncRowStyle();
+      };
+
+      cb.addEventListener('change', (e) => {
+        e.stopPropagation();
+        applySel();
+      });
+
+      tr.addEventListener('click', (e) => {
+        cb.checked = !cb.checked;
+        applySel();
+      });
+
+      // UX: double-click an entry to extract it right away into the current folder.
+      // This uses "strip_top_dir" by default to avoid creating an extra single top-level directory.
+      tr.addEventListener('dblclick', (e) => {
+        try { e.preventDefault(); e.stopPropagation(); } catch (e2) {}
+        try {
+          // Ensure the clicked item is selected.
+          cb.checked = true;
+          applySel();
+        } catch (e3) {}
+        try { archiveQuickExtract([key], { stripTopDir: true }); } catch (e4) {}
+      });
+
+      tbody.appendChild(tr);
+    }
+
+    table.appendChild(tbody);
+    return { table, shown };
+  }
+
+  function _updateArchiveListMeta(extra = {}) {
+    const metaEl = el('fm-archive-list-meta');
+    if (!metaEl) return;
+
+    const total = (S.archiveListItems && Array.isArray(S.archiveListItems)) ? S.archiveListItems.length : 0;
+    const truncated = !!(S.archiveListTruncated);
+    const selCount = (S.archiveListSel && S.archiveListSel.size) ? S.archiveListSel.size : 0;
+    const shown = (typeof extra.shown === 'number') ? extra.shown : null;
+
+    let s = truncated ? `Показано ${total} элементов (обрезано)` : `Элементов: ${total}`;
+    if (shown != null && shown !== total) s += ` • Отфильтровано: ${shown}`;
+    s += ` • Выбрано: ${selCount}`;
+    metaEl.textContent = s;
+  }
+
+  function renderArchiveListBody() {
+    const bodyEl = el('fm-archive-list-body');
+    if (!bodyEl) return;
+
+    const items = Array.isArray(S.archiveListItems) ? S.archiveListItems : [];
+    const filter = String(S.archiveListFilter || '');
+
+    try { bodyEl.innerHTML = ''; } catch (e) {}
+    const out = _renderArchiveListTable(items, { filter });
+    if (out && out.table) bodyEl.appendChild(out.table);
+    try { _updateArchiveListMeta({ shown: out ? out.shown : null }); } catch (e) {}
+  }
+
+  function _archiveSelectedKeys() {
+    if (!(S.archiveListSel instanceof Set)) return [];
+    return Array.from(S.archiveListSel.values()).filter(Boolean);
+  }
+
+  async function archiveQuickExtract(keys, { stripTopDir = true } = {}) {
+    const ks = Array.isArray(keys) ? keys.filter(Boolean) : [];
+    if (!ks.length) {
+      toast('Выберите файлы в архиве', 'info');
+      return;
+    }
+
+    const side = String((S.archiveList && S.archiveList.side) || S.activeSide || 'left');
+    const p = S.panels[side];
+    const name = safeName((S.archiveList && S.archiveList.name) || '');
+    if (!p || !name) return;
+    if (p.target !== 'local') {
+      toast('Распаковка доступна только для local панели', 'info');
+      return;
+    }
+
+    const body = {
+      target: 'local',
+      cwd: String(p.cwd || ''),
+      archive: joinLocal(p.cwd, name),
+      dest: '',
+      create_dest: false,
+      strip_top_dir: !!stripTopDir,
+      overwrite: false,
+      items: ks,
+    };
+
+    const { res, data } = await fetchJson('/api/fs/archive/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res || !res.ok || !data || !data.ok) {
+      const msg = data && (data.details || data.error || data.message) ? String(data.details || data.error || data.message) : 'extract_failed';
+      toast('FM: ' + msg, 'error');
+      return;
+    }
+
+    const nExtracted = (data && typeof data.extracted === 'number') ? data.extracted : null;
+    const extra = (nExtracted != null) ? ` (${nExtracted})` : '';
+    toast('Извлечено' + extra, 'success');
+
+    // Refresh file list so the user sees extracted items.
+    try { await listPanel(side, { fromInput: false }); } catch (e) {}
+  }
+
+  function archiveListSelectAllFiltered() {
+    const items = Array.isArray(S.archiveListItems) ? S.archiveListItems : [];
+    const filter = String(S.archiveListFilter || '').trim().toLowerCase();
+    if (!(S.archiveListSel instanceof Set)) S.archiveListSel = new Set();
+    for (const it of items) {
+      const key = _archiveItemKey(it);
+      if (!key) continue;
+      if (filter && !String(key).toLowerCase().includes(filter)) continue;
+      S.archiveListSel.add(key);
+    }
+    renderArchiveListBody();
+  }
+
+  function archiveListSelectNone() {
+    S.archiveListSel = new Set();
+    renderArchiveListBody();
+  }
+
+  async function loadArchiveListFromModal() {
+    const errEl = el('fm-archive-list-error');
+    const bodyEl = el('fm-archive-list-body');
+    const metaEl = el('fm-archive-list-meta');
+
+    if (errEl) errEl.textContent = '';
+
+    const side = String((S.archiveList && S.archiveList.side) || S.activeSide || 'left');
+    const p = S.panels[side];
+    const name = safeName((S.archiveList && S.archiveList.name) || '');
+    if (!p || !name) return;
+
+    if (p.target !== 'local') {
+      if (errEl) errEl.textContent = 'Просмотр архивов доступен только для local панели.';
+      return;
+    }
+
+    const full = joinLocal(p.cwd, name);
+    const url = `/api/fs/archive/list?target=local&path=${encodeURIComponent(full)}&max=5000`;
+
+    const { res, data } = await fetchJson(url);
+
+    if (!res || !res.ok || !data || !data.ok) {
+      const msg = data && (data.details || data.error || data.message) ? String(data.details || data.error || data.message) : 'archive_list_failed';
+      if (errEl) errEl.textContent = msg;
+      if (bodyEl) { try { bodyEl.textContent = ''; } catch (e) {} try { bodyEl.innerHTML = ''; } catch (e2) {} }
+      if (metaEl) metaEl.textContent = '';
+      toast('FM: ' + msg, 'error');
+      return;
+    }
+
+    const items = Array.isArray(data.items) ? data.items : [];
+    const truncated = !!data.truncated;
+
+    S.archiveListItems = items;
+    S.archiveListTruncated = truncated;
+
+    // keep existing selection when possible
+    try {
+      if (!(S.archiveListSel instanceof Set)) S.archiveListSel = new Set();
+      const avail = new Set(items.map(_archiveItemKey));
+      for (const k of Array.from(S.archiveListSel.values())) {
+        if (!avail.has(k)) S.archiveListSel.delete(k);
+      }
+    } catch (e) {}
+
+    renderArchiveListBody();
+  }
+
+// -------------------------- chmod / chown --------------------------
   function _fsAdminCaps(panel) {
     try {
       const rf = (S.caps && S.caps.remoteFs) ? S.caps.remoteFs : null;
@@ -6416,13 +7385,184 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     const exCancel = el('fm-extract-cancel-btn');
     const exClose = el('fm-extract-close-btn');
     const exDest = el('fm-extract-dest');
+    const exHereBtn = el('fm-extract-dest-here-btn');
+    const exOtherBtn = el('fm-extract-dest-other-btn');
+    const exPickBtn = el('fm-extract-dest-pick-btn');
     const closeEx = () => closeExtractModal();
     if (exOk) exOk.addEventListener('click', (e) => { e.preventDefault(); doExtractFromModal(); });
     if (exCancel) exCancel.addEventListener('click', (e) => { e.preventDefault(); closeEx(); });
     if (exClose) exClose.addEventListener('click', (e) => { e.preventDefault(); closeEx(); });
     if (exDest) exDest.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doExtractFromModal(); } });
+
+    // Quick destination helpers
+    if (exHereBtn) exHereBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const mk = el('fm-extract-create-dest');
+      if (mk) {
+        mk.checked = false;
+        try { if (typeof mk.onchange === 'function') mk.onchange(); } catch (e2) {}
+        try { mk.dispatchEvent(new Event('change')); } catch (e3) {}
+      }
+    });
+
+    if (exOtherBtn) exOtherBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const side = String((S.extract && S.extract.side) || S.activeSide || 'left');
+      const other = (side === 'left') ? 'right' : 'left';
+      const p2 = S.panels && S.panels[other] ? S.panels[other] : null;
+      if (!p2 || String(p2.target || 'local') !== 'local') {
+        toast('Другая панель должна быть local', 'info');
+        return;
+      }
+      const mk = el('fm-extract-create-dest');
+      if (mk) {
+        mk.checked = true;
+        try { if (typeof mk.onchange === 'function') mk.onchange(); } catch (e2) {}
+        try { mk.dispatchEvent(new Event('change')); } catch (e3) {}
+      }
+      if (exDest) {
+        try { exDest.value = String(p2.cwd || '') || '/'; } catch (e4) {}
+        try { exDest.focus(); exDest.select && exDest.select(); } catch (e5) {}
+      }
+    });
+
+
+    if (exPickBtn) exPickBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const side = String((S.extract && S.extract.side) || S.activeSide || 'left');
+      const p = S.panels && S.panels[side] ? S.panels[side] : null;
+      if (!p || String(p.target || 'local') !== 'local') {
+        toast('Панель должна быть local', 'info');
+        return;
+      }
+      const mk = el('fm-extract-create-dest');
+      if (mk) {
+        mk.checked = true;
+        try { if (typeof mk.onchange === 'function') mk.onchange(); } catch (e2) {}
+        try { mk.dispatchEvent(new Event('change')); } catch (e3) {}
+      }
+      const destInp = el('fm-extract-dest');
+      let start = '';
+      try { start = String((destInp && destInp.value) || '').trim(); } catch (e4) { start = ''; }
+      if (!start || !start.startsWith('/')) start = String(p.cwd || '') || '/opt/var';
+      openFolderPicker({
+        target: 'local',
+        path: start,
+        title: 'Папка назначения',
+        onPick: (path) => {
+          try { if (destInp) destInp.value = String(path || ''); } catch (e5) {}
+          try { if (destInp) { destInp.focus(); destInp.select && destInp.select(); } } catch (e6) {}
+        },
+      });
+    });
     const xm = el('fm-extract-modal');
     if (xm) xm.addEventListener('click', (e) => { if (e.target === xm) closeEx(); });
+
+
+    // folder picker modal buttons
+    const fpOk = el('fm-folder-picker-select-btn');
+    const fpCancel = el('fm-folder-picker-cancel-btn');
+    const fpClose = el('fm-folder-picker-close-btn');
+    const fpUp = el('fm-folder-picker-up-btn');
+    const fpHome = el('fm-folder-picker-home-btn');
+    const fpPath = el('fm-folder-picker-path');
+    const fpModal = el('fm-folder-picker-modal');
+
+    if (fpOk) fpOk.addEventListener('click', (e) => {
+      e.preventDefault();
+      _folderPickerPick(_folderPickerChosenPath());
+    });
+    if (fpCancel) fpCancel.addEventListener('click', (e) => { e.preventDefault(); closeFolderPicker(); });
+    if (fpClose) fpClose.addEventListener('click', (e) => { e.preventDefault(); closeFolderPicker(); });
+    if (fpModal) fpModal.addEventListener('click', (e) => { if (e.target === fpModal) closeFolderPicker(); });
+
+    if (fpUp) fpUp.addEventListener('click', (e) => {
+      e.preventDefault();
+      const fp = S.folderPicker;
+      if (!fp) return;
+      try {
+        if (fp.target === 'remote') fp.path = '..';
+        else fp.path = _parentLocalPath(String(fp.path || ''));
+        fp.selected = '';
+      } catch (e2) {}
+      loadFolderPicker(false);
+    });
+
+    if (fpHome) fpHome.addEventListener('click', (e) => {
+      e.preventDefault();
+      const fp = S.folderPicker;
+      if (!fp) return;
+      let root = '';
+      try { root = (fp.roots && fp.roots[0]) ? String(fp.roots[0]) : ''; } catch (e2) { root = ''; }
+      if (!root) root = '/opt/var';
+      try { fp.path = root; fp.selected = ''; } catch (e3) {}
+      loadFolderPicker(false);
+    });
+
+    if (fpPath) fpPath.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        loadFolderPicker(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        closeFolderPicker();
+      }
+    });
+
+
+
+    // archive list modal buttons
+    const alCancel = el('fm-archive-list-cancel-btn');
+    const alClose = el('fm-archive-list-close-btn');
+    const alExtract = el('fm-archive-list-extract-btn');
+    const alExtractHere = el('fm-archive-list-extract-here-btn');
+    const alRefresh = el('fm-archive-list-refresh-btn');
+    const closeAl = () => closeArchiveListModal();
+
+    if (alCancel) alCancel.addEventListener('click', (e) => { e.preventDefault(); closeAl(); });
+    if (alClose) alClose.addEventListener('click', (e) => { e.preventDefault(); closeAl(); });
+    if (alRefresh) alRefresh.addEventListener('click', (e) => { e.preventDefault(); loadArchiveListFromModal(); });
+
+    const alFilter = el('fm-archive-list-filter');
+    const alAll = el('fm-archive-list-select-all-btn');
+    const alNone = el('fm-archive-list-select-none-btn');
+    if (alFilter) alFilter.addEventListener('input', () => {
+      try { S.archiveListFilter = String(alFilter.value || ''); } catch (e) { S.archiveListFilter = ''; }
+      renderArchiveListBody();
+    });
+    if (alFilter) alFilter.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        try { alFilter.value = ''; } catch (e2) {}
+        S.archiveListFilter = '';
+        renderArchiveListBody();
+      }
+    });
+    if (alAll) alAll.addEventListener('click', (e) => { e.preventDefault(); archiveListSelectAllFiltered(); });
+    if (alNone) alNone.addEventListener('click', (e) => { e.preventDefault(); archiveListSelectNone(); });
+    if (alExtract) alExtract.addEventListener('click', (e) => {
+      e.preventDefault();
+      const st = S.archiveList || {};
+      const side = String(st.side || S.activeSide || 'left');
+      const name = safeName(st.name || '');
+      const items = _archiveSelectedKeys();
+      try { closeAl(); } catch (e2) {}
+      if (name) openExtractModalWithItems(side, name, (items && items.length) ? items : null);
+      else openExtractModal();
+    });
+
+    if (alExtractHere) alExtractHere.addEventListener('click', (e) => {
+      e.preventDefault();
+      const items = _archiveSelectedKeys();
+      if (!items || !items.length) {
+        toast('Выберите файлы в архиве', 'info');
+        return;
+      }
+      try { archiveQuickExtract(items, { stripTopDir: true }); } catch (e2) {}
+    });
+
+    const alm = el('fm-archive-list-modal');
+    if (alm) alm.addEventListener('click', (e) => { if (e.target === alm) closeAl(); });
 
     // select by mask modal
     const maskOk = el('fm-mask-ok-btn');
@@ -6694,7 +7834,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
         closedAny = true;
       }
 
-      ['fm-help-modal', 'fm-ops-modal', 'fm-progress-modal', 'fm-conflicts-modal', 'fm-props-modal', 'fm-hash-modal', 'fm-rename-modal', 'fm-create-modal', 'fm-archive-modal', 'fm-extract-modal', 'fm-connect-modal', 'fm-chmod-modal', 'fm-chown-modal'].forEach((id) => {
+      ['fm-help-modal', 'fm-ops-modal', 'fm-progress-modal', 'fm-conflicts-modal', 'fm-props-modal', 'fm-hash-modal', 'fm-rename-modal', 'fm-create-modal', 'fm-archive-modal', 'fm-extract-modal', 'fm-folder-picker-modal', 'fm-archive-list-modal', 'fm-connect-modal', 'fm-chmod-modal', 'fm-chown-modal'].forEach((id) => {
         const m = el(id);
         if (m && !m.classList.contains('hidden')) {
           modalClose(m);
@@ -6873,12 +8013,14 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     upBtn.className = 'btn-secondary';
     upBtn.id = 'fm-upload-btn';
     upBtn.textContent = '⬆ Upload';
+    upBtn.title = 'Загрузить файлы в активную панель';
 
     const downBtn = document.createElement('button');
     downBtn.type = 'button';
     downBtn.className = 'btn-secondary';
     downBtn.id = 'fm-download-btn';
     downBtn.textContent = '⬇ Download';
+    downBtn.title = 'Скачать выбранные файлы/папки (ZIP)';
 
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -7028,6 +8170,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     if (!hasRow && hasSelection) {
       menu.appendChild(_ctxBtn('Скачать', 'download', ''));
       if (canArchive) menu.appendChild(_ctxBtn('Архивировать…', 'archive_create', ''));
+      if (canExtract) menu.appendChild(_ctxBtn('Содержимое архива…', 'archive_list', ''));
       if (canExtract) menu.appendChild(_ctxBtn('Распаковать…', 'archive_extract', ''));
       menu.appendChild(_ctxBtn('Свойства…', 'props', ''));
       menu.appendChild(_ctxSep());
@@ -7040,6 +8183,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
       }
       menu.appendChild(_ctxBtn('Скачать', 'download', ''));
       if (canArchive) menu.appendChild(_ctxBtn('Архивировать…', 'archive_create', ''));
+      if (canExtract) menu.appendChild(_ctxBtn('Содержимое архива…', 'archive_list', ''));
       if (canExtract) menu.appendChild(_ctxBtn('Распаковать…', 'archive_extract', ''));
       menu.appendChild(_ctxBtn('Копировать полный путь', 'copy_path', 'Ctrl+Shift+C'));
       menu.appendChild(_ctxSep());
@@ -7161,6 +8305,8 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
           openArchiveModal();
         } else if (act === 'archive_extract') {
           openExtractModal();
+        } else if (act === 'archive_list') {
+          openArchiveListModal();
         } else if (act === 'copy_path') {
           copyFullPaths(side);
         } else if (act === 'copy') {
