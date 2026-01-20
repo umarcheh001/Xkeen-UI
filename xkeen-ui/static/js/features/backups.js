@@ -32,9 +32,16 @@
 
   function targetLabelForBackup(filename) {
     const name = String(filename || '');
-    if (name.startsWith('03_inbounds-')) return { target: 'inbounds', label: '03_inbounds.json' };
-    if (name.startsWith('04_outbounds-')) return { target: 'outbounds', label: '04_outbounds.json' };
-    return { target: 'routing', label: '05_routing.json' };
+    // Backups are named "<prefix>-YYYYMMDD-HHMMSS.json".
+    // Prefix may include variants like *_hys2 (e.g. 05_routing_hys2-...).
+    function labelFromPrefix(defLabel) {
+      const prefix = name.split('-')[0] || '';
+      return prefix ? (prefix + '.json') : defLabel;
+    }
+
+    if (name.startsWith('03_inbounds')) return { target: 'inbounds', label: labelFromPrefix('03_inbounds.json') };
+    if (name.startsWith('04_outbounds')) return { target: 'outbounds', label: labelFromPrefix('04_outbounds.json') };
+    return { target: 'routing', label: labelFromPrefix('05_routing.json') };
   }
 
   function getTableBody() {
@@ -226,9 +233,21 @@
       return;
     }
 
+    function _baseName(p, fallback) {
+      try {
+        if (!p) return fallback;
+        const parts = String(p).split(/[\\/]/);
+        const b = parts[parts.length - 1];
+        return b || fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    const files = (window.XKEEN_FILES && typeof window.XKEEN_FILES === 'object') ? window.XKEEN_FILES : {};
     const label = t === 'routing'
-      ? '05_routing.json'
-      : (t === 'inbounds' ? '03_inbounds.json' : '04_outbounds.json');
+      ? _baseName(files.routing, '05_routing.json')
+      : (t === 'inbounds' ? _baseName(files.inbounds, '03_inbounds.json') : _baseName(files.outbounds, '04_outbounds.json'));
 
     const statusEl = document.getElementById(
       t === 'routing' ? 'routing-status' : (t === 'inbounds' ? 'inbounds-status' : 'outbounds-status')
