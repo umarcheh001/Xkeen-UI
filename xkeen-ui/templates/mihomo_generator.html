@@ -56,7 +56,7 @@
   <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}"></script>
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260110a') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260119d') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -100,6 +100,7 @@
     }
     select,
     input[type="text"],
+    input[type="number"],
     textarea {
       width: 100%;
       border-radius: 6px;
@@ -112,11 +113,23 @@
     }
     select:focus,
     input[type="text"]:focus,
+    input[type="number"]:focus,
     textarea:focus {
       outline: none;
       border-color: #3b82f6;
       box-shadow: 0 0 0 1px rgba(59,130,246,0.5);
+    }    
+    /* Make number inputs look like regular fields */
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
     }
+    input[type="number"] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+
     .row-inline {
       display: flex;
       gap: 8px;
@@ -125,6 +138,28 @@
     .row-inline > div {
       flex: 1;
     }
+
+    /* Header actions row (avoid .actions button stretching in generator page) */
+    .generator-header-actions-row {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .generator-header-actions-row .header-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .generator-header-actions-row .theme-toggle-btn {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
     .subscriptions-list,
     .proxies-list {
       display: flex;
@@ -397,6 +432,25 @@
       color: #4b5563;
     }
 
+    /* Inputs in light theme (override generator local dark styles) */
+    html[data-theme="light"] select,
+    html[data-theme="light"] input[type="text"],
+    html[data-theme="light"] input[type="number"],
+    html[data-theme="light"] textarea {
+      background: #ffffff;
+      color: #111827;
+      border-color: #d1d5db;
+    }
+
+    html[data-theme="light"] select:focus,
+    html[data-theme="light"] input[type="text"]:focus,
+    html[data-theme="light"] input[type="number"]:focus,
+    html[data-theme="light"] textarea:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.35);
+    }
+
+
     html[data-theme="light"] .btn {
       background: #ffffff;
       color: #111827;
@@ -473,7 +527,7 @@
       <h1>Mihomo — генератор конфига</h1>
       <p>Новый генератор для профилей роутера (bazy ZKeen / кастомные провайдеры).</p>
 
-      <div class="actions" style="justify-content: space-between; align-items: center;">
+      <div class="generator-header-actions-row">
         <a href="{{ url_for('index') }}" class="btn-link">← Назад</a>
         <div class="header-actions">
           <button
@@ -509,12 +563,12 @@
         <div style="margin-top:4px">
           <label>Подписки (proxy-providers)</label>
           <div id="subscriptionsList" class="subscriptions-list"></div>
-          <button type="button" id="addSubscriptionBtn" class="btn btn-ghost btn-xs">
+          <button type="button" id="addSubscriptionBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новую подписку (proxy-provider).">
             + Добавить подписку
           </button>
           <div class="hint xk-card-desc">
-            Первые 5 подписок заполнят провайдеры:
-            my-vless-sub, second-sub, third-sub, fourth-sub, fifth-sub.
+            Подписки будут заполнены в proxy-providers как: proxy-sub, proxy-sub-2, proxy-sub-3, ...
+            Если подписок больше 5 — дополнительные proxy-providers будут добавлены автоматически.
           </div>
         </div>
 
@@ -545,11 +599,19 @@
         <div>
           <label>Узлы (proxies)</label>
           <div id="proxiesList" class="proxies-list"></div>
-          <button type="button" id="addProxyBtn" class="btn btn-ghost btn-xs">
-            + Добавить узел
-          </button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button type="button" id="addProxyBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новый узел (proxy) вручную.">
+              + Добавить узел
+            </button>
+            <button type="button" id="bulkImportBtn" class="btn btn-ghost btn-xs" title="Вставьте список ссылок (vless/trojan/vmess/ss/hysteria2/hy2) и/или https подписок">
+              📥 Импорт списка
+            </button>
+            <button type="button" id="normalizeProxiesBtn" class="btn btn-ghost btn-xs" title="Заполнить пустые имена/группы и нормализовать текущие узлы по шаблонам из импорта">
+              ✨ Нормализовать
+            </button>
+          </div>
           <div class="hint xk-card-desc">
-            Поддерживаются VLESS ссылки, WireGuard-конфиги и готовые YAML-блоки proxy.
+            Поддерживаются ссылки (auto/VLESS/Trojan/VMess/SS/Hysteria2), WireGuard-конфиги, подписки (https://... как proxy-provider) и готовые YAML-блоки proxy.
           </div>
         </div>
       </div>
@@ -607,7 +669,7 @@
         <div class="validation-log-panel">
           <div class="validation-log-header">
             Лог проверки mihomo
-            <button type="button" id="clearValidationLogBtn" class="btn" style="float:right;">
+            <button type="button" id="clearValidationLogBtn" class="btn" style="float:right;" data-tooltip="Очистить окно лога проверки.">
               Очистить
             </button>
           </div>
@@ -620,11 +682,12 @@
 	<script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
 	<script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260105c') }}"></script>
   <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_generator.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_generator.js', v='20260119d') }}"></script>
   <script src="{{ url_for('static', filename='js/pages/mihomo_generator.init.js') }}"></script>
 <div id="validationModal" class="modal hidden" onclick="if (event.target === this) hideValidationModal();">
   <div class="modal-content">
@@ -633,6 +696,88 @@
       <button type="button" class="modal-close" onclick="hideValidationModal()">×</button>
     </div>
     <div id="validationModalBody" class="modal-body modal-body-logs"></div>
+  </div>
+</div>
+
+<div id="bulkImportModal" class="modal hidden" onclick="if (event.target === this) hideBulkImportModal();">
+  <div class="modal-content" style="max-width:820px;">
+    <div class="modal-header">
+      <span class="modal-title">Импорт узлов и подписок</span>
+      <button type="button" class="modal-close" onclick="hideBulkImportModal()">×</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;">
+      <div class="hint xk-card-desc">
+        Вставьте список строк (каждая с новой строки). Поддерживается: <code>vless://</code>, <code>trojan://</code>, <code>vmess://</code>, <code>ss://</code>, <code>hysteria2://</code>, <code>hy2://</code> и <code>https://</code> (подписки).
+        Комментарии (<code>#</code>) и пустые строки игнорируются.
+        <div style="margin-top:6px;font-size:12px;color:#9ca3af;">
+          Форматы: <code>link</code>, <code>name|link</code>, <code>name|link|groups</code>, <code>name|link|groups|icon|priority</code>, <code>name|link|groups|icon|priority|tag</code>, <code>groups|link</code>, <code>name|groups|link</code>.
+          <br>Группы: через запятую (<code>HK,SG</code>) или точку с запятой.
+        </div>
+      </div>
+
+      <textarea id="bulkImportTextarea" rows="10" style="width:100%;resize:vertical;" placeholder="vless://...\nhttps://sub.example.com/...\ntrojan://..."></textarea>
+
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
+          <input id="bulkImportClearExisting" type="checkbox">
+          Очистить текущие узлы перед импортом
+        </label>
+        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
+          <input id="bulkImportToSubscriptions" type="checkbox" checked>
+          HTTPS добавлять в «Подписки»
+        </label>
+        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
+          <input id="bulkImportDedup" type="checkbox" checked>
+          Игнорировать дубли
+        </label>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start;">
+        <div>
+          <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">Шаблон имени (для импортируемых узлов)</div>
+          <input id="bulkImportNameTemplate" type="text" class="input" style="width:100%;" placeholder="{name}" value="{name}">
+          <div style="font-size:11px;color:#6b7280;margin-top:4px;">
+            Переменные: <code>{name}</code>, <code>{type}</code>, <code>{host}</code>, <code>{port}</code>, <code>{geo}</code>, <code>{flag}</code>, <code>{region}</code>, <code>{region_group}</code>, <code>{group}</code>, <code>{groups}</code>, <code>{tags}</code>, <code>{index}</code>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">Шаблон групп (если в строке не указаны)</div>
+          <input id="bulkImportGroupsTemplate" type="text" class="input" style="width:100%;" placeholder="например: {geo},Заблок. сервисы">
+          <div style="font-size:11px;color:#6b7280;margin-top:4px;">
+            Можно вернуть несколько групп через запятую.
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
+          <input id="bulkImportAutoGeo" type="checkbox" checked>
+          Авто-GEO по имени/хосту (HK/SG/JP/US…)
+        </label>
+        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
+          <input id="bulkImportAutoRegionGroup" type="checkbox">
+          Добавлять региональную группу (Asia/Europe/America…)
+        </label>
+      </div>
+
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+        <div style="font-size:12px;color:#9ca3af;">Применить шаблоны к уже добавленным узлам:</div>
+        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
+          <input id="bulkImportOverwriteName" type="checkbox">
+          Перезаписать имя
+        </label>
+        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
+          <input id="bulkImportOverwriteGroups" type="checkbox">
+          Перезаписать группы
+        </label>
+        <button type="button" id="bulkImportApplyExistingBtn" class="btn">Применить</button>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" class="btn" onclick="hideBulkImportModal()">Отмена</button>
+        <button type="button" id="bulkImportApplyBtn" class="btn btn-primary">Импортировать</button>
+      </div>
+    </div>
   </div>
 </div>
 
