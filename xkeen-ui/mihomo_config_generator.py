@@ -49,6 +49,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 from mihomo_server_core import (
     MIHOMO_ROOT,
     parse_vless,
+    parse_proxy_uri,
     parse_wireguard,
     apply_proxy_insert,
 )
@@ -83,7 +84,11 @@ DEFAULT_TEMPLATES: Dict[str, str] = {
     "app": "custom.yaml",             # legacy / fallback
 }
 
-# Provider names in both templates, in desired order.
+# Provider names in both templates, in desired order (first 5 stubs exist in templates).
+#
+# NOTE: The generator UI historically supported only 5 subscriptions.
+# Newer versions allow passing more than 5 URLs – extra providers are
+# auto-appended to the resulting config.
 ROUTER_PROVIDER_NAMES: List[str] = [
     "proxy-sub",
     "proxy-sub-2",
@@ -91,6 +96,20 @@ ROUTER_PROVIDER_NAMES: List[str] = [
     "proxy-sub-4",
     "proxy-sub-5",
 ]
+
+
+def _provider_name_for_index(idx: int) -> str:
+    """Return provider name for a subscription index (0-based).
+
+    Pattern matches bundled templates:
+      0 -> proxy-sub
+      1 -> proxy-sub-2
+      2 -> proxy-sub-3
+      ...
+    """
+    if idx <= 0:
+        return "proxy-sub"
+    return f"proxy-sub-{idx + 1}"
 
 
 # Mapping from UI rule-group IDs to actual group names in templates.
@@ -124,22 +143,23 @@ RULE_GROUP_ID_TO_GROUP_NAMES: Dict[str, Sequence[str]] = {
 
     # Специальная группа для QUIC-трафика
     "QUIC": ("QUIC",),
-# Дополнительные группы для профиля ZKeen (GEOIP/GEOSITE и Ru-Traffic)
-"RuTraffic": ("Ru-Traffic", "ru-ips@ipcidr"),
-"DigitalOcean": ("DigitalOcean",),
-"Gcore": ("Gcore",),
-"Hetzner": ("Hetzner",),
-"Linode": ("Linode",),
-"Oracle": ("Oracle",),
-"Ovh": ("Ovh", "OVH"),
-"Vultr": ("Vultr",),
-"Colocrossing": ("Colocrossing",),
-"Contabo": ("Contabo",),
-"Mega": ("Mega",),
-"Scaleway": ("Scaleway",),
-"DOMAINS": ("DOMAINS",),
-"OTHER": ("OTHER",),
-"POLITIC": ("POLITIC",),
+
+    # Дополнительные группы для профиля ZKeen (GEOIP/GEOSITE и Ru-Traffic)
+    "RuTraffic": ("Ru-Traffic", "ru-ips@ipcidr"),
+    "DigitalOcean": ("DigitalOcean",),
+    "Gcore": ("Gcore",),
+    "Hetzner": ("Hetzner",),
+    "Linode": ("Linode",),
+    "Oracle": ("Oracle",),
+    "Ovh": ("Ovh", "OVH"),
+    "Vultr": ("Vultr",),
+    "Colocrossing": ("Colocrossing",),
+    "Contabo": ("Contabo",),
+    "Mega": ("Mega",),
+    "Scaleway": ("Scaleway",),
+    "DOMAINS": ("DOMAINS",),
+    "OTHER": ("OTHER",),
+    "POLITIC": ("POLITIC",),
 
 }
 
@@ -227,26 +247,36 @@ def _replace_provider_urls(content: str, subscriptions: Sequence[str]) -> str:
       from the config, leaving only the header ``proxy-providers:`` and
       surrounding comments from the template.
 
-    * If there are N subscription URLs, only the first N providers from
-      :data:`ROUTER_PROVIDER_NAMES` are kept, with their ``url:`` fields
-      overwritten. Remaining provider stubs are stripped out completely.
+    * If there are N subscription URLs, provider stubs from the template are
+      kept for the first 5 subscriptions (``proxy-sub``, ``proxy-sub-2``, ...)
+      and their ``url:`` fields are overwritten.
+
+      If there are **more than 5** subscriptions, extra providers are appended
+      to the generated config automatically.
 
     This keeps the generated config "clean": no dummy placeholders leak
     into the final YAML if the user did not configure them explicitly.
     """
     lines = content.splitlines()
 
-    # Map provider -> subscription URL (only non-empty URLs)
-    provider_to_url: Dict[str, str] = {}
-    for idx, url in enumerate(subscriptions or []):
-        if idx >= len(ROUTER_PROVIDER_NAMES):
-            break
-        url = str(url).strip()
-        if not url:
-            continue
-        provider_to_url[ROUTER_PROVIDER_NAMES[idx]] = url
+    # Normalise subscription list (keep order, drop empties).
+    subs_clean: List[str] = [str(x).strip() for x in (subscriptions or []) if str(x).strip()]
 
-    active_providers = set(provider_to_url.keys())
+    # Map provider -> URL for *all* subscriptions (unlimited)
+    provider_to_url: Dict[str, str] = {
+        _provider_name_for_index(i): url
+        for i, url in enumerate(subs_clean)
+    }
+    active_providers: Set[str] = set(provider_to_url.keys())
+
+    # Fast path: nothing to inject
+    if not provider_to_url:
+        # We still strip provider stubs later via _ensure_empty_proxy_providers_map
+        # to keep templates clean.
+        active_providers = set()
+
+    # We rewrite ONLY bundled provider stubs (first 5) and strip the unused ones.
+    bundled_providers = set(ROUTER_PROVIDER_NAMES)
 
     new_lines: List[str] = []
     current_provider: Optional[str] = None
@@ -254,8 +284,9 @@ def _replace_provider_urls(content: str, subscriptions: Sequence[str]) -> str:
     keep_block: bool = True
     buffer: List[str] = []
     seen_url_for_provider: Set[str] = set()
+    found_providers: Set[str] = set()
 
-    def flush_buffer():
+    def flush_buffer() -> None:
         if buffer and keep_block:
             new_lines.extend(buffer)
 
@@ -266,15 +297,13 @@ def _replace_provider_urls(content: str, subscriptions: Sequence[str]) -> str:
         # Detect leaving a provider block
         if current_provider is not None:
             if stripped and indent <= (current_indent or 0) and not stripped.startswith("#"):
-                # Block ended – flush / drop it depending on keep_block
                 flush_buffer()
                 buffer = []
                 current_provider = None
                 current_indent = None
-                keep_block = True  # default for next blocks
+                keep_block = True
 
-        # If we are not currently inside a provider block, check if this
-        # line starts one of the known providers.
+        # Detect provider header lines (only bundled stubs)
         if current_provider is None:
             matched_provider = None
             for pn in ROUTER_PROVIDER_NAMES:
@@ -285,30 +314,128 @@ def _replace_provider_urls(content: str, subscriptions: Sequence[str]) -> str:
             if matched_provider is not None:
                 current_provider = matched_provider
                 current_indent = indent
-                keep_block = (
-                    not active_providers  # no subs -> drop all providers
-                    and False             # explicit
-                ) or (matched_provider in active_providers)
+                found_providers.add(matched_provider)
+                # Keep only active providers; otherwise drop stub
+                keep_block = matched_provider in active_providers
                 buffer = [line]
                 continue
 
-            # Normal line outside provider blocks – keep as is.
+            # Normal line outside provider blocks
             new_lines.append(line)
             continue
 
-        # We are inside a provider block
-        # Optionally rewrite the first ``url:`` for active providers.
-        if keep_block and stripped.startswith("url:") and current_provider in provider_to_url and current_provider not in seen_url_for_provider:
+        # Inside provider block – rewrite first url: for active providers
+        if (
+            keep_block
+            and stripped.startswith("url:")
+            and current_provider in provider_to_url
+            and current_provider not in seen_url_for_provider
+        ):
             url = provider_to_url[current_provider]
             buffer.append(" " * indent + f'url: "{url}"  # set by generator')
             seen_url_for_provider.add(current_provider)
         else:
             buffer.append(line)
 
-    # Flush last provider block if still open
+    # Flush last provider block if file ended
     if current_provider is not None:
         flush_buffer()
 
+    rendered = "\n".join(new_lines)
+
+    # Append extra providers (subscription #6+) into proxy-providers section.
+    extra_provider_names = [
+        _provider_name_for_index(i)
+        for i in range(len(subs_clean))
+        if _provider_name_for_index(i) not in bundled_providers
+    ]
+
+    if extra_provider_names:
+        rendered = _append_extra_provider_blocks(rendered, provider_to_url, extra_provider_names)
+
+    return rendered
+
+
+def _append_extra_provider_blocks(
+    content: str,
+    provider_to_url: Dict[str, str],
+    provider_names: Sequence[str],
+) -> str:
+    """Append new `proxy-providers` blocks for providers not present in template.
+
+    Bundled templates ship with 5 stub providers. When the user gives more
+    than 5 subscription URLs we generate additional provider blocks, so the
+    config still works without modifying templates.
+    """
+    if not provider_names:
+        return content
+
+    lines = content.splitlines()
+
+    # Find `proxy-providers:` header (top-level)
+    header_idx: Optional[int] = None
+    for i, line in enumerate(lines):
+        if line.strip() == "proxy-providers:" and (len(line) - len(line.lstrip()) == 0):
+            header_idx = i
+            break
+
+    if header_idx is None:
+        return content
+
+    # Find end of proxy-providers section: first meaningful line at indent 0
+    end_idx = len(lines)
+    j = header_idx + 1
+    while j < len(lines):
+        s = lines[j].strip()
+        if not s or s.startswith("#"):
+            j += 1
+            continue
+        if not lines[j].startswith(" "):
+            end_idx = j
+            break
+        j += 1
+
+    # Determine already-present providers to avoid duplicates.
+    present: Set[str] = set()
+    for ln in lines[header_idx + 1 : end_idx]:
+        st = ln.strip()
+        m = re.match(r"^([A-Za-z0-9_.-]+):\s*$", st)
+        if m:
+            present.add(m.group(1))
+
+    blocks: List[str] = []
+    for pn in provider_names:
+        if pn in present:
+            continue
+        url = str(provider_to_url.get(pn) or "").strip()
+        if not url:
+            continue
+        blocks.extend(
+            [
+                f"  {pn}:",
+                "    type: http",
+                f"    url: \"{url}\"  # set by generator",
+                f"    path: ./proxy_providers/{pn}.yaml",
+                "    interval: 3600",
+                "    health-check:",
+                "      enable: true",
+                "      url: \"http://www.gstatic.com/generate_204\"",
+                "      interval: 300",
+                "      timeout: 8000",
+                "      lazy: true",
+                "      expected-status: 204",
+                "    override:",
+                "      tfo: true",
+                "      mptcp: true",
+                "      udp: true",
+                "",
+            ]
+        )
+
+    if not blocks:
+        return content
+
+    new_lines = lines[:end_idx] + blocks + lines[end_idx:]
     return "\n".join(new_lines)
 
 
@@ -316,21 +443,21 @@ def _replace_provider_urls(content: str, subscriptions: Sequence[str]) -> str:
 def _filter_proxy_group_uses(content: str, subscriptions: Sequence[str]) -> str:
     """Adjust `use:` lists in proxy-groups based on active subscriptions.
 
-    * If there are no non-empty subscription URLs, all `use:` blocks that
-      reference my-vless-sub / second-sub / ... are removed entirely.
+    * If there are no non-empty subscription URLs, all `use:` blocks are
+      removed entirely (the template providers are not referenced).
     * If there are N active subscriptions, `use:` lists are rewritten to
-      contain only the first N providers from ROUTER_PROVIDER_NAMES in order.
+      contain only the provider names that correspond to those subscriptions
+      (proxy-sub, proxy-sub-2, proxy-sub-3, ...). This supports more than 5
+      subscriptions when extra providers were auto-appended.
 
     This ensures that template stubs do not leak into the final config when
     the user has not configured any subscriptions.
     """
     # Build list of active provider names (based on non-empty URLs).
-    active_providers: List[str] = []
-    for idx, url in enumerate(subscriptions or []):
-        if idx >= len(ROUTER_PROVIDER_NAMES):
-            break
-        if str(url).strip():
-            active_providers.append(ROUTER_PROVIDER_NAMES[idx])
+    subs_clean = [str(x).strip() for x in (subscriptions or []) if str(x).strip()]
+    active_providers: List[str] = [
+        _provider_name_for_index(i) for i in range(len(subs_clean))
+    ]
 
     lines = content.splitlines()
     out_lines: List[str] = []
@@ -649,7 +776,22 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
         default_groups = ["Заблок. сервисы"]
 
     cfg = content
-    for idx, item in enumerate(proxies, 1):
+
+    # Optional: sort proxies by 'priority' (lower = higher). Keep stable order for ties.
+    def _prio_key(pair):
+        _idx, _item = pair
+        try:
+            v = _item.get("priority")
+            if v is None:
+                return (10**9, _idx)
+            v = int(str(v).strip())
+            return (v, _idx)
+        except Exception:
+            return (10**9, _idx)
+
+    sorted_pairs = sorted(list(enumerate(proxies, 1)), key=_prio_key)
+
+    for idx, item in sorted_pairs:
         if not isinstance(item, dict):
             continue
 
@@ -669,11 +811,19 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
             groups = ["Заблок. сервисы"]
 
         try:
-            if kind == "vless":
+            if kind in {"auto", "vless", "trojan", "vmess", "ss", "hysteria2"}:
                 link = str(item.get("link") or "").strip()
                 if not link:
                     continue
-                res = parse_vless(link, custom_name=name)
+
+                # kind is UI hint; actual scheme is auto-detected.
+                # This allows users to paste any supported URI even if they chose the wrong type.
+                try:
+                    res = parse_proxy_uri(link, custom_name=name)
+                except Exception:
+                    # Backward compatibility: older configs might still rely on vless-only parser
+                    res = parse_vless(link, custom_name=name)
+
                 proxy_name = res.name
                 proxy_yaml = res.yaml
 
