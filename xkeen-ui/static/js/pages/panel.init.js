@@ -166,6 +166,11 @@
       if (window.XKeen && XKeen.features && XKeen.features.mihomoPanel && typeof XKeen.features.mihomoPanel.init === 'function') XKeen.features.mihomoPanel.init();
     });
     safe(() => {
+      if (window.XKeen && XKeen.features && XKeen.features.mihomoImport && typeof XKeen.features.mihomoImport.init === 'function') {
+        XKeen.features.mihomoImport.init();
+      }
+    });
+    safe(() => {
       if (window.XKeen && XKeen.features && XKeen.features.serviceStatus && typeof XKeen.features.serviceStatus.init === 'function') XKeen.features.serviceStatus.init();
     });
     safe(() => {
