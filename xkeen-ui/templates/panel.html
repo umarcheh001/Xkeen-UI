@@ -70,7 +70,7 @@
 
 
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260110a') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260119d') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -191,9 +191,9 @@
     
 <div class="xkeen-ctrl-row">
   <div class="xkeen-ctrl-group">
-    <button id="xkeen-start-btn" class="xkeen-ctrl-btn">Start xkeen</button>
-    <button id="xkeen-stop-btn" class="xkeen-ctrl-btn">Stop xkeen</button>
-    <button id="xkeen-restart-btn" class="xkeen-ctrl-btn">Restart xkeen</button>
+    <button id="xkeen-start-btn" class="xkeen-ctrl-btn" data-tooltip="Запустить сервис xkeen.">Start xkeen</button>
+    <button id="xkeen-stop-btn" class="xkeen-ctrl-btn" data-tooltip="Остановить сервис xkeen.">Stop xkeen</button>
+    <button id="xkeen-restart-btn" class="xkeen-ctrl-btn" data-tooltip="Перезапустить сервис xkeen.">Restart xkeen</button>
   </div>
   <div class="global-toggle-right">
     <label class="global-autorestart-toggle">
@@ -214,7 +214,12 @@
         <!-- Сворачиваемый блок routing -->
         <section class="card">
           <div class="commands-header" id="routing-header">
-            <h2>Роутинг Xray</h2>
+            <h2>
+              Роутинг Xray
+              <span class="xray-profile-badge" data-profile="{{ xray_profile|e }}">
+                {% if xray_profile == 'hys2' %}Hysteria2{% else %}Обычный{% endif %}
+              </span>
+            </h2>
             <span id="routing-arrow">▼</span>
           </div>
 
@@ -228,12 +233,12 @@
             <div id="routing-error" class="error"></div>
 
             <div class="actions">
-  <button id="routing-save-btn">💾 Save routing</button>
-  <button id="routing-format-btn">✨ Format JSON</button>
-  <button id="routing-backup-btn">📦 Backup</button>
-  <button id="routing-restore-auto-btn">⏪ Restore autobackup</button>
-  <button id="routing-export-local-btn">⬇️ Экспорт</button>
-  <button id="routing-import-local-btn">⬆️ Импорт</button>
+  <button id="routing-save-btn" data-tooltip="Сохранить текущий роутинг (routing.json).">💾 Save routing</button>
+  <button id="routing-format-btn" data-tooltip="Отформатировать JSON (красивые отступы).">✨ Format JSON</button>
+  <button id="routing-backup-btn" data-tooltip="Сделать бэкап текущего routing.json.">📦 Backup</button>
+  <button id="routing-restore-auto-btn" data-tooltip="Восстановить routing из автобэкапа.">⏪ Restore autobackup</button>
+  <button id="routing-export-local-btn" data-tooltip="Скачать routing.json на компьютер.">⬇️ Экспорт</button>
+  <button id="routing-import-local-btn" data-tooltip="Импортировать routing.json с компьютера.">⬆️ Импорт</button>
 </div>
 
 <input type="file"
@@ -243,8 +248,8 @@
 
 
             <div class="actions">
-              <button id="github-export-btn">⬆️ Выгрузить в репозитарий</button>
-              <button id="github-open-catalog-btn">📂 Каталог конфигураций</button>
+              <button id="github-export-btn" data-tooltip="Выгрузить текущий routing.json в GitHub‑каталог конфигов.">⬆️ Выгрузить в репозитарий</button>
+              <button id="github-open-catalog-btn" data-tooltip="Открыть каталог конфигураций (GitHub).">📂 Каталог конфигураций</button>
             </div>
 
             <div id="routing-status" class="status"></div>
@@ -261,7 +266,7 @@
     <!-- Inbounds mode -->
     <section class="card">
       <div class="commands-header" id="inbounds-header">
-        <h2>Режим работы inbounds (03_inbounds.json)</h2>
+        <h2>Режим работы inbounds ({{ inbounds_name|e }})</h2>
         <span id="inbounds-arrow">▼</span>
       </div>
 
@@ -300,10 +305,10 @@
       </label>
 
       <div class="actions">
-        <button id="inbounds-open-editor-btn">📝 Открыть в редакторе</button>
-        <button id="inbounds-save-btn">💾 Save inbounds</button>
-        <button id="inbounds-backup-btn">📦 Backup 03_inbounds.json</button>
-        <button id="inbounds-restore-auto-btn">⏪ Restore inbounds</button>
+        <button id="inbounds-open-editor-btn" data-tooltip="Открыть {{ inbounds_name|e }} в редакторе JSON.">📝 Открыть в редакторе</button>
+        <button id="inbounds-save-btn" data-tooltip="Сохранить {{ inbounds_name|e }}.">💾 Save inbounds</button>
+        <button id="inbounds-backup-btn" data-tooltip="Сделать бэкап {{ inbounds_name|e }}.">📦 Backup {{ inbounds_name|e }}</button>
+        <button id="inbounds-restore-auto-btn" data-tooltip="Восстановить inbounds из автобэкапа.">⏪ Restore inbounds</button>
       </div>
 
       <div id="inbounds-status" class="status"></div>
@@ -313,21 +318,77 @@
     <!-- Outbounds VLESS editor -->
     <section class="card">
       <div class="commands-header" id="outbounds-header">
-        <h2>Прокси (04_outbounds.json)</h2>
+        <h2>Прокси ({{ outbounds_name|e }})</h2>
         <span id="outbounds-arrow">▼</span>
       </div>
 
       <div id="outbounds-body" style="display:none;">
       <p>Файл: <code>{{ outbounds_file }}</code></p>
-      <p class="xk-card-desc">Укажи VLESS ссылку, на основе которой будет собран конфиг outbounds.</p>
+      <p class="xk-card-desc">Укажи ссылку прокси (vless / trojan / vmess / ss / hy2), на основе которой будет собран конфиг <code>{{ outbounds_name|e }}</code>.</p>
 
-      <input id="outbounds-url" type="text" placeholder="vless://uuid@host:port?encryption=none&flow=xtls-rprx-vision&security=reality&pbk=...&sni=...&fp=chrome&sid=...&spx=%2F">
+      <div class="outbounds-hints">
+        <label>
+          <span class="hint-label">Протокол</span>
+          <select id="outbounds-proto" class="xray-log-select">
+            <option value="auto" selected>Авто</option>
+            <option value="vless">VLESS</option>
+            <option value="trojan">Trojan</option>
+            <option value="vmess">VMess</option>
+            <option value="ss">Shadowsocks</option>
+            <option value="hy2">Hysteria2 (HY2)</option>
+          </select>
+        </label>
+
+        <label>
+          <span class="hint-label">Транспорт</span>
+          <select id="outbounds-type" class="xray-log-select">
+            <option value="auto" selected>Авто</option>
+            <option value="tcp">TCP</option>
+            <option value="ws">WebSocket</option>
+            <option value="grpc">gRPC</option>
+            <option value="httpupgrade">HTTP Upgrade</option>
+            <option value="kcp">mKCP</option>
+            <option value="raw">RAW</option>
+            <option value="xhttp">XHTTP</option>
+          </select>
+        </label>
+
+        <label>
+          <span class="hint-label">Security</span>
+          <select id="outbounds-security" class="xray-log-select">
+            <option value="auto" selected>Авто</option>
+            <option value="none">None</option>
+            <option value="tls">TLS</option>
+            <option value="reality">Reality</option>
+          </select>
+        </label>
+      </div>
+
+      <input id="outbounds-url" type="text" placeholder="vless://... / trojan://... / vmess://... / ss://... / hy2://...">
+
+      <!-- Parsed preview + validation (client-side) -->
+      <div id="outbounds-parse-box" class="outbounds-parse-box" style="display:none;">
+        <div class="outbounds-parse-badges">
+          <span id="outbounds-badge-proto" class="outbounds-badge">—</span>
+          <span id="outbounds-badge-type" class="outbounds-badge">—</span>
+          <span id="outbounds-badge-sec" class="outbounds-badge">—</span>
+          <span id="outbounds-badge-state" class="outbounds-badge outbounds-badge-ok" style="display:none;">OK</span>
+          <span id="outbounds-badge-state-bad" class="outbounds-badge outbounds-badge-bad" style="display:none;">Ошибка</span>
+        </div>
+
+        <div id="outbounds-parse-error" class="outbounds-parse-msg outbounds-parse-error" style="display:none;"></div>
+        <div id="outbounds-parse-warn" class="outbounds-parse-msg outbounds-parse-warn" style="display:none;"></div>
+
+        <div id="outbounds-parse-kv" class="outbounds-parse-kv"></div>
+      </div>
 
       <div class="actions">
-        <button id="outbounds-open-editor-btn">📝 Открыть в редакторе</button>
-        <button id="outbounds-save-btn">💾 Save VLESS</button>
-        <button id="outbounds-backup-btn">📦 Backup 04_outbounds.json</button>
-        <button id="outbounds-restore-auto-btn">⏪ Restore outbounds</button>
+        <button id="outbounds-open-editor-btn" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">📝 Открыть в редакторе</button>
+        <button id="outbounds-normalize-btn" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">✨ Нормализовать</button>
+        <button id="outbounds-build-btn" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">🧩 Собрать ссылку</button>
+        <button id="outbounds-save-btn" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">💾 Save link</button>
+        <button id="outbounds-backup-btn" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">📦 Backup {{ outbounds_name|e }}</button>
+        <button id="outbounds-restore-auto-btn" data-tooltip="Восстановить outbounds из автобэкапа.">⏪ Restore outbounds</button>
       </div>
 
       <div id="outbounds-status" class="status"></div>
@@ -416,6 +477,12 @@
         <button id="mihomo-load-btn"
                 title="Загрузить текущий config.yaml">
           📥 Конфиг
+        </button>
+
+        <button id="mihomo-import-node-btn"
+                type="button"
+                title="Импорт узла/подписки: вставь ссылку (vless/trojan/vmess/ss/hysteria2/hy2) или https-подписку — панель преобразует в YAML и добавит в config.yaml">
+          ➕ Узел
         </button>
         <button id="mihomo-save-btn"
                 title="Сохранить (авто‑бэкап, авто‑перезапуск по галке)">
@@ -542,7 +609,7 @@
                     rows="8"
                     placeholder="Например:\n80\n443\n596:599\nКаждая строка — порт или диапазон портов."></textarea>
           <div class="actions">
-            <button id="port-proxying-save-btn">💾 Сохранить port_proxying.lst</button>
+            <button id="port-proxying-save-btn" data-tooltip="Сохранить список port_proxying.lst.">💾 Сохранить port_proxying.lst</button>
           </div>
           <div id="port-proxying-status" class="status"></div>
 
@@ -560,7 +627,7 @@
                     rows="8"
                     placeholder="Порты для исключения из проксирования.\nНапример:\n22\n25\n80:89"></textarea>
           <div class="actions">
-            <button id="port-exclude-save-btn">💾 Сохранить port_exclude.lst</button>
+            <button id="port-exclude-save-btn" data-tooltip="Сохранить список port_exclude.lst.">💾 Сохранить port_exclude.lst</button>
           </div>
           <div id="port-exclude-status" class="status"></div>
 
@@ -576,7 +643,7 @@
                     rows="8"
                     placeholder="Например:\n192.168.0.0/16\n2001:db8::/32"></textarea>
           <div class="actions">
-            <button id="ip-exclude-save-btn">💾 Сохранить ip_exclude.lst</button>
+            <button id="ip-exclude-save-btn" data-tooltip="Сохранить список ip_exclude.lst.">💾 Сохранить ip_exclude.lst</button>
           </div>
           <div id="ip-exclude-status" class="status"></div>
         </div>
@@ -588,8 +655,8 @@
 <section class="card commands-card">
   <div class="commands-header">
     <h2>Команды</h2>
-    <button type="button" class="btn-secondary" id="terminal-open-shell-btn">Открыть терминал</button>
-    <button type="button" class="btn-secondary btn-interactive-shell" id="terminal-open-pty-btn" title="Интерактивная оболочка (PTY)">Interactive Shell</button>
+    <button type="button" class="btn-secondary" id="terminal-open-shell-btn" data-tooltip="Открыть терминал (обычный режим).">Открыть терминал</button>
+    <button type="button" class="btn-secondary btn-interactive-shell" id="terminal-open-pty-btn" title="Интерактивная оболочка (PTY)" data-tooltip="Открыть интерактивную оболочку (PTY).">Interactive Shell</button>
   </div>
 
   <div id="commands-body">
@@ -615,24 +682,6 @@
     <div class="command-group">
       <div class="command-group-title">Утилиты панели</div>
       <ul class="command-list">
-        <li class="command-item-wrap">
-          <button type="button"
-                  class="command-item xkeen-ctrl-btn"
-                  data-flag="__sysmon"
-                  data-label="sysmon"
-                  data-tooltip="Мониторинг роутера (базовый): CPU/RAM/диски/сеть/температура">
-            <code>sysmon</code>
-          </button>
-        </li>
-        <li class="command-item-wrap">
-          <button type="button"
-                  class="command-item xkeen-ctrl-btn"
-                  data-flag="__sysmon_short"
-                  data-label="sysmon --short"
-                  data-tooltip="Мониторинг (коротко): только ключевые показатели">
-            <code>sysmon --short</code>
-          </button>
-        </li>
         <li class="command-item-wrap">
           <button type="button"
                   class="command-item xkeen-ctrl-btn"
@@ -667,7 +716,7 @@
     <div class="fm-header">
       <h2>Файловый менеджер</h2>
       <div class="fm-header-actions">
-        <button type="button" class="btn-secondary" id="fm-ops-btn">🧾 Операции</button>
+        <button type="button" class="btn-secondary" id="fm-ops-btn" title="Операции с файлами (копировать, переместить, удалить, архивы и т.д.)">🧾 Операции</button>
       </div>
     </div>
 
@@ -689,9 +738,9 @@
             <option value="local">L</option>
             <option value="remote">R</option>
           </select>
-          <button type="button" class="btn-secondary fm-connect-btn">Connect…</button>
-          <button type="button" class="btn-secondary fm-disconnect-btn" style="display:none;">Disconnect</button>
-          <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" />
+          <button type="button" class="btn-secondary fm-connect-btn" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
+          <button type="button" class="btn-secondary fm-disconnect-btn" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
+          <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" title="Путь текущей папки (Enter — перейти)" />
           <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">↑</button>
           <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">⟳</button>
           <div class="fm-filter-wrap">
@@ -708,9 +757,9 @@
             <option value="local">L</option>
             <option value="remote">R</option>
           </select>
-          <button type="button" class="btn-secondary fm-connect-btn">Connect…</button>
-          <button type="button" class="btn-secondary fm-disconnect-btn" style="display:none;">Disconnect</button>
-          <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" />
+          <button type="button" class="btn-secondary fm-connect-btn" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
+          <button type="button" class="btn-secondary fm-disconnect-btn" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
+          <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" title="Путь текущей папки (Enter — перейти)" />
           <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">↑</button>
           <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">⟳</button>
           <div class="fm-filter-wrap">
@@ -1080,6 +1129,275 @@
       </div>
     </div>
 
+    <!-- Outbounds: mini generator modal (build proxy link from hints) -->
+    <div id="outbounds-generator-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Сборка ссылки прокси">
+      <div class="modal-content" style="max-width: 780px;" data-modal-key="outbounds-generator">
+        <div class="modal-header">
+          <span class="modal-title">Собрать ссылку из подсказок</span>
+          <button type="button" class="modal-close" id="outbounds-generator-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description" style="margin-bottom: 10px;">
+            Мини-генератор: выбери <b>протокол / транспорт / security</b> и заполни минимальные поля.
+            Готовая ссылка появится ниже и может быть вставлена в поле <code>04_outbounds.json</code>.
+          </p>
+
+          <div class="outbounds-gen-hints">
+            <label>
+              <span class="hint-label">Протокол</span>
+              <select id="outbounds-gen-proto" class="xray-log-select">
+                <option value="auto" selected>Авто</option>
+                <option value="vless">VLESS</option>
+                <option value="trojan">Trojan</option>
+                <option value="vmess">VMess</option>
+                <option value="ss">Shadowsocks</option>
+                <option value="hy2">Hysteria2 (HY2)</option>
+              </select>
+            </label>
+
+            <label>
+              <span class="hint-label">Транспорт</span>
+              <select id="outbounds-gen-type" class="xray-log-select">
+                <option value="auto" selected>Авто</option>
+                <option value="tcp">TCP</option>
+                <option value="ws">WebSocket</option>
+                <option value="grpc">gRPC</option>
+                <option value="httpupgrade">HTTP Upgrade</option>
+                <option value="kcp">mKCP</option>
+                <option value="raw">RAW</option>
+                <option value="xhttp">XHTTP</option>
+              </select>
+            </label>
+
+            <label>
+              <span class="hint-label">Security</span>
+              <select id="outbounds-gen-security" class="xray-log-select">
+                <option value="auto" selected>Авто</option>
+                <option value="none">None</option>
+                <option value="tls">TLS</option>
+                <option value="reality">Reality</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="outbounds-gen-grid">
+            <label>
+              <span class="hint-label">Server (host)</span>
+              <input id="outbounds-gen-host" class="xray-log-filter" type="text" placeholder="example.com">
+            </label>
+
+            <label>
+              <span class="hint-label">Port</span>
+              <input id="outbounds-gen-port" class="xray-log-filter" type="number" placeholder="443" min="1" max="65535">
+            </label>
+
+            <label>
+              <span class="hint-label">Tag (необязательно)</span>
+              <input id="outbounds-gen-tag" class="xray-log-filter" type="text" placeholder="proxy">
+            </label>
+
+            <label id="outbounds-gen-cred-vless">
+              <span class="hint-label">UUID (VLESS)</span>
+              <input id="outbounds-gen-uuid" class="xray-log-filter" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            </label>
+
+            <label id="outbounds-gen-cred-trojan" style="display:none;">
+              <span class="hint-label">Password (Trojan)</span>
+              <input id="outbounds-gen-pass" class="xray-log-filter" type="text" placeholder="password">
+            </label>
+
+            <label id="outbounds-gen-cred-vmess" style="display:none;">
+              <span class="hint-label">UUID (VMess)</span>
+              <input id="outbounds-gen-vmess-uuid" class="xray-log-filter" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            </label>
+
+            <label id="outbounds-gen-cred-ss" style="display:none;">
+              <span class="hint-label">Method (SS)</span>
+              <select id="outbounds-gen-ss-method" class="xray-log-select">
+                <option value="aes-128-gcm">aes-128-gcm</option>
+                <option value="aes-256-gcm">aes-256-gcm</option>
+                <option value="chacha20-ietf-poly1305" selected>chacha20-ietf-poly1305</option>
+                <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm</option>
+                <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm</option>
+              </select>
+            </label>
+
+            <label id="outbounds-gen-cred-ss-pass" style="display:none;">
+              <span class="hint-label">Password (SS)</span>
+              <input id="outbounds-gen-ss-pass" class="xray-log-filter" type="text" placeholder="password">
+            </label>
+
+            <label id="outbounds-gen-cred-hy2" style="display:none;">
+              <span class="hint-label">Auth (HY2)</span>
+              <input id="outbounds-gen-hy2-auth" class="xray-log-filter" type="text" placeholder="password или user:pass">
+            </label>
+          </div>
+
+          <details id="outbounds-gen-advanced" class="outbounds-gen-advanced">
+            <summary>Дополнительно</summary>
+            <div class="outbounds-gen-grid outbounds-gen-adv">
+              <label id="outbounds-gen-field-sni">
+                <span class="hint-label">SNI</span>
+                <input id="outbounds-gen-sni" class="xray-log-filter" type="text" placeholder="example.com">
+              </label>
+
+              <label id="outbounds-gen-field-fp">
+                <span class="hint-label">Fingerprint (fp)</span>
+                <input id="outbounds-gen-fp" class="xray-log-filter" type="text" placeholder="chrome">
+              </label>
+
+              <label id="outbounds-gen-field-alpn">
+                <span class="hint-label">ALPN</span>
+                <input id="outbounds-gen-alpn" class="xray-log-filter" type="text" placeholder="h2,http/1.1">
+              </label>
+
+              <label id="outbounds-gen-field-flow">
+                <span class="hint-label">Flow (VLESS)</span>
+                <select id="outbounds-gen-flow" class="xray-log-select">
+                  <option value="">(нет)</option>
+                  <option value="xtls-rprx-vision">xtls-rprx-vision</option>
+                </select>
+              </label>
+
+              <label id="outbounds-gen-field-path">
+                <span class="hint-label">Path (WS/HTTP Upgrade)</span>
+                <input id="outbounds-gen-path" class="xray-log-filter" type="text" placeholder="/">
+              </label>
+
+              <label id="outbounds-gen-field-hosthdr">
+                <span class="hint-label">Host header (WS/HTTP Upgrade)</span>
+                <input id="outbounds-gen-hosthdr" class="xray-log-filter" type="text" placeholder="cdn.example.com">
+              </label>
+
+              <label id="outbounds-gen-field-grpc-service">
+                <span class="hint-label">gRPC serviceName</span>
+                <input id="outbounds-gen-service" class="xray-log-filter" type="text" placeholder="grpc">
+              </label>
+
+              <label id="outbounds-gen-field-grpc-authority">
+                <span class="hint-label">gRPC authority</span>
+                <input id="outbounds-gen-authority" class="xray-log-filter" type="text" placeholder="example.com">
+              </label>
+
+              <label id="outbounds-gen-field-grpc-mode">
+                <span class="hint-label">gRPC mode</span>
+                <select id="outbounds-gen-grpc-mode" class="xray-log-select">
+                  <option value="">auto</option>
+                  <option value="multi">multi</option>
+                </select>
+              </label>
+
+              <label id="outbounds-gen-field-reality-pbk">
+                <span class="hint-label">Reality PBK (pbk)</span>
+                <input id="outbounds-gen-pbk" class="xray-log-filter" type="text" placeholder="publicKey">
+              </label>
+
+              <label id="outbounds-gen-field-reality-sid">
+                <span class="hint-label">Reality SID (sid)</span>
+                <input id="outbounds-gen-sid" class="xray-log-filter" type="text" placeholder="shortId">
+              </label>
+
+              <label id="outbounds-gen-field-reality-spx">
+                <span class="hint-label">Reality SPX (spx)</span>
+                <input id="outbounds-gen-spx" class="xray-log-filter" type="text" placeholder="/" value="/">
+              </label>
+
+              <label id="outbounds-gen-field-ss-plugin" style="display:none;">
+                <span class="hint-label">SS plugin (необязательно)</span>
+                <input id="outbounds-gen-ss-plugin" class="xray-log-filter" type="text" placeholder="v2ray-plugin;mode=websocket;tls">
+              </label>
+
+              <label id="outbounds-gen-field-hy2-insecure" style="display:none;">
+                <span class="hint-label">HY2 insecure</span>
+                <select id="outbounds-gen-hy2-insecure" class="xray-log-select">
+                  <option value="0" selected>0 (проверять TLS)</option>
+                  <option value="1">1 (allow insecure)</option>
+                </select>
+              </label>
+
+              <label id="outbounds-gen-field-hy2-obfs" style="display:none;">
+                <span class="hint-label">HY2 obfs</span>
+                <select id="outbounds-gen-hy2-obfs" class="xray-log-select">
+                  <option value="" selected>(нет)</option>
+                  <option value="salamander">salamander</option>
+                </select>
+              </label>
+
+              <label id="outbounds-gen-field-hy2-obfspwd" style="display:none;">
+                <span class="hint-label">HY2 obfs-password</span>
+                <input id="outbounds-gen-hy2-obfspwd" class="xray-log-filter" type="text" placeholder="obfs password">
+              </label>
+
+              <label id="outbounds-gen-field-hy2-pinsha256" style="display:none;">
+                <span class="hint-label">PinSHA256 (HY2)</span>
+                <input id="outbounds-gen-hy2-pinsha256" class="xray-log-filter" type="text" placeholder="33:83:...:95">
+              </label>
+
+              <label id="outbounds-gen-field-allowinsecure">
+                <span class="hint-label">TLS allowInsecure</span>
+                <select id="outbounds-gen-allowinsecure" class="xray-log-select">
+                  <option value="0" selected>Нет</option>
+                  <option value="1">Да</option>
+                </select>
+              </label>
+            </div>
+          </details>
+
+          <div id="outbounds-gen-status" class="status" style="margin-top: 10px;"></div>
+
+          <label style="display:block; margin-top: 10px;">
+            <span class="hint-label">Ссылка (preview)</span>
+            <textarea id="outbounds-gen-preview" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" readonly></textarea>
+          </label>
+        </div>
+        <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="outbounds-gen-prefill-btn" class="btn-secondary" data-tooltip="Заполнить поля генератора из ссылки, вставленной в поле на странице (удобно для редактирования существующего прокси).">↩️ Заполнить из поля</button>
+            <button type="button" id="outbounds-gen-generate-btn" data-tooltip="Собрать ссылку из заполненных полей.">🧩 Собрать</button>
+            <button type="button" id="outbounds-gen-insert-btn" class="btn-primary" data-tooltip="Вставить ссылку в поле на странице и закрыть окно." disabled>✅ Вставить в поле</button>
+          </div>
+          <button type="button" id="outbounds-gen-cancel-btn">Отмена</button>
+        </div>
+      </div>
+    </div>
+</div>
+
+    <!-- Mihomo: import proxy / subscription modal (parser) -->
+    <div id="mihomo-import-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Импорт узла Mihomo">
+      <div class="modal-content" style="max-width: 780px;" data-modal-key="mihomo-import">
+        <div class="modal-header">
+          <span class="modal-title">Импорт узла (Mihomo)</span>
+          <button type="button" class="modal-close" id="mihomo-import-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description" style="margin-bottom: 10px;">
+            Вставь ссылку узла <b>vless / trojan / vmess / ss / hysteria2 / hy2</b> или <b>https‑подписку</b>.
+            Панель преобразует её в YAML и аккуратно добавит в <code>config.yaml</code>.
+          </p>
+
+          <label style="display:block; margin-top: 10px;">
+            <span class="hint-label">Ссылка / подписка</span>
+            <textarea id="mihomo-import-input" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" placeholder="vless://...\nили\nhttps://..."></textarea>
+          </label>
+
+          <div id="mihomo-import-status" class="status" style="margin-top: 10px;"></div>
+          <p id="mihomo-import-target-hint" class="modal-hint" style="margin:8px 0 0; opacity:0.75; font-size: 0.85rem;"></p>
+
+          <label style="display:block; margin-top: 10px;">
+            <span class="hint-label">YAML (preview)</span>
+            <textarea id="mihomo-import-preview" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" readonly></textarea>
+          </label>
+        </div>
+        <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="mihomo-import-parse-btn" data-tooltip="Преобразовать ссылку в YAML и показать результат.">✨ Преобразовать</button>
+            <button type="button" id="mihomo-import-insert-btn" class="btn-primary" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>✅ Вставить в конфиг</button>
+          </div>
+          <button type="button" id="mihomo-import-cancel-btn">Отмена</button>
+        </div>
+      </div>
+    </div>
+    
     <!-- File manager: upload conflict (same-name file already exists) -->
     <div id="fm-upload-conflict-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Конфликт при загрузке">
       <div class="modal-content" style="max-width: 720px;">
@@ -1246,6 +1564,7 @@
   <script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/confirm_modal.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
 	  <script src="{{ url_for('static', filename='js/ui/last_activity.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js') }}"></script>
@@ -1264,6 +1583,7 @@
   <script src="{{ url_for('static', filename='js/features/xray_logs.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/restart_log.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_panel.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260119d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/commands_list.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/outbounds.js') }}"></script>
@@ -1272,7 +1592,7 @@
     <script src="{{ url_for('static', filename='js/features/file_manager/prefs.js') }}"></script>
     <script src="{{ url_for('static', filename='js/features/file_manager/chrome.js') }}"></script>
     <script src="{{ url_for('static', filename='js/features/file_manager/editor.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/features/file_manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/features/file_manager.js', v='20260119d') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/_core.js') }}"></script>
   <!-- Terminal refactor (Wave 3): Stage A (events/ui/api) + Stage B (transport adapters) -->
   <script src="{{ url_for('static', filename='js/terminal/core/events.js') }}"></script>
@@ -1677,13 +1997,33 @@
         <label>Архив</label>
         <div id="fm-extract-archive" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
 
-        <label for="fm-extract-dest">Папка назначения *</label>
+        <label for="fm-extract-dest">Папка назначения</label>
         <input id="fm-extract-dest" class="terminal-input fm-mono" placeholder="./out" spellcheck="false" />
+
+        <label></label>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" id="fm-extract-dest-here-btn" style="padding:6px 10px; font-size:12px;">Текущая</button>
+          <button type="button" class="btn-secondary" id="fm-extract-dest-other-btn" style="padding:6px 10px; font-size:12px;">Другая панель</button>
+          <button type="button" class="btn-secondary" id="fm-extract-dest-pick-btn" style="padding:6px 10px; font-size:12px;">Выбрать…</button>
+          <span style="opacity:.7; font-size:12px;">(можно указать абсолютный путь)</span>
+        </div>
 
         <label></label>
         <label style="display:flex; gap:8px; align-items:center;">
           <input id="fm-extract-create-dest" type="checkbox" checked />
-          <span>Создать папку, если нет</span>
+          <span>Распаковать в отдельную папку</span>
+        </label>
+
+        <label></label>
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input id="fm-extract-strip-top" type="checkbox" />
+          <span>Убрать верхнюю папку архива (если она одна)</span>
+        </label>
+
+        <label></label>
+        <label style="display:flex; gap:8px; align-items:center;">
+          <input id="fm-extract-flatten" type="checkbox" />
+          <span>Не сохранять структуру папок (плоско)</span>
         </label>
 
         <label></label>
@@ -1692,12 +2032,72 @@
           <span>Перезаписывать существующие файлы</span>
         </label>
       </div>
-      <div class="status" style="margin-top:10px; opacity:.75;">Поддерживаются архивы: <span class="fm-mono">.zip</span>, <span class="fm-mono">.tar.gz</span>.</div>
+      <div class="status" style="margin-top:10px; opacity:.75;">Поддерживаются архивы: <span class="fm-mono">.zip</span>, <span class="fm-mono">.tar</span>, <span class="fm-mono">.tar.gz</span>, <span class="fm-mono">.tgz</span>, <span class="fm-mono">.tar.xz</span>, <span class="fm-mono">.tar.bz2</span>.</div>
       <div id="fm-extract-error" class="error"></div>
     </div>
     <div class="modal-actions" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="fm-extract-cancel-btn">Отмена</button>
       <button type="button" class="btn-primary" id="fm-extract-ok-btn">Распаковать</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: folder picker -->
+<div id="fm-folder-picker-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Folder picker">
+  <div class="modal-content" style="max-width:780px;">
+    <div class="modal-header">
+      <span class="modal-title" id="fm-folder-picker-title">Выбор папки</span>
+      <button type="button" class="modal-close" id="fm-folder-picker-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+        <button type="button" class="btn-secondary" id="fm-folder-picker-up-btn" style="padding:6px 10px; font-size:12px;">↑ Вверх</button>
+        <button type="button" class="btn-secondary" id="fm-folder-picker-home-btn" style="padding:6px 10px; font-size:12px;">Корень</button>
+        <input id="fm-folder-picker-path" class="terminal-input fm-mono" placeholder="/opt/var" spellcheck="false" style="flex:1; min-width:220px;" />
+      </div>
+      <div id="fm-folder-picker-status" class="status" style="margin:0 0 10px 0; padding:6px 10px; opacity:.85;">&nbsp;</div>
+      <div id="fm-folder-picker-list" class="fm-dropop-list fm-mono" style="margin:0; max-height:420px; overflow:auto; padding:0;"></div>
+      <div id="fm-folder-picker-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="fm-folder-picker-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-folder-picker-select-btn">Выбрать</button>
+    </div>
+  </div>
+</div>
+
+<!-- File Manager: archive list -->
+<div id="fm-archive-list-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Archive list">
+  <div class="modal-content" style="max-width:860px;">
+    <div class="modal-header">
+      <span class="modal-title" id="fm-archive-list-title">Содержимое архива</span>
+      <button type="button" class="modal-close" id="fm-archive-list-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="fm-form-grid" style="grid-template-columns: 120px 1fr;">
+        <label>Архив</label>
+        <div id="fm-archive-list-path" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
+
+        <label>Файлы</label>
+        <div>
+          <div style="display:flex; gap:8px; align-items:center; margin:0 0 6px 0;">
+            <input id="fm-archive-list-filter" class="terminal-input fm-mono" placeholder="Фильтр (например: conf)" spellcheck="false" style="flex:1; min-width:200px;" />
+            <button type="button" class="btn-secondary" id="fm-archive-list-select-all-btn">Все</button>
+            <button type="button" class="btn-secondary" id="fm-archive-list-select-none-btn">Снять</button>
+          </div>
+          <div id="fm-archive-list-body" class="fm-dropop-list fm-mono" style="margin:0; max-height:420px; overflow:auto; padding:0;"></div>
+        </div>
+
+        <label></label>
+        <div id="fm-archive-list-meta" class="status" style="margin:0; padding:6px 10px; opacity:.8;">&nbsp;</div>
+      </div>
+      <div id="fm-archive-list-error" class="error"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end; gap:10px;">
+      <button type="button" class="btn-secondary" id="fm-archive-list-refresh-btn">Обновить</button>
+      <button type="button" class="btn-secondary" id="fm-archive-list-extract-btn">Распаковать…</button>
+      <button type="button" class="btn-secondary" id="fm-archive-list-extract-here-btn">Извлечь сюда</button>
+      <button type="button" class="btn-primary" id="fm-archive-list-cancel-btn">Закрыть</button>
     </div>
   </div>
 </div>
@@ -1909,6 +2309,35 @@
     <div class="modal-actions" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="fm-conflicts-cancel-btn">Отмена</button>
       <button type="button" class="btn-primary" id="fm-conflicts-ok-btn">Продолжить</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- File Manager: bookmarks (pins) modal -->
+<div id="fm-bookmarks-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Избранное">
+  <div class="modal-content" style="max-width:860px;">
+    <div class="modal-header">
+      <span class="modal-title" id="fm-bookmarks-title">Избранное (local)</span>
+      <button type="button" class="modal-close" id="fm-bookmarks-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="status" style="margin:0 0 8px 0; opacity:.9;">
+        Закладки сохраняются в браузере (localStorage) и доступны в обоих панелях. В выпадающем меню 📌 будут показаны ваши пути.
+      </div>
+      <div id="fm-bookmarks-list" class="fm-bm-list"></div>
+      <div id="fm-bookmarks-error" class="error" style="display:none;"></div>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between; gap:10px; flex-wrap:wrap;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="btn-secondary" id="fm-bookmarks-reset-btn" title="Вернуть стандартный набор">Сбросить</button>
+        <button type="button" class="btn-secondary" id="fm-bookmarks-add-row-btn" title="Добавить строку">＋ Добавить</button>
+        <button type="button" class="btn-secondary" id="fm-bookmarks-add-current-btn" title="Добавить текущую папку активной панели">⭐ Текущая</button>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+        <button type="button" class="btn-secondary" id="fm-bookmarks-cancel-btn">Отмена</button>
+        <button type="button" class="btn-primary" id="fm-bookmarks-save-btn">Сохранить</button>
+      </div>
     </div>
   </div>
 </div>
