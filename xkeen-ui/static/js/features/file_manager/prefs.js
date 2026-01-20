@@ -13,6 +13,7 @@
     sort: 'xkeen.fm.sort',           // JSON: { key: 'name'|'size'|'perm'|'mtime', dir: 'asc'|'desc', dirsFirst: true }
     showHidden: 'xkeen.fm.dotfiles', // '1'|'0'
     mask: 'xkeen.fm.mask',           // last used selection mask (glob)
+    bookmarksLocal: 'xkeen.fm.bookmarks.local', // JSON: [{ label: '...', value: '/path' }, ...]
     geom: 'xkeen.fm.geom_v1',        // JSON: { w: px, h: px, shiftX: px }
   };
 
@@ -67,6 +68,54 @@
     lsSet(KEYS.mask, String(v || ''));
   }
 
+  function _sanitizeBookmarkItem(it) {
+    if (!it || typeof it !== 'object') return null;
+    const value = String(it.value || '').trim();
+    if (!value) return null;
+    const label = String(it.label || '').trim();
+    return { label: label || value, value };
+  }
+
+  function loadBookmarksLocal(defaultsArr) {
+    const raw = lsGet(KEYS.bookmarksLocal);
+    const defaults = Array.isArray(defaultsArr) ? defaultsArr : [];
+    if (!raw) return defaults.map((x) => _sanitizeBookmarkItem(x)).filter(Boolean);
+    try {
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return defaults.map((x) => _sanitizeBookmarkItem(x)).filter(Boolean);
+      const seen = new Set();
+      const out = [];
+      for (const it of arr) {
+        const s = _sanitizeBookmarkItem(it);
+        if (!s) continue;
+        if (seen.has(s.value)) continue;
+        seen.add(s.value);
+        out.push(s);
+      }
+      return out.length ? out : defaults.map((x) => _sanitizeBookmarkItem(x)).filter(Boolean);
+    } catch (e) {
+      return defaults.map((x) => _sanitizeBookmarkItem(x)).filter(Boolean);
+    }
+  }
+
+  function saveBookmarksLocal(arr) {
+    const list = Array.isArray(arr) ? arr : [];
+    const seen = new Set();
+    const out = [];
+    for (const it of list) {
+      const s = _sanitizeBookmarkItem(it);
+      if (!s) continue;
+      if (seen.has(s.value)) continue;
+      seen.add(s.value);
+      out.push(s);
+    }
+    lsSet(KEYS.bookmarksLocal, JSON.stringify(out));
+  }
+
+  function clearBookmarksLocal() {
+    try { localStorage.removeItem(KEYS.bookmarksLocal); } catch (e) {}
+  }
+
   // Public API
   FM.prefs = {
     keys: KEYS,
@@ -78,5 +127,8 @@
     saveShowHiddenPref,
     loadMaskPref,
     saveMaskPref,
+    loadBookmarksLocal,
+    saveBookmarksLocal,
+    clearBookmarksLocal,
   };
 })();
