@@ -503,7 +503,13 @@ function closeHelp() {
 
   async function restoreAuto() {
     const statusEl = $(IDS.status);
-    const label = '05_routing.json';
+    // Use the actual routing file name (supports 05_routing_hys2.json)
+    let label = '05_routing.json';
+    try {
+      if (window.XKEEN_FILES && window.XKEEN_FILES.routing) {
+        label = String(window.XKEEN_FILES.routing).split(/[\\/]/).pop() || label;
+      }
+    } catch (e) {}
     if (!confirm('Восстановить из авто-бэкапа файл ' + label + '?')) return;
 
     try {
