@@ -71,7 +71,21 @@ def create_backups_blueprint(
 
     @bp.get("/backups")
     def backups_page() -> Any:
-        return render_template("backups.html", backups=list_backups(), backup_dir=BACKUP_DIR)
+        # UI hint: show which fragment names are active (classic vs *_hys2.json).
+        try:
+            xray_profile = "hys2" if "_hys2" in os.path.basename(ROUTING_FILE) else "classic"
+        except Exception:
+            xray_profile = "classic"
+
+        return render_template(
+            "backups.html",
+            backups=list_backups(),
+            backup_dir=BACKUP_DIR,
+            xray_profile=xray_profile,
+            routing_file=os.path.basename(ROUTING_FILE),
+            inbounds_file=os.path.basename(INBOUNDS_FILE),
+            outbounds_file=os.path.basename(OUTBOUNDS_FILE),
+        )
 
     # ---------- API: backups ----------
 
@@ -101,7 +115,13 @@ def create_backups_blueprint(
             os.makedirs(BACKUP_DIR, exist_ok=True)
 
         ts = time.strftime("%Y%m%d-%H%M%S")
-        fname = f"05_routing-{ts}.json"
+        # Name backups after the actual routing file in use.
+        # Examples:
+        #   - 05_routing.json       -> 05_routing-YYYYMMDD-HHMMSS.json
+        #   - 05_routing_hys2.json  -> 05_routing_hys2-YYYYMMDD-HHMMSS.json
+        base = os.path.basename(ROUTING_FILE)
+        prefix = os.path.splitext(base)[0] or "05_routing"
+        fname = f"{prefix}-{ts}.json"
         path = os.path.join(BACKUP_DIR, fname)
 
         # Payload format:
@@ -129,7 +149,14 @@ def create_backups_blueprint(
             os.makedirs(BACKUP_DIR, exist_ok=True)
 
         ts = time.strftime("%Y%m%d-%H%M%S")
-        fname = f"03_inbounds-{ts}.json"
+
+        # Name backups after the actual inbounds file in use.
+        # Examples:
+        #   - 03_inbounds.json       -> 03_inbounds-YYYYMMDD-HHMMSS.json
+        #   - 03_inbounds_hys2.json  -> 03_inbounds_hys2-YYYYMMDD-HHMMSS.json
+        base = os.path.basename(INBOUNDS_FILE)
+        prefix = os.path.splitext(base)[0] or "03_inbounds"
+        fname = f"{prefix}-{ts}.json"
         path = os.path.join(BACKUP_DIR, fname)
         save_json(path, data)
         _core_log("info", "backup.create", kind="inbounds", filename=fname, remote_addr=str(request.remote_addr or ""))
@@ -146,7 +173,14 @@ def create_backups_blueprint(
             os.makedirs(BACKUP_DIR, exist_ok=True)
 
         ts = time.strftime("%Y%m%d-%H%M%S")
-        fname = f"04_outbounds-{ts}.json"
+
+        # Name backups after the actual outbounds file in use.
+        # Examples:
+        #   - 04_outbounds.json       -> 04_outbounds-YYYYMMDD-HHMMSS.json
+        #   - 04_outbounds_hys2.json  -> 04_outbounds_hys2-YYYYMMDD-HHMMSS.json
+        base = os.path.basename(OUTBOUNDS_FILE)
+        prefix = os.path.splitext(base)[0] or "04_outbounds"
+        fname = f"{prefix}-{ts}.json"
         path = os.path.join(BACKUP_DIR, fname)
         save_json(path, data)
         _core_log("info", "backup.create", kind="outbounds", filename=fname, remote_addr=str(request.remote_addr or ""))
