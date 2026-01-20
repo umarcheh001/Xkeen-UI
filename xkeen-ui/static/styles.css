@@ -20,6 +20,29 @@
   --log-route-redirect-direct: #a855f7;
   --log-route-reject: #f97373;
 
+  /* Theme-aware modal / floating surfaces (used by tooltips, menus, etc.) */
+  --modal-bg: rgba(15, 23, 42, 0.95);
+  --modal-text: #e5e7eb;
+  --modal-border: rgba(51, 65, 85, 0.85);
+  --shadow-rgb: 0, 0, 0;
+  --shadow: 0.35;
+
+  /* Unified button variables (so semantic .btn-secondary stays readable in light theme too) */
+  --editor-btn-bg: rgba(255,255,255,0.04);
+  --editor-btn-border: rgba(51,65,85,0.9);
+  --editor-btn-text: #e5e7eb;
+  --editor-btn-hover-bg: rgba(255,255,255,0.08);
+  --editor-btn-hover-border: rgba(71,85,105,0.85);
+
+  /* Tooltip surface (portal renderer) */
+  --xk-tooltip-bg: rgba(15, 23, 42, 0.95);
+  --xk-tooltip-text: #e5e7eb;
+  --xk-tooltip-border: rgba(148, 163, 184, 0.25);
+  --xk-tooltip-shadow: rgba(0, 0, 0, 0.55);
+
+  /* Tooltip blur ("macOS style") for light theme. Disabled by default. */
+  --xk-tooltip-backdrop: none;
+
 }
 
 /* Semantic colors: light theme defaults */
@@ -38,6 +61,36 @@ html[data-theme="light"] {
   --log-route-redirect-vless: #0284c7;
   --log-route-redirect-direct: #7c3aed;
   --log-route-reject: #dc2626;
+
+  /* Theme-aware modal / floating surfaces */
+  --modal-bg: #ffffff;
+  --modal-text: #111827;
+  --modal-border: rgba(15, 23, 42, 0.15);
+  --shadow-rgb: 15, 23, 42;
+  --shadow: 0.14;
+
+  /* Unified button variables */
+  --editor-btn-bg: #ffffff;
+  --editor-btn-border: rgba(15, 23, 42, 0.18);
+  --editor-btn-text: #111827;
+  --editor-btn-hover-bg: rgba(15, 23, 42, 0.06);
+  --editor-btn-hover-border: rgba(15, 23, 42, 0.22);
+
+  /* File manager buttons: keep contrast in light theme */
+  --fm-btn-text: #111827;
+  --fm-btn-hover-text: #111827;
+
+  /* File manager toggle ("Скрытые") */
+  --fm-toggle-knob-bg: rgba(255, 255, 255, 0.96);
+  --fm-toggle-knob-border: rgba(15, 23, 42, 0.10);
+
+  /* Tooltip surface (portal renderer) */
+  /* "macOS style" (milky + blur) */
+  --xk-tooltip-bg: rgba(255, 255, 255, 0.72);
+  --xk-tooltip-text: #111827;
+  --xk-tooltip-border: rgba(15, 23, 42, 0.10);
+  --xk-tooltip-shadow: rgba(15, 23, 42, 0.14);
+  --xk-tooltip-backdrop: blur(18px) saturate(180%);
 }
 
 
@@ -555,6 +608,17 @@ box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
   white-space: normal;
 }
 
+/*
+  В шапке некоторых страниц используется контейнер .actions (для кнопки "Назад" + действий справа).
+  Общие правила .actions button растягивают кнопки до flex-basis 210px, из-за чего переключатель темы
+  становится огромным и переносит DevTools/Выйти на следующую строку.
+  Для блока .header-actions (правый угол) отключаем это поведение.
+*/
+.actions .header-actions button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 
 button {
   border-radius: 9999px;
@@ -601,6 +665,213 @@ button:disabled {
   opacity: 0.5;
   cursor: default;
   box-shadow: none;
+}
+
+/*
+  Tooltips (описания на кнопках)
+  --------------------------------
+  Используется атрибут: data-tooltip="..."
+*/
+
+/*
+  IMPORTANT:
+  Для мест с overflow:hidden/scroll (модалки, тулбары, шапки) псевдо-элементы
+  ::before/::after могут обрезаться по границам контейнера.
+  Поэтому по умолчанию включён "портальный" тултип (JS рендерит его в <body>
+  с position:fixed). Если он активен – отключаем CSS-псевдо-рендеринг,
+  чтобы не было дубля.
+*/
+.xk-tooltip-portal [data-tooltip]::after,
+.xk-tooltip-portal [data-tooltip]::before {
+  display: none !important;
+}
+
+/* Portal tooltip (fixed-position, not clipped by containers) */
+#xk-tooltip-portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2147483646;
+  pointer-events: none;
+  transform: translate3d(-9999px, -9999px, 0);
+  opacity: 0;
+  transition: opacity 0.08s ease;
+}
+
+#xk-tooltip-portal[hidden] {
+  display: none;
+}
+
+#xk-tooltip-portal .xk-tooltip-bubble {
+  position: relative;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.25;
+  text-align: center;
+  width: max-content;
+  max-width: 320px;
+  white-space: normal;
+
+  background: var(--xk-tooltip-bg, rgba(15, 23, 42, 0.95));
+  -webkit-backdrop-filter: var(--xk-tooltip-backdrop, none);
+  backdrop-filter: var(--xk-tooltip-backdrop, none);
+  border: 1px solid var(--xk-tooltip-border, rgba(148, 163, 184, 0.25));
+  color: var(--xk-tooltip-text, #e5e7eb);
+  box-shadow: 0 10px 30px var(--xk-tooltip-shadow, rgba(0, 0, 0, 0.55));
+}
+
+#xk-tooltip-portal .xk-tooltip-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  -webkit-backdrop-filter: var(--xk-tooltip-backdrop, none);
+  backdrop-filter: var(--xk-tooltip-backdrop, none);
+  border-left: 1px solid var(--xk-tooltip-border, rgba(148, 163, 184, 0.25));
+  border-top: 1px solid var(--xk-tooltip-border, rgba(148, 163, 184, 0.25));
+  transform: rotate(45deg);
+}
+
+#xk-tooltip-portal[data-pos="top"] .xk-tooltip-arrow {
+  bottom: -6px;
+}
+
+#xk-tooltip-portal[data-pos="bottom"] .xk-tooltip-arrow {
+  top: -6px;
+  transform: rotate(225deg);
+}
+button[data-tooltip] {
+  position: relative;
+}
+
+button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 12px);
+  transform: translateX(-50%);
+
+  opacity: 0;
+  pointer-events: none;
+
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--xk-tooltip-bg, rgba(15, 23, 42, 0.95));
+  -webkit-backdrop-filter: var(--xk-tooltip-backdrop, none);
+  backdrop-filter: var(--xk-tooltip-backdrop, none);
+  border: 1px solid var(--xk-tooltip-border, rgba(148, 163, 184, 0.25));
+  color: var(--xk-tooltip-text, #e5e7eb);
+
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.25;
+  text-align: center;
+
+  width: max-content;
+  max-width: 320px;
+  white-space: normal;
+
+  box-shadow: 0 10px 30px var(--xk-tooltip-shadow, rgba(0, 0, 0, 0.55));
+  z-index: 9999;
+}
+
+button[data-tooltip]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid var(--xk-tooltip-bg, rgba(15, 23, 42, 0.95));
+
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+button[data-tooltip]:hover::after,
+button[data-tooltip]:hover::before,
+button[data-tooltip]:focus-visible::after,
+button[data-tooltip]:focus-visible::before {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  button[data-tooltip]::after,
+  button[data-tooltip]::before {
+    display: none;
+  }
+}
+
+/* Themed tooltip for any non-button element with data-tooltip */
+[data-tooltip]:not(button):not(input):not(textarea):not(select) {
+  position: relative;
+}
+
+[data-tooltip]:not(button):not(input):not(textarea):not(select)::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 12px);
+  transform: translateX(-50%);
+
+  opacity: 0;
+  pointer-events: none;
+
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--xk-tooltip-bg, rgba(15, 23, 42, 0.95));
+  -webkit-backdrop-filter: var(--xk-tooltip-backdrop, none);
+  backdrop-filter: var(--xk-tooltip-backdrop, none);
+  border: 1px solid var(--xk-tooltip-border, rgba(148, 163, 184, 0.25));
+  color: var(--xk-tooltip-text, #e5e7eb);
+
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.25;
+  text-align: center;
+
+  width: max-content;
+  max-width: 320px;
+  white-space: normal;
+
+  box-shadow: 0 10px 30px var(--xk-tooltip-shadow, rgba(0, 0, 0, 0.55));
+  z-index: 9999;
+}
+
+[data-tooltip]:not(button):not(input):not(textarea):not(select)::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid var(--xk-tooltip-bg, rgba(15, 23, 42, 0.95));
+
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10000;
+}
+
+[data-tooltip]:not(button):not(input):not(textarea):not(select):hover::after,
+[data-tooltip]:not(button):not(input):not(textarea):not(select):hover::before,
+[data-tooltip]:not(button):not(input):not(textarea):not(select):focus-visible::after,
+[data-tooltip]:not(button):not(input):not(textarea):not(select):focus-visible::before {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  [data-tooltip]:not(button):not(input):not(textarea):not(select)::after,
+  [data-tooltip]:not(button):not(input):not(textarea):not(select)::before {
+    display: none;
+  }
 }
 
 .status {
@@ -685,6 +956,93 @@ button:disabled {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 1px #3b82f6;
+}
+
+/* Outbounds: parsed preview + validation */
+.outbounds-parse-box {
+  margin-top: 10px;
+  border: 1px solid var(--border, #374151);
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: rgba(2, 6, 23, 0.55);
+}
+
+#outbounds-url.xk-invalid {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 1px #ef4444;
+}
+
+.outbounds-parse-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.outbounds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.4;
+  border: 1px solid var(--border, #374151);
+  color: var(--text, #e5e7eb);
+  background: rgba(2, 6, 23, 0.35);
+}
+
+.outbounds-badge-ok {
+  border-color: rgba(34, 197, 94, 0.65);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.outbounds-badge-bad {
+  border-color: rgba(239, 68, 68, 0.75);
+  background: rgba(239, 68, 68, 0.10);
+}
+
+.outbounds-parse-msg {
+  margin-top: 8px;
+  font-size: calc(12px * var(--xk-font-scale) * var(--xk-card-desc-scale, 1));
+  line-height: 1.35;
+}
+
+.outbounds-parse-error {
+  color: #fecaca;
+}
+
+.outbounds-parse-warn {
+  color: #fde68a;
+}
+
+.outbounds-parse-kv {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.outbounds-kv-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 2fr;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.35);
+  border: 1px solid rgba(55, 65, 81, 0.5);
+}
+
+.outbounds-kv-row .k {
+  color: var(--muted, #9ca3af);
+  font-size: calc(12px * var(--xk-font-scale));
+}
+
+.outbounds-kv-row .v {
+  color: var(--text, #e5e7eb);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: calc(12px * var(--xk-font-scale));
+  overflow-wrap: anywhere;
 }
 
 table {
@@ -1414,14 +1772,23 @@ html[data-theme="light"] #view-commands #commands-body .command-group{
   white-space: nowrap;
   padding: 6px 8px;
   border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.95);
-  color: rgba(226, 232, 240, 0.98);
+  border: 1px solid var(--xk-tooltip-border, rgba(148, 163, 184, 0.22));
+  background: var(--xk-tooltip-bg, rgba(15, 23, 42, 0.95));
+  -webkit-backdrop-filter: var(--xk-tooltip-backdrop, none);
+  backdrop-filter: var(--xk-tooltip-backdrop, none);
+  color: var(--xk-tooltip-text, rgba(226, 232, 240, 0.98));
+  box-shadow: 0 10px 30px var(--xk-tooltip-shadow, rgba(0, 0, 0, 0.55));
   font-size: calc(12px * var(--xk-font-scale));
   opacity: 0;
   transform: translateY(-2px);
   pointer-events: none;
   transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+/* When the portal tooltip system is enabled, hide legacy CodeMirror tooltips
+   that rely on data-tip + pseudo-elements (avoid double tooltips). */
+.xk-tooltip-portal .xkeen-cm-tool[data-tip]::after {
+  display: none !important;
 }
 
 .xkeen-cm-tool[data-tip]:hover::after,
@@ -2286,10 +2653,68 @@ button.top-tab-btn.active {
   resize: vertical;
 }
 
-.xray-log-filter,
+/* Live Xray logs: filter + selects (match the panel theme) */
+.xray-log-filter{
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--border, #374151);
+  background: var(--header-btn-bg, #020617);
+  color: var(--text, #e5e7eb);
+  box-sizing: border-box;
+  font-size: calc(13px * var(--xk-font-scale));
+  line-height: 1.15;
+  outline: none;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.40);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
 
-.xray-log-filter::placeholder {
+.xray-log-filter::placeholder{
   color: var(--muted, #6b7280);
+}
+
+.xray-log-filter:focus{
+  border-color: var(--accent, #60a5fa);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #60a5fa) 22%, transparent);
+}
+
+.xray-log-select{
+  border-radius: 9999px;
+  padding: 7px 34px 7px 12px;
+  font-size: calc(12px * var(--xk-font-scale));
+  border: 1px solid var(--border, #374151);
+  background: var(--header-btn-bg, #020617);
+  color: var(--text, #e5e7eb);
+  outline: none;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.40);
+  cursor: pointer;
+  line-height: 1.15;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a3b3c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px 14px;
+}
+
+.xray-log-select:focus{
+  border-color: var(--accent, #60a5fa);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #60a5fa) 22%, transparent);
+}
+
+html[data-theme="light"] .xray-log-select{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+
+.xray-log-select option{
+  background: var(--card-bg, #020617);
+  color: var(--text, #e5e7eb);
+}
+
+html[data-theme="light"] .xray-log-select option{
+  background: var(--card-bg, #ffffff);
+  color: var(--text, #111827);
 }
 
 
@@ -2552,6 +2977,30 @@ button.backup-icon-btn.backup-delete-btn {
   line-height: 1;
   white-space: nowrap;
   user-select: none;
+}
+
+/* Header badge: active Xray profile (classic vs hysteria2 fragments) */
+.xray-profile-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--text-muted, #94a3b8) 35%, transparent);
+  background: color-mix(in srgb, var(--text-muted, #94a3b8) 10%, transparent);
+  color: var(--text-muted, #94a3b8);
+  font-size: calc(12px * var(--xk-font-scale));
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.xray-profile-badge[data-profile="hys2"] {
+  border-color: var(--accent, #60a5fa);
+  background: color-mix(in srgb, var(--accent, #60a5fa) 12%, transparent);
+  color: var(--accent, #60a5fa);
 }
 
 .xray-logs-badge[data-state="on"] {
@@ -2826,15 +3275,25 @@ button.backup-icon-btn.backup-delete-btn {
   position: absolute;
   width: 16px;
   height: 16px;
+  left: auto;
   right: 6px;
   bottom: 6px;
   cursor: se-resize;
+  z-index: 5;
   opacity: 0.55;
   border-right: 2px solid rgba(148,163,184,0.7);
   border-bottom: 2px solid rgba(148,163,184,0.7);
   border-radius: 2px;
   user-select: none;
   touch-action: none;
+}
+
+/* Routing help modal: slightly larger resize handle (iframe makes pointer events trickier). */
+#xkeen-routing-help-modal .modal-resizer {
+  width: 20px;
+  height: 20px;
+  right: 10px;
+  bottom: 10px;
 }
 
 .modal-resizer::before {
@@ -3802,15 +4261,53 @@ textarea#json-editor-textarea {
 
 /* Xray log filter row */
 .log-filter-row {
-  margin: 8px 0;
+  margin: 8px 0 10px;
   display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0;
+  flex-wrap: nowrap;
 }
 
 .log-filter-row .xray-log-filter {
   flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  box-shadow: none;
+}
+
+.log-filter-row .xray-log-filter:focus{
+  /* Keep focus ring even though base shadow is removed for the joined group */
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #60a5fa) 22%, transparent);
+}
+
+.log-filter-row #xray-log-filter-clear{
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding: 7px 12px;
+  min-width: 44px;
+  line-height: 1;
+  box-shadow: none;
+  transform: none;
+  border-left: 0;
+}
+
+.log-filter-row #xray-log-filter-clear:hover,
+.log-filter-row #xray-log-filter-clear:active{
+  transform: none;
+  box-shadow: none;
+}
+
+/* Keep filter row usable on narrow screens */
+@media (max-width: 560px){
+  .log-filter-row{ flex-wrap: wrap; gap: 8px; }
+  .log-filter-row .xray-log-filter{
+    border-radius: 9999px;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.40);
+  }
+  .log-filter-row #xray-log-filter-clear{
+    border-radius: 9999px;
+    border-left: 1px solid var(--editor-btn-border, rgba(51,65,85,0.9));
+  }
 }
 
 
@@ -4713,6 +5210,30 @@ html[data-theme="light"] #outbounds-url {
   border-color: #d1d5db;
 }
 
+html[data-theme="light"] .outbounds-parse-box {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: #e5e7eb;
+}
+
+html[data-theme="light"] .outbounds-badge {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: #e5e7eb;
+  color: #111827;
+}
+
+html[data-theme="light"] .outbounds-kv-row {
+  background: rgba(249, 250, 251, 0.95);
+  border-color: #e5e7eb;
+}
+
+html[data-theme="light"] .outbounds-kv-row .k {
+  color: #4b5563;
+}
+
+html[data-theme="light"] .outbounds-kv-row .v {
+  color: #111827;
+}
+
 
 /* Светлая тема: кнопка переключения ядра и бейдж времени загрузки */
 html[data-theme="light"] .service-core-text {
@@ -5135,43 +5656,11 @@ html[data-theme="light"] .terminal-commands-mode-btn.is-active{
   line-height: 1;
 }
 
-/* Generic tooltip for any element with data-tooltip */
-.xk-tooltip{ position: relative; }
-.xk-tooltip::after{
-  content: attr(data-tooltip);
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(100% + 8px);
-  padding: 6px 8px;
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.98);
-  color: #e5e7eb;
-  font-size: calc(11px * var(--xk-font-scale));
-  line-height: 1.3;
-  white-space: normal;
-  max-width: 280px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 60;
-}
-.xk-tooltip::before{
-  content: "";
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 100%;
-  border-width: 6px;
-  border-style: solid;
-  border-color: transparent transparent rgba(15, 23, 42, 0.98) transparent;
-  opacity: 0;
-  pointer-events: none;
-  z-index: 59;
-}
-.xk-tooltip:hover::after,
-.xk-tooltip:hover::before{
-  opacity: 1;
+
+/* Legacy alias: keep .xk-tooltip as a marker (older markup).
+   Actual tooltip rendering uses the global [data-tooltip] rules above. */
+.xk-tooltip{
+  position: relative;
 }
 
 /* Destructive action button (used in confirm modals) */
@@ -5453,10 +5942,12 @@ button:disabled{
   line-height: 1;
   padding: 6px 8px;
   border-radius: 10px;
-  border: 1px solid var(--border, rgba(51,65,85,0.55));
-  background: color-mix(in srgb, var(--card-bg, #020617) 85%, transparent);
+  /* Use theme-aware button vars so the toggle is readable in both themes */
+  color: var(--editor-btn-text, #e5e7eb);
+  border: 1px solid var(--editor-btn-border, rgba(51,65,85,0.55));
+  background: color-mix(in srgb, var(--editor-btn-bg, rgba(255,255,255,0.04)) 85%, transparent);
 }
-.fm-toggle:hover{ background: color-mix(in srgb, var(--card-bg, #020617) 75%, transparent); }
+.fm-toggle:hover{ background: color-mix(in srgb, var(--editor-btn-bg, rgba(255,255,255,0.04)) 75%, transparent); }
 .fm-toggle input{
   position: absolute;
   opacity: 0;
@@ -5467,8 +5958,8 @@ button:disabled{
   width: 34px;
   height: 18px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--border, #334155) 75%, transparent);
-  border: 1px solid var(--fm-btn-border, var(--border, rgba(51,65,85,0.85)));
+  background: color-mix(in srgb, var(--editor-btn-border, rgba(51,65,85,0.85)) 75%, transparent);
+  border: 1px solid var(--fm-btn-border, var(--editor-btn-border, rgba(51,65,85,0.85)));
   position: relative;
   flex: 0 0 auto;
 }
@@ -5480,7 +5971,9 @@ button:disabled{
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--text, rgba(226,232,240,0.92));
+  /* Knob should stay "milky" in light theme, but still readable in dark */
+  background: var(--fm-toggle-knob-bg, rgba(226,232,240,0.92));
+  border: 1px solid var(--fm-toggle-knob-border, rgba(15,23,42,0.12));
   transition: transform 0.15s ease;
 }
 .fm-toggle input:checked + .fm-toggle-slider{
@@ -5527,7 +6020,8 @@ button:disabled{
   pill-shaped icon buttons.
 */
 .fm-bookmarks-select,
-.fm-target-select{
+.fm-target-select,
+.fm-bookmarks-btn{
   /* Match <button> + .btn-secondary visual language */
   border-radius: 9999px;
   background: var(--fm-btn-bg, var(--header-btn-bg, rgba(255,255,255,0.04)));
@@ -5571,7 +6065,8 @@ button:disabled{
 }
 
 .fm-bookmarks-select:hover,
-.fm-target-select:hover{
+.fm-target-select:hover,
+.fm-bookmarks-btn:hover{
   background: var(--fm-btn-hover-bg, var(--header-btn-hover-bg, rgba(255,255,255,0.06)));
   border-color: var(--fm-btn-hover-border, var(--header-btn-hover-border, rgba(148,163,184,0.55)));
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.9);
@@ -5579,7 +6074,8 @@ button:disabled{
 }
 
 .fm-bookmarks-select:active,
-.fm-target-select:active{
+.fm-target-select:active,
+.fm-bookmarks-btn:active{
   background: linear-gradient(135deg,
     color-mix(in srgb, var(--fm-btn-active-from, var(--editor-btn-active-from, #1d4ed8)) 40%, transparent),
     color-mix(in srgb, var(--fm-btn-active-to, var(--editor-btn-active-to, #2563eb)) 45%, transparent)
@@ -5590,7 +6086,8 @@ button:disabled{
 }
 
 .fm-bookmarks-select:focus,
-.fm-target-select:focus{
+.fm-target-select:focus,
+.fm-bookmarks-btn:focus{
   outline: none;
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--fm-btn-active-to, var(--editor-btn-active-to, #2563eb)) 22%, transparent),
@@ -5599,20 +6096,23 @@ button:disabled{
 
 /* Light theme: align with light buttons */
 html[data-theme="light"] .fm-bookmarks-select,
-html[data-theme="light"] .fm-target-select{
+html[data-theme="light"] .fm-target-select,
+html[data-theme="light"] .fm-bookmarks-btn{
   background: var(--fm-btn-bg, var(--header-btn-bg, #ffffff));
   border-color: var(--fm-btn-border, var(--header-btn-border, #d1d5db));
   color: var(--fm-btn-text, var(--header-btn-text, #111827));
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
 }
 html[data-theme="light"] .fm-bookmarks-select:hover,
-html[data-theme="light"] .fm-target-select:hover{
+html[data-theme="light"] .fm-target-select:hover,
+html[data-theme="light"] .fm-bookmarks-btn:hover{
   border-color: var(--fm-btn-hover-border, var(--header-btn-hover-border, #9ca3af));
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
   background: var(--fm-btn-hover-bg, var(--header-btn-hover-bg, #ffffff));
 }
 html[data-theme="light"] .fm-bookmarks-select:active,
-html[data-theme="light"] .fm-target-select:active{
+html[data-theme="light"] .fm-target-select:active,
+html[data-theme="light"] .fm-bookmarks-btn:active{
   background: color-mix(in srgb, var(--fm-btn-active-to, var(--editor-btn-active-to, #2563eb)) 12%, transparent);
   border-color: color-mix(in srgb, var(--fm-btn-active-to, var(--editor-btn-active-to, #2563eb)) 45%, transparent);
   box-shadow: 0 6px 16px color-mix(in srgb, var(--fm-btn-active-to, var(--editor-btn-active-to, #2563eb)) 18%, transparent);
@@ -5620,7 +6120,8 @@ html[data-theme="light"] .fm-target-select:active{
 
 /* Make native <select> dropdowns readable in dark theme (options are otherwise too pale on white popups) */
 html:not([data-theme="light"]) .fm-bookmarks-select,
-html:not([data-theme="light"]) .fm-target-select{
+html:not([data-theme="light"]) .fm-target-select,
+html:not([data-theme="light"]) .fm-bookmarks-btn{
   color-scheme: dark;
 }
 html:not([data-theme="light"]) .fm-bookmarks-select option,
@@ -6071,3 +6572,124 @@ html[data-theme="light"] .fm-progress-details{
   border-color: var(--border, rgba(15,23,42,0.12));
 }
 
+
+/* File Manager: bookmarks (pins) manager modal */
+.fm-bm-list{
+  display:flex;
+  flex-direction:column;
+  gap: 8px;
+  margin-top: 8px;
+  max-height: min(52vh, 520px);
+  overflow: auto;
+  padding-right: 2px;
+}
+.fm-bm-row{
+  display:flex;
+  gap: 8px;
+  align-items:center;
+}
+.fm-bm-row .terminal-input{
+  height: 32px;
+}
+.fm-bm-label{
+  flex: 0 0 220px;
+  min-width: 140px;
+}
+.fm-bm-path{
+  flex: 1 1 auto;
+  min-width: 180px;
+}
+.fm-bm-mini{
+  height: 32px;
+  min-width: 36px;
+  padding: 0 10px;
+  border-radius: 9999px;
+}
+
+
+
+/* Outbounds helper hints (protocol/type/security dropdowns) */
+.outbounds-hints{
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin: 10px 0 12px 0;
+}
+
+.outbounds-hints label{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.outbounds-hints .hint-label{
+  font-size: calc(12px * var(--xk-font-scale));
+  color: var(--muted, #94a3b8);
+  padding-left: 4px;
+}
+
+/* Slightly compact select paddings for the outbounds block */
+.outbounds-hints select.xray-log-select{
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+
+/* Outbounds mini-generator modal */
+.outbounds-gen-hints{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:flex-end;
+  margin: 6px 0 10px 0;
+}
+.outbounds-gen-hints label{ display:flex; flex-direction:column; gap:6px; }
+
+.outbounds-gen-grid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-items:end;
+}
+.outbounds-gen-grid label{ display:flex; flex-direction:column; gap:6px; }
+
+.outbounds-gen-preview{
+  /* Reuse the main panel textarea style (.xkeen-textarea) and just make it compact */
+  min-height: 96px;
+  max-height: min(38vh, 280px);
+  font-size: calc(13px * var(--xk-font-scale));
+  padding: 10px 12px;
+  border-radius: 8px;
+  line-height: 1.35;
+}
+
+/* Mihomo Import modal: YAML preview with minimal syntax highlighting (CodeMirror, read-only) */
+.xk-mihomo-import-preview.CodeMirror{
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  font-size: calc(13px * var(--xk-font-scale));
+  line-height: 1.35;
+}
+.xk-mihomo-import-preview .CodeMirror-scroll{
+  padding: 10px 12px;
+}
+
+.outbounds-gen-advanced{
+  margin-top: 10px;
+  padding: 10px 10px 8px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.18);
+}
+.outbounds-gen-advanced > summary{
+  cursor: pointer;
+  user-select: none;
+  font-weight: 600;
+  opacity: 0.9;
+}
+.outbounds-gen-advanced[open] > summary{ margin-bottom: 10px; }
+
+@media (max-width: 720px){
+  .outbounds-gen-grid{ grid-template-columns: 1fr; }
+}
