@@ -224,12 +224,25 @@
       const statusEl = $('inbounds-status');
       const backupsStatusEl = $('backups-status');
 
+      function _baseName(p, fallback) {
+        try {
+          if (!p) return fallback;
+          const parts = String(p).split(/\//);
+          const b = parts[parts.length - 1];
+          return b || fallback;
+        } catch (e) {
+          return fallback;
+        }
+      }
+
+      const fileLabel = _baseName(window.XKEEN_FILES && window.XKEEN_FILES.inbounds, '03_inbounds.json');
+
       try {
         const res = await fetch('/api/backup-inbounds', { method: 'POST' });
         const data = await res.json().catch(() => ({}));
 
         if (res.ok && data && data.ok) {
-          const msg = 'Бэкап 03_inbounds.json создан: ' + (data.filename || '');
+          const msg = 'Бэкап ' + fileLabel + ' создан: ' + (data.filename || '');
           if (statusEl) statusEl.textContent = msg;
           if (backupsStatusEl) backupsStatusEl.textContent = '';
           try { if (typeof showToast === 'function') showToast(msg, false); } catch (e) {}
@@ -240,13 +253,13 @@
             }
           } catch (e) {}
         } else {
-          const msg = 'Ошибка создания бэкапа 03_inbounds.json: ' + ((data && data.error) || 'неизвестная ошибка');
+          const msg = 'Ошибка создания бэкапа ' + fileLabel + ': ' + ((data && data.error) || 'неизвестная ошибка');
           if (statusEl) statusEl.textContent = msg;
           try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
         }
       } catch (e) {
         console.error(e);
-        const msg = 'Ошибка создания бэкапа 03_inbounds.json.';
+        const msg = 'Ошибка создания бэкапа ' + fileLabel + '.';
         if (statusEl) statusEl.textContent = msg;
         try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
       }
