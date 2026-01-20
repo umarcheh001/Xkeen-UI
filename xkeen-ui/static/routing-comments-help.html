@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Маршрутизация Xray — комментарии и примеры (05_routing.jsonc)</title>
+  <title>Маршрутизация Xray — комментарии и примеры (05_routing*.jsonc)</title>
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -253,8 +253,9 @@
 </head>
 <body>
 
-  <h1>Маршрутизация Xray (05_routing.jsonc)</h1>
-  <p>Эта страница объясняет, как правильно писать комментарии и правила в файле <code>05_routing.jsonc</code>, чтобы панель XKeen UI могла его загрузить и применить.</p>
+  <h1>Маршрутизация Xray (JSONC)</h1>
+  <p>Эта страница объясняет, как правильно писать комментарии и правила в файле routing-части Xray в формате <code>.jsonc</code> (JSON с комментариями), чтобы панель XKeen UI могла его загрузить и применить.</p>
+  <p><b>Важно:</b> имя файла зависит от профиля/ядра. Обычно это <code>05_routing.jsonc</code>, но для Hysteria2 может использоваться <code>05_routing_hys2.jsonc</code>.</p>
 
   <div class="card">
     <div class="tag">Кратко</div>
@@ -384,12 +385,12 @@
 
   <hr>
 
-  <h2>4. Готовый пример 05_routing.jsonc</h2>
+  <h2>4. Готовый пример 05_routing*.jsonc</h2>
 
-  <p>Ниже — рабочий шаблон <code>05_routing.jsonc</code>, который можно использовать как базу и редактировать под себя.</p>
+  <p>Ниже — рабочий шаблон <code>05_routing*.jsonc</code>, который можно использовать как базу и редактировать под себя.</p>
 
   <pre><code>/*
- * 05_routing.jsonc — пример с комментариями
+ * 05_routing*.jsonc — пример с комментариями
  *
  * Поддерживаются комментарии:
  *   // однострочный комментарий
