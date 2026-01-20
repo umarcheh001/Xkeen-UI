@@ -130,6 +130,8 @@
         const ruleGroupsSelectAll = document.getElementById("ruleGroupsSelectAll");
         const proxiesList = document.getElementById("proxiesList");
         const addProxyBtn = document.getElementById("addProxyBtn");
+        const bulkImportBtn = document.getElementById("bulkImportBtn");
+        const normalizeProxiesBtn = document.getElementById("normalizeProxiesBtn");
         const generateBtn = document.getElementById("generateBtn");
         const saveBtn = document.getElementById("saveBtn");
         const validateBtn = document.getElementById("validateBtn");
@@ -140,6 +142,21 @@
         const previewTextarea = document.getElementById("previewTextarea");
         const validationLogEl = document.getElementById("validationLog");
         const clearValidationLogBtn = document.getElementById("clearValidationLogBtn");
+
+        // Bulk import modal
+        const bulkImportModal = document.getElementById("bulkImportModal");
+        const bulkImportTextarea = document.getElementById("bulkImportTextarea");
+        const bulkImportClearExisting = document.getElementById("bulkImportClearExisting");
+        const bulkImportToSubscriptions = document.getElementById("bulkImportToSubscriptions");
+        const bulkImportDedup = document.getElementById("bulkImportDedup");
+        const bulkImportNameTemplate = document.getElementById("bulkImportNameTemplate");
+        const bulkImportGroupsTemplate = document.getElementById("bulkImportGroupsTemplate");
+        const bulkImportAutoGeo = document.getElementById("bulkImportAutoGeo");
+        const bulkImportAutoRegionGroup = document.getElementById("bulkImportAutoRegionGroup");
+        const bulkImportApplyBtn = document.getElementById("bulkImportApplyBtn");
+        const bulkImportOverwriteName = document.getElementById("bulkImportOverwriteName");
+        const bulkImportOverwriteGroups = document.getElementById("bulkImportOverwriteGroups");
+        const bulkImportApplyExistingBtn = document.getElementById("bulkImportApplyExistingBtn");
       
        
         let validationLogRaw = "";
@@ -723,8 +740,16 @@
           const typeLabel = document.createElement("label");
           typeLabel.textContent = "Тип узла";
           const typeSelect = document.createElement("select");
+          // Tooltip (portal tooltips will pick it from title)
+          typeSelect.title = "Выберите формат узла: авто-распознавание ссылки, конкретный тип (VLESS/Trojan/VMess/SS/Hysteria2), подписка (provider), WireGuard или YAML блок.";
           typeSelect.innerHTML = `
+            <option value="auto">Ссылка (auto)</option>
             <option value="vless">VLESS ссылка</option>
+            <option value="trojan">Trojan ссылка</option>
+            <option value="vmess">VMess ссылка</option>
+            <option value="ss">Shadowsocks ссылка</option>
+            <option value="hysteria2">Hysteria2 ссылка</option>
+            <option value="provider">Подписка (proxy-provider)</option>
             <option value="wireguard">WireGuard конфиг</option>
             <option value="yaml">YAML блок proxy</option>
           `;
@@ -737,9 +762,42 @@
           const nameInput = document.createElement("input");
           nameInput.type = "text";
           nameInput.placeholder = "My Node";
+          nameInput.title = "Имя узла (отображается в Clash/Mihomo UI и в селекторах).";
           nameWrap.appendChild(nameLabel);
           nameWrap.appendChild(nameInput);
-      
+
+          const prioWrap = document.createElement("div");
+          const prioLabel = document.createElement("label");
+          prioLabel.textContent = "Приоритет (опц.)";
+          const prioInput = document.createElement("input");
+          prioInput.type = "number";
+          prioInput.min = "0";
+          prioInput.step = "1";
+          prioInput.placeholder = "0";
+          prioInput.title = "Приоритет узла (опционально). Можно использовать для сортировки/удобства. 0 = по умолчанию.";
+          prioWrap.appendChild(prioLabel);
+          prioWrap.appendChild(prioInput);
+
+          const iconWrap = document.createElement("div");
+          const iconLabel = document.createElement("label");
+          iconLabel.textContent = "Icon URL (опц.)";
+          const iconInput = document.createElement("input");
+          iconInput.type = "text";
+          iconInput.placeholder = "https://.../icon.png";
+          iconInput.title = "URL иконки (опционально). Используется в Clash/Mihomo UI как значок узла.";
+          iconWrap.appendChild(iconLabel);
+          iconWrap.appendChild(iconInput);
+          const tagsWrap = document.createElement("div");
+          const tagsLabel = document.createElement("label");
+          tagsLabel.textContent = "Теги (опц.)";
+          const tagsInput = document.createElement("input");
+          tagsInput.type = "text";
+          tagsInput.placeholder = "work,home";
+          tagsInput.title = "Теги узла (опционально). Укажите через запятую: work,home";
+          tagsWrap.appendChild(tagsLabel);
+          tagsWrap.appendChild(tagsInput);
+
+
           const groupsWrap = document.createElement("div");
           groupsWrap.className = "full";
           const groupsLabel = document.createElement("label");
@@ -747,6 +805,7 @@
           const groupsInput = document.createElement("input");
           groupsInput.type = "text";
           groupsInput.placeholder = "Заблок. сервисы,YouTube";
+          groupsInput.title = "Группы (через запятую). Узел будет добавлен в эти селекторы/группы.";
           groupsWrap.appendChild(groupsLabel);
           groupsWrap.appendChild(groupsInput);
       
@@ -757,30 +816,67 @@
           const dataArea = document.createElement("textarea");
           dataArea.rows = 4;
           dataArea.placeholder = "vless://...";
+          dataArea.title = "Вставьте ссылку/конфиг для узла. Тип зависит от выбранного формата выше.";
           dataWrap.appendChild(dataLabel);
           dataWrap.appendChild(dataArea);
       
           body.appendChild(typeWrap);
           body.appendChild(nameWrap);
+          body.appendChild(prioWrap);
+          body.appendChild(iconWrap);
+          body.appendChild(tagsWrap);
           body.appendChild(groupsWrap);
           body.appendChild(dataWrap);
       
           function updateTypeUI() {
             const t = typeSelect.value;
-            if (t === "vless") {
-              typeBadge.textContent = "Тип: vless";
-              dataLabel.textContent = "VLESS ссылка";
-              dataArea.placeholder = "vless://...";
+            if (t === "auto") {
+              typeBadge.textContent = "Тип: auto";
+              dataLabel.textContent = "Ссылка (auto)";
+              dataArea.placeholder = "vless://... или https://sub...";
+              dataArea.title = "Авто-режим: вставьте ссылку (vless/trojan/vmess/ss/hysteria2/hy2) или URL подписки (https://...).";
+              dataArea.rows = 4;
+            } else if (t === "provider") {
+              typeBadge.textContent = "Тип: provider";
+              dataLabel.textContent = "URL подписки";
+              dataArea.placeholder = "https://example.com/subscription";
+              dataArea.title = "URL подписки (proxy-provider). Будет добавлен в proxy-providers.";
+              dataArea.rows = 3;
+            } else if (t === "vless" || t === "trojan" || t === "vmess" || t === "ss" || t === "hysteria2") {
+              typeBadge.textContent = `Тип: ${t}`;
+              if (t === "vless") {
+                dataLabel.textContent = "VLESS ссылка";
+                dataArea.placeholder = "vless://...";
+                dataArea.title = "Вставьте VLESS ссылку (vless://...).";
+              } else if (t === "trojan") {
+                dataLabel.textContent = "Trojan ссылка";
+                dataArea.placeholder = "trojan://...";
+                dataArea.title = "Вставьте Trojan ссылку (trojan://...).";
+              } else if (t === "vmess") {
+                dataLabel.textContent = "VMess ссылка";
+                dataArea.placeholder = "vmess://...";
+                dataArea.title = "Вставьте VMess ссылку (vmess://...).";
+              } else if (t === "ss") {
+                dataLabel.textContent = "Shadowsocks ссылка";
+                dataArea.placeholder = "ss://...";
+                dataArea.title = "Вставьте Shadowsocks ссылку (ss://...).";
+              } else {
+                dataLabel.textContent = "Hysteria2 ссылка";
+                dataArea.placeholder = "hysteria2://... или hy2://...";
+                dataArea.title = "Вставьте Hysteria2 ссылку (hysteria2://... или hy2://...).";
+              }
               dataArea.rows = 4;
             } else if (t === "wireguard") {
               typeBadge.textContent = "Тип: wireguard";
               dataLabel.textContent = "WireGuard конфиг";
               dataArea.placeholder = "[Interface]\nAddress = ...";
+              dataArea.title = "Вставьте содержимое WireGuard-конфига (.conf): [Interface]/[Peer] и т.д.";
               dataArea.rows = 6;
             } else {
               typeBadge.textContent = "Тип: yaml";
               dataLabel.textContent = "YAML блок proxy";
               dataArea.placeholder = "- name: MyNode\n  type: trojan\n  server: ...";
+              dataArea.title = "Вставьте YAML-блок узла proxy (как в конфиге Mihomo).";
               dataArea.rows = 6;
             }
           }
@@ -791,6 +887,9 @@
             if (initial.kind) typeSelect.value = initial.kind;
             if (initial.name) nameInput.value = initial.name;
             if (initial.groups) groupsInput.value = initial.groups;
+            if (initial.priority !== undefined && initial.priority !== null && String(initial.priority) !== "") prioInput.value = initial.priority;
+            if (initial.icon) iconInput.value = initial.icon;
+            if (initial.tags) tagsInput.value = initial.tags;
             if (initial.data) dataArea.value = initial.data;
             updateTypeUI();
           }
@@ -800,6 +899,7 @@
       
           const ctrl = {
             el: wrapper,
+            _inputs: { typeSelect, nameInput, groupsInput, dataArea, iconInput, prioInput, tagsInput },
             getState: () => {
               const kind = typeSelect.value;
               const name = nameInput.value.trim();
@@ -808,13 +908,26 @@
                 .map(s => s.trim())
                 .filter(Boolean);
               const data = dataArea.value;
+              const icon = String(iconInput.value || "").trim();
+              const tagsRaw = String(tagsInput.value || "").trim();
+              const tags = tagsRaw
+                .split(/[,;]+/)
+                .map(s => s.trim())
+                .filter(Boolean);
+              const prioRaw = String(prioInput.value || "").trim();
+              const prio = prioRaw ? parseInt(prioRaw, 10) : null;
+
               if (!data.trim()) return null;
               const out = { kind };
               if (name) out.name = name;
               if (groups.length) out.groups = groups;
-              if (kind === "vless") out.link = data.trim();
-              else if (kind === "wireguard") out.config = data;
-              else out.yaml = data;
+              if (icon) out.icon = icon;
+              if (tags.length) out.tags = tags;
+              if (prio !== null && !Number.isNaN(prio)) out.priority = prio;
+
+              if (kind === "wireguard") out.config = data;
+              else if (kind === "yaml") out.yaml = data;
+              else out.link = data.trim();
               return out;
             },
           };
@@ -822,8 +935,790 @@
           proxiesList.appendChild(wrapper);
           proxyControllers.push(ctrl);
         }
+
+        // ----- bulk import (like Outbound Generator) -----
+        function getExistingSubscriptionUrls() {
+          try {
+            return Array.from(subscriptionsList.querySelectorAll("input[type='text']"))
+              .map(i => (i.value || "").trim())
+              .filter(Boolean);
+          } catch (e) {
+            return [];
+          }
+        }
+
+        function getExistingProxyLinks() {
+          const out = [];
+          try {
+            proxyControllers.forEach((c) => {
+              const st = c && typeof c.getState === 'function' ? c.getState() : null;
+              if (!st) return;
+              if (st.link) out.push(String(st.link).trim());
+            });
+          } catch (e) {}
+          return out.filter(Boolean);
+        }
+
+        function normalizeImportedLine(line) {
+          if (!line) return "";
+          return String(line)
+            .replace(/\uFEFF/g, "")
+            .trim();
+        }
+
+        function safeDecodeURIComponent(s) {
+          try { return decodeURIComponent(s); } catch (e) { return s; }
+        }
+
+        function parseGroupList(groupsStr) {
+          const raw = String(groupsStr || "").trim();
+          if (!raw) return [];
+          const cleaned = raw
+            .replace(/^\[|\]$/g, "")
+            .replace(/^\(|\)$/g, "")
+            .replace(/^\{|\}$/g, "")
+            .trim();
+          if (!cleaned) return [];
+          return cleaned
+            .split(/[,;]+/)
+            .map(s => String(s || "").trim())
+            .filter(Boolean);
+        }
+
+        function looksLikeGroupsToken(token) {
+          const t = String(token || "").trim();
+          if (!t) return false;
+          if (t.includes(",") || t.includes(";")) return true;
+          // short codes like HK/SG/JP/US etc
+          if (/^[A-Z0-9]{2,5}$/.test(t)) return true;
+          // Allow forcing groups with @ prefix for short GEO codes or multi-groups
+          if (t.startsWith("@")) {
+            const rest = t.slice(1).trim();
+            if (rest.includes(",") || rest.includes(";")) return true;
+            if (/^[A-Z0-9]{2,5}$/.test(rest)) return true;
+          }
+          // Emoji flags or icons in a single token
+          try {
+            if (/^\p{Extended_Pictographic}{1,3}$/u.test(t)) return true;
+          } catch (e) {
+            // ignore if unicode properties unsupported
+          }
+          return false;
+        }
+
+        function looksLikeIconToken(token) {
+          const t = String(token || "").trim();
+          if (!t) return false;
+          const raw = t.replace(/^icon\s*:\s*/i, "").trim();
+          if (!raw) return false;
+          if (/^https?:\/\//i.test(raw)) {
+            if (/\.(png|jpe?g|svg|webp)(\?|#|$)/i.test(raw)) return true;
+            if (/IconSet|Qure@|group-icons|koolson|qure/i.test(raw)) return true;
+          }
+          return false;
+        }
+
+        function stripIconPrefix(token) {
+          return String(token || "").trim().replace(/^icon\s*:\s*/i, "").trim();
+        }
+
+        function parsePriorityToken(token) {
+          const t = String(token || "").trim();
+          if (!t) return null;
+          let m = t.match(/^(?:p|prio|priority)\s*[:=]?\s*(\d{1,4})$/i);
+          if (m) {
+            try {
+              const v = parseInt(m[1], 10);
+              if (!Number.isNaN(v)) return v;
+            } catch (e) {}
+          }
+          m = t.match(/^(\d{1,4})$/);
+          if (m) {
+            try {
+              const v = parseInt(m[1], 10);
+              if (!Number.isNaN(v)) return v;
+            } catch (e) {}
+          }
+          return null;
+        }
+
+        function parseTagsToken(token) {
+          const t = String(token || "").trim();
+          if (!t) return "";
+          const m = t.match(/^(?:tag|tags|label|labels|t)\s*[:=]\s*(.+)$/i);
+          if (m) return String(m[1] || "").trim();
+          return "";
+        }
+
+
+        function isHttpUrlToken(token) {
+          const t = String(token || "").trim();
+          return /^https?:\/\//i.test(t);
+        }
+
+        function isProxyUriToken(token) {
+          const t = String(token || "").trim();
+          return /^(vless|trojan|vmess|ss|hysteria2|hy2):\/\//i.test(t);
+        }
+
+        function guessGeoFromText(text) {
+          const s = String(text || "").toUpperCase();
+          if (!s) return "";
+
+          // Emoji flags (most common)
+          const emojiMap = {
+            "🇭🇰": "HK", "🇸🇬": "SG", "🇯🇵": "JP", "🇰🇷": "KR", "🇺🇸": "US",
+            "🇬🇧": "GB", "🇩🇪": "DE", "🇳🇱": "NL", "🇫🇷": "FR", "🇷🇺": "RU",
+            "🇹🇷": "TR", "🇦🇪": "AE", "🇮🇳": "IN", "🇨🇦": "CA", "🇦🇺": "AU",
+            "🇮🇹": "IT", "🇪🇸": "ES", "🇸🇪": "SE", "🇳🇴": "NO", "🇫🇮": "FI",
+          };
+          for (const k in emojiMap) {
+            if (Object.prototype.hasOwnProperty.call(emojiMap, k) && String(text || "").includes(k)) {
+              return emojiMap[k];
+            }
+          }
+
+          const rules = [
+            [/\bHK\b|HONG\s*KONG|HKG/i, "HK"],
+            [/\bSG\b|SINGAPORE/i, "SG"],
+            [/\bJP\b|JAPAN|TOKYO|OSAKA/i, "JP"],
+            [/\bKR\b|KOREA|SEOUL/i, "KR"],
+            [/\bUS\b|USA|UNITED\s*STATES|NEW\s*YORK|LOS\s*ANGELES|CHICAGO/i, "US"],
+            [/\bGB\b|UK\b|UNITED\s*KINGDOM|LONDON/i, "GB"],
+            [/\bDE\b|GERMANY|BERLIN|FRANKFURT/i, "DE"],
+            [/\bNL\b|NETHERLANDS|AMSTERDAM/i, "NL"],
+            [/\bFR\b|FRANCE|PARIS/i, "FR"],
+            [/\bTR\b|TURKEY|ISTANBUL/i, "TR"],
+            [/\bAE\b|UAE\b|DUBAI|ABU\s*DHABI/i, "AE"],
+          ];
+          for (const [rx, geo] of rules) {
+            if (rx.test(s)) return geo;
+          }
+          return "";
+        }
+
+        function geoToFlag(geo) {
+          const g = String(geo || "").trim().toUpperCase();
+          if (!g) return "";
+          if (g.length === 2 && /^[A-Z]{2}$/.test(g)) {
+            try {
+              const A = 0x1F1E6;
+              const cp1 = A + (g.charCodeAt(0) - 65);
+              const cp2 = A + (g.charCodeAt(1) - 65);
+              return String.fromCodePoint(cp1, cp2);
+            } catch (e) {
+              return "";
+            }
+          }
+          return "";
+        }
+
+        function geoToRegionName(geo) {
+          const g = String(geo || "").trim().toUpperCase();
+          const m = {
+            "HK": "Hong Kong",
+            "SG": "Singapore",
+            "JP": "Japan",
+            "KR": "Korea",
+            "US": "USA",
+            "GB": "UK",
+            "DE": "Germany",
+            "NL": "Netherlands",
+            "FR": "France",
+            "TR": "Turkey",
+            "AE": "UAE",
+            "RU": "Russia",
+            "IN": "India",
+            "CA": "Canada",
+            "AU": "Australia",
+            "IT": "Italy",
+            "ES": "Spain",
+            "SE": "Sweden",
+            "NO": "Norway",
+            "FI": "Finland",
+          };
+          return m[g] || "";
+        }
+
+       
+
+        function geoToRegionGroup(geo) {
+          const g = String(geo || "").trim().toUpperCase();
+          if (!g) return "";
+
+          const ASIA = new Set(["CN","HK","MO","TW","JP","KR","SG","TH","VN","MY","ID","PH","IN","PK","BD","LK","NP","KH","LA","MM","BN"]);
+          const EUROPE = new Set(["DE","NL","FR","GB","UK","IT","ES","PT","BE","LU","CH","AT","CZ","PL","SK","HU","RO","BG","GR","SE","NO","DK","FI","EE","LV","LT","IE","IS","SI","HR","RS","BA","ME","MK","AL","MD","UA"]);
+          const AMERICA = new Set(["US","CA","MX","BR","AR","CL","CO","PE","VE","UY","BO","EC","PA","CR","GT","HN","SV","NI","DO","CU","PR"]);
+          const CIS = new Set(["RU","BY","KZ","UZ","KG","TJ","TM","AZ","AM","GE"]);
+          const MIDEAST = new Set(["TR","AE","SA","QA","KW","OM","BH","IL","JO","LB","SY","IQ","IR","YE","PS"]);
+          const OCEANIA = new Set(["AU","NZ"]);
+          const AFRICA = new Set(["ZA","EG","MA","DZ","TN","NG","KE","ET","GH","UG","TZ","CM","SN"]);
+
+          if (ASIA.has(g)) return "Asia";
+          if (EUROPE.has(g)) return "Europe";
+          if (AMERICA.has(g)) return "America";
+          if (CIS.has(g)) return "CIS";
+          if (MIDEAST.has(g)) return "MiddleEast";
+          if (OCEANIA.has(g)) return "Oceania";
+          if (AFRICA.has(g)) return "Africa";
+          return "";
+        }
+
+        function extractLinkMeta(link) {
+
+          const out = {
+            type: "",
+            host: "",
+            port: "",
+            nameFromLink: "",
+            geo: "",
+          };
+          const s = String(link || "").trim();
+          if (!s) return out;
+
+          const m = s.match(/^([a-z0-9+.-]+):\/\//i);
+          if (m) out.type = String(m[1] || "").toLowerCase();
+
+          // VMess base64 json
+          if (out.type === "vmess") {
+            try {
+              const b64 = s.slice(8);
+              const pad = b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), "=");
+              const raw = atob(pad.replace(/-/g, "+").replace(/_/g, "/"));
+              const j = JSON.parse(raw);
+              if (j && j.add) out.host = String(j.add);
+              if (j && j.port) out.port = String(j.port);
+              if (j && j.ps) out.nameFromLink = String(j.ps);
+            } catch (e) {}
+            out.geo = guessGeoFromText(out.nameFromLink || out.host);
+            return out;
+          }
+
+          // Generic URL parsing for custom schemes
+          try {
+            const u = new URL(s);
+            out.host = String(u.hostname || "");
+            out.port = String(u.port || "");
+            const h = String(u.hash || "").replace(/^#/, "");
+            if (h) out.nameFromLink = safeDecodeURIComponent(h);
+          } catch (e) {
+            // ignore
+          }
+
+          out.geo = guessGeoFromText(out.nameFromLink || out.host);
+          return out;
+        }
+
+        function applyTemplate(tpl, meta) {
+          const t = String(tpl || "").trim();
+          if (!t) return "";
+          const map = {
+            name: String(meta.name || ""),
+            type: String(meta.type || ""),
+            host: String(meta.host || ""),
+            port: String(meta.port || ""),
+            geo: String(meta.geo || ""),
+            flag: String(meta.flag || ""),
+            region: String(meta.region || ""),
+            region_group: String(meta.region_group || ""),
+            group: String(meta.group || ""),
+            groups: String(meta.groups || ""),
+            tags: String(meta.tags || ""),
+            index: String(meta.index || ""),
+          };
+          return t.replace(/\{(name|type|host|port|geo|flag|region|region_group|group|groups|tags|index)\}/g, (_, k) => map[k] || "").trim();
+        }
+
+        function guessNameFromLink(link) {
+          const meta = extractLinkMeta(link);
+          return meta.nameFromLink || "";
+        }
+
+        function parseImportLine(line) {
+          const raw = normalizeImportedLine(line);
+          if (!raw) return null;
+          if (raw.startsWith("#")) return null;
+
+          // Support formats:
+          // 1) link
+          // 2) name|link
+          // 3) name|link|groups
+          // 4) name|link|groups|icon|priority
+          // 5) groups|link
+          // 6) name|groups|link
+          // 7) name - link
+          let name = "";
+          let groups = "";
+          let link = "";
+          let icon = "";
+          let priority = null;
+          let tags = "";
+
+          const consumeAux = (token) => {
+            const t = String(token || "").trim();
+            if (!t) return null;
+
+            const pr = parsePriorityToken(t);
+            if (pr !== null && priority === null) {
+              priority = pr;
+              return { kind: 'priority', value: pr };
+            }
+
+            if (looksLikeIconToken(t) && !icon) {
+              icon = stripIconPrefix(t);
+              return { kind: 'icon', value: icon };
+            }
+
+            // tags: tag:work / t=work / @work
+            const tg = parseTagsToken(t);
+            if (tg && !tags) {
+              tags = tg;
+              return { kind: 'tags', value: tags };
+            }
+            if (!tags && t.startsWith("@")) {
+              const rest = t.slice(1).trim();
+              // '@HK' can be forced groups token; treat as tag only for non-geo words
+              if (rest && !(rest.includes(",") || rest.includes(";")) && !/^[A-Z0-9]{2,5}$/.test(rest)) {
+                tags = rest;
+                return { kind: 'tags', value: tags };
+              }
+            }
+
+            return null;
+          };
+
+          if (raw.includes("|")) {
+            const partsRaw = raw.split("|").map(s => String(s || "").trim());
+            const parts = partsRaw.filter(p => String(p || "").trim() !== "");
+
+            let linkIdx = parts.findIndex(p => isProxyUriToken(p));
+            if (linkIdx < 0) linkIdx = parts.findIndex(p => isHttpUrlToken(p));
+
+            if (linkIdx >= 0) {
+              link = parts[linkIdx];
+
+              const leftRaw = parts.slice(0, linkIdx).map(s => s.trim()).filter(Boolean);
+              const rightRaw = parts.slice(linkIdx + 1).map(s => s.trim()).filter(Boolean);
+
+              const left = [];
+              leftRaw.forEach((t) => {
+                if (!consumeAux(t)) left.push(t)
+              });
+
+              const right = [];
+              rightRaw.forEach((t) => {
+                if (!consumeAux(t)) right.push(t)
+              });
+
+              // Parse left side into name/groups by token heuristics.
+              const nameParts = [];
+              const groupParts = [];
+
+              if (left.length === 1) {
+                if (looksLikeGroupsToken(left[0])) groupParts.push(left[0]);
+                else nameParts.push(left[0]);
+              } else if (left.length === 2) {
+                const a = left[0];
+                const b = left[1];
+                const aIsG = looksLikeGroupsToken(a);
+                const bIsG = looksLikeGroupsToken(b);
+                if (aIsG && !bIsG) {
+                  groupParts.push(a);
+                  nameParts.push(b);
+                } else if (!aIsG && bIsG) {
+                  nameParts.push(a);
+                  groupParts.push(b);
+                } else {
+                  // ambiguous -> treat both as name
+                  nameParts.push(a, b);
+                }
+              } else if (left.length > 2) {
+                left.forEach((t) => {
+                  if (looksLikeGroupsToken(t)) groupParts.push(t);
+                  else nameParts.push(t);
+                });
+              }
+
+              name = nameParts.join(" ").trim();
+              groups = groupParts.join(",").trim();
+
+              // Right side tokens are treated as groups by default.
+              if (right.length) {
+                const r = right.join("|").trim();
+                groups = (groups ? (groups + "," + r) : r);
+              }
+
+              // Cleanup group string: remove @ prefix used as tag
+              groups = String(groups || "")
+                .split(/[,;]+/)
+                .map(x => String(x || "").trim().replace(/^@/, ""))
+                .filter(Boolean)
+                .join(",");
+
+            } else {
+              // No scheme part, fallback to raw
+              link = raw;
+            }
+
+          } else {
+            const m = raw.match(/(vless|trojan|vmess|ss|hysteria2|hy2|https?):\/\//i);
+            if (m && typeof m.index === 'number' && m.index > 0) {
+              name = raw.slice(0, m.index).trim().replace(/[\-–—:]+\s*$/, "").trim();
+              link = raw.slice(m.index).trim();
+            } else {
+              link = raw;
+            }
+          }
+
+          link = (link || "").trim();
+          if (!link) return null;
+
+          const isHttpUrl = /^https?:\/\//i.test(link);
+
+          // Do not treat pure image URLs as subscriptions
+          if (isHttpUrl && looksLikeIconToken(link)) {
+            return null;
+          }
+
+          if (!name) name = guessNameFromLink(link);
+
+          if (isHttpUrl) {
+            return { type: 'subscription', url: link, name };
+          }
+
+          // Proxy link
+          return {
+            type: 'proxy',
+            kind: 'auto',
+            name: name || "",
+            groups: groups || "",
+            icon: icon || "",
+            priority: priority,
+            tags: tags || "",
+            data: link,
+          };
+        }
+
+        function buildImportedProxy(parsed, idx, opts) {
+          const link = String(parsed.data || "").trim();
+          const meta = extractLinkMeta(link);
+          const rawName = String(parsed.name || "").trim();
+          const derivedName = meta.nameFromLink || guessNameFromLink(link) || "";
+          const baseName = rawName || derivedName || (meta.host ? (meta.host + (meta.port ? (":" + meta.port) : "")) : "");
+
+          let groupsList = parseGroupList(parsed.groups);
+
+          const geo = meta.geo || (opts.autoGeo ? guessGeoFromText(baseName || meta.host) : "");
+          const flag = geoToFlag(geo);
+          const region = geoToRegionName(geo);
+          const region_group = geoToRegionGroup(geo);
+          const tags = String(parsed.tags || "").trim();
+
+
+          if (!groupsList.length) {
+            const tplGroups = String(opts.groupsTemplate || "").trim();
+            if (tplGroups) {
+              const rendered = applyTemplate(tplGroups, {
+                name: baseName,
+                type: meta.type,
+                host: meta.host,
+                port: meta.port,
+                geo,
+                flag,
+                region,
+                region_group,
+                group: "",
+                groups: "",
+                tags,
+                index: idx,
+              });
+              groupsList = parseGroupList(rendered);
+            }
+          }
+
+          if (!groupsList.length && opts.autoGeo && geo) {
+            groupsList = [geo];
+          }
+
+          if (opts.autoRegionGroup && region_group) {
+            if (!groupsList.includes(region_group)) {
+              const geoPos = geo ? groupsList.findIndex(g => String(g || '').trim().toUpperCase() === geo) : -1;
+              if (geoPos >= 0) groupsList.splice(geoPos + 1, 0, region_group);
+              else groupsList.push(region_group);
+            }
+          }
+
+          const groupFirst = groupsList.length ? groupsList[0] : "";
+          const nameTemplate = String(opts.nameTemplate || "{name}").trim() || "{name}";
+          const finalName = applyTemplate(nameTemplate, {
+            name: baseName,
+            type: meta.type,
+            host: meta.host,
+            port: meta.port,
+            geo,
+            flag,
+            region,
+            region_group,
+            group: groupFirst,
+            groups: groupsList.join(","),
+            tags,
+            index: idx,
+          }) || baseName;
+
+          let pr = parsed.priority;
+          if (typeof pr === 'string') pr = parsePriorityToken(pr);
+          if (typeof pr !== 'number' || Number.isNaN(pr)) pr = null;
+
+          return {
+            kind: 'auto',
+            name: finalName,
+            groups: groupsList.join(', '),
+            icon: String(parsed.icon || "").trim(),
+            priority: pr,
+            tags: tags,
+            data: link,
+          };
+        }
+
+        function clearAllProxies() {
+          try {
+            proxyControllers.length = 0;
+            while (proxiesList.firstChild) proxiesList.removeChild(proxiesList.firstChild);
+          } catch (e) {}
+        }
+
+        function addSubscriptionsToUI(urls, dedup = true) {
+          if (!urls || !urls.length) return 0;
+          const existing = getExistingSubscriptionUrls();
+          const seen = new Set(existing.map(u => String(u).trim()));
+          let added = 0;
+
+          urls.forEach((u) => {
+            const url = String(u || "").trim();
+            if (!url) return;
+            if (dedup && seen.has(url)) return;
+            seen.add(url);
+
+            // If the list contains a single empty row, fill it first.
+            const inputs = Array.from(subscriptionsList.querySelectorAll("input[type='text']"));
+            const empty = inputs.find(i => !(i.value || "").trim());
+            if (empty) {
+              empty.value = url;
+            } else {
+              subscriptionsList.appendChild(createSubscriptionRow(url));
+            }
+            added += 1;
+          });
+
+          return added;
+        }
+
+        function doBulkImport() {
+          if (!bulkImportTextarea) return;
+          const text = String(bulkImportTextarea.value || "");
+          const clearExisting = !!(bulkImportClearExisting && bulkImportClearExisting.checked);
+          const toSubs = !!(bulkImportToSubscriptions && bulkImportToSubscriptions.checked);
+          const dedup = !!(bulkImportDedup && bulkImportDedup.checked);
+          const nameTemplate = (bulkImportNameTemplate && bulkImportNameTemplate.value) ? String(bulkImportNameTemplate.value) : "{name}";
+          const groupsTemplate = (bulkImportGroupsTemplate && bulkImportGroupsTemplate.value) ? String(bulkImportGroupsTemplate.value) : "";
+          const autoGeo = !!(bulkImportAutoGeo && bulkImportAutoGeo.checked);
+          const autoRegionGroup = !!(bulkImportAutoRegionGroup && bulkImportAutoRegionGroup.checked);
+
+          const lines = text.replace(/\r\n/g, "\n").split("\n");
+          const subs = [];
+          const proxies = [];
+          const unknown = [];
+
+          const existingSubs = new Set(getExistingSubscriptionUrls().map(s => String(s).trim()));
+          const existingLinks = new Set(getExistingProxyLinks().map(s => String(s).trim()));
+          const localSeen = new Set();
+
+          let proxyIdx = 0;
+          lines.forEach((line) => {
+            const parsed = parseImportLine(line);
+            if (!parsed) return;
+
+            if (parsed.type === 'subscription') {
+              const key = String(parsed.url).trim();
+              if (dedup && (existingSubs.has(key) || localSeen.has(key))) return;
+              localSeen.add(key);
+              subs.push(key);
+              return;
+            }
+            if (parsed.type === 'proxy') {
+              const key = String(parsed.data).trim();
+              if (dedup && (existingLinks.has(key) || localSeen.has(key))) return;
+              localSeen.add(key);
+              proxyIdx += 1;
+              proxies.push(buildImportedProxy(parsed, proxyIdx, { nameTemplate, groupsTemplate, autoGeo, autoRegionGroup }));
+              return;
+            }
+
+            unknown.push(String(line || "").trim());
+          });
+
+          if (!subs.length && !proxies.length) {
+            setStatus("Не нашёл валидных строк для импорта.", "err");
+            try { toast("Не нашёл валидных строк для импорта.", 'error'); } catch (e) {}
+            return;
+          }
+
+          if (clearExisting) {
+            clearAllProxies();
+          }
+
+          let addedSubs = 0;
+          if (toSubs && subs.length) {
+            addedSubs = addSubscriptionsToUI(subs, true);
+          }
+
+          let addedProxies = 0;
+          proxies.forEach((p) => {
+            createProxyCard({
+              kind: p.kind,
+              name: p.name || "",
+              groups: p.groups || "",
+              icon: p.icon || "",
+              priority: (p.priority !== null && p.priority !== undefined) ? p.priority : "",
+              tags: p.tags || "",
+              data: p.data,
+            });
+            addedProxies += 1;
+          });
+
+          // Clear textarea for convenience
+          try { bulkImportTextarea.value = ""; } catch (e) {}
+          hideBulkImportModal();
+
+          const msg = `Импортировано: узлов ${addedProxies}` + (toSubs ? `, подписок ${addedSubs}` : "") + ".";
+          setStatus(msg, "ok");
+          try { toast(msg, 'success'); } catch (e) {}
+
+          // Autopreview
+          schedulePreview(200);
+        }
       
         // ----- collect state -----
+
+
+        function applyTemplatesToExistingProxies() {
+          const nameTemplate = String((bulkImportNameTemplate && bulkImportNameTemplate.value) || "{name}").trim() || "{name}";
+          const groupsTemplate = String((bulkImportGroupsTemplate && bulkImportGroupsTemplate.value) || "").trim();
+          const autoGeo = !!(bulkImportAutoGeo && bulkImportAutoGeo.checked);
+          const autoRegionGroup = !!(bulkImportAutoRegionGroup && bulkImportAutoRegionGroup.checked);
+          const overwriteName = !!(bulkImportOverwriteName && bulkImportOverwriteName.checked);
+          const overwriteGroups = !!(bulkImportOverwriteGroups && bulkImportOverwriteGroups.checked);
+
+          let changedNodes = 0;
+          let changedFields = 0;
+
+          try {
+            proxyControllers.forEach((c, i) => {
+              const inputs = c && c._inputs;
+              if (!inputs) return;
+
+              const kind = String(inputs.typeSelect && inputs.typeSelect.value || "").toLowerCase();
+              if (kind === "wireguard" || kind === "yaml" || kind === "provider") return;
+
+              const link = String(inputs.dataArea && inputs.dataArea.value || "").trim();
+              if (!link) return;
+              if (/^https?:\/\//i.test(link)) return; // likely subscription pasted into proxy field
+
+              const meta = extractLinkMeta(link);
+              const existingName = String(inputs.nameInput && inputs.nameInput.value || "").trim();
+              const existingGroupsStr = String(inputs.groupsInput && inputs.groupsInput.value || "").trim();
+
+              const derivedName = meta.nameFromLink || guessNameFromLink(link) || "";
+              const baseName = existingName || derivedName || (meta.host ? (meta.host + (meta.port ? (":" + meta.port) : "")) : "");
+
+              let groupsList = parseGroupList(existingGroupsStr);
+              if (overwriteGroups) groupsList = [];
+
+              const geo = meta.geo || (autoGeo ? guessGeoFromText(baseName || meta.host) : "");
+              const flag = geoToFlag(geo);
+              const region = geoToRegionName(geo);
+              const region_group = geoToRegionGroup(geo);
+              const tags = String((inputs.tagsInput && inputs.tagsInput.value) || "").trim();
+
+
+              if (!groupsList.length) {
+                if (groupsTemplate) {
+                  const rendered = applyTemplate(groupsTemplate, {
+                    name: baseName,
+                    type: meta.type,
+                    host: meta.host,
+                    port: meta.port,
+                    geo,
+                    flag,
+                    region,
+                    region_group,
+                    group: "",
+                    groups: "",
+                    tags,
+                    index: i + 1,
+                  });
+                  groupsList = parseGroupList(rendered);
+                }
+              }
+
+              if (!groupsList.length && autoGeo && geo) {
+                groupsList = [geo];
+              }
+
+              if (autoRegionGroup && region_group) {
+                if (!groupsList.includes(region_group)) {
+                  const geoPos = geo ? groupsList.findIndex(g => String(g || '').trim().toUpperCase() === geo) : -1;
+                  if (geoPos >= 0) groupsList.splice(geoPos + 1, 0, region_group);
+                  else groupsList.push(region_group);
+                }
+              }
+
+              const groupFirst = groupsList.length ? groupsList[0] : "";
+              const newName = applyTemplate(nameTemplate, {
+                name: baseName,
+                type: meta.type,
+                host: meta.host,
+                port: meta.port,
+                geo,
+                flag,
+                region,
+                region_group,
+                group: groupFirst,
+                groups: groupsList.join(","),
+                tags,
+                index: i + 1,
+              }) || baseName;
+
+              const newGroupsStr = groupsList.join(", ");
+
+              let nodeChanged = false;
+
+              if ((overwriteName || !existingName) && newName && newName !== existingName) {
+                inputs.nameInput.value = newName;
+                changedFields += 1;
+                nodeChanged = true;
+              }
+
+              if ((overwriteGroups || !existingGroupsStr) && newGroupsStr !== existingGroupsStr) {
+                inputs.groupsInput.value = newGroupsStr;
+                changedFields += 1;
+                nodeChanged = true;
+              }
+
+              if (nodeChanged) changedNodes += 1;
+            });
+          } catch (e) {
+            console.error(e);
+          }
+
+          const msg = changedNodes
+            ? `Шаблоны применены к ${changedNodes} узлам (изменено полей: ${changedFields}).`
+            : "Нечего применять: все узлы уже заполнены.";
+
+          setStatus(msg, changedNodes ? "ok" : null);
+          try { toast(msg, changedNodes ? 'success' : 'info'); } catch (e) {}
+          schedulePreview(200);
+        }
         function collectState() {
           const profile = profileSelect.value || "router_custom";
       
@@ -844,11 +1739,51 @@
             .filter(cb => cb.checked)
             .map(cb => cb.value);
       
-          const proxies = proxyControllers
+          const rawItems = proxyControllers
             .map(c => c.getState())
             .filter(Boolean);
+
+          // Поддержка "подписки как узла": если в списке узлов добавили
+          // provider/auto или просто вставили https://... в обычную ссылку,
+          // то это считается подпиской (proxy-provider), а не одиночным прокси.
+          const providerUrlsFromNodes = [];
+          const proxies = [];
+          const LINK_KINDS = ["auto", "vless", "trojan", "vmess", "ss", "hysteria2"];
+
+          rawItems.forEach((it) => {
+            const kind = String(it.kind || "").toLowerCase();
+            const link = String(it.link || "").trim();
+            const isHttpUrl = /^https?:\/\//i.test(link);
+
+            if (kind === "provider") {
+              if (link) providerUrlsFromNodes.push(link);
+              return;
+            }
+            if (kind === "auto" && isHttpUrl) {
+              providerUrlsFromNodes.push(link);
+              return;
+            }
+            if (LINK_KINDS.includes(kind) && isHttpUrl) {
+              providerUrlsFromNodes.push(link);
+              return;
+            }
+            proxies.push(it);
+          });
       
-          const state = { profile, subscriptions, proxies };
+          // Объединяем подписки из секции "Подписки" и из списка узлов.
+          const mergedSubscriptions = subscriptions.concat(providerUrlsFromNodes);
+          // Убираем дубли, сохраняя порядок.
+          const uniqSubscriptions = [];
+          const seen = new Set();
+          mergedSubscriptions.forEach((u) => {
+            const k = String(u || "").trim();
+            if (!k) return;
+            if (seen.has(k)) return;
+            seen.add(k);
+            uniqSubscriptions.push(k);
+          });
+
+          const state = { profile, subscriptions: uniqSubscriptions, proxies };
           if (defaultGroups.length) state.defaultGroups = defaultGroups;
           if (enabledRuleGroups.length) state.enabledRuleGroups = enabledRuleGroups;
           return state;
@@ -977,6 +1912,27 @@
         // Expose modal controls globally so inline onclick handlers work
         window.showValidationModal = showValidationModal;
         window.hideValidationModal = hideValidationModal;
+
+        // ----- bulk import modal -----
+        function showBulkImportModal() {
+          const modal = bulkImportModal || document.getElementById("bulkImportModal");
+          if (!modal) return;
+          modal.classList.remove("hidden");
+          document.body.classList.add("modal-open");
+          try {
+            if (bulkImportTextarea) bulkImportTextarea.focus();
+          } catch (e) {}
+        }
+
+        function hideBulkImportModal() {
+          const modal = bulkImportModal || document.getElementById("bulkImportModal");
+          if (!modal) return;
+          modal.classList.add("hidden");
+          document.body.classList.remove("modal-open");
+        }
+
+        window.showBulkImportModal = showBulkImportModal;
+        window.hideBulkImportModal = hideBulkImportModal;
       
         // ----- validate via mihomo core -----
         async function validateConfigOnServer(showPopup = true, notify = false) {
@@ -1145,6 +2101,10 @@
           subscriptionsList.appendChild(createSubscriptionRow(""));
         };
         addProxyBtn.onclick = () => createProxyCard();
+        if (bulkImportBtn) bulkImportBtn.onclick = () => showBulkImportModal();
+        if (normalizeProxiesBtn) normalizeProxiesBtn.onclick = () => applyTemplatesToExistingProxies();
+        if (bulkImportApplyBtn) bulkImportApplyBtn.onclick = () => doBulkImport();
+        if (bulkImportApplyExistingBtn) bulkImportApplyExistingBtn.onclick = () => applyTemplatesToExistingProxies();
         generateBtn.onclick = () => generatePreviewDemo(true);
         saveBtn.onclick = downloadConfig;
         validateBtn.onclick = () => { validateConfigOnServer(true, true); };
