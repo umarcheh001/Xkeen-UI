@@ -1873,7 +1873,7 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
 
     @bp.post('/api/fs/archive/extract')
     def api_fs_archive_extract() -> Any:
-        """Extract .zip/.tar.gz archives on the local filesystem.
+        """Extract .zip and .tar* archives on the local filesystem.
 
         JSON body:
           {
@@ -1906,6 +1906,8 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
             dest = _join_local_cwd(cwd, dest)
 
         create_dest = bool(str(data.get('create_dest') or '').strip().lower() in ('1', 'true', 'yes', 'on') or data.get('create_dest') is True)
+        strip_top_dir = bool(str(data.get('strip_top_dir') or '').strip().lower() in ('1', 'true', 'yes', 'on') or data.get('strip_top_dir') is True)
+        flatten = bool(str(data.get('flatten') or '').strip().lower() in ('1', 'true', 'yes', 'on') or data.get('flatten') is True)
         overwrite = bool(str(data.get('overwrite') or '').strip().lower() in ('1', 'true', 'yes', 'on') or data.get('overwrite') is True)
 
         try:
@@ -1938,10 +1940,93 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
 
         dest_root_abs = os.path.abspath(rp_dest)
 
+        # Optional: extract only selected entries.
+        # items: list of paths inside archive. Directories should be suffixed with "/".
+        sel_raw = data.get('items')
+        sel_exact = set()
+        sel_dirs = []
+        if isinstance(sel_raw, list):
+            for x in sel_raw:
+                try:
+                    nm = str(x or '').replace('\\', '/').strip()
+                except Exception:
+                    nm = ''
+                if not nm:
+                    continue
+                while nm.startswith('./'):
+                    nm = nm[2:]
+                # Preserve trailing slash to indicate directory selection
+                is_dir = nm.endswith('/')
+                nm2 = nm.strip('/')
+                if not nm2 or nm2 in ('.',):
+                    continue
+                if is_dir:
+                    sel_dirs.append(nm2)
+                else:
+                    sel_exact.add(nm2)
+        # limit to keep requests sane
+        if len(sel_exact) + len(sel_dirs) > 10000:
+            return error_response('too_many_items', 400, ok=False)
+
+        def _want_member(nm0: str) -> bool:
+            """Return True if this archive member should be extracted based on selection."""
+            if not sel_exact and not sel_dirs:
+                return True
+            if nm0 in sel_exact:
+                return True
+            for d in sel_dirs:
+                if nm0 == d or nm0.startswith(d + '/'):
+                    return True
+            return False
+
         lower = rp_arch.lower()
         extracted = 0
         skipped = 0
         renamed = 0
+
+        def _flatten_member_name(nm_use: str) -> str:
+            """Return a safe flattened leaf name or '' if nothing usable."""
+            try:
+                s = str(nm_use or '').replace('\\', '/').rstrip('/')
+            except Exception:
+                s = ''
+            if not s or s in ('.', './'):
+                return ''
+            leaf = os.path.basename(s)
+            if leaf in ('', '.', '..'):
+                return ''
+            # Avoid weird Windows drive/UNC patterns after basename.
+            leaf = leaf.replace(':', '_')
+            return leaf
+
+        def _compute_strip_prefix(metas: list[tuple[str, bool]]) -> str:
+            """Compute a single common top directory prefix to strip ("root/") or '' if none."""
+            if not strip_top_dir:
+                return ''
+            roots: set[str | None] = set()
+            for nm0, is_dir in metas:
+                try:
+                    nm0s = str(nm0 or '').lstrip('/').strip()
+                except Exception:
+                    nm0s = ''
+                if not nm0s:
+                    continue
+                parts = [p for p in nm0s.split('/') if p]
+                if not parts:
+                    continue
+                if len(parts) == 1:
+                    # Ignore the pure root dir entry like "root/".
+                    if is_dir:
+                        continue
+                    roots.add(None)
+                    continue
+                roots.add(parts[0])
+
+            if len(roots) == 1 and None not in roots:
+                root = next(iter(roots))
+                if root and root not in ('.', '..'):
+                    return root + '/'
+            return ''
 
         def _unique_leaf(parent_abs: str, leaf: str, *, is_dir: bool) -> str:
             """Return a non-conflicting leaf name inside parent_abs using " (N)" suffix."""
@@ -2030,6 +2115,27 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
         try:
             if lower.endswith('.zip'):
                 with zipfile.ZipFile(rp_arch, 'r') as zf:
+                    # Optionally strip a single common top-level directory from all extracted entries.
+                    strip_prefix = ''
+                    if strip_top_dir:
+                        try:
+                            metas: list[tuple[str, bool]] = []
+                            for zi0 in zf.infolist():
+                                nm = (zi0.filename or '').replace('\\', '/')
+                                while nm.startswith('./'):
+                                    nm = nm[2:]
+                                if not nm or nm in ('.', './'):
+                                    continue
+                                nm0 = nm.rstrip('/')
+                                if not nm0:
+                                    continue
+                                if not _want_member(nm0):
+                                    continue
+                                metas.append((nm0, nm.endswith('/')))
+                            strip_prefix = _compute_strip_prefix(metas)
+                        except Exception:
+                            strip_prefix = ''
+
                     for zi in zf.infolist():
                         nm = (zi.filename or '').replace('\\', '/')
                         # common prefixes like "./"
@@ -2037,22 +2143,59 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
                             nm = nm[2:]
                         if not nm or nm in ('.', './'):
                             continue
+                        nm0 = nm.rstrip('/')
+                        if not _want_member(nm0):
+                            continue
+
+                        # Apply optional strip of a single common top-level directory.
+                        nm_use = nm
+                        if strip_prefix and nm_use.startswith(strip_prefix):
+                            nm_use = nm_use[len(strip_prefix):]
+                        if not nm_use or nm_use in ('.', './'):
+                            continue
+
                         # directory entry: create it (useful for empty dirs)
-                        if nm.endswith('/'):
-                            if _is_safe_extract_path(dest_root_abs, nm):
+                        if nm_use.endswith('/'):
+                            if flatten:
+                                continue
+                            if _is_safe_extract_path(dest_root_abs, nm_use):
                                 try:
                                     # Ensure directory exists; if a file blocks a dir component, remap with suffix.
-                                    _ensure_parent_dirs(nm.rstrip('/') + '/_')
+                                    _ensure_parent_dirs(nm_use.rstrip('/') + '/_')
                                 except Exception:
                                     pass
                             continue
                         if _zipinfo_is_symlink(zi):
                             skipped += 1
                             continue
-                        if not _is_safe_extract_path(dest_root_abs, nm):
+                        if not _is_safe_extract_path(dest_root_abs, nm_use):
                             skipped += 1
                             continue
-                        rel = _ensure_parent_dirs(nm)
+
+                        # Optional: flatten nested paths into the destination folder.
+                        if flatten:
+                            leaf = _flatten_member_name(nm_use)
+                            if not leaf:
+                                continue
+                            if not _is_safe_extract_path(dest_root_abs, leaf):
+                                skipped += 1
+                                continue
+                            out = os.path.abspath(os.path.join(dest_root_abs, leaf))
+
+                            if os.path.exists(out):
+                                parent_abs = os.path.dirname(out) or dest_root_abs
+                                leaf0 = os.path.basename(out)
+                                if (not overwrite) or os.path.isdir(out):
+                                    new_leaf = _unique_leaf(parent_abs, leaf0, is_dir=False)
+                                    out = os.path.abspath(os.path.join(dest_root_abs, new_leaf))
+                                    renamed += 1
+
+                            with zf.open(zi, 'r') as src, open(out, 'wb') as dst_fp:
+                                shutil.copyfileobj(src, dst_fp, length=256 * 1024)
+                            extracted += 1
+                            continue
+
+                        rel = _ensure_parent_dirs(nm_use)
                         rel = _apply_dir_map(rel)
                         out = os.path.abspath(os.path.join(dest_root_abs, rel))
 
@@ -2073,8 +2216,32 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
                             shutil.copyfileobj(src, dst_fp, length=256 * 1024)
                         extracted += 1
 
-            elif lower.endswith('.tar.gz') or lower.endswith('.tgz'):
-                with tarfile.open(rp_arch, 'r:gz') as tf:
+            elif (lower.endswith('.tar') or lower.endswith('.tar.gz') or lower.endswith('.tgz')
+                  or lower.endswith('.tar.xz') or lower.endswith('.txz')
+                  or lower.endswith('.tar.bz2') or lower.endswith('.tbz') or lower.endswith('.tbz2')):
+                # tarfile supports transparent decompression via r:* for .tar/.tar.gz/.tar.xz/.tar.bz2
+                with tarfile.open(rp_arch, 'r:*') as tf:
+                    # Optionally strip a single common top-level directory from all extracted entries.
+                    strip_prefix = ''
+                    if strip_top_dir:
+                        try:
+                            metas: list[tuple[str, bool]] = []
+                            for ti0 in tf.getmembers():
+                                nm = (ti0.name or '').replace('\\', '/')
+                                while nm.startswith('./'):
+                                    nm = nm[2:]
+                                if not nm or nm in ('.', './'):
+                                    continue
+                                nm0 = nm.rstrip('/')
+                                if not nm0:
+                                    continue
+                                if not _want_member(nm0):
+                                    continue
+                                metas.append((nm0, bool(ti0.isdir() or nm.endswith('/'))))
+                            strip_prefix = _compute_strip_prefix(metas)
+                        except Exception:
+                            strip_prefix = ''
+
                     for ti in tf.getmembers():
                         nm = (ti.name or '').replace('\\', '/')
                         # common prefixes like "./"
@@ -2082,12 +2249,25 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
                             nm = nm[2:]
                         if not nm or nm in ('.', './'):
                             continue
+                        nm0 = nm.rstrip('/')
+                        if not _want_member(nm0):
+                            continue
+
+                        # Apply optional strip of a single common top-level directory.
+                        nm_use = nm
+                        if strip_prefix and nm_use.startswith(strip_prefix):
+                            nm_use = nm_use[len(strip_prefix):]
+                        if not nm_use or nm_use in ('.', './'):
+                            continue
+
                         # create directory entries explicitly (covers empty dirs)
-                        if ti.isdir() or nm.endswith('/'):
-                            if _is_safe_extract_path(dest_root_abs, nm):
+                        if ti.isdir() or nm_use.endswith('/'):
+                            if flatten:
+                                continue
+                            if _is_safe_extract_path(dest_root_abs, nm_use):
                                 try:
                                     # Ensure directory exists; if a file blocks a dir component, remap with suffix.
-                                    _ensure_parent_dirs(nm.rstrip('/') + '/_')
+                                    _ensure_parent_dirs(nm_use.rstrip('/') + '/_')
                                 except Exception:
                                     pass
                             continue
@@ -2095,10 +2275,38 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
                         if ti.issym() or ti.islnk():
                             skipped += 1
                             continue
-                        if not _is_safe_extract_path(dest_root_abs, nm):
+                        if not _is_safe_extract_path(dest_root_abs, nm_use):
                             skipped += 1
                             continue
-                        rel = _ensure_parent_dirs(nm)
+
+                        # Optional: flatten nested paths into the destination folder.
+                        if flatten:
+                            leaf = _flatten_member_name(nm_use)
+                            if not leaf:
+                                continue
+                            if not _is_safe_extract_path(dest_root_abs, leaf):
+                                skipped += 1
+                                continue
+                            out = os.path.abspath(os.path.join(dest_root_abs, leaf))
+
+                            if os.path.exists(out):
+                                parent_abs = os.path.dirname(out) or dest_root_abs
+                                leaf0 = os.path.basename(out)
+                                if (not overwrite) or os.path.isdir(out):
+                                    new_leaf = _unique_leaf(parent_abs, leaf0, is_dir=False)
+                                    out = os.path.abspath(os.path.join(dest_root_abs, new_leaf))
+                                    renamed += 1
+
+                            src = tf.extractfile(ti)
+                            if src is None:
+                                skipped += 1
+                                continue
+                            with src, open(out, 'wb') as dst_fp:
+                                shutil.copyfileobj(src, dst_fp, length=256 * 1024)
+                            extracted += 1
+                            continue
+
+                        rel = _ensure_parent_dirs(nm_use)
                         rel = _apply_dir_map(rel)
                         out = os.path.abspath(os.path.join(dest_root_abs, rel))
 
@@ -2132,6 +2340,112 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
         except Exception as e:
             msg = str(e) or 'extract_failed'
             return error_response('extract_failed', 400, ok=False, details=msg[-400:])
+
+
+
+    @bp.get('/api/fs/archive/list')
+    def api_fs_archive_list() -> Any:
+        '''List contents of an archive (.zip/.tar*). Local only.
+
+        Query params:
+          target=local
+          path=<full path to archive>
+          max=<max entries, default 2000>
+        '''
+        if (resp := _require_enabled()) is not None:
+            return resp
+
+        target = str(request.args.get('target') or 'local').strip().lower()
+        if target != 'local':
+            return error_response('only_local_supported', 400, ok=False)
+
+        arch = str(request.args.get('path') or request.args.get('archive') or '').strip()
+        if not arch:
+            return error_response('path_required', 400, ok=False)
+
+        try:
+            max_items = int(request.args.get('max') or 2000)
+        except Exception:
+            max_items = 2000
+        max_items = max(1, min(max_items, 10000))
+
+        try:
+            rp_arch = _local_resolve(arch, LOCALFS_ROOTS)
+        except PermissionError as e:
+            return error_response(str(e) or 'forbidden', 403, ok=False)
+        except Exception:
+            return error_response('bad_path', 400, ok=False)
+
+        if not os.path.isfile(rp_arch):
+            return error_response('not_found', 404, ok=False)
+
+        lower = rp_arch.lower()
+        items: List[Dict[str, Any]] = []
+        truncated = False
+
+        def _push(name: str, size: int, mtime: int, is_dir: bool, is_link: bool) -> None:
+            nonlocal truncated
+            if len(items) >= max_items:
+                truncated = True
+                return
+            items.append({
+                'name': name,
+                'size': int(size or 0),
+                'mtime': int(mtime or 0),
+                'is_dir': bool(is_dir),
+                'is_link': bool(is_link),
+            })
+
+        try:
+            if lower.endswith('.zip'):
+                with zipfile.ZipFile(rp_arch, 'r') as zf:
+                    for zi in zf.infolist():
+                        if truncated:
+                            break
+                        nm = (zi.filename or '').replace('\\', '/')
+                        while nm.startswith('./'):
+                            nm = nm[2:]
+                        if not nm or nm in ('.', './'):
+                            continue
+                        is_dir = nm.endswith('/')
+                        is_link = False
+                        try:
+                            is_link = _zipinfo_is_symlink(zi)
+                        except Exception:
+                            is_link = False
+                        # ZipInfo.date_time: (YYYY, MM, DD, HH, MM, SS)
+                        mtime = 0
+                        try:
+                            dt = zi.date_time
+                            mtime = int(time.mktime((dt[0], dt[1], dt[2], dt[3], dt[4], dt[5], 0, 0, -1)))
+                        except Exception:
+                            mtime = 0
+                        _push(nm.rstrip('/'), int(getattr(zi, 'file_size', 0) or 0), mtime, is_dir, is_link)
+
+            elif (lower.endswith('.tar') or lower.endswith('.tar.gz') or lower.endswith('.tgz')
+                  or lower.endswith('.tar.xz') or lower.endswith('.txz')
+                  or lower.endswith('.tar.bz2') or lower.endswith('.tbz') or lower.endswith('.tbz2')):
+                with tarfile.open(rp_arch, 'r:*') as tf:
+                    for ti in tf.getmembers():
+                        if truncated:
+                            break
+                        nm = (ti.name or '').replace('\\', '/')
+                        while nm.startswith('./'):
+                            nm = nm[2:]
+                        if not nm or nm in ('.', './'):
+                            continue
+                        is_dir = bool(ti.isdir() or nm.endswith('/'))
+                        is_link = bool(ti.issym() or ti.islnk())
+                        _push(nm.rstrip('/'), int(getattr(ti, 'size', 0) or 0), int(getattr(ti, 'mtime', 0) or 0), is_dir, is_link)
+
+            else:
+                return error_response('unsupported_archive', 400, ok=False)
+
+            return jsonify({'ok': True, 'path': arch, 'items': items, 'truncated': truncated})
+
+        except Exception as e:
+            msg = str(e) or 'archive_list_failed'
+            return error_response('archive_list_failed', 400, ok=False, details=msg[-400:])
 
 
     @bp.post('/api/fs/upload')
