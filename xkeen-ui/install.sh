@@ -23,6 +23,10 @@ esac
 MIHOMO_TEMPLATES_DIR="/opt/etc/mihomo/templates"
 SRC_MIHOMO_TEMPLATES="$SRC_DIR/opt/etc/mihomo/templates"
 
+# Шаблоны Xray (Routing)
+XRAY_ROUTING_TEMPLATES_DIR="/opt/etc/xray/templates/routing"
+SRC_XRAY_ROUTING_TEMPLATES="$SRC_DIR/opt/etc/xray/templates/routing"
+
 # Файлы/директории Xray (используются панелью, но сами не трогаются)
 #
 # В некоторых сборках/профилях части конфига могут называться иначе.
@@ -103,6 +107,7 @@ NEED_GEVENT=0
 if ! "$PYTHON_BIN" -c "import flask" >/dev/null 2>&1; then
   NEED_FLASK=1
 fi
+
 
 # Проверяем gevent и geventwebsocket (только если архитектура позволяет)
 if [ "$WANT_GEVENT" -eq 1 ]; then
@@ -446,7 +451,25 @@ if [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
   fi
 fi
 
-\
+# --- Шаблоны Xray (Routing) ---
+
+if [ -d "$SRC_XRAY_ROUTING_TEMPLATES" ]; then
+  echo "[*] Устанавливаю шаблоны роутинга Xray в $XRAY_ROUTING_TEMPLATES_DIR..."
+  mkdir -p "$XRAY_ROUTING_TEMPLATES_DIR"
+
+  # Не перезаписываем существующие файлы пользователя.
+  for f in "$SRC_XRAY_ROUTING_TEMPLATES"/*.json "$SRC_XRAY_ROUTING_TEMPLATES"/*.jsonc; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    if [ ! -f "$XRAY_ROUTING_TEMPLATES_DIR/$base" ]; then
+      cp -f "$f" "$XRAY_ROUTING_TEMPLATES_DIR/$base"
+      echo "[*] + $base"
+    fi
+  done
+else
+  echo "[*] Шаблоны роутинга Xray не найдены в архиве (пропуск)"
+fi
+
 # --- Обновление порта в run_server.py / app.py ---
 
 RUN_SERVER="$UI_DIR/run_server.py"
