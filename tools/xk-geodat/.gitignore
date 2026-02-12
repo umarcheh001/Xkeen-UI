@@ -1,0 +1,6 @@
+cat > .gitignore <<'EOF'
+dist/
+.gocache/
+.gotmp/
+*.exe
+EOF
