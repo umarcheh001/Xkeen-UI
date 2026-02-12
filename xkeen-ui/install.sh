@@ -515,6 +515,12 @@ if [ "$UPDATED" -eq 0 ]; then
   echo "    Порт может остаться по умолчанию, проверь файлы вручную."
 fi
 
+# --- Optional: xk-geodat (DAT GeoIP/GeoSite: "Содержимое" и "В routing") ---
+if [ -f "$SRC_DIR/scripts/install_xk_geodat.sh" ]; then
+  echo "[*] (Опционально) Устанавливаю xk-geodat для DAT GeoIP/GeoSite..."
+  sh "$SRC_DIR/scripts/install_xk_geodat.sh" || true
+fi
+
 # --- Init-скрипт ---
 
 echo "[*] Создаю init-скрипт $INIT_SCRIPT..."
