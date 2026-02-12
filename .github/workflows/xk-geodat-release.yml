@@ -1,0 +1,39 @@
+name: xk-geodat (release binaries)
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/xk-geodat/go.mod
+
+      - name: Build (linux arm64 + linux mipsle)
+        working-directory: tools/xk-geodat
+        run: |
+          set -e
+          mkdir -p dist
+
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+            go build -trimpath -ldflags "-s -w" -o dist/xk-geodat-linux-arm64 ./cmd/xk-geodat
+
+          CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat \
+            go build -trimpath -ldflags "-s -w" -o dist/xk-geodat-linux-mipsle ./cmd/xk-geodat
+
+      - name: Upload assets to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            tools/xk-geodat/dist/xk-geodat-linux-arm64
+            tools/xk-geodat/dist/xk-geodat-linux-mipsle
