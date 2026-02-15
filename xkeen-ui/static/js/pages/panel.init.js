@@ -151,6 +151,11 @@
       if (window.XKeen && XKeen.routing && typeof XKeen.routing.init === 'function') XKeen.routing.init();
     });
     safe(() => {
+      if (window.XKeen && XKeen.features && XKeen.features.routingTemplates && typeof XKeen.features.routingTemplates.init === 'function') {
+        XKeen.features.routingTemplates.init();
+      }
+    });
+    safe(() => {
       if (window.XKeen && XKeen.features && XKeen.features.inbounds && typeof XKeen.features.inbounds.init === 'function') XKeen.features.inbounds.init();
     });
     safe(() => {

@@ -27,6 +27,10 @@ SRC_MIHOMO_TEMPLATES="$SRC_DIR/opt/etc/mihomo/templates"
 XRAY_ROUTING_TEMPLATES_DIR="/opt/etc/xray/templates/routing"
 SRC_XRAY_ROUTING_TEMPLATES="$SRC_DIR/opt/etc/xray/templates/routing"
 
+# Шаблоны Xray (Observatory)
+XRAY_OBSERVATORY_TEMPLATES_DIR="/opt/etc/xray/templates/observatory"
+SRC_XRAY_OBSERVATORY_TEMPLATES="$SRC_DIR/opt/etc/xray/templates/observatory"
+
 # Файлы/директории Xray (используются панелью, но сами не трогаются)
 #
 # В некоторых сборках/профилях части конфига могут называться иначе.
@@ -468,6 +472,25 @@ if [ -d "$SRC_XRAY_ROUTING_TEMPLATES" ]; then
   done
 else
   echo "[*] Шаблоны роутинга Xray не найдены в архиве (пропуск)"
+fi
+
+# --- Шаблоны Xray (Observatory) ---
+
+if [ -d "$SRC_XRAY_OBSERVATORY_TEMPLATES" ]; then
+  echo "[*] Устанавливаю шаблоны observatory Xray в $XRAY_OBSERVATORY_TEMPLATES_DIR..."
+  mkdir -p "$XRAY_OBSERVATORY_TEMPLATES_DIR"
+
+  # Не перезаписываем существующие файлы пользователя.
+  for f in "$SRC_XRAY_OBSERVATORY_TEMPLATES"/*.json "$SRC_XRAY_OBSERVATORY_TEMPLATES"/*.jsonc; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    if [ ! -f "$XRAY_OBSERVATORY_TEMPLATES_DIR/$base" ]; then
+      cp -f "$f" "$XRAY_OBSERVATORY_TEMPLATES_DIR/$base"
+      echo "[*] + $base"
+    fi
+  done
+else
+  echo "[*] Шаблоны observatory Xray не найдены в архиве (пропуск)"
 fi
 
 # --- Обновление порта в run_server.py / app.py ---

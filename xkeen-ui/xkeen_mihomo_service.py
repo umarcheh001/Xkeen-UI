@@ -11,7 +11,7 @@ to perform one-shot actions like:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, List
 
 from mihomo_config_generator import build_full_config, get_profile_rule_presets
 from mihomo_server_core import (
@@ -40,23 +40,45 @@ def generate_config_from_state(state: Dict[str, Any]) -> str:
     return build_full_config(state)
 
 
-def generate_and_save_config(state: Dict[str, Any]) -> Tuple[str, str]:
+def _build_full_config_and_warnings(state: Dict[str, Any]) -> Tuple[str, List[str]]:
+    """Build config.yaml from *state* and collect non-fatal generator warnings.
+
+    Warnings are collected only when the generator supports it via the internal
+    `_xk_collect_warnings` flag. This function is safe to call for all states.
+    """
+    st: Dict[str, Any] = dict(state) if isinstance(state, dict) else {}
+    st["_xk_collect_warnings"] = True
+
+    cfg = build_full_config(st)
+
+    warnings = st.get("_xk_warnings")
+    if not isinstance(warnings, list):
+        warnings_list: List[str] = []
+    else:
+        warnings_list = [str(w).strip() for w in warnings if str(w).strip()]
+
+    return cfg, warnings_list
+
+
+
+def generate_and_save_config(state: Dict[str, Any]) -> Tuple[str, str, List[str]]:
     """Generate config from state and save it into the active profile.
 
     Returns:
-        (config_yaml, active_profile_name)
+        (config_yaml, active_profile_name, warnings)
 
     A backup is created automatically by :func:`save_config`
     (see :mod:`mihomo_server_core`).
     """
-    cfg = build_full_config(state)
+    cfg, warnings = _build_full_config_and_warnings(state)
     ensure_mihomo_layout()
     save_config(cfg)
     active_profile = get_active_profile_name()
-    return cfg, active_profile
+    return cfg, active_profile, warnings
 
 
-def generate_save_and_restart(payload: Dict[str, Any]) -> Tuple[str, str]:
+
+def generate_save_and_restart(payload: Dict[str, Any]) -> Tuple[str, str, List[str]]:
     """Generate config, save it and restart mihomo via xkeen.
 
     The *payload* parameter is intentionally a bit more generic than just
@@ -90,7 +112,10 @@ def generate_save_and_restart(payload: Dict[str, Any]) -> Tuple[str, str]:
          :func:`build_full_config`.
 
     Returns:
-        (config_yaml, restart_log)
+        (config_yaml, restart_log, warnings)
+
+    The *warnings* list contains non-fatal issues (e.g. bad proxy YAML blocks)
+    that the generator intentionally skips.
     """
     # Detect whether we were given a plain state dict (old API) or an extended
     # payload (new API) with manual override support.
@@ -108,10 +133,18 @@ def generate_save_and_restart(payload: Dict[str, Any]) -> Tuple[str, str]:
     # but keep inner whitespace exactly as the user typed it).
     override = override.rstrip("\n")
 
+    warnings_list: List[str] = []
+
     if override.strip():
         cfg = override
+        # Even when configOverride is used, collect warnings from state so that
+        # the user can see non-fatal issues in their inputs (e.g. bad YAML proxy blocks).
+        try:
+            _cfg_tmp, warnings_list = _build_full_config_and_warnings(state)
+        except Exception:
+            warnings_list = []
     else:
-        cfg = build_full_config(state)
+        cfg, warnings_list = _build_full_config_and_warnings(state)
 
     ensure_mihomo_layout()
     log = restart_mihomo_and_get_log(cfg)
@@ -131,18 +164,22 @@ def generate_save_and_restart(payload: Dict[str, Any]) -> Tuple[str, str]:
         # Logging errors must not affect the main flow.
         pass
 
-    return cfg, log
+    return cfg, log, warnings_list
 
 
 
 
-def generate_preview(payload: Dict[str, Any]) -> str:
+def generate_preview(payload: Dict[str, Any]) -> Tuple[str, List[str]]:
     """Generate mihomo config.yaml for preview only.
 
-    This uses the same ``build_full_config`` pipeline as
-    :func:`generate_save_and_restart`, but does **not** save anything
-    to disk and does **not** restart mihomo. It is safe to call on
-    every UI change.
+    This uses the same build pipeline as :func:`generate_save_and_restart`, but
+    does **not** save anything to disk and does **not** restart mihomo.
+
+    Returns:
+        (config_yaml, warnings)
+
+    The *warnings* list contains non-fatal issues (e.g. bad proxy YAML blocks)
+    that the generator intentionally skips during preview.
     """
     # Support both bare state and new-style {"state": {...}} payloads.
     if "profile" in payload and "state" not in payload and "configOverride" not in payload:
@@ -153,7 +190,19 @@ def generate_preview(payload: Dict[str, Any]) -> str:
             raise ValueError("payload.state must be an object when provided")
         state = state_obj  # type: ignore[assignment]
 
-    return build_full_config(state)
+    # Ask generator to collect non-fatal warnings into state.
+    state = dict(state)
+    state["_xk_collect_warnings"] = True
+
+    cfg = build_full_config(state)
+    warnings = state.get("_xk_warnings")
+    if not isinstance(warnings, list):
+        warnings_list: List[str] = []
+    else:
+        warnings_list = [str(w).strip() for w in warnings if str(w).strip()]
+
+    return cfg, warnings_list
+
 
 
 def get_profile_defaults(profile: str | None) -> Dict[str, Any]:
