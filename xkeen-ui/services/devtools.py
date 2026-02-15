@@ -32,6 +32,7 @@ from services.xray_logs import tail_lines_fast, read_new_lines
 ENV_WHITELIST: Tuple[str, ...] = (
     # UI/server
     "XKEEN_UI_STATE_DIR",
+    "XKEEN_UI_ENV_FILE",  # read-only (path to devtools.env)
     "XKEEN_UI_SECRET_KEY",  # shown as "(set)" only
     "XKEEN_RESTART_LOG_FILE",
     # UI layout/visibility (optional)
@@ -88,6 +89,18 @@ ENV_WHITELIST: Tuple[str, ...] = (
     # misc
     "XKEEN_ALLOW_SHELL",
     "XKEEN_XRAY_LOG_TZ_OFFSET",
+
+    # Xray fragment paths (routing/inbounds/outbounds)
+    "XKEEN_XRAY_CONFIGS_DIR",
+    "XKEEN_XRAY_ROUTING_FILE",
+    "XKEEN_XRAY_INBOUNDS_FILE",
+    "XKEEN_XRAY_OUTBOUNDS_FILE",
+    "XKEEN_XRAY_ROUTING_FILE_RAW",
+
+    # Xkeen lists (ports / excludes)
+    "XKEEN_PORT_PROXYING_FILE",
+    "XKEEN_PORT_EXCLUDE_FILE",
+    "XKEEN_IP_EXCLUDE_FILE",
 )
 
 
@@ -381,6 +394,27 @@ def _default_effective_value(
     # Xray/Mihomo log timezone offset default (+3, see app.py).
     if k == "XKEEN_XRAY_LOG_TZ_OFFSET":
         return "3"
+
+    # Xray fragment/config paths (keep in sync with app.py).
+    if k == "XKEEN_XRAY_CONFIGS_DIR":
+        return "/opt/etc/xray/configs"
+    if k == "XKEEN_XRAY_ROUTING_FILE":
+        # Basename is relative to XKEEN_XRAY_CONFIGS_DIR.
+        return "05_routing.json"
+    if k == "XKEEN_XRAY_INBOUNDS_FILE":
+        return "03_inbounds.json"
+    if k == "XKEEN_XRAY_OUTBOUNDS_FILE":
+        return "04_outbounds.json"
+    if k == "XKEEN_XRAY_ROUTING_FILE_RAW":
+        return "05_routing.jsonc"
+
+    # XKeen list paths
+    if k == "XKEEN_PORT_PROXYING_FILE":
+        return "/opt/etc/xkeen/port_proxying.lst"
+    if k == "XKEEN_PORT_EXCLUDE_FILE":
+        return "/opt/etc/xkeen/port_exclude.lst"
+    if k == "XKEEN_IP_EXCLUDE_FILE":
+        return "/opt/etc/xkeen/ip_exclude.lst"
 
     return None
 

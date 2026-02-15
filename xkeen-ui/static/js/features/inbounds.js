@@ -23,8 +23,173 @@
     // guard against double-fire when clicking labels / rapid toggles
     let autoSaveInFlight = false;
 
+    // Active inbounds fragment file (basename or absolute). Controlled by dropdown.
+    let _activeFragment = null;
+
+    const IDS = {
+      fragmentSelect: 'inbounds-fragment-select',
+      fragmentRefresh: 'inbounds-fragment-refresh-btn',
+      fileCode: 'inbounds-file-code',
+    };
+
     function $(id) {
       return document.getElementById(id);
+    }
+
+    function getSelectedFragmentFromUI() {
+      try {
+        const sel = $(IDS.fragmentSelect);
+        if (sel && sel.value) return String(sel.value);
+      } catch (e) {}
+      return null;
+    }
+
+    function rememberActiveFragment(name) {
+      try {
+        if (name) localStorage.setItem('xkeen.inbounds.fragment', String(name));
+      } catch (e) {}
+    }
+
+    function restoreRememberedFragment() {
+      try {
+        const v = localStorage.getItem('xkeen.inbounds.fragment');
+        if (v) return String(v);
+      } catch (e) {}
+      return null;
+    }
+
+    function getActiveFragment() {
+      return getSelectedFragmentFromUI() || _activeFragment || restoreRememberedFragment() || null;
+    }
+
+    function updateActiveFileLabel(fullPathOrName, configsDir) {
+      const codeEl = $(IDS.fileCode);
+      if (!codeEl) return;
+      const v = String(fullPathOrName || '');
+      if (v) {
+        codeEl.textContent = v;
+        return;
+      }
+      try {
+        const f = getActiveFragment();
+        if (f && configsDir) {
+          codeEl.textContent = String(configsDir).replace(/\/+$/, '') + '/' + f;
+        } else if (f) {
+          codeEl.textContent = f;
+        }
+      } catch (e) {}
+    }
+
+    async function refreshFragmentsList(opts) {
+      const sel = $(IDS.fragmentSelect);
+      if (!sel) return;
+
+      const notify = !!(opts && opts.notify);
+
+      let data = null;
+      try {
+        const res = await fetch('/api/inbounds/fragments', { cache: 'no-store' });
+        data = await res.json().catch(() => null);
+      } catch (e) {
+        data = null;
+      }
+
+      if (!data || !data.ok || !Array.isArray(data.items)) {
+        try { if (notify && typeof window.toast === 'function') window.toast('Не удалось обновить список inbounds', 'error'); } catch (e) {}
+        return;
+      }
+
+      const currentDefault = (data.current || sel.dataset.current || '').toString();
+      const remembered = restoreRememberedFragment();
+      const preferred = (getActiveFragment() || remembered || currentDefault || (data.items[0] ? data.items[0].name : '')).toString();
+
+      function decorateName(n) {
+        const name = String(n || '');
+        if (!name) return '';
+        if (/_hys2\.json$/i.test(name)) return name + ' (Hysteria2)';
+        return name;
+      }
+
+      try { if (sel.dataset) sel.dataset.dir = String(data.dir || ''); } catch (e) {}
+      sel.innerHTML = '';
+
+      const names = data.items.map((it) => String(it.name || '')).filter(Boolean);
+      if (currentDefault && names.indexOf(currentDefault) === -1) {
+        const opt = document.createElement('option');
+        opt.value = currentDefault;
+        opt.textContent = decorateName(currentDefault) + ' (текущий)';
+        sel.appendChild(opt);
+      }
+
+      data.items.forEach((it) => {
+        const name = String(it.name || '');
+        if (!name) return;
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = decorateName(name);
+        sel.appendChild(opt);
+      });
+
+      try {
+        const finalChoice = names.indexOf(preferred) !== -1 ? preferred : (currentDefault || (names[0] || ''));
+        if (finalChoice) sel.value = finalChoice;
+        _activeFragment = sel.value || finalChoice || null;
+        rememberActiveFragment(_activeFragment);
+
+        const dir = data.dir ? String(data.dir).replace(/\/+$/, '') : '';
+        updateActiveFileLabel((dir ? dir + '/' : '') + (_activeFragment || ''), dir);
+        // Sync legacy global file label for other modules (modal editor, backups)
+        try {
+          if (window.XKEEN_FILES) window.XKEEN_FILES.inbounds = (dir ? dir + '/' : '') + (_activeFragment || '');
+        } catch (e) {}
+        try {
+          window.XKeen = window.XKeen || {};
+          window.XKeen.state = window.XKeen.state || {};
+          window.XKeen.state.fragments = window.XKeen.state.fragments || {};
+          window.XKeen.state.fragments.inbounds = _activeFragment;
+        } catch (e) {}
+      } catch (e) {}
+
+      // Wire refresh button (once)
+      try {
+        const btn = $(IDS.fragmentRefresh);
+        if (btn && !btn.dataset.xkWired) {
+          btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await refreshFragmentsList({ notify: true });
+            await load();
+          });
+          btn.dataset.xkWired = '1';
+        }
+      } catch (e) {}
+
+      // Success toast (only when explicitly requested)
+      try { if (notify && typeof window.toast === 'function') window.toast('Список inbounds обновлён', 'success'); } catch (e) {}
+
+      // Wire select change (once)
+      try {
+        if (!sel.dataset.xkWired) {
+          sel.addEventListener('change', async (e) => {
+            const next = String(sel.value || '');
+            if (!next) return;
+            _activeFragment = next;
+            rememberActiveFragment(_activeFragment);
+            try {
+              const dir = sel.dataset && sel.dataset.dir ? String(sel.dataset.dir) : '';
+              updateActiveFileLabel((dir ? dir.replace(/\/+$/, '') + '/' : '') + _activeFragment, dir);
+              if (window.XKEEN_FILES) window.XKEEN_FILES.inbounds = (dir ? dir.replace(/\/+$/, '') + '/' : '') + _activeFragment;
+            } catch (e2) {}
+            try {
+              window.XKeen = window.XKeen || {};
+              window.XKeen.state = window.XKeen.state || {};
+              window.XKeen.state.fragments = window.XKeen.state.fragments || {};
+              window.XKeen.state.fragments.inbounds = _activeFragment;
+            } catch (e3) {}
+            await load();
+          });
+          sel.dataset.xkWired = '1';
+        }
+      } catch (e) {}
     }
 
     function wireButton(btnId, handler) {
@@ -97,7 +262,9 @@
     async function load() {
       const statusEl = $('inbounds-status');
       try {
-        const res = await fetch('/api/inbounds');
+        const file = getActiveFragment();
+        const url = file ? ('/api/inbounds?file=' + encodeURIComponent(file)) : '/api/inbounds';
+        const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) {
           if (statusEl) statusEl.textContent = 'Не удалось загрузить inbounds.';
           return;
@@ -185,7 +352,9 @@
       const restart = toggle ? !!toggle.checked : false;
 
       try {
-        const res = await fetch('/api/inbounds', {
+        const file = getActiveFragment();
+        const url = file ? ('/api/inbounds?file=' + encodeURIComponent(file)) : '/api/inbounds';
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mode, restart }),
@@ -238,7 +407,9 @@
       const fileLabel = _baseName(window.XKEEN_FILES && window.XKEEN_FILES.inbounds, '03_inbounds.json');
 
       try {
-        const res = await fetch('/api/backup-inbounds', { method: 'POST' });
+        const file = getActiveFragment();
+        const url = file ? ('/api/backup-inbounds?file=' + encodeURIComponent(file)) : '/api/backup-inbounds';
+        const res = await fetch(url, { method: 'POST' });
         const data = await res.json().catch(() => ({}));
 
         if (res.ok && data && data.ok) {
@@ -277,6 +448,9 @@
 
       setCollapsedFromStorage();
       wireHeader('inbounds-header', toggleCard);
+
+      // Fragment selector
+      refreshFragmentsList();
 
       // Buttons
       wireButton('inbounds-save-btn', save);

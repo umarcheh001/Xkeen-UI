@@ -83,8 +83,20 @@ from routes_remotefs import (
     _parse_ls_line,
 )
 
+# Optional: auto-snapshot Xray config fragments on overwrite.
+try:
+    from services.xray_backups import snapshot_before_overwrite as _snapshot_before_overwrite
+except Exception:
+    _snapshot_before_overwrite = None
 
-def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> Blueprint:
+
+def create_fs_blueprint(
+    *,
+    tmp_dir: str = "/tmp",
+    max_upload_mb: int = 200,
+    xray_configs_dir: str | None = None,
+    backup_dir: str | None = None,
+) -> Blueprint:
     """Create /api/fs/* facade blueprint.
 
     Args:
@@ -96,6 +108,18 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
 
     # Allowed local roots (UI sandbox).
     LOCALFS_ROOTS = _local_allowed_roots()
+
+    # For snapshotting (rollback) only when writing inside XRAY_CONFIGS_DIR.
+    try:
+        _XRAY_CONFIGS_DIR_REAL = os.path.realpath(str(xray_configs_dir or "")) if xray_configs_dir else ""
+    except Exception:
+        _XRAY_CONFIGS_DIR_REAL = ""
+    try:
+        _BACKUP_DIR = str(backup_dir or "") if backup_dir else ""
+        _BACKUP_DIR_REAL = os.path.realpath(_BACKUP_DIR) if _BACKUP_DIR else ""
+    except Exception:
+        _BACKUP_DIR = ""
+        _BACKUP_DIR_REAL = ""
 
     # Local staging config (do NOT depend on remotefs manager existing).
     TMP_DIR = str(tmp_dir or "/tmp")
@@ -1187,6 +1211,18 @@ def create_fs_blueprint(*, tmp_dir: str = "/tmp", max_upload_mb: int = 200) -> B
 
             if dry_run:
                 return jsonify({'ok': True, 'dry_run': True, 'bytes': len(raw), 'would_overwrite': bool(os.path.exists(rp))})
+
+            # Auto-create snapshot (rollback) before overwriting Xray config fragments.
+            try:
+                if st0 is not None and _snapshot_before_overwrite and _BACKUP_DIR and _XRAY_CONFIGS_DIR_REAL and _BACKUP_DIR_REAL:
+                    _snapshot_before_overwrite(
+                        rp,
+                        backup_dir=_BACKUP_DIR,
+                        xray_configs_dir_real=_XRAY_CONFIGS_DIR_REAL,
+                        backup_dir_real=_BACKUP_DIR_REAL,
+                    )
+            except Exception:
+                pass
 
             tmp_path = os.path.join(TMP_DIR, f"xkeen_write_local_{uuid.uuid4().hex}.tmp")
             try:

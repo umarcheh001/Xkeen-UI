@@ -760,6 +760,78 @@ def _apply_rule_group_filtering(content: str, enabled_ids: Sequence[str]) -> str
         result = header_comment + result
 
     return result
+
+
+def _ensure_leading_dash_for_yaml_block(yaml_block: str) -> str:
+    """Ensure a proxy YAML snippet starts with a list item dash."""
+    if not yaml_block:
+        return ""
+
+    text = yaml_block.replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.splitlines()
+
+    # Trim leading/trailing blank lines.
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    if not lines:
+        return ""
+
+    def _first_content_index(items: List[str]) -> Optional[int]:
+        for idx, line in enumerate(items):
+            stripped = line.lstrip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            return idx
+        return None
+
+    content_idx = _first_content_index(lines)
+    if content_idx is None:
+        return ""
+
+    # Strip a "proxies:" header if user pasted it.
+    if re.match(r"^proxies\s*:\s*$", lines[content_idx].lstrip()):
+        lines = lines[:content_idx] + lines[content_idx + 1 :]
+        while content_idx < len(lines) and not lines[content_idx].strip():
+            lines.pop(content_idx)
+        content_idx = _first_content_index(lines)
+        if content_idx is None:
+            return ""
+
+    # Remove common leading indentation from meaningful lines.
+    min_indent: Optional[int] = None
+    for line in lines:
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(stripped)
+        if min_indent is None or indent < min_indent:
+            min_indent = indent
+    if min_indent:
+        lines = [line[min_indent:] if len(line) >= min_indent else "" for line in lines]
+
+    content_idx = _first_content_index(lines)
+    if content_idx is None:
+        return ""
+
+    stripped = lines[content_idx].lstrip()
+    if stripped.startswith("-"):
+        # Fix "-name" -> "- name" for common typo.
+        if len(stripped) > 1 and not stripped[1].isspace():
+            indent = len(lines[content_idx]) - len(stripped)
+            lines[content_idx] = (" " * indent) + "- " + stripped[1:]
+        return "\n".join(lines)
+
+    indent = len(lines[content_idx]) - len(stripped)
+    lines[content_idx] = (" " * indent) + "- " + stripped
+    for i in range(content_idx + 1, len(lines)):
+        lines[i] = (" " * (indent + 2)) + lines[i]
+    return "\n".join(lines)
+
+
+
+
 def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
     """Use parse_vless / parse_wireguard / raw YAML to inject proxies into config."""
     proxies = state.get("proxies") or []
@@ -776,6 +848,28 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
         default_groups = ["Заблок. сервисы"]
 
     cfg = content
+
+    # Optional: collect non-fatal warnings for UI preview.
+    collect_warn = bool(state.get("_xk_collect_warnings"))
+    _warnings = state.get("_xk_warnings") if collect_warn else None
+    if collect_warn and not isinstance(_warnings, list):
+        _warnings = []
+        state["_xk_warnings"] = _warnings
+
+    def _warn(msg: str):
+        if not collect_warn:
+            return
+        try:
+            if _warnings is None:
+                return
+            if len(_warnings) >= 30:
+                return
+            s = str(msg).strip()
+            if not s:
+                return
+            _warnings.append(s)
+        except Exception:
+            pass
 
     # Optional: sort proxies by 'priority' (lower = higher). Keep stable order for ties.
     def _prio_key(pair):
@@ -814,6 +908,7 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
             if kind in {"auto", "vless", "trojan", "vmess", "ss", "hysteria2"}:
                 link = str(item.get("link") or "").strip()
                 if not link:
+                    _warn(f"Прокси {name or f'proxy#{idx}'}: пустая ссылка")
                     continue
 
                 # kind is UI hint; actual scheme is auto-detected.
@@ -830,6 +925,7 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
             elif kind == "wireguard":
                 conf = str(item.get("config") or "").strip()
                 if not conf:
+                    _warn(f"Прокси {name or f'proxy#{idx}'}: пустой WireGuard-конфиг")
                     continue
                 res = parse_wireguard(conf, custom_name=name)
                 proxy_name = res.name
@@ -838,6 +934,7 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
             elif kind == "yaml":
                 yaml_block = str(item.get("yaml") or "").strip()
                 if not yaml_block:
+                    _warn(f"Прокси {name or f'proxy#{idx}'}: пустой YAML-блок")
                     continue
                 yaml_block = _ensure_leading_dash_for_yaml_block(yaml_block)
 
@@ -876,14 +973,20 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
                 proxy_yaml = yaml_block
 
             else:
+                _warn(f"Прокси {name or f'proxy#{idx}'}: неизвестный тип '{kind}'")
                 # Unknown kind – ignore silently; UI should not send this.
                 continue
 
             cfg = apply_proxy_insert(cfg, proxy_yaml, proxy_name, groups)
 
-        except Exception:
+        except Exception as exc:
             # Let the rest of proxies still be applied; individual bad entries
             # just do not make it into the resulting config.
+            try:
+                label = name or f"proxy#{idx}"
+                _warn(f"Прокси {label}: ошибка добавления ({kind}): {exc}")
+            except Exception:
+                pass
             continue
 
     return cfg

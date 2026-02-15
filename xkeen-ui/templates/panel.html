@@ -68,9 +68,7 @@
   <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
 
-
-
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260119d') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260214a') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -102,7 +100,6 @@
       </div>
     </div>
   </div>
-
 
   <!-- Wider container (match DevTools page width) -->
   <div class="container container-wide">
@@ -209,59 +206,117 @@
     <div id="view-routing" class="view-section" data-xk-section="routing">
 <!-- Routing editor + Mihomo config -->
     <div class="layout-2col routing-layout">
-      <div class="layout-main">
 
-        <!-- Сворачиваемый блок routing -->
-        <section class="card">
-          <div class="commands-header" id="routing-header">
-            <h2>
-              Роутинг Xray
-              <span class="xray-profile-badge" data-profile="{{ xray_profile|e }}">
-                {% if xray_profile == 'hys2' %}Hysteria2{% else %}Обычный{% endif %}
-              </span>
-            </h2>
-            <span id="routing-arrow">▼</span>
-          </div>
+            <div class="layout-side routing-side">
+        <div class="routing-side-grid">
+    <section class="card routing-dat-card">
+              <div class="commands-header" id="routing-dat-header">
+                <h2>DAT-файлы GeoIP / GeoSite</h2>
+                <span id="routing-dat-arrow">►</span>
+              </div>
 
-          <div id="routing-body">
-            <p>Файл: <code>{{ routing_file }}</code></p>
+              <div id="routing-dat-body" style="display:none;">
+                <p class="xk-card-desc">Хранилища GeoIP/GeoSite используются правилами <code>geoip:</code> и <code>geosite:</code>. Здесь можно быстро обновить и заменить DAT-файлы.</p>
 
-            <div id="routing-help-line">💡 Справка</div>
+                <div class="routing-dat-toolbar">
+                  <div class="routing-dat-toolbar-left">
+                    <button id="routing-dat-refresh-btn" class="btn-secondary btn-icon" type="button" aria-label="Обновить статусы" data-tooltip="Проверить наличие DAT-файлов и обновить информацию о размере/дате.">⟳</button>
+                    <button id="routing-dat-geodat-install-btn" class="btn-secondary btn-compact" type="button" data-tooltip="Установить/обновить xk-geodat (включит просмотр содержимого DAT и добавление тегов в правила).">xk-geodat</button>
+                    <button id="routing-dat-geodat-install-file-btn" class="btn-secondary btn-icon" type="button" aria-label="Установить xk-geodat из файла" data-tooltip="Установить xk-geodat из файла (если вы тестируете до релиза или ставите свой бинарник).">⬆︎</button>
+                    <input id="routing-dat-geodat-install-file" type="file" style="display:none" />
+                  </div>
+                  <div id="routing-dat-status" class="status"></div>
+                </div>
 
-            <textarea id="routing-editor" spellcheck="false"></textarea>
+                <div class="routing-dat-grid">
+                  <div class="routing-dat-item" data-kind="geosite">
+                    <div class="routing-dat-head">
+                      <div class="routing-dat-title">
+                        <span class="routing-dat-name">GeoSite</span>
+                        <span class="routing-dat-file">geosite.dat</span>
+                      </div>
+                      <div class="routing-dat-meta" id="routing-dat-geosite-meta">—</div>
+                    </div>
 
-            <div id="routing-error" class="error"></div>
+                    <label class="routing-dat-field">
+                      <span>Папка</span>
+                      <input id="routing-dat-geosite-dir" class="routing-dat-input" type="text" placeholder="/opt/etc/xray/dat">
+                    </label>
 
-            <div class="actions">
-  <button id="routing-save-btn" data-tooltip="Сохранить текущий роутинг (routing.json).">💾 Save routing</button>
-  <button id="routing-format-btn" data-tooltip="Отформатировать JSON (красивые отступы).">✨ Format JSON</button>
-  <button id="routing-backup-btn" data-tooltip="Сделать бэкап текущего routing.json.">📦 Backup</button>
-  <button id="routing-restore-auto-btn" data-tooltip="Восстановить routing из автобэкапа.">⏪ Restore autobackup</button>
-  <button id="routing-export-local-btn" data-tooltip="Скачать routing.json на компьютер.">⬇️ Экспорт</button>
-  <button id="routing-import-local-btn" data-tooltip="Импортировать routing.json с компьютера.">⬆️ Импорт</button>
-</div>
+                    <label class="routing-dat-field">
+                      <span>Имя файла</span>
+                      <div class="routing-dat-combo" data-kind="geosite">
+                        <input id="routing-dat-geosite-name" class="routing-dat-input" type="text" list="routing-dat-geosite-name-list" placeholder="geosite.dat">
+                        <button id="routing-dat-geosite-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" data-tooltip="Показать найденные .dat в папке.">▼</button>
+                        <div id="routing-dat-geosite-found" class="routing-dat-found" data-tooltip="Найденные DAT в папке. Клик по строке подставит имя файла.">—</div>
+                      </div>
+                      <datalist id="routing-dat-geosite-name-list"></datalist>
+                    </label>
 
-<input type="file"
-       id="local-config-file-input"
-       accept="application/json"
-       style="display:none">
+                    <label class="routing-dat-field">
+                      <span>URL обновления</span>
+                      <input id="routing-dat-geosite-url" class="routing-dat-input" type="url" placeholder="https://.../geosite.dat">
+                    </label>
 
+                    <input id="routing-dat-geosite-file" type="file" accept=".dat" style="display:none">
 
-            <div class="actions">
-              <button id="github-export-btn" data-tooltip="Выгрузить текущий routing.json в GitHub‑каталог конфигов.">⬆️ Выгрузить в репозитарий</button>
-              <button id="github-open-catalog-btn" data-tooltip="Открыть каталог конфигураций (GitHub).">📂 Каталог конфигураций</button>
-            </div>
+                    <div class="routing-dat-actions">
+                      <button id="routing-dat-geosite-upload-btn" class="btn-secondary" type="button" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">⬆️ Загрузить</button>
+                      <button id="routing-dat-geosite-update-btn" class="btn-secondary" type="button" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">🔗 Обновить</button>
+                      <button id="routing-dat-geosite-download-btn" class="btn-secondary" type="button" data-tooltip="Скачать текущий локальный DAT-файл.">⬇️ Скачать</button>
+                    </div>
 
-            <div id="routing-status" class="status"></div>
-          </div>
-</section>
+                    <div class="routing-dat-actions routing-dat-actions-muted">
+                      <button id="routing-dat-geosite-content-btn" class="btn-secondary" type="button" data-tooltip="Открыть просмотр тегов/содержимого GeoSite (поиск + копирование geosite:TAG).">● Содержимое</button>
+                      <button id="routing-dat-geosite-inrouting-btn" class="btn-secondary" type="button" data-tooltip="Добавить тег GeoSite в правила маршрутизации (создать новое правило или добавить в существующее).">➕ В правило</button>
+                    </div>
+                  </div>
 
-        
+                  <div class="routing-dat-item" data-kind="geoip">
+                    <div class="routing-dat-head">
+                      <div class="routing-dat-title">
+                        <span class="routing-dat-name">GeoIP</span>
+                        <span class="routing-dat-file">geoip.dat</span>
+                      </div>
+                      <div class="routing-dat-meta" id="routing-dat-geoip-meta">—</div>
+                    </div>
 
-      </div>
+                    <label class="routing-dat-field">
+                      <span>Папка</span>
+                      <input id="routing-dat-geoip-dir" class="routing-dat-input" type="text" placeholder="/opt/etc/xray/dat">
+                    </label>
 
-      <div class="layout-side">
+                    <label class="routing-dat-field">
+                      <span>Имя файла</span>
+                      <div class="routing-dat-combo" data-kind="geoip">
+                        <input id="routing-dat-geoip-name" class="routing-dat-input" type="text" list="routing-dat-geoip-name-list" placeholder="geoip.dat">
+                        <button id="routing-dat-geoip-browse" class="btn-secondary btn-icon routing-dat-combo-btn" type="button" aria-label="Обнаруженные DAT" data-tooltip="Показать найденные .dat в папке.">▼</button>
+                        <div id="routing-dat-geoip-found" class="routing-dat-found" data-tooltip="Найденные DAT в папке. Клик по строке подставит имя файла.">—</div>
+                      </div>
+                      <datalist id="routing-dat-geoip-name-list"></datalist>
+                    </label>
 
+                    <label class="routing-dat-field">
+                      <span>URL обновления</span>
+                      <input id="routing-dat-geoip-url" class="routing-dat-input" type="url" placeholder="https://.../geoip.dat">
+                    </label>
+
+                    <input id="routing-dat-geoip-file" type="file" accept=".dat" style="display:none">
+
+                    <div class="routing-dat-actions">
+                      <button id="routing-dat-geoip-upload-btn" class="btn-secondary" type="button" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">⬆️ Загрузить</button>
+                      <button id="routing-dat-geoip-update-btn" class="btn-secondary" type="button" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">🔗 Обновить</button>
+                      <button id="routing-dat-geoip-download-btn" class="btn-secondary" type="button" data-tooltip="Скачать текущий локальный DAT-файл.">⬇️ Скачать</button>
+                    </div>
+
+                    <div class="routing-dat-actions routing-dat-actions-muted">
+                      <button id="routing-dat-geoip-content-btn" class="btn-secondary" type="button" data-tooltip="Открыть просмотр тегов/содержимого GeoIP (поиск + копирование geoip:TAG).">● Содержимое</button>
+                      <button id="routing-dat-geoip-inrouting-btn" class="btn-secondary" type="button" data-tooltip="Добавить тег GeoIP в правила маршрутизации (создать новое правило или добавить в существующее).">➕ В правило</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
 
     <!-- Inbounds mode -->
     <section class="card">
@@ -271,7 +326,15 @@
       </div>
 
       <div id="inbounds-body" style="display:none;">
-      <p>Файл: <code>{{ inbounds_file }}</code></p>
+
+      <div class="xk-fragment-row">
+        <label class="xk-fragment-select">
+          <span class="hint-label">Файл</span>
+          <select id="inbounds-fragment-select" class="xray-log-select" data-current="{{ inbounds_name|e }}"></select>
+        </label>
+        <button id="inbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" data-tooltip="Обновить список файлов inbounds из /opt/etc/xray/configs/">↻</button>
+      </div>
+      <p class="xk-card-desc">Активный фрагмент: <code id="inbounds-file-code">{{ inbounds_file }}</code></p>
 
       <div class="inbounds-modes">
         <label class="mode-item">
@@ -304,11 +367,11 @@
         Перезапускать xkeen после смены режима
       </label>
 
-      <div class="actions">
-        <button id="inbounds-open-editor-btn" data-tooltip="Открыть {{ inbounds_name|e }} в редакторе JSON.">📝 Открыть в редакторе</button>
-        <button id="inbounds-save-btn" data-tooltip="Сохранить {{ inbounds_name|e }}.">💾 Save inbounds</button>
-        <button id="inbounds-backup-btn" data-tooltip="Сделать бэкап {{ inbounds_name|e }}.">📦 Backup {{ inbounds_name|e }}</button>
-        <button id="inbounds-restore-auto-btn" data-tooltip="Восстановить inbounds из автобэкапа.">⏪ Restore inbounds</button>
+      <div class="actions xk-actions-grid-2">
+        <button id="inbounds-open-editor-btn" data-tooltip="Открыть {{ inbounds_name|e }} в редакторе JSON.">📝 Редактор</button>
+        <button id="inbounds-save-btn" data-tooltip="Сохранить {{ inbounds_name|e }}.">💾 Сохранить</button>
+        <button id="inbounds-backup-btn" data-tooltip="Сделать бэкап {{ inbounds_name|e }}.">📦 Backup</button>
+        <button id="inbounds-restore-auto-btn" data-tooltip="Восстановить inbounds из автобэкапа.">⏪ Restore</button>
       </div>
 
       <div id="inbounds-status" class="status"></div>
@@ -323,7 +386,15 @@
       </div>
 
       <div id="outbounds-body" style="display:none;">
-      <p>Файл: <code>{{ outbounds_file }}</code></p>
+
+      <div class="xk-fragment-row">
+        <label class="xk-fragment-select">
+          <span class="hint-label">Файл</span>
+          <select id="outbounds-fragment-select" class="xray-log-select" data-current="{{ outbounds_name|e }}"></select>
+        </label>
+        <button id="outbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" data-tooltip="Обновить список файлов outbounds из /opt/etc/xray/configs/">↻</button>
+      </div>
+      <p class="xk-card-desc">Активный фрагмент: <code id="outbounds-file-code">{{ outbounds_file }}</code></p>
       <p class="xk-card-desc">Укажи ссылку прокси (vless / trojan / vmess / ss / hy2), на основе которой будет собран конфиг <code>{{ outbounds_name|e }}</code>.</p>
 
       <div class="outbounds-hints">
@@ -382,13 +453,13 @@
         <div id="outbounds-parse-kv" class="outbounds-parse-kv"></div>
       </div>
 
-      <div class="actions">
-        <button id="outbounds-open-editor-btn" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">📝 Открыть в редакторе</button>
-        <button id="outbounds-normalize-btn" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">✨ Нормализовать</button>
-        <button id="outbounds-build-btn" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">🧩 Собрать ссылку</button>
-        <button id="outbounds-save-btn" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">💾 Save link</button>
-        <button id="outbounds-backup-btn" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">📦 Backup {{ outbounds_name|e }}</button>
-        <button id="outbounds-restore-auto-btn" data-tooltip="Восстановить outbounds из автобэкапа.">⏪ Restore outbounds</button>
+      <div class="actions xk-actions-grid-2">
+        <button id="outbounds-open-editor-btn" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">📝 Редактор</button>
+        <button id="outbounds-normalize-btn" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">✨ Норм</button>
+        <button id="outbounds-build-btn" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">🧩 Собрать</button>
+        <button id="outbounds-save-btn" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">💾 Сохранить</button>
+        <button id="outbounds-backup-btn" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">📦 Backup</button>
+        <button id="outbounds-restore-auto-btn" data-tooltip="Восстановить outbounds из автобэкапа.">⏪ Restore</button>
       </div>
 
       <div id="outbounds-status" class="status"></div>
@@ -397,50 +468,164 @@
 
     <!-- Backups list -->
     <section class="card">
-      <h2>Бэкапы Xray конфигов (routing / inbounds / outbounds)</h2>
-      <p>Каталог бэкапов: <code>{{ backup_dir }}</code></p>
+      <div class="commands-header" id="routing-backups-header">
+        <h2>Бэкапы Xray конфигов (routing / inbounds / outbounds / dns / …)</h2>
+        <span id="routing-backups-arrow">►</span>
+      </div>
 
-      <table id="backups-table">
-        <thead>
-          <tr>
-            <th>Имя файла</th>
-            <th>Размер</th>
-            <th>Создан</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-        </tbody>
-      </table>
+      <div id="routing-backups-body" style="display:none;">
+        <p>Каталог бэкапов: <code>{{ backup_dir }}</code></p>
 
-      <div id="backups-status" class="status"></div>
+        <p class="xk-card-desc" style="margin-top: 8px;">
+          Здесь показываются <b>снимки (snapshots)</b> — автоматические rollback‑копии каждого файла.
+          Снимок обновляется при сохранении конфига и содержит <b>предыдущее</b> состояние файла.
+        </p>
 
-      <div class="hint xk-card-desc">
-        <a href="/backups">Открыть страницу бэкапов →</a>
+
+        <table id="backups-table" data-mode="snapshots">
+          <thead>
+            <tr>
+              <th>Имя файла</th>
+              <th>Размер</th>
+              <th>Создан</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+
+        <div id="backups-status" class="status"></div>
+
+        <div class="hint xk-card-desc">
+          <a href="/backups">Открыть страницу истории бэкапов →</a>
+        </div>
       </div>
     </section>
 
     <!-- Help block -->
     <section class="card">
-      <h2>Справка и ссылки</h2>
-      <ul class="links">
-        <li><a href="https://github.com/Corvus-Malus/XKeen" target="_blank" rel="noopener">GitHub Corvus-Malus/XKeen</a></li>
-        <li><a href="https://jameszero.net/faq-xkeen.htm" target="_blank" rel="noopener">FAQ по XKeen (jameszero.net)</a></li>
-        <li><a href="https://t.me/c/2138190368/23" target="_blank" rel="noopener">Telegram чат XKeen</a></li>
-        <li><a href="https://github.com/jameszeroX/XKeen" target="_blank" rel="noopener">GitHub jameszeroX/XKeen</a></li>
-        <li><a href="https://github.com/jameszeroX/XKeen/tree/main/test" target="_blank" rel="noopener">XKeen beta</a></li>
-      </ul>
+      <div class="commands-header" id="routing-help-header">
+        <h2>Справка и ссылки</h2>
+        <span id="routing-help-arrow">►</span>
+      </div>
+      <div id="routing-help-body" style="display:none;">
+        <ul class="links">
+          <li><a href="https://github.com/Corvus-Malus/XKeen" target="_blank" rel="noopener">GitHub Corvus-Malus/XKeen</a></li>
+          <li><a href="https://jameszero.net/faq-xkeen.htm" target="_blank" rel="noopener">FAQ по XKeen (jameszero.net)</a></li>
+          <li><a href="https://t.me/c/2138190368/23" target="_blank" rel="noopener">Telegram чат XKeen</a></li>
+          <li><a href="https://github.com/jameszeroX/XKeen" target="_blank" rel="noopener">GitHub jameszeroX/XKeen</a></li>
+          <li><a href="https://github.com/jameszeroX/XKeen/tree/main/test" target="_blank" rel="noopener">XKeen beta</a></li>
+        </ul>
+      </div>
     </section>
 
+        </div>
+      </div>
 
+<div class="routing-col routing-col-center">
+        <section class="card routing-rules-card">
+          <div class="commands-header" id="routing-rules-header">
+            <h2>Правила маршрутизации</h2>
+            <span id="routing-rules-arrow">►</span>
+          </div>
 
+          <div id="routing-rules-body" style="display:none;">
+            <div class="routing-rules-toolbar">
+              <div class="routing-rules-summary">
+                <span id="routing-rules-count">—</span>
+                <span class="routing-rules-dot">•</span>
+                <span id="routing-rules-geo">—</span>
+              </div>
+              <div class="routing-rules-controls">
+                <input type="search" id="routing-rules-filter" class="routing-rules-filter" placeholder="Фильтр по тегам / типам / значениям">
+                <button id="routing-rules-refresh-btn" class="btn-secondary" type="button">⟳ Обновить</button>
+              </div>
+            </div>
 
-    
+            <div class="routing-rules-config">
+              <div class="routing-rules-settings">
+                <label class="routing-rule-field">
+                  <span class="routing-rule-key"><span>domainStrategy</span></span>
+                  <select id="routing-domain-strategy" class="routing-rule-input routing-domain-strategy-select">
+                    <option value="">(по умолчанию)</option>
+                    <option value="AsIs">AsIs</option>
+                    <option value="IPIfNonMatch">IPIfNonMatch</option>
+                    <option value="IPOnDemand">IPOnDemand</option>
+                  </select>
+                </label>
+              </div>
+              <div class="routing-rules-actions">
+                <button id="routing-balancer-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить балансировщик" aria-label="Добавить балансировщик">⚖️</button>
+                <button id="routing-rules-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить правило" aria-label="Добавить правило">📜</button>
+                <button id="routing-rules-apply-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Применить изменения в JSON-редактор" aria-label="Применить в JSON">💾</button>
+                <button id="routing-rules-reload-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Перезагрузить из JSON-редактора" aria-label="Перезагрузить из JSON">↺</button>
+              </div>
+            </div>
 
+            <div class="routing-balancers">
+              <div class="routing-balancers-title">Балансировщики</div>
+              <div id="routing-balancers-list" class="routing-balancers-grid"></div>
+            </div>
 
+            <div id="routing-rules-list" class="routing-rule-grid"></div>
+            <div id="routing-rules-empty" class="xk-card-desc">Здесь появятся правила из routing.rules.</div>
+          </div>
+        </section>
 
+        <!-- Сворачиваемый блок routing -->
 
-      
+        <section class="card">
+          <div class="commands-header" id="routing-header">
+            <h2>
+              Роутинг Xray
+              <span class="xray-profile-badge" data-profile="{{ xray_profile|e }}">
+                {% if xray_profile == 'hys2' %}Hysteria2{% else %}Обычный{% endif %}
+              </span>
+            </h2>
+            <span class="xk-routing-active-inline">Активный фрагмент: <code id="routing-file-code">{{ routing_file }}</code></span>
+            <span id="routing-arrow">▼</span>
+          </div>
+
+          <div id="routing-body">
+            <!-- Compact header row (file selector + editor toolbar) -->
+            <div class="xk-routing-topbar">
+              <div class="xk-routing-fileblock">
+                <div class="xk-routing-fileline">
+                  <select id="routing-fragment-select" class="xray-log-select" data-current="{{ routing_name|e }}"></select>
+                  <button id="routing-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" data-tooltip="Обновить список файлов роутинга из /opt/etc/xray/configs/">↻</button>
+                </div>
+              </div>
+              <div class="xk-routing-toolbarhost" id="routing-toolbar-host"></div>
+            </div>
+
+            <textarea id="routing-editor" spellcheck="false"></textarea>
+
+            <div id="routing-error" class="error"></div>
+
+            <div class="actions">
+  <button id="routing-save-btn" data-tooltip="Сохранить текущий роутинг (routing.json).">💾 Save routing</button>
+  <button id="routing-format-btn" data-tooltip="Отформатировать JSON (красивые отступы).">✨ Format JSON</button>
+  <button id="routing-backup-btn" data-tooltip="Сделать бэкап текущего routing.json.">📦 Backup</button>
+  <button id="routing-restore-auto-btn" data-tooltip="Восстановить routing из автобэкапа.">⏪ Restore autobackup</button>
+  <button id="routing-export-local-btn" data-tooltip="Скачать routing.json на компьютер.">⬇️ Экспорт</button>
+  <button id="routing-import-local-btn" data-tooltip="Импортировать routing.json с компьютера.">⬆️ Импорт</button>
+  <button id="routing-import-template-btn" data-tooltip="Импортировать готовый шаблон роутинга (заменит текст в редакторе, без автосохранения).">🧩 Шаблоны</button>
+</div>
+
+<input type="file"
+       id="local-config-file-input"
+       accept="application/json"
+       style="display:none">
+
+            <div class="actions">
+              <button id="github-export-btn" data-tooltip="Выгрузить текущий routing.json в GitHub‑каталог конфигов.">⬆️ Выгрузить в репозитарий</button>
+              <button id="github-open-catalog-btn" data-tooltip="Открыть каталог конфигураций (GitHub).">📂 Каталог конфигураций</button>
+            </div>
+
+            <div id="routing-status" class="status"></div>
+          </div>
+</section>
 
       </div>
     </div>
@@ -709,8 +894,6 @@
     </section>
 </div>
 
-
-
 <div id="view-files" class="view-section" style="display:none;" data-xk-section="files">
   <section class="card fm-card">
     <div class="fm-header">
@@ -884,14 +1067,10 @@
           <span class="small dt-log-stats" id="xray-log-stats" aria-live="polite"></span>
         </div>
 
-
-
-
         <pre id="xray-log-output" class="log-block xray-log-block"></pre>
         <div id="xray-log-status" class="status"></div>
       </section>
     </div>
-
 
     <!-- Xray log: context modal -->
     <div id="xray-context-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Контекст строки лога Xray">
@@ -1083,10 +1262,6 @@
       </div>
     </div>
 
-
-
-
-
     
     <div id="core-modal" class="modal hidden">
       <div class="modal-content">
@@ -1129,6 +1304,148 @@
       </div>
     </div>
 
+
+
+    <!-- Xray snapshots preview modal (read-only) -->
+    <div id="xray-snapshot-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Просмотр снимка Xray конфигурации">
+      <div class="modal-content" style="max-width: 980px;" data-modal-key="xray-snapshot-preview">
+        <div class="modal-header">
+          <span class="modal-title">Снимок: <span id="xray-snapshot-title">—</span></span>
+          <button type="button" class="modal-close" id="xray-snapshot-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="xray-snapshot-meta" class="modal-description" style="margin-bottom: 10px;">—</p>
+          <textarea class="routing-template-preview-code" id="xray-snapshot-preview" readonly>// загрузка…</textarea>
+          <div id="xray-snapshot-status" class="modal-hint" style="margin-top: 10px;"></div>
+        </div>
+        <div class="modal-actions" style="justify-content: space-between;">
+          <button type="button" class="btn-secondary" id="xray-snapshot-copy-btn" data-tooltip="Скопировать текст снимка в буфер обмена">⧉ Копировать</button>
+          <div style="display:flex; gap:10px;">
+            <button type="button" id="xray-snapshot-cancel-btn">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Routing templates: import preset into 05_routing.json (no auto-save) -->
+    <div id="routing-template-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Импорт шаблона роутинга">
+      <div class="modal-content" style="max-width: 860px;" data-modal-key="routing-templates">
+        <div class="modal-header">
+          <span class="modal-title">Импорт шаблона роутинга <span id="routing-template-count" class="xk-count-badge">0</span></span>
+          <button type="button" class="modal-close" id="routing-template-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description" style="margin-bottom: 12px;">
+            Выбери готовый шаблон. Он будет загружен в редактор и заменит текущий текст <b>без автосохранения</b>.
+          </p>
+
+          <div class="routing-template-grid">
+            <div class="routing-template-list" id="routing-template-list"></div>
+
+            <div class="routing-template-preview">
+              <div class="routing-template-preview-header">
+                <div class="routing-template-preview-title" id="routing-template-title">—</div>
+                <div class="routing-template-preview-desc" id="routing-template-desc">Выбери шаблон слева, чтобы увидеть описание и превью.</div>
+              </div>
+              <textarea class="routing-template-preview-code" id="routing-template-preview" readonly>// превью появится здесь</textarea>
+            </div>
+          </div>
+
+          <div id="routing-template-status" class="modal-hint" style="margin-top: 10px;"></div>
+        </div>
+        <div class="modal-actions" style="justify-content: space-between;">
+          <div style="display:flex; gap:10px; flex-wrap: wrap;">
+            <button type="button" class="btn-secondary" id="routing-template-refresh-btn" data-tooltip="Перечитать список шаблонов из /opt/etc/xray/templates/routing">⟳ Обновить</button>
+            <button type="button" class="btn-secondary" id="routing-template-save-btn" data-tooltip="Сохранить текущий текст из редактора как новый пользовательский шаблон">💾 Сохранить как шаблон</button>
+            <button type="button" class="btn-secondary" id="routing-template-edit-btn" disabled data-tooltip="Редактировать выбранный шаблон (только пользовательские)">✎ Редактировать</button>
+            <button type="button" class="btn-danger" id="routing-template-delete-btn" disabled data-tooltip="Удалить выбранный шаблон (только пользовательские)">🗑 Удалить</button>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button type="button" id="routing-template-import-btn" class="btn-primary" disabled data-tooltip="Заменить текст в редакторе выбранным шаблоном">Импортировать</button>
+            <button type="button" class="btn-secondary" id="routing-template-cancel-btn">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Routing templates: save current editor content as a user template -->
+    <div id="routing-template-save-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Сохранить шаблон роутинга">
+      <div class="modal-content" style="max-width: 560px;" data-modal-key="routing-template-save">
+        <div class="modal-header">
+          <span class="modal-title">Сохранить как шаблон</span>
+          <button type="button" class="modal-close" id="routing-template-save-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description" style="margin-bottom: 10px;">
+            Сохранит текущий текст из редактора как новый пользовательский шаблон в <code>/opt/etc/xray/templates/routing</code>.
+          </p>
+
+          <div class="routing-template-save-form">
+            <label>
+              <span class="hint-label">Имя файла</span>
+              <input id="routing-template-save-filename" class="xray-log-filter" type="text" placeholder="my_template.jsonc">
+            </label>
+            <label>
+              <span class="hint-label">Название (опционально)</span>
+              <input id="routing-template-save-title" class="xray-log-filter" type="text" placeholder="Например: Мой роутинг">
+            </label>
+            <label>
+              <span class="hint-label">Описание (опционально)</span>
+              <textarea id="routing-template-save-desc" class="xray-log-filter routing-template-save-textarea" rows="3" placeholder="Коротко опиши, что делает этот шаблон..."></textarea>
+            </label>
+          </div>
+
+          <div id="routing-template-save-status" class="modal-hint" style="margin-top: 10px;"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="routing-template-save-cancel-btn">Отмена</button>
+          <button type="button" class="btn-primary" id="routing-template-save-confirm-btn">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+<!-- Routing templates: edit existing user template -->
+<div id="routing-template-edit-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Редактировать шаблон роутинга">
+  <div class="modal-content" style="max-width: 860px;" data-modal-key="routing-template-edit">
+    <div class="modal-header">
+      <span class="modal-title">Редактировать шаблон</span>
+      <button type="button" class="modal-close" id="routing-template-edit-close-btn" title="Закрыть">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-description" style="margin-bottom: 10px;">
+        Измени <b>имя / название / описание</b> и содержимое шаблона. Доступно только для <b>пользовательских</b> шаблонов.
+      </p>
+
+      <div class="routing-template-edit-form">
+        <div class="routing-template-edit-row">
+          <label>
+            <span class="hint-label">Имя файла</span>
+            <input id="routing-template-edit-filename" class="xray-log-filter" type="text" placeholder="my_template.jsonc">
+          </label>
+          <label>
+            <span class="hint-label">Название (опционально)</span>
+            <input id="routing-template-edit-title" class="xray-log-filter" type="text" placeholder="Например: Мой роутинг">
+          </label>
+        </div>
+
+        <label>
+          <span class="hint-label">Описание (опционально)</span>
+          <textarea id="routing-template-edit-desc" class="xray-log-filter routing-template-save-textarea" rows="2" placeholder="Коротко опиши, что делает этот шаблон..."></textarea>
+        </label>
+
+        <label>
+          <span class="hint-label">Шаблон (JSON / JSONC)</span>
+          <textarea id="routing-template-edit-content" class="routing-template-edit-textarea" rows="14" spellcheck="false"></textarea>
+        </label>
+      </div>
+
+      <div id="routing-template-edit-status" class="modal-hint" style="margin-top: 10px;"></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="routing-template-edit-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="routing-template-edit-confirm-btn">Сохранить</button>
+    </div>
+  </div>
+</div>
     <!-- Outbounds: mini generator modal (build proxy link from hints) -->
     <div id="outbounds-generator-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Сборка ссылки прокси">
       <div class="modal-content" style="max-width: 780px;" data-modal-key="outbounds-generator">
@@ -1465,7 +1782,6 @@
       </div>
     </div>
 
-
     <div id="github-catalog-modal" class="modal hidden">
       <div class="modal-content">
         <div class="modal-header">
@@ -1473,15 +1789,24 @@
           <button type="button" class="modal-close" id="github-catalog-close-btn-header">×</button>
         </div>
         <div class="modal-body">
+          <div class="github-catalog-messages">
+            <div id="github-catalog-status" class="status" style="margin-top:0;"></div>
+            <div id="github-catalog-error" class="error" style="display:none; margin-top:0;"></div>
+          </div>
           <div id="github-catalog-list">Загрузка...</div>
         </div>
         <div class="modal-actions">
-          <button id="github-catalog-close-btn">Закрыть</button>
-          <a id="github-repo-link" href="{{ github_repo_url }}" target="_blank">Открыть репозиторий на GitHub</a>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn-secondary btn-compact" id="github-catalog-retry-btn" title="Повторить загрузку каталога">↻ Повторить</button>
+            <span id="github-catalog-stale-pill" class="github-stale-pill hidden" title="Показаны данные из кэша">кэш</span>
+            <a id="github-repo-link" href="{{ github_repo_url }}" target="_blank">Открыть репозиторий на GitHub</a>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="github-catalog-close-btn">Закрыть</button>
+          </div>
         </div>
       </div>
     </div>
-
 
     <!-- Donate modal (💰 Донат) -->
     <div id="donate-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Поддержать проект">
@@ -1539,7 +1864,6 @@
       </div>
     </div>
 
-
     <div id="toast-container"></div>
 
     <footer>
@@ -1575,8 +1899,11 @@
     <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
 <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/backups.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/dat_contents_modal.js', v='20260213b') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/backups.js', v='20260213c') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260213b') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260120c') }}"></script>
   <script src="{{ url_for('static', filename='js/features/local_io.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/github.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/service_status.js') }}"></script>
@@ -1650,12 +1977,77 @@
           <div id="json-editor-error" class="error"></div>
         </div>
         <div class="modal-actions">
+          <button type="button" id="json-editor-format-btn" class="btn-secondary" data-tooltip="Форматировать JSON/JSONC (с комментариями)">✨ Format</button>
           <button id="json-editor-save-btn">💾 Сохранить</button>
           <button id="json-editor-cancel-btn">Отмена</button>
         </div>
       </div>
     </div>
 
+    <!-- DAT GeoSite/GeoIP: просмотр тегов и содержимого (copy geosite:TAG / geoip:TAG) -->
+    <div id="routing-dat-contents-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="DAT content viewer">
+      <div class="modal-content dat-contents-modal-content">
+        <div class="modal-header">
+          <span class="modal-title" id="routing-dat-contents-title">DAT — Содержимое</span>
+          <button type="button" class="modal-close" id="routing-dat-contents-close-btn" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body dat-contents-modal-body">
+          <div class="dat-contents-head">
+            <div class="dat-contents-meta">
+              <span class="dat-contents-kind" id="routing-dat-contents-kind">geosite:</span>
+              <code class="dat-contents-path" id="routing-dat-contents-path">—</code>
+            </div>
+            <div class="dat-contents-controls">
+              <button type="button" id="routing-dat-contents-install-geodat-btn" class="btn-secondary" data-tooltip="Установить/обновить xk-geodat (нужен для просмотра содержимого DAT).">⬇︎ xk-geodat</button>
+              <button type="button" id="routing-dat-contents-reload-btn" class="btn-secondary" data-tooltip="Обновить список тегов">↻</button>
+            </div>
+          </div>
+
+          <div class="dat-contents-layout">
+            <div class="dat-contents-tags">
+              <div class="dat-contents-tags-top">
+                <input id="routing-dat-contents-search" class="routing-dat-input" type="text" placeholder="Поиск тега…">
+                <div id="routing-dat-contents-tags-status" class="dat-contents-status"></div>
+              </div>
+              <div id="routing-dat-contents-tags-list" class="dat-contents-tags-list"></div>
+            </div>
+
+            <div class="dat-contents-items">
+              <div class="dat-contents-items-top">
+                <div class="dat-contents-selected">
+                  <span class="dat-contents-selected-label">Тег:</span>
+                  <code id="routing-dat-contents-selected-tag">—</code>
+                  <span id="routing-dat-contents-used-badge" class="dat-contents-used-badge" data-tooltip="Тег используется в routing.rules">✓ используется</span>
+                </div>
+                <div class="dat-contents-toolbar">
+                  <button type="button" id="routing-dat-contents-copy-selected-btn" class="btn-secondary" disabled data-tooltip="Выберите тег" aria-label="Copy">⧉</button>
+                  <div class="dat-contents-pager dat-contents-pager-inline">
+                    <button type="button" id="routing-dat-contents-prev-btn" class="btn-secondary" disabled data-tooltip="Предыдущая страница" aria-label="Prev">←</button>
+                    <div id="routing-dat-contents-page-info" class="dat-contents-page-info"></div>
+                    <button type="button" id="routing-dat-contents-next-btn" class="btn-secondary" disabled data-tooltip="Следующая страница" aria-label="Next">→</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PR3: быстрый перенос выбранного тега в routing.rules (создать/добавить) -->
+              <div class="dat-contents-routingbar" id="routing-dat-contents-routingbar">
+                <span class="dat-contents-routing-label">В routing:</span>
+                <select id="routing-dat-contents-target-rule" class="routing-dat-input dat-contents-select" data-tooltip="Куда добавить выбранный тег"></select>
+                <select id="routing-dat-contents-target-outbound" class="routing-dat-input dat-contents-select" data-tooltip="outboundTag для нового правила"></select>
+                <button type="button" id="routing-dat-contents-inrouting-btn" class="btn-secondary" disabled data-tooltip="Добавить выбранный тег в правило">➕</button>
+                <div id="routing-dat-contents-routing-status" class="dat-contents-status"></div>
+              </div>
+
+              <div id="routing-dat-contents-items-status" class="dat-contents-status"></div>
+              <div id="routing-dat-contents-items-list" class="dat-contents-items-list"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions" style="justify-content:flex-end;">
+          <button type="button" id="routing-dat-contents-ok-btn" class="btn-secondary">Закрыть</button>
+        </div>
+      </div>
+    </div>
 
 <div id="mihomo-validation-modal" class="modal hidden" onclick="if (event.target === this) hideMihomoValidationModal();">
   <div class="modal-content">
@@ -1755,7 +2147,6 @@
     </div>
   </div>
 </div>
-
 
 <!-- File Manager: Connect modal -->
 <div id="fm-connect-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Remote connect">
@@ -2126,8 +2517,6 @@
   </div>
 </div>
 
-
-
 <!-- File Manager: properties -->
 <div id="fm-props-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Properties">
   <div class="modal-content" style="max-width:720px;">
@@ -2313,7 +2702,6 @@
   </div>
 </div>
 
-
 <!-- File Manager: bookmarks (pins) modal -->
 <div id="fm-bookmarks-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Избранное">
   <div class="modal-content" style="max-width:860px;">
@@ -2393,7 +2781,6 @@
     </div>
   </div>
 </div>
-
 
 <!-- File Manager: help modal -->
 <div id="fm-help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Справка по файловому менеджеру">

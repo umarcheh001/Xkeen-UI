@@ -1,0 +1,335 @@
+// Настройка маршрутизации
+{
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "rules": [
+      // Блокировка quic
+      {
+        "network": "udp",
+        "port": "443",
+        "outboundTag": "block",
+        "type": "field"
+      },
+
+      // Прямое подключение | LAN / локальные сети
+      {
+        "type": "field",
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "direct",
+        "ip": [
+          "127.0.0.0/8",
+          "10.0.0.0/8",
+          "172.16.0.0/12",
+          "192.168.0.0/16",
+          "169.254.0.0/16"
+        ]
+      },
+
+      // Блокировка  |   Уязвимые UDP порты
+      {
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "block",
+        "type": "field",
+        "network": "udp",
+        "port": "135, 137, 138, 139"
+      },
+
+      // Блокировка | Реклама и аналитика
+      {
+        "type": "field",
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "block",
+        "domain": [
+          "ext:geosite_v2fly.dat:category-ads-all",
+          "google-analytics",
+          "analytics.yandex",
+          "appcenter.ms",
+          "app-measurement.com",
+          "firebase.io",
+          "crashlytics.com"
+        ]
+      },
+
+      {
+        // VPS подключение  |  IP адреса |
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "vless-reality",
+        "type": "field",
+        "ip": ["ext:geoip_v2fly.dat:google", "ext:geoip_v2fly.dat:twitter"]
+      },
+
+      // VPS подключение  | Для работы Telegram открыть порты xkeen -ap 80,443,596:599,1400,5222
+      {
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "vless-reality",
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "80,443,596-599,1400,5222",
+        "ip": [
+          "91.108.4.0/22",
+          "91.108.8.0/22",
+          "91.108.12.0/22",
+          "91.108.16.0/22",
+          "91.108.20.0/22",
+          "91.108.56.0/22",
+          "95.161.64.0/20",
+          "149.154.160.0/20",
+          "149.154.162.0/23",
+          "149.154.164.0/23",
+          "149.154.166.0/23",
+          "185.76.151.0/24",
+          "ext:geoip_v2fly.dat:telegram"
+        ]
+      },
+
+      // VPS подключение  |  Доменные имена
+      {
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "vless-reality",
+        "type": "field",
+        "domain": [
+          "ext:geosite_v2fly.dat:speedtest",
+          "ext:geosite_v2fly.dat:openai",
+          "ext:geosite_v2fly.dat:discord",
+          "ext:geosite_v2fly.dat:twitter",
+          "ext:geosite_v2fly.dat:youtube",
+          "ext:geosite_v2fly.dat:facebook",
+          "ext:geosite_v2fly.dat:instagram",
+          "ext:geosite_v2fly.dat:tiktok",
+          "ext:geosite_v2fly.dat:netflix",
+          "ext:geosite_v2fly.dat:tidal",
+          "ext:geosite_v2fly.dat:intel",
+          "ext:geosite_v2fly.dat:whatsapp",
+          "ext:geosite_v2fly.dat:whatsapp-ads",
+          "ext:geosite_v2fly.dat:spotify",
+          "ext:geosite_v2fly.dat:autodesk",
+          "ext:geosite_v2fly.dat:google-gemini",
+          "ext:geosite_v2fly.dat:google-deepmind",
+          "ext:geosite_v2fly.dat:soundcloud",
+          "ext:geosite_v2fly.dat:linkedin",
+          "ext:geosite_v2fly.dat:notion",
+          "ext:geosite_v2fly.dat:playstation",
+          "ext:geosite_v2fly.dat:github",
+
+          "status.rockblack.pro",
+          "rockblack.pro",
+          "rockblack.su",
+          "domain:grok.com",
+          "manus.im",
+          "cloudflare-ech.com",
+          "rutracker.org",
+          "rutracker.net",
+          "static.rutracker.cc",
+          "lostfilm.tv",
+          "themoviedb.org",
+          "image.tmdb.org",
+          "4pda.to",
+          "grok.com",
+
+          // Roblox
+          "roblox.com",
+          "robloxengine.com",
+          "rbxcdn.com",
+          "robloxcdn.com",
+          "rbxgame.com",
+          "rbxtrk.com",
+          "robloxlabs.com",
+          "rbxes.com",
+
+          // kino.pub
+          "firebase-settings.crashlytics.com",
+          "firebaseinstallations.googleapis.com",
+          "kp-pro.cloud",
+          "firebaseremoteconfigrealtime.googleapis.com",
+          "firebaseremoteconfig.googleapis.com",
+          "cdn32.lol",
+          "kino.pub",
+
+          // viber
+          "domain:viber.com",
+          "domain:viber.me",
+          "domain:viber.co",
+          "domain:vbcdn.com",
+          "domain:vbcdn.net",
+          "s-bid.rmp.rakuten.com",
+          "es.amplreq.com",
+          "venetia.iad.appboy.com",
+          "firebase-settings.crashlytics.com",
+          "acr.amplreq.com",
+          "s-bid.rmp.rakuten.com",
+          "content.cdn.viber.com",
+          "app.adjust.com",
+          "app.adjust.io",
+          "googleads.g.doubleclick.net",
+          "media.cdn.viber.com",
+          "mads.amazon-adsystem.com",
+          "s.amazon-adsystem.com",
+          "aax.amazon-adsystem.com",
+          "c.amazon-adsystem.com",
+          "web.whatsapp.com",
+          "firebaselogging-pa.googleapis.com",
+          "api.mixpanel.com",
+          "data-event-proxy.viber.com",
+          "s-bid.rmp.rakuten.com",
+
+          //claude
+          "claude.ai",
+          "claude.com",
+          "a-cdn.anthropic.com",
+          "statsig.anthropic.com",
+          "s-cdn.anthropic.com",
+          "a-cdn.claude.ai",
+          "widget.intercom.io",
+          "a-api.anthropic.com",
+
+          // hdrezka.ag
+          "stream.voidboost.cc",
+          "hdrezka.ag",
+
+          // IP address
+          "whoer.net",
+          "check-host.net",
+          "2ip.io"
+        ]
+      },
+
+      // Throne and Liberty 10000,11005 |  Supercell 9339 |  viber 9443,2233,543 |  Minecraft Java 25565
+      {
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "vless-reality",
+        "type": "field",
+        "network": "tcp",
+        "port": "10000,11005,9339,9443,2233,543,25565"
+      },
+
+      // Battlefield 6 открыть порты xkeen -ap 80,443,20000:28000
+      {
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "vless-reality",
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "20000-28000"
+      },
+
+      {
+        "type": "field",
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "vless-reality",
+        "ip": ["ext:geoip_zkeenip.dat:akamai", "ext:geoip_zkeenip.dat:amazon"]
+      },
+
+      // Discord 50000:50030
+      {
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "vless-reality",
+        "type": "field",
+        "network": "udp",
+        "port": "50000-50030"
+      },
+
+      {
+        "type": "field",
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "vless-reality",
+        "ip": [
+          "138.128.136.0/21",
+          "162.158.0.0/15",
+          "172.64.0.0/13",
+          "34.0.0.0/15",
+          "34.2.0.0/16",
+          "34.3.0.0/23",
+          "34.3.2.0/24",
+          "35.192.0.0/12",
+          "35.208.0.0/12",
+          "35.224.0.0/12",
+          "35.240.0.0/13",
+          "5.200.14.128/25",
+          "66.22.192.0/18",
+          "104.16.0.0/12",
+          "13.200.0.0/13",
+          "13.208.0.0/12",
+          "13.224.0.0/12",
+          "13.24.0.0/13",
+          "13.32.0.0/12",
+          "13.48.0.0/13",
+          "13.56.0.0/14",
+          "143.204.0.0/16",
+          "18.128.0.0/9",
+          "18.32.0.0/11",
+          "18.64.0.0/10",
+          "188.114.96.0/22",
+          "204.11.56.0/23",
+          "23.227.32.0/19",
+          "3.128.0.0/9",
+          "ext:geoip_zkeenip.dat:discord"
+        ]
+      },
+
+      // Roblox порты xkeen -ap 80,443,49152:65535
+      {
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "vless-reality",
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "49152-65535",
+        "ip": ["103.140.28.0/23", "128.116.0.0/17", "141.193.3.0/24", "205.201.62.0/24"]
+      },
+
+      // Для работы WhatsApp открыть порты xkeen -ap 80,443,3478,46420
+      {
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "vless-reality",
+        "type": "field",
+        "network": "tcp,udp",
+        "port": "443,3478,46420",
+        "ip": [
+          "31.13.24.0/21",
+          "31.13.64.0/18",
+          "45.64.40.0/22",
+          "57.141.0.0/20",
+          "57.141.16.0/21",
+          "57.144.0.0/14",
+          "66.220.144.0/20",
+          "69.63.176.0/20",
+          "69.171.224.0/19",
+          "74.119.76.0/22",
+          "102.132.96.0/20",
+          "103.4.96.0/22",
+          "129.134.0.0/17",
+          "157.240.0.0/17",
+          "157.240.192.0/18",
+          "163.70.128.0/17",
+          "163.77.132.0/23",
+          "163.77.136.0/23",
+          "173.252.64.0/19",
+          "173.252.96.0/19",
+          "179.60.192.0/22",
+          "185.60.216.0/22",
+          "185.89.216.0/22",
+          "204.15.20.0/22"
+        ]
+      },
+
+      {
+        "type": "field",
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "direct",
+        "protocol": ["bittorrent"]
+      },
+
+      {
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "direct",
+        "type": "field",
+        "domain": ["wink.ru", "ngenix.net"]
+      },
+
+      // Прямое подключение  |  Все остальное
+      {
+        "inboundTag": ["redirect", "tproxy"],
+        "outboundTag": "direct",
+        "type": "field"
+      }
+    ]
+  }
+}

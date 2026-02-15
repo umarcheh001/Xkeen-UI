@@ -1,0 +1,27 @@
+{
+  "routing": {
+    "rules": [
+      {
+        "port": "443",
+        "network": "udp",
+        "outboundTag": "block"
+      },
+      {
+        "protocol": ["bittorrent"],
+        "outboundTag": "direct"
+      },
+      {
+        "domain": ["ext:geosite_v2fly.dat:category-ru"],
+        "outboundTag": "direct"
+      },
+      {
+        "ip": ["ext:geoip_zkeenip.dat:ru"],
+        "outboundTag": "direct"
+      },
+      {
+        "network": "tcp,udp",
+        "outboundTag": "vless_1"
+      }
+    ]
+  }
+}

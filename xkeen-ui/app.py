@@ -51,6 +51,7 @@ from urllib.parse import urlparse, parse_qs, unquote, quote
 from typing import Any, Dict, Optional, Tuple
 from dataclasses import dataclass, field
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import uuid
 
 # --- Dev/macOS fallback for MIHOMO_ROOT (must happen before importing mihomo_server_core) ---
@@ -118,6 +119,11 @@ from routes_fs import create_fs_blueprint
 from routes_devtools import create_devtools_blueprint
 from services.xkeen import append_restart_log as _svc_append_restart_log, read_restart_log as _svc_read_restart_log, restart_xkeen as _svc_restart_xkeen
 from services.xray_logs import load_xray_log_config as _svc_load_xray_log_config, tail_lines as _svc_tail_lines, tail_lines_fast as _svc_tail_lines_fast, read_new_lines as _svc_read_new_lines, adjust_log_timezone as _svc_adjust_log_timezone
+from services.xray_backups import (
+    is_history_backup_filename as _is_history_backup_filename,
+    snapshot_before_overwrite as _snapshot_before_overwrite,
+    atomic_write_bytes as _atomic_write_bytes,
+)
 from services.xray import restart_xray_core as _svc_restart_xray_core
 from services import devtools as _svc_devtools
 from services.mihomo import (
@@ -279,7 +285,7 @@ _core_log(
 )
 
 
-# ---- Xray config files (auto-mode)
+# ---- Xray config files (auto-mode + env overrides)
 #
 # В некоторых сборках/профилях файлы частей конфига могут называться иначе,
 # например для Hysteria2 используются *_hys2.json:
@@ -287,7 +293,109 @@ _core_log(
 #
 # Авто-режим: если стандартный файл отсутствует, но есть *_hys2.json —
 # используем его. Это позволяет панели работать "из коробки" без ручных symlink.
-XRAY_CONFIGS_DIR = os.path.join(BASE_ETC_DIR, "xray", "configs")
+#
+# Также поддерживаем переопределение путей через переменные окружения:
+#   XKEEN_XRAY_CONFIGS_DIR   — базовый каталог фрагментов (по умолчанию /opt/etc/xray/configs)
+#   XKEEN_XRAY_ROUTING_FILE  — путь/имя файла роутинга (по умолчанию авто-подбор 05_routing*.json)
+#   XKEEN_XRAY_INBOUNDS_FILE — путь/имя файла inbounds (по умолчанию авто-подбор 03_inbounds*.json)
+#   XKEEN_XRAY_OUTBOUNDS_FILE— путь/имя файла outbounds (по умолчанию авто-подбор 04_outbounds*.json)
+#   XKEEN_XRAY_ROUTING_FILE_RAW — путь/имя raw JSONC с комментариями (по умолчанию <routing>.jsonc)
+_XRAY_CONFIGS_DIR_DEFAULT = os.path.join(BASE_ETC_DIR, "xray", "configs")
+XRAY_CONFIGS_DIR = os.environ.get("XKEEN_XRAY_CONFIGS_DIR", _XRAY_CONFIGS_DIR_DEFAULT)
+
+# Real path of XRAY config fragments dir (for safe file selection via ?file=...)
+try:
+    XRAY_CONFIGS_DIR_REAL = os.path.realpath(XRAY_CONFIGS_DIR)
+except Exception:
+    XRAY_CONFIGS_DIR_REAL = XRAY_CONFIGS_DIR
+
+
+def _resolve_xray_fragment_file(file_arg: str, *, kind: str, default_path: str) -> str:
+    """Resolve a selectable fragment file inside XRAY_CONFIGS_DIR (safe).
+
+    Args:
+        file_arg: value of ?file= query param (usually basename like 05_routing.json)
+        kind: one of "routing" | "inbounds" | "outbounds" (used for mild validation)
+        default_path: fallback absolute path used when file_arg is empty/invalid.
+
+    Returns:
+        Absolute real path to a .json/.jsonc file inside XRAY_CONFIGS_DIR.
+    """
+    try:
+        v = str(file_arg or "").strip()
+    except Exception:
+        v = ""
+    if not v:
+        return default_path
+
+    # Allow either basename or absolute path, but keep it inside XRAY_CONFIGS_DIR.
+    try:
+        if v.startswith("/"):
+            cand = v
+        else:
+            # Disallow nested paths to avoid directory traversal.
+            if "/" in v or "\\" in v:
+                raise ValueError("invalid filename")
+            cand = os.path.join(XRAY_CONFIGS_DIR, v)
+
+        cand_real = os.path.realpath(cand)
+        base = XRAY_CONFIGS_DIR_REAL
+        if not (cand_real == base or cand_real.startswith(base + os.sep)):
+            raise ValueError("outside configs dir")
+
+        if not (cand_real.endswith(".json") or cand_real.endswith(".jsonc")):
+            raise ValueError("unsupported extension")
+
+        # Mild validation: keep the user inside the right family of fragments.
+        # (UI lists only matching files anyway.)
+        try:
+            lname = os.path.basename(cand_real).lower()
+            if kind and kind not in lname:
+                # allow routing_... file names that include 'routing' etc
+                raise ValueError("kind mismatch")
+        except Exception:
+            raise
+
+        return cand_real
+    except Exception:
+        return default_path
+
+
+def _list_xray_fragments(kind: str) -> list[dict]:
+    """List fragment files in XRAY_CONFIGS_DIR by keyword."""
+    items: list[dict] = []
+    try:
+        if not os.path.isdir(XRAY_CONFIGS_DIR):
+            return items
+        for name in os.listdir(XRAY_CONFIGS_DIR):
+            lname = str(name or "").lower()
+            if not lname.endswith(".json"):
+                continue
+            if kind and kind not in lname:
+                continue
+            full = os.path.join(XRAY_CONFIGS_DIR, name)
+            if not os.path.isfile(full):
+                continue
+            try:
+                st = os.stat(full)
+                items.append(
+                    {
+                        "name": name,
+                        "size": int(getattr(st, "st_size", 0) or 0),
+                        "mtime": int(getattr(st, "st_mtime", 0) or 0),
+                        "hys2": ("_hys2" in lname),
+                    }
+                )
+            except Exception:
+                items.append({"name": name, "hys2": ("_hys2" in lname)})
+    except Exception:
+        items = []
+    try:
+        items.sort(key=lambda it: str(it.get("name") or "").lower())
+    except Exception:
+        pass
+    return items
+
 
 
 def _pick_xray_config_file(default_name: str, alt_name: str) -> str:
@@ -311,9 +419,34 @@ def _pick_xray_config_file(default_name: str, alt_name: str) -> str:
     return default_path
 
 
-ROUTING_FILE = _pick_xray_config_file("05_routing.json", "05_routing_hys2.json")
-INBOUNDS_FILE = _pick_xray_config_file("03_inbounds.json", "03_inbounds_hys2.json")
-OUTBOUNDS_FILE = _pick_xray_config_file("04_outbounds.json", "04_outbounds_hys2.json")
+def _resolve_path_in_dir(base_dir: str, p: str) -> str:
+    """Resolve user-provided file path.
+
+    - absolute paths are used as-is
+    - relative paths are treated as relative to base_dir
+    """
+    try:
+        v = str(p or "").strip()
+    except Exception:
+        v = ""
+    if not v:
+        return ""
+    if v.startswith("/"):
+        return v
+    return os.path.join(base_dir, v)
+
+
+def _env_or_auto_pick(env_key: str, default_name: str, alt_name: str) -> str:
+    """Pick xray fragment file, optionally overridden via env."""
+    v = os.environ.get(env_key, "")
+    if v and str(v).strip():
+        return _resolve_path_in_dir(XRAY_CONFIGS_DIR, v)
+    return _pick_xray_config_file(default_name, alt_name)
+
+
+ROUTING_FILE = _env_or_auto_pick("XKEEN_XRAY_ROUTING_FILE", "05_routing.json", "05_routing_hys2.json")
+INBOUNDS_FILE = _env_or_auto_pick("XKEEN_XRAY_INBOUNDS_FILE", "03_inbounds.json", "03_inbounds_hys2.json")
+OUTBOUNDS_FILE = _env_or_auto_pick("XKEEN_XRAY_OUTBOUNDS_FILE", "04_outbounds.json", "04_outbounds_hys2.json")
 
 # JSONC routing file (with comments) follows the selected routing file.
 #
@@ -322,18 +455,72 @@ OUTBOUNDS_FILE = _pick_xray_config_file("04_outbounds.json", "04_outbounds_hys2.
 # 05_routing_hys2.json. In that case we must store/read comments in a matching
 # *.jsonc file рядом с выбранным routing-файлом.
 try:
-    if ROUTING_FILE.endswith(".json"):
-        ROUTING_FILE_RAW = ROUTING_FILE + "c"  # 05_routing*.json -> 05_routing*.jsonc
+    _raw_override = os.environ.get("XKEEN_XRAY_ROUTING_FILE_RAW", "")
+    if _raw_override and str(_raw_override).strip():
+        ROUTING_FILE_RAW = _resolve_path_in_dir(XRAY_CONFIGS_DIR, _raw_override)
     else:
-        ROUTING_FILE_RAW = ROUTING_FILE + ".jsonc"
+        if ROUTING_FILE.endswith(".json"):
+            ROUTING_FILE_RAW = ROUTING_FILE + "c"  # 05_routing*.json -> 05_routing*.jsonc
+        else:
+            ROUTING_FILE_RAW = ROUTING_FILE + ".jsonc"
 except Exception:
     ROUTING_FILE_RAW = os.path.join(XRAY_CONFIGS_DIR, "05_routing.jsonc")
 BACKUP_DIR = os.path.join(BASE_ETC_DIR, "xray", "configs", "backups")
+
+try:
+    BACKUP_DIR_REAL = os.path.realpath(BACKUP_DIR)
+except Exception:
+    BACKUP_DIR_REAL = BACKUP_DIR
+
+
+def snapshot_xray_config_before_overwrite(abs_path: str) -> None:
+    """If abs_path is an Xray config fragment and exists, save its previous content as snapshot.
+
+    Snapshot path: BACKUP_DIR/<basename>.
+    Never raises.
+    """
+    try:
+        _snapshot_before_overwrite(
+            abs_path,
+            backup_dir=BACKUP_DIR,
+            xray_configs_dir_real=XRAY_CONFIGS_DIR_REAL,
+            backup_dir_real=BACKUP_DIR_REAL,
+        )
+    except Exception:
+        return
 XKEEN_RESTART_CMD = ["xkeen", "-restart"]
 RESTART_LOG_FILE = os.environ.get("XKEEN_RESTART_LOG_FILE", os.path.join(UI_STATE_DIR, "restart.log"))
-PORT_PROXYING_FILE = os.path.join(BASE_ETC_DIR, "xkeen", "port_proxying.lst")
-PORT_EXCLUDE_FILE = os.path.join(BASE_ETC_DIR, "xkeen", "port_exclude.lst")
-IP_EXCLUDE_FILE = os.path.join(BASE_ETC_DIR, "xkeen", "ip_exclude.lst")
+def _env_or_default_file(env_key: str, default_path: str) -> str:
+    v = os.environ.get(env_key, "")
+    if v and str(v).strip():
+        vv = str(v).strip()
+        return vv if vv.startswith("/") else os.path.join(BASE_ETC_DIR, vv)
+    return default_path
+
+
+PORT_PROXYING_FILE = _env_or_default_file(
+    "XKEEN_PORT_PROXYING_FILE",
+    os.path.join(BASE_ETC_DIR, "xkeen", "port_proxying.lst"),
+)
+PORT_EXCLUDE_FILE = _env_or_default_file(
+    "XKEEN_PORT_EXCLUDE_FILE",
+    os.path.join(BASE_ETC_DIR, "xkeen", "port_exclude.lst"),
+)
+
+# ip_exclude.lst historically lived in two possible locations:
+#   - /opt/etc/xkeen/ip_exclude.lst (new)
+#   - /opt/etc/xkeen_exclude.lst (legacy; v1.1.3.8)
+# We support explicit override via XKEEN_IP_EXCLUDE_FILE and also auto-fallback
+# to the legacy path if the new file doesn't exist.
+_ip_exclude_default = os.path.join(BASE_ETC_DIR, "xkeen", "ip_exclude.lst")
+_ip_exclude_legacy = os.path.join(BASE_ETC_DIR, "xkeen_exclude.lst")
+IP_EXCLUDE_FILE = _env_or_default_file("XKEEN_IP_EXCLUDE_FILE", _ip_exclude_default)
+try:
+    if "XKEEN_IP_EXCLUDE_FILE" not in os.environ:
+        if not os.path.exists(_ip_exclude_default) and os.path.exists(_ip_exclude_legacy):
+            IP_EXCLUDE_FILE = _ip_exclude_legacy
+except Exception:
+    pass
 XRAY_LOG_CONFIG_FILE = os.path.join(BASE_ETC_DIR, "xray", "configs", "01_log.json")
 XRAY_ACCESS_LOG = os.path.join(BASE_VAR_DIR, "log", "xray", "access.log")
 XRAY_ERROR_LOG = os.path.join(BASE_VAR_DIR, "log", "xray", "error.log")
@@ -537,6 +724,126 @@ def _github_raw_get(path: str) -> str | None:
         if e.code == 404:
             return None
         raise
+
+# ---------------------------------------------------------------------------
+# Non-blocking network helpers (avoid freezing the single-threaded UI server)
+# ---------------------------------------------------------------------------
+
+_NET_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+
+# Cache GitHub configs index.json to avoid repeated slow network calls.
+_GH_INDEX_CACHE = {"items": [], "ts": 0.0}
+_GH_INDEX_FUTURE = None
+_GH_INDEX_LOCK = threading.Lock()
+
+# Seconds: how long to consider cached index "fresh".
+_GH_INDEX_TTL = int(os.environ.get("XKEEN_GITHUB_INDEX_CACHE_TTL", "60") or 60)
+
+
+def _net_call(fn, wait_seconds: float):
+    """Run blocking IO in a worker thread, wait up to wait_seconds.
+
+    Raises TimeoutError on timeout.
+    """
+    fut = _NET_EXECUTOR.submit(fn)
+    try:
+        return fut.result(timeout=max(0.1, float(wait_seconds)))
+    except FutureTimeoutError as e:
+        raise TimeoutError("timeout") from e
+
+
+def _sanitize_github_index_items(items):
+    """Return a small, safe subset of fields for the UI."""
+    out = []
+    if not isinstance(items, list):
+        return out
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        _id = it.get("id")
+        if not _id:
+            continue
+        try:
+            created_at = int(it.get("created_at", 0) or 0)
+        except Exception:
+            created_at = 0
+        tags = it.get("tags")
+        if not isinstance(tags, list):
+            tags = []
+        # Keep only fields used by UI.
+        out.append(
+            {
+                "id": str(_id),
+                "title": str(it.get("title") or _id),
+                "created_at": created_at,
+                "tags": tags[:32],
+            }
+        )
+    return out
+
+
+def _github_fetch_index_items() -> list:
+    raw = _github_raw_get("configs/index.json")
+    if not raw:
+        return []
+    items = json.loads(raw)
+    if not isinstance(items, list):
+        return []
+    return items
+
+
+def _github_get_index_items(wait_seconds: float = 2.0, force_refresh: bool = False):
+    """Get configs index items without blocking the UI server.
+
+    Returns (items, stale: bool).
+    """
+    now = time.time()
+    ttl = max(5, int(_GH_INDEX_TTL))
+
+    # Serve fresh cache immediately.
+    if not force_refresh and _GH_INDEX_CACHE["items"] and (now - float(_GH_INDEX_CACHE["ts"])) < ttl:
+        return _GH_INDEX_CACHE["items"], False
+
+    # Ensure a background fetch is in-flight.
+    with _GH_INDEX_LOCK:
+        global _GH_INDEX_FUTURE  # noqa: PLW0603
+        if _GH_INDEX_FUTURE is None or _GH_INDEX_FUTURE.done():
+            _GH_INDEX_FUTURE = _NET_EXECUTOR.submit(_github_fetch_index_items)
+
+    # Wait a bit for the background fetch.
+    try:
+        items = _GH_INDEX_FUTURE.result(timeout=max(0.1, float(wait_seconds)))
+        # Update cache on success.
+        if isinstance(items, list):
+            _GH_INDEX_CACHE["items"] = items
+            _GH_INDEX_CACHE["ts"] = time.time()
+            return items, False
+    except FutureTimeoutError:
+        # Timeout: fall back to cache if any.
+        if _GH_INDEX_CACHE["items"]:
+            return _GH_INDEX_CACHE["items"], True
+        raise TimeoutError("timeout")
+    except Exception:
+        if _GH_INDEX_CACHE["items"]:
+            return _GH_INDEX_CACHE["items"], True
+        raise
+
+    # Unexpected type; fall back to cache.
+    if _GH_INDEX_CACHE["items"]:
+        return _GH_INDEX_CACHE["items"], True
+    return [], False
+
+
+def _github_raw_get_safe(path: str, wait_seconds: float = 3.0) -> str | None:
+    """Fetch a GitHub raw path with a short wait on the main thread."""
+    return _net_call(lambda: _github_raw_get(path), wait_seconds)
+
+
+def _config_server_request_safe(path: str, method: str = "GET", payload=None, wait_seconds: float = 8.0):
+    """Call config server in a worker thread to avoid blocking the UI."""
+    return _net_call(lambda: _config_server_request(path, method=method, payload=payload), wait_seconds)
+
+
 
 
 COMMAND_GROUPS = [
@@ -1511,6 +1818,237 @@ def strip_json_comments_text(s):
 
     return ''.join(res)
 
+
+def format_jsonc_text(src: str, indent_size: int = 2) -> str:
+    """Best-effort formatter for JSONC (JSON + comments).
+
+    - Keeps //, # and /* */ comments.
+    - Reindents based on bracket nesting.
+    - Does not try to reorder/normalize values; it only normalizes whitespace.
+
+    This is intentionally conservative and dependency-free (no jsbeautifier).
+    """
+    if src is None:
+        src = ""
+    if not isinstance(src, str):
+        try:
+            src = str(src)
+        except Exception:
+            src = ""
+
+    s = src
+    n = len(s)
+    i = 0
+
+    out: list[str] = []
+    lvl = 0
+    in_str = False
+    esc = False
+    in_line_comment = False
+    in_block_comment = False
+    at_line_start = True
+
+    def _append(txt: str) -> None:
+        out.append(txt)
+
+    def _trim_trailing_ws() -> None:
+        # remove trailing spaces/tabs at buffer end
+        while out:
+            t = out[-1]
+            if not t:
+                out.pop()
+                continue
+            if t.endswith(" ") or t.endswith("\t"):
+                out[-1] = t.rstrip(" \t")
+                if out[-1] == "":
+                    out.pop()
+                continue
+            break
+
+    def _newline() -> None:
+        nonlocal at_line_start
+        _trim_trailing_ws()
+        _append("\n")
+        at_line_start = True
+
+    def _indent() -> None:
+        nonlocal at_line_start
+        if at_line_start:
+            _append(" " * max(0, lvl) * indent_size)
+            at_line_start = False
+
+    def _peek_next_sig(pos: int) -> tuple[int, str]:
+        """Return (index, char) of next significant non-ws char, skipping *whitespace only*.
+
+        We purposely do NOT skip comments here: if there is a comment between
+        open and close braces, the structure is not 'empty' for formatting.
+        """
+        j = pos
+        while j < n and s[j] in (" ", "\t", "\r", "\n"):
+            j += 1
+        return j, (s[j] if j < n else "")
+
+    def _read_line_comment(start: int) -> tuple[int, str]:
+        j = start
+        # consume until newline (newline char is NOT consumed)
+        while j < n and s[j] != "\n":
+            j += 1
+        return j, s[start:j]
+
+    def _read_block_comment(start: int) -> tuple[int, str]:
+        j = start
+        # find closing */
+        while j + 1 < n and not (s[j] == "*" and s[j + 1] == "/"):
+            j += 1
+        j = min(n, j + 2)
+        return j, s[start:j]
+
+    def _read_bare_token(start: int) -> tuple[int, str]:
+        j = start
+        while j < n:
+            ch = s[j]
+            if ch in (" ", "\t", "\r", "\n", "{", "}", "[", "]", ":", ","):
+                break
+            # comments start
+            if ch == "#":
+                break
+            if ch == "/" and j + 1 < n and s[j + 1] in ("/", "*"):
+                break
+            j += 1
+        return j, s[start:j]
+
+    while i < n:
+        ch = s[i]
+
+        # Inside string
+        if in_str:
+            _append(ch)
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            i += 1
+            continue
+
+        # Line comment (// or #)
+        if in_line_comment:
+            if ch == "\n":
+                in_line_comment = False
+                _newline()
+                i += 1
+                continue
+            _append(ch)
+            i += 1
+            continue
+
+        # Block comment (/* */)
+        if in_block_comment:
+            _append(ch)
+            if ch == "\n":
+                # Keep multi-line comments readable by re-indenting next line
+                at_line_start = True
+                _indent()
+            if ch == "*" and i + 1 < n and s[i + 1] == "/":
+                _append("/")
+                i += 2
+                in_block_comment = False
+                continue
+            i += 1
+            continue
+
+        # Skip whitespace outside strings/comments
+        if ch in (" ", "\t", "\r", "\n"):
+            i += 1
+            continue
+
+        # Start of string
+        if ch == '"':
+            _indent()
+            in_str = True
+            _append(ch)
+            i += 1
+            continue
+
+        # Start of comments
+        if ch == "#":
+            _indent()
+            in_line_comment = True
+            # consume rest of line as-is
+            j, txt = _read_line_comment(i)
+            _append(txt)
+            i = j
+            continue
+        if ch == "/" and i + 1 < n and s[i + 1] == "/":
+            _indent()
+            in_line_comment = True
+            j, txt = _read_line_comment(i)
+            _append(txt)
+            i = j
+            continue
+        if ch == "/" and i + 1 < n and s[i + 1] == "*":
+            _indent()
+            in_block_comment = True
+            # consume "/*" here, rest handled in loop
+            _append("/*")
+            i += 2
+            continue
+
+        # Structural tokens
+        if ch in ("{", "["):
+            _indent()
+            # Detect empty object/array: next significant token is closing and there are no comments
+            j, nxt = _peek_next_sig(i + 1)
+            close = "}" if ch == "{" else "]"
+            if nxt == close:
+                _append(ch)
+                _append(close)
+                i = j + 1
+                at_line_start = False
+                continue
+            _append(ch)
+            lvl += 1
+            _newline()
+            i += 1
+            continue
+
+        if ch in ("}", "]"):
+            lvl = max(0, lvl - 1)
+            # If previous is not a newline, break the line before closing
+            if not at_line_start:
+                _newline()
+            _indent()
+            _append(ch)
+            at_line_start = False
+            i += 1
+            continue
+
+        if ch == ",":
+            _append(",")
+            _newline()
+            i += 1
+            continue
+
+        if ch == ":":
+            _append(": ")
+            at_line_start = False
+            i += 1
+            continue
+
+        # Bare token (numbers, true/false/null, identifiers)
+        _indent()
+        j, tok = _read_bare_token(i)
+        _append(tok)
+        at_line_start = False
+        i = j
+
+    # Final tidy: ensure ending newline
+    text_out = "".join(out)
+    if text_out and not text_out.endswith("\n"):
+        text_out += "\n"
+    return text_out
+
 def load_json(path, default=None):
     def strip_json_comments(s):
         """Удаляем //, # и /* */ комментарии вне строк."""
@@ -1607,29 +2145,81 @@ def save_text(path, content):
         f.write(content)
 
 
+# ---------- API: JSON/JSONC formatter (preserve comments) ----------
+
+@app.post("/api/json/format")
+def api_format_jsonc():
+    """Format JSON/JSONC text with indentation.
+
+    Goal: keep user comments (//, /* */) intact when possible.
+
+    Request JSON:
+      {"text": "..."}
+
+    Response:
+      {"ok": true, "text": "..."}
+    """
+    payload = request.get_json(silent=True) or {}
+    text = payload.get("text", "")
+    if not isinstance(text, str):
+        try:
+            text = str(text)
+        except Exception:
+            text = ""
+    if not text.strip():
+        return api_error("empty text", 400, ok=False)
+
+    # Validate JSON ignoring comments.
+    cleaned = strip_json_comments_text(text)
+    try:
+        obj = json.loads(cleaned)
+    except Exception as e:
+        return api_error(f"invalid json: {e}", 400, ok=False)
+
+    # Dependency-free JSONC formatter (keeps comments).
+    try:
+        formatted = format_jsonc_text(text, indent_size=2)
+        return jsonify({"ok": True, "text": formatted, "engine": "xkeen_jsonc"}), 200
+    except Exception:
+        # Fallback: strict JSON pretty print (comments will be removed)
+        formatted = json.dumps(obj, ensure_ascii=False, indent=2) + "\n"
+        return jsonify({"ok": True, "text": formatted, "engine": "json"}), 200
+
+
+
 
 def _detect_backup_target_file(filename: str):
     """Return which config file this backup filename should restore into.
 
-    We rely on filename prefixes that we control when creating backups:
-    - 05_routing-YYYY...          -> ROUTING_FILE
-    - 05_routing_hys2-YYYY...     -> ROUTING_FILE (Hysteria2 profile)
-    - 03_inbounds-YYYY...         -> INBOUNDS_FILE
-    - 03_inbounds_hys2-YYYY...    -> INBOUNDS_FILE (Hysteria2 profile)
-    - 04_outbounds-YYYY...        -> OUTBOUNDS_FILE
-    - 04_outbounds_hys2-YYYY...   -> OUTBOUNDS_FILE (Hysteria2 profile)
-    Anything else defaults to ROUTING_FILE for backwards compatibility.
+    We primarily rely on filename prefixes that we control when creating backups:
+    - <basename-without-ext>-YYYY...json
+
+    With fragment selection enabled, backups may be created for *custom* files
+    inside XRAY_CONFIGS_DIR, for example:
+      05_routing(in_keenetic)_new-YYYYMMDD-HHMMSS.json
+
+    In that case we try to restore back to the exact fragment file if it exists.
     """
     name = str(filename or "")
-    # Manual backups are named as: <prefix>-YYYYMMDD-HHMMSS.json
-    # Prefix may include *_hys2 (e.g. 03_inbounds_hys2-...).
     prefix = name.split("-", 1)[0] if "-" in name else name
 
+    # 1) Try to restore into an existing fragment file in XRAY_CONFIGS_DIR
+    try:
+        cand = os.path.join(XRAY_CONFIGS_DIR, prefix + ".json")
+        cand_real = os.path.realpath(cand)
+        if cand_real.startswith(XRAY_CONFIGS_DIR_REAL + os.sep) and os.path.isfile(cand_real):
+            return cand_real
+    except Exception:
+        pass
+
+    # 2) Backwards-compatible mapping by known prefixes
     if prefix.startswith("03_inbounds"):
         return INBOUNDS_FILE
     if prefix.startswith("04_outbounds"):
         return OUTBOUNDS_FILE
     return ROUTING_FILE
+
+
 
 
 def _find_latest_auto_backup_for(config_path: str):
@@ -1664,9 +2254,8 @@ def list_backups():
     if not os.path.isdir(BACKUP_DIR):
         return items
     for name in os.listdir(BACKUP_DIR):
-        # Список показывает только ручные JSON-бэкапы:
-        # 05_routing-*, 03_inbounds-*, 04_outbounds-*.
-        if not name.endswith(".json"):
+        # /backups should show only history backups (timestamp), not snapshots.
+        if not _is_history_backup_filename(name):
             continue
         full = os.path.join(BACKUP_DIR, name)
         try:
@@ -1805,16 +2394,21 @@ REDIRECT_INBOUNDS = {
 }
 
 
-def load_inbounds():
-    return load_json(INBOUNDS_FILE, default=None)
+
+def load_inbounds(file_path: str | None = None):
+    return load_json(file_path or INBOUNDS_FILE, default=None)
 
 
-def save_inbounds(data):
-    save_json(INBOUNDS_FILE, data)
+def save_inbounds(data, file_path: str | None = None):
+    p = file_path or INBOUNDS_FILE
+    # Auto-create snapshot (rollback) before overwrite.
+    snapshot_xray_config_before_overwrite(p)
+    save_json(p, data)
 
 
-def detect_inbounds_mode():
-    data = load_inbounds()
+def detect_inbounds_mode(file_path: str | None = None, data=None):
+    if data is None:
+        data = load_inbounds(file_path)
     if not data:
         return None
     if data == MIXED_INBOUNDS:
@@ -3130,12 +3724,16 @@ def build_outbounds_config_from_vmess(url: str) -> dict:
     return _wrap_outbounds_with_common(outbound)
 
 
-def load_outbounds():
-    return load_json(OUTBOUNDS_FILE, default=None)
+
+def load_outbounds(file_path: str | None = None):
+    return load_json(file_path or OUTBOUNDS_FILE, default=None)
 
 
-def save_outbounds(cfg):
-    save_json(OUTBOUNDS_FILE, cfg)
+def save_outbounds(cfg, file_path: str | None = None):
+    p = file_path or OUTBOUNDS_FILE
+    # Auto-create snapshot (rollback) before overwrite.
+    snapshot_xray_config_before_overwrite(p)
+    save_json(p, cfg)
 
 
 # ---------- routes: Auth / Setup ----------
@@ -3431,10 +4029,10 @@ def api_mihomo_preview():
     """
     data = request.get_json(silent=True) or {}
     try:
-        cfg = mihomo_svc.generate_preview(data)
+        cfg, warnings = mihomo_svc.generate_preview(data)
     except Exception as exc:  # pragma: no cover - defensive
         return api_error(f"Ошибка генерации предпросмотра: {exc}", 400, ok=False)
-    return jsonify({"ok": True, "content": cfg}), 200
+    return jsonify({"ok": True, "content": cfg, "warnings": warnings}), 200
 
 
 @app.get("/api/mihomo/profile_defaults")
@@ -4135,20 +4733,189 @@ def api_set_ip_exclude():
 
 # ---------- API: inbounds (03_inbounds.json) ----------
 
+
+# ---------- API: inbounds fragments (dropdown) ----------
+
+@app.get("/api/inbounds/fragments")
+def api_list_inbounds_fragments():
+    items = _list_xray_fragments("inbounds")
+    current_name = os.path.basename(INBOUNDS_FILE)
+    return jsonify(
+        {
+            "ok": True,
+            "dir": XRAY_CONFIGS_DIR,
+            "current": current_name,
+            "items": items,
+        }
+    ), 200
+
+
+
 @app.get("/api/inbounds")
 def api_get_inbounds():
-    mode = detect_inbounds_mode()
-    data = load_inbounds()
+    file_arg = request.args.get("file", "")
+    sel_path = _resolve_xray_fragment_file(file_arg, kind="inbounds", default_path=INBOUNDS_FILE)
+
+    # Prefer raw JSONC variant (with comments) if present.
+    raw_path = sel_path
+    if sel_path.endswith(".json"):
+        raw_path = sel_path + "c"  # -> .jsonc
+    elif not sel_path.endswith(".jsonc"):
+        raw_path = sel_path + ".jsonc"
+
+    chosen_path = sel_path
+    raw_exists = os.path.exists(raw_path)
+    main_exists = os.path.exists(sel_path)
+
+    if raw_exists and not sel_path.endswith(".jsonc"):
+        # If main JSON was edited externally after JSONC was created, prefer main.
+        if main_exists:
+            try:
+                st_raw = os.stat(raw_path)
+                st_main = os.stat(sel_path)
+                raw_mtime_ns = getattr(st_raw, "st_mtime_ns", int(st_raw.st_mtime * 1_000_000_000))
+                main_mtime_ns = getattr(st_main, "st_mtime_ns", int(st_main.st_mtime * 1_000_000_000))
+                chosen_path = sel_path if main_mtime_ns > raw_mtime_ns else raw_path
+            except Exception:
+                chosen_path = raw_path
+        else:
+            chosen_path = raw_path
+
+    text = ""
+    try:
+        with open(chosen_path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except Exception:
+        text = ""
+
+    # Parse config (strip comments) to keep UI mode detection stable.
+    data = None
+    try:
+        if text.strip():
+            cleaned = strip_json_comments_text(text)
+            data = json.loads(cleaned) if cleaned.strip() else None
+        else:
+            data = load_inbounds(sel_path)
+    except Exception:
+        data = load_inbounds(sel_path)
+
+    mode = detect_inbounds_mode(data=data)
+
+    # Ensure we always return readable text (for modal editor).
+    if not text.strip():
+        try:
+            text = (json.dumps(data, ensure_ascii=False, indent=2) if data is not None else "{}") + "\n"
+        except Exception:
+            text = "{}\n"
+
+    return (
+        jsonify(
+            {
+                "ok": True,
+                "mode": mode,
+                "config": data,
+                "text": text,
+                "file": os.path.basename(sel_path),
+                "path": sel_path,
+                "raw_path": raw_path if raw_exists else None,
+                "using_raw": bool(chosen_path == raw_path and raw_exists),
+            }
+        ),
+        200,
+    )
+
+    data = load_inbounds(sel_path)
+    mode = detect_inbounds_mode(data=data)
+
     try:
         pretty = json.dumps(data, ensure_ascii=False, indent=2) if data is not None else "{}"
     except Exception:
         pretty = "{}"
-    return jsonify({"mode": mode, "config": data, "text": pretty}), 200
+
+    return (
+        jsonify(
+            {
+                "ok": True,
+                "mode": mode,
+                "config": data,
+                "text": pretty,
+                "file": os.path.basename(sel_path),
+                "path": sel_path,
+            }
+        ),
+        200,
+    )
+
 
 
 @app.post("/api/inbounds")
 def api_set_inbounds():
     payload = request.get_json(silent=True) or {}
+    file_arg = request.args.get("file", "")
+    sel_path = _resolve_xray_fragment_file(file_arg, kind="inbounds", default_path=INBOUNDS_FILE)
+
+    # Raw JSON/JSONC save mode (keeps comments in *.jsonc)
+    if isinstance(payload.get("text"), str):
+        raw_text = payload.get("text") or ""
+        if not raw_text.strip():
+            return api_error("empty text", 400, ok=False)
+
+        cleaned = strip_json_comments_text(raw_text)
+        try:
+            obj = json.loads(cleaned)
+        except Exception as e:
+            return api_error(f"invalid json: {e}", 400, ok=False)
+
+        if not isinstance(obj, dict):
+            return api_error("config must be object", 400, ok=False)
+
+        raw_path = sel_path
+        if sel_path.endswith(".json"):
+            raw_path = sel_path + "c"
+        elif not sel_path.endswith(".jsonc"):
+            raw_path = sel_path + ".jsonc"
+
+        # Auto-create snapshots before overwrite.
+        snapshot_xray_config_before_overwrite(sel_path)
+        snapshot_xray_config_before_overwrite(raw_path)
+        # IMPORTANT: write clean JSON first, then raw JSONC last.
+        # The corresponding GET endpoint prefers *.jsonc when it is newer than *.json.
+        def _atomic_write_text(path: str, content: str) -> None:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+                f.write(content)
+            os.replace(tmp, path)
+
+        def _atomic_write_json(path: str, obj: Any) -> None:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+                json.dump(obj, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+            os.replace(tmp, path)
+
+        # Save cleaned JSON for xkeen/xray
+        try:
+            d = os.path.dirname(sel_path)
+            if d and not os.path.isdir(d):
+                os.makedirs(d, exist_ok=True)
+            _atomic_write_json(sel_path, obj)
+        except Exception as e:
+            return api_error(f"failed to write file: {e}", 500, ok=False)
+
+        # Save raw text (with comments) last so it stays newer and is shown in UI
+        try:
+            d_raw = os.path.dirname(raw_path)
+            if d_raw and not os.path.isdir(d_raw):
+                os.makedirs(d_raw, exist_ok=True)
+            _atomic_write_text(raw_path, raw_text)
+        except Exception as e:
+            return api_error(f"failed to write raw file: {e}", 500, ok=False)
+
+        restart_flag = bool(payload.get("restart", True))
+        mode = detect_inbounds_mode(data=obj)
+        restarted = restart_flag and restart_xkeen(source="inbounds")
+
+        return jsonify({"ok": True, "mode": mode, "restarted": restarted, "file": os.path.basename(sel_path)}), 200
 
     # Новый режим: прямое сохранение произвольного конфига
     if "config" in payload:
@@ -4157,12 +4924,12 @@ def api_set_inbounds():
             return api_error("config must be object", 400, ok=False)
 
         restart_flag = bool(payload.get("restart", True))
-        save_inbounds(data)
+        save_inbounds(data, sel_path)
         # после ручного редактирования пробуем определить режим (mixed/tproxy/redirect/custom)
-        mode = detect_inbounds_mode()
+        mode = detect_inbounds_mode(data=data)
         restarted = restart_flag and restart_xkeen(source="inbounds")
 
-        return jsonify({"ok": True, "mode": mode, "restarted": restarted}), 200
+        return jsonify({"ok": True, "mode": mode, "restarted": restarted, "file": os.path.basename(sel_path)}), 200
 
     # Старый режим: выбор предустановленного режима по полю mode
     mode = payload.get("mode")
@@ -4178,20 +4945,370 @@ def api_set_inbounds():
         data = REDIRECT_INBOUNDS
 
     restart_flag = bool(payload.get("restart", True))
-    save_inbounds(data)
+    save_inbounds(data, sel_path)
     restarted = restart_flag and restart_xkeen(source="inbounds")
 
-    return jsonify({"ok": True, "mode": mode, "restarted": restarted}), 200
+    return jsonify({"ok": True, "mode": mode, "restarted": restarted, "file": os.path.basename(sel_path)}), 200
+
+    # Новый режим: прямое сохранение произвольного конфига
+    if "config" in payload:
+        data = payload.get("config")
+        if not isinstance(data, dict):
+            return api_error("config must be object", 400, ok=False)
+
+        restart_flag = bool(payload.get("restart", True))
+        save_inbounds(data, sel_path)
+        # после ручного редактирования пробуем определить режим (mixed/tproxy/redirect/custom)
+        mode = detect_inbounds_mode(data=data)
+        restarted = restart_flag and restart_xkeen(source="inbounds")
+
+        return jsonify({"ok": True, "mode": mode, "restarted": restarted, "file": os.path.basename(sel_path)}), 200
+
+    # Старый режим: выбор предустановленного режима по полю mode
+    mode = payload.get("mode")
+
+    if mode not in ("mixed", "tproxy", "redirect"):
+        return api_error("invalid mode", 400, ok=False)
+
+    if mode == "mixed":
+        data = MIXED_INBOUNDS
+    elif mode == "tproxy":
+        data = TPROXY_INBOUNDS
+    else:
+        data = REDIRECT_INBOUNDS
+
+    restart_flag = bool(payload.get("restart", True))
+    save_inbounds(data, sel_path)
+    restarted = restart_flag and restart_xkeen(source="inbounds")
+
+    return jsonify({"ok": True, "mode": mode, "restarted": restarted, "file": os.path.basename(sel_path)}), 200
 
 
 # ---------- API: outbounds (04_outbounds.json) ----------
 
+
+
+# ---------- API: outbounds fragments (dropdown) ----------
+
+@app.get("/api/outbounds/fragments")
+def api_list_outbounds_fragments():
+    items = _list_xray_fragments("outbounds")
+    current_name = os.path.basename(OUTBOUNDS_FILE)
+    return jsonify(
+        {
+            "ok": True,
+            "dir": XRAY_CONFIGS_DIR,
+            "current": current_name,
+            "items": items,
+        }
+    ), 200
+
+
+
+# ---------- API: Xray outbound tags (for Balancer selector UI) ----------
+
+@app.get("/api/xray/outbound-tags")
+def api_xray_outbound_tags():
+    """Return a list of outbound tags from the current (or selected) outbounds fragment.
+
+    Used by Routing UI to build Balancer.selector in "UI" mode.
+    Always returns ok:true (even when the outbounds file is missing or broken).
+    """
+    file_arg = request.args.get("file", "")
+    sel_path = _resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=OUTBOUNDS_FILE)
+
+    # Prefer raw JSONC variant (with comments) if present & newer.
+    raw_path = sel_path
+    if sel_path.endswith(".json"):
+        raw_path = sel_path + "c"  # -> .jsonc
+    elif not sel_path.endswith(".jsonc"):
+        raw_path = sel_path + ".jsonc"
+
+    chosen_path = sel_path
+    try:
+        raw_exists = os.path.exists(raw_path)
+        main_exists = os.path.exists(sel_path)
+        if raw_exists and not sel_path.endswith(".jsonc"):
+            if main_exists:
+                try:
+                    st_raw = os.stat(raw_path)
+                    st_main = os.stat(sel_path)
+                    raw_mtime_ns = getattr(st_raw, "st_mtime_ns", int(st_raw.st_mtime * 1_000_000_000))
+                    main_mtime_ns = getattr(st_main, "st_mtime_ns", int(st_main.st_mtime * 1_000_000_000))
+                    chosen_path = sel_path if main_mtime_ns > raw_mtime_ns else raw_path
+                except Exception:
+                    chosen_path = raw_path
+            else:
+                chosen_path = raw_path
+    except Exception:
+        chosen_path = sel_path
+
+    tags: list[str] = []
+    seen: set[str] = set()
+
+    try:
+        text = ""
+        try:
+            with open(chosen_path, "r", encoding="utf-8") as f:
+                text = f.read()
+        except Exception:
+            # Fallback: try the main fragment path if chosen is missing.
+            if chosen_path != sel_path:
+                try:
+                    with open(sel_path, "r", encoding="utf-8") as f:
+                        text = f.read()
+                except Exception:
+                    text = ""
+
+        if text.strip():
+            cleaned = strip_json_comments_text(text)
+            obj = json.loads(cleaned) if cleaned.strip() else None
+        else:
+            obj = load_outbounds(sel_path)
+
+        outbounds = None
+        if isinstance(obj, dict):
+            outbounds = obj.get("outbounds")
+        elif isinstance(obj, list):
+            outbounds = obj
+
+        if isinstance(outbounds, list):
+            for o in outbounds:
+                if not isinstance(o, dict):
+                    continue
+                t = o.get("tag")
+                if not isinstance(t, str):
+                    continue
+                t = t.strip()
+                if not t or t in seen:
+                    continue
+                seen.add(t)
+                tags.append(t)
+    except Exception:
+        # best-effort: ignore and return empty tags
+        tags = []
+
+    return jsonify({"ok": True, "tags": tags}), 200
+
+
+
+# ---------- API: Xray observatory preset (for balancer leastPing) ----------
+
+@app.post("/api/xray/observatory/preset")
+def api_xray_observatory_preset():
+    """Create 07_observatory.json (+ .jsonc) from the bundled template.
+
+    UI uses this endpoint when user enables balancer.strategy.type=leastPing
+    but the required observatory config fragment is missing.
+
+    Request JSON:
+      {"restart": false}
+
+    Response:
+      {"ok": true, "existed": false, "files": ["07_observatory.json", "07_observatory.jsonc"], "restarted": false}
+    """
+    payload = request.get_json(silent=True) or {}
+    restart_flag = bool(payload.get("restart", False))
+
+    dst_json = os.path.join(XRAY_CONFIGS_DIR, "07_observatory.json")
+    dst_jsonc = dst_json + "c"  # -> 07_observatory.jsonc
+
+    existed_json = False
+    existed_jsonc = False
+    try:
+        existed_json = os.path.exists(dst_json)
+        existed_jsonc = os.path.exists(dst_jsonc)
+    except Exception:
+        existed_json = False
+        existed_jsonc = False
+
+    # If JSON already exists — don't overwrite.
+    if existed_json:
+        # Best-effort: if JSONC is missing, seed it from the template for UI friendliness.
+        wrote = []
+        if not existed_jsonc:
+            try:
+                tpl_text = ""
+                tpl_path = os.environ.get(
+                    "XKEEN_XRAY_OBSERVATORY_TEMPLATE",
+                    "/opt/etc/xray/templates/observatory/07_observatory_base.jsonc",
+                )
+                if tpl_path and os.path.exists(tpl_path):
+                    with open(tpl_path, "r", encoding="utf-8") as f:
+                        tpl_text = f.read()
+                if not tpl_text:
+                    base_dir = os.path.dirname(os.path.abspath(__file__))
+                    bundled = os.path.join(base_dir, "opt", "etc", "xray", "templates", "observatory", "07_observatory_base.jsonc")
+                    if os.path.exists(bundled):
+                        with open(bundled, "r", encoding="utf-8") as f:
+                            tpl_text = f.read()
+                if tpl_text:
+                    _atomic_write_bytes(dst_jsonc, (tpl_text.rstrip("\n") + "\n").encode("utf-8"), mode=0o644)
+                    wrote.append(os.path.basename(dst_jsonc))
+            except Exception:
+                pass
+
+        restarted = restart_flag and restart_xkeen(source="observatory-preset")
+        return jsonify({"ok": True, "existed": True, "files": wrote, "restarted": restarted}), 200
+
+    # Load template text (prefer /opt/etc, fallback to bundled UI archive).
+    tpl_text = ""
+    tpl_path = os.environ.get(
+        "XKEEN_XRAY_OBSERVATORY_TEMPLATE",
+        "/opt/etc/xray/templates/observatory/07_observatory_base.jsonc",
+    )
+    try:
+        if tpl_path and os.path.exists(tpl_path):
+            with open(tpl_path, "r", encoding="utf-8") as f:
+                tpl_text = f.read()
+    except Exception:
+        tpl_text = ""
+
+    if not tpl_text:
+        try:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            bundled = os.path.join(base_dir, "opt", "etc", "xray", "templates", "observatory", "07_observatory_base.jsonc")
+            if os.path.exists(bundled):
+                with open(bundled, "r", encoding="utf-8") as f:
+                    tpl_text = f.read()
+        except Exception:
+            tpl_text = ""
+
+    # Final fallback: minimal config in code.
+    if not tpl_text:
+        tpl_text = (
+            '{\n'
+            '  "observatory": {\n'
+            '    "subjectSelector": ["proxy"],\n'
+            '    "probeUrl": "https://www.google.com/generate_204",\n'
+            '    "probeInterval": "60s",\n'
+            '    "enableConcurrency": true\n'
+            '  }\n'
+            '}\n'
+        )
+
+    # Parse JSON from JSONC template.
+    cfg_obj: dict[str, Any] = {}
+    try:
+        cleaned = strip_json_comments_text(tpl_text)
+        parsed = json.loads(cleaned) if cleaned.strip() else {}
+        if isinstance(parsed, dict):
+            cfg_obj = parsed
+    except Exception:
+        cfg_obj = {}
+
+    if not isinstance(cfg_obj, dict) or not cfg_obj:
+        cfg_obj = {
+            "observatory": {
+                "subjectSelector": ["proxy"],
+                "probeUrl": "https://www.google.com/generate_204",
+                "probeInterval": "60s",
+                "enableConcurrency": True,
+            }
+        }
+
+    files_written: list[str] = []
+
+    # Write JSON (for Xray)
+    try:
+        pretty = json.dumps(cfg_obj, ensure_ascii=False, indent=2) + "\n"
+        _atomic_write_bytes(dst_json, pretty.encode("utf-8"), mode=0o644)
+        files_written.append(os.path.basename(dst_json))
+    except Exception:
+        return api_error("failed to write observatory json", 500, ok=False)
+
+    # Write JSONC (for UI), but don't overwrite if already exists.
+    try:
+        if not existed_jsonc:
+            _atomic_write_bytes(dst_jsonc, (tpl_text.rstrip("\n") + "\n").encode("utf-8"), mode=0o644)
+            files_written.append(os.path.basename(dst_jsonc))
+    except Exception:
+        pass
+
+    restarted = restart_flag and restart_xkeen(source="observatory-preset")
+    return jsonify({"ok": True, "existed": False, "files": files_written, "restarted": restarted}), 200
+
+
+
 @app.get("/api/outbounds")
 def api_get_outbounds():
-    cfg = load_outbounds()
+    file_arg = request.args.get("file", "")
+    sel_path = _resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=OUTBOUNDS_FILE)
+
+    # Prefer raw JSONC variant (with comments) if present.
+    raw_path = sel_path
+    if sel_path.endswith(".json"):
+        raw_path = sel_path + "c"  # -> .jsonc
+    elif not sel_path.endswith(".jsonc"):
+        raw_path = sel_path + ".jsonc"
+
+    chosen_path = sel_path
+    raw_exists = os.path.exists(raw_path)
+    main_exists = os.path.exists(sel_path)
+
+    if raw_exists and not sel_path.endswith(".jsonc"):
+        if main_exists:
+            try:
+                st_raw = os.stat(raw_path)
+                st_main = os.stat(sel_path)
+                raw_mtime_ns = getattr(st_raw, "st_mtime_ns", int(st_raw.st_mtime * 1_000_000_000))
+                main_mtime_ns = getattr(st_main, "st_mtime_ns", int(st_main.st_mtime * 1_000_000_000))
+                chosen_path = sel_path if main_mtime_ns > raw_mtime_ns else raw_path
+            except Exception:
+                chosen_path = raw_path
+        else:
+            chosen_path = raw_path
+
+    text = ""
+    try:
+        with open(chosen_path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except Exception:
+        text = ""
+
+    cfg = None
+    try:
+        if text.strip():
+            cleaned = strip_json_comments_text(text)
+            cfg = json.loads(cleaned) if cleaned.strip() else None
+        else:
+            cfg = load_outbounds(sel_path)
+    except Exception:
+        cfg = load_outbounds(sel_path)
+
     url = None
     if cfg:
-        # Восстанавливаем ссылку (vless / trojan / vmess / ss)
+        try:
+            url = build_proxy_url_from_config(cfg)
+        except Exception:
+            url = None
+
+    if not text.strip():
+        try:
+            text = (json.dumps(cfg, ensure_ascii=False, indent=2) if cfg is not None else "{}") + "\n"
+        except Exception:
+            text = "{}\n"
+
+    return (
+        jsonify(
+            {
+                "ok": True,
+                "url": url,
+                "config": cfg,
+                "text": text,
+                "file": os.path.basename(sel_path),
+                "path": sel_path,
+                "raw_path": raw_path if raw_exists else None,
+                "using_raw": bool(chosen_path == raw_path and raw_exists),
+            }
+        ),
+        200,
+    )
+
+    cfg = load_outbounds(sel_path)
+    url = None
+    if cfg:
+        # Восстанавливаем ссылку (vless / trojan / vmess / ss / hy2)
         try:
             url = build_proxy_url_from_config(cfg)
         except Exception:
@@ -4200,12 +5317,88 @@ def api_get_outbounds():
         pretty = json.dumps(cfg, ensure_ascii=False, indent=2) if cfg is not None else "{}"
     except Exception:
         pretty = "{}"
-    return jsonify({"url": url, "config": cfg, "text": pretty}), 200
+    return (
+        jsonify(
+            {
+                "ok": True,
+                "url": url,
+                "config": cfg,
+                "text": pretty,
+                "file": os.path.basename(sel_path),
+                "path": sel_path,
+            }
+        ),
+        200,
+    )
+
 
 
 @app.post("/api/outbounds")
 def api_set_outbounds():
     payload = request.get_json(silent=True) or {}
+    file_arg = request.args.get("file", "")
+    sel_path = _resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=OUTBOUNDS_FILE)
+
+    # Raw JSON/JSONC save mode (keeps comments in *.jsonc)
+    if isinstance(payload.get("text"), str):
+        raw_text = payload.get("text") or ""
+        if not raw_text.strip():
+            return api_error("empty text", 400, ok=False)
+
+        cleaned = strip_json_comments_text(raw_text)
+        try:
+            obj = json.loads(cleaned)
+        except Exception as e:
+            return api_error(f"invalid json: {e}", 400, ok=False)
+
+        if not isinstance(obj, dict):
+            return api_error("config must be object", 400, ok=False)
+
+        raw_path = sel_path
+        if sel_path.endswith(".json"):
+            raw_path = sel_path + "c"
+        elif not sel_path.endswith(".jsonc"):
+            raw_path = sel_path + ".jsonc"
+
+        # Auto-create snapshots before overwrite.
+        snapshot_xray_config_before_overwrite(sel_path)
+        snapshot_xray_config_before_overwrite(raw_path)
+        # IMPORTANT: write clean JSON first, then raw JSONC last.
+        # The corresponding GET endpoint prefers *.jsonc when it is newer than *.json.
+        def _atomic_write_text(path: str, content: str) -> None:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+                f.write(content)
+            os.replace(tmp, path)
+
+        def _atomic_write_json(path: str, obj: Any) -> None:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+                json.dump(obj, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+            os.replace(tmp, path)
+
+        # Save cleaned JSON for xkeen/xray
+        try:
+            d = os.path.dirname(sel_path)
+            if d and not os.path.isdir(d):
+                os.makedirs(d, exist_ok=True)
+            _atomic_write_json(sel_path, obj)
+        except Exception as e:
+            return api_error(f"failed to write file: {e}", 500, ok=False)
+
+        # Save raw text (with comments) last so it stays newer and is shown in UI
+        try:
+            d_raw = os.path.dirname(raw_path)
+            if d_raw and not os.path.isdir(d_raw):
+                os.makedirs(d_raw, exist_ok=True)
+            _atomic_write_text(raw_path, raw_text)
+        except Exception as e:
+            return api_error(f"failed to write raw file: {e}", 500, ok=False)
+
+        restart_flag = bool(payload.get("restart", True))
+        restarted = restart_flag and restart_xkeen(source="outbounds")
+        return jsonify({"ok": True, "restarted": restarted, "file": os.path.basename(sel_path)}), 200
 
     # Новый режим: прямое сохранение произвольного конфига
     if "config" in payload:
@@ -4213,7 +5406,7 @@ def api_set_outbounds():
         if not isinstance(cfg, dict):
             return api_error("config must be object", 400, ok=False)
     else:
-        # Старый режим: собираем конфиг из VLESS-ссылки
+        # Старый режим: собираем конфиг из ссылки
         url = (payload.get("url") or "").strip()
         if not url:
             return api_error("url is required", 400, ok=False)
@@ -4222,13 +5415,35 @@ def api_set_outbounds():
         except Exception as e:
             return api_error(str(e), 400, ok=False)
 
-    save_outbounds(cfg)
+    save_outbounds(cfg, sel_path)
     restart_flag = bool(payload.get("restart", True))
     restarted = restart_flag and restart_xkeen(source="outbounds")
 
-    return jsonify({"ok": True, "restarted": restarted}), 200
+    return jsonify({"ok": True, "restarted": restarted, "file": os.path.basename(sel_path)}), 200
+
+    # Новый режим: прямое сохранение произвольного конфига
+    if "config" in payload:
+        cfg = payload.get("config")
+        if not isinstance(cfg, dict):
+            return api_error("config must be object", 400, ok=False)
+    else:
+        # Старый режим: собираем конфиг из ссылки
+        url = (payload.get("url") or "").strip()
+        if not url:
+            return api_error("url is required", 400, ok=False)
+        try:
+            cfg = build_outbounds_config_from_link(url)
+        except Exception as e:
+            return api_error(str(e), 400, ok=False)
+
+    save_outbounds(cfg, sel_path)
+    restart_flag = bool(payload.get("restart", True))
+    restarted = restart_flag and restart_xkeen(source="outbounds")
+
+    return jsonify({"ok": True, "restarted": restarted, "file": os.path.basename(sel_path)}), 200
 
 # ---------- API: Local configs import/export ----------
+
 
 @app.get("/api/local/export-configs")
 def api_local_export_configs():
@@ -4299,7 +5514,7 @@ def api_github_export_configs():
     }
 
     try:
-        server_resp = _config_server_request("/upload", method="POST", payload=upload_payload)
+        server_resp = _config_server_request_safe("/upload", method="POST", payload=upload_payload, wait_seconds=10.0)
     except Exception as e:
         return api_error(f"upload failed: {e}", 500, ok=False)
 
@@ -4315,23 +5530,38 @@ def api_github_export_configs():
 
 @app.get("/api/github/configs")
 def api_github_list_configs():
-    """Возвращает список конфигов из GitHub (configs/index.json)."""
+    """Возвращает список конфигов из GitHub (configs/index.json).
+
+    Важно: не блокируем UI-сервер долгими сетевыми запросами (роутер часто однопоточный).
+    Query:
+      - limit: сколько элементов вернуть (default 200, max 500)
+      - wait: сколько секунд подождать свежие данные (default 2.0, max 8.0)
+      - force: 1 чтобы попытаться обновить index.json из GitHub даже если кэш ещё свежий
+    """
+    limit = request.args.get("limit", type=int) or 200
+    limit = max(1, min(int(limit), 500))
+
+    wait = request.args.get("wait", type=float)
+    if wait is None:
+        wait = 2.0
+    wait = max(0.2, min(float(wait), 8.0))
+
+    force = request.args.get("force", type=int) or 0
+
     try:
-        raw = _github_raw_get("configs/index.json")
+        items, stale = _github_get_index_items(wait_seconds=wait, force_refresh=bool(force))
+    except TimeoutError:
+        return api_error("GitHub timeout while loading configs index (try again later)", 504, ok=False)
     except Exception as e:
         return api_error(f"github index failed: {e}", 500, ok=False)
 
-    if not raw:
-        items = []
-    else:
-        try:
-            items = json.loads(raw)
-            if not isinstance(items, list):
-                items = []
-        except Exception:
-            items = []
+    safe_items = _sanitize_github_index_items(items)
+    total = len(safe_items)
 
-    return jsonify({"ok": True, "items": items}), 200
+    safe_items.sort(key=lambda it: int(it.get("created_at", 0) or 0), reverse=True)
+    safe_items = safe_items[:limit]
+
+    return jsonify({"ok": True, "items": safe_items, "total": total, "stale": bool(stale)}), 200
 
 
 @app.post("/api/github/import-configs")
@@ -4339,35 +5569,35 @@ def api_github_import_configs():
     """
     Если в теле есть cfg_id — загружаем именно его.
     Если нет — берём самый свежий из configs/index.json в GitHub-репозитории.
+
+    Важно: все сетевые операции выполняются в worker-потоках, чтобы не «подвешивать» UI.
     """
     payload = request.get_json(silent=True) or {}
     cfg_id = (payload.get("cfg_id") or "").strip()
 
-    # Если id не указан — читаем index.json из репозитория и выбираем последнюю конфигурацию.
+    # 1) Если id не указан — берём последний из index.json.
     if not cfg_id:
         try:
-            raw_index = _github_raw_get("configs/index.json")
+            items, _stale = _github_get_index_items(wait_seconds=2.5, force_refresh=False)
+        except TimeoutError:
+            return api_error("GitHub timeout while loading configs index", 504, ok=False)
         except Exception as e:
             return api_error(f"github index failed: {e}", 500, ok=False)
 
-        if not raw_index:
+        safe_items = _sanitize_github_index_items(items)
+        if not safe_items:
             return api_error("no configs found in repo", 404, ok=False)
 
-        try:
-            items = json.loads(raw_index)
-            if not isinstance(items, list) or not items:
-                return api_error("no configs found in repo", 404, ok=False)
-        except Exception:
-            return api_error("invalid index.json in repo", 500, ok=False)
-
-        latest = max(items, key=lambda it: int(it.get("created_at", 0) or 0))
+        latest = max(safe_items, key=lambda it: int(it.get("created_at", 0) or 0))
         cfg_id = latest.get("id")
         if not cfg_id:
             return api_error("latest config has no id", 500, ok=False)
 
-    # Загружаем bundle.json выбранной конфигурации
+    # 2) Загружаем bundle.json выбранной конфигурации (короткое ожидание на основном потоке).
     try:
-        raw_bundle = _github_raw_get(f"configs/{cfg_id}/bundle.json")
+        raw_bundle = _github_raw_get_safe(f"configs/{cfg_id}/bundle.json", wait_seconds=4.0)
+    except TimeoutError:
+        return api_error("GitHub timeout while loading bundle.json", 504, ok=False)
     except Exception as e:
         return api_error(f"github get {cfg_id} failed: {e}", 500, ok=False)
 
@@ -4438,12 +5668,13 @@ def api_mihomo_download():
 def api_mihomo_save():
     try:
         state = _mihomo_get_state_from_request()
-        cfg, active_profile = mihomo_svc.generate_and_save_config(state)
+        cfg, active_profile, warnings = mihomo_svc.generate_and_save_config(state)
         return jsonify(
             {
                 "ok": True,
                 "active_profile": active_profile,
                 "config_length": len(cfg),
+                "warnings": warnings,
             }
         )
     except Exception as e:
@@ -4454,9 +5685,9 @@ def api_mihomo_save():
 def api_mihomo_restart():
     try:
         state = _mihomo_get_state_from_request()
-        cfg, log = mihomo_svc.generate_save_and_restart(state)
+        cfg, log, warnings = mihomo_svc.generate_save_and_restart(state)
         return jsonify(
-            {"ok": True, "config_length": len(cfg), "log": log}
+            {"ok": True, "config_length": len(cfg), "log": log, "warnings": warnings}
         )
     except Exception as e:
         return api_error(str(e), 400, ok=False)
@@ -4483,12 +5714,13 @@ def api_mihomo_generate_apply():
             if not ok_yaml:
                 return api_error(f"Invalid YAML syntax: {yaml_err}", 400, ok=False)
 
-        cfg, log = mihomo_svc.generate_save_and_restart(data)
+        cfg, log, warnings = mihomo_svc.generate_save_and_restart(data)
         return jsonify(
             {
                 "ok": True,
                 "config_length": len(cfg),
                 "log": log,
+                "warnings": warnings,
             }
         )
     except FileNotFoundError as e:
@@ -4790,6 +6022,10 @@ elif not REMOTEFS_ENABLED:
 routing_bp = create_routing_blueprint(
     ROUTING_FILE=ROUTING_FILE,
     ROUTING_FILE_RAW=ROUTING_FILE_RAW,
+    XRAY_CONFIGS_DIR=XRAY_CONFIGS_DIR,
+    XRAY_CONFIGS_DIR_REAL=XRAY_CONFIGS_DIR_REAL,
+    BACKUP_DIR=BACKUP_DIR,
+    BACKUP_DIR_REAL=BACKUP_DIR_REAL,
     load_json=load_json,
     strip_json_comments_text=strip_json_comments_text,
     restart_xkeen=restart_xkeen,
@@ -4877,6 +6113,8 @@ try:
     fs_bp = create_fs_blueprint(
         tmp_dir=str(os.getenv("XKEEN_REMOTEFM_TMP_DIR", "/tmp") or "/tmp"),
         max_upload_mb=int(os.getenv("XKEEN_REMOTEFM_MAX_UPLOAD_MB", "200") or "200"),
+        xray_configs_dir=XRAY_CONFIGS_DIR,
+        backup_dir=BACKUP_DIR,
     )
     app.register_blueprint(fs_bp)
 except Exception as _e:

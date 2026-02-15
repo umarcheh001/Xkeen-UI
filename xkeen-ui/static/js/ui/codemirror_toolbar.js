@@ -440,7 +440,9 @@
     (effectiveItems || []).forEach((it) => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'xkeen-cm-tool' + ((it && (it.id === 'help' || it.isHelp)) ? ' is-help' : '');
+      btn.className = 'xkeen-cm-tool'
+        + ((it && (it.id === 'help' || it.isHelp)) ? ' is-help' : '')
+        + ((it && (it.id === 'help_comments' || it.isCommentsHelp)) ? ' is-comments-help' : '');
       btn.setAttribute('aria-label', it.label || it.id || 'Action');
 
       // For help/debugging: keep a stable id/command on the element.

@@ -37,6 +37,28 @@
     if (errorEl) errorEl.textContent = msg ? String(msg) : '';
   }
 
+  function activeFileParam(kind) {
+    try {
+      if (window.XKeen && XKeen.state && XKeen.state.fragments && XKeen.state.fragments[kind]) {
+        return String(XKeen.state.fragments[kind] || '').trim();
+      }
+    } catch (e) {}
+    // Fallback: use whatever is shown as active file label in window.XKEEN_FILES
+    try {
+      const fp = window.XKEEN_FILES && window.XKEEN_FILES[kind];
+      if (!fp) return '';
+      const parts = String(fp).split('/');
+      const b = parts[parts.length - 1];
+      return String(b || '').trim();
+    } catch (e) {}
+    return '';
+  }
+
+  function buildTargetUrl(target, baseUrl) {
+    const active = activeFileParam(target);
+    return baseUrl + (active ? ('?file=' + encodeURIComponent(active)) : '');
+  }
+
   function setHeader(target) {
     const titleEl = el('json-editor-title');
     const fileLabelEl = el('json-editor-file-label');
@@ -52,18 +74,35 @@
       }
     }
 
+    function _activeFileParam(kind) {
+      try {
+        if (window.XKeen && XKeen.state && XKeen.state.fragments && XKeen.state.fragments[kind]) {
+          return String(XKeen.state.fragments[kind] || '').trim();
+        }
+      } catch (e) {}
+      // Fallback: use whatever is shown as active file label in window.XKEEN_FILES
+      try {
+        const fp = window.XKEEN_FILES && window.XKEEN_FILES[kind];
+        const b = _baseName(fp, '');
+        return b || '';
+      } catch (e) {}
+      return '';
+    }
+
     if (target === 'inbounds') {
-      const base = _baseName(window.XKEEN_FILES && window.XKEEN_FILES.inbounds, '03_inbounds.json');
+      const active = activeFileParam('inbounds');
+      const base = active ? active : _baseName(window.XKEEN_FILES && window.XKEEN_FILES.inbounds, '03_inbounds.json');
       if (titleEl) titleEl.textContent = 'Редактор ' + base;
       if (fileLabelEl) fileLabelEl.textContent = 'Файл: ' + base;
-      return '/api/inbounds';
+      return buildTargetUrl('inbounds', '/api/inbounds');
     }
 
     if (target === 'outbounds') {
-      const base = _baseName(window.XKEEN_FILES && window.XKEEN_FILES.outbounds, '04_outbounds.json');
+      const active = activeFileParam('outbounds');
+      const base = active ? active : _baseName(window.XKEEN_FILES && window.XKEEN_FILES.outbounds, '04_outbounds.json');
       if (titleEl) titleEl.textContent = 'Редактор ' + base;
       if (fileLabelEl) fileLabelEl.textContent = 'Файл: ' + base;
-      return '/api/outbounds';
+      return buildTargetUrl('outbounds', '/api/outbounds');
     }
 
     return null;
@@ -142,6 +181,7 @@
     const closeBtn = el('json-editor-close-btn');
     const cancelBtn = el('json-editor-cancel-btn');
     const saveBtn = el('json-editor-save-btn');
+    const formatBtn = el('json-editor-format-btn');
 
     const onClose = (e) => {
       if (e && e.preventDefault) e.preventDefault();
@@ -155,6 +195,13 @@
       saveBtn.addEventListener('click', (e) => {
         e.preventDefault();
         save();
+      });
+    }
+
+    if (formatBtn) {
+      formatBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        formatCurrent();
       });
     }
 
@@ -203,6 +250,7 @@
       const cm = await ensureEditor(textarea);
       if (cm) {
         try { cm.setOption('theme', cmThemeFromPage()); } catch (e) {}
+        updateLintForText(cm, finalText || '');
         cm.setValue(finalText || '');
         setTimeout(() => {
           try { cm.refresh(); cm.focus(); } catch (e) {}
@@ -224,6 +272,70 @@
     _currentTarget = null;
   }
 
+
+
+  function hasJsonComments(text) {
+    const t = String(text || '');
+    // Rough detection: ignore URLs by requiring comment token not preceded by ':'
+    return /(^|[^:])\/\/|\n\s*#|\/\*/.test(t);
+  }
+
+  function updateLintForText(cm, text) {
+    if (!cm) return;
+    try {
+      const canLint = jsonLintAvailable();
+      // JSONC comments produce false positives in strict JSON linter.
+      cm.setOption('lint', canLint && !hasJsonComments(text));
+    } catch (e) {}
+  }
+
+  function getCurrentText(textarea) {
+    if (_cm) return _cm.getValue();
+    if (textarea) return textarea.value || '';
+    return '';
+  }
+
+  async function formatCurrent() {
+    ensureWired();
+    const textarea = el('json-editor-textarea');
+    const text = String(getCurrentText(textarea) || '');
+    if (!text.trim()) {
+      setError('Пустой JSON.');
+      return;
+    }
+    setError('');
+    try {
+      const res = await fetch('/api/json/format', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data || data.ok !== true || typeof data.text !== 'string') {
+        const msg = 'Ошибка форматирования: ' + ((data && data.error) || res.statusText || ('HTTP ' + res.status));
+        setError(msg);
+        toast(msg, true);
+        return;
+      }
+
+      const next = String(data.text || '');
+      if (_cm) {
+        updateLintForText(_cm, next);
+        _cm.setValue(next);
+        try { _cm.focus(); } catch (e) {}
+      } else {
+        textarea.value = next;
+        textarea.focus();
+      }
+      toast('JSON отформатирован.', false);
+    } catch (e) {
+      console.error(e);
+      const msg = 'Ошибка форматирования.';
+      setError(msg);
+      toast(msg, true);
+    }
+  }
+
   async function save() {
     ensureWired();
 
@@ -236,23 +348,17 @@
     if (_cm) text = _cm.getValue();
     else if (textarea) text = textarea.value || '';
     else return;
-
-    let config;
-    try {
-      config = JSON.parse(String(text || ''));
-    } catch (e) {
-      setError('Ошибка парсинга JSON: ' + (e && e.message ? e.message : e));
-      return;
-    }
-
-    const url = target === 'inbounds' ? '/api/inbounds' : '/api/outbounds';
+    // Send raw JSON/JSONC text to backend (keeps comments).
+    const url = target === 'inbounds'
+      ? buildTargetUrl('inbounds', '/api/inbounds')
+      : buildTargetUrl('outbounds', '/api/outbounds');
 
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          config,
+          text,
           restart: shouldRestartAfterSave(),
         }),
       });

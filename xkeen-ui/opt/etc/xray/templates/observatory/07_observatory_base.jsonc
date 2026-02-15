@@ -1,0 +1,26 @@
+// xkeen-template: {"title":"Observatory (leastPing)","description":"Минимальный observatory для balancer.strategy.type=leastPing (по статье jameszero 4025)."}
+//
+// Примечания:
+// - subjectSelector может содержать теги outbounds или префиксы (например "proxy").
+// - probeUrl — быстрый URL для проверки доступности/задержки (generate_204 обычно отвечает сразу).
+// - probeInterval — интервал опроса.
+// - enableConcurrency=true полезно при нескольких прокси, чтобы проверять параллельно.
+
+{
+  "observatory": {
+    "subjectSelector": ["proxy"],
+    "probeUrl": "https://www.google.com/generate_204",
+    "probeInterval": "60s",
+    "enableConcurrency": true
+  }
+}
+
+// Альтернатива (не включайте одновременно с observatory):
+// {
+//   "burstObservatory": {
+//     "subjectSelector": ["proxy"],
+//     "probeUrl": "https://www.google.com/generate_204",
+//     "probeInterval": "60s",
+//     "enableConcurrency": true
+//   }
+// }

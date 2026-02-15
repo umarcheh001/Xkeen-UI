@@ -11,9 +11,39 @@
 
   let _inited = false;
   let _repoUrl = '';
+  let _catalogAbort = null;
 
   function el(id) {
     return document.getElementById(id);
+  }
+
+  function setCatalogMessage({ status = '', error = '', stale = false, loading = false } = {}) {
+    const statusEl = el('github-catalog-status');
+    const errorEl = el('github-catalog-error');
+    const stalePill = el('github-catalog-stale-pill');
+    const retryBtn = el('github-catalog-retry-btn');
+
+    if (statusEl) statusEl.textContent = status || '';
+
+    if (errorEl) {
+      if (error) {
+        errorEl.textContent = error;
+        errorEl.style.display = '';
+      } else {
+        errorEl.textContent = '';
+        errorEl.style.display = 'none';
+      }
+    }
+
+    if (stalePill) {
+      if (stale) stalePill.classList.remove('hidden');
+      else stalePill.classList.add('hidden');
+    }
+
+    if (retryBtn) {
+      retryBtn.disabled = !!loading;
+      retryBtn.setAttribute('aria-busy', loading ? 'true' : 'false');
+    }
   }
 
 
@@ -46,6 +76,9 @@
     const modal = el('github-catalog-modal');
     if (!modal) return;
     modal.classList.add('hidden');
+    try {
+      if (_catalogAbort) _catalogAbort.abort();
+    } catch (e) {}
   }
 
   function openRepository() {
@@ -100,11 +133,15 @@
     setStatus('Выгрузка конфигураций на сервер...', false);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       const res = await fetch('/api/github/export-configs', {
+        signal: controller.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
+      clearTimeout(timeoutId);
       const data = await res.json();
 
       if (res.ok && data.ok) {
@@ -130,11 +167,15 @@
     setStatus('Загрузка конфигурации ' + cfgId + '...', false);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
       const res = await fetch('/api/github/import-configs', {
+        signal: controller.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cfg_id: cfgId }),
       });
+      clearTimeout(timeoutId);
       const data = await res.json();
 
       if (res.ok && data.ok) {
@@ -155,22 +196,77 @@
     }
   }
 
-  async function loadCatalog() {
+  function _humanizeCatalogError(res, data, err) {
+    // Prefer a short and understandable message.
+    const serverMsg = (data && (data.error || data.message)) ? String(data.error || data.message) : '';
+
+    if (err && err.name === 'AbortError') {
+      return 'Таймаут: GitHub не отвечает. Нажмите «Повторить».';
+    }
+
+    const status = res ? res.status : 0;
+    if (status === 504) {
+      return 'Таймаут: GitHub не отвечает, а локального кэша пока нет. Попробуйте позже или нажмите «Повторить».';
+    }
+    if (status === 404) {
+      return 'Каталог не найден в репозитории (configs/index.json). Проверьте репозиторий/ветку.';
+    }
+
+    if (serverMsg) {
+      // Keep server message but make it more friendly.
+      if (/timeout/i.test(serverMsg)) return 'Таймаут: GitHub не отвечает. Нажмите «Повторить».';
+      if (/not configured|configured/i.test(serverMsg)) return 'GitHub-репозиторий не настроен на сервере.';
+      return 'Не удалось загрузить каталог: ' + serverMsg;
+    }
+
+    if (status) return 'Не удалось загрузить каталог (HTTP ' + status + '). Нажмите «Повторить».';
+    return 'Не удалось загрузить каталог. Проверьте интернет/DNS на роутере и нажмите «Повторить».';
+  }
+
+  async function loadCatalog(opts) {
+    const force = !!(opts && opts.force);
     const listEl = el('github-catalog-list');
     if (!listEl) return;
     listEl.textContent = 'Загрузка...';
+    setCatalogMessage({ status: 'Загрузка каталога…', error: '', stale: false, loading: true });
 
     try {
-      const res = await fetch('/api/github/configs');
-      const data = await res.json();
+      if (_catalogAbort) {
+        try { _catalogAbort.abort(); } catch (e) {}
+      }
+
+      const controller = new AbortController();
+      _catalogAbort = controller;
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const url = '/api/github/configs?limit=200&wait=2' + (force ? '&force=1' : '') + '&t=' + Date.now();
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data.ok) {
-        listEl.textContent =
-          'Ошибка загрузки каталога: ' + ((data && data.error) || 'неизвестная ошибка');
+        const msg = _humanizeCatalogError(res, data, null);
+        setCatalogMessage({ status: '', error: msg, stale: false, loading: false });
+        listEl.textContent = '';
         return;
       }
 
       const items = data.items || [];
+      const stale = !!data.stale;
+      const total = Number(data.total || items.length || 0);
+
+      if (stale) {
+        setCatalogMessage({
+          status:
+            'Показаны данные из кэша' + (total ? ` • всего: ${total}` : '') + ' (GitHub сейчас недоступен/медленный).',
+          error: '',
+          stale: true,
+          loading: false,
+        });
+      } else {
+        setCatalogMessage({ status: total ? `Всего конфигураций: ${total}` : '', error: '', stale: false, loading: false });
+      }
+
       if (!items.length) {
         listEl.textContent = 'Конфигураций пока нет.';
         return;
@@ -212,7 +308,10 @@
       listEl.appendChild(container);
     } catch (e) {
       console.error(e);
-      listEl.textContent = 'Ошибка загрузки каталога (см. консоль).';
+
+      const msg = _humanizeCatalogError(null, null, e);
+      setCatalogMessage({ status: '', error: msg, stale: false, loading: false });
+      listEl.textContent = '';
     }
   }
 
@@ -263,6 +362,14 @@
       catalogCloseBtn.addEventListener('click', (e) => {
         e.preventDefault();
         closeCatalogModal();
+      });
+    }
+
+    const catalogRetryBtn = el('github-catalog-retry-btn');
+    if (catalogRetryBtn) {
+      catalogRetryBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        loadCatalog({ force: true });
       });
     }
 

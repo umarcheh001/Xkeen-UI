@@ -131,6 +131,14 @@
     'XKEEN_MAX_ZIP_ESTIMATE_ITEMS': 'Ограничение количества элементов при оценке размера zip (защита от огромных деревьев).',
     'XKEEN_ALLOW_SHELL': 'Разрешить выполнение shell‑команд/терминал в UI. 1=включено, 0=выключено. Включайте только в доверенной сети.',
     'XKEEN_XRAY_LOG_TZ_OFFSET': 'Сдвиг временных меток в логах Xray/Mihomo (в часах). Значение — целое число, по умолчанию 3.',
+    'XKEEN_XRAY_CONFIGS_DIR': 'Каталог с фрагментами Xray-конфига (routing/inbounds/outbounds). По умолчанию: /opt/etc/xray/configs.',
+    'XKEEN_XRAY_ROUTING_FILE': 'Путь или имя файла роутинга Xray. Если указано имя без / — считается относительно XKEEN_XRAY_CONFIGS_DIR. Пример: 05_routing(in_keenetic)_new.json',
+    'XKEEN_XRAY_INBOUNDS_FILE': 'Путь или имя файла 03_inbounds*.json. Если имя без / — относительно XKEEN_XRAY_CONFIGS_DIR.',
+    'XKEEN_XRAY_OUTBOUNDS_FILE': 'Путь или имя файла 04_outbounds*.json. Если имя без / — относительно XKEEN_XRAY_CONFIGS_DIR.',
+    'XKEEN_XRAY_ROUTING_FILE_RAW': 'Путь или имя raw JSONC-файла роутинга (с комментариями). По умолчанию <routing>.jsonc рядом с выбранным routing-файлом.',
+    'XKEEN_PORT_PROXYING_FILE': 'Файл со списком портов для проксирования. По умолчанию: /opt/etc/xkeen/port_proxying.lst.',
+    'XKEEN_PORT_EXCLUDE_FILE': 'Файл со списком портов-исключений. По умолчанию: /opt/etc/xkeen/port_exclude.lst.',
+    'XKEEN_IP_EXCLUDE_FILE': 'Файл со списком IP/подсетей-исключений. По умолчанию: /opt/etc/xkeen/ip_exclude.lst. В старых версиях мог быть /opt/etc/xkeen_exclude.lst — UI подхватит его автоматически, если новый путь отсутствует.',
   };
 
 
@@ -192,6 +200,14 @@
     'XKEEN_MAX_ZIP_ESTIMATE_ITEMS',
     'XKEEN_ALLOW_SHELL',
     'XKEEN_XRAY_LOG_TZ_OFFSET',
+    'XKEEN_XRAY_CONFIGS_DIR',
+    'XKEEN_XRAY_ROUTING_FILE',
+    'XKEEN_XRAY_INBOUNDS_FILE',
+    'XKEEN_XRAY_OUTBOUNDS_FILE',
+    'XKEEN_XRAY_ROUTING_FILE_RAW',
+    'XKEEN_PORT_PROXYING_FILE',
+    'XKEEN_PORT_EXCLUDE_FILE',
+    'XKEEN_IP_EXCLUDE_FILE',
     'XKEEN_RESTART_LOG_FILE',
   ]);
 

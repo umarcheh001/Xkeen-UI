@@ -1,0 +1,29 @@
+{
+  "routing": {
+    "rules": [
+      {
+        "port": "443",
+        "network": "udp",
+        "outboundTag": "block"
+      },
+      {
+        "domain": [
+          "ext:geosite_zkeen.dat:domains",
+          "ext:geosite_zkeen.dat:other",
+          "ext:geosite_zkeen.dat:youtube"
+        ],
+        "outboundTag": "vless_1"
+      },
+      {
+        "ip": [
+          "ext:geoip_zkeenip.dat:discord"
+        ],
+        "outboundTag": "vless_1"
+      },
+      {
+        "network": "tcp,udp",
+        "outboundTag": "direct"
+      }
+    ]
+  }
+}

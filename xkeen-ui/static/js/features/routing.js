@@ -20,6 +20,11 @@
     error: 'routing-error',
     helpLine: 'routing-help-line',
 
+    // Routing fragment selector (optional)
+    fragmentSelect: 'routing-fragment-select',
+    fragmentRefresh: 'routing-fragment-refresh-btn',
+    fileCode: 'routing-file-code',
+
     btnSave: 'routing-save-btn',
     btnFormat: 'routing-format-btn',
     btnBackup: 'routing-backup-btn',
@@ -42,9 +47,141 @@
   let _cm = null;
   let _errorMarker = null;
 
+  // Active routing fragment file (basename or absolute). Controlled by dropdown.
+  let _activeFragment = null;
+
+
   function $(id) {
     return document.getElementById(id);
   }
+
+  function getSelectedFragmentFromUI() {
+    try {
+      const sel = $(IDS.fragmentSelect);
+      if (sel && sel.value) return String(sel.value);
+    } catch (e) {}
+    return null;
+  }
+
+  function rememberActiveFragment(name) {
+    try {
+      if (name) localStorage.setItem('xkeen.routing.fragment', String(name));
+    } catch (e) {}
+  }
+
+  function restoreRememberedFragment() {
+    try {
+      const v = localStorage.getItem('xkeen.routing.fragment');
+      if (v) return String(v);
+    } catch (e) {}
+    return null;
+  }
+
+  function getActiveFragment() {
+    return getSelectedFragmentFromUI() || _activeFragment || restoreRememberedFragment() || null;
+  }
+
+  function updateActiveFileLabel(fullPathOrName, configsDir) {
+    const codeEl = $(IDS.fileCode);
+    if (!codeEl) return;
+    const v = String(fullPathOrName || '');
+    if (v) {
+      codeEl.textContent = v;
+      return;
+    }
+    try {
+      const f = getActiveFragment();
+      if (f && configsDir) {
+        codeEl.textContent = String(configsDir).replace(/\/+$/, '') + '/' + f;
+      } else if (f) {
+        codeEl.textContent = f;
+      }
+    } catch (e) {}
+  }
+
+  async function refreshFragmentsList(opts) {
+    const sel = $(IDS.fragmentSelect);
+    if (!sel) return;
+
+    const notify = !!(opts && opts.notify);
+
+    let data = null;
+    try {
+      const res = await fetch('/api/routing/fragments', { cache: 'no-store' });
+      data = await res.json().catch(() => null);
+    } catch (e) {
+      data = null;
+    }
+    if (!data || !data.ok || !Array.isArray(data.items)) {
+      // Fallback: keep whatever is rendered by server
+      try { if (notify && typeof window.toast === 'function') window.toast('Не удалось обновить список файлов роутинга', 'error'); } catch (e) {}
+      return;
+    }
+
+    const currentDefault = (data.current || sel.dataset.current || '').toString();
+    const remembered = restoreRememberedFragment();
+    const preferred = (getActiveFragment() || remembered || currentDefault || (data.items[0] ? data.items[0].name : '')).toString();
+
+    function decorateName(n) {
+      const name = String(n || '');
+      if (!name) return '';
+      // Mark special Hysteria2 fragments (used only when assembling hysteria2 configs)
+      if (/_hys2\.json$/i.test(name)) return name + ' (Hysteria2)';
+      return name;
+    }
+
+    // Rebuild options
+    try { if (sel.dataset) sel.dataset.dir = String(data.dir || ''); } catch (e) {}
+    sel.innerHTML = '';
+    const names = data.items.map((it) => String(it.name || '')).filter(Boolean);
+
+    // If currentDefault isn't in list, keep it as "custom"
+    if (currentDefault && names.indexOf(currentDefault) === -1) {
+      const opt = document.createElement('option');
+      opt.value = currentDefault;
+      opt.textContent = decorateName(currentDefault) + ' (текущий)';
+      sel.appendChild(opt);
+    }
+
+    data.items.forEach((it) => {
+      const name = String(it.name || '');
+      if (!name) return;
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = decorateName(name);
+      sel.appendChild(opt);
+    });
+
+    // Select preferred if exists
+    try {
+      const finalChoice = names.indexOf(preferred) !== -1 ? preferred : (currentDefault || (names[0] || ''));
+      if (finalChoice) sel.value = finalChoice;
+      _activeFragment = sel.value || finalChoice || null;
+      rememberActiveFragment(_activeFragment);
+      updateActiveFileLabel((data.dir ? String(data.dir).replace(/\/+$/, '') + '/' : '') + (_activeFragment || ''), data.dir || '');
+      // Keep legacy global in sync
+      try {
+        if (window.XKEEN_FILES) window.XKEEN_FILES.routing = (data.dir ? String(data.dir).replace(/\/+$/, '') + '/' : '') + (_activeFragment || '');
+      } catch (e) {}
+    } catch (e) {}
+
+    // Wire refresh button (once)
+    try {
+      const btn = $(IDS.fragmentRefresh);
+      if (btn && !btn.dataset.xkWired) {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await refreshFragmentsList({ notify: true });
+        });
+        btn.dataset.xkWired = '1';
+      }
+    } catch (e) {}
+
+    // Success toast (only when explicitly requested)
+    try { if (notify && typeof window.toast === 'function') window.toast('Список файлов роутинга обновлён', 'success'); } catch (e) {}
+  }
+
+
 
 
   function setStatus(msg, isError) {
@@ -297,12 +434,26 @@ function closeHelp() {
     const statusEl = $(IDS.status);
     if (statusEl) statusEl.textContent = 'Загрузка routing…';
     try {
-      const res = await fetch('/api/routing');
+      const file = getActiveFragment();
+      const url = file ? ('/api/routing?file=' + encodeURIComponent(file)) : '/api/routing';
+      const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) {
         if (statusEl) statusEl.textContent = 'Не удалось загрузить routing.';
         toast('Не удалось загрузить routing.', true);
         return;
       }
+
+      // Optional server notice (e.g. JSON-with-comments -> JSONC auto-migration)
+      try {
+        const b64 = res.headers.get('X-XKeen-Notice-B64');
+        if (b64) {
+          const kind = res.headers.get('X-XKeen-Notice-Kind') || 'info';
+          const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          const msg = new TextDecoder('utf-8').decode(bytes);
+          if (msg) toast(msg, kind);
+        }
+      } catch (e) {}
+
       const text = await res.text();
       if (_cm) {
         _cm.setValue(text);
@@ -354,7 +505,9 @@ function closeHelp() {
     const restart = shouldAutoRestartAfterSave();
 
     try {
-      const res = await fetch('/api/routing?restart=' + (restart ? '1' : '0'), {
+      const file = getActiveFragment();
+      const url = '/api/routing?restart=' + (restart ? '1' : '0') + (file ? ('&file=' + encodeURIComponent(file)) : '');
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: rawText,
@@ -397,15 +550,47 @@ function closeHelp() {
     const statusEl = $(IDS.status);
     if (!_cm) return;
     const text = _cm.getValue();
-    
-    if (hasUserComments(text)) {
-      const ok = await confirmCommentsLoss('Форматирование');
-      if (!ok) return;
-    }
     const cleaned = stripJsonComments(text);
     try {
-      const obj = JSON.parse(cleaned);
-      _cm.setValue(JSON.stringify(obj, null, 2));
+      // Validate first (JSONC comments allowed)
+      JSON.parse(cleaned);
+    } catch (e) {
+      setError('Ошибка JSON: ' + (e && e.message ? e.message : e), null);
+      if (statusEl) statusEl.textContent = 'Не удалось отформатировать: некорректный JSON.';
+      toast('Не удалось отформатировать: некорректный JSON.', true);
+      return;
+    }
+
+    // Prefer server-side formatter that preserves comments (JSONC/JS style).
+    // Falls back to classic JSON.stringify (will remove comments).
+    let serverFormatted = null;
+    try {
+      const res = await fetch('/api/json/format', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data && data.ok === true && typeof data.text === 'string') {
+        serverFormatted = data.text;
+      }
+    } catch (e) {
+      serverFormatted = null;
+    }
+
+    try {
+      if (typeof serverFormatted === 'string') {
+        _cm.setValue(serverFormatted);
+      } else {
+        // Legacy fallback (comments will be lost)
+        if (hasUserComments(text)) {
+          const ok = await confirmCommentsLoss('Форматирование');
+          if (!ok) return;
+        }
+        const obj = JSON.parse(cleaned);
+        _cm.setValue(JSON.stringify(obj, null, 2));
+      }
+
       _cm.scrollTo(0, 0);
       setError('', null);
       if (statusEl) statusEl.textContent = 'JSON отформатирован.';
@@ -473,7 +658,9 @@ function closeHelp() {
     const statusEl = $(IDS.status);
     const backupsStatusEl = document.getElementById('backups-status');
     try {
-      const res = await fetch('/api/backup', { method: 'POST' });
+      const file = getActiveFragment();
+      const url = '/api/backup' + (file ? ('?file=' + encodeURIComponent(file)) : '');
+      const res = await fetch(url, { method: 'POST' });
       let data = null;
       try { data = await res.json(); } catch (e) {}
       if (res.ok && data && data.ok) {
@@ -595,6 +782,51 @@ function closeHelp() {
       });
       if (header.dataset) header.dataset.xkeenWired = '1';
     }
+    // Fragment selector (routing fragments in /opt/etc/xray/configs/*routing*.json)
+    const fragSel = $(IDS.fragmentSelect);
+    if (fragSel && !(fragSel.dataset && fragSel.dataset.xkeenWired === '1')) {
+      fragSel.addEventListener('change', async (e) => {
+        const next = String(fragSel.value || '');
+        if (!next) return;
+
+        // If there are unsaved changes, ask before switching.
+        let dirty = false;
+        try { dirty = !!window.routingIsDirty; } catch (e) {}
+        if (dirty) {
+          const ok = await (window.XKeen && window.XKeen.ui && typeof window.XKeen.ui.confirm === 'function'
+            ? window.XKeen.ui.confirm({
+                title: 'Несохранённые изменения',
+                message: 'В редакторе есть несохранённые изменения. Переключить файл и потерять их?',
+                okText: 'Переключить',
+                cancelText: 'Остаться',
+                danger: true,
+              })
+            : Promise.resolve(window.confirm('Есть несохранённые изменения. Переключить файл и потерять их?')));
+          if (!ok) {
+            // revert selection
+            try { fragSel.value = _activeFragment || fragSel.value; } catch (e) {}
+            return;
+          }
+        }
+
+        _activeFragment = next;
+        rememberActiveFragment(_activeFragment);
+        try {
+          const dir = fragSel.dataset && fragSel.dataset.dir ? String(fragSel.dataset.dir) : '';
+          updateActiveFileLabel((dir ? dir.replace(/\/+$/, '') + '/' : '') + _activeFragment, dir);
+        } catch (e2) {}
+
+        // Keep legacy global in sync for labels
+        try {
+          const dir2 = fragSel.dataset && fragSel.dataset.dir ? String(fragSel.dataset.dir) : '';
+          if (window.XKEEN_FILES) window.XKEEN_FILES.routing = (dir2 ? dir2.replace(/\/+$/, '') + '/' : '') + _activeFragment;
+        } catch (e3) {}
+
+        await load();
+      });
+      if (fragSel.dataset) fragSel.dataset.xkeenWired = '1';
+    }
+
     // Help line
     const help = $(IDS.helpLine);
     if (help && !(help.dataset && help.dataset.xkeenWired === '1')) {
@@ -694,22 +926,49 @@ function closeHelp() {
         cm.addOverlay(hashCommentOverlay);
       }
     } catch (e) {}
-
-    // Cosmetic class + toolbar if present in legacy main.js
+    // Cosmetic class + toolbar
+    // We keep the default red '?' (CodeMirror help) and add a second yellow help button
+    // for routing comments (JSONC) via the module modal (/static/routing-comments-help.html).
     try {
       if (cm.getWrapperElement) {
         cm.getWrapperElement().classList.add('xkeen-cm');
         if (typeof window.xkeenAttachCmToolbar === 'function' && window.XKEEN_CM_TOOLBAR_DEFAULT) {
-          window.xkeenAttachCmToolbar(cm, window.XKEEN_CM_TOOLBAR_DEFAULT);
+          const base = Array.isArray(window.XKEEN_CM_TOOLBAR_DEFAULT) ? window.XKEEN_CM_TOOLBAR_DEFAULT : [];
+          const items = [];
+          (base || []).forEach((it) => {
+            items.push(it);
+            if (it && it.id === 'help') {
+              items.push({
+                id: 'help_comments',
+                svg: (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.help) ? window.XKEEN_CM_ICONS.help : it.svg,
+                label: 'Справка (комментарии)',
+                fallbackHint: 'JSONC',
+                isCommentsHelp: true,
+                onClick: () => openHelp(),
+              });
+            }
+          });
+          window.xkeenAttachCmToolbar(cm, items);
         }
       }
     } catch (e) {}
 
-    cm.on('change', () => {
+cm.on('change', () => {
       validate();
     });
 
     return cm;
+  }
+
+  function moveToolbarToHost(cm) {
+    try {
+      const host = document.getElementById('routing-toolbar-host');
+      if (!host || !cm || !cm._xkeenToolbarEl) return;
+      if (host.contains(cm._xkeenToolbarEl)) return;
+      host.appendChild(cm._xkeenToolbarEl);
+      // Mark so CSS can adjust spacing when toolbar lives inside the header.
+      try { cm._xkeenToolbarEl.classList.add('xk-toolbar-in-host'); } catch (e) {}
+    } catch (e) {}
   }
 
   function init() {
@@ -721,11 +980,17 @@ function closeHelp() {
     _cm = createEditor();
     XKeen.state.routingEditor = _cm;
 
+    // Place CodeMirror toolbar into the compact header (same line as file selector)
+    try {
+      // next tick — CodeMirror may replace textarea synchronously, but toolbar can be attached right away
+      setTimeout(() => moveToolbarToHost(_cm), 0);
+    } catch (e) {}
+
     // Notify theme module that editors are ready (safe to dispatch multiple times)
     try { document.dispatchEvent(new CustomEvent('xkeen-editors-ready')); } catch (e) {}
 
     wireUI();
-    load();
+    refreshFragmentsList().finally(() => load());
   }
 
   XKeen.routing = {

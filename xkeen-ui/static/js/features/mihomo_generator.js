@@ -1838,6 +1838,20 @@
               }
               editor.setValue(cfg);
 
+              const serverWarnings = Array.isArray(data.warnings) ? data.warnings : [];
+              let serverWarnMsg = null;
+              if (serverWarnings.length) {
+                const uniq = [];
+                const seen = new Set();
+                serverWarnings.forEach((w) => {
+                  const s = String(w || '').trim();
+                  if (!s || seen.has(s)) return;
+                  seen.add(s);
+                  uniq.push(s);
+                });
+                if (uniq.length) serverWarnMsg = "Предупреждения генератора: " + uniq.join(" • ");
+              }
+
               // Проверяем группы по умолчанию по фактически сгенерированному YAML
               const dg = (state && Array.isArray(state.defaultGroups)) ? state.defaultGroups : [];
               const dgCheck = validateDefaultGroupsAgainstConfig(dg, cfg);
@@ -1846,8 +1860,16 @@
                   "Неизвестные группы по умолчанию: " +
                   dgCheck.unknown.join(", ") +
                   ". Убедитесь, что такие proxy-groups существуют в шаблоне.";
-                setStatus(warnMsg, null);
-                if (manual) try { toast(warnMsg, 'info'); } catch (e) {}
+                let finalMsg = warnMsg;
+                if (serverWarnMsg) finalMsg += "\n" + serverWarnMsg;
+                setStatus(finalMsg, null);
+                if (manual) {
+                  try { toast(warnMsg, 'info'); } catch (e) {}
+                  if (serverWarnMsg) try { toast(serverWarnMsg, 'info'); } catch (e) {}
+                }
+              } else if (serverWarnMsg) {
+                setStatus(serverWarnMsg, null);
+                if (manual) try { toast(serverWarnMsg, 'info'); } catch (e) {}
               } else {
                 setStatus("Предпросмотр сгенерирован на сервере без сохранения и перезапуска.", "ok");
               }
@@ -2040,7 +2062,27 @@
               if (notify) try { toast("Ошибка при применении: " + (data.error || res.status), 'error'); } catch (e) {}
               return;
             }
-            setStatus("Конфиг отправлен на роутер, xkeen перезапускается.", "ok");
+            const serverWarnings = Array.isArray(data.warnings) ? data.warnings : [];
+            let serverWarnMsg = null;
+            if (serverWarnings.length) {
+              const uniq = [];
+              const seen = new Set();
+              serverWarnings.forEach((w) => {
+                const s = String(w || '').trim();
+                if (!s || seen.has(s)) return;
+                seen.add(s);
+                uniq.push(s);
+              });
+              if (uniq.length) serverWarnMsg = "Предупреждения генератора: " + uniq.join(" • ");
+            }
+
+            const baseMsg = "Конфиг отправлен на роутер, xkeen перезапускается.";
+            if (serverWarnMsg) {
+              setStatus(baseMsg + "\n" + serverWarnMsg, "ok");
+              if (notify) try { toast(serverWarnMsg, 'info'); } catch (e) {}
+            } else {
+              setStatus(baseMsg, "ok");
+            }
             /* toast for restart is handled globally in spinner_fetch.js */
           } catch (e) {
             setStatus("Ошибка сети: " + e, "err");
