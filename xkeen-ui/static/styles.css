@@ -3051,6 +3051,36 @@ button.backup-icon-btn.backup-delete-btn {
   color: var(--accent, #60a5fa);
 }
 
+/* Small status badge for JSONC sidecar/comments (routing + JSON editor modal). */
+.xk-comments-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--text-muted, #94a3b8) 35%, transparent);
+  background: color-mix(in srgb, var(--text-muted, #94a3b8) 8%, transparent);
+  color: var(--text-muted, #94a3b8);
+  font-size: calc(12px * var(--xk-font-scale));
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.xk-comments-badge.xk-comments-on {
+  border-color: var(--sem-success, #22c55e);
+  background: color-mix(in srgb, var(--sem-success, #22c55e) 12%, transparent);
+  color: var(--sem-success, #22c55e);
+}
+
+.xk-comments-badge.xk-comments-off {
+  border-color: color-mix(in srgb, var(--text-muted, #94a3b8) 35%, transparent);
+  background: color-mix(in srgb, var(--text-muted, #94a3b8) 8%, transparent);
+  color: var(--text-muted, #94a3b8);
+}
+
 .xray-logs-badge[data-state="on"] {
   display: inline-flex;
   animation: xray-logs-badge-blink 1.1s infinite;
@@ -8511,6 +8541,19 @@ html[data-theme="light"] .routing-observatory-warning{
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* Two compact search inputs (tag + value) in DAT contents modal */
+.dat-contents-search-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dat-contents-search-row .routing-dat-input {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .dat-contents-status {

@@ -24,6 +24,7 @@
     ok: 'routing-dat-contents-ok-btn',
 
     search: 'routing-dat-contents-search',
+    searchValue: 'routing-dat-contents-search-value',
     tagsStatus: 'routing-dat-contents-tags-status',
     tagsList: 'routing-dat-contents-tags-list',
 
@@ -52,17 +53,39 @@
   };
 
   const LIMIT = 200;
+  const FETCH_LIMIT = 500; // backend caps at 500 for /api/routing/dat/tag
+
+  function _shortLine(v, limit) {
+    let s = String(v == null ? '' : v).replace(/\r/g, '').trim();
+    if (!s) return '';
+    try {
+      s = s.split('\n').map(x => String(x || '').trim()).filter(Boolean).slice(0, 3).join(' | ');
+    } catch (e) {}
+    const lim = (typeof limit === 'number' && isFinite(limit) && limit > 30) ? limit : 200;
+    if (s.length > lim) s = s.slice(0, lim - 3) + '...';
+    return s;
+  }
 
   let _wired = false;
   let _kind = 'geosite';
   let _path = '';
   let _tags = []; // [{tag,count}]
-let _usedTags = new Set(); // lowercase tags currently used in routing.rules
+  let _usedTags = new Set(); // lowercase tags currently used in routing.rules
   let _selectedTag = '';
   let _offset = 0;
   let _total = null; // number|null (if backend does not return total)
   let _pageSize = 0;
   let _openOpts = null; // last open() options
+
+  // Value search (domain/IP) across items inside selected tag.
+  // When searchValue is non-empty, we fetch ALL items for the tag (paged, cached)
+  // and then filter client-side with local paging (LIMIT items per page).
+  const _allItemsCache = Object.create(null); // key -> { items, total, done, promise }
+  let _valueSearchTimer = null;
+  let _valueSearchToken = 0;
+  let _filterKey = '';
+  let _filterItems = null; // Array<{t,v}> | null
+  let _filterInfoText = '';
 
   function routingApi() {
     try {
@@ -318,6 +341,180 @@ let _usedTags = new Set(); // lowercase tags currently used in routing.rules
     return _tags.filter((t) => String(t.tag || '').toLowerCase().includes(s));
   }
 
+  function valueQueryRaw() {
+    const e = el(IDS.searchValue);
+    return e ? String(e.value || '') : '';
+  }
+
+  function valueQueryNorm() {
+    return String(valueQueryRaw() || '').trim().toLowerCase();
+  }
+
+  function isValueFilterActive() {
+    return !!valueQueryNorm();
+  }
+
+  function allItemsKey(kind, path, tag) {
+    return String(kind || '') + '|' + String(path || '') + '|' + String(tag || '');
+  }
+
+  function normalizeItems(raw) {
+    const r = Array.isArray(raw) ? raw : [];
+    return r.map((it) => {
+      if (typeof it === 'string') return { t: '', v: it };
+      if (!it || typeof it !== 'object') return { t: '', v: String(it || '') };
+      const t = (it.t != null) ? it.t : (it.type != null ? it.type : '');
+      const v = (it.v != null) ? it.v : (it.value != null ? it.value : '');
+      return { t: String(t || ''), v: (v == null ? '' : String(v)) };
+    });
+  }
+
+  async function ensureAllItemsLoaded(kind, path, tag, token) {
+    const k = allItemsKey(kind, path, tag);
+    const cached = _allItemsCache[k];
+    if (cached && cached.done && Array.isArray(cached.items)) return cached;
+    if (cached && cached.promise) return await cached.promise;
+
+    const p = (async () => {
+      const items = [];
+      let total = null;
+      let offset = 0;
+      let guard = 0;
+      while (true) {
+        if (token !== _valueSearchToken) {
+          const err = new Error('cancelled');
+          err.cancelled = true;
+          throw err;
+        }
+        guard += 1;
+        if (guard > 300) break; // safety
+
+        const url = '/api/routing/dat/tag?kind=' + encodeURIComponent(kind)
+          + '&path=' + encodeURIComponent(path)
+          + '&tag=' + encodeURIComponent(tag)
+          + '&offset=' + encodeURIComponent(String(offset))
+          + '&limit=' + encodeURIComponent(String(FETCH_LIMIT));
+
+        const res = await fetch(url, { method: 'GET' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok !== true) {
+          const errMsg = (data && (data.error || data.message)) || ('HTTP ' + res.status);
+          throw new Error(String(errMsg));
+        }
+
+        if (typeof data.total === 'number' && Number.isFinite(data.total)) {
+          total = Number(data.total);
+        }
+
+        const batch = normalizeItems(data.items);
+        items.push(...batch);
+
+        // Stop conditions
+        if (batch.length < FETCH_LIMIT) break;
+        offset += FETCH_LIMIT;
+        if (total != null && offset >= total) break;
+        if (offset > 200000) break;
+      }
+      return { items, total, done: true };
+    })();
+
+    _allItemsCache[k] = { items: [], total: null, done: false, promise: p };
+    try {
+      const r = await p;
+      _allItemsCache[k] = { items: r.items || [], total: r.total == null ? null : Number(r.total), done: true };
+      return _allItemsCache[k];
+    } finally {
+      // no-op
+    }
+  }
+
+  function filterItems(items, qNorm) {
+    const q = String(qNorm || '').trim().toLowerCase();
+    if (!q) return items || [];
+    return (items || []).filter((it) => {
+      if (!it) return false;
+      const v = (it.v != null) ? String(it.v) : '';
+      const t = (it.t != null) ? String(it.t) : '';
+      const hay = (t + ' ' + v).toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  function currentFilterKey(qNorm) {
+    return allItemsKey(_kind, _path, _selectedTag) + '::' + String(qNorm || '').trim().toLowerCase();
+  }
+
+  function renderFilteredPage() {
+    const qNorm = valueQueryNorm();
+    if (!_filterItems || !Array.isArray(_filterItems)) {
+      renderPager();
+      return;
+    }
+    const total = _filterItems.length;
+    if (_offset >= total) _offset = 0;
+    const page = _filterItems.slice(_offset, _offset + LIMIT);
+    _pageSize = page.length;
+    _total = total;
+    setItemsStatus(_filterInfoText || (total ? ('Найдено: ' + total) : 'Ничего не найдено.'), false);
+    renderItems(page);
+    renderPager();
+  }
+
+  async function refreshItemsView() {
+    if (!_selectedTag) {
+      setItemsStatus('', false);
+      renderItems([]);
+      renderPager();
+      return;
+    }
+
+    const qNorm = valueQueryNorm();
+    if (!qNorm) {
+      _filterKey = '';
+      _filterItems = null;
+      _filterInfoText = '';
+      await loadTagItems();
+      return;
+    }
+
+    const token = _valueSearchToken;
+    const key = currentFilterKey(qNorm);
+
+    // Reuse cached filtered results when possible.
+    if (_filterKey === key && Array.isArray(_filterItems)) {
+      renderFilteredPage();
+      return;
+    }
+
+    // (Re)build filtered list.
+    _filterKey = key;
+    _filterItems = null;
+    _filterInfoText = '';
+
+    setDisabled(IDS.pagerPrev, true);
+    setDisabled(IDS.pagerNext, true);
+    setItemsStatus('Поиск…', false);
+    renderItems([]);
+    renderPager();
+
+    try {
+      const all = await ensureAllItemsLoaded(_kind, _path, _selectedTag, token);
+      if (token !== _valueSearchToken) {
+        const err = new Error('cancelled');
+        err.cancelled = true;
+        throw err;
+      }
+      const filtered = filterItems(all && all.items ? all.items : [], qNorm);
+      _filterItems = filtered;
+      _filterInfoText = filtered.length ? ('Найдено: ' + filtered.length) : 'Ничего не найдено.';
+      renderFilteredPage();
+    } catch (e) {
+      if (e && e.cancelled) return;
+      setItemsStatus('Ошибка поиска.', true);
+      renderPager();
+    }
+  }
+
   function renderTags() {
     const list = el(IDS.tagsList);
     if (!list) return;
@@ -501,6 +698,7 @@ let _usedTags = new Set(); // lowercase tags currently used in routing.rules
       if (!res.ok || !data || data.ok !== true) {
         const err = (data && (data.error || data.message)) || ('HTTP ' + res.status);
         const hint = (data && data.hint) ? String(data.hint) : '';
+        const details = (data && data.details) ? _shortLine(data.details, 220) : '';
         if (hint) {
           // Server provided a friendly hint (PR4).
           if (err === 'missing_dat_file') {
@@ -515,7 +713,7 @@ let _usedTags = new Set(); // lowercase tags currently used in routing.rules
         } else if (err === 'xk_geodat_timeout') {
           setTagsStatus('xk-geodat не ответил вовремя. Попробуйте ещё раз.', true);
         } else {
-          setTagsStatus('Ошибка: ' + String(err), true);
+          setTagsStatus('Ошибка: ' + String(err) + (details ? ('. ' + details) : ''), true);
         }
         return;
       }
@@ -557,6 +755,7 @@ let _usedTags = new Set(); // lowercase tags currently used in routing.rules
       if (!res.ok || !data || data.ok !== true) {
         const err = (data && (data.error || data.message)) || ('HTTP ' + res.status);
         const hint = (data && data.hint) ? String(data.hint) : '';
+        const details = (data && data.details) ? _shortLine(data.details, 220) : '';
         if (hint) {
           setItemsStatus(hint, true);
         } else if (err === 'missing_xk_geodat') {
@@ -566,20 +765,14 @@ let _usedTags = new Set(); // lowercase tags currently used in routing.rules
         } else if (err === 'xk_geodat_timeout') {
           setItemsStatus('xk-geodat не ответил вовремя. Попробуйте ещё раз.', true);
         } else {
-          setItemsStatus('Ошибка: ' + String(err), true);
+          setItemsStatus('Ошибка: ' + String(err) + (details ? ('. ' + details) : ''), true);
         }
         renderPager();
         return;
       }
       const raw = Array.isArray(data.items) ? data.items : [];
       // Normalize items: accept [{t,v}] or [{type,value}] or ["..."]
-      const items = raw.map((it) => {
-        if (typeof it === 'string') return { t: '', v: it };
-        if (!it || typeof it !== 'object') return { t: '', v: String(it || '') };
-        const t = (it.t != null) ? it.t : (it.type != null ? it.type : '');
-        const v = (it.v != null) ? it.v : (it.value != null ? it.value : '');
-        return { t: String(t || ''), v: (v == null ? '' : String(v)) };
-      });
+      const items = normalizeItems(raw);
 
       _pageSize = items.length;
       if (typeof data.total === 'number' && Number.isFinite(data.total)) {
@@ -600,12 +793,17 @@ let _usedTags = new Set(); // lowercase tags currently used in routing.rules
   async function selectTag(tag) {
     _selectedTag = String(tag || '').trim();
     _offset = 0;
+    // Changing tag invalidates active value-search view; bump token to cancel in-flight searches.
+    _valueSearchToken += 1;
+    _filterKey = '';
+    _filterItems = null;
+    _filterInfoText = '';
     setSelectedTagHeader();
     setRoutingStatus('', false);
     try { refreshRoutingTargets(); } catch (e) {}
     try { refreshUsedTags(); } catch (e) {}
     renderTags();
-    await loadTagItems();
+    await refreshItemsView();
   }
 
   function openModal() {
@@ -661,6 +859,26 @@ let _usedTags = new Set(); // lowercase tags currently used in routing.rules
       });
     }
 
+    const qv = el(IDS.searchValue);
+    if (qv) {
+      qv.addEventListener('input', () => {
+        try {
+          if (_valueSearchTimer) clearTimeout(_valueSearchTimer);
+        } catch (e) {}
+
+        // Reset paging + cancel in-flight search.
+        _offset = 0;
+        _valueSearchToken += 1;
+        _filterKey = '';
+        _filterItems = null;
+        _filterInfoText = '';
+
+        _valueSearchTimer = setTimeout(() => {
+          try { refreshItemsView(); } catch (e) {}
+        }, 250);
+      });
+    }
+
     const copyBtn = el(IDS.copySel);
     if (copyBtn) {
       copyBtn.addEventListener('click', async (e) => {
@@ -695,7 +913,7 @@ let _usedTags = new Set(); // lowercase tags currently used in routing.rules
         e.preventDefault();
         if (!_selectedTag) return;
         _offset = Math.max(0, Number(_offset || 0) - LIMIT);
-        await loadTagItems();
+        await refreshItemsView();
       });
     }
 
@@ -705,7 +923,7 @@ let _usedTags = new Set(); // lowercase tags currently used in routing.rules
         e.preventDefault();
         if (!_selectedTag) return;
         _offset = Math.max(0, Number(_offset || 0) + LIMIT);
-        await loadTagItems();
+        await refreshItemsView();
       });
     }
 
@@ -738,6 +956,24 @@ let _usedTags = new Set(); // lowercase tags currently used in routing.rules
     // Reset search
     const q = el(IDS.search);
     if (q) q.value = '';
+
+    const qv = el(IDS.searchValue);
+    if (qv) {
+      qv.value = '';
+      if (_kind === 'geoip') {
+        qv.placeholder = 'Поиск IP…';
+        qv.title = 'Поиск IP/подсети внутри выбранного тега';
+      } else {
+        qv.placeholder = 'Поиск домена…';
+        qv.title = 'Поиск домена внутри выбранного тега';
+      }
+    }
+
+    // Reset value-search state (also cancels any in-flight fetches from a previous open).
+    _valueSearchToken += 1;
+    _filterKey = '';
+    _filterItems = null;
+    _filterInfoText = '';
 
     openModal();
     await loadTags();

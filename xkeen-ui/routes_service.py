@@ -6,6 +6,8 @@ import subprocess
 from flask import Blueprint, request, jsonify
 from typing import Any, Callable, Dict, Optional
 
+from routes.common.errors import error_response
+
 # --- core.log helpers (never fail) ---
 try:
     from services.logging_setup import core_logger as _get_core_logger
@@ -34,21 +36,7 @@ def _core_log(level: str, msg: str, **extra) -> None:
     except Exception:
         pass
 
-
-
-
-def error_response(message: str, status: int = 400, *, ok: bool | None = None) -> Any:
-    """Return a JSON error response for this blueprint.
-
-    Mirrors ``app.api_error`` format: at least ``{"error": ...}``,
-    optionally with ``"ok": False`` when ``ok`` is explicitly passed.
-    """
-    payload: Dict[str, Any] = {"error": message}
-    if ok is not None:
-        payload["ok"] = ok
-    return jsonify(payload), status
-
-from services.cores import get_cores_status, switch_core
+from services.cores import CoreSwitchError, get_cores_status, switch_core
 
 
 def create_service_blueprint(
@@ -56,6 +44,8 @@ def create_service_blueprint(
     append_restart_log: Callable[[str, bool, str], None] | Callable[..., None],
     XRAY_ERROR_LOG: str,
     broadcast_event: Callable[[dict], None] | None = None,
+    read_restart_log: Callable[..., list[str]] | None = None,
+    clear_restart_log: Callable[..., None] | None = None,
 ) -> Blueprint:
     """Create blueprint with xkeen service-control endpoints."""
     bp = Blueprint("service", __name__)
@@ -73,6 +63,32 @@ def create_service_blueprint(
                 _core_log("warning", "broadcast_event error", error=str(e))
             except Exception:
                 pass
+    # ---- restart-log helpers (injected from app.py; safe defaults for tests) ----
+    if read_restart_log is None:
+        def read_restart_log(limit: int = 100):  # type: ignore[no-redef]
+            return []
+
+    if clear_restart_log is None:
+        def clear_restart_log():  # type: ignore[no-redef]
+            return None
+
+    @bp.get("/api/restart-log")
+    def api_restart_log() -> Any:
+        try:
+            lines = read_restart_log(limit=100)
+            return jsonify({"lines": lines}), 200
+        except Exception as e:  # noqa: BLE001
+            return error_response(str(e), 500)
+
+    @bp.post("/api/restart-log/clear")
+    def api_restart_log_clear() -> Any:
+        try:
+            clear_restart_log()
+            return jsonify({"ok": True}), 200
+        except Exception as e:  # noqa: BLE001
+            return error_response(str(e), 500, ok=False)
+
+
 
     @bp.post("/api/xkeen/start")
     def api_xkeen_start() -> Any:
@@ -167,7 +183,12 @@ def create_service_blueprint(
                 switch_core(core, XRAY_ERROR_LOG)
             except ValueError as e:
                 return jsonify({"ok": False, "error": str(e)}), 400
+            except CoreSwitchError as e:
+                # Diagnostic payload (safe, local admin UI).
+                _core_log("error", "xkeen.core_set_failed", core=core, error=str(e), **(e.details or {}))
+                return jsonify({"ok": False, "error": str(e), "details": e.details}), 500
             except RuntimeError as e:
+                _core_log("error", "xkeen.core_set_failed", core=core, error=str(e))
                 return jsonify({"ok": False, "error": str(e)}), 500
 
             # Уведомляем всех WS-подписчиков о смене ядра.
@@ -191,5 +212,16 @@ def create_service_blueprint(
         _emit_event({"event": "xkeen_restarted", "ok": bool(restarted)})
 
         return jsonify({"ok": True, "restarted": restarted}), 200
+
+    # Legacy alias used by UI button (kept for compatibility).
+    @bp.post("/api/restart")
+    def api_restart() -> Any:
+        """Restart xkeen (legacy endpoint).
+
+        This endpoint historically returned HTTP 500 on failure.
+        """
+        ok = restart_xkeen(source="api-button")
+        payload = {"ok": bool(ok), "restarted": bool(ok)}
+        return jsonify(payload), (200 if ok else 500)
 
     return bp

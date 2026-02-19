@@ -247,6 +247,17 @@
         ? data.text
         : (data && data.config ? JSON.stringify(data.config, null, 2) : '{}');
 
+      // JSONC sidecar status (no absolute paths in UI)
+      try {
+        const badge = el('json-editor-comments-status');
+        if (badge) {
+          const hasSidecar = !!(data && data.raw_path);
+          badge.classList.toggle('xk-comments-on', hasSidecar);
+          badge.classList.toggle('xk-comments-off', !hasSidecar);
+          badge.textContent = hasSidecar ? 'Комментарии: включены' : 'Комментарии: выключены';
+        }
+      } catch (e) {}
+
       const cm = await ensureEditor(textarea);
       if (cm) {
         try { cm.setOption('theme', cmThemeFromPage()); } catch (e) {}

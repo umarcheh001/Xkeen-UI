@@ -40,6 +40,7 @@
     // Feature modules
     try { if (XK.features.devtoolsService && typeof XK.features.devtoolsService.init === 'function') XK.features.devtoolsService.init(); } catch (e) {}
     try { if (XK.features.devtoolsLogs && typeof XK.features.devtoolsLogs.init === 'function') XK.features.devtoolsLogs.init(); } catch (e) {}
+    try { if (XK.features.devtoolsUpdate && typeof XK.features.devtoolsUpdate.init === 'function') XK.features.devtoolsUpdate.init(); } catch (e) {}
     try { if (XK.features.devtoolsEnv && typeof XK.features.devtoolsEnv.init === 'function') XK.features.devtoolsEnv.init(); } catch (e) {}
     try { if (XK.features.devtoolsTheme && typeof XK.features.devtoolsTheme.init === 'function') XK.features.devtoolsTheme.init(); } catch (e) {}
     try { if (XK.features.devtoolsTerminalTheme && typeof XK.features.devtoolsTerminalTheme.init === 'function') XK.features.devtoolsTerminalTheme.init(); } catch (e) {}

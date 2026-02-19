@@ -75,6 +75,12 @@
     helpArrow: 'routing-help-arrow',
   };
 
+  // JSONC preservation (Level B) work-in-progress.
+  // Today applyModelToEditor() rewrites the whole document via JSON.stringify,
+  // which destroys JSONC comments. Next commits will switch to text-level JSONC edits.
+  // (Kept as a feature flag for incremental rollout.)
+  const JSONC_PRESERVE_ENABLED = true;
+
   // -------- field help (ported from legacy routing.js) --------
   const FIELD_HELP_MODAL_ID = 'xkeen-routing-field-help-modal';
   const FIELD_HELP_TITLE_ID = 'xkeen-routing-field-help-title';
@@ -201,10 +207,12 @@
       ruleTag: {
         title: 'ruleTag',
         desc: 'Тег правила для идентификации и логов; на маршрутизацию не влияет.',
+        note: 'Рекомендуется задавать уникальный ruleTag — UI использует его как стабильный ключ для сохранения JSONC‑комментариев при reorder/правках.',
       },
       'balancer.tag': {
         title: 'balancer.tag',
         desc: 'Тег балансировщика; используется в balancerTag правил.',
+        note: 'Должен быть уникальным — это помогает сохранять JSONC‑комментарии при reorder/правках балансировщиков.',
       },
       'balancer.selector': {
         title: 'balancer.selector',
@@ -254,6 +262,45 @@
     const msg = String((opts && (opts.message || opts.text)) || 'Confirm?');
     // eslint-disable-next-line no-restricted-globals
     return confirm(msg);
+  }
+
+  function isJsoncDebugEnabled() {
+    try {
+      return String((localStorage && localStorage.getItem && localStorage.getItem('xk.routing.jsonc.debug')) || '') === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function formatApplyCounts(label, stats) {
+    const s = stats || {};
+    const added = Number(s.added || 0);
+    const changed = Number(s.changed || 0);
+    const removed = Number(s.removed || 0);
+    const inserted = !!s.inserted;
+    if (!inserted && added === 0 && changed === 0 && removed === 0) return null;
+    return `${label} +${added} ~${changed} -${removed}${inserted ? ' (вставлен ключ)' : ''}`;
+  }
+
+  function formatDomainStrategyAction(action) {
+    const a = String(action || '');
+    if (a === 'replaced') return 'изменён';
+    if (a === 'inserted') return 'добавлен';
+    if (a === 'removed') return 'удалён';
+    return '';
+  }
+
+  function buildApplyPreviewLine(preview) {
+    const p = preview || {};
+    const parts = [];
+    const r = formatApplyCounts('rules', p.rules);
+    if (r) parts.push(r);
+    const b = formatApplyCounts('balancers', p.balancers);
+    if (b) parts.push(b);
+    const ds = formatDomainStrategyAction(p.domainStrategy);
+    if (ds) parts.push(`domainStrategy ${ds}`);
+    if (!parts.length) return '';
+    return `Изменения: ${parts.join('; ')}`;
   }
 
   function safeJsonParse(text) {
@@ -996,8 +1043,33 @@
       }
 
       const installed = !!data.installed;
-      if (installed) toast('xk-geodat установлен.', false);
-      else toast('xk-geodat: установка не выполнена. ' + (data.hint || data.error || ''), true);
+      if (installed) {
+        toast('xk-geodat установлен.', false);
+      } else {
+        const hint = String((data.hint || data.error || '')).trim();
+        let reason = String((data.reason || data.details || '')).trim();
+
+        // Fallbacks: help/stderr often contain exec format / not found / permission details.
+        if (!reason) reason = String(data.help || '').trim();
+        if (!reason) reason = String(data.stderr || '').trim();
+
+        // Make reason single-line and short.
+        if (reason) {
+          try {
+            reason = reason.replace(/\r/g, '').split('\n')
+              .map((s) => String(s || '').trim())
+              .filter(Boolean)
+              .slice(0, 3)
+              .join(' | ');
+            if (reason.length > 240) reason = reason.slice(0, 237) + '...';
+          } catch (e) {}
+        }
+
+        let msg = 'xk-geodat: установка не выполнена.';
+        if (hint) msg += ' ' + hint;
+        if (reason && (!hint || hint.indexOf(reason) === -1)) msg += ' Причина: ' + reason;
+        toast(msg, true);
+      }
 
       try { await refreshDatMeta(); } catch (e) {}
       return data;
@@ -1088,9 +1160,11 @@
       if (status) {
         const installed = !!(gs && (gs.installed === true || gs.ok === true && gs.installed));
         status.textContent = installed ? 'OK • xk-geodat: ✓' : 'OK • xk-geodat: ✕';
-        status.setAttribute('data-tooltip', installed
+        let tip = installed
           ? 'xk-geodat установлен (просмотр содержимого DAT доступен)'
-          : 'xk-geodat не установлен (нажмите «xk-geodat» для установки)');
+          : 'xk-geodat не установлен (нажмите «xk-geodat» для установки)';
+        if (!installed && gs && gs.reason) tip += '\\nПричина: ' + String(gs.reason);
+        status.setAttribute('data-tooltip', tip);
       }
     } catch (e) {
       if (status) status.textContent = 'Ошибка';
@@ -1569,8 +1643,237 @@
     }
     return out;
   }
+  async function applyModelToEditor() {
+    // TODO(jsonc-preserve): do not rewrite the whole document; patch only rules/balancers/domainStrategy in JSONC text.
+    // Safety guard: do not apply if editor content is empty or currently invalid JSON/JSONC.
+    const raw = getEditorText();
+    if (!String(raw || '').trim()) {
+      toast('Редактор JSON пуст — невозможно применить изменения', true);
+      return false;
+    }
+    const parsed = safeJsonParse(raw);
+    if (parsed && parsed.__error) {
+      toast('Текущий JSON содержит ошибку — сначала исправьте его в редакторе', true);
+      return false;
+    }
 
-  function applyModelToEditor() {
+    const m = ensureModel();
+    const debugJsonc = isJsoncDebugEnabled();
+
+    const jp = (JSONC_PRESERVE_ENABLED && XK.features && XK.features.routingJsoncPreserve)
+      ? XK.features.routingJsoncPreserve
+      : null;
+
+    // Best-effort: apply routing.rules + routing.balancers + routing.domainStrategy via JSONC patcher.
+    // On failure, ask user before falling back to the legacy full rewrite (comments will be lost).
+    if (jp && typeof jp.locateRoutingObject === 'function') {
+      let fallbackReason = '';
+      let debugStage = '';
+      let debugError = '';
+      const preview = { rules: null, balancers: null, domainStrategy: 'noop' };
+      let rulesSegments = null;
+      let balancersSegments = null;
+
+      try {
+        // Work on a copy; only touch the editor if we successfully apply all patches.
+        let nextText = raw;
+
+        debugStage = 'locateRouting';
+        // routing object range (root.routing or routing-only fragment)
+        let routingRange = jp.locateRoutingObject(nextText);
+        if (!routingRange) {
+          fallbackReason = 'Не удалось найти routing-объект в текущем документе.';
+          throw new Error('routingRange');
+        }
+
+        debugStage = 'checkFns';
+        // Need a ready JSONC-preserve surface.
+        const needFns = [
+          'locateArrayByKey',
+          'splitJsoncArrayElements',
+          'renderRulesArray',
+          'renderBalancersArray',
+          'renderObjectArrayLiteral',
+          'detectObjectIndents',
+          'insertKeyValueInObject',
+          'applyDomainStrategy',
+        ];
+        for (const fn of needFns) {
+          if (typeof jp[fn] !== 'function') {
+            fallbackReason = `JSONC-preserve модуль не готов (${fn}).`;
+            throw new Error('missingFn');
+          }
+        }
+
+        // 1) rules
+        debugStage = 'rules';
+        let rulesRange = jp.locateArrayByKey(nextText, routingRange, 'rules');
+        if (rulesRange) {
+          const segments = jp.splitJsoncArrayElements(nextText, rulesRange);
+          rulesSegments = segments || [];
+          const rendered = jp.renderRulesArray(nextText, rulesRange, segments || [], m.rules || []);
+          if (!rendered || !rendered.ok || typeof rendered.text !== 'string') {
+            fallbackReason = 'Не удалось применить изменения с сохранением комментариев (rules).';
+            throw new Error('rules');
+          }
+          preview.rules = { ...(rendered.stats || {}), inserted: false };
+          // Treat pure reorder as "changed" for preview purposes (content may be unchanged).
+          if (preview.rules && !preview.rules.inserted && Number(preview.rules.added || 0) === 0 && Number(preview.rules.removed || 0) === 0 && Number(preview.rules.changed || 0) === 0) {
+            try {
+              const oldList = (rulesSegments || []).map((seg) => (seg && seg.canonical) ? seg.canonical : ((seg && seg.parsed) ? jp.stableStringify(seg.parsed) : ''));
+              const newList = (Array.isArray(m.rules) ? m.rules : []).map((r) => jp.stableStringify(r));
+              if (oldList.length === newList.length) {
+                let moved = 0;
+                for (let k = 0; k < oldList.length; k++) if (oldList[k] !== newList[k]) moved++;
+                if (moved) preview.rules.changed = moved;
+              }
+            } catch (e) {}
+          }
+          nextText = nextText.slice(0, rulesRange.start) + rendered.text + nextText.slice(rulesRange.end);
+        } else {
+          // If rules key is missing, insert it (legacy rewrite would also add it).
+          const ind = jp.detectObjectIndents(nextText, routingRange);
+          if (!ind) {
+            fallbackReason = 'Не удалось определить отступы routing-объекта для вставки rules.';
+            throw new Error('rulesIndent');
+          }
+          const arrText = jp.renderObjectArrayLiteral(ind.childIndent, String(ind.childIndent || '') + '  ', m.rules || []);
+          const ins = jp.insertKeyValueInObject(nextText, routingRange, 'rules', arrText);
+          if (!ins || !ins.ok || typeof ins.text !== 'string') {
+            fallbackReason = 'Не удалось вставить routing.rules в документ.';
+            throw new Error('rulesInsert');
+          }
+          preview.rules = { added: (Array.isArray(m.rules) ? m.rules.length : 0), changed: 0, removed: 0, unchanged: 0, inserted: true };
+          nextText = ins.text;
+        }
+
+        debugStage = 'relocateRouting2';
+        // Re-locate after patching (offsets may have changed)
+        routingRange = jp.locateRoutingObject(nextText);
+        if (!routingRange) {
+          fallbackReason = 'Не удалось повторно найти routing-объект после обновления rules.';
+          throw new Error('routingRange2');
+        }
+
+        // 2) balancers
+        debugStage = 'balancers';
+        let balancersRange = jp.locateArrayByKey(nextText, routingRange, 'balancers');
+        if (balancersRange) {
+          const segmentsB = jp.splitJsoncArrayElements(nextText, balancersRange);
+          balancersSegments = segmentsB || [];
+          const renderedB = jp.renderBalancersArray(nextText, balancersRange, segmentsB || [], m.balancers || []);
+          if (!renderedB || !renderedB.ok || typeof renderedB.text !== 'string') {
+            fallbackReason = 'Не удалось применить изменения с сохранением комментариев (balancers).';
+            throw new Error('balancers');
+          }
+          preview.balancers = { ...(renderedB.stats || {}), inserted: false };
+          // Treat pure reorder as "changed" for preview purposes (content may be unchanged).
+          if (preview.balancers && !preview.balancers.inserted && Number(preview.balancers.added || 0) === 0 && Number(preview.balancers.removed || 0) === 0 && Number(preview.balancers.changed || 0) === 0) {
+            try {
+              const oldList = (balancersSegments || []).map((seg) => (seg && seg.canonical) ? seg.canonical : ((seg && seg.parsed) ? jp.stableStringify(seg.parsed) : ''));
+              const newList = (Array.isArray(m.balancers) ? m.balancers : []).map((b) => jp.stableStringify(b));
+              if (oldList.length === newList.length) {
+                let moved = 0;
+                for (let k = 0; k < oldList.length; k++) if (oldList[k] !== newList[k]) moved++;
+                if (moved) preview.balancers.changed = moved;
+              }
+            } catch (e) {}
+          }
+          nextText = nextText.slice(0, balancersRange.start) + renderedB.text + nextText.slice(balancersRange.end);
+        } else {
+          // If balancers key is missing, insert it (legacy rewrite would also add it).
+          const indB = jp.detectObjectIndents(nextText, routingRange);
+          if (!indB) {
+            fallbackReason = 'Не удалось определить отступы routing-объекта для вставки balancers.';
+            throw new Error('balIndent');
+          }
+          const arrTextB = jp.renderObjectArrayLiteral(indB.childIndent, String(indB.childIndent || '') + '  ', m.balancers || []);
+          const insB = jp.insertKeyValueInObject(nextText, routingRange, 'balancers', arrTextB);
+          if (!insB || !insB.ok || typeof insB.text !== 'string') {
+            fallbackReason = 'Не удалось вставить routing.balancers в документ.';
+            throw new Error('balInsert');
+          }
+          preview.balancers = { added: (Array.isArray(m.balancers) ? m.balancers.length : 0), changed: 0, removed: 0, unchanged: 0, inserted: true };
+          nextText = insB.text;
+        }
+
+        debugStage = 'relocateRouting3';
+        // Re-locate after patching (offsets may have changed)
+        routingRange = jp.locateRoutingObject(nextText);
+        if (!routingRange) {
+          fallbackReason = 'Не удалось повторно найти routing-объект после обновления balancers.';
+          throw new Error('routingRange3');
+        }
+
+        // 3) domainStrategy (point replacement/insert without touching surrounding comments)
+        debugStage = 'domainStrategy';
+        const dsRes = jp.applyDomainStrategy(nextText, routingRange, m.domainStrategy || '');
+        if (!dsRes || !dsRes.ok || typeof dsRes.text !== 'string') {
+          fallbackReason = 'Не удалось применить изменения domainStrategy с сохранением комментариев.';
+          throw new Error('domainStrategy');
+        }
+        preview.domainStrategy = String(dsRes.action || 'noop');
+        nextText = dsRes.text;
+
+        // Minimal preview of changes (rules/balancers/domainStrategy)
+        const previewLine = buildApplyPreviewLine(preview);
+        if (previewLine) toast(previewLine, false);
+        if (debugJsonc) {
+          try {
+            // eslint-disable-next-line no-console
+            console.info('[routing][jsonc] apply ok', { preview, stage: debugStage });
+          } catch (e) {}
+        }
+
+        // Success: apply to editor
+        setEditorText(nextText);
+        markDirty(false);
+
+        // Best-effort validate/update UI in routing.js
+        try {
+          if (XK.routing && typeof XK.routing.validate === 'function') {
+            XK.routing.validate();
+          }
+        } catch (e) {}
+
+        return true;
+      } catch (e) {
+        debugError = String((e && (e.message || e)) || '');
+        if (!fallbackReason) fallbackReason = 'Не удалось применить изменения с сохранением комментариев JSONC.';
+
+        if (debugJsonc) {
+          try {
+            // eslint-disable-next-line no-console
+            console.warn('[routing][jsonc] fallback', { reason: fallbackReason, stage: debugStage, error: debugError });
+          } catch (e2) {}
+          toast(`[debug] JSONC-preserve fallback: ${fallbackReason} (stage: ${debugStage})`, false);
+        }
+
+        const previewLine = buildApplyPreviewLine(preview);
+        const explain = [
+          'Примечание:',
+          '• Комментарии рядом с правилами/балансировщиками обычно сохраняются.',
+          '• Если правило/балансировщик менялся, комментарии внутри него могут быть перезаписаны (это ожидаемо).',
+        ].join('\n');
+
+        const msgParts = [];
+        msgParts.push(fallbackReason);
+        if (previewLine) msgParts.push(previewLine);
+        msgParts.push(explain);
+        msgParts.push('Применить старым способом (комментарии будут потеряны)?');
+
+        const okFallback = await confirmModal({
+          title: 'Сохранение комментариев',
+          message: msgParts.join('\n\n'),
+          okText: 'Применить старым способом',
+          cancelText: 'Отмена',
+          danger: true,
+        });
+        if (!okFallback) return false;
+      }
+    }
+
+    // Legacy fallback: rewrite the whole JSON (comments are lost).
     const out = buildRootFromModel();
     const text = JSON.stringify(out, null, 2) + '\n';
     setEditorText(text);
@@ -1582,6 +1885,8 @@
         XK.routing.validate();
       }
     } catch (e) {}
+
+    return true;
   }
 
   function anyGeo(rule) {
@@ -4073,15 +4378,18 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
         toast('Нет изменений для применения', false);
         return;
       }
+      const canPreserve = !!(JSONC_PRESERVE_ENABLED && XK.features && XK.features.routingJsoncPreserve);
       const ok = await confirmModal({
         title: 'Применить изменения',
-        message: 'Перезаписать routing.rules / routing.balancers / domainStrategy в редакторе JSON?\n(Комментарии в JSONC будут потеряны.)',
+        message: canPreserve
+          ? 'Применить изменения карточек в редактор JSON?\n(Попытаемся сохранить комментарии JSONC, если это возможно.)'
+          : 'Перезаписать routing.rules / routing.balancers / domainStrategy в редакторе JSON?\n(Комментарии в JSONC будут потеряны.)',
         okText: 'Применить',
         cancelText: 'Отмена',
         danger: true,
       });
       if (!ok) return;
-      applyModelToEditor();
+      if (!(await applyModelToEditor())) return;
       toast('Изменения применены в JSON', false);
     });
 
@@ -4255,7 +4563,69 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
     if (datPath) {
       const p = datPath.replace(/\\/g, '/');
       const base = (p.split('/').pop() || '').trim();
-      if (base) selector = 'ext:' + base + ':' + tag;
+      if (base) {
+        // Prefer the file-part already used in routing rules (if any), because
+        // DAT filename in the card may be a short alias (e.g. zkeen.dat) while rules
+        // often use a prefixed name (e.g. geosite_zkeen.dat).
+        let filePart = base;
+        const baseLc = String(base).toLowerCase();
+        const kword = (kind === 'geoip') ? 'geoip' : 'geosite';
+
+        try {
+          // Match current editor/model (including unsaved changes).
+          if (!_root && !_dirty) {
+            try { loadModelFromEditor(); } catch (e) {}
+          }
+          const m0 = ensureModel();
+          const rules0 = Array.isArray(m0.rules) ? m0.rules : [];
+          const freq = new Map();
+
+          rules0.forEach((r) => {
+            _walkDeep(r, (s) => {
+              const raw = String(s || '').trim();
+              if (!raw) return;
+              const lc = raw.toLowerCase();
+              if (!lc.startsWith('ext:')) return;
+
+              const restLc = lc.slice(4);
+              const restRaw = raw.slice(4);
+              const j = restLc.indexOf(':');
+              if (j < 0) return;
+
+              const fileLc = restLc.slice(0, j).trim();
+              const fileRaw = restRaw.slice(0, j).trim();
+              if (!fileLc) return;
+
+              // ext:geoip:TAG / ext:geosite:TAG are kind-only, not a filename
+              if (fileLc === 'geoip' || fileLc === 'geosite') return;
+
+              // Only consider files that look like the same kind.
+              const looksKind = (kword === 'geoip')
+                ? (fileLc === 'geoip' || fileLc.includes('geoip'))
+                : (fileLc === 'geosite' || fileLc.includes('geosite'));
+              if (!looksKind) return;
+
+              const fbase = _basenameLower(fileLc);
+              if (!fbase) return;
+
+              // Match either exact basename or well-known suffix match: *_<base>, *-<base>, or endsWith(<base>)
+              if (fbase === baseLc || fbase.endsWith('_' + baseLc) || fbase.endsWith('-' + baseLc) || fbase.endsWith(baseLc)) {
+                const key = fileRaw || fileLc;
+                freq.set(key, (freq.get(key) || 0) + 1);
+              }
+            }, 0);
+          });
+
+          let best = '';
+          let bestN = 0;
+          freq.forEach((n, v) => {
+            if (n > bestN) { bestN = n; best = v; }
+          });
+          if (best) filePart = best;
+        } catch (e) {}
+
+        selector = 'ext:' + filePart + ':' + tag;
+      }
     }
     const fieldKey = (kind === 'geoip') ? 'ip' : 'domain';
     const mode = String(opts && opts.mode ? opts.mode : 'new');
@@ -4346,6 +4716,51 @@ function getUsedDatTags(kind, datFileOrPath) {
   const k = (kind === 'geoip') ? 'geoip' : 'geosite';
   const base = _basenameLower(datFileOrPath);
 
+  // Build base aliases to tolerate common naming variants:
+  // zkeen.dat <-> geosite_zkeen.dat, zkeenip.dat <-> geoip_zkeenip.dat, etc.
+  const aliases = new Set();
+  function addAlias(v) {
+    const s = String(v || '').trim().toLowerCase();
+    if (s) aliases.add(s);
+  }
+  if (base) {
+    addAlias(base);
+
+    // Strip kind prefix (geosite_*, geoip_*)
+    if (base.startsWith(k + '_')) addAlias(base.slice(k.length + 1));
+    if (base.startsWith(k + '-')) addAlias(base.slice(k.length + 1));
+
+    // Add kind-prefixed variants
+    addAlias(k + '_' + base);
+    addAlias(k + '-' + base);
+
+    // zkeen special pairs (historical naming)
+    if (k === 'geosite' && (base === 'zkeen.dat' || base === 'geosite_zkeen.dat')) {
+      addAlias('zkeen.dat');
+      addAlias('geosite_zkeen.dat');
+    }
+    if (k === 'geoip' && (base === 'zkeenip.dat' || base === 'geoip_zkeenip.dat')) {
+      addAlias('zkeenip.dat');
+      addAlias('geoip_zkeenip.dat');
+    }
+  }
+
+  function baseMatches(fileLc) {
+    const fbase = _basenameLower(fileLc);
+    if (!fbase) return false;
+    if (!base) return true;
+
+    if (aliases.has(fbase)) return true;
+
+    // Also tolerate suffix matches: geosite_<base>, geoip-<base>, etc.
+    for (const a of aliases) {
+      if (!a) continue;
+      if (fbase === a) return true;
+      if (fbase.endsWith('_' + a) || fbase.endsWith('-' + a) || fbase.endsWith(a) || a.endsWith(fbase)) return true;
+    }
+    return false;
+  }
+
   // Match current editor/model (including unsaved changes).
   if (!_root && !_dirty) {
     try { loadModelFromEditor(); } catch (e) {}
@@ -4381,10 +4796,15 @@ function getUsedDatTags(kind, datFileOrPath) {
       const tagRaw = restRaw.slice(j + 1).trim();
       if (!tagRaw) return;
 
+      // Legacy: ext:geoip:TAG / ext:geosite:TAG
+      if (fileLc === 'geoip' || fileLc === 'geosite') {
+        if (fileLc === k) used.add(tagRaw.toLowerCase());
+        return;
+      }
+
       if (base) {
-        // When a specific DAT file is provided, match by basename for precision.
-        const fbase = _basenameLower(fileLc);
-        if (!fbase || fbase !== base) return;
+        // When a specific DAT file is provided, match by basename with aliases.
+        if (!baseMatches(fileLc)) return;
         used.add(tagRaw.toLowerCase());
         return;
       }

@@ -510,6 +510,16 @@
         <span id="routing-help-arrow">►</span>
       </div>
       <div id="routing-help-body" style="display:none;">
+        <div class="xk-card-desc" style="margin: 6px 0 10px;">
+          <b>JSONC‑комментарии:</b> карточки «Правила/Балансировщики» применяют изменения в редактор точечно и стараются сохранить комментарии рядом с элементами.
+          Для надёжной привязки комментариев при перетаскивании задавайте уникальный <code>ruleTag</code> у правил и <code>tag</code> у балансировщиков.
+          Если точечное применение невозможно, появится предупреждение и можно выбрать «старый способ» (полная перезапись без комментариев).
+
+          <div style="margin-top:6px;">
+            Диагностика: откройте консоль браузера и выполните
+            <code>localStorage.setItem('xk.routing.jsonc.debug','1')</code>, затем повторите действие — причины fallback будут в toast/console.
+          </div>
+        </div>
         <ul class="links">
           <li><a href="https://github.com/Corvus-Malus/XKeen" target="_blank" rel="noopener">GitHub Corvus-Malus/XKeen</a></li>
           <li><a href="https://jameszero.net/faq-xkeen.htm" target="_blank" rel="noopener">FAQ по XKeen (jameszero.net)</a></li>
@@ -558,7 +568,7 @@
               <div class="routing-rules-actions">
                 <button id="routing-balancer-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить балансировщик" aria-label="Добавить балансировщик">⚖️</button>
                 <button id="routing-rules-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить правило" aria-label="Добавить правило">📜</button>
-                <button id="routing-rules-apply-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Применить изменения в JSON-редактор" aria-label="Применить в JSON">💾</button>
+                <button id="routing-rules-apply-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Применить изменения в JSON‑редактор (с сохранением JSONC‑комментариев, best effort)" aria-label="Применить в JSON">💾</button>
                 <button id="routing-rules-reload-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Перезагрузить из JSON-редактора" aria-label="Перезагрузить из JSON">↺</button>
               </div>
             </div>
@@ -594,6 +604,7 @@
                 <div class="xk-routing-fileline">
                   <select id="routing-fragment-select" class="xray-log-select" data-current="{{ routing_name|e }}"></select>
                   <button id="routing-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" data-tooltip="Обновить список файлов роутинга из /opt/etc/xray/configs/">↻</button>
+                  <span id="routing-comments-status" class="xk-comments-badge xk-comments-off" data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
                 </div>
               </div>
               <div class="xk-routing-toolbarhost" id="routing-toolbar-host"></div>
@@ -924,6 +935,7 @@
           <button type="button" class="btn-secondary fm-connect-btn" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
           <button type="button" class="btn-secondary fm-disconnect-btn" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
           <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" title="Путь текущей папки (Enter — перейти)" />
+          <button type="button" class="btn-secondary fm-root-btn" title="В корень (FTP) / домой (SFTP)" aria-label="В корень или домой">⌂</button>
           <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">↑</button>
           <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">⟳</button>
           <div class="fm-filter-wrap">
@@ -943,6 +955,7 @@
           <button type="button" class="btn-secondary fm-connect-btn" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
           <button type="button" class="btn-secondary fm-disconnect-btn" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
           <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" title="Путь текущей папки (Enter — перейти)" />
+          <button type="button" class="btn-secondary fm-root-btn" title="В корень (FTP) / домой (SFTP)" aria-label="В корень или домой">⌂</button>
           <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">↑</button>
           <button type="button" class="btn-secondary fm-refresh-btn" title="Обновить">⟳</button>
           <div class="fm-filter-wrap">
@@ -1891,18 +1904,19 @@
   <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
 	  <script src="{{ url_for('static', filename='js/ui/last_activity.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js', v='20260218a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260105c') }}"></script>
   <script src="{{ url_for('static', filename='js/util/tab_id.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/ansi.js') }}"></script>
     <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
 <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js', v='20260218a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/dat_contents_modal.js', v='20260213b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/backups.js', v='20260213c') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260213b') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260218a') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_jsonc_preserve.js', v='20260218d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260218d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260120c') }}"></script>
   <script src="{{ url_for('static', filename='js/features/local_io.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/github.js') }}"></script>
@@ -1918,7 +1932,7 @@
     <!-- File Manager (split into small modules) -->
     <script src="{{ url_for('static', filename='js/features/file_manager/prefs.js') }}"></script>
     <script src="{{ url_for('static', filename='js/features/file_manager/chrome.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/features/file_manager/editor.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/features/file_manager/editor.js', v='20260218a') }}"></script>
     <script src="{{ url_for('static', filename='js/features/file_manager.js', v='20260119d') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/_core.js') }}"></script>
   <!-- Terminal refactor (Wave 3): Stage A (events/ui/api) + Stage B (transport adapters) -->
@@ -1973,6 +1987,7 @@
         </div>
         <div class="modal-body">
           <p id="json-editor-file-label"></p>
+          <span id="json-editor-comments-status" class="xk-comments-badge xk-comments-off" data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
           <textarea id="json-editor-textarea" spellcheck="false"></textarea>
           <div id="json-editor-error" class="error"></div>
         </div>
@@ -2006,7 +2021,10 @@
           <div class="dat-contents-layout">
             <div class="dat-contents-tags">
               <div class="dat-contents-tags-top">
-                <input id="routing-dat-contents-search" class="routing-dat-input" type="text" placeholder="Поиск тега…">
+                <div class="dat-contents-search-row">
+                  <input id="routing-dat-contents-search" class="routing-dat-input" type="text" placeholder="Поиск тега…">
+                  <input id="routing-dat-contents-search-value" class="routing-dat-input" type="text" placeholder="Поиск домена…" title="Поиск домена/IP внутри выбранного тега">
+                </div>
                 <div id="routing-dat-contents-tags-status" class="dat-contents-status"></div>
               </div>
               <div id="routing-dat-contents-tags-list" class="dat-contents-tags-list"></div>

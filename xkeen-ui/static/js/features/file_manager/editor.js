@@ -81,6 +81,16 @@
     return true;
   }
 
+  // JSONC (JSON with comments) note:
+  // CodeMirror's built-in JSON linter (jsonlint) is strict JSON and
+  // will throw on comment tokens (//, /* */). For *.jsonc we therefore
+  // disable lint to avoid false red errors in the editor modal.
+  function hasJsonComments(text) {
+    const t = String(text || '');
+    // Rough detection: ignore URLs by requiring comment token not preceded by ':'
+    return /(^|[^:])\/\/|\/\*/.test(t);
+  }
+
   function looksLikeYaml(text) {
     const s = sampleText(text, 3000);
     if (!s) return false;
@@ -115,7 +125,7 @@
     const ext = n.includes('.') ? n.split('.').pop() : '';
 
     if (ext === 'json') return { name: 'javascript', json: true };
-    if (ext === 'jsonc') return { name: 'jsonc', json: true };
+    if (ext === 'jsonc') return { name: 'jsonc', json: true, jsonc: true };
     if (ext === 'js' || ext === 'ts') return 'javascript';
     if (ext === 'yaml' || ext === 'yml') return 'yaml';
     if (ext === 'sh' || ext === 'bash') return 'shell';
@@ -340,11 +350,16 @@
     if (cm) {
       try {
         let mode = guessMode(ctx && ctx.name, text);
-        const isJson = !!(mode && typeof mode === 'object' && mode.json);
-        const ensured = await ensureCmAssets({ mode, jsonLint: isJson });
+        const modeObj = (mode && typeof mode === 'object') ? mode : null;
+        const isJson = !!(modeObj && modeObj.json);
+        const isJsonc = !!(modeObj && modeObj.jsonc);
+
+        // Strict JSON lint is not compatible with JSONC comment tokens.
+        const wantsJsonLint = isJson && !isJsonc && !hasJsonComments(text);
+        const ensured = await ensureCmAssets({ mode, jsonLint: wantsJsonLint });
         if (!ensured.modeOk) mode = 'text/plain';
 
-        const canLintJson = isJson && ensured.jsonLintOk;
+        const canLintJson = wantsJsonLint && ensured.jsonLintOk;
         try {
           const gutters = canLintJson
             ? ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']

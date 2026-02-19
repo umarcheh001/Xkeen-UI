@@ -163,6 +163,36 @@
     return null;
   }
 
+  // Best-effort timeout for "restart-ish" actions.
+  // If the UI/backend is restarting, the browser request may stay pending for a long time
+  // (e.g. reverse proxy waiting for upstream). We abort to avoid an infinite overlay.
+  function spinnerTimeoutMs(url, init) {
+    try {
+      const method = (init && init.method ? String(init.method).toUpperCase() : 'GET');
+      const loc = parseUrl(url);
+      const path = loc ? loc.pathname : url;
+      if (path === '/api/xkeen/core' && method === 'POST') return 65000;
+      // Default for other restart-ish endpoints
+      return 45000;
+    } catch (e) {
+      return 45000;
+    }
+  }
+
+  function showSpinnerTimeoutToast() {
+    const msg = 'Запрос выполняется слишком долго. Возможно, панель перезапускается. Обновите страницу через пару секунд.';
+    try {
+      if (typeof window.showToast === 'function') {
+        window.showToast(msg, true);
+        return;
+      }
+      if (XKeen.ui && typeof XKeen.ui.showToast === 'function') {
+        XKeen.ui.showToast(msg, true);
+        return;
+      }
+    } catch (e) {}
+  }
+
     function restartToastMessageForUrl(url) {
     const loc = parseUrl(url);
     const path = loc ? loc.pathname : String(url || '');
@@ -304,15 +334,37 @@
 
     showGlobalXkeenSpinner(spinnerConfig.message);
 
+    // Abort long-running requests to avoid infinite overlay.
+    let timeoutId = null;
+    let controller = null;
+    try {
+      if (typeof AbortController !== 'undefined' && !(opts && opts.signal)) {
+        controller = new AbortController();
+        opts.signal = controller.signal;
+        timeoutId = window.setTimeout(function () {
+          try { controller.abort(); } catch (e) {}
+        }, spinnerTimeoutMs(url, init));
+      }
+    } catch (e) {
+      // ignore
+    }
+
     return origFetch(input, opts)
       .then(function (res) {
+        try { if (timeoutId) window.clearTimeout(timeoutId); } catch (e) {}
         hideGlobalXkeenSpinner();
         try { handleXkeenRestartFromResponse(url, res); } catch (e) {}
         try { handleXrayRestartFromResponse(url, res); } catch (e) {}
         return res;
       })
       .catch(function (err) {
+        try { if (timeoutId) window.clearTimeout(timeoutId); } catch (e) {}
         hideGlobalXkeenSpinner();
+        try {
+          if (err && err.name === 'AbortError') {
+            showSpinnerTimeoutToast();
+          }
+        } catch (e) {}
         throw err;
       });
   };

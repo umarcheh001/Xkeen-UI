@@ -539,3 +539,62 @@ details.dt-theme-group .dt-collapsible-icon{
   height: 1px;
   opacity: 0;
 }
+
+
+/* --- Self-update card (DevTools) --- */
+.dt-update-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.dt-update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.dt-update-log {
+  max-height: 240px;
+}
+
+
+/* Update: security alerts */
+.dt-alert{
+  display: block;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border, #1f2937);
+  background: color-mix(in srgb, var(--card-bg, #020617) 92%, var(--text, #e5e7eb) 8%);
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.35;
+}
+
+.dt-alert strong{
+  color: var(--text, #e5e7eb);
+}
+
+.dt-alert .dt-alert-lines{
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dt-alert.ok{
+  border-color: color-mix(in srgb, var(--sem-success, #34d399) 45%, var(--border, #1f2937));
+  background: color-mix(in srgb, var(--sem-success, #34d399) 12%, var(--card-bg, #020617));
+}
+
+.dt-alert.warn{
+  border-color: color-mix(in srgb, var(--sem-warning, #fbbf24) 45%, var(--border, #1f2937));
+  background: color-mix(in srgb, var(--sem-warning, #fbbf24) 12%, var(--card-bg, #020617));
+}
+
+.dt-alert.bad{
+  border-color: color-mix(in srgb, var(--sem-error, #fca5a5) 45%, var(--border, #1f2937));
+  background: color-mix(in srgb, var(--sem-error, #fca5a5) 12%, var(--card-bg, #020617));
+}

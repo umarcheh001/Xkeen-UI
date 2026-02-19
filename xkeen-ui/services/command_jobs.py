@@ -1,0 +1,307 @@
+"""Background command jobs for XKeen UI.
+
+This module runs `xkeen` (or optional shell commands) in a background thread and
+stores incremental output for polling or WebSocket streaming.
+"""
+
+from __future__ import annotations
+
+import codecs
+import os
+import select
+import signal
+import subprocess
+import threading
+import time
+import uuid
+from dataclasses import dataclass, field
+from typing import Dict
+
+from services.xkeen_commands_catalog import (
+    XKEEN_BIN,
+    SHELL_BIN,
+    COMMAND_TIMEOUT,
+)
+
+@dataclass
+class CommandJob:
+    id: str
+    flag: str | None = None
+    cmd: str | None = None
+    status: str = "queued"  # "queued" | "running" | "finished" | "error"
+    exit_code: int | None = None
+    output: str = ""
+    created_at: float = field(default_factory=time.time)
+    finished_at: float | None = None
+    error: str | None = None
+
+
+JOBS: Dict[str, CommandJob] = {}
+JOBS_LOCK = threading.Lock()
+MAX_JOB_AGE = 3600  # seconds to keep finished jobs
+
+
+def cleanup_old_jobs() -> None:
+    """Remove finished jobs older than MAX_JOB_AGE."""
+    now = time.time()
+    with JOBS_LOCK:
+        old_ids = [
+            job_id
+            for job_id, job in JOBS.items()
+            if job.finished_at is not None and (now - job.finished_at) > MAX_JOB_AGE
+        ]
+        for job_id in old_ids:
+            JOBS.pop(job_id, None)
+
+
+def _run_command_job(job_id: str, stdin_data: str | None) -> None:
+    """Run xkeen or shell command in background and store result in JOBS."""
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            return
+        job.status = "running"
+
+    if job.cmd:
+        cmd = [SHELL_BIN, "-c", job.cmd]
+    elif job.flag:
+        cmd = [XKEEN_BIN, job.flag]
+    else:
+        with JOBS_LOCK:
+            job = JOBS.get(job_id)
+            if not job:
+                return
+            job.status = "error"
+            job.error = "empty command"
+            job.finished_at = time.time()
+        return
+
+    # Stream output while the command is running so /ws/command-status can actually stream.
+    # Note: we run the command in its own process group so we can terminate the whole tree on timeout.
+    COMMAND_MAX_OUTPUT_CHARS = int(os.environ.get("XKEEN_COMMAND_MAX_OUTPUT_CHARS", "1048576"))  # 1 MiB
+
+    def _is_noise_line(line: str) -> bool:
+        low = (line or "").lower()
+        if "collected errors" in low:
+            return True
+        if "opkg_conf" in low or "opkg" in low:
+            return True
+        return False
+
+    def _append_output(chunk: str) -> None:
+        if not chunk:
+            return
+        with JOBS_LOCK:
+            j = JOBS.get(job_id)
+            if not j:
+                return
+            # Prevent unbounded RAM usage on chatty commands.
+            if COMMAND_MAX_OUTPUT_CHARS > 0 and len(j.output) >= COMMAND_MAX_OUTPUT_CHARS:
+                # Mark once.
+                if "[output truncated]" not in j.output:
+                    j.output += "\n[output truncated]\n"
+                return
+            if COMMAND_MAX_OUTPUT_CHARS > 0:
+                room = COMMAND_MAX_OUTPUT_CHARS - len(j.output)
+                if room <= 0:
+                    return
+                if len(chunk) > room:
+                    j.output += chunk[:room]
+                    if "[output truncated]" not in j.output:
+                        j.output += "\n[output truncated]\n"
+                    return
+            j.output += chunk
+
+    started = time.time()
+    proc: subprocess.Popen | None = None
+    exit_code: int | None = None
+    timed_out = False
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE if stdin_data is not None else None,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=False,
+            close_fds=True,
+            preexec_fn=os.setsid,
+        )
+
+        if stdin_data is not None and proc.stdin is not None:
+            try:
+                proc.stdin.write(stdin_data.encode("utf-8", errors="ignore"))
+            except Exception:
+                pass
+            try:
+                proc.stdin.close()
+            except Exception:
+                pass
+
+        if proc.stdout is None:
+            raise RuntimeError("no stdout")
+
+        fd = proc.stdout.fileno()
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        carry = ""
+
+        while True:
+            # Timeout check
+            if (time.time() - started) > float(COMMAND_TIMEOUT):
+                timed_out = True
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except Exception:
+                    try:
+                        proc.terminate()
+                    except Exception:
+                        pass
+                try:
+                    # Give it a bit to exit
+                    proc.wait(timeout=1.0)
+                except Exception:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except Exception:
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                break
+
+            # Read available output (non-blocking-ish)
+            try:
+                r, _, _ = select.select([fd], [], [], 0.2)
+            except Exception:
+                r = [fd]
+
+            if r:
+                try:
+                    data = os.read(fd, 4096)
+                except Exception:
+                    data = b""
+                if not data:
+                    break
+
+                txt = decoder.decode(data)
+                if txt:
+                    carry += txt
+                    while "\n" in carry:
+                        line, carry = carry.split("\n", 1)
+                        if _is_noise_line(line):
+                            continue
+                        _append_output(line + "\n")
+
+            # If process exited and no more buffered data is coming, we can finish.
+            try:
+                if proc.poll() is not None:
+                    # Drain whatever is left (best effort)
+                    try:
+                        while True:
+                            r2, _, _ = select.select([fd], [], [], 0)
+                            if not r2:
+                                break
+                            data2 = os.read(fd, 4096)
+                            if not data2:
+                                break
+                            txt2 = decoder.decode(data2)
+                            if txt2:
+                                carry += txt2
+                                while "\n" in carry:
+                                    line, carry = carry.split("\n", 1)
+                                    if _is_noise_line(line):
+                                        continue
+                                    _append_output(line + "\n")
+                    except Exception:
+                        pass
+                    break
+            except Exception:
+                pass
+
+        # Flush decoder + remaining partial line
+        try:
+            tail = decoder.decode(b"", final=True)
+        except Exception:
+            tail = ""
+        if tail:
+            carry += tail
+        if carry:
+            # last line without newline
+            if not _is_noise_line(carry):
+                _append_output(carry)
+
+        try:
+            exit_code = proc.wait(timeout=0.2)
+        except Exception:
+            try:
+                exit_code = proc.poll()
+            except Exception:
+                exit_code = None
+
+        with JOBS_LOCK:
+            job = JOBS.get(job_id)
+            if not job:
+                return
+            if timed_out:
+                job.status = "error"
+                job.error = f"timeout after {COMMAND_TIMEOUT}s"
+            else:
+                job.status = "finished"
+            job.exit_code = int(exit_code) if exit_code is not None else None
+            job.finished_at = time.time()
+
+    except Exception as e:  # pragma: no cover - defensive
+        with JOBS_LOCK:
+            job = JOBS.get(job_id)
+            if not job:
+                return
+            job.status = "error"
+            job.error = str(e)
+            job.finished_at = time.time()
+    finally:
+        try:
+            if proc is not None:
+                try:
+                    if proc.stdout:
+                        proc.stdout.close()
+                except Exception:
+                    pass
+                try:
+                    if proc.stdin:
+                        proc.stdin.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+
+def create_command_job(flag: str | None, stdin_data: str | None, cmd: str | None = None) -> CommandJob:
+    """Create CommandJob, start background thread and return the job object."""
+    job_id = uuid.uuid4().hex[:12]
+    job = CommandJob(id=job_id, flag=flag, cmd=cmd)
+    with JOBS_LOCK:
+        JOBS[job_id] = job
+
+    cleanup_old_jobs()
+
+    t = threading.Thread(target=_run_command_job, args=(job_id, stdin_data), daemon=True)
+    t.start()
+    return job
+
+
+
+def get_command_job(job_id: str) -> CommandJob | None:
+    # Return a job by id (thread-safe).
+    try:
+        jid = (job_id or "").strip()
+    except Exception:
+        jid = ""
+    if not jid:
+        return None
+    with JOBS_LOCK:
+        return JOBS.get(jid)
+
+# Backward-compatible aliases (old app.py names)
+_cleanup_old_jobs = cleanup_old_jobs
+_create_command_job = create_command_job
+_get_command_job = get_command_job

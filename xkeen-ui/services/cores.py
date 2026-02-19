@@ -1,8 +1,79 @@
-"""Helpers for detecting and switching xkeen cores (xray / mihomo)."""
+"""Helpers for detecting and switching xkeen cores (xray / mihomo).
+
+Diagnostics patch (2026-02)
+--------------------------
+The core switch endpoint is a frequent source of "UI hangs" because it executes
+external commands and may trigger service restarts.
+
+This module now adds:
+- per-command timing logs (to core logger when available);
+- subprocess timeouts (configurable via env);
+- structured error details for the API layer.
+"""
+
+from __future__ import annotations
 
 import os
 import subprocess
-from typing import List, Optional, Tuple
+import time
+from typing import Dict, List, Optional, Tuple
+
+from services.xray_assets import ensure_xray_dat_assets
+
+
+# --- core logger (never required) ---
+try:
+    from services.logging_setup import core_logger as _get_core_logger
+
+    _CORE_LOGGER = _get_core_logger()
+except Exception:  # noqa: BLE001
+    _CORE_LOGGER = None
+
+
+def _core_log(level: str, msg: str, **extra) -> None:
+    if _CORE_LOGGER is None:
+        return
+    try:
+        if extra:
+            tail = ", ".join(f"{k}={v}" for k, v in extra.items())
+            full = f"{msg} | {tail}"
+        else:
+            full = msg
+        fn = getattr(_CORE_LOGGER, str(level or "info").lower(), None)
+        if callable(fn):
+            fn(full)
+        else:
+            _CORE_LOGGER.info(full)
+    except Exception:
+        return
+
+
+def _env_int(name: str, default: int) -> int:
+    v = os.environ.get(name)
+    if v is None:
+        return default
+    try:
+        return int(str(v).strip())
+    except Exception:
+        return default
+
+
+def _truncate(s: str, limit: int = 800) -> str:
+    s = s or ""
+    if len(s) <= limit:
+        return s
+    return s[:limit] + "…"
+
+
+class CoreSwitchError(RuntimeError):
+    """Raised when core switching fails.
+
+    Carries best-effort diagnostic details.
+    """
+
+    def __init__(self, message: str, *, details: Optional[Dict[str, object]] = None):
+        super().__init__(message)
+        self.details: Dict[str, object] = details or {}
 
 
 def detect_available_cores() -> List[str]:
@@ -84,12 +155,16 @@ def switch_core(core: str, error_log_path: str) -> None:
             # Non-critical: ignore failure to clear log
             pass
 
+    # Timeouts (seconds). Keep conservative defaults; can be tuned via env.
+    timeout_switch = max(5, _env_int("XKEEN_CORE_SWITCH_TIMEOUT", 25))
+    timeout_start = max(5, _env_int("XKEEN_CORE_START_TIMEOUT", 60))
+
     # Open log file handle for xkeen commands
     log_handle = None
     try:
         if log_file:
             try:
-                log_handle = open(log_file, "a")
+                log_handle = open(log_file, "a", encoding="utf-8", errors="replace")
             except Exception:
                 # Fallback to /dev/null if log file cannot be opened
                 try:
@@ -97,26 +172,155 @@ def switch_core(core: str, error_log_path: str) -> None:
                 except Exception:
                     log_handle = None
 
-        def run_cmd(cmd):
-            if log_handle is not None:
-                return subprocess.run(cmd, stdout=log_handle, stderr=log_handle, check=True)
-            return subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        def _write_diag(line: str) -> None:
+            if log_handle is None:
+                return
+            try:
+                log_handle.write(line.rstrip("\n") + "\n")
+                log_handle.flush()
+            except Exception:
+                return
 
+        def run_cmd(cmd, *, phase: str, timeout: int) -> None:
+            cmd_s = " ".join(str(x) for x in cmd)
+            _core_log("info", "xkeen.cmd_start", phase=phase, cmd=cmd_s, timeout=timeout)
+            _write_diag(f"[xkeen-ui] {phase}: start cmd={cmd_s} timeout={timeout}s")
+            t0 = time.monotonic()
+            try:
+                if log_handle is not None:
+                    subprocess.run(cmd, stdout=log_handle, stderr=log_handle, check=True, timeout=timeout)
+                else:
+                    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=timeout)
+            except subprocess.TimeoutExpired as exc:
+                dt = round(time.monotonic() - t0, 3)
+                _core_log("error", "xkeen.cmd_timeout", phase=phase, cmd=cmd_s, elapsed_s=dt)
+                _write_diag(f"[xkeen-ui] {phase}: TIMEOUT after {dt}s cmd={cmd_s}")
+                raise CoreSwitchError(
+                    "Таймаут выполнения команды",
+                    details={
+                        "phase": phase,
+                        "cmd": cmd_s,
+                        "timeout_s": timeout,
+                        "elapsed_s": dt,
+                        "log": log_file,
+                    },
+                ) from exc
+            except subprocess.CalledProcessError as exc:
+                dt = round(time.monotonic() - t0, 3)
+                _core_log("error", "xkeen.cmd_failed", phase=phase, cmd=cmd_s, rc=getattr(exc, "returncode", None), elapsed_s=dt)
+                _write_diag(
+                    f"[xkeen-ui] {phase}: FAILED rc={getattr(exc,'returncode',None)} after {dt}s cmd={cmd_s}"
+                )
+                raise CoreSwitchError(
+                    "Команда завершилась с ошибкой",
+                    details={
+                        "phase": phase,
+                        "cmd": cmd_s,
+                        "returncode": getattr(exc, "returncode", None),
+                        "elapsed_s": dt,
+                        "log": log_file,
+                    },
+                ) from exc
+            except Exception as exc:
+                dt = round(time.monotonic() - t0, 3)
+                _core_log("error", "xkeen.cmd_exception", phase=phase, cmd=cmd_s, elapsed_s=dt, error=str(exc))
+                _write_diag(f"[xkeen-ui] {phase}: EXCEPTION after {dt}s cmd={cmd_s} err={exc}")
+                raise CoreSwitchError(
+                    "Ошибка выполнения команды",
+                    details={
+                        "phase": phase,
+                        "cmd": cmd_s,
+                        "elapsed_s": dt,
+                        "log": log_file,
+                        "error": str(exc),
+                    },
+                ) from exc
+            dt = round(time.monotonic() - t0, 3)
+            _core_log("info", "xkeen.cmd_ok", phase=phase, cmd=cmd_s, elapsed_s=dt)
+            _write_diag(f"[xkeen-ui] {phase}: ok elapsed={dt}s cmd={cmd_s}")
+
+        # ---- run switching sequence ----
         try:
             if core == "mihomo":
-                run_cmd(["xkeen", "-mihomo"])
+                run_cmd(["xkeen", "-mihomo"], phase="switch_core", timeout=timeout_switch)
             else:
-                run_cmd(["xkeen", "-xray"])
-
-            run_cmd(["xkeen", "-start"])
-        except Exception as exc:
-            # Make sure to close handle before raising
-            if log_handle is not None:
+                run_cmd(["xkeen", "-xray"], phase="switch_core", timeout=timeout_switch)
+            # Xray configs often reference DAT assets via `ext:<name>.dat:<list>`.
+            # Many embedded builds resolve these assets next to the binary
+            # (e.g. /opt/sbin/geosite_v2fly.dat). Ensure all DAT files managed by
+            # the UI under /opt/etc/xray/dat are symlinked into /opt/sbin.
+            if core == "xray":
                 try:
-                    log_handle.close()
-                except Exception:
+                    dat_dir = os.environ.get("XRAY_DAT_DIR") or "/opt/etc/xray/dat"
+                    asset_dir = os.environ.get("XRAY_ASSET_DIR") or "/opt/sbin"
+                    ensure_xray_dat_assets(
+                        dat_dir=dat_dir,
+                        asset_dir=asset_dir,
+                        diag=_write_diag,
+                        log=lambda line: _core_log("info", line),
+                    )
+                except Exception as e:  # noqa: BLE001
+                    # Best-effort only; do not block switching.
+                    _core_log("warning", "xray_assets_failed", error=str(e))
+            # Preflight check for Xray configs: fail fast with actionable error
+            if core == "xray":
+                try:
+                    xray_bin = "/opt/sbin/xray" if os.path.exists("/opt/sbin/xray") else "xray"
+                    confdir = os.environ.get("XRAY_CONFDIR") or "/opt/etc/xray/configs"
+                    test_timeout = max(5, _env_int("XKEEN_XRAY_TEST_TIMEOUT", 15))
+                    cmd = [xray_bin, "-test", "-confdir", confdir]
+                    cmd_s = " ".join(str(x) for x in cmd)
+                    _core_log("info", "xkeen.cmd_start", phase="xray_test", cmd=cmd_s, timeout=test_timeout)
+                    _write_diag(f"[xkeen-ui] xray_test: start cmd={cmd_s} timeout={test_timeout}s")
+                    t0t = time.monotonic()
+                    if log_handle is not None:
+                        subprocess.run(cmd, stdout=log_handle, stderr=log_handle, check=True, timeout=test_timeout)
+                    else:
+                        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=test_timeout)
+                    dtt = round(time.monotonic() - t0t, 3)
+                    _core_log("info", "xkeen.cmd_ok", phase="xray_test", cmd=cmd_s, elapsed_s=dtt)
+                    _write_diag(f"[xkeen-ui] xray_test: ok elapsed={dtt}s cmd={cmd_s}")
+                except FileNotFoundError:
+                    # xray binary not found - skip preflight
                     pass
-            raise RuntimeError("Ошибка смены или запуска ядра") from exc
+                except subprocess.TimeoutExpired as exc:
+                    dtt = round(time.monotonic() - t0t, 3) if 't0t' in locals() else None
+                    _core_log("error", "xkeen.cmd_timeout", phase="xray_test", cmd=cmd_s if 'cmd_s' in locals() else 'xray -test', elapsed_s=dtt)
+                    _write_diag(f"[xkeen-ui] xray_test: TIMEOUT after {dtt}s cmd={cmd_s}")
+                    raise CoreSwitchError(
+                        "Таймаут проверки конфигурации Xray",
+                        details={
+                            "phase": "xray_test",
+                            "cmd": cmd_s if 'cmd_s' in locals() else 'xray -test',
+                            "timeout_s": test_timeout,
+                            "elapsed_s": dtt,
+                            "log": log_file,
+                        },
+                    ) from exc
+                except subprocess.CalledProcessError as exc:
+                    dtt = round(time.monotonic() - t0t, 3) if 't0t' in locals() else None
+                    _core_log("error", "xkeen.cmd_failed", phase="xray_test", cmd=cmd_s if 'cmd_s' in locals() else 'xray -test', rc=getattr(exc, 'returncode', None), elapsed_s=dtt)
+                    _write_diag(f"[xkeen-ui] xray_test: FAILED rc={getattr(exc,'returncode',None)} after {dtt}s cmd={cmd_s}")
+                    raise CoreSwitchError(
+                        "Ошибка конфигурации Xray",
+                        details={
+                            "phase": "xray_test",
+                            "cmd": cmd_s if 'cmd_s' in locals() else 'xray -test',
+                            "returncode": getattr(exc, 'returncode', None),
+                            "elapsed_s": dtt,
+                            "log": log_file,
+                            "hint": "Проверь /opt/var/log/xray/error.log. Частые причины: 1) отсутствует GeoSite/GeoIP список в DAT; 2) Xray не видит нужный *.dat в assets (должен быть доступен по имени в /opt/sbin или через симлинки из /opt/etc/xray/dat).",
+                        },
+                    ) from exc
+
+            run_cmd(["xkeen", "-start"], phase="start", timeout=timeout_start)
+        except CoreSwitchError:
+            raise
+        except Exception as exc:
+            raise CoreSwitchError(
+                "Ошибка смены или запуска ядра",
+                details={"phase": "unknown", "log": log_file, "error": str(exc)},
+            ) from exc
     finally:
         if log_handle is not None:
             try:

@@ -17,12 +17,21 @@ from typing import Any, Callable, Dict, Optional
 
 from flask import Blueprint, jsonify, redirect, render_template, request, url_for
 
+from routes.common.errors import error_response
+
 from services.xray_backups import (
     is_snapshot_filename,
     safe_basename,
     safe_child_realpath,
     read_text_limited,
     atomic_write_bytes,
+)
+
+# JSONC sidecar mapping helpers (Stage 4: Backup/Restore writes JSONC into JSONC_DIR)
+from services.xray_config_files import (
+    ensure_xray_jsonc_dir,
+    jsonc_path_for,
+    legacy_jsonc_path_for,
 )
 
 
@@ -54,16 +63,6 @@ def _core_log(level: str, msg: str, **extra) -> None:
             _CORE_LOGGER.info(full)
     except Exception:
         pass
-
-
-def error_response(message: str, status: int = 400, *, ok: bool | None = None) -> Any:
-    """Return a JSON error response for this blueprint."""
-    payload: Dict[str, Any] = {"error": message}
-    if ok is not None:
-        payload["ok"] = ok
-    return jsonify(payload), status
-
-
 def create_backups_blueprint(
     BACKUP_DIR: str,
     ROUTING_FILE: str,
@@ -136,10 +135,33 @@ def create_backups_blueprint(
             return fallback_path
 
     def _routing_paths_for(selected: str) -> tuple[str, str]:
-        """Return (routing_main_json, routing_raw_jsonc) for selected path."""
+        """Return (routing_main_json, routing_raw_jsonc) for selected path.
+
+        Note: raw JSONC is stored in XRAY_JSONC_DIR (UI sidecar dir). We still
+        support reading legacy raw JSONC next to the main .json in configs dir.
+        """
+        main = selected
         if selected.endswith(".jsonc"):
-            return selected[:-1], selected
-        return selected, selected + "c"
+            main = selected[:-1]
+        # Canonical sidecar location (JSONC_DIR)
+        return main, jsonc_path_for(main)
+
+    def _read_routing_raw_text(main_json: str) -> Optional[str]:
+        """Read routing raw JSONC from JSONC_DIR, with legacy fallback."""
+        # Prefer canonical JSONC_DIR
+        candidates = [jsonc_path_for(main_json), legacy_jsonc_path_for(main_json)]
+        seen: set[str] = set()
+        for p in candidates:
+            if not p or p in seen:
+                continue
+            seen.add(p)
+            try:
+                if os.path.exists(p):
+                    with open(p, "r", encoding="utf-8") as f:
+                        return f.read()
+            except OSError:
+                continue
+        return None
 
     # ---- pages ----
 
@@ -160,6 +182,20 @@ def create_backups_blueprint(
             inbounds_file=os.path.basename(INBOUNDS_FILE),
             outbounds_file=os.path.basename(OUTBOUNDS_FILE),
         )
+
+    @bp.post("/delete-backup")
+    def delete_backup_from_backups_page() -> Any:
+        """Legacy HTML form action: delete a backup and redirect to /backups."""
+        filename = request.form.get("filename")
+        if filename:
+            path = os.path.join(BACKUP_DIR, filename)
+            if os.path.isfile(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    # Ignore deletion error and just return to the backups page
+                    pass
+        return redirect(url_for("backups.backups_page"))
 
     # ---- API: Xray snapshots (rollback) ----
 
@@ -297,13 +333,8 @@ def create_backups_blueprint(
         selected = _resolve_fragment(file_arg, ROUTING_FILE, kind="routing")
         routing_main, routing_raw = _routing_paths_for(selected)
 
-        raw_text = None
-        if os.path.exists(routing_raw):
-            try:
-                with open(routing_raw, "r", encoding="utf-8") as f:
-                    raw_text = f.read()
-            except OSError:
-                raw_text = None
+        # Raw JSONC lives in JSONC_DIR; fall back to legacy sidecar in configs.
+        raw_text = _read_routing_raw_text(routing_main)
 
         # Always try to load cleaned JSON as well for sanity / future use
         data = load_json(routing_main, default=None)
@@ -424,8 +455,9 @@ def create_backups_blueprint(
         if isinstance(data, dict) and "__xkeen_raw_jsonc__" in data:
             raw = data.get("__xkeen_raw_jsonc__") or ""
             try:
-                # Restore raw JSONC next to the target routing JSON.
-                raw_path = target_file + "c" if target_file.endswith(".json") else target_file
+                # Restore raw JSONC into JSONC_DIR (UI sidecar dir).
+                ensure_xray_jsonc_dir()
+                raw_path = jsonc_path_for(target_file)
                 with open(raw_path, "w", encoding="utf-8") as f:
                     f.write(raw)
 
@@ -499,7 +531,8 @@ def create_backups_blueprint(
         if target == "routing" and isinstance(data, dict) and "__xkeen_raw_jsonc__" in data:
             raw = data.get("__xkeen_raw_jsonc__") or ""
             try:
-                raw_path = config_path + "c"
+                ensure_xray_jsonc_dir()
+                raw_path = jsonc_path_for(config_path)
                 with open(raw_path, "w", encoding="utf-8") as f:
                     f.write(raw)
 
@@ -537,7 +570,8 @@ def create_backups_blueprint(
                 if isinstance(data, dict) and "__xkeen_raw_jsonc__" in data:
                     raw = data.get("__xkeen_raw_jsonc__") or ""
                     try:
-                        raw_path = target_file + "c" if target_file.endswith(".json") else target_file
+                        ensure_xray_jsonc_dir()
+                        raw_path = jsonc_path_for(target_file)
                         with open(raw_path, "w", encoding="utf-8") as f:
                             f.write(raw)
 

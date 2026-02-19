@@ -28,7 +28,7 @@
   <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260214a') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='devtools.css', v='20260109e') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='devtools.css', v='20260219a') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -93,6 +93,58 @@
               Примечание: Stop/Restart могут оборвать текущую вкладку — это нормально.
             </p>
           </section>
+
+          <details class="card dt-collapsible" id="dt-update-card" data-xk-section="update dt-update-card" open>
+            <summary class="dt-collapsible-summary">
+              <h2 style="margin:0;">Обновление панели</h2>
+              <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+            </summary>
+            <div class="dt-collapsible-body">
+
+              <div class="small" style="margin-bottom:10px; opacity:0.9;">
+                Проверка и установка обновлений Xkeen‑UI из GitHub (stable releases или main tarball).
+                Во время обновления панель перезапустится — вкладка может временно оборваться.
+              </div>
+
+              <div class="dt-update-meta small" style="margin-bottom:8px; opacity:0.9;">
+                <div>Repo: <code id="dt-update-repo">—</code></div>
+                <div>Channel: <code id="dt-update-channel">—</code></div>
+                <div>Branch: <code id="dt-update-branch">—</code></div>
+              </div>
+
+              <div class="small" style="margin-bottom:6px;">
+                Текущая версия: <strong id="dt-update-current-version">—</strong>
+                <span id="dt-update-current-commit" style="opacity:0.85;"></span>
+              </div>
+              <div class="small" id="dt-update-current-built" style="margin-bottom:10px; opacity:0.85;"></div>
+
+              <div class="small" style="margin-bottom:6px;">
+                Latest (<span id="dt-update-latest-kind">—</span>): <strong id="dt-update-latest-version">—</strong>
+                <span id="dt-update-latest-date" style="opacity:0.85;"></span>
+              </div>
+              <div class="small" id="dt-update-latest-hint" style="margin-bottom:10px; opacity:0.85;"></div>
+
+              <div id="dt-update-security" class="dt-alert" style="display:none; margin:10px 0;"></div>
+
+
+              <div class="dt-update-actions" aria-label="Update actions">
+                <button type="button" id="dt-update-check" class="btn-secondary" title="Проверить обновления (stable releases / main tarball).">Check</button>
+                <button type="button" id="dt-update-run" class="xkeen-ctrl-btn" title="Запустить обновление в фоне. Панель перезапустится.">Update</button>
+                <button type="button" id="dt-update-rollback" class="btn-secondary" title="Откатиться на предыдущую версию (из локального backup).">Rollback</button>
+                <button type="button" id="dt-update-refresh" class="btn-secondary" title="Обновить локальный статус и лог операции.">Refresh</button>
+                <button type="button" id="dt-update-open-logs" class="btn-secondary" title="Перейти во вкладку Logs.">Open logs</button>
+              </div>
+
+              <div id="dt-update-status" class="status" style="margin-top:10px;">—</div>
+              <div class="small" id="dt-update-substatus" style="margin-top:6px; opacity:0.85;"></div>
+
+              <pre id="dt-update-log" class="log-block dt-update-log" title="update.log (tail)" style="margin:10px 0 0 0;"></pre>
+              <div class="small" style="margin-top:6px; opacity:0.8;">
+                Показаны последние строки <code>update.log</code>. Полный лог можно открыть во вкладке Logs.
+              </div>
+
+            </div>
+          </details>
 
                     <details class="card dt-logging-card dt-collapsible" id="dt-logging-card" data-xk-section="logging dt-logging-card" open>
             <summary class="dt-collapsible-summary">
@@ -2100,11 +2152,12 @@ html[data-xk-hide-hints="1"] .card{
   <script src="{{ url_for('static', filename='js/features/devtools/service.js', v='20260109e') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/logs.js', v='20260109e') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/env.js', v='20260109e') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/devtools/update.js', v='20260219a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/theme.js', v='20260110a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/terminal_theme.js', v='20260109e') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/codemirror_theme.js', v='20260109e') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/custom_css.js', v='20260109e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools.js', v='20260109e') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/devtools.js', v='20260219a') }}"></script>
   <script src="{{ url_for('static', filename='js/pages/devtools.init.js') }}"></script>
 </body>
 </html>

@@ -6,6 +6,9 @@ Blueprint endpoints are protected by the global auth_guard in app.py.
 from __future__ import annotations
 
 import os
+import shutil
+import subprocess
+import time
 
 from flask import Blueprint, jsonify, request, send_file
 
@@ -56,6 +59,21 @@ def _redact_env_updates(updates: dict) -> dict:
 
 from services import devtools as dt
 from services import branding as br
+from services.build_info import read_build_info
+from services.self_update.state import (
+    ensure_update_dir,
+    get_update_paths,
+    get_backup_dir,
+    list_backups,
+    read_lock,
+    read_status,
+    read_update_log_tail,
+    release_lock,
+    try_acquire_lock,
+    write_status,
+)
+from services.self_update.github import github_get_latest_release, github_get_latest_main
+from services.self_update.security import is_url_allowed, security_snapshot
 
 try:
     from services.logging_setup import refresh_runtime_from_env as _refresh_logging
@@ -66,6 +84,453 @@ except Exception:  # logging is optional
 
 def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
     bp = Blueprint("devtools", __name__)
+
+    def _find_update_runner() -> str:
+        """Return absolute path to update runner script (best-effort)."""
+        here = os.path.abspath(os.path.dirname(__file__))
+        cand = os.path.join(here, "scripts", "update_xkeen_ui.sh")
+        if os.path.isfile(cand):
+            return cand
+        cand2 = "/opt/etc/xkeen-ui/scripts/update_xkeen_ui.sh"
+        if os.path.isfile(cand2):
+            return cand2
+        return cand  # default (will fail later with a clear error)
+
+    @bp.get("/api/devtools/update/info")
+    def api_devtools_update_info() -> Any:
+        """Return local build/update information.
+
+        PR/Commit 1 (self-update): expose current build metadata written by install.sh.
+        This endpoint performs *no* network calls.
+        """
+
+        build = read_build_info(ui_state_dir)
+        caps = {
+            "curl": bool(shutil.which("curl")),
+            "tar": bool(shutil.which("tar")),
+            "sha256sum": bool(shutil.which("sha256sum")),
+        }
+        settings = {
+            "repo": str(os.environ.get("XKEEN_UI_UPDATE_REPO") or build.get("repo") or "umarcheh001/Xkeen-UI"),
+            "channel": str(os.environ.get("XKEEN_UI_UPDATE_CHANNEL") or build.get("channel") or "stable"),
+            "branch": str(os.environ.get("XKEEN_UI_UPDATE_BRANCH") or "main"),
+        }
+        return jsonify({"ok": True, "build": build, "capabilities": caps, "settings": settings, "security": security_snapshot()})
+
+    @bp.get("/api/devtools/update/status")
+    def api_devtools_update_status() -> Any:
+        """Return local self-update status/lock/log tail.
+
+        PR/Commit 2 (self-update): provides stable state storage for later update runs.
+        This endpoint performs *no* network calls.
+        """
+
+        try:
+            ensure_update_dir(ui_state_dir)
+        except Exception:
+            # Non-critical; we can still report "idle".
+            pass
+
+        paths = get_update_paths(ui_state_dir)
+
+        status = read_status(paths["status_file"])
+        lock_info = read_lock(paths["lock_file"])
+
+        try:
+            tail = int(request.args.get("tail") or 200)
+        except Exception:
+            tail = 200
+        tail = max(0, min(2000, tail))
+
+        backup_dir = get_backup_dir(ui_state_dir)
+        backups = list_backups(backup_dir, limit=5)
+
+
+        log_tail = read_update_log_tail(paths["log_file"], lines=tail) if tail else []
+
+        # Keep response compact and UI-friendly.
+        return jsonify({"ok": True, "status": status, "lock": lock_info, "log_tail": log_tail, "backup_dir": backup_dir, "backups": backups, "has_backup": bool(backups)})
+
+    @bp.post("/api/devtools/update/check")
+    def api_devtools_update_check() -> Any:
+        """Check GitHub for the latest stable release (no install).
+
+        PR/Commit 3 (self-update): query GitHub Releases API and compare with current BUILD.json.
+        Network is performed with a short wait and safe caching; the UI must not freeze.
+        """
+        payload = request.get_json(silent=True) or {}
+        force_refresh = bool(payload.get("force_refresh") or payload.get("force") or False)
+        try:
+            wait_seconds = float(payload.get("wait_seconds") or 2.5)
+        except Exception:
+            wait_seconds = 2.5
+        wait_seconds = max(0.2, min(10.0, wait_seconds))
+
+        build = read_build_info(ui_state_dir)
+        repo = str(os.environ.get("XKEEN_UI_UPDATE_REPO") or build.get("repo") or "umarcheh001/Xkeen-UI")
+        channel = str(os.environ.get("XKEEN_UI_UPDATE_CHANNEL") or build.get("channel") or "stable")
+        branch = str(os.environ.get("XKEEN_UI_UPDATE_BRANCH") or "main")
+        ch = channel.strip().lower() or "stable"
+
+        try:
+            if ch == "stable":
+                gh_res, stale = github_get_latest_release(repo, wait_seconds=wait_seconds, force_refresh=force_refresh)
+            elif ch == "main":
+                gh_res, stale = github_get_latest_main(repo, branch=branch, wait_seconds=wait_seconds, force_refresh=force_refresh)
+            else:
+                return jsonify({"ok": False, "error": "channel_not_supported", "repo": repo, "channel": channel, "branch": branch, "current": build, "latest": None, "update_available": False})
+        except TimeoutError:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "timeout",
+                    "repo": repo,
+                    "channel": channel,
+                "branch": branch,
+                    "current": build,
+                    "latest": None,
+                    "update_available": False,
+                }
+            )
+        except Exception as e:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "check_failed",
+                    "repo": repo,
+                    "channel": channel,
+                "branch": branch,
+                    "current": build,
+                    "latest": None,
+                    "update_available": False,
+                    "meta": {"message": str(e)[:200]},
+                }
+            )
+
+        latest = gh_res.get("latest") if isinstance(gh_res, dict) else None
+        ok = bool(gh_res.get("ok")) if isinstance(gh_res, dict) else False
+        err = gh_res.get("error") if isinstance(gh_res, dict) else "bad_response"
+        meta = gh_res.get("meta") if isinstance(gh_res, dict) else None
+
+        # Compare by tag/version (stable) or commit (main).
+        update_available = False
+        if ok and isinstance(latest, dict):
+            if ch == "stable":
+                current_ver = build.get("version")
+                latest_tag = latest.get("tag")
+                if latest_tag:
+                    if current_ver:
+                        update_available = str(current_ver) != str(latest_tag)
+                    else:
+                        update_available = True
+            elif ch == "main":
+                current_commit = build.get("commit")
+                latest_sha = latest.get("sha")
+                if latest_sha:
+                    if current_commit:
+                        update_available = str(current_commit) != str(latest_sha)
+                    else:
+                        update_available = True
+
+        # Security/limits diagnostics for UI (runner enforces separately).
+        sec = {
+            "settings": security_snapshot(),
+            "download": None,
+            "checksum": None,
+            "warnings": [],
+            "will_block_run": False,
+        }
+        try:
+            if isinstance(latest, dict):
+                if ch == "stable":
+                    asset = latest.get("asset") if isinstance(latest.get("asset"), dict) else {}
+                    durl = str(asset.get("download_url") or "")
+                    if durl:
+                        d_ok, d_reason = is_url_allowed(durl)
+                    else:
+                        d_ok, d_reason = False, "missing"
+                    sec["download"] = {"url": durl or None, "ok": bool(d_ok), "reason": d_reason}
+                    if not d_ok:
+                        sec["warnings"].append("download_url_blocked:" + d_reason)
+
+                    sha = latest.get("sha256_asset") if isinstance(latest.get("sha256_asset"), dict) else {}
+                    surl = str(sha.get("download_url") or "")
+                    if surl:
+                        s_ok, s_reason = is_url_allowed(surl)
+                        sec["checksum"] = {
+                            "present": True,
+                            "kind": sha.get("kind"),
+                            "url": surl,
+                            "ok": bool(s_ok),
+                            "reason": s_reason,
+                        }
+                        if not s_ok:
+                            sec["warnings"].append("checksum_url_blocked:" + s_reason)
+                    else:
+                        sec["checksum"] = {"present": False, "kind": sha.get("kind"), "url": None}
+                        if str(os.environ.get("XKEEN_UI_UPDATE_REQUIRE_SHA") or "0").strip() == "1":
+                            sec["warnings"].append("checksum_required_missing")
+                elif ch == "main":
+                    durl = str(latest.get("tarball_url") or "")
+                    if durl:
+                        d_ok, d_reason = is_url_allowed(durl)
+                    else:
+                        d_ok, d_reason = False, "missing"
+                    sec["download"] = {"url": durl or None, "ok": bool(d_ok), "reason": d_reason}
+                    if not d_ok:
+                        sec["warnings"].append("download_url_blocked:" + d_reason)
+        except Exception:
+            pass
+
+        # Will the runner likely refuse to run with current policy?
+        try:
+            sec["will_block_run"] = bool(
+                any(str(w).startswith("download_url_blocked") for w in (sec.get("warnings") or []))
+                or any(str(w).startswith("checksum_url_blocked") for w in (sec.get("warnings") or []))
+                or "checksum_required_missing" in (sec.get("warnings") or [])
+            )
+        except Exception:
+            sec["will_block_run"] = False
+
+        return jsonify(
+            {
+                "ok": ok,
+                "error": err,
+                "repo": repo,
+                "channel": channel,
+                "branch": branch,
+                "current": build,
+                "latest": latest,
+                "update_available": bool(update_available),
+                "stale": bool(stale),
+                "meta": meta,
+                "security": sec,
+            }
+        )
+
+    @bp.post("/api/devtools/update/run")
+    def api_devtools_update_run() -> Any:
+        """Start self-update runner in background.
+
+        PR/Commit 5 (self-update): spawn update runner via subprocess.Popen.
+        The runner performs backup/download/extract/install and writes status/log.
+        """
+
+        # Ensure storage exists.
+        try:
+            ensure_update_dir(ui_state_dir)
+        except Exception:
+            pass
+
+        paths = get_update_paths(ui_state_dir)
+
+        # Preconditions (avoid starting a job that will instantly fail without status).
+        have_python = bool(shutil.which("python3") or shutil.which("python") or os.path.isfile("/opt/bin/python3"))
+        have_tar = bool(shutil.which("tar"))
+        have_downloader = bool(shutil.which("curl") or shutil.which("wget"))
+        runner = _find_update_runner()
+        if not os.path.isfile(runner):
+            return jsonify({"ok": False, "error": "runner_not_found", "runner": runner})
+        if not have_python or not have_tar or not have_downloader:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "missing_dependencies",
+                    "capabilities": {
+                        "python": have_python,
+                        "tar": have_tar,
+                        "curl_or_wget": have_downloader,
+                    },
+                }
+            )
+
+        # Acquire lock for this run (runner will adopt it using XKEEN_UI_LOCK_PRECREATED=1).
+        acquired, lock_info = try_acquire_lock(paths["lock_file"])
+        if not acquired:
+            status = read_status(paths["status_file"])
+            return jsonify({"ok": True, "started": False, "reason": "locked", "lock": lock_info, "status": status})
+
+        # Reset status for a clean run (keep previous log file).
+        try:
+            if os.path.isfile(paths["status_file"]):
+                os.replace(paths["status_file"], paths["status_file"] + ".prev")
+        except Exception:
+            # Not critical.
+            pass
+
+        now = time.time()
+        base_status: Dict[str, Any] = {
+            "state": "running",
+            "step": "spawn",
+            "progress": {"runner": os.path.basename(runner)},
+            "created_ts": now,
+            "started_ts": now,
+            "finished_ts": None,
+            "error": None,
+            "pid": None,
+            "op": "update",
+            "message": "Starting update runner",
+            "updated_ts": now,
+        }
+        write_status(paths["status_file"], base_status)
+
+        env = os.environ.copy()
+        env["XKEEN_UI_LOCK_PRECREATED"] = "1"
+        env["XKEEN_UI_UPDATE_DIR"] = paths["update_dir"]
+        env["XKEEN_UI_UPDATE_ACTION"] = "update"
+
+        # Pass effective update settings to runner (so it works without restarting UI).
+        build_eff = read_build_info(ui_state_dir)
+        repo_eff = str(os.environ.get("XKEEN_UI_UPDATE_REPO") or build_eff.get("repo") or "umarcheh001/Xkeen-UI")
+        channel_eff = str(os.environ.get("XKEEN_UI_UPDATE_CHANNEL") or build_eff.get("channel") or "stable")
+        branch_eff = str(os.environ.get("XKEEN_UI_UPDATE_BRANCH") or "main")
+        env["XKEEN_UI_UPDATE_REPO"] = repo_eff
+        env["XKEEN_UI_UPDATE_CHANNEL"] = channel_eff
+        env["XKEEN_UI_UPDATE_BRANCH"] = branch_eff
+
+        try:
+            # Don't redirect stdout to update.log, because runner already writes update.log
+            # and uses tee; redirecting would duplicate lines.
+            p = subprocess.Popen(
+                ["sh", runner],
+                cwd=os.path.dirname(runner) or None,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT,
+                close_fds=True,
+                start_new_session=True,
+            )
+            base_status["pid"] = p.pid
+            base_status["progress"] = {"runner": os.path.basename(runner), "spawned_pid": p.pid}
+            base_status["message"] = "Runner started"
+            base_status["updated_ts"] = time.time()
+            write_status(paths["status_file"], base_status)
+            _core_log("info", "self_update: started runner", pid=p.pid, runner=runner)
+            return jsonify({"ok": True, "started": True, "pid": p.pid, "lock": lock_info, "status": base_status})
+        except Exception as e:
+            # Best-effort rollback of lock and status.
+            release_lock(paths["lock_file"])
+            base_status["state"] = "failed"
+            base_status["step"] = "spawn"
+            base_status["error"] = "spawn_failed"
+            base_status["message"] = str(e)[:200]
+            base_status["finished_ts"] = time.time()
+            base_status["updated_ts"] = time.time()
+            write_status(paths["status_file"], base_status)
+            _core_log("error", "self_update: failed to start runner", error=str(e)[:200])
+            return jsonify({"ok": False, "error": "spawn_failed", "meta": {"message": str(e)[:200]}})
+
+
+    @bp.post("/api/devtools/update/rollback")
+    def api_devtools_update_rollback() -> Any:
+        """Start rollback runner in background.
+
+        PR/Commit 7 (self-update): restore the latest backup created by the updater.
+        """
+
+        # Ensure storage exists.
+        try:
+            ensure_update_dir(ui_state_dir)
+        except Exception:
+            pass
+
+        paths = get_update_paths(ui_state_dir)
+
+        # Check that a backup exists (UI should hide the button otherwise).
+        backup_dir = get_backup_dir(ui_state_dir)
+        backups = list_backups(backup_dir, limit=1)
+        if not backups:
+            return jsonify({"ok": False, "error": "no_backup", "backup_dir": backup_dir})
+
+        # Preconditions for rollback: python + tar + runner script.
+        have_python = bool(shutil.which("python3") or shutil.which("python") or os.path.isfile("/opt/bin/python3"))
+        have_tar = bool(shutil.which("tar"))
+        runner = _find_update_runner()
+        if not os.path.isfile(runner):
+            return jsonify({"ok": False, "error": "runner_not_found", "runner": runner})
+        if not have_python or not have_tar:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "missing_dependencies",
+                    "capabilities": {
+                        "python": have_python,
+                        "tar": have_tar,
+                    },
+                }
+            )
+
+        # Acquire lock for this run (runner will adopt it using XKEEN_UI_LOCK_PRECREATED=1).
+        acquired, lock_info = try_acquire_lock(paths["lock_file"])
+        if not acquired:
+            status = read_status(paths["status_file"])
+            return jsonify({"ok": True, "started": False, "reason": "locked", "lock": lock_info, "status": status})
+
+        # Reset status for a clean run (keep previous log file).
+        try:
+            if os.path.isfile(paths["status_file"]):
+                os.replace(paths["status_file"], paths["status_file"] + ".prev")
+        except Exception:
+            pass
+
+        now = time.time()
+        base_status: Dict[str, Any] = {
+            "state": "running",
+            "step": "spawn",
+            "progress": {"runner": os.path.basename(runner), "action": "rollback"},
+            "created_ts": now,
+            "started_ts": now,
+            "finished_ts": None,
+            "error": None,
+            "pid": None,
+            "op": "rollback",
+            "message": "Starting rollback runner",
+            "updated_ts": now,
+        }
+        write_status(paths["status_file"], base_status)
+
+        env = os.environ.copy()
+        env["XKEEN_UI_LOCK_PRECREATED"] = "1"
+        env["XKEEN_UI_UPDATE_DIR"] = paths["update_dir"]
+        env["XKEEN_UI_UPDATE_ACTION"] = "rollback"
+
+        build_eff = read_build_info(ui_state_dir)
+        repo_eff = str(os.environ.get("XKEEN_UI_UPDATE_REPO") or build_eff.get("repo") or "umarcheh001/Xkeen-UI")
+        channel_eff = str(os.environ.get("XKEEN_UI_UPDATE_CHANNEL") or build_eff.get("channel") or "stable")
+        branch_eff = str(os.environ.get("XKEEN_UI_UPDATE_BRANCH") or "main")
+        env["XKEEN_UI_UPDATE_REPO"] = repo_eff
+        env["XKEEN_UI_UPDATE_CHANNEL"] = channel_eff
+        env["XKEEN_UI_UPDATE_BRANCH"] = branch_eff
+
+        try:
+            p = subprocess.Popen(
+                ["sh", runner],
+                cwd=os.path.dirname(runner) or None,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.STDOUT,
+                close_fds=True,
+                start_new_session=True,
+            )
+            base_status["pid"] = p.pid
+            base_status["progress"] = {"runner": os.path.basename(runner), "spawned_pid": p.pid, "action": "rollback"}
+            base_status["message"] = "Rollback runner started"
+            base_status["updated_ts"] = time.time()
+            write_status(paths["status_file"], base_status)
+            _core_log("info", "self_update: started rollback runner", pid=p.pid, runner=runner)
+            return jsonify({"ok": True, "started": True, "pid": p.pid, "lock": lock_info, "status": base_status})
+        except Exception as e:
+            release_lock(paths["lock_file"])
+            base_status["state"] = "failed"
+            base_status["step"] = "spawn"
+            base_status["error"] = "spawn_failed"
+            base_status["message"] = str(e)[:200]
+            base_status["finished_ts"] = time.time()
+            base_status["updated_ts"] = time.time()
+            write_status(paths["status_file"], base_status)
+            _core_log("error", "self_update: failed to start rollback runner", error=str(e)[:200])
+            return jsonify({"ok": False, "error": "spawn_failed", "meta": {"message": str(e)[:200]}})
+
 
     @bp.get("/api/devtools/env")
     def api_devtools_env_get() -> Any:

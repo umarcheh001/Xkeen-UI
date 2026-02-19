@@ -1307,6 +1307,7 @@ async function xhrUploadFiles({ side, files }) {
       connectBtn: qs('.fm-connect-btn', root),
       disconnectBtn: qs('.fm-disconnect-btn', root),
       pathInput: qs('.fm-path-input', root),
+      rootBtn: qs('.fm-root-btn', root),
       upBtn: qs('.fm-up-btn', root),
       refreshBtn: qs('.fm-refresh-btn', root),
       clearTrashBtn: qs('.fm-clear-trash-btn', root),
@@ -2138,6 +2139,22 @@ async function xhrUploadFiles({ side, files }) {
       hide(pd.disconnectBtn);
     }
 
+    // Remote quick jump (home/root) button.
+    if (pd.rootBtn) {
+      if (isRemote && p.sid) {
+        show(pd.rootBtn);
+        const rp = String(p.rproto || '').toLowerCase();
+        const isFtp = (rp === 'ftp' || rp === 'ftps');
+        const label = isFtp ? '/' : '⌂';
+        const title = isFtp ? 'В корень (/)' : 'В домашнюю (~)';
+        try { pd.rootBtn.textContent = label; } catch (e) {}
+        try { pd.rootBtn.title = title; } catch (e) {}
+        try { pd.rootBtn.setAttribute('aria-label', title); } catch (e) {}
+      } else {
+        hide(pd.rootBtn);
+      }
+    }
+
     // List
     const list = pd.list;
     if (!list) return;
@@ -2316,7 +2333,11 @@ async function xhrUploadFiles({ side, files }) {
         if (pd.pathInput) {
           const v = String(pd.pathInput.value || '').trim();
           if (v) {
-            if (p.target === 'remote' && (v === '~' || v === '.')) desired = '.';
+            if (p.target === 'remote' && (v === '~' || v === '.')) {
+              // FTP is usually rooted at '/', while SFTP might be chrooted and not expose '/'.
+              const rp = String((p.rproto || '')).trim().toLowerCase();
+              desired = (rp === 'ftp' || rp === 'ftps') ? '/' : '.';
+            }
             else desired = v;
           }
         }
@@ -2341,8 +2362,12 @@ async function xhrUploadFiles({ side, files }) {
       if (p.target === 'local') {
         return `/api/fs/list?target=local&path=${encodeURIComponent(desired || '')}`;
       }
-      // For remote, use '.' for home; do not force '/' which may be invalid on chrooted SFTP.
-      return `/api/fs/list?target=remote&sid=${encodeURIComponent(p.sid)}&path=${encodeURIComponent(desired || '.')}`;
+      // For remote, default cwd depends on protocol.
+      //  - SFTP: use '.' (home); do not force '/' which may be invalid on chrooted servers.
+      //  - FTP/FTPS: use '/' for a more predictable UX.
+      const rp = String((p.rproto || '')).trim().toLowerCase();
+      const def = (rp === 'ftp' || rp === 'ftps') ? '/' : '.';
+      return `/api/fs/list?target=remote&sid=${encodeURIComponent(p.sid)}&path=${encodeURIComponent(desired || def)}`;
     })();
 
     // Loading state
@@ -2350,7 +2375,20 @@ async function xhrUploadFiles({ side, files }) {
       pd.list && pd.list.classList.add('is-loading');
     } catch (e) {}
 
-    const { res, data } = await fetchJson(url, { method: 'GET' });
+    let res = null;
+    let data = null;
+    try {
+      const r = await fetchJson(url, { method: 'GET' });
+      res = r.res;
+      data = r.data;
+    } catch (e) {
+      try {
+        pd.list && pd.list.classList.remove('is-loading');
+      } catch (e2) {}
+      const em = (e && (e.message || e.toString)) ? String(e.message || e) : 'network_error';
+      toast('FM: list_failed' + (em ? (' — ' + em) : ''), 'error');
+      return false;
+    }
 
     try {
       pd.list && pd.list.classList.remove('is-loading');
@@ -2358,7 +2396,13 @@ async function xhrUploadFiles({ side, files }) {
 
     if (!res || !res.ok || !data || !data.ok) {
       const msg = (data && (data.error || data.message)) ? String(data.error || data.message) : 'list_failed';
-      const details = data && (data.details || data.hint) ? String(data.details || data.hint) : '';
+      let details = data && (data.details || data.hint) ? String(data.details || data.hint) : '';
+      if (!details && res && !res.ok) {
+        try { details = `HTTP ${res.status}${res.statusText ? (' ' + res.statusText) : ''}`; } catch (e) {}
+      }
+      if (!details && res && res.ok && !data) {
+        details = 'bad_json';
+      }
       if (msg === 'path_not_allowed') {
         // Local sandbox boundary — not an actual error for UX.
         toast('FM: путь вне sandbox (см. XKEEN_LOCALFM_ROOTS)', 'info');
@@ -3801,8 +3845,10 @@ function _toastHostkeyDeleteResult(deletedCount, prefix) {
     p.target = 'remote';
     p.sid = String(data.session_id || '');
     p.rproto = String(proto || '');
-    // Use '.' as home for maximum compatibility (some SFTP servers/chroots do not expose '/').
-    p.cwd = '.';
+    // Initial cwd depends on protocol:
+    //  - SFTP: use '.' (home); do not force '/' which may be invalid on chrooted servers.
+    //  - FTP/FTPS: use '/' for a more predictable UX.
+    p.cwd = (proto === 'ftp' || proto === 'ftps') ? '/' : '.';
     p.items = [];
     p.selected.clear();
     p.focusName = '';
@@ -3812,7 +3858,15 @@ function _toastHostkeyDeleteResult(deletedCount, prefix) {
 
     modalClose(el('fm-connect-modal'));
 
-    toast('Подключено: ' + user + '@' + host, 'success');
+    try {
+      const ptxt = String(proto || '').trim().toLowerCase();
+      const pport = String(port || '').trim();
+      const head = ptxt ? (ptxt.toUpperCase() + ' ') : '';
+      const tail = pport ? (':' + pport) : '';
+      toast('Подключено: ' + head + user + '@' + host + tail, 'success');
+    } catch (e) {
+      toast('Подключено: ' + user + '@' + host, 'success');
+    }
     renderPanel(side);
     await listPanel(side, { fromInput: false });
   }
@@ -4883,6 +4937,27 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
       pd.upBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         await goUp(side);
+      });
+    }
+
+    if (pd.rootBtn) {
+      pd.rootBtn.addEventListener('click', async (e) => {
+        try { e.preventDefault(); } catch (e2) {}
+        const p = S.panels[side];
+        if (!p) return;
+        if (p.target !== 'remote') return;
+
+        // If not connected yet, behave like "Connect" (one click flow).
+        if (!p.sid) {
+          await connectRemoteToSide(side);
+          return;
+        }
+
+        const rp = String(p.rproto || '').toLowerCase();
+        const isFtp = (rp === 'ftp' || rp === 'ftps');
+        const dest = isFtp ? '/' : '.';
+        p.cwd = dest;
+        await listPanel(side, { fromInput: false });
       });
     }
 
@@ -7170,7 +7245,21 @@ function openExtractModalWithItems(side, name, items) {
       };
     })();
 
-    if (protoSel) protoSel.addEventListener('change', () => { try { updateConnectAuthUi(); } catch (e) {} scheduleFp(); });
+    if (protoSel) protoSel.addEventListener('change', () => {
+      try { updateConnectAuthUi(); } catch (e) {}
+      // UX: keep port in sync with common defaults when switching protocol.
+      // Do not override custom ports (e.g. 222/2222) unless it's clearly a default.
+      try {
+        const p = String(protoSel.value || '').trim().toLowerCase();
+        const cur = portInp ? String(portInp.value || '').trim() : '';
+        const want = (p === 'sftp') ? '22' : '21';
+        if (portInp) {
+          if (!cur) portInp.value = want;
+          else if ((cur === '22' || cur === '21') && cur !== want) portInp.value = want;
+        }
+      } catch (e) {}
+      scheduleFp();
+    });
     if (authTypeSel) authTypeSel.addEventListener('change', () => { try { updateConnectAuthUi(); } catch (e) {} });
     if (hostInp) hostInp.addEventListener('input', () => scheduleFp());
     if (portInp) portInp.addEventListener('input', () => scheduleFp());

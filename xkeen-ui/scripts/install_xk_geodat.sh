@@ -21,9 +21,18 @@ DEST_DIR="$(dirname "$DEST")"
 geodat_sanity_check() {
   BIN="$1"
 
+  # Some MIPS firmwares are flaky with Go runtime preemption/scheduling.
+  # Running with these envs is safe and improves stability.
+  PREFIX=""
+  ARCH_SANITY="$(uname -m 2>/dev/null || echo unknown)"
+  if echo "$ARCH_SANITY" | grep -qi mips; then
+    PREFIX="GODEBUG=asyncpreemptoff=1 GOMAXPROCS=1"
+  fi
+
   # We need the exit code + output, so temporarily disable "set -e".
   set +e
-  OUT="$($BIN --help 2>&1)"
+  # shellcheck disable=SC2086
+  OUT="$($PREFIX $BIN --help 2>&1)"
   RC=$?
   set -e
 
@@ -37,12 +46,13 @@ geodat_sanity_check() {
     VER="$(echo "$OUT" | sed -n 's/.*ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH=\(go[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' | head -n1)"
     if [ -n "$VER" ]; then
       set +e
-      OUT2="$(ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH="$VER" $BIN --help 2>&1)"
+      # shellcheck disable=SC2086
+      OUT2="$(ASSUME_NO_MOVING_GC_UNSAFE_RISK_IT_WITH="$VER" $PREFIX $BIN --help 2>&1)"
       RC2=$?
       set -e
 
       # Hard failures (wrong arch / missing loader / noexec, etc.).
-      if [ "$RC2" -eq 126 ] || [ "$RC2" -eq 127 ] || echo "$OUT2" | grep -qi -e "Exec format error" -e "not found"; then
+      if [ "$RC2" -eq 126 ] || [ "$RC2" -eq 127 ] || echo "$OUT2" | grep -qi -e "Exec format error" -e "not found" -e "SIGSEGV" -e "segmentation" -e "SIGILL" -e "illegal instruction" -e "futexwakeup"; then
         return 1
       fi
       # Any other non-zero is considered acceptable (some builds exit non-zero on --help).
@@ -51,7 +61,7 @@ geodat_sanity_check() {
   fi
 
   # Hard failures.
-  if [ "$RC" -eq 126 ] || [ "$RC" -eq 127 ] || echo "$OUT" | grep -qi -e "Exec format error" -e "not found"; then
+  if [ "$RC" -eq 126 ] || [ "$RC" -eq 127 ] || echo "$OUT" | grep -qi -e "Exec format error" -e "not found" -e "SIGSEGV" -e "segmentation" -e "SIGILL" -e "illegal instruction" -e "futexwakeup"; then
     return 1
   fi
 
@@ -190,10 +200,36 @@ if command -v opkg >/dev/null 2>&1; then
   OPKG_ARCH="$(opkg print-architecture 2>/dev/null | awk 'NR==1{print $2}' || true)"
 fi
 
+# Best-effort endianness detection. Some firmwares may report only "mips" in uname.
+# /proc/cpuinfo usually contains "byte order" / "endian" hints.
+ENDIAN=""
+if [ -r /proc/cpuinfo ]; then
+  if grep -qi "little endian" /proc/cpuinfo; then
+    ENDIAN="le"
+  elif grep -qi "big endian" /proc/cpuinfo; then
+    ENDIAN="be"
+  fi
+fi
+
 ASSET=""
 case "${ARCH}/${OPKG_ARCH}" in
   *aarch64*|*arm64*) ASSET="xk-geodat-linux-arm64" ;;
-  *mips*/*mipsel*|*mips*/*mipsle*|*mipsel*|*mipsle*) ASSET="xk-geodat-linux-mipsle" ;;
+  *mips*)
+    # Prefer opkg arch when present; otherwise fallback to /proc/cpuinfo endianness.
+    if echo "${OPKG_ARCH}" | grep -qiE 'mipsel|mipsle'; then
+      ASSET="xk-geodat-linux-mipsle"
+    elif echo "${OPKG_ARCH}" | grep -qiE '^mips($|[^a-z])'; then
+      # opkg says mips (likely big-endian)
+      ASSET="xk-geodat-linux-mips"
+    else
+      # If we can't tell, assume little-endian (most common) unless cpuinfo says otherwise.
+      if [ "${ENDIAN}" = "be" ]; then
+        ASSET="xk-geodat-linux-mips"
+      else
+        ASSET="xk-geodat-linux-mipsle"
+      fi
+    fi
+    ;;
   *) echo "xk-geodat: unsupported arch: $ARCH ($OPKG_ARCH) — пропуск"; exit 0 ;;
 esac
 

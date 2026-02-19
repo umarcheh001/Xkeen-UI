@@ -25,6 +25,9 @@
     fragmentRefresh: 'routing-fragment-refresh-btn',
     fileCode: 'routing-file-code',
 
+    // JSONC comments status (sidecar present / used)
+    commentsStatus: 'routing-comments-status',
+
     btnSave: 'routing-save-btn',
     btnFormat: 'routing-format-btn',
     btnBackup: 'routing-backup-btn',
@@ -96,6 +99,32 @@
       } else if (f) {
         codeEl.textContent = f;
       }
+    } catch (e) {}
+  }
+
+  function _setCommentsBadge(found, using, bn) {
+    const el = $(IDS.commentsStatus);
+    if (!el) return;
+    const has = !!found;
+    el.classList.toggle('xk-comments-on', has);
+    el.classList.toggle('xk-comments-off', !has);
+    if (has) {
+      el.textContent = using ? 'Комментарии: включены' : 'Комментарии: включены (не используются)';
+      try {
+        el.title = bn ? ('JSONC: ' + String(bn)) : 'JSONC sidecar найден';
+      } catch (e) {}
+    } else {
+      el.textContent = 'Комментарии: выключены';
+      try { el.title = 'JSONC sidecar не найден'; } catch (e) {}
+    }
+  }
+
+  function _applyCommentsHeaders(res) {
+    try {
+      const found = (res && res.headers && res.headers.get('X-XKeen-JSONC') === '1');
+      const using = (res && res.headers && res.headers.get('X-XKeen-JSONC-Using') === '1');
+      const bn = (res && res.headers) ? (res.headers.get('X-XKeen-JSONC-File') || '') : '';
+      _setCommentsBadge(found, using, bn);
     } catch (e) {}
   }
 
@@ -437,6 +466,7 @@ function closeHelp() {
       const file = getActiveFragment();
       const url = file ? ('/api/routing?file=' + encodeURIComponent(file)) : '/api/routing';
       const res = await fetch(url, { cache: 'no-store' });
+      _applyCommentsHeaders(res);
       if (!res.ok) {
         if (statusEl) statusEl.textContent = 'Не удалось загрузить routing.';
         toast('Не удалось загрузить routing.', true);
@@ -481,6 +511,7 @@ function closeHelp() {
       validate();
     } catch (e) {
       console.error(e);
+      _setCommentsBadge(false, false, '');
       if (statusEl) statusEl.textContent = 'Ошибка загрузки routing.';
       toast('Ошибка загрузки routing.', true);
     }
@@ -517,6 +548,8 @@ function closeHelp() {
       try { data = await res.json(); } catch (e) {}
 
       if (res.ok && data && data.ok) {
+        // Saving always writes the JSONC sidecar.
+        _setCommentsBadge(true, true, '');
         try {
           window.routingSavedContent = rawText;
           window.routingIsDirty = false;

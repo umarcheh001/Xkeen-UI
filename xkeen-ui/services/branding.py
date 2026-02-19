@@ -23,6 +23,8 @@ import re
 import urllib.parse
 from typing import Any, Dict, Tuple
 
+from services.io.atomic import _atomic_write_text
+
 
 DEFAULTS: Dict[str, Any] = {
     "title": "",
@@ -53,18 +55,6 @@ _ALLOWED_DATA_MIMES: Tuple[str, ...] = (
 
 def _branding_path(ui_state_dir: str) -> str:
     return os.path.join(ui_state_dir, "branding.json")
-
-
-def _atomic_write_text(path: str, text: str, mode: int = 0o644) -> None:
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8", errors="ignore") as f:
-        f.write(text)
-    try:
-        os.chmod(tmp, mode)
-    except Exception:
-        pass
-    os.replace(tmp, path)
 
 
 def _trim(s: Any) -> str:

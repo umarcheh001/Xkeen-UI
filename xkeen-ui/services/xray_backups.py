@@ -212,6 +212,7 @@ def is_xray_config_path(
     *,
     xray_configs_dir_real: str,
     backup_dir_real: str,
+    xray_jsonc_dir_real: str = "",
 ) -> bool:
     """Return True if abs_path points to an Xray config fragment we want to snapshot."""
     try:
@@ -222,13 +223,20 @@ def is_xray_config_path(
         return False
     try:
         base = os.path.realpath(str(xray_configs_dir_real or ""))
+        side = os.path.realpath(str(xray_jsonc_dir_real or ""))
         bkp = os.path.realpath(str(backup_dir_real or ""))
     except Exception:
         return False
 
-    if not base:
+    if not base and not side:
         return False
-    if not (rp == base or rp.startswith(base + os.sep)):
+
+    allowed = False
+    if base and (rp == base or rp.startswith(base + os.sep)):
+        allowed = True
+    if side and (rp == side or rp.startswith(side + os.sep)):
+        allowed = True
+    if not allowed:
         return False
     if bkp and (rp == bkp or rp.startswith(bkp + os.sep)):
         return False
@@ -243,6 +251,7 @@ def snapshot_before_overwrite(
     backup_dir: str,
     xray_configs_dir_real: str,
     backup_dir_real: str,
+    xray_jsonc_dir_real: str = "",
     max_bytes: int = 5 * 1024 * 1024,
 ) -> bool:
     """Create/update a snapshot for abs_path before it is overwritten.
@@ -254,7 +263,12 @@ def snapshot_before_overwrite(
         if not abs_path:
             return False
         rp = os.path.realpath(abs_path)
-        if not is_xray_config_path(rp, xray_configs_dir_real=xray_configs_dir_real, backup_dir_real=backup_dir_real):
+        if not is_xray_config_path(
+            rp,
+            xray_configs_dir_real=xray_configs_dir_real,
+            backup_dir_real=backup_dir_real,
+            xray_jsonc_dir_real=xray_jsonc_dir_real,
+        ):
             return False
         if not os.path.isfile(rp):
             return False
