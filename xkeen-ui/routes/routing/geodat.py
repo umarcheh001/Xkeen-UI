@@ -12,7 +12,7 @@ from typing import Any
 from flask import Blueprint, request, jsonify
 
 from services.geodat.runner import _geodat_bin_path
-from services.geodat.install import _geodat_install_script_path, _geodat_run_help, _geodat_stat_meta
+from services.geodat.install import _geodat_install_script_path, _geodat_run_help, _geodat_stat_meta, geodat_platform_info
 
 
 def _short_reason(text: str, *, limit: int = 240) -> str:
@@ -50,6 +50,7 @@ def register_geodat_routes(bp: Blueprint) -> None:
             ok_help, help_text = _geodat_run_help(bin_path)
         return jsonify({
             "ok": True,
+            "platform": geodat_platform_info(),
             "installed": bool(exists and ok_help),
             "path": bin_path,
             "meta": meta,
@@ -142,8 +143,10 @@ def register_geodat_routes(bp: Blueprint) -> None:
             ok_help, help_text = _geodat_run_help(bin_path)
 
         installed = bool(exists and ok_help)
+        platform = geodat_platform_info()
         payload = {
             "ok": True,
+            "platform": platform,
             "installed": installed,
             "path": bin_path,
             "rc": getattr(proc, "returncode", None),

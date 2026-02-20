@@ -20,6 +20,11 @@ DEST_DIR="$(dirname "$DEST")"
 
 geodat_sanity_check() {
   BIN="$1"
+# Reject non-ELF files (e.g. HTML/captive portal pages saved as a file).
+if ! is_elf_file "$BIN"; then
+  return 1
+fi
+
 
   # Some MIPS firmwares are flaky with Go runtime preemption/scheduling.
   # Running with these envs is safe and improves stability.
@@ -52,16 +57,18 @@ geodat_sanity_check() {
       set -e
 
       # Hard failures (wrong arch / missing loader / noexec, etc.).
-      if [ "$RC2" -eq 126 ] || [ "$RC2" -eq 127 ] || echo "$OUT2" | grep -qi -e "Exec format error" -e "not found" -e "SIGSEGV" -e "segmentation" -e "SIGILL" -e "illegal instruction" -e "futexwakeup"; then
-        return 1
-      fi
+      if [ "$RC2" -eq 126 ] || [ "$RC2" -eq 127 ] || echo "$OUT2" | grep -qi -e "Exec format error" -e "not found" -e "No such file" -e "syntax error" -e "unexpected" -e "SIGSEGV" -e "segmentation" -e "SIGILL" -e "illegal instruction" -e "futexwakeup"; then
+  SHORT="$(echo "$OUT2" | sed -n '1,2p' | tr '\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g')"
+  echo "xk-geodat: sanity failed (rc=$RC2) — $SHORT"
+  return 1
+fi
       # Any other non-zero is considered acceptable (some builds exit non-zero on --help).
       return 0
     fi
   fi
 
   # Hard failures.
-  if [ "$RC" -eq 126 ] || [ "$RC" -eq 127 ] || echo "$OUT" | grep -qi -e "Exec format error" -e "not found" -e "SIGSEGV" -e "segmentation" -e "SIGILL" -e "illegal instruction" -e "futexwakeup"; then
+  if [ "$RC" -eq 126 ] || [ "$RC" -eq 127 ] || echo "$OUT" | grep -qi -e "Exec format error" -e "not found" -e "No such file" -e "syntax error" -e "unexpected" -e "SIGSEGV" -e "segmentation" -e "SIGILL" -e "illegal instruction" -e "futexwakeup" -e "syntax error" -e "unexpected"; then
     return 1
   fi
 
@@ -105,6 +112,43 @@ file_sha256() {
   else
     return 1
   fi
+}
+
+
+is_elf_file() {
+  F="$1"
+  # Check ELF magic 0x7f 'E' 'L' 'F'
+  if [ ! -f "$F" ]; then return 1; fi
+
+  MAGIC="$(dd if="$F" bs=1 count=4 2>/dev/null | hexdump -v -e '1/1 "%02x"' 2>/dev/null || true)"
+  # BusyBox hexdump may not support -e; fallback to od.
+  if [ -z "$MAGIC" ]; then
+    MAGIC="$(dd if="$F" bs=1 count=4 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n\t' || true)"
+  fi
+
+  [ "$MAGIC" = "7f454c46" ] && return 0
+  return 1
+}
+
+elf_diag() {
+  F="$1"
+  SZ="$(wc -c < "$F" 2>/dev/null || echo "?")"
+  MAGIC="$(dd if="$F" bs=1 count=4 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n\t' || true)"
+  HEAD1="$(dd if="$F" bs=1 count=64 2>/dev/null | tr '\r\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g' | cut -c1-120)"
+  echo "size=$SZ magic=${MAGIC:-?} head='${HEAD1:-}'"
+}
+
+
+is_elf_binary() {
+  F="$1"
+  # Expect 0x7F 'E' 'L' 'F' => 7f454c46
+  MAGIC="$(dd if="$F" bs=1 count=4 2>/dev/null | od -An -tx1 | tr -d ' \n\t' || true)"
+  [ "$MAGIC" = "7f454c46" ]
+}
+
+head_snippet() {
+  F="$1"
+  head -c 120 "$F" 2>/dev/null | tr '\r\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g'
 }
 
 fetch_url() {
@@ -197,41 +241,84 @@ mkdir -p "$DEST_DIR"
 ARCH="$(uname -m 2>/dev/null || echo unknown)"
 OPKG_ARCH=""
 if command -v opkg >/dev/null 2>&1; then
-  OPKG_ARCH="$(opkg print-architecture 2>/dev/null | awk 'NR==1{print $2}' || true)"
+  # Prefer a specific arch over "all"/"noarch". Example lines:
+  #   arch all 1
+  #   arch mipsel_24kc 10
+  OPKG_ARCH="$(opkg print-architecture 2>/dev/null | awk '
+    $1=="arch" && NR==1 { first=$2 }
+    $1=="arch" {
+      a=tolower($2)
+      if (a!="all" && a!="noarch" && chosen=="") chosen=$2
+    }
+    END {
+      if (chosen!="") print chosen;
+      else if (first!="") print first;
+    }' || true)"
 fi
 
 # Best-effort endianness detection. Some firmwares may report only "mips" in uname.
 # /proc/cpuinfo usually contains "byte order" / "endian" hints.
 ENDIAN=""
 if [ -r /proc/cpuinfo ]; then
-  if grep -qi "little endian" /proc/cpuinfo; then
-    ENDIAN="le"
-  elif grep -qi "big endian" /proc/cpuinfo; then
-    ENDIAN="be"
+  # Robust (no grep -E dependency): detect endian hints from /proc/cpuinfo text.
+  CPUINFO="$(tr 'A-Z' 'a-z' < /proc/cpuinfo 2>/dev/null || true)"
+  case "$CPUINFO" in
+    *"little endian"*) ENDIAN="le" ;;
+    *"big endian"*)    ENDIAN="be" ;;
+    *"byte order"*little*) ENDIAN="le" ;;
+    *"byte order"*big*)    ENDIAN="be" ;;
+    *"endian"*little*) ENDIAN="le" ;;
+    *"endian"*big*)    ENDIAN="be" ;;
+  esac
+fi
+
+
+# Fallback: detect endianness via Python (native byteorder) if cpuinfo has no hints.
+if [ -z "$ENDIAN" ]; then
+  PYEND=""
+  if command -v python3 >/dev/null 2>&1; then
+    PYEND="$(python3 -c 'import sys; print(sys.byteorder)' 2>/dev/null || true)"
+  elif [ -x /opt/bin/python3 ]; then
+    PYEND="$(/opt/bin/python3 -c 'import sys; print(sys.byteorder)' 2>/dev/null || true)"
+  elif command -v python >/dev/null 2>&1; then
+    PYEND="$(python -c 'import sys; print(sys.byteorder)' 2>/dev/null || true)"
   fi
+  case "$PYEND" in
+    little*) ENDIAN="le" ;;
+    big*)    ENDIAN="be" ;;
+  esac
 fi
 
 ASSET=""
 case "${ARCH}/${OPKG_ARCH}" in
   *aarch64*|*arm64*) ASSET="xk-geodat-linux-arm64" ;;
   *mips*)
-    # Prefer opkg arch when present; otherwise fallback to /proc/cpuinfo endianness.
-    if echo "${OPKG_ARCH}" | grep -qiE 'mipsel|mipsle'; then
-      ASSET="xk-geodat-linux-mipsle"
-    elif echo "${OPKG_ARCH}" | grep -qiE '^mips($|[^a-z])'; then
-      # opkg says mips (likely big-endian)
+  # Prefer opkg arch when it explicitly says little-endian (mipsel/mipsle).
+  if echo "${OPKG_ARCH}" | grep -qiE 'mipsel|mipsle'; then
+    ASSET="xk-geodat-linux-mipsle"
+  else
+    # Otherwise rely on endianness detection (cpuinfo/python). If unknown, assume little-endian
+    # (most consumer routers), but do NOT claim big-endian without evidence.
+    if [ "${ENDIAN}" = "be" ]; then
       ASSET="xk-geodat-linux-mips"
     else
-      # If we can't tell, assume little-endian (most common) unless cpuinfo says otherwise.
-      if [ "${ENDIAN}" = "be" ]; then
-        ASSET="xk-geodat-linux-mips"
-      else
-        ASSET="xk-geodat-linux-mipsle"
-      fi
+      ASSET="xk-geodat-linux-mipsle"
     fi
-    ;;
+  fi
+  ;;
   *) echo "xk-geodat: unsupported arch: $ARCH ($OPKG_ARCH) — пропуск"; exit 0 ;;
 esac
+# If router is MIPS big-endian, this project does not publish a compatible binary.
+# Avoid pointless GitHub downloads and show a clear explanation in the UI.
+# If router is MIPS big-endian, this project does not publish a compatible binary.
+# Avoid pointless GitHub downloads and show a clear explanation in the UI.
+if [ "$ASSET" = "xk-geodat-linux-mips" ] && [ "${ENDIAN}" = "be" ]; then
+  echo "xk-geodat: unsupported MIPS big-endian (mips). Этот проект публикует xk-geodat только для arm64/aarch64 и mipsle/mipsel."
+  echo "xk-geodat: arch=$ARCH opkg_arch=${OPKG_ARCH:-} endian=${ENDIAN:-unknown}"
+  exit 0
+fi
+
+
 
 # Optional overrides (useful for testing before publishing a Release):
 #   XKEEN_GEODAT_ASSET         -> override asset name (default is detected by arch)
@@ -248,7 +335,33 @@ if [ -n "${XKEEN_GEODAT_LOCAL:-}" ] && [ -f "$XKEEN_GEODAT_LOCAL" ]; then
   backup_existing
   cp "$XKEEN_GEODAT_LOCAL" "$DEST" || { echo "xk-geodat: copy failed — пропуск"; restore_backup; exit 0; }
   chmod +x "$DEST" || { echo "xk-geodat: chmod failed — пропуск"; restore_backup; exit 0; }
-  geodat_sanity_check "$DEST" || { echo "xk-geodat: bad local binary — пропуск"; rm -f "$DEST"; restore_backup; exit 0; }
+if ! is_elf_file "$DEST"; then
+  echo "xk-geodat: bad local binary (not ELF) — пропуск"
+  echo "xk-geodat: вероятно, файл скачан не как бинарник (например, HTML-страница блокировки/редиректа). $(elf_diag "$DEST")"
+  rm -f "$DEST"
+  restore_backup
+  exit 0
+fi
+  if ! geodat_sanity_check "$DEST"; then
+  # Try to provide a short diagnostic to help the user pick the right binary.
+  set +e
+  DIAG_OUT="$($DEST --help 2>&1)"
+  DIAG_RC=$?
+  set -e
+  DIAG_OUT="$(echo "$DIAG_OUT" | sed -n '1,2p' | tr '\n' ' ' | sed 's/[[:space:]][[:space:]]*/ /g')"
+  SZ="$(wc -c < "$DEST" 2>/dev/null || echo 0)"
+    HD="$(head_snippet "$DEST")"
+    echo "xk-geodat: bad local binary — пропуск"
+    echo "xk-geodat: диагност.: size=${SZ}B head='${HD}'"
+  echo "xk-geodat: диагностика: rc=$DIAG_RC arch=$ARCH opkg_arch=${OPKG_ARCH:-} endian=${ENDIAN:-unknown} expected_asset=$ASSET"
+  if [ -n "$DIAG_OUT" ]; then
+    echo "xk-geodat: вывод: $DIAG_OUT"
+  fi
+  rm -f "$DEST"
+  restore_backup
+  exit 0
+fi
+
   echo "xk-geodat: installed to $DEST"
   exit 0
 fi
@@ -282,9 +395,34 @@ if [ "$RC" -ne 0 ]; then
   fi
   rm -f "$TMP" 2>/dev/null || true
   exit 0
+# Reject captive portal / block pages: must be an ELF binary.
+if ! is_elf_file "$TMP"; then
+  echo "xk-geodat: bad binary (not ELF) — пропуск"
+  echo "xk-geodat: вероятно, GitHub недоступен/заблокирован и вместо бинарника скачана HTML-страница. $(elf_diag "$TMP")"
+  rm -f "$TMP" 2>/dev/null || true
+  exit 0
+fi
+
 fi
 
 chmod +x "$TMP"
+if ! is_elf_binary "$TMP"; then
+  SNIP="$(head_snippet "$TMP")"
+  echo "xk-geodat: downloaded file is not a valid ELF binary — пропуск"
+  echo "xk-geodat: size=$(wc -c < "$TMP" 2>/dev/null || echo 0) arch=$ARCH opkg_arch=${OPKG_ARCH:-} endian=${ENDIAN:-unknown} expected_asset=$ASSET"
+  if [ -n "$SNIP" ]; then echo "xk-geodat: head: $SNIP"; fi
+  rm -f "$TMP" 2>/dev/null || true
+  exit 0
+fi
+
+
+# Validate that the downloaded file is an ELF binary.
+if ! is_elf_file "$TMP"; then
+  echo "xk-geodat: downloaded file is not an ELF binary — пропуск"
+  rm -f "$TMP" 2>/dev/null || true
+  exit 0
+fi
+
 
 # Soft checksum verification (if SHA256SUMS is available)
 if [ -n "${XKEEN_GEODAT_SHA256SUMS_URL:-}" ]; then
@@ -298,7 +436,15 @@ fi
 verify_sha256sums_if_available "$TMP" "$ASSET" "$SUMS_URL" "$SUMS_TMP" || { echo "xk-geodat: checksum failed — пропуск"; rm -f "$TMP"; exit 0; }
 
 # sanity check
-geodat_sanity_check "$TMP" || { echo "xk-geodat: bad binary — пропуск"; rm -f "$TMP"; exit 0; }
+if ! geodat_sanity_check "$TMP"; then
+  echo "xk-geodat: bad binary — пропуск"
+  SZ="$(wc -c < "$TMP" 2>/dev/null || echo 0)"
+  HD="$(head_snippet "$TMP")"
+  echo "xk-geodat: диагност.: size=${SZ}B head='${HD}'"
+  rm -f "$TMP"
+  exit 0
+fi
+
 
 backup_existing
 if mv "$TMP" "$DEST"; then

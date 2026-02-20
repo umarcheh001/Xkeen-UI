@@ -30,7 +30,7 @@ from services.geodat.runner import (
     _geodat_validate,
     _run_xk_geodat_json,
 )
-from services.geodat.install import _download_to_file
+from services.geodat.install import _download_to_file, _is_elf_binary
 
 from services.filemanager.metadata import _apply_local_metadata_best_effort
 
@@ -99,8 +99,14 @@ def register_dat_routes(bp: Blueprint) -> None:
             payload = _geodat_error_payload(payload.get('error', 'missing_xk_geodat'), kind=k, path=rp)
             _geodat_cache_set(key, payload, min(ttl_s, 10))
             return jsonify(payload), status
+        # Guard: sometimes network/captive portal saves HTML instead of a binary.
+        if not _is_elf_binary(bin_path):
+            payload, status = _geodat_missing_bin_payload()
+            payload["hint"] = "xk-geodat установлен некорректно (файл не ELF). Проверьте доступ к GitHub или установите правильный бинарник вручную."
+            _geodat_cache_set(key, payload, min(ttl_s, 10))
+            return jsonify(payload), status
 
-        # Prevent cache stampede when multiple UI tabs open the modal.
+# Prevent cache stampede when multiple UI tabs open the modal.
         ev, is_leader = _geodat_inflight_acquire(key)
         if not is_leader:
             try:

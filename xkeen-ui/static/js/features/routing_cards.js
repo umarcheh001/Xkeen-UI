@@ -994,6 +994,21 @@
     const url = (o.url ? String(o.url) : '').trim();
     const file = o.file || null;
 
+// If router architecture is unsupported for published releases (notably MIPS big-endian),
+// avoid running the installer and show a clear explanation. (Upload/URL may still be used for custom builds.)
+try {
+  if (mode === 'release') {
+    const st = await getGeodatStatus();
+    const plat = st && st.platform ? st.platform : null;
+    if (plat && plat.supported === false) {
+      const note = String(plat.note || '').trim() || 'xk-geodat не поддерживается на этой архитектуре.';
+      toast(note, true);
+      return { ok: false, error: 'unsupported_arch', reason: note, platform: plat };
+    }
+  }
+} catch (e) {}
+
+
     let title = 'Установка xk-geodat';
     let message = 'Установить/обновить xk-geodat? Это включит просмотр содержимого DAT (GeoIP/GeoSite) и кнопку «В правило».';
     if (mode === 'url' && url) {
@@ -1158,14 +1173,29 @@
       let gs = null;
       try { gs = await getGeodatStatus(); } catch (e) { gs = null; }
       if (status) {
-        const installed = !!(gs && (gs.installed === true || gs.ok === true && gs.installed));
-        status.textContent = installed ? 'OK • xk-geodat: ✓' : 'OK • xk-geodat: ✕';
-        let tip = installed
-          ? 'xk-geodat установлен (просмотр содержимого DAT доступен)'
-          : 'xk-geodat не установлен (нажмите «xk-geodat» для установки)';
-        if (!installed && gs && gs.reason) tip += '\\nПричина: ' + String(gs.reason);
-        status.setAttribute('data-tooltip', tip);
-      }
+  const installed = !!(gs && (gs.installed === true || gs.ok === true && gs.installed));
+  const plat = (gs && gs.platform) ? gs.platform : null;
+
+  // If platform is unsupported for published binaries, disable the "release install" button
+  // and show a clear tooltip (upload/URL can still be used for custom builds).
+  try {
+    const btnMain = $(IDS.datGeodatInstall);
+    if (btnMain && plat && plat.supported === false) btnMain.disabled = true;
+  } catch (e) {}
+
+  status.textContent = installed ? 'OK • xk-geodat: ✓' : 'OK • xk-geodat: ✕';
+
+  let tip = installed
+    ? 'xk-geodat установлен (просмотр содержимого DAT доступен)'
+    : 'xk-geodat не установлен (нажмите «xk-geodat» для установки)';
+  if (!installed && plat && plat.supported === false) {
+    const note = String(plat.note || '').trim();
+    if (note) tip = note;
+  } else if (!installed && gs && gs.reason) {
+    tip += "\\nПричина: " + String(gs.reason);
+  }
+  status.setAttribute('data-tooltip', tip);
+}
     } catch (e) {
       if (status) status.textContent = 'Ошибка';
       toast('DAT: не удалось получить статусы: ' + String(e && e.message ? e.message : e), true);
