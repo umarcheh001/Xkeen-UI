@@ -56,21 +56,21 @@ jobs:
           print("Wrote", path, data)
           PY
 
-      - name: Build tarball (includes generated BUILD.json)
+      - name: Build tarball (ONLY xkeen-ui folder)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
 
-          # Tracked files (exclude .github), plus generated xkeen-ui/BUILD.json
-          git ls-files > /tmp/files.txt
-          grep -vE '^\.github/' /tmp/files.txt > /tmp/files2.txt
-          echo "xkeen-ui/BUILD.json" >> /tmp/files2.txt
-
-          tar -czf dist/xkeen-ui-routing.tar.gz -T /tmp/files2.txt
+          # В архиве будет только папка xkeen-ui/...
+          tar -czf dist/xkeen-ui-routing.tar.gz \
+            --exclude='**/__pycache__' \
+            --exclude='**/*.pyc' \
+            --exclude='.DS_Store' \
+            xkeen-ui
 
           echo "Archive top:"
-          tar -tzf dist/xkeen-ui-routing.tar.gz | sed -n '1,15p'
+          tar -tzf dist/xkeen-ui-routing.tar.gz | sed -n '1,25p'
 
       - name: Compute sha256 sidecar
         shell: bash
