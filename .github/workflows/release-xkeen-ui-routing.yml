@@ -70,7 +70,7 @@ jobs:
           tar -czf dist/xkeen-ui-routing.tar.gz -T /tmp/files2.txt
 
           echo "Archive top:"
-          tar -tzf dist/xkeen-ui-routing.tar.gz | head -n 15
+          tar -tzf dist/xkeen-ui-routing.tar.gz | sed -n '1,15p'
 
       - name: Compute sha256 sidecar
         shell: bash
