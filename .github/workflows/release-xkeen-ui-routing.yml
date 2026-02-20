@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Prepare BUILD.json (version + release_date + update_url)
+      - name: Prepare BUILD.json inside xkeen-ui/
         shell: bash
         run: |
           set -euo pipefail
@@ -32,6 +32,7 @@ jobs:
           fi
 
           VERSION="${TAG#v}"
+
           RELEASE_DATE="${{ github.event.release.published_at }}"
           if [ -z "${RELEASE_DATE:-}" ] || [ "${RELEASE_DATE:-}" = "null" ]; then
             RELEASE_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -39,32 +40,37 @@ jobs:
 
           UPDATE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/xkeen-ui-routing.tar.gz"
 
+          mkdir -p xkeen-ui
+
           python3 - <<PY
-          import json
+          import json, os
           data = {
             "version": "${VERSION}",
             "release_date": "${RELEASE_DATE}",
             "update_url": "${UPDATE_URL}",
           }
-          with open("BUILD.json", "w", encoding="utf-8") as f:
+          path = os.path.join("xkeen-ui", "BUILD.json")
+          with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
             f.write("\n")
-          print("BUILD.json written:", data)
+          print("Wrote", path, data)
           PY
 
-      - name: Build tarball (root folder = xkeen-ui/)
+      - name: Build tarball (includes generated BUILD.json)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
 
-          FILES="$(git ls-files | grep -vE '^\.github/')"
+          # Tracked files (exclude .github), plus generated xkeen-ui/BUILD.json
+          git ls-files > /tmp/files.txt
+          grep -vE '^\.github/' /tmp/files.txt > /tmp/files2.txt
+          echo "xkeen-ui/BUILD.json" >> /tmp/files2.txt
 
-          printf "%s\n" "$FILES" | tar -czf dist/xkeen-ui-routing.tar.gz \
-            --transform='s,^,xkeen-ui/,' \
-            -T -
+          tar -czf dist/xkeen-ui-routing.tar.gz -T /tmp/files2.txt
 
-          tar -tzf dist/xkeen-ui-routing.tar.gz | head -n 5
+          echo "Archive top:"
+          tar -tzf dist/xkeen-ui-routing.tar.gz | head -n 15
 
       - name: Compute sha256 sidecar
         shell: bash
