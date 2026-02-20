@@ -7,6 +7,16 @@
 
   const SH = (XK.features && XK.features.devtoolsShared) ? XK.features.devtoolsShared : {};
   const toast = SH.toast || function (m, isErr) { try { console[(isErr ? 'error' : 'log')](m); } catch (e) {} };
+  // Kind-aware toast helper: supports boolean (legacy) and 'info'|'success'|'error'.
+  const toastKind = function (msg, kind) {
+    try {
+      if (typeof window.showToast === 'function') return window.showToast(String(msg || ''), kind);
+      if (XK && XK.ui && typeof XK.ui.showToast === 'function') return XK.ui.showToast(String(msg || ''), kind);
+    } catch (e) {}
+    const k = String(kind || '').toLowerCase();
+    const isErr = (kind === true) || (k === 'error' || k === 'danger' || k === 'fail' || k === 'failed');
+    return toast(String(msg || ''), isErr);
+  };
   const getJSON = SH.getJSON || (async (u) => {
     const r = await fetch(u, { cache: 'no-store' });
     const d = await r.json().catch(() => ({}));
@@ -25,6 +35,56 @@
     return d;
   });
   const byId = SH.byId || ((id) => { try { return document.getElementById(id); } catch (e) { return null; } });
+
+  // Shared with update_notifier.js
+  const LS_NOTIFY_ENABLED = 'xk_update_notify_enabled';
+  const LS_NOTIFY_INTERVAL_H = 'xk_update_notify_interval_h';
+
+  function _clampNotifyHours(v) {
+    const n = Number(v);
+    if (n === 1 || n === 6 || n === 24) return n;
+    return 6;
+  }
+
+  function _readNotifySettings() {
+    // Prefer feature API (it also applies defaults).
+    try {
+      const n = XK && XK.features && XK.features.updateNotifier ? XK.features.updateNotifier : null;
+      if (n && typeof n.getSettings === 'function') return n.getSettings();
+    } catch (e) {}
+
+    // Fallback: read localStorage directly.
+    let enabled = true;
+    let hours = 6;
+    try {
+      const rawE = String(window.localStorage.getItem(LS_NOTIFY_ENABLED) || '').trim();
+      if (rawE === '0') enabled = false;
+      if (rawE === '1') enabled = true;
+    } catch (e) {}
+    try {
+      const rawH = String(window.localStorage.getItem(LS_NOTIFY_INTERVAL_H) || '').trim();
+      if (rawH) hours = _clampNotifyHours(rawH);
+    } catch (e) {}
+    return { enabled, intervalHours: hours, intervalMs: hours * 60 * 60 * 1000 };
+  }
+
+  function _applyNotifySettings(s) {
+    // Prefer feature API (so it immediately re-schedules polling).
+    try {
+      const n = XK && XK.features && XK.features.updateNotifier ? XK.features.updateNotifier : null;
+      if (n && typeof n.setSettings === 'function') return n.setSettings(s);
+      if (n && typeof n.applySettings === 'function') return n.applySettings();
+    } catch (e) {}
+
+    // Fallback: store to localStorage only.
+    try {
+      if (typeof s.enabled === 'boolean') window.localStorage.setItem(LS_NOTIFY_ENABLED, s.enabled ? '1' : '0');
+    } catch (e) {}
+    try {
+      if (s.intervalHours != null) window.localStorage.setItem(LS_NOTIFY_INTERVAL_H, String(_clampNotifyHours(s.intervalHours)));
+    } catch (e) {}
+    return _readNotifySettings();
+  }
 
   function _fmtIso(iso) {
     try {
@@ -49,11 +109,16 @@
       return '';
     }
   }
-
   function _setText(id, text) {
     const el = byId(id);
     if (!el) return;
     try { el.textContent = String(text || ''); } catch (e) {}
+  }
+
+  function _setClass(id, className) {
+    const el = byId(id);
+    if (!el) return;
+    try { el.className = String(className || ''); } catch (e) {}
   }
 
   function _setStatus(msg, cls) {
@@ -86,6 +151,62 @@
     } catch (e) {
       try { pre.textContent = ''; } catch (e2) {}
     }
+  }
+
+
+  const STEP_LABELS = {
+    spawn: 'Запуск…',
+    init: 'Подготовка…',
+    backup: 'Создание бэкапа…',
+    check_latest: 'Проверка GitHub…',
+    download: 'Скачивание…',
+    verify: 'Проверка checksum…',
+    extract: 'Распаковка…',
+    install: 'Установка…',
+    restart: 'Перезапуск UI…',
+    rollback_select: 'Откат: выбор бэкапа…',
+    rollback_stop: 'Откат: остановка UI…',
+    rollback_restore: 'Откат: восстановление…',
+  };
+
+  const STEP_PCT = {
+    spawn: 3,
+    init: 8,
+    backup: 18,
+    check_latest: 30,
+    download: 55,
+    verify: 62,
+    extract: 78,
+    install: 90,
+    restart: 96,
+    rollback_select: 15,
+    rollback_stop: 35,
+    rollback_restore: 80,
+  };
+
+  function _setProgress(visible, pct, indeterminate, text) {
+    const wrap = byId('dt-update-progress-wrap');
+    const bar = byId('dt-update-progress-bar');
+    const box = byId('dt-update-progress');
+    const tx = byId('dt-update-progress-text');
+    if (!wrap || !bar || !box) return;
+    try { wrap.style.display = visible ? '' : 'none'; } catch (e) {}
+    if (!visible) return;
+
+    const p = Math.max(0, Math.min(100, Math.round(Number(pct || 0))));
+    try { box.setAttribute('aria-valuenow', String(p)); } catch (e) {}
+
+    try {
+      if (indeterminate) box.classList.add('indeterminate');
+      else box.classList.remove('indeterminate');
+    } catch (e) {}
+
+    try {
+      if (!indeterminate) bar.style.width = String(p) + '%';
+      else bar.style.width = '0%';
+    } catch (e) {}
+
+    try { if (tx) tx.textContent = String(text || ''); } catch (e) {}
   }
 
 
@@ -208,6 +329,8 @@
     lastCheck: null,
     lastInfo: null,
     lastStatus: null,
+    lastRunState: null,
+    lastRunOp: null,
   };
 
   function _setButtonsDisabled(disabled) {
@@ -253,6 +376,21 @@
     _setText('dt-update-current-commit', commit ? ('(' + commit + ')') : '');
     _setText('dt-update-current-built', builtUtc ? ('Сборка: ' + _fmtIso(builtUtc)) : '');
 
+
+    // Cosmetic classes
+    try {
+      _setClass('dt-update-repo', 'dt-badge dt-badge-info');
+      const chl = String(channel || '').toLowerCase();
+      let chCls = 'dt-badge dt-badge-muted';
+      if (chl === 'stable') chCls = 'dt-badge dt-badge-ok';
+      else if (chl === 'main') chCls = 'dt-badge dt-badge-warn';
+      _setClass('dt-update-channel', chCls);
+      _setClass('dt-update-branch', 'dt-badge dt-badge-muted');
+      _setClass('dt-update-current-version', 'dt-value dt-value-neutral');
+      _setClass('dt-update-latest-version', 'dt-value dt-value-neutral');
+      _setClass('dt-update-verdict', 'dt-pill dt-pill-muted');
+    } catch (e) {}
+
     const caps = (data && data.capabilities && typeof data.capabilities === 'object') ? data.capabilities : {};
     const miss = [];
     if (caps && Object.prototype.hasOwnProperty.call(caps, 'curl') && !caps.curl) miss.push('curl');
@@ -270,20 +408,38 @@
     const latest = (data && data.latest && typeof data.latest === 'object') ? data.latest : null;
     const stale = !!(data && data.stale);
 
+    const ok = !!(data && data.ok);
+    const updateAvail = !!(data && data.update_available);
+
     _renderSecurity((data && data.security) ? data.security : null);
 
-    if (!latest) {
+    // Defaults
+    _setClass('dt-update-current-version', 'dt-value dt-value-neutral');
+    _setClass('dt-update-latest-version', 'dt-value dt-value-neutral');
+    _setClass('dt-update-verdict', 'dt-pill dt-pill-muted');
+
+    const btnRun = byId('dt-update-run');
+    if (btnRun) {
+      try { delete btnRun.dataset.uptodate; delete btnRun.dataset.blocked; } catch (e) {}
+      try { btnRun.disabled = false; } catch (e) {}
+    }
+
+    if (!latest || !ok) {
       _setText('dt-update-latest-kind', '—');
       _setText('dt-update-latest-version', '—');
       _setText('dt-update-latest-date', '');
-      _setText('dt-update-latest-hint', (data && data.ok) ? 'Данные не найдены.' : 'Не удалось получить данные о latest.');
+      _setText('dt-update-latest-hint', '');
+      _setText('dt-update-verdict', '⚠️ Не удалось получить информацию о latest');
+      _setClass('dt-update-verdict', 'dt-pill dt-pill-bad');
+      _setStatus('Check failed', 'bad');
+      if (btnRun) {
+        try { btnRun.dataset.blocked = '1'; } catch (e) {}
+      }
       return;
     }
 
     const kind = latest.kind ? String(latest.kind) : 'stable';
     _setText('dt-update-latest-kind', kind);
-
-    const updateAvail = !!(data && data.update_available);
 
     let verLabel = '—';
     let dateLabel = '';
@@ -304,8 +460,6 @@
     _setText('dt-update-latest-date', dateLabel);
 
     const hintParts = [];
-    if (updateAvail) hintParts.push('Доступно обновление');
-    else hintParts.push('У вас актуальная версия');
     if (stale) hintParts.push('данные из кэша');
 
     // Asset hint (stable only)
@@ -317,14 +471,41 @@
           const name = a && a.name ? String(a.name) : '';
           return wanted.indexOf(name) >= 0;
         });
-        if (!haveAsset) hintParts.push('нет xkeen-ui-routing.tar.gz / xkeen-ui.tar.gz в релизе');
+        if (!haveAsset) hintParts.push('в релизе нет xkeen-ui-routing.tar.gz / xkeen-ui.tar.gz');
       } catch (e) {}
     }
 
-    _setText('dt-update-latest-hint', hintParts.join(' · '));
+    // Policy block: if security says will_block_run, show as error verdict and disable Update.
+    const willBlock = !!(data && data.security && data.security.will_block_run);
+    if (willBlock) {
+      _setText('dt-update-verdict', '⛔ Обновление заблокировано политикой безопасности');
+      _setClass('dt-update-verdict', 'dt-pill dt-pill-bad');
+      _setStatus('Blocked by policy', 'bad');
+      _setClass('dt-update-latest-version', 'dt-value dt-value-neutral');
+      if (btnRun) {
+        try { btnRun.disabled = true; } catch (e) {}
+        try { btnRun.dataset.blocked = '1'; } catch (e) {}
+        try { btnRun.title = 'Обновление заблокировано политикой (allow-list/sha/лимиты). См. предупреждение ниже.'; } catch (e) {}
+      }
+    } else if (updateAvail) {
+      _setText('dt-update-verdict', '⬆️ Доступно обновление');
+      _setClass('dt-update-verdict', 'dt-pill dt-pill-warn');
+      _setClass('dt-update-latest-version', 'dt-value dt-value-warn');
+      _setClass('dt-update-current-version', 'dt-value dt-value-neutral');
+      _setStatus('Доступно обновление: ' + verLabel, 'warn');
+    } else {
+      _setText('dt-update-verdict', '✅ У вас актуальная версия');
+      _setClass('dt-update-verdict', 'dt-pill dt-pill-ok');
+      _setClass('dt-update-latest-version', 'dt-value dt-value-ok');
+      _setClass('dt-update-current-version', 'dt-value dt-value-ok');
+      _setStatus('У вас актуальная версия', 'ok');
+      if (btnRun) {
+        try { btnRun.dataset.uptodate = '1'; } catch (e) {}
+        try { btnRun.title = 'Версия актуальна. Можно нажать Update, чтобы переустановить поверх (с подтверждением).'; } catch (e) {}
+      }
+    }
 
-    if (updateAvail) _setStatus('Update available: ' + verLabel, 'ok');
-    else _setStatus('Up to date', 'ok');
+    _setText('dt-update-latest-hint', hintParts.join(' · '));
   }
 
   function _renderStatus(data) {
@@ -334,15 +515,86 @@
     const stateVal = st && st.state ? String(st.state) : 'idle';
     const step = st && st.step ? String(st.step) : '';
     const err = st && st.error ? String(st.error) : '';
+    const op = st && st.op ? String(st.op) : '';
 
+    // Progress bar (step-based by default; real byte progress when runner provides bytes_done/bytes_total)
     if (stateVal === 'running') {
-      _setStatus('Running' + (step ? (': ' + step) : ''), 'warn');
-    } else if (stateVal === 'done') {
-      _setStatus('Done' + (step ? (': ' + step) : ''), 'ok');
-    } else if (stateVal === 'failed') {
-      _setStatus('Failed' + (step ? (': ' + step) : ''), 'bad');
+      let label = STEP_LABELS[step] || (step ? ('Шаг: ' + step) : 'Выполняется…');
+      let pct = (step && Object.prototype.hasOwnProperty.call(STEP_PCT, step)) ? STEP_PCT[step] : 0;
+      let ind = (step === 'download' || step === 'verify' || step === 'extract');
+
+      const prog = (st && st.progress && typeof st.progress === 'object') ? st.progress : null;
+      try {
+        const phase = prog && prog.phase ? String(prog.phase) : '';
+        const isDl = (step === 'download') || (phase === 'download');
+        const isVerify = (step === 'verify') || (phase === 'verify');
+        const isExtract = (step === 'extract') || (phase === 'extract');
+
+        if (prog && (isDl || isVerify || isExtract)) {
+          const bd = Number(prog.bytes_done || 0);
+          const bt = Number(prog.bytes_total || 0);
+          const fd = Number(prog.files_done || 0);
+          const ft = Number(prog.files_total || 0);
+
+          const hasBytes = (bt > 0 && bd >= 0);
+          const hasFiles = (ft > 0 && fd >= 0);
+
+          if (hasBytes || (isExtract && hasFiles)) {
+            if (hasBytes) pct = Math.max(0, Math.min(100, (bd / bt) * 100));
+            else pct = Math.max(0, Math.min(100, (fd / ft) * 100));
+
+            ind = false;
+
+            const pInt = Math.round(pct);
+            const doneS = _fmtBytes(bd);
+            const totalS = _fmtBytes(bt);
+
+            if (isDl) label = (STEP_LABELS['download'] || 'Скачивание…') + ' ' + pInt + '%';
+            else if (isVerify) label = (STEP_LABELS['verify'] || 'Проверка checksum…') + ' ' + pInt + '%';
+            else if (isExtract) label = (STEP_LABELS['extract'] || 'Распаковка…') + ' ' + pInt + '%';
+
+            const extra = [];
+            if (isExtract && hasFiles) extra.push(String(fd) + ' / ' + String(ft) + ' файлов');
+            if (hasBytes && doneS && totalS) extra.push(doneS + ' / ' + totalS);
+            if (isVerify && !hasBytes && bd > 0 && doneS) extra.push('проверено ' + doneS);
+
+            if (extra.length) label += ' (' + extra.join(' · ') + ')';
+
+            const sp = Number(prog.speed_bps || 0);
+            if (sp > 0) {
+              const spS = _fmtBytes(sp);
+              if (spS) label += ' · ' + spS + '/s';
+            }
+            const eta = Number(prog.eta_sec || 0);
+            if (eta > 0 && eta < 86400) label += ' · ETA ' + _fmtAgeSec(eta);
+          } else {
+            // totals unknown — keep indeterminate bar
+            ind = true;
+            if (isVerify) {
+              const doneS = _fmtBytes(bd);
+              if (doneS) label = (STEP_LABELS['verify'] || 'Проверка checksum…') + ' (проверено ' + doneS + ')';
+            }
+            if (isExtract && fd > 0) {
+              label = (STEP_LABELS['extract'] || 'Распаковка…') + ' (' + String(fd) + ' файлов)';
+            }
+          }
+        }
+      } catch (e) {}
+
+      _setProgress(true, pct, ind, label);
     } else {
-      _setStatus('Idle', '');
+      _setProgress(false, 0, false, '');
+    }
+
+    // Status headline
+    if (stateVal === 'running') {
+      _setStatus((op === 'rollback' ? 'Откат выполняется' : 'Обновление выполняется') + (step ? (': ' + step) : ''), 'warn');
+    } else if (stateVal === 'done') {
+      _setStatus(op === 'rollback' ? 'Откат завершён' : 'Обновление завершено', 'ok');
+    } else if (stateVal === 'failed') {
+      _setStatus(op === 'rollback' ? 'Ошибка отката' : 'Ошибка обновления', 'bad');
+    } else {
+      _setStatus('Ожидание', '');
     }
 
     const parts = [];
@@ -397,6 +649,25 @@
       _stopPolling();
       _setButtonsDisabled(false);
     }
+
+    // Toasts on finish (works across reloads via localStorage)
+    try {
+      const fin = Number(st && st.finished_ts ? st.finished_ts : 0);
+      if (fin && (stateVal === 'done' || stateVal === 'failed')) {
+        const key = 'xk_dt_update_last_toast_ts';
+        let last = 0;
+        try { last = Number(window.localStorage.getItem(key) || 0); } catch (e) { last = 0; }
+        if (!last || fin > last) {
+          if (stateVal === 'done') {
+            toastKind(op === 'rollback' ? 'Откат завершён' : 'Обновление завершено', 'success');
+          } else {
+            const e2 = err || (st && st.message ? String(st.message) : 'failed');
+            toastKind((op === 'rollback' ? 'Ошибка отката: ' : 'Ошибка обновления: ') + e2, 'error');
+          }
+          try { window.localStorage.setItem(key, String(fin)); } catch (e) {}
+        }
+      }
+    } catch (e) {}
   }
 
   async function loadInfo() {
@@ -409,7 +680,7 @@
     }
   }
 
-  async function checkLatest(forceRefresh) {
+  async function checkLatest(forceRefresh, silentToast) {
     try {
       _setStatus('Checking GitHub…', 'warn');
       const data = await postJSON('/api/devtools/update/check', {
@@ -425,7 +696,9 @@
         _renderCheck(data || {});
       }
     } catch (e) {
-      _setStatus('Check error: ' + (e && e.message ? e.message : String(e)), 'bad');
+      const msg = 'Check error: ' + (e && e.message ? e.message : String(e));
+      _setStatus(msg, 'bad');
+      if (!silentToast) toastKind(msg, 'error');
     }
   }
 
@@ -452,16 +725,16 @@
       const data = await postJSON('/api/devtools/update/rollback', {});
       if (data && data.ok) {
         if (data.started) {
-          toast('Rollback started');
+          toastKind('Откат запущен', 'info');
           _setButtonsDisabled(true);
           setTimeout(() => loadStatus(true).catch(() => {}), 400);
           _startPolling();
         } else if (data.reason === 'locked') {
-          toast('Operation already running', false);
+          toastKind('Операция уже выполняется', 'info');
           _renderStatus({ status: data.status, lock: data.lock, log_tail: [] });
           _startPolling();
         } else {
-          toast('Rollback not started', true);
+          toastKind('Откат не запущен', 'error');
         }
       } else {
         const err = data && data.error ? String(data.error) : 'rollback_failed';
@@ -474,20 +747,73 @@
 
   async function runUpdate() {
     try {
+      const btnRun = byId('dt-update-run');
+      try {
+        if (btnRun && btnRun.dataset && btnRun.dataset.blocked === '1') {
+          toastKind('Обновление заблокировано политикой. См. предупреждение ниже.', 'error');
+          return;
+        }
+      } catch (e) {}
+
+      let ok = true;
+      try {
+        const upToDate = !!(btnRun && btnRun.dataset && btnRun.dataset.uptodate === '1');
+        if (upToDate) {
+          ok = window.confirm('У вас актуальная версия. Переустановить поверх ещё раз?');
+        }
+      } catch (e) { ok = true; }
+      if (!ok) return;
+      // "По красоте": если есть результат /check (или быстро получим его),
+      // передаём в /run (asset_url/tag/sha_url), чтобы runner не делал сетевой check_latest.
+      let chk = state.lastCheck;
+      if (!(chk && chk.ok && chk.latest)) {
+        try {
+          await checkLatest(false, true);
+          chk = state.lastCheck;
+        } catch (e) {
+          // ignore; will fallback to runner's own check_latest
+        }
+      }
+
+      const resolved = {};
+      try {
+        const ch = (chk && chk.channel) ? String(chk.channel).toLowerCase() : '';
+        if (ch) resolved.channel = ch;
+        if (chk && chk.branch) resolved.branch = String(chk.branch);
+        const latest = (chk && chk.latest && typeof chk.latest === 'object') ? chk.latest : null;
+        if (latest) {
+          if (ch === 'stable') {
+            resolved.tag = latest.tag ? String(latest.tag) : '';
+            const asset = (latest.asset && typeof latest.asset === 'object') ? latest.asset : {};
+            if (asset.name) resolved.asset_name = String(asset.name);
+            if (asset.download_url) resolved.asset_url = String(asset.download_url);
+            const sha = (latest.sha256_asset && typeof latest.sha256_asset === 'object') ? latest.sha256_asset : {};
+            if (sha.download_url) resolved.sha_url = String(sha.download_url);
+            if (sha.kind) resolved.sha_kind = String(sha.kind);
+          } else if (ch === 'main') {
+            // main channel: we already know the tarball_url from /check
+            resolved.tag = latest.tag ? String(latest.tag) : '';
+            if (latest.tarball_url) resolved.asset_url = String(latest.tarball_url);
+          }
+        }
+      } catch (e) {}
+
+      const payload = (resolved && resolved.asset_url) ? { resolved } : {};
+
       _setStatus('Starting update…', 'warn');
-      const data = await postJSON('/api/devtools/update/run', {});
+      const data = await postJSON('/api/devtools/update/run', payload);
       if (data && data.ok) {
         if (data.started) {
-          toast('Update started');
+          toastKind('Обновление запущено', 'info');
           _setButtonsDisabled(true);
           setTimeout(() => loadStatus(true).catch(() => {}), 400);
           _startPolling();
         } else if (data.reason === 'locked') {
-          toast('Update already running', false);
+          toastKind('Обновление уже выполняется', 'info');
           _renderStatus({ status: data.status, lock: data.lock, log_tail: [] });
           _startPolling();
         } else {
-          toast('Update not started', true);
+          toastKind('Обновление не запущено', 'error');
         }
       } else {
         const err = data && data.error ? String(data.error) : 'run_failed';
@@ -513,6 +839,63 @@
     } catch (e) {}
   }
 
+  function _renderNotifyHint(s) {
+    const elHint = byId('dt-update-autocheck-hint');
+    const elEnable = byId('dt-update-autocheck-enable');
+    const elInterval = byId('dt-update-autocheck-interval');
+    if (!elEnable || !elInterval) return;
+
+    const enabled = !!(s && s.enabled);
+    const hours = s && s.intervalHours ? Number(s.intervalHours) : 6;
+
+    try { elEnable.checked = enabled; } catch (e) {}
+    try { elInterval.value = String(_clampNotifyHours(hours)); } catch (e) {}
+    try { elInterval.disabled = !enabled; } catch (e) {}
+
+    if (elHint) {
+      const msg = enabled
+        ? ('Автопроверка включена: каждые ' + String(_clampNotifyHours(hours)) + 'ч (пока вкладка открыта).')
+        : 'Автопроверка выключена (уведомления не будут показываться автоматически).';
+      try { elHint.textContent = msg; } catch (e) {}
+    }
+  }
+
+  function _initAutoCheckControls() {
+    const elEnable = byId('dt-update-autocheck-enable');
+    const elInterval = byId('dt-update-autocheck-interval');
+    if (!elEnable || !elInterval) return;
+
+    // Initial render
+    _renderNotifyHint(_readNotifySettings());
+
+    // Wire change handlers
+    elEnable.addEventListener('change', () => {
+      const enabled = !!elEnable.checked;
+      const hours = _clampNotifyHours(elInterval.value);
+      const s = _applyNotifySettings({ enabled, intervalHours: hours });
+      _renderNotifyHint(s);
+      toastKind(enabled ? 'Автопроверка обновлений включена' : 'Автопроверка обновлений выключена', 'success');
+    });
+
+    elInterval.addEventListener('change', () => {
+      const enabled = !!elEnable.checked;
+      const hours = _clampNotifyHours(elInterval.value);
+      const s = _applyNotifySettings({ enabled, intervalHours: hours });
+      _renderNotifyHint(s);
+      toastKind('Интервал автопроверки: ' + String(_clampNotifyHours(hours)) + 'ч', 'success');
+    });
+
+    // Keep UI in sync if settings change from another tab.
+    try {
+      window.addEventListener('storage', (ev) => {
+        const k = ev && ev.key ? String(ev.key) : '';
+        if (k === LS_NOTIFY_ENABLED || k === LS_NOTIFY_INTERVAL_H) {
+          _renderNotifyHint(_readNotifySettings());
+        }
+      });
+    } catch (e) {}
+  }
+
   function init() {
     const btnCheck = byId('dt-update-check');
     const btnRun = byId('dt-update-run');
@@ -520,11 +903,14 @@
     const btnRefresh = byId('dt-update-refresh');
     const btnOpenLogs = byId('dt-update-open-logs');
 
-    if (btnCheck) btnCheck.addEventListener('click', () => checkLatest(true));
+    if (btnCheck) btnCheck.addEventListener('click', () => checkLatest(true, false));
     if (btnRun) btnRun.addEventListener('click', () => runUpdate());
     if (btnRollback) btnRollback.addEventListener('click', () => runRollback());
     if (btnRefresh) btnRefresh.addEventListener('click', () => loadStatus(false));
     if (btnOpenLogs) btnOpenLogs.addEventListener('click', openLogsTab);
+
+    // Auto-check settings UI (shared with global header notifier)
+    try { _initAutoCheckControls(); } catch (e) {}
 
     // Initial paint
     loadInfo().catch(() => {});

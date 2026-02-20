@@ -61,6 +61,15 @@
             class="theme-toggle-btn theme-toggle-header"
             aria-label="Переключить тему" title="Переключить светлую/тёмную тему"
           ></button>
+          <a
+            href="#dt-update-card"
+            id="xk-update-link"
+            class="service-core-text hidden"
+            title="Обновление"
+          >
+            <span class="xk-update-dot" aria-hidden="true"></span>
+            <span data-xk-update-label>Обновление</span>
+          </a>
           <a href="{{ url_for('logout') }}" class="btn-link" title="Выйти из панели">Выйти</a>
         </div>
       </div>
@@ -106,25 +115,56 @@
                 Во время обновления панель перезапустится — вкладка может временно оборваться.
               </div>
 
-              <div class="dt-update-meta small" style="margin-bottom:8px; opacity:0.9;">
-                <div>Repo: <code id="dt-update-repo">—</code></div>
-                <div>Channel: <code id="dt-update-channel">—</code></div>
-                <div>Branch: <code id="dt-update-branch">—</code></div>
+              <div class="dt-update-meta dt-kv-grid small" style="margin-bottom:10px;">
+                <div class="dt-kv"><span class="dt-k">Repo:</span> <code id="dt-update-repo" class="dt-badge dt-badge-info">—</code></div>
+                <div class="dt-kv"><span class="dt-k">Channel:</span> <code id="dt-update-channel" class="dt-badge dt-badge-muted">—</code></div>
+                <div class="dt-kv"><span class="dt-k">Branch:</span> <code id="dt-update-branch" class="dt-badge dt-badge-muted">—</code></div>
               </div>
 
-              <div class="small" style="margin-bottom:6px;">
-                Текущая версия: <strong id="dt-update-current-version">—</strong>
-                <span id="dt-update-current-commit" style="opacity:0.85;"></span>
+              <div class="dt-kv small" style="margin-bottom:6px;">
+                <span class="dt-k">Текущая версия:</span>
+                <span id="dt-update-current-version" class="dt-value dt-value-neutral">—</span>
+                <span id="dt-update-current-commit" class="dt-sub"></span>
               </div>
               <div class="small" id="dt-update-current-built" style="margin-bottom:10px; opacity:0.85;"></div>
 
-              <div class="small" style="margin-bottom:6px;">
-                Latest (<span id="dt-update-latest-kind">—</span>): <strong id="dt-update-latest-version">—</strong>
-                <span id="dt-update-latest-date" style="opacity:0.85;"></span>
+              <div class="dt-kv small" style="margin-bottom:6px;">
+                <span class="dt-k">Latest (<span id="dt-update-latest-kind">—</span>):</span>
+                <span id="dt-update-latest-version" class="dt-value dt-value-neutral">—</span>
+                <span id="dt-update-latest-date" class="dt-sub"></span>
               </div>
-              <div class="small" id="dt-update-latest-hint" style="margin-bottom:10px; opacity:0.85;"></div>
+
+              <div class="dt-update-verdict-row" style="margin-bottom:10px;">
+                <span id="dt-update-verdict" class="dt-pill dt-pill-muted">—</span>
+                <span class="small" id="dt-update-latest-hint" style="opacity:0.85;"></span>
+              </div>
 
               <div id="dt-update-security" class="dt-alert" style="display:none; margin:10px 0;"></div>
+
+              <div id="dt-update-progress-wrap" style="display:none; margin:10px 0 0 0;">
+                <div class="dt-progress" id="dt-update-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <div class="dt-progress-bar" id="dt-update-progress-bar"></div>
+                </div>
+                <div class="small" id="dt-update-progress-text" style="margin-top:6px; opacity:0.85;"></div>
+              </div>
+
+              <div class="dt-logging-grid" role="group" aria-label="Update auto-check settings" style="margin: 12px 0 6px 0;">
+                <label class="dt-switch dt-logging-switch" title="Автопроверка обновлений. Работает только пока панель открыта в браузере.">
+                  <input id="dt-update-autocheck-enable" type="checkbox" aria-label="Автопроверка обновлений">
+                  <span class="dt-switch-slider" aria-hidden="true"></span>
+                  <span class="dt-switch-label">Автопроверка</span>
+                </label>
+
+                <label class="dt-logging-field" title="Интервал проверки новых версий (в фоне, пока вкладка открыта).">
+                  <span class="dt-logging-label">Интервал</span>
+                  <select id="dt-update-autocheck-interval" class="dt-pill-field" aria-label="Интервал автопроверки">
+                    <option value="1">1ч</option>
+                    <option value="6">6ч</option>
+                    <option value="24">24ч</option>
+                  </select>
+                </label>
+              </div>
+              <div class="small" id="dt-update-autocheck-hint" style="margin-bottom:10px; opacity:0.85;"></div>
 
 
               <div class="dt-update-actions" aria-label="Update actions">
@@ -2135,6 +2175,7 @@ html[data-xk-hide-hints="1"] .card{
   <script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
   <script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
@@ -2152,7 +2193,7 @@ html[data-xk-hide-hints="1"] .card{
   <script src="{{ url_for('static', filename='js/features/devtools/service.js', v='20260109e') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/logs.js', v='20260109e') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/env.js', v='20260109e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools/update.js', v='20260219a') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/devtools/update.js', v='20260220a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/theme.js', v='20260110a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/terminal_theme.js', v='20260109e') }}"></script>
   <script src="{{ url_for('static', filename='js/features/devtools/codemirror_theme.js', v='20260109e') }}"></script>

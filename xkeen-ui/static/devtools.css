@@ -562,6 +562,84 @@ details.dt-theme-group .dt-collapsible-icon{
 }
 
 
+
+
+/* Update: colored meta + verdict pill */
+.dt-kv-grid{ display:flex; flex-wrap:wrap; gap:10px; align-items:baseline; }
+.dt-kv{ display:flex; align-items:baseline; gap:6px; }
+.dt-k{ opacity:0.85; }
+.dt-sub{ margin-left:6px; opacity:0.8; }
+
+.dt-badge{
+  display:inline-flex;
+  align-items:center;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid var(--border, #1f2937);
+  background: color-mix(in srgb, var(--card-bg, #020617) 92%, var(--text, #e5e7eb) 8%);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: calc(12px * var(--xk-font-scale));
+}
+.dt-badge-info{
+  border-color: color-mix(in srgb, var(--accent, #60a5fa) 55%, var(--border, #1f2937));
+  color: color-mix(in srgb, var(--accent, #60a5fa) 82%, var(--text, #e5e7eb));
+}
+.dt-badge-muted{ opacity:0.95; }
+.dt-badge-ok{ border-color: color-mix(in srgb, var(--sem-success, #34d399) 55%, var(--border, #1f2937)); color: color-mix(in srgb, var(--sem-success, #34d399) 82%, var(--text, #e5e7eb)); }
+.dt-badge-warn{ border-color: color-mix(in srgb, var(--sem-warning, #fbbf24) 55%, var(--border, #1f2937)); color: color-mix(in srgb, var(--sem-warning, #fbbf24) 82%, var(--text, #e5e7eb)); }
+
+.dt-value{
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+.dt-value-neutral{ color: var(--text, #e5e7eb); }
+.dt-value-ok{ color: var(--sem-success, #34d399); }
+.dt-value-warn{ color: var(--sem-warning, #fbbf24); }
+.dt-value-bad{ color: var(--sem-error, #fca5a5); }
+
+.dt-update-verdict-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.dt-pill{
+  display:inline-flex;
+  align-items:center;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid var(--border, #1f2937);
+  background: color-mix(in srgb, var(--card-bg, #020617) 92%, var(--text, #e5e7eb) 8%);
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.2;
+}
+.dt-pill-muted{ opacity:0.9; }
+.dt-pill-ok{ border-color: color-mix(in srgb, var(--sem-success, #34d399) 55%, var(--border, #1f2937)); background: color-mix(in srgb, var(--sem-success, #34d399) 10%, var(--card-bg, #020617)); }
+.dt-pill-warn{ border-color: color-mix(in srgb, var(--sem-warning, #fbbf24) 55%, var(--border, #1f2937)); background: color-mix(in srgb, var(--sem-warning, #fbbf24) 10%, var(--card-bg, #020617)); }
+.dt-pill-bad{ border-color: color-mix(in srgb, var(--sem-error, #fca5a5) 55%, var(--border, #1f2937)); background: color-mix(in srgb, var(--sem-error, #fca5a5) 10%, var(--card-bg, #020617)); }
+
+/* Progress bar (indeterminate + step mapping) */
+.dt-progress{
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #1f2937);
+  background: color-mix(in srgb, var(--card-bg, #020617) 85%, var(--text, #e5e7eb) 15%);
+  overflow: hidden;
+}
+.dt-progress-bar{
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: color-mix(in srgb, var(--accent, #60a5fa) 70%, var(--text, #e5e7eb));
+  transition: width 0.25s ease;
+}
+.dt-progress.indeterminate .dt-progress-bar{
+  width: 38%;
+  animation: dt-progress-ind 1.2s infinite ease-in-out;
+}
+@keyframes dt-progress-ind{
+  0%{ transform: translateX(-110%); opacity:0.75; }
+  50%{ opacity:1; }
+  100%{ transform: translateX(300%); opacity:0.75; }
+}
 /* Update: security alerts */
 .dt-alert{
   display: block;

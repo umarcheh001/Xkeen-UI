@@ -218,9 +218,16 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
             if ch == "stable":
                 current_ver = build.get("version")
                 latest_tag = latest.get("tag")
+
+                def _norm_ver(v: Any) -> str:
+                    s = str(v or "").strip()
+                    if s.lower().startswith("v"):
+                        s = s[1:].strip()
+                    return s
+
                 if latest_tag:
                     if current_ver:
-                        update_available = str(current_ver) != str(latest_tag)
+                        update_available = _norm_ver(current_ver) != _norm_ver(latest_tag)
                     else:
                         update_available = True
             elif ch == "main":
@@ -316,6 +323,18 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         The runner performs backup/download/extract/install and writes status/log.
         """
 
+        payload = request.get_json(silent=True) or {}
+        # Optional "preflight" data from /api/devtools/update/check so runner can skip network check_latest.
+        resolved = payload.get("resolved") if isinstance(payload, dict) else None
+        if not isinstance(resolved, dict):
+            resolved = {}
+
+        def _s(v: Any) -> str:
+            try:
+                return str(v or "").strip()
+            except Exception:
+                return ""
+
         # Ensure storage exists.
         try:
             ensure_update_dir(ui_state_dir)
@@ -387,6 +406,24 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         env["XKEEN_UI_UPDATE_REPO"] = repo_eff
         env["XKEEN_UI_UPDATE_CHANNEL"] = channel_eff
         env["XKEEN_UI_UPDATE_BRANCH"] = branch_eff
+
+        # If UI provides a resolved URL/tag/sha from /check, pass it to runner as overrides.
+        # Runner will then skip its own GitHub API calls in check_latest.
+        asset_url = _s(resolved.get("asset_url"))
+        if asset_url:
+            env["XKEEN_UI_UPDATE_ASSET_URL"] = asset_url
+            tag = _s(resolved.get("tag"))
+            if tag:
+                env["XKEEN_UI_UPDATE_TAG"] = tag
+            sha_url = _s(resolved.get("sha_url"))
+            if sha_url:
+                env["XKEEN_UI_UPDATE_SHA_URL"] = sha_url
+            sha_kind = _s(resolved.get("sha_kind"))
+            if sha_kind:
+                env["XKEEN_UI_UPDATE_SHA_KIND"] = sha_kind
+            asset_name = _s(resolved.get("asset_name"))
+            if asset_name:
+                env["XKEEN_UI_UPDATE_ASSET_NAME"] = asset_name
 
         try:
             # Don't redirect stdout to update.log, because runner already writes update.log

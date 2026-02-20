@@ -367,6 +367,27 @@ header p {
   gap: 6px;
 }
 
+/* Self-update notifier pill (header) */
+.service-core-text .xk-update-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--sem-warning, #fbbf24);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--sem-warning, #fbbf24) 70%, transparent);
+  display: none;
+}
+
+.service-core-text.xk-update-available {
+  border-color: color-mix(in srgb, var(--sem-warning, #fbbf24) 55%, transparent);
+  background: color-mix(in srgb, var(--sem-warning, #fbbf24) 12%, var(--header-btn-bg, #020617) 88%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sem-warning, #fbbf24) 35%, transparent);
+}
+
+.service-core-text.xk-update-available .xk-update-dot {
+  display: inline-block;
+  animation: service-status-pulse 1.4s ease-in-out infinite;
+}
+
 .service-core-text.has-core {
   border-color: var(--accent, #2563eb);
   background: color-mix(in srgb, var(--accent, #2563eb) 12%, var(--header-btn-bg, #020617) 88%);

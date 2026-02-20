@@ -148,6 +148,16 @@
             >DevTools</a>
 
             <a
+              href="{{ url_for('devtools_page') }}#dt-update-card"
+              id="xk-update-link"
+              class="service-core-text hidden"
+              title="Обновление"
+            >
+              <span class="xk-update-dot" aria-hidden="true"></span>
+              <span data-xk-update-label>Обновление</span>
+            </a>
+
+            <a
               href="{{ url_for('logout') }}"
               class="service-core-text"
               title="Выйти из панели"
@@ -1928,6 +1938,7 @@
   <script src="{{ url_for('static', filename='js/features/commands_list.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/outbounds.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
     <script src="{{ url_for('static', filename='js/features/xkeen_texts.js') }}"></script>
     <!-- File Manager (split into small modules) -->
     <script src="{{ url_for('static', filename='js/features/file_manager/prefs.js') }}"></script>
