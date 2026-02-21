@@ -12,7 +12,13 @@ OUT="${OUT:-$HERE/xk-geodat}"
 
 export CGO_ENABLED=0
 
+# Optional build metadata (for --version)
+VERSION=${VERSION:-$(git describe --tags --always 2>/dev/null || echo "dev")}
+COMMIT=${COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo "")}
+DATE=${DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}
+LDFLAGS=${LDFLAGS:-"-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"}
+
 echo "[*] Building to: $OUT"
-go build -trimpath -ldflags "-s -w" -o "$OUT" ./cmd/xk-geodat
+go build -trimpath -ldflags "${LDFLAGS}" -o "$OUT" ./cmd/xk-geodat
 
 file "$OUT" || true

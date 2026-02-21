@@ -4,13 +4,9 @@ import (
   "encoding/json"
   "errors"
   "fmt"
-  "net"
   "os"
   "sort"
   "strings"
-
-  router "github.com/v2fly/v2ray-core/v4/app/router"
-  "google.golang.org/protobuf/proto"
 )
 
 type Meta struct {
@@ -95,39 +91,17 @@ func Tags(kind, path string) (TagsResult, error) {
   out := TagsResult{OK: true, Kind: k, Path: path, Meta: meta}
 
   if k == "geosite" {
-    var list router.GeoSiteList
-    if err := proto.Unmarshal(b, &list); err != nil {
+    tags, err := parseGeoSiteTags(b)
+    if err != nil {
       return TagsResult{}, err
     }
-    entry := list.GetEntry()
-    out.Tags = make([]TagStat, 0, len(entry))
-    for _, gs := range entry {
-      if gs == nil {
-        continue
-      }
-      tag := strings.TrimSpace(gs.GetCountryCode())
-      if tag == "" {
-        continue
-      }
-      out.Tags = append(out.Tags, TagStat{Tag: tag, Count: len(gs.GetDomain())})
-    }
+    out.Tags = tags
   } else {
-    var list router.GeoIPList
-    if err := proto.Unmarshal(b, &list); err != nil {
+    tags, err := parseGeoIPTags(b)
+    if err != nil {
       return TagsResult{}, err
     }
-    entry := list.GetEntry()
-    out.Tags = make([]TagStat, 0, len(entry))
-    for _, gi := range entry {
-      if gi == nil {
-        continue
-      }
-      tag := strings.TrimSpace(gi.GetCountryCode())
-      if tag == "" {
-        continue
-      }
-      out.Tags = append(out.Tags, TagStat{Tag: tag, Count: len(gi.GetCidr())})
-    }
+    out.Tags = tags
   }
 
   sort.Slice(out.Tags, func(i, j int) bool {
@@ -164,97 +138,19 @@ func Dump(kind, path, tag string, offset, limit int) (DumpResult, error) {
   out := DumpResult{OK: true, Kind: k, Path: path, Tag: tag, Offset: offset, Limit: limit, Meta: meta}
 
   if k == "geosite" {
-    var list router.GeoSiteList
-    if err := proto.Unmarshal(b, &list); err != nil {
+    items, total, err := parseGeoSiteDump(b, tag, offset, limit)
+    if err != nil {
       return DumpResult{}, err
     }
-    var found *router.GeoSite
-    for _, gs := range list.GetEntry() {
-      if gs == nil {
-        continue
-      }
-      if strings.EqualFold(gs.GetCountryCode(), tag) {
-        found = gs
-        break
-      }
-    }
-    if found == nil {
-      return DumpResult{}, fmt.Errorf("tag_not_found")
-    }
-
-    domains := found.GetDomain()
-    out.Total = len(domains)
-    if offset >= out.Total {
-      out.Items = []DumpItem{}
-      return out, nil
-    }
-    end := offset + limit
-    if end > out.Total {
-      end = out.Total
-    }
-
-    out.Items = make([]DumpItem, 0, end-offset)
-    for _, d := range domains[offset:end] {
-      if d == nil {
-        continue
-      }
-      t := strings.ToLower(d.GetType().String())
-      if t == "" {
-        t = "domain"
-      }
-      out.Items = append(out.Items, DumpItem{T: t, V: d.GetValue()})
-    }
-
+    out.Total = total
+    out.Items = items
   } else {
-    var list router.GeoIPList
-    if err := proto.Unmarshal(b, &list); err != nil {
+    items, total, err := parseGeoIPDump(b, tag, offset, limit)
+    if err != nil {
       return DumpResult{}, err
     }
-    var found *router.GeoIP
-    for _, gi := range list.GetEntry() {
-      if gi == nil {
-        continue
-      }
-      if strings.EqualFold(gi.GetCountryCode(), tag) {
-        found = gi
-        break
-      }
-    }
-    if found == nil {
-      return DumpResult{}, fmt.Errorf("tag_not_found")
-    }
-
-    cidrs := found.GetCidr()
-    out.Total = len(cidrs)
-    if offset >= out.Total {
-      out.Items = []DumpItem{}
-      return out, nil
-    }
-    end := offset + limit
-    if end > out.Total {
-      end = out.Total
-    }
-
-    out.Items = make([]DumpItem, 0, end-offset)
-    for _, c := range cidrs[offset:end] {
-      if c == nil {
-        continue
-      }
-      ip := net.IP(c.GetIp())
-      ipStr := ""
-      if len(ip) == 4 || len(ip) == 16 {
-        ipStr = ip.String()
-      } else if len(ip) > 0 {
-        // Attempt to normalize unknown lengths
-        ipStr = net.IP(ip).String()
-      }
-      p := int(c.GetPrefix())
-      cidrStr := ""
-      if ipStr != "" && p >= 0 {
-        cidrStr = fmt.Sprintf("%s/%d", ipStr, p)
-      }
-      out.Items = append(out.Items, DumpItem{T: "cidr", V: cidrStr, IP: ipStr, Prefix: p, CIDR: cidrStr})
-    }
+    out.Total = total
+    out.Items = items
   }
 
   return out, nil

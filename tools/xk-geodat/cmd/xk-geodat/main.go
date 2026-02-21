@@ -9,6 +9,13 @@ import (
 	"xk-geodat/internal/geodat"
 )
 
+// Filled via -ldflags "-X main.version=... -X main.commit=... -X main.date=..."
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
+)
+
 type ErrOut struct {
 	OK     bool   `json:"ok"`
 	Error  string `json:"error"`
@@ -35,6 +42,27 @@ func isHelpToken(s string) bool {
 	}
 }
 
+func isVersionToken(s string) bool {
+	switch s {
+	case "--version", "-version", "version":
+		return true
+	default:
+		return false
+	}
+}
+
+func printVersion() {
+	if commit != "" && date != "" {
+		fmt.Printf("xk-geodat %s (%s, %s)\n", version, commit, date)
+		return
+	}
+	if commit != "" {
+		fmt.Printf("xk-geodat %s (%s)\n", version, commit)
+		return
+	}
+	fmt.Printf("xk-geodat %s\n", version)
+}
+
 func hasHelp(args []string) bool {
 	for _, a := range args {
 		if isHelpToken(a) {
@@ -57,6 +85,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Global flags:")
 	fmt.Fprintln(w, "  -h, --help  Show this help")
+	fmt.Fprintln(w, "  --version   Show version")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Examples:")
 	fmt.Fprintln(w, "  xk-geodat tags --kind geosite --path /opt/etc/xray/geosite.dat")
@@ -70,6 +99,10 @@ func main() {
 	}
 
 	cmd := os.Args[1]
+	if isVersionToken(cmd) {
+		printVersion()
+		os.Exit(0)
+	}
 	if isHelpToken(cmd) {
 		printRootUsage(os.Stdout)
 		os.Exit(0)
