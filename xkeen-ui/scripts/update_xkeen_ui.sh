@@ -634,7 +634,15 @@ if [ "$ACTION" != "rollback" ]; then
 fi
 
 mkdir -p "$UPDATE_DIR" "$BACKUP_DIR" 2>/dev/null || true
-touch "$LOG_FILE" 2>/dev/null || true
+
+# Каждая операция обновления должна иметь «свой» лог.
+# Раньше update.log копился бесконечно (append), и в UI всегда показывалась
+# большая история. Сбрасываем лог на старте, а предыдущий (если был) сохраняем
+# как update.prev.log для диагностики.
+if [ -f "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
+  mv -f "$LOG_FILE" "$UPDATE_DIR/update.prev.log" 2>/dev/null || true
+fi
+: >"$LOG_FILE" 2>/dev/null || true
 
 log "=== Xkeen-UI updater start ==="
 log "repo=$REPO channel=$CHANNEL action=$ACTION update_dir=$UPDATE_DIR backup_dir=$BACKUP_DIR"

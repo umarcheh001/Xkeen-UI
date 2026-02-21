@@ -178,10 +178,22 @@
               <div id="dt-update-status" class="status" style="margin-top:10px;">—</div>
               <div class="small" id="dt-update-substatus" style="margin-top:6px; opacity:0.85;"></div>
 
-              <pre id="dt-update-log" class="log-block dt-update-log" title="update.log (tail)" style="margin:10px 0 0 0;"></pre>
-              <div class="small" style="margin-top:6px; opacity:0.8;">
-                Показаны последние строки <code>update.log</code>. Полный лог можно открыть во вкладке Logs.
-              </div>
+
+              <details id="dt-update-log-box" class="dt-collapsible dt-update-log-box" style="margin-top:10px;">
+                <summary class="dt-collapsible-summary" title="update.log (tail)">
+                  <div style="display:flex; flex-direction:column; gap:2px;">
+                    <span>Лог обновления</span>
+                    <span class="small" style="opacity:0.75;">Показаны последние строки <code>update.log</code></span>
+                  </div>
+                  <span class="dt-collapsible-icon" aria-hidden="true">▾</span>
+                </summary>
+                <div class="dt-collapsible-body">
+                  <pre id="dt-update-log" class="log-block dt-update-log" title="update.log (tail)" style="margin:0;"></pre>
+                  <div class="small" style="margin-top:6px; opacity:0.8;">
+                    Лог автоматически очищается при каждом обновлении. Полный лог можно открыть во вкладке Logs.
+                  </div>
+                </div>
+              </details>
 
             </div>
           </details>

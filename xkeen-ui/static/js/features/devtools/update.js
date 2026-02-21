@@ -40,6 +40,45 @@
   const LS_NOTIFY_ENABLED = 'xk_update_notify_enabled';
   const LS_NOTIFY_INTERVAL_H = 'xk_update_notify_interval_h';
 
+  // Persist update log collapse state (DevTools → Update card)
+  const LS_UPDATE_LOG_OPEN = 'xk_dt_update_log_open';
+
+  function _getUpdateLogBoxEl() {
+    try {
+      const el = byId('dt-update-log-box');
+      if (!el) return null;
+      const tag = (el.tagName || '').toLowerCase();
+      if (tag !== 'details') return null;
+      return el;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function _setUpdateLogOpen(isOpen, persist) {
+    const el = _getUpdateLogBoxEl();
+    if (!el) return;
+    try { el.open = !!isOpen; } catch (e) {}
+    if (persist) {
+      try { window.localStorage.setItem(LS_UPDATE_LOG_OPEN, (isOpen ? '1' : '0')); } catch (e) {}
+    }
+  }
+
+  function _initUpdateLogBox() {
+    const el = _getUpdateLogBoxEl();
+    if (!el) return;
+    try {
+      const v = String(window.localStorage.getItem(LS_UPDATE_LOG_OPEN) || '').trim();
+      if (v === '1') el.open = true;
+      else if (v === '0') el.open = false;
+    } catch (e) {}
+    try {
+      el.addEventListener('toggle', () => {
+        try { window.localStorage.setItem(LS_UPDATE_LOG_OPEN, (el.open ? '1' : '0')); } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
   function _clampNotifyHours(v) {
     const n = Number(v);
     if (n === 1 || n === 6 || n === 24) return n;
@@ -628,6 +667,17 @@
     const logTail = (data && Array.isArray(data.log_tail)) ? data.log_tail : [];
     _renderLog(logTail);
 
+    // Auto-open the log when an operation starts or fails (still user-collapsible).
+    try {
+      if ((stateVal === 'running' && state.lastRunState !== 'running') ||
+          (stateVal === 'failed' && state.lastRunState !== 'failed')) {
+        _setUpdateLogOpen(true, true);
+      }
+      state.lastRunState = stateVal;
+    } catch (e) {
+      state.lastRunState = stateVal;
+    }
+
     // Rollback button visibility (only when backups exist)
     try {
       const btnRb = byId('dt-update-rollback');
@@ -911,6 +961,9 @@
 
     // Auto-check settings UI (shared with global header notifier)
     try { _initAutoCheckControls(); } catch (e) {}
+
+    // Update log (collapsible)
+    try { _initUpdateLogBox(); } catch (e) {}
 
     // Initial paint
     loadInfo().catch(() => {});

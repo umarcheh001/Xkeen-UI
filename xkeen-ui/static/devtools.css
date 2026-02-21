@@ -561,6 +561,30 @@ details.dt-theme-group .dt-collapsible-icon{
   max-height: 240px;
 }
 
+/* Update log: collapsible container */
+details.dt-update-log-box{
+  border: 1px solid var(--border, #1f2937);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card-bg, #020617) 92%, var(--text, #e5e7eb) 8%);
+}
+
+details.dt-update-log-box > summary{
+  padding: 10px 12px;
+}
+
+details.dt-update-log-box[open] > summary{
+  border-bottom: 1px solid var(--border, #1f2937);
+}
+
+details.dt-update-log-box .dt-collapsible-body{
+  margin-top: 0;
+  padding: 10px 12px 12px;
+}
+
+details.dt-update-log-box pre.dt-update-log{
+  margin: 0;
+}
+
 
 
 
