@@ -1613,7 +1613,7 @@ with tarfile.open(tarball, 'r:*') as tf:
     last_t = start
 
     def emit(force: bool = False):
-        nonlocal last_emit, last_bytes, last_files, last_t
+        global last_emit, last_bytes, last_files, last_t
         now = time.time()
         if not force and (now - last_emit) < 0.35:
             return
