@@ -67,79 +67,197 @@ def stream_xray_logs_ws(
     max_lines: int,
     tail_lines: Callable[[str], List[str]],
     adjust_log_timezone: Callable[[List[str]], List[str]],
+    line_matcher: Optional[Callable[[str], bool]] = None,
     ws_debug: Optional[Callable[..., Any]] = None,
     client_ip: str = "unknown",
 ) -> None:
     """Stream a text log file like `tail -f` with the legacy payload format."""
 
     sent_lines = 0
+    matcher = line_matcher or (lambda _line: True)
+
+    def _stat_meta(p: str) -> Tuple[bool, int, int]:
+        """(exists, ino, size)"""
+        try:
+            st = os.stat(p)
+            return True, int(getattr(st, "st_ino", 0) or 0), int(getattr(st, "st_size", 0) or 0)
+        except Exception:
+            return False, 0, 0
+
+    def _send_init_snapshot() -> Tuple[bool, int, int]:
+        """Send init snapshot. Returns (ok, ino, size)."""
+        try:
+            lns = tail_lines(path, max_lines=max_lines)  # type: ignore[arg-type]
+        except Exception as e:
+            if ws_debug:
+                try:
+                    ws_debug("ws_xray_logs: failed to read initial snapshot", error=str(e), path=path)
+                except Exception:
+                    pass
+            lns = []
+
+        try:
+            lns = adjust_log_timezone(lns)
+        except Exception:
+            # Timezone adjust should never break log viewing.
+            pass
+
+        # Apply server-side filter last.
+        try:
+            if lns:
+                lns = [ln for ln in lns if matcher(ln)]
+        except Exception:
+            pass
+
+        ok_send = _send_json(ws, {"type": "init", "lines": lns}, ws_debug=ws_debug, client_ip=client_ip, tag="ws_xray_logs")
+        if not ok_send:
+            return False, 0, 0
+
+        exists, ino, size = _stat_meta(path)
+        return True, ino if exists else 0, size if exists else 0
 
     # 1) Initial snapshot
+    ok0, ino, off = _send_init_snapshot()
+    if not ok0:
+        return
+
+    # 2) Follow loop (inode/offset aware, rotation/truncate resilient)
+    f = None
+    carry = b""
     try:
-        last_lines = tail_lines(path, max_lines=max_lines)  # type: ignore[arg-type]
-        last_lines = adjust_log_timezone(last_lines)
+        f = open(path, "rb", buffering=0)
+        try:
+            f.seek(0, os.SEEK_END)
+            off = int(f.tell() or 0)
+        except Exception:
+            # Keep off from _send_init_snapshot() stat.
+            pass
     except Exception as e:
         if ws_debug:
             try:
-                ws_debug(
-                    "ws_xray_logs: failed to read initial snapshot",
-                    error=str(e),
-                    path=path,
-                )
+                ws_debug("ws_xray_logs: failed to open log for follow", error=str(e), path=path)
             except Exception:
                 pass
-        last_lines = []
-
-    if not _send_json(ws, {"type": "init", "lines": last_lines}, ws_debug=ws_debug, client_ip=client_ip, tag="ws_xray_logs"):
         return
-    sent_lines += len(last_lines)
 
-    # 2) Follow loop
+    last_stat_check = time.time()
+    idle_sleep = 0.05
+
     try:
-        with open(path, "r") as f:
+        if ws_debug:
             try:
-                f.seek(0, os.SEEK_END)
+                ws_debug("ws_xray_logs: entering tail loop", path=path, ino=ino, start_off=int(off or 0))
             except Exception:
                 pass
 
-            if ws_debug:
+        while True:
+            try:
+                chunk = f.read(64 * 1024)  # type: ignore[union-attr]
+            except Exception:
+                chunk = b""  # type: ignore[assignment]
+
+            if chunk:
+                off += len(chunk)
+                buf = (carry or b"") + chunk
+                parts = buf.splitlines(True)
+                new_carry = b""
+                if parts:
+                    last = parts[-1]
+                    if not last.endswith(b"\n") and not last.endswith(b"\r"):
+                        new_carry = last
+                        parts = parts[:-1]
+                carry = new_carry
+
+                if parts:
+                    lines_out = [p.decode("utf-8", "replace") for p in parts]
+                    try:
+                        lines_out = adjust_log_timezone(lines_out)
+                    except Exception:
+                        pass
+
+                    for ln in lines_out:
+                        try:
+                            if not matcher(ln):
+                                continue
+                        except Exception:
+                            # If matcher fails, don't drop the line.
+                            pass
+                        if not _send_json(ws, {"type": "line", "line": ln}, ws_debug=ws_debug, client_ip=client_ip, tag="ws_xray_logs"):
+                            return
+                        sent_lines += 1
+
+                        if ws_debug and sent_lines % 200 == 0:
+                            try:
+                                ws_debug("ws_xray_logs: still streaming", total_sent=sent_lines, path=path)
+                            except Exception:
+                                pass
+
+                idle_sleep = 0.02
+                continue
+
+            gevent.sleep(idle_sleep)
+            if idle_sleep < 0.30:
+                idle_sleep = min(0.30, idle_sleep * 1.3)
+
+            now = time.time()
+            if now - last_stat_check < 1.0:
+                continue
+            last_stat_check = now
+
+            exists, cur_ino, cur_size = _stat_meta(path)
+            if not exists:
+                _send_json(
+                    ws,
+                    {"type": "init", "lines": [], "error": "logfile not found"},
+                    ws_debug=ws_debug,
+                    client_ip=client_ip,
+                    tag="ws_xray_logs",
+                )
+                break
+
+            rotated = bool(ino and cur_ino and cur_ino != ino)
+            truncated = bool(int(cur_size or 0) < int(off or 0))
+
+            if rotated or truncated:
+                if ws_debug:
+                    try:
+                        ws_debug(
+                            "ws_xray_logs: rotation/truncate detected",
+                            path=path,
+                            rotated=rotated,
+                            truncated=truncated,
+                            old_ino=ino,
+                            new_ino=cur_ino,
+                            old_off=int(off or 0),
+                            new_size=int(cur_size or 0),
+                        )
+                    except Exception:
+                        pass
+
+                # Send fresh snapshot and reopen from end.
+                ok1, ino2, size2 = _send_init_snapshot()
+                if not ok1:
+                    break
+
+                ino = int(ino2 or cur_ino or 0)
+                carry = b""
+
                 try:
-                    ws_debug(
-                        "ws_xray_logs: entering tail loop",
-                        path=path,
-                        start_pos=int(getattr(f, "tell", lambda: 0)() or 0),
-                    )
+                    if f:
+                        f.close()
                 except Exception:
                     pass
 
-            while True:
-                line = f.readline()
-                if not line:
-                    gevent.sleep(0.3)
-                    continue
-
                 try:
-                    adj = adjust_log_timezone([line])
-                    if not _send_json(ws, {"type": "line", "line": adj[0]}, ws_debug=ws_debug, client_ip=client_ip, tag="ws_xray_logs"):
-                        break
-                    sent_lines += 1
+                    f = open(path, "rb", buffering=0)
+                    try:
+                        f.seek(0, os.SEEK_END)
+                        off = int(f.tell() or int(size2 or cur_size or 0))
+                    except Exception:
+                        off = int(size2 or cur_size or 0)
+                except Exception:
+                    break
 
-                    if ws_debug and sent_lines % 100 == 0:
-                        try:
-                            ws_debug(
-                                "ws_xray_logs: still streaming",
-                                total_sent=sent_lines,
-                                path=path,
-                            )
-                        except Exception:
-                            pass
-                except Exception as e:
-                    if ws_debug:
-                        try:
-                            ws_debug("ws_xray_logs: error while streaming single line", error=str(e))
-                        except Exception:
-                            pass
-                    continue
     finally:
         if ws_debug:
             try:
@@ -150,6 +268,11 @@ def stream_xray_logs_ws(
                 )
             except Exception:
                 pass
+        try:
+            if f:
+                f.close()
+        except Exception:
+            pass
         try:
             ws.close()
         except Exception:

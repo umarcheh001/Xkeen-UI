@@ -327,6 +327,8 @@ def create_fileops_blueprint(
         dir_size_bytes=_dir_size_bytes,
         spool_cleanup_stale=_spool_cleanup_stale,
         spool_check_limit=_spool_check_limit,
+        spool_base_dir=_SPOOL_BASE,
+        spool_max_bytes=int(FILEOPS_SPOOL_MAX_BYTES),
         remote2remote_direct=bool(FILEOPS_REMOTE2REMOTE_DIRECT),
         fxp_enabled=bool(FILEOPS_FXP_ENABLED),
     )

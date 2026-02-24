@@ -53,6 +53,10 @@ class FileOpsRuntime:
     spool_cleanup_stale: Callable[..., None] | None = None
     spool_check_limit: Callable[..., None] | None = None
 
+    # Spool limits (optional; used by some runners for proactive cap checks)
+    spool_base_dir: str | None = None
+    spool_max_bytes: int | None = None
+
     # Feature flags
     remote2remote_direct: bool = True
     fxp_enabled: bool = True

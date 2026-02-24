@@ -22,9 +22,11 @@
   const LOAD_MORE_STEP = 400;
   const MAX_MAX_LINES = 5000;
 
-  // Persist per-page UI state (file/interval/follow/live/lines/filter + log window height)
-  // so the user doesn't have to reconfigure the Live logs view every time.
+  // Legacy localStorage prefs (file/interval/follow/live/lines/filter + log window height).
+  // Commit 14 migrates these prefs to /api/ui-settings so they can sync across devices.
+  // We keep STORAGE_KEY only for one-time seeding.
   const STORAGE_KEY = 'xkeen.ui.xrayLogs.v1';
+  const SEED_KEY = 'xkeen.seed.logsPrefs.v1';
 
   let _maxLines = DEFAULT_MAX_LINES;
   let _pollMs = DEFAULT_POLL_MS;
@@ -62,6 +64,236 @@
   // (Same UX approach as File Manager / Terminal).
   let _isFullscreen = false;
   let _heightBeforeFullscreen = null;
+
+  // UI settings (server): loaded on demand.
+  // IMPORTANT: do NOT auto-fetch on page load. We only load settings when the
+  // user actually opens/starts the logs view (needed for upcoming Monaco/ANSI features).
+  let _uiSettingsLoaded = false;
+  let _uiSettingsLoadPromise = null;
+  let _ansiEnabled = false;
+  let _ws2Enabled = false;
+  // Xray logs view prefs (file/filter/follow/live/maxLines/pollMs/height)
+  // are stored in /api/ui-settings (Commit 14). We apply them lazily when the
+  // user actually uses the logs view (view/enable/live).
+  let _logsViewPrefsReady = false;
+  let _logsViewPrefsUserTouched = false;
+  let _logsViewPrefsApplying = false;
+  let _ws2FailedSession = false;
+  let _ws2PendingCmd = null;
+  let _ws2SwitchTimer = null;
+  let _ws2FailStreak = 0;
+  let _ws2LastOpenAt = 0;
+
+  function _applyUiSettingsSnapshot(s, reason = '') {
+    try {
+      const prevAnsi = _ansiEnabled;
+      const prevWs2 = _ws2Enabled;
+
+      _ansiEnabled = !!(s && s.logs && s.logs.ansi);
+      _ws2Enabled = !!(s && s.logs && s.logs.ws2);
+
+      // ANSI toggle: can be applied immediately by re-rendering current buffer.
+      if (prevAnsi !== _ansiEnabled) {
+        try { _pendingCount = 0; applyXrayLogFilterToOutput(); } catch (e) {}
+      }
+
+      // WS2 toggle: apply immediately for live streaming if possible.
+      if (prevWs2 !== _ws2Enabled && _streaming) {
+        // If WS2 has been marked as failed for this session, do not force-switch.
+        if (_ws2FailedSession && _ws2Enabled) return;
+
+        const wantWs2 = _shouldUseWs2();
+        const isWs2 = _isWs2Socket(_ws);
+
+        // Switch transport by closing the active socket and reconnecting.
+        if (wantWs2 && !isWs2) {
+          try { _wsClosingManually = true; if (_ws) _ws.close(); } catch (e) {}
+          _ws = null;
+          setTimeout(() => { try { xrayLogConnectWsSmart(); } catch (e) {} }, 0);
+        }
+
+        if (!wantWs2 && isWs2) {
+          try { _wsClosingManually = true; if (_ws) _ws.close(); } catch (e) {}
+          _ws = null;
+          setTimeout(() => { try { xrayLogConnectWs(); } catch (e) {} }, 0);
+        }
+      }
+
+      // If we got a snapshot from the settings module, consider it "loaded".
+      if (reason) {
+        _uiSettingsLoaded = true;
+      }
+    } catch (e) {}
+  }
+
+  // Live updates: react to changes made from the "UI настройки" modal.
+  try {
+    document.addEventListener('xkeen:ui-settings-changed', (ev) => {
+      const s = ev && ev.detail ? ev.detail.settings : null;
+      _applyUiSettingsSnapshot(s, 'event');
+    });
+  } catch (e) {}
+
+  async function ensureUiSettingsLoadedForLogs() {
+    if (_uiSettingsLoaded) return true;
+    if (_uiSettingsLoadPromise) return _uiSettingsLoadPromise;
+
+    _uiSettingsLoadPromise = (async () => {
+      try {
+        if (window.XKeen && XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.fetchOnce === 'function') {
+          const s = await XKeen.ui.settings.fetchOnce();
+          _applyUiSettingsSnapshot(s, 'fetchOnce');
+        }
+        _uiSettingsLoaded = true;
+        return true;
+      } catch (e) {
+        // Keep logs working even if settings endpoint is unavailable.
+        console.warn('ui-settings: failed to load', e);
+        _uiSettingsLoadPromise = null;
+        return false;
+      }
+    })();
+
+    return _uiSettingsLoadPromise;
+  }
+
+  function _seedMarkerIsSet() {
+    try {
+      if (!window.localStorage) return false;
+      const v = localStorage.getItem(SEED_KEY);
+      return v === '1' || v === 'true' || v === 'yes';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _setSeedMarker() {
+    try {
+      if (!window.localStorage) return;
+      localStorage.setItem(SEED_KEY, '1');
+    } catch (e) {}
+  }
+
+  function _isViewPrefsEmpty(v) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return true;
+    try {
+      return Object.keys(v).length === 0;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function _getServerLogsViewPrefs(settingsObj) {
+    try {
+      const s = (settingsObj && typeof settingsObj === 'object') ? settingsObj : null;
+      const v = s && s.logs && s.logs.view;
+      return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function _extractViewPrefsFromLegacy(legacy) {
+    const st = (legacy && typeof legacy === 'object') ? legacy : {};
+    const out = {};
+
+    // keep only known fields (future-proof: unknown fields are ignored)
+    if (st.file != null) out.file = String(st.file);
+    if (st.filter != null) out.filter = String(st.filter);
+    if (typeof st.live === 'boolean') out.live = !!st.live;
+    if (typeof st.follow === 'boolean') out.follow = !!st.follow;
+    if (st.maxLines != null) out.maxLines = st.maxLines;
+    if (st.pollMs != null) out.pollMs = st.pollMs;
+    if (st.height != null) out.height = st.height;
+    if (st.loglevel != null) out.loglevel = String(st.loglevel);
+
+    // keep last update timestamp if present
+    if (st.ts != null) out.ts = st.ts;
+    return out;
+  }
+
+  async function _saveLogsViewPrefsToServerBestEffort(reason) {
+    try {
+      if (!(window.XKeen && XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.patch === 'function')) return false;
+      // We only write view prefs; feature flags (ansi/ws2) live alongside.
+      const cur = collectUiState();
+      await XKeen.ui.settings.patch({ logs: { view: cur } });
+      // Once we successfully persist view prefs to the server, consider migration complete.
+      // This prevents legacy localStorage prefs from becoming the "parallel truth" again.
+      try { _setSeedMarker(); } catch (e2) {}
+      return true;
+    } catch (e) {
+      console.warn('ui-settings: failed to save logs view prefs' + (reason ? ' (' + reason + ')' : ''), e);
+      return false;
+    }
+  }
+
+  async function ensureLogsViewPrefsLoadedForLogs() {
+    if (_logsViewPrefsReady) return true;
+
+    // Ensure /api/ui-settings is fetched (or at least attempted) before we decide on seeding.
+    try { await ensureUiSettingsLoadedForLogs(); } catch (e) {}
+
+    // If the settings helper is missing or the endpoint is not reachable, keep legacy behavior.
+    if (!(window.XKeen && XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.get === 'function')) {
+      _logsViewPrefsReady = true;
+      return false;
+    }
+
+    // If we failed to load settings from server, don't try to seed/apply.
+    try {
+      if (typeof XKeen.ui.settings.isLoadedFromServer === 'function' && !XKeen.ui.settings.isLoadedFromServer()) {
+        _logsViewPrefsReady = true;
+        return false;
+      }
+    } catch (e) {}
+
+    let settings = null;
+    try { settings = XKeen.ui.settings.get(); } catch (e) { settings = null; }
+    let view = _getServerLogsViewPrefs(settings);
+
+    // One-time migration: seed server prefs from legacy localStorage.
+    if (!_seedMarkerIsSet() && _isViewPrefsEmpty(view)) {
+      const legacy = readStoredUiState();
+      const hasLegacy = legacy && typeof legacy === 'object' && Object.keys(legacy).length > 0;
+      if (hasLegacy) {
+        try {
+          const seed = _extractViewPrefsFromLegacy(legacy);
+          await XKeen.ui.settings.patch({ logs: { view: seed } });
+          _setSeedMarker();
+          // Stop using legacy storage after successful seed.
+          try { localStorage.removeItem(STORAGE_KEY); } catch (e2) {}
+          try { settings = XKeen.ui.settings.get(); } catch (e3) { settings = null; }
+          view = _getServerLogsViewPrefs(settings);
+        } catch (e) {
+          console.warn('ui-settings: seed from localStorage failed', e);
+        }
+      }
+    }
+
+    // If the user already changed something on this page before we had a chance to apply
+    // server prefs, prefer the current UI state and push it to the server (best-effort).
+    if (_logsViewPrefsUserTouched) {
+      try { await _saveLogsViewPrefsToServerBestEffort('user_touched'); } catch (e) {}
+      _logsViewPrefsReady = true;
+      return true;
+    }
+
+    // Apply server prefs to UI (one-shot) so the view matches other devices.
+    if (!_isViewPrefsEmpty(view)) {
+      _logsViewPrefsApplying = true;
+      try {
+        applyUiStateFromPrefs(view);
+      } catch (e) {
+        console.warn('ui-settings: failed to apply logs view prefs', e);
+      }
+      _logsViewPrefsApplying = false;
+      try { syncCurrentFileFromUi(); } catch (e) {}
+    }
+
+    _logsViewPrefsReady = true;
+    return true;
+  }
 
   function $(id) {
     return document.getElementById(id);
@@ -133,25 +365,37 @@
   }
 
   function scheduleSaveUiState() {
+    // Do not treat programmatic updates (applying server prefs) as "user touches".
+    if (_logsViewPrefsApplying) return;
+
+    _logsViewPrefsUserTouched = true;
+
     try {
       if (_saveTimer) clearTimeout(_saveTimer);
     } catch (e) {}
 
     _saveTimer = setTimeout(() => {
       _saveTimer = null;
-      const prev = readStoredUiState();
-      const cur = collectUiState();
-      // merge (keep any unknown future fields)
-      writeStoredUiState(Object.assign({}, prev || {}, cur || {}));
-    }, 120);
+      (async () => {
+        // Primary: server-side settings (sync across devices)
+        const saved = await _saveLogsViewPrefsToServerBestEffort('debounced');
+        if (saved) return;
+
+        // Fallback: legacy localStorage (keeps UX working if /api/ui-settings is unavailable)
+        const prev = readStoredUiState();
+        const cur = collectUiState();
+        // merge (keep any unknown future fields)
+        writeStoredUiState(Object.assign({}, prev || {}, cur || {}));
+      })();
+    }, 250);
   }
 
-  function applyStoredUiState() {
-    const st = readStoredUiState();
-    if (!st || typeof st !== 'object') return;
+  function applyUiStateFromPrefs(st) {
+    const prefs = (st && typeof st === 'object') ? st : {};
+    if (!prefs || typeof prefs !== 'object') return;
 
     // file (default: access)
-    const file = String(st.file || '').toLowerCase();
+    const file = String(prefs.file || '').toLowerCase();
     const fileNorm = (file === 'access' || file === 'access.log') ? 'access' : (file === 'error' || file === 'error.log') ? 'error' : '';
     const fileSel = $('xray-log-file');
     if (fileSel && fileNorm) fileSel.value = fileNorm;
@@ -159,20 +403,20 @@
 
     // loglevel selector (UI preference)
     const lvlSel = $('xray-log-level');
-    const lvl = String(st.loglevel || '').toLowerCase();
+    const lvl = String(prefs.loglevel || '').toLowerCase();
     if (lvlSel && ALLOWED_LOGLEVELS.includes(lvl)) lvlSel.value = lvl;
 
     // live/follow toggles
     const liveEl = $('xray-log-live');
-    if (liveEl && typeof st.live === 'boolean') liveEl.checked = !!st.live;
+    if (liveEl && typeof prefs.live === 'boolean') liveEl.checked = !!prefs.live;
 
     const followEl = $('xray-log-follow');
-    if (followEl && typeof st.follow === 'boolean') followEl.checked = !!st.follow;
+    if (followEl && typeof prefs.follow === 'boolean') followEl.checked = !!prefs.follow;
 
     // interval + internal poll
     const intervalEl = $('xray-log-interval');
     try {
-      const v = parseInt(st.pollMs, 10);
+      const v = parseInt(prefs.pollMs, 10);
       if (isFinite(v) && v >= 500) {
         _pollMs = v;
         if (intervalEl) intervalEl.value = String(v);
@@ -181,7 +425,7 @@
 
     // max lines + internal window
     try {
-      let v = parseInt(st.maxLines, 10);
+      let v = parseInt(prefs.maxLines, 10);
       if (!isFinite(v)) v = DEFAULT_MAX_LINES;
       if (v < 50) v = 50;
       if (v > MAX_MAX_LINES) v = MAX_MAX_LINES;
@@ -192,17 +436,30 @@
 
     // filter
     const filterEl = $('xray-log-filter');
-    if (filterEl && typeof st.filter === 'string') filterEl.value = st.filter;
+    if (filterEl && typeof prefs.filter === 'string') filterEl.value = prefs.filter;
 
     // log window height
     const outputEl = $('xray-log-output');
     try {
-      let h = parseInt(st.height, 10);
+      let h = parseInt(prefs.height, 10);
       if (isFinite(h)) {
         // Keep consistent with CSS min-height.
         if (h < 420) h = 420;
         if (outputEl) outputEl.style.height = String(h) + 'px';
       }
+    } catch (e) {}
+  }
+
+  // Initial restore without triggering /api/ui-settings fetch.
+  // - Before migration happens, we keep the old behavior (restore from localStorage).
+  // - After migration (seed marker is set), we intentionally avoid using legacy storage
+  //   so the source of truth stays on the server (prefs will be applied when the user
+  //   opens/starts the logs view).
+  function applyInitialUiStateNoFetch() {
+    try {
+      if (_seedMarkerIsSet()) return;
+      const st = readStoredUiState();
+      if (st && typeof st === 'object') applyUiStateFromPrefs(st);
     } catch (e) {}
   }
 
@@ -258,6 +515,174 @@
     // Remaining C0 controls (except \t)
     s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
     return s;
+  }
+
+
+
+  // ---------- ANSI rendering (optional; enabled via /api/ui-settings -> logs.ansi) ----------
+
+  const ANSI_FG_MAP = {
+    30: 'black',
+    31: 'red',
+    32: 'green',
+    33: 'yellow',
+    34: 'blue',
+    35: 'magenta',
+    36: 'cyan',
+    37: 'white',
+    90: 'bright-black',
+    91: 'bright-red',
+    92: 'bright-green',
+    93: 'bright-yellow',
+    94: 'bright-blue',
+    95: 'bright-magenta',
+    96: 'bright-cyan',
+    97: 'bright-white',
+  };
+
+  const ANSI_BG_MAP = {
+    40: 'black',
+    41: 'red',
+    42: 'green',
+    43: 'yellow',
+    44: 'blue',
+    45: 'magenta',
+    46: 'cyan',
+    47: 'white',
+    100: 'bright-black',
+    101: 'bright-red',
+    102: 'bright-green',
+    103: 'bright-yellow',
+    104: 'bright-blue',
+    105: 'bright-magenta',
+    106: 'bright-cyan',
+    107: 'bright-white',
+  };
+
+  function _ansiResetState(st) {
+    st.fg = null;
+    st.bg = null;
+    st.bold = false;
+    st.underline = false;
+  }
+
+  function _ansiApplySgrParams(params, st) {
+    // params is an array of integers (SGR codes)
+    for (let i = 0; i < params.length; i++) {
+      const code = params[i];
+      if (!isFinite(code)) continue;
+
+      if (code === 0) {
+        _ansiResetState(st);
+        continue;
+      }
+
+      // font styles
+      if (code === 1) { st.bold = true; continue; }
+      if (code === 22) { st.bold = false; continue; }
+      if (code === 4) { st.underline = true; continue; }
+      if (code === 24) { st.underline = false; continue; }
+
+      // default colors
+      if (code === 39) { st.fg = null; continue; }
+      if (code === 49) { st.bg = null; continue; }
+
+      // basic 16-color palette
+      if (code in ANSI_FG_MAP) { st.fg = ANSI_FG_MAP[code]; continue; }
+      if (code in ANSI_BG_MAP) { st.bg = ANSI_BG_MAP[code]; continue; }
+
+      // Extended color: 38;5;<n> or 38;2;<r>;<g>;<b> and same for 48
+      // We intentionally do not map 256/truecolor here (keeps CSS simple).
+      if (code == 38 || code == 48) {
+        const mode = params[i + 1];
+        if (mode == 5) {
+          // 256 color: skip 2 params
+          i += 2;
+          continue;
+        }
+        if (mode == 2) {
+          // truecolor: skip 4 params
+          i += 4;
+          continue;
+        }
+      }
+    }
+  }
+
+  function ansiSgrToHtml(html) {
+    // Converts SGR codes (ESC[...m) to <span class="ansi ..."> wrappers.
+    // Input may already contain other HTML tags (timestamp/levels/links).
+    if (!html) return '';
+    const s = String(html);
+    if (s.indexOf('[') === -1) return s;
+
+    let out = '';
+    let pos = 0;
+
+    const st = { fg: null, bg: null, bold: false, underline: false };
+    let open = false;
+
+    function closeSpan() {
+      if (open) {
+        out += '</span>';
+        open = false;
+      }
+    }
+
+    function openSpanIfNeeded() {
+      const classes = [];
+      if (st.bold) classes.push('ansi-bold');
+      if (st.underline) classes.push('ansi-underline');
+      if (st.fg) classes.push('ansi-fg-' + st.fg);
+      if (st.bg) {
+        classes.push('ansi-bg-' + st.bg);
+        classes.push('ansi-has-bg');
+      }
+      if (!classes.length) return;
+      out += '<span class="ansi ' + classes.join(' ') + '">';
+      open = true;
+    }
+
+    while (pos < s.length) {
+      const esc = s.indexOf('[', pos);
+      if (esc === -1) {
+        if (!open) openSpanIfNeeded();
+        out += s.slice(pos);
+        break;
+      }
+
+      // text chunk before escape
+      if (esc > pos) {
+        if (!open) openSpanIfNeeded();
+        out += s.slice(pos, esc);
+      }
+
+      // Find end of sequence (we only support SGR: 'm')
+      const mEnd = s.indexOf('m', esc + 2);
+      if (mEnd === -1) {
+        // broken escape sequence: drop the ESC and continue
+        pos = esc + 2;
+        continue;
+      }
+
+      const seq = s.slice(esc + 2, mEnd);
+      const parts = seq.length ? seq.split(';') : ['0'];
+      const params = parts.map((x) => parseInt(x, 10)).filter((n) => isFinite(n));
+
+      // Update state (close previous styling span)
+      closeSpan();
+      _ansiApplySgrParams(params.length ? params : [0], st);
+
+      // Open span for new state if needed
+      openSpanIfNeeded();
+
+      pos = mEnd + 1;
+    }
+
+    closeSpan();
+    // Remove any remaining ESC chars (safety)
+    out = out.replace(//g, '');
+    return out;
   }
 
   // Base64 helpers (avoid putting raw IP/hosts into HTML attributes)
@@ -449,8 +874,8 @@
   let transport = '';
   try {
     if (_ws && typeof WebSocket !== 'undefined') {
-      if (_ws.readyState === WebSocket.OPEN) transport = 'WS';
-      else if (_ws.readyState === WebSocket.CONNECTING) transport = 'WS…';
+      if (_ws.readyState === WebSocket.OPEN) transport = _isWs2Socket(_ws) ? 'WS2' : 'WS';
+      else if (_ws.readyState === WebSocket.CONNECTING) transport = _isWs2Socket(_ws) ? 'WS2…' : 'WS…';
     }
   } catch (e) {}
 
@@ -521,6 +946,126 @@
   }
 
 
+  // ---------- Clickable log level badges + quick filters (frontend-only) ----------
+
+  const CLICKABLE_LEVELS_RE = /(^|[^A-Za-z0-9_])((?:DEBUG|INFO|WARN(?:ING)?|ERROR|FATAL))(?![A-Za-z0-9_])/gi;
+
+  function normalizeClickableLevel(levelRaw) {
+    const u = String(levelRaw || '').trim().toUpperCase();
+    if (!u) return '';
+    if (u === 'WARNING') return 'WARN';
+    return u;
+  }
+
+  function levelToFilterTerm(levelCanonical) {
+    const u = String(levelCanonical || '').trim().toUpperCase();
+    if (!u) return '';
+    if (u === 'WARN') return 'warn';
+    return u.toLowerCase();
+  }
+
+  function wrapClickableLevelBadges(htmlEscaped) {
+    // Input must be HTML-escaped and contain no tags yet.
+    // We wrap raw level tokens so resulting filter terms remain
+    // compatible with server-side substring matching (services/log_filter.py).
+    if (!htmlEscaped) return '';
+    const s = String(htmlEscaped);
+    if (s.search(CLICKABLE_LEVELS_RE) === -1) return s;
+    CLICKABLE_LEVELS_RE.lastIndex = 0;
+
+    return s.replace(CLICKABLE_LEVELS_RE, (m, pfx, lvl) => {
+      const canon = normalizeClickableLevel(lvl);
+      if (!canon) return m;
+
+      const cls =
+        canon === 'INFO'
+          ? 'log-lvl log-lvl-info'
+          : canon === 'DEBUG'
+          ? 'log-lvl log-lvl-debug'
+          : canon === 'WARN'
+          ? 'log-lvl log-lvl-warning'
+          : canon === 'ERROR'
+          ? 'log-lvl log-lvl-error'
+          : canon === 'FATAL'
+          ? 'log-lvl log-lvl-error'
+          : 'log-lvl';
+
+      const title = 'Клик: фильтр по уровню (повторный клик — убрать уровень из фильтра)';
+      return (
+        String(pfx || '') +
+        '<span class="xk-log-level ' +
+        cls +
+        '" data-level="' +
+        canon +
+        '" title="' +
+        title +
+        '">' +
+        String(lvl || '').toUpperCase() +
+        '</span>'
+      );
+    });
+  }
+
+  function buildFilterWithLevel(rawFilter, levelCanonical) {
+    const clicked = levelToFilterTerm(levelCanonical);
+    if (!clicked) return String(rawFilter || '').trim();
+
+    const raw = String(rawFilter || '').trim();
+    if (!raw) return clicked;
+
+    const isLevelTerm = (t) => {
+      const x = String(t || '').trim().toLowerCase();
+      return x === 'debug' || x === 'info' || x === 'warn' || x === 'warning' || x === 'error' || x === 'fatal';
+    };
+    const isClickedTerm = (t) => {
+      const x = String(t || '').trim().toLowerCase();
+      if (!x) return false;
+      if (clicked === 'warn') return x === 'warn' || x === 'warning';
+      return x === clicked;
+    };
+
+    // Preserve OR groups ("|") if user already uses them.
+    const hadPipe = raw.includes('|');
+    const groups = raw.split('|').map((g) => g.trim());
+    const nextGroups = [];
+
+    for (const g of groups) {
+      if (!g) continue;
+      const terms = g.split(/\s+/).map((t) => t.trim()).filter(Boolean);
+      const hasClicked = terms.some(isClickedTerm);
+      const hasAnyLevel = terms.some(isLevelTerm);
+
+      let out = terms.filter((t) => !isLevelTerm(t));
+
+      if (hasClicked) {
+        // Toggle off: remove any level terms from this group.
+      } else {
+        // Replace existing level term(s) with clicked, or add clicked in front.
+        out.unshift(clicked);
+      }
+
+      // De-dupe repeated clicked tokens inside a group.
+      const dedup = [];
+      for (const t of out) {
+        if (
+          dedup.length &&
+          String(dedup[dedup.length - 1]).toLowerCase() === String(t).toLowerCase() &&
+          isClickedTerm(t)
+        ) {
+          continue;
+        }
+        dedup.push(t);
+      }
+
+      if (dedup.length) nextGroups.push(dedup.join(' '));
+    }
+
+    if (!nextGroups.length) return '';
+    return hadPipe ? nextGroups.join(' | ') : nextGroups[0];
+  }
+
+
+
   // Detect Xray log level for view-side filtering.
   // We prefer exact markers like [Info]/[Debug]/[Warning]/[Error].
   function detectXrayLogLevel(line) {
@@ -549,19 +1094,13 @@
     const cls = getXrayLogLineClass(clean);
     let processed = escapeHtml(clean);
 
+    // Clickable level badges (INFO/WARN/ERROR/etc.)
+    processed = wrapClickableLevelBadges(processed);
+
     // Timestamp highlight (common Xray format: YYYY/MM/DD HH:MM:SS(.ms) or YYYY-MM-DD ...)
     processed = processed.replace(/^(\d{4}[\/-]\d{2}[\/-]\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?)/, '<span class="log-ts">$1</span>');
 
-    // Typical Xray levels
-    processed = processed
-      .replace(/\[Info\]/g, '<span class="log-lvl log-lvl-info">[Info]</span>')
-      .replace(/\[Warning\]/g, '<span class="log-lvl log-lvl-warning">[Warning]</span>')
-      .replace(/\[Error\]/g, '<span class="log-lvl log-lvl-error">[Error]</span>')
-      .replace(/\[Debug\]/g, '<span class="log-lvl log-lvl-debug">[Debug]</span>')
-      .replace(/level=(info)/gi, 'level=<span class="log-lvl log-lvl-info">$1</span>')
-      .replace(/level=(warning)/gi, 'level=<span class="log-lvl log-lvl-warning">$1</span>')
-      .replace(/level=(error)/gi, 'level=<span class="log-lvl log-lvl-error">$1</span>')
-      .replace(/level=(debug)/gi, 'level=<span class="log-lvl log-lvl-debug">$1</span>');
+    
 
     // Route highlights (in brackets)
     processed = processed
@@ -656,6 +1195,14 @@
       return String(pfx || '') + '<a href="#" class="log-link log-domain" data-kind="domain" data-b64="' + b64 + '" title="' + linkTitle + '">' + vis + '</a>';
     });
 
+
+
+    // Optional: render ANSI colors from logs (SGR) into HTML spans.
+    // Feature is disabled by default (see /api/ui-settings -> logs.ansi).
+    if (_ansiEnabled) {
+      try { processed = ansiSgrToHtml(processed); } catch (e) {}
+    }
+
     const dataIdx = (idx === undefined || idx === null) ? '' : (' data-idx="' + String(idx) + '"');
     return '<span class="' + cls + '"' + dataIdx + '>' + processed + '</span>';
   }
@@ -697,10 +1244,19 @@
   const isErrorFile = _isErrorFileName(_currentFile);
   const levelFilter = (isErrorFile && ALLOWED_LOGLEVELS.includes(selectedLevel)) ? selectedLevel : '';
 
-  const terms = rawFilter
-    .split(/\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Filter syntax is server-compatible (services/log_filter.py):
+  //   - whitespace = AND
+  //   - '|' = OR between groups
+  const groups = rawFilter
+    .split('|')
+    .map((g) => g.trim())
+    .filter(Boolean)
+    .map((g) =>
+      g
+        .split(/\s+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    );
 
   const src = Array.isArray(_lastLines) ? _lastLines : [];
   let entries = src.map((line, idx) => ({ idx, line: normalizeLogLine(line) }));
@@ -709,10 +1265,10 @@
     entries = entries.filter((e) => shouldKeepLineForLevel(e.line, levelFilter));
   }
 
-  const filtered = terms.length
+  const filtered = groups.length
     ? entries.filter((e) => {
         const lower = String(e.line || '').toLowerCase();
-        return terms.every((t) => lower.includes(t));
+        return groups.some((terms) => terms.every((t) => lower.includes(t)));
       })
     : entries;
 
@@ -726,6 +1282,38 @@
 }
 
   // ---------- Data sources: HTTP + WebSocket ----------
+
+  function _isWs2Socket(ws) {
+    try {
+      return !!(ws && ws.__xkProto === 'ws2');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _shouldUseWs2() {
+    return !!(_ws2Enabled && !_ws2FailedSession);
+  }
+
+  function _ws2SendOrQueue(payload) {
+    // Best-effort send. If WS2 is still CONNECTING, keep only the last pending cmd.
+    try {
+      if (!_ws || !_isWs2Socket(_ws) || typeof WebSocket === 'undefined') {
+        _ws2PendingCmd = payload || null;
+        return false;
+      }
+      if (_ws.readyState === WebSocket.OPEN) {
+        _ws.send(JSON.stringify(payload));
+        return true;
+      }
+      // CONNECTING / CLOSING: queue
+      _ws2PendingCmd = payload || null;
+      return false;
+    } catch (e) {
+      _ws2PendingCmd = payload || null;
+      return false;
+    }
+  }
 
   async function fetchXrayLogsOnce(source = 'manual', opts = {}) {
   const outputEl = $('xray-log-output');
@@ -796,6 +1384,187 @@
     if (statusEl) statusEl.textContent = 'Ошибка чтения логов Xray.';
   }
 }
+
+  function xrayLogConnectWs2() {
+    // Don't connect if streaming is not enabled.
+    if (!_streaming) return;
+    if (!_useWs || !('WebSocket' in window)) {
+      _useWs = false;
+      return;
+    }
+
+    // Already open/connecting
+    if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    const statusEl = $('xray-log-status');
+    const file = _currentFile || 'access';
+    const filterEl = $('xray-log-filter');
+    const filter = String((filterEl && filterEl.value) || '').trim();
+
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+
+    const params = new URLSearchParams();
+    params.set('file', file);
+    params.set('max_lines', String(_maxLines || DEFAULT_MAX_LINES));
+    if (filter) params.set('filter', filter);
+
+    const url = proto + '//' + host + '/ws/xray-logs2?' + params.toString();
+
+    wsDebug('WS2: connecting', { url: url, file: file, filter: !!filter });
+
+    let ws = null;
+    try {
+      _wsClosingManually = false;
+      _wsEverOpened = false;
+      ws = new WebSocket(url);
+      ws.__xkProto = 'ws2';
+      _ws = ws;
+    } catch (e) {
+      console.error('Failed to create WebSocket2 for logs', e);
+      _ws2FailedSession = true;
+      if (statusEl) statusEl.textContent = 'Не удалось создать WebSocket2, использую старый режим.';
+      // fallback to legacy connect (or HTTP in legacy handler)
+      try { xrayLogConnectWs(); } catch (e2) {}
+      return;
+    }
+
+    ws.onopen = function () {
+      if (ws !== _ws) return;
+      wsDebug('WS2: open', { file: file });
+      _wsEverOpened = true;
+      _ws2FailStreak = 0;
+      _ws2LastOpenAt = Date.now();
+
+      // Disable HTTP polling while WS is active
+      if (_timer) {
+        try { clearInterval(_timer); } catch (e) {}
+        _timer = null;
+      }
+
+      if (statusEl) statusEl.textContent = 'WebSocket2 для логов подключён.';
+      try { updateXrayLogStats(); } catch (e) {}
+
+      // Flush pending command (switch/clear) if any
+      if (_ws2PendingCmd) {
+        try { ws.send(JSON.stringify(_ws2PendingCmd)); } catch (e2) {}
+        _ws2PendingCmd = null;
+      }
+    };
+
+    ws.onmessage = function (event) {
+      if (ws !== _ws) return;
+      let data = null;
+      try {
+        data = JSON.parse(event.data);
+      } catch (e) {
+        console.warn('Invalid WebSocket2 payload for xray logs', e);
+        return;
+      }
+
+      let added = 0;
+
+      if (data && data.type === 'init' && Array.isArray(data.lines)) {
+        _lastLines = data.lines;
+      } else if (data && data.type === 'append' && Array.isArray(data.lines)) {
+        for (const ln of data.lines) _lastLines.push(ln);
+        added = data.lines.length;
+      } else if (data && data.type === 'status') {
+        // status/meta update only
+        try { updateXrayLogStats(); } catch (e) {}
+        return;
+      } else if (data && data.type === 'error') {
+        const err = String(data.error || '').trim();
+        if (statusEl) statusEl.textContent = err ? ('WS2: ' + err) : 'WS2: ошибка.';
+        try { updateXrayLogStats(); } catch (e) {}
+        return;
+      } else if (Array.isArray(data.lines)) {
+        _lastLines = data.lines;
+      } else if (data && typeof data.line === 'string') {
+        _lastLines.push(data.line);
+        added = 1;
+      }
+
+      if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
+
+      if (_paused) {
+        if (added) _pendingCount += added;
+        updateXrayLogStats();
+        return;
+      }
+
+      _pendingCount = 0;
+      applyXrayLogFilterToOutput();
+    };
+
+    ws.onclose = function (ev) {
+      if (ws !== _ws) return;
+      const visible = isLogsViewVisible();
+
+      const code = (ev && typeof ev.code === 'number') ? ev.code : 0;
+      const reason = (ev && typeof ev.reason === 'string') ? ev.reason : '';
+      const dt = _ws2LastOpenAt ? (Date.now() - _ws2LastOpenAt) : 99999;
+      if (_wsEverOpened && dt < 1200) _ws2FailStreak = (_ws2FailStreak || 0) + 1;
+      else if (dt >= 1200) _ws2FailStreak = 0;
+
+      wsDebug('WS2: close', { file: file, manual: _wsClosingManually, everOpened: _wsEverOpened, code: code, reason: reason, dt: dt, streak: _ws2FailStreak });
+
+      _ws = null;
+      try { updateXrayLogStats(); } catch (e) {}
+
+      if (_wsClosingManually || !visible) {
+        if (statusEl) statusEl.textContent = 'WebSocket2 для логов закрыт.';
+        return;
+      }
+
+      // never opened -> WS2 not supported / not available
+      if (!_wsEverOpened) {
+        _ws2FailedSession = true;
+        if (statusEl) statusEl.textContent = 'WebSocket2 недоступен, использую старый режим.';
+        // fallback to legacy connect (or HTTP inside legacy handler)
+        setTimeout(() => {
+          const stillVisible = isLogsViewVisible();
+          if (!_ws && _useWs && stillVisible && _streaming) {
+            try { xrayLogConnectWs(); } catch (e2) {}
+          }
+        }, 0);
+        return;
+      }
+
+      if (_ws2FailStreak >= 3) {
+        _ws2FailedSession = true;
+        if (statusEl) statusEl.textContent = 'WebSocket2 нестабилен (code ' + String(code || '?') + '), использую старый режим.';
+        setTimeout(() => {
+          const stillVisible = isLogsViewVisible();
+          if (!_ws && _useWs && stillVisible && _streaming) {
+            try { xrayLogConnectWs(); } catch (e2) {}
+          }
+        }, 0);
+        return;
+      }
+
+      if (statusEl) statusEl.textContent = 'WebSocket2 разорван (code ' + String(code || '?') + '), пытаюсь переподключиться...';
+
+      setTimeout(() => {
+        const stillVisible = isLogsViewVisible();
+        if (!_ws && _useWs && stillVisible && _streaming && _shouldUseWs2()) xrayLogConnectWs2();
+        // If WS2 is disabled mid-session or failed, legacy will be used by start().
+      }, 1000);
+    };
+
+    ws.onerror = function () {
+      if (ws !== _ws) return;
+      wsDebug('WS2: error', { file: file });
+      console.warn('WebSocket2 error in xray logs');
+    };
+  }
+
+  function xrayLogConnectWsSmart() {
+    if (_shouldUseWs2()) return xrayLogConnectWs2();
+    return xrayLogConnectWs();
+  }
 
   function xrayLogConnectWs() {
     // Don't connect if streaming is not enabled.
@@ -922,7 +1691,7 @@
 
       setTimeout(() => {
         const stillVisible = isLogsViewVisible();
-        if (!_ws && _useWs && stillVisible && _streaming) xrayLogConnectWs();
+        if (!_ws && _useWs && stillVisible && _streaming) xrayLogConnectWsSmart();
       }, 1000);
     };
 
@@ -936,9 +1705,13 @@
 
   // ---------- Lifecycle (start/stop) ----------
 
-  function startXrayLogAuto() {
+  async function startXrayLogAuto() {
     const outputEl = $('xray-log-output');
     if (!outputEl) return;
+
+    // Load + apply server-side UI prefs only when the user enables the logs stream.
+    // (includes one-time migration from legacy localStorage)
+    try { await ensureLogsViewPrefsLoadedForLogs(); } catch (e) {}
 
     _streaming = true;
     _paused = false;
@@ -966,12 +1739,12 @@
         try { clearInterval(_timer); } catch (e) {}
         _timer = null;
       }
-      xrayLogConnectWs();
+      xrayLogConnectWsSmart();
       return;
     }
 
     if (_timer) return;
-    fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
+    await fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
     _timer = setInterval(() => fetchXrayLogsOnce('poll'), _pollMs);
   }
 
@@ -984,7 +1757,8 @@
     setXrayLogLampState('off');
 
     // IMPORTANT: do NOT force-toggle the "Live" checkbox here.
-    // The checkbox is treated as a user preference and is persisted via localStorage.
+    // The checkbox is treated as a user preference and is persisted via /api/ui-settings
+    // (with a legacy localStorage fallback when the settings endpoint is unavailable).
     try { updateXrayLogStats(); } catch (e) {}
     if (_timer) {
       try { clearInterval(_timer); } catch (e) {}
@@ -1001,8 +1775,9 @@
 
   // ---------- Actions (wired from HTML) ----------
 
-  function xrayLogsView() {
-    fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
+  async function xrayLogsView() {
+    try { await ensureLogsViewPrefsLoadedForLogs(); } catch (e) {}
+    await fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
   }
 
   function xrayLogsClearScreen() {
@@ -1011,9 +1786,17 @@
     _lastLines = [];
     _cursor = '';
     _pendingCount = 0;
+
+    // WS2: also reset server-side cursor (so it doesn't re-send buffered tail on resume).
+    try {
+      if (_streaming && _shouldUseWs2()) {
+        _ws2SendOrQueue({ cmd: 'clear' });
+        if (!_ws) xrayLogConnectWs2();
+      }
+    } catch (e) {}
   }
 
-  function xrayLogChangeFile() {
+  async function xrayLogChangeFile() {
     const selectEl = $('xray-log-file');
     if (selectEl) _currentFile = selectEl.value || 'access';
     updateLoglevelUiForCurrentFile();
@@ -1025,8 +1808,36 @@
     _pendingCount = 0;
     applyXrayLogFilterToOutput();
 
-    // If streaming is enabled and WS in use, reconnect for the new file (avoid HTTP dupes)
+    // Load server-side UI prefs only when the logs view is actively used.
+    try { await ensureUiSettingsLoadedForLogs(); } catch (e) {}
+    // If streaming is enabled and WS in use:
+    // - WS2: switch file without reconnect
+    // - legacy: reconnect for the new file (avoid HTTP dupes)
     if (_streaming && _useWs && 'WebSocket' in window) {
+      if (_shouldUseWs2()) {
+        const filterEl = $('xray-log-filter');
+        const filter = String((filterEl && filterEl.value) || '').trim();
+        const cmd = { cmd: 'switch', file: String(_currentFile || 'access'), filter: filter, max_lines: (_maxLines || DEFAULT_MAX_LINES) };
+
+        // Stop HTTP polling while WS2 is expected to be used.
+        if (_timer) {
+          try { clearInterval(_timer); } catch (e) {}
+          _timer = null;
+        }
+
+        // If WS2 is already connected/connecting -> just send or queue the command.
+        if (_ws && _isWs2Socket(_ws)) {
+          _ws2SendOrQueue(cmd);
+          return;
+        }
+
+        // If no WS or we are not on WS2 yet, queue the desired state and connect WS2.
+        _ws2PendingCmd = cmd;
+        xrayLogConnectWs2();
+        return;
+      }
+
+      // legacy WS: reconnect to apply new file
       if (_timer) {
         try { clearInterval(_timer); } catch (e) {}
         _timer = null;
@@ -1036,13 +1847,13 @@
         _wsClosingManually = true;
         try { _ws.close(); } catch (e) {}
         _ws = null;
-      try { updateXrayLogStats(); } catch (e) {}
+        try { updateXrayLogStats(); } catch (e) {}
       }
-      xrayLogConnectWs();
+      xrayLogConnectWsSmart();
       return;
     }
 
-    fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
+    await fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
   }
 
   async function xrayLogsEnable() {
@@ -1086,8 +1897,12 @@
       const visible = isLogsViewVisible();
 
       if (visible) {
-        // Always show current file content once.
-        fetchXrayLogsOnce('enable', { resetCursor: true, forceRender: true });
+        // Show current file content once.
+        // When WS2 + Live is enabled, avoid the extra HTTP snapshot request:
+        // WS2 will send an init snapshot immediately after reconnect/switch.
+        if (!(wantStream && _useWs && 'WebSocket' in window && _shouldUseWs2())) {
+          fetchXrayLogsOnce('enable', { resetCursor: true, forceRender: true });
+        }
       }
 
       if (visible && wantStream) {
@@ -1581,19 +2396,21 @@ function copyXrayContextModal() {
         _cursor = '';
         _pendingCount = 0;
 
-        // If WS is active — reconnect to get a new snapshot.
+        // If WS is active — legacy: reconnect; WS2: switch max_lines without reconnect.
         const wsActive =
           _ws && typeof WebSocket !== 'undefined' &&
           (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING);
 
-        if (_streaming && wsActive) {
+        if (_streaming && wsActive && _isWs2Socket(_ws) && _shouldUseWs2()) {
+          _ws2SendOrQueue({ cmd: 'switch', file: String(_currentFile || 'access'), filter: String(($('xray-log-filter') && $('xray-log-filter').value) || '').trim(), max_lines: (_maxLines || DEFAULT_MAX_LINES) });
+        } else if (_streaming && wsActive) {
           try {
             _wsClosingManually = true;
             _ws.close();
           } catch (e3) {}
           _ws = null;
           try { updateXrayLogStats(); } catch (e4) {}
-          xrayLogConnectWs();
+          xrayLogConnectWsSmart();
         } else {
           fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
         }
@@ -1630,19 +2447,21 @@ function copyXrayContextModal() {
       _cursor = '';
       _pendingCount = 0;
 
-      // If WS is active — reconnect to get a bigger initial snapshot.
+      // If WS is active — legacy: reconnect; WS2: switch max_lines without reconnect.
       const wsActive =
         _ws && typeof WebSocket !== 'undefined' &&
         (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING);
 
-      if (_streaming && wsActive) {
+      if (_streaming && wsActive && _isWs2Socket(_ws) && _shouldUseWs2()) {
+        _ws2SendOrQueue({ cmd: 'switch', file: String(_currentFile || 'access'), filter: String(($('xray-log-filter') && $('xray-log-filter').value) || '').trim(), max_lines: (_maxLines || DEFAULT_MAX_LINES) });
+      } else if (_streaming && wsActive) {
         try {
           _wsClosingManually = true;
           _ws.close();
         } catch (e2) {}
         _ws = null;
         try { updateXrayLogStats(); } catch (e) {}
-        xrayLogConnectWs();
+        xrayLogConnectWsSmart();
       } else {
         fetchXrayLogsOnce('load_more', { resetCursor: true, forceRender: true });
       }
@@ -1681,6 +2500,29 @@ function copyXrayContextModal() {
     // Alt+Click (on line) opens context immediately
     outputEl.addEventListener('click', (e) => {
       const t = e.target;
+
+      // Clickable log levels: click -> add/replace level term in filter; click again -> toggle off
+      const lvlEl = t && t.closest ? t.closest('.xk-log-level') : null;
+      if (lvlEl && outputEl.contains(lvlEl) && !e.altKey) {
+        // Don't break selection/copy: ignore clicks when user is selecting text.
+        try {
+          const sel = window.getSelection ? window.getSelection() : null;
+          if (sel && !sel.isCollapsed) return;
+        } catch (eSel) {}
+
+        const lvl = String(lvlEl.getAttribute('data-level') || lvlEl.textContent || '').trim().toUpperCase();
+        if (lvl) {
+          const filterEl = $('xray-log-filter');
+          if (filterEl) {
+            const next = buildFilterWithLevel(filterEl.value || '', lvl);
+            if (next !== String(filterEl.value || '')) filterEl.value = next;
+            applyXrayLogFilterToOutput();
+            try { scheduleSaveUiState(); } catch (eSave) {}
+            return;
+          }
+        }
+      }
+
       const linkEl = t && t.closest ? t.closest('.log-link') : null;
       if (linkEl && outputEl.contains(linkEl)) {
         e.preventDefault();
@@ -1709,7 +2551,34 @@ function copyXrayContextModal() {
   try { updateXrayLogStats(); } catch (e) {}
 }
 
-  function bindFilterUi() {
+    function scheduleWs2SwitchFromUi(reason) {
+    if (!_streaming) return;
+    if (!_shouldUseWs2()) return;
+    if (!_useWs || !('WebSocket' in window)) return;
+
+    // Only when WS2 is the active transport (or not connected yet).
+    if (_ws && !_isWs2Socket(_ws)) return;
+
+    if (_ws2SwitchTimer) {
+      try { clearTimeout(_ws2SwitchTimer); } catch (e) {}
+      _ws2SwitchTimer = null;
+    }
+
+    _ws2SwitchTimer = setTimeout(() => {
+      _ws2SwitchTimer = null;
+      const filterEl = $('xray-log-filter');
+      const filter = String((filterEl && filterEl.value) || '').trim();
+      const cmd = { cmd: 'switch', file: String(_currentFile || 'access'), filter: filter, max_lines: (_maxLines || DEFAULT_MAX_LINES) };
+      _ws2SendOrQueue(cmd);
+      // Ensure WS2 is connected (if it was closed).
+      if (!_ws) {
+        _ws2PendingCmd = cmd;
+        xrayLogConnectWs2();
+      }
+    }, 180);
+  }
+
+function bindFilterUi() {
     const filterEl = $('xray-log-filter');
     const clearBtn = $('xray-log-filter-clear');
 
@@ -1717,6 +2586,7 @@ function copyXrayContextModal() {
       filterEl.addEventListener('input', () => {
         applyXrayLogFilterToOutput();
         try { scheduleSaveUiState(); } catch (e) {}
+        try { scheduleWs2SwitchFromUi('filter'); } catch (e) {}
       });
       filterEl.addEventListener(
         'keydown',
@@ -1735,6 +2605,7 @@ function copyXrayContextModal() {
         filterEl.value = '';
         applyXrayLogFilterToOutput();
         try { scheduleSaveUiState(); } catch (e) {}
+        try { scheduleWs2SwitchFromUi('filter_clear'); } catch (e) {}
         try { filterEl.focus(); } catch (e) {}
       });
     }
@@ -1750,7 +2621,7 @@ function copyXrayContextModal() {
 
     // Restore UI preferences for this page (file/live/follow/interval/lines/filter/height)
     // BEFORE wiring listeners, so we don't accidentally trigger actions.
-    try { applyStoredUiState(); } catch (e) {}
+    try { applyInitialUiStateNoFetch(); } catch (e) {}
 
     // Sync current file from UI (after restore)
     try { syncCurrentFileFromUi(); } catch (e) {}

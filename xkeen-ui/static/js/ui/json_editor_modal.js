@@ -13,6 +13,10 @@
 
   let _inited = false;
   let _cm = null;
+  let _monaco = null;
+  let _monacoFacade = null;
+  let _kind = 'codemirror';
+  let _engineUnsub = null;
   let _currentTarget = null;
 
   function el(id) {
@@ -119,6 +123,49 @@
     }
   }
 
+  function normalizeEngine(v) {
+    const s = String(v || '').toLowerCase();
+    return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
+  }
+
+  function getEngineHelper() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+  }
+
+  function getMonacoShared() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
+  }
+
+  function setEngineSelect(engine) {
+    const sel = el('json-editor-engine-select');
+    if (!sel) return;
+    try { sel.value = normalizeEngine(engine); } catch (e) {}
+  }
+
+  function showEditorKind(kind) {
+    const k = normalizeEngine(kind);
+    const host = el('json-editor-monaco');
+
+    // CodeMirror wrapper
+    try {
+      if (_cm && _cm.getWrapperElement) {
+        const w = _cm.getWrapperElement();
+        if (w) w.style.display = (k === 'codemirror') ? '' : 'none';
+      }
+    } catch (e) {}
+
+    // Textarea fallback (if CM failed)
+    try {
+      const ta = el('json-editor-textarea');
+      if (ta && !_cm) ta.style.display = (k === 'codemirror') ? '' : 'none';
+    } catch (e) {}
+
+    // Monaco host
+    try {
+      if (host) host.classList.toggle('hidden', k !== 'monaco');
+    } catch (e) {}
+  }
+
   async function ensureEditor(textarea) {
     if (_cm || !window.CodeMirror || !textarea) return _cm;
 
@@ -173,6 +220,103 @@
     return _cm;
   }
 
+  async function ensureMonacoEditor(initialText) {
+    const host = el('json-editor-monaco');
+    if (_monacoFacade && _monaco) return _monacoFacade;
+    if (!host) return null;
+
+    const shared = getMonacoShared();
+    if (!shared || typeof shared.createEditor !== 'function') return null;
+
+    _monaco = await shared.createEditor(host, {
+      language: 'json',
+      readOnly: false,
+      value: String(initialText ?? ''),
+      tabSize: 2,
+      insertSpaces: true,
+      wordWrap: 'on',
+    });
+
+    if (_monaco) {
+      try { _monacoFacade = shared.toFacade(_monaco); } catch (e) { _monacoFacade = null; }
+    }
+    return _monacoFacade;
+  }
+
+  function getCurrentValue() {
+    const textarea = el('json-editor-textarea');
+    if (_kind === 'monaco' && _monacoFacade) return _monacoFacade.getValue();
+    if (_cm) return _cm.getValue();
+    if (textarea) return textarea.value || '';
+    return '';
+  }
+
+  function setCurrentValue(text) {
+    const textarea = el('json-editor-textarea');
+    const v = String(text ?? '');
+    if (_kind === 'monaco' && _monacoFacade) {
+      try { _monacoFacade.setValue(v); } catch (e) {}
+      return;
+    }
+    if (_cm) {
+      try { updateLintForText(_cm, v); } catch (e) {}
+      _cm.setValue(v);
+      return;
+    }
+    if (textarea) textarea.value = v;
+  }
+
+  async function switchEngine(nextEngine, opts) {
+    const next = normalizeEngine(nextEngine);
+    if (next === _kind) return;
+
+    const prevText = getCurrentValue();
+    let cmCursor = null;
+    let cmScroll = null;
+    try { if (_cm) cmCursor = _cm.getCursor(); } catch (e) {}
+    try { if (_cm) cmScroll = _cm.getScrollInfo(); } catch (e) {}
+
+    _kind = next;
+    setEngineSelect(_kind);
+
+    if (_kind === 'monaco') {
+      const fac = await ensureMonacoEditor(prevText);
+      if (fac) {
+        try { fac.setValue(prevText); } catch (e) {}
+        try { fac.layout(); } catch (e) {}
+        try { fac.focus(); } catch (e) {}
+      }
+    } else {
+      const textarea = el('json-editor-textarea');
+      const cm = await ensureEditor(textarea);
+      if (cm) {
+        try { cm.setOption('theme', cmThemeFromPage()); } catch (e) {}
+        updateLintForText(cm, prevText);
+        cm.setValue(prevText);
+        try {
+          if (cmCursor) cm.setCursor(cmCursor);
+          if (cmScroll && typeof cm.scrollTo === 'function') cm.scrollTo(cmScroll.left || 0, cmScroll.top || 0);
+        } catch (e) {}
+        setTimeout(() => {
+          try { cm.refresh(); cm.focus(); } catch (e) {}
+        }, 0);
+      } else if (textarea) {
+        textarea.value = prevText;
+        textarea.focus();
+      }
+    }
+
+    showEditorKind(_kind);
+
+    // Persist as global preference (best-effort)
+    try {
+      const helper = getEngineHelper();
+      if (helper && typeof helper.set === 'function' && !(opts && opts.noPersist)) {
+        helper.set(_kind);
+      }
+    } catch (e) {}
+  }
+
   function ensureWired() {
     if (_inited) return;
     _inited = true;
@@ -182,6 +326,7 @@
     const cancelBtn = el('json-editor-cancel-btn');
     const saveBtn = el('json-editor-save-btn');
     const formatBtn = el('json-editor-format-btn');
+    const engineSel = el('json-editor-engine-select');
 
     const onClose = (e) => {
       if (e && e.preventDefault) e.preventDefault();
@@ -204,6 +349,30 @@
         formatCurrent();
       });
     }
+
+    if (engineSel && !(engineSel.dataset && engineSel.dataset.xkeenWired === '1')) {
+      engineSel.addEventListener('change', (e) => {
+        const v = e && e.target ? e.target.value : null;
+        switchEngine(v);
+      });
+      if (engineSel.dataset) engineSel.dataset.xkeenWired = '1';
+    }
+
+    // Sync with global engine changes (best-effort)
+    try {
+      const helper = getEngineHelper();
+      if (helper && typeof helper.onChange === 'function') {
+        if (_engineUnsub) { try { _engineUnsub(); } catch (e) {} }
+        _engineUnsub = helper.onChange((d) => {
+          try {
+            const m = el('json-editor-modal');
+            if (!m || m.classList.contains('hidden')) return;
+            const eng = normalizeEngine(d && d.engine);
+            if (eng && eng !== _kind) switchEngine(eng, { noPersist: true });
+          } catch (e) {}
+        });
+      }
+    } catch (e) {}
 
     // Close on overlay click
     if (modal && !(modal.dataset && modal.dataset.xkeenOverlayWired === '1')) {
@@ -235,6 +404,20 @@
     setError('');
     modal.classList.remove('hidden');
 
+    // Adopt preferred engine (server/local). Default is CodeMirror.
+    try {
+      const helper = getEngineHelper();
+      if (helper && typeof helper.ensureLoaded === 'function') {
+        await helper.ensureLoaded();
+      }
+      const pref = helper && typeof helper.get === 'function' ? helper.get() : 'codemirror';
+      _kind = normalizeEngine(pref);
+      setEngineSelect(_kind);
+    } catch (e) {
+      _kind = 'codemirror';
+      setEngineSelect(_kind);
+    }
+
     try {
       const res = await fetch(url, { method: 'GET' });
       if (!res.ok) {
@@ -258,18 +441,25 @@
         }
       } catch (e) {}
 
-      const cm = await ensureEditor(textarea);
-      if (cm) {
-        try { cm.setOption('theme', cmThemeFromPage()); } catch (e) {}
-        updateLintForText(cm, finalText || '');
-        cm.setValue(finalText || '');
-        setTimeout(() => {
-          try { cm.refresh(); cm.focus(); } catch (e) {}
-        }, 0);
+      if (_kind === 'monaco') {
+        await ensureMonacoEditor(finalText || '');
+        try { if (_monacoFacade) { _monacoFacade.setValue(finalText || ''); _monacoFacade.focus(); _monacoFacade.layout(); } } catch (e) {}
       } else {
-        textarea.value = finalText || '';
-        textarea.focus();
+        const cm = await ensureEditor(textarea);
+        if (cm) {
+          try { cm.setOption('theme', cmThemeFromPage()); } catch (e) {}
+          updateLintForText(cm, finalText || '');
+          cm.setValue(finalText || '');
+          setTimeout(() => {
+            try { cm.refresh(); cm.focus(); } catch (e) {}
+          }, 0);
+        } else {
+          textarea.value = finalText || '';
+          textarea.focus();
+        }
       }
+
+      showEditorKind(_kind);
     } catch (e) {
       console.error(e);
       setError('Ошибка загрузки конфига.');
@@ -300,16 +490,9 @@
     } catch (e) {}
   }
 
-  function getCurrentText(textarea) {
-    if (_cm) return _cm.getValue();
-    if (textarea) return textarea.value || '';
-    return '';
-  }
-
   async function formatCurrent() {
     ensureWired();
-    const textarea = el('json-editor-textarea');
-    const text = String(getCurrentText(textarea) || '');
+    const text = String(getCurrentValue() || '');
     if (!text.trim()) {
       setError('Пустой JSON.');
       return;
@@ -330,14 +513,11 @@
       }
 
       const next = String(data.text || '');
-      if (_cm) {
-        updateLintForText(_cm, next);
-        _cm.setValue(next);
-        try { _cm.focus(); } catch (e) {}
-      } else {
-        textarea.value = next;
-        textarea.focus();
-      }
+      setCurrentValue(next);
+      try {
+        if (_kind === 'monaco' && _monacoFacade) _monacoFacade.focus();
+        if (_kind !== 'monaco' && _cm) _cm.focus();
+      } catch (e) {}
       toast('JSON отформатирован.', false);
     } catch (e) {
       console.error(e);
@@ -353,12 +533,8 @@
     if (!_currentTarget) return;
 
     const target = _currentTarget;
-    const textarea = el('json-editor-textarea');
-
-    let text = '';
-    if (_cm) text = _cm.getValue();
-    else if (textarea) text = textarea.value || '';
-    else return;
+    const text = String(getCurrentValue() || '');
+    if (text === null || typeof text !== 'string') return;
     // Send raw JSON/JSONC text to backend (keeps comments).
     const url = target === 'inbounds'
       ? buildTargetUrl('inbounds', '/api/inbounds')

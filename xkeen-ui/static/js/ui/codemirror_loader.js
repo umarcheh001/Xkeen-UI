@@ -244,6 +244,37 @@
     return out;
   };
 
+  // ------------------------ editor engine preference ------------------------
+  // This is used by future Monaco integration.
+  // IMPORTANT: no auto-fetch on page load. fetchPreferredEngine() is only called
+  // by code that actually needs to decide which editor to initialize.
+  function normalizeEngine(v) {
+    const s = String(v || '').toLowerCase();
+    return (s === 'monaco' || s === 'codemirror') ? s : '';
+  }
+
+  L.getPreferredEngine = function getPreferredEngine() {
+    try {
+      if (XK && XK.ui && XK.ui.settings && typeof XK.ui.settings.get === 'function') {
+        const st = XK.ui.settings.get();
+        const eng = normalizeEngine(st && st.editor && st.editor.engine);
+        if (eng) return eng;
+      }
+    } catch (e) {}
+    return 'codemirror';
+  };
+
+  L.fetchPreferredEngine = async function fetchPreferredEngine() {
+    try {
+      if (XK && XK.ui && XK.ui.settings && typeof XK.ui.settings.fetchOnce === 'function') {
+        const st = await XK.ui.settings.fetchOnce();
+        const eng = normalizeEngine(st && st.editor && st.editor.engine);
+        if (eng) return eng;
+      }
+    } catch (e) {}
+    return L.getPreferredEngine();
+  };
+
   // Best-effort: if panel templates already loaded javascript mode,
   // define jsonc immediately so editors can use it synchronously.
   try { defineJsoncModeIfPossible(); } catch (e) {}

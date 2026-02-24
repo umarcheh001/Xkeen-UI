@@ -86,11 +86,17 @@ def run_job_delete(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) -> 
                 ss = rt.mgr.get(src['sid'])
                 if not ss:
                     raise RuntimeError('session_not_found')
-                # best-effort remote delete
-                if is_dir:
-                    rt.mgr._run_lftp(ss, [f"rm -r {rt.lftp_quote(spath)}"], capture=True)
-                else:
-                    rt.mgr._run_lftp(ss, [f"rm {rt.lftp_quote(spath)}"], capture=True)
+                # Remote delete must not be best-effort; otherwise UI will show "done" while the file stays in place.
+                cmd = f"rm -r {rt.lftp_quote(spath)}" if is_dir else f"rm {rt.lftp_quote(spath)}"
+                rc, out, err = rt.mgr._run_lftp(ss, [cmd], capture=True)
+                if rc != 0:
+                    try:
+                        tail_err = (err or b'').decode('utf-8', errors='replace')[-400:].strip()
+                        tail_out = (out or b'').decode('utf-8', errors='replace')[-400:].strip()
+                        tail = tail_err or tail_out or f"rc={rc}"
+                    except Exception:
+                        tail = f"rc={rc}"
+                    raise RuntimeError(f"delete_failed:{tail}")
                 mark_done();
 
         # Attach trash summary (for UI notifications)

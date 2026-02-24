@@ -93,6 +93,171 @@ html[data-theme="light"] {
   --xk-tooltip-backdrop: blur(18px) saturate(180%);
 }
 
+/* =========================
+   Monaco UI theming
+   ========================= */
+
+/* Monaco context menu (right click) should match panel theme.
+   Monaco uses its own DOM (not native browser menu), so we can safely style it. */
+/* IMPORTANT: Monaco renders the context menu in a global "portal" container (.context-view)
+   attached to <body>, so it is often NOT a descendant of .monaco-editor.
+   Style both cases to keep it consistent across pages/modals. */
+.monaco-editor .monaco-menu,
+.context-view .monaco-menu {
+  background: var(--modal-bg) !important;
+  color: var(--modal-text) !important;
+  border: 1px solid var(--modal-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(var(--shadow-rgb), var(--shadow)) !important;
+  overflow: hidden;
+  backdrop-filter: var(--xk-tooltip-backdrop);
+}
+
+.monaco-editor .monaco-menu .monaco-action-bar.vertical .action-item,
+.context-view .monaco-menu .monaco-action-bar.vertical .action-item {
+  border-radius: 10px;
+}
+
+.monaco-editor .monaco-menu .action-menu-item,
+.context-view .monaco-menu .action-menu-item {
+  color: var(--modal-text) !important;
+}
+
+.monaco-editor .monaco-menu .action-menu-item .label,
+.monaco-editor .monaco-menu .action-menu-item .keybinding,
+.monaco-editor .monaco-menu .action-menu-item .submenu-indicator,
+.context-view .monaco-menu .action-menu-item .label,
+.context-view .monaco-menu .action-menu-item .keybinding,
+.context-view .monaco-menu .action-menu-item .submenu-indicator {
+  color: var(--modal-text) !important;
+}
+
+.monaco-editor .monaco-menu .action-menu-item:hover,
+.monaco-editor .monaco-menu .action-menu-item.focused,
+.context-view .monaco-menu .action-menu-item:hover,
+.context-view .monaco-menu .action-menu-item.focused {
+  background: rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="light"] .monaco-editor .monaco-menu .action-menu-item:hover,
+html[data-theme="light"] .monaco-editor .monaco-menu .action-menu-item.focused,
+html[data-theme="light"] .context-view .monaco-menu .action-menu-item:hover,
+html[data-theme="light"] .context-view .monaco-menu .action-menu-item.focused {
+  background: rgba(15, 23, 42, 0.08) !important;
+}
+
+.monaco-editor .monaco-menu .separator,
+.context-view .monaco-menu .separator {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="light"] .monaco-editor .monaco-menu .separator,
+html[data-theme="light"] .context-view .monaco-menu .separator {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12) !important;
+}
+
+
+/* Monaco suggest widget (autocomplete), hover tooltip and find widget should also match panel theme */
+.monaco-editor .suggest-widget,
+.monaco-editor .suggest-widget.visible,
+.monaco-editor .suggest-widget .suggest-widget,
+.monaco-editor .context-view .suggest-widget {
+  background: var(--modal-bg) !important;
+  color: var(--modal-text) !important;
+  border: 1px solid var(--modal-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(var(--shadow-rgb), var(--shadow)) !important;
+  backdrop-filter: var(--xk-tooltip-backdrop);
+}
+
+.monaco-editor .suggest-widget .monaco-list-row,
+.monaco-editor .suggest-widget .monaco-list-row .label-name,
+.monaco-editor .suggest-widget .monaco-list-row .details-label,
+.monaco-editor .suggest-widget .monaco-list-row .label-description,
+.monaco-editor .suggest-widget .monaco-list-row .readMore {
+  color: var(--modal-text) !important;
+}
+
+.monaco-editor .suggest-widget .monaco-list-row:hover,
+.monaco-editor .suggest-widget .monaco-list-row.focused,
+.monaco-editor .suggest-widget .monaco-list-row.selected {
+  background: rgba(148, 163, 184, 0.18) !important;
+}
+
+html[data-theme="light"] .monaco-editor .suggest-widget .monaco-list-row:hover,
+html[data-theme="light"] .monaco-editor .suggest-widget .monaco-list-row.focused,
+html[data-theme="light"] .monaco-editor .suggest-widget .monaco-list-row.selected {
+  background: rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Monaco hover tooltip */
+.monaco-editor-hover,
+.monaco-hover {
+  background: var(--modal-bg) !important;
+  color: var(--modal-text) !important;
+  border: 1px solid var(--modal-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(var(--shadow-rgb), var(--shadow)) !important;
+  backdrop-filter: var(--xk-tooltip-backdrop);
+}
+
+.monaco-editor-hover .hover-contents,
+.monaco-hover .hover-contents,
+.monaco-editor-hover .markdown-hover,
+.monaco-hover .markdown-hover,
+.monaco-editor-hover .hover-row,
+.monaco-hover .hover-row,
+.monaco-editor-hover code,
+.monaco-hover code {
+  color: var(--modal-text) !important;
+}
+
+/* Monaco find/replace widget */
+.monaco-editor .find-widget,
+.monaco-editor .find-widget.visible {
+  background: var(--modal-bg) !important;
+  color: var(--modal-text) !important;
+  border: 1px solid var(--modal-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(var(--shadow-rgb), var(--shadow)) !important;
+  backdrop-filter: var(--xk-tooltip-backdrop);
+}
+
+/* Inputs inside find widget */
+.monaco-editor .find-widget .monaco-inputbox,
+.monaco-editor .find-widget .monaco-inputbox input,
+.monaco-editor .find-widget .monaco-inputbox textarea {
+  background: color-mix(in srgb, var(--modal-bg) 80%, transparent) !important;
+  color: var(--modal-text) !important;
+  border: 1px solid color-mix(in srgb, var(--modal-border) 80%, transparent) !important;
+  border-radius: 10px !important;
+}
+
+.monaco-editor .find-widget .monaco-inputbox input::placeholder,
+.monaco-editor .find-widget .monaco-inputbox textarea::placeholder {
+  color: color-mix(in srgb, var(--modal-text) 55%, transparent) !important;
+}
+
+/* Buttons in find widget */
+.monaco-editor .find-widget .button,
+.monaco-editor .find-widget .codicon,
+.monaco-editor .find-widget .monaco-button,
+.monaco-editor .find-widget .monaco-action-bar .action-item {
+  color: var(--modal-text) !important;
+}
+
+.monaco-editor .find-widget .button:hover,
+.monaco-editor .find-widget .monaco-action-bar .action-item:hover {
+  background: rgba(148, 163, 184, 0.18) !important;
+  border-radius: 10px !important;
+}
+
+html[data-theme="light"] .monaco-editor .find-widget .button:hover,
+html[data-theme="light"] .monaco-editor .find-widget .monaco-action-bar .action-item:hover {
+  background: rgba(15, 23, 42, 0.08) !important;
+}
+
+
 
 body {
   margin: 0;
@@ -514,6 +679,117 @@ textarea#routing-editor {
   box-sizing: border-box;
 }
 
+
+
+/* Monaco editor container (hidden unless enabled via Routing editor toggle) */
+.xk-monaco-editor {
+  width: 100%;
+  min-height: 300px;
+  height: 76vh;
+  border-radius: 8px;
+  border: 1px solid #111827;
+  background: var(--header-btn-bg, #020617);
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+/* Monaco editor size variant for modal dialogs */
+.xk-monaco-editor--modal {
+  height: 60vh;
+}
+
+/* Monaco editor size variant for small previews */
+.xk-monaco-editor--small {
+  height: 36vh;
+  min-height: 240px;
+}
+
+html[data-theme="light"] .xk-monaco-editor {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+}
+
+/* Editor engine selector (CodeMirror / Monaco) */
+.xk-editor-engine,
+.xk-routing-engine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+}
+
+/* Inline editor toolbar row (engine select + small status chips). */
+.xk-editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 8px;
+}
+
+/* Allow the left side (engine select) to stay compact; chip hugs content. */
+.xk-editor-toolbar .xk-editor-engine {
+  margin-right: 0;
+  flex: 0 0 auto;
+}
+
+.xk-editor-engine-label,
+.xk-routing-engine-label {
+  font-size: calc(13px * var(--xk-font-scale));
+  color: #9ca3af;
+}
+
+.xk-editor-engine-select,
+.xk-routing-engine-select {
+  border-radius: 9999px;
+  padding: 7px 34px 7px 12px;
+  font-size: calc(12px * var(--xk-font-scale));
+  border: 1px solid var(--border, #374151);
+  background: var(--header-btn-bg, #020617);
+  color: var(--text, #e5e7eb);
+  outline: none;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.40);
+  cursor: pointer;
+  line-height: 1.15;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a3b3c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px 14px;
+}
+
+.xk-editor-engine-select:focus,
+.xk-routing-engine-select:focus {
+  border-color: var(--accent, #60a5fa);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #60a5fa) 22%, transparent);
+}
+
+html[data-theme="light"] .xk-editor-engine-select,
+html[data-theme="light"] .xk-routing-engine-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+
+.xk-editor-engine-select option,
+.xk-routing-engine-select option {
+  background: var(--card-bg, #020617);
+  color: var(--text, #e5e7eb);
+}
+
+html[data-theme="light"] .xk-editor-engine-select option,
+html[data-theme="light"] .xk-routing-engine-select option {
+  background: var(--card-bg, #ffffff);
+  color: var(--text, #111827);
+}
+
+.xk-editor-engine-help,
+.xk-routing-engine-help {
+  width: 32px;
+  height: 32px;
+  line-height: 1;
+}
 
 .xkeen-textarea {
   width: 100%;
@@ -2630,6 +2906,11 @@ button.top-tab-btn.active {
   white-space: nowrap;
 }
 
+
+/* Live logs: clickable level badges */
+.xk-log-level {
+  cursor: pointer;
+}
 .log-lvl-info { color: var(--sem-info, #93c5fd); }
 .log-lvl-warning { color: var(--sem-warning, #fbbf24); }
 .log-lvl-error { color: var(--sem-error, #f87171); }
@@ -2706,6 +2987,53 @@ button.top-tab-btn.active {
   margin-right: 8px;
   font-variant-numeric: tabular-nums;
 }
+
+
+
+/* ANSI color rendering in Live Logs (optional; enabled via ui-settings logs.ansi) */
+.ansi { color: inherit; }
+.ansi-bold { font-weight: 700; }
+.ansi-underline { text-decoration: underline; }
+
+/* Foreground colors (approximate to panel semantic colors) */
+.ansi-fg-black { color: var(--muted, #6b7280); }
+.ansi-fg-red { color: var(--sem-error, #f87171); }
+.ansi-fg-green { color: var(--sem-success, #22c55e); }
+.ansi-fg-yellow { color: var(--sem-warning, #fbbf24); }
+.ansi-fg-blue { color: var(--sem-info, #93c5fd); }
+.ansi-fg-magenta { color: color-mix(in srgb, var(--accent, #60a5fa) 35%, #f472b6 65%); }
+.ansi-fg-cyan { color: color-mix(in srgb, var(--sem-info, #93c5fd) 55%, #67e8f9 45%); }
+.ansi-fg-white { color: var(--text, #e5e7eb); }
+
+.ansi-fg-bright-black { color: color-mix(in srgb, var(--muted, #6b7280) 55%, var(--text, #e5e7eb) 45%); }
+.ansi-fg-bright-red { color: color-mix(in srgb, var(--sem-error, #f87171) 70%, white 30%); }
+.ansi-fg-bright-green { color: color-mix(in srgb, var(--sem-success, #22c55e) 70%, white 30%); }
+.ansi-fg-bright-yellow { color: color-mix(in srgb, var(--sem-warning, #fbbf24) 70%, white 30%); }
+.ansi-fg-bright-blue { color: color-mix(in srgb, var(--sem-info, #93c5fd) 70%, white 30%); }
+.ansi-fg-bright-magenta { color: color-mix(in srgb, color-mix(in srgb, var(--accent, #60a5fa) 35%, #f472b6 65%) 70%, white 30%); }
+.ansi-fg-bright-cyan { color: color-mix(in srgb, color-mix(in srgb, var(--sem-info, #93c5fd) 55%, #67e8f9 45%) 70%, white 30%); }
+.ansi-fg-bright-white { color: var(--text, #e5e7eb); }
+
+/* Background colors: subtle tint so text stays readable */
+.ansi.ansi-has-bg { padding: 0 1px; border-radius: 4px; }
+
+.ansi-bg-black { background: color-mix(in srgb, var(--muted, #6b7280) 18%, transparent); }
+.ansi-bg-red { background: color-mix(in srgb, var(--sem-error, #f87171) 18%, transparent); }
+.ansi-bg-green { background: color-mix(in srgb, var(--sem-success, #22c55e) 18%, transparent); }
+.ansi-bg-yellow { background: color-mix(in srgb, var(--sem-warning, #fbbf24) 18%, transparent); }
+.ansi-bg-blue { background: color-mix(in srgb, var(--sem-info, #93c5fd) 18%, transparent); }
+.ansi-bg-magenta { background: color-mix(in srgb, color-mix(in srgb, var(--accent, #60a5fa) 35%, #f472b6 65%) 18%, transparent); }
+.ansi-bg-cyan { background: color-mix(in srgb, color-mix(in srgb, var(--sem-info, #93c5fd) 55%, #67e8f9 45%) 18%, transparent); }
+.ansi-bg-white { background: rgba(255,255,255,0.10); }
+
+.ansi-bg-bright-black { background: color-mix(in srgb, var(--muted, #6b7280) 24%, transparent); }
+.ansi-bg-bright-red { background: color-mix(in srgb, var(--sem-error, #f87171) 24%, transparent); }
+.ansi-bg-bright-green { background: color-mix(in srgb, var(--sem-success, #22c55e) 24%, transparent); }
+.ansi-bg-bright-yellow { background: color-mix(in srgb, var(--sem-warning, #fbbf24) 24%, transparent); }
+.ansi-bg-bright-blue { background: color-mix(in srgb, var(--sem-info, #93c5fd) 24%, transparent); }
+.ansi-bg-bright-magenta { background: color-mix(in srgb, color-mix(in srgb, var(--accent, #60a5fa) 35%, #f472b6 65%) 24%, transparent); }
+.ansi-bg-bright-cyan { background: color-mix(in srgb, color-mix(in srgb, var(--sem-info, #93c5fd) 55%, #67e8f9 45%) 24%, transparent); }
+.ansi-bg-bright-white { background: rgba(255,255,255,0.14); }
 
 /* Live Xray logs */
 .xray-log-block {
@@ -2882,6 +3210,53 @@ html[data-theme="light"] .xray-log-select option{
   line-height: 1.2;
 }
 
+
+
+
+/* ANSI color rendering in Live Logs (optional; enabled via ui-settings logs.ansi) */
+.ansi { color: inherit; }
+.ansi-bold { font-weight: 700; }
+.ansi-underline { text-decoration: underline; }
+
+/* Foreground colors (approximate to panel semantic colors) */
+.ansi-fg-black { color: var(--muted, #6b7280); }
+.ansi-fg-red { color: var(--sem-error, #f87171); }
+.ansi-fg-green { color: var(--sem-success, #22c55e); }
+.ansi-fg-yellow { color: var(--sem-warning, #fbbf24); }
+.ansi-fg-blue { color: var(--sem-info, #93c5fd); }
+.ansi-fg-magenta { color: color-mix(in srgb, var(--accent, #60a5fa) 35%, #f472b6 65%); }
+.ansi-fg-cyan { color: color-mix(in srgb, var(--sem-info, #93c5fd) 55%, #67e8f9 45%); }
+.ansi-fg-white { color: var(--text, #e5e7eb); }
+
+.ansi-fg-bright-black { color: color-mix(in srgb, var(--muted, #6b7280) 55%, var(--text, #e5e7eb) 45%); }
+.ansi-fg-bright-red { color: color-mix(in srgb, var(--sem-error, #f87171) 70%, white 30%); }
+.ansi-fg-bright-green { color: color-mix(in srgb, var(--sem-success, #22c55e) 70%, white 30%); }
+.ansi-fg-bright-yellow { color: color-mix(in srgb, var(--sem-warning, #fbbf24) 70%, white 30%); }
+.ansi-fg-bright-blue { color: color-mix(in srgb, var(--sem-info, #93c5fd) 70%, white 30%); }
+.ansi-fg-bright-magenta { color: color-mix(in srgb, color-mix(in srgb, var(--accent, #60a5fa) 35%, #f472b6 65%) 70%, white 30%); }
+.ansi-fg-bright-cyan { color: color-mix(in srgb, color-mix(in srgb, var(--sem-info, #93c5fd) 55%, #67e8f9 45%) 70%, white 30%); }
+.ansi-fg-bright-white { color: var(--text, #e5e7eb); }
+
+/* Background colors: subtle tint so text stays readable */
+.ansi.ansi-has-bg { padding: 0 1px; border-radius: 4px; }
+
+.ansi-bg-black { background: color-mix(in srgb, var(--muted, #6b7280) 18%, transparent); }
+.ansi-bg-red { background: color-mix(in srgb, var(--sem-error, #f87171) 18%, transparent); }
+.ansi-bg-green { background: color-mix(in srgb, var(--sem-success, #22c55e) 18%, transparent); }
+.ansi-bg-yellow { background: color-mix(in srgb, var(--sem-warning, #fbbf24) 18%, transparent); }
+.ansi-bg-blue { background: color-mix(in srgb, var(--sem-info, #93c5fd) 18%, transparent); }
+.ansi-bg-magenta { background: color-mix(in srgb, color-mix(in srgb, var(--accent, #60a5fa) 35%, #f472b6 65%) 18%, transparent); }
+.ansi-bg-cyan { background: color-mix(in srgb, color-mix(in srgb, var(--sem-info, #93c5fd) 55%, #67e8f9 45%) 18%, transparent); }
+.ansi-bg-white { background: rgba(255,255,255,0.10); }
+
+.ansi-bg-bright-black { background: color-mix(in srgb, var(--muted, #6b7280) 24%, transparent); }
+.ansi-bg-bright-red { background: color-mix(in srgb, var(--sem-error, #f87171) 24%, transparent); }
+.ansi-bg-bright-green { background: color-mix(in srgb, var(--sem-success, #22c55e) 24%, transparent); }
+.ansi-bg-bright-yellow { background: color-mix(in srgb, var(--sem-warning, #fbbf24) 24%, transparent); }
+.ansi-bg-bright-blue { background: color-mix(in srgb, var(--sem-info, #93c5fd) 24%, transparent); }
+.ansi-bg-bright-magenta { background: color-mix(in srgb, color-mix(in srgb, var(--accent, #60a5fa) 35%, #f472b6 65%) 24%, transparent); }
+.ansi-bg-bright-cyan { background: color-mix(in srgb, color-mix(in srgb, var(--sem-info, #93c5fd) 55%, #67e8f9 45%) 24%, transparent); }
+.ansi-bg-bright-white { background: rgba(255,255,255,0.14); }
 
 /* Live Xray logs */
 .xray-log-block {
@@ -3077,7 +3452,7 @@ button.backup-icon-btn.backup-delete-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: 10px;
+  gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--text-muted, #94a3b8) 35%, transparent);
@@ -3090,16 +3465,34 @@ button.backup-icon-btn.backup-delete-btn {
   user-select: none;
 }
 
+/* Small dot indicator (chip style). */
+.xk-comments-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted, #94a3b8) 70%, transparent);
+  display: inline-block;
+}
+
 .xk-comments-badge.xk-comments-on {
   border-color: var(--sem-success, #22c55e);
   background: color-mix(in srgb, var(--sem-success, #22c55e) 12%, transparent);
   color: var(--sem-success, #22c55e);
 }
 
+.xk-comments-badge.xk-comments-on::before {
+  background: var(--sem-success, #22c55e);
+}
+
 .xk-comments-badge.xk-comments-off {
   border-color: color-mix(in srgb, var(--text-muted, #94a3b8) 35%, transparent);
   background: color-mix(in srgb, var(--text-muted, #94a3b8) 8%, transparent);
   color: var(--text-muted, #94a3b8);
+}
+
+.xk-comments-badge.xk-comments-off::before {
+  background: color-mix(in srgb, var(--text-muted, #94a3b8) 70%, transparent);
 }
 
 .xray-logs-badge[data-state="on"] {
@@ -5218,6 +5611,30 @@ html[data-theme="light"] .xkeen-cm ::selection {
   max-height: 440px;
 }
 
+/* Routing templates: Monaco containers (preview + edit) */
+.routing-template-preview-monaco {
+  flex: 1;
+  height: 440px;
+  min-height: 440px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--text-muted, #94a3b8) 22%, transparent);
+  box-shadow: none;
+}
+
+.routing-template-edit-monaco {
+  width: 100%;
+  min-height: 260px;
+  height: 360px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--text-muted, #94a3b8) 22%, transparent);
+  box-shadow: none;
+}
+
+html[data-theme="light"] .routing-template-preview-monaco,
+html[data-theme="light"] .routing-template-edit-monaco {
+  border-color: #e5e7eb;
+}
+
 
 /* Snapshot preview modal (read-only CodeMirror) */
 .xray-snapshot-preview-cm {
@@ -5226,6 +5643,20 @@ html[data-theme="light"] .xkeen-cm ::selection {
 
 .xray-snapshot-preview-cm .CodeMirror-scroll {
   max-height: 520px;
+}
+
+/* Snapshot preview modal (read-only Monaco) */
+.xray-snapshot-preview-monaco {
+  width: 100%;
+  height: 520px;
+  min-height: 520px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--text-muted, #94a3b8) 22%, transparent);
+  box-shadow: none;
+}
+
+html[data-theme="light"] .xray-snapshot-preview-monaco {
+  border-color: #e5e7eb;
 }
 
 html[data-theme="light"] .routing-template-preview-cm {
@@ -7118,6 +7549,15 @@ html[data-theme="light"] .fm-progress-details{
   padding: 10px 12px;
 }
 
+/* Mihomo Import modal: YAML preview (Monaco, read-only) */
+.xk-mihomo-import-preview-monaco{
+  height: min(38vh, 280px);
+  min-height: 220px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: none;
+}
+
+
 .outbounds-gen-advanced{
   margin-top: 10px;
   padding: 10px 10px 8px 10px;
@@ -8682,6 +9122,76 @@ html[data-theme="light"] .routing-observatory-warning{
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.dat-contents-items-search-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  /* Keep search input + mode buttons on one line (desktop). */
+  flex-wrap: nowrap;
+}
+
+.dat-contents-search-mode {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dat-contents-search-mode .btn-secondary {
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.dat-contents-search-mode .btn-secondary.is-active {
+  background: var(--editor-btn-hover-bg);
+  border-color: var(--sem-info);
+  box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.35) inset;
+}
+
+/* GeoIP quick IP-version chips (v4/v6/all) */
+.dat-contents-ipfilter {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dat-contents-ipfilter .btn-secondary {
+  padding: 5px 9px;
+  border-radius: 999px;
+  line-height: 1;
+  min-width: 0;
+  white-space: nowrap;
+  opacity: 0.92;
+}
+
+.dat-contents-ipfilter .btn-secondary:hover {
+  opacity: 1;
+}
+
+.dat-contents-ipfilter .btn-secondary.is-active {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25) inset;
+}
+
+.dat-contents-items-search-row .routing-dat-input {
+  /* Don't stretch to full width; keep it neat and leave room for buttons. */
+  flex: 0 1 520px;
+  max-width: 560px;
+  min-width: 220px;
+}
+
+/* On narrow layouts allow wrapping (mobile / small panels). */
+@media (max-width: 980px) {
+  .dat-contents-items-search-row {
+    flex-wrap: wrap;
+  }
+  .dat-contents-items-search-row .routing-dat-input {
+    flex: 1 1 100%;
+    max-width: none;
+    min-width: 0;
+  }
 }
 
 .dat-contents-selected {

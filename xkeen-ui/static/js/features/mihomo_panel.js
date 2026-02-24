@@ -17,12 +17,15 @@
   const IDS = {
     view: 'view-mihomo',
     textarea: 'mihomo-editor',
+    monacoHost: 'mihomo-editor-monaco',
+    engineSelect: 'mihomo-editor-engine-select',
     status: 'mihomo-status',
     body: 'mihomo-body',
     arrow: 'mihomo-arrow',
 
     btnLoad: 'mihomo-load-btn',
     btnSave: 'mihomo-save-btn',
+    btnFormatYaml: 'mihomo-format-yaml-btn',
     btnValidate: 'mihomo-validate-btn',
     btnSaveRestart: 'mihomo-save-restart-btn',
 
@@ -55,10 +58,19 @@
 
   let _inited = false;
   let _cm = null;
+  let _engine = 'codemirror';
+  let _monaco = null;
+  let _monacoFacade = null;
+  let _engineTouched = false;
+  let _engineSyncing = false;
   let _templates = [];
   let _templatesLoaded = false;
   let _chosenTemplateName = null;
   let _activeProfileName = null;
+
+  // YAML error marker (CodeMirror only; backend validate / Prettier errors).
+  let _yamlErrorLine = null;
+  let _yamlErrorLineHandle = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -89,6 +101,267 @@
     const t = document.documentElement.getAttribute('data-theme');
     return t === 'light' ? 'default' : 'material-darker';
   }
+
+
+  // -------------------------- engine toggle (CodeMirror / Monaco) --------------------------
+  function normalizeEngine(v) {
+    const s = String(v || '').toLowerCase();
+    return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
+  }
+
+  function getEngineHelper() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+  }
+
+  function getMonacoShared() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
+  }
+
+  function showNode(node) {
+    if (!node) return;
+    try { node.classList.remove('hidden'); } catch (e) {}
+    try { node.style.display = ''; } catch (e2) {}
+  }
+
+  function hideNode(node) {
+    if (!node) return;
+    try { node.classList.add('hidden'); } catch (e) {}
+    try { node.style.display = 'none'; } catch (e2) {}
+  }
+
+  function cmWrapper(cm) {
+    try { return (cm && typeof cm.getWrapperElement === 'function') ? cm.getWrapperElement() : null; } catch (e) { return null; }
+  }
+
+  function showCmToolbar(show) {
+    try {
+      const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+      if (cm && cm._xkeenToolbarEl) cm._xkeenToolbarEl.style.display = show ? '' : 'none';
+    } catch (e) {}
+  }
+
+  function ensureMonacoHost() {
+    let host = $(IDS.monacoHost);
+    if (host) return host;
+
+    const ta = $(IDS.textarea);
+    if (!ta || !ta.parentNode) return null;
+
+    host = document.createElement('div');
+    host.id = IDS.monacoHost;
+    host.className = 'xk-monaco-editor hidden';
+
+    try { ta.parentNode.insertBefore(host, ta); } catch (e) {
+      try { ta.parentNode.appendChild(host); } catch (e2) {}
+    }
+    return host;
+  }
+
+  async function ensureMonacoEditor() {
+    if (_monaco) return _monaco;
+
+    const host = ensureMonacoHost();
+    if (!host) return null;
+
+    const shared = getMonacoShared();
+    if (!shared || typeof shared.createEditor !== 'function') return null;
+
+    // initial value from CodeMirror/textarea
+    let value = '';
+    try { if (_cm && _cm.getValue) value = String(_cm.getValue() || ''); } catch (e) {}
+    if (!value) {
+      try {
+        const ta = $(IDS.textarea);
+        if (ta) value = String(ta.value || '');
+      } catch (e2) {}
+    }
+
+    try {
+      _monaco = await shared.createEditor(host, {
+        language: 'yaml',
+        value,
+        tabSize: 2,
+        insertSpaces: true,
+        wordWrap: 'on',
+      });
+      if (!_monaco) return null;
+
+      try { _monacoFacade = (shared.toFacade ? shared.toFacade(_monaco) : null); } catch (e) { _monacoFacade = null; }
+      return _monaco;
+    } catch (e) {
+      try { console.error(e); } catch (e2) {}
+      return null;
+    }
+  }
+
+  function showCodeMirror(show) {
+    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    const w = cmWrapper(cm);
+    const ta = $(IDS.textarea);
+
+    if (w) {
+      if (show) showNode(w);
+      else hideNode(w);
+      if (show) {
+        try { if (cm && cm.refresh) cm.refresh(); } catch (e) {}
+      }
+      return;
+    }
+
+    if (ta) {
+      if (show) showNode(ta);
+      else hideNode(ta);
+    }
+  }
+
+  function showMonaco(show) {
+    const host = ensureMonacoHost();
+    if (!host) return;
+
+    if (show) showNode(host);
+    else hideNode(host);
+
+    if (show && _monaco && typeof _monaco.layout === 'function') {
+      try { _monaco.layout(); } catch (e) {}
+      try { setTimeout(() => { try { _monaco.layout(); } catch (e2) {} }, 0); } catch (e3) {}
+    }
+  }
+
+  function setEngineSelectValue(engine) {
+    const sel = $(IDS.engineSelect);
+    if (!sel) return;
+    try { sel.value = normalizeEngine(engine); } catch (e) {}
+  }
+
+  async function resolvePreferredEngine() {
+    let engine = 'codemirror';
+    const ee = getEngineHelper();
+    try {
+      if (ee && typeof ee.ensureLoaded === 'function') engine = normalizeEngine(await ee.ensureLoaded());
+      else if (ee && typeof ee.get === 'function') engine = normalizeEngine(ee.get());
+    } catch (e) {
+      try { engine = normalizeEngine(ee && ee.get ? ee.get() : 'codemirror'); } catch (e2) { engine = 'codemirror'; }
+    }
+    return engine;
+  }
+
+  async function switchEngine(nextEngine, opts) {
+    const next = normalizeEngine(nextEngine);
+    if (!next) return _engine;
+    if (next === _engine && !(opts && opts.force)) return _engine;
+
+    _engineSyncing = true;
+    try {
+      try { clearYamlErrorMarker(); } catch (e) {}
+
+      if (next === 'monaco') {
+        const ed = await ensureMonacoEditor();
+        if (!ed) {
+          // Fallback to CodeMirror and persist it to global helper (best-effort).
+          try {
+            const ee = getEngineHelper();
+            if (ee && typeof ee.set === 'function') ee.set('codemirror');
+          } catch (e2) {}
+          showMonaco(false);
+          showCodeMirror(true);
+          showCmToolbar(true);
+          _engine = 'codemirror';
+          return _engine;
+        }
+
+        // Sync text from CodeMirror to Monaco on entry.
+        try {
+          const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+          const v = (cm && cm.getValue) ? String(cm.getValue() || '') : String(($(IDS.textarea) && $(IDS.textarea).value) || '');
+          if (ed && ed.setValue) ed.setValue(v);
+        } catch (e3) {}
+
+        showCodeMirror(false);
+        showCmToolbar(false);
+        showMonaco(true);
+
+        _engine = 'monaco';
+        try { if (_monacoFacade && _monacoFacade.focus) _monacoFacade.focus(); else if (_monaco && _monaco.focus) _monaco.focus(); } catch (e4) {}
+        return _engine;
+      }
+
+      // Switch to CodeMirror (sync text back from Monaco).
+      try {
+        const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+        if (_monaco && cm && cm.setValue) cm.setValue(String(_monaco.getValue() || ''));
+      } catch (e5) {}
+
+      showMonaco(false);
+      showCodeMirror(true);
+      showCmToolbar(true);
+
+      _engine = 'codemirror';
+      try {
+        const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+        if (cm && cm.focus) cm.focus();
+      } catch (e6) {}
+      return _engine;
+    } finally {
+      _engineSyncing = false;
+    }
+  }
+
+  function initEngineToggle() {
+    const sel = $(IDS.engineSelect);
+    if (!sel) return;
+    if (sel.dataset && sel.dataset.xkWired === '1') return;
+
+    // Initial value from settings/local fallback (async, non-blocking).
+    (async () => {
+      try {
+        const pref = await resolvePreferredEngine();
+        setEngineSelectValue(pref);
+        await switchEngine(pref, { force: false });
+      } catch (e) {}
+    })();
+
+    sel.addEventListener('change', async () => {
+      const next = normalizeEngine(sel.value);
+      _engineTouched = true;
+      try {
+        await switchEngine(next, { force: false });
+
+        const ee = getEngineHelper();
+        if (ee && typeof ee.set === 'function') {
+          try { await ee.set(next); } catch (e) {}
+        }
+      } finally {
+        try { setTimeout(() => { _engineTouched = false; }, 0); } catch (e) { _engineTouched = false; }
+      }
+    });
+
+    if (sel.dataset) sel.dataset.xkWired = '1';
+
+    // Keep in sync with other editors when preference changes globally.
+    const ee = getEngineHelper();
+    const onGlobal = (detail) => {
+      try {
+        if (_engineTouched) return;
+        const eng = normalizeEngine(detail && detail.engine);
+        if (!eng) return;
+        try { if (sel.value !== eng) sel.value = eng; } catch (e) {}
+        if (eng !== _engine) {
+          switchEngine(eng, { force: false }).catch(() => {});
+        }
+      } catch (e) {}
+    };
+
+    try {
+      if (ee && typeof ee.onChange === 'function') {
+        ee.onChange(onGlobal);
+      } else {
+        document.addEventListener('xkeen-editor-engine-change', (ev) => {
+          onGlobal(ev && ev.detail ? ev.detail : {});
+        });
+      }
+    } catch (e) {}
+  }
+
 
   function ensureEditor() {
     const ta = $(IDS.textarea);
@@ -155,31 +428,118 @@
   }
 
   function getEditorText() {
-    const cm = _cm || XKeen.state.mihomoEditor;
-    if (cm && cm.getValue) return cm.getValue();
+    try {
+      if (_engine === 'monaco' && _monaco) return String(_monaco.getValue() || '');
+    } catch (e) {}
+    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    if (cm && cm.getValue) return String(cm.getValue() || '');
     const ta = $(IDS.textarea);
-    return ta ? ta.value : '';
+    return ta ? String(ta.value || '') : '';
   }
 
+  // Set text into all known backends so switching engines stays lossless.
   function setEditorText(text) {
-    const cm = _cm || XKeen.state.mihomoEditor;
-    if (cm && cm.setValue) {
-      cm.setValue(String(text ?? ''));
-      return;
-    }
-    const ta = $(IDS.textarea);
-    if (ta) ta.value = String(text ?? '');
+    const v = String(text ?? '');
+    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    try { if (cm && cm.setValue) cm.setValue(v); } catch (e) {}
+    try { if (_monaco && _monaco.setValue) _monaco.setValue(v); } catch (e) {}
+    try {
+      const ta = $(IDS.textarea);
+      if (ta) ta.value = v;
+    } catch (e) {}
   }
 
   window.getMihomoEditorText = window.getMihomoEditorText || getEditorText;
   window.setMihomoEditorText = window.setMihomoEditorText || setEditorText;
 
-  function refreshEditorIfAny() {
+  function clearYamlErrorMarker() {
     const cm = _cm || XKeen.state.mihomoEditor;
+    if (!cm) {
+      _yamlErrorLine = null;
+      _yamlErrorLineHandle = null;
+      return;
+    }
+    try {
+      if (_yamlErrorLineHandle) {
+        cm.removeLineClass(_yamlErrorLineHandle, 'background', 'cm-error-line');
+      } else if (typeof _yamlErrorLine === 'number') {
+        cm.removeLineClass(_yamlErrorLine, 'background', 'cm-error-line');
+      }
+    } catch (e) {}
+    _yamlErrorLine = null;
+    _yamlErrorLineHandle = null;
+  }
+
+  function markYamlErrorLine(line0) {
+    // Always clear previous marker in CodeMirror.
+    clearYamlErrorMarker();
+    if (typeof line0 !== 'number' || line0 < 0) return;
+
+    // Monaco: best-effort focus on the line (no background marker for now).
+    if (_engine === 'monaco' && _monaco) {
+      try {
+        const line1 = Math.max(1, line0 + 1);
+        if (_monaco.revealLineInCenter) _monaco.revealLineInCenter(line1);
+        if (_monaco.setPosition) _monaco.setPosition({ lineNumber: line1, column: 1 });
+        if (_monaco.focus) _monaco.focus();
+        return;
+      } catch (e) {}
+    }
+
+    // CodeMirror marker (background highlight + scroll).
+    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    if (!cm) return;
+
+    try {
+      _yamlErrorLine = line0;
+      _yamlErrorLineHandle = cm.addLineClass(line0, 'background', 'cm-error-line');
+      if (cm.scrollIntoView) cm.scrollIntoView({ line: line0, ch: 0 }, 200);
+    } catch (e) {}
+  }
+
+  function extractYamlLineCol(textOrLog) {
+    const s = String(textOrLog ?? '');
+    // Common patterns:
+    //  - "yaml: line 12: ..."
+    //  - "line 12, column 3"
+    //  - "line 12: column 3"
+    //  - "line 12:3"
+    let m = /line\s+(\d+)\s*(?:[:,]\s*column\s*(\d+))?/i.exec(s);
+    if (m) {
+      const line = parseInt(m[1], 10);
+      const col = m[2] ? parseInt(m[2], 10) : null;
+      if (Number.isFinite(line)) return { line, col };
+    }
+    m = /line\s+(\d+)\s*,\s*col(?:umn)?\s*(\d+)/i.exec(s);
+    if (m) {
+      const line = parseInt(m[1], 10);
+      const col = parseInt(m[2], 10);
+      if (Number.isFinite(line)) return { line, col: Number.isFinite(col) ? col : null };
+    }
+    m = /line\s+(\d+)\s*:\s*(\d+)/i.exec(s);
+    if (m) {
+      const line = parseInt(m[1], 10);
+      const col = parseInt(m[2], 10);
+      if (Number.isFinite(line)) return { line, col: Number.isFinite(col) ? col : null };
+    }
+    return null;
+  }
+
+
+  function refreshEditorIfAny() {
+    // If Monaco is active, ensure layout (especially after tab/card open).
+    if (_engine === 'monaco' && _monaco && typeof _monaco.layout === 'function') {
+      try { _monaco.layout(); } catch (e) {}
+      try { setTimeout(() => { try { _monaco.layout(); } catch (e2) {} }, 0); } catch (e3) {}
+      return;
+    }
+
+    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
     try {
       if (cm && cm.refresh) cm.refresh();
     } catch (e) {}
   }
+
 
   // Card collapse (header onclick="toggleMihomoCard()" in template)
   function toggleMihomoCard() {
@@ -302,6 +662,61 @@
     }
   };
 
+
+
+  MP.formatYamlFromEditor = async function formatYamlFromEditor() {
+    const content = String(getEditorText() || '');
+    if (!content.trim()) {
+      setStatus('config.yaml пустой, форматировать нечего.', true);
+      return false;
+    }
+
+    clearYamlErrorMarker();
+
+    // Browser-side Prettier formatting (offline-capable via static/vendor).
+    try {
+      if (!window.XKeen || !XKeen.ui || !XKeen.ui.formatters || typeof XKeen.ui.formatters.formatYaml !== 'function') {
+        setStatus('Форматирование YAML недоступно (formatters не загружены).', true);
+        return false;
+      }
+
+      // Avoid noisy "loading..." toast; keep only final result.
+      setStatus('Форматирую YAML…', false, true);
+
+      const r = await XKeen.ui.formatters.formatYaml(content);
+      if (!r || !r.ok) {
+        const err = (r && r.error) ? String(r.error) : 'unknown';
+        const msg =
+          (err === 'prettier_not_available')
+            ? 'Prettier недоступен — форматирование YAML пропущено.'
+            : ('Ошибка форматирования YAML: ' + err);
+        try {
+          const lc = extractYamlLineCol(err);
+          if (lc && Number.isFinite(lc.line)) markYamlErrorLine(Math.max(0, lc.line - 1));
+        } catch (e2) {}
+        setStatus(msg, true);
+        return false;
+      }
+
+      const out = String(r.text ?? '');
+      if (out === content) {
+        clearYamlErrorMarker();
+        setStatus('YAML уже отформатирован.', false);
+        return true;
+      }
+
+      setEditorText(out);
+      clearYamlErrorMarker();
+      bumpLastActivity('formatted');
+      setStatus('YAML отформатирован.', false);
+      return true;
+    } catch (e) {
+      console.error(e);
+      setStatus('Ошибка форматирования YAML: ' + e, true);
+      return false;
+    }
+  };
+
   // ---------- Validate modal ----------
 
   function formatValidationLogHtml(text) {
@@ -346,6 +761,8 @@
       setStatus('config.yaml пустой, проверять нечего.', true);
       return false;
     }
+
+    clearYamlErrorMarker();
     setStatus('Проверяю конфиг через mihomo...', false);
 
     try {
@@ -365,9 +782,14 @@
 
       const firstLine = (log.split('\n').find((l) => l.trim()) || '').trim();
       if (data.ok) {
+        clearYamlErrorMarker();
         setStatus(firstLine || 'mihomo сообщает, что конфиг валиден (exit code 0).', false);
         return true;
       }
+      try {
+        const lc = extractYamlLineCol(firstLine || log);
+        if (lc && Number.isFinite(lc.line)) markYamlErrorLine(Math.max(0, lc.line - 1));
+      } catch (e2) {}
       setStatus('В таком виде конфиг не будет работать: ' + (firstLine || 'ошибка проверки.'), true);
       return false;
     } catch (e) {
@@ -967,10 +1389,12 @@
     if (root.dataset) root.dataset.xkeenMihomoPanelInited = '1';
 
     ensureEditor();
+    try { initEngineToggle(); } catch (e) {}
 
     // Main actions
     wireButton(IDS.btnLoad, () => MP.loadConfig());
     wireButton(IDS.btnSave, () => MP.saveConfig());
+    wireButton(IDS.btnFormatYaml, () => MP.formatYamlFromEditor());
     wireButton(IDS.btnValidate, () => MP.validateFromEditor());
     wireButton(IDS.btnSaveRestart, () => MP.saveAndRestart());
 

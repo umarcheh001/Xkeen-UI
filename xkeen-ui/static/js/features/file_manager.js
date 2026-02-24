@@ -1134,7 +1134,12 @@ async function xhrUploadFiles({ side, files }) {
 
         const url = (() => {
           let u = `/api/fs/upload?target=${encodeURIComponent(p.target)}&path=${encodeURIComponent(destPath)}`;
-          if (p.target === 'remote') u += `&sid=${encodeURIComponent(p.sid)}`;
+          if (p.target === 'remote') {
+            u += `&sid=${encodeURIComponent(p.sid)}`;
+            // Create destination directories on demand (remote).
+            // Safe for existing paths: remote side uses `mkdir -p`.
+            u += '&parents=1';
+          }
           if (overwrite) u += '&overwrite=1';
           return u;
         })();

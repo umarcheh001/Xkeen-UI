@@ -14,9 +14,53 @@
   let _snapWired = false;
   let _snapCm = null;
   let _snapLastText = '';
+  let _snapMonaco = null;
+  let _snapMonacoFacade = null;
+  let _snapKind = 'codemirror';
+  let _snapEngineSyncing = false;
+  let _snapEngineUnsub = null;
 
   function el(id) {
     return document.getElementById(id);
+  }
+
+  function showNode(node) {
+    if (!node) return;
+    try { node.classList.remove('hidden'); } catch (e) {}
+  }
+
+  function hideNode(node) {
+    if (!node) return;
+    try { node.classList.add('hidden'); } catch (e) {}
+  }
+
+  function cmWrapper(cm) {
+    try { return cm && typeof cm.getWrapperElement === 'function' ? cm.getWrapperElement() : null; } catch (e) {}
+    return null;
+  }
+
+  function modalOpen(id) {
+    const m = el(id);
+    return !!(m && !m.classList.contains('hidden'));
+  }
+
+  function getEngineHelper() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) return XKeen.ui.editorEngine;
+    } catch (e) {}
+    return null;
+  }
+
+  function getMonacoShared() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) return XKeen.ui.monacoShared;
+    } catch (e) {}
+    return null;
+  }
+
+  function normalizeEngine(v) {
+    const s = String(v || '').toLowerCase();
+    return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
   }
 
   function tableEl() {
@@ -254,6 +298,146 @@
     return t === 'light' ? 'default' : 'material-darker';
   }
 
+  const SNAP_PLACEHOLDER = '// загрузка…';
+
+  function setSnapEngineSelect(engine) {
+    const sel = el('xray-snapshot-engine-select');
+    if (!sel) return;
+    try { sel.value = normalizeEngine(engine); } catch (e) {}
+  }
+
+  async function resolvePreferredEngine() {
+    let engine = 'codemirror';
+    const ee = getEngineHelper();
+    try {
+      if (ee && typeof ee.ensureLoaded === 'function') engine = normalizeEngine(await ee.ensureLoaded());
+      else if (ee && typeof ee.get === 'function') engine = normalizeEngine(ee.get());
+    } catch (e) {
+      try { engine = normalizeEngine(ee && ee.get ? ee.get() : 'codemirror'); } catch (e2) { engine = 'codemirror'; }
+    }
+    return engine;
+  }
+
+  function snapTextFallback() {
+    try { if (_snapLastText) return String(_snapLastText || ''); } catch (e) {}
+    try {
+      if (_snapKind === 'monaco' && _snapMonacoFacade && _snapMonacoFacade.getValue) return String(_snapMonacoFacade.getValue() || '');
+    } catch (e) {}
+    try {
+      if (_snapCm && _snapCm.getValue) return String(_snapCm.getValue() || '');
+    } catch (e) {}
+    const ta = el('xray-snapshot-preview');
+    return ta ? String(ta.value || '') : '';
+  }
+
+  function disposeSnapMonaco() {
+    try {
+      if (_snapMonacoFacade && _snapMonacoFacade.dispose) _snapMonacoFacade.dispose();
+      else if (_snapMonaco && _snapMonaco.dispose) _snapMonaco.dispose();
+    } catch (e) {}
+    _snapMonaco = null;
+    _snapMonacoFacade = null;
+  }
+
+  function resetSnapVisibility() {
+    const host = el('xray-snapshot-preview-monaco');
+    hideNode(host);
+    const w = cmWrapper(_snapCm);
+    if (w) showNode(w);
+    const ta = el('xray-snapshot-preview');
+    if (!w && ta) showNode(ta);
+  }
+
+  async function activateSnapEngine(engine) {
+    const next = normalizeEngine(engine);
+    const host = el('xray-snapshot-preview-monaco');
+    const ta = el('xray-snapshot-preview');
+
+    if (next === 'monaco') {
+      const shared = getMonacoShared();
+      if (!shared || !host || typeof shared.createEditor !== 'function') {
+        try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
+        const ee = getEngineHelper();
+        try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
+        return activateSnapEngine('codemirror');
+      }
+
+      // Hide CodeMirror/textarea, show Monaco host
+      const w = cmWrapper(_snapCm);
+      if (w) hideNode(w);
+      if (ta) hideNode(ta);
+      showNode(host);
+
+      const value = snapTextFallback() || SNAP_PLACEHOLDER;
+
+      if (!_snapMonaco) {
+        const ed = await shared.createEditor(host, {
+          // Monaco core ships JSON support; JSONC is not always registered.
+          language: 'json',
+          readOnly: true,
+          value: value,
+        });
+        if (!ed) {
+          try { if (window.toast) window.toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
+          const ee = getEngineHelper();
+          try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
+          resetSnapVisibility();
+          return activateSnapEngine('codemirror');
+        }
+        _snapMonaco = ed;
+        try { _snapMonacoFacade = shared.toFacade(ed); } catch (e) { _snapMonacoFacade = null; }
+        try { if (shared.layoutOnVisible) shared.layoutOnVisible(ed, host); } catch (e2) {}
+      } else if (_snapMonacoFacade && _snapMonacoFacade.setValue) {
+        _snapMonacoFacade.setValue(value);
+      }
+
+      _snapKind = 'monaco';
+      try { if (_snapMonacoFacade) _snapMonacoFacade.scrollTo(0, 0); } catch (e) {}
+      return 'monaco';
+    }
+
+    // CodeMirror
+    if (host) hideNode(host);
+    try { disposeSnapMonaco(); } catch (e) {}
+
+    const cm = ensureSnapEditor();
+    const value = snapTextFallback() || SNAP_PLACEHOLDER;
+    if (cm && cm.setValue) {
+      try {
+        cm.setValue(value);
+        cm.scrollTo(0, 0);
+        setTimeout(() => { try { cm.refresh(); } catch (e2) {} }, 30);
+      } catch (e) {}
+      const w = cmWrapper(cm);
+      if (w) showNode(w);
+      if (ta) hideNode(ta);
+    } else {
+      if (ta) {
+        try { ta.value = value; } catch (e) {}
+        showNode(ta);
+      }
+    }
+
+    _snapKind = 'codemirror';
+    return 'codemirror';
+  }
+
+  async function syncSnapEngineNow() {
+    if (_snapEngineSyncing) return;
+    _snapEngineSyncing = true;
+    try {
+      const engine = await resolvePreferredEngine();
+      setSnapEngineSelect(engine);
+      if (modalOpen('xray-snapshot-modal')) await activateSnapEngine(engine);
+    } finally {
+      _snapEngineSyncing = false;
+    }
+  }
+
+  function scheduleSnapEngineSync() {
+    try { setTimeout(() => { try { syncSnapEngineNow(); } catch (e) {} }, 0); } catch (e) {}
+  }
+
   function openSnapModal() {
     const m = el('xray-snapshot-modal');
     if (!m) return;
@@ -265,11 +449,8 @@
     } catch (e) {}
 
     try {
-      // Lazy-init preview editor (CodeMirror) and refresh after showing the modal
-      ensureSnapEditor();
-      if (_snapCm && typeof _snapCm.refresh === 'function') {
-        setTimeout(() => { try { _snapCm.refresh(); } catch (e2) {} }, 60);
-      }
+      // Activate preferred editor engine (CodeMirror / Monaco)
+      scheduleSnapEngineSync();
     } catch (e) {}
   }
 
@@ -306,15 +487,26 @@
     const value = String(text || '');
     _snapLastText = value;
 
-    const cm = ensureSnapEditor();
-    if (cm && typeof cm.setValue === 'function') {
-      cm.setValue(value);
-      try { cm.scrollTo(0, 0); } catch (e) {}
-      return;
-    }
+    try {
+      if (_snapKind === 'monaco' && _snapMonacoFacade && _snapMonacoFacade.setValue) {
+        _snapMonacoFacade.setValue(value);
+        try { _snapMonacoFacade.scrollTo(0, 0); } catch (e2) {}
+        return;
+      }
+    } catch (e) {}
+
+    try {
+      if (_snapCm && typeof _snapCm.setValue === 'function') {
+        _snapCm.setValue(value);
+        try { _snapCm.scrollTo(0, 0); } catch (e2) {}
+        return;
+      }
+    } catch (e) {}
 
     const ta = el('xray-snapshot-preview');
-    if (ta) ta.value = value;
+    if (ta) {
+      try { ta.value = value; } catch (e) {}
+    }
   }
 
   function ensureSnapEditor() {
@@ -336,7 +528,7 @@
 
     try {
       _snapCm = window.CodeMirror.fromTextArea(ta, {
-        mode: { name: 'jsonc' },
+        mode: { name: 'javascript', json: true },
         theme: cmThemeFromPage(),
         readOnly: 'nocursor',
         lineNumbers: true,
@@ -366,7 +558,7 @@
       } catch (e3) {}
 
       try {
-        _snapCm.setValue('// загрузка…');
+        _snapCm.setValue(String(_snapLastText || SNAP_PLACEHOLDER));
         _snapCm.scrollTo(0, 0);
       } catch (e4) {}
     } catch (e) {
@@ -410,15 +602,20 @@
           }
         } catch (e2) {}
 
-        // Fallback: select textarea and execCommand
+        // Fallback: execCommand on a temporary textarea (works even if the real textarea is hidden)
         try {
-          const ta = el('xray-snapshot-preview');
-          if (ta) {
-            ta.focus();
-            ta.select();
-            const ok = document.execCommand('copy');
-            toast(ok ? 'Скопировано.' : 'Не удалось скопировать.', !ok);
-          }
+          const tmp = document.createElement('textarea');
+          tmp.value = txt;
+          tmp.setAttribute('readonly', '');
+          tmp.style.position = 'fixed';
+          tmp.style.left = '-9999px';
+          tmp.style.top = '0';
+          document.body.appendChild(tmp);
+          tmp.focus();
+          tmp.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(tmp);
+          toast(ok ? 'Скопировано.' : 'Не удалось скопировать.', !ok);
         } catch (e3) {
           toast('Не удалось скопировать.', true);
         }
@@ -439,6 +636,30 @@
       const m = el('xray-snapshot-modal');
       if (m && !m.classList.contains('hidden')) closeSnapModal();
     });
+
+    // Engine toggle
+    const sel = el('xray-snapshot-engine-select');
+    if (sel && !(sel.dataset && sel.dataset.xkeenWired === '1')) {
+      if (sel.dataset) sel.dataset.xkeenWired = '1';
+      sel.addEventListener('change', async () => {
+        const ee = getEngineHelper();
+        try {
+          if (ee && ee.set) await ee.set(sel.value);
+        } catch (e) {}
+        scheduleSnapEngineSync();
+      });
+    }
+
+    // Listen for global engine changes
+    if (!_snapEngineUnsub) {
+      const ee = getEngineHelper();
+      if (ee && typeof ee.onChange === 'function') {
+        _snapEngineUnsub = ee.onChange((d) => {
+          try { setSnapEngineSelect(d && d.engine ? d.engine : 'codemirror'); } catch (e) {}
+          if (modalOpen('xray-snapshot-modal')) scheduleSnapEngineSync();
+        });
+      }
+    }
   }
 
   function renderRowSnapshot(tbody, s) {

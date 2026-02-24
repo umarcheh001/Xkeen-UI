@@ -68,7 +68,7 @@
   <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260214a') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260223i') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -140,6 +140,13 @@
               class="theme-toggle-btn theme-toggle-header"
               aria-label="Переключить тему"
             ></button>
+
+            <button
+              type="button"
+              id="ui-settings-open-btn"
+              class="service-core-text"
+              title="UI настройки (Prettier/ANSI)"
+            >⚙ UI</button>
 
             <a
               href="{{ url_for('devtools_page') }}"
@@ -665,6 +672,15 @@
       </p>
 
       <!-- Основной редактор config.yaml -->
+      <div class="xk-editor-engine" id="mihomo-editor-engine" style="margin: 4px 0 8px;">
+        <span class="xk-editor-engine-label">Редактор</span>
+        <select id="mihomo-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+          <option value="codemirror">CodeMirror</option>
+          <option value="monaco">Monaco</option>
+        </select>
+      </div>
+
+      <div id="mihomo-editor-monaco" class="xk-monaco-editor hidden"></div>
       <textarea id="mihomo-editor" spellcheck="false"></textarea>
       <div id="mihomo-status" class="status"></div>
 
@@ -693,6 +709,11 @@
         <button id="mihomo-save-btn"
                 title="Сохранить (авто‑бэкап, авто‑перезапуск по галке)">
           💾 Сохранить
+        </button>
+        <button id="mihomo-format-yaml-btn"
+                type="button"
+                title="Отформатировать YAML (Prettier; оффлайн‑фолбэк через static/vendor)">
+          🧹 YAML
         </button>
         <button id="mihomo-validate-btn"
                 type="button"
@@ -1337,7 +1358,17 @@
           <button type="button" class="modal-close" id="xray-snapshot-close-btn" title="Закрыть">×</button>
         </div>
         <div class="modal-body">
-          <p id="xray-snapshot-meta" class="modal-description" style="margin-bottom: 10px;">—</p>
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom: 10px;">
+            <p id="xray-snapshot-meta" class="modal-description" style="margin:0;">—</p>
+            <div class="xk-editor-engine" id="xray-snapshot-engine" style="margin-top: 2px;">
+              <span class="xk-editor-engine-label">Редактор</span>
+              <select id="xray-snapshot-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+                <option value="codemirror">CodeMirror</option>
+                <option value="monaco">Monaco</option>
+              </select>
+            </div>
+          </div>
+          <div id="xray-snapshot-preview-monaco" class="xk-monaco-editor xray-snapshot-preview-monaco hidden"></div>
           <textarea class="routing-template-preview-code" id="xray-snapshot-preview" readonly>// загрузка…</textarea>
           <div id="xray-snapshot-status" class="modal-hint" style="margin-top: 10px;"></div>
         </div>
@@ -1366,9 +1397,21 @@
 
             <div class="routing-template-preview">
               <div class="routing-template-preview-header">
-                <div class="routing-template-preview-title" id="routing-template-title">—</div>
-                <div class="routing-template-preview-desc" id="routing-template-desc">Выбери шаблон слева, чтобы увидеть описание и превью.</div>
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+                  <div>
+                    <div class="routing-template-preview-title" id="routing-template-title">—</div>
+                    <div class="routing-template-preview-desc" id="routing-template-desc">Выбери шаблон слева, чтобы увидеть описание и превью.</div>
+                  </div>
+                  <div class="xk-editor-engine" id="routing-template-preview-engine">
+                    <span class="xk-editor-engine-label">Редактор</span>
+                    <select id="routing-template-preview-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+                      <option value="codemirror">CodeMirror</option>
+                      <option value="monaco">Monaco</option>
+                    </select>
+                  </div>
+                </div>
               </div>
+              <div id="routing-template-preview-monaco" class="xk-monaco-editor routing-template-preview-monaco hidden"></div>
               <textarea class="routing-template-preview-code" id="routing-template-preview" readonly>// превью появится здесь</textarea>
             </div>
           </div>
@@ -1431,7 +1474,16 @@
   <div class="modal-content" style="max-width: 860px;" data-modal-key="routing-template-edit">
     <div class="modal-header">
       <span class="modal-title">Редактировать шаблон</span>
-      <button type="button" class="modal-close" id="routing-template-edit-close-btn" title="Закрыть">×</button>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="xk-editor-engine" id="routing-template-edit-engine">
+          <span class="xk-editor-engine-label">Редактор</span>
+          <select id="routing-template-edit-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+            <option value="codemirror">CodeMirror</option>
+            <option value="monaco">Monaco</option>
+          </select>
+        </div>
+        <button type="button" class="modal-close" id="routing-template-edit-close-btn" title="Закрыть">×</button>
+      </div>
     </div>
     <div class="modal-body">
       <p class="modal-description" style="margin-bottom: 10px;">
@@ -1457,6 +1509,7 @@
 
         <label>
           <span class="hint-label">Шаблон (JSON / JSONC)</span>
+          <div id="routing-template-edit-monaco" class="xk-monaco-editor routing-template-edit-monaco hidden"></div>
           <textarea id="routing-template-edit-content" class="routing-template-edit-textarea" rows="14" spellcheck="false"></textarea>
         </label>
       </div>
@@ -1723,10 +1776,20 @@
           <div id="mihomo-import-status" class="status" style="margin-top: 10px;"></div>
           <p id="mihomo-import-target-hint" class="modal-hint" style="margin:8px 0 0; opacity:0.75; font-size: 0.85rem;"></p>
 
-          <label style="display:block; margin-top: 10px;">
-            <span class="hint-label">YAML (preview)</span>
+          <div style="margin-top: 10px;">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+              <span class="hint-label">YAML (preview)</span>
+              <div class="xk-editor-engine" id="mihomo-import-preview-engine" style="margin-top: 2px;">
+                <span class="xk-editor-engine-label">Редактор</span>
+                <select id="mihomo-import-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+                  <option value="codemirror">CodeMirror</option>
+                  <option value="monaco">Monaco</option>
+                </select>
+              </div>
+            </div>
+            <div id="mihomo-import-preview-monaco" class="xk-monaco-editor xk-monaco-editor--modal xk-mihomo-import-preview-monaco hidden"></div>
             <textarea id="mihomo-import-preview" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" readonly></textarea>
-          </label>
+          </div>
         </div>
         <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -1767,11 +1830,21 @@
             <span class="modal-title" id="fm-editor-title">Файл</span>
             <span id="fm-editor-subtitle" class="modal-hint" style="margin:0; font-size: 0.82rem; opacity:0.75;"></span>
           </div>
-          <button type="button" class="modal-close" id="fm-editor-close-btn" title="Закрыть">×</button>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="xk-editor-engine" id="fm-editor-engine">
+              <span class="xk-editor-engine-label">Редактор</span>
+              <select id="fm-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+                <option value="codemirror">CodeMirror</option>
+                <option value="monaco">Monaco</option>
+              </select>
+            </div>
+            <button type="button" class="modal-close" id="fm-editor-close-btn" title="Закрыть">×</button>
+          </div>
         </div>
         <div class="modal-body">
           <div id="fm-editor-warning" class="status" style="display:none;"></div>
           <div id="fm-editor-error" class="error" style="display:none;"></div>
+          <div id="fm-editor-monaco" class="xk-monaco-editor xk-monaco-editor--modal hidden"></div>
           <textarea id="fm-editor-textarea" spellcheck="false"></textarea>
         </div>
         <div class="modal-actions">
@@ -1887,6 +1960,45 @@
       </div>
     </div>
 
+
+    <!-- UI settings modal (Prettier/ANSI flags) -->
+    <div id="ui-settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="UI настройки">
+      <div class="modal-content" style="max-width: 560px;" data-modal-key="ui-settings">
+        <div class="modal-header">
+          <span class="modal-title">UI настройки</span>
+          <button type="button" class="modal-close" id="ui-settings-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description">Настройки сохраняются на роутере и применяются без консоли.</p>
+
+          <div class="xk-ui-settings-grid">
+            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center;">
+              <input type="checkbox" id="ui-setting-prefer-prettier">
+              <span><b>Routing:</b> Format via Prettier</span>
+            </label>
+            <div class="xk-card-desc" style="margin:-6px 0 10px 28px;">При включении кнопка «✨ Format JSON» будет использовать браузерный Prettier (JSONC) прежде чем уходить в fallback.</div>
+
+            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center;">
+              <input type="checkbox" id="ui-setting-logs-ansi">
+              <span><b>Logs:</b> ANSI colors</span>
+            </label>
+            <div class="xk-card-desc" style="margin:-6px 0 10px 28px;">Преобразует ANSI‑цвета в HTML (лучше читаемость live‑логов).</div>
+
+            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center;">
+              <input type="checkbox" id="ui-setting-logs-ws2">
+              <span><b>Logs:</b> WS2</span>
+            </label>
+            <div class="xk-card-desc" style="margin:-6px 0 0 28px;">Экспериментальный режим: переключение file/filter и очистка экрана без переподключения (endpoint <code>/ws/xray-logs2</code>).</div>
+          </div>
+
+          <div id="ui-settings-status" class="modal-hint" style="margin-top: 10px;"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="ui-settings-ok-btn" class="btn-secondary">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast-container"></div>
 
     <footer>
@@ -1914,27 +2026,34 @@
   <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
 	  <script src="{{ url_for('static', filename='js/ui/last_activity.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js', v='20260218a') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js', v='20260224d') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/monaco_loader.js', v='20260222a') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/monaco_shared.js', v='20260223a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260105c') }}"></script>
   <script src="{{ url_for('static', filename='js/util/tab_id.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/ansi.js') }}"></script>
     <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
 <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js', v='20260218a') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/settings.js', v='20260222c') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/editor_engine.js', v='20260223a') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/settings_panel.js', v='20260222a') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/prettier_loader.js', v='20260222a') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/formatters.js', v='20260222a') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js', v='20260224a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/dat_contents_modal.js', v='20260213b') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/backups.js', v='20260213c') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260218a') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/backups.js', v='20260224d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260224d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_jsonc_preserve.js', v='20260218d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260218d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260120c') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260224d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/local_io.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/github.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/service_status.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/xray_logs.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/restart_log.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_panel.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260119d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_panel.js', v='20260223f') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260223j') }}"></script>
   <script src="{{ url_for('static', filename='js/features/commands_list.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/outbounds.js') }}"></script>
@@ -1943,7 +2062,7 @@
     <!-- File Manager (split into small modules) -->
     <script src="{{ url_for('static', filename='js/features/file_manager/prefs.js') }}"></script>
     <script src="{{ url_for('static', filename='js/features/file_manager/chrome.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/features/file_manager/editor.js', v='20260218a') }}"></script>
+    <script src="{{ url_for('static', filename='js/features/file_manager/editor.js', v='20260223d') }}"></script>
     <script src="{{ url_for('static', filename='js/features/file_manager.js', v='20260119d') }}"></script>
   <script src="{{ url_for('static', filename='js/terminal/_core.js') }}"></script>
   <!-- Terminal refactor (Wave 3): Stage A (events/ui/api) + Stage B (transport adapters) -->
@@ -1998,8 +2117,22 @@
         </div>
         <div class="modal-body">
           <p id="json-editor-file-label"></p>
-          <span id="json-editor-comments-status" class="xk-comments-badge xk-comments-off" data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
+
+          <div class="xk-editor-toolbar" id="json-editor-toolbar">
+            <!-- Engine toggle (CodeMirror / Monaco) -->
+            <div class="xk-editor-engine" id="json-editor-engine">
+              <span class="xk-editor-engine-label">Редактор</span>
+              <select id="json-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+                <option value="codemirror">CodeMirror</option>
+                <option value="monaco">Monaco</option>
+              </select>
+            </div>
+
+            <span id="json-editor-comments-status" class="xk-comments-badge xk-comments-off" data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
+          </div>
+
           <textarea id="json-editor-textarea" spellcheck="false"></textarea>
+          <div id="json-editor-monaco" class="xk-monaco-editor xk-monaco-editor--modal hidden" aria-label="Monaco editor host"></div>
           <div id="json-editor-error" class="error"></div>
         </div>
         <div class="modal-actions">
@@ -2034,7 +2167,7 @@
               <div class="dat-contents-tags-top">
                 <div class="dat-contents-search-row">
                   <input id="routing-dat-contents-search" class="routing-dat-input" type="text" placeholder="Поиск тега…">
-                  <input id="routing-dat-contents-search-value" class="routing-dat-input" type="text" placeholder="Поиск домена…" title="Поиск домена/IP внутри выбранного тега">
+                  <input id="routing-dat-contents-search-value" class="routing-dat-input" type="text" placeholder="Поиск по домену/IP…" title="Найти теги по домену (GeoSite) или IP (GeoIP)">
                 </div>
                 <div id="routing-dat-contents-tags-status" class="dat-contents-status"></div>
               </div>
@@ -2065,6 +2198,25 @@
                 <select id="routing-dat-contents-target-outbound" class="routing-dat-input dat-contents-select" data-tooltip="outboundTag для нового правила"></select>
                 <button type="button" id="routing-dat-contents-inrouting-btn" class="btn-secondary" disabled data-tooltip="Добавить выбранный тег в правило">➕</button>
                 <div id="routing-dat-contents-routing-status" class="dat-contents-status"></div>
+              </div>
+
+              <div class="dat-contents-items-search-row">
+                <input id="routing-dat-contents-search-items" class="routing-dat-input" type="text" placeholder="Поиск в списке…" title="Фильтровать элементы выбранного тега (текущая страница)">
+
+                <!-- Search mode: local (current page) vs server (whole tag) -->
+                <div class="dat-contents-search-mode" role="group" aria-label="Режим поиска">
+                  <button type="button" id="routing-dat-contents-search-items-mode-local" class="btn-secondary is-active" data-tooltip="Фильтр по текущей странице">Локально</button>
+                  <button type="button" id="routing-dat-contents-search-items-mode-server" class="btn-secondary" data-tooltip="Поиск по всему тегу (сервер)">Весь тег</button>
+                </div>
+
+                <!-- Quick IP version filter (GeoIP only) -->
+                <div id="routing-dat-contents-ipfilter" class="dat-contents-ipfilter" role="group" aria-label="IP версия" style="display:none;">
+                  <button type="button" id="routing-dat-contents-ipfilter-all" class="btn-secondary is-active" data-tooltip="Показать все записи (сбросить фильтры)">Все</button>
+                  <button type="button" id="routing-dat-contents-ipfilter-v4" class="btn-secondary" data-tooltip="Только IPv4 (поиск по всему тегу)">v4</button>
+                  <button type="button" id="routing-dat-contents-ipfilter-v6" class="btn-secondary" data-tooltip="Только IPv6 (поиск по всему тегу)">v6</button>
+                </div>
+
+                <button type="button" id="routing-dat-contents-search-items-more" class="btn-secondary" style="display:none" data-tooltip="Найти ещё совпадения">Ещё</button>
               </div>
 
               <div id="routing-dat-contents-items-status" class="dat-contents-status"></div>
@@ -2356,7 +2508,7 @@
         <label></label>
         <div id="fm-rename-src" class="status" style="margin:0; padding:8px 10px;">&nbsp;</div>
       </div>
-      <div class="status" style="margin-top:10px; opacity:.8;">Подсказка: переименование работает только в текущем каталоге (без "/" и "\").</div>
+      <div class="status" style="margin-top:10px; opacity:.8;">Подсказка: переименование работает только в текущем каталоге (без "/" и "").</div>
       <div id="fm-rename-error" class="error"></div>
     </div>
     <div class="modal-actions" style="justify-content:flex-end;">

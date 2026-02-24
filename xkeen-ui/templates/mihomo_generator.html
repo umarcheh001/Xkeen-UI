@@ -632,7 +632,15 @@
             <div class="preview-head-top">
               <h2>Предпросмотр</h2>
               <!-- Toolbar (Поиск/Фулскрин/и т.д.) будет подключён к CodeMirror и вставлен сюда -->
-              <div id="previewToolbarHost" class="preview-toolbar-host"></div>
+              <div id="previewToolbarHost" class="preview-toolbar-host">
+                <div class="xk-editor-engine" id="mihomo-preview-engine">
+                  <span class="xk-editor-engine-label">Редактор</span>
+                  <select id="mihomo-preview-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+                    <option value="codemirror">CodeMirror</option>
+                    <option value="monaco">Monaco</option>
+                  </select>
+                </div>
+              </div>
             </div>
             <small class="xk-card-desc">
               По умолчанию загружен базовый скелет. Можно доработать вручную при включённом «Редактирование».
@@ -644,6 +652,7 @@
         </div>
 
         <textarea id="previewTextarea" style="display:none;"></textarea>
+        <div id="previewMonaco" class="xk-monaco-editor xk-monaco-editor--modal hidden"></div>
         <div class="hint xk-card-desc">
           Режим <strong>Редактирование</strong> позволяет вручную править yaml, который затем уходит на роутер.
         </div>
@@ -696,8 +705,12 @@
 	<script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260105c') }}"></script>
   <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_generator.js', v='20260119d') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/settings.js', v='20260222c') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/editor_engine.js', v='20260223a') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui/monaco_loader.js', v='20260222a') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/monaco_shared.js', v='20260223a') }}"></script>
+<script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_generator.js', v='20260223g') }}"></script>
   <script src="{{ url_for('static', filename='js/pages/mihomo_generator.init.js') }}"></script>
 <div id="validationModal" class="modal hidden" onclick="if (event.target === this) hideValidationModal();">
   <div class="modal-content">

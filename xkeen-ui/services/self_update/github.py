@@ -22,26 +22,48 @@ from typing import Any, Dict, List, Optional, Tuple
 from services.net import NET_EXECUTOR
 
 
-_GITHUB_API_BASE = os.environ.get("XKEEN_UI_GITHUB_API_BASE", "https://api.github.com").rstrip("/")
-_USER_AGENT = os.environ.get("XKEEN_UI_HTTP_USER_AGENT", "xkeen-ui")
+def _cfg_github_api_base() -> str:
+    base = os.environ.get("XKEEN_UI_GITHUB_API_BASE", "https://api.github.com") or "https://api.github.com"
+    return str(base).rstrip("/")
 
-# Network timeout for GitHub API requests (seconds)
-try:
-    _API_TIMEOUT = max(3.0, float(os.environ.get("XKEEN_UI_UPDATE_API_TIMEOUT", "10") or 10))
-except Exception:
-    _API_TIMEOUT = 10.0
 
-# Cache TTL in seconds (serve cached "latest" quickly; refresh in background when stale).
-try:
-    _REL_TTL = max(5, int(os.environ.get("XKEEN_UI_UPDATE_CHECK_CACHE_TTL", "60") or 60))
-except Exception:
-    _REL_TTL = 60
+def _cfg_user_agent() -> str:
+    ua = os.environ.get("XKEEN_UI_HTTP_USER_AGENT", "xkeen-ui") or "xkeen-ui"
+    return str(ua)
 
-# Release notes can be large; keep it compact for UI.
-try:
-    _MAX_BODY_CHARS = max(256, int(os.environ.get("XKEEN_UI_UPDATE_RELEASE_NOTES_MAX_CHARS", "4096") or 4096))
-except Exception:
-    _MAX_BODY_CHARS = 4096
+
+def _cfg_api_timeout() -> float:
+    """Network timeout for GitHub API requests (seconds)."""
+    try:
+        return max(3.0, float(os.environ.get("XKEEN_UI_UPDATE_API_TIMEOUT", "10") or 10))
+    except Exception:
+        return 10.0
+
+
+def _cfg_rel_ttl() -> int:
+    """Cache TTL in seconds for GitHub update checks."""
+    try:
+        return max(5, int(os.environ.get("XKEEN_UI_UPDATE_CHECK_CACHE_TTL", "60") or 60))
+    except Exception:
+        return 60
+
+
+def _cfg_max_body_chars() -> int:
+    """Limit release notes size sent to UI."""
+    try:
+        return max(256, int(os.environ.get("XKEEN_UI_UPDATE_RELEASE_NOTES_MAX_CHARS", "4096") or 4096))
+    except Exception:
+        return 4096
+
+
+def _cfg_prefer_asset_name() -> str:
+    """Preferred release artifact name.
+
+    Used by "Check latest". Runner script also respects this env.
+    """
+    v = (os.environ.get("XKEEN_UI_UPDATE_ASSET_NAME", "") or "").strip()
+    return v or "xkeen-ui-routing.tar.gz"
+
 
 # Cache and in-flight futures are keyed by repo string ("owner/name").
 _REL_CACHE: Dict[str, Dict[str, Any]] = {}
@@ -53,15 +75,16 @@ _MAIN_CACHE: Dict[str, Dict[str, Any]] = {}
 _MAIN_FUTURES: Dict[str, Any] = {}
 
 
-def _req_json(url: str, *, timeout: float = _API_TIMEOUT) -> Tuple[Any, Dict[str, Any]]:
+def _req_json(url: str, *, timeout: Optional[float] = None) -> Tuple[Any, Dict[str, Any]]:
     """Blocking JSON GET with minimal headers. Returns (parsed_json, meta)."""
     headers = {
-        "User-Agent": _USER_AGENT,
+        "User-Agent": _cfg_user_agent(),
         "Accept": "application/vnd.github+json",
     }
     req = urllib.request.Request(url, headers=headers, method="GET")
     meta: Dict[str, Any] = {"url": url}
-    with urllib.request.urlopen(req, timeout=float(timeout)) as resp:
+    tmo = _cfg_api_timeout() if (timeout is None) else float(timeout)
+    with urllib.request.urlopen(req, timeout=float(tmo)) as resp:
         raw = resp.read().decode("utf-8", errors="replace")
         meta["status"] = int(getattr(resp, "status", 200) or 200)
         try:
@@ -200,8 +223,9 @@ def _sanitize_release(raw: Dict[str, Any]) -> Dict[str, Any]:
             body_s = str(body)
         except Exception:
             body_s = ""
-    if len(body_s) > _MAX_BODY_CHARS:
-        body_s = body_s[: _MAX_BODY_CHARS].rstrip() + "\n…(truncated)…"
+    max_body = _cfg_max_body_chars()
+    if len(body_s) > max_body:
+        body_s = body_s[: max_body].rstrip() + "\n…(truncated)…"
 
     assets_out: List[Dict[str, Any]] = []
     raw_assets = raw.get("assets")
@@ -221,11 +245,20 @@ def _sanitize_release(raw: Dict[str, Any]) -> Dict[str, Any]:
             )
 
     # Pick the main artifact and optional sha file.
-    # Prefer the "routing" release artifact (current project convention),
-    # but keep backward compatibility with older releases.
-    main_asset = _pick_asset(assets_out, prefer_name="xkeen-ui-routing.tar.gz") or _pick_asset(
-        assets_out, prefer_name="xkeen-ui.tar.gz"
-    )
+    # Respect XKEEN_UI_UPDATE_ASSET_NAME (runner also uses it), but keep backward
+    # compatibility with older releases.
+    prefer = _cfg_prefer_asset_name()
+    candidates = [prefer]
+    if prefer != 'xkeen-ui-routing.tar.gz':
+        candidates.append('xkeen-ui-routing.tar.gz')
+    if prefer != 'xkeen-ui.tar.gz':
+        candidates.append('xkeen-ui.tar.gz')
+
+    main_asset = None
+    for nm in candidates:
+        main_asset = _pick_asset(assets_out, prefer_name=nm)
+        if main_asset:
+            break
     sha_asset = _pick_sha_for_asset(assets_out, (main_asset or {}).get('name') if isinstance(main_asset, dict) else '')
     return {
         "tag": tag,
@@ -247,9 +280,9 @@ def _fetch_latest_release(repo: str) -> Dict[str, Any]:
     if not repo or "/" not in repo:
         return {"ok": False, "error": "invalid_repo", "latest": None, "meta": {"repo": repo}}
 
-    url = f"{_GITHUB_API_BASE}/repos/{repo}/releases/latest"
+    url = f"{_cfg_github_api_base()}/repos/{repo}/releases/latest"
     try:
-        data, meta = _req_json(url, timeout=_API_TIMEOUT)
+        data, meta = _req_json(url, timeout=_cfg_api_timeout())
         if not isinstance(data, dict):
             return {"ok": False, "error": "bad_response", "latest": None, "meta": meta}
         latest = _sanitize_release(data)
@@ -284,7 +317,7 @@ def github_get_latest_release(repo: str, *, wait_seconds: float = 2.0, force_ref
 
     # Serve fresh cache immediately.
     cached = _REL_CACHE.get(repo)
-    if not force_refresh and cached and (now - float(cached.get("ts") or 0.0)) < _REL_TTL:
+    if not force_refresh and cached and (now - float(cached.get("ts") or 0.0)) < _cfg_rel_ttl():
         return dict(cached.get("data") or {"ok": False, "error": "cache_empty", "latest": None, "meta": {"repo": repo}}), False
 
     # Ensure background fetch is in-flight.
@@ -363,7 +396,7 @@ def _fetch_latest_main(repo: str, branch: Optional[str] = None) -> Dict[str, Any
     br = (branch or os.environ.get('XKEEN_UI_UPDATE_BRANCH') or '').strip() or None
     default_branch = None
     try:
-        repo_data, repo_meta = _req_json(f"{_GITHUB_API_BASE}/repos/{repo}", timeout=_API_TIMEOUT)
+        repo_data, repo_meta = _req_json(f"{_cfg_github_api_base()}/repos/{repo}", timeout=_cfg_api_timeout())
         meta['repo_meta'] = repo_meta
         if isinstance(repo_data, dict):
             default_branch = repo_data.get('default_branch')
@@ -380,9 +413,9 @@ def _fetch_latest_main(repo: str, branch: Optional[str] = None) -> Dict[str, Any
         if not b or b in tried:
             continue
         tried.append(b)
-        url = f"{_GITHUB_API_BASE}/repos/{repo}/commits/{b}"
+        url = f"{_cfg_github_api_base()}/repos/{repo}/commits/{b}"
         try:
-            data, cmeta = _req_json(url, timeout=_API_TIMEOUT)
+            data, cmeta = _req_json(url, timeout=_cfg_api_timeout())
             meta['commit_meta'] = cmeta
             if not isinstance(data, dict) or not data.get('sha'):
                 continue
@@ -419,7 +452,7 @@ def github_get_latest_main(
 
     now = time.time()
     cached = _MAIN_CACHE.get(key)
-    if not force_refresh and cached and (now - float(cached.get('ts') or 0.0)) < _REL_TTL:
+    if not force_refresh and cached and (now - float(cached.get('ts') or 0.0)) < _cfg_rel_ttl():
         return dict(cached.get('data') or {'ok': False, 'error': 'cache_empty', 'latest': None, 'meta': {'repo': repo, 'branch': bkey}}), False
 
     with _LOCK:

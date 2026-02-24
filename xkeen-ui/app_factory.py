@@ -163,6 +163,14 @@ def create_app(*, ws_runtime: bool = False):
     # -------- Flask app
     app = Flask(__name__, static_folder="static", template_folder="templates")
 
+    # Make UI updates visible without requiring Ctrl+F5.
+    # With max_age=0 browsers revalidate static JS/CSS on reload and will fetch
+    # the new version after an update.
+    try:
+        app.config.setdefault("SEND_FILE_MAX_AGE_DEFAULT", 0)
+    except Exception:
+        pass
+
     @app.route("/favicon.ico")
     def favicon():
         return send_from_directory(
@@ -297,6 +305,7 @@ def create_app(*, ws_runtime: bool = False):
 
     # -------- Blueprint registration
     from routes_utils import create_utils_blueprint
+    from routes_ui_settings import create_ui_settings_blueprint
     from routes_ws_support import create_ws_support_blueprint
     from routes_ws_streams import create_ws_streams_blueprint
     from routes_capabilities import create_capabilities_blueprint
@@ -315,6 +324,7 @@ def create_app(*, ws_runtime: bool = False):
     from routes_fileops import create_fileops_blueprint
 
     app.register_blueprint(create_utils_blueprint())
+    app.register_blueprint(create_ui_settings_blueprint())
     app.register_blueprint(create_ws_support_blueprint())
     app.register_blueprint(create_ws_streams_blueprint())
     app.register_blueprint(create_capabilities_blueprint())

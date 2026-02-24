@@ -15,6 +15,7 @@ from flask import Blueprint, request
 
 from services.auth_setup import auth_is_configured, _is_logged_in
 from services.ws_debug import ws_debug
+from services.log_filter import build_line_matcher as _build_line_matcher
 from services.xray_log_api import (
     tail_lines,
     adjust_log_timezone,
@@ -22,6 +23,7 @@ from services.xray_log_api import (
 )
 from services import devtools as _svc_devtools
 from services.ws_tail import stream_xray_logs_ws, stream_devtools_logs_ws
+from services.ws_logs2 import stream_xray_logs_ws2
 
 ws_streams_bp = Blueprint("ws_streams", __name__)
 
@@ -42,6 +44,7 @@ def _ws_send(ws: Any, payload: dict) -> bool:
 def ws_xray_logs():
     """WebSocket-стрим логов Xray (legacy payloads)."""
     file_name = request.args.get("file", "error")
+    filter_expr = request.args.get("filter")
     client_ip = request.remote_addr or "unknown"
 
     try:
@@ -50,7 +53,13 @@ def ws_xray_logs():
         max_lines = 800
     max_lines = max(50, min(5000, int(max_lines or 800)))
 
-    ws_debug("ws_xray_logs: handler called", client=client_ip, file=file_name, max_lines=max_lines)
+    ws_debug(
+        "ws_xray_logs: handler called",
+        client=client_ip,
+        file=file_name,
+        max_lines=max_lines,
+        filter=bool(filter_expr),
+    )
 
     ws = request.environ.get("wsgi.websocket")
     if ws is None:
@@ -84,6 +93,57 @@ def ws_xray_logs():
         max_lines=max_lines,
         tail_lines=tail_lines,
         adjust_log_timezone=adjust_log_timezone,
+        line_matcher=_build_line_matcher(filter_expr),
+        ws_debug=ws_debug,
+        client_ip=client_ip,
+    )
+    return ""
+
+
+@ws_streams_bp.route("/ws/xray-logs2")
+def ws_xray_logs2():
+    """WebSocket-стрим логов Xray (v2 protocol: switch/clear/pause without reconnect)."""
+    file_name = request.args.get("file", "error")
+    filter_expr = request.args.get("filter")
+    client_ip = request.remote_addr or "unknown"
+
+    try:
+        max_lines = int((request.args.get("max_lines", "800") or "800").strip())
+    except Exception:
+        max_lines = 800
+    max_lines = max(50, min(5000, int(max_lines or 800)))
+
+    ws_debug(
+        "ws_xray_logs2: handler called",
+        client=client_ip,
+        file=file_name,
+        max_lines=max_lines,
+        filter=bool(filter_expr),
+    )
+
+    ws = request.environ.get("wsgi.websocket")
+    if ws is None:
+        ws_debug("ws_xray_logs2: no WebSocket in environ, returning 400", path=request.path)
+        return "Expected WebSocket", 400
+
+    # Defense in depth: WS endpoints must be authenticated (auth_guard handles it too).
+    if auth_is_configured() and not _is_logged_in():
+        _ws_send(ws, {"type": "error", "error": "unauthorized"})
+        try:
+            ws.close()
+        except Exception:
+            pass
+        return ""
+
+    stream_xray_logs_ws2(
+        ws,
+        initial_file=file_name,
+        initial_filter=filter_expr,
+        max_lines=max_lines,
+        resolve_path=_resolve_xray_log_path_for_ws,
+        tail_lines=tail_lines,
+        adjust_log_timezone=adjust_log_timezone,
+        build_line_matcher=_build_line_matcher,
         ws_debug=ws_debug,
         client_ip=client_ip,
     )

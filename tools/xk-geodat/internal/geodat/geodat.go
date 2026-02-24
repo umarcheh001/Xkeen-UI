@@ -48,6 +48,21 @@ type DumpResult struct {
   Meta   Meta       `json:"meta"`
 }
 
+
+type LookupMatch struct {
+  Tag   string `json:"tag"`
+  Count int    `json:"count"`
+}
+
+type LookupResult struct {
+  OK      bool          `json:"ok"`
+  Kind    string        `json:"kind"`
+  Path    string        `json:"path"`
+  Value   string        `json:"value"`
+  Meta    Meta          `json:"meta"`
+  Matches []LookupMatch `json:"matches"`
+}
+
 func statMeta(path string) (Meta, error) {
   st, err := os.Stat(path)
   if err != nil {
@@ -154,7 +169,53 @@ func Dump(kind, path, tag string, offset, limit int) (DumpResult, error) {
   }
 
   return out, nil
+
 }
+
+// Lookup finds matching tags for a domain (geosite) or ip (geoip).
+// maxTags limits the result size (0 = unlimited).
+func Lookup(kind, path, value string, maxTags int) (LookupResult, error) {
+  k, err := NormalizeKind(kind)
+  if err != nil {
+    return LookupResult{}, err
+  }
+  value = strings.TrimSpace(value)
+  if value == "" {
+    return LookupResult{}, errors.New("value_required")
+  }
+
+  b, meta, err := readFile(path)
+  if err != nil {
+    return LookupResult{}, err
+  }
+
+  out := LookupResult{OK: true, Kind: k, Path: path, Value: value, Meta: meta}
+
+  if k == "geosite" {
+    dom, err := normalizeDomainInput(value)
+    if err != nil {
+      return LookupResult{}, err
+    }
+    matches, err := parseGeoSiteLookup(b, dom, maxTags)
+    if err != nil {
+      return LookupResult{}, err
+    }
+    out.Matches = matches
+  } else {
+    ip, err := normalizeIPInput(value)
+    if err != nil {
+      return LookupResult{}, err
+    }
+    matches, err := parseGeoIPLookup(b, ip, maxTags)
+    if err != nil {
+      return LookupResult{}, err
+    }
+    out.Matches = matches
+  }
+
+  return out, nil
+}
+
 
 func ToJSON(v any, pretty bool) ([]byte, error) {
   if pretty {

@@ -68,6 +68,16 @@
     });
 
     // refresh editors when tab becomes visible
+    if (name === 'routing') {
+      // Monaco can be initialized while hidden (0px) or get a broken layout
+      // after switching tabs/pages in some browsers. Give the routing module a
+      // chance to relayout/recreate the active engine.
+      try {
+        if (window.XKeen && XKeen.routing && typeof XKeen.routing.onShow === 'function') {
+          safe(() => XKeen.routing.onShow({ reason: 'tab' }));
+        }
+      } catch (e) {}
+    }
     if (name === 'mihomo') {
       const ed = getEditor('mihomoEditor');
       if (ed && ed.refresh) safe(() => ed.refresh());

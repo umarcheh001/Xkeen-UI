@@ -25,6 +25,16 @@
 
     search: 'routing-dat-contents-search',
     searchValue: 'routing-dat-contents-search-value',
+    searchItems: 'routing-dat-contents-search-items',
+    searchItemsModeLocal: 'routing-dat-contents-search-items-mode-local',
+    searchItemsModeServer: 'routing-dat-contents-search-items-mode-server',
+    searchItemsMore: 'routing-dat-contents-search-items-more',
+
+    // Quick IP version filter (GeoIP only)
+    ipFilter: 'routing-dat-contents-ipfilter',
+    ipFilterAll: 'routing-dat-contents-ipfilter-all',
+    ipFilterV4: 'routing-dat-contents-ipfilter-v4',
+    ipFilterV6: 'routing-dat-contents-ipfilter-v6',
     tagsStatus: 'routing-dat-contents-tags-status',
     tagsList: 'routing-dat-contents-tags-list',
 
@@ -77,15 +87,38 @@
   let _pageSize = 0;
   let _openOpts = null; // last open() options
 
-  // Value search (domain/IP) across items inside selected tag.
-  // When searchValue is non-empty, we fetch ALL items for the tag (paged, cached)
-  // and then filter client-side with local paging (LIMIT items per page).
-  const _allItemsCache = Object.create(null); // key -> { items, total, done, promise }
-  let _valueSearchTimer = null;
-  let _valueSearchToken = 0;
-  let _filterKey = '';
-  let _filterItems = null; // Array<{t,v}> | null
-  let _filterInfoText = '';
+  // Value lookup (domain/IP) across TAGS.
+  // When searchValue is non-empty, we ask backend to lookup matching tags.
+  // Backend caches results (keyed by DAT mtime+value), so we keep UI logic simple.
+  let _lookupTimer = null;
+  let _lookupToken = 0;
+  let _lookupQNorm = '';
+  let _lookupPending = false;
+  let _lookupError = '';
+  let _lookupTagsSet = null; // Set(lowercase tag) | null
+
+  // Items list filter (search inside currently opened tag list).
+  let _itemsFilterTimer = null;
+  let _itemsLoaded = []; // normalized items for current page
+  let _itemsStatusBase = '';
+  let _itemsStatusBaseErr = false;
+
+  // Items search mode: local (current page filter) vs server (whole tag scan).
+  let _itemsSearchMode = 'local'; // 'local' | 'server'
+
+  // Quick preset for GeoIP items filter: all/v4/v6 (UI-only).
+  // v4 is server-search for '.' and v6 is server-search for ':' to avoid pagination surprises.
+  let _ipQuick = 'all'; // 'all' | 'v4' | 'v6' | 'custom'
+  let _itemsServerTimer = null;
+  let _itemsServerToken = 0;
+  let _itemsServerQNorm = '';
+  let _itemsServerNextCursor = null; // number|null
+  let _itemsServerViewed = 0; // how many items scanned so far (best-effort)
+  let _itemsServerTotal = null; // tag total, if known
+  let _itemsServerItems = []; // normalized items (matches)
+  let _itemsServerMode = ''; // 'contains' | 'ipin' (backend-provided)
+  let _itemsServerPending = false;
+  let _itemsShowingServer = false;
 
   function routingApi() {
     try {
@@ -335,6 +368,332 @@
     s.classList.toggle('error', !!isErr);
   }
 
+  function setItemsStatusBase(msg, isErr) {
+    _itemsStatusBase = msg ? String(msg) : '';
+    _itemsStatusBaseErr = !!isErr;
+    setItemsStatus(_itemsStatusBase, _itemsStatusBaseErr);
+  }
+
+  function itemsQueryRaw() {
+    const e = el(IDS.searchItems);
+    return e ? String(e.value || '') : '';
+  }
+
+  function setItemsQuery(raw) {
+    const e = el(IDS.searchItems);
+    if (!e) return;
+    e.value = String(raw == null ? '' : raw);
+  }
+
+  function itemsQueryNorm() {
+    return String(itemsQueryRaw() || '').trim().toLowerCase();
+  }
+
+  function isItemsServerMode() {
+    return String(_itemsSearchMode || 'local') === 'server';
+  }
+
+  function showItemsMoreButton(show, disabled) {
+    const b = el(IDS.searchItemsMore);
+    if (!b) return;
+    b.style.display = show ? '' : 'none';
+    b.disabled = !!disabled;
+  }
+
+  function renderItemsSearchModeButtons() {
+    const bLocal = el(IDS.searchItemsModeLocal);
+    const bServer = el(IDS.searchItemsModeServer);
+    const isServer = isItemsServerMode();
+    if (bLocal) bLocal.classList.toggle('is-active', !isServer);
+    if (bServer) bServer.classList.toggle('is-active', isServer);
+  }
+
+  function syncItemsSearchInputHint() {
+    const qi = el(IDS.searchItems);
+    if (!qi) return;
+    if (isItemsServerMode()) {
+      qi.title = _kind === 'geoip'
+        ? 'Поиск по всему тегу GeoIP (сервер). Если введён IP — ищем попадание IP ∈ CIDR.'
+        : 'Поиск по всему тегу GeoSite (сервер)';
+    } else {
+      qi.title = _kind === 'geoip'
+        ? 'Фильтровать открытый список подсетей (текущая страница)'
+        : 'Фильтровать открытый список доменов (текущая страница)';
+    }
+  }
+
+  function resetServerSearchState() {
+    try { if (_itemsServerTimer) clearTimeout(_itemsServerTimer); } catch (e) {}
+    _itemsServerTimer = null;
+    _itemsServerToken += 1; // invalidate in-flight
+    _itemsServerQNorm = '';
+    _itemsServerNextCursor = null;
+    _itemsServerViewed = 0;
+    _itemsServerTotal = null;
+    _itemsServerItems = [];
+    _itemsServerMode = '';
+    _itemsServerPending = false;
+    _itemsShowingServer = false;
+    showItemsMoreButton(false, false);
+  }
+
+  function setItemsSearchMode(mode) {
+    const m = (String(mode || '').toLowerCase() === 'server') ? 'server' : 'local';
+    if (_itemsSearchMode === m) return;
+    _itemsSearchMode = m;
+    // Switching modes should not keep stale server results.
+    resetServerSearchState();
+    renderItemsSearchModeButtons();
+    syncItemsSearchInputHint();
+    try { applyItemsFilter(); } catch (e) {}
+  }
+
+  function syncIpQuickFromQuery() {
+    if (_kind !== 'geoip') {
+      _ipQuick = 'custom';
+      return;
+    }
+    const q = String(itemsQueryRaw() || '').trim();
+    if (!q) _ipQuick = 'all';
+    else if (q === '.') _ipQuick = 'v4';
+    else if (q === ':') _ipQuick = 'v6';
+    else _ipQuick = 'custom';
+  }
+
+  function renderIpQuickButtons() {
+    const wrap = el(IDS.ipFilter);
+    if (!wrap) return;
+    const show = (_kind === 'geoip');
+    wrap.style.display = show ? '' : 'none';
+    if (!show) return;
+
+    syncIpQuickFromQuery();
+    const bAll = el(IDS.ipFilterAll);
+    const bV4 = el(IDS.ipFilterV4);
+    const bV6 = el(IDS.ipFilterV6);
+    if (bAll) bAll.classList.toggle('is-active', _ipQuick === 'all');
+    if (bV4) bV4.classList.toggle('is-active', _ipQuick === 'v4');
+    if (bV6) bV6.classList.toggle('is-active', _ipQuick === 'v6');
+  }
+
+  function applyIpQuickFilter(mode) {
+    if (_kind !== 'geoip') return;
+    const m = String(mode || '').toLowerCase();
+    if (m === 'v4') {
+      _ipQuick = 'v4';
+      setItemsSearchMode('server');
+      setItemsQuery('.');
+      try { applyItemsFilter(); } catch (e) {}
+      renderIpQuickButtons();
+      return;
+    }
+    if (m === 'v6') {
+      _ipQuick = 'v6';
+      setItemsSearchMode('server');
+      setItemsQuery(':');
+      try { applyItemsFilter(); } catch (e) {}
+      renderIpQuickButtons();
+      return;
+    }
+
+    // all
+    _ipQuick = 'all';
+    // Back to normal paging, no surprise “search mode”.
+    setItemsSearchMode('local');
+    setItemsQuery('');
+    try { applyItemsFilter(); } catch (e) {}
+    renderIpQuickButtons();
+  }
+
+  function serverSearchStatusLine() {
+    const found = Array.isArray(_itemsServerItems) ? _itemsServerItems.length : 0;
+    const viewed = Number(_itemsServerViewed || 0);
+    const hasTotal = (typeof _itemsServerTotal === 'number') && isFinite(_itemsServerTotal);
+    const total = hasTotal ? Number(_itemsServerTotal) : null;
+    const tail = (total != null) ? (`${Math.min(total, viewed)} из ${total}`) : String(viewed);
+    const end = (_itemsServerNextCursor == null && viewed > 0) ? ' • конец' : '';
+    const modeLabel = (_kind === 'geoip' && String(_itemsServerMode || '') === 'ipin') ? 'IP ∈ CIDR' : 'текст';
+    return `Поиск в теге (${modeLabel}): найдено ${found}, просмотрено ${tail}${end}`;
+  }
+
+  function syncPagerForItemsSearch() {
+    // When server-searching inside a tag, paging buttons should not navigate pages.
+    const q = itemsQueryNorm();
+    const active = !!(_selectedTag && isItemsServerMode() && q);
+    if (active) {
+      setDisabled(IDS.pagerPrev, true);
+      setDisabled(IDS.pagerNext, true);
+      setText(IDS.pagerInfo, 'Поиск');
+      return;
+    }
+    renderPager();
+  }
+
+  async function serverSearchFetch(cursor, append) {
+    if (!_selectedTag) return;
+    const qRaw = String(itemsQueryRaw() || '').trim();
+    const qNorm = String(qRaw || '').trim().toLowerCase();
+    if (!qNorm) {
+      resetServerSearchState();
+      setItemsStatus(_itemsStatusBase, false);
+      renderItems(Array.isArray(_itemsLoaded) ? _itemsLoaded : []);
+      syncPagerForItemsSearch();
+      return;
+    }
+
+    // Token ensures we ignore stale responses after quick typing.
+    const token = (_itemsServerToken += 1);
+    _itemsServerPending = true;
+    _itemsShowingServer = true;
+    setItemsStatus('Поиск…', false);
+    showItemsMoreButton(false, true);
+    syncPagerForItemsSearch();
+
+    try {
+      const url = '/api/routing/dat/search?kind=' + encodeURIComponent(_kind)
+        + '&path=' + encodeURIComponent(_path)
+        + '&tag=' + encodeURIComponent(_selectedTag)
+        + '&q=' + encodeURIComponent(qRaw)
+        + '&cursor=' + encodeURIComponent(String(cursor || 0))
+        + '&limit=' + encodeURIComponent(String(LIMIT));
+
+      const res = await fetch(url, { method: 'GET' });
+      const data = await res.json().catch(() => ({}));
+      if (token !== _itemsServerToken) return;
+
+      if (!res.ok || !data || data.ok !== true) {
+        const err = (data && (data.error || data.message)) || ('HTTP ' + res.status);
+        const hint = (data && data.hint) ? String(data.hint) : '';
+        const details = (data && data.details) ? _shortLine(data.details, 220) : '';
+        const msg = hint || ('Ошибка поиска: ' + String(err) + (details ? ('. ' + details) : ''));
+        _itemsServerPending = false;
+        _itemsServerItems = [];
+        _itemsServerNextCursor = null;
+        _itemsServerViewed = Number(cursor || 0);
+        setItemsStatus(msg, true);
+        renderItems([]);
+        showItemsMoreButton(false, false);
+        syncPagerForItemsSearch();
+        return;
+      }
+
+      const raw = Array.isArray(data.items) ? data.items : [];
+      const got = normalizeItems(raw);
+      if (append) _itemsServerItems = (Array.isArray(_itemsServerItems) ? _itemsServerItems : []).concat(got);
+      else _itemsServerItems = got;
+
+      const nextCur = (typeof data.next_cursor === 'number' && isFinite(data.next_cursor)) ? Number(data.next_cursor) : null;
+      _itemsServerNextCursor = nextCur;
+      const viewed = (typeof data.viewed === 'number' && isFinite(data.viewed)) ? Number(data.viewed) : (nextCur != null ? nextCur : (Number(cursor || 0) + Number(data.scanned || 0)));
+      _itemsServerViewed = viewed;
+      if (typeof data.total === 'number' && isFinite(data.total)) _itemsServerTotal = Number(data.total);
+      _itemsServerMode = (data && data.mode) ? String(data.mode) : '';
+
+      _itemsServerPending = false;
+      setItemsStatus(serverSearchStatusLine(), false);
+      renderItems(_itemsServerItems);
+      showItemsMoreButton(nextCur != null, false);
+      syncPagerForItemsSearch();
+    } catch (e) {
+      if (token !== _itemsServerToken) return;
+      _itemsServerPending = false;
+      setItemsStatus('Ошибка поиска (сеть).', true);
+      renderItems([]);
+      showItemsMoreButton(false, false);
+      syncPagerForItemsSearch();
+    }
+  }
+
+  function serverSearchStart() {
+    const qNorm = itemsQueryNorm();
+    if (!qNorm) {
+      resetServerSearchState();
+      applyItemsFilter();
+      return;
+    }
+    if (_itemsServerQNorm === qNorm && Array.isArray(_itemsServerItems) && _itemsServerItems.length) {
+      // Already have results for this query.
+      _itemsShowingServer = true;
+      setItemsStatus(serverSearchStatusLine(), false);
+      renderItems(_itemsServerItems);
+      showItemsMoreButton(_itemsServerNextCursor != null, false);
+      syncPagerForItemsSearch();
+      return;
+    }
+    // Reset state and fetch from the beginning.
+    resetServerSearchState();
+    _itemsServerQNorm = qNorm;
+    _itemsShowingServer = true;
+    serverSearchFetch(0, false);
+  }
+
+  function serverSearchMore() {
+    if (!_selectedTag) return;
+    if (!isItemsServerMode()) return;
+    const qNorm = itemsQueryNorm();
+    if (!qNorm) return;
+    if (_itemsServerQNorm && _itemsServerQNorm !== qNorm) return;
+    const cur = _itemsServerNextCursor;
+    if (cur == null) return;
+    serverSearchFetch(cur, true);
+  }
+
+  function filterItemsLocal(items, qNorm) {
+    const q = String(qNorm || '').trim().toLowerCase();
+    if (!q) return items || [];
+    const src = Array.isArray(items) ? items : [];
+    return src.filter((it) => {
+      try {
+        const t = (it && (it.t || it.type)) ? (it.t || it.type) : '';
+        const v = (it && (it.v != null || it.value != null)) ? (it.v != null ? it.v : it.value) : (typeof it === 'string' ? it : '');
+        const hay = (String(t || '') + ' ' + String(v || '')).toLowerCase();
+        return hay.includes(q);
+      } catch (e) {
+        return false;
+      }
+    });
+  }
+
+  function applyItemsFilter() {
+    // Do not override error statuses.
+    if (_itemsStatusBaseErr) {
+      _itemsShowingServer = false;
+      renderItems(_itemsLoaded || []);
+      showItemsMoreButton(false, false);
+      syncPagerForItemsSearch();
+      return;
+    }
+
+    const q = itemsQueryNorm();
+
+    // Server mode: scan the whole tag on backend and show matches.
+    if (isItemsServerMode() && q) {
+      _itemsShowingServer = true;
+      serverSearchStart();
+      try { renderIpQuickButtons(); } catch (e) {}
+      return;
+    }
+
+    // Local filter: current page only.
+    _itemsShowingServer = false;
+    if (!q) {
+      resetServerSearchState();
+      setItemsStatus(_itemsStatusBase, false);
+      renderItems(Array.isArray(_itemsLoaded) ? _itemsLoaded : []);
+      syncPagerForItemsSearch();
+      try { renderIpQuickButtons(); } catch (e) {}
+      return;
+    }
+
+    const base = Array.isArray(_itemsLoaded) ? _itemsLoaded : [];
+    const filtered = filterItemsLocal(base, q);
+    setItemsStatus(`Фильтр: ${filtered.length} из ${base.length}`, false);
+    showItemsMoreButton(false, false);
+    renderItems(filtered);
+    syncPagerForItemsSearch();
+    try { renderIpQuickButtons(); } catch (e) {}
+  }
+
   function filterTags(q) {
     const s = String(q || '').trim().toLowerCase();
     if (!s) return _tags;
@@ -350,12 +709,8 @@
     return String(valueQueryRaw() || '').trim().toLowerCase();
   }
 
-  function isValueFilterActive() {
+  function isLookupActive() {
     return !!valueQueryNorm();
-  }
-
-  function allItemsKey(kind, path, tag) {
-    return String(kind || '') + '|' + String(path || '') + '|' + String(tag || '');
   }
 
   function normalizeItems(raw) {
@@ -369,150 +724,80 @@
     });
   }
 
-  async function ensureAllItemsLoaded(kind, path, tag, token) {
-    const k = allItemsKey(kind, path, tag);
-    const cached = _allItemsCache[k];
-    if (cached && cached.done && Array.isArray(cached.items)) return cached;
-    if (cached && cached.promise) return await cached.promise;
-
-    const p = (async () => {
-      const items = [];
-      let total = null;
-      let offset = 0;
-      let guard = 0;
-      while (true) {
-        if (token !== _valueSearchToken) {
-          const err = new Error('cancelled');
-          err.cancelled = true;
-          throw err;
-        }
-        guard += 1;
-        if (guard > 300) break; // safety
-
-        const url = '/api/routing/dat/tag?kind=' + encodeURIComponent(kind)
-          + '&path=' + encodeURIComponent(path)
-          + '&tag=' + encodeURIComponent(tag)
-          + '&offset=' + encodeURIComponent(String(offset))
-          + '&limit=' + encodeURIComponent(String(FETCH_LIMIT));
-
-        const res = await fetch(url, { method: 'GET' });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data || data.ok !== true) {
-          const errMsg = (data && (data.error || data.message)) || ('HTTP ' + res.status);
-          throw new Error(String(errMsg));
-        }
-
-        if (typeof data.total === 'number' && Number.isFinite(data.total)) {
-          total = Number(data.total);
-        }
-
-        const batch = normalizeItems(data.items);
-        items.push(...batch);
-
-        // Stop conditions
-        if (batch.length < FETCH_LIMIT) break;
-        offset += FETCH_LIMIT;
-        if (total != null && offset >= total) break;
-        if (offset > 200000) break;
-      }
-      return { items, total, done: true };
-    })();
-
-    _allItemsCache[k] = { items: [], total: null, done: false, promise: p };
-    try {
-      const r = await p;
-      _allItemsCache[k] = { items: r.items || [], total: r.total == null ? null : Number(r.total), done: true };
-      return _allItemsCache[k];
-    } finally {
-      // no-op
-    }
-  }
-
-  function filterItems(items, qNorm) {
-    const q = String(qNorm || '').trim().toLowerCase();
-    if (!q) return items || [];
-    return (items || []).filter((it) => {
-      if (!it) return false;
-      const v = (it.v != null) ? String(it.v) : '';
-      const t = (it.t != null) ? String(it.t) : '';
-      const hay = (t + ' ' + v).toLowerCase();
-      return hay.includes(q);
-    });
-  }
-
-  function currentFilterKey(qNorm) {
-    return allItemsKey(_kind, _path, _selectedTag) + '::' + String(qNorm || '').trim().toLowerCase();
-  }
-
-  function renderFilteredPage() {
-    const qNorm = valueQueryNorm();
-    if (!_filterItems || !Array.isArray(_filterItems)) {
-      renderPager();
+  async function runLookup(valueRaw, token) {
+    const qRaw = String(valueRaw || '').trim();
+    const qNorm = String(qRaw || '').trim().toLowerCase();
+    if (!qNorm) {
+      _lookupQNorm = '';
+      _lookupPending = false;
+      _lookupError = '';
+      _lookupTagsSet = null;
       return;
     }
-    const total = _filterItems.length;
-    if (_offset >= total) _offset = 0;
-    const page = _filterItems.slice(_offset, _offset + LIMIT);
-    _pageSize = page.length;
-    _total = total;
-    setItemsStatus(_filterInfoText || (total ? ('Найдено: ' + total) : 'Ничего не найдено.'), false);
-    renderItems(page);
-    renderPager();
+
+    _lookupPending = true;
+    _lookupError = '';
+    setTagsStatus('Поиск…', false);
+
+    try {
+      const res = await fetch('/api/routing/dat/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: _kind, path: _path, value: qRaw }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (token !== _lookupToken) return;
+
+      if (!res.ok || !data || data.ok !== true) {
+        const msg = (data && (data.error || data.message)) || ('HTTP ' + res.status);
+        _lookupQNorm = qNorm;
+        _lookupPending = false;
+        _lookupError = String(msg || 'lookup_failed');
+        _lookupTagsSet = null;
+        setTagsStatus('Lookup: ' + _lookupError, true);
+        renderTags();
+        return;
+      }
+
+      const matches = Array.isArray(data.matches) ? data.matches : [];
+      const set = new Set();
+      matches.forEach((m) => {
+        const t = (m && typeof m === 'object') ? (m.tag || m.t || m.name) : m;
+        const s = String(t || '').trim().toLowerCase();
+        if (s) set.add(s);
+      });
+
+      _lookupQNorm = qNorm;
+      _lookupPending = false;
+      _lookupError = '';
+      _lookupTagsSet = set;
+
+      const label = _kind === 'geoip' ? 'IP' : 'домену';
+      const n = set.size;
+      setTagsStatus(n ? (`Найдено тегов по ${label}: ${n}`) : (`Ничего не найдено по ${label}.`), false);
+      renderTags();
+    } catch (e) {
+      if (token !== _lookupToken) return;
+      _lookupQNorm = qNorm;
+      _lookupPending = false;
+      _lookupError = 'network_error';
+      _lookupTagsSet = null;
+      setTagsStatus('Lookup: ошибка сети.', true);
+      renderTags();
+    }
   }
 
   async function refreshItemsView() {
     if (!_selectedTag) {
-      setItemsStatus('', false);
+      _itemsLoaded = [];
+      setItemsStatusBase('', false);
       renderItems([]);
       renderPager();
       return;
     }
 
-    const qNorm = valueQueryNorm();
-    if (!qNorm) {
-      _filterKey = '';
-      _filterItems = null;
-      _filterInfoText = '';
-      await loadTagItems();
-      return;
-    }
-
-    const token = _valueSearchToken;
-    const key = currentFilterKey(qNorm);
-
-    // Reuse cached filtered results when possible.
-    if (_filterKey === key && Array.isArray(_filterItems)) {
-      renderFilteredPage();
-      return;
-    }
-
-    // (Re)build filtered list.
-    _filterKey = key;
-    _filterItems = null;
-    _filterInfoText = '';
-
-    setDisabled(IDS.pagerPrev, true);
-    setDisabled(IDS.pagerNext, true);
-    setItemsStatus('Поиск…', false);
-    renderItems([]);
-    renderPager();
-
-    try {
-      const all = await ensureAllItemsLoaded(_kind, _path, _selectedTag, token);
-      if (token !== _valueSearchToken) {
-        const err = new Error('cancelled');
-        err.cancelled = true;
-        throw err;
-      }
-      const filtered = filterItems(all && all.items ? all.items : [], qNorm);
-      _filterItems = filtered;
-      _filterInfoText = filtered.length ? ('Найдено: ' + filtered.length) : 'Ничего не найдено.';
-      renderFilteredPage();
-    } catch (e) {
-      if (e && e.cancelled) return;
-      setItemsStatus('Ошибка поиска.', true);
-      renderPager();
-    }
+    // NOTE: searchValue field is used for TAG lookup, not for filtering items.
+    await loadTagItems();
   }
 
   function renderTags() {
@@ -520,7 +805,17 @@
     if (!list) return;
 
     const q = (el(IDS.search) && el(IDS.search).value) || '';
-    const items = filterTags(q);
+    let items = filterTags(q);
+
+    // Optional: narrow down by lookup results.
+    const qvNorm = valueQueryNorm();
+    if (qvNorm && _lookupQNorm === qvNorm) {
+      if (_lookupError) {
+        items = [];
+      } else if (_lookupTagsSet instanceof Set) {
+        items = items.filter((t) => _lookupTagsSet.has(String(t.tag || '').toLowerCase()));
+      }
+    }
     list.innerHTML = '';
 
     if (!items.length) {
@@ -616,7 +911,11 @@
     if (!items || !items.length) {
       const empty = document.createElement('div');
       empty.className = 'dat-contents-empty';
-      empty.textContent = _selectedTag ? 'Пусто.' : 'Выберите тег слева.';
+      const q = itemsQueryNorm();
+      if (!_selectedTag) empty.textContent = 'Выберите тег слева.';
+      else if (_itemsShowingServer && q) empty.textContent = 'Ничего не найдено в этом теге.';
+      else if (q && Array.isArray(_itemsLoaded) && _itemsLoaded.length) empty.textContent = 'Ничего не найдено на этой странице.';
+      else empty.textContent = 'Пусто.';
       list.appendChild(empty);
       return;
     }
@@ -686,7 +985,8 @@
     setSelectedTagHeader();
     setRoutingStatus('', false);
     try { refreshRoutingTargets(); } catch (e) {}
-    setItemsStatus('', false);
+    _itemsLoaded = [];
+    setItemsStatusBase('', false);
     renderItems([]);
     renderPager();
 
@@ -729,6 +1029,16 @@
       }).filter((x) => x.tag);
       setTagsStatus(_tags.length ? ('Тегов: ' + _tags.length) : 'Теги не найдены.', false);
       renderTags();
+
+      // If lookup field is active — refresh lookup results (DAT might have changed).
+      try {
+        const qvNorm = valueQueryNorm();
+        if (qvNorm) {
+          _lookupToken += 1;
+          const token = _lookupToken;
+          runLookup(valueQueryRaw(), token);
+        }
+      } catch (e) {}
     } catch (e) {
       setTagsStatus('Ошибка загрузки тегов.', true);
       if (typeof console !== 'undefined') console.error(e);
@@ -741,7 +1051,8 @@
     if (!_selectedTag) return;
     setDisabled(IDS.pagerPrev, true);
     setDisabled(IDS.pagerNext, true);
-    setItemsStatus('Загрузка…', false);
+    _itemsLoaded = [];
+    setItemsStatusBase('Загрузка…', false);
     renderItems([]);
 
     try {
@@ -757,15 +1068,15 @@
         const hint = (data && data.hint) ? String(data.hint) : '';
         const details = (data && data.details) ? _shortLine(data.details, 220) : '';
         if (hint) {
-          setItemsStatus(hint, true);
+          setItemsStatusBase(hint, true);
         } else if (err === 'missing_xk_geodat') {
-          setItemsStatus('Не установлен xk-geodat. Нажмите «xk-geodat» (вверху) для установки и затем попробуйте ещё раз.', true);
+          setItemsStatusBase('Не установлен xk-geodat. Нажмите «xk-geodat» (вверху) для установки и затем попробуйте ещё раз.', true);
         } else if (err === 'missing_dat_file') {
-          setItemsStatus('DAT-файл не найден: ' + _path, true);
+          setItemsStatusBase('DAT-файл не найден: ' + _path, true);
         } else if (err === 'xk_geodat_timeout') {
-          setItemsStatus('xk-geodat не ответил вовремя. Попробуйте ещё раз.', true);
+          setItemsStatusBase('xk-geodat не ответил вовремя. Попробуйте ещё раз.', true);
         } else {
-          setItemsStatus('Ошибка: ' + String(err) + (details ? ('. ' + details) : ''), true);
+          setItemsStatusBase('Ошибка: ' + String(err) + (details ? ('. ' + details) : ''), true);
         }
         renderPager();
         return;
@@ -780,11 +1091,12 @@
       } else {
         _total = null;
       }
-      setItemsStatus(items.length ? '' : 'Пусто.', false);
-      renderItems(items);
-      renderPager();
+      _itemsLoaded = items;
+      setItemsStatusBase(items.length ? '' : 'Пусто.', false);
+      applyItemsFilter();
+      syncPagerForItemsSearch();
     } catch (e) {
-      setItemsStatus('Ошибка загрузки содержимого.', true);
+      setItemsStatusBase('Ошибка загрузки содержимого.', true);
       if (typeof console !== 'undefined') console.error(e);
       renderPager();
     }
@@ -793,11 +1105,12 @@
   async function selectTag(tag) {
     _selectedTag = String(tag || '').trim();
     _offset = 0;
-    // Changing tag invalidates active value-search view; bump token to cancel in-flight searches.
-    _valueSearchToken += 1;
-    _filterKey = '';
-    _filterItems = null;
-    _filterInfoText = '';
+    // Reset in-list filter when switching tags.
+    try { const qi = el(IDS.searchItems); if (qi) qi.value = ''; } catch (e) {}
+    // Also reset server-search state (cursor/results).
+    resetServerSearchState();
+    renderItemsSearchModeButtons();
+    syncItemsSearchInputHint();
     setSelectedTagHeader();
     setRoutingStatus('', false);
     try { refreshRoutingTargets(); } catch (e) {}
@@ -863,19 +1176,30 @@
     if (qv) {
       qv.addEventListener('input', () => {
         try {
-          if (_valueSearchTimer) clearTimeout(_valueSearchTimer);
+          if (_lookupTimer) clearTimeout(_lookupTimer);
         } catch (e) {}
 
-        // Reset paging + cancel in-flight search.
-        _offset = 0;
-        _valueSearchToken += 1;
-        _filterKey = '';
-        _filterItems = null;
-        _filterInfoText = '';
+        const raw = valueQueryRaw();
+        const norm = valueQueryNorm();
+        _lookupToken += 1;
+        const token = _lookupToken;
 
-        _valueSearchTimer = setTimeout(() => {
-          try { refreshItemsView(); } catch (e) {}
-        }, 250);
+        if (!norm) {
+          _lookupQNorm = '';
+          _lookupPending = false;
+          _lookupError = '';
+          _lookupTagsSet = null;
+          setTagsStatus(_tags.length ? ('Тегов: ' + _tags.length) : 'Теги не найдены.', false);
+          renderTags();
+          return;
+        }
+
+        _lookupPending = true;
+        setTagsStatus('Поиск…', false);
+
+        _lookupTimer = setTimeout(() => {
+          try { runLookup(raw, token); } catch (e) {}
+        }, 300);
       });
     }
 
@@ -899,6 +1223,54 @@
       });
     }
 
+    // Search inside opened items list (current tag page).
+    const qi = el(IDS.searchItems);
+    if (qi) {
+      qi.addEventListener('input', () => {
+        try { if (_itemsFilterTimer) clearTimeout(_itemsFilterTimer); } catch (e) {}
+        const delay = isItemsServerMode() ? 260 : 120;
+        _itemsFilterTimer = setTimeout(() => {
+          try { applyItemsFilter(); } catch (e) {}
+          try { renderIpQuickButtons(); } catch (e) {}
+        }, delay);
+      });
+    }
+
+    // Items search mode toggle.
+    const bModeLocal = el(IDS.searchItemsModeLocal);
+    if (bModeLocal) {
+      bModeLocal.addEventListener('click', (e) => {
+        e.preventDefault();
+        setItemsSearchMode('local');
+        try { renderIpQuickButtons(); } catch (e) {}
+      });
+    }
+    const bModeServer = el(IDS.searchItemsModeServer);
+    if (bModeServer) {
+      bModeServer.addEventListener('click', (e) => {
+        e.preventDefault();
+        setItemsSearchMode('server');
+        try { renderIpQuickButtons(); } catch (e) {}
+      });
+    }
+
+    // GeoIP quick filters
+    const bAll = el(IDS.ipFilterAll);
+    if (bAll) bAll.addEventListener('click', (e) => { e.preventDefault(); applyIpQuickFilter('all'); });
+    const bV4 = el(IDS.ipFilterV4);
+    if (bV4) bV4.addEventListener('click', (e) => { e.preventDefault(); applyIpQuickFilter('v4'); });
+    const bV6 = el(IDS.ipFilterV6);
+    if (bV6) bV6.addEventListener('click', (e) => { e.preventDefault(); applyIpQuickFilter('v6'); });
+
+    const bMore = el(IDS.searchItemsMore);
+    if (bMore) {
+      bMore.addEventListener('click', (e) => {
+        e.preventDefault();
+        serverSearchMore();
+      });
+    }
+
+
     const addBtn = el(IDS.inRouting);
     if (addBtn) {
       addBtn.addEventListener('click', (e) => {
@@ -912,6 +1284,7 @@
       prevBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         if (!_selectedTag) return;
+        if (isItemsServerMode() && itemsQueryNorm()) return;
         _offset = Math.max(0, Number(_offset || 0) - LIMIT);
         await refreshItemsView();
       });
@@ -922,6 +1295,7 @@
       nextBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         if (!_selectedTag) return;
+        if (isItemsServerMode() && itemsQueryNorm()) return;
         _offset = Math.max(0, Number(_offset || 0) + LIMIT);
         await refreshItemsView();
       });
@@ -961,19 +1335,38 @@
     if (qv) {
       qv.value = '';
       if (_kind === 'geoip') {
-        qv.placeholder = 'Поиск IP…';
-        qv.title = 'Поиск IP/подсети внутри выбранного тега';
+        qv.placeholder = 'Поиск по IP…';
+        qv.title = 'Найти теги GeoIP, в которых содержится указанный IP';
       } else {
-        qv.placeholder = 'Поиск домена…';
-        qv.title = 'Поиск домена внутри выбранного тега';
+        qv.placeholder = 'Поиск по домену…';
+        qv.title = 'Найти теги GeoSite, в которых встречается домен/URL';
+      }
+    }
+    const qi = el(IDS.searchItems);
+    if (qi) {
+      qi.value = '';
+      if (_kind === 'geoip') {
+        qi.placeholder = 'Поиск в списке подсетей…';
+        qi.title = 'Фильтровать открытый список подсетей (текущая страница)';
+      } else {
+        qi.placeholder = 'Поиск в списке доменов…';
+        qi.title = 'Фильтровать открытый список доменов (текущая страница)';
       }
     }
 
-    // Reset value-search state (also cancels any in-flight fetches from a previous open).
-    _valueSearchToken += 1;
-    _filterKey = '';
-    _filterItems = null;
-    _filterInfoText = '';
+    // Reset items search mode/state on modal open.
+    _itemsSearchMode = 'local';
+    resetServerSearchState();
+    renderItemsSearchModeButtons();
+    syncItemsSearchInputHint();
+
+    // Reset lookup state (also cancels any in-flight requests from a previous open).
+    try { if (_lookupTimer) clearTimeout(_lookupTimer); } catch (e) {}
+    _lookupToken += 1;
+    _lookupQNorm = '';
+    _lookupPending = false;
+    _lookupError = '';
+    _lookupTagsSet = null;
 
     openModal();
     await loadTags();

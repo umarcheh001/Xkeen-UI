@@ -22,6 +22,8 @@ from flask import Blueprint, jsonify, request, send_file
 
 from services.xray_logs import read_new_lines as _svc_read_new_lines
 from services.xray_logs import tail_lines_fast as _svc_tail_lines_fast
+from services.log_filter import build_line_matcher as _build_line_matcher
+from services.log_filter import filter_lines as _filter_lines
 from services.xray_log_api import (
     adjust_log_timezone,
     clear_logs,
@@ -89,10 +91,12 @@ def create_xray_logs_blueprint(
           file=error|access (или error.log/access.log)
           max_lines=число (по умолчанию 800, 50–5000)
           cursor=строка (опционально) — инкрементальный курсор (DevTools-like)
+          filter=строка (опционально) — серверный фильтр строк (AND по пробелам, OR по '|')
           source=строка — для debug-логов
         """
         file_name = request.args.get("file", "error")
         cursor = request.args.get("cursor")
+        filter_expr = request.args.get("filter")
         try:
             max_lines = int(request.args.get("max_lines", 800))
         except (TypeError, ValueError):
@@ -105,12 +109,14 @@ def create_xray_logs_blueprint(
             max_lines = 5000
 
         source = request.args.get("source", "manual")
+        matcher = _build_line_matcher(filter_expr)
         try:
             ws_debug(
                 "api_xray_logs: HTTP tail requested",
                 file=file_name,
                 max_lines=max_lines,
                 cursor=bool(cursor),
+                filter=bool(filter_expr),
                 source=source,
                 client=request.remote_addr or "unknown",
             )
@@ -147,6 +153,9 @@ def create_xray_logs_blueprint(
                 carry = _xray_b64d(str(cur.get("carry", "")))
                 new_lines, new_off, new_carry = _svc_read_new_lines(path, off, carry=carry, max_bytes=128 * 1024)
                 new_cursor = _xray_encode_cursor({"ino": ino, "off": int(new_off), "carry": _xray_b64e(new_carry)})
+                # Server-side filter reduces payload (client may still filter further).
+                if filter_expr:
+                    new_lines = _filter_lines(new_lines, matcher)
                 new_lines = adjust_log_timezone(new_lines)
                 return (
                     jsonify(
@@ -165,6 +174,8 @@ def create_xray_logs_blueprint(
 
         # Full tail snapshot
         lines = _svc_tail_lines_fast(path, max_lines=max_lines, max_bytes=256 * 1024)
+        if filter_expr:
+            lines = _filter_lines(lines, matcher)
         lines = adjust_log_timezone(lines)
         new_cursor = _xray_encode_cursor({"ino": ino, "off": size, "carry": ""})
         return (

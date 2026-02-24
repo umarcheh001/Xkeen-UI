@@ -28,6 +28,66 @@
   const DEFAULT_INTERVAL_MS = DEFAULT_INTERVAL_HOURS * 60 * 60 * 1000;
   const DEFAULT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // show cached badge up to 24h
 
+  // Local-only build info (no GitHub network). Used to invalidate cached "update available"
+  // after the panel has been updated/rolled back.
+  const BUILD_INFO_URL = '/api/devtools/update/info';
+
+  // Cross-tab soft reload signal (set by DevTools after a successful update).
+  // Other open tabs will refresh and pick up new JS/CSS without requiring Ctrl+F5.
+  const LS_FORCE_RELOAD = 'xk_ui_force_reload_ts';
+
+  function _normVer(v) {
+    let s = String(v || '').trim();
+    if (s.toLowerCase().startsWith('v')) s = s.slice(1).trim();
+    return s;
+  }
+
+  // Best-effort semver-ish compare.
+  // Returns: 1 if a>b, -1 if a<b, 0 if equal/unknown.
+  function _cmpSemver(a, b) {
+    try {
+      const pa = String(a || '').trim();
+      const pb = String(b || '').trim();
+      if (!pa || !pb) return 0;
+
+      const sa = pa.split('-', 2);
+      const sb = pb.split('-', 2);
+      const na = sa[0].split('.').map((x) => parseInt(x, 10));
+      const nb = sb[0].split('.').map((x) => parseInt(x, 10));
+      const len = Math.max(na.length, nb.length, 3);
+      for (let i = 0; i < len; i++) {
+        const va = (i < na.length && isFinite(na[i])) ? na[i] : 0;
+        const vb = (i < nb.length && isFinite(nb[i])) ? nb[i] : 0;
+        if (va > vb) return 1;
+        if (va < vb) return -1;
+      }
+
+      // Numeric equal; handle prerelease: 1.0.0 > 1.0.0-rc1
+      const ra = (sa.length > 1) ? String(sa[1] || '') : '';
+      const rb = (sb.length > 1) ? String(sb[1] || '') : '';
+      if (!ra && rb) return 1;
+      if (ra && !rb) return -1;
+      if (ra && rb) {
+        if (ra > rb) return 1;
+        if (ra < rb) return -1;
+      }
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function _reloadWithCacheBust() {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set('_', String(Date.now()));
+      // replace() avoids growing history on repeated reload requests
+      window.location.replace(u.toString());
+    } catch (e) {
+      try { window.location.reload(); } catch (e2) {}
+    }
+  }
+
   function _clampIntervalHours(v) {
     const n = Number(v);
     if (n === 1 || n === 6 || n === 24) return n;
@@ -168,6 +228,23 @@
     }
   }
 
+  async function _getJSON(url, timeoutMs) {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), Math.max(300, Number(timeoutMs || 1200)));
+    try {
+      const res = await fetch(url, { cache: 'no-store', method: 'GET', signal: controller.signal });
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (e) {
+        data = {};
+      }
+      return { ok: res.ok, data };
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
   function _loadCachedResult() {
     try {
       const raw = window.localStorage.getItem(LS_LAST_RESULT);
@@ -221,7 +298,17 @@
       const has = !!(ok && data && data.ok && data.update_available);
       const latestLabel = _extractLatestLabel(data);
 
-      _saveCachedResult({ ts: _now(), has_update: has, latest: latestLabel || '', channel: String((data && data.channel) || '') });
+      // Cache also the *current* build fingerprint so we can invalidate stale badges
+      // after an update/rollback even if GitHub is unreachable.
+      let curVer = '';
+      let curCommit = '';
+      try {
+        const cur = (data && data.current && typeof data.current === 'object') ? data.current : {};
+        curVer = String(cur.version || '').trim();
+        curCommit = String(cur.commit || '').trim();
+      } catch (e) {}
+
+      _saveCachedResult({ ts: _now(), has_update: has, latest: latestLabel || '', channel: String((data && data.channel) || ''), cur_ver: curVer, cur_commit: curCommit });
 
       if (has) {
         _setLinkState({ visible: true, hasUpdate: true, label: latestLabel || '' });
@@ -268,6 +355,59 @@
     const cached = _loadCachedResult();
     if (cached && cached.has_update) {
       _setLinkState({ visible: true, hasUpdate: true, label: cached.latest || '' });
+
+      // Common complaint: after updating the panel, the cached badge may stay visible
+      // until the next scheduled check (default 6h) or if GitHub is unreachable.
+      // Try to clear it using *local* build info (no GitHub network).
+      try {
+        (async () => {
+          const { ok, data } = await _getJSON(BUILD_INFO_URL, 1200);
+          if (!ok || !data || !data.ok) return;
+          const build = (data && data.build && typeof data.build === 'object') ? data.build : {};
+          const localVer = String(build.version || '').trim();
+          const localCommit = String(build.commit || '').trim();
+          const ch = String(cached.channel || '').toLowerCase();
+          const latest = String(cached.latest || '').trim();
+
+          // If user updated to a *newer* build than the cached "latest" (e.g. manual install,
+          // switching channels, or hotfix builds), don't keep a stale badge around.
+          // For stable we can do a semver-ish compare; for main we can't reliably order commits.
+          let localIsNewerOrEqual = false;
+          if (ch !== 'main') {
+            const lv = _normVer(localVer);
+            const lt = _normVer(latest);
+            if (lv && lt) {
+              const c = _cmpSemver(lv, lt);
+              localIsNewerOrEqual = (c >= 0);
+            }
+          }
+
+          let upToDate = false;
+          if (ch === 'main') {
+            // cached.latest is usually short sha; compare prefix.
+            if (latest && localCommit) {
+              upToDate = String(localCommit).startsWith(String(latest));
+            }
+          } else {
+            // stable: cached.latest is a tag like v1.4.6
+            if (latest && localVer) {
+              upToDate = _normVer(localVer) === _normVer(latest);
+              if (!upToDate && localIsNewerOrEqual) upToDate = true;
+            }
+          }
+
+          if (upToDate) {
+            _saveCachedResult({ ts: _now(), has_update: false, latest: '', channel: ch, cur_ver: localVer, cur_commit: localCommit });
+            _setLinkState({ visible: false, hasUpdate: false, label: '' });
+            // Also allow an immediate re-check later (e.g. if a newer release appears soon).
+            try { window.localStorage.removeItem(LS_LAST_CHECK); } catch (e) {}
+            return;
+          }
+
+          // If still flagged, verify quickly even if interval hasn't elapsed.
+          _checkOnce({ silent: true }).catch(() => {});
+        })().catch(() => {});
+      } catch (e) {}
     } else {
       _setLinkState({ visible: false, hasUpdate: false, label: '' });
     }
@@ -281,6 +421,14 @@
     _schedule(s.intervalMs);
     return s;
   }
+
+  // Public helper for other modules (e.g. DevTools update runner UI).
+  api.resetCache = function resetCache() {
+    try { window.localStorage.removeItem(LS_LAST_RESULT); } catch (e) {}
+    try { window.localStorage.removeItem(LS_LAST_CHECK); } catch (e) {}
+    try { window.localStorage.removeItem(LS_LAST_TOAST); } catch (e) {}
+    try { _setLinkState({ visible: false, hasUpdate: false, label: '' }); } catch (e) {}
+  };
 
   api.init = function init(opts) {
     if (_inited) return;
@@ -320,6 +468,12 @@
   try {
     window.addEventListener('storage', (ev) => {
       const k = ev && ev.key ? String(ev.key) : '';
+      // DevTools broadcasts this after a successful update so other open tabs
+      // will refresh and pick up new assets.
+      if (k === LS_FORCE_RELOAD) {
+        _reloadWithCacheBust();
+        return;
+      }
       if (k === LS_ENABLED || k === LS_INTERVAL_HOURS) {
         if (_inited) _applySettings();
       }

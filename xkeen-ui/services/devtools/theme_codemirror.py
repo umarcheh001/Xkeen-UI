@@ -28,63 +28,72 @@ CODEMIRROR_THEME_CSS_MARKER = "/* xkeen-ui codemirror theme v3 */"
 # ---------------------------------------------------------------------------
 
 _DEFAULT_CODEMIRROR_THEME_CONFIG: Dict[str, Any] = {
+    # Used for lightweight migrations of the stock (factory) palette.
+    # User-changed palettes are never overwritten.
+    "preset": "material-darker-v5",
     "enabled": False,
     "dark": {
-        "background": "#020617",
-        "text": "#e5e7eb",
-        "gutter_bg": "#020617",
-        "gutter_text": "#9ca3af",
-        "cursor": "#60a5fa",
-        "selection": "#60a5fa38",
+        # Default palette is intentionally close to CodeMirror "material-darker"
+        # so that enabling the DevTools CodeMirror theme feels like a "refine"
+        # instead of a completely different editor.
+        # Tuned for xkeen panel dark UI (less "muddy gray", more deep navy)
+        "background": "#070c18",
+        "text": "#f2f6fc",
+        "gutter_bg": "#0b1020",
+        "gutter_text": "#56627a",
+        "cursor": "#ffd400",
+        "selection": "#1e2a4433",
         # Selected text color (used for ::selection + CodeMirror-selectedtext)
-        "selection_text": "#e5e7eb",
-        "active_line": "#60a5fa17",
+        "selection_text": "#e6edf3",
+        "active_line": "#101a36",
         # Search match highlight (addon/search/match-highlighter)
-        "search_match": "#fbbf2440",
+        "search_match": "#80cbc433",
         # Rulers (addon/display/rulers)
-        "ruler": "#334155",
+        "ruler": "#202b45",
         # Indent guides (addon/display/indent-guides + cm-tab guides)
-        "indent_guide": "#47556980",
+        "indent_guide": "#33415f66",
         # Trailing spaces highlight (addon/edit/trailingspace)
-        "trailingspace": "#f8717126",
+        "trailingspace": "#ff537033",
         # Lint tooltip + line highlights (addon/lint)
-        "lint_tooltip_bg": "#0b1220",
-        "lint_tooltip_text": "#e5e7eb",
-        "lint_tooltip_border": "#334155",
-        "lint_error_line": "#f8717114",
-        "lint_warning_line": "#fbbf2414",
-        "bracket_bg": "#60a5fa2e",
-        "bracket_border": "#60a5fa73",
-        "bad_bracket_bg": "#f871712e",
-        "bad_bracket_border": "#f871718c",
-        "dialog_bg": "#020617",
-        "dialog_text": "#e5e7eb",
-        "dialog_border": "#1f2937",
-        "dialog_input_bg": "#020617",
-        "dialog_input_text": "#e5e7eb",
-        "dialog_btn_bg": "#020617",
-        "dialog_btn_text": "#e5e7eb",
-        "dialog_btn_border": "#1f2937",
+        "lint_tooltip_bg": "#212121",
+        "lint_tooltip_text": "#eeffff",
+        "lint_tooltip_border": "#2a2a2a",
+        "lint_error_line": "#ff53701a",
+        "lint_warning_line": "#ffcb6b1a",
+        "bracket_bg": "#82aaff26",
+        "bracket_border": "#82aaff66",
+        "bad_bracket_bg": "#ff537026",
+        "bad_bracket_border": "#ff537066",
+        "dialog_bg": "#212121",
+        "dialog_text": "#eeffff",
+        "dialog_border": "#2a2a2a",
+        "dialog_input_bg": "#212121",
+        "dialog_input_text": "#eeffff",
+        "dialog_btn_bg": "#212121",
+        "dialog_btn_text": "#eeffff",
+        "dialog_btn_border": "#2a2a2a",
         "tokens": {
-            "keyword": "#93c5fd",
-            "string": "#bbf7d0",
-            "number": "#fde68a",
-            "comment": "#a1a1aa",
-            "atom": "#fbcfe8",
-            "def": "#bfdbfe",
-            "variable": "#e5e7eb",
-            "variable2": "#22d3ee",
-            "builtin": "#fbbf24",
-            "meta": "#c7d2fe",
-            "tag": "#fca5a5",
-            "attribute": "#86efac",
-            "error": "#f87171",
-            "property": "#c7d2fe",
-            "operator": "#e5e7eb",
-            "qualifier": "#fde68a",
-            "bracket": "#9ca3af",
-            "link": "#60a5fa",
-            "header": "#fbbf24",
+            "keyword": "#d2a6ff",
+            "string": "#b7f58a",
+            # Numbers should be distinct and readable on the dark background
+            "number": "#ffb86c",
+            "comment": "#6b8299",
+            "atom": "#ff8b6a",
+            "def": "#7ab0ff",
+            "variable": "#ff6b7a",
+            "variable2": "#f2f6fc",
+            "builtin": "#ffcc80",
+            "meta": "#ffcc80",
+            "tag": "#ff4d6d",
+            "attribute": "#d2a6ff",
+            "error": "#ff4d6d",
+            # JSON keys / properties ("routing", "rules"...) should be cyan-ish
+            "property": "#7dd3fc",
+            "operator": "#7dd3fc",
+            "qualifier": "#decb6b",
+            "bracket": "#f2f6fc",
+            "link": "#7ab0ff",
+            "header": "#ffd38a",
         },
     },
     "light": {
@@ -183,6 +192,14 @@ def _sanitize_codemirror_theme_config(cfg_in: Any) -> Dict[str, Any]:
     base = json.loads(json.dumps(_DEFAULT_CODEMIRROR_THEME_CONFIG))
     src = cfg_in if isinstance(cfg_in, dict) else {}
 
+    # preset (optional, for migrations)
+    try:
+        pv = src.get("preset")
+        if isinstance(pv, str) and pv.strip():
+            base["preset"] = pv.strip()
+    except Exception:
+        pass
+
     # enabled
     try:
         ev = src.get("enabled")
@@ -217,16 +234,73 @@ def _sanitize_codemirror_theme_config(cfg_in: Any) -> Dict[str, Any]:
     return base
 
 
+def _maybe_migrate_stock_palette(cfg: Dict[str, Any], raw: Any) -> Dict[str, Any]:
+    """Migrate *factory* palette to the newer, less-bled preset.
+
+    We only migrate when:
+      - the old config has no 'preset' field (pre-v4), and
+      - key colors still match the old factory defaults (so user didn't tune).
+
+    This avoids overwriting user customization.
+    """
+
+    try:
+        if isinstance(raw, dict) and isinstance(raw.get("preset"), str):
+            # If user already has a preset, normally keep it. But we may migrate
+            # the *factory* v4 preset to v5 when it still matches stock colors.
+            if str(raw.get("preset")) != "material-darker-v4":
+                return cfg
+
+
+        dark = cfg.get("dark") if isinstance(cfg.get("dark"), dict) else {}
+        tok = dark.get("tokens") if isinstance(dark.get("tokens"), dict) else {}
+
+        # Heuristic: very old defaults used a muddy gray background and red-ish numbers.
+        if (
+            str(dark.get("background")).lower() == "#212121"
+            and str(tok.get("string")).lower() == "#c3e88d"
+            and str(tok.get("number")).lower() == "#ff5370"
+        ):
+            migrated = json.loads(json.dumps(_DEFAULT_CODEMIRROR_THEME_CONFIG))
+            # Preserve user's enabled flag if they used it as a switch.
+            if isinstance(cfg.get("enabled"), bool):
+                migrated["enabled"] = cfg.get("enabled")
+            return migrated
+
+        # Heuristic: migrate factory v4 preset to v5 when unchanged by user.
+        if (
+            str((raw or {}).get("preset")) == "material-darker-v4"
+            and str(dark.get("background")).lower() == "#0b1020"
+            and str(tok.get("property")).lower() == "#89ddff"
+            and str(tok.get("string")).lower() == "#c3e88d"
+            and str(tok.get("number")).lower() == "#ffcb6b"
+        ):
+            migrated = json.loads(json.dumps(_DEFAULT_CODEMIRROR_THEME_CONFIG))
+            if isinstance(cfg.get("enabled"), bool):
+                migrated["enabled"] = cfg.get("enabled")
+            return migrated
+    except Exception:
+        pass
+
+    return cfg
+
+
 def _codemirror_theme_css_from_config(cfg: Dict[str, Any]) -> str:
     lines: List[str] = []
     lines.append(CODEMIRROR_THEME_CSS_MARKER)
     lines.append("/* Generated by DevTools: CodeMirror */")
     lines.append("")
 
-    if not (cfg or {}).get("enabled"):
-        lines.append("/* disabled */")
-        lines.append("")
-        return "\n".join(lines) + "\n"
+    # NOTE:
+    # Historically this stylesheet acted as the *only* syntax-color source when the
+    # global theme layer normalized CodeMirror surfaces to CSS variables.
+    # If we output nothing when "enabled" is false, some pages end up effectively
+    # monochrome (because global theme CSS has many `!important` rules).
+    #
+    # So we always emit a small baseline token palette (close to CodeMirror's
+    # material-darker / default), and only switch to the full user-configured
+    # override when the DevTools toggle is enabled.
+    is_enabled = bool((cfg or {}).get("enabled"))
 
     def rule(sel: str, body: List[str]) -> None:
         lines.append(f"{sel} {{")
@@ -234,9 +308,70 @@ def _codemirror_theme_css_from_config(cfg: Dict[str, Any]) -> str:
             lines.append("  " + ln)
         lines.append("}")
 
+    def rule(sel: str, body: List[str]) -> None:
+        lines.append(f"{sel} {{")
+        for ln in body:
+            lines.append("  " + ln)
+        lines.append("}")
+
+    def emit_tokens(mode: str, t: Dict[str, Any]) -> None:
+        tok = t.get("tokens") if isinstance(t.get("tokens"), dict) else {}
+        r = f":root[data-theme=\"{mode}\"]"
+
+        token_map = {
+            "keyword": ".cm-keyword",
+            "string": ".cm-string",
+            "number": ".cm-number",
+            "comment": ".cm-comment",
+            "atom": ".cm-atom",
+            "def": ".cm-def",
+            "variable": ".cm-variable",
+            "variable2": ".cm-variable-2",
+            "builtin": ".cm-builtin",
+            "meta": ".cm-meta",
+            "tag": ".cm-tag",
+            "attribute": ".cm-attribute",
+            "error": ".cm-error",
+            "property": ".cm-property",
+            "operator": ".cm-operator",
+            "qualifier": ".cm-qualifier",
+            "bracket": ".cm-bracket",
+            "link": ".cm-link",
+            "header": ".cm-header",
+        }
+
+        # Apply to both built-in themes (default + material-darker). Some pages
+        # temporarily switch themes based on panel theme.
+        for k, sel in token_map.items():
+            if tok.get(k):
+                rule(
+                    f"{r} .cm-s-default {sel}, {r} .cm-s-material-darker {sel}",
+                    [f"color: {tok.get(k)} !important;"],
+                )
+
+        # CodeMirror uses background for .cm-error in material-darker. Keep error
+        # visible even if the global theme overrides backgrounds.
+        if tok.get("error"):
+            rule(
+                f"{r} .cm-s-default .cm-error, {r} .cm-s-material-darker .cm-error",
+                [
+                    f"color: {tok.get('error')} !important;",
+                    "background: transparent !important;",
+                ],
+            )
+
+
+    if not is_enabled:
+        lines.append("/* baseline (DevTools CodeMirror theme: Disabled) */")
+        lines.append("/* Keeps syntax colors readable even when global theme normalizes surfaces. */")
+        for mode in ("dark", "light"):
+            t = (cfg or {}).get(mode) if isinstance((cfg or {}).get(mode), dict) else {}
+            emit_tokens(mode, t)
+            lines.append("")
+        return "\n".join(lines) + "\n"
+
     for mode in ("dark", "light"):
         t = (cfg or {}).get(mode) if isinstance((cfg or {}).get(mode), dict) else {}
-        tok = t.get("tokens") if isinstance(t.get("tokens"), dict) else {}
         r = f":root[data-theme=\"{mode}\"]"
 
         # Surfaces
@@ -351,30 +486,7 @@ def _codemirror_theme_css_from_config(cfg: Dict[str, Any]) -> str:
         )
 
         # Tokens
-        token_map = {
-            "keyword": ".cm-keyword",
-            "string": ".cm-string",
-            "number": ".cm-number",
-            "comment": ".cm-comment",
-            "atom": ".cm-atom",
-            "def": ".cm-def",
-            "variable": ".cm-variable",
-            "variable2": ".cm-variable-2",
-            "builtin": ".cm-builtin",
-            "meta": ".cm-meta",
-            "tag": ".cm-tag",
-            "attribute": ".cm-attribute",
-            "error": ".cm-error",
-            "property": ".cm-property",
-            "operator": ".cm-operator",
-            "qualifier": ".cm-qualifier",
-            "bracket": ".cm-bracket",
-            "link": ".cm-link",
-            "header": ".cm-header",
-        }
-        for k, sel in token_map.items():
-            if tok.get(k):
-                rule(f"{r} .CodeMirror {sel}", [f"color: {tok.get(k)} !important;"])
+        emit_tokens(mode, t)
 
         # Dialog (search/replace)
         rule(
@@ -418,6 +530,7 @@ def codemirror_theme_get(ui_state_dir: str) -> Dict[str, Any]:
             with open(jpath, "r", encoding="utf-8", errors="ignore") as f:
                 raw = json.load(f)
             cfg = _sanitize_codemirror_theme_config(raw)
+            cfg = _maybe_migrate_stock_palette(cfg, raw)
             exists = True
             try:
                 if not os.path.isfile(cpath) or not _file_has_marker(cpath, CODEMIRROR_THEME_CSS_MARKER):
@@ -461,4 +574,3 @@ def codemirror_theme_reset(ui_state_dir: str) -> Dict[str, Any]:
         except Exception:
             pass
     return codemirror_theme_get(ui_state_dir)
-

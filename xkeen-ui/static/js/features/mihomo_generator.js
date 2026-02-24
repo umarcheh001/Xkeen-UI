@@ -140,6 +140,8 @@
         const copyBtn = document.getElementById("copyBtn");
         const statusMessage = document.getElementById("statusMessage");
         const previewTextarea = document.getElementById("previewTextarea");
+        const previewEngineSelect = document.getElementById("mihomo-preview-engine-select");
+        const previewMonacoHost = document.getElementById("previewMonaco");
         const validationLogEl = document.getElementById("validationLog");
         const clearValidationLogBtn = document.getElementById("clearValidationLogBtn");
 
@@ -188,6 +190,251 @@
       
         let editor = null;
 
+// ----- Engine toggle (CodeMirror / Monaco) -----
+let _engine = 'codemirror';
+let _engineTouched = false;
+let _engineSyncing = false;
+let _monaco = null;
+let _monacoFacade = null;
+let _active = null; // facade: {getValue,setValue,focus,layout,dispose}
+let _isEditable = false;
+
+function normalizeEngine(v) {
+  const s = String(v || '').toLowerCase();
+  return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
+}
+
+function getEngineHelper() {
+  try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+}
+
+function getMonacoShared() {
+  try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
+}
+
+function showNode(node) {
+  if (!node) return;
+  try { node.classList.remove('hidden'); } catch (e) {}
+  try { node.style.display = ''; } catch (e2) {}
+}
+
+function hideNode(node) {
+  if (!node) return;
+  try { node.classList.add('hidden'); } catch (e) {}
+  try { node.style.display = 'none'; } catch (e2) {}
+}
+
+function cmWrapper(cm) {
+  try { return (cm && typeof cm.getWrapperElement === 'function') ? cm.getWrapperElement() : null; } catch (e) { return null; }
+}
+
+function showCmToolbar(show) {
+  try {
+    if (editor && editor._xkeenToolbarEl) editor._xkeenToolbarEl.style.display = show ? '' : 'none';
+  } catch (e) {}
+}
+
+function cmFacade() {
+  const cm = editor;
+  return {
+    getValue: () => { try { return String(cm.getValue() || ''); } catch (e) { return ''; } },
+    setValue: (v) => { try { cm.setValue(String(v ?? '')); } catch (e) {} },
+    focus: () => { try { cm.focus(); } catch (e) {} },
+    layout: () => { try { cm.refresh(); } catch (e) {} },
+    dispose: () => {},
+  };
+}
+
+function showCodeMirror(show) {
+  const w = cmWrapper(editor);
+  if (w) {
+    if (show) showNode(w); else hideNode(w);
+    if (show) { try { if (editor && editor.refresh) editor.refresh(); } catch (e) {} }
+  }
+}
+
+function showMonaco(show) {
+  const host = previewMonacoHost;
+  if (!host) return;
+  if (show) showNode(host); else hideNode(host);
+  if (show && _monaco && typeof _monaco.layout === 'function') {
+    try { _monaco.layout(); } catch (e) {}
+    try { setTimeout(() => { try { _monaco.layout(); } catch (e2) {} }, 0); } catch (e3) {}
+  }
+}
+
+async function ensureMonacoEditor(initialValue) {
+  if (_monaco) return _monaco;
+  if (!previewMonacoHost) return null;
+  const shared = getMonacoShared();
+  if (!shared || typeof shared.createEditor !== 'function') return null;
+
+  const value = String(initialValue ?? '');
+  try {
+    _monaco = await shared.createEditor(previewMonacoHost, {
+      language: 'yaml',
+      value,
+      readOnly: !_isEditable,
+      tabSize: 2,
+      insertSpaces: true,
+      wordWrap: 'on',
+    });
+    if (!_monaco) return null;
+    try { _monacoFacade = shared.toFacade ? shared.toFacade(_monaco) : null; } catch (e) { _monacoFacade = null; }
+    return _monaco;
+  } catch (e) {
+    try { console.error(e); } catch (e2) {}
+    return null;
+  }
+}
+
+function getEditorText() {
+  try { return _active ? String(_active.getValue() || '') : (editor ? String(editor.getValue() || '') : ''); } catch (e) { return ''; }
+}
+
+function setEditorText(text) {
+  if (!_active) return;
+  try { _active.setValue(String(text ?? '')); } catch (e) {}
+}
+
+function setEngineSelectValue(engine) {
+  if (!previewEngineSelect) return;
+  try { previewEngineSelect.value = normalizeEngine(engine); } catch (e) {}
+}
+
+async function resolvePreferredEngine() {
+  let engine = 'codemirror';
+  const ee = getEngineHelper();
+  try {
+    if (ee && typeof ee.ensureLoaded === 'function') engine = normalizeEngine(await ee.ensureLoaded());
+    else if (ee && typeof ee.get === 'function') engine = normalizeEngine(ee.get());
+  } catch (e) {
+    try { engine = normalizeEngine(ee && ee.get ? ee.get() : 'codemirror'); } catch (e2) { engine = 'codemirror'; }
+  }
+  return engine;
+}
+
+async function switchEngine(nextEngine, opts) {
+  const next = normalizeEngine(nextEngine);
+  if (!next) return _engine;
+  if (next === _engine && !(opts && opts.force)) return _engine;
+  if (_engineSyncing) return _engine;
+
+  _engineSyncing = true;
+  try {
+    const currentText = getEditorText();
+
+    if (next === 'monaco') {
+      const ed = await ensureMonacoEditor(currentText);
+      if (!ed) {
+        // Fallback to CodeMirror and persist it to global helper (best-effort).
+        try {
+          const ee = getEngineHelper();
+          if (ee && typeof ee.set === 'function') ee.set('codemirror');
+        } catch (e2) {}
+        setEngineSelectValue('codemirror');
+        showMonaco(false);
+        showCodeMirror(true);
+        showCmToolbar(true);
+        _active = cmFacade();
+        _engine = 'codemirror';
+        return _engine;
+      }
+
+      // Sync text from CodeMirror to Monaco on entry.
+      try { if (ed && ed.setValue) ed.setValue(String(currentText || '')); } catch (e3) {}
+
+      // Apply current editable flag
+      try { if (ed && ed.updateOptions) ed.updateOptions({ readOnly: !_isEditable }); } catch (e4) {}
+
+      showCodeMirror(false);
+      showCmToolbar(false);
+      showMonaco(true);
+
+      _engine = 'monaco';
+      _active = _monacoFacade || {
+        getValue: () => { try { return String(ed.getValue() || ''); } catch (e) { return ''; } },
+        setValue: (v) => { try { ed.setValue(String(v ?? '')); } catch (e) {} },
+        focus: () => { try { ed.focus(); } catch (e) {} },
+        layout: () => { try { ed.layout(); } catch (e) {} },
+        dispose: () => { try { ed.dispose(); } catch (e) {} },
+      };
+      try { if (_active && _active.focus) _active.focus(); } catch (e5) {}
+      return _engine;
+    }
+
+    // Switch to CodeMirror (sync text back from Monaco).
+    try {
+      if (!editor) initEditor();
+    } catch (e0) {}
+
+    try { if (editor && editor.setValue) editor.setValue(String(currentText || '')); } catch (e6) {}
+
+    // Apply current editable flag
+    try { if (editor && editor.setOption) editor.setOption('readOnly', !_isEditable); } catch (e7) {}
+
+    showMonaco(false);
+    showCodeMirror(true);
+    showCmToolbar(true);
+
+    _engine = 'codemirror';
+    _active = cmFacade();
+    try { if (editor && editor.focus) editor.focus(); } catch (e8) {}
+    return _engine;
+  } finally {
+    _engineSyncing = false;
+  }
+}
+
+function initEngineToggle() {
+  if (!previewEngineSelect) return;
+  if (previewEngineSelect.dataset && previewEngineSelect.dataset.xkWired === '1') return;
+
+  // Initial value from settings/local fallback (async, non-blocking).
+  (async () => {
+    try {
+      const pref = await resolvePreferredEngine();
+      setEngineSelectValue(pref);
+      await switchEngine(pref, { force: false });
+    } catch (e) {}
+  })();
+
+  previewEngineSelect.addEventListener('change', async () => {
+    const next = normalizeEngine(previewEngineSelect.value);
+    _engineTouched = true;
+    try {
+      await switchEngine(next, { force: false });
+      const ee = getEngineHelper();
+      if (ee && typeof ee.set === 'function') {
+        try { await ee.set(next); } catch (e) {}
+      }
+    } finally {
+      try { setTimeout(() => { _engineTouched = false; }, 0); } catch (e) { _engineTouched = false; }
+    }
+  });
+
+  if (previewEngineSelect.dataset) previewEngineSelect.dataset.xkWired = '1';
+
+  // Keep in sync with other editors when preference changes globally.
+  const ee = getEngineHelper();
+  const onGlobal = (detail) => {
+    try {
+      if (_engineTouched) return;
+      const eng = normalizeEngine(detail && detail.engine);
+      if (!eng) return;
+      try { if (previewEngineSelect.value !== eng) previewEngineSelect.value = eng; } catch (e) {}
+      if (eng !== _engine) {
+        switchEngine(eng, { force: false }).catch(() => {});
+      }
+    } catch (e) {}
+  };
+
+  try {
+    if (ee && typeof ee.onChange === 'function') ee.onChange(onGlobal);
+    else document.addEventListener('xkeen-editor-engine-change', (ev) => onGlobal(ev && ev.detail ? ev.detail : {}));
+  } catch (e) {}
+}
+
         function moveToolbarToHeader() {
           try {
             const host = document.getElementById('previewToolbarHost');
@@ -227,7 +474,7 @@
         let previewTimeout = null;
       
         function schedulePreview(delay = 300) {
-          if (!editor) return;
+          if (!_active) return;
           clearTimeout(previewTimeout);
           previewTimeout = setTimeout(() => {
             generatePreviewDemo(false);
@@ -439,24 +686,37 @@
         }
       
         function jumpToErrorPositionFromLog(log) {
-          if (!editor || !log) return;
-          // Ищем паттерны вида "line 12 column 5" или "at line 23, column 1"
-          const re = /(line|строка)[^0-9]*(\d+)[^0-9]+(column|col|столбец)?[^0-9]*(\d+)?/i;
-          const m = log.match(re);
-          if (!m) return;
-          const lineNum = parseInt(m[2], 10);
-          const colNum = m[4] ? parseInt(m[4], 10) : 1;
-          if (!Number.isFinite(lineNum) || lineNum <= 0) return;
-          const line = lineNum - 1;
-          const ch = colNum > 0 ? colNum - 1 : 0;
-          try {
-            editor.setCursor({ line, ch });
-            editor.scrollIntoView({ line, ch }, 100);
-            // кратко подчеркнём строку статусом
-            setStatus("Ошибка около строки " + lineNum + ", столбец " + colNum + ".", "err");
-          } catch (e) {
-            console.warn("Failed to move cursor to error position", e);
-          }
+  if (!log) return;
+  // Ищем паттерны вида "line 12 column 5" или "at line 23, column 1"
+  const re = /(line|строка)[^0-9]*(\d+)[^0-9]+(column|col|столбец)?[^0-9]*(\d+)?/i;
+  const m = log.match(re);
+  if (!m) return;
+  const lineNum = parseInt(m[2], 10);
+  const colNum = m[4] ? parseInt(m[4], 10) : 1;
+  if (!Number.isFinite(lineNum) || lineNum <= 0) return;
+
+  try {
+    if (_engine === 'monaco' && _monaco) {
+      const pos = { lineNumber: lineNum, column: (colNum > 0 ? colNum : 1) };
+      try { _monaco.setPosition(pos); } catch (e) {}
+      try { _monaco.revealPositionInCenter(pos); } catch (e) {}
+      try { _monaco.focus(); } catch (e) {}
+      setStatus("Ошибка около строки " + lineNum + ", столбец " + colNum + ".", "err");
+      return;
+    }
+  } catch (e) {}
+
+  if (!editor) return;
+
+  const line = lineNum - 1;
+  const ch = colNum > 0 ? colNum - 1 : 0;
+  try {
+    editor.setCursor({ line, ch });
+    editor.scrollIntoView({ line, ch }, 100);
+    setStatus("Ошибка около строки " + lineNum + ", столбец " + colNum + ".", "err");
+  } catch (e) {
+    console.warn("Failed to move cursor to error position", e);
+  }
         }
       
       
@@ -526,6 +786,9 @@
           }
       
           editor.setValue(SKELETON);
+
+          // Default active engine is CodeMirror until overridden by global preference.
+          try { _engine = 'codemirror'; _active = cmFacade(); } catch (e) {}
         }
       
         // React on theme changes (main.js dispatches xkeen-theme-change)
@@ -1793,7 +2056,7 @@
         function generatePreviewDemo(manual = false) {
           const state = collectState();
           const payload = { state };
-          if (!editor) {
+          if (!_active) {
             setStatus("Editor not initialised.", "err");
             if (manual) try { toast("Editor not initialised.", 'error'); } catch (e) {}
             return;
@@ -1836,7 +2099,7 @@
                 if (manual) try { toast("Сервер вернул пустой конфиг для предпросмотра.", 'error'); } catch (e) {}
                 return;
               }
-              editor.setValue(cfg);
+              setEditorText(cfg);
 
               const serverWarnings = Array.isArray(data.warnings) ? data.warnings : [];
               let serverWarnMsg = null;
@@ -1885,7 +2148,7 @@
       
         // ----- download config -----
         function downloadConfig() {
-          const text = editor ? editor.getValue() : "";
+          const text = getEditorText();
           if (!text.trim()) {
             setStatus("Нечего сохранять – редактор пуст.", "err");
             try { toast("Нечего сохранять – редактор пуст.", 'error'); } catch (e) {}
@@ -1958,7 +2221,7 @@
       
         // ----- validate via mihomo core -----
         async function validateConfigOnServer(showPopup = true, notify = false) {
-          const cfg = editor ? editor.getValue() : "";
+          const cfg = getEditorText();
           if (!cfg.trim()) {
             setStatus("Нечего проверять – конфиг пуст.", "err");
             if (notify) try { toast("Нечего проверять – конфиг пуст.", 'error'); } catch (e) {}
@@ -2007,7 +2270,7 @@
       // ----- apply to router -----
         async function applyToRouter(notify = false) {
           const state = collectState();
-          const cfg = editor ? editor.getValue() : "";
+          const cfg = getEditorText();
           if (!cfg.trim()) {
             setStatus("Нечего применять – конфиг пуст.", "err");
             if (notify) try { toast("Нечего применять – конфиг пуст.", 'error'); } catch (e) {}
@@ -2092,7 +2355,7 @@
       
         // ----- copy -----
         function copyConfig() {
-          const text = editor ? editor.getValue() : "";
+          const text = getEditorText();
           if (!navigator.clipboard) {
             const t = document.createElement("textarea");
             t.value = text;
@@ -2115,26 +2378,40 @@
             () => { setStatus("Не удалось скопировать в буфер обмена.", "err"); try { toast("Не удалось скопировать в буфер обмена.", 'error'); } catch (e) {} }
           );
         }
-      
+
         // ----- edit toggle -----
         function setEditable(flag, notify = false) {
-          if (!editor) return;
-          if (flag) {
-            editor.setOption("readOnly", false);
-            setStatus("Режим редактирования включён.", "ok");
-            if (notify) try { toast("Режим редактирования включён.", 'info'); } catch (e) {}
+          _isEditable = !!flag;
+
+          // Apply to CodeMirror if present
+          try {
+            if (editor && editor.setOption) editor.setOption('readOnly', !_isEditable);
+          } catch (e) {}
+
+          // Apply to Monaco if present
+          try {
+            if (_monaco && _monaco.updateOptions) _monaco.updateOptions({ readOnly: !_isEditable });
+          } catch (e) {}
+
+          if (_isEditable) {
+            setStatus('Режим редактирования включён.', 'ok');
+            if (notify) {
+              try { toast('Режим редактирования включён.', 'info'); } catch (e) {}
+            }
           } else {
-            editor.setOption("readOnly", true);
-            setStatus("Редактирование выключено, конфиг защищён от случайных правок.", null);
-            if (notify) try { toast("Редактирование выключено.", 'info'); } catch (e) {}
+            setStatus('Редактирование выключено, конфиг защищён от случайных правок.', null);
+            if (notify) {
+              try { toast('Редактирование выключено.', 'info'); } catch (e) {}
+            }
           }
         }
-      
+
         // ----- init -----
         // NOTE: init() itself is called from pages/mihomo_generator.init.js on DOMContentLoaded.
         // Поэтому здесь нельзя вешать ещё один DOMContentLoaded, иначе колбэк уже не сработает.
         initEditor();
         try { setEditable(!!(editToggle && editToggle.checked), false); } catch (e) {}
+        initEngineToggle();
         addInitialSubscriptionRow();
         loadProfileDefaults(profileSelect && profileSelect.value);
         setStatus("Скелет загружен. Заполните поля слева и нажмите «Применить».", null);

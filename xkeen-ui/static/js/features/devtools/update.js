@@ -36,6 +36,19 @@
   });
   const byId = SH.byId || ((id) => { try { return document.getElementById(id); } catch (e) { return null; } });
 
+  // Cross-tab reload broadcast key (handled by update_notifier.js on other tabs).
+  const LS_FORCE_RELOAD = 'xk_ui_force_reload_ts';
+
+  function _reloadWithCacheBust() {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set('_', String(Date.now()));
+      window.location.replace(u.toString());
+    } catch (e) {
+      try { window.location.reload(); } catch (e2) {}
+    }
+  }
+
   // Shared with update_notifier.js
   const LS_NOTIFY_ENABLED = 'xk_update_notify_enabled';
   const LS_NOTIFY_INTERVAL_H = 'xk_update_notify_interval_h';
@@ -710,6 +723,18 @@
         if (!last || fin > last) {
           if (stateVal === 'done') {
             toastKind(op === 'rollback' ? 'Откат завершён' : 'Обновление завершено', 'success');
+
+            // Important UX: clear the global "update available" badge immediately after update,
+            // and refresh open tabs to pick up new assets without manual Ctrl+F5.
+            if (op !== 'rollback') {
+              try {
+                const n = XK && XK.features && XK.features.updateNotifier ? XK.features.updateNotifier : null;
+                if (n && typeof n.resetCache === 'function') n.resetCache();
+              } catch (e) {}
+              try { window.localStorage.setItem(LS_FORCE_RELOAD, String(Date.now())); } catch (e) {}
+              // Refresh this DevTools tab too (storage event doesn't fire in the same tab).
+              try { setTimeout(() => _reloadWithCacheBust(), 700); } catch (e) {}
+            }
           } else {
             const e2 = err || (st && st.message ? String(st.message) : 'failed');
             toastKind((op === 'rollback' ? 'Ошибка отката: ' : 'Ошибка обновления: ') + e2, 'error');

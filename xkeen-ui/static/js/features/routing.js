@@ -20,6 +20,10 @@
     error: 'routing-error',
     helpLine: 'routing-help-line',
 
+    // Editor engine toggle (CodeMirror / Monaco)
+    engineSelect: 'routing-editor-engine-select',
+    monacoContainer: 'routing-editor-monaco',
+
     // Routing fragment selector (optional)
     fragmentSelect: 'routing-fragment-select',
     fragmentRefresh: 'routing-fragment-refresh-btn',
@@ -52,6 +56,17 @@
 
   // Active routing fragment file (basename or absolute). Controlled by dropdown.
   let _activeFragment = null;
+
+  // Active editor engine: 'codemirror' (default) or 'monaco'
+  let _engine = 'codemirror';
+  let _monaco = null;
+  let _monacoFacade = null;
+  let _monacoHostEl = null;
+  let _engineSelectEl = null;
+  let _engineTouched = false;
+
+  // Monaco diagnostics debounce (markers).
+  let _monacoDiagTimer = null;
 
 
   function $(id) {
@@ -368,8 +383,14 @@ function closeHelp() {
     const errEl = $(IDS.error);
     if (errEl) errEl.textContent = String(message ?? '');
 
-    if (!_cm || !_cm.getDoc) return;
+    // Always clear previous CM marker (if any).
     clearErrorMarker();
+
+    // In Monaco mode we don't create CodeMirror line markers.
+    // Monaco editor markers are managed separately (runMonacoDiagnostics).
+    if (_engine === 'monaco') return;
+
+    if (!_cm || !_cm.getDoc) return;
 
     if (typeof line !== 'number' || line < 0) return;
     try {
@@ -411,11 +432,193 @@ function closeHelp() {
     return { line, ch: Math.max(0, p - (lastNL + 1)) };
   }
 
-  function validate() {
-    const cm = _cm || (XKeen.state ? XKeen.state.routingEditor : null);
-    if (!cm || !cm.getValue) return false;
+  // ------------------------ Monaco diagnostics (JSON markers) ------------------------
 
-    const raw = cm.getValue();
+  function stripJsonCommentsWithMap(input) {
+    // Returns { cleaned, map } where map[cleanedIndex] = rawIndex.
+    const raw = String(input ?? '');
+    const cleaned = [];
+    const map = [];
+
+    let inString = false;
+    let escape = false;
+    let i = 0;
+    const n = raw.length;
+
+    while (i < n) {
+      const ch = raw[i];
+
+      if (inString) {
+        cleaned.push(ch);
+        map.push(i);
+
+        if (escape) {
+          escape = false;
+        } else if (ch === '\\') {
+          escape = true;
+        } else if (ch === '"') {
+          inString = false;
+        }
+        i++;
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = true;
+        cleaned.push(ch);
+        map.push(i);
+        i++;
+        continue;
+      }
+
+      // Single-line comment //
+      if (ch === '/' && i + 1 < n && raw[i + 1] === '/') {
+        i += 2;
+        while (i < n && raw[i] !== '\n') i++;
+        continue;
+      }
+
+      // Single-line comment starting with #
+      if (ch === '#') {
+        i++;
+        while (i < n && raw[i] !== '\n') i++;
+        continue;
+      }
+
+      // Multi-line comment /* ... */
+      if (ch === '/' && i + 1 < n && raw[i + 1] === '*') {
+        i += 2;
+        while (i + 1 < n && !(raw[i] === '*' && raw[i + 1] === '/')) i++;
+        if (i + 1 < n) i += 2;
+        continue;
+      }
+
+      cleaned.push(ch);
+      map.push(i);
+      i++;
+    }
+
+    return { cleaned: cleaned.join(''), map };
+  }
+
+  function clearMonacoMarkers() {
+    try {
+      if (!_monaco) return;
+      const api = window.monaco;
+      if (!api || !api.editor || typeof api.editor.setModelMarkers !== 'function') return;
+      const model = (_monaco.getModel && _monaco.getModel()) ? _monaco.getModel() : null;
+      if (!model) return;
+      api.editor.setModelMarkers(model, 'xkeen', []);
+    } catch (e) {}
+  }
+
+  function setMonacoMarkers(markers) {
+    try {
+      if (!_monaco) return;
+      const api = window.monaco;
+      if (!api || !api.editor || typeof api.editor.setModelMarkers !== 'function') return;
+      const model = (_monaco.getModel && _monaco.getModel()) ? _monaco.getModel() : null;
+      if (!model) return;
+      api.editor.setModelMarkers(model, 'xkeen', Array.isArray(markers) ? markers : []);
+    } catch (e) {}
+  }
+
+  function indexToMonacoLineCol(text, rawIndex) {
+    // Monaco uses 1-based line/column.
+    const s = String(text ?? '');
+    const p = Math.max(0, Math.min(typeof rawIndex === 'number' ? rawIndex : 0, s.length));
+    let line = 1;
+    let col = 1;
+    for (let i = 0; i < p; i++) {
+      if (s.charCodeAt(i) === 10) { // \n
+        line++;
+        col = 1;
+      } else {
+        col++;
+      }
+    }
+    return { line, col };
+  }
+
+  function runMonacoDiagnostics() {
+    // Validate JSONC (strip comments) and show errors as Monaco markers (no auto-fix).
+    const raw = getEditorText();
+
+    if (!String(raw ?? '').trim()) {
+      setError('Файл пуст. Введи корректный JSON.', null);
+      try {
+        const api = window.monaco;
+        const sev = (api && api.MarkerSeverity && api.MarkerSeverity.Error) ? api.MarkerSeverity.Error : 8;
+        setMonacoMarkers([{
+          severity: sev,
+          message: 'Файл пуст',
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 2,
+        }]);
+      } catch (e) {}
+      return false;
+    }
+
+    const sm = stripJsonCommentsWithMap(raw);
+    const cleaned = sm.cleaned;
+
+    try {
+      JSON.parse(cleaned);
+      setError('', null);
+      clearMonacoMarkers();
+      return true;
+    } catch (e) {
+      const msg = (e && e.message) ? String(e.message) : String(e);
+      const pos = extractJsonErrorPos(e) ?? 0;
+
+      let rawIdx = 0;
+      try {
+        if (sm && Array.isArray(sm.map) && sm.map.length) {
+          const p = Math.max(0, Math.min(pos, sm.map.length - 1));
+          rawIdx = sm.map[p];
+        }
+      } catch (e2) { rawIdx = 0; }
+
+      const lc = indexToMonacoLineCol(raw, rawIdx);
+
+      try {
+        const api = window.monaco;
+        const sev = (api && api.MarkerSeverity && api.MarkerSeverity.Error) ? api.MarkerSeverity.Error : 8;
+        setMonacoMarkers([{
+          severity: sev,
+          message: msg || 'JSON parse error',
+          startLineNumber: lc.line,
+          startColumn: lc.col,
+          endLineNumber: lc.line,
+          endColumn: lc.col + 1,
+        }]);
+      } catch (e3) {}
+
+      setError('Ошибка JSON: ' + msg, null);
+      return false;
+    }
+  }
+
+  function scheduleMonacoDiagnostics() {
+    try { if (_monacoDiagTimer) clearTimeout(_monacoDiagTimer); } catch (e) {}
+    _monacoDiagTimer = setTimeout(() => {
+      _monacoDiagTimer = null;
+      try {
+        if (_engine === 'monaco' && _monaco) runMonacoDiagnostics();
+      } catch (e) {}
+    }, 400);
+  }
+
+
+  function validate() {
+    // Monaco: show diagnostics as editor markers (debounced on input).
+    try {
+      if (_engine === 'monaco' && _monaco) return runMonacoDiagnostics();
+    } catch (e) {}
+
+    const raw = getEditorText();
     const cleaned = stripJsonComments(raw);
 
     if (!String(raw ?? '').trim()) {
@@ -441,13 +644,26 @@ function closeHelp() {
 
   function jsoncLint(text) {
     // CodeMirror lint adapter: return array of annotations
-    const cleaned = stripJsonComments(text);
+    const raw = String(text ?? '');
+    const sm = stripJsonCommentsWithMap(raw);
+    const cleaned = sm.cleaned;
+
     try {
       JSON.parse(cleaned);
       return [];
     } catch (e) {
       const pos = extractJsonErrorPos(e) ?? 0;
-      const lc = posToLineCh(cleaned, pos);
+
+      let rawIdx = 0;
+      try {
+        if (sm && Array.isArray(sm.map) && sm.map.length) {
+          const p = Math.max(0, Math.min(pos, sm.map.length - 1));
+          rawIdx = sm.map[p];
+        }
+      } catch (e2) { rawIdx = 0; }
+
+      const lc = posToLineCh(raw, rawIdx);
+
       return [
         {
           from: { line: lc.line, ch: lc.ch },
@@ -485,13 +701,8 @@ function closeHelp() {
       } catch (e) {}
 
       const text = await res.text();
-      if (_cm) {
-        _cm.setValue(text);
-        _cm.scrollTo(0, 0);
-      } else {
-        const ta = $(IDS.textarea);
-        if (ta) ta.value = text;
-      }
+      setEditorTextAll(text);
+      scrollEditorsTop();
 
       try {
         // Keep compatibility with existing monolith flags, if present.
@@ -519,9 +730,7 @@ function closeHelp() {
 
   async function save() {
     const statusEl = $(IDS.status);
-    if (!_cm) return;
-
-    const rawText = _cm.getValue();
+    const rawText = getEditorText();
     const cleaned = stripJsonComments(rawText);
     try {
       JSON.parse(cleaned);
@@ -579,10 +788,31 @@ function closeHelp() {
       toast('Ошибка при сохранении routing.', true);
     }
   }
+
+
+  async function getPreferPrettierFlag() {
+    // Load server settings only on demand (no auto-fetch on page load).
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.settings) {
+        if (typeof XKeen.ui.settings.fetchOnce === 'function') {
+          const st = await XKeen.ui.settings.fetchOnce().catch(() => null);
+          if (st && st.format && typeof st.format.preferPrettier === 'boolean') {
+            return !!st.format.preferPrettier;
+          }
+        }
+        if (typeof XKeen.ui.settings.get === 'function') {
+          const st2 = XKeen.ui.settings.get();
+          if (st2 && st2.format && typeof st2.format.preferPrettier === 'boolean') {
+            return !!st2.format.preferPrettier;
+          }
+        }
+      }
+    } catch (e) {}
+    return false;
+  }
   async function format() {
     const statusEl = $(IDS.status);
-    if (!_cm) return;
-    const text = _cm.getValue();
+    const text = getEditorText();
     const cleaned = stripJsonComments(text);
     try {
       // Validate first (JSONC comments allowed)
@@ -592,6 +822,34 @@ function closeHelp() {
       if (statusEl) statusEl.textContent = 'Не удалось отформатировать: некорректный JSON.';
       toast('Не удалось отформатировать: некорректный JSON.', true);
       return;
+    }
+
+    // If enabled in ui-settings, try browser-side Prettier first.
+    // Fallback is preserved: server-side formatter -> JSON.stringify.
+    let preferPrettier = false;
+    try {
+      preferPrettier = await getPreferPrettierFlag();
+    } catch (e) {
+      preferPrettier = false;
+    }
+
+    if (preferPrettier) {
+      try {
+        const F = (window.XKeen && XKeen.ui && XKeen.ui.formatters) ? XKeen.ui.formatters : null;
+        if (F && typeof F.formatJson === 'function') {
+          const r = await F.formatJson(text, { parser: 'jsonc' });
+          if (r && r.ok === true && typeof r.text === 'string') {
+            setEditorTextAll(r.text);
+            scrollEditorsTop();
+            setError('', null);
+            if (statusEl) statusEl.textContent = 'JSON отформатирован.';
+            toast('JSON отформатирован.', false);
+            return;
+          }
+        }
+      } catch (e) {
+        // continue with fallback
+      }
     }
 
     // Prefer server-side formatter that preserves comments (JSONC/JS style).
@@ -613,7 +871,7 @@ function closeHelp() {
 
     try {
       if (typeof serverFormatted === 'string') {
-        _cm.setValue(serverFormatted);
+        setEditorTextAll(serverFormatted);
       } else {
         // Legacy fallback (comments will be lost)
         if (hasUserComments(text)) {
@@ -621,10 +879,10 @@ function closeHelp() {
           if (!ok) return;
         }
         const obj = JSON.parse(cleaned);
-        _cm.setValue(JSON.stringify(obj, null, 2));
+        setEditorTextAll(JSON.stringify(obj, null, 2));
       }
 
-      _cm.scrollTo(0, 0);
+      scrollEditorsTop();
       setError('', null);
       if (statusEl) statusEl.textContent = 'JSON отформатирован.';
       toast('JSON отформатирован.', false);
@@ -637,8 +895,7 @@ function closeHelp() {
 
   function clearComments() {
     const statusEl = $(IDS.status);
-    if (!_cm) return;
-    const text = _cm.getValue();
+    const text = getEditorText();
     const cleaned = stripJsonComments(text);
     _cm.setValue(cleaned);
     validate();
@@ -647,8 +904,7 @@ function closeHelp() {
   }
   async function sortRules() {
     const statusEl = $(IDS.status);
-    if (!_cm) return;
-    const text = _cm.getValue();
+    const text = getEditorText();
     const cleaned = stripJsonComments(text);
 
     
@@ -676,7 +932,7 @@ function closeHelp() {
         return 0;
       });
       obj.routing.rules = rules;
-      _cm.setValue(JSON.stringify(obj, null, 2));
+      setEditorTextAll(JSON.stringify(obj, null, 2));
       setError('', null);
       if (statusEl) statusEl.textContent = 'Правила routing.rules упорядочены.';
       toast('Правила routing.rules упорядочены.', false);
@@ -767,8 +1023,12 @@ function closeHelp() {
     const willOpen = body.style.display === 'none';
     body.style.display = willOpen ? 'block' : 'none';
     arrow.textContent = willOpen ? '▲' : '▼';
-    if (willOpen && _cm && _cm.refresh) {
-      try { _cm.refresh(); } catch (e) {}
+    if (willOpen) {
+      if (_engine === 'monaco') {
+        try { if (_monaco && _monaco.layout) _monaco.layout(); } catch (e) {}
+      } else if (_cm && _cm.refresh) {
+        try { _cm.refresh(); } catch (e) {}
+      }
     }
   }
 
@@ -898,7 +1158,7 @@ function closeHelp() {
     const cm = window.CodeMirror.fromTextArea(textarea, {
       // Routing supports JSON with comments (raw *.jsonc is saved alongside the
       // cleaned JSON for xray), so enable commenting in the editor.
-      mode: { name: 'jsonc' },
+      mode: { name: 'javascript', json: true },
       theme: 'material-darker',
       lineNumbers: true,
       styleActiveLine: true,
@@ -960,27 +1220,46 @@ function closeHelp() {
       }
     } catch (e) {}
     // Cosmetic class + toolbar
-    // We keep the default red '?' (CodeMirror help) and add a second yellow help button
-    // for routing comments (JSONC) via the module modal (/static/routing-comments-help.html).
+    // IMPORTANT: Keep ONLY one help entry in the toolbar.
+    // The default CodeMirror help (red '?') is removed, because its purpose overlaps with
+    // our routing comments help. We keep the yellow JSONC help button only.
     try {
       if (cm.getWrapperElement) {
         cm.getWrapperElement().classList.add('xkeen-cm');
         if (typeof window.xkeenAttachCmToolbar === 'function' && window.XKEEN_CM_TOOLBAR_DEFAULT) {
           const base = Array.isArray(window.XKEEN_CM_TOOLBAR_DEFAULT) ? window.XKEEN_CM_TOOLBAR_DEFAULT : [];
           const items = [];
+          let inserted = false;
           (base || []).forEach((it) => {
-            items.push(it);
+            // Drop the default CodeMirror help button (red '?').
             if (it && it.id === 'help') {
-              items.push({
-                id: 'help_comments',
-                svg: (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.help) ? window.XKEEN_CM_ICONS.help : it.svg,
-                label: 'Справка (комментарии)',
-                fallbackHint: 'JSONC',
-                isCommentsHelp: true,
-                onClick: () => openHelp(),
-              });
+              if (!inserted) {
+                items.push({
+                  id: 'help_comments',
+                  svg: (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.help) ? window.XKEEN_CM_ICONS.help : it.svg,
+                  label: 'Справка (комментарии)',
+                  fallbackHint: 'JSONC',
+                  isCommentsHelp: true,
+                  onClick: () => openHelp(),
+                });
+                inserted = true;
+              }
+              return;
             }
+            items.push(it);
           });
+
+          // If defaults did not contain a help button at all, still add JSONC help at the end.
+          if (!inserted) {
+            items.push({
+              id: 'help_comments',
+              svg: (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.help) ? window.XKEEN_CM_ICONS.help : '',
+              label: 'Справка (комментарии)',
+              fallbackHint: 'JSONC',
+              isCommentsHelp: true,
+              onClick: () => openHelp(),
+            });
+          }
           window.xkeenAttachCmToolbar(cm, items);
         }
       }
@@ -1001,8 +1280,588 @@ cm.on('change', () => {
       host.appendChild(cm._xkeenToolbarEl);
       // Mark so CSS can adjust spacing when toolbar lives inside the header.
       try { cm._xkeenToolbarEl.classList.add('xk-toolbar-in-host'); } catch (e) {}
+      // If Monaco is active, keep only the JSONC help button visible.
+      try { syncToolbarForEngine(_engine); } catch (e) {}
     } catch (e) {}
   }
+
+  function syncToolbarForEngine(engine) {
+    try {
+      if (!_cm || !_cm._xkeenToolbarEl || !_cm._xkeenToolbarEl.querySelectorAll) return;
+      const bar = _cm._xkeenToolbarEl;
+      const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
+
+      // Always keep the toolbar container visible in the host so layout doesn't jump.
+      bar.style.display = '';
+
+      const btns = bar.querySelectorAll('button.xkeen-cm-tool');
+      (btns || []).forEach((btn) => {
+        const isCommentsHelp = !!(
+          btn.classList.contains('is-comments-help') ||
+          (btn.dataset && btn.dataset.actionId === 'help_comments')
+        );
+        // In Monaco mode show only the yellow JSONC help button.
+        btn.style.display = (isMonaco && !isCommentsHelp) ? 'none' : '';
+      });
+    } catch (e) {}
+  }
+
+  // ------------------------ editor engine toggle (CodeMirror / Monaco) ------------------------
+
+  function normalizeEngine(v) {
+    const s = String(v || '').toLowerCase();
+    return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
+  }
+
+  // Legacy per-feature key (used before global editorEngine helper existed).
+  const LEGACY_LS_KEY = 'xkeen.routing.editor.engine';
+  const GLOBAL_LS_KEY = 'xkeen.editor.engine';
+
+  function _settingsLoadedFromServer() {
+    try {
+      return !!(XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.isLoadedFromServer === 'function' && XKeen.ui.settings.isLoadedFromServer());
+    } catch (e) {}
+    return false;
+  }
+
+  function _hasGlobalEditorEngine() {
+    try {
+      return !!(XKeen.ui && XKeen.ui.editorEngine && typeof XKeen.ui.editorEngine.get === 'function' && typeof XKeen.ui.editorEngine.set === 'function');
+    } catch (e) {}
+    return false;
+  }
+
+  function _readLocal(key) {
+    try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+  }
+
+  function _writeLocal(key, val) {
+    try { localStorage.setItem(key, String(val || '')); } catch (e) {}
+  }
+
+  function _removeLocal(key) {
+    try { localStorage.removeItem(key); } catch (e) {}
+  }
+
+  function migrateLegacyEngineIfNeeded() {
+    // If server settings are already known, do not override them.
+    if (_settingsLoadedFromServer()) {
+      try { _removeLocal(LEGACY_LS_KEY); } catch (e) {}
+      return;
+    }
+
+    // If global fallback already exists, just drop legacy.
+    const cur = normalizeEngine(_readLocal(GLOBAL_LS_KEY));
+    if (cur && _readLocal(GLOBAL_LS_KEY)) {
+      try { _removeLocal(LEGACY_LS_KEY); } catch (e) {}
+      return;
+    }
+
+    // Migrate legacy → global fallback.
+    const legacyRaw = _readLocal(LEGACY_LS_KEY);
+    const legacy = legacyRaw ? normalizeEngine(legacyRaw) : '';
+    if (legacyRaw && legacy) {
+      _writeLocal(GLOBAL_LS_KEY, legacy);
+      try { _removeLocal(LEGACY_LS_KEY); } catch (e) {}
+    }
+  }
+
+  function getPreferredEngine() {
+    // Primary: global helper (which itself prefers server settings).
+    if (_hasGlobalEditorEngine()) {
+      try { return normalizeEngine(XKeen.ui.editorEngine.get()); } catch (e) {}
+    }
+
+    // Fallback (shouldn't happen in new builds): cached settings.
+    try {
+      if (XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.get === 'function') {
+        const st = XKeen.ui.settings.get();
+        return normalizeEngine(st && st.editor ? st.editor.engine : null);
+      }
+    } catch (e) {}
+
+    // Last resort: legacy local key.
+    const legacy = _readLocal(LEGACY_LS_KEY);
+    return legacy ? normalizeEngine(legacy) : 'codemirror';
+  }
+
+  function persistPreferredEngine(engine) {
+    const next = normalizeEngine(engine);
+
+    if (_hasGlobalEditorEngine()) {
+      try {
+        // Async best-effort (server first, fallback local).
+        const p = XKeen.ui.editorEngine.set(next);
+        if (p && typeof p.then === 'function') p.catch(() => {});
+      } catch (e) {}
+      return;
+    }
+
+    // Very old fallback path: try PATCH server settings, otherwise write legacy LS.
+    (async () => {
+      let serverOk = false;
+      try {
+        if (XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.patch === 'function') {
+          await XKeen.ui.settings.patch({ editor: { engine: next } });
+          serverOk = true;
+        }
+      } catch (e) {
+        serverOk = false;
+      }
+
+      if (!serverOk) {
+        try { _writeLocal(LEGACY_LS_KEY, next); } catch (e) {}
+      } else {
+        try { _removeLocal(LEGACY_LS_KEY); } catch (e) {}
+      }
+    })();
+  }
+
+  function wireGlobalEngineSyncOnce() {
+    // Keep routing toggle/editor synced when engine changes elsewhere.
+    try {
+      if (window.__xkeenRoutingEngineSyncWired) return;
+      window.__xkeenRoutingEngineSyncWired = true;
+
+      if (_hasGlobalEditorEngine() && typeof XKeen.ui.editorEngine.onChange === 'function') {
+        XKeen.ui.editorEngine.onChange((detail) => {
+          try {
+            const eng = normalizeEngine(detail && detail.engine);
+            if (!eng) return;
+
+            // If user is actively changing the select, don't fight.
+            if (_engineTouched) return;
+
+            try { if (_engineSelectEl && _engineSelectEl.value !== eng) _engineSelectEl.value = eng; } catch (e) {}
+            if (eng !== _engine) {
+              switchEngine(eng, { persist: false });
+            }
+          } catch (e) {}
+        });
+        return;
+      }
+
+      // Fallback: listen to the DOM event directly.
+      document.addEventListener('xkeen-editor-engine-change', (ev) => {
+        try {
+          const eng = normalizeEngine(ev && ev.detail ? ev.detail.engine : null);
+          if (!eng) return;
+          if (_engineTouched) return;
+
+          try { if (_engineSelectEl && _engineSelectEl.value !== eng) _engineSelectEl.value = eng; } catch (e) {}
+          if (eng !== _engine) switchEngine(eng, { persist: false });
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
+  function ensureMonacoHost() {
+    if (_monacoHostEl) return _monacoHostEl;
+    const ta = $(IDS.textarea);
+    if (!ta || !ta.parentNode) return null;
+
+    let host = $(IDS.monacoContainer);
+    if (!host) {
+      host = document.createElement('div');
+      host.id = IDS.monacoContainer;
+      host.className = 'xk-monaco-editor';
+      host.style.display = 'none';
+      // Insert right after the textarea (CodeMirror replaces it with its wrapper).
+      try {
+        if (ta.nextSibling) ta.parentNode.insertBefore(host, ta.nextSibling);
+        else ta.parentNode.appendChild(host);
+      } catch (e) {
+        ta.parentNode.appendChild(host);
+      }
+    }
+    _monacoHostEl = host;
+    return host;
+  }
+
+  function _getMonacoShared() {
+    try {
+      return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null;
+    } catch (e) {}
+    return null;
+  }
+
+  async function ensureMonacoEditor() {
+    if (_monaco) return _monaco;
+
+    const host = ensureMonacoHost();
+    if (!host) return null;
+
+    const ms = _getMonacoShared();
+    if (!ms || typeof ms.createEditor !== 'function') {
+      toast('Monaco shared не найден (monaco_shared.js).', true);
+      return null;
+    }
+
+    try {
+      _monaco = await ms.createEditor(host, {
+        value: (_cm && typeof _cm.getValue === 'function') ? _cm.getValue() : '',
+        // Xray configs commonly use JSON with user comments (JSONC-like).
+        // Backend сохраняет чистый JSON + отдельный .jsonc сайдкар, поэтому в UI
+        // разрешаем комментарии для удобства.
+        language: 'jsonc',
+        allowComments: true,
+        tabSize: 2,
+        insertSpaces: true,
+        wordWrap: 'on',
+        onChange: () => {
+          try { scheduleMonacoDiagnostics(); } catch (e) {}
+        },
+      });
+
+      if (!_monaco) {
+        toast('Не удалось загрузить Monaco Editor (CDN недоступен?).', true);
+        return null;
+      }
+
+      // Facade for modules expecting CodeMirror-like API (getValue/setValue/scrollTo).
+      try {
+        _monacoFacade = (typeof ms.toFacade === 'function') ? ms.toFacade(_monaco) : null;
+      } catch (e) {
+        _monacoFacade = null;
+      }
+
+      if (!_monacoFacade) {
+        _monacoFacade = {
+          getValue: () => { try { return _monaco.getValue(); } catch (e) { return ''; } },
+          setValue: (v) => { try { _monaco.setValue(String(v ?? '')); } catch (e) {} },
+          focus: () => { try { _monaco.focus(); } catch (e) {} },
+          scrollTo: (_x, y) => {
+            try {
+              if (typeof y === 'number') _monaco.setScrollTop(Math.max(0, y));
+              else _monaco.setScrollTop(0);
+            } catch (e) {}
+          },
+        };
+      }
+
+      // Ensure layout fix for hidden containers (modals/tabs/engine switch).
+      try {
+        if (typeof ms.layoutOnVisible === 'function') ms.layoutOnVisible(_monaco, host);
+      } catch (e) {}
+
+      return _monaco;
+    } catch (e) {
+      try { console.error(e); } catch (e2) {}
+      toast('Ошибка загрузки Monaco (см. консоль).', true);
+      return null;
+    }
+  }
+
+  function getEditorText() {
+    try {
+      if (_engine === 'monaco' && _monaco) return String(_monaco.getValue() || '');
+    } catch (e) {}
+    try {
+      if (_cm && typeof _cm.getValue === 'function') return String(_cm.getValue() || '');
+    } catch (e) {}
+    const ta = $(IDS.textarea);
+    return ta ? String(ta.value || '') : '';
+  }
+
+  function setEditorTextAll(text) {
+    const v = String(text ?? '');
+    try { if (_cm && typeof _cm.setValue === 'function') _cm.setValue(v); } catch (e) {}
+    try { if (_monaco && typeof _monaco.setValue === 'function') _monaco.setValue(v); } catch (e) {}
+    try {
+      const ta = $(IDS.textarea);
+      if (ta) ta.value = v;
+    } catch (e) {}
+  }
+
+  function scrollEditorsTop() {
+    try { if (_cm && typeof _cm.scrollTo === 'function') _cm.scrollTo(0, 0); } catch (e) {}
+    try { if (_monaco && typeof _monaco.setScrollTop === 'function') _monaco.setScrollTop(0); } catch (e) {}
+  }
+
+  function showCodeMirror(show) {
+    try {
+      if (!_cm || !_cm.getWrapperElement) return;
+      const w = _cm.getWrapperElement();
+      if (!w) return;
+      w.style.display = show ? '' : 'none';
+      if (show && _cm.refresh) _cm.refresh();
+    } catch (e) {}
+  }
+
+  function showMonaco(show) {
+    const host = ensureMonacoHost();
+    if (!host) return;
+    host.style.display = show ? '' : 'none';
+
+    if (show && _monaco && typeof _monaco.layout === 'function') {
+      const ms = _getMonacoShared();
+      if (ms && typeof ms.layoutOnVisible === 'function') {
+        try { ms.layoutOnVisible(_monaco, host); } catch (e) {}
+        return;
+      }
+
+      // Fallback: do a couple of layouts on the next frames (slow routers/browsers).
+      try {
+        requestAnimationFrame(() => {
+          try { _monaco.layout(); } catch (e) {}
+          try { setTimeout(() => { try { _monaco.layout(); } catch (e2) {} }, 0); } catch (e3) {}
+        });
+      } catch (e) {
+        try { _monaco.layout(); } catch (e2) {}
+      }
+    }
+  }
+
+  function isMonacoAlive(ed) {
+    const e = ed || _monaco;
+    if (!e) return false;
+    // Monaco editor instances throw when disposed; probe with harmless calls.
+    try {
+      if (typeof e.getModel === 'function') {
+        const m = e.getModel();
+        if (!m) return false;
+        if (typeof m.isDisposed === 'function' && m.isDisposed()) return false;
+      }
+      if (typeof e.getValue === 'function') e.getValue();
+      return true;
+    } catch (e2) {
+      return false;
+    }
+  }
+
+  function relayoutMonaco(reason) {
+    if (_engine !== 'monaco') return;
+    const host = ensureMonacoHost();
+    if (!host) return;
+
+    // If we don't have a healthy instance, recreate it.
+    if (!isMonacoAlive(_monaco)) {
+      try {
+        if (_monaco && typeof _monaco.dispose === 'function') _monaco.dispose();
+      } catch (e) {}
+      _monaco = null;
+      _monacoFacade = null;
+    }
+
+    const doLayout = () => {
+      try {
+        if (!_monaco || typeof _monaco.layout !== 'function') return;
+        const ms = _getMonacoShared();
+        if (ms && typeof ms.layoutOnVisible === 'function') {
+          ms.layoutOnVisible(_monaco, host);
+          return;
+        }
+        _monaco.layout();
+      } catch (e) {}
+    };
+
+    // Try several times: tab switches / BFCache restore can yield 0px size for a moment.
+    try {
+      requestAnimationFrame(() => {
+        doLayout();
+        try { setTimeout(doLayout, 0); } catch (e) {}
+        try { setTimeout(doLayout, 80); } catch (e) {}
+        try { setTimeout(doLayout, 250); } catch (e) {}
+      });
+    } catch (e) {
+      doLayout();
+    }
+
+    // Optional debug hook
+    try {
+      if (reason && window.console && console.debug) console.debug('[routing] monaco relayout:', reason);
+    } catch (e) {}
+  }
+
+  async function onShow(opts) {
+    // Called when routing view becomes visible (tab switch) or when page is restored.
+    const reason = (opts && opts.reason) ? String(opts.reason) : '';
+
+    // Keep selection/UI in sync with global preference.
+    try {
+      const desired = normalizeEngine(getPreferredEngine());
+      if (_engineSelectEl && desired && _engineSelectEl.value !== desired) {
+        _engineSelectEl.value = desired;
+      }
+      if (desired && desired !== _engine) {
+        await switchEngine(desired, { persist: false });
+      }
+    } catch (e) {}
+
+    // Refresh CodeMirror if active.
+    try {
+      if (_engine === 'codemirror' && _cm && typeof _cm.refresh === 'function') {
+        _cm.refresh();
+      }
+    } catch (e) {}
+
+    // Ensure Monaco exists + layout when active.
+    if (_engine === 'monaco') {
+      try {
+        await ensureMonacoEditor();
+      } catch (e) {}
+      try { relayoutMonaco(reason || 'show'); } catch (e) {}
+    }
+  }
+
+  function wirePageReturnOnce() {
+    // BFCache restore (Safari/Chrome) can keep DOM but lose Monaco layout/workers.
+    try {
+      if (window.__xkeenRoutingPageReturnWired) return;
+      window.__xkeenRoutingPageReturnWired = true;
+
+      window.addEventListener('pageshow', (ev) => {
+        // Always run: even non-persisted navigations sometimes need a relayout.
+        try {
+          if (document.visibilityState === 'visible') onShow({ reason: ev && ev.persisted ? 'bfcache' : 'pageshow' });
+        } catch (e) {}
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        try {
+          if (document.visibilityState === 'visible') onShow({ reason: 'visibility' });
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
+  function showCmToolbar(show) {
+    try {
+      if (_cm && _cm._xkeenToolbarEl) {
+        _cm._xkeenToolbarEl.style.display = show ? '' : 'none';
+      }
+    } catch (e) {}
+  }
+
+  async function switchEngine(nextEngine, opts) {
+    const next = normalizeEngine(nextEngine);
+    if (next === _engine) return;
+
+    if (next === 'monaco') {
+      const ed = await ensureMonacoEditor();
+      if (!ed) {
+        // Revert UI selection
+        try { if (_engineSelectEl) _engineSelectEl.value = _engine; } catch (e) {}
+        return;
+      }
+      // Sync text from CodeMirror to Monaco on entry
+      try { if (_cm && typeof _cm.getValue === 'function') ed.setValue(_cm.getValue()); } catch (e) {}
+
+      showCodeMirror(false);
+      showMonaco(true);
+      // Keep only JSONC help visible in the toolbar host.
+      try { syncToolbarForEngine('monaco'); } catch (e) {}
+
+      _engine = 'monaco';
+      // Expose facade so other modules (templates/cards) keep working
+      try { XKeen.state.routingEditor = _monacoFacade || XKeen.state.routingEditor; } catch (e) {}
+      try { if (_monacoFacade && _monacoFacade.focus) _monacoFacade.focus(); } catch (e) {}
+      try { validate(); } catch (e) {}
+    } else {
+      // Sync text back from Monaco to CodeMirror
+      try {
+        if (_monaco && _cm && typeof _cm.setValue === 'function') _cm.setValue(_monaco.getValue());
+      } catch (e) {}
+
+      // Leave Monaco: clear markers and cancel pending diagnostics.
+      try { if (_monacoDiagTimer) clearTimeout(_monacoDiagTimer); } catch (e) {}
+      _monacoDiagTimer = null;
+      try { clearMonacoMarkers(); } catch (e) {}
+
+      showMonaco(false);
+      showCodeMirror(true);
+      // Restore full CodeMirror toolbar.
+      try { syncToolbarForEngine('codemirror'); } catch (e) {}
+
+      _engine = 'codemirror';
+      try { XKeen.state.routingEditor = _cm; } catch (e) {}
+      try { if (_cm && _cm.focus) _cm.focus(); } catch (e) {}
+      try { validate(); } catch (e) {}
+    }
+  }
+
+  function ensureEngineToggleUI() {
+    const host = document.getElementById('routing-toolbar-host');
+    if (!host) return;
+    if (document.getElementById(IDS.engineSelect)) {
+      _engineSelectEl = document.getElementById(IDS.engineSelect);
+      return;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'xk-editor-engine';
+
+    const label = document.createElement('span');
+    label.className = 'xk-editor-engine-label';
+    label.textContent = 'Редактор:';
+
+    const sel = document.createElement('select');
+    sel.id = IDS.engineSelect;
+    sel.className = 'xk-editor-engine-select';
+
+    const o1 = document.createElement('option');
+    o1.value = 'codemirror';
+    o1.textContent = 'CodeMirror';
+    const o2 = document.createElement('option');
+    o2.value = 'monaco';
+    o2.textContent = 'Monaco';
+
+    sel.appendChild(o1);
+    sel.appendChild(o2);
+
+    wrap.appendChild(label);
+    wrap.appendChild(sel);
+    // Help lives in the editor toolbar (yellow JSONC help). Do not duplicate here.
+
+    // Put it at the beginning of the toolbar host.
+    host.insertBefore(wrap, host.firstChild);
+
+    _engineSelectEl = sel;
+
+    // Migrate legacy routing-only preference into global fallback (once).
+    try { migrateLegacyEngineIfNeeded(); } catch (e) {}
+
+    // Keep synced with other editors (global helper / event).
+    try { wireGlobalEngineSyncOnce(); } catch (e) {}
+
+    // Determine initial engine (global helper is primary).
+    const initial = normalizeEngine(getPreferredEngine());
+    sel.value = initial;
+
+    // Apply initial engine immediately (if it isn't the default).
+    if (initial && initial !== _engine) {
+      switchEngine(initial, { persist: false });
+    }
+
+    sel.addEventListener('change', () => {
+      _engineTouched = true;
+      const v = normalizeEngine(sel.value);
+
+      // Switch UI immediately.
+      switchEngine(v, { persist: false });
+
+      // Persist globally (server settings primary; localStorage is fallback).
+      persistPreferredEngine(v);
+
+      // Allow external changes again after a short moment.
+      try { setTimeout(() => { _engineTouched = false; }, 150); } catch (e) { _engineTouched = false; }
+    });
+
+    // Lazy server read (do not override user choice).
+    try {
+      if (_hasGlobalEditorEngine() && XKeen.ui && XKeen.ui.editorEngine && typeof XKeen.ui.editorEngine.ensureLoaded === 'function') {
+        XKeen.ui.editorEngine.ensureLoaded().then((eng) => {
+          if (_engineTouched) return;
+          const desired = normalizeEngine(eng);
+          try { if (_engineSelectEl) _engineSelectEl.value = desired; } catch (e) {}
+          if (desired && desired !== _engine) switchEngine(desired, { persist: false });
+        }).catch(() => {});
+      }
+    } catch (e) {}
+
+
+  }
+
 
   function init() {
     const textarea = $(IDS.textarea);
@@ -1013,6 +1872,12 @@ cm.on('change', () => {
     _cm = createEditor();
     XKeen.state.routingEditor = _cm;
 
+    // Ensure Monaco container exists (hidden by default)
+    try { ensureMonacoHost(); } catch (e) {}
+
+    // Build engine toggle UI (default CodeMirror, no auto-fetch beyond routing)
+    try { ensureEngineToggleUI(); } catch (e) {}
+
     // Place CodeMirror toolbar into the compact header (same line as file selector)
     try {
       // next tick — CodeMirror may replace textarea synchronously, but toolbar can be attached right away
@@ -1022,12 +1887,16 @@ cm.on('change', () => {
     // Notify theme module that editors are ready (safe to dispatch multiple times)
     try { document.dispatchEvent(new CustomEvent('xkeen-editors-ready')); } catch (e) {}
 
+    // Fix Monaco after tab switches / navigation away+back (BFCache)
+    try { wirePageReturnOnce(); } catch (e) {}
+
     wireUI();
     refreshFragmentsList().finally(() => load());
   }
 
   XKeen.routing = {
     init,
+    onShow,
     load,
     save,
     validate,

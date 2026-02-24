@@ -57,6 +57,10 @@ def register_list_endpoints(bp, deps: Dict[str, Any]) -> None:
                 rp = _local_resolve(path_in, LOCALFS_ROOTS)
             except PermissionError as e:
                 return error_response(str(e), 403, ok=False)
+
+            # Distinguish "missing" from "not a directory" to keep UI messages sane.
+            if not os.path.exists(rp):
+                return error_response("not_found", 404, ok=False)
             if not os.path.isdir(rp):
                 return error_response("not_a_directory", 400, ok=False)
 
@@ -152,6 +156,10 @@ def register_list_endpoints(bp, deps: Dict[str, Any]) -> None:
                                 items_all.append(item)
                         except Exception:
                             continue
+            except FileNotFoundError:
+                return error_response("not_found", 404, ok=False)
+            except PermissionError as e:
+                return error_response(str(e), 403, ok=False)
             except Exception:
                 return error_response("list_failed", 400, ok=False)
 
@@ -203,6 +211,51 @@ def register_list_endpoints(bp, deps: Dict[str, Any]) -> None:
             item = _parse_ls_line(line)
             if item is not None:
                 items2.append(item)
+
+        # Fallback: some FTP/SFTP servers output a non-standard `ls -l` format
+        # that our parser can't understand. If we got output but parsed zero
+        # items, fall back to `cls -1` (names only) and return a minimal item
+        # format so the UI can still navigate.
+        if (not items2) and (text or "").strip():
+            cmd2 = "cls -1" if (not rpath or rpath in (".",)) else f"cls -1 {_lftp_quote(rpath)}"
+            rc2, out2, err2 = mgr._run_lftp(s, [cmd2], capture=True)
+            if rc2 == 0:
+                text2 = (out2 or b"").decode("utf-8", errors="replace")
+                seen: set[str] = set()
+                for raw in text2.splitlines():
+                    nm = (raw or "").strip()
+                    if not nm or nm.startswith("total "):
+                        continue
+
+                    # Some servers include trailing slash for dirs.
+                    is_dir = False
+                    if nm.endswith("/"):
+                        is_dir = True
+                        nm = nm.rstrip("/")
+
+                    # Normalize to last segment if full path is returned.
+                    if "/" in nm:
+                        nn = nm.rstrip("/")
+                        if nn:
+                            seg = nn.split("/")[-1]
+                            if seg:
+                                nm = seg
+
+                    if nm in (".", ".."):
+                        continue
+                    if nm in seen:
+                        continue
+                    seen.add(nm)
+
+                    items2.append(
+                        {
+                            "name": nm,
+                            "type": "dir" if is_dir else "other",
+                            "size": 0,
+                            "perm": "",
+                            "mtime": None,
+                        }
+                    )
         return jsonify({"ok": True, "target": "remote", "sid": sid, "path": rpath, "items": items2})
 
     @bp.post("/api/fs/stat-batch")

@@ -16,6 +16,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import tarfile
 import time
 import uuid
@@ -266,21 +267,102 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
             tmp_root = os.path.join(TMP_DIR, f"xkeen_remote_zip_{uuid.uuid4().hex}")
             os.makedirs(tmp_root, exist_ok=True)
 
+            def _remote_is_dir_guess(sess: Any, rpath: str) -> bool | None:
+                """Return True/False if path exists and is dir/file, or None if unknown."""
+                try:
+                    rc, out, err = mgr._run_lftp(sess, [f"cls -ld {_lftp_quote(rpath)}"], capture=True)
+                except Exception:
+                    return None
+                if rc != 0:
+                    return None
+                text = (out or b"").decode("utf-8", errors="replace")
+                for line in text.splitlines():
+                    try:
+                        item = _parse_ls_line(line)
+                    except Exception:
+                        item = None
+                    if item:
+                        return item.get("type") == "dir"
+                return None
+
+            def _run_lftp_get_with_tmp_cap(sess: Any, *, src: str, dst: str, hard_cap_bytes: int | None) -> None:
+                """Download a single remote file to local dst, enforcing a best-effort /tmp cap."""
+                os.makedirs(os.path.dirname(dst) or TMP_DIR, exist_ok=True)
+                cmd = f"get -- {_lftp_quote(src)} -o {_lftp_quote(dst)}"
+                script = mgr._build_lftp_script(sess, [cmd])
+                env = os.environ.copy()
+                env.setdefault('LC_ALL', 'C')
+                env.setdefault('LANG', 'C')
+
+                start_free = _tmp_free_bytes()
+                proc = subprocess.Popen(
+                    [mgr.lftp_bin, '-c', script],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    env=env,
+                    bufsize=0,
+                )
+
+                try:
+                    while proc.poll() is None:
+                        if isinstance(hard_cap_bytes, int) and hard_cap_bytes > 0 and isinstance(start_free, int) and start_free > 0:
+                            cur_free = _tmp_free_bytes()
+                            if isinstance(cur_free, int) and cur_free >= 0:
+                                used = int(start_free - cur_free)
+                                if used > hard_cap_bytes:
+                                    try:
+                                        proc.terminate()
+                                    except Exception:
+                                        pass
+                                    raise RuntimeError('tmp_limit_exceeded')
+                        time.sleep(0.25)
+
+                    _out, _err = proc.communicate()
+                    if int(proc.returncode or 0) != 0:
+                        tail = ((_err or b'').decode('utf-8', errors='replace')[-400:]).strip()
+                        raise RuntimeError('mirror_failed:' + tail)
+                finally:
+                    try:
+                        if proc and proc.stderr:
+                            proc.stderr.close()
+                    except Exception:
+                        pass
+
             try:
+                used_names = set()
                 for it in items:
                     rpath = str(it.get("path") or "").strip()
                     if not rpath:
                         continue
                     leaf = str(it.get("name") or os.path.basename(rpath.rstrip("/")) or "item").strip() or "item"
                     safe_leaf = re.sub(r"[^0-9A-Za-z._-]+", "_", leaf)[:128] or "item"
-                    out_local = os.path.join(tmp_root, safe_leaf)
-                    # mirror into local temp (file or dir)
-                    _run_lftp_mirror_with_tmp_cap(
-                        s,
-                        rpath,
-                        out_local,
-                        max_bytes=MAX_ZIP_BYTES,
-                    )
+
+                    # Avoid collisions when multiple items share the same leaf.
+                    stem, ext = os.path.splitext(safe_leaf)
+                    cand = safe_leaf
+                    n = 2
+                    while cand in used_names:
+                        cand = f"{stem}_{n}{ext}" if ext else f"{safe_leaf}_{n}"
+                        n += 1
+                    used_names.add(cand)
+
+                    out_local = os.path.join(tmp_root, cand)
+
+                    is_dir = it.get("is_dir")
+                    if is_dir is None:
+                        is_dir = _remote_is_dir_guess(s, rpath)
+
+                    # Download into local temp (file or dir).
+                    if is_dir is True:
+                        _run_lftp_mirror_with_tmp_cap(s, src=rpath, dst=out_local, hard_cap_bytes=MAX_ZIP_BYTES)
+                    elif is_dir is False:
+                        _run_lftp_get_with_tmp_cap(s, src=rpath, dst=out_local, hard_cap_bytes=MAX_ZIP_BYTES)
+                    else:
+                        # Unknown type (server quirks). Try file first; if it fails, try mirror.
+                        try:
+                            _run_lftp_get_with_tmp_cap(s, src=rpath, dst=out_local, hard_cap_bytes=MAX_ZIP_BYTES)
+                        except Exception:
+                            _run_lftp_mirror_with_tmp_cap(s, src=rpath, dst=out_local, hard_cap_bytes=MAX_ZIP_BYTES)
 
                 # create zip from tmp_root
                 _zip_directory(tmp_root, tmp_zip, root_name=root_name)

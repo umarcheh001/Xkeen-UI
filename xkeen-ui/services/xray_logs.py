@@ -31,7 +31,7 @@ def load_xray_log_config(load_json, config_path: str, access_log: str, error_log
 def tail_lines(path: str, max_lines: int = 800, cache: Dict[str, Dict[str, Any]] | None = None) -> List[str]:
     """Return last max_lines lines from file with simple caching.
 
-    If cache is provided, it should be a dict mapping path -> {"size","mtime","lines"}.
+    If cache is provided, it should be a dict mapping path -> {"size","mtime","ino","lines"}.
     """
     try:
         st = os.stat(path)
@@ -40,7 +40,13 @@ def tail_lines(path: str, max_lines: int = 800, cache: Dict[str, Dict[str, Any]]
 
     if cache is not None:
         info = cache.get(path)
-        if info and info.get("size") == st.st_size and info.get("mtime") == st.st_mtime:
+        # Include inode in cache key to avoid returning stale data after log rotation.
+        if (
+            info
+            and info.get("size") == st.st_size
+            and info.get("mtime") == st.st_mtime
+            and int(info.get("ino", 0) or 0) == int(getattr(st, "st_ino", 0) or 0)
+        ):
             lines = info.get("lines", [])
         else:
             try:
@@ -48,7 +54,7 @@ def tail_lines(path: str, max_lines: int = 800, cache: Dict[str, Dict[str, Any]]
                     lines = f.readlines()
             except (FileNotFoundError, OSError):
                 return []
-            cache[path] = {"size": st.st_size, "mtime": st.st_mtime, "lines": lines}
+            cache[path] = {"size": st.st_size, "mtime": st.st_mtime, "ino": int(getattr(st, "st_ino", 0) or 0), "lines": lines}
     else:
         try:
             with open(path, "r") as f:

@@ -40,10 +40,15 @@
     return (FM && FM.api) ? FM.api : {};
   }
 
-  // -------------------------- text file viewer/editor (CodeMirror modal) --------------------------
+  // -------------------------- text file viewer/editor (CodeMirror / Monaco modal) --------------------------
   const STATE = {
     wired: false,
     cm: null,
+    monaco: null,
+    monacoFacade: null,
+    activeKind: 'codemirror',
+    activeFacade: null,
+    switching: false,
     ctx: null,          // { target, sid, path, name, side, truncated, readOnly }
     dirty: false,
     lastSaved: '',
@@ -56,6 +61,8 @@
       modal,
       title: el('fm-editor-title'),
       subtitle: el('fm-editor-subtitle'),
+      engineSelect: el('fm-editor-engine-select'),
+      monacoHost: el('fm-editor-monaco'),
       textarea: el('fm-editor-textarea'),
       saveBtn: el('fm-editor-save-btn'),
       cancelBtn: el('fm-editor-cancel-btn'),
@@ -165,6 +172,85 @@
     }
   }
 
+  // -------------------------- engine helpers --------------------------
+  function getEditorEngineHelper() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+  }
+
+  function normalizeEngine(v) {
+    const s = String(v || '').toLowerCase();
+    return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
+  }
+
+  function setEngineSelectValue(engine) {
+    const ui = els();
+    if (!ui || !ui.engineSelect) return;
+    try { ui.engineSelect.value = normalizeEngine(engine); } catch (e) {}
+  }
+
+  function cmFacade(cm) {
+    const ed = cm;
+    return {
+      getValue: () => {
+        try { return String(ed.getValue() || ''); } catch (e) { return ''; }
+      },
+      setValue: (v) => {
+        try { ed.setValue(String(v ?? '')); } catch (e) {}
+      },
+      focus: () => {
+        try { ed.focus(); } catch (e) {}
+      },
+      scrollTo: (_x, y) => {
+        try { ed.scrollTo(null, Math.max(0, typeof y === 'number' ? y : 0)); } catch (e) {}
+      },
+      layout: () => {
+        try { ed.refresh(); } catch (e) {}
+      },
+      dispose: () => {},
+      onChange: (cb) => {
+        if (!cb || typeof cb !== 'function') return () => {};
+        try {
+          const fn = () => { try { cb(); } catch (e) {} };
+          ed.on('change', fn);
+          return () => { try { ed.off('change', fn); } catch (e) {} };
+        } catch (e) {}
+        return () => {};
+      },
+    };
+  }
+
+  function activeFacade() {
+    if (STATE.activeFacade) return STATE.activeFacade;
+    if (STATE.activeKind === 'monaco' && STATE.monacoFacade) return STATE.monacoFacade;
+    if (STATE.activeKind === 'codemirror' && STATE.cm) return cmFacade(STATE.cm);
+    return null;
+  }
+
+  function activeText(ui) {
+    const fac = activeFacade();
+    if (fac) return String(fac.getValue() || '');
+    try {
+      const u = ui || els();
+      return String((u && u.textarea && u.textarea.value) || '');
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function updateDirtyUI() {
+    const ctx = STATE.ctx;
+    const ui = els();
+    if (!ui) return;
+    const ro = !!(ctx && ctx.readOnly);
+    const v = activeText(ui);
+    try {
+      STATE.dirty = (ctx && !ro) ? (v !== STATE.lastSaved) : false;
+    } catch (e) {
+      STATE.dirty = false;
+    }
+    try { if (ui.saveBtn) ui.saveBtn.disabled = !STATE.dirty || ro; } catch (e) {}
+  }
+
   // -------------------------- CodeMirror lazy assets (modes / JSON lint) --------------------------
   function modeName(mode) {
     try {
@@ -265,12 +351,7 @@
     } catch (e) {}
 
     cm.on('change', () => {
-      try {
-        const v = cm.getValue();
-        STATE.dirty = (STATE.ctx && !STATE.ctx.readOnly) ? (v !== STATE.lastSaved) : false;
-        const ui2 = els();
-        if (ui2 && ui2.saveBtn) ui2.saveBtn.disabled = !STATE.dirty || !!(STATE.ctx && STATE.ctx.readOnly);
-      } catch (e) {}
+      try { updateDirtyUI(); } catch (e) {}
     });
 
     STATE.cm = cm;
@@ -318,6 +399,229 @@
     if (focus) setTimeout(() => { try { cm.focus(); } catch (e) {} }, 0);
   }
 
+  function showCodeMirror(ui) {
+    const cm = STATE.cm;
+    try {
+      if (cm && typeof cm.getWrapperElement === 'function') {
+        const w = cm.getWrapperElement();
+        if (w) w.style.display = '';
+      }
+    } catch (e) {}
+    try {
+      if (ui && ui.textarea) {
+        // If CodeMirror is created, keep the original textarea hidden.
+        ui.textarea.style.display = cm ? 'none' : '';
+      }
+    } catch (e) {}
+    try { if (ui && ui.monacoHost) ui.monacoHost.classList.add('hidden'); } catch (e) {}
+  }
+
+  function hideCodeMirror(ui) {
+    const cm = STATE.cm;
+    try {
+      if (cm && typeof cm.getWrapperElement === 'function') {
+        const w = cm.getWrapperElement();
+        if (w) w.style.display = 'none';
+      }
+    } catch (e) {}
+    // If CM not created yet, hide the raw textarea (Monaco will use its own host)
+    try { if (ui && ui.textarea) ui.textarea.style.display = 'none'; } catch (e) {}
+  }
+
+  function disposeMonaco(ui) {
+    try {
+      if (STATE.monacoFacade && typeof STATE.monacoFacade.dispose === 'function') STATE.monacoFacade.dispose();
+      else if (STATE.monaco && typeof STATE.monaco.dispose === 'function') STATE.monaco.dispose();
+    } catch (e) {}
+    STATE.monaco = null;
+    STATE.monacoFacade = null;
+    try {
+      const host = (ui && ui.monacoHost) ? ui.monacoHost : (els() && els().monacoHost);
+      if (host) host.innerHTML = '';
+    } catch (e) {}
+  }
+
+  function monacoLanguage(name, text) {
+    const mode = guessMode(name, text);
+    try {
+      if (mode && typeof mode === 'object') {
+        if (mode.jsonc) return 'jsonc';
+        if (mode.json) return 'json';
+        if (mode.name) return monacoLanguage(mode.name, text);
+      }
+    } catch (e) {}
+
+    const s = String(mode || '').toLowerCase();
+    if (s === 'javascript') return 'javascript';
+    if (s === 'yaml') return 'yaml';
+    if (s === 'shell') return 'shell';
+    if (s === 'xml') return 'xml';
+    if (s === 'python') return 'python';
+    if (s === 'css') return 'css';
+    if (s === 'markdown') return 'markdown';
+    if (s === 'htmlmixed' || s === 'html') return 'html';
+    if (s === 'properties') return 'ini';
+    if (s === 'toml') return 'toml';
+
+    // Nginx / unknown modes: keep plain text.
+    return 'plaintext';
+  }
+
+  function captureView() {
+    const kind = STATE.activeKind;
+    try {
+      if (kind === 'monaco' && STATE.monaco) {
+        return {
+          kind: 'monaco',
+          pos: (typeof STATE.monaco.getPosition === 'function') ? STATE.monaco.getPosition() : null,
+          scrollTop: (typeof STATE.monaco.getScrollTop === 'function') ? STATE.monaco.getScrollTop() : 0,
+        };
+      }
+      if (kind === 'codemirror' && STATE.cm) {
+        const cm = STATE.cm;
+        const cur = (typeof cm.getCursor === 'function') ? cm.getCursor() : null;
+        const si = (typeof cm.getScrollInfo === 'function') ? cm.getScrollInfo() : null;
+        return {
+          kind: 'codemirror',
+          cursor: cur,
+          scrollTop: si ? si.top : 0,
+        };
+      }
+    } catch (e) {}
+    return { kind: kind || 'codemirror' };
+  }
+
+  function restoreView(targetKind, view) {
+    try {
+      if (targetKind === 'monaco' && STATE.monaco) {
+        const ed = STATE.monaco;
+        // Prefer converted CM cursor if present.
+        let pos = view && view.pos ? view.pos : null;
+        if (!pos && view && view.cursor) {
+          pos = { lineNumber: (view.cursor.line || 0) + 1, column: (view.cursor.ch || 0) + 1 };
+        }
+        if (pos && typeof ed.setPosition === 'function') ed.setPosition(pos);
+        if (typeof ed.setScrollTop === 'function' && typeof view.scrollTop === 'number') ed.setScrollTop(Math.max(0, view.scrollTop));
+        if (typeof ed.focus === 'function') ed.focus();
+        return;
+      }
+
+      if (targetKind === 'codemirror' && STATE.cm) {
+        const cm = STATE.cm;
+        let cur = view && view.cursor ? view.cursor : null;
+        if (!cur && view && view.pos) {
+          cur = { line: Math.max(0, (view.pos.lineNumber || 1) - 1), ch: Math.max(0, (view.pos.column || 1) - 1) };
+        }
+        if (cur && typeof cm.setCursor === 'function') cm.setCursor(cur);
+        if (typeof cm.scrollTo === 'function' && typeof view.scrollTop === 'number') cm.scrollTo(null, Math.max(0, view.scrollTop));
+        kickRefresh(cm, true);
+      }
+    } catch (e) {}
+  }
+
+  async function activateEngine(nextEngine, { ctx, text, preserveView } = {}) {
+    const ui = els();
+    if (!ui) return 'codemirror';
+
+    const engine = normalizeEngine(nextEngine);
+    const ro = !!(ctx && ctx.readOnly);
+    const value = String(text ?? '');
+    const view = preserveView ? captureView() : null;
+
+    // Keep the toggle UI in sync.
+    setEngineSelectValue(engine);
+
+    // Dispose Monaco if we're leaving it (helps avoid leaks in long sessions).
+    if (engine !== 'monaco') {
+      try { disposeMonaco(ui); } catch (e) {}
+    }
+
+    if (engine === 'monaco') {
+      hideCodeMirror(ui);
+      try { if (ui.monacoHost) ui.monacoHost.classList.remove('hidden'); } catch (e) {}
+
+      const shared = (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null;
+      if (!shared || typeof shared.createEditor !== 'function' || !ui.monacoHost) {
+        // No Monaco infra → fallback.
+        try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
+        return activateEngine('codemirror', { ctx, text, preserveView });
+      }
+
+      // (Re)create Monaco fresh for the current file.
+      try { disposeMonaco(ui); } catch (e) {}
+
+      const lang = monacoLanguage(ctx && ctx.name, value);
+      const ed = await shared.createEditor(ui.monacoHost, {
+        language: lang,
+        readOnly: ro,
+        value: value,
+        onChange: () => { try { updateDirtyUI(); } catch (e) {} },
+      });
+
+      if (!ed) {
+        try { if (window.toast) window.toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
+        try {
+          const ee = getEditorEngineHelper();
+          if (ee && typeof ee.set === 'function') await ee.set('codemirror');
+        } catch (e) {}
+        return activateEngine('codemirror', { ctx, text, preserveView });
+      }
+
+      STATE.monaco = ed;
+      try { STATE.monacoFacade = shared.toFacade(ed); } catch (e) { STATE.monacoFacade = null; }
+      STATE.activeKind = 'monaco';
+      STATE.activeFacade = STATE.monacoFacade;
+
+      // Restore view if we are switching while open.
+      if (view) restoreView('monaco', view);
+
+      updateDirtyUI();
+      return 'monaco';
+    }
+
+    // CodeMirror
+    showCodeMirror(ui);
+    const cm = ensureCm();
+
+    if (cm) {
+      try {
+        let mode = guessMode(ctx && ctx.name, value);
+        const modeObj = (mode && typeof mode === 'object') ? mode : null;
+        const isJson = !!(modeObj && modeObj.json);
+        const isJsonc = !!(modeObj && modeObj.jsonc);
+
+        const wantsJsonLint = isJson && !isJsonc && !hasJsonComments(value);
+        const ensured = await ensureCmAssets({ mode, jsonLint: wantsJsonLint });
+        if (!ensured.modeOk) mode = 'text/plain';
+
+        const canLintJson = wantsJsonLint && ensured.jsonLintOk;
+        try {
+          const gutters = canLintJson
+            ? ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']
+            : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'];
+          cm.setOption('gutters', gutters);
+        } catch (e) {}
+
+        cm.setOption('mode', mode);
+        cm.setOption('lint', canLintJson);
+        cm.setOption('readOnly', ro ? 'nocursor' : false);
+        cm.setValue(value);
+        cm.clearHistory();
+        kickRefresh(cm, true);
+      } catch (e) {}
+    } else if (ui.textarea) {
+      ui.textarea.value = value;
+      setTimeout(() => { try { ui.textarea.focus(); } catch (e) {} }, 0);
+    }
+
+    STATE.activeKind = 'codemirror';
+    STATE.activeFacade = cm ? cmFacade(cm) : null;
+
+    if (view) restoreView('codemirror', view);
+    updateDirtyUI();
+    return 'codemirror';
+  }
+
   async function open(ctx, text) {
     const ui = els();
     if (!ui) return false;
@@ -344,42 +648,31 @@
 
     modalOpen(ui.modal);
 
-    const cm = ensureCm();
-    const ro = !!(ctx && ctx.readOnly);
-
-    if (cm) {
+    // Resolve preferred engine (server settings are primary; local fallback is acceptable).
+    let engine = 'codemirror';
+    try {
+      const ee = getEditorEngineHelper();
+      if (ee && typeof ee.ensureLoaded === 'function') {
+        engine = normalizeEngine(await ee.ensureLoaded());
+      } else if (ee && typeof ee.get === 'function') {
+        engine = normalizeEngine(ee.get());
+      }
+    } catch (e) {
       try {
-        let mode = guessMode(ctx && ctx.name, text);
-        const modeObj = (mode && typeof mode === 'object') ? mode : null;
-        const isJson = !!(modeObj && modeObj.json);
-        const isJsonc = !!(modeObj && modeObj.jsonc);
-
-        // Strict JSON lint is not compatible with JSONC comment tokens.
-        const wantsJsonLint = isJson && !isJsonc && !hasJsonComments(text);
-        const ensured = await ensureCmAssets({ mode, jsonLint: wantsJsonLint });
-        if (!ensured.modeOk) mode = 'text/plain';
-
-        const canLintJson = wantsJsonLint && ensured.jsonLintOk;
-        try {
-          const gutters = canLintJson
-            ? ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']
-            : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'];
-          cm.setOption('gutters', gutters);
-        } catch (e) {}
-
-        cm.setOption('mode', mode);
-        cm.setOption('lint', canLintJson);
-        cm.setOption('readOnly', ro ? 'nocursor' : false);
-        cm.setValue(String(text || ''));
-        cm.clearHistory();
-        kickRefresh(cm, true);
-      } catch (e) {}
-    } else if (ui.textarea) {
-      ui.textarea.value = String(text || '');
-      setTimeout(() => { try { ui.textarea.focus(); } catch (e) {} }, 0);
+        const ee = getEditorEngineHelper();
+        engine = normalizeEngine(ee && ee.get ? ee.get() : 'codemirror');
+      } catch (e2) {
+        engine = 'codemirror';
+      }
     }
 
-    try { if (ui.saveBtn) ui.saveBtn.disabled = true; } catch (e) {}
+    setEngineSelectValue(engine);
+    STATE.switching = true;
+    try {
+      await activateEngine(engine, { ctx, text, preserveView: false });
+    } finally {
+      STATE.switching = false;
+    }
     return true;
   }
 
@@ -412,6 +705,10 @@
     try { STATE.dirty = false; } catch (e) {}
     try { STATE.lastSaved = ''; } catch (e) {}
 
+    // Clean up Monaco to avoid leaks; restore default UI visibility.
+    try { disposeMonaco(ui); } catch (e) {}
+    try { showCodeMirror(ui); } catch (e) {}
+
     modalClose(ui.modal);
   }
 
@@ -435,8 +732,7 @@
     if (!ctx || !ui) return;
     if (ctx.readOnly) return;
 
-    const cm = STATE.cm;
-    const text = cm ? String(cm.getValue() || '') : String((ui.textarea && ui.textarea.value) || '');
+    const text = activeText(ui);
     try { if (ui.saveBtn) ui.saveBtn.disabled = true; } catch (e) {}
 
     const payload = { target: ctx.target, path: ctx.path, sid: ctx.sid || '', text };
@@ -472,7 +768,7 @@
     setInfo({ err: '' });
     try { if (window.toast) window.toast('Сохранено: ' + (ctx.name || 'файл'), 'success'); } catch (e) {}
 
-    try { if (ui.saveBtn) ui.saveBtn.disabled = true; } catch (e) {}
+    try { updateDirtyUI(); } catch (e) {}
 
     try {
       const lp = api().listPanel;
@@ -490,6 +786,46 @@
     if (ui.closeBtn) ui.closeBtn.addEventListener('click', (e) => { e.preventDefault(); requestClose(); });
     if (ui.downloadBtn) ui.downloadBtn.addEventListener('click', (e) => { e.preventDefault(); download(); });
     if (ui.saveBtn) ui.saveBtn.addEventListener('click', (e) => { e.preventDefault(); save(); });
+
+    // Engine toggle (global setting)
+    if (ui.engineSelect) {
+      try {
+        const ee = getEditorEngineHelper();
+        if (ee && typeof ee.get === 'function') ui.engineSelect.value = normalizeEngine(ee.get());
+      } catch (e) {}
+
+      ui.engineSelect.addEventListener('change', async () => {
+        const next = normalizeEngine(ui.engineSelect.value);
+        try {
+          const ee = getEditorEngineHelper();
+          if (ee && typeof ee.set === 'function') await ee.set(next);
+        } catch (e) {}
+      });
+    }
+
+    try {
+      const ee = getEditorEngineHelper();
+      if (ee && typeof ee.onChange === 'function') {
+        ee.onChange(async (d) => {
+          const next = normalizeEngine(d && d.engine);
+          setEngineSelectValue(next);
+
+          // Switch live only if modal is open.
+          if (!STATE.ctx) return;
+          if (STATE.switching) return;
+          if (next === STATE.activeKind) return;
+
+          STATE.switching = true;
+          try {
+            const v = activeText();
+            await activateEngine(next, { ctx: STATE.ctx, text: v, preserveView: true });
+          } catch (e) {
+          } finally {
+            STATE.switching = false;
+          }
+        });
+      }
+    } catch (e) {}
   }
 
   FM.editor = {

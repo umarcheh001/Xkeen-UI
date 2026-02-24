@@ -610,6 +610,84 @@ def application(environ, start_response):
         return []
 
     
+
+
+    # WebSocket endpoint for Xray logs v2 (command protocol; no reconnect on switch/clear)
+    if GEVENT_AVAILABLE and path == "/ws/xray-logs2":
+        has_ws = "wsgi.websocket" in environ and environ.get("wsgi.websocket") is not None
+        ws_debug(
+            "WSGI WS handler: request to /ws/xray-logs2",
+            has_ws=has_ws,
+            method=method,
+            qs=qs,
+            client=client_ip,
+        )
+
+        # If it's not actually a WebSocket upgrade – delegate to Flask
+        if not has_ws:
+            return app(environ, start_response)
+
+        ws = environ["wsgi.websocket"]
+
+        # Parse query
+        params = parse_qs(qs or "")
+        file_name = (params.get("file", ["error"])[0] or "error").lower()
+        filter_expr = (params.get("filter", [""])[0] or "").strip()
+
+        try:
+            max_lines = int((params.get("max_lines", ["800"])[0] or "800").strip())
+        except Exception:
+            max_lines = 800
+        max_lines = max(50, min(5000, int(max_lines or 800)))
+
+        ws_debug(
+            "ws2_raw: handler entered",
+            client=client_ip,
+            file=file_name,
+            max_lines=max_lines,
+            filter=bool(filter_expr),
+        )
+
+        try:
+            from services.ws_logs2 import stream_xray_logs_ws2
+            from services.log_filter import build_line_matcher as _build_line_matcher
+        except Exception as e:
+            ws_debug("ws2_raw: import failed", error=str(e))
+            try:
+                ws.send(json.dumps({"type": "error", "error": "ws2_import_failed"}, ensure_ascii=False))
+            except Exception:
+                pass
+            try:
+                ws.close()
+            except Exception:
+                pass
+            return []
+
+        try:
+            stream_xray_logs_ws2(
+                ws,
+                initial_file=file_name,
+                initial_filter=filter_expr,
+                max_lines=max_lines,
+                resolve_path=_resolve_xray_log_path_for_ws,
+                tail_lines=tail_lines,
+                adjust_log_timezone=adjust_log_timezone,
+                build_line_matcher=_build_line_matcher,
+                ws_debug=ws_debug,
+                client_ip=client_ip,
+            )
+        except Exception as e:
+            ws_debug("ws2_raw: unhandled exception", error=str(e))
+            try:
+                ws.send(json.dumps({"type": "error", "error": "ws2_exception", "message": str(e)}, ensure_ascii=False))
+            except Exception:
+                pass
+            try:
+                ws.close()
+            except Exception:
+                pass
+        return []
+
     # WebSocket endpoint for long-running xkeen commands
     if GEVENT_AVAILABLE and path == "/ws/command-status":
         has_ws = "wsgi.websocket" in environ and environ.get("wsgi.websocket") is not None

@@ -85,6 +85,21 @@
     'XKEEN_UI_ENV_FILE': 'Путь к env‑файлу DevTools (по умолчанию <UI_STATE_DIR>/devtools.env). Обычно менять не нужно. Эта переменная отображается только для информации (read‑only).',
     'XKEEN_UI_SECRET_KEY': 'Секретный ключ Flask/сессий. При смене ключа текущие сессии станут недействительными. Значение не отображается.',
     'XKEEN_RESTART_LOG_FILE': 'Файл, куда пишутся сообщения/ошибки при запуске/перезапуске UI (для диагностики). По умолчанию: <UI_STATE_DIR>/restart.log.',
+
+    // Self-update (GitHub)
+    'XKEEN_UI_UPDATE_REPO': 'Репозиторий UI для обновления (owner/repo). По умолчанию: umarcheh001/Xkeen-UI.',
+    'XKEEN_UI_UPDATE_CHANNEL': 'Канал обновлений UI: stable (релизы) или main (tarball из ветки).',
+    'XKEEN_UI_UPDATE_BRANCH': 'Ветка для канала main (по умолчанию: main).',
+    'XKEEN_UI_UPDATE_ASSET_NAME': 'Имя tar.gz ассета в релизе (канал stable). По умолчанию: xkeen-ui-routing.tar.gz.',
+    'XKEEN_UI_UPDATE_ALLOW_HOSTS': 'Allow‑list хостов, откуда разрешено скачивать обновления. Формат: через запятую. По умолчанию: github.com,objects.githubusercontent.com,codeload.github.com.',
+    'XKEEN_UI_UPDATE_ALLOW_HTTP': 'Разрешить HTTP (не рекомендуется). Значения: 1/0. По умолчанию: 0 (только HTTPS).',
+    'XKEEN_UI_UPDATE_MAX_BYTES': 'Максимальный размер tar.gz (в байтах), который разрешено скачать.',
+    'XKEEN_UI_UPDATE_MAX_CHECKSUM_BYTES': 'Максимальный размер checksum‑файла (sha/sha256) в байтах.',
+    'XKEEN_UI_UPDATE_CONNECT_TIMEOUT': 'Таймаут подключения (сек) при скачивании.',
+    'XKEEN_UI_UPDATE_DOWNLOAD_TIMEOUT': 'Таймаут скачивания (сек).',
+    'XKEEN_UI_UPDATE_API_TIMEOUT': 'Таймаут GitHub API (сек).',
+    'XKEEN_UI_UPDATE_REQUIRE_SHA': 'Требовать checksum (sha) перед установкой. Значения: 1/0.',
+    'XKEEN_UI_UPDATE_SHA_STRICT': 'Строгая проверка имени checksum‑файла. Значения: 1/0.',
     'XKEEN_UI_PANEL_SECTIONS_WHITELIST': 'Whitelist видимых секций/вкладок на основной панели (/). Формат: ключи через запятую. Пусто/не задано = показывать всё. Ключи: routing,mihomo,xkeen,xray-logs,commands,files,mihomo-generator,donate. Пример: routing,mihomo,xray-logs,commands. (Секция “Files” может быть скрыта и по архитектуре/feature flags.)',
     'XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST': 'Whitelist видимых секций DevTools (/devtools). Формат: ключи через запятую. Пусто/не задано = показывать всё. Ключи: tools,logs,service,logging,ui,layout,theme,css,env. Пример: service,logging,ui,layout,theme,css,env (или просто tools,env).',
     'XKEEN_LOG_DIR': 'Каталог UI‑логов: core.log / access.log / ws.log. По умолчанию: /opt/var/log/xkeen-ui.',
@@ -146,13 +161,29 @@
   
 
   // ENV help modal content
-  const ENV_APPLY_IMMEDIATE_KEYS = new Set([
+  // Keys that apply without restarting UI (either immediately or on next request).
+  const ENV_NO_RESTART_KEYS = new Set([
     'XKEEN_LOG_CORE_ENABLE',
     'XKEEN_LOG_CORE_LEVEL',
     'XKEEN_LOG_ACCESS_ENABLE',
     'XKEEN_LOG_WS_ENABLE',
     'XKEEN_LOG_ROTATE_MAX_MB',
     'XKEEN_LOG_ROTATE_BACKUPS',
+
+    // Self-update: read at runtime (check latest / runner uses env per run).
+    'XKEEN_UI_UPDATE_CHANNEL',
+    'XKEEN_UI_UPDATE_REPO',
+    'XKEEN_UI_UPDATE_BRANCH',
+    'XKEEN_UI_UPDATE_ASSET_NAME',
+    'XKEEN_UI_UPDATE_ALLOW_HTTP',
+    'XKEEN_UI_UPDATE_ALLOW_HOSTS',
+    'XKEEN_UI_UPDATE_API_TIMEOUT',
+    'XKEEN_UI_UPDATE_CONNECT_TIMEOUT',
+    'XKEEN_UI_UPDATE_DOWNLOAD_TIMEOUT',
+    'XKEEN_UI_UPDATE_MAX_BYTES',
+    'XKEEN_UI_UPDATE_MAX_CHECKSUM_BYTES',
+    'XKEEN_UI_UPDATE_REQUIRE_SHA',
+    'XKEEN_UI_UPDATE_SHA_STRICT',
   ]);
 
   // Большинство переменных читаются на старте (константы/инициализация blueprint'ов).
@@ -218,9 +249,11 @@
   function _envRestartHint(key) {
     const k = String(key || '');
     // Keep it short to fit into the help table on small screens.
-    if (ENV_APPLY_IMMEDIATE_KEYS.has(k)) return 'нет (сразу)';
+    // User asked for a strict yes/no here.
+    if (ENV_NO_RESTART_KEYS.has(k)) return 'нет';
     if (ENV_RESTART_KEYS.has(k)) return 'да';
-    return 'зависит';
+    // Safe default: assume restart is required.
+    return 'да';
   }
 
   function _setEnvSnapshot(items, envFile) {
@@ -248,7 +281,16 @@
 
   function _buildEnvHelpHtml() {
     const envFile = _envSnapshot && _envSnapshot.envFile ? String(_envSnapshot.envFile) : '';
-    const keys = Object.keys(ENV_HELP || {}).slice().sort();
+    let keys = [];
+    try {
+      // Prefer the authoritative whitelist from backend snapshot (it may include keys
+      // that are not yet described in ENV_HELP).
+      const snap = (_envSnapshot && Array.isArray(_envSnapshot.items)) ? _envSnapshot.items : [];
+      keys = snap.map((it) => String((it && it.key) ? it.key : '')).filter((k) => !!k);
+    } catch (e) { keys = []; }
+    // Merge in documented keys too (defensive), then uniq+sort.
+    try { keys = keys.concat(Object.keys(ENV_HELP || {})); } catch (e2) {}
+    keys = Array.from(new Set(keys)).slice().sort();
 
     const parts = [];
     parts.push('<div style="line-height:1.55;">');
@@ -272,7 +314,7 @@
 
     parts.push('<div class="small" style="opacity:0.9; margin-bottom:6px;">Точно применяются без рестарта:</div>');
     parts.push('<ul style="margin-top:0;">');
-    parts.push('<li><code>XKEEN_LOG_CORE_ENABLE</code>, <code>XKEEN_LOG_CORE_ENABLE</code>, <code>XKEEN_LOG_CORE_ENABLE</code>, <code>XKEEN_LOG_CORE_LEVEL</code>, <code>XKEEN_LOG_ACCESS_ENABLE</code>, <code>XKEEN_LOG_WS_ENABLE</code>, <code>XKEEN_LOG_ROTATE_MAX_MB</code>, <code>XKEEN_LOG_ROTATE_BACKUPS</code> — DevTools пытается обновить логирование сразу.</li>');
+    parts.push('<li><code>XKEEN_LOG_CORE_ENABLE</code>, <code>XKEEN_LOG_CORE_LEVEL</code>, <code>XKEEN_LOG_ACCESS_ENABLE</code>, <code>XKEEN_LOG_WS_ENABLE</code>, <code>XKEEN_LOG_ROTATE_MAX_MB</code>, <code>XKEEN_LOG_ROTATE_BACKUPS</code> — DevTools пытается обновить логирование сразу.</li>');
     parts.push('</ul>');
 
     parts.push('<div class="small" style="opacity:0.9; margin-bottom:6px;">Рекомендуется делать Restart UI после изменений (самое частое):</div>');
@@ -303,7 +345,7 @@
     parts.push('<tbody>');
 
     for (const k of keys) {
-      const desc = ENV_HELP[k] || '';
+      const desc = ENV_HELP[k] || ('Переменная окружения: ' + k);
       parts.push('<tr>');
       parts.push('<td class="dt-env-help-td-key"><code>' + _escapeHtml(k) + '</code></td>');
       parts.push('<td class="dt-env-help-td-desc">' + _escapeHtml(desc) + '</td>');

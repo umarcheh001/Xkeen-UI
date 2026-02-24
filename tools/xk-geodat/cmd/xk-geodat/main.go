@@ -82,6 +82,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  tags        List tags inside DAT (GeoSite/GeoIP)")
 	fmt.Fprintln(w, "  dump        Dump items for a tag (paged)")
 	fmt.Fprintln(w, "  tag         Alias for 'dump' (backward-compatible)")
+	fmt.Fprintln(w, "  lookup      Find matching tags for a domain/IP")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Global flags:")
 	fmt.Fprintln(w, "  -h, --help  Show this help")
@@ -90,6 +91,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "Examples:")
 	fmt.Fprintln(w, "  xk-geodat tags --kind geosite --path /opt/etc/xray/geosite.dat")
 	fmt.Fprintln(w, "  xk-geodat dump --kind geosite --path /opt/etc/xray/geosite.dat --tag google --offset 0 --limit 200")
+	fmt.Fprintln(w, "  xk-geodat lookup --kind geosite --path /opt/etc/xray/geosite.dat --value youtube.com")
 }
 
 func main() {
@@ -172,7 +174,40 @@ func main() {
 		}
 		printJSON(res, *pretty, 0)
 
-	default:
+case "lookup":
+	fs := flag.NewFlagSet("lookup", flag.ContinueOnError)
+	// We fully control output (JSON + help). Silence flag's own printing.
+	fs.SetOutput(io.Discard)
+
+	kind := fs.String("kind", "", "geosite|geoip")
+	path := fs.String("path", "", "path to .dat")
+	value := fs.String("value", "", "domain/ip (or URL / host:port)")
+	maxTags := fs.Int("max_tags", 50, "max tags to return (0 = unlimited)")
+	pretty := fs.Bool("pretty", false, "pretty JSON")
+
+	if hasHelp(os.Args[2:]) {
+		fs.SetOutput(os.Stdout)
+		fmt.Fprintln(os.Stdout, "usage: xk-geodat lookup --kind geosite|geoip --path /path/file.dat --value VALUE [--max_tags N] [--pretty]")
+		fmt.Fprintln(os.Stdout, "")
+		fs.PrintDefaults()
+		os.Exit(0)
+	}
+
+	if err := fs.Parse(os.Args[2:]); err != nil {
+		printJSON(ErrOut{OK: false, Error: "bad_args", Detail: err.Error()}, *pretty, 2)
+	}
+	if *kind == "" || *path == "" || *value == "" {
+		printJSON(ErrOut{OK: false, Error: "kind_path_value_required"}, *pretty, 2)
+	}
+
+	res, err := geodat.Lookup(*kind, *path, *value, *maxTags)
+	if err != nil {
+		printJSON(ErrOut{OK: false, Error: "lookup_failed", Detail: err.Error()}, *pretty, 1)
+	}
+	printJSON(res, *pretty, 0)
+
+default:
+
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", cmd)
 		printRootUsage(os.Stderr)
 		os.Exit(2)

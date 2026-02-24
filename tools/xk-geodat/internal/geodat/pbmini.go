@@ -4,6 +4,7 @@ import (
   "errors"
   "fmt"
   "net"
+  "sort"
   "strings"
 )
 
@@ -108,6 +109,99 @@ func readBytesField(b []byte, i int) (val []byte, next int, err error) {
 
 // ---- GeoSite ----
 
+
+// parseGeoSiteLookup scans all tags and returns those that match the given domain.
+func parseGeoSiteLookup(b []byte, domain string, maxTags int) ([]LookupMatch, error) {
+  out := make([]LookupMatch, 0, 32)
+
+  // GeoSiteList.entry = 1 (bytes)
+  i := 0
+  for i < len(b) {
+    fn, wt, j, err := readKey(b, i)
+    if err != nil {
+      return nil, err
+    }
+    i = j
+    if fn == 1 && wt == wtBytes {
+      entryBytes, next, err := readBytesField(b, i)
+      if err != nil {
+        return nil, err
+      }
+      i = next
+
+      tag, cnt, err := parseGeoSiteEntryLookup(entryBytes, domain)
+      if err != nil {
+        return nil, err
+      }
+      if tag != "" && cnt > 0 {
+        out = append(out, LookupMatch{Tag: tag, Count: cnt})
+      }
+      continue
+    }
+    ni, err := skip(b, i, wt)
+    if err != nil {
+      return nil, err
+    }
+    i = ni
+  }
+
+  sort.Slice(out, func(i, j int) bool {
+    if out[i].Count != out[j].Count {
+      return out[i].Count > out[j].Count
+    }
+    return strings.ToLower(out[i].Tag) < strings.ToLower(out[j].Tag)
+  })
+
+  if maxTags > 0 && len(out) > maxTags {
+    out = out[:maxTags]
+  }
+  return out, nil
+}
+
+func parseGeoSiteEntryLookup(b []byte, domain string) (tag string, count int, err error) {
+  i := 0
+  for i < len(b) {
+    fn, wt, j, err := readKey(b, i)
+    if err != nil {
+      return "", 0, err
+    }
+    i = j
+
+    switch {
+    case fn == 1 && wt == wtBytes: // country_code
+      raw, next, err := readBytesField(b, i)
+      if err != nil {
+        return "", 0, err
+      }
+      i = next
+      tag = strings.TrimSpace(string(raw))
+
+    case fn == 2 && wt == wtBytes: // domain
+      raw, next, err := readBytesField(b, i)
+      if err != nil {
+        return "", 0, err
+      }
+      i = next
+      t, v, err := parseDomainItem(raw)
+      if err != nil {
+        return "", 0, err
+      }
+      if matchDomainRule(t, v, domain) {
+        count++
+      }
+
+    default:
+      ni, err := skip(b, i, wt)
+      if err != nil {
+        return "", 0, err
+      }
+      i = ni
+    }
+  }
+  return tag, count, nil
+}
+
+
 func parseGeoSiteTags(b []byte) ([]TagStat, error) {
   out := make([]TagStat, 0, 256)
   // GeoSiteList.entry = 1 (bytes)
@@ -182,7 +276,7 @@ func parseGeoSiteEntryTagAndCount(b []byte) (tag string, domains int, err error)
 }
 
 func parseDomainItem(b []byte) (t string, v string, err error) {
-  dtype := uint64(2) // default to "domain" (matches historical behavior)
+  dtype := uint64(0) // default enum value in proto3: plain
   i := 0
   for i < len(b) {
     fn, wt, j, err := readKey(b, i)
@@ -328,6 +422,178 @@ func parseGeoSiteEntryDump(b []byte, wantTag string, offset, limit int) (matched
 }
 
 // ---- GeoIP ----
+
+
+func parseCIDRForLookup(b []byte) (ip net.IP, prefix int, err error) {
+  var ipBytes []byte
+  var p uint64
+  i := 0
+  for i < len(b) {
+    fn, wt, j, err := readKey(b, i)
+    if err != nil {
+      return nil, 0, err
+    }
+    i = j
+    switch {
+    case fn == 1 && wt == wtBytes: // ip
+      raw, next, err := readBytesField(b, i)
+      if err != nil {
+        return nil, 0, err
+      }
+      i = next
+      ipBytes = raw
+    case fn == 2 && wt == wtVarint: // prefix
+      vv, next, err := readVarint(b, i)
+      if err != nil {
+        return nil, 0, err
+      }
+      i = next
+      p = vv
+    default:
+      ni, err := skip(b, i, wt)
+      if err != nil {
+        return nil, 0, err
+      }
+      i = ni
+    }
+  }
+  if len(ipBytes) == 0 {
+    return nil, 0, errors.New("bad_cidr_ip")
+  }
+  return net.IP(ipBytes), int(p), nil
+}
+
+// parseGeoIPLookup scans all tags and returns those that match the given IP.
+func parseGeoIPLookup(b []byte, ip net.IP, maxTags int) ([]LookupMatch, error) {
+  out := make([]LookupMatch, 0, 32)
+
+  i := 0
+  for i < len(b) {
+    fn, wt, j, err := readKey(b, i)
+    if err != nil {
+      return nil, err
+    }
+    i = j
+    if fn == 1 && wt == wtBytes {
+      entryBytes, next, err := readBytesField(b, i)
+      if err != nil {
+        return nil, err
+      }
+      i = next
+
+      tag, cnt, err := parseGeoIPEntryLookup(entryBytes, ip)
+      if err != nil {
+        return nil, err
+      }
+      if tag != "" && cnt > 0 {
+        out = append(out, LookupMatch{Tag: tag, Count: cnt})
+      }
+      continue
+    }
+    ni, err := skip(b, i, wt)
+    if err != nil {
+      return nil, err
+    }
+    i = ni
+  }
+
+  sort.Slice(out, func(i, j int) bool {
+    if out[i].Count != out[j].Count {
+      return out[i].Count > out[j].Count
+    }
+    return strings.ToLower(out[i].Tag) < strings.ToLower(out[j].Tag)
+  })
+  if maxTags > 0 && len(out) > maxTags {
+    out = out[:maxTags]
+  }
+  return out, nil
+}
+
+func parseGeoIPEntryLookup(b []byte, ipIn net.IP) (tag string, count int, err error) {
+  i := 0
+  for i < len(b) {
+    fn, wt, j, err := readKey(b, i)
+    if err != nil {
+      return "", 0, err
+    }
+    i = j
+
+    switch {
+    case fn == 1 && wt == wtBytes: // country_code
+      raw, next, err := readBytesField(b, i)
+      if err != nil {
+        return "", 0, err
+      }
+      i = next
+      tag = strings.TrimSpace(string(raw))
+
+    case fn == 2 && wt == wtBytes: // cidr
+      raw, next, err := readBytesField(b, i)
+      if err != nil {
+        return "", 0, err
+      }
+      i = next
+
+      cidrIP, prefix, err := parseCIDRForLookup(raw)
+      if err != nil {
+        return "", 0, err
+      }
+
+      base := cidrIP
+      bits := 128
+      tip := ipIn
+
+      // Determine address family based on CIDR base IP.
+      if base4 := base.To4(); base4 != nil {
+        bits = 32
+        base = base4
+        tip4 := tip.To4()
+        if tip4 == nil {
+          continue
+        }
+        tip = tip4
+      } else {
+        base = base.To16()
+        if base == nil {
+          continue
+        }
+        tip16 := tip.To16()
+        if tip16 == nil {
+          continue
+        }
+        tip = tip16
+      }
+
+      if prefix < 0 {
+        continue
+      }
+      if bits == 32 && prefix > 32 {
+        continue
+      }
+      if bits == 128 && prefix > 128 {
+        continue
+      }
+
+      mask := net.CIDRMask(prefix, bits)
+      if mask == nil {
+        continue
+      }
+      netw := net.IPNet{IP: base.Mask(mask), Mask: mask}
+      if netw.Contains(tip) {
+        count++
+      }
+
+    default:
+      ni, err := skip(b, i, wt)
+      if err != nil {
+        return "", 0, err
+      }
+      i = ni
+    }
+  }
+  return tag, count, nil
+}
+
 
 func parseGeoIPTags(b []byte) ([]TagStat, error) {
   out := make([]TagStat, 0, 256)

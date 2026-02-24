@@ -215,6 +215,56 @@ details.dt-theme-group .dt-collapsible-icon{
   max-height: 92vh;
 }
 
+/* ENV help table: fixed layout + proper wrapping for long keys */
+.dt-env-help-table-wrap{
+  overflow: auto;
+  border: 1px solid var(--border, #1f2937);
+  border-radius: 12px;
+}
+
+.dt-env-help-table{
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.dt-env-help-table th,
+.dt-env-help-table td{
+  padding: 10px 12px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border, #1f2937);
+}
+
+.dt-env-help-table thead th{
+  font-weight: 600;
+  background: color-mix(in srgb, var(--card-bg, #020617) 92%, var(--text, #e5e7eb) 8%);
+}
+
+.dt-env-help-col-key{ width: 28%; }
+.dt-env-help-col-restart{ width: 92px; text-align: center; }
+
+.dt-env-help-td-key code{
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dt-env-help-td-desc{
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dt-env-help-td-restart{
+  text-align: center;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px){
+  .dt-env-help-col-key{ width: 44%; }
+  .dt-env-help-col-restart{ width: 76px; }
+}
+
 .dt-help details > summary {
   cursor: pointer;
   user-select: none;

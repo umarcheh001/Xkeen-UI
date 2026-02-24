@@ -18,6 +18,17 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
     rt.job_set_state(job, 'running')
     job.started_ts = rt.now_fn()
 
+    ensure_follow = rt.ensure_local_follow
+    ensure_nofollow = rt.ensure_local_nofollow
+    if not callable(ensure_follow) or not callable(ensure_nofollow):
+        raise RuntimeError('local_helpers_missing')
+
+    spool_base = getattr(rt, 'spool_base_dir', None)
+    try:
+        spool_max = int(getattr(rt, 'spool_max_bytes', 0) or 0)
+    except Exception:
+        spool_max = 0
+
     # --- local helpers for safety ---
     def _same_local(a: str, b: str) -> bool:
         """Best-effort check whether two local paths point to the same inode."""
@@ -143,7 +154,7 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
             dst_is_dir = bool(dst.get('is_dir')) or dst_path.endswith('/') or len(sources) > 1
             if dst_is_dir:
                 if dst_target == 'local':
-                    ddir = _ensure_local_path_allowed(dst_path)
+                    ddir = ensure_follow(dst_path)
                     try:
                         os.makedirs(ddir, exist_ok=True)
                     except Exception:
@@ -164,7 +175,7 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
                 dpath = dst_path
                 # ensure parent exists
                 if dst_target == 'local':
-                    dp_abs = _ensure_local_path_allowed_nofollow(dpath)
+                    dp_abs = ensure_nofollow(dpath)
                     os.makedirs(os.path.dirname(dp_abs) or '/tmp', exist_ok=True)
                     dpath = dp_abs
                 else:
@@ -178,8 +189,8 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
             # --- same-target fast path for move ---
             if job.op == 'move' and src_target == dst_target:
                 if src_target == 'local':
-                    sp = _ensure_local_path_allowed_nofollow(spath)
-                    dp = _ensure_local_path_allowed_nofollow(dpath)
+                    sp = ensure_nofollow(spath)
+                    dp = ensure_nofollow(dpath)
 
                     # Protect Keenetic /tmp/mnt mount labels from being moved/renamed.
                     if rt.local_is_protected_entry_abs(sp) or rt.local_is_protected_entry_abs(dp):
@@ -235,7 +246,8 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
                 ss = rt.mgr.get(src['sid'])
                 if not ss:
                     raise RuntimeError('session_not_found')
-                dp = _ensure_local_path_allowed_nofollow(dpath)
+                # dpath is already resolved above; keep as a safety net.
+                dp = ensure_nofollow(dpath)
                 if rt.local_is_protected_entry_abs(dp):
                     raise RuntimeError('protected_path')
                 # overwrite policy
@@ -307,7 +319,7 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
                 ds = rt.mgr.get(dst['sid'])
                 if not ds:
                     raise RuntimeError('session_not_found')
-                sp = _ensure_local_path_allowed(spath)
+                sp = ensure_follow(spath)
                 if is_dir:
                     # Pre-check free space on remote destination (best-effort).
                     try:
@@ -358,8 +370,8 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
                     mark_done();
 
             elif src_target == 'local' and dst_target == 'local':
-                sp = _ensure_local_path_allowed(spath)
-                dp = _ensure_local_path_allowed_nofollow(dpath)
+                sp = ensure_follow(spath)
+                dp = ensure_nofollow(dpath)
 
                 # COPY onto itself is a common UX case when both panels point to the same dir.
                 # Never delete the source; instead, auto-pick a free "(2)/(3)…" name.
@@ -504,11 +516,11 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
 
                     # Fallback: spool to local tmp then upload.
                     base_usage = 0
-                    if FILEOPS_SPOOL_MAX_BYTES:
+                    if spool_max and spool_base:
                         # account for existing spool usage (other jobs/leftovers)
-                        base_usage = rt.dir_size_bytes(_SPOOL_BASE, stop_after=FILEOPS_SPOOL_MAX_BYTES + 1)
+                        base_usage = rt.dir_size_bytes(spool_base, stop_after=spool_max + 1)
                     size_total = rt.remote_stat_size(ss, spath) or 0
-                    if FILEOPS_SPOOL_MAX_BYTES and size_total:
+                    if spool_max and size_total:
                         rt.spool_check_limit(int(base_usage + int(size_total)))
                     tmp = rt.spool_tmp_file(ext='bin')
                     try:
@@ -528,7 +540,7 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
                                         break
                                     fp.write(chunk)
                                     done += len(chunk)
-                                    if FILEOPS_SPOOL_MAX_BYTES and (base_usage + done) > FILEOPS_SPOOL_MAX_BYTES:
+                                    if spool_max and (base_usage + done) > spool_max:
                                         try:
                                             rt.terminate_proc(proc)
                                         except Exception:
@@ -623,11 +635,11 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
                     try:
                         rt.progress_set(job, current={'path': spath, 'name': sname, 'phase': 'download', 'is_dir': True})
                         base_usage = 0
-                        if FILEOPS_SPOOL_MAX_BYTES:
-                            base_usage = rt.dir_size_bytes(_SPOOL_BASE, stop_after=FILEOPS_SPOOL_MAX_BYTES + 1)
-                            if base_usage >= FILEOPS_SPOOL_MAX_BYTES:
+                        if spool_max and spool_base:
+                            base_usage = rt.dir_size_bytes(spool_base, stop_after=spool_max + 1)
+                            if base_usage >= spool_max:
                                 raise RuntimeError('spool_limit_exceeded')
-                        remaining = max(0, FILEOPS_SPOOL_MAX_BYTES - base_usage) if FILEOPS_SPOOL_MAX_BYTES else 0
+                        remaining = max(0, spool_max - base_usage) if spool_max else 0
                         last_sz = 0
 
                         proc1 = rt.popen_lftp_quiet(ss, [f"mirror -- {rt.lftp_quote(spath)} {rt.lftp_quote(tmpd)}"])
@@ -638,7 +650,7 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
                                     rt.terminate_proc(proc1)
                                     raise RuntimeError('canceled')
 
-                                if FILEOPS_SPOOL_MAX_BYTES:
+                                if spool_max:
                                     sz = rt.dir_size_bytes(tmpd, stop_after=remaining + 1)
                                     if sz > remaining:
                                         rt.terminate_proc(proc1)

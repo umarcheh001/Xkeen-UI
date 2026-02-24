@@ -11,6 +11,20 @@ import os
 from flask import Flask, render_template, make_response
 
 
+def _no_cache(resp):
+    """Apply no-cache headers for HTML pages.
+
+    This helps ensure that after self-update users get the new HTML that points
+    at updated static assets, without requiring Ctrl+F5.
+    """
+    try:
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+    except Exception:
+        pass
+    return resp
+
+
 def register_pages_routes(
     app: Flask,
     *,
@@ -39,38 +53,64 @@ def register_pages_routes(
         except Exception:
             _xray_profile = "classic"
 
-        return render_template(
-            "panel.html",
-            machine=_machine,
-            is_mips=_is_mips,
-            xray_profile=_xray_profile,
-            routing_file=ROUTING_FILE,
-            routing_name=os.path.basename(ROUTING_FILE),
-            mihomo_config_file=MIHOMO_CONFIG_FILE,
-            inbounds_file=INBOUNDS_FILE,
-            inbounds_name=os.path.basename(INBOUNDS_FILE),
-            outbounds_file=OUTBOUNDS_FILE,
-            outbounds_name=os.path.basename(OUTBOUNDS_FILE),
-            backup_dir=BACKUP_DIR,
-            command_groups=COMMAND_GROUPS,
-            github_repo_url=GITHUB_REPO_URL,
-        )
+        try:
+            resp = make_response(
+                render_template(
+                    "panel.html",
+                    machine=_machine,
+                    is_mips=_is_mips,
+                    xray_profile=_xray_profile,
+                    routing_file=ROUTING_FILE,
+                    routing_name=os.path.basename(ROUTING_FILE),
+                    mihomo_config_file=MIHOMO_CONFIG_FILE,
+                    inbounds_file=INBOUNDS_FILE,
+                    inbounds_name=os.path.basename(INBOUNDS_FILE),
+                    outbounds_file=OUTBOUNDS_FILE,
+                    outbounds_name=os.path.basename(OUTBOUNDS_FILE),
+                    backup_dir=BACKUP_DIR,
+                    command_groups=COMMAND_GROUPS,
+                    github_repo_url=GITHUB_REPO_URL,
+                )
+            )
+            return _no_cache(resp)
+        except Exception:
+            # Fallback to previous behaviour.
+            return render_template(
+                "panel.html",
+                machine=_machine,
+                is_mips=_is_mips,
+                xray_profile=_xray_profile,
+                routing_file=ROUTING_FILE,
+                routing_name=os.path.basename(ROUTING_FILE),
+                mihomo_config_file=MIHOMO_CONFIG_FILE,
+                inbounds_file=INBOUNDS_FILE,
+                inbounds_name=os.path.basename(INBOUNDS_FILE),
+                outbounds_file=OUTBOUNDS_FILE,
+                outbounds_name=os.path.basename(OUTBOUNDS_FILE),
+                backup_dir=BACKUP_DIR,
+                command_groups=COMMAND_GROUPS,
+                github_repo_url=GITHUB_REPO_URL,
+            )
 
     @app.get("/xkeen")
     def xkeen_page():
-        return render_template("xkeen.html")
+        try:
+            return _no_cache(make_response(render_template("xkeen.html")))
+        except Exception:
+            return render_template("xkeen.html")
 
     @app.get("/mihomo_generator")
     def mihomo_generator_page():
-        return render_template("mihomo_generator.html")
+        try:
+            return _no_cache(make_response(render_template("mihomo_generator.html")))
+        except Exception:
+            return render_template("mihomo_generator.html")
 
     @app.get("/devtools")
     def devtools_page():
         # Avoid stale cached HTML holding on to old static asset versions
         try:
             resp = make_response(render_template("devtools.html"))
-            resp.headers["Cache-Control"] = "no-store, max-age=0"
-            resp.headers["Pragma"] = "no-cache"
-            return resp
+            return _no_cache(resp)
         except Exception:
             return render_template("devtools.html")

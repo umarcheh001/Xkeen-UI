@@ -18,6 +18,8 @@
     title: 'routing-template-title',
     desc: 'routing-template-desc',
     preview: 'routing-template-preview',
+    previewMonaco: 'routing-template-preview-monaco',
+    previewEngineSelect: 'routing-template-preview-engine-select',
     status: 'routing-template-status',
     btnRefresh: 'routing-template-refresh-btn',
     btnSave: 'routing-template-save-btn',
@@ -48,6 +50,8 @@ editStatus: 'routing-template-edit-status',
 editConfirm: 'routing-template-edit-confirm-btn',
 editCancel: 'routing-template-edit-cancel-btn',
 editCloseX: 'routing-template-edit-close-btn',
+editMonaco: 'routing-template-edit-monaco',
+editEngineSelect: 'routing-template-edit-engine-select',
   };
 
   let _inited = false;
@@ -58,6 +62,17 @@ editCloseX: 'routing-template-edit-close-btn',
   let _editOriginalFilename = '';
   let _editCm = null;
   let _previewCm = null;
+
+  // Monaco state (lazy; created only when engine=monaco)
+  let _previewMonaco = null;
+  let _previewMonacoFacade = null;
+  let _previewKind = 'codemirror';
+
+  let _editMonaco = null;
+  let _editMonacoFacade = null;
+  let _editKind = 'codemirror';
+
+  let _engineSyncing = false;
 
   function currentCmTheme() {
     try {
@@ -77,6 +92,270 @@ editCloseX: 'routing-template-edit-close-btn',
       s.textContent = String(msg || '');
       s.classList.toggle('error', !!isError);
     }
+
+  }
+
+
+  // -------------------------- engine toggle (CodeMirror / Monaco) --------------------------
+  const PREVIEW_PLACEHOLDER = '// превью появится здесь';
+
+  function normalizeEngine(v) {
+    const s = String(v || '').toLowerCase();
+    return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
+  }
+
+  function getEngineHelper() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+  }
+
+  function getMonacoShared() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
+  }
+
+  function setEngineSelects(engine) {
+    const e = normalizeEngine(engine);
+    const a = el(IDS.previewEngineSelect);
+    const b = el(IDS.editEngineSelect);
+    try { if (a) a.value = e; } catch (e2) {}
+    try { if (b) b.value = e; } catch (e3) {}
+  }
+
+  function modalOpen(id) {
+    const m = el(id);
+    return !!(m && !m.classList.contains('hidden'));
+  }
+
+  function showNode(node) {
+    if (!node) return;
+    try { node.classList.remove('hidden'); } catch (e) {}
+  }
+
+  function hideNode(node) {
+    if (!node) return;
+    try { node.classList.add('hidden'); } catch (e) {}
+  }
+
+  function cmWrapper(cm) {
+    try { return (cm && typeof cm.getWrapperElement === 'function') ? cm.getWrapperElement() : null; } catch (e) { return null; }
+  }
+
+  function resetPreviewVisibility() {
+    const host = el(IDS.previewMonaco);
+    const ta = el(IDS.preview);
+    hideNode(host);
+    const w = cmWrapper(_previewCm);
+    if (w) showNode(w);
+    if (!w && ta) showNode(ta);
+  }
+
+  function resetEditVisibility() {
+    const host = el(IDS.editMonaco);
+    const ta = el(IDS.editContent);
+    hideNode(host);
+    const w = cmWrapper(_editCm);
+    if (w) showNode(w);
+    if (!w && ta) showNode(ta);
+  }
+
+  function disposePreviewMonaco() {
+    try { if (_previewMonaco && _previewMonaco.dispose) _previewMonaco.dispose(); } catch (e) {}
+    _previewMonaco = null;
+    _previewMonacoFacade = null;
+    _previewKind = 'codemirror';
+  }
+
+  function disposeEditMonaco() {
+    try { if (_editMonaco && _editMonaco.dispose) _editMonaco.dispose(); } catch (e) {}
+    _editMonaco = null;
+    _editMonacoFacade = null;
+    _editKind = 'codemirror';
+  }
+
+  async function resolvePreferredEngine() {
+    let engine = 'codemirror';
+    const ee = getEngineHelper();
+    try {
+      if (ee && typeof ee.ensureLoaded === 'function') engine = normalizeEngine(await ee.ensureLoaded());
+      else if (ee && typeof ee.get === 'function') engine = normalizeEngine(ee.get());
+    } catch (e) {
+      try { engine = normalizeEngine(ee && ee.get ? ee.get() : 'codemirror'); } catch (e2) { engine = 'codemirror'; }
+    }
+    return engine;
+  }
+
+  function previewTextFallback() {
+    try {
+      if (_previewKind === 'monaco' && _previewMonacoFacade && _previewMonacoFacade.getValue) return String(_previewMonacoFacade.getValue() || '');
+    } catch (e) {}
+    try {
+      if (_previewCm && _previewCm.getValue) return String(_previewCm.getValue() || '');
+    } catch (e) {}
+    const ta = el(IDS.preview);
+    return ta ? String(ta.value || '') : '';
+  }
+
+  async function activatePreviewEngine(engine) {
+    const next = normalizeEngine(engine);
+    const host = el(IDS.previewMonaco);
+
+    if (next === 'monaco') {
+      const shared = getMonacoShared();
+      if (!shared || !host || typeof shared.createEditor !== 'function') {
+        try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
+        const ee = getEngineHelper();
+        try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
+        return activatePreviewEngine('codemirror');
+      }
+
+      // Hide CodeMirror/textarea, show Monaco host
+      const w = cmWrapper(_previewCm);
+      if (w) hideNode(w);
+      const ta = el(IDS.preview);
+      if (ta) hideNode(ta);
+      showNode(host);
+
+      const value = previewTextFallback() || PREVIEW_PLACEHOLDER;
+
+      if (!_previewMonaco) {
+        const ed = await shared.createEditor(host, {
+          // Monaco core ships JSON support; JSONC is not always registered.
+          // Templates may include comments, but for syntax highlighting we use 'json'.
+          language: 'json',
+          readOnly: true,
+          value: value,
+        });
+        if (!ed) {
+          try { if (window.toast) window.toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
+          const ee = getEngineHelper();
+          try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
+          resetPreviewVisibility();
+          return activatePreviewEngine('codemirror');
+        }
+        _previewMonaco = ed;
+        try { _previewMonacoFacade = shared.toFacade(ed); } catch (e) { _previewMonacoFacade = null; }
+      } else if (_previewMonacoFacade && _previewMonacoFacade.setValue) {
+        _previewMonacoFacade.setValue(value);
+      }
+
+      _previewKind = 'monaco';
+      try { if (_previewMonacoFacade) _previewMonacoFacade.scrollTo(0, 0); } catch (e) {}
+      return 'monaco';
+    }
+
+    // CodeMirror
+    hideNode(host);
+    try { disposePreviewMonaco(); } catch (e) {}
+
+    const cm = ensurePreviewEditor();
+    const value = previewTextFallback() || PREVIEW_PLACEHOLDER;
+    if (cm && cm.setValue) {
+      try {
+        cm.setValue(value);
+        cm.scrollTo(0, 0);
+        setTimeout(() => { try { cm.refresh(); } catch (e2) {} }, 30);
+      } catch (e) {}
+      const w = cmWrapper(cm);
+      if (w) showNode(w);
+    } else {
+      const ta = el(IDS.preview);
+      if (ta) {
+        try { ta.value = value; } catch (e) {}
+        showNode(ta);
+      }
+    }
+
+    _previewKind = 'codemirror';
+    return 'codemirror';
+  }
+
+  async function activateEditEngine(engine) {
+    const next = normalizeEngine(engine);
+    const host = el(IDS.editMonaco);
+
+    if (next === 'monaco') {
+      const shared = getMonacoShared();
+      if (!shared || !host || typeof shared.createEditor !== 'function') {
+        try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
+        const ee = getEngineHelper();
+        try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
+        return activateEditEngine('codemirror');
+      }
+
+      // Preserve current value before switching
+      const value = getEditEditorText();
+
+      // Hide CodeMirror/textarea, show Monaco host
+      const w = cmWrapper(_editCm);
+      if (w) hideNode(w);
+      const ta = el(IDS.editContent);
+      if (ta) hideNode(ta);
+      showNode(host);
+
+      if (!_editMonaco) {
+        const ed = await shared.createEditor(host, {
+          // Monaco core ships JSON support; JSONC is not always registered.
+          language: 'json',
+          readOnly: false,
+          value: value,
+        });
+        if (!ed) {
+          try { if (window.toast) window.toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
+          const ee = getEngineHelper();
+          try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
+          resetEditVisibility();
+          return activateEditEngine('codemirror');
+        }
+        _editMonaco = ed;
+        try { _editMonacoFacade = shared.toFacade(ed); } catch (e) { _editMonacoFacade = null; }
+      }
+
+      try { if (_editMonacoFacade && _editMonacoFacade.setValue) _editMonacoFacade.setValue(value); } catch (e) {}
+      _editKind = 'monaco';
+      try { if (_editMonacoFacade) _editMonacoFacade.focus(); } catch (e) {}
+      return 'monaco';
+    }
+
+    // CodeMirror
+    hideNode(host);
+    try { disposeEditMonaco(); } catch (e) {}
+
+    const value = getEditEditorText();
+    const cm = ensureEditEditor();
+    if (cm && cm.setValue) {
+      try {
+        cm.setValue(String(value || ''));
+        cm.scrollTo(0, 0);
+        setTimeout(() => { try { cm.refresh(); } catch (e2) {} }, 30);
+      } catch (e) {}
+      const w = cmWrapper(cm);
+      if (w) showNode(w);
+    } else {
+      const ta = el(IDS.editContent);
+      if (ta) {
+        try { ta.value = String(value || ''); } catch (e) {}
+        showNode(ta);
+      }
+    }
+
+    _editKind = 'codemirror';
+    return 'codemirror';
+  }
+
+  async function syncEngineNow() {
+    if (_engineSyncing) return;
+    _engineSyncing = true;
+    try {
+      const engine = await resolvePreferredEngine();
+      setEngineSelects(engine);
+      if (modalOpen(IDS.modal)) await activatePreviewEngine(engine);
+      if (modalOpen(IDS.editModal)) await activateEditEngine(engine);
+    } finally {
+      _engineSyncing = false;
+    }
+  }
+
+  function scheduleEngineSync() {
+    try { setTimeout(() => { try { syncEngineNow(); } catch (e) {} }, 0); } catch (e) {}
   }
 
   function openModal() {
@@ -84,13 +363,8 @@ editCloseX: 'routing-template-edit-close-btn',
     if (!m) return;
     m.classList.remove('hidden');
 
-    // Lazy-init preview editor (CodeMirror) and refresh after showing the modal
-    try {
-      ensurePreviewEditor();
-      if (_previewCm && typeof _previewCm.refresh === 'function') {
-        setTimeout(() => { try { _previewCm.refresh(); } catch (e2) {} }, 50);
-      }
-    } catch (e) {}
+    // Defer engine init until modal is visible (CodeMirror / Monaco).
+    try { scheduleEngineSync(); } catch (e) {}
 
     // Make sure scroll lock is correct
     try {
@@ -104,6 +378,10 @@ editCloseX: 'routing-template-edit-close-btn',
     const m = el(IDS.modal);
     if (!m) return;
     m.classList.add('hidden');
+
+    // Dispose Monaco preview editor to avoid leaks.
+    try { disposePreviewMonaco(); } catch (e) {}
+    try { resetPreviewVisibility(); } catch (e) {}
 
     // Make sure scroll lock is correct
     try {
@@ -154,13 +432,8 @@ function openEditModal() {
     }
   } catch (e) {}
 
-  // Lazy-init CodeMirror for template editor
-  try {
-    ensureEditEditor();
-    if (_editCm && typeof _editCm.refresh === 'function') {
-      setTimeout(() => { try { _editCm.refresh(); } catch (e2) {} }, 50);
-    }
-  } catch (e) {}
+  // Defer engine init until modal is visible (CodeMirror / Monaco).
+  try { scheduleEngineSync(); } catch (e) {}
 }
 
 function closeEditModal() {
@@ -172,6 +445,10 @@ function closeEditModal() {
       XK.ui.modal.syncBodyScrollLock();
     }
   } catch (e) {}
+
+  // Dispose Monaco editor to avoid leaks and restore default visibility.
+  try { disposeEditMonaco(); } catch (e) {}
+  try { resetEditVisibility(); } catch (e) {}
 }
 
 function setEditStatus(msg, isError) {
@@ -199,7 +476,7 @@ function ensureEditEditor() {
 
   try {
     _editCm = window.CodeMirror.fromTextArea(ta, {
-        mode: { name: 'jsonc' },
+        mode: { name: 'javascript', json: true },
         theme: currentCmTheme(),
       lineNumbers: true,
       lineWrapping: true,
@@ -241,7 +518,7 @@ function ensureEditEditor() {
 
     try {
       _previewCm = window.CodeMirror.fromTextArea(ta, {
-        mode: { name: 'jsonc' },
+        mode: { name: 'javascript', json: true },
         theme: currentCmTheme(),
         readOnly: 'nocursor',
         lineNumbers: false,
@@ -267,7 +544,7 @@ function ensureEditEditor() {
       } catch (e3) {}
 
       try {
-        _previewCm.setValue('// превью появится здесь');
+        _previewCm.setValue(PREVIEW_PLACEHOLDER);
         _previewCm.scrollTo(0, 0);
       } catch (e4) {}
     } catch (e) {
@@ -279,20 +556,37 @@ function ensureEditEditor() {
 
   function setPreviewText(text) {
     const value = String(text || '');
-    const cm = ensurePreviewEditor();
-    if (cm && typeof cm.setValue === 'function') {
-      cm.setValue(value);
-      try { cm.scrollTo(0, 0); } catch (e) {}
-      return;
-    }
+
+    // Always keep textarea in sync (fallback + source of truth before editor is inited).
     const ta = el(IDS.preview);
     if (ta) {
-      // textarea fallback
-      ta.value = value;
+      try { ta.value = value; } catch (e) {}
     }
+
+    // Update CodeMirror if present.
+    try {
+      if (_previewCm && typeof _previewCm.setValue === 'function') {
+        _previewCm.setValue(value);
+        try { _previewCm.scrollTo(0, 0); } catch (e2) {}
+      }
+    } catch (e) {}
+
+    // Update Monaco if present.
+    try {
+      if (_previewMonacoFacade && typeof _previewMonacoFacade.setValue === 'function') {
+        _previewMonacoFacade.setValue(value);
+        try { _previewMonacoFacade.scrollTo(0, 0); } catch (e2) {}
+      }
+    } catch (e) {}
   }
 
+
 function getEditEditorText() {
+  try {
+    if (_editKind === 'monaco' && _editMonacoFacade && typeof _editMonacoFacade.getValue === 'function') {
+      return String(_editMonacoFacade.getValue() || '');
+    }
+  } catch (e) {}
   if (_editCm && typeof _editCm.getValue === 'function') return String(_editCm.getValue() || '');
   const ta = el(IDS.editContent);
   if (ta) return String(ta.value || '');
@@ -301,13 +595,22 @@ function getEditEditorText() {
 
 function setEditEditorText(text) {
   const value = String(text || '');
-  if (_editCm && typeof _editCm.setValue === 'function') {
-    _editCm.setValue(value);
-    try { _editCm.scrollTo(0, 0); } catch (e) {}
-    return;
-  }
   const ta = el(IDS.editContent);
-  if (ta) ta.value = value;
+  if (ta) {
+    try { ta.value = value; } catch (e) {}
+  }
+  if (_editCm && typeof _editCm.setValue === 'function') {
+    try {
+      _editCm.setValue(value);
+      try { _editCm.scrollTo(0, 0); } catch (e2) {}
+    } catch (e) {}
+  }
+  try {
+    if (_editMonacoFacade && typeof _editMonacoFacade.setValue === 'function') {
+      _editMonacoFacade.setValue(value);
+      try { _editMonacoFacade.scrollTo(0, 0); } catch (e2) {}
+    }
+  } catch (e) {}
 }
 
 async function openEditForSelected() {
@@ -467,7 +770,6 @@ async function submitEditTemplate() {
 
     const t = el(IDS.title);
     const d = el(IDS.desc);
-    ensurePreviewEditor();
     const b = el(IDS.btnImport);
     const del = el(IDS.btnDelete);
     const edit = el(IDS.btnEdit);
@@ -597,7 +899,6 @@ async function submitEditTemplate() {
     _selected = tpl;
     _selectedContent = '';
 
-    ensurePreviewEditor();
 
     // highlight
     const list = el(IDS.list);
@@ -903,6 +1204,53 @@ async function submitEditTemplate() {
       });
       if (openBtn.dataset) openBtn.dataset.xkWired = '1';
     }
+
+    // Engine toggles (global setting)
+    const previewSel = el(IDS.previewEngineSelect);
+    if (previewSel && !(previewSel.dataset && previewSel.dataset.xkWired === '1')) {
+      previewSel.addEventListener('change', async (e) => {
+        try {
+          const ee = getEngineHelper();
+          if (ee && typeof ee.set === 'function') {
+            await ee.set(previewSel.value);
+          }
+        } catch (e2) {}
+        try { scheduleEngineSync(); } catch (e3) {}
+      });
+      if (previewSel.dataset) previewSel.dataset.xkWired = '1';
+    }
+
+    const editSel = el(IDS.editEngineSelect);
+    if (editSel && !(editSel.dataset && editSel.dataset.xkWired === '1')) {
+      editSel.addEventListener('change', async (e) => {
+        try {
+          const ee = getEngineHelper();
+          if (ee && typeof ee.set === 'function') {
+            await ee.set(editSel.value);
+          }
+        } catch (e2) {}
+        try { scheduleEngineSync(); } catch (e3) {}
+      });
+      if (editSel.dataset) editSel.dataset.xkWired = '1';
+    }
+
+    // React to engine changes made elsewhere (routing editor, file manager, etc.)
+    try {
+      const ee = getEngineHelper();
+      if (ee && typeof ee.onChange === 'function' && document.body && document.body.dataset && document.body.dataset.xkRoutingTplEngineWatch !== '1') {
+        ee.onChange((d) => {
+          try {
+            const next = normalizeEngine(d && d.engine ? d.engine : 'codemirror');
+            setEngineSelects(next);
+            // If modals are open, re-activate editors to match the new engine.
+            if (modalOpen(IDS.modal) || modalOpen(IDS.editModal)) {
+              scheduleEngineSync();
+            }
+          } catch (e4) {}
+        });
+        document.body.dataset.xkRoutingTplEngineWatch = '1';
+      }
+    } catch (e) {}
 
     const btnRefresh = el(IDS.btnRefresh);
     if (btnRefresh && !(btnRefresh.dataset && btnRefresh.dataset.xkWired === '1')) {

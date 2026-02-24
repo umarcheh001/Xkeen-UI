@@ -19,6 +19,10 @@
 
     input: 'mihomo-import-input',
     preview: 'mihomo-import-preview',
+
+
+    engineSelect: 'mihomo-import-engine-select',
+    monacoHost: 'mihomo-import-preview-monaco',
     status: 'mihomo-import-status',
     hint: 'mihomo-import-target-hint',
 
@@ -29,6 +33,13 @@
   let _inited = false;
   let _lastResult = null; // { outputs: [{type, content, uri}] }
   let _previewCm = null;
+
+  let _previewKind = 'codemirror';
+  let _previewMonaco = null;
+  let _previewMonacoFacade = null;
+  let _previewLastText = '';
+  let _engineUnsub = null;
+  let _engineSyncing = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -59,6 +70,186 @@
     return t === 'light' ? 'default' : 'material-darker';
   }
 
+
+  function normalizeEngine(v) {
+    const s = String(v || '').toLowerCase();
+    return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
+  }
+
+  function getEngineHelper() {
+    try {
+      return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getMonacoShared() {
+    try {
+      return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function showNode(node) {
+    if (!node) return;
+    try { node.classList.remove('hidden'); } catch (e) {}
+    try { node.style.display = ''; } catch (e2) {}
+  }
+
+  function hideNode(node) {
+    if (!node) return;
+    try { node.classList.add('hidden'); } catch (e) {}
+    try { node.style.display = 'none'; } catch (e2) {}
+  }
+
+  function cmWrapper(cm) {
+    try { return (cm && typeof cm.getWrapperElement === 'function') ? cm.getWrapperElement() : null; } catch (e) { return null; }
+  }
+
+  function modalOpen() {
+    const m = $(IDS.modal);
+    return !!(m && !m.classList.contains('hidden'));
+  }
+
+  function setEngineSelectValue(engine) {
+    const sel = $(IDS.engineSelect);
+    if (!sel) return;
+    try { sel.value = normalizeEngine(engine); } catch (e) {}
+  }
+
+  async function resolvePreferredEngine() {
+    let engine = 'codemirror';
+    const ee = getEngineHelper();
+    try {
+      if (ee && typeof ee.ensureLoaded === 'function') engine = normalizeEngine(await ee.ensureLoaded());
+      else if (ee && typeof ee.get === 'function') engine = normalizeEngine(ee.get());
+    } catch (e) {
+      try { engine = normalizeEngine(ee && ee.get ? ee.get() : 'codemirror'); } catch (e2) { engine = 'codemirror'; }
+    }
+    return engine;
+  }
+
+  function previewTextFallback() {
+    try { if (_previewLastText) return String(_previewLastText || ''); } catch (e) {}
+    try {
+      if (_previewKind === 'monaco' && _previewMonacoFacade && _previewMonacoFacade.getValue) return String(_previewMonacoFacade.getValue() || '');
+    } catch (e2) {}
+    try {
+      if (_previewCm && _previewCm.getValue) return String(_previewCm.getValue() || '');
+    } catch (e3) {}
+    const ta = $(IDS.preview);
+    return ta ? String(ta.value || '') : '';
+  }
+
+  function disposePreviewMonaco() {
+    try {
+      if (_previewMonacoFacade && _previewMonacoFacade.dispose) _previewMonacoFacade.dispose();
+      else if (_previewMonaco && _previewMonaco.dispose) _previewMonaco.dispose();
+    } catch (e) {}
+    _previewMonaco = null;
+    _previewMonacoFacade = null;
+  }
+
+  async function activatePreviewEngine(engine) {
+    const next = normalizeEngine(engine);
+    const host = $(IDS.monacoHost);
+    const ta = $(IDS.preview);
+
+    if (next === 'monaco') {
+      const shared = getMonacoShared();
+      if (!shared || !host || typeof shared.createEditor !== 'function') {
+        try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e0) {}
+        const ee = getEngineHelper();
+        try { if (ee && ee.set) await ee.set('codemirror'); } catch (e1) {}
+        return activatePreviewEngine('codemirror');
+      }
+
+      // Hide CodeMirror/textarea, show Monaco host
+      const w = cmWrapper(_previewCm);
+      if (w) hideNode(w);
+      if (ta) hideNode(ta);
+      showNode(host);
+
+      const value = previewTextFallback();
+
+      if (!_previewMonaco) {
+        const ed = await shared.createEditor(host, {
+          language: 'yaml',
+          readOnly: true,
+          value: value,
+          tabSize: 2,
+          insertSpaces: true,
+          wordWrap: 'on',
+        });
+        if (!ed) {
+          try { if (window.toast) window.toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e2) {}
+          const ee = getEngineHelper();
+          try { if (ee && ee.set) await ee.set('codemirror'); } catch (e3) {}
+          if (host) hideNode(host);
+          return activatePreviewEngine('codemirror');
+        }
+        _previewMonaco = ed;
+        try { _previewMonacoFacade = (shared.toFacade ? shared.toFacade(ed) : null); } catch (e4) { _previewMonacoFacade = null; }
+        try { if (shared.layoutOnVisible) shared.layoutOnVisible(ed, host); } catch (e5) {}
+      } else if (_previewMonacoFacade && _previewMonacoFacade.setValue) {
+        _previewMonacoFacade.setValue(value);
+      }
+
+      _previewKind = 'monaco';
+      try { if (_previewMonacoFacade) _previewMonacoFacade.scrollTo(0, 0); } catch (e6) {}
+      return 'monaco';
+    }
+
+    // CodeMirror
+    if (host) hideNode(host);
+    try { disposePreviewMonaco(); } catch (e) {}
+
+    const cm = ensurePreviewCm();
+    const value = previewTextFallback();
+
+    if (cm && cm.setOption) {
+      try { cm.setOption('theme', cmThemeFromPage()); } catch (e1) {}
+    }
+
+    if (cm && cm.setValue) {
+      try {
+        cm.setValue(value);
+        cm.scrollTo(0, 0);
+        setTimeout(() => { try { cm.refresh(); } catch (e2) {} }, 30);
+      } catch (e3) {}
+      const w = cmWrapper(cm);
+      if (w) showNode(w);
+      if (ta) hideNode(ta);
+    } else {
+      if (ta) {
+        try { ta.value = value; } catch (e4) {}
+        showNode(ta);
+      }
+    }
+
+    _previewKind = 'codemirror';
+    return 'codemirror';
+  }
+
+  async function syncEngineNow() {
+    if (_engineSyncing) return;
+    _engineSyncing = true;
+    try {
+      const engine = await resolvePreferredEngine();
+      setEngineSelectValue(engine);
+      if (modalOpen()) await activatePreviewEngine(engine);
+    } finally {
+      _engineSyncing = false;
+    }
+  }
+
+  function scheduleEngineSync() {
+    try { setTimeout(() => { try { syncEngineNow(); } catch (e) {} }, 0); } catch (e) {}
+  }
+
+
   function ensurePreviewCm() {
     const ta = $(IDS.preview);
     if (!ta || !window.CodeMirror) return null;
@@ -87,11 +278,19 @@
 
   function setPreview(text) {
     const v = String(text || '');
+    _previewLastText = v;
+
+    try {
+      if (_previewKind === 'monaco' && _previewMonacoFacade && _previewMonacoFacade.setValue) {
+        _previewMonacoFacade.setValue(v);
+        try { _previewMonacoFacade.scrollTo(0, 0); } catch (e2) {}
+        return;
+      }
+    } catch (e) {}
+
     if (_previewCm && _previewCm.setValue) {
       _previewCm.setValue(v);
-      try {
-        _previewCm.scrollTo(0, 0);
-      } catch (e) {}
+      try { _previewCm.scrollTo(0, 0); } catch (e2) {}
       return;
     }
     const el = $(IDS.preview);
@@ -141,13 +340,6 @@
     } catch (e2) {}
 
     if (show) {
-      // init preview CodeMirror only when opened (faster first paint)
-      try {
-        const cm = ensurePreviewCm();
-        if (cm && cm.setOption) cm.setOption('theme', cmThemeFromPage());
-        if (cm && cm.refresh) setTimeout(() => cm.refresh(), 0);
-      } catch (e0) {}
-
       // reset
       _lastResult = null;
       setStatus('', false);
@@ -155,6 +347,9 @@
       setPreview('');
       const ins = $(IDS.btnInsert);
       if (ins) ins.disabled = true;
+
+      // Activate preferred editor engine (CodeMirror / Monaco)
+      try { scheduleEngineSync(); } catch (e4) {}
 
       try {
         const inp = $(IDS.input);
@@ -715,6 +910,28 @@
 
     wireButton(IDS.btnParse, () => parseInput());
     wireButton(IDS.btnInsert, () => insertIntoEditor());
+
+    // Engine toggle (preview)
+    const sel = $(IDS.engineSelect);
+    if (sel && !(sel.dataset && sel.dataset.xkWired === '1')) {
+      if (sel.dataset) sel.dataset.xkWired = '1';
+      sel.addEventListener('change', async () => {
+        const ee = getEngineHelper();
+        try { if (ee && ee.set) await ee.set(sel.value); } catch (e) {}
+        scheduleEngineSync();
+      });
+    }
+
+    // Listen for global engine changes
+    if (!_engineUnsub) {
+      const ee = getEngineHelper();
+      if (ee && typeof ee.onChange === 'function') {
+        _engineUnsub = ee.onChange((d) => {
+          try { setEngineSelectValue(d && d.engine ? d.engine : 'codemirror'); } catch (e) {}
+          if (modalOpen()) scheduleEngineSync();
+        });
+      }
+    }
 
     // Close on backdrop click (outside content)
     if (!modal.dataset || modal.dataset.xkBackdrop !== '1') {

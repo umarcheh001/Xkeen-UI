@@ -5,77 +5,116 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Маршрутизация Xray — комментарии и примеры (05_routing*.jsonc)</title>
   <style>
+    :root{
+      --bg: #f5f5f7;
+      --text: #111827;
+      --muted: #374151;
+      --card-bg: #ffffff;
+      --border: #d1d5db;
+      --code-bg: #e5e7eb;
+      --code-border: #cbd5e1;
+      --code-text: #0f172a;
+      --pre-bg: rgba(15, 23, 42, 0.04);
+      --tag-bg: #eff6ff;
+      --tag-text: #1f2937;
+      --link: #2563eb;
+    }
+
+    /* Match the surrounding UI theme when user/device prefers dark mode. */
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg: #0f172a;
+        --text: #e5e7eb;
+        --muted: #cbd5e1;
+        --card-bg: #020617;
+        --border: #1f2937;
+        --code-bg: #1e293b;
+        --code-border: #334155;
+        --code-text: #e5e7eb;
+        --pre-bg: rgba(148, 163, 184, 0.10);
+        --tag-bg: rgba(96, 165, 250, 0.18);
+        --tag-text: #e5e7eb;
+        --link: #60a5fa;
+      }
+    }
+
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       max-width: 960px;
       margin: 0 auto;
       padding: 24px;
       line-height: 1.6;
-      background: #f5f5f7;
-      color: #111827;
+      background: var(--bg);
+      color: var(--text);
     }
 
     h1 {
       font-size: 26px;
       margin: 0 0 12px;
-      color: #111827;
+      color: var(--text);
     }
 
     h2 {
       font-size: 20px;
       margin: 24px 0 8px;
-      color: #111827;
+      color: var(--text);
     }
 
     h3 {
       font-size: 16px;
       margin: 20px 0 6px;
-      color: #111827;
+      color: var(--text);
     }
 
     p {
       margin: 0 0 12px;
-      color: #374151;
+      color: var(--muted);
     }
 
     ul {
       padding-left: 20px;
       margin: 8px 0 12px;
-      color: #374151;
+      color: var(--muted);
     }
+
+    a{ color: var(--link); }
+    a:hover{ text-decoration: underline; }
 
     code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 13px;
-      padding: 2px 4px;
-      border-radius: 4px;
-      background: #f3f4f6;
-      color: #111827;
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      color: var(--code-text);
+      white-space: nowrap;
     }
 
     pre {
       margin: 12px 0 16px;
       padding: 12px 14px;
       border-radius: 10px;
-      background: #11182708;
-      border: 1px solid #e5e7eb;
+      background: var(--pre-bg);
+      border: 1px solid var(--border);
       overflow: auto;
     }
 
     pre code {
       padding: 0;
       background: transparent;
+      border: none;
       border-radius: 0;
       display: block;
       white-space: pre;
     }
 
     .card {
-      background: #ffffff;
+      background: var(--card-bg);
       border-radius: 12px;
       padding: 16px 18px;
       margin: 16px 0 20px;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--border);
       box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
     }
 
@@ -84,8 +123,8 @@
       font-size: 11px;
       padding: 2px 8px;
       border-radius: 999px;
-      background: #eff6ff;
-      color: #1f2937;
+      background: var(--tag-bg);
+      color: var(--tag-text);
       text-transform: uppercase;
       letter-spacing: 0.06em;
       margin-bottom: 8px;
@@ -93,7 +132,7 @@
 
     hr {
       border: none;
-      border-top: 1px solid #e5e7eb;
+      border-top: 1px solid var(--border);
       margin: 24px 0;
     }
 
@@ -104,16 +143,16 @@
       margin-bottom: 16px;
       padding: 6px 14px;
       border-radius: 999px;
-      border: 1px solid #d1d5db;
-      background: #ffffff;
-      color: #111827;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
       font-size: 13px;
       cursor: pointer;
       box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
     }
 
     button.back-to-panel:hover {
-      background: #f3f4f6;
+      background: color-mix(in srgb, var(--card-bg) 85%, var(--text) 15%);
     }
 
     button.back-to-panel:active {
@@ -255,7 +294,7 @@
 
   <h1>Маршрутизация Xray (JSONC)</h1>
   <p>Эта страница объясняет, как правильно писать комментарии и правила в файле routing-части Xray в формате <code>.jsonc</code> (JSON с комментариями), чтобы панель XKeen UI могла его загрузить и применить.</p>
-  <p><b>Важно:</b> имя файла зависит от профиля/ядра. Обычно это <code>05_routing.jsonc</code>, но для Hysteria2 может использоваться <code>05_routing_hys2.jsonc</code>.</p>
+  <p><b>Важно:</b> имя файла <b>определяется</b> профилем/ядром. Обычно это <code>05_routing.jsonc</code>, но для Hysteria2 может использоваться <code>05_routing_hys2.jsonc</code>.</p>
 
   <div class="card">
     <div class="tag">Кратко</div>

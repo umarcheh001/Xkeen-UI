@@ -245,7 +245,17 @@ def create_xray_configs_blueprint(
         mode2 = detect_inbounds_mode(data=data)
         return jsonify({"ok": True, "restarted": restarted, "file": os.path.basename(sel_path), "mode": mode2}), 200
 
-    # --- API: outbounds ---
+    
+
+    # --- API: inbounds fragments list ---
+
+    @bp.get("/api/inbounds/fragments")
+    def api_list_inbounds_fragments():
+        items = list_xray_fragments("inbounds")
+        current_name = os.path.basename(INBOUNDS_FILE)
+        return jsonify({"ok": True, "dir": XRAY_CONFIGS_DIR, "current": current_name, "items": items}), 200
+
+# --- API: outbounds ---
 
     @bp.get("/api/outbounds")
     def api_get_outbounds():

@@ -80,6 +80,10 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
             except PermissionError as e:
                 return error_response(str(e), 403, ok=False)
 
+            # Distinguish missing path from wrong type so UI can show correct message.
+            if not os.path.exists(rp):
+                return error_response("not_found", 404, ok=False)
+
             if os.path.isdir(rp):
                 if not want_zip:
                     return error_response("not_a_file", 400, ok=False)
@@ -340,6 +344,7 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
             return resp
 
         overwrite = str(request.args.get("overwrite", "") or "").strip().lower() in ("1", "true", "yes", "on")
+        create_parents = str(request.args.get("parents", "") or "").strip().lower() in ("1", "true", "yes", "on")
         target = str(request.args.get("target", "") or "").strip().lower()
         path = str(request.args.get("path", "") or "").strip()
 
@@ -494,6 +499,16 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
             return error_response("upload_failed", 400, ok=False)
 
         try:
+            if create_parents:
+                parent = os.path.dirname(remote_path.rstrip("/"))
+                if parent and parent not in ("", "."):
+                    rc_m, out_m, err_m = mgr._run_lftp(s, [f"mkdir -p {_lftp_quote(parent)}"], capture=True)
+                    if rc_m != 0:
+                        tail_err = (err_m.decode("utf-8", errors="replace")[-400:]).strip()
+                        tail_out = (out_m.decode("utf-8", errors="replace")[-400:]).strip()
+                        tail = tail_err or tail_out or f"rc={rc_m}"
+                        return error_response("remote_mkdir_failed", 400, ok=False, details=tail)
+
             rc, out, err = mgr._run_lftp(s, [f"put {_lftp_quote(tmp_path)} -o {_lftp_quote(remote_path)}"], capture=True)
             if rc != 0:
                 tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
