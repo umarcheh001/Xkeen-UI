@@ -26,6 +26,28 @@
     }
   }
 
+  // Terminal is now lazy-loaded; on a fresh tab capabilities may not be ready yet.
+  // We use a lightweight direct probe as a fallback, so command buttons can still
+  // choose PTY on WS-capable routers without requiring an extra click.
+  let _wsProbePromise = null;
+  async function detectWsCapability() {
+    try {
+      if (hasWs()) return true;
+    } catch (e0) {}
+    if (_wsProbePromise) return _wsProbePromise;
+    _wsProbePromise = (async () => {
+      try {
+        const r = await fetch('/api/capabilities', { cache: 'no-store', credentials: 'same-origin' });
+        if (!r.ok) return false;
+        const data = await r.json().catch(() => ({}));
+        return !!(data && data.websocket);
+      } catch (e) {
+        return false;
+      }
+    })();
+    return _wsProbePromise;
+  }
+
   function isPtyConnected() {
     // New API: ctx/transport
     try {
@@ -103,9 +125,21 @@
 
   async function openPtyAndRun(cmd) {
     // Open full Interactive Shell (PTY) and execute the command inside PTY.
+    // Terminal is lazy-loaded on first use; wait for it to be ready to avoid
+    // timing races on slow devices (where the PTY WS may come up after our timeout).
+    try {
+      const lazy = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureTerminalReady === 'function')
+        ? XKeen.lazy.ensureTerminalReady
+        : null;
+      if (lazy) {
+        await Promise.resolve(lazy());
+      }
+    } catch (e0) {}
+
     try {
       if (XKeen.terminal && XKeen.terminal.api && typeof XKeen.terminal.api.open === 'function') {
-        XKeen.terminal.api.open('pty');
+        // Prefer object-form to be compatible with lazy stub API.
+        await Promise.resolve(XKeen.terminal.api.open({ mode: 'pty', cmd: '' }));
       } else if (hasTerminalApi()) {
         XKeen.terminal.open(null, { cmd: '', mode: 'pty' });
       } else if (typeof window.openTerminal === 'function') {
@@ -116,15 +150,21 @@
     // Safety: ensure the window is visible even if it opened with a stale/buggy geometry.
     clampTerminalViewportSoon();
 
-    const ok = await waitForPtyConnected();
+    const ok = await waitForPtyConnected(12000);
     if (!ok) {
       toast('PTY не подключён (WebSocket недоступен или не успел подключиться)', 'info');
       return false;
     }
 
     try {
-      // Use \r to match Enter for PTY.
-      sendPtyRaw(String(cmd || '') + '\r');
+      const api = (window.XKeen && XKeen.terminal && XKeen.terminal.api) ? XKeen.terminal.api : null;
+      if (api && typeof api.send === 'function') {
+        // Use raw to avoid routing and match Enter for PTY.
+        await Promise.resolve(api.send(String(cmd || '') + '\r', { raw: true, prefer: 'pty', allowWhenDisconnected: false, source: 'commands_list' }));
+      } else {
+        // Legacy fallback.
+        sendPtyRaw(String(cmd || '') + '\r');
+      }
       focusTerminal();
       clampTerminalViewportSoon();
       return true;
@@ -147,10 +187,14 @@
         const label = el.getAttribute('data-label') || ('xkeen ' + flag);
         if (!flag) return;
 
-        if (hasWs()) {
-          await openPtyAndRun(label);
-          return;
-        }
+        // Prefer PTY on WS-capable routers.
+        try {
+          const wsOk = await detectWsCapability();
+          if (wsOk) {
+            await openPtyAndRun(label);
+            return;
+          }
+        } catch (e0) {}
 
         // No WS => keep old: open terminal with suggested command (does not auto-execute).
         if (hasTerminalApi()) {

@@ -1,128 +1,52 @@
 #######################################################################################################
 # Описание:
-# Веб-интерфейс доступен по адресу http://192.168.1.1:9090/ui (192.168.1.1 = IP роутера).
+# Веб-интерфейс доступен по адресу http://192.168.1.1:9090/ui (192.168.1.1 = IP роутера). 
 # После добавления сервера и запуска mihomo необходимо зайти в веб-интерфейс и выбрать нужное подключение для селекторов.
 # Группа "Заблок. сервисы" содержит список доменов большинства заблокированных ресурсов.
+# Остальные группы YouTube/Discord и тд имеют приоритет над группой "Заблок. сервисы". 
 #######################################################################################################
 # Для работы Discord требуется проксировать порты XKeen: 80,443,2000:2300,8443,19200:19400,50000:50030
 # Для работы Whatsapp/Telegram требуется проксировать порты Xkeen: 80,443,596:599,1400,3478,5222
 #######################################################################################################
 
-port: 7890
-socks-port: 7891
-allow-lan: true
-mode: rule
 log-level: silent
-ipv6: true
+allow-lan: true
+redir-port: 5000
+tproxy-port: 5001
+find-process-mode: off
 unified-delay: true
-tcp-concurrent: true
-global-client-fingerprint: chrome
-redir-port: 7892
-tproxy-port: 7893
-
-# Dashboard (Веб-интерфейс управления)
-external-controller: "0.0.0.0:9090"
-secret: "admin"
-external-ui: ui
-external-ui-url: "https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip"
-profile:
-  store-selected: true
+external-controller: 0.0.0.0:9090
+external-ui: zashboard
+external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
+profile: { store-selected: true }
 
 sniffer:
   enable: true
-  parse-pure-ip: true
-  force-dns-mapping: true
   sniff:
     HTTP:
     TLS:
-    QUIC:
 
 anchors:
-  a1: &domain       { type: http, format: mrs,  behavior: domain,    interval: 86400 }
-  a2: &ipcidr       { type: http, format: mrs,  behavior: ipcidr,    interval: 86400 }
-  a3: &classical    { type: http, format: text, behavior: classical, interval: 86400 }
-  a4: &inline       { type: inline,            behavior: classical }
-  a5: &ipcidr-text  { type: http, format: text, behavior: ipcidr,    interval: 86400 }
+  a1: &domain { type: http, format: mrs, behavior: domain, interval: 86400 }
+  a2: &ipcidr { type: http, format: mrs, behavior: ipcidr, interval: 86400 }
+  a3: &classical { type: http, format: text, behavior: classical, interval: 86400 }
+  a4: &inline { type: inline, behavior: classical }
 
 #############################################################################################
-# Пример VLESS подключения БЕЗ использования подписки #
+# Пример VLESS подключения БЕЗ использования подписки (РАСКОММЕНТИРОВАТЬ ДЛЯ ИСПОЛЬЗОВАНИЯ) #
 #############################################################################################
+#proxies:
 
 
 
 ######################################################################################
-# Подписки
+# Пример подключения С использованием подписки (РАСКОММЕНТИРОВАТЬ ДЛЯ ИСПОЛЬЗОВАНИЯ) #
 ######################################################################################
 proxy-providers:
   proxy-sub:
     type: http
     url: ""
-    path: ./proxy_providers/my-vless-sub.yaml
-    interval: 3600
-    health-check:
-      enable: true
-      url: "http://www.gstatic.com/generate_204"
-      interval: 300
-      timeout: 8000
-      lazy: true
-      expected-status: 204
-    override:
-      tfo: true
-      mptcp: true
-      udp: true
-
-  proxy-sub-2:
-    type: http
-    url: ""
-    path: ./proxy_providers/my-vless-sub-2.yaml
-    interval: 3600
-    health-check:
-      enable: true
-      url: "http://www.gstatic.com/generate_204"
-      interval: 300
-      timeout: 8000
-      lazy: true
-      expected-status: 204
-    override:
-      tfo: true
-      mptcp: true
-      udp: true
-  proxy-sub-3:
-    type: http
-    url: ""
-    path: ./proxy_providers/my-vless-sub-3.yaml
-    interval: 3600
-    health-check:
-      enable: true
-      url: "http://www.gstatic.com/generate_204"
-      interval: 300
-      timeout: 8000
-      lazy: true
-      expected-status: 204
-    override:
-      tfo: true
-      mptcp: true
-      udp: true
-  proxy-sub-4:
-    type: http
-    url: ""
-    path: ./proxy_providers/my-vless-sub-4.yaml
-    interval: 3600
-    health-check:
-      enable: true
-      url: "http://www.gstatic.com/generate_204"
-      interval: 300
-      timeout: 8000
-      lazy: true
-      expected-status: 204
-    override:
-      tfo: true
-      mptcp: true
-      udp: true
-  proxy-sub-5:
-    type: http
-    url: ""
-    path: ./proxy_providers/my-vless-sub-5.yaml
+    path: ./proxy_providers/proxy-sub.yaml
     interval: 3600
     health-check:
       enable: true
@@ -140,9 +64,7 @@ proxy-groups:
   - name: Заблок. сервисы
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Reject.png
-    use:
-      - proxy-sub
-      - proxy-sub-2
+    include-all: true
 
   - name: YouTube
     type: select
@@ -153,190 +75,127 @@ proxy-groups:
   - name: Discord
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Discord.png
+    include-all: true
     proxies: [Заблок. сервисы, DIRECT]
 
   - name: Twitch
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Twitch.png
+    include-all: true
     proxies: [DIRECT, Заблок. сервисы]
 
   - name: Reddit
     type: select
     icon: https://www.redditstatic.com/shreddit/assets/favicon/192x192.png
+    include-all: true
     proxies: [DIRECT, Заблок. сервисы]
 
   - name: Meta
     type: select
     icon: https://github.com/zxc-rv/assets/raw/main/group-icons/meta.png
+    include-all: true
     proxies: [Заблок. сервисы, DIRECT]
 
   - name: Spotify
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Spotify.png
+    include-all: true
     exclude-filter: 🇷🇺
     proxies: [Заблок. сервисы, DIRECT]
 
   - name: Telegram
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Telegram.png
-    proxies: [DIRECT, Заблок. сервисы]
+    include-all: true
+    proxies: [Заблок. сервисы, DIRECT]
 
   - name: Steam
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Steam.png
+    include-all: true
     proxies: [DIRECT, Заблок. сервисы]
 
-  - name: Cloudflare
+  - name: CDN
     type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Cloudflare.png
-    proxies: [PASS, Заблок. сервисы]
-
-  - name: Amazon
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Amazon.png
-    proxies: [PASS, Заблок. сервисы]
-
+    icon: https://www.svgrepo.com/show/396567/globe-with-meridians.svg
+    include-all: true
+    proxies: [Заблок. сервисы, PASS]
+  
   - name: Google
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png
+    include-all: true
     proxies: [PASS, Заблок. сервисы]
 
   - name: GitHub
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/GitHub.png
+    include-all: true
     proxies: [PASS, Заблок. сервисы]
 
   - name: AI
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Bot.png
+    include-all: true
     exclude-filter: 🇷🇺
     proxies: [Заблок. сервисы]
 
   - name: Twitter
     type: select
     icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Twitter.png
+    include-all: true
     proxies: [Заблок. сервисы, DIRECT]
 
-  - name: Colocrossing
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: Contabo
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: DigitalOcean
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: Gcore
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: Hetzner
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: Linode
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: Mega
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: Oracle
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: OVH
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: Scaleway
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: Vultr
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: Akamai
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: CDN77
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: Fastly
-    type: select
-    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/Server.png
-    proxies: [DIRECT, Заблок. сервисы]
-
-  - name: QUIC
-    type: select
-    icon: https://github.com/zxc-rv/assets/raw/main/group-icons/quic.png
-    proxies: [REJECT, PASS]
-
 rule-providers:
-  amazon@domain:       { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/amazon.mrs }
-  amazon@ipcidr:       { <<: *ipcidr,      url: https://github.com/PentiumB/CDN-RuleSet/releases/latest/download/amazon.mrs }
-
-  colocrossing@ipcidr: { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/colocrossing_ips.list }
-  contabo@ipcidr:      { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/contabo_ips.list }
-  digitalocean@ipcidr: { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/digitalocean_ips.list }
-  gcore@ipcidr:        { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/gcore_ips.list }
-  hetzner@ipcidr:      { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/hetzner_ips.list }
-  linode@ipcidr:       { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/linode_ips.list }
-  mega@ipcidr:         { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/mega_ips.list }
-  oracle@ipcidr:       { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/oracle_ips.list }
-  ovh@ipcidr:          { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/ovh_ips.list }
-  scaleway@ipcidr:     { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/scaleway_ips.list }
-  vultr@ipcidr:        { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/vultr_ips.list }
-  akamai@ipcidr:       { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/akamai_ips.list }
-  cdn77@ipcidr:        { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/cdn77_ips.list }
-  fastly@ipcidr:       { <<: *ipcidr-text, url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/fastly_ips.list }
-
-  refilter@domain:     { <<: *domain,      url: https://github.com/legiz-ru/mihomo-rule-sets/raw/main/re-filter/domain-rule.mrs }
-  domains@classical:   { <<: *classical,   url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/domains.list }
-  other@classical:     { <<: *classical,   url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/other.list }
-  politic@classical:   { <<: *classical,   url: https://github.com/Anton111111/rule-lists/releases/download/lists-20251207-002638-835e3fe/politic.list }
-
-  category-ai@domain:  { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/category-ai-!cn.mrs }
-  cloudflare@domain:   { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/cloudflare.mrs }
-  cloudflare@ipcidr:   { <<: *ipcidr,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geoip/cloudflare.mrs }
-  discord@classical:   { <<: *classical,   url: https://github.com/zxc-rv/assets/raw/main/rules/discord.list }
-  google@domain:       { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/google.mrs }
-  github@domain:       { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/github.mrs }
-  meta@domain:         { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/facebook.mrs }
-  meta@ipcidr:         { <<: *ipcidr,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geoip/facebook.mrs }
-  reddit@domain:       { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/reddit.mrs }
-  spotify@domain:      { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/spotify.mrs }
-  steam@domain:        { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/steam.mrs }
-  telegram@domain:     { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/telegram.mrs }
-  telegram@ipcidr:     { <<: *ipcidr,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geoip/telegram.mrs }
-  twitch@domain:       { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/twitch.mrs }
-  twitter@domain:      { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/twitter.mrs }
-  youtube@domain:      { <<: *domain,      url: https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/youtube.mrs }
+  adlist@domain: { <<: *domain, url: https://github.com/zxc-rv/ad-filter/releases/latest/download/adlist.mrs }
+  akamai@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/akamai.mrs }
+  akamai@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/akamai@ipcidr.mrs }
+  amazon@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/amazon.mrs }
+  amazon@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/amazon@ipcidr.mrs }
+  category-ai@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ai-!cn.mrs }
+  cdn77@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/cdn77@ipcidr.mrs }
+  category-ru@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ru.mrs }
+  cloudflare@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cloudflare.mrs }
+  cloudflare@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/cloudflare@ipcidr.mrs }
+  digitalocean@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/digitalocean.mrs }
+  digitalocean@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/digitalocean@ipcidr.mrs }
+  discord@classical: { <<: *classical, url: https://github.com/zxc-rv/assets/raw/main/rules/discord.list }
+  fastly@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/fastly.mrs }
+  fastly@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/fastly@ipcidr.mrs }
+  gcore@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/gcore@ipcidr.mrs }
+  github@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs }
+  google@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs }
+  google@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/google@ipcidr.mrs }
+  hetzner@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/hetzner.mrs }
+  hetzner@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/hetzner@ipcidr.mrs }
+  meta@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/meta.mrs }
+  meta@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/meta@ipcidr.mrs }
+  oracle@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/oracle.mrs }
+  oracle@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/oracle@ipcidr.mrs }
+  ovh@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/ovh@ipcidr.mrs }
+  reddit@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/reddit.mrs }
+  refilter@domain: { <<: *domain, url: https://github.com/legiz-ru/mihomo-rule-sets/raw/main/re-filter/domain-rule.mrs }
+  scaleway@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/scaleway@ipcidr.mrs }
+  spotify@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/spotify.mrs }
+  steam@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/steam.mrs }
+  telegram@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs }
+  telegram@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/telegram@ipcidr.mrs }
+  twitch@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/twitch.mrs }
+  twitter@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/twitter.mrs }
+  vultr@ipcidr: { <<: *ipcidr, url: https://github.com/zxc-rv/zkeenip-rulesets/releases/latest/download/vultr@ipcidr.mrs }
+  youtube@domain: { <<: *domain, url: https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs }
+  user@classical: # СВОИ ПРАВИЛА
+    type: inline
+    behavior: classical
+    payload: # Типы правил и примеры: https://wiki.metacubex.one/ru/config/rules/
+      - DOMAIN-SUFFIX,2ip.io
 
 rules:
-  - AND,((DST-PORT,443),(NETWORK,UDP)),QUIC
-  - OR,((DOMAIN-SUFFIX,gql.twitch.tv),(DOMAIN-SUFFIX,usher.ttvnw.net)),Заблок. сервисы # Разблокировка высокого качества на Twitch.tv
-
+  - RULE-SET,adlist@domain,REJECT # Блокировка рекламы
+  - AND,((DST-PORT,443),(NETWORK,UDP)),REJECT # Блокировка QUIC
+  # @pkg Twitch begin
+  - OR,((DOMAIN-SUFFIX,gql.twitch.tv),(DOMAIN-SUFFIX,usher.ttvnw.net)),Заблок. сервисы # Разблокировка высокого качества на Twitch.tv (может вызвать рекламу)
+  # @pkg Twitch end
   - RULE-SET,category-ai@domain,AI
   - RULE-SET,steam@domain,Steam
   - RULE-SET,spotify@domain,Spotify
@@ -345,30 +204,22 @@ rules:
   - RULE-SET,twitch@domain,Twitch
   - RULE-SET,twitter@domain,Twitter
   - RULE-SET,discord@classical,Discord
-  - RULE-SET,colocrossing@ipcidr,Colocrossing
-  - RULE-SET,contabo@ipcidr,Contabo
-  - RULE-SET,digitalocean@ipcidr,DigitalOcean
-  - RULE-SET,gcore@ipcidr,Gcore
-  - RULE-SET,hetzner@ipcidr,Hetzner
-  - RULE-SET,linode@ipcidr,Linode
-  - RULE-SET,mega@ipcidr,Mega
-  - RULE-SET,oracle@ipcidr,Oracle
-  - RULE-SET,ovh@ipcidr,OVH
-  - RULE-SET,scaleway@ipcidr,Scaleway
-  - RULE-SET,vultr@ipcidr,Vultr
-  - RULE-SET,akamai@ipcidr,Akamai
-  - RULE-SET,cdn77@ipcidr,CDN77
-  - RULE-SET,fastly@ipcidr,Fastly
   - OR,((RULE-SET,meta@domain),(RULE-SET,meta@ipcidr,no-resolve)),Meta
   - OR,((RULE-SET,telegram@domain),(RULE-SET,telegram@ipcidr,no-resolve)),Telegram
-  - OR,((RULE-SET,cloudflare@domain),(RULE-SET,cloudflare@ipcidr)),Cloudflare
-  - OR,((RULE-SET,amazon@domain),(RULE-SET,amazon@ipcidr)),Amazon
-
-  - RULE-SET,refilter@domain,Заблок. сервисы
-  - RULE-SET,domains@classical,Заблок. сервисы
-  - RULE-SET,other@classical,Заблок. сервисы
-  - RULE-SET,politic@classical,Заблок. сервисы
-
-  - RULE-SET,google@domain,Google
+  - OR,((RULE-SET,refilter@domain),(RULE-SET,user@classical)),Заблок. сервисы
   - RULE-SET,github@domain,GitHub
+  - OR,((RULE-SET,google@domain),(RULE-SET,google@ipcidr)),Google
+  - RULE-SET,category-ru@domain,DIRECT
+  - OR,((RULE-SET,amazon@domain),(RULE-SET,amazon@ipcidr)),CDN
+  - OR,((RULE-SET,akamai@domain),(RULE-SET,akamai@ipcidr)),CDN
+  - OR,((RULE-SET,cloudflare@domain),(RULE-SET,cloudflare@ipcidr)),CDN
+  - OR,((RULE-SET,digitalocean@domain),(RULE-SET,digitalocean@ipcidr)),CDN
+  - OR,((RULE-SET,fastly@domain),(RULE-SET,fastly@ipcidr)),CDN
+  - OR,((RULE-SET,oracle@domain),(RULE-SET,oracle@ipcidr)),CDN
+  - OR,((RULE-SET,hetzner@domain),(RULE-SET,hetzner@ipcidr)),CDN
+  - RULE-SET,scaleway@ipcidr,CDN
+  - RULE-SET,ovh@ipcidr,CDN
+  - RULE-SET,vultr@ipcidr,CDN
+  - RULE-SET,gcore@ipcidr,CDN
+  - RULE-SET,cdn77@ipcidr,CDN
   - MATCH,DIRECT

@@ -78,18 +78,7 @@
   {% endif %}
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
-  <script src="{{ url_for('static', filename='xterm/xterm.js') }}"></script>
-  <script src="{{ url_for('static', filename='xterm/xterm-addon-fit.js') }}"></script>
-  <!-- XTerm.js official addons (локально) -->
-  <script src="{{ url_for('static', filename='xterm/xterm-addon-search.js') }}"></script>
-  <script src="{{ url_for('static', filename='xterm/xterm-addon-web-links.js') }}"></script>
-  <!-- Extra XTerm.js addons (локально) -->
-  <script src="{{ url_for('static', filename='xterm/xterm-addon-webgl.js') }}"></script>
-  <script src="{{ url_for('static', filename='xterm/xterm-addon-unicode11.js') }}"></script>
-  <script src="{{ url_for('static', filename='xterm/xterm-addon-serialize.js') }}"></script>
-  <script src="{{ url_for('static', filename='xterm/xterm-addon-clipboard.js') }}"></script>
-  <!-- Ligatures for XTerm.js (font ligatures + safe fallback ligatures) -->
-  <script src="{{ url_for('static', filename='xterm/xterm-addon-ligatures.js') }}"></script>
+    <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
 <body>
   <div id="global-xkeen-spinner">
@@ -551,7 +540,7 @@
       </div>
 
 <div class="routing-col routing-col-center">
-        <section class="card routing-rules-card">
+        <section class="card routing-rules-card xk-only-routing">
           <div class="commands-header" id="routing-rules-header">
             <h2>Правила маршрутизации</h2>
             <span id="routing-rules-arrow">►</span>
@@ -606,11 +595,11 @@
           <div class="commands-header" id="routing-header">
             <h2>
               Роутинг Xray
-              <span class="xray-profile-badge" data-profile="{{ xray_profile|e }}">
-                {% if xray_profile == 'hys2' %}Hysteria2{% else %}Обычный{% endif %}
-              </span>
+              {# Show Xray profile badge only for Hysteria2 configs. #}
+              {% if xray_profile == 'hys2' %}
+                <span class="xray-profile-badge" data-profile="{{ xray_profile|e }}">Хистерия2</span>
+              {% endif %}
             </h2>
-            <span class="xk-routing-active-inline">Активный фрагмент: <code id="routing-file-code">{{ routing_file }}</code></span>
             <span id="routing-arrow">▼</span>
           </div>
 
@@ -619,12 +608,57 @@
             <div class="xk-routing-topbar">
               <div class="xk-routing-fileblock">
                 <div class="xk-routing-fileline">
-                  <select id="routing-fragment-select" class="xray-log-select" data-current="{{ routing_name|e }}"></select>
-                  <button id="routing-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" data-tooltip="Обновить список файлов роутинга из /opt/etc/xray/configs/">↻</button>
-                  <span id="routing-comments-status" class="xk-comments-badge xk-comments-off" data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
+                  {# Server-rendered fallback option so the selector is never empty if /api/routing/fragments fails. #}
+                  <select id="routing-fragment-select" class="xray-log-select" data-current="{{ routing_name|e }}">
+                    <option value="{{ routing_name|e }}">{{ routing_name|e }}</option>
+                  </select>
+
+                  {# Editor semantic mode badge (Routing vs Fragment). Updated dynamically by routing.js. #}
+                  <span
+                    id="routing-editor-mode-badge"
+                    class="xray-profile-badge"
+                    data-profile="routing"
+                    data-tooltip="Режим редактора: Routing mode"
+                  >Routing mode</span>
                 </div>
               </div>
-              <div class="xk-routing-toolbarhost" id="routing-toolbar-host"></div>
+
+              {# Right side: service controls live near the editor toolbar (keeps fileline clean). #}
+              <div class="xk-routing-toolbararea">
+                <details class="dt-log-menu xk-routing-menu">
+                  <summary class="terminal-tool-btn xk-routing-menu-trigger" data-tooltip="Меню" aria-label="Меню">⋯</summary>
+
+                  <div class="dt-log-menu-panel xk-routing-menu-panel">
+                    <div class="terminal-menu-section" aria-label="Файл">
+                      <div class="terminal-menu-title">Файл</div>
+                      <code id="routing-file-code">{{ routing_file }}</code>
+
+                      <button id="routing-fragment-refresh-btn"
+                              type="button"
+                              class="terminal-tool-btn"
+                              data-tooltip="Обновить список файлов роутинга из /opt/etc/xray/configs/">↻ Обновить список</button>
+
+                      <label class="dt-switch xk-routing-menu-switch"
+                             data-tooltip="Показывать все JSON-файлы из /opt/etc/xray/configs (кроме 01_log.json).">
+                        <input type="checkbox" id="routing-fragment-all-toggle" aria-label="Показывать все файлы">
+                        <span class="dt-switch-slider" aria-hidden="true"></span>
+                        <span class="dt-switch-label">Все файлы</span>
+                      </label>
+                    </div>
+
+                    <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+                    <div class="terminal-menu-section" aria-label="JSONC">
+                      <div class="terminal-menu-title">JSONC</div>
+                      <span id="routing-comments-status"
+                            class="xk-comments-badge xk-comments-off"
+                            data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
+                    </div>
+                  </div>
+                </details>
+
+                <div class="xk-routing-toolbarhost" id="routing-toolbar-host"></div>
+              </div>
             </div>
 
             <textarea id="routing-editor" spellcheck="false"></textarea>
@@ -634,19 +668,19 @@
             <div class="actions">
   <button id="routing-save-btn" data-tooltip="Сохранить текущий роутинг (routing.json).">💾 Save routing</button>
   <button id="routing-format-btn" data-tooltip="Отформатировать JSON (красивые отступы).">✨ Format JSON</button>
-  <button id="routing-backup-btn" data-tooltip="Сделать бэкап текущего routing.json.">📦 Backup</button>
-  <button id="routing-restore-auto-btn" data-tooltip="Восстановить routing из автобэкапа.">⏪ Restore autobackup</button>
-  <button id="routing-export-local-btn" data-tooltip="Скачать routing.json на компьютер.">⬇️ Экспорт</button>
-  <button id="routing-import-local-btn" data-tooltip="Импортировать routing.json с компьютера.">⬆️ Импорт</button>
-  <button id="routing-import-template-btn" data-tooltip="Импортировать готовый шаблон роутинга (заменит текст в редакторе, без автосохранения).">🧩 Шаблоны</button>
+  <button id="routing-backup-btn" data-tooltip="Backup для файла: {{ routing_name|e }}">📦 Backup</button>
+  <button id="routing-restore-auto-btn" data-tooltip="Restore autobackup для файла: {{ routing_name|e }}">⏪ Restore autobackup</button>
+  <button id="routing-export-local-btn" data-tooltip="Скачать текущий файл из редактора на компьютер.">⬇️ Экспорт</button>
+  <button id="routing-import-local-btn" data-tooltip="Загрузить файл в редактор (без автосохранения).">⬆️ Импорт</button>
+  <button id="routing-import-template-btn" class="xk-only-routing" data-tooltip="Импортировать готовый шаблон роутинга (заменит текст в редакторе, без автосохранения).">🧩 Шаблоны</button>
 </div>
 
 <input type="file"
        id="local-config-file-input"
-       accept="application/json"
+       accept=".json,.jsonc,application/json,text/plain"
        style="display:none">
 
-            <div class="actions">
+            <div class="actions xk-only-routing">
               <button id="github-export-btn" data-tooltip="Выгрузить текущий routing.json в GitHub‑каталог конфигов.">⬆️ Выгрузить в репозитарий</button>
               <button id="github-open-catalog-btn" data-tooltip="Открыть каталог конфигураций (GitHub).">📂 Каталог конфигураций</button>
             </div>
@@ -2008,6 +2042,9 @@
 
   <script>
 	    window.XKEEN_GITHUB_REPO_URL = "{{ github_repo_url|e }}";
+	    window.XKEEN_STATIC_BASE = "{{ url_for('static', filename='') }}";
+		    // Cache-buster for lazy-loaded scripts (Commit J)
+		    window.XKEEN_STATIC_VER = "20260225b";
 	    // Files shown in UI (used by last-load badge and other helpers)
 	    window.XKEEN_FILES = {
 	      routing: "{{ routing_file|e }}",
@@ -2015,10 +2052,15 @@
 	      outbounds: "{{ outbounds_file|e }}",
 	      mihomo: "{{ mihomo_config_file|e }}",
 	    };
+		    // File Manager initial right panel path
+		    window.XKEEN_FM_RIGHT_DEFAULT = "{{ fm_right_default|e }}";
   </script>
   <!-- Modularization scaffold (no behavior changes yet) -->
   <script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
   <script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/core/xk_dom.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/core/xk_http.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/core/xk_storage.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/confirm_modal.js') }}"></script>
@@ -2043,7 +2085,7 @@
   <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js', v='20260224a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/dat_contents_modal.js', v='20260213b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/backups.js', v='20260224d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260224d') }}"></script>
+	  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260225a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_jsonc_preserve.js', v='20260218d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260218d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260224d') }}"></script>
@@ -2059,53 +2101,12 @@
   <script src="{{ url_for('static', filename='js/features/outbounds.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
     <script src="{{ url_for('static', filename='js/features/xkeen_texts.js') }}"></script>
-    <!-- File Manager (split into small modules) -->
-    <script src="{{ url_for('static', filename='js/features/file_manager/prefs.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/features/file_manager/chrome.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/features/file_manager/editor.js', v='20260223d') }}"></script>
-    <script src="{{ url_for('static', filename='js/features/file_manager.js', v='20260119d') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/_core.js') }}"></script>
-  <!-- Terminal refactor (Wave 3): Stage A (events/ui/api) + Stage B (transport adapters) -->
-  <script src="{{ url_for('static', filename='js/terminal/core/events.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/logger.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/config.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/ui.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/api.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/transport/pty_transport.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/transport/lite_transport.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/transport/index.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/state.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/registry.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/commands/registry.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/commands/router.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/commands/builtins/xkeen_restart.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/commands/builtins/sysmon.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/session_controller.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/context.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/public_api.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/output_controller.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/input_controller.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/capabilities.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/pty.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/core/xterm_manager.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/lite_runner.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/search.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/history.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/quick_commands.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/chrome.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/modules/overlay_controller.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/modules/status_controller.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/modules/terminal_controller.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/modules/ui_controller.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/modules/buffer_actions.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/modules/ssh_profiles.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/modules/reconnect_controller.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/modules/output_prefs.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/modules/confirm_prompt.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/xray_tail.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/terminal/terminal.js') }}"></script>
+      <!-- File Manager scripts are lazy-loaded when Files tab is opened (Commit J) -->
+
+    <!-- Terminal scripts are lazy-loaded on first open (Commit J) -->
+
   <script src="{{ url_for('static', filename='js/features/donate.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/pages/panel.init.js') }}"></script>
+	  <script src="{{ url_for('static', filename='js/pages/panel.init.js', v='20260225a') }}"></script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 
     <!-- Модальный JSON-редактор для 03_inbounds.json / 04_outbounds.json -->
@@ -2116,7 +2117,13 @@
           <button type="button" class="modal-close" id="json-editor-close-btn">×</button>
         </div>
         <div class="modal-body">
-          <p id="json-editor-file-label"></p>
+          {#
+            NOTE:
+            The modal title already contains the active filename (e.g. "Редактор 03_inbounds.json").
+            Showing an extra "Файл: …" row wastes vertical space in small editors.
+            Keep the element for backward-compat (JS can still set text), but hide it by default.
+          #}
+          <p id="json-editor-file-label" class="xk-editor-file-label hidden"></p>
 
           <div class="xk-editor-toolbar" id="json-editor-toolbar">
             <!-- Engine toggle (CodeMirror / Monaco) -->

@@ -1,5 +1,5 @@
 (() => {
-  // Local import/export module (upload/download configs)
+  // Local import/export module (routing editor file-scoped)
   // Public API: XKeen.localIO.init()
 
   window.XKeen = window.XKeen || {};
@@ -11,76 +11,107 @@
     return document.getElementById(id);
   }
 
-
   function setStatus(msg, isError) {
     const statusEl = el('routing-status');
     if (statusEl) statusEl.textContent = String(msg ?? '');
-    if (msg) toast(msg, !!isError);
+    if (msg) toast(String(msg), !!isError);
   }
 
-  function buildDefaultFilename() {
-    const ts = new Date();
-    return (
-      'xkeen-config-' +
-      ts.getFullYear().toString() +
-      String(ts.getMonth() + 1).padStart(2, '0') +
-      String(ts.getDate()).padStart(2, '0') +
-      '-' +
-      String(ts.getHours()).padStart(2, '0') +
-      String(ts.getMinutes()).padStart(2, '0') +
-      String(ts.getSeconds()).padStart(2, '0') +
-      '.json'
-    );
+  function _basename(name) {
+    const s = String(name ?? '');
+    if (!s) return '';
+    // support both unix and windows separators
+    return s.split('/').pop().split('\\').pop();
   }
 
-  async function refreshAfterImport() {
-    // Keep compatibility with current monolithic main.js.
-    // If those loaders exist (panel page), call them.
-    const fns = [
-      'loadRouting',
-      'loadInboundsMode',
-      'loadPortProxying',
-      'loadPortExclude',
-      'loadIpExclude',
-    ];
+  function sanitizeFilename(name) {
+    let s = _basename(name) || '';
+    if (!s) return '';
+    // Windows-forbidden chars + control chars
+    s = s.replace(/[<>:\"/\\|?*\x00-\x1F]/g, '_');
+    // Trim trailing dots/spaces (Windows)
+    s = s.replace(/[\.\s]+$/g, '');
+    // avoid empty
+    if (!s) s = 'routing.json';
+    return s;
+  }
 
-    for (const fn of fns) {
-      try {
-        const f = window[fn];
-        if (typeof f === 'function') {
-          // eslint-disable-next-line no-await-in-loop
-          await f();
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    // Also emit an event for future modular features.
+  function getSelectedRoutingFileName() {
     try {
-      document.dispatchEvent(new CustomEvent('xkeen-localio-imported'));
+      const sel = el('routing-fragment-select');
+      if (sel) {
+        const v = String(sel.value || '').trim();
+        if (v) return v;
+        const cur = String(sel.getAttribute('data-current') || '').trim();
+        if (cur) return cur;
+      }
     } catch (e) {}
+    return 'routing.json';
+  }
+
+  function buildExportFilename() {
+    const raw = getSelectedRoutingFileName();
+    let fname = sanitizeFilename(raw);
+    if (!/\.[A-Za-z0-9]{1,6}$/.test(fname)) fname += '.json';
+    return fname;
+  }
+
+  function getEditorFacade() {
+    try {
+      if (window.XKeen && window.XKeen.state && window.XKeen.state.routingEditor) {
+        return window.XKeen.state.routingEditor;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function getEditorText() {
+    const ed = getEditorFacade();
+    try {
+      if (ed && typeof ed.getValue === 'function') return String(ed.getValue() ?? '');
+    } catch (e) {}
+
+    // Fallbacks
+    try {
+      const ta = el('routing-editor');
+      if (ta) return String(ta.value ?? '');
+    } catch (e2) {}
+
+    return '';
+  }
+
+  function setEditorText(text) {
+    const ed = getEditorFacade();
+    const v = String(text ?? '');
+    try {
+      if (ed && typeof ed.setValue === 'function') {
+        ed.setValue(v);
+        if (typeof ed.focus === 'function') ed.focus();
+        if (typeof ed.scrollTo === 'function') ed.scrollTo(0, 0);
+        return true;
+      }
+    } catch (e) {}
+
+    try {
+      const ta = el('routing-editor');
+      if (ta) {
+        ta.value = v;
+        ta.focus();
+        return true;
+      }
+    } catch (e2) {}
+
+    return false;
   }
 
   async function exportToFile() {
-    const statusEl = el('routing-status');
-    if (statusEl) statusEl.textContent = 'Экспорт локальной конфигурации в файл...';
+    const fname = buildExportFilename();
+    const text = getEditorText();
 
     try {
-      const res = await fetch('/api/local/export-configs', { method: 'GET' });
-
-      if (!res.ok) {
-        const errText = 'Ошибка экспорта: ' + (res.statusText || ('HTTP ' + res.status));
-        if (statusEl) statusEl.textContent = errText;
-        toast(errText, true);
-        return;
-      }
-
-      const blob = await res.blob();
+      const blob = new Blob([text], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const fname = buildDefaultFilename();
-
       a.href = url;
       a.download = fname;
       document.body.appendChild(a);
@@ -88,61 +119,55 @@
       a.remove();
       URL.revokeObjectURL(url);
 
-      const okMsg = 'Конфигурация выгружена в файл ' + fname;
-      if (statusEl) statusEl.textContent = okMsg;
-      toast(okMsg, false);
+      setStatus('Файл выгружен: ' + fname, false);
     } catch (e) {
       console.error(e);
-      const errMsg = 'Ошибка экспорта (см. консоль браузера).';
-      if (statusEl) statusEl.textContent = errMsg;
-      toast(errMsg, true);
+      setStatus('Ошибка экспорта (см. консоль браузера).', true);
     }
   }
 
   async function importFromFile(file) {
-    const statusEl = el('routing-status');
-    if (statusEl) statusEl.textContent = 'Загрузка конфигурации из файла...';
-
     if (!file) {
-      const msg = 'Файл не выбран.';
-      if (statusEl) statusEl.textContent = msg;
-      toast(msg, true);
+      setStatus('Файл не выбран.', true);
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
+    // Soft size limit (keep router UI responsive)
+    try {
+      const maxBytes = 2 * 1024 * 1024; // 2MB
+      if (file.size && file.size > maxBytes) {
+        setStatus('Файл слишком большой для импорта в редактор (' + file.size + ' байт).', true);
+        return;
+      }
+    } catch (e) {}
+
+    const reader = new FileReader();
+    reader.onerror = () => {
+      setStatus('Ошибка чтения файла (см. консоль браузера).', true);
+    };
+    reader.onload = () => {
+      try {
+        const content = String(reader.result ?? '');
+        const ok = setEditorText(content);
+        const fname = sanitizeFilename(file.name || 'file.json');
+        if (ok) {
+          // Re-validate to update routing/fragment mode UI and markers.
+          try { if (window.XKeen && XKeen.routing && typeof XKeen.routing.validate === 'function') XKeen.routing.validate(); } catch (e) {}
+          setStatus('Загружено в редактор: ' + fname + ' (не сохранено).', false);
+        } else {
+          setStatus('Не удалось вставить содержимое в редактор.', true);
+        }
+      } catch (e) {
+        console.error(e);
+        setStatus('Ошибка импорта (см. консоль браузера).', true);
+      }
+    };
 
     try {
-      const res = await fetch('/api/local/import-configs', {
-        method: 'POST',
-        body: formData,
-      });
-
-      let data = null;
-      try {
-        data = await res.json();
-      } catch (e) {
-        // Server might return non-JSON on error.
-      }
-
-      if (res.ok && data && data.ok) {
-        const msg = 'Конфигурация загружена из файла. Не забудьте перезапустить xkeen после проверки.';
-        if (statusEl) statusEl.textContent = msg;
-        toast(msg, false);
-        await refreshAfterImport();
-      } else {
-        const errMsg =
-          'Ошибка импорта: ' +
-          ((data && data.error) || res.statusText || ('HTTP ' + res.status) || 'неизвестная ошибка');
-        if (statusEl) statusEl.textContent = errMsg;
-        toast(errMsg, true);
-      }
+      reader.readAsText(file);
     } catch (e) {
       console.error(e);
-      const errMsg = 'Ошибка импорта (см. консоль браузера).';
-      if (statusEl) statusEl.textContent = errMsg;
-      toast(errMsg, true);
+      setStatus('Ошибка импорта (см. консоль браузера).', true);
     }
   }
 

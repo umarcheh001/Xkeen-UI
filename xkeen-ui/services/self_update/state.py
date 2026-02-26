@@ -19,6 +19,8 @@ import time
 import glob
 from typing import Any, Dict, List, Optional, Tuple
 
+from services.io import read_json
+
 
 def _is_dir_writable(path: str) -> bool:
     try:
@@ -89,17 +91,13 @@ def _default_status() -> Dict[str, Any]:
 def read_status(status_file: str) -> Dict[str, Any]:
     """Read status.json. Returns defaults if missing/invalid."""
     base = _default_status()
-    try:
-        with open(status_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            base.update({k: data.get(k) for k in base.keys()})
-            # Keep any extra keys (forward compatibility)
-            for k, v in data.items():
-                if k not in base:
-                    base[k] = v
-    except Exception:
-        pass
+    data = read_json(status_file, default=None)
+    if isinstance(data, dict):
+        base.update({k: data.get(k) for k in base.keys()})
+        # Keep any extra keys (forward compatibility)
+        for k, v in data.items():
+            if k not in base:
+                base[k] = v
     return base
 
 
@@ -137,15 +135,10 @@ def read_lock(lock_file: str) -> Dict[str, Any]:
         return out
 
     out["exists"] = True
-    try:
-        with open(lock_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            out["pid"] = data.get("pid")
-            out["created_ts"] = data.get("created_ts")
-    except Exception:
-        # Ignore parse errors; still report exists=true.
-        pass
+    data = read_json(lock_file, default=None)
+    if isinstance(data, dict):
+        out["pid"] = data.get("pid")
+        out["created_ts"] = data.get("created_ts")
 
     try:
         ct = float(out.get("created_ts") or 0.0)

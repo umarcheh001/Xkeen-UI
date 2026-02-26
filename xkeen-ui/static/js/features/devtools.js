@@ -5,26 +5,35 @@
   const XK = window.XKeen;
   XK.features = XK.features || {};
 
+  const CORE_STORAGE = (XK.core && XK.core.storage) ? XK.core.storage : null;
+
   function _wireCollapsibles() {
-  // Make selected DevTools blocks collapsible and remember state in localStorage.
-  const els = Array.from(document.querySelectorAll('details.dt-collapsible[id]'));
-  if (!els.length) return;
+    // Make selected DevTools blocks collapsible and remember state in localStorage.
+    const els = Array.from(document.querySelectorAll('details.dt-collapsible[id]'));
+    if (!els.length) return;
 
-  els.forEach((el) => {
-    const id = String(el.id || '').trim();
-    if (!id) return;
-    const key = `xk.devtools.collapse.${id}.open`;
-    try {
-      const saved = localStorage.getItem(key);
-      if (saved === '0') el.open = false;
-      if (saved === '1') el.open = true;
-    } catch (e) {}
+    const store = (CORE_STORAGE && typeof CORE_STORAGE.ns === 'function')
+      ? CORE_STORAGE.ns('xk.devtools.collapse.')
+      : null;
 
-    el.addEventListener('toggle', () => {
-      try { localStorage.setItem(key, el.open ? '1' : '0'); } catch (e) {}
+    els.forEach((el) => {
+      const id = String(el.id || '').trim();
+      if (!id) return;
+      const key = `${id}.open`;
+      try {
+        const saved = store ? store.get(key, null) : localStorage.getItem('xk.devtools.collapse.' + key);
+        if (saved === '0') el.open = false;
+        if (saved === '1') el.open = true;
+      } catch (e) {}
+
+      el.addEventListener('toggle', () => {
+        try {
+          if (store) store.set(key, el.open ? '1' : '0');
+          else localStorage.setItem('xk.devtools.collapse.' + key, el.open ? '1' : '0');
+        } catch (e) {}
+      });
     });
-  });
-}
+  }
 
   function setActiveTab(tabName) {
     try {

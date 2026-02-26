@@ -6,6 +6,9 @@
   XK.features = XK.features || {};
   const api = XK.features.devtoolsShared = XK.features.devtoolsShared || {};
 
+  const CORE_DOM = (XK.core && XK.core.dom) ? XK.core.dom : null;
+  const CORE_HTTP = (XK.core && XK.core.http) ? XK.core.http : null;
+
   function toast(msg, isError) {
     try {
       if (typeof window.showToast === 'function') return window.showToast(msg, !!isError);
@@ -15,6 +18,14 @@
   }
 
   async function getJSON(url) {
+    // Prefer shared core wrapper when available (keeps behavior: cache=no-store, throws on !ok).
+    try {
+      if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
+        return await CORE_HTTP.fetchJSON(url, { cache: 'no-store' });
+      }
+    } catch (e) {
+      // Fall back to legacy implementation below
+    }
     const res = await fetch(url, { cache: 'no-store' });
     let data = null;
     try { data = await res.json(); } catch (e) {}
@@ -26,6 +37,22 @@
   }
 
   async function postJSON(url, body) {
+    // Prefer shared core wrapper when available (keeps behavior: cache=no-store, throws on !ok).
+    try {
+      if (CORE_HTTP && typeof CORE_HTTP.postJSON === 'function') {
+        return await CORE_HTTP.postJSON(url, body || {}, { cache: 'no-store' });
+      }
+      if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
+        return await CORE_HTTP.fetchJSON(url, {
+          cache: 'no-store',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body || {}),
+        });
+      }
+    } catch (e) {
+      // Fall back to legacy implementation below
+    }
     const res = await fetch(url, {
       cache: 'no-store',
       method: 'POST',
@@ -42,7 +69,10 @@
   }
 
   function byId(id) {
-    try { return document.getElementById(id); } catch (e) { return null; }
+    try {
+      if (CORE_DOM && typeof CORE_DOM.byId === 'function') return CORE_DOM.byId(id);
+    } catch (e) {}
+    try { return document.getElementById(id); } catch (e2) { return null; }
   }
 
   function escapeHtml(s) {

@@ -50,8 +50,18 @@ def init_mihomo_paths(config_path: str) -> Tuple[str, str, str, str]:
                 dst = os.path.join(mihomo_templates_dir, name)
                 if os.path.isfile(src):
                     shutil.copy2(src, dst)
-    except Exception:
-        # Do not fail the app on template copy errors.
-        pass
+    except Exception as e:  # noqa: BLE001
+        # Do not fail the app on template copy errors, but leave a trace for support.
+        try:
+            from core.logging import core_log_once
+            core_log_once(
+                "warning",
+                "mihomo_templates_copy_failed",
+                "mihomo templates copy failed (non-fatal)",
+                error=str(e),
+                templates_dir=mihomo_templates_dir,
+            )
+        except Exception:
+            pass
 
     return mihomo_config_file, mihomo_root_dir, mihomo_templates_dir, mihomo_default_template

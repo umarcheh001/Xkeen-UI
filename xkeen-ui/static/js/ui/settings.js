@@ -15,6 +15,7 @@
 
   // Keep defaults in sync with services/ui_settings.py
   const DEFAULTS = {
+    schemaVersion: 1,
     editor: {
       engine: 'codemirror',
     },

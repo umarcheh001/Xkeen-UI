@@ -82,8 +82,19 @@ BACKUP_DIR = MIHOMO_ROOT / "backup"
 try:
     PROFILES_DIR.mkdir(parents=True, exist_ok=True)
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-except Exception:
-    pass
+except Exception as e:  # noqa: BLE001
+    # Non-fatal; profiles/backup features may degrade. Leave a trace for support.
+    try:
+        from core.logging import core_log_once
+        core_log_once(
+            "warning",
+            "mihomo_layout_create_failed",
+            "mihomo layout create failed (non-fatal)",
+            error=str(e),
+            mihomo_root=str(MIHOMO_ROOT),
+        )
+    except Exception:
+        pass
 
 # How many backups we try to keep per active profile (best-effort, не строго).
 MAX_BACKUPS_PER_PROFILE = int(os.environ.get('MIHOMO_MAX_BACKUPS', '20'))

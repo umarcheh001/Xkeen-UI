@@ -1,4 +1,9 @@
-"""Routing API blueprint split.
+"""Routing API blueprint package.
 
-Modules in this package will host /api/routing endpoints.
+Implementation lives in :mod:`routes.routing.blueprint`.
+Expose a stable import path: ``from routes.routing import create_routing_blueprint``.
 """
+
+from .blueprint import create_routing_blueprint  # noqa: F401
+
+__all__ = ["create_routing_blueprint"]
