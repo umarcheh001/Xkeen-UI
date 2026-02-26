@@ -12,6 +12,18 @@ import os
 import sys
 
 
+def _dbg(msg: str) -> None:
+    """Optional early bootstrap debug output.
+
+    Enable with env `XKEEN_BOOT_DEBUG=1`.
+    """
+    if os.environ.get("XKEEN_BOOT_DEBUG") in ("1", "true", "yes", "on"):
+        try:
+            print(f"[xkeen-ui][boot] {msg}", file=sys.stderr)
+        except Exception:
+            return
+
+
 def _mh_is_writable_dir(path: str) -> bool:
     try:
         os.makedirs(path, exist_ok=True)
@@ -57,5 +69,6 @@ def ensure_mihomo_root_env() -> None:
 
     try:
         os.makedirs(os.environ["MIHOMO_ROOT"], exist_ok=True)
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        # Best-effort: leave a trace only when bootstrap debug is enabled.
+        _dbg(f"MIHOMO_ROOT mkdir failed: {os.environ.get('MIHOMO_ROOT')} ({e})")

@@ -117,7 +117,8 @@
 
     // Generator apply endpoint
     if (path === '/api/mihomo/generate_apply' && method === 'POST') {
-      return { message: 'Применение профиля и перезапуск xkeen...' };
+      // Restart is now done via background job; keep the spinner message accurate.
+      return { message: 'Сохранение конфигурации Mihomo...' };
     }
 
     // Xray logs enable/disable restarts ONLY Xray core (no xkeen-ui restart)
@@ -173,9 +174,10 @@
       const path = loc ? loc.pathname : url;
       if (path === '/api/xkeen/core' && method === 'POST') return 65000;
       // Default for other restart-ish endpoints
-      return 45000;
+      // Restart operations on routers may take ~60s, so keep UI timeout safely above backend timeouts.
+      return 65000;
     } catch (e) {
-      return 45000;
+      return 65000;
     }
   }
 
@@ -202,7 +204,7 @@
       if (path === '/api/inbounds') return 'Inbounds сохранены и xkeen перезапущен.';
       if (path === '/api/outbounds') return 'Outbounds сохранены и xkeen перезапущен.';
       if (path === '/api/mihomo-config') return 'config.yaml сохранён и xkeen перезапущен.';
-      if (path === '/api/mihomo/generate_apply') return 'Конфиг применён и xkeen перезапущен.';
+      if (path === '/api/mihomo/generate_apply') return 'Конфиг сохранён. Перезапуск запущен.';
 
       if (path === '/api/xkeen/port-proxying') return 'port_proxying.lst сохранён и xkeen перезапущен.';
       if (path === '/api/xkeen/port-exclude') return 'port_exclude.lst сохранён и xkeen перезапущен.';

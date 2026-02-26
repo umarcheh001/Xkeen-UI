@@ -9,6 +9,20 @@ import os
 import sys
 
 
+def _dbg(msg: str) -> None:
+    """Optional debug output for early path resolution.
+
+    We intentionally avoid importing logging here to keep this module dependency-free.
+    Enable with env `XKEEN_PATHS_DEBUG=1`.
+    """
+
+    if os.environ.get("XKEEN_PATHS_DEBUG") in ("1", "true", "yes", "on"):
+        try:
+            print(f"[xkeen-ui][paths] {msg}", file=sys.stderr)
+        except Exception:
+            return
+
+
 def get_ui_state_dir() -> str:
     """Return a writable directory for UI state (auth, secret key, logs).
 
@@ -32,8 +46,8 @@ def get_ui_state_dir() -> str:
             f.write("")
         os.remove(test_path)
         return default_dir
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        _dbg(f"router default state dir not writable: {default_dir} ({e})")
 
     home = os.path.expanduser("~")
     xdg = os.environ.get("XDG_CONFIG_HOME")
@@ -46,8 +60,9 @@ def get_ui_state_dir() -> str:
 
     try:
         os.makedirs(fallback, exist_ok=True)
-    except Exception:
+    except Exception as e:  # noqa: BLE001
         # Last resort: current working directory
+        _dbg(f"fallback state dir create failed: {fallback} ({e}); using ./xkeen-ui-state")
         fallback = os.path.abspath("./xkeen-ui-state")
         os.makedirs(fallback, exist_ok=True)
     return fallback
@@ -65,7 +80,8 @@ def choose_base_dir(default_dir: str, fallback_dir: str) -> str:
             f.write("")
         os.remove(test_path)
         return default_dir
-    except Exception:
+    except Exception as e:  # noqa: BLE001
+        _dbg(f"base dir not writable: {default_dir} ({e}); using {fallback_dir}")
         os.makedirs(fallback_dir, exist_ok=True)
         return fallback_dir
 

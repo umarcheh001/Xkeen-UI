@@ -122,83 +122,55 @@ RULE_GROUP_ID_TO_GROUP_NAMES: Dict[str, Sequence[str]] = {
     "YouTube": ("YouTube", "youtube@domain"),
     "Discord": ("Discord", "discord@classical"),
     "Twitch": ("Twitch", "twitch@domain"),
-    "Twitter": ("Twitter", "twitter@domain"),
     "Reddit": ("Reddit", "reddit@domain"),
     "Spotify": ("Spotify", "spotify@domain"),
     "Steam": ("Steam", "steam@domain"),
-    "Telegram": ("Telegram", "telegram@domain", "telegram@ipcidr"),
+    "Telegram": ("Telegram", "telegram@domain", "telegram@ipcidr", "telegram@ip"),
 
-    # Крупные сети / CDN / облака
+    # Крупные сети / сети / соцсети
     "Meta": ("Meta", "meta@domain", "meta@ipcidr"),
-    "Amazon": ("Amazon", "amazon@domain", "amazon@ipcidr"),
-    "Cloudflare": ("Cloudflare", "cloudflare@domain", "cloudflare@ipcidr"),
-    "Fastly": ("Fastly", "fastly@ipcidr"),
-    "CDN77": ("CDN77", "cdn77@ipcidr"),
-    "Akamai": ("Akamai", "akamai@ipcidr"),
+    "Twitter": ("Twitter", "twitter@domain"),
+
+    # CDN / хостинги (единая группа CDN)
+    "CDN": (
+        "CDN",
+        "akamai@domain",
+        "akamai@ipcidr",
+        "amazon@domain",
+        "amazon@ipcidr",
+        "cloudflare@domain",
+        "cloudflare@ipcidr",
+        "cdn77@ipcidr",
+        "digitalocean@domain",
+        "digitalocean@ipcidr",
+        "fastly@domain",
+        "fastly@ipcidr",
+        "gcore@ipcidr",
+        "hetzner@domain",
+        "hetzner@ipcidr",
+        "oracle@domain",
+        "oracle@ipcidr",
+        "ovh@ipcidr",
+        "scaleway@ipcidr",
+        "vultr@ipcidr",
+    ),
 
     # Общие сервисы
-    "Google": ("Google", "google@domain"),
+    "Google": ("Google", "google@domain", "google@ipcidr"),
     "GitHub": ("GitHub", "github@domain"),
     "AI": ("AI", "category-ai@domain"),
 
-    # Специальная группа для QUIC-трафика
+    # Специальная группа для QUIC-трафика (в UI не показываем, всегда включена)
     "QUIC": ("QUIC",),
-
-    # Дополнительные группы для профиля ZKeen (GEOIP/GEOSITE и Ru-Traffic)
-    "RuTraffic": ("Ru-Traffic", "ru-ips@ipcidr"),
-    "DigitalOcean": ("DigitalOcean",),
-    "Gcore": ("Gcore",),
-    "Hetzner": ("Hetzner",),
-    "Linode": ("Linode",),
-    "Oracle": ("Oracle",),
-    "Ovh": ("Ovh", "OVH"),
-    "Vultr": ("Vultr",),
-    "Colocrossing": ("Colocrossing",),
-    "Contabo": ("Contabo",),
-    "Mega": ("Mega",),
-    "Scaleway": ("Scaleway",),
-    "DOMAINS": ("DOMAINS",),
-    "OTHER": ("OTHER",),
-    "POLITIC": ("POLITIC",),
-
 }
-
-
-
-
 
 
 # Rule-group IDs that must always remain enabled in all profiles.
-# These correspond to the core ZKeen domain lists (DOMAINS/OTHER/POLITIC)
-# that are part of the base skeleton and should not be toggled via the UI.
-ALWAYS_ENABLED_RULE_IDS: Set[str] = {
-    "DOMAINS",
-    "OTHER",
-    "POLITIC",
-}
-
+ALWAYS_ENABLED_RULE_IDS: Set[str] = set()
 
 
 # IDs of rule packages that are specific to the ZKeen router profile only.
-# These correspond to additional GEOIP/GEOSITE and Ru-Traffic related groups
-# which are not available for generic/custom router profiles.
-ZKEEN_ONLY_RULE_IDS: Set[str] = {
-    "RuTraffic",
-    "DigitalOcean",
-    "Gcore",
-    "Hetzner",
-    "Linode",
-    "Oracle",
-    "Ovh",
-    "Vultr",
-    "Colocrossing",
-    "Contabo",
-    "Mega",
-    "Scaleway",
-    "DOMAINS",
-    "OTHER",
-    "POLITIC",
-}
+ZKEEN_ONLY_RULE_IDS: Set[str] = set()
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -343,15 +315,17 @@ def _replace_provider_urls(content: str, subscriptions: Sequence[str]) -> str:
 
     rendered = "\n".join(new_lines)
 
-    # Append extra providers (subscription #6+) into proxy-providers section.
-    extra_provider_names = [
-        _provider_name_for_index(i)
-        for i in range(len(subs_clean))
-        if _provider_name_for_index(i) not in bundled_providers
-    ]
-
-    if extra_provider_names:
-        rendered = _append_extra_provider_blocks(rendered, provider_to_url, extra_provider_names)
+    # Append missing providers into proxy-providers section.
+    #
+    # Historically templates shipped with 5 stub providers, but newer templates
+    # may ship with fewer stubs (e.g. only proxy-sub). If the user enters more
+    # subscriptions than the template contains, we must append the missing
+    # provider blocks so that all subscriptions are honored.
+    if subs_clean:
+        needed_provider_names = [_provider_name_for_index(i) for i in range(len(subs_clean))]
+        missing = [pn for pn in needed_provider_names if pn not in found_providers]
+        if missing:
+            rendered = _append_extra_provider_blocks(rendered, provider_to_url, missing)
 
     return rendered
 
@@ -597,7 +571,273 @@ def _comment_block(block: str) -> str:
     return "\n".join(commented_lines)
 
 
-def _apply_rule_group_filtering(content: str, enabled_ids: Sequence[str]) -> str:
+
+def _remove_proxy_groups_by_name(content: str, names_to_remove: Set[str]) -> str:
+    """Remove proxy-groups list items by `name:` safely within the proxy-groups section.
+
+    We intentionally avoid a single big regex here: if the last removed
+    proxy-group item is near the end of the list, a naive pattern may eat
+    following top-level sections (rule-providers / rules). This helper is
+    line-based and only touches the `proxy-groups:` section.
+    """
+    if not names_to_remove:
+        return content
+
+    lines = content.splitlines()
+
+    # Find top-level `proxy-groups:` header
+    header_idx: Optional[int] = None
+    for i, line in enumerate(lines):
+        if line.strip() == "proxy-groups:" and (len(line) - len(line.lstrip()) == 0):
+            header_idx = i
+            break
+    if header_idx is None:
+        return content
+
+    # Find end of the section: next non-empty, non-comment line at indent 0
+    end_idx = len(lines)
+    j = header_idx + 1
+    while j < len(lines):
+        s = lines[j].strip()
+        if not s or s.startswith("#"):
+            j += 1
+            continue
+        if (len(lines[j]) - len(lines[j].lstrip()) == 0) and not lines[j].lstrip().startswith("-"):
+            end_idx = j
+            break
+        j += 1
+
+    name_re = re.compile(r"^(\s*)- name:\s*(.+?)\s*$")
+
+    out_lines: List[str] = []
+    out_lines.extend(lines[: header_idx + 1])
+
+    i = header_idx + 1
+    while i < end_idx:
+        m = name_re.match(lines[i])
+        if not m:
+            out_lines.append(lines[i])
+            i += 1
+            continue
+
+        item_indent = m.group(1)
+        item_name = m.group(2).strip()
+
+        # Find end of this list item: next `- name:` at the same indentation.
+        k = i + 1
+        while k < end_idx:
+            m2 = name_re.match(lines[k])
+            if m2 and m2.group(1) == item_indent:
+                break
+            # Defensive stop on a new top-level key (should normally be outside end_idx).
+            if lines[k].strip() and (len(lines[k]) - len(lines[k].lstrip()) == 0) and not lines[k].lstrip().startswith("#"):
+                break
+            k += 1
+
+        if item_name not in names_to_remove:
+            out_lines.extend(lines[i:k])
+
+        i = k
+
+    out_lines.extend(lines[end_idx:])
+    return "\n".join(out_lines)
+
+
+
+def _apply_pkg_markers(content: str, enabled_set: set[str]) -> str:
+    """Apply simple package markers embedded in templates.
+
+    Marker syntax (YAML comments, indentation doesn't matter):
+
+        # @pkg <ID> begin
+        ... lines that belong to this package ...
+        # @pkg <ID> end
+
+    If <ID> is NOT in enabled_set, the whole block (including markers) is removed.
+    If <ID> IS enabled, markers are removed but inner lines are kept.
+
+    This is used for rules that are not tied to a dedicated proxy-group name
+    (e.g. Twitch HQ unlock rule that routes into the always-present
+    "Заблок. сервисы" group).
+    """
+    if not content:
+        return content
+
+    begin_re = re.compile(r"^\s*#\s*@pkg\s+([A-Za-z0-9_\-]+)\s+begin\s*$")
+    end_re = re.compile(r"^\s*#\s*@pkg\s+([A-Za-z0-9_\-]+)\s+end\s*$")
+
+    lines = content.splitlines()
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        m = begin_re.match(lines[i])
+        if not m:
+            out.append(lines[i])
+            i += 1
+            continue
+
+        pkg_id = m.group(1)
+        # Find matching end marker.
+        j = i + 1
+        while j < len(lines):
+            m2 = end_re.match(lines[j])
+            if m2 and m2.group(1) == pkg_id:
+                break
+            j += 1
+
+        if j >= len(lines):
+            # Unclosed marker: keep as-is to avoid deleting user content.
+            out.append(lines[i])
+            i += 1
+            continue
+
+        if pkg_id in enabled_set:
+            # Keep inner block, drop markers.
+            out.extend(lines[i + 1:j])
+        # else: drop everything
+        i = j + 1
+
+    return "\n".join(out)
+
+def _cleanup_rules_section(content: str, enabled_set: set[str], profile: str | None = None) -> str:
+    """Clean up `rules:` section after package filtering.
+
+    Removes orphan comment-only blocks (when all rules in a block were dropped)
+    and applies a few profile-specific trims.
+
+    This keeps the final YAML readable (especially for router_zkeen).
+    """
+    if not content:
+        return content
+
+    profile = _normalise_profile_name(profile)
+
+    lines = content.splitlines()
+    start_idx = None
+    for i, line in enumerate(lines):
+        if (len(line) - len(line.lstrip()) == 0) and line.strip() == 'rules:':
+            start_idx = i
+            break
+    if start_idx is None:
+        return content
+
+    end_idx = len(lines)
+    for j in range(start_idx + 1, len(lines)):
+        s = lines[j].strip()
+        if not s or s.startswith('#'):
+            continue
+        if (len(lines[j]) - len(lines[j].lstrip()) == 0) and not lines[j].lstrip().startswith('-'):
+            end_idx = j
+            break
+
+    body = lines[start_idx + 1:end_idx]
+
+    def _is_rule_line(l: str) -> bool:
+        return bool(l.lstrip().startswith('-'))
+
+    # Profile-specific trims
+    def _drop_rule_line(l: str) -> bool:
+        if not _is_rule_line(l):
+            return False
+        if profile == 'router_zkeen':
+            # Twitch HQ unlock rule is meaningful only if Twitch package is enabled.
+            if 'Twitch' not in enabled_set and ('gql.twitch.tv' in l or 'usher.ttvnw.net' in l):
+                return True
+        return False
+
+    filtered = [ln.rstrip() for ln in body if not _drop_rule_line(ln)]
+
+    # In router_zkeen rules we sometimes have consecutive section headers like:
+    #   # --- Хостинги ... ---
+    #   - GEOIP,...
+    #   # --- ZKeen GEOSITE ... ---
+    # If all rules under the first header are removed, the header becomes orphan.
+    # Remove such orphan headers (keep the last header before a rule).
+    if profile == 'router_zkeen' and filtered:
+        hdr_re = re.compile(r"^\s*#\s*---")
+        compact: list[str] = []
+        i = 0
+        while i < len(filtered):
+            ln = filtered[i]
+            if hdr_re.match(ln):
+                # Look ahead until we hit a rule or another header.
+                k = i + 1
+                found_rule = False
+                found_hdr = False
+                while k < len(filtered):
+                    s = filtered[k].strip()
+                    if not s:
+                        k += 1
+                        continue
+                    if hdr_re.match(filtered[k]):
+                        found_hdr = True
+                        break
+                    if _is_rule_line(filtered[k]):
+                        found_rule = True
+                        break
+                    k += 1
+                if found_hdr and not found_rule:
+                    # Drop this header.
+                    i += 1
+                    continue
+            compact.append(ln)
+            i += 1
+        filtered = compact
+
+    # Split into blocks separated by blank lines. Keep only blocks that still
+    # contain at least one rule line.
+    blocks: list[list[str]] = []
+    cur: list[str] = []
+    for ln in filtered:
+        if not ln.strip():
+            if cur:
+                blocks.append(cur)
+                cur = []
+            continue
+        cur.append(ln)
+    if cur:
+        blocks.append(cur)
+
+    kept_blocks: list[list[str]] = []
+    for blk in blocks:
+        if any(_is_rule_line(x) for x in blk):
+            kept_blocks.append(blk)
+
+    new_body: list[str] = []
+    for bi, blk in enumerate(kept_blocks):
+        if bi > 0:
+            new_body.append('')
+        new_body.extend(blk)
+
+    # Determine indentation used inside rules section.
+    indent = '  '
+    for ln in new_body:
+        if ln.strip():
+            indent = ln[:len(ln) - len(ln.lstrip())]
+            break
+
+    # Ensure final MATCH rule exists.
+    def _is_match_rule(l: str) -> bool:
+        s = l.strip().replace(' ', '')
+        return s.startswith('-MATCH,')
+
+    if not any(_is_rule_line(x) and _is_match_rule(x) for x in new_body):
+        if new_body and new_body[-1].strip():
+            new_body.append('')
+        new_body.append(f'{indent}- MATCH,DIRECT')
+
+    # Remove leading/trailing blank lines in rules body.
+    while new_body and not new_body[0].strip():
+        new_body.pop(0)
+    while new_body and not new_body[-1].strip():
+        new_body.pop()
+
+    out = lines[:start_idx + 1] + new_body + lines[end_idx:]
+    return "\n".join(out)
+
+
+
+def _apply_rule_group_filtering(content: str, enabled_ids: Sequence[str], profile: str | None = None) -> str:
     """Enable only selected rule-group packages, producing a *clean* config.
 
     Semantics (router profiles):
@@ -647,6 +887,8 @@ def _apply_rule_group_filtering(content: str, enabled_ids: Sequence[str]) -> str
     # rules were removed for disabled packages.
     providers_to_remove: Set[str] = set()
 
+    proxy_groups_to_remove: Set[str] = set()
+
     # Process each known UI rule-group ID.
     for group_id, group_names in RULE_GROUP_ID_TO_GROUP_NAMES.items():
         # If this package is enabled – leave everything as-is.
@@ -666,19 +908,16 @@ def _apply_rule_group_filtering(content: str, enabled_ids: Sequence[str]) -> str
         if not effective_group_names:
             continue
 
-        # 1) Drop proxy-group blocks for these group names.
-        for group_name in effective_group_names:
-            # Block:
-            #   - name: AKAMAI
-            #     type: select
-            #     ...
-            # (up to the next "- name:" at same level or EOF)
-            pattern = re.compile(
-                rf"(?m)^([ \t]*)- name:\s*{re.escape(group_name)}\b.*?(?=^[ \t]*- name:|\Z)",
-                re.S,
-            )
-            result = pattern.sub("", result)
 
+        # 1) Collect proxy-group names to remove.
+        #    Actual removal is done later via a small section-aware slicer,
+        #    so we never accidentally delete following top-level sections.
+        for group_name in effective_group_names:
+            if group_name and "@" not in group_name:
+                proxy_groups_to_remove.add(group_name)
+
+        # 2) Remove rules that send traffic into these groups,
+        #    and collect provider names from RULE-SET lines.
         # 2) Remove rules that send traffic into these groups,
         #    and collect provider names from RULE-SET lines.
         lines = result.splitlines()
@@ -705,6 +944,11 @@ def _apply_rule_group_filtering(content: str, enabled_ids: Sequence[str]) -> str
                 new_lines.append(line)
 
         result = "\n".join(new_lines)
+
+    # 1b) Drop proxy-groups safely (only within `proxy-groups:` section).
+    if proxy_groups_to_remove:
+        result = _remove_proxy_groups_by_name(result, proxy_groups_to_remove)
+
 
     # 3) Remove rule-providers that became unused for disabled packages.
     # В некоторых профилях (например, router_zkeen) часть пакетов объявляет
@@ -742,6 +986,12 @@ def _apply_rule_group_filtering(content: str, enabled_ids: Sequence[str]) -> str
                 rf"(?m)^([ \t]*){re.escape(prov_name)}:[^\n]*\n(?:\1[ \t]+.*\n)*"
             )
             result = pattern.sub("", result)
+
+    # 3a) Apply optional @pkg markers embedded in templates.
+    result = _apply_pkg_markers(result, enabled_set)
+
+    # 3b) Clean up `rules:` section (remove orphan comment blocks, etc.)
+    result = _cleanup_rules_section(result, enabled_set, profile)
 
     # 4) Clean up excessive blank lines to keep config readable.
     result = re.sub(r"\n{3,}", "\n\n", result)
@@ -1025,7 +1275,7 @@ def build_router_config(state: Dict[str, Any]) -> str:
     enabled_ids = state.get("enabledRuleGroups") or []
     if not isinstance(enabled_ids, list):
         enabled_ids = []
-    content = _apply_rule_group_filtering(content, enabled_ids)
+    content = _apply_rule_group_filtering(content, enabled_ids, profile)
 
     # 3) insert proxies
     content = _insert_proxies_from_state(content, state)

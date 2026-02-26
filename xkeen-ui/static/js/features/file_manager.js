@@ -15,6 +15,11 @@
   const CHROME = FM.chrome || {};
   const EDITOR = FM.editor || {};
 
+  const CORE_DOM = (window.XKeen && window.XKeen.core && window.XKeen.core.dom) ? window.XKeen.core.dom : null;
+  const CORE_HTTP = (window.XKeen && window.XKeen.core && window.XKeen.core.http) ? window.XKeen.core.http : null;
+  const CORE_STORAGE = (window.XKeen && window.XKeen.core && window.XKeen.core.storage) ? window.XKeen.core.storage : null;
+
+
   // --- prefs (localStorage)
   const loadSortPref = PREFS.loadSortPref || (() => ({ key: 'name', dir: 'asc', dirsFirst: true }));
   const saveSortPref = PREFS.saveSortPref || (() => {});
@@ -41,15 +46,57 @@
 
   // -------------------------- small helpers --------------------------
   function el(id) {
-    try { return document.getElementById(id); } catch (e) { return null; }
+    try {
+      if (CORE_DOM && typeof CORE_DOM.byId === 'function') return CORE_DOM.byId(id);
+    } catch (e) {}
+    try { return document.getElementById(id); } catch (e2) { return null; }
   }
 
   function qs(sel, root) {
-    try { return (root || document).querySelector(sel); } catch (e) { return null; }
+    try {
+      if (CORE_DOM && typeof CORE_DOM.q === 'function') return CORE_DOM.q(sel, root);
+    } catch (e) {}
+    try { return (root || document).querySelector(sel); } catch (e2) { return null; }
   }
 
   function qsa(sel, root) {
-    try { return Array.from((root || document).querySelectorAll(sel) || []); } catch (e) { return []; }
+    try {
+      if (CORE_DOM && typeof CORE_DOM.qa === 'function') return CORE_DOM.qa(sel, root);
+    } catch (e) {}
+    try { return Array.from((root || document).querySelectorAll(sel) || []); } catch (e2) { return []; }
+  }
+
+  // --- core/storage (localStorage wrapper, keys stay the same)
+  function storageGet(key) {
+    try { if (CORE_STORAGE && typeof CORE_STORAGE.get === 'function') return CORE_STORAGE.get(key); } catch (e) {}
+    try { return window.localStorage ? window.localStorage.getItem(String(key)) : null; } catch (e2) { return null; }
+  }
+
+  function storageSet(key, val) {
+    try { if (CORE_STORAGE && typeof CORE_STORAGE.set === 'function') return CORE_STORAGE.set(key, val); } catch (e) {}
+    try { if (window.localStorage) window.localStorage.setItem(String(key), String(val)); } catch (e2) {}
+  }
+
+  function storageRemove(key) {
+    try { if (CORE_STORAGE && typeof CORE_STORAGE.remove === 'function') return CORE_STORAGE.remove(key); } catch (e) {}
+    try { if (window.localStorage) window.localStorage.removeItem(String(key)); } catch (e2) {}
+  }
+
+  function storageGetJSON(key, fallback) {
+    try { if (CORE_STORAGE && typeof CORE_STORAGE.getJSON === 'function') return CORE_STORAGE.getJSON(key, fallback); } catch (e) {}
+    try {
+      const raw = storageGet(key);
+      if (!raw) return fallback;
+      const j = JSON.parse(raw);
+      return (j == null) ? fallback : j;
+    } catch (e2) {
+      return fallback;
+    }
+  }
+
+  function storageSetJSON(key, val) {
+    try { if (CORE_STORAGE && typeof CORE_STORAGE.setJSON === 'function') return CORE_STORAGE.setJSON(key, val); } catch (e) {}
+    try { storageSet(key, JSON.stringify(val)); } catch (e2) {}
   }
 
   function show(node) {
@@ -199,11 +246,24 @@
       return false;
     }
 
-    const api = _terminalApi();
-    if (!api) {
-      try { toast('Терминал недоступен (api не найден)', 'error'); } catch (e) {}
-      return false;
+    let api = _terminalApi();
+if (!api) {
+  // Terminal is now lazy-loaded (Commit J). If stubs are available, try to load it on-demand.
+  try {
+    const lazy = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureTerminalReady === 'function')
+      ? XKeen.lazy.ensureTerminalReady
+      : null;
+    if (lazy) {
+      await Promise.resolve(lazy());
+      await _waitFor(() => !!_terminalApi(), 3000, 100);
+      api = _terminalApi();
     }
+  } catch (e0) {}
+}
+if (!api) {
+  try { toast('Терминал недоступен (api не найден)', 'error'); } catch (e) {}
+  return false;
+}
 
     let cwd = String(p.cwd || '/') || '/';
     try {
@@ -361,6 +421,9 @@ function parentRemote(cwd) {
 
   function getCsrfToken() {
     try {
+      if (CORE_HTTP && typeof CORE_HTTP.csrfToken === 'function') return String(CORE_HTTP.csrfToken() || '');
+    } catch (e) {}
+    try {
       const m = document.querySelector('meta[name="csrf-token"]');
       const v = m ? (m.getAttribute('content') || '') : '';
       return String(v || '');
@@ -389,13 +452,17 @@ function parentRemote(cwd) {
       headers = new Headers();
     }
 
-    // CSRF for mutating API calls
-    if (method !== 'GET' && method !== 'HEAD') {
-      const tok = getCsrfToken();
-      if (tok && !headers.get('X-CSRF-Token')) headers.set('X-CSRF-Token', tok);
-    }
-
+    // CSRF for mutating API calls (prefer core/http)
     opts.headers = headers;
+    try {
+      if (CORE_HTTP && typeof CORE_HTTP.withCSRF === 'function') {
+        const wrapped = CORE_HTTP.withCSRF(opts, method);
+        if (wrapped) Object.assign(opts, wrapped);
+      } else if (method !== 'GET' && method !== 'HEAD') {
+        const tok = getCsrfToken();
+        if (tok && !headers.get('X-CSRF-Token')) headers.set('X-CSRF-Token', tok);
+      }
+    } catch (e) {}
 
     const res = await fetch(url, opts);
     let data = null;
@@ -1281,8 +1348,8 @@ async function xhrUploadFiles({ side, files }) {
     dropOp: { resolve: null }, // drag&drop move/copy choice modal
     panels: {
       left: { target: 'local', sid: '', cwd: '/opt/var', roots: [], items: [], selected: new Set(), focusName: '', anchorName: '', filter: '' },
-      // Keenetic-friendly default: right panel opens at disk list (/tmp/mnt)
-      right: { target: 'local', sid: '', cwd: '/tmp/mnt', roots: [], items: [], selected: new Set(), focusName: '', anchorName: '', filter: '' },
+      // Right panel default: on routers it's usually /tmp/mnt, but on dev machines it may not exist.
+      right: { target: 'local', sid: '', cwd: (typeof window.XKEEN_FM_RIGHT_DEFAULT === 'string' && window.XKEEN_FM_RIGHT_DEFAULT) ? window.XKEEN_FM_RIGHT_DEFAULT : '/tmp/mnt', roots: [], items: [], selected: new Set(), focusName: '', anchorName: '', filter: '' },
     },
     connectForSide: 'left',
     pending: null, // { op, payload, conflicts }
@@ -3183,7 +3250,7 @@ async function goUp(side) {
 
   function _lsGetJson(key, fallback) {
     try {
-      const raw = window.localStorage ? window.localStorage.getItem(key) : null;
+      const raw = storageGet(key);
       if (!raw) return fallback;
       const j = JSON.parse(raw);
       return (j == null) ? fallback : j;
@@ -3193,10 +3260,7 @@ async function goUp(side) {
   }
 
   function _lsSetJson(key, val) {
-    try {
-      if (!window.localStorage) return;
-      window.localStorage.setItem(key, JSON.stringify(val));
-    } catch (e) {}
+    try { storageSetJSON(key, val); } catch (e) {}
   }
 
   function _loadRememberProfileFlag() {
@@ -4702,7 +4766,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
     if (S.opsUi.hiddenIds && typeof S.opsUi.hiddenIds.has === 'function') return S.opsUi.hiddenIds;
     const set = new Set();
     try {
-      const raw = localStorage.getItem(_opsHiddenStorageKey()) || '';
+      const raw = storageGet(_opsHiddenStorageKey()) || '';
       if (raw) {
         const arr = JSON.parse(raw);
         if (Array.isArray(arr)) arr.forEach((x) => { if (x) set.add(String(x)); });
@@ -4715,7 +4779,7 @@ ${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
   function _opsSaveHidden() {
     try {
       const set = _opsEnsureHidden();
-      localStorage.setItem(_opsHiddenStorageKey(), JSON.stringify(Array.from(set).slice(0, 500)));
+      storageSet(_opsHiddenStorageKey(), JSON.stringify(Array.from(set).slice(0, 500)));
     } catch (e) {}
   }
 
@@ -8629,8 +8693,8 @@ function openExtractModalWithItems(side, name, items) {
         const L = (window.XKeen && window.XKeen.ui && window.XKeen.ui.layout) ? window.XKeen.ui.layout : null;
         if (L && typeof L.load === 'function') hideUnused = !!(L.load() || {}).hideUnused;
         else {
-          const raw = localStorage.getItem('xkeen-layout-v1');
-          hideUnused = raw ? !!(JSON.parse(raw) || {}).hideUnused : false;
+          const st = storageGetJSON('xkeen-layout-v1', null);
+          hideUnused = st ? !!(st || {}).hideUnused : false;
         }
       } catch (e) {}
 
@@ -8665,9 +8729,13 @@ function openExtractModalWithItems(side, name, items) {
       } catch (e) {}
 
       // Fill modal selects from server capabilities (optional).
+      // Do this only when remote backend is actually enabled; otherwise the
+      // endpoint may respond with 404 (disabled) which spams the console.
       try {
-        await loadRemoteCaps();
-        applyCapsToConnectModal();
+        if (enabled && supported && !isMips) {
+          await loadRemoteCaps();
+          applyCapsToConnectModal();
+        }
       } catch (e) {}
 
       // If remote isn't enabled, show a hint inside the view.

@@ -10,20 +10,15 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 
-def create_app(*, ws_runtime: bool = False):
-    """Create and configure the Flask application.
+def _ensure_runtime_env() -> str:
+    """Prepare process environment (mihomo root env, etc.).
 
-    Args:
-        ws_runtime: Whether WebSocket runtime is *actually* active. In practice,
-            run_server.py sets this later via app.set_ws_runtime(True), but we
-            still accept the flag for testability.
+    Returns:
+        CONFIG_PATH from mihomo_server_core.
     """
-
-    # Local imports to reduce side-effects on module import.
-    from flask import Flask, send_from_directory
 
     from bootstrap_mihomo_env import ensure_mihomo_root_env
 
@@ -31,23 +26,49 @@ def create_app(*, ws_runtime: bool = False):
 
     from mihomo_server_core import CONFIG_PATH
 
-    from core.paths import UI_STATE_DIR, BASE_ETC_DIR, BASE_VAR_DIR
+    return CONFIG_PATH
+
+
+def _init_settings_and_logging(*, ws_runtime: bool) -> Tuple["Settings", Dict[str, str]]:
+    """Initialize Settings and core logging. No behavior changes."""
+
+    from core.settings import Settings
     from core.logging import init_logging, core_log as _core_log
 
-    UI_LOG_DIR, UI_CORE_LOG, UI_ACCESS_LOG, UI_WS_LOG = init_logging(BASE_VAR_DIR)
+    settings = Settings.from_env()
+    ui_state_dir = settings.ui_state_dir
+    base_etc_dir = settings.base_etc_dir
+    base_var_dir = settings.base_var_dir
+
+    ui_log_dir, ui_core_log, ui_access_log, ui_ws_log = init_logging(base_var_dir)
 
     _core_log(
         "info",
         "xkeen-ui init",
         pid=os.getpid(),
-        ui_state_dir=UI_STATE_DIR,
-        ui_log_dir=UI_LOG_DIR,
-        base_etc_dir=BASE_ETC_DIR,
-        base_var_dir=BASE_VAR_DIR,
+        ui_state_dir=ui_state_dir,
+        ui_log_dir=ui_log_dir,
+        base_etc_dir=base_etc_dir,
+        base_var_dir=base_var_dir,
         ws_runtime=bool(ws_runtime),
     )
 
-    # ---- Xray config files (auto-mode + env overrides)
+    return settings, {
+        "UI_STATE_DIR": ui_state_dir,
+        "BASE_ETC_DIR": base_etc_dir,
+        "BASE_VAR_DIR": base_var_dir,
+        "UI_LOG_DIR": ui_log_dir,
+        "UI_CORE_LOG": ui_core_log,
+        "UI_ACCESS_LOG": ui_access_log,
+        "UI_WS_LOG": ui_ws_log,
+    }
+
+
+def _init_xray_startup_migrations(*, base_etc_dir: str, base_var_dir: str, ui_state_dir: str) -> Dict[str, Any]:
+    """Init Xray paths, backups, and jsonc migration. Never blocks startup."""
+
+    from core.logging import core_log as _core_log
+
     from services.xray_config_files import (
         XRAY_CONFIGS_DIR,
         XRAY_CONFIGS_DIR_REAL,
@@ -61,7 +82,6 @@ def create_app(*, ws_runtime: bool = False):
         migrate_jsonc_sidecars_from_configs,
     )
 
-    # Stage 6: migrate legacy *.jsonc files out of XRAY_CONFIGS_DIR on startup.
     try:
         ensure_xray_jsonc_dir()
         mig = migrate_jsonc_sidecars_from_configs()
@@ -73,15 +93,27 @@ def create_app(*, ws_runtime: bool = False):
                 xray_jsonc_dir=XRAY_JSONC_DIR,
                 **mig,
             )
-    except Exception:
-        # Never block UI startup.
-        pass
+    except Exception as e:  # noqa: BLE001
+        # Best-effort migration must never block startup, but we should leave a trace.
+        _core_log(
+            "warning",
+            "xray jsonc migration failed",
+            error=str(e),
+            xray_configs_dir=XRAY_CONFIGS_DIR,
+            xray_jsonc_dir=XRAY_JSONC_DIR,
+        )
 
-    BACKUP_DIR = os.path.join(BASE_ETC_DIR, "xray", "configs", "backups")
+    backup_dir = os.path.join(base_etc_dir, "xray", "configs", "backups")
     try:
-        BACKUP_DIR_REAL = os.path.realpath(BACKUP_DIR)
-    except Exception:
-        BACKUP_DIR_REAL = BACKUP_DIR
+        backup_dir_real = os.path.realpath(backup_dir)
+    except Exception as e:  # noqa: BLE001
+        backup_dir_real = backup_dir
+        _core_log(
+            "warning",
+            "backup_dir realpath failed",
+            error=str(e),
+            backup_dir=backup_dir,
+        )
 
     from services.xray_backups import (
         is_history_backup_filename as _is_history_backup_filename,
@@ -89,34 +121,211 @@ def create_app(*, ws_runtime: bool = False):
     )
 
     def snapshot_xray_config_before_overwrite(abs_path: str) -> None:
-        """Save snapshot for an Xray fragment before overwrite. Never raises."""
         try:
             _snapshot_before_overwrite(
                 abs_path,
-                backup_dir=BACKUP_DIR,
+                backup_dir=backup_dir,
                 xray_configs_dir_real=XRAY_CONFIGS_DIR_REAL,
-                backup_dir_real=BACKUP_DIR_REAL,
+                backup_dir_real=backup_dir_real,
                 xray_jsonc_dir_real=XRAY_JSONC_DIR_REAL,
             )
-        except Exception:
+        except Exception as e:  # noqa: BLE001
+            # Snapshot is best-effort; never break save flow.
+            _core_log(
+                "warning",
+                "snapshot before overwrite failed",
+                error=str(e),
+                abs_path=abs_path,
+                backup_dir=backup_dir,
+            )
             return
 
-    XKEEN_RESTART_CMD = ["xkeen", "-restart"]
-    RESTART_LOG_FILE = os.environ.get(
-        "XKEEN_RESTART_LOG_FILE", os.path.join(UI_STATE_DIR, "restart.log")
+    xkeen_restart_cmd = ["xkeen", "-restart"]
+    restart_log_file = os.environ.get(
+        "XKEEN_RESTART_LOG_FILE", os.path.join(ui_state_dir, "restart.log")
     )
-    XRAY_LOG_CONFIG_FILE = os.path.join(BASE_ETC_DIR, "xray", "configs", "01_log.json")
-    XRAY_ACCESS_LOG = os.path.join(BASE_VAR_DIR, "log", "xray", "access.log")
-    XRAY_ERROR_LOG = os.path.join(BASE_VAR_DIR, "log", "xray", "error.log")
-    XRAY_ACCESS_LOG_SAVED = XRAY_ACCESS_LOG + ".saved"
-    XRAY_ERROR_LOG_SAVED = XRAY_ERROR_LOG + ".saved"
+    xray_log_config_file = os.path.join(base_etc_dir, "xray", "configs", "01_log.json")
+    xray_access_log = os.path.join(base_var_dir, "log", "xray", "access.log")
+    xray_error_log = os.path.join(base_var_dir, "log", "xray", "error.log")
+    xray_access_log_saved = xray_access_log + ".saved"
+    xray_error_log_saved = xray_error_log + ".saved"
 
-    # Timezone offset for Xray/Mihomo logs.
-    _XRAY_LOG_TZ_ENV = os.environ.get("XKEEN_XRAY_LOG_TZ_OFFSET", "3")
+    _xray_log_tz_env = os.environ.get("XKEEN_XRAY_LOG_TZ_OFFSET", "3")
     try:
-        XRAY_LOG_TZ_OFFSET_HOURS = int(_XRAY_LOG_TZ_ENV)
+        xray_log_tz_offset_hours = int(_xray_log_tz_env)
     except ValueError:
-        XRAY_LOG_TZ_OFFSET_HOURS = 3
+        xray_log_tz_offset_hours = 3
+
+    return {
+        "XRAY_CONFIGS_DIR": XRAY_CONFIGS_DIR,
+        "XRAY_CONFIGS_DIR_REAL": XRAY_CONFIGS_DIR_REAL,
+        "XRAY_JSONC_DIR": XRAY_JSONC_DIR,
+        "XRAY_JSONC_DIR_REAL": XRAY_JSONC_DIR_REAL,
+        "ROUTING_FILE": ROUTING_FILE,
+        "ROUTING_FILE_RAW": ROUTING_FILE_RAW,
+        "INBOUNDS_FILE": INBOUNDS_FILE,
+        "OUTBOUNDS_FILE": OUTBOUNDS_FILE,
+        "BACKUP_DIR": backup_dir,
+        "BACKUP_DIR_REAL": backup_dir_real,
+        "is_history_backup_filename": _is_history_backup_filename,
+        "snapshot_xray_config_before_overwrite": snapshot_xray_config_before_overwrite,
+        "XKEEN_RESTART_CMD": xkeen_restart_cmd,
+        "RESTART_LOG_FILE": restart_log_file,
+        "XRAY_LOG_CONFIG_FILE": xray_log_config_file,
+        "XRAY_ACCESS_LOG": xray_access_log,
+        "XRAY_ERROR_LOG": xray_error_log,
+        "XRAY_ACCESS_LOG_SAVED": xray_access_log_saved,
+        "XRAY_ERROR_LOG_SAVED": xray_error_log_saved,
+        "XRAY_LOG_TZ_OFFSET_HOURS": xray_log_tz_offset_hours,
+    }
+
+
+def _create_flask_app():
+    from flask import Flask
+
+    app = Flask(__name__, static_folder="static", template_folder="templates")
+    try:
+        app.config.setdefault("SEND_FILE_MAX_AGE_DEFAULT", 0)
+    except Exception as e:  # noqa: BLE001
+        # Non-fatal: only affects cache headers for static send_file.
+        try:
+            from core.logging import core_log_once
+            core_log_once(
+                "debug",
+                "flask_send_file_cache_disable_failed",
+                "flask config setdefault failed (non-fatal)",
+                error=str(e),
+            )
+        except Exception:
+            pass
+    return app
+
+
+def _register_favicon(app):
+    from flask import send_from_directory
+
+    @app.route("/favicon.ico")
+    def favicon():
+        return send_from_directory(
+            app.static_folder, "favicon.ico", mimetype="image/vnd.microsoft.icon"
+        )
+
+
+def _init_auth_and_pages(
+    app,
+    *,
+    ui_state_dir: str,
+    routing_file: str,
+    mihomo_config_file: str,
+    inbounds_file: str,
+    outbounds_file: str,
+    backup_dir: str,
+    command_groups,
+    github_repo_url: str,
+):
+    from services.auth_setup import init_auth
+
+    init_auth(app)
+
+    from services import devtools as _svc_devtools
+    from routes.ui_assets import register_ui_assets_routes
+    from routes.auth import register_auth_routes
+    from routes.pages import register_pages_routes
+
+    register_ui_assets_routes(app, UI_STATE_DIR=ui_state_dir, devtools_service=_svc_devtools)
+    register_auth_routes(app)
+    register_pages_routes(
+        app,
+        ROUTING_FILE=routing_file,
+        MIHOMO_CONFIG_FILE=mihomo_config_file,
+        INBOUNDS_FILE=inbounds_file,
+        OUTBOUNDS_FILE=outbounds_file,
+        BACKUP_DIR=backup_dir,
+        COMMAND_GROUPS=command_groups,
+        GITHUB_REPO_URL=github_repo_url,
+    )
+
+
+def _init_ws_debug_logger(*, ui_ws_log: str):
+    from services.ws_debug import init_ws_debug
+
+    try:
+        init_ws_debug(ui_ws_log)
+    except Exception as e:  # noqa: BLE001
+        # WS debug logger is optional; never block startup.
+        try:
+            from core.logging import core_log_once
+            core_log_once(
+                "warning",
+                "ws_debug_init_failed",
+                "ws_debug init failed (non-fatal)",
+                error=str(e),
+                ui_ws_log=ui_ws_log,
+            )
+        except Exception:
+            pass
+
+
+def _init_access_log_middleware(app):
+    from services.logging_setup import (
+        access_enabled as _access_enabled,
+        access_logger as _get_access_logger,
+    )
+    from middleware.access_log import init_access_log as _init_access_log
+
+    _init_access_log(app, _access_enabled, _get_access_logger, skip_prefixes=("/static/", "/ws/"))
+
+
+def _register_api_blueprints(app, ctx: "AppContext"):
+    # Centralized blueprint registration (see routes.register_blueprints).
+    from routes import register_blueprints
+
+    register_blueprints(app, ctx)
+
+
+def create_app(*, ws_runtime: bool = False):
+    """Create and configure the Flask application.
+
+    Args:
+        ws_runtime: Whether WebSocket runtime is *actually* active. In practice,
+            run_server.py sets this later via app.set_ws_runtime(True), but we
+            still accept the flag for testability.
+    """
+
+    # Local imports to reduce side-effects on module import.
+    settings, env = _init_settings_and_logging(ws_runtime=ws_runtime)
+
+    # Importing mihomo_server_core can be early; do it after logging is ready so best-effort
+    # failures leave a trace.
+    CONFIG_PATH = _ensure_runtime_env()
+    UI_STATE_DIR = env["UI_STATE_DIR"]
+    BASE_ETC_DIR = env["BASE_ETC_DIR"]
+    BASE_VAR_DIR = env["BASE_VAR_DIR"]
+    UI_WS_LOG = env["UI_WS_LOG"]
+
+    xray_ctx = _init_xray_startup_migrations(
+        base_etc_dir=BASE_ETC_DIR,
+        base_var_dir=BASE_VAR_DIR,
+        ui_state_dir=UI_STATE_DIR,
+    )
+
+    XRAY_CONFIGS_DIR = xray_ctx["XRAY_CONFIGS_DIR"]
+    XRAY_CONFIGS_DIR_REAL = xray_ctx["XRAY_CONFIGS_DIR_REAL"]
+    XRAY_JSONC_DIR_REAL = xray_ctx["XRAY_JSONC_DIR_REAL"]
+    ROUTING_FILE = xray_ctx["ROUTING_FILE"]
+    ROUTING_FILE_RAW = xray_ctx["ROUTING_FILE_RAW"]
+    INBOUNDS_FILE = xray_ctx["INBOUNDS_FILE"]
+    OUTBOUNDS_FILE = xray_ctx["OUTBOUNDS_FILE"]
+    BACKUP_DIR = xray_ctx["BACKUP_DIR"]
+    BACKUP_DIR_REAL = xray_ctx["BACKUP_DIR_REAL"]
+    snapshot_xray_config_before_overwrite = xray_ctx["snapshot_xray_config_before_overwrite"]
+    is_history_backup_filename = xray_ctx["is_history_backup_filename"]
+    XKEEN_RESTART_CMD = xray_ctx["XKEEN_RESTART_CMD"]
+    RESTART_LOG_FILE = xray_ctx["RESTART_LOG_FILE"]
+    XRAY_LOG_CONFIG_FILE = xray_ctx["XRAY_LOG_CONFIG_FILE"]
+    XRAY_ACCESS_LOG = xray_ctx["XRAY_ACCESS_LOG"]
+    XRAY_ERROR_LOG = xray_ctx["XRAY_ERROR_LOG"]
+    XRAY_LOG_TZ_OFFSET_HOURS = xray_ctx["XRAY_LOG_TZ_OFFSET_HOURS"]
 
     from core.mihomo_paths import init_mihomo_paths
 
@@ -161,60 +370,26 @@ def create_app(*, ws_runtime: bool = False):
     )
 
     # -------- Flask app
-    app = Flask(__name__, static_folder="static", template_folder="templates")
+    app = _create_flask_app()
+    _register_favicon(app)
 
-    # Make UI updates visible without requiring Ctrl+F5.
-    # With max_age=0 browsers revalidate static JS/CSS on reload and will fetch
-    # the new version after an update.
-    try:
-        app.config.setdefault("SEND_FILE_MAX_AGE_DEFAULT", 0)
-    except Exception:
-        pass
-
-    @app.route("/favicon.ico")
-    def favicon():
-        return send_from_directory(
-            app.static_folder, "favicon.ico", mimetype="image/vnd.microsoft.icon"
-        )
-
-    # -------- Auth / first-run setup
-    from services.auth_setup import init_auth
-
-    init_auth(app)
-
-    # --- UI assets / auth / pages
-    from routes_ui_assets import register_ui_assets_routes
-    from routes_auth import register_auth_routes
-    from routes_pages import register_pages_routes
-
-    from services import devtools as _svc_devtools
-
-    register_ui_assets_routes(app, UI_STATE_DIR=UI_STATE_DIR, devtools_service=_svc_devtools)
-    register_auth_routes(app)
-    register_pages_routes(
+    _init_auth_and_pages(
         app,
-        ROUTING_FILE=ROUTING_FILE,
-        MIHOMO_CONFIG_FILE=MIHOMO_CONFIG_FILE,
-        INBOUNDS_FILE=INBOUNDS_FILE,
-        OUTBOUNDS_FILE=OUTBOUNDS_FILE,
-        BACKUP_DIR=BACKUP_DIR,
-        COMMAND_GROUPS=COMMAND_GROUPS,
-        GITHUB_REPO_URL=GITHUB_REPO_URL,
+        ui_state_dir=UI_STATE_DIR,
+        routing_file=ROUTING_FILE,
+        mihomo_config_file=MIHOMO_CONFIG_FILE,
+        inbounds_file=INBOUNDS_FILE,
+        outbounds_file=OUTBOUNDS_FILE,
+        backup_dir=BACKUP_DIR,
+        command_groups=COMMAND_GROUPS,
+        github_repo_url=GITHUB_REPO_URL,
     )
 
-    # --- WS debug logger
-    from services.ws_debug import init_ws_debug, ws_debug
+    _init_ws_debug_logger(ui_ws_log=UI_WS_LOG)
 
-    try:
-        init_ws_debug(UI_WS_LOG)
-    except Exception:
-        pass
+    from services.ws_debug import ws_debug
 
-    # --- Access log middleware
-    from services.logging_setup import access_enabled as _access_enabled, access_logger as _get_access_logger
-    from middleware.access_log import init_access_log as _init_access_log
-
-    _init_access_log(app, _access_enabled, _get_access_logger, skip_prefixes=("/static/", "/ws/"))
+    _init_access_log_middleware(app)
 
     # -------- helpers for blueprints
     from services.xkeen import (
@@ -252,8 +427,19 @@ def create_app(*, ws_runtime: bool = False):
             cand_real = os.path.realpath(cand)
             if cand_real.startswith(XRAY_CONFIGS_DIR_REAL + os.sep) and os.path.isfile(cand_real):
                 return cand_real
-        except Exception:
-            pass
+        except Exception as e:  # noqa: BLE001
+            # Best-effort: failure shouldn't block backup operations, but leave a trace.
+            try:
+                from core.logging import core_warn_budget
+                core_warn_budget(
+                    "backup_target_detect_failed",
+                    "backup target detect failed (non-fatal)",
+                    error=str(e),
+                    filename=name,
+                    prefix=prefix,
+                )
+            except Exception:
+                pass
 
         if prefix.startswith("03_inbounds"):
             return INBOUNDS_FILE
@@ -286,7 +472,7 @@ def create_app(*, ws_runtime: bool = False):
         if not os.path.isdir(BACKUP_DIR):
             return items
         for name in os.listdir(BACKUP_DIR):
-            if not _is_history_backup_filename(name):
+            if not is_history_backup_filename(name):
                 continue
             full = os.path.join(BACKUP_DIR, name)
             try:
@@ -303,161 +489,42 @@ def create_app(*, ws_runtime: bool = False):
         items.sort(key=lambda x: x["mtime"], reverse=True)
         return items
 
-    # -------- Blueprint registration
-    from routes_utils import create_utils_blueprint
-    from routes_ui_settings import create_ui_settings_blueprint
-    from routes_ws_support import create_ws_support_blueprint
-    from routes_ws_streams import create_ws_streams_blueprint
-    from routes_capabilities import create_capabilities_blueprint
-    from routes_xkeen_lists import create_xkeen_lists_blueprint
-    from routes_config_exchange import create_config_exchange_blueprint
-    from routes_routing import create_routing_blueprint
-    from routes_xray_configs import create_xray_configs_blueprint
-    from routes_mihomo import create_mihomo_blueprint
-    from routes_backup import create_backups_blueprint
-    from routes_service import create_service_blueprint
-    from routes_xray_logs import create_xray_logs_blueprint
-    from routes_commands import create_commands_blueprint
-    from routes_devtools import create_devtools_blueprint
-    from routes_fs import create_fs_blueprint
-    from routes_remotefs import create_remotefs_blueprint
-    from routes_fileops import create_fileops_blueprint
+    from core.context import AppContext
+    from services.logging_setup import core_logger
 
-    app.register_blueprint(create_utils_blueprint())
-    app.register_blueprint(create_ui_settings_blueprint())
-    app.register_blueprint(create_ws_support_blueprint())
-    app.register_blueprint(create_ws_streams_blueprint())
-    app.register_blueprint(create_capabilities_blueprint())
-
-    app.register_blueprint(create_xkeen_lists_blueprint(restart_xkeen=restart_xkeen))
-    app.register_blueprint(create_config_exchange_blueprint(github_owner=GITHUB_OWNER, github_repo=GITHUB_REPO))
-
-    app.register_blueprint(
-        create_routing_blueprint(
-            ROUTING_FILE=ROUTING_FILE,
-            ROUTING_FILE_RAW=ROUTING_FILE_RAW,
-            XRAY_CONFIGS_DIR=XRAY_CONFIGS_DIR,
-            XRAY_CONFIGS_DIR_REAL=XRAY_CONFIGS_DIR_REAL,
-            BACKUP_DIR=BACKUP_DIR,
-            BACKUP_DIR_REAL=BACKUP_DIR_REAL,
-            load_json=load_json,
-            strip_json_comments_text=strip_json_comments_text,
-            restart_xkeen=restart_xkeen,
-        )
+    ctx = AppContext(
+        settings=settings,
+        logger=core_logger(),
+        ui_state_dir=UI_STATE_DIR,
+        github_owner=GITHUB_OWNER,
+        github_repo=GITHUB_REPO,
+        mihomo_config_file=MIHOMO_CONFIG_FILE,
+        mihomo_templates_dir=MIHOMO_TEMPLATES_DIR,
+        mihomo_default_template=MIHOMO_DEFAULT_TEMPLATE,
+        xray_configs_dir=XRAY_CONFIGS_DIR,
+        xray_configs_dir_real=XRAY_CONFIGS_DIR_REAL,
+        routing_file=ROUTING_FILE,
+        routing_file_raw=ROUTING_FILE_RAW,
+        inbounds_file=INBOUNDS_FILE,
+        outbounds_file=OUTBOUNDS_FILE,
+        backup_dir=BACKUP_DIR,
+        backup_dir_real=BACKUP_DIR_REAL,
+        xray_error_log=XRAY_ERROR_LOG,
+        load_json=load_json,
+        save_json=save_json,
+        strip_json_comments_text=strip_json_comments_text,
+        snapshot_xray_config_before_overwrite=snapshot_xray_config_before_overwrite,
+        list_backups=list_backups,
+        detect_backup_target_file=_detect_backup_target_file,
+        find_latest_auto_backup_for=_find_latest_auto_backup_for,
+        restart_xkeen=restart_xkeen,
+        append_restart_log=append_restart_log,
+        read_restart_log=read_restart_log,
+        clear_restart_log=clear_restart_log,
+        ws_debug=ws_debug,
+        restart_xray_core=restart_xray_core,
     )
 
-    app.register_blueprint(
-        create_xray_configs_blueprint(
-            restart_xkeen=restart_xkeen,
-            load_json=load_json,
-            save_json=save_json,
-            strip_json_comments_text=strip_json_comments_text,
-            snapshot_xray_config_before_overwrite=snapshot_xray_config_before_overwrite,
-        )
-    )
-
-    app.register_blueprint(
-        create_mihomo_blueprint(
-            MIHOMO_CONFIG_FILE=MIHOMO_CONFIG_FILE,
-            MIHOMO_TEMPLATES_DIR=MIHOMO_TEMPLATES_DIR,
-            MIHOMO_DEFAULT_TEMPLATE=MIHOMO_DEFAULT_TEMPLATE,
-            restart_xkeen=restart_xkeen,
-        )
-    )
-
-    app.register_blueprint(
-        create_backups_blueprint(
-            BACKUP_DIR=BACKUP_DIR,
-            ROUTING_FILE=ROUTING_FILE,
-            ROUTING_FILE_RAW=ROUTING_FILE_RAW,
-            INBOUNDS_FILE=INBOUNDS_FILE,
-            OUTBOUNDS_FILE=OUTBOUNDS_FILE,
-            load_json=load_json,
-            save_json=save_json,
-            list_backups=list_backups,
-            _detect_backup_target_file=_detect_backup_target_file,
-            _find_latest_auto_backup_for=_find_latest_auto_backup_for,
-            strip_json_comments_text=strip_json_comments_text,
-            restart_xkeen=restart_xkeen,
-        )
-    )
-
-    from services.events import broadcast_event
-
-    app.register_blueprint(
-        create_service_blueprint(
-            restart_xkeen=restart_xkeen,
-            append_restart_log=append_restart_log,
-            XRAY_ERROR_LOG=XRAY_ERROR_LOG,
-            broadcast_event=broadcast_event,
-            read_restart_log=read_restart_log,
-            clear_restart_log=clear_restart_log,
-        )
-    )
-
-    app.register_blueprint(create_xray_logs_blueprint(ws_debug=ws_debug, restart_xray_core=restart_xray_core))
-    app.register_blueprint(create_commands_blueprint())
-    app.register_blueprint(create_devtools_blueprint(UI_STATE_DIR))
-
-    # Local filesystem facade (always enabled).
-    remotefs_mgr = None
-    try:
-        fs_bp = create_fs_blueprint(
-            tmp_dir=str(os.getenv("XKEEN_REMOTEFM_TMP_DIR", "/tmp") or "/tmp"),
-            max_upload_mb=int(os.getenv("XKEEN_REMOTEFM_MAX_UPLOAD_MB", "200") or "200"),
-            xray_configs_dir=XRAY_CONFIGS_DIR,
-            backup_dir=BACKUP_DIR,
-        )
-        app.register_blueprint(fs_bp)
-    except Exception as _e:
-        try:
-            ws_debug("fs blueprint init failed", error=str(_e))
-        except Exception:
-            pass
-
-    # RemoteFS blueprint (optional; disabled on MIPS and when lftp is missing)
-    from services.capabilities import detect_capabilities, detect_remotefs_state
-
-    try:
-        _caps = detect_capabilities(dict(os.environ))
-        app.extensions["xkeen.capabilities"] = _caps
-    except Exception:
-        _caps = None
-
-    _remote_enabled = bool((_caps or {}).get("remoteFs", {}).get("enabled"))
-    if _remote_enabled:
-        try:
-            _r = detect_remotefs_state(dict(os.environ))
-            _lftp_bin = _r.get("lftp_bin") or "lftp"
-            remotefs_bp, remotefs_mgr = create_remotefs_blueprint(
-                enabled=True,
-                lftp_bin=_lftp_bin,
-                max_sessions=int(os.getenv("XKEEN_REMOTEFM_MAX_SESSIONS", "6")),
-                ttl_seconds=int(os.getenv("XKEEN_REMOTEFM_SESSION_TTL", "900")),
-                max_upload_mb=int(os.getenv("XKEEN_REMOTEFM_MAX_UPLOAD_MB", "200")),
-                tmp_dir=str(os.getenv("XKEEN_REMOTEFM_TMP_DIR", "/tmp") or "/tmp"),
-                return_mgr=True,
-            )
-            app.extensions["xkeen.remotefs_mgr"] = remotefs_mgr
-            app.register_blueprint(remotefs_bp)
-        except Exception as _e:
-            try:
-                ws_debug("remotefs init failed", error=str(_e))
-            except Exception:
-                pass
-
-    # FileOps blueprint (copy/move/delete; supports RemoteFS if enabled)
-    try:
-        fileops_bp = create_fileops_blueprint(
-            remotefs_mgr=remotefs_mgr,
-            tmp_dir=str(os.getenv("XKEEN_REMOTEFM_TMP_DIR", "/tmp") or "/tmp"),
-            max_upload_mb=int(os.getenv("XKEEN_REMOTEFM_MAX_UPLOAD_MB", "200")),
-        )
-        app.register_blueprint(fileops_bp)
-    except Exception as _e:
-        try:
-            ws_debug("fileops init failed", error=str(_e))
-        except Exception:
-            pass
+    _register_api_blueprints(app, ctx)
 
     return app

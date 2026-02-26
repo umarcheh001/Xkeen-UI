@@ -31,16 +31,25 @@ def _local_allowed_roots() -> List[str]:
         # - /opt/var : runtime/cache/logs
         # - /tmp     : RAM disk and mount points (/tmp/mnt)
         roots = ['/opt/etc', '/opt/var', '/tmp']
+    # Keep both the user-facing root path (lexical checks use it) and its realpath
+    # (realpath checks use it). This matters on macOS where /tmp is a symlink to
+    # /private/tmp: UI often sends "/tmp/..." while realpath resolves to "/private/tmp/...".
     out: List[str] = []
     for r in roots:
         try:
-            rp = os.path.realpath(r).rstrip('/')
+            ap = os.path.normpath(str(r)).rstrip('/')
+            if ap:
+                out.append(ap)
+        except Exception:
+            pass
+        try:
+            rp = os.path.realpath(str(r)).rstrip('/')
             if rp:
                 out.append(rp)
         except Exception:
-            continue
+            pass
     # de-dup
-    return sorted(set(out))
+    return sorted(set([x for x in out if x]))
 
 
 def _local_is_allowed(real_path: str, roots: List[str]) -> bool:

@@ -15,45 +15,30 @@
         // ---- constants ----
         const RULE_GROUP_PRESETS = [
           // Контентные сервисы
-          { id: "YouTube",      label: "YouTube / видео" },
-          { id: "Discord",      label: "Discord" },
-          { id: "Twitch",       label: "Twitch" },
-          { id: "Reddit",       label: "Reddit" },
-          { id: "Spotify",      label: "Spotify" },
-          { id: "Steam",        label: "Steam / игры" },
-          { id: "Telegram",     label: "Telegram" },
-      
-          // Крупные сети / CDN / облака
-          { id: "Meta",         label: "Meta / Facebook" },
-          { id: "Amazon",       label: "Amazon / AWS" },
-          { id: "Cloudflare",   label: "Cloudflare" },
-          { id: "Fastly",       label: "Fastly" },
-          { id: "CDN77",        label: "CDN77" },
-          { id: "Akamai",       label: "Akamai" },
-      
+          { id: "YouTube",   label: "YouTube / видео" },
+          { id: "Discord",   label: "Discord" },
+          { id: "Twitch",    label: "Twitch" },
+          { id: "Reddit",    label: "Reddit" },
+          { id: "Spotify",   label: "Spotify" },
+          { id: "Steam",     label: "Steam / игры" },
+          { id: "Telegram",  label: "Telegram" },
+
+          // Крупные сети / соцсети
+          { id: "Meta",      label: "Meta / Facebook" },
+          { id: "Twitter",   label: "Twitter / X" },
+
+          // CDN / хостинги
+          { id: "CDN",       label: "CDN / хостинги" },
+
           // Общие сервисы
-          { id: "Google",       label: "Google" },
-          { id: "GitHub",       label: "GitHub" },
-          { id: "AI",           label: "AI сервисы" },
-      
-          // ZKeen: дополнительные GEOIP/GEOSITE пакеты
-          { id: "DigitalOcean", label: "DigitalOcean" },
-          { id: "Gcore",        label: "Gcore" },
-          { id: "Hetzner",      label: "Hetzner" },
-          { id: "Linode",       label: "Linode" },
-          { id: "Oracle",       label: "Oracle Cloud" },
-          { id: "Ovh",          label: "OVH" },
-          { id: "Vultr",        label: "Vultr" },
-          { id: "Colocrossing", label: "Colocrossing" },
-          { id: "Contabo",      label: "Contabo" },
-          { id: "Mega",         label: "Mega" },
-          { id: "Scaleway",     label: "Scaleway" },
-      
-          // Специальная группа
+          { id: "Google",    label: "Google" },
+          { id: "GitHub",    label: "GitHub" },
+          { id: "AI",        label: "AI сервисы" },
+
           // QUIC и базовая группа блокировок всегда включены и не управляются из UI
         ];
-      
-      
+
+
         // Active list of rule IDs that should be shown for the current profile.
         // Filled from backend (/api/mihomo/profile_defaults).
         let availableRuleGroupIds = RULE_GROUP_PRESETS.map(p => p.id);
@@ -144,6 +129,7 @@
         const previewMonacoHost = document.getElementById("previewMonaco");
         const validationLogEl = document.getElementById("validationLog");
         const clearValidationLogBtn = document.getElementById("clearValidationLogBtn");
+        const corePillEl = document.getElementById("xkeen-core-pill");
 
         // Bulk import modal
         const bulkImportModal = document.getElementById("bulkImportModal");
@@ -162,6 +148,51 @@
       
        
         let validationLogRaw = "";
+
+        // ---- active core indicator (Mihomo generator page) ----
+        let _lastKnownCore = '';
+
+        function _setCorePill(core, running) {
+          if (!corePillEl) return;
+          const c = String(core || '').toLowerCase();
+          const isRunning = !!running;
+
+          let label = '';
+          if (!isRunning) label = 'не запущено';
+          else if (c === 'mihomo') label = 'mihomo';
+          else if (c === 'xray') label = 'xray';
+          else label = 'неизвестно';
+
+          corePillEl.textContent = 'Ядро: ' + label;
+          if (corePillEl.dataset) corePillEl.dataset.core = (c === 'mihomo' || c === 'xray') ? c : '';
+          corePillEl.classList.toggle('has-core', isRunning && (c === 'mihomo' || c === 'xray'));
+        }
+
+        async function refreshActiveCorePill(opts) {
+          const o = opts || {};
+          try {
+            const res = await fetch('/api/xkeen/status');
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.ok === false) throw new Error((data && data.error) ? data.error : ('HTTP ' + res.status));
+
+            const core = (data && data.core) ? String(data.core) : '';
+            const running = !!(data && data.running);
+
+            if (core) _lastKnownCore = core;
+            _setCorePill(core, running);
+
+            if (!o.silent && running) {
+              try {
+                const label = core ? String(core) : 'неизвестно';
+                toast('Активное ядро: ' + label, 'info');
+              } catch (e) {}
+            }
+            return { core, running };
+          } catch (e) {
+            _setCorePill(_lastKnownCore, true);
+            return { core: _lastKnownCore, running: true, error: String(e || '') };
+          }
+        }
       
         function escapeHtml(str) {
           if (!str) return "";
@@ -2313,18 +2344,27 @@ function initEngineToggle() {
           }
       
           const payload = { state, configOverride: cfg };
+          let snap = null;
+          const btn = applyBtn;
           try {
+            try { if (btn) btn.disabled = true; } catch (e) {}
+
+            // Best-effort: refresh core pill before apply so the user immediately sees current core.
+            try { snap = await refreshActiveCorePill({ silent: true }); } catch (e) { snap = null; }
+
             const res = await fetch("/api/mihomo/generate_apply", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.ok) {
               setStatus("Ошибка при применении: " + (data.error || res.status), "err");
               if (notify) try { toast("Ошибка при применении: " + (data.error || res.status), 'error'); } catch (e) {}
               return;
             }
+
+            // --- warnings (dedup) ---
             const serverWarnings = Array.isArray(data.warnings) ? data.warnings : [];
             let serverWarnMsg = null;
             if (serverWarnings.length) {
@@ -2339,6 +2379,64 @@ function initEngineToggle() {
               if (uniq.length) serverWarnMsg = "Предупреждения генератора: " + uniq.join(" • ");
             }
 
+            // --- core hint ---
+            const core = (data && data.core) ? String(data.core) : (snap && snap.core ? String(snap.core) : (_lastKnownCore || ''));
+            if (core) _lastKnownCore = core;
+            try { _setCorePill(core, true); } catch (e) {}
+
+            if (core && core !== 'mihomo') {
+              const warn = 'Сейчас активно ядро ' + core + '. Конфиг Mihomo сохранён, но применится только после переключения ядра на Mihomo.';
+              // toast.js supports only info/success/error; use boolean=true to show ⚠️.
+              if (notify) try { toast(warn, true); } catch (e) {}
+            }
+
+            const jobId = (data && (data.restart_job_id || data.job_id)) ? String(data.restart_job_id || data.job_id) : '';
+
+            // New async mode: restart is a background job.
+            if (jobId) {
+              const baseMsg = 'Конфиг сохранён. Запущен перезапуск xkeen (в фоне).';
+              if (serverWarnMsg) {
+                setStatus(baseMsg + "\n" + serverWarnMsg, "ok");
+                if (notify) try { toast(serverWarnMsg, 'info'); } catch (e) {}
+              } else {
+                setStatus(baseMsg, "ok");
+              }
+
+              // Stream restart output into the log panel.
+              try {
+                appendValidationLog('');
+                appendValidationLog('--- xkeen -restart (job ' + jobId + ') ---');
+              } catch (e) {}
+
+              const CJ = (window.XKeen && XKeen.util && XKeen.util.commandJob) ? XKeen.util.commandJob : null;
+              if (CJ && typeof CJ.waitForCommandJob === 'function') {
+                const result = await CJ.waitForCommandJob(jobId, {
+                  maxWaitMs: 300000,
+                  onChunk: (chunk) => {
+                    try {
+                      const clean = String(chunk || '').replace(/\r\n/g, '\n').replace(/\n+$/g, '');
+                      if (clean) appendValidationLog(clean);
+                    } catch (e) {}
+                  }
+                });
+
+                const ok = !!(result && result.status === 'finished' && (result.exit_code === 0 || result.exit_code === null) && !result.error);
+                if (ok) {
+                  setStatus('xkeen перезапущен.', 'ok');
+                  if (notify) try { toast('xkeen перезапущен.', 'success'); } catch (e) {}
+                } else {
+                  const errMsg = (result && result.error) ? String(result.error) : 'Перезапуск завершился с ошибкой';
+                  setStatus(errMsg, 'err');
+                  if (notify) try { toast(errMsg, 'error'); } catch (e) {}
+                }
+              } else {
+                // Fallback: job was queued but we can't stream it.
+                if (notify) try { toast('Перезапуск запущен (job ' + jobId + ').', 'info'); } catch (e) {}
+              }
+              return;
+            }
+
+            // Legacy sync mode (server returned restart log inline)
             const baseMsg = "Конфиг отправлен на роутер, xkeen перезапускается.";
             if (serverWarnMsg) {
               setStatus(baseMsg + "\n" + serverWarnMsg, "ok");
@@ -2346,10 +2444,11 @@ function initEngineToggle() {
             } else {
               setStatus(baseMsg, "ok");
             }
-            /* toast for restart is handled globally in spinner_fetch.js */
           } catch (e) {
             setStatus("Ошибка сети: " + e, "err");
             if (notify) try { toast("Ошибка сети: " + e, 'error'); } catch (e2) {}
+          } finally {
+            try { if (btn) btn.disabled = false; } catch (e) {}
           }
         }
       
@@ -2414,6 +2513,8 @@ function initEngineToggle() {
         initEngineToggle();
         addInitialSubscriptionRow();
         loadProfileDefaults(profileSelect && profileSelect.value);
+        // Show active core badge in the header (best-effort, no hard dependency).
+        refreshActiveCorePill({ silent: true });
         setStatus("Скелет загружен. Заполните поля слева и нажмите «Применить».", null);
       
         addSubscriptionBtn.onclick = () => {

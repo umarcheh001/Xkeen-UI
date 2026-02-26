@@ -14,6 +14,30 @@
   XKeen.state = XKeen.state || {};
   XKeen.features = XKeen.features || {};
 
+  const CORE_HTTP = (window.XKeen && window.XKeen.core && window.XKeen.core.http) ? window.XKeen.core.http : null;
+  const CORE_STORAGE = (window.XKeen && window.XKeen.core && window.XKeen.core.storage) ? window.XKeen.core.storage : null;
+
+  function _storeGet(key) {
+    try { if (CORE_STORAGE && typeof CORE_STORAGE.get === 'function') return CORE_STORAGE.get(key); } catch (e) {}
+    try { return localStorage.getItem(String(key)); } catch (e2) { return null; }
+  }
+  function _storeSet(key, val) {
+    try { if (CORE_STORAGE && typeof CORE_STORAGE.set === 'function') return CORE_STORAGE.set(key, val); } catch (e) {}
+    try { localStorage.setItem(String(key), String(val)); } catch (e2) {}
+  }
+  function _storeRemove(key) {
+    try { if (CORE_STORAGE && typeof CORE_STORAGE.remove === 'function') return CORE_STORAGE.remove(key); } catch (e) {}
+    try { localStorage.removeItem(String(key)); } catch (e2) {}
+  }
+
+  function _withCSRF(init, methodHint) {
+    try {
+      if (CORE_HTTP && typeof CORE_HTTP.withCSRF === 'function') return CORE_HTTP.withCSRF(init, methodHint);
+    } catch (e) {}
+    return init || {};
+  }
+
+
   const IDS = {
     textarea: 'routing-editor',
     status: 'routing-status',
@@ -27,7 +51,11 @@
     // Routing fragment selector (optional)
     fragmentSelect: 'routing-fragment-select',
     fragmentRefresh: 'routing-fragment-refresh-btn',
+    fragmentAllToggle: 'routing-fragment-all-toggle',
     fileCode: 'routing-file-code',
+
+    // Mode badge (Routing vs Fragment)
+    modeBadge: 'routing-editor-mode-badge',
 
     // JSONC comments status (sidecar present / used)
     commentsStatus: 'routing-comments-status',
@@ -57,6 +85,9 @@
   // Active routing fragment file (basename or absolute). Controlled by dropdown.
   let _activeFragment = null;
 
+  // Semantic mode: 'routing' (routing config) or 'fragment' (generic Xray JSON).
+  let _routingMode = 'routing';
+
   // Active editor engine: 'codemirror' (default) or 'monaco'
   let _engine = 'codemirror';
   let _monaco = null;
@@ -64,6 +95,10 @@
   let _monacoHostEl = null;
   let _engineSelectEl = null;
   let _engineTouched = false;
+
+  // Prevent concurrent editor engine switches (init + onShow may race on slow devices).
+  // If Monaco gets created twice, it may throw: "Element already has context attribute".
+  let _engineSwitchChain = Promise.resolve();
 
   // Monaco diagnostics debounce (markers).
   let _monacoDiagTimer = null;
@@ -83,13 +118,34 @@
 
   function rememberActiveFragment(name) {
     try {
-      if (name) localStorage.setItem('xkeen.routing.fragment', String(name));
+      if (name) _storeSet('xkeen.routing.fragment', String(name));
     } catch (e) {}
+  }
+
+  function rememberFragmentsScopeAll(enabled) {
+    try { _storeSet('xkeen.routing.fragments.all', enabled ? '1' : '0'); } catch (e) {}
+  }
+
+  function restoreFragmentsScopeAll() {
+    try {
+      const v = _storeGet('xkeen.routing.fragments.all');
+      if (v === null || v === undefined) return false;
+      return String(v) === '1' || String(v).toLowerCase() === 'true';
+    } catch (e) {}
+    return false;
+  }
+
+  function isFragmentsScopeAllEnabled() {
+    try {
+      const cb = $(IDS.fragmentAllToggle);
+      if (cb) return !!cb.checked;
+    } catch (e) {}
+    return restoreFragmentsScopeAll();
   }
 
   function restoreRememberedFragment() {
     try {
-      const v = localStorage.getItem('xkeen.routing.fragment');
+      const v = _storeGet('xkeen.routing.fragment');
       if (v) return String(v);
     } catch (e) {}
     return null;
@@ -114,6 +170,156 @@
       } else if (f) {
         codeEl.textContent = f;
       }
+    } catch (e) {}
+  }
+
+  function _activeFileNameForUI() {
+    try {
+      const f = getActiveFragment();
+      if (f) return String(f);
+    } catch (e) {}
+    try {
+      const sel = $(IDS.fragmentSelect);
+      const cur = sel && sel.dataset ? String(sel.dataset.current || '') : '';
+      if (cur) return cur;
+    } catch (e2) {}
+    return '';
+  }
+
+  function _updateModeBadge() {
+    const badge = $(IDS.modeBadge);
+    if (!badge) return;
+    const isRouting = String(_routingMode || '') === 'routing';
+    badge.textContent = isRouting ? 'Routing mode' : 'Fragment mode';
+    try {
+      badge.setAttribute('data-profile', isRouting ? 'routing' : 'fragment');
+      badge.setAttribute('data-tooltip', 'Режим редактора: ' + (isRouting ? 'Routing mode' : 'Fragment mode'));
+    } catch (e) {}
+  }
+
+  function _updateFileScopedTooltips() {
+    const file = _activeFileNameForUI();
+    if (!file) return;
+
+    try {
+      const backupBtn = $(IDS.btnBackup);
+      if (backupBtn) backupBtn.setAttribute('data-tooltip', 'Backup для файла: ' + file);
+    } catch (e) {}
+
+    try {
+      const raBtn = $(IDS.btnRestoreAuto);
+      if (raBtn) raBtn.setAttribute('data-tooltip', 'Restore autobackup для файла: ' + file);
+    } catch (e) {}
+  }
+
+
+
+  function _isPlainObject(v) {
+    return !!(v && typeof v === 'object' && !Array.isArray(v));
+  }
+
+  function _detectRoutingModeFromParsed(obj, fileName) {
+    // Heuristics:
+    // - classic routing: root.routing is an object
+    // - routing-only fragment: root has rules/balancers/domainStrategy
+    // - fallback by file name contains 'routing'
+    try {
+      if (_isPlainObject(obj) && _isPlainObject(obj.routing)) return 'routing';
+      if (_isPlainObject(obj)) {
+        if (Array.isArray(obj.rules) || Array.isArray(obj.balancers)) return 'routing';
+        if (obj.domainStrategy != null) return 'routing';
+      }
+    } catch (e) {}
+    try {
+      const fn = String(fileName || getActiveFragment() || '');
+      if (fn && /routing/i.test(fn)) return 'routing';
+    } catch (e2) {}
+    return 'fragment';
+  }
+
+  function _detectRoutingModeFromText(rawText) {
+    const fileName = getActiveFragment();
+    const cleaned = stripJsonComments(String(rawText ?? ''));
+    try {
+      const obj = JSON.parse(cleaned);
+      return _detectRoutingModeFromParsed(obj, fileName);
+    } catch (e) {
+      // If JSON is broken, fall back to file name / simple substring match.
+      try {
+        const fn = String(fileName || '');
+        if (fn && /routing/i.test(fn)) return 'routing';
+      } catch (e2) {}
+      try {
+        if (/\"routing\"\s*:\s*\{/.test(String(rawText || ''))) return 'routing';
+      } catch (e3) {}
+      return 'fragment';
+    }
+  }
+
+  function _setElHidden(el, hide) {
+    if (!el) return;
+    try {
+      if (hide) {
+        if (el.dataset && el.dataset.xkPrevDisplay === undefined) {
+          el.dataset.xkPrevDisplay = (el.style && el.style.display) ? String(el.style.display) : '';
+        }
+        el.style.display = 'none';
+      } else {
+        if (el.dataset && el.dataset.xkPrevDisplay !== undefined) {
+          el.style.display = String(el.dataset.xkPrevDisplay || '');
+          try { delete el.dataset.xkPrevDisplay; } catch (e) {}
+        } else {
+          el.style.display = '';
+        }
+      }
+    } catch (e) {}
+  }
+
+  function _applyRoutingModeUI(mode) {
+    const root = document.getElementById('view-routing') || document.body;
+    const isRouting = String(mode || '') === 'routing';
+
+    try {
+      const els = root.querySelectorAll ? root.querySelectorAll('.xk-only-routing') : [];
+      (els || []).forEach((el) => _setElHidden(el, !isRouting));
+    } catch (e) {}
+
+    // Update primary button labels/tooltips so the editor doesn't lie.
+    try {
+      const saveBtn = $(IDS.btnSave);
+      if (saveBtn) {
+        saveBtn.textContent = isRouting ? '💾 Save routing' : '💾 Save file';
+        saveBtn.setAttribute('data-tooltip', isRouting
+          ? 'Сохранить текущий роутинг (routing.json).'
+          : 'Сохранить выбранный JSON‑файл (как есть, с поддержкой JSONC‑комментариев).');
+      }
+    } catch (e) {}
+
+    // Keep the mode badge + file-scoped tooltips in sync.
+    try { _updateModeBadge(); } catch (e) {}
+    try { _updateFileScopedTooltips(); } catch (e) {}
+
+    // Expose current mode (handy for other modules / debugging).
+    try {
+      if (window.XKeen && window.XKeen.state) window.XKeen.state.routingMode = isRouting ? 'routing' : 'fragment';
+    } catch (e) {}
+  }
+
+  function _setRoutingMode(mode, reason) {
+    const next = String(mode || '').toLowerCase() === 'routing' ? 'routing' : 'fragment';
+    if (next === _routingMode) return;
+    _routingMode = next;
+    try { _applyRoutingModeUI(_routingMode); } catch (e) {}
+    try {
+      const ev = new CustomEvent('xkeen-routing-mode', { detail: { mode: _routingMode, reason: String(reason || '') } });
+      window.dispatchEvent(ev);
+    } catch (e2) {}
+  }
+
+  function _maybeUpdateModeFromParsed(obj) {
+    try {
+      const next = _detectRoutingModeFromParsed(obj, getActiveFragment());
+      _setRoutingMode(next, 'parsed');
     } catch (e) {}
   }
 
@@ -147,24 +353,39 @@
     const sel = $(IDS.fragmentSelect);
     if (!sel) return;
 
-    const notify = !!(opts && opts.notify);
+    const all = isFragmentsScopeAllEnabled();
+    const url = all ? '/api/routing/fragments?all=1' : '/api/routing/fragments';
 
+    const notify = !!(opts && opts.notify);
     let data = null;
     try {
-      const res = await fetch('/api/routing/fragments', { cache: 'no-store' });
-      data = await res.json().catch(() => null);
+      if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
+        data = await CORE_HTTP.fetchJSON(url, { method: 'GET', cache: 'no-store' }).catch(() => null);
+      } else {
+        const res = await fetch(url, { cache: 'no-store' });
+        data = await res.json().catch(() => null);
+      }
     } catch (e) {
       data = null;
     }
     if (!data || !data.ok || !Array.isArray(data.items)) {
       // Fallback: keep whatever is rendered by server
-      try { if (notify && typeof window.toast === 'function') window.toast('Не удалось обновить список файлов роутинга', 'error'); } catch (e) {}
+      try {
+        if (notify && typeof window.toast === 'function') {
+          window.toast(all ? 'Не удалось обновить список файлов Xray' : 'Не удалось обновить список файлов роутинга', 'error');
+        }
+      } catch (e) {}
       return;
     }
 
     const currentDefault = (data.current || sel.dataset.current || '').toString();
     const remembered = restoreRememberedFragment();
     const preferred = (getActiveFragment() || remembered || currentDefault || (data.items[0] ? data.items[0].name : '')).toString();
+
+    // Optional UX: when switching from "All files" -> routing-only list,
+    // explain why selection may jump back to the routing file.
+    const prevSelection = (opts && opts.prevSelection) ? String(opts.prevSelection) : null;
+    const scopeChanged = (opts && opts.scopeChanged) ? String(opts.scopeChanged) : '';
 
     function decorateName(n) {
       const name = String(n || '');
@@ -209,6 +430,21 @@
       } catch (e) {}
     } catch (e) {}
 
+    // If scope was reduced and a non-routing file disappeared from the list, clarify the jump.
+    try {
+      if (scopeChanged === 'off' && prevSelection && _activeFragment && prevSelection !== _activeFragment) {
+        if (names.indexOf(prevSelection) === -1) {
+          if (typeof window.toast === 'function') {
+            window.toast('«Все файлы» выключено — переключено на: ' + String(_activeFragment), 'info');
+          }
+        }
+      }
+    } catch (e) {}
+
+    // Keep badge/tooltips up-to-date (selection may change during refresh).
+    try { _updateModeBadge(); } catch (e) {}
+    try { _updateFileScopedTooltips(); } catch (e) {}
+
     // Wire refresh button (once)
     try {
       const btn = $(IDS.fragmentRefresh);
@@ -219,10 +455,19 @@
         });
         btn.dataset.xkWired = '1';
       }
+      if (btn) {
+        btn.setAttribute('data-tooltip', all
+          ? 'Обновить список JSON-файлов Xray из /opt/etc/xray/configs/ (кроме 01_log.json)'
+          : 'Обновить список файлов роутинга из /opt/etc/xray/configs/');
+      }
     } catch (e) {}
 
     // Success toast (only when explicitly requested)
-    try { if (notify && typeof window.toast === 'function') window.toast('Список файлов роутинга обновлён', 'success'); } catch (e) {}
+    try {
+      if (notify && typeof window.toast === 'function') {
+        window.toast(all ? 'Список файлов Xray обновлён' : 'Список файлов роутинга обновлён', 'success');
+      }
+    } catch (e) {}
   }
 
 
@@ -565,9 +810,10 @@ function closeHelp() {
     const cleaned = sm.cleaned;
 
     try {
-      JSON.parse(cleaned);
+      const obj = JSON.parse(cleaned);
       setError('', null);
       clearMonacoMarkers();
+      _maybeUpdateModeFromParsed(obj);
       return true;
     } catch (e) {
       const msg = (e && e.message) ? String(e.message) : String(e);
@@ -627,8 +873,9 @@ function closeHelp() {
     }
 
     try {
-      JSON.parse(cleaned);
+      const obj = JSON.parse(cleaned);
       setError('', null);
+      _maybeUpdateModeFromParsed(obj);
       return true;
     } catch (e) {
       const pos = extractJsonErrorPos(e);
@@ -677,15 +924,15 @@ function closeHelp() {
 
   async function load() {
     const statusEl = $(IDS.status);
-    if (statusEl) statusEl.textContent = 'Загрузка routing…';
+    if (statusEl) statusEl.textContent = 'Загрузка файла…';
     try {
       const file = getActiveFragment();
       const url = file ? ('/api/routing?file=' + encodeURIComponent(file)) : '/api/routing';
       const res = await fetch(url, { cache: 'no-store' });
       _applyCommentsHeaders(res);
       if (!res.ok) {
-        if (statusEl) statusEl.textContent = 'Не удалось загрузить routing.';
-        toast('Не удалось загрузить routing.', true);
+        if (statusEl) statusEl.textContent = 'Не удалось загрузить файл.';
+        toast('Не удалось загрузить файл.', true);
         return;
       }
 
@@ -704,6 +951,8 @@ function closeHelp() {
       setEditorTextAll(text);
       scrollEditorsTop();
 
+      try { _setRoutingMode(_detectRoutingModeFromText(text), 'load'); } catch (e) {}
+
       try {
         // Keep compatibility with existing monolith flags, if present.
         window.routingSavedContent = text;
@@ -712,19 +961,19 @@ function closeHelp() {
         if (saveBtn) saveBtn.classList.remove('dirty');
       } catch (e) {}
 
-      if (statusEl) statusEl.textContent = 'Routing загружен.';
+      const okJson = validate();
+      if (statusEl) statusEl.textContent = okJson ? (_routingMode === 'routing' ? 'Routing загружен.' : 'Файл загружен.') : 'Файл загружен, но содержит ошибку JSON.';
       try {
         if (typeof window.updateLastActivity === 'function') {
           const fp = window.XKEEN_FILES && window.XKEEN_FILES.routing ? window.XKEEN_FILES.routing : '';
           window.updateLastActivity('loaded', 'routing', fp);
         }
       } catch (e) {}
-      validate();
     } catch (e) {
       console.error(e);
       _setCommentsBadge(false, false, '');
-      if (statusEl) statusEl.textContent = 'Ошибка загрузки routing.';
-      toast('Ошибка загрузки routing.', true);
+      if (statusEl) statusEl.textContent = 'Ошибка загрузки файла.';
+      toast('Ошибка загрузки файла.', true);
     }
   }
 
@@ -747,11 +996,11 @@ function closeHelp() {
     try {
       const file = getActiveFragment();
       const url = '/api/routing?restart=' + (restart ? '1' : '0') + (file ? ('&file=' + encodeURIComponent(file)) : '');
-      const res = await fetch(url, {
+      const res = await fetch(url, _withCSRF({
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: rawText,
-      });
+      }, 'POST'));
 
       let data = null;
       try { data = await res.json(); } catch (e) {}
@@ -766,7 +1015,7 @@ function closeHelp() {
           if (saveBtn) saveBtn.classList.remove('dirty');
         } catch (e) {}
 
-        let msg = 'Routing сохранён.';
+        let msg = (_routingMode === 'routing') ? 'Routing сохранён.' : 'Файл сохранён.';
         if (statusEl) statusEl.textContent = msg;
         if (!data || !data.restarted) {
           toast(msg, false);
@@ -784,8 +1033,8 @@ function closeHelp() {
       }
     } catch (e) {
       console.error(e);
-      if (statusEl) statusEl.textContent = 'Ошибка при сохранении routing.';
-      toast('Ошибка при сохранении routing.', true);
+      if (statusEl) statusEl.textContent = 'Ошибка при сохранении файла.';
+      toast('Ошибка при сохранении файла.', true);
     }
   }
 
@@ -856,11 +1105,11 @@ function closeHelp() {
     // Falls back to classic JSON.stringify (will remove comments).
     let serverFormatted = null;
     try {
-      const res = await fetch('/api/json/format', {
+      const res = await fetch('/api/json/format', _withCSRF({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
-      });
+      }, 'POST'));
       const data = await res.json().catch(() => null);
       if (res.ok && data && data.ok === true && typeof data.text === 'string') {
         serverFormatted = data.text;
@@ -903,6 +1152,10 @@ function closeHelp() {
     toast('Комментарии удалены.', false);
   }
   async function sortRules() {
+    if (_routingMode !== 'routing') {
+      try { toast('Сортировка доступна только для routing.rules.', 'info'); } catch (e) { try { toast('Сортировка доступна только для routing.rules.', false); } catch (e2) {} }
+      return;
+    }
     const statusEl = $(IDS.status);
     const text = getEditorText();
     const cleaned = stripJsonComments(text);
@@ -948,8 +1201,19 @@ function closeHelp() {
     const backupsStatusEl = document.getElementById('backups-status');
     try {
       const file = getActiveFragment();
-      const url = '/api/backup' + (file ? ('?file=' + encodeURIComponent(file)) : '');
-      const res = await fetch(url, { method: 'POST' });
+      let url = '';
+      if (_routingMode === 'routing') {
+        url = '/api/backup' + (file ? ('?file=' + encodeURIComponent(file)) : '');
+      } else {
+        if (!file) {
+          const msg = 'Выберите файл для бэкапа.';
+          if (statusEl) statusEl.textContent = msg;
+          toast(msg, true);
+          return;
+        }
+        url = '/api/backup-fragment?file=' + encodeURIComponent(file);
+      }
+      const res = await fetch(url, _withCSRF({ method: 'POST' }, 'POST'));
       let data = null;
       try { data = await res.json(); } catch (e) {}
       if (res.ok && data && data.ok) {
@@ -979,21 +1243,48 @@ function closeHelp() {
 
   async function restoreAuto() {
     const statusEl = $(IDS.status);
-    // Use the actual routing file name (supports 05_routing_hys2.json)
-    let label = '05_routing.json';
-    try {
-      if (window.XKEEN_FILES && window.XKEEN_FILES.routing) {
-        label = String(window.XKEEN_FILES.routing).split(/[\\/]/).pop() || label;
-      }
-    } catch (e) {}
+    const file = getActiveFragment();
+
+    // Use a human label for confirmations
+    let label = '';
+    if (_routingMode === 'routing') {
+      // Use the actual routing file name (supports 05_routing_hys2.json)
+      label = '05_routing.json';
+      try {
+        if (file) {
+          label = String(file).split(/[\\/]/).pop() || label;
+        } else if (window.XKEEN_FILES && window.XKEEN_FILES.routing) {
+          label = String(window.XKEEN_FILES.routing).split(/[\\/]/).pop() || label;
+        }
+      } catch (e) {}
+    } else {
+      label = file ? String(file).split(/[\\/]/).pop() : 'выбранный файл';
+    }
+
     if (!confirm('Восстановить из авто-бэкапа файл ' + label + '?')) return;
 
     try {
-      const res = await fetch('/api/restore-auto', {
+      let endpoint = '/api/restore-auto';
+      let body = { target: 'routing' };
+      if (_routingMode !== 'routing') {
+        if (!file) {
+          const msg = 'Выберите файл для восстановления из авто-бэкапа.';
+          if (statusEl) statusEl.textContent = msg;
+          toast(msg, true);
+          return;
+        }
+        endpoint = '/api/restore-auto-fragment';
+        body = { file: file };
+      } else {
+        // Support multiple routing fragments (e.g. 05_routing_hys2.json)
+        if (file) body.file = file;
+      }
+
+      const res = await fetch(endpoint, _withCSRF({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target: 'routing' }),
-      });
+        body: JSON.stringify(body),
+      }, 'POST'));
       let data = null;
       try { data = await res.json(); } catch (e) {}
       if (res.ok && data && data.ok) {
@@ -1109,6 +1400,10 @@ function closeHelp() {
           updateActiveFileLabel((dir ? dir.replace(/\/+$/, '') + '/' : '') + _activeFragment, dir);
         } catch (e2) {}
 
+        // Update tooltips immediately so actions are self-documenting even before load() completes.
+        try { _updateFileScopedTooltips(); } catch (e) {}
+        try { _updateModeBadge(); } catch (e) {}
+
         // Keep legacy global in sync for labels
         try {
           const dir2 = fragSel.dataset && fragSel.dataset.dir ? String(fragSel.dataset.dir) : '';
@@ -1118,6 +1413,21 @@ function closeHelp() {
         await load();
       });
       if (fragSel.dataset) fragSel.dataset.xkeenWired = '1';
+    }
+
+    // "All files" toggle for fragment selector (optional)
+    const allCb = $(IDS.fragmentAllToggle);
+    if (allCb && !(allCb.dataset && allCb.dataset.xkWired === '1')) {
+      try { allCb.checked = restoreFragmentsScopeAll(); } catch (e) {}
+      allCb.addEventListener('change', async () => {
+        const enabled = !!allCb.checked;
+        const prevSel = getActiveFragment();
+        rememberFragmentsScopeAll(enabled);
+        await refreshFragmentsList({ notify: true, scopeChanged: enabled ? 'on' : 'off', prevSelection: prevSel });
+        // Do not auto-switch file here: keep selection. Reload content so the editor stays consistent.
+        try { await load(); } catch (e) {}
+      });
+      if (allCb.dataset) allCb.dataset.xkWired = '1';
     }
 
     // Help line
@@ -1332,15 +1642,15 @@ cm.on('change', () => {
   }
 
   function _readLocal(key) {
-    try { return localStorage.getItem(key) || ''; } catch (e) { return ''; }
+    try { return String(_storeGet(key) || ''); } catch (e) { return ''; }
   }
 
   function _writeLocal(key, val) {
-    try { localStorage.setItem(key, String(val || '')); } catch (e) {}
+    try { _storeSet(key, String(val || '')); } catch (e) {}
   }
 
   function _removeLocal(key) {
-    try { localStorage.removeItem(key); } catch (e) {}
+    try { _storeRemove(key); } catch (e) {}
   }
 
   function migrateLegacyEngineIfNeeded() {
@@ -1733,7 +2043,7 @@ cm.on('change', () => {
     } catch (e) {}
   }
 
-  async function switchEngine(nextEngine, opts) {
+  async function _doSwitchEngine(nextEngine, opts) {
     const next = normalizeEngine(nextEngine);
     if (next === _engine) return;
 
@@ -1778,6 +2088,14 @@ cm.on('change', () => {
       try { if (_cm && _cm.focus) _cm.focus(); } catch (e) {}
       try { validate(); } catch (e) {}
     }
+  }
+
+  function switchEngine(nextEngine, opts) {
+    // Serialize all switches to avoid racing Monaco creation.
+    _engineSwitchChain = _engineSwitchChain
+      .catch(() => {})
+      .then(() => _doSwitchEngine(nextEngine, opts));
+    return _engineSwitchChain;
   }
 
   function ensureEngineToggleUI() {

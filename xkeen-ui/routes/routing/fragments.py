@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 
 
 def register_fragments_routes(bp: Blueprint, *, xray_configs_dir: str, routing_file: str) -> None:
@@ -16,8 +16,13 @@ def register_fragments_routes(bp: Blueprint, *, xray_configs_dir: str, routing_f
     def api_list_routing_fragments() -> Any:
         """List routing fragment files in xray_configs_dir.
 
-        Used by UI dropdown: /opt/etc/xray/configs/*routing*.json
+        Default: used by UI dropdown (routing only): /opt/etc/xray/configs/*routing*.json
+        Optional: /api/routing/fragments?all=1 lists all *.json fragments (except 01_log.json).
         """
+
+        q_all = str(request.args.get("all") or "").strip().lower()
+        list_all = q_all in {"1", "true", "yes", "on"}
+
         items = []
         try:
             if os.path.isdir(xray_configs_dir):
@@ -25,7 +30,10 @@ def register_fragments_routes(bp: Blueprint, *, xray_configs_dir: str, routing_f
                     lname = str(name or "").lower()
                     if not lname.endswith(".json"):
                         continue
-                    if "routing" not in lname:
+                    # Always exclude the log config: logs are managed in a dedicated UI card.
+                    if lname == "01_log.json":
+                        continue
+                    if (not list_all) and ("routing" not in lname):
                         continue
                     full = os.path.join(xray_configs_dir, name)
                     if not os.path.isfile(full):

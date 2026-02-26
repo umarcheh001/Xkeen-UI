@@ -267,7 +267,31 @@
   }
 
   // Install a singleton if not present yet.
-  if (!window.XKeen.terminal.api) {
+  // NOTE: panel pages may pre-install a *lazy stub* API so other features can
+  // call `XKeen.terminal.api.*` before Terminal scripts are loaded.
+  // When the real Terminal core loads, we MUST replace that stub, otherwise
+  // `api.send()` stays a stub forever (Commands tab opens PTY but can't send).
+  //
+  // REGRESSION NOTE:
+  //   Do NOT change this logic to a simple `api ||= ...` / "only if missing".
+  //   The lazy stub exists intentionally and must be overwritten here.
+  function _looksLikeLazyStub(api) {
+    // Primary signal.
+    if (api && api.__xkLazyStubInstalled) return true;
+    // Secondary guard: if someone forgets to set the flag, we still want to
+    // detect the minimal stub shape (only open/send) and replace it.
+    if (!api || typeof api !== 'object') return false;
+    const hasOpen = (typeof api.open === 'function');
+    const hasSend = (typeof api.send === 'function');
+    const hasSelfTest = (typeof api.selfTest === 'function');
+    const hasIsOpen = (typeof api.isOpen === 'function');
+    // Minimal stub usually has open/send only.
+    return hasOpen && hasSend && (!hasSelfTest || !hasIsOpen);
+  }
+
+  const _existingApi = window.XKeen.terminal.api;
+  const _shouldInstall = (!_existingApi || _looksLikeLazyStub(_existingApi));
+  if (_shouldInstall) {
     window.XKeen.terminal.api = createPublicApi();
   }
 

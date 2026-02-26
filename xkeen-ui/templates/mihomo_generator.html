@@ -537,6 +537,12 @@
             aria-label="Переключить тему"
           ></button>
           <a href="{{ url_for('devtools_page') }}" class="btn-link" title="DevTools">DevTools</a>
+          <span
+            id="xkeen-core-pill"
+            class="service-core-text"
+            style="cursor: default;"
+            title="Активное ядро XKeen"
+          >Ядро: …</span>
           <a
             href="{{ url_for('devtools_page') }}#dt-update-card"
             id="xk-update-link"
@@ -697,6 +703,9 @@
 	<!-- Modularization scaffold (no behavior changes yet) -->
 	<script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/core/xk_dom.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/core/xk_http.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/core/xk_storage.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
 	<script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
 	<script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
@@ -704,13 +713,14 @@
   <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
 	<script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260105c') }}"></script>
   <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/settings.js', v='20260222c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/editor_engine.js', v='20260223a') }}"></script>
     <script src="{{ url_for('static', filename='js/ui/monaco_loader.js', v='20260222a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/monaco_shared.js', v='20260223a') }}"></script>
 <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_generator.js', v='20260223g') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_generator.js', v='20260225a') }}"></script>
   <script src="{{ url_for('static', filename='js/pages/mihomo_generator.init.js') }}"></script>
 <div id="validationModal" class="modal hidden" onclick="if (event.target === this) hideValidationModal();">
   <div class="modal-content">

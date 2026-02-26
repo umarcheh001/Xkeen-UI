@@ -12,20 +12,15 @@ So we try a few candidate locations.
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Any, Dict, List, Optional
 
+from services.io import read_json
+
 
 def _safe_read_json(path: str) -> Optional[Dict[str, Any]]:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            return data
-    except Exception:
-        return None
-    return None
+    data = read_json(path, default=None)
+    return data if isinstance(data, dict) else None
 
 
 def _candidate_paths(ui_state_dir: Optional[str] = None) -> List[str]:
