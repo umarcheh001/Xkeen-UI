@@ -1379,7 +1379,7 @@
       try { setSelectedTagHeader(); } catch (e) {}
     }, 450);
 
-    // If opened via "➕ В правило" - focus rule picker for faster workflow.
+    // If opened with intent=inrouting - focus rule picker for faster workflow.
     try {
       if (_openOpts && _openOpts.intent === 'inrouting') {
         const sel = el(IDS.targetRule);

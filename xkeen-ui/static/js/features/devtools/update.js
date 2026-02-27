@@ -755,9 +755,9 @@
     }
   }
 
-  async function checkLatest(forceRefresh, silentToast) {
+  async function checkLatest(forceRefresh, silentToast, silentStatus) {
     try {
-      _setStatus('Checking GitHub…', 'warn');
+      if (!silentStatus) _setStatus('Checking GitHub…', 'warn');
       const data = await postJSON('/api/devtools/update/check', {
         force_refresh: !!forceRefresh,
         wait_seconds: 2.5,
@@ -843,7 +843,7 @@
       let chk = state.lastCheck;
       if (!(chk && chk.ok && chk.latest)) {
         try {
-          await checkLatest(false, true);
+          await checkLatest(false, true, true);
           chk = state.lastCheck;
         } catch (e) {
           // ignore; will fallback to runner's own check_latest
@@ -978,7 +978,7 @@
     const btnRefresh = byId('dt-update-refresh');
     const btnOpenLogs = byId('dt-update-open-logs');
 
-    if (btnCheck) btnCheck.addEventListener('click', () => checkLatest(true, false));
+    if (btnCheck) btnCheck.addEventListener('click', () => checkLatest(true, false, false));
     if (btnRun) btnRun.addEventListener('click', () => runUpdate());
     if (btnRollback) btnRollback.addEventListener('click', () => runRollback());
     if (btnRefresh) btnRefresh.addEventListener('click', () => loadStatus(false));
@@ -993,6 +993,8 @@
     // Initial paint
     loadInfo().catch(() => {});
     loadStatus(true).catch(() => {});
+    // UX: populate "Latest" on load (silently; no temporary "Checking…" status).
+    try { setTimeout(() => checkLatest(false, true, true).catch(() => {}), 250); } catch (e) {}
   }
 
   XK.features.devtoolsUpdate = { init, loadInfo, checkLatest, loadStatus, runUpdate, runRollback };

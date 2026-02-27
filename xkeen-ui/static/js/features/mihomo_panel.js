@@ -68,6 +68,12 @@
   let _chosenTemplateName = null;
   let _activeProfileName = null;
 
+  // Editor dirty tracking (to avoid accidental overwrites when loading templates/config).
+  let _editorDirty = false;
+  let _suppressDirty = false;
+  let _lastTemplateSelectValue = '';
+  let _monacoDirtyDisposable = null;
+
   // YAML error marker (CodeMirror only; backend validate / Prettier errors).
   let _yamlErrorLine = null;
   let _yamlErrorLineHandle = null;
@@ -185,6 +191,15 @@
         wordWrap: 'on',
       });
       if (!_monaco) return null;
+
+      // Dirty tracking (user edits only).
+      try {
+        if (!_monacoDirtyDisposable && typeof _monaco.onDidChangeModelContent === 'function') {
+          _monacoDirtyDisposable = _monaco.onDidChangeModelContent(() => {
+            if (!_suppressDirty) _editorDirty = true;
+          });
+        }
+      } catch (e) {}
 
       try { _monacoFacade = (shared.toFacade ? shared.toFacade(_monaco) : null); } catch (e) { _monacoFacade = null; }
       return _monaco;
@@ -411,6 +426,14 @@
 
     XKeen.state.mihomoEditor = _cm;
 
+    // Dirty tracking (user edits only).
+    try {
+      if (!_cm._xkeenDirtyWired) {
+        _cm.on('change', () => { if (!_suppressDirty) _editorDirty = true; });
+        _cm._xkeenDirtyWired = true;
+      }
+    } catch (e) {}
+
     try {
       if (typeof window.xkeenAttachCmToolbar === 'function') {
         // IMPORTANT:
@@ -447,6 +470,20 @@
       const ta = $(IDS.textarea);
       if (ta) ta.value = v;
     } catch (e) {}
+  }
+
+  function setEditorTextClean(text) {
+    _suppressDirty = true;
+    try { setEditorText(text); } finally { _suppressDirty = false; }
+    _editorDirty = false;
+  }
+
+  function markEditorClean() {
+    _editorDirty = false;
+  }
+
+  function isEditorDirty() {
+    return !!_editorDirty;
   }
 
   window.getMihomoEditorText = window.getMihomoEditorText || getEditorText;
@@ -572,7 +609,7 @@
         return false;
       }
       const content = data.content || '';
-      setEditorText(content);
+      setEditorTextClean(content);
       setStatus('config.yaml загружен (' + content.length + ' байт).', false, !notify);
       try {
         if (typeof window.updateLastActivity === 'function') {
@@ -610,6 +647,7 @@
       }
       let msg = 'config.yaml сохранён.';
       setStatus(msg, false, !!(data && data.restarted));
+      markEditorClean();
       try {
         if (typeof window.updateLastActivity === 'function') {
           const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
@@ -649,6 +687,7 @@
       }
       let msg = 'config.yaml сохранён.';
       setStatus(msg, false, true);
+      markEditorClean();
       try {
         if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.load === 'function') {
           XKeen.features.restartLog.load();
@@ -698,7 +737,9 @@
         return false;
       }
 
-      const out = String(r.text ?? '');
+      // In case the underlying Prettier build returns a Promise (v3+),
+      // normalize defensively.
+      const out = String(await Promise.resolve(r.text ?? ''));
       if (out === content) {
         clearYamlErrorMarker();
         setStatus('YAML уже отформатирован.', false);
@@ -945,7 +986,7 @@
         return false;
       }
       const content = data.content || '';
-      setEditorText(content);
+      setEditorTextClean(content);
       setStatus('Шаблон ' + _chosenTemplateName + ' загружен в редактор. Не забудьте сохранить config.yaml.', false);
       bumpLastActivity('loaded');
       return true;
@@ -1402,6 +1443,72 @@
     wireButton(IDS.tplRefresh, () => MP.loadTemplatesList());
     wireButton(IDS.tplLoad, () => MP.loadSelectedTemplateToEditor());
     wireButton(IDS.tplSaveFromEditor, () => MP.saveEditorAsTemplate());
+
+    // Template select: auto-load on change (with overwrite confirmation if there are unsaved edits).
+    const tplSel = $(IDS.tplSelect);
+    if (tplSel && (!tplSel.dataset || tplSel.dataset.xkeenAutoLoad !== '1')) {
+      _lastTemplateSelectValue = String(tplSel.value || '');
+      tplSel.addEventListener('change', async () => {
+        const next = String(tplSel.value || '');
+        const prev = _lastTemplateSelectValue;
+        if (!next) {
+          _lastTemplateSelectValue = '';
+          return;
+        }
+
+        if (isEditorDirty()) {
+          const msg = 'Заменить содержимое редактора шаблоном “' + next + '”? Несохранённые изменения будут потеряны.';
+          let ok = false;
+          try {
+            if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
+              ok = await XKeen.ui.confirm({
+                title: 'Загрузить шаблон',
+                message: msg,
+                okText: 'Загрузить',
+                cancelText: 'Отмена',
+                danger: true,
+              });
+            } else {
+              ok = window.confirm(msg);
+            }
+          } catch (e) {
+            ok = window.confirm(msg);
+          }
+
+          if (!ok) {
+            try { tplSel.value = prev; } catch (e) {}
+            return;
+          }
+        }
+
+        const loaded = await MP.loadSelectedTemplateToEditor();
+        if (!loaded) {
+          try { tplSel.value = prev; } catch (e) {}
+          return;
+        }
+        _lastTemplateSelectValue = next;
+        try {
+          const d = (tplSel && tplSel.closest) ? tplSel.closest('details') : null;
+          if (d && d.classList && d.classList.contains('xk-mihomo-menu')) d.open = false;
+        } catch (e) {}
+
+      });
+      if (tplSel.dataset) tplSel.dataset.xkeenAutoLoad = '1';
+    }
+
+    // Auto-close the compact ⋯ menu after clicking an action button (keeps UI tidy).
+    try {
+      const details = document.querySelector('details.xk-mihomo-menu');
+      const panel = details ? details.querySelector('.xk-mihomo-menu-panel') : null;
+      if (details && panel && !(details.dataset && details.dataset.xkAutoClose === '1')) {
+        panel.addEventListener('click', (e) => {
+          const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+          if (!btn) return;
+          try { details.open = false; } catch (e2) {}
+        });
+        if (details.dataset) details.dataset.xkAutoClose = '1';
+      }
+    } catch (e) {}
 
     // Profiles panel toggler
     const header = $(IDS.profilesHeader);

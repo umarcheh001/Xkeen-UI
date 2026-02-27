@@ -40,8 +40,6 @@
     datGeoipUpdate: 'routing-dat-geoip-update-btn',
     datGeositeContent: 'routing-dat-geosite-content-btn',
     datGeoipContent: 'routing-dat-geoip-content-btn',
-    datGeositeInRouting: 'routing-dat-geosite-inrouting-btn',
-    datGeoipInRouting: 'routing-dat-geoip-inrouting-btn',
     datGeositeFile: 'routing-dat-geosite-file',
     datGeoipFile: 'routing-dat-geoip-file',
     datGeodatInstall: 'routing-dat-geodat-install-btn',
@@ -1010,7 +1008,7 @@ try {
 
 
     let title = 'Установка xk-geodat';
-    let message = 'Установить/обновить xk-geodat? Это включит просмотр содержимого DAT (GeoIP/GeoSite) и кнопку «В правило».';
+    let message = 'Установить/обновить xk-geodat? Это включит просмотр содержимого DAT (GeoIP/GeoSite) и добавление тегов в правила маршрутизации.';
     if (mode === 'url' && url) {
       message = 'Скачать и установить xk-geodat по URL?\n\n' + url;
     } else if (mode === 'file' && file && file.name) {
@@ -1131,7 +1129,7 @@ try {
     try { rSite = await datResolveKindPrefs('geosite', prefs, els.geosite); } catch (e) { rSite = null; }
     try { rIp = await datResolveKindPrefs('geoip', prefs, els.geoip); } catch (e) { rIp = null; }
 
-    // Persist any auto-resolve changes (so "Содержимое" / "В правило" works immediately).
+    // Persist any auto-resolve changes (so "Содержимое" works immediately).
     try { saveDatPrefs(prefs); } catch (e) {}
 
     const pSite = normalizePath((rSite && rSite.dir) ? rSite.dir : prefs.geosite.dir, (rSite && rSite.name) ? rSite.name : prefs.geosite.name);
@@ -1344,8 +1342,6 @@ try {
     const b6 = $(IDS.datGeoipUpdate);
     const b7 = $(IDS.datGeositeContent);
     const b8 = $(IDS.datGeoipContent);
-    const b9 = $(IDS.datGeositeInRouting);
-    const b10 = $(IDS.datGeoipInRouting);
 
     if (b1) b1.addEventListener('click', (e) => { e.preventDefault(); uploadDat('geosite'); });
     if (b2) b2.addEventListener('click', (e) => { e.preventDefault(); uploadDat('geoip'); });
@@ -1372,32 +1368,6 @@ try {
       try {
         if (window.XKeen && XKeen.ui && XKeen.ui.datContents && typeof XKeen.ui.datContents.open === 'function') {
           XKeen.ui.datContents.open('geoip');
-        } else {
-          toast('DAT: модуль просмотра содержимого не загружен.', true);
-        }
-      } catch (err) {
-        toast('DAT: не удалось открыть содержимое.', true);
-      }
-    });
-
-    // PR3: "➕ В правило" opens the same modal but focuses the routing picker.
-    if (b9) b9.addEventListener('click', (e) => {
-      e.preventDefault();
-      try {
-        if (window.XKeen && XKeen.ui && XKeen.ui.datContents && typeof XKeen.ui.datContents.open === 'function') {
-          XKeen.ui.datContents.open('geosite', { intent: 'inrouting' });
-        } else {
-          toast('DAT: модуль просмотра содержимого не загружен.', true);
-        }
-      } catch (err) {
-        toast('DAT: не удалось открыть содержимое.', true);
-      }
-    });
-    if (b10) b10.addEventListener('click', (e) => {
-      e.preventDefault();
-      try {
-        if (window.XKeen && XKeen.ui && XKeen.ui.datContents && typeof XKeen.ui.datContents.open === 'function') {
-          XKeen.ui.datContents.open('geoip', { intent: 'inrouting' });
         } else {
           toast('DAT: модуль просмотра содержимого не загружен.', true);
         }

@@ -41,6 +41,11 @@
 
   function buildOptions(parser, user) {
     const u = (user && typeof user === 'object') ? user : {};
+
+    // JSON/JSONC are consumed by strict parsers on the router side (Xray configs).
+    // Trailing commas break JSON.parse / Go json decoder, so default to 'none'.
+    const isJsonFamily = (parser === 'json' || parser === 'jsonc');
+
     const o = {
       parser,
       // Prettier defaults are OK; keep minimal but predictable.
@@ -48,7 +53,7 @@
       printWidth: Number.isFinite(u.printWidth) ? Number(u.printWidth) : 80,
       useTabs: !!u.useTabs,
       singleQuote: !!u.singleQuote,
-      trailingComma: (typeof u.trailingComma === 'string') ? u.trailingComma : 'es5',
+      trailingComma: (typeof u.trailingComma === 'string') ? u.trailingComma : (isJsonFamily ? 'none' : 'es5'),
       proseWrap: (typeof u.proseWrap === 'string') ? u.proseWrap : 'preserve',
     };
 
@@ -84,7 +89,9 @@
     }
 
     try {
-      const out = env.prettier.format(input, {
+      // Prettier v3+ returns a Promise in many builds (including standalone).
+      // Always await to avoid "[object Promise]" ending up in editors.
+      const out = await env.prettier.format(input, {
         ...buildOptions(parser, mergedPrefs),
         plugins: env.plugins,
       });
@@ -109,7 +116,9 @@
     }
 
     try {
-      const out = env.prettier.format(input, {
+      // Prettier v3+ returns a Promise in many builds (including standalone).
+      // Always await to avoid "[object Promise]" ending up in editors.
+      const out = await env.prettier.format(input, {
         ...buildOptions(parser, mergedPrefs2),
         plugins: env.plugins,
       });

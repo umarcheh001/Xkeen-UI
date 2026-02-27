@@ -202,6 +202,11 @@
     if (!file) return;
 
     try {
+      const saveBtn = $(IDS.btnSave);
+      if (saveBtn) saveBtn.setAttribute('data-tooltip', 'Сохранить файл: ' + file);
+    } catch (e) {}
+
+    try {
       const backupBtn = $(IDS.btnBackup);
       if (backupBtn) backupBtn.setAttribute('data-tooltip', 'Backup для файла: ' + file);
     } catch (e) {}
@@ -1439,6 +1444,22 @@ function closeHelp() {
       });
       if (help.dataset) help.dataset.xkeenWired = '1';
     }
+
+    // Auto-close the compact ⋯ menu after clicking an action button (keeps UI tidy).
+    try {
+      const details = document.querySelector('details.xk-routing-menu');
+      const panel = details ? details.querySelector('.xk-routing-menu-panel') : null;
+      if (details && panel && !(details.dataset && details.dataset.xkAutoClose === '1')) {
+        panel.addEventListener('click', (e) => {
+          const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+          if (!btn) return;
+          // Keep menu open for non-action controls (currently only the scope toggle lives in a <label>).
+          // For any button click, close the menu.
+          try { details.open = false; } catch (e2) {}
+        });
+        if (details.dataset) details.dataset.xkAutoClose = '1';
+      }
+    } catch (e) {}
 
   }
 

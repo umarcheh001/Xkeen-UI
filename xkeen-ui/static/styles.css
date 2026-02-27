@@ -923,6 +923,51 @@ box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
 }
 
 /*
+  Inline icon toolbar (used in small cards like Inbounds/Outbounds)
+  - single row
+  - icon-only buttons with tooltips
+*/
+.actions.xk-actions-inline{
+  display:flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Stretch icon buttons to occupy the whole card width (equal columns) */
+.actions.xk-actions-inline button{
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  white-space: nowrap;
+}
+
+/* Override fixed .btn-icon size inside the inline toolbar */
+.actions.xk-actions-inline .btn-icon{
+  width: auto;
+  min-width: 0;
+  flex: 1 1 0;
+  border-radius: 12px;
+}
+
+/* Minor spacing tweak for dt-switch used inside cards */
+.xk-mini-switch{ margin-top: 10px; }
+
+/* Make the mini switch span the whole card width */
+.dt-switch.xk-mini-switch{
+  width: 100%;
+  display: flex;
+  box-sizing: border-box;
+}
+.dt-switch.xk-mini-switch .dt-switch-label{
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: normal;
+}
+
+/*
   В шапке некоторых страниц используется контейнер .actions (для кнопки "Назад" + действий справа).
   Общие правила .actions button растягивают кнопки до flex-basis 210px, из-за чего переключатель темы
   становится огромным и переносит DevTools/Выйти на следующую строку.
@@ -7757,6 +7802,111 @@ html[data-theme="light"] .fm-progress-details{
   align-items:center;
   gap:8px;
   line-height:1.2;
+}
+
+
+
+/* Mihomo editor: compact Save/Restart + ⋯ menu (match Routing Xray style) */
+.xk-mihomo-toolbararea{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex: 0 0 auto;
+  margin: 6px 0 10px;
+  flex-wrap: wrap;
+}
+
+/* Mihomo overflow menu trigger: small and neat (same sizing as routing menu). */
+.xk-mihomo-menu > summary{
+  border-radius: 9999px;
+}
+.xk-mihomo-menu-trigger{
+  width: 34px;
+  height: 28px;
+  min-width: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(16px * var(--xk-font-scale));
+  line-height: 1;
+}
+
+/* Keep open-state subtle (avoid a huge blue ring). */
+.xk-mihomo-menu[open] > summary{
+  box-shadow: none;
+  border-color: var(--header-tab-active-bg, rgba(59, 130, 246, 0.65));
+  background: color-mix(in srgb, var(--header-tab-active-bg, #2563eb) 24%, transparent);
+}
+
+/* Mihomo menu panel: compact, scroll-safe. */
+.xk-mihomo-menu-panel{
+  min-width: 240px;
+  max-width: 340px;
+  border-radius: 12px;
+  gap: 10px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.8);
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  z-index: 90;
+  box-sizing: border-box;
+}
+.xk-mihomo-menu-panel *{ box-sizing: border-box; }
+
+/* Mihomo overflow menu: open upwards (drop-up) so it doesn't go off-screen near the bottom. */
+.xk-mihomo-menu .dt-log-menu-panel{
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+/* Menu items: full-width like Terminal menu */
+.xk-mihomo-menu-panel .terminal-tool-btn{
+  width: auto;
+  align-self: stretch;
+  text-align:left;
+  border-radius:10px;
+  padding:8px 10px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  line-height:1.2;
+}
+
+/* Make select fit the menu panel (avoid horizontal overflow). */
+.xk-mihomo-menu-panel .xray-log-select{
+  width: 100%;
+  min-width: 0;
+}
+
+/* Routing: primary Save button (vector icon, compact like Terminal menu) */
+.xk-save-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  line-height: 1;
+}
+.xk-save-btn .xk-btn-icon{
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+.xk-save-btn .xk-btn-label{
+  font-weight: 700;
+  letter-spacing: .01em;
+}
+.xk-save-btn-primary{
+  border-color: color-mix(in srgb, var(--header-tab-active-bg, #2563eb) 55%, transparent);
+  background: color-mix(in srgb, var(--header-tab-active-bg, #2563eb) 18%, transparent);
+}
+.xk-save-btn-primary:hover{
+  background: color-mix(in srgb, var(--header-tab-active-bg, #2563eb) 26%, transparent);
 }
 
 /* Switch in routing menu: full-width pill like other menu items */

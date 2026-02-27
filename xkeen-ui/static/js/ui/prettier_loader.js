@@ -32,12 +32,13 @@
   const DEFAULT_VERSION = '3.8.1';
 
   // You can override at runtime before calling any loader methods:
-  // window.XKeenPrettierConfig = { version: '3.8.1', prefer: 'local', cdn: ['jsdelivr','unpkg'], timeoutMs: 2500 }
+  // window.XKeenPrettierConfig = { version: '3.8.1', prefer: 'local', cdn: ['jsdelivr','unpkg'], timeoutMs: 8000 }
   const _cfg = {
     version: DEFAULT_VERSION,
     prefer: 'local', // 'local' | 'cdn'
     cdn: ['jsdelivr', 'unpkg'],
-    timeoutMs: 2500,
+    // Routers can be slow; keep this reasonably high.
+    timeoutMs: 8000,
   };
 
   function applyExternalConfig() {
@@ -67,28 +68,96 @@
   };
 
   // ------------------------ loaders (shared) ------------------------
+  // NOTE: Prettier's UMD wrapper prefers AMD/CommonJS if it detects them.
+  // Monaco (AMD loader) can introduce `define.amd`, causing Prettier to NOT
+  // attach to `window.prettier` / `window.prettierPlugins`.
+  // To keep Prettier predictable, we eval local scripts in an isolated scope
+  // where `define/module/exports` are undefined.
+
+  const _js = new Map();
+
+  function isSameOrigin(url) {
+    try {
+      const u = new URL(String(url || ''), window.location.href);
+      return u.origin === window.location.origin;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function looksLikeLocalStatic(url) {
+    const u = String(url || '');
+    if (!u) return false;
+    if (!isSameOrigin(u)) return false;
+    try {
+      const abs = new URL(u, window.location.href).pathname;
+      return abs.includes('/static/');
+    } catch (e) {
+      return u.includes('/static/');
+    }
+  }
+
+  async function evalAsGlobalNoAMD(url) {
+    try {
+      const res = await fetch(String(url), { cache: 'force-cache' });
+      if (!res || !res.ok) return false;
+      const code = await res.text();
+      // Shadow AMD/CommonJS globals so Prettier uses globalThis/window path.
+      // eslint-disable-next-line no-new-func
+      const fn = new Function(
+        'exports',
+        'module',
+        'define',
+        'globalThis',
+        'self',
+        'window',
+        code + '\n//# sourceURL=' + String(url).replace(/\s/g, '%20')
+      );
+      fn(undefined, undefined, undefined, window, window, window);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function loadScriptOnce(src) {
     const url = String(src || '');
     if (!url) return Promise.resolve(false);
-    try {
-      if (XK.cmLoader && typeof XK.cmLoader.loadScriptOnce === 'function') {
-        return XK.cmLoader.loadScriptOnce(url);
-      }
-    } catch (e) {}
 
-    // Fallback tiny loader
-    return new Promise((resolve) => {
-      try {
-        const s = document.createElement('script');
-        s.src = url;
-        s.async = true;
-        s.onload = () => resolve(true);
-        s.onerror = () => resolve(false);
-        document.head.appendChild(s);
-      } catch (e) {
-        resolve(false);
+    if (_js.has(url)) return _js.get(url);
+
+    const p = (async () => {
+      // Local-first: use fetch+eval to avoid AMD/CommonJS interference.
+      if (looksLikeLocalStatic(url)) {
+        const ok = await evalAsGlobalNoAMD(url);
+        if (ok) return true;
+        // If eval failed (e.g. CSP blocks eval), fall back to script tag.
       }
-    });
+
+      // Prefer shared loader for caching if available.
+      try {
+        if (XK.cmLoader && typeof XK.cmLoader.loadScriptOnce === 'function') {
+          return await XK.cmLoader.loadScriptOnce(url);
+        }
+      } catch (e) {}
+
+      // Fallback tiny loader
+      return await new Promise((resolve) => {
+        try {
+          const s = document.createElement('script');
+          s.src = url;
+          s.async = true;
+          s.onload = () => resolve(true);
+          s.onerror = () => resolve(false);
+          document.head.appendChild(s);
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    })();
+
+    _js.set(url, p);
+    return p;
   }
 
   function withTimeout(promise, ms) {

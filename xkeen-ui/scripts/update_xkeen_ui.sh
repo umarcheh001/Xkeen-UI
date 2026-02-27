@@ -36,8 +36,13 @@ SHA_KIND_OVERRIDE="${XKEEN_UI_UPDATE_SHA_KIND:-}"
 BACKUP_KEEP="${XKEEN_UI_BACKUP_KEEP:-3}"
 
 # --- Security/limits ---
-# Allowed download hosts (comma-separated). We follow redirects via curl -L, so include both github.com and objects.githubusercontent.com.
-ALLOW_HOSTS_RAW="${XKEEN_UI_UPDATE_ALLOW_HOSTS:-github.com,objects.githubusercontent.com,codeload.github.com}"
+# Allowed download hosts (comma-separated).
+#
+# NOTE: GitHub release assets are served via a 302 redirect from github.com to
+# release-assets.githubusercontent.com (a time-limited signed URL). If this host
+# is not in the allow-list, the Python progress downloader will reject the
+# redirect and fall back to curl/wget.
+ALLOW_HOSTS_RAW="${XKEEN_UI_UPDATE_ALLOW_HOSTS:-github.com,release-assets.githubusercontent.com,objects.githubusercontent.com,codeload.github.com}"
 ALLOW_HTTP="${XKEEN_UI_UPDATE_ALLOW_HTTP:-0}"
 
 # Timeouts

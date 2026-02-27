@@ -68,7 +68,7 @@
   <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260223i') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260227a') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -266,15 +266,11 @@
 
                     <input id="routing-dat-geosite-file" type="file" accept=".dat" style="display:none">
 
-                    <div class="routing-dat-actions">
-                      <button id="routing-dat-geosite-upload-btn" class="btn-secondary" type="button" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">⬆️ Загрузить</button>
-                      <button id="routing-dat-geosite-update-btn" class="btn-secondary" type="button" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">🔗 Обновить</button>
-                      <button id="routing-dat-geosite-download-btn" class="btn-secondary" type="button" data-tooltip="Скачать текущий локальный DAT-файл.">⬇️ Скачать</button>
-                    </div>
-
-                    <div class="routing-dat-actions routing-dat-actions-muted">
-                      <button id="routing-dat-geosite-content-btn" class="btn-secondary" type="button" data-tooltip="Открыть просмотр тегов/содержимого GeoSite (поиск + копирование geosite:TAG).">● Содержимое</button>
-                      <button id="routing-dat-geosite-inrouting-btn" class="btn-secondary" type="button" data-tooltip="Добавить тег GeoSite в правила маршрутизации (создать новое правило или добавить в существующее).">➕ В правило</button>
+                    <div class="actions xk-actions-inline routing-dat-actions-inline">
+                      <button id="routing-dat-geosite-upload-btn" class="btn-icon" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">⬆️</button>
+                      <button id="routing-dat-geosite-update-btn" class="btn-icon" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">🔗</button>
+                      <button id="routing-dat-geosite-download-btn" class="btn-icon" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">⬇️</button>
+                      <button id="routing-dat-geosite-content-btn" class="btn-icon" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoSite (поиск + копирование geosite:TAG).">🔎</button>
                     </div>
                   </div>
 
@@ -309,15 +305,11 @@
 
                     <input id="routing-dat-geoip-file" type="file" accept=".dat" style="display:none">
 
-                    <div class="routing-dat-actions">
-                      <button id="routing-dat-geoip-upload-btn" class="btn-secondary" type="button" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">⬆️ Загрузить</button>
-                      <button id="routing-dat-geoip-update-btn" class="btn-secondary" type="button" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">🔗 Обновить</button>
-                      <button id="routing-dat-geoip-download-btn" class="btn-secondary" type="button" data-tooltip="Скачать текущий локальный DAT-файл.">⬇️ Скачать</button>
-                    </div>
-
-                    <div class="routing-dat-actions routing-dat-actions-muted">
-                      <button id="routing-dat-geoip-content-btn" class="btn-secondary" type="button" data-tooltip="Открыть просмотр тегов/содержимого GeoIP (поиск + копирование geoip:TAG).">● Содержимое</button>
-                      <button id="routing-dat-geoip-inrouting-btn" class="btn-secondary" type="button" data-tooltip="Добавить тег GeoIP в правила маршрутизации (создать новое правило или добавить в существующее).">➕ В правило</button>
+                    <div class="actions xk-actions-inline routing-dat-actions-inline">
+                      <button id="routing-dat-geoip-upload-btn" class="btn-icon" type="button" aria-label="Загрузить" data-tooltip="Загрузить DAT-файл с компьютера и сохранить по указанному пути.">⬆️</button>
+                      <button id="routing-dat-geoip-update-btn" class="btn-icon" type="button" aria-label="Обновить" data-tooltip="Скачать DAT по URL и заменить текущий файл (с подтверждением).">🔗</button>
+                      <button id="routing-dat-geoip-download-btn" class="btn-icon" type="button" aria-label="Скачать" data-tooltip="Скачать текущий локальный DAT-файл.">⬇️</button>
+                      <button id="routing-dat-geoip-content-btn" class="btn-icon" type="button" aria-label="Содержимое" data-tooltip="Открыть просмотр тегов/содержимого GeoIP (поиск + копирование geoip:TAG).">🔎</button>
                     </div>
                   </div>
                 </div>
@@ -368,16 +360,17 @@
         </label>
       </div>
 
-      <label class="toggle">
+      <label class="dt-switch xk-mini-switch" title="После смены режима автоматически применить конфиг и перезапустить xkeen.">
         <input type="checkbox" id="inbounds-autorestart" checked>
-        Перезапускать xkeen после смены режима
+        <span class="dt-switch-slider" aria-hidden="true"></span>
+        <span class="dt-switch-label">Перезапускать xkeen после смены режима</span>
       </label>
 
-      <div class="actions xk-actions-grid-2">
-        <button id="inbounds-open-editor-btn" data-tooltip="Открыть {{ inbounds_name|e }} в редакторе JSON.">📝 Редактор</button>
-        <button id="inbounds-save-btn" data-tooltip="Сохранить {{ inbounds_name|e }}.">💾 Сохранить</button>
-        <button id="inbounds-backup-btn" data-tooltip="Сделать бэкап {{ inbounds_name|e }}.">📦 Backup</button>
-        <button id="inbounds-restore-auto-btn" data-tooltip="Восстановить inbounds из автобэкапа.">⏪ Restore</button>
+      <div class="actions xk-actions-inline">
+        <button id="inbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ inbounds_name|e }} в редакторе JSON.">📝</button>
+        <button id="inbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Сохранить {{ inbounds_name|e }}.">💾</button>
+        <button id="inbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ inbounds_name|e }}.">📦</button>
+        <button id="inbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить inbounds из автобэкапа.">⏪</button>
       </div>
 
       <div id="inbounds-status" class="status"></div>
@@ -459,13 +452,13 @@
         <div id="outbounds-parse-kv" class="outbounds-parse-kv"></div>
       </div>
 
-      <div class="actions xk-actions-grid-2">
-        <button id="outbounds-open-editor-btn" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">📝 Редактор</button>
-        <button id="outbounds-normalize-btn" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">✨ Норм</button>
-        <button id="outbounds-build-btn" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">🧩 Собрать</button>
-        <button id="outbounds-save-btn" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">💾 Сохранить</button>
-        <button id="outbounds-backup-btn" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">📦 Backup</button>
-        <button id="outbounds-restore-auto-btn" data-tooltip="Восстановить outbounds из автобэкапа.">⏪ Restore</button>
+      <div class="actions xk-actions-inline">
+        <button id="outbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">📝</button>
+        <button id="outbounds-normalize-btn" class="btn-icon" aria-label="Нормализовать" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">✨</button>
+        <button id="outbounds-build-btn" class="btn-icon" aria-label="Собрать" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">🧩</button>
+        <button id="outbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">💾</button>
+        <button id="outbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">📦</button>
+        <button id="outbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить outbounds из автобэкапа.">⏪</button>
       </div>
 
       <div id="outbounds-status" class="status"></div>
@@ -625,6 +618,20 @@
 
               {# Right side: service controls live near the editor toolbar (keeps fileline clean). #}
               <div class="xk-routing-toolbararea">
+                <button
+                  id="routing-save-btn"
+                  type="button"
+                  class="terminal-tool-btn xk-save-btn xk-save-btn-primary"
+                  data-tooltip="Сохранить текущий файл (routing.json или выбранный фрагмент)."
+                >
+                  <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M7 3h10l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M17 3v6H7V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M7 21v-8h10v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                  </svg>
+                  <span class="xk-btn-label">Сохранить</span>
+                </button>
+
                 <details class="dt-log-menu xk-routing-menu">
                   <summary class="terminal-tool-btn xk-routing-menu-trigger" data-tooltip="Меню" aria-label="Меню">⋯</summary>
 
@@ -654,6 +661,37 @@
                             class="xk-comments-badge xk-comments-off"
                             data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
                     </div>
+
+                    <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+                    <div class="terminal-menu-section" aria-label="Действия">
+                      <div class="terminal-menu-title">Действия</div>
+
+                      <button id="routing-format-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Отформатировать JSON (красивые отступы).">✨ Форматировать JSON</button>
+                      <button id="routing-backup-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Backup для файла: {{ routing_name|e }}">📦 Backup</button>
+                      <button id="routing-restore-auto-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Restore autobackup для файла: {{ routing_name|e }}">⏪ Restore autobackup</button>
+
+                      <button id="routing-export-local-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Скачать текущий файл из редактора на компьютер.">⬇️ Экспорт</button>
+                      <button id="routing-import-local-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Загрузить файл в редактор (без автосохранения).">⬆️ Импорт</button>
+
+                      <button id="routing-import-template-btn" type="button" class="terminal-tool-btn xk-only-routing"
+                              data-tooltip="Импортировать готовый шаблон роутинга (заменит текст в редакторе, без автосохранения).">🧩 Шаблоны</button>
+                    </div>
+
+                    <div class="terminal-menu-sep xk-only-routing" role="separator" aria-hidden="true"></div>
+
+                    <div class="terminal-menu-section xk-only-routing" aria-label="GitHub">
+                      <div class="terminal-menu-title">GitHub</div>
+                      <button id="github-export-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Выгрузить текущий routing.json в GitHub‑каталог конфигов.">⬆️ Выгрузить в репозитарий</button>
+                      <button id="github-open-catalog-btn" type="button" class="terminal-tool-btn"
+                              data-tooltip="Открыть каталог конфигураций (GitHub).">📂 Каталог конфигураций</button>
+                    </div>
                   </div>
                 </details>
 
@@ -665,25 +703,10 @@
 
             <div id="routing-error" class="error"></div>
 
-            <div class="actions">
-  <button id="routing-save-btn" data-tooltip="Сохранить текущий роутинг (routing.json).">💾 Save routing</button>
-  <button id="routing-format-btn" data-tooltip="Отформатировать JSON (красивые отступы).">✨ Format JSON</button>
-  <button id="routing-backup-btn" data-tooltip="Backup для файла: {{ routing_name|e }}">📦 Backup</button>
-  <button id="routing-restore-auto-btn" data-tooltip="Restore autobackup для файла: {{ routing_name|e }}">⏪ Restore autobackup</button>
-  <button id="routing-export-local-btn" data-tooltip="Скачать текущий файл из редактора на компьютер.">⬇️ Экспорт</button>
-  <button id="routing-import-local-btn" data-tooltip="Загрузить файл в редактор (без автосохранения).">⬆️ Импорт</button>
-  <button id="routing-import-template-btn" class="xk-only-routing" data-tooltip="Импортировать готовый шаблон роутинга (заменит текст в редакторе, без автосохранения).">🧩 Шаблоны</button>
-</div>
-
 <input type="file"
        id="local-config-file-input"
        accept=".json,.jsonc,application/json,text/plain"
        style="display:none">
-
-            <div class="actions xk-only-routing">
-              <button id="github-export-btn" data-tooltip="Выгрузить текущий routing.json в GitHub‑каталог конфигов.">⬆️ Выгрузить в репозитарий</button>
-              <button id="github-open-catalog-btn" data-tooltip="Открыть каталог конфигураций (GitHub).">📂 Каталог конфигураций</button>
-            </div>
 
             <div id="routing-status" class="status"></div>
           </div>
@@ -719,45 +742,76 @@
       <div id="mihomo-status" class="status"></div>
 
       <!-- Шаблоны config.yaml -->
-      <div class="actions mihomo-templates-row">
-        <select id="mihomo-template-select" class="mihomo-template-select">
-          <option value="">— выбери шаблон —</option>
-        </select>
-
-        <button id="mihomo-template-load-btn"
-                type="button"
-                title="Загрузить выбранный шаблон">
-          📂 Шаблон
-        </button>
-
-        <button id="mihomo-load-btn"
-                title="Загрузить текущий config.yaml">
-          📥 Конфиг
-        </button>
-
-        <button id="mihomo-import-node-btn"
-                type="button"
-                title="Импорт узла/подписки: вставь ссылку (vless/trojan/vmess/ss/hysteria2/hy2) или https-подписку — панель преобразует в YAML и добавит в config.yaml">
-          ➕ Узел
-        </button>
+      <div class="xk-mihomo-toolbararea" role="toolbar" aria-label="Действия Mihomo">
         <button id="mihomo-save-btn"
-                title="Сохранить (авто‑бэкап, авто‑перезапуск по галке)">
-          💾 Сохранить
-        </button>
-        <button id="mihomo-format-yaml-btn"
                 type="button"
-                title="Отформатировать YAML (Prettier; оффлайн‑фолбэк через static/vendor)">
-          🧹 YAML
+                class="terminal-tool-btn xk-save-btn xk-save-btn-primary"
+                data-tooltip="Сохранить (авто‑бэкап, авто‑перезапуск по галке)">
+          <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M7 3h10l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M17 3v6H7V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M7 21v-8h10v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <span class="xk-btn-label">Сохранить</span>
         </button>
-        <button id="mihomo-validate-btn"
-                type="button"
-                title="Проверить config.yaml через mihomo (без сохранения и рестарта)">
-          🩺 Проверка
-        </button>
+
         <button id="mihomo-save-restart-btn"
-                title="Сохранить и перезапустить mihomo">
-          💾💥 Рестарт
+                type="button"
+                class="terminal-tool-btn xk-save-btn terminal-tool-btn-danger"
+                data-tooltip="Сохранить и перезапустить mihomo">
+          <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M21 3v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="xk-btn-label">Рестарт</span>
         </button>
+
+        <details class="dt-log-menu xk-mihomo-menu">
+          <summary class="terminal-tool-btn xk-mihomo-menu-trigger" data-tooltip="Меню" aria-label="Меню">⋯</summary>
+
+          <div class="dt-log-menu-panel xk-mihomo-menu-panel">
+            <div class="terminal-menu-section" aria-label="Шаблоны">
+              <div class="terminal-menu-title">Шаблоны</div>
+              <select id="mihomo-template-select" class="xray-log-select xk-mihomo-menu-select">
+                <option value="">— выбери шаблон —</option>
+              </select>
+            </div>
+
+            <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
+
+            <div class="terminal-menu-section" aria-label="Действия">
+              <div class="terminal-menu-title">Действия</div>
+
+              <button id="mihomo-load-btn"
+                      type="button"
+                      class="terminal-tool-btn"
+                      data-tooltip="Загрузить текущий config.yaml">
+                📥 Конфиг
+              </button>
+
+              <button id="mihomo-import-node-btn"
+                      type="button"
+                      class="terminal-tool-btn"
+                      title="Импорт узла/подписки: вставь ссылку (vless/trojan/vmess/ss/hysteria2/hy2) или https-подписку — панель преобразует в YAML и добавит в config.yaml">
+                ➕ Узел
+              </button>
+
+              <button id="mihomo-format-yaml-btn"
+                      type="button"
+                      class="terminal-tool-btn"
+                      data-tooltip="Отформатировать YAML (Prettier; оффлайн‑фолбэк через static/vendor)">
+                🧹 YAML
+              </button>
+
+              <button id="mihomo-validate-btn"
+                      type="button"
+                      class="terminal-tool-btn"
+                      data-tooltip="Проверить config.yaml через mihomo (без сохранения и рестарта)">
+                🩺 Проверка
+              </button>
+            </div>
+          </div>
+        </details>
       </div>
 
       <hr>
@@ -2080,12 +2134,12 @@
   <script src="{{ url_for('static', filename='js/ui/settings.js', v='20260222c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/editor_engine.js', v='20260223a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/settings_panel.js', v='20260222a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/prettier_loader.js', v='20260222a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/formatters.js', v='20260222a') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/prettier_loader.js', v='20260227b') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/formatters.js', v='20260227c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js', v='20260224a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/dat_contents_modal.js', v='20260213b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/backups.js', v='20260224d') }}"></script>
-	  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260225a') }}"></script>
+	  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260227a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_jsonc_preserve.js', v='20260218d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260218d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260224d') }}"></script>
@@ -2094,7 +2148,7 @@
   <script src="{{ url_for('static', filename='js/features/service_status.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/xray_logs.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/restart_log.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_panel.js', v='20260223f') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_panel.js', v='20260227b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260223j') }}"></script>
   <script src="{{ url_for('static', filename='js/features/commands_list.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
