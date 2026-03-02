@@ -712,6 +712,18 @@
           </div>
 </section>
 
+        <!-- Restart log (Routing) -->
+        <section class="card log-card xk-routing-log-card">
+          <div class="log-header-row">
+            <h2>Журнал перезапуска</h2>
+            <div class="log-header-actions">
+              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">Очистить</button>
+              <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">Копировать</button>
+            </div>
+          </div>
+          <pre class="log-block" data-xk-restart-log="1"></pre>
+        </section>
+
       </div>
     </div>
 </div>
@@ -724,25 +736,15 @@
     </div>
 
     <div id="mihomo-body">
-      <p class="small xk-card-desc">
-        Активный файл: <code>{{ mihomo_config_file|e }}</code>
-      </p>
+      <!-- Compact header row (active file + editor toolbar) -->
+      <div class="xk-routing-topbar xk-mihomo-topbar">
+        <div class="xk-routing-fileblock">
+          <div class="xk-routing-fileline">
+            <span class="xk-routing-active-inline">Активный файл: <code>{{ mihomo_config_file|e }}</code></span>
+          </div>
+        </div>
 
-      <!-- Основной редактор config.yaml -->
-      <div class="xk-editor-engine" id="mihomo-editor-engine" style="margin: 4px 0 8px;">
-        <span class="xk-editor-engine-label">Редактор</span>
-        <select id="mihomo-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
-          <option value="codemirror">CodeMirror</option>
-          <option value="monaco">Monaco</option>
-        </select>
-      </div>
-
-      <div id="mihomo-editor-monaco" class="xk-monaco-editor hidden"></div>
-      <textarea id="mihomo-editor" spellcheck="false"></textarea>
-      <div id="mihomo-status" class="status"></div>
-
-      <!-- Шаблоны config.yaml -->
-      <div class="xk-mihomo-toolbararea" role="toolbar" aria-label="Действия Mihomo">
+        <div class="xk-mihomo-toolbararea" role="toolbar" aria-label="Действия Mihomo">
         <button id="mihomo-save-btn"
                 type="button"
                 class="terminal-tool-btn xk-save-btn xk-save-btn-primary"
@@ -796,6 +798,27 @@
                 ➕ Узел
               </button>
 
+              <button id="mihomo-proxy-tools-btn"
+                      type="button"
+                      class="terminal-tool-btn"
+                      data-tooltip="Proxy Tools: быстрый rename/replace узлов в секции proxies без ручного редактирования YAML">
+                ⚙️ Прокси
+              </button>
+
+              <button id="mihomo-open-zashboard-btn"
+                      type="button"
+                      class="terminal-tool-btn"
+                      data-tooltip="Открыть Zashboard UI через same-origin прокси (без проблем с портами/CORS)">
+                🌐 Zashboard UI
+              </button>
+
+              <button id="mihomo-hwid-sub-btn"
+                      type="button"
+                      class="terminal-tool-btn"
+                      data-tooltip="Добавить HWID‑подписку (proxy-provider) в config.yaml">
+                🔗 HWID‑подписка
+              </button>
+
               <button id="mihomo-format-yaml-btn"
                       type="button"
                       class="terminal-tool-btn"
@@ -812,7 +835,25 @@
             </div>
           </div>
         </details>
+
+          <!-- Editor engine (shared setting) -->
+          <div class="xk-editor-engine" id="mihomo-editor-engine">
+            <span class="xk-editor-engine-label">Редактор</span>
+            <select id="mihomo-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+              <option value="codemirror">CodeMirror</option>
+              <option value="monaco">Monaco</option>
+            </select>
+          </div>
+
+          <!-- CodeMirror toolbar host (fullscreen/search/etc) to keep spacing tight like Xray editor. -->
+          <div class="xk-mihomo-toolbarhost" id="mihomo-toolbar-host"></div>
+        </div>
       </div>
+
+      <!-- Основной редактор config.yaml -->
+      <div id="mihomo-editor-monaco" class="xk-monaco-editor hidden"></div>
+      <textarea id="mihomo-editor" spellcheck="false"></textarea>
+      <div id="mihomo-status" class="status"></div>
 
       <hr>
 
@@ -1016,11 +1057,11 @@
       <div class="log-header-row">
         <h2>Журнал</h2>
         <div class="log-header-actions">
-          <button type="button" class="btn-secondary log-btn" id="restart-log-clear-btn">Очистить</button>
-          <button type="button" class="btn-secondary log-btn" id="restart-log-copy-btn">Копировать</button>
+          <button type="button" class="btn-secondary log-btn" id="restart-log-clear-btn" data-xk-restart-log-action="clear">Очистить</button>
+          <button type="button" class="btn-secondary log-btn" id="restart-log-copy-btn" data-xk-restart-log-action="copy">Копировать</button>
         </div>
       </div>
-      <pre id="restart-log" class="log-block"></pre>
+      <pre id="restart-log" class="log-block" data-xk-restart-log="1"></pre>
     </section>
 </div>
 
@@ -1029,11 +1070,15 @@
     <div class="fm-header">
       <h2>Файловый менеджер</h2>
       <div class="fm-header-actions">
+        <button type="button" class="btn-secondary" id="fm-volumes-btn" style="display:none;" title="USB-диски/разделы: список и Mount/Unmount">💽 Диски</button>
         <button type="button" class="btn-secondary" id="fm-ops-btn" title="Операции с файлами (копировать, переместить, удалить, архивы и т.д.)">🧾 Операции</button>
       </div>
     </div>
 
-    <div id="fm-disabled-note" class="status" style="display:none;"></div>
+    <div class="fm-top-notes" aria-live="polite">
+      <div id="fm-disabled-note" class="status" style="display:none;"></div>
+      <div id="fm-footer-status" class="status fm-status-note" aria-live="polite"></div>
+    </div>
 
     <!-- Busy overlay: shown when opening remote files (SFTP) so the user sees progress and
          doesn't click "open" multiple times while content is loading into the editor. -->
@@ -1852,9 +1897,20 @@
         </div>
         <div class="modal-body">
           <p class="modal-description" style="margin-bottom: 10px;">
-            Вставь ссылку узла <b>vless / trojan / vmess / ss / hysteria2 / hy2</b> или <b>https‑подписку</b>.
+            Вставь ссылку узла <b>vless / trojan / vmess / ss / hysteria2 / hy2</b>, <b>https‑подписку</b> или <b>WireGuard (.conf)</b>.
             Панель преобразует её в YAML и аккуратно добавит в <code>config.yaml</code>.
           </p>
+
+
+          <label style="display:block; margin-top: 10px;">
+            <span class="hint-label">Тип импорта</span>
+            <select id="mihomo-import-mode" class="xray-log-select" style="width: 100%;">
+              <option value="auto">Auto</option>
+              <option value="proxy">Proxy link</option>
+              <option value="subscription">HTTPS subscription</option>
+              <option value="wireguard">WireGuard (.conf)</option>
+            </select>
+          </label>
 
           <label style="display:block; margin-top: 10px;">
             <span class="hint-label">Ссылка / подписка</span>
@@ -1863,6 +1919,24 @@
 
           <div id="mihomo-import-status" class="status" style="margin-top: 10px;"></div>
           <p id="mihomo-import-target-hint" class="modal-hint" style="margin:8px 0 0; opacity:0.75; font-size: 0.85rem;"></p>
+          
+          <div id="mihomo-import-groups-block" style="margin-top: 12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <span class="hint-label">Добавить в группы</span>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button type="button" id="mihomo-import-groups-all-btn" style="padding:4px 8px; font-size:0.85rem;" data-tooltip="Выбрать все группы">Все</button>
+                <button type="button" id="mihomo-import-groups-none-btn" style="padding:4px 8px; font-size:0.85rem;" data-tooltip="Снять выбор со всех групп">Снять</button>
+              </div>
+            </div>
+            <div id="mihomo-import-groups" style="margin-top: 6px; border: 1px solid rgba(127,127,127,0.25); border-radius: 12px; padding: 8px; max-height: 140px; overflow: auto;">
+              <div class="xk-card-desc" style="opacity:0.75;">Группы будут подхвачены из текущего <code>config.yaml</code>.</div>
+            </div>
+            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin-top: 8px;">
+              <input type="checkbox" id="mihomo-import-groups-remember">
+              <span>Запомнить выбор</span>
+            </label>
+          </div>
+
 
           <div style="margin-top: 10px;">
             <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
@@ -1885,6 +1959,156 @@
             <button type="button" id="mihomo-import-insert-btn" class="btn-primary" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>✅ Вставить в конфиг</button>
           </div>
           <button type="button" id="mihomo-import-cancel-btn">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Mihomo: proxy tools (rename / replace) -->
+    <div id="mihomo-proxy-tools-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Proxy Tools Mihomo">
+      <div class="modal-content xk-pt-modal" style="max-width: 780px;" data-modal-key="mihomo-proxy-tools">
+        <div class="modal-header">
+          <span class="modal-title">Proxy Tools (Mihomo)</span>
+          <button type="button" class="modal-close" id="mihomo-proxy-tools-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body xk-pt-body">
+          <p class="modal-description xk-pt-desc">
+            Быстрые операции над <code>proxies:</code> без ручного редактирования YAML:
+            <b>переименовать</b> узел (с обновлением групп) или <b>заменить</b> его содержимое по ссылке/WireGuard.
+          </p>
+
+          <div class="xk-pt-grid xk-pt-grid--select">
+            <label for="mihomo-proxy-tools-select" class="xk-pt-label">Выбери прокси</label>
+            <select id="mihomo-proxy-tools-select" class="xray-log-select xk-pt-control">
+              <option value="">— нет proxies —</option>
+            </select>
+          </div>
+
+          <div id="mihomo-proxy-tools-status" class="status" style="margin-top: 8px;"></div>
+
+          <!-- Helpful UX when config uses proxy-providers and has no static proxies -->
+          <div id="mihomo-proxy-tools-no-proxies" class="hidden" style="display:none; margin-top: 8px; padding: 12px; border-radius: 12px; border: 1px solid rgba(127,127,127,0.18); background: rgba(2,6,23,0.35);">
+            <div style="font-weight: 600; margin-bottom: 6px;">Статические proxies не найдены</div>
+            <div id="mihomo-proxy-tools-no-proxies-text" class="xk-card-desc" style="opacity: 0.9;">
+              Вы используете proxy-providers (подписка). Proxy Tools работает только со статическими proxies. Хотите добавить статический узел?
+            </div>
+            <div style="margin-top: 10px; display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" id="mihomo-proxy-tools-add-static-btn" class="btn-primary" data-tooltip="Вставить секцию proxies: с примером статического узла в текущий YAML.">➕ Добавить статический прокси</button>
+            </div>
+            <div class="xk-card-desc" style="margin-top: 6px; opacity: 0.75;">
+              Мы добавим <code>proxies:</code> с примером узла (<code>socks5</code>). Затем вы сможете отредактировать его под свой сервер.
+            </div>
+          </div>
+
+          <div id="mihomo-proxy-tools-actions">
+
+            <div class="xk-pt-section">
+              <div class="terminal-menu-title xk-pt-title">Rename</div>
+
+              <div class="xk-pt-grid xk-pt-grid--rename">
+                <label for="mihomo-proxy-tools-rename-input" class="xk-pt-label">Новое имя</label>
+                <input id="mihomo-proxy-tools-rename-input" class="xkeen-input xk-pt-control" type="text" placeholder="например: MyProxy" />
+                <button type="button" id="mihomo-proxy-tools-rename-btn" class="btn-primary" data-tooltip="Переименовать прокси и обновить все упоминания в proxy-groups.">
+                  ✏️ Переименовать
+                </button>
+              </div>
+
+              <div class="xk-card-desc xk-pt-note">
+                Переименование меняет <code>- name:</code> и все ссылки на имя внутри <code>proxy-groups</code>.
+              </div>
+            </div>
+
+            <div class="xk-pt-section">
+              <div class="terminal-menu-title xk-pt-title">Replace</div>
+
+              <div class="xk-pt-grid xk-pt-grid--replace-top">
+                <label for="mihomo-proxy-tools-replace-type" class="xk-pt-label">Тип</label>
+                <select id="mihomo-proxy-tools-replace-type" class="xray-log-select xk-pt-control">
+                  <option value="auto">Auto (proxy link)</option>
+                  <option value="wireguard">WireGuard (.conf)</option>
+                </select>
+
+                <button type="button" id="mihomo-proxy-tools-prepare-btn" data-tooltip="Преобразовать ссылку/конфиг в YAML и показать preview.">
+                  ✨ Подготовить
+                </button>
+
+                <button type="button" id="mihomo-proxy-tools-replace-btn" class="btn-danger" data-tooltip="Заменить выбранный proxy block на подготовленный YAML." disabled>
+                  ♻️ Заменить
+                </button>
+              </div>
+
+              <div class="xk-pt-grid xk-pt-grid--textarea" style="margin-top: 8px;">
+                <label for="mihomo-proxy-tools-replace-input" class="xk-pt-label">Ссылка / конфиг</label>
+                <textarea id="mihomo-proxy-tools-replace-input" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" placeholder="vless://...
+
+или WireGuard .conf"></textarea>
+              </div>
+
+              <div class="xk-pt-grid xk-pt-grid--textarea" style="margin-top: 8px;">
+                <label for="mihomo-proxy-tools-replace-preview" class="xk-pt-label">YAML (preview)</label>
+                <textarea id="mihomo-proxy-tools-replace-preview" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" readonly></textarea>
+              </div>
+
+              <div class="xk-card-desc xk-pt-note">
+                Заменяется только выбранный блок внутри <code>proxies:</code>. Группы остаются, имя сохраняется.
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="mihomo-proxy-tools-close2-btn">Закрыть</button>
+          </div>
+          <div></div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Mihomo: HWID subscription wizard modal -->
+    <div id="mihomo-hwid-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="HWID‑подписка Mihomo">
+      <div class="modal-content" style="max-width: 780px;" data-modal-key="mihomo-hwid">
+        <div class="modal-header">
+          <span class="modal-title">HWID‑подписка (Mihomo)</span>
+          <button type="button" class="modal-close" id="mihomo-hwid-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description" style="margin-bottom: 10px;">
+            Добавляет <b>proxy-provider</b> с HWID‑заголовками в <code>config.yaml</code>.
+            Сначала проверь ссылку — панель попробует вытащить <code>profile-title</code> и предложит имя.
+          </p>
+          <label style="display:block; margin-top: 10px;">
+            <span class="hint-label">URL подписки</span>
+            <input id="mihomo-hwid-url" class="xkeen-input" type="text" placeholder="https://..." />
+          </label>
+
+          <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin-top: 10px;">
+            <input type="checkbox" id="mihomo-hwid-insecure">
+            <span>Игнорировать TLS</span>
+          </label>
+          <div class="xk-card-desc" style="margin:-6px 0 0 28px;">Включай только если сертификат домена битый/самоподписанный.</div>
+
+          <label style="display:block; margin-top: 12px;">
+            <span class="hint-label">Имя provider</span>
+            <input id="mihomo-hwid-name" class="xkeen-input" type="text" placeholder="например: My_Sub" />
+          </label>
+
+          <div id="mihomo-hwid-status" class="status" style="margin-top: 10px;"></div>
+          <p id="mihomo-hwid-meta" class="modal-hint" style="margin:8px 0 0; opacity:0.75; font-size: 0.85rem;"></p>
+          <p id="mihomo-hwid-tip" class="modal-hint" style="margin:6px 0 0; opacity:0.7; font-size: 0.82rem; display:none;"></p>
+          <label style="display:block; margin-top: 10px;">
+            <span class="hint-label">YAML (preview)</span>
+            <textarea id="mihomo-hwid-preview" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" readonly></textarea>
+          </label>
+        </div>
+        <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" id="mihomo-hwid-probe-btn" data-tooltip="Проверить ссылку и собрать YAML preview.">🔎 Проверить</button>
+            <button type="button" id="mihomo-hwid-insert-btn" class="btn-primary" data-tooltip="Вставить proxy-provider в config.yaml и закрыть окно." disabled>✅ Вставить в конфиг</button>
+          </div>
+          <button type="button" id="mihomo-hwid-cancel-btn">Отмена</button>
         </div>
       </div>
     </div>
@@ -2098,7 +2322,7 @@
 	    window.XKEEN_GITHUB_REPO_URL = "{{ github_repo_url|e }}";
 	    window.XKEEN_STATIC_BASE = "{{ url_for('static', filename='') }}";
 		    // Cache-buster for lazy-loaded scripts (Commit J)
-		    window.XKEEN_STATIC_VER = "20260225b";
+		    window.XKEEN_STATIC_VER = "20260302a";
 	    // Files shown in UI (used by last-load badge and other helpers)
 	    window.XKEEN_FILES = {
 	      routing: "{{ routing_file|e }}",
@@ -2128,7 +2352,7 @@
   <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260105c') }}"></script>
   <script src="{{ url_for('static', filename='js/util/tab_id.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/util/ansi.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/util/ansi.js', v='20260302a') }}"></script>
     <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
 <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/settings.js', v='20260222c') }}"></script>
@@ -2139,7 +2363,7 @@
   <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js', v='20260224a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/dat_contents_modal.js', v='20260213b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/backups.js', v='20260224d') }}"></script>
-	  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260227a') }}"></script>
+	  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260302c') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_jsonc_preserve.js', v='20260218d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260218d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260224d') }}"></script>
@@ -2147,9 +2371,12 @@
   <script src="{{ url_for('static', filename='js/features/github.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/service_status.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/xray_logs.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/restart_log.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_panel.js', v='20260227b') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260223j') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/restart_log.js', v='20260302c') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_panel.js', v='20260302g') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_yaml_patch.js', v='20260302a') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260302e') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_proxy_tools.js', v='20260302a') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_hwid_sub.js', v='20260302b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/commands_list.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/outbounds.js') }}"></script>
@@ -2160,7 +2387,7 @@
     <!-- Terminal scripts are lazy-loaded on first open (Commit J) -->
 
   <script src="{{ url_for('static', filename='js/features/donate.js') }}"></script>
-	  <script src="{{ url_for('static', filename='js/pages/panel.init.js', v='20260225a') }}"></script>
+	  <script src="{{ url_for('static', filename='js/pages/panel.init.js', v='20260302a') }}"></script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 
     <!-- Модальный JSON-редактор для 03_inbounds.json / 04_outbounds.json -->
@@ -2972,6 +3199,46 @@
   </div>
 </div>
 
+<!-- File Manager: multi-download mode chooser -->
+<div id="fm-download-multi-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Download">
+  <div class="modal-content" style="max-width:560px;">
+    <div class="modal-header">
+      <span class="modal-title">Скачать выбранное</span>
+      <button type="button" class="modal-close" id="fm-download-multi-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="status" id="fm-download-multi-desc" style="margin:0 0 10px 0; opacity:.9;"></div>
+
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <label style="display:flex; gap:10px; align-items:flex-start;">
+          <input type="radio" name="fm-download-multi-mode" id="fm-download-multi-mode-zip" value="zip" />
+          <div>
+            <div style="font-weight:600;">Одним ZIP-архивом</div>
+            <div style="font-size:12px; opacity:.8;">Удобно для папок и большого числа файлов. Требует место в /tmp.</div>
+          </div>
+        </label>
+
+        <label style="display:flex; gap:10px; align-items:flex-start;">
+          <input type="radio" name="fm-download-multi-mode" id="fm-download-multi-mode-queue" value="queue" />
+          <div>
+            <div style="font-weight:600;">По очереди (каждый файл отдельно)</div>
+            <div id="fm-download-multi-queue-hint" style="font-size:12px; opacity:.8;">Браузер может запросить разрешение на несколько загрузок.</div>
+          </div>
+        </label>
+      </div>
+
+      <label style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+        <input type="checkbox" id="fm-download-multi-remember" />
+        <span style="font-size:12px; opacity:.9;">Запомнить выбор</span>
+      </label>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end; gap:10px;">
+      <button type="button" class="btn-secondary" id="fm-download-multi-cancel-btn">Отмена</button>
+      <button type="button" class="btn-primary" id="fm-download-multi-ok-btn">Скачать</button>
+    </div>
+  </div>
+</div>
+
 <!-- File Manager: progress modal -->
 <div id="fm-progress-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Progress">
   <div class="modal-content" style="max-width:620px;">
@@ -3024,6 +3291,28 @@
   </div>
 </div>
 
+<!-- File Manager: USB volumes (mount/unmount) -->
+<div id="fm-volumes-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Диски / Тома">
+  <div class="modal-content" style="max-width:920px;">
+    <div class="modal-header">
+      <span class="modal-title">Диски / Тома (USB)</span>
+      <button type="button" class="modal-close" id="fm-volumes-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:10px;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="btn-secondary" id="fm-volumes-refresh-btn">⟳ Обновить</button>
+          <span id="fm-volumes-spinner" class="hidden" style="opacity:.85;">⏳</span>
+        </div>
+        <div id="fm-volumes-summary" style="font-size:12px; opacity:.85;"></div>
+      </div>
+
+      <div id="fm-volumes-list"></div>
+      <div class="status" style="margin-top:10px; opacity:.75;">Команды: <code>show usb</code>, <code>system mount &lt;fs&gt;</code>, <code>system no mount &lt;fs&gt;</code>.</div>
+    </div>
+  </div>
+</div>
+
 <!-- File Manager: help modal -->
 <div id="fm-help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Справка по файловому менеджеру">
   <div class="modal-content" style="max-width:780px;">
@@ -3055,7 +3344,7 @@
         <ul>
           <li><b>➕ Папка</b> / <b>➕ Файл</b> — создание в активной панели.</li>
           <li><b>⬆ Upload</b> — загрузка файлов с компьютера в активный каталог.</li>
-          <li><b>⬇ Download</b> — скачать выделенное (папка/несколько элементов скачиваются как <b>.zip</b>).</li>
+          <li><b>⬇ Download</b> — скачать выделенное. Для папки всегда будет <b>.zip</b>. Для нескольких файлов можно выбрать: <b>.zip</b> или <b>по очереди</b> (каждый файл отдельно).</li>
           <li><b>F5</b> — копировать из активной панели в другую, <b>F6</b> — переместить.</li>
           <li>Если в назначении есть файлы с теми же именами — появится окно <b>«Конфликты»</b> (заменить/пропустить).</li>
           <li><b>F2</b> — переименовать (только в текущем каталоге), <b>F8</b> — в корзину (в корзине — удалить навсегда).</li>

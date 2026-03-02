@@ -54,6 +54,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .fs import create_fs_blueprint
     from .remotefs.blueprint import create_remotefs_blueprint
     from .fileops import create_fileops_blueprint
+    from .storage_usb import create_storage_usb_blueprint
 
     # Keep registration order stable.
     app.register_blueprint(create_utils_blueprint())
@@ -138,6 +139,8 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     )
 
     app.register_blueprint(create_commands_blueprint())
+    # USB storage helper API (list + mount/unmount). Safe to register even if ndmc is missing.
+    app.register_blueprint(create_storage_usb_blueprint())
     app.register_blueprint(create_devtools_blueprint(ctx.ui_state_dir))
 
     # FS / RemoteFS / FileOps are optional and should never block UI start.

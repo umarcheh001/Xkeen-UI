@@ -23,6 +23,20 @@ from services.fileops import FileOpJob, FileOpJobManager, SpoolManager, WsTokenM
 from services.fileops.runtime import FileOpsRuntime
 from services.fileops.ops_copy_move import run_job_copy_move as _run_job_copy_move_impl
 from services.fileops.ops_delete import run_job_delete as _run_job_delete_impl
+from services.fileops.ops_archive import (
+    normalize_zip as _normalize_zip_impl,
+    normalize_unzip as _normalize_unzip_impl,
+    run_job_zip as _run_job_zip_impl,
+    run_job_unzip as _run_job_unzip_impl,
+)
+from services.fileops.ops_checksum import (
+    normalize_checksum as _normalize_checksum_impl,
+    run_job_checksum as _run_job_checksum_impl,
+)
+from services.fileops.ops_dirsize import (
+    normalize_dirsize as _normalize_dirsize_impl,
+    run_job_dirsize as _run_job_dirsize_impl,
+)
 from services.fileops.normalize import (
     normalize_sources as _normalize_sources_impl,
     normalize_delete as _normalize_delete_impl,
@@ -340,11 +354,35 @@ def create_fileops_blueprint(
     def _run_job_delete(job: FileOpJob, spec: Dict[str, Any]) -> None:
         return _run_job_delete_impl(job, spec, _runtime)
 
+    def _run_job_zip(job: FileOpJob, spec: Dict[str, Any]) -> None:
+        return _run_job_zip_impl(job, spec, _runtime)
+
+    def _run_job_unzip(job: FileOpJob, spec: Dict[str, Any]) -> None:
+        return _run_job_unzip_impl(job, spec, _runtime)
+
+    def _run_job_checksum(job: FileOpJob, spec: Dict[str, Any]) -> None:
+        return _run_job_checksum_impl(job, spec, _runtime)
+
+    def _run_job_dirsize(job: FileOpJob, spec: Dict[str, Any]) -> None:
+        return _run_job_dirsize_impl(job, spec, _runtime)
+
     def _normalize_sources(spec: Dict[str, Any]) -> None:
         return _normalize_sources_impl(spec, _runtime)
 
     def _normalize_delete(spec: Dict[str, Any]) -> None:
         return _normalize_delete_impl(spec, _runtime)
+
+    def _normalize_zip(spec: Dict[str, Any]) -> Dict[str, Any]:
+        return _normalize_zip_impl(spec, _runtime)
+
+    def _normalize_unzip(spec: Dict[str, Any]) -> Dict[str, Any]:
+        return _normalize_unzip_impl(spec, _runtime)
+
+    def _normalize_checksum(spec: Dict[str, Any]) -> Dict[str, Any]:
+        return _normalize_checksum_impl(spec, _runtime)
+
+    def _normalize_dirsize(spec: Dict[str, Any]) -> Dict[str, Any]:
+        return _normalize_dirsize_impl(spec, _runtime)
 
     def _compute_copy_move_conflicts(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
         return _compute_copy_move_conflicts_impl(spec, _runtime)
@@ -369,9 +407,17 @@ def create_fileops_blueprint(
             "normalize_delete": _normalize_delete,
             "normalize_sources": _normalize_sources,
             "compute_copy_move_conflicts": _compute_copy_move_conflicts,
+            "normalize_zip": _normalize_zip,
+            "normalize_unzip": _normalize_unzip,
+            "normalize_checksum": _normalize_checksum,
+            "normalize_dirsize": _normalize_dirsize,
             "progress_set": _progress_set,
             "run_job_delete": _run_job_delete,
             "run_job_copy_move": _run_job_copy_move,
+            "run_job_zip": _run_job_zip,
+            "run_job_unzip": _run_job_unzip,
+            "run_job_checksum": _run_job_checksum,
+            "run_job_dirsize": _run_job_dirsize,
             "core_log": _core_log,
         },
     )

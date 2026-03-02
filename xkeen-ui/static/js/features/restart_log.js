@@ -7,6 +7,10 @@
 
   const RL = XKeen.features.restartLog;
 
+  // Keep one canonical raw buffer so multiple log blocks (across sections)
+  // can render the same output.
+  RL._rawText = (typeof RL._rawText === 'string') ? RL._rawText : '';
+
   // ANSI -> HTML formatter.
   // Prefer shared util (it also strips non-SGR control sequences like ESC[H/ESC[J).
   function ansiToHtml(line) {
@@ -24,14 +28,24 @@
     return String(line || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  function getLogEl() {
-    return document.getElementById('restart-log');
+  function getLogEls() {
+    const els = [];
+    try {
+      const q = document.querySelectorAll('[data-xk-restart-log="1"]');
+      q.forEach((el) => { if (el) els.push(el); });
+    } catch (e) {}
+
+    // Back-compat: old markup
+    try {
+      const legacy = document.getElementById('restart-log');
+      if (legacy && els.indexOf(legacy) === -1) els.push(legacy);
+    } catch (e) {}
+
+    return els;
   }
 
-  RL.renderFromRaw = function renderFromRaw(rawText) {
-    const logEl = getLogEl();
-    if (!logEl) return;
-
+  function renderInto(el, rawText) {
+    if (!el) return;
     const text = rawText || '';
     const lines = String(text).split(/\r?\n/);
     // Avoid an extra empty block caused by trailing newline in the raw text.
@@ -47,53 +61,65 @@
       // Each line is rendered as a block-level <span>. Adding <br> creates empty rows in <pre>.
       .join('');
 
-    logEl.innerHTML = html;
-    logEl.scrollTop = logEl.scrollHeight;
+    el.innerHTML = html;
+    try { el.scrollTop = el.scrollHeight; } catch (e) {}
+  }
+
+  function renderAll() {
+    const els = getLogEls();
+    if (!els.length) return;
+    const raw = RL._rawText || '';
+    els.forEach((el) => {
+      try { el.dataset.rawText = raw; } catch (e) {}
+      renderInto(el, raw);
+    });
+  }
+
+  RL.renderFromRaw = function renderFromRaw(rawText) {
+    RL._rawText = String(rawText || '');
+    renderAll();
+  };
+
+  RL.setRaw = function setRaw(rawText) {
+    RL._rawText = String(rawText || '');
+    renderAll();
   };
 
   RL.load = async function load() {
-    const logEl = getLogEl();
-    if (!logEl) return false;
+    const els = getLogEls();
+    if (!els.length) return false;
 
     try {
       const res = await fetch('/api/restart-log');
       if (!res.ok) {
         const msg = 'Не удалось загрузить журнал.';
-        logEl.dataset.rawText = msg;
-        RL.renderFromRaw(msg);
+        RL.setRaw(msg);
         return false;
       }
       const data = await res.json().catch(() => ({}));
       const lines = Array.isArray(data.lines) ? data.lines : [];
       const text = lines.length ? lines.join('') : 'Журнал пуст.';
-      logEl.dataset.rawText = text;
-      RL.renderFromRaw(text);
+      RL.setRaw(text);
       return true;
     } catch (e) {
       console.error(e);
       const msg = 'Ошибка загрузки журнала.';
-      logEl.dataset.rawText = msg;
-      RL.renderFromRaw(msg);
+      RL.setRaw(msg);
       return false;
     }
   };
 
   RL.append = function append(text) {
-    const logEl = getLogEl();
-    if (!logEl || !text) return;
-    const current = logEl.dataset.rawText || '';
-    let raw = current;
+    if (!text) return;
+    let raw = RL._rawText || '';
     if (raw && !raw.endsWith('\n')) raw += '\n';
     raw += String(text);
-    logEl.dataset.rawText = raw;
-    RL.renderFromRaw(raw);
+    RL._rawText = raw;
+    renderAll();
   };
 
   RL.clear = function clear() {
-    const logEl = getLogEl();
-    if (!logEl) return;
-    logEl.dataset.rawText = '';
-    logEl.innerHTML = '';
+    RL.setRaw('');
     try {
       fetch('/api/restart-log/clear', { method: 'POST' });
     } catch (e) {
@@ -120,9 +146,7 @@
   }
 
   RL.copy = function copy() {
-    const logEl = getLogEl();
-    if (!logEl) return;
-    const text = logEl.dataset.rawText || '';
+    const text = RL._rawText || '';
     if (!text) return;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -135,29 +159,41 @@
     }
   };
 
-  RL.init = function init() {
-    const clearBtn = document.getElementById('restart-log-clear-btn');
-    const copyBtn = document.getElementById('restart-log-copy-btn');
-
-    if (clearBtn && (!clearBtn.dataset || clearBtn.dataset.xkeenBound !== '1')) {
-      clearBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        RL.clear();
-      });
-      if (clearBtn.dataset) clearBtn.dataset.xkeenBound = '1';
-    }
-
-    if (copyBtn && (!copyBtn.dataset || copyBtn.dataset.xkeenBound !== '1')) {
-      copyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        RL.copy();
-      });
-      if (copyBtn.dataset) copyBtn.dataset.xkeenBound = '1';
-    }
-
-    // Auto-load when restart log block exists.
+  function bindOnce(el, handler) {
+    if (!el) return;
     try {
-      RL.load();
+      if (el.dataset && el.dataset.xkeenBound === '1') return;
+      el.addEventListener('click', handler);
+      if (el.dataset) el.dataset.xkeenBound = '1';
+    } catch (e) {}
+  }
+
+  RL.init = function init() {
+    // Data-attr buttons (preferred)
+    try {
+      const btns = document.querySelectorAll('[data-xk-restart-log-action]');
+      btns.forEach((btn) => {
+        const act = btn.getAttribute('data-xk-restart-log-action');
+        if (!act) return;
+        if (act === 'clear') {
+          bindOnce(btn, (e) => { e.preventDefault(); RL.clear(); });
+        } else if (act === 'copy') {
+          bindOnce(btn, (e) => { e.preventDefault(); RL.copy(); });
+        }
+      });
+    } catch (e) {}
+
+    // Back-compat: old ids
+    try {
+      const clearBtn = document.getElementById('restart-log-clear-btn');
+      const copyBtn = document.getElementById('restart-log-copy-btn');
+      bindOnce(clearBtn, (e) => { e.preventDefault(); RL.clear(); });
+      bindOnce(copyBtn, (e) => { e.preventDefault(); RL.copy(); });
+    } catch (e) {}
+
+    // Auto-load when any restart log block exists.
+    try {
+      if (getLogEls().length) RL.load();
     } catch (e) {}
   };
 

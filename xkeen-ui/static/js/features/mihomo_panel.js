@@ -28,6 +28,7 @@
     btnFormatYaml: 'mihomo-format-yaml-btn',
     btnValidate: 'mihomo-validate-btn',
     btnSaveRestart: 'mihomo-save-restart-btn',
+    btnOpenZashboardUi: 'mihomo-open-zashboard-btn',
 
     // Templates
     tplSelect: 'mihomo-template-select',
@@ -73,6 +74,9 @@
   let _suppressDirty = false;
   let _lastTemplateSelectValue = '';
   let _monacoDirtyDisposable = null;
+
+  // Monaco fullscreen (CSS-driven)
+  let _monacoFsWired = false;
 
   // YAML error marker (CodeMirror only; backend validate / Prettier errors).
   let _yamlErrorLine = null;
@@ -145,6 +149,54 @@
       if (cm && cm._xkeenToolbarEl) cm._xkeenToolbarEl.style.display = show ? '' : 'none';
     } catch (e) {}
   }
+
+  // Fallback fullscreen button in the engine header (for Monaco mode when CodeMirror isn't loaded yet)
+  function ensureHeaderFsButton() {
+    try {
+      const sel = $(IDS.engineSelect);
+      const wrap = sel && sel.closest ? sel.closest('.xk-editor-engine') : null;
+      const host = wrap || $(IDS.view) || document.body;
+      if (!host || !host.querySelector) return null;
+
+      const existing = host.querySelector('button.xk-mihomo-fs-btn');
+      if (existing) return existing;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'xkeen-cm-tool xk-mihomo-fs-btn';
+      try { btn.dataset.tip = 'Фулскрин (F11 / Esc)'; } catch (e) {}
+      try { btn.dataset.actionId = 'fs_hdr'; } catch (e) {}
+      btn.innerHTML = (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.fullscreen) ? window.XKEEN_CM_ICONS.fullscreen : '⛶';
+
+      btn.addEventListener('click', (e) => {
+        try { e.preventDefault(); e.stopPropagation(); } catch (err) {}
+        try { toggleEditorFullscreen(_cm || (XKeen.state ? XKeen.state.mihomoEditor : null)); } catch (err) {}
+      });
+
+      // Place it right next to the engine select.
+      if (wrap) wrap.appendChild(btn);
+      else host.appendChild(btn);
+
+      return btn;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function syncHeaderFsButton(engine) {
+    try {
+      const btn = ensureHeaderFsButton();
+      if (!btn) return;
+
+      const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
+      const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+      const hasToolbar = !!(cm && cm._xkeenToolbarEl);
+
+      // Show header button only when Monaco is active AND no CM toolbar exists.
+      btn.style.display = (isMonaco && !hasToolbar) ? '' : 'none';
+    } catch (e) {}
+  }
+
 
   function ensureMonacoHost() {
     let host = $(IDS.monacoHost);
@@ -242,6 +294,175 @@
     }
   }
 
+  // ------------------------ fullscreen (CodeMirror + Monaco) ------------------------
+
+  // CodeMirror toolbar is attached near the CodeMirror wrapper. When we reuse it in Monaco mode
+  // (to keep UI consistent), it must sit above the Monaco host instead of ending up under it.
+  function repositionCmToolbarForEngine(engine) {
+    try {
+      const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+      const bar = cm && cm._xkeenToolbarEl;
+      if (!bar || !bar.parentNode) return;
+
+      // Prefer placing the toolbar into the dedicated host in the topbar.
+      // This keeps the layout tight (no extra vertical gaps) and matches Routing Xray UX.
+      const hostSlot = document.getElementById('mihomo-toolbar-host');
+      if (hostSlot) {
+        if (!hostSlot.contains(bar)) hostSlot.appendChild(bar);
+        try { bar.classList.add('xk-toolbar-in-host'); } catch (e) {}
+        return;
+      }
+
+      const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
+
+      if (isMonaco) {
+        const host = ensureMonacoHost();
+        if (!host || !host.parentNode) return;
+        // Place the toolbar right above Monaco host (top-right above the editor).
+        if (bar.nextSibling !== host) host.parentNode.insertBefore(bar, host);
+        return;
+      }
+
+      const w = cmWrapper(cm);
+      if (!w || !w.parentNode) return;
+      // Restore the toolbar above CodeMirror wrapper.
+      if (bar.nextSibling !== w) w.parentNode.insertBefore(bar, w);
+    } catch (e) {}
+  }
+
+  function _syncToolbarFsClass(isFs) {
+    try {
+      const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+      if (cm && cm._xkeenToolbarEl) cm._xkeenToolbarEl.classList.toggle('is-fullscreen', !!isFs);
+    } catch (e) {}
+  }
+
+  function syncToolbarForEngine(engine) {
+    try {
+      const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+      if (!cm || !cm._xkeenToolbarEl || !cm._xkeenToolbarEl.querySelectorAll) return;
+      const bar = cm._xkeenToolbarEl;
+      const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
+
+      // Keep the toolbar container visible so layout doesn't jump.
+      bar.style.display = '';
+
+      const btns = bar.querySelectorAll('button.xkeen-cm-tool');
+
+      // Prefer the real CodeMirror fullscreen action when it exists; otherwise fall back to fs_any.
+      let hasFs = false;
+      (btns || []).forEach((btn) => {
+        try {
+          const id = (btn.dataset && btn.dataset.actionId) ? String(btn.dataset.actionId) : '';
+          if (id === 'fs') hasFs = true;
+        } catch (e) {}
+      });
+
+      (btns || []).forEach((btn) => {
+        const id = (btn.dataset && btn.dataset.actionId) ? String(btn.dataset.actionId) : '';
+        const isFs = (id === 'fs');
+        const isFsAny = (id === 'fs_any');
+
+        if (isMonaco) {
+          // In Monaco mode show only one fullscreen button: fs (preferred) or fs_any.
+          btn.style.display = hasFs ? (isFs ? '' : 'none') : (isFsAny ? '' : 'none');
+        } else {
+          // In CodeMirror mode hide the fallback button to avoid duplicates.
+          btn.style.display = isFsAny ? 'none' : '';
+        }
+      });
+    } catch (e) {}
+  }
+
+
+  function isMonacoFullscreen() {
+    try {
+      const host = ensureMonacoHost();
+      return !!(host && host.classList && host.classList.contains('is-fullscreen'));
+    } catch (e) {}
+    return false;
+  }
+
+  function setMonacoFullscreen(on) {
+    const host = ensureMonacoHost();
+    if (!host) return;
+    const enabled = !!on;
+
+    // Some containers use transforms; position:fixed would become relative to that ancestor.
+    // To guarantee true fullscreen, portal the host to <body> while fullscreen is active.
+    const st = host.__xkFs || (host.__xkFs = { on: false, placeholder: null, parent: null, next: null });
+
+    if (enabled) {
+      if (!st.on) {
+        st.on = true;
+        try {
+          st.parent = host.parentNode;
+          st.next = host.nextSibling;
+          st.placeholder = document.createComment('xk-monaco-fs');
+          if (st.parent) st.parent.insertBefore(st.placeholder, st.next);
+        } catch (e) {}
+        try { document.body.appendChild(host); } catch (e) {}
+      }
+
+      try { host.classList.add('is-fullscreen'); } catch (e) {}
+      try { document.body.classList.add('xk-no-scroll'); } catch (e) {}
+    } else {
+      try { host.classList.remove('is-fullscreen'); } catch (e) {}
+      try { document.body.classList.remove('xk-no-scroll'); } catch (e) {}
+
+      if (st.on) {
+        st.on = false;
+        try {
+          if (st.placeholder && st.placeholder.parentNode) {
+            st.placeholder.parentNode.replaceChild(host, st.placeholder);
+          } else if (st.parent) {
+            st.parent.insertBefore(host, st.next || null);
+          }
+        } catch (e) {}
+        st.placeholder = null;
+        st.parent = null;
+        st.next = null;
+      }
+    }
+
+    // Keep toolbar visible above fullscreen editor (and re-apply after CM toolbar sync).
+    try { _syncToolbarFsClass(enabled); } catch (e) {}
+    try { setTimeout(() => { try { _syncToolbarFsClass(enabled); } catch (e2) {} }, 0); } catch (e3) {}
+
+    try { if (_monaco && typeof _monaco.layout === 'function') _monaco.layout(); } catch (e) {}
+    try { setTimeout(() => { try { if (_monaco && typeof _monaco.layout === 'function') _monaco.layout(); } catch (e2) {} }, 0); } catch (e3) {}
+    try { if (_monaco && typeof _monaco.focus === 'function') _monaco.focus(); } catch (e) {}
+  }
+
+  function wireMonacoFullscreenOnce() {
+    if (_monacoFsWired) return;
+    _monacoFsWired = true;
+
+    document.addEventListener('keydown', (e) => {
+      try {
+        if (!e || e.key !== 'Escape') return;
+        if (_engine !== 'monaco') return;
+        if (!isMonacoFullscreen()) return;
+        setMonacoFullscreen(false);
+      } catch (err) {}
+    }, true);
+  }
+
+  function toggleEditorFullscreen(cm) {
+    if (_engine === 'monaco') {
+      try { wireMonacoFullscreenOnce(); } catch (e) {}
+      setMonacoFullscreen(!isMonacoFullscreen());
+      return;
+    }
+
+    const ed = cm || _cm;
+    try {
+      if (ed && typeof ed.getOption === 'function' && typeof ed.setOption === 'function') {
+        ed.setOption('fullScreen', !ed.getOption('fullScreen'));
+      }
+    } catch (e) {}
+  }
+
   function setEngineSelectValue(engine) {
     const sel = $(IDS.engineSelect);
     if (!sel) return;
@@ -270,6 +491,12 @@
       try { clearYamlErrorMarker(); } catch (e) {}
 
       if (next === 'monaco') {
+        // If CodeMirror was in fullscreen, exit it first to avoid CSS/layout glitches.
+        try {
+          const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+          if (cm && cm.getOption && cm.setOption && cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
+        } catch (e0) {}
+
         const ed = await ensureMonacoEditor();
         if (!ed) {
           // Fallback to CodeMirror and persist it to global helper (best-effort).
@@ -280,6 +507,8 @@
           showMonaco(false);
           showCodeMirror(true);
           showCmToolbar(true);
+          try { syncToolbarForEngine('codemirror'); } catch (e) {}
+          try { syncHeaderFsButton('codemirror'); } catch (e) {}
           _engine = 'codemirror';
           return _engine;
         }
@@ -292,8 +521,16 @@
         } catch (e3) {}
 
         showCodeMirror(false);
-        showCmToolbar(false);
+        // Keep toolbar visible in Monaco mode (only fullscreen button is shown).
+        showCmToolbar(true);
         showMonaco(true);
+
+        // Move CM toolbar above Monaco host so the fullscreen button is in the top-right corner.
+        try { repositionCmToolbarForEngine('monaco'); } catch (e) {}
+
+        try { syncToolbarForEngine('monaco'); } catch (e) {}
+        try { syncHeaderFsButton('monaco'); } catch (e) {}
+        try { wireMonacoFullscreenOnce(); } catch (e) {}
 
         _engine = 'monaco';
         try { if (_monacoFacade && _monacoFacade.focus) _monacoFacade.focus(); else if (_monaco && _monaco.focus) _monaco.focus(); } catch (e4) {}
@@ -301,6 +538,8 @@
       }
 
       // Switch to CodeMirror (sync text back from Monaco).
+      // If Monaco is fullscreen, exit it before hiding to avoid leaving body scroll locked.
+      try { if (isMonacoFullscreen()) setMonacoFullscreen(false); } catch (e0) {}
       try {
         const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
         if (_monaco && cm && cm.setValue) cm.setValue(String(_monaco.getValue() || ''));
@@ -309,6 +548,11 @@
       showMonaco(false);
       showCodeMirror(true);
       showCmToolbar(true);
+
+      // Restore CM toolbar position above the CodeMirror wrapper.
+      try { repositionCmToolbarForEngine('codemirror'); } catch (e) {}
+
+      try { syncToolbarForEngine('codemirror'); } catch (e) {}
 
       _engine = 'codemirror';
       try {
@@ -440,10 +684,34 @@
         // xkeenAttachCmToolbar(cm) expects an items list.
         // If called without it, it creates an empty toolbar (no buttons),
         // which выглядит как "тулбар пропал".
-        const items = (window && window.XKEEN_CM_TOOLBAR_DEFAULT)
+        const baseItems = (window && window.XKEEN_CM_TOOLBAR_DEFAULT)
           ? window.XKEEN_CM_TOOLBAR_DEFAULT
           : ((window && window.XKEEN_CM_TOOLBAR_MINI) ? window.XKEEN_CM_TOOLBAR_MINI : null);
+
+        // Replace fullscreen action: in this card it must work for the active engine.
+        const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
+          if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) });
+          return it;
+        });
+
+        // Fallback fullscreen button for Monaco even when CM fullscreen addon isn't loaded.
+        try {
+          if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
+            items.push({
+              id: 'fs_any',
+              svg: window.XKEEN_CM_ICONS.fullscreen,
+              label: 'Фулскрин',
+              fallbackHint: 'F11 / Esc',
+              onClick: () => toggleEditorFullscreen(_cm),
+            });
+          }
+        } catch (e) {}
+
         window.xkeenAttachCmToolbar(_cm, items);
+        // Keep the toolbar in the compact topbar host (if present).
+        try { repositionCmToolbarForEngine(_engine); } catch (e) {}
+        try { syncToolbarForEngine(_engine); } catch (e) {}
+        try { syncHeaderFsButton(_engine); } catch (e) {}
       }
     } catch (e) {}
 
@@ -673,31 +941,156 @@
       setStatus('config.yaml пустой, сохранять нечего.', true);
       return false;
     }
+    // Feature E: job-based restart (no long-running HTTP request).
+    if (MP._restartJobRunning) {
+      setStatus('Перезапуск уже выполняется…', true);
+      return false;
+    }
+
+    const btn = $(IDS.btnSaveRestart);
+    const setBtnBusy = (busy) => {
+      if (!btn) return;
+      try { btn.disabled = !!busy; } catch (e) {}
+      try { btn.classList.toggle('is-busy', !!busy); } catch (e) {}
+    };
+
+    const clearRestartLogUi = () => {
+      try {
+        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.setRaw === 'function') {
+          XKeen.features.restartLog.setRaw('');
+          return;
+        }
+      } catch (e) {}
+      try {
+        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.clear === 'function') {
+          XKeen.features.restartLog.clear();
+          return;
+        }
+      } catch (e) {}
+
+      const el = document.getElementById('restart-log');
+      if (!el) return;
+      try { el.dataset.rawText = ''; } catch (e) {}
+      try { el.innerHTML = ''; } catch (e) {}
+      try { el.scrollTop = 0; } catch (e) {}
+    };
+
+    const appendRestartLog = (chunk) => {
+      if (!chunk) return;
+      try {
+        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.append === 'function') {
+          XKeen.features.restartLog.append(String(chunk));
+          return;
+        }
+      } catch (e) {}
+      const el = document.getElementById('restart-log');
+      if (!el) return;
+      try {
+        const prev = el.textContent || '';
+        el.textContent = prev + String(chunk);
+        el.scrollTop = el.scrollHeight;
+      } catch (e) {}
+    };
+
     try {
-      setStatus('Сохранение config.yaml и перезапуск mihomo...', false);
-      const res = await fetch('/api/mihomo-config', {
+      MP._restartJobRunning = true;
+      setBtnBusy(true);
+      clearYamlErrorMarker();
+
+      // Avoid noisy "loading..." toast: status line + streaming log is enough.
+      setStatus('Сохраняю config.yaml и запускаю перезапуск…', false, true);
+      clearRestartLogUi();
+      appendRestartLog('⏳ Запуск xkeen -restart (job)…\n');
+
+      // Backend endpoint: returns 202 + restart_job_id.
+      const res = await fetch('/api/mihomo/generate_apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, restart: true }),
+        body: JSON.stringify({ configOverride: content }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        setStatus((data && data.error) || 'Ошибка сохранения config.yaml.', true);
+        const errMsg = (data && data.error) ? String(data.error) : 'Ошибка сохранения/перезапуска.';
+        try {
+          const lc = extractYamlLineCol(errMsg);
+          if (lc && Number.isFinite(lc.line)) markYamlErrorLine(Math.max(0, lc.line - 1));
+        } catch (e2) {}
+        setStatus(errMsg, true);
         return false;
       }
-      let msg = 'config.yaml сохранён.';
-      setStatus(msg, false, true);
+
+      const jobId = data.restart_job_id || data.job_id || data.restartJobId || null;
+      if (!jobId) {
+        setStatus('Перезапуск запущен, но job_id не получен.', true);
+        return false;
+      }
+
+      // Config is saved at this point.
       markEditorClean();
-      try {
-        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.load === 'function') {
-          XKeen.features.restartLog.load();
+      bumpLastActivity('saved');
+
+      setStatus('Перезапуск в очереди (job ' + String(jobId) + ')…', false, true);
+
+      // Stream output via existing command_jobs polling/WS util.
+      const CJ = (window.XKeen && XKeen.util && XKeen.util.commandJob) ? XKeen.util.commandJob : null;
+      let result = null;
+
+      if (CJ && typeof CJ.waitForCommandJob === 'function') {
+        result = await CJ.waitForCommandJob(String(jobId), {
+          maxWaitMs: 5 * 60 * 1000,
+          onChunk: (chunk) => {
+            try { appendRestartLog(chunk); } catch (e) {}
+          }
+        });
+      } else {
+        // Minimal HTTP polling fallback.
+        let lastLen = 0;
+        while (true) {
+          const pr = await fetch(`/api/run-command/${encodeURIComponent(String(jobId))}`);
+          const pj = await pr.json().catch(() => ({}));
+          const out = (pj && typeof pj.output === 'string') ? pj.output : '';
+          if (out.length > lastLen) {
+            appendRestartLog(out.slice(lastLen));
+            lastLen = out.length;
+          }
+          if (!pr.ok || pj.ok === false || pj.status === 'finished' || pj.status === 'error') {
+            result = pj;
+            break;
+          }
+          await new Promise(r => setTimeout(r, 1000));
         }
-      } catch (e) {}
-      return true;
+      }
+
+      const ok = !!(result && result.ok);
+      if (ok) {
+        setStatus('Готово', false);
+      } else {
+        const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
+        const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
+        const msg = err ? ('Ошибка: ' + err) : (exitCode !== null ? ('Ошибка (exit_code=' + exitCode + ')') : 'Ошибка перезапуска.');
+        // Requirement: final toast should be exactly "Ошибка"; show details in status/log without extra toast.
+        setStatus('Ошибка', true);
+        try { if (msg && msg !== 'Ошибка') appendRestartLog('\n' + msg + '\n'); } catch (e) {}
+        try { if (msg) setStatus(msg, true, true); } catch (e) {}
+      }
+
+      return ok;
     } catch (e) {
       console.error(e);
-      setStatus('Ошибка сохранения config.yaml.', true);
+      setStatus('Ошибка перезапуска (job).', true);
       return false;
+    } finally {
+      MP._restartJobRunning = false;
+      setBtnBusy(false);
+    }
+  };
+
+  MP.openZashboardUi = function openZashboardUi() {
+    const url = window.location.protocol + '//' + window.location.host + '/mihomo_panel/ui/';
+    try {
+      window.open(url, '_blank', 'noopener');
+    } catch (e) {
+      window.location.href = url;
     }
   };
 
@@ -1431,6 +1824,7 @@
 
     ensureEditor();
     try { initEngineToggle(); } catch (e) {}
+    try { syncHeaderFsButton(_engine); } catch (e) {}
 
     // Main actions
     wireButton(IDS.btnLoad, () => MP.loadConfig());
@@ -1438,6 +1832,7 @@
     wireButton(IDS.btnFormatYaml, () => MP.formatYamlFromEditor());
     wireButton(IDS.btnValidate, () => MP.validateFromEditor());
     wireButton(IDS.btnSaveRestart, () => MP.saveAndRestart());
+    wireButton(IDS.btnOpenZashboardUi, () => MP.openZashboardUi());
 
     // Templates
     wireButton(IDS.tplRefresh, () => MP.loadTemplatesList());

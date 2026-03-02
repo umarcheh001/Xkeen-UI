@@ -11,6 +11,7 @@ Endpoints:
  - GET  /api/mihomo-templates
  - GET  /api/mihomo-template
  - POST /api/mihomo-template
+ - POST /api/mihomo/hwid/apply
  - POST /api/mihomo/generate
  - POST /api/mihomo/download
  - POST /api/mihomo/save
@@ -35,6 +36,9 @@ from __future__ import annotations
 
 import os
 import re
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request, current_app
@@ -45,7 +49,13 @@ from mihomo_server_core import (
     save_config,
     restart_mihomo_and_get_log,
     validate_config,
+    # YAML patch helpers (ported ideas from mihomo_editor)
+    apply_proxy_insert,
+    rename_proxy_in_config,
+    replace_proxy_in_config,
+    parse_wireguard,
 )
+
 
 import xkeen_mihomo_service as mihomo_svc
 
@@ -64,6 +74,14 @@ from services.mihomo_backups import (
     restore_backup_file as _mh_restore_backup_file,
     delete_backup_file as _mh_delete_backup_file,
     clean_backups_for_api as _mh_clean_backups_for_api,
+)
+
+from services.mihomo_hwid_sub import (
+    get_device_info as _mh_hwid_get_device_info,
+    probe_subscription_safe as _mh_hwid_probe_subscription_safe,
+    apply_mode as _mh_hwid_apply_mode,
+    build_provider_entry as _mh_hwid_build_provider_entry,
+    ensure_unique_provider_name as _mh_hwid_ensure_unique_provider_name,
 )
 
 from services.mihomo_yaml import validate_yaml_syntax
@@ -155,6 +173,203 @@ def create_mihomo_blueprint(
         resp = {"ok": True}
         resp.update(data)
         return jsonify(resp), 200
+
+    # ---------- API: HWID subscription helper ----------
+
+    @bp.get("/api/mihomo/hwid/device")
+    def api_mihomo_hwid_device():
+        """Return best-effort device info + headers for HWID-bound subscriptions."""
+        try:
+            info = _mh_hwid_get_device_info()
+        except Exception as exc:  # pragma: no cover - defensive
+            return _api_error(f"HWID device info error: {exc}", 400, ok=False)
+        return jsonify({"ok": True, **info}), 200
+
+    @bp.post("/api/mihomo/hwid/probe")
+    def api_mihomo_hwid_probe():
+        """Probe subscription URL and try to extract profile-title (if present)."""
+        data = request.get_json(silent=True) or {}
+        url = (data.get("url") or "").strip()
+        insecure = bool(data.get("insecure", False))
+        prefer = (data.get("prefer") or "head_then_range_get").strip() or "head_then_range_get"
+
+        timeout_ms = data.get("timeout_ms", 8000)
+        try:
+            timeout_ms = int(timeout_ms)
+        except Exception:
+            timeout_ms = 8000
+        timeout_s = max(1.0, min(float(timeout_ms) / 1000.0, 60.0))
+
+        info = _mh_hwid_get_device_info()
+        headers = info.get("headers") or {}
+
+        result = _mh_hwid_probe_subscription_safe(
+            url,
+            headers=headers,
+            insecure=insecure,
+            timeout=timeout_s,
+            prefer=prefer,
+        )
+
+        # UX: autodetect "обычная" подписка.
+        # If the subscription also works without HWID headers, show a non-blocking hint in UI.
+        try:
+            if isinstance(result, dict) and result.get("ok") is True:
+                plain = _mh_hwid_probe_subscription_safe(
+                    url,
+                    headers=None,
+                    insecure=insecure,
+                    timeout=timeout_s,
+                    prefer=prefer,
+                )
+                if isinstance(plain, dict):
+                    result["no_headers_ok"] = True if plain.get("ok") is True else False
+                    probe = plain.get("probe") if isinstance(plain.get("probe"), dict) else {}
+                    result["no_headers_http_status"] = probe.get("http_status")
+        except Exception:
+            # Ignore autodetect errors — probe result remains usable.
+            pass
+
+        # Map known error codes to helpful HTTP statuses (no 500).
+        if result.get("ok") is True:
+            return jsonify(result), 200
+
+        err = (result.get("error") or {}) if isinstance(result, dict) else {}
+        code = (err.get("code") or "").upper()
+        status = 502
+        if code == "INVALID_URL":
+            status = 400
+        elif code == "TIMEOUT":
+            status = 504
+        return jsonify(result), status
+
+    @bp.post("/api/mihomo/hwid/apply")
+    def api_mihomo_hwid_apply():
+        """Apply HWID subscription provider to mihomo config (server-side).
+
+        Supported modes:
+          - add: insert provider into existing config
+          - replace_providers: replace whole proxy-providers section
+          - replace_all: replace whole config with a template, then insert provider
+
+        If restart=true, schedules xkeen -restart via background job and returns 202.
+        """
+
+        data = request.get_json(silent=True) or {}
+        url = (data.get("url") or "").strip()
+        insecure = bool(data.get("insecure", False))
+        mode = (data.get("mode") or "add").strip() or "add"
+        provider_name = (data.get("name") or "").strip()
+        restart_flag = bool(data.get("restart", False))
+
+        # Optional template selector for replace_all
+        template_name = (data.get("template_name") or "").strip()
+        template_inline = data.get("template")  # optional inline YAML
+
+        # Reuse probe logic to validate URL and get suggested name.
+        info = _mh_hwid_get_device_info()
+        headers = info.get("headers") or {}
+
+        # Probe (in worker thread) to get profile-title and validate URL.
+        probe = _mh_hwid_probe_subscription_safe(
+            url,
+            headers=headers,
+            insecure=insecure,
+            timeout=8.0,
+            prefer="head_then_range_get",
+        )
+
+        if not (probe and isinstance(probe, dict) and probe.get("ok") is True):
+            # Keep probe error payload intact, but mark that apply failed.
+            err = (probe.get("error") or {}) if isinstance(probe, dict) else {}
+            code = (err.get("code") or "").upper()
+            status = 502
+            if code == "INVALID_URL":
+                status = 400
+            elif code == "TIMEOUT":
+                status = 504
+            return jsonify({"ok": False, "stage": "probe", "probe": probe}), status
+
+        suggested = ((probe.get("profile") or {}) if isinstance(probe, dict) else {}).get(
+            "suggested_name"
+        )
+        name_base = provider_name or (suggested or "")
+
+        # Base YAML depends on mode.
+        base_yaml = load_text(MIHOMO_CONFIG_FILE, default="") or ""
+        tmpl_yaml = None
+
+        if mode.strip().lower() == "replace_all":
+            if isinstance(template_inline, str) and template_inline.strip():
+                tmpl_yaml = template_inline
+            else:
+                # If template_name is provided, load from templates dir; otherwise use default template.
+                if template_name:
+                    sp = _safe_template_path(MIHOMO_TEMPLATES_DIR, template_name)
+                    if not sp:
+                        return _api_error("Invalid template_name", 400, ok=False)
+                    tmpl_yaml = load_text(sp, default=None)
+                    if tmpl_yaml is None:
+                        return _api_error(f"Template not found: {template_name}", 404, ok=False)
+                else:
+                    tmpl_yaml = load_text(MIHOMO_DEFAULT_TEMPLATE, default=None)
+                    if tmpl_yaml is None:
+                        return _api_error("Default template not found", 404, ok=False)
+            base_for_name = tmpl_yaml or ""
+        else:
+            base_for_name = base_yaml
+
+        name_unique = _mh_hwid_ensure_unique_provider_name(base_for_name, name_base)
+        entry = _mh_hwid_build_provider_entry(name_unique, url, headers)
+
+        try:
+            cfg_new = _mh_hwid_apply_mode(base_yaml, mode, entry, template_yaml=tmpl_yaml)
+        except ValueError as e:
+            return _api_error(str(e), 400, ok=False)
+        except Exception as e:
+            return _api_error(f"apply failed: {e}", 400, ok=False)
+
+        # Validate YAML (fast, optional) to prevent writing broken config.
+        ok_yaml, yaml_err = validate_yaml_syntax(cfg_new)
+        if not ok_yaml:
+            return jsonify(
+                {
+                    "ok": False,
+                    "stage": "validate",
+                    "error": {
+                        "code": "YAML_INVALID",
+                        "message": f"Invalid YAML syntax: {yaml_err}",
+                        "hint": "Проверьте шаблон/вставку и попробуйте снова.",
+                        "retryable": False,
+                    },
+                }
+            ), 400
+
+        try:
+            ensure_mihomo_layout()
+            save_config(cfg_new)
+            active_profile = get_active_profile_name()
+
+            running_core = detect_running_core()
+
+            resp = {
+                "ok": True,
+                "mode": mode,
+                "provider_name": name_unique,
+                "active_profile": active_profile,
+                "config_length": len(cfg_new),
+                "core": running_core,
+            }
+
+            if restart_flag:
+                job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
+                resp.update({"restart_queued": True, "restart_job_id": job.id})
+                return jsonify(resp), 202
+
+            resp["restart_queued"] = False
+            return jsonify(resp), 200
+        except Exception as e:
+            return _api_error(str(e), 400, ok=False)
 
     @bp.get("/api/mihomo-config/template")
     def api_get_mihomo_default_template():
@@ -258,6 +473,38 @@ def create_mihomo_blueprint(
 
     @bp.post("/api/mihomo/restart")
     def api_mihomo_restart():
+        # Optional async mode: schedule restart as command_job to avoid long-running HTTP.
+        # Compatibility: default behavior remains synchronous (returns log inline).
+        async_q = request.args.get("async")
+        if async_q in ("1", "true", "yes"):
+            try:
+                state = _mihomo_get_state_from_request()
+                cfg = mihomo_svc.generate_config_from_state(state)
+                if not cfg.strip():
+                    return _api_error("Empty config", 400, ok=False)
+
+                ensure_mihomo_layout()
+                save_config(cfg.rstrip("\n"))
+                active_profile = get_active_profile_name()
+                running_core = detect_running_core()
+
+                job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
+                return (
+                    jsonify(
+                        {
+                            "ok": True,
+                            "active_profile": active_profile,
+                            "config_length": len(cfg),
+                            "warnings": [],
+                            "restart_queued": True,
+                            "restart_job_id": job.id,
+                            "core": running_core,
+                        }
+                    ),
+                    202,
+                )
+            except Exception as e:
+                return _api_error(str(e), 400, ok=False)
         try:
             state = _mihomo_get_state_from_request()
             cfg, log, warnings = mihomo_svc.generate_save_and_restart(state)
@@ -302,7 +549,7 @@ def create_mihomo_blueprint(
             running_core = detect_running_core()
 
             # Schedule xkeen restart in background.
-            job = create_command_job(flag="-restart", stdin_data=None, cmd=None)
+            job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
 
             return (
                 jsonify(
@@ -406,6 +653,290 @@ def create_mihomo_blueprint(
             return jsonify({"ok": rc == 0, "log": log})
         except Exception as e:
             return _api_error(str(e), 400, ok=False)
+
+
+    # ---------- API: Mihomo YAML patch helpers (pure text) ----------
+
+    _PATCH_MAX_BYTES = 512 * 1024  # 512KB
+
+    def _patch_guard():
+        cl = request.content_length
+        if cl is not None and cl > _PATCH_MAX_BYTES:
+            return _api_error("payload too large", 413, ok=False)
+        return None
+
+    def _norm_text(s: Any) -> str:
+        if not isinstance(s, str):
+            s = str(s or "")
+        return s.replace("\r\n", "\n").replace("\r", "\n")
+
+    def _norm_groups(v: Any):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            return [x.strip() for x in v.split(",") if x.strip()]
+        if isinstance(v, (list, tuple)):
+            out = []
+            for x in v:
+                xs = str(x or "").strip()
+                if xs:
+                    out.append(xs)
+            return out
+        return []
+
+    def _infer_proxy_name_from_yaml(proxy_yaml: str) -> str:
+        # best-effort: read first "- name:" line
+        m = re.search(r"^\s*-\s*name:\s*(.+?)\s*$", proxy_yaml, flags=re.M)
+        if not m:
+            return ""
+        raw = m.group(1).strip()
+        # remove trailing comment (best-effort)
+        if raw and raw[0] not in ("'", '"'):
+            raw = re.sub(r"\s+#.*$", "", raw).strip()
+        return raw.strip("'\"")
+
+    @bp.post("/api/mihomo/patch/apply_insert")
+    def api_mihomo_patch_apply_insert():
+        """Insert proxy YAML under `proxies:` and register it in target proxy-groups."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+
+        data = request.get_json(silent=True) or {}
+        content = _norm_text(data.get("content") or "")
+        proxy_yaml = _norm_text(data.get("proxy_yaml") or data.get("proxyYaml") or "")
+        proxy_name = (data.get("proxy_name") or data.get("proxyName") or "").strip()
+        groups = _norm_groups(data.get("groups") or data.get("target_groups"))
+
+        # Extra safety when Content-Length is missing: avoid large payloads.
+        if request.content_length is None:
+            total = len(content) + len(proxy_yaml) + len(proxy_name) + sum(len(g) for g in groups)
+            if total > _PATCH_MAX_BYTES:
+                return _api_error("payload too large", 413, ok=False)
+
+        if not proxy_yaml.strip():
+            return _api_error("proxy_yaml is required", 400, ok=False)
+
+        if not proxy_name:
+            proxy_name = _infer_proxy_name_from_yaml(proxy_yaml)
+        if not proxy_name:
+            return _api_error("proxy_name is required", 400, ok=False)
+
+        try:
+            patched = apply_proxy_insert(content, proxy_yaml, proxy_name, groups)
+            return jsonify({"ok": True, "content": patched}), 200
+        except Exception as e:
+            return _api_error(str(e), 400, ok=False)
+
+    @bp.post("/api/mihomo/patch/rename_proxy")
+    def api_mihomo_patch_rename_proxy():
+        """Rename proxy and update its usages in proxy-groups."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+
+        data = request.get_json(silent=True) or {}
+        content = _norm_text(data.get("content") or "")
+        old_name = (data.get("old_name") or data.get("oldName") or "").strip()
+        new_name = (data.get("new_name") or data.get("newName") or "").strip()
+
+        if request.content_length is None:
+            total = len(content) + len(old_name) + len(new_name)
+            if total > _PATCH_MAX_BYTES:
+                return _api_error("payload too large", 413, ok=False)
+
+        if not old_name or not new_name:
+            return _api_error("old_name and new_name are required", 400, ok=False)
+
+        try:
+            patched = rename_proxy_in_config(content, old_name, new_name)
+            return jsonify({"ok": True, "content": patched}), 200
+        except Exception as e:
+            return _api_error(str(e), 400, ok=False)
+
+    @bp.post("/api/mihomo/patch/replace_proxy")
+    def api_mihomo_patch_replace_proxy():
+        """Replace one proxy block inside `proxies:` section by name."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+
+        data = request.get_json(silent=True) or {}
+        content = _norm_text(data.get("content") or "")
+        proxy_name = (data.get("proxy_name") or data.get("proxyName") or "").strip()
+        proxy_yaml = _norm_text(data.get("proxy_yaml") or data.get("proxyYaml") or "")
+
+        if request.content_length is None:
+            total = len(content) + len(proxy_name) + len(proxy_yaml)
+            if total > _PATCH_MAX_BYTES:
+                return _api_error("payload too large", 413, ok=False)
+
+        if not proxy_name or not proxy_yaml.strip():
+            return _api_error("proxy_name and proxy_yaml are required", 400, ok=False)
+
+        try:
+            patched, changed = replace_proxy_in_config(content, proxy_name, proxy_yaml)
+            return jsonify({"ok": True, "content": patched, "changed": bool(changed)}), 200
+        except Exception as e:
+            return _api_error(str(e), 400, ok=False)
+
+    @bp.post("/api/mihomo/parse/wireguard")
+    def api_mihomo_parse_wireguard():
+        """Parse WireGuard/AmneziaWG config text and return Mihomo proxy YAML block."""
+        guard = _patch_guard()
+        if guard is not None:
+            return guard
+
+        data = request.get_json(silent=True) or {}
+        text = _norm_text(data.get("text") or "")
+        name = (data.get("name") or "").strip() or None
+
+        if request.content_length is None:
+            total = len(text) + (len(name) if name else 0)
+            if total > _PATCH_MAX_BYTES:
+                return _api_error("payload too large", 413, ok=False)
+
+        if not text.strip():
+            return _api_error("text is required", 400, ok=False)
+
+        try:
+            r = parse_wireguard(text, custom_name=name)
+            return jsonify({"ok": True, "proxy_name": r.name, "proxy_yaml": r.yaml}), 200
+        except Exception as e:
+            return _api_error(str(e), 400, ok=False)
+
+
+    # ---------- Same-origin proxy: Mihomo external UI (Zashboard) ----------
+
+    _MIHOMO_UI_DEFAULT_PORT = 9090
+
+    def _get_mihomo_ui_port() -> int:
+        '''Parse external-controller port from the active config.yaml (best-effort).
+
+        We keep it strictly local (127.0.0.1) and use only this single port.
+        '''
+        try:
+            cfg = load_text(MIHOMO_CONFIG_FILE, default='') or ''
+        except Exception:
+            cfg = ''
+        # external-controller: 0.0.0.0:9090  (quotes optional)
+        m = re.search(r"external-controller:\s*(?:['\"]?)(?:[^:]*):(\d+)(?:['\"]?)", cfg)
+        if m:
+            try:
+                port = int(m.group(1))
+                if 1 <= port <= 65535:
+                    return port
+            except Exception:
+                pass
+        return _MIHOMO_UI_DEFAULT_PORT
+
+    _HOP_BY_HOP_HEADERS = {
+        'connection',
+        'keep-alive',
+        'proxy-authenticate',
+        'proxy-authorization',
+        'te',
+        'trailers',
+        'transfer-encoding',
+        'upgrade',
+    }
+
+    @bp.route('/mihomo_panel/', defaults={'path': ''}, methods=['GET', 'HEAD'])
+    @bp.route('/mihomo_panel/<path:path>', methods=['GET', 'HEAD'])
+    def mihomo_panel_proxy(path: str):
+        '''Proxy Mihomo UI through the same origin.
+
+        MVP: GET/HEAD only. No websockets.
+        Security: fixed upstream = http://127.0.0.1:<port>/, port derived from config.
+        '''
+        # Basic path hardening: disallow backslashes and parent traversal.
+        sp = str(path or '')
+        if '\\' in sp or any(seg == '..' for seg in sp.split('/')):
+            return _api_error('bad path', 400, ok=False)
+
+        port = _get_mihomo_ui_port()
+        rel = sp.lstrip('/')
+        base = f'http://127.0.0.1:{port}'
+        target_url = f"{base}/{rel}" if rel else f"{base}/"
+        qs = request.query_string.decode('utf-8', errors='ignore')
+        if qs:
+            target_url = target_url + '?' + qs
+
+        method = request.method.upper()
+        req = urllib.request.Request(target_url, data=None, method=method)
+
+        # Forward most headers, but keep it same-origin and avoid hop-by-hop headers.
+        for k, v in request.headers.items():
+            kl = k.lower()
+            if kl in ('host', 'origin', 'referer', 'content-length'):
+                continue
+            if kl in _HOP_BY_HOP_HEADERS:
+                continue
+            try:
+                req.add_header(k, v)
+            except Exception:
+                pass
+
+        # Important: set Host for the upstream.
+        try:
+            req.add_header('Host', f'127.0.0.1:{port}')
+        except Exception:
+            pass
+
+        status = 502
+        body = b''
+        resp_headers = {}
+
+        try:
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                status = int(getattr(resp, 'status', 200) or 200)
+                resp_headers = dict(resp.headers.items())
+                if method != 'HEAD':
+                    body = resp.read() or b''
+        except urllib.error.HTTPError as e:
+            status = int(getattr(e, 'code', 502) or 502)
+            resp_headers = dict(getattr(e, 'headers', {}).items()) if getattr(e, 'headers', None) else {}
+            if method != 'HEAD':
+                try:
+                    body = e.read() or b''
+                except Exception:
+                    body = b''
+        except Exception as e:
+            # Do not expose internal errors; this is an upstream availability issue.
+            return _api_error(f'Не удалось открыть Mihomo UI на 127.0.0.1:{port}: {e}', 502, ok=False)
+
+        r = current_app.response_class(body if method != 'HEAD' else b'', status=status)
+
+        # Copy headers (filter server/date/cors and hop-by-hop). Rewrite Location to keep same-origin.
+        for k, v in (resp_headers or {}).items():
+            kl = str(k).lower()
+            if kl in _HOP_BY_HOP_HEADERS:
+                continue
+            if kl in (
+                'server',
+                'date',
+                'access-control-allow-origin',
+                'access-control-allow-credentials',
+                'access-control-allow-headers',
+                'access-control-allow-methods',
+            ):
+                continue
+            if kl == 'location' and isinstance(v, str):
+                # Rewrite absolute redirects back to /mihomo_panel/...
+                if v.startswith(base + '/'):
+                    v = '/mihomo_panel/' + v[len(base) + 1:]
+                elif v == base or v.startswith(base + '?'):
+                    v = '/mihomo_panel/'
+            try:
+                r.headers[k] = v
+            except Exception:
+                pass
+
+        # Prevent aggressive caching of UI assets (helps when Mihomo UI updates).
+        r.headers.setdefault('Cache-Control', 'no-store, no-cache, must-revalidate')
+        r.headers.setdefault('Pragma', 'no-cache')
+        return r
+
 
     # ---------- Profiles ----------
 

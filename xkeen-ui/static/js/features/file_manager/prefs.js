@@ -15,6 +15,10 @@
     mask: 'xkeen.fm.mask',           // last used selection mask (glob)
     bookmarksLocal: 'xkeen.fm.bookmarks.local', // JSON: [{ label: '...', value: '/path' }, ...]
     geom: 'xkeen.fm.geom_v1',        // JSON: { w: px, h: px, shiftX: px }
+
+    // Panels state (persist between reloads)
+    panels: 'xkeen.fm.panels_v1',    // JSON: { left:{cwd,target,filter}, right:{cwd,target,filter} }
+    activeSide: 'xkeen.fm.activeSide', // 'left'|'right'
   };
 
   function lsGet(key) {
@@ -116,6 +120,68 @@
     try { localStorage.removeItem(KEYS.bookmarksLocal); } catch (e) {}
   }
 
+  function _sanitizePanelSide(sideObj, fallbackObj) {
+    const fb = (fallbackObj && typeof fallbackObj === 'object') ? fallbackObj : {};
+    const src = (sideObj && typeof sideObj === 'object') ? sideObj : {};
+
+    let target = String(src.target || fb.target || 'local');
+    if (target !== 'local' && target !== 'remote') target = String(fb.target || 'local');
+
+    let cwd = String(src.cwd || fb.cwd || '').trim();
+    if (!cwd) cwd = String(fb.cwd || '');
+
+    let filter = String((src.filter != null ? src.filter : fb.filter) || '');
+    if (filter.length > 256) filter = filter.slice(0, 256);
+
+    return { target, cwd, filter };
+  }
+
+  function loadPanelsPref(defaultsObj) {
+    const defaults = (defaultsObj && typeof defaultsObj === 'object') ? defaultsObj : { left: {}, right: {} };
+    const fbLeft = defaults.left || {};
+    const fbRight = defaults.right || {};
+
+    const raw = lsGet(KEYS.panels);
+    if (!raw) {
+      return {
+        left: _sanitizePanelSide(fbLeft, fbLeft),
+        right: _sanitizePanelSide(fbRight, fbRight),
+      };
+    }
+
+    try {
+      const j = JSON.parse(raw);
+      return {
+        left: _sanitizePanelSide(j && j.left, fbLeft),
+        right: _sanitizePanelSide(j && j.right, fbRight),
+      };
+    } catch (e) {
+      return {
+        left: _sanitizePanelSide(fbLeft, fbLeft),
+        right: _sanitizePanelSide(fbRight, fbRight),
+      };
+    }
+  }
+
+  function savePanelsPref(panelsObj) {
+    const p = (panelsObj && typeof panelsObj === 'object') ? panelsObj : {};
+    const out = {
+      left: _sanitizePanelSide(p.left, { target: 'local', cwd: '/opt/var', filter: '' }),
+      right: _sanitizePanelSide(p.right, { target: 'local', cwd: '/tmp/mnt', filter: '' }),
+    };
+    lsSet(KEYS.panels, JSON.stringify(out));
+  }
+
+  function loadActiveSidePref() {
+    const raw = lsGet(KEYS.activeSide);
+    return (raw === 'right') ? 'right' : 'left';
+  }
+
+  function saveActiveSidePref(side) {
+    if (side !== 'left' && side !== 'right') return;
+    lsSet(KEYS.activeSide, side);
+  }
+
   // Public API
   FM.prefs = {
     keys: KEYS,
@@ -130,5 +196,10 @@
     loadBookmarksLocal,
     saveBookmarksLocal,
     clearBookmarksLocal,
+
+    loadPanelsPref,
+    savePanelsPref,
+    loadActiveSidePref,
+    saveActiveSidePref,
   };
 })();

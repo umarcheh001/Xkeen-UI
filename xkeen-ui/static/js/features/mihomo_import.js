@@ -18,6 +18,7 @@
     btnCancel: 'mihomo-import-cancel-btn',
 
     input: 'mihomo-import-input',
+    modeSelect: 'mihomo-import-mode',
     preview: 'mihomo-import-preview',
 
 
@@ -25,6 +26,11 @@
     monacoHost: 'mihomo-import-preview-monaco',
     status: 'mihomo-import-status',
     hint: 'mihomo-import-target-hint',
+
+    groupsBox: 'mihomo-import-groups',
+    groupsAllBtn: 'mihomo-import-groups-all-btn',
+    groupsNoneBtn: 'mihomo-import-groups-none-btn',
+    groupsRemember: 'mihomo-import-groups-remember',
 
     btnParse: 'mihomo-import-parse-btn',
     btnInsert: 'mihomo-import-insert-btn',
@@ -40,6 +46,56 @@
   let _previewLastText = '';
   let _engineUnsub = null;
   let _engineSyncing = false;
+
+  // Groups selection (proxy-groups)
+  const GROUPS_PREF_KEY = 'xkeen.mihomo.import.groups.v1';
+  const GROUPS_REMEMBER_KEY = 'xkeen.mihomo.import.groups.remember_v1';
+
+
+  // Import mode (Auto / Proxy / Subscription / WireGuard)
+  const MODE_PREF_KEY = 'xkeen.mihomo.import.mode.v1';
+
+  function getImportMode() {
+    const sel = $(IDS.modeSelect);
+    const v = sel ? String(sel.value || 'auto') : 'auto';
+    return v || 'auto';
+  }
+
+  function setImportMode(mode) {
+    const sel = $(IDS.modeSelect);
+    if (!sel) return;
+    try { sel.value = String(mode || 'auto'); } catch (e) {}
+  }
+
+  function loadImportModePref() {
+    try {
+      if (window.localStorage) {
+        const v = localStorage.getItem(MODE_PREF_KEY);
+        if (v) return String(v);
+      }
+    } catch (e) {}
+    return 'auto';
+  }
+
+  function saveImportModePref(mode) {
+    try { if (window.localStorage) localStorage.setItem(MODE_PREF_KEY, String(mode || 'auto')); } catch (e) {}
+  }
+
+  function updateModeUi() {
+    const inp = $(IDS.input);
+    if (!inp) return;
+    const mode = getImportMode();
+    if (mode === 'wireguard') {
+      inp.placeholder = '[Interface]\nPrivateKey = ...\nAddress = ...\n\n[Peer]\nPublicKey = ...\nEndpoint = host:port\nAllowedIPs = 0.0.0.0/0';
+    } else if (mode === 'subscription') {
+      inp.placeholder = 'https://...';
+    } else if (mode === 'proxy') {
+      inp.placeholder = 'vless://...\nили\ntrojan://...';
+    } else {
+      inp.placeholder = 'vless://...\nили\nhttps://...';
+    }
+  }
+
 
   function $(id) {
     return document.getElementById(id);
@@ -68,6 +124,156 @@
   function cmThemeFromPage() {
     const t = document.documentElement.getAttribute('data-theme');
     return t === 'light' ? 'default' : 'material-darker';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Proxy-groups UI helpers
+  // ---------------------------------------------------------------------------
+
+  function escapeHtml(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function _stripQuotes(s) {
+    const v = String(s || '').trim();
+    if (!v) return '';
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      return v.slice(1, -1);
+    }
+    return v;
+  }
+
+  function parseProxyGroupNamesFromYaml(yamlText) {
+    const lines = String(yamlText || '').replace(/\r\n?/g, '\n').split('\n');
+    let inGroups = false;
+    let baseIndent = 0;
+    const out = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const ln = String(lines[i] || '');
+      const mStart = ln.match(/^(\s*)proxy-groups\s*:\s*(#.*)?$/);
+      if (mStart) {
+        inGroups = true;
+        baseIndent = (mStart[1] || '').length;
+        continue;
+      }
+      if (!inGroups) continue;
+
+      if (!ln.trim()) continue;
+
+      const indent = (ln.match(/^(\s*)/) || ['', ''])[1].length;
+      const ts = ln.replace(/^\s+/, '');
+
+      // End of proxy-groups block when a new top-level key starts
+      if (indent <= baseIndent && !ts.startsWith('#') && !ts.startsWith('-') && /^[A-Za-z0-9_\-]+\s*:/.test(ts)) {
+        inGroups = false;
+        continue;
+      }
+
+      const mName = ln.match(/^\s*-\s*name\s*:\s*(.+?)\s*(#.*)?$/);
+      if (mName) {
+        let raw = String(mName[1] || '').trim();
+        // Remove trailing inline comment (best-effort)
+        raw = raw.replace(/\s+#.*$/, '').trim();
+        const name = _stripQuotes(raw);
+        if (name && out.indexOf(name) === -1) out.push(name);
+      }
+    }
+    return out;
+  }
+
+  function loadGroupPrefs() {
+    let remember = false;
+    let selected = [];
+    try {
+      if (window.localStorage) {
+        remember = localStorage.getItem(GROUPS_REMEMBER_KEY) === '1';
+        const raw = localStorage.getItem(GROUPS_PREF_KEY);
+        if (raw) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) selected = arr.map((x) => String(x || '').trim()).filter(Boolean);
+        }
+      }
+    } catch (e) {}
+    return { remember, selected };
+  }
+
+  function saveGroupPrefs(selected, remember) {
+    try {
+      if (!window.localStorage) return;
+      localStorage.setItem(GROUPS_REMEMBER_KEY, remember ? '1' : '0');
+      if (remember) localStorage.setItem(GROUPS_PREF_KEY, JSON.stringify(selected || []));
+    } catch (e) {}
+  }
+
+  function renderGroupCheckboxes(names, selectedSet) {
+    const box = $(IDS.groupsBox);
+    if (!box) return;
+
+    const sel = selectedSet || new Set();
+
+    if (!names || !names.length) {
+      box.innerHTML = '<div class="xk-card-desc" style="opacity:0.75;">Группы <code>proxy-groups</code> не найдены в текущем <code>config.yaml</code>.</div>';
+      return;
+    }
+
+    const parts = [];
+    for (const name of names) {
+      const checked = sel.has(name) ? ' checked' : '';
+      parts.push(
+        '<label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin:4px 0;">' +
+          '<input type="checkbox" class="mihomo-import-group-cb" data-group="' + escapeHtml(name) + '"' + checked + '>' +
+          '<span>' + escapeHtml(name) + '</span>' +
+        '</label>'
+      );
+    }
+    box.innerHTML = parts.join('');
+  }
+
+  function readSelectedGroupsFromUi() {
+    const box = $(IDS.groupsBox);
+    if (!box) return [];
+    const cbs = Array.from(box.querySelectorAll('input.mihomo-import-group-cb'));
+    return cbs
+      .filter((cb) => cb && cb.checked)
+      .map((cb) => String(cb.dataset && cb.dataset.group ? cb.dataset.group : '').trim())
+      .filter(Boolean);
+  }
+
+  function setAllGroupsChecked(checked) {
+    const box = $(IDS.groupsBox);
+    if (!box) return;
+    const cbs = Array.from(box.querySelectorAll('input.mihomo-import-group-cb'));
+    cbs.forEach((cb) => { try { cb.checked = !!checked; } catch (e) {} });
+  }
+
+  function refreshGroupsUiFromConfig() {
+    const cfg = getEditorText() || '';
+    const names = parseProxyGroupNamesFromYaml(cfg);
+
+    const prefs = loadGroupPrefs();
+    const rememberCb = $(IDS.groupsRemember);
+    const remember = rememberCb ? !!rememberCb.checked : prefs.remember;
+
+    // If remember checkbox exists, sync it from stored prefs when opening modal
+    if (rememberCb) {
+      try { rememberCb.checked = !!prefs.remember; } catch (e) {}
+    }
+
+    const selected = (prefs.remember && Array.isArray(prefs.selected)) ? new Set(prefs.selected) : new Set();
+    renderGroupCheckboxes(names, selected);
+  }
+
+  function maybePersistGroupsSelection() {
+    const rememberCb = $(IDS.groupsRemember);
+    const remember = !!(rememberCb && rememberCb.checked);
+    const selected = readSelectedGroupsFromUi();
+    saveGroupPrefs(selected, remember);
   }
 
 
@@ -348,6 +554,13 @@
       const ins = $(IDS.btnInsert);
       if (ins) ins.disabled = true;
 
+      // Load proxy-groups list from current config.yaml
+      try { refreshGroupsUiFromConfig(); } catch (e4a) {}
+
+      // Import mode (persisted)
+      try { setImportMode(loadImportModePref()); } catch (e4b) {}
+      try { updateModeUi(); } catch (e4c) {}
+
       // Activate preferred editor engine (CodeMirror / Monaco)
       try { scheduleEngineSync(); } catch (e4) {}
 
@@ -364,7 +577,14 @@
     if (el.dataset && el.dataset.xkWired === '1') return;
     el.addEventListener('click', (e) => {
       e.preventDefault();
-      try { fn(e); } catch (err) { console.error(err); }
+      try {
+        const r = fn(e);
+        if (r && typeof r.then === 'function') {
+          r.catch((err) => { try { console.error(err); } catch (e2) {} });
+        }
+      } catch (err) {
+        console.error(err);
+      }
     });
     if (el.dataset) el.dataset.xkWired = '1';
   }
@@ -639,6 +859,14 @@
     return `  - ${toYaml(common).trim().replace(/\n/g, '\n    ')}`;
   }
 
+  function proxyYamlRawFromIndented(indented) {
+    const s = String(indented || '');
+    // convert from list-item under `proxies:` (2-space indent) to raw block starting with `- name:`
+    return s.replace(/^ {2}/gm, '');
+  }
+
+
+
   function generateConfigForMihomo(uri, existingConfig = '') {
     const generateName = (base) => {
       let index = 1;
@@ -675,136 +903,118 @@
     const config = parseProxyUri(uri);
     if (config.tag === 'PROXY' || existingConfig.includes(config.tag)) config.tag = generateName(config.protocol);
 
-    return { type: 'proxy', content: convertToMihomoYaml(config) + '\n' };
+    const indented = convertToMihomoYaml(config);
+    const raw = proxyYamlRawFromIndented(indented);
+    return { type: 'proxy', proxy_name: config.tag, content: raw + '\n' };
   }
 
+  // Expose a minimal helper API for other modules (Proxy Tools, etc.)
+  // NOTE: keep this stable; it is used as a shared parser/generator.
+  MI.generateConfigForMihomo = MI.generateConfigForMihomo || generateConfigForMihomo;
+  MI.proxyYamlRawFromIndented = MI.proxyYamlRawFromIndented || proxyYamlRawFromIndented;
+
   // ---------------------------------------------------------------------------
-  // YAML insertion helpers
+  // YAML insertion helpers (shared)
   // ---------------------------------------------------------------------------
 
-  function ensureNewline(s) {
-    const t = String(s || '');
-    return t.endsWith('\n') ? t : t + '\n';
+  function yamlPatch() {
+    try {
+      return (window.XKeen && XKeen.features && XKeen.features.mihomoYamlPatch) ? XKeen.features.mihomoYamlPatch : null;
+    } catch (e) {
+      return null;
+    }
   }
 
-  function findSectionBlock(text, key) {
-    const src = String(text || '');
+  function insertProvidersIntoConfig(existingText, outputs) {
+    let txt = String(existingText || '');
+    const yp = yamlPatch();
 
-    // Match top-level key (column 0). If user indented the whole file, we still try.
-    const re = new RegExp(`^(?:${escapeRegExp(key)})\\s*:\\s*(.*)$`, 'm');
-    const m = re.exec(src);
-    if (!m) return null;
+    if (!yp || typeof yp.insertIntoSection !== 'function') {
+      throw new Error('mihomoYamlPatch не загружен');
+    }
 
-    const lineStart = m.index;
-    const lineEnd = src.indexOf('\n', lineStart);
-    const afterLine = lineEnd === -1 ? src.length : lineEnd + 1;
+    const providers = (outputs || []).filter((o) => o.type === 'proxy-provider');
+    providers.forEach((o) => {
+      txt = yp.insertIntoSection(txt, 'proxy-providers', o.content);
+    });
+    return txt;
+  }
 
-    // Find next top-level key (starts in column 0, not comment)
-    const rest = src.slice(afterLine);
-    const next = /^(?!\s)(?!#)([A-Za-z0-9_.-]+)\s*:/m.exec(rest);
-    const bodyEnd = next ? afterLine + next.index : src.length;
-
-    // If section is inline like `proxies: []` or `proxy-providers: {}`
-    const inlineTail = String(m[1] || '').trim();
-
-    return {
-      headerStart: lineStart,
-      headerEnd: afterLine,
-      bodyStart: afterLine,
-      bodyEnd,
-      inlineTail,
+  async function applyInsertProxy(txt, proxyOut, groups) {
+    const body = {
+      content: String(txt || ''),
+      proxy_yaml: String(proxyOut && proxyOut.content ? proxyOut.content : ''),
+      proxy_name: String((proxyOut && (proxyOut.proxy_name || proxyOut.proxyName)) || '').trim(),
+      groups: Array.isArray(groups) ? groups : [],
     };
+
+    const http = (window.XKeen && XKeen.core && XKeen.core.http) ? XKeen.core.http : null;
+    const post = http && typeof http.postJSON === 'function' ? http.postJSON : null;
+    if (!post) throw new Error('XKeen.core.http.postJSON недоступен');
+
+    const data = await post('/api/mihomo/patch/apply_insert', body);
+    if (!data || data.ok === false) throw new Error((data && data.error) ? data.error : 'apply_insert failed');
+    return String(data.content || '');
   }
+
 
   function escapeRegExp(s) {
     return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
-  function normalizeInlineSection(text, key) {
-    const src = String(text || '');
-    const re = new RegExp(`^(${escapeRegExp(key)}\\s*:)\\s*(\[\]|\{\}|null|~)?\\s*(#.*)?$`, 'm');
-    const m = re.exec(src);
-    if (!m) return src;
-
-    // Convert to block style: keep comment
-    const comment = m[3] ? ' ' + m[3].trim() : '';
-    const repl = `${key}:${comment}`;
-    return src.replace(re, repl);
+  function configHasProxyName(cfgText, name) {
+    const n = String(name || '').trim();
+    if (!n) return false;
+    const re1 = new RegExp('^\\s*-\\s*name\\s*:\\s*(?:"' + escapeRegExp(n) + '"|\'' + escapeRegExp(n) + '\'|' + escapeRegExp(n) + ')\\s*(?:#.*)?$', 'm');
+    return re1.test(String(cfgText || ''));
   }
 
-  function insertIntoSection(text, key, snippet) {
-    let src = ensureNewline(String(text || ''));
-    src = normalizeInlineSection(src, key);
-
-    const sec = findSectionBlock(src, key);
-    const sn = ensureNewline(String(snippet || '')).trimEnd() + '\n';
-
-    if (!sec) {
-      // Append new section at the end
-      const sep = src.trimEnd().length ? '\n' : '';
-      return src.trimEnd() + sep + `${key}:\n` + sn;
+  function makeUniqueName(base, cfgText) {
+    const b = String(base || 'WG').trim() || 'WG';
+    if (!configHasProxyName(cfgText, b)) return b;
+    let i = 2;
+    while (i < 2000) {
+      const cand = b + '_' + i;
+      if (!configHasProxyName(cfgText, cand)) return cand;
+      i++;
     }
-
-    // Ensure header is block-style
-    // (If inlineTail is not empty and not a comment, we keep it but insertion will still work)
-
-    const before = src.slice(0, sec.bodyEnd);
-    const after = src.slice(sec.bodyEnd);
-
-    // Insert at end of section body, keep one blank line between blocks
-    let mid = before;
-    if (!mid.endsWith('\n')) mid += '\n';
-
-    // Avoid duplicates (best-effort): if snippet already present, return original
-    if (src.includes(sn.trim())) return src;
-
-    // If section body ends with newline, just append.
-    // Add a blank line if body is not empty and doesn't already end with one.
-    const body = src.slice(sec.bodyStart, sec.bodyEnd);
-    const hasBodyContent = body.trim().length > 0;
-    if (hasBodyContent && !body.endsWith('\n\n')) {
-      // ensure exactly one newline before snippet (so list/map stays compact)
-      if (!mid.endsWith('\n')) mid += '\n';
-    }
-
-    mid += sn;
-
-    return mid + after;
+    return b + '_' + Date.now();
   }
 
-  function insertOutputsIntoConfig(existingText, outputs) {
-    let txt = String(existingText || '');
+  async function parseWireguardViaApi(confText, desiredName) {
+    const http = (window.XKeen && XKeen.core && XKeen.core.http) ? XKeen.core.http : null;
+    const post = http && typeof http.postJSON === 'function' ? http.postJSON : null;
+    if (!post) throw new Error('XKeen.core.http.postJSON недоступен');
 
-    // Insert providers first (so groups can reference them later if needed)
-    const providers = outputs.filter((o) => o.type === 'proxy-provider');
-    const proxies = outputs.filter((o) => o.type === 'proxy');
+    const body = { text: String(confText || '') };
+    if (desiredName) body.name = String(desiredName || '');
 
-    providers.forEach((o) => {
-      txt = insertIntoSection(txt, 'proxy-providers', o.content);
-    });
+    const data = await post('/api/mihomo/parse/wireguard', body);
+    if (!data || data.ok === false) throw new Error((data && data.error) ? data.error : 'parse/wireguard failed');
 
-    proxies.forEach((o) => {
-      txt = insertIntoSection(txt, 'proxies', o.content);
-    });
+    const proxy_name = String(data.proxy_name || data.name || '').trim();
+    const proxy_yaml = String(data.proxy_yaml || data.proxy || data.yaml || '').trimEnd() + '\n';
+    if (!proxy_name || !proxy_yaml) throw new Error('WireGuard: пустой результат парсинга');
 
-    return txt;
+    return { type: 'proxy', proxy_name, content: proxy_yaml };
   }
+
 
   // ---------------------------------------------------------------------------
   // UI Actions
   // ---------------------------------------------------------------------------
 
-  function parseInput() {
+  async function parseInput() {
     const inp = $(IDS.input);
-    const uriRaw = inp ? String(inp.value || '') : '';
+    const rawText = inp ? String(inp.value || '') : '';
+    const mode = getImportMode();
 
-    const lines = uriRaw
-      .split(/\r?\n/)
-      .map((s) => String(s || '').trim())
-      .filter(Boolean);
-
-    if (!lines.length) {
-      setStatus('Вставь ссылку узла или https-подписку.', true);
+    if (!rawText.trim()) {
+      const msg =
+        mode === 'wireguard'
+          ? 'Вставь WireGuard (.conf) и нажми «Преобразовать».'
+          : 'Вставь ссылку узла или https-подписку.';
+      setStatus(msg, true);
       setHint('');
       setPreview('');
       const ins = $(IDS.btnInsert);
@@ -818,19 +1028,69 @@
     const outputs = [];
     const errors = [];
 
-    for (const line of lines) {
+    // WireGuard mode: parse whole textarea as a single .conf
+    if (mode === 'wireguard') {
+      setStatus('Разбираю WireGuard…', false);
       try {
-        const out = generateConfigForMihomo(line, tmp);
-        outputs.push({ ...out, uri: line });
-        // update tmp so name generation stays unique across multiple lines
-        tmp += '\n' + out.content;
+        let out = await parseWireguardViaApi(rawText, null);
+        // Ensure unique name against current config.yaml
+        if (configHasProxyName(existing, out.proxy_name)) {
+          const unique = makeUniqueName(out.proxy_name, existing);
+          out = await parseWireguardViaApi(rawText, unique);
+        }
+        outputs.push({ ...out, uri: 'wireguard.conf' });
       } catch (e) {
-        errors.push(`${line}: ${e && e.message ? e.message : 'ошибка'}`);
+        const msg = e && e.message ? e.message : String(e || 'ошибка');
+        // Make error a bit more readable for typical missing-key issue
+        const human = msg.includes('missing mandatory keys')
+          ? 'Некорректный WireGuard (.conf): нет PrivateKey/PublicKey/Endpoint'
+          : msg;
+        errors.push(human);
+      }
+    } else {
+      // Line-based parsing (auto/proxy/subscription)
+      const lines = rawText
+        .split(/\r?\n/)
+        .map((s) => String(s || '').trim())
+        .filter(Boolean);
+
+      if (!lines.length) {
+        setStatus('Вставь данные и нажми «Преобразовать».', true);
+        setHint('');
+        setPreview('');
+        const ins = $(IDS.btnInsert);
+        if (ins) ins.disabled = true;
+        return;
+      }
+
+      for (const line of lines) {
+        try {
+          if (mode === 'subscription' && !/^https?:\/\//i.test(line)) {
+            throw new Error('Ожидается HTTPS‑подписка (URL начинается с http/https)');
+          }
+          if (mode === 'proxy' && /^https?:\/\//i.test(line)) {
+            throw new Error('Это похоже на подписку. Выбери «HTTPS subscription» или «Auto».');
+          }
+
+          const out = generateConfigForMihomo(line, tmp);
+
+          if (mode === 'subscription' && out.type !== 'proxy-provider') {
+            throw new Error('Не удалось распознать URL подписки');
+          }
+          if (mode === 'proxy' && out.type !== 'proxy') {
+            throw new Error('Не удалось распознать ссылку узла');
+          }
+
+          outputs.push({ ...out, uri: line });
+          tmp += '\n' + out.content;
+        } catch (e) {
+          errors.push(`${line}: ${e && e.message ? e.message : 'ошибка'}`);
+        }
       }
     }
 
     if (!outputs.length) {
-      setStatus(errors.join('\n') || 'Не удалось распознать ссылку.', true);
+      setStatus(errors.join('\n') || 'Не удалось распознать данные.', true);
       setHint('');
       setPreview('');
       const ins = $(IDS.btnInsert);
@@ -844,9 +1104,11 @@
     const preview = outputs
       .map((o) => {
         if (o.type === 'proxy-provider') {
-          return `# proxy-providers\n${o.content.trimEnd()}`;
+          return `# proxy-providers\n${String(o.content || '').trimEnd()}`;
         }
-        return `# proxies\n${o.content.trimEnd()}`;
+        const raw = String(o.content || '').trimEnd();
+        const ind = raw.split('\n').map((l) => (l ? '  ' + l : l)).join('\n');
+        return `# proxies\n${ind}`;
       })
       .join('\n\n');
 
@@ -856,8 +1118,7 @@
     setHint('Будет добавлено в секцию: ' + targets.join(' + '));
 
     if (errors.length) {
-      setStatus('Часть ссылок распознана, часть — нет. Проверь строки ниже в preview.', true);
-      // Append errors into preview as comments
+      setStatus('Часть данных распознана, часть — нет. Проверь строки ниже в preview.', true);
       setPreview(preview + '\n\n# Ошибки\n' + errors.map((x) => '# ' + x).join('\n') + '\n');
     } else {
       setStatus('Готово. Нажми «Вставить в конфиг».', false);
@@ -867,29 +1128,72 @@
     if (ins) ins.disabled = false;
   }
 
-  function insertIntoEditor() {
+  async function insertIntoEditor() {
     if (!_lastResult || !_lastResult.outputs || !_lastResult.outputs.length) {
       setStatus('Сначала нажми «Преобразовать».', true);
       return;
     }
 
-    const existing = getEditorText() || '';
-    const next = insertOutputsIntoConfig(existing, _lastResult.outputs);
+    const btnIns = $(IDS.btnInsert);
+    const btnParse = $(IDS.btnParse);
 
-    setEditorText(next);
-    refreshEditor();
+    if (btnIns) {
+      btnIns.disabled = true;
+      try { btnIns.classList.add('loading'); } catch (e) {}
+    }
+    if (btnParse) {
+      btnParse.disabled = true;
+      try { btnParse.classList.add('loading'); } catch (e2) {}
+    }
 
-    showModal(false);
-    toastMsg('Добавлено в config.yaml ✅', false);
+    setStatus('Вставляю в config.yaml…', false);
 
     try {
-      // mark last activity badge
-      if (typeof window.updateLastActivity === 'function') {
-        const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
-        window.updateLastActivity('modified', 'mihomo', fp);
+      let txt = getEditorText() || '';
+
+      // 1) Providers — локальный патч (секция proxy-providers)
+      txt = insertProvidersIntoConfig(txt, _lastResult.outputs);
+
+      // 2) Proxies — через backend apply_insert (вставка + добавление в proxy-groups)
+      const groups = readSelectedGroupsFromUi();
+      const proxies = _lastResult.outputs.filter((o) => o.type === 'proxy');
+
+      for (const o of proxies) {
+        txt = await applyInsertProxy(txt, o, groups);
       }
-    } catch (e) {}
+
+      setEditorText(txt);
+      refreshEditor();
+
+      // Persist groups selection if requested
+      try { maybePersistGroupsSelection(); } catch (e3) {}
+
+      showModal(false);
+      toastMsg('Добавлено в config.yaml ✅', false);
+
+      try {
+        // mark last activity badge
+        if (typeof window.updateLastActivity === 'function') {
+          const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
+          window.updateLastActivity('modified', 'mihomo', fp);
+        }
+      } catch (e4) {}
+    } catch (e) {
+      console.error(e);
+      setStatus('Ошибка вставки: ' + (e && e.message ? e.message : String(e || 'ошибка')), true);
+      // keep modal open
+    } finally {
+      if (btnIns) {
+        btnIns.disabled = false;
+        try { btnIns.classList.remove('loading'); } catch (e5) {}
+      }
+      if (btnParse) {
+        btnParse.disabled = false;
+        try { btnParse.classList.remove('loading'); } catch (e6) {}
+      }
+    }
   }
+
 
   // ---------------------------------------------------------------------------
   // Init
@@ -908,8 +1212,35 @@
     wireButton(IDS.btnClose, () => showModal(false));
     wireButton(IDS.btnCancel, () => showModal(false));
 
+    // Groups (proxy-groups) selection helpers
+    wireButton(IDS.groupsAllBtn, () => { setAllGroupsChecked(true); maybePersistGroupsSelection(); });
+    wireButton(IDS.groupsNoneBtn, () => { setAllGroupsChecked(false); maybePersistGroupsSelection(); });
+
+    // Import mode selector
+    const modeSel = $(IDS.modeSelect);
+    if (modeSel && (!modeSel.dataset || modeSel.dataset.mihomoImportModeBound !== '1')) {
+      modeSel.addEventListener('change', () => {
+        try { updateModeUi(); } catch (e) {}
+        try { saveImportModePref(getImportMode()); } catch (e2) {}
+      });
+      if (modeSel.dataset) modeSel.dataset.mihomoImportModeBound = '1';
+    }
+
     wireButton(IDS.btnParse, () => parseInput());
     wireButton(IDS.btnInsert, () => insertIntoEditor());
+
+    // Persist groups selection (if remember enabled)
+    const rememberCb = $(IDS.groupsRemember);
+    if (rememberCb && (!rememberCb.dataset || rememberCb.dataset.mihomoImportGroupsBound !== '1')) {
+      rememberCb.addEventListener('change', () => { try { maybePersistGroupsSelection(); } catch (e) {} });
+      if (rememberCb.dataset) rememberCb.dataset.mihomoImportGroupsBound = '1';
+    }
+
+    const groupsBox = $(IDS.groupsBox);
+    if (groupsBox && (!groupsBox.dataset || groupsBox.dataset.mihomoImportGroupsBound !== '1')) {
+      groupsBox.addEventListener('change', () => { try { maybePersistGroupsSelection(); } catch (e) {} });
+      if (groupsBox.dataset) groupsBox.dataset.mihomoImportGroupsBound = '1';
+    }
 
     // Engine toggle (preview)
     const sel = $(IDS.engineSelect);

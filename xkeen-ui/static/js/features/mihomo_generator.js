@@ -227,6 +227,7 @@ let _engineTouched = false;
 let _engineSyncing = false;
 let _monaco = null;
 let _monacoFacade = null;
+let _monacoFsWired = false;
 let _active = null; // facade: {getValue,setValue,focus,layout,dispose}
 let _isEditable = false;
 
@@ -294,6 +295,133 @@ function showMonaco(show) {
   }
 }
 
+// ------------------------ fullscreen (CodeMirror + Monaco) ------------------------
+
+function _syncToolbarFsClass(isFs) {
+  try {
+    if (editor && editor._xkeenToolbarEl) editor._xkeenToolbarEl.classList.toggle('is-fullscreen', !!isFs);
+  } catch (e) {}
+}
+
+function syncToolbarForEngine(engine) {
+  try {
+    if (!editor || !editor._xkeenToolbarEl || !editor._xkeenToolbarEl.querySelectorAll) return;
+    const bar = editor._xkeenToolbarEl;
+    const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
+
+    bar.style.display = '';
+    const btns = bar.querySelectorAll('button.xkeen-cm-tool');
+
+    // Prefer the real CodeMirror fullscreen action when it exists; otherwise fall back to fs_any.
+    let hasFs = false;
+    (btns || []).forEach((btn) => {
+      try {
+        const id = (btn.dataset && btn.dataset.actionId) ? String(btn.dataset.actionId) : '';
+        if (id === 'fs') hasFs = true;
+      } catch (e) {}
+    });
+
+    (btns || []).forEach((btn) => {
+      const id = (btn.dataset && btn.dataset.actionId) ? String(btn.dataset.actionId) : '';
+      const isFs = (id === 'fs');
+      const isFsAny = (id === 'fs_any');
+
+      if (isMonaco) {
+        // In Monaco mode show only one fullscreen button: fs (preferred) or fs_any.
+        btn.style.display = hasFs ? (isFs ? '' : 'none') : (isFsAny ? '' : 'none');
+      } else {
+        // In CodeMirror mode hide the fallback button to avoid duplicates.
+        btn.style.display = isFsAny ? 'none' : '';
+      }
+    });
+  } catch (e) {}
+}
+
+
+function isMonacoFullscreen() {
+  try {
+    return !!(previewMonacoHost && previewMonacoHost.classList && previewMonacoHost.classList.contains('is-fullscreen'));
+  } catch (e) {}
+  return false;
+}
+
+function setMonacoFullscreen(on) {
+  if (!previewMonacoHost) return;
+  const host = previewMonacoHost;
+  const enabled = !!on;
+
+  const st = host.__xkFs || (host.__xkFs = { on: false, placeholder: null, parent: null, next: null });
+
+  if (enabled) {
+    if (!st.on) {
+      st.on = true;
+      try {
+        st.parent = host.parentNode;
+        st.next = host.nextSibling;
+        st.placeholder = document.createComment('xk-monaco-fs');
+        if (st.parent) st.parent.insertBefore(st.placeholder, st.next);
+      } catch (e) {}
+      try { document.body.appendChild(host); } catch (e) {}
+    }
+
+    try { host.classList.add('is-fullscreen'); } catch (e) {}
+    try { document.body.classList.add('xk-no-scroll'); } catch (e) {}
+  } else {
+    try { host.classList.remove('is-fullscreen'); } catch (e) {}
+    try { document.body.classList.remove('xk-no-scroll'); } catch (e) {}
+
+    if (st.on) {
+      st.on = false;
+      try {
+        if (st.placeholder && st.placeholder.parentNode) {
+          st.placeholder.parentNode.replaceChild(host, st.placeholder);
+        } else if (st.parent) {
+          st.parent.insertBefore(host, st.next || null);
+        }
+      } catch (e) {}
+      st.placeholder = null;
+      st.parent = null;
+      st.next = null;
+    }
+  }
+
+  // Keep toolbar above fullscreen editor.
+  try { _syncToolbarFsClass(enabled); } catch (e) {}
+  try { setTimeout(() => { try { _syncToolbarFsClass(enabled); } catch (e2) {} }, 0); } catch (e3) {}
+
+  try { if (_monaco && typeof _monaco.layout === 'function') _monaco.layout(); } catch (e) {}
+  try { setTimeout(() => { try { if (_monaco && typeof _monaco.layout === 'function') _monaco.layout(); } catch (e2) {} }, 0); } catch (e3) {}
+  try { if (_monaco && typeof _monaco.focus === 'function') _monaco.focus(); } catch (e) {}
+}
+
+function wireMonacoFullscreenOnce() {
+  if (_monacoFsWired) return;
+  _monacoFsWired = true;
+  document.addEventListener('keydown', (e) => {
+    try {
+      if (!e || e.key !== 'Escape') return;
+      if (_engine !== 'monaco') return;
+      if (!isMonacoFullscreen()) return;
+      setMonacoFullscreen(false);
+    } catch (err) {}
+  }, true);
+}
+
+function toggleEditorFullscreen(cm) {
+  if (_engine === 'monaco') {
+    try { wireMonacoFullscreenOnce(); } catch (e) {}
+    setMonacoFullscreen(!isMonacoFullscreen());
+    return;
+  }
+
+  const ed = cm || editor;
+  try {
+    if (ed && typeof ed.getOption === 'function' && typeof ed.setOption === 'function') {
+      ed.setOption('fullScreen', !ed.getOption('fullScreen'));
+    }
+  } catch (e) {}
+}
+
 async function ensureMonacoEditor(initialValue) {
   if (_monaco) return _monaco;
   if (!previewMonacoHost) return null;
@@ -356,6 +484,11 @@ async function switchEngine(nextEngine, opts) {
     const currentText = getEditorText();
 
     if (next === 'monaco') {
+      // If CodeMirror was in fullscreen, exit it first to avoid CSS/layout glitches.
+      try {
+        if (editor && editor.getOption && editor.setOption && editor.getOption('fullScreen')) editor.setOption('fullScreen', false);
+      } catch (e0) {}
+
       const ed = await ensureMonacoEditor(currentText);
       if (!ed) {
         // Fallback to CodeMirror and persist it to global helper (best-effort).
@@ -367,6 +500,7 @@ async function switchEngine(nextEngine, opts) {
         showMonaco(false);
         showCodeMirror(true);
         showCmToolbar(true);
+        try { syncToolbarForEngine('codemirror'); } catch (e) {}
         _active = cmFacade();
         _engine = 'codemirror';
         return _engine;
@@ -379,8 +513,12 @@ async function switchEngine(nextEngine, opts) {
       try { if (ed && ed.updateOptions) ed.updateOptions({ readOnly: !_isEditable }); } catch (e4) {}
 
       showCodeMirror(false);
-      showCmToolbar(false);
+      // Keep toolbar visible in Monaco mode (only fullscreen button is shown).
+      showCmToolbar(true);
       showMonaco(true);
+
+      try { syncToolbarForEngine('monaco'); } catch (e) {}
+      try { wireMonacoFullscreenOnce(); } catch (e) {}
 
       _engine = 'monaco';
       _active = _monacoFacade || {
@@ -395,6 +533,8 @@ async function switchEngine(nextEngine, opts) {
     }
 
     // Switch to CodeMirror (sync text back from Monaco).
+    // If Monaco is fullscreen, exit it before hiding to avoid leaving body scroll locked.
+    try { if (isMonacoFullscreen()) setMonacoFullscreen(false); } catch (e0) {}
     try {
       if (!editor) initEditor();
     } catch (e0) {}
@@ -407,6 +547,8 @@ async function switchEngine(nextEngine, opts) {
     showMonaco(false);
     showCodeMirror(true);
     showCmToolbar(true);
+
+    try { syncToolbarForEngine('codemirror'); } catch (e) {}
 
     _engine = 'codemirror';
     _active = cmFacade();
@@ -491,11 +633,32 @@ function initEngineToggle() {
           try {
             if (!editor || !window || typeof window.xkeenAttachCmToolbar !== 'function') return;
             resetToolbar();
-            const items = (isEditable)
+            const baseItems = (isEditable)
               ? (window.XKEEN_CM_TOOLBAR_DEFAULT || null)
               : (window.XKEEN_CM_TOOLBAR_MINI || window.XKEEN_CM_TOOLBAR_DEFAULT || null);
+
+            // Replace fullscreen action: it must work for the active engine (CodeMirror/Monaco).
+            const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
+              if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) });
+              return it;
+            });
+
+            // Fallback fullscreen button for Monaco even when CM fullscreen addon isn't loaded.
+            try {
+              if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
+                items.push({
+                  id: 'fs_any',
+                  svg: window.XKEEN_CM_ICONS.fullscreen,
+                  label: 'Фулскрин',
+                  fallbackHint: 'F11 / Esc',
+                  onClick: () => toggleEditorFullscreen(editor),
+                });
+              }
+            } catch (e) {}
+
             window.xkeenAttachCmToolbar(editor, items);
             moveToolbarToHeader();
+            try { syncToolbarForEngine(_engine); } catch (e) {}
           } catch (e) {
             // ignore
           }
@@ -809,8 +972,26 @@ function initEngineToggle() {
           // automatically disabled when editor is readOnly.
           try {
             if (window && typeof window.xkeenAttachCmToolbar === 'function') {
-              window.xkeenAttachCmToolbar(editor, window.XKEEN_CM_TOOLBAR_DEFAULT || null);
+              const baseItems = window.XKEEN_CM_TOOLBAR_DEFAULT || null;
+              const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
+                if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) });
+                return it;
+              });
+              try {
+                if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
+                  items.push({
+                    id: 'fs_any',
+                    svg: window.XKEEN_CM_ICONS.fullscreen,
+                    label: 'Фулскрин',
+                    fallbackHint: 'F11 / Esc',
+                    onClick: () => toggleEditorFullscreen(editor),
+                  });
+                }
+              } catch (e) {}
+
+              window.xkeenAttachCmToolbar(editor, items);
               moveToolbarToHeader();
+              try { syncToolbarForEngine(_engine); } catch (e) {}
             }
           } catch (e) {
             // ignore

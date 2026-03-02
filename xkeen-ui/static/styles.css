@@ -1543,8 +1543,33 @@ html[data-theme="light"] .btn-link:hover {
 /* Routing view: keep routing editor on the LEFT (wide) and auxiliary cards on the RIGHT (narrow) */
 .layout-2col.routing-layout {
   grid-template-columns: minmax(0, 1fr) minmax(280px, 440px);
+  /* Make horizontal gutters between columns tighter on Routing Xray page */
+  column-gap: 8px;
   /* Explicit areas: avoids auto-placement gaps when DOM order changes */
   grid-template-areas: "routing-center routing-side";
+}
+
+/* Routing Xray: make vertical spacing between stacked cards more compact */
+.layout-2col.routing-layout .routing-col {
+  gap: 8px;
+}
+
+/* Cards already have a global margin-bottom; remove it here and rely on the flex gap above. */
+.layout-2col.routing-layout .routing-col > .card {
+  margin-bottom: 0;
+}
+
+.layout-2col.routing-layout .routing-side-grid {
+  gap: 8px;
+}
+
+.layout-2col.routing-layout .routing-side-grid > .card {
+  margin-bottom: 0;
+}
+
+/* Restart log card spacing is handled by the column gap above */
+.layout-2col.routing-layout .xk-routing-log-card {
+  margin-top: 0;
 }
 
 /* Place the editor/rules column on the left even if DOM order differs */
@@ -6855,6 +6880,54 @@ button:disabled{
 .fm-header h2{ margin: 0; }
 .fm-header-actions{ display:flex; gap: 8px; align-items:center; }
 
+/* File Manager: USB volumes modal */
+.fm-volumes-table{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: calc(13px * var(--xk-font-scale));
+}
+.fm-volumes-table th,
+.fm-volumes-table td{
+  padding: 8px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--editor-btn-border, rgba(51,65,85,0.9)) 65%, transparent);
+  vertical-align: middle;
+}
+.fm-volumes-table th{
+  text-align: left;
+  font-size: calc(12px * var(--xk-font-scale));
+  opacity: .8;
+  font-weight: 600;
+}
+.fm-volumes-table tbody tr:hover td{
+  background: color-mix(in srgb, var(--card-bg, rgba(30,41,59,0.85)) 60%, transparent);
+}
+.fm-volumes-td-name code,
+.fm-volumes-table td code{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: calc(12px * var(--xk-font-scale));
+}
+.fm-volumes-state{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: calc(12px * var(--xk-font-scale));
+  opacity: .9;
+}
+.fm-volumes-state::before{
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted, #94a3b8) 70%, transparent);
+  flex: 0 0 auto;
+}
+.fm-volumes-state.is-mounted::before{
+  background: color-mix(in srgb, var(--success, #22c55e) 75%, transparent);
+}
+.fm-volumes-state.is-unmounted::before{
+  background: color-mix(in srgb, var(--warning, #f59e0b) 75%, transparent);
+}
+
 /* File manager buttons: allow separate theming */
 .fm-card .btn-secondary{
   background: var(--fm-btn-bg, var(--editor-btn-bg, rgba(255,255,255,0.04)));
@@ -6933,6 +7006,42 @@ button:disabled{
   gap: 12px;
   flex: 1;
   min-height: 0;
+}
+
+/* File manager top notes row: left note + right selection/free-space status */
+.fm-top-notes{
+  /* Match the two-panel grid so the right status starts at the left edge of the right panel */
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  align-items: flex-start;
+}
+.fm-top-notes .status{ margin-top: 0; }
+.fm-top-notes #fm-disabled-note{
+  grid-column: 1;
+  min-width: 0;
+}
+
+.fm-top-notes #fm-footer-status{
+  grid-column: 2;
+  justify-self: start;
+}
+
+/* Selection/free-space status (plain text) */
+.fm-status-note{
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.fm-status-note:empty{ display:none; }
+
+.fm-status-v{
+  font-weight: 700;
+  color: var(--accent, #60a5fa);
 }
 
 .fm-panel{
@@ -7126,6 +7235,30 @@ html:not([data-theme="light"]) .fm-target-select optgroup{
 }
 .fm-list.is-loading{ opacity: 0.65; pointer-events: none; }
 
+/* Inline panel error (unified UX) */
+.fm-panel-error{
+  margin: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--danger, #ef4444) 55%, var(--border, rgba(51,65,85,0.9)));
+  background: color-mix(in srgb, var(--danger, #ef4444) 10%, transparent);
+}
+.fm-panel-error-title{
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.fm-panel-error-msg{
+  opacity: 0.95;
+}
+.fm-panel-error-hint{
+  margin-top: 6px;
+  opacity: 0.78;
+  font-size: 0.95em;
+}
+.fm-panel-error-retry{
+  margin-top: 10px;
+}
+
 .fm-list.is-drop-target{
   outline: 2px dashed color-mix(in srgb, var(--accent, #60a5fa) 55%, transparent);
   outline-offset: -2px;
@@ -7281,6 +7414,18 @@ html:not([data-theme="light"]) .fm-target-select optgroup{
   flex-wrap: wrap;
 }
 
+.fm-footer-status{
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.2;
+  opacity: 0.78;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .fm-help-btn{
   padding: 6px 10px;
   font-size: calc(12px * var(--xk-font-scale));
@@ -7323,9 +7468,11 @@ html:not([data-theme="light"]) .fm-target-select optgroup{
   padding: 6px;
   border-radius: 12px;
   border: 1px solid var(--fm-menu-border, var(--modal-border, rgba(51,65,85,0.85)));
-  background: var(--fm-menu-bg, color-mix(in srgb, var(--modal-bg, #020617) 92%, transparent));
+  /* Use the same solid base as modal cards: the context menu must not be see-through. */
+  background: var(--fm-menu-bg, var(--modal-bg, rgba(15, 23, 42, 0.95)));
   box-shadow: 0 10px 30px rgba(var(--shadow-rgb, 0,0,0), calc(var(--shadow, 0.35)));
-  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 .fm-context-menu.hidden{ display:none; }
 
@@ -7364,7 +7511,7 @@ html:not([data-theme="light"]) .fm-target-select optgroup{
 
 
 html[data-theme="light"] .fm-context-menu{
-  background: var(--fm-menu-bg, color-mix(in srgb, var(--modal-bg, #ffffff) 92%, transparent));
+  background: var(--fm-menu-bg, var(--modal-bg, #ffffff));
   border-color: var(--fm-menu-border, var(--modal-border, var(--border, rgba(15,23,42,0.18))));
   box-shadow: 0 10px 30px rgba(var(--shadow-rgb, 15,23,42), var(--shadow, 0.12));
 }
@@ -7856,10 +8003,10 @@ html[data-theme="light"] .fm-progress-details{
 }
 .xk-mihomo-menu-panel *{ box-sizing: border-box; }
 
-/* Mihomo overflow menu: open upwards (drop-up) so it doesn't go off-screen near the bottom. */
+/* Mihomo overflow menu: open downwards (toolbar is at the top, like Routing Xray). */
 .xk-mihomo-menu .dt-log-menu-panel{
-  top: auto;
-  bottom: calc(100% + 8px);
+  top: calc(100% + 8px);
+  bottom: auto;
 }
 
 /* Menu items: full-width like Terminal menu */
@@ -7879,6 +8026,22 @@ html[data-theme="light"] .fm-progress-details{
 .xk-mihomo-menu-panel .xray-log-select{
   width: 100%;
   min-width: 0;
+}
+
+/* Mihomo editor: topbar layout (same density as Routing Xray) */
+.xk-mihomo-topbar .xk-mihomo-toolbararea{
+  margin: 0;
+}
+
+.xk-mihomo-toolbarhost{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  flex: 0 0 auto;
+}
+.xk-mihomo-toolbarhost .xkeen-cm-toolbar{
+  margin: 0;
+  padding-right: 0;
 }
 
 /* Routing: primary Save button (vector icon, compact like Terminal menu) */
@@ -9912,4 +10075,98 @@ html[data-theme="light"] .routing-json-textarea {
 html[data-theme="light"] .routing-json-pre {
   border-color: rgba(15, 23, 42, 0.14);
   background: rgba(15, 23, 42, 0.03);
+}
+
+/* -------------------- Monaco fullscreen (routing editor) -------------------- */
+.xk-monaco-editor.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  border-radius: 0;
+  z-index: 10000;
+}
+
+body.xk-no-scroll {
+  overflow: hidden;
+}
+
+
+/* Proxy Tools (Mihomo) modal: compact aligned layout */
+
+#mihomo-proxy-tools-modal .xk-pt-desc{
+  margin: 0 0 8px;
+}
+
+#mihomo-proxy-tools-modal .xk-pt-grid{
+  display: grid;
+  gap: 8px 10px;
+  align-items: center;
+}
+
+#mihomo-proxy-tools-modal .xk-pt-label{
+  font-size: 0.86rem;
+  opacity: 0.85;
+}
+
+#mihomo-proxy-tools-modal .xk-pt-control{
+  width: 100%;
+}
+
+#mihomo-proxy-tools-modal .xk-pt-grid--select{
+  grid-template-columns: 140px minmax(220px, 520px);
+}
+
+#mihomo-proxy-tools-modal .xk-pt-grid--rename{
+  grid-template-columns: 140px minmax(220px, 520px) auto;
+  align-items: end;
+}
+
+#mihomo-proxy-tools-modal .xk-pt-grid--replace-top{
+  grid-template-columns: 140px minmax(220px, 360px) auto auto;
+  align-items: end;
+}
+#mihomo-proxy-tools-modal .xk-pt-grid--replace-top .xk-pt-label{
+  align-self: center;
+  padding-bottom: 2px;
+}
+
+#mihomo-proxy-tools-modal .xk-pt-grid--textarea{
+  grid-template-columns: 140px 1fr;
+  align-items: start;
+}
+
+#mihomo-proxy-tools-modal .xk-pt-section{
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(127,127,127,0.15);
+}
+
+#mihomo-proxy-tools-modal .xk-pt-title{
+  margin-bottom: 6px;
+}
+
+#mihomo-proxy-tools-modal .xk-pt-note{
+  margin: 6px 0 0;
+  opacity: 0.75;
+}
+
+/* Slightly more compact textareas in this modal */
+#mihomo-proxy-tools-modal textarea.outbounds-gen-preview{
+  min-height: 84px;
+}
+
+@media (max-width: 720px){
+  #mihomo-proxy-tools-modal .xk-pt-grid--select,
+  #mihomo-proxy-tools-modal .xk-pt-grid--rename,
+  #mihomo-proxy-tools-modal .xk-pt-grid--replace-top,
+  #mihomo-proxy-tools-modal .xk-pt-grid--textarea{
+    grid-template-columns: 1fr;
+  }
+
+  #mihomo-proxy-tools-modal .xk-pt-grid--rename button,
+  #mihomo-proxy-tools-modal .xk-pt-grid--replace-top button{
+    justify-self: start;
+  }
 }

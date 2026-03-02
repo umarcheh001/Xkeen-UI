@@ -103,6 +103,12 @@
   // Monaco diagnostics debounce (markers).
   let _monacoDiagTimer = null;
 
+  // Monaco fullscreen (CSS-driven)
+  let _monacoFsWired = false;
+
+  // Async restart job state (xkeen -restart) for save with auto-restart.
+  let _restartJobRunning = false;
+
 
   function $(id) {
     return document.getElementById(id);
@@ -981,7 +987,6 @@ function closeHelp() {
       toast('Ошибка загрузки файла.', true);
     }
   }
-
   async function save() {
     const statusEl = $(IDS.status);
     const rawText = getEditorText();
@@ -998,9 +1003,68 @@ function closeHelp() {
 
     const restart = shouldAutoRestartAfterSave();
 
+    if (restart && _restartJobRunning) {
+      if (statusEl) statusEl.textContent = 'Перезапуск уже выполняется…';
+      toast('Перезапуск уже выполняется…', 'info');
+      return;
+    }
+
+    const saveBtn = $(IDS.btnSave);
+    const setBtnBusy = (busy) => {
+      if (!saveBtn) return;
+      try { saveBtn.disabled = !!busy; } catch (e) {}
+      try { saveBtn.classList.toggle('is-busy', !!busy); } catch (e) {}
+    };
+
+    const clearRestartLogUi = () => {
+      try {
+        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.setRaw === 'function') {
+          XKeen.features.restartLog.setRaw('');
+          return;
+        }
+      } catch (e) {}
+      try {
+        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.clear === 'function') {
+          XKeen.features.restartLog.clear();
+          return;
+        }
+      } catch (e) {}
+
+      // ultra-fallback: legacy element
+      const el = document.getElementById('restart-log');
+      if (!el) return;
+      try { el.dataset.rawText = ''; } catch (e) {}
+      try { el.innerHTML = ''; } catch (e) {}
+      try { el.scrollTop = 0; } catch (e) {}
+    };
+
+    const appendRestartLog = (chunk) => {
+      if (!chunk) return;
+      try {
+        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.append === 'function') {
+          XKeen.features.restartLog.append(String(chunk));
+          return;
+        }
+      } catch (e) {}
+      const el = document.getElementById('restart-log');
+      if (!el) return;
+      try {
+        const prev = el.textContent || '';
+        el.textContent = prev + String(chunk);
+        el.scrollTop = el.scrollHeight;
+      } catch (e) {}
+    };
+
     try {
       const file = getActiveFragment();
-      const url = '/api/routing?restart=' + (restart ? '1' : '0') + (file ? ('&file=' + encodeURIComponent(file)) : '');
+      const url =
+        '/api/routing?restart=' + (restart ? '1' : '0') +
+        (restart ? '&async=1' : '') +
+        (file ? ('&file=' + encodeURIComponent(file)) : '');
+
+      setBtnBusy(true);
+
+      // Save request (fast). Restart is handled as a background job when async=1.
       const res = await fetch(url, _withCSRF({
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -1016,33 +1080,94 @@ function closeHelp() {
         try {
           window.routingSavedContent = rawText;
           window.routingIsDirty = false;
-          const saveBtn = $(IDS.btnSave);
-          if (saveBtn) saveBtn.classList.remove('dirty');
+          const saveBtn2 = $(IDS.btnSave);
+          if (saveBtn2) saveBtn2.classList.remove('dirty');
         } catch (e) {}
 
         let msg = (_routingMode === 'routing') ? 'Routing сохранён.' : 'Файл сохранён.';
-        if (statusEl) statusEl.textContent = msg;
-        if (!data || !data.restarted) {
-          toast(msg, false);
-        }
+
+        // Update activity bookkeeping
         try {
           if (typeof window.updateLastActivity === 'function') {
             const fp = window.XKEEN_FILES && window.XKEEN_FILES.routing ? window.XKEEN_FILES.routing : '';
             window.updateLastActivity('saved', 'routing', fp);
           }
         } catch (e) {}
+
+        // Async job: stream full, colored output like terminal.
+        const jobId = (data && (data.restart_job_id || data.job_id || data.restartJobId)) ? String(data.restart_job_id || data.job_id || data.restartJobId) : '';
+        if (restart && jobId) {
+          _restartJobRunning = true;
+          if (statusEl) statusEl.textContent = msg + ' Перезапуск…';
+          clearRestartLogUi();
+          appendRestartLog('⏳ Запуск xkeen -restart (job)…\n');
+
+          const CJ = (window.XKeen && XKeen.util && XKeen.util.commandJob) ? XKeen.util.commandJob : null;
+          let result = null;
+
+          if (CJ && typeof CJ.waitForCommandJob === 'function') {
+            result = await CJ.waitForCommandJob(jobId, {
+              maxWaitMs: 5 * 60 * 1000,
+              onChunk: (chunk) => { try { appendRestartLog(chunk); } catch (e) {} }
+            });
+          } else {
+            // Minimal HTTP polling fallback.
+            let lastLen = 0;
+            while (true) {
+              const pr = await fetch(`/api/run-command/${encodeURIComponent(jobId)}`);
+              const pj = await pr.json().catch(() => ({}));
+              const out = (pj && typeof pj.output === 'string') ? pj.output : '';
+              if (out.length > lastLen) {
+                appendRestartLog(out.slice(lastLen));
+                lastLen = out.length;
+              }
+              if (!pr.ok || pj.ok === false || pj.status === 'finished' || pj.status === 'error') {
+                result = pj;
+                break;
+              }
+              await new Promise(r => setTimeout(r, 1000));
+            }
+          }
+
+          const ok = !!(result && result.ok);
+          if (ok) {
+            if (statusEl) statusEl.textContent = 'Готово';
+            toast('Готово', false);
+          } else {
+            if (statusEl) statusEl.textContent = 'Ошибка';
+            toast('Ошибка', true);
+
+            const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
+            const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
+            const detail = err ? ('Ошибка: ' + err) : (exitCode !== null ? ('Ошибка (exit_code=' + exitCode + ')') : '');
+            if (detail) { try { appendRestartLog('\n' + detail + '\n'); } catch (e) {} }
+          }
+
+          return ok;
+        }
+
+        // Legacy / non-async: keep previous UX (save toast, restart toast handled elsewhere).
+        if (statusEl) statusEl.textContent = msg;
+        if (!data || !data.restarted) {
+          toast(msg, false);
+        }
+        return true;
       } else {
         const msg = 'Save error: ' + ((data && data.error) || res.statusText || ('HTTP ' + res.status) || 'неизвестная ошибка');
         if (statusEl) statusEl.textContent = msg;
         toast(msg, true);
+        return false;
       }
     } catch (e) {
       console.error(e);
       if (statusEl) statusEl.textContent = 'Ошибка при сохранении файла.';
       toast('Ошибка при сохранении файла.', true);
+      return false;
+    } finally {
+      _restartJobRunning = false;
+      setBtnBusy(false);
     }
   }
-
 
   async function getPreferPrettierFlag() {
     // Load server settings only on demand (no auto-fetch on page load).
@@ -1562,6 +1687,14 @@ function closeHelp() {
           const items = [];
           let inserted = false;
           (base || []).forEach((it) => {
+            // Replace fullscreen action: in routing card it must work for the active engine
+            // (CodeMirror or Monaco), not just CodeMirror.
+            if (it && it.id === 'fs') {
+              items.push(Object.assign({}, it, {
+                onClick: () => toggleEditorFullscreen(cm),
+              }));
+              return;
+            }
             // Drop the default CodeMirror help button (red '?').
             if (it && it.id === 'help') {
               if (!inserted) {
@@ -1631,9 +1764,81 @@ cm.on('change', () => {
           btn.classList.contains('is-comments-help') ||
           (btn.dataset && btn.dataset.actionId === 'help_comments')
         );
-        // In Monaco mode show only the yellow JSONC help button.
-        btn.style.display = (isMonaco && !isCommentsHelp) ? 'none' : '';
+
+        const isFs = !!(btn.dataset && btn.dataset.actionId === 'fs');
+
+        // In Monaco mode show only the yellow JSONC help + fullscreen.
+        btn.style.display = (isMonaco && !(isCommentsHelp || isFs)) ? 'none' : '';
       });
+    } catch (e) {}
+  }
+
+  // ------------------------ fullscreen (CodeMirror + Monaco) ------------------------
+
+  function _syncToolbarFsClass(isFs) {
+    try {
+      if (_cm && _cm._xkeenToolbarEl) {
+        _cm._xkeenToolbarEl.classList.toggle('is-fullscreen', !!isFs);
+      }
+    } catch (e) {}
+  }
+
+  function isMonacoFullscreen() {
+    try {
+      return !!(_monacoHostEl && _monacoHostEl.classList && _monacoHostEl.classList.contains('is-fullscreen'));
+    } catch (e) {}
+    return false;
+  }
+
+  function setMonacoFullscreen(on) {
+    const host = ensureMonacoHost();
+    if (!host) return;
+
+    const enabled = !!on;
+    try { host.classList.toggle('is-fullscreen', enabled); } catch (e) {}
+    try { document.body.classList.toggle('xk-no-scroll', enabled); } catch (e) {}
+
+    // Keep toolbar visible and pinned (same behaviour as CodeMirror fullscreen).
+    try { _syncToolbarFsClass(enabled); } catch (e) {}
+
+    // Monaco needs layout after container size/position change.
+    try { if (_monaco && typeof _monaco.layout === 'function') _monaco.layout(); } catch (e) {}
+    try {
+      setTimeout(() => {
+        try { if (_monaco && typeof _monaco.layout === 'function') _monaco.layout(); } catch (e2) {}
+      }, 0);
+    } catch (e) {}
+    try { if (_monaco && typeof _monaco.focus === 'function') _monaco.focus(); } catch (e) {}
+  }
+
+  function wireMonacoFullscreenOnce() {
+    if (_monacoFsWired) return;
+    _monacoFsWired = true;
+
+    // Exit Monaco fullscreen on Escape.
+    document.addEventListener('keydown', (e) => {
+      try {
+        if (!e || e.key !== 'Escape') return;
+        if (_engine !== 'monaco') return;
+        if (!isMonacoFullscreen()) return;
+        setMonacoFullscreen(false);
+      } catch (err) {}
+    }, true);
+  }
+
+  function toggleEditorFullscreen(cm) {
+    if (_engine === 'monaco') {
+      try { wireMonacoFullscreenOnce(); } catch (e) {}
+      setMonacoFullscreen(!isMonacoFullscreen());
+      return;
+    }
+
+    // CodeMirror: preserve the original behaviour.
+    const ed = cm || _cm;
+    try {
+      if (ed && typeof ed.getOption === 'function' && typeof ed.setOption === 'function') {
+        ed.setOption('fullScreen', !ed.getOption('fullScreen'));
+      }
     } catch (e) {}
   }
 
@@ -2069,6 +2274,13 @@ cm.on('change', () => {
     if (next === _engine) return;
 
     if (next === 'monaco') {
+      // If CodeMirror was in fullscreen, exit it first, otherwise its fullscreen CSS may affect layout.
+      try {
+        if (_cm && typeof _cm.getOption === 'function' && typeof _cm.setOption === 'function' && _cm.getOption('fullScreen')) {
+          _cm.setOption('fullScreen', false);
+        }
+      } catch (e) {}
+
       const ed = await ensureMonacoEditor();
       if (!ed) {
         // Revert UI selection
@@ -2080,8 +2292,9 @@ cm.on('change', () => {
 
       showCodeMirror(false);
       showMonaco(true);
-      // Keep only JSONC help visible in the toolbar host.
+      // Keep only JSONC help + fullscreen visible in the toolbar host.
       try { syncToolbarForEngine('monaco'); } catch (e) {}
+      try { wireMonacoFullscreenOnce(); } catch (e) {}
 
       _engine = 'monaco';
       // Expose facade so other modules (templates/cards) keep working
@@ -2089,6 +2302,9 @@ cm.on('change', () => {
       try { if (_monacoFacade && _monacoFacade.focus) _monacoFacade.focus(); } catch (e) {}
       try { validate(); } catch (e) {}
     } else {
+      // If Monaco is fullscreen, exit it before hiding to avoid leaving body scroll locked.
+      try { if (isMonacoFullscreen()) setMonacoFullscreen(false); } catch (e) {}
+
       // Sync text back from Monaco to CodeMirror
       try {
         if (_monaco && _cm && typeof _cm.setValue === 'function') _cm.setValue(_monaco.getValue());

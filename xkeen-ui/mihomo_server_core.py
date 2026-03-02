@@ -1062,65 +1062,116 @@ def _inject_proxy_before_leave(out_lines: List[str], proxy_name: str) -> None:
     out_lines.append(f"{indent}- {quoted}")
 
 
-def replace_proxy_block(content: str, target_name: str, new_yaml_block: str) -> str:
-    """Replace existing proxy block with new one (by name).
+def replace_proxy_in_config(content: str, proxy_name: str, new_proxy_yaml: str) -> Tuple[str, bool]:
+    """Replace a proxy block inside top-level `proxies:` section.
 
-    * Looks inside `proxies:` section.
-    * target_name is matched ignoring surrounding quotes.
-    * new_yaml_block should be a valid YAML snippet starting with `- name:`.
+    Args:
+        content: Full Mihomo `config.yaml` text.
+        proxy_name: Target proxy name to replace (matches `- name:`).
+        new_proxy_yaml: YAML snippet of the new proxy, starting with `- name:`
+            and containing relative indentation (e.g. `  server:`). The snippet
+            is treated as *unindented* relative to the list item; the function
+            will indent it to match existing `proxies:` list indentation.
+
+    Returns:
+        (new_content, changed)
     """
-    lines = content.splitlines()
-    new_lines = new_yaml_block.splitlines()
+    if not isinstance(content, str):
+        content = str(content or "")
+    if not isinstance(new_proxy_yaml, str):
+        new_proxy_yaml = str(new_proxy_yaml or "")
 
-    in_proxies = False
-    start_idx = None
-    found_name = None
+    proxy_name = (proxy_name or "").strip()
+    if not proxy_name:
+        out0 = content.replace("\r\n", "\n").replace("\r", "\n")
+        return (out0 if out0.endswith("\n") else out0 + "\n"), False
 
-    def flush_block(i: int) -> None:
-        nonlocal lines
-        if start_idx is None:
-            return
-        # Replace [start_idx, i) with new_lines
-        lines = lines[:start_idx] + new_lines + lines[i:]
+    # Normalise newlines
+    content_n = content.replace("\r\n", "\n").replace("\r", "\n")
+    new_yaml_n = new_proxy_yaml.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n")
 
-    i = 0
-    while i < len(lines):
-        stripped = lines[i].lstrip()
-        if stripped.startswith('proxies:'):
-            in_proxies = True
-            i += 1
+    lines = content_n.splitlines()
+
+    # 1) Find top-level `proxies:` section
+    proxies_idx = None
+    for i, line in enumerate(lines):
+        if line.strip() == "proxies:" and (len(line) - len(line.lstrip()) == 0):
+            proxies_idx = i
+            break
+
+    if proxies_idx is None:
+        return (content_n if content_n.endswith("\n") else content_n + "\n"), False
+
+    # 2) Find end of the section (next top-level key)
+    end_idx = len(lines)
+    for j in range(proxies_idx + 1, len(lines)):
+        l = lines[j]
+        if not l.strip() or l.lstrip().startswith("#"):
             continue
+        if (len(l) - len(l.lstrip()) == 0) and not l.lstrip().startswith("-"):
+            end_idx = j
+            break
 
-        if in_proxies and stripped.startswith('- name:'):
-            # If we were inside previous block -> end of previous block
-            if start_idx is not None and found_name is not None:
-                flush_block(i)
-                return "\n".join(lines) + "\n"
+    # 3) Detect list item indentation inside proxies section
+    name_line_re = re.compile(r"^(\s*)-\s+name:\s*(.+?)\s*$")
+    item_indent_str = "  "  # default
+    item_indent_len = 2
+    for j in range(proxies_idx + 1, end_idx):
+        m = name_line_re.match(lines[j])
+        if m:
+            item_indent_str = m.group(1)
+            item_indent_len = len(item_indent_str)
+            break
 
-            # new block begins
-            start_idx = i
-            found_name = stripped.split(':', 1)[1].strip().strip('"\'')
+    # 4) Find target proxy block boundaries
+    def _clean_name(raw: str) -> str:
+        raw = raw.strip()
+        # remove trailing comment (best-effort, only when comment is outside quotes)
+        if raw and raw[0] not in ("'", '"'):
+            raw = re.sub(r"\s+#.*$", "", raw).strip()
+        return raw.strip("'\"")  # strip quotes
 
-        if in_proxies and stripped and not stripped.startswith('-') and not stripped.startswith('#'):
-            # possibly other keys under the block; we just move on
-            pass
+    target_start = None
+    target_end = None
 
-        # if we reached end of proxies section
-        if in_proxies and stripped and not lines[i].startswith('  '):
-            if start_idx is not None and found_name is not None:
-                flush_block(i)
-                return "\n".join(lines) + "\n"
-            in_proxies = False
+    for j in range(proxies_idx + 1, end_idx):
+        m = name_line_re.match(lines[j])
+        if not m:
+            continue
+        indent = m.group(1)
+        if len(indent) != item_indent_len:
+            continue
+        found = _clean_name(m.group(2))
+        if found == proxy_name:
+            target_start = j
+            # next proxy block begins with another `- name:` at same indent
+            for k in range(j + 1, end_idx):
+                m2 = name_line_re.match(lines[k])
+                if m2 and len(m2.group(1)) == item_indent_len:
+                    target_end = k
+                    break
+            if target_end is None:
+                target_end = end_idx
+            break
 
-        if in_proxies and found_name == target_name and i + 1 == len(lines):
-            # block goes until end of file
-            flush_block(i + 1)
-            return "\n".join(lines) + "\n"
+    if target_start is None:
+        return (content_n if content_n.endswith("\n") else content_n + "\n"), False
 
-        i += 1
+    new_lines = new_yaml_n.splitlines()
+    if not new_lines or not new_lines[0].lstrip().startswith("- name:"):
+        return (content_n if content_n.endswith("\n") else content_n + "\n"), False
 
-    return "\n".join(lines) + "\n"
+    indented_block = [item_indent_str + ln for ln in new_lines]
+    out_lines = lines[:target_start] + indented_block + lines[target_end:]
 
+    out = "\n".join(out_lines).rstrip("\n") + "\n"
+    return out, True
+
+
+def replace_proxy_block(content: str, target_name: str, new_yaml_block: str) -> str:
+    """Backwards-compatible wrapper (returns only text)."""
+    out, _changed = replace_proxy_in_config(content, target_name, new_yaml_block)
+    return out
 
 def rename_proxy_in_config(content: str, old_name: str, new_name: str) -> str:
     """Rename proxy and all its usages inside proxy-groups."""
@@ -1637,6 +1688,7 @@ __all__ = [
     # config manipulation
     'insert_proxy_into_groups',
     'replace_proxy_block',
+    'replace_proxy_in_config',
     'rename_proxy_in_config',
     'apply_proxy_insert',
     'apply_insert',

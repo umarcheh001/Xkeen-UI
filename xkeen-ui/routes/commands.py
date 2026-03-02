@@ -33,11 +33,14 @@ def create_commands_blueprint() -> Blueprint:
         if not isinstance(stdin_data, str):
             stdin_data = None
 
+        # Optional: run command attached to a pseudo-terminal (TTY-like output)
+        use_pty = bool(data.get("pty") or data.get("tty"))
+
         # Legacy mode: xkeen <flag>
         if flag:
             if flag not in ALLOWED_FLAGS:
                 return error_response("flag not allowed", 400, ok=False)
-            job = create_command_job(flag=flag, stdin_data=stdin_data, cmd=None)
+            job = create_command_job(flag=flag, stdin_data=stdin_data, cmd=None, use_pty=use_pty)
             return (
                 jsonify(
                     {
@@ -54,7 +57,7 @@ def create_commands_blueprint() -> Blueprint:
         if cmd:
             if not ALLOW_FULL_SHELL:
                 return error_response("shell disabled by config", 403, ok=False)
-            job = create_command_job(flag=None, stdin_data=stdin_data, cmd=cmd)
+            job = create_command_job(flag=None, stdin_data=stdin_data, cmd=cmd, use_pty=use_pty)
             return (
                 jsonify(
                     {

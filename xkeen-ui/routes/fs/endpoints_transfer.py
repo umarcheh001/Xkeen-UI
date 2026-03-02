@@ -33,6 +33,7 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
     _parse_ls_line = deps["_parse_ls_line"]
 
     _local_resolve = deps["_local_resolve"]
+    _local_is_protected_entry_abs = deps.get("_local_is_protected_entry_abs")
 
     _content_disposition_attachment = deps["_content_disposition_attachment"]
     _zip_directory = deps["_zip_directory"]
@@ -381,6 +382,14 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
                 rp = _local_resolve(dest, LOCALFS_ROOTS)
             except PermissionError as e:
                 return error_response(str(e), 403, ok=False)
+
+            # Guard against accidental uploads into /tmp/mnt root (mount hub).
+            # Those "loose" files are confusing and were historically undeletable.
+            try:
+                if callable(_local_is_protected_entry_abs) and _local_is_protected_entry_abs(rp):
+                    return error_response("protected_path", 403, ok=False)
+            except Exception:
+                pass
 
             parent = os.path.dirname(rp)
             if parent and not os.path.isdir(parent):

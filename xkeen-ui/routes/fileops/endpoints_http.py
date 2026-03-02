@@ -19,9 +19,17 @@ def register_http_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
     _normalize_delete = deps["normalize_delete"]
     _normalize_sources = deps["normalize_sources"]
     _compute_copy_move_conflicts = deps["compute_copy_move_conflicts"]
+    _normalize_zip = deps.get("normalize_zip")
+    _normalize_unzip = deps.get("normalize_unzip")
+    _normalize_checksum = deps.get("normalize_checksum")
+    _normalize_dirsize = deps.get("normalize_dirsize")
     _progress_set = deps["progress_set"]
     _run_job_delete = deps["run_job_delete"]
     _run_job_copy_move = deps["run_job_copy_move"]
+    _run_job_zip = deps.get("run_job_zip")
+    _run_job_unzip = deps.get("run_job_unzip")
+    _run_job_checksum = deps.get("run_job_checksum")
+    _run_job_dirsize = deps.get("run_job_dirsize")
     _core_log = deps.get("core_log")
 
     @bp.post("/api/fileops/jobs")
@@ -30,13 +38,29 @@ def register_http_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
             return resp
         data = request.get_json(silent=True) or {}
         op = str(data.get("op") or "copy").strip().lower()
-        if op not in ("copy", "move", "delete"):
+        if op not in ("copy", "move", "delete", "zip", "unzip", "checksum", "dirsize"):
             return error_response("unsupported_op", 400, ok=False)
         try:
             if op == "delete":
                 _normalize_delete(data)
-            else:
+            elif op in ("copy", "move"):
                 _normalize_sources(data)
+            elif op == "zip":
+                if not callable(_normalize_zip):
+                    raise RuntimeError('unsupported_op')
+                data = _normalize_zip(data)
+            elif op == "unzip":
+                if not callable(_normalize_unzip):
+                    raise RuntimeError('unsupported_op')
+                data = _normalize_unzip(data)
+            elif op == "checksum":
+                if not callable(_normalize_checksum):
+                    raise RuntimeError('unsupported_op')
+                data = _normalize_checksum(data)
+            elif op == "dirsize":
+                if not callable(_normalize_dirsize):
+                    raise RuntimeError('unsupported_op')
+                data = _normalize_dirsize(data)
         except RuntimeError as e:
             return error_response(str(e), 400, ok=False)
         except Exception:
@@ -75,7 +99,7 @@ def register_http_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
             spec = {"src": data["src"], "sources": data["sources"], "options": data.get("options") or {}}
             _progress_set(job, files_total=len(spec["sources"]))
             jobmgr.submit(job, _run_job_delete, spec)
-        else:
+        elif op in ("copy", "move"):
             spec = {
                 "src": data["src"],
                 "dst": data["dst"],
@@ -85,6 +109,31 @@ def register_http_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
             }
             _progress_set(job, bytes_total=spec["bytes_total"], files_total=len(spec["sources"]))
             jobmgr.submit(job, _run_job_copy_move, spec)
+        elif op == "zip":
+            if not callable(_run_job_zip):
+                return error_response("unsupported_op", 400, ok=False)
+            # data is already normalized into runner spec
+            _progress_set(job, files_total=len(data.get('items') or []), bytes_total=0)
+            jobmgr.submit(job, _run_job_zip, data)
+        elif op == "unzip":
+            if not callable(_run_job_unzip):
+                return error_response("unsupported_op", 400, ok=False)
+            _progress_set(job, files_total=0, bytes_total=0)
+            jobmgr.submit(job, _run_job_unzip, data)
+        elif op == "checksum":
+            if not callable(_run_job_checksum):
+                return error_response("unsupported_op", 400, ok=False)
+            try:
+                bt = int(data.get('size_total') or 0)
+            except Exception:
+                bt = 0
+            _progress_set(job, files_total=1, bytes_total=bt)
+            jobmgr.submit(job, _run_job_checksum, data)
+        elif op == "dirsize":
+            if not callable(_run_job_dirsize):
+                return error_response("unsupported_op", 400, ok=False)
+            _progress_set(job, files_total=0, bytes_total=0)
+            jobmgr.submit(job, _run_job_dirsize, data)
 
         if callable(_core_log):
             try:

@@ -255,11 +255,54 @@ function ensureFileManagerReady() {
 
   _fileManagerPromise = (async () => {
     await loadScriptsInOrder([
+      // NOTE: no per-file cache-busters here.
+      // `_toUrl()` will append a single `?v=${window.XKEEN_STATIC_VER}`
+      // to all lazy-loaded scripts.
+      'js/features/file_manager/common.js',
+      'js/features/file_manager/api.js',
+      'js/features/file_manager/errors.js',
+      'js/features/file_manager/progress.js',
       'js/features/file_manager/prefs.js',
+      'js/features/file_manager/state.js',
+      'js/features/file_manager/bookmarks.js',
+      'js/features/file_manager/terminal.js',
+      'js/features/file_manager/list_model.js',
+      'js/features/file_manager/status.js',
+      'js/features/file_manager/storage.js',
+      'js/features/file_manager/render.js',
+      'js/features/file_manager/listing.js',
+      'js/features/file_manager/selection.js',
+      'js/features/file_manager/transfers.js',
+      'js/features/file_manager/remote.js',
+      'js/features/file_manager/ops.js',
+      'js/features/file_manager/actions.js',
+      'js/features/file_manager/props.js',
+      'js/features/file_manager/hash.js',
+      'js/features/file_manager/actions_modals.js',
+      'js/features/file_manager/dragdrop.js',
+      'js/features/file_manager/context_menu.js',
       'js/features/file_manager/chrome.js',
-      'js/features/file_manager/editor.js?v=20260223d',
-      'js/features/file_manager.js?v=20260119d',
+      'js/features/file_manager/editor.js',
+      'js/features/file_manager/navigation.js',
+      'js/features/file_manager/wire.js',
+
+      'js/features/file_manager.js',
+      // Thin entrypoint (must be last)
+      'js/features/file_manager/init.js',
     ]);
+
+    // Dev guards: help diagnose script order issues (use ?debug=1 or window.XKEEN_DEV=true)
+    try {
+      const q = (window.location && typeof window.location.search === 'string') ? window.location.search : '';
+      const isDebug = !!window.XKEEN_DEV || /(?:^|[?&])debug=1(?:&|$)/.test(q);
+      if (isDebug) {
+        const FM = (window.XKeen && window.XKeen.features && window.XKeen.features.fileManager) ? window.XKeen.features.fileManager : null;
+        if (!FM) console.error('[FM] missing XKeen.features.fileManager after lazy load');
+        if (FM && (!FM.state || !FM.state.S)) console.error('[FM] missing FM.state.S (state container not initialized)');
+        if (FM && (!FM.contextMenu || typeof FM.contextMenu.show !== 'function')) console.error('[FM] missing FM.contextMenu.show (context_menu.js not loaded)');
+        if (FM && (!FM.editor)) console.error('[FM] missing FM.editor (editor.js not loaded)');
+      }
+    } catch (e) {}
 
     _fileManagerLoaded = true;
     return true;
@@ -429,6 +472,9 @@ safe(() => {
 	      if (window.XKeen && XKeen.features && XKeen.features.mihomoImport && typeof XKeen.features.mihomoImport.init === 'function') {
 	        XKeen.features.mihomoImport.init();
 	      }
+	      if (window.XKeen && XKeen.features && XKeen.features.mihomoProxyTools && typeof XKeen.features.mihomoProxyTools.init === 'function') {
+	        XKeen.features.mihomoProxyTools.init();
+	      }
 	    });
 	  }
 	  if (name === 'xkeen') {
@@ -506,15 +552,15 @@ safe(() => {
     }
 
     // file manager: lazy-load + init + refresh when tab becomes visible
-if (name === 'files') {
-  ensureFileManagerReady().then(() => {
-    try {
-      const FM = (window.XKeen && XKeen.features && XKeen.features.fileManager) ? XKeen.features.fileManager : null;
-      if (FM && typeof FM.init === 'function') safe(() => FM.init());
-      if (FM && typeof FM.onShow === 'function') safe(() => FM.onShow());
-    } catch (e) {}
-  });
-}
+    if (name === 'files') {
+      ensureFileManagerReady().then(() => {
+        try {
+          const FM = (window.XKeen && XKeen.features && XKeen.features.fileManager) ? XKeen.features.fileManager : null;
+          // init.js is the entrypoint and calls FM.init() once.
+          if (FM && typeof FM.onShow === 'function') safe(() => FM.onShow());
+        } catch (e) {}
+      });
+    }
 
     // Ensure body scroll-lock state stays correct when switching tabs.
     // (e.g. when leaving a fullscreen card view).

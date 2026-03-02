@@ -46,6 +46,9 @@
     cm: null,
     monaco: null,
     monacoFacade: null,
+    monacoFsWired: false,
+    fsHeaderBar: null,
+    fsHeaderBtn: null,
     activeKind: 'codemirror',
     activeFacade: null,
     switching: false,
@@ -219,6 +222,259 @@
     };
   }
 
+  // ------------------------ fullscreen (CodeMirror + Monaco) ------------------------
+
+  function _syncToolbarFsClass(isFs) {
+    try {
+      const cm = STATE.cm;
+      if (cm && cm._xkeenToolbarEl) cm._xkeenToolbarEl.classList.toggle('is-fullscreen', !!isFs);
+    } catch (e) {}
+
+    // Header fullscreen button (Monaco mode) must stay visible too.
+    try {
+      if (STATE.fsHeaderBar) STATE.fsHeaderBar.classList.toggle('is-fullscreen', !!isFs);
+    } catch (e) {}
+  }
+
+  
+  function ensureHeaderFs(ui) {
+    try {
+      const u = ui || els();
+      if (!u) return null;
+
+      // Prefer the engine box wrapper.
+      const box = (u.engineSelect && u.engineSelect.closest)
+        ? u.engineSelect.closest('.xk-editor-engine')
+        : el('fm-editor-engine');
+      if (!box) return null;
+
+      // Already created
+      if (STATE.fsHeaderBar && STATE.fsHeaderBar.parentNode) return STATE.fsHeaderBar;
+      const existing = box.querySelector && box.querySelector('.xk-monaco-fsbar');
+      if (existing) {
+        STATE.fsHeaderBar = existing;
+        return existing;
+      }
+
+      const bar = document.createElement('div');
+      bar.className = 'xkeen-cm-toolbar xk-monaco-fsbar';
+      bar.style.margin = '0';
+      bar.style.paddingRight = '0';
+      bar.style.gap = '6px';
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'xkeen-cm-tool';
+      try { btn.dataset.actionId = 'fs_any'; } catch (e) {}
+      try { btn.dataset.tip = 'Фулскрин (Esc)'; } catch (e) {}
+      btn.innerHTML = (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.fullscreen) ? window.XKEEN_CM_ICONS.fullscreen : '⛶';
+      btn.addEventListener('click', () => {
+        try { toggleEditorFullscreen(STATE.cm, els()); } catch (e) {}
+      });
+
+      bar.appendChild(btn);
+      box.appendChild(bar);
+
+      STATE.fsHeaderBar = bar;
+      STATE.fsHeaderBtn = btn;
+      return bar;
+    } catch (e) {
+      return null;
+    }
+  }
+
+function syncToolbarForEngine(engine) {
+    try {
+      const cm = STATE.cm;
+      const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
+
+      // Monaco header button (exists even when CodeMirror was never created).
+      let headerBar = null;
+      try {
+        headerBar = ensureHeaderFs(els());
+        if (headerBar) headerBar.style.display = isMonaco ? '' : 'none';
+      } catch (e) {}
+
+      // CodeMirror toolbar (if present)
+      if (!cm || !cm._xkeenToolbarEl || !cm._xkeenToolbarEl.querySelectorAll) return;
+      const bar = cm._xkeenToolbarEl;
+
+      // In Monaco mode we already have a dedicated fullscreen control in the header.
+      // Hide the CM toolbar to avoid duplicates/confusing buttons.
+      if (isMonaco) {
+        bar.style.display = 'none';
+        return;
+      }
+
+      // Keep container visible so layout doesn't jump.
+      bar.style.display = '';
+
+      const btns = bar.querySelectorAll('button.xkeen-cm-tool');
+      (btns || []).forEach((btn) => {
+        const id = (btn.dataset && btn.dataset.actionId) ? String(btn.dataset.actionId) : '';
+        // In CodeMirror mode hide the fallback button to avoid duplicates.
+        btn.style.display = (id === 'fs_any') ? 'none' : '';
+      });
+    } catch (e) {}
+  }
+
+
+  function isMonacoFullscreen(ui) {
+    try {
+      const host = (ui && ui.monacoHost) ? ui.monacoHost : (els() && els().monacoHost);
+      return !!(host && host.classList && host.classList.contains('is-fullscreen'));
+    } catch (e) {}
+    return false;
+  }
+
+  function setMonacoFullscreen(on, ui) {
+    const u = ui || els();
+    if (!u || !u.monacoHost) return;
+    const host = u.monacoHost;
+    const enabled = !!on;
+
+    // Ensure consistent class for shared CSS.
+    try { if (host.classList && !host.classList.contains('xk-monaco-editor')) host.classList.add('xk-monaco-editor'); } catch (e) {}
+
+    // Portal to <body> while fullscreen is active to avoid "fixed inside transformed parent" issues.
+    const st = host.__xkFs || (host.__xkFs = { on: false, placeholder: null, parent: null, next: null });
+
+    if (enabled) {
+      if (!st.on) {
+        st.on = true;
+        try {
+          st.parent = host.parentNode;
+          st.next = host.nextSibling;
+          st.placeholder = document.createComment('xk-monaco-fs');
+          if (st.parent) st.parent.insertBefore(st.placeholder, st.next);
+        } catch (e) {}
+        try { document.body.appendChild(host); } catch (e) {}
+      }
+
+      try { host.classList.add('is-fullscreen'); } catch (e) {}
+      try { document.body.classList.add('xk-no-scroll'); } catch (e) {}
+    } else {
+      try { host.classList.remove('is-fullscreen'); } catch (e) {}
+      try { document.body.classList.remove('xk-no-scroll'); } catch (e) {}
+
+      if (st.on) {
+        st.on = false;
+        try {
+          if (st.placeholder && st.placeholder.parentNode) {
+            st.placeholder.parentNode.replaceChild(host, st.placeholder);
+          } else if (st.parent) {
+            st.parent.insertBefore(host, st.next || null);
+          }
+        } catch (e) {}
+        st.placeholder = null;
+        st.parent = null;
+        st.next = null;
+      }
+    }
+
+    // Keep toolbar visible above fullscreen editor.
+    try { _syncToolbarFsClass(enabled); } catch (e) {}
+    try { setTimeout(() => { try { _syncToolbarFsClass(enabled); } catch (e2) {} }, 0); } catch (e3) {}
+
+    try { if (STATE.monaco && typeof STATE.monaco.layout === 'function') STATE.monaco.layout(); } catch (e) {}
+    try { setTimeout(() => { try { if (STATE.monaco && typeof STATE.monaco.layout === 'function') STATE.monaco.layout(); } catch (e2) {} }, 0); } catch (e3) {}
+    try { if (STATE.monaco && typeof STATE.monaco.focus === 'function') STATE.monaco.focus(); } catch (e) {}
+  }
+
+  function wireMonacoFullscreenOnce() {
+    if (STATE.monacoFsWired) return;
+    STATE.monacoFsWired = true;
+
+    document.addEventListener('keydown', (e) => {
+      try {
+        if (!e || e.key !== 'Escape') return;
+
+        const ui = els();
+        if (!ui) return;
+
+        // 1) Monaco fullscreen (CSS-driven)
+        try {
+          if (STATE.activeKind === 'monaco' && isMonacoFullscreen(ui)) {
+            try { e.preventDefault(); } catch (e2) {}
+            try { e.stopPropagation(); } catch (e2) {}
+            try { e.stopImmediatePropagation(); } catch (e2) {}
+            setMonacoFullscreen(false, ui);
+            return;
+          }
+        } catch (e2) {}
+
+        // 2) CodeMirror fullscreen (addon/display/fullscreen)
+        try {
+          const cm = STATE.cm;
+          const isFs = !!(STATE.activeKind === 'codemirror' && cm && typeof cm.getOption === 'function' && cm.getOption('fullScreen'));
+          if (isFs && typeof cm.setOption === 'function') {
+            try { e.preventDefault(); } catch (e3) {}
+            try { e.stopPropagation(); } catch (e3) {}
+            try { e.stopImmediatePropagation(); } catch (e3) {}
+            cm.setOption('fullScreen', false);
+            try { _syncToolbarFsClass(false); } catch (e3) {}
+            return;
+          }
+        } catch (e3) {}
+      } catch (err) {}
+    }, true);
+  }
+
+  function toggleEditorFullscreen(cm, ui) {
+    if (STATE.activeKind === 'monaco') {
+      try { wireMonacoFullscreenOnce(); } catch (e) {}
+      setMonacoFullscreen(!isMonacoFullscreen(ui || els()), ui || els());
+      return;
+    }
+
+    const ed = cm || STATE.cm;
+    try {
+      if (ed && typeof ed.getOption === 'function' && typeof ed.setOption === 'function') {
+        ed.setOption('fullScreen', !ed.getOption('fullScreen'));
+      }
+    } catch (e) {}
+  }
+
+  function isEditorFullscreen(ui) {
+    const u = ui || els();
+    if (!u) return false;
+    try { if (isMonacoFullscreen(u)) return true; } catch (e) {}
+    try {
+      const cm = STATE.cm;
+      if (cm && typeof cm.getOption === 'function' && cm.getOption('fullScreen')) return true;
+      if (cm && typeof cm.getWrapperElement === 'function') {
+        const w = cm.getWrapperElement();
+        if (w && w.classList && w.classList.contains('CodeMirror-fullscreen')) return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function exitFullscreenIfAny(ui) {
+    const u = ui || els();
+    let did = false;
+
+    // Monaco (CSS-driven)
+    try {
+      if (u && isMonacoFullscreen(u)) {
+        setMonacoFullscreen(false, u);
+        did = true;
+      }
+    } catch (e) {}
+
+    // CodeMirror (addon/display/fullscreen)
+    try {
+      const cm = STATE.cm;
+      if (cm && typeof cm.getOption === 'function' && typeof cm.setOption === 'function' && cm.getOption('fullScreen')) {
+        cm.setOption('fullScreen', false);
+        try { _syncToolbarFsClass(false); } catch (e2) {}
+        did = true;
+      }
+    } catch (e) {}
+
+    return did;
+  }
+
   function activeFacade() {
     if (STATE.activeFacade) return STATE.activeFacade;
     if (STATE.activeKind === 'monaco' && STATE.monacoFacade) return STATE.monacoFacade;
@@ -335,7 +591,18 @@
         'Cmd-G': 'findNext',
         'Shift-Ctrl-G': 'findPrev',
         'Shift-Cmd-G': 'findPrev',
-        'Esc': () => { requestClose(); },
+        'Esc': () => {
+          // In fullscreen mode Esc should first exit fullscreen, not close the modal.
+          try {
+            const isFs = !!(cm && typeof cm.getOption === 'function' && cm.getOption('fullScreen'));
+            if (isFs && typeof cm.setOption === 'function') {
+              cm.setOption('fullScreen', false);
+              try { _syncToolbarFsClass(false); } catch (e) {}
+              return;
+            }
+          } catch (e) {}
+          requestClose();
+        },
       },
     });
 
@@ -346,7 +613,26 @@
 
     try {
       if (window.xkeenAttachCmToolbar && window.XKEEN_CM_TOOLBAR_DEFAULT) {
-        window.xkeenAttachCmToolbar(cm, window.XKEEN_CM_TOOLBAR_DEFAULT);
+        const baseItems = window.XKEEN_CM_TOOLBAR_DEFAULT;
+        const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
+              if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm, els()) });
+              return it;
+            });
+
+            // Fallback fullscreen button for Monaco even when CM fullscreen addon isn't loaded.
+            try {
+              if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
+                items.push({
+                  id: 'fs_any',
+                  svg: window.XKEEN_CM_ICONS.fullscreen,
+                  label: 'Фулскрин',
+                  fallbackHint: 'F11 / Esc',
+                  onClick: () => toggleEditorFullscreen(cm, els()),
+                });
+              }
+            } catch (e) {}
+        window.xkeenAttachCmToolbar(cm, items);
+        try { syncToolbarForEngine('codemirror'); } catch (e) {}
       }
     } catch (e) {}
 
@@ -533,10 +819,18 @@
 
     // Dispose Monaco if we're leaving it (helps avoid leaks in long sessions).
     if (engine !== 'monaco') {
+      // If Monaco is fullscreen, exit it before disposing/hiding to avoid leaving body scroll locked.
+      try { if (isMonacoFullscreen(ui)) setMonacoFullscreen(false, ui); } catch (e0) {}
       try { disposeMonaco(ui); } catch (e) {}
     }
 
     if (engine === 'monaco') {
+      // If CodeMirror was in fullscreen, exit it first to avoid CSS/layout glitches.
+      try {
+        const cm = STATE.cm;
+        if (cm && cm.getOption && cm.setOption && cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
+      } catch (e0) {}
+
       hideCodeMirror(ui);
       try { if (ui.monacoHost) ui.monacoHost.classList.remove('hidden'); } catch (e) {}
 
@@ -571,6 +865,9 @@
       try { STATE.monacoFacade = shared.toFacade(ed); } catch (e) { STATE.monacoFacade = null; }
       STATE.activeKind = 'monaco';
       STATE.activeFacade = STATE.monacoFacade;
+
+      try { syncToolbarForEngine('monaco'); } catch (e) {}
+      try { wireMonacoFullscreenOnce(); } catch (e) {}
 
       // Restore view if we are switching while open.
       if (view) restoreView('monaco', view);
@@ -616,6 +913,8 @@
 
     STATE.activeKind = 'codemirror';
     STATE.activeFacade = cm ? cmFacade(cm) : null;
+
+    try { syncToolbarForEngine('codemirror'); } catch (e) {}
 
     if (view) restoreView('codemirror', view);
     updateDirtyUI();
@@ -704,6 +1003,15 @@
     try { STATE.ctx = null; } catch (e) {}
     try { STATE.dirty = false; } catch (e) {}
     try { STATE.lastSaved = ''; } catch (e) {}
+
+    // Exit any fullscreen mode before closing.
+    try {
+      if (isMonacoFullscreen(ui)) setMonacoFullscreen(false, ui);
+    } catch (e) {}
+    try {
+      const cm = STATE.cm;
+      if (cm && cm.getOption && cm.setOption && cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
+    } catch (e2) {}
 
     // Clean up Monaco to avoid leaks; restore default UI visibility.
     try { disposeMonaco(ui); } catch (e) {}
@@ -834,5 +1142,12 @@
     requestClose,
     download,
     save,
+    // Fullscreen helpers (used by global ESC handlers)
+    isFullscreen: () => {
+      try { return isEditorFullscreen(); } catch (e) { return false; }
+    },
+    exitFullscreenIfAny: () => {
+      try { return exitFullscreenIfAny(); } catch (e) { return false; }
+    },
   };
 })();

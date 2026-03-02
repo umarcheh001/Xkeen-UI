@@ -11,6 +11,8 @@ from typing import Any, Callable, Dict, Optional
 
 from flask import Blueprint, request, jsonify, current_app
 
+from services.command_jobs import create_command_job
+
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 
 from services.routing.templates import _paths_for_routing
@@ -347,6 +349,38 @@ def register_config_routes(
         if restart_arg is not None:
             restart_arg = restart_arg.strip().lower()
             restart_flag = restart_arg in ("1", "true", "yes", "on", "y")
+
+        async_arg = request.args.get("async", None)
+        async_flag = False
+        if async_arg is not None:
+            async_arg = str(async_arg).strip().lower()
+            async_flag = async_arg in ("1", "true", "yes", "on", "y")
+
+        # Restart xkeen: legacy sync mode or async job mode (?async=1).
+        if restart_flag and async_flag:
+            try:
+                job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
+                _core_log(
+                    "info",
+                    "routing.save.async_restart",
+                    restart_job_id=str(job.id),
+                    remote_addr=str(request.remote_addr or ""),
+                )
+                return (
+                    jsonify(
+                        {
+                            "ok": True,
+                            "restarted": False,
+                            "restart_queued": True,
+                            "restart_job_id": job.id,
+                        }
+                    ),
+                    202,
+                )
+            except Exception as e:
+                _core_log("warning", "routing.save.async_restart_failed", err=str(e))
+                return jsonify({"ok": False, "error": f"failed to schedule restart job: {e}"}), 500
+
         restarted = restart_flag and restart_xkeen(source="routing")
         _core_log(
             "info",

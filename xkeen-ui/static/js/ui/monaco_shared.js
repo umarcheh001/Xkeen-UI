@@ -355,6 +355,11 @@
     const el = host;
     if (!el) return null;
 
+    // Ensure consistent class for shared CSS (fullscreen, modal sizing, etc.)
+    try {
+      if (el.classList && !el.classList.contains('xk-monaco-editor')) el.classList.add('xk-monaco-editor');
+    } catch (e) {}
+
     const o = opts || {};
     const reqLangRaw = String(o.language || 'plaintext').toLowerCase().trim();
     const language = _normalizeLanguage(reqLangRaw);

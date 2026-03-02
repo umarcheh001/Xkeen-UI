@@ -145,7 +145,24 @@ _PROTECT_MNT_LABELS = str(os.getenv('XKEEN_PROTECT_MNT_LABELS', '1') or '1').str
 _PROTECTED_MNT_ROOT = str(os.getenv('XKEEN_PROTECTED_MNT_ROOT', '/tmp/mnt') or '/tmp/mnt').strip() or '/tmp/mnt'
 
 def _local_is_protected_entry_abs(ap: str) -> bool:
-    """Return True if `ap` is a protected mount-label entry (or /tmp/mnt itself)."""
+    """Return True if `ap` is a protected mount-label entry (or /tmp/mnt itself).
+
+    Keenetic uses /tmp/mnt as a mount root for USB volumes. Its *top-level* entries are
+    usually auto-created mountpoints and/or label symlinks. Renaming/deleting those
+    directories is a common footgun.
+
+    However, users (and our UI) can accidentally place a *regular file* directly under
+    /tmp/mnt (e.g. upload while being in /tmp/mnt). Such files must remain removable.
+
+    Policy:
+      - /tmp/mnt itself is always protected.
+      - Direct children of /tmp/mnt are protected only when they are:
+          * symlinks, or
+          * mountpoint directories (real mountpoints).
+      - Regular files under /tmp/mnt are NOT protected (so they can be cleaned up).
+      - If the path does not exist yet and is a direct child of /tmp/mnt, treat it as
+        protected to prevent creating new "loose" entries in the mount root.
+    """
     if not _PROTECT_MNT_LABELS:
         return False
     try:
@@ -160,7 +177,27 @@ def _local_is_protected_entry_abs(ap: str) -> bool:
         return True
     try:
         if os.path.dirname(apn) == mroot:
-            return True
+            # Existing entry: protect only mountpoint dirs / symlinks.
+            try:
+                st = os.lstat(apn)
+                mode_i = int(getattr(st, 'st_mode', 0) or 0)
+                if stat.S_ISLNK(mode_i):
+                    return True
+                if stat.S_ISDIR(mode_i):
+                    try:
+                        rp = os.path.realpath(apn)
+                        if os.path.ismount(rp):
+                            return True
+                    except Exception:
+                        # If we cannot determine mount status, be conservative.
+                        return True
+                # Regular file / other => not protected.
+                return False
+            except FileNotFoundError:
+                # Prevent creating new top-level entries under /tmp/mnt.
+                return True
+            except Exception:
+                return True
     except Exception:
         pass
     return False

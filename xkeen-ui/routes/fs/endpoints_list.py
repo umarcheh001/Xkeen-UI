@@ -13,6 +13,7 @@ import json
 import os
 import re
 import stat
+import shutil
 from typing import Any, Dict, List
 
 from flask import jsonify, request
@@ -174,6 +175,13 @@ def register_list_endpoints(bp, deps: Dict[str, Any]) -> None:
             out = {"ok": True, "target": "local", "path": ap, "realpath": rp, "roots": LOCALFS_ROOTS, "items": items}
             if trash_root:
                 out["trash_root"] = trash_root
+            # Disk space (local only; best-effort)
+            try:
+                du = shutil.disk_usage(rp)
+                out["space"] = {"free": int(du.free), "total": int(du.total), "used": int(du.used)}
+            except Exception:
+                pass
+
             # Trash usage stats (for UI warnings)
             try:
                 out["trash"] = _local_trash_stats(LOCALFS_ROOTS)

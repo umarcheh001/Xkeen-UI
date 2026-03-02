@@ -7,6 +7,8 @@ stores incremental output for polling or WebSocket streaming.
 from __future__ import annotations
 
 import codecs
+import errno
+import pty
 import os
 import select
 import signal
@@ -28,6 +30,7 @@ class CommandJob:
     id: str
     flag: str | None = None
     cmd: str | None = None
+    use_pty: bool = False
     status: str = "queued"  # "queued" | "running" | "finished" | "error"
     exit_code: int | None = None
     output: str = ""
@@ -61,6 +64,8 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
         if not job:
             return
         job.status = "running"
+
+    use_pty = bool(getattr(job, 'use_pty', False))
 
     if job.cmd:
         cmd = [SHELL_BIN, "-c", job.cmd]
@@ -118,30 +123,52 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
     timed_out = False
 
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE if stdin_data is not None else None,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=False,
-            close_fds=True,
-            preexec_fn=os.setsid,
-        )
+        pty_master_fd = None
 
-        if stdin_data is not None and proc.stdin is not None:
+        if use_pty:
+            # Run the command with stdout/stderr attached to a pseudo-terminal so
+            # programs detect TTY and switch to console-friendly log format (INFO[...]).
+            master_fd, slave_fd = pty.openpty()
+            pty_master_fd = master_fd
+
+            proc = subprocess.Popen(
+                cmd,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                text=False,
+                close_fds=True,
+                preexec_fn=os.setsid,
+                env={**os.environ, 'TERM': os.environ.get('TERM', 'xterm-256color')},
+            )
+
+            if stdin_data is not None:
+                try:
+                    os.write(master_fd, stdin_data.encode('utf-8', errors='ignore'))
+                except Exception:
+                    pass
+
             try:
-                proc.stdin.write(stdin_data.encode("utf-8", errors="ignore"))
+                os.close(slave_fd)
             except Exception:
                 pass
-            try:
-                proc.stdin.close()
-            except Exception:
-                pass
 
-        if proc.stdout is None:
-            raise RuntimeError("no stdout")
+            read_fd = master_fd
+        else:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE if stdin_data is not None else None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=False,
+                close_fds=True,
+                preexec_fn=os.setsid,
+            )
+            if proc.stdout is None:
+                raise RuntimeError('no stdout')
+            read_fd = proc.stdout.fileno()
 
-        fd = proc.stdout.fileno()
+        fd = read_fd
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         carry = ""
 
@@ -177,7 +204,13 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
 
             if r:
                 try:
-                    data = os.read(fd, 4096)
+                    try:
+                        data = os.read(fd, 4096)
+                    except OSError as oe:
+                        if getattr(oe, 'errno', None) == errno.EIO:
+                            data = b''
+                        else:
+                            raise
                 except Exception:
                     data = b""
                 if not data:
@@ -185,6 +218,7 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
 
                 txt = decoder.decode(data)
                 if txt:
+                    txt = txt.replace('\r\n', '\n').replace('\r', '\n')
                     carry += txt
                     while "\n" in carry:
                         line, carry = carry.split("\n", 1)
@@ -201,11 +235,18 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
                             r2, _, _ = select.select([fd], [], [], 0)
                             if not r2:
                                 break
-                            data2 = os.read(fd, 4096)
+                            try:
+                                data2 = os.read(fd, 4096)
+                            except OSError as oe2:
+                                if getattr(oe2, 'errno', None) == errno.EIO:
+                                    data2 = b''
+                                else:
+                                    raise
                             if not data2:
                                 break
                             txt2 = decoder.decode(data2)
                             if txt2:
+                                txt2 = txt2.replace('\r\n', '\n').replace('\r', '\n')
                                 carry += txt2
                                 while "\n" in carry:
                                     line, carry = carry.split("\n", 1)
@@ -271,14 +312,20 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
                         proc.stdin.close()
                 except Exception:
                     pass
+
+            if pty_master_fd is not None:
+                try:
+                    os.close(pty_master_fd)
+                except Exception:
+                    pass
         except Exception:
             pass
 
 
-def create_command_job(flag: str | None, stdin_data: str | None, cmd: str | None = None) -> CommandJob:
+def create_command_job(flag: str | None, stdin_data: str | None, cmd: str | None = None, use_pty: bool = False) -> CommandJob:
     """Create CommandJob, start background thread and return the job object."""
     job_id = uuid.uuid4().hex[:12]
-    job = CommandJob(id=job_id, flag=flag, cmd=cmd)
+    job = CommandJob(id=job_id, flag=flag, cmd=cmd, use_pty=bool(use_pty) and stdin_data is None)
     with JOBS_LOCK:
         JOBS[job_id] = job
 

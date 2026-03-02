@@ -254,9 +254,23 @@ def detect_capabilities(
         },
     }
 
+    # USB storage (ndmc show usb + system mount/no mount)
+    ndmc_bin = None
+    try:
+        ndmc_bin = which("ndmc")
+    except Exception:
+        ndmc_bin = None
+
+    storage_usb = {
+        "enabled": bool(ndmc_bin),
+        "supported": bool(ndmc_bin),
+        "reason": None if ndmc_bin else "ndmc_missing",
+    }
+
     return {
         "websocket": bool(ws_runtime),
         "runtime": runtime,
         "files": files,
         "remoteFs": remote,
+        "storageUsb": storage_usb,
     }
