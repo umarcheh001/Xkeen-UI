@@ -19,6 +19,51 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Dict
 
+
+def _build_exec_env(*, term: str | None = None) -> dict:
+    """Normalize env for spawned commands.
+
+    We try to mimic a normal interactive Entware shell so that:
+    - /opt/bin tools are preferred (opkg, python/pip, xkeen, etc.)
+    - HOME is writable (some installers/caches otherwise fail with 'Read-only file system')
+    """
+    env = os.environ.copy()
+
+    # Prefer Entware first
+    orig_path = env.get("PATH") or ""
+    parts = [p for p in orig_path.split(":") if p]
+    opt_first = ["/opt/sbin", "/opt/bin"]
+    for d in opt_first:
+        parts = [p for p in parts if p != d]
+    env["PATH"] = ":".join(opt_first + parts) if parts else ":".join(opt_first)
+
+    if not (env.get("HOME") or "").strip():
+        for cand in ("/opt/root", "/root", "/tmp"):
+            try:
+                if os.path.isdir(cand) and os.access(cand, os.W_OK):
+                    env["HOME"] = cand
+                    break
+            except Exception:
+                pass
+    env.setdefault("HOME", "/tmp")
+    env.setdefault("TMPDIR", "/tmp")
+
+    if term:
+        env["TERM"] = term
+    else:
+        env.setdefault("TERM", os.environ.get("TERM", "xterm-256color"))
+
+    # BusyBox shells can source $ENV in interactive mode
+    for prof in ("/opt/etc/profile", "/etc/profile"):
+        try:
+            if os.path.isfile(prof):
+                env.setdefault("ENV", prof)
+                break
+        except Exception:
+            pass
+
+    return env
+
 from services.xkeen_commands_catalog import (
     XKEEN_BIN,
     SHELL_BIN,
@@ -139,7 +184,7 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
                 text=False,
                 close_fds=True,
                 preexec_fn=os.setsid,
-                env={**os.environ, 'TERM': os.environ.get('TERM', 'xterm-256color')},
+                env=_build_exec_env(term=os.environ.get('TERM') or 'xterm-256color'),
             )
 
             if stdin_data is not None:
@@ -163,6 +208,7 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
                 text=False,
                 close_fds=True,
                 preexec_fn=os.setsid,
+                           env=_build_exec_env(),
             )
             if proc.stdout is None:
                 raise RuntimeError('no stdout')

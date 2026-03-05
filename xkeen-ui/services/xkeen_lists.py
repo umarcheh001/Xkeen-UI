@@ -48,6 +48,11 @@ except Exception:
     # best-effort
     pass
 
+# xkeen.json (newer xkeen versions)
+XKEEN_CONFIG_FILE = _env_or_default_file(
+    "XKEEN_CONFIG_FILE",
+    os.path.join(BASE_ETC_DIR, "xkeen", "xkeen.json"),
+)
 
 # ---- Defaults ------------------------------------------------------------------
 
@@ -61,6 +66,8 @@ DEFAULT_PORT_EXCLUDE = """#
 # Одновременно использовать порты проксирования и исключать порты нельзя
 # Приоритет у портов проксирования
 """
+DEFAULT_XKEEN_CONFIG = "{}\n"
+
 DEFAULT_IP_EXCLUDE = """#192.168.0.0/16
 #2001:db8::/32
 
@@ -71,23 +78,27 @@ DEFAULT_IP_EXCLUDE = """#192.168.0.0/16
 KIND_PORT_PROXYING = "port-proxying"
 KIND_PORT_EXCLUDE = "port-exclude"
 KIND_IP_EXCLUDE = "ip-exclude"
+KIND_CONFIG = "config"
 
 SUPPORTED_KINDS: Tuple[str, ...] = (
     KIND_PORT_PROXYING,
     KIND_PORT_EXCLUDE,
     KIND_IP_EXCLUDE,
+    KIND_CONFIG,
 )
 
 _KIND_TO_PATH = {
     KIND_PORT_PROXYING: PORT_PROXYING_FILE,
     KIND_PORT_EXCLUDE: PORT_EXCLUDE_FILE,
     KIND_IP_EXCLUDE: IP_EXCLUDE_FILE,
+    KIND_CONFIG: XKEEN_CONFIG_FILE,
 }
 
 _KIND_TO_DEFAULT = {
     KIND_PORT_PROXYING: DEFAULT_PORT_PROXYING,
     KIND_PORT_EXCLUDE: DEFAULT_PORT_EXCLUDE,
     KIND_IP_EXCLUDE: DEFAULT_IP_EXCLUDE,
+    KIND_CONFIG: DEFAULT_XKEEN_CONFIG,
 }
 
 

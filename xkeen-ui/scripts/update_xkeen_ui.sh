@@ -11,7 +11,7 @@
 #   XKEEN_UI_UPDATE_ASSET_NAME=xkeen-ui-routing.tar.gz
 #   XKEEN_UI_UPDATE_DIR=/opt/var/lib/xkeen-ui/update
 #   XKEEN_UI_BACKUP_DIR=/opt/var/backups/xkeen-ui
-#   XKEEN_UI_BACKUP_KEEP=3
+#   XKEEN_UI_BACKUP_KEEP=1
 #
 # Важно:
 # - Скрипт пишет лог и status.json в update-dir.
@@ -33,7 +33,7 @@ SHA_URL_OVERRIDE="${XKEEN_UI_UPDATE_SHA_URL:-}"
 SHA_KIND_OVERRIDE="${XKEEN_UI_UPDATE_SHA_KIND:-}"
 
 
-BACKUP_KEEP="${XKEEN_UI_BACKUP_KEEP:-3}"
+BACKUP_KEEP="1"  # hard limit: keep only ONE UI backup
 
 # --- Security/limits ---
 # Allowed download hosts (comma-separated).

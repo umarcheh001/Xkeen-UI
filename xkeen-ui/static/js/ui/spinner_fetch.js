@@ -209,6 +209,7 @@
       if (path === '/api/xkeen/port-proxying') return 'port_proxying.lst сохранён и xkeen перезапущен.';
       if (path === '/api/xkeen/port-exclude') return 'port_exclude.lst сохранён и xkeen перезапущен.';
       if (path === '/api/xkeen/ip-exclude') return 'ip_exclude.lst сохранён и xkeen перезапущен.';
+      if (path === '/api/xkeen/config') return 'xkeen.json сохранён и xkeen перезапущен.';
 
       if (path === '/api/xray-logs/enable') return 'Логи Xray включены и Xray перезапущен.';
       if (path === '/api/xray-logs/disable') return 'Логи Xray выключены и Xray перезапущен.';

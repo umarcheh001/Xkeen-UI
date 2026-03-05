@@ -11,6 +11,12 @@
   --sem-error: #f87171;
   --sem-debug: #a1a1aa;
 
+  /* Commands card: category accents (dark theme) */
+  --xk-cmd-tone-warn: #fcd571;
+  --xk-cmd-tone-danger: #faa3a3;
+  --xk-cmd-tone-ok: #6fd996;
+  --xk-cmd-tone-info: #9fd9d9;
+
   /* Xray logs highlight (token colors) — dark defaults */
   --log-ts: #94a3b8;
   --log-ip: #fde68a;
@@ -52,6 +58,12 @@ html[data-theme="light"] {
   --sem-warning: #b45309;
   --sem-error: #dc2626;
   --sem-debug: #6b7280;
+
+  /* Commands card: category accents (light theme) */
+  --xk-cmd-tone-warn: #b45309;
+  --xk-cmd-tone-danger: #dc2626;
+  --xk-cmd-tone-ok: #047857;
+  --xk-cmd-tone-info: #0f766e;
 
   /* Xray logs highlight (token colors) — light defaults */
   --log-ts: #64748b;
@@ -827,6 +839,120 @@ box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
   line-height: 1.45;
 }
 
+/* XKeen: Ports/Excludes (incl. xkeen.json) — двухколоночная сетка мини‑редакторов */
+.xkeen-files-grid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  /* Stretch items so both cards in a row look одинаковыми по высоте */
+  align-items: stretch;
+}
+
+@media (max-width: 900px){
+  .xkeen-files-grid{ grid-template-columns: 1fr; }
+}
+
+.xkeen-mini-editor{
+  min-width: 0;
+  padding: 10px 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.35) inset;
+
+  /* Make inner editor area fill available height when grid row is taller */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+html[data-theme="light"] .xkeen-mini-editor{
+  background: linear-gradient(180deg, rgba(15,23,42,0.03), rgba(15,23,42,0.015));
+  border-color: rgba(15, 23, 42, 0.14);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.65) inset;
+}
+
+.xkeen-mini-head h3{
+  margin: 0 0 4px;
+  font-size: calc(13px * var(--xk-font-scale));
+  font-weight: 700;
+}
+
+.xkeen-mini-head .xk-card-desc{
+  margin: 0 0 8px;
+}
+
+.xkeen-mini-editor .xkeen-textarea{
+  /* Grow to keep card heights consistent across the row */
+  flex: 1 1 auto;
+  min-height: 220px;
+  max-height: none;
+  font-size: calc(14px * var(--xk-font-scale));
+}
+
+.xkeen-mini-editor .CodeMirror{
+  /* Fill the available space inside fixed-height mini card so there is no big gap above Save button */
+  flex: 1 1 auto;
+  min-height: 220px;
+  height: auto !important;
+  box-shadow: none;
+}
+
+/* XKeen mini editors: одинаковая высота карточек + выравнивание кнопок сохранения */
+.xkeen-mini-editor{
+  /* One consistent height for all 4 mini editors so they look uniform */
+  height: clamp(360px, 42vh, 520px);
+}
+
+
+/* Reserve equal header space across cards so editor boxes stay одинаковыми */
+.xkeen-mini-head{
+  min-height: calc(86px * var(--xk-font-scale));
+}
+
+.xkeen-mini-head .xk-card-desc{
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+/* On narrow screens (one column) allow natural height */
+@media (max-width: 900px){
+  .xkeen-mini-editor{ height: auto; }
+}
+
+/* Let the textarea occupy the same predictable area and prevent manual resize from breaking alignment */
+.xkeen-mini-editor .xkeen-textarea{
+  min-height: 220px;
+  resize: none;
+}
+
+/* Push the save button block to the bottom so buttons are on one horizontal line within each row */
+.xkeen-mini-editor .actions{
+  /* Keep buttons aligned in the row, but reduce the visual gap */
+  margin-top: auto;
+  padding-top: 6px;
+  flex-wrap: nowrap;
+}
+
+.xkeen-mini-editor .actions button{
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Keep status line from growing vertically (prevents footer height mismatch) */
+.xkeen-mini-editor .status{
+  min-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
 /* Make scrolling predictable and avoid white gaps */
 .CodeMirror-scroll {
   max-height: 76vh;
@@ -1446,6 +1572,12 @@ footer {
   font-size: calc(11px * var(--xk-font-scale));
 }
 
+/* Panel footer (Routing page): keep the small signature on the left under the content. */
+.panel-footer {
+  text-align: left;
+  padding-left: 2px;
+}
+
 .btn-link {
   display: inline-flex;
   align-items: center;
@@ -1631,6 +1763,15 @@ html[data-theme="light"] .btn-link:hover {
   margin-top: 16px;
 }
 
+/* Mihomo: make the gap between the editor card and the restart log minimal */
+#view-mihomo > section.card {
+  margin-bottom: 8px;
+}
+
+#view-mihomo > section.card.xk-mihomo-log-card {
+  margin-top: 0;
+}
+
 /* Live логи Xray: fullscreen (card-level) */
 .log-card.is-fullscreen{
   position: fixed !important;
@@ -1753,12 +1894,105 @@ html[data-theme="light"] #view-commands #commands-body .command-group{
   box-shadow: 0 0 0 1px rgba(255,255,255,0.65) inset;
 }
 
+html[data-theme="light"] .commands-status-row{
+  background: linear-gradient(180deg, rgba(15,23,42,0.03), rgba(15,23,42,0.015));
+  border-color: rgba(15, 23, 42, 0.14);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.65) inset;
+}
+html[data-theme="light"] .commands-status-row .core-pill{
+  background: rgba(255,255,255,0.75);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+html[data-theme="light"] .commands-status-row .core-name{ color: #1f2a44; }
+html[data-theme="light"] .commands-status-row .core-ver{ color: #0f172a; }
+html[data-theme="light"] .commands-status-row .core-latest{ color: #2563eb; }
+html[data-theme="light"] .commands-status-row .cores-checked-at{ color: #475569; }
+
 .commands-header {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
 }
+
+/* Commands: cores status row (installed versions + update hints) */
+.commands-status-row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  margin: 0 0 10px 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.35);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset;
+}
+
+.commands-status-row .core-pill{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.20);
+  background: rgba(2, 6, 23, 0.35);
+}
+
+.commands-status-row .core-pill.not-installed{ opacity: 0.55; }
+
+.commands-status-row .core-name{
+  font-weight: 600;
+  color: #c7d2fe;
+  letter-spacing: 0.02em;
+}
+
+.commands-status-row .core-ver{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: calc(12px * var(--xk-font-scale));
+  color: #e5e7eb;
+  opacity: 0.95;
+}
+
+.commands-status-row .core-latest{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: calc(12px * var(--xk-font-scale));
+  color: #93c5fd;
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.commands-status-row .core-latest:hover{ text-decoration: underline; opacity: 1; }
+
+.commands-status-row .core-pill.has-update{
+  border-color: rgba(251, 191, 36, 0.55);
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.20) inset;
+}
+
+.commands-status-row .core-pill.has-update .core-latest{ color: #fbbf24; }
+
+.commands-status-row .core-pill.has-error{
+  border-color: rgba(239, 68, 68, 0.55);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.18) inset;
+}
+
+.commands-status-row .cores-checked-at{
+  margin-left: auto;
+  font-size: calc(12px * var(--xk-font-scale));
+  color: #94a3b8;
+  opacity: 0.9;
+  white-space: nowrap;
+}
+
+.commands-status-row .btn-mini{
+  padding: 6px 10px;
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1;
+  border-radius: 999px;
+}
+
+.commands-status-row #cores-check-btn.loading{ opacity: 0.75; }
+.commands-status-row #cores-check-btn.loading::after{ content: '…'; margin-left: 6px; opacity: 0.9; }
 
 /* Routing card header: keep collapse arrow pinned to the right (the active-file line may be hidden). */
 #routing-header #routing-arrow{
@@ -1791,7 +2025,24 @@ html[data-theme="light"] #view-commands #commands-body .command-group{
   letter-spacing: 0.08em;
   color: #9ca3af;
   margin-bottom: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
 }
+
+.command-group-title .cgt-key {
+  font-weight: 600;
+}
+
+.command-group-title .cgt-rest {
+  font-weight: 500;
+  color: inherit;
+}
+
+.command-group-title.tone-warn .cgt-key { color: var(--xk-cmd-tone-warn); }
+.command-group-title.tone-danger .cgt-key { color: var(--xk-cmd-tone-danger); }
+.command-group-title.tone-ok .cgt-key { color: var(--xk-cmd-tone-ok); }
+.command-group-title.tone-info .cgt-key { color: var(--xk-cmd-tone-info); }
 
 
 .command-list {
@@ -3379,6 +3630,28 @@ html[data-theme="light"] .xray-log-select option{
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sem-debug, #a1a1aa) 65%, transparent);
 }
 
+/* Restart log cards: terminal-like level colors (helps Xray logs look closer to Mihomo) */
+.log-card .log-block {
+  white-space: pre;
+}
+
+.log-card .log-line-info {
+  color: color-mix(in srgb, var(--sem-info, #93c5fd) 80%, white 20%);
+}
+
+.log-card .log-line-warning {
+  color: color-mix(in srgb, var(--sem-warning, #fbbf24) 82%, white 18%);
+}
+
+.log-card .log-line-error {
+  color: color-mix(in srgb, var(--sem-error, #f87171) 82%, white 18%);
+}
+
+.log-card .log-line-debug {
+  color: color-mix(in srgb, var(--sem-debug, #a1a1aa) 82%, white 18%);
+  opacity: 0.9;
+}
+
 
 
 .log-btn.icon-only {
@@ -3901,6 +4174,114 @@ html[data-theme="light"] .github-stale-pill{
 
 .modal-resizer:hover {
   opacity: 0.9;
+}
+
+/* Forced rules wizard modal: tighter, cleaner layout */
+#routing-forced-rules-modal .modal-content {
+  max-width: 920px;
+}
+
+#routing-forced-rules-modal .modal-body {
+  margin-top: 6px;
+}
+
+#routing-forced-rules-modal .routing-rule-field {
+  grid-template-columns: minmax(86px, 110px) 1fr;
+  gap: 8px;
+}
+
+#routing-forced-rules-modal .routing-rule-key {
+  font-size: calc(11px * var(--xk-font-scale));
+}
+
+.xk-forced-wizard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.xk-forced-wizard-panel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  box-sizing: border-box;
+}
+
+.xk-forced-wizard-row2 {
+  display: grid;
+  grid-template-columns: 1.35fr 0.65fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.xk-forced-outbound-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.xk-forced-outbound-wrap .btn-secondary {
+  padding: 6px 10px;
+  min-width: 44px;
+}
+
+.xk-forced-wizard-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.xk-forced-wizard-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+#routing-forced-rules-modal .xk-forced-wizard-options .routing-rule-field {
+  grid-template-columns: minmax(88px, 112px) 1fr;
+}
+
+.xk-forced-wizard-listbox {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.xk-forced-wizard-listhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.xk-forced-wizard-list {
+  margin: 0;
+  max-height: 330px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 860px) {
+  .xk-forced-wizard-grid {
+    grid-template-columns: 1fr;
+  }
+  .xk-forced-wizard-row2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+html[data-theme="light"] .xk-forced-wizard-panel {
+  border-color: rgba(2, 6, 23, 0.10);
+  background: rgba(2, 6, 23, 0.02);
 }
 
 
@@ -8718,6 +9099,102 @@ html[data-theme="light"] .routing-help-btn:hover {
   word-break: break-word;
 }
 
+
+/* Unified error box (Routing Rules / reusable) */
+.xk-error-box {
+  grid-column: 1 / -1; /* works inside grid lists (rules) */
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.12);
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.35);
+}
+
+.xk-error-box.is-compact {
+  padding: 10px;
+}
+
+.xk-error-title {
+  font-weight: 700;
+  color: #fecaca;
+  margin-bottom: 6px;
+  font-size: calc(13px * var(--xk-font-scale));
+}
+
+.xk-error-msg {
+  color: #e5e7eb;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: calc(12px * var(--xk-font-scale));
+}
+
+.xk-error-hint {
+  margin-top: 6px;
+  color: #fca5a5;
+  opacity: 0.95;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: calc(12px * var(--xk-font-scale));
+}
+
+.xk-error-details {
+  margin-top: 8px;
+}
+
+.xk-error-details code,
+.xk-error-code code {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(51, 65, 85, 0.9);
+  background: rgba(2, 6, 23, 0.65);
+  color: #cbd5e1;
+  font-size: calc(11px * var(--xk-font-scale));
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.xk-error-code {
+  margin-top: 8px;
+  color: #94a3b8;
+  font-size: calc(11px * var(--xk-font-scale));
+}
+
+.xk-error-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+html[data-theme="light"] .xk-error-box {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: rgba(254, 226, 226, 0.85);
+  box-shadow: 0 10px 20px rgba(148, 163, 184, 0.25);
+}
+
+html[data-theme="light"] .xk-error-title {
+  color: #991b1b;
+}
+
+html[data-theme="light"] .xk-error-msg {
+  color: #334155;
+}
+
+html[data-theme="light"] .xk-error-hint {
+  color: #b91c1c;
+}
+
+html[data-theme="light"] .xk-error-details code,
+html[data-theme="light"] .xk-error-code code {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+html[data-theme="light"] .xk-error-code {
+  color: #64748b;
+}
 .routing-balancers {
   margin-bottom: 12px;
 }
@@ -9081,6 +9558,36 @@ html[data-theme="light"] .routing-selector-item{
 .routing-strategy-chip.is-active{
   background: color-mix(in srgb, var(--editor-btn-active-to, #2563eb) 14%, transparent);
   border-color: color-mix(in srgb, var(--editor-btn-active-to, #2563eb) 35%, transparent);
+}
+
+/* Forced rules wizard chips (domains / IP values) */
+.xk-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:2px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.07);
+  color: var(--fg, #e5e7eb);
+  font-size: 12px;
+  line-height: 1.35;
+  cursor:pointer;
+  user-select:none;
+  white-space: nowrap;
+}
+.xk-chip:hover{
+  background: rgba(255,255,255,.11);
+  border-color: rgba(255,255,255,.18);
+}
+html[data-theme="light"] .xk-chip{
+  border-color: rgba(0,0,0,.14);
+  background: rgba(0,0,0,.06);
+  color: var(--fg, #111827);
+}
+html[data-theme="light"] .xk-chip:hover{
+  background: rgba(0,0,0,.09);
+  border-color: rgba(0,0,0,.18);
 }
 
 
@@ -10169,4 +10676,112 @@ body.xk-no-scroll {
   #mihomo-proxy-tools-modal .xk-pt-grid--replace-top button{
     justify-self: start;
   }
+}
+
+
+/* === Balancer help modal === */
+
+.xk-balancer-help-grid{
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.xk-balancer-help-toc{
+  position: sticky;
+  top: 0;
+  align-self: start;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(2, 6, 23, 0.35);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.xk-balancer-help-toc a{
+  display: block;
+  padding: 7px 8px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--fg, #e5e7eb);
+  opacity: 0.9;
+  font-size: calc(12px * var(--xk-font-scale));
+}
+
+.xk-balancer-help-toc a:hover{
+  background: rgba(148, 163, 184, 0.12);
+  opacity: 1;
+}
+
+.xk-balancer-help-main{
+  min-width: 0;
+}
+
+.xk-balancer-help-callout{
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+}
+
+.xk-balancer-help-details{
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.22);
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin: 10px 0;
+}
+
+.xk-balancer-help-details > summary{
+  cursor: pointer;
+  font-weight: 650;
+  margin: 0;
+  outline: none;
+}
+
+.xk-balancer-help-details[open] > summary{
+  margin-bottom: 8px;
+}
+
+.xk-balancer-help-code{
+  display: block;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  border-radius: 12px;
+  padding: 8px 10px;
+  margin: 8px 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: calc(12px * var(--xk-font-scale));
+  overflow: auto;
+  line-height: 1.45;
+}
+
+@media (max-width: 860px){
+  .xk-balancer-help-grid{
+    grid-template-columns: 1fr;
+  }
+  .xk-balancer-help-toc{
+    position: static;
+  }
+}
+
+html[data-theme="light"] .xk-balancer-help-toc{
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+html[data-theme="light"] .xk-balancer-help-callout{
+  background: rgba(30, 64, 175, 0.06);
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+html[data-theme="light"] .xk-balancer-help-details{
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+html[data-theme="light"] .xk-balancer-help-code{
+  background: rgba(241, 245, 249, 0.9);
+  border-color: rgba(148, 163, 184, 0.45);
 }

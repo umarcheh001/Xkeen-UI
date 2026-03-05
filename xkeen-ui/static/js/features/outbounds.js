@@ -2223,6 +2223,373 @@
     }
 
 
+    // --- Proxy pool (multiple links) ---
+
+    const POOL_IDS = {
+      modal: 'outbounds-pool-modal',
+      open: 'outbounds-pool-btn',
+      close: 'outbounds-pool-close-btn',
+      cancel: 'outbounds-pool-cancel-btn',
+      input: 'outbounds-pool-input',
+      add: 'outbounds-pool-add-btn',
+      clear: 'outbounds-pool-clear-btn',
+      tbody: 'outbounds-pool-tbody',
+      save: 'outbounds-pool-save-btn',
+      replace: 'outbounds-pool-replace',
+      status: 'outbounds-pool-status',
+      existing: 'outbounds-pool-existing',
+    };
+
+    let _poolEntries = [];
+
+    const POOL_RESERVED = new Set([
+      'direct','block','dns',
+      'freedom','blackhole','reject','bypass',
+      'api','xray-api','metrics',
+    ]);
+
+    function poolShow(show) {
+      const modal = $(POOL_IDS.modal);
+      if (!modal) return;
+      try {
+        if (show) modal.classList.remove('hidden');
+        else modal.classList.add('hidden');
+      } catch (e) {}
+      try {
+        if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+          XKeen.ui.modal.syncBodyScrollLock();
+        }
+      } catch (e) {}
+    }
+
+    function poolSetStatus(msg, isErr) {
+      const el = $(POOL_IDS.status);
+      if (!el) return;
+      try {
+        el.textContent = String(msg || '');
+        el.style.color = isErr ? 'var(--danger, #ef4444)' : '';
+      } catch (e) {}
+    }
+
+    function poolSanitizeTag(tag) {
+      let t = String(tag || '').trim();
+      // Remove whitespace and unsafe chars (keep a-zA-Z0-9._:-)
+      t = t.replace(/\s+/g, '_').replace(/[^A-Za-z0-9._:-]+/g, '_');
+      t = t.replace(/^_+/, '').replace(/_+$/, '');
+      return t;
+    }
+
+    function poolSuggestTagFromUrl(url, fallbackIdx) {
+      const raw = String(url || '').trim();
+      if (!raw) return 'p' + String(fallbackIdx || 1);
+
+      // 1) Prefer #fragment
+      try {
+        const hashIdx = raw.indexOf('#');
+        if (hashIdx >= 0 && hashIdx < raw.length - 1) {
+          const frag = safeDecodeURIComponent(raw.slice(hashIdx + 1));
+          const t1 = poolSanitizeTag(frag);
+          if (t1) return t1;
+        }
+      } catch (e) {}
+
+      // 2) Try host
+      try {
+        const u = new URL(raw);
+        const host = (u.hostname || '').toString();
+        const port = (u.port || '').toString();
+        const base = host + (port ? ('_' + port) : '');
+        const t2 = poolSanitizeTag(base);
+        if (t2) return t2;
+      } catch (e) {}
+
+      return 'p' + String(fallbackIdx || 1);
+    }
+
+    function poolEnsureUniqueTag(tag, existingSet) {
+      let t = String(tag || '').trim();
+      if (!t) t = 'p1';
+      if (!existingSet) existingSet = new Set();
+      const base = t;
+      let k = 2;
+      while (existingSet.has(t) || POOL_RESERVED.has(String(t).toLowerCase())) {
+        t = base + '-' + String(k++);
+      }
+      return t;
+    }
+
+    function poolParseLines(text) {
+      const lines = String(text || '').split(/\r?\n/).map((s) => String(s || '').trim()).filter(Boolean);
+      const parsed = [];
+
+      lines.forEach((line, idx) => {
+        let tag = '';
+        let url = '';
+
+        // Formats:
+        //  - tag | url
+        //  - tag = url
+        //  - url
+        if (line.includes('|')) {
+          const parts = line.split('|');
+          tag = (parts[0] || '').trim();
+          url = parts.slice(1).join('|').trim();
+        } else if (line.includes('=')) {
+          const parts = line.split('=');
+          tag = (parts[0] || '').trim();
+          url = parts.slice(1).join('=').trim();
+        } else {
+          url = line;
+        }
+
+        if (!url) return;
+
+        tag = poolSanitizeTag(tag);
+        if (!tag) tag = poolSuggestTagFromUrl(url, idx + 1);
+
+        parsed.push({ tag, url });
+      });
+
+      return parsed;
+    }
+
+    function poolRenderTable() {
+      const tbody = $(POOL_IDS.tbody);
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      _poolEntries.forEach((ent, idx) => {
+        const tr = document.createElement('tr');
+        tr.dataset.idx = String(idx);
+
+        const tdTag = document.createElement('td');
+        tdTag.style.padding = '8px';
+        const inTag = document.createElement('input');
+        inTag.type = 'text';
+        inTag.value = String(ent.tag || '');
+        inTag.className = 'xray-log-filter';
+        inTag.style.width = '100%';
+        inTag.addEventListener('change', () => {
+          const v = poolSanitizeTag(inTag.value);
+          _poolEntries[idx].tag = v;
+          inTag.value = v;
+        });
+        tdTag.appendChild(inTag);
+
+        const tdUrl = document.createElement('td');
+        tdUrl.style.padding = '8px';
+        const inUrl = document.createElement('input');
+        inUrl.type = 'text';
+        inUrl.value = String(ent.url || '');
+        inUrl.className = 'xray-log-filter';
+        inUrl.style.width = '100%';
+        inUrl.addEventListener('change', () => {
+          _poolEntries[idx].url = String(inUrl.value || '').trim();
+        });
+        tdUrl.appendChild(inUrl);
+
+        const tdAct = document.createElement('td');
+        tdAct.style.padding = '8px';
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn-secondary';
+        del.style.padding = '4px 8px';
+        del.textContent = '✕';
+        del.title = 'Удалить';
+        del.addEventListener('click', () => {
+          _poolEntries.splice(idx, 1);
+          poolRenderTable();
+        });
+        tdAct.appendChild(del);
+
+        tr.appendChild(tdTag);
+        tr.appendChild(tdUrl);
+        tr.appendChild(tdAct);
+        tbody.appendChild(tr);
+      });
+    }
+
+    function poolCollectEntries() {
+      // Ensure clean + unique tags
+      const out = [];
+      const used = new Set();
+      for (let i = 0; i < _poolEntries.length; i++) {
+        const e = _poolEntries[i] || {};
+        const url = String(e.url || '').trim();
+        if (!url) continue;
+        let tag = poolSanitizeTag(e.tag || '');
+        if (!tag) tag = poolSuggestTagFromUrl(url, i + 1);
+        tag = poolEnsureUniqueTag(tag, used);
+        used.add(tag);
+        if (POOL_RESERVED.has(String(tag).toLowerCase())) continue;
+        out.push({ tag, url });
+      }
+      return out;
+    }
+
+    async function poolRefreshExistingTagsHint() {
+      const hint = $(POOL_IDS.existing);
+      if (!hint) return;
+      hint.textContent = '';
+      let url = '/api/xray/outbound-tags';
+      const f = getActiveFragment();
+      if (f) url += '?file=' + encodeURIComponent(String(f));
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.ok || !Array.isArray(data.tags)) return;
+        const tags = data.tags.map((t) => String(t || '').trim()).filter(Boolean);
+        if (!tags.length) return;
+        const show = tags.slice(0, 10).join(', ') + (tags.length > 10 ? ` … (+${tags.length - 10})` : '');
+        hint.textContent = 'Существующие теги: ' + show;
+      } catch (e) {}
+    }
+
+    async function poolSave() {
+      poolSetStatus('', false);
+      const entries = poolCollectEntries();
+      if (!entries.length) {
+        poolSetStatus('Список пустой.', true);
+        return;
+      }
+
+      // Final validation (reserved + duplicates)
+      const seen = new Set();
+      for (const e of entries) {
+        const t = String(e.tag || '').trim();
+        if (!t) {
+          poolSetStatus('У одной из строк пустой tag.', true);
+          return;
+        }
+        if (POOL_RESERVED.has(t.toLowerCase())) {
+          poolSetStatus('Tag зарезервирован: ' + t, true);
+          return;
+        }
+        if (seen.has(t)) {
+          poolSetStatus('Дубликат tag: ' + t, true);
+          return;
+        }
+        seen.add(t);
+      }
+
+      const replaceCb = $(POOL_IDS.replace);
+      const replacePool = !!(replaceCb && replaceCb.checked);
+
+      let apiUrl = '/api/xray/outbounds/proxies';
+      const f = getActiveFragment();
+      if (f) apiUrl += '?file=' + encodeURIComponent(String(f));
+
+      poolSetStatus('Сохраняю…', false);
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            entries,
+            restart: shouldRestartAfterSave(),
+            replace_pool: replacePool,
+            write_raw: true,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok === false) {
+          const err = (data && (data.error || data.message)) ? String(data.error || data.message) : 'Ошибка сохранения.';
+          poolSetStatus(err, true);
+          try { if (typeof window.toast === 'function') window.toast(err, 'error'); } catch (e) {}
+          return;
+        }
+
+        const msg = 'Пул прокси сохранён' + (data.restarted ? ' и перезапущен.' : '.');
+        poolSetStatus('✅ ' + msg, false);
+        try { if (typeof window.toast === 'function') window.toast(msg, 'success'); } catch (e) {}
+
+        // Refresh outbounds state on page
+        try { await load(); } catch (e) {}
+        poolShow(false);
+      } catch (e) {
+        poolSetStatus('Ошибка сети: ' + String(e || ''), true);
+      }
+    }
+
+    function poolOpen() {
+      poolSetStatus('', false);
+      poolShow(true);
+      try { poolRefreshExistingTagsHint(); } catch (e) {}
+      try { poolRenderTable(); } catch (e) {}
+    }
+
+    function poolClose() {
+      poolShow(false);
+    }
+
+    function wirePoolModal() {
+      const modal = $(POOL_IDS.modal);
+      if (!modal) return;
+      if (modal.dataset && modal.dataset.xkWired === '1') return;
+
+      wireButton(POOL_IDS.open, poolOpen);
+      wireButton(POOL_IDS.close, poolClose);
+      wireButton(POOL_IDS.cancel, poolClose);
+
+      wireButton(POOL_IDS.clear, () => {
+        _poolEntries = [];
+        poolRenderTable();
+        poolSetStatus('', false);
+      });
+
+      wireButton(POOL_IDS.add, () => {
+        const input = $(POOL_IDS.input);
+        const text = input ? String(input.value || '') : '';
+        const add = poolParseLines(text);
+        if (!add.length) {
+          poolSetStatus('Не нашёл строк со ссылками.', true);
+          return;
+        }
+        // Merge into state (upsert by tag)
+        const byTag = new Map();
+        _poolEntries.forEach((e) => {
+          const t = String(e.tag || '').trim();
+          if (t) byTag.set(t, { tag: t, url: String(e.url || '') });
+        });
+
+        const used = new Set(Array.from(byTag.keys()));
+        add.forEach((e, idx) => {
+          let t = poolSanitizeTag(e.tag);
+          if (!t) t = poolSuggestTagFromUrl(e.url, idx + 1);
+          t = poolEnsureUniqueTag(t, used);
+          used.add(t);
+          byTag.set(t, { tag: t, url: String(e.url || '').trim() });
+        });
+
+        _poolEntries = Array.from(byTag.values());
+        poolRenderTable();
+        poolSetStatus(`Добавлено/обновлено: ${add.length}. Итог строк: ${_poolEntries.length}.`, false);
+
+        try {
+          if (input) {
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+          }
+        } catch (e) {}
+      });
+
+      wireButton(POOL_IDS.save, poolSave);
+
+      // Esc closes modal
+      document.addEventListener('keydown', (e) => {
+        if (!e) return;
+        if (e.key !== 'Escape') return;
+        try {
+          const m = $(POOL_IDS.modal);
+          if (m && !m.classList.contains('hidden')) poolClose();
+        } catch (e2) {}
+      });
+
+      if (modal.dataset) modal.dataset.xkWired = '1';
+    }
+
+
     function init() {
       const hasAny =
         $('outbounds-body') ||
@@ -2265,6 +2632,7 @@
       // Initial load
       wireHints();
       wireGeneratorModal();
+      wirePoolModal();
       load();
     }
 

@@ -243,9 +243,18 @@ geodat_sanity_check() {
 BAK=""
 backup_existing() {
   BAK=""
+
+  # Keep only ONE backup to avoid накопление после каждого обновления панели.
+  # Legacy versions created "${DEST}.bak-<ts>" — очищаем такие файлы.
+  rm -f "${DEST}.bak-"* 2>/dev/null || true
+
+  # Stable single backup path.
+  if [ -f "${DEST}.bak" ]; then
+    rm -f "${DEST}.bak" 2>/dev/null || true
+  fi
+
   if [ -f "$DEST" ]; then
-    TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo $$)"
-    BAK="${DEST}.bak-${TS}"
+    BAK="${DEST}.bak"
     echo "xk-geodat: backup existing -> $BAK"
     mv "$DEST" "$BAK" || { echo "xk-geodat: backup failed — пропуск"; exit 0; }
   fi
@@ -253,7 +262,10 @@ backup_existing() {
 
 restore_backup() {
   if [ -n "$BAK" ] && [ -f "$BAK" ]; then
-    mv "$BAK" "$DEST" 2>/dev/null || true
+    # Restore but keep backup file (copy if possible).
+    rm -f "$DEST" 2>/dev/null || true
+    cp "$BAK" "$DEST" 2>/dev/null || mv "$BAK" "$DEST" 2>/dev/null || true
+    chmod +x "$DEST" 2>/dev/null || true
   fi
 }
 

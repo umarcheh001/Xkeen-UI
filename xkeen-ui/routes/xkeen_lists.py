@@ -13,6 +13,7 @@ from flask import Blueprint, jsonify, request
 
 from services.xkeen_lists import (
     KIND_IP_EXCLUDE,
+    KIND_CONFIG,
     KIND_PORT_EXCLUDE,
     KIND_PORT_PROXYING,
     get_list_content,
@@ -77,6 +78,23 @@ def create_xkeen_lists_blueprint(restart_xkeen: Callable[..., Any]) -> Blueprint
         set_list_content(KIND_IP_EXCLUDE, content)
         restart_flag = bool(payload.get("restart", True))
         restarted = restart_flag and restart_xkeen(source="ip-exclude")
+        return jsonify({"ok": True, "restarted": restarted}), 200
+
+
+    # ----- xkeen config (xkeen.json) -----
+
+    @bp.get("/api/xkeen/config")
+    def api_get_xkeen_config():
+        content = get_list_content(KIND_CONFIG)
+        return jsonify({"content": content}), 200
+
+    @bp.post("/api/xkeen/config")
+    def api_set_xkeen_config():
+        payload = _get_json_payload()
+        content = payload.get("content", "")
+        set_list_content(KIND_CONFIG, content)
+        restart_flag = bool(payload.get("restart", True))
+        restarted = restart_flag and restart_xkeen(source="xkeen-config")
         return jsonify({"ok": True, "restarted": restarted}), 200
 
     return bp

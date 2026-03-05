@@ -98,6 +98,7 @@
       'loadPortProxying',
       'loadPortExclude',
       'loadIpExclude',
+      'loadXkeenConfig',
     ];
 
     for (const fn of fns) {

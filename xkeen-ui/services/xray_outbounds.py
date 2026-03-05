@@ -595,6 +595,37 @@ def build_outbounds_config_from_link(url: str) -> Dict[str, Any]:
     raise ValueError("Поддерживаются ссылки vless://, trojan://, vmess://, ss://, hy2://")
 
 
+def build_proxy_outbound_from_link(url: str, tag: str) -> Dict[str, Any]:
+    """Build a *single* proxy outbound object from share link.
+
+    Used by balancer/pool workflows: we must NOT auto-add legacy alias or direct/block
+    for each entry.
+
+    Supported schemes: vless/trojan/vmess/ss/hy2.
+    """
+    t = str(tag or "").strip()
+    if not t:
+        raise ValueError("tag is required")
+
+    cfg = build_outbounds_config_from_link(url)
+    outbounds = (cfg or {}).get("outbounds")
+    if not isinstance(outbounds, list) or not outbounds:
+        raise ValueError("failed to build outbound")
+
+    ob = outbounds[0]
+    if not isinstance(ob, dict):
+        raise ValueError("invalid outbound")
+
+    # deepcopy (safe, without importing copy)
+    try:
+        ob2 = json.loads(json.dumps(ob))
+    except Exception:
+        ob2 = dict(ob)
+
+    ob2["tag"] = t
+    return ob2
+
+
 def build_outbounds_config_from_hysteria2(url: str) -> Dict[str, Any]:
     """Build 04_outbounds.json from Hysteria2 share link.
 

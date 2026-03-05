@@ -61,6 +61,7 @@
     commentsStatus: 'routing-comments-status',
 
     btnSave: 'routing-save-btn',
+	    btnReset: 'routing-reset-btn',
     btnFormat: 'routing-format-btn',
     btnBackup: 'routing-backup-btn',
     btnRestoreAuto: 'routing-restore-auto-btn',
@@ -108,6 +109,10 @@
 
   // Async restart job state (xkeen -restart) for save with auto-restart.
   let _restartJobRunning = false;
+
+	  // Dirty UI (unsaved changes)
+	  let _dirtyTimer = null;
+	  let _suppressDirty = 0;
 
 
   function $(id) {
@@ -489,6 +494,53 @@
     if (el) el.textContent = String(msg ?? '');
     if (msg) toast(msg, !!isError);
   }
+
+	  function _getSavedContent() {
+	    try {
+	      return (typeof window.routingSavedContent === 'string') ? window.routingSavedContent : '';
+	    } catch (e) {}
+	    return '';
+	  }
+
+	  function _isDirtyText(current, saved) {
+	    const cur = String(current ?? '');
+	    const sv = String(saved ?? '');
+	    // If we have a saved baseline — strict compare; otherwise any non-empty content is considered dirty.
+	    if (sv.length) return cur !== sv;
+	    return cur.trim().length > 0;
+	  }
+
+	  function syncDirtyUi(forceDirty) {
+	    if (_suppressDirty > 0) return;
+	    let dirty = null;
+	    if (typeof forceDirty === 'boolean') dirty = forceDirty;
+	    else {
+	      try { dirty = _isDirtyText(getEditorText(), _getSavedContent()); } catch (e) { dirty = false; }
+	    }
+
+	    try { window.routingIsDirty = !!dirty; } catch (e) {}
+	    try {
+	      const saveBtn = $(IDS.btnSave);
+	      if (saveBtn) saveBtn.classList.toggle('dirty', !!dirty);
+	    } catch (e) {}
+	    try {
+	      const resetBtn = $(IDS.btnReset);
+	      if (resetBtn) {
+	        resetBtn.disabled = !dirty;
+	        resetBtn.classList.toggle('is-active', !!dirty);
+	      }
+	    } catch (e) {}
+	  }
+
+	  function scheduleDirtyCheck(waitMs) {
+	    if (_suppressDirty > 0) return;
+	    const wait = (typeof waitMs === 'number' && waitMs >= 0) ? waitMs : 200;
+	    try { if (_dirtyTimer) clearTimeout(_dirtyTimer); } catch (e) {}
+	    _dirtyTimer = setTimeout(() => {
+	      _dirtyTimer = null;
+	      try { syncDirtyUi(); } catch (e) {}
+	    }, wait);
+	  }
 
   function stripJsonComments(text) {
     try {
@@ -958,8 +1010,11 @@ function closeHelp() {
         }
       } catch (e) {}
 
-      const text = await res.text();
-      setEditorTextAll(text);
+	      const text = await res.text();
+	      try { _suppressDirty++; } catch (e) {}
+	      try { setEditorTextAll(text); } finally {
+	        try { _suppressDirty = Math.max(0, _suppressDirty - 1); } catch (e) { _suppressDirty = 0; }
+	      }
       scrollEditorsTop();
 
       try { _setRoutingMode(_detectRoutingModeFromText(text), 'load'); } catch (e) {}
@@ -971,6 +1026,7 @@ function closeHelp() {
         const saveBtn = $(IDS.btnSave);
         if (saveBtn) saveBtn.classList.remove('dirty');
       } catch (e) {}
+	      try { syncDirtyUi(false); } catch (e) {}
 
       const okJson = validate();
       if (statusEl) statusEl.textContent = okJson ? (_routingMode === 'routing' ? 'Routing загружен.' : 'Файл загружен.') : 'Файл загружен, но содержит ошибку JSON.';
@@ -1083,6 +1139,7 @@ function closeHelp() {
           const saveBtn2 = $(IDS.btnSave);
           if (saveBtn2) saveBtn2.classList.remove('dirty');
         } catch (e) {}
+	        try { syncDirtyUi(false); } catch (e) {}
 
         let msg = (_routingMode === 'routing') ? 'Routing сохранён.' : 'Файл сохранён.';
 
@@ -1167,6 +1224,52 @@ function closeHelp() {
       _restartJobRunning = false;
       setBtnBusy(false);
     }
+  }
+
+
+  async function resetToSaved() {
+    const saved = _getSavedContent();
+    const current = getEditorText();
+    const dirty = _isDirtyText(current, saved);
+
+    if (!dirty) {
+      toast('Изменений нет — откатывать нечего.', 'info');
+      return;
+    }
+
+    const ok = await (window.XKeen && window.XKeen.ui && typeof window.XKeen.ui.confirm === 'function'
+      ? window.XKeen.ui.confirm({
+          title: 'Откатить изменения?',
+          message: 'Вернуть текст редактора к последней сохранённой версии? Все несохранённые правки будут потеряны.',
+          okText: 'Откатить',
+          cancelText: 'Отмена',
+          danger: true,
+        })
+      : Promise.resolve(window.confirm('Вернуть текст редактора к последней сохранённой версии? Несохранённые правки будут потеряны.')));
+    if (!ok) return;
+
+    try { _suppressDirty++; } catch (e) {}
+    try {
+      setEditorTextAll(saved);
+      scrollEditorsTop();
+    } finally {
+      try { _suppressDirty = Math.max(0, _suppressDirty - 1); } catch (e) { _suppressDirty = 0; }
+    }
+
+    try { window.routingIsDirty = false; } catch (e) {}
+    try { syncDirtyUi(false); } catch (e) {}
+
+    // Discard local edits in routing cards by reloading from the editor.
+    try {
+      const RC = window.XKeen && window.XKeen.features ? window.XKeen.features.routingCards : null;
+      const ctrl = RC && RC.rules ? RC.rules.controls : null;
+      if (ctrl && typeof ctrl.renderFromEditor === 'function') {
+        ctrl.renderFromEditor({ setError: false });
+      }
+    } catch (e) {}
+
+    try { validate(); } catch (e) {}
+    setStatus('Изменения откатены.', false);
   }
 
   async function getPreferPrettierFlag() {
@@ -1478,6 +1581,7 @@ function closeHelp() {
       if (validate()) save();
       else setStatus('Ошибка: некорректный JSON.', true);
     });
+	    wireButton(IDS.btnReset, resetToSaved);
     wireButton(IDS.btnFormat, format);
     wireButton(IDS.btnBackup, backup);
     wireButton(IDS.btnRestoreAuto, restoreAuto);
@@ -1729,9 +1833,10 @@ function closeHelp() {
       }
     } catch (e) {}
 
-cm.on('change', () => {
-      validate();
-    });
+	    cm.on('change', () => {
+	      validate();
+	      scheduleDirtyCheck();
+	    });
 
     return cm;
   }
@@ -2046,6 +2151,7 @@ cm.on('change', () => {
         wordWrap: 'on',
         onChange: () => {
           try { scheduleMonacoDiagnostics(); } catch (e) {}
+	          try { scheduleDirtyCheck(); } catch (e) {}
         },
       });
 

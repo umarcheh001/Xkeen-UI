@@ -111,6 +111,65 @@ def _pty_preexec(slave_fd: int) -> None:
         pass
 
 
+def _pty_build_env(shell_path: str) -> dict:
+    """Build a sane environment for interactive PTY shells.
+
+    Important for embedded/router environments:
+    - ensure Entware paths are available first (/opt/sbin:/opt/bin) so `opkg`, `pip`, etc.
+      resolve to Entware tools instead of system stubs.
+    - ensure HOME is writable (some tools fail with 'Read-only file system' when HOME is / or empty).
+    """
+    env = os.environ.copy()
+    env.setdefault("TERM", "xterm-256color")
+
+    # Prefer Entware tools in PATH.
+    orig_path = env.get("PATH") or ""
+    parts = [p for p in orig_path.split(":") if p]
+    opt_first = ["/opt/sbin", "/opt/bin"]
+    for d in opt_first:
+        # Remove duplicates from tail, we'll prepend in stable order.
+        parts = [p for p in parts if p != d]
+    env["PATH"] = ":".join(opt_first + parts) if parts else ":".join(opt_first)
+
+    # Pick a writable HOME (affects shells history + many installers/caches).
+    if not (env.get("HOME") or "").strip():
+        for cand in ("/opt/root", "/root", "/tmp"):
+            try:
+                if os.path.isdir(cand) and os.access(cand, os.W_OK):
+                    env["HOME"] = cand
+                    break
+            except Exception:
+                pass
+    env.setdefault("HOME", "/tmp")
+
+    env.setdefault("TMPDIR", "/tmp")
+    env.setdefault("SHELL", shell_path or "/bin/sh")
+    env.setdefault("USER", "root")
+    env.setdefault("LOGNAME", env.get("USER") or "root")
+
+    # BusyBox ash/sh can source $ENV for interactive shells; this helps pick up aliases and PATH tweaks.
+    for prof in ("/opt/etc/profile", "/etc/profile"):
+        try:
+            if os.path.isfile(prof):
+                env.setdefault("ENV", prof)
+                break
+        except Exception:
+            pass
+
+    return env
+
+
+def _pty_default_cwd(env: dict) -> str | None:
+    """Prefer starting PTY shell in a writable HOME."""
+    h = (env.get("HOME") or "").strip()
+    try:
+        if h and os.path.isdir(h) and os.access(h, os.W_OK):
+            return h
+    except Exception:
+        pass
+    return None
+
+
 # ------------------------------
 # PTY session manager (supports reconnect by session_id)
 # ------------------------------
@@ -439,8 +498,8 @@ def _pty_create_session(rows0: int = 0, cols0: int = 0) -> PtySession:
     if cols0 > 0 and rows0 > 0:
         _pty_set_winsize(slave_fd, rows0, cols0)
 
-    env = os.environ.copy()
-    env.setdefault("TERM", "xterm-256color")
+    env = _pty_build_env(shell)
+    cwd = _pty_default_cwd(env)
 
     proc = subprocess.Popen(
         _pty_shell_args(shell),
@@ -449,6 +508,7 @@ def _pty_create_session(rows0: int = 0, cols0: int = 0) -> PtySession:
         stderr=slave_fd,
         close_fds=True,
         env=env,
+        cwd=cwd,
         preexec_fn=lambda: _pty_preexec(slave_fd),
     )
 

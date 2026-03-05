@@ -77,7 +77,7 @@
       }
     }
 
-    function attachEditor(textareaId, stateKey) {
+        function attachEditor(textareaId, stateKey, extraOpts) {
       const ta = document.getElementById(textareaId);
       if (!ta || !window.CodeMirror) return null;
 
@@ -96,8 +96,13 @@
         tabSize: 2,
         indentUnit: 2,
         indentWithTabs: false,
-        viewportMargin: Infinity,
+        // Keep rendering sane for potentially larger files (xkeen.json).
+        viewportMargin: 80,
       };
+
+      if (extraOpts && typeof extraOpts === 'object') {
+        try { Object.assign(opts, extraOpts); } catch (e) {}
+      }
 
       const ed = CodeMirror.fromTextArea(ta, opts);
       try { ed.getWrapperElement().classList.add('xkeen-cm'); } catch (e) {}
@@ -121,7 +126,8 @@
       const hasAny =
         document.getElementById('port-proxying-editor') ||
         document.getElementById('port-exclude-editor') ||
-        document.getElementById('ip-exclude-editor');
+        document.getElementById('ip-exclude-editor') ||
+        document.getElementById('xkeen-config-editor');
 
       if (!hasAny) return;
       if (inited) return;
@@ -131,6 +137,7 @@
       const portProxyEd = attachEditor('port-proxying-editor', 'portProxyingEditor');
       const portExcludeEd = attachEditor('port-exclude-editor', 'portExcludeEditor');
       const ipExcludeEd = attachEditor('ip-exclude-editor', 'ipExcludeEditor');
+      const xkeenConfigEd = attachEditor('xkeen-config-editor', 'xkeenConfigEditor', { mode: { name: 'javascript', json: true } });
 
       // Expose for other scripts that rely on main.js lexical vars.
       // main.js will copy from XKeen.state.* when it detects this feature.
@@ -138,16 +145,19 @@
       if (portProxyEd) window.portProxyingEditor = portProxyEd;
       if (portExcludeEd) window.portExcludeEditor = portExcludeEd;
       if (ipExcludeEd) window.ipExcludeEditor = ipExcludeEd;
+      if (xkeenConfigEd) window.xkeenConfigEditor = xkeenConfigEd;
 
       // Save buttons
       wireButton('port-proxying-save-btn', () => saveText('/api/xkeen/port-proxying', 'port-proxying-editor', 'port-proxying-status', 'port_proxying.lst', 'portProxyingEditor'));
       wireButton('port-exclude-save-btn', () => saveText('/api/xkeen/port-exclude', 'port-exclude-editor', 'port-exclude-status', 'port_exclude.lst', 'portExcludeEditor'));
       wireButton('ip-exclude-save-btn', () => saveText('/api/xkeen/ip-exclude', 'ip-exclude-editor', 'ip-exclude-status', 'ip_exclude.lst', 'ipExcludeEditor'));
+      wireButton('xkeen-config-save-btn', () => saveText('/api/xkeen/config', 'xkeen-config-editor', 'xkeen-config-status', 'xkeen.json', 'xkeenConfigEditor'));
 
       // Initial load
       loadText('/api/xkeen/port-proxying', 'port-proxying-editor', 'port-proxying-status', 'port_proxying.lst', 'portProxyingEditor');
       loadText('/api/xkeen/port-exclude', 'port-exclude-editor', 'port-exclude-status', 'port_exclude.lst', 'portExcludeEditor');
       loadText('/api/xkeen/ip-exclude', 'ip-exclude-editor', 'ip-exclude-status', 'ip_exclude.lst', 'ipExcludeEditor');
+      loadText('/api/xkeen/config', 'xkeen-config-editor', 'xkeen-config-status', 'xkeen.json', 'xkeenConfigEditor');
 
       // Let theme.js sync editors.
       try { document.dispatchEvent(new CustomEvent('xkeen-editors-ready')); } catch (e) {}
@@ -172,6 +182,11 @@
       ensureInited();
       return loadText('/api/xkeen/ip-exclude', 'ip-exclude-editor', 'ip-exclude-status', 'ip_exclude.lst', 'ipExcludeEditor');
     }
+    function reloadXkeenConfig() {
+      ensureInited();
+      return loadText('/api/xkeen/config', 'xkeen-config-editor', 'xkeen-config-status', 'xkeen.json', 'xkeenConfigEditor');
+    }
+
 
     function reloadAll() {
       ensureInited();
@@ -179,6 +194,7 @@
         reloadPortProxying(),
         reloadPortExclude(),
         reloadIpExclude(),
+        reloadXkeenConfig(),
       ]);
     }
 
@@ -193,7 +209,7 @@
       arrow.textContent = willOpen ? '▲' : '▼';
 
       if (willOpen) {
-        ['portProxyingEditor', 'portExcludeEditor', 'ipExcludeEditor'].forEach((k) => {
+        ['portProxyingEditor', 'portExcludeEditor', 'ipExcludeEditor', 'xkeenConfigEditor'].forEach((k) => {
           try {
             const ed = (window.XKeen && XKeen.state) ? XKeen.state[k] : null;
             if (ed && ed.refresh) ed.refresh();
@@ -210,6 +226,7 @@
       reloadPortProxying,
       reloadPortExclude,
       reloadIpExclude,
+      reloadXkeenConfig,
       reloadAll,
     };
   })();

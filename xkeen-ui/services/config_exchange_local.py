@@ -13,7 +13,7 @@ import os
 import time
 from typing import Any, Dict, List
 
-from services.xkeen_lists import PORT_PROXYING_FILE, PORT_EXCLUDE_FILE, IP_EXCLUDE_FILE
+from services.xkeen_lists import PORT_PROXYING_FILE, PORT_EXCLUDE_FILE, IP_EXCLUDE_FILE, XKEEN_CONFIG_FILE
 from services.xray_config_files import ROUTING_FILE, OUTBOUNDS_FILE
 from utils.fs import load_text, save_text
 from utils.jsonio import load_json, save_json
@@ -55,6 +55,7 @@ def build_user_configs_bundle(
         "xkeen/port_proxying.lst": PORT_PROXYING_FILE,
         "xkeen/port_exclude.lst": PORT_EXCLUDE_FILE,
         "xkeen/ip_exclude.lst": IP_EXCLUDE_FILE,
+        "xkeen/xkeen.json": XKEEN_CONFIG_FILE,
     }
     for logical_path, real_path in lst_files.items():
         content = load_text(real_path, default="")
@@ -94,8 +95,11 @@ def apply_user_configs_bundle(bundle: Dict[str, Any]) -> None:
         basename = os.path.basename(str(path))
         real_path: str | None = None
 
+        # xkeen.json (lives in /opt/etc/xkeen)
+        if basename == os.path.basename(XKEEN_CONFIG_FILE):
+            real_path = XKEEN_CONFIG_FILE
         # JSON configs
-        if basename.endswith(".json"):
+        elif basename.endswith(".json"):
             if basename == os.path.basename(OUTBOUNDS_FILE):
                 continue
             real_path = os.path.join(xray_dir, basename)

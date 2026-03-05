@@ -93,63 +93,83 @@
         <div id="xkeen-body">
           <p>Файлы из каталога <code>/opt/etc/xkeen</code>:</p>
 
-          <h3>port_proxying.lst</h3>
-          <p class="small xk-card-desc">
-            Порты и диапазоны, которые нужно отправлять через прокси.
-          </p>
-          <textarea id="port-proxying-editor"
-                    class="xkeen-textarea"
-                    spellcheck="false"
-                    rows="10"
-                    placeholder="Например:
-80
-443
-596:599
-Каждая строка — порт или диапазон портов."></textarea>
-          <div class="actions">
-            <button id="port-proxying-save-btn">💾 Сохранить port_proxying.lst</button>
+          <div class="xkeen-files-grid">
+            <div class="xkeen-mini-editor">
+              <div class="xkeen-mini-head">
+                <h3>port_proxying.lst</h3>
+                <p class="small xk-card-desc">
+                  Порты и диапазоны, которые нужно отправлять через прокси.
+                </p>
+              </div>
+              <textarea id="port-proxying-editor"
+                        class="xkeen-textarea"
+                        spellcheck="false"
+                        rows="8"
+                        placeholder="Например:\n80\n443\n596:599\nКаждая строка — порт или диапазон портов."></textarea>
+              <div class="actions">
+                <button id="port-proxying-save-btn" data-tooltip="Сохранить список port_proxying.lst.">💾 Сохранить port_proxying.lst</button>
+              </div>
+              <div id="port-proxying-status" class="status"></div>
+            </div>
+
+            <div class="xkeen-mini-editor">
+              <div class="xkeen-mini-head">
+                <h3>port_exclude.lst</h3>
+                <p class="small xk-card-desc">
+                  Порты, которые нужно исключить из проксирования.<br>
+                  <strong>Важно:</strong> одновременно использовать список проксируемых портов и исключения нельзя,
+                  приоритет у портов проксирования.
+                </p>
+              </div>
+              <textarea id="port-exclude-editor"
+                        class="xkeen-textarea"
+                        spellcheck="false"
+                        rows="8"
+                        placeholder="Порты для исключения из проксирования.\nНапример:\n22\n25\n80:89"></textarea>
+              <div class="actions">
+                <button id="port-exclude-save-btn" data-tooltip="Сохранить список port_exclude.lst.">💾 Сохранить port_exclude.lst</button>
+              </div>
+              <div id="port-exclude-status" class="status"></div>
+            </div>
+
+            <div class="xkeen-mini-editor">
+              <div class="xkeen-mini-head">
+                <h3>ip_exclude.lst</h3>
+                <p class="small xk-card-desc">
+                  IP и подсети, которые нужно исключить из проксирования (по одной в строке).
+                </p>
+              </div>
+              <textarea id="ip-exclude-editor"
+                        class="xkeen-textarea"
+                        spellcheck="false"
+                        rows="8"
+                        placeholder="Например:\n192.168.0.0/16\n2001:db8::/32"></textarea>
+              <div class="actions">
+                <button id="ip-exclude-save-btn" data-tooltip="Сохранить список ip_exclude.lst.">💾 Сохранить ip_exclude.lst</button>
+              </div>
+              <div id="ip-exclude-status" class="status"></div>
+            </div>
+
+            <div class="xkeen-mini-editor">
+              <div class="xkeen-mini-head">
+                <h3>xkeen.json</h3>
+                <p class="small xk-card-desc">
+                Пользовательские политики портов для разных устройств (используются в роутинге через <code>source</code>).<br>
+                Имена policy должны совпадать с политиками в роутере и работают только при наличии дефолтной политики <code>xkeen</code>.<br>
+                <code>port</code>: <code>""</code> — все, <code>80,443,596:599</code> — список/диапазоны, <code>!7777</code> — исключить.
+                </p>
+              </div>
+              <textarea id="xkeen-config-editor"
+                        class="xkeen-textarea xkeen-json-textarea"
+                        spellcheck="false"
+                        rows="8"
+                        placeholder="{\n  \"example\": true\n}\n"></textarea>
+              <div class="actions">
+                <button id="xkeen-config-save-btn" data-tooltip="Сохранить файл xkeen.json.">💾 Сохранить xkeen.json</button>
+              </div>
+              <div id="xkeen-config-status" class="status"></div>
+            </div>
           </div>
-          <div id="port-proxying-status" class="status"></div>
-
-          <hr>
-
-          <h3>port_exclude.lst</h3>
-          <p class="small xk-card-desc">
-            Порты, которые нужно исключить из проксирования.<br>
-            <strong>Важно:</strong> одновременно использовать список проксируемых портов и исключения нельзя,
-            приоритет у портов проксирования.
-          </p>
-          <textarea id="port-exclude-editor"
-                    class="xkeen-textarea"
-                    spellcheck="false"
-                    rows="10"
-                    placeholder="Порты для исключения из проксирования.
-Например:
-22
-25
-80:89"></textarea>
-          <div class="actions">
-            <button id="port-exclude-save-btn">💾 Сохранить port_exclude.lst</button>
-          </div>
-          <div id="port-exclude-status" class="status"></div>
-
-          <hr>
-
-          <h3>ip_exclude.lst</h3>
-          <p class="small xk-card-desc">
-            IP и подсети, которые нужно исключить из проксирования (по одной в строке).
-          </p>
-          <textarea id="ip-exclude-editor"
-                    class="xkeen-textarea"
-                    spellcheck="false"
-                    rows="10"
-                    placeholder="Например:
-192.168.0.0/16
-2001:db8::/32"></textarea>
-          <div class="actions">
-            <button id="ip-exclude-save-btn">💾 Сохранить ip_exclude.lst</button>
-          </div>
-          <div id="ip-exclude-status" class="status"></div>
         </div>
       </section>
 

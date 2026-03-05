@@ -20,8 +20,18 @@
     let inited = false;
     // last mode that is known to be applied on backend (from load/save)
     let currentMode = null;
+    // last loaded config snapshot (for extras detection)
+    let lastConfig = null;
+    let lastExtrasTags = [];
+    let lastSocksPort = null;
     // guard against double-fire when clicking labels / rapid toggles
     let autoSaveInFlight = false;
+
+    // Apply modal state
+    let _applyModalBound = false;
+    let _applyModalResolver = null;
+    let _applyModalEscHandler = null;
+    let _applyModalCtx = null;
 
     // Active inbounds fragment file (basename or absolute). Controlled by dropdown.
     let _activeFragment = null;
@@ -259,18 +269,360 @@
       }
     }
 
-    async function load() {
+    function analyzeConfig(cfg) {
+      const extras = [];
+      let socksPort = null;
+      try {
+        const inb = Array.isArray(cfg) ? cfg : (cfg && cfg.inbounds);
+        if (Array.isArray(inb)) {
+          inb.forEach((it) => {
+            if (!it || typeof it !== 'object') return;
+            const tag = (typeof it.tag === 'string') ? it.tag.trim() : '';
+            if (tag === 'redirect' || tag === 'tproxy') return;
+            if (tag) extras.push(tag);
+            else extras.push('(без тега)');
+            if (tag === 'socks-in') {
+              const p = Number(it.port);
+              if (Number.isFinite(p) && p > 0) socksPort = Math.trunc(p);
+            }
+          });
+        }
+      } catch (e) {}
+
+      // de-dup extras for nicer UI
+      const seen = new Set();
+      const uniq = [];
+      extras.forEach((t) => {
+        const k = String(t || '');
+        if (!k || seen.has(k)) return;
+        seen.add(k);
+        uniq.push(k);
+      });
+      return { extrasTags: uniq, socksPort };
+    }
+
+    function _extractInbounds(cfg) {
+      try {
+        if (Array.isArray(cfg)) return cfg;
+        if (cfg && typeof cfg === 'object' && Array.isArray(cfg.inbounds)) return cfg.inbounds;
+      } catch (e) {}
+      return [];
+    }
+
+    function _portSpecContains(spec, port) {
+      try {
+        const p = Number(port);
+        if (!Number.isFinite(p)) return false;
+
+        if (typeof spec === 'number') {
+          const n = Math.trunc(spec);
+          return n === Math.trunc(p);
+        }
+
+        if (typeof spec === 'string') {
+          const s = spec.trim();
+          if (!s) return false;
+
+          // Fast path: pure number
+          if (/^\d+$/.test(s)) return Math.trunc(p) == parseInt(s, 10);
+
+          // Comma-separated list, allow ranges like 1000-2000 or 1000:2000
+          const parts = s.split(',').map(x => x.trim()).filter(Boolean);
+          for (const part of parts) {
+            if (!part) continue;
+            // Range
+            const m = part.match(/^(\d+)\s*[-:]\s*(\d+)$/);
+            if (m) {
+              const a = parseInt(m[1], 10);
+              const b = parseInt(m[2], 10);
+              if (Number.isFinite(a) && Number.isFinite(b)) {
+                const lo = Math.min(a, b);
+                const hi = Math.max(a, b);
+                if (Math.trunc(p) >= lo && Math.trunc(p) <= hi) return true;
+              }
+              continue;
+            }
+            if (/^\d+$/.test(part)) {
+              const n = parseInt(part, 10);
+              if (Math.trunc(p) === n) return true;
+            }
+          }
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    function findPortConflicts(cfg, port, preserveExtras) {
+      const conflicts = [];
+      const inb = _extractInbounds(cfg);
+      if (!Array.isArray(inb) || !inb.length) return conflicts;
+
+      inb.forEach((it) => {
+        try {
+          if (!it || typeof it !== 'object') return;
+          const tag = (typeof it.tag === 'string') ? it.tag.trim() : '';
+          // We'll replace socks-in if user enables it, so don't treat it as a conflict.
+          if (tag === 'socks-in') return;
+
+          // If user disables preserving extras, check only system tags.
+          if (!preserveExtras && tag !== 'redirect' && tag !== 'tproxy') return;
+
+          const spec = it.port;
+          if (_portSpecContains(spec, port)) {
+            const t = tag ? tag : '(без тега)';
+            conflicts.push(t + (spec != null ? ' (port=' + String(spec) + ')' : ''));
+          }
+        } catch (e) {}
+      });
+
+      // de-dup for nicer UI
+      const seen = new Set();
+      const uniq = [];
+      conflicts.forEach((x) => {
+        const k = String(x || '');
+        if (!k || seen.has(k)) return;
+        seen.add(k);
+        uniq.push(k);
+      });
+      return uniq;
+    }
+
+    function formatExtrasShort(tags) {
+      try {
+        const arr = Array.isArray(tags) ? tags.filter(Boolean) : [];
+        if (!arr.length) return '';
+        const head = arr.slice(0, 3).join(', ');
+        if (arr.length <= 3) return head;
+        return head + ` и ещё ${arr.length - 3}`;
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function shouldShowApplyModal() {
+      return currentMode === 'custom' || (Array.isArray(lastExtrasTags) && lastExtrasTags.length > 0);
+    }
+
+    function setModeRadio(mode) {
+      const radios = document.querySelectorAll('input[name="inbounds_mode"]');
+      if (!radios || !radios.length) return;
+      radios.forEach((r) => {
+        try {
+          if (!mode || (mode !== 'mixed' && mode !== 'tproxy' && mode !== 'redirect')) {
+            r.checked = false;
+          } else {
+            r.checked = (r.value === mode);
+          }
+        } catch (e) {}
+      });
+    }
+
+    function getApplyModalEls() {
+      return {
+        modal: $('inbounds-apply-modal'),
+        closeBtn: $('inbounds-apply-close-btn'),
+        cancelBtn: $('inbounds-apply-cancel-btn'),
+        okBtn: $('inbounds-apply-ok-btn'),
+        desc: $('inbounds-apply-desc'),
+        preserve: $('inbounds-apply-preserve-extras'),
+        extrasHint: $('inbounds-apply-extras-hint'),
+        addSocks: $('inbounds-apply-add-socks'),
+        socksRow: $('inbounds-apply-socks-row'),
+        socksPort: $('inbounds-apply-socks-port'),
+        warn: $('inbounds-apply-warn'),
+        error: $('inbounds-apply-error'),
+      };
+    }
+
+    function showApplyModal(ctx) {
+      const ui = getApplyModalEls();
+      if (!ui.modal || !ui.okBtn || !ui.cancelBtn || !ui.closeBtn || !ui.preserve || !ui.addSocks || !ui.socksPort) {
+        return Promise.resolve({ preserveExtras: true, addSocks: false, socksPort: null });
+      }
+
+      // Close any previous unresolved modal.
+      if (typeof _applyModalResolver === 'function') {
+        try { _applyModalResolver(null); } catch (e) {}
+        _applyModalResolver = null;
+      }
+      _applyModalCtx = ctx || {};
+
+      // Bind handlers once.
+      if (!_applyModalBound) {
+        _applyModalBound = true;
+
+        function hideWith(val) {
+          const ui2 = getApplyModalEls();
+          try { if (ui2.error) { ui2.error.style.display = 'none'; ui2.error.textContent = ''; } } catch (e0) {}
+          try { if (ui2.warn) { ui2.warn.style.display = 'none'; ui2.warn.textContent = ''; } } catch (e0w) {}
+          try { ui2.modal.classList.add('hidden'); } catch (e1) {}
+          if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+            try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e2) {}
+          } else {
+            try { document.body.classList.remove('modal-open'); } catch (e3) {}
+          }
+
+          if (_applyModalEscHandler) {
+            try { document.removeEventListener('keydown', _applyModalEscHandler); } catch (e4) {}
+          }
+
+          const r = _applyModalResolver;
+          _applyModalResolver = null;
+          if (typeof r === 'function') {
+            try { r(val); } catch (e5) {}
+          }
+        }
+
+        function refreshWarn() {
+          const ui2 = getApplyModalEls();
+          try { if (ui2.warn) { ui2.warn.style.display = 'none'; ui2.warn.textContent = ''; } } catch (e0) {}
+          try {
+            if (!ui2.warn || !ui2.addSocks || !ui2.addSocks.checked) return;
+            const raw = Number(ui2.socksPort.value || ui2.socksPort.placeholder || 1080);
+            const p2 = Math.trunc(raw);
+            if (!Number.isFinite(p2) || p2 < 1 || p2 > 65535) return;
+            const preserveExtras = !!(ui2.preserve && ui2.preserve.checked);
+            const cfg = (_applyModalCtx && _applyModalCtx.config) ? _applyModalCtx.config : lastConfig;
+            const hits = findPortConflicts(cfg, p2, preserveExtras);
+            if (hits && hits.length) {
+              ui2.warn.textContent = '⚠️ Порт ' + p2 + ' уже используется: ' + hits.join(', ') + '. Выберите другой порт, иначе Xray может не запуститься.';
+              ui2.warn.style.display = 'block';
+            }
+          } catch (e1) {}
+        }
+
+        // Backdrop click closes.
+        ui.modal.addEventListener('click', (e) => {
+          if (e.target === ui.modal) hideWith(null);
+        });
+        ui.closeBtn.addEventListener('click', (e) => { e.preventDefault(); hideWith(null); });
+        ui.cancelBtn.addEventListener('click', (e) => { e.preventDefault(); hideWith(null); });
+
+        ui.addSocks.addEventListener('change', () => {
+          const ui2 = getApplyModalEls();
+          const on = !!ui2.addSocks.checked;
+          try { ui2.socksRow.style.display = on ? 'block' : 'none'; } catch (e) {}
+          try { refreshWarn(); } catch (e) {}
+        });
+
+        try {
+          ui.preserve.addEventListener('change', () => {
+            try { refreshWarn(); } catch (e) {}
+          });
+        } catch (e) {}
+
+        try {
+          ui.socksPort.addEventListener('input', () => {
+            try { refreshWarn(); } catch (e) {}
+          });
+          ui.socksPort.addEventListener('change', () => {
+            try { refreshWarn(); } catch (e) {}
+          });
+        } catch (e) {}
+
+        ui.okBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const ui2 = getApplyModalEls();
+          const preserveExtras = !!ui2.preserve.checked;
+          const addSocks = !!ui2.addSocks.checked;
+          let socksPort = null;
+
+          try { if (ui2.error) { ui2.error.style.display = 'none'; ui2.error.textContent = ''; } } catch (e0) {}
+
+          if (addSocks) {
+            const p = Number(ui2.socksPort.value || ui2.socksPort.placeholder || 1080);
+            const p2 = Math.trunc(p);
+            if (!Number.isFinite(p2) || p2 < 1 || p2 > 65535) {
+              try {
+                if (ui2.error) {
+                  ui2.error.textContent = 'Некорректный порт. Укажите число 1…65535.';
+                  ui2.error.style.display = 'block';
+                }
+                ui2.socksPort.focus();
+              } catch (e1) {}
+              return;
+            }
+            socksPort = p2;
+          }
+
+          hideWith({ preserveExtras, addSocks, socksPort });
+        });
+
+        // ESC closes.
+        _applyModalEscHandler = (e) => {
+          if (e && (e.key === 'Escape' || e.key === 'Esc')) {
+            hideWith(null);
+          }
+        };
+      }
+
+      // Populate UI
+      const extrasShort = formatExtrasShort(_applyModalCtx.extrasTags || []);
+      try {
+        if (ui.desc) {
+          const m = String(_applyModalCtx.selectedMode || '');
+          ui.desc.textContent = `Применение пресета режима: ${m}.`;
+        }
+      } catch (e) {}
+      try {
+        if (ui.extrasHint) {
+          if (extrasShort) {
+            ui.extrasHint.textContent = 'Обнаружены пользовательские секции: ' + extrasShort + '.';
+          } else {
+            ui.extrasHint.textContent = 'Пользовательские секции не обнаружены.';
+          }
+        }
+      } catch (e) {}
+
+      try { ui.preserve.checked = true; } catch (e) {}
+      try { ui.addSocks.checked = false; } catch (e) {}
+      try { ui.socksRow.style.display = 'none'; } catch (e) {}
+      try {
+        const p = Number(_applyModalCtx.socksPort) || 1080;
+        ui.socksPort.value = String(Math.trunc(p));
+      } catch (e) {}
+      try { if (ui.warn) { ui.warn.style.display = 'none'; ui.warn.textContent = ''; } } catch (e) {}
+      try { if (ui.error) { ui.error.style.display = 'none'; ui.error.textContent = ''; } } catch (e) {}
+
+      // Show modal
+      try { ui.modal.classList.remove('hidden'); } catch (e) {}
+      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+        try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
+      } else {
+        try { document.body.classList.add('modal-open'); } catch (e) {}
+      }
+
+      // Attach ESC handler (created in one-time binding above).
+      try { if (_applyModalEscHandler) document.removeEventListener('keydown', _applyModalEscHandler); } catch (e) {}
+      try { if (_applyModalEscHandler) document.addEventListener('keydown', _applyModalEscHandler); } catch (e) {}
+
+      setTimeout(() => {
+        try { ui.cancelBtn.focus(); } catch (e) {}
+      }, 0);
+
+      return new Promise((resolve) => {
+        _applyModalResolver = resolve;
+      });
+    }
+
+    async function load(opts) {
       const statusEl = $('inbounds-status');
+      const silent = !!(opts && opts.silent);
       try {
         const file = getActiveFragment();
         const url = file ? ('/api/inbounds?file=' + encodeURIComponent(file)) : '/api/inbounds';
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) {
-          if (statusEl) statusEl.textContent = 'Не удалось загрузить inbounds.';
+          if (statusEl && !silent) statusEl.textContent = 'Не удалось загрузить inbounds.';
           return;
         }
         const data = await res.json().catch(() => ({}));
         const mode = data && data.mode;
+
+        lastConfig = (data && data.config) ? data.config : null;
+        const a = analyzeConfig(lastConfig);
+        lastExtrasTags = a.extrasTags || [];
+        lastSocksPort = a.socksPort;
 
         // remember current applied mode
         currentMode = mode || null;
@@ -280,10 +632,19 @@
           if (radio) radio.checked = true;
         }
 
-        if (statusEl) {
-          if (mode === 'custom') statusEl.textContent = 'Обнаружен пользовательский конфиг (не совпадает с пресетами).';
-          else if (mode) statusEl.textContent = 'Текущий режим: ' + mode;
-          else statusEl.textContent = 'Режим не определён (файл отсутствует или повреждён).';
+        if (statusEl && !silent) {
+          const extrasShort = formatExtrasShort(lastExtrasTags);
+          if (mode === 'custom') {
+            statusEl.textContent = extrasShort
+              ? ('Обнаружен пользовательский конфиг (не совпадает с пресетами). Пользовательские секции: ' + extrasShort + '.')
+              : 'Обнаружен пользовательский конфиг (не совпадает с пресетами).';
+          } else if (mode) {
+            statusEl.textContent = extrasShort
+              ? ('Текущий режим: ' + mode + '. Есть пользовательские секции: ' + extrasShort + '.')
+              : ('Текущий режим: ' + mode);
+          } else {
+            statusEl.textContent = 'Режим не определён (файл отсутствует или повреждён).';
+          }
         }
 
         try {
@@ -294,7 +655,7 @@
         } catch (e) {}
       } catch (e) {
         console.error(e);
-        if (statusEl) statusEl.textContent = 'Ошибка загрузки inbounds.';
+        if (statusEl && !silent) statusEl.textContent = 'Ошибка загрузки inbounds.';
       }
     }
 
@@ -320,8 +681,6 @@
             autoSaveInFlight = true;
             try {
               await save();
-              // save() will set status/toasts; we only update currentMode optimistically here
-              currentMode = r.value;
             } finally {
               autoSaveInFlight = false;
             }
@@ -351,13 +710,36 @@
       const mode = selected.value;
       const restart = toggle ? !!toggle.checked : false;
 
+      // When config is custom or contains extras, ask how to apply preset.
+      let preserve_extras = true;
+      let add_socks = false;
+      let socks_port = null;
+      const isPresetMode = (mode === 'mixed' || mode === 'tproxy' || mode === 'redirect');
+      if (isPresetMode && shouldShowApplyModal()) {
+        const opts = await showApplyModal({
+          selectedMode: mode,
+          extrasTags: lastExtrasTags,
+          socksPort: lastSocksPort,
+          config: lastConfig,
+        });
+        if (!opts) {
+          if (statusEl) statusEl.textContent = 'Отменено.';
+          // Revert selection to the last known backend mode when user cancels.
+          setModeRadio(currentMode);
+          return;
+        }
+        preserve_extras = !!opts.preserveExtras;
+        add_socks = !!opts.addSocks;
+        socks_port = opts.socksPort != null ? Number(opts.socksPort) : null;
+      }
+
       try {
         const file = getActiveFragment();
         const url = file ? ('/api/inbounds?file=' + encodeURIComponent(file)) : '/api/inbounds';
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode, restart }),
+          body: JSON.stringify({ mode, restart, preserve_extras, add_socks, socks_port }),
         });
         const data = await res.json().catch(() => ({}));
 
@@ -367,6 +749,8 @@
 
           // keep currentMode in sync
           currentMode = (data && data.mode) ? data.mode : mode;
+          // Refresh extras snapshot silently (so next apply doesn't show modal unnecessarily).
+          try { await load({ silent: true }); } catch (e) {}
           try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
           try {
             if (typeof updateLastActivity === 'function') {

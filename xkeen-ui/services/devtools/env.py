@@ -102,6 +102,7 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_PORT_PROXYING_FILE",
     "XKEEN_PORT_EXCLUDE_FILE",
     "XKEEN_IP_EXCLUDE_FILE",
+    "XKEEN_CONFIG_FILE",
 )
 
 
@@ -409,6 +410,8 @@ def _default_effective_value(
         return "/opt/etc/xkeen/port_exclude.lst"
     if k == "XKEEN_IP_EXCLUDE_FILE":
         return "/opt/etc/xkeen/ip_exclude.lst"
+    if k == "XKEEN_CONFIG_FILE":
+        return "/opt/etc/xkeen/xkeen.json"
 
     return None
 

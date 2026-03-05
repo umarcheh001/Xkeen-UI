@@ -246,6 +246,46 @@ function wireTerminalLazyOpen() {
   wire(ptyBtn, 'pty');
 }
 
+// Decide which terminal open button to show on initial page load.
+// Before terminal scripts are lazy-loaded, both buttons exist in markup.
+// We hide one of them based on /api/capabilities.websocket (WS runtime).
+let _terminalCapsInit = false;
+function initTerminalCapabilityButtons() {
+  if (_terminalCapsInit) return;
+  _terminalCapsInit = true;
+
+  const shellBtn = document.getElementById('terminal-open-shell-btn');
+  const ptyBtn = document.getElementById('terminal-open-pty-btn');
+  if (!shellBtn && !ptyBtn) return;
+
+  function apply(hasWs) {
+    const ws = !!hasWs;
+    try {
+      window.XKeen = window.XKeen || {};
+      window.XKeen.state = window.XKeen.state || {};
+      window.XKeen.state.hasWs = ws;
+    } catch (e) {}
+
+    if (ws) {
+      if (ptyBtn) { try { ptyBtn.style.display = ''; ptyBtn.disabled = false; } catch (e) {} }
+      if (shellBtn) { try { shellBtn.style.display = 'none'; shellBtn.disabled = true; } catch (e) {} }
+    } else {
+      if (shellBtn) { try { shellBtn.style.display = ''; shellBtn.disabled = false; } catch (e) {} }
+      if (ptyBtn) { try { ptyBtn.style.display = 'none'; ptyBtn.disabled = true; } catch (e) {} }
+    }
+  }
+
+  // Keep server-side default (based on arch) until we know the actual WS runtime.
+  // This removes the "two buttons" glitch on initial load.
+  fetch('/api/capabilities', { cache: 'no-store' })
+    .then((r) => (r && r.ok) ? r.json() : null)
+    .then((data) => apply(!!(data && data.websocket)))
+    .catch(() => {
+      // On error: keep current default button.
+    });
+}
+
+
 let _fileManagerLoaded = false;
 let _fileManagerPromise = null;
 
@@ -489,6 +529,9 @@ safe(() => {
 	      if (window.XKeen && XKeen.features && XKeen.features.commandsList && typeof XKeen.features.commandsList.init === 'function') {
 	        XKeen.features.commandsList.init();
 	      }
+	      if (window.XKeen && XKeen.features && XKeen.features.coresStatus && typeof XKeen.features.coresStatus.init === 'function') {
+	        XKeen.features.coresStatus.init();
+	      }
 	    });
 	  }
 
@@ -641,6 +684,9 @@ safe(() => {
 
     // Terminal: load heavy xterm+modules only when user opens it
     wireTerminalLazyOpen();
+
+    // Hide the extra terminal button immediately (capabilities-based)
+    initTerminalCapabilityButtons();
 
     // Auto-open terminal from URL (?terminal=pty|shell) without loading terminal scripts on every page load.
     try {

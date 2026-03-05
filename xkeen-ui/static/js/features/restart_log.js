@@ -28,6 +28,52 @@
     return String(line || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // Normalize Xray-style log lines into a more terminal-like format.
+  // Example:
+  //   2026/03/02 21:48:55.631491 [Info] infra/conf/serial: ...
+  // becomes:
+  //   INFO[2026-03-02T21:48:55.631491] infra/conf/serial: ...
+  const XRAY_TS_LINE_RE = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s*(?:\[([^\]]+)\])?\s*(.*)$/;
+
+  function normalizeLineForTerminal(line) {
+    const s = String(line || '');
+    if (!s) return s;
+
+    // Keep ANSI / already-terminal lines intact.
+    if (s.indexOf('\x1b') !== -1) return s;
+    if (/^(?:INFO|WARN|WARNING|ERROR|ERRO|FATA|DEBUG)\[/.test(s)) return s;
+
+    const m = s.match(XRAY_TS_LINE_RE);
+    if (!m) return s;
+
+    const y = m[1];
+    const mo = m[2];
+    const d = m[3];
+    const t = m[4];
+    const iso = `${y}-${mo}-${d}T${t}`;
+
+    let lvl = 'INFO';
+    const low = String(m[5] || '').trim().toLowerCase();
+    if (low.startsWith('warn')) lvl = 'WARN';
+    else if (low.startsWith('error')) lvl = 'ERROR';
+    else if (low.startsWith('fatal')) lvl = 'FATA';
+    else if (low.startsWith('debug')) lvl = 'DEBUG';
+    else if (low.startsWith('info')) lvl = 'INFO';
+
+    const msg = String(m[6] || '').replace(/^\s+/, '');
+    return msg ? `${lvl}[${iso}] ${msg}` : `${lvl}[${iso}]`;
+  }
+
+  function normalizeTextForTerminal(text) {
+    const raw = String(text || '');
+    if (!raw) return raw;
+    const hasTrailingNl = raw.endsWith('\n');
+    const lines = raw.split(/\r?\n/);
+    if (hasTrailingNl && lines.length && lines[lines.length - 1] === '') lines.pop();
+    const norm = lines.map(normalizeLineForTerminal).join('\n');
+    return hasTrailingNl ? (norm + '\n') : norm;
+  }
+
   function getLogEls() {
     const els = [];
     try {
@@ -52,10 +98,11 @@
     if (lines.length && lines[lines.length - 1] === '') lines.pop();
     const html = lines
       .map((line) => {
+        const normalized = normalizeLineForTerminal(line || '');
         const cls = (typeof window.getXrayLogLineClass === 'function')
-          ? window.getXrayLogLineClass(line)
+          ? window.getXrayLogLineClass(normalized)
           : 'log-line';
-        const inner = ansiToHtml(line || '');
+        const inner = ansiToHtml(normalized);
         return '<span class="' + cls + '">' + inner + '</span>';
       })
       // Each line is rendered as a block-level <span>. Adding <br> creates empty rows in <pre>.
@@ -146,7 +193,7 @@
   }
 
   RL.copy = function copy() {
-    const text = RL._rawText || '';
+    const text = normalizeTextForTerminal(RL._rawText || '');
     if (!text) return;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {

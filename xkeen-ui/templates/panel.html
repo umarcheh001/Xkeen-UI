@@ -68,7 +68,7 @@
   <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260227a') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260305a') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -456,6 +456,7 @@
         <button id="outbounds-open-editor-btn" class="btn-icon" aria-label="Редактор" data-tooltip="Открыть {{ outbounds_name|e }} в редакторе JSON.">📝</button>
         <button id="outbounds-normalize-btn" class="btn-icon" aria-label="Нормализовать" data-tooltip="Нормализовать ссылку: дефолты, алиасы, порядок параметров.">✨</button>
         <button id="outbounds-build-btn" class="btn-icon" aria-label="Собрать" data-tooltip="Открыть мини-генератор и собрать ссылку из подсказок (protocol/type/security).">🧩</button>
+        <button id="outbounds-pool-btn" class="btn-icon" aria-label="Пул" data-tooltip="Пул прокси (несколько ссылок) — удобно для балансировщика.">🧱</button>
         <button id="outbounds-save-btn" class="btn-icon btn-primary" aria-label="Сохранить" data-tooltip="Распарсить ссылку и сохранить как outbounds для Xray.">💾</button>
         <button id="outbounds-backup-btn" class="btn-icon" aria-label="Backup" data-tooltip="Сделать бэкап {{ outbounds_name|e }}.">📦</button>
         <button id="outbounds-restore-auto-btn" class="btn-icon" aria-label="Restore" data-tooltip="Восстановить outbounds из автобэкапа.">⏪</button>
@@ -565,6 +566,9 @@
                 </label>
               </div>
               <div class="routing-rules-actions">
+                <button id="routing-balancer-quick-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Быстрый старт: leastPing + observatory + сохранить+рестарт" aria-label="Быстрый старт балансировщика">⚡</button>
+                <button id="routing-balancer-help-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Справка по балансировщикам" aria-label="Справка по балансировщикам">❓</button>
+                <button id="routing-forced-rules-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Принудительные правила (обход балансировщика): домены/IP → конкретный outbound" aria-label="Принудительные правила">🔒</button>
                 <button id="routing-balancer-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить балансировщик" aria-label="Добавить балансировщик">⚖️</button>
                 <button id="routing-rules-add-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Добавить правило" aria-label="Добавить правило">📜</button>
                 <button id="routing-rules-apply-btn" class="btn-secondary btn-icon" type="button" data-tooltip="Применить изменения в JSON‑редактор (с сохранением JSONC‑комментариев, best effort)" aria-label="Применить в JSON">💾</button>
@@ -630,6 +634,21 @@
                     <path d="M7 21v-8h10v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
                   </svg>
                   <span class="xk-btn-label">Сохранить</span>
+                </button>
+
+                <button
+                  id="routing-reset-btn"
+                  type="button"
+                  class="terminal-tool-btn xk-save-btn xk-reset-btn"
+                  data-tooltip="Откатить несохранённые изменения и вернуть текст к последней сохранённой версии."
+                  aria-label="Откатить изменения"
+                  disabled
+                >
+                  <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M9 10H4V5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M4 10a8 8 0 1 1 2.35 5.65" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span class="xk-btn-label">Откатить</span>
                 </button>
 
                 <details class="dt-log-menu xk-routing-menu">
@@ -944,6 +963,18 @@
       </div>
     </div>
   </section>
+
+  <!-- Restart log (Mihomo) -->
+  <section class="card log-card xk-mihomo-log-card">
+    <div class="log-header-row">
+      <h2>Журнал перезапуска</h2>
+      <div class="log-header-actions">
+        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="clear">Очистить</button>
+        <button type="button" class="btn-secondary log-btn" data-xk-restart-log-action="copy">Копировать</button>
+      </div>
+    </div>
+    <pre class="log-block" data-xk-restart-log="1"></pre>
+  </section>
 </div>
 <div id="view-xkeen" class="view-section" style="display:none;" data-xk-section="xkeen">
   <!-- XKeen: порты и исключения -->
@@ -955,53 +986,83 @@
         <div id="xkeen-body">
           <p>Файлы из каталога <code>/opt/etc/xkeen</code>:</p>
 
-          <h3>port_proxying.lst</h3>
-          <p class="small xk-card-desc">
-            Порты и диапазоны, которые нужно отправлять через прокси.
-          </p>
-          <textarea id="port-proxying-editor"
-                    class="xkeen-textarea"
-                    spellcheck="false"
-                    rows="8"
-                    placeholder="Например:\n80\n443\n596:599\nКаждая строка — порт или диапазон портов."></textarea>
-          <div class="actions">
-            <button id="port-proxying-save-btn" data-tooltip="Сохранить список port_proxying.lst.">💾 Сохранить port_proxying.lst</button>
+          <div class="xkeen-files-grid">
+            <div class="xkeen-mini-editor">
+              <div class="xkeen-mini-head">
+                <h3>port_proxying.lst</h3>
+                <p class="small xk-card-desc">
+                  Порты и диапазоны, которые нужно отправлять через прокси.
+                </p>
+              </div>
+              <textarea id="port-proxying-editor"
+                        class="xkeen-textarea"
+                        spellcheck="false"
+                        rows="8"
+                        placeholder="Например:\n80\n443\n596:599\nКаждая строка — порт или диапазон портов."></textarea>
+              <div class="actions">
+                <button id="port-proxying-save-btn" data-tooltip="Сохранить список port_proxying.lst.">💾 Сохранить port_proxying.lst</button>
+              </div>
+              <div id="port-proxying-status" class="status"></div>
+            </div>
+
+            <div class="xkeen-mini-editor">
+              <div class="xkeen-mini-head">
+                <h3>port_exclude.lst</h3>
+                <p class="small xk-card-desc">
+                  Порты, которые нужно исключить из проксирования.<br>
+                  <strong>Важно:</strong> одновременно использовать список проксируемых портов и исключения нельзя,
+                  приоритет у портов проксирования.
+                </p>
+              </div>
+              <textarea id="port-exclude-editor"
+                        class="xkeen-textarea"
+                        spellcheck="false"
+                        rows="8"
+                        placeholder="Порты для исключения из проксирования.\nНапример:\n22\n25\n80:89"></textarea>
+              <div class="actions">
+                <button id="port-exclude-save-btn" data-tooltip="Сохранить список port_exclude.lst.">💾 Сохранить port_exclude.lst</button>
+              </div>
+              <div id="port-exclude-status" class="status"></div>
+            </div>
+
+            <div class="xkeen-mini-editor">
+              <div class="xkeen-mini-head">
+                <h3>ip_exclude.lst</h3>
+                <p class="small xk-card-desc">
+                  IP и подсети, которые нужно исключить из проксирования (по одной в строке).
+                </p>
+              </div>
+              <textarea id="ip-exclude-editor"
+                        class="xkeen-textarea"
+                        spellcheck="false"
+                        rows="8"
+                        placeholder="Например:\n192.168.0.0/16\n2001:db8::/32"></textarea>
+              <div class="actions">
+                <button id="ip-exclude-save-btn" data-tooltip="Сохранить список ip_exclude.lst.">💾 Сохранить ip_exclude.lst</button>
+              </div>
+              <div id="ip-exclude-status" class="status"></div>
+            </div>
+
+            <div class="xkeen-mini-editor">
+              <div class="xkeen-mini-head">
+                <h3>xkeen.json</h3>
+                <p class="small xk-card-desc">
+                  Пользовательские политики портов для разных устройств (используются в роутинге через <code>source</code>).<br>
+                  Имена policy должны совпадать с политиками в роутере и работают только при наличии дефолтной политики <code>xkeen</code>.<br>
+                  <code>port</code>: <code>""</code> — все, <code>80,443,596:599</code> — список/диапазоны, <code>!7777</code> — исключить.
+                </p>
+              </div>
+              <textarea id="xkeen-config-editor"
+                        class="xkeen-textarea xkeen-json-textarea"
+                        spellcheck="false"
+                        rows="8"
+                        placeholder="{\n  \"example\": true\n}\n"></textarea>
+              <div class="actions">
+                <button id="xkeen-config-save-btn" data-tooltip="Сохранить файл xkeen.json.">💾 Сохранить xkeen.json</button>
+              </div>
+              <div id="xkeen-config-status" class="status"></div>
+            </div>
           </div>
-          <div id="port-proxying-status" class="status"></div>
-
-          <hr>
-
-          <h3>port_exclude.lst</h3>
-          <p class="small xk-card-desc">
-            Порты, которые нужно исключить из проксирования.<br>
-            <strong>Важно:</strong> одновременно использовать список проксируемых портов и исключения нельзя,
-            приоритет у портов проксирования.
-          </p>
-          <textarea id="port-exclude-editor"
-                    class="xkeen-textarea"
-                    spellcheck="false"
-                    rows="8"
-                    placeholder="Порты для исключения из проксирования.\nНапример:\n22\n25\n80:89"></textarea>
-          <div class="actions">
-            <button id="port-exclude-save-btn" data-tooltip="Сохранить список port_exclude.lst.">💾 Сохранить port_exclude.lst</button>
-          </div>
-          <div id="port-exclude-status" class="status"></div>
-
-          <hr>
-
-          <h3>ip_exclude.lst</h3>
-          <p class="small xk-card-desc">
-            IP и подсети, которые нужно исключить из проксирования (по одной в строке).
-          </p>
-          <textarea id="ip-exclude-editor"
-                    class="xkeen-textarea"
-                    spellcheck="false"
-                    rows="8"
-                    placeholder="Например:\n192.168.0.0/16\n2001:db8::/32"></textarea>
-          <div class="actions">
-            <button id="ip-exclude-save-btn" data-tooltip="Сохранить список ip_exclude.lst.">💾 Сохранить ip_exclude.lst</button>
-          </div>
-          <div id="ip-exclude-status" class="status"></div>
         </div>
       </section>
 </div>
@@ -1011,14 +1072,37 @@
 <section class="card commands-card">
   <div class="commands-header">
     <h2>Команды</h2>
-    <button type="button" class="btn-secondary" id="terminal-open-shell-btn" data-tooltip="Открыть терминал (обычный режим).">Открыть терминал</button>
-    <button type="button" class="btn-secondary btn-interactive-shell" id="terminal-open-pty-btn" title="Интерактивная оболочка (PTY)" data-tooltip="Открыть интерактивную оболочку (PTY).">Interactive Shell</button>
+    <button type="button" class="btn-secondary" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} data-tooltip="Открыть терминал (обычный режим).">Открыть терминал</button>
+    <button type="button" class="btn-secondary btn-interactive-shell" id="terminal-open-pty-btn" {% if is_mips %}style="display:none;"{% endif %} title="Интерактивная оболочка (PTY)" data-tooltip="Открыть интерактивную оболочку (PTY).">Interactive Shell</button>
+  </div>
+
+  <!-- Cores status row (installed versions + update hints). Filled by js/features/cores_status.js -->
+  <div class="commands-status-row" id="commands-status-row" aria-live="polite">
+    <div class="core-pill" id="core-pill-xray" data-core="xray">
+      <span class="core-name">Xray</span>
+      <span class="core-ver" id="core-xray-installed">—</span>
+      <a class="core-latest" id="core-xray-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
+      <button type="button" class="btn-secondary btn-mini" id="core-xray-update-btn" data-core="xray" style="display:none;" data-tooltip="Запустить обновление Xray (xkeen -ux) через терминал.">Обновить</button>
+    </div>
+    <div class="core-pill" id="core-pill-mihomo" data-core="mihomo">
+      <span class="core-name">Mihomo</span>
+      <span class="core-ver" id="core-mihomo-installed">—</span>
+      <a class="core-latest" id="core-mihomo-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
+      <button type="button" class="btn-secondary btn-mini" id="core-mihomo-update-btn" data-core="mihomo" style="display:none;" data-tooltip="Запустить обновление Mihomo (xkeen -um) через терминал.">Обновить</button>
+    </div>
+
+    <button type="button" class="btn-secondary btn-mini" id="cores-check-btn" title="Проверить обновления (с кэшем)">Проверить обновления</button>
+    <span class="cores-checked-at" id="cores-checked-at"></span>
   </div>
 
   <div id="commands-body">
   {% for group in command_groups %}
     <div class="command-group">
-      <div class="command-group-title">{{ group.title }}</div>
+      {% set _tone = group.tone if group.tone is defined else '' %}
+      {% set _parts = group.title.split(' | ', 1) %}
+      <div class="command-group-title{% if _tone %} tone-{{ _tone }}{% endif %}">
+        <span class="cgt-key">{{ _parts[0] }}</span>{% if _parts|length > 1 %}<span class="cgt-sep"> | </span><span class="cgt-rest">{{ _parts[1] }}</span>{% endif %}
+      </div>
       <ul class="command-list">
         {% for cmd in group['items'] %}
           <li class="command-item-wrap">
@@ -1481,6 +1565,406 @@
       </div>
     </div>
 
+    <!-- Inbounds preset apply modal (preserve extras + optional socks-in) -->
+    <div id="inbounds-apply-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Применение режима inbounds">
+      <div class="modal-content" style="max-width: 760px;" data-modal-key="inbounds-apply">
+        <div class="modal-header">
+          <span class="modal-title">Применение режима inbounds</span>
+          <button type="button" class="modal-close" id="inbounds-apply-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description" id="inbounds-apply-desc">
+            Вы применяете пресет режима. Можно сохранить пользовательские секции и при желании добавить локальный SOCKS-in.
+          </p>
+
+          <label class="dt-switch xk-mini-switch" title="Сохранять все inbounds кроме системных (redirect/tproxy).">
+            <input type="checkbox" id="inbounds-apply-preserve-extras" checked>
+            <span class="dt-switch-slider" aria-hidden="true"></span>
+            <span class="dt-switch-label">Сохранить пользовательские inbounds</span>
+          </label>
+          <div id="inbounds-apply-extras-hint" class="modal-hint" style="margin: 6px 0 12px 34px;"></div>
+
+          <label class="dt-switch xk-mini-switch" title="Добавить inbound для локального SOCKS-прокси (tag: socks-in).">
+            <input type="checkbox" id="inbounds-apply-add-socks">
+            <span class="dt-switch-slider" aria-hidden="true"></span>
+            <span class="dt-switch-label">Добавить SOCKS-in</span>
+          </label>
+
+          <div id="inbounds-apply-socks-row" style="display:none; margin: 8px 0 0 34px;">
+            <div style="display:flex; gap: 12px; align-items:flex-start; flex-wrap: wrap;">
+              <label class="routing-rule-field" style="margin:0; min-width: 220px;">
+                <span class="routing-rule-key"><span>Порт</span></span>
+                <input id="inbounds-apply-socks-port" class="routing-rule-input" type="number" min="1" max="65535" step="1" placeholder="1080" inputmode="numeric">
+              </label>
+              <div class="modal-hint" style="margin-top: 2px; max-width: 420px;">
+                Будет создан inbound <code>tag: socks-in</code>, <code>protocol: socks</code>, <code>udp: true</code> + <code>sniffing</code>.
+              </div>
+            </div>
+          </div>
+
+          <div id="inbounds-apply-warn" class="modal-hint" style="display:none; margin-top: 10px; color: var(--warning, #f59e0b);"></div>
+
+          <div id="inbounds-apply-error" class="modal-hint" style="display:none; margin-top: 10px; color: var(--danger, #ef4444);"></div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="inbounds-apply-cancel-btn">Отмена</button>
+          <button type="button" id="inbounds-apply-ok-btn" class="btn-primary">Применить</button>
+        </div>
+      </div>
+    </div>
+
+
+
+    
+
+    <!-- Balancers help (how-to) -->
+    <div id="routing-balancer-help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Справка по балансировщикам">
+      <div class="modal-content" style="max-width: 980px;" data-modal-key="routing-balancer-help">
+        <div class="modal-header">
+          <span class="modal-title">Справка: балансировщики (Xray Routing)</span>
+          <button type="button" class="modal-close" id="routing-balancer-help-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body routing-help-body xk-balancer-help-grid">
+          <nav class="xk-balancer-help-toc" aria-label="Навигация по справке">
+            <div class="terminal-menu-title" style="margin:0 0 8px;">Содержание</div>
+            <a href="#" data-help-target="xk-bhelp-what">Как это устроено</a>
+            <a href="#" data-help-target="xk-bhelp-step1">Шаг 1: серверы (outbounds)</a>
+            <a href="#" data-help-target="xk-bhelp-step2">Шаг 2: балансировщик</a>
+            <a href="#" data-help-target="xk-bhelp-step3">Шаг 3: правила</a>
+            <a href="#" data-help-target="xk-bhelp-forced">Исключения (🔒)</a>
+            <a href="#" data-help-target="xk-bhelp-troubles">Ошибки и подсказки</a>
+          </nav>
+
+          <div class="xk-balancer-help-main">
+            <div class="xk-balancer-help-callout">
+              <b>Идея простая:</b> вы добавляете несколько серверов (outbounds) с разными <code>tag</code>,
+              затем создаёте <b>балансировщик</b>, а в правилах указываете <code>balancerTag</code>.
+              Дальше Xray сам выбирает “какой outbound использовать сейчас”.
+            </div>
+
+            <h3 id="xk-bhelp-what">Как это устроено в панели (3 файла)</h3>
+            <ul>
+              <li><code>04_outbounds.json</code> — список ваших серверов/прокси (каждый с уникальным <code>tag</code>).</li>
+              <li><code>05_routing.json</code> — <code>routing.balancers</code> (балансировщики) и <code>routing.rules</code> (правила).
+                <span class="modal-hint">(в некоторых сборках/профилях может быть <code>05_routing_hys2.json</code>; панель показывает активный файл в селекторе сверху)</span>
+              </li>
+              <li><code>07_observatory.json</code> — измерение доступности/пинга (нужно для <code>leastPing</code>).</li>
+            </ul>
+            <div class="xk-balancer-help-details" style="margin: 10px 0 12px; padding: 10px 12px;">
+              <b>Минимальный пример (для понимания)</b>
+              <div class="modal-hint" style="margin: 6px 0 8px;">Смысл: несколько outbounds с тегами → один balancer → правило с balancerTag.</div>
+              <div class="xk-balancer-help-code">
+                <code>// routing.balancers</code><br>
+                <code>{ "tag": "proxy", "selector": ["vless-"], "strategy": {"type":"leastPing"}, "fallbackTag": "direct" }</code><br><br>
+                <code>// routing.rules (в конце списка)</code><br>
+                <code>{ "type": "field", "balancerTag": "proxy" }</code>
+              </div>
+            </div>
+
+            <div class="modal-hint" style="margin: 0 0 12px;">
+              Важно: Xray применяет конфиг только после <b>перезапуска</b>. В мастерах “Применить + Рестарт” перезапуск делается автоматически (job + лог).
+            </div>
+
+            <h3 id="xk-bhelp-step1">Шаг 1. Добавьте серверы в 04_outbounds (и дайте им теги)</h3>
+            <details class="xk-balancer-help-details" open>
+              <summary>Самый простой способ — кнопка “Пул прокси” в карточке 04_outbounds</summary>
+              <p>
+                Откройте карточку <b>Outbounds (04_outbounds.json)</b> и нажмите <b>🧱 Пул прокси</b>.
+                Вставьте несколько строк со ссылками — по одной записи на строку:
+              </p>
+              <div class="xk-balancer-help-code">
+                <code>vless-1 | vless://....</code><br>
+                <code>vless-2 = vless://....</code><br>
+                <code>vless://....#vless-3</code>
+              </div>
+              <ul>
+                <li><b>Рекомендуется</b> использовать общий префикс в тегах (например <code>vless-*</code>) — так проще управлять списком.</li>
+                <li>Теги <code>direct</code>/<code>block</code>/<code>dns</code> — служебные, их не используйте для прокси.</li>
+                <li>После сохранения пул попадёт в <code>04_outbounds</code>. Далее в мастерах можно “подтянуть” теги автоматически.</li>
+              </ul>
+            </details>
+
+            <h3 id="xk-bhelp-step2">Шаг 2. Создайте балансировщик</h3>
+            <details class="xk-balancer-help-details" open>
+              <summary>⚡ “Быстрый старт” — рекомендовано для большинства</summary>
+              <p>
+                Кнопка <b>⚡</b> создаёт/обновляет балансировщик со стратегией <code>leastPing</code> и настраивает всё нужное:
+              </p>
+              <ul>
+                <li>Создаёт <code>routing.balancers</code> с <code>strategy.type = leastPing</code>.</li>
+                <li>Заполняет <code>selector</code> по списку outbound‑тегов (можно отредактировать).</li>
+                <li>Генерирует <code>07_observatory.json</code>, чтобы Xray мог измерять задержку.</li>
+                <li>Опционально добавляет “дефолтное” правило <code>match‑all</code> с <code>balancerTag</code> (чтобы весь трафик пошёл через балансировщик).</li>
+                <li>Нажатие <b>“Применить + Рестарт”</b> — сохранит нужные файлы и перезапустит Xray в job‑режиме с логом.</li>
+              </ul>
+              <div class="modal-hint">
+                Если вы не хотите, чтобы <i>весь</i> трафик шёл через балансировщик — снимите галочку про “дефолтное правило”
+                и создайте правило вручную только для нужных доменов/устройств.
+              </div>
+            </details>
+            <details class="xk-balancer-help-details">
+              <summary>⚖️ “Добавить балансировщик” — ручная настройка</summary>
+              <p>
+                Кнопка <b>⚖️</b> добавляет балансировщик в список “Балансировщики”. Дальше вы вручную редактируете:
+              </p>
+              <ul>
+                <li><code>tag</code> — имя балансировщика (его потом указывают в <code>balancerTag</code> у правил).</li>
+                <li><code>selector</code> — список <b>префиксов</b> outbound‑тегов. Xray выберет все outbounds, чьи <code>tag</code> начинаются с этих строк.</li>
+                <li><code>strategy</code> — алгоритм (например <code>leastPing</code>).</li>
+                <li><code>fallbackTag</code> — запасной outbound (обычно <code>direct</code>).</li>
+              </ul>
+              <div class="xk-balancer-help-callout" style="margin-top:10px;">
+                <b>Важно про selector:</b> это префиксы. Если у вас есть теги <code>vless-1</code> и <code>vless-10</code>,
+                то selector <code>vless-1</code> может “захватить” оба. Делайте теги уникальными, без таких пересечений.
+              </div>
+            </details>
+
+            <h3 id="xk-bhelp-step3">Шаг 3. Настройте правила маршрутизации</h3>
+            <details class="xk-balancer-help-details" open>
+              <summary>Как отправить трафик в балансировщик</summary>
+              <p>
+                В правилах (<code>routing.rules</code>) у каждого правила должно быть <b>одно из двух</b>:
+                <code>outboundTag</code> (на конкретный сервер) или <code>balancerTag</code> (в балансировщик).
+              </p>
+              <ul>
+                <li>Чтобы использовать балансировщик — задайте <code>balancerTag: &lt;tag балансировщика&gt;</code>.</li>
+                <li>Правила проверяются <b>сверху вниз</b>. Первое совпавшее правило побеждает.</li>
+                <li>Обычно “дефолтное” правило (match‑all) ставят в самый низ списка.</li>
+              </ul>
+              <div class="xk-balancer-help-code">
+                <code>{ "type": "field", "balancerTag": "proxy" }</code>
+              </div>
+              <div class="modal-hint" style="margin-top: 8px;">
+                Если вы редактируете правила/балансировщики через карточки, обычно нужно: <b>💾 Применить изменения</b> → затем в редакторе <b>Сохранить</b> → (при необходимости) <b>Перезапуск</b>.
+                В мастере ⚡ это делается одной кнопкой.
+              </div>
+            </details>
+
+            <h3 id="xk-bhelp-forced">Исключения (🔒 Принудительные правила)</h3>
+            <details class="xk-balancer-help-details" open>
+              <summary>Когда нужны принудительные правила</summary>
+              <p>
+                Если какие‑то домены/IP <b>нельзя</b> отправлять в балансировщик (например локальные ресурсы, банки, IPTV,
+                админка роутера), используйте кнопку <b>🔒</b>.
+              </p>
+              <ul>
+                <li>Мастер создаёт правила <code>type: field</code>, которые ведут на <b>конкретный</b> <code>outboundTag</code> (например <code>direct</code>).</li>
+                <li>Эти правила вставляются <b>выше</b> правила с <code>balancerTag</code>, поэтому они “обходят” балансировщик.</li>
+                <li>Опция “Только для redirect/tproxy” полезна, если вы не хотите менять поведение для других inbound’ов.</li>
+              </ul>
+              <div class="xk-balancer-help-code">
+                <code>geosite:category-ru</code><br>
+                <code>domain:example.com</code><br>
+                <code>geoip:private</code>
+              </div>
+            </details>
+
+            <h3 id="xk-bhelp-troubles">Ошибки и подсказки</h3>
+            <details class="xk-balancer-help-details">
+              <summary>Не подтягиваются теги / пустой список</summary>
+              <ul>
+                <li>Проверьте, что в <code>04_outbounds</code> есть outbounds с <b>уникальными</b> <code>tag</code>.</li>
+                <li>Нажмите “⟳ Обновить список” в мастере (он берёт теги из outbounds и фильтрует служебные).</li>
+              </ul>
+            </details>
+            <details class="xk-balancer-help-details">
+              <summary>leastPing не работает / не видно переключений</summary>
+              <ul>
+                <li>Для <code>leastPing</code> нужен <code>07_observatory.json</code> и перезапуск Xray.</li>
+                <li>Если сомневаетесь — используйте ⚡ мастер и кнопку “Применить + Рестарт” (он создаст observatory и покажет лог).</li>
+                <li>Проверьте, что ваши серверы реально доступны из роутера (DNS/маршруты/время).</li>
+              </ul>
+            </details>
+            <details class="xk-balancer-help-details">
+              <summary>Трафик “не туда” / правило не срабатывает</summary>
+              <ul>
+                <li>Правила применяются сверху вниз. Проверьте порядок (исключения должны быть выше).</li>
+                <li>Проверьте условия rule: <code>domain</code>/<code>ip</code>/<code>source</code>/<code>inboundTag</code>.</li>
+                <li>Помните, что <code>selector</code> — префиксы. Не делайте пересекающиеся теги.</li>
+              </ul>
+            </details>
+          </div>
+        </div>
+        <div class="modal-actions" style="justify-content:flex-end;">
+          <button type="button" class="btn-secondary" id="routing-balancer-help-ok-btn">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+<!-- Quick balancer (leastPing) wizard -->
+    <div id="routing-balancer-quick-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Быстрый старт балансировщика (leastPing)">
+      <div class="modal-content" style="max-width: 820px;" data-modal-key="routing-balancer-quick">
+        <div class="modal-header">
+          <span class="modal-title">Быстрый старт: балансировщик leastPing</span>
+          <button type="button" class="modal-close" id="routing-balancer-quick-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description" style="margin-bottom: 10px;">
+            Панель создаст/обновит балансировщик <code>leastPing</code>, сформирует <code>07_observatory.json</code> и сразу выполнит <b>Сохранить + Перезапуск</b> (job‑режим с логом).
+          </p>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items:start;">
+            <div>
+              <label class="routing-rule-field" style="margin-bottom: 10px;">
+                <span class="routing-rule-key"><span>balancer.tag</span></span>
+                <input id="routing-balancer-quick-tag" class="routing-rule-input" type="text" value="proxy" placeholder="proxy">
+              </label>
+
+              <label class="routing-rule-field" style="margin-bottom: 10px;">
+                <span class="routing-rule-key"><span>fallbackTag</span></span>
+                <input id="routing-balancer-quick-fallback" class="routing-rule-input" type="text" value="direct" placeholder="direct">
+              </label>
+
+              <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin: 2px 0 8px;">
+                <input type="checkbox" id="routing-balancer-quick-default-rule" checked>
+                <span>Сделать балансировщик <b>дефолтным</b> (добавить правило match‑all с <code>balancerTag</code>)</span>
+              </label>
+
+              <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin: 2px 0 0;">
+                <input type="checkbox" id="routing-balancer-quick-overwrite-observatory" checked>
+                <span>Перезаписать <code>07_observatory</code> при существовании</span>
+              </label>
+            </div>
+
+            <div>
+              <label class="routing-rule-field" style="margin-bottom: 10px;">
+                <span class="routing-rule-key"><span>probeUrl</span></span>
+                <input id="routing-balancer-quick-probe-url" class="routing-rule-input" type="text" value="https://www.gstatic.com/generate_204" placeholder="https://www.gstatic.com/generate_204">
+              </label>
+
+              <label class="routing-rule-field" style="margin-bottom: 10px;">
+                <span class="routing-rule-key"><span>probeInterval</span></span>
+                <input id="routing-balancer-quick-probe-interval" class="routing-rule-input" type="text" value="60s" placeholder="60s">
+              </label>
+
+              <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin: 2px 0 0;">
+                <input type="checkbox" id="routing-balancer-quick-concurrency" checked>
+                <span>enableConcurrency</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 6px;">
+              <div class="terminal-menu-title" style="margin:0;">Теги прокси (selector / subjectSelector)</div>
+              <button type="button" class="btn-secondary" id="routing-balancer-quick-refresh-tags-btn" data-tooltip="Взять теги из outbounds">⟳ Обновить список</button>
+            </div>
+            <textarea id="routing-balancer-quick-tags" class="xkeen-textarea" spellcheck="false" rows="7" placeholder="tag1\ntag2\n..."></textarea>
+            <div class="modal-hint" style="margin-top: 6px;">
+              По умолчанию будут взяты все outbound‑теги (кроме direct/block/dns и др.). Можно отредактировать вручную.
+            </div>
+          </div>
+
+          <div id="routing-balancer-quick-status" class="modal-hint" style="margin-top: 10px;"></div>
+        </div>
+
+        <div class="modal-actions" style="justify-content: space-between;">
+          <button type="button" id="routing-balancer-quick-cancel-btn">Отмена</button>
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="btn-secondary" id="routing-balancer-quick-dry-btn" data-tooltip="Только обновить карточки (без сохранения/рестарта)">Только применить</button>
+            <button type="button" class="btn-danger" id="routing-balancer-quick-run-btn">Применить + Рестарт</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+    <!-- Forced rules wizard (bypass balancer): domains/IP -> specific outboundTag -->
+    <div id="routing-forced-rules-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Принудительные правила (обход балансировщика)">
+      <div class="modal-content" style="max-width: 920px;" data-modal-key="routing-forced-rules">
+        <div class="modal-header">
+          <span class="modal-title">Принудительные правила (обход балансировщика)</span>
+          <button type="button" class="modal-close" id="routing-forced-rules-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-description" style="margin: 0 0 10px;">
+            Мастер добавит/обновит правила <code>type: field</code>, которые отправляют выбранные домены/IP <b>на конкретный outbound</b>.
+            Эти правила будут стоять <b>выше</b> правила балансировщика (и обходить его).
+          </p>
+
+          <div class="xk-forced-wizard-grid">
+            <!-- Left: input -->
+            <div class="xk-forced-wizard-panel">
+              <div class="xk-forced-wizard-row2">
+                <label class="routing-rule-field" style="margin:0;">
+                  <span class="routing-rule-key"><span>outboundTag</span></span>
+                  <div class="xk-forced-outbound-wrap">
+                    <select id="routing-forced-rules-outbound" class="routing-rule-input"></select>
+                    <button type="button" class="btn-secondary" id="routing-forced-rules-refresh-tags-btn" data-tooltip="Обновить список outbound‑тегов">⟳</button>
+                  </div>
+                </label>
+
+                <label class="routing-rule-field" style="margin:0;">
+                  <span class="routing-rule-key"><span>Тип</span></span>
+                  <select id="routing-forced-rules-type" class="routing-rule-input">
+                    <option value="domain">domain</option>
+                    <option value="ip">ip</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="routing-rule-field" style="margin: 8px 0 0;">
+                <span class="routing-rule-key"><span>Значения</span></span>
+                <textarea id="routing-forced-rules-values" class="xkeen-textarea" spellcheck="false" rows="6" placeholder="По одному на строке\nexample.com\ndomain:google.com\ngeosite:youtube\n\nДля ip: 1.2.3.4/32\ngeoip:private"></textarea>
+              </label>
+
+              <div class="xk-forced-wizard-actions">
+                <button type="button" class="btn-secondary" id="routing-forced-rules-add-btn">Добавить</button>
+                <button type="button" class="btn-secondary" id="routing-forced-rules-clear-proxy-btn" data-tooltip="Удалить все значения для выбранного outboundTag">Очистить выбранный</button>
+                <button type="button" class="btn-danger" id="routing-forced-rules-clear-all-btn" data-tooltip="Удалить все принудительные правила из мастера">Удалить всё</button>
+              </div>
+
+              <div class="modal-hint" style="margin-top: 8px;">
+                Поддерживаются любые значения Xray для <code>domain</code>/<code>ip</code> (например <code>geosite:TAG</code>, <code>geoip:TAG</code>, <code>domain:example.com</code>).
+              </div>
+            </div>
+
+            <!-- Right: options + preview -->
+            <div class="xk-forced-wizard-panel">
+              <div class="xk-forced-wizard-options">
+                <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin:0;">
+                  <input type="checkbox" id="routing-forced-rules-inbound-only" checked>
+                  <span>Только для <code>redirect/tproxy</code></span>
+                </label>
+
+                <label class="routing-rule-field" style="margin:0;">
+                  <span class="routing-rule-key"><span>Приоритет</span></span>
+                  <select id="routing-forced-rules-priority" class="routing-rule-input">
+                    <option value="after_block">После block‑правил</option>
+                    <option value="before_balancer">Перед балансировщиком</option>
+                  </select>
+                </label>
+
+                <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin:0;">
+                  <input type="checkbox" id="routing-forced-rules-import-legacy">
+                  <span>Импорт без <code>ruleTag</code></span>
+                </label>
+              </div>
+
+              <div class="xk-forced-wizard-listbox">
+                <div class="xk-forced-wizard-listhead">
+                  <div class="terminal-menu-title" style="margin:0;">Текущие правила</div>
+                  <div id="routing-forced-rules-status" class="modal-hint" style="margin:0;"></div>
+                </div>
+                <div id="routing-forced-rules-list" class="xk-card-desc xk-forced-wizard-list">
+                  —
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="justify-content: space-between;">
+          <button type="button" id="routing-forced-rules-cancel-btn">Отмена</button>
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="btn-secondary" id="routing-forced-rules-dry-btn" data-tooltip="Только обновить карточки (без сохранения/рестарта)">Только применить</button>
+            <button type="button" class="btn-danger" id="routing-forced-rules-run-btn">Применить + Рестарт</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
 
 
     <!-- Xray snapshots preview modal (read-only) -->
@@ -1887,6 +2371,60 @@
       </div>
     </div>
 </div>
+
+	    <!-- Outbounds: proxy pool modal (multiple links) -->
+	    <div id="outbounds-pool-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Пул прокси для балансировщика">
+	      <div class="modal-content" style="max-width: 860px;" data-modal-key="outbounds-pool">
+	        <div class="modal-header">
+	          <span class="modal-title">Пул прокси (несколько ссылок)</span>
+	          <button type="button" class="modal-close" id="outbounds-pool-close-btn" title="Закрыть">×</button>
+	        </div>
+	        <div class="modal-body">
+	          <p class="modal-description" style="margin-bottom: 10px;">
+	            Вставь несколько ссылок (по одной на строку). Можно писать <code>tag | url</code>, <code>tag = url</code> или просто <code>url</code> (тег будет предложен автоматически).
+	            Эти теги потом выбираются в балансировщике (<code>leastPing</code>).
+	          </p>
+
+	          <label style="display:block;">
+	            <span class="hint-label">Список (вставка)</span>
+	            <textarea id="outbounds-pool-input" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" placeholder="p1 | vless://...\np2 = vless://...\nvless://...#mytag"></textarea>
+	          </label>
+
+	          <div class="actions xk-actions-inline" style="margin-top: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+	            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+	              <button type="button" id="outbounds-pool-add-btn" class="btn-secondary">➕ Добавить в список</button>
+	              <button type="button" id="outbounds-pool-clear-btn" class="btn-secondary">🧹 Очистить список</button>
+	            </div>
+	            <span id="outbounds-pool-existing" class="modal-hint" style="opacity:0.75; font-size:0.85rem;"></span>
+	          </div>
+
+	          <div style="margin-top: 10px; max-height: 260px; overflow:auto; border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 10px;">
+	            <table style="width:100%; border-collapse: collapse;">
+	              <thead>
+	                <tr>
+	                  <th style="text-align:left; padding:8px;">Tag</th>
+	                  <th style="text-align:left; padding:8px;">URL</th>
+	                  <th style="width:70px; padding:8px;"></th>
+	                </tr>
+	              </thead>
+	              <tbody id="outbounds-pool-tbody"></tbody>
+	            </table>
+	          </div>
+
+	          <div id="outbounds-pool-status" class="status" style="margin-top: 10px;"></div>
+	        </div>
+	        <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+	          <label style="display:flex; gap:8px; align-items:center;">
+	            <input type="checkbox" id="outbounds-pool-replace" />
+	            <span>Заменить весь пул (удалить старые прокси‑теги)</span>
+	          </label>
+	          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+	            <button type="button" id="outbounds-pool-save-btn" class="btn-primary">💾 Сохранить</button>
+	            <button type="button" id="outbounds-pool-cancel-btn">Отмена</button>
+	          </div>
+	        </div>
+	      </div>
+	    </div>
 
     <!-- Mihomo: import proxy / subscription modal (parser) -->
     <div id="mihomo-import-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Импорт узла Mihomo">
@@ -2313,8 +2851,8 @@
 
     <div id="toast-container"></div>
 
-    <footer>
-      <small>Xkeen UI — {{ inbounds_file|e }}, {{ outbounds_file|e }}, {{ routing_file|e }}</small>
+    <footer class="panel-footer">
+      <small>Directed by umarcheh</small>
     </footer>
   </div>
 
@@ -2363,9 +2901,48 @@
   <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js', v='20260224a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/dat_contents_modal.js', v='20260213b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/backups.js', v='20260224d') }}"></script>
-	  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260302c') }}"></script>
+
+  <!-- Routing page core -->
+  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260302c') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_jsonc_preserve.js', v='20260218d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260218d') }}"></script>
+
+  <!-- routing_cards: namespace + shared helpers -->
+  <script src="{{ url_for('static', filename='js/features/routing_cards/ns.js', v='20260304d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/ids.js', v='20260304d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/common.js', v='20260304d') }}"></script>
+
+  <!-- routing_cards: UI helpers -->
+  <script src="{{ url_for('static', filename='js/features/routing_cards/collapse.js', v='20260304d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/help_docs.js', v='20260304d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/help_modal.js', v='20260304d') }}"></script>
+
+  <!-- routing_cards: DAT card -->
+  <script src="{{ url_for('static', filename='js/features/routing_cards/dat/prefs.js', v='20260304d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/dat/combo.js', v='20260304d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/dat/api.js', v='20260304d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/dat/card.js', v='20260304d') }}"></script>
+
+  <!-- routing_cards: Rules card -->
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/state.js', v='20260304d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/model.js', v='20260304d2') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/detect.js', v='20260304j') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/json_modal.js', v='20260304h4') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/apply.js', v='20260304h4') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/fields.js', v='20260304e') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dnd_pointer.js', v='20260304h') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/render.js', v='20260304h4') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/controls.js', v='20260304h4') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dat_bridge.js', v='20260304h4') }}"></script>
+
+  <!-- routing_cards: Quick balancer wizard (leastPing + observatory + restart) -->
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/quick_balancer.js', v='20260305a') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/balancer_help.js', v='20260305c') }}"></script>
+
+  <!-- routing_cards: Forced rules wizard (bypass balancer) -->
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/forced_rules_wizard.js', v='20260305b') }}"></script>
+
+  <!-- routing_cards: facade/entrypoint -->
+  <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260304m') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260224d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/local_io.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/github.js') }}"></script>
@@ -2378,8 +2955,9 @@
   <script src="{{ url_for('static', filename='js/features/mihomo_proxy_tools.js', v='20260302a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_hwid_sub.js', v='20260302b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/commands_list.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/cores_status.js', v='20260305a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/outbounds.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/outbounds.js', v='20260305b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
     <script src="{{ url_for('static', filename='js/features/xkeen_texts.js') }}"></script>
       <!-- File Manager scripts are lazy-loaded when Files tab is opened (Commit J) -->

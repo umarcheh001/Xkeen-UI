@@ -50,6 +50,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .service import create_service_blueprint
     from .xray_logs import create_xray_logs_blueprint
     from .commands import create_commands_blueprint
+    from .cores_status import create_cores_status_blueprint
     from .devtools import create_devtools_blueprint
     from .fs import create_fs_blueprint
     from .remotefs.blueprint import create_remotefs_blueprint
@@ -139,6 +140,8 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     )
 
     app.register_blueprint(create_commands_blueprint())
+    # Cores version/update hints (Commands tab header)
+    app.register_blueprint(create_cores_status_blueprint(ctx.ui_state_dir))
     # USB storage helper API (list + mount/unmount). Safe to register even if ndmc is missing.
     app.register_blueprint(create_storage_usb_blueprint())
     app.register_blueprint(create_devtools_blueprint(ctx.ui_state_dir))

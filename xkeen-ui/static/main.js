@@ -78,6 +78,7 @@
   linkLegacyFn('loadPortProxying', () => XKeen.features && XKeen.features.xkeenTexts && XKeen.features.xkeenTexts.reloadPortProxying);
   linkLegacyFn('loadPortExclude', () => XKeen.features && XKeen.features.xkeenTexts && XKeen.features.xkeenTexts.reloadPortExclude);
   linkLegacyFn('loadIpExclude', () => XKeen.features && XKeen.features.xkeenTexts && XKeen.features.xkeenTexts.reloadIpExclude);
+  linkLegacyFn('loadXkeenConfig', () => XKeen.features && XKeen.features.xkeenTexts && XKeen.features.xkeenTexts.reloadXkeenConfig);
 
   // Restart log (older code sometimes calls this after restart/import)
   linkLegacyFn('loadRestartLog', () => XKeen.features && XKeen.features.restartLog && XKeen.features.restartLog.load);
