@@ -65,11 +65,11 @@
         modules = ['vs/language/json/monaco.contribution'];
       } else if (lang === 'yaml') {
         // YAML is shipped as a basic language (tokenization only).
-        modules = ['vs/basic-languages/yaml/yaml'];
+        modules = ['vs/basic-languages/monaco.contribution'];
       } else if (lang === 'ini') {
-        modules = ['vs/basic-languages/ini/ini'];
+        modules = ['vs/basic-languages/monaco.contribution'];
       } else if (lang === 'shell' || lang === 'bash' || lang === 'sh') {
-        modules = ['vs/basic-languages/shell/shell'];
+        modules = ['vs/basic-languages/monaco.contribution'];
       }
 
       if (!modules) {

@@ -2,44 +2,30 @@
   'use strict';
 
   // Lazy Monaco Editor (AMD) loader.
-  // CDN-first with safe fallbacks; does nothing unless explicitly called.
+  // Local-only loader; never fetches Monaco from external CDNs.
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
   XK.monacoLoader = XK.monacoLoader || {};
 
   const L = XK.monacoLoader;
-
   // ------------------------ base paths ------------------------
-  function guessStaticRoot() {
-    try {
-      const cs = document.currentScript;
-      if (cs && cs.src) {
-        const u = new URL(cs.src, window.location.href);
-        const p = String(u.pathname || '');
-        const idx = p.indexOf('/static/');
-        if (idx >= 0) return p.slice(0, idx + '/static/'.length);
-      }
-    } catch (e) {}
-    return '/static/';
-  }
-
-  const STATIC_ROOT = guessStaticRoot();
+  // Keep Monaco on a fixed local path. Avoid guessing from <script src> or runtime path
+  // mangling, because on some installs that produced broken URLs like /static/monaco--/vs.
+  const STATIC_ROOT = '/static/';
 
   // ------------------------ config ------------------------
-  const DEFAULT_VERSION = '0.52.2';
+  const DEFAULT_VERSION = '0.55.1';
 
   // You can override at runtime before calling any loader methods:
-  // window.XKeenMonacoConfig = { version: '0.52.2', prefer: 'cdn', cdn: ['jsdelivr', 'unpkg'], localVsPaths: [...] }
+  // window.XKeenMonacoConfig = { version: '0.55.1', prefer: 'local', localVsPaths: [...] }
   const _cfg = {
     version: DEFAULT_VERSION,
-    prefer: 'cdn', // 'cdn' | 'local'
-    cdn: ['jsdelivr', 'unpkg'],
-    // Local AMD loader candidates (vs/loader.min.js):
+    prefer: 'local', // local-only
+    // Local AMD loader candidates (vs/loader.js):
     //   - If later you add a local copy, place it under /static/monaco-editor/...
     localVsPaths: [
       STATIC_ROOT + 'monaco-editor/vs',
-      STATIC_ROOT + 'monaco/vs',
     ],
   };
 
@@ -48,9 +34,13 @@
       const ext = window.XKeenMonacoConfig;
       if (!ext || typeof ext !== 'object') return;
       if (typeof ext.version === 'string' && ext.version.trim()) _cfg.version = ext.version.trim();
-      if (ext.prefer === 'cdn' || ext.prefer === 'local') _cfg.prefer = ext.prefer;
-      if (Array.isArray(ext.cdn) && ext.cdn.length) _cfg.cdn = ext.cdn.slice(0);
-      if (Array.isArray(ext.localVsPaths) && ext.localVsPaths.length) _cfg.localVsPaths = ext.localVsPaths.slice(0);
+      _cfg.prefer = 'local';
+      if (Array.isArray(ext.localVsPaths) && ext.localVsPaths.length) {
+        const sane = ext.localVsPaths
+          .map((v) => String(v || '').trim().replace(/\/+$/, ''))
+          .filter((v) => v === '/static/monaco-editor/vs' || v.endsWith('/static/monaco-editor/vs'));
+        if (sane.length) _cfg.localVsPaths = sane;
+      }
     } catch (e) {}
   }
 
@@ -63,9 +53,13 @@
   L.setConfig = function setConfig(patch) {
     if (!patch || typeof patch !== 'object') return L.getConfig();
     if (typeof patch.version === 'string' && patch.version.trim()) _cfg.version = patch.version.trim();
-    if (patch.prefer === 'cdn' || patch.prefer === 'local') _cfg.prefer = patch.prefer;
-    if (Array.isArray(patch.cdn) && patch.cdn.length) _cfg.cdn = patch.cdn.slice(0);
-    if (Array.isArray(patch.localVsPaths) && patch.localVsPaths.length) _cfg.localVsPaths = patch.localVsPaths.slice(0);
+    _cfg.prefer = 'local';
+    if (Array.isArray(patch.localVsPaths) && patch.localVsPaths.length) {
+      const sane = patch.localVsPaths
+        .map((v) => String(v || '').trim().replace(/\/+$/, ''))
+        .filter((v) => v === '/static/monaco-editor/vs' || v.endsWith('/static/monaco-editor/vs'));
+      if (sane.length) _cfg.localVsPaths = sane;
+    }
     return L.getConfig();
   };
 
@@ -141,37 +135,6 @@
   }
 
   // ------------------------ URL helpers ------------------------
-  function cdnCandidates(version) {
-    const v = String(version || DEFAULT_VERSION).trim() || DEFAULT_VERSION;
-    const out = [];
-
-    const wanted = Array.isArray(_cfg.cdn) ? _cfg.cdn : [];
-    for (const p of wanted) {
-      const prov = String(p || '').toLowerCase();
-      if (prov === 'jsdelivr') {
-        out.push({
-          loader: `https://cdn.jsdelivr.net/npm/monaco-editor@${v}/min/vs/loader.min.js`,
-          vsBase: `https://cdn.jsdelivr.net/npm/monaco-editor@${v}/min/vs`,
-          provider: 'jsdelivr',
-        });
-      } else if (prov === 'unpkg') {
-        out.push({
-          loader: `https://unpkg.com/monaco-editor@${v}/min/vs/loader.min.js`,
-          vsBase: `https://unpkg.com/monaco-editor@${v}/min/vs`,
-          provider: 'unpkg',
-        });
-      } else if (prov === 'cdnjs') {
-        // cdnjs URL patterns can differ by version; keep as an optional provider only.
-        out.push({
-          loader: `https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/${v}/min/vs/loader.min.js`,
-          vsBase: `https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/${v}/min/vs`,
-          provider: 'cdnjs',
-        });
-      }
-    }
-
-    return out;
-  }
 
   function localCandidates() {
     const bases = Array.isArray(_cfg.localVsPaths) ? _cfg.localVsPaths : [];
@@ -179,12 +142,6 @@
     for (const b of bases) {
       const base = String(b || '').replace(/\/+$/, '');
       if (!base) continue;
-      out.push({
-        loader: base + '/loader.min.js',
-        vsBase: base,
-        provider: 'local',
-      });
-      // Some builds ship loader.js (unminified)
       out.push({
         loader: base + '/loader.js',
         vsBase: base,
@@ -210,7 +167,7 @@
     return _activeSource ? Object.assign({}, _activeSource) : null;
   };
 
-  // Loads AMD loader (vs/loader.min.js) and configures require() paths.
+  // Loads local AMD loader (vs/loader.js) and configures require() paths.
   // Returns { ok, provider, vsBase, loader }.
   L.ensureConfigured = async function ensureConfigured() {
     if (_configured) {
@@ -230,17 +187,7 @@
         }
       } catch (e) {}
 
-      const prefer = _cfg.prefer === 'local' ? 'local' : 'cdn';
-      const candidates = [];
-
-      const local = localCandidates();
-      const cdn = cdnCandidates(_cfg.version);
-
-      if (prefer === 'local') {
-        candidates.push(...local, ...cdn);
-      } else {
-        candidates.push(...cdn, ...local);
-      }
+      const candidates = localCandidates();
 
       for (const c of candidates) {
         const ok = await loadScriptOnce(c.loader);

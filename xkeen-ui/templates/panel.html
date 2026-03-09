@@ -68,7 +68,7 @@
   <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260305a') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260309-xray-toolbar-compact-v1') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -193,10 +193,17 @@
       </div>
     
 <div class="xkeen-ctrl-row">
-  <div class="xkeen-ctrl-group">
+  <div class="xkeen-ctrl-group xkeen-ctrl-group-main">
     <button id="xkeen-start-btn" class="xkeen-ctrl-btn" data-tooltip="Запустить сервис xkeen.">Start xkeen</button>
     <button id="xkeen-stop-btn" class="xkeen-ctrl-btn" data-tooltip="Остановить сервис xkeen.">Stop xkeen</button>
     <button id="xkeen-restart-btn" class="xkeen-ctrl-btn" data-tooltip="Перезапустить сервис xkeen.">Restart xkeen</button>
+    <div class="xkeen-ctrl-group-routing-focus" data-xk-section="routing">
+      <div id="routing-focus-switch" class="routing-focus-switch routing-focus-switch-compact" role="toolbar" aria-label="Режим редактирования роутинга">
+        <button id="routing-focus-gui-btn" type="button" class="routing-focus-btn" aria-pressed="false" data-tooltip="Сфокусироваться на GUI-карточках правил и балансировщиков">GUI</button>
+        <button id="routing-focus-raw-btn" type="button" class="routing-focus-btn" aria-pressed="false" data-tooltip="Сфокусироваться на raw JSON/JSONC редакторе">RAW</button>
+        <span id="routing-focus-note" class="routing-focus-note" title="GUI — быстрые карточки; RAW — точный JSON/JSONC редактор.">RAW: JSON/JSONC</span>
+      </div>
+    </div>
   </div>
   <div class="global-toggle-right">
     <label class="global-autorestart-toggle">
@@ -327,8 +334,10 @@
 
       <div class="xk-fragment-row">
         <label class="xk-fragment-select">
-          <span class="hint-label">Файл</span>
-          <select id="inbounds-fragment-select" class="xray-log-select" data-current="{{ inbounds_name|e }}"></select>
+          <select id="inbounds-fragment-select" class="xray-log-select" data-current="{{ inbounds_name|e }}"
+                  title="Выбор файла inbounds для редактирования"
+                  data-tooltip="Выбор файла inbounds для редактирования"
+                  aria-label="Файл inbounds"></select>
         </label>
         <button id="inbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" data-tooltip="Обновить список файлов inbounds из /opt/etc/xray/configs/">↻</button>
       </div>
@@ -388,8 +397,10 @@
 
       <div class="xk-fragment-row">
         <label class="xk-fragment-select">
-          <span class="hint-label">Файл</span>
-          <select id="outbounds-fragment-select" class="xray-log-select" data-current="{{ outbounds_name|e }}"></select>
+          <select id="outbounds-fragment-select" class="xray-log-select" data-current="{{ outbounds_name|e }}"
+                  title="Выбор файла outbounds для редактирования"
+                  data-tooltip="Выбор файла outbounds для редактирования"
+                  aria-label="Файл outbounds"></select>
         </label>
         <button id="outbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" data-tooltip="Обновить список файлов outbounds из /opt/etc/xray/configs/">↻</button>
       </div>
@@ -534,7 +545,7 @@
       </div>
 
 <div class="routing-col routing-col-center">
-        <section class="card routing-rules-card xk-only-routing">
+        <section id="routing-rules-card" class="card routing-rules-card xk-only-routing" data-focus-role="gui">
           <div class="commands-header" id="routing-rules-header">
             <h2>Правила маршрутизации</h2>
             <span id="routing-rules-arrow">►</span>
@@ -588,7 +599,7 @@
 
         <!-- Сворачиваемый блок routing -->
 
-        <section class="card">
+        <section id="routing-editor-card" class="card" data-focus-role="raw">
           <div class="commands-header" id="routing-header">
             <h2>
               Роутинг Xray
@@ -606,17 +617,12 @@
               <div class="xk-routing-fileblock">
                 <div class="xk-routing-fileline">
                   {# Server-rendered fallback option so the selector is never empty if /api/routing/fragments fails. #}
-                  <select id="routing-fragment-select" class="xray-log-select" data-current="{{ routing_name|e }}">
+                  <select id="routing-fragment-select" class="xray-log-select" data-current="{{ routing_name|e }}"
+                          data-tooltip="Текущий файл роутинга: {{ routing_name|e }}. Режим редактора определяется автоматически."
+                          title="Текущий файл роутинга: {{ routing_name|e }}. Режим редактора определяется автоматически.">
                     <option value="{{ routing_name|e }}">{{ routing_name|e }}</option>
                   </select>
 
-                  {# Editor semantic mode badge (Routing vs Fragment). Updated dynamically by routing.js. #}
-                  <span
-                    id="routing-editor-mode-badge"
-                    class="xray-profile-badge"
-                    data-profile="routing"
-                    data-tooltip="Режим редактора: Routing mode"
-                  >Routing mode</span>
                 </div>
               </div>
 
@@ -625,21 +631,21 @@
                 <button
                   id="routing-save-btn"
                   type="button"
-                  class="terminal-tool-btn xk-save-btn xk-save-btn-primary"
+                  class="terminal-tool-btn xk-save-btn xk-save-btn-primary xk-icon-btn"
                   data-tooltip="Сохранить текущий файл (routing.json или выбранный фрагмент)."
+                  aria-label="Сохранить файл"
                 >
                   <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M7 3h10l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
                     <path d="M17 3v6H7V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                     <path d="M7 21v-8h10v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
                   </svg>
-                  <span class="xk-btn-label">Сохранить</span>
                 </button>
 
                 <button
                   id="routing-reset-btn"
                   type="button"
-                  class="terminal-tool-btn xk-save-btn xk-reset-btn"
+                  class="terminal-tool-btn xk-save-btn xk-reset-btn xk-icon-btn"
                   data-tooltip="Откатить несохранённые изменения и вернуть текст к последней сохранённой версии."
                   aria-label="Откатить изменения"
                   disabled
@@ -648,7 +654,6 @@
                     <path d="M9 10H4V5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M4 10a8 8 0 1 1 2.35 5.65" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
-                  <span class="xk-btn-label">Откатить</span>
                 </button>
 
                 <details class="dt-log-menu xk-routing-menu">
@@ -720,6 +725,13 @@
 
             <textarea id="routing-editor" spellcheck="false"></textarea>
 
+            <div id="routing-editor-meta" class="routing-editor-meta" aria-live="polite">
+              <span id="routing-editor-valid-badge" class="routing-editor-badge">JSON: —</span>
+              <span id="routing-editor-dirty-badge" class="routing-editor-badge">Состояние: —</span>
+              <span id="routing-editor-view-badge" class="routing-editor-badge">Позиция: —</span>
+              <span id="routing-editor-comments-badge" class="routing-editor-badge is-muted">Комментарии: —</span>
+            </div>
+
             <div id="routing-error" class="error"></div>
 
 <input type="file"
@@ -766,8 +778,9 @@
         <div class="xk-mihomo-toolbararea" role="toolbar" aria-label="Действия Mihomo">
         <button id="mihomo-save-btn"
                 type="button"
-                class="terminal-tool-btn xk-save-btn xk-save-btn-primary"
-                data-tooltip="Сохранить (авто‑бэкап, авто‑перезапуск по галке)">
+                class="terminal-tool-btn xk-save-btn xk-save-btn-primary xk-icon-btn"
+                data-tooltip="Сохранить (авто‑бэкап, авто‑перезапуск по галке)"
+                aria-label="Сохранить config.yaml">
           <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M7 3h10l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
             <path d="M17 3v6H7V3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -778,8 +791,9 @@
 
         <button id="mihomo-save-restart-btn"
                 type="button"
-                class="terminal-tool-btn xk-save-btn terminal-tool-btn-danger"
-                data-tooltip="Сохранить и перезапустить mihomo">
+                class="terminal-tool-btn xk-save-btn terminal-tool-btn-danger xk-icon-btn"
+                data-tooltip="Сохранить и перезапустить mihomo"
+                aria-label="Сохранить и перезапустить mihomo">
           <svg class="xk-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M21 12a9 9 0 1 1-2.64-6.36" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             <path d="M21 3v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -858,7 +872,7 @@
           <!-- Editor engine (shared setting) -->
           <div class="xk-editor-engine" id="mihomo-editor-engine">
             <span class="xk-editor-engine-label">Редактор</span>
-            <select id="mihomo-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+            <select id="mihomo-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
               <option value="codemirror">CodeMirror</option>
               <option value="monaco">Monaco</option>
             </select>
@@ -1070,48 +1084,58 @@
 <div id="view-commands" class="view-section" style="display:none;" data-xk-section="commands">
   <!-- XKeen commands -->
 <section class="card commands-card">
-  <div class="commands-header">
-    <h2>Команды</h2>
-    <button type="button" class="btn-secondary" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} data-tooltip="Открыть терминал (обычный режим).">Открыть терминал</button>
-    <button type="button" class="btn-secondary btn-interactive-shell" id="terminal-open-pty-btn" {% if is_mips %}style="display:none;"{% endif %} title="Интерактивная оболочка (PTY)" data-tooltip="Открыть интерактивную оболочку (PTY).">Interactive Shell</button>
-  </div>
-
-  <!-- Cores status row (installed versions + update hints). Filled by js/features/cores_status.js -->
-  <div class="commands-status-row" id="commands-status-row" aria-live="polite">
-    <div class="core-pill" id="core-pill-xray" data-core="xray">
-      <span class="core-name">Xray</span>
-      <span class="core-ver" id="core-xray-installed">—</span>
-      <a class="core-latest" id="core-xray-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
-      <button type="button" class="btn-secondary btn-mini" id="core-xray-update-btn" data-core="xray" style="display:none;" data-tooltip="Запустить обновление Xray (xkeen -ux) через терминал.">Обновить</button>
-    </div>
-    <div class="core-pill" id="core-pill-mihomo" data-core="mihomo">
-      <span class="core-name">Mihomo</span>
-      <span class="core-ver" id="core-mihomo-installed">—</span>
-      <a class="core-latest" id="core-mihomo-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
-      <button type="button" class="btn-secondary btn-mini" id="core-mihomo-update-btn" data-core="mihomo" style="display:none;" data-tooltip="Запустить обновление Mihomo (xkeen -um) через терминал.">Обновить</button>
+  <div class="commands-hero">
+    <div class="commands-header">
+      <div class="commands-header-copy">
+        <div class="commands-title-row">
+          <h2>Команды</h2>
+          <button type="button" class="btn-secondary commands-title-action" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} data-tooltip="Открыть терминал (обычный режим).">Открыть терминал</button>
+          <button type="button" class="btn-secondary btn-interactive-shell commands-title-action" id="terminal-open-pty-btn" {% if is_mips %}style="display:none;"{% endif %} title="Интерактивная оболочка (PTY)" data-tooltip="Открыть интерактивную оболочку (PTY).">Interactive Shell</button>
+        </div>
+      </div>
     </div>
 
-    <button type="button" class="btn-secondary btn-mini" id="cores-check-btn" title="Проверить обновления (с кэшем)">Проверить обновления</button>
-    <span class="cores-checked-at" id="cores-checked-at"></span>
+    <!-- Cores status row (installed versions + update hints). Filled by js/features/cores_status.js -->
+    <div class="commands-status-row" id="commands-status-row" aria-live="polite">
+      <div class="core-pill" id="core-pill-xray" data-core="xray">
+        <span class="core-name">Xray</span>
+        <span class="core-ver" id="core-xray-installed">—</span>
+        <a class="core-latest" id="core-xray-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
+        <button type="button" class="btn-secondary btn-mini" id="core-xray-update-btn" data-core="xray" style="display:none;" data-tooltip="Запустить обновление Xray (xkeen -ux) через терминал.">Обновить</button>
+      </div>
+      <div class="core-pill" id="core-pill-mihomo" data-core="mihomo">
+        <span class="core-name">Mihomo</span>
+        <span class="core-ver" id="core-mihomo-installed">—</span>
+        <a class="core-latest" id="core-mihomo-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
+        <button type="button" class="btn-secondary btn-mini" id="core-mihomo-update-btn" data-core="mihomo" style="display:none;" data-tooltip="Запустить обновление Mihomo (xkeen -um) через терминал.">Обновить</button>
+      </div>
+
+      <button type="button" class="btn-secondary btn-mini" id="cores-check-btn" title="Проверить обновления (с кэшем)">Проверить обновления</button>
+      <span class="cores-checked-at" id="cores-checked-at"></span>
+    </div>
   </div>
 
   <div id="commands-body">
   {% for group in command_groups %}
-    <div class="command-group">
       {% set _tone = group.tone if group.tone is defined else '' %}
       {% set _parts = group.title.split(' | ', 1) %}
-      <div class="command-group-title{% if _tone %} tone-{{ _tone }}{% endif %}">
-        <span class="cgt-key">{{ _parts[0] }}</span>{% if _parts|length > 1 %}<span class="cgt-sep"> | </span><span class="cgt-rest">{{ _parts[1] }}</span>{% endif %}
+    <div class="command-group{% if _tone %} tone-{{ _tone }}{% endif %}" data-tone="{{ _tone or 'neutral' }}">
+      <div class="command-group-head">
+        <div class="command-group-title{% if _tone %} tone-{{ _tone }}{% endif %}">
+          <span class="cgt-key">{{ _parts[0] }}</span>{% if _parts|length > 1 %}<span class="cgt-sep"> | </span><span class="cgt-rest">{{ _parts[1] }}</span>{% endif %}
+        </div>
+        <span class="command-group-count">{{ group['items']|length }}</span>
       </div>
       <ul class="command-list">
         {% for cmd in group['items'] %}
           <li class="command-item-wrap">
             <button type="button"
-                    class="command-item xkeen-ctrl-btn"
+                    class="command-item"
                     data-flag="{{ cmd.flag }}"
                     data-label="xkeen {{ cmd.flag }}"
                     data-tooltip="{{ cmd.desc }}">
-              <code>xkeen {{ cmd.flag }}</code>
+              <span class="command-item-prefix">xkeen</span>
+              <code>{{ cmd.flag }}</code>
             </button>
           </li>
         {% endfor %}
@@ -1119,16 +1143,30 @@
     </div>
   {% endfor %}
 
-    <div class="command-group">
-      <div class="command-group-title">Утилиты панели</div>
+    <div class="command-group tone-info" data-tone="info">
+      <div class="command-group-head">
+        <div class="command-group-title tone-info">Утилиты панели</div>
+        <span class="command-group-count">2</span>
+      </div>
       <ul class="command-list">
         <li class="command-item-wrap">
           <button type="button"
-                  class="command-item xkeen-ctrl-btn"
+                  class="command-item"
                   data-flag="__sysmon_full"
                   data-label="sysmon --full"
                   data-tooltip="Мониторинг (расширенно): сеть/DNS/HTTPS/conntrack/ошибки интерфейсов/логи">
+            <span class="command-item-prefix">panel</span>
             <code>sysmon --full</code>
+          </button>
+        </li>
+        <li class="command-item-wrap">
+          <button type="button"
+                  class="command-item"
+                  data-flag="__entware_backup"
+                  data-label="entware-backup"
+                  data-tooltip="Создать tar.gz-бэкап Entware (/opt) на выбранный накопитель">
+            <span class="command-item-prefix">panel</span>
+            <code>entware-backup</code>
           </button>
         </li>
       </ul>
@@ -1793,76 +1831,118 @@
 
 <!-- Quick balancer (leastPing) wizard -->
     <div id="routing-balancer-quick-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Быстрый старт балансировщика (leastPing)">
-      <div class="modal-content" style="max-width: 820px;" data-modal-key="routing-balancer-quick">
+      <div class="modal-content xk-qb-modal" data-modal-key="routing-balancer-quick-premium-v1">
         <div class="modal-header">
           <span class="modal-title">Быстрый старт: балансировщик leastPing</span>
           <button type="button" class="modal-close" id="routing-balancer-quick-close-btn" title="Закрыть">×</button>
         </div>
         <div class="modal-body">
-          <p class="modal-description" style="margin-bottom: 10px;">
-            Панель создаст/обновит балансировщик <code>leastPing</code>, сформирует <code>07_observatory.json</code> и сразу выполнит <b>Сохранить + Перезапуск</b> (job‑режим с логом).
-          </p>
-
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items:start;">
-            <div>
-              <label class="routing-rule-field" style="margin-bottom: 10px;">
-                <span class="routing-rule-key"><span>balancer.tag</span></span>
-                <input id="routing-balancer-quick-tag" class="routing-rule-input" type="text" value="proxy" placeholder="proxy">
-              </label>
-
-              <label class="routing-rule-field" style="margin-bottom: 10px;">
-                <span class="routing-rule-key"><span>fallbackTag</span></span>
-                <input id="routing-balancer-quick-fallback" class="routing-rule-input" type="text" value="direct" placeholder="direct">
-              </label>
-
-              <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin: 2px 0 8px;">
-                <input type="checkbox" id="routing-balancer-quick-default-rule" checked>
-                <span>Сделать балансировщик <b>дефолтным</b> (добавить правило match‑all с <code>balancerTag</code>)</span>
-              </label>
-
-              <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin: 2px 0 0;">
-                <input type="checkbox" id="routing-balancer-quick-overwrite-observatory" checked>
-                <span>Перезаписать <code>07_observatory</code> при существовании</span>
-              </label>
-            </div>
-
-            <div>
-              <label class="routing-rule-field" style="margin-bottom: 10px;">
-                <span class="routing-rule-key"><span>probeUrl</span></span>
-                <input id="routing-balancer-quick-probe-url" class="routing-rule-input" type="text" value="https://www.gstatic.com/generate_204" placeholder="https://www.gstatic.com/generate_204">
-              </label>
-
-              <label class="routing-rule-field" style="margin-bottom: 10px;">
-                <span class="routing-rule-key"><span>probeInterval</span></span>
-                <input id="routing-balancer-quick-probe-interval" class="routing-rule-input" type="text" value="60s" placeholder="60s">
-              </label>
-
-              <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin: 2px 0 0;">
-                <input type="checkbox" id="routing-balancer-quick-concurrency" checked>
-                <span>enableConcurrency</span>
-              </label>
+          <div class="xk-qb-lead">
+            <div class="xk-qb-lead-icon">⚡</div>
+            <div class="xk-qb-lead-text">
+              <div class="xk-qb-lead-title">leastPing + observatory + готовое правило маршрутизации</div>
+              <p class="modal-description" style="margin:0;">
+                Мастер создаст или обновит балансировщик <code>leastPing</code>, сформирует <code>07_observatory.json</code>, при необходимости добавит дефолтное правило и затем выполнит <b>Сохранить + Перезапуск</b> с логом.
+              </p>
             </div>
           </div>
 
-          <div style="margin-top: 12px;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 6px;">
-              <div class="terminal-menu-title" style="margin:0;">Теги прокси (selector / subjectSelector)</div>
-              <button type="button" class="btn-secondary" id="routing-balancer-quick-refresh-tags-btn" data-tooltip="Взять теги из outbounds">⟳ Обновить список</button>
-            </div>
-            <textarea id="routing-balancer-quick-tags" class="xkeen-textarea" spellcheck="false" rows="7" placeholder="tag1\ntag2\n..."></textarea>
-            <div class="modal-hint" style="margin-top: 6px;">
-              По умолчанию будут взяты все outbound‑теги (кроме direct/block/dns и др.). Можно отредактировать вручную.
-            </div>
-          </div>
+          <div class="xk-qb-grid">
+            <section class="xk-qb-panel xk-qb-main-panel">
+              <div class="xk-qb-panelhead">
+                <div>
+                  <div class="xk-qb-kicker">Шаг 1</div>
+                  <div class="terminal-menu-title" style="margin:0;">Параметры балансировщика</div>
+                </div>
+                <div id="routing-balancer-quick-summary" class="xk-qb-summary" data-tooltip="Текущий balancer.tag и количество выбранных прокси-тегов">proxy · 0 tag</div>
+              </div>
 
-          <div id="routing-balancer-quick-status" class="modal-hint" style="margin-top: 10px;"></div>
+              <div class="xk-qb-fields-grid">
+                <label>
+                  <span class="xk-qb-fieldlabel">balancer.tag</span>
+                  <input id="routing-balancer-quick-tag" class="routing-rule-input" type="text" value="proxy" placeholder="proxy">
+                </label>
+                <label>
+                  <span class="xk-qb-fieldlabel">fallbackTag</span>
+                  <input id="routing-balancer-quick-fallback" class="routing-rule-input" type="text" value="direct" placeholder="direct">
+                </label>
+                <label class="xk-qb-fieldwide">
+                  <span class="xk-qb-fieldlabel">probeUrl</span>
+                  <input id="routing-balancer-quick-probe-url" class="routing-rule-input" type="text" value="https://www.gstatic.com/generate_204" placeholder="https://www.gstatic.com/generate_204">
+                </label>
+                <label>
+                  <span class="xk-qb-fieldlabel">probeInterval</span>
+                  <input id="routing-balancer-quick-probe-interval" class="routing-rule-input" type="text" value="60s" placeholder="60s">
+                </label>
+              </div>
+
+              <div class="xk-qb-options-grid">
+                <label class="xk-qb-option-card">
+                  <input type="checkbox" id="routing-balancer-quick-default-rule" checked>
+                  <div class="xk-qb-option-copy">
+                    <strong>Сделать балансировщик дефолтным</strong>
+                    <small>Добавить правило match-all с <code>balancerTag</code> для inbound <code>redirect / tproxy</code>.</small>
+                  </div>
+                </label>
+                <label class="xk-qb-option-card">
+                  <input type="checkbox" id="routing-balancer-quick-overwrite-observatory" checked>
+                  <div class="xk-qb-option-copy">
+                    <strong>Перезаписать observatory</strong>
+                    <small>Разрешить панели обновить существующий <code>07_observatory.json</code>.</small>
+                  </div>
+                </label>
+                <label class="xk-qb-option-card xk-qb-option-card-compact">
+                  <input type="checkbox" id="routing-balancer-quick-concurrency" checked>
+                  <div class="xk-qb-option-copy">
+                    <strong>enableConcurrency</strong>
+                    <small>Параллельная проверка доступности узлов.</small>
+                  </div>
+                </label>
+              </div>
+            </section>
+
+            <section class="xk-qb-panel xk-qb-tags-panel">
+              <div class="xk-qb-panelhead">
+                <div>
+                  <div class="xk-qb-kicker">Шаг 2</div>
+                  <div class="terminal-menu-title" style="margin:0;">Пул тегов для selector / subjectSelector</div>
+                </div>
+                <button type="button" class="btn-secondary btn-compact xk-qb-refresh-btn" id="routing-balancer-quick-refresh-tags-btn" data-tooltip="Взять теги из 04_outbounds.json и исключить служебные outbound">
+                  <span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span>
+                  <span>Обновить</span>
+                </button>
+              </div>
+
+              <label class="xk-qb-editor-block">
+                <span class="xk-qb-fieldlabel">Список тегов</span>
+                <textarea id="routing-balancer-quick-tags" class="xkeen-textarea" spellcheck="false" rows="9" placeholder="tag1
+tag2
+..."></textarea>
+              </label>
+
+              <div class="xk-qb-note">
+                <div><b>Подсказка:</b> по умолчанию мастер подтягивает все обычные outbound‑теги, исключая <code>direct</code>, <code>block</code>, <code>dns</code> и другие служебные значения.</div>
+                <div>Можно оставить только нужные теги вручную — по одному на строку.</div>
+              </div>
+
+              <div id="routing-balancer-quick-status" class="xk-qb-statusbar"></div>
+            </section>
+          </div>
         </div>
 
-        <div class="modal-actions" style="justify-content: space-between;">
-          <button type="button" id="routing-balancer-quick-cancel-btn">Отмена</button>
-          <div style="display:flex; gap:10px;">
-            <button type="button" class="btn-secondary" id="routing-balancer-quick-dry-btn" data-tooltip="Только обновить карточки (без сохранения/рестарта)">Только применить</button>
-            <button type="button" class="btn-danger" id="routing-balancer-quick-run-btn">Применить + Рестарт</button>
+        <div class="modal-actions xk-qb-footer">
+          <div class="xk-qb-footer-left">
+            <button type="button" id="routing-balancer-quick-cancel-btn" class="btn-compact">Отмена</button>
+          </div>
+          <div class="xk-qb-footer-actions">
+            <button type="button" class="btn-secondary btn-compact xk-qb-footer-btn" id="routing-balancer-quick-dry-btn" data-tooltip="Только обновить карточки и JSON-редактор, без сохранения и рестарта.">
+              <span class="xk-btn-inline-glyph" aria-hidden="true">✓</span>
+              <span>Только применить</span>
+            </button>
+            <button type="button" class="btn-danger btn-compact xk-qb-footer-btn xk-qb-primary-action" id="routing-balancer-quick-run-btn">
+              <span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span>
+              <span>Применить + Рестарт</span>
+            </button>
           </div>
         </div>
       </div>
@@ -1871,32 +1951,44 @@
 
 
     <!-- Forced rules wizard (bypass balancer): domains/IP -> specific outboundTag -->
-    <div id="routing-forced-rules-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Принудительные правила (обход балансировщика)">
-      <div class="modal-content" style="max-width: 920px;" data-modal-key="routing-forced-rules">
+    <div id="routing-forced-rules-modal" class="modal hidden" data-modal-key="routing-forced-rules-premium-v4" role="dialog" aria-modal="true" aria-label="Принудительные правила (обход балансировщика)">
+      <div class="modal-content" data-modal-key="routing-forced-rules-premium-v4-content">
         <div class="modal-header">
           <span class="modal-title">Принудительные правила (обход балансировщика)</span>
           <button type="button" class="modal-close" id="routing-forced-rules-close-btn" title="Закрыть">×</button>
         </div>
         <div class="modal-body">
-          <p class="modal-description" style="margin: 0 0 10px;">
-            Мастер добавит/обновит правила <code>type: field</code>, которые отправляют выбранные домены/IP <b>на конкретный outbound</b>.
-            Эти правила будут стоять <b>выше</b> правила балансировщика (и обходить его).
-          </p>
+          <div class="xk-forced-wizard-lead">
+            <div class="xk-forced-wizard-lead-icon">⇄</div>
+            <div class="xk-forced-wizard-lead-text">
+              <div class="xk-forced-wizard-lead-title">Домены и IP → конкретный outbound</div>
+              <p class="modal-description" style="margin:0;">
+                Мастер создаёт правила <code>type: field</code>, которые отправляют выбранные значения <b>мимо балансировщика</b> прямо на нужный <code>outboundTag</code>.
+              </p>
+            </div>
+          </div>
 
           <div class="xk-forced-wizard-grid">
             <!-- Left: input -->
-            <div class="xk-forced-wizard-panel">
-              <div class="xk-forced-wizard-row2">
-                <label class="routing-rule-field" style="margin:0;">
-                  <span class="routing-rule-key"><span>outboundTag</span></span>
+            <section class="xk-forced-wizard-panel xk-forced-wizard-input-panel">
+              <div class="xk-forced-wizard-panelhead">
+                <div>
+                  <div class="xk-forced-wizard-kicker">Шаг 1</div>
+                  <div class="terminal-menu-title" style="margin:0;">Добавить значения</div>
+                </div>
+              </div>
+
+              <div class="xk-forced-controls-grid">
+                <label class="xk-forced-fieldgroup">
+                  <span class="xk-forced-fieldlabel">outbound</span>
                   <div class="xk-forced-outbound-wrap">
                     <select id="routing-forced-rules-outbound" class="routing-rule-input"></select>
-                    <button type="button" class="btn-secondary" id="routing-forced-rules-refresh-tags-btn" data-tooltip="Обновить список outbound‑тегов">⟳</button>
+                    <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-refresh-tags-btn" data-tooltip="Обновить список outbound-тегов" aria-label="Обновить список outbound-тегов"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.2 10a6.2 6.2 0 1 1-1.83-4.39"/><path d="M16.2 4.6v3.62h-3.62"/></svg></button>
                   </div>
                 </label>
 
-                <label class="routing-rule-field" style="margin:0;">
-                  <span class="routing-rule-key"><span>Тип</span></span>
+                <label class="xk-forced-fieldgroup xk-forced-fieldgroup-compact">
+                  <span class="xk-forced-fieldlabel">Тип</span>
                   <select id="routing-forced-rules-type" class="routing-rule-input">
                     <option value="domain">domain</option>
                     <option value="ip">ip</option>
@@ -1904,67 +1996,90 @@
                 </label>
               </div>
 
-              <label class="routing-rule-field" style="margin: 8px 0 0;">
-                <span class="routing-rule-key"><span>Значения</span></span>
-                <textarea id="routing-forced-rules-values" class="xkeen-textarea" spellcheck="false" rows="6" placeholder="По одному на строке\nexample.com\ndomain:google.com\ngeosite:youtube\n\nДля ip: 1.2.3.4/32\ngeoip:private"></textarea>
-              </label>
+              <div class="xk-forced-editor-block">
+                <div class="xk-forced-editor-head">
+                  <span class="xk-forced-fieldlabel">Значения</span>
+                  <div class="xk-forced-wizard-toolbar">
+                    <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-add-btn" data-tooltip="Добавить значения в выбранный outbound" aria-label="Добавить значения"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.2v11.6"/><path d="M4.2 10h11.6"/></svg></button>
+                    <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-clear-proxy-btn" data-tooltip="Очистить значения только у выбранного outbound" aria-label="Очистить выбранный outbound"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.1 5h6.95a1.4 1.4 0 0 1 1.4 1.4v7.2a1.4 1.4 0 0 1-1.4 1.4H8.1L3.55 10 8.1 5Z"/><path d="m9.3 8 4.1 4.1"/><path d="m13.4 8-4.1 4.1"/></svg></button>
+                    <button type="button" class="btn-danger btn-icon xk-icon-btn" id="routing-forced-rules-clear-all-btn" data-tooltip="Удалить все записи мастера" aria-label="Удалить все записи"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.8 6.2h8.4"/><path d="M7.1 6.2V5a1 1 0 0 1 1-1h3.8a1 1 0 0 1 1 1v1.2"/><path d="M7.2 8.2v6.1"/><path d="M10 8.2v6.1"/><path d="M12.8 8.2v6.1"/><path d="M6.5 6.2l.6 9a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-9"/></svg></button>
+                  </div>
+                </div>
 
-              <div class="xk-forced-wizard-actions">
-                <button type="button" class="btn-secondary" id="routing-forced-rules-add-btn">Добавить</button>
-                <button type="button" class="btn-secondary" id="routing-forced-rules-clear-proxy-btn" data-tooltip="Удалить все значения для выбранного outboundTag">Очистить выбранный</button>
-                <button type="button" class="btn-danger" id="routing-forced-rules-clear-all-btn" data-tooltip="Удалить все принудительные правила из мастера">Удалить всё</button>
+                <textarea id="routing-forced-rules-values" class="xkeen-textarea" spellcheck="false" rows="7" placeholder="По одному на строке
+example.com
+domain:google.com
+geosite:youtube
+
+Для ip:
+1.2.3.4/32
+geoip:private"></textarea>
               </div>
 
-              <div class="modal-hint" style="margin-top: 8px;">
-                Поддерживаются любые значения Xray для <code>domain</code>/<code>ip</code> (например <code>geosite:TAG</code>, <code>geoip:TAG</code>, <code>domain:example.com</code>).
+              <div class="xk-forced-wizard-note">
+                Поддерживаются обычные значения Xray для <code>domain</code>/<code>ip</code>: <code>domain:example.com</code>, <code>geosite:TAG</code>, <code>geoip:TAG</code> и другие.
               </div>
-            </div>
+            </section>
 
             <!-- Right: options + preview -->
-            <div class="xk-forced-wizard-panel">
-              <div class="xk-forced-wizard-options">
-                <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin:0;">
+            <section class="xk-forced-wizard-panel xk-forced-wizard-preview-panel">
+              <div class="xk-forced-wizard-panelhead">
+                <div>
+                  <div class="xk-forced-wizard-kicker">Шаг 2</div>
+                  <div class="terminal-menu-title" style="margin:0;">Параметры и результат</div>
+                </div>
+                <div id="routing-forced-rules-summary" class="xk-forced-wizard-summary" data-tooltip="Количество outbound, domain и ip в мастере">0 outbound · 0 domain · 0 ip</div>
+              </div>
+
+              <div class="xk-forced-options-grid">
+                <label class="xk-forced-option-card global-autorestart-toggle">
                   <input type="checkbox" id="routing-forced-rules-inbound-only" checked>
-                  <span>Только для <code>redirect/tproxy</code></span>
+                  <div class="xk-forced-option-copy">
+                    <strong>Только redirect / tproxy</strong>
+                    <small>Не трогать другие inbound</small>
+                  </div>
                 </label>
 
-                <label class="routing-rule-field" style="margin:0;">
-                  <span class="routing-rule-key"><span>Приоритет</span></span>
+                <label class="xk-forced-option-card xk-forced-option-select">
+                  <span class="xk-forced-fieldlabel">Приоритет</span>
                   <select id="routing-forced-rules-priority" class="routing-rule-input">
-                    <option value="after_block">После block‑правил</option>
+                    <option value="after_block">После block-правил</option>
                     <option value="before_balancer">Перед балансировщиком</option>
                   </select>
                 </label>
 
-                <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin:0;">
+                <label class="xk-forced-option-card global-autorestart-toggle xk-forced-option-wide">
                   <input type="checkbox" id="routing-forced-rules-import-legacy">
-                  <span>Импорт без <code>ruleTag</code></span>
+                  <div class="xk-forced-option-copy">
+                    <strong>Импорт legacy-правил</strong>
+                    <small>Подтянуть правила без <code>ruleTag</code></small>
+                  </div>
                 </label>
               </div>
 
               <div class="xk-forced-wizard-listbox">
                 <div class="xk-forced-wizard-listhead">
-                  <div class="terminal-menu-title" style="margin:0;">Текущие правила</div>
+                  <div class="xk-forced-wizard-listtitle">
+                    <div class="terminal-menu-title" style="margin:0;">Текущие правила</div>
+                    <div class="xk-forced-list-subtitle">Карточки по outboundTag: компактный обзор, клик по chip удаляет значение</div>
+                  </div>
                   <div id="routing-forced-rules-status" class="modal-hint" style="margin:0;"></div>
                 </div>
-                <div id="routing-forced-rules-list" class="xk-card-desc xk-forced-wizard-list">
-                  —
-                </div>
+                <div id="routing-forced-rules-list" class="xk-card-desc xk-forced-wizard-list">—</div>
               </div>
-            </div>
+            </section>
           </div>
         </div>
 
-        <div class="modal-actions" style="justify-content: space-between;">
-          <button type="button" id="routing-forced-rules-cancel-btn">Отмена</button>
-          <div style="display:flex; gap:10px;">
-            <button type="button" class="btn-secondary" id="routing-forced-rules-dry-btn" data-tooltip="Только обновить карточки (без сохранения/рестарта)">Только применить</button>
-            <button type="button" class="btn-danger" id="routing-forced-rules-run-btn">Применить + Рестарт</button>
+        <div class="modal-actions xk-forced-wizard-footer">
+          <button type="button" class="btn-compact" id="routing-forced-rules-cancel-btn">Отмена</button>
+          <div class="xk-forced-wizard-footer-actions">
+            <button type="button" class="btn-secondary btn-compact xk-forced-primary-action" id="routing-forced-rules-dry-btn" data-tooltip="Только применить изменения в редакторе без сохранения и рестарта"><span class="xk-btn-inline-glyph" aria-hidden="true">✓</span><span>Только применить</span></button>
+            <button type="button" class="btn-danger btn-compact xk-forced-primary-action" id="routing-forced-rules-run-btn"><span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span><span>Применить + Рестарт</span></button>
           </div>
         </div>
       </div>
     </div>
-
 
 
     <!-- Xray snapshots preview modal (read-only) -->
@@ -1979,7 +2094,7 @@
             <p id="xray-snapshot-meta" class="modal-description" style="margin:0;">—</p>
             <div class="xk-editor-engine" id="xray-snapshot-engine" style="margin-top: 2px;">
               <span class="xk-editor-engine-label">Редактор</span>
-              <select id="xray-snapshot-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+              <select id="xray-snapshot-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
                 <option value="codemirror">CodeMirror</option>
                 <option value="monaco">Monaco</option>
               </select>
@@ -2021,7 +2136,7 @@
                   </div>
                   <div class="xk-editor-engine" id="routing-template-preview-engine">
                     <span class="xk-editor-engine-label">Редактор</span>
-                    <select id="routing-template-preview-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+                    <select id="routing-template-preview-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
                       <option value="codemirror">CodeMirror</option>
                       <option value="monaco">Monaco</option>
                     </select>
@@ -2094,7 +2209,7 @@
       <div style="display:flex; align-items:center; gap:10px;">
         <div class="xk-editor-engine" id="routing-template-edit-engine">
           <span class="xk-editor-engine-label">Редактор</span>
-          <select id="routing-template-edit-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+          <select id="routing-template-edit-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
             <option value="codemirror">CodeMirror</option>
             <option value="monaco">Monaco</option>
           </select>
@@ -2140,287 +2255,366 @@
   </div>
 </div>
     <!-- Outbounds: mini generator modal (build proxy link from hints) -->
-    <div id="outbounds-generator-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Сборка ссылки прокси">
-      <div class="modal-content" style="max-width: 780px;" data-modal-key="outbounds-generator">
+    <div id="outbounds-generator-modal" class="modal hidden" data-modal-key="outbounds-generator-premium-v1" role="dialog" aria-modal="true" aria-label="Сборка ссылки прокси">
+      <div class="modal-content xk-gen-modal" data-modal-key="outbounds-generator-premium-v1-content">
         <div class="modal-header">
-          <span class="modal-title">Собрать ссылку из подсказок</span>
+          <span class="modal-title">Генератор ссылки прокси</span>
           <button type="button" class="modal-close" id="outbounds-generator-close-btn" title="Закрыть">×</button>
         </div>
         <div class="modal-body">
-          <p class="modal-description" style="margin-bottom: 10px;">
-            Мини-генератор: выбери <b>протокол / транспорт / security</b> и заполни минимальные поля.
-            Готовая ссылка появится ниже и может быть вставлена в поле <code>04_outbounds.json</code>.
-          </p>
-
-          <div class="outbounds-gen-hints">
-            <label>
-              <span class="hint-label">Протокол</span>
-              <select id="outbounds-gen-proto" class="xray-log-select">
-                <option value="auto" selected>Авто</option>
-                <option value="vless">VLESS</option>
-                <option value="trojan">Trojan</option>
-                <option value="vmess">VMess</option>
-                <option value="ss">Shadowsocks</option>
-                <option value="hy2">Hysteria2 (HY2)</option>
-              </select>
-            </label>
-
-            <label>
-              <span class="hint-label">Транспорт</span>
-              <select id="outbounds-gen-type" class="xray-log-select">
-                <option value="auto" selected>Авто</option>
-                <option value="tcp">TCP</option>
-                <option value="ws">WebSocket</option>
-                <option value="grpc">gRPC</option>
-                <option value="httpupgrade">HTTP Upgrade</option>
-                <option value="kcp">mKCP</option>
-                <option value="raw">RAW</option>
-                <option value="xhttp">XHTTP</option>
-              </select>
-            </label>
-
-            <label>
-              <span class="hint-label">Security</span>
-              <select id="outbounds-gen-security" class="xray-log-select">
-                <option value="auto" selected>Авто</option>
-                <option value="none">None</option>
-                <option value="tls">TLS</option>
-                <option value="reality">Reality</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="outbounds-gen-grid">
-            <label>
-              <span class="hint-label">Server (host)</span>
-              <input id="outbounds-gen-host" class="xray-log-filter" type="text" placeholder="example.com">
-            </label>
-
-            <label>
-              <span class="hint-label">Port</span>
-              <input id="outbounds-gen-port" class="xray-log-filter" type="number" placeholder="443" min="1" max="65535">
-            </label>
-
-            <label>
-              <span class="hint-label">Tag (необязательно)</span>
-              <input id="outbounds-gen-tag" class="xray-log-filter" type="text" placeholder="proxy">
-            </label>
-
-            <label id="outbounds-gen-cred-vless">
-              <span class="hint-label">UUID (VLESS)</span>
-              <input id="outbounds-gen-uuid" class="xray-log-filter" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-            </label>
-
-            <label id="outbounds-gen-cred-trojan" style="display:none;">
-              <span class="hint-label">Password (Trojan)</span>
-              <input id="outbounds-gen-pass" class="xray-log-filter" type="text" placeholder="password">
-            </label>
-
-            <label id="outbounds-gen-cred-vmess" style="display:none;">
-              <span class="hint-label">UUID (VMess)</span>
-              <input id="outbounds-gen-vmess-uuid" class="xray-log-filter" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-            </label>
-
-            <label id="outbounds-gen-cred-ss" style="display:none;">
-              <span class="hint-label">Method (SS)</span>
-              <select id="outbounds-gen-ss-method" class="xray-log-select">
-                <option value="aes-128-gcm">aes-128-gcm</option>
-                <option value="aes-256-gcm">aes-256-gcm</option>
-                <option value="chacha20-ietf-poly1305" selected>chacha20-ietf-poly1305</option>
-                <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm</option>
-                <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm</option>
-              </select>
-            </label>
-
-            <label id="outbounds-gen-cred-ss-pass" style="display:none;">
-              <span class="hint-label">Password (SS)</span>
-              <input id="outbounds-gen-ss-pass" class="xray-log-filter" type="text" placeholder="password">
-            </label>
-
-            <label id="outbounds-gen-cred-hy2" style="display:none;">
-              <span class="hint-label">Auth (HY2)</span>
-              <input id="outbounds-gen-hy2-auth" class="xray-log-filter" type="text" placeholder="password или user:pass">
-            </label>
-          </div>
-
-          <details id="outbounds-gen-advanced" class="outbounds-gen-advanced">
-            <summary>Дополнительно</summary>
-            <div class="outbounds-gen-grid outbounds-gen-adv">
-              <label id="outbounds-gen-field-sni">
-                <span class="hint-label">SNI</span>
-                <input id="outbounds-gen-sni" class="xray-log-filter" type="text" placeholder="example.com">
-              </label>
-
-              <label id="outbounds-gen-field-fp">
-                <span class="hint-label">Fingerprint (fp)</span>
-                <input id="outbounds-gen-fp" class="xray-log-filter" type="text" placeholder="chrome">
-              </label>
-
-              <label id="outbounds-gen-field-alpn">
-                <span class="hint-label">ALPN</span>
-                <input id="outbounds-gen-alpn" class="xray-log-filter" type="text" placeholder="h2,http/1.1">
-              </label>
-
-              <label id="outbounds-gen-field-flow">
-                <span class="hint-label">Flow (VLESS)</span>
-                <select id="outbounds-gen-flow" class="xray-log-select">
-                  <option value="">(нет)</option>
-                  <option value="xtls-rprx-vision">xtls-rprx-vision</option>
-                </select>
-              </label>
-
-              <label id="outbounds-gen-field-path">
-                <span class="hint-label">Path (WS/HTTP Upgrade)</span>
-                <input id="outbounds-gen-path" class="xray-log-filter" type="text" placeholder="/">
-              </label>
-
-              <label id="outbounds-gen-field-hosthdr">
-                <span class="hint-label">Host header (WS/HTTP Upgrade)</span>
-                <input id="outbounds-gen-hosthdr" class="xray-log-filter" type="text" placeholder="cdn.example.com">
-              </label>
-
-              <label id="outbounds-gen-field-grpc-service">
-                <span class="hint-label">gRPC serviceName</span>
-                <input id="outbounds-gen-service" class="xray-log-filter" type="text" placeholder="grpc">
-              </label>
-
-              <label id="outbounds-gen-field-grpc-authority">
-                <span class="hint-label">gRPC authority</span>
-                <input id="outbounds-gen-authority" class="xray-log-filter" type="text" placeholder="example.com">
-              </label>
-
-              <label id="outbounds-gen-field-grpc-mode">
-                <span class="hint-label">gRPC mode</span>
-                <select id="outbounds-gen-grpc-mode" class="xray-log-select">
-                  <option value="">auto</option>
-                  <option value="multi">multi</option>
-                </select>
-              </label>
-
-              <label id="outbounds-gen-field-reality-pbk">
-                <span class="hint-label">Reality PBK (pbk)</span>
-                <input id="outbounds-gen-pbk" class="xray-log-filter" type="text" placeholder="publicKey">
-              </label>
-
-              <label id="outbounds-gen-field-reality-sid">
-                <span class="hint-label">Reality SID (sid)</span>
-                <input id="outbounds-gen-sid" class="xray-log-filter" type="text" placeholder="shortId">
-              </label>
-
-              <label id="outbounds-gen-field-reality-spx">
-                <span class="hint-label">Reality SPX (spx)</span>
-                <input id="outbounds-gen-spx" class="xray-log-filter" type="text" placeholder="/" value="/">
-              </label>
-
-              <label id="outbounds-gen-field-ss-plugin" style="display:none;">
-                <span class="hint-label">SS plugin (необязательно)</span>
-                <input id="outbounds-gen-ss-plugin" class="xray-log-filter" type="text" placeholder="v2ray-plugin;mode=websocket;tls">
-              </label>
-
-              <label id="outbounds-gen-field-hy2-insecure" style="display:none;">
-                <span class="hint-label">HY2 insecure</span>
-                <select id="outbounds-gen-hy2-insecure" class="xray-log-select">
-                  <option value="0" selected>0 (проверять TLS)</option>
-                  <option value="1">1 (allow insecure)</option>
-                </select>
-              </label>
-
-              <label id="outbounds-gen-field-hy2-obfs" style="display:none;">
-                <span class="hint-label">HY2 obfs</span>
-                <select id="outbounds-gen-hy2-obfs" class="xray-log-select">
-                  <option value="" selected>(нет)</option>
-                  <option value="salamander">salamander</option>
-                </select>
-              </label>
-
-              <label id="outbounds-gen-field-hy2-obfspwd" style="display:none;">
-                <span class="hint-label">HY2 obfs-password</span>
-                <input id="outbounds-gen-hy2-obfspwd" class="xray-log-filter" type="text" placeholder="obfs password">
-              </label>
-
-              <label id="outbounds-gen-field-hy2-pinsha256" style="display:none;">
-                <span class="hint-label">PinSHA256 (HY2)</span>
-                <input id="outbounds-gen-hy2-pinsha256" class="xray-log-filter" type="text" placeholder="33:83:...:95">
-              </label>
-
-              <label id="outbounds-gen-field-allowinsecure">
-                <span class="hint-label">TLS allowInsecure</span>
-                <select id="outbounds-gen-allowinsecure" class="xray-log-select">
-                  <option value="0" selected>Нет</option>
-                  <option value="1">Да</option>
-                </select>
-              </label>
+          <div class="xk-gen-lead">
+            <div class="xk-gen-lead-icon">🧩</div>
+            <div class="xk-gen-lead-copy">
+              <div class="xk-gen-lead-title">Параметры → аккуратно собранная ссылка</div>
+              <p class="modal-description" style="margin:0;">
+                Выберите <b>протокол</b>, укажите базовые поля и при необходимости заполните дополнительные параметры.
+                Ниже панель соберёт готовую ссылку для <code>04_outbounds.json</code>, которую можно сразу вставить в поле прокси.
+              </p>
             </div>
-          </details>
-
-          <div id="outbounds-gen-status" class="status" style="margin-top: 10px;"></div>
-
-          <label style="display:block; margin-top: 10px;">
-            <span class="hint-label">Ссылка (preview)</span>
-            <textarea id="outbounds-gen-preview" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" readonly></textarea>
-          </label>
-        </div>
-        <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" id="outbounds-gen-prefill-btn" class="btn-secondary" data-tooltip="Заполнить поля генератора из ссылки, вставленной в поле на странице (удобно для редактирования существующего прокси).">↩️ Заполнить из поля</button>
-            <button type="button" id="outbounds-gen-generate-btn" data-tooltip="Собрать ссылку из заполненных полей.">🧩 Собрать</button>
-            <button type="button" id="outbounds-gen-insert-btn" class="btn-primary" data-tooltip="Вставить ссылку в поле на странице и закрыть окно." disabled>✅ Вставить в поле</button>
           </div>
-          <button type="button" id="outbounds-gen-cancel-btn">Отмена</button>
+
+          <div class="xk-gen-grid2">
+            <section class="xk-gen-panel xk-gen-form-panel">
+              <div class="xk-gen-panelhead">
+                <div>
+                  <div class="xk-gen-kicker">Шаг 1</div>
+                  <div class="terminal-menu-title" style="margin:0;">Основные параметры</div>
+                </div>
+                <div id="outbounds-gen-summary" class="xk-gen-summary" data-tooltip="Текущая схема сборки">VLESS · TCP · Reality</div>
+              </div>
+
+              <div class="xk-gen-selects">
+                <label>
+                  <span class="xk-gen-fieldlabel">Протокол</span>
+                  <select id="outbounds-gen-proto" class="xray-log-select">
+                    <option value="auto" selected>Авто</option>
+                    <option value="vless">VLESS</option>
+                    <option value="trojan">Trojan</option>
+                    <option value="vmess">VMess</option>
+                    <option value="ss">Shadowsocks</option>
+                    <option value="hy2">Hysteria2 (HY2)</option>
+                  </select>
+                </label>
+
+                <label>
+                  <span class="xk-gen-fieldlabel">Транспорт</span>
+                  <select id="outbounds-gen-type" class="xray-log-select">
+                    <option value="auto" selected>Авто</option>
+                    <option value="tcp">TCP</option>
+                    <option value="ws">WebSocket</option>
+                    <option value="grpc">gRPC</option>
+                    <option value="httpupgrade">HTTP Upgrade</option>
+                    <option value="kcp">mKCP</option>
+                    <option value="raw">RAW</option>
+                    <option value="xhttp">XHTTP</option>
+                  </select>
+                </label>
+
+                <label>
+                  <span class="xk-gen-fieldlabel">Security</span>
+                  <select id="outbounds-gen-security" class="xray-log-select">
+                    <option value="auto" selected>Авто</option>
+                    <option value="none">None</option>
+                    <option value="tls">TLS</option>
+                    <option value="reality">Reality</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="xk-gen-fields-grid">
+                <label>
+                  <span class="xk-gen-fieldlabel">Server (host)</span>
+                  <input id="outbounds-gen-host" class="xray-log-filter" type="text" placeholder="example.com">
+                </label>
+
+                <label>
+                  <span class="xk-gen-fieldlabel">Port</span>
+                  <input id="outbounds-gen-port" class="xray-log-filter" type="number" placeholder="443" min="1" max="65535">
+                </label>
+
+                <label>
+                  <span class="xk-gen-fieldlabel">Tag (необязательно)</span>
+                  <input id="outbounds-gen-tag" class="xray-log-filter" type="text" placeholder="proxy">
+                </label>
+              </div>
+
+              <div class="xk-gen-credentials-card">
+                <div class="xk-gen-subtitle">Учетные данные</div>
+                <div class="xk-gen-fields-grid xk-gen-credentials-grid">
+                  <label id="outbounds-gen-cred-vless">
+                    <span class="xk-gen-fieldlabel">UUID (VLESS)</span>
+                    <input id="outbounds-gen-uuid" class="xray-log-filter" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                  </label>
+
+                  <label id="outbounds-gen-cred-trojan" style="display:none;">
+                    <span class="xk-gen-fieldlabel">Password (Trojan)</span>
+                    <input id="outbounds-gen-pass" class="xray-log-filter" type="text" placeholder="password">
+                  </label>
+
+                  <label id="outbounds-gen-cred-vmess" style="display:none;">
+                    <span class="xk-gen-fieldlabel">UUID (VMess)</span>
+                    <input id="outbounds-gen-vmess-uuid" class="xray-log-filter" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                  </label>
+
+                  <label id="outbounds-gen-cred-ss" style="display:none;">
+                    <span class="xk-gen-fieldlabel">Method (SS)</span>
+                    <select id="outbounds-gen-ss-method" class="xray-log-select">
+                      <option value="aes-128-gcm">aes-128-gcm</option>
+                      <option value="aes-256-gcm">aes-256-gcm</option>
+                      <option value="chacha20-ietf-poly1305" selected>chacha20-ietf-poly1305</option>
+                      <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm</option>
+                      <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm</option>
+                    </select>
+                  </label>
+
+                  <label id="outbounds-gen-cred-ss-pass" style="display:none;">
+                    <span class="xk-gen-fieldlabel">Password (SS)</span>
+                    <input id="outbounds-gen-ss-pass" class="xray-log-filter" type="text" placeholder="password">
+                  </label>
+
+                  <label id="outbounds-gen-cred-hy2" style="display:none;">
+                    <span class="xk-gen-fieldlabel">Auth (HY2)</span>
+                    <input id="outbounds-gen-hy2-auth" class="xray-log-filter" type="text" placeholder="password или user:pass">
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <section class="xk-gen-panel xk-gen-result-panel">
+              <div class="xk-gen-panelhead">
+                <div>
+                  <div class="xk-gen-kicker">Шаг 2</div>
+                  <div class="terminal-menu-title" style="margin:0;">Дополнительно и результат</div>
+                </div>
+                <div id="outbounds-gen-prefill-hint" class="modal-hint xk-gen-sidehint">Можно взять данные из текущего поля</div>
+              </div>
+
+              <details id="outbounds-gen-advanced" class="outbounds-gen-advanced xk-gen-advanced-card">
+                <summary>Дополнительные параметры</summary>
+                <div class="xk-gen-fields-grid xk-gen-adv-grid">
+                  <label id="outbounds-gen-field-sni">
+                    <span class="xk-gen-fieldlabel">SNI</span>
+                    <input id="outbounds-gen-sni" class="xray-log-filter" type="text" placeholder="example.com">
+                  </label>
+
+                  <label id="outbounds-gen-field-fp">
+                    <span class="xk-gen-fieldlabel">Fingerprint (fp)</span>
+                    <input id="outbounds-gen-fp" class="xray-log-filter" type="text" placeholder="chrome">
+                  </label>
+
+                  <label id="outbounds-gen-field-alpn">
+                    <span class="xk-gen-fieldlabel">ALPN</span>
+                    <input id="outbounds-gen-alpn" class="xray-log-filter" type="text" placeholder="h2,http/1.1">
+                  </label>
+
+                  <label id="outbounds-gen-field-flow">
+                    <span class="xk-gen-fieldlabel">Flow (VLESS)</span>
+                    <select id="outbounds-gen-flow" class="xray-log-select">
+                      <option value="">(нет)</option>
+                      <option value="xtls-rprx-vision">xtls-rprx-vision</option>
+                    </select>
+                  </label>
+
+                  <label id="outbounds-gen-field-path">
+                    <span class="xk-gen-fieldlabel">Path (WS/HTTP Upgrade)</span>
+                    <input id="outbounds-gen-path" class="xray-log-filter" type="text" placeholder="/">
+                  </label>
+
+                  <label id="outbounds-gen-field-hosthdr">
+                    <span class="xk-gen-fieldlabel">Host header (WS/HTTP Upgrade)</span>
+                    <input id="outbounds-gen-hosthdr" class="xray-log-filter" type="text" placeholder="cdn.example.com">
+                  </label>
+
+                  <label id="outbounds-gen-field-grpc-service">
+                    <span class="xk-gen-fieldlabel">gRPC serviceName</span>
+                    <input id="outbounds-gen-service" class="xray-log-filter" type="text" placeholder="grpc">
+                  </label>
+
+                  <label id="outbounds-gen-field-grpc-authority">
+                    <span class="xk-gen-fieldlabel">gRPC authority</span>
+                    <input id="outbounds-gen-authority" class="xray-log-filter" type="text" placeholder="example.com">
+                  </label>
+
+                  <label id="outbounds-gen-field-grpc-mode">
+                    <span class="xk-gen-fieldlabel">gRPC mode</span>
+                    <select id="outbounds-gen-grpc-mode" class="xray-log-select">
+                      <option value="">auto</option>
+                      <option value="multi">multi</option>
+                    </select>
+                  </label>
+
+                  <label id="outbounds-gen-field-reality-pbk">
+                    <span class="xk-gen-fieldlabel">Reality PBK (pbk)</span>
+                    <input id="outbounds-gen-pbk" class="xray-log-filter" type="text" placeholder="publicKey">
+                  </label>
+
+                  <label id="outbounds-gen-field-reality-sid">
+                    <span class="xk-gen-fieldlabel">Reality SID (sid)</span>
+                    <input id="outbounds-gen-sid" class="xray-log-filter" type="text" placeholder="shortId">
+                  </label>
+
+                  <label id="outbounds-gen-field-reality-spx">
+                    <span class="xk-gen-fieldlabel">Reality SPX (spx)</span>
+                    <input id="outbounds-gen-spx" class="xray-log-filter" type="text" placeholder="/" value="/">
+                  </label>
+
+                  <label id="outbounds-gen-field-ss-plugin" style="display:none;">
+                    <span class="xk-gen-fieldlabel">SS plugin (необязательно)</span>
+                    <input id="outbounds-gen-ss-plugin" class="xray-log-filter" type="text" placeholder="v2ray-plugin;mode=websocket;tls">
+                  </label>
+
+                  <label id="outbounds-gen-field-hy2-insecure" style="display:none;">
+                    <span class="xk-gen-fieldlabel">HY2 insecure</span>
+                    <select id="outbounds-gen-hy2-insecure" class="xray-log-select">
+                      <option value="0" selected>0 (проверять TLS)</option>
+                      <option value="1">1 (allow insecure)</option>
+                    </select>
+                  </label>
+
+                  <label id="outbounds-gen-field-hy2-obfs" style="display:none;">
+                    <span class="xk-gen-fieldlabel">HY2 obfs</span>
+                    <select id="outbounds-gen-hy2-obfs" class="xray-log-select">
+                      <option value="" selected>(нет)</option>
+                      <option value="salamander">salamander</option>
+                    </select>
+                  </label>
+
+                  <label id="outbounds-gen-field-hy2-obfspwd" style="display:none;">
+                    <span class="xk-gen-fieldlabel">HY2 obfs-password</span>
+                    <input id="outbounds-gen-hy2-obfspwd" class="xray-log-filter" type="text" placeholder="obfs password">
+                  </label>
+
+                  <label id="outbounds-gen-field-hy2-pinsha256" style="display:none;">
+                    <span class="xk-gen-fieldlabel">PinSHA256 (HY2)</span>
+                    <input id="outbounds-gen-hy2-pinsha256" class="xray-log-filter" type="text" placeholder="33:83:...:95">
+                  </label>
+
+                  <label id="outbounds-gen-field-allowinsecure">
+                    <span class="xk-gen-fieldlabel">TLS allowInsecure</span>
+                    <select id="outbounds-gen-allowinsecure" class="xray-log-select">
+                      <option value="0" selected>Нет</option>
+                      <option value="1">Да</option>
+                    </select>
+                  </label>
+                </div>
+              </details>
+
+              <div id="outbounds-gen-status" class="status xk-gen-statusbar"></div>
+
+              <label class="xk-gen-preview-block">
+                <span class="xk-gen-fieldlabel">Готовая ссылка</span>
+                <textarea id="outbounds-gen-preview" class="xkeen-textarea outbounds-gen-preview xk-gen-preview" spellcheck="false" readonly></textarea>
+              </label>
+              <div class="xk-gen-note">Сначала нажмите «Собрать», затем при необходимости сразу вставьте результат в основное поле.</div>
+            </section>
+          </div>
+        </div>
+        <div class="modal-actions xk-gen-footer">
+          <div class="xk-gen-footer-left">
+            <button type="button" id="outbounds-gen-prefill-btn" class="btn-secondary btn-compact xk-gen-footer-btn" data-tooltip="Заполнить поля генератора из ссылки, вставленной в поле на странице (удобно для редактирования существующего прокси)."><span class="xk-btn-inline-glyph" aria-hidden="true">↩️</span><span>Заполнить из поля</span></button>
+          </div>
+          <div class="xk-gen-footer-actions">
+            <button type="button" id="outbounds-gen-cancel-btn" class="btn-compact">Отмена</button>
+            <button type="button" id="outbounds-gen-generate-btn" class="btn-secondary btn-compact xk-gen-footer-btn" data-tooltip="Собрать ссылку из заполненных полей."><span class="xk-btn-inline-glyph" aria-hidden="true">🧩</span><span>Собрать</span></button>
+            <button type="button" id="outbounds-gen-insert-btn" class="btn-primary btn-compact xk-gen-footer-btn xk-gen-primary-action" data-tooltip="Вставить ссылку в поле на странице и закрыть окно." disabled><span class="xk-btn-inline-glyph" aria-hidden="true">✅</span><span>Вставить в поле</span></button>
+          </div>
         </div>
       </div>
     </div>
-</div>
 
 	    <!-- Outbounds: proxy pool modal (multiple links) -->
-	    <div id="outbounds-pool-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Пул прокси для балансировщика">
-	      <div class="modal-content" style="max-width: 860px;" data-modal-key="outbounds-pool">
+	    <div id="outbounds-pool-modal" class="modal hidden" data-modal-key="outbounds-pool-premium-v2" role="dialog" aria-modal="true" aria-label="Пул прокси для балансировщика">
+	      <div class="modal-content" data-modal-key="outbounds-pool-premium-v2-content">
 	        <div class="modal-header">
 	          <span class="modal-title">Пул прокси (несколько ссылок)</span>
 	          <button type="button" class="modal-close" id="outbounds-pool-close-btn" title="Закрыть">×</button>
 	        </div>
 	        <div class="modal-body">
-	          <p class="modal-description" style="margin-bottom: 10px;">
-	            Вставь несколько ссылок (по одной на строку). Можно писать <code>tag | url</code>, <code>tag = url</code> или просто <code>url</code> (тег будет предложен автоматически).
-	            Эти теги потом выбираются в балансировщике (<code>leastPing</code>).
-	          </p>
-
-	          <label style="display:block;">
-	            <span class="hint-label">Список (вставка)</span>
-	            <textarea id="outbounds-pool-input" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" placeholder="p1 | vless://...\np2 = vless://...\nvless://...#mytag"></textarea>
-	          </label>
-
-	          <div class="actions xk-actions-inline" style="margin-top: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap;">
-	            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-	              <button type="button" id="outbounds-pool-add-btn" class="btn-secondary">➕ Добавить в список</button>
-	              <button type="button" id="outbounds-pool-clear-btn" class="btn-secondary">🧹 Очистить список</button>
+	          <div class="xk-pool-lead">
+	            <div class="xk-pool-lead-icon">🧱</div>
+	            <div class="xk-pool-lead-text">
+	              <div class="xk-pool-lead-title">Несколько ссылок → готовый пул тегов</div>
+	              <p class="modal-description" style="margin:0;">
+	                Вставьте ссылки по одной на строку. Поддерживаются форматы <code>tag | url</code>, <code>tag = url</code> и просто <code>url</code>.
+	                Панель соберёт outbounds, аккуратно обновит <code>04_outbounds.json</code> и подготовит теги для балансировщика <code>leastPing</code>.
+	              </p>
 	            </div>
-	            <span id="outbounds-pool-existing" class="modal-hint" style="opacity:0.75; font-size:0.85rem;"></span>
 	          </div>
 
-	          <div style="margin-top: 10px; max-height: 260px; overflow:auto; border: 1px solid var(--border, rgba(255,255,255,0.12)); border-radius: 10px;">
-	            <table style="width:100%; border-collapse: collapse;">
-	              <thead>
-	                <tr>
-	                  <th style="text-align:left; padding:8px;">Tag</th>
-	                  <th style="text-align:left; padding:8px;">URL</th>
-	                  <th style="width:70px; padding:8px;"></th>
-	                </tr>
-	              </thead>
-	              <tbody id="outbounds-pool-tbody"></tbody>
-	            </table>
-	          </div>
+	          <div class="xk-pool-grid">
+	            <section class="xk-pool-panel xk-pool-input-panel">
+	              <div class="xk-pool-panelhead">
+	                <div>
+	                  <div class="xk-pool-kicker">Шаг 1</div>
+	                  <div class="terminal-menu-title" style="margin:0;">Вставка и подготовка</div>
+	                </div>
+	              </div>
 
-	          <div id="outbounds-pool-status" class="status" style="margin-top: 10px;"></div>
+	              <label class="xk-pool-editor-block">
+	                <span class="xk-pool-fieldlabel">Список ссылок</span>
+	                <textarea id="outbounds-pool-input" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" placeholder="p1 | vless://...
+p2 = vless://...
+vless://...#mytag"></textarea>
+	              </label>
+
+	              <div class="xk-pool-toolbar">
+	                <button type="button" id="outbounds-pool-add-btn" class="btn-secondary btn-compact xk-pool-action"><span class="xk-btn-inline-glyph" aria-hidden="true">＋</span><span>Добавить в список</span></button>
+	                <button type="button" id="outbounds-pool-clear-btn" class="btn-secondary btn-compact xk-pool-action"><span class="xk-btn-inline-glyph" aria-hidden="true">🧹</span><span>Очистить</span></button>
+	              </div>
+
+	              <div class="xk-pool-note">
+	                <div><b>Подсказка:</b> если tag не указан, он будет предложен автоматически по <code>#fragment</code> или host.</div>
+	                <div id="outbounds-pool-existing" class="modal-hint xk-pool-existing">Существующие теги загрузятся автоматически…</div>
+	              </div>
+	            </section>
+
+	            <section class="xk-pool-panel xk-pool-preview-panel">
+	              <div class="xk-pool-panelhead">
+	                <div>
+	                  <div class="xk-pool-kicker">Шаг 2</div>
+	                  <div class="terminal-menu-title" style="margin:0;">Итоговый пул</div>
+	                </div>
+	                <div id="outbounds-pool-summary" class="xk-pool-summary" data-tooltip="Количество строк, подготовленных к сохранению">0 строк · 0 tag</div>
+	              </div>
+
+	              <div class="xk-pool-listbox">
+	                <div class="xk-pool-listhead">
+	                  <div class="xk-pool-listtitle">
+	                    <div class="terminal-menu-title" style="margin:0;">Список для записи</div>
+	                    <div class="xk-pool-list-subtitle">Tag можно поправить вручную, URL — заменить прямо в таблице. Кнопка справа удаляет строку.</div>
+	                  </div>
+	                  <div id="outbounds-pool-status" class="modal-hint xk-pool-status" style="margin:0;"></div>
+	                </div>
+
+	                <div class="xk-pool-tablewrap">
+	                  <table class="xk-pool-table">
+	                    <thead>
+	                      <tr>
+	                        <th>Tag</th>
+	                        <th>URL</th>
+	                        <th class="xk-pool-table-actions-col"></th>
+	                      </tr>
+	                    </thead>
+	                    <tbody id="outbounds-pool-tbody"></tbody>
+	                  </table>
+	                  <div id="outbounds-pool-empty" class="xk-pool-empty">Пока пусто. Добавьте ссылки слева, чтобы собрать пул.</div>
+	                </div>
+	              </div>
+	            </section>
+	          </div>
 	        </div>
-	        <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-	          <label style="display:flex; gap:8px; align-items:center;">
+
+	        <div class="modal-actions xk-pool-footer">
+	          <label class="xk-pool-replace-card">
 	            <input type="checkbox" id="outbounds-pool-replace" />
-	            <span>Заменить весь пул (удалить старые прокси‑теги)</span>
+	            <div class="xk-pool-replace-copy">
+	              <strong>Заменить весь пул</strong>
+	              <small>Удалить старые прокси-теги и оставить только текущий список + служебные outbounds.</small>
+	            </div>
 	          </label>
-	          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-	            <button type="button" id="outbounds-pool-save-btn" class="btn-primary">💾 Сохранить</button>
-	            <button type="button" id="outbounds-pool-cancel-btn">Отмена</button>
+	          <div class="xk-pool-footer-actions">
+	            <button type="button" id="outbounds-pool-cancel-btn" class="btn-compact">Отмена</button>
+	            <button type="button" id="outbounds-pool-save-btn" class="btn-primary btn-compact xk-pool-primary-action"><span class="xk-btn-inline-glyph" aria-hidden="true">💾</span><span>Сохранить</span></button>
 	          </div>
 	        </div>
 	      </div>
@@ -2428,75 +2622,104 @@
 
     <!-- Mihomo: import proxy / subscription modal (parser) -->
     <div id="mihomo-import-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Импорт узла Mihomo">
-      <div class="modal-content" style="max-width: 780px;" data-modal-key="mihomo-import">
-        <div class="modal-header">
-          <span class="modal-title">Импорт узла (Mihomo)</span>
+      <div class="modal-content xk-mi-modal" data-modal-key="mihomo-import">
+        <div class="modal-header xk-mi-header">
+          <div class="xk-mi-titlebox">
+            <span class="xk-mi-kicker">Mihomo · Premium import</span>
+            <span class="modal-title">Импорт узла</span>
+            <p class="xk-mi-subtitle">
+              Поддерживаются <b>vless / trojan / vmess / ss / hysteria2 / hy2</b>, <b>https‑подписка</b> и <b>WireGuard (.conf)</b>.
+              Панель аккуратно преобразует их в YAML и вставит в нужную секцию <code>config.yaml</code>.
+            </p>
+          </div>
           <button type="button" class="modal-close" id="mihomo-import-close-btn" title="Закрыть">×</button>
         </div>
-        <div class="modal-body">
-          <p class="modal-description" style="margin-bottom: 10px;">
-            Вставь ссылку узла <b>vless / trojan / vmess / ss / hysteria2 / hy2</b>, <b>https‑подписку</b> или <b>WireGuard (.conf)</b>.
-            Панель преобразует её в YAML и аккуратно добавит в <code>config.yaml</code>.
-          </p>
+        <div class="modal-body xk-mi-body">
+          <section class="xk-mi-lead">
+            <div class="xk-mi-lead-icon" aria-hidden="true">⇢</div>
+            <div class="xk-mi-lead-copy">
+              <div class="xk-mi-lead-title">Быстрый импорт без ручного YAML</div>
+              <div class="xk-mi-lead-desc">Сначала проверь превью, затем одним кликом вставь узел в <code>proxies</code> или подписку в <code>proxy-providers</code>.</div>
+            </div>
+            <div class="xk-mi-chiprow" aria-hidden="true">
+              <span class="xk-mi-chip">Auto</span>
+              <span class="xk-mi-chip">Preview</span>
+              <span class="xk-mi-chip">Safe insert</span>
+            </div>
+          </section>
 
+          <div class="xk-mi-grid">
+            <section class="xk-mi-panel xk-mi-panel--controls">
+              <div class="xk-mi-field-grid">
+                <label class="xk-mi-field">
+                  <span class="hint-label">Тип импорта</span>
+                  <select id="mihomo-import-mode" class="xray-log-select xk-mi-control">
+                    <option value="auto">Auto</option>
+                    <option value="proxy">Proxy link</option>
+                    <option value="subscription">HTTPS subscription</option>
+                    <option value="wireguard">WireGuard (.conf)</option>
+                  </select>
+                </label>
 
-          <label style="display:block; margin-top: 10px;">
-            <span class="hint-label">Тип импорта</span>
-            <select id="mihomo-import-mode" class="xray-log-select" style="width: 100%;">
-              <option value="auto">Auto</option>
-              <option value="proxy">Proxy link</option>
-              <option value="subscription">HTTPS subscription</option>
-              <option value="wireguard">WireGuard (.conf)</option>
-            </select>
-          </label>
-
-          <label style="display:block; margin-top: 10px;">
-            <span class="hint-label">Ссылка / подписка</span>
-            <textarea id="mihomo-import-input" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" placeholder="vless://...\nили\nhttps://..."></textarea>
-          </label>
-
-          <div id="mihomo-import-status" class="status" style="margin-top: 10px;"></div>
-          <p id="mihomo-import-target-hint" class="modal-hint" style="margin:8px 0 0; opacity:0.75; font-size: 0.85rem;"></p>
-          
-          <div id="mihomo-import-groups-block" style="margin-top: 12px;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-              <span class="hint-label">Добавить в группы</span>
-              <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <button type="button" id="mihomo-import-groups-all-btn" style="padding:4px 8px; font-size:0.85rem;" data-tooltip="Выбрать все группы">Все</button>
-                <button type="button" id="mihomo-import-groups-none-btn" style="padding:4px 8px; font-size:0.85rem;" data-tooltip="Снять выбор со всех групп">Снять</button>
+                <label class="xk-mi-field xk-mi-field--grow">
+                  <span class="hint-label">Ссылка / подписка / конфиг</span>
+                  <textarea id="mihomo-import-input" class="xkeen-textarea outbounds-gen-preview xk-mi-input" spellcheck="false" placeholder="vless://...
+или
+https://..."></textarea>
+                </label>
               </div>
-            </div>
-            <div id="mihomo-import-groups" style="margin-top: 6px; border: 1px solid rgba(127,127,127,0.25); border-radius: 12px; padding: 8px; max-height: 140px; overflow: auto;">
-              <div class="xk-card-desc" style="opacity:0.75;">Группы будут подхвачены из текущего <code>config.yaml</code>.</div>
-            </div>
-            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin-top: 8px;">
-              <input type="checkbox" id="mihomo-import-groups-remember">
-              <span>Запомнить выбор</span>
-            </label>
-          </div>
 
+              <div id="mihomo-import-status" class="status xk-mi-status hidden"></div>
+              <p id="mihomo-import-target-hint" class="modal-hint xk-mi-target hidden"></p>
 
-          <div style="margin-top: 10px;">
-            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
-              <span class="hint-label">YAML (preview)</span>
-              <div class="xk-editor-engine" id="mihomo-import-preview-engine" style="margin-top: 2px;">
-                <span class="xk-editor-engine-label">Редактор</span>
-                <select id="mihomo-import-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
-                  <option value="codemirror">CodeMirror</option>
-                  <option value="monaco">Monaco</option>
-                </select>
+              <div id="mihomo-import-groups-block" class="xk-mi-groups-card">
+                <div class="xk-mi-section-head">
+                  <div>
+                    <div class="xk-mi-section-title">Добавить в группы</div>
+                    <div class="xk-mi-section-subtitle">Выбор из текущего <code>config.yaml</code> для статических <code>proxies</code>.</div>
+                  </div>
+                  <div class="xk-mi-inline-actions">
+                    <button type="button" id="mihomo-import-groups-all-btn" class="btn-compact" data-tooltip="Выбрать все группы">Все</button>
+                    <button type="button" id="mihomo-import-groups-none-btn" class="btn-compact" data-tooltip="Снять выбор со всех групп">Снять</button>
+                  </div>
+                </div>
+                <div id="mihomo-import-groups" class="xk-mi-groups-shell">
+                  <div class="xk-card-desc" style="opacity:0.75;">Группы будут подхвачены из текущего <code>config.yaml</code>.</div>
+                </div>
+                <label class="global-autorestart-toggle xk-mi-remember">
+                  <input type="checkbox" id="mihomo-import-groups-remember">
+                  <span>Запомнить выбор</span>
+                </label>
               </div>
-            </div>
-            <div id="mihomo-import-preview-monaco" class="xk-monaco-editor xk-monaco-editor--modal xk-mihomo-import-preview-monaco hidden"></div>
-            <textarea id="mihomo-import-preview" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" readonly></textarea>
+            </section>
+
+            <section class="xk-mi-panel xk-mi-panel--preview">
+              <div class="xk-mi-section-head xk-mi-section-head--preview">
+                <div>
+                  <div class="xk-mi-section-title">YAML preview</div>
+                  <div class="xk-mi-section-subtitle">Показываем итоговый фрагмент до вставки в конфиг.</div>
+                </div>
+                <div class="xk-editor-engine" id="mihomo-import-preview-engine">
+                  <span class="xk-editor-engine-label">Редактор</span>
+                  <select id="mihomo-import-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
+                    <option value="codemirror">CodeMirror</option>
+                    <option value="monaco">Monaco</option>
+                  </select>
+                </div>
+              </div>
+              <div class="xk-mi-preview-wrap">
+                <div id="mihomo-import-preview-monaco" class="xk-monaco-editor xk-monaco-editor--modal xk-mihomo-import-preview-monaco hidden"></div>
+                <textarea id="mihomo-import-preview" class="xkeen-textarea outbounds-gen-preview xk-mi-preview" spellcheck="false" readonly></textarea>
+              </div>
+            </section>
           </div>
         </div>
-        <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" id="mihomo-import-parse-btn" data-tooltip="Преобразовать ссылку в YAML и показать результат.">✨ Преобразовать</button>
-            <button type="button" id="mihomo-import-insert-btn" class="btn-primary" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>✅ Вставить в конфиг</button>
+        <div class="modal-actions xk-mi-footer">
+          <div class="xk-mi-footer-actions">
+            <button type="button" id="mihomo-import-parse-btn" class="xk-mi-primary-action" data-tooltip="Преобразовать ссылку в YAML и показать результат.">✨ Преобразовать</button>
+            <button type="button" id="mihomo-import-insert-btn" class="btn-primary xk-mi-primary-action" data-tooltip="Вставить YAML в config.yaml (proxies / proxy-providers) и закрыть окно." disabled>✅ Вставить в конфиг</button>
           </div>
-          <button type="button" id="mihomo-import-cancel-btn">Отмена</button>
+          <button type="button" id="mihomo-import-cancel-btn" class="btn-compact">Отмена</button>
         </div>
       </div>
     </div>
@@ -2504,102 +2727,136 @@
 
     <!-- Mihomo: proxy tools (rename / replace) -->
     <div id="mihomo-proxy-tools-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Proxy Tools Mihomo">
-      <div class="modal-content xk-pt-modal" style="max-width: 780px;" data-modal-key="mihomo-proxy-tools">
-        <div class="modal-header">
-          <span class="modal-title">Proxy Tools (Mihomo)</span>
+      <div class="modal-content xk-pt-modal" style="max-width: 1040px;" data-modal-key="mihomo-proxy-tools">
+        <div class="modal-header xk-pt-header">
+          <div class="xk-pt-titlebox">
+            <span class="xk-pt-kicker">Mihomo · Premium proxy tools</span>
+            <span class="modal-title">Proxy Tools</span>
+            <p class="xk-pt-subtitle">
+              Аккуратные операции над <code>proxies:</code> без ручного редактирования YAML: <b>переименование</b> узла с обновлением групп и <b>точечная замена</b> содержимого по ссылке или <b>WireGuard (.conf)</b>.
+            </p>
+          </div>
           <button type="button" class="modal-close" id="mihomo-proxy-tools-close-btn" title="Закрыть">×</button>
         </div>
+
         <div class="modal-body xk-pt-body">
-          <p class="modal-description xk-pt-desc">
-            Быстрые операции над <code>proxies:</code> без ручного редактирования YAML:
-            <b>переименовать</b> узел (с обновлением групп) или <b>заменить</b> его содержимое по ссылке/WireGuard.
-          </p>
-
-          <div class="xk-pt-grid xk-pt-grid--select">
-            <label for="mihomo-proxy-tools-select" class="xk-pt-label">Выбери прокси</label>
-            <select id="mihomo-proxy-tools-select" class="xray-log-select xk-pt-control">
-              <option value="">— нет proxies —</option>
-            </select>
-          </div>
-
-          <div id="mihomo-proxy-tools-status" class="status" style="margin-top: 8px;"></div>
-
-          <!-- Helpful UX when config uses proxy-providers and has no static proxies -->
-          <div id="mihomo-proxy-tools-no-proxies" class="hidden" style="display:none; margin-top: 8px; padding: 12px; border-radius: 12px; border: 1px solid rgba(127,127,127,0.18); background: rgba(2,6,23,0.35);">
-            <div style="font-weight: 600; margin-bottom: 6px;">Статические proxies не найдены</div>
-            <div id="mihomo-proxy-tools-no-proxies-text" class="xk-card-desc" style="opacity: 0.9;">
-              Вы используете proxy-providers (подписка). Proxy Tools работает только со статическими proxies. Хотите добавить статический узел?
+          <section class="xk-pt-lead">
+            <div class="xk-pt-lead-icon" aria-hidden="true">⇄</div>
+            <div class="xk-pt-lead-copy">
+              <div class="xk-pt-lead-title">Управление статическими узлами</div>
+              <div class="xk-pt-lead-desc">Работаем только с текущим содержимым редактора. Сначала выбери целевой proxy, затем либо переименуй его, либо подготовь новый YAML и замени только один блок внутри <code>proxies:</code>.</div>
             </div>
-            <div style="margin-top: 10px; display:flex; gap:8px; flex-wrap:wrap;">
-              <button type="button" id="mihomo-proxy-tools-add-static-btn" class="btn-primary" data-tooltip="Вставить секцию proxies: с примером статического узла в текущий YAML.">➕ Добавить статический прокси</button>
+            <div class="xk-pt-chiprow" aria-hidden="true">
+              <span class="xk-pt-chip">Rename</span>
+              <span class="xk-pt-chip">Replace</span>
+              <span class="xk-pt-chip">Safe preview</span>
             </div>
-            <div class="xk-card-desc" style="margin-top: 6px; opacity: 0.75;">
-              Мы добавим <code>proxies:</code> с примером узла (<code>socks5</code>). Затем вы сможете отредактировать его под свой сервер.
-            </div>
-          </div>
+          </section>
 
-          <div id="mihomo-proxy-tools-actions">
-
-            <div class="xk-pt-section">
-              <div class="terminal-menu-title xk-pt-title">Rename</div>
-
-              <div class="xk-pt-grid xk-pt-grid--rename">
-                <label for="mihomo-proxy-tools-rename-input" class="xk-pt-label">Новое имя</label>
-                <input id="mihomo-proxy-tools-rename-input" class="xkeen-input xk-pt-control" type="text" placeholder="например: MyProxy" />
-                <button type="button" id="mihomo-proxy-tools-rename-btn" class="btn-primary" data-tooltip="Переименовать прокси и обновить все упоминания в proxy-groups.">
-                  ✏️ Переименовать
-                </button>
+          <div class="xk-pt-shell">
+            <section class="xk-pt-panel xk-pt-panel--target">
+              <div class="xk-pt-panel-head">
+                <div>
+                  <div class="xk-pt-section-title">Целевой proxy</div>
+                  <div class="xk-pt-section-subtitle">Список берётся из текущей секции <code>proxies:</code> в <code>config.yaml</code>.</div>
+                </div>
+                <div id="mihomo-proxy-tools-current" class="xk-pt-current is-empty">— не выбран —</div>
               </div>
 
-              <div class="xk-card-desc xk-pt-note">
-                Переименование меняет <code>- name:</code> и все ссылки на имя внутри <code>proxy-groups</code>.
-              </div>
-            </div>
-
-            <div class="xk-pt-section">
-              <div class="terminal-menu-title xk-pt-title">Replace</div>
-
-              <div class="xk-pt-grid xk-pt-grid--replace-top">
-                <label for="mihomo-proxy-tools-replace-type" class="xk-pt-label">Тип</label>
-                <select id="mihomo-proxy-tools-replace-type" class="xray-log-select xk-pt-control">
-                  <option value="auto">Auto (proxy link)</option>
-                  <option value="wireguard">WireGuard (.conf)</option>
+              <label class="xk-pt-field">
+                <span class="hint-label">Выбери узел</span>
+                <select id="mihomo-proxy-tools-select" class="xray-log-select xk-pt-control">
+                  <option value="">— нет proxies —</option>
                 </select>
+              </label>
 
-                <button type="button" id="mihomo-proxy-tools-prepare-btn" data-tooltip="Преобразовать ссылку/конфиг в YAML и показать preview.">
-                  ✨ Подготовить
-                </button>
+              <div id="mihomo-proxy-tools-status" class="status xk-pt-status hidden"></div>
 
-                <button type="button" id="mihomo-proxy-tools-replace-btn" class="btn-danger" data-tooltip="Заменить выбранный proxy block на подготовленный YAML." disabled>
-                  ♻️ Заменить
-                </button>
+              <div id="mihomo-proxy-tools-no-proxies" class="xk-pt-empty hidden" style="display:none;">
+                <div class="xk-pt-empty-title">Статические proxies не найдены</div>
+                <div id="mihomo-proxy-tools-no-proxies-text" class="xk-pt-empty-text">
+                  Proxy Tools работает только со статическими <code>proxies</code>. Хотите быстро добавить безопасный шаблон узла?
+                </div>
+                <div class="xk-pt-empty-actions">
+                  <button type="button" id="mihomo-proxy-tools-add-static-btn" class="btn-primary xk-pt-primary-btn" data-tooltip="Вставить секцию proxies: с примером статического узла в текущий YAML.">✨ Добавить статический proxy</button>
+                </div>
+                <div class="xk-pt-empty-note">
+                  Будет добавлен аккуратный шаблон <code>socks5</code> в секцию <code>proxies</code>. После этого его можно сразу отредактировать под свой сервер.
+                </div>
               </div>
+            </section>
 
-              <div class="xk-pt-grid xk-pt-grid--textarea" style="margin-top: 8px;">
-                <label for="mihomo-proxy-tools-replace-input" class="xk-pt-label">Ссылка / конфиг</label>
-                <textarea id="mihomo-proxy-tools-replace-input" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" placeholder="vless://...
+            <div id="mihomo-proxy-tools-actions" class="xk-pt-workgrid">
+              <section class="xk-pt-card xk-pt-card--rename">
+                <div class="xk-pt-card-head">
+                  <div>
+                    <div class="xk-pt-section-title">Rename</div>
+                    <div class="xk-pt-section-subtitle">Меняем <code>- name:</code> и обновляем все ссылки на узел внутри <code>proxy-groups</code>.</div>
+                  </div>
+                </div>
+
+                <label class="xk-pt-field">
+                  <span class="hint-label">Новое имя</span>
+                  <input id="mihomo-proxy-tools-rename-input" class="xkeen-input xk-pt-control" type="text" placeholder="например: MyProxy" />
+                </label>
+
+                <div class="xk-pt-card-actions">
+                  <button type="button" id="mihomo-proxy-tools-rename-btn" class="btn-primary xk-pt-primary-btn" data-tooltip="Переименовать proxy и обновить все упоминания в proxy-groups.">✏️ Переименовать</button>
+                </div>
+
+                <div class="xk-pt-note">
+                  Полезно, когда хочешь унифицировать названия узлов, не перебирая вручную группы и селекторы.
+                </div>
+              </section>
+
+              <section class="xk-pt-card xk-pt-card--replace">
+                <div class="xk-pt-card-head">
+                  <div>
+                    <div class="xk-pt-section-title">Replace</div>
+                    <div class="xk-pt-section-subtitle">Подготовь новый YAML-фрагмент и замени только выбранный proxy block, сохранив структуру конфига.</div>
+                  </div>
+                </div>
+
+                <div class="xk-pt-topbar">
+                  <label class="xk-pt-field xk-pt-field--compact">
+                    <span class="hint-label">Источник</span>
+                    <select id="mihomo-proxy-tools-replace-type" class="xray-log-select xk-pt-control">
+                      <option value="auto">Auto (proxy link)</option>
+                      <option value="wireguard">WireGuard (.conf)</option>
+                    </select>
+                  </label>
+
+                  <div class="xk-pt-inline-actions">
+                    <button type="button" id="mihomo-proxy-tools-prepare-btn" class="xk-pt-secondary-btn" data-tooltip="Преобразовать ссылку/конфиг в YAML и показать preview.">✨ Подготовить</button>
+                    <button type="button" id="mihomo-proxy-tools-replace-btn" class="btn-danger xk-pt-danger-btn" data-tooltip="Заменить выбранный proxy block на подготовленный YAML." disabled>♻️ Заменить</button>
+                  </div>
+                </div>
+
+                <div class="xk-pt-editor-grid">
+                  <label class="xk-pt-field">
+                    <span class="hint-label">Ссылка / конфиг</span>
+                    <textarea id="mihomo-proxy-tools-replace-input" class="xkeen-textarea outbounds-gen-preview xk-pt-textarea" spellcheck="false" placeholder="vless://...
 
 или WireGuard .conf"></textarea>
-              </div>
+                  </label>
 
-              <div class="xk-pt-grid xk-pt-grid--textarea" style="margin-top: 8px;">
-                <label for="mihomo-proxy-tools-replace-preview" class="xk-pt-label">YAML (preview)</label>
-                <textarea id="mihomo-proxy-tools-replace-preview" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" readonly></textarea>
-              </div>
+                  <label class="xk-pt-field">
+                    <span class="hint-label">YAML preview</span>
+                    <textarea id="mihomo-proxy-tools-replace-preview" class="xkeen-textarea outbounds-gen-preview xk-pt-textarea xk-pt-textarea--preview" spellcheck="false" readonly></textarea>
+                  </label>
+                </div>
 
-              <div class="xk-card-desc xk-pt-note">
-                Заменяется только выбранный блок внутри <code>proxies:</code>. Группы остаются, имя сохраняется.
-              </div>
+                <div class="xk-pt-note">
+                  При замене сохраняется имя выбранного узла. Группы и остальная структура <code>config.yaml</code> не трогаются.
+                </div>
+              </section>
             </div>
-
           </div>
         </div>
 
-        <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" id="mihomo-proxy-tools-close2-btn">Закрыть</button>
-          </div>
-          <div></div>
+        <div class="modal-actions xk-pt-footer">
+          <div class="xk-pt-footer-note">Изменения выполняются только в редакторе. Для применения к сервису сохрани и примени общий конфиг Mihomo.</div>
+          <button type="button" id="mihomo-proxy-tools-close2-btn" class="btn-compact">Закрыть</button>
         </div>
       </div>
     </div>
@@ -2607,50 +2864,104 @@
 
     <!-- Mihomo: HWID subscription wizard modal -->
     <div id="mihomo-hwid-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="HWID‑подписка Mihomo">
-      <div class="modal-content" style="max-width: 780px;" data-modal-key="mihomo-hwid">
-        <div class="modal-header">
-          <span class="modal-title">HWID‑подписка (Mihomo)</span>
+      <div class="modal-content xk-hw-modal" style="max-width: 1020px;" data-modal-key="mihomo-hwid">
+        <div class="modal-header xk-hw-header">
+          <div class="xk-hw-titlebox">
+            <span class="xk-hw-kicker">Mihomo · Premium HWID subscription</span>
+            <span class="modal-title">HWID‑подписка</span>
+            <p class="xk-hw-subtitle">
+              Аккуратно добавляет <b>proxy-provider</b> с HWID‑заголовками в <code>config.yaml</code>.
+              Сначала проверь ссылку, посмотри итоговый YAML, затем либо вставь provider в редактор, либо сразу примени и поставь рестарт в очередь.
+            </p>
+          </div>
           <button type="button" class="modal-close" id="mihomo-hwid-close-btn" title="Закрыть">×</button>
         </div>
-        <div class="modal-body">
-          <p class="modal-description" style="margin-bottom: 10px;">
-            Добавляет <b>proxy-provider</b> с HWID‑заголовками в <code>config.yaml</code>.
-            Сначала проверь ссылку — панель попробует вытащить <code>profile-title</code> и предложит имя.
-          </p>
-          <label style="display:block; margin-top: 10px;">
-            <span class="hint-label">URL подписки</span>
-            <input id="mihomo-hwid-url" class="xkeen-input" type="text" placeholder="https://..." />
-          </label>
 
-          <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center; margin-top: 10px;">
-            <input type="checkbox" id="mihomo-hwid-insecure">
-            <span>Игнорировать TLS</span>
-          </label>
-          <div class="xk-card-desc" style="margin:-6px 0 0 28px;">Включай только если сертификат домена битый/самоподписанный.</div>
+        <div class="modal-body xk-hw-body">
+          <section class="xk-hw-lead">
+            <div class="xk-hw-lead-icon" aria-hidden="true">🔗</div>
+            <div class="xk-hw-lead-copy">
+              <div class="xk-hw-lead-title">Проверка заголовков и безопасная вставка</div>
+              <div class="xk-hw-lead-desc">Панель сама соберёт HWID / User-Agent, попробует вытащить <code>profile-title</code>, подскажет имя provider и покажет точный YAML перед вставкой.</div>
+            </div>
+            <div class="xk-hw-chiprow" aria-hidden="true">
+              <span class="xk-hw-chip">Probe</span>
+              <span class="xk-hw-chip">Preview</span>
+              <span class="xk-hw-chip">Apply + restart</span>
+            </div>
+          </section>
 
-          <label style="display:block; margin-top: 12px;">
-            <span class="hint-label">Имя provider</span>
-            <input id="mihomo-hwid-name" class="xkeen-input" type="text" placeholder="например: My_Sub" />
-          </label>
+          <div class="xk-hw-grid">
+            <section class="xk-hw-panel xk-hw-panel--controls">
+              <div class="xk-hw-form-grid">
+                <label class="xk-hw-field xk-hw-field--full">
+                  <span class="hint-label">URL подписки</span>
+                  <input id="mihomo-hwid-url" class="xkeen-input xk-hw-control" type="text" placeholder="https://..." />
+                </label>
 
-          <div id="mihomo-hwid-status" class="status" style="margin-top: 10px;"></div>
-          <p id="mihomo-hwid-meta" class="modal-hint" style="margin:8px 0 0; opacity:0.75; font-size: 0.85rem;"></p>
-          <p id="mihomo-hwid-tip" class="modal-hint" style="margin:6px 0 0; opacity:0.7; font-size: 0.82rem; display:none;"></p>
-          <label style="display:block; margin-top: 10px;">
-            <span class="hint-label">YAML (preview)</span>
-            <textarea id="mihomo-hwid-preview" class="xkeen-textarea outbounds-gen-preview" spellcheck="false" readonly></textarea>
-          </label>
-        </div>
-        <div class="modal-actions" style="justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" id="mihomo-hwid-probe-btn" data-tooltip="Проверить ссылку и собрать YAML preview.">🔎 Проверить</button>
-            <button type="button" id="mihomo-hwid-insert-btn" class="btn-primary" data-tooltip="Вставить proxy-provider в config.yaml и закрыть окно." disabled>✅ Вставить в конфиг</button>
+                <label class="xk-hw-field">
+                  <span class="hint-label">Имя provider</span>
+                  <input id="mihomo-hwid-name" class="xkeen-input xk-hw-control" type="text" placeholder="например: My_Sub" />
+                </label>
+
+                <label class="xk-hw-field">
+                  <span class="hint-label xk-hw-label-row">
+                    <span>Режим применения</span>
+                    <span class="xk-hw-label-tip" tabindex="0" aria-label="Подсказка по режимам" data-tooltip="Рекомендуется add. Остальные режимы перезаписывают часть или весь config.yaml.">ⓘ</span>
+                  </span>
+                  <select id="mihomo-hwid-mode" class="xray-log-select xk-hw-control">
+                    <option value="add">Добавить provider (add)</option>
+                    <option value="replace_providers">Заменить proxy-providers (replace_providers)</option>
+                    <option value="replace_all">Заменить весь config.yaml (replace_all)</option>
+                  </select>
+                </label>
+
+                <label id="mihomo-hwid-template-wrap" class="xk-hw-field xk-hw-field--full hidden">
+                  <span class="hint-label">Шаблон для replace_all</span>
+                  <select id="mihomo-hwid-template" class="xray-log-select xk-hw-control"></select>
+                  <div class="xk-hw-field-note">Если шаблон не выбран, используется шаблон Mihomo по умолчанию.</div>
+                </label>
+
+                <label class="xk-hw-switch xk-hw-switch--full xk-hw-switch--compact">
+                  <input type="checkbox" id="mihomo-hwid-insecure">
+                  <div class="xk-hw-switch-copy">
+                    <strong>Игнорировать TLS</strong>
+                    <small>Используй только для битого или самоподписанного сертификата.</small>
+                  </div>
+                </label>
+              </div>
+
+              <div id="mihomo-hwid-status" class="status xk-hw-status hidden"></div>
+              <div id="mihomo-hwid-meta" class="xk-hw-meta hidden"></div>
+              <div id="mihomo-hwid-tip" class="xk-hw-tip hidden"></div>
+            </section>
+
+            <section class="xk-hw-panel xk-hw-panel--preview">
+              <div class="xk-hw-section-head">
+                <div>
+                  <div class="xk-hw-section-title">YAML preview</div>
+                  <div class="xk-hw-section-subtitle">Provider будет добавлен в <code>proxy-providers</code> именно в таком виде.</div>
+                </div>
+                <div class="xk-hw-current-pill">header + health-check</div>
+              </div>
+              <div class="xk-hw-preview-wrap">
+                <textarea id="mihomo-hwid-preview" class="xkeen-textarea outbounds-gen-preview xk-hw-preview" spellcheck="false" readonly></textarea>
+              </div>
+            </section>
           </div>
-          <button type="button" id="mihomo-hwid-cancel-btn">Отмена</button>
+        </div>
+
+        <div class="modal-actions xk-hw-footer">
+          <div class="xk-hw-footer-actions">
+            <button type="button" id="mihomo-hwid-probe-btn" class="xk-hw-secondary-btn" data-tooltip="Проверить ссылку, собрать HWID-заголовки и показать YAML preview.">🔎 Проверить</button>
+            <button type="button" id="mihomo-hwid-insert-btn" class="btn-primary xk-hw-primary-btn" data-tooltip="Вставить proxy-provider в config.yaml редактора и закрыть окно." disabled>✅ Вставить в конфиг</button>
+            <button type="button" id="mihomo-hwid-apply-restart-btn" class="btn-primary xk-hw-primary-btn" data-tooltip="Сервер сохранит config.yaml и поставит рестарт в очередь." disabled>🚀 Применить + рестарт</button>
+          </div>
+          <button type="button" id="mihomo-hwid-cancel-btn" class="btn-compact">Отмена</button>
         </div>
       </div>
     </div>
-    
+
     <!-- File manager: upload conflict (same-name file already exists) -->
     <div id="fm-upload-conflict-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Конфликт при загрузке">
       <div class="modal-content" style="max-width: 720px;">
@@ -2683,7 +2994,7 @@
           <div style="display:flex; align-items:center; gap:10px;">
             <div class="xk-editor-engine" id="fm-editor-engine">
               <span class="xk-editor-engine-label">Редактор</span>
-              <select id="fm-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+              <select id="fm-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
                 <option value="codemirror">CodeMirror</option>
                 <option value="monaco">Monaco</option>
               </select>
@@ -2838,7 +3149,19 @@
               <input type="checkbox" id="ui-setting-logs-ws2">
               <span><b>Logs:</b> WS2</span>
             </label>
-            <div class="xk-card-desc" style="margin:-6px 0 0 28px;">Экспериментальный режим: переключение file/filter и очистка экрана без переподключения (endpoint <code>/ws/xray-logs2</code>).</div>
+            <div class="xk-card-desc" style="margin:-6px 0 10px 28px;">Экспериментальный режим: переключение file/filter и очистка экрана без переподключения (endpoint <code>/ws/xray-logs2</code>).</div>
+
+            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center;">
+              <input type="checkbox" id="ui-setting-routing-gui">
+              <span><b>Routing:</b> GUI Rules card</span>
+            </label>
+            <div class="xk-card-desc" style="margin:-6px 0 10px 28px;">Показывает карточку «Правила маршрутизации» поверх JSON-редактора. Можно отключить, если нужен только raw JSONC.</div>
+
+            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center;">
+              <input type="checkbox" id="ui-setting-routing-autoapply">
+              <span><b>Routing:</b> Auto Apply</span>
+            </label>
+            <div class="xk-card-desc" style="margin:-6px 0 0 28px;">Автоматически синхронизирует изменения в карточке правил обратно в JSON-редактор без ручного нажатия «💾 Применить».</div>
           </div>
 
           <div id="ui-settings-status" class="modal-hint" style="margin-top: 10px;"></div>
@@ -2880,6 +3203,7 @@
   <script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/confirm_modal.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/xray_preflight_modal.js', v='20260308-preflight-premium-v1') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
 	  <script src="{{ url_for('static', filename='js/ui/last_activity.js') }}"></script>
@@ -2893,9 +3217,9 @@
   <script src="{{ url_for('static', filename='js/util/ansi.js', v='20260302a') }}"></script>
     <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
 <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/settings.js', v='20260222c') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/settings.js', v='20260308-stage2') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/editor_engine.js', v='20260223a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/settings_panel.js', v='20260222a') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/settings_panel.js', v='20260308-stage2') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/prettier_loader.js', v='20260227b') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/formatters.js', v='20260227c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js', v='20260224a') }}"></script>
@@ -2903,7 +3227,7 @@
   <script src="{{ url_for('static', filename='js/features/backups.js', v='20260224d') }}"></script>
 
   <!-- Routing page core -->
-  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260302c') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260308-stage3fix2') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_jsonc_preserve.js', v='20260218d') }}"></script>
 
   <!-- routing_cards: namespace + shared helpers -->
@@ -2924,26 +3248,26 @@
 
   <!-- routing_cards: Rules card -->
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/state.js', v='20260304d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/model.js', v='20260304d2') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/model.js', v='20260308-stage3fix1') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/detect.js', v='20260304j') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/json_modal.js', v='20260304h4') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/apply.js', v='20260304h4') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/fields.js', v='20260304e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dnd_pointer.js', v='20260304h') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/render.js', v='20260304h4') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/controls.js', v='20260304h4') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/apply.js', v='20260308-stage3fix1') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/fields.js', v='20260308-stage1') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dnd_pointer.js', v='20260308-stage3') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/render.js', v='20260308-stage3fix1') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/controls.js', v='20260308-stage3fix2') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dat_bridge.js', v='20260304h4') }}"></script>
 
   <!-- routing_cards: Quick balancer wizard (leastPing + observatory + restart) -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/quick_balancer.js', v='20260305a') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/quick_balancer.js', v='20260308-quick-balancer-premium-v1') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/balancer_help.js', v='20260305c') }}"></script>
 
   <!-- routing_cards: Forced rules wizard (bypass balancer) -->
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/forced_rules_wizard.js', v='20260305b') }}"></script>
 
   <!-- routing_cards: facade/entrypoint -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260304m') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260224d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260308-stage3fix2') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260308-stage3fix2') }}"></script>
   <script src="{{ url_for('static', filename='js/features/local_io.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/github.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/service_status.js') }}"></script>
@@ -2951,13 +3275,13 @@
   <script src="{{ url_for('static', filename='js/features/restart_log.js', v='20260302c') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_panel.js', v='20260302g') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_yaml_patch.js', v='20260302a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260302e') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260309-premium-import-v1') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_proxy_tools.js', v='20260302a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_hwid_sub.js', v='20260302b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/commands_list.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/cores_status.js', v='20260305a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/outbounds.js', v='20260305b') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/outbounds.js', v='20260308-proxy-generator-premium-v1') }}"></script>
   <script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
     <script src="{{ url_for('static', filename='js/features/xkeen_texts.js') }}"></script>
       <!-- File Manager scripts are lazy-loaded when Files tab is opened (Commit J) -->
@@ -2965,7 +3289,7 @@
     <!-- Terminal scripts are lazy-loaded on first open (Commit J) -->
 
   <script src="{{ url_for('static', filename='js/features/donate.js') }}"></script>
-	  <script src="{{ url_for('static', filename='js/pages/panel.init.js', v='20260302a') }}"></script>
+	  <script src="{{ url_for('static', filename='js/pages/panel.init.js', v='20260308-stage2') }}"></script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 
     <!-- Модальный JSON-редактор для 03_inbounds.json / 04_outbounds.json -->
@@ -2988,7 +3312,7 @@
             <!-- Engine toggle (CodeMirror / Monaco) -->
             <div class="xk-editor-engine" id="json-editor-engine">
               <span class="xk-editor-engine-label">Редактор</span>
-              <select id="json-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+              <select id="json-editor-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" data-tooltip="Выбор движка редактора: CodeMirror или Monaco (общая настройка)" aria-label="Выбор движка редактора">
                 <option value="codemirror">CodeMirror</option>
                 <option value="monaco">Monaco</option>
               </select>

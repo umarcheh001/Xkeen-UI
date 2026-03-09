@@ -457,6 +457,21 @@ safe(() => {
     return null;
   }
 
+  const LAST_VIEW_KEY = 'xkeen.panel.last_view.v1';
+
+  function _rememberView(name) {
+    try { localStorage.setItem(LAST_VIEW_KEY, String(name || 'routing')); } catch (e) {}
+  }
+
+  function _restoreView() {
+    try {
+      const v = localStorage.getItem(LAST_VIEW_KEY);
+      return v ? String(v) : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   function showView(viewName) {
     let name = String(viewName || 'routing');
 
@@ -501,6 +516,18 @@ safe(() => {
       const hidden = (btn.style.display === 'none') || (btn.dataset && btn.dataset.xkForceHidden === '1');
       btn.classList.toggle('active', !hidden && btn.dataset.view === name);
     });
+
+    // Show the RAW/GUI quick-focus block only on the Xray routing tab.
+    try {
+      const routingFocusGroup = document.querySelector('.xkeen-ctrl-group-routing-focus');
+      if (routingFocusGroup) {
+        const isRoutingView = name === 'routing';
+        routingFocusGroup.style.display = isRoutingView ? '' : 'none';
+        routingFocusGroup.setAttribute('aria-hidden', isRoutingView ? 'false' : 'true');
+      }
+    } catch (e) {}
+
+    try { _rememberView(name); } catch (e) {}
 
 	  // View-scoped init for heavier modules to avoid doing work (and API calls)
 	  // on tabs the user never opens.
@@ -704,9 +731,10 @@ safe(() => {
     XKeen.ui.tabs.show = showView;
     window.showView = showView;
 
-    // Initial view: keep current .active or default to routing
+    // Initial view: remember the last opened tab when possible.
     const activeBtn = document.querySelector('.top-tab-btn.active[data-view]') || document.querySelector('.top-tab-btn[data-view]');
-    const initial = activeBtn && activeBtn.dataset && activeBtn.dataset.view ? activeBtn.dataset.view : 'routing';
+    const remembered = _restoreView();
+    const initial = remembered || (activeBtn && activeBtn.dataset && activeBtn.dataset.view ? activeBtn.dataset.view : 'routing');
     showView(initial);
   }
 

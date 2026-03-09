@@ -53,17 +53,28 @@
     } catch (e) {}
   }
 
+  function toggleBlock(el, show) {
+    if (!el) return;
+    try { el.classList.toggle('hidden', !show); } catch (e) {}
+    try { el.style.display = show ? '' : 'none'; } catch (e2) {}
+  }
+
   function setStatus(msg, isErr) {
     const el = $(IDS.status);
     if (!el) return;
-    el.textContent = String(msg || '');
-    el.classList.toggle('error', !!isErr);
+    const s = String(msg || '').trim();
+    el.textContent = s;
+    el.classList.toggle('error', !!isErr && !!s);
+    el.classList.toggle('success', !!s && !isErr);
+    toggleBlock(el, !!s);
   }
 
   function setMeta(msg) {
     const el = $(IDS.meta);
     if (!el) return;
-    el.textContent = String(msg || '');
+    const s = String(msg || '').trim();
+    el.textContent = s;
+    toggleBlock(el, !!s);
   }
 
   function setTip(msg) {
@@ -71,7 +82,7 @@
     if (!el) return;
     const s = String(msg || '').trim();
     el.textContent = s;
-    el.style.display = s ? '' : 'none';
+    toggleBlock(el, !!s);
   }
 
   function setPreview(text) {
@@ -283,6 +294,37 @@
     } catch (e) {}
   }
 
+  function updatePreviewFromState() {
+    const urlEl = $(IDS.url);
+    const nameEl = $(IDS.name);
+    const url = urlEl ? String(urlEl.value || '').trim() : '';
+    const name = sanitizeProviderName(nameEl ? nameEl.value : '');
+    if (!url || !name) {
+      setPreview('');
+      setInsertEnabled(false);
+      setApplyEnabled(false);
+      return;
+    }
+    const headers = (_lastProbe && _lastProbe.headers_used) || (_device && _device.headers) || {};
+    setPreview(buildProviderSnippet(name, url, headers));
+    if (_lastProbe && _lastProbe.ok) {
+      setInsertEnabled(true);
+      setApplyEnabled(true);
+    }
+  }
+
+  async function reloadEditorFromServer() {
+    const http = getHttp();
+    if (!http || typeof http.fetchJSON !== 'function') return;
+    try {
+      const data = await http.fetchJSON('/api/mihomo-config');
+      if (data && data.ok && typeof data.content === 'string') {
+        setEditorText(String(data.content || ''));
+        refreshEditor();
+      }
+    } catch (e) {}
+  }
+
   async function doProbe() {
     if (_busy) return;
     const urlEl = $(IDS.url);
@@ -382,57 +424,18 @@
   }
 
   function ensureModeUi() {
-    const modal = $(IDS.modal);
-    if (!modal) return;
-    const body = modal.querySelector('.modal-body');
-    const nameEl = $(IDS.name);
-    const anchor = nameEl ? nameEl.closest('label') : null;
-    if (!body || !anchor) return;
-
-    if (!$(IDS.mode)) {
-      const wrap = document.createElement('label');
-      wrap.style.display = 'block';
-      wrap.style.marginTop = '12px';
-      wrap.innerHTML = `
-        <span class="hint-label">Режим применения</span>
-        <select id="${IDS.mode}" class="xkeen-input" style="width:100%;">
-          <option value="add">Добавить provider (add)</option>
-          <option value="replace_providers">Заменить proxy-providers (replace_providers)</option>
-          <option value="replace_all">Заменить весь config.yaml (replace_all)</option>
-        </select>
-        <div class="xk-card-desc" style="margin-top:6px;">Рекомендуется <b>add</b>. Остальные режимы перезаписывают части конфига.</div>
-      `;
-      anchor.insertAdjacentElement('afterend', wrap);
+    const modeEl = $(IDS.mode);
+    const wrapT = document.getElementById(IDS.template + '-wrap');
+    if (!modeEl || !wrapT) return;
+    if (!modeEl.dataset || modeEl.dataset.xkWired !== '1') {
+      const sync = () => {
+        const v = String(modeEl.value || 'add');
+        toggleBlock(wrapT, v === 'replace_all');
+      };
+      modeEl.addEventListener('change', sync);
+      sync();
+      if (modeEl.dataset) modeEl.dataset.xkWired = '1';
     }
-
-    if (!$(IDS.template)) {
-      const wrapT = document.createElement('label');
-      wrapT.style.display = 'none';
-      wrapT.style.marginTop = '12px';
-      wrapT.id = IDS.template + '-wrap';
-      wrapT.innerHTML = `
-        <span class="hint-label">Шаблон для replace_all</span>
-        <select id="${IDS.template}" class="xkeen-input" style="width:100%;"></select>
-        <div class="xk-card-desc" style="margin-top:6px;">Если не выбрать — будет использован шаблон по умолчанию.</div>
-      `;
-      const modeEl = $(IDS.mode);
-      (modeEl ? modeEl.closest('label') : anchor).insertAdjacentElement('afterend', wrapT);
-    }
-
-    // Toggle template selector
-    try {
-      const modeEl = $(IDS.mode);
-      const wrapT = document.getElementById(IDS.template + '-wrap');
-      if (modeEl && wrapT && (!modeEl.dataset || modeEl.dataset.xkWired !== '1')) {
-        const sync = () => {
-          const v = String(modeEl.value || 'add');
-          wrapT.style.display = (v === 'replace_all') ? 'block' : 'none';
-        };
-        modeEl.addEventListener('change', sync);
-        sync();
-        if (modeEl.dataset) modeEl.dataset.xkWired = '1';
-      }
-    } catch (e) {}
   }
 
   async function ensureTemplatesLoaded() {
@@ -463,20 +466,9 @@
   }
 
   function ensureApplyRestartButton() {
-    const modal = $(IDS.modal);
-    if (!modal) return;
-    const actionsLeft = modal.querySelector('.modal-actions > div');
-    if (!actionsLeft) return;
-    if ($(IDS.btnApplyRestart)) return;
-
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = IDS.btnApplyRestart;
-    btn.className = 'btn-primary';
-    btn.textContent = '🚀 Применить + рестарт';
+    const btn = $(IDS.btnApplyRestart);
+    if (!btn) return;
     btn.disabled = true;
-    btn.setAttribute('data-tooltip', 'Сервер применит изменения, сохранит config.yaml и поставит рестарт в очередь.');
-    actionsLeft.appendChild(btn);
   }
 
   async function doApplyRestart() {
@@ -530,6 +522,7 @@
       const nm = res.provider_name ? String(res.provider_name) : '';
       const job = res.restart_job_id ? String(res.restart_job_id) : '';
 
+      await reloadEditorFromServer();
       showModal(false);
       if (job) toastMsg(`Рестарт поставлен в очередь (job: ${job}) ✅`, 'success');
       else toastMsg(`Применено ✅ ${nm ? '(' + nm + ')' : ''}`, 'success');
@@ -615,6 +608,26 @@
       ensureModeUi();
       ensureApplyRestartButton();
       wireButton(IDS.btnApplyRestart, () => doApplyRestart());
+    } catch (e) {}
+
+    try {
+      const bindLivePreview = (el, opts) => {
+        if (!el || (el.dataset && el.dataset.xkHwPreview === '1')) return;
+        const onMutate = () => {
+          if (opts && opts.invalidateProbe) {
+            _lastProbe = null;
+            setInsertEnabled(false);
+            setApplyEnabled(false);
+          }
+          updatePreviewFromState();
+        };
+        el.addEventListener('input', onMutate);
+        el.addEventListener('change', onMutate);
+        if (el.dataset) el.dataset.xkHwPreview = '1';
+      };
+      bindLivePreview($(IDS.name));
+      bindLivePreview($(IDS.url), { invalidateProbe: true });
+      bindLivePreview($(IDS.insecure), { invalidateProbe: true });
     } catch (e) {}
 
     // Close on backdrop click (outside content)

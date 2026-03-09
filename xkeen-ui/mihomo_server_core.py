@@ -980,10 +980,11 @@ def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Itera
             return
         if group_has_proxies:
             return
+        if not group_has_include_all:
+            return
         indent = group_include_indent or "    "
-        quoted = proxy_name if (proxy_name.startswith('"') or proxy_name.startswith("'")) else f'"{proxy_name}"'
         out2.append(f"{indent}proxies:")
-        out2.append(f"{indent}  - {quoted}")
+        out2.append(f"{indent}  - {_quote_proxy_list_item(proxy_name)}")
 
     for idx, line in enumerate(lines2):
         stripped = line.lstrip()
@@ -1040,27 +1041,99 @@ def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Itera
 
     return "\n".join(out2) + "\n"
 
+def _quote_proxy_list_item(proxy_name: str) -> str:
+    value = str(proxy_name or "").strip()
+    if value.startswith('"') or value.startswith("'"):
+        return value
+    return f'"{value}"'
+
+
+def _proxy_list_item_name(line: str) -> Optional[str]:
+    m = re.match(r"^\s*-\s*(.+?)\s*$", str(line or ""))
+    if not m:
+        return None
+    raw = m.group(1).strip()
+    if raw.startswith('"') and raw.endswith('"') and len(raw) >= 2:
+        return raw[1:-1]
+    if raw.startswith("'") and raw.endswith("'") and len(raw) >= 2:
+        return raw[1:-1]
+    return raw
+
+
 def _inject_proxy_before_leave(out_lines: List[str], proxy_name: str) -> None:
     """Append '- proxy_name' to the current proxies: list if not there yet."""
-    # Determine current indent from last non-empty line
     if not out_lines:
         return
-    # Scan backwards to find the last proxies entry indent
+
+    target = str(proxy_name or "").strip().strip('"').strip("'")
+    if not target:
+        return
+
     indent = '      '
     for line in reversed(out_lines):
-        if line.strip().startswith('-') and not line.strip().startswith('- name:'):
+        stripped = line.strip()
+        if stripped.startswith('- name:'):
+            break
+        if stripped.startswith('-'):
             indent = line[: len(line) - len(line.lstrip())]
             break
 
-    quoted = proxy_name if (proxy_name.startswith('"') or proxy_name.startswith("'")) else f'"{proxy_name}"'
-
-    # Avoid duplicates: if already present in recent proxies lines, skip
-    for line in out_lines[::-1][:30]:
-        if quoted in line:
+    for line in reversed(out_lines):
+        stripped = line.strip()
+        if stripped.startswith('- name:'):
+            break
+        existing = _proxy_list_item_name(line)
+        if existing is not None and existing.strip().strip('"').strip("'") == target:
             return
 
-    out_lines.append(f"{indent}- {quoted}")
+    out_lines.append(f"{indent}- {_quote_proxy_list_item(target)}")
 
+
+
+def _strip_yaml_inline_comment(raw: str) -> str:
+    text = str(raw or "")
+    if not text:
+        return text
+    in_single = False
+    in_double = False
+    escaped = False
+    for idx, ch in enumerate(text):
+        if in_double:
+            if escaped:
+                escaped = False
+                continue
+            if ch == "\\":
+                escaped = True
+                continue
+            if ch == '"':
+                in_double = False
+            continue
+        if in_single:
+            if ch == "'":
+                in_single = False
+            continue
+        if ch == '"':
+            in_double = True
+            continue
+        if ch == "'":
+            in_single = True
+            continue
+        if ch == '#':
+            return text[:idx].rstrip()
+    return text.rstrip()
+
+
+def _normalize_yaml_scalar(raw: str) -> str:
+    text = _strip_yaml_inline_comment(str(raw or "").strip()).strip()
+    if len(text) >= 2 and ((text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'"))):
+        return text[1:-1]
+    return text
+
+
+def _quote_yaml_name(value: str) -> str:
+    text = str(value or "")
+    text = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{text}"'
 
 def replace_proxy_in_config(content: str, proxy_name: str, new_proxy_yaml: str) -> Tuple[str, bool]:
     """Replace a proxy block inside top-level `proxies:` section.
@@ -1125,11 +1198,7 @@ def replace_proxy_in_config(content: str, proxy_name: str, new_proxy_yaml: str) 
 
     # 4) Find target proxy block boundaries
     def _clean_name(raw: str) -> str:
-        raw = raw.strip()
-        # remove trailing comment (best-effort, only when comment is outside quotes)
-        if raw and raw[0] not in ("'", '"'):
-            raw = re.sub(r"\s+#.*$", "", raw).strip()
-        return raw.strip("'\"")  # strip quotes
+        return _normalize_yaml_scalar(raw)
 
     target_start = None
     target_end = None
@@ -1173,26 +1242,107 @@ def replace_proxy_block(content: str, target_name: str, new_yaml_block: str) -> 
     out, _changed = replace_proxy_in_config(content, target_name, new_yaml_block)
     return out
 
+def _rename_inline_group_proxies(line: str, old_name: str, new_name: str) -> str:
+    m = re.match(r"^(\s*proxies\s*:\s*\[)(.*?)(\]\s*(#.*)?)$", str(line or ""))
+    if not m:
+        return line
+    inner = (m.group(2) or "").strip()
+    if not inner:
+        return line
+
+    items = [item.strip() for item in inner.split(",")]
+    changed = False
+    new_items: List[str] = []
+    for item in items:
+        if _normalize_yaml_scalar(item) == old_name:
+            new_items.append(_quote_proxy_list_item(new_name))
+            changed = True
+        else:
+            new_items.append(item)
+
+    if not changed:
+        return line
+    return f"{m.group(1)}{', '.join(new_items)}{m.group(3)}"
+
+
 def rename_proxy_in_config(content: str, old_name: str, new_name: str) -> str:
-    """Rename proxy and all its usages inside proxy-groups."""
-    if old_name == new_name:
+    """Rename proxy and update its usages inside `proxy-groups:` only."""
+    if not isinstance(content, str):
+        content = str(content or "")
+
+    old_name = str(old_name or "").strip()
+    new_name = str(new_name or "").strip()
+    if not old_name or not new_name or old_name == new_name:
         return content
 
-    # replace in proxies section name:
-    pattern = re.compile(rf"(-\s+name:\s+)(['\"]?){re.escape(old_name)}(['\"]?)")
-    content = pattern.sub(lambda m: f"{m.group(1)}\"{new_name}\"", content)
+    content_n = content.replace("\r\n", "\n").replace("\r", "\n")
+    had_trailing_nl = content_n.endswith("\n")
+    lines = content_n.splitlines()
 
-    # replace inside proxy-groups lists
-    def repl_group(m: re.Match[str]) -> str:
-        before, name, after = m.groups()
-        if name == old_name:
-            name = new_name
-        return f"{before}{name}{after}"
+    out: List[str] = []
+    in_proxies = False
+    in_groups = False
+    in_group_proxies_list = False
+    proxies_list_indent = -1
 
-    content = re.sub(r'(\-\s+)([\"\']?)(%s)([\"\']?)' % re.escape(old_name), repl_group, content)
-    return content
+    for line in lines:
+        stripped = line.lstrip()
+        indent_len = len(line) - len(stripped)
 
+        if indent_len == 0 and stripped.startswith("proxies:"):
+            in_proxies = True
+            in_groups = False
+            in_group_proxies_list = False
+            proxies_list_indent = -1
+            out.append(line)
+            continue
 
+        if indent_len == 0 and stripped.startswith("proxy-groups:"):
+            in_groups = True
+            in_proxies = False
+            in_group_proxies_list = False
+            proxies_list_indent = -1
+            out.append(line)
+            continue
+
+        if indent_len == 0 and stripped and not stripped.startswith("#"):
+            in_proxies = False
+            in_groups = False
+            in_group_proxies_list = False
+            proxies_list_indent = -1
+
+        if in_proxies:
+            m_name = re.match(r"^(\s*)-\s+name:\s*(.+?)(\s*(#.*)?)$", line)
+            if m_name and _normalize_yaml_scalar(m_name.group(2)) == old_name:
+                comment = m_name.group(3) if m_name.group(4) else ""
+                out.append(f"{m_name.group(1)}- name: {_quote_yaml_name(new_name)}{comment}")
+                continue
+
+        if in_groups:
+            if in_group_proxies_list and stripped and not stripped.startswith("#") and indent_len <= proxies_list_indent:
+                in_group_proxies_list = False
+                proxies_list_indent = -1
+
+            if stripped.startswith("proxies:"):
+                if "[" in stripped and "]" in stripped:
+                    out.append(_rename_inline_group_proxies(line, old_name, new_name))
+                else:
+                    in_group_proxies_list = True
+                    proxies_list_indent = indent_len
+                    out.append(line)
+                continue
+
+            if in_group_proxies_list:
+                m_item = re.match(r"^(\s*)-\s*(.+?)\s*$", line)
+                if m_item and len(m_item.group(1)) > proxies_list_indent:
+                    if _normalize_yaml_scalar(m_item.group(2)) == old_name:
+                        out.append(f"{m_item.group(1)}- {_quote_proxy_list_item(new_name)}")
+                        continue
+
+        out.append(line)
+
+    out_text = "\n".join(out)
+    return out_text + ("\n" if had_trailing_nl else "")
 
 def apply_proxy_insert(
     content: str,
@@ -1208,6 +1358,17 @@ def apply_proxy_insert(
     # Normalise newlines
     content = content.replace("\r\n", "\n")
     proxy_yaml_block = proxy_yaml_block.replace("\r\n", "\n")
+
+
+    # Fresh/default profiles may start as `proxies: []`. Convert that inline
+    # empty section into block form before inserting, otherwise the very first
+    # import would create a duplicated top-level `proxies:` key.
+    content = re.sub(
+        r'^(proxies\s*:)\s*(?:\[\]|\{\}|null|~)?\s*(#.*)?$',
+        lambda m: f"proxies:{(' ' + m.group(2).strip()) if m.group(2) else ''}",
+        content,
+        flags=re.M,
+    )
 
     yaml_block_lines = [
         ln.rstrip("\n")
@@ -1227,9 +1388,25 @@ def apply_proxy_insert(
         # Only treat a bare top-level "proxies:" as the section header.
         if stripped == "proxies:" and indent == 0:
             base_indent = line[: len(line) - len(stripped)]
-            # Insert new block directly under "proxies:"
-            for rel_i, block_line in enumerate(yaml_block_lines):
-                lines.insert(idx + 1 + rel_i, f"{base_indent}  {block_line}")
+
+            # Append to the end of the section so UI priority/order is preserved.
+            section_end = len(lines)
+            for j in range(idx + 1, len(lines)):
+                candidate = lines[j]
+                candidate_stripped = candidate.lstrip()
+                candidate_indent = len(candidate) - len(candidate_stripped)
+                if candidate_indent == 0 and candidate_stripped and not candidate_stripped.startswith('#') and not candidate_stripped.startswith('-'):
+                    section_end = j
+                    break
+
+            insert_at = section_end
+            while insert_at > idx + 1 and not lines[insert_at - 1].strip():
+                insert_at -= 1
+            while insert_at > idx + 1 and lines[insert_at - 1].lstrip().startswith('#'):
+                insert_at -= 1
+
+            block_lines = [f"{base_indent}  {block_line}" for block_line in yaml_block_lines]
+            lines[insert_at:insert_at] = block_lines
             inserted = True
             break
 

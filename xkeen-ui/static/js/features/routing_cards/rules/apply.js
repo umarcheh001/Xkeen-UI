@@ -84,6 +84,35 @@
     }, Number(ms || 350));
   }
 
+  function _stableListFromSegments(jp, segments) {
+    const arr = Array.isArray(segments) ? segments : [];
+    return arr.map((seg) => {
+      if (seg && typeof seg.canonical === 'string' && seg.canonical) return seg.canonical;
+      if (seg && seg.parsed && typeof jp.stableStringify === 'function') return jp.stableStringify(seg.parsed);
+      return '';
+    });
+  }
+
+  function _stableListFromObjects(jp, arr) {
+    const list = Array.isArray(arr) ? arr : [];
+    return list.map((item) => (jp && typeof jp.stableStringify === 'function') ? jp.stableStringify(item) : JSON.stringify(item));
+  }
+
+  function _sameStableList(a, b) {
+    const aa = Array.isArray(a) ? a : [];
+    const bb = Array.isArray(b) ? b : [];
+    if (aa.length !== bb.length) return false;
+    for (let i = 0; i < aa.length; i++) {
+      if (String(aa[i] || '') !== String(bb[i] || '')) return false;
+    }
+    return true;
+  }
+
+
+  function _emitCommentsUx(kind, extra) {
+    const detail = Object.assign({ kind: String(kind || '') }, (extra && typeof extra === 'object') ? extra : {});
+    try { document.dispatchEvent(new CustomEvent('xkeen:routing-comments-ux', { detail })); } catch (e) {}
+  }
 
 
   async function applyToEditor(opts) {
@@ -210,27 +239,31 @@
           if (balancersRange) {
             const segmentsB = jp.splitJsoncArrayElements(nextText, balancersRange);
             balancersSegments = segmentsB || [];
-            const renderedB = jp.renderBalancersArray(nextText, balancersRange, segmentsB || [], m.balancers || []);
-            if (!renderedB || !renderedB.ok || typeof renderedB.text !== 'string') {
-              fallbackReason = 'Не удалось применить изменения с сохранением комментариев (balancers).';
-              throw new Error('balancers');
+            const oldBalancersList = _stableListFromSegments(jp, balancersSegments || []);
+            const newBalancersList = _stableListFromObjects(jp, m.balancers || []);
+            if (_sameStableList(oldBalancersList, newBalancersList)) {
+              preview.balancers = { added: 0, changed: 0, removed: 0, unchanged: newBalancersList.length, inserted: false, skipped: true };
+            } else {
+              const renderedB = jp.renderBalancersArray(nextText, balancersRange, segmentsB || [], m.balancers || []);
+              if (!renderedB || !renderedB.ok || typeof renderedB.text !== 'string') {
+                fallbackReason = 'Не удалось применить изменения с сохранением комментариев (balancers).';
+                throw new Error('balancers');
+              }
+              preview.balancers = { ...(renderedB.stats || {}), inserted: false };
+              // Treat pure reorder as "changed" for preview purposes (content may be unchanged).
+              if (preview.balancers && !preview.balancers.inserted && Number(preview.balancers.added || 0) === 0 && Number(preview.balancers.removed || 0) === 0 && Number(preview.balancers.changed || 0) === 0) {
+                try {
+                  if (oldBalancersList.length === newBalancersList.length) {
+                    let moved = 0;
+                    for (let k = 0; k < oldBalancersList.length; k++) if (oldBalancersList[k] !== newBalancersList[k]) moved++;
+                    if (moved) preview.balancers.changed = moved;
+                  }
+                } catch (e) {}
+              }
+              nextText = nextText.slice(0, balancersRange.start) + renderedB.text + nextText.slice(balancersRange.end);
             }
-            preview.balancers = { ...(renderedB.stats || {}), inserted: false };
-            // Treat pure reorder as "changed" for preview purposes (content may be unchanged).
-            if (preview.balancers && !preview.balancers.inserted && Number(preview.balancers.added || 0) === 0 && Number(preview.balancers.removed || 0) === 0 && Number(preview.balancers.changed || 0) === 0) {
-              try {
-                const oldList = (balancersSegments || []).map((seg) => (seg && seg.canonical) ? seg.canonical : ((seg && seg.parsed) ? jp.stableStringify(seg.parsed) : ''));
-                const newList = (Array.isArray(m.balancers) ? m.balancers : []).map((b) => jp.stableStringify(b));
-                if (oldList.length === newList.length) {
-                  let moved = 0;
-                  for (let k = 0; k < oldList.length; k++) if (oldList[k] !== newList[k]) moved++;
-                  if (moved) preview.balancers.changed = moved;
-                }
-              } catch (e) {}
-            }
-            nextText = nextText.slice(0, balancersRange.start) + renderedB.text + nextText.slice(balancersRange.end);
-          } else {
-            // If balancers key is missing, insert it (legacy rewrite would also add it).
+          } else if (Array.isArray(m.balancers) && m.balancers.length) {
+            // Missing key: insert only when there are real balancers to persist.
             const indB = jp.detectObjectIndents(nextText, routingRange);
             if (!indB) {
               fallbackReason = 'Не удалось определить отступы routing-объекта для вставки balancers.';
@@ -244,6 +277,8 @@
             }
             preview.balancers = { added: (Array.isArray(m.balancers) ? m.balancers.length : 0), changed: 0, removed: 0, unchanged: 0, inserted: true };
             nextText = insB.text;
+          } else {
+            preview.balancers = { added: 0, changed: 0, removed: 0, unchanged: 0, inserted: false, skipped: true };
           }
   
           debugStage = 'relocateRouting3';
@@ -267,6 +302,7 @@
           // Minimal preview of changes (rules/balancers/domainStrategy)
           const previewLine = buildApplyPreviewLine(preview);
           if (previewLine) toast(previewLine, false);
+          _emitCommentsUx('preserved', { message: previewLine || 'Изменения применены с JSONC-preserve.' });
           if (debugJsonc) {
             try {
               // eslint-disable-next-line no-console
@@ -277,7 +313,9 @@
           // Success: apply to editor
           _suppressEditorChange(400);
           setEditorText(nextText);
+          try { S._editorDirtyFromCards = true; } catch (e) {}
           if (RM && typeof RM.markDirty === 'function') RM.markDirty(false);
+          if (RM && typeof RM.refreshApplyButtonState === 'function') RM.refreshApplyButtonState();
   
           // Best-effort validate/update UI in routing.js
           try {
@@ -313,6 +351,8 @@
           msgParts.push('Применить старым способом (комментарии будут потеряны)?');
   
           // In auto-sync mode we must never block the UI with confirm dialogs.
+          _emitCommentsUx('fallback-needed', { reason: fallbackReason, message: previewLine || '' });
+
           if (!confirmLegacyFallback) return false;
 
           const okFallback = await confirmModal({
@@ -322,13 +362,14 @@
             cancelText: 'Отмена',
             danger: true,
           });
-          if (!okFallback) return false;
+          if (!okFallback) { _emitCommentsUx('fallback-cancelled', { reason: fallbackReason }); return false; }
         }
       }
   
       if (!allowLegacyFallback) return false;
 
       // Legacy fallback: rewrite the whole JSON (comments are lost).
+      _emitCommentsUx('fallback-used', { message: 'Применён legacy rewrite: комментарии в текущем тексте будут перезаписаны.' });
       const out = (RM && typeof RM.buildRootFromModel === 'function') ? RM.buildRootFromModel() : (m || {});
       const text = JSON.stringify(out, null, 2) + '\n';
       _suppressEditorChange(400);
@@ -351,6 +392,14 @@
   let _autoApplying = false;
   let _autoQueued = false;
 
+  function _isAutoApplyEnabled() {
+    try {
+      const st = (XK && XK.ui && XK.ui.settings && typeof XK.ui.settings.get === 'function') ? XK.ui.settings.get() : null;
+      return !(st && st.routing && st.routing.autoApply === false);
+    } catch (e) {}
+    return true;
+  }
+
   async function _autoApplyNow() {
     if (_autoApplying) { _autoQueued = true; return; }
     _autoApplying = true;
@@ -371,6 +420,7 @@
   }
 
   function requestAutoApply(opts2) {
+    if (!_isAutoApplyEnabled()) return;
     const o2 = (typeof opts2 === 'number') ? { wait: opts2 } : (opts2 || {});
     const wait = Number.isFinite(Number(o2.wait)) ? Number(o2.wait) : 400;
     const immediate = !!o2.immediate || wait <= 0;

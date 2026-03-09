@@ -70,8 +70,9 @@
     }
     .generator-layout {
       display: grid;
-      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr);
-      gap: 16px;
+      grid-template-columns: minmax(360px, 0.86fr) minmax(0, 1.54fr);
+      gap: 18px;
+      align-items: start;
     }
     @media (max-width: 960px) {
       .generator-layout {
@@ -88,6 +89,202 @@
     .card h2 {
       margin: 0 0 8px;
       font-size: 18px;
+    }
+
+    .generator-card {
+      position: relative;
+      overflow: hidden;
+      border-radius: 24px;
+      padding: 18px;
+      border: 1px solid rgba(96, 165, 250, 0.16);
+      background:
+        linear-gradient(180deg, rgba(3, 9, 28, 0.96), rgba(2, 8, 23, 0.94)),
+        radial-gradient(circle at top right, rgba(59,130,246,0.10), transparent 34%);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.04),
+        0 24px 52px rgba(2,8,23,0.55);
+    }
+    .generator-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(125,211,252,0), rgba(125,211,252,0.35), rgba(125,211,252,0));
+      pointer-events: none;
+    }
+    .generator-lead {
+      margin-bottom: 14px;
+    }
+    .generator-lead .hint {
+      margin-top: 6px;
+      line-height: 1.45;
+    }
+    .generator-head-pill {
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    .generator-sections {
+      display: grid;
+      gap: 14px;
+    }
+    .generator-section-panel {
+      padding: 14px;
+      border-radius: 22px;
+    }
+    .generator-section-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .generator-section-title {
+      margin: 2px 0 0;
+      font-size: 15px;
+      font-weight: 700;
+      color: #f8fbff;
+    }
+    .generator-section-badge {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(96, 165, 250, 0.22);
+      background: rgba(15, 23, 42, 0.58);
+      color: #dbeafe;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .generator-field-card,
+    .generator-rule-groups-card,
+    .generator-action-block {
+      border-radius: 18px;
+      border: 1px solid rgba(148,163,184,0.14);
+      background: linear-gradient(180deg, rgba(8, 20, 54, 0.82), rgba(4, 14, 40, 0.78));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .generator-field-card {
+      padding: 11px 12px 12px;
+    }
+    .generator-field-card + .generator-field-card {
+      margin-top: 10px;
+    }
+    .generator-field-card + .generator-rule-groups-card {
+      margin-top: 10px;
+    }
+    .generator-rule-groups-card {
+      padding: 11px 12px 12px;
+    }
+    .generator-field-card label,
+    .generator-rule-groups-card label {
+      margin-bottom: 6px;
+    }
+    .generator-rule-groups-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .generator-rule-groups-head > label {
+      margin: 0;
+    }
+    .generator-rule-groups-head .generator-checkbox-meta {
+      margin: 0;
+    }
+    .generator-checkbox-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.16);
+      background: rgba(2, 6, 23, 0.28);
+      font-size: 11px;
+      color: #cbd5e1;
+      cursor: pointer;
+    }
+    .generator-checkbox-meta input[type="checkbox"] {
+      margin: 0;
+    }
+    .generator-action-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .generator-preview-shell {
+      padding: 14px;
+      border-radius: 22px;
+      min-height: 0;
+    }
+    .preview-head-copy {
+      min-width: 0;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .preview-head-copy .xk-gen-kicker {
+      width: fit-content;
+      margin-bottom: 0;
+    }
+    .preview-head-meta {
+      color: #93a4bf;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: normal;
+    }
+    .generator-preview-shell .preview-head-top {
+      margin-bottom: 10px;
+    }
+    .generator-preview-hint {
+      margin-top: 8px;
+      line-height: 1.45;
+    }
+    .generator-statusbar {
+      min-height: 48px;
+      margin-top: 12px;
+      padding: 11px 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(148,163,184,0.14);
+      background: linear-gradient(180deg, rgba(6,18,52,0.74), rgba(4,14,40,0.68));
+    }
+    .generator-card--preview .CodeMirror {
+      min-height: clamp(560px, 74vh, 1180px);
+    }
+    .generator-card--preview .CodeMirror-scroll {
+      max-height: 78vh;
+    }
+    #previewMonaco {
+      min-height: 600px;
+      height: 76vh;
+      border-radius: 16px;
+    }
+    #previewMonaco.is-fullscreen {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      min-height: 0 !important;
+      border-radius: 0 !important;
+      z-index: 10000 !important;
+      box-shadow: none !important;
+    }
+    .validation-log-panel {
+      margin-top: 12px;
+      border-radius: 18px;
+      padding: 10px 12px 12px;
+      max-height: 210px;
+      background: linear-gradient(180deg, rgba(6,18,46,0.78), rgba(4,14,34,0.72));
+      border: 1px solid rgba(148,163,184,0.14);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .validation-log {
+      border-radius: 12px;
+      min-height: 86px;
     }
     .card small {
       color: #9ca3af;
@@ -351,15 +548,16 @@
   
     
     .validation-log-panel {
-      margin-top: 16px;
-      background: #020617;
-      border-radius: 8px;
-      border: 1px solid #1f2937;
-      padding: 8px 10px 10px;
-      max-height: 220px;
+      margin-top: 12px;
+      background: linear-gradient(180deg, rgba(6,18,46,0.78), rgba(4,14,34,0.72));
+      border-radius: 18px;
+      border: 1px solid rgba(148,163,184,0.14);
+      padding: 10px 12px 12px;
+      max-height: 210px;
       display: flex;
       flex-direction: column;
       gap: 6px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
     }
     .validation-log-header {
       font-size: 12px;
@@ -373,11 +571,12 @@
       margin: 0;
       padding: 6px 8px;
       background: #020617;
-      border-radius: 6px;
+      border-radius: 12px;
       border: 1px solid #111827;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 12px;
       overflow: auto;
+      min-height: 86px;
     }
     /* Светлая тема: лог проверки Mihomo */
     html[data-theme="light"] .validation-log-panel {
@@ -424,6 +623,37 @@
       background: #ffffff;
       border-color: #d1d5db;
       box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    html[data-theme="light"] .generator-card {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.97), rgba(248,250,252,0.96)),
+        radial-gradient(circle at top right, rgba(59,130,246,0.06), transparent 34%);
+      border-color: rgba(148,163,184,0.20);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.75),
+        0 20px 44px rgba(15, 23, 42, 0.08);
+    }
+
+    html[data-theme="light"] .generator-section-title {
+      color: #0f172a;
+    }
+
+    html[data-theme="light"] .generator-section-badge,
+    html[data-theme="light"] .generator-checkbox-meta {
+      background: rgba(239,246,255,0.92);
+      border-color: rgba(96,165,250,0.20);
+      color: #1e3a8a;
+    }
+
+    html[data-theme="light"] .generator-field-card,
+    html[data-theme="light"] .generator-rule-groups-card,
+    html[data-theme="light"] .generator-action-block,
+    html[data-theme="light"] .generator-statusbar,
+    html[data-theme="light"] .validation-log-panel {
+      background: rgba(248,250,252,0.94);
+      border-color: rgba(148,163,184,0.18);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.65);
     }
 
     html[data-theme="light"] label,
@@ -489,6 +719,10 @@
       color: #166534;
     }
 
+    html[data-theme="light"] .status-message.warn {
+      color: #b45309;
+    }
+
     html[data-theme="light"] .status-message.err {
       color: #b91c1c;
     }
@@ -501,11 +735,796 @@
       cursor: pointer;
     }
 
+
+    @media (max-width: 1240px) {
+      .generator-layout {
+        grid-template-columns: minmax(320px, 0.98fr) minmax(0, 1.32fr);
+      }
+    }
+
+    @media (max-width: 860px) {
+      .generator-section-head,
+      .generator-rule-groups-head,
+      .generator-statusbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .generator-section-badge,
+      .generator-checkbox-meta {
+        align-self: flex-start;
+      }
+      #previewMonaco {
+        min-height: 460px;
+        height: 68vh;
+      }
+      .generator-card--preview .CodeMirror {
+        min-height: 440px;
+      }
+    }
+
     html[data-theme="dark"] .rule-group-item input[type="checkbox"] {
       width: 14px;
       height: 14px;
       accent-color: #60a5fa; /* синий акцент для тёмной темы */
       cursor: pointer;
+    }
+
+
+    /* Premium modal: preview / validate / apply */
+    #mihomoResultModal {
+      padding: 10px;
+    }
+    #mihomoResultModal .modal-content {
+      width: min(96vw, 1040px);
+      max-width: 1040px;
+      max-height: min(94vh, 1040px);
+      padding: 12px 14px 14px;
+      border-radius: 26px;
+      border-color: rgba(71, 85, 105, 0.82);
+      background:
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.09), transparent 26%),
+        linear-gradient(180deg, rgba(2, 6, 23, 0.992), rgba(2, 6, 23, 0.972));
+      box-shadow:
+        0 30px 96px rgba(2, 6, 23, 0.84),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      resize: both;
+      overflow: auto;
+    }
+    .mihomo-result-modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+    }
+    .mihomo-result-titlebox {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .mihomo-result-modal-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: fit-content;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(96, 165, 250, 0.20);
+      background: rgba(15, 23, 42, 0.56);
+      color: #bfdbfe;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .mihomo-result-modal-subtitle {
+      color: #94a3b8;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 820px;
+    }
+    .mihomo-result-modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      min-height: 0;
+    }
+    .mihomo-result-lead {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      border: 1px solid rgba(96, 165, 250, 0.14);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(37, 99, 235, 0.13), rgba(15, 23, 42, 0.52));
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 12px 30px rgba(2, 6, 23, 0.22);
+    }
+    .mihomo-result-lead-icon {
+      width: 42px;
+      height: 42px;
+      min-width: 42px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      font-weight: 800;
+      border: 1px solid rgba(96, 165, 250, 0.34);
+      background: rgba(37, 99, 235, 0.18);
+      color: #dbeafe;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .mihomo-result-lead-copy {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .mihomo-result-lead-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    .mihomo-result-lead-desc {
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .mihomo-result-state-badge {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 0 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(96, 165, 250, 0.22);
+      background: rgba(15, 23, 42, 0.58);
+      color: #dbeafe;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .mihomo-result-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.96fr) minmax(0, 1.04fr);
+      gap: 12px;
+    }
+    .mihomo-result-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
+    .mihomo-result-block {
+      padding: 12px 13px;
+      border-radius: 18px;
+      border: 1px solid rgba(148,163,184,0.14);
+      background: linear-gradient(180deg, rgba(8, 20, 54, 0.82), rgba(4, 14, 40, 0.78));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .mihomo-result-block-title {
+      margin-bottom: 8px;
+      color: #e5eefc;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .mihomo-result-summary {
+      color: #e5e7eb;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+    .mihomo-result-list {
+      display: grid;
+      gap: 8px;
+    }
+    .mihomo-result-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 9px 10px;
+      border-radius: 14px;
+      border: 1px solid rgba(148,163,184,0.12);
+      background: rgba(2, 6, 23, 0.38);
+      color: #e5e7eb;
+      line-height: 1.5;
+      min-width: 0;
+    }
+    .mihomo-result-item-index {
+      width: 22px;
+      height: 22px;
+      min-width: 22px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #dbeafe;
+      background: rgba(30, 64, 175, 0.52);
+      border: 1px solid rgba(96, 165, 250, 0.26);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .mihomo-result-item--warning {
+      border-color: rgba(250, 204, 21, 0.20);
+      background: linear-gradient(180deg, rgba(250, 204, 21, 0.10), rgba(2, 6, 23, 0.34));
+    }
+    .mihomo-result-item--warning .mihomo-result-item-index {
+      background: rgba(202, 138, 4, 0.42);
+      border-color: rgba(250, 204, 21, 0.28);
+    }
+    .mihomo-result-item--error {
+      border-color: rgba(248, 113, 113, 0.22);
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.11), rgba(2, 6, 23, 0.34));
+    }
+    .mihomo-result-item--error .mihomo-result-item-index {
+      background: rgba(185, 28, 28, 0.42);
+      border-color: rgba(248, 113, 113, 0.30);
+    }
+    .mihomo-result-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .mihomo-result-meta-card {
+      padding: 10px 11px;
+      border-radius: 15px;
+      border: 1px solid rgba(148,163,184,0.14);
+      background: rgba(2, 6, 23, 0.34);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+      min-width: 0;
+    }
+    .mihomo-result-meta-label {
+      color: #93a4bf;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .mihomo-result-meta-value {
+      color: #f8fafc;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+    .mihomo-result-terminal {
+      min-height: 280px;
+      max-height: 52vh;
+      overflow: auto;
+      margin: 0;
+      padding: 12px 13px;
+      border-radius: 16px;
+      border: 1px solid rgba(15, 23, 42, 0.86);
+      background: #020617;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+    }
+    .mihomo-result-terminal .log-line {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .mihomo-result-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(148,163,184,0.12);
+    }
+    .mihomo-result-footer-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #mihomoResultModal[data-kind="success"] .mihomo-result-lead,
+    #mihomoResultModal[data-kind="success"] .mihomo-result-state-badge {
+      border-color: rgba(74, 222, 128, 0.22);
+    }
+    #mihomoResultModal[data-kind="success"] .mihomo-result-lead {
+      background: linear-gradient(180deg, rgba(22, 163, 74, 0.14), rgba(15, 23, 42, 0.52));
+    }
+    #mihomoResultModal[data-kind="success"] .mihomo-result-lead-icon,
+    #mihomoResultModal[data-kind="success"] .mihomo-result-state-badge {
+      background: rgba(20, 83, 45, 0.34);
+      color: #dcfce7;
+    }
+    #mihomoResultModal[data-kind="warning"] .mihomo-result-lead,
+    #mihomoResultModal[data-kind="warning"] .mihomo-result-state-badge {
+      border-color: rgba(250, 204, 21, 0.24);
+    }
+    #mihomoResultModal[data-kind="warning"] .mihomo-result-lead {
+      background: linear-gradient(180deg, rgba(250, 204, 21, 0.14), rgba(15, 23, 42, 0.52));
+    }
+    #mihomoResultModal[data-kind="warning"] .mihomo-result-lead-icon,
+    #mihomoResultModal[data-kind="warning"] .mihomo-result-state-badge {
+      background: rgba(161, 98, 7, 0.34);
+      color: #fef3c7;
+    }
+    #mihomoResultModal[data-kind="error"] .mihomo-result-lead,
+    #mihomoResultModal[data-kind="error"] .mihomo-result-state-badge {
+      border-color: rgba(248, 113, 113, 0.24);
+    }
+    #mihomoResultModal[data-kind="error"] .mihomo-result-lead {
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.14), rgba(15, 23, 42, 0.52));
+    }
+    #mihomoResultModal[data-kind="error"] .mihomo-result-lead-icon,
+    #mihomoResultModal[data-kind="error"] .mihomo-result-state-badge {
+      background: rgba(127, 29, 29, 0.34);
+      color: #fee2e2;
+    }
+    html[data-theme="light"] #mihomoResultModal .modal-content {
+      border-color: rgba(148, 163, 184, 0.26);
+      background:
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.05), transparent 26%),
+        linear-gradient(180deg, rgba(255,255,255,0.992), rgba(248,250,252,0.972));
+      box-shadow:
+        0 24px 68px rgba(15, 23, 42, 0.14),
+        inset 0 1px 0 rgba(255,255,255,0.82);
+    }
+    html[data-theme="light"] .mihomo-result-modal-kicker,
+    html[data-theme="light"] .mihomo-result-state-badge {
+      background: rgba(239,246,255,0.92);
+      border-color: rgba(96,165,250,0.20);
+      color: #1e3a8a;
+    }
+    html[data-theme="light"] .mihomo-result-modal-subtitle,
+    html[data-theme="light"] .mihomo-result-meta-label {
+      color: #64748b;
+    }
+    html[data-theme="light"] .mihomo-result-lead,
+    html[data-theme="light"] .mihomo-result-block,
+    html[data-theme="light"] .mihomo-result-meta-card {
+      background: rgba(248,250,252,0.94);
+      border-color: rgba(148,163,184,0.18);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.65);
+    }
+    html[data-theme="light"] .mihomo-result-lead-title,
+    html[data-theme="light"] .mihomo-result-meta-value,
+    html[data-theme="light"] .mihomo-result-block-title {
+      color: #0f172a;
+    }
+    html[data-theme="light"] .mihomo-result-lead-desc,
+    html[data-theme="light"] .mihomo-result-summary,
+    html[data-theme="light"] .mihomo-result-item {
+      color: #334155;
+    }
+    html[data-theme="light"] .mihomo-result-terminal {
+      background: #ffffff;
+      border-color: rgba(148,163,184,0.22);
+    }
+    @media (max-width: 980px) {
+      .mihomo-result-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .mihomo-result-meta-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 700px) {
+      .mihomo-result-modal-header,
+      .mihomo-result-lead,
+      .mihomo-result-footer {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .mihomo-result-state-badge {
+        align-self: flex-start;
+      }
+      .mihomo-result-meta-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+
+    /* Premium modal: bulk import */
+    #bulkImportModal {
+      padding: 10px;
+    }
+    #bulkImportModal .modal-content {
+      width: min(96vw, 980px);
+      max-width: 980px;
+      max-height: min(94vh, 980px);
+      padding: 12px 14px 14px;
+      border-radius: 24px;
+      border-color: rgba(71, 85, 105, 0.82);
+      background:
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.08), transparent 24%),
+        linear-gradient(180deg, rgba(2, 6, 23, 0.988), rgba(2, 6, 23, 0.968));
+      box-shadow:
+        0 30px 90px rgba(2, 6, 23, 0.84),
+        inset 0 1px 0 rgba(255, 255, 255, 0.045);
+      resize: both;
+      overflow: auto;
+    }
+    .bulk-import-modal-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+    }
+    .bulk-import-modal-titlebox {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .bulk-import-modal-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: fit-content;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(96, 165, 250, 0.20);
+      background: rgba(15, 23, 42, 0.56);
+      color: #bfdbfe;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .bulk-import-modal-subtitle {
+      color: #94a3b8;
+      font-size: 13px;
+      line-height: 1.5;
+      max-width: 760px;
+    }
+    .bulk-import-modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      min-height: 0;
+    }
+    .bulk-import-lead {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 14px;
+      border: 1px solid rgba(96, 165, 250, 0.14);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(37, 99, 235, 0.13), rgba(15, 23, 42, 0.52));
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 12px 30px rgba(2, 6, 23, 0.22);
+    }
+    .bulk-import-lead-icon {
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 19px;
+      border: 1px solid rgba(96, 165, 250, 0.34);
+      background: rgba(37, 99, 235, 0.18);
+      color: #dbeafe;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .bulk-import-lead-text {
+      min-width: 0;
+      flex: 1;
+    }
+    .bulk-import-lead-title {
+      margin: 0 0 4px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .bulk-import-lead-desc {
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .bulk-import-lead-badges {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .bulk-import-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: rgba(2, 6, 23, 0.30);
+      color: #dbeafe;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .bulk-import-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.12fr) minmax(320px, 0.88fr);
+      gap: 12px;
+      min-height: 0;
+    }
+    .bulk-import-panel {
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.10);
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.84), rgba(2, 6, 23, 0.76));
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 10px 22px rgba(2, 6, 23, 0.18);
+      box-sizing: border-box;
+    }
+    .bulk-import-panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .bulk-import-panel-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .bulk-import-panel-meta {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(96, 165, 250, 0.18);
+      background: rgba(15, 23, 42, 0.44);
+      color: #cbd5e1;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .bulk-import-textarea {
+      width: 100%;
+      min-height: clamp(220px, 38vh, 480px);
+      padding: 12px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(59,130,246,0.42);
+      background: linear-gradient(180deg, rgba(1, 7, 24, 0.96), rgba(1, 8, 30, 0.98));
+      color: #e5e7eb;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 0 0 1px rgba(2,6,23,0.45);
+      resize: vertical;
+    }
+    .bulk-import-textarea::placeholder {
+      color: #64748b;
+    }
+    .bulk-import-supported {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .bulk-import-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(96, 165, 250, 0.16);
+      background: rgba(2, 6, 23, 0.32);
+      color: #bfdbfe;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .bulk-import-hint,
+    .bulk-import-minihelp {
+      color: #94a3b8;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .bulk-import-hint code,
+    .bulk-import-minihelp code,
+    .bulk-import-lead-desc code {
+      color: #dbeafe;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(96, 165, 250, 0.14);
+      border-radius: 8px;
+      padding: 1px 6px;
+    }
+    .bulk-import-option-row,
+    .bulk-import-check-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .bulk-import-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: rgba(2, 6, 23, 0.28);
+      color: #cbd5e1;
+      font-size: 12px;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .bulk-import-check input[type="checkbox"] {
+      margin: 0;
+      accent-color: #60a5fa;
+    }
+    .bulk-import-subgrid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+      min-height: 0;
+    }
+    .bulk-import-card {
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(148,163,184,0.12);
+      background: linear-gradient(180deg, rgba(8, 20, 54, 0.82), rgba(4, 14, 40, 0.78));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .bulk-import-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .bulk-import-card-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .bulk-import-card-subtitle {
+      margin: 3px 0 0;
+      color: #94a3b8;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .bulk-import-field-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+    }
+    .bulk-import-field-label {
+      display: block;
+      margin-bottom: 6px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .bulk-import-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 2px;
+    }
+    .bulk-import-actions-note {
+      color: #94a3b8;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .bulk-import-actions-main {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    html[data-theme="light"] #bulkImportModal .modal-content {
+      border-color: rgba(148, 163, 184, 0.28);
+      background:
+        radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.05), transparent 24%),
+        linear-gradient(180deg, rgba(255,255,255,0.985), rgba(248,250,252,0.97));
+      box-shadow:
+        0 26px 70px rgba(15, 23, 42, 0.14),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+    html[data-theme="light"] .bulk-import-modal-kicker,
+    html[data-theme="light"] .bulk-import-panel-meta,
+    html[data-theme="light"] .bulk-import-chip,
+    html[data-theme="light"] .bulk-import-badge,
+    html[data-theme="light"] .bulk-import-check {
+      background: rgba(239,246,255,0.92);
+      border-color: rgba(96,165,250,0.18);
+      color: #1e3a8a;
+    }
+    html[data-theme="light"] .bulk-import-modal-subtitle,
+    html[data-theme="light"] .bulk-import-lead-desc,
+    html[data-theme="light"] .bulk-import-hint,
+    html[data-theme="light"] .bulk-import-minihelp,
+    html[data-theme="light"] .bulk-import-card-subtitle,
+    html[data-theme="light"] .bulk-import-actions-note {
+      color: #475569;
+    }
+    html[data-theme="light"] .bulk-import-lead,
+    html[data-theme="light"] .bulk-import-panel,
+    html[data-theme="light"] .bulk-import-card {
+      background: rgba(248,250,252,0.96);
+      border-color: rgba(148,163,184,0.16);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 10px 22px rgba(15,23,42,0.06);
+    }
+    html[data-theme="light"] .bulk-import-lead-title,
+    html[data-theme="light"] .bulk-import-panel-title,
+    html[data-theme="light"] .bulk-import-card-title,
+    html[data-theme="light"] .bulk-import-field-label {
+      color: #0f172a;
+    }
+    html[data-theme="light"] .bulk-import-textarea {
+      background: #ffffff;
+      color: #111827;
+      border-color: rgba(37, 99, 235, 0.32);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 0 0 1px rgba(148,163,184,0.12);
+    }
+    html[data-theme="light"] .bulk-import-textarea::placeholder {
+      color: #94a3b8;
+    }
+    html[data-theme="light"] .bulk-import-hint code,
+    html[data-theme="light"] .bulk-import-minihelp code,
+    html[data-theme="light"] .bulk-import-lead-desc code {
+      color: #1e3a8a;
+      background: rgba(239,246,255,0.92);
+      border-color: rgba(96,165,250,0.16);
+    }
+
+    @media (max-width: 1040px) {
+      .bulk-import-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+    @media (max-width: 720px) {
+      #bulkImportModal {
+        padding: 6px;
+      }
+      #bulkImportModal .modal-content {
+        width: min(98vw, 980px);
+        padding: 10px 10px 12px;
+        resize: none;
+      }
+      .bulk-import-modal-header,
+      .bulk-import-panel-head,
+      .bulk-import-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .bulk-import-actions-main {
+        justify-content: stretch;
+      }
+      .bulk-import-actions-main .btn {
+        flex: 1 1 auto;
+        justify-content: center;
+      }
+      .bulk-import-textarea {
+        min-height: 200px;
+      }
     }
 
   </style>
@@ -559,134 +1578,164 @@
 
     <div class="generator-layout">
       <!-- LEFT CARD -->
-      <div class="card">
-        <h2>Исходные данные</h2>
-        <small class="xk-card-desc">Профиль, шаблон, подписки, пакеты групп/правил и узлы.</small>
-
-        <div style="height:8px"></div>
-
-        <div class="row-inline">
-          <div>
-            <label for="profileSelect">Профиль</label>
-            <select id="profileSelect">
-              <option value="router_custom">Роутер (кастомные провайдеры)</option>
-              <option value="router_zkeen">Роутер (базы ZKeen)</option>
-            </select>
+      <div class="card generator-card generator-card--source">
+        <div class="xk-gen-lead generator-lead">
+          <div class="xk-gen-lead-icon">🧩</div>
+          <div style="min-width:0;flex:1;">
+            <div class="xk-gen-kicker">Mihomo generator</div>
+            <div class="xk-gen-lead-title">Исходные данные</div>
           </div>
+          <div class="xk-gen-summary generator-head-pill">input / providers / proxies</div>
         </div>
 
-        <div style="margin-top:4px">
-          <label>Подписки (proxy-providers)</label>
-          <div id="subscriptionsList" class="subscriptions-list"></div>
-          <button type="button" id="addSubscriptionBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новую подписку (proxy-provider).">
-            + Добавить подписку
-          </button>
-          <div class="hint xk-card-desc">
-            Подписки будут заполнены в proxy-providers как: proxy-sub, proxy-sub-2, proxy-sub-3, ...
-            Если подписок больше 5 — дополнительные proxy-providers будут добавлены автоматически.
-          </div>
-        </div>
+        <div class="generator-sections">
+          <div class="xk-gen-panel generator-section-panel">
+            <div class="generator-section-head">
+              <div>
+                <div class="xk-gen-kicker">Источник</div>
+                <div class="generator-section-title">Профиль и подписки</div>
+              </div>
+              <div class="generator-section-badge">proxy-providers</div>
+            </div>
 
-        <div style="margin-top:10px">
-          <label for="defaultGroupsInput">Группы по умолчанию для узлов</label>
-          <input id="defaultGroupsInput" type="text" value="Заблок. сервисы" placeholder="Заблок. сервисы,YouTube">
-          <div class="hint xk-card-desc">
-            Если у узла не заданы свои группы, будут использованы эти.
-          </div>
-        </div>
+            <div class="generator-field-card">
+              <label for="profileSelect">Профиль</label>
+              <select id="profileSelect">
+                <option value="router_custom">Роутер (кастомные провайдеры)</option>
+                <option value="router_zkeen">Роутер (базы ZKeen)</option>
+              </select>
+            </div>
 
-        <div style="margin-top:12px">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <label>Пакеты групп и правил</label>
-            <label style="font-size:11px;color:#9ca3af;">
-              <input id="ruleGroupsSelectAll" type="checkbox" style="margin-right:4px">
-              Отметить всё
-            </label>
+            <div class="generator-field-card">
+              <label>Подписки (proxy-providers)</label>
+              <div id="subscriptionsList" class="subscriptions-list"></div>
+              <button type="button" id="addSubscriptionBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новую подписку (proxy-provider).">
+                + Добавить подписку
+              </button>
+              <div class="hint xk-card-desc">
+                Подписки будут заполнены в proxy-providers как: proxy-sub, proxy-sub-2, proxy-sub-3, ...
+                Если подписок больше 5 — дополнительные proxy-providers будут добавлены автоматически.
+              </div>
+            </div>
           </div>
-          <div id="ruleGroupsList" class="rule-groups-grid"></div>
-          <div class="hint xk-card-desc">
-            Отмеченные пакеты останутся в шаблоне, остальные группы/правила генератор закомментирует.
-          </div>
-        </div>
 
-        <hr style="margin:14px 0;border-color:#1f2937">
+          <div class="xk-gen-panel generator-section-panel">
+            <div class="generator-section-head">
+              <div>
+                <div class="xk-gen-kicker">Шаблон</div>
+                <div class="generator-section-title">Группы и rule-пакеты</div>
+              </div>
+              <div class="generator-section-badge">rules / groups</div>
+            </div>
 
-        <div>
-          <label>Узлы (proxies)</label>
-          <div id="proxiesList" class="proxies-list"></div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <button type="button" id="addProxyBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новый узел (proxy) вручную.">
-              + Добавить узел
-            </button>
-            <button type="button" id="bulkImportBtn" class="btn btn-ghost btn-xs" title="Вставьте список ссылок (vless/trojan/vmess/ss/hysteria2/hy2) и/или https подписок">
-              📥 Импорт списка
-            </button>
-            <button type="button" id="normalizeProxiesBtn" class="btn btn-ghost btn-xs" title="Заполнить пустые имена/группы и нормализовать текущие узлы по шаблонам из импорта">
-              ✨ Нормализовать
-            </button>
+            <div class="generator-field-card">
+              <label for="defaultGroupsInput">Группы по умолчанию для узлов</label>
+              <input id="defaultGroupsInput" type="text" value="Заблок. сервисы" placeholder="Заблок. сервисы,YouTube">
+              <div class="hint xk-card-desc">
+                Если у узла не заданы свои группы, будут использованы эти.
+              </div>
+            </div>
+
+            <div class="generator-rule-groups-card">
+              <div class="generator-rule-groups-head">
+                <label>Пакеты групп и правил</label>
+                <label class="generator-checkbox-meta">
+                  <input id="ruleGroupsSelectAll" type="checkbox">
+                  Отметить всё
+                </label>
+              </div>
+              <div id="ruleGroupsList" class="rule-groups-grid"></div>
+              <div class="hint xk-card-desc">
+                Отмеченные пакеты останутся в шаблоне, остальные группы и правила генератор закомментирует.
+              </div>
+            </div>
           </div>
-          <div class="hint xk-card-desc">
-            Поддерживаются ссылки (auto/VLESS/Trojan/VMess/SS/Hysteria2), WireGuard-конфиги, подписки (https://... как proxy-provider) и готовые YAML-блоки proxy.
+
+          <div class="xk-gen-panel generator-section-panel">
+            <div class="generator-section-head">
+              <div>
+                <div class="xk-gen-kicker">Наполнение</div>
+                <div class="generator-section-title">Узлы и быстрые действия</div>
+              </div>
+              <div class="generator-section-badge">proxies</div>
+            </div>
+
+            <div class="generator-action-block" style="padding:12px;">
+              <label>Узлы (proxies)</label>
+              <div id="proxiesList" class="proxies-list"></div>
+              <div class="generator-action-row">
+                <button type="button" id="addProxyBtn" class="btn btn-ghost btn-xs" data-tooltip="Добавить новый узел (proxy) вручную.">
+                  + Добавить узел
+                </button>
+                <button type="button" id="bulkImportBtn" class="btn btn-ghost btn-xs" title="Вставьте список ссылок (vless/trojan/vmess/ss/hysteria2/hy2) и/или https подписок">
+                  📥 Импорт списка
+                </button>
+                <button type="button" id="normalizeProxiesBtn" class="btn btn-ghost btn-xs" title="Заполнить пустые имена/группы и нормализовать текущие узлы по шаблонам из импорта">
+                  ✨ Нормализовать
+                </button>
+              </div>
+              <div class="hint xk-card-desc">
+                Поддерживаются ссылки (auto/VLESS/Trojan/VMess/SS/Hysteria2), WireGuard-конфиги, подписки (https://... как proxy-provider) и готовые YAML-блоки proxy.
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- RIGHT CARD -->
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;">
-          <div style="flex:1;min-width:0;">
-            <div class="preview-head-top">
+      <div class="card generator-card generator-card--preview">
+        <div class="xk-gen-panel generator-preview-shell">
+          <div class="preview-head-top">
+            <div class="preview-head-copy">
+              <div class="xk-gen-kicker">YAML / preview editor</div>
               <h2>Предпросмотр</h2>
-              <!-- Toolbar (Поиск/Фулскрин/и т.д.) будет подключён к CodeMirror и вставлен сюда -->
-              <div id="previewToolbarHost" class="preview-toolbar-host">
-                <div class="xk-editor-engine" id="mihomo-preview-engine">
-                  <span class="xk-editor-engine-label">Редактор</span>
-                  <select id="mihomo-preview-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
-                    <option value="codemirror">CodeMirror</option>
-                    <option value="monaco">Monaco</option>
-                  </select>
-                </div>
+              <div id="stateSummary" class="preview-head-meta">
+                Профиль: router_custom · Rule-групп: 0 · Подписок: 0 · Прокси: 0
               </div>
             </div>
-            <small class="xk-card-desc">
-              По умолчанию загружен базовый скелет. Можно доработать вручную при включённом «Редактирование».
-            </small>
-            <div id="stateSummary" class="hint" style="margin-top:4px;">
-              Профиль: router_custom · Rule-групп: 0 · Подписок: 0 · Прокси: 0
+            <!-- Toolbar (Поиск/Фулскрин/и т.д.) будет подключён к CodeMirror и вставлен сюда -->
+            <div id="previewToolbarHost" class="preview-toolbar-host">
+              <div class="xk-editor-engine" id="mihomo-preview-engine">
+                <span class="xk-editor-engine-label">Редактор</span>
+                <select id="mihomo-preview-engine-select" class="xk-editor-engine-select" title="Выбор движка редактора (общая настройка)">
+                  <option value="codemirror">CodeMirror</option>
+                  <option value="monaco">Monaco</option>
+                </select>
+              </div>
             </div>
           </div>
-        </div>
 
-        <textarea id="previewTextarea" style="display:none;"></textarea>
-        <div id="previewMonaco" class="xk-monaco-editor xk-monaco-editor--modal hidden"></div>
-        <div class="hint xk-card-desc">
-          Режим <strong>Редактирование</strong> позволяет вручную править yaml, который затем уходит на роутер.
-        </div>
-
-                <div class="status-bar">
-          <div id="statusMessage" class="status-message">
-            Скелет загружен. Включите «Редактирование» для ручных правок.
+          <textarea id="previewTextarea" style="display:none;"></textarea>
+          <div id="previewMonaco" class="xk-monaco-editor xk-monaco-editor--modal hidden"></div>
+          <div class="hint xk-card-desc generator-preview-hint">
+            Режим <strong>Редактирование</strong> позволяет вручную править YAML перед сохранением и применением на роутере.
           </div>
-          <div class="status-actions">
-            <label class="edit-toggle">
-              <input type="checkbox" id="editToggle">
-              Редактирование
-            </label>
-            <button type="button" id="generateBtn" class="btn btn-primary btn-icon" title="Демо: сгенерировать/обновить предпросмотр" aria-label="Демо">
-              ⚙️
-            </button>
-            <button type="button" id="copyBtn" class="btn" title="Копировать в буфер обмена">
-              📋
-            </button>
-            <button type="button" id="saveBtn" class="btn" title="Сохранить профиль">
-              💾
-            </button>
-            <button type="button" id="validateBtn" class="btn" title="Проверить config.yaml">
-              🩺
-            </button>
-            <button type="button" id="applyBtn" class="btn" title="Применить на роутере">
-              🚀
-            </button>
+
+          <div class="status-bar generator-statusbar">
+            <div id="statusMessage" class="status-message">
+              Скелет загружен. Включите «Редактирование» для ручных правок.
+            </div>
+            <div class="status-actions">
+              <label class="edit-toggle">
+                <input type="checkbox" id="editToggle">
+                Редактирование
+              </label>
+              <button type="button" id="generateBtn" class="btn btn-primary btn-icon" title="Сгенерировать/обновить предпросмотр" aria-label="Сгенерировать предпросмотр">
+                ⚙️
+              </button>
+              <button type="button" id="copyBtn" class="btn" title="Копировать в буфер обмена">
+                📋
+              </button>
+              <button type="button" id="saveBtn" class="btn" title="Скачать config.yaml">
+                💾
+              </button>
+              <button type="button" id="validateBtn" class="btn" title="Проверить config.yaml через mihomo -t">
+                🩺
+              </button>
+              <button type="button" id="applyBtn" class="btn" title="Сохранить и применить на роутере">
+                🚀
+              </button>
+            </div>
           </div>
         </div>
 
@@ -722,93 +1771,206 @@
 <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_generator.js', v='20260225a') }}"></script>
   <script src="{{ url_for('static', filename='js/pages/mihomo_generator.init.js') }}"></script>
-<div id="validationModal" class="modal hidden" onclick="if (event.target === this) hideValidationModal();">
-  <div class="modal-content">
-    <div class="modal-header">
-      <span class="modal-title">Результат проверки конфигурации Mihomo</span>
-      <button type="button" class="modal-close" onclick="hideValidationModal()">×</button>
+<div id="mihomoResultModal" class="modal hidden" data-kind="info" onclick="if (event.target === this) hideMihomoResultModal();">
+  <div class="modal-content" role="dialog" aria-modal="true" aria-label="Результат операций генератора Mihomo">
+    <div class="modal-header mihomo-result-modal-header">
+      <div class="mihomo-result-titlebox">
+        <div id="mihomoResultModalKicker" class="mihomo-result-modal-kicker">Mihomo / result</div>
+        <span id="mihomoResultModalTitle" class="modal-title">Результат операции</span>
+        <div id="mihomoResultModalSubtitle" class="mihomo-result-modal-subtitle">Подробности проверки, предпросмотра и применения конфигурации отображаются в одном окне.</div>
+      </div>
+      <button type="button" class="modal-close" onclick="hideMihomoResultModal()">×</button>
     </div>
-    <div id="validationModalBody" class="modal-body modal-body-logs"></div>
+    <div class="modal-body mihomo-result-modal-body">
+      <section class="mihomo-result-lead">
+        <div id="mihomoResultModalIcon" class="mihomo-result-lead-icon">MH</div>
+        <div class="mihomo-result-lead-copy">
+          <div id="mihomoResultModalLeadTitle" class="mihomo-result-lead-title">Mihomo сообщает результат операции</div>
+          <p id="mihomoResultModalLeadDesc" class="mihomo-result-lead-desc">Если генератор нашёл ошибки или предупреждения, они будут показаны ниже вместе с логом и подсказками.</p>
+        </div>
+        <div id="mihomoResultModalBadge" class="mihomo-result-state-badge">Инфо</div>
+      </section>
+
+      <div class="mihomo-result-grid">
+        <section class="mihomo-result-panel">
+          <div id="mihomoResultSummaryWrap" class="mihomo-result-block" style="display:none;">
+            <div class="mihomo-result-block-title">Кратко</div>
+            <div id="mihomoResultSummary" class="mihomo-result-summary"></div>
+          </div>
+          <div id="mihomoResultWarningsWrap" class="mihomo-result-block" style="display:none;">
+            <div class="mihomo-result-block-title">Предупреждения</div>
+            <div id="mihomoResultWarnings"></div>
+          </div>
+          <div id="mihomoResultErrorsWrap" class="mihomo-result-block" style="display:none;">
+            <div class="mihomo-result-block-title">Ошибки</div>
+            <div id="mihomoResultErrors"></div>
+          </div>
+          <div id="mihomoResultMetaWrap" class="mihomo-result-meta-grid" style="display:none;"></div>
+        </section>
+
+        <section class="mihomo-result-panel">
+          <div id="mihomoResultLogWrap" class="mihomo-result-block" style="display:none;">
+            <div class="mihomo-result-block-title">Лог / детали</div>
+            <div id="mihomoResultModalLog" class="mihomo-result-terminal"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div class="modal-actions mihomo-result-footer">
+      <div class="mihomo-result-footer-actions">
+        <button type="button" id="mihomoResultJumpBtn" class="btn" style="display:none;">Перейти к ошибке</button>
+        <button type="button" id="mihomoResultCopyBtn" class="btn">Скопировать детали</button>
+      </div>
+      <button type="button" class="btn btn-primary" onclick="hideMihomoResultModal()">Закрыть</button>
+    </div>
   </div>
 </div>
 
-<div id="bulkImportModal" class="modal hidden" onclick="if (event.target === this) hideBulkImportModal();">
-  <div class="modal-content" style="max-width:820px;">
-    <div class="modal-header">
-      <span class="modal-title">Импорт узлов и подписок</span>
+<div id="bulkImportModal" class="modal hidden bulk-import-premium-modal" onclick="if (event.target === this) hideBulkImportModal();">
+  <div class="modal-content">
+    <div class="modal-header bulk-import-modal-header">
+      <div class="bulk-import-modal-titlebox">
+        <div class="bulk-import-modal-kicker">Mihomo / bulk import</div>
+        <span class="modal-title">Импорт узлов и подписок</span>
+        <div class="bulk-import-modal-subtitle">
+          Быстрый импорт ссылок, HTTPS-подписок и шаблонов именования без ручного заполнения каждой карточки.
+        </div>
+      </div>
       <button type="button" class="modal-close" onclick="hideBulkImportModal()">×</button>
     </div>
-    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px;">
-      <div class="hint xk-card-desc">
-        Вставьте список строк (каждая с новой строки). Поддерживается: <code>vless://</code>, <code>trojan://</code>, <code>vmess://</code>, <code>ss://</code>, <code>hysteria2://</code>, <code>hy2://</code> и <code>https://</code> (подписки).
-        Комментарии (<code>#</code>) и пустые строки игнорируются.
-        <div style="margin-top:6px;font-size:12px;color:#9ca3af;">
-          Форматы: <code>link</code>, <code>name|link</code>, <code>name|link|groups</code>, <code>name|link|groups|icon|priority</code>, <code>name|link|groups|icon|priority|tag</code>, <code>groups|link</code>, <code>name|groups|link</code>.
-          <br>Группы: через запятую (<code>HK,SG</code>) или точку с запятой.
-        </div>
-      </div>
-
-      <textarea id="bulkImportTextarea" rows="10" style="width:100%;resize:vertical;" placeholder="vless://...\nhttps://sub.example.com/...\ntrojan://..."></textarea>
-
-      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
-        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
-          <input id="bulkImportClearExisting" type="checkbox">
-          Очистить текущие узлы перед импортом
-        </label>
-        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
-          <input id="bulkImportToSubscriptions" type="checkbox" checked>
-          HTTPS добавлять в «Подписки»
-        </label>
-        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
-          <input id="bulkImportDedup" type="checkbox" checked>
-          Игнорировать дубли
-        </label>
-      </div>
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start;">
-        <div>
-          <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">Шаблон имени (для импортируемых узлов)</div>
-          <input id="bulkImportNameTemplate" type="text" class="input" style="width:100%;" placeholder="{name}" value="{name}">
-          <div style="font-size:11px;color:#6b7280;margin-top:4px;">
-            Переменные: <code>{name}</code>, <code>{type}</code>, <code>{host}</code>, <code>{port}</code>, <code>{geo}</code>, <code>{flag}</code>, <code>{region}</code>, <code>{region_group}</code>, <code>{group}</code>, <code>{groups}</code>, <code>{tags}</code>, <code>{index}</code>
-          </div>
-        </div>
-        <div>
-          <div style="font-size:12px;color:#9ca3af;margin-bottom:4px;">Шаблон групп (если в строке не указаны)</div>
-          <input id="bulkImportGroupsTemplate" type="text" class="input" style="width:100%;" placeholder="например: {geo},Заблок. сервисы">
-          <div style="font-size:11px;color:#6b7280;margin-top:4px;">
-            Можно вернуть несколько групп через запятую.
+    <div class="modal-body bulk-import-modal-body">
+      <div class="bulk-import-lead">
+        <div class="bulk-import-lead-icon">📥</div>
+        <div class="bulk-import-lead-text">
+          <div class="bulk-import-lead-title">Вставьте список строк — генератор сам разберёт формат</div>
+          <p class="bulk-import-lead-desc">
+            Поддерживаются <code>vless://</code>, <code>trojan://</code>, <code>vmess://</code>, <code>ss://</code>, <code>hysteria2://</code>, <code>hy2://</code> и <code>https://</code>.
+            Комментарии с <code>#</code> и пустые строки игнорируются.
+          </p>
+          <div class="bulk-import-lead-badges">
+            <span class="bulk-import-badge">link</span>
+            <span class="bulk-import-badge">name|link</span>
+            <span class="bulk-import-badge">name|link|groups</span>
+            <span class="bulk-import-badge">groups|link</span>
+            <span class="bulk-import-badge">name|groups|link</span>
           </div>
         </div>
       </div>
 
-      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
-        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
-          <input id="bulkImportAutoGeo" type="checkbox" checked>
-          Авто-GEO по имени/хосту (HK/SG/JP/US…)
-        </label>
-        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
-          <input id="bulkImportAutoRegionGroup" type="checkbox">
-          Добавлять региональную группу (Asia/Europe/America…)
-        </label>
+      <div class="bulk-import-layout">
+        <section class="bulk-import-panel bulk-import-panel--source">
+          <div class="bulk-import-panel-head">
+            <div class="bulk-import-panel-title">Источник импорта</div>
+            <div class="bulk-import-panel-meta">каждая строка отдельно</div>
+          </div>
+
+          <textarea id="bulkImportTextarea" class="bulk-import-textarea" rows="10" placeholder="vless://...
+https://sub.example.com/...
+trojan://..."></textarea>
+
+          <div class="bulk-import-supported">
+            <span class="bulk-import-chip">vless://</span>
+            <span class="bulk-import-chip">trojan://</span>
+            <span class="bulk-import-chip">vmess://</span>
+            <span class="bulk-import-chip">ss://</span>
+            <span class="bulk-import-chip">hysteria2://</span>
+            <span class="bulk-import-chip">https://</span>
+          </div>
+
+          <div class="bulk-import-hint">
+            Подсказка: группы можно указывать через запятую или точку с запятой, например <code>HK,SG</code> или <code>HK;SG</code>.
+          </div>
+
+          <div class="bulk-import-option-row">
+            <label class="bulk-import-check">
+              <input id="bulkImportClearExisting" type="checkbox">
+              Очистить текущие узлы перед импортом
+            </label>
+            <label class="bulk-import-check">
+              <input id="bulkImportToSubscriptions" type="checkbox" checked>
+              HTTPS добавлять в «Подписки»
+            </label>
+            <label class="bulk-import-check">
+              <input id="bulkImportDedup" type="checkbox" checked>
+              Игнорировать дубли
+            </label>
+          </div>
+        </section>
+
+        <section class="bulk-import-panel bulk-import-panel--options">
+          <div class="bulk-import-subgrid">
+            <div class="bulk-import-card">
+              <div class="bulk-import-card-head">
+                <div>
+                  <div class="bulk-import-card-title">Шаблоны заполнения</div>
+                  <div class="bulk-import-card-subtitle">Позволяют сразу нормализовать имена и группы у импортируемых узлов.</div>
+                </div>
+              </div>
+              <div class="bulk-import-field-grid">
+                <div>
+                  <label for="bulkImportNameTemplate" class="bulk-import-field-label">Шаблон имени</label>
+                  <input id="bulkImportNameTemplate" type="text" class="input" placeholder="{name}" value="{name}">
+                </div>
+                <div>
+                  <label for="bulkImportGroupsTemplate" class="bulk-import-field-label">Шаблон групп</label>
+                  <input id="bulkImportGroupsTemplate" type="text" class="input" placeholder="например: {geo},Заблок. сервисы">
+                </div>
+              </div>
+              <div class="bulk-import-minihelp">
+                Переменные: <code>{name}</code>, <code>{type}</code>, <code>{host}</code>, <code>{port}</code>, <code>{geo}</code>, <code>{flag}</code>, <code>{region}</code>, <code>{region_group}</code>, <code>{group}</code>, <code>{groups}</code>, <code>{tags}</code>, <code>{index}</code>
+              </div>
+            </div>
+
+            <div class="bulk-import-card">
+              <div class="bulk-import-card-head">
+                <div>
+                  <div class="bulk-import-card-title">Автоматизация GEO</div>
+                  <div class="bulk-import-card-subtitle">Удобно для быстрых региональных групп без ручной сортировки.</div>
+                </div>
+              </div>
+              <div class="bulk-import-check-grid">
+                <label class="bulk-import-check">
+                  <input id="bulkImportAutoGeo" type="checkbox" checked>
+                  Авто-GEO по имени/хосту
+                </label>
+                <label class="bulk-import-check">
+                  <input id="bulkImportAutoRegionGroup" type="checkbox">
+                  Добавлять региональную группу
+                </label>
+              </div>
+            </div>
+
+            <div class="bulk-import-card">
+              <div class="bulk-import-card-head">
+                <div>
+                  <div class="bulk-import-card-title">Применить шаблоны к уже добавленным узлам</div>
+                  <div class="bulk-import-card-subtitle">Заполнит пустые поля или перезапишет существующие, если включить флаги ниже.</div>
+                </div>
+              </div>
+              <div class="bulk-import-check-grid">
+                <label class="bulk-import-check">
+                  <input id="bulkImportOverwriteName" type="checkbox">
+                  Перезаписать имя
+                </label>
+                <label class="bulk-import-check">
+                  <input id="bulkImportOverwriteGroups" type="checkbox">
+                  Перезаписать группы
+                </label>
+              </div>
+              <div>
+                <button type="button" id="bulkImportApplyExistingBtn" class="btn">Применить шаблоны</button>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
-        <div style="font-size:12px;color:#9ca3af;">Применить шаблоны к уже добавленным узлам:</div>
-        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
-          <input id="bulkImportOverwriteName" type="checkbox">
-          Перезаписать имя
-        </label>
-        <label style="font-size:12px;color:#9ca3af;display:flex;align-items:center;gap:6px;">
-          <input id="bulkImportOverwriteGroups" type="checkbox">
-          Перезаписать группы
-        </label>
-        <button type="button" id="bulkImportApplyExistingBtn" class="btn">Применить</button>
-      </div>
-
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button type="button" class="btn" onclick="hideBulkImportModal()">Отмена</button>
-        <button type="button" id="bulkImportApplyBtn" class="btn btn-primary">Импортировать</button>
+      <div class="bulk-import-actions">
+        <div class="bulk-import-actions-note">Поддерживаются комментарии, пустые строки и массовая вставка списков из буфера обмена.</div>
+        <div class="bulk-import-actions-main">
+          <button type="button" class="btn" onclick="hideBulkImportModal()">Отмена</button>
+          <button type="button" id="bulkImportApplyBtn" class="btn btn-primary">Импортировать</button>
+        </div>
       </div>
     </div>
   </div>

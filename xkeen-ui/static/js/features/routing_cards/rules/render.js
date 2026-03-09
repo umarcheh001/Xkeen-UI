@@ -136,6 +136,15 @@
   };
   const buildKeyLabel = (typeof RF.buildKeyLabel === 'function') ? RF.buildKeyLabel : function (t) { const s = document.createElement('span'); s.textContent = t; return s; };
   const buildField = (typeof RF.buildField === 'function') ? RF.buildField : function (labelText, inputEl) { const d = document.createElement('label'); d.appendChild(document.createTextNode(labelText)); d.appendChild(inputEl); return d; };
+  const createChipInput = (typeof RF.createChipInput === 'function') ? RF.createChipInput : function (values, opts) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = formatMultiValue(values || []);
+    input.addEventListener('change', () => {
+      if (opts && typeof opts.onChange === 'function') opts.onChange(splitMultiValue(input.value));
+    });
+    return input;
+  };
 
   function anyGeo(rule) {
     if (!rule || typeof rule !== 'object') return false;
@@ -164,36 +173,165 @@
     }
   }
 
+  const RULE_INLINE_CHIP_FIELDS = new Set(['domain', 'ip', 'sourceIP', 'port']);
+  const RULE_OPTIONAL_FIELDS = (() => {
+    const list = [];
+    (RULE_MULTI_FIELDS || []).forEach((field) => list.push({ ...field, kind: 'multi' }));
+    (RULE_TEXT_FIELDS || []).forEach((field) => list.push({ ...field, kind: 'text' }));
+    list.push({ key: 'attrs', label: 'attrs', placeholder: 'key=value', kind: 'attrs' });
+    list.push({ key: 'domainMatcher', label: 'domainMatcher', placeholder: 'hybrid', kind: 'text' });
+    return list;
+  })();
+  const RULE_OPTIONAL_FIELD_MAP = RULE_OPTIONAL_FIELDS.reduce((acc, field) => {
+    acc[field.key] = field;
+    return acc;
+  }, {});
+
+  function sanitizeRuleTag(value) {
+    return String(value == null ? '' : value).trim();
+  }
+
+  function normalizeOptionalFieldList(values) {
+    const out = [];
+    const seen = new Set();
+    (Array.isArray(values) ? values : []).forEach((raw) => {
+      const key = String(raw == null ? '' : raw).trim();
+      if (!key || !RULE_OPTIONAL_FIELD_MAP[key] || seen.has(key)) return;
+      seen.add(key);
+      out.push(key);
+    });
+    return out;
+  }
+
+  function isFieldValuePresent(rule, key) {
+    if (!rule || !key) return false;
+    if (key === 'sourceIP') {
+      const src = rule.sourceIP != null ? rule.sourceIP : rule.source;
+      if (Array.isArray(src)) return src.length > 0;
+      return !!String(src == null ? '' : src).trim();
+    }
+    if (key === 'attrs') {
+      return !!(rule.attrs && typeof rule.attrs === 'object' && !Array.isArray(rule.attrs) && Object.keys(rule.attrs).length);
+    }
+    const value = rule[key];
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === 'object') return Object.keys(value).length > 0;
+    return !!String(value == null ? '' : value).trim();
+  }
+
+  function ensureVisibleField(rule, key) {
+    if (!rule || !key || !RULE_OPTIONAL_FIELD_MAP[key]) return;
+    const next = normalizeOptionalFieldList((rule && rule.__xkVisibleFields) || []);
+    if (next.indexOf(key) >= 0) return;
+    next.push(key);
+    rule.__xkVisibleFields = next;
+  }
+
+  function removeVisibleField(rule, key) {
+    if (!rule) return;
+    const next = normalizeOptionalFieldList((rule && rule.__xkVisibleFields) || []).filter((it) => it !== key);
+    if (next.length) rule.__xkVisibleFields = next;
+    else {
+      try { delete rule.__xkVisibleFields; } catch (e) {}
+    }
+  }
+
+  function getVisibleOptionalFieldKeys(rule) {
+    const next = normalizeOptionalFieldList((rule && rule.__xkVisibleFields) || []);
+    Object.keys(RULE_OPTIONAL_FIELD_MAP).forEach((key) => {
+      if (isFieldValuePresent(rule, key) && next.indexOf(key) < 0) next.push(key);
+    });
+    return next;
+  }
+
+  function clearRuleField(rule, key) {
+    if (!rule || !key) return;
+    if (key === 'sourceIP') {
+      try { delete rule.sourceIP; } catch (e) {}
+      try { delete rule.source; } catch (e) {}
+    } else if (key === 'attrs') {
+      try { delete rule.attrs; } catch (e) {}
+    } else {
+      try { delete rule[key]; } catch (e) {}
+    }
+    removeVisibleField(rule, key);
+  }
+
+  function setPendingRuleFieldFocus(idx, key) {
+    try {
+      S._ruleFieldFocus = { idx: Number(idx), key: String(key || '') };
+    } catch (e) {}
+  }
+
+  function consumePendingRuleFieldFocus(card, idx) {
+    try {
+      const req = S._ruleFieldFocus;
+      if (!req || Number(req.idx) !== Number(idx) || !req.key) return;
+      S._ruleFieldFocus = null;
+      requestAnimationFrame(() => {
+        try {
+          const row = card.querySelector(`[data-field-key="${req.key}"]`);
+          if (!row) return;
+          const target = row.querySelector('[data-chip-input="1"], .routing-rule-input, .routing-rule-textarea, select, input, textarea');
+          if (!target) return;
+          target.focus();
+          if (typeof target.select === 'function') target.select();
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
+  function getRuleConditionKeys(rule) {
+    const keys = [];
+    ['inboundTag', 'domain', 'ip', 'port', 'sourceIP', 'source', 'sourcePort', 'localIP', 'localPort', 'network', 'protocol', 'user', 'attrs', 'domainMatcher', 'vlessRoute'].forEach((key) => {
+      if (isFieldValuePresent(rule, key)) keys.push(key === 'source' ? 'sourceIP' : key);
+    });
+    return Array.from(new Set(keys));
+  }
+
   // Compact header/match summary for a rule card.
-  // Legacy UI showed "#N → <target>" in the title and rendered type + ruleTag as badges.
   function summarizeRule(rule) {
-    if (!rule || typeof rule !== 'object') return { title: '(invalid)', badges: [], geo: false };
+    if (!rule || typeof rule !== 'object') {
+      return { title: '(invalid)', match: 'без условий', type: 'field', target: '—', targetKind: 'outbound', ruleTag: '', geo: false, conditionKeys: [], conditionCount: 0 };
+    }
     const type = String(rule.type || 'field');
+    const targetKind = rule.balancerTag ? 'balancer' : 'outbound';
     const target = rule.outboundTag
       ? String(rule.outboundTag)
       : (rule.balancerTag ? String(rule.balancerTag) : '—');
-    const ruleTag = rule.ruleTag ? String(rule.ruleTag) : '';
+    const ruleTag = sanitizeRuleTag(rule.ruleTag);
 
-    // Try to build a short match summary
     const parts = [];
-    const pushArr = (k) => {
-      const v = rule[k];
+    const pushPart = (k, v) => {
       if (Array.isArray(v) && v.length) parts.push(`${k}:${v.slice(0, 2).join(',')}${v.length > 2 ? '…' : ''}`);
       else if (typeof v === 'string' && v) parts.push(`${k}:${v}`);
     };
 
-    ['inboundTag', 'domain', 'ip', 'port', 'network', 'protocol', 'source', 'sourcePort', 'sourceIP', 'user'].forEach(pushArr);
+    pushPart('inboundTag', rule.inboundTag);
+    pushPart('domain', rule.domain);
+    pushPart('ip', rule.ip);
+    pushPart('port', rule.port);
+    pushPart('network', rule.network);
+    pushPart('protocol', rule.protocol);
+    pushPart('sourceIP', rule.sourceIP != null ? rule.sourceIP : rule.source);
+    pushPart('sourcePort', rule.sourcePort);
+    pushPart('user', rule.user);
+    if (rule.attrs && typeof rule.attrs === 'object' && !Array.isArray(rule.attrs) && Object.keys(rule.attrs).length) {
+      parts.push(`attrs:${Object.keys(rule.attrs).slice(0, 2).join(',')}${Object.keys(rule.attrs).length > 2 ? '…' : ''}`);
+    }
 
+    const conditionKeys = getRuleConditionKeys(rule);
     const match = parts.length ? parts.join(' • ') : 'без условий';
     return {
-      // Leading spaces keep the legacy "#N → target" look (idxSpan is a separate node).
-      title: ` → ${target}`,
+      title: `# → ${target}`,
       match,
-      badges: [type, ruleTag || 'без тега'],
       type,
       target,
+      targetKind,
       ruleTag,
       geo: anyGeo(rule),
+      conditionKeys,
+      conditionCount: conditionKeys.length,
     };
   }
 
@@ -213,12 +351,21 @@
     if (!refs) return;
     const sum = summarizeRule(rule);
     try {
-      if (refs.titleEl) refs.titleEl.textContent = sum.title;
-      if (refs.typeBadge) refs.typeBadge.textContent = String(rule && rule.type ? rule.type : 'field');
-      // Legacy header badge shows ruleTag (or "без тега") rather than the target.
-      if (refs.ruleTagBadge) refs.ruleTagBadge.textContent = (rule && rule.ruleTag) ? String(rule.ruleTag) : 'без тега';
+      if (refs.typeBadge) refs.typeBadge.textContent = String(sum.type || 'field');
+      if (refs.ruleTagBadge && !refs.ruleTagBadge.classList.contains('is-editing')) refs.ruleTagBadge.textContent = sum.ruleTag || 'без тега';
+      if (refs.targetBadge) refs.targetBadge.textContent = `${sum.targetKind}: ${sum.target}`;
+      if (refs.conditionBadge) refs.conditionBadge.textContent = `${sum.conditionCount} усл.`;
       if (refs.matchEl) refs.matchEl.textContent = sum.match;
       if (refs.geoBadgeEl) refs.geoBadgeEl.style.display = sum.geo ? '' : 'none';
+      if (refs.condBadgesWrap) {
+        refs.condBadgesWrap.innerHTML = '';
+        sum.conditionKeys.slice(0, 3).forEach((key) => {
+          const badge = document.createElement('span');
+          badge.className = 'routing-rule-badge is-cond';
+          badge.textContent = key;
+          refs.condBadgesWrap.appendChild(badge);
+        });
+      }
     } catch (e) {}
   }
 
@@ -247,6 +394,7 @@
       'balancerTag',
       'attrs',
     ]);
+    RULE_OPTIONAL_FIELDS.forEach((f) => known.add(f.key));
     RULE_MULTI_FIELDS.forEach((f) => known.add(f.key));
     RULE_TEXT_FIELDS.forEach((f) => known.add(f.key));
     // legacy alias
@@ -292,9 +440,110 @@
   }
 
 
-  function buildRuleForm(rule, idx, onChanged) {
+  function buildRuleForm(rule, idx, onChanged, requestRuleRerender) {
     const form = document.createElement('div');
     form.className = 'routing-rule-form';
+
+    const rerenderRuleForm = (fieldKey) => {
+      if (typeof requestRuleRerender === 'function') requestRuleRerender(fieldKey || '');
+    };
+
+    function attachOptionalFieldUi(fieldKey, fieldEl) {
+      if (!fieldEl) return fieldEl;
+      fieldEl.dataset.fieldKey = fieldKey;
+      fieldEl.classList.add('routing-rule-field-optional');
+      const keyWrap = fieldEl.querySelector('.routing-rule-key') || fieldEl.querySelector('.routing-rule-target-label');
+      if (keyWrap) {
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'routing-rule-remove-field';
+        removeBtn.textContent = '×';
+        removeBtn.setAttribute('aria-label', 'Убрать поле ' + String(fieldKey));
+        removeBtn.setAttribute('title', 'Убрать поле');
+        removeBtn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          clearRuleField(rule, fieldKey);
+          if (typeof onChanged === 'function') onChanged();
+          rerenderRuleForm('');
+        });
+        keyWrap.appendChild(removeBtn);
+      }
+      return fieldEl;
+    }
+
+    function buildOptionalRuleField(field) {
+      if (!field) return null;
+      if (field.kind === 'multi') {
+        let values = normalizeListValue(rule ? rule[field.key] : null);
+        if (field.key === 'sourceIP' && rule && !Object.prototype.hasOwnProperty.call(rule, 'sourceIP') && rule.source != null) {
+          values = normalizeListValue(rule.source);
+        }
+
+        let control;
+        if (RULE_INLINE_CHIP_FIELDS.has(field.key)) {
+          control = createChipInput(values, {
+            placeholder: field.placeholder,
+            ariaLabel: field.label,
+            onChange: (arr) => {
+              if (field.key === 'sourceIP') {
+                setRuleValue(rule, 'sourceIP', arr);
+                try { delete rule.source; } catch (e) {}
+              } else {
+                setRuleValue(rule, field.key, arr);
+              }
+              ensureVisibleField(rule, field.key);
+              if (typeof onChanged === 'function') onChanged();
+            },
+          });
+        } else {
+          control = createRuleTextarea(formatMultiValue(values), field.placeholder, (raw) => {
+            const arr = splitMultiValue(raw);
+            if (field.key === 'sourceIP') {
+              setRuleValue(rule, 'sourceIP', arr);
+              try { delete rule.source; } catch (e) {}
+            } else {
+              setRuleValue(rule, field.key, arr);
+            }
+            ensureVisibleField(rule, field.key);
+            if (typeof onChanged === 'function') onChanged();
+          });
+        }
+        return attachOptionalFieldUi(field.key, buildField(field.label, control, field.key));
+      }
+
+      if (field.kind === 'attrs') {
+        const attrsTextarea = createRuleTextarea(formatAttrs(rule && rule.attrs ? rule.attrs : {}), field.placeholder || 'key=value', (raw) => {
+          const obj = parseAttrs(raw);
+          setRuleValue(rule, 'attrs', obj);
+          ensureVisibleField(rule, field.key);
+          if (typeof onChanged === 'function') onChanged();
+        });
+        return attachOptionalFieldUi(field.key, buildField(field.label, attrsTextarea, field.key));
+      }
+
+      let value = String(rule && rule[field.key] ? rule[field.key] : '');
+      let control;
+      if (field.key === 'port') {
+        const initialPortValues = value ? splitMultiValue(value) : [];
+        control = createChipInput(initialPortValues, {
+          placeholder: field.placeholder,
+          ariaLabel: field.label,
+          onChange: (arr) => {
+            setRuleValue(rule, field.key, arr.join(', '));
+            ensureVisibleField(rule, field.key);
+            if (typeof onChanged === 'function') onChanged();
+          },
+        });
+      } else {
+        control = createRuleInput(value, field.placeholder, (val) => {
+          setRuleValue(rule, field.key, val);
+          ensureVisibleField(rule, field.key);
+          if (typeof onChanged === 'function') onChanged();
+        });
+      }
+      return attachOptionalFieldUi(field.key, buildField(field.label, control, field.key));
+    }
 
     // type
     ensureRuleTypeDatalist();
@@ -304,13 +553,6 @@
     });
     try { typeInput.setAttribute('list', 'routing-rule-types'); } catch (e) {}
     form.appendChild(buildField('type', typeInput, null));
-
-    // ruleTag
-    const ruleTagInput = createRuleInput(String(rule && rule.ruleTag ? rule.ruleTag : ''), 'media', (val) => {
-      setRuleValue(rule, 'ruleTag', val);
-      if (typeof onChanged === 'function') onChanged();
-    });
-    form.appendChild(buildField('ruleTag', ruleTagInput, 'ruleTag'));
 
     // outbound/balancer target
     const targetWrap = document.createElement('div');
@@ -346,7 +588,6 @@
     balancerRadio.value = 'balancer';
     const balancerLabel = buildKeyLabel('balancerTag', 'balancerTag', 'routing-rule-target-label');
 
-    // Prefer selecting from existing balancers (but keep manual input as fallback).
     const balTags = getExistingBalancerTags();
     const initialBal = String(rule && rule.balancerTag ? rule.balancerTag : '').trim();
 
@@ -394,14 +635,12 @@
         setRuleValue(rule, 'balancerTag', '');
       }
 
-      // sync select with typed value
       try {
         if (!v) balancerSelect.value = '';
         else if (balTags.indexOf(v) >= 0) balancerSelect.value = v;
         else balancerSelect.value = '__custom__';
       } catch (e) {}
 
-      // keep input enabled only for custom mode (or empty)
       requestAnimationFrame(() => {
         try {
           const isOutbound = !!outboundRadio.checked;
@@ -427,19 +666,16 @@
       const sel = String(balancerSelect.value || '');
       if (sel === '__custom__') {
         balancerRadio.checked = true;
-        // keep current input value
         syncBalancerPickDisabled();
         try { balancerInput.focus(); } catch (e) {}
         return;
       }
 
       if (!sel) {
-        // Clear balancer target
         balancerRadio.checked = true;
         try { balancerInput.value = ''; } catch (e) {}
         setRuleValue(rule, 'balancerTag', '');
       } else {
-        // Pick existing balancer tag
         balancerRadio.checked = true;
         try { balancerInput.value = sel; } catch (e) {}
         setRuleValue(rule, 'balancerTag', sel);
@@ -463,13 +699,11 @@
     outboundRadio.checked = !preferBalancer;
     balancerRadio.checked = preferBalancer;
     outboundInput.disabled = preferBalancer;
-    // picker (select+input) depends on selected mode + custom vs preset
     try { syncBalancerPickDisabled(); } catch (e) { try { balancerInput.disabled = !preferBalancer; } catch (e2) {} }
 
     function syncTargetMode() {
       const isOutbound = outboundRadio.checked;
       outboundInput.disabled = !isOutbound;
-      // balancerTag picker: select + manual input
       try { syncBalancerPickDisabled(); } catch (e) { try { balancerInput.disabled = isOutbound; } catch (e2) {} }
 
       if (isOutbound) {
@@ -487,45 +721,68 @@
     targetWrap.appendChild(balancerRow);
     form.appendChild(targetWrap);
 
-    // multi fields
-    RULE_MULTI_FIELDS.forEach((field) => {
-      let values = normalizeListValue(rule ? rule[field.key] : null);
-      // compat: old key "source"
-      if (field.key === 'sourceIP' && rule && !Object.prototype.hasOwnProperty.call(rule, 'sourceIP') && rule.source != null) {
-        values = normalizeListValue(rule.source);
-      }
-      const ta = createRuleTextarea(formatMultiValue(values), field.placeholder, (raw) => {
-        const arr = splitMultiValue(raw);
-        if (field.key === 'sourceIP') {
-          setRuleValue(rule, 'sourceIP', arr);
-          try { delete rule.source; } catch (e) {}
-        } else {
-          setRuleValue(rule, field.key, arr);
-        }
-        if (typeof onChanged === 'function') onChanged();
+    const visibleFieldKeys = getVisibleOptionalFieldKeys(rule);
+    RULE_OPTIONAL_FIELDS.forEach((field) => {
+      if (visibleFieldKeys.indexOf(field.key) < 0) return;
+      const fieldEl = buildOptionalRuleField(field);
+      if (fieldEl) form.appendChild(fieldEl);
+    });
+
+    const missingFields = RULE_OPTIONAL_FIELDS.filter((field) => visibleFieldKeys.indexOf(field.key) < 0);
+    if (missingFields.length) {
+      const addWrap = document.createElement('div');
+      addWrap.className = 'routing-rule-add-field';
+
+      const addLabel = document.createElement('span');
+      addLabel.className = 'routing-rule-add-field-label';
+      addLabel.textContent = 'Добавить условие';
+
+      const addControls = document.createElement('div');
+      addControls.className = 'routing-rule-add-field-controls';
+
+      const addSelect = document.createElement('select');
+      addSelect.className = 'routing-rule-input routing-rule-select';
+      addSelect.setAttribute('aria-label', 'Добавить условие');
+
+      const emptyOpt = document.createElement('option');
+      emptyOpt.value = '';
+      emptyOpt.textContent = '— выбрать поле —';
+      addSelect.appendChild(emptyOpt);
+
+      missingFields.forEach((field) => {
+        const opt = document.createElement('option');
+        opt.value = field.key;
+        opt.textContent = field.label;
+        addSelect.appendChild(opt);
       });
-      form.appendChild(buildField(field.label, ta, field.key));
-    });
 
-    // text fields
-    RULE_TEXT_FIELDS.forEach((field) => {
-      const input = createRuleInput(String(rule && rule[field.key] ? rule[field.key] : ''), field.placeholder, (val) => {
-        setRuleValue(rule, field.key, val);
-        if (typeof onChanged === 'function') onChanged();
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'btn-secondary';
+      addBtn.textContent = 'Добавить';
+
+      const addSelectedField = () => {
+        const key = String(addSelect.value || '').trim();
+        if (!key || !RULE_OPTIONAL_FIELD_MAP[key]) return;
+        ensureVisibleField(rule, key);
+        markDirty(true);
+        requestAutoSync({ wait: 250 });
+        setPendingRuleFieldFocus(idx, key);
+        rerenderRuleForm(key);
+      };
+
+      addBtn.addEventListener('click', addSelectedField);
+      addSelect.addEventListener('change', () => {
+        if (addSelect.value) addSelectedField();
       });
-      form.appendChild(buildField(field.label, input, field.key));
-    });
 
-    // attrs
-    const attrsTextarea = createRuleTextarea(formatAttrs(rule && rule.attrs ? rule.attrs : {}), 'key=value', (raw) => {
-      const obj = parseAttrs(raw);
-      setRuleValue(rule, 'attrs', obj);
-      if (typeof onChanged === 'function') onChanged();
-    });
-    form.appendChild(buildField('attrs', attrsTextarea, 'attrs'));
+      addControls.appendChild(addSelect);
+      addControls.appendChild(addBtn);
+      addWrap.appendChild(addLabel);
+      addWrap.appendChild(addControls);
+      form.appendChild(addWrap);
+    }
 
-    // extra (unknown keys) as JSON
-    // Keep draft text while user types (even if invalid), so closing/reopening doesn't lose input.
     const initExtraRaw = (rule && typeof rule.__xkExtraDraft === 'string')
       ? rule.__xkExtraDraft
       : (() => {
@@ -540,7 +797,6 @@
 
       const txt = String(raw || '').trim();
       if (!txt) {
-        // remove existing extra keys
         try {
           const old = getRuleExtraObject(rule);
           Object.keys(old).forEach((k) => { try { delete rule[k]; } catch (e) {} });
@@ -553,7 +809,6 @@
 
       const parsed = safeJsonParse(txt);
       if (parsed && !parsed.__error && parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        // wipe old extras then apply new
         try {
           const old = getRuleExtraObject(rule);
           Object.keys(old).forEach((k) => { try { delete rule[k]; } catch (e) {} });
@@ -568,14 +823,12 @@
         if (typeof onChanged === 'function') onChanged();
       } else {
         extraTextarea.classList.add('is-invalid');
-        // Still mark as dirty to indicate there are unapplied changes.
         markDirty(true);
       }
     });
 
     form.appendChild(buildField('extra (JSON)', extraTextarea, null));
 
-    // Ensure textareas fit content after mount.
     requestAnimationFrame(() => {
       try {
         form.querySelectorAll('.routing-rule-textarea').forEach((ta) => autoResizeTextarea(ta));
@@ -672,18 +925,11 @@
     const p = (async () => {
       let info = { exists: false, name: '' };
       try {
-        const url = '/api/fs/list?target=local&path=' + encodeURIComponent(_observatoryCache.dir);
-        const resp = await fetch(url, { method: 'GET' });
+        const resp = await fetch('/api/xray/observatory/config', { method: 'GET', cache: 'no-store' });
         const data = await resp.json().catch(() => ({}));
-        if (resp.ok && data && data.ok !== false && Array.isArray(data.items)) {
-          const names = data.items
-            .map((it) => (it && it.name != null ? String(it.name) : ''))
-            .filter((s) => !!(s && String(s).trim()));
-          let found = '';
-          if (names.indexOf('07_observatory.json') >= 0) found = '07_observatory.json';
-          else if (names.indexOf('07_observatory.jsonc') >= 0) found = '07_observatory.jsonc';
-          else found = names.find((n) => /observatory/i.test(n) && /\.jsonc?$/i.test(n)) || '';
-          info = { exists: !!found, name: found || '' };
+        if (resp.ok && data && data.ok !== false) {
+          const found = data.exists ? String(data.file || '07_observatory.json') : '';
+          info = { exists: !!data.exists, name: found || '' };
         }
       } catch (e) {
         info = { exists: false, name: '' };
@@ -731,8 +977,15 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
     form.className = 'routing-rule-form';
 
     // tag
+    let _lastBalancerTag = String(bal && bal.tag ? bal.tag : '').trim();
     const tagInput = createRuleInput(String(bal && bal.tag ? bal.tag : ''), 'balancer', (val) => {
       const v = String(val || '').trim();
+      if (_lastBalancerTag && v && _lastBalancerTag !== v && RM && typeof RM.retargetRulesForBalancer === 'function') {
+        try { RM.retargetRulesForBalancer(_lastBalancerTag, v); } catch (e) {}
+        _lastBalancerTag = v;
+      } else if (v) {
+        _lastBalancerTag = v;
+      }
       if (v) bal.tag = v;
       else { try { delete bal.tag; } catch (e) {} }
       if (typeof onChanged === 'function') onChanged();
@@ -897,8 +1150,14 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
 
     function isMissingTag(tag) {
       if (!tagsLoaded) return false;
-      if (!tag) return false;
-      return !availableSet.has(String(tag));
+      const t = String(tag || '').trim();
+      if (!t) return false;
+      if (availableSet.has(t)) return false;
+      // selector supports prefixes too: treat value as valid if at least one outbound starts with it.
+      for (let i = 0; i < availableTags.length; i++) {
+        if (String(availableTags[i] || '').startsWith(t)) return false;
+      }
+      return true;
     }
 
     function renderChips() {
@@ -1512,18 +1771,23 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
         e.preventDefault();
         e.stopPropagation();
         const tag = b && b.tag ? String(b.tag) : `balancer#${idx + 1}`;
+        const refs = (RM && typeof RM.countRulesUsingBalancer === 'function') ? RM.countRulesUsingBalancer(tag) : 0;
+        const msg = refs
+          ? `Удалить балансировщик "${tag}"?\n\nТакже будут удалены правила, которые на него ссылаются: ${refs}.`
+          : `Удалить балансировщик "${tag}"?`;
         const ok = await confirmModal({
           title: 'Удалить балансировщик',
-          message: `Удалить балансировщик "${tag}"?`,
+          message: msg,
           okText: 'Удалить',
           cancelText: 'Отмена',
           danger: true,
         });
         if (!ok) return;
-        const m2 = ensureModel();
-        const removed = m2.balancers[idx];
-        m2.balancers.splice(idx, 1);
-        try { if (S._balOpenSet) S._balOpenSet.delete(removed); } catch (e2) {}
+        const res = (RM && typeof RM.removeBalancerAt === 'function')
+          ? RM.removeBalancerAt(idx, { removeRules: true })
+          : { ok: false, removed: null, removedRules: 0 };
+        if (!res || res.ok === false) return;
+        try { if (S._balOpenSet) S._balOpenSet.delete(res.removed); } catch (e2) {}
         markDirty(true);
         renderAll();
         requestAutoSync({ immediate: true });
@@ -1553,6 +1817,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       card.appendChild(body);
 
       list.appendChild(card);
+      consumePendingRuleFieldFocus(card, idx);
     });
   }
 
@@ -1617,13 +1882,85 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
         renderAll();
         if (moved) {
           pulseRuleCardByIdx(toIdx);
-          // Apply immediately after drop (stable reorder)
-          requestAutoSync({ immediate: true });
+          // Slight debounce after drop: avoids touching JSON while drag UI is still settling
+          // and keeps the apply button visibly highlighted for a moment.
+          requestAutoSync({ wait: 450 });
         }
       },
       // DnD enabled only when filter is empty (stable indexes).
       isEnabled: () => !String(S._filter || '').trim(),
     });
+  }
+
+  function createRuleTagInlineBadge(rule, onCommit) {
+    const wrap = document.createElement('div');
+    wrap.className = 'routing-rule-inline-tag';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'routing-rule-badge is-tag routing-rule-tag-inline-btn';
+    button.textContent = sanitizeRuleTag(rule && rule.ruleTag) || 'без тега';
+    button.setAttribute('title', 'Переименовать ruleTag');
+    button.setAttribute('aria-label', 'Переименовать ruleTag');
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'routing-rule-inline-input';
+    input.placeholder = 'ruleTag';
+    input.value = sanitizeRuleTag(rule && rule.ruleTag);
+
+    let active = false;
+    function syncButton() {
+      button.textContent = sanitizeRuleTag(rule && rule.ruleTag) || 'без тега';
+    }
+    function stopEdit(applyChange) {
+      if (!active) return;
+      active = false;
+      wrap.classList.remove('is-editing');
+      button.classList.remove('is-editing');
+      if (applyChange) {
+        const next = sanitizeRuleTag(input.value);
+        if (next) rule.ruleTag = next;
+        else {
+          try { delete rule.ruleTag; } catch (e) {}
+        }
+        syncButton();
+        if (typeof onCommit === 'function') onCommit();
+      } else {
+        input.value = sanitizeRuleTag(rule && rule.ruleTag);
+        syncButton();
+      }
+    }
+    function startEdit() {
+      active = true;
+      wrap.classList.add('is-editing');
+      button.classList.add('is-editing');
+      input.value = sanitizeRuleTag(rule && rule.ruleTag);
+      requestAnimationFrame(() => {
+        try { input.focus(); input.select(); } catch (e) {}
+      });
+    }
+
+    button.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      startEdit();
+    });
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        stopEdit(true);
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault();
+        stopEdit(false);
+      }
+    });
+    input.addEventListener('blur', () => stopEdit(true));
+
+    wrap.appendChild(button);
+    wrap.appendChild(input);
+    wrap.syncLabel = syncButton;
+    return wrap;
   }
 
   function renderRules() {
@@ -1722,7 +2059,6 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       const title = document.createElement('div');
       title.className = 'routing-rule-title';
 
-      // Small drag handle (pointer-based DnD starts from here).
       if (dragEnabled) {
         const handle = document.createElement('span');
         handle.className = 'routing-rule-handle';
@@ -1738,12 +2074,18 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       idxSpan.className = 'routing-rule-index';
       idxSpan.textContent = `#${idx + 1}`;
 
-      const tText = document.createElement('span');
-      tText.className = 'routing-rule-outbound';
-      tText.textContent = sum.title;
+      const ruleTagEditor = createRuleTagInlineBadge(rule || {}, () => {
+        onRuleChanged();
+      });
+      const ruleTagBadge = ruleTagEditor.querySelector('.routing-rule-tag-inline-btn');
+
+      const targetBadge = document.createElement('span');
+      targetBadge.className = 'routing-rule-badge is-target';
+      targetBadge.textContent = `${sum.targetKind}: ${sum.target}`;
 
       title.appendChild(idxSpan);
-      title.appendChild(tText);
+      title.appendChild(ruleTagEditor);
+      title.appendChild(targetBadge);
 
       const meta = document.createElement('div');
       meta.className = 'routing-rule-meta';
@@ -1753,11 +2095,14 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       typeBadge.textContent = String(rule && rule.type ? rule.type : 'field');
       meta.appendChild(typeBadge);
 
-      // Legacy header badge: ruleTag (or "без тега")
-      const ruleTagBadge = document.createElement('span');
-      ruleTagBadge.className = 'routing-rule-badge is-tag';
-      ruleTagBadge.textContent = (rule && rule.ruleTag) ? String(rule.ruleTag) : 'без тега';
-      meta.appendChild(ruleTagBadge);
+      const conditionBadge = document.createElement('span');
+      conditionBadge.className = 'routing-rule-badge is-count';
+      conditionBadge.textContent = `${sum.conditionCount} усл.`;
+      meta.appendChild(conditionBadge);
+
+      const condBadgesWrap = document.createElement('div');
+      condBadgesWrap.className = 'routing-rule-cond-badges';
+      meta.appendChild(condBadgesWrap);
 
       const geoBadge = document.createElement('span');
       geoBadge.className = 'routing-rule-badge is-geo';
@@ -1766,7 +2111,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       meta.appendChild(geoBadge);
 
       const match = document.createElement('div');
-      match.className = 'routing-rule-empty';
+      match.className = 'routing-rule-empty routing-rule-summary';
       match.textContent = sum.match;
 
       main.appendChild(title);
@@ -1891,21 +2236,23 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       pre.className = 'routing-json-pre';
       updateJsonPreview(pre, rule || {});
 
-      const refs = { titleEl: tText, typeBadge, ruleTagBadge, matchEl: match, geoBadgeEl: geoBadge };
+      const refs = { typeBadge, ruleTagBadge, targetBadge, conditionBadge, condBadgesWrap, matchEl: match, geoBadgeEl: geoBadge };
       const onRuleChanged = () => {
         markDirty(true);
         updateRuleHeadDom(rule, refs);
         updateJsonPreview(pre, rule || {});
-        // If a filter is active, immediately hide/show the card when edits change match.
         if (filter) {
           try { card.style.display = ruleMatchesFilter(rule, filter) ? '' : 'none'; } catch (e) {}
         }
-        // Debounced auto-sync for inline edits
         requestAutoSync({ wait: 450 });
       };
+      updateRuleHeadDom(rule, refs);
 
       if (isOpen) {
-        const form = buildRuleForm(rule || {}, idx, onRuleChanged);
+        const form = buildRuleForm(rule || {}, idx, onRuleChanged, (focusFieldKey) => {
+          if (focusFieldKey) setPendingRuleFieldFocus(idx, focusFieldKey);
+          renderRules();
+        });
         body.appendChild(form);
       }
 

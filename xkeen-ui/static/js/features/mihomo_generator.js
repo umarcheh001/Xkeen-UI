@@ -145,9 +145,30 @@
         const bulkImportOverwriteName = document.getElementById("bulkImportOverwriteName");
         const bulkImportOverwriteGroups = document.getElementById("bulkImportOverwriteGroups");
         const bulkImportApplyExistingBtn = document.getElementById("bulkImportApplyExistingBtn");
-      
-       
+
+        // Unified premium result modal (preview / validate / apply)
+        const mihomoResultModal = document.getElementById("mihomoResultModal");
+        const mihomoResultModalKicker = document.getElementById("mihomoResultModalKicker");
+        const mihomoResultModalTitle = document.getElementById("mihomoResultModalTitle");
+        const mihomoResultModalSubtitle = document.getElementById("mihomoResultModalSubtitle");
+        const mihomoResultModalIcon = document.getElementById("mihomoResultModalIcon");
+        const mihomoResultModalLeadTitle = document.getElementById("mihomoResultModalLeadTitle");
+        const mihomoResultModalLeadDesc = document.getElementById("mihomoResultModalLeadDesc");
+        const mihomoResultModalBadge = document.getElementById("mihomoResultModalBadge");
+        const mihomoResultSummaryWrap = document.getElementById("mihomoResultSummaryWrap");
+        const mihomoResultSummary = document.getElementById("mihomoResultSummary");
+        const mihomoResultWarningsWrap = document.getElementById("mihomoResultWarningsWrap");
+        const mihomoResultWarnings = document.getElementById("mihomoResultWarnings");
+        const mihomoResultErrorsWrap = document.getElementById("mihomoResultErrorsWrap");
+        const mihomoResultErrors = document.getElementById("mihomoResultErrors");
+        const mihomoResultMetaWrap = document.getElementById("mihomoResultMetaWrap");
+        const mihomoResultLogWrap = document.getElementById("mihomoResultLogWrap");
+        const mihomoResultModalLog = document.getElementById("mihomoResultModalLog");
+        const mihomoResultJumpBtn = document.getElementById("mihomoResultJumpBtn");
+        const mihomoResultCopyBtn = document.getElementById("mihomoResultCopyBtn");
+
         let validationLogRaw = "";
+        let _lastMihomoResultPayload = null;
 
         // ---- active core indicator (Mihomo generator page) ----
         let _lastKnownCore = '';
@@ -704,11 +725,55 @@ function initEngineToggle() {
         }
       
                 // Мини-валидация состояния перед предпросмотром / применением
+        function extractYamlProxyName(yamlText) {
+          const s = String(yamlText || "");
+          if (!s) return "";
+          const m = s.match(/^\s*-\s*name\s*:\s*(.+?)\s*$/m);
+          if (!m) return "";
+          let raw = String(m[1] || "").trim();
+          if (raw && !(raw.startsWith('"') || raw.startsWith("'"))) raw = raw.replace(/\s+#.*$/, "").trim();
+          return raw.replace(/^['"]|['"]$/g, "").trim();
+        }
+
+        function extractWireguardEndpointHost(confText) {
+          const s = String(confText || "");
+          if (!s) return "";
+          const m = s.match(/^\s*Endpoint\s*=\s*(.+?)\s*$/mi);
+          if (!m) return "";
+          const endpoint = String(m[1] || "").trim();
+          if (!endpoint) return "";
+          if (endpoint.startsWith("[")) {
+            const idx = endpoint.indexOf("]");
+            if (idx > 1) return endpoint.slice(1, idx).trim();
+          }
+          const lastColon = endpoint.lastIndexOf(":");
+          if (lastColon > 0) return endpoint.slice(0, lastColon).trim();
+          return endpoint;
+        }
+
+        function getProxyDisplayNameForValidation(proxy, idx) {
+          if (!proxy || typeof proxy !== "object") return "";
+          const explicit = String(proxy.name || "").trim();
+          if (explicit) return explicit;
+
+          const kind = String(proxy.kind || "").toLowerCase();
+          if (kind === "yaml") return extractYamlProxyName(proxy.yaml || "");
+          if (kind === "wireguard") return extractWireguardEndpointHost(proxy.config || "");
+
+          const link = String(proxy.link || "").trim();
+          if (link) {
+            const meta = extractLinkMeta(link);
+            return meta.nameFromLink || guessNameFromLink(link) || (meta.host ? (meta.host + (meta.port ? (":" + meta.port) : "")) : "");
+          }
+
+          return idx ? `proxy#${idx}` : "";
+        }
+
         function validateState(state, mode) {
           const warnings = [];
           const errors = [];
-          const subs = state.subscriptions || [];
-          const proxies = state.proxies || [];
+          const subs = Array.isArray(state.subscriptions) ? state.subscriptions : [];
+          const proxies = Array.isArray(state.proxies) ? state.proxies : [];
 
           // Нет ни одного источника прокси
           if (!subs.length && !proxies.length) {
@@ -719,14 +784,39 @@ function initEngineToggle() {
             }
           }
 
+          // Дубли имён узлов создают неоднозначный YAML и ломают proxy-groups.
+          const seenProxyNames = new Map();
+          proxies.forEach((proxy, idx) => {
+            const displayName = getProxyDisplayNameForValidation(proxy, idx + 1);
+            if (!displayName) return;
+            const key = String(displayName || "").trim();
+            if (!key) return;
+            if (seenProxyNames.has(key)) {
+              errors.push(`Повторяющееся имя узла: ${key}. Имена узлов должны быть уникальны.`);
+              return;
+            }
+            seenProxyNames.set(key, idx + 1);
+          });
+
+          proxies.forEach((proxy, idx) => {
+            const groups = Array.isArray(proxy && proxy.groups) ? proxy.groups : [];
+            if (!groups.length) return;
+            const cleaned = groups.map((g) => String(g || "").trim()).filter(Boolean);
+            if (cleaned.length !== groups.length) {
+              warnings.push(`Узел #${idx + 1}: в списке групп были пустые значения, они будут проигнорированы.`);
+            }
+            const unique = uniqueStrings(cleaned);
+            if (unique.length !== cleaned.length) {
+              warnings.push(`Узел ${getProxyDisplayNameForValidation(proxy, idx + 1) || ("#" + (idx + 1))}: дубли групп будут автоматически схлопнуты.`);
+            }
+          });
+
           // Профиль app – просто предупреждение
           if (state.profile === "app") {
             warnings.push("Профиль «app»: прозрачная маршрутизация роутера отключена, конфиг работает как обычный клиент.");
           }
 
-          // Проверку групп по умолчанию делаем по фактически сгенерированному YAML (после предпросмотра),
-          // чтобы не ловить ложные предупреждения для пользовательских proxy-groups.
-          return { valid: errors.length === 0, warnings, errors };
+          return { valid: errors.length === 0, warnings: uniqueStrings(warnings), errors: uniqueStrings(errors) };
         }
 
         // ---- YAML helpers: validate default proxy-groups against generated config ----
@@ -809,6 +899,20 @@ function initEngineToggle() {
           return { unknown };
         }
 
+        function getBulkImportOptions() {
+          return {
+            clearExisting: !!(bulkImportClearExisting && bulkImportClearExisting.checked),
+            toSubs: !!(bulkImportToSubscriptions && bulkImportToSubscriptions.checked),
+            dedup: !!(bulkImportDedup && bulkImportDedup.checked),
+            nameTemplate: (bulkImportNameTemplate && bulkImportNameTemplate.value) ? String(bulkImportNameTemplate.value) : "{name}",
+            groupsTemplate: (bulkImportGroupsTemplate && bulkImportGroupsTemplate.value) ? String(bulkImportGroupsTemplate.value) : "",
+            autoGeo: !!(bulkImportAutoGeo && bulkImportAutoGeo.checked),
+            autoRegionGroup: !!(bulkImportAutoRegionGroup && bulkImportAutoRegionGroup.checked),
+            overwriteName: !!(bulkImportOverwriteName && bulkImportOverwriteName.checked),
+            overwriteGroups: !!(bulkImportOverwriteGroups && bulkImportOverwriteGroups.checked),
+          };
+        }
+
       
         // Автопредпросмотр для профиля / шаблона / списков групп
         autoPreviewOnChange(profileSelect, ["change"]);
@@ -858,8 +962,9 @@ function initEngineToggle() {
       
         function setStatus(text, type) {
           statusMessage.textContent = text;
-          statusMessage.classList.remove("ok", "err");
+          statusMessage.classList.remove("ok", "warn", "err");
           if (type === "ok") statusMessage.classList.add("ok");
+          if (type === "warn") statusMessage.classList.add("warn");
           if (type === "err") statusMessage.classList.add("err");
         }
         function setValidationLog(text) {
@@ -1378,17 +1483,17 @@ function initEngineToggle() {
             getState: () => {
               const kind = typeSelect.value;
               const name = nameInput.value.trim();
-              const groups = (groupsInput.value || "")
+              const groups = uniqueStrings((groupsInput.value || "")
                 .split(",")
                 .map(s => s.trim())
-                .filter(Boolean);
+                .filter(Boolean));
               const data = dataArea.value;
               const icon = String(iconInput.value || "").trim();
               const tagsRaw = String(tagsInput.value || "").trim();
-              const tags = tagsRaw
+              const tags = uniqueStrings(tagsRaw
                 .split(/[,;]+/)
                 .map(s => s.trim())
-                .filter(Boolean);
+                .filter(Boolean));
               const prioRaw = String(prioInput.value || "").trim();
               const prio = prioRaw ? parseInt(prioRaw, 10) : null;
 
@@ -1458,6 +1563,27 @@ function initEngineToggle() {
             .split(/[,;]+/)
             .map(s => String(s || "").trim())
             .filter(Boolean);
+        }
+
+        function uniqueStrings(items) {
+          const out = [];
+          const seen = new Set();
+          (Array.isArray(items) ? items : []).forEach((item) => {
+            const value = String(item || "").trim();
+            if (!value || seen.has(value)) return;
+            seen.add(value);
+            out.push(value);
+          });
+          return out;
+        }
+
+        function looksLikeForcedGroupsToken(token) {
+          const t = String(token || "").trim();
+          if (!t) return false;
+          if (t.startsWith("@")) return true;
+          if (t.includes(",") || t.includes(";")) return true;
+          if (/^[\[{(].+[\]})]$/.test(t)) return true;
+          return false;
         }
 
         function looksLikeGroupsToken(token) {
@@ -1790,26 +1916,27 @@ function initEngineToggle() {
               const groupParts = [];
 
               if (left.length === 1) {
-                if (looksLikeGroupsToken(left[0])) groupParts.push(left[0]);
-                else nameParts.push(left[0]);
+                const token = left[0];
+                if (looksLikeForcedGroupsToken(token)) groupParts.push(token);
+                else nameParts.push(token);
               } else if (left.length === 2) {
                 const a = left[0];
                 const b = left[1];
-                const aIsG = looksLikeGroupsToken(a);
-                const bIsG = looksLikeGroupsToken(b);
-                if (aIsG && !bIsG) {
+                const aIsForcedGroup = looksLikeForcedGroupsToken(a);
+                const bIsForcedGroup = looksLikeForcedGroupsToken(b);
+                if (aIsForcedGroup && !bIsForcedGroup) {
                   groupParts.push(a);
                   nameParts.push(b);
-                } else if (!aIsG && bIsG) {
+                } else if (!aIsForcedGroup && bIsForcedGroup) {
                   nameParts.push(a);
                   groupParts.push(b);
                 } else {
-                  // ambiguous -> treat both as name
+                  // ambiguous tokens like HK|vless://... are safer as names, not groups
                   nameParts.push(a, b);
                 }
               } else if (left.length > 2) {
                 left.forEach((t) => {
-                  if (looksLikeGroupsToken(t)) groupParts.push(t);
+                  if (looksLikeForcedGroupsToken(t)) groupParts.push(t);
                   else nameParts.push(t);
                 });
               }
@@ -1991,13 +2118,14 @@ function initEngineToggle() {
         function doBulkImport() {
           if (!bulkImportTextarea) return;
           const text = String(bulkImportTextarea.value || "");
-          const clearExisting = !!(bulkImportClearExisting && bulkImportClearExisting.checked);
-          const toSubs = !!(bulkImportToSubscriptions && bulkImportToSubscriptions.checked);
-          const dedup = !!(bulkImportDedup && bulkImportDedup.checked);
-          const nameTemplate = (bulkImportNameTemplate && bulkImportNameTemplate.value) ? String(bulkImportNameTemplate.value) : "{name}";
-          const groupsTemplate = (bulkImportGroupsTemplate && bulkImportGroupsTemplate.value) ? String(bulkImportGroupsTemplate.value) : "";
-          const autoGeo = !!(bulkImportAutoGeo && bulkImportAutoGeo.checked);
-          const autoRegionGroup = !!(bulkImportAutoRegionGroup && bulkImportAutoRegionGroup.checked);
+          const opts = getBulkImportOptions();
+          const clearExisting = opts.clearExisting;
+          const toSubs = opts.toSubs;
+          const dedup = opts.dedup;
+          const nameTemplate = opts.nameTemplate;
+          const groupsTemplate = opts.groupsTemplate;
+          const autoGeo = opts.autoGeo;
+          const autoRegionGroup = opts.autoRegionGroup;
 
           const lines = text.replace(/\r\n/g, "\n").split("\n");
           const subs = [];
@@ -2044,7 +2172,7 @@ function initEngineToggle() {
 
           let addedSubs = 0;
           if (toSubs && subs.length) {
-            addedSubs = addSubscriptionsToUI(subs, true);
+            addedSubs = addSubscriptionsToUI(subs, dedup);
           }
 
           let addedProxies = 0;
@@ -2066,8 +2194,9 @@ function initEngineToggle() {
           hideBulkImportModal();
 
           const msg = `Импортировано: узлов ${addedProxies}` + (toSubs ? `, подписок ${addedSubs}` : "") + ".";
-          setStatus(msg, "ok");
-          try { toast(msg, 'success'); } catch (e) {}
+          const finalMsg = unknown.length ? (msg + ` Не распознано строк: ${unknown.length}.`) : msg;
+          setStatus(finalMsg, "ok");
+          try { toast(finalMsg, unknown.length ? 'info' : 'success'); } catch (e) {}
 
           // Autopreview
           schedulePreview(200);
@@ -2077,12 +2206,13 @@ function initEngineToggle() {
 
 
         function applyTemplatesToExistingProxies() {
-          const nameTemplate = String((bulkImportNameTemplate && bulkImportNameTemplate.value) || "{name}").trim() || "{name}";
-          const groupsTemplate = String((bulkImportGroupsTemplate && bulkImportGroupsTemplate.value) || "").trim();
-          const autoGeo = !!(bulkImportAutoGeo && bulkImportAutoGeo.checked);
-          const autoRegionGroup = !!(bulkImportAutoRegionGroup && bulkImportAutoRegionGroup.checked);
-          const overwriteName = !!(bulkImportOverwriteName && bulkImportOverwriteName.checked);
-          const overwriteGroups = !!(bulkImportOverwriteGroups && bulkImportOverwriteGroups.checked);
+          const opts = getBulkImportOptions();
+          const nameTemplate = String(opts.nameTemplate || "{name}").trim() || "{name}";
+          const groupsTemplate = String(opts.groupsTemplate || "").trim();
+          const autoGeo = !!opts.autoGeo;
+          const autoRegionGroup = !!opts.autoRegionGroup;
+          const overwriteName = !!opts.overwriteName;
+          const overwriteGroups = !!opts.overwriteGroups;
 
           let changedNodes = 0;
           let changedFields = 0;
@@ -2269,23 +2399,54 @@ function initEngineToggle() {
           const state = collectState();
           const payload = { state };
           if (!_active) {
-            setStatus("Editor not initialised.", "err");
-            if (manual) try { toast("Editor not initialised.", 'error'); } catch (e) {}
+            const msg = "Editor not initialised.";
+            setStatus(msg, "err");
+            if (manual) {
+              showMihomoResultModal({
+                kind: 'error',
+                kicker: 'Mihomo / preview',
+                title: 'Предпросмотр недоступен',
+                subtitle: 'Редактор ещё не инициализирован — дождитесь полной загрузки страницы.',
+                leadTitle: 'Редактор не готов',
+                leadDesc: msg,
+                summary: msg,
+                errors: [msg],
+                source: 'Браузер',
+                action: 'Предпросмотр',
+              });
+              try { toast(msg, 'error'); } catch (e) {}
+            }
             return;
           }
       
-          // Обновляем сводку и выполняем мини-валидацию
           updateStateSummary(state);
-          const { valid, warnings, errors } = validateState(state, "preview");
-          if (!valid && errors.length) {
-            setStatus(errors.join(" "), "err");
-            if (manual) try { toast(errors.join(" "), 'error'); } catch (e) {}
+          const validation = validateState(state, "preview");
+          const localWarnings = uniqueStrings(validation.warnings || []);
+          const localErrors = uniqueStrings(validation.errors || []);
+          if (!validation.valid && localErrors.length) {
+            const msg = localErrors.join(" ");
+            setStatus(msg, "err");
+            if (manual) {
+              showMihomoResultModal({
+                kind: 'error',
+                kicker: 'Mihomo / preview',
+                title: 'Невозможно собрать предпросмотр',
+                subtitle: 'Сначала исправьте ошибки в исходных данных слева, затем запустите генерацию снова.',
+                leadTitle: 'Проверка формы не пройдена',
+                leadDesc: msg,
+                summary: 'Генератор не отправлял запрос на сервер, потому что нашёл ошибки в форме.',
+                errors: localErrors,
+                warnings: localWarnings,
+                source: 'Клиентская валидация',
+                action: 'Предпросмотр',
+              });
+              try { toast(msg, 'error'); } catch (e) {}
+            }
             return;
           }
-          if (warnings.length) {
-            // Показываем предупреждение, но предпросмотр всё равно генерируем
-            setStatus(warnings.join(" "), null);
-            if (manual) try { toast(warnings.join(" "), 'info'); } catch (e) {}
+          if (localWarnings.length) {
+            setStatus(localWarnings.join(" • "), "warn");
+            if (manual) try { toast(localWarnings.join(" • "), 'info'); } catch (e) {}
           } else {
             setStatus("Генерирую предпросмотр на сервере...", "ok");
           }
@@ -2297,67 +2458,108 @@ function initEngineToggle() {
             },
             body: JSON.stringify(payload)
           })
-            .then(resp => resp.json().then(data => ({ ok: resp.ok, data })))
-            .then(({ ok, data }) => {
+            .then(resp => resp.json().catch(() => ({})).then(data => ({ ok: resp.ok, status: resp.status, data })))
+            .then(({ ok, status, data }) => {
               if (!ok || !data || data.ok === false) {
                 const msg = (data && (data.error || data.message)) || "Не удалось сгенерировать предпросмотр.";
                 setStatus(msg, "err");
-                if (manual) try { toast(msg, 'error'); } catch (e) {}
+                if (manual) {
+                  showMihomoResultModal({
+                    kind: 'error',
+                    kicker: 'Mihomo / preview',
+                    title: 'Сервер не смог собрать предпросмотр',
+                    subtitle: 'Конфиг не был собран. Проверьте входные данные и ответ сервера ниже.',
+                    leadTitle: 'Ошибка генерации предпросмотра',
+                    leadDesc: msg,
+                    summary: msg,
+                    errors: uniqueStrings([data && data.error, data && data.message].filter(Boolean)),
+                    log: String((data && (data.log || data.details)) || ''),
+                    source: 'API /api/mihomo/preview',
+                    action: 'Предпросмотр',
+                  });
+                  try { toast(msg, 'error'); } catch (e) {}
+                }
                 return;
               }
               const cfg = data.content || data.config || "";
               if (!cfg.trim()) {
-                setStatus("Сервер вернул пустой конфиг для предпросмотра.", "err");
-                if (manual) try { toast("Сервер вернул пустой конфиг для предпросмотра.", 'error'); } catch (e) {}
+                const msg = "Сервер вернул пустой конфиг для предпросмотра.";
+                setStatus(msg, "err");
+                if (manual) {
+                  showMihomoResultModal({
+                    kind: 'error',
+                    kicker: 'Mihomo / preview',
+                    title: 'Предпросмотр получился пустым',
+                    subtitle: 'Сервер ответил без содержимого config.yaml, поэтому редактор не был обновлён.',
+                    leadTitle: 'Пустой ответ сервера',
+                    leadDesc: msg,
+                    summary: msg,
+                    errors: [msg],
+                    source: 'API /api/mihomo/preview',
+                    action: 'Предпросмотр',
+                  });
+                  try { toast(msg, 'error'); } catch (e) {}
+                }
                 return;
               }
               setEditorText(cfg);
 
-              const serverWarnings = Array.isArray(data.warnings) ? data.warnings : [];
-              let serverWarnMsg = null;
-              if (serverWarnings.length) {
-                const uniq = [];
-                const seen = new Set();
-                serverWarnings.forEach((w) => {
-                  const s = String(w || '').trim();
-                  if (!s || seen.has(s)) return;
-                  seen.add(s);
-                  uniq.push(s);
-                });
-                if (uniq.length) serverWarnMsg = "Предупреждения генератора: " + uniq.join(" • ");
-              }
-
-              // Проверяем группы по умолчанию по фактически сгенерированному YAML
+              const serverWarnings = uniqueStrings(Array.isArray(data.warnings) ? data.warnings : []);
               const dg = (state && Array.isArray(state.defaultGroups)) ? state.defaultGroups : [];
               const dgCheck = validateDefaultGroupsAgainstConfig(dg, cfg);
+              const combinedWarnings = uniqueStrings(localWarnings.concat(serverWarnings));
               if (dgCheck.unknown && dgCheck.unknown.length) {
-                const warnMsg =
+                combinedWarnings.push(
                   "Неизвестные группы по умолчанию: " +
                   dgCheck.unknown.join(", ") +
-                  ". Убедитесь, что такие proxy-groups существуют в шаблоне.";
-                let finalMsg = warnMsg;
-                if (serverWarnMsg) finalMsg += "\n" + serverWarnMsg;
-                setStatus(finalMsg, null);
-                if (manual) {
-                  try { toast(warnMsg, 'info'); } catch (e) {}
-                  if (serverWarnMsg) try { toast(serverWarnMsg, 'info'); } catch (e) {}
-                }
-              } else if (serverWarnMsg) {
-                setStatus(serverWarnMsg, null);
-                if (manual) try { toast(serverWarnMsg, 'info'); } catch (e) {}
-              } else {
-                setStatus("Предпросмотр сгенерирован на сервере без сохранения и перезапуска.", "ok");
+                  ". Убедитесь, что такие proxy-groups существуют в шаблоне."
+                );
               }
 
-              if (manual) try { toast("Предпросмотр обновлён.", 'success'); } catch (e) {}
+              if (combinedWarnings.length) {
+                const warnMsg = combinedWarnings.join(" • ");
+                setStatus(warnMsg, "warn");
+                if (manual) {
+                  showMihomoResultModal({
+                    kind: 'warning',
+                    kicker: 'Mihomo / preview',
+                    title: 'Предпросмотр собран с предупреждениями',
+                    subtitle: 'YAML уже обновлён в редакторе, но перед применением лучше проверить замечания ниже.',
+                    leadTitle: 'Предпросмотр готов, но есть нюансы',
+                    leadDesc: firstMeaningfulLine(cfg) || 'Сервер собрал config.yaml и передал его в редактор.',
+                    summary: 'Сервер успешно сгенерировал config.yaml для просмотра без сохранения и перезапуска.',
+                    warnings: combinedWarnings,
+                    source: 'API /api/mihomo/preview',
+                    action: 'Предпросмотр',
+                  });
+                  try { toast('Предпросмотр обновлён с предупреждениями.', 'info'); } catch (e) {}
+                }
+              } else {
+                setStatus("Предпросмотр сгенерирован на сервере без сохранения и перезапуска.", "ok");
+                if (manual) try { toast("Предпросмотр обновлён.", 'success'); } catch (e) {}
+              }
             })
             .catch(err => {
               console.error("preview error", err);
-              setStatus("Ошибка генерации предпросмотра: " + err, "err");
-              if (manual) try { toast("Ошибка генерации предпросмотра: " + err, 'error'); } catch (e) {}
+              const msg = "Ошибка генерации предпросмотра: " + err;
+              setStatus(msg, "err");
+              if (manual) {
+                showMihomoResultModal({
+                  kind: 'error',
+                  kicker: 'Mihomo / preview',
+                  title: 'Предпросмотр прервался из-за ошибки сети',
+                  subtitle: 'Браузер не смог получить ответ сервера генератора.',
+                  leadTitle: 'Ошибка соединения',
+                  leadDesc: msg,
+                  summary: msg,
+                  errors: [String(err || 'network error')],
+                  source: 'Браузер / fetch',
+                  action: 'Предпросмотр',
+                });
+                try { toast(msg, 'error'); } catch (e) {}
+              }
             });
         }
-      
         // ----- download config -----
         function downloadConfig() {
           const text = getEditorText();
@@ -2382,33 +2584,190 @@ function initEngineToggle() {
         }
       
         
-        // ----- validate via mihomo core -----
-        
+        // ----- premium result modal (preview / validate / apply) -----
+        function extractLineColFromText(text) {
+          const raw = String(text || "");
+          if (!raw) return null;
+          const re = /(line|строка)[^0-9]*(\d+)[^0-9]+(column|col|столбец)?[^0-9]*(\d+)?/i;
+          const m = raw.match(re);
+          if (!m) return null;
+          const line = parseInt(m[2], 10);
+          const column = m[4] ? parseInt(m[4], 10) : 1;
+          if (!Number.isFinite(line) || line <= 0) return null;
+          return { line, column: Number.isFinite(column) && column > 0 ? column : 1 };
+        }
+
+        function firstMeaningfulLine(text) {
+          return (String(text || "").split("\n").find((line) => String(line || "").trim()) || "").trim();
+        }
+
+        function renderResultItems(items, tone) {
+          const arr = uniqueStrings(items || []);
+          if (!arr.length) return "";
+          const toneClass = tone === 'error' ? 'mihomo-result-item--error' : (tone === 'warning' ? 'mihomo-result-item--warning' : '');
+          return arr.map((item, index) => {
+            return '<div class="mihomo-result-item ' + toneClass + '">' +
+              '<span class="mihomo-result-item-index">' + (index + 1) + '</span>' +
+              '<span>' + escapeHtml(item) + '</span>' +
+            '</div>';
+          }).join('');
+        }
+
+        function setResultSectionVisible(node, visible) {
+          if (!node) return;
+          node.style.display = visible ? '' : 'none';
+        }
+
+        function buildResultCopyText(payload) {
+          const parts = [];
+          const title = String((payload && payload.title) || 'Результат операции').trim();
+          if (title) parts.push(title);
+          const summary = String((payload && payload.summary) || '').trim();
+          if (summary) parts.push('', summary);
+          const warnings = uniqueStrings(payload && payload.warnings);
+          if (warnings.length) {
+            parts.push('', 'Предупреждения:');
+            warnings.forEach((item) => parts.push('- ' + item));
+          }
+          const errors = uniqueStrings(payload && payload.errors);
+          if (errors.length) {
+            parts.push('', 'Ошибки:');
+            errors.forEach((item) => parts.push('- ' + item));
+          }
+          const log = String((payload && payload.log) || '').trim();
+          if (log) parts.push('', 'Лог / детали:', log);
+          return parts.join('\n');
+        }
+
+        function hideMihomoResultModal() {
+          if (!mihomoResultModal) return;
+          mihomoResultModal.classList.add('hidden');
+          document.body.classList.remove('modal-open');
+        }
+
+        function showMihomoResultModal(options) {
+          if (!mihomoResultModal) return;
+
+          const payload = Object.assign({
+            kind: 'info',
+            kicker: 'Mihomo / result',
+            title: 'Результат операции',
+            subtitle: 'Подробности проверки, предпросмотра и применения конфигурации отображаются в одном окне.',
+            leadTitle: '',
+            leadDesc: '',
+            summary: '',
+            warnings: [],
+            errors: [],
+            log: '',
+            source: '',
+            action: '',
+          }, options || {});
+
+          const kind = (String(payload.kind || 'info').toLowerCase());
+          const normalizedKind = (kind === 'success' || kind === 'warning' || kind === 'error') ? kind : 'info';
+          const icons = { success: 'OK', warning: '!', error: 'ERR', info: 'MH' };
+          const badges = { success: 'Готово', warning: 'Внимание', error: 'Ошибка', info: 'Инфо' };
+          const lineCol = payload.lineCol || extractLineColFromText([payload.summary, payload.log, (payload.errors || []).join('\n')].join('\n'));
+          const meta = [];
+          if (payload.source) meta.push({ label: 'Источник', value: payload.source });
+          if (payload.action) meta.push({ label: 'Операция', value: payload.action });
+          if (lineCol) meta.push({ label: 'Локация', value: 'строка ' + lineCol.line + ', столбец ' + lineCol.column });
+
+          _lastMihomoResultPayload = Object.assign({}, payload, { kind: normalizedKind, lineCol });
+
+          try { mihomoResultModal.dataset.kind = normalizedKind; } catch (e) {}
+          if (mihomoResultModalKicker) mihomoResultModalKicker.textContent = String(payload.kicker || 'Mihomo / result');
+          if (mihomoResultModalTitle) mihomoResultModalTitle.textContent = String(payload.title || 'Результат операции');
+          if (mihomoResultModalSubtitle) mihomoResultModalSubtitle.textContent = String(payload.subtitle || '');
+          if (mihomoResultModalIcon) mihomoResultModalIcon.textContent = icons[normalizedKind] || 'MH';
+          if (mihomoResultModalLeadTitle) mihomoResultModalLeadTitle.textContent = String(payload.leadTitle || payload.title || 'Результат операции');
+          if (mihomoResultModalLeadDesc) mihomoResultModalLeadDesc.textContent = String(payload.leadDesc || payload.summary || payload.subtitle || '');
+          if (mihomoResultModalBadge) mihomoResultModalBadge.textContent = badges[normalizedKind] || 'Инфо';
+
+          const summaryText = String(payload.summary || '').trim();
+          setResultSectionVisible(mihomoResultSummaryWrap, !!summaryText);
+          if (mihomoResultSummary) mihomoResultSummary.textContent = summaryText;
+
+          const warningHtml = renderResultItems(payload.warnings, 'warning');
+          setResultSectionVisible(mihomoResultWarningsWrap, !!warningHtml);
+          if (mihomoResultWarnings) mihomoResultWarnings.innerHTML = warningHtml;
+
+          const errorHtml = renderResultItems(payload.errors, 'error');
+          setResultSectionVisible(mihomoResultErrorsWrap, !!errorHtml);
+          if (mihomoResultErrors) mihomoResultErrors.innerHTML = errorHtml;
+
+          if (mihomoResultMetaWrap) {
+            if (meta.length) {
+              mihomoResultMetaWrap.innerHTML = meta.map((item) => (
+                '<div class="mihomo-result-meta-card">' +
+                  '<div class="mihomo-result-meta-label">' + escapeHtml(item.label) + '</div>' +
+                  '<div class="mihomo-result-meta-value">' + escapeHtml(item.value) + '</div>' +
+                '</div>'
+              )).join('');
+            } else {
+              mihomoResultMetaWrap.innerHTML = '';
+            }
+            setResultSectionVisible(mihomoResultMetaWrap, meta.length > 0);
+          }
+
+          const logText = String(payload.log || '').trim();
+          setResultSectionVisible(mihomoResultLogWrap, !!logText);
+          if (mihomoResultModalLog) mihomoResultModalLog.innerHTML = logText ? formatLogHtml(logText) : '';
+
+          if (mihomoResultJumpBtn) {
+            const canJump = !!lineCol;
+            mihomoResultJumpBtn.style.display = canJump ? '' : 'none';
+            mihomoResultJumpBtn.onclick = canJump ? (() => {
+              try { jumpToErrorPositionFromLog('line ' + lineCol.line + ' column ' + lineCol.column); } catch (e) {}
+              hideMihomoResultModal();
+            }) : null;
+          }
+
+          if (mihomoResultCopyBtn) {
+            mihomoResultCopyBtn.onclick = async () => {
+              const copyText = buildResultCopyText(_lastMihomoResultPayload || payload);
+              try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  await navigator.clipboard.writeText(copyText);
+                } else {
+                  const ta = document.createElement('textarea');
+                  ta.value = copyText;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand('copy');
+                  document.body.removeChild(ta);
+                }
+                try { toast('Детали скопированы в буфер обмена.', 'success'); } catch (e) {}
+              } catch (e) {
+                try { toast('Не удалось скопировать детали.', 'error'); } catch (e2) {}
+              }
+            };
+          }
+
+          mihomoResultModal.classList.remove('hidden');
+          document.body.classList.add('modal-open');
+        }
+
         function showValidationModal(text) {
-          const modal = document.getElementById("validationModal");
-          const body = document.getElementById("validationModalBody");
-          if (!modal || !body) return;
-      
-          const raw = text == null ? "" : String(text);
-          body.innerHTML = formatLogHtml(raw);
-      
-          // показать модалку
-          modal.classList.remove("hidden");
-          document.body.classList.add("modal-open");
+          const raw = text == null ? '' : String(text);
+          showMihomoResultModal({
+            kind: /\[exit code:\s*0\]/i.test(raw) ? 'success' : 'error',
+            kicker: 'Mihomo / validate',
+            title: /\[exit code:\s*0\]/i.test(raw) ? 'Проверка конфигурации пройдена' : 'Проверка конфигурации не пройдена',
+            subtitle: 'Проверка выполняется через mihomo -t без сохранения и перезапуска.',
+            leadTitle: 'Результат проверки config.yaml',
+            leadDesc: firstMeaningfulLine(raw) || 'Mihomo вернул подробный лог проверки.',
+            summary: firstMeaningfulLine(raw) || '',
+            log: raw,
+            source: 'mihomo -t',
+            action: 'Валидация',
+          });
         }
-      
-        function hideValidationModal() {
-          const modal = document.getElementById("validationModal");
-          if (!modal) return;
-      
-          // скрыть модалку
-          modal.classList.add("hidden");
-          document.body.classList.remove("modal-open");
-        }
-      
-        // Expose modal controls globally so inline onclick handlers work
+
+        const hideValidationModal = hideMihomoResultModal;
         window.showValidationModal = showValidationModal;
         window.hideValidationModal = hideValidationModal;
+        window.hideMihomoResultModal = hideMihomoResultModal;
 
         // ----- bulk import modal -----
         function showBulkImportModal() {
@@ -2430,14 +2789,55 @@ function initEngineToggle() {
 
         window.showBulkImportModal = showBulkImportModal;
         window.hideBulkImportModal = hideBulkImportModal;
+
+        document.addEventListener('keydown', (ev) => {
+          try {
+            if (ev.key === 'Escape') {
+              const resultModal = mihomoResultModal || document.getElementById('mihomoResultModal');
+              if (resultModal && !resultModal.classList.contains('hidden')) {
+                ev.preventDefault();
+                hideMihomoResultModal();
+                return;
+              }
+            }
+          } catch (e) {}
+          try {
+            const modal = bulkImportModal || document.getElementById("bulkImportModal");
+            if (!modal || modal.classList.contains('hidden')) return;
+            if (ev.key === 'Escape') {
+              ev.preventDefault();
+              hideBulkImportModal();
+              return;
+            }
+            if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+              ev.preventDefault();
+              doBulkImport();
+            }
+          } catch (e) {}
+        });
       
         // ----- validate via mihomo core -----
         async function validateConfigOnServer(showPopup = true, notify = false) {
           const cfg = getEditorText();
           if (!cfg.trim()) {
-            setStatus("Нечего проверять – конфиг пуст.", "err");
-            if (notify) try { toast("Нечего проверять – конфиг пуст.", 'error'); } catch (e) {}
-            return { ok: false };
+            const msg = "Нечего проверять – конфиг пуст.";
+            setStatus(msg, "err");
+            if (showPopup) {
+              showMihomoResultModal({
+                kind: 'error',
+                kicker: 'Mihomo / validate',
+                title: 'Проверка невозможна',
+                subtitle: 'Перед проверкой нужно получить или вставить config.yaml в редактор.',
+                leadTitle: 'Пустой редактор',
+                leadDesc: msg,
+                summary: msg,
+                errors: [msg],
+                source: 'Редактор',
+                action: 'Валидация',
+              });
+            }
+            if (notify) try { toast(msg, 'error'); } catch (e) {}
+            return { ok: false, log: '', message: msg };
           }
           setStatus("Проверяю конфиг через mihomo...", "ok");
           try {
@@ -2446,53 +2846,124 @@ function initEngineToggle() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ config: cfg }),
             });
-            const data = await res.json();
-            const log = data && data.log ? data.log : "";
+            const data = await res.json().catch(() => ({}));
+            const log = data && data.log ? String(data.log) : "";
             if (typeof log === "string" && log.trim()) {
               setValidationLog(log);
-              jumpToErrorPositionFromLog(log);
-              if (showPopup) {
-                showValidationModal(log);
+              if (!res.ok || !data.ok) {
+                jumpToErrorPositionFromLog(log);
               }
             }
             if (!res.ok) {
-              setStatus("Ошибка проверки конфига: " + (data && (data.error || res.status)), "err");
-              if (notify) try { toast("Ошибка проверки конфига: " + (data && (data.error || res.status)), 'error'); } catch (e) {}
-              return { ok: false, log };
+              const msg = "Ошибка проверки конфига: " + (data && (data.error || res.status));
+              setStatus(msg, "err");
+              if (showPopup) {
+                showMihomoResultModal({
+                  kind: 'error',
+                  kicker: 'Mihomo / validate',
+                  title: 'Сервер не смог проверить конфиг',
+                  subtitle: 'Проверка через mihomo -t не завершилась успешно.',
+                  leadTitle: 'Проверка остановлена',
+                  leadDesc: msg,
+                  summary: msg,
+                  errors: [String((data && data.error) || res.status || 'Неизвестная ошибка')],
+                  log,
+                  source: 'API /api/mihomo/validate_raw',
+                  action: 'Валидация',
+                });
+              }
+              if (notify) try { toast(msg, 'error'); } catch (e) {}
+              return { ok: false, log, message: msg };
             }
-            const firstLine = (log.split("\n").find(l => l.trim()) || "").trim();
+            const firstLine = firstMeaningfulLine(log);
             if (data.ok) {
               const msg = firstLine || "mihomo сообщает, что конфиг валиден (exit code 0).";
               setStatus(msg, "ok");
+              if (showPopup) {
+                showMihomoResultModal({
+                  kind: 'success',
+                  kicker: 'Mihomo / validate',
+                  title: 'Проверка конфигурации пройдена',
+                  subtitle: 'Mihomo принял config.yaml — ядро не нашло ошибок в синтаксисе и структуре.',
+                  leadTitle: 'config.yaml валиден',
+                  leadDesc: msg,
+                  summary: msg,
+                  log,
+                  source: 'mihomo -t',
+                  action: 'Валидация',
+                });
+              }
               if (notify) try { toast(msg, 'success'); } catch (e) {}
-              return { ok: true, log };
+              return { ok: true, log, message: msg };
             } else {
               const msg = firstLine || "mihomo сообщил об ошибке при проверке конфига.";
               setStatus("В таком виде конфиг не будет работать: " + msg, "err");
+              if (showPopup) {
+                showMihomoResultModal({
+                  kind: 'error',
+                  kicker: 'Mihomo / validate',
+                  title: 'Проверка конфигурации не пройдена',
+                  subtitle: 'Конфиг не был сохранён и не должен применяться, пока ошибка не исправлена.',
+                  leadTitle: 'Mihomo отклонил config.yaml',
+                  leadDesc: msg,
+                  summary: msg,
+                  errors: [msg],
+                  log,
+                  source: 'mihomo -t',
+                  action: 'Валидация',
+                });
+              }
               if (notify) try { toast("В таком виде конфиг не будет работать: " + msg, 'error'); } catch (e) {}
-              return { ok: false, log };
+              return { ok: false, log, message: msg };
             }
           } catch (e) {
-            setStatus("Ошибка сети при проверке конфига: " + e, "err");
-            if (notify) try { toast("Ошибка сети при проверке конфига: " + e, 'error'); } catch (e2) {}
-            return { ok: false };
+            const msg = "Ошибка сети при проверке конфига: " + e;
+            setStatus(msg, "err");
+            if (showPopup) {
+              showMihomoResultModal({
+                kind: 'error',
+                kicker: 'Mihomo / validate',
+                title: 'Проверка прервалась из-за ошибки сети',
+                subtitle: 'Браузер не смог получить ответ от сервера проверки.',
+                leadTitle: 'Сетевая ошибка',
+                leadDesc: msg,
+                summary: msg,
+                errors: [String(e || 'network error')],
+                source: 'Браузер / fetch',
+                action: 'Валидация',
+              });
+            }
+            if (notify) try { toast(msg, 'error'); } catch (e2) {}
+            return { ok: false, log: '', message: msg };
           }
         }
-      
       // ----- apply to router -----
         async function applyToRouter(notify = false) {
           const state = collectState();
           const cfg = getEditorText();
           if (!cfg.trim()) {
-            setStatus("Нечего применять – конфиг пуст.", "err");
-            if (notify) try { toast("Нечего применять – конфиг пуст.", 'error'); } catch (e) {}
+            const msg = "Нечего применять – конфиг пуст.";
+            setStatus(msg, "err");
+            showMihomoResultModal({
+              kind: 'error',
+              kicker: 'Mihomo / apply',
+              title: 'Применение невозможно',
+              subtitle: 'В редакторе нет config.yaml для сохранения и отправки на роутер.',
+              leadTitle: 'Пустой редактор',
+              leadDesc: msg,
+              summary: msg,
+              errors: [msg],
+              source: 'Редактор',
+              action: 'Применение',
+            });
+            if (notify) try { toast(msg, 'error'); } catch (e) {}
             return;
           }
       
-          // Обновляем сводку и выполняем мини-валидацию
           updateStateSummary(state);
-          const { valid, warnings, errors } = validateState(state, "apply");
-          // Проверяем группы по умолчанию по текущему YAML (в редакторе)
+          const validationState = validateState(state, "apply");
+          const warnings = uniqueStrings(validationState.warnings || []);
+          const errors = uniqueStrings(validationState.errors || []);
           const dg = (state && Array.isArray(state.defaultGroups)) ? state.defaultGroups : [];
           const dgCheck = validateDefaultGroupsAgainstConfig(dg, cfg);
           if (dgCheck.unknown && dgCheck.unknown.length) {
@@ -2502,23 +2973,50 @@ function initEngineToggle() {
               ". Убедитесь, что такие proxy-groups существуют в шаблоне."
             );
           }
-          if (!valid && errors.length) {
-            setStatus(errors.join(" "), "err");
-            if (notify) try { toast(errors.join(" "), 'error'); } catch (e) {}
+          if (!validationState.valid && errors.length) {
+            const msg = errors.join(" ");
+            setStatus(msg, "err");
+            showMihomoResultModal({
+              kind: 'error',
+              kicker: 'Mihomo / apply',
+              title: 'Применение остановлено ещё до отправки',
+              subtitle: 'Генератор нашёл ошибки в форме или в текущем состоянии узлов и подписок.',
+              leadTitle: 'Клиентская проверка не пройдена',
+              leadDesc: msg,
+              summary: 'Запрос на сервер не отправлялся, потому что конфигурация генератора уже на клиенте выглядит небезопасной.',
+              errors,
+              warnings,
+              source: 'Клиентская валидация',
+              action: 'Применение',
+            });
+            if (notify) try { toast(msg, 'error'); } catch (e) {}
             return;
           }
       
-          // Перед применением дополнительно прогоняем конфиг через mihomo -t
           const validation = await validateConfigOnServer(false, false);
           if (!validation.ok) {
-            // Подробный текст уже выведен в статусе, применение блокируем.
-            if (notify) try { toast(statusMessage.textContent || 'Ошибка валидации конфига.', 'error'); } catch (e) {}
+            const msg = validation.message || statusMessage.textContent || 'Ошибка валидации конфига.';
+            showMihomoResultModal({
+              kind: 'error',
+              kicker: 'Mihomo / apply',
+              title: 'Применение остановлено: config.yaml не прошёл проверку',
+              subtitle: 'Сохранение и перезапуск не запускались, потому что mihomo не принял текущий YAML.',
+              leadTitle: 'Mihomo отклонил текущий config.yaml',
+              leadDesc: msg,
+              summary: msg,
+              errors: uniqueStrings(errors.concat([msg])),
+              warnings,
+              log: String(validation.log || ''),
+              source: 'mihomo -t',
+              action: 'Применение',
+            });
+            if (notify) try { toast(msg, 'error'); } catch (e) {}
             return;
           }
       
           if (warnings.length) {
-            // Для применения показываем предупреждения, но не блокируем операцию
-            setStatus(warnings.join(" "), "err");
+            setStatus(warnings.join(" • "), "warn");
+            if (notify) try { toast('Конфиг будет применён, но есть предупреждения.', 'info'); } catch (e) {}
           } else {
             setStatus("Отправляю конфиг на роутер...", "ok");
             if (notify) try { toast("Отправляю конфиг на роутер...", 'info'); } catch (e) {}
@@ -2530,7 +3028,6 @@ function initEngineToggle() {
           try {
             try { if (btn) btn.disabled = true; } catch (e) {}
 
-            // Best-effort: refresh core pill before apply so the user immediately sees current core.
             try { snap = await refreshActiveCorePill({ silent: true }); } catch (e) { snap = null; }
 
             const res = await fetch("/api/mihomo/generate_apply", {
@@ -2540,50 +3037,45 @@ function initEngineToggle() {
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || !data.ok) {
-              setStatus("Ошибка при применении: " + (data.error || res.status), "err");
-              if (notify) try { toast("Ошибка при применении: " + (data.error || res.status), 'error'); } catch (e) {}
+              const msg = "Ошибка при применении: " + (data.error || res.status);
+              setStatus(msg, "err");
+              showMihomoResultModal({
+                kind: 'error',
+                kicker: 'Mihomo / apply',
+                title: 'Сервер не смог применить конфиг',
+                subtitle: 'Конфиг не был безопасно сохранён или перезапуск не был запущен.',
+                leadTitle: 'Ошибка сохранения / применения',
+                leadDesc: msg,
+                summary: msg,
+                errors: uniqueStrings(errors.concat([String((data && data.error) || res.status || 'Неизвестная ошибка')])),
+                warnings,
+                log: String((data && (data.log || data.details)) || ''),
+                source: 'API /api/mihomo/generate_apply',
+                action: 'Применение',
+              });
+              if (notify) try { toast(msg, 'error'); } catch (e) {}
               return;
             }
 
-            // --- warnings (dedup) ---
-            const serverWarnings = Array.isArray(data.warnings) ? data.warnings : [];
-            let serverWarnMsg = null;
-            if (serverWarnings.length) {
-              const uniq = [];
-              const seen = new Set();
-              serverWarnings.forEach((w) => {
-                const s = String(w || '').trim();
-                if (!s || seen.has(s)) return;
-                seen.add(s);
-                uniq.push(s);
-              });
-              if (uniq.length) serverWarnMsg = "Предупреждения генератора: " + uniq.join(" • ");
-            }
+            const serverWarnings = uniqueStrings(Array.isArray(data.warnings) ? data.warnings : []);
+            const finalWarnings = uniqueStrings(warnings.concat(serverWarnings));
 
-            // --- core hint ---
             const core = (data && data.core) ? String(data.core) : (snap && snap.core ? String(snap.core) : (_lastKnownCore || ''));
             if (core) _lastKnownCore = core;
             try { _setCorePill(core, true); } catch (e) {}
 
             if (core && core !== 'mihomo') {
-              const warn = 'Сейчас активно ядро ' + core + '. Конфиг Mihomo сохранён, но применится только после переключения ядра на Mihomo.';
-              // toast.js supports only info/success/error; use boolean=true to show ⚠️.
-              if (notify) try { toast(warn, true); } catch (e) {}
+              const coreWarning = 'Сейчас активно ядро ' + core + '. Конфиг Mihomo сохранён, но применится только после переключения ядра на Mihomo.';
+              finalWarnings.push(coreWarning);
+              if (notify) try { toast(coreWarning, true); } catch (e) {}
             }
 
             const jobId = (data && (data.restart_job_id || data.job_id)) ? String(data.restart_job_id || data.job_id) : '';
 
-            // New async mode: restart is a background job.
             if (jobId) {
               const baseMsg = 'Конфиг сохранён. Запущен перезапуск xkeen (в фоне).';
-              if (serverWarnMsg) {
-                setStatus(baseMsg + "\n" + serverWarnMsg, "ok");
-                if (notify) try { toast(serverWarnMsg, 'info'); } catch (e) {}
-              } else {
-                setStatus(baseMsg, "ok");
-              }
+              setStatus(finalWarnings.length ? (baseMsg + "\n" + finalWarnings.join(" • ")) : baseMsg, finalWarnings.length ? 'warn' : 'ok');
 
-              // Stream restart output into the log panel.
               try {
                 appendValidationLog('');
                 appendValidationLog('--- xkeen -restart (job ' + jobId + ') ---');
@@ -2603,36 +3095,97 @@ function initEngineToggle() {
 
                 const ok = !!(result && result.status === 'finished' && (result.exit_code === 0 || result.exit_code === null) && !result.error);
                 if (ok) {
-                  setStatus('xkeen перезапущен.', 'ok');
-                  if (notify) try { toast('xkeen перезапущен.', 'success'); } catch (e) {}
+                  const summary = finalWarnings.length
+                    ? 'Конфиг сохранён, xkeen успешно перезапущен, но стоит проверить предупреждения ниже.'
+                    : 'Конфиг сохранён и xkeen успешно перезапущен.';
+                  setStatus(finalWarnings.length ? 'xkeen перезапущен с предупреждениями.' : 'xkeen перезапущен.', finalWarnings.length ? 'warn' : 'ok');
+                  showMihomoResultModal({
+                    kind: finalWarnings.length ? 'warning' : 'success',
+                    kicker: 'Mihomo / apply',
+                    title: finalWarnings.length ? 'Конфиг применён с предупреждениями' : 'Конфиг успешно применён',
+                    subtitle: jobId ? ('Перезапуск xkeen выполнялся фоновым заданием: ' + jobId + '.') : 'Конфиг сохранён и применён на роутере.',
+                    leadTitle: finalWarnings.length ? 'Сохранение и перезапуск завершены, но есть замечания' : 'Сохранение и перезапуск завершены',
+                    leadDesc: summary,
+                    summary,
+                    warnings: finalWarnings,
+                    log: validationLogRaw,
+                    source: 'API /api/mihomo/generate_apply',
+                    action: 'Применение',
+                  });
+                  if (notify) try { toast(finalWarnings.length ? 'Конфиг применён с предупреждениями.' : 'xkeen перезапущен.', finalWarnings.length ? 'info' : 'success'); } catch (e) {}
                 } else {
                   const errMsg = (result && result.error) ? String(result.error) : 'Перезапуск завершился с ошибкой';
                   setStatus(errMsg, 'err');
+                  showMihomoResultModal({
+                    kind: 'error',
+                    kicker: 'Mihomo / apply',
+                    title: 'Конфиг сохранён, но перезапуск завершился ошибкой',
+                    subtitle: 'Файл уже записан на роутер, однако фоновый перезапуск xkeen не завершился штатно.',
+                    leadTitle: 'Ошибка на этапе перезапуска',
+                    leadDesc: errMsg,
+                    summary: errMsg,
+                    warnings: finalWarnings,
+                    errors: [errMsg],
+                    log: validationLogRaw,
+                    source: 'Фоновый job xkeen -restart',
+                    action: 'Применение',
+                  });
                   if (notify) try { toast(errMsg, 'error'); } catch (e) {}
                 }
               } else {
-                // Fallback: job was queued but we can't stream it.
                 if (notify) try { toast('Перезапуск запущен (job ' + jobId + ').', 'info'); } catch (e) {}
+                showMihomoResultModal({
+                  kind: finalWarnings.length ? 'warning' : 'success',
+                  kicker: 'Mihomo / apply',
+                  title: finalWarnings.length ? 'Конфиг сохранён, перезапуск запущен с предупреждениями' : 'Конфиг сохранён, перезапуск запущен',
+                  subtitle: 'Роутер уже получил config.yaml, а перезапуск xkeen выполняется в фоне.',
+                  leadTitle: 'Фоновое применение запущено',
+                  leadDesc: 'Job ID: ' + jobId,
+                  summary: 'Конфиг сохранён на роутере. Следите за логом проверки ниже, пока xkeen завершает перезапуск.',
+                  warnings: finalWarnings,
+                  log: validationLogRaw,
+                  source: 'Фоновый job xkeen -restart',
+                  action: 'Применение',
+                });
               }
               return;
             }
 
-            // Legacy sync mode (server returned restart log inline)
             const baseMsg = "Конфиг отправлен на роутер, xkeen перезапускается.";
-            if (serverWarnMsg) {
-              setStatus(baseMsg + "\n" + serverWarnMsg, "ok");
-              if (notify) try { toast(serverWarnMsg, 'info'); } catch (e) {}
-            } else {
-              setStatus(baseMsg, "ok");
-            }
+            setStatus(finalWarnings.length ? (baseMsg + "\n" + finalWarnings.join(" • ")) : baseMsg, finalWarnings.length ? 'warn' : 'ok');
+            showMihomoResultModal({
+              kind: finalWarnings.length ? 'warning' : 'success',
+              kicker: 'Mihomo / apply',
+              title: finalWarnings.length ? 'Конфиг применён с предупреждениями' : 'Конфиг успешно применён',
+              subtitle: 'Сервер принял config.yaml и запустил перезапуск xkeen.',
+              leadTitle: finalWarnings.length ? 'Сохранение выполнено, но есть замечания' : 'Сохранение выполнено успешно',
+              leadDesc: baseMsg,
+              summary: baseMsg,
+              warnings: finalWarnings,
+              source: 'API /api/mihomo/generate_apply',
+              action: 'Применение',
+            });
           } catch (e) {
-            setStatus("Ошибка сети: " + e, "err");
-            if (notify) try { toast("Ошибка сети: " + e, 'error'); } catch (e2) {}
+            const msg = "Ошибка сети: " + e;
+            setStatus(msg, "err");
+            showMihomoResultModal({
+              kind: 'error',
+              kicker: 'Mihomo / apply',
+              title: 'Применение прервалось из-за ошибки сети',
+              subtitle: 'Браузер не смог дождаться ответа сервера после отправки config.yaml.',
+              leadTitle: 'Сетевая ошибка',
+              leadDesc: msg,
+              summary: msg,
+              warnings,
+              errors: [String(e || 'network error')],
+              source: 'Браузер / fetch',
+              action: 'Применение',
+            });
+            if (notify) try { toast(msg, 'error'); } catch (e2) {}
           } finally {
             try { if (btn) btn.disabled = false; } catch (e) {}
           }
         }
-      
         // ----- copy -----
         function copyConfig() {
           const text = getEditorText();

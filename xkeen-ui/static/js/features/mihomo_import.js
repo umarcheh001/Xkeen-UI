@@ -111,14 +111,20 @@
   function setStatus(msg, isErr) {
     const el = $(IDS.status);
     if (!el) return;
-    el.textContent = String(msg || '');
+    const value = String(msg || '');
+    const hasMsg = !!value.trim();
+    el.textContent = value;
     el.classList.toggle('error', !!isErr);
+    el.classList.toggle('success', hasMsg && !isErr);
+    el.classList.toggle('hidden', !hasMsg);
   }
 
   function setHint(msg) {
     const el = $(IDS.hint);
     if (!el) return;
-    el.textContent = String(msg || '');
+    const value = String(msg || '');
+    el.textContent = value;
+    el.classList.toggle('hidden', !value.trim());
   }
 
   function cmThemeFromPage() {
@@ -475,8 +481,8 @@
     try {
       const w = _previewCm.getWrapperElement();
       w.classList.add('xkeen-cm', 'xk-mihomo-import-preview');
-      // compact height like the old textarea
-      _previewCm.setSize(null, '260px');
+      const previewHeight = window.innerWidth <= 720 ? '280px' : '360px';
+      _previewCm.setSize(null, previewHeight);
     } catch (e) {}
 
     return _previewCm;
@@ -868,14 +874,14 @@
 
 
   function generateConfigForMihomo(uri, existingConfig = '') {
-    const generateName = (base) => {
+    const generateName = (base, existsFn) => {
       let index = 1;
-      while (existingConfig.includes(`${base}_${index}`)) index++;
+      while (existsFn(existingConfig, `${base}_${index}`)) index++;
       return `${base}_${index}`;
     };
 
     if (uri.startsWith('http')) {
-      const name = generateName('subscription');
+      const name = generateName('subscription', configHasProviderName);
       return {
         type: 'proxy-provider',
         content: toYaml(
@@ -901,7 +907,9 @@
     if (uri.includes('type=xhttp')) throw new Error('XHTTP в Mihomo не поддерживается');
 
     const config = parseProxyUri(uri);
-    if (config.tag === 'PROXY' || existingConfig.includes(config.tag)) config.tag = generateName(config.protocol);
+    if (config.tag === 'PROXY' || configHasProxyName(existingConfig, config.tag)) {
+      config.tag = generateName(config.protocol, configHasProxyName);
+    }
 
     const indented = convertToMihomoYaml(config);
     const raw = proxyYamlRawFromIndented(indented);
@@ -966,6 +974,13 @@
     const n = String(name || '').trim();
     if (!n) return false;
     const re1 = new RegExp('^\\s*-\\s*name\\s*:\\s*(?:"' + escapeRegExp(n) + '"|\'' + escapeRegExp(n) + '\'|' + escapeRegExp(n) + ')\\s*(?:#.*)?$', 'm');
+    return re1.test(String(cfgText || ''));
+  }
+
+  function configHasProviderName(cfgText, name) {
+    const n = String(name || '').trim();
+    if (!n) return false;
+    const re1 = new RegExp('^\\s+' + escapeRegExp(n) + '\\s*:\\s*(?:#.*)?$', 'm');
     return re1.test(String(cfgText || ''));
   }
 

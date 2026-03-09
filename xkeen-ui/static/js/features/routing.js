@@ -60,6 +60,13 @@
     // JSONC comments status (sidecar present / used)
     commentsStatus: 'routing-comments-status',
 
+    // Compact editor meta/status row
+    editorMeta: 'routing-editor-meta',
+    editorValidBadge: 'routing-editor-valid-badge',
+    editorDirtyBadge: 'routing-editor-dirty-badge',
+    editorViewBadge: 'routing-editor-view-badge',
+    editorCommentsBadge: 'routing-editor-comments-badge',
+
     btnSave: 'routing-save-btn',
 	    btnReset: 'routing-reset-btn',
     btnFormat: 'routing-format-btn',
@@ -82,6 +89,7 @@
   let _inited = false;
   let _cm = null;
   let _errorMarker = null;
+  let _lastJsonErrorLocation = null;
 
   // Active routing fragment file (basename or absolute). Controlled by dropdown.
   let _activeFragment = null;
@@ -101,6 +109,9 @@
   // If Monaco gets created twice, it may throw: "Element already has context attribute".
   let _engineSwitchChain = Promise.resolve();
 
+  let _commentsBadgeBase = { found: false, using: false, bn: '' };
+  let _commentsBadgeOverride = null;
+
   // Monaco diagnostics debounce (markers).
   let _monacoDiagTimer = null;
 
@@ -112,7 +123,11 @@
 
 	  // Dirty UI (unsaved changes)
 	  let _dirtyTimer = null;
+	  let _editorContentTimer = null;
 	  let _suppressDirty = 0;
+
+  const VIEW_STATE_LS_PREFIX = 'xkeen.routing.viewstate.v1::';
+  let _lastValidationState = { ok: null, message: '' };
 
 
   function $(id) {
@@ -184,6 +199,128 @@
     } catch (e) {}
   }
 
+
+  function _viewStateKey(file) {
+    return VIEW_STATE_LS_PREFIX + String(file || '__default__');
+  }
+
+  function captureViewState() {
+    try {
+      if (_engine === 'monaco' && _monaco) {
+        return {
+          kind: 'monaco',
+          pos: (typeof _monaco.getPosition === 'function') ? _monaco.getPosition() : null,
+          scrollTop: (typeof _monaco.getScrollTop === 'function') ? _monaco.getScrollTop() : 0,
+        };
+      }
+      if (_cm) {
+        const cur = (typeof _cm.getCursor === 'function') ? _cm.getCursor() : null;
+        const si = (typeof _cm.getScrollInfo === 'function') ? _cm.getScrollInfo() : null;
+        return {
+          kind: 'codemirror',
+          cursor: cur,
+          scrollTop: si ? si.top : 0,
+        };
+      }
+    } catch (e) {}
+    return { kind: _engine || 'codemirror' };
+  }
+
+  function saveCurrentViewState() {
+    try {
+      const key = _viewStateKey(getActiveFragment());
+      const data = captureViewState();
+      localStorage.setItem(key, JSON.stringify(data || {}));
+      updateEditorMetaStatus();
+    } catch (e) {}
+  }
+
+  function loadSavedViewState(file) {
+    try {
+      const raw = localStorage.getItem(_viewStateKey(file));
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      return (obj && typeof obj === 'object') ? obj : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function restoreViewState(view) {
+    try {
+      if (_engine === 'monaco' && _monaco) {
+        let pos = view && view.pos ? view.pos : null;
+        if (!pos && view && view.cursor) {
+          pos = { lineNumber: (view.cursor.line || 0) + 1, column: (view.cursor.ch || 0) + 1 };
+        }
+        if (pos && typeof _monaco.setPosition === 'function') _monaco.setPosition(pos);
+        if (typeof _monaco.setScrollTop === 'function' && typeof view.scrollTop === 'number') {
+          _monaco.setScrollTop(Math.max(0, view.scrollTop));
+        }
+        return true;
+      }
+      if (_cm) {
+        let cur = view && view.cursor ? view.cursor : null;
+        if (!cur && view && view.pos) {
+          cur = { line: Math.max(0, (view.pos.lineNumber || 1) - 1), ch: Math.max(0, (view.pos.column || 1) - 1) };
+        }
+        if (cur && typeof _cm.setCursor === 'function') _cm.setCursor(cur);
+        if (typeof _cm.scrollTo === 'function' && typeof view.scrollTop === 'number') _cm.scrollTo(null, Math.max(0, view.scrollTop));
+        if (typeof _cm.refresh === 'function') _cm.refresh();
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function _describeViewState(view) {
+    try {
+      if (!view) return 'новая позиция';
+      if (view.pos) return 'L' + String(view.pos.lineNumber || 1) + ':' + String(view.pos.column || 1);
+      if (view.cursor) return 'L' + String((view.cursor.line || 0) + 1) + ':' + String((view.cursor.ch || 0) + 1);
+    } catch (e) {}
+    return 'верх файла';
+  }
+
+  function updateEditorMetaStatus() {
+    try {
+      const validEl = $(IDS.editorValidBadge);
+      const dirtyEl = $(IDS.editorDirtyBadge);
+      const viewEl = $(IDS.editorViewBadge);
+
+      _updateEditorCommentsBadge();
+
+      const ok = _lastValidationState && _lastValidationState.ok;
+      const msg = _lastValidationState && _lastValidationState.message ? String(_lastValidationState.message) : '';
+      const dirty = !!window.routingIsDirty;
+      const savedView = loadSavedViewState(getActiveFragment());
+
+      if (validEl) {
+        validEl.textContent = ok === null ? 'JSON: —' : (ok ? 'JSON: valid' : 'JSON: invalid');
+        validEl.classList.toggle('is-ok', !!ok);
+        validEl.classList.toggle('is-bad', ok === false);
+        validEl.setAttribute('data-tooltip', msg || (ok === null
+          ? 'Состояние проверки JSON/JSONC пока не определено.'
+          : (ok ? 'JSON/JSONC синтаксис корректен.' : 'В тексте есть ошибка синтаксиса JSON/JSONC.')));
+      }
+      if (dirtyEl) {
+        dirtyEl.textContent = dirty ? 'Состояние: изменён' : 'Состояние: сохранён';
+        dirtyEl.classList.toggle('is-warn', dirty);
+        dirtyEl.classList.toggle('is-ok', !dirty);
+        dirtyEl.setAttribute('data-tooltip', dirty
+          ? 'Текст редактора отличается от последней сохранённой версии файла.'
+          : 'Текущий текст совпадает с последней сохранённой версией файла.');
+      }
+      if (viewEl) {
+        viewEl.textContent = 'Позиция: ' + _describeViewState(savedView);
+        viewEl.classList.toggle('is-muted', !savedView);
+        viewEl.setAttribute('data-tooltip', savedView
+          ? ('Сохранённая позиция и прокрутка для текущего routing-файла: ' + _describeViewState(savedView))
+          : 'Для текущего routing-файла ещё не сохранена позиция курсора/прокрутки.');
+      }
+    } catch (e) {}
+  }
+
   function _activeFileNameForUI() {
     try {
       const f = getActiveFragment();
@@ -198,23 +335,56 @@
   }
 
   function _updateModeBadge() {
-    const badge = $(IDS.modeBadge);
-    if (!badge) return;
     const isRouting = String(_routingMode || '') === 'routing';
-    badge.textContent = isRouting ? 'Routing mode' : 'Fragment mode';
+    const modeLabel = isRouting ? 'Routing mode' : 'Fragment mode';
+
     try {
-      badge.setAttribute('data-profile', isRouting ? 'routing' : 'fragment');
-      badge.setAttribute('data-tooltip', 'Режим редактора: ' + (isRouting ? 'Routing mode' : 'Fragment mode'));
+      const badge = $(IDS.modeBadge);
+      if (badge) {
+        badge.textContent = modeLabel;
+        badge.setAttribute('data-profile', isRouting ? 'routing' : 'fragment');
+        badge.setAttribute('data-tooltip', 'Режим редактора: ' + modeLabel);
+      }
+    } catch (e) {}
+
+    try {
+      const sel = $(IDS.fragmentSelect);
+      if (sel) {
+        const file = _activeFileNameForUI() || String(sel.value || sel.dataset.current || '').trim();
+        const tip = file
+          ? ('Файл для редактирования: ' + file + ' · Режим: ' + modeLabel)
+          : ('Выбор файла для редактирования · Режим: ' + modeLabel);
+        sel.setAttribute('data-tooltip', tip);
+        sel.setAttribute('title', tip);
+        sel.setAttribute('aria-label', 'Файл для редактирования. ' + modeLabel);
+      }
     } catch (e) {}
   }
 
   function _updateFileScopedTooltips() {
     const file = _activeFileNameForUI();
-    if (!file) return;
+    const isRouting = String(_routingMode || '') === 'routing';
+    const saveTip = file
+      ? ((isRouting ? 'Сохранить routing-файл: ' : 'Сохранить файл: ') + file)
+      : (isRouting ? 'Сохранить текущий routing-файл.' : 'Сохранить текущий файл.');
+    const resetTip = file
+      ? ('Откатить несохранённые изменения в файле: ' + file)
+      : 'Откатить несохранённые изменения и вернуть текст к последней сохранённой версии.';
 
     try {
       const saveBtn = $(IDS.btnSave);
-      if (saveBtn) saveBtn.setAttribute('data-tooltip', 'Сохранить файл: ' + file);
+      if (saveBtn) {
+        saveBtn.setAttribute('data-tooltip', saveTip);
+        saveBtn.setAttribute('aria-label', isRouting ? 'Сохранить routing-файл' : 'Сохранить файл');
+      }
+    } catch (e) {}
+
+    try {
+      const resetBtn = $(IDS.btnReset);
+      if (resetBtn) {
+        resetBtn.setAttribute('data-tooltip', resetTip);
+        resetBtn.setAttribute('title', resetTip);
+      }
     } catch (e) {}
 
     try {
@@ -300,14 +470,11 @@
       (els || []).forEach((el) => _setElHidden(el, !isRouting));
     } catch (e) {}
 
-    // Update primary button labels/tooltips so the editor doesn't lie.
+    // Keep tooltips in sync with the active file / semantic mode.
     try {
       const saveBtn = $(IDS.btnSave);
       if (saveBtn) {
-        saveBtn.textContent = isRouting ? '💾 Save routing' : '💾 Save file';
-        saveBtn.setAttribute('data-tooltip', isRouting
-          ? 'Сохранить текущий роутинг (routing.json).'
-          : 'Сохранить выбранный JSON‑файл (как есть, с поддержкой JSONC‑комментариев).');
+        saveBtn.dataset.mode = isRouting ? 'routing' : 'fragment';
       }
     } catch (e) {}
 
@@ -339,21 +506,73 @@
     } catch (e) {}
   }
 
-  function _setCommentsBadge(found, using, bn) {
-    const el = $(IDS.commentsStatus);
+  function _updateEditorCommentsBadge() {
+    const el = $(IDS.editorCommentsBadge);
     if (!el) return;
-    const has = !!found;
-    el.classList.toggle('xk-comments-on', has);
-    el.classList.toggle('xk-comments-off', !has);
-    if (has) {
-      el.textContent = using ? 'Комментарии: включены' : 'Комментарии: включены (не используются)';
-      try {
-        el.title = bn ? ('JSONC: ' + String(bn)) : 'JSONC sidecar найден';
-      } catch (e) {}
+
+    const base = _commentsBadgeBase || { found: false, using: false, bn: '' };
+    const override = _commentsBadgeOverride;
+
+    let text = 'Комментарии: —';
+    let title = '';
+    let mode = 'muted';
+
+    if (override && override.kind) {
+      if (override.kind === 'preserved') {
+        text = 'Комментарии: JSONC preserve';
+        title = override.message || 'Изменения применены с сохранением JSONC-комментариев.';
+        mode = 'ok';
+      } else if (override.kind === 'fallback-needed') {
+        text = 'Комментарии: нужен fallback';
+        title = override.reason || 'JSONC-preserve не удалось завершить без legacy rewrite.';
+        mode = 'warn';
+      } else if (override.kind === 'fallback-used') {
+        text = 'Комментарии: legacy rewrite';
+        title = override.message || 'Изменения применены старым способом: комментарии в текущем тексте перезаписаны.';
+        mode = 'warn';
+      } else if (override.kind === 'fallback-cancelled') {
+        text = 'Комментарии: fallback отменён';
+        title = override.reason || 'Пользователь отменил legacy rewrite — текст оставлен без перезаписи.';
+        mode = 'muted';
+      }
+    } else if (base.found) {
+      text = base.using ? 'Комментарии: JSONC active' : 'Комментарии: sidecar найден';
+      title = base.bn ? ('JSONC: ' + String(base.bn)) : (base.using ? 'JSONC sidecar используется' : 'JSONC sidecar найден');
+      mode = base.using ? 'ok' : 'muted';
     } else {
-      el.textContent = 'Комментарии: выключены';
-      try { el.title = 'JSONC sidecar не найден'; } catch (e) {}
+      text = 'Комментарии: off';
+      title = 'JSONC sidecar не найден';
+      mode = 'muted';
     }
+
+    el.textContent = text;
+    el.classList.remove('is-ok', 'is-warn', 'is-bad', 'is-muted');
+    el.classList.add(mode === 'ok' ? 'is-ok' : (mode === 'warn' ? 'is-warn' : 'is-muted'));
+    if (title) el.setAttribute('data-tooltip', title);
+    else el.removeAttribute('data-tooltip');
+  }
+
+  function _setCommentsBadge(found, using, bn) {
+    _commentsBadgeBase = { found: !!found, using: !!using, bn: String(bn || '') };
+    _commentsBadgeOverride = null;
+
+    const el = $(IDS.commentsStatus);
+    if (el) {
+      const has = !!found;
+      el.classList.toggle('xk-comments-on', has);
+      el.classList.toggle('xk-comments-off', !has);
+      if (has) {
+        el.textContent = using ? 'Комментарии: включены' : 'Комментарии: включены (не используются)';
+        try {
+          el.title = bn ? ('JSONC: ' + String(bn)) : 'JSONC sidecar найден';
+        } catch (e) {}
+      } else {
+        el.textContent = 'Комментарии: выключены';
+        try { el.title = 'JSONC sidecar не найден'; } catch (e) {}
+      }
+    }
+
+    _updateEditorCommentsBadge();
   }
 
   function _applyCommentsHeaders(res) {
@@ -530,6 +749,8 @@
 	        resetBtn.classList.toggle('is-active', !!dirty);
 	      }
 	    } catch (e) {}
+      try { updateEditorMetaStatus(); } catch (e) {}
+      try { document.dispatchEvent(new CustomEvent('xkeen:routing-editor-dirty', { detail: { dirty: !!dirty } })); } catch (e) {}
 	  }
 
 	  function scheduleDirtyCheck(waitMs) {
@@ -539,6 +760,28 @@
 	    _dirtyTimer = setTimeout(() => {
 	      _dirtyTimer = null;
 	      try { syncDirtyUi(); } catch (e) {}
+	    }, wait);
+	  }
+
+	  function dispatchEditorContentEvent(reason) {
+	    try {
+	      document.dispatchEvent(new CustomEvent('xkeen:routing-editor-content', {
+	        detail: {
+	          reason: String(reason || 'change'),
+	          engine: String(_engine || ''),
+	          dirty: !!(typeof window !== 'undefined' && window.routingIsDirty),
+	          file: String(getActiveFragment() || ''),
+	        }
+	      }));
+	    } catch (e) {}
+	  }
+
+	  function scheduleEditorContentEvent(reason, waitMs) {
+	    const wait = (typeof waitMs === 'number' && waitMs >= 0) ? waitMs : 120;
+	    try { if (_editorContentTimer) clearTimeout(_editorContentTimer); } catch (e) {}
+	    _editorContentTimer = setTimeout(() => {
+	      _editorContentTimer = null;
+	      try { dispatchEditorContentEvent(reason); } catch (e) {}
 	    }, wait);
 	  }
 
@@ -687,9 +930,133 @@ function closeHelp() {
     _errorMarker = null;
   }
 
+  function clearJsonErrorLocation() {
+    _lastJsonErrorLocation = null;
+    try {
+      const errEl = $(IDS.error);
+      if (!errEl) return;
+      errEl.classList.remove('is-clickable');
+      errEl.removeAttribute('role');
+      errEl.removeAttribute('tabindex');
+      errEl.removeAttribute('title');
+    } catch (e) {}
+  }
+
+  function setJsonErrorLocation(loc) {
+    const norm = (!loc || typeof loc !== 'object') ? null : {
+      line: Number.isFinite(loc.line) ? Math.max(1, Math.floor(loc.line)) : null,
+      col: Number.isFinite(loc.col) ? Math.max(1, Math.floor(loc.col)) : null,
+      index: Number.isFinite(loc.index) ? Math.max(0, Math.floor(loc.index)) : null,
+    };
+    _lastJsonErrorLocation = norm;
+    try {
+      const errEl = $(IDS.error);
+      if (!errEl) return;
+      if (norm && (norm.line || norm.index !== null)) {
+        errEl.classList.add('is-clickable');
+        errEl.setAttribute('role', 'button');
+        errEl.setAttribute('tabindex', '0');
+        errEl.setAttribute('title', 'Перейти к месту ошибки');
+      } else {
+        errEl.classList.remove('is-clickable');
+        errEl.removeAttribute('role');
+        errEl.removeAttribute('tabindex');
+        errEl.removeAttribute('title');
+      }
+    } catch (e) {}
+  }
+
+  function getMonacoMarkerErrorLocation() {
+    try {
+      if (!_monaco) return null;
+      const api = window.monaco;
+      if (!api || !api.editor || typeof api.editor.getModelMarkers !== 'function') return null;
+      const model = (_monaco.getModel && _monaco.getModel()) ? _monaco.getModel() : null;
+      if (!model || !model.uri) return null;
+      const markers = api.editor.getModelMarkers({ resource: model.uri, owner: 'xkeen' }) || [];
+      const m = markers && markers.length ? markers[0] : null;
+      if (!m) return null;
+      return {
+        line: Number.isFinite(m.startLineNumber) ? m.startLineNumber : 1,
+        col: Number.isFinite(m.startColumn) ? m.startColumn : 1,
+        index: null,
+      };
+    } catch (e) {}
+    return null;
+  }
+
+  function jumpToJsonErrorLocation() {
+    let loc = _lastJsonErrorLocation || null;
+    if ((!loc || (!loc.line && loc.index == null)) && _engine === 'monaco') {
+      loc = getMonacoMarkerErrorLocation();
+    }
+    if (!loc) return false;
+
+    const raw = String(getEditorText() || '');
+
+    if (_engine === 'monaco' && _monaco) {
+      try {
+        let line = Number.isFinite(loc.line) ? loc.line : null;
+        let col = Number.isFinite(loc.col) ? loc.col : null;
+        if ((!line || !col) && Number.isFinite(loc.index)) {
+          const lc = indexToMonacoLineCol(raw, loc.index);
+          line = lc.line;
+          col = lc.col;
+        }
+        if (!line || !col) {
+          const markerLoc = getMonacoMarkerErrorLocation();
+          if (markerLoc) {
+            line = markerLoc.line;
+            col = markerLoc.col;
+          }
+        }
+        line = Math.max(1, Number(line || 1));
+        col = Math.max(1, Number(col || 1));
+        if (_monaco.focus) _monaco.focus();
+        if (_monaco.setPosition) _monaco.setPosition({ lineNumber: line, column: col });
+        if (_monaco.setSelection) {
+          _monaco.setSelection({
+            startLineNumber: line,
+            startColumn: col,
+            endLineNumber: line,
+            endColumn: col + 1,
+          });
+        }
+        if (_monaco.revealPositionInCenter) {
+          _monaco.revealPositionInCenter({ lineNumber: line, column: col });
+        } else if (_monaco.revealLineInCenter) {
+          _monaco.revealLineInCenter(line);
+        }
+        return true;
+      } catch (e) {}
+    }
+
+    if (_cm && _cm.getDoc) {
+      try {
+        let line0 = Number.isFinite(loc.line) ? Math.max(0, loc.line - 1) : null;
+        let ch0 = Number.isFinite(loc.col) ? Math.max(0, loc.col - 1) : null;
+        if ((line0 === null || ch0 === null) && Number.isFinite(loc.index)) {
+          const lc = posToLineCh(raw, loc.index);
+          line0 = lc.line;
+          ch0 = lc.ch;
+        }
+        line0 = Math.max(0, Number(line0 || 0));
+        ch0 = Math.max(0, Number(ch0 || 0));
+        const doc = _cm.getDoc();
+        doc.setCursor({ line: line0, ch: ch0 });
+        if (_cm.scrollIntoView) _cm.scrollIntoView({ line: line0, ch: ch0 }, 120);
+        if (_cm.focus) _cm.focus();
+        return true;
+      } catch (e) {}
+    }
+
+    return false;
+  }
+
   function setError(message, line /* 0-based */) {
     const errEl = $(IDS.error);
     if (errEl) errEl.textContent = String(message ?? '');
+    if (!String(message ?? '')) clearJsonErrorLocation();
 
     // Always clear previous CM marker (if any).
     clearErrorMarker();
@@ -854,6 +1221,9 @@ function closeHelp() {
 
     if (!String(raw ?? '').trim()) {
       setError('Файл пуст. Введи корректный JSON.', null);
+      clearJsonErrorLocation();
+      _lastValidationState = { ok: false, message: 'Файл пуст' };
+      try { updateEditorMetaStatus(); } catch (e) {}
       try {
         const api = window.monaco;
         const sev = (api && api.MarkerSeverity && api.MarkerSeverity.Error) ? api.MarkerSeverity.Error : 8;
@@ -875,8 +1245,11 @@ function closeHelp() {
     try {
       const obj = JSON.parse(cleaned);
       setError('', null);
+      clearJsonErrorLocation();
       clearMonacoMarkers();
       _maybeUpdateModeFromParsed(obj);
+      _lastValidationState = { ok: true, message: 'JSON корректен' };
+      try { updateEditorMetaStatus(); } catch (e) {}
       return true;
     } catch (e) {
       const msg = (e && e.message) ? String(e.message) : String(e);
@@ -905,7 +1278,11 @@ function closeHelp() {
         }]);
       } catch (e3) {}
 
-      setError('Ошибка JSON: ' + msg, null);
+      const errMsg = 'Ошибка JSON: ' + msg;
+      setError(errMsg, null);
+      setJsonErrorLocation({ line: lc.line, col: lc.col, index: rawIdx });
+      _lastValidationState = { ok: false, message: errMsg };
+      try { updateEditorMetaStatus(); } catch (e4) {}
       return false;
     }
   }
@@ -921,6 +1298,38 @@ function closeHelp() {
   }
 
 
+  function showRoutingJsonErrorModal(err, rawText) {
+    try {
+      if (!(window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function')) return;
+      const msg = (err && err.message) ? String(err.message) : String(err || 'JSON parse error');
+      const raw = String(rawText == null ? getEditorText() : rawText);
+      const cleaned = stripJsonComments(raw);
+      const pos = extractJsonErrorPos(err);
+      let line = null;
+      let col = null;
+      if (typeof pos === 'number') {
+        const lc = posToLineCh(cleaned, pos);
+        line = lc.line + 1;
+        col = lc.ch + 1;
+      }
+      const hint = line && col
+        ? ('Проверьте строку ' + line + ', столбец ' + col + '. Конфиг не отправлялся на сервер.')
+        : 'Конфиг не отправлялся на сервер. Исправьте синтаксис JSON и попробуйте снова.';
+      const payload = {
+        error: msg,
+        hint: hint,
+        phase: 'json_parse',
+        cmd: 'JSON.parse(stripJsonComments(...))',
+        stderr: msg + (line && col ? ('\nline: ' + line + ', column: ' + col) : ''),
+        stdout: '',
+      };
+      if (line && col) {
+        payload.location = { line: line, column: col };
+      }
+      XKeen.ui.showXrayPreflightError(payload);
+    } catch (e) {}
+  }
+
   function validate() {
     // Monaco: show diagnostics as editor markers (debounced on input).
     try {
@@ -928,26 +1337,40 @@ function closeHelp() {
     } catch (e) {}
 
     const raw = getEditorText();
-    const cleaned = stripJsonComments(raw);
+    const sm = stripJsonCommentsWithMap(raw);
+    const cleaned = sm.cleaned;
 
     if (!String(raw ?? '').trim()) {
       setError('Файл пуст. Введи корректный JSON.', null);
+      clearJsonErrorLocation();
+      _lastValidationState = { ok: false, message: 'Файл пуст' };
+      try { updateEditorMetaStatus(); } catch (e) {}
       return false;
     }
 
     try {
       const obj = JSON.parse(cleaned);
       setError('', null);
+      clearJsonErrorLocation();
       _maybeUpdateModeFromParsed(obj);
+      _lastValidationState = { ok: true, message: 'JSON корректен' };
+      try { updateEditorMetaStatus(); } catch (e) {}
       return true;
     } catch (e) {
-      const pos = extractJsonErrorPos(e);
-      if (typeof pos === 'number') {
-        const lc = posToLineCh(cleaned, pos);
-        setError('Ошибка JSON: ' + (e && e.message ? e.message : e), lc.line);
-      } else {
-        setError('Ошибка JSON: ' + (e && e.message ? e.message : e), null);
-      }
+      const pos = extractJsonErrorPos(e) ?? 0;
+      let rawIdx = 0;
+      try {
+        if (sm && Array.isArray(sm.map) && sm.map.length) {
+          const p = Math.max(0, Math.min(pos, sm.map.length - 1));
+          rawIdx = sm.map[p];
+        }
+      } catch (e2) { rawIdx = 0; }
+      const lc = posToLineCh(raw, rawIdx);
+      const errMsg = 'Ошибка JSON: ' + (e && e.message ? e.message : e);
+      setError(errMsg, lc.line);
+      setJsonErrorLocation({ line: lc.line + 1, col: lc.ch + 1, index: rawIdx });
+      _lastValidationState = { ok: false, message: errMsg };
+      try { updateEditorMetaStatus(); } catch (e2) {}
       return false;
     }
   }
@@ -1015,7 +1438,12 @@ function closeHelp() {
 	      try { setEditorTextAll(text); } finally {
 	        try { _suppressDirty = Math.max(0, _suppressDirty - 1); } catch (e) { _suppressDirty = 0; }
 	      }
-      scrollEditorsTop();
+
+      const savedView = loadSavedViewState(file);
+      if (!(savedView && restoreViewState(savedView))) {
+        scrollEditorsTop();
+      }
+      try { updateEditorMetaStatus(); } catch (e) {}
 
       try { _setRoutingMode(_detectRoutingModeFromText(text), 'load'); } catch (e) {}
 
@@ -1029,6 +1457,7 @@ function closeHelp() {
 	      try { syncDirtyUi(false); } catch (e) {}
 
       const okJson = validate();
+      try { scheduleEditorContentEvent('load', 30); } catch (e) {}
       if (statusEl) statusEl.textContent = okJson ? (_routingMode === 'routing' ? 'Routing загружен.' : 'Файл загружен.') : 'Файл загружен, но содержит ошибку JSON.';
       try {
         if (typeof window.updateLastActivity === 'function') {
@@ -1046,12 +1475,25 @@ function closeHelp() {
   async function save() {
     const statusEl = $(IDS.status);
     const rawText = getEditorText();
-    const cleaned = stripJsonComments(rawText);
+    const sm = stripJsonCommentsWithMap(rawText);
+    const cleaned = sm.cleaned;
     try {
       JSON.parse(cleaned);
       setError('', null);
+      clearJsonErrorLocation();
     } catch (e) {
-      setError('Ошибка JSON: ' + (e && e.message ? e.message : e), null);
+      const pos = extractJsonErrorPos(e) ?? 0;
+      let rawIdx = 0;
+      try {
+        if (sm && Array.isArray(sm.map) && sm.map.length) {
+          const p = Math.max(0, Math.min(pos, sm.map.length - 1));
+          rawIdx = sm.map[p];
+        }
+      } catch (e2) { rawIdx = 0; }
+      const lc = posToLineCh(rawText, rawIdx);
+      setError('Ошибка JSON: ' + (e && e.message ? e.message : e), lc.line);
+      setJsonErrorLocation({ line: lc.line + 1, col: lc.ch + 1, index: rawIdx });
+      showRoutingJsonErrorModal(e, rawText);
       if (statusEl) statusEl.textContent = 'Ошибка: некорректный JSON.';
       toast('Ошибка: некорректный JSON.', true);
       return;
@@ -1140,6 +1582,7 @@ function closeHelp() {
           if (saveBtn2) saveBtn2.classList.remove('dirty');
         } catch (e) {}
 	        try { syncDirtyUi(false); } catch (e) {}
+        try { saveCurrentViewState(); } catch (e) {}
 
         let msg = (_routingMode === 'routing') ? 'Routing сохранён.' : 'Файл сохранён.';
 
@@ -1258,6 +1701,7 @@ function closeHelp() {
 
     try { window.routingIsDirty = false; } catch (e) {}
     try { syncDirtyUi(false); } catch (e) {}
+    try { saveCurrentViewState(); } catch (e) {}
 
     // Discard local edits in routing cards by reloading from the editor.
     try {
@@ -1627,6 +2071,7 @@ function closeHelp() {
           }
         }
 
+        try { saveCurrentViewState(); } catch (e) {}
         _activeFragment = next;
         rememberActiveFragment(_activeFragment);
         try {
@@ -1672,6 +2117,22 @@ function closeHelp() {
         openHelp();
       });
       if (help.dataset) help.dataset.xkeenWired = '1';
+    }
+
+
+    // Error line under editor: click/Enter to jump to exact JSON error location.
+    const errEl = $(IDS.error);
+    if (errEl && !(errEl.dataset && errEl.dataset.xkJumpWired === '1')) {
+      const onJump = (e) => {
+        try { if (e) { e.preventDefault(); e.stopPropagation(); } } catch (e2) {}
+        try { jumpToJsonErrorLocation(); } catch (e3) {}
+      };
+      errEl.addEventListener('click', onJump);
+      errEl.addEventListener('keydown', (e) => {
+        const k = e && (e.key || e.code);
+        if (k === 'Enter' || k === ' ' || k === 'Spacebar') onJump(e);
+      });
+      if (errEl.dataset) errEl.dataset.xkJumpWired = '1';
     }
 
     // Auto-close the compact ⋯ menu after clicking an action button (keeps UI tidy).
@@ -1836,7 +2297,10 @@ function closeHelp() {
 	    cm.on('change', () => {
 	      validate();
 	      scheduleDirtyCheck();
+	      scheduleEditorContentEvent('edit', 160);
 	    });
+    try { cm.on('cursorActivity', () => { saveCurrentViewState(); }); } catch (e) {}
+    try { cm.on('scroll', () => { saveCurrentViewState(); }); } catch (e) {}
 
     return cm;
   }
@@ -2152,6 +2616,8 @@ function closeHelp() {
         onChange: () => {
           try { scheduleMonacoDiagnostics(); } catch (e) {}
 	          try { scheduleDirtyCheck(); } catch (e) {}
+          try { scheduleEditorContentEvent('edit', 160); } catch (e) {}
+          try { saveCurrentViewState(); } catch (e) {}
         },
       });
 
@@ -2186,6 +2652,17 @@ function closeHelp() {
         if (typeof ms.layoutOnVisible === 'function') ms.layoutOnVisible(_monaco, host);
       } catch (e) {}
 
+      try {
+        if (_monaco && typeof _monaco.onDidScrollChange === 'function') {
+          _monaco.onDidScrollChange(() => { try { saveCurrentViewState(); } catch (e) {} });
+        }
+      } catch (e) {}
+      try {
+        if (_monaco && typeof _monaco.onDidChangeCursorPosition === 'function') {
+          _monaco.onDidChangeCursorPosition(() => { try { saveCurrentViewState(); } catch (e) {} });
+        }
+      } catch (e) {}
+
       return _monaco;
     } catch (e) {
       try { console.error(e); } catch (e2) {}
@@ -2205,14 +2682,18 @@ function closeHelp() {
     return ta ? String(ta.value || '') : '';
   }
 
-  function setEditorTextAll(text) {
+  function setEditorTextAll(text, opts) {
     const v = String(text ?? '');
+    const o = opts || {};
     try { if (_cm && typeof _cm.setValue === 'function') _cm.setValue(v); } catch (e) {}
     try { if (_monaco && typeof _monaco.setValue === 'function') _monaco.setValue(v); } catch (e) {}
     try {
       const ta = $(IDS.textarea);
       if (ta) ta.value = v;
     } catch (e) {}
+    if (o.broadcast !== false) {
+      try { scheduleEditorContentEvent(o.reason || 'set', typeof o.wait === 'number' ? o.wait : 60); } catch (e) {}
+    }
   }
 
   function scrollEditorsTop() {
@@ -2344,6 +2825,7 @@ function closeHelp() {
       } catch (e) {}
       try { relayoutMonaco(reason || 'show'); } catch (e) {}
     }
+    try { updateEditorMetaStatus(); } catch (e) {}
   }
 
   function wirePageReturnOnce() {
@@ -2362,7 +2844,12 @@ function closeHelp() {
       document.addEventListener('visibilitychange', () => {
         try {
           if (document.visibilityState === 'visible') onShow({ reason: 'visibility' });
+          else saveCurrentViewState();
         } catch (e) {}
+      });
+
+      window.addEventListener('beforeunload', () => {
+        try { saveCurrentViewState(); } catch (e) {}
       });
     } catch (e) {}
   }
@@ -2378,6 +2865,8 @@ function closeHelp() {
   async function _doSwitchEngine(nextEngine, opts) {
     const next = normalizeEngine(nextEngine);
     if (next === _engine) return;
+
+    const preservedView = captureViewState();
 
     if (next === 'monaco') {
       // If CodeMirror was in fullscreen, exit it first, otherwise its fullscreen CSS may affect layout.
@@ -2405,8 +2894,10 @@ function closeHelp() {
       _engine = 'monaco';
       // Expose facade so other modules (templates/cards) keep working
       try { XKeen.state.routingEditor = _monacoFacade || XKeen.state.routingEditor; } catch (e) {}
+      try { restoreViewState(preservedView); } catch (e) {}
       try { if (_monacoFacade && _monacoFacade.focus) _monacoFacade.focus(); } catch (e) {}
       try { validate(); } catch (e) {}
+      try { saveCurrentViewState(); } catch (e) {}
     } else {
       // If Monaco is fullscreen, exit it before hiding to avoid leaving body scroll locked.
       try { if (isMonacoFullscreen()) setMonacoFullscreen(false); } catch (e) {}
@@ -2428,8 +2919,10 @@ function closeHelp() {
 
       _engine = 'codemirror';
       try { XKeen.state.routingEditor = _cm; } catch (e) {}
+      try { restoreViewState(preservedView); } catch (e) {}
       try { if (_cm && _cm.focus) _cm.focus(); } catch (e) {}
       try { validate(); } catch (e) {}
+      try { saveCurrentViewState(); } catch (e) {}
     }
   }
 
@@ -2446,19 +2939,23 @@ function closeHelp() {
     if (!host) return;
     if (document.getElementById(IDS.engineSelect)) {
       _engineSelectEl = document.getElementById(IDS.engineSelect);
+      try {
+        _engineSelectEl.setAttribute('data-tooltip', 'Выбор движка редактора: CodeMirror или Monaco');
+        _engineSelectEl.setAttribute('title', 'Выбор движка редактора: CodeMirror или Monaco');
+        _engineSelectEl.setAttribute('aria-label', 'Выбор движка редактора');
+      } catch (e) {}
       return;
     }
 
     const wrap = document.createElement('div');
     wrap.className = 'xk-editor-engine';
 
-    const label = document.createElement('span');
-    label.className = 'xk-editor-engine-label';
-    label.textContent = 'Редактор:';
-
     const sel = document.createElement('select');
     sel.id = IDS.engineSelect;
     sel.className = 'xk-editor-engine-select';
+    sel.setAttribute('data-tooltip', 'Выбор движка редактора: CodeMirror или Monaco');
+    sel.setAttribute('title', 'Выбор движка редактора: CodeMirror или Monaco');
+    sel.setAttribute('aria-label', 'Выбор движка редактора');
 
     const o1 = document.createElement('option');
     o1.value = 'codemirror';
@@ -2470,7 +2967,6 @@ function closeHelp() {
     sel.appendChild(o1);
     sel.appendChild(o2);
 
-    wrap.appendChild(label);
     wrap.appendChild(sel);
     // Help lives in the editor toolbar (yellow JSONC help). Do not duplicate here.
 
@@ -2525,6 +3021,14 @@ function closeHelp() {
 
 
   function init() {
+    try {
+      document.addEventListener('xkeen:routing-comments-ux', (ev) => {
+        const d = ev && ev.detail ? ev.detail : {};
+        _commentsBadgeOverride = (d && d.kind) ? { kind: String(d.kind || ''), reason: String(d.reason || ''), message: String(d.message || '') } : null;
+        try { updateEditorMetaStatus(); } catch (e) {}
+      });
+    } catch (e) {}
+
     const textarea = $(IDS.textarea);
     if (!textarea) return;
     if (_inited) return;
@@ -2547,12 +3051,47 @@ function closeHelp() {
 
     // Notify theme module that editors are ready (safe to dispatch multiple times)
     try { document.dispatchEvent(new CustomEvent('xkeen-editors-ready')); } catch (e) {}
+    try { updateEditorMetaStatus(); } catch (e) {}
 
     // Fix Monaco after tab switches / navigation away+back (BFCache)
     try { wirePageReturnOnce(); } catch (e) {}
 
     wireUI();
     refreshFragmentsList().finally(() => load());
+  }
+
+  function replaceEditorText(text, opts) {
+    const o = opts || {};
+    try { _suppressDirty++; } catch (e) {}
+    try {
+      setEditorTextAll(text, {
+        reason: o.reason || 'replace',
+        wait: (typeof o.wait === 'number') ? o.wait : 40,
+        broadcast: true,
+      });
+    } finally {
+      try { _suppressDirty = Math.max(0, _suppressDirty - 1); } catch (e) { _suppressDirty = 0; }
+    }
+    try {
+      if (o.scrollTop !== false) scrollEditorsTop();
+    } catch (e) {}
+    try { validate(); } catch (e) {}
+
+    if (o.markDirty === true) {
+      try { window.routingIsDirty = true; } catch (e) {}
+      try { syncDirtyUi(true); } catch (e) {}
+    } else if (o.markDirty === false) {
+      try {
+        window.routingSavedContent = String(text ?? '');
+        window.routingIsDirty = false;
+      } catch (e) {}
+      try { syncDirtyUi(false); } catch (e) {}
+    } else {
+      try { scheduleDirtyCheck(0); } catch (e) {}
+    }
+
+    try { saveCurrentViewState(); } catch (e) {}
+    try { scheduleEditorContentEvent(o.reason || 'replace', 20); } catch (e) {}
   }
 
   XKeen.routing = {
@@ -2570,6 +3109,7 @@ function closeHelp() {
     openHelp,
     closeHelp,
     setError,
+    replaceEditorText,
   };
 
   // Alias for consistency with other feature modules.

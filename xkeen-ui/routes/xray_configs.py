@@ -643,7 +643,11 @@ def create_xray_configs_blueprint(
         merged.append(direct_obj)
         merged.append(block_obj)
 
-        final_obj: Any = merged if base_is_list else {"outbounds": merged}
+        if base_is_list:
+            final_obj: Any = merged
+        else:
+            final_obj = dict(base_obj) if isinstance(base_obj, dict) else {}
+            final_obj["outbounds"] = merged
 
         # Save
         write_raw = bool(payload.get("write_raw", True))

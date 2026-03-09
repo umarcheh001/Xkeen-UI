@@ -52,6 +52,8 @@ from mihomo_server_core import (
     parse_proxy_uri,
     parse_wireguard,
     apply_proxy_insert,
+    _yaml_str,
+    _yaml_list,
 )
 
 
@@ -1082,6 +1084,54 @@ def _ensure_leading_dash_for_yaml_block(yaml_block: str) -> str:
 
 
 
+def _proxy_tags_list(value: Any) -> List[str]:
+    if isinstance(value, (list, tuple, set)):
+        raw = [str(x or '').strip() for x in value]
+    else:
+        raw = re.split(r'[,;]+', str(value or '').strip()) if str(value or '').strip() else []
+    out: List[str] = []
+    seen: Set[str] = set()
+    for item in raw:
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
+
+
+def _append_proxy_meta_yaml(proxy_yaml: str, item: Dict[str, Any]) -> str:
+    """Attach generator metadata fields (icon/tags) to proxy YAML when present."""
+    if not isinstance(item, dict):
+        return proxy_yaml
+
+    icon = str(item.get('icon') or '').strip()
+    tags = _proxy_tags_list(item.get('tags'))
+    if not icon and not tags:
+        return proxy_yaml
+
+    lines = proxy_yaml.replace('\r\n', '\n').replace('\r', '\n').splitlines()
+    if not lines:
+        return proxy_yaml
+
+    has_icon = any(re.match(r'^\s*icon\s*:', ln) for ln in lines[1:])
+    has_tags = any(re.match(r'^\s*tags\s*:', ln) for ln in lines[1:])
+
+    extra: List[str] = []
+    if icon and not has_icon:
+        extra.append(f"  icon: {_yaml_str(icon)}")
+    if tags and not has_tags:
+        extra.append(f"  tags: {_yaml_list(tags)}")
+    if not extra:
+        return proxy_yaml
+
+    out_lines = [lines[0]] + extra + lines[1:]
+    return "\n".join(out_lines).rstrip('\n') + "\n"
+
+
+def _normalise_proxy_name_for_check(name: Any) -> str:
+    return str(name or '').strip().strip('"').strip("'")
+
+
 def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
     """Use parse_vless / parse_wireguard / raw YAML to inject proxies into config."""
     proxies = state.get("proxies") or []
@@ -1134,6 +1184,7 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
             return (10**9, _idx)
 
     sorted_pairs = sorted(list(enumerate(proxies, 1)), key=_prio_key)
+    seen_proxy_names: Set[str] = set()
 
     for idx, item in sorted_pairs:
         if not isinstance(item, dict):
@@ -1170,7 +1221,7 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
                     res = parse_vless(link, custom_name=name)
 
                 proxy_name = res.name
-                proxy_yaml = res.yaml
+                proxy_yaml = _append_proxy_meta_yaml(res.yaml, item)
 
             elif kind == "wireguard":
                 conf = str(item.get("config") or "").strip()
@@ -1179,7 +1230,7 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
                     continue
                 res = parse_wireguard(conf, custom_name=name)
                 proxy_name = res.name
-                proxy_yaml = res.yaml
+                proxy_yaml = _append_proxy_meta_yaml(res.yaml, item)
 
             elif kind == "yaml":
                 yaml_block = str(item.get("yaml") or "").strip()
@@ -1220,16 +1271,27 @@ def _insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:
                             lines.insert(1, " " * (indent + 2) + f"name: {proxy_name}")
                             yaml_block = "\n".join(lines)
 
-                proxy_yaml = yaml_block
+                proxy_yaml = _append_proxy_meta_yaml(yaml_block, item)
 
             else:
                 _warn(f"Прокси {name or f'proxy#{idx}'}: неизвестный тип '{kind}'")
                 # Unknown kind – ignore silently; UI should not send this.
                 continue
 
-            cfg = apply_proxy_insert(cfg, proxy_yaml, proxy_name, groups)
+            proxy_name_norm = _normalise_proxy_name_for_check(proxy_name)
+            if proxy_name_norm in seen_proxy_names:
+                raise ValueError(
+                    f"Дублирующееся имя узла '{proxy_name_norm}'. У каждого узла должно быть уникальное имя."
+                )
+            seen_proxy_names.add(proxy_name_norm)
+
+            cfg = apply_proxy_insert(cfg, proxy_yaml, proxy_name_norm, groups)
 
         except Exception as exc:
+            # Duplicate proxy names are a hard error: the result would be ambiguous.
+            if isinstance(exc, ValueError) and "Дублирующееся имя узла" in str(exc):
+                raise
+
             # Let the rest of proxies still be applied; individual bad entries
             # just do not make it into the resulting config.
             try:

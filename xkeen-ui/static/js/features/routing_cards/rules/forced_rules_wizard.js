@@ -49,6 +49,7 @@
     inboundOnly: 'routing-forced-rules-inbound-only',
     priority: 'routing-forced-rules-priority',
     importLegacy: 'routing-forced-rules-import-legacy',
+    summary: 'routing-forced-rules-summary',
   };
 
   function $(id) {
@@ -83,6 +84,23 @@
     try {
       el.textContent = String(msg || '');
       el.style.color = isErr ? 'var(--danger, #ef4444)' : 'var(--modal-muted, var(--muted, #9ca3af))';
+    } catch (e) {}
+  }
+
+  function updateSummary() {
+    const el = $(IDS.summary);
+    if (!el) return;
+    const forced = FW._state.forced || {};
+    const tags = Object.keys(forced);
+    let domains = 0;
+    let ips = 0;
+    tags.forEach((tag) => {
+      const item = forced[tag] || {};
+      domains += Array.isArray(item.domains) ? item.domains.length : 0;
+      ips += Array.isArray(item.ips) ? item.ips.length : 0;
+    });
+    try {
+      el.textContent = `${tags.length} outbound · ${domains} domain · ${ips} ip`;
     } catch (e) {}
   }
 
@@ -191,30 +209,82 @@
 
     const forced = FW._state.forced || {};
     const tags = Object.keys(forced);
+    updateSummary();
     if (!tags.length) {
-      el.innerHTML = '<span style="color: var(--muted, #9ca3af)">Пока пусто. Добавьте домены/IP слева.</span>';
+      el.innerHTML = '<div class="xk-forced-wizard-empty">Пока пусто. Добавьте домены или IP слева.</div>';
       return;
+    }
+
+    function renderChip(tag, kind, value) {
+      return `<span class="xk-chip" data-kind="${escapeHtml(kind)}" data-tag="${escapeHtml(tag)}" data-value="${escapeHtml(value)}" title="Удалить значение">${escapeHtml(value)} ×</span>`;
+    }
+
+    function renderInlineRow(tag, kind, values) {
+      if (!values.length) return '';
+      const chips = values.map((v) => renderChip(tag, kind, v)).join(' ');
+      return (
+        `<div class="xk-forced-inline-row" data-kind="${escapeHtml(kind)}">` +
+          `<span class="xk-forced-inline-label">${escapeHtml(kind)}</span>` +
+          `<div class="xk-forced-rule-chips is-inline">${chips}</div>` +
+        `</div>`
+      );
     }
 
     tags.sort((a, b) => a.localeCompare(b, 'ru'));
     const parts = [];
     for (const tag of tags) {
       const it = forced[tag] || { domains: [], ips: [] };
-      const d = it.domains || [];
-      const ip = it.ips || [];
-      const dHtml = d.map((v) => `<span class="xk-chip" data-kind="domain" data-tag="${escapeHtml(tag)}" data-value="${escapeHtml(v)}" title="Удалить">${escapeHtml(v)} ×</span>`).join(' ');
-      const ipHtml = ip.map((v) => `<span class="xk-chip" data-kind="ip" data-tag="${escapeHtml(tag)}" data-value="${escapeHtml(v)}" title="Удалить">${escapeHtml(v)} ×</span>`).join(' ');
+      const d = Array.isArray(it.domains) ? it.domains : [];
+      const ip = Array.isArray(it.ips) ? it.ips : [];
+      const total = d.length + ip.length;
+      const compactInline = total <= 5 && d.length <= 3 && ip.length <= 3;
+      const dHtml = d.map((v) => renderChip(tag, 'domain', v)).join(' ');
+      const ipHtml = ip.map((v) => renderChip(tag, 'ip', v)).join(' ');
+      const groups = [];
+
+      if (compactInline) {
+        if (d.length) groups.push(renderInlineRow(tag, 'domain', d));
+        if (ip.length) groups.push(renderInlineRow(tag, 'ip', ip));
+      } else {
+        if (d.length) {
+          groups.push(
+            `<div class="xk-forced-rule-group" data-kind="domain">` +
+              `<div class="xk-forced-rule-group-head">` +
+                `<span class="xk-forced-rule-group-title">domain</span>` +
+                `<span class="xk-forced-rule-group-meta">${d.length}</span>` +
+              `</div>` +
+              `<div class="xk-forced-rule-chips">${dHtml}</div>` +
+            `</div>`
+          );
+        }
+        if (ip.length) {
+          groups.push(
+            `<div class="xk-forced-rule-group" data-kind="ip">` +
+              `<div class="xk-forced-rule-group-head">` +
+                `<span class="xk-forced-rule-group-title">ip</span>` +
+                `<span class="xk-forced-rule-group-meta">${ip.length}</span>` +
+              `</div>` +
+              `<div class="xk-forced-rule-chips">${ipHtml}</div>` +
+            `</div>`
+          );
+        }
+      }
+
       parts.push(
-        `<details style="margin:0 0 8px;">` +
-          `<summary style="cursor:pointer; user-select:none;">` +
-            `<b>${escapeHtml(tag)}</b> ` +
-            `<span style="color: var(--muted, #9ca3af)">• domain: ${d.length} • ip: ${ip.length}</span>` +
-          `</summary>` +
-          `<div style="margin-top:6px; display:flex; flex-direction:column; gap:8px;">` +
-            `<div><div style="font-size: 12px; color: var(--muted, #9ca3af); margin-bottom: 4px;">domain</div><div style="display:flex; gap:6px; flex-wrap:wrap;">${dHtml || '<span style="color: var(--muted, #9ca3af)">—</span>'}</div></div>` +
-            `<div><div style="font-size: 12px; color: var(--muted, #9ca3af); margin-bottom: 4px;">ip</div><div style="display:flex; gap:6px; flex-wrap:wrap;">${ipHtml || '<span style="color: var(--muted, #9ca3af)">—</span>'}</div></div>` +
+        `<div class="xk-forced-rule-card${compactInline ? ' is-inline' : ''}">` +
+          `<div class="xk-forced-rule-head">` +
+            `<div class="xk-forced-rule-tagwrap">` +
+              `<span class="xk-forced-rule-accent" aria-hidden="true"></span>` +
+              `<div class="xk-forced-rule-tag"><code>${escapeHtml(tag)}</code></div>` +
+            `</div>` +
+            `<div class="xk-forced-rule-badges">` +
+              `<span class="xk-forced-count is-total">${total} знач.</span>` +
+              `<span class="xk-forced-count is-domain">domain ${d.length}</span>` +
+              `<span class="xk-forced-count is-ip">ip ${ip.length}</span>` +
+            `</div>` +
           `</div>` +
-        `</details>`
+          `<div class="xk-forced-rule-groups${compactInline ? ' is-inline' : ''}">${groups.join('') || '<span class="xk-forced-rule-empty">—</span>'}</div>` +
+        `</div>`
       );
     }
     el.innerHTML = parts.join('');

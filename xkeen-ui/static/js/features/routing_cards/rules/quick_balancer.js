@@ -50,6 +50,7 @@
     conc: 'routing-balancer-quick-concurrency',
     defaultRule: 'routing-balancer-quick-default-rule',
     overwriteObs: 'routing-balancer-quick-overwrite-observatory',
+    summary: 'routing-balancer-quick-summary',
   };
 
   function $(id) {
@@ -78,12 +79,20 @@
     _syncBodyScroll();
   }
 
-  function setStatus(msg, isErr) {
+  function setStatus(msg, isErr, isSuccess) {
     const el = $(IDS.status);
     if (!el) return;
     try {
       el.textContent = String(msg || '');
-      el.style.color = isErr ? 'var(--danger, #ef4444)' : 'var(--modal-muted, var(--muted, #9ca3af))';
+      if (el.classList) {
+        el.classList.toggle('is-error', !!isErr);
+        el.classList.toggle('is-success', !isErr && !!isSuccess);
+      }
+      if (!el.classList || (!el.classList.contains('is-error') && !el.classList.contains('is-success'))) {
+        el.style.color = isErr ? 'var(--danger, #ef4444)' : 'var(--modal-muted, var(--muted, #9ca3af))';
+      } else {
+        el.style.color = '';
+      }
     } catch (e) {}
   }
 
@@ -111,6 +120,61 @@
       out.push(t);
     });
     return out;
+  }
+
+  function updateSummary() {
+    const el = $(IDS.summary);
+    if (!el) return;
+    const balTag = String(($(IDS.tag) && $(IDS.tag).value) || 'proxy').trim() || 'proxy';
+    const nTags = parseTags(($(IDS.tags) && $(IDS.tags).value) || '').length;
+    const parts = [balTag, nTags + ' tag'];
+    try {
+      if ($(IDS.defaultRule) && $(IDS.defaultRule).checked) parts.push('default');
+      el.textContent = parts.join(' · ');
+    } catch (e) {}
+  }
+
+  function hasRuleForBalancer(model, balancerTag) {
+    const rules = Array.isArray(model && model.rules) ? model.rules : [];
+    const bt = String(balancerTag || '').trim();
+    if (!bt) return false;
+    return rules.some((r) => r && typeof r === 'object' && !Array.isArray(r) && String(r.balancerTag || '').trim() === bt);
+  }
+
+  function findLeastPingBalancer(model) {
+    const balancers = Array.isArray(model && model.balancers) ? model.balancers : [];
+    for (let i = 0; i < balancers.length; i++) {
+      const b = balancers[i];
+      const st = b && typeof b === 'object' && b.strategy && typeof b.strategy === 'object' ? String(b.strategy.type || '').trim() : '';
+      if (st === 'leastPing') return b;
+    }
+    return null;
+  }
+
+  function prefillFromRoutingModel() {
+    const rr = (RM && typeof RM.loadFromEditor === 'function') ? RM.loadFromEditor({ setError: false }) : { ok: false };
+    if (!rr || rr.ok === false) return false;
+    const model = (RM && typeof RM.ensureModel === 'function') ? RM.ensureModel() : (rr.model || {});
+    const bal = findLeastPingBalancer(model);
+    if (!bal) return false;
+
+    const balTag = String(bal.tag || '').trim() || 'proxy';
+    const fallback = String(bal.fallbackTag || '').trim() || 'direct';
+    const selector = Array.isArray(bal.selector) ? bal.selector : [];
+
+    const tagEl = $(IDS.tag);
+    const fallbackEl = $(IDS.fallback);
+    const tagsEl = $(IDS.tags);
+    const defaultRuleEl = $(IDS.defaultRule);
+
+    if (tagEl) tagEl.value = balTag;
+    if (fallbackEl) fallbackEl.value = fallback;
+    if (tagsEl && selector.length) tagsEl.value = selector.map((t) => String(t || '').trim()).filter(Boolean).join('\n');
+    if (defaultRuleEl) defaultRuleEl.checked = hasRuleForBalancer(model, balTag);
+
+    updateSummary();
+    setStatus('Найден существующий leastPing-балансировщик. Поля предзаполнены из текущего routing.', false);
+    return true;
   }
 
   const RESERVED = new Set([
@@ -161,8 +225,9 @@
     if (ta) {
       try { ta.value = filtered.join('\n'); } catch (e) {}
     }
+    updateSummary();
     if (!filtered.length) setStatus('Не удалось найти подходящие outbound-теги. Введите список вручную.', true);
-    else setStatus(`Найдено тегов: ${filtered.length}`, false);
+    else setStatus(`Найдено тегов: ${filtered.length}`, false, true);
   }
 
   function ensureLeastPingBalancer(model, balancerTag, selectorTags, fallbackTag) {
@@ -240,6 +305,7 @@
       const r = m.rules[idx];
       r.type = 'field';
       r.balancerTag = balancerTag;
+      r.inboundTag = ['redirect', 'tproxy'];
       try { delete r.outboundTag; } catch (e) {}
       r.ruleTag = AUTO_RULETAG;
       return { rule: r, idx, inserted: false };
@@ -255,7 +321,7 @@
     }
 
     const ins = chooseInsertIndex(m.rules);
-    const rNew = { type: 'field', balancerTag, ruleTag: AUTO_RULETAG };
+    const rNew = { type: 'field', balancerTag, inboundTag: ['redirect', 'tproxy'], ruleTag: AUTO_RULETAG };
     m.rules.splice(ins, 0, rNew);
     return { rule: rNew, idx: ins, inserted: true };
   }
@@ -368,7 +434,7 @@
       }
 
       if (opts && opts.dry) {
-        setStatus('Готово: изменения применены в редактор (без сохранения/рестарта).', false);
+        setStatus('Готово: изменения применены в редактор (без сохранения/рестарта).', false, true);
         toast('Изменения применены в редактор', false);
         return true;
       }
@@ -385,7 +451,7 @@
       setStatus('Сохраняю и перезапускаю…', false);
       const ok = await saveWithForcedRestart();
       if (ok) {
-        setStatus('Готово. Лог перезапуска — в “Журнал перезапуска”.', false);
+        setStatus('Готово. Лог перезапуска — в “Журнал перезапуска”.', false, true);
         toast('Готово', false);
         closeModal();
         return true;
@@ -415,6 +481,11 @@
       setStatus('', false);
       openModal();
 
+      let prefilledFromRouting = false;
+      try {
+        prefilledFromRouting = prefillFromRoutingModel();
+      } catch (e0) {}
+
       // Best-effort prefill from existing observatory
       try {
         const info = await fetchObservatoryConfig();
@@ -428,7 +499,7 @@
           if (pUrl && c.probeUrl) pUrl.value = String(c.probeUrl || '');
           if (pInt && c.probeInterval) pInt.value = String(c.probeInterval || '');
           if (conc && typeof c.enableConcurrency === 'boolean') conc.checked = !!c.enableConcurrency;
-          if (tagsTa && Array.isArray(c.subjectSelector) && c.subjectSelector.length) {
+          if (tagsTa && (!String(tagsTa.value || '').trim()) && Array.isArray(c.subjectSelector) && c.subjectSelector.length) {
             tagsTa.value = c.subjectSelector.map((t) => String(t || '').trim()).filter(Boolean).join('\n');
           }
         }
@@ -441,6 +512,12 @@
           await refreshTagsList();
         }
       } catch (e3) {}
+
+      updateSummary();
+      if (!prefilledFromRouting) {
+        setStatus('Заполните параметры и список тегов. Можно начать с кнопки “Обновить”.', false);
+      }
+      try { if ($(IDS.tag) && typeof $(IDS.tag).focus === 'function') $(IDS.tag).focus(); } catch (e4) {}
     });
 
     const closeBtn = $(IDS.close);
@@ -464,6 +541,18 @@
         if (!m || m.classList.contains('hidden')) return;
         closeModal();
       } catch (e2) {}
+    });
+
+    [IDS.tag, IDS.tags, IDS.fallback].forEach((id) => {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('input', () => updateSummary());
+      el.addEventListener('change', () => updateSummary());
+    });
+    [IDS.defaultRule, IDS.overwriteObs, IDS.conc].forEach((id) => {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('change', () => updateSummary());
     });
 
     const refreshBtn = $(IDS.refreshTags);

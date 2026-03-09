@@ -784,8 +784,23 @@ def ensure_unique_provider_name(cfg: str, provider_name: str, *, max_tries: int 
     return f"{base}_{int(time.time())}"
 
 
+def _yaml_normalize_inline_section(text: str, key: str) -> str:
+    s = text or ""
+    k = (key or "").strip()
+    if not k:
+        return s
+    re_inline = re.compile(
+        rf"(?m)^({re.escape(k)}\s*:)\s*(\[\]|\{{\}}|null|~)?\s*(#.*)?$"
+    )
+    m = re_inline.search(s)
+    if not m:
+        return s
+    comment = f" {m.group(3).strip()}" if m.group(3) else ""
+    return re_inline.sub(f"{k}:{comment}", s, count=1)
+
+
 def _yaml_replace_section(text: str, key: str, new_section: str) -> str:
-    s = _yaml_ensure_newline(text)
+    s = _yaml_ensure_newline(_yaml_normalize_inline_section(text, key))
     new_s = _yaml_ensure_newline(new_section)
     rng = _yaml_find_section_range(s, key)
     if not rng:
@@ -805,7 +820,7 @@ def _yaml_insert_into_section(
     *,
     avoid_duplicates: bool = True,
 ) -> str:
-    s = _yaml_ensure_newline(text)
+    s = _yaml_ensure_newline(_yaml_normalize_inline_section(text, key))
     entry = _yaml_ensure_newline(provider_entry)
     rng = _yaml_find_section_range(s, key)
 

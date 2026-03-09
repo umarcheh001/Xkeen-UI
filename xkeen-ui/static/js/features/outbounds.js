@@ -1341,12 +1341,12 @@
     function setSelectIfExists(id, value) {
       const el = $(id);
       if (!el) return;
-      const v = String(value || '').trim().toLowerCase();
-      if (!v) return;
+      const raw = (value === undefined || value === null) ? '' : String(value).trim();
+      const v = raw.toLowerCase();
       try {
-        // Only set if option exists
-        const ok = Array.from(el.options || []).some(o => String(o.value || '').toLowerCase() === v);
-        if (ok) el.value = v;
+        // Only set if option exists. Empty value is allowed when select has an explicit blank option.
+        const ok = Array.from(el.options || []).some(o => String(o.value || '').trim().toLowerCase() === v);
+        if (ok) el.value = raw;
       } catch (e) {}
     }
 
@@ -1713,6 +1713,33 @@
       return s;
     }
 
+    function updateGeneratorSummary() {
+      const el = $('outbounds-gen-summary');
+      if (!el) return;
+      const proto = getResolvedGenProto();
+      const type = (proto === 'hy2') ? 'HY2' : resolveGenType().toUpperCase();
+      const sec = (proto === 'hy2') ? 'TLS' : resolveGenSecurity(proto);
+      const protoLabelMap = { vless: 'VLESS', trojan: 'Trojan', vmess: 'VMess', ss: 'SS', hy2: 'HY2' };
+      const secLabelMap = { none: 'None', tls: 'TLS', reality: 'Reality' };
+      const protoLabel = protoLabelMap[proto] || String(proto || 'auto').toUpperCase();
+      const secLabel = secLabelMap[String(sec || '').toLowerCase()] || String(sec || '').toUpperCase() || 'Auto';
+      el.textContent = proto === 'hy2' ? `${protoLabel} · QUIC · ${secLabel}` : `${protoLabel} · ${type} · ${secLabel}`;
+    }
+
+    function markGeneratorDirty() {
+      const previewEl = $('outbounds-gen-preview');
+      const insertBtn = $('outbounds-gen-insert-btn');
+      const statusEl = $('outbounds-gen-status');
+      const modal = $('outbounds-generator-modal');
+      if (!modal || modal.classList.contains('hidden')) return;
+      updateGeneratorSummary();
+      if (previewEl && String(previewEl.value || '').trim()) {
+        previewEl.value = '';
+        if (insertBtn) insertBtn.disabled = true;
+        if (statusEl) statusEl.textContent = 'Изменены поля — нажмите «Собрать», чтобы обновить ссылку.';
+      }
+    }
+
     function updateGeneratorVisibility() {
       const proto = getResolvedGenProto();
       // HY2 does not use classic transport/security selectors here
@@ -2035,6 +2062,7 @@
     }
 
     function openGeneratorModal() {
+      updateGeneratorSummary();
       // Sync selects from main hints for convenience
       try {
         const mainProto = $('outbounds-proto');
@@ -2073,6 +2101,8 @@
         const current = input ? String(input.value || '').trim() : '';
         const prefillBtn = $('outbounds-gen-prefill-btn');
         if (prefillBtn) prefillBtn.disabled = !current;
+        const prefillHint = $('outbounds-gen-prefill-hint');
+        if (prefillHint) prefillHint.textContent = current ? 'Можно взять данные из текущего поля' : 'Основное поле сейчас пустое';
         if (current) {
           const ok = prefillGeneratorFromUrl(current);
           if (ok) {
@@ -2090,6 +2120,7 @@
       } catch (e) {}
 
       updateGeneratorVisibility();
+      updateGeneratorSummary();
       showGeneratorModal(true);
 
       try {
@@ -2130,6 +2161,7 @@
     function generatorGenerate() {
       try {
         updateGeneratorVisibility();
+        updateGeneratorSummary();
       } catch (e) {}
       const res = buildLinkFromGenerator();
       renderGeneratorResult(res);
@@ -2201,12 +2233,23 @@
       wireButton('outbounds-gen-insert-btn', generatorInsert);
 
       const onChange = () => {
-        try { updateGeneratorVisibility(); } catch (e) {}
+        try {
+          updateGeneratorVisibility();
+          markGeneratorDirty();
+        } catch (e) {}
       };
 
       ['outbounds-gen-proto','outbounds-gen-type','outbounds-gen-security'].forEach((id) => {
         const el = $(id);
         if (el) el.addEventListener('change', onChange);
+      });
+
+      Array.from(modal.querySelectorAll('input, select, textarea')).forEach((el) => {
+        if (!el || el.id === 'outbounds-gen-preview') return;
+        const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
+        el.addEventListener(evt, () => {
+          try { markGeneratorDirty(); } catch (e) {}
+        });
       });
 
       // Esc closes modal
@@ -2238,6 +2281,8 @@
       replace: 'outbounds-pool-replace',
       status: 'outbounds-pool-status',
       existing: 'outbounds-pool-existing',
+      summary: 'outbounds-pool-summary',
+      empty: 'outbounds-pool-empty',
     };
 
     let _poolEntries = [];
@@ -2268,6 +2313,44 @@
       try {
         el.textContent = String(msg || '');
         el.style.color = isErr ? 'var(--danger, #ef4444)' : '';
+      } catch (e) {}
+    }
+
+
+    function poolResetDraft() {
+      _poolEntries = [];
+      try {
+        const input = $(POOL_IDS.input);
+        if (input) input.value = '';
+      } catch (e) {}
+      try {
+        const replace = $(POOL_IDS.replace);
+        if (replace) replace.checked = false;
+      } catch (e) {}
+      poolSetStatus('', false);
+      try { poolRenderTable(); } catch (e) {}
+    }
+
+    function poolSyncUiState() {
+      const summary = $(POOL_IDS.summary);
+      const empty = $(POOL_IDS.empty);
+      const saveBtn = $(POOL_IDS.save);
+      let ready = 0;
+      let total = 0;
+      try {
+        total = Array.isArray(_poolEntries) ? _poolEntries.length : 0;
+        ready = _poolEntries.filter((e) => String((e && e.url) || '').trim()).length;
+      } catch (e) {}
+      try {
+        if (summary) {
+          summary.textContent = `${total} строк · ${ready} tag`;
+        }
+      } catch (e) {}
+      try {
+        if (empty) empty.style.display = total ? 'none' : 'block';
+      } catch (e) {}
+      try {
+        if (saveBtn) saveBtn.disabled = !ready;
       } catch (e) {}
     }
 
@@ -2330,24 +2413,35 @@
         //  - tag | url
         //  - tag = url
         //  - url
-        if (line.includes('|')) {
-          const parts = line.split('|');
-          tag = (parts[0] || '').trim();
-          url = parts.slice(1).join('|').trim();
-        } else if (line.includes('=')) {
-          const parts = line.split('=');
-          tag = (parts[0] || '').trim();
-          url = parts.slice(1).join('=').trim();
+        // Important: raw vmess/vless links may contain '=' inside the URL,
+        // so treat '=' as a tag separator only when it appears before the scheme.
+        const pipeIdx = line.indexOf('|');
+        const eqIdx = line.indexOf('=');
+        const schemeIdx = line.indexOf('://');
+
+        if (pipeIdx > 0 && (schemeIdx === -1 || pipeIdx < schemeIdx)) {
+          tag = line.slice(0, pipeIdx).trim();
+          url = line.slice(pipeIdx + 1).trim();
+        } else if (eqIdx > 0 && (schemeIdx === -1 || eqIdx < schemeIdx)) {
+          const left = line.slice(0, eqIdx).trim();
+          const right = line.slice(eqIdx + 1).trim();
+          if (right.includes('://')) {
+            tag = left;
+            url = right;
+          } else {
+            url = line;
+          }
         } else {
           url = line;
         }
 
         if (!url) return;
 
+        const explicitTag = !!poolSanitizeTag(tag);
         tag = poolSanitizeTag(tag);
         if (!tag) tag = poolSuggestTagFromUrl(url, idx + 1);
 
-        parsed.push({ tag, url });
+        parsed.push({ tag, url, explicitTag });
       });
 
       return parsed;
@@ -2373,6 +2467,7 @@
           const v = poolSanitizeTag(inTag.value);
           _poolEntries[idx].tag = v;
           inTag.value = v;
+          poolSyncUiState();
         });
         tdTag.appendChild(inTag);
 
@@ -2385,6 +2480,7 @@
         inUrl.style.width = '100%';
         inUrl.addEventListener('change', () => {
           _poolEntries[idx].url = String(inUrl.value || '').trim();
+          poolSyncUiState();
         });
         tdUrl.appendChild(inUrl);
 
@@ -2392,10 +2488,10 @@
         tdAct.style.padding = '8px';
         const del = document.createElement('button');
         del.type = 'button';
-        del.className = 'btn-secondary';
-        del.style.padding = '4px 8px';
+        del.className = 'btn-secondary xk-pool-delete-btn';
         del.textContent = '✕';
         del.title = 'Удалить';
+        del.setAttribute('aria-label', 'Удалить строку');
         del.addEventListener('click', () => {
           _poolEntries.splice(idx, 1);
           poolRenderTable();
@@ -2407,6 +2503,8 @@
         tr.appendChild(tdAct);
         tbody.appendChild(tr);
       });
+
+      poolSyncUiState();
     }
 
     function poolCollectEntries() {
@@ -2513,10 +2611,14 @@
     }
 
     function poolOpen() {
-      poolSetStatus('', false);
+      poolResetDraft();
       poolShow(true);
       try { poolRefreshExistingTagsHint(); } catch (e) {}
       try { poolRenderTable(); } catch (e) {}
+      try {
+        const input = $(POOL_IDS.input);
+        if (input) input.focus();
+      } catch (e) {}
     }
 
     function poolClose() {
@@ -2533,9 +2635,7 @@
       wireButton(POOL_IDS.cancel, poolClose);
 
       wireButton(POOL_IDS.clear, () => {
-        _poolEntries = [];
-        poolRenderTable();
-        poolSetStatus('', false);
+        poolResetDraft();
       });
 
       wireButton(POOL_IDS.add, () => {
@@ -2546,20 +2646,26 @@
           poolSetStatus('Не нашёл строк со ссылками.', true);
           return;
         }
-        // Merge into state (upsert by tag)
+        // Merge into state (explicit tag -> update existing, auto tag -> keep unique)
         const byTag = new Map();
         _poolEntries.forEach((e) => {
-          const t = String(e.tag || '').trim();
-          if (t) byTag.set(t, { tag: t, url: String(e.url || '') });
+          const t = String((e && e.tag) || '').trim();
+          if (t) byTag.set(t, { tag: t, url: String((e && e.url) || '') });
         });
 
         const used = new Set(Array.from(byTag.keys()));
         add.forEach((e, idx) => {
-          let t = poolSanitizeTag(e.tag);
-          if (!t) t = poolSuggestTagFromUrl(e.url, idx + 1);
-          t = poolEnsureUniqueTag(t, used);
+          let t = poolSanitizeTag(e && e.tag);
+          const url = String((e && e.url) || '').trim();
+          const explicitTag = !!(e && e.explicitTag);
+          if (!t) t = poolSuggestTagFromUrl(url, idx + 1);
+
+          if (!explicitTag && used.has(t)) {
+            t = poolEnsureUniqueTag(t, used);
+          }
+
           used.add(t);
-          byTag.set(t, { tag: t, url: String(e.url || '').trim() });
+          byTag.set(t, { tag: t, url });
         });
 
         _poolEntries = Array.from(byTag.values());
@@ -2575,6 +2681,7 @@
       });
 
       wireButton(POOL_IDS.save, poolSave);
+      try { poolSyncUiState(); } catch (e) {}
 
       // Esc closes modal
       document.addEventListener('keydown', (e) => {

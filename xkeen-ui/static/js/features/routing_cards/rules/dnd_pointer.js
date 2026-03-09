@@ -86,6 +86,15 @@
       try { return !!ctx.isEnabled(); } catch (e) { return true; }
     }
 
+    function setDragLive(on, mode) {
+      try {
+        listEl.classList.toggle('is-dnd-live', !!on);
+        if (on && mode) listEl.setAttribute('data-dnd-active', String(mode));
+        else listEl.removeAttribute('data-dnd-active');
+      } catch (e) {}
+      try { document.body.classList.toggle('xk-rules-dnd-live', !!on); } catch (e) {}
+    }
+
     function clearDropMarkers() {
       try {
         listEl.querySelectorAll('.routing-rule-card.is-drop-before,.routing-rule-card.is-drop-after').forEach((el) => {
@@ -205,6 +214,7 @@
       } catch (e) {}
 
       S._pDndStarted = true;
+      setDragLive(true, 'pointer');
       try { document.body.classList.add('xk-pointer-dnd-active'); } catch (e) {}
     }
 
@@ -292,6 +302,7 @@
       const toIdx = S._dropInsertIdx;
 
       pointerCleanupDom();
+      setDragLive(false);
       pointerResetState();
 
       // If we never started (small tap), do nothing.
@@ -382,6 +393,7 @@
 
       S._dragRuleIdx = idx;
       S._dropInsertIdx = null;
+      setDragLive(true, 'native');
       try { card.classList.add('is-dragging'); } catch (e) {}
       try {
         ev.dataTransfer.effectAllowed = 'move';
@@ -390,6 +402,7 @@
     };
 
     const onDragEnd = function () {
+      setDragLive(false);
       cleanupNativeDom();
     };
 
@@ -427,6 +440,7 @@
 
       const fromIdx = Number(S._dragRuleIdx);
       const toIdx = S._dropInsertIdx;
+      setDragLive(false);
       cleanupNativeDom();
 
       if (toIdx == null || !Number.isFinite(Number(toIdx))) return;
@@ -446,6 +460,7 @@
 
     const onWinDragEnd = function () {
       if (!enabledNow()) return;
+      setDragLive(false);
       cleanupNativeDom();
     };
 
@@ -456,6 +471,7 @@
       if (S._pDndActive) {
         pointerEnd(false);
       } else {
+        setDragLive(false);
         // Still ensure no leftovers.
         pointerCleanupDom();
         pointerResetState();

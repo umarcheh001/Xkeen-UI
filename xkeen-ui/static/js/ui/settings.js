@@ -31,6 +31,10 @@
       // Xray logs view preferences (migrated from localStorage in Commit 14)
       view: {},
     },
+    routing: {
+      guiEnabled: true,
+      autoApply: true,
+    },
   };
 
   // Simple deep clone for JSON-like values.

@@ -67,6 +67,12 @@ DEFAULTS: Dict[str, Any] = {
         # client storage on first use.
         "view": {},
     },
+    "routing": {
+        # Show extra GUI layer for routing rules card.
+        "guiEnabled": True,
+        # Auto-apply routing card edits back into the JSON editor.
+        "autoApply": True,
+    },
 }
 
 
@@ -123,6 +129,10 @@ def _canonical_empty() -> Dict[str, Any]:
             "ansi": bool(DEFAULTS["logs"]["ansi"]),
             "ws2": bool(DEFAULTS["logs"]["ws2"]),
             "view": {},
+        },
+        "routing": {
+            "guiEnabled": bool(DEFAULTS["routing"]["guiEnabled"]),
+            "autoApply": bool(DEFAULTS["routing"]["autoApply"]),
         },
     }
 
@@ -321,9 +331,38 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.warnings.append({"path": f"logs.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
+    # ---- routing ----
+    routing_raw = raw.get("routing")
+    if routing_raw is None:
+        pass
+    elif not isinstance(routing_raw, dict):
+        rep.warnings.append({"path": "routing", "warning": "must be an object; reset"})
+        rep.changed = True
+    else:
+        gui_enabled = routing_raw.get("guiEnabled")
+        if gui_enabled is not None:
+            if _is_bool(gui_enabled):
+                out["routing"]["guiEnabled"] = bool(gui_enabled)
+            else:
+                rep.warnings.append({"path": "routing.guiEnabled", "warning": "invalid type; ignored"})
+                rep.changed = True
+
+        auto_apply = routing_raw.get("autoApply")
+        if auto_apply is not None:
+            if _is_bool(auto_apply):
+                out["routing"]["autoApply"] = bool(auto_apply)
+            else:
+                rep.warnings.append({"path": "routing.autoApply", "warning": "invalid type; ignored"})
+                rep.changed = True
+
+        for k in routing_raw.keys():
+            if k not in ("guiEnabled", "autoApply"):
+                rep.warnings.append({"path": f"routing.{k}", "warning": "unknown key dropped"})
+                rep.changed = True
+
     # ---- top-level unknown keys ----
     for k in raw.keys():
-        if k not in ("schemaVersion", "editor", "format", "logs"):
+        if k not in ("schemaVersion", "editor", "format", "logs", "routing"):
             rep.warnings.append({"path": k, "warning": "unknown key dropped"})
             rep.changed = True
 
@@ -448,8 +487,36 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
             if p:
                 out["logs"] = p
 
+    # routing
+    if "routing" in patch:
+        routing_patch = patch.get("routing")
+        if not isinstance(routing_patch, dict):
+            rep.errors.append({"path": "routing", "error": "must be an object"})
+        else:
+            p: Dict[str, Any] = {}
+            if "guiEnabled" in routing_patch:
+                v = routing_patch.get("guiEnabled")
+                if _is_bool(v):
+                    p["guiEnabled"] = bool(v)
+                else:
+                    rep.errors.append({"path": "routing.guiEnabled", "error": "must be boolean"})
+
+            if "autoApply" in routing_patch:
+                v = routing_patch.get("autoApply")
+                if _is_bool(v):
+                    p["autoApply"] = bool(v)
+                else:
+                    rep.errors.append({"path": "routing.autoApply", "error": "must be boolean"})
+
+            for k in routing_patch.keys():
+                if k not in ("guiEnabled", "autoApply"):
+                    rep.warnings.append({"path": f"routing.{k}", "warning": "unknown key dropped"})
+
+            if p:
+                out["routing"] = p
+
     for k in patch.keys():
-        if k not in ("schemaVersion", "editor", "format", "logs"):
+        if k not in ("schemaVersion", "editor", "format", "logs", "routing"):
             rep.warnings.append({"path": k, "warning": "unknown key dropped"})
 
     return out, rep

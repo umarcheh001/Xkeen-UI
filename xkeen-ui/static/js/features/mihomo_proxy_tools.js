@@ -19,6 +19,7 @@
 
     select: 'mihomo-proxy-tools-select',
     status: 'mihomo-proxy-tools-status',
+    current: 'mihomo-proxy-tools-current',
 
     noProxiesBox: 'mihomo-proxy-tools-no-proxies',
     noProxiesText: 'mihomo-proxy-tools-no-proxies-text',
@@ -52,8 +53,19 @@
   function setStatus(msg, isErr) {
     const el = $(IDS.status);
     if (!el) return;
-    el.textContent = String(msg || '');
-    el.classList.toggle('error', !!isErr);
+    const value = String(msg || '').trim();
+    el.textContent = value;
+    el.classList.toggle('hidden', !value);
+    el.classList.toggle('error', !!value && !!isErr);
+    el.classList.toggle('success', !!value && !isErr);
+  }
+
+  function syncCurrentProxyBadge(name) {
+    const el = $(IDS.current);
+    if (!el) return;
+    const value = String(name || '').trim();
+    el.textContent = value || '— не выбран —';
+    el.classList.toggle('is-empty', !value);
   }
 
   function setNoProxiesUi(show, msg) {
@@ -62,6 +74,7 @@
     const wrap = $(IDS.actionsWrap);
 
     if (txt) txt.textContent = String(msg || '');
+    if (show) syncCurrentProxyBadge('');
     if (box) {
       box.classList.toggle('hidden', !show);
       try { box.style.display = show ? 'block' : 'none'; } catch (e) {}
@@ -223,15 +236,76 @@
     );
   }
 
+  function insertIntoExistingEmptyProxies(yamlText) {
+    const original = String(yamlText ?? '');
+    const nl = original.includes('\r\n') ? '\r\n' : '\n';
+    const lines = original.replace(/\r\n?/g, '\n').split('\n');
+
+    let proxiesIdx = -1;
+    let endIdx = lines.length;
+    for (let i = 0; i < lines.length; i++) {
+      if (/^proxies\s*:\s*(#.*)?$/.test(String(lines[i] || ''))) {
+        proxiesIdx = i;
+        for (let j = i + 1; j < lines.length; j++) {
+          const ln = String(lines[j] || '');
+          if (!ln.trim() || /^\s*#/.test(ln)) continue;
+          if (!/^\s/.test(ln) && /^[A-Za-z0-9_\-]+\s*:/.test(ln)) {
+            endIdx = j;
+            break;
+          }
+        }
+        break;
+      }
+    }
+
+    if (proxiesIdx === -1) return { content: original, changed: false, reason: 'missing' };
+
+    let hasNamedProxy = false;
+    for (let i = proxiesIdx + 1; i < endIdx; i++) {
+      if (/^\s*-\s*name\s*:\s*/.test(String(lines[i] || ''))) {
+        hasNamedProxy = true;
+        break;
+      }
+    }
+    if (hasNamedProxy) return { content: original, changed: false, reason: 'non_empty' };
+
+    const bodyLines = [
+      '  # Добавлен шаблон статического узла. Замените на ваш реальный прокси.',
+      '  - name: "static-proxy-1"',
+      '    type: socks5',
+      '    server: 127.0.0.1',
+      '    port: 1080',
+      '    udp: true',
+      ''
+    ];
+
+    if (/^proxies\s*:\s*\[\s*\]\s*(#.*)?$/.test(String(lines[proxiesIdx] || ''))) {
+      lines.splice(proxiesIdx, 1, 'proxies:', ...bodyLines);
+    } else {
+      lines.splice(proxiesIdx + 1, 0, ...bodyLines);
+    }
+
+    return {
+      content: lines.join('\n').replace(/\n/g, nl),
+      changed: true,
+      inserted_name: 'static-proxy-1',
+      reason: 'filled_empty_section',
+    };
+  }
+
   function insertProxiesTemplate(yamlText) {
     const original = String(yamlText ?? '');
     const nl = original.includes('\r\n') ? '\r\n' : '\n';
 
-    if (hasTopLevelKey(original, 'proxies')) return { content: original, changed: false, reason: 'exists' };
+    if (hasTopLevelKey(original, 'proxies')) {
+      const filled = insertIntoExistingEmptyProxies(original);
+      if (filled && filled.changed) return filled;
+      return { content: original, changed: false, reason: 'exists' };
+    }
 
     const tpl = buildProxiesTemplate(nl);
 
-    const reCommented = new RegExp('^\\s*#\\s*proxies\\s*:\\s*(#.*)?$', 'm');
+    const reCommented = new RegExp('^\s*#\s*proxies\s*:\s*(#.*)?$', 'm');
     if (reCommented.test(original)) {
       const patched = original.replace(reCommented, tpl.trimEnd());
       return { content: patched, changed: true, inserted_name: 'static-proxy-1', reason: 'replaced_commented' };
@@ -268,6 +342,7 @@
       opt.value = '';
       opt.textContent = '— нет proxies —';
       sel.appendChild(opt);
+      syncCurrentProxyBadge('');
       return;
     }
 
@@ -280,6 +355,7 @@
 
     const chosen = (preferName && list.includes(preferName)) ? preferName : list[0];
     try { sel.value = chosen; } catch (e) {}
+    syncCurrentProxyBadge(chosen);
   }
 
   function selectedProxyName() {
@@ -304,6 +380,7 @@
 
   function onOpen() {
     clearTransientUi();
+    syncCurrentProxyBadge('');
 
     const cfg = getEditorText();
     const names = parseProxyNamesFromYaml(cfg);
@@ -375,6 +452,8 @@
     if (newName === oldName) return setStatus('Новое имя совпадает со старым.', true);
 
     const cfg = getEditorText();
+    const existing = parseProxyNamesFromYaml(cfg);
+    if (existing.includes(newName)) return setStatus('Узел с таким именем уже существует.', true);
     const btn = $(IDS.renameBtn);
     if (btn) { btn.disabled = true; btn.classList.add('loading'); }
 
@@ -395,9 +474,13 @@
       const names = parseProxyNamesFromYaml(patched);
       renderProxySelect(names, newName);
 
+      _prepared = null;
+      const prev = $(IDS.replacePreview);
+      if (prev) prev.value = '';
+      const repBtn = $(IDS.replaceBtn);
+      if (repBtn) repBtn.disabled = true;
       setStatus('Переименовано ✅', false);
       toastMsg('Прокси переименован ✅', false);
-      clearTransientUi(); // clear prepared replace state
     } catch (e) {
       console.error(e);
       setStatus('Ошибка rename: ' + (e && e.message ? e.message : String(e || 'ошибка')), true);
@@ -524,6 +607,7 @@
   function onSelectChange() {
     // reset prepared state and preview when user changes target
     clearTransientUi();
+    syncCurrentProxyBadge(selectedProxyName());
   }
 
   PT.init = function init() {
@@ -548,6 +632,18 @@
     if (sel && (!sel.dataset || sel.dataset.xkWired !== '1')) {
       sel.addEventListener('change', () => { try { onSelectChange(); } catch (e) {} });
       if (sel.dataset) sel.dataset.xkWired = '1';
+    }
+
+    const repInput = $(IDS.replaceInput);
+    if (repInput && (!repInput.dataset || repInput.dataset.xkWired !== '1')) {
+      repInput.addEventListener('input', () => { try { clearTransientUi(); syncCurrentProxyBadge(selectedProxyName()); } catch (e) {} });
+      if (repInput.dataset) repInput.dataset.xkWired = '1';
+    }
+
+    const repType = $(IDS.replaceType);
+    if (repType && (!repType.dataset || repType.dataset.xkWired !== '1')) {
+      repType.addEventListener('change', () => { try { clearTransientUi(); syncCurrentProxyBadge(selectedProxyName()); } catch (e) {} });
+      if (repType.dataset) repType.dataset.xkWired = '1';
     }
 
     // Close on backdrop click

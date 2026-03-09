@@ -72,23 +72,39 @@ M.sanitizeModelForExport = function (model) {
     balancers: (Array.isArray(mm.balancers) ? mm.balancers : []).map(_stripInternalDeep),
   };
 };
+
+  function _editorDirtyFromCards() {
+    return !!S._editorDirtyFromCards;
+  }
+
+  function _isApplyButtonDirty() {
+    return !!S._dirty || _editorDirtyFromCards();
+  }
+
+  function refreshApplyButtonState() {
+    const btn = $(IDS.rulesApply);
+    if (!btn) return;
+    const dirty = _isApplyButtonDirty();
+    const tip = dirty
+      ? (S._dirty
+          ? 'Применить изменения в JSON-редактор (есть несохранённые изменения в карточках)'
+          : 'Изменения из карточек уже попали в редактор, но сам файл ещё не сохранён')
+      : 'Применить изменения в JSON-редактор';
+    const label = dirty
+      ? (S._dirty ? 'Применить в JSON (есть изменения)' : 'Изменения из карточек применены в редактор')
+      : 'Применить в JSON';
+    if (btn.classList && btn.classList.contains('btn-icon')) {
+      btn.classList.toggle('is-dirty', dirty);
+      btn.setAttribute('data-tooltip', tip);
+      btn.setAttribute('aria-label', label);
+    } else {
+      btn.textContent = dirty ? '💾 Применить в JSON *' : '💾 Применить в JSON';
+    }
+  }
+
   function markDirty(v) {
     S._dirty = !!v;
-    const btn = $(IDS.rulesApply);
-    if (btn) {
-      // In compact UI we keep icon-only apply button and show "dirty" via styling + tooltip.
-      if (btn.classList && btn.classList.contains('btn-icon')) {
-        btn.classList.toggle('is-dirty', S._dirty);
-        btn.setAttribute('data-tooltip', S._dirty
-          ? 'Применить изменения в JSON-редактор (есть несохранённые изменения)'
-          : 'Применить изменения в JSON-редактор');
-        btn.setAttribute('aria-label', S._dirty
-          ? 'Применить в JSON (есть изменения)'
-          : 'Применить в JSON');
-      } else {
-        btn.textContent = S._dirty ? '💾 Применить в JSON *' : '💾 Применить в JSON';
-      }
-    }
+    refreshApplyButtonState();
   }
 
   function extractRoutingFromRoot(root) {
@@ -133,6 +149,11 @@ M.sanitizeModelForExport = function (model) {
     const { root, routing, hasKey } = extractRoutingFromRoot(parsed);
     S._root = root;
     S._rootHasKey = hasKey;
+    S._routingKeyPresence = {
+      domainStrategy: !!(routing && typeof routing === 'object' && !Array.isArray(routing) && Object.prototype.hasOwnProperty.call(routing, 'domainStrategy')),
+      rules: !!(routing && typeof routing === 'object' && !Array.isArray(routing) && Object.prototype.hasOwnProperty.call(routing, 'rules')),
+      balancers: !!(routing && typeof routing === 'object' && !Array.isArray(routing) && Object.prototype.hasOwnProperty.call(routing, 'balancers')),
+    };
 
     const model = {
       domainStrategy: String(routing.domainStrategy || ''),
@@ -167,14 +188,91 @@ M.sanitizeModelForExport = function (model) {
     return { ok: true, model };
   }
 
+
+  function _normTag(tag) {
+    return String(tag || '').trim();
+  }
+
+  function countRulesUsingBalancer(tag) {
+    const t = _normTag(tag);
+    if (!t) return 0;
+    const m = ensureModel();
+    const rules = Array.isArray(m.rules) ? m.rules : [];
+    let n = 0;
+    rules.forEach((r) => {
+      if (!r || typeof r !== 'object' || Array.isArray(r)) return;
+      if (_normTag(r.balancerTag) === t) n += 1;
+    });
+    return n;
+  }
+
+  function retargetRulesForBalancer(oldTag, newTag) {
+    const from = _normTag(oldTag);
+    const to = _normTag(newTag);
+    if (!from || !to || from === to) return 0;
+    const m = ensureModel();
+    const rules = Array.isArray(m.rules) ? m.rules : [];
+    let changed = 0;
+    rules.forEach((r) => {
+      if (!r || typeof r !== 'object' || Array.isArray(r)) return;
+      if (_normTag(r.balancerTag) !== from) return;
+      r.balancerTag = to;
+      changed += 1;
+    });
+    return changed;
+  }
+
+  function removeBalancerAt(idx, opts) {
+    const o = opts || {};
+    const removeRules = (o.removeRules !== false);
+    const m = ensureModel();
+    if (!Array.isArray(m.balancers)) m.balancers = [];
+    if (!Array.isArray(m.rules)) m.rules = [];
+    const i = Number(idx);
+    if (!Number.isInteger(i) || i < 0 || i >= m.balancers.length) {
+      return { ok: false, removed: null, removedTag: '', removedRules: 0 };
+    }
+
+    const removed = m.balancers[i];
+    const removedTag = _normTag(removed && removed.tag);
+    m.balancers.splice(i, 1);
+
+    let removedRules = 0;
+    if (removeRules && removedTag) {
+      const nextRules = [];
+      m.rules.forEach((r) => {
+        if (!r || typeof r !== 'object' || Array.isArray(r)) {
+          nextRules.push(r);
+          return;
+        }
+        if (_normTag(r.balancerTag) === removedTag) {
+          removedRules += 1;
+          return;
+        }
+        nextRules.push(r);
+      });
+      m.rules = nextRules;
+    }
+
+    return { ok: true, removed, removedTag, removedRules };
+  }
+
   function buildRootFromModel() {
     const m = ensureModel();
+    const presence = S._routingKeyPresence || {};
+    const baseRouting = S._rootHasKey ? (S._root && S._root.routing ? S._root.routing : {}) : (S._root || {});
     const routing = {
-      ...(S._rootHasKey ? (S._root && S._root.routing ? S._root.routing : {}) : (S._root || {})),
-      domainStrategy: m.domainStrategy || undefined,
+      ...baseRouting,
       rules: (Array.isArray(m.rules) ? m.rules : []).map(_stripInternalDeep),
-      balancers: (Array.isArray(m.balancers) ? m.balancers : []).map(_stripInternalDeep),
     };
+
+    const domainStrategy = String(m.domainStrategy || '').trim();
+    if (domainStrategy || presence.domainStrategy) routing.domainStrategy = domainStrategy || undefined;
+    else delete routing.domainStrategy;
+
+    const balancers = (Array.isArray(m.balancers) ? m.balancers : []).map(_stripInternalDeep);
+    if (balancers.length || presence.balancers) routing.balancers = balancers;
+    else delete routing.balancers;
 
     // Clean undefined keys
     Object.keys(routing).forEach((k) => {
@@ -191,9 +289,24 @@ M.sanitizeModelForExport = function (model) {
     return out;
   }
 
+
+  try {
+    if (!document.__xkRulesApplyDirtyHooked) {
+      document.addEventListener('xkeen:routing-editor-dirty', function (ev) {
+        try {
+          const dirty = !!(ev && ev.detail && ev.detail.dirty);
+          if (!dirty) S._editorDirtyFromCards = false;
+          refreshApplyButtonState();
+        } catch (e) {}
+      });
+      document.__xkRulesApplyDirtyHooked = true;
+    }
+  } catch (e) {}
+
   // Public interface
   M.ensureModel = ensureModel;
   M.markDirty = markDirty;
+  M.refreshApplyButtonState = refreshApplyButtonState;
   M.extractRoutingFromRoot = extractRoutingFromRoot;
 
   M.loadModelFromEditor = loadModelFromEditor;
@@ -201,4 +314,8 @@ M.sanitizeModelForExport = function (model) {
 
   M.buildRootFromModel = buildRootFromModel;
   M.buildRoot = buildRootFromModel;
+
+  M.countRulesUsingBalancer = countRulesUsingBalancer;
+  M.retargetRulesForBalancer = retargetRulesForBalancer;
+  M.removeBalancerAt = removeBalancerAt;
 })();

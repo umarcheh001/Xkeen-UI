@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
+import tempfile
 from typing import Any, Callable, Dict, Optional
 
 from flask import Blueprint, request, jsonify, current_app
@@ -55,6 +58,94 @@ def _core_log(level: str, msg: str, **extra) -> None:
             _CORE_LOGGER.info(full)
     except Exception:
         pass
+
+
+def _shorten_text(s: str, limit: int = 4000) -> str:
+    s = str(s or '').strip()
+    if len(s) <= limit:
+        return s
+    return s[:limit] + "\n... [truncated]"
+
+
+def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) -> Dict[str, Any]:
+    """Validate Xray configs with edited fragment injected into a temp confdir."""
+    xray_bin = '/opt/sbin/xray' if os.path.exists('/opt/sbin/xray') else 'xray'
+    confdir = xray_configs_dir_real or os.environ.get('XRAY_CONFDIR') or '/opt/etc/xray/configs'
+    test_timeout = max(5, int(os.environ.get('XKEEN_XRAY_TEST_TIMEOUT', '15') or '15'))
+
+    if not os.path.isdir(confdir):
+        return {
+            'ok': False,
+            'error': 'xray config dir not found',
+            'phase': 'xray_test',
+            'cmd': f'{xray_bin} -test -confdir {confdir}',
+            'hint': 'Не найден каталог конфигурации Xray.',
+        }
+
+    try:
+        with tempfile.TemporaryDirectory(prefix='xkeen-xray-test-') as tmpdir:
+            for name in os.listdir(confdir):
+                src = os.path.join(confdir, name)
+                dst = os.path.join(tmpdir, name)
+                try:
+                    if os.path.isdir(src) and not os.path.islink(src):
+                        shutil.copytree(src, dst, symlinks=True)
+                    else:
+                        shutil.copy2(src, dst, follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+
+            target = os.path.join(tmpdir, os.path.basename(sel_main))
+            d = os.path.dirname(target)
+            if d and not os.path.isdir(d):
+                os.makedirs(d, exist_ok=True)
+            with open(target, 'w', encoding='utf-8') as f:
+                json.dump(obj, f, ensure_ascii=False, indent=2)
+                f.write('\n')
+
+            cmd = [xray_bin, '-test', '-confdir', tmpdir]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=test_timeout, check=False)
+            stdout = _shorten_text(proc.stdout or '')
+            stderr = _shorten_text(proc.stderr or '')
+            if proc.returncode == 0:
+                return {'ok': True, 'phase': 'xray_test', 'cmd': ' '.join(cmd), 'stdout': stdout, 'stderr': stderr}
+            return {
+                'ok': False,
+                'error': 'xray test failed',
+                'phase': 'xray_test',
+                'cmd': ' '.join(cmd),
+                'returncode': proc.returncode,
+                'stdout': stdout,
+                'stderr': stderr,
+                'hint': 'Xray не принял конфиг. Исправьте ошибку и повторите сохранение.',
+            }
+    except FileNotFoundError:
+        return {
+            'ok': False,
+            'error': 'xray binary not found',
+            'phase': 'xray_test',
+            'cmd': f'{xray_bin} -test -confdir {confdir}',
+            'hint': 'Не найден бинарник Xray для preflight-проверки.',
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            'ok': False,
+            'error': 'xray test timeout',
+            'phase': 'xray_test',
+            'cmd': f'{xray_bin} -test -confdir {confdir}',
+            'timeout_s': test_timeout,
+            'stdout': _shorten_text(getattr(exc, 'stdout', '') or ''),
+            'stderr': _shorten_text(getattr(exc, 'stderr', '') or ''),
+            'hint': 'Таймаут проверки конфигурации Xray.',
+        }
+    except Exception as exc:
+        return {
+            'ok': False,
+            'error': f'preflight exception: {exc}',
+            'phase': 'xray_test',
+            'cmd': f'{xray_bin} -test -confdir {confdir}',
+            'hint': 'Не удалось выполнить preflight-проверку Xray.',
+        }
 
 
 def register_config_routes(
@@ -300,6 +391,31 @@ def register_config_routes(
             obj = json.loads(cleaned)
         except Exception as e:
             return jsonify({"ok": False, "error": f"invalid json: {e}"}), 400
+
+        preflight = _run_xray_preflight(
+            xray_configs_dir_real=xray_configs_dir_real,
+            sel_main=sel_main,
+            obj=obj,
+        )
+        if not preflight.get("ok"):
+            _core_log(
+                "warning",
+                "routing.save.preflight_failed",
+                file=os.path.basename(str(sel_main or "")),
+                returncode=preflight.get("returncode"),
+                error=str(preflight.get("error") or ""),
+            )
+            return jsonify({
+                "ok": False,
+                "error": "xray preflight failed",
+                "phase": preflight.get("phase"),
+                "cmd": preflight.get("cmd"),
+                "returncode": preflight.get("returncode"),
+                "timeout_s": preflight.get("timeout_s"),
+                "stdout": preflight.get("stdout"),
+                "stderr": preflight.get("stderr"),
+                "hint": preflight.get("hint"),
+            }), 400
 
         try:
             if _snapshot_before_overwrite and backup_dir and backup_dir_real:

@@ -267,6 +267,40 @@
   }
 
   // Show a toast when ONLY Xray core has been restarted (no xkeen-ui restart).
+
+  function handleRoutingPreflightErrorFromResponse(url, response) {
+    if (!response || response.ok || !response.headers || typeof response.clone !== 'function') return;
+
+    const loc = parseUrl(url);
+    const path = loc ? loc.pathname : String(url || '');
+    if (path !== '/api/routing') return;
+
+    const ct = response.headers.get && response.headers.get('Content-Type')
+      ? String(response.headers.get('Content-Type') || '')
+      : '';
+    if (!ct || ct.indexOf('application/json') === -1) return;
+
+    try {
+      response.clone().json().then(function (data) {
+        if (!data || String(data.error || '') !== 'xray preflight failed') return;
+
+        try {
+          if (window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function') {
+            XKeen.ui.showXrayPreflightError(data);
+            return;
+          }
+        } catch (e) {}
+
+        try {
+          const summary = (data && (data.hint || data.stderr || data.stdout || data.error)) ? String(data.hint || data.stderr || data.stdout || data.error) : 'Xray не принял конфиг.';
+          if (typeof window.alert === 'function') window.alert(summary);
+        } catch (e2) {}
+      }).catch(function () {});
+    } catch (e) {
+      // ignore
+    }
+  }
+
   function handleXrayRestartFromResponse(url, response) {
     if (!response || !response.headers || typeof response.clone !== 'function') return;
 
@@ -329,6 +363,7 @@
 
     if (!spinnerConfig) {
       return origFetch(input, opts).then(function (res) {
+        try { handleRoutingPreflightErrorFromResponse(url, res); } catch (e) {}
         try { handleXkeenRestartFromResponse(url, res); } catch (e) {}
         try { handleXrayRestartFromResponse(url, res); } catch (e) {}
         return res;
@@ -356,6 +391,7 @@
       .then(function (res) {
         try { if (timeoutId) window.clearTimeout(timeoutId); } catch (e) {}
         hideGlobalXkeenSpinner();
+        try { handleRoutingPreflightErrorFromResponse(url, res); } catch (e) {}
         try { handleXkeenRestartFromResponse(url, res); } catch (e) {}
         try { handleXrayRestartFromResponse(url, res); } catch (e) {}
         return res;

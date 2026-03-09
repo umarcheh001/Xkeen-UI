@@ -944,7 +944,7 @@ async function submitEditTemplate() {
   async function confirmReplaceIfDirty() {
     // Detect unsaved changes
     const cm = (XK.state && XK.state.routingEditor) ? XK.state.routingEditor : null;
-    const ta = el('routing-textarea');
+    const ta = el('routing-editor') || el('routing-textarea');
 
     let current = '';
     if (cm && typeof cm.getValue === 'function') current = cm.getValue();
@@ -984,7 +984,7 @@ async function submitEditTemplate() {
 
   function getEditorText() {
     const cm = (XK.state && XK.state.routingEditor) ? XK.state.routingEditor : null;
-    const ta = el('routing-textarea');
+    const ta = el('routing-editor') || el('routing-textarea');
     if (cm && typeof cm.getValue === 'function') return String(cm.getValue() || '');
     if (ta) return String(ta.value || '');
     return '';
@@ -999,17 +999,36 @@ async function submitEditTemplate() {
     const ok = await confirmReplaceIfDirty();
     if (!ok) return;
 
-    const cm = (XK.state && XK.state.routingEditor) ? XK.state.routingEditor : null;
-    const ta = el('routing-textarea');
+    let replaced = false;
+    try {
+      if (XK.routing && typeof XK.routing.replaceEditorText === 'function') {
+        XK.routing.replaceEditorText(_selectedContent, {
+          reason: 'template-import',
+          markDirty: true,
+          scrollTop: true,
+        });
+        replaced = true;
+      }
+    } catch (e) {}
 
-    if (cm && typeof cm.setValue === 'function') {
-      cm.setValue(_selectedContent);
-      try { cm.scrollTo(0, 0); } catch (e) {}
-    } else if (ta) {
-      ta.value = _selectedContent;
+    if (!replaced) {
+      const cm = (XK.state && XK.state.routingEditor) ? XK.state.routingEditor : null;
+      const ta = el('routing-editor') || el('routing-textarea');
+
+      if (cm && typeof cm.setValue === 'function') {
+        cm.setValue(_selectedContent);
+        try { cm.scrollTo(0, 0); } catch (e) {}
+      } else if (ta) {
+        ta.value = _selectedContent;
+      }
+
+      markDirty();
+      try {
+        document.dispatchEvent(new CustomEvent('xkeen:routing-editor-content', {
+          detail: { reason: 'template-import', dirty: true, file: '' }
+        }));
+      } catch (e) {}
     }
-
-    markDirty();
 
     try {
       if (typeof window.toast === 'function') {

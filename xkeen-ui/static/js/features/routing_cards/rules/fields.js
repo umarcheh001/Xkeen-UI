@@ -192,6 +192,135 @@
     return label;
   }
 
+  function createChipInput(values, opts) {
+    const o = opts || {};
+    let items = normalizeListValue(values).map((v) => String(v).trim()).filter(Boolean);
+    const wrap = document.createElement('div');
+    wrap.className = 'routing-chip-editor';
+
+    const list = document.createElement('div');
+    list.className = 'routing-chip-list';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'routing-chip-input';
+    input.spellcheck = false;
+    if (o.placeholder) input.placeholder = o.placeholder;
+    if (o.ariaLabel) input.setAttribute('aria-label', o.ariaLabel);
+    input.setAttribute('data-chip-input', '1');
+
+    function uniqueItems(arr) {
+      const out = [];
+      const seen = new Set();
+      (Array.isArray(arr) ? arr : []).forEach((raw) => {
+        const s = String(raw == null ? '' : raw).trim();
+        if (!s) return;
+        if (seen.has(s)) return;
+        seen.add(s);
+        out.push(s);
+      });
+      return out;
+    }
+
+    function emitChange() {
+      if (typeof o.onChange === 'function') o.onChange(items.slice());
+    }
+
+    function render() {
+      list.innerHTML = '';
+      items.forEach((item, idx) => {
+        const chip = document.createElement('span');
+        chip.className = 'routing-chip';
+
+        const txt = document.createElement('span');
+        txt.className = 'routing-chip-text';
+        txt.textContent = item;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'routing-chip-remove';
+        btn.textContent = '×';
+        btn.setAttribute('aria-label', 'Удалить: ' + item);
+        btn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          items.splice(idx, 1);
+          render();
+          emitChange();
+          try { input.focus(); } catch (e) {}
+        });
+
+        chip.appendChild(txt);
+        chip.appendChild(btn);
+        list.appendChild(chip);
+      });
+      list.appendChild(input);
+    }
+
+    function commitRaw(raw) {
+      const next = splitMultiValue(raw);
+      if (!next.length) return false;
+      const merged = uniqueItems(items.concat(next));
+      const changed = JSON.stringify(merged) !== JSON.stringify(items);
+      items = merged;
+      input.value = '';
+      render();
+      if (changed) emitChange();
+      return changed;
+    }
+
+    input.addEventListener('keydown', (ev) => {
+      const key = String(ev.key || '');
+      if (key === 'Enter' || key === ',' || key === 'Tab') {
+        const raw = String(input.value || '').trim();
+        if (!raw) {
+          if (key === 'Enter' || key === ',') ev.preventDefault();
+          return;
+        }
+        ev.preventDefault();
+        commitRaw(raw);
+        return;
+      }
+      if (key === 'Backspace' && !String(input.value || '') && items.length) {
+        items = items.slice(0, -1);
+        render();
+        emitChange();
+      }
+    });
+
+    input.addEventListener('blur', () => {
+      const raw = String(input.value || '').trim();
+      if (raw) commitRaw(raw);
+    });
+
+    input.addEventListener('paste', (ev) => {
+      try {
+        const raw = String(ev.clipboardData && ev.clipboardData.getData ? ev.clipboardData.getData('text') : '');
+        if (!/[\n,]/.test(raw || '')) return;
+        ev.preventDefault();
+        commitRaw(raw);
+      } catch (e) {}
+    });
+
+    wrap.addEventListener('click', () => {
+      try { input.focus(); } catch (e) {}
+    });
+
+    wrap.appendChild(list);
+    render();
+
+    wrap.getValues = function () { return items.slice(); };
+    wrap.setValues = function (next) {
+      items = uniqueItems(normalizeListValue(next));
+      render();
+    };
+    wrap.focusInput = function () {
+      try { input.focus(); } catch (e) {}
+    };
+
+    return wrap;
+  }
+
   // Export helpers
   if (typeof F.normalizeListValue !== 'function') F.normalizeListValue = normalizeListValue;
   if (typeof F.splitMultiValue !== 'function') F.splitMultiValue = splitMultiValue;
@@ -205,4 +334,5 @@
   if (typeof F.createRuleInput !== 'function') F.createRuleInput = createRuleInput;
   if (typeof F.buildKeyLabel !== 'function') F.buildKeyLabel = buildKeyLabel;
   if (typeof F.buildField !== 'function') F.buildField = buildField;
+  if (typeof F.createChipInput !== 'function') F.createChipInput = createChipInput;
 })();

@@ -594,6 +594,27 @@ else
   echo "[*] sysmon: скрипт не найден в $SYS_MON_SRC (пропуск)"
 fi
 
+# --- Entware backup wrapper ---
+ENTWARE_BACKUP_SRC="$UI_DIR/tools/entware_backup.sh"
+ENTWARE_BACKUP_BIN="/opt/bin/entware-backup"
+
+if [ -f "$ENTWARE_BACKUP_SRC" ]; then
+  echo "[*] Устанавливаю entware-backup в $ENTWARE_BACKUP_BIN..."
+  cat > "$ENTWARE_BACKUP_BIN" <<'EOF'
+#!/bin/sh
+SCRIPT="/opt/etc/xkeen-ui/tools/entware_backup.sh"
+if [ ! -f "$SCRIPT" ]; then
+  echo "entware-backup: script not found: $SCRIPT" >&2
+  exit 127
+fi
+exec sh "$SCRIPT" "$@"
+EOF
+  chmod +x "$ENTWARE_BACKUP_BIN" 2>/dev/null || true
+  chmod +x "$ENTWARE_BACKUP_SRC" 2>/dev/null || true
+else
+  echo "[*] entware-backup: скрипт не найден в $ENTWARE_BACKUP_SRC (пропуск)"
+fi
+
 
 cleanup_legacy_xray_templates() {
   # Некоторые версии xkeen/xray могут подхватывать *.jsonc из /opt/etc/xray (recursive scan)
@@ -879,6 +900,27 @@ start_service() {
   STDOUT_LOG="$LOG_DIR/stdout.log"
   STDERR_LOG="$LOG_DIR/stderr.log"
   mkdir -p "$LOG_DIR" 2>/dev/null || true
+
+  if ! command -v nohup >/dev/null 2>&1; then
+    echo "Команда nohup не найдена. Пытаюсь установить пакет coreutils-nohup..."
+    if command -v opkg >/dev/null 2>&1; then
+      opkg update || true
+      if ! opkg install coreutils-nohup; then
+        echo "Не удалось установить coreutils-nohup автоматически."
+        echo "Установите пакет вручную: opkg install coreutils-nohup"
+        return 1
+      fi
+      if ! command -v nohup >/dev/null 2>&1; then
+        echo "Пакет coreutils-nohup установлен, но команда nohup по-прежнему недоступна."
+        echo "Проверьте PATH или установите пакет вручную: opkg install coreutils-nohup"
+        return 1
+      fi
+    else
+      echo "Команда nohup не найдена, и opkg недоступен для автоустановки."
+      echo "Установите пакет вручную: opkg install coreutils-nohup"
+      return 1
+    fi
+  fi
 
   nohup "$PYTHON_BIN" "$TARGET" >> "$STDOUT_LOG" 2>> "$STDERR_LOG" &
   echo $! > "$PID_FILE"

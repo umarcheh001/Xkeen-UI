@@ -206,9 +206,14 @@
           m.balancers.push(obj);
         } else {
           const prev = m.balancers[ctx.idx];
+          const prevTag = prev && prev.tag ? String(prev.tag).trim() : '';
+          const nextTag = obj && obj.tag ? String(obj.tag).trim() : '';
           const wasOpen = S._balOpenSet && S._balOpenSet.has(prev);
           if (S._balOpenSet) S._balOpenSet.delete(prev);
           m.balancers[ctx.idx] = obj;
+          if (prevTag && nextTag && prevTag !== nextTag && RM && typeof RM.retargetRulesForBalancer === 'function') {
+            try { RM.retargetRulesForBalancer(prevTag, nextTag); } catch (e) {}
+          }
           if (wasOpen && S._balOpenSet) S._balOpenSet.add(obj);
         }
       } else if (ctx.kind === 'balancerSelector') {

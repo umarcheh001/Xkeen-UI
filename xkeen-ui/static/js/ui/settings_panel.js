@@ -67,6 +67,8 @@
       'ui-setting-prefer-prettier',
       'ui-setting-logs-ansi',
       'ui-setting-logs-ws2',
+      'ui-setting-routing-gui',
+      'ui-setting-routing-autoapply',
     ];
     for (const id of ids) {
       const el = $(id);
@@ -109,6 +111,16 @@
     try {
       const cb3 = $('ui-setting-logs-ws2');
       if (cb3) cb3.checked = !!(st && st.logs && st.logs.ws2);
+    } catch (e) {}
+
+    try {
+      const cb4 = $('ui-setting-routing-gui');
+      if (cb4) cb4.checked = !(st && st.routing && st.routing.guiEnabled === false);
+    } catch (e) {}
+
+    try {
+      const cb5 = $('ui-setting-routing-autoapply');
+      if (cb5) cb5.checked = !(st && st.routing && st.routing.autoApply === false);
     } catch (e) {}
 
     setDisabled(false);
@@ -194,6 +206,20 @@
     if (cbWs2) {
       cbWs2.addEventListener('change', () => {
         patchSetting({ logs: { ws2: !!cbWs2.checked } }, cbWs2, 'WS2');
+      });
+    }
+
+    const cbRoutingGui = $('ui-setting-routing-gui');
+    if (cbRoutingGui) {
+      cbRoutingGui.addEventListener('change', () => {
+        patchSetting({ routing: { guiEnabled: !!cbRoutingGui.checked } }, cbRoutingGui, 'GUI Routing');
+      });
+    }
+
+    const cbRoutingAuto = $('ui-setting-routing-autoapply');
+    if (cbRoutingAuto) {
+      cbRoutingAuto.addEventListener('change', () => {
+        patchSetting({ routing: { autoApply: !!cbRoutingAuto.checked } }, cbRoutingAuto, 'Auto Apply');
       });
     }
   }

@@ -106,6 +106,36 @@
     }, 250));
   }
 
+  function wireEditorContentEvents() {
+    if (S.__rulesEditorContentWired) return;
+    S.__rulesEditorContentWired = true;
+
+    const onContent = debounce((ev) => {
+      if (!isViewVisible()) return;
+      const detail = (ev && ev.detail) ? ev.detail : {};
+      const body = $(IDS.rulesBody);
+      const isOpen = !!(body && body.style.display !== 'none');
+
+      // When GUI card is collapsed, keep the internal model fresh so the next open
+      // shows current JSON immediately, but skip expensive full re-render.
+      if (!isOpen) {
+        try {
+          const r = (RM && typeof RM.loadFromEditor === 'function')
+            ? RM.loadFromEditor({ setError: false })
+            : { ok: false };
+          if (r && r.ok) syncDomainStrategySelect();
+        } catch (e) {}
+        return;
+      }
+
+      renderFromEditor({ setError: !!detail.setError });
+    }, 140);
+
+    try {
+      document.addEventListener('xkeen:routing-editor-content', onContent);
+    } catch (e) {}
+  }
+
   function wireRulesControls() {
     // Avoid double wiring
     if (S.__rulesControlsWired) return;
@@ -230,12 +260,14 @@
     // Re-render after routing editor becomes ready
     document.addEventListener('xkeen-editors-ready', () => {
       try { hookEditorChanges(); } catch (e) {}
+      try { wireEditorContentEvents(); } catch (e) {}
       try { renderFromEditor({ setError: false }); } catch (e) {}
     });
 
     // If editor is already ready
     setTimeout(() => {
       try { hookEditorChanges(); } catch (e) {}
+      try { wireEditorContentEvents(); } catch (e) {}
       try { renderFromEditor({ setError: false }); } catch (e) {}
     }, 700);
   }
@@ -245,5 +277,6 @@
   CTRL.syncDomainStrategySelect = syncDomainStrategySelect;
   CTRL.renderFromEditor = renderFromEditor;
   CTRL.hookEditorChanges = hookEditorChanges;
+  CTRL.wireEditorContentEvents = wireEditorContentEvents;
   CTRL.initRulesCard = initRulesCard;
 })();
