@@ -164,6 +164,8 @@
       // Local sandbox boundary — not an actual error for UX.
       if (ae && String(ae.code || '') === 'path_not_allowed') {
         toast('FM: путь вне sandbox (см. XKEEN_LOCALFM_ROOTS)', 'info');
+        _clearPanelError(side);
+        _renderPanel(side);
         return false;
       }
 

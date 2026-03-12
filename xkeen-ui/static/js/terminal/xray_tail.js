@@ -29,6 +29,11 @@
 
   function setCtx(ctx) { __ctxRef = ctx || null; }
 
+  function resetRunningState() {
+    isRunning = false;
+    clearRestartTimer();
+  }
+
   function $(id) {
     try {
       const ctx = __ctxRef || (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core && window.XKeen.terminal.core.getCtx ? window.XKeen.terminal.core.getCtx() : null);
@@ -175,7 +180,7 @@
 
     try {
       const pty = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
-      if (pty && typeof pty.sendRaw === 'function') { pty.sendRaw(payload); return true; }
+      if (pty && typeof pty.sendRaw === 'function') return !!pty.sendRaw(payload);
     } catch (e2) {}
 
     return false;
@@ -269,8 +274,11 @@
     // Start on a fresh line + separator so restarts are visible
     sendPtyRaw('\r');
     sendPtyRaw(`echo "----- XRAY ${kind}.log (tail -f) -----"\r`);
-    sendPtyRaw(cmd + '\r');
-    isRunning = true;
+    isRunning = !!sendPtyRaw(cmd + '\r');
+    if (!isRunning) {
+      toast('PTY подключён, но tail не запустился.', true);
+      return;
+    }
     focusTerm();
   }
 
@@ -409,7 +417,10 @@
       const btn = $('terminal-btn-xraylogs');
       if (btn) btn.style.display = enabled ? '' : 'none';
     } catch (e) {}
-    if (!enabled) hideMenu();
+    if (!enabled) {
+      resetRunningState();
+      hideMenu();
+    }
   }
 
   // Export (optional)
@@ -437,7 +448,7 @@
       onClose: () => {
         try { unbindWhileOpen(); } catch (e) {}
         try { hideMenu(); } catch (e2) {}
-        try { clearRestartTimer(); } catch (e3) {}
+        try { resetRunningState(); } catch (e3) {}
         try { disposeUi(); } catch (e4) {}
         try { setCtx(null); } catch (e5) {}
       },

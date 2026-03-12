@@ -1053,7 +1053,9 @@ function closeHelp() {
     return false;
   }
 
-  function setError(message, line /* 0-based */) {
+  function setError(message, line /* 0-based */, options) {
+    const opts = (options && typeof options === 'object') ? options : null;
+    const autoScroll = !!(opts && opts.scroll);
     const errEl = $(IDS.error);
     if (errEl) errEl.textContent = String(message ?? '');
     if (!String(message ?? '')) clearJsonErrorLocation();
@@ -1076,7 +1078,7 @@ function closeHelp() {
         { line, ch: Math.max(1, lineText.length) },
         { className: 'cm-error-line' }
       );
-      if (_cm.scrollIntoView) _cm.scrollIntoView({ line, ch: 0 }, 200);
+      if (autoScroll && _cm.scrollIntoView) _cm.scrollIntoView({ line, ch: 0 }, 200);
     } catch (e) {
       // ignore
     }
@@ -1084,10 +1086,28 @@ function closeHelp() {
 
   function extractJsonErrorPos(err) {
     const msg = String(err && err.message ? err.message : '');
-    const m = /position\s+(\d+)/i.exec(msg);
+    const m = /(?:at\s+)?position\s+(\d+)/i.exec(msg);
     if (!m) return null;
     const n = parseInt(m[1], 10);
     return Number.isFinite(n) ? n : null;
+  }
+
+  function extractJsonErrorLineCol(err) {
+    const directLine = Number.isFinite(err && err.lineNumber) ? Math.floor(err.lineNumber)
+      : (Number.isFinite(err && err.line) ? Math.floor(err.line) : null);
+    const directCol = Number.isFinite(err && err.columnNumber) ? Math.floor(err.columnNumber)
+      : (Number.isFinite(err && err.column) ? Math.floor(err.column) : null);
+    if (directLine && directCol) {
+      return { line: Math.max(1, directLine), col: Math.max(1, directCol) };
+    }
+
+    const msg = String(err && err.message ? err.message : err || '');
+    const m = /line\s+(\d+)\D+column\s+(\d+)/i.exec(msg);
+    if (!m) return null;
+    const line = parseInt(m[1], 10);
+    const col = parseInt(m[2], 10);
+    if (!Number.isFinite(line) || !Number.isFinite(col)) return null;
+    return { line: Math.max(1, line), col: Math.max(1, col) };
   }
 
   function posToLineCh(text, pos) {
@@ -1107,13 +1127,33 @@ function closeHelp() {
     return { line, ch: Math.max(0, p - (lastNL + 1)) };
   }
 
+  function lineColToIndex(text, line1, col1) {
+    const s = String(text ?? '');
+    const targetLine = Math.max(1, Number.isFinite(line1) ? Math.floor(line1) : 1);
+    const targetCol = Math.max(1, Number.isFinite(col1) ? Math.floor(col1) : 1);
+
+    let line = 1;
+    let i = 0;
+    while (i < s.length && line < targetLine) {
+      if (s.charCodeAt(i) === 10) line++;
+      i++;
+    }
+    return Math.max(0, Math.min(i + targetCol - 1, s.length));
+  }
+
   // ------------------------ Monaco diagnostics (JSON markers) ------------------------
 
   function stripJsonCommentsWithMap(input) {
-    // Returns { cleaned, map } where map[cleanedIndex] = rawIndex.
+    // Returns { cleaned, map } where removed comment chars are replaced with
+    // whitespace. This keeps line/column positions stable for parser errors.
     const raw = String(input ?? '');
     const cleaned = [];
     const map = [];
+
+    function pushMapped(ch, rawIndex) {
+      cleaned.push(ch);
+      map.push(rawIndex);
+    }
 
     let inString = false;
     let escape = false;
@@ -1124,8 +1164,7 @@ function closeHelp() {
       const ch = raw[i];
 
       if (inString) {
-        cleaned.push(ch);
-        map.push(i);
+        pushMapped(ch, i);
 
         if (escape) {
           escape = false;
@@ -1140,40 +1179,139 @@ function closeHelp() {
 
       if (ch === '"') {
         inString = true;
-        cleaned.push(ch);
-        map.push(i);
+        pushMapped(ch, i);
         i++;
         continue;
       }
 
       // Single-line comment //
       if (ch === '/' && i + 1 < n && raw[i + 1] === '/') {
+        pushMapped(' ', i);
+        pushMapped(' ', i + 1);
         i += 2;
-        while (i < n && raw[i] !== '\n') i++;
+        while (i < n && raw[i] !== '\n') {
+          pushMapped(raw[i] === '\r' ? '\r' : ' ', i);
+          i++;
+        }
         continue;
       }
 
       // Single-line comment starting with #
       if (ch === '#') {
+        pushMapped(' ', i);
         i++;
-        while (i < n && raw[i] !== '\n') i++;
+        while (i < n && raw[i] !== '\n') {
+          pushMapped(raw[i] === '\r' ? '\r' : ' ', i);
+          i++;
+        }
         continue;
       }
 
       // Multi-line comment /* ... */
       if (ch === '/' && i + 1 < n && raw[i + 1] === '*') {
+        pushMapped(' ', i);
+        pushMapped(' ', i + 1);
         i += 2;
-        while (i + 1 < n && !(raw[i] === '*' && raw[i + 1] === '/')) i++;
-        if (i + 1 < n) i += 2;
+        while (i < n) {
+          if (i + 1 < n && raw[i] === '*' && raw[i + 1] === '/') {
+            pushMapped(' ', i);
+            pushMapped(' ', i + 1);
+            i += 2;
+            break;
+          }
+          pushMapped((raw[i] === '\n' || raw[i] === '\r') ? raw[i] : ' ', i);
+          i++;
+        }
         continue;
       }
 
-      cleaned.push(ch);
-      map.push(i);
+      pushMapped(ch, i);
       i++;
     }
 
     return { cleaned: cleaned.join(''), map };
+  }
+
+  function probeJsonlintErrorLocation(cleanedText) {
+    try {
+      const lint = window.jsonlint && (window.jsonlint.parser || window.jsonlint);
+      if (!lint || typeof lint.parse !== 'function') return null;
+
+      const prevParseError = lint.parseError;
+      let captured = null;
+      lint.parseError = function(message, info) {
+        captured = { message, info };
+        const err = new Error(String(message || 'JSON parse error'));
+        err.__xkJsonlintInfo = info || null;
+        throw err;
+      };
+
+      try {
+        lint.parse(String(cleanedText ?? ''));
+      } catch (err) {
+        const info = (captured && captured.info) || err.__xkJsonlintInfo || null;
+        const loc = info && info.loc ? info.loc : null;
+        if (!loc) return null;
+        return {
+          message: String((captured && captured.message) || err.message || 'JSON parse error'),
+          line: Number.isFinite(loc.first_line) ? Math.max(1, Math.floor(loc.first_line)) : null,
+          col: Number.isFinite(loc.first_column) ? Math.max(1, Math.floor(loc.first_column) + 1) : null,
+        };
+      } finally {
+        lint.parseError = prevParseError;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function extractJsonErrorLocation(err, rawText, stripMap) {
+    const raw = String(rawText ?? '');
+    const sm = stripMap && typeof stripMap === 'object' ? stripMap : stripJsonCommentsWithMap(raw);
+    const cleaned = String(sm && sm.cleaned != null ? sm.cleaned : '');
+    const map = Array.isArray(sm && sm.map) ? sm.map : [];
+
+    const out = {
+      message: String((err && err.message) ? err.message : err || 'JSON parse error'),
+      index: 0,
+      line: 1,
+      col: 1,
+    };
+
+    let cleanedIndex = extractJsonErrorPos(err);
+    let lineCol = null;
+
+    if (cleanedIndex == null || !Number.isFinite(cleanedIndex)) {
+      // Browser-provided line/column for JSON.parse are inconsistent across
+      // engines. Some browsers report EOF for errors that actually happened
+      // much earlier, so prefer jsonlint's parser location when it exists.
+      const probed = probeJsonlintErrorLocation(cleaned);
+      if (probed && probed.line && probed.col) {
+        lineCol = { line: probed.line, col: probed.col };
+        if (!out.message && probed.message) out.message = String(probed.message);
+      } else {
+        lineCol = extractJsonErrorLineCol(err);
+      }
+    }
+
+    if ((cleanedIndex == null || !Number.isFinite(cleanedIndex)) && lineCol) {
+      cleanedIndex = lineColToIndex(cleaned, lineCol.line, lineCol.col);
+    }
+
+    if (!Number.isFinite(cleanedIndex)) cleanedIndex = 0;
+
+    let rawIndex = 0;
+    if (map.length) {
+      if (cleanedIndex >= map.length) rawIndex = raw.length;
+      else rawIndex = map[Math.max(0, cleanedIndex)];
+    } else {
+      rawIndex = Math.max(0, Math.min(cleanedIndex, raw.length));
+    }
+
+    const lc = posToLineCh(raw, rawIndex);
+    out.index = rawIndex;
+    out.line = lc.line + 1;
+    out.col = lc.ch + 1;
+    return out;
   }
 
   function clearMonacoMarkers() {
@@ -1252,18 +1390,9 @@ function closeHelp() {
       try { updateEditorMetaStatus(); } catch (e) {}
       return true;
     } catch (e) {
-      const msg = (e && e.message) ? String(e.message) : String(e);
-      const pos = extractJsonErrorPos(e) ?? 0;
-
-      let rawIdx = 0;
-      try {
-        if (sm && Array.isArray(sm.map) && sm.map.length) {
-          const p = Math.max(0, Math.min(pos, sm.map.length - 1));
-          rawIdx = sm.map[p];
-        }
-      } catch (e2) { rawIdx = 0; }
-
-      const lc = indexToMonacoLineCol(raw, rawIdx);
+      const loc = extractJsonErrorLocation(e, raw, sm);
+      const msg = String(loc && loc.message ? loc.message : ((e && e.message) ? e.message : e));
+      const lc = { line: loc.line, col: loc.col };
 
       try {
         const api = window.monaco;
@@ -1280,7 +1409,7 @@ function closeHelp() {
 
       const errMsg = 'Ошибка JSON: ' + msg;
       setError(errMsg, null);
-      setJsonErrorLocation({ line: lc.line, col: lc.col, index: rawIdx });
+      setJsonErrorLocation({ line: lc.line, col: lc.col, index: loc.index });
       _lastValidationState = { ok: false, message: errMsg };
       try { updateEditorMetaStatus(); } catch (e4) {}
       return false;
@@ -1301,17 +1430,12 @@ function closeHelp() {
   function showRoutingJsonErrorModal(err, rawText) {
     try {
       if (!(window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function')) return;
-      const msg = (err && err.message) ? String(err.message) : String(err || 'JSON parse error');
       const raw = String(rawText == null ? getEditorText() : rawText);
-      const cleaned = stripJsonComments(raw);
-      const pos = extractJsonErrorPos(err);
-      let line = null;
-      let col = null;
-      if (typeof pos === 'number') {
-        const lc = posToLineCh(cleaned, pos);
-        line = lc.line + 1;
-        col = lc.ch + 1;
-      }
+      const sm = stripJsonCommentsWithMap(raw);
+      const loc = extractJsonErrorLocation(err, raw, sm);
+      const msg = String(loc && loc.message ? loc.message : ((err && err.message) ? err.message : (err || 'JSON parse error')));
+      const line = Number.isFinite(loc && loc.line) ? loc.line : null;
+      const col = Number.isFinite(loc && loc.col) ? loc.col : null;
       const hint = line && col
         ? ('Проверьте строку ' + line + ', столбец ' + col + '. Конфиг не отправлялся на сервер.')
         : 'Конфиг не отправлялся на сервер. Исправьте синтаксис JSON и попробуйте снова.';
@@ -1357,18 +1481,10 @@ function closeHelp() {
       try { updateEditorMetaStatus(); } catch (e) {}
       return true;
     } catch (e) {
-      const pos = extractJsonErrorPos(e) ?? 0;
-      let rawIdx = 0;
-      try {
-        if (sm && Array.isArray(sm.map) && sm.map.length) {
-          const p = Math.max(0, Math.min(pos, sm.map.length - 1));
-          rawIdx = sm.map[p];
-        }
-      } catch (e2) { rawIdx = 0; }
-      const lc = posToLineCh(raw, rawIdx);
-      const errMsg = 'Ошибка JSON: ' + (e && e.message ? e.message : e);
-      setError(errMsg, lc.line);
-      setJsonErrorLocation({ line: lc.line + 1, col: lc.ch + 1, index: rawIdx });
+      const loc = extractJsonErrorLocation(e, raw, sm);
+      const errMsg = 'Ошибка JSON: ' + String(loc && loc.message ? loc.message : (e && e.message ? e.message : e));
+      setError(errMsg, loc.line - 1);
+      setJsonErrorLocation({ line: loc.line, col: loc.col, index: loc.index });
       _lastValidationState = { ok: false, message: errMsg };
       try { updateEditorMetaStatus(); } catch (e2) {}
       return false;
@@ -1385,23 +1501,13 @@ function closeHelp() {
       JSON.parse(cleaned);
       return [];
     } catch (e) {
-      const pos = extractJsonErrorPos(e) ?? 0;
-
-      let rawIdx = 0;
-      try {
-        if (sm && Array.isArray(sm.map) && sm.map.length) {
-          const p = Math.max(0, Math.min(pos, sm.map.length - 1));
-          rawIdx = sm.map[p];
-        }
-      } catch (e2) { rawIdx = 0; }
-
-      const lc = posToLineCh(raw, rawIdx);
+      const loc = extractJsonErrorLocation(e, raw, sm);
 
       return [
         {
-          from: { line: lc.line, ch: lc.ch },
-          to: { line: lc.line, ch: lc.ch + 1 },
-          message: (e && e.message) ? e.message : 'JSON parse error',
+          from: { line: Math.max(0, loc.line - 1), ch: Math.max(0, loc.col - 1) },
+          to: { line: Math.max(0, loc.line - 1), ch: Math.max(0, loc.col) },
+          message: String(loc && loc.message ? loc.message : ((e && e.message) ? e.message : 'JSON parse error')),
           severity: 'error',
         },
       ];
@@ -1482,17 +1588,9 @@ function closeHelp() {
       setError('', null);
       clearJsonErrorLocation();
     } catch (e) {
-      const pos = extractJsonErrorPos(e) ?? 0;
-      let rawIdx = 0;
-      try {
-        if (sm && Array.isArray(sm.map) && sm.map.length) {
-          const p = Math.max(0, Math.min(pos, sm.map.length - 1));
-          rawIdx = sm.map[p];
-        }
-      } catch (e2) { rawIdx = 0; }
-      const lc = posToLineCh(rawText, rawIdx);
-      setError('Ошибка JSON: ' + (e && e.message ? e.message : e), lc.line);
-      setJsonErrorLocation({ line: lc.line + 1, col: lc.ch + 1, index: rawIdx });
+      const loc = extractJsonErrorLocation(e, rawText, sm);
+      setError('Ошибка JSON: ' + String(loc && loc.message ? loc.message : (e && e.message ? e.message : e)), loc.line - 1);
+      setJsonErrorLocation({ line: loc.line, col: loc.col, index: loc.index });
       showRoutingJsonErrorModal(e, rawText);
       if (statusEl) statusEl.textContent = 'Ошибка: некорректный JSON.';
       toast('Ошибка: некорректный JSON.', true);
@@ -2364,11 +2462,48 @@ function closeHelp() {
     if (!host) return;
 
     const enabled = !!on;
-    try { host.classList.toggle('is-fullscreen', enabled); } catch (e) {}
-    try { document.body.classList.toggle('xk-no-scroll', enabled); } catch (e) {}
+    const st = host.__xkFs || (host.__xkFs = { on: false, placeholder: null, parent: null, next: null });
+
+    if (enabled) {
+      if (!st.on) {
+        st.on = true;
+        try {
+          st.parent = host.parentNode;
+          st.next = host.nextSibling;
+          st.placeholder = document.createComment('xk-routing-monaco-fs');
+          if (st.parent) st.parent.insertBefore(st.placeholder, st.next);
+        } catch (e) {}
+        try { document.body.appendChild(host); } catch (e) {}
+      }
+
+      try { host.classList.add('is-fullscreen'); } catch (e) {}
+      try { document.body.classList.add('xk-no-scroll'); } catch (e) {}
+    } else {
+      try { host.classList.remove('is-fullscreen'); } catch (e) {}
+      try { document.body.classList.remove('xk-no-scroll'); } catch (e) {}
+
+      if (st.on) {
+        st.on = false;
+        try {
+          if (st.placeholder && st.placeholder.parentNode) {
+            st.placeholder.parentNode.replaceChild(host, st.placeholder);
+          } else if (st.parent) {
+            st.parent.insertBefore(host, st.next || null);
+          }
+        } catch (e) {}
+        st.placeholder = null;
+        st.parent = null;
+        st.next = null;
+      }
+    }
 
     // Keep toolbar visible and pinned (same behaviour as CodeMirror fullscreen).
     try { _syncToolbarFsClass(enabled); } catch (e) {}
+    try {
+      setTimeout(() => {
+        try { _syncToolbarFsClass(enabled); } catch (e2) {}
+      }, 0);
+    } catch (e) {}
 
     // Monaco needs layout after container size/position change.
     try { if (_monaco && typeof _monaco.layout === 'function') _monaco.layout(); } catch (e) {}
@@ -2826,6 +2961,11 @@ function closeHelp() {
       try { relayoutMonaco(reason || 'show'); } catch (e) {}
     }
     try { updateEditorMetaStatus(); } catch (e) {}
+    try {
+      if (window.XKeen && XKeen.features && XKeen.features.routingCards && typeof XKeen.features.routingCards.onShow === 'function') {
+        XKeen.features.routingCards.onShow({ reason: reason || 'show' });
+      }
+    } catch (e) {}
   }
 
   function wirePageReturnOnce() {
@@ -3036,6 +3176,18 @@ function closeHelp() {
 
     _cm = createEditor();
     XKeen.state.routingEditor = _cm;
+
+    try {
+      if (window.XKeen && XKeen.cmLoader && typeof XKeen.cmLoader.ensureJsonLint === 'function') {
+        Promise.resolve(XKeen.cmLoader.ensureJsonLint())
+          .then((ok) => {
+            if (!ok) return;
+            try { if (_cm && typeof _cm.performLint === 'function') _cm.performLint(); } catch (e2) {}
+            try { validate(); } catch (e3) {}
+          })
+          .catch(() => {});
+      }
+    } catch (e) {}
 
     // Ensure Monaco container exists (hidden by default)
     try { ensureMonacoHost(); } catch (e) {}

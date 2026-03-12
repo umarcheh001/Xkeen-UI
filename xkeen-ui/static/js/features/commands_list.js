@@ -79,7 +79,7 @@
     // Backward compatibility fallback: send via modular PTY if present.
     try {
       const pty = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
-      if (pty && typeof pty.sendRaw === 'function') { pty.sendRaw(data); return true; }
+      if (pty && typeof pty.sendRaw === 'function') return !!pty.sendRaw(data);
     } catch (e2) {}
     return false;
   }
@@ -160,10 +160,21 @@
       const api = (window.XKeen && XKeen.terminal && XKeen.terminal.api) ? XKeen.terminal.api : null;
       if (api && typeof api.send === 'function') {
         // Use raw to avoid routing and match Enter for PTY.
-        await Promise.resolve(api.send(String(cmd || '') + '\r', { raw: true, prefer: 'pty', allowWhenDisconnected: false, source: 'commands_list' }));
+        const sendRes = await Promise.resolve(api.send(String(cmd || '') + '\r', { raw: true, prefer: 'pty', allowWhenDisconnected: false, source: 'commands_list' }));
+        const delivered = !!(
+          sendRes &&
+          ((sendRes.handled === true) || (sendRes.result && sendRes.result.ok === true))
+        );
+        if (!delivered) {
+          toast('PTY подключён, но команда не отправилась', 'error');
+          return false;
+        }
       } else {
         // Legacy fallback.
-        sendPtyRaw(String(cmd || '') + '\r');
+        if (!sendPtyRaw(String(cmd || '') + '\r')) {
+          toast('PTY подключён, но команда не отправилась', 'error');
+          return false;
+        }
       }
       focusTerminal();
       clampTerminalViewportSoon();

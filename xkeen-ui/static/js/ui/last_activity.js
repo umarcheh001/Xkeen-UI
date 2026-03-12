@@ -1,14 +1,15 @@
 (() => {
   "use strict";
 
-  // Badge under global auto-restart checkbox.
-  // Shows last load/save time and the active config file depending on the selected core:
+  // Compact header chip for last load/save activity.
+  // Shows the active config file depending on the selected core:
   //   - xray   -> 05_routing.json (routing file)
   //   - mihomo -> config.yaml
   // Public API (back-compat):
   //   window.updateLastActivity(kind, source, filePath?)
 
   const STORAGE_KEY = "xkeen_last_activity_v2";
+  const COLLAPSE_KEY = "xkeen_last_activity_chip_collapsed_v1";
 
   function $(id) {
     return document.getElementById(id);
@@ -42,37 +43,104 @@
   }
 
   function effectiveLabel(payload) {
-    // Requirement: show 05_routing.json OR config.yaml depending on selected core.
     const core = currentCore();
     const p = coreFile(core);
     const b = basename(p);
     if (b) return b;
-    // Fallbacks
     return basename(payload && payload.filePath) || (payload && payload.source) || "";
   }
 
+  function readCollapsed() {
+    try {
+      if (!window.localStorage) return true;
+      const raw = localStorage.getItem(COLLAPSE_KEY);
+      if (raw == null) return true;
+      return raw !== "0";
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function writeCollapsed(value) {
+    try {
+      if (!window.localStorage) return;
+      localStorage.setItem(COLLAPSE_KEY, value ? "1" : "0");
+    } catch (_) {}
+  }
+
+  function ensureStructure(el) {
+    if (!el || el.dataset.lastActivityReady === "1") return el;
+
+    el.innerHTML =
+      '<span class="last-load-chip__icon" aria-hidden="true"></span>' +
+      '<span class="last-load-chip__body">' +
+        '<span class="last-load-chip__prefix"></span>' +
+        '<span class="last-load-chip__text"></span>' +
+      "</span>" +
+      '<span class="last-load-chip__caret" aria-hidden="true"></span>';
+
+    el.dataset.lastActivityReady = "1";
+    return el;
+  }
+
+  function setCollapsed(el, collapsed) {
+    if (!el) return;
+    el.classList.toggle("is-collapsed", !!collapsed);
+    el.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  }
+
+  function fullText(kind, label, timeText) {
+    if (kind === "loaded") return `Загружено ${label}${timeText ? " в " + timeText : ""}`;
+    if (kind === "saved") return `Сохранено ${label}${timeText ? " в " + timeText : ""}`;
+    if (kind === "error") return `Ошибка ${label}${timeText ? " в " + timeText : ""}`;
+    return `${label}${timeText ? " в " + timeText : ""}`;
+  }
+
+  function prefixText(kind) {
+    if (kind === "loaded") return "Загружено";
+    if (kind === "saved") return "Сохранено";
+    if (kind === "error") return "Ошибка";
+    return "Активно";
+  }
+
+  function detailText(label, timeText) {
+    if (!timeText) return label;
+    return `${label} · ${timeText}`;
+  }
+
   function render(payload) {
-    const el = $("last-load");
-    if (!el || !payload) return;
+    const rawEl = $("last-load");
+    if (!rawEl || !payload) return;
+
+    const el = ensureStructure(rawEl);
 
     const label = effectiveLabel(payload);
     const t = payload.ts ? fmtTime(payload.ts) : "";
+    const message = fullText(payload.kind, label, t);
+    const prefix = prefixText(payload.kind);
+    const detail = detailText(label, t);
 
-    // Reset state classes
     el.classList.remove("last-load-loaded", "last-load-saved", "last-load-error");
     if (payload.kind === "loaded") el.classList.add("last-load-loaded");
     else if (payload.kind === "saved") el.classList.add("last-load-saved");
     else if (payload.kind === "error") el.classList.add("last-load-error");
 
     if (!label) {
-      el.textContent = "";
+      el.classList.add("hidden");
+      el.title = "";
+      el.setAttribute("aria-label", "Последняя операция с конфигом");
       return;
     }
 
-    if (payload.kind === "loaded") el.textContent = `Загружено ${label}${t ? " в " + t : ""}`;
-    else if (payload.kind === "saved") el.textContent = `Сохранено ${label}${t ? " в " + t : ""}`;
-    else if (payload.kind === "error") el.textContent = `Ошибка ${label}${t ? " в " + t : ""}`;
-    else el.textContent = `${label}${t ? " в " + t : ""}`;
+    el.classList.remove("hidden");
+    el.dataset.kind = String(payload.kind || "info");
+    el.title = message;
+    el.setAttribute("aria-label", message);
+
+    const prefixEl = el.querySelector(".last-load-chip__prefix");
+    const textEl = el.querySelector(".last-load-chip__text");
+    if (prefixEl) prefixEl.textContent = prefix;
+    if (textEl) textEl.textContent = detail;
   }
 
   function readStored() {
@@ -110,11 +178,28 @@
     window.updateLastActivity = updateLastActivity;
   }
 
+  function bindChip() {
+    const el = $("last-load");
+    if (!el || el.dataset.lastActivityBound === "1") return;
+
+    ensureStructure(el);
+    setCollapsed(el, readCollapsed());
+
+    el.addEventListener("click", () => {
+      const next = !el.classList.contains("is-collapsed");
+      setCollapsed(el, next);
+      writeCollapsed(next);
+    });
+
+    el.dataset.lastActivityBound = "1";
+  }
+
   function init() {
+    bindChip();
+
     const stored = readStored();
     if (stored) render(stored);
 
-    // Re-render when core changes (service_status updates data-core)
     const coreEl = $("xkeen-core-text");
     if (coreEl && window.MutationObserver) {
       const mo = new MutationObserver(() => {

@@ -199,7 +199,7 @@
       const ws = st ? st.ptyWs : null;
       if (ws && ws.readyState === WebSocket.OPEN) {
         const pty = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.pty;
-        if (pty && typeof pty.sendRaw === 'function') { pty.sendRaw(data); return true; }
+        if (pty && typeof pty.sendRaw === 'function') return !!pty.sendRaw(data);
       }
     } catch (e) {}
 

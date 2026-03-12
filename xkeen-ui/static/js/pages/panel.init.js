@@ -30,6 +30,7 @@ const STATIC_BASE = (function () {
 })();
 
 const _xkLoaded = new Set();
+const _xkLoading = new Map();
 
 function _toUrl(path) {
   const p = String(path || '');
@@ -56,37 +57,56 @@ function loadScriptOnce(path) {
   const url = _toUrl(path);
   if (!url) return Promise.resolve(false);
   if (_xkLoaded.has(url)) return Promise.resolve(true);
+  if (_xkLoading.has(url)) return _xkLoading.get(url);
 
   // Existing tag?
   try {
     const found = document.querySelector('script[src="' + url + '"]') || document.querySelector('script[data-xk-src="' + url + '"]');
     if (found) {
-      _xkLoaded.add(url);
-      return Promise.resolve(true);
+      const state = (found.dataset && found.dataset.xkLoadState) ? String(found.dataset.xkLoadState) : '';
+      if (state === 'ready') {
+        _xkLoaded.add(url);
+        return Promise.resolve(true);
+      }
+      if (state === 'loading' && _xkLoading.has(url)) {
+        return _xkLoading.get(url);
+      }
+      try { found.remove(); } catch (e) {}
     }
   } catch (e) {}
 
-  return new Promise((resolve) => {
+  const promise = new Promise((resolve) => {
     const s = document.createElement('script');
     s.src = url;
     // preserve execution order when awaited sequentially
     try { s.async = false; } catch (e) {}
     s.dataset.xkSrc = url;
-    s.onload = () => { _xkLoaded.add(url); resolve(true); };
+    s.dataset.xkLoadState = 'loading';
+    s.onload = () => {
+      try { s.dataset.xkLoadState = 'ready'; } catch (e) {}
+      _xkLoaded.add(url);
+      resolve(true);
+    };
     s.onerror = () => {
       console.error('[xk] failed to load script:', url);
-      _xkLoaded.add(url);
+      try { s.dataset.xkLoadState = 'error'; } catch (e) {}
+      try { s.remove(); } catch (e2) {}
       resolve(false);
     };
     (document.body || document.documentElement).appendChild(s);
   });
+  _xkLoading.set(url, promise.finally(() => {
+    try { _xkLoading.delete(url); } catch (e) {}
+  }));
+  return _xkLoading.get(url);
 }
 
 async function loadScriptsInOrder(list) {
   const items = Array.isArray(list) ? list : [];
   for (let i = 0; i < items.length; i++) {
     // eslint-disable-next-line no-await-in-loop
-    await loadScriptOnce(items[i]);
+    const ok = await loadScriptOnce(items[i]);
+    if (!ok) return false;
   }
   return true;
 }
@@ -127,7 +147,7 @@ function ensureTerminalReady() {
 
   _terminalPromise = (async () => {
     // XTerm libs first (global Terminal + addons)
-    await withUmdGlobals(() => loadScriptsInOrder([
+    const xtermOk = await withUmdGlobals(() => loadScriptsInOrder([
       'xterm/xterm.js',
       'xterm/xterm-addon-fit.js',
       'xterm/xterm-addon-search.js',
@@ -138,9 +158,10 @@ function ensureTerminalReady() {
       'xterm/xterm-addon-clipboard.js',
       'xterm/xterm-addon-ligatures.js',
     ]));
+    if (!xtermOk) throw new Error('failed to load xterm libraries');
 
     // Terminal modules (kept in the same order as the old <script> list in panel.html)
-    await loadScriptsInOrder([
+    const termOk = await loadScriptsInOrder([
       'js/terminal/_core.js',
       'js/terminal/core/events.js',
       'js/terminal/core/logger.js',
@@ -181,6 +202,7 @@ function ensureTerminalReady() {
       'js/terminal/xray_tail.js',
       'js/terminal/terminal.js',
     ]);
+    if (!termOk) throw new Error('failed to load terminal modules');
 
     safe(() => {
       if (window.XKeen && XKeen.terminal && typeof XKeen.terminal.init === 'function') {
@@ -206,7 +228,12 @@ function ensureTerminalReady() {
 
     _terminalLoaded = true;
     return true;
-  })();
+  })().catch((err) => {
+    try { console.error('[XKeen] terminal lazy load failed:', err); } catch (e) {}
+    _terminalLoaded = false;
+    _terminalPromise = null;
+    return false;
+  });
 
   return _terminalPromise;
 }
@@ -237,7 +264,9 @@ function wireTerminalLazyOpen() {
       if (_terminalLoaded) return; // terminal scripts will handle further clicks
       e.preventDefault();
       e.stopImmediatePropagation();
-      ensureTerminalReady().then(() => openTerminal(mode));
+      ensureTerminalReady().then((ready) => {
+        if (ready) openTerminal(mode);
+      });
     }, true);
     if (btn.dataset) btn.dataset.xkLazyTerminal = '1';
   }
@@ -294,7 +323,7 @@ function ensureFileManagerReady() {
   if (_fileManagerPromise) return _fileManagerPromise;
 
   _fileManagerPromise = (async () => {
-    await loadScriptsInOrder([
+    const ok = await loadScriptsInOrder([
       // NOTE: no per-file cache-busters here.
       // `_toUrl()` will append a single `?v=${window.XKEEN_STATIC_VER}`
       // to all lazy-loaded scripts.
@@ -330,6 +359,7 @@ function ensureFileManagerReady() {
       // Thin entrypoint (must be last)
       'js/features/file_manager/init.js',
     ]);
+    if (!ok) throw new Error('failed to load file manager modules');
 
     // Dev guards: help diagnose script order issues (use ?debug=1 or window.XKEEN_DEV=true)
     try {
@@ -346,7 +376,12 @@ function ensureFileManagerReady() {
 
     _fileManagerLoaded = true;
     return true;
-  })();
+  })().catch((err) => {
+    try { console.error('[XKeen] file manager lazy load failed:', err); } catch (e) {}
+    _fileManagerLoaded = false;
+    _fileManagerPromise = null;
+    return false;
+  });
 
   return _fileManagerPromise;
 }
@@ -409,7 +444,8 @@ safe(() => {
       const stubOpen = (a, b) => {
         const { cmd, mode } = _normalizeTerminalOpenArgs(a, b);
         // Return a promise so callers may await terminal readiness/open.
-        return ensureTerminalReady().then(() => {
+        return ensureTerminalReady().then((ready) => {
+          if (!ready) return false;
           try {
             const T = window.XKeen && XKeen.terminal ? XKeen.terminal : null;
             if (!T) return false;
@@ -426,7 +462,8 @@ safe(() => {
 
       const stubSend = (text, opts) => {
         // Return a promise so callers may await delivery.
-        return ensureTerminalReady().then(() => {
+        return ensureTerminalReady().then((ready) => {
+          if (!ready) return { handled: false, result: { ok: false, error: 'terminal not ready' } };
           try {
             const T = window.XKeen && XKeen.terminal ? XKeen.terminal : null;
             if (!T) return { handled: false, result: { ok: false, error: 'terminal missing' } };
@@ -485,7 +522,12 @@ safe(() => {
     };
 
     function isForceHidden(el) {
-      try { return !!(el && el.dataset && el.dataset.xkForceHidden === '1'); } catch (e) { return false; }
+      try {
+        return !!(el && el.dataset && (
+          el.dataset.xkForceHidden === '1' ||
+          el.dataset.xkHideUnusedHidden === '1'
+        ));
+      } catch (e) { return false; }
     }
 
     // If the requested view is not available (e.g. hidden by env whitelist),
@@ -513,7 +555,7 @@ safe(() => {
 
     // active tab state (ignore hidden tabs)
     document.querySelectorAll('.top-tab-btn[data-view]').forEach((btn) => {
-      const hidden = (btn.style.display === 'none') || (btn.dataset && btn.dataset.xkForceHidden === '1');
+      const hidden = (btn.style.display === 'none') || isForceHidden(btn);
       btn.classList.toggle('active', !hidden && btn.dataset.view === name);
     });
 
@@ -623,7 +665,8 @@ safe(() => {
 
     // file manager: lazy-load + init + refresh when tab becomes visible
     if (name === 'files') {
-      ensureFileManagerReady().then(() => {
+      ensureFileManagerReady().then((ready) => {
+        if (!ready) return;
         try {
           const FM = (window.XKeen && XKeen.features && XKeen.features.fileManager) ? XKeen.features.fileManager : null;
           // init.js is the entrypoint and calls FM.init() once.

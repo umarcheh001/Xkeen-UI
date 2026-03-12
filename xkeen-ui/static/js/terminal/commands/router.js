@@ -112,7 +112,15 @@
           // Keep existing behavior: add newline if not already present.
           const payload = String(cmdText || '');
           const hasNewline = /\r|\n/.test(payload);
-          ctx.transport.send(hasNewline ? payload : (payload + '\n'), { source: (meta && meta.source) || 'router' });
+          const ok = !!ctx.transport.send(hasNewline ? payload : (payload + '\n'), { source: (meta && meta.source) || 'router' });
+          if (!ok) {
+            try {
+              if (ctx && ctx.events && typeof ctx.events.emit === 'function') {
+                ctx.events.emit('command:error', { cmdText: norm(cmdText), error: 'transport send failed', meta: meta || {} });
+              }
+            } catch (e1) {}
+            return { handled: false, result: { ok: false, error: 'transport send failed' } };
+          }
           try {
             if (ctx && ctx.events && typeof ctx.events.emit === 'function') {
               ctx.events.emit('command:handled', { cmdText: norm(cmdText), via: 'transport', meta: meta || {} });

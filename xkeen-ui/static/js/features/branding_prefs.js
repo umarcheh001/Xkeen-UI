@@ -267,21 +267,23 @@
     const saveBtn = byId('dt-branding-save');
     const resetBtn = byId('dt-branding-reset');
 
-    // Prefer router proof (global). If branding module exists, let it sync.
-    // Otherwise we still load from router directly and hydrate the form.
-    try {
-      if (branding && typeof branding.refreshFromRouter === 'function') {
-        await branding.refreshFromRouter();
-        syncFormFromPrefs(branding.load());
-      } else {
-        const cfg = await loadFromRouter();
-        syncFormFromPrefs(cfg || {});
-        saveCache(cfg || {});
-        applyFallback(cfg || {});
+    async function syncFromSource() {
+      try {
+        if (branding && typeof branding.refreshFromRouter === 'function') {
+          await branding.refreshFromRouter();
+          syncFormFromPrefs(branding.load());
+        } else {
+          const cfg = await loadFromRouter();
+          syncFormFromPrefs(cfg || {});
+          saveCache(cfg || {});
+          applyFallback(cfg || {});
+        }
+      } catch (e) {
+        try { syncFormFromPrefs((branding && branding.load) ? branding.load() : {}); } catch (e2) {}
       }
-    } catch (e) {
-      try { syncFormFromPrefs((branding && branding.load) ? branding.load() : {}); } catch (e2) {}
     }
+
+    await syncFromSource();
 
     const onUrlChange = () => {
       _logoSrc = (logoUrlEl && String(logoUrlEl.value || '').trim()) || _logoSrc;
@@ -455,6 +457,12 @@
         }
       });
     }
+
+    try {
+      document.addEventListener('xkeen-ui-prefs-applied', () => {
+        syncFromSource();
+      });
+    } catch (e) {}
   }
 
   Feature.init = function init() {

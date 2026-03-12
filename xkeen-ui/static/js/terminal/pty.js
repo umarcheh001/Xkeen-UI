@@ -507,9 +507,12 @@ function tryMigrateLegacyKey(base) {
 
   function sendRaw(data) {
     const ws = state.ptyWs;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try { ws.send(JSON.stringify({ type: 'input', data: String(data || '') })); } catch (e) {}
-    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try {
+      ws.send(JSON.stringify({ type: 'input', data: String(data || '') }));
+      return true;
+    } catch (e) {}
+    return false;
   }
 
   // --------------------

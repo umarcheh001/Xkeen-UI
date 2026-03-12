@@ -221,6 +221,10 @@
         XK.features.donate.init();
       }
     } catch (e) {}
+
+    try {
+      document.dispatchEvent(new CustomEvent('xkeen-ui-prefs-applied'));
+    } catch (e) {}
   }
 
   function doImport(prefsMap) {

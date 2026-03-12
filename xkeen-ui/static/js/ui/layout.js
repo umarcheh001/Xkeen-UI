@@ -122,6 +122,30 @@
     } catch (e) {}
   }
 
+  function isHardHidden(el) {
+    try { return !!(el && el.dataset && el.dataset.xkForceHidden === '1'); } catch (e) { return false; }
+  }
+
+  function setHideUnusedHidden(el, hidden) {
+    if (!el || !el.dataset) return;
+    try {
+      if (hidden) el.dataset.xkHideUnusedHidden = '1';
+      else delete el.dataset.xkHideUnusedHidden;
+    } catch (e) {}
+  }
+
+  function refreshPanelViews() {
+    try {
+      const active = document.querySelector('.top-tab-btn.active[data-view]');
+      const name = (active && active.dataset) ? String(active.dataset.view || '') : 'routing';
+      if (XK && XK.ui && XK.ui.tabs && typeof XK.ui.tabs.show === 'function') {
+        XK.ui.tabs.show(name || 'routing');
+        return;
+      }
+      if (typeof window.showView === 'function') window.showView(name || 'routing');
+    } catch (e) {}
+  }
+
   function tabKey(btn) {
     if (!btn) return '';
     try {
@@ -301,11 +325,19 @@
   // or unsupported (e.g., missing lftp), when the user enabled the toggle.
   async function applyHideUnusedNow() {
     const prefs = load();
-    if (!prefs.hideUnused) return;
-
     const filesTab = document.getElementById('top-tab-files');
     const filesView = document.getElementById('view-files');
     if (!filesTab && !filesView) return;
+
+    if (!prefs.hideUnused) {
+      if (filesTab) {
+        setHideUnusedHidden(filesTab, false);
+        if (!isHardHidden(filesTab)) filesTab.style.display = '';
+      }
+      if (filesView) setHideUnusedHidden(filesView, false);
+      refreshPanelViews();
+      return;
+    }
 
     try {
       const resp = await fetch('/api/capabilities', { cache: 'no-store' });
@@ -317,12 +349,11 @@
       const hideFiles = !(enabled && supported);
 
       if (filesTab) {
-        // Hide with a hard style to avoid other modules re-showing it.
-        filesTab.style.display = hideFiles ? 'none' : '';
-        filesTab.dataset.xkForceHidden = hideFiles ? '1' : '0';
+        setHideUnusedHidden(filesTab, hideFiles);
+        filesTab.style.display = hideFiles ? 'none' : (isHardHidden(filesTab) ? 'none' : '');
       }
       if (filesView) {
-        filesView.dataset.xkForceHidden = hideFiles ? '1' : '0';
+        setHideUnusedHidden(filesView, hideFiles);
         if (hideFiles) filesView.style.display = 'none';
       }
 
@@ -339,6 +370,8 @@
             }
           } catch (e) {}
         }
+      } else {
+        refreshPanelViews();
       }
     } catch (e) {
       // ignore
@@ -356,6 +389,7 @@
           apply(load());
           // Re-apply tabs on the panel page.
           applyTabsNow();
+          applyHideUnusedNow();
         } catch (e) {}
       });
     } catch (e) {}

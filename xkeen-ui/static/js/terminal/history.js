@@ -180,7 +180,7 @@
     // Last resort: modular PTY object (should be removed once terminal.js is fully modular).
     try {
       const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
-      if (P && typeof P.sendRaw === 'function') { P.sendRaw(raw); return true; }
+      if (P && typeof P.sendRaw === 'function') return !!P.sendRaw(raw);
     } catch (e2) {}
 
     return false;

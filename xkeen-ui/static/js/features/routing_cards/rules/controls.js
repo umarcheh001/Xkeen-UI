@@ -55,7 +55,7 @@
     h.addEventListener('click', () => {
       const open = b.style.display === 'none';
       b.style.display = open ? '' : 'none';
-      a.textContent = open ? '▼' : '►';
+        a.textContent = open ? '▲' : '▼';
     });
   };
 

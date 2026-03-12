@@ -129,6 +129,13 @@
         syncControls(prefs);
       });
     } catch (e) {}
+
+    try {
+      document.addEventListener('xkeen-ui-prefs-applied', () => {
+        prefs = load();
+        syncControls(prefs);
+      });
+    } catch (e) {}
   }
 
   Typo.init = function init() {

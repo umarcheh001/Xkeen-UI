@@ -37,7 +37,7 @@
   <link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
   {% endif %}
 </head>
-<body>
+<body class="devtools-page">
   <div id="global-xkeen-spinner">
     <div class="global-spinner-box">
       <div class="global-spinner-icon"></div>
@@ -48,36 +48,36 @@
   </div>
 
   <div class="container container-wide dt-container">
-    <header>
-      <h1>DevTools</h1>
-      <p>Диагностика панели: управление сервисом UI, логи, переменные окружения (whitelist).</p>
-
-      <div class="actions" style="justify-content: space-between; align-items: center;">
-        <a href="{{ url_for('index') }}" class="btn-link">← Назад</a>
+    <header class="dt-page-header">
+      <div class="actions dt-page-actions dt-page-header-bar" style="justify-content: space-between; align-items: center;">
+        <div class="dt-page-title-group">
+          <h1>DevTools</h1>
+        </div>
         <div class="header-actions">
           <button
             type="button"
             id="theme-toggle-btn"
-            class="theme-toggle-btn theme-toggle-header"
+            class="theme-toggle-btn theme-toggle-header dt-header-btn dt-header-btn-theme"
             aria-label="Переключить тему" title="Переключить светлую/тёмную тему"
           ></button>
+          <a href="{{ url_for('index') }}" class="btn-link dt-header-btn dt-header-btn-back">← Назад</a>
           <a
             href="#dt-update-card"
             id="xk-update-link"
-            class="service-core-text hidden"
+            class="service-core-text hidden dt-header-btn dt-header-btn-update"
             title="Обновление"
           >
             <span class="xk-update-dot" aria-hidden="true"></span>
             <span data-xk-update-label>Обновление</span>
           </a>
-          <a href="{{ url_for('logout') }}" class="btn-link" title="Выйти из панели">Выйти</a>
+          <a href="{{ url_for('logout') }}" class="btn-link dt-header-btn dt-header-btn-logout" title="Выйти из панели">Выйти</a>
         </div>
       </div>
     </header>
 
     <div class="top-tabs dt-tabs" role="tablist" aria-label="DevTools tabs">
-      <button type="button" id="dt-tab-btn-tools" class="top-tab-btn active" data-xk-section="tools dt-tab-btn-tools" role="tab" aria-selected="true" aria-controls="dt-tab-tools" title="Открыть вкладку Tools (инструменты DevTools).">Tools</button>
-      <button type="button" id="dt-tab-btn-logs" class="top-tab-btn" data-xk-section="logs dt-tab-btn-logs" role="tab" aria-selected="false" aria-controls="dt-tab-logs" title="Открыть вкладку Logs (логи панели).">Logs</button>
+      <button type="button" id="dt-tab-btn-tools" class="top-tab-btn dt-top-tab dt-top-tab-tools active" data-xk-section="tools dt-tab-btn-tools" role="tab" aria-selected="true" aria-controls="dt-tab-tools" title="Открыть вкладку Tools (инструменты DevTools).">Tools</button>
+      <button type="button" id="dt-tab-btn-logs" class="top-tab-btn dt-top-tab dt-top-tab-logs" data-xk-section="logs dt-tab-btn-logs" role="tab" aria-selected="false" aria-controls="dt-tab-logs" title="Открыть вкладку Logs (логи панели).">Logs</button>
     </div>
 
     <div id="dt-tab-tools" class="view-section" data-xk-section="tools dt-tab-tools" role="tabpanel" aria-labelledby="dt-tab-btn-tools">
@@ -89,12 +89,12 @@
           <section class="card" id="dt-service-card" data-xk-section="service dt-service-card">
             <h2 style="margin-top:0;">Сервис панели</h2>
             <div class="dt-service-actions" aria-label="UI controls">
-              <button type="button" id="dt-ui-start" class="xkeen-ctrl-btn dt-ui-action" title="Запустить сервис веб‑панели (UI).">Start</button>
-              <button type="button" id="dt-ui-stop" class="xkeen-ctrl-btn dt-ui-action" title="Остановить сервис UI. Текущая вкладка может оборваться — это нормально.">Stop</button>
-              <button type="button" id="dt-ui-restart" class="xkeen-ctrl-btn dt-ui-action" title="Перезапустить сервис UI (часть настроек применяется после перезапуска). Вкладка может оборваться — это нормально.">Restart</button>
+              <button type="button" id="dt-ui-start" class="xkeen-ctrl-btn dt-ui-action dt-ui-action-start" title="Запустить сервис веб‑панели (UI).">Start</button>
+              <button type="button" id="dt-ui-stop" class="xkeen-ctrl-btn dt-ui-action dt-ui-action-stop" title="Остановить сервис UI. Текущая вкладка может оборваться — это нормально.">Stop</button>
+              <button type="button" id="dt-ui-restart" class="xkeen-ctrl-btn dt-ui-action dt-ui-action-restart" title="Перезапустить сервис UI (часть настроек применяется после перезапуска). Вкладка может оборваться — это нормально.">Restart</button>
             </div>
             <div class="dt-service-actions-secondary">
-              <button type="button" id="dt-ui-refresh" class="btn-secondary" title="Обновить статус сервиса UI.">Refresh</button>
+              <button type="button" id="dt-ui-refresh" class="btn-secondary dt-ui-refresh-btn" title="Обновить статус сервиса UI.">Refresh</button>
             </div>
 
             <div id="dt-ui-status" class="status" style="margin-top:10px;">Загрузка…</div>
@@ -1452,6 +1452,18 @@
                       <input type="range" id="dt-theme-contrast" min="0.85" max="1.25" step="0.01" aria-label="Contrast">
                       <span class="dt-theme-slider-val" id="dt-theme-contrast-val">—</span>
                     </label>
+
+                    <label class="dt-theme-slider">
+                      <span class="dt-theme-slider-name">Шрифт UI</span>
+                      <input type="range" id="dt-theme-font-scale" min="0.85" max="1.50" step="0.01" aria-label="Global font scale">
+                      <span class="dt-theme-slider-val" id="dt-theme-font-scale-val">—</span>
+                    </label>
+
+                    <label class="dt-theme-slider">
+                      <span class="dt-theme-slider-name">Моношрифт</span>
+                      <input type="range" id="dt-theme-mono-scale" min="0.85" max="1.50" step="0.01" aria-label="Global monospace font scale">
+                      <span class="dt-theme-slider-val" id="dt-theme-mono-scale-val">—</span>
+                    </label>
                   </div>
                 </div>
               </details>
@@ -1503,6 +1515,7 @@
                 <button type="button" id="dt-term-save" class="btn-secondary" title="Сохранить и применить тему терминала.">Save</button>
                 <button type="button" id="dt-term-reset" class="btn-secondary" title="Удалить terminal_theme.* и вернуться к наследованию глобальной темы.">Reset</button>
               </div>
+              <div class="small" id="dt-term-meta" style="margin-top:10px; opacity:0.85;"></div>
               <div class="small" id="dt-term-status" style="margin-top:10px; opacity:0.85;"></div>
             </div>
           </details>
@@ -1537,6 +1550,7 @@
                 <button type="button" id="dt-cm-save" class="btn-secondary" title="Сохранить и применить тему CodeMirror.">Save</button>
                 <button type="button" id="dt-cm-reset" class="btn-secondary" title="Удалить codemirror_theme.* и вернуться к наследованию глобальной темы.">Reset</button>
               </div>
+              <div class="small" id="dt-cm-meta" style="margin-top:10px; opacity:0.85;"></div>
               <div class="small" id="dt-cm-status" style="margin-top:10px; opacity:0.85;"></div>
             </div>
           </details>
@@ -1584,7 +1598,7 @@
 
         <!-- Right column: ENV whitelist editor -->
         <div class="layout-main dt-tools-right">
-          <section class="card" id="dt-env-card" data-xk-section="env dt-env-card">
+          <section class="card dt-main-card" id="dt-env-card" data-xk-section="env dt-env-card">
             <div style="display:flex; justify-content: space-between; align-items:center; gap:10px; flex-wrap:wrap;">
               <h2 style="margin-top:0;">ENV (whitelist)</h2>
               <button type="button" id="dt-env-help-btn" class="btn-secondary" title="Открыть справку по ENV (whitelist).">Справка</button>
@@ -1615,7 +1629,7 @@
 
     
 <div id="dt-tab-logs" class="view-section" data-xk-section="logs dt-tab-logs" role="tabpanel" aria-labelledby="dt-tab-btn-logs" style="display:none;">
-  <section class="card dt-logs-card" data-xk-section="logs dt-logs-card">
+  <section class="card dt-logs-card dt-main-card" data-xk-section="logs dt-logs-card">
     <h2 style="margin-top:0;">Логи панели</h2>
 
     <div class="dt-logs-layout">

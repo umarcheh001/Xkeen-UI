@@ -134,11 +134,30 @@
     } catch (e) {}
   }
 
+  function isDefaultBalancerRule(rule, balancerTag) {
+    const bt = String(balancerTag || '').trim();
+    if (!bt || !rule || typeof rule !== 'object' || Array.isArray(rule)) return false;
+    if (String(rule.balancerTag || '').trim() !== bt) return false;
+
+    const keys = Object.keys(rule);
+    const allowed = new Set(['type', 'balancerTag', 'ruleTag', 'inboundTag']);
+    for (const k of keys) {
+      if (allowed.has(k)) continue;
+      return false;
+    }
+
+    const inbound = Array.isArray(rule.inboundTag)
+      ? rule.inboundTag.map((v) => String(v || '').trim()).filter(Boolean)
+      : (rule.inboundTag ? [String(rule.inboundTag || '').trim()].filter(Boolean) : []);
+
+    if (!inbound.length) return true;
+    const s = new Set(inbound);
+    return s.has('redirect') || s.has('tproxy');
+  }
+
   function hasRuleForBalancer(model, balancerTag) {
     const rules = Array.isArray(model && model.rules) ? model.rules : [];
-    const bt = String(balancerTag || '').trim();
-    if (!bt) return false;
-    return rules.some((r) => r && typeof r === 'object' && !Array.isArray(r) && String(r.balancerTag || '').trim() === bt);
+    return rules.some((r) => isDefaultBalancerRule(r, balancerTag));
   }
 
   function findLeastPingBalancer(model) {
@@ -194,8 +213,11 @@
   }
 
   async function fetchOutboundTags() {
+    const url = (C && typeof C.buildOutboundTagsUrl === 'function')
+      ? C.buildOutboundTagsUrl()
+      : '/api/xray/outbound-tags';
     try {
-      const resp = await fetch('/api/xray/outbound-tags', { method: 'GET' });
+      const resp = await fetch(url, { method: 'GET' });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data || data.ok === false) return [];
       if (!Array.isArray(data.tags)) return [];
@@ -311,11 +333,12 @@
       return { rule: r, idx, inserted: false };
     }
 
-    // If user already has a rule that routes via this balancer, do not add another one.
+    // Do not duplicate an existing catch-all rule for this balancer. Specific
+    // domain/ip rules must not block creation of the default redirect/tproxy rule.
     for (let i = 0; i < m.rules.length; i++) {
       const r = m.rules[i];
       if (!r || typeof r !== 'object' || Array.isArray(r)) continue;
-      if (String(r.balancerTag || '') === balancerTag) {
+      if (isDefaultBalancerRule(r, balancerTag)) {
         return { rule: r, idx: i, inserted: false, existed: true };
       }
     }

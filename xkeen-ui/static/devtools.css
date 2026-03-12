@@ -750,3 +750,1161 @@ details.dt-update-log-box pre.dt-update-log{
   border-color: color-mix(in srgb, var(--sem-error, #fca5a5) 45%, var(--border, #1f2937));
   background: color-mix(in srgb, var(--sem-error, #fca5a5) 12%, var(--card-bg, #020617));
 }
+
+/* DevTools premium glass redesign */
+body.devtools-page {
+  --dt-glass-border: rgba(96, 165, 250, 0.14);
+  --dt-glass-border-strong: rgba(148, 197, 255, 0.22);
+  --dt-glass-top: rgba(17, 27, 46, 0.78);
+  --dt-glass-bottom: rgba(6, 12, 24, 0.7);
+  --dt-glow: rgba(59, 130, 246, 0.18);
+  background:
+    radial-gradient(circle at top center, rgba(59, 130, 246, 0.08), transparent 24%),
+    radial-gradient(circle at 16% 12%, rgba(14, 165, 233, 0.06), transparent 18%),
+    linear-gradient(180deg, #030816 0%, #020617 100%);
+}
+
+body.devtools-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.58;
+  background:
+    radial-gradient(circle at top left, rgba(147, 197, 253, 0.08), transparent 18%),
+    linear-gradient(125deg, transparent 0 40%, rgba(255, 255, 255, 0.028) 50%, transparent 60%);
+}
+
+body.devtools-page .dt-container {
+  position: relative;
+  z-index: 1;
+  max-width: min(1680px, 96vw);
+  padding-top: 16px;
+  padding-bottom: 30px;
+}
+
+body.devtools-page .dt-page-header {
+  position: relative;
+  margin-bottom: 12px;
+  padding: 12px 18px;
+  border-radius: 24px;
+  border: 1px solid var(--dt-glass-border);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(7, 15, 30, 0.94), rgba(3, 8, 23, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 28px 70px rgba(2, 8, 23, 0.42);
+  backdrop-filter: blur(24px) saturate(155%);
+  -webkit-backdrop-filter: blur(24px) saturate(155%);
+  overflow: hidden;
+}
+
+body.devtools-page .dt-page-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 36%),
+    linear-gradient(90deg, transparent, rgba(125, 211, 252, 0.06), transparent);
+}
+
+body.devtools-page .dt-page-header > * {
+  position: relative;
+  z-index: 1;
+}
+
+body.devtools-page .dt-page-header h1 {
+  margin: 0;
+  font-size: clamp(1.7rem, 2vw, 2.35rem);
+  letter-spacing: -0.05em;
+  color: #f8fbff;
+  text-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+body.devtools-page .dt-page-header-bar {
+  min-height: 44px;
+}
+
+body.devtools-page .dt-page-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+body.devtools-page .dt-page-header p {
+  margin-top: 6px;
+  color: rgba(191, 219, 254, 0.74);
+  font-size: calc(1rem * var(--xk-font-scale));
+}
+
+body.devtools-page .dt-page-actions,
+body.devtools-page .header-actions {
+  gap: 8px;
+}
+
+body.devtools-page .header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+body.devtools-page .dt-header-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 197, 255, 0.18);
+  background:
+    linear-gradient(180deg, rgba(18, 28, 48, 0.78), rgba(8, 14, 28, 0.72)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 44%);
+  color: #eaf2ff;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -10px 18px rgba(2,8,23,0.24),
+    0 12px 24px rgba(2,8,23,0.26);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  font-size: calc(11.5px * var(--xk-font-scale));
+  font-weight: 600;
+}
+
+body.devtools-page .dt-header-btn::before,
+body.devtools-page .theme-toggle-btn.dt-header-btn-theme::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 58%);
+  opacity: 0.9;
+  z-index: -1;
+}
+
+body.devtools-page .dt-header-btn:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  border-color: rgba(186, 221, 255, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -12px 22px rgba(2, 8, 23, 0.26),
+    0 16px 30px rgba(2, 8, 23, 0.32);
+}
+
+body.devtools-page .dt-header-btn-back {
+  background:
+    linear-gradient(180deg, rgba(26, 44, 82, 0.82), rgba(11, 23, 48, 0.78)),
+    radial-gradient(circle at 24% 24%, rgba(125, 211, 252, 0.24), transparent 38%);
+  border-color: rgba(103, 232, 249, 0.18);
+}
+
+body.devtools-page .dt-header-btn-theme {
+  min-width: 64px;
+  padding: 0 16px;
+  background:
+    linear-gradient(180deg, rgba(24, 51, 104, 0.82), rgba(10, 23, 52, 0.78)),
+    radial-gradient(circle at 30% 28%, rgba(147, 197, 253, 0.4), transparent 34%);
+  border-color: rgba(96, 165, 250, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 0 0 1px rgba(96, 165, 250, 0.12),
+    0 14px 28px rgba(8, 47, 107, 0.3);
+}
+
+body.devtools-page .dt-header-btn-update {
+  background:
+    linear-gradient(180deg, rgba(37, 35, 84, 0.84), rgba(17, 18, 48, 0.8)),
+    radial-gradient(circle at 28% 24%, rgba(167, 139, 250, 0.22), transparent 36%);
+  border-color: rgba(167, 139, 250, 0.2);
+}
+
+body.devtools-page .dt-header-btn-logout {
+  background:
+    linear-gradient(180deg, rgba(76, 22, 31, 0.82), rgba(41, 10, 17, 0.8)),
+    radial-gradient(circle at 28% 22%, rgba(251, 113, 133, 0.18), transparent 36%);
+  border-color: rgba(251, 113, 133, 0.2);
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn,
+body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header {
+  border-radius: 999px !important;
+  background:
+    linear-gradient(180deg, rgba(18, 28, 48, 0.78), rgba(8, 14, 28, 0.72)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 46%) !important;
+  border-color: rgba(148, 197, 255, 0.18) !important;
+  color: #eaf2ff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -10px 18px rgba(2, 8, 23, 0.24),
+    0 10px 24px rgba(2, 8, 23, 0.26) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header {
+  background:
+    linear-gradient(180deg, rgba(24, 51, 104, 0.82), rgba(10, 23, 52, 0.78)),
+    radial-gradient(circle at 30% 28%, rgba(147, 197, 253, 0.4), transparent 34%) !important;
+  border-color: rgba(96, 165, 250, 0.28) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 0 1px rgba(96, 165, 250, 0.12),
+    0 14px 28px rgba(8, 47, 107, 0.3) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn-back.btn-link {
+  background:
+    linear-gradient(180deg, rgba(26, 44, 82, 0.82), rgba(11, 23, 48, 0.78)),
+    radial-gradient(circle at 24% 24%, rgba(125, 211, 252, 0.24), transparent 38%) !important;
+  border-color: rgba(103, 232, 249, 0.18) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn-update.service-core-text {
+  background:
+    linear-gradient(180deg, rgba(37, 35, 84, 0.84), rgba(17, 18, 48, 0.8)),
+    radial-gradient(circle at 28% 24%, rgba(167, 139, 250, 0.22), transparent 36%) !important;
+  border-color: rgba(167, 139, 250, 0.2) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn-logout.btn-link {
+  background:
+    linear-gradient(180deg, rgba(76, 22, 31, 0.82), rgba(41, 10, 17, 0.8)),
+    radial-gradient(circle at 28% 22%, rgba(251, 113, 133, 0.18), transparent 36%) !important;
+  border-color: rgba(251, 113, 133, 0.18) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn:hover,
+body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header:hover {
+  background:
+    linear-gradient(180deg, rgba(20, 32, 56, 0.96), rgba(8, 16, 32, 0.94)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.14), transparent 48%) !important;
+  border-color: rgba(186, 221, 255, 0.34) !important;
+  color: #f8fbff !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -12px 22px rgba(2, 8, 23, 0.26),
+    0 16px 30px rgba(2, 8, 23, 0.32) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header:hover {
+  background:
+    linear-gradient(180deg, rgba(30, 63, 121, 0.92), rgba(12, 31, 69, 0.9)),
+    radial-gradient(circle at 30% 28%, rgba(147, 197, 253, 0.46), transparent 34%) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn-back.btn-link:hover {
+  background:
+    linear-gradient(180deg, rgba(34, 56, 101, 0.92), rgba(14, 28, 56, 0.9)),
+    radial-gradient(circle at 24% 24%, rgba(125, 211, 252, 0.28), transparent 40%) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn-update.service-core-text:hover {
+  background:
+    linear-gradient(180deg, rgba(52, 46, 108, 0.92), rgba(23, 23, 58, 0.88)),
+    radial-gradient(circle at 28% 24%, rgba(167, 139, 250, 0.28), transparent 38%) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn-logout.btn-link:hover {
+  background:
+    linear-gradient(180deg, rgba(96, 28, 41, 0.92), rgba(52, 12, 21, 0.9)),
+    radial-gradient(circle at 28% 22%, rgba(251, 113, 133, 0.24), transparent 38%) !important;
+}
+
+body.devtools-page .dt-tabs {
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding: 6px;
+  gap: 8px;
+  border-radius: 22px;
+  border: 1px solid rgba(96, 165, 250, 0.12);
+  background: rgba(2, 8, 23, 0.44);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 12px 28px rgba(2,8,23,0.2);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+body.devtools-page .dt-top-tab {
+  position: relative;
+  min-height: 42px;
+  border-radius: 15px;
+  border: 1px solid rgba(96, 165, 250, 0.14);
+  background:
+    linear-gradient(180deg, rgba(13, 22, 40, 0.86), rgba(6, 12, 24, 0.82));
+  color: rgba(219, 234, 254, 0.82);
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+body.devtools-page .dt-top-tab::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent 36%);
+}
+
+body.devtools-page .dt-top-tab-tools:hover:not(.active) {
+  background:
+    linear-gradient(180deg, rgba(17, 42, 88, 0.92), rgba(8, 19, 41, 0.88)),
+    radial-gradient(circle at 18% 24%, rgba(96, 165, 250, 0.16), transparent 38%);
+}
+
+body.devtools-page .dt-top-tab-logs:hover:not(.active) {
+  background:
+    linear-gradient(180deg, rgba(26, 36, 80, 0.92), rgba(11, 17, 38, 0.88)),
+    radial-gradient(circle at 18% 24%, rgba(167, 139, 250, 0.14), transparent 38%);
+}
+
+body.devtools-page .dt-top-tab.active {
+  color: #f8fbff;
+  border-color: rgba(125, 211, 252, 0.28);
+  background:
+    linear-gradient(180deg, rgba(37, 99, 235, 0.96), rgba(29, 78, 216, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    0 14px 28px rgba(29, 78, 216, 0.24);
+}
+
+body.devtools-page .dt-tools-layout {
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+  gap: 14px;
+}
+
+body.devtools-page .dt-tools-left,
+body.devtools-page .dt-tools-right,
+body.devtools-page .dt-logs-layout,
+body.devtools-page .dt-logs-main,
+body.devtools-page .dt-logs-sidebar {
+  min-width: 0;
+}
+
+body.devtools-page .dt-tools-left {
+  position: relative;
+  padding: 6px;
+  gap: 6px;
+  border-radius: 24px;
+  border: 1px solid rgba(96, 165, 250, 0.1);
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(6, 12, 25, 0.72), rgba(2, 8, 22, 0.54));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 18px 40px rgba(2,8,23,0.18);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+body.devtools-page .card,
+body.devtools-page details.dt-collapsible,
+body.devtools-page details.dt-update-log-box {
+  position: relative;
+  border-radius: 24px;
+  border: 1px solid var(--dt-glass-border);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(5, 11, 25, 0.96), rgba(2, 8, 23, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 24px 54px rgba(2,8,23,0.34);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+body.devtools-page .card::before,
+body.devtools-page details.dt-collapsible::before,
+body.devtools-page details.dt-update-log-box::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+}
+
+body.devtools-page .dt-main-card {
+  min-height: 100%;
+}
+
+body.devtools-page .dt-tools-left > .card,
+body.devtools-page .dt-tools-left > details.card {
+  --dt-side-accent: rgba(96, 165, 250, 0.88);
+  --dt-card-glyph: "◌";
+  margin-bottom: 0;
+  border-color: rgba(96, 165, 250, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.06), transparent 34%),
+    linear-gradient(180deg, rgba(4, 10, 22, 0.96), rgba(2, 8, 22, 0.92));
+}
+
+body.devtools-page #dt-service-card { --dt-card-glyph: "◉"; --dt-side-accent: rgba(74, 222, 128, 0.9); }
+body.devtools-page #dt-update-card { --dt-card-glyph: "↻"; --dt-side-accent: rgba(96, 165, 250, 0.92); }
+body.devtools-page #dt-logging-card { --dt-card-glyph: "≡"; --dt-side-accent: rgba(56, 189, 248, 0.88); }
+body.devtools-page #dt-ui-prefs-card { --dt-card-glyph: "⌘"; --dt-side-accent: rgba(125, 211, 252, 0.88); }
+body.devtools-page #dt-branding-card { --dt-card-glyph: "✦"; --dt-side-accent: rgba(251, 191, 36, 0.88); }
+body.devtools-page #dt-ui-prefs-io-card { --dt-card-glyph: "⇄"; --dt-side-accent: rgba(167, 139, 250, 0.9); }
+body.devtools-page #dt-layout-card { --dt-card-glyph: "▦"; --dt-side-accent: rgba(52, 211, 153, 0.9); }
+body.devtools-page #dt-theme-editor-card { --dt-card-glyph: "◍"; --dt-side-accent: rgba(244, 114, 182, 0.88); }
+body.devtools-page #dt-terminal-theme-card { --dt-card-glyph: ">_"; --dt-side-accent: rgba(45, 212, 191, 0.88); }
+body.devtools-page #dt-codemirror-theme-card { --dt-card-glyph: "{}"; --dt-side-accent: rgba(96, 165, 250, 0.88); }
+body.devtools-page #dt-custom-css-card { --dt-card-glyph: "/*"; --dt-side-accent: rgba(250, 204, 21, 0.88); }
+
+body.devtools-page .dt-tools-right > .card,
+body.devtools-page .dt-logs-card {
+  border-color: rgba(125, 211, 252, 0.16);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.1), transparent 36%),
+    linear-gradient(180deg, rgba(4, 11, 25, 0.98), rgba(2, 8, 23, 0.94));
+}
+
+body.devtools-page .card h2,
+body.devtools-page details.dt-collapsible > summary h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #f8fbff;
+  letter-spacing: -0.03em;
+}
+
+body.devtools-page .dt-tools-left > section.card > h2::before,
+body.devtools-page .dt-tools-left > details.card > summary h2::before {
+  content: var(--dt-card-glyph);
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--dt-side-accent) 44%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--dt-side-accent) 22%, rgba(15, 23, 42, 0.94)), rgba(4, 10, 22, 0.9));
+  color: color-mix(in srgb, var(--dt-side-accent) 88%, #f8fbff 12%);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 8px 16px color-mix(in srgb, var(--dt-side-accent) 18%, transparent);
+}
+
+body.devtools-page .small,
+body.devtools-page .dt-k,
+body.devtools-page .dt-sub,
+body.devtools-page .dt-logging-label,
+body.devtools-page .dt-switch-label,
+body.devtools-page .dt-page-header p {
+  color: rgba(191, 219, 254, 0.74);
+}
+
+body.devtools-page .dt-collapsible-summary {
+  min-height: 56px;
+  padding: 0 4px;
+}
+
+body.devtools-page details.dt-collapsible[open] > summary,
+body.devtools-page details.dt-update-log-box[open] > summary {
+  border-bottom: 1px solid rgba(96, 165, 250, 0.1);
+}
+
+body.devtools-page .dt-collapsible-icon {
+  opacity: 0.88;
+  color: #bfdbfe;
+}
+
+body.devtools-page .dt-service-actions button.dt-ui-action,
+body.devtools-page #dt-update-run {
+  position: relative;
+  overflow: hidden;
+  border-width: 1px;
+  border-radius: 14px;
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+}
+
+body.devtools-page .dt-service-actions button.dt-ui-action::before,
+body.devtools-page #dt-update-run::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.16), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), transparent 58%);
+}
+
+body.devtools-page .dt-ui-action-start {
+  border-color: rgba(74, 222, 128, 0.32);
+  background:
+    linear-gradient(180deg, rgba(8, 61, 36, 0.92), rgba(5, 31, 20, 0.9)),
+    radial-gradient(circle at 22% 22%, rgba(74, 222, 128, 0.22), transparent 38%);
+  color: #ebfff1;
+}
+
+body.devtools-page .dt-ui-action-stop {
+  border-color: rgba(248, 113, 113, 0.32);
+  background:
+    linear-gradient(180deg, rgba(88, 19, 31, 0.92), rgba(48, 10, 18, 0.9)),
+    radial-gradient(circle at 22% 22%, rgba(248, 113, 113, 0.2), transparent 38%);
+  color: #fff0f2;
+}
+
+body.devtools-page .dt-ui-action-restart,
+body.devtools-page #dt-update-run {
+  border-color: rgba(251, 191, 36, 0.28);
+  background:
+    linear-gradient(180deg, rgba(92, 55, 13, 0.92), rgba(43, 25, 7, 0.9)),
+    radial-gradient(circle at 22% 22%, rgba(251, 191, 36, 0.18), transparent 38%);
+  color: #fff7e8;
+}
+
+body.devtools-page .dt-ui-refresh-btn,
+body.devtools-page .btn-secondary,
+body.devtools-page .dt-btn-like,
+body.devtools-page .dt-log-btn,
+body.devtools-page .dt-log-menu > summary {
+  border-radius: 14px;
+  border-color: rgba(96, 165, 250, 0.16);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(6, 12, 24, 0.68));
+  color: #dbeafe;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    0 10px 22px rgba(2,8,23,0.16);
+}
+
+body.devtools-page .btn-secondary:hover,
+body.devtools-page .dt-btn-like:hover,
+body.devtools-page .dt-log-btn:hover,
+body.devtools-page .dt-log-menu > summary:hover {
+  border-color: rgba(125, 211, 252, 0.28);
+  background:
+    linear-gradient(180deg, rgba(16, 29, 56, 0.82), rgba(8, 17, 35, 0.78));
+}
+
+body.devtools-page .dt-pill-field,
+body.devtools-page .dt-env-input,
+body.devtools-page .xray-log-select,
+body.devtools-page .xray-log-filter,
+body.devtools-page .dt-log-lines-input {
+  border-radius: 14px;
+  border-color: rgba(96, 165, 250, 0.14);
+  background:
+    linear-gradient(180deg, rgba(3, 10, 24, 0.96), rgba(2, 8, 20, 0.92));
+  color: #e5eefc;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+body.devtools-page .dt-pill-field:focus,
+body.devtools-page .dt-env-input:focus,
+body.devtools-page .xray-log-select:focus,
+body.devtools-page .xray-log-filter:focus,
+body.devtools-page .dt-log-lines-input:focus {
+  border-color: rgba(96, 165, 250, 0.44);
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.24),
+    0 0 0 4px rgba(59, 130, 246, 0.12);
+}
+
+body.devtools-page .dt-switch,
+body.devtools-page .dt-log-interval,
+body.devtools-page .dt-log-stats {
+  border-radius: 999px;
+  border-color: rgba(96, 165, 250, 0.14);
+  background: rgba(8, 16, 31, 0.58);
+}
+
+body.devtools-page .dt-switch-slider {
+  background: rgba(30, 41, 59, 0.88);
+  border-color: rgba(96, 165, 250, 0.14);
+}
+
+body.devtools-page .dt-switch input:checked + .dt-switch-slider {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.96), rgba(29, 78, 216, 0.94));
+}
+
+body.devtools-page .dt-env-scroll {
+  border: 1px solid rgba(96, 165, 250, 0.1);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(2, 8, 23, 0.58), rgba(2, 8, 23, 0.36));
+  padding: 4px 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+body.devtools-page #dt-env-card table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+body.devtools-page #dt-env-card thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(3, 10, 24, 0.96);
+  color: #cfe3ff;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.14);
+}
+
+body.devtools-page #dt-env-card th,
+body.devtools-page #dt-env-card td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.08);
+}
+
+body.devtools-page #dt-env-card tbody tr:hover td {
+  background: rgba(12, 24, 48, 0.34);
+}
+
+body.devtools-page .dt-logs-layout {
+  gap: 14px;
+}
+
+body.devtools-page .dt-logs-sidebar {
+  border-radius: 20px;
+  border: 1px solid rgba(96, 165, 250, 0.12);
+  background:
+    linear-gradient(180deg, rgba(5, 11, 24, 0.76), rgba(2, 8, 22, 0.72));
+  padding: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+body.devtools-page .dt-log-item,
+body.devtools-page .dt-log-menu-panel {
+  border-color: rgba(96, 165, 250, 0.12);
+  background:
+    linear-gradient(180deg, rgba(10, 18, 34, 0.82), rgba(4, 10, 22, 0.78));
+}
+
+body.devtools-page .dt-log-item.active {
+  border-color: rgba(125, 211, 252, 0.28);
+  background:
+    linear-gradient(180deg, rgba(19, 50, 109, 0.92), rgba(8, 24, 59, 0.88));
+  box-shadow: 0 12px 26px rgba(29, 78, 216, 0.16);
+}
+
+body.devtools-page .dt-log-topbar,
+body.devtools-page .dt-log-controls {
+  padding: 10px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(96, 165, 250, 0.1);
+  background: rgba(4, 11, 25, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+body.devtools-page .dt-log-view,
+body.devtools-page .dt-update-log {
+  border-radius: 18px;
+  border: 1px solid rgba(96, 165, 250, 0.12);
+  background: linear-gradient(180deg, rgba(2, 7, 16, 0.99), rgba(2, 6, 14, 0.97));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.025),
+    0 14px 28px rgba(0, 0, 0, 0.2);
+}
+
+body.devtools-page .dt-badge,
+body.devtools-page .dt-pill,
+body.devtools-page .dt-custom-css-badge,
+body.devtools-page .dt-log-badge {
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+html[data-theme="light"] body.devtools-page {
+  --dt-glass-border: rgba(63, 111, 203, 0.12);
+  --dt-glass-border-strong: rgba(63, 111, 203, 0.18);
+  background:
+    radial-gradient(circle at top center, rgba(119, 155, 227, 0.18), transparent 28%),
+    radial-gradient(circle at 18% 18%, rgba(191, 219, 254, 0.38), transparent 28%),
+    linear-gradient(180deg, #eef4ff 0%, #e7eefb 52%, #dde6f5 100%);
+}
+
+html[data-theme="light"] body.devtools-page::before {
+  opacity: 0.72;
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.58), transparent 18%),
+    linear-gradient(125deg, transparent 0 40%, rgba(63, 111, 203, 0.05) 50%, transparent 60%);
+}
+
+html[data-theme="light"] body.devtools-page .dt-page-header,
+html[data-theme="light"] body.devtools-page .card,
+html[data-theme="light"] body.devtools-page details.dt-collapsible,
+html[data-theme="light"] body.devtools-page details.dt-update-log-box,
+html[data-theme="light"] body.devtools-page .dt-tabs,
+html[data-theme="light"] body.devtools-page .dt-tools-left,
+html[data-theme="light"] body.devtools-page .dt-env-scroll,
+html[data-theme="light"] body.devtools-page .dt-logs-sidebar,
+html[data-theme="light"] body.devtools-page .dt-log-topbar,
+html[data-theme="light"] body.devtools-page .dt-log-controls {
+  border-color: rgba(63, 111, 203, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(244, 248, 255, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.76),
+    0 18px 42px rgba(59, 91, 154, 0.08);
+}
+
+html[data-theme="light"] body.devtools-page .dt-page-header h1,
+html[data-theme="light"] body.devtools-page .card h2,
+html[data-theme="light"] body.devtools-page details.dt-collapsible > summary h2 {
+  color: #162033;
+  text-shadow: none;
+}
+
+html[data-theme="light"] body.devtools-page .dt-tools-left > section.card > h2::before,
+html[data-theme="light"] body.devtools-page .dt-tools-left > details.card > summary h2::before {
+  border-color: color-mix(in srgb, var(--dt-side-accent) 26%, rgba(63, 111, 203, 0.12));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--dt-side-accent) 12%, rgba(255,255,255,0.98)), rgba(243,248,255,0.92));
+}
+
+html[data-theme="light"] body.devtools-page .dt-page-header p,
+html[data-theme="light"] body.devtools-page .small,
+html[data-theme="light"] body.devtools-page .dt-k,
+html[data-theme="light"] body.devtools-page .dt-sub,
+html[data-theme="light"] body.devtools-page .dt-logging-label,
+html[data-theme="light"] body.devtools-page .dt-switch-label {
+  color: rgba(59, 75, 103, 0.82);
+}
+
+html[data-theme="light"] body.devtools-page .dt-header-btn,
+html[data-theme="light"] body.devtools-page .dt-top-tab,
+html[data-theme="light"] body.devtools-page .btn-secondary,
+html[data-theme="light"] body.devtools-page .dt-btn-like,
+html[data-theme="light"] body.devtools-page .dt-log-btn,
+html[data-theme="light"] body.devtools-page .dt-log-menu > summary,
+html[data-theme="light"] body.devtools-page .dt-pill-field,
+html[data-theme="light"] body.devtools-page .dt-env-input,
+html[data-theme="light"] body.devtools-page .xray-log-select,
+html[data-theme="light"] body.devtools-page .xray-log-filter,
+html[data-theme="light"] body.devtools-page .dt-log-lines-input,
+html[data-theme="light"] body.devtools-page .dt-switch,
+html[data-theme="light"] body.devtools-page .dt-log-interval,
+html[data-theme="light"] body.devtools-page .dt-log-stats,
+html[data-theme="light"] body.devtools-page .dt-log-item,
+html[data-theme="light"] body.devtools-page .dt-log-menu-panel,
+html[data-theme="light"] body.devtools-page #dt-env-card thead th {
+  border-color: rgba(63, 111, 203, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(243,248,255,0.94));
+  color: #162033;
+}
+
+html[data-theme="light"] body.devtools-page .dt-header-btn-theme {
+  background:
+    linear-gradient(180deg, rgba(236, 245, 255, 0.98), rgba(221, 235, 255, 0.9)),
+    radial-gradient(circle at 30% 28%, rgba(96, 165, 250, 0.2), transparent 36%);
+}
+
+html[data-theme="light"] body.devtools-page .dt-header-btn-back {
+  background:
+    linear-gradient(180deg, rgba(240, 251, 255, 0.98), rgba(225, 243, 255, 0.9)),
+    radial-gradient(circle at 24% 24%, rgba(103, 232, 249, 0.18), transparent 38%);
+}
+
+html[data-theme="light"] body.devtools-page .dt-header-btn-update {
+  background:
+    linear-gradient(180deg, rgba(245, 241, 255, 0.98), rgba(234, 228, 255, 0.9)),
+    radial-gradient(circle at 24% 24%, rgba(167, 139, 250, 0.16), transparent 38%);
+}
+
+html[data-theme="light"] body.devtools-page .dt-header-btn-logout {
+  background:
+    linear-gradient(180deg, rgba(255, 243, 245, 0.98), rgba(255, 228, 233, 0.9)),
+    radial-gradient(circle at 24% 24%, rgba(251, 113, 133, 0.14), transparent 38%);
+}
+
+html[data-theme="light"] body.devtools-page header.dt-page-header .header-actions .dt-header-btn,
+html[data-theme="light"] body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(240, 247, 255, 0.82)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.56), transparent 44%) !important;
+  border-color: rgba(96, 165, 250, 0.16) !important;
+  color: #162033 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    inset 0 -10px 18px rgba(191, 219, 254, 0.16),
+    0 12px 24px rgba(47, 79, 140, 0.1) !important;
+}
+
+html[data-theme="light"] body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header {
+  background:
+    linear-gradient(180deg, rgba(236, 245, 255, 0.98), rgba(221, 235, 255, 0.9)),
+    radial-gradient(circle at 30% 28%, rgba(96, 165, 250, 0.2), transparent 36%) !important;
+}
+
+html[data-theme="light"] body.devtools-page header.dt-page-header .header-actions .dt-header-btn-back.btn-link {
+  background:
+    linear-gradient(180deg, rgba(240, 251, 255, 0.98), rgba(225, 243, 255, 0.9)),
+    radial-gradient(circle at 24% 24%, rgba(103, 232, 249, 0.18), transparent 38%) !important;
+}
+
+html[data-theme="light"] body.devtools-page header.dt-page-header .header-actions .dt-header-btn-update.service-core-text {
+  background:
+    linear-gradient(180deg, rgba(245, 241, 255, 0.98), rgba(234, 228, 255, 0.9)),
+    radial-gradient(circle at 24% 24%, rgba(167, 139, 250, 0.16), transparent 38%) !important;
+}
+
+html[data-theme="light"] body.devtools-page header.dt-page-header .header-actions .dt-header-btn-logout.btn-link {
+  background:
+    linear-gradient(180deg, rgba(255, 243, 245, 0.98), rgba(255, 228, 233, 0.9)),
+    radial-gradient(circle at 24% 24%, rgba(251, 113, 133, 0.14), transparent 38%) !important;
+}
+
+html[data-theme="light"] body.devtools-page header.dt-page-header .header-actions .dt-header-btn:hover,
+html[data-theme="light"] body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header:hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(236, 244, 255, 0.98)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.66), transparent 46%) !important;
+  border-color: rgba(63, 111, 203, 0.22) !important;
+  color: #162033 !important;
+}
+
+html[data-theme="light"] body.devtools-page .dt-top-tab.active {
+  color: #f8fbff;
+  background:
+    linear-gradient(180deg, rgba(37, 99, 235, 0.94), rgba(29, 78, 216, 0.92));
+}
+
+html[data-theme="light"] body.devtools-page .dt-ui-action-start {
+  border-color: rgba(34, 197, 94, 0.24);
+  background:
+    linear-gradient(180deg, rgba(240, 253, 244, 0.98), rgba(220, 252, 231, 0.92)),
+    radial-gradient(circle at 20% 22%, rgba(74, 222, 128, 0.18), transparent 38%);
+  color: #14532d;
+}
+
+html[data-theme="light"] body.devtools-page .dt-ui-action-stop {
+  border-color: rgba(239, 68, 68, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 241, 242, 0.98), rgba(255, 228, 230, 0.92)),
+    radial-gradient(circle at 20% 22%, rgba(248, 113, 113, 0.18), transparent 38%);
+  color: #7f1d1d;
+}
+
+html[data-theme="light"] body.devtools-page .dt-ui-action-restart,
+html[data-theme="light"] body.devtools-page #dt-update-run {
+  border-color: rgba(245, 158, 11, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.92)),
+    radial-gradient(circle at 20% 22%, rgba(251, 191, 36, 0.16), transparent 38%);
+  color: #78350f;
+}
+
+html[data-theme="light"] body.devtools-page .dt-log-view,
+html[data-theme="light"] body.devtools-page .dt-update-log {
+  border-color: rgba(63, 111, 203, 0.12);
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(241, 246, 255, 0.96));
+}
+
+@media (max-width: 1024px) {
+  body.devtools-page .dt-tools-layout,
+  body.devtools-page .dt-logs-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.devtools-page .dt-tools-left {
+    padding: 6px;
+  }
+}
+
+@media (max-width: 760px) {
+  body.devtools-page .dt-container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  body.devtools-page .dt-page-header {
+    padding: 12px 14px;
+    border-radius: 22px;
+  }
+
+  body.devtools-page .dt-page-title-group {
+    gap: 10px;
+  }
+
+  body.devtools-page .dt-page-actions,
+  body.devtools-page .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+/* Theme bridge: late override so DevTools global theme variables affect the new premium header/tabs/actions. */
+body.devtools-page .dt-page-header {
+  border-color: color-mix(in srgb, var(--modal-border, #475569d1) 92%, transparent);
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--accent, #60a5fa) 12%, transparent), transparent 30%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--modal-bg, #060e1eeb) 96%, white 4%),
+      color-mix(in srgb, var(--modal-bg, #060e1eeb) 98%, black 2%)
+    );
+}
+
+body.devtools-page .dt-page-header h1 {
+  color: var(--modal-text, #f8fbff);
+}
+
+body.devtools-page .dt-page-header p {
+  color: var(--modal-muted, #bfdbfebd);
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn,
+body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header {
+  border-color: var(--header-btn-border, #94c5ff2e) !important;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--header-btn-bg, #0f172a94) 92%, white 8%),
+      color-mix(in srgb, var(--header-btn-bg, #0f172a94) 96%, black 4%)
+    ),
+    radial-gradient(circle at top left, color-mix(in srgb, var(--header-btn-text, #eaf2ff) 12%, transparent), transparent 46%) !important;
+  color: var(--header-btn-text, #eaf2ff) !important;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--header-btn-text, #eaf2ff) 12%, transparent),
+    inset 0 -10px 18px rgba(2, 8, 23, 0.24),
+    0 10px 24px rgba(2, 8, 23, 0.26) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn:hover,
+body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header:hover {
+  border-color: var(--header-btn-hover-border, #baddff57) !important;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--header-btn-hover-bg, #142038f5) 94%, white 6%),
+      color-mix(in srgb, var(--header-btn-hover-bg, #142038f5) 98%, black 2%)
+    ),
+    radial-gradient(circle at top left, color-mix(in srgb, var(--header-btn-hover-text, #f8fbff) 14%, transparent), transparent 48%) !important;
+  color: var(--header-btn-hover-text, #f8fbff) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn:hover::before,
+body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header:hover::before {
+  opacity: 1;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 58%);
+}
+
+body.devtools-page header.dt-page-header .header-actions .theme-toggle-btn.dt-header-btn-theme.theme-toggle-header {
+  border-color: color-mix(in srgb, var(--accent, #60a5fa) 52%, var(--header-btn-border, #94c5ff2e) 48%) !important;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(24, 51, 104, 0.82) 76%, var(--accent, #60a5fa) 24%),
+      color-mix(in srgb, rgba(10, 23, 52, 0.78) 68%, var(--header-btn-hover-bg, #142038f5) 32%)
+    ),
+    radial-gradient(circle at 30% 28%, color-mix(in srgb, rgba(147, 197, 253, 0.4) 58%, var(--accent, #60a5fa) 42%), transparent 34%) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn-back.btn-link {
+  border-color: color-mix(in srgb, var(--sem-info, #93c5fd) 46%, var(--header-btn-border, #94c5ff2e) 54%) !important;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(26, 44, 82, 0.82) 78%, var(--sem-info, #93c5fd) 22%),
+      color-mix(in srgb, rgba(11, 23, 48, 0.78) 66%, var(--sem-info, #93c5fd) 34%)
+    ),
+    radial-gradient(circle at 24% 24%, color-mix(in srgb, rgba(125, 211, 252, 0.24) 56%, var(--sem-info, #93c5fd) 44%), transparent 38%) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn-update.service-core-text {
+  border-color: color-mix(in srgb, var(--sem-warning, #fbbf24) 48%, var(--header-btn-border, #94c5ff2e) 52%) !important;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(37, 35, 84, 0.84) 80%, var(--sem-warning, #fbbf24) 20%),
+      color-mix(in srgb, rgba(17, 18, 48, 0.8) 68%, var(--sem-warning, #fbbf24) 32%)
+    ),
+    radial-gradient(circle at 28% 24%, color-mix(in srgb, rgba(251, 191, 36, 0.22) 58%, var(--sem-warning, #fbbf24) 42%), transparent 36%) !important;
+}
+
+body.devtools-page header.dt-page-header .header-actions .dt-header-btn-logout.btn-link {
+  border-color: color-mix(in srgb, var(--sem-error, #f87171) 46%, var(--header-btn-border, #94c5ff2e) 54%) !important;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(76, 22, 31, 0.82) 80%, var(--sem-error, #f87171) 20%),
+      color-mix(in srgb, rgba(41, 10, 17, 0.8) 68%, var(--sem-error, #f87171) 32%)
+    ),
+    radial-gradient(circle at 28% 22%, color-mix(in srgb, rgba(251, 113, 133, 0.18) 62%, var(--sem-error, #f87171) 38%), transparent 36%) !important;
+}
+
+body.devtools-page .dt-top-tab {
+  border-color: var(--header-tab-border, #60a5fa24);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--header-tab-bg, #0f172a94) 94%, white 6%),
+      color-mix(in srgb, var(--header-tab-bg, #0f172a94) 98%, black 2%)
+    );
+  color: var(--header-tab-text, #dbeafe);
+}
+
+body.devtools-page .dt-top-tab:hover:not(.active) {
+  border-color: color-mix(in srgb, var(--header-tab-active-bg, #2563eb) 34%, var(--header-tab-border, #60a5fa24) 66%);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--header-tab-active-bg, #2563eb) 24%, var(--header-tab-bg, #0f172a94) 76%),
+      color-mix(in srgb, var(--header-tab-active-bg, #2563eb) 34%, var(--header-tab-bg, #0f172a94) 66%)
+    );
+  color: var(--header-tab-active-text, #f8fbff);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 20px rgba(2, 7, 18, 0.2);
+}
+
+body.devtools-page .dt-top-tab:hover:not(.active)::before {
+  opacity: 1;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 58%);
+}
+
+body.devtools-page .dt-top-tab.active {
+  border-color: color-mix(in srgb, var(--header-tab-active-bg, #2563eb) 58%, white 42%);
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, #173976 72%, var(--header-tab-active-bg, #2563eb) 28%) 0%,
+      color-mix(in srgb, #2b58b4 58%, var(--header-tab-active-bg, #2563eb) 42%) 48%,
+      color-mix(in srgb, #5c86e7 64%, var(--header-tab-active-bg, #2563eb) 36%) 100%);
+  color: var(--header-tab-active-text, #f8fbff);
+  box-shadow:
+    0 14px 28px color-mix(in srgb, var(--header-tab-active-bg, #2563eb) 28%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+body.devtools-page .dt-ui-action,
+body.devtools-page #dt-update-run {
+  border-color: color-mix(in srgb, var(--editor-btn-border, #60a5fa2e) 90%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--editor-btn-bg, #0f172a94) 92%, white 8%),
+      color-mix(in srgb, var(--editor-btn-bg, #0f172a94) 96%, black 4%)
+    );
+  color: var(--editor-btn-text, #eaf2ff);
+}
+
+body.devtools-page .dt-ui-action:hover,
+body.devtools-page #dt-update-run:hover {
+  border-color: var(--editor-btn-hover-border, #baddff57);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--editor-btn-hover-bg, #142038eb) 94%, white 6%),
+      color-mix(in srgb, var(--editor-btn-hover-bg, #142038eb) 98%, black 2%)
+    );
+  color: var(--editor-btn-hover-text, #f8fbff);
+}
+
+body.devtools-page .dt-ui-action-start {
+  border-color: color-mix(in srgb, var(--sem-success, #22c55e) 52%, var(--editor-btn-border, #60a5fa2e) 48%);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(9, 61, 36, 0.92) 82%, var(--sem-success, #22c55e) 18%),
+      color-mix(in srgb, rgba(6, 31, 20, 0.9) 68%, var(--sem-success, #22c55e) 32%)
+    ),
+    radial-gradient(circle at 22% 22%, color-mix(in srgb, rgba(74, 222, 128, 0.22) 56%, var(--sem-success, #22c55e) 44%), transparent 38%);
+  color: #ebfff1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 24px rgba(6, 95, 70, 0.24);
+}
+
+body.devtools-page .dt-ui-action-stop {
+  border-color: color-mix(in srgb, var(--sem-error, #f87171) 52%, var(--editor-btn-border, #60a5fa2e) 48%);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(88, 19, 31, 0.92) 82%, var(--sem-error, #f87171) 18%),
+      color-mix(in srgb, rgba(48, 10, 18, 0.9) 68%, var(--sem-error, #f87171) 32%)
+    ),
+    radial-gradient(circle at 22% 22%, color-mix(in srgb, rgba(248, 113, 113, 0.22) 56%, var(--sem-error, #f87171) 44%), transparent 38%);
+  color: #fff0f2;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 24px rgba(127, 29, 29, 0.24);
+}
+
+body.devtools-page .dt-ui-action-restart,
+body.devtools-page #dt-update-run {
+  border-color: color-mix(in srgb, var(--sem-warning, #fbbf24) 52%, var(--editor-btn-border, #60a5fa2e) 48%);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(92, 55, 13, 0.92) 82%, var(--sem-warning, #fbbf24) 18%),
+      color-mix(in srgb, rgba(43, 25, 7, 0.9) 68%, var(--sem-warning, #fbbf24) 32%)
+    );
+  color: #fff7e8;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 24px rgba(146, 64, 14, 0.24);
+}
+
+body.devtools-page .dt-ui-action-start:hover {
+  border-color: color-mix(in srgb, var(--sem-success, #22c55e) 64%, white 36%);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(11, 85, 48, 0.96) 82%, var(--sem-success, #22c55e) 18%),
+      color-mix(in srgb, rgba(6, 43, 25, 0.94) 68%, var(--sem-success, #22c55e) 32%)
+    ),
+    radial-gradient(circle at 22% 22%, color-mix(in srgb, rgba(74, 222, 128, 0.28) 56%, var(--sem-success, #22c55e) 44%), transparent 40%);
+  color: #f4fff6;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 16px 30px rgba(6, 95, 70, 0.32);
+}
+
+body.devtools-page .dt-ui-action-stop:hover {
+  border-color: color-mix(in srgb, var(--sem-error, #f87171) 64%, white 36%);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(115, 24, 40, 0.96) 82%, var(--sem-error, #f87171) 18%),
+      color-mix(in srgb, rgba(61, 11, 22, 0.94) 68%, var(--sem-error, #f87171) 32%)
+    ),
+    radial-gradient(circle at 22% 22%, color-mix(in srgb, rgba(248, 113, 113, 0.28) 56%, var(--sem-error, #f87171) 44%), transparent 40%);
+  color: #fff5f6;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 16px 30px rgba(127, 29, 29, 0.34);
+}
+
+body.devtools-page .dt-ui-action-restart:hover,
+body.devtools-page #dt-update-run:hover {
+  border-color: color-mix(in srgb, var(--sem-warning, #fbbf24) 64%, white 36%);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgba(115, 70, 17, 0.96) 82%, var(--sem-warning, #fbbf24) 18%),
+      color-mix(in srgb, rgba(60, 35, 8, 0.94) 68%, var(--sem-warning, #fbbf24) 32%)
+    ),
+    radial-gradient(circle at 22% 22%, color-mix(in srgb, rgba(251, 191, 36, 0.26) 56%, var(--sem-warning, #fbbf24) 44%), transparent 40%);
+  color: #fffbf1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 16px 30px rgba(146, 64, 14, 0.32);
+}

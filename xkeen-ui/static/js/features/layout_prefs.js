@@ -53,6 +53,9 @@
       try { localStorage.setItem('xkeen-layout-v1', JSON.stringify(next || {})); } catch (e) {}
     }
     if (c && typeof c.apply === 'function') c.apply(next);
+    try {
+      if (c && typeof c.applyHideUnusedNow === 'function') c.applyHideUnusedNow();
+    } catch (e) {}
   }
 
   function uniq(list) {
@@ -276,6 +279,10 @@
         if (!ev || ev.key !== 'xkeen-layout-v1') return;
         sync();
       });
+    } catch (e) {}
+
+    try {
+      document.addEventListener('xkeen-ui-prefs-applied', sync);
     } catch (e) {}
   }
 

@@ -36,7 +36,7 @@
 
     function applyState() {
       b.style.display = open ? '' : 'none';
-      a.textContent = open ? '▼' : '►';
+        a.textContent = open ? '▲' : '▼';
     }
     applyState();
 

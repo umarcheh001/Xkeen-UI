@@ -25,7 +25,7 @@
 <link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
 {% endif %}
 </head>
-<body>
+<body class="xk-backups-page">
   <div id="global-xkeen-spinner">
     <div class="global-spinner-box">
       <div class="global-spinner-icon"></div>
@@ -37,45 +37,47 @@
 
   <!-- Wider container (match DevTools page width) -->
   <div class="container container-wide">
-    <header>
-      <h1>Бэкапы Xray конфигов (05_routing* / 03_inbounds* / 04_outbounds*)</h1>
-      <p>Каталог: <code>{{ backup_dir }}</code></p>
-
-      <p class="xk-card-desc" style="margin-top: 6px;">
-        Активные файлы:
-        <code>{{ inbounds_file }}</code>
-        · <code>{{ outbounds_file }}</code>
-        · <code>{{ routing_file }}</code>
-        <span class="xray-profile-badge" data-profile="{{ xray_profile|e }}" style="vertical-align: middle;">
-          {% if xray_profile == 'hys2' %}Hysteria2{% else %}Обычный{% endif %}
-        </span>
-      </p>
-
-      <div class="actions" style="justify-content: space-between; align-items: center;">
-        <a href="{{ url_for('index') }}" class="btn-link">← Назад</a>
+    <header class="panel-header xk-backups-page-header">
+      <div class="xk-backups-header-main">
+        <div class="xk-backups-header-title">
+          <h1>Бэкапы Xray конфигов</h1>
+        </div>
         <div class="header-actions">
           <button
             type="button"
             id="theme-toggle-btn"
-            class="theme-toggle-btn theme-toggle-header"
+            class="theme-toggle-btn theme-toggle-header xk-header-btn xk-header-btn-theme"
             aria-label="Переключить тему"
           ></button>
-          <a href="{{ url_for('devtools_page') }}" class="btn-link" title="DevTools">DevTools</a>
+          <a
+            href="{{ url_for('index') }}"
+            class="service-core-text xk-header-btn xk-header-btn-ui"
+            title="Назад на главную панель"
+          >← Назад</a>
+          <a
+            href="{{ url_for('devtools_page') }}"
+            class="service-core-text xk-header-btn xk-header-btn-devtools"
+            title="DevTools"
+          >DevTools</a>
           <a
             href="{{ url_for('devtools_page') }}#dt-update-card"
             id="xk-update-link"
-            class="service-core-text hidden"
+            class="service-core-text xk-header-btn xk-header-btn-devtools hidden"
             title="Обновление"
           >
             <span class="xk-update-dot" aria-hidden="true"></span>
             <span data-xk-update-label>Обновление</span>
           </a>
-          <a href="{{ url_for('logout') }}" class="btn-link" title="Выйти из панели">Выйти</a>
+          <a
+            href="{{ url_for('logout') }}"
+            class="service-core-text xk-header-btn xk-header-btn-logout"
+            title="Выйти из панели"
+          >Выйти</a>
         </div>
       </div>
     </header>
 
-    <section class="card">
+    <section class="card xk-backups-table-card">
       <table id="backups-table" data-mode="history">
         <thead>
           <tr>

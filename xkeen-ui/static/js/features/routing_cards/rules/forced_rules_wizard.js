@@ -314,8 +314,11 @@
   }
 
   async function fetchOutboundTags() {
+    const url = (C && typeof C.buildOutboundTagsUrl === 'function')
+      ? C.buildOutboundTagsUrl()
+      : '/api/xray/outbound-tags';
     try {
-      const resp = await fetch('/api/xray/outbound-tags', { method: 'GET' });
+      const resp = await fetch(url, { method: 'GET' });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data || data.ok === false) return [];
       if (!Array.isArray(data.tags)) return [];

@@ -841,7 +841,7 @@
   
   // -------- Balancer selector UI (outbound tags + chips) --------
   const _balSelectorMode = new WeakMap(); // balancer object -> 'ui' | 'raw'
-  const _outboundTagsCache = { ts: 0, tags: [], inflight: null, ttlMs: 30000 };
+  const _outboundTagsCache = { ts: 0, tags: [], inflight: null, ttlMs: 30000, key: '' };
   let _activeSelectorPanelCloser = null;
 
   function closeActiveSelectorPanel() {
@@ -879,17 +879,21 @@
   }
 
   async function getOutboundTags(force) {
+    const url = (C && typeof C.buildOutboundTagsUrl === 'function')
+      ? C.buildOutboundTagsUrl()
+      : '/api/xray/outbound-tags';
     const now = Date.now();
-    if (!force && _outboundTagsCache.ts && (now - _outboundTagsCache.ts) < _outboundTagsCache.ttlMs) {
+    if (!force && _outboundTagsCache.key === url && _outboundTagsCache.ts && (now - _outboundTagsCache.ts) < _outboundTagsCache.ttlMs) {
       return Array.isArray(_outboundTagsCache.tags) ? _outboundTagsCache.tags : [];
     }
-    if (_outboundTagsCache.inflight) {
+    if (_outboundTagsCache.inflight && _outboundTagsCache.key === url) {
       try { return await _outboundTagsCache.inflight; } catch (e) { /* fallthrough */ }
     }
 
+    _outboundTagsCache.key = url;
     const p = (async () => {
       try {
-        const resp = await fetch('/api/xray/outbound-tags', { method: 'GET' });
+        const resp = await fetch(url, { method: 'GET' });
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok || !data || data.ok === false) {
           _outboundTagsCache.tags = [];

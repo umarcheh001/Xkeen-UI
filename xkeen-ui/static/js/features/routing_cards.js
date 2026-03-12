@@ -83,7 +83,7 @@
       const arrow = document.getElementById(arrowId);
       if (!body || !arrow) return;
       body.style.display = open ? '' : 'none';
-      arrow.textContent = open ? '▼' : '►';
+        arrow.textContent = open ? '▲' : '▼';
     } catch (e) {}
   }
 
@@ -187,6 +187,64 @@
     try { wireFocusToggle(); } catch (e) {}
   }
 
+  function onShow(opts) {
+    const reason = (opts && opts.reason) ? String(opts.reason) : '';
+
+    const refreshVisibleCards = () => {
+      try {
+        const view = document.getElementById('view-routing');
+        if (!view) return;
+        const st = window.getComputedStyle(view);
+        if (!st || st.display === 'none' || st.visibility === 'hidden') return;
+      } catch (e) {}
+
+      try { applyUiSettings(); } catch (e) {}
+
+      try {
+        const rulesBody = document.getElementById('routing-rules-body');
+        const isRulesOpen = !!(rulesBody && rulesBody.style.display !== 'none');
+        const controls = RC.rules && RC.rules.controls;
+        const model = RC.rules && RC.rules.model;
+
+        if (isRulesOpen && controls && typeof controls.renderFromEditor === 'function') {
+          controls.renderFromEditor({ setError: false });
+        } else if (model && typeof model.loadFromEditor === 'function') {
+          const r = model.loadFromEditor({ setError: false });
+          if (r && r.ok && controls && typeof controls.syncDomainStrategySelect === 'function') {
+            controls.syncDomainStrategySelect();
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const datBody = document.getElementById('routing-dat-body');
+        const isDatOpen = !!(datBody && datBody.style.display !== 'none');
+        const refreshDat = RC.dat && RC.dat.card && typeof RC.dat.card.refreshDatMeta === 'function'
+          ? RC.dat.card.refreshDatMeta
+          : null;
+        if (isDatOpen && refreshDat) refreshDat();
+      } catch (e) {}
+    };
+
+    try {
+      requestAnimationFrame(() => {
+        refreshVisibleCards();
+        try { setTimeout(refreshVisibleCards, 0); } catch (e) {}
+        try { setTimeout(refreshVisibleCards, 120); } catch (e) {}
+        try { setTimeout(refreshVisibleCards, 260); } catch (e) {}
+      });
+    } catch (e) {
+      refreshVisibleCards();
+    }
+
+    if (IS_DEBUG) {
+      try {
+        // eslint-disable-next-line no-console
+        console.debug('[RC] onShow', { reason });
+      } catch (e) {}
+    }
+  }
+
   let _inited = false;
   function init() {
     if (_inited) return;
@@ -241,6 +299,7 @@
   RC.applyUiSettings = applyUiSettings;
   RC.applyFocusMode = applyFocusMode;
   RC.getPreferredFocusMode = _getPreferredFocusMode;
+  RC.onShow = onShow;
   RC.init = init;
 
   // Auto-init

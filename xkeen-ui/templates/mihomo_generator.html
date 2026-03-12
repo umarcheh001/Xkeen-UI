@@ -336,25 +336,176 @@
       flex: 1;
     }
 
-    /* Header actions row (avoid .actions button stretching in generator page) */
-    .generator-header-actions-row {
-      margin-top: 10px;
+    /* Premium header (match main panel controls) */
+    .mihomo-generator-page .container.container-wide > header.generator-page-header {
+      position: relative;
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
+      gap: 12px 16px;
+      margin: 16px 0 18px;
+      padding: 16px 20px;
+      border-radius: 32px;
+      border: 1px solid rgba(64, 126, 255, 0.18);
+      background:
+        linear-gradient(90deg, rgba(2, 12, 42, 0.96) 0%, rgba(5, 18, 54, 0.94) 48%, rgba(13, 28, 58, 0.9) 100%),
+        radial-gradient(circle at 22% 18%, rgba(59, 130, 246, 0.18), transparent 34%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 26px 54px rgba(2, 8, 23, 0.5);
+      backdrop-filter: blur(24px) saturate(155%);
+      -webkit-backdrop-filter: blur(24px) saturate(155%);
+      overflow: hidden;
     }
-    .generator-header-actions-row .header-actions {
+    .mihomo-generator-page .container.container-wide > header.generator-page-header::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 78% 18%, rgba(96, 165, 250, 0.13), transparent 28%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 54%);
+    }
+    .mihomo-generator-page .generator-page-header > * {
+      position: relative;
+      z-index: 1;
+    }
+    .mihomo-generator-page .generator-header-title {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .mihomo-generator-page .generator-header-title h1 {
+      margin: 0;
+      color: #f8fbff;
+      font-size: clamp(21px, 2.2vw, 32px);
+      letter-spacing: -0.045em;
+      line-height: 1.04;
+    }
+    .mihomo-generator-page .generator-header-actions-row {
+      margin-top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex: 0 1 auto;
+      min-width: 0;
+    }
+    .mihomo-generator-page .generator-header-actions-row .header-actions {
       display: inline-flex;
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
       justify-content: flex-end;
     }
-    .generator-header-actions-row .theme-toggle-btn {
-      flex: 0 0 auto;
+    .mihomo-generator-page .xk-header-btn,
+    .mihomo-generator-page .theme-toggle-btn.xk-header-btn-theme {
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 38px;
+      padding: 0 13px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 197, 255, 0.18);
+      background:
+        linear-gradient(180deg, rgba(18, 28, 48, 0.78), rgba(8, 14, 28, 0.72)),
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.12), transparent 46%);
+      color: #eaf2ff;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 -10px 18px rgba(2, 8, 23, 0.24),
+        0 10px 24px rgba(2, 8, 23, 0.26);
+      backdrop-filter: blur(16px) saturate(150%);
+      -webkit-backdrop-filter: blur(16px) saturate(150%);
+      text-decoration: none;
+      font-size: calc(11px * var(--xk-font-scale));
+      font-weight: 700;
+      letter-spacing: 0.01em;
       white-space: nowrap;
+    }
+    .mihomo-generator-page .xk-header-btn::before,
+    .mihomo-generator-page .theme-toggle-btn.xk-header-btn-theme::before {
+      content: "";
+      position: absolute;
+      inset: 1px;
+      border-radius: inherit;
+      pointer-events: none;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.18), transparent 34%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 58%);
+      opacity: 0.9;
+      z-index: -1;
+    }
+    .mihomo-generator-page .xk-header-btn:hover,
+    .mihomo-generator-page .theme-toggle-btn.xk-header-btn-theme:hover {
+      transform: translateY(-1px);
+      border-color: rgba(186, 221, 255, 0.34);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        inset 0 -12px 22px rgba(2, 8, 23, 0.26),
+        0 16px 30px rgba(2, 8, 23, 0.32);
+    }
+    .mihomo-generator-page .theme-toggle-btn.xk-header-btn-theme {
+      min-width: 60px;
+      padding: 0 14px;
+      background:
+        linear-gradient(180deg, rgba(24, 51, 104, 0.82), rgba(10, 23, 52, 0.78)),
+        radial-gradient(circle at 30% 28%, rgba(147, 197, 253, 0.4), transparent 34%);
+      border-color: rgba(96, 165, 250, 0.28);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        0 0 0 1px rgba(96, 165, 250, 0.12),
+        0 14px 28px rgba(8, 47, 107, 0.3);
+    }
+    .mihomo-generator-page .xk-header-btn-ui {
+      background:
+        linear-gradient(180deg, rgba(26, 44, 82, 0.82), rgba(11, 23, 48, 0.78)),
+        radial-gradient(circle at 24% 24%, rgba(125, 211, 252, 0.24), transparent 38%);
+      border-color: rgba(103, 232, 249, 0.18);
+    }
+    .mihomo-generator-page .xk-header-btn-devtools {
+      background:
+        linear-gradient(180deg, rgba(37, 35, 84, 0.84), rgba(17, 18, 48, 0.8)),
+        radial-gradient(circle at 28% 24%, rgba(167, 139, 250, 0.22), transparent 36%);
+      border-color: rgba(167, 139, 250, 0.2);
+    }
+    .mihomo-generator-page .xk-header-btn-logout {
+      background:
+        linear-gradient(180deg, rgba(76, 22, 31, 0.82), rgba(41, 10, 17, 0.8)),
+        radial-gradient(circle at 28% 22%, rgba(251, 113, 133, 0.18), transparent 36%);
+      border-color: rgba(251, 113, 133, 0.18);
+    }
+    .mihomo-generator-page .xk-mg-header-btn-core {
+      cursor: default;
+      background:
+        linear-gradient(180deg, rgba(18, 28, 48, 0.84), rgba(8, 14, 28, 0.8)),
+        radial-gradient(circle at 24% 24%, rgba(148, 163, 184, 0.12), transparent 38%);
+      border-color: rgba(148, 163, 184, 0.16);
+      color: #d6e5ff;
+    }
+    .mihomo-generator-page .xk-mg-header-btn-core.has-core {
+      border-color: rgba(96, 165, 250, 0.28);
+      background:
+        linear-gradient(180deg, rgba(24, 51, 104, 0.82), rgba(10, 23, 52, 0.78)),
+        radial-gradient(circle at 30% 28%, rgba(147, 197, 253, 0.24), transparent 34%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        0 0 0 1px rgba(96, 165, 250, 0.1),
+        0 12px 24px rgba(8, 47, 107, 0.22);
+      text-decoration: none;
+    }
+    .mihomo-generator-page .xk-mg-header-btn-core:hover,
+    .mihomo-generator-page .xk-mg-header-btn-core.has-core:hover {
+      text-decoration: none;
+    }
+    .mihomo-generator-page .xk-header-btn-devtools.xk-update-available {
+      border-color: rgba(196, 181, 253, 0.28);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        0 0 0 1px rgba(167, 139, 250, 0.1),
+        0 14px 28px rgba(49, 46, 129, 0.24);
     }
 
     .subscriptions-list,
@@ -634,6 +785,67 @@
         inset 0 1px 0 rgba(255,255,255,0.75),
         0 20px 44px rgba(15, 23, 42, 0.08);
     }
+    html[data-theme="light"] .mihomo-generator-page .container.container-wide > header.generator-page-header {
+      border-color: rgba(96, 165, 250, 0.18);
+      background:
+        linear-gradient(90deg, rgba(244, 249, 255, 0.98) 0%, rgba(235, 244, 255, 0.96) 50%, rgba(242, 247, 255, 0.94) 100%),
+        radial-gradient(circle at 18% 16%, rgba(96, 165, 250, 0.12), transparent 34%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.8),
+        0 20px 44px rgba(47, 79, 140, 0.1);
+    }
+    html[data-theme="light"] .mihomo-generator-page .generator-header-title h1 {
+      color: #0f172a;
+    }
+    html[data-theme="light"] .mihomo-generator-page .xk-header-btn,
+    html[data-theme="light"] .mihomo-generator-page .theme-toggle-btn.xk-header-btn-theme {
+      border-color: rgba(96, 165, 250, 0.16);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(240, 247, 255, 0.82)),
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.56), transparent 44%);
+      color: #162033;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.84),
+        inset 0 -10px 18px rgba(191, 219, 254, 0.16),
+        0 12px 24px rgba(47, 79, 140, 0.1);
+    }
+    html[data-theme="light"] .mihomo-generator-page .xk-header-btn-theme {
+      background:
+        linear-gradient(180deg, rgba(236, 245, 255, 0.98), rgba(221, 235, 255, 0.9)),
+        radial-gradient(circle at 30% 28%, rgba(96, 165, 250, 0.2), transparent 36%);
+    }
+    html[data-theme="light"] .mihomo-generator-page .xk-header-btn-ui {
+      background:
+        linear-gradient(180deg, rgba(240, 251, 255, 0.98), rgba(225, 243, 255, 0.9)),
+        radial-gradient(circle at 24% 24%, rgba(103, 232, 249, 0.18), transparent 38%);
+    }
+    html[data-theme="light"] .mihomo-generator-page .xk-header-btn-devtools {
+      background:
+        linear-gradient(180deg, rgba(245, 241, 255, 0.98), rgba(234, 228, 255, 0.9)),
+        radial-gradient(circle at 24% 24%, rgba(167, 139, 250, 0.16), transparent 38%);
+    }
+    html[data-theme="light"] .mihomo-generator-page .xk-header-btn-logout {
+      background:
+        linear-gradient(180deg, rgba(255, 243, 245, 0.98), rgba(255, 228, 233, 0.9)),
+        radial-gradient(circle at 24% 24%, rgba(251, 113, 133, 0.14), transparent 38%);
+    }
+    html[data-theme="light"] .mihomo-generator-page .xk-mg-header-btn-core {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(242, 247, 255, 0.86)),
+        radial-gradient(circle at 24% 24%, rgba(148, 163, 184, 0.1), transparent 38%);
+      border-color: rgba(148, 163, 184, 0.18);
+      color: #334155;
+    }
+    html[data-theme="light"] .mihomo-generator-page .xk-mg-header-btn-core.has-core {
+      background:
+        linear-gradient(180deg, rgba(236, 245, 255, 0.98), rgba(221, 235, 255, 0.9)),
+        radial-gradient(circle at 30% 28%, rgba(96, 165, 250, 0.16), transparent 36%);
+      border-color: rgba(96, 165, 250, 0.2);
+      color: #1e3a8a;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.84),
+        0 12px 24px rgba(59, 130, 246, 0.12);
+    }
 
     html[data-theme="light"] .generator-section-title {
       color: #0f172a;
@@ -667,7 +879,7 @@
     html[data-theme="light"] input[type="text"],
     html[data-theme="light"] input[type="number"],
     html[data-theme="light"] textarea {
-      background: #ffffff;
+      background-color: #ffffff;
       color: #111827;
       border-color: #d1d5db;
     }
@@ -743,6 +955,17 @@
     }
 
     @media (max-width: 860px) {
+      .mihomo-generator-page .container.container-wide > header.generator-page-header {
+        padding: 14px 16px;
+      }
+      .mihomo-generator-page .generator-page-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .mihomo-generator-page .generator-header-actions-row,
+      .mihomo-generator-page .generator-header-actions-row .header-actions {
+        justify-content: flex-start;
+      }
       .generator-section-head,
       .generator-rule-groups-head,
       .generator-statusbar {
@@ -1529,7 +1752,7 @@
 
   </style>
 </head>
-<body>
+<body class="mihomo-generator-page">
   <div id="global-xkeen-spinner">
     <div class="global-spinner-box">
       <div class="global-spinner-icon"></div>
@@ -1542,36 +1765,49 @@
 
   <!-- Wider container (match DevTools page width) -->
   <div class="container container-wide">
-    <header>
-      <h1>Mihomo — генератор конфига</h1>
-      <p>Новый генератор для профилей роутера (bazy ZKeen / кастомные провайдеры).</p>
+    <header class="generator-page-header">
+      <div class="generator-header-title">
+        <h1>Mihomo — генератор конфига</h1>
+      </div>
 
       <div class="generator-header-actions-row">
-        <a href="{{ url_for('index') }}" class="btn-link">← Назад</a>
         <div class="header-actions">
           <button
             type="button"
             id="theme-toggle-btn"
-            class="theme-toggle-btn theme-toggle-header"
+            class="theme-toggle-btn theme-toggle-header xk-header-btn xk-header-btn-theme"
             aria-label="Переключить тему"
           ></button>
-          <a href="{{ url_for('devtools_page') }}" class="btn-link" title="DevTools">DevTools</a>
+          <a
+            href="{{ url_for('index') }}"
+            class="service-core-text xk-header-btn xk-header-btn-ui"
+            title="Назад на главную панель"
+          >← Назад</a>
+          <a
+            href="{{ url_for('devtools_page') }}"
+            class="service-core-text xk-header-btn xk-header-btn-devtools"
+            title="DevTools"
+          >DevTools</a>
           <span
             id="xkeen-core-pill"
-            class="service-core-text"
+            class="service-core-text xk-header-btn xk-mg-header-btn-core"
             style="cursor: default;"
             title="Активное ядро XKeen"
           >Ядро: …</span>
           <a
             href="{{ url_for('devtools_page') }}#dt-update-card"
             id="xk-update-link"
-            class="service-core-text hidden"
+            class="service-core-text xk-header-btn xk-header-btn-devtools hidden"
             title="Обновление"
           >
             <span class="xk-update-dot" aria-hidden="true"></span>
             <span data-xk-update-label>Обновление</span>
           </a>
-          <a href="{{ url_for('logout') }}" class="btn-link" title="Выйти из панели">Выйти</a>
+          <a
+            href="{{ url_for('logout') }}"
+            class="service-core-text xk-header-btn xk-header-btn-logout"
+            title="Выйти из панели"
+          >Выйти</a>
         </div>
       </div>
     </header>
@@ -1645,9 +1881,6 @@
                 </label>
               </div>
               <div id="ruleGroupsList" class="rule-groups-grid"></div>
-              <div class="hint xk-card-desc">
-                Отмеченные пакеты останутся в шаблоне, остальные группы и правила генератор закомментирует.
-              </div>
             </div>
           </div>
 

@@ -151,8 +151,8 @@
     try {
       if (FM.api && typeof FM.api.listPanel === 'function') {
         await Promise.all([
-          FM.api.listPanel('left', { fromInput: true }),
-          FM.api.listPanel('right', { fromInput: true }),
+          FM.api.listPanel('left', { fromInput: false }),
+          FM.api.listPanel('right', { fromInput: false }),
         ]);
       }
     } catch (e) {}
@@ -1273,16 +1273,16 @@ return false;
       // Refresh current trash view (items should disappear from here)
       try {
         if (FM.listing && typeof FM.listing.listPanel === 'function') {
-          await FM.listing.listPanel(side, { fromInput: true });
+          await FM.listing.listPanel(side, { fromInput: false });
         } else if (A && typeof A.listPanel === 'function') {
-          await A.listPanel(side, { fromInput: true });
+          await A.listPanel(side, { fromInput: false });
         }
       } catch (e) {}
 
       // Optimistic UI: clear selection
       try { p.selected && p.selected.clear && p.selected.clear(); } catch (e) {}
     } catch (e) {
-      presentError(_errFromResponse(res, data, { action: 'restore' }), { place: 'toast', action: 'restore' });
+      presentError(e, { place: 'toast', action: 'restore' });
     }
   };
 
@@ -1338,9 +1338,9 @@ return false;
       // Refresh trash view(s)
       try {
         if (FM.listing && typeof FM.listing.listPanel === 'function') {
-          await FM.listing.listPanel(s, { fromInput: true });
+          await FM.listing.listPanel(s, { fromInput: false });
         } else if (A && typeof A.listPanel === 'function') {
-          await A.listPanel(s, { fromInput: true });
+          await A.listPanel(s, { fromInput: false });
         }
       } catch (e) {}
 
@@ -1352,14 +1352,14 @@ return false;
         const po = S && S.panels ? S.panels[o] : null;
         if (po && isTrashPanel(po)) {
           if (FM.listing && typeof FM.listing.listPanel === 'function') {
-            await FM.listing.listPanel(o, { fromInput: true });
+            await FM.listing.listPanel(o, { fromInput: false });
           } else if (A && typeof A.listPanel === 'function') {
-            await A.listPanel(o, { fromInput: true });
+            await A.listPanel(o, { fromInput: false });
           }
         }
       } catch (e) {}
     } catch (e) {
-      presentError(_errFromResponse(res, data, { action: 'clear_trash' }), { place: 'toast', action: 'clear_trash' });
+      presentError(e, { place: 'toast', action: 'clear_trash' });
     }
   };
   // exports

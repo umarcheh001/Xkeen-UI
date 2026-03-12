@@ -7,6 +7,15 @@
 
   const CJ = XKeen.util.commandJob;
 
+  function commonPrefixLength(a, b) {
+    const left = String(a == null ? '' : a);
+    const right = String(b == null ? '' : b);
+    const limit = Math.min(left.length, right.length);
+    let i = 0;
+    while (i < limit && left.charCodeAt(i) === right.charCodeAt(i)) i += 1;
+    return i;
+  }
+
   CJ.runShellCommand = async function runShellCommand(cmd, stdinValue, options = {}) {
     const body = { cmd };
     if (typeof stdinValue === 'string') body.stdin = stdinValue;
@@ -140,6 +149,7 @@
 
     // HTTP polling fallback
     let lastLen = 0;
+    let httpAlignedToWs = accOutput.length === 0;
     while (true) {
       const res = await fetch(`/api/run-command/${encodeURIComponent(jobId)}`);
       const data = await res.json().catch(() => ({}));
@@ -151,6 +161,15 @@
       }
 
       const output = (typeof data.output === 'string') ? data.output : '';
+      if (!httpAlignedToWs) {
+        const finished = (data.status === 'finished' || data.status === 'error');
+        if (output.length < accOutput.length && !finished) {
+          await new Promise(r => setTimeout(r, 250));
+          continue;
+        }
+        lastLen = output.startsWith(accOutput) ? accOutput.length : commonPrefixLength(accOutput, output);
+        httpAlignedToWs = true;
+      }
       if (output.length > lastLen) {
         const chunk = output.slice(lastLen);
         lastLen = output.length;

@@ -704,25 +704,39 @@
     }
 
     function newSession() {
-      // Open a new browser tab and auto-open PTY terminal there.
-      try {
-        const url = new URL(window.location.href);
-        url.searchParams.set('terminal', 'pty');
-        window.open(url.toString(), '_blank');
-        return;
-      } catch (e0) {}
+      // Keep "new session" inside the current panel.
+      // Opening a full duplicate UI in a new browser tab reinitializes unrelated
+      // heavy modules (Monaco, xterm lazy boot, etc.) and proved fragile.
+      const c = resolveCtx(ctx);
+      try { hideAllMenus(c); } catch (e0) {}
 
-      // Fallback: same tab (popup blocked). Ensure we start a NEW PTY session here.
+      if (getMode() !== 'pty') {
+        open('', 'pty');
+        return;
+      }
+
       try {
-        const S = getSession(resolveCtx(ctx));
+        const S = getSession(c);
+        if (S && typeof S.stopRetry === 'function') S.stopRetry({ silent: true });
+      } catch (e1) {}
+
+      try {
+        const S = getSession(c);
         if (S && typeof S.disconnect === 'function') S.disconnect({ sendClose: true, clearSession: true, reason: 'newSession' });
         else {
           const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
           if (P && typeof P.disconnect === 'function') P.disconnect({ sendClose: true, clearSession: true });
         }
-      } catch (e1) {}
+      } catch (e2) {}
 
-      open('', 'pty');
+      const reopen = () => open('', 'pty');
+      try {
+        if (typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(reopen);
+          return;
+        }
+      } catch (e3) {}
+      setTimeout(reopen, 0);
     }
 
     function sendRaw(data) {
@@ -731,8 +745,7 @@
       try {
         const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
         if (P && typeof P.sendRaw === 'function') {
-          P.sendRaw(s);
-          return true;
+          return !!P.sendRaw(s);
         }
       } catch (e0) {}
 
@@ -744,15 +757,25 @@
     }
 
     function sendCtrlC() {
-      try { hideAllMenus(resolveCtx(ctx)); } catch (e) {}
-      sendRaw('\x03');
-      termFocus(getTerm(resolveCtx(ctx)));
+      const c = resolveCtx(ctx);
+      try { hideAllMenus(c); } catch (e) {}
+      const ok = sendRaw('\x03');
+      if (!ok) {
+        safeToast(c, 'PTY не подключен', 'info');
+        return;
+      }
+      termFocus(getTerm(c));
     }
 
     function sendCtrlD() {
-      try { hideAllMenus(resolveCtx(ctx)); } catch (e) {}
-      sendRaw('\x04');
-      termFocus(getTerm(resolveCtx(ctx)));
+      const c = resolveCtx(ctx);
+      try { hideAllMenus(c); } catch (e) {}
+      const ok = sendRaw('\x04');
+      if (!ok) {
+        safeToast(c, 'PTY не подключен', 'info');
+        return;
+      }
+      termFocus(getTerm(c));
     }
 
     function sendSignal(name) {

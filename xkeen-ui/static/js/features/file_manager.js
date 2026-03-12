@@ -53,7 +53,12 @@
 
   function show(node) {
     if (!node) return;
-    try { if (node.dataset && node.dataset.xkForceHidden === '1') return; } catch (e) {}
+    try {
+      if (node.dataset && (
+        node.dataset.xkForceHidden === '1' ||
+        node.dataset.xkHideUnusedHidden === '1'
+      )) return;
+    } catch (e) {}
     try { node.style.display = ''; } catch (e) {}
   }
 

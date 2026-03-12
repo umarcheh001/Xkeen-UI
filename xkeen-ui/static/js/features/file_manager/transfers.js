@@ -694,6 +694,7 @@
 
       while (attempt < 3) {
         attempt++;
+        let cancelled = false;
 
         const destPath = (p.target === 'remote') ? joinRemote(p.cwd, finalName) : joinLocal(p.cwd, finalName);
         const label = (finalName === originalName)
@@ -720,6 +721,7 @@
         }
 
         bindProgressCancel(() => {
+          cancelled = true;
           try { xhr.abort(); } catch (e) {}
           finishTransferUi({ ok: false, message: 'Отменено', showDetails: false, detailsText: 'Отменено пользователем' });
         });
@@ -749,6 +751,7 @@
         };
 
         xhr.upload.onloadend = () => {
+          if (cancelled) return;
           try { _progressSetUi({ pct: 100, metaText: 'Передано, завершаю на роутере…' }); } catch (e) {}
         };
 
@@ -757,7 +760,7 @@
 
         const result = await new Promise((resolve) => {
           xhr.onerror = () => resolve({ ok: false, status: xhr.status || 0, text: '' });
-          xhr.onabort = () => resolve({ ok: false, status: xhr.status || 0, text: '' });
+          xhr.onabort = () => resolve({ ok: false, cancelled: true, status: xhr.status || 0, text: '' });
           xhr.onload = () => {
             const text = String(xhr.responseText || '');
             if (xhr.status >= 200 && xhr.status < 300) {
@@ -780,6 +783,10 @@
           toast('Загружено: ' + finalName, 'success');
           uploadedOk = true;
           break;
+        }
+
+        if (result && result.cancelled) {
+          return false;
         }
 
         // Conflict returned by server (race / stale listing): ask and retry.

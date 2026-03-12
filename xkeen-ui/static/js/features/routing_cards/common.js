@@ -104,6 +104,32 @@
     };
   };
 
+  C.getActiveOutboundsFragment = function () {
+    try {
+      const sel = document.getElementById('outbounds-fragment-select');
+      if (sel && sel.value) return String(sel.value);
+    } catch (e) {}
+    try {
+      if (XK.state && XK.state.fragments && XK.state.fragments.outbounds) {
+        return String(XK.state.fragments.outbounds);
+      }
+    } catch (e) {}
+    try {
+      const v = localStorage.getItem('xkeen.outbounds.fragment');
+      if (v) return String(v);
+    } catch (e) {}
+    return '';
+  };
+
+  C.buildOutboundTagsUrl = function () {
+    let url = '/api/xray/outbound-tags';
+    try {
+      const file = C.getActiveOutboundsFragment();
+      if (file) url += '?file=' + encodeURIComponent(String(file));
+    } catch (e) {}
+    return url;
+  };
+
   function formatApplyCounts(label, stats) {
     const s = stats || {};
     const added = Number(s.added || 0);

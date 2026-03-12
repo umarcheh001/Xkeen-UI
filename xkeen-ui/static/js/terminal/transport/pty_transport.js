@@ -97,7 +97,7 @@
 
       const P = pty();
       if (P && typeof P.sendRaw === 'function') {
-        try { P.sendRaw(payload); return true; } catch (e) {}
+        try { return !!P.sendRaw(payload); } catch (e) {}
       }
       return false;
     }

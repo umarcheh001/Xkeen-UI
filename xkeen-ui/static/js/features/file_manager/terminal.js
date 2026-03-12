@@ -157,7 +157,15 @@
         }
       } catch (e3) {}
 
-      await Promise.resolve(api.send(`cd -- ${q} && pwd`, { source: 'file_manager_terminal_here' }));
+      const sendRes = await Promise.resolve(api.send(`cd -- ${q} && pwd`, { source: 'file_manager_terminal_here' }));
+      const delivered = !!(
+        sendRes &&
+        ((sendRes.handled === true) || (sendRes.result && sendRes.result.ok === true))
+      );
+      if (!delivered) {
+        _toast('Терминал: PTY ещё не готов принять команду', 'error');
+        return false;
+      }
       return true;
     } catch (e4) {
       _toast('Терминал: не удалось открыть', 'error');

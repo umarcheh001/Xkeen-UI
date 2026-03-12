@@ -68,7 +68,7 @@
   <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260309-xray-toolbar-compact-v1') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260312-premium-panel-v13') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -80,7 +80,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
-<body>
+<body class="panel-page">
   <div id="global-xkeen-spinner">
     <div class="global-spinner-box">
       <div class="global-spinner-icon"></div>
@@ -92,7 +92,7 @@
 
   <!-- Wider container (match DevTools page width) -->
   <div class="container container-wide">
-    <header>
+    <header class="panel-header">
       <div class="header-main">
         <div class="header-title-group">
           <img id="xk-brand-logo" class="xk-brand-logo hidden" alt="Logo" />
@@ -125,21 +125,30 @@
           <div class="header-actions">
             <button
               type="button"
+              id="last-load"
+              class="last-load-badge last-load-chip hidden"
+              title="Последняя операция с конфигом"
+              aria-label="Последняя операция с конфигом"
+              aria-expanded="false"
+            ></button>
+
+            <button
+              type="button"
               id="theme-toggle-btn"
-              class="theme-toggle-btn theme-toggle-header"
+              class="theme-toggle-btn theme-toggle-header xk-header-btn xk-header-btn-theme"
               aria-label="Переключить тему"
             ></button>
 
             <button
               type="button"
               id="ui-settings-open-btn"
-              class="service-core-text"
+              class="service-core-text xk-header-btn xk-header-btn-ui"
               title="UI настройки (Prettier/ANSI)"
             >⚙ UI</button>
 
             <a
               href="{{ url_for('devtools_page') }}"
-              class="service-core-text"
+              class="service-core-text xk-header-btn xk-header-btn-devtools"
               title="DevTools"
             >DevTools</a>
 
@@ -155,62 +164,61 @@
 
             <a
               href="{{ url_for('logout') }}"
-              class="service-core-text"
+              class="service-core-text xk-header-btn xk-header-btn-logout"
               title="Выйти из панели"
             >Выйти</a>
           </div>
         </div>
       </div>
 
-      <p>Маршрутизация, режим inbounds и VLESS outbounds в одной панели.</p>
-
 <div class="top-tabs header-tabs">
-        <button class="top-tab-btn active" data-view="routing" data-xk-section="routing">
+        <button class="top-tab-btn xk-top-tab xk-top-tab-routing active" data-view="routing" data-xk-section="routing">
           Роутинг Xray
         </button>
-        <button class="top-tab-btn" data-view="mihomo" data-xk-section="mihomo">
+        <button class="top-tab-btn xk-top-tab xk-top-tab-mihomo" data-view="mihomo" data-xk-section="mihomo">
           Роутинг Mihomo
         </button>
-        <button class="top-tab-btn" data-view="xkeen" data-xk-section="xkeen">
+        <button class="top-tab-btn xk-top-tab xk-top-tab-xkeen" data-view="xkeen" data-xk-section="xkeen">
           Порты и Исключения
         </button>
-        <button class="top-tab-btn" data-view="xray-logs" data-xk-section="xray-logs">
+        <button class="top-tab-btn xk-top-tab xk-top-tab-logs" data-view="xray-logs" data-xk-section="xray-logs">
           Live логи Xray
         </button>
-        <button class="top-tab-btn" data-view="commands" data-xk-section="commands">
+        <button class="top-tab-btn xk-top-tab xk-top-tab-commands" data-view="commands" data-xk-section="commands">
           Команды
         </button>
-        <button class="top-tab-btn" data-view="files" data-xk-section="files" id="top-tab-files" {% if is_mips %}style="display:none;"{% endif %}>
+        <button class="top-tab-btn xk-top-tab xk-top-tab-files" data-view="files" data-xk-section="files" id="top-tab-files" {% if is_mips %}style="display:none;"{% endif %}>
           Файлы
         </button>
-        <button class="top-tab-btn" type="button" data-xk-section="mihomo-generator" id="top-tab-mihomo-generator" onclick="window.location.href='/mihomo_generator'">
+        <button class="top-tab-btn xk-top-tab xk-top-tab-generator" type="button" data-xk-section="mihomo-generator" id="top-tab-mihomo-generator" onclick="window.location.href='/mihomo_generator'">
           Mihomo Генератор
         </button>
 
-        <button class="top-tab-btn" type="button" data-xk-section="donate" id="top-tab-donate">
+        <button class="top-tab-btn xk-top-tab xk-top-tab-donate" type="button" data-xk-section="donate" id="top-tab-donate">
           💰 Донат
         </button>
       </div>
     
 <div class="xkeen-ctrl-row">
   <div class="xkeen-ctrl-group xkeen-ctrl-group-main">
-    <button id="xkeen-start-btn" class="xkeen-ctrl-btn" data-tooltip="Запустить сервис xkeen.">Start xkeen</button>
-    <button id="xkeen-stop-btn" class="xkeen-ctrl-btn" data-tooltip="Остановить сервис xkeen.">Stop xkeen</button>
-    <button id="xkeen-restart-btn" class="xkeen-ctrl-btn" data-tooltip="Перезапустить сервис xkeen.">Restart xkeen</button>
+    <button id="xkeen-start-btn" class="xkeen-ctrl-btn xkeen-ctrl-btn-start" data-tooltip="Запустить сервис xkeen.">Start xkeen</button>
+    <button id="xkeen-stop-btn" class="xkeen-ctrl-btn xkeen-ctrl-btn-stop" data-tooltip="Остановить сервис xkeen.">Stop xkeen</button>
+    <button id="xkeen-restart-btn" class="xkeen-ctrl-btn xkeen-ctrl-btn-restart" data-tooltip="Перезапустить сервис xkeen.">Restart xkeen</button>
     <div class="xkeen-ctrl-group-routing-focus" data-xk-section="routing">
       <div id="routing-focus-switch" class="routing-focus-switch routing-focus-switch-compact" role="toolbar" aria-label="Режим редактирования роутинга">
-        <button id="routing-focus-gui-btn" type="button" class="routing-focus-btn" aria-pressed="false" data-tooltip="Сфокусироваться на GUI-карточках правил и балансировщиков">GUI</button>
-        <button id="routing-focus-raw-btn" type="button" class="routing-focus-btn" aria-pressed="false" data-tooltip="Сфокусироваться на raw JSON/JSONC редакторе">RAW</button>
+        <button id="routing-focus-gui-btn" type="button" class="routing-focus-btn routing-focus-btn-gui" aria-pressed="false" data-tooltip="Сфокусироваться на GUI-карточках правил и балансировщиков">GUI</button>
+        <button id="routing-focus-raw-btn" type="button" class="routing-focus-btn routing-focus-btn-raw" aria-pressed="false" data-tooltip="Сфокусироваться на raw JSON/JSONC редакторе">RAW</button>
         <span id="routing-focus-note" class="routing-focus-note" title="GUI — быстрые карточки; RAW — точный JSON/JSONC редактор.">RAW: JSON/JSONC</span>
       </div>
     </div>
   </div>
   <div class="global-toggle-right">
-    <label class="global-autorestart-toggle">
+    <label class="dt-switch xk-global-autorestart-switch"
+           title="Автоматически перезапускать xkeen после сохранения конфигов.">
       <input type="checkbox" id="global-autorestart-xkeen" checked>
-      <span>Авто‑перезапуск xkeen</span>
+      <span class="dt-switch-slider" aria-hidden="true"></span>
+      <span class="dt-switch-label">Авто‑перезапуск xkeen</span>
     </label>
-    <div id="last-load" class="last-load-badge"></div>
   </div>
 </div>
 
@@ -225,17 +233,27 @@
     <section class="card routing-dat-card">
               <div class="commands-header" id="routing-dat-header">
                 <h2>DAT-файлы GeoIP / GeoSite</h2>
-                <span id="routing-dat-arrow">►</span>
+                <span id="routing-dat-arrow">▼</span>
               </div>
 
               <div id="routing-dat-body" style="display:none;">
-                <p class="xk-card-desc">Хранилища GeoIP/GeoSite используются правилами <code>geoip:</code> и <code>geosite:</code>. Здесь можно быстро обновить и заменить DAT-файлы.</p>
-
                 <div class="routing-dat-toolbar">
                   <div class="routing-dat-toolbar-left">
                     <button id="routing-dat-refresh-btn" class="btn-secondary btn-icon" type="button" aria-label="Обновить статусы" data-tooltip="Проверить наличие DAT-файлов и обновить информацию о размере/дате.">⟳</button>
                     <button id="routing-dat-geodat-install-btn" class="btn-secondary btn-compact" type="button" data-tooltip="Установить/обновить xk-geodat (включит просмотр содержимого DAT и добавление тегов в правила).">xk-geodat</button>
                     <button id="routing-dat-geodat-install-file-btn" class="btn-secondary btn-icon" type="button" aria-label="Установить xk-geodat из файла" data-tooltip="Установить xk-geodat из файла (если вы тестируете до релиза или ставите свой бинарник).">⬆︎</button>
+                    <details class="xk-card-help-popover routing-dat-help-popover">
+                      <summary class="xk-card-help-trigger"
+                               aria-label="Подсказка по DAT-файлам"
+                               title="О DAT-файлах"
+                               data-tooltip="О DAT-файлах">
+                        <span class="xk-card-help-icon" aria-hidden="true">?</span>
+                      </summary>
+                      <div class="xk-card-help-panel">
+                        Хранилища <code>GeoIP</code> и <code>GeoSite</code> используются правилами <code>geoip:</code> и <code>geosite:</code>.
+                        Здесь можно быстро обновить DAT-файлы, заменить их вручную и открыть содержимое тегов через <code>xk-geodat</code>.
+                      </div>
+                    </details>
                     <input id="routing-dat-geodat-install-file" type="file" style="display:none" />
                   </div>
                   <div id="routing-dat-status" class="status"></div>
@@ -324,7 +342,7 @@
             </section>
 
     <!-- Inbounds mode -->
-    <section class="card">
+    <section class="card routing-side-card routing-side-card--inbounds">
       <div class="commands-header" id="inbounds-header">
         <h2>Режим работы inbounds ({{ inbounds_name|e }})</h2>
         <span id="inbounds-arrow">▼</span>
@@ -387,7 +405,7 @@
     </section>
 
     <!-- Outbounds VLESS editor -->
-    <section class="card">
+    <section class="card routing-side-card routing-side-card--outbounds">
       <div class="commands-header" id="outbounds-header">
         <h2>Прокси ({{ outbounds_name|e }})</h2>
         <span id="outbounds-arrow">▼</span>
@@ -405,10 +423,9 @@
         <button id="outbounds-fragment-refresh-btn" type="button" class="btn-icon btn-secondary" data-tooltip="Обновить список файлов outbounds из /opt/etc/xray/configs/">↻</button>
       </div>
       <p class="xk-card-desc">Активный фрагмент: <code id="outbounds-file-code">{{ outbounds_file }}</code></p>
-      <p class="xk-card-desc">Укажи ссылку прокси (vless / trojan / vmess / ss / hy2), на основе которой будет собран конфиг <code>{{ outbounds_name|e }}</code>.</p>
 
       <div class="outbounds-hints">
-        <label>
+        <label class="outbounds-hint-field">
           <span class="hint-label">Протокол</span>
           <select id="outbounds-proto" class="xray-log-select">
             <option value="auto" selected>Авто</option>
@@ -420,7 +437,7 @@
           </select>
         </label>
 
-        <label>
+        <label class="outbounds-hint-field">
           <span class="hint-label">Транспорт</span>
           <select id="outbounds-type" class="xray-log-select">
             <option value="auto" selected>Авто</option>
@@ -434,7 +451,7 @@
           </select>
         </label>
 
-        <label>
+        <label class="outbounds-hint-field">
           <span class="hint-label">Security</span>
           <select id="outbounds-security" class="xray-log-select">
             <option value="auto" selected>Авто</option>
@@ -443,6 +460,17 @@
             <option value="reality">Reality</option>
           </select>
         </label>
+
+        <details class="outbounds-help-popover">
+          <summary class="outbounds-help-trigger"
+                   aria-label="Подсказка по ссылке прокси"
+                   title="Что вставлять в это поле"
+                   data-tooltip="Подсказка по ссылке прокси">?</summary>
+          <div class="outbounds-help-panel">
+            Укажи ссылку прокси <code>vless / trojan / vmess / ss / hy2</code>,
+            на основе которой будет собран конфиг <code>{{ outbounds_name|e }}</code>.
+          </div>
+        </details>
       </div>
 
       <input id="outbounds-url" type="text" placeholder="vless://... / trojan://... / vmess://... / ss://... / hy2://...">
@@ -478,19 +506,14 @@
     </section>
 
     <!-- Backups list -->
-    <section class="card">
+    <section class="card routing-side-card routing-side-card--backups">
       <div class="commands-header" id="routing-backups-header">
         <h2>Бэкапы Xray конфигов (routing / inbounds / outbounds / dns / …)</h2>
-        <span id="routing-backups-arrow">►</span>
+          <span id="routing-backups-arrow">▼</span>
       </div>
 
       <div id="routing-backups-body" style="display:none;">
         <p>Каталог бэкапов: <code>{{ backup_dir }}</code></p>
-
-        <p class="xk-card-desc" style="margin-top: 8px;">
-          Здесь показываются <b>снимки (snapshots)</b> — автоматические rollback‑копии каждого файла.
-          Снимок обновляется при сохранении конфига и содержит <b>предыдущее</b> состояние файла.
-        </p>
 
 
         <table id="backups-table" data-mode="snapshots">
@@ -511,26 +534,31 @@
         <div class="hint xk-card-desc">
           <a href="/backups">Открыть страницу истории бэкапов →</a>
         </div>
+
+        <div class="xk-card-help-row xk-card-help-row--corner">
+          <details class="xk-card-help-popover">
+            <summary class="xk-card-help-trigger"
+                     aria-label="Подсказка по снимкам Xray"
+                     title="О снимках Xray"
+                     data-tooltip="О снимках Xray">
+              <span class="xk-card-help-icon" aria-hidden="true">?</span>
+            </summary>
+            <div class="xk-card-help-panel">
+              Сюда попадают <b>snapshots</b> — rollback-копии <b>предыдущего</b> состояния каждого Xray-файла.
+              Снимок обновляется при сохранении конфига, а из списка ниже его можно быстро открыть или восстановить.
+            </div>
+          </details>
+        </div>
       </div>
     </section>
 
     <!-- Help block -->
-    <section class="card">
+    <section class="card routing-side-card routing-side-card--help">
       <div class="commands-header" id="routing-help-header">
         <h2>Справка и ссылки</h2>
-        <span id="routing-help-arrow">►</span>
+          <span id="routing-help-arrow">▼</span>
       </div>
       <div id="routing-help-body" style="display:none;">
-        <div class="xk-card-desc" style="margin: 6px 0 10px;">
-          <b>JSONC‑комментарии:</b> карточки «Правила/Балансировщики» применяют изменения в редактор точечно и стараются сохранить комментарии рядом с элементами.
-          Для надёжной привязки комментариев при перетаскивании задавайте уникальный <code>ruleTag</code> у правил и <code>tag</code> у балансировщиков.
-          Если точечное применение невозможно, появится предупреждение и можно выбрать «старый способ» (полная перезапись без комментариев).
-
-          <div style="margin-top:6px;">
-            Диагностика: откройте консоль браузера и выполните
-            <code>localStorage.setItem('xk.routing.jsonc.debug','1')</code>, затем повторите действие — причины fallback будут в toast/console.
-          </div>
-        </div>
         <ul class="links">
           <li><a href="https://github.com/Corvus-Malus/XKeen" target="_blank" rel="noopener">GitHub Corvus-Malus/XKeen</a></li>
           <li><a href="https://jameszero.net/faq-xkeen.htm" target="_blank" rel="noopener">FAQ по XKeen (jameszero.net)</a></li>
@@ -538,6 +566,22 @@
           <li><a href="https://github.com/jameszeroX/XKeen" target="_blank" rel="noopener">GitHub jameszeroX/XKeen</a></li>
           <li><a href="https://github.com/jameszeroX/XKeen/tree/main/test" target="_blank" rel="noopener">XKeen beta</a></li>
         </ul>
+        <div class="xk-card-help-row xk-card-help-row--corner">
+          <details class="xk-card-help-popover">
+            <summary class="xk-card-help-trigger"
+                     aria-label="Подсказка по JSONC-комментариям и применению"
+                     title="О JSONC и применении"
+                     data-tooltip="О JSONC и применении">
+              <span class="xk-card-help-icon" aria-hidden="true">?</span>
+            </summary>
+            <div class="xk-card-help-panel">
+              <p><b>JSONC-комментарии:</b> карточки «Правила / Балансировщики» сначала пытаются применить изменения точечно и сохранить комментарии рядом с элементами.</p>
+              <p>Для устойчивой привязки задавайте уникальный <code>ruleTag</code> у правил и <code>tag</code> у балансировщиков.</p>
+              <p>Если точечное обновление невозможно, панель предложит <b>legacy rewrite</b> без сохранения комментариев.</p>
+              <p>Диагностика: выполните в консоли <code>localStorage.setItem('xk.routing.jsonc.debug','1')</code> и повторите действие — причина fallback появится в toast/console.</p>
+            </div>
+          </details>
+        </div>
       </div>
     </section>
 
@@ -548,7 +592,7 @@
         <section id="routing-rules-card" class="card routing-rules-card xk-only-routing" data-focus-role="gui">
           <div class="commands-header" id="routing-rules-header">
             <h2>Правила маршрутизации</h2>
-            <span id="routing-rules-arrow">►</span>
+            <span id="routing-rules-arrow">▼</span>
           </div>
 
           <div id="routing-rules-body" style="display:none;">
@@ -675,15 +719,6 @@
                         <span class="dt-switch-slider" aria-hidden="true"></span>
                         <span class="dt-switch-label">Все файлы</span>
                       </label>
-                    </div>
-
-                    <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
-
-                    <div class="terminal-menu-section" aria-label="JSONC">
-                      <div class="terminal-menu-title">JSONC</div>
-                      <span id="routing-comments-status"
-                            class="xk-comments-badge xk-comments-off"
-                            data-tooltip="Статус JSONC sidecar (комментарии)">Комментарии: —</span>
                     </div>
 
                     <div class="terminal-menu-sep" role="separator" aria-hidden="true"></div>
@@ -1562,26 +1597,34 @@
     </div>
 
     
-    <div id="core-modal" class="modal hidden">
-      <div class="modal-content">
-        <div class="modal-header">
-          <span class="modal-title">Выбор ядра XKeen</span>
+    <div id="core-modal" class="modal hidden xk-core-modal-shell" role="dialog" aria-modal="true" aria-label="Выбор ядра XKeen">
+      <div class="modal-content xk-core-modal-content">
+        <div class="modal-header xk-core-modal-header">
+          <div class="xk-core-titlebox">
+            <span class="xk-core-kicker">XKEEN ENGINE</span>
+            <span class="modal-title">Выбор ядра XKeen</span>
+          </div>
           <button type="button" class="modal-close" id="core-modal-close-btn">×</button>
         </div>
-        <div class="modal-body">
-          <p class="modal-description">
-            Выберите ядро, которое будет использоваться сервисом xkeen.
-            При смене ядра сервис будет перезапущен.
-          </p>
-          <div class="core-select-row">
-            <button type="button" class="core-option" data-core="xray">xray</button>
-            <button type="button" class="core-option" data-core="mihomo">mihomo</button>
+        <div class="modal-body xk-core-modal-body">
+          <div class="xk-core-intro">
+            <p class="modal-description xk-core-description">
+              Выберите ядро, которое будет использовать сервис Xkeen. После применения сервис будет перезапущен.
+            </p>
           </div>
-          <p id="core-modal-status" class="modal-hint" style="margin-top: 8px; font-size: 0.85rem; color: var(--modal-muted, var(--muted, #9ca3af));"></p>
+          <div class="core-select-row xk-core-select-row">
+            <button type="button" class="core-option xk-core-option" data-core="xray">
+              <span class="xk-core-option-title">xray</span>
+            </button>
+            <button type="button" class="core-option xk-core-option" data-core="mihomo">
+              <span class="xk-core-option-title">mihomo</span>
+            </button>
+          </div>
+          <p id="core-modal-status" class="modal-hint xk-core-status"></p>
         </div>
-        <div class="modal-actions">
-          <button id="core-modal-cancel-btn">Отмена</button>
-          <button id="core-modal-confirm-btn">Применить</button>
+        <div class="modal-actions xk-core-modal-actions">
+          <button id="core-modal-cancel-btn" class="btn-secondary">Отмена</button>
+          <button id="core-modal-confirm-btn" class="btn-primary">Применить</button>
         </div>
       </div>
     </div>
@@ -3124,49 +3167,66 @@ https://..."></textarea>
 
     <!-- UI settings modal (Prettier/ANSI flags) -->
     <div id="ui-settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="UI настройки">
-      <div class="modal-content" style="max-width: 560px;" data-modal-key="ui-settings">
-        <div class="modal-header">
-          <span class="modal-title">UI настройки</span>
+      <div class="modal-content xk-ui-settings-modal-content" data-modal-key="ui-settings">
+        <div class="modal-header xk-ui-settings-header">
+          <div class="xk-ui-settings-titlebox">
+            <span class="xk-ui-settings-kicker">Panel preferences</span>
+            <span class="modal-title">UI настройки</span>
+            <p class="xk-ui-settings-subtitle">Настройки сохраняются на роутере и применяются сразу, без консоли.</p>
+          </div>
           <button type="button" class="modal-close" id="ui-settings-close-btn" title="Закрыть">×</button>
         </div>
-        <div class="modal-body">
-          <p class="modal-description">Настройки сохраняются на роутере и применяются без консоли.</p>
-
+        <div class="modal-body xk-ui-settings-body">
           <div class="xk-ui-settings-grid">
-            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center;">
+            <label class="dt-switch xk-ui-setting-card">
               <input type="checkbox" id="ui-setting-prefer-prettier">
-              <span><b>Routing:</b> Format via Prettier</span>
+              <span class="dt-switch-slider" aria-hidden="true"></span>
+              <span class="xk-ui-setting-copy">
+                <strong>Routing: Format via Prettier</strong>
+                <small>Кнопка «✨ Format JSON» сначала использует браузерный Prettier для JSONC и только потом уходит в fallback.</small>
+              </span>
             </label>
-            <div class="xk-card-desc" style="margin:-6px 0 10px 28px;">При включении кнопка «✨ Format JSON» будет использовать браузерный Prettier (JSONC) прежде чем уходить в fallback.</div>
 
-            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center;">
+            <label class="dt-switch xk-ui-setting-card">
               <input type="checkbox" id="ui-setting-logs-ansi">
-              <span><b>Logs:</b> ANSI colors</span>
+              <span class="dt-switch-slider" aria-hidden="true"></span>
+              <span class="xk-ui-setting-copy">
+                <strong>Logs: ANSI colors</strong>
+                <small>Преобразует ANSI-цвета в HTML и делает live-логи заметно читабельнее.</small>
+              </span>
             </label>
-            <div class="xk-card-desc" style="margin:-6px 0 10px 28px;">Преобразует ANSI‑цвета в HTML (лучше читаемость live‑логов).</div>
 
-            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center;">
+            <label class="dt-switch xk-ui-setting-card">
               <input type="checkbox" id="ui-setting-logs-ws2">
-              <span><b>Logs:</b> WS2</span>
+              <span class="dt-switch-slider" aria-hidden="true"></span>
+              <span class="xk-ui-setting-copy">
+                <strong>Logs: WS2</strong>
+                <small>Экспериментальный режим без переподключения: смена file/filter и очистка экрана через <code>/ws/xray-logs2</code>.</small>
+              </span>
             </label>
-            <div class="xk-card-desc" style="margin:-6px 0 10px 28px;">Экспериментальный режим: переключение file/filter и очистка экрана без переподключения (endpoint <code>/ws/xray-logs2</code>).</div>
 
-            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center;">
+            <label class="dt-switch xk-ui-setting-card">
               <input type="checkbox" id="ui-setting-routing-gui">
-              <span><b>Routing:</b> GUI Rules card</span>
+              <span class="dt-switch-slider" aria-hidden="true"></span>
+              <span class="xk-ui-setting-copy">
+                <strong>Routing: GUI Rules card</strong>
+                <small>Показывает карточку «Правила маршрутизации» поверх raw JSON/JSONC-редактора. Можно отключить, если нужен только RAW.</small>
+              </span>
             </label>
-            <div class="xk-card-desc" style="margin:-6px 0 10px 28px;">Показывает карточку «Правила маршрутизации» поверх JSON-редактора. Можно отключить, если нужен только raw JSONC.</div>
 
-            <label class="global-autorestart-toggle" style="display:flex; gap:10px; align-items:center;">
+            <label class="dt-switch xk-ui-setting-card">
               <input type="checkbox" id="ui-setting-routing-autoapply">
-              <span><b>Routing:</b> Auto Apply</span>
+              <span class="dt-switch-slider" aria-hidden="true"></span>
+              <span class="xk-ui-setting-copy">
+                <strong>Routing: Auto Apply</strong>
+                <small>Автоматически синхронизирует изменения из карточки правил обратно в JSON-редактор без ручного нажатия «Применить».</small>
+              </span>
             </label>
-            <div class="xk-card-desc" style="margin:-6px 0 0 28px;">Автоматически синхронизирует изменения в карточке правил обратно в JSON-редактор без ручного нажатия «💾 Применить».</div>
           </div>
 
-          <div id="ui-settings-status" class="modal-hint" style="margin-top: 10px;"></div>
+          <div id="ui-settings-status" class="modal-hint xk-ui-settings-status"></div>
         </div>
-        <div class="modal-actions">
+        <div class="modal-actions xk-ui-settings-footer">
           <button type="button" id="ui-settings-ok-btn" class="btn-secondary">Закрыть</button>
         </div>
       </div>
@@ -3334,19 +3394,22 @@ https://..."></textarea>
     </div>
 
     <!-- DAT GeoSite/GeoIP: просмотр тегов и содержимого (copy geosite:TAG / geoip:TAG) -->
-    <div id="routing-dat-contents-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="DAT content viewer">
-      <div class="modal-content dat-contents-modal-content">
-        <div class="modal-header">
-          <span class="modal-title" id="routing-dat-contents-title">DAT — Содержимое</span>
+    <div id="routing-dat-contents-modal" class="modal hidden xk-dat-modal-shell" role="dialog" aria-modal="true" aria-label="DAT content viewer">
+      <div class="modal-content dat-contents-modal-content xk-dat-modal-content">
+        <div class="modal-header xk-dat-modal-header">
+          <div class="xk-dat-modal-titlebox">
+            <span class="xk-dat-modal-kicker">DAT EXPLORER</span>
+            <span class="modal-title" id="routing-dat-contents-title">DAT — Содержимое</span>
+          </div>
           <button type="button" class="modal-close" id="routing-dat-contents-close-btn" aria-label="Close">×</button>
         </div>
-        <div class="modal-body dat-contents-modal-body">
-          <div class="dat-contents-head">
-            <div class="dat-contents-meta">
+        <div class="modal-body dat-contents-modal-body xk-dat-modal-body">
+          <div class="dat-contents-head xk-dat-head">
+            <div class="dat-contents-meta xk-dat-meta">
               <span class="dat-contents-kind" id="routing-dat-contents-kind">geosite:</span>
               <code class="dat-contents-path" id="routing-dat-contents-path">—</code>
             </div>
-            <div class="dat-contents-controls">
+            <div class="dat-contents-controls xk-dat-controls">
               <button type="button" id="routing-dat-contents-install-geodat-btn" class="btn-secondary" data-tooltip="Установить/обновить xk-geodat (нужен для просмотра содержимого DAT).">⬇︎ xk-geodat</button>
               <button type="button" id="routing-dat-contents-reload-btn" class="btn-secondary" data-tooltip="Обновить список тегов">↻</button>
             </div>
@@ -3414,7 +3477,7 @@ https://..."></textarea>
             </div>
           </div>
         </div>
-        <div class="modal-actions" style="justify-content:flex-end;">
+        <div class="modal-actions xk-dat-modal-actions" style="justify-content:flex-end;">
           <button type="button" id="routing-dat-contents-ok-btn" class="btn-secondary">Закрыть</button>
         </div>
       </div>
@@ -3515,6 +3578,27 @@ https://..."></textarea>
     <div class="modal-actions" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="ssh-confirm-cancel-btn">Отмена</button>
       <button type="button" id="ssh-confirm-ok" class="btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="ssh-transfer-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="SSH profile transfer">
+  <div class="modal-content" style="max-width:760px;">
+    <div class="modal-header">
+      <span class="modal-title" id="ssh-transfer-title">SSH профили</span>
+      <button type="button" class="modal-close" id="ssh-transfer-close-btn" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+      <div id="ssh-transfer-help" style="opacity:.85;"></div>
+      <textarea id="ssh-transfer-text" class="xkeen-textarea" rows="14" spellcheck="false" style="min-height:280px;"></textarea>
+      <div id="ssh-transfer-error" class="error"></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="ssh-transfer-cancel-btn">Отмена</button>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" id="ssh-transfer-copy-btn">Копировать</button>
+        <button type="button" class="btn-primary" id="ssh-transfer-submit-btn">Сохранить</button>
+      </div>
     </div>
   </div>
 </div>

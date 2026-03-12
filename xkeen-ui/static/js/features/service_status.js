@@ -293,7 +293,7 @@
           return;
         }
 
-        statusEl.textContent = 'Выберите ядро XKeen:';
+        statusEl.textContent = '';
 
         let anyVisible = false;
         coreButtons.forEach((btn) => {

@@ -220,6 +220,8 @@ class PtySession:
     closed: bool = False
     lock: object = field(default_factory=_make_lock)
     reader_g: object | None = None
+    exit_code: int | None = None
+    exit_notified: bool = False
 
     def is_alive(self) -> bool:
         try:
@@ -308,6 +310,32 @@ class PtySession:
                 pass
             return False
 
+    def notify_exit(self, code: int | None = None) -> None:
+        try:
+            code_i = int(code if code is not None else -1)
+        except Exception:
+            code_i = -1
+
+        ws_obj = None
+        with self.lock:  # type: ignore[attr-defined]
+            if self.exit_notified:
+                return
+            self.exit_notified = True
+            self.exit_code = code_i
+            ws_obj = self.ws
+
+        if ws_obj is None:
+            return
+
+        try:
+            ws_obj.send(json.dumps({"type": "exit", "code": code_i}, ensure_ascii=False))
+        except Exception:
+            pass
+        try:
+            ws_obj.close()
+        except Exception:
+            pass
+
     def start_reader(self) -> None:
         if self.reader_g is not None:
             return
@@ -346,6 +374,13 @@ class PtySession:
                             self.detach(ws_obj)
                 except Exception:
                     break
+
+            try:
+                code = self.proc.poll()
+            except Exception:
+                code = None
+            if code is not None:
+                self.notify_exit(code)
 
         if _gspawn:
             try:
@@ -1136,15 +1171,23 @@ def application(environ, start_response):
             # If process died, clean up session
             try:
                 if sess is not None and not sess.is_alive():
-                    code = -1
+                    code = getattr(sess, "exit_code", None)
                     try:
-                        code = sess.proc.poll()
+                        if code is None:
+                            code = sess.proc.poll()
                     except Exception:
                         pass
-                    try:
-                        ws.send(json.dumps({"type": "exit", "code": int(code if code is not None else -1)}, ensure_ascii=False))
-                    except Exception:
-                        pass
+                    already_notified = bool(getattr(sess, "exit_notified", False))
+                    if not already_notified:
+                        try:
+                            sess.exit_notified = True
+                            sess.exit_code = int(code if code is not None else -1)
+                        except Exception:
+                            pass
+                        try:
+                            ws.send(json.dumps({"type": "exit", "code": int(code if code is not None else -1)}, ensure_ascii=False))
+                        except Exception:
+                            pass
                     try:
                         sess.close(kill=True)
                     except Exception:
