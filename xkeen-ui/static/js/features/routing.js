@@ -123,15 +123,112 @@
 
 	  // Dirty UI (unsaved changes)
 	  let _dirtyTimer = null;
+	  let _validateTimer = null;
 	  let _editorContentTimer = null;
+	  let _viewStateTimer = null;
 	  let _suppressDirty = 0;
+  let _editorPerfProfile = { lite: false, lineCount: 1, charCount: 0 };
 
   const VIEW_STATE_LS_PREFIX = 'xkeen.routing.viewstate.v1::';
   let _lastValidationState = { ok: null, message: '' };
+  const PERF_LIMITS = {
+    softLines: 1800,
+    softChars: 110000,
+    viewportMarginLite: 36,
+    highlightLengthLite: 1200,
+    measureFromLite: 1200,
+    viewStateMs: 180,
+    viewStateMsLite: 260,
+    validateMs: 110,
+    validateMsLite: 180,
+  };
 
 
   function $(id) {
     return document.getElementById(id);
+  }
+
+  function isMipsTarget() {
+    try {
+      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
+      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
+      if (!v) return false;
+      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+    } catch (e) {}
+    try {
+      return /mips/i.test(String((window.navigator && window.navigator.userAgent) || ''));
+    } catch (e2) {}
+    return false;
+  }
+
+  function countLines(text) {
+    const s = String(text ?? '');
+    if (!s) return 1;
+    let n = 1;
+    for (let i = 0; i < s.length; i += 1) {
+      if (s.charCodeAt(i) === 10) n += 1;
+    }
+    return n;
+  }
+
+  function computeEditorPerfProfile(text) {
+    const raw = String(text ?? '');
+    const lineCount = countLines(raw);
+    const charCount = raw.length;
+    const lite = !!(isMipsTarget() || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars);
+    return { lite, lineCount, charCount };
+  }
+
+  function currentViewStateDebounceMs() {
+    return (_editorPerfProfile && _editorPerfProfile.lite) ? PERF_LIMITS.viewStateMsLite : PERF_LIMITS.viewStateMs;
+  }
+
+  function currentValidateDebounceMs() {
+    return (_editorPerfProfile && _editorPerfProfile.lite) ? PERF_LIMITS.validateMsLite : PERF_LIMITS.validateMs;
+  }
+
+  function applyCodeMirrorPerfProfile(text) {
+    const next = computeEditorPerfProfile(text);
+    _editorPerfProfile = next;
+
+    if (!_cm || typeof _cm.setOption !== 'function') return next;
+
+    const wrapper = (typeof _cm.getWrapperElement === 'function') ? _cm.getWrapperElement() : null;
+    const apply = () => {
+      try { _cm.setOption('styleActiveLine', !next.lite); } catch (e) {}
+      try { _cm.setOption('showIndentGuides', !next.lite); } catch (e) {}
+      try { _cm.setOption('matchBrackets', !next.lite); } catch (e) {}
+      try { _cm.setOption('highlightSelectionMatches', !next.lite); } catch (e) {}
+      try { _cm.setOption('showTrailingSpace', !next.lite); } catch (e) {}
+      try { _cm.setOption('lineWrapping', !next.lite); } catch (e) {}
+      try { _cm.setOption('foldGutter', !next.lite); } catch (e) {}
+      try { _cm.setOption('rulers', next.lite ? [] : [{ column: 120 }]); } catch (e) {}
+      try { _cm.setOption('maxHighlightLength', next.lite ? PERF_LIMITS.highlightLengthLite : 10000); } catch (e) {}
+      try { _cm.setOption('crudeMeasuringFrom', next.lite ? PERF_LIMITS.measureFromLite : 10000); } catch (e) {}
+      try {
+        _cm.setOption(
+          'gutters',
+          next.lite
+            ? ['CodeMirror-linenumbers', 'CodeMirror-lint-markers']
+            : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']
+        );
+      } catch (e) {}
+      try { _cm.setOption('viewportMargin', next.lite ? PERF_LIMITS.viewportMarginLite : Infinity); } catch (e) {}
+    };
+
+    try {
+      if (typeof _cm.operation === 'function') _cm.operation(apply);
+      else apply();
+    } catch (e) {}
+
+    try {
+      if (wrapper && wrapper.classList) wrapper.classList.toggle('xk-cm-lite', !!next.lite);
+    } catch (e) {}
+    try {
+      if (_engine === 'codemirror' && typeof _cm.refresh === 'function') _cm.refresh();
+    } catch (e) {}
+
+    return next;
   }
 
   function getSelectedFragmentFromUI() {
@@ -226,13 +323,24 @@
     return { kind: _engine || 'codemirror' };
   }
 
-  function saveCurrentViewState() {
+  function saveCurrentViewState(opts) {
+    const o = opts || {};
     try {
       const key = _viewStateKey(getActiveFragment());
       const data = captureViewState();
       localStorage.setItem(key, JSON.stringify(data || {}));
-      updateEditorMetaStatus();
+      if (o.updateMeta !== false) updateEditorMetaStatus();
     } catch (e) {}
+  }
+
+  function scheduleViewStateSave(waitMs, opts) {
+    const wait = (typeof waitMs === 'number' && waitMs >= 0) ? waitMs : currentViewStateDebounceMs();
+    const o = opts || {};
+    try { if (_viewStateTimer) clearTimeout(_viewStateTimer); } catch (e) {}
+    _viewStateTimer = setTimeout(() => {
+      _viewStateTimer = null;
+      try { saveCurrentViewState(o); } catch (e) {}
+    }, wait);
   }
 
   function loadSavedViewState(file) {
@@ -760,6 +868,15 @@
 	    _dirtyTimer = setTimeout(() => {
 	      _dirtyTimer = null;
 	      try { syncDirtyUi(); } catch (e) {}
+	    }, wait);
+	  }
+
+	  function scheduleValidate(waitMs) {
+	    const wait = (typeof waitMs === 'number' && waitMs >= 0) ? waitMs : currentValidateDebounceMs();
+	    try { if (_validateTimer) clearTimeout(_validateTimer); } catch (e) {}
+	    _validateTimer = setTimeout(() => {
+	      _validateTimer = null;
+	      try { validate(); } catch (e) {}
 	    }, wait);
 	  }
 
@@ -2254,6 +2371,7 @@ function closeHelp() {
   function createEditor() {
     const textarea = $(IDS.textarea);
     if (!textarea || !window.CodeMirror) return null;
+    const initialLite = isMipsTarget();
 
     // If main.js provides shared keybindings, reuse them.
     let cmExtraKeysCommon = null;
@@ -2280,16 +2398,20 @@ function closeHelp() {
       mode: { name: 'javascript', json: true },
       theme: 'material-darker',
       lineNumbers: true,
-      styleActiveLine: true,
-      showIndentGuides: true,
-      matchBrackets: true,
+      styleActiveLine: !initialLite,
+      showIndentGuides: !initialLite,
+      matchBrackets: !initialLite,
       autoCloseBrackets: true,
-      highlightSelectionMatches: true,
-      showTrailingSpace: true,
-      rulers: [{ column: 120 }],
-      lineWrapping: true,
-      foldGutter: true,
-      gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers'],
+      highlightSelectionMatches: !initialLite,
+      showTrailingSpace: !initialLite,
+      rulers: initialLite ? [] : [{ column: 120 }],
+      lineWrapping: !initialLite,
+      foldGutter: !initialLite,
+      gutters: initialLite
+        ? ['CodeMirror-linenumbers', 'CodeMirror-lint-markers']
+        : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers'],
+      maxHighlightLength: initialLite ? PERF_LIMITS.highlightLengthLite : 10000,
+      crudeMeasuringFrom: initialLite ? PERF_LIMITS.measureFromLite : 10000,
 
       // Prefer brace+comment folding when available (requires addon/fold/comment-fold.js)
       foldOptions: (function() {
@@ -2316,7 +2438,7 @@ function closeHelp() {
       extraKeys,
       // Continue line/block comments on Enter (requires addon/comment/continuecomment.js)
       continueComments: true,
-      viewportMargin: Infinity,
+      viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : Infinity,
     });
 
     // Add an overlay to highlight lines starting with '#' as comments (JSONC extension).
@@ -2345,6 +2467,7 @@ function closeHelp() {
     try {
       if (cm.getWrapperElement) {
         cm.getWrapperElement().classList.add('xkeen-cm');
+        cm.getWrapperElement().classList.toggle('xk-cm-lite', !!initialLite);
         if (typeof window.xkeenAttachCmToolbar === 'function' && window.XKEEN_CM_TOOLBAR_DEFAULT) {
           const base = Array.isArray(window.XKEEN_CM_TOOLBAR_DEFAULT) ? window.XKEEN_CM_TOOLBAR_DEFAULT : [];
           const items = [];
@@ -2391,14 +2514,16 @@ function closeHelp() {
         }
       }
     } catch (e) {}
+    _editorPerfProfile = { lite: !!initialLite, lineCount: 1, charCount: 0 };
 
 	    cm.on('change', () => {
-	      validate();
+	      if (_suppressDirty > 0) return;
+	      scheduleValidate();
 	      scheduleDirtyCheck();
 	      scheduleEditorContentEvent('edit', 160);
 	    });
-    try { cm.on('cursorActivity', () => { saveCurrentViewState(); }); } catch (e) {}
-    try { cm.on('scroll', () => { saveCurrentViewState(); }); } catch (e) {}
+    try { cm.on('cursorActivity', () => { scheduleViewStateSave(null, { updateMeta: false }); }); } catch (e) {}
+    try { cm.on('scroll', () => { scheduleViewStateSave(null, { updateMeta: false }); }); } catch (e) {}
 
     return cm;
   }
@@ -2606,10 +2731,31 @@ function closeHelp() {
     }
   }
 
+  function hasExplicitEnginePreference() {
+    try {
+      if (_readLocal(GLOBAL_LS_KEY)) return true;
+    } catch (e) {}
+    try {
+      if (_readLocal(LEGACY_LS_KEY)) return true;
+    } catch (e) {}
+    try {
+      if (XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.get === 'function') {
+        const st = XKeen.ui.settings.get();
+        return !!normalizeEngine(st && st.editor ? st.editor.engine : null);
+      }
+    } catch (e) {}
+    return false;
+  }
+
   function getPreferredEngine() {
     // Primary: global helper (which itself prefers server settings).
     if (_hasGlobalEditorEngine()) {
-      try { return normalizeEngine(XKeen.ui.editorEngine.get()); } catch (e) {}
+      try {
+        const global = normalizeEngine(XKeen.ui.editorEngine.get());
+        if (global && (global !== 'codemirror' || hasExplicitEnginePreference() || !isMipsTarget())) {
+          return global;
+        }
+      } catch (e) {}
     }
 
     // Fallback (shouldn't happen in new builds): cached settings.
@@ -2622,7 +2768,8 @@ function closeHelp() {
 
     // Last resort: legacy local key.
     const legacy = _readLocal(LEGACY_LS_KEY);
-    return legacy ? normalizeEngine(legacy) : 'codemirror';
+    if (legacy) return normalizeEngine(legacy);
+    return isMipsTarget() ? 'monaco' : 'codemirror';
   }
 
   function persistPreferredEngine(engine) {
@@ -2747,12 +2894,12 @@ function closeHelp() {
         allowComments: true,
         tabSize: 2,
         insertSpaces: true,
-        wordWrap: 'on',
+        wordWrap: isMipsTarget() ? 'off' : 'on',
         onChange: () => {
           try { scheduleMonacoDiagnostics(); } catch (e) {}
 	          try { scheduleDirtyCheck(); } catch (e) {}
           try { scheduleEditorContentEvent('edit', 160); } catch (e) {}
-          try { saveCurrentViewState(); } catch (e) {}
+          try { scheduleViewStateSave(null, { updateMeta: false }); } catch (e) {}
         },
       });
 
@@ -2789,12 +2936,12 @@ function closeHelp() {
 
       try {
         if (_monaco && typeof _monaco.onDidScrollChange === 'function') {
-          _monaco.onDidScrollChange(() => { try { saveCurrentViewState(); } catch (e) {} });
+          _monaco.onDidScrollChange(() => { try { scheduleViewStateSave(null, { updateMeta: false }); } catch (e) {} });
         }
       } catch (e) {}
       try {
         if (_monaco && typeof _monaco.onDidChangeCursorPosition === 'function') {
-          _monaco.onDidChangeCursorPosition(() => { try { saveCurrentViewState(); } catch (e) {} });
+          _monaco.onDidChangeCursorPosition(() => { try { scheduleViewStateSave(null, { updateMeta: false }); } catch (e) {} });
         }
       } catch (e) {}
 
@@ -2820,6 +2967,7 @@ function closeHelp() {
   function setEditorTextAll(text, opts) {
     const v = String(text ?? '');
     const o = opts || {};
+    try { applyCodeMirrorPerfProfile(v); } catch (e) {}
     try { if (_cm && typeof _cm.setValue === 'function') _cm.setValue(v); } catch (e) {}
     try { if (_monaco && typeof _monaco.setValue === 'function') _monaco.setValue(v); } catch (e) {}
     try {
@@ -3149,7 +3297,7 @@ function closeHelp() {
       if (_hasGlobalEditorEngine() && XKeen.ui && XKeen.ui.editorEngine && typeof XKeen.ui.editorEngine.ensureLoaded === 'function') {
         XKeen.ui.editorEngine.ensureLoaded().then((eng) => {
           if (_engineTouched) return;
-          const desired = normalizeEngine(eng);
+          const desired = normalizeEngine(hasExplicitEnginePreference() ? eng : getPreferredEngine());
           try { if (_engineSelectEl) _engineSelectEl.value = desired; } catch (e) {}
           if (desired && desired !== _engine) switchEngine(desired, { persist: false });
         }).catch(() => {});

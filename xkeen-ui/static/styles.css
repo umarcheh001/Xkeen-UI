@@ -1397,6 +1397,7 @@ html[data-theme="light"] .xkeen-mini-editor{
 
   /* Keep scrolling predictable */
   overflow: auto !important;
+  overflow-anchor: none;
 }
 
 /* Routing Xray: make the main editor noticeably larger on wide screens */
@@ -9902,21 +9903,17 @@ button:disabled{
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  /* Like the terminal window: allow user resize */
-  resize: both;
+  /* Resize is handled by our own bottom-right grip so behavior stays predictable. */
+  resize: none;
   overflow: hidden;
   position: relative;
-  /*
-    Browser resize handle is only bottom-right.
-    We add our own bottom-left handle (JS) that resizes from the left
-    by widening the card and shifting it with a CSS variable.
-  */
-  --fm-shift-x: 0px;
-  transform: translateX(var(--fm-shift-x));
   min-height: 420px;
   height: clamp(420px, 70vh, 760px);
   max-height: 90vh;
-  max-width: 100%;
+  --fm-shift-x: 0px;
+  transform: translateX(var(--fm-shift-x));
+  width: 100%;
+  max-width: none;
 }
 
 /*
@@ -9926,54 +9923,51 @@ button:disabled{
   On wide screens we expand the file manager card ~2cm on each side
   (≈ +4cm total) relative to the main container, without affecting the header.
 */
-@media (min-width: 1120px){
-  .fm-card{
-    width: calc(100% + 4cm);
-    margin-left: -2cm;
-    margin-right: -2cm;
-    max-width: none;
-  }
-}
 
-.fm-card::after{
-  /* bottom-right resize hint */
-  content: "";
+.fm-resize-handle-left,
+.fm-resize-handle-right{
+  /* Actual draggable area for bottom-corner resize (implemented in JS) */
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  width: 14px;
-  height: 14px;
-  border-right: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 35%, transparent);
-  border-bottom: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 35%, transparent);
-  pointer-events: none;
-  border-radius: 2px;
-}
-
-.fm-card::before{
-  /* bottom-left resize hint (visual; browser handle is still bottom-right) */
-  content: "";
-  position: absolute;
-  left: 10px;
-  bottom: 10px;
-  width: 14px;
-  height: 14px;
-  border-left: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 22%, transparent);
-  border-bottom: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 22%, transparent);
-  pointer-events: none;
-  border-radius: 2px;
-}
-
-.fm-resize-handle-left{
-  /* Actual draggable area for bottom-left resize (implemented in JS) */
-  position: absolute;
-  left: 6px;
   bottom: 6px;
   width: 22px;
   height: 22px;
-  cursor: nesw-resize;
   z-index: 3;
   background: transparent;
   touch-action: none;
+}
+
+.fm-resize-handle-left{
+  left: 6px;
+  cursor: nesw-resize;
+}
+
+.fm-resize-handle-right{
+  right: 6px;
+  cursor: nwse-resize;
+}
+
+.fm-resize-handle-left::before,
+.fm-resize-handle-right::before{
+  /* Visual cue for the custom bottom-corner resize handles */
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.fm-resize-handle-left::before{
+  left: 4px;
+  border-left: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 35%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 35%, transparent);
+}
+
+.fm-resize-handle-right::before{
+  right: 4px;
+  border-right: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 35%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--muted, #94a3b8) 35%, transparent);
 }
 
 .fm-card.is-fullscreen{
@@ -9982,22 +9976,17 @@ button:disabled{
   top: 8px !important;
   width: calc(100vw - 16px) !important;
   height: calc(100vh - 16px) !important;
-  /* Reset the "wider-than-container" offsets used in normal mode */
   margin: 0 !important;
   max-width: none !important;
   max-height: none !important;
   resize: none !important;
-  transform: none !important;
   --fm-shift-x: 0px !important;
+  transform: none !important;
   z-index: 45;
 }
 
-.fm-card.is-fullscreen .fm-resize-handle-left{
-  display: none;
-}
-
-.fm-card.is-fullscreen::after,
-.fm-card.is-fullscreen::before{
+.fm-card.is-fullscreen .fm-resize-handle-left,
+.fm-card.is-fullscreen .fm-resize-handle-right{
   display: none;
 }
 
@@ -10805,7 +10794,8 @@ html[data-theme="light"] .fm-context-sep{
 
 @media (max-width: 920px){
   .fm-card{ resize: none; }
-  .fm-resize-handle-left{ display:none; }
+  .fm-resize-handle-left,
+  .fm-resize-handle-right{ display:none; }
   .fm-two{ grid-template-columns: 1fr; }
   .fm-row{ grid-template-columns: 28px minmax(140px, 1fr) minmax(56px, 84px) minmax(64px, 92px) minmax(108px, 140px); }
   .fm-panel.is-trash .fm-row{ grid-template-columns: 28px minmax(140px, 1fr) minmax(180px, 1.2fr) minmax(56px, 84px) minmax(64px, 92px) minmax(108px, 140px); }
@@ -17455,11 +17445,14 @@ body.panel-page::before {
   opacity: 0.42;
 }
 
+body.panel-page .container-wide {
+  min-height: calc(100vh - 64px);
+}
+
 body.panel-page .container-wide::before {
   content: "";
   position: absolute;
-  inset: 24px 12px auto;
-  height: 68vh;
+  inset: 24px 12px 24px;
   pointer-events: none;
   z-index: -1;
   background:
@@ -19751,6 +19744,60 @@ html[data-theme="light"] body.panel-page .routing-side-card .links a {
   }
 }
 
+/* Low-end / MIPS panel profile:
+   reduce expensive glass/shadow effects and keep the main CodeMirror editor
+   in a fixed-height virtualized mode for smoother scrolling on weak CPUs. */
+body.panel-page.xk-perf-lite .card,
+body.panel-page.xk-perf-lite .CodeMirror,
+body.panel-page.xk-perf-lite .xk-monaco-editor,
+body.panel-page.xk-perf-lite .top-tab-btn,
+body.panel-page.xk-perf-lite .service-core-text,
+body.panel-page.xk-perf-lite .terminal-tool-btn,
+body.panel-page.xk-perf-lite .xk-btn-icon,
+body.panel-page.xk-perf-lite .routing-focus-btn {
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+body.panel-page.xk-perf-lite .card,
+body.panel-page.xk-perf-lite .dt-log-menu-panel,
+body.panel-page.xk-perf-lite .xk-card-help-panel,
+body.panel-page.xk-perf-lite .terminal-tool-btn,
+body.panel-page.xk-perf-lite .top-tab-btn,
+body.panel-page.xk-perf-lite .service-core-text,
+body.panel-page.xk-perf-lite .routing-focus-btn {
+  transition: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+body.panel-page.xk-perf-lite .service-status-lamp,
+body.panel-page.xk-perf-lite .xk-update-dot,
+body.panel-page.xk-perf-lite .global-spinner-icon {
+  animation: none !important;
+}
+
+body.panel-page .CodeMirror.xk-cm-lite {
+  height: min(78vh, 920px) !important;
+  min-height: 360px !important;
+}
+
+body.panel-page .CodeMirror.xk-cm-lite .CodeMirror-scroll {
+  height: 100% !important;
+  max-height: none !important;
+  padding-bottom: 0 !important;
+}
+
+body.panel-page .CodeMirror.xk-cm-lite .CodeMirror-lines {
+  padding-bottom: 12px;
+}
+
+@media (max-width: 720px) {
+  body.panel-page .CodeMirror.xk-cm-lite {
+    min-height: 300px !important;
+  }
+}
+
 /* Theme bridge: late overrides so DevTools global theme variables affect the new premium panel surfaces. */
 body.panel-page header .header-actions .xk-header-btn,
 body.panel-page header .header-actions .theme-toggle-btn.xk-header-btn-theme,
@@ -20623,4 +20670,354 @@ html[data-theme="dark"] body.panel-page .routing-focus-btn.is-active {
 .xk-routing-menu-panel .terminal-tool-btn:focus-visible,
 .xk-mihomo-menu-panel .terminal-tool-btn:focus-visible {
   border-color: color-mix(in srgb, var(--accent, #60a5fa) 52%, var(--modal-body-border, var(--modal-border, #475569d1)) 48%);
+}
+
+/* Light theme polish: stronger contrast for modal states, toggles, and primary actions */
+html[data-theme="light"] .btn-secondary {
+  border-color: rgba(63, 111, 203, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(242, 247, 255, 0.94)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 42%);
+  color: #24324a;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 10px 22px rgba(59, 91, 154, 0.08);
+}
+
+html[data-theme="light"] .btn-secondary:hover:not([disabled]) {
+  border-color: rgba(37, 99, 235, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(236, 244, 255, 0.96)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.12), transparent 42%);
+  color: #1f2c44;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 14px 28px rgba(59, 91, 154, 0.10);
+}
+
+html[data-theme="light"] .btn-primary {
+  border-color: rgba(37, 99, 235, 0.34);
+  background:
+    linear-gradient(180deg, #5f88ea 0%, #3f6fcb 100%),
+    radial-gradient(circle at 22% 22%, rgba(255, 255, 255, 0.18), transparent 40%);
+  color: #f8fbff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 12px 26px rgba(59, 91, 154, 0.14);
+}
+
+html[data-theme="light"] .btn-primary:hover:not([disabled]) {
+  border-color: rgba(37, 99, 235, 0.44);
+  background:
+    linear-gradient(180deg, #7097f0 0%, #2f5fc7 100%),
+    radial-gradient(circle at 22% 22%, rgba(255, 255, 255, 0.24), transparent 42%);
+  color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 16px 30px rgba(59, 91, 154, 0.18);
+}
+
+html[data-theme="light"] .btn-primary:disabled {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: linear-gradient(180deg, rgba(226, 232, 240, 0.92), rgba(214, 223, 234, 0.88));
+  color: rgba(71, 85, 105, 0.72);
+  box-shadow: none;
+}
+
+html[data-theme="light"] .dt-switch,
+html[data-theme="light"] .fm-toggle {
+  color: #24324a;
+  border-color: rgba(63, 111, 203, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(242, 247, 255, 0.94)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.06), transparent 42%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 8px 18px rgba(59, 91, 154, 0.08);
+}
+
+html[data-theme="light"] .dt-switch:hover,
+html[data-theme="light"] .fm-toggle:hover {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(236, 244, 255, 0.96)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.10), transparent 42%);
+}
+
+html[data-theme="light"] .dt-switch-slider,
+html[data-theme="light"] .fm-toggle-slider {
+  background: linear-gradient(180deg, rgba(203, 213, 225, 0.96), rgba(186, 197, 211, 0.90));
+  border-color: rgba(148, 163, 184, 0.42);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.54);
+}
+
+html[data-theme="light"] .dt-switch-slider::after,
+html[data-theme="light"] .fm-toggle-slider::after {
+  background: linear-gradient(180deg, #ffffff, #eef4ff);
+  border-color: rgba(37, 99, 235, 0.12);
+  box-shadow: 0 2px 8px rgba(59, 91, 154, 0.18);
+}
+
+html[data-theme="light"] .dt-switch input:checked + .dt-switch-slider,
+html[data-theme="light"] .fm-toggle input:checked + .fm-toggle-slider {
+  background: linear-gradient(180deg, #6a91ed 0%, #3f6fcb 100%);
+  border-color: rgba(37, 99, 235, 0.56);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 10px 22px rgba(59, 91, 154, 0.16);
+}
+
+html[data-theme="light"] .dt-switch input:checked + .dt-switch-slider::after,
+html[data-theme="light"] .fm-toggle input:checked + .fm-toggle-slider::after {
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+html[data-theme="light"] .dt-switch-label,
+html[data-theme="light"] .fm-toggle-label {
+  color: #475569;
+  opacity: 1;
+}
+
+html[data-theme="light"] .global-autorestart-toggle input[type="checkbox"],
+html[data-theme="light"] .xk-mi-remember input[type="checkbox"],
+html[data-theme="light"] .xk-forced-options-grid .xk-forced-option-card input[type="checkbox"],
+html[data-theme="light"] .xk-pool-replace-card input[type="checkbox"],
+html[data-theme="light"] .xk-qb-option-card input[type="checkbox"] {
+  accent-color: #2563eb;
+}
+
+html[data-theme="light"] #ui-settings-modal .xk-ui-setting-copy strong {
+  color: #17263d;
+}
+
+html[data-theme="light"] #ui-settings-modal .xk-ui-settings-subtitle,
+html[data-theme="light"] #ui-settings-modal .xk-ui-setting-copy small,
+html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
+  color: #4a5d7a;
+}
+
+html[data-theme="light"] #ui-settings-modal .xk-ui-setting-card {
+  border-color: rgba(63, 111, 203, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 255, 0.95)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.10), transparent 40%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 14px 30px rgba(59, 91, 154, 0.09);
+}
+
+html[data-theme="light"] #ui-settings-modal .xk-ui-setting-card:hover {
+  border-color: rgba(37, 99, 235, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(238, 245, 255, 0.96)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.12), transparent 40%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 18px 34px rgba(59, 91, 154, 0.11);
+}
+
+html[data-theme="light"] #ui-settings-modal .xk-ui-setting-card:has(input:checked) {
+  border-color: rgba(37, 99, 235, 0.34);
+  background:
+    linear-gradient(180deg, rgba(239, 246, 255, 0.995), rgba(226, 236, 255, 0.95)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.18), transparent 42%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 18px 36px rgba(59, 91, 154, 0.13),
+    0 0 0 1px rgba(37, 99, 235, 0.06);
+}
+
+html[data-theme="light"] #ui-settings-modal .xk-ui-setting-card:has(input:checked) .xk-ui-setting-copy strong {
+  color: #183b78;
+}
+
+html[data-theme="light"] #ui-settings-modal .xk-ui-setting-card:has(input:checked) .xk-ui-setting-copy small {
+  color: #3f5d8a;
+}
+
+html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
+  border-color: rgba(63, 111, 203, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(242, 247, 255, 0.94)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.06), transparent 42%);
+}
+
+html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status.error {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.98), rgba(254, 226, 226, 0.92));
+  color: #b91c1c;
+}
+
+html[data-theme="light"] #core-modal .xk-core-description,
+html[data-theme="light"] #core-modal .xk-core-description-secondary,
+html[data-theme="light"] #core-modal .xk-core-option-note,
+html[data-theme="light"] #core-modal .xk-core-status {
+  color: #4a5d7a;
+}
+
+html[data-theme="light"] #core-modal .xk-core-option {
+  border-color: rgba(63, 111, 203, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.995), rgba(241, 246, 255, 0.95)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.10), transparent 38%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 14px 30px rgba(59, 91, 154, 0.10);
+}
+
+html[data-theme="light"] #core-modal .xk-core-option:hover:not([disabled]) {
+  border-color: rgba(37, 99, 235, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(236, 244, 255, 0.96)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.14), transparent 40%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 18px 34px rgba(59, 91, 154, 0.12);
+}
+
+html[data-theme="light"] #core-modal .xk-core-option.active {
+  border-color: rgba(37, 99, 235, 0.44);
+  background:
+    linear-gradient(180deg, #6b93ef 0%, #2f5fc7 100%),
+    radial-gradient(circle at 22% 22%, rgba(255, 255, 255, 0.22), transparent 40%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 18px 34px rgba(37, 99, 235, 0.20);
+}
+
+html[data-theme="light"] #core-modal .xk-core-option.active .xk-core-option-title {
+  color: #f8fbff;
+  text-shadow: 0 1px 0 rgba(15, 23, 42, 0.18);
+}
+
+html[data-theme="light"] #core-modal .xk-core-option[disabled] {
+  background: rgba(241, 245, 249, 0.78);
+  opacity: 0.64;
+}
+
+html[data-theme="light"] .xk-forced-wizard-lead-title,
+html[data-theme="light"] .xk-forced-option-card strong,
+html[data-theme="light"] .xk-forced-rule-group-title,
+html[data-theme="light"] .xk-forced-rule-total {
+  color: #162033;
+}
+
+html[data-theme="light"] .xk-forced-wizard-kicker,
+html[data-theme="light"] .xk-forced-fieldlabel,
+html[data-theme="light"] .xk-forced-list-subtitle,
+html[data-theme="light"] .xk-forced-rule-group-meta,
+html[data-theme="light"] .xk-forced-option-card small {
+  color: #64748b;
+}
+
+html[data-theme="light"] .xk-forced-wizard-note,
+html[data-theme="light"] .xk-forced-wizard-empty {
+  color: #4a5d7a;
+}
+
+html[data-theme="light"] .xk-forced-wizard-toolbar {
+  border-color: rgba(63, 111, 203, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(242, 247, 255, 0.94)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.06), transparent 42%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+html[data-theme="light"] .xk-forced-wizard-toolbar .btn-icon,
+html[data-theme="light"] .xk-forced-outbound-wrap .btn-icon {
+  border-color: rgba(63, 111, 203, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(236, 244, 255, 0.94)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 42%);
+  color: #23407d;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 10px 22px rgba(59, 91, 154, 0.08);
+}
+
+html[data-theme="light"] .xk-forced-wizard-summary {
+  border-color: rgba(37, 99, 235, 0.22);
+  background:
+    linear-gradient(180deg, rgba(239, 246, 255, 0.99), rgba(224, 236, 255, 0.93)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.14), transparent 42%);
+  color: #1d4ed8;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 10px 20px rgba(59, 91, 154, 0.08);
+}
+
+html[data-theme="light"] .xk-forced-options-grid .xk-forced-option-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 255, 0.95)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 40%);
+}
+
+html[data-theme="light"] .xk-forced-options-grid .xk-forced-option-card:has(input:checked) {
+  border-color: rgba(37, 99, 235, 0.28);
+  background:
+    linear-gradient(180deg, rgba(239, 246, 255, 0.99), rgba(228, 238, 255, 0.95)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.14), transparent 40%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 12px 24px rgba(37, 99, 235, 0.10);
+}
+
+html[data-theme="light"] .xk-mi-lead-title,
+html[data-theme="light"] .xk-mi-section-title {
+  color: #162033;
+}
+
+html[data-theme="light"] .xk-mi-panel,
+html[data-theme="light"] .xk-mi-groups-card,
+html[data-theme="light"] .xk-mi-preview-wrap,
+html[data-theme="light"] .xk-mi-status {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.995), rgba(244, 248, 255, 0.96)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.08), transparent 42%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 12px 26px rgba(59, 91, 154, 0.08);
+}
+
+html[data-theme="light"] .xk-mi-groups-shell {
+  border-color: rgba(63, 111, 203, 0.12);
+  background: rgba(247, 250, 255, 0.94);
+}
+
+html[data-theme="light"] .xk-mi-chip,
+html[data-theme="light"] .xk-mi-target {
+  border-color: rgba(37, 99, 235, 0.22);
+  background:
+    linear-gradient(180deg, rgba(239, 246, 255, 0.99), rgba(224, 236, 255, 0.93)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.12), transparent 42%);
+  color: #1d4ed8;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+html[data-theme="light"] .xk-mi-section-subtitle,
+html[data-theme="light"] .xk-mi-kicker {
+  color: #64748b;
+}
+
+html[data-theme="light"] #mihomo-import-modal .xray-log-select,
+html[data-theme="light"] #mihomo-import-modal .xk-editor-engine-select {
+  border-color: rgba(63, 111, 203, 0.18);
+  background-color: rgba(255, 255, 255, 0.96);
+  color: #1f2c44;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 10px 20px rgba(59, 91, 154, 0.08);
+}
+
+html[data-theme="light"] #mihomo-import-modal .xray-log-select:hover,
+html[data-theme="light"] #mihomo-import-modal .xk-editor-engine-select:hover {
+  border-color: rgba(37, 99, 235, 0.28);
+  background-color: #ffffff;
+}
+
+html[data-theme="light"] .xk-mi-status.success {
+  border-color: rgba(37, 99, 235, 0.18);
+  background:
+    linear-gradient(180deg, rgba(239, 246, 255, 0.99), rgba(224, 236, 255, 0.93)),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.10), transparent 42%);
+  color: #1e429f;
 }

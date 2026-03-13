@@ -1967,11 +1967,49 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
     return wrap;
   }
 
+  let _rulesRenderToken = 0;
+  let _rulesRenderTimer = null;
+
+  function isMipsTarget() {
+    try {
+      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
+      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
+      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+    } catch (e) {}
+    return false;
+  }
+
+  function cancelQueuedRulesRender() {
+    _rulesRenderToken += 1;
+    try {
+      if (_rulesRenderTimer) clearTimeout(_rulesRenderTimer);
+    } catch (e) {}
+    _rulesRenderTimer = null;
+  }
+
+  function shouldChunkRuleRender(visibleCount) {
+    const count = Number(visibleCount || 0);
+    if (count <= 18) return false;
+    if (S._manualGuiSync || S._perfLite || isMipsTarget()) return true;
+    return count >= 72;
+  }
+
+  function getRuleChunkSize(visibleCount) {
+    const count = Number(visibleCount || 0);
+    if (S._manualGuiSync || S._perfLite || isMipsTarget()) return count >= 120 ? 8 : 10;
+    if (count >= 180) return 12;
+    if (count >= 120) return 16;
+    return 24;
+  }
+
   function renderRules() {
+    cancelQueuedRulesRender();
 
     const list = $(IDS.rulesList);
     const empty = $(IDS.rulesEmpty);
     if (!list) return;
+    try { list.setAttribute('aria-busy', 'false'); } catch (e) {}
+    try { if (list.dataset) list.dataset.renderMode = 'full'; } catch (e) {}
 
     // Unified error UX (parse/network/etc)
     if (S && S._error) {
@@ -2039,7 +2077,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
     }
     if (empty) empty.style.display = 'none';
 
-    visible.forEach(({ idx, rule }) => {
+    const buildRuleCard = ({ idx, rule }) => {
       const sum = summarizeRule(rule);
 
       const card = document.createElement('div');
@@ -2263,8 +2301,48 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       body.appendChild(pre);
       card.appendChild(body);
 
-      list.appendChild(card);
-    });
+      return card;
+    };
+
+    const appendVisibleChunk = (start, end) => {
+      const frag = document.createDocumentFragment();
+      for (let i = start; i < end; i += 1) {
+        frag.appendChild(buildRuleCard(visible[i]));
+      }
+      list.appendChild(frag);
+    };
+
+    if (!shouldChunkRuleRender(visible.length)) {
+      appendVisibleChunk(0, visible.length);
+      return;
+    }
+
+    const token = ++_rulesRenderToken;
+    const chunkSize = getRuleChunkSize(visible.length);
+    let cursor = 0;
+
+    try { list.setAttribute('aria-busy', 'true'); } catch (e) {}
+    try { if (list.dataset) list.dataset.renderMode = 'chunked'; } catch (e) {}
+
+    const pump = () => {
+      if (token !== _rulesRenderToken) return;
+
+      const next = Math.min(cursor + chunkSize, visible.length);
+      appendVisibleChunk(cursor, next);
+      cursor = next;
+
+      if (cursor >= visible.length) {
+        try { list.setAttribute('aria-busy', 'false'); } catch (e) {}
+        return;
+      }
+
+      _rulesRenderTimer = setTimeout(() => {
+        _rulesRenderTimer = null;
+        pump();
+      }, 0);
+    };
+
+    pump();
   }
 
   function renderAll() {

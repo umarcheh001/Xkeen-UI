@@ -14,7 +14,7 @@
     showHidden: 'xkeen.fm.dotfiles', // '1'|'0'
     mask: 'xkeen.fm.mask',           // last used selection mask (glob)
     bookmarksLocal: 'xkeen.fm.bookmarks.local', // JSON: [{ label: '...', value: '/path' }, ...]
-    geom: 'xkeen.fm.geom_v1',        // JSON: { w: px, h: px, shiftX: px }
+    geom: 'xkeen.fm.geom_v3',        // JSON: { w: px, h: px, shiftX: px }
 
     // Panels state (persist between reloads)
     panels: 'xkeen.fm.panels_v1',    // JSON: { left:{cwd,target,filter}, right:{cwd,target,filter} }

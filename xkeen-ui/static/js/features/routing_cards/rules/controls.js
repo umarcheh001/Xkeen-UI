@@ -59,6 +59,84 @@
     });
   };
 
+  const PERF_LIMITS = {
+    softLines: 1800,
+    softChars: 110000,
+  };
+
+  function isMipsTarget() {
+    try {
+      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
+      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
+      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+    } catch (e) {}
+    return false;
+  }
+
+  function countLines(text) {
+    const raw = String(text == null ? '' : text);
+    if (!raw) return 1;
+    let out = 1;
+    for (let i = 0; i < raw.length; i += 1) {
+      if (raw.charCodeAt(i) === 10) out += 1;
+    }
+    return out;
+  }
+
+  function getEditorTextSnapshot() {
+    try {
+      if (C && typeof C.getEditorText === 'function') return String(C.getEditorText() || '');
+    } catch (e) {}
+    const cm = editorInstance();
+    try {
+      if (cm && typeof cm.getValue === 'function') return String(cm.getValue() || '');
+    } catch (e) {}
+    const ta = $('routing-editor');
+    return ta ? String(ta.value || '') : '';
+  }
+
+  function computeGuiPerfProfile(text) {
+    const raw = String(text == null ? '' : text);
+    const lineCount = countLines(raw);
+    const charCount = raw.length;
+    const lite = !!(isMipsTarget() || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars);
+    return {
+      lite,
+      manualSync: lite,
+      lineCount,
+      charCount,
+    };
+  }
+
+  function syncGuiPerfMode(text) {
+    const profile = computeGuiPerfProfile(typeof text === 'string' ? text : getEditorTextSnapshot());
+    S._perfLite = !!profile.lite;
+    S._manualGuiSync = !!profile.manualSync;
+
+    const body = $(IDS.rulesBody);
+    if (body && body.dataset) body.dataset.syncMode = profile.manualSync ? 'manual' : 'live';
+
+    const refreshBtn = $(IDS.rulesRefresh);
+    if (refreshBtn && refreshBtn.dataset) refreshBtn.dataset.syncMode = profile.manualSync ? 'manual' : 'live';
+
+    return profile;
+  }
+
+  function markRulesStale(flag) {
+    const stale = !!flag;
+    S._rulesStale = stale;
+    const refreshBtn = $(IDS.rulesRefresh);
+    if (refreshBtn && refreshBtn.dataset) refreshBtn.dataset.stale = stale ? '1' : '0';
+  }
+
+  function shouldSkipLiveSync(detail, profile) {
+    if (!profile || !profile.manualSync) return false;
+    const d = detail || {};
+    if (d.forceRender === true || d.setError === true) return false;
+    const reason = String(d.reason || '');
+    return reason === '' || reason === 'edit' || reason === 'change';
+  }
+
   function syncDomainStrategySelect() {
     const ds = $(IDS.domainStrategy);
     if (!ds) return;
@@ -73,6 +151,7 @@
     if (!isViewVisible()) return;
     const o = opts || {};
     const setError = !!o.setError; // default: false (do not wipe lists on transient editor updates)
+    syncGuiPerfMode(typeof o.text === 'string' ? o.text : null);
     const r = (RM && typeof RM.loadFromEditor === 'function')
       ? RM.loadFromEditor({ setError })
       : { ok: false, error: 'no model' };
@@ -88,6 +167,7 @@
       return;
     }
     syncDomainStrategySelect();
+    markRulesStale(false);
     if (RR && typeof RR.renderAll === 'function') RR.renderAll();
   }
 
@@ -98,6 +178,15 @@
     cm.__xkRoutingRulesHooked = true;
     cm.on('change', debounce(() => {
       if (S._suppressEditorChange) return;
+      const profile = syncGuiPerfMode();
+      if (S.__rulesEditorContentWired) {
+        if (profile.manualSync) markRulesStale(true);
+        return;
+      }
+      if (profile.manualSync) {
+        markRulesStale(true);
+        return;
+      }
       // Avoid heavy re-render when rules card is collapsed
       const body = $(IDS.rulesBody);
       const isOpen = body && body.style.display !== 'none';
@@ -113,18 +202,31 @@
     const onContent = debounce((ev) => {
       if (!isViewVisible()) return;
       const detail = (ev && ev.detail) ? ev.detail : {};
+      const profile = syncGuiPerfMode();
       const body = $(IDS.rulesBody);
       const isOpen = !!(body && body.style.display !== 'none');
 
       // When GUI card is collapsed, keep the internal model fresh so the next open
       // shows current JSON immediately, but skip expensive full re-render.
       if (!isOpen) {
+        if (shouldSkipLiveSync(detail, profile)) {
+          markRulesStale(true);
+          return;
+        }
         try {
           const r = (RM && typeof RM.loadFromEditor === 'function')
             ? RM.loadFromEditor({ setError: false })
             : { ok: false };
-          if (r && r.ok) syncDomainStrategySelect();
+          if (r && r.ok) {
+            syncDomainStrategySelect();
+            markRulesStale(false);
+          }
         } catch (e) {}
+        return;
+      }
+
+      if (shouldSkipLiveSync(detail, profile)) {
+        markRulesStale(true);
         return;
       }
 
@@ -163,7 +265,11 @@
     }
 
     const refreshBtn = $(IDS.rulesRefresh);
-    if (refreshBtn) refreshBtn.addEventListener('click', (e) => { e.preventDefault(); if (RR && typeof RR.renderAll === 'function') RR.renderAll(); });
+    if (refreshBtn) refreshBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      markRulesStale(false);
+      if (RR && typeof RR.renderAll === 'function') RR.renderAll();
+    });
 
     const reloadBtn = $(IDS.rulesReload);
     if (reloadBtn) reloadBtn.addEventListener('click', (e) => {
@@ -174,6 +280,7 @@
       if (!r.ok) {
         toast('Не удалось прочитать JSON: ' + String(r.error && r.error.message ? r.error.message : r.error), true);
       }
+      markRulesStale(false);
       if (RR && typeof RR.renderAll === 'function') RR.renderAll();
     });
 
@@ -254,6 +361,7 @@
     if (!$(IDS.rulesHeader) || !$(IDS.rulesBody)) return;
 
     wireRulesControls();
+    syncGuiPerfMode();
     // First render: do NOT show error UI while editor is still loading.
     renderFromEditor({ setError: false });
 

@@ -27,6 +27,9 @@
 
   // Last error (normalized via RC.common.normalizeError).
   if (!('_error' in S)) S._error = null;
+  if (!('_perfLite' in S)) S._perfLite = false;
+  if (!('_manualGuiSync' in S)) S._manualGuiSync = false;
+  if (!('_rulesStale' in S)) S._rulesStale = false;
 
   // Expanded items: store object references (stable across reorder)
   if (!('_openSet' in S)) S._openSet = new Set();

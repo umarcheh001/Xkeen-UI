@@ -68,7 +68,7 @@
   <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260312-premium-panel-v13') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260313-lighttheme-v1') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -80,7 +80,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
 </head>
-<body class="panel-page">
+<body class="panel-page{% if is_mips %} xk-perf-lite{% endif %}">
   <div id="global-xkeen-spinner">
     <div class="global-spinner-box">
       <div class="global-spinner-icon"></div>
@@ -3242,8 +3242,9 @@ https://..."></textarea>
   <script>
 	    window.XKEEN_GITHUB_REPO_URL = "{{ github_repo_url|e }}";
 	    window.XKEEN_STATIC_BASE = "{{ url_for('static', filename='') }}";
+	    window.XKEEN_IS_MIPS = {{ is_mips|tojson }};
 		    // Cache-buster for lazy-loaded scripts (Commit J)
-		    window.XKEEN_STATIC_VER = "20260302a";
+		    window.XKEEN_STATIC_VER = "20260313d";
 	    // Files shown in UI (used by last-load badge and other helpers)
 	    window.XKEEN_FILES = {
 	      routing: "{{ routing_file|e }}",
@@ -3269,8 +3270,8 @@ https://..."></textarea>
 	  <script src="{{ url_for('static', filename='js/ui/last_activity.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js', v='20260224d') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/monaco_loader.js', v='20260222a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/monaco_shared.js', v='20260223a') }}"></script>
+<script src="{{ url_for('static', filename='js/ui/monaco_loader.js', v='20260313a') }}"></script>
+<script src="{{ url_for('static', filename='js/ui/monaco_shared.js', v='20260313a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260105c') }}"></script>
   <script src="{{ url_for('static', filename='js/util/tab_id.js') }}"></script>
@@ -3287,7 +3288,7 @@ https://..."></textarea>
   <script src="{{ url_for('static', filename='js/features/backups.js', v='20260224d') }}"></script>
 
   <!-- Routing page core -->
-  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260308-stage3fix2') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260313c') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_jsonc_preserve.js', v='20260218d') }}"></script>
 
   <!-- routing_cards: namespace + shared helpers -->
@@ -3307,15 +3308,15 @@ https://..."></textarea>
   <script src="{{ url_for('static', filename='js/features/routing_cards/dat/card.js', v='20260304d') }}"></script>
 
   <!-- routing_cards: Rules card -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/state.js', v='20260304d') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/state.js', v='20260313b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/model.js', v='20260308-stage3fix1') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/detect.js', v='20260304j') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/json_modal.js', v='20260304h4') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/apply.js', v='20260308-stage3fix1') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/fields.js', v='20260308-stage1') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dnd_pointer.js', v='20260308-stage3') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/render.js', v='20260308-stage3fix1') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/controls.js', v='20260308-stage3fix2') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/render.js', v='20260313b') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/controls.js', v='20260313b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dat_bridge.js', v='20260304h4') }}"></script>
 
   <!-- routing_cards: Quick balancer wizard (leastPing + observatory + restart) -->
@@ -3327,12 +3328,8 @@ https://..."></textarea>
 
   <!-- routing_cards: facade/entrypoint -->
   <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260308-stage3fix2') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_templates.js', v='20260308-stage3fix2') }}"></script>
   <script src="{{ url_for('static', filename='js/features/local_io.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/github.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/service_status.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/xray_logs.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/restart_log.js', v='20260302c') }}"></script>
+  <!-- routing_templates/github/service_status/xray_logs/restart_log are lazy-loaded by panel.init.js -->
   <script src="{{ url_for('static', filename='js/features/mihomo_panel.js', v='20260302g') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_yaml_patch.js', v='20260302a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260309-premium-import-v1') }}"></script>
@@ -3340,16 +3337,15 @@ https://..."></textarea>
   <script src="{{ url_for('static', filename='js/features/mihomo_hwid_sub.js', v='20260302b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/commands_list.js') }}"></script>
   <script src="{{ url_for('static', filename='js/features/cores_status.js', v='20260305a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/inbounds.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/outbounds.js', v='20260308-proxy-generator-premium-v1') }}"></script>
+  <!-- inbounds/outbounds are lazy-loaded by panel.init.js -->
   <script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
     <script src="{{ url_for('static', filename='js/features/xkeen_texts.js') }}"></script>
       <!-- File Manager scripts are lazy-loaded when Files tab is opened (Commit J) -->
 
     <!-- Terminal scripts are lazy-loaded on first open (Commit J) -->
 
-  <script src="{{ url_for('static', filename='js/features/donate.js') }}"></script>
-	  <script src="{{ url_for('static', filename='js/pages/panel.init.js', v='20260308-stage2') }}"></script>
+  <!-- donate is lazy-loaded by panel.init.js -->
+	  <script src="{{ url_for('static', filename='js/pages/panel.init.js', v='20260313b') }}"></script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 
     <!-- Модальный JSON-редактор для 03_inbounds.json / 04_outbounds.json -->

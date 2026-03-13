@@ -481,6 +481,258 @@ safe(() => {
   } catch (e1) {}
 });
 
+const _lazyFeatureReady = Object.create(null);
+const _lazyFeatureLoading = Object.create(null);
+const LAZY_FEATURE_SCRIPTS = {
+  routingTemplates: ['js/features/routing_templates.js'],
+  github: ['js/features/github.js'],
+  serviceStatus: ['js/features/service_status.js'],
+  xrayLogs: ['js/features/xray_logs.js'],
+  restartLog: ['js/features/restart_log.js'],
+  inbounds: ['js/features/inbounds.js'],
+  outbounds: ['js/features/outbounds.js'],
+  donate: ['js/features/donate.js'],
+};
+
+function isMipsTarget() {
+  try {
+    if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
+    const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
+    return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+  } catch (e) {}
+  return false;
+}
+
+function runWhenIdle(fn, timeoutMs) {
+  const wait = (typeof timeoutMs === 'number' && timeoutMs >= 0) ? timeoutMs : 0;
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(() => safe(fn), { timeout: Math.max(500, wait || 800) });
+    return;
+  }
+  setTimeout(() => safe(fn), wait);
+}
+
+function getLazyFeatureApi(name) {
+  try {
+    switch (String(name || '')) {
+      case 'routingTemplates':
+        return (window.XKeen && XKeen.features) ? XKeen.features.routingTemplates : null;
+      case 'github':
+        return window.XKeen ? XKeen.github : null;
+      case 'serviceStatus':
+        return (window.XKeen && XKeen.features) ? XKeen.features.serviceStatus : null;
+      case 'xrayLogs':
+        return (window.XKeen && XKeen.features) ? XKeen.features.xrayLogs : null;
+      case 'restartLog':
+        return (window.XKeen && XKeen.features) ? XKeen.features.restartLog : null;
+      case 'inbounds':
+        return (window.XKeen && XKeen.features) ? XKeen.features.inbounds : null;
+      case 'outbounds':
+        return (window.XKeen && XKeen.features) ? XKeen.features.outbounds : null;
+      case 'donate':
+        return (window.XKeen && XKeen.features) ? XKeen.features.donate : null;
+      default:
+        return null;
+    }
+  } catch (e) {
+    return null;
+  }
+}
+
+function initLazyFeature(name) {
+  const feature = getLazyFeatureApi(name);
+  switch (String(name || '')) {
+    case 'routingTemplates':
+      if (feature && typeof feature.init === 'function') feature.init();
+      break;
+    case 'github':
+      if (feature && typeof feature.init === 'function') feature.init({ repoUrl: window.XKEEN_GITHUB_REPO_URL || '' });
+      break;
+    case 'serviceStatus':
+    case 'xrayLogs':
+    case 'restartLog':
+    case 'inbounds':
+    case 'outbounds':
+    case 'donate':
+      if (feature && typeof feature.init === 'function') feature.init();
+      break;
+    default:
+      break;
+  }
+}
+
+function ensureLazyFeature(name) {
+  const key = String(name || '');
+  if (!key) return Promise.resolve(false);
+  if (_lazyFeatureReady[key]) return Promise.resolve(true);
+  if (_lazyFeatureLoading[key]) return _lazyFeatureLoading[key];
+
+  _lazyFeatureLoading[key] = (async () => {
+    const scripts = Array.isArray(LAZY_FEATURE_SCRIPTS[key]) ? LAZY_FEATURE_SCRIPTS[key] : [];
+    const existing = getLazyFeatureApi(key);
+    if (!existing && scripts.length) {
+      const ok = await loadScriptsInOrder(scripts);
+      if (!ok) throw new Error('failed to load lazy feature: ' + key);
+    }
+    safe(() => initLazyFeature(key));
+    _lazyFeatureReady[key] = true;
+    return true;
+  })().catch((err) => {
+    try { console.error('[XKeen] lazy feature failed:', key, err); } catch (e) {}
+    _lazyFeatureReady[key] = false;
+    return false;
+  }).finally(() => {
+    _lazyFeatureLoading[key] = null;
+  });
+
+  return _lazyFeatureLoading[key];
+}
+
+function warmLazyFeature(name, delayMs) {
+  const wait = (typeof delayMs === 'number' && delayMs >= 0) ? delayMs : 0;
+  setTimeout(() => {
+    runWhenIdle(() => { void ensureLazyFeature(name); }, wait);
+  }, wait);
+}
+
+function replayDeferredClick(el) {
+  if (!el) return;
+  try {
+    if (el.dataset) el.dataset.xkLazyReplay = '1';
+  } catch (e) {}
+  try {
+    el.click();
+  } catch (e) {
+    try {
+      el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+    } catch (e2) {}
+  }
+}
+
+function consumeReplayFlag(el) {
+  try {
+    if (!el || !el.dataset || el.dataset.xkLazyReplay !== '1') return false;
+    delete el.dataset.xkLazyReplay;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function wireLazyFeatureClicks() {
+  if (document.body && document.body.dataset && document.body.dataset.xkLazyFeatureClicks === '1') return;
+
+  document.addEventListener('click', (e) => {
+    const raw = e && e.target && typeof e.target.closest === 'function' ? e.target : null;
+    if (!raw) return;
+
+    const templateBtn = raw.closest('#routing-import-template-btn');
+    if (templateBtn) {
+      if (consumeReplayFlag(templateBtn)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      ensureLazyFeature('routingTemplates').then((ready) => {
+        if (!ready) return;
+        try {
+          const api = getLazyFeatureApi('routingTemplates');
+          if (api && typeof api.open === 'function') api.open();
+          else replayDeferredClick(templateBtn);
+        } catch (err) {}
+      });
+      return;
+    }
+
+    const githubExportBtn = raw.closest('#github-export-btn');
+    if (githubExportBtn) {
+      if (consumeReplayFlag(githubExportBtn)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      ensureLazyFeature('github').then((ready) => {
+        if (!ready) return;
+        try {
+          const api = getLazyFeatureApi('github');
+          if (api && typeof api.openExportModal === 'function') api.openExportModal();
+          else replayDeferredClick(githubExportBtn);
+        } catch (err) {}
+      });
+      return;
+    }
+
+    const githubCatalogBtn = raw.closest('#github-open-catalog-btn');
+    if (githubCatalogBtn) {
+      if (consumeReplayFlag(githubCatalogBtn)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      ensureLazyFeature('github').then((ready) => {
+        if (!ready) return;
+        try {
+          const api = getLazyFeatureApi('github');
+          if (api && typeof api.openCatalogModal === 'function') api.openCatalogModal();
+          else replayDeferredClick(githubCatalogBtn);
+        } catch (err) {}
+      });
+      return;
+    }
+
+    const donateBtn = raw.closest('#top-tab-donate');
+    if (donateBtn) {
+      if (consumeReplayFlag(donateBtn)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      ensureLazyFeature('donate').then((ready) => {
+        if (!ready) return;
+        replayDeferredClick(donateBtn);
+      });
+      return;
+    }
+
+    const inboundsTrigger = raw.closest('#inbounds-header, [id^="inbounds-"], [name="inbounds_mode"]');
+    if (inboundsTrigger && !_lazyFeatureReady.inbounds) {
+      if (consumeReplayFlag(inboundsTrigger)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      ensureLazyFeature('inbounds').then((ready) => {
+        if (!ready) return;
+        replayDeferredClick(inboundsTrigger);
+      });
+      return;
+    }
+
+    const outboundsTrigger = raw.closest('#outbounds-header, [id^="outbounds-"]');
+    if (outboundsTrigger && !_lazyFeatureReady.outbounds) {
+      if (consumeReplayFlag(outboundsTrigger)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      ensureLazyFeature('outbounds').then((ready) => {
+        if (!ready) return;
+        replayDeferredClick(outboundsTrigger);
+      });
+    }
+  }, true);
+
+  if (document.body && document.body.dataset) document.body.dataset.xkLazyFeatureClicks = '1';
+}
+
+function schedulePanelWarmups() {
+  const mips = isMipsTarget();
+
+  warmLazyFeature('serviceStatus', mips ? 900 : 120);
+  warmLazyFeature('restartLog', mips ? 1400 : 280);
+
+  if (mips) {
+    warmLazyFeature('inbounds', 2200);
+    warmLazyFeature('outbounds', 2800);
+    warmLazyFeature('routingTemplates', 3400);
+    return;
+  }
+
+  warmLazyFeature('inbounds', 500);
+  warmLazyFeature('outbounds', 750);
+  warmLazyFeature('routingTemplates', 1000);
+  warmLazyFeature('github', 1600);
+  warmLazyFeature('donate', 2400);
+}
+
   // Legacy initializers from main.js were removed. If you add a new module,
   // just extend initModules() below.
 
@@ -631,19 +883,24 @@ safe(() => {
     // If the user explicitly enabled the "Live" toggle (persisted preference),
     // resume streaming while the tab is visible.
     if (name === 'xray-logs') {
-      if (window.XKeen && XKeen.features && XKeen.features.xrayLogs) {
-        if (typeof XKeen.features.xrayLogs.viewOnce === 'function') safe(() => XKeen.features.xrayLogs.viewOnce());
-        if (typeof XKeen.features.xrayLogs.refreshStatus === 'function') safe(() => XKeen.features.xrayLogs.refreshStatus());
+      ensureLazyFeature('xrayLogs').then((ready) => {
+        if (!ready) return;
+        const section = document.getElementById('view-xray-logs');
+        if (!section || section.style.display === 'none') return;
 
-        // If the user has the "Live" toggle enabled (persisted preference),
-        // resume streaming when the tab becomes visible again.
-        try {
-          const liveEl = document.getElementById('xray-log-live');
-          if (liveEl && liveEl.checked && typeof XKeen.features.xrayLogs.start === 'function') {
-            safe(() => XKeen.features.xrayLogs.start());
-          }
-        } catch (e) {}
-      } else {
+        if (window.XKeen && XKeen.features && XKeen.features.xrayLogs) {
+          if (typeof XKeen.features.xrayLogs.viewOnce === 'function') safe(() => XKeen.features.xrayLogs.viewOnce());
+          if (typeof XKeen.features.xrayLogs.refreshStatus === 'function') safe(() => XKeen.features.xrayLogs.refreshStatus());
+
+          try {
+            const liveEl = document.getElementById('xray-log-live');
+            if (liveEl && liveEl.checked && typeof XKeen.features.xrayLogs.start === 'function') {
+              safe(() => XKeen.features.xrayLogs.start());
+            }
+          } catch (e) {}
+          return;
+        }
+
         if (typeof window.fetchXrayLogsOnce === 'function') safe(() => window.fetchXrayLogsOnce('manual'));
         if (typeof window.refreshXrayLogStatus === 'function') safe(() => window.refreshXrayLogStatus());
 
@@ -653,7 +910,7 @@ safe(() => {
             safe(() => window.startXrayLogAuto());
           }
         } catch (e) {}
-      }
+      });
     } else {
       // Leaving the tab stops any active stream.
       if (window.XKeen && XKeen.features && XKeen.features.xrayLogs && typeof XKeen.features.xrayLogs.stop === 'function') {
@@ -701,32 +958,9 @@ safe(() => {
     safe(() => {
       if (window.XKeen && XKeen.routing && typeof XKeen.routing.init === 'function') XKeen.routing.init();
     });
-    safe(() => {
-      if (window.XKeen && XKeen.features && XKeen.features.routingTemplates && typeof XKeen.features.routingTemplates.init === 'function') {
-        XKeen.features.routingTemplates.init();
-      }
-    });
-    safe(() => {
-      if (window.XKeen && XKeen.features && XKeen.features.inbounds && typeof XKeen.features.inbounds.init === 'function') XKeen.features.inbounds.init();
-    });
-    safe(() => {
-      if (window.XKeen && XKeen.features && XKeen.features.outbounds && typeof XKeen.features.outbounds.init === 'function') XKeen.features.outbounds.init();
-    });
-    safe(() => {
-      if (window.XKeen && XKeen.features && XKeen.features.xrayLogs && typeof XKeen.features.xrayLogs.init === 'function') XKeen.features.xrayLogs.init();
-    });
-    safe(() => {
-      if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.init === 'function') XKeen.features.restartLog.init();
-    });
 	  // mihomoPanel/mihomoImport are initialized lazily when the tab is opened (see showView).
     safe(() => {
-      if (window.XKeen && XKeen.features && XKeen.features.serviceStatus && typeof XKeen.features.serviceStatus.init === 'function') XKeen.features.serviceStatus.init();
-    });
-    safe(() => {
       if (window.XKeen && XKeen.localIO && typeof XKeen.localIO.init === 'function') XKeen.localIO.init();
-    });
-    safe(() => {
-      if (window.XKeen && XKeen.github && typeof XKeen.github.init === 'function') XKeen.github.init({ repoUrl: window.XKEEN_GITHUB_REPO_URL || '' });
     });
     safe(() => {
       if (window.XKeen && XKeen.backups && typeof XKeen.backups.init === 'function') XKeen.backups.init();
@@ -735,12 +969,6 @@ safe(() => {
       if (window.XKeen && XKeen.jsonEditor && typeof XKeen.jsonEditor.init === 'function') XKeen.jsonEditor.init();
     });
 	  // xkeenTexts/commandsList are initialized lazily when their tabs are opened (see showView).
-
-    safe(() => {
-      if (window.XKeen && XKeen.features && XKeen.features.donate && typeof XKeen.features.donate.init === 'function') {
-        XKeen.features.donate.init();
-      }
-    });
   }
 
   function init() {
@@ -751,6 +979,7 @@ safe(() => {
 
     // Tabs (replaces inline onclick="showView(...)")
     wireTabs();
+    wireLazyFeatureClicks();
 
     // Terminal: load heavy xterm+modules only when user opens it
     wireTerminalLazyOpen();
@@ -779,6 +1008,7 @@ safe(() => {
     const remembered = _restoreView();
     const initial = remembered || (activeBtn && activeBtn.dataset && activeBtn.dataset.view ? activeBtn.dataset.view : 'routing');
     showView(initial);
+    schedulePanelWarmups();
   }
 
   if (document.readyState === 'loading') {

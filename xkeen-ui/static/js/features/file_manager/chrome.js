@@ -16,7 +16,7 @@
   }
 
   // LocalStorage key for geometry
-  const LS_GEOM = (FM.prefs && FM.prefs.keys && FM.prefs.keys.geom) || 'xkeen.fm.geom_v1';
+  const LS_GEOM = (FM.prefs && FM.prefs.keys && FM.prefs.keys.geom) || 'xkeen.fm.geom_v3';
 
   function lsGet(key) {
     try {
@@ -108,8 +108,6 @@
   let geomAppliedOnce = false;
   let geomSaveTimer = null;
   let geomRO = null;
-  let nativeResizeActive = false;
-
   function canResizeNow() {
     try {
       if (isFs) return false;
@@ -128,21 +126,45 @@
       if (!j || typeof j !== 'object') return null;
       const w = Number(j.w);
       const h = Number(j.h);
-      const shiftX = Number(j.shiftX || 0);
+      const shiftX = Number.isFinite(Number(j.shiftX)) ? Number(j.shiftX) : 0;
       if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
       if (w < GEOM.minW || h < GEOM.minH) return null;
-      if (!Number.isFinite(shiftX)) return { w, h, shiftX: 0 };
       return { w, h, shiftX };
     } catch (e) {
       return null;
     }
   }
 
-  function clampGeom(g) {
+  function getShiftX(card) {
+    if (!card || !card.style || typeof card.style.getPropertyValue !== 'function') return 0;
+    try {
+      const raw = String(card.style.getPropertyValue('--fm-shift-x') || '').trim();
+      const n = Number(raw.replace('px', '').trim());
+      return Number.isFinite(n) ? n : 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function getCardMetrics(card) {
+    if (!card) return null;
+    try {
+      const rect = card.getBoundingClientRect();
+      const shiftX = getShiftX(card);
+      if (!rect || !Number.isFinite(rect.left)) return null;
+      return {
+        flowLeft: rect.left - shiftX,
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function clampGeom(g, metrics) {
     if (!g) return null;
     let w = Number(g.w);
     let h = Number(g.h);
-    let shiftX = Number(g.shiftX || 0);
+    let shiftX = Number.isFinite(Number(g.shiftX)) ? Number(g.shiftX) : 0;
     if (!Number.isFinite(w) || !Number.isFinite(h)) return null;
 
     const maxW = Math.max(GEOM.minW, Math.round(window.innerWidth * 0.98));
@@ -151,23 +173,13 @@
     if (h < GEOM.minH) h = GEOM.minH;
     if (Number.isFinite(maxW) && maxW > 0 && w > maxW) w = maxW;
     if (Number.isFinite(maxH) && maxH > 0 && h > maxH) h = maxH;
-
-    const maxShift = Math.max(0, Math.round(window.innerWidth * 0.55));
-    if (!Number.isFinite(shiftX)) shiftX = 0;
-    if (shiftX > maxShift) shiftX = maxShift;
-    if (shiftX < -maxShift) shiftX = -maxShift;
-
-    return { w, h, shiftX };
-  }
-
-  function getShiftX(card) {
-    try {
-      const v = window.getComputedStyle(card).getPropertyValue('--fm-shift-x');
-      const n = parseFloat(String(v || '').trim());
-      return isFinite(n) ? n : 0;
-    } catch (e) {
-      return 0;
+    if (metrics && Number.isFinite(metrics.flowLeft)) {
+      const minShift = Math.round(8 - metrics.flowLeft);
+      const maxShift = Math.round(window.innerWidth - 8 - metrics.flowLeft - w);
+      if (shiftX < minShift) shiftX = minShift;
+      if (shiftX > maxShift) shiftX = maxShift;
     }
+    return { w, h, shiftX };
   }
 
   function applyGeom(g) {
@@ -175,7 +187,7 @@
     if (!card || !g) return;
     if (!canResizeNow()) return;
 
-    const gg = clampGeom(g);
+    const gg = clampGeom(g, getCardMetrics(card));
     if (!gg) return;
 
     try {
@@ -198,7 +210,7 @@
     const h = Math.round(r.height);
     if (w < GEOM.minW || h < GEOM.minH) return;
 
-    const geom = clampGeom({ w, h, shiftX: getShiftX(card) });
+    const geom = clampGeom({ w, h, shiftX: getShiftX(card) }, getCardMetrics(card));
     if (!geom) return;
 
     geomTouched = true;
@@ -252,31 +264,6 @@
       }
     } catch (e) {}
 
-    // Detect native bottom-right resize drag.
-    try {
-      card.addEventListener('pointerdown', (ev) => {
-        try {
-          if (!canResizeNow()) return;
-          if (ev && ev.pointerType === 'mouse' && ev.button !== 0) return;
-          const r = card.getBoundingClientRect();
-          const pad = 28;
-          const nearRight = (r.right - ev.clientX) >= 0 && (r.right - ev.clientX) < pad;
-          const nearBottom = (r.bottom - ev.clientY) >= 0 && (r.bottom - ev.clientY) < pad;
-          if (!nearRight || !nearBottom) return;
-          geomTouched = true;
-          nativeResizeActive = true;
-        } catch (e) {}
-      }, { passive: true });
-
-      const endNative = () => {
-        if (!nativeResizeActive) return;
-        nativeResizeActive = false;
-        scheduleSaveGeom();
-      };
-      window.addEventListener('pointerup', endNative, { passive: true });
-      window.addEventListener('pointercancel', endNative, { passive: true });
-    } catch (e) {}
-
     // Apply stored geometry later when viewport becomes wide enough.
     try {
       window.addEventListener('resize', () => {
@@ -290,124 +277,126 @@
     } catch (e) {}
   }
 
-  // -------------------------- bottom-left resize handle --------------------------
-  function wireLeftResizeHandle() {
+  // -------------------------- bottom corner resize handles --------------------------
+  function wireResizeHandles() {
     const card = cardEl();
     if (!card) return;
 
-    let handle = qs('.fm-resize-handle-left', card);
-    if (!handle) {
-      try {
-        handle = document.createElement('div');
-        handle.className = 'fm-resize-handle-left';
-        handle.setAttribute('aria-hidden', 'true');
-        card.appendChild(handle);
-      } catch (e) {
-        return;
-      }
-    }
+    const handles = [
+      { side: 'left', className: 'fm-resize-handle-left', cursor: 'nesw-resize' },
+      { side: 'right', className: 'fm-resize-handle-right', cursor: 'nwse-resize' },
+    ];
 
-    // avoid double-wire
-    try {
-      if (handle.dataset && handle.dataset.fmWire === '1') return;
-      if (handle.dataset) handle.dataset.fmWire = '1';
-    } catch (e) {}
-
-    let dragging = false;
-    let startX = 0;
-    let startY = 0;
-    let startW = 0;
-    let startH = 0;
-    let startShiftX = 0;
-    let prevBodyUserSelect = '';
-    let prevBodyCursor = '';
-
-    function startDrag(ev) {
-      try {
-        if (!canResizeNow()) return;
-        if (ev && ev.pointerType === 'mouse' && ev.button !== 0) return;
-        const r = card.getBoundingClientRect();
-        startX = ev.clientX;
-        startY = ev.clientY;
-        startW = r.width;
-        startH = r.height;
-        startShiftX = getShiftX(card);
-
-        // Ensure pixel-based sizing so drag math stays stable.
-        card.style.width = Math.round(startW) + 'px';
-        card.style.height = Math.round(startH) + 'px';
-        card.style.setProperty('--fm-shift-x', startShiftX + 'px');
-
-        dragging = true;
-        geomTouched = true;
-
-        prevBodyUserSelect = document.body.style.userSelect || '';
-        prevBodyCursor = document.body.style.cursor || '';
-        document.body.style.userSelect = 'none';
-        document.body.style.cursor = 'nesw-resize';
-
-        try { handle.setPointerCapture(ev.pointerId); } catch (e) {}
-        ev.preventDefault();
-        ev.stopPropagation();
-      } catch (e) {}
-    }
-
-    function onMove(ev) {
-      if (!dragging) return;
-      try {
-        let dx = ev.clientX - startX;
-        let dy = ev.clientY - startY;
-
-        let w = startW - dx;
-        let h = startH + dy;
-
-        const minW = GEOM.minW;
-        const minH = GEOM.minH;
-        const maxH = Math.round(window.innerHeight * 0.90);
-
-        if (w < minW) {
-          w = minW;
-          dx = startW - w;
+    handles.forEach((cfg) => {
+      let handle = qs('.' + cfg.className, card);
+      if (!handle) {
+        try {
+          handle = document.createElement('div');
+          handle.className = cfg.className;
+          handle.setAttribute('aria-hidden', 'true');
+          card.appendChild(handle);
+        } catch (e) {
+          return;
         }
-        if (h < minH) h = minH;
-        if (isFinite(maxH) && maxH > 0 && h > maxH) h = maxH;
-
-        const shiftX = startShiftX + dx;
-        card.style.width = Math.round(w) + 'px';
-        card.style.height = Math.round(h) + 'px';
-        card.style.setProperty('--fm-shift-x', Math.round(shiftX) + 'px');
-
-        ev.preventDefault();
-        ev.stopPropagation();
-      } catch (e) {}
-    }
-
-    function endDrag(ev) {
-      if (!dragging) return;
-      dragging = false;
-      try {
-        document.body.style.userSelect = prevBodyUserSelect;
-        document.body.style.cursor = prevBodyCursor;
-      } catch (e) {}
+      }
 
       try {
-        if (ev) {
+        if (handle.dataset && handle.dataset.fmWire === '1') return;
+        if (handle.dataset) handle.dataset.fmWire = '1';
+      } catch (e) {}
+
+      let dragging = false;
+      let startX = 0;
+      let startY = 0;
+      let startW = 0;
+      let startH = 0;
+      let startShiftX = 0;
+      let metrics = null;
+      let prevBodyUserSelect = '';
+      let prevBodyCursor = '';
+
+      function startDrag(ev) {
+        try {
+          if (!canResizeNow()) return;
+          if (ev && ev.pointerType === 'mouse' && ev.button !== 0) return;
+          const r = card.getBoundingClientRect();
+          startX = ev.clientX;
+          startY = ev.clientY;
+          startW = r.width;
+          startH = r.height;
+          startShiftX = getShiftX(card);
+          metrics = getCardMetrics(card);
+
+          card.style.width = Math.round(startW) + 'px';
+          card.style.height = Math.round(startH) + 'px';
+          card.style.setProperty('--fm-shift-x', Math.round(startShiftX) + 'px');
+
+          dragging = true;
+          geomTouched = true;
+
+          prevBodyUserSelect = document.body.style.userSelect || '';
+          prevBodyCursor = document.body.style.cursor || '';
+          document.body.style.userSelect = 'none';
+          document.body.style.cursor = cfg.cursor;
+
+          try { handle.setPointerCapture(ev.pointerId); } catch (e) {}
           ev.preventDefault();
           ev.stopPropagation();
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
 
-      try {
-        geomTouched = true;
-        scheduleSaveGeom();
-      } catch (e) {}
-    }
+      function onMove(ev) {
+        if (!dragging) return;
+        try {
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
 
-    handle.addEventListener('pointerdown', startDrag, { passive: false });
-    handle.addEventListener('pointermove', onMove, { passive: false });
-    handle.addEventListener('pointerup', endDrag, { passive: false });
-    handle.addEventListener('pointercancel', endDrag, { passive: false });
-    handle.addEventListener('lostpointercapture', endDrag, { passive: false });
+          let w = cfg.side === 'left' ? (startW - dx) : (startW + dx);
+          let h = startH + dy;
+          let shiftX = startShiftX;
+          if (cfg.side === 'left') {
+            shiftX = startShiftX + (startW - w);
+          }
+
+          const geom = clampGeom({ w, h, shiftX }, metrics);
+          if (!geom) return;
+
+          card.style.width = Math.round(geom.w) + 'px';
+          card.style.height = Math.round(geom.h) + 'px';
+          card.style.setProperty('--fm-shift-x', Math.round(geom.shiftX) + 'px');
+
+          ev.preventDefault();
+          ev.stopPropagation();
+        } catch (e) {}
+      }
+
+      function endDrag(ev) {
+        if (!dragging) return;
+        dragging = false;
+        try {
+          document.body.style.userSelect = prevBodyUserSelect;
+          document.body.style.cursor = prevBodyCursor;
+        } catch (e) {}
+
+        try {
+          if (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+          }
+        } catch (e) {}
+
+        try {
+          geomTouched = true;
+          scheduleSaveGeom();
+        } catch (e) {}
+      }
+
+      handle.addEventListener('pointerdown', startDrag, { passive: false });
+      handle.addEventListener('pointermove', onMove, { passive: false });
+      handle.addEventListener('pointerup', endDrag, { passive: false });
+      handle.addEventListener('pointercancel', endDrag, { passive: false });
+      handle.addEventListener('lostpointercapture', endDrag, { passive: false });
+    });
   }
 
   FM.chrome = {
@@ -419,6 +408,7 @@
     syncFromDom,
     // geometry
     wireGeomPersistence,
-    wireLeftResizeHandle,
+    wireResizeHandles,
+    wireLeftResizeHandle: wireResizeHandles,
   };
 })();

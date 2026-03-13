@@ -25,6 +25,26 @@
     return s;
   }
 
+  function _runtimeLanguageId(language) {
+    const lang = _normalizeLanguage(language);
+    if (lang === 'jsonc') return 'json';
+    if (lang === 'bash' || lang === 'sh') return 'shell';
+    return lang;
+  }
+
+  function _isLanguageRegistered(monaco, language) {
+    try {
+      if (!monaco || !monaco.languages || typeof monaco.languages.getLanguages !== 'function') return false;
+      const runtimeLang = _runtimeLanguageId(language);
+      if (!runtimeLang || runtimeLang === 'plaintext') return true;
+      const languages = monaco.languages.getLanguages();
+      return Array.isArray(languages) && languages.some((entry) => {
+        return String((entry && entry.id) || '').toLowerCase() === runtimeLang;
+      });
+    } catch (e) {}
+    return false;
+  }
+
   function _maybeEnableJsonComments(monaco) {
     try {
       if (_state.jsonCommentsEnabled) return;
@@ -47,59 +67,19 @@
   }
 
   async function _ensureLanguage(monaco, language) {
-    // Best-effort: load language contribution modules on demand.
+    // Monaco's editor.main bundle in this project already registers the languages we use
+    // (json/jsonc, yaml, shell, ini, html, css, js, python, markdown, toml, xml).
+    // Requiring contribution modules again can trigger duplicate AMD module warnings.
     try {
-      const lang = _normalizeLanguage(language);
-      if (!lang || lang === 'plaintext') return;
-      if (_state.langLoaded && _state.langLoaded.has(lang)) return;
-
-      const req = window.require;
-      if (!req || typeof req !== 'function') {
-        // No AMD require() (should not happen if Monaco is loaded), but keep graceful.
-        if (_state.langLoaded) _state.langLoaded.add(lang);
-        return;
+      const runtimeLang = _runtimeLanguageId(language);
+      if (!runtimeLang || runtimeLang === 'plaintext') return;
+      if (_state.langLoaded && _state.langLoaded.has(runtimeLang)) return;
+      if (_isLanguageRegistered(monaco, runtimeLang)) {
+        if (_state.langLoaded) _state.langLoaded.add(runtimeLang);
+      } else {
+        // Unknown/unsupported language ids fall back to plaintext later.
+        try { if (_state.langLoaded) _state.langLoaded.add(runtimeLang); } catch (e) {}
       }
-
-      let modules = null;
-      if (lang === 'json' || lang === 'jsonc') {
-        modules = ['vs/language/json/monaco.contribution'];
-      } else if (lang === 'yaml') {
-        // YAML is shipped as a basic language (tokenization only).
-        modules = ['vs/basic-languages/monaco.contribution'];
-      } else if (lang === 'ini') {
-        modules = ['vs/basic-languages/monaco.contribution'];
-      } else if (lang === 'shell' || lang === 'bash' || lang === 'sh') {
-        modules = ['vs/basic-languages/monaco.contribution'];
-      }
-
-      if (!modules) {
-        if (_state.langLoaded) _state.langLoaded.add(lang);
-        return;
-      }
-
-      await new Promise((resolve) => {
-        const TIMEOUT_MS = 2200;
-        let done = false;
-        const finish = () => {
-          if (done) return;
-          done = true;
-          resolve(true);
-        };
-        try {
-          const t = setTimeout(() => finish(), TIMEOUT_MS);
-          req(modules, () => {
-            try { clearTimeout(t); } catch (e) {}
-            finish();
-          }, () => {
-            try { clearTimeout(t); } catch (e) {}
-            finish();
-          });
-        } catch (e) {
-          finish();
-        }
-      });
-
-      try { if (_state.langLoaded) _state.langLoaded.add(lang); } catch (e) {}
     } catch (e) {
       // Ignore.
     }
@@ -620,8 +600,7 @@
       try {
         const m = editor && editor.getModel ? editor.getModel() : null;
         if (m && monaco.editor && monaco.editor.setModelLanguage && language && language !== 'plaintext') {
-          // 'jsonc' might not exist as a separate language id; fall back to 'json'.
-          const langToSet = (language === 'jsonc') ? 'json' : language;
+          const langToSet = _isLanguageRegistered(monaco, language) ? _runtimeLanguageId(language) : 'plaintext';
           monaco.editor.setModelLanguage(m, langToSet);
         }
       } catch (e) {}

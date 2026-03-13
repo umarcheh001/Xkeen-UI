@@ -155,6 +155,14 @@
   let _configuredPromise = null;
   let _configured = false;
   let _activeSource = null; // { provider, loader, vsBase }
+  let _monacoPromise = null;
+
+  function hasMonacoApi() {
+    try {
+      return !!(window.monaco && window.monaco.editor && typeof window.monaco.editor.create === 'function');
+    } catch (e) {}
+    return false;
+  }
 
   L.getPaths = function getPaths() {
     return {
@@ -200,6 +208,10 @@
               paths: {
                 vs: c.vsBase,
               },
+              ignoreDuplicateModules: [
+                'vs/basic-languages/monaco.contribution',
+                'vs/language/json/monaco.contribution',
+              ],
             });
             _configured = true;
             _activeSource = { provider: c.provider, loader: c.loader, vsBase: c.vsBase };
@@ -221,30 +233,42 @@
   // Ensures Monaco's editor main module is loaded.
   // Returns window.monaco or null.
   L.ensureMonaco = async function ensureMonaco() {
-    const st = await L.ensureConfigured();
-    if (!st || !st.ok) return null;
+    if (hasMonacoApi()) return window.monaco;
+    if (_monacoPromise) return _monacoPromise;
 
-    // Monaco main module.
-    return await new Promise((resolve) => {
-      const TIMEOUT_MS = 4500;
-      let done = false;
-      let timer = null;
-      const finish = (v) => {
-        if (done) return;
-        done = true;
-        try { if (timer) clearTimeout(timer); } catch (e) {}
-        resolve(v);
-      };
+    _monacoPromise = (async () => {
+      const st = await L.ensureConfigured();
+      if (!st || !st.ok) return null;
+      if (hasMonacoApi()) return window.monaco;
 
-      try {
-        if (!window.require) return finish(null);
-        timer = setTimeout(() => finish(null), TIMEOUT_MS);
-        window.require(['vs/editor/editor.main'], () => {
-          finish(window.monaco || null);
-        }, () => finish(null));
-      } catch (e) {
-        finish(null);
-      }
-    });
+      // Monaco main module.
+      return await new Promise((resolve) => {
+        const TIMEOUT_MS = 4500;
+        let done = false;
+        let timer = null;
+        const finish = (v) => {
+          if (done) return;
+          done = true;
+          try { if (timer) clearTimeout(timer); } catch (e) {}
+          resolve(v);
+        };
+
+        try {
+          if (!window.require) return finish(null);
+          timer = setTimeout(() => finish(null), TIMEOUT_MS);
+          window.require(['vs/editor/editor.main'], () => {
+            finish(window.monaco || null);
+          }, () => finish(null));
+        } catch (e) {
+          finish(null);
+        }
+      });
+    })();
+
+    try {
+      return await _monacoPromise;
+    } finally {
+      if (!hasMonacoApi()) _monacoPromise = null;
+    }
   };
 })();

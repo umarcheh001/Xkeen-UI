@@ -160,7 +160,7 @@
     // Card resize handles + geometry persistence
     try {
       const ch = CHROME();
-      if (ch && typeof ch.wireLeftResizeHandle === 'function') ch.wireLeftResizeHandle();
+      if (ch && typeof ch.wireResizeHandles === 'function') ch.wireResizeHandles();
     } catch (e) {}
     try {
       const ch = CHROME();
