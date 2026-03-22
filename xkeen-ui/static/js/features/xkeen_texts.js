@@ -133,34 +133,51 @@
       if (inited) return;
       inited = true;
 
-      // Editors
-      const portProxyEd = attachEditor('port-proxying-editor', 'portProxyingEditor');
-      const portExcludeEd = attachEditor('port-exclude-editor', 'portExcludeEditor');
-      const ipExcludeEd = attachEditor('ip-exclude-editor', 'ipExcludeEditor');
-      const xkeenConfigEd = attachEditor('xkeen-config-editor', 'xkeenConfigEditor', { mode: { name: 'javascript', json: true } });
+      const finishInit = () => {
+        // Editors
+        const portProxyEd = attachEditor('port-proxying-editor', 'portProxyingEditor');
+        const portExcludeEd = attachEditor('port-exclude-editor', 'portExcludeEditor');
+        const ipExcludeEd = attachEditor('ip-exclude-editor', 'ipExcludeEditor');
+        const xkeenConfigEd = attachEditor('xkeen-config-editor', 'xkeenConfigEditor', { mode: { name: 'javascript', json: true } });
 
-      // Expose for other scripts that rely on main.js lexical vars.
-      // main.js will copy from XKeen.state.* when it detects this feature.
-      // Still expose as window.* for debugging/legacy.
-      if (portProxyEd) window.portProxyingEditor = portProxyEd;
-      if (portExcludeEd) window.portExcludeEditor = portExcludeEd;
-      if (ipExcludeEd) window.ipExcludeEditor = ipExcludeEd;
-      if (xkeenConfigEd) window.xkeenConfigEditor = xkeenConfigEd;
+        // Expose for other scripts that rely on main.js lexical vars.
+        // main.js will copy from XKeen.state.* when it detects this feature.
+        // Still expose as window.* for debugging/legacy.
+        if (portProxyEd) window.portProxyingEditor = portProxyEd;
+        if (portExcludeEd) window.portExcludeEditor = portExcludeEd;
+        if (ipExcludeEd) window.ipExcludeEditor = ipExcludeEd;
+        if (xkeenConfigEd) window.xkeenConfigEditor = xkeenConfigEd;
 
-      // Save buttons
-      wireButton('port-proxying-save-btn', () => saveText('/api/xkeen/port-proxying', 'port-proxying-editor', 'port-proxying-status', 'port_proxying.lst', 'portProxyingEditor'));
-      wireButton('port-exclude-save-btn', () => saveText('/api/xkeen/port-exclude', 'port-exclude-editor', 'port-exclude-status', 'port_exclude.lst', 'portExcludeEditor'));
-      wireButton('ip-exclude-save-btn', () => saveText('/api/xkeen/ip-exclude', 'ip-exclude-editor', 'ip-exclude-status', 'ip_exclude.lst', 'ipExcludeEditor'));
-      wireButton('xkeen-config-save-btn', () => saveText('/api/xkeen/config', 'xkeen-config-editor', 'xkeen-config-status', 'xkeen.json', 'xkeenConfigEditor'));
+        // Save buttons
+        wireButton('port-proxying-save-btn', () => saveText('/api/xkeen/port-proxying', 'port-proxying-editor', 'port-proxying-status', 'port_proxying.lst', 'portProxyingEditor'));
+        wireButton('port-exclude-save-btn', () => saveText('/api/xkeen/port-exclude', 'port-exclude-editor', 'port-exclude-status', 'port_exclude.lst', 'portExcludeEditor'));
+        wireButton('ip-exclude-save-btn', () => saveText('/api/xkeen/ip-exclude', 'ip-exclude-editor', 'ip-exclude-status', 'ip_exclude.lst', 'ipExcludeEditor'));
+        wireButton('xkeen-config-save-btn', () => saveText('/api/xkeen/config', 'xkeen-config-editor', 'xkeen-config-status', 'xkeen.json', 'xkeenConfigEditor'));
 
-      // Initial load
-      loadText('/api/xkeen/port-proxying', 'port-proxying-editor', 'port-proxying-status', 'port_proxying.lst', 'portProxyingEditor');
-      loadText('/api/xkeen/port-exclude', 'port-exclude-editor', 'port-exclude-status', 'port_exclude.lst', 'portExcludeEditor');
-      loadText('/api/xkeen/ip-exclude', 'ip-exclude-editor', 'ip-exclude-status', 'ip_exclude.lst', 'ipExcludeEditor');
-      loadText('/api/xkeen/config', 'xkeen-config-editor', 'xkeen-config-status', 'xkeen.json', 'xkeenConfigEditor');
+        // Initial load
+        loadText('/api/xkeen/port-proxying', 'port-proxying-editor', 'port-proxying-status', 'port_proxying.lst', 'portProxyingEditor');
+        loadText('/api/xkeen/port-exclude', 'port-exclude-editor', 'port-exclude-status', 'port_exclude.lst', 'portExcludeEditor');
+        loadText('/api/xkeen/ip-exclude', 'ip-exclude-editor', 'ip-exclude-status', 'ip_exclude.lst', 'ipExcludeEditor');
+        loadText('/api/xkeen/config', 'xkeen-config-editor', 'xkeen-config-status', 'xkeen.json', 'xkeenConfigEditor');
 
-      // Let theme.js sync editors.
-      try { document.dispatchEvent(new CustomEvent('xkeen-editors-ready')); } catch (e) {}
+        // Let theme.js sync editors.
+        try { document.dispatchEvent(new CustomEvent('xkeen-editors-ready')); } catch (e) {}
+      };
+
+      try {
+        const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
+        if (loader && typeof loader.ensureEditorAssets === 'function') {
+          Promise.resolve(loader.ensureEditorAssets({
+            mode: 'shell',
+            trailingSpace: true,
+          }))
+            .catch(() => null)
+            .finally(finishInit);
+          return;
+        }
+      } catch (e) {}
+
+      finishInit();
     }
 
     function ensureInited() {

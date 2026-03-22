@@ -63,6 +63,18 @@
     try { if (modal) modal.classList.add('hidden'); } catch (e2) {}
   }
 
+  function toggleHidden(node, hidden) {
+    const c = C();
+    try {
+      if (c && typeof c.toggleHidden === 'function') {
+        c.toggleHidden(node, hidden);
+        return;
+      }
+    } catch (e) {}
+    if (!node) return;
+    try { node.hidden = !!hidden; } catch (e2) {}
+  }
+
   function toast(msg, level) {
     try { if (C && typeof C.toast === 'function') return C.toast(msg, level); } catch (e) {}
   }
@@ -105,6 +117,16 @@
     const lm = LM();
     try { if (lm && typeof lm.visibleSortedItems === 'function') return lm.visibleSortedItems(side); } catch (e) {}
     return [];
+  }
+
+  function isLiteMode() {
+    const c = C();
+    try { if (c && typeof c.isLiteMode === 'function') return !!c.isLiteMode(); } catch (e) {}
+    try {
+      const S = getS();
+      if (S && typeof S.liteMode === 'boolean') return !!S.liteMode;
+    } catch (e2) {}
+    return false;
   }
 
   function setShowHidden(on) {
@@ -390,10 +412,12 @@
     const view = el('view-files');
     const actions = view ? qs('.fm-header-actions', view) : null;
     if (!actions || !S) return;
+    const lite = isLiteMode();
 
     // Buttons for file operations should be located at the bottom-right of the card.
     const footerActions = view ? qs('.fm-footer-actions', view) : null;
     const fileActions = footerActions || actions;
+    toggleHidden(el('fm-ops-btn'), lite);
 
     // Fullscreen toggle
     if (!el('fm-fullscreen-btn')) {
@@ -450,11 +474,14 @@
     }
 
     // Terminal here
-    if (!el('fm-terminal-here-btn')) {
+    if (lite) {
+      toggleHidden(el('fm-terminal-here-btn'), true);
+    } else if (!el('fm-terminal-here-btn')) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'btn-secondary';
       b.id = 'fm-terminal-here-btn';
+      b.dataset.fmLiteHide = '1';
       b.textContent = '⌨ Terminal here';
       b.title = 'Открыть терминал в текущей папке (PTY)';
       b.setAttribute('aria-label', 'Открыть терминал в текущей папке');
@@ -472,6 +499,8 @@
       } catch (e) {
         try { actions.appendChild(b); } catch (e2) {}
       }
+    } else {
+      toggleHidden(el('fm-terminal-here-btn'), false);
     }
 
     // Sync fullscreen state from DOM (best effort)
@@ -630,6 +659,7 @@
       } catch (e0) {}
 
       const ctrl = !!(e.ctrlKey || e.metaKey);
+      const lite = isLiteMode();
 
       if (ctrl && (k === 'a' || k === 'A')) {
         e.preventDefault();
@@ -703,12 +733,14 @@
 
       if (k === 'F5') {
         e.preventDefault();
+        if (lite) return;
         try { const o = OPS(); if (o && typeof o.runCopyMove === 'function') await o.runCopyMove('copy'); } catch (e2) {}
         return;
       }
 
       if (k === 'F6') {
         e.preventDefault();
+        if (lite) return;
         try { const o = OPS(); if (o && typeof o.runCopyMove === 'function') await o.runCopyMove('move'); } catch (e2) {}
         return;
       }
@@ -724,6 +756,7 @@
 
       if (k === 'F8') {
         e.preventDefault();
+        if (lite) return;
         try { const o = OPS(); if (o && typeof o.runDelete === 'function') await o.runDelete(); } catch (e2) {}
         return;
       }
@@ -748,6 +781,16 @@
       pd.targetSelect.addEventListener('change', async () => {
         const v = String(pd.targetSelect.value || 'local');
         if (v === 'remote') {
+          if (isLiteMode()) {
+            p.target = 'local';
+            p.sid = '';
+            try { pd.targetSelect.value = 'local'; } catch (e) {}
+            try {
+              const l = LISTING();
+              if (l && typeof l.listPanel === 'function') await l.listPanel(side, { fromInput: true });
+            } catch (e2) {}
+            return;
+          }
           p.target = 'remote';
           // no session => show connect
           try { const r = RENDER(); if (r && typeof r.renderPanel === 'function') r.renderPanel(side); } catch (e) {}
@@ -779,6 +822,7 @@
     if (pd.connectBtn) {
       pd.connectBtn.addEventListener('click', async (e) => {
         try { e.preventDefault(); } catch (e2) {}
+        if (isLiteMode()) return;
         try {
           const rr = REMOTE();
           if (rr && typeof rr.connectRemoteToSide === 'function') await rr.connectRemoteToSide(side);
@@ -789,6 +833,7 @@
     if (pd.disconnectBtn) {
       pd.disconnectBtn.addEventListener('click', async (e) => {
         try { e.preventDefault(); } catch (e2) {}
+        if (isLiteMode()) return;
         try {
           const rr = REMOTE();
           if (rr && typeof rr.disconnectSide === 'function') await rr.disconnectSide(side);
@@ -809,6 +854,7 @@
     if (pd.rootBtn) {
       pd.rootBtn.addEventListener('click', async (e) => {
         try { e.preventDefault(); } catch (e2) {}
+        if (isLiteMode()) return;
         const pp = S.panels[side];
         if (!pp) return;
         if (pp.target !== 'remote') return;
@@ -1061,7 +1107,7 @@
 
       // Drag & Drop (moved to dragdrop.js)
       try {
-        if (FM.dragdrop && typeof FM.dragdrop.attachDragDrop === 'function') {
+        if (!isLiteMode() && FM.dragdrop && typeof FM.dragdrop.attachDragDrop === 'function') {
           FM.dragdrop.attachDragDrop({ side, panelDom: pd });
         }
       } catch (e) {}

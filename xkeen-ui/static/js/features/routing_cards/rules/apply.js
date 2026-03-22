@@ -114,6 +114,221 @@
     try { document.dispatchEvent(new CustomEvent('xkeen:routing-comments-ux', { detail })); } catch (e) {}
   }
 
+  function _stripTrailingCommaLocal(raw) {
+    const s = String(raw || '');
+    let j = s.length;
+    while (j > 0 && /\s/.test(s[j - 1])) j -= 1;
+    if (j > 0 && s[j - 1] === ',') {
+      return s.slice(0, j - 1) + s.slice(j);
+    }
+    return s;
+  }
+
+  function _trimSegmentForArrayLocal(raw) {
+    return String(raw == null ? '' : raw)
+      .replace(/\r\n?/g, '\n')
+      .replace(/^\n+/, '')
+      .replace(/\s+$/, '');
+  }
+
+  function _stripDisabledRawList(text, disabledRawList) {
+    let out = String(text == null ? '' : text);
+    const list = Array.isArray(disabledRawList) ? disabledRawList : [];
+    list.forEach((disabledRaw) => {
+      const chunk = String(disabledRaw || '');
+      if (!chunk || out.indexOf(chunk) < 0) return;
+      out = out.split(chunk).join('');
+    });
+    return out;
+  }
+
+  function _normalizeNodeRaw(raw, indent) {
+    const out = _trimSegmentForArrayLocal(raw);
+    if (!out) return '';
+    if (out[0] === '\n' || out[0] === '\r') return out;
+    if (out[0] === ' ' || out[0] === '\t') return '\n' + out;
+    return '\n' + String(indent || '') + out;
+  }
+
+  function _buildRulesArrayNodes(text, rulesRange, jp) {
+    const activeSegments = (jp && typeof jp.splitJsoncArrayElements === 'function')
+      ? (jp.splitJsoncArrayElements(text, rulesRange) || [])
+      : [];
+    const disabledSegments = (jp && typeof jp.extractDisabledRuleSegments === 'function')
+      ? (jp.extractDisabledRuleSegments(text, rulesRange) || [])
+      : [];
+    const disabledRawList = disabledSegments.map((seg) => String((seg && seg.raw) || '')).filter(Boolean);
+
+    const nodes = [];
+    activeSegments.forEach((seg, index) => {
+      const rawSeg = String((seg && seg.raw) || '');
+      const leading = String((seg && seg.leadingCommentRaw) || '');
+      const objStart = Number(seg && seg.objStart);
+      const cleanedLeading = _stripDisabledRawList(leading, disabledRawList);
+      const start = Number.isFinite(objStart) ? Math.max(0, objStart - cleanedLeading.length) : index;
+      let cleanedRaw = _stripTrailingCommaLocal(rawSeg);
+      cleanedRaw = _stripDisabledRawList(cleanedRaw, disabledRawList);
+      cleanedRaw = _trimSegmentForArrayLocal(cleanedRaw);
+      nodes.push({
+        kind: 'active',
+        index,
+        start,
+        indent: String((seg && seg.indent) || (rulesRange && rulesRange.childIndent) || ''),
+        raw: cleanedRaw,
+      });
+    });
+    disabledSegments.forEach((seg, index) => {
+      nodes.push({
+        kind: 'disabled',
+        index,
+        start: Number(seg && seg.start),
+        indent: String((seg && seg.indent) || (rulesRange && rulesRange.childIndent) || ''),
+        raw: _trimSegmentForArrayLocal(String((seg && seg.raw) || '')),
+        innerRaw: _trimSegmentForArrayLocal(String((seg && seg.innerRaw) || '')),
+      });
+    });
+
+    nodes.sort((a, b) => {
+      const aa = Number.isFinite(a.start) ? a.start : Number.MAX_SAFE_INTEGER;
+      const bb = Number.isFinite(b.start) ? b.start : Number.MAX_SAFE_INTEGER;
+      if (aa !== bb) return aa - bb;
+      if (a.kind === b.kind) return Number(a.index || 0) - Number(b.index || 0);
+      return a.kind === 'disabled' ? -1 : 1;
+    });
+
+    return nodes;
+  }
+
+  function _renderRulesArrayNodes(rulesRange, nodes) {
+    const range = rulesRange || {};
+    const items = Array.isArray(nodes) ? nodes : [];
+    if (!items.length) return '[]';
+
+    let enabledCount = 0;
+    items.forEach((node) => {
+      if (node && node.kind === 'active') enabledCount += 1;
+    });
+
+    let seenEnabled = 0;
+    let out = '[';
+    items.forEach((node) => {
+      const indent = String((node && node.indent) || range.childIndent || '');
+      out += _normalizeNodeRaw(node && node.raw, indent);
+      if (node && node.kind === 'active') {
+        seenEnabled += 1;
+        if (seenEnabled < enabledCount) out += ',';
+      }
+    });
+    out += '\n' + String(range.indent || '') + ']';
+    return out;
+  }
+
+  async function toggleRuleComment(opts) {
+    const o = opts || {};
+    const mode = String(o.mode || '').toLowerCase();
+    if (mode !== 'disable' && mode !== 'enable') return false;
+
+    if (!canPreserve()) {
+      toast('Для переключения правила нужен режим JSONC-preserve.', true);
+      return false;
+    }
+
+    const jp = (XK.features && XK.features.routingJsoncPreserve)
+      ? XK.features.routingJsoncPreserve
+      : null;
+    if (!jp || typeof jp.locateRoutingObject !== 'function' || typeof jp.locateArrayByKey !== 'function') {
+      toast('JSONC helper не готов для переключения правила.', true);
+      return false;
+    }
+
+    const raw = getEditorText();
+    const routingRange = jp.locateRoutingObject(raw);
+    if (!routingRange) {
+      toast('Не удалось найти routing в текущем документе.', true);
+      return false;
+    }
+
+    const rulesRange = jp.locateArrayByKey(raw, routingRange, 'rules');
+    if (!rulesRange) {
+      toast('В текущем routing нет массива rules.', true);
+      return false;
+    }
+
+    const nodes = _buildRulesArrayNodes(raw, rulesRange, jp);
+    if (!nodes.length) {
+      toast('Массив routing.rules пуст.', true);
+      return false;
+    }
+
+    let changed = false;
+    if (mode === 'disable') {
+      const targetRuleIndex = Number(o.ruleIndex);
+      if (!Number.isInteger(targetRuleIndex) || targetRuleIndex < 0) return false;
+
+      let activeIndex = -1;
+      for (let i = 0; i < nodes.length; i += 1) {
+        const node = nodes[i];
+        if (!node || node.kind !== 'active') continue;
+        activeIndex += 1;
+        if (activeIndex !== targetRuleIndex) continue;
+
+        const rawSeg = _trimSegmentForArrayLocal(_stripTrailingCommaLocal(node.raw));
+        node.kind = 'disabled';
+        node.innerRaw = rawSeg;
+        node.raw = (typeof jp.commentOutRuleSegment === 'function')
+          ? jp.commentOutRuleSegment(rawSeg, node.indent || rulesRange.childIndent || '')
+          : rawSeg;
+        changed = true;
+        break;
+      }
+    } else {
+      const targetStart = Number(o.start);
+      const targetDisabledIndex = Number(o.disabledIndex);
+      let disabledIndex = -1;
+      for (let i = 0; i < nodes.length; i += 1) {
+        const node = nodes[i];
+        if (!node || node.kind !== 'disabled') continue;
+        disabledIndex += 1;
+
+        const startMatches = Number.isFinite(targetStart) && Number(node.start) === targetStart;
+        const indexMatches = Number.isInteger(targetDisabledIndex) && targetDisabledIndex >= 0 && disabledIndex === targetDisabledIndex;
+        if (!startMatches && !indexMatches) continue;
+
+        const restored = _trimSegmentForArrayLocal(String(node.innerRaw || ''));
+        if (!restored.trim()) {
+          toast('Не удалось восстановить текст правила из комментария.', true);
+          return false;
+        }
+
+        node.kind = 'active';
+        node.raw = restored;
+        changed = true;
+        break;
+      }
+    }
+
+    if (!changed) return false;
+
+    const nextArray = _renderRulesArrayNodes(rulesRange, nodes);
+    const nextText = raw.slice(0, rulesRange.start) + nextArray + raw.slice(rulesRange.end);
+
+    _suppressEditorChange(400);
+    setEditorText(nextText);
+    try { S._editorDirtyFromCards = true; } catch (e) {}
+    try {
+      if (RM && typeof RM.loadFromEditor === 'function') RM.loadFromEditor({ setError: true });
+    } catch (e) {}
+    if (RM && typeof RM.markDirty === 'function') RM.markDirty(false);
+    if (RM && typeof RM.refreshApplyButtonState === 'function') RM.refreshApplyButtonState();
+
+    try {
+      if (XK.routing && typeof XK.routing.validate === 'function') XK.routing.validate();
+    } catch (e) {}
+
+    toast(mode === 'disable' ? 'Правило закомментировано в RAW JSONC.' : 'Правило снова включено из комментария.', false);
+    return true;
+  }
+
 
   async function applyToEditor(opts) {
       const o = opts || {};
@@ -397,7 +612,7 @@
       const st = (XK && XK.ui && XK.ui.settings && typeof XK.ui.settings.get === 'function') ? XK.ui.settings.get() : null;
       return !(st && st.routing && st.routing.autoApply === false);
     } catch (e) {}
-    return true;
+    return false;
   }
 
   async function _autoApplyNow() {
@@ -442,4 +657,5 @@
   RA.applyToEditor = applyToEditor;
   RA.canPreserve = canPreserve;
   RA.requestAutoApply = requestAutoApply;
+  RA.toggleRuleComment = toggleRuleComment;
 })();

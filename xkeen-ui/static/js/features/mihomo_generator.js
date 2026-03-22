@@ -5,6 +5,30 @@
   XKeen.features.mihomoGenerator = (() => {
     let inited = false;
 
+    function afterNextPaint(fn) {
+      if (typeof fn !== 'function') return;
+      try {
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(() => {
+            window.setTimeout(fn, 0);
+          });
+          return;
+        }
+      } catch (e) {}
+      window.setTimeout(fn, 0);
+    }
+
+    function duringIdle(fn, timeout = 240) {
+      if (typeof fn !== 'function') return;
+      try {
+        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+          window.requestIdleCallback(() => fn(), { timeout });
+          return;
+        }
+      } catch (e) {}
+      afterNextPaint(fn);
+    }
+
     function init() {
       if (inited) return;
       inited = true;
@@ -1027,54 +1051,39 @@ function initEngineToggle() {
             return 'material-darker';
           }
         }
-      
-        function initEditor() {
-          if (editor) return;
-          previewTextarea.value = SKELETON;
-          editor = CodeMirror.fromTextArea(previewTextarea, {
-            mode: "text/x-yaml",
-            theme: getCurrentCmTheme(),
-            lineNumbers: true,
-            styleActiveLine: true,
-            showIndentGuides: true,
-            matchBrackets: true,
-            autoCloseBrackets: true,
-            highlightSelectionMatches: true,
-            lineWrapping: true,
-            foldGutter: true,
-            gutters: ['CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
-            tabSize: 2,
-            indentUnit: 2,
-            indentWithTabs: false,
-            viewportMargin: Infinity,
-            extraKeys: Object.assign({}, (typeof buildCmExtraKeysCommon === 'function' ? buildCmExtraKeysCommon() : {}), {
-              'Ctrl-F': 'findPersistent',
-              'Cmd-F': 'findPersistent',
-              'Ctrl-G': 'findNext',
-              'Cmd-G': 'findNext',
-              'Shift-Ctrl-G': 'findPrev',
-              'Shift-Cmd-G': 'findPrev',
-              'Ctrl-H': 'replace',
-              'Shift-Ctrl-H': 'replaceAll'
-            }),
-            // Preview is read-only, но с курсором и поиском
-            readOnly: true
+
+        function getPreviewEditorExtraKeys() {
+          return Object.assign({}, (typeof buildCmExtraKeysCommon === 'function' ? buildCmExtraKeysCommon() : {}), {
+            'Ctrl-F': 'findPersistent',
+            'Cmd-F': 'findPersistent',
+            'Ctrl-G': 'findNext',
+            'Cmd-G': 'findNext',
+            'Shift-Ctrl-G': 'findPrev',
+            'Shift-Cmd-G': 'findPrev',
+            'Ctrl-H': 'replace',
+            'Shift-Ctrl-H': 'replaceAll'
           });
-      
-          // Mark as XKeen editor so shared CSS fixes apply in light theme
-          try {
-            const w = editor.getWrapperElement && editor.getWrapperElement();
-            if (w) w.classList.add('xkeen-cm');
-          } catch (e) {}
-      
-          // Register in global list so main.js theme toggle can sync it
-          try {
-            window.__xkeenEditors = window.__xkeenEditors || [];
-            window.__xkeenEditors.push(editor);
-          } catch (e) {}
-      
-          // Toolbar is always full; write-only actions (replace/comment) are
-          // automatically disabled when editor is readOnly.
+        }
+
+        function enhanceEditorOptions() {
+          if (!editor || editor._xkeenEnhanced) return;
+          try { editor._xkeenEnhanced = true; } catch (e) {}
+
+          try { editor.setOption('styleActiveLine', true); } catch (e) {}
+          try { editor.setOption('showIndentGuides', true); } catch (e) {}
+          try { editor.setOption('matchBrackets', true); } catch (e) {}
+          try { editor.setOption('autoCloseBrackets', true); } catch (e) {}
+          try { editor.setOption('highlightSelectionMatches', true); } catch (e) {}
+          try { editor.setOption('foldGutter', true); } catch (e) {}
+          try { editor.setOption('gutters', ['CodeMirror-linenumbers', 'CodeMirror-foldgutter']); } catch (e) {}
+          try { editor.setOption('extraKeys', getPreviewEditorExtraKeys()); } catch (e) {}
+          try { if (editor.refresh) editor.refresh(); } catch (e) {}
+        }
+
+        function attachPreviewToolbar() {
+          if (!editor || editor._xkeenToolbarAttached) return;
+          try { editor._xkeenToolbarAttached = true; } catch (e) {}
+
           try {
             if (window && typeof window.xkeenAttachCmToolbar === 'function') {
               const baseItems = window.XKEEN_CM_TOOLBAR_DEFAULT || null;
@@ -1101,8 +1110,63 @@ function initEngineToggle() {
           } catch (e) {
             // ignore
           }
+        }
+
+        function wireLazyPreviewToolbar() {
+          if (!editor || editor._xkeenToolbarLazyWired) return;
+          try { editor._xkeenToolbarLazyWired = true; } catch (e) {}
+
+          const kick = () => {
+            try { attachPreviewToolbar(); } catch (e) {}
+          };
+
+          try {
+            const w = editor.getWrapperElement && editor.getWrapperElement();
+            if (w) {
+              w.addEventListener('mouseenter', kick, { once: true, passive: true });
+              w.addEventListener('focusin', kick, { once: true });
+            }
+          } catch (e) {}
+
+          try {
+            if (previewEngineSelect) {
+              previewEngineSelect.addEventListener('mousedown', kick, { once: true, passive: true });
+              previewEngineSelect.addEventListener('focus', kick, { once: true });
+            }
+          } catch (e) {}
+        }
       
-          editor.setValue(SKELETON);
+        function initEditor() {
+          if (editor) return;
+          if (previewTextarea && previewTextarea.value !== SKELETON) {
+            previewTextarea.value = SKELETON;
+          }
+          editor = CodeMirror.fromTextArea(previewTextarea, {
+            mode: "text/x-yaml",
+            theme: getCurrentCmTheme(),
+            lineNumbers: true,
+            lineWrapping: true,
+            tabSize: 2,
+            indentUnit: 2,
+            indentWithTabs: false,
+            viewportMargin: 10,
+            // Preview is read-only, но с курсором и поиском
+            readOnly: true
+          });
+      
+          // Mark as XKeen editor so shared CSS fixes apply in light theme
+          try {
+            const w = editor.getWrapperElement && editor.getWrapperElement();
+            if (w) w.classList.add('xkeen-cm');
+          } catch (e) {}
+      
+          // Register in global list so main.js theme toggle can sync it
+          try {
+            window.__xkeenEditors = window.__xkeenEditors || [];
+            window.__xkeenEditors.push(editor);
+          } catch (e) {}
+
+          try { wireLazyPreviewToolbar(); } catch (e) {}
 
           // Default active engine is CodeMirror until overridden by global preference.
           try { _engine = 'codemirror'; _active = cmFacade(); } catch (e) {}
@@ -1226,7 +1290,7 @@ function initEngineToggle() {
           if (!ruleGroupsList) return;
       
           // Сначала очищаем список, затем рисуем только релевантные этому профилю группы.
-          ruleGroupsList.innerHTML = "";
+          ruleGroupsList.textContent = "";
       
           const allowed = Array.isArray(availableRuleGroupIds) && availableRuleGroupIds.length
             ? new Set(availableRuleGroupIds)
@@ -1235,6 +1299,8 @@ function initEngineToggle() {
           const presetsToRender = RULE_GROUP_PRESETS.filter(preset =>
             !allowed || allowed.has(preset.id)
           );
+
+          const frag = document.createDocumentFragment();
       
           presetsToRender.forEach(preset => {
             const label = document.createElement("label");
@@ -1250,7 +1316,7 @@ function initEngineToggle() {
       
             label.appendChild(cb);
             label.appendChild(span);
-            ruleGroupsList.appendChild(label);
+            frag.appendChild(label);
       
             cb.addEventListener("change", () => {
               updateSelectAllCheckbox();
@@ -1258,6 +1324,8 @@ function initEngineToggle() {
               schedulePreview();
             });
           });
+
+          ruleGroupsList.appendChild(frag);
       
           // Обработчик "Отметить всё" вешаем один раз, он работает с текущим набором чекбоксов.
           if (ruleGroupsSelectAll && !ruleGroupsSelectAllInited) {
@@ -3221,6 +3289,12 @@ function initEngineToggle() {
             if (editor && editor.setOption) editor.setOption('readOnly', !_isEditable);
           } catch (e) {}
 
+          if (_isEditable) {
+            duringIdle(() => {
+              try { enhanceEditorOptions(); } catch (e) {}
+            }, 180);
+          }
+
           // Apply to Monaco if present
           try {
             if (_monaco && _monaco.updateOptions) _monaco.updateOptions({ readOnly: !_isEditable });
@@ -3242,14 +3316,17 @@ function initEngineToggle() {
         // ----- init -----
         // NOTE: init() itself is called from pages/mihomo_generator.init.js on DOMContentLoaded.
         // Поэтому здесь нельзя вешать ещё один DOMContentLoaded, иначе колбэк уже не сработает.
-        initEditor();
-        try { setEditable(!!(editToggle && editToggle.checked), false); } catch (e) {}
-        initEngineToggle();
-        addInitialSubscriptionRow();
-        loadProfileDefaults(profileSelect && profileSelect.value);
-        // Show active core badge in the header (best-effort, no hard dependency).
-        refreshActiveCorePill({ silent: true });
         setStatus("Скелет загружен. Заполните поля слева и нажмите «Применить».", null);
+
+        try { initEditor(); } catch (e) {}
+        try { setEditable(!!(editToggle && editToggle.checked), false); } catch (e) {}
+        try { initEngineToggle(); } catch (e) {}
+        try { addInitialSubscriptionRow(); } catch (e) {}
+
+        duringIdle(() => {
+          try { loadProfileDefaults(profileSelect && profileSelect.value); } catch (e) {}
+          try { refreshActiveCorePill({ silent: true }); } catch (e) {}
+        });
       
         addSubscriptionBtn.onclick = () => {
           subscriptionsList.appendChild(createSubscriptionRow(""));

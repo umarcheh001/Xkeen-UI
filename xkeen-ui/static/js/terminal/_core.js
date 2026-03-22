@@ -32,6 +32,7 @@
     connState: 'disconnected',
     // capabilities (filled by capabilities.js)
     hasWs: false,
+    hasPty: false,
   };
 
   // --------------------

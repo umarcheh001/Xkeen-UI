@@ -107,6 +107,16 @@
   // Back-compat: old code calls setMihomoStatus/getMihomoEditorText/setMihomoEditorText.
   window.setMihomoStatus = window.setMihomoStatus || ((m, err) => setStatus(m, err));
 
+  function hasInitialMihomoConfig() {
+    try {
+      if (typeof window.XKEEN_MIHOMO_CONFIG_EXISTS === 'boolean') return !!window.XKEEN_MIHOMO_CONFIG_EXISTS;
+      const raw = String(window.XKEEN_MIHOMO_CONFIG_EXISTS || '').trim().toLowerCase();
+      if (!raw) return true;
+      return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+    } catch (e) {}
+    return true;
+  }
+
   function cmThemeFromPage() {
     const t = document.documentElement.getAttribute('data-theme');
     return t === 'light' ? 'default' : 'material-darker';
@@ -125,6 +135,22 @@
 
   function getMonacoShared() {
     try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
+  }
+
+  async function ensureMonacoSharedApi() {
+    const existing = getMonacoShared();
+    if (existing && typeof existing.createEditor === 'function') return existing;
+
+    try {
+      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
+      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
+        const ok = await lazy.ensureMonacoSupport();
+        if (!ok) return null;
+      }
+    } catch (e) {}
+
+    const loaded = getMonacoShared();
+    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
   }
 
   function showNode(node) {
@@ -221,7 +247,7 @@
     const host = ensureMonacoHost();
     if (!host) return null;
 
-    const shared = getMonacoShared();
+    const shared = await ensureMonacoSharedApi();
     if (!shared || typeof shared.createEditor !== 'function') return null;
 
     // initial value from CodeMirror/textarea
@@ -661,7 +687,7 @@
         'Ctrl-H': 'replace',
         'Shift-Ctrl-H': 'replaceAll',
       }),
-      viewportMargin: Infinity,
+      viewportMargin: 30,
     });
 
     try {
@@ -916,6 +942,7 @@
       let msg = 'config.yaml сохранён.';
       setStatus(msg, false, !!(data && data.restarted));
       markEditorClean();
+      try { window.XKEEN_MIHOMO_CONFIG_EXISTS = true; } catch (e) {}
       try {
         if (typeof window.updateLastActivity === 'function') {
           const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
@@ -968,11 +995,21 @@
         }
       } catch (e) {}
 
-      const el = document.getElementById('restart-log');
-      if (!el) return;
-      try { el.dataset.rawText = ''; } catch (e) {}
-      try { el.innerHTML = ''; } catch (e) {}
-      try { el.scrollTop = 0; } catch (e) {}
+      const els = [];
+      try {
+        document.querySelectorAll('[data-xk-restart-log="1"]').forEach((el) => {
+          if (el) els.push(el);
+        });
+      } catch (e) {}
+      try {
+        const legacy = document.getElementById('restart-log');
+        if (legacy && els.indexOf(legacy) === -1) els.push(legacy);
+      } catch (e) {}
+      els.forEach((el) => {
+        try { el.dataset.rawText = ''; } catch (e) {}
+        try { el.innerHTML = ''; } catch (e) {}
+        try { el.scrollTop = 0; } catch (e) {}
+      });
     };
 
     const appendRestartLog = (chunk) => {
@@ -983,13 +1020,23 @@
           return;
         }
       } catch (e) {}
-      const el = document.getElementById('restart-log');
-      if (!el) return;
+      const els = [];
       try {
-        const prev = el.textContent || '';
-        el.textContent = prev + String(chunk);
-        el.scrollTop = el.scrollHeight;
+        document.querySelectorAll('[data-xk-restart-log="1"]').forEach((el) => {
+          if (el) els.push(el);
+        });
       } catch (e) {}
+      try {
+        const legacy = document.getElementById('restart-log');
+        if (legacy && els.indexOf(legacy) === -1) els.push(legacy);
+      } catch (e) {}
+      els.forEach((el) => {
+        try {
+          const prev = el.textContent || '';
+          el.textContent = prev + String(chunk);
+          el.scrollTop = el.scrollHeight;
+        } catch (e) {}
+      });
     };
 
     try {
@@ -1107,6 +1154,13 @@
 
     // Browser-side Prettier formatting (offline-capable via static/vendor).
     try {
+      const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
+        ? XKeen.lazy.ensureFeature
+        : null;
+      if (ensureFeature) {
+        await Promise.resolve(ensureFeature('formatters'));
+      }
+
       if (!window.XKeen || !XKeen.ui || !XKeen.ui.formatters || typeof XKeen.ui.formatters.formatYaml !== 'function') {
         setStatus('Форматирование YAML недоступно (formatters не загружены).', true);
         return false;
@@ -1822,134 +1876,165 @@
     _inited = true;
     if (root.dataset) root.dataset.xkeenMihomoPanelInited = '1';
 
-    ensureEditor();
-    try { initEngineToggle(); } catch (e) {}
-    try { syncHeaderFsButton(_engine); } catch (e) {}
+    const finishInit = () => {
+      ensureEditor();
+      try { initEngineToggle(); } catch (e) {}
+      try { syncHeaderFsButton(_engine); } catch (e) {}
 
-    // Main actions
-    wireButton(IDS.btnLoad, () => MP.loadConfig());
-    wireButton(IDS.btnSave, () => MP.saveConfig());
-    wireButton(IDS.btnFormatYaml, () => MP.formatYamlFromEditor());
-    wireButton(IDS.btnValidate, () => MP.validateFromEditor());
-    wireButton(IDS.btnSaveRestart, () => MP.saveAndRestart());
-    wireButton(IDS.btnOpenZashboardUi, () => MP.openZashboardUi());
+      // Main actions
+      wireButton(IDS.btnLoad, () => MP.loadConfig());
+      wireButton(IDS.btnSave, () => MP.saveConfig());
+      wireButton(IDS.btnFormatYaml, () => MP.formatYamlFromEditor());
+      wireButton(IDS.btnValidate, () => MP.validateFromEditor());
+      wireButton(IDS.btnSaveRestart, () => MP.saveAndRestart());
+      wireButton(IDS.btnOpenZashboardUi, () => MP.openZashboardUi());
 
-    // Templates
-    wireButton(IDS.tplRefresh, () => MP.loadTemplatesList());
-    wireButton(IDS.tplLoad, () => MP.loadSelectedTemplateToEditor());
-    wireButton(IDS.tplSaveFromEditor, () => MP.saveEditorAsTemplate());
+      // Templates
+      wireButton(IDS.tplRefresh, () => MP.loadTemplatesList());
+      wireButton(IDS.tplLoad, () => MP.loadSelectedTemplateToEditor());
+      wireButton(IDS.tplSaveFromEditor, () => MP.saveEditorAsTemplate());
 
-    // Template select: auto-load on change (with overwrite confirmation if there are unsaved edits).
-    const tplSel = $(IDS.tplSelect);
-    if (tplSel && (!tplSel.dataset || tplSel.dataset.xkeenAutoLoad !== '1')) {
-      _lastTemplateSelectValue = String(tplSel.value || '');
-      tplSel.addEventListener('change', async () => {
-        const next = String(tplSel.value || '');
-        const prev = _lastTemplateSelectValue;
-        if (!next) {
-          _lastTemplateSelectValue = '';
-          return;
-        }
-
-        if (isEditorDirty()) {
-          const msg = 'Заменить содержимое редактора шаблоном “' + next + '”? Несохранённые изменения будут потеряны.';
-          let ok = false;
-          try {
-            if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-              ok = await XKeen.ui.confirm({
-                title: 'Загрузить шаблон',
-                message: msg,
-                okText: 'Загрузить',
-                cancelText: 'Отмена',
-                danger: true,
-              });
-            } else {
-              ok = window.confirm(msg);
-            }
-          } catch (e) {
-            ok = window.confirm(msg);
+      // Template select: auto-load on change (with overwrite confirmation if there are unsaved edits).
+      const tplSel = $(IDS.tplSelect);
+      if (tplSel && (!tplSel.dataset || tplSel.dataset.xkeenAutoLoad !== '1')) {
+        _lastTemplateSelectValue = String(tplSel.value || '');
+        tplSel.addEventListener('change', async () => {
+          const next = String(tplSel.value || '');
+          const prev = _lastTemplateSelectValue;
+          if (!next) {
+            _lastTemplateSelectValue = '';
+            return;
           }
 
-          if (!ok) {
+          if (isEditorDirty()) {
+            const msg = 'Заменить содержимое редактора шаблоном “' + next + '”? Несохранённые изменения будут потеряны.';
+            let ok = false;
+            try {
+              if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
+                ok = await XKeen.ui.confirm({
+                  title: 'Загрузить шаблон',
+                  message: msg,
+                  okText: 'Загрузить',
+                  cancelText: 'Отмена',
+                  danger: true,
+                });
+              } else {
+                ok = window.confirm(msg);
+              }
+            } catch (e) {
+              ok = window.confirm(msg);
+            }
+
+            if (!ok) {
+              try { tplSel.value = prev; } catch (e) {}
+              return;
+            }
+          }
+
+          const loaded = await MP.loadSelectedTemplateToEditor();
+          if (!loaded) {
             try { tplSel.value = prev; } catch (e) {}
             return;
           }
-        }
-
-        const loaded = await MP.loadSelectedTemplateToEditor();
-        if (!loaded) {
-          try { tplSel.value = prev; } catch (e) {}
-          return;
-        }
-        _lastTemplateSelectValue = next;
-        try {
-          const d = (tplSel && tplSel.closest) ? tplSel.closest('details') : null;
-          if (d && d.classList && d.classList.contains('xk-mihomo-menu')) d.open = false;
-        } catch (e) {}
-
-      });
-      if (tplSel.dataset) tplSel.dataset.xkeenAutoLoad = '1';
-    }
-
-    // Auto-close the compact ⋯ menu after clicking an action button (keeps UI tidy).
-    try {
-      const details = document.querySelector('details.xk-mihomo-menu');
-      const panel = details ? details.querySelector('.xk-mihomo-menu-panel') : null;
-      if (details && panel && !(details.dataset && details.dataset.xkAutoClose === '1')) {
-        panel.addEventListener('click', (e) => {
-          const btn = e.target && e.target.closest ? e.target.closest('button') : null;
-          if (!btn) return;
-          try { details.open = false; } catch (e2) {}
+          _lastTemplateSelectValue = next;
+          try {
+            const d = (tplSel && tplSel.closest) ? tplSel.closest('details') : null;
+            if (d && d.classList && d.classList.contains('xk-mihomo-menu')) d.open = false;
+          } catch (e) {}
         });
-        if (details.dataset) details.dataset.xkAutoClose = '1';
+        if (tplSel.dataset) tplSel.dataset.xkeenAutoLoad = '1';
+      }
+
+      // Auto-close the compact ⋯ menu after clicking an action button (keeps UI tidy).
+      try {
+        const details = document.querySelector('details.xk-mihomo-menu');
+        const panel = details ? details.querySelector('.xk-mihomo-menu-panel') : null;
+        if (details && panel && !(details.dataset && details.dataset.xkAutoClose === '1')) {
+          panel.addEventListener('click', (e) => {
+            const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+            if (!btn) return;
+            try { details.open = false; } catch (e2) {}
+          });
+          if (details.dataset) details.dataset.xkAutoClose = '1';
+        }
+      } catch (e) {}
+
+      // Profiles panel toggler
+      const header = $(IDS.profilesHeader);
+      const panel = $(IDS.profilesPanel);
+      const arrow = $(IDS.profilesArrow);
+      if (header && panel && (!header.dataset || header.dataset.xkeenWired !== '1')) {
+        header.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const visible = panel.style.display !== 'none';
+          panel.style.display = visible ? 'none' : 'block';
+          if (arrow) arrow.textContent = visible ? '▼' : '▲';
+          if (!visible) {
+            await MP.loadProfiles();
+            await MP.loadBackups();
+          }
+        });
+        if (header.dataset) header.dataset.xkeenWired = '1';
+      }
+
+      wireButton(IDS.profilesRefresh, async () => {
+        setStatus('Обновляю список профилей…', false);
+        const ok = await MP.loadProfiles();
+        setStatus(ok ? 'Список профилей обновлён.' : 'Ошибка загрузки профилей.', !ok);
+      });
+
+      wireButton(IDS.backupsRefresh, async () => {
+        setStatus('Обновляю список бэкапов…', false);
+        const ok = await MP.loadBackups();
+        setStatus(ok ? 'Список бэкапов обновлён.' : 'Ошибка загрузки бэкапов.', !ok);
+      });
+
+      wireButton(IDS.saveProfileBtn, () => MP.createProfileFromEditor());
+      wireButton(IDS.backupsCleanBtn, () => MP.cleanBackups());
+
+      const filter = $(IDS.backupsActiveOnly);
+      if (filter && (!filter.dataset || filter.dataset.xkeenWired !== '1')) {
+        filter.addEventListener('change', () => {
+          MP.loadBackups();
+        });
+        if (filter.dataset) filter.dataset.xkeenWired = '1';
+      }
+
+      attachProfilesHandlers();
+      attachBackupsHandlers();
+      // Initial loads:
+      // avoid an unnecessary 404 on fresh installs/dev fallback when config.yaml
+      // does not exist yet. The user can still click "Load" explicitly later.
+      if (hasInitialMihomoConfig()) {
+        try { MP.loadConfig({ notify: false }); } catch (e) {}
+      } else {
+        try { setEditorTextClean(''); } catch (e) {}
+        try { setStatus('config.yaml пока не создан. Открыт пустой редактор.', false, true); } catch (e) {}
+      }
+      try { MP.loadTemplatesList({ silent: true }); } catch (e) {}
+    };
+
+    try {
+      const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
+      if (loader && typeof loader.ensureEditorAssets === 'function') {
+        Promise.resolve(loader.ensureEditorAssets({
+          mode: 'yaml',
+          search: true,
+          fold: true,
+          fullscreen: true,
+          rulers: true,
+          autoCloseBrackets: true,
+          trailingSpace: true,
+          comments: true,
+        }))
+          .catch(() => null)
+          .finally(finishInit);
+        return;
       }
     } catch (e) {}
 
-    // Profiles panel toggler
-    const header = $(IDS.profilesHeader);
-    const panel = $(IDS.profilesPanel);
-    const arrow = $(IDS.profilesArrow);
-    if (header && panel && (!header.dataset || header.dataset.xkeenWired !== '1')) {
-      header.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const visible = panel.style.display !== 'none';
-        panel.style.display = visible ? 'none' : 'block';
-        if (arrow) arrow.textContent = visible ? '▼' : '▲';
-        if (!visible) {
-          await MP.loadProfiles();
-          await MP.loadBackups();
-        }
-      });
-      if (header.dataset) header.dataset.xkeenWired = '1';
-    }
-
-    wireButton(IDS.profilesRefresh, async () => {
-      setStatus('Обновляю список профилей…', false);
-      const ok = await MP.loadProfiles();
-      setStatus(ok ? 'Список профилей обновлён.' : 'Ошибка загрузки профилей.', !ok);
-    });
-
-    wireButton(IDS.backupsRefresh, async () => {
-      setStatus('Обновляю список бэкапов…', false);
-      const ok = await MP.loadBackups();
-      setStatus(ok ? 'Список бэкапов обновлён.' : 'Ошибка загрузки бэкапов.', !ok);
-    });
-
-    wireButton(IDS.saveProfileBtn, () => MP.createProfileFromEditor());
-    wireButton(IDS.backupsCleanBtn, () => MP.cleanBackups());
-
-    const filter = $(IDS.backupsActiveOnly);
-    if (filter && (!filter.dataset || filter.dataset.xkeenWired !== '1')) {
-      filter.addEventListener('change', () => {
-        MP.loadBackups();
-      });
-      if (filter.dataset) filter.dataset.xkeenWired = '1';
-    }
-
-    attachProfilesHandlers();
-    attachBackupsHandlers();
-    // Initial loads (silent to avoid noisy toasts on every page refresh)
-    try { MP.loadConfig({ notify: false }); } catch (e) {}
-    try { MP.loadTemplatesList({ silent: true }); } catch (e) {}
+    finishInit();
   };
+
+  MP.isEditorDirty = isEditorDirty;
 })();

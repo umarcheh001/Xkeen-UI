@@ -47,18 +47,21 @@
   }
 
   async function _terminalChooseMode() {
-    // Prefer interactive PTY if backend supports WebSocket.
+    // Prefer interactive PTY only when backend explicitly allows PTY.
     try {
       const term = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal : null;
       const caps = term && term.capabilities ? term.capabilities : null;
       if (caps && typeof caps.initCapabilities === 'function') {
         await Promise.resolve(caps.initCapabilities());
       }
+      if (caps && typeof caps.hasPty === 'function') {
+        return caps.hasPty() ? 'pty' : 'shell';
+      }
       if (caps && typeof caps.hasWs === 'function') {
         return caps.hasWs() ? 'pty' : 'shell';
       }
     } catch (e) {}
-    return 'pty';
+    return 'shell';
   }
 
   function _sleep(ms) {

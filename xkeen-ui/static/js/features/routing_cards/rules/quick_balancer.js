@@ -57,6 +57,135 @@
     try { return document.getElementById(id); } catch (e) { return null; }
   }
 
+  function ensureModalDom() {
+    let modal = $(MODAL_ID);
+    if (modal) return modal;
+    if (!document.body) return null;
+
+    document.body.insertAdjacentHTML('beforeend', `
+      <div id="routing-balancer-quick-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Быстрый старт балансировщика (leastPing)">
+        <div class="modal-content xk-qb-modal" data-modal-key="routing-balancer-quick-premium-v1">
+          <div class="modal-header">
+            <span class="modal-title">Быстрый старт: балансировщик leastPing</span>
+            <button type="button" class="modal-close" id="routing-balancer-quick-close-btn" title="Закрыть">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="xk-qb-lead">
+              <div class="xk-qb-lead-icon">⚡</div>
+              <div class="xk-qb-lead-text">
+                <div class="xk-qb-lead-title">leastPing + observatory + готовое правило маршрутизации</div>
+                <p class="modal-description" style="margin:0;">
+                  Мастер создаст или обновит балансировщик <code>leastPing</code>, сформирует <code>07_observatory.json</code>, при необходимости добавит дефолтное правило и затем выполнит <b>Сохранить + Перезапуск</b> с логом.
+                </p>
+              </div>
+            </div>
+
+            <div class="xk-qb-grid">
+              <section class="xk-qb-panel xk-qb-main-panel">
+                <div class="xk-qb-panelhead">
+                  <div>
+                    <div class="xk-qb-kicker">Шаг 1</div>
+                    <div class="terminal-menu-title" style="margin:0;">Параметры балансировщика</div>
+                  </div>
+                  <div id="routing-balancer-quick-summary" class="xk-qb-summary" data-tooltip="Текущий balancer.tag и количество выбранных прокси-тегов">proxy · 0 tag</div>
+                </div>
+
+                <div class="xk-qb-fields-grid">
+                  <label>
+                    <span class="xk-qb-fieldlabel">balancer.tag</span>
+                    <input id="routing-balancer-quick-tag" class="routing-rule-input" type="text" value="proxy" placeholder="proxy">
+                  </label>
+                  <label>
+                    <span class="xk-qb-fieldlabel">fallbackTag</span>
+                    <input id="routing-balancer-quick-fallback" class="routing-rule-input" type="text" value="direct" placeholder="direct">
+                  </label>
+                  <label class="xk-qb-fieldwide">
+                    <span class="xk-qb-fieldlabel">probeUrl</span>
+                    <input id="routing-balancer-quick-probe-url" class="routing-rule-input" type="text" value="https://www.gstatic.com/generate_204" placeholder="https://www.gstatic.com/generate_204">
+                  </label>
+                  <label>
+                    <span class="xk-qb-fieldlabel">probeInterval</span>
+                    <input id="routing-balancer-quick-probe-interval" class="routing-rule-input" type="text" value="60s" placeholder="60s">
+                  </label>
+                </div>
+
+                <div class="xk-qb-options-grid">
+                  <label class="xk-qb-option-card">
+                    <input type="checkbox" id="routing-balancer-quick-default-rule" checked>
+                    <div class="xk-qb-option-copy">
+                      <strong>Сделать балансировщик дефолтным</strong>
+                      <small>Добавить правило match-all с <code>balancerTag</code> для inbound <code>redirect / tproxy</code>.</small>
+                    </div>
+                  </label>
+                  <label class="xk-qb-option-card">
+                    <input type="checkbox" id="routing-balancer-quick-overwrite-observatory" checked>
+                    <div class="xk-qb-option-copy">
+                      <strong>Перезаписать observatory</strong>
+                      <small>Разрешить панели обновить существующий <code>07_observatory.json</code>.</small>
+                    </div>
+                  </label>
+                  <label class="xk-qb-option-card xk-qb-option-card-compact">
+                    <input type="checkbox" id="routing-balancer-quick-concurrency" checked>
+                    <div class="xk-qb-option-copy">
+                      <strong>enableConcurrency</strong>
+                      <small>Параллельная проверка доступности узлов.</small>
+                    </div>
+                  </label>
+                </div>
+              </section>
+
+              <section class="xk-qb-panel xk-qb-tags-panel">
+                <div class="xk-qb-panelhead">
+                  <div>
+                    <div class="xk-qb-kicker">Шаг 2</div>
+                    <div class="terminal-menu-title" style="margin:0;">Пул тегов для selector / subjectSelector</div>
+                  </div>
+                  <button type="button" class="btn-secondary btn-compact xk-qb-refresh-btn" id="routing-balancer-quick-refresh-tags-btn" data-tooltip="Взять теги из 04_outbounds.json и исключить служебные outbound">
+                    <span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span>
+                    <span>Обновить</span>
+                  </button>
+                </div>
+
+                <label class="xk-qb-editor-block">
+                  <span class="xk-qb-fieldlabel">Список тегов</span>
+                  <textarea id="routing-balancer-quick-tags" class="xkeen-textarea" spellcheck="false" rows="9" placeholder="tag1
+tag2
+..."></textarea>
+                </label>
+
+                <div class="xk-qb-note">
+                  <div><b>Подсказка:</b> по умолчанию мастер подтягивает все обычные outbound-теги, исключая <code>direct</code>, <code>block</code>, <code>dns</code> и другие служебные значения.</div>
+                  <div>Можно оставить только нужные теги вручную — по одному на строку.</div>
+                </div>
+
+                <div id="routing-balancer-quick-status" class="xk-qb-statusbar"></div>
+              </section>
+            </div>
+          </div>
+
+          <div class="modal-actions xk-qb-footer">
+            <div class="xk-qb-footer-left">
+              <button type="button" id="routing-balancer-quick-cancel-btn" class="btn-compact">Отмена</button>
+            </div>
+            <div class="xk-qb-footer-actions">
+              <button type="button" class="btn-secondary btn-compact xk-qb-footer-btn" id="routing-balancer-quick-dry-btn" data-tooltip="Только обновить карточки и JSON-редактор, без сохранения и рестарта.">
+                <span class="xk-btn-inline-glyph" aria-hidden="true">✓</span>
+                <span>Только применить</span>
+              </button>
+              <button type="button" class="btn-danger btn-compact xk-qb-footer-btn xk-qb-primary-action" id="routing-balancer-quick-run-btn">
+                <span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span>
+                <span>Применить + Рестарт</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+
+    modal = $(MODAL_ID);
+    return modal;
+  }
+
   function _syncBodyScroll() {
     try {
       if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
@@ -66,7 +195,7 @@
   }
 
   function openModal() {
-    const m = $(MODAL_ID);
+    const m = ensureModalDom();
     if (!m) return;
     try { m.classList.remove('hidden'); } catch (e) {}
     _syncBodyScroll();
@@ -493,11 +622,11 @@
 
   function wireOnce() {
     if (QB.__wired) return;
-    QB.__wired = true;
 
+    const modal = ensureModalDom();
     const btn = $(BTN_ID);
-    const modal = $(MODAL_ID);
     if (!btn || !modal) return;
+    QB.__wired = true;
 
     btn.addEventListener('click', async (e) => {
       e.preventDefault();

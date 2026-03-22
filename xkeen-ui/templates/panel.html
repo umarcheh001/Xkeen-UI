@@ -37,38 +37,27 @@
   <script src="{{ url_for('static', filename='codemirror/addon/selection/active-line.min.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/edit/matchbrackets.min.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/mode/javascript/javascript.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/mode/shell/shell.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/mode/yaml/yaml.min.js') }}"></script>
   <script src="{{ url_for('static', filename='codemirror/addon/lint/lint.min.js') }}"></script>
 
   <!-- NOTE: extra modes / JSON linter are lazy-loaded (see js/ui/codemirror_loader.js) -->
-  <!-- CodeMirror addons: folding, search, dialog, autoclose -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/fold/foldgutter.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/dialog/dialog.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/display/fullscreen.css') }}">
 
-  <script src="{{ url_for('static', filename='codemirror/addon/fold/foldcode.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/fold/brace-fold.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/fold/indent-fold.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/fold/foldgutter.js') }}"></script>
+  <script>
+    (function () {
+      try {
+        var nav = window.navigator || {};
+        var ua = String(nav.userAgent || '');
+        var vendor = String(nav.vendor || '');
+        var isSafari = /Safari/i.test(ua)
+          && /Apple/i.test(vendor)
+          && !/(Chrome|Chromium|CriOS|Edg|OPR|OPT|Opera|Vivaldi|DuckDuckGo|Firefox|FxiOS|Arc|Brave)/i.test(ua);
+        if (isSafari) {
+          document.documentElement.classList.add('xk-webkit-safari');
+        }
+      } catch (e) {}
+    })();
+  </script>
 
-  <script src="{{ url_for('static', filename='codemirror/addon/search/searchcursor.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/search/search.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/search/match-highlighter.js') }}"></script>
-
-  <script src="{{ url_for('static', filename='codemirror/addon/dialog/dialog.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/edit/closebrackets.js') }}"></script>
-
-  <!-- Quality-of-life addons: fullscreen, comments, trailing spaces, rulers -->
-  <script src="{{ url_for('static', filename='codemirror/addon/display/fullscreen.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/comment/comment.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/comment/continuecomment.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/fold/comment-fold.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/mode/overlay.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
-
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260313-lighttheme-v1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260317h') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -112,13 +101,16 @@
           <button
             id="xkeen-core-text"
             type="button"
-            class="service-core-text"
+            class="service-core-text{% if not multi_core %} hidden{% endif %}"
+            {% if not multi_core %}aria-hidden="true" tabindex="-1"{% endif %}
           ></button>
 
+          {% if has_xray %}
           <!-- Notice: global Xray logging is enabled (loglevel!=none) -->
           <span id="xray-logs-badge" class="xray-logs-badge" data-state="off" title="Логи Xray выключены">
             Логи Xray
           </span>
+          {% endif %}
         </div>
 
         <div class="header-right">
@@ -162,6 +154,13 @@
               <span data-xk-update-label>Обновление</span>
             </a>
 
+            <button
+              type="button"
+              id="panel-core-ui-refresh-btn"
+              class="service-core-text xk-header-btn hidden"
+              title="РћР±РЅРѕРІРёС‚СЊ РїР°РЅРµР»СЊ РїРѕСЃР»Рµ РёР·РјРµРЅРµРЅРёСЏ РЅР°Р±РѕСЂР° СЏРґРµСЂ"
+            >РћР±РЅРѕРІРёС‚СЊ РїР°РЅРµР»СЊ</button>
+
             <a
               href="{{ url_for('logout') }}"
               class="service-core-text xk-header-btn xk-header-btn-logout"
@@ -172,28 +171,35 @@
       </div>
 
 <div class="top-tabs header-tabs">
+        {% if has_xray %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-routing active" data-view="routing" data-xk-section="routing">
           Роутинг Xray
         </button>
+        {% endif %}
+        {% if has_mihomo %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-mihomo" data-view="mihomo" data-xk-section="mihomo">
           Роутинг Mihomo
         </button>
+        {% endif %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-xkeen" data-view="xkeen" data-xk-section="xkeen">
           Порты и Исключения
         </button>
+        {% if has_xray %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-logs" data-view="xray-logs" data-xk-section="xray-logs">
           Live логи Xray
         </button>
+        {% endif %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-commands" data-view="commands" data-xk-section="commands">
           Команды
         </button>
-        <button class="top-tab-btn xk-top-tab xk-top-tab-files" data-view="files" data-xk-section="files" id="top-tab-files" {% if is_mips %}style="display:none;"{% endif %}>
+        <button class="top-tab-btn xk-top-tab xk-top-tab-files" data-view="files" data-xk-section="files" id="top-tab-files">
           Файлы
         </button>
+        {% if has_mihomo %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-generator" type="button" data-xk-section="mihomo-generator" id="top-tab-mihomo-generator" onclick="window.location.href='/mihomo_generator'">
           Mihomo Генератор
         </button>
-
+        {% endif %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-donate" type="button" data-xk-section="donate" id="top-tab-donate">
           💰 Донат
         </button>
@@ -224,6 +230,7 @@
 
 </header>
 
+    {% if has_xray %}
     <div id="view-routing" class="view-section" data-xk-section="routing">
 <!-- Routing editor + Mihomo config -->
     <div class="layout-2col routing-layout">
@@ -763,7 +770,6 @@
             <div id="routing-editor-meta" class="routing-editor-meta" aria-live="polite">
               <span id="routing-editor-valid-badge" class="routing-editor-badge">JSON: —</span>
               <span id="routing-editor-dirty-badge" class="routing-editor-badge">Состояние: —</span>
-              <span id="routing-editor-view-badge" class="routing-editor-badge">Позиция: —</span>
               <span id="routing-editor-comments-badge" class="routing-editor-badge is-muted">Комментарии: —</span>
             </div>
 
@@ -794,6 +800,7 @@
     </div>
 </div>
 
+    {% endif %}
 <div id="view-mihomo" class="view-section" style="display:none;" data-xk-section="mihomo">
   <section class="card">
     <div class="commands-header" onclick="toggleMihomoCard()">
@@ -1123,6 +1130,8 @@
     <div class="commands-header">
       <div class="commands-header-copy">
         <div class="commands-title-row">
+          {% set __xk_commands_is_mips = is_mips %}
+          {% set is_mips = not terminal_supports_pty %}
           <h2>Команды</h2>
           <button type="button" class="btn-secondary commands-title-action" id="terminal-open-shell-btn" {% if not is_mips %}style="display:none;"{% endif %} data-tooltip="Открыть терминал (обычный режим).">Открыть терминал</button>
           <button type="button" class="btn-secondary btn-interactive-shell commands-title-action" id="terminal-open-pty-btn" {% if is_mips %}style="display:none;"{% endif %} title="Интерактивная оболочка (PTY)" data-tooltip="Открыть интерактивную оболочку (PTY).">Interactive Shell</button>
@@ -1130,20 +1139,25 @@
       </div>
     </div>
 
+    {% set is_mips = __xk_commands_is_mips %}
     <!-- Cores status row (installed versions + update hints). Filled by js/features/cores_status.js -->
     <div class="commands-status-row" id="commands-status-row" aria-live="polite">
+      {% if has_xray %}
       <div class="core-pill" id="core-pill-xray" data-core="xray">
         <span class="core-name">Xray</span>
         <span class="core-ver" id="core-xray-installed">—</span>
         <a class="core-latest" id="core-xray-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
         <button type="button" class="btn-secondary btn-mini" id="core-xray-update-btn" data-core="xray" style="display:none;" data-tooltip="Запустить обновление Xray (xkeen -ux) через терминал.">Обновить</button>
       </div>
+      {% endif %}
+      {% if has_mihomo %}
       <div class="core-pill" id="core-pill-mihomo" data-core="mihomo">
         <span class="core-name">Mihomo</span>
         <span class="core-ver" id="core-mihomo-installed">—</span>
         <a class="core-latest" id="core-mihomo-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
         <button type="button" class="btn-secondary btn-mini" id="core-mihomo-update-btn" data-core="mihomo" style="display:none;" data-tooltip="Запустить обновление Mihomo (xkeen -um) через терминал.">Обновить</button>
       </div>
+      {% endif %}
 
       <button type="button" class="btn-secondary btn-mini" id="cores-check-btn" title="Проверить обновления (с кэшем)">Проверить обновления</button>
       <span class="cores-checked-at" id="cores-checked-at"></span>
@@ -1228,7 +1242,7 @@
       <h2>Файловый менеджер</h2>
       <div class="fm-header-actions">
         <button type="button" class="btn-secondary" id="fm-volumes-btn" style="display:none;" title="USB-диски/разделы: список и Mount/Unmount">💽 Диски</button>
-        <button type="button" class="btn-secondary" id="fm-ops-btn" title="Операции с файлами (копировать, переместить, удалить, архивы и т.д.)">🧾 Операции</button>
+        <button type="button" class="btn-secondary" id="fm-ops-btn" data-fm-lite-hide="1" title="Операции с файлами (копировать, переместить, удалить, архивы и т.д.)">🧾 Операции</button>
       </div>
     </div>
 
@@ -1251,10 +1265,10 @@
         <div class="fm-panel-bar">
           <select class="fm-target-select" aria-label="Target" title="local / remote">
             <option value="local">L</option>
-            <option value="remote">R</option>
+            <option value="remote" data-fm-lite-hide="1">R</option>
           </select>
-          <button type="button" class="btn-secondary fm-connect-btn" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
-          <button type="button" class="btn-secondary fm-disconnect-btn" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
+          <button type="button" class="btn-secondary fm-connect-btn" data-fm-lite-hide="1" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
+          <button type="button" class="btn-secondary fm-disconnect-btn" data-fm-lite-hide="1" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
           <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" title="Путь текущей папки (Enter — перейти)" />
           <button type="button" class="btn-secondary fm-root-btn" title="В корень (FTP) / домой (SFTP)" aria-label="В корень или домой">⌂</button>
           <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">↑</button>
@@ -1271,10 +1285,10 @@
         <div class="fm-panel-bar">
           <select class="fm-target-select" aria-label="Target" title="local / remote">
             <option value="local">L</option>
-            <option value="remote">R</option>
+            <option value="remote" data-fm-lite-hide="1">R</option>
           </select>
-          <button type="button" class="btn-secondary fm-connect-btn" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
-          <button type="button" class="btn-secondary fm-disconnect-btn" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
+          <button type="button" class="btn-secondary fm-connect-btn" data-fm-lite-hide="1" title="Подключиться к удалённому хосту (SFTP)">Connect…</button>
+          <button type="button" class="btn-secondary fm-disconnect-btn" data-fm-lite-hide="1" title="Отключиться от удалённого хоста" style="display:none;">Disconnect</button>
           <input class="fm-path-input" spellcheck="false" placeholder="/opt/var" title="Путь текущей папки (Enter — перейти)" />
           <button type="button" class="btn-secondary fm-root-btn" title="В корень (FTP) / домой (SFTP)" aria-label="В корень или домой">⌂</button>
           <button type="button" class="btn-secondary fm-up-btn" title="Вверх" aria-label="Вверх">↑</button>
@@ -1300,10 +1314,10 @@
         <span><b>Shift+F7</b> — новый файл</span>
         <span><b>F2</b> — Rename</span>
         <span><b>ПКМ</b> — контекстное меню</span>
-        <span><b>F5</b> — Copy</span>
-        <span><b>F6</b> — Move</span>
-        <span><b>Drag&Drop</b> — выбрать Move / Copy</span>
-        <span><b>F8</b> — в корзину (в корзине — удалить навсегда)</span>
+        <span data-fm-lite-hide="1"><b>F5</b> — Copy</span>
+        <span data-fm-lite-hide="1"><b>F6</b> — Move</span>
+        <span data-fm-lite-hide="1"><b>Drag&Drop</b> — выбрать Move / Copy</span>
+        <span data-fm-lite-hide="1"><b>F8</b> — в корзину (в корзине — удалить навсегда)</span>
       </div>
     </div>
 
@@ -1319,7 +1333,7 @@
         <div class="log-header-row">
           <h2>Live логи Xray <span id="xray-log-lamp" class="xray-log-lamp" data-state="unknown" title="Статус логов Xray неизвестен"></span></h2>
           <div class="log-header-actions">
-            <select id="xray-log-file" class="xray-log-select" onchange="xrayLogChangeFile()">
+            <select id="xray-log-file" class="xray-log-select">
               <option value="access" selected>access.log</option>
               <option value="error">error.log</option>
             </select>
@@ -1333,12 +1347,12 @@
               <option value="debug">debug</option>
               <option value="error">error</option>
             </select>
-            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsView()" title="Просмотреть логи" aria-label="Просмотреть логи">🔍</button>
-            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsEnable()" title="Включить логи" aria-label="Включить логи">▶</button>
-            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsDisable()" title="Остановить логи" aria-label="Остановить логи">⏹</button>
-            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsClearScreen()" title="Очистить журнал" aria-label="Очистить журнал">🧹</button>
-            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsClear()" title="Очистить логфайлы" aria-label="Очистить логфайлы">🗑</button>
-            <button type="button" class="btn-secondary log-btn icon-only" onclick="xrayLogsCopy()" title="Скопировать" aria-label="Скопировать">📋</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-view-btn" title="Просмотреть логи" aria-label="Просмотреть логи">🔍</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-enable-btn" title="Включить логи" aria-label="Включить логи">▶</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-disable-btn" title="Остановить логи" aria-label="Остановить логи">⏹</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-clear-screen-btn" title="Очистить журнал" aria-label="Очистить журнал">🧹</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-clear-files-btn" title="Очистить логфайлы" aria-label="Очистить логфайлы">🗑</button>
+            <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-copy-btn" title="Скопировать" aria-label="Скопировать">📋</button>
             <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-fullscreen" title="Полный экран" aria-label="Полный экран">⛶</button>
           </div>
         </div>
@@ -1871,259 +1885,6 @@
         </div>
       </div>
     </div>
-
-<!-- Quick balancer (leastPing) wizard -->
-    <div id="routing-balancer-quick-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Быстрый старт балансировщика (leastPing)">
-      <div class="modal-content xk-qb-modal" data-modal-key="routing-balancer-quick-premium-v1">
-        <div class="modal-header">
-          <span class="modal-title">Быстрый старт: балансировщик leastPing</span>
-          <button type="button" class="modal-close" id="routing-balancer-quick-close-btn" title="Закрыть">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="xk-qb-lead">
-            <div class="xk-qb-lead-icon">⚡</div>
-            <div class="xk-qb-lead-text">
-              <div class="xk-qb-lead-title">leastPing + observatory + готовое правило маршрутизации</div>
-              <p class="modal-description" style="margin:0;">
-                Мастер создаст или обновит балансировщик <code>leastPing</code>, сформирует <code>07_observatory.json</code>, при необходимости добавит дефолтное правило и затем выполнит <b>Сохранить + Перезапуск</b> с логом.
-              </p>
-            </div>
-          </div>
-
-          <div class="xk-qb-grid">
-            <section class="xk-qb-panel xk-qb-main-panel">
-              <div class="xk-qb-panelhead">
-                <div>
-                  <div class="xk-qb-kicker">Шаг 1</div>
-                  <div class="terminal-menu-title" style="margin:0;">Параметры балансировщика</div>
-                </div>
-                <div id="routing-balancer-quick-summary" class="xk-qb-summary" data-tooltip="Текущий balancer.tag и количество выбранных прокси-тегов">proxy · 0 tag</div>
-              </div>
-
-              <div class="xk-qb-fields-grid">
-                <label>
-                  <span class="xk-qb-fieldlabel">balancer.tag</span>
-                  <input id="routing-balancer-quick-tag" class="routing-rule-input" type="text" value="proxy" placeholder="proxy">
-                </label>
-                <label>
-                  <span class="xk-qb-fieldlabel">fallbackTag</span>
-                  <input id="routing-balancer-quick-fallback" class="routing-rule-input" type="text" value="direct" placeholder="direct">
-                </label>
-                <label class="xk-qb-fieldwide">
-                  <span class="xk-qb-fieldlabel">probeUrl</span>
-                  <input id="routing-balancer-quick-probe-url" class="routing-rule-input" type="text" value="https://www.gstatic.com/generate_204" placeholder="https://www.gstatic.com/generate_204">
-                </label>
-                <label>
-                  <span class="xk-qb-fieldlabel">probeInterval</span>
-                  <input id="routing-balancer-quick-probe-interval" class="routing-rule-input" type="text" value="60s" placeholder="60s">
-                </label>
-              </div>
-
-              <div class="xk-qb-options-grid">
-                <label class="xk-qb-option-card">
-                  <input type="checkbox" id="routing-balancer-quick-default-rule" checked>
-                  <div class="xk-qb-option-copy">
-                    <strong>Сделать балансировщик дефолтным</strong>
-                    <small>Добавить правило match-all с <code>balancerTag</code> для inbound <code>redirect / tproxy</code>.</small>
-                  </div>
-                </label>
-                <label class="xk-qb-option-card">
-                  <input type="checkbox" id="routing-balancer-quick-overwrite-observatory" checked>
-                  <div class="xk-qb-option-copy">
-                    <strong>Перезаписать observatory</strong>
-                    <small>Разрешить панели обновить существующий <code>07_observatory.json</code>.</small>
-                  </div>
-                </label>
-                <label class="xk-qb-option-card xk-qb-option-card-compact">
-                  <input type="checkbox" id="routing-balancer-quick-concurrency" checked>
-                  <div class="xk-qb-option-copy">
-                    <strong>enableConcurrency</strong>
-                    <small>Параллельная проверка доступности узлов.</small>
-                  </div>
-                </label>
-              </div>
-            </section>
-
-            <section class="xk-qb-panel xk-qb-tags-panel">
-              <div class="xk-qb-panelhead">
-                <div>
-                  <div class="xk-qb-kicker">Шаг 2</div>
-                  <div class="terminal-menu-title" style="margin:0;">Пул тегов для selector / subjectSelector</div>
-                </div>
-                <button type="button" class="btn-secondary btn-compact xk-qb-refresh-btn" id="routing-balancer-quick-refresh-tags-btn" data-tooltip="Взять теги из 04_outbounds.json и исключить служебные outbound">
-                  <span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span>
-                  <span>Обновить</span>
-                </button>
-              </div>
-
-              <label class="xk-qb-editor-block">
-                <span class="xk-qb-fieldlabel">Список тегов</span>
-                <textarea id="routing-balancer-quick-tags" class="xkeen-textarea" spellcheck="false" rows="9" placeholder="tag1
-tag2
-..."></textarea>
-              </label>
-
-              <div class="xk-qb-note">
-                <div><b>Подсказка:</b> по умолчанию мастер подтягивает все обычные outbound‑теги, исключая <code>direct</code>, <code>block</code>, <code>dns</code> и другие служебные значения.</div>
-                <div>Можно оставить только нужные теги вручную — по одному на строку.</div>
-              </div>
-
-              <div id="routing-balancer-quick-status" class="xk-qb-statusbar"></div>
-            </section>
-          </div>
-        </div>
-
-        <div class="modal-actions xk-qb-footer">
-          <div class="xk-qb-footer-left">
-            <button type="button" id="routing-balancer-quick-cancel-btn" class="btn-compact">Отмена</button>
-          </div>
-          <div class="xk-qb-footer-actions">
-            <button type="button" class="btn-secondary btn-compact xk-qb-footer-btn" id="routing-balancer-quick-dry-btn" data-tooltip="Только обновить карточки и JSON-редактор, без сохранения и рестарта.">
-              <span class="xk-btn-inline-glyph" aria-hidden="true">✓</span>
-              <span>Только применить</span>
-            </button>
-            <button type="button" class="btn-danger btn-compact xk-qb-footer-btn xk-qb-primary-action" id="routing-balancer-quick-run-btn">
-              <span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span>
-              <span>Применить + Рестарт</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-
-
-    <!-- Forced rules wizard (bypass balancer): domains/IP -> specific outboundTag -->
-    <div id="routing-forced-rules-modal" class="modal hidden" data-modal-key="routing-forced-rules-premium-v4" role="dialog" aria-modal="true" aria-label="Принудительные правила (обход балансировщика)">
-      <div class="modal-content" data-modal-key="routing-forced-rules-premium-v4-content">
-        <div class="modal-header">
-          <span class="modal-title">Принудительные правила (обход балансировщика)</span>
-          <button type="button" class="modal-close" id="routing-forced-rules-close-btn" title="Закрыть">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="xk-forced-wizard-lead">
-            <div class="xk-forced-wizard-lead-icon">⇄</div>
-            <div class="xk-forced-wizard-lead-text">
-              <div class="xk-forced-wizard-lead-title">Домены и IP → конкретный outbound</div>
-              <p class="modal-description" style="margin:0;">
-                Мастер создаёт правила <code>type: field</code>, которые отправляют выбранные значения <b>мимо балансировщика</b> прямо на нужный <code>outboundTag</code>.
-              </p>
-            </div>
-          </div>
-
-          <div class="xk-forced-wizard-grid">
-            <!-- Left: input -->
-            <section class="xk-forced-wizard-panel xk-forced-wizard-input-panel">
-              <div class="xk-forced-wizard-panelhead">
-                <div>
-                  <div class="xk-forced-wizard-kicker">Шаг 1</div>
-                  <div class="terminal-menu-title" style="margin:0;">Добавить значения</div>
-                </div>
-              </div>
-
-              <div class="xk-forced-controls-grid">
-                <label class="xk-forced-fieldgroup">
-                  <span class="xk-forced-fieldlabel">outbound</span>
-                  <div class="xk-forced-outbound-wrap">
-                    <select id="routing-forced-rules-outbound" class="routing-rule-input"></select>
-                    <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-refresh-tags-btn" data-tooltip="Обновить список outbound-тегов" aria-label="Обновить список outbound-тегов"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.2 10a6.2 6.2 0 1 1-1.83-4.39"/><path d="M16.2 4.6v3.62h-3.62"/></svg></button>
-                  </div>
-                </label>
-
-                <label class="xk-forced-fieldgroup xk-forced-fieldgroup-compact">
-                  <span class="xk-forced-fieldlabel">Тип</span>
-                  <select id="routing-forced-rules-type" class="routing-rule-input">
-                    <option value="domain">domain</option>
-                    <option value="ip">ip</option>
-                  </select>
-                </label>
-              </div>
-
-              <div class="xk-forced-editor-block">
-                <div class="xk-forced-editor-head">
-                  <span class="xk-forced-fieldlabel">Значения</span>
-                  <div class="xk-forced-wizard-toolbar">
-                    <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-add-btn" data-tooltip="Добавить значения в выбранный outbound" aria-label="Добавить значения"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.2v11.6"/><path d="M4.2 10h11.6"/></svg></button>
-                    <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-clear-proxy-btn" data-tooltip="Очистить значения только у выбранного outbound" aria-label="Очистить выбранный outbound"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.1 5h6.95a1.4 1.4 0 0 1 1.4 1.4v7.2a1.4 1.4 0 0 1-1.4 1.4H8.1L3.55 10 8.1 5Z"/><path d="m9.3 8 4.1 4.1"/><path d="m13.4 8-4.1 4.1"/></svg></button>
-                    <button type="button" class="btn-danger btn-icon xk-icon-btn" id="routing-forced-rules-clear-all-btn" data-tooltip="Удалить все записи мастера" aria-label="Удалить все записи"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.8 6.2h8.4"/><path d="M7.1 6.2V5a1 1 0 0 1 1-1h3.8a1 1 0 0 1 1 1v1.2"/><path d="M7.2 8.2v6.1"/><path d="M10 8.2v6.1"/><path d="M12.8 8.2v6.1"/><path d="M6.5 6.2l.6 9a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-9"/></svg></button>
-                  </div>
-                </div>
-
-                <textarea id="routing-forced-rules-values" class="xkeen-textarea" spellcheck="false" rows="7" placeholder="По одному на строке
-example.com
-domain:google.com
-geosite:youtube
-
-Для ip:
-1.2.3.4/32
-geoip:private"></textarea>
-              </div>
-
-              <div class="xk-forced-wizard-note">
-                Поддерживаются обычные значения Xray для <code>domain</code>/<code>ip</code>: <code>domain:example.com</code>, <code>geosite:TAG</code>, <code>geoip:TAG</code> и другие.
-              </div>
-            </section>
-
-            <!-- Right: options + preview -->
-            <section class="xk-forced-wizard-panel xk-forced-wizard-preview-panel">
-              <div class="xk-forced-wizard-panelhead">
-                <div>
-                  <div class="xk-forced-wizard-kicker">Шаг 2</div>
-                  <div class="terminal-menu-title" style="margin:0;">Параметры и результат</div>
-                </div>
-                <div id="routing-forced-rules-summary" class="xk-forced-wizard-summary" data-tooltip="Количество outbound, domain и ip в мастере">0 outbound · 0 domain · 0 ip</div>
-              </div>
-
-              <div class="xk-forced-options-grid">
-                <label class="xk-forced-option-card global-autorestart-toggle">
-                  <input type="checkbox" id="routing-forced-rules-inbound-only" checked>
-                  <div class="xk-forced-option-copy">
-                    <strong>Только redirect / tproxy</strong>
-                    <small>Не трогать другие inbound</small>
-                  </div>
-                </label>
-
-                <label class="xk-forced-option-card xk-forced-option-select">
-                  <span class="xk-forced-fieldlabel">Приоритет</span>
-                  <select id="routing-forced-rules-priority" class="routing-rule-input">
-                    <option value="after_block">После block-правил</option>
-                    <option value="before_balancer">Перед балансировщиком</option>
-                  </select>
-                </label>
-
-                <label class="xk-forced-option-card global-autorestart-toggle xk-forced-option-wide">
-                  <input type="checkbox" id="routing-forced-rules-import-legacy">
-                  <div class="xk-forced-option-copy">
-                    <strong>Импорт legacy-правил</strong>
-                    <small>Подтянуть правила без <code>ruleTag</code></small>
-                  </div>
-                </label>
-              </div>
-
-              <div class="xk-forced-wizard-listbox">
-                <div class="xk-forced-wizard-listhead">
-                  <div class="xk-forced-wizard-listtitle">
-                    <div class="terminal-menu-title" style="margin:0;">Текущие правила</div>
-                    <div class="xk-forced-list-subtitle">Карточки по outboundTag: компактный обзор, клик по chip удаляет значение</div>
-                  </div>
-                  <div id="routing-forced-rules-status" class="modal-hint" style="margin:0;"></div>
-                </div>
-                <div id="routing-forced-rules-list" class="xk-card-desc xk-forced-wizard-list">—</div>
-              </div>
-            </section>
-          </div>
-        </div>
-
-        <div class="modal-actions xk-forced-wizard-footer">
-          <button type="button" class="btn-compact" id="routing-forced-rules-cancel-btn">Отмена</button>
-          <div class="xk-forced-wizard-footer-actions">
-            <button type="button" class="btn-secondary btn-compact xk-forced-primary-action" id="routing-forced-rules-dry-btn" data-tooltip="Только применить изменения в редакторе без сохранения и рестарта"><span class="xk-btn-inline-glyph" aria-hidden="true">✓</span><span>Только применить</span></button>
-            <button type="button" class="btn-danger btn-compact xk-forced-primary-action" id="routing-forced-rules-run-btn"><span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span><span>Применить + Рестарт</span></button>
-          </div>
-        </div>
-      </div>
-    </div>
-
 
     <!-- Xray snapshots preview modal (read-only) -->
     <div id="xray-snapshot-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Просмотр снимка Xray конфигурации">
@@ -3243,8 +3004,15 @@ https://..."></textarea>
 	    window.XKEEN_GITHUB_REPO_URL = "{{ github_repo_url|e }}";
 	    window.XKEEN_STATIC_BASE = "{{ url_for('static', filename='') }}";
 	    window.XKEEN_IS_MIPS = {{ is_mips|tojson }};
+	    window.XKEEN_AVAILABLE_CORES = {{ available_cores|tojson }};
+	    window.XKEEN_DETECTED_CORES = {{ detected_cores|tojson }};
+	    window.XKEEN_CORE_UI_FALLBACK = {{ core_ui_fallback|tojson }};
+	    window.XKEEN_HAS_XRAY = {{ has_xray|tojson }};
+	    window.XKEEN_HAS_MIHOMO = {{ has_mihomo|tojson }};
+	    window.XKEEN_MIHOMO_CONFIG_EXISTS = {{ mihomo_config_exists|tojson }};
+	    window.XKEEN_MULTI_CORE = {{ multi_core|tojson }};
 		    // Cache-buster for lazy-loaded scripts (Commit J)
-		    window.XKEEN_STATIC_VER = "20260313d";
+		    window.XKEEN_STATIC_VER = "20260322a";
 	    // Files shown in UI (used by last-load badge and other helpers)
 	    window.XKEEN_FILES = {
 	      routing: "{{ routing_file|e }}",
@@ -3264,31 +3032,23 @@ https://..."></textarea>
   <script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/confirm_modal.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/xray_preflight_modal.js', v='20260308-preflight-premium-v1') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/theme.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/theme.js', v='20260316a') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
 	  <script src="{{ url_for('static', filename='js/ui/last_activity.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js', v='20260224d') }}"></script>
-<script src="{{ url_for('static', filename='js/ui/monaco_loader.js', v='20260313a') }}"></script>
-<script src="{{ url_for('static', filename='js/ui/monaco_shared.js', v='20260313a') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js', v='20260317b') }}"></script>
+  <!-- Monaco support is lazy-loaded on first Monaco editor open by panel.init.js -->
   <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260105c') }}"></script>
+  <script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260317e') }}"></script>
   <script src="{{ url_for('static', filename='js/util/tab_id.js') }}"></script>
   <script src="{{ url_for('static', filename='js/util/ansi.js', v='20260302a') }}"></script>
     <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
-<script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ui/spinner_fetch.js', v='20260317c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/settings.js', v='20260308-stage2') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/editor_engine.js', v='20260223a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/settings_panel.js', v='20260308-stage2') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/prettier_loader.js', v='20260227b') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/formatters.js', v='20260227c') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/json_editor_modal.js', v='20260224a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/dat_contents_modal.js', v='20260213b') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/backups.js', v='20260224d') }}"></script>
-
+  {% if has_xray %}
   <!-- Routing page core -->
-  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260313c') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260322a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_jsonc_preserve.js', v='20260218d') }}"></script>
 
   <!-- routing_cards: namespace + shared helpers -->
@@ -3298,9 +3058,6 @@ https://..."></textarea>
 
   <!-- routing_cards: UI helpers -->
   <script src="{{ url_for('static', filename='js/features/routing_cards/collapse.js', v='20260304d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/help_docs.js', v='20260304d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/help_modal.js', v='20260304d') }}"></script>
-
   <!-- routing_cards: DAT card -->
   <script src="{{ url_for('static', filename='js/features/routing_cards/dat/prefs.js', v='20260304d') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/dat/combo.js', v='20260304d') }}"></script>
@@ -3315,37 +3072,32 @@ https://..."></textarea>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/apply.js', v='20260308-stage3fix1') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/fields.js', v='20260308-stage1') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dnd_pointer.js', v='20260308-stage3') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/render.js', v='20260313b') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/controls.js', v='20260313b') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/render.js', v='20260317a') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/controls.js', v='20260317g') }}"></script>
   <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dat_bridge.js', v='20260304h4') }}"></script>
 
-  <!-- routing_cards: Quick balancer wizard (leastPing + observatory + restart) -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/quick_balancer.js', v='20260308-quick-balancer-premium-v1') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/balancer_help.js', v='20260305c') }}"></script>
-
-  <!-- routing_cards: Forced rules wizard (bypass balancer) -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/forced_rules_wizard.js', v='20260305b') }}"></script>
-
   <!-- routing_cards: facade/entrypoint -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260308-stage3fix2') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260317a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/local_io.js') }}"></script>
-  <!-- routing_templates/github/service_status/xray_logs/restart_log are lazy-loaded by panel.init.js -->
-  <script src="{{ url_for('static', filename='js/features/mihomo_panel.js', v='20260302g') }}"></script>
+  <!-- routing_cards: help/docs + quick balancer + balancer help + forced rules are lazy-loaded by routing_cards.js -->
+  {% endif %}
+  <!-- routing_templates/github/service_status/xray_logs/restart_log/xray_preflight are lazy-loaded by panel.init.js -->
+  {% if has_mihomo %}
+  <script src="{{ url_for('static', filename='js/features/mihomo_panel.js', v='20260322a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_yaml_patch.js', v='20260302a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260309-premium-import-v1') }}"></script>
+  <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260317b') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_proxy_tools.js', v='20260302a') }}"></script>
   <script src="{{ url_for('static', filename='js/features/mihomo_hwid_sub.js', v='20260302b') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/commands_list.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/cores_status.js', v='20260305a') }}"></script>
-  <!-- inbounds/outbounds are lazy-loaded by panel.init.js -->
+  {% endif %}
+  <!-- commands_list/cores_status/inbounds/outbounds are lazy-loaded by panel.init.js -->
   <script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
-    <script src="{{ url_for('static', filename='js/features/xkeen_texts.js') }}"></script>
+    <!-- xkeen_texts/settings_panel/formatters are lazy-loaded by panel.init.js and view handlers -->
       <!-- File Manager scripts are lazy-loaded when Files tab is opened (Commit J) -->
 
     <!-- Terminal scripts are lazy-loaded on first open (Commit J) -->
 
   <!-- donate is lazy-loaded by panel.init.js -->
-	  <script src="{{ url_for('static', filename='js/pages/panel.init.js', v='20260313b') }}"></script>
+	  <script src="{{ url_for('static', filename='js/pages/panel.init.js', v='20260322a') }}"></script>
   <script src="{{ url_for('static', filename='main.js') }}"></script>
 
     <!-- Модальный JSON-редактор для 03_inbounds.json / 04_outbounds.json -->
@@ -3606,6 +3358,7 @@ https://..."></textarea>
       <span class="modal-title">Подключение к серверу</span>
       <button type="button" class="modal-close" id="fm-connect-close-btn" aria-label="Close">×</button>
     </div>
+    <form id="fm-connect-form" novalidate autocomplete="on">
     <div class="modal-body">
       <div class="fm-form-grid">
         <label for="fm-conn-profile">Профиль</label>
@@ -3624,13 +3377,13 @@ https://..."></textarea>
         </select>
 
         <label for="fm-host">Host *</label>
-        <input id="fm-host" class="terminal-input" placeholder="example.com" />
+        <input id="fm-host" class="terminal-input" placeholder="example.com" autocomplete="url" />
 
         <label for="fm-port">Port</label>
-        <input id="fm-port" class="terminal-input" placeholder="22" inputmode="numeric" />
+        <input id="fm-port" class="terminal-input" placeholder="22" inputmode="numeric" autocomplete="off" />
 
         <label for="fm-user">User</label>
-        <input id="fm-user" class="terminal-input" placeholder="root" />
+        <input id="fm-user" class="terminal-input" placeholder="root" autocomplete="username" />
 
         <label for="fm-auth-type" id="fm-auth-type-label">Auth</label>
         <select id="fm-auth-type" class="terminal-input">
@@ -3639,16 +3392,16 @@ https://..."></textarea>
         </select>
 
         <label for="fm-pass" id="fm-pass-label">Password</label>
-        <input id="fm-pass" class="terminal-input" type="password" placeholder="" />
+        <input id="fm-pass" class="terminal-input" type="password" placeholder="" autocomplete="current-password" />
 
-        <label for="fm-key-file" id="fm-key-file-label">Private key</label>
-        <input id="fm-key-file" class="terminal-input" type="file" />
+        <label for="fm-key-file" id="fm-key-file-label" style="display:none;">Private key</label>
+        <input id="fm-key-file" class="terminal-input" type="file" style="display:none;" disabled />
 
-        <label for="fm-key-path" id="fm-key-path-label">Key path (на роутере)</label>
-        <input id="fm-key-path" class="terminal-input" placeholder="/opt/etc/ssh/id_rsa" spellcheck="false" />
+        <label for="fm-key-path" id="fm-key-path-label" style="display:none;">Key path (на роутере)</label>
+        <input id="fm-key-path" class="terminal-input" placeholder="/opt/etc/ssh/id_rsa" spellcheck="false" autocomplete="off" style="display:none;" disabled />
 
-        <label for="fm-passphrase" id="fm-passphrase-label">Passphrase</label>
-        <input id="fm-passphrase" class="terminal-input" type="password" placeholder="(если нужно)" />
+        <label for="fm-passphrase" id="fm-passphrase-label" style="display:none;">Passphrase</label>
+        <input id="fm-passphrase" class="terminal-input" type="text" placeholder="(если нужно)" autocomplete="off" style="display:none;" disabled />
 
         <label for="fm-hostkey-policy">SFTP host key</label>
         <div style="display:flex; gap:8px; align-items:center;">
@@ -3690,8 +3443,9 @@ https://..."></textarea>
     </div>
     <div class="modal-actions" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="fm-connect-cancel-btn">Отмена</button>
-      <button type="button" class="btn-primary" id="fm-connect-ok-btn">Connect</button>
+      <button type="submit" class="btn-primary" id="fm-connect-ok-btn">Connect</button>
     </div>
+    </form>
   </div>
 </div>
 
@@ -4116,7 +3870,7 @@ https://..."></textarea>
     <div class="modal-body">
       <div id="fm-dropop-text" class="status" style="margin:0 0 10px 0;"></div>
       <pre id="fm-dropop-list" class="fm-dropop-list" style="margin:0;"></pre>
-      <div class="status" style="margin-top:10px; opacity:.8;">Подсказка: Ctrl во время Drag&Drop меняет выбор по умолчанию.</div>
+      <div class="status" style="margin-top:10px; opacity:.8;" data-fm-lite-hide="1">Подсказка: Ctrl во время Drag&Drop меняет выбор по умолчанию.</div>
     </div>
     <div class="modal-actions" style="justify-content:flex-end;">
       <button type="button" class="btn-secondary" id="fm-dropop-cancel-btn">Отмена</button>
@@ -4327,11 +4081,12 @@ https://..."></textarea>
           <li><b>➕ Папка</b> / <b>➕ Файл</b> — создание в активной панели.</li>
           <li><b>⬆ Upload</b> — загрузка файлов с компьютера в активный каталог.</li>
           <li><b>⬇ Download</b> — скачать выделенное. Для папки всегда будет <b>.zip</b>. Для нескольких файлов можно выбрать: <b>.zip</b> или <b>по очереди</b> (каждый файл отдельно).</li>
-          <li><b>F5</b> — копировать из активной панели в другую, <b>F6</b> — переместить.</li>
-          <li>Если в назначении есть файлы с теми же именами — появится окно <b>«Конфликты»</b> (заменить/пропустить).</li>
-          <li><b>F2</b> — переименовать (только в текущем каталоге), <b>F8</b> — в корзину (в корзине — удалить навсегда).</li>
-          <li><b>Drag&amp;Drop</b>: перетаскивание между панелями (по умолчанию move; удерживайте <b>Ctrl</b> для copy) или выбор действия в диалоге.</li>
-          <li><b>Операции</b> — список фоновых задач (копирование/перемещение/удаление/загрузка) и их прогресс.</li>
+          <li data-fm-lite-hide="1"><b>F5</b> — копировать из активной панели в другую, <b>F6</b> — переместить.</li>
+          <li data-fm-lite-hide="1">Если в назначении есть файлы с теми же именами — появится окно <b>«Конфликты»</b> (заменить/пропустить).</li>
+          <li><b>F2</b> — переименовать (только в текущем каталоге).</li>
+          <li data-fm-lite-hide="1"><b>F8</b> — в корзину (в корзине — удалить навсегда).</li>
+          <li data-fm-lite-hide="1"><b>Drag&amp;Drop</b>: перетаскивание между панелями (по умолчанию move; удерживайте <b>Ctrl</b> для copy) или выбор действия в диалоге.</li>
+          <li data-fm-lite-hide="1"><b>Операции</b> — список фоновых задач (копирование/перемещение/удаление/загрузка) и их прогресс.</li>
         </ul>
 
         <h3>Горячие клавиши</h3>
@@ -4346,9 +4101,9 @@ https://..."></textarea>
           <li><b>F7</b> — новая папка</li>
           <li><b>Shift+F7</b> — новый файл</li>
           <li><b>F2</b> — переименовать</li>
-          <li><b>F5</b> — копировать</li>
-          <li><b>F6</b> — переместить</li>
-          <li><b>F8</b> — в корзину (в корзине — удалить навсегда)</li>
+          <li data-fm-lite-hide="1"><b>F5</b> — копировать</li>
+          <li data-fm-lite-hide="1"><b>F6</b> — переместить</li>
+          <li data-fm-lite-hide="1"><b>F8</b> — в корзину (в корзине — удалить навсегда)</li>
           <li><b>F1</b> — открыть эту справку</li>
           <li><b>Esc</b> — закрыть окно/выйти из полноэкранного режима</li>
         </ul>

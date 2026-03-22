@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 import sys
 import re
+import shlex
 import shutil
 import subprocess
 import base64
@@ -30,6 +31,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, List, Dict, Tuple, Optional
 from urllib.parse import unquote, urlparse, parse_qs
+
+from services.xkeen_commands_catalog import build_xkeen_cmd
 
 
 # === Base paths and constants ===
@@ -100,7 +103,7 @@ except Exception as e:  # noqa: BLE001
 MAX_BACKUPS_PER_PROFILE = int(os.environ.get('MIHOMO_MAX_BACKUPS', '20'))
 
 # Command used to restart mihomo via XKeen wrapper.
-RESTART_CMD = os.environ.get('MIHOMO_RESTART_CMD', 'xkeen -restart')
+RESTART_CMD = os.environ.get('MIHOMO_RESTART_CMD', shlex.join(build_xkeen_cmd("-restart")))
 RESTART_TIMEOUT = int(os.environ.get('MIHOMO_RESTART_TIMEOUT', '60'))
 
 

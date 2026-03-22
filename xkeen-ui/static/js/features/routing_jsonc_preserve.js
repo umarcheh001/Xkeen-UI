@@ -859,6 +859,85 @@
   }
 
 
+  const DISABLED_RULE_START_MARKER = "__XK_DISABLED_RULE_START__";
+  const DISABLED_RULE_END_MARKER = "__XK_DISABLED_RULE_END__";
+
+  function encodeDisabledRuleLine(line, baseIndent) {
+    const src = String(line == null ? "" : line);
+    const indent = String(baseIndent || "");
+    let body = src;
+    if (indent && body.startsWith(indent)) body = body.slice(indent.length);
+    return indent + "//" + (body ? (" " + body) : "");
+  }
+
+  function commentOutRuleSegment(raw, indent) {
+    const baseIndent = String(indent || "");
+    let src = String(raw == null ? "" : raw).replace(/\r\n?/g, "\n");
+    src = src.replace(/^\n+/, "").replace(/\s+$/, "");
+    const lines = src ? src.split("\n") : [];
+    const out = [];
+    out.push(baseIndent + "//" + DISABLED_RULE_START_MARKER);
+    for (const line of lines) out.push(encodeDisabledRuleLine(line, baseIndent));
+    out.push(baseIndent + "//" + DISABLED_RULE_END_MARKER);
+    return out.join("\n");
+  }
+
+  function decodeDisabledRuleInnerRaw(encoded) {
+    const src = String(encoded == null ? "" : encoded).replace(/\r\n?/g, "\n");
+    return src.split("\n").map((line) => {
+      const m = /^([ \t]*)\/\/ ?(.*)$/.exec(line);
+      if (!m) return line;
+      return m[1] + m[2];
+    }).join("\n");
+  }
+
+  function extractDisabledRuleSegments(text, arrayRange) {
+    const s = String(text || "");
+    if (!arrayRange || !Number.isFinite(arrayRange.start) || !Number.isFinite(arrayRange.end)) return [];
+
+    const bodyStart = Math.max(0, arrayRange.start + 1);
+    const bodyEnd = Math.max(bodyStart, Math.min(s.length, arrayRange.end - 1));
+    const body = s.slice(bodyStart, bodyEnd);
+    const rx = new RegExp(
+      `(^[ \\t]*)\\/\\/${DISABLED_RULE_START_MARKER}[ \\t]*(?:\\r\\n|\\r|\\n)([\\s\\S]*?)(?:\\r\\n|\\r|\\n)\\1\\/\\/${DISABLED_RULE_END_MARKER}(?=\\r\\n|\\r|\\n|$)`,
+      "gm"
+    );
+
+    const out = [];
+    let m = null;
+    while ((m = rx.exec(body))) {
+      const raw = String(m[0] || "");
+      const innerRaw = decodeDisabledRuleInnerRaw(String(m[2] || ""));
+      const start = bodyStart + m.index;
+      const end = start + raw.length;
+      const indent = String(m[1] || "");
+
+      let parsed = null;
+      let canonical = "";
+      let keyHint = null;
+      const p = tryParseJsonc(innerRaw);
+      if (p && p.ok) {
+        parsed = p.value;
+        canonical = stableStringify(parsed);
+        keyHint = extractRuleTag(parsed);
+      }
+
+      out.push({
+        raw,
+        innerRaw,
+        start,
+        end,
+        indent,
+        parsed,
+        canonical,
+        keyHint,
+      });
+    }
+
+    return out;
+  }
+
+
   // --- PR6: render new routing.rules array preserving attached comments (best-effort)
 
   function stripTrailingComma(raw) {
@@ -1329,6 +1408,7 @@
     locateArrayByKey,
     // PR4: array element raw segments
     splitJsoncArrayElements,
+    extractDisabledRuleSegments,
     // PR5: stable keys + change detection
     canonicalize,
     stableStringify,
@@ -1341,6 +1421,9 @@
     isSameRule,
     // PR6: render rules array
     renderRulesArray,
+    commentOutRuleSegment,
+    decodeDisabledRuleInnerRaw,
+    stripTrailingComma,
     // PR8: render balancers array
     renderBalancersArray,
     formatObjectNoFirstIndent,

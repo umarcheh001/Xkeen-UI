@@ -64,6 +64,15 @@
     return false;
   }
 
+  function isLiteMode() {
+    try { if (C && typeof C.isLiteMode === 'function') return !!C.isLiteMode(); } catch (e) {}
+    try {
+      const s = getS();
+      if (s && typeof s.liteMode === 'boolean') return !!s.liteMode;
+    } catch (e2) {}
+    return false;
+  }
+
   function _isArchiveFileName(n) {
     const s = String(n || '').toLowerCase();
     return s.endsWith('.zip')
@@ -154,6 +163,7 @@
     const selNames = p ? (getSelectionNames(side) || []) : [];
     const hasSelection = !!(selNames && selNames.length);
     const inTrash = !!(p && isTrashPanel(p));
+    const lite = isLiteMode();
 
     // Archive actions (local only): prefer selection, fallback to the row item.
     const candNames = (selNames && selNames.length) ? selNames : (rowName ? [rowName] : []);
@@ -205,33 +215,33 @@
 
     if (!hasRow && hasSelection) {
       menu.appendChild(_ctxBtn('Скачать', 'download', ''));
-      if (canArchive) menu.appendChild(_ctxBtn('Архивировать…', 'archive_create', ''));
+      if (!lite && canArchive) menu.appendChild(_ctxBtn('Архивировать…', 'archive_create', ''));
       if (canExtract) menu.appendChild(_ctxBtn('Содержимое архива…', 'archive_list', ''));
-      if (canExtract) menu.appendChild(_ctxBtn('Распаковать…', 'archive_extract', ''));
+      if (!lite && canExtract) menu.appendChild(_ctxBtn('Распаковать…', 'archive_extract', ''));
       menu.appendChild(_ctxBtn('Свойства…', 'props', ''));
       menu.appendChild(_ctxSep());
     }
 
     if (hasRow) {
       menu.appendChild(_ctxBtn(isDir ? 'Открыть папку' : 'Открыть', 'open', 'Enter'));
-      if (!isRemotePanel) {
+      if (!lite && !isRemotePanel) {
         menu.appendChild(_ctxBtn(isDir ? 'Терминал здесь' : 'Терминал в папке', 'terminal_here', ''));
       }
       menu.appendChild(_ctxBtn('Скачать', 'download', ''));
-      if (canArchive) menu.appendChild(_ctxBtn('Архивировать…', 'archive_create', ''));
+      if (!lite && canArchive) menu.appendChild(_ctxBtn('Архивировать…', 'archive_create', ''));
       if (canExtract) menu.appendChild(_ctxBtn('Содержимое архива…', 'archive_list', ''));
-      if (canExtract) menu.appendChild(_ctxBtn('Распаковать…', 'archive_extract', ''));
+      if (!lite && canExtract) menu.appendChild(_ctxBtn('Распаковать…', 'archive_extract', ''));
       menu.appendChild(_ctxBtn('Копировать полный путь', 'copy_path', 'Ctrl+Shift+C'));
       menu.appendChild(_ctxSep());
-      menu.appendChild(_ctxBtn('Копировать', 'copy', 'F5'));
-      menu.appendChild(_ctxBtn('Переместить', 'move', 'F6'));
+      if (!lite) menu.appendChild(_ctxBtn('Копировать', 'copy', 'F5'));
+      if (!lite) menu.appendChild(_ctxBtn('Переместить', 'move', 'F6'));
       menu.appendChild(_ctxBtn('Переименовать', 'rename', 'F2'));
       menu.appendChild(_ctxBtn('Свойства…', 'props', ''));
-      if (!isDir) menu.appendChild(_ctxBtn('Checksum (MD5/SHA256)…', 'checksum', ''));
+      if (!lite && !isDir) menu.appendChild(_ctxBtn('Checksum (MD5/SHA256)…', 'checksum', ''));
       if (canChmod) menu.appendChild(_ctxBtn('Права (chmod)…', 'chmod', ''));
       if (canChown) menu.appendChild(_ctxBtn('Владелец (chown)…', 'chown', ''));
       if (inTrash) menu.appendChild(_ctxBtn('Восстановить', 'restore', ''));
-      menu.appendChild(_ctxBtn(inTrash ? 'Удалить навсегда' : 'В корзину', 'delete', 'F8'));
+      if (!lite) menu.appendChild(_ctxBtn(inTrash ? 'Удалить навсегда' : 'В корзину', 'delete', 'F8'));
       menu.appendChild(_ctxSep());
     }
 
@@ -247,7 +257,7 @@
     }
     menu.appendChild(_ctxSep());
     menu.appendChild(_ctxBtn('Загрузить (Upload)…', 'upload', ''));
-    if (!hasRow && !isRemotePanel) {
+    if (!lite && !hasRow && !isRemotePanel) {
       menu.appendChild(_ctxBtn('Терминал здесь', 'terminal_here', ''));
     }
     menu.appendChild(_ctxBtn('Вверх', 'up', 'Backspace'));

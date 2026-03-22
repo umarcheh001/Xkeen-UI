@@ -7,6 +7,7 @@ from flask import Blueprint, request, jsonify
 from typing import Any, Callable, Dict, Optional
 
 from routes.common.errors import error_response
+from services.xkeen_commands_catalog import build_xkeen_cmd
 
 # --- core.log helpers (never fail) ---
 try:
@@ -93,7 +94,7 @@ def create_service_blueprint(
     @bp.post("/api/xkeen/start")
     def api_xkeen_start() -> Any:
         try:
-            subprocess.check_call(["xkeen", "-start"])
+            subprocess.check_call(build_xkeen_cmd("-start"))
             append_restart_log(True, source="api-start")
             _core_log("info", "xkeen.start", source="api-start")
             return jsonify({"ok": True}), 200
@@ -106,7 +107,7 @@ def create_service_blueprint(
     @bp.post("/api/xkeen/stop")
     def api_xkeen_stop() -> Any:
         try:
-            subprocess.check_call(["xkeen", "-stop"])
+            subprocess.check_call(build_xkeen_cmd("-stop"))
             append_restart_log(True, source="api-stop")
             _core_log("info", "xkeen.stop", source="api-stop")
             return jsonify({"ok": True}), 200

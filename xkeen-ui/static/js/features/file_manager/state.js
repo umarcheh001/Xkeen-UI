@@ -55,6 +55,9 @@
     enabled: false,
     caps: null,
     remoteCaps: null,
+    liteMode: (typeof window.XKEEN_IS_MIPS === 'boolean')
+      ? !!window.XKEEN_IS_MIPS
+      : String(window.XKEEN_IS_MIPS || '').toLowerCase() === 'true',
     // UX guard: when opening a remote file for the editor, lock UI to prevent double-open spam.
     openBusy: false,
     openBusySinceMs: 0,

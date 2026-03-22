@@ -6,6 +6,8 @@ Extracted from legacy app.py to keep UI rendering stable while allowing app.py r
 from __future__ import annotations
 
 import os
+import shutil
+from typing import Optional
 
 # NOTE: Keep structure and text stable; UI uses this for rendering.
 # "tone" is used only for UI color accents (see styles.css + panel.html).
@@ -167,7 +169,88 @@ COMMAND_GROUPS = [
 ALLOWED_FLAGS = {item["flag"] for group in COMMAND_GROUPS for item in group["items"]}
 
 # Binary name for XKeen (usually available in PATH)
-XKEEN_BIN = "xkeen"
+XKEEN_BIN = os.getenv("XKEEN_BIN", "xkeen")
+
+_CONTROL_FLAG_TO_ACTION = {
+    "-start": "start",
+    "-stop": "stop",
+    "-restart": "restart",
+    "-status": "status",
+}
+
+
+def _is_executable_file(path: str) -> bool:
+    try:
+        return bool(path) and os.path.isfile(path) and os.access(path, os.X_OK)
+    except Exception:
+        return False
+
+
+def _command_available(cmd: str) -> bool:
+    try:
+        raw = str(cmd or "").strip()
+        if not raw:
+            return False
+        if os.path.isabs(raw) or os.sep in raw:
+            return _is_executable_file(raw)
+        return bool(shutil.which(raw))
+    except Exception:
+        return False
+
+
+def resolve_xkeen_init_script() -> Optional[str]:
+    """Resolve XKeen init.d script path for old/new router releases.
+
+    Order:
+      1. explicit env override (`XKEEN_INIT_SCRIPT`, `XKEEN_INITD_FILE`, `XKEEN_INITD_SCRIPT`)
+      2. new beta path `/opt/etc/init.d/S05xkeen`
+      3. legacy path `/opt/etc/init.d/S99xkeen`
+    """
+    candidates: list[str] = []
+
+    for env_name in ("XKEEN_INIT_SCRIPT", "XKEEN_INITD_FILE", "XKEEN_INITD_SCRIPT"):
+        val = str(os.getenv(env_name, "") or "").strip()
+        if val:
+            candidates.append(val)
+
+    candidates.extend((
+        "/opt/etc/init.d/S05xkeen",
+        "/opt/etc/init.d/S99xkeen",
+    ))
+
+    seen: set[str] = set()
+    for cand in candidates:
+        path = str(cand or "").strip()
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        if _is_executable_file(path):
+            return path
+    return None
+
+
+def build_xkeen_cmd(flag_or_action: str) -> list[str]:
+    """Build a compatible XKeen command.
+
+    For service-control actions we prefer the standard `xkeen` CLI because it
+    matches legacy behaviour and is noticeably faster on real devices. The
+    init.d script resolver is kept as a compatibility fallback for setups where
+    the CLI is unavailable but `/opt/etc/init.d/S05xkeen` or
+    `/opt/etc/init.d/S99xkeen` exists.
+    """
+    raw = str(flag_or_action or "").strip()
+    if not raw:
+        return [XKEEN_BIN]
+
+    flag = raw if raw.startswith("-") else f"-{raw}"
+    action = _CONTROL_FLAG_TO_ACTION.get(flag)
+    if action:
+        if _command_available(XKEEN_BIN):
+            return [XKEEN_BIN, flag]
+        init_script = resolve_xkeen_init_script()
+        if init_script:
+            return [init_script, action]
+    return [XKEEN_BIN, flag]
 
 # Timeout for background xkeen jobs (seconds)
 COMMAND_TIMEOUT = 300

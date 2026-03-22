@@ -38,6 +38,12 @@
     try { return document.getElementById(id); } catch (e2) { return null; }
   }
 
+  function qsa(sel, root) {
+    const c = C();
+    try { if (c && typeof c.qsa === 'function') return c.qsa(sel, root); } catch (e) {}
+    try { return Array.from((root || document).querySelectorAll(sel) || []); } catch (e2) { return []; }
+  }
+
   function storageGetJSON(key, fallback) {
     const c = C();
     try { if (c && typeof c.storageGetJSON === 'function') return c.storageGetJSON(key, fallback); } catch (e) {}
@@ -65,6 +71,64 @@
   function hide(node) {
     if (!node) return;
     try { node.style.display = 'none'; } catch (e) {}
+  }
+
+  function toggleHidden(node, hidden) {
+    const c = C();
+    try {
+      if (c && typeof c.toggleHidden === 'function') {
+        c.toggleHidden(node, hidden);
+        return;
+      }
+    } catch (e) {}
+    if (!node) return;
+    try { node.hidden = !!hidden; } catch (e2) {}
+  }
+
+  function isLiteMode() {
+    const c = C();
+    try { if (c && typeof c.isLiteMode === 'function') return !!c.isLiteMode(); } catch (e) {}
+    try {
+      const S = getS();
+      if (S && typeof S.liteMode === 'boolean') return !!S.liteMode;
+    } catch (e2) {}
+    try {
+      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
+      return String(window.XKEEN_IS_MIPS || '').toLowerCase() === 'true';
+    } catch (e3) {
+      return false;
+    }
+  }
+
+  function applyLiteUi(liteMode) {
+    const on = !!liteMode;
+    const view = el('view-files');
+    const root = el('fm-root');
+
+    try { if (view && view.dataset) view.dataset.fmLite = on ? '1' : '0'; } catch (e) {}
+    try { if (root && root.dataset) root.dataset.fmLite = on ? '1' : '0'; } catch (e2) {}
+
+    qsa('[data-fm-lite-hide="1"]').forEach((node) => {
+      toggleHidden(node, on);
+    });
+    toggleHidden(el('fm-terminal-here-btn'), on);
+  }
+
+  function setLiteNote(note) {
+    if (!note) return;
+    note.textContent = 'Lite-режим для слабого роутера: доступны local просмотр и базовые операции, remote, фоновые job/ws-операции, drag&drop и terminal отключены.';
+    show(note);
+  }
+
+  function isLiteBlockedAction(act) {
+    const name = String(act || '');
+    return name === 'terminal_here'
+      || name === 'copy'
+      || name === 'move'
+      || name === 'delete'
+      || name === 'archive_create'
+      || name === 'archive_extract'
+      || name === 'checksum';
   }
 
   async function fetchJson(url, init) {
@@ -127,6 +191,8 @@
       const rf = data.remoteFs || {};
       const arch = String(rf.arch || '').toLowerCase();
       const isMips = arch.startsWith('mips') || String(rf.reason || '') === 'arch_mips_disabled';
+      S.liteMode = !!isMips;
+      applyLiteUi(S.liteMode);
 
       // "Hide unused" layout preference: if enabled, hide Files tab when remote FS is unusable.
       let hideUnused = false;
@@ -138,10 +204,10 @@
 
       const enabled = !!rf.enabled;
       const supported = !!rf.supported;
-      const featureUsable = !!enabled && !!supported;
+      const featureUsable = !!enabled && !!supported && !isMips;
 
       if (tabBtn) {
-        if (isMips) hide(tabBtn);
+        if (isMips) show(tabBtn);
         else if (hideUnused && !featureUsable) hide(tabBtn);
         else show(tabBtn);
       }
@@ -150,7 +216,7 @@
 
       // Disable "remote" in target select if backend is not supported.
       try {
-        const allowRemote = !!supported && !isMips;
+        const allowRemote = !!enabled && !!supported && !isMips;
         ['left', 'right'].forEach((side) => {
           const st = ST();
           const pd = (st && typeof st.panelDom === 'function') ? st.panelDom(side) : null;
@@ -158,11 +224,19 @@
           if (!pd || !pd.targetSelect || !p) return;
 
           const opt = Array.from(pd.targetSelect.options || []).find(o => String(o.value) === 'remote');
-          if (opt) opt.disabled = !allowRemote;
+          if (opt) {
+            opt.disabled = !allowRemote;
+            toggleHidden(opt, !allowRemote);
+          }
+          toggleHidden(pd.connectBtn, !allowRemote);
+          toggleHidden(pd.disconnectBtn, !allowRemote);
 
           if (!allowRemote && p.target === 'remote') {
             p.target = 'local';
             p.sid = '';
+          }
+          if (!allowRemote) {
+            try { pd.targetSelect.value = 'local'; } catch (e) {}
           }
         });
       } catch (e) {}
@@ -178,9 +252,8 @@
       // Inline hint inside view
       if (note) {
         if (isMips) {
-          note.textContent = 'Файловый менеджер недоступен на MIPS-архитектуре.';
-          show(note);
-        } else if (!enabled) {
+          setLiteNote(note);
+        } else if (!enabled || !supported) {
           const reason = rf.reason ? String(rf.reason) : 'disabled';
           let msg = 'Remote файловый менеджер недоступен: ' + reason + '.';
           if (reason === 'lftp_missing') msg += ' Установите lftp через Entware: opkg install lftp.';
@@ -203,6 +276,7 @@
       FM.contextMenu.setDispatcher(async (act, ctx) => {
         const S = getS();
         const side = String((ctx && ctx.side) || (S && S.activeSide) || 'left');
+        const lite = isLiteMode();
 
         const NAV = (FM && FM.nav) ? FM.nav : {};
         const OPS = (FM && FM.ops) ? FM.ops : {};
@@ -219,6 +293,8 @@
           if (NAV && typeof NAV.goUp === 'function') await NAV.goUp(side);
           return;
         }
+
+        if (lite && isLiteBlockedAction(act)) return;
 
         // Terminal
         if (act === 'terminal_here') {
@@ -329,6 +405,11 @@
       FM.api = FM.api || {};
       if (FM.render && typeof FM.render.renderPanel === 'function') FM.api.renderPanel = FM.render.renderPanel;
       if (FM.listing && typeof FM.listing.listPanel === 'function') ST().listPanel = FM.listing.listPanel;
+    } catch (e) {}
+
+    try {
+      applyLiteUi(isLiteMode());
+      if (isLiteMode()) setLiteNote(el('fm-disabled-note'));
     } catch (e) {}
 
     // Context menu dispatcher

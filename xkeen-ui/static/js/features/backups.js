@@ -58,6 +58,22 @@
     return null;
   }
 
+  async function ensureMonacoSharedApi() {
+    const existing = getMonacoShared();
+    if (existing && typeof existing.createEditor === 'function') return existing;
+
+    try {
+      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
+      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
+        const ok = await lazy.ensureMonacoSupport();
+        if (!ok) return null;
+      }
+    } catch (e) {}
+
+    const loaded = getMonacoShared();
+    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+  }
+
   function normalizeEngine(v) {
     const s = String(v || '').toLowerCase();
     return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
@@ -354,7 +370,7 @@
     const ta = el('xray-snapshot-preview');
 
     if (next === 'monaco') {
-      const shared = getMonacoShared();
+      const shared = await ensureMonacoSharedApi();
       if (!shared || !host || typeof shared.createEditor !== 'function') {
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
         const ee = getEngineHelper();

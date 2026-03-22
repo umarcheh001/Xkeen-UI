@@ -461,10 +461,13 @@
       const mode = String(url.searchParams.get('terminal') || '').toLowerCase();
       if (mode === 'pty' || mode === 'shell') {
         const doOpen = () => {
-          // If PTY was requested but WS is not supported, fall back to lite shell.
+          // If PTY was requested but PTY is not supported, fall back to lite shell.
           let finalMode = mode;
           try {
-            if (finalMode === 'pty' && T.capabilities && typeof T.capabilities.hasWs === 'function' && !T.capabilities.hasWs()) {
+            const hasPty = (T.capabilities && typeof T.capabilities.hasPty === 'function')
+              ? T.capabilities.hasPty()
+              : ((T.capabilities && typeof T.capabilities.hasWs === 'function') ? T.capabilities.hasWs() : false);
+            if (finalMode === 'pty' && !hasPty) {
               finalMode = 'shell';
             }
           } catch (e0) {}

@@ -99,9 +99,26 @@
     const html = lines
       .map((line) => {
         const normalized = normalizeLineForTerminal(line || '');
-        const cls = (typeof window.getXrayLogLineClass === 'function')
-          ? window.getXrayLogLineClass(normalized)
-          : 'log-line';
+        let cls = 'log-line';
+        if (typeof window.getXrayLogLineClass === 'function') {
+          cls = window.getXrayLogLineClass(normalized);
+        } else {
+          const lower = normalized.toLowerCase();
+          if (
+            lower.includes('error') ||
+            lower.includes('fail') ||
+            lower.includes('failed') ||
+            lower.includes('fatal')
+          ) {
+            cls = 'log-line log-line-error';
+          } else if (lower.includes('warning') || lower.includes('warn')) {
+            cls = 'log-line log-line-warning';
+          } else if (lower.includes('info')) {
+            cls = 'log-line log-line-info';
+          } else if (lower.includes('debug')) {
+            cls = 'log-line log-line-debug';
+          }
+        }
         const inner = ansiToHtml(normalized);
         return '<span class="' + cls + '">' + inner + '</span>';
       })

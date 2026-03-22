@@ -15,6 +15,63 @@
     moByHost: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
   };
 
+  const PERF_LIMITS = {
+    softLines: 1800,
+    softChars: 110000,
+    webkitSoftLines: 320,
+    webkitSoftChars: 22000,
+  };
+
+  function _isMipsTarget() {
+    try {
+      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
+      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
+      if (!v) return false;
+      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+    } catch (e) {}
+    try {
+      return /mips/i.test(String((window.navigator && window.navigator.userAgent) || ''));
+    } catch (e) {}
+    return false;
+  }
+
+  function _isWebKitSafari() {
+    try {
+      const nav = window.navigator || {};
+      const ua = String(nav.userAgent || '');
+      const vendor = String(nav.vendor || '');
+      if (!ua) return false;
+      if (!/Safari/i.test(ua)) return false;
+      if (!/Apple/i.test(vendor)) return false;
+      if (/(Chrome|Chromium|CriOS|Edg|OPR|OPT|Opera|Vivaldi|DuckDuckGo|Firefox|FxiOS|Arc|Brave)/i.test(ua)) return false;
+      return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function _countLines(text) {
+    const s = String(text ?? '');
+    if (!s) return 1;
+    let n = 1;
+    for (let i = 0; i < s.length; i += 1) {
+      if (s.charCodeAt(i) === 10) n += 1;
+    }
+    return n;
+  }
+
+  function _computePerfProfile(value, opts) {
+    const o = opts || {};
+    const raw = String(value ?? '');
+    const lineCount = _countLines(raw);
+    const charCount = raw.length;
+    const requested = String(o.performanceProfile || '').toLowerCase().trim();
+    const safariLite = _isWebKitSafari()
+      && (lineCount >= PERF_LIMITS.webkitSoftLines || charCount >= PERF_LIMITS.webkitSoftChars);
+    const lite = requested === 'lite'
+      || (requested !== 'default' && (_isMipsTarget() || safariLite || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars));
+    return { lite, lineCount, charCount };
+  }
+
   function _normalizeLanguage(lang) {
     const s = String(lang || '').toLowerCase().trim();
     if (!s) return 'plaintext';
@@ -467,23 +524,40 @@
     return false;
   }
 
-  function layoutOnVisible(editor, host) {
+  function layoutOnVisible(editor, host, opts) {
     if (!editor || typeof editor.layout !== 'function') return () => {};
     const el = host;
+    const lite = !!(opts && opts.lite);
+    let scheduled = false;
 
-    const bump = () => {
+    const bumpNow = () => {
       try {
         if (!_isVisible(el)) return;
         editor.layout();
-        // A couple of extra layouts to survive "created while hidden" and slow rendering.
-        try {
-          requestAnimationFrame(() => {
-            try { editor.layout(); } catch (e) {}
-            try { setTimeout(() => { try { editor.layout(); } catch (e2) {} }, 0); } catch (e3) {}
-            try { setTimeout(() => { try { editor.layout(); } catch (e4) {} }, 120); } catch (e5) {}
-          });
-        } catch (e) {}
+        if (!lite) {
+          try {
+            setTimeout(() => {
+              try {
+                if (_isVisible(el)) editor.layout();
+              } catch (e2) {}
+            }, 120);
+          } catch (e3) {}
+        }
       } catch (e) {}
+    };
+
+    const bump = () => {
+      if (scheduled) return;
+      scheduled = true;
+      const run = () => {
+        scheduled = false;
+        bumpNow();
+      };
+      try {
+        requestAnimationFrame(run);
+      } catch (e) {
+        try { setTimeout(run, 0); } catch (e2) {}
+      }
     };
 
     // ResizeObserver: react to container resize.
@@ -567,6 +641,8 @@
     const language = _normalizeLanguage(reqLangRaw);
     const readOnly = !!o.readOnly;
     const value = String(o.value ?? '');
+    const perf = _computePerfProfile(value, o);
+    const safari = _isWebKitSafari();
 
     try {
       const monaco = await _ensureMonaco();
@@ -584,11 +660,24 @@
       const editor = monaco.editor.create(el, {
         value,
         readOnly,
-        automaticLayout: true,
+        automaticLayout: !(perf.lite || safari),
         minimap: { enabled: false },
         stickyScroll: { enabled: false },
         scrollBeyondLastLine: false,
-        wordWrap: o.wordWrap || 'on',
+        wordWrap: o.wordWrap || ((perf.lite || safari) ? 'off' : 'on'),
+        disableLayerHinting: safari,
+        disableMonospaceOptimizations: safari,
+        links: !perf.lite && !safari,
+        selectionHighlight: !perf.lite && !safari,
+        occurrencesHighlight: (perf.lite || safari) ? 'off' : 'singleFile',
+        renderLineHighlight: (perf.lite || safari) ? 'none' : 'line',
+        quickSuggestions: !perf.lite && !safari,
+        suggestOnTriggerCharacters: !perf.lite && !safari,
+        folding: !perf.lite && !safari,
+        matchBrackets: (perf.lite || safari) ? 'never' : 'always',
+        parameterHints: { enabled: !perf.lite && !safari },
+        smoothScrolling: false,
+        cursorSmoothCaretAnimation: 'off',
         tabSize: (typeof o.tabSize === 'number') ? o.tabSize : 2,
         insertSpaces: (typeof o.insertSpaces === 'boolean') ? o.insertSpaces : true,
         fontFamily: o.fontFamily || typo.fontFamily,
@@ -615,7 +704,7 @@
       } catch (e) {}
 
       // Ensure it lays out even if created in hidden container.
-      try { layoutOnVisible(editor, el); } catch (e) {}
+      try { layoutOnVisible(editor, el, { lite: perf.lite }); } catch (e) {}
 
       return editor;
     } catch (e) {

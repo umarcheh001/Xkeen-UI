@@ -27,32 +27,38 @@
     return editors.filter(Boolean);
   }
 
-  function applyTheme(theme) {
+  function applyTheme(theme, opts) {
     const html = document.documentElement;
     const next = theme === 'light' ? 'light' : 'dark';
+    const syncEditors = !opts || opts.syncEditors !== false;
+    const notify = !opts || opts.notify !== false;
 
     html.setAttribute('data-theme', next);
 
     // Sync CodeMirror theme with panel theme (light -> default, dark -> material-darker)
     const cmTheme = next === 'light' ? 'default' : 'material-darker';
 
-    try {
-      const uniq = Array.from(new Set(getEditorsForThemeSync()));
-      uniq.forEach((cm) => {
-        if (!cm || !cm.setOption) return;
-        try {
-          cm.setOption('theme', cmTheme);
-          if (cm.refresh) cm.refresh();
-        } catch (e) {
-          // ignore CodeMirror errors
-        }
-      });
-    } catch (e) {}
+    if (syncEditors) {
+      try {
+        const uniq = Array.from(new Set(getEditorsForThemeSync()));
+        uniq.forEach((cm) => {
+          if (!cm || !cm.setOption) return;
+          try {
+            cm.setOption('theme', cmTheme);
+            if (cm.refresh) cm.refresh();
+          } catch (e) {
+            // ignore CodeMirror errors
+          }
+        });
+      } catch (e) {}
+    }
 
     // Notify other scripts about theme changes
-    try {
-      document.dispatchEvent(new CustomEvent('xkeen-theme-change', { detail: { theme: next, cmTheme } }));
-    } catch (e) {}
+    if (notify) {
+      try {
+        document.dispatchEvent(new CustomEvent('xkeen-theme-change', { detail: { theme: next, cmTheme } }));
+      } catch (e) {}
+    }
 
     const btn = document.getElementById('theme-toggle-btn');
     if (!btn) return;
@@ -88,8 +94,8 @@
   function initThemeToggle() {
     let current = getInitialTheme();
 
-    // Important: run after other DOMContentLoaded listeners (main.js initializes editors there)
-    setTimeout(() => applyTheme(current), 0);
+    // Prime the page theme early; heavy editor refresh happens later via xkeen-editors-ready.
+    applyTheme(current, { syncEditors: false, notify: false });
 
     const btn = document.getElementById('theme-toggle-btn');
     if (!btn) return;

@@ -312,11 +312,17 @@ function tryMigrateLegacyKey(base) {
     // A new session tab may try to connect before /api/capabilities finishes.
     // If so, wait for initCapabilities() once and re-check.
     try {
-      if (caps && typeof caps.hasWs === 'function' && !caps.hasWs()) {
+      const hasPty = (caps && typeof caps.hasPty === 'function')
+        ? caps.hasPty()
+        : ((caps && typeof caps.hasWs === 'function') ? caps.hasWs() : false);
+      if (!hasPty) {
         if (typeof caps.initCapabilities === 'function') {
           try { await caps.initCapabilities(); } catch (e0) {}
         }
-        if (caps && typeof caps.hasWs === 'function' && !caps.hasWs()) {
+        const hasPtyAfterInit = (caps && typeof caps.hasPty === 'function')
+          ? caps.hasPty()
+          : ((caps && typeof caps.hasWs === 'function') ? caps.hasWs() : false);
+        if (!hasPtyAfterInit) {
           safeWriteln(term, '[PTY] WebSocket не поддерживается на этом устройстве.');
           try { emit('pty:error', { message: 'ws unsupported' }); } catch (e2) {}
           return;

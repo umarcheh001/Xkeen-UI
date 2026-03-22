@@ -208,6 +208,9 @@
     // DevTools: settings toggle
     wireDevtoolsToggle();
   };
+  Donate.open = showDonateModal;
+  Donate.close = hideDonateModal;
+  Donate.syncVisibility = syncDonateButtonVisibility;
 
   // Back-compat / convenience
   window.XKeen = window.XKeen || {};

@@ -19,6 +19,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 from services.xray_assets import ensure_xray_dat_assets
+from services.xkeen_commands_catalog import build_xkeen_cmd
 
 
 # --- core logger (never required) ---
@@ -313,7 +314,7 @@ def switch_core(core: str, error_log_path: str) -> None:
                         },
                     ) from exc
 
-            run_cmd(["xkeen", "-start"], phase="start", timeout=timeout_start)
+            run_cmd(build_xkeen_cmd("-start"), phase="start", timeout=timeout_start)
         except CoreSwitchError:
             raise
         except Exception as exc:

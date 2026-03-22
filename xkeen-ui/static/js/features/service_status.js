@@ -174,13 +174,21 @@
     const lamp = $('xkeen-service-lamp');
     const textEl = $('xkeen-service-text');
     const coreEl = $('xkeen-core-text');
+    const startBtn = $('xkeen-start-btn');
+
+    if (startBtn) {
+      const showStart = String(state || '').toLowerCase() === 'stopped';
+      startBtn.hidden = !showStart;
+      startBtn.setAttribute('aria-hidden', showStart ? 'false' : 'true');
+    }
 
     if (!lamp || !textEl || !coreEl) return;
 
-    lamp.dataset.state = String(state || '');
+    const st = String(state || '');
+    lamp.dataset.state = st;
 
     let text;
-    switch (state) {
+    switch (st) {
       case 'running':
         text = 'Сервис запущен';
         break;
@@ -201,7 +209,7 @@
 
     const hasCore = !!core;
     if (hasCore) {
-      const label = core === 'mihomo' ? 'mihomo' : 'xray';
+      const label = String(core || '').toLowerCase() === 'mihomo' ? 'mihomo' : 'xray';
       coreEl.textContent = `Ядро: ${label}`;
       coreEl.dataset.core = label;
       coreEl.classList.add('has-core');

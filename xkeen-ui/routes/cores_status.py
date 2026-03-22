@@ -164,6 +164,30 @@ def _github_latest_release_tag(repo: str, *, timeout_s: float) -> Dict[str, Any]
         return {"ok": False, "repo": repo, "tag": None, "url": None, "error": "request_failed", "meta": {"message": str(e)[:200]}}
 
 
+def _latest_release_or_skip(repo: str, *, installed: bool, timeout_s: float) -> Dict[str, Any]:
+    if not installed:
+        return {
+            "ok": True,
+            "repo": repo,
+            "tag": None,
+            "url": None,
+            "error": None,
+            "meta": {"reason": "not_installed"},
+            "skipped": True,
+        }
+
+    data = _github_latest_release_tag(repo, timeout_s=timeout_s)
+    return {
+        "ok": bool(data.get("ok")),
+        "repo": repo,
+        "tag": data.get("tag"),
+        "url": data.get("url"),
+        "error": data.get("error"),
+        "meta": data.get("meta"),
+        "skipped": False,
+    }
+
+
 def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
     bp = Blueprint("cores_status", __name__)
 
@@ -240,12 +264,20 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
         xray_repo = str(os.environ.get("XKEEN_UI_XRAY_REPO") or "XTLS/Xray-core")
         mihomo_repo = str(os.environ.get("XKEEN_UI_MIHOMO_REPO") or "MetaCubeX/mihomo")
 
-        xr = _github_latest_release_tag(xray_repo, timeout_s=timeout_s)
-        mh = _github_latest_release_tag(mihomo_repo, timeout_s=timeout_s)
+        xr = _latest_release_or_skip(
+            xray_repo,
+            installed=bool(installed.get("xray", {}).get("installed")),
+            timeout_s=timeout_s,
+        )
+        mh = _latest_release_or_skip(
+            mihomo_repo,
+            installed=bool(installed.get("mihomo", {}).get("installed")),
+            timeout_s=timeout_s,
+        )
 
         latest: Dict[str, Any] = {
-            "xray": {"repo": xray_repo, "tag": xr.get("tag"), "url": xr.get("url"), "ok": bool(xr.get("ok")), "error": xr.get("error"), "meta": xr.get("meta")},
-            "mihomo": {"repo": mihomo_repo, "tag": mh.get("tag"), "url": mh.get("url"), "ok": bool(mh.get("ok")), "error": mh.get("error"), "meta": mh.get("meta")},
+            "xray": xr,
+            "mihomo": mh,
         }
         ok = bool(xr.get("ok")) and bool(mh.get("ok"))
 

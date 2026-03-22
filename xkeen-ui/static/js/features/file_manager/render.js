@@ -39,6 +39,15 @@
     try { return Array.from((root || document).querySelectorAll(sel) || []); } catch (e2) { return []; }
   }
 
+  function isLiteMode() {
+    try { if (C && typeof C.isLiteMode === 'function') return !!C.isLiteMode(); } catch (e) {}
+    try {
+      const S = _S();
+      if (S && typeof S.liteMode === 'boolean') return !!S.liteMode;
+    } catch (e2) {}
+    return false;
+  }
+
   function safeName(v) {
     try { if (C && typeof C.safeName === 'function') return C.safeName(v); } catch (e) {}
     return String(v == null ? '' : v);
@@ -156,7 +165,10 @@
 
     // Buttons visibility
     const isRemote = p.target === 'remote';
-    if (isRemote) {
+    if (isLiteMode()) {
+      hide(pd.connectBtn);
+      hide(pd.disconnectBtn);
+    } else if (isRemote) {
       if (p.sid) {
         hide(pd.connectBtn);
         show(pd.disconnectBtn);
@@ -306,7 +318,7 @@
       row.tabIndex = -1;
       row.dataset.name = name;
       row.dataset.type = type;
-      row.setAttribute('draggable', 'true');
+      row.setAttribute('draggable', isLiteMode() ? 'false' : 'true');
 
       const selected = !!(p.selected && typeof p.selected.has === 'function' ? p.selected.has(name) : false);
       if (selected) row.classList.add('is-selected');

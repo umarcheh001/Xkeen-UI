@@ -284,9 +284,30 @@
       response.clone().json().then(function (data) {
         if (!data || String(data.error || '') !== 'xray preflight failed') return;
 
+        const presentModal = function () {
+          try {
+            if (window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function') {
+              XKeen.ui.showXrayPreflightError(data);
+              return true;
+            }
+          } catch (e) {}
+          return false;
+        };
+
+        if (presentModal()) return;
+
         try {
-          if (window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function') {
-            XKeen.ui.showXrayPreflightError(data);
+          const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
+            ? XKeen.lazy.ensureFeature
+            : null;
+          if (ensureFeature) {
+            Promise.resolve(ensureFeature('xrayPreflight')).then(function () {
+              if (presentModal()) return;
+              try {
+                const summary = (data && (data.hint || data.stderr || data.stdout || data.error)) ? String(data.hint || data.stderr || data.stdout || data.error) : 'Xray не принял конфиг.';
+                if (typeof window.alert === 'function') window.alert(summary);
+              } catch (e2) {}
+            }).catch(function () {});
             return;
           }
         } catch (e) {}

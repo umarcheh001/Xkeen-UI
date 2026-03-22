@@ -140,7 +140,9 @@ def _init_xray_startup_migrations(*, base_etc_dir: str, base_var_dir: str, ui_st
             )
             return
 
-    xkeen_restart_cmd = ["xkeen", "-restart"]
+    from services.xkeen_commands_catalog import build_xkeen_cmd
+
+    xkeen_restart_cmd = build_xkeen_cmd("-restart")
     restart_log_file = os.environ.get(
         "XKEEN_RESTART_LOG_FILE", os.path.join(ui_state_dir, "restart.log")
     )

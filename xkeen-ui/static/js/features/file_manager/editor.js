@@ -185,6 +185,28 @@
     return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
   }
 
+  async function ensureMonacoSharedApi() {
+    try {
+      const existing = (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null;
+      if (existing && typeof existing.createEditor === 'function') return existing;
+    } catch (e) {}
+
+    try {
+      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
+      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
+        const ok = await lazy.ensureMonacoSupport();
+        if (!ok) return null;
+      }
+    } catch (e) {}
+
+    try {
+      const loaded = (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null;
+      return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function setEngineSelectValue(engine) {
     const ui = els();
     if (!ui || !ui.engineSelect) return;
@@ -834,7 +856,7 @@ function syncToolbarForEngine(engine) {
       hideCodeMirror(ui);
       try { if (ui.monacoHost) ui.monacoHost.classList.remove('hidden'); } catch (e) {}
 
-      const shared = (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null;
+      const shared = await ensureMonacoSharedApi();
       if (!shared || typeof shared.createEditor !== 'function' || !ui.monacoHost) {
         // No Monaco infra → fallback.
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
@@ -1142,6 +1164,9 @@ function syncToolbarForEngine(engine) {
     requestClose,
     download,
     save,
+    isDirty: () => {
+      try { return !!(STATE.ctx && STATE.dirty); } catch (e) { return false; }
+    },
     // Fullscreen helpers (used by global ESC handlers)
     isFullscreen: () => {
       try { return isEditorFullscreen(); } catch (e) { return false; }

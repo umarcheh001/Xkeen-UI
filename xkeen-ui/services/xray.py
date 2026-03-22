@@ -20,6 +20,8 @@ try:
 except Exception:  # pragma: no cover
     shutil = None  # type: ignore
 
+from services.xkeen_commands_catalog import build_xkeen_cmd
+
 
 def _which(cmd: str) -> str | None:
     try:
@@ -114,11 +116,11 @@ def restart_xray_core(
         _kill_pids(still, signal.SIGKILL)
         time.sleep(0.2)
 
-    # Start: default to xkeen -start if available
+    # Start: prefer the resolved xkeen service command (new S05 / old S99).
     cmd = start_cmd
     if not cmd:
         if _which("xkeen"):
-            cmd = ["xkeen", "-start"]
+            cmd = build_xkeen_cmd("-start")
 
     if not cmd:
         # Last-resort: try to start xray directly with confdir.

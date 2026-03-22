@@ -18,6 +18,7 @@
   let _kind = 'codemirror';
   let _engineUnsub = null;
   let _currentTarget = null;
+  let _savedText = '';
 
   function el(id) {
     return document.getElementById(id);
@@ -136,6 +137,22 @@
     try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
   }
 
+  async function ensureMonacoSharedApi() {
+    const existing = getMonacoShared();
+    if (existing && typeof existing.createEditor === 'function') return existing;
+
+    try {
+      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
+      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
+        const ok = await lazy.ensureMonacoSupport();
+        if (!ok) return null;
+      }
+    } catch (e) {}
+
+    const loaded = getMonacoShared();
+    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+  }
+
   function setEngineSelect(engine) {
     const sel = el('json-editor-engine-select');
     if (!sel) return;
@@ -167,14 +184,19 @@
   }
 
   async function ensureEditor(textarea) {
-    if (_cm || !window.CodeMirror || !textarea) return _cm;
-
-    // Lazy-load JSON linter (jsonlint + addon/lint/json-lint) if available.
     try {
-      if (window.XKeen && XKeen.cmLoader && typeof XKeen.cmLoader.ensureJsonLint === 'function') {
-        await XKeen.cmLoader.ensureJsonLint();
+      const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
+      if (loader && typeof loader.ensureEditorAssets === 'function') {
+        await loader.ensureEditorAssets({
+          jsonLint: true,
+          search: true,
+          rulers: true,
+          trailingSpace: true,
+        });
       }
     } catch (e) {}
+
+    if (_cm || !window.CodeMirror || !textarea) return _cm;
 
     const canLint = jsonLintAvailable();
 
@@ -225,7 +247,7 @@
     if (_monacoFacade && _monaco) return _monacoFacade;
     if (!host) return null;
 
-    const shared = getMonacoShared();
+    const shared = await ensureMonacoSharedApi();
     if (!shared || typeof shared.createEditor !== 'function') return null;
 
     _monaco = await shared.createEditor(host, {
@@ -429,6 +451,7 @@
       const finalText = (data && typeof data.text === 'string')
         ? data.text
         : (data && data.config ? JSON.stringify(data.config, null, 2) : '{}');
+      _savedText = String(finalText || '');
 
       // JSONC sidecar status (no absolute paths in UI)
       try {
@@ -471,6 +494,16 @@
     if (modal) modal.classList.add('hidden');
     setError('');
     _currentTarget = null;
+    _savedText = '';
+  }
+
+  function isDirty() {
+    if (!_currentTarget) return false;
+    try {
+      return String(getCurrentValue() || '') !== String(_savedText || '');
+    } catch (e) {
+      return false;
+    }
   }
 
 
@@ -559,6 +592,7 @@
         return;
       }
 
+      _savedText = text;
       close();
 
       // Refresh related panels (modular)
@@ -606,5 +640,6 @@
   XKeen.jsonEditor.init = ensureWired;
   XKeen.jsonEditor.open = open;
   XKeen.jsonEditor.close = close;
+  XKeen.jsonEditor.isDirty = isDirty;
   XKeen.jsonEditor.save = save;
 })();

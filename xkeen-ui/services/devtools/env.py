@@ -20,6 +20,7 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_UI_STATE_DIR",
     "XKEEN_UI_ENV_FILE",  # read-only (path to devtools.env)
     "XKEEN_UI_SECRET_KEY",  # shown as "(set)" only
+    "XKEEN_INIT_SCRIPT",
     "XKEEN_RESTART_LOG_FILE",
     # self-update (GitHub)
     "XKEEN_UI_UPDATE_REPO",
@@ -218,6 +219,15 @@ def _default_effective_value(
     if k == "XKEEN_UI_ENV_FILE":
         # Path to the persisted env file used by the init script.
         return os.path.join(ui_state_dir, "devtools.env")
+
+    if k == "XKEEN_INIT_SCRIPT":
+        # Keep DevTools aligned with the runtime resolver for old/new XKeen init.d names.
+        try:
+            from services.xkeen_commands_catalog import resolve_xkeen_init_script
+
+            return resolve_xkeen_init_script() or "/opt/etc/init.d/S05xkeen"
+        except Exception:
+            return "/opt/etc/init.d/S05xkeen"
 
     if k == "XKEEN_RESTART_LOG_FILE":
         # app.py uses <UI_STATE_DIR>/restart.log
@@ -681,4 +691,3 @@ def set_env(ui_state_dir: str, updates: Mapping[str, Optional[str]], whitelist: 
         write_env_file(env_path, cfg)
 
     return get_env_items(ui_state_dir, whitelist=whitelist)
-

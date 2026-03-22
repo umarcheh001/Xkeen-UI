@@ -24,6 +24,8 @@
   // UI state
   if (!('_dirty' in S)) S._dirty = false;
   if (!('_filter' in S)) S._filter = '';
+  if (!('_disabledRules' in S)) S._disabledRules = [];
+  if (!('_ruleSegments' in S)) S._ruleSegments = [];
 
   // Last error (normalized via RC.common.normalizeError).
   if (!('_error' in S)) S._error = null;

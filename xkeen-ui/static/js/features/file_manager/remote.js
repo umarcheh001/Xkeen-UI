@@ -321,7 +321,22 @@
     const inp = el(inputId);
     const lbl = _labelForInput(inputId);
     if (lbl) lbl.style.display = showIt ? '' : 'none';
-    if (inp) inp.style.display = showIt ? '' : 'none';
+    if (inp) {
+      inp.style.display = showIt ? '' : 'none';
+      try { inp.disabled = !showIt; } catch (e) {}
+    }
+  }
+
+  function _setPasswordFieldMode(inputId, active) {
+    const inp = el(inputId);
+    if (!inp) return;
+    try {
+      inp.type = active ? 'password' : 'text';
+    } catch (e) {}
+    try {
+      if (inputId === 'fm-pass') inp.autocomplete = active ? 'current-password' : 'off';
+      else inp.autocomplete = 'off';
+    } catch (e2) {}
   }
 
   function updateConnectAuthUi() {
@@ -334,10 +349,12 @@
     _toggleRow('fm-auth-type', isSftp);
 
     _toggleRow('fm-pass', !useKey);
+    _setPasswordFieldMode('fm-pass', !useKey);
 
     _toggleRow('fm-key-file', useKey);
     _toggleRow('fm-key-path', useKey);
     _toggleRow('fm-passphrase', useKey);
+    _setPasswordFieldMode('fm-passphrase', useKey);
 
     try {
       const hkLbl = _labelForInput('fm-hostkey-policy');
@@ -346,6 +363,7 @@
       if (hk) {
         const wrap = hk.parentElement;
         if (wrap) wrap.style.display = isSftp ? '' : 'none';
+        try { hk.disabled = !isSftp; } catch (e2) {}
       }
     } catch (e) {}
 
@@ -357,7 +375,10 @@
       if (fpLbl) fpLbl.style.display = isSftp ? '' : 'none';
       if (fpRow) fpRow.style.display = isSftp ? 'flex' : 'none';
       if (fp) fp.style.display = isSftp ? '' : 'none';
-      if (rm) rm.style.display = isSftp ? '' : 'none';
+      if (rm) {
+        rm.style.display = isSftp ? '' : 'none';
+        try { rm.disabled = !isSftp; } catch (e2) {}
+      }
     } catch (e) {}
 
     _toggleRow('fm-tls-verify', proto === 'ftps');
@@ -809,7 +830,7 @@
     _wired = true;
 
     // connect modal buttons
-    const connectOk = el('fm-connect-ok-btn');
+    const connectForm = el('fm-connect-form');
     const connectCancel = el('fm-connect-cancel-btn');
     const connectClose = el('fm-connect-close-btn');
     const profileSel = el('fm-conn-profile');
@@ -842,7 +863,7 @@
       } catch (e) {}
     };
 
-    if (connectOk) connectOk.addEventListener('click', (e) => { e.preventDefault(); void doConnect(); });
+    if (connectForm) connectForm.addEventListener('submit', (e) => { e.preventDefault(); void doConnect(); });
     if (connectCancel) connectCancel.addEventListener('click', (e) => { e.preventDefault(); closeConnect(); });
     if (connectClose) connectClose.addEventListener('click', (e) => { e.preventDefault(); closeConnect(); });
 

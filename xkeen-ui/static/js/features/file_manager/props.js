@@ -97,6 +97,12 @@
     return [];
   }
 
+  function isLiteMode() {
+    try { if (C && typeof C.isLiteMode === 'function') return !!C.isLiteMode(); } catch (e) {}
+    try { return !!(S && typeof S.liteMode === 'boolean' && S.liteMode); } catch (e2) {}
+    return false;
+  }
+
   async function fetchJson(url, init) {
     if (A && typeof A.fetchJson === 'function') return await A.fetchJson(url, init);
     throw new Error('FM.api.fetchJson missing');
@@ -137,6 +143,11 @@
     const s = String(side || S.activeSide || 'left');
     const p = S && S.panels ? S.panels[s] : null;
     if (!p) return;
+
+    if (isLiteMode()) {
+      toast('Глубокий расчёт размера отключён в lite-режиме', 'info');
+      return;
+    }
 
     if (p.target !== 'local') {
       toast('Размер содержимого доступен только для local', 'info');
@@ -343,11 +354,12 @@
         const cachedBytes = cache && typeof cache.bytes === 'number' ? Number(cache.bytes) : NaN;
         const cachedErr = cache ? String(cache.err || '') : '';
         const isLocal = (p.target === 'local');
-        const sizeText = (!isLocal) ? 'недоступно' : ((isFinite(cachedBytes) && cachedBytes >= 0)
+        const lite = isLiteMode();
+        const sizeText = (!isLocal) ? 'недоступно' : (lite ? 'недоступно в lite-режиме' : ((isFinite(cachedBytes) && cachedBytes >= 0)
           ? `${fmtSize(cachedBytes)} (${Math.max(0, Math.trunc(cachedBytes))} B)`
-          : 'не рассчитан');
+          : 'не рассчитан'));
         const noteHtml = (isLocal && cachedErr) ? _htmlEscape(`• ${cachedErr}`) : '';
-        const canRecalc = isLocal;
+        const canRecalc = isLocal && !lite;
         const btnHtml = canRecalc
           ? `<button type="button" class="btn-secondary fm-props-recalc-btn" id="fm-props-dirsize-recalc-btn" data-side="${_htmlEscape(side)}" data-path="${_htmlEscape(path)}">Пересчитать</button>`
           : '';

@@ -56,6 +56,145 @@
     try { return document.getElementById(id); } catch (e) { return null; }
   }
 
+  function ensureModalDom() {
+    let modal = $(MODAL_ID);
+    if (modal) return modal;
+    if (!document.body) return null;
+
+    document.body.insertAdjacentHTML('beforeend', `
+      <div id="routing-forced-rules-modal" class="modal hidden" data-modal-key="routing-forced-rules-premium-v4" role="dialog" aria-modal="true" aria-label="Принудительные правила (обход балансировщика)">
+        <div class="modal-content" data-modal-key="routing-forced-rules-premium-v4-content">
+          <div class="modal-header">
+            <span class="modal-title">Принудительные правила (обход балансировщика)</span>
+            <button type="button" class="modal-close" id="routing-forced-rules-close-btn" title="Закрыть">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="xk-forced-wizard-lead">
+              <div class="xk-forced-wizard-lead-icon">⇄</div>
+              <div class="xk-forced-wizard-lead-text">
+                <div class="xk-forced-wizard-lead-title">Домены и IP → конкретный outbound</div>
+                <p class="modal-description" style="margin:0;">
+                  Мастер создаёт правила <code>type: field</code>, которые отправляют выбранные значения <b>мимо балансировщика</b> прямо на нужный <code>outboundTag</code>.
+                </p>
+              </div>
+            </div>
+
+            <div class="xk-forced-wizard-grid">
+              <section class="xk-forced-wizard-panel xk-forced-wizard-input-panel">
+                <div class="xk-forced-wizard-panelhead">
+                  <div>
+                    <div class="xk-forced-wizard-kicker">Шаг 1</div>
+                    <div class="terminal-menu-title" style="margin:0;">Добавить значения</div>
+                  </div>
+                </div>
+
+                <div class="xk-forced-controls-grid">
+                  <label class="xk-forced-fieldgroup">
+                    <span class="xk-forced-fieldlabel">outbound</span>
+                    <div class="xk-forced-outbound-wrap">
+                      <select id="routing-forced-rules-outbound" class="routing-rule-input"></select>
+                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-refresh-tags-btn" data-tooltip="Обновить список outbound-тегов" aria-label="Обновить список outbound-тегов"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16.2 10a6.2 6.2 0 1 1-1.83-4.39"/><path d="M16.2 4.6v3.62h-3.62"/></svg></button>
+                    </div>
+                  </label>
+
+                  <label class="xk-forced-fieldgroup xk-forced-fieldgroup-compact">
+                    <span class="xk-forced-fieldlabel">Тип</span>
+                    <select id="routing-forced-rules-type" class="routing-rule-input">
+                      <option value="domain">domain</option>
+                      <option value="ip">ip</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="xk-forced-editor-block">
+                  <div class="xk-forced-editor-head">
+                    <span class="xk-forced-fieldlabel">Значения</span>
+                    <div class="xk-forced-wizard-toolbar">
+                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-add-btn" data-tooltip="Добавить значения в выбранный outbound" aria-label="Добавить значения"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.2v11.6"/><path d="M4.2 10h11.6"/></svg></button>
+                      <button type="button" class="btn-secondary btn-icon xk-icon-btn" id="routing-forced-rules-clear-proxy-btn" data-tooltip="Очистить значения только у выбранного outbound" aria-label="Очистить выбранный outbound"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.1 5h6.95a1.4 1.4 0 0 1 1.4 1.4v7.2a1.4 1.4 0 0 1-1.4 1.4H8.1L3.55 10 8.1 5Z"/><path d="m9.3 8 4.1 4.1"/><path d="m13.4 8-4.1 4.1"/></svg></button>
+                      <button type="button" class="btn-danger btn-icon xk-icon-btn" id="routing-forced-rules-clear-all-btn" data-tooltip="Удалить все записи мастера" aria-label="Удалить все записи"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5.8 6.2h8.4"/><path d="M7.1 6.2V5a1 1 0 0 1 1-1h3.8a1 1 0 0 1 1 1v1.2"/><path d="M7.2 8.2v6.1"/><path d="M10 8.2v6.1"/><path d="M12.8 8.2v6.1"/><path d="M6.5 6.2l.6 9a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-9"/></svg></button>
+                    </div>
+                  </div>
+
+                  <textarea id="routing-forced-rules-values" class="xkeen-textarea" spellcheck="false" rows="7" placeholder="По одному на строке
+example.com
+domain:google.com
+geosite:youtube
+
+Для ip:
+1.2.3.4/32
+geoip:private"></textarea>
+                </div>
+
+                <div class="xk-forced-wizard-note">
+                  Поддерживаются обычные значения Xray для <code>domain</code>/<code>ip</code>: <code>domain:example.com</code>, <code>geosite:TAG</code>, <code>geoip:TAG</code> и другие.
+                </div>
+              </section>
+
+              <section class="xk-forced-wizard-panel xk-forced-wizard-preview-panel">
+                <div class="xk-forced-wizard-panelhead">
+                  <div>
+                    <div class="xk-forced-wizard-kicker">Шаг 2</div>
+                    <div class="terminal-menu-title" style="margin:0;">Параметры и результат</div>
+                  </div>
+                  <div id="routing-forced-rules-summary" class="xk-forced-wizard-summary" data-tooltip="Количество outbound, domain и ip в мастере">0 outbound · 0 domain · 0 ip</div>
+                </div>
+
+                <div class="xk-forced-options-grid">
+                  <label class="xk-forced-option-card global-autorestart-toggle">
+                    <input type="checkbox" id="routing-forced-rules-inbound-only" checked>
+                    <div class="xk-forced-option-copy">
+                      <strong>Только redirect / tproxy</strong>
+                      <small>Не трогать другие inbound</small>
+                    </div>
+                  </label>
+
+                  <label class="xk-forced-option-card xk-forced-option-select">
+                    <span class="xk-forced-fieldlabel">Приоритет</span>
+                    <select id="routing-forced-rules-priority" class="routing-rule-input">
+                      <option value="after_block">После block-правил</option>
+                      <option value="before_balancer">Перед балансировщиком</option>
+                    </select>
+                  </label>
+
+                  <label class="xk-forced-option-card global-autorestart-toggle xk-forced-option-wide">
+                    <input type="checkbox" id="routing-forced-rules-import-legacy">
+                    <div class="xk-forced-option-copy">
+                      <strong>Импорт legacy-правил</strong>
+                      <small>Подтянуть правила без <code>ruleTag</code></small>
+                    </div>
+                  </label>
+                </div>
+
+                <div class="xk-forced-wizard-listbox">
+                  <div class="xk-forced-wizard-listhead">
+                    <div class="xk-forced-wizard-listtitle">
+                      <div class="terminal-menu-title" style="margin:0;">Текущие правила</div>
+                      <div class="xk-forced-list-subtitle">Карточки по outboundTag: компактный обзор, клик по chip удаляет значение</div>
+                    </div>
+                    <div id="routing-forced-rules-status" class="modal-hint" style="margin:0;"></div>
+                  </div>
+                  <div id="routing-forced-rules-list" class="xk-card-desc xk-forced-wizard-list">—</div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div class="modal-actions xk-forced-wizard-footer">
+            <button type="button" class="btn-compact" id="routing-forced-rules-cancel-btn">Отмена</button>
+            <div class="xk-forced-wizard-footer-actions">
+              <button type="button" class="btn-secondary btn-compact xk-forced-primary-action" id="routing-forced-rules-dry-btn" data-tooltip="Только применить изменения в редакторе без сохранения и рестарта"><span class="xk-btn-inline-glyph" aria-hidden="true">✓</span><span>Только применить</span></button>
+              <button type="button" class="btn-danger btn-compact xk-forced-primary-action" id="routing-forced-rules-run-btn"><span class="xk-btn-inline-glyph" aria-hidden="true">⟳</span><span>Применить + Рестарт</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+
+    modal = $(MODAL_ID);
+    return modal;
+  }
+
   function _syncBodyScroll() {
     try {
       if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
@@ -65,7 +204,7 @@
   }
 
   function openModal() {
-    const m = $(MODAL_ID);
+    const m = ensureModalDom();
     if (!m) return;
     try { m.classList.remove('hidden'); } catch (e) {}
     _syncBodyScroll();
@@ -629,11 +768,11 @@
 
   function wireOnce() {
     if (FW.__wired) return;
-    FW.__wired = true;
 
+    const modal = ensureModalDom();
     const btn = $(BTN_ID);
-    const modal = $(MODAL_ID);
     if (!btn || !modal) return;
+    FW.__wired = true;
 
     btn.addEventListener('click', async (e) => {
       e.preventDefault();

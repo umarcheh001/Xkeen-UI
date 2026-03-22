@@ -10,9 +10,28 @@
 
   const L = XK.monacoLoader;
   // ------------------------ base paths ------------------------
-  // Keep Monaco on a fixed local path. Avoid guessing from <script src> or runtime path
-  // mangling, because on some installs that produced broken URLs like /static/monaco--/vs.
-  const STATIC_ROOT = '/static/';
+  function guessStaticRoot() {
+    try {
+      const configured = (typeof window.XKEEN_STATIC_BASE === 'string' && window.XKEEN_STATIC_BASE)
+        ? String(window.XKEEN_STATIC_BASE || '').trim()
+        : '';
+      if (configured) return configured.endsWith('/') ? configured : (configured + '/');
+    } catch (e) {}
+
+    try {
+      const cs = document.currentScript;
+      if (cs && cs.src) {
+        const u = new URL(cs.src, window.location.href);
+        const p = String(u.pathname || '');
+        const idx = p.indexOf('/static/');
+        if (idx >= 0) return p.slice(0, idx + '/static/'.length);
+      }
+    } catch (e2) {}
+
+    return '/static/';
+  }
+
+  const STATIC_ROOT = guessStaticRoot();
 
   // ------------------------ config ------------------------
   const DEFAULT_VERSION = '0.55.1';

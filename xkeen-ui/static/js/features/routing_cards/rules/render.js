@@ -24,8 +24,6 @@
 
   const IDS = RC.IDS || {};
   const C = RC.common || {};
-  const HM = RC.helpModal || {};
-
   const $ = (typeof C.$ === 'function') ? C.$ : function (id) { return document.getElementById(id); };
   const toast = (typeof C.toast === 'function') ? C.toast : function (msg) { try { /* eslint-disable-next-line no-alert */ alert(String(msg || '')); } catch (e) {} };
   const confirmModal = (typeof C.confirmModal === 'function') ? C.confirmModal : async function (opts) {
@@ -46,7 +44,21 @@
     };
   };
 
-  const openFieldHelp = (typeof HM.openFieldHelp === 'function') ? HM.openFieldHelp : function () {};
+  function openFieldHelp(docKey) {
+    try {
+      const HM = RC.helpModal || {};
+      if (typeof HM.openFieldHelp === 'function') {
+        HM.openFieldHelp(docKey);
+        return;
+      }
+    } catch (e) {}
+    try {
+      const lazy = RC.lazy || {};
+      if (typeof lazy.openFieldHelp === 'function') {
+        lazy.openFieldHelp(docKey);
+      }
+    } catch (e2) {}
+  }
 
   const ensureModel = (typeof RM.ensureModel === 'function') ? RM.ensureModel : function () {
     if (!S._model) S._model = { domainStrategy: '', rules: [], balancers: [] };
@@ -2046,21 +2058,69 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
 
     const m = ensureModel();
     const filter = String(S._filter || '').trim();
+    const ruleSegments = Array.isArray(S._ruleSegments) ? S._ruleSegments : [];
+    const disabledRules = Array.isArray(S._disabledRules) ? S._disabledRules : [];
+    const hasDisabledRules = disabledRules.length > 0;
 
-    // Enable DnD only when filter is empty (stable indexes / expectations).
-    const dragEnabled = !filter;
+    // Enable DnD only when filter is empty and there are no commented rules.
+    const dragEnabled = !filter && !hasDisabledRules;
     // DnD wiring lives in rules/dnd_pointer.js (RC-09). It self-disables when filter is active.
     list.dataset.dndMode = supportsPointerDnD() ? 'pointer' : 'native';
     ensureRulesDnD();
 
     list.innerHTML = '';
 
-    // Build visible list with stable indexes (no indexOf issues for duplicates)
-    const visible = [];
-    for (let i = 0; i < (m.rules || []).length; i++) {
-      const r = m.rules[i];
-      if (ruleMatchesFilter(r, filter)) visible.push({ idx: i, rule: r });
+    const rulesAddBtn = $(IDS.rulesAdd);
+    if (rulesAddBtn) {
+      const baseTip = String((rulesAddBtn.dataset && rulesAddBtn.dataset.baseTooltip) || rulesAddBtn.getAttribute('data-tooltip') || 'Добавить правило');
+      if (rulesAddBtn.dataset) rulesAddBtn.dataset.baseTooltip = baseTip;
+      const tip = hasDisabledRules
+        ? 'Добавление правил временно выключено: сначала включи закомментированные карточки или редактируй RAW.'
+        : baseTip;
+      rulesAddBtn.disabled = hasDisabledRules;
+      rulesAddBtn.setAttribute('data-tooltip', tip);
+      rulesAddBtn.setAttribute('title', tip);
+      rulesAddBtn.setAttribute('aria-label', tip);
     }
+
+    const combined = [];
+    for (let i = 0; i < (m.rules || []).length; i++) {
+      combined.push({
+        kind: 'active',
+        idx: i,
+        rule: m.rules[i],
+        orderStart: Number(ruleSegments[i] && ruleSegments[i].start),
+      });
+    }
+    for (let i = 0; i < disabledRules.length; i++) {
+      const meta = disabledRules[i] || {};
+      combined.push({
+        kind: 'disabled',
+        disabledIdx: i,
+        meta,
+        rule: (meta && meta.parsed && typeof meta.parsed === 'object' && !Array.isArray(meta.parsed))
+          ? meta.parsed
+          : { ruleTag: String(meta && meta.keyHint ? meta.keyHint : '') },
+        orderStart: Number(meta && meta.start),
+      });
+    }
+    combined.sort((a, b) => {
+      const aa = Number.isFinite(a.orderStart) ? a.orderStart : Number.MAX_SAFE_INTEGER;
+      const bb = Number.isFinite(b.orderStart) ? b.orderStart : Number.MAX_SAFE_INTEGER;
+      if (aa !== bb) return aa - bb;
+      if (a.kind === b.kind) {
+        return Number((a.kind === 'active' ? a.idx : a.disabledIdx) || 0) - Number((b.kind === 'active' ? b.idx : b.disabledIdx) || 0);
+      }
+      return a.kind === 'active' ? -1 : 1;
+    });
+    combined.forEach((item, index) => {
+      item.displayIndex = index;
+    });
+
+    const visible = combined.filter((item) => {
+      if (!filter) return true;
+      return ruleMatchesFilter(item.rule, filter);
+    });
 
     // Summary
     const c = $(IDS.rulesCount);
@@ -2068,17 +2128,23 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
     const geo = $(IDS.rulesGeo);
     if (geo) {
       const geoCount = m.rules.filter((r) => anyGeo(r)).length;
-      geo.textContent = `${geoCount} geo*`;
+      geo.textContent = hasDisabledRules ? `${geoCount} geo* • ${disabledRules.length} выкл.` : `${geoCount} geo*`;
     }
 
+    if (empty) {
+      empty.textContent = hasDisabledRules
+        ? 'Здесь появятся активные и отключённые правила из routing.rules.'
+        : 'Здесь появятся правила из routing.rules.';
+    }
     if (!visible.length) {
       if (empty) empty.style.display = '';
       return;
     }
     if (empty) empty.style.display = 'none';
 
-    const buildRuleCard = ({ idx, rule }) => {
+    const buildRuleCard = ({ idx, rule, displayIndex }) => {
       const sum = summarizeRule(rule);
+      const structureLocked = hasDisabledRules;
 
       const card = document.createElement('div');
       card.className = 'routing-rule-card' + (dragEnabled ? ' is-draggable' : '');
@@ -2114,7 +2180,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
 
       const idxSpan = document.createElement('span');
       idxSpan.className = 'routing-rule-index';
-      idxSpan.textContent = `#${idx + 1}`;
+      idxSpan.textContent = `#${Number.isFinite(displayIndex) ? (displayIndex + 1) : (idx + 1)}`;
 
       const ruleTagEditor = createRuleTagInlineBadge(rule || {}, () => {
         onRuleChanged();
@@ -2182,7 +2248,21 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       editBtn.setAttribute('title', 'Открыть правило в JSON-редакторе');
       editBtn.setAttribute('aria-label', 'Открыть правило в JSON-редакторе');
       editBtn.addEventListener('click', () => {
-        JM.open((RM && typeof RM.sanitizeForExport === 'function') ? RM.sanitizeForExport(rule || {}) : (rule || {}), `Правило #${idx + 1}`, { kind: 'rule', idx, isNew: false });
+        JM.open((RM && typeof RM.sanitizeForExport === 'function') ? RM.sanitizeForExport(rule || {}) : (rule || {}), `Правило #${Number.isFinite(displayIndex) ? (displayIndex + 1) : (idx + 1)}`, { kind: 'rule', idx, isNew: false });
+      });
+
+      const commentBtn = document.createElement('button');
+      commentBtn.type = 'button';
+      commentBtn.className = 'btn-secondary btn-icon routing-rule-comment-btn';
+      commentBtn.textContent = '//';
+      commentBtn.setAttribute('title', 'Отключить правило в RAW JSONC (закомментировать)');
+      commentBtn.setAttribute('aria-label', 'Отключить правило в RAW JSONC (закомментировать)');
+      commentBtn.addEventListener('click', async () => {
+        const ok = (RA && typeof RA.toggleRuleComment === 'function')
+          ? await RA.toggleRuleComment({ mode: 'disable', ruleIndex: idx })
+          : false;
+        if (!ok) return;
+        try { renderAll(); } catch (e) {}
       });
 
       const upBtn = document.createElement('button');
@@ -2191,7 +2271,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       upBtn.textContent = '⬆';
       upBtn.setAttribute('title', 'Переместить правило вверх');
       upBtn.setAttribute('aria-label', 'Переместить правило вверх');
-      upBtn.disabled = idx <= 0;
+      upBtn.disabled = structureLocked || idx <= 0;
       upBtn.addEventListener('click', () => {
         if (idx <= 0) return;
         if (moveRuleToIndex(idx, idx - 1)) {
@@ -2208,7 +2288,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       downBtn.textContent = '⬇';
       downBtn.setAttribute('title', 'Переместить правило вниз');
       downBtn.setAttribute('aria-label', 'Переместить правило вниз');
-      downBtn.disabled = idx >= m.rules.length - 1;
+      downBtn.disabled = structureLocked || idx >= m.rules.length - 1;
       downBtn.addEventListener('click', () => {
         if (idx >= m.rules.length - 1) return;
         if (moveRuleToIndex(idx, idx + 1)) {
@@ -2225,6 +2305,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       dupBtn.textContent = '📄';
       dupBtn.setAttribute('title', 'Дублировать правило');
       dupBtn.setAttribute('aria-label', 'Дублировать правило');
+      dupBtn.disabled = structureLocked;
       dupBtn.addEventListener('click', () => {
         const copy = JSON.parse(JSON.stringify(rule || {}));
         m.rules.splice(idx + 1, 0, copy);
@@ -2240,10 +2321,11 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       delBtn.textContent = '🗑';
       delBtn.setAttribute('title', 'Удалить правило');
       delBtn.setAttribute('aria-label', 'Удалить правило');
+      delBtn.disabled = structureLocked;
       delBtn.addEventListener('click', async () => {
         const ok = await confirmModal({
           title: 'Удалить правило',
-          message: `Удалить правило #${idx + 1}?`,
+          message: `Удалить правило #${Number.isFinite(displayIndex) ? (displayIndex + 1) : (idx + 1)}?`,
           okText: 'Удалить',
           cancelText: 'Отмена',
           danger: true,
@@ -2257,9 +2339,10 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
         requestAutoSync({ immediate: true });
       });
 
-      // Order: Details -> JSON -> Duplicate -> Move -> Delete
+      // Order: Details -> JSON -> Comment -> Duplicate -> Move -> Delete
       actions.appendChild(toggleBtn);
       actions.appendChild(editBtn);
+      actions.appendChild(commentBtn);
       actions.appendChild(dupBtn);
       actions.appendChild(upBtn);
       actions.appendChild(downBtn);
@@ -2304,10 +2387,140 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       return card;
     };
 
+    const buildDisabledRuleCard = ({ disabledIdx, rule, meta, displayIndex }) => {
+      const safeRule = (rule && typeof rule === 'object' && !Array.isArray(rule)) ? rule : {};
+      const sum = summarizeRule(safeRule);
+
+      const card = document.createElement('div');
+      card.className = 'routing-rule-card is-disabled';
+      card.dataset.disabled = '1';
+      card.dataset.open = '1';
+
+      const head = document.createElement('div');
+      head.className = 'routing-rule-head';
+
+      const main = document.createElement('div');
+      main.className = 'routing-rule-main';
+
+      const title = document.createElement('div');
+      title.className = 'routing-rule-title';
+
+      const idxSpan = document.createElement('span');
+      idxSpan.className = 'routing-rule-index';
+      idxSpan.textContent = `#${Number.isFinite(displayIndex) ? (displayIndex + 1) : (disabledIdx + 1)}`;
+
+      const ruleTagBadge = document.createElement('span');
+      ruleTagBadge.className = 'routing-rule-badge is-tag';
+      ruleTagBadge.textContent = sanitizeRuleTag(safeRule.ruleTag) || 'без тега';
+
+      const targetBadge = document.createElement('span');
+      targetBadge.className = 'routing-rule-badge is-target';
+      targetBadge.textContent = `${sum.targetKind}: ${sum.target}`;
+
+      title.appendChild(idxSpan);
+      title.appendChild(ruleTagBadge);
+      title.appendChild(targetBadge);
+
+      const metaRow = document.createElement('div');
+      metaRow.className = 'routing-rule-meta';
+
+      const stateBadge = document.createElement('span');
+      stateBadge.className = 'routing-rule-badge is-disabled';
+      stateBadge.textContent = 'отключено';
+      metaRow.appendChild(stateBadge);
+
+      const rawBadge = document.createElement('span');
+      rawBadge.className = 'routing-rule-badge is-disabled-origin';
+      rawBadge.textContent = '// RAW JSONC';
+      metaRow.appendChild(rawBadge);
+
+      const typeBadge = document.createElement('span');
+      typeBadge.className = 'routing-rule-badge is-type';
+      typeBadge.textContent = String(safeRule && safeRule.type ? safeRule.type : 'field');
+      metaRow.appendChild(typeBadge);
+
+      const conditionBadge = document.createElement('span');
+      conditionBadge.className = 'routing-rule-badge is-count';
+      conditionBadge.textContent = `${sum.conditionCount} усл.`;
+      metaRow.appendChild(conditionBadge);
+
+      const geoBadge = document.createElement('span');
+      geoBadge.className = 'routing-rule-badge is-geo';
+      geoBadge.textContent = 'geo';
+      if (!sum.geo) geoBadge.style.display = 'none';
+      metaRow.appendChild(geoBadge);
+
+      const match = document.createElement('div');
+      match.className = 'routing-rule-empty routing-rule-summary';
+      match.textContent = sum.match;
+
+      const statusRow = document.createElement('div');
+      statusRow.className = 'routing-rule-disabled-status';
+
+      const statusLead = document.createElement('span');
+      statusLead.className = 'routing-rule-disabled-status-chip';
+      statusLead.textContent = 'RAW JSONC';
+
+      const statusText = document.createElement('span');
+      statusText.className = 'routing-rule-disabled-status-text';
+      statusText.textContent = 'Правило отключено комментарием и хранится в исходном JSONC без удаления.';
+
+      statusRow.appendChild(statusLead);
+      statusRow.appendChild(statusText);
+
+      const note = document.createElement('div');
+      note.className = 'routing-rule-disabled-note';
+      note.textContent = 'Пока блок не раскомментирован, это правило не участвует в маршрутизации.';
+
+      main.appendChild(title);
+      main.appendChild(metaRow);
+      main.appendChild(statusRow);
+      main.appendChild(match);
+      main.appendChild(note);
+
+      const actions = document.createElement('div');
+      actions.className = 'routing-rule-actions';
+
+      const enableBtn = document.createElement('button');
+      enableBtn.type = 'button';
+      enableBtn.className = 'routing-rule-toggle';
+      enableBtn.textContent = 'Вернуть правило';
+      enableBtn.setAttribute('title', 'Раскомментировать правило в RAW JSONC');
+      enableBtn.setAttribute('aria-label', 'Раскомментировать правило в RAW JSONC');
+      enableBtn.addEventListener('click', async () => {
+        const ok = (RA && typeof RA.toggleRuleComment === 'function')
+          ? await RA.toggleRuleComment({
+              mode: 'enable',
+              start: Number(meta && meta.start),
+              disabledIndex: disabledIdx,
+            })
+          : false;
+        if (!ok) return;
+        try { renderAll(); } catch (e) {}
+      });
+      actions.appendChild(enableBtn);
+
+      head.appendChild(main);
+      head.appendChild(actions);
+      card.appendChild(head);
+
+      const body = document.createElement('div');
+      body.className = 'routing-rule-body';
+
+      const pre = document.createElement('pre');
+      pre.className = 'routing-json-pre';
+      updateJsonPreview(pre, safeRule);
+      body.appendChild(pre);
+
+      card.appendChild(body);
+      return card;
+    };
+
     const appendVisibleChunk = (start, end) => {
       const frag = document.createDocumentFragment();
       for (let i = start; i < end; i += 1) {
-        frag.appendChild(buildRuleCard(visible[i]));
+        const item = visible[i];
+        frag.appendChild(item && item.kind === 'disabled' ? buildDisabledRuleCard(item) : buildRuleCard(item));
       }
       list.appendChild(frag);
     };

@@ -73,6 +73,20 @@
     return false;
   }
 
+  function isWebKitSafari() {
+    try {
+      const nav = window.navigator || {};
+      const ua = String(nav.userAgent || '');
+      const vendor = String(nav.vendor || '');
+      if (!ua) return false;
+      if (!/Safari/i.test(ua)) return false;
+      if (!/Apple/i.test(vendor)) return false;
+      if (/(Chrome|Chromium|CriOS|Edg|OPR|OPT|Opera|Vivaldi|DuckDuckGo|Firefox|FxiOS|Arc|Brave)/i.test(ua)) return false;
+      return true;
+    } catch (e) {}
+    return false;
+  }
+
   function countLines(text) {
     const raw = String(text == null ? '' : text);
     if (!raw) return 1;
@@ -99,17 +113,32 @@
     const raw = String(text == null ? '' : text);
     const lineCount = countLines(raw);
     const charCount = raw.length;
-    const lite = !!(isMipsTarget() || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars);
+    const safari = isWebKitSafari();
+    const lite = !!(isMipsTarget() || safari || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars);
     return {
       lite,
-      manualSync: lite,
+      manualSync: lite || safari,
       lineCount,
       charCount,
     };
   }
 
-  function syncGuiPerfMode(text) {
-    const profile = computeGuiPerfProfile(typeof text === 'string' ? text : getEditorTextSnapshot());
+  function resolveGuiPerfProfile(input) {
+    if (input && typeof input === 'object') {
+      const lite = !!input.lite;
+      const safari = (typeof input.webkitSafari === 'boolean') ? !!input.webkitSafari : isWebKitSafari();
+      return {
+        lite,
+        manualSync: (typeof input.manualSync === 'boolean') ? !!input.manualSync : (lite || safari),
+        lineCount: Number.isFinite(input.lineCount) ? Math.max(1, Math.floor(input.lineCount)) : 1,
+        charCount: Number.isFinite(input.charCount) ? Math.max(0, Math.floor(input.charCount)) : 0,
+      };
+    }
+    return computeGuiPerfProfile(typeof input === 'string' ? input : getEditorTextSnapshot());
+  }
+
+  function syncGuiPerfMode(input) {
+    const profile = resolveGuiPerfProfile(input);
     S._perfLite = !!profile.lite;
     S._manualGuiSync = !!profile.manualSync;
 
@@ -178,11 +207,10 @@
     cm.__xkRoutingRulesHooked = true;
     cm.on('change', debounce(() => {
       if (S._suppressEditorChange) return;
-      const profile = syncGuiPerfMode();
       if (S.__rulesEditorContentWired) {
-        if (profile.manualSync) markRulesStale(true);
         return;
       }
+      const profile = syncGuiPerfMode();
       if (profile.manualSync) {
         markRulesStale(true);
         return;
@@ -202,7 +230,7 @@
     const onContent = debounce((ev) => {
       if (!isViewVisible()) return;
       const detail = (ev && ev.detail) ? ev.detail : {};
-      const profile = syncGuiPerfMode();
+      const profile = syncGuiPerfMode(detail.profile || null);
       const body = $(IDS.rulesBody);
       const isOpen = !!(body && body.style.display !== 'none');
 

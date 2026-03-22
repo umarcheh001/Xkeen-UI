@@ -198,6 +198,35 @@
     }
   }
 
+  function supportsPty(ctx) {
+    const c = resolveCtx(ctx);
+    try {
+      if (c && c.caps && typeof c.caps.hasPty === 'function') return !!c.caps.hasPty();
+    } catch (e0) {}
+    try {
+      if (c && c.caps && typeof c.caps.hasWs === 'function') return !!c.caps.hasWs();
+    } catch (e1) {}
+    try {
+      const st = getCoreState(c);
+      if (st && typeof st.hasPty === 'boolean') return !!st.hasPty;
+      if (st && typeof st.hasWs === 'boolean') return !!st.hasWs;
+    } catch (e2) {}
+    return false;
+  }
+
+  async function resolveOpenMode(ctx, requestedMode) {
+    const c = resolveCtx(ctx);
+    const mode = String(requestedMode || 'shell');
+    if (mode !== 'pty') return mode;
+    if (supportsPty(c)) return 'pty';
+    try {
+      if (c && c.caps && typeof c.caps.initCapabilities === 'function') {
+        await Promise.resolve(c.caps.initCapabilities());
+      }
+    } catch (e) {}
+    return supportsPty(c) ? 'pty' : 'shell';
+  }
+
   function syncSharedState(ctx, next) {
     const c = resolveCtx(ctx);
     const st = getCoreState(c);
@@ -411,9 +440,10 @@
       return false;
     }
 
-    function open(initialCommand, mode) {
+    async function open(initialCommand, mode) {
       const c = resolveCtx(ctx);
-      const m = String(mode || 'shell');
+      const requestedMode = String(mode || 'shell');
+      const m = await resolveOpenMode(c, requestedMode);
       const cmd = String(initialCommand || '');
 
       // Restore minimized PTY window without reconnecting.

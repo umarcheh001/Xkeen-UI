@@ -157,6 +157,8 @@
     'XKEEN_IP_EXCLUDE_FILE': 'Файл со списком IP/подсетей-исключений. По умолчанию: /opt/etc/xkeen/ip_exclude.lst. В старых версиях мог быть /opt/etc/xkeen_exclude.lst — UI подхватит его автоматически, если новый путь отсутствует.',
   };
 
+  ENV_HELP.XKEEN_INIT_SCRIPT = 'Rezervnyi put k init.d-skriptu XKeen dlya fallback-scenariev sovmestimosti. Osnovnoi put upravleniya - CLI `xkeen`; pri ego nedostupnosti UI ishet S05xkeen, potom S99xkeen.';
+
 
   
 
@@ -243,6 +245,8 @@
     'XKEEN_IP_EXCLUDE_FILE',
     'XKEEN_RESTART_LOG_FILE',
   ]);
+
+  ENV_RESTART_KEYS.add('XKEEN_INIT_SCRIPT');
 
   let _envSnapshot = { items: [], envFile: '' };
 

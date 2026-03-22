@@ -17,9 +17,19 @@
   XKeen.ui = XKeen.ui || {};
   XKeen.util = XKeen.util || {};
 
-  const DEFAULT_MAX_LINES = 800;
-  const DEFAULT_POLL_MS = 2000;
-  const LOAD_MORE_STEP = 400;
+  function isPerfLite() {
+    try {
+      if (document.body && document.body.classList && document.body.classList.contains('xk-perf-lite')) return true;
+    } catch (e) {}
+    try {
+      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
+    } catch (e2) {}
+    return false;
+  }
+
+  const DEFAULT_MAX_LINES = isPerfLite() ? 400 : 800;
+  const DEFAULT_POLL_MS = isPerfLite() ? 3000 : 2000;
+  const LOAD_MORE_STEP = isPerfLite() ? 200 : 400;
   const MAX_MAX_LINES = 5000;
 
   // Legacy localStorage prefs (file/interval/follow/live/lines/filter + log window height).
@@ -45,6 +55,7 @@
   let _statusTimer = null;
   let _currentFile = 'access';
   let _lastLines = [];
+  let _httpFetchInFlight = false;
 
   let _ws = null;
   let _useWs = true;
@@ -1316,74 +1327,79 @@
   }
 
   async function fetchXrayLogsOnce(source = 'manual', opts = {}) {
-  const outputEl = $('xray-log-output');
-  if (!outputEl) return;
+    const outputEl = $('xray-log-output');
+    if (!outputEl) return;
 
-  const statusEl = $('xray-log-status');
-  const file = _currentFile || 'access';
+    if (String(source || '').toLowerCase() === 'poll' && _httpFetchInFlight) return;
+    _httpFetchInFlight = true;
 
-  const resetCursor = !!(opts && opts.resetCursor);
-  const forceRender = !!(opts && opts.forceRender);
+    const statusEl = $('xray-log-status');
+    const file = _currentFile || 'access';
 
-  const cur = resetCursor ? '' : (_cursor || '');
+    const resetCursor = !!(opts && opts.resetCursor);
+    const forceRender = !!(opts && opts.forceRender);
 
-  try {
-    const params = new URLSearchParams();
-    params.set('file', file);
-    params.set('max_lines', String(_maxLines || DEFAULT_MAX_LINES));
-    params.set('source', String(source || 'manual'));
-    if (cur) params.set('cursor', cur);
+    const cur = resetCursor ? '' : (_cursor || '');
 
-    const res = await fetch('/api/xray-logs?' + params.toString());
-    if (!res.ok) {
-      if (statusEl) statusEl.textContent = 'Не удалось загрузить логи Xray.';
-      return;
-    }
+    try {
+      const params = new URLSearchParams();
+      params.set('file', file);
+      params.set('max_lines', String(_maxLines || DEFAULT_MAX_LINES));
+      params.set('source', String(source || 'manual'));
+      if (cur) params.set('cursor', cur);
 
-    const data = await res.json().catch(() => ({}));
-    const mode = String((data && data.mode) || 'full').toLowerCase();
-    const lines = Array.isArray(data && data.lines) ? data.lines : [];
-    const newCur = String((data && data.cursor) || '');
+      const res = await fetch('/api/xray-logs?' + params.toString());
+      if (!res.ok) {
+        if (statusEl) statusEl.textContent = 'Не удалось загрузить логи Xray.';
+        return;
+      }
 
-    if (newCur) _cursor = newCur;
+      const data = await res.json().catch(() => ({}));
+      const mode = String((data && data.mode) || 'full').toLowerCase();
+      const lines = Array.isArray(data && data.lines) ? data.lines : [];
+      const newCur = String((data && data.cursor) || '');
 
-    if (mode === 'append') {
-      if (lines.length) {
-        for (const ln of lines) _lastLines.push(ln);
+      if (newCur) _cursor = newCur;
+
+      if (mode === 'append') {
+        if (lines.length) {
+          for (const ln of lines) _lastLines.push(ln);
+          if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
+
+          if (_paused && !forceRender && source === 'poll') {
+            _pendingCount += lines.length;
+            updateXrayLogStats();
+          } else {
+            _pendingCount = 0;
+            applyXrayLogFilterToOutput();
+          }
+        } else {
+          // still update meta/stats (cursor/transport)
+          updateXrayLogStats();
+        }
+      } else {
+        _lastLines = lines;
         if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
 
         if (_paused && !forceRender && source === 'poll') {
-          _pendingCount += lines.length;
+          // keep buffer updated but don't repaint
+          _pendingCount = Math.max(0, _pendingCount);
           updateXrayLogStats();
         } else {
           _pendingCount = 0;
           applyXrayLogFilterToOutput();
         }
-      } else {
-        // still update meta/stats (cursor/transport)
-        updateXrayLogStats();
       }
-    } else {
-      _lastLines = lines;
-      if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
 
-      if (_paused && !forceRender && source === 'poll') {
-        // keep buffer updated but don't repaint
-        _pendingCount = Math.max(0, _pendingCount);
-        updateXrayLogStats();
-      } else {
-        _pendingCount = 0;
-        applyXrayLogFilterToOutput();
-      }
+      if (statusEl) statusEl.textContent = '';
+      refreshXrayLogStatus();
+    } catch (e) {
+      console.error(e);
+      if (statusEl) statusEl.textContent = 'Ошибка чтения логов Xray.';
+    } finally {
+      _httpFetchInFlight = false;
     }
-
-    if (statusEl) statusEl.textContent = '';
-    refreshXrayLogStatus();
-  } catch (e) {
-    console.error(e);
-    if (statusEl) statusEl.textContent = 'Ошибка чтения логов Xray.';
   }
-}
 
   function xrayLogConnectWs2() {
     // Don't connect if streaming is not enabled.
@@ -2283,38 +2299,87 @@ function copyXrayContextModal() {
     _timer = setInterval(() => fetchXrayLogsOnce('poll'), _pollMs);
   }
 
-  function bindControlsUi() {
-  const fileSel = $('xray-log-file');
-  const lvlSel = $('xray-log-level');
-  const liveEl = $('xray-log-live');
-  const intervalEl = $('xray-log-interval');
-  const followEl = $('xray-log-follow');
-  const loadMoreBtn = $('xray-log-load-more');
+	function bindControlsUi() {
+	  const fileSel = $('xray-log-file');
+	  const lvlSel = $('xray-log-level');
+	  const liveEl = $('xray-log-live');
+	  const intervalEl = $('xray-log-interval');
+	  const followEl = $('xray-log-follow');
+	  const loadMoreBtn = $('xray-log-load-more');
+	  const viewBtn = $('xray-log-view-btn');
+	  const enableBtn = $('xray-log-enable-btn');
+	  const disableBtn = $('xray-log-disable-btn');
+	  const clearScreenBtn = $('xray-log-clear-screen-btn');
+	  const clearFilesBtn = $('xray-log-clear-files-btn');
+	  const copyBtn = $('xray-log-copy-btn');
 
-  const pauseBtn = $('xray-log-pause');
-  const linesInput = $('xray-log-lines');
-  const copySelBtn = $('xray-log-copy-selection');
-  const dlBtn = $('xray-log-download');
-  const outputEl = $('xray-log-output');
+	  const pauseBtn = $('xray-log-pause');
+	  const linesInput = $('xray-log-lines');
+	  const copySelBtn = $('xray-log-copy-selection');
+	  const dlBtn = $('xray-log-download');
+	  const outputEl = $('xray-log-output');
 
-  if (liveEl) {
-    liveEl.addEventListener('change', () => {
-      if (liveEl.checked) startXrayLogAuto();
-      else stopXrayLogAuto();
+	  if (viewBtn) {
+	    viewBtn.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      void xrayLogsView();
+	    });
+	  }
+
+	  if (enableBtn) {
+	    enableBtn.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      void xrayLogsEnable();
+	    });
+	  }
+
+	  if (disableBtn) {
+	    disableBtn.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      void xrayLogsDisable();
+	    });
+	  }
+
+	  if (clearScreenBtn) {
+	    clearScreenBtn.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      xrayLogsClearScreen();
+	    });
+	  }
+
+	  if (clearFilesBtn) {
+	    clearFilesBtn.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      void xrayLogsClear();
+	    });
+	  }
+
+	  if (copyBtn) {
+	    copyBtn.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      xrayLogsCopy();
+	    });
+	  }
+
+	  if (liveEl) {
+	    liveEl.addEventListener('change', () => {
+	      if (liveEl.checked) startXrayLogAuto();
+	      else stopXrayLogAuto();
       try { updateXrayLogStats(); } catch (e) {}
       try { scheduleSaveUiState(); } catch (e) {}
     });
-  }
+	  }
 
-  if (fileSel) {
-    fileSel.addEventListener('change', () => {
-      try { scheduleSaveUiState(); } catch (e) {}
-    });
-  }  if (lvlSel) {
-    lvlSel.addEventListener('change', () => {
-      try { scheduleSaveUiState(); } catch (e) {}
-      // Re-apply view filters immediately when the threshold changes.
-      try { applyXrayLogFilterToOutput(); } catch (e) {}
+	  if (fileSel) {
+	    fileSel.addEventListener('change', () => {
+	      void xrayLogChangeFile();
+	    });
+	  }
+	  if (lvlSel) {
+	    lvlSel.addEventListener('change', () => {
+	      try { scheduleSaveUiState(); } catch (e) {}
+	      // Re-apply view filters immediately when the threshold changes.
+	      try { applyXrayLogFilterToOutput(); } catch (e) {}
 
       // If Xray logging is already enabled, changing loglevel should apply immediately
       // (restart only Xray core) so the user doesn't have to press ▶ manually.

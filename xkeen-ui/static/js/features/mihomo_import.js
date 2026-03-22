@@ -304,6 +304,22 @@
     }
   }
 
+  async function ensureMonacoSharedApi() {
+    const existing = getMonacoShared();
+    if (existing && typeof existing.createEditor === 'function') return existing;
+
+    try {
+      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
+      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
+        const ok = await lazy.ensureMonacoSupport();
+        if (!ok) return null;
+      }
+    } catch (e) {}
+
+    const loaded = getMonacoShared();
+    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+  }
+
   function showNode(node) {
     if (!node) return;
     try { node.classList.remove('hidden'); } catch (e) {}
@@ -370,7 +386,7 @@
     const ta = $(IDS.preview);
 
     if (next === 'monaco') {
-      const shared = getMonacoShared();
+      const shared = await ensureMonacoSharedApi();
       if (!shared || !host || typeof shared.createEditor !== 'function') {
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e0) {}
         const ee = getEngineHelper();
@@ -417,6 +433,13 @@
     // CodeMirror
     if (host) hideNode(host);
     try { disposePreviewMonaco(); } catch (e) {}
+
+    try {
+      const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
+      if (loader && typeof loader.ensureEditorAssets === 'function') {
+        await loader.ensureEditorAssets({ mode: 'yaml' });
+      }
+    } catch (e) {}
 
     const cm = ensurePreviewCm();
     const value = previewTextFallback();

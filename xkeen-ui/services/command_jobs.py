@@ -65,7 +65,7 @@ def _build_exec_env(*, term: str | None = None) -> dict:
     return env
 
 from services.xkeen_commands_catalog import (
-    XKEEN_BIN,
+    build_xkeen_cmd,
     SHELL_BIN,
     COMMAND_TIMEOUT,
 )
@@ -115,7 +115,7 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
     if job.cmd:
         cmd = [SHELL_BIN, "-c", job.cmd]
     elif job.flag:
-        cmd = [XKEEN_BIN, job.flag]
+        cmd = build_xkeen_cmd(job.flag)
     else:
         with JOBS_LOCK:
             job = JOBS.get(job_id)

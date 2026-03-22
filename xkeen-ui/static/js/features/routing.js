@@ -64,7 +64,6 @@
     editorMeta: 'routing-editor-meta',
     editorValidBadge: 'routing-editor-valid-badge',
     editorDirtyBadge: 'routing-editor-dirty-badge',
-    editorViewBadge: 'routing-editor-view-badge',
     editorCommentsBadge: 'routing-editor-comments-badge',
 
     btnSave: 'routing-save-btn',
@@ -89,6 +88,7 @@
   let _inited = false;
   let _cm = null;
   let _errorMarker = null;
+  let _errorGutterLine = null;
   let _lastJsonErrorLocation = null;
 
   // Active routing fragment file (basename or absolute). Controlled by dropdown.
@@ -102,12 +102,15 @@
   let _monaco = null;
   let _monacoFacade = null;
   let _monacoHostEl = null;
+  let _routingMonacoToolbarEl = null;
   let _engineSelectEl = null;
   let _engineTouched = false;
 
   // Prevent concurrent editor engine switches (init + onShow may race on slow devices).
   // If Monaco gets created twice, it may throw: "Element already has context attribute".
   let _engineSwitchChain = Promise.resolve();
+  let _monacoEnsurePromise = null;
+  let _lastPageReturnShowAt = 0;
 
   let _commentsBadgeBase = { found: false, using: false, bn: '' };
   let _commentsBadgeOverride = null;
@@ -126,21 +129,37 @@
 	  let _validateTimer = null;
 	  let _editorContentTimer = null;
 	  let _viewStateTimer = null;
-	  let _suppressDirty = 0;
-  let _editorPerfProfile = { lite: false, lineCount: 1, charCount: 0 };
+  let _suppressDirty = 0;
+  let _editorPerfProfile = { lite: false, manualSync: false, webkitSafari: false, lineCount: 1, charCount: 0 };
+  let _editorSnapshotVersion = 0;
+  let _editorSnapshotCache = null;
+  let _hashCommentOverlay = null;
+  let _jsoncAnalysisCache = {
+    raw: null,
+    fast: null,
+    exact: null,
+  };
+  let _viewStateCache = { key: null, value: null };
 
   const VIEW_STATE_LS_PREFIX = 'xkeen.routing.viewstate.v1::';
   let _lastValidationState = { ok: null, message: '' };
   const PERF_LIMITS = {
     softLines: 1800,
     softChars: 110000,
-    viewportMarginLite: 36,
+    webkitSoftLines: 320,
+    webkitSoftChars: 22000,
+    viewportMarginLite: 96,
+    viewportMarginWebkit: 120,
     highlightLengthLite: 1200,
     measureFromLite: 1200,
     viewStateMs: 180,
-    viewStateMsLite: 260,
+    viewStateMsLite: 1200,
+    dirtyMs: 200,
+    dirtyMsLite: 480,
     validateMs: 110,
-    validateMsLite: 180,
+    validateMsLite: 650,
+    editorContentMs: 120,
+    editorContentMsLite: 360,
   };
 
 
@@ -161,6 +180,20 @@
     return false;
   }
 
+  function isWebKitSafari() {
+    try {
+      const nav = window.navigator || {};
+      const ua = String(nav.userAgent || '');
+      const vendor = String(nav.vendor || '');
+      if (!ua) return false;
+      if (!/Safari/i.test(ua)) return false;
+      if (!/Apple/i.test(vendor)) return false;
+      if (/(Chrome|Chromium|CriOS|Edg|OPR|OPT|Opera|Vivaldi|DuckDuckGo|Firefox|FxiOS|Arc|Brave)/i.test(ua)) return false;
+      return true;
+    } catch (e) {}
+    return false;
+  }
+
   function countLines(text) {
     const s = String(text ?? '');
     if (!s) return 1;
@@ -175,20 +208,206 @@
     const raw = String(text ?? '');
     const lineCount = countLines(raw);
     const charCount = raw.length;
-    const lite = !!(isMipsTarget() || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars);
-    return { lite, lineCount, charCount };
+    const safari = isWebKitSafari();
+    const safariLite = safari
+      && (lineCount >= PERF_LIMITS.webkitSoftLines || charCount >= PERF_LIMITS.webkitSoftChars);
+    const lite = !!(isMipsTarget() || safariLite || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars);
+    return {
+      lite,
+      manualSync: safari || lite,
+      webkitSafari: safari,
+      lineCount,
+      charCount,
+    };
+  }
+
+  function readCurrentEditorText() {
+    try {
+      if (_engine === 'monaco' && _monaco) return String(_monaco.getValue() || '');
+    } catch (e) {}
+    try {
+      if (_cm && typeof _cm.getValue === 'function') return String(_cm.getValue() || '');
+    } catch (e) {}
+    const ta = $(IDS.textarea);
+    return ta ? String(ta.value || '') : '';
+  }
+
+  function cacheEditorSnapshot(text) {
+    const raw = String(text ?? '');
+    const perf = computeEditorPerfProfile(raw);
+    _editorPerfProfile = perf;
+    _editorSnapshotCache = {
+      version: _editorSnapshotVersion,
+      text: raw,
+      perf,
+    };
+    return _editorSnapshotCache;
+  }
+
+  function invalidateEditorSnapshot() {
+    _editorSnapshotVersion += 1;
+    _editorSnapshotCache = null;
+  }
+
+  function getEditorSnapshot() {
+    if (_editorSnapshotCache && _editorSnapshotCache.version === _editorSnapshotVersion) {
+      return _editorSnapshotCache;
+    }
+    return cacheEditorSnapshot(readCurrentEditorText());
   }
 
   function currentViewStateDebounceMs() {
     return (_editorPerfProfile && _editorPerfProfile.lite) ? PERF_LIMITS.viewStateMsLite : PERF_LIMITS.viewStateMs;
   }
 
+  function currentDirtyDebounceMs() {
+    return (_editorPerfProfile && _editorPerfProfile.lite) ? PERF_LIMITS.dirtyMsLite : PERF_LIMITS.dirtyMs;
+  }
+
   function currentValidateDebounceMs() {
     return (_editorPerfProfile && _editorPerfProfile.lite) ? PERF_LIMITS.validateMsLite : PERF_LIMITS.validateMs;
   }
 
+  function currentEditorContentDebounceMs() {
+    return (_editorPerfProfile && _editorPerfProfile.lite) ? PERF_LIMITS.editorContentMsLite : PERF_LIMITS.editorContentMs;
+  }
+
+  function shouldManualCodeMirrorLint() {
+    return !!(_editorPerfProfile && _editorPerfProfile.lite);
+  }
+
+  function shouldUseCodeMirrorLintAddon() {
+    return !isWebKitSafari();
+  }
+
+  function syncCodeMirrorLintNow() {
+    try {
+      if (_engine !== 'codemirror') return;
+      if (!shouldUseCodeMirrorLintAddon()) return;
+      if (shouldManualCodeMirrorLint() && _cm && typeof _cm.performLint === 'function') _cm.performLint();
+    } catch (e) {}
+  }
+
+  function shouldUsePreciseJsonLocation(opts) {
+    const o = opts || {};
+    if (o.preciseLocation === true) return true;
+    if (o.preciseLocation === false) return false;
+    return !(_editorPerfProfile && _editorPerfProfile.lite);
+  }
+
+  function ensureHashCommentOverlay() {
+    if (_hashCommentOverlay) return _hashCommentOverlay;
+    _hashCommentOverlay = {
+      token: function(stream) {
+        if (stream.sol()) {
+          stream.eatSpace();
+          if (stream.peek && stream.peek() === '#') {
+            stream.skipToEnd();
+            return 'comment';
+          }
+        }
+        stream.skipToEnd();
+        return null;
+      }
+    };
+    return _hashCommentOverlay;
+  }
+
+  function syncRoutingCodeMirrorOverlays(enabled) {
+    if (!_cm || typeof _cm.addOverlay !== 'function') return;
+
+    const allowRichOverlays = !!enabled;
+    try {
+      _cm.state = _cm.state || {};
+      const key = '__xkRoutingHashOverlayEnabled';
+      const overlay = ensureHashCommentOverlay();
+      const hasOverlay = !!_cm.state[key];
+
+      if (allowRichOverlays && !hasOverlay) {
+        _cm.addOverlay(overlay);
+        _cm.state[key] = true;
+      } else if (!allowRichOverlays && hasOverlay && typeof _cm.removeOverlay === 'function') {
+        _cm.removeOverlay(overlay);
+        _cm.state[key] = false;
+      }
+    } catch (e) {}
+
+    try {
+      if (typeof window.xkeenCmLinksSetEnabled === 'function') {
+        window.xkeenCmLinksSetEnabled(_cm, allowRichOverlays);
+      }
+    } catch (e) {}
+  }
+
+  function getJsoncAnalysis(rawText, opts) {
+    const raw = String(rawText ?? '');
+    const preciseLocation = shouldUsePreciseJsonLocation(opts);
+
+    if (_jsoncAnalysisCache.raw === raw) {
+      if (preciseLocation && _jsoncAnalysisCache.exact) return _jsoncAnalysisCache.exact;
+      if (!preciseLocation && (_jsoncAnalysisCache.fast || _jsoncAnalysisCache.exact)) {
+        return _jsoncAnalysisCache.fast || _jsoncAnalysisCache.exact;
+      }
+    } else {
+      _jsoncAnalysisCache.raw = raw;
+      _jsoncAnalysisCache.fast = null;
+      _jsoncAnalysisCache.exact = null;
+    }
+
+    const sm = stripJsonCommentsWithMap(raw);
+    const cleaned = sm.cleaned;
+    let parsed = null;
+    let error = null;
+    let loc = null;
+
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      error = e;
+      loc = extractJsonErrorLocation(error, raw, sm, { preciseLocation });
+    }
+
+    const analysis = {
+      raw,
+      sm,
+      cleaned,
+      ok: !error,
+      parsed,
+      error,
+      loc,
+      message: loc && loc.message ? String(loc.message) : String(error && error.message ? error.message : ''),
+    };
+
+    if (analysis.ok) {
+      _jsoncAnalysisCache.fast = analysis;
+      _jsoncAnalysisCache.exact = analysis;
+      return analysis;
+    }
+
+    if (preciseLocation) {
+      _jsoncAnalysisCache.exact = analysis;
+      if (!_jsoncAnalysisCache.fast) _jsoncAnalysisCache.fast = analysis;
+    } else {
+      _jsoncAnalysisCache.fast = analysis;
+    }
+
+    return analysis;
+  }
+
+  function buildRoutingLintOptions(lite) {
+    if (!shouldUseCodeMirrorLintAddon()) return false;
+    return {
+      getAnnotations: jsoncLint,
+      async: false,
+      lintOnChange: !lite,
+      delay: lite ? Math.max(700, currentValidateDebounceMs()) : 300,
+      tooltips: true,
+    };
+  }
+
   function applyCodeMirrorPerfProfile(text) {
     const next = computeEditorPerfProfile(text);
+    const safari = isWebKitSafari();
     _editorPerfProfile = next;
 
     if (!_cm || typeof _cm.setOption !== 'function') return next;
@@ -198,10 +417,10 @@
       try { _cm.setOption('styleActiveLine', !next.lite); } catch (e) {}
       try { _cm.setOption('showIndentGuides', !next.lite); } catch (e) {}
       try { _cm.setOption('matchBrackets', !next.lite); } catch (e) {}
-      try { _cm.setOption('highlightSelectionMatches', !next.lite); } catch (e) {}
-      try { _cm.setOption('showTrailingSpace', !next.lite); } catch (e) {}
-      try { _cm.setOption('lineWrapping', !next.lite); } catch (e) {}
-      try { _cm.setOption('foldGutter', !next.lite); } catch (e) {}
+      try { _cm.setOption('highlightSelectionMatches', !next.lite && !safari); } catch (e) {}
+      try { _cm.setOption('showTrailingSpace', !next.lite && !safari); } catch (e) {}
+      try { _cm.setOption('lineWrapping', !next.lite && !safari); } catch (e) {}
+      try { _cm.setOption('foldGutter', !next.lite && !safari); } catch (e) {}
       try { _cm.setOption('rulers', next.lite ? [] : [{ column: 120 }]); } catch (e) {}
       try { _cm.setOption('maxHighlightLength', next.lite ? PERF_LIMITS.highlightLengthLite : 10000); } catch (e) {}
       try { _cm.setOption('crudeMeasuringFrom', next.lite ? PERF_LIMITS.measureFromLite : 10000); } catch (e) {}
@@ -210,10 +429,20 @@
           'gutters',
           next.lite
             ? ['CodeMirror-linenumbers', 'CodeMirror-lint-markers']
-            : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']
+            : (safari
+              ? ['CodeMirror-linenumbers', 'CodeMirror-lint-markers']
+              : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers'])
         );
       } catch (e) {}
-      try { _cm.setOption('viewportMargin', next.lite ? PERF_LIMITS.viewportMarginLite : Infinity); } catch (e) {}
+      try { _cm.setOption('lint', buildRoutingLintOptions(next.lite)); } catch (e) {}
+      try {
+        _cm.setOption(
+          'viewportMargin',
+          next.lite
+            ? PERF_LIMITS.viewportMarginLite
+            : (safari ? PERF_LIMITS.viewportMarginWebkit : Infinity)
+        );
+      } catch (e) {}
     };
 
     try {
@@ -224,6 +453,7 @@
     try {
       if (wrapper && wrapper.classList) wrapper.classList.toggle('xk-cm-lite', !!next.lite);
     } catch (e) {}
+    try { syncRoutingCodeMirrorOverlays(!next.lite && !safari); } catch (e) {}
     try {
       if (_engine === 'codemirror' && typeof _cm.refresh === 'function') _cm.refresh();
     } catch (e) {}
@@ -328,7 +558,10 @@
     try {
       const key = _viewStateKey(getActiveFragment());
       const data = captureViewState();
-      localStorage.setItem(key, JSON.stringify(data || {}));
+      _viewStateCache = { key, value: data };
+      if (!o.memoryOnly) {
+        localStorage.setItem(key, JSON.stringify(data || {}));
+      }
       if (o.updateMeta !== false) updateEditorMetaStatus();
     } catch (e) {}
   }
@@ -344,12 +577,20 @@
   }
 
   function loadSavedViewState(file) {
+    const key = _viewStateKey(file);
+    if (_viewStateCache && _viewStateCache.key === key) return _viewStateCache.value;
     try {
-      const raw = localStorage.getItem(_viewStateKey(file));
-      if (!raw) return null;
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        _viewStateCache = { key, value: null };
+        return null;
+      }
       const obj = JSON.parse(raw);
-      return (obj && typeof obj === 'object') ? obj : null;
+      const out = (obj && typeof obj === 'object') ? obj : null;
+      _viewStateCache = { key, value: out };
+      return out;
     } catch (e) {
+      _viewStateCache = { key, value: null };
       return null;
     }
   }
@@ -381,27 +622,16 @@
     return false;
   }
 
-  function _describeViewState(view) {
-    try {
-      if (!view) return 'новая позиция';
-      if (view.pos) return 'L' + String(view.pos.lineNumber || 1) + ':' + String(view.pos.column || 1);
-      if (view.cursor) return 'L' + String((view.cursor.line || 0) + 1) + ':' + String((view.cursor.ch || 0) + 1);
-    } catch (e) {}
-    return 'верх файла';
-  }
-
   function updateEditorMetaStatus() {
     try {
       const validEl = $(IDS.editorValidBadge);
       const dirtyEl = $(IDS.editorDirtyBadge);
-      const viewEl = $(IDS.editorViewBadge);
 
       _updateEditorCommentsBadge();
 
       const ok = _lastValidationState && _lastValidationState.ok;
       const msg = _lastValidationState && _lastValidationState.message ? String(_lastValidationState.message) : '';
       const dirty = !!window.routingIsDirty;
-      const savedView = loadSavedViewState(getActiveFragment());
 
       if (validEl) {
         validEl.textContent = ok === null ? 'JSON: —' : (ok ? 'JSON: valid' : 'JSON: invalid');
@@ -418,13 +648,6 @@
         dirtyEl.setAttribute('data-tooltip', dirty
           ? 'Текст редактора отличается от последней сохранённой версии файла.'
           : 'Текущий текст совпадает с последней сохранённой версией файла.');
-      }
-      if (viewEl) {
-        viewEl.textContent = 'Позиция: ' + _describeViewState(savedView);
-        viewEl.classList.toggle('is-muted', !savedView);
-        viewEl.setAttribute('data-tooltip', savedView
-          ? ('Сохранённая позиция и прокрутка для текущего routing-файла: ' + _describeViewState(savedView))
-          : 'Для текущего routing-файла ещё не сохранена позиция курсора/прокрутки.');
       }
     } catch (e) {}
   }
@@ -842,7 +1065,7 @@
 	    let dirty = null;
 	    if (typeof forceDirty === 'boolean') dirty = forceDirty;
 	    else {
-	      try { dirty = _isDirtyText(getEditorText(), _getSavedContent()); } catch (e) { dirty = false; }
+	      try { dirty = _isDirtyText(getEditorSnapshot().text, _getSavedContent()); } catch (e) { dirty = false; }
 	    }
 
 	    try { window.routingIsDirty = !!dirty; } catch (e) {}
@@ -863,7 +1086,7 @@
 
 	  function scheduleDirtyCheck(waitMs) {
 	    if (_suppressDirty > 0) return;
-	    const wait = (typeof waitMs === 'number' && waitMs >= 0) ? waitMs : 200;
+	    const wait = (typeof waitMs === 'number' && waitMs >= 0) ? waitMs : currentDirtyDebounceMs();
 	    try { if (_dirtyTimer) clearTimeout(_dirtyTimer); } catch (e) {}
 	    _dirtyTimer = setTimeout(() => {
 	      _dirtyTimer = null;
@@ -882,19 +1105,27 @@
 
 	  function dispatchEditorContentEvent(reason) {
 	    try {
+	      const snapshot = getEditorSnapshot();
 	      document.dispatchEvent(new CustomEvent('xkeen:routing-editor-content', {
 	        detail: {
 	          reason: String(reason || 'change'),
 	          engine: String(_engine || ''),
 	          dirty: !!(typeof window !== 'undefined' && window.routingIsDirty),
 	          file: String(getActiveFragment() || ''),
+	          profile: snapshot && snapshot.perf ? {
+	            lite: !!snapshot.perf.lite,
+	            manualSync: !!snapshot.perf.manualSync,
+	            webkitSafari: !!snapshot.perf.webkitSafari,
+	            lineCount: Number(snapshot.perf.lineCount || 0),
+	            charCount: Number(snapshot.perf.charCount || 0),
+	          } : null,
 	        }
 	      }));
 	    } catch (e) {}
 	  }
 
 	  function scheduleEditorContentEvent(reason, waitMs) {
-	    const wait = (typeof waitMs === 'number' && waitMs >= 0) ? waitMs : 120;
+	    const wait = (typeof waitMs === 'number' && waitMs >= 0) ? waitMs : currentEditorContentDebounceMs();
 	    try { if (_editorContentTimer) clearTimeout(_editorContentTimer); } catch (e) {}
 	    _editorContentTimer = setTimeout(() => {
 	      _editorContentTimer = null;
@@ -1045,6 +1276,23 @@ function closeHelp() {
       if (_errorMarker && typeof _errorMarker.clear === 'function') _errorMarker.clear();
     } catch (e) {}
     _errorMarker = null;
+    try {
+      if (_cm && typeof _cm.setGutterMarker === 'function' && Number.isFinite(_errorGutterLine)) {
+        _cm.setGutterMarker(_errorGutterLine, 'CodeMirror-lint-markers', null);
+      }
+    } catch (e2) {}
+    _errorGutterLine = null;
+  }
+
+  function createRoutingErrorGutterMarker(message) {
+    const marker = document.createElement('span');
+    marker.className = 'xk-routing-error-gutter-marker';
+    marker.textContent = '×';
+    try {
+      const msg = String(message || '').trim();
+      if (msg) marker.title = msg;
+    } catch (e) {}
+    return marker;
   }
 
   function clearJsonErrorLocation() {
@@ -1064,6 +1312,7 @@ function closeHelp() {
       line: Number.isFinite(loc.line) ? Math.max(1, Math.floor(loc.line)) : null,
       col: Number.isFinite(loc.col) ? Math.max(1, Math.floor(loc.col)) : null,
       index: Number.isFinite(loc.index) ? Math.max(0, Math.floor(loc.index)) : null,
+      message: loc && loc.message ? String(loc.message) : '',
     };
     _lastJsonErrorLocation = norm;
     try {
@@ -1083,20 +1332,55 @@ function closeHelp() {
     } catch (e) {}
   }
 
-  function getMonacoMarkerErrorLocation() {
+  function getMonacoModelMarkers(opts) {
     try {
       if (!_monaco) return null;
       const api = window.monaco;
       if (!api || !api.editor || typeof api.editor.getModelMarkers !== 'function') return null;
       const model = (_monaco.getModel && _monaco.getModel()) ? _monaco.getModel() : null;
       if (!model || !model.uri) return null;
-      const markers = api.editor.getModelMarkers({ resource: model.uri, owner: 'xkeen' }) || [];
+      const o = opts || {};
+      const markers = api.editor.getModelMarkers({
+        resource: model.uri,
+        owner: o.anyOwner ? undefined : String(o.owner || 'xkeen'),
+      }) || [];
+      const errSeverity = (api.MarkerSeverity && api.MarkerSeverity.Error) ? api.MarkerSeverity.Error : 8;
+      const filtered = markers.filter((m) => {
+        if (!m) return false;
+        if (o.excludeOwner && String(m.owner || '') === String(o.excludeOwner)) return false;
+        if (o.errorsOnly === false) return true;
+        return Number(m.severity || 0) >= errSeverity;
+      });
+      filtered.sort((a, b) => {
+        const aOwn = String(a && a.owner || '');
+        const bOwn = String(b && b.owner || '');
+        if (o.preferNonOwner) {
+          const owner = String(o.preferNonOwner);
+          const aPenalty = aOwn === owner ? 1 : 0;
+          const bPenalty = bOwn === owner ? 1 : 0;
+          if (aPenalty !== bPenalty) return aPenalty - bPenalty;
+        }
+        const aLine = Number(a && a.startLineNumber || 0);
+        const bLine = Number(b && b.startLineNumber || 0);
+        if (aLine !== bLine) return aLine - bLine;
+        return Number(a && a.startColumn || 0) - Number(b && b.startColumn || 0);
+      });
+      return filtered;
+    } catch (e) {}
+    return [];
+  }
+
+  function getMonacoMarkerErrorLocation(opts) {
+    try {
+      const markers = getMonacoModelMarkers(opts);
       const m = markers && markers.length ? markers[0] : null;
       if (!m) return null;
       return {
         line: Number.isFinite(m.startLineNumber) ? m.startLineNumber : 1,
         col: Number.isFinite(m.startColumn) ? m.startColumn : 1,
         index: null,
+        message: String(m.message || ''),
+        owner: String(m.owner || ''),
       };
     } catch (e) {}
     return null;
@@ -1105,11 +1389,16 @@ function closeHelp() {
   function jumpToJsonErrorLocation() {
     let loc = _lastJsonErrorLocation || null;
     if ((!loc || (!loc.line && loc.index == null)) && _engine === 'monaco') {
-      loc = getMonacoMarkerErrorLocation();
+      loc = getMonacoMarkerErrorLocation({ anyOwner: true, preferNonOwner: 'xkeen', excludeOwner: '' });
     }
     if (!loc) return false;
 
     const raw = String(getEditorText() || '');
+
+    try {
+      const analysis = getJsoncAnalysis(raw, { preciseLocation: true });
+      if (analysis && !analysis.ok && analysis.loc) loc = analysis.loc;
+    } catch (e) {}
 
     if (_engine === 'monaco' && _monaco) {
       try {
@@ -1195,6 +1484,10 @@ function closeHelp() {
         { line, ch: Math.max(1, lineText.length) },
         { className: 'cm-error-line' }
       );
+      if (!shouldUseCodeMirrorLintAddon() && typeof _cm.setGutterMarker === 'function') {
+        _cm.setGutterMarker(line, 'CodeMirror-lint-markers', createRoutingErrorGutterMarker(message));
+        _errorGutterLine = line;
+      }
       if (autoScroll && _cm.scrollIntoView) _cm.scrollIntoView({ line, ch: 0 }, 200);
     } catch (e) {
       // ignore
@@ -1381,11 +1674,32 @@ function closeHelp() {
     return null;
   }
 
-  function extractJsonErrorLocation(err, rawText, stripMap) {
+  function probeCodeMirrorJsonLintLocation(cleanedText) {
+    try {
+      const CM = window.CodeMirror;
+      const helper = CM && CM.helpers && CM.helpers.lint ? CM.helpers.lint.json : null;
+      if (typeof helper !== 'function') return null;
+      const annotations = helper(String(cleanedText ?? '')) || [];
+      const ann = annotations && annotations.length ? annotations[0] : null;
+      if (!ann || !ann.from) return null;
+      return {
+        message: String(ann.message || 'JSON parse error'),
+        line: Number.isFinite(ann.from.line) ? Math.max(1, ann.from.line + 1) : null,
+        col: Number.isFinite(ann.from.ch) ? Math.max(1, ann.from.ch + 1) : null,
+      };
+    } catch (e) {}
+    return null;
+  }
+
+  function extractJsonErrorLocation(err, rawText, stripMap, opts) {
     const raw = String(rawText ?? '');
     const sm = stripMap && typeof stripMap === 'object' ? stripMap : stripJsonCommentsWithMap(raw);
     const cleaned = String(sm && sm.cleaned != null ? sm.cleaned : '');
     const map = Array.isArray(sm && sm.map) ? sm.map : [];
+    const preciseLocation = shouldUsePreciseJsonLocation(opts);
+    // Keep Safari live validation on the cheap path; exact coordinates still come
+    // from explicit preciseLocation flows such as save/error modal handling.
+    const wantsParserProbe = preciseLocation;
 
     const out = {
       message: String((err && err.message) ? err.message : err || 'JSON parse error'),
@@ -1396,21 +1710,26 @@ function closeHelp() {
 
     let cleanedIndex = extractJsonErrorPos(err);
     let lineCol = null;
+    let probed = null;
 
-    if (cleanedIndex == null || !Number.isFinite(cleanedIndex)) {
-      // Browser-provided line/column for JSON.parse are inconsistent across
-      // engines. Some browsers report EOF for errors that actually happened
-      // much earlier, so prefer jsonlint's parser location when it exists.
-      const probed = probeJsonlintErrorLocation(cleaned);
+    if (wantsParserProbe) {
+      probed = probeCodeMirrorJsonLintLocation(cleaned);
+      if (!probed) {
+        probed = probeJsonlintErrorLocation(cleaned);
+      }
+      // Browser-provided JSON.parse locations are inconsistent across engines.
+      // Safari often reports EOF even when the syntax error is much earlier.
       if (probed && probed.line && probed.col) {
         lineCol = { line: probed.line, col: probed.col };
-        if (!out.message && probed.message) out.message = String(probed.message);
-      } else {
-        lineCol = extractJsonErrorLineCol(err);
+        if (probed.message) out.message = String(probed.message);
       }
     }
 
-    if ((cleanedIndex == null || !Number.isFinite(cleanedIndex)) && lineCol) {
+    if ((cleanedIndex == null || !Number.isFinite(cleanedIndex)) && !lineCol) {
+      lineCol = extractJsonErrorLineCol(err);
+    }
+
+    if (lineCol) {
       cleanedIndex = lineColToIndex(cleaned, lineCol.line, lineCol.col);
     }
 
@@ -1535,18 +1854,18 @@ function closeHelp() {
 
   function scheduleMonacoDiagnostics() {
     try { if (_monacoDiagTimer) clearTimeout(_monacoDiagTimer); } catch (e) {}
+    const wait = Math.max(350, currentValidateDebounceMs());
     _monacoDiagTimer = setTimeout(() => {
       _monacoDiagTimer = null;
       try {
         if (_engine === 'monaco' && _monaco) runMonacoDiagnostics();
       } catch (e) {}
-    }, 400);
+    }, wait);
   }
 
 
   function showRoutingJsonErrorModal(err, rawText) {
     try {
-      if (!(window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function')) return;
       const raw = String(rawText == null ? getEditorText() : rawText);
       const sm = stripJsonCommentsWithMap(raw);
       const loc = extractJsonErrorLocation(err, raw, sm);
@@ -1567,7 +1886,25 @@ function closeHelp() {
       if (line && col) {
         payload.location = { line: line, column: col };
       }
-      XKeen.ui.showXrayPreflightError(payload);
+      const open = () => {
+        try {
+          if (window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function') {
+            XKeen.ui.showXrayPreflightError(payload);
+            return true;
+          }
+        } catch (e) {}
+        return false;
+      };
+      if (open()) return;
+
+      const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
+        ? XKeen.lazy.ensureFeature
+        : null;
+      if (ensureFeature) {
+        Promise.resolve(ensureFeature('xrayPreflight')).then(() => {
+          open();
+        }).catch(() => {});
+      }
     } catch (e) {}
   }
 
@@ -1698,17 +2035,16 @@ function closeHelp() {
   async function save() {
     const statusEl = $(IDS.status);
     const rawText = getEditorText();
-    const sm = stripJsonCommentsWithMap(rawText);
-    const cleaned = sm.cleaned;
-    try {
-      JSON.parse(cleaned);
+    const analysis = getJsoncAnalysis(rawText, { preciseLocation: true });
+    if (analysis.ok) {
       setError('', null);
       clearJsonErrorLocation();
-    } catch (e) {
-      const loc = extractJsonErrorLocation(e, rawText, sm);
-      setError('Ошибка JSON: ' + String(loc && loc.message ? loc.message : (e && e.message ? e.message : e)), loc.line - 1);
+    } else {
+      const loc = analysis.loc || { line: 1, col: 1, index: 0 };
+      const message = String(analysis.message || (analysis.error && analysis.error.message) || 'JSON parse error');
+      setError('Ошибка JSON: ' + message, loc.line - 1);
       setJsonErrorLocation({ line: loc.line, col: loc.col, index: loc.index });
-      showRoutingJsonErrorModal(e, rawText);
+      showRoutingJsonErrorModal(analysis.error, rawText);
       if (statusEl) statusEl.textContent = 'Ошибка: некорректный JSON.';
       toast('Ошибка: некорректный JSON.', true);
       return;
@@ -1743,12 +2079,21 @@ function closeHelp() {
         }
       } catch (e) {}
 
-      // ultra-fallback: legacy element
-      const el = document.getElementById('restart-log');
-      if (!el) return;
-      try { el.dataset.rawText = ''; } catch (e) {}
-      try { el.innerHTML = ''; } catch (e) {}
-      try { el.scrollTop = 0; } catch (e) {}
+      const els = [];
+      try {
+        document.querySelectorAll('[data-xk-restart-log="1"]').forEach((el) => {
+          if (el) els.push(el);
+        });
+      } catch (e) {}
+      try {
+        const legacy = document.getElementById('restart-log');
+        if (legacy && els.indexOf(legacy) === -1) els.push(legacy);
+      } catch (e) {}
+      els.forEach((el) => {
+        try { el.dataset.rawText = ''; } catch (e) {}
+        try { el.innerHTML = ''; } catch (e) {}
+        try { el.scrollTop = 0; } catch (e) {}
+      });
     };
 
     const appendRestartLog = (chunk) => {
@@ -1759,13 +2104,23 @@ function closeHelp() {
           return;
         }
       } catch (e) {}
-      const el = document.getElementById('restart-log');
-      if (!el) return;
+      const els = [];
       try {
-        const prev = el.textContent || '';
-        el.textContent = prev + String(chunk);
-        el.scrollTop = el.scrollHeight;
+        document.querySelectorAll('[data-xk-restart-log="1"]').forEach((el) => {
+          if (el) els.push(el);
+        });
       } catch (e) {}
+      try {
+        const legacy = document.getElementById('restart-log');
+        if (legacy && els.indexOf(legacy) === -1) els.push(legacy);
+      } catch (e) {}
+      els.forEach((el) => {
+        try {
+          const prev = el.textContent || '';
+          el.textContent = prev + String(chunk);
+          el.scrollTop = el.scrollHeight;
+        } catch (e) {}
+      });
     };
 
     try {
@@ -1885,6 +2240,192 @@ function closeHelp() {
   }
 
 
+  function runMonacoDiagnostics() {
+    const raw = getEditorText();
+    const safari = isWebKitSafari();
+
+    if (!String(raw ?? '').trim()) {
+      setError('File is empty. Enter valid JSON.', null);
+      clearJsonErrorLocation();
+      _lastValidationState = { ok: false, message: 'Empty file' };
+      try { updateEditorMetaStatus(); } catch (e) {}
+      try {
+        const api = window.monaco;
+        const sev = (api && api.MarkerSeverity && api.MarkerSeverity.Error) ? api.MarkerSeverity.Error : 8;
+        setMonacoMarkers([{
+          severity: sev,
+          message: 'Empty file',
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 2,
+        }]);
+      } catch (e) {}
+      return false;
+    }
+
+    const analysis = getJsoncAnalysis(raw, { preciseLocation: false });
+    if (analysis.ok) {
+      setError('', null);
+      clearJsonErrorLocation();
+      clearMonacoMarkers();
+      _maybeUpdateModeFromParsed(analysis.parsed);
+      _lastValidationState = { ok: true, message: 'JSON is valid' };
+      try { updateEditorMetaStatus(); } catch (e) {}
+      return true;
+    }
+
+    let loc = analysis.loc || { line: 1, col: 1, index: 0 };
+    let msg = String(analysis.message || 'JSON parse error');
+
+    // Safari Monaco already has native JSON markers with reliable coordinates.
+    // Prefer them over our local parser result when available.
+    const nativeMarker = safari
+      ? getMonacoMarkerErrorLocation({ anyOwner: true, preferNonOwner: 'xkeen', excludeOwner: 'xkeen' })
+      : null;
+    if (nativeMarker && nativeMarker.line && nativeMarker.col) {
+      loc = {
+        line: nativeMarker.line,
+        col: nativeMarker.col,
+        index: null,
+      };
+      if (nativeMarker.message) msg = String(nativeMarker.message);
+    }
+
+    if (!(safari && nativeMarker)) {
+      try {
+        const api = window.monaco;
+        const sev = (api && api.MarkerSeverity && api.MarkerSeverity.Error) ? api.MarkerSeverity.Error : 8;
+        setMonacoMarkers([{
+          severity: sev,
+          message: msg,
+          startLineNumber: loc.line,
+          startColumn: loc.col,
+          endLineNumber: loc.line,
+          endColumn: loc.col + 1,
+        }]);
+      } catch (e) {}
+    } else {
+      clearMonacoMarkers();
+    }
+
+    const errMsg = 'JSON error: ' + msg;
+    setError(errMsg, null);
+    setJsonErrorLocation({ line: loc.line, col: loc.col, index: loc.index, message: msg });
+    _lastValidationState = { ok: false, message: errMsg };
+    try { updateEditorMetaStatus(); } catch (e) {}
+
+    if (safari) {
+      try {
+        setTimeout(() => {
+          if (_engine !== 'monaco' || !_monaco) return;
+          const refreshed = getMonacoMarkerErrorLocation({ anyOwner: true, preferNonOwner: 'xkeen', excludeOwner: 'xkeen' });
+          if (!refreshed || !refreshed.line || !refreshed.col) return;
+          const refreshedMsg = String(refreshed.message || msg || 'JSON parse error');
+          setError('JSON error: ' + refreshedMsg, null);
+          setJsonErrorLocation({ line: refreshed.line, col: refreshed.col, index: null, message: refreshedMsg });
+          _lastValidationState = { ok: false, message: 'JSON error: ' + refreshedMsg };
+          try { updateEditorMetaStatus(); } catch (e2) {}
+        }, 80);
+      } catch (e) {}
+    }
+
+    return false;
+  }
+
+  function showRoutingJsonErrorModal(err, rawText) {
+    try {
+      const raw = String(rawText == null ? getEditorText() : rawText);
+      const analysis = getJsoncAnalysis(raw, { preciseLocation: true });
+      const loc = analysis.loc || extractJsonErrorLocation(err, raw, null, { preciseLocation: true });
+      const msg = String(analysis.message || (loc && loc.message) || ((err && err.message) ? err.message : (err || 'JSON parse error')));
+      const line = Number.isFinite(loc && loc.line) ? loc.line : null;
+      const col = Number.isFinite(loc && loc.col) ? loc.col : null;
+      const hint = line && col
+        ? ('Check line ' + line + ', column ' + col + '. The config was not sent to the server.')
+        : 'The config was not sent to the server. Fix the JSON syntax and try again.';
+      const payload = {
+        error: msg,
+        hint: hint,
+        phase: 'json_parse',
+        cmd: 'JSON.parse(stripJsonComments(...))',
+        stderr: msg + (line && col ? ('\nline: ' + line + ', column: ' + col) : ''),
+        stdout: '',
+      };
+      if (line && col) payload.location = { line: line, column: col };
+      const open = () => {
+        try {
+          if (window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function') {
+            XKeen.ui.showXrayPreflightError(payload);
+            return true;
+          }
+        } catch (e) {}
+        return false;
+      };
+      if (open()) return;
+
+      const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
+        ? XKeen.lazy.ensureFeature
+        : null;
+      if (ensureFeature) {
+        Promise.resolve(ensureFeature('xrayPreflight')).then(() => {
+          open();
+        }).catch(() => {});
+      }
+    } catch (e) {}
+  }
+
+  function validate() {
+    try {
+      if (_engine === 'monaco' && _monaco) return runMonacoDiagnostics();
+    } catch (e) {}
+
+    const raw = getEditorText();
+    if (!String(raw ?? '').trim()) {
+      setError('File is empty. Enter valid JSON.', null);
+      clearJsonErrorLocation();
+      _lastValidationState = { ok: false, message: 'Empty file' };
+      try { updateEditorMetaStatus(); } catch (e) {}
+      try { syncCodeMirrorLintNow(); } catch (e2) {}
+      return false;
+    }
+
+    const analysis = getJsoncAnalysis(raw, { preciseLocation: !isWebKitSafari() });
+    if (analysis.ok) {
+      setError('', null);
+      clearJsonErrorLocation();
+      _maybeUpdateModeFromParsed(analysis.parsed);
+      _lastValidationState = { ok: true, message: 'JSON is valid' };
+      try { updateEditorMetaStatus(); } catch (e) {}
+      try { syncCodeMirrorLintNow(); } catch (e2) {}
+      return true;
+    }
+
+    const loc = analysis.loc || { line: 1, col: 1, index: 0 };
+    const errMsg = 'JSON error: ' + String(analysis.message || 'JSON parse error');
+    setError(errMsg, loc.line - 1);
+    setJsonErrorLocation({ line: loc.line, col: loc.col, index: loc.index });
+    _lastValidationState = { ok: false, message: errMsg };
+    try { updateEditorMetaStatus(); } catch (e) {}
+    try { syncCodeMirrorLintNow(); } catch (e2) {}
+    return false;
+  }
+
+  function jsoncLint(text) {
+    const analysis = getJsoncAnalysis(String(text ?? ''), { preciseLocation: !isWebKitSafari() });
+    if (analysis.ok) return [];
+
+    const loc = analysis.loc || { line: 1, col: 1 };
+    return [
+      {
+        from: { line: Math.max(0, loc.line - 1), ch: Math.max(0, loc.col - 1) },
+        to: { line: Math.max(0, loc.line - 1), ch: Math.max(0, loc.col) },
+        message: String(analysis.message || 'JSON parse error'),
+        severity: 'error',
+      },
+    ];
+  }
+
   async function resetToSaved() {
     const saved = _getSavedContent();
     const current = getEditorText();
@@ -1976,6 +2517,14 @@ function closeHelp() {
 
     if (preferPrettier) {
       try {
+        const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
+          ? XKeen.lazy.ensureFeature
+          : null;
+        if (ensureFeature) {
+          await Promise.resolve(ensureFeature('formatters'));
+        }
+      } catch (e) {}
+      try {
         const F = (window.XKeen && XKeen.ui && XKeen.ui.formatters) ? XKeen.ui.formatters : null;
         if (F && typeof F.formatJson === 'function') {
           const r = await F.formatJson(text, { parser: 'jsonc' });
@@ -2038,7 +2587,7 @@ function closeHelp() {
     const statusEl = $(IDS.status);
     const text = getEditorText();
     const cleaned = stripJsonComments(text);
-    _cm.setValue(cleaned);
+    setEditorTextAll(cleaned, { reason: 'clear-comments', wait: 40 });
     validate();
     if (statusEl) statusEl.textContent = 'Комментарии удалены.';
     toast('Комментарии удалены.', false);
@@ -2371,7 +2920,12 @@ function closeHelp() {
   function createEditor() {
     const textarea = $(IDS.textarea);
     if (!textarea || !window.CodeMirror) return null;
-    const initialLite = isMipsTarget();
+
+    const existing = getExistingRoutingCodeMirror(textarea);
+    if (existing) return existing;
+
+    const initialLite = computeEditorPerfProfile(textarea.value || '').lite;
+    const safari = isWebKitSafari();
 
     // If main.js provides shared keybindings, reuse them.
     let cmExtraKeysCommon = null;
@@ -2402,14 +2956,16 @@ function closeHelp() {
       showIndentGuides: !initialLite,
       matchBrackets: !initialLite,
       autoCloseBrackets: true,
-      highlightSelectionMatches: !initialLite,
-      showTrailingSpace: !initialLite,
+      highlightSelectionMatches: !initialLite && !safari,
+      showTrailingSpace: !initialLite && !safari,
       rulers: initialLite ? [] : [{ column: 120 }],
-      lineWrapping: !initialLite,
-      foldGutter: !initialLite,
+      lineWrapping: !initialLite && !safari,
+      foldGutter: !initialLite && !safari,
       gutters: initialLite
         ? ['CodeMirror-linenumbers', 'CodeMirror-lint-markers']
-        : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers'],
+        : (safari
+          ? ['CodeMirror-linenumbers', 'CodeMirror-lint-markers']
+          : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']),
       maxHighlightLength: initialLite ? PERF_LIMITS.highlightLengthLite : 10000,
       crudeMeasuringFrom: initialLite ? PERF_LIMITS.measureFromLite : 10000,
 
@@ -2430,7 +2986,7 @@ function closeHelp() {
       })(),
 
       // IMPORTANT: JSONC-aware lint (strip comments first)
-      lint: { getAnnotations: jsoncLint, async: false },
+      lint: buildRoutingLintOptions(initialLite),
 
       tabSize: 2,
       indentUnit: 2,
@@ -2438,36 +2994,20 @@ function closeHelp() {
       extraKeys,
       // Continue line/block comments on Enter (requires addon/comment/continuecomment.js)
       continueComments: true,
-      viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : Infinity,
+      viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : (safari ? PERF_LIMITS.viewportMarginWebkit : Infinity),
     });
 
-    // Add an overlay to highlight lines starting with '#' as comments (JSONC extension).
-    try {
-      if (cm && typeof cm.addOverlay === 'function') {
-        const hashCommentOverlay = {
-          token: function(stream) {
-            if (stream.sol()) {
-              stream.eatSpace();
-              if (stream.peek && stream.peek() === '#') {
-                stream.skipToEnd();
-                return 'comment';
-              }
-            }
-            stream.skipToEnd();
-            return null;
-          }
-        };
-        cm.addOverlay(hashCommentOverlay);
-      }
-    } catch (e) {}
     // Cosmetic class + toolbar
     // IMPORTANT: Keep ONLY one help entry in the toolbar.
     // The default CodeMirror help (red '?') is removed, because its purpose overlaps with
     // our routing comments help. We keep the yellow JSONC help button only.
     try {
       if (cm.getWrapperElement) {
-        cm.getWrapperElement().classList.add('xkeen-cm');
-        cm.getWrapperElement().classList.toggle('xk-cm-lite', !!initialLite);
+        const wrapper = cm.getWrapperElement();
+        wrapper.classList.add('xkeen-cm');
+        wrapper.classList.toggle('xk-cm-lite', !!initialLite);
+        try { textarea.__xkRoutingCodeMirror = cm; } catch (e) {}
+        cleanupRoutingCodeMirrorWrappers(wrapper);
         if (typeof window.xkeenAttachCmToolbar === 'function' && window.XKEEN_CM_TOOLBAR_DEFAULT) {
           const base = Array.isArray(window.XKEEN_CM_TOOLBAR_DEFAULT) ? window.XKEEN_CM_TOOLBAR_DEFAULT : [];
           const items = [];
@@ -2514,18 +3054,51 @@ function closeHelp() {
         }
       }
     } catch (e) {}
-    _editorPerfProfile = { lite: !!initialLite, lineCount: 1, charCount: 0 };
+    _editorPerfProfile = {
+      lite: !!initialLite,
+      manualSync: !!(initialLite || safari),
+      webkitSafari: !!safari,
+      lineCount: 1,
+      charCount: 0,
+    };
+    try { syncRoutingCodeMirrorOverlays(!initialLite && !safari); } catch (e) {}
 
 	    cm.on('change', () => {
 	      if (_suppressDirty > 0) return;
+	      invalidateEditorSnapshot();
 	      scheduleValidate();
 	      scheduleDirtyCheck();
-	      scheduleEditorContentEvent('edit', 160);
+	      if (!isWebKitSafari()) scheduleEditorContentEvent('edit');
 	    });
-    try { cm.on('cursorActivity', () => { scheduleViewStateSave(null, { updateMeta: false }); }); } catch (e) {}
-    try { cm.on('scroll', () => { scheduleViewStateSave(null, { updateMeta: false }); }); } catch (e) {}
+    try { cm.on('blur', () => {
+      if (shouldManualCodeMirrorLint()) scheduleValidate(0);
+      try { saveCurrentViewState({ updateMeta: false }); } catch (e2) {}
+    }); } catch (e) {}
+    try { cm.on('cursorActivity', () => {
+      scheduleViewStateSave(null, { updateMeta: false, memoryOnly: isWebKitSafari() });
+    }); } catch (e) {}
+    try { cm.on('scroll', () => {
+      scheduleViewStateSave(null, { updateMeta: false, memoryOnly: isWebKitSafari() });
+    }); } catch (e) {}
 
     return cm;
+  }
+
+  function ensureCodeMirrorEditor() {
+    if (_cm && typeof _cm.getWrapperElement === 'function') {
+      try { moveToolbarToHost(_cm); } catch (e) {}
+      try { syncRoutingToolbarUi('codemirror'); } catch (e) {}
+      return _cm;
+    }
+
+    const cm = createEditor();
+    if (!cm) return null;
+
+    _cm = cm;
+    try { XKeen.state.routingEditor = _cm; } catch (e) {}
+    try { moveToolbarToHost(_cm); } catch (e) {}
+    try { syncRoutingToolbarUi('codemirror'); } catch (e) {}
+    return _cm;
   }
 
   function moveToolbarToHost(cm) {
@@ -2538,6 +3111,85 @@ function closeHelp() {
       try { cm._xkeenToolbarEl.classList.add('xk-toolbar-in-host'); } catch (e) {}
       // If Monaco is active, keep only the JSONC help button visible.
       try { syncToolbarForEngine(_engine); } catch (e) {}
+    } catch (e) {}
+  }
+
+  function buildRoutingToolbarButton(opts) {
+    const o = opts || {};
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'xkeen-cm-tool'
+      + (o.commentsHelp ? ' is-comments-help' : '');
+    btn.setAttribute('aria-label', String(o.label || 'Действие'));
+    if (o.actionId) btn.dataset.actionId = String(o.actionId);
+    if (o.tip) btn.dataset.tip = String(o.tip);
+    if (o.svg) btn.innerHTML = String(o.svg);
+    else btn.textContent = String(o.fallbackText || '?');
+    btn.addEventListener('click', (e) => {
+      try { e.preventDefault(); e.stopPropagation(); } catch (err) {}
+      try { if (typeof o.onClick === 'function') o.onClick(); } catch (err2) {}
+    });
+    return btn;
+  }
+
+  function ensureRoutingMonacoToolbar() {
+    try {
+      const host = document.getElementById('routing-toolbar-host');
+      if (!host) return null;
+
+      if (_cm && _cm._xkeenToolbarEl) {
+        try { moveToolbarToHost(_cm); } catch (e) {}
+        if (_routingMonacoToolbarEl) _routingMonacoToolbarEl.style.display = 'none';
+        return _cm._xkeenToolbarEl;
+      }
+
+      let bar = _routingMonacoToolbarEl;
+      if (!bar) {
+        const icons = window.XKEEN_CM_ICONS || {};
+        bar = document.createElement('div');
+        bar.className = 'xkeen-cm-toolbar xk-routing-monaco-toolbar';
+        bar.setAttribute('role', 'toolbar');
+        bar.appendChild(buildRoutingToolbarButton({
+          actionId: 'help_comments',
+          label: 'Справка (комментарии)',
+          tip: 'Справка (комментарии)',
+          commentsHelp: true,
+          svg: icons.help || '',
+          fallbackText: '?',
+          onClick: () => openHelp(),
+        }));
+        bar.appendChild(buildRoutingToolbarButton({
+          actionId: 'fs',
+          label: 'Полный экран',
+          tip: 'Полный экран',
+          svg: icons.fullscreen || '',
+          fallbackText: '[]',
+          onClick: () => toggleEditorFullscreen(null),
+        }));
+        _routingMonacoToolbarEl = bar;
+      }
+
+      if (!host.contains(bar)) host.appendChild(bar);
+      bar.style.display = (_engine === 'monaco' && !_cm) ? '' : 'none';
+      return bar;
+    } catch (e) {}
+    return null;
+  }
+
+  function syncRoutingToolbarUi(engine) {
+    const next = normalizeEngine(engine || _engine);
+    try {
+      if (_cm && _cm._xkeenToolbarEl) {
+        moveToolbarToHost(_cm);
+        syncToolbarForEngine(next);
+      }
+    } catch (e) {}
+    try {
+      if (_routingMonacoToolbarEl) {
+        _routingMonacoToolbarEl.style.display = (!_cm && next === 'monaco') ? '' : 'none';
+      } else if (!_cm && next === 'monaco') {
+        ensureRoutingMonacoToolbar();
+      }
     } catch (e) {}
   }
 
@@ -2739,12 +3391,42 @@ function closeHelp() {
       if (_readLocal(LEGACY_LS_KEY)) return true;
     } catch (e) {}
     try {
-      if (XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.get === 'function') {
+      if (_settingsLoadedFromServer() && XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.get === 'function') {
         const st = XKeen.ui.settings.get();
         return !!normalizeEngine(st && st.editor ? st.editor.engine : null);
       }
     } catch (e) {}
     return false;
+  }
+
+  async function resolveInitialEnginePreference() {
+    try { migrateLegacyEngineIfNeeded(); } catch (e) {}
+
+    try {
+      const localGlobal = normalizeEngine(_readLocal(GLOBAL_LS_KEY));
+      if (localGlobal) return localGlobal;
+    } catch (e) {}
+
+    try {
+      const localLegacy = normalizeEngine(_readLocal(LEGACY_LS_KEY));
+      if (localLegacy) return localLegacy;
+    } catch (e) {}
+
+    try {
+      if (_settingsLoadedFromServer()) {
+        const cached = normalizeEngine(getPreferredEngine());
+        if (cached) return cached;
+      }
+    } catch (e) {}
+
+    try {
+      if (_hasGlobalEditorEngine() && XKeen.ui && XKeen.ui.editorEngine && typeof XKeen.ui.editorEngine.ensureLoaded === 'function') {
+        const loaded = normalizeEngine(await XKeen.ui.editorEngine.ensureLoaded());
+        if (loaded) return loaded;
+      }
+    } catch (e) {}
+
+    return normalizeEngine(getPreferredEngine()) || 'codemirror';
   }
 
   function getPreferredEngine() {
@@ -2843,24 +3525,37 @@ function closeHelp() {
   }
 
   function ensureMonacoHost() {
-    if (_monacoHostEl) return _monacoHostEl;
     const ta = $(IDS.textarea);
     if (!ta || !ta.parentNode) return null;
 
     let host = $(IDS.monacoContainer);
+    let cmWrapper = null;
+    try {
+      if (_cm && typeof _cm.getWrapperElement === 'function') cmWrapper = _cm.getWrapperElement();
+    } catch (e) {}
+
     if (!host) {
       host = document.createElement('div');
       host.id = IDS.monacoContainer;
       host.className = 'xk-monaco-editor';
       host.style.display = 'none';
-      // Insert right after the textarea (CodeMirror replaces it with its wrapper).
-      try {
-        if (ta.nextSibling) ta.parentNode.insertBefore(host, ta.nextSibling);
-        else ta.parentNode.appendChild(host);
-      } catch (e) {
+    }
+
+    // Keep Monaco in the same visual slot as the main routing editor.
+    try {
+      if (cmWrapper && cmWrapper.parentNode) {
+        if (host !== cmWrapper.previousSibling) cmWrapper.parentNode.insertBefore(host, cmWrapper);
+      } else if (ta.nextSibling) {
+        if (host !== ta.nextSibling) ta.parentNode.insertBefore(host, ta.nextSibling);
+      } else if (!host.parentNode) {
         ta.parentNode.appendChild(host);
       }
+    } catch (e) {
+      try {
+        if (!host.parentNode) ta.parentNode.appendChild(host);
+      } catch (e2) {}
     }
+
     _monacoHostEl = host;
     return host;
   }
@@ -2872,96 +3567,148 @@ function closeHelp() {
     return null;
   }
 
+  async function ensureMonacoSharedApi() {
+    const existing = _getMonacoShared();
+    if (existing && typeof existing.createEditor === 'function') return existing;
+
+    try {
+      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
+      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
+        const ok = await lazy.ensureMonacoSupport();
+        if (!ok) return null;
+      }
+    } catch (e) {}
+
+    const loaded = _getMonacoShared();
+    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+  }
+
+  function resetMonacoHostDom(hostEl) {
+    const host = hostEl || ensureMonacoHost();
+    if (!host) return;
+    try {
+      while (host.firstChild) host.removeChild(host.firstChild);
+    } catch (e) {
+      try { host.textContent = ''; } catch (e2) {}
+    }
+  }
+
   async function ensureMonacoEditor() {
-    if (_monaco) return _monaco;
+    if (isMonacoAlive(_monaco)) return _monaco;
+    if (_monacoEnsurePromise) return _monacoEnsurePromise;
 
     const host = ensureMonacoHost();
     if (!host) return null;
 
-    const ms = _getMonacoShared();
+    const ms = await ensureMonacoSharedApi();
     if (!ms || typeof ms.createEditor !== 'function') {
-      toast('Monaco shared не найден (monaco_shared.js).', true);
+      toast('Не удалось загрузить Monaco support.', true);
       return null;
     }
 
-    try {
-      _monaco = await ms.createEditor(host, {
-        value: (_cm && typeof _cm.getValue === 'function') ? _cm.getValue() : '',
-        // Xray configs commonly use JSON with user comments (JSONC-like).
-        // Backend сохраняет чистый JSON + отдельный .jsonc сайдкар, поэтому в UI
-        // разрешаем комментарии для удобства.
-        language: 'jsonc',
-        allowComments: true,
-        tabSize: 2,
-        insertSpaces: true,
-        wordWrap: isMipsTarget() ? 'off' : 'on',
-        onChange: () => {
-          try { scheduleMonacoDiagnostics(); } catch (e) {}
-	          try { scheduleDirtyCheck(); } catch (e) {}
-          try { scheduleEditorContentEvent('edit', 160); } catch (e) {}
-          try { scheduleViewStateSave(null, { updateMeta: false }); } catch (e) {}
-        },
-      });
+    _monacoEnsurePromise = (async () => {
+      try {
+        if (_monaco && typeof _monaco.dispose === 'function') _monaco.dispose();
+      } catch (e) {}
+      _monaco = null;
+      _monacoFacade = null;
+      resetMonacoHostDom(host);
 
-      if (!_monaco) {
-        toast('Не удалось загрузить Monaco Editor (CDN недоступен?).', true);
+      try {
+        _monaco = await ms.createEditor(host, {
+          value: readCurrentEditorText(),
+          // Xray configs commonly use JSON with user comments (JSONC-like).
+          // Backend сохраняет чистый JSON + отдельный .jsonc сайдкар, поэтому в UI
+          // разрешаем комментарии для удобства.
+          language: 'jsonc',
+          allowComments: true,
+          tabSize: 2,
+          insertSpaces: true,
+          performanceProfile: (_editorPerfProfile && _editorPerfProfile.lite) ? 'lite' : 'default',
+          wordWrap: isMipsTarget() ? 'off' : 'on',
+          onChange: () => {
+            try { invalidateEditorSnapshot(); } catch (e) {}
+            try { scheduleMonacoDiagnostics(); } catch (e) {}
+	            try { scheduleDirtyCheck(); } catch (e) {}
+            try { if (!isWebKitSafari()) scheduleEditorContentEvent('edit'); } catch (e) {}
+          },
+        });
+
+        if (!isMonacoAlive(_monaco)) {
+          _monaco = null;
+          toast('Не удалось загрузить Monaco Editor.', true);
+          return null;
+        }
+
+        // Facade for modules expecting CodeMirror-like API (getValue/setValue/scrollTo).
+        try {
+          _monacoFacade = (typeof ms.toFacade === 'function') ? ms.toFacade(_monaco) : null;
+        } catch (e) {
+          _monacoFacade = null;
+        }
+
+        if (!_monacoFacade) {
+          _monacoFacade = {
+            getValue: () => { try { return _monaco.getValue(); } catch (e) { return ''; } },
+            setValue: (v) => { try { _monaco.setValue(String(v ?? '')); } catch (e) {} },
+            focus: () => { try { _monaco.focus(); } catch (e) {} },
+            scrollTo: (_x, y) => {
+              try {
+                if (typeof y === 'number') _monaco.setScrollTop(Math.max(0, y));
+                else _monaco.setScrollTop(0);
+              } catch (e) {}
+            },
+          };
+        }
+
+        // Ensure layout fix for hidden containers (modals/tabs/engine switch).
+        try {
+          if (typeof ms.layoutOnVisible === 'function') ms.layoutOnVisible(_monaco, host, { lite: !!(_editorPerfProfile && _editorPerfProfile.lite) });
+        } catch (e) {}
+
+        try {
+          if (_monaco && typeof _monaco.onDidScrollChange === 'function') {
+            _monaco.onDidScrollChange(() => {
+              try { scheduleViewStateSave(null, { updateMeta: false, memoryOnly: isWebKitSafari() }); } catch (e) {}
+            });
+          }
+        } catch (e) {}
+        try {
+          if (_monaco && typeof _monaco.onDidChangeCursorPosition === 'function') {
+            _monaco.onDidChangeCursorPosition(() => {
+              try { scheduleViewStateSave(null, { updateMeta: false, memoryOnly: isWebKitSafari() }); } catch (e) {}
+            });
+          }
+        } catch (e) {}
+        try {
+          if (_monaco && typeof _monaco.onDidBlurEditorText === 'function') {
+            _monaco.onDidBlurEditorText(() => {
+              try { saveCurrentViewState({ updateMeta: false }); } catch (e) {}
+            });
+          }
+        } catch (e) {}
+
+        return _monaco;
+      } catch (e) {
+        try { console.error(e); } catch (e2) {}
+        toast('Ошибка загрузки Monaco (см. консоль).', true);
+        _monaco = null;
+        _monacoFacade = null;
         return null;
       }
+    })().finally(() => {
+      _monacoEnsurePromise = null;
+    });
 
-      // Facade for modules expecting CodeMirror-like API (getValue/setValue/scrollTo).
-      try {
-        _monacoFacade = (typeof ms.toFacade === 'function') ? ms.toFacade(_monaco) : null;
-      } catch (e) {
-        _monacoFacade = null;
-      }
-
-      if (!_monacoFacade) {
-        _monacoFacade = {
-          getValue: () => { try { return _monaco.getValue(); } catch (e) { return ''; } },
-          setValue: (v) => { try { _monaco.setValue(String(v ?? '')); } catch (e) {} },
-          focus: () => { try { _monaco.focus(); } catch (e) {} },
-          scrollTo: (_x, y) => {
-            try {
-              if (typeof y === 'number') _monaco.setScrollTop(Math.max(0, y));
-              else _monaco.setScrollTop(0);
-            } catch (e) {}
-          },
-        };
-      }
-
-      // Ensure layout fix for hidden containers (modals/tabs/engine switch).
-      try {
-        if (typeof ms.layoutOnVisible === 'function') ms.layoutOnVisible(_monaco, host);
-      } catch (e) {}
-
-      try {
-        if (_monaco && typeof _monaco.onDidScrollChange === 'function') {
-          _monaco.onDidScrollChange(() => { try { scheduleViewStateSave(null, { updateMeta: false }); } catch (e) {} });
-        }
-      } catch (e) {}
-      try {
-        if (_monaco && typeof _monaco.onDidChangeCursorPosition === 'function') {
-          _monaco.onDidChangeCursorPosition(() => { try { scheduleViewStateSave(null, { updateMeta: false }); } catch (e) {} });
-        }
-      } catch (e) {}
-
-      return _monaco;
-    } catch (e) {
-      try { console.error(e); } catch (e2) {}
-      toast('Ошибка загрузки Monaco (см. консоль).', true);
-      return null;
-    }
+    return _monacoEnsurePromise;
   }
 
   function getEditorText() {
     try {
-      if (_engine === 'monaco' && _monaco) return String(_monaco.getValue() || '');
+      const snapshot = getEditorSnapshot();
+      return snapshot ? String(snapshot.text || '') : '';
     } catch (e) {}
-    try {
-      if (_cm && typeof _cm.getValue === 'function') return String(_cm.getValue() || '');
-    } catch (e) {}
-    const ta = $(IDS.textarea);
-    return ta ? String(ta.value || '') : '';
+    return '';
   }
 
   function setEditorTextAll(text, opts) {
@@ -2974,6 +3721,7 @@ function closeHelp() {
       const ta = $(IDS.textarea);
       if (ta) ta.value = v;
     } catch (e) {}
+    try { cacheEditorSnapshot(v); } catch (e) {}
     if (o.broadcast !== false) {
       try { scheduleEditorContentEvent(o.reason || 'set', typeof o.wait === 'number' ? o.wait : 60); } catch (e) {}
     }
@@ -2984,25 +3732,111 @@ function closeHelp() {
     try { if (_monaco && typeof _monaco.setScrollTop === 'function') _monaco.setScrollTop(0); } catch (e) {}
   }
 
+  function getRoutingCodeMirrorWrappers() {
+    const ta = $(IDS.textarea);
+    if (!ta) return [];
+    try {
+      const all = Array.from(document.querySelectorAll('.CodeMirror'));
+      return all.filter((wrap) => {
+        try {
+          const cm = wrap && wrap.CodeMirror;
+          if (!cm || typeof cm.getTextArea !== 'function') return false;
+          return cm.getTextArea() === ta;
+        } catch (e) {
+          return false;
+        }
+      });
+    } catch (e) {}
+    return [];
+  }
+
+  function cleanupRoutingCodeMirrorWrappers(keepWrapper) {
+    const wrappers = getRoutingCodeMirrorWrappers();
+    for (let i = 0; i < wrappers.length; i += 1) {
+      const wrap = wrappers[i];
+      if (!wrap || wrap === keepWrapper) continue;
+      try {
+        const cm = wrap.CodeMirror;
+        if (cm && typeof cm.getTextArea === 'function') {
+          const ta = cm.getTextArea();
+          if (ta && ta.id && ta.id !== IDS.textarea) continue;
+        }
+      } catch (e) {}
+      try { wrap.style.display = 'none'; } catch (e) {}
+      try { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); } catch (e) {}
+    }
+  }
+
+  function getExistingRoutingCodeMirror(textarea) {
+    const ta = textarea || $(IDS.textarea);
+    if (!ta) return null;
+
+    try {
+      const cached = ta.__xkRoutingCodeMirror;
+      if (cached && typeof cached.getWrapperElement === 'function') {
+        const wrap = cached.getWrapperElement();
+        if (wrap && wrap.isConnected) {
+          cleanupRoutingCodeMirrorWrappers(wrap);
+          return cached;
+        }
+      }
+    } catch (e) {}
+
+    const wrappers = getRoutingCodeMirrorWrappers();
+    for (let i = 0; i < wrappers.length; i += 1) {
+      const wrap = wrappers[i];
+      try {
+        const cm = wrap && wrap.CodeMirror;
+        if (!cm || typeof cm.getWrapperElement !== 'function') continue;
+        if (typeof cm.getTextArea === 'function' && cm.getTextArea() !== ta) continue;
+        ta.__xkRoutingCodeMirror = cm;
+        cleanupRoutingCodeMirrorWrappers(wrap);
+        return cm;
+      } catch (e) {}
+    }
+
+    return null;
+  }
+
+  function syncRoutingEngineDomState(engine) {
+    const next = normalizeEngine(engine || _engine);
+    try {
+      const body = $(IDS.body);
+      if (body) body.setAttribute('data-routing-engine', next);
+    } catch (e) {}
+  }
+
   function showCodeMirror(show) {
     try {
-      if (!_cm || !_cm.getWrapperElement) return;
-      const w = _cm.getWrapperElement();
-      if (!w) return;
-      w.style.display = show ? '' : 'none';
-      if (show && _cm.refresh) _cm.refresh();
+      const wrappers = getRoutingCodeMirrorWrappers();
+      const current = (_cm && _cm.getWrapperElement) ? _cm.getWrapperElement() : null;
+      if (show && current) cleanupRoutingCodeMirrorWrappers(current);
+      const ta = $(IDS.textarea);
+      try { if (ta) ta.style.display = 'none'; } catch (e) {}
+      try { syncRoutingEngineDomState(show ? 'codemirror' : 'monaco'); } catch (e) {}
+
+      for (let i = 0; i < wrappers.length; i += 1) {
+        const wrap = wrappers[i];
+        if (!wrap) continue;
+        if (show && current && wrap === current) wrap.style.removeProperty('display');
+        else wrap.style.setProperty('display', 'none', 'important');
+      }
+
+      if (show && _cm && typeof _cm.refresh === 'function') _cm.refresh();
     } catch (e) {}
   }
 
   function showMonaco(show) {
     const host = ensureMonacoHost();
     if (!host) return;
-    host.style.display = show ? '' : 'none';
+    try { syncRoutingEngineDomState(show ? 'monaco' : 'codemirror'); } catch (e) {}
+    if (show) host.style.removeProperty('display');
+    else host.style.setProperty('display', 'none', 'important');
 
     if (show && _monaco && typeof _monaco.layout === 'function') {
       const ms = _getMonacoShared();
       if (ms && typeof ms.layoutOnVisible === 'function') {
-        try { ms.layoutOnVisible(_monaco, host); } catch (e) {}
+        try { ms.layoutOnVisible(_monaco, host, { lite: !!(_editorPerfProfile && _editorPerfProfile.lite) }); } catch (e) {}
         return;
       }
 
@@ -3047,6 +3881,7 @@ function closeHelp() {
       } catch (e) {}
       _monaco = null;
       _monacoFacade = null;
+      resetMonacoHostDom(host);
     }
 
     const doLayout = () => {
@@ -3054,7 +3889,7 @@ function closeHelp() {
         if (!_monaco || typeof _monaco.layout !== 'function') return;
         const ms = _getMonacoShared();
         if (ms && typeof ms.layoutOnVisible === 'function') {
-          ms.layoutOnVisible(_monaco, host);
+          ms.layoutOnVisible(_monaco, host, { lite: !!(_editorPerfProfile && _editorPerfProfile.lite) });
           return;
         }
         _monaco.layout();
@@ -3073,10 +3908,6 @@ function closeHelp() {
       doLayout();
     }
 
-    // Optional debug hook
-    try {
-      if (reason && window.console && console.debug) console.debug('[routing] monaco relayout:', reason);
-    } catch (e) {}
   }
 
   async function onShow(opts) {
@@ -3122,22 +3953,29 @@ function closeHelp() {
       if (window.__xkeenRoutingPageReturnWired) return;
       window.__xkeenRoutingPageReturnWired = true;
 
+      const triggerReturnShow = (reason) => {
+        const now = Date.now();
+        if ((now - _lastPageReturnShowAt) < 180) return;
+        _lastPageReturnShowAt = now;
+        try {
+          if (document.visibilityState === 'visible') onShow({ reason: String(reason || 'show') });
+        } catch (e) {}
+      };
+
       window.addEventListener('pageshow', (ev) => {
         // Always run: even non-persisted navigations sometimes need a relayout.
-        try {
-          if (document.visibilityState === 'visible') onShow({ reason: ev && ev.persisted ? 'bfcache' : 'pageshow' });
-        } catch (e) {}
+        triggerReturnShow(ev && ev.persisted ? 'bfcache' : 'pageshow');
       });
 
       document.addEventListener('visibilitychange', () => {
         try {
-          if (document.visibilityState === 'visible') onShow({ reason: 'visibility' });
-          else saveCurrentViewState();
+          if (document.visibilityState === 'visible') triggerReturnShow('visibility');
+          else saveCurrentViewState({ updateMeta: false });
         } catch (e) {}
       });
 
       window.addEventListener('beforeunload', () => {
-        try { saveCurrentViewState(); } catch (e) {}
+        try { saveCurrentViewState({ updateMeta: false }); } catch (e) {}
       });
     } catch (e) {}
   }
@@ -3177,6 +4015,7 @@ function closeHelp() {
       showMonaco(true);
       // Keep only JSONC help + fullscreen visible in the toolbar host.
       try { syncToolbarForEngine('monaco'); } catch (e) {}
+      try { syncRoutingToolbarUi('monaco'); } catch (e) {}
       try { wireMonacoFullscreenOnce(); } catch (e) {}
 
       _engine = 'monaco';
@@ -3187,12 +4026,18 @@ function closeHelp() {
       try { validate(); } catch (e) {}
       try { saveCurrentViewState(); } catch (e) {}
     } else {
+      const cm = ensureCodeMirrorEditor();
+      if (!cm) {
+        try { if (_engineSelectEl) _engineSelectEl.value = _engine; } catch (e) {}
+        return;
+      }
+
       // If Monaco is fullscreen, exit it before hiding to avoid leaving body scroll locked.
       try { if (isMonacoFullscreen()) setMonacoFullscreen(false); } catch (e) {}
 
       // Sync text back from Monaco to CodeMirror
       try {
-        if (_monaco && _cm && typeof _cm.setValue === 'function') _cm.setValue(_monaco.getValue());
+        if (_monaco && typeof cm.setValue === 'function') cm.setValue(_monaco.getValue());
       } catch (e) {}
 
       // Leave Monaco: clear markers and cancel pending diagnostics.
@@ -3204,11 +4049,12 @@ function closeHelp() {
       showCodeMirror(true);
       // Restore full CodeMirror toolbar.
       try { syncToolbarForEngine('codemirror'); } catch (e) {}
+      try { syncRoutingToolbarUi('codemirror'); } catch (e) {}
 
       _engine = 'codemirror';
-      try { XKeen.state.routingEditor = _cm; } catch (e) {}
+      try { XKeen.state.routingEditor = cm; } catch (e) {}
       try { restoreViewState(preservedView); } catch (e) {}
-      try { if (_cm && _cm.focus) _cm.focus(); } catch (e) {}
+      try { if (cm && cm.focus) cm.focus(); } catch (e) {}
       try { validate(); } catch (e) {}
       try { saveCurrentViewState(); } catch (e) {}
     }
@@ -3322,42 +4168,78 @@ function closeHelp() {
     if (_inited) return;
     _inited = true;
 
-    _cm = createEditor();
-    XKeen.state.routingEditor = _cm;
+    const startInit = (resolvedEngine) => {
+      const initialEngine = normalizeEngine(resolvedEngine || getPreferredEngine()) || 'codemirror';
+      const bootWithMonaco = initialEngine === 'monaco';
 
-    try {
-      if (window.XKeen && XKeen.cmLoader && typeof XKeen.cmLoader.ensureJsonLint === 'function') {
-        Promise.resolve(XKeen.cmLoader.ensureJsonLint())
-          .then((ok) => {
-            if (!ok) return;
-            try { if (_cm && typeof _cm.performLint === 'function') _cm.performLint(); } catch (e2) {}
-            try { validate(); } catch (e3) {}
-          })
-          .catch(() => {});
-      }
-    } catch (e) {}
+      const finishInit = () => {
+        if (!bootWithMonaco) {
+          _cm = ensureCodeMirrorEditor();
+          try { XKeen.state.routingEditor = _cm; } catch (e) {}
+          try { syncRoutingEngineDomState(_engine); } catch (e2) {}
+          try {
+            if (!shouldManualCodeMirrorLint() && _cm && typeof _cm.performLint === 'function') _cm.performLint();
+          } catch (e3) {}
+        } else {
+          try { syncRoutingEngineDomState('monaco'); } catch (e4) {}
+        }
 
-    // Ensure Monaco container exists (hidden by default)
-    try { ensureMonacoHost(); } catch (e) {}
+        // Ensure Monaco container exists (hidden by default)
+        try { ensureMonacoHost(); } catch (e) {}
 
-    // Build engine toggle UI (default CodeMirror, no auto-fetch beyond routing)
-    try { ensureEngineToggleUI(); } catch (e) {}
+        // Build engine toggle UI (default CodeMirror, no auto-fetch beyond routing)
+        try { ensureEngineToggleUI(); } catch (e) {}
 
-    // Place CodeMirror toolbar into the compact header (same line as file selector)
-    try {
-      // next tick — CodeMirror may replace textarea synchronously, but toolbar can be attached right away
-      setTimeout(() => moveToolbarToHost(_cm), 0);
-    } catch (e) {}
+        try {
+          if (bootWithMonaco) ensureRoutingMonacoToolbar();
+          else if (_cm) setTimeout(() => moveToolbarToHost(_cm), 0);
+        } catch (e) {}
 
-    // Notify theme module that editors are ready (safe to dispatch multiple times)
-    try { document.dispatchEvent(new CustomEvent('xkeen-editors-ready')); } catch (e) {}
-    try { updateEditorMetaStatus(); } catch (e) {}
+        // Fix Monaco after tab switches / navigation away+back (BFCache)
+        try { wirePageReturnOnce(); } catch (e) {}
 
-    // Fix Monaco after tab switches / navigation away+back (BFCache)
-    try { wirePageReturnOnce(); } catch (e) {}
+        wireUI();
 
-    wireUI();
-    refreshFragmentsList().finally(() => load());
+        Promise.resolve(bootWithMonaco ? _engineSwitchChain : null)
+          .catch(() => {})
+          .finally(() => {
+            if (!_cm && _engine !== 'monaco') {
+              try { _cm = ensureCodeMirrorEditor(); } catch (e) {}
+            }
+            try { syncRoutingToolbarUi(_engine); } catch (e) {}
+            try { validate(); } catch (e) {}
+            try { document.dispatchEvent(new CustomEvent('xkeen-editors-ready')); } catch (e) {}
+            try { updateEditorMetaStatus(); } catch (e) {}
+            refreshFragmentsList().finally(() => load());
+          });
+      };
+
+      try {
+        const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
+        if (loader && typeof loader.ensureEditorAssets === 'function') {
+          Promise.resolve(loader.ensureEditorAssets({
+            mode: 'jsonc',
+            jsonLint: true,
+            search: true,
+            fold: true,
+            fullscreen: true,
+            rulers: true,
+            autoCloseBrackets: true,
+            trailingSpace: true,
+            comments: true,
+          }))
+            .catch(() => null)
+            .finally(finishInit);
+          return;
+        }
+      } catch (e) {}
+
+      finishInit();
+    };
+
+    Promise.resolve(resolveInitialEnginePreference())
+      .catch(() => normalizeEngine(getPreferredEngine()) || 'codemirror')
+      .then(startInit);
   }
 
   function replaceEditorText(text, opts) {

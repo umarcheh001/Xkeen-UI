@@ -64,6 +64,11 @@ def _is_mips_arch(machine: str) -> bool:
     return m.startswith("mips")
 
 
+def _is_arm_arch(machine: str) -> bool:
+    m = (machine or "").lower()
+    return m.startswith("arm") or "aarch64" in m or "arm64" in m
+
+
 def _which_lftp(which: Callable[[str], Optional[str]]) -> Optional[str]:
     """Resolve lftp binary path.
 
@@ -159,6 +164,38 @@ def _detect_runtime_mode(env: Dict[str, str]) -> str:
     return "router" if (has_ndm or has_ndmc or has_opkg or is_opt) else "dev"
 
 
+def detect_terminal_state(
+    env: Dict[str, str],
+    *,
+    runtime_mode: Optional[str] = None,
+    ws_runtime: Optional[bool] = None,
+) -> Dict[str, object]:
+    """Detect terminal transport availability.
+
+    PTY is stricter than raw WebSocket runtime:
+    - Router mode: PTY only on ARM-class devices.
+    - Dev/desktop mode: PTY follows WS runtime availability.
+    """
+    rt_mode = runtime_mode or _detect_runtime_mode(env)
+    ws_ok = bool(_env_bool(env, "XKEEN_WS_RUNTIME", False) if ws_runtime is None else ws_runtime)
+    machine_arch = _detect_machine_arch()
+    pty_ok = bool(ws_ok and (rt_mode != "router" or _is_arm_arch(machine_arch)))
+
+    reason = None
+    if not ws_ok:
+        reason = "ws_unavailable"
+    elif rt_mode == "router" and not _is_arm_arch(machine_arch):
+        reason = "arch_not_arm"
+
+    return {
+        "lite": True,
+        "pty": bool(pty_ok),
+        "ws": bool(ws_ok),
+        "arch": machine_arch,
+        "reason": reason,
+    }
+
+
 def detect_capabilities(
     env: Dict[str, str],
     *,
@@ -172,6 +209,7 @@ def detect_capabilities(
     ws_runtime = _env_bool(env, "XKEEN_WS_RUNTIME", False)
 
     rt_mode = _detect_runtime_mode(env)
+    terminal = detect_terminal_state(env, runtime_mode=rt_mode, ws_runtime=ws_runtime)
 
     # Log dir used by UI logging setup (best-effort, no side effects).
     default_log_dir = os.path.join(str(BASE_VAR_DIR), "log", "xkeen-ui")
@@ -269,6 +307,7 @@ def detect_capabilities(
 
     return {
         "websocket": bool(ws_runtime),
+        "terminal": terminal,
         "runtime": runtime,
         "files": files,
         "remoteFs": remote,

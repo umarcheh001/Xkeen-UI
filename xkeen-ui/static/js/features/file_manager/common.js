@@ -244,4 +244,33 @@
     }
     return false;
   };
+
+  C.isLiteMode = function isLiteMode() {
+    try {
+      const s = (FM && FM.state && FM.state.S) ? FM.state.S : null;
+      if (s && typeof s.liteMode === 'boolean') return !!s.liteMode;
+    } catch (e) {}
+    try {
+      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
+      return String(window.XKEEN_IS_MIPS || '').toLowerCase() === 'true';
+    } catch (e2) {
+      return false;
+    }
+  };
+
+  C.toggleHidden = function toggleHidden(node, hidden) {
+    if (!node) return;
+    const on = !!hidden;
+    try { node.hidden = on; } catch (e) {}
+    try {
+      const tag = String(node.tagName || '').toUpperCase();
+      if (tag === 'OPTION') {
+        node.removeAttribute('aria-hidden');
+      } else if (on) {
+        node.setAttribute('aria-hidden', 'true');
+      } else {
+        node.removeAttribute('aria-hidden');
+      }
+    } catch (e2) {}
+  };
 })();

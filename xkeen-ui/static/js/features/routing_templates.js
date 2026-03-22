@@ -112,6 +112,22 @@ editEngineSelect: 'routing-template-edit-engine-select',
     try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
   }
 
+  async function ensureMonacoSharedApi() {
+    const existing = getMonacoShared();
+    if (existing && typeof existing.createEditor === 'function') return existing;
+
+    try {
+      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
+      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
+        const ok = await lazy.ensureMonacoSupport();
+        if (!ok) return null;
+      }
+    } catch (e) {}
+
+    const loaded = getMonacoShared();
+    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+  }
+
   function setEngineSelects(engine) {
     const e = normalizeEngine(engine);
     const a = el(IDS.previewEngineSelect);
@@ -199,7 +215,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
     const host = el(IDS.previewMonaco);
 
     if (next === 'monaco') {
-      const shared = getMonacoShared();
+      const shared = await ensureMonacoSharedApi();
       if (!shared || !host || typeof shared.createEditor !== 'function') {
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
         const ee = getEngineHelper();
@@ -273,7 +289,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
     const host = el(IDS.editMonaco);
 
     if (next === 'monaco') {
-      const shared = getMonacoShared();
+      const shared = await ensureMonacoSharedApi();
       if (!shared || !host || typeof shared.createEditor !== 'function') {
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
         const ee = getEngineHelper();

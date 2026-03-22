@@ -45,6 +45,95 @@
     return !!(ev && (ev.ctrlKey || ev.metaKey));
   }
 
+  function supportsTouchInput() {
+    try {
+      if (typeof navigator !== 'undefined' && Number(navigator.maxTouchPoints || 0) > 0) return true;
+    } catch (e) {}
+    try {
+      return ('ontouchstart' in window);
+    } catch (e2) {}
+    return false;
+  }
+
+  function supportsModernWheelEvent() {
+    try {
+      const el = document.createElement('div');
+      return ('onwheel' in el);
+    } catch (e) {}
+    return true;
+  }
+
+  function isWebKitSafari() {
+    try {
+      const nav = window.navigator || {};
+      const ua = String(nav.userAgent || '');
+      const vendor = String(nav.vendor || '');
+      if (!ua) return false;
+      if (!/Safari/i.test(ua)) return false;
+      if (!/Apple/i.test(vendor)) return false;
+      if (/(Chrome|Chromium|CriOS|Edg|OPR|OPT|Opera|Vivaldi|DuckDuckGo|Firefox|FxiOS|Arc|Brave)/i.test(ua)) return false;
+      return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function shouldRelaxLegacyCodeMirrorListeners(textarea) {
+    if (isWebKitSafari()) return false;
+    try {
+      const id = textarea && textarea.id ? String(textarea.id) : '';
+      if (!id) return false;
+      return (
+        id === 'routing-editor' ||
+        id === 'mihomo-editor' ||
+        id === 'port-proxying-editor' ||
+        id === 'port-exclude-editor' ||
+        id === 'ip-exclude-editor' ||
+        id === 'xkeen-config-editor' ||
+        id === 'previewTextarea' ||
+        id === 'fm-editor-textarea' ||
+        id === 'json-editor-textarea' ||
+        id === 'xray-snapshot-preview' ||
+        id === 'routing-template-preview' ||
+        id === 'routing-template-edit-content' ||
+        id === 'mihomo-import-preview'
+      );
+    } catch (e) {}
+    return false;
+  }
+
+  function withPatchedCodeMirrorListeners(textarea, createFn) {
+    if (typeof createFn !== 'function') return null;
+
+    const skipTouchListeners = !supportsTouchInput();
+    const skipLegacyWheelListeners = shouldRelaxLegacyCodeMirrorListeners(textarea) && supportsModernWheelEvent();
+    if (!skipTouchListeners && !skipLegacyWheelListeners) {
+      return createFn();
+    }
+
+    const proto = (typeof EventTarget !== 'undefined' && EventTarget && EventTarget.prototype) ? EventTarget.prototype : null;
+    const orig = proto && typeof proto.addEventListener === 'function' ? proto.addEventListener : null;
+    if (!orig) return createFn();
+
+    proto.addEventListener = function patchedAddEventListener(type, listener, options) {
+      const ev = String(type || '');
+
+      if (skipTouchListeners && (ev === 'touchstart' || ev === 'touchmove')) {
+        return;
+      }
+      if (skipLegacyWheelListeners && (ev === 'mousewheel' || ev === 'DOMMouseScroll')) {
+        return;
+      }
+
+      return orig.call(this, type, listener, options);
+    };
+
+    try {
+      return createFn();
+    } finally {
+      proto.addEventListener = orig;
+    }
+  }
+
   function buildUrlOverlay() {
     // Overlay is stateless; CodeMirror reuses it per editor.
     return {
@@ -82,6 +171,50 @@
         }
       },
     };
+  }
+
+  function getLinkState(cm) {
+    try {
+      if (!cm) return null;
+      cm.state = cm.state || {};
+      return cm.state;
+    } catch (e) {}
+    return null;
+  }
+
+  function areLinksEnabled(cm) {
+    const st = getLinkState(cm);
+    if (!st) return true;
+    return st.__xkeenLinksEnabled !== false;
+  }
+
+  function setLinksEnabled(cm, enabled) {
+    try {
+      if (!cm || typeof cm.addOverlay !== 'function') return;
+      const st = getLinkState(cm);
+      if (!st) return;
+
+      const wrap = cm.getWrapperElement ? cm.getWrapperElement() : null;
+      const next = enabled !== false;
+      if (!st.__xkeenLinksOverlay) st.__xkeenLinksOverlay = buildUrlOverlay();
+
+      st.__xkeenLinksEnabled = next;
+      if (next) {
+        if (!st.__xkeenLinksOverlayAttached) {
+          cm.addOverlay(st.__xkeenLinksOverlay);
+          st.__xkeenLinksOverlayAttached = true;
+        }
+      } else if (st.__xkeenLinksOverlayAttached && typeof cm.removeOverlay === 'function') {
+        cm.removeOverlay(st.__xkeenLinksOverlay);
+        st.__xkeenLinksOverlayAttached = false;
+      }
+
+      if (wrap) {
+        wrap.classList.toggle('xkeen-cm-links', next);
+        if (!next) wrap.classList.remove('xkeen-cm-link-hover', 'xkeen-cm-link-armed');
+      }
+      if (!next) hideTooltip();
+    } catch (e) {}
   }
 
   // NOTE:
@@ -189,14 +322,19 @@
       cm.state.__xkeenLinksAttached = true;
 
       // Overlay for URL highlighting.
-      cm.addOverlay(buildUrlOverlay());
+      setLinksEnabled(cm, true);
 
       const wrap = cm.getWrapperElement ? cm.getWrapperElement() : null;
-      if (wrap) wrap.classList.add('xkeen-cm-links');
 
       // Hover + click handlers.
       let lastKey = '';
       function onMove(ev) {
+        if (!areLinksEnabled(cm)) {
+          if (wrap) wrap.classList.remove('xkeen-cm-link-hover', 'xkeen-cm-link-armed');
+          hideTooltip();
+          lastKey = '';
+          return;
+        }
         const t = getHoveredUrlToken(cm, ev);
         if (!t) {
           if (wrap) wrap.classList.remove('xkeen-cm-link-hover', 'xkeen-cm-link-armed');
@@ -270,7 +408,8 @@
 
       const orig = CM.fromTextArea;
       CM.fromTextArea = function patchedFromTextArea() {
-        const cm = orig.apply(this, arguments);
+        const textarea = arguments && arguments[0];
+        const cm = withPatchedCodeMirrorListeners(textarea, () => orig.apply(this, arguments));
         try { attachToEditor(cm); } catch (e) {}
         return cm;
       };
@@ -305,6 +444,11 @@
 
   // Init as soon as possible.
   function init() {
+    try {
+      window.xkeenCmLinksSetEnabled = function(cm, enabled) {
+        try { setLinksEnabled(cm, enabled); } catch (e) {}
+      };
+    } catch (e) {}
     patchCodeMirrorFromTextArea();
     // If CodeMirror loads after this script, retry a few times.
     let tries = 0;

@@ -35,6 +35,53 @@
     return ta ? ta.value : '';
   };
 
+  function refreshRuleSourceMeta(raw) {
+    let ruleSegments = [];
+    let disabledRules = [];
+
+    try {
+      const jp = (XK.features && XK.features.routingJsoncPreserve) ? XK.features.routingJsoncPreserve : null;
+      const text = String(raw == null ? '' : raw);
+      if (!jp || typeof jp.locateRoutingObject !== 'function' || typeof jp.locateArrayByKey !== 'function') {
+        S._ruleSegments = ruleSegments;
+        S._disabledRules = disabledRules;
+        return;
+      }
+
+      const routingRange = jp.locateRoutingObject(text);
+      const rulesRange = routingRange ? jp.locateArrayByKey(text, routingRange, 'rules') : null;
+      if (!rulesRange) {
+        S._ruleSegments = ruleSegments;
+        S._disabledRules = disabledRules;
+        return;
+      }
+
+      const segments = (typeof jp.splitJsoncArrayElements === 'function')
+        ? (jp.splitJsoncArrayElements(text, rulesRange) || [])
+        : [];
+
+      ruleSegments = segments.map((seg, index) => {
+        const rawSeg = String((seg && seg.raw) || '');
+        const leading = String((seg && seg.leadingCommentRaw) || '');
+        const objStart = Number(seg && seg.objStart);
+        const start = Number.isFinite(objStart) ? Math.max(0, objStart - leading.length) : 0;
+        return {
+          index,
+          start,
+          end: start + rawSeg.length,
+          indent: String((seg && seg.indent) || ''),
+        };
+      });
+
+      if (typeof jp.extractDisabledRuleSegments === 'function') {
+        disabledRules = jp.extractDisabledRuleSegments(text, rulesRange) || [];
+      }
+    } catch (e) {}
+
+    S._ruleSegments = ruleSegments;
+    S._disabledRules = disabledRules;
+  }
+
   function ensureModel() {
     if (!S._model) {
       S._model = { domainStrategy: '', rules: [], balancers: [] };
@@ -161,6 +208,7 @@ M.sanitizeModelForExport = function (model) {
       balancers: Array.isArray(routing.balancers) ? routing.balancers.slice() : [],
     };
     S._model = model;
+    refreshRuleSourceMeta(raw);
 
     // Clear errors on successful parse.
     try { S._error = null; } catch (e) {}

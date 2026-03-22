@@ -69,9 +69,11 @@ DEFAULTS: Dict[str, Any] = {
     },
     "routing": {
         # Show extra GUI layer for routing rules card.
-        "guiEnabled": True,
+        # Default OFF: this is optional UI sugar and can be heavier on weak devices.
+        "guiEnabled": False,
         # Auto-apply routing card edits back into the JSON editor.
-        "autoApply": True,
+        # Default OFF: let users opt in to the extra sync work explicitly.
+        "autoApply": False,
     },
 }
 

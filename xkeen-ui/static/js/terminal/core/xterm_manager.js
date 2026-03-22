@@ -34,7 +34,7 @@
     let monoFamily = DEFAULT_XTERM_FONT_FAMILY;
 
     try {
-      const root = document && document.documentElement ? document.documentElement : null;
+      const root = _resolveThemeScopeEl();
       if (root && typeof window.getComputedStyle === 'function') {
         const cs = window.getComputedStyle(root);
         const s = String(cs.getPropertyValue('--xk-mono-font-scale') || '').trim();
@@ -140,9 +140,27 @@
   }
 
   
+  function _resolveThemeScopeEl() {
+    try {
+      if (document && typeof document.querySelector === 'function') {
+        const activeWindow = document.querySelector('.terminal-window:not(.hidden)');
+        if (activeWindow) return activeWindow;
+        const anyWindow = document.querySelector('.terminal-window');
+        if (anyWindow) return anyWindow;
+      }
+    } catch (e) {}
+    try {
+      if (document && document.body) return document.body;
+    } catch (e2) {}
+    try {
+      if (document && document.documentElement) return document.documentElement;
+    } catch (e3) {}
+    return null;
+  }
+
   function readTerminalThemeFromCss(cursorBlinkEnabled) {
     try {
-      const root = document && document.documentElement ? document.documentElement : null;
+      const root = _resolveThemeScopeEl();
       if (!root) return null;
 
       // Prefer independent Terminal theme (DevTools → Terminal), if enabled.
@@ -203,18 +221,32 @@
       }
 
       // Fallback: derive palette from global UI theme variables.
-      const bgRaw = _readCssVar(root, '--card-bg') || _readCssVar(root, '--bg');
-      const fgRaw = _readCssVar(root, '--text');
-      const mutedRaw = _readCssVar(root, '--muted');
-      const accentRaw = _readCssVar(root, '--accent');
+      let currentTheme = 'dark';
+      try {
+        const html = document && document.documentElement ? document.documentElement : null;
+        currentTheme = (html && html.getAttribute('data-theme') === 'light') ? 'light' : 'dark';
+      } catch (e0) {}
+
+      const bgRaw = _readCssVar(root, '--card-bg')
+        || _readCssVar(root, '--modal-body-bg')
+        || _readCssVar(root, '--modal-bg')
+        || _readCssVar(root, '--bg');
+      const fgRaw = _readCssVar(root, '--text') || _readCssVar(root, '--modal-text');
+      const mutedRaw = _readCssVar(root, '--muted') || _readCssVar(root, '--modal-muted');
+      const accentRaw = _readCssVar(root, '--accent')
+        || _readCssVar(root, '--header-tab-active-bg')
+        || _readCssVar(root, '--sem-info');
 
       const succRaw = _readCssVar(root, '--sem-success');
       const infoRaw = _readCssVar(root, '--sem-info');
       const warnRaw = _readCssVar(root, '--sem-warning');
       const errRaw = _readCssVar(root, '--sem-error');
 
-      const bgC = _parseCssColor(bgRaw) || { r: 2, g: 6, b: 23, a: 1 };
-      const fgC = _parseCssColor(fgRaw) || { r: 229, g: 231, b: 235, a: 1 };
+      const fallbackBg = (currentTheme === 'light') ? '#ffffff' : '#020617';
+      const fallbackFg = (currentTheme === 'light') ? '#111827' : '#e5e7eb';
+
+      const bgC = _parseCssColor(bgRaw) || _parseCssColor(fallbackBg) || { r: 2, g: 6, b: 23, a: 1 };
+      const fgC = _parseCssColor(fgRaw) || _parseCssColor(fallbackFg) || { r: 229, g: 231, b: 235, a: 1 };
       const muted = _parseCssColor(mutedRaw) || _parseCssColor('#9ca3af') || fgC;
       const accent = _parseCssColor(accentRaw) || _parseCssColor('#60a5fa') || fgC;
       const succ = _parseCssColor(succRaw) || _parseCssColor('#22c55e') || fgC;
@@ -269,6 +301,7 @@
         cursorAccent: _rgbToHex(bgC),
         selectionBackground: selectionBg,
         selection: selectionBg,
+        selectionForeground: _rgbToHex(fgC),
         // ANSI palette
         black: _rgbToHex(base[0]),
         red: _rgbToHex(base[1]),
@@ -425,6 +458,7 @@ function readPrefs(ctx) {
     // Resize dedupe
     let lastCols = 0;
     let lastRows = 0;
+    let themeSignature = '';
 
     function emit(name, payload) {
       try {
@@ -452,19 +486,123 @@ function readPrefs(ctx) {
       } catch (e) {}
     }
 
-    function applyThemeFromCss() {
-      if (!term) return;
+    function getCurrentThemeName() {
       try {
+        const html = document && document.documentElement ? document.documentElement : null;
+        return (html && html.getAttribute('data-theme') === 'light') ? 'light' : 'dark';
+      } catch (e) {}
+      return 'dark';
+    }
+
+    function buildThemeSignature(th) {
+      const t = th && typeof th === 'object' ? th : {};
+      return JSON.stringify({
+        theme: getCurrentThemeName(),
+        background: String(t.background || ''),
+        foreground: String(t.foreground || ''),
+        cursor: String(t.cursor || ''),
+        cursorAccent: String(t.cursorAccent || ''),
+        selectionBackground: String(t.selectionBackground || t.selection || ''),
+        selectionForeground: String(t.selectionForeground || ''),
+        black: String(t.black || ''),
+        white: String(t.white || ''),
+        brightBlack: String(t.brightBlack || ''),
+        brightWhite: String(t.brightWhite || ''),
+      });
+    }
+
+    function isTerminalOverlayOpen() {
+      let overlay = null;
+      try { overlay = ctx && ctx.dom && ctx.dom.overlay ? ctx.dom.overlay : null; } catch (e) {}
+      try { if (!overlay && document) overlay = document.getElementById('terminal-overlay'); } catch (e2) {}
+      if (!overlay) return false;
+      try {
+        if (!overlay.isConnected) return false;
+        const cs = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(overlay) : null;
+        if (!cs) return true;
+        if (cs.display === 'none') return false;
+        if (cs.visibility === 'hidden') return false;
+        return true;
+      } catch (e3) {}
+      try { return overlay.style.display !== 'none'; } catch (e4) {}
+      return true;
+    }
+
+    function disableWebglRenderer() {
+      if (!webglAddon) return false;
+      try { webglAddon.dispose?.(); } catch (e) {}
+      webglAddon = null;
+      syncCoreRefs();
+      return true;
+    }
+
+    function applyThemeToDom(th) {
+      if (!term || !th) return;
+
+      const bg = String(th.background || '').trim();
+      const fg = String(th.foreground || '').trim();
+      const cursor = String(th.cursor || '').trim();
+      const root = term && term.element ? term.element : null;
+      if (!root) return;
+
+      const paint = (el, opts) => {
+        if (!el || !el.style) return;
+        try {
+          if (bg && (!opts || opts.bg !== false)) el.style.backgroundColor = bg;
+          if (fg && opts && opts.fg) el.style.color = fg;
+          if (cursor && opts && opts.caret) el.style.caretColor = cursor;
+        } catch (e) {}
+      };
+
+      paint(root, { bg: true, fg: true });
+
+      try {
+        root.querySelectorAll('.xterm-viewport, .xterm-screen, .xterm-screen canvas, .xterm-helpers, .xterm-helper-textarea, .composition-view')
+          .forEach((el) => {
+            const isComposition = !!(el && el.classList && el.classList.contains('composition-view'));
+            const isTextarea = !!(el && el.classList && el.classList.contains('xterm-helper-textarea'));
+            paint(el, { bg: true, fg: isComposition, caret: isTextarea });
+          });
+      } catch (e2) {}
+    }
+
+    function applyThemeFromCss(opts) {
+      if (!term) return;
+      const disableWebgl = !!(opts && opts.disableWebgl);
+      try {
+        if (disableWebgl) disableWebglRenderer();
         let cb = false;
         try {
           cb = (typeof term.getOption === 'function') ? !!term.getOption('cursorBlink') : !!(term.options && term.options.cursorBlink);
         } catch (e0) {}
         const th = readTerminalThemeFromCss(cb);
         if (!th) return;
+        themeSignature = buildThemeSignature(th);
         if (typeof term.setOption === 'function') term.setOption('theme', th);
         else if (term.options) term.options.theme = th;
+        applyThemeToDom(th);
+        try { term?.clearTextureAtlas?.(); } catch (e1) {}
       } catch (e) {}
       try { term?.refresh?.(0, term.rows ? (term.rows - 1) : 0); } catch (e2) {}
+      try {
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(() => {
+            try {
+              if (disableWebgl) disableWebglRenderer();
+              let cb = false;
+              try {
+                cb = (typeof term?.getOption === 'function') ? !!term.getOption('cursorBlink') : !!(term && term.options && term.options.cursorBlink);
+              } catch (e3) {}
+              const th = readTerminalThemeFromCss(cb);
+              if (!th) return;
+              themeSignature = buildThemeSignature(th);
+              applyThemeToDom(th);
+              try { term?.clearTextureAtlas?.(); } catch (e4) {}
+              try { term?.refresh?.(0, term.rows ? (term.rows - 1) : 0); } catch (e5) {}
+            } catch (e6) {}
+          });
+        }
+      } catch (e7) {}
     }
 
     function getRefs() {
@@ -658,6 +796,7 @@ function readPrefs(ctx) {
       baseFontSize = clamp(parseInt(String(prefs.fontSize || 12), 10) || 12, 8, 32);
       const { monoScale, monoFamily } = readMonoTypographyFromCss();
       const effectiveFontSize = clamp(Math.round(baseFontSize * monoScale), 8, 32);
+      const initialTheme = readTerminalThemeFromCss(!!prefs.cursorBlink) || undefined;
 
       try {
         term = new Terminal({
@@ -667,12 +806,13 @@ function readPrefs(ctx) {
           scrollback: 2000,
           fontFamily: monoFamily || DEFAULT_XTERM_FONT_FAMILY,
           fontSize: effectiveFontSize,
-          theme: readTerminalThemeFromCss(!!prefs.cursorBlink) || undefined,
+          theme: initialTheme,
         });
       } catch (e) {
         term = null;
         return null;
       }
+      themeSignature = buildThemeSignature(initialTheme);
 
       try { loadAddons(term); } catch (e2) {}
       try { attachEventProxies(); } catch (e3) {}
@@ -691,13 +831,19 @@ function readPrefs(ctx) {
       try {
         if (!themeListener && typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
           themeListener = () => {
-            try { applyThemeFromCss(); } catch (e6) {}
+            try {
+              if (!isTerminalOverlayOpen()) {
+                disposeTerminal();
+                return;
+              }
+            } catch (e6) {}
+            try { applyThemeFromCss({ disableWebgl: true }); } catch (e7) {}
           };
           document.addEventListener('xkeen-theme-change', themeListener);
         }
-      } catch (e7) {}
+      } catch (e8) {}
 
-      try { applyThemeFromCss(); } catch (e8) {}
+      try { applyThemeFromCss(); } catch (e9) {}
 
       syncCoreRefs();
       return term;
@@ -789,6 +935,7 @@ function readPrefs(ctx) {
         }
       } catch (e4) {}
 
+      try { applyThemeFromCss(); } catch (e45) {}
       try { fit(); } catch (e5) {}
       syncCoreRefs();
       return true;
@@ -842,14 +989,25 @@ function readPrefs(ctx) {
 
       lastCols = 0;
       lastRows = 0;
+      themeSignature = '';
 
       try { showXtermHost(ctx, false); } catch (e4) {}
       syncCoreRefs();
     }
 
     function ensureTerminal(opts = {}) {
-      const had = !!term;
-      const t = createTerminal(opts);
+      const prefs = (opts && opts.prefs) ? opts.prefs : readPrefs(ctx);
+      let had = !!term;
+      try {
+        const nextTheme = readTerminalThemeFromCss(!!(prefs && prefs.cursorBlink));
+        const nextSignature = buildThemeSignature(nextTheme);
+        if (term && themeSignature && nextSignature && themeSignature !== nextSignature) {
+          disposeTerminal();
+          had = false;
+        }
+      } catch (e0) {}
+
+      const t = createTerminal(Object.assign({}, opts || {}, { prefs }));
       if (!t) {
         try { showXtermHost(ctx, false); } catch (e) {}
         return { term: null, created: false };
@@ -860,7 +1018,6 @@ function readPrefs(ctx) {
       // terminal instance is reused.
       try { attachToHost(); } catch (e2) {}
       try {
-        const prefs = (opts && opts.prefs) ? opts.prefs : readPrefs(ctx);
         applyPrefs(prefs);
       } catch (e3) {}
 

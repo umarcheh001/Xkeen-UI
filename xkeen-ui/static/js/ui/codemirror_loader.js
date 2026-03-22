@@ -32,6 +32,101 @@
   const _js = new Map();
   const _css = new Map();
 
+  function isSameOrigin(url) {
+    try {
+      const u = new URL(String(url || ''), window.location.href);
+      return u.origin === window.location.origin;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function shouldForceGlobalUmd(url) {
+    const raw = String(url || '');
+    if (!raw || !isSameOrigin(raw)) return false;
+    try {
+      const path = new URL(raw, window.location.href).pathname;
+      return path.includes('/static/codemirror/') || path.includes('/static/jsonlint/');
+    } catch (e) {
+      return raw.includes('/static/codemirror/') || raw.includes('/static/jsonlint/');
+    }
+  }
+
+  async function evalAsGlobalNoAMD(url) {
+    try {
+      const res = await fetch(String(url), { cache: 'force-cache' });
+      if (!res || !res.ok) return false;
+      const code = await res.text();
+      // Keep AMD/CommonJS hooks local to this isolated evaluation so Monaco's
+      // live AMD loader on window is never clobbered during CodeMirror/jsonlint
+      // lazy loads.
+      // jsonlint uses a classic `var jsonlint = ...` export, so we promote it
+      // back to window explicitly after evaluation.
+      // eslint-disable-next-line no-new-func
+      const fn = new Function(
+        'window',
+        'globalThis',
+        'self',
+        'define',
+        'exports',
+        'module',
+        code
+          + '\n//# sourceURL=' + String(url).replace(/\s/g, '%20')
+          + '\n;return {'
+          + '\n  CodeMirror: (typeof CodeMirror !== "undefined") ? CodeMirror : undefined,'
+          + '\n  jsonlint: (typeof jsonlint !== "undefined") ? jsonlint : undefined'
+          + '\n};'
+      );
+      const exposed = fn.call(window, window, window, window, undefined, undefined, undefined) || {};
+      if (exposed.CodeMirror && !window.CodeMirror) window.CodeMirror = exposed.CodeMirror;
+      if (exposed.jsonlint && !window.jsonlint) window.jsonlint = exposed.jsonlint;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function loadScriptTagNoAMD(url) {
+    return new Promise((resolve) => {
+      const g = window;
+      const hadDefine = Object.prototype.hasOwnProperty.call(g, 'define');
+      const hadExports = Object.prototype.hasOwnProperty.call(g, 'exports');
+      const hadModule = Object.prototype.hasOwnProperty.call(g, 'module');
+
+      const savedDefine = g.define;
+      const savedExports = g.exports;
+      const savedModule = g.module;
+
+      const restore = () => {
+        try { if (hadDefine) g.define = savedDefine; else delete g.define; } catch (e1) {}
+        try { if (hadExports) g.exports = savedExports; else delete g.exports; } catch (e2) {}
+        try { if (hadModule) g.module = savedModule; else delete g.module; } catch (e3) {}
+      };
+
+      const finish = (ok) => {
+        restore();
+        resolve(!!ok);
+      };
+
+      try {
+        g.define = undefined;
+        g.exports = undefined;
+        g.module = undefined;
+      } catch (e) {}
+
+      try {
+        const s = document.createElement('script');
+        s.src = url;
+        s.async = false;
+        s.onload = () => finish(true);
+        s.onerror = () => finish(false);
+        document.head.appendChild(s);
+      } catch (e) {
+        finish(false);
+      }
+    });
+  }
+
   function alreadyPresentScript(src) {
     try {
       const abs = new URL(src, window.location.href).toString();
@@ -71,18 +166,26 @@
       return p;
     }
 
-    const p = new Promise((resolve) => {
-      try {
-        const s = document.createElement('script');
-        s.src = url;
-        s.async = true;
-        s.onload = () => resolve(true);
-        s.onerror = () => resolve(false);
-        document.head.appendChild(s);
-      } catch (e) {
-        resolve(false);
+    const p = (async () => {
+      if (shouldForceGlobalUmd(url)) {
+        const evalOk = await evalAsGlobalNoAMD(url);
+        if (evalOk) return true;
+        return await loadScriptTagNoAMD(url);
       }
-    });
+
+      return await new Promise((resolve) => {
+        try {
+          const s = document.createElement('script');
+          s.src = url;
+          s.async = true;
+          s.onload = () => resolve(true);
+          s.onerror = () => resolve(false);
+          document.head.appendChild(s);
+        } catch (e) {
+          resolve(false);
+        }
+      });
+    })();
 
     _js.set(url, p);
     return p;
@@ -129,6 +232,44 @@
     properties: 'mode/properties/properties.min.js',
     xml: 'mode/xml/xml.min.js',
     nginx: 'mode/nginx/nginx.min.js',
+  };
+
+  const ADDON_GROUPS = {
+    search: {
+      css: ['addon/dialog/dialog.css'],
+      js: [
+        'addon/dialog/dialog.js',
+        'addon/search/searchcursor.js',
+        'addon/search/search.js',
+        'addon/mode/overlay.js',
+        'addon/search/match-highlighter.js',
+      ],
+    },
+    fold: {
+      css: ['addon/fold/foldgutter.css'],
+      js: [
+        'addon/fold/foldcode.js',
+        'addon/fold/brace-fold.js',
+        'addon/fold/indent-fold.js',
+        'addon/fold/comment-fold.js',
+        'addon/fold/foldgutter.js',
+      ],
+    },
+    editing: {
+      js: [
+        'addon/edit/closebrackets.js',
+        'addon/edit/trailingspace.js',
+        'addon/comment/comment.js',
+        'addon/comment/continuecomment.js',
+      ],
+    },
+    fullscreen: {
+      css: ['addon/display/fullscreen.css'],
+      js: ['addon/display/fullscreen.js'],
+    },
+    rulers: {
+      js: ['addon/display/rulers.js'],
+    },
   };
 
   // jsonc mode is a tiny wrapper around javascript(json:true), but with
@@ -209,6 +350,44 @@
     return ok && modeLoaded(n);
   };
 
+  L.ensureAddonGroup = async function ensureAddonGroup(groupName) {
+    const key = String(groupName || '').trim();
+    const spec = ADDON_GROUPS[key];
+    if (!spec) return false;
+
+    let ok = true;
+
+    const css = Array.isArray(spec.css) ? spec.css : [];
+    for (let i = 0; i < css.length; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      ok = (await loadCssOnce(CM_ROOT + css[i])) && ok;
+    }
+
+    const js = Array.isArray(spec.js) ? spec.js : [];
+    for (let i = 0; i < js.length; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      ok = (await loadScriptOnce(CM_ROOT + js[i])) && ok;
+    }
+
+    return ok;
+  };
+
+  L.ensureAddonGroups = async function ensureAddonGroups(groupNames) {
+    const names = Array.isArray(groupNames) ? groupNames : [];
+    const seen = new Set();
+    let ok = true;
+
+    for (let i = 0; i < names.length; i += 1) {
+      const key = String(names[i] || '').trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      // eslint-disable-next-line no-await-in-loop
+      ok = (await L.ensureAddonGroup(key)) && ok;
+    }
+
+    return ok;
+  };
+
   // JSON lint dependencies:
   //  - CodeMirror addon/lint/lint.min.js (loaded globally by panel.html)
   //  - window.jsonlint (jsonlint.min.js)
@@ -241,6 +420,39 @@
     const out = { modeOk: true, jsonLintOk: true };
     if (mode) out.modeOk = await L.ensureMode(mode);
     if (wantJsonLint) out.jsonLintOk = await L.ensureJsonLint();
+    return out;
+  };
+
+  // Higher-level helper for editor creation on demand.
+  // Keeps panel templates lighter by shifting optional addons out of <head>.
+  L.ensureEditorAssets = async function ensureEditorAssets(opts) {
+    const o = opts || {};
+    const out = {
+      modeOk: true,
+      jsonLintOk: true,
+      addonsOk: true,
+    };
+
+    const mode = String(o.mode || '').trim();
+    if (mode) {
+      out.modeOk = await L.ensureMode(mode);
+    }
+
+    if (o.jsonLint) {
+      out.jsonLintOk = await L.ensureJsonLint();
+    }
+
+    const groups = [];
+    if (o.search) groups.push('search');
+    if (o.fold) groups.push('fold');
+    if (o.fullscreen) groups.push('fullscreen');
+    if (o.rulers) groups.push('rulers');
+    if (o.autoCloseBrackets || o.trailingSpace || o.comments) groups.push('editing');
+
+    if (groups.length) {
+      out.addonsOk = await L.ensureAddonGroups(groups);
+    }
+
     return out;
   };
 

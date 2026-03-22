@@ -13,13 +13,13 @@
     return !!(XKeen.terminal && typeof XKeen.terminal.open === 'function');
   }
 
-  function hasWs() {
+  function hasPty() {
     try {
       return !!(
         XKeen.terminal &&
         XKeen.terminal.capabilities &&
-        typeof XKeen.terminal.capabilities.hasWs === 'function' &&
-        XKeen.terminal.capabilities.hasWs()
+        typeof XKeen.terminal.capabilities.hasPty === 'function' &&
+        XKeen.terminal.capabilities.hasPty()
       );
     } catch (e) {
       return false;
@@ -28,24 +28,27 @@
 
   // Terminal is now lazy-loaded; on a fresh tab capabilities may not be ready yet.
   // We use a lightweight direct probe as a fallback, so command buttons can still
-  // choose PTY on WS-capable routers without requiring an extra click.
-  let _wsProbePromise = null;
-  async function detectWsCapability() {
+  // choose PTY on supported devices without requiring an extra click.
+  let _ptyProbePromise = null;
+  async function detectPtyCapability() {
     try {
-      if (hasWs()) return true;
+      if (hasPty()) return true;
     } catch (e0) {}
-    if (_wsProbePromise) return _wsProbePromise;
-    _wsProbePromise = (async () => {
+    if (_ptyProbePromise) return _ptyProbePromise;
+    _ptyProbePromise = (async () => {
       try {
         const r = await fetch('/api/capabilities', { cache: 'no-store', credentials: 'same-origin' });
         if (!r.ok) return false;
         const data = await r.json().catch(() => ({}));
+        if (data && data.terminal && typeof data.terminal === 'object' && 'pty' in data.terminal) {
+          return !!data.terminal.pty;
+        }
         return !!(data && data.websocket);
       } catch (e) {
         return false;
       }
     })();
-    return _wsProbePromise;
+    return _ptyProbePromise;
   }
 
   function isPtyConnected() {
@@ -186,8 +189,8 @@
   }
 
   // Command list wiring:
-  // - On devices with WS (gevent-websocket): open ONLY PTY terminal and run the command there.
-  // - On devices without WS: fallback to lite terminal with a prefilled line (previous behavior).
+  // - On devices with PTY support: open ONLY PTY terminal and run the command there.
+  // - On devices without PTY: fallback to lite terminal with a prefilled line (previous behavior).
   CL.init = function init() {
     const items = document.querySelectorAll('.command-item');
     if (!items || !items.length) return;
@@ -198,10 +201,10 @@
         const label = el.getAttribute('data-label') || ('xkeen ' + flag);
         if (!flag) return;
 
-        // Prefer PTY on WS-capable routers.
+        // Prefer PTY only on devices that explicitly support it.
         try {
-          const wsOk = await detectWsCapability();
-          if (wsOk) {
+          const ptyOk = await detectPtyCapability();
+          if (ptyOk) {
             await openPtyAndRun(label);
             return;
           }

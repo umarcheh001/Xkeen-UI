@@ -12,6 +12,7 @@
 
   window.XKeen = window.XKeen || {};
   XKeen.ui = XKeen.ui || {};
+  XKeen.core = XKeen.core || {};
 
   // Keep defaults in sync with services/ui_settings.py
   const DEFAULTS = {
@@ -32,8 +33,8 @@
       view: {},
     },
     routing: {
-      guiEnabled: true,
-      autoApply: true,
+      guiEnabled: false,
+      autoApply: false,
     },
   };
 
@@ -62,6 +63,13 @@
     } catch (e) {
       return '';
     }
+  }
+
+  function getHttpApi() {
+    try {
+      if (XKeen.core && XKeen.core.http) return XKeen.core.http;
+    } catch (e) {}
+    return null;
   }
 
   // Minimal deep-merge for JSON-like objects.
@@ -139,17 +147,30 @@
   }
 
   async function fetchFromServer() {
-    const res = await fetch('/api/ui-settings', {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+    const http = getHttpApi();
+    let data = null;
 
-    if (!res.ok) {
-      throw new Error('Failed to load UI settings');
+    if (http && typeof http.fetchJSON === 'function') {
+      data = await http.fetchJSON('/api/ui-settings', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        timeoutMs: 8000,
+        retry: 1,
+      });
+    } else {
+      const res = await fetch('/api/ui-settings', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to load UI settings');
+      }
+      data = await res.json();
     }
-    const data = await res.json();
+
     if (!data || data.ok !== true || !data.settings || typeof data.settings !== 'object') {
       throw new Error('Bad UI settings response');
     }
@@ -183,29 +204,40 @@
       throw new Error('Patch must be an object');
     }
 
-    const headers = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    };
-    const tok = csrfToken();
-    if (tok) headers['X-CSRF-Token'] = tok;
+    const http = getHttpApi();
+    let data = null;
 
-    const res = await fetch('/api/ui-settings', {
-      method: 'PATCH',
-      headers,
-      body: JSON.stringify(patch),
-    });
+    if (http && typeof http.patchJSON === 'function') {
+      data = await http.patchJSON('/api/ui-settings', patch, {
+        headers: { Accept: 'application/json' },
+        timeoutMs: 8000,
+      });
+    } else {
+      const headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      };
+      const tok = csrfToken();
+      if (tok) headers['X-CSRF-Token'] = tok;
 
-    if (!res.ok) {
-      let msg = 'Failed to patch UI settings';
-      try {
-        const data = await res.json();
-        if (data && data.error) msg = String(data.error);
-      } catch (e) {}
-      throw new Error(msg);
+      const res = await fetch('/api/ui-settings', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(patch),
+      });
+
+      if (!res.ok) {
+        let msg = 'Failed to patch UI settings';
+        try {
+          const errData = await res.json();
+          if (errData && errData.error) msg = String(errData.error);
+        } catch (e) {}
+        throw new Error(msg);
+      }
+
+      data = await res.json();
     }
 
-    const data = await res.json();
     if (!data || data.ok !== true || !data.settings || typeof data.settings !== 'object') {
       throw new Error('Bad UI settings response');
     }
