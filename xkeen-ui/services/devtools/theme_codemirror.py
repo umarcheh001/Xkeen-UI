@@ -308,12 +308,6 @@ def _codemirror_theme_css_from_config(cfg: Dict[str, Any]) -> str:
             lines.append("  " + ln)
         lines.append("}")
 
-    def rule(sel: str, body: List[str]) -> None:
-        lines.append(f"{sel} {{")
-        for ln in body:
-            lines.append("  " + ln)
-        lines.append("}")
-
     def emit_tokens(mode: str, t: Dict[str, Any]) -> None:
         tok = t.get("tokens") if isinstance(t.get("tokens"), dict) else {}
         r = f":root[data-theme=\"{mode}\"]"

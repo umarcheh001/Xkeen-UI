@@ -88,7 +88,8 @@ def register_geodat_routes(bp: Blueprint) -> None:
             if request.files and "file" in request.files:
                 f = request.files.get("file")
                 if f and getattr(f, "filename", ""):
-                    import tempfile, uuid
+                    import tempfile
+                    import uuid
                     tmpdir = tempfile.gettempdir()
                     tmp_uploaded = os.path.join(tmpdir, f"xk-geodat-upload-{uuid.uuid4().hex}")
                     f.save(tmp_uploaded)

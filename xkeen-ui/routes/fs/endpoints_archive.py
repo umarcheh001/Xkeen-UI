@@ -381,7 +381,7 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
                     mimetype="application/zip",
                     headers=headers,
                 )
-            except Exception as e:
+            except Exception:
                 raise
 
         except Exception as e:

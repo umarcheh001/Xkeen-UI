@@ -12,7 +12,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from logging import Logger
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
+
+if TYPE_CHECKING:
+    from core.settings import Settings
 
 
 @dataclass

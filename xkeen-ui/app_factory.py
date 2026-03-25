@@ -10,7 +10,11 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Any, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Tuple
+
+if TYPE_CHECKING:
+    from core.context import AppContext
+    from core.settings import Settings
 
 
 def _ensure_runtime_env() -> str:

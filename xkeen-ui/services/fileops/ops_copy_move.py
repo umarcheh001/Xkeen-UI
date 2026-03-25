@@ -748,7 +748,7 @@ def run_job_copy_move(job: FileOpJob, spec: Dict[str, Any], rt: FileOpsRuntime) 
         except Exception:
             pass
         job._proc = None
-    except Exception as e:
+    except Exception:
         rt.job_set_state(job, 'error', error='unexpected_error')
         job.finished_ts = rt.now_fn()
         try:
