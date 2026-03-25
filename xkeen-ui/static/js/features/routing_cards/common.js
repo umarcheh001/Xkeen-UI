@@ -65,28 +65,56 @@
     }
   };
 
-  C.editorInstance = function () {
+  function getRoutingShellApi() {
     try {
-      if (XK.state && XK.state.routingEditor) return XK.state.routingEditor;
+      if (window.XKeen && XK.features && XK.features.routingShell) return XK.features.routingShell;
     } catch (e) {}
+    return null;
+  }
+
+  C.editorInstance = function () {
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.getEditorInstance === 'function') {
+      try {
+        return shell.getEditorInstance();
+      } catch (e) {}
+    }
     return null;
   };
 
   C.getEditorText = function () {
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.getEditorText === 'function') {
+      try {
+        return String(shell.getEditorText() || '');
+      } catch (e) {}
+    }
     const cm = C.editorInstance();
+    if (cm && typeof cm.get === 'function') return cm.get();
     if (cm && typeof cm.getValue === 'function') return cm.getValue();
     const ta = C.$('routing-editor');
     return ta ? ta.value : '';
   };
 
   C.setEditorText = function (text) {
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.setEditorText === 'function') {
+      try {
+        if (shell.setEditorText(String(text || ''), { reason: 'routing-cards' })) return true;
+      } catch (e) {}
+    }
     const cm = C.editorInstance();
+    if (cm && typeof cm.set === 'function') {
+      cm.set(String(text || ''));
+      return true;
+    }
     if (cm && typeof cm.setValue === 'function') {
       cm.setValue(String(text || ''));
-      return;
+      return true;
     }
     const ta = C.$('routing-editor');
     if (ta) ta.value = String(text || '');
+    return !!ta;
   };
 
   C.isViewVisible = function () {

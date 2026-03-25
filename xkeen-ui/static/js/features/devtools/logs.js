@@ -32,6 +32,29 @@
     try { document.execCommand('copy'); toast('Скопировано'); } catch (e) { toast('Не удалось скопировать', true); }
     try { ta.remove(); } catch (e) {}
   });
+  const confirmAction = SH.confirmAction || (async (opts) => {
+    if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') return !!(await XKeen.ui.confirm(opts || {}));
+    return !!window.confirm(String((opts && opts.message) || 'Продолжить?'));
+  });
+  const openModal = SH.openModal || ((modal, source) => {
+    try { modal.classList.remove('hidden'); } catch (e) {}
+    if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+      try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e2) {}
+    } else {
+      try { document.body.classList.add('modal-open'); } catch (e3) {}
+    }
+    return true;
+  });
+  const closeModal = SH.closeModal || ((modal, source) => {
+    try { modal.classList.add('hidden'); } catch (e) {}
+    if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+      try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e2) {}
+    } else {
+      try { document.body.classList.remove('modal-open'); } catch (e3) {}
+    }
+    return true;
+  });
+
 
   // ------------------------- Logs -------------------------
 
@@ -2210,15 +2233,13 @@ async function clearLog() {
   if (_logClearInFlight) return;
 
   // Confirm: destructive and must never be accidental.
-  const ok = await (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function'
-    ? XKeen.ui.confirm({
-        title: 'Очистить лог?',
-        message: `Очистить лог \"${name}\"? Это действие необратимо.`,
-        okText: 'Очистить',
-        cancelText: 'Отменить',
-        danger: true,
-      })
-    : Promise.resolve(window.confirm(`Очистить лог "${name}"?`)));
+  const ok = await confirmAction({
+    title: 'Очистить лог?',
+    message: `Очистить лог \"${name}\"? Это действие необратимо.`,
+    okText: 'Очистить',
+    cancelText: 'Отменить',
+    danger: true,
+  });
 
   if (!ok) return;
 
@@ -2357,12 +2378,7 @@ function _wireLogContextModal() {
   if (!modal) return;
 
   function close() {
-    try { modal.classList.add('hidden'); } catch (e) {}
-    if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-      try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
-    } else {
-      try { document.body.classList.remove('modal-open'); } catch (e) {}
-    }
+    closeModal(modal, 'devtools_log_context');
   }
 
   if (closeBtn) closeBtn.addEventListener('click', (e) => { e.preventDefault(); close(); });
@@ -2456,12 +2472,7 @@ function _openLogContextModal(rawIdx) {
     try { bodyEl.textContent = String(src.slice(start, end + 1).join('')); } catch (e2) {}
   }
 
-  try { modal.classList.remove('hidden'); } catch (e) {}
-  if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-    try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
-  } else {
-    try { document.body.classList.add('modal-open'); } catch (e) {}
-  }
+  openModal(modal, 'devtools_log_context');
 }
 
 function _wireLogLineActions() {

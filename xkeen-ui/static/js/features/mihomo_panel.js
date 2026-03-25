@@ -81,9 +81,18 @@
   // YAML error marker (CodeMirror only; backend validate / Prettier errors).
   let _yamlErrorLine = null;
   let _yamlErrorLineHandle = null;
+  let _viewStateStore = null;
 
   function $(id) {
     return document.getElementById(id);
+  }
+
+  function refreshRestartLog() {
+    try {
+      const api = window.XKeen && XKeen.features ? XKeen.features.restartLog : null;
+      if (api && typeof api.load === 'function') return api.load();
+    } catch (e) {}
+    return null;
   }
 
   function escapeHtml(s) {
@@ -133,24 +142,58 @@
     try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
   }
 
-  function getMonacoShared() {
-    try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
+  function getEditorActions() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorActions) ? XKeen.ui.editorActions : null; } catch (e) { return null; }
   }
 
-  async function ensureMonacoSharedApi() {
-    const existing = getMonacoShared();
-    if (existing && typeof existing.createEditor === 'function') return existing;
+  const CM6_SCOPE = 'mihomo-panel';
 
+  function withCm6Scope(opts) {
+    return Object.assign({ cm6Scope: CM6_SCOPE, scope: CM6_SCOPE }, opts || {});
+  }
+
+  function getEditorRuntime(engine, opts) {
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.getRuntime !== 'function') return null;
+    try { return helper.getRuntime(engine, withCm6Scope(opts)); } catch (e) {}
+    return null;
+  }
+
+  async function ensureEditorRuntime(engine, opts) {
+    const helper = getEngineHelper();
+    if (!helper) return null;
     try {
-      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
-      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
-        const ok = await lazy.ensureMonacoSupport();
-        if (!ok) return null;
+      if (typeof helper.ensureRuntime === 'function') return await helper.ensureRuntime(engine, withCm6Scope(opts));
+      if (typeof helper.getRuntime === 'function') return helper.getRuntime(engine, withCm6Scope(opts));
+    } catch (e) {}
+    return null;
+  }
+
+  function isCm6Runtime(runtime) {
+    try { return !!(runtime && runtime.backend === 'cm6'); } catch (e) {}
+    return false;
+  }
+
+  function isCm6Editor(editor) {
+    try {
+      if (!editor) return false;
+      if (editor.__xkeenCm6Bridge || editor.backend === 'cm6') return true;
+      const wrap = (typeof editor.getWrapperElement === 'function') ? editor.getWrapperElement() : null;
+      return !!(wrap && wrap.classList && wrap.classList.contains('xkeen-cm6-editor'));
+    } catch (e) {}
+    return false;
+  }
+
+  function disposeCodeMirrorEditor(editor) {
+    if (!editor) return false;
+    try { if (typeof editor.dispose === 'function') return !!editor.dispose(); } catch (e) {}
+    try {
+      if (typeof editor.toTextArea === 'function') {
+        editor.toTextArea();
+        return true;
       }
     } catch (e) {}
-
-    const loaded = getMonacoShared();
-    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+    return false;
   }
 
   function showNode(node) {
@@ -247,8 +290,8 @@
     const host = ensureMonacoHost();
     if (!host) return null;
 
-    const shared = await ensureMonacoSharedApi();
-    if (!shared || typeof shared.createEditor !== 'function') return null;
+    const runtime = await ensureEditorRuntime('monaco');
+    if (!runtime || typeof runtime.create !== 'function') return null;
 
     // initial value from CodeMirror/textarea
     let value = '';
@@ -261,7 +304,7 @@
     }
 
     try {
-      _monaco = await shared.createEditor(host, {
+      _monaco = await runtime.create(host, {
         language: 'yaml',
         value,
         tabSize: 2,
@@ -279,7 +322,12 @@
         }
       } catch (e) {}
 
-      try { _monacoFacade = (shared.toFacade ? shared.toFacade(_monaco) : null); } catch (e) { _monacoFacade = null; }
+      try {
+        const helper = getEngineHelper();
+        _monacoFacade = (helper && typeof helper.fromMonaco === 'function') ? helper.fromMonaco(_monaco) : null;
+      } catch (e) {
+        _monacoFacade = null;
+      }
       return _monaco;
     } catch (e) {
       try { console.error(e); } catch (e2) {}
@@ -315,7 +363,11 @@
     else hideNode(host);
 
     if (show && _monaco && typeof _monaco.layout === 'function') {
-      try { _monaco.layout(); } catch (e) {}
+      try {
+        const runtime = getEditorRuntime('monaco');
+        if (runtime && typeof runtime.layoutOnVisible === 'function') runtime.layoutOnVisible(_monaco, host);
+        else _monaco.layout();
+      } catch (e) {}
       try { setTimeout(() => { try { _monaco.layout(); } catch (e2) {} }, 0); } catch (e3) {}
     }
   }
@@ -483,9 +535,11 @@
 
     const ed = cm || _cm;
     try {
-      if (ed && typeof ed.getOption === 'function' && typeof ed.setOption === 'function') {
-        ed.setOption('fullScreen', !ed.getOption('fullScreen'));
-      }
+      const actions = getEditorActions();
+      if (actions && typeof actions.toggleFullscreen === 'function' && actions.toggleFullscreen(ed)) return;
+    } catch (e) {}
+    try {
+      if (ed && typeof ed.getOption === 'function' && typeof ed.setOption === 'function') ed.setOption('fullScreen', !ed.getOption('fullScreen'));
     } catch (e) {}
   }
 
@@ -512,6 +566,7 @@
     if (!next) return _engine;
     if (next === _engine && !(opts && opts.force)) return _engine;
 
+    const preservedView = captureCurrentViewState();
     _engineSyncing = true;
     try {
       try { clearYamlErrorMarker(); } catch (e) {}
@@ -520,7 +575,9 @@
         // If CodeMirror was in fullscreen, exit it first to avoid CSS/layout glitches.
         try {
           const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
-          if (cm && cm.getOption && cm.setOption && cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
+          const actions = getEditorActions();
+          if (actions && typeof actions.setFullscreen === 'function') actions.setFullscreen(cm, false);
+          else if (cm && cm.getOption && cm.setOption && cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
         } catch (e0) {}
 
         const ed = await ensureMonacoEditor();
@@ -559,6 +616,8 @@
         try { wireMonacoFullscreenOnce(); } catch (e) {}
 
         _engine = 'monaco';
+        try { if (preservedView) restoreCurrentViewState(preservedView); } catch (e5a) {}
+        try { bindViewStateTracking(); } catch (e5b) {}
         try { if (_monacoFacade && _monacoFacade.focus) _monacoFacade.focus(); else if (_monaco && _monaco.focus) _monaco.focus(); } catch (e4) {}
         return _engine;
       }
@@ -567,7 +626,7 @@
       // If Monaco is fullscreen, exit it before hiding to avoid leaving body scroll locked.
       try { if (isMonacoFullscreen()) setMonacoFullscreen(false); } catch (e0) {}
       try {
-        const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+        const cm = ensureEditor();
         if (_monaco && cm && cm.setValue) cm.setValue(String(_monaco.getValue() || ''));
       } catch (e5) {}
 
@@ -581,6 +640,8 @@
       try { syncToolbarForEngine('codemirror'); } catch (e) {}
 
       _engine = 'codemirror';
+      try { if (preservedView) restoreCurrentViewState(preservedView); } catch (e6a) {}
+      try { bindViewStateTracking(); } catch (e6b) {}
       try {
         const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
         if (cm && cm.focus) cm.focus();
@@ -650,15 +711,30 @@
 
   function ensureEditor() {
     const ta = $(IDS.textarea);
-    if (!ta || !window.CodeMirror) return null;
-    if (_cm) return _cm;
+    if (!ta) return null;
+
+    const runtime = getEditorRuntime('codemirror');
+    const preferCm6 = isCm6Runtime(runtime);
+
+    if (_cm) {
+      if (!preferCm6 || isCm6Editor(_cm)) return _cm;
+      try { disposeCodeMirrorEditor(_cm); } catch (e) {}
+      _cm = null;
+    }
     if (XKeen.state.mihomoEditor) {
-      _cm = XKeen.state.mihomoEditor;
-      return _cm;
+      const cached = XKeen.state.mihomoEditor;
+      if (!preferCm6 || isCm6Editor(cached)) {
+        _cm = cached;
+        return _cm;
+      }
+      try { disposeCodeMirrorEditor(cached); } catch (e) {}
+      try { XKeen.state.mihomoEditor = null; } catch (e) {}
     }
 
     const extra = (typeof window.buildCmExtraKeysCommon === 'function') ? window.buildCmExtraKeysCommon() : {};
-    _cm = CodeMirror.fromTextArea(ta, {
+    if (!runtime || typeof runtime.create !== 'function') return null;
+
+    _cm = runtime.create(ta, {
       mode: 'yaml',
       theme: cmThemeFromPage(),
       lineNumbers: true,
@@ -780,6 +856,114 @@
     return !!_editorDirty;
   }
 
+  function getActiveEditorFacade() {
+    if (_engine === 'monaco' && _monacoFacade) return _monacoFacade;
+
+    const helper = getEngineHelper();
+    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    if (cm) {
+      const runtime = getEditorRuntime('codemirror');
+      if (runtime && typeof runtime.toFacade === 'function') {
+        try {
+          return runtime.toFacade(cm, {
+            layout: () => {
+              try { if (cm.layout) cm.layout(); else if (cm.refresh) cm.refresh(); } catch (e) {}
+            },
+          });
+        } catch (e) {}
+      }
+      if (helper && typeof helper.fromCodeMirror === 'function') {
+        try {
+          return helper.fromCodeMirror(cm, {
+            layout: () => {
+              try { if (cm.layout) cm.layout(); else if (cm.refresh) cm.refresh(); } catch (e) {}
+            },
+          });
+        } catch (e) {}
+      }
+    }
+
+    const ta = $(IDS.textarea);
+    if (ta && helper && typeof helper.fromTextarea === 'function') {
+      try { return helper.fromTextarea(ta, { kind: 'codemirror' }); } catch (e) {}
+    }
+
+    return null;
+  }
+
+  function getViewStateStore() {
+    if (_viewStateStore) return _viewStateStore;
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.createViewStateStore !== 'function') return null;
+    try {
+      _viewStateStore = helper.createViewStateStore({
+        buildKey: () => 'xkeen.mihomo.panel.viewstate.v1::config',
+      });
+    } catch (e) {
+      _viewStateStore = null;
+    }
+    return _viewStateStore;
+  }
+
+  function captureCurrentViewState() {
+    const store = getViewStateStore();
+    if (!store || typeof store.capture !== 'function') return null;
+    return store.capture({
+      engine: _engine,
+      facade: getActiveEditorFacade(),
+      textarea: $(IDS.textarea),
+      capture: () => {
+        const fac = getActiveEditorFacade();
+        if (fac && typeof fac.saveViewState === 'function') {
+          return fac.saveViewState({ memoryOnly: true });
+        }
+        return null;
+      },
+    });
+  }
+
+  function loadSavedViewState(engine) {
+    const store = getViewStateStore();
+    if (!store || typeof store.load !== 'function') return null;
+    return store.load({ ctx: 'config', engine: engine || _engine });
+  }
+
+  function restoreCurrentViewState(view) {
+    const store = getViewStateStore();
+    if (!store || typeof store.restore !== 'function') return false;
+    return !!store.restore({
+      ctx: 'config',
+      engine: _engine,
+      facade: getActiveEditorFacade(),
+      textarea: $(IDS.textarea),
+      view,
+    });
+  }
+
+  function saveCurrentViewState(opts) {
+    const store = getViewStateStore();
+    if (!store || typeof store.save !== 'function') return null;
+    return store.save({
+      ctx: 'config',
+      engine: (opts && opts.engine) || _engine,
+      view: (opts && typeof opts.view !== 'undefined') ? opts.view : captureCurrentViewState(),
+    });
+  }
+
+  function bindViewStateTracking() {
+    const store = getViewStateStore();
+    if (!store || typeof store.bind !== 'function') return;
+    store.bind({
+      ctx: 'config',
+      engine: _engine,
+      monaco: _engine === 'monaco' ? _monaco : null,
+      codemirror: _engine === 'codemirror' ? (_cm || (XKeen.state ? XKeen.state.mihomoEditor : null)) : null,
+      textarea: $(IDS.textarea),
+      waitMs: 180,
+      capture: () => captureCurrentViewState(),
+    });
+  }
+
   window.getMihomoEditorText = window.getMihomoEditorText || getEditorText;
   window.setMihomoEditorText = window.setMihomoEditorText || setEditorText;
 
@@ -872,7 +1056,62 @@
   }
 
 
-  // Card collapse (header onclick="toggleMihomoCard()" in template)
+  function getMihomoCardToggles() {
+    try {
+      return Array.from(document.querySelectorAll('[data-xk-toggle="mihomo-card"]'));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function syncMihomoCardToggleState(isOpen) {
+    getMihomoCardToggles().forEach((header) => {
+      try { header.setAttribute('aria-expanded', isOpen ? 'true' : 'false'); } catch (e) {}
+    });
+  }
+
+  function wireMihomoCardToggle() {
+    getMihomoCardToggles().forEach((header) => {
+      if (!header || (header.dataset && header.dataset.xkToggleWired === '1')) return;
+      const onToggle = (e) => {
+        if (e) {
+          if (e.type === 'keydown') {
+            const key = String(e.key || '');
+            if (key !== 'Enter' && key !== ' ') return;
+          }
+          e.preventDefault();
+        }
+        toggleMihomoCard();
+      };
+      header.addEventListener('click', onToggle);
+      header.addEventListener('keydown', onToggle);
+      if (header.dataset) header.dataset.xkToggleWired = '1';
+    });
+  }
+
+  function wireValidationModal() {
+    const modal = $(IDS.validationModal);
+    if (!modal || (modal.dataset && modal.dataset.xkDismissWired === '1')) return;
+
+    modal.addEventListener('click', (e) => {
+      if (e && e.target === modal) hideValidationModal();
+    });
+
+    try {
+      const dismissers = modal.querySelectorAll('[data-dismiss="mihomo-validation"]');
+      dismissers.forEach((btn) => {
+        if (!btn || (btn.dataset && btn.dataset.xkDismissWired === '1')) return;
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          hideValidationModal();
+        });
+        if (btn.dataset) btn.dataset.xkDismissWired = '1';
+      });
+    } catch (e) {}
+
+    if (modal.dataset) modal.dataset.xkDismissWired = '1';
+  }
+
   function toggleMihomoCard() {
     const body = $(IDS.body);
     const arrow = $(IDS.arrow);
@@ -880,6 +1119,7 @@
     const willOpen = (body.style.display === '' || body.style.display === 'none');
     body.style.display = willOpen ? 'block' : 'none';
     arrow.textContent = willOpen ? '▲' : '▼';
+    syncMihomoCardToggleState(willOpen);
     if (willOpen) refreshEditorIfAny();
   }
   window.toggleMihomoCard = window.toggleMihomoCard || toggleMihomoCard;
@@ -904,6 +1144,11 @@
       }
       const content = data.content || '';
       setEditorTextClean(content);
+      try {
+        const savedView = loadSavedViewState(_engine);
+        if (savedView) restoreCurrentViewState(savedView);
+      } catch (e) {}
+      try { bindViewStateTracking(); } catch (e2) {}
       setStatus('config.yaml загружен (' + content.length + ' байт).', false, !notify);
       try {
         if (typeof window.updateLastActivity === 'function') {
@@ -1710,7 +1955,7 @@
           setStatus(msg, false, !!(data && data.restarted));
           await MP.loadProfiles();
           if (data.restarted) {
-            try { if (window.loadRestartLog) window.loadRestartLog(); } catch (e) {}
+            try { refreshRestartLog(); } catch (e) {}
           }
         } catch (err) {
           console.error(err);
@@ -1814,7 +2059,7 @@
           let msg = 'Бэкап ' + filename + ' восстановлен.';
           if (!data.restarted) msg += ' Загрузите config.yaml ещё раз.';
           setStatus(msg, false, !!(data && data.restarted));
-          try { if (data.restarted && window.loadRestartLog) window.loadRestartLog(); } catch (e) {}
+          try { if (data.restarted) refreshRestartLog(); } catch (e) {}
         } catch (err) {
           console.error(err);
           setStatus('Ошибка восстановления бэкапа.', true);
@@ -1880,6 +2125,9 @@
       ensureEditor();
       try { initEngineToggle(); } catch (e) {}
       try { syncHeaderFsButton(_engine); } catch (e) {}
+      try { bindViewStateTracking(); } catch (e2) {}
+      try { wireMihomoCardToggle(); } catch (e3) {}
+      try { wireValidationModal(); } catch (e4) {}
 
       // Main actions
       wireButton(IDS.btnLoad, () => MP.loadConfig());
@@ -2015,22 +2263,34 @@
     };
 
     try {
-      const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
-      if (loader && typeof loader.ensureEditorAssets === 'function') {
-        Promise.resolve(loader.ensureEditorAssets({
-          mode: 'yaml',
-          search: true,
-          fold: true,
-          fullscreen: true,
-          rulers: true,
-          autoCloseBrackets: true,
-          trailingSpace: true,
-          comments: true,
-        }))
-          .catch(() => null)
-          .finally(finishInit);
-        return;
-      }
+      Promise.resolve(ensureEditorRuntime('codemirror', {
+        mode: 'yaml',
+        search: true,
+        fold: true,
+        fullscreen: true,
+        rulers: true,
+        autoCloseBrackets: true,
+        trailingSpace: true,
+        comments: true,
+      }))
+        .then((runtime) => {
+          if (runtime && typeof runtime.ensureAssets === 'function') {
+            return runtime.ensureAssets({
+              mode: 'yaml',
+              search: true,
+              fold: true,
+              fullscreen: true,
+              rulers: true,
+              autoCloseBrackets: true,
+              trailingSpace: true,
+              comments: true,
+            });
+          }
+          return null;
+        })
+        .catch(() => null)
+        .finally(finishInit);
+      return;
     } catch (e) {}
 
     finishInit();

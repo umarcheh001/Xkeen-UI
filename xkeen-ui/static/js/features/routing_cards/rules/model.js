@@ -26,11 +26,6 @@
     try { return JSON.parse(String(text || '')); } catch (e) { return { __error: e }; }
   };
   const getEditorText = (typeof C.getEditorText === 'function') ? C.getEditorText : function () {
-    try {
-      if (XK.state && XK.state.routingEditor && typeof XK.state.routingEditor.getValue === 'function') {
-        return XK.state.routingEditor.getValue();
-      }
-    } catch (e) {}
     const ta = document.getElementById('routing-editor');
     return ta ? ta.value : '';
   };

@@ -27,7 +27,7 @@
   </script>
   <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260214a') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260325c') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='devtools.css', v='20260219a') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
@@ -59,7 +59,7 @@
             id="theme-toggle-btn"
             class="theme-toggle-btn theme-toggle-header dt-header-btn dt-header-btn-theme"
             aria-label="Переключить тему" title="Переключить светлую/тёмную тему"
-          ></button>
+          ><span class="theme-toggle-icon" aria-hidden="true">☀</span><span class="theme-toggle-text">Светлая тема</span></button>
           <a href="{{ url_for('index') }}" class="btn-link dt-header-btn dt-header-btn-back">← Назад</a>
           <a
             href="#dt-update-card"
@@ -2198,39 +2198,7 @@ html[data-xk-hide-hints="1"] .card{
   </div>
 
   <!-- Modular: init + feature logic -->
-  <script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/core/xk_dom.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/core/xk_http.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/core/xk_storage.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/theme.js', v='20260316a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/settings.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/editor_engine.js', v='20260223a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/confirm_modal.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js', v='20260317b') }}"></script>
-<script src="{{ url_for('static', filename='js/ui/monaco_loader.js', v='20260317b') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260316d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/donate.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/typography.js', v='20251230c') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/layout_prefs.js', v='20260101c') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/branding_prefs.js', v='20260101f') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/ui_prefs_io.js', v='20260101f') }}"></script>
-  <script src="{{ url_for('static', filename='js/util/ansi.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools/shared.js', v='20260109e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools/service.js', v='20260109e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools/logs.js', v='20260109e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools/env.js', v='20260109e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools/update.js', v='20260220a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools/theme.js', v='20260110a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools/terminal_theme.js', v='20260109e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools/codemirror_theme.js', v='20260109e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools/custom_css.js', v='20260109e') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/devtools.js', v='20260219a') }}"></script>
-  <script src="{{ url_for('static', filename='js/pages/devtools.init.js') }}"></script>
+  <!-- Frontend workspace entrypoint (step 37). -->
+  <script type="module" src="{{ frontend_page_entry_url('devtools') }}"></script>
 </body>
 </html>

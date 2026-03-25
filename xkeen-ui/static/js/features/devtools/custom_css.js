@@ -21,6 +21,50 @@
   });
   const byId = SH.byId || ((id) => { try { return document.getElementById(id); } catch (e) { return null; } });
 
+  const confirmAction = SH.confirmAction || (async (opts) => {
+    if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') return !!(await XKeen.ui.confirm(opts || {}));
+    return !!window.confirm(String((opts && opts.message) || 'Продолжить?'));
+  });
+  const openModal = SH.openModal || ((modal, source) => {
+    try { modal.classList.remove('hidden'); } catch (e) {}
+    if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+      try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e2) {}
+    } else {
+      try { document.body.classList.add('modal-open'); } catch (e3) {}
+    }
+    return true;
+  });
+  const closeModal = SH.closeModal || ((modal, source) => {
+    try { modal.classList.add('hidden'); } catch (e) {}
+    if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+      try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e2) {}
+    } else {
+      try { document.body.classList.remove('modal-open'); } catch (e3) {}
+    }
+    return true;
+  });
+
+  function getEditorEngineHelper() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+  }
+
+  function getEditorRuntime(engine) {
+    const helper = getEditorEngineHelper();
+    if (!helper || typeof helper.getRuntime !== 'function') return null;
+    try { return helper.getRuntime(engine); } catch (e) {}
+    return null;
+  }
+
+  async function ensureEditorRuntime(engine, opts) {
+    const helper = getEditorEngineHelper();
+    if (!helper) return null;
+    try {
+      if (typeof helper.ensureRuntime === 'function') return await helper.ensureRuntime(engine, opts || {});
+      if (typeof helper.getRuntime === 'function') return helper.getRuntime(engine);
+    } catch (e) {}
+    return null;
+  }
+
 
   function _formatBytes(n) {
     try { if (SH && typeof SH.formatBytes === "function") return SH.formatBytes(n); } catch (e) {}
@@ -130,107 +174,52 @@
     } catch (e) {}
   }
 
+  const CM6_SCOPE = 'devtools';
+
+  function getCmTheme() {
+    return (document.documentElement.getAttribute('data-theme') === 'light') ? 'default' : 'material-darker';
+  }
+
+  function getCodeMirrorRuntimeOptions(opts) {
+    return Object.assign({ cm6Scope: CM6_SCOPE, scope: CM6_SCOPE }, opts || {});
+  }
+
+  function registerEditorForThemeSync(editor) {
+    if (!editor) return;
+    try {
+      window.__xkeenEditors = window.__xkeenEditors || [];
+      if (!window.__xkeenEditors.includes(editor)) window.__xkeenEditors.push(editor);
+      document.dispatchEvent(new CustomEvent('xkeen-editors-ready'));
+    } catch (e) {}
+  }
+
   async function _ensureCustomCssEditor() {
     const ta = byId('dt-custom-css-textarea');
     if (!ta) return null;
     if (_customCssEditor) return _customCssEditor;
 
-    // Attempt to lazy-load CodeMirror (optional). Fallback to textarea if it fails.
     try {
-      const cmTheme = (document.documentElement.getAttribute('data-theme') === 'light') ? 'default' : 'material-darker';
-      const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
-      const paths = (loader && typeof loader.getPaths === 'function') ? loader.getPaths() : null;
-
-      if (paths && paths.codemirrorRoot && loader && typeof loader.loadCssOnce === 'function' && typeof loader.loadScriptOnce === 'function') {
-        await loader.loadCssOnce(paths.codemirrorRoot + 'codemirror.min.css');
-        if (cmTheme === 'material-darker') {
-          await loader.loadCssOnce(paths.codemirrorRoot + 'theme/material-darker.min.css');
-        }
-        await loader.loadScriptOnce(paths.codemirrorRoot + 'codemirror.min.js');
-      }
-
-      if (window.CodeMirror && typeof window.CodeMirror.fromTextArea === 'function') {
-        // Minimal CSS highlighting: overlay-based mode (CSS mode is not bundled).
-        try {
-          if (loader && typeof loader.loadScriptOnce === 'function' && paths && paths.codemirrorRoot) {
-            await loader.loadScriptOnce(paths.codemirrorRoot + 'addon/mode/overlay.js');
-          }
-        } catch (e) {}
-
-        try {
-          if (window.CodeMirror && window.CodeMirror.overlayMode && !(window.CodeMirror.modes && window.CodeMirror.modes.xk_csslite)) {
-            window.CodeMirror.defineMode('xk_csslite', function (config) {
-              const base = window.CodeMirror.getMode(config, 'text/plain');
-              const overlay = {
-                token: function (stream) {
-                  // Block comments /* ... */
-                  if (stream.match('/*')) {
-                    while ((stream.next()) != null) {
-                      if (stream.current().endsWith('*/')) break;
-                      if (stream.peek() === '*' ) {
-                        stream.next();
-                        if (stream.peek() === '/') { stream.next(); break; }
-                      }
-                    }
-                    return 'comment';
-                  }
-
-                  // Strings
-                  if (stream.match(/"(?:[^\\"]|\\.)*"/)) return 'string';
-                  if (stream.match(/'(?:[^\\']|\\.)*'/)) return 'string';
-
-                  // @rules
-                  if (stream.match(/@[a-zA-Z_-][\w-]*/)) return 'keyword';
-
-                  // !important
-                  if (stream.match(/!important\b/)) return 'keyword';
-
-                  // Hex colors (#rgb, #rrggbb, #rrggbbaa)
-                  if (stream.match(/#[0-9a-fA-F]{3,8}\b/)) return 'atom';
-
-                  // Numbers with common units
-                  if (stream.match(/[0-9]+(?:\.[0-9]+)?(?:px|rem|em|%|vh|vw|vmin|vmax|s|ms)?\b/)) return 'number';
-
-                  // Property name (foo-bar:) — highlight before colon
-                  if (stream.match(/[a-zA-Z_-][\w-]*(?=\s*:)/)) return 'property';
-
-                  stream.next();
-                  return null;
-                }
-              };
-              return window.CodeMirror.overlayMode(base, overlay);
-            });
-          }
-        } catch (e) {}
-        _customCssEditor = window.CodeMirror.fromTextArea(ta, {
-          mode: (window.CodeMirror.modes && window.CodeMirror.modes.xk_csslite) ? 'xk_csslite' : 'text/plain',
-          lineNumbers: true,
-          lineWrapping: true,
-          indentUnit: 2,
-          tabSize: 2,
-          theme: cmTheme,
-          extraKeys: {
-            'Ctrl-S': () => _customCssSaveToServer(),
-            'Cmd-S': () => _customCssSaveToServer(),
-          },
-        });
-
-        // Register for theme sync (theme.js listens to xkeen-editors-ready).
-        try {
-          window.__xkeenEditors = window.__xkeenEditors || [];
-          window.__xkeenEditors.push(_customCssEditor);
-          document.dispatchEvent(new CustomEvent('xkeen-editors-ready'));
-        } catch (e) {}
-
-        // Fix first render when the block is collapsed.
-        setTimeout(() => { try { _customCssEditor.refresh(); } catch (e) {} }, 0);
-      }
+      const cmTheme = getCmTheme();
+      const runtime = await ensureEditorRuntime('codemirror', getCodeMirrorRuntimeOptions({ theme: cmTheme }));
+      if (!runtime || typeof runtime.create !== 'function') return null;
+      _customCssEditor = runtime.create(ta, {
+        mode: 'text/plain',
+        lineWrapping: true,
+        readOnly: false,
+        theme: cmTheme,
+        lint: false,
+        links: false,
+        onSave: () => _customCssSaveToServer(),
+      });
+      registerEditorForThemeSync(_customCssEditor);
+      setTimeout(() => { try { if (_customCssEditor && _customCssEditor.refresh) _customCssEditor.refresh(); } catch (e) {} }, 0);
     } catch (e) {
-      // ignore
+      // Fallback to textarea when runtime is unavailable.
     }
 
     return _customCssEditor;
   }
+
 
   async function _customCssLoadFromServer() {
     if (_customCssLoading) return;
@@ -293,15 +282,13 @@
   }
 
   async function _customCssResetOnServer() {
-    const ok = await (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function'
-      ? XKeen.ui.confirm({
-          title: 'Reset custom.css?',
-          message: 'Удалить custom.css и отключить кастомизацию? Это действие необратимо.',
-          okText: 'Reset',
-          cancelText: 'Отменить',
-          danger: true,
-        })
-      : Promise.resolve(window.confirm('Удалить custom.css? Это действие необратимо.')));
+    const ok = await confirmAction({
+      title: 'Reset custom.css?',
+      message: 'Удалить custom.css и отключить кастомизацию? Это действие необратимо.',
+      okText: 'Reset',
+      cancelText: 'Отменить',
+      danger: true,
+    });
     if (!ok) return;
 
     try {
@@ -361,12 +348,7 @@ let _customCssHelpExtrasWired = false;
 function _showCustomCssHelpModal() {
   const modal = byId('dt-custom-css-help-modal');
   if (!modal) return;
-  try { modal.classList.remove('hidden'); } catch (e) {}
-  if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-    try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
-  } else {
-    try { document.body.classList.add('modal-open'); } catch (e) {}
-  }
+  openModal(modal, 'devtools_custom_css_help');
 
   // Lazy-highlight snippets when opened.
   _ensureCustomCssHelpHighlights();
@@ -377,53 +359,23 @@ function _showCustomCssHelpModal() {
 function _hideCustomCssHelpModal() {
   const modal = byId('dt-custom-css-help-modal');
   if (!modal) return;
-  try { modal.classList.add('hidden'); } catch (e) {}
-  if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-    try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
-  } else {
-    try { document.body.classList.remove('modal-open'); } catch (e) {}
-  }
+  closeModal(modal, 'devtools_custom_css_help');
 }
 
 async function _ensureCustomCssHelpHighlights() {
   const modal = byId('dt-custom-css-help-modal');
   if (!modal) return;
-
-  // Ensure CodeMirror + our CSS-lite mode exist (also upgrades the main editor).
-  await _ensureCustomCssEditor();
-  if (!window.CodeMirror || typeof window.CodeMirror.fromTextArea !== 'function') return;
-
-  const cmTheme = (document.documentElement.getAttribute('data-theme') === 'light') ? 'default' : 'material-darker';
   const nodes = modal.querySelectorAll('textarea.dt-help-code');
   if (!nodes || !nodes.length) return;
 
   for (const ta of nodes) {
     if (!ta || (ta.dataset && ta.dataset.cmInited === '1')) continue;
-    try { if (ta.dataset) ta.dataset.cmInited = '1'; } catch (e) {}
     try {
-      const cm = window.CodeMirror.fromTextArea(ta, {
-        mode: (window.CodeMirror.modes && window.CodeMirror.modes.xk_csslite) ? 'xk_csslite' : 'text/plain',
-        readOnly: true,
-        lineNumbers: false,
-        lineWrapping: true,
-        indentUnit: 2,
-        tabSize: 2,
-        theme: cmTheme,
-        cursorBlinkRate: -1,
-        viewportMargin: Infinity,
-      });
-      _customCssHelpEditors.push(cm);
+      if (ta.dataset) ta.dataset.cmInited = '1';
+      ta.readOnly = true;
+      ta.spellcheck = false;
     } catch (e) {}
   }
-
-  // Refresh (dialog is now visible).
-  setTimeout(() => {
-    try {
-      for (const cm of _customCssHelpEditors) {
-        try { cm.refresh(); } catch (e) {}
-      }
-    } catch (e) {}
-  }, 0);
 }
 
 
@@ -476,6 +428,22 @@ function _buildCustomCssHelpIndex() {
   return _customCssHelpIndex;
 }
 
+function _offsetToEditorPos(text, offset) {
+  const source = String(text || '');
+  const safe = Math.max(0, Math.min(source.length, Number(offset || 0)));
+  let line = 0;
+  let ch = 0;
+  for (let i = 0; i < safe; i += 1) {
+    if (source.charCodeAt(i) === 10) {
+      line += 1;
+      ch = 0;
+    } else {
+      ch += 1;
+    }
+  }
+  return { line, ch };
+}
+
 async function _insertSnippetIntoCustomCssEditor(snippet) {
   const code = String(snippet || '');
   if (!code.trim()) return;
@@ -487,37 +455,52 @@ async function _insertSnippetIntoCustomCssEditor(snippet) {
   // Ensure editor exists (CodeMirror optional).
   try { await _ensureCustomCssEditor(); } catch (e) {}
 
-  // CodeMirror path
+  // Editor path (CM6 bridge / facade-compatible raw editor).
   try {
-    if (_customCssEditor && typeof _customCssEditor.getDoc === 'function') {
-      const doc = _customCssEditor.getDoc();
-      const sel = String(doc.getSelection ? (doc.getSelection() || '') : '');
-      let ins = code;
+    if (_customCssEditor && typeof _customCssEditor.getValue === 'function' && typeof _customCssEditor.setValue === 'function') {
+      const full = String(_customCssEditor.getValue() || '');
+      let start = full.length;
+      let end = full.length;
+      let selectedText = '';
 
-      if (!sel) {
-        const cur = doc.getCursor ? doc.getCursor() : null;
-        const full = String(_customCssEditor.getValue ? (_customCssEditor.getValue() || '') : '');
-        if (full.trim().length > 0 && cur) {
-          try {
-            let prevChar = '';
-            if (cur.ch > 0) {
-              prevChar = doc.getRange({ line: cur.line, ch: cur.ch - 1 }, cur) || '';
-            } else if (cur.line > 0) {
-              const prevLine = String(doc.getLine(cur.line - 1) || '');
-              prevChar = prevLine.slice(-1);
-            }
-            if (prevChar && prevChar !== '\n') ins = '\n\n' + ins;
-            else if (full && !ins.startsWith('\n')) ins = '\n' + ins;
-          } catch (e) {}
+      if (_customCssEditor.view && _customCssEditor.view.state && _customCssEditor.view.state.selection) {
+        const sel = _customCssEditor.view.state.selection.main;
+        start = Number(sel && sel.from || 0);
+        end = Number(sel && sel.to || start);
+        selectedText = String(_customCssEditor.view.state.doc.sliceString(start, end) || '');
+      } else if (typeof _customCssEditor.getDoc === 'function') {
+        const doc = _customCssEditor.getDoc();
+        selectedText = String(doc && doc.getSelection ? (doc.getSelection() || '') : '');
+        const cur = doc && doc.getCursor ? doc.getCursor('from') : (_customCssEditor.getCursor ? _customCssEditor.getCursor() : null);
+        const anchor = doc && doc.getCursor ? doc.getCursor('to') : cur;
+        const from = cur && typeof cur.line === 'number' && typeof cur.ch === 'number' ? cur : { line: 0, ch: full.length };
+        const to = anchor && typeof anchor.line === 'number' && typeof anchor.ch === 'number' ? anchor : from;
+        const lines = full.split('\n');
+        const toOffset = (pos) => {
+          let out = 0;
+          for (let i = 0; i < Math.max(0, Number(pos.line || 0)); i += 1) out += String(lines[i] || '').length + 1;
+          return out + Math.max(0, Number(pos.ch || 0));
+        };
+        start = toOffset(from);
+        end = toOffset(to);
+      }
+
+      let ins = code;
+      if (!selectedText) {
+        if (full.trim().length > 0 && start > 0) {
+          const prevChar = full.charAt(start - 1);
+          if (prevChar && prevChar !== '\n') ins = '\n\n' + ins;
+          else if (!ins.startsWith('\n')) ins = '\n' + ins;
         }
       }
 
-      if (typeof doc.replaceSelection === 'function') {
-        doc.replaceSelection(ins, 'end');
-      } else if (typeof _customCssEditor.replaceSelection === 'function') {
-        _customCssEditor.replaceSelection(ins, 'end');
-      }
-
+      const nextValue = full.slice(0, start) + ins + full.slice(end);
+      _customCssEditor.setValue(nextValue);
+      try {
+        if (typeof _customCssEditor.setCursor === 'function') {
+          _customCssEditor.setCursor(_offsetToEditorPos(nextValue, start + ins.length));
+        }
+      } catch (e) {}
       try { _customCssEditor.focus(); } catch (e) {}
       toast('Вставлено в редактор');
       return;
@@ -540,13 +523,13 @@ async function _insertSnippetIntoCustomCssEditor(snippet) {
     if (typeof ta.setRangeText === 'function') {
       ta.setRangeText(ins, start, end, 'end');
     } else {
-      // Old fallback
       ta.value = v.slice(0, start) + ins + v.slice(end);
     }
     ta.focus();
     toast('Вставлено в редактор');
   } catch (e) {}
 }
+
 
 function _wireCustomCssHelpInsertButtons() {
   const modal = byId('dt-custom-css-help-modal');

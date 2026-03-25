@@ -6,6 +6,60 @@
   XKeen.features.xkeenTexts = (() => {
     let inited = false;
 
+    function getEditorEngineHelper() {
+      try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+    }
+
+    const CM6_SCOPE = 'xkeen-texts';
+
+    function withCm6Scope(opts) {
+      return Object.assign({ cm6Scope: CM6_SCOPE, scope: CM6_SCOPE }, opts || {});
+    }
+
+    function getEditorRuntime(engine, opts) {
+      const helper = getEditorEngineHelper();
+      if (!helper || typeof helper.getRuntime !== 'function') return null;
+      try { return helper.getRuntime(engine, withCm6Scope(opts)); } catch (e) {}
+      return null;
+    }
+
+    async function ensureEditorRuntime(engine, opts) {
+      const helper = getEditorEngineHelper();
+      if (!helper) return null;
+      try {
+        if (typeof helper.ensureRuntime === 'function') return await helper.ensureRuntime(engine, withCm6Scope(opts));
+        if (typeof helper.getRuntime === 'function') return helper.getRuntime(engine, withCm6Scope(opts));
+      } catch (e) {}
+      return null;
+    }
+
+    function isCm6Runtime(runtime) {
+      try { return !!(runtime && runtime.backend === 'cm6'); } catch (e) {}
+      return false;
+    }
+
+    function isCm6Editor(editor) {
+      try {
+        if (!editor) return false;
+        if (editor.__xkeenCm6Bridge || editor.backend === 'cm6') return true;
+        const wrap = (typeof editor.getWrapperElement === 'function') ? editor.getWrapperElement() : null;
+        return !!(wrap && wrap.classList && wrap.classList.contains('xkeen-cm6-editor'));
+      } catch (e) {}
+      return false;
+    }
+
+    function disposeCodeMirrorEditor(editor) {
+      if (!editor) return false;
+      try { if (typeof editor.dispose === 'function') return !!editor.dispose(); } catch (e) {}
+      try {
+        if (typeof editor.toTextArea === 'function') {
+          editor.toTextArea();
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+
     function shouldRestartAfterSave() {
       const cb = document.getElementById('global-autorestart-xkeen');
       // On xkeen.html this checkbox is absent; default restart=true so changes apply immediately.
@@ -79,13 +133,21 @@
 
         function attachEditor(textareaId, stateKey, extraOpts) {
       const ta = document.getElementById(textareaId);
-      if (!ta || !window.CodeMirror) return null;
+      if (!ta) return null;
 
-      // Prevent double-init if main.js already created it.
-      if (XKeen.state && XKeen.state[stateKey]) return XKeen.state[stateKey];
+      const runtime = getEditorRuntime('codemirror');
+      const preferCm6 = isCm6Runtime(runtime);
+
+      // Prevent double-init if main.js already created it, but do not reuse a cached legacy CM5 instance when scoped CM6 is active.
+      if (XKeen.state && XKeen.state[stateKey]) {
+        const existing = XKeen.state[stateKey];
+        if (!preferCm6 || isCm6Editor(existing)) return existing;
+        try { disposeCodeMirrorEditor(existing); } catch (e) {}
+        try { XKeen.state[stateKey] = null; } catch (e2) {}
+      }
 
       const opts = {
-        mode: 'shell',
+        mode: 'text/plain',
         theme: 'material-darker',
         lineNumbers: true,
         styleActiveLine: true,
@@ -104,7 +166,9 @@
         try { Object.assign(opts, extraOpts); } catch (e) {}
       }
 
-      const ed = CodeMirror.fromTextArea(ta, opts);
+      if (!runtime || typeof runtime.create !== 'function') return null;
+      const ed = runtime.create(ta, opts);
+      if (!ed) return null;
       try { ed.getWrapperElement().classList.add('xkeen-cm'); } catch (e) {}
       XKeen.state[stateKey] = ed;
       return ed;
@@ -134,11 +198,12 @@
       inited = true;
 
       const finishInit = () => {
+        wireCardToggle();
         // Editors
         const portProxyEd = attachEditor('port-proxying-editor', 'portProxyingEditor');
         const portExcludeEd = attachEditor('port-exclude-editor', 'portExcludeEditor');
         const ipExcludeEd = attachEditor('ip-exclude-editor', 'ipExcludeEditor');
-        const xkeenConfigEd = attachEditor('xkeen-config-editor', 'xkeenConfigEditor', { mode: { name: 'javascript', json: true } });
+        const xkeenConfigEd = attachEditor('xkeen-config-editor', 'xkeenConfigEditor', { mode: 'application/jsonc' });
 
         // Expose for other scripts that rely on main.js lexical vars.
         // main.js will copy from XKeen.state.* when it detects this feature.
@@ -165,16 +230,22 @@
       };
 
       try {
-        const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
-        if (loader && typeof loader.ensureEditorAssets === 'function') {
-          Promise.resolve(loader.ensureEditorAssets({
-            mode: 'shell',
-            trailingSpace: true,
-          }))
-            .catch(() => null)
-            .finally(finishInit);
-          return;
-        }
+        Promise.resolve(ensureEditorRuntime('codemirror', {
+          mode: 'text/plain',
+          trailingSpace: true,
+        }))
+          .then((runtime) => {
+            if (runtime && typeof runtime.ensureAssets === 'function') {
+              return runtime.ensureAssets({
+                mode: 'text/plain',
+                trailingSpace: true,
+              });
+            }
+            return null;
+          })
+          .catch(() => null)
+          .finally(finishInit);
+        return;
       } catch (e) {}
 
       finishInit();
@@ -215,7 +286,48 @@
       ]);
     }
 
-    // Back-compat: templates still call onclick="toggleXkeenSettings()".
+    function getToggleHeaders() {
+      try {
+        return Array.from(document.querySelectorAll('[data-xk-toggle="xkeen-settings"]'));
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function syncToggleHeaderState(isOpen) {
+      getToggleHeaders().forEach((header) => {
+        try { header.setAttribute('aria-expanded', isOpen ? 'true' : 'false'); } catch (e) {}
+      });
+    }
+
+    function refreshAttachedEditors() {
+      ['portProxyingEditor', 'portExcludeEditor', 'ipExcludeEditor', 'xkeenConfigEditor'].forEach((k) => {
+        try {
+          const ed = (window.XKeen && XKeen.state) ? XKeen.state[k] : null;
+          if (ed && ed.refresh) ed.refresh();
+        } catch (e) {}
+      });
+    }
+
+    function wireCardToggle() {
+      getToggleHeaders().forEach((header) => {
+        if (!header || (header.dataset && header.dataset.xkeenToggleWired === '1')) return;
+        const onToggle = (e) => {
+          if (e) {
+            if (e.type === 'keydown') {
+              const key = String(e.key || '');
+              if (key !== 'Enter' && key !== ' ') return;
+            }
+            e.preventDefault();
+          }
+          toggleCard();
+        };
+        header.addEventListener('click', onToggle);
+        header.addEventListener('keydown', onToggle);
+        if (header.dataset) header.dataset.xkeenToggleWired = '1';
+      });
+    }
+
     function toggleCard() {
       const body = document.getElementById('xkeen-body');
       const arrow = document.getElementById('xkeen-arrow');
@@ -224,18 +336,11 @@
       const willOpen = (body.style.display === '' || body.style.display === 'none');
       body.style.display = willOpen ? 'block' : 'none';
       arrow.textContent = willOpen ? '▲' : '▼';
+      syncToggleHeaderState(willOpen);
 
-      if (willOpen) {
-        ['portProxyingEditor', 'portExcludeEditor', 'ipExcludeEditor', 'xkeenConfigEditor'].forEach((k) => {
-          try {
-            const ed = (window.XKeen && XKeen.state) ? XKeen.state[k] : null;
-            if (ed && ed.refresh) ed.refresh();
-          } catch (e) {}
-        });
-      }
+      if (willOpen) refreshAttachedEditors();
     }
 
-    window.toggleXkeenSettings = window.toggleXkeenSettings || toggleCard;
 
     return {
       init,

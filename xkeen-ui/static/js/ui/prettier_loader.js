@@ -136,8 +136,8 @@
 
       // Prefer shared loader for caching if available.
       try {
-        if (XK.cmLoader && typeof XK.cmLoader.loadScriptOnce === 'function') {
-          return await XK.cmLoader.loadScriptOnce(url);
+        if (XK.runtime && XK.runtime.loader && typeof XK.runtime.loader.loadScriptOnce === 'function') {
+          return await XK.runtime.loader.loadScriptOnce(url);
         }
       } catch (e) {}
 

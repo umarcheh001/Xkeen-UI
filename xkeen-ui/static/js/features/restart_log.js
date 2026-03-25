@@ -261,10 +261,4 @@
     } catch (e) {}
   };
 
-  // Back-compat: old code calls `loadRestartLog()`.
-  if (typeof window.loadRestartLog !== 'function') {
-    window.loadRestartLog = function loadRestartLog() {
-      return RL.load();
-    };
-  }
 })();

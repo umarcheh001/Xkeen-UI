@@ -23,6 +23,7 @@
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
 
+  XK.core = XK.core || {};
   XK.state = XK.state || {};
   XK.util = XK.util || {};
   XK.ui = XK.ui || {};

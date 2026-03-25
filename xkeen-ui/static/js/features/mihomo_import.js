@@ -39,6 +39,7 @@
   let _inited = false;
   let _lastResult = null; // { outputs: [{type, content, uri}] }
   let _previewCm = null;
+  let _previewCmFacade = null;
 
   let _previewKind = 'codemirror';
   let _previewMonaco = null;
@@ -296,28 +297,78 @@
     }
   }
 
-  function getMonacoShared() {
-    try {
-      return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null;
-    } catch (e) {
-      return null;
-    }
+  const CM6_SCOPE = 'mihomo-import';
+
+  function withCm6Scope(opts) {
+    return Object.assign({ cm6Scope: CM6_SCOPE, scope: CM6_SCOPE }, opts || {});
   }
 
-  async function ensureMonacoSharedApi() {
-    const existing = getMonacoShared();
-    if (existing && typeof existing.createEditor === 'function') return existing;
+  function getEditorRuntime(engine, opts) {
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.getRuntime !== 'function') return null;
+    try { return helper.getRuntime(engine, withCm6Scope(opts)); } catch (e) {}
+    return null;
+  }
 
+  async function ensureEditorRuntime(engine, opts) {
+    const helper = getEngineHelper();
+    if (!helper) return null;
     try {
-      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
-      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
-        const ok = await lazy.ensureMonacoSupport();
-        if (!ok) return null;
+      if (typeof helper.ensureRuntime === 'function') return await helper.ensureRuntime(engine, withCm6Scope(opts));
+      if (typeof helper.getRuntime === 'function') return helper.getRuntime(engine, withCm6Scope(opts));
+    } catch (e) {}
+    return null;
+  }
+
+  function isCm6Runtime(runtime) {
+    try { return !!(runtime && runtime.backend === 'cm6'); } catch (e) {}
+    return false;
+  }
+
+  function isCm6Editor(editor) {
+    try {
+      if (!editor) return false;
+      if (editor.__xkeenCm6Bridge || editor.backend === 'cm6') return true;
+      const wrap = (typeof editor.getWrapperElement === 'function') ? editor.getWrapperElement() : null;
+      return !!(wrap && wrap.classList && wrap.classList.contains('xkeen-cm6-editor'));
+    } catch (e) {}
+    return false;
+  }
+
+  function disposeCodeMirrorEditor(editor) {
+    if (!editor) return false;
+    try { if (typeof editor.dispose === 'function') return !!editor.dispose(); } catch (e) {}
+    try {
+      if (typeof editor.toTextArea === 'function') {
+        editor.toTextArea();
+        return true;
       }
     } catch (e) {}
+    return false;
+  }
 
-    const loaded = getMonacoShared();
-    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+  function createCodeMirrorFacade(cm) {
+    if (!cm) return null;
+    const runtime = getEditorRuntime('codemirror');
+    if (runtime && typeof runtime.toFacade === 'function') {
+      try {
+        return runtime.toFacade(cm, {
+          layout: () => {
+            try { if (cm.layout) cm.layout(); else if (cm.refresh) cm.refresh(); } catch (e) {}
+          },
+        });
+      } catch (e) {}
+    }
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.fromCodeMirror !== 'function') return null;
+    try {
+      return helper.fromCodeMirror(cm, {
+        layout: () => {
+          try { if (cm.layout) cm.layout(); else if (cm.refresh) cm.refresh(); } catch (e) {}
+        },
+      });
+    } catch (e) {}
+    return null;
   }
 
   function showNode(node) {
@@ -365,8 +416,11 @@
       if (_previewKind === 'monaco' && _previewMonacoFacade && _previewMonacoFacade.getValue) return String(_previewMonacoFacade.getValue() || '');
     } catch (e2) {}
     try {
-      if (_previewCm && _previewCm.getValue) return String(_previewCm.getValue() || '');
+      if (_previewCmFacade && _previewCmFacade.getValue) return String(_previewCmFacade.getValue() || '');
     } catch (e3) {}
+    try {
+      if (_previewCm && _previewCm.getValue) return String(_previewCm.getValue() || '');
+    } catch (e4) {}
     const ta = $(IDS.preview);
     return ta ? String(ta.value || '') : '';
   }
@@ -386,8 +440,8 @@
     const ta = $(IDS.preview);
 
     if (next === 'monaco') {
-      const shared = await ensureMonacoSharedApi();
-      if (!shared || !host || typeof shared.createEditor !== 'function') {
+      const runtime = await ensureEditorRuntime('monaco');
+      if (!runtime || !host || typeof runtime.create !== 'function') {
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e0) {}
         const ee = getEngineHelper();
         try { if (ee && ee.set) await ee.set('codemirror'); } catch (e1) {}
@@ -403,7 +457,7 @@
       const value = previewTextFallback();
 
       if (!_previewMonaco) {
-        const ed = await shared.createEditor(host, {
+        const ed = await runtime.create(host, {
           language: 'yaml',
           readOnly: true,
           value: value,
@@ -419,8 +473,13 @@
           return activatePreviewEngine('codemirror');
         }
         _previewMonaco = ed;
-        try { _previewMonacoFacade = (shared.toFacade ? shared.toFacade(ed) : null); } catch (e4) { _previewMonacoFacade = null; }
-        try { if (shared.layoutOnVisible) shared.layoutOnVisible(ed, host); } catch (e5) {}
+        try {
+          const helper = getEngineHelper();
+          _previewMonacoFacade = (helper && typeof helper.fromMonaco === 'function') ? helper.fromMonaco(ed) : null;
+        } catch (e4) {
+          _previewMonacoFacade = null;
+        }
+        try { if (runtime.layoutOnVisible) runtime.layoutOnVisible(ed, host); } catch (e5) {}
       } else if (_previewMonacoFacade && _previewMonacoFacade.setValue) {
         _previewMonacoFacade.setValue(value);
       }
@@ -435,9 +494,9 @@
     try { disposePreviewMonaco(); } catch (e) {}
 
     try {
-      const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
-      if (loader && typeof loader.ensureEditorAssets === 'function') {
-        await loader.ensureEditorAssets({ mode: 'yaml' });
+      const runtime = await ensureEditorRuntime('codemirror', { mode: 'yaml' });
+      if (runtime && typeof runtime.ensureAssets === 'function') {
+        await runtime.ensureAssets({ mode: 'yaml' });
       }
     } catch (e) {}
 
@@ -487,10 +546,21 @@
 
   function ensurePreviewCm() {
     const ta = $(IDS.preview);
-    if (!ta || !window.CodeMirror) return null;
-    if (_previewCm) return _previewCm;
+    if (!ta) return null;
 
-    _previewCm = CodeMirror.fromTextArea(ta, {
+    const runtime = getEditorRuntime('codemirror');
+    const preferCm6 = isCm6Runtime(runtime);
+
+    if (_previewCm) {
+      if (!preferCm6 || isCm6Editor(_previewCm)) return _previewCm;
+      try { disposeCodeMirrorEditor(_previewCm); } catch (e) {}
+      _previewCm = null;
+      _previewCmFacade = null;
+    }
+
+    if (!runtime || typeof runtime.create !== 'function') return null;
+
+    _previewCm = runtime.create(ta, {
       mode: 'yaml',
       theme: cmThemeFromPage(),
       lineNumbers: false,
@@ -505,9 +575,11 @@
       const w = _previewCm.getWrapperElement();
       w.classList.add('xkeen-cm', 'xk-mihomo-import-preview');
       const previewHeight = window.innerWidth <= 720 ? '280px' : '360px';
-      _previewCm.setSize(null, previewHeight);
+      if (typeof _previewCm.setSize === 'function') _previewCm.setSize(null, previewHeight);
+      else if (w) w.style.height = previewHeight;
     } catch (e) {}
 
+    _previewCmFacade = createCodeMirrorFacade(_previewCm);
     return _previewCm;
   }
 
@@ -523,6 +595,11 @@
       }
     } catch (e) {}
 
+    if (_previewCmFacade && _previewCmFacade.set) {
+      _previewCmFacade.set(v);
+      try { _previewCmFacade.scrollTo(0, 0); } catch (e2) {}
+      return;
+    }
     if (_previewCm && _previewCm.setValue) {
       _previewCm.setValue(v);
       try { _previewCm.scrollTo(0, 0); } catch (e2) {}

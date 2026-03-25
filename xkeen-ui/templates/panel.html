@@ -26,20 +26,7 @@
     window.XKeen.env.devtoolsSectionsWhitelist = {{ devtools_sections_whitelist|tojson }};
   </script>
   <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
-<!-- CodeMirror & JSON lint -->
-
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/codemirror.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/theme/material-darker.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/lint/lint.min.css') }}">
-
-  <script src="{{ url_for('static', filename='codemirror/codemirror.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/display/indent-guides.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/selection/active-line.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/edit/matchbrackets.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/mode/javascript/javascript.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/lint/lint.min.js') }}"></script>
-
-  <!-- NOTE: extra modes / JSON linter are lazy-loaded (see js/ui/codemirror_loader.js) -->
+  <!-- Editor payload is lazy-loaded by js/runtime/lazy_runtime.js + js/ui/editor_engine.js. -->
 
   <script>
     (function () {
@@ -57,7 +44,7 @@
     })();
   </script>
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260317h') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260325g') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -81,40 +68,50 @@
 
   <!-- Wider container (match DevTools page width) -->
   <div class="container container-wide">
-    <header class="panel-header">
-      <div class="header-main">
-        <div class="header-title-group">
-          <img id="xk-brand-logo" class="xk-brand-logo hidden" alt="Logo" />
-          <h1 id="xk-brand-title" data-xk-brand-title>Xkeen UI</h1>
-          <span
-            id="xkeen-service-lamp"
-            class="service-status-lamp"
-            data-state="pending"
-            title="Проверка статуса..."
-          ></span>
-          <span id="xkeen-service-text" class="service-status-text">
-            Проверка статуса...
-          </span>
+    <header class="panel-header panel-header-shell" data-xk-shell="panel-header">
+      <div class="header-main panel-header-shell-main">
+        <div class="header-title-group panel-shell-brand" data-xk-shell-group="brand">
+          <div class="panel-shell-branding">
+            <img id="xk-brand-logo" class="xk-brand-logo hidden" alt="Logo" />
+            <h1 id="xk-brand-title" data-xk-brand-title>Xkeen UI</h1>
+          </div>
+          <div class="panel-shell-status" data-xk-shell-slot="status" aria-live="polite">
+            <span
+              id="xkeen-service-lamp"
+              class="service-status-lamp"
+              data-state="pending"
+              title="Проверка статуса..."
+            ></span>
+            <span id="xkeen-service-text" class="service-status-text">
+              Проверка статуса...
+            </span>
+          </div>
         </div>
 
-        <div class="header-center">
-          <button
-            id="xkeen-core-text"
-            type="button"
-            class="service-core-text{% if not multi_core %} hidden{% endif %}"
-            {% if not multi_core %}aria-hidden="true" tabindex="-1"{% endif %}
-          ></button>
+        <div class="header-center panel-shell-center" data-xk-shell-group="service">
+          <div class="panel-shell-core" data-xk-shell-slot="core">
+            <button
+              id="xkeen-core-text"
+              type="button"
+              class="service-core-text{% if not multi_core %} hidden{% endif %}"
+              data-loading="true"
+              aria-busy="true"
+              {% if not multi_core %}aria-hidden="true" tabindex="-1"{% endif %}
+            >Ядро</button>
+          </div>
 
           {% if has_xray %}
-          <!-- Notice: global Xray logging is enabled (loglevel!=none) -->
-          <span id="xray-logs-badge" class="xray-logs-badge" data-state="off" title="Логи Xray выключены">
-            Логи Xray
-          </span>
+          <div class="panel-shell-badges" data-xk-shell-slot="badges">
+            <!-- Notice: global Xray logging is enabled (loglevel!=none) -->
+            <span id="xray-logs-badge" class="xray-logs-badge" data-state="off" title="Логи Xray выключены">
+              Логи Xray
+            </span>
+          </div>
           {% endif %}
         </div>
 
-        <div class="header-right">
-          <div class="header-actions">
+        <div class="header-right panel-shell-right" data-xk-shell-group="actions">
+          <div class="panel-shell-summary" data-xk-shell-slot="summary">
             <button
               type="button"
               id="last-load"
@@ -123,49 +120,57 @@
               aria-label="Последняя операция с конфигом"
               aria-expanded="false"
             ></button>
+          </div>
 
-            <button
-              type="button"
-              id="theme-toggle-btn"
-              class="theme-toggle-btn theme-toggle-header xk-header-btn xk-header-btn-theme"
-              aria-label="Переключить тему"
-            ></button>
+          <div class="header-actions panel-shell-actions">
+            <div class="panel-shell-actions-primary" data-xk-shell-slot="workspace-actions">
+              <button
+                type="button"
+                id="theme-toggle-btn"
+                class="theme-toggle-btn theme-toggle-header xk-header-btn xk-header-btn-theme"
+                aria-label="Переключить тему"
+              ><span class="theme-toggle-icon" aria-hidden="true">☀</span><span class="theme-toggle-text">Светлая тема</span></button>
 
-            <button
-              type="button"
-              id="ui-settings-open-btn"
-              class="service-core-text xk-header-btn xk-header-btn-ui"
-              title="UI настройки (Prettier/ANSI)"
-            >⚙ UI</button>
+              <button
+                type="button"
+                id="ui-settings-open-btn"
+                class="service-core-text xk-header-btn xk-header-btn-ui"
+                title="UI settings"
+              >⚙ UI</button>
 
-            <a
-              href="{{ url_for('devtools_page') }}"
-              class="service-core-text xk-header-btn xk-header-btn-devtools"
-              title="DevTools"
-            >DevTools</a>
+              <a
+                href="{{ url_for('devtools_page') }}"
+                class="service-core-text xk-header-btn xk-header-btn-devtools"
+                title="DevTools"
+              >DevTools</a>
 
-            <a
-              href="{{ url_for('devtools_page') }}#dt-update-card"
-              id="xk-update-link"
-              class="service-core-text hidden"
-              title="Обновление"
-            >
-              <span class="xk-update-dot" aria-hidden="true"></span>
-              <span data-xk-update-label>Обновление</span>
-            </a>
+              <a
+                href="{{ url_for('devtools_page') }}#dt-update-card"
+                id="xk-update-link"
+                class="service-core-text hidden"
+                data-loading="true"
+                aria-busy="true"
+                title="Обновление"
+              >
+                <span class="xk-update-dot" aria-hidden="true"></span>
+                <span data-xk-update-label>Обновление</span>
+              </a>
 
-            <button
-              type="button"
-              id="panel-core-ui-refresh-btn"
-              class="service-core-text xk-header-btn hidden"
-              title="РћР±РЅРѕРІРёС‚СЊ РїР°РЅРµР»СЊ РїРѕСЃР»Рµ РёР·РјРµРЅРµРЅРёСЏ РЅР°Р±РѕСЂР° СЏРґРµСЂ"
-            >РћР±РЅРѕРІРёС‚СЊ РїР°РЅРµР»СЊ</button>
+              <button
+                type="button"
+                id="panel-core-ui-refresh-btn"
+                class="service-core-text xk-header-btn hidden"
+                title="РћР±РЅРѕРІРёС‚СЊ РїР°РЅРµР»СЊ РїРѕСЃР»Рµ РёР·РјРµРЅРµРЅРёСЏ РЅР°Р±РѕСЂР° СЏРґРµСЂ"
+              >РћР±РЅРѕРІРёС‚СЊ РїР°РЅРµР»СЊ</button>
+            </div>
 
-            <a
-              href="{{ url_for('logout') }}"
-              class="service-core-text xk-header-btn xk-header-btn-logout"
-              title="Выйти из панели"
-            >Выйти</a>
+            <div class="panel-shell-actions-secondary" data-xk-shell-slot="session-actions">
+              <a
+                href="{{ url_for('logout') }}"
+                class="service-core-text xk-header-btn xk-header-btn-logout"
+                title="Выйти из панели"
+              >Выйти</a>
+            </div>
           </div>
         </div>
       </div>
@@ -196,7 +201,7 @@
           Файлы
         </button>
         {% if has_mihomo %}
-        <button class="top-tab-btn xk-top-tab xk-top-tab-generator" type="button" data-xk-section="mihomo-generator" id="top-tab-mihomo-generator" onclick="window.location.href='/mihomo_generator'">
+        <button class="top-tab-btn xk-top-tab xk-top-tab-generator" type="button" data-xk-section="mihomo-generator" id="top-tab-mihomo-generator" data-nav-href="{{ url_for('mihomo_generator_page') }}">
           Mihomo Генератор
         </button>
         {% endif %}
@@ -803,7 +808,7 @@
     {% endif %}
 <div id="view-mihomo" class="view-section" style="display:none;" data-xk-section="mihomo">
   <section class="card">
-    <div class="commands-header" onclick="toggleMihomoCard()">
+    <div class="commands-header" data-xk-toggle="mihomo-card" role="button" tabindex="0" aria-controls="mihomo-body" aria-expanded="true">
       <h2>Роутинг Mihomo</h2>
       <span id="mihomo-arrow">▼</span>
     </div>
@@ -1035,7 +1040,7 @@
 <div id="view-xkeen" class="view-section" style="display:none;" data-xk-section="xkeen">
   <!-- XKeen: порты и исключения -->
       <section class="card commands-card">
-        <div class="commands-header" onclick="toggleXkeenSettings()">
+        <div class="commands-header" data-xk-toggle="xkeen-settings" role="button" tabindex="0" aria-controls="xkeen-body" aria-expanded="true">
           <h2>Порты и Исключения</h2>
           <span id="xkeen-arrow">▼</span>
         </div>
@@ -1399,6 +1404,8 @@
 
           <button type="button" id="xray-log-pause" class="btn-secondary dt-log-btn" title="Пауза: заморозить вывод (строки продолжают собираться)." aria-label="Пауза">⏸ Pause</button>
 
+          <button type="button" id="xray-log-scroll-bottom" class="btn-secondary dt-log-btn xray-log-scroll-btn" title="Scroll to the latest rendered lines." aria-label="Scroll to latest log lines" hidden>Latest</button>
+
           <details class="dt-log-menu" id="xray-log-more">
             <summary class="btn-secondary dt-log-btn" title="Дополнительно" aria-label="Дополнительно">⋯</summary>
             <div class="dt-log-menu-panel" role="menu" aria-label="Дополнительные действия">
@@ -1412,6 +1419,7 @@
 </div>
           </details>
 
+          <span class="small xray-log-mode" id="xray-log-mode" aria-live="polite">Manual</span>
           <span class="small dt-log-stats" id="xray-log-stats" aria-live="polite"></span>
         </div>
 
@@ -2926,68 +2934,23 @@ https://..."></textarea>
     </div>
 
 
-    <!-- UI settings modal (Prettier/ANSI flags) -->
-    <div id="ui-settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="UI настройки">
+    <!-- UI settings modal -->
+    <div id="ui-settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Настройки интерфейса" data-modal-focus="#ui-settings-nav-btn-editor">
       <div class="modal-content xk-ui-settings-modal-content" data-modal-key="ui-settings">
         <div class="modal-header xk-ui-settings-header">
           <div class="xk-ui-settings-titlebox">
-            <span class="xk-ui-settings-kicker">Panel preferences</span>
-            <span class="modal-title">UI настройки</span>
-            <p class="xk-ui-settings-subtitle">Настройки сохраняются на роутере и применяются сразу, без консоли.</p>
+            <span class="modal-title">Настройки интерфейса</span>
           </div>
           <button type="button" class="modal-close" id="ui-settings-close-btn" title="Закрыть">×</button>
         </div>
         <div class="modal-body xk-ui-settings-body">
-          <div class="xk-ui-settings-grid">
-            <label class="dt-switch xk-ui-setting-card">
-              <input type="checkbox" id="ui-setting-prefer-prettier">
-              <span class="dt-switch-slider" aria-hidden="true"></span>
-              <span class="xk-ui-setting-copy">
-                <strong>Routing: Format via Prettier</strong>
-                <small>Кнопка «✨ Format JSON» сначала использует браузерный Prettier для JSONC и только потом уходит в fallback.</small>
-              </span>
-            </label>
-
-            <label class="dt-switch xk-ui-setting-card">
-              <input type="checkbox" id="ui-setting-logs-ansi">
-              <span class="dt-switch-slider" aria-hidden="true"></span>
-              <span class="xk-ui-setting-copy">
-                <strong>Logs: ANSI colors</strong>
-                <small>Преобразует ANSI-цвета в HTML и делает live-логи заметно читабельнее.</small>
-              </span>
-            </label>
-
-            <label class="dt-switch xk-ui-setting-card">
-              <input type="checkbox" id="ui-setting-logs-ws2">
-              <span class="dt-switch-slider" aria-hidden="true"></span>
-              <span class="xk-ui-setting-copy">
-                <strong>Logs: WS2</strong>
-                <small>Экспериментальный режим без переподключения: смена file/filter и очистка экрана через <code>/ws/xray-logs2</code>.</small>
-              </span>
-            </label>
-
-            <label class="dt-switch xk-ui-setting-card">
-              <input type="checkbox" id="ui-setting-routing-gui">
-              <span class="dt-switch-slider" aria-hidden="true"></span>
-              <span class="xk-ui-setting-copy">
-                <strong>Routing: GUI Rules card</strong>
-                <small>Показывает карточку «Правила маршрутизации» поверх raw JSON/JSONC-редактора. Можно отключить, если нужен только RAW.</small>
-              </span>
-            </label>
-
-            <label class="dt-switch xk-ui-setting-card">
-              <input type="checkbox" id="ui-setting-routing-autoapply">
-              <span class="dt-switch-slider" aria-hidden="true"></span>
-              <span class="xk-ui-setting-copy">
-                <strong>Routing: Auto Apply</strong>
-                <small>Автоматически синхронизирует изменения из карточки правил обратно в JSON-редактор без ручного нажатия «Применить».</small>
-              </span>
-            </label>
+          <div class="xk-ui-settings-shell">
+            <nav id="ui-settings-nav" class="xk-ui-settings-nav" aria-label="Разделы настроек интерфейса"></nav>
+            <div id="ui-settings-sections" class="xk-ui-settings-sections" aria-live="polite"></div>
           </div>
-
-          <div id="ui-settings-status" class="modal-hint xk-ui-settings-status"></div>
         </div>
         <div class="modal-actions xk-ui-settings-footer">
+          <div id="ui-settings-status" class="modal-hint xk-ui-settings-status is-empty"></div>
           <button type="button" id="ui-settings-ok-btn" class="btn-secondary">Закрыть</button>
         </div>
       </div>
@@ -3012,7 +2975,7 @@ https://..."></textarea>
 	    window.XKEEN_MIHOMO_CONFIG_EXISTS = {{ mihomo_config_exists|tojson }};
 	    window.XKEEN_MULTI_CORE = {{ multi_core|tojson }};
 		    // Cache-buster for lazy-loaded scripts (Commit J)
-		    window.XKEEN_STATIC_VER = "20260322a";
+		    window.XKEEN_STATIC_VER = "20260324d";
 	    // Files shown in UI (used by last-load badge and other helpers)
 	    window.XKEEN_FILES = {
 	      routing: "{{ routing_file|e }}",
@@ -3023,82 +2986,8 @@ https://..."></textarea>
 		    // File Manager initial right panel path
 		    window.XKEEN_FM_RIGHT_DEFAULT = "{{ fm_right_default|e }}";
   </script>
-  <!-- Modularization scaffold (no behavior changes yet) -->
-  <script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/core/xk_dom.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/core/xk_http.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/core/xk_storage.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/confirm_modal.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/theme.js', v='20260316a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
-	  <script src="{{ url_for('static', filename='js/ui/last_activity.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ui/codemirror_loader.js', v='20260317b') }}"></script>
-  <!-- Monaco support is lazy-loaded on first Monaco editor open by panel.init.js -->
-  <script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260317e') }}"></script>
-  <script src="{{ url_for('static', filename='js/util/tab_id.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/util/ansi.js', v='20260302a') }}"></script>
-    <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
-<script src="{{ url_for('static', filename='js/ui/spinner_fetch.js', v='20260317c') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/settings.js', v='20260308-stage2') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/editor_engine.js', v='20260223a') }}"></script>
-  {% if has_xray %}
-  <!-- Routing page core -->
-  <script src="{{ url_for('static', filename='js/features/routing.js', v='20260322a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_jsonc_preserve.js', v='20260218d') }}"></script>
-
-  <!-- routing_cards: namespace + shared helpers -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards/ns.js', v='20260304d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/ids.js', v='20260304d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/common.js', v='20260304d') }}"></script>
-
-  <!-- routing_cards: UI helpers -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards/collapse.js', v='20260304d') }}"></script>
-  <!-- routing_cards: DAT card -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards/dat/prefs.js', v='20260304d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/dat/combo.js', v='20260304d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/dat/api.js', v='20260304d') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/dat/card.js', v='20260304d') }}"></script>
-
-  <!-- routing_cards: Rules card -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/state.js', v='20260313b') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/model.js', v='20260308-stage3fix1') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/detect.js', v='20260304j') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/json_modal.js', v='20260304h4') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/apply.js', v='20260308-stage3fix1') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/fields.js', v='20260308-stage1') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dnd_pointer.js', v='20260308-stage3') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/render.js', v='20260317a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/controls.js', v='20260317g') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/routing_cards/rules/dat_bridge.js', v='20260304h4') }}"></script>
-
-  <!-- routing_cards: facade/entrypoint -->
-  <script src="{{ url_for('static', filename='js/features/routing_cards.js', v='20260317a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/local_io.js') }}"></script>
-  <!-- routing_cards: help/docs + quick balancer + balancer help + forced rules are lazy-loaded by routing_cards.js -->
-  {% endif %}
-  <!-- routing_templates/github/service_status/xray_logs/restart_log/xray_preflight are lazy-loaded by panel.init.js -->
-  {% if has_mihomo %}
-  <script src="{{ url_for('static', filename='js/features/mihomo_panel.js', v='20260322a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_yaml_patch.js', v='20260302a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_import.js', v='20260317b') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_proxy_tools.js', v='20260302a') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_hwid_sub.js', v='20260302b') }}"></script>
-  {% endif %}
-  <!-- commands_list/cores_status/inbounds/outbounds are lazy-loaded by panel.init.js -->
-  <script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
-    <!-- xkeen_texts/settings_panel/formatters are lazy-loaded by panel.init.js and view handlers -->
-      <!-- File Manager scripts are lazy-loaded when Files tab is opened (Commit J) -->
-
-    <!-- Terminal scripts are lazy-loaded on first open (Commit J) -->
-
-  <!-- donate is lazy-loaded by panel.init.js -->
-	  <script src="{{ url_for('static', filename='js/pages/panel.init.js', v='20260322a') }}"></script>
-  <script src="{{ url_for('static', filename='main.js') }}"></script>
+  <!-- Frontend workspace entrypoint (step 37): keeps page bootstrap in one file instead of a long inline script list. -->
+  <script type="module" src="{{ frontend_page_entry_url('panel') }}"></script>
 
     <!-- Модальный JSON-редактор для 03_inbounds.json / 04_outbounds.json -->
     <div id="json-editor-modal" class="modal hidden">
@@ -3231,11 +3120,11 @@ https://..."></textarea>
       </div>
     </div>
 
-<div id="mihomo-validation-modal" class="modal hidden" onclick="if (event.target === this) hideMihomoValidationModal();">
+<div id="mihomo-validation-modal" class="modal hidden" data-modal-dismiss="mihomo-validation">
   <div class="modal-content">
     <div class="modal-header">
       <span class="modal-title">Результат проверки конфигурации Mihomo</span>
-      <button type="button" class="modal-close" onclick="hideMihomoValidationModal()">×</button>
+      <button type="button" class="modal-close" data-dismiss="mihomo-validation">×</button>
     </div>
     <div id="mihomo-validation-modal-body" class="modal-body modal-body-logs"></div>
   </div>

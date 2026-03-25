@@ -17,6 +17,39 @@
     return document.getElementById(id);
   }
 
+  function getModalApi() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.modal) return XKeen.ui.modal;
+    } catch (e) {}
+    return null;
+  }
+
+  function showModal(modal, source) {
+    if (!modal) return false;
+    const api = getModalApi();
+    try {
+      if (api && typeof api.open === 'function') return api.open(modal, { source: source || 'github' });
+    } catch (e) {}
+    try { modal.classList.remove('hidden'); } catch (e2) {}
+    try {
+      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
+    } catch (e3) {}
+    return true;
+  }
+
+  function hideModal(modal, source) {
+    if (!modal) return false;
+    const api = getModalApi();
+    try {
+      if (api && typeof api.close === 'function') return api.close(modal, { source: source || 'github' });
+    } catch (e) {}
+    try { modal.classList.add('hidden'); } catch (e2) {}
+    try {
+      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
+    } catch (e3) {}
+    return true;
+  }
+
   function setCatalogMessage({ status = '', error = '', stale = false, loading = false } = {}) {
     const statusEl = el('github-catalog-status');
     const errorEl = el('github-catalog-error');
@@ -56,26 +89,26 @@
   function openExportModal() {
     const modal = el('github-export-modal');
     if (!modal) return;
-    modal.classList.remove('hidden');
+    showModal(modal, 'github_export_open');
   }
 
   function closeExportModal() {
     const modal = el('github-export-modal');
     if (!modal) return;
-    modal.classList.add('hidden');
+    hideModal(modal, 'github_export_close');
   }
 
   function openCatalogModal() {
     const modal = el('github-catalog-modal');
     if (!modal) return;
-    modal.classList.remove('hidden');
+    showModal(modal, 'github_catalog_open');
     loadCatalog();
   }
 
   function closeCatalogModal() {
     const modal = el('github-catalog-modal');
     if (!modal) return;
-    modal.classList.add('hidden');
+    hideModal(modal, 'github_catalog_close');
     try {
       if (_catalogAbort) _catalogAbort.abort();
     } catch (e) {}
@@ -90,24 +123,42 @@
     }
   }
 
+  function getConfigShellApi() {
+    try {
+      const api = window.XKeen && XKeen.pages ? XKeen.pages.configShell : null;
+      return api && typeof api.activateRoutingView === 'function' ? api : null;
+    } catch (e) {}
+    return null;
+  }
+
   async function refreshAfterImport() {
-    // Keep compatibility with current monolithic main.js.
-    const fns = [
-      'loadRouting',
-      'loadInboundsMode',
-      'loadPortProxying',
-      'loadPortExclude',
-      'loadIpExclude',
-      'loadXkeenConfig',
+    const tasks = [
+      async () => {
+        const configShell = getConfigShellApi();
+        if (configShell && typeof configShell.activateRoutingView === 'function') {
+          await configShell.activateRoutingView({ reason: 'github-import', force: true });
+        }
+        const api = window.XKeen && XKeen.routing ? XKeen.routing : null;
+        if (api && typeof api.load === 'function') await api.load();
+      },
+      async () => {
+        const configShell = getConfigShellApi();
+        if (configShell && typeof configShell.ensureInboundsReady === 'function') {
+          await configShell.ensureInboundsReady();
+        }
+        const api = window.XKeen && XKeen.features ? XKeen.features.inbounds : null;
+        if (api && typeof api.load === 'function') await api.load();
+      },
+      async () => {
+        const texts = window.XKeen && XKeen.features ? XKeen.features.xkeenTexts : null;
+        if (texts && typeof texts.reloadAll === 'function') await texts.reloadAll();
+      },
     ];
 
-    for (const fn of fns) {
+    for (const run of tasks) {
       try {
-        const f = window[fn];
-        if (typeof f === 'function') {
-          // eslint-disable-next-line no-await-in-loop
-          await f();
-        }
+        // eslint-disable-next-line no-await-in-loop
+        await run();
       } catch (e) {
         console.error(e);
       }
@@ -406,23 +457,6 @@
       });
     }
 
-    // Close modals on Escape.
-    document.addEventListener(
-      'keydown',
-      (e) => {
-        if (e.key !== 'Escape') return;
-        const exportModal = el('github-export-modal');
-        const catalogModal = el('github-catalog-modal');
-        if (exportModal && !exportModal.classList.contains('hidden')) {
-          e.preventDefault();
-          closeExportModal();
-        } else if (catalogModal && !catalogModal.classList.contains('hidden')) {
-          e.preventDefault();
-          closeCatalogModal();
-        }
-      },
-      { passive: false }
-    );
   }
 
   XKeen.github.init = init;

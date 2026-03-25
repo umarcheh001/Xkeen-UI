@@ -9,18 +9,51 @@
 
   function byId(id) { return document.getElementById(id); }
 
-  function toast(msg, isErr) {
+  function normalizeToastKind(value, fallback) {
+    const kind = String(value || fallback || 'info').trim().toLowerCase();
+    if (kind === 'error' || kind === 'warning' || kind === 'success' || kind === 'info') return kind;
+    return 'info';
+  }
+
+  function toast(msg, kindOrError) {
+    const kind = (typeof kindOrError === 'string')
+      ? normalizeToastKind(kindOrError, 'info')
+      : (kindOrError ? 'error' : 'info');
     try {
-      if (typeof window.toast === 'function') return window.toast(String(msg || ''), isErr ? 'error' : 'info');
+      if (typeof window.toast === 'function') return window.toast(String(msg || ''), kind);
     } catch (e) {}
     try { console.log('[xkeen]', msg); } catch (e) {}
   }
 
-  function setStatus(msg, isErr) {
+  function writeStatus(msg, isErr) {
     const el = byId('dt-ui-prefs-io-status');
     if (!el) return;
     el.textContent = msg ? String(msg) : '';
     try { el.style.color = isErr ? 'var(--sem-error, #fca5a5)' : ''; } catch (e) {}
+  }
+
+  function setStatus(msg, isErr) {
+    writeStatus(msg, isErr);
+  }
+
+  function buildConfirmText(options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    const message = String(opts.message || opts.text || opts.body || 'Continue?').trim() || 'Continue?';
+    const details = Array.isArray(opts.details)
+      ? opts.details.map((item) => String(item || '').trim()).filter(Boolean).join('\n')
+      : String(opts.details || '').trim();
+    return details ? (message + '\n\n' + details) : message;
+  }
+
+  async function confirmAction(options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    try {
+      if (XK && XK.ui && typeof XK.ui.confirm === 'function') return !!(await XK.ui.confirm(opts));
+    } catch (e) {}
+
+    const ok = window.confirm(buildConfirmText(opts));
+    if (!ok && opts.cancelMessage) toast(opts.cancelMessage, opts.cancelKind || 'info');
+    return !!ok;
   }
 
   // Note: branding is global now (stored on the router), so we export it separately
@@ -405,6 +438,12 @@
           if (rbOk === false) msg += ' Branding: failed to apply.';
           msg += ' (May require page reload for some UI)';
           setStatus(msg, rbOk === false);
+          if (rbOk === false) {
+            toast('Импорт применён частично: branding не удалось записать на роутер', 'warning');
+            return;
+          }
+          toast('Импорт применён', 'success');
+          return;
           toast('Импорт применён');
         } catch (e) {
           setStatus('Import failed: ' + (e && e.message ? e.message : String(e)), true);
@@ -416,6 +455,44 @@
     if (resetBtn) {
       resetBtn.addEventListener('click', async () => {
         try {
+          const confirmReset = await confirmAction({
+            title: 'Сбросить UI-настройки',
+            message: 'Сбросить все UI-настройки?',
+            details: [
+              'Будут очищены theme, typography, layout, hidden flags, branding cache и DevTools keys.',
+              'Часть интерфейса может потребовать перезагрузку страницы.',
+            ],
+            okText: 'Сбросить',
+            cancelText: 'Отменить',
+            focus: 'cancel',
+            danger: true,
+            cancelMessage: 'Сброс UI-настроек отменён.',
+            cancelKind: 'info',
+          });
+          if (!confirmReset) {
+            writeStatus('Сброс UI-настроек отменён.', false);
+            return;
+          }
+
+          const removedCount = resetAll();
+          const brandingResetOk = await resetRouterBranding();
+          try {
+            if (XK && XK.ui && XK.ui.branding && typeof XK.ui.branding.refreshFromRouter === 'function') {
+              await XK.ui.branding.refreshFromRouter();
+            }
+          } catch (e) {}
+          if (exportTa) exportTa.value = '';
+          if (importTa) importTa.value = '';
+          setStatus(
+            'Reset: removed ' + removedCount + ' keys. Branding reset: ' + (brandingResetOk ? 'ok' : 'failed') + '. (May require page reload for some UI)',
+            !brandingResetOk
+          );
+          toast(
+            brandingResetOk ? 'UI-настройки сброшены' : 'UI-настройки сброшены частично: branding reset не подтвердился',
+            brandingResetOk ? 'success' : 'warning'
+          );
+          return;
+
           const ok = window.confirm('Сбросить все UI-настройки (тема/типографика/layout/скрытые/брендинг/DevTools)?');
           if (!ok) return;
           const n = resetAll();
@@ -431,6 +508,7 @@
           toast('UI-настройки сброшены');
         } catch (e) {
           setStatus('Reset failed: ' + (e && e.message ? e.message : String(e)), true);
+          toast('Reset failed', true);
         }
       });
     }

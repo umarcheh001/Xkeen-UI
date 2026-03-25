@@ -13,15 +13,168 @@
 
   let _inited = false;
   let _cm = null;
+  let _cmFacade = null;
   let _monaco = null;
   let _monacoFacade = null;
   let _kind = 'codemirror';
   let _engineUnsub = null;
+  let _dirtyUnsub = null;
   let _currentTarget = null;
   let _savedText = '';
+  let _viewStateStore = null;
 
   function el(id) {
     return document.getElementById(id);
+  }
+
+  function getModalApi() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.modal) return XKeen.ui.modal;
+    } catch (e) {}
+    return null;
+  }
+
+  function getConfigDirtyApi() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.configDirty) return XKeen.ui.configDirty;
+    } catch (e) {}
+    return null;
+  }
+
+
+  function getUiSettingsApi() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.settings) return XKeen.ui.settings;
+    } catch (e) {}
+    return null;
+  }
+
+  function getFormattersApi() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.formatters) return XKeen.ui.formatters;
+    } catch (e) {}
+    return null;
+  }
+
+  async function getPreferPrettierFlag() {
+    try {
+      const api = getUiSettingsApi();
+      if (!api) return false;
+      if (typeof api.fetchOnce === 'function') {
+        const st = await api.fetchOnce().catch(() => null);
+        if (st && st.format && typeof st.format.preferPrettier === 'boolean') {
+          return !!st.format.preferPrettier;
+        }
+      }
+      if (typeof api.get === 'function') {
+        const st2 = api.get();
+        if (st2 && st2.format && typeof st2.format.preferPrettier === 'boolean') {
+          return !!st2.format.preferPrettier;
+        }
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function refreshRestartLog() {
+    try {
+      const api = window.XKeen && XKeen.features ? XKeen.features.restartLog : null;
+      if (api && typeof api.load === 'function') return api.load();
+    } catch (e) {}
+    return null;
+  }
+
+  function clearDirtyListener() {
+    try {
+      if (typeof _dirtyUnsub === 'function') _dirtyUnsub();
+    } catch (e) {}
+    _dirtyUnsub = null;
+  }
+
+  function clearTargetDirtyState(target) {
+    const scope = String(target || '').trim();
+    if (!scope) return;
+    const api = getConfigDirtyApi();
+    if (!api || typeof api.clearSource !== 'function') return;
+    try { api.clearSource(scope, 'jsonEditor'); } catch (e) {}
+  }
+
+  function syncTargetDirtyState(forceDirty) {
+    if (!_currentTarget) return false;
+    let dirty = false;
+    try {
+      dirty = (typeof forceDirty === 'boolean')
+        ? !!forceDirty
+        : (String(getCurrentValue() || '') !== String(_savedText || ''));
+    } catch (e) {
+      dirty = false;
+    }
+
+    const api = getConfigDirtyApi();
+    if (api && typeof api.setDirty === 'function') {
+      try {
+        api.setDirty(_currentTarget, 'jsonEditor', dirty, {
+          label: 'JSON editor',
+          summary: dirty ? 'Есть несохранённые правки в модальном JSON-редакторе.' : '',
+        });
+      } catch (e) {}
+    }
+    return dirty;
+  }
+
+  function bindDirtyListener() {
+    clearDirtyListener();
+
+    const fac = getActiveFacade();
+    if (fac && typeof fac.onChange === 'function') {
+      try {
+        const unsub = fac.onChange(() => {
+          try { syncTargetDirtyState(); } catch (e) {}
+          try { validateCurrentJson(getCurrentValue(), { silent: false }); } catch (e2) {}
+        });
+        if (typeof unsub === 'function') {
+          _dirtyUnsub = unsub;
+          return;
+        }
+      } catch (e) {}
+    }
+
+    const textarea = el('json-editor-textarea');
+    if (!textarea) return;
+    const handler = () => {
+      try { syncTargetDirtyState(); } catch (e) {}
+      try { validateCurrentJson(getCurrentValue(), { silent: false }); } catch (e2) {}
+    };
+    textarea.addEventListener('input', handler);
+    _dirtyUnsub = () => {
+      try { textarea.removeEventListener('input', handler); } catch (e) {}
+    };
+  }
+
+  function showModal(modal, source) {
+    if (!modal) return false;
+    const api = getModalApi();
+    try {
+      if (api && typeof api.open === 'function') return api.open(modal, { source: source || 'json_editor_modal' });
+    } catch (e) {}
+    try { modal.classList.remove('hidden'); } catch (e2) {}
+    try {
+      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
+    } catch (e3) {}
+    return true;
+  }
+
+  function hideModal(modal, source) {
+    if (!modal) return false;
+    const api = getModalApi();
+    try {
+      if (api && typeof api.close === 'function') return api.close(modal, { source: source || 'json_editor_modal' });
+    } catch (e) {}
+    try { modal.classList.add('hidden'); } catch (e2) {}
+    try {
+      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
+    } catch (e3) {}
+    return true;
   }
 
 
@@ -113,12 +266,10 @@
     return null;
   }
 
-  function jsonLintAvailable() {
+  function jsonLintAvailable(runtime) {
+    const target = runtime || getCodeMirrorValidationRuntime();
     try {
-      if (!window.jsonlint) return false;
-      if (!window.CodeMirror) return false;
-      const h = window.CodeMirror.helpers;
-      return !!(h && h.lint && h.lint.json);
+      return !!(target && typeof target.validateText === 'function');
     } catch (e) {
       return false;
     }
@@ -133,24 +284,228 @@
     try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
   }
 
-  function getMonacoShared() {
-    try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
+  const CM6_SCOPE = 'json-modal';
+
+  function withCm6Scope(opts) {
+    return Object.assign({ cm6Scope: CM6_SCOPE }, opts || {});
   }
 
-  async function ensureMonacoSharedApi() {
-    const existing = getMonacoShared();
-    if (existing && typeof existing.createEditor === 'function') return existing;
+  function getEditorRuntime(engine, opts) {
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.getRuntime !== 'function') return null;
+    try { return helper.getRuntime(engine, withCm6Scope(opts)); } catch (e) {}
+    return null;
+  }
+
+  async function ensureEditorRuntime(engine, opts) {
+    const helper = getEngineHelper();
+    if (!helper) return null;
+    try {
+      if (typeof helper.ensureRuntime === 'function') return await helper.ensureRuntime(engine, withCm6Scope(opts));
+      if (typeof helper.getRuntime === 'function') return helper.getRuntime(engine, withCm6Scope(opts));
+    } catch (e) {}
+    return null;
+  }
+
+  function isCm6Editor(cm) {
+    try {
+      return !!(cm && cm.__xkeen_cm6_bridge === true);
+    } catch (e) {}
+    return false;
+  }
+
+  function getCodeMirrorValidationRuntime() {
+    try {
+      return (window.XKeen && XKeen.ui && XKeen.ui.cm6Runtime) ? XKeen.ui.cm6Runtime : null;
+    } catch (e) {}
+    return null;
+  }
+
+  function jsonValidationMode(text) {
+    return hasJsonComments(text) ? 'jsonc' : 'application/json';
+  }
+
+  function validateCurrentJson(text, opts) {
+    const raw = String(text ?? '');
+    const options = opts || {};
+    const cm = _cm;
+    const runtime = getCodeMirrorValidationRuntime();
+    const mode = jsonValidationMode(raw);
+    const allowComments = mode === 'jsonc';
+    let result = { ok: true, diagnostics: [], summary: '' };
 
     try {
-      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
-      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
-        const ok = await lazy.ensureMonacoSupport();
-        if (!ok) return null;
+      if (runtime && typeof runtime.applyValidation === 'function') {
+        result = runtime.applyValidation(cm || null, {
+          text: raw,
+          mode,
+          allowComments,
+        }) || result;
+      } else if (runtime && typeof runtime.validateText === 'function') {
+        result = runtime.validateText(raw, { mode, allowComments }) || result;
       }
     } catch (e) {}
 
-    const loaded = getMonacoShared();
-    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+    if (!result || typeof result !== 'object') result = { ok: true, diagnostics: [], summary: '' };
+
+    if (cm && isCm6Editor(cm) && typeof cm.setDiagnostics === 'function') {
+      try {
+        cm.setDiagnostics(Array.isArray(result.diagnostics) ? result.diagnostics : []);
+      } catch (e) {}
+    }
+
+    if (result.ok === false) {
+      const msg = String(result.summary || 'Ошибка JSON.');
+      if (!options.silent) setError(msg);
+      return { ok: false, summary: msg, diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [] };
+    }
+
+    if (!options.silent) setError('');
+    return { ok: true, diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [], summary: '' };
+  }
+
+  function createCodeMirrorFacade(cm) {
+    if (!cm) return null;
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.fromCodeMirror !== 'function') return null;
+    try {
+      return helper.fromCodeMirror(cm, {
+        set: (value) => {
+          const next = String(value ?? '');
+          try { updateLintForText(cm, next); } catch (e) {}
+          try { cm.setValue(next); } catch (e2) {}
+          try { validateCurrentJson(next, { silent: false }); } catch (e3) {}
+        },
+        layout: () => {
+          try { cm.refresh(); } catch (e) {}
+        },
+      });
+    } catch (e) {}
+    return null;
+  }
+
+  function createMonacoFacade(editor) {
+    if (!editor) return null;
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.fromMonaco !== 'function') return null;
+    try {
+      return helper.fromMonaco(editor);
+    } catch (e) {}
+    return null;
+  }
+
+  function getTextareaFacade() {
+    const textarea = el('json-editor-textarea');
+    if (!textarea) return null;
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.fromTextarea !== 'function') return null;
+    try {
+      return helper.fromTextarea(textarea, { kind: 'codemirror' });
+    } catch (e) {}
+    return null;
+  }
+
+  function getActiveFacade() {
+    if (_kind === 'monaco' && _monacoFacade) return _monacoFacade;
+    if (_kind !== 'monaco' && _cmFacade) return _cmFacade;
+    return getTextareaFacade();
+  }
+
+  function getViewStateStore() {
+    if (_viewStateStore) return _viewStateStore;
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.createViewStateStore !== 'function') return null;
+    try {
+      _viewStateStore = helper.createViewStateStore({
+        buildKey: (ctx) => {
+          const scope = ctx && ctx.target ? String(ctx.target || '').trim() : '';
+          const file = ctx && ctx.file ? String(ctx.file || '').trim() : '';
+          if (!scope) return '';
+          return 'xkeen.json_editor.viewstate.v1::'
+            + encodeURIComponent(scope)
+            + '::'
+            + encodeURIComponent(file || '__default__');
+        },
+      });
+    } catch (e) {
+      _viewStateStore = null;
+    }
+    return _viewStateStore;
+  }
+
+  function getViewStateContext(target) {
+    const scope = String(target || _currentTarget || '').trim();
+    if (!scope) return null;
+    const file = activeFileParam(scope) || scope;
+    return { target: scope, file };
+  }
+
+  function captureCurrentViewState() {
+    const store = getViewStateStore();
+    if (!store || typeof store.capture !== 'function') return null;
+    return store.capture({
+      engine: _kind,
+      facade: getActiveFacade(),
+      textarea: el('json-editor-textarea'),
+      capture: () => {
+        const fac = getActiveFacade();
+        if (fac && typeof fac.saveViewState === 'function') {
+          return fac.saveViewState({ memoryOnly: true });
+        }
+        return null;
+      },
+    });
+  }
+
+  function loadSavedViewState(target, engine) {
+    const store = getViewStateStore();
+    const ctx = getViewStateContext(target);
+    if (!store || !ctx || typeof store.load !== 'function') return null;
+    return store.load({ ctx, engine: engine || _kind });
+  }
+
+  function restoreCurrentViewState(view) {
+    const store = getViewStateStore();
+    if (!store || typeof store.restore !== 'function') return false;
+    return !!store.restore({
+      engine: _kind,
+      facade: getActiveFacade(),
+      textarea: el('json-editor-textarea'),
+      view,
+    });
+  }
+
+  function saveCurrentViewState(opts) {
+    const store = getViewStateStore();
+    const ctx = getViewStateContext(opts && opts.target ? opts.target : null);
+    if (!store || !ctx || typeof store.save !== 'function') return null;
+    return store.save({
+      ctx,
+      engine: (opts && opts.engine) || _kind,
+      view: (opts && typeof opts.view !== 'undefined') ? opts.view : captureCurrentViewState(),
+    });
+  }
+
+  function clearViewStateTracking() {
+    const store = getViewStateStore();
+    if (!store) return;
+    try { if (typeof store.clearTimer === 'function') store.clearTimer(); } catch (e) {}
+    try { if (typeof store.clearBindings === 'function') store.clearBindings(); } catch (e2) {}
+  }
+
+  function bindViewStateTracking() {
+    const store = getViewStateStore();
+    const ctx = getViewStateContext();
+    if (!store || !ctx || typeof store.bind !== 'function') return;
+    store.bind({
+      ctx,
+      engine: _kind,
+      monaco: _kind === 'monaco' ? _monaco : null,
+      codemirror: _kind === 'codemirror' ? _cm : null,
+      textarea: el('json-editor-textarea'),
+      waitMs: 180,
+      capture: () => captureCurrentViewState(),
+    });
   }
 
   function setEngineSelect(engine) {
@@ -184,10 +539,18 @@
   }
 
   async function ensureEditor(textarea) {
+    if (_cm || !textarea) return _cm;
+
+    let runtime = null;
     try {
-      const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
-      if (loader && typeof loader.ensureEditorAssets === 'function') {
-        await loader.ensureEditorAssets({
+      runtime = await ensureEditorRuntime('codemirror', {
+        jsonLint: true,
+        search: true,
+        rulers: true,
+        trailingSpace: true,
+      });
+      if (runtime && typeof runtime.ensureAssets === 'function') {
+        await runtime.ensureAssets({
           jsonLint: true,
           search: true,
           rulers: true,
@@ -196,12 +559,13 @@
       }
     } catch (e) {}
 
-    if (_cm || !window.CodeMirror || !textarea) return _cm;
+    const canUseRuntime = !!(runtime && typeof runtime.create === 'function');
+    if (!canUseRuntime) return null;
 
-    const canLint = jsonLintAvailable();
+    const canLint = jsonLintAvailable(runtime);
 
-    _cm = CodeMirror.fromTextArea(textarea, {
-      mode: { name: 'javascript', json: true },
+    _cm = runtime.create(textarea, {
+      mode: 'jsonc',
       theme: cmThemeFromPage(),
       lineNumbers: true,
       styleActiveLine: true,
@@ -234,10 +598,17 @@
       }
     } catch (e) {}
 
-    // For theme sync (ui/theme.js)
+    try {
+      if (window.xkeenAttachCmToolbar && window.XKEEN_CM_TOOLBAR_MINI) {
+        window.xkeenAttachCmToolbar(_cm, window.XKEEN_CM_TOOLBAR_MINI);
+      }
+    } catch (e) {}
+
     try {
       XKeen.state.jsonModalEditor = _cm;
     } catch (e) {}
+
+    _cmFacade = createCodeMirrorFacade(_cm);
 
     return _cm;
   }
@@ -247,10 +618,10 @@
     if (_monacoFacade && _monaco) return _monacoFacade;
     if (!host) return null;
 
-    const shared = await ensureMonacoSharedApi();
-    if (!shared || typeof shared.createEditor !== 'function') return null;
+    const runtime = await ensureEditorRuntime('monaco');
+    if (!runtime || typeof runtime.create !== 'function') return null;
 
-    _monaco = await shared.createEditor(host, {
+    _monaco = await runtime.create(host, {
       language: 'json',
       readOnly: false,
       value: String(initialText ?? ''),
@@ -259,32 +630,28 @@
       wordWrap: 'on',
     });
 
-    if (_monaco) {
-      try { _monacoFacade = shared.toFacade(_monaco); } catch (e) { _monacoFacade = null; }
-    }
+    if (_monaco) _monacoFacade = createMonacoFacade(_monaco);
     return _monacoFacade;
   }
 
   function getCurrentValue() {
-    const textarea = el('json-editor-textarea');
-    if (_kind === 'monaco' && _monacoFacade) return _monacoFacade.getValue();
-    if (_cm) return _cm.getValue();
-    if (textarea) return textarea.value || '';
+    const fac = getActiveFacade();
+    try {
+      if (fac && typeof fac.get === 'function') return String(fac.get() || '');
+    } catch (e) {}
     return '';
   }
 
   function setCurrentValue(text) {
-    const textarea = el('json-editor-textarea');
     const v = String(text ?? '');
-    if (_kind === 'monaco' && _monacoFacade) {
-      try { _monacoFacade.setValue(v); } catch (e) {}
-      return;
-    }
-    if (_cm) {
-      try { updateLintForText(_cm, v); } catch (e) {}
-      _cm.setValue(v);
-      return;
-    }
+    const fac = getActiveFacade();
+    try {
+      if (fac && typeof fac.set === 'function') {
+        fac.set(v);
+        return;
+      }
+    } catch (e) {}
+    const textarea = el('json-editor-textarea');
     if (textarea) textarea.value = v;
   }
 
@@ -293,6 +660,7 @@
     if (next === _kind) return;
 
     const prevText = getCurrentValue();
+    const preservedView = captureCurrentViewState();
     let cmCursor = null;
     let cmScroll = null;
     try { if (_cm) cmCursor = _cm.getCursor(); } catch (e) {}
@@ -304,31 +672,39 @@
     if (_kind === 'monaco') {
       const fac = await ensureMonacoEditor(prevText);
       if (fac) {
-        try { fac.setValue(prevText); } catch (e) {}
-        try { fac.layout(); } catch (e) {}
-        try { fac.focus(); } catch (e) {}
+        try { fac.set(prevText); } catch (e) {}
+        try { setError(''); } catch (e2) {}
+        try { fac.layout(); } catch (e3) {}
+        try { fac.focus(); } catch (e4) {}
       }
     } else {
       const textarea = el('json-editor-textarea');
       const cm = await ensureEditor(textarea);
+      const fac = _cmFacade || createCodeMirrorFacade(cm);
       if (cm) {
         try { cm.setOption('theme', cmThemeFromPage()); } catch (e) {}
-        updateLintForText(cm, prevText);
-        cm.setValue(prevText);
+        try { if (fac && typeof fac.set === 'function') fac.set(prevText); } catch (e) {}
+        try { validateCurrentJson(prevText, { silent: false }); } catch (e2) {}
         try {
           if (cmCursor) cm.setCursor(cmCursor);
           if (cmScroll && typeof cm.scrollTo === 'function') cm.scrollTo(cmScroll.left || 0, cmScroll.top || 0);
         } catch (e) {}
         setTimeout(() => {
-          try { cm.refresh(); cm.focus(); } catch (e) {}
+          try { if (fac && typeof fac.layout === 'function') fac.layout(); } catch (e) {}
+          try { if (fac && typeof fac.focus === 'function') fac.focus(); } catch (e2) {}
         }, 0);
       } else if (textarea) {
         textarea.value = prevText;
+        try { validateCurrentJson(prevText, { silent: false }); } catch (e) {}
         textarea.focus();
       }
     }
 
     showEditorKind(_kind);
+    try { if (preservedView) restoreCurrentViewState(preservedView); } catch (e) {}
+    try { bindViewStateTracking(); } catch (e) {}
+    try { bindDirtyListener(); } catch (e) {}
+    try { syncTargetDirtyState(); } catch (e) {}
 
     // Persist as global preference (best-effort)
     try {
@@ -350,8 +726,10 @@
     const formatBtn = el('json-editor-format-btn');
     const engineSel = el('json-editor-engine-select');
 
-    const onClose = (e) => {
+    const onClose = async (e) => {
       if (e && e.preventDefault) e.preventDefault();
+      const ok = await confirmCloseIfDirty();
+      if (!ok) return;
       close();
     };
 
@@ -396,20 +774,6 @@
       }
     } catch (e) {}
 
-    // Close on overlay click
-    if (modal && !(modal.dataset && modal.dataset.xkeenOverlayWired === '1')) {
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) close();
-      });
-      if (modal.dataset) modal.dataset.xkeenOverlayWired = '1';
-    }
-
-    // Close on ESC
-    document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-      const m = el('json-editor-modal');
-      if (m && !m.classList.contains('hidden')) close();
-    });
   }
 
   async function open(target) {
@@ -422,9 +786,14 @@
     const textarea = el('json-editor-textarea');
     if (!modal || !textarea) return;
 
+    try { saveCurrentViewState(); } catch (e) {}
+    try { clearViewStateTracking(); } catch (e) {}
+    try { clearDirtyListener(); } catch (e) {}
+    try { clearTargetDirtyState(_currentTarget); } catch (e) {}
     _currentTarget = target;
+    try { clearTargetDirtyState(_currentTarget); } catch (e) {}
     setError('');
-    modal.classList.remove('hidden');
+    showModal(modal, 'json_editor_open');
 
     // Adopt preferred engine (server/local). Default is CodeMirror.
     try {
@@ -466,23 +835,40 @@
 
       if (_kind === 'monaco') {
         await ensureMonacoEditor(finalText || '');
-        try { if (_monacoFacade) { _monacoFacade.setValue(finalText || ''); _monacoFacade.focus(); _monacoFacade.layout(); } } catch (e) {}
+        try {
+          if (_monacoFacade) {
+            _monacoFacade.set(finalText || '');
+            setError('');
+            _monacoFacade.focus();
+            _monacoFacade.layout();
+          }
+        } catch (e) {}
       } else {
         const cm = await ensureEditor(textarea);
+        const fac = _cmFacade || createCodeMirrorFacade(cm);
         if (cm) {
           try { cm.setOption('theme', cmThemeFromPage()); } catch (e) {}
-          updateLintForText(cm, finalText || '');
-          cm.setValue(finalText || '');
+          try { if (fac && typeof fac.set === 'function') fac.set(finalText || ''); } catch (e) {}
+          try { validateCurrentJson(finalText || '', { silent: false }); } catch (e2) {}
           setTimeout(() => {
-            try { cm.refresh(); cm.focus(); } catch (e) {}
+            try { if (fac && typeof fac.layout === 'function') fac.layout(); } catch (e) {}
+            try { if (fac && typeof fac.focus === 'function') fac.focus(); } catch (e2) {}
           }, 0);
         } else {
           textarea.value = finalText || '';
+          try { validateCurrentJson(finalText || '', { silent: false }); } catch (e) {}
           textarea.focus();
         }
       }
 
       showEditorKind(_kind);
+      try {
+        const savedView = loadSavedViewState(_currentTarget, _kind);
+        if (savedView) restoreCurrentViewState(savedView);
+      } catch (e) {}
+      try { bindViewStateTracking(); } catch (e) {}
+      try { bindDirtyListener(); } catch (e) {}
+      try { syncTargetDirtyState(false); } catch (e) {}
     } catch (e) {
       console.error(e);
       setError('Ошибка загрузки конфига.');
@@ -490,8 +876,14 @@
   }
 
   function close() {
+    const target = _currentTarget;
+    try { saveCurrentViewState(); } catch (e) {}
+    try { clearViewStateTracking(); } catch (e) {}
     const modal = el('json-editor-modal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) hideModal(modal, 'json_editor_close');
+    try { clearDirtyListener(); } catch (e) {}
+    try { if (_cm && typeof _cm.clearDiagnostics === 'function') _cm.clearDiagnostics(); } catch (e2) {}
+    try { clearTargetDirtyState(target); } catch (e3) {}
     setError('');
     _currentTarget = null;
     _savedText = '';
@@ -506,6 +898,30 @@
     }
   }
 
+  async function confirmCloseIfDirty() {
+    if (!isDirty()) return true;
+
+    const target = String(_currentTarget || 'config');
+    const message = 'В JSON-редакторе ' + target + ' есть несохранённые изменения. Закрыть и потерять их?';
+
+    try {
+      if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
+        return await XKeen.ui.confirm({
+          title: 'Закрыть редактор?',
+          message,
+          okText: 'Закрыть',
+          cancelText: 'Остаться',
+          danger: true,
+        });
+      }
+    } catch (e) {}
+
+    try {
+      return !!window.confirm(message);
+    } catch (e) {}
+    return false;
+  }
+
 
 
   function hasJsonComments(text) {
@@ -516,9 +932,12 @@
 
   function updateLintForText(cm, text) {
     if (!cm) return;
+    if (isCm6Editor(cm)) {
+      try { validateCurrentJson(text, { silent: false }); } catch (e) {}
+      return;
+    }
     try {
       const canLint = jsonLintAvailable();
-      // JSONC comments produce false positives in strict JSON linter.
       cm.setOption('lint', canLint && !hasJsonComments(text));
     } catch (e) {}
   }
@@ -531,6 +950,45 @@
       return;
     }
     setError('');
+
+    let preferPrettier = false;
+    try {
+      preferPrettier = await getPreferPrettierFlag();
+    } catch (e) {
+      preferPrettier = false;
+    }
+
+    if (preferPrettier) {
+      try {
+        const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
+          ? XKeen.lazy.ensureFeature
+          : null;
+        if (ensureFeature) {
+          await Promise.resolve(ensureFeature('formatters'));
+        }
+      } catch (e) {}
+
+      try {
+        const formatters = getFormattersApi();
+        if (formatters && typeof formatters.formatJson === 'function') {
+          const parser = hasJsonComments(text) ? 'jsonc' : 'json';
+          const result = await formatters.formatJson(text, { parser });
+          if (result && result.ok === true && typeof result.text === 'string') {
+            const pretty = String(result.text || '');
+            setCurrentValue(pretty);
+            try {
+              const fac = getActiveFacade();
+              if (fac && typeof fac.focus === 'function') fac.focus();
+            } catch (e) {}
+            toast('JSON отформатирован.', false);
+            return;
+          }
+        }
+      } catch (e) {
+        // Fallback to server formatter below.
+      }
+    }
+
     try {
       const res = await fetch('/api/json/format', {
         method: 'POST',
@@ -548,8 +1006,8 @@
       const next = String(data.text || '');
       setCurrentValue(next);
       try {
-        if (_kind === 'monaco' && _monacoFacade) _monacoFacade.focus();
-        if (_kind !== 'monaco' && _cm) _cm.focus();
+        const fac = getActiveFacade();
+        if (fac && typeof fac.focus === 'function') fac.focus();
       } catch (e) {}
       toast('JSON отформатирован.', false);
     } catch (e) {
@@ -568,6 +1026,17 @@
     const target = _currentTarget;
     const text = String(getCurrentValue() || '');
     if (text === null || typeof text !== 'string') return;
+    const validation = validateCurrentJson(text, { silent: false });
+    if (validation && validation.ok === false) {
+      const msg = String(validation.summary || 'Ошибка JSON.');
+      setError(msg);
+      toast(msg, true);
+      try {
+        const fac = getActiveFacade();
+        if (fac && typeof fac.focus === 'function') fac.focus();
+      } catch (e) {}
+      return;
+    }
     // Send raw JSON/JSONC text to backend (keeps comments).
     const url = target === 'inbounds'
       ? buildTargetUrl('inbounds', '/api/inbounds')
@@ -627,9 +1096,7 @@
         toast(label + ' сохранён.', false);
       }
 
-      try {
-        if (typeof window.loadRestartLog === 'function') window.loadRestartLog();
-      } catch (e) {}
+      try { refreshRestartLog(); } catch (e) {}
     } catch (e) {
       console.error(e);
       setError('Ошибка сохранения.');

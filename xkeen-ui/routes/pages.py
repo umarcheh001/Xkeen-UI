@@ -97,6 +97,7 @@ def register_pages_routes(
 ) -> None:
     """Register UI page routes on the app."""
 
+
     @app.get("/")
     def index():
         # machine info for conditional UI (e.g. hide Files tab on MIPS)

@@ -30,6 +30,13 @@
     }
   }
 
+  function getModalApi() {
+    try {
+      if (XK.ui && XK.ui.modal) return XK.ui.modal;
+    } catch (e) {}
+    return null;
+  }
+
   function syncDonateButtonVisibility() {
     const btn = document.getElementById('top-tab-donate');
     if (!btn) return;
@@ -49,12 +56,15 @@
   function showDonateModal() {
     const modal = document.getElementById('donate-modal');
     if (!modal) return;
-    modal.classList.remove('hidden');
+    const api = getModalApi();
     try {
-      if (XK.ui && XK.ui.modal && typeof XK.ui.modal.syncBodyScrollLock === 'function') {
-        XK.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.add('modal-open');
+      if (api && typeof api.open === 'function') api.open(modal, { source: 'donate_modal' });
+      else modal.classList.remove('hidden');
+    } catch (e) {}
+    try {
+      if (!api || typeof api.open !== 'function') {
+        if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
+        else document.body.classList.add('modal-open');
       }
     } catch (e) {}
 
@@ -68,12 +78,15 @@
   function hideDonateModal() {
     const modal = document.getElementById('donate-modal');
     if (!modal) return;
-    modal.classList.add('hidden');
+    const api = getModalApi();
     try {
-      if (XK.ui && XK.ui.modal && typeof XK.ui.modal.syncBodyScrollLock === 'function') {
-        XK.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.remove('modal-open');
+      if (api && typeof api.close === 'function') api.close(modal, { source: 'donate_modal' });
+      else modal.classList.add('hidden');
+    } catch (e) {}
+    try {
+      if (!api || typeof api.close !== 'function') {
+        if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
+        else document.body.classList.remove('modal-open');
       }
     } catch (e) {}
   }
@@ -153,20 +166,6 @@
 
     wireClose(closeBtn);
     wireClose(okBtn);
-
-    if (!modal.dataset || modal.dataset.xkeenDonateWired !== '1') {
-      modal.addEventListener('click', (e) => {
-        // Close on backdrop click
-        if (e.target === modal) hideDonateModal();
-      });
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          const m = document.getElementById('donate-modal');
-          if (m && !m.classList.contains('hidden')) hideDonateModal();
-        }
-      });
-      if (modal.dataset) modal.dataset.xkeenDonateWired = '1';
-    }
 
     // Copyable wallet addresses
     const addrEls = modal.querySelectorAll('.donate-address[data-copy]');

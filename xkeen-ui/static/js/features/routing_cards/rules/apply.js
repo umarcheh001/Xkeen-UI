@@ -29,19 +29,11 @@
   };
 
   const getEditorText = (typeof C.getEditorText === 'function') ? C.getEditorText : function () {
-    try {
-      const cm = (XK.state && XK.state.routingEditor) ? XK.state.routingEditor : null;
-      if (cm && typeof cm.getValue === 'function') return cm.getValue();
-    } catch (e) {}
     const ta = document.getElementById('routing-editor');
     return ta ? ta.value : '';
   };
 
   const setEditorText = (typeof C.setEditorText === 'function') ? C.setEditorText : function (text) {
-    try {
-      const cm = (XK.state && XK.state.routingEditor) ? XK.state.routingEditor : null;
-      if (cm && typeof cm.setValue === 'function') { cm.setValue(String(text || '')); return; }
-    } catch (e) {}
     const ta = document.getElementById('routing-editor');
     if (ta) ta.value = String(text || '');
   };

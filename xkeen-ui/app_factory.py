@@ -184,8 +184,16 @@ def _init_xray_startup_migrations(*, base_etc_dir: str, base_var_dir: str, ui_st
 
 def _create_flask_app():
     from flask import Flask
+    from routes.ui_assets import apply_response_cache_policy, get_static_asset_max_age
 
-    app = Flask(__name__, static_folder="static", template_folder="templates")
+    class XkeenFlask(Flask):
+        def get_send_file_max_age(self, filename):  # type: ignore[override]
+            try:
+                return get_static_asset_max_age(filename)
+            except Exception:
+                return super().get_send_file_max_age(filename)
+
+    app = XkeenFlask(__name__, static_folder="static", template_folder="templates")
     try:
         app.config.setdefault("SEND_FILE_MAX_AGE_DEFAULT", 0)
     except Exception as e:  # noqa: BLE001
@@ -200,6 +208,11 @@ def _create_flask_app():
             )
         except Exception:
             pass
+
+    @app.after_request
+    def _apply_ui_cache_policy(response):
+        return apply_response_cache_policy(response)
+
     return app
 
 
@@ -230,10 +243,11 @@ def _init_auth_and_pages(
     init_auth(app)
 
     from services import devtools as _svc_devtools
-    from routes.ui_assets import register_ui_assets_routes
+    from routes.ui_assets import init_ui_assets_helpers, register_ui_assets_routes
     from routes.auth import register_auth_routes
     from routes.pages import register_pages_routes
 
+    init_ui_assets_helpers(app)
     register_ui_assets_routes(app, UI_STATE_DIR=ui_state_dir, devtools_service=_svc_devtools)
     register_auth_routes(app)
     register_pages_routes(

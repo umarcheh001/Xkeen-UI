@@ -627,6 +627,43 @@
     return { fontFamily, fontSize, lineHeight };
   }
 
+
+  function _getSettingsApi() {
+    try {
+      return (window.XKeen && XKeen.ui && XKeen.ui.settings) ? XKeen.ui.settings : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function _getEditorFontScaleFromSettings(snapshot) {
+    try {
+      const editor = (snapshot && snapshot.editor && typeof snapshot.editor === 'object') ? snapshot.editor : {};
+      const api = _getSettingsApi();
+      if (api && typeof api.getEditorFontScale === 'function') {
+        return api.getEditorFontScale(snapshot, 'monaco');
+      }
+      if (api && typeof api.clampEditorFontScale === 'function') {
+        if (Object.prototype.hasOwnProperty.call(editor, 'monacoFontScale')) return api.clampEditorFontScale(editor.monacoFontScale);
+        if (Object.prototype.hasOwnProperty.call(editor, 'fontScale')) return api.clampEditorFontScale(editor.fontScale);
+      }
+      const raw = Object.prototype.hasOwnProperty.call(editor, 'monacoFontScale') ? editor.monacoFontScale : editor.fontScale;
+      const num = Number(raw);
+      if (!Number.isFinite(num)) return 100;
+      return Math.max(75, Math.min(200, Math.round(num)));
+    } catch (e) {
+      return 100;
+    }
+  }
+
+  function _editorTypographyOpts(snapshot) {
+    const typo = _typographyOpts();
+    const fontScale = _getEditorFontScaleFromSettings(snapshot);
+    typo.fontSize = Math.max(12, Math.round(typo.fontSize * (fontScale / 100)));
+    typo.lineHeight = Math.max(18, Math.round(typo.fontSize * 1.45));
+    return typo;
+  }
+
   async function createEditor(host, opts) {
     const el = host;
     if (!el) return null;
@@ -655,7 +692,7 @@
       try { applyTheme(monaco); } catch (e) {}
       try { wireThemeSync(monaco); } catch (e) {}
 
-      const typo = _typographyOpts();
+      const typo = _editorTypographyOpts((_getSettingsApi() && typeof _getSettingsApi().get === 'function') ? _getSettingsApi().get() : null);
 
       const editor = monaco.editor.create(el, {
         value,
@@ -703,6 +740,37 @@
         }
       } catch (e) {}
 
+      // React to UI settings changes (editor font scale) unless caller explicitly overrides typography.
+      try {
+        const settingsApi = _getSettingsApi();
+        const manageFontFamily = !o.fontFamily;
+        const manageFontSize = typeof o.fontSize !== 'number';
+        const manageLineHeight = typeof o.lineHeight !== 'number';
+        if (settingsApi && typeof settingsApi.subscribe === 'function' && (manageFontFamily || manageFontSize || manageLineHeight)) {
+          const applyManagedTypography = (snapshot) => {
+            try {
+              const nextTypo = _editorTypographyOpts(snapshot);
+              const patch = {};
+              if (manageFontFamily) patch.fontFamily = nextTypo.fontFamily;
+              if (manageFontSize) patch.fontSize = nextTypo.fontSize;
+              if (manageLineHeight) patch.lineHeight = nextTypo.lineHeight;
+              if (Object.keys(patch).length && editor && typeof editor.updateOptions === 'function') {
+                editor.updateOptions(patch);
+                try { if (editor.layout) editor.layout(); } catch (e2) {}
+              }
+            } catch (e2) {}
+          };
+          const unsubscribeTypography = settingsApi.subscribe((nextSnapshot) => {
+            applyManagedTypography(nextSnapshot);
+          });
+          if (editor && typeof editor.onDidDispose === 'function') {
+            editor.onDidDispose(() => {
+              try { unsubscribeTypography(); } catch (e2) {}
+            });
+          }
+        }
+      } catch (e) {}
+
       // Ensure it lays out even if created in hidden container.
       try { layoutOnVisible(editor, el, { lite: perf.lite }); } catch (e) {}
 
@@ -712,15 +780,41 @@
     }
   }
 
-  function toFacade(editor) {
+  function getEditorEngineHelper() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) return XKeen.ui.editorEngine;
+    } catch (e) {}
+    return null;
+  }
+
+  function toFacade(editor, opts) {
+    const helper = getEditorEngineHelper();
+    try {
+      if (helper && typeof helper.fromMonaco === 'function') {
+        const facade = helper.fromMonaco(editor, opts || {});
+        if (facade) return facade;
+      }
+    } catch (e) {}
+
     const ed = editor;
     return {
+      kind: 'monaco',
+      engine: 'monaco',
+      raw: ed,
+      editor: ed,
       getValue: () => {
+        try { return String(ed.getValue() || ''); } catch (e) { return ''; }
+      },
+      get: () => {
         try { return String(ed.getValue() || ''); } catch (e) { return ''; }
       },
       setValue: (v) => {
         try { ed.setValue(String(v ?? '')); } catch (e) {}
       },
+      set: (v) => {
+        try { ed.setValue(String(v ?? '')); } catch (e) {}
+      },
+      validate: () => true,
       focus: () => {
         try { ed.focus(); } catch (e) {}
       },
@@ -732,6 +826,18 @@
       },
       layout: () => {
         try { if (ed.layout) ed.layout(); } catch (e) {}
+      },
+      saveViewState: () => {
+        try {
+          return {
+            kind: 'monaco',
+            state: (typeof ed.saveViewState === 'function') ? ed.saveViewState() : null,
+            pos: (typeof ed.getPosition === 'function') ? ed.getPosition() : null,
+            scrollTop: (typeof ed.getScrollTop === 'function') ? ed.getScrollTop() : 0,
+            scrollLeft: (typeof ed.getScrollLeft === 'function') ? ed.getScrollLeft() : 0,
+          };
+        } catch (e) {}
+        return { kind: 'monaco' };
       },
       dispose: () => {
         try { if (ed.dispose) ed.dispose(); } catch (e) {}

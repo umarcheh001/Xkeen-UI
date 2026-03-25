@@ -6,6 +6,7 @@
 
   window.XKeen = window.XKeen || {};
   XKeen.backups = XKeen.backups || {};
+  const UI = (window.XKeen && XKeen.ui && XKeen.ui.sharedPrimitives) ? XKeen.ui.sharedPrimitives : null;
 
   let _inited = false;
   let _mode = null; // 'history' | 'snapshots'
@@ -13,14 +14,20 @@
   // Snapshot preview modal
   let _snapWired = false;
   let _snapCm = null;
+  let _snapCmFacade = null;
   let _snapLastText = '';
   let _snapMonaco = null;
   let _snapMonacoFacade = null;
   let _snapKind = 'codemirror';
   let _snapEngineSyncing = false;
   let _snapEngineUnsub = null;
+  let _snapCurrentName = '';
+  let _snapViewStateStore = null;
 
   function el(id) {
+    try {
+      if (UI && typeof UI.byId === 'function') return UI.byId(id);
+    } catch (e) {}
     return document.getElementById(id);
   }
 
@@ -32,6 +39,41 @@
   function hideNode(node) {
     if (!node) return;
     try { node.classList.add('hidden'); } catch (e) {}
+  }
+
+  function getModalApi() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.modal) return XKeen.ui.modal;
+    } catch (e) {}
+    return null;
+  }
+
+  function showModal(modal, source) {
+    if (UI && typeof UI.openModal === 'function') return UI.openModal(modal, { source: source || 'backups' });
+    if (!modal) return false;
+    const api = getModalApi();
+    try {
+      if (api && typeof api.open === 'function') return api.open(modal, { source: source || 'backups' });
+    } catch (e) {}
+    try { modal.classList.remove('hidden'); } catch (e2) {}
+    try {
+      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
+    } catch (e3) {}
+    return true;
+  }
+
+  function hideModal(modal, source) {
+    if (UI && typeof UI.closeModal === 'function') return UI.closeModal(modal, { source: source || 'backups' });
+    if (!modal) return false;
+    const api = getModalApi();
+    try {
+      if (api && typeof api.close === 'function') return api.close(modal, { source: source || 'backups' });
+    } catch (e) {}
+    try { modal.classList.add('hidden'); } catch (e2) {}
+    try {
+      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
+    } catch (e3) {}
+    return true;
   }
 
   function cmWrapper(cm) {
@@ -51,27 +93,186 @@
     return null;
   }
 
-  function getMonacoShared() {
+  const CM6_SCOPE = 'backups';
+
+  function withCm6Scope(opts) {
+    return Object.assign({ cm6Scope: CM6_SCOPE, scope: CM6_SCOPE }, opts || {});
+  }
+
+  function getEditorRuntime(engine, opts) {
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.getRuntime !== 'function') return null;
+    try { return helper.getRuntime(engine, withCm6Scope(opts)); } catch (e) {}
+    return null;
+  }
+
+  async function ensureEditorRuntime(engine, opts) {
+    const helper = getEngineHelper();
+    if (!helper) return null;
     try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) return XKeen.ui.monacoShared;
+      if (typeof helper.ensureRuntime === 'function') return await helper.ensureRuntime(engine, withCm6Scope(opts));
+      if (typeof helper.getRuntime === 'function') return helper.getRuntime(engine, withCm6Scope(opts));
     } catch (e) {}
     return null;
   }
 
-  async function ensureMonacoSharedApi() {
-    const existing = getMonacoShared();
-    if (existing && typeof existing.createEditor === 'function') return existing;
+  function isCm6Runtime(runtime) {
+    try { return !!(runtime && runtime.backend === 'cm6'); } catch (e) {}
+    return false;
+  }
 
+  function isCm6Editor(editor) {
     try {
-      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
-      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
-        const ok = await lazy.ensureMonacoSupport();
-        if (!ok) return null;
+      if (!editor) return false;
+      if (editor.__xkeenCm6Bridge || editor.backend === 'cm6') return true;
+      const wrap = (typeof editor.getWrapperElement === 'function') ? editor.getWrapperElement() : null;
+      return !!(wrap && wrap.classList && wrap.classList.contains('xkeen-cm6-editor'));
+    } catch (e) {}
+    return false;
+  }
+
+  function disposeCodeMirrorEditor(editor) {
+    if (!editor) return false;
+    try { if (typeof editor.dispose === 'function') return !!editor.dispose(); } catch (e) {}
+    try {
+      if (typeof editor.toTextArea === 'function') {
+        editor.toTextArea();
+        return true;
       }
     } catch (e) {}
+    return false;
+  }
 
-    const loaded = getMonacoShared();
-    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+  function createCodeMirrorFacade(cm) {
+    if (!cm) return null;
+    const runtime = getEditorRuntime('codemirror');
+    if (runtime && typeof runtime.toFacade === 'function') {
+      try {
+        return runtime.toFacade(cm, {
+          layout: () => {
+            try { if (cm.layout) cm.layout(); else if (cm.refresh) cm.refresh(); } catch (e) {}
+          },
+        });
+      } catch (e) {}
+    }
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.fromCodeMirror !== 'function') return null;
+    try {
+      return helper.fromCodeMirror(cm, {
+        layout: () => {
+          try { if (cm.layout) cm.layout(); else if (cm.refresh) cm.refresh(); } catch (e) {}
+        },
+      });
+    } catch (e) {}
+    return null;
+  }
+
+  function createMonacoFacade(editor) {
+    if (!editor) return null;
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.fromMonaco !== 'function') return null;
+    try {
+      return helper.fromMonaco(editor);
+    } catch (e) {}
+    return null;
+  }
+
+  function getSnapActiveFacade() {
+    if (_snapKind === 'monaco' && _snapMonacoFacade) return _snapMonacoFacade;
+    if (_snapCmFacade) return _snapCmFacade;
+    return null;
+  }
+
+  function getSnapViewStateStore() {
+    if (_snapViewStateStore) return _snapViewStateStore;
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.createViewStateStore !== 'function') return null;
+    try {
+      _snapViewStateStore = helper.createViewStateStore({
+        buildKey: (ctx) => {
+          const name = ctx && ctx.name ? String(ctx.name || '').trim() : '';
+          if (!name) return '';
+          return 'xkeen.backups.snapshot.viewstate.v1::' + encodeURIComponent(name);
+        },
+      });
+    } catch (e) {
+      _snapViewStateStore = null;
+    }
+    return _snapViewStateStore;
+  }
+
+  function getSnapViewStateContext(name) {
+    const value = String(name || _snapCurrentName || '').trim();
+    if (!value) return null;
+    return { name: value };
+  }
+
+  function captureSnapViewState() {
+    const store = getSnapViewStateStore();
+    if (!store || typeof store.capture !== 'function') return null;
+    return store.capture({
+      engine: _snapKind,
+      facade: getSnapActiveFacade(),
+      textarea: el('xray-snapshot-preview'),
+      capture: () => {
+        const fac = getSnapActiveFacade();
+        if (fac && typeof fac.saveViewState === 'function') {
+          return fac.saveViewState({ memoryOnly: true });
+        }
+        return null;
+      },
+    });
+  }
+
+  function saveSnapViewState(opts) {
+    const store = getSnapViewStateStore();
+    const ctx = getSnapViewStateContext(opts && opts.name ? opts.name : null);
+    if (!store || !ctx || typeof store.save !== 'function') return null;
+    return store.save({
+      ctx,
+      engine: (opts && opts.engine) || _snapKind,
+      view: (opts && typeof opts.view !== 'undefined') ? opts.view : captureSnapViewState(),
+    });
+  }
+
+  function loadSnapViewState(name, engine) {
+    const store = getSnapViewStateStore();
+    const ctx = getSnapViewStateContext(name);
+    if (!store || !ctx || typeof store.load !== 'function') return null;
+    return store.load({ ctx, engine: engine || _snapKind });
+  }
+
+  function restoreSnapViewState(view) {
+    const store = getSnapViewStateStore();
+    if (!store || typeof store.restore !== 'function') return false;
+    return !!store.restore({
+      engine: _snapKind,
+      facade: getSnapActiveFacade(),
+      textarea: el('xray-snapshot-preview'),
+      view,
+    });
+  }
+
+  function clearSnapViewStateTracking() {
+    const store = getSnapViewStateStore();
+    if (!store) return;
+    try { if (typeof store.clearTimer === 'function') store.clearTimer(); } catch (e) {}
+    try { if (typeof store.clearBindings === 'function') store.clearBindings(); } catch (e2) {}
+  }
+
+  function bindSnapViewStateTracking() {
+    const store = getSnapViewStateStore();
+    const ctx = getSnapViewStateContext();
+    if (!store || !ctx || typeof store.bind !== 'function') return;
+    store.bind({
+      ctx,
+      engine: _snapKind,
+      monaco: _snapKind === 'monaco' ? _snapMonaco : null,
+      codemirror: _snapKind === 'codemirror' ? _snapCm : null,
+      textarea: el('xray-snapshot-preview'),
+      waitMs: 180,
+      capture: () => captureSnapViewState(),
+    });
   }
 
   function normalizeEngine(v) {
@@ -91,10 +292,97 @@
     return _mode;
   }
 
+  function normalizeToastKind(value, fallback) {
+    const kind = String(value || fallback || 'info').trim().toLowerCase();
+    if (kind === 'error' || kind === 'warning' || kind === 'success' || kind === 'info') return kind;
+    return 'info';
+  }
+
+  function toast(message, kindOrError) {
+    const text = String(message || '').trim();
+    if (!text) return null;
+    const kind = (typeof kindOrError === 'string')
+      ? normalizeToastKind(kindOrError, 'info')
+      : (kindOrError ? 'error' : 'info');
+    try {
+      if (UI && typeof UI.toast === 'function') return UI.toast(text, kind);
+    } catch (e) {}
+    try {
+      if (typeof window.toast === 'function') return window.toast(text, kind);
+    } catch (e2) {}
+    try {
+      if (typeof window.showToast === 'function') return window.showToast(text, kind);
+    } catch (e3) {}
+    try {
+      if (window.XKeen && XKeen.ui && typeof XKeen.ui.toast === 'function') return XKeen.ui.toast(text, kind);
+    } catch (e4) {}
+    try { console.log('[xkeen]', text); } catch (e5) {}
+    return null;
+  }
+
+  function writeStatus(statusEl, msg, isError) {
+    if (!statusEl) return;
+    try {
+      if (UI && typeof UI.writeStatus === 'function') {
+        UI.writeStatus(statusEl, msg, isError ? 'error' : 'info');
+        return;
+      }
+    } catch (e) {}
+    statusEl.textContent = String(msg ?? '');
+    try { statusEl.classList.toggle('error', !!isError); } catch (e2) {}
+  }
+
   function setStatus(msg, isError) {
-    const statusEl = el('backups-status');
-    if (statusEl) statusEl.textContent = String(msg ?? '');
-    if (msg) toast(msg, !!isError);
+    writeStatus(el('backups-status'), msg, isError);
+    if (msg) toast(msg, isError ? 'error' : 'info');
+  }
+
+  function buildConfirmText(opts) {
+    const options = (opts && typeof opts === 'object') ? opts : {};
+    const message = String(options.message || options.text || options.body || 'Продолжить?').trim() || 'Продолжить?';
+    const details = Array.isArray(options.details)
+      ? options.details.map((item) => String(item || '').trim()).filter(Boolean).join('\n')
+      : String(options.details || '').trim();
+    return details ? (message + '\n\n' + details) : message;
+  }
+
+  async function confirmAction(opts) {
+    const options = (opts && typeof opts === 'object') ? opts : {};
+    try {
+      if (UI && typeof UI.confirmAction === 'function') return !!(await UI.confirmAction(options));
+    } catch (e) {}
+
+    if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
+      return !!(await XKeen.ui.confirm(options));
+    }
+
+    const ok = window.confirm(buildConfirmText(options));
+    if (!ok && options.cancelMessage) {
+      toast(options.cancelMessage, options.cancelKind || 'info');
+    }
+    return !!ok;
+  }
+
+  function emitOutcome(statusEl, successMessage, warnings) {
+    const warningList = Array.isArray(warnings) ? warnings.filter(Boolean) : [];
+    const finalMessage = warningList.length
+      ? (String(successMessage || '').trim() + ' Но: ' + warningList.join(' '))
+      : String(successMessage || '').trim();
+
+    writeStatus(statusEl || el('backups-status'), finalMessage, false);
+    toast(finalMessage, warningList.length ? 'warning' : 'success');
+  }
+
+  async function requestXkeenRestartWarning() {
+    try {
+      const res = await fetch('/api/restart', { method: 'POST' });
+      if (!res || !res.ok) {
+        return 'Запрос на перезапуск xkeen не подтвердился. Обновите страницу позже или перезапустите xkeen вручную.';
+      }
+      return '';
+    } catch (e) {
+      return 'Не удалось подтвердить перезапуск xkeen. Обновите страницу позже или перезапустите xkeen вручную.';
+    }
   }
 
   function formatSize(bytes) {
@@ -231,7 +519,21 @@
 
     const { label } = targetLabelForBackup(name);
 
-    if (!confirm('Восстановить бэкап ' + name + ' в ' + label + ' и перезапустить xkeen?')) {
+    const ok = await confirmAction({
+      title: 'Восстановить бэкап',
+      message: 'Восстановить бэкап ' + name + '?',
+      details: [
+        'Файл назначения: ' + label + '.',
+        'После восстановления будет запрошен перезапуск xkeen.',
+      ],
+      okText: 'Восстановить',
+      cancelText: 'Отменить',
+      danger: true,
+      cancelMessage: 'Восстановление бэкапа отменено.',
+      cancelKind: 'info',
+    });
+    if (!ok) {
+      writeStatus(el('backups-status'), 'Восстановление бэкапа отменено.', false);
       return;
     }
 
@@ -251,10 +553,11 @@
         return;
       }
 
-      setStatus('Бэкап восстановлен: ' + name, false);
+      const warnings = [];
+      const restartWarning = await requestXkeenRestartWarning();
+      if (restartWarning) warnings.push(restartWarning);
 
-      // Restart xkeen (spinner_fetch.js shows overlay for /api/restart)
-      await fetch('/api/restart', { method: 'POST' });
+      emitOutcome(el('backups-status'), 'Бэкап восстановлен: ' + name, warnings);
     } catch (e) {
       console.error(e);
       setStatus('Ошибка при запросе восстановления бэкапа.', true);
@@ -268,20 +571,19 @@
       return;
     }
 
-    // Use a consistent modal confirm instead of a browser alert.
-    if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-      const ok = await XKeen.ui.confirm({
-        title: 'Удалить бэкап',
-        message: 'Удалить бэкап ' + name + '? Это действие необратимо.',
-        okText: 'Удалить',
-        cancelText: 'Отменить',
-        danger: true,
-      });
-      if (!ok) return;
-    } else {
-      if (!confirm('Удалить бэкап ' + name + '? Это действие необратимо.')) {
-        return;
-      }
+    const ok = await confirmAction({
+      title: 'Удалить бэкап',
+      message: 'Удалить бэкап ' + name + '?',
+      details: 'Это действие необратимо.',
+      okText: 'Удалить',
+      cancelText: 'Отменить',
+      danger: true,
+      cancelMessage: 'Удаление бэкапа отменено.',
+      cancelKind: 'info',
+    });
+    if (!ok) {
+      writeStatus(el('backups-status'), 'Удаление бэкапа отменено.', false);
+      return;
     }
 
     try {
@@ -337,10 +639,8 @@
   function snapTextFallback() {
     try { if (_snapLastText) return String(_snapLastText || ''); } catch (e) {}
     try {
-      if (_snapKind === 'monaco' && _snapMonacoFacade && _snapMonacoFacade.getValue) return String(_snapMonacoFacade.getValue() || '');
-    } catch (e) {}
-    try {
-      if (_snapCm && _snapCm.getValue) return String(_snapCm.getValue() || '');
+      const fac = getSnapActiveFacade();
+      if (fac && typeof fac.get === 'function') return String(fac.get() || '');
     } catch (e) {}
     const ta = el('xray-snapshot-preview');
     return ta ? String(ta.value || '') : '';
@@ -368,10 +668,11 @@
     const next = normalizeEngine(engine);
     const host = el('xray-snapshot-preview-monaco');
     const ta = el('xray-snapshot-preview');
+    const preservedView = captureSnapViewState();
 
     if (next === 'monaco') {
-      const shared = await ensureMonacoSharedApi();
-      if (!shared || !host || typeof shared.createEditor !== 'function') {
+      const runtime = await ensureEditorRuntime('monaco');
+      if (!runtime || !host || typeof runtime.create !== 'function') {
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
         const ee = getEngineHelper();
         try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
@@ -387,7 +688,7 @@
       const value = snapTextFallback() || SNAP_PLACEHOLDER;
 
       if (!_snapMonaco) {
-        const ed = await shared.createEditor(host, {
+        const ed = await runtime.create(host, {
           // Monaco core ships JSON support; JSONC is not always registered.
           language: 'json',
           readOnly: true,
@@ -401,28 +702,35 @@
           return activateSnapEngine('codemirror');
         }
         _snapMonaco = ed;
-        try { _snapMonacoFacade = shared.toFacade(ed); } catch (e) { _snapMonacoFacade = null; }
-        try { if (shared.layoutOnVisible) shared.layoutOnVisible(ed, host); } catch (e2) {}
-      } else if (_snapMonacoFacade && _snapMonacoFacade.setValue) {
-        _snapMonacoFacade.setValue(value);
+        _snapMonacoFacade = createMonacoFacade(ed);
+        try { if (runtime.layoutOnVisible) runtime.layoutOnVisible(ed, host); } catch (e2) {}
+      } else if (_snapMonacoFacade && _snapMonacoFacade.set) {
+        _snapMonacoFacade.set(value);
       }
 
       _snapKind = 'monaco';
-      try { if (_snapMonacoFacade) _snapMonacoFacade.scrollTo(0, 0); } catch (e) {}
+      try {
+        if (!(preservedView && restoreSnapViewState(preservedView)) && _snapMonacoFacade) {
+          _snapMonacoFacade.scrollTo(0, 0);
+        }
+      } catch (e) {}
+      try { bindSnapViewStateTracking(); } catch (e2) {}
       return 'monaco';
     }
 
     // CodeMirror
+    try { await ensureEditorRuntime('codemirror', { mode: 'application/jsonc' }); } catch (e) {}
     if (host) hideNode(host);
     try { disposeSnapMonaco(); } catch (e) {}
 
     const cm = ensureSnapEditor();
+    const fac = _snapCmFacade || createCodeMirrorFacade(cm);
     const value = snapTextFallback() || SNAP_PLACEHOLDER;
     if (cm && cm.setValue) {
       try {
-        cm.setValue(value);
-        cm.scrollTo(0, 0);
-        setTimeout(() => { try { cm.refresh(); } catch (e2) {} }, 30);
+        if (fac && typeof fac.set === 'function') fac.set(value);
+        if (fac && typeof fac.scrollTo === 'function') fac.scrollTo(0, 0);
+        setTimeout(() => { try { if (fac && fac.layout) fac.layout(); } catch (e2) {} }, 30);
       } catch (e) {}
       const w = cmWrapper(cm);
       if (w) showNode(w);
@@ -435,6 +743,10 @@
     }
 
     _snapKind = 'codemirror';
+    try {
+      if (preservedView) restoreSnapViewState(preservedView);
+    } catch (e3) {}
+    try { bindSnapViewStateTracking(); } catch (e4) {}
     return 'codemirror';
   }
 
@@ -457,12 +769,7 @@
   function openSnapModal() {
     const m = el('xray-snapshot-modal');
     if (!m) return;
-    m.classList.remove('hidden');
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      }
-    } catch (e) {}
+    showModal(m, 'backups_snapshot_open');
 
     try {
       // Activate preferred editor engine (CodeMirror / Monaco)
@@ -473,12 +780,10 @@
   function closeSnapModal() {
     const m = el('xray-snapshot-modal');
     if (!m) return;
-    m.classList.add('hidden');
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      }
-    } catch (e) {}
+    try { saveSnapViewState(); } catch (e) {}
+    try { clearSnapViewStateTracking(); } catch (e2) {}
+    hideModal(m, 'backups_snapshot_close');
+    _snapCurrentName = '';
   }
 
   function setSnapStatus(msg, isError) {
@@ -504,17 +809,10 @@
     _snapLastText = value;
 
     try {
-      if (_snapKind === 'monaco' && _snapMonacoFacade && _snapMonacoFacade.setValue) {
-        _snapMonacoFacade.setValue(value);
-        try { _snapMonacoFacade.scrollTo(0, 0); } catch (e2) {}
-        return;
-      }
-    } catch (e) {}
-
-    try {
-      if (_snapCm && typeof _snapCm.setValue === 'function') {
-        _snapCm.setValue(value);
-        try { _snapCm.scrollTo(0, 0); } catch (e2) {}
+      const fac = getSnapActiveFacade();
+      if (fac && typeof fac.set === 'function') {
+        fac.set(value);
+        try { if (fac.scrollTo) fac.scrollTo(0, 0); } catch (e2) {}
         return;
       }
     } catch (e) {}
@@ -528,23 +826,30 @@
   function ensureSnapEditor() {
     const ta = el('xray-snapshot-preview');
     if (!ta) return null;
-    if (_snapCm) return _snapCm;
 
-    if (!window.CodeMirror || typeof window.CodeMirror.fromTextArea !== 'function') {
-      return null;
+    const runtime = getEditorRuntime('codemirror');
+    const preferCm6 = isCm6Runtime(runtime);
+
+    if (_snapCm) {
+      if (!preferCm6 || isCm6Editor(_snapCm)) {
+        if (!_snapCmFacade) _snapCmFacade = createCodeMirrorFacade(_snapCm);
+        return _snapCm;
+      }
+      try { disposeCodeMirrorEditor(_snapCm); } catch (e) {}
+      _snapCm = null;
+      _snapCmFacade = null;
     }
 
-    // Ensure jsonc mode exists.
     try {
-      if (window.XKeen && XKeen.cmLoader && typeof XKeen.cmLoader.ensureMode === 'function') {
-        // Best-effort (no await here). The base javascript mode is usually already present.
-        XKeen.cmLoader.ensureMode('jsonc');
-      }
+      if (!runtime || typeof runtime.create !== 'function') return null;
+      if (typeof runtime.ensureAssets === 'function') runtime.ensureAssets({ mode: 'application/jsonc' });
     } catch (e) {}
 
     try {
-      _snapCm = window.CodeMirror.fromTextArea(ta, {
-        mode: { name: 'javascript', json: true },
+      if (!runtime || typeof runtime.create !== 'function') return null;
+
+      _snapCm = runtime.create(ta, {
+        mode: 'application/jsonc',
         theme: cmThemeFromPage(),
         readOnly: 'nocursor',
         lineNumbers: true,
@@ -573,13 +878,16 @@
         window.__xkeenEditors.push(_snapCm);
       } catch (e3) {}
 
+      _snapCmFacade = createCodeMirrorFacade(_snapCm);
+
       try {
-        _snapCm.setValue(String(_snapLastText || SNAP_PLACEHOLDER));
-        _snapCm.scrollTo(0, 0);
+        if (_snapCmFacade && typeof _snapCmFacade.set === 'function') _snapCmFacade.set(String(_snapLastText || SNAP_PLACEHOLDER));
+        if (_snapCmFacade && typeof _snapCmFacade.scrollTo === 'function') _snapCmFacade.scrollTo(0, 0);
       } catch (e4) {}
     } catch (e) {
       console.error(e);
       _snapCm = null;
+      _snapCmFacade = null;
     }
 
     return _snapCm;
@@ -637,21 +945,6 @@
         }
       });
     }
-
-    // Close on overlay click
-    if (modal && !(modal.dataset && modal.dataset.xkeenOverlayWired === '1')) {
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeSnapModal();
-      });
-      if (modal.dataset) modal.dataset.xkeenOverlayWired = '1';
-    }
-
-    // Close on ESC
-    document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-      const m = el('xray-snapshot-modal');
-      if (m && !m.classList.contains('hidden')) closeSnapModal();
-    });
 
     // Engine toggle
     const sel = el('xray-snapshot-engine-select');
@@ -759,9 +1052,12 @@
       return;
     }
 
+    try { if (_snapCurrentName && _snapCurrentName !== n) saveSnapViewState({ name: _snapCurrentName }); } catch (e) {}
+
     // Wire modal on first use.
     wireSnapModalOnce();
 
+    _snapCurrentName = n;
     setSnapStatus('', false);
     setSnapTitle(n);
     setSnapMeta('Загрузка…');
@@ -785,6 +1081,14 @@
       const trunc = data.truncated ? ' · показан фрагмент (ограничение 512 KB)' : '';
       setSnapMeta('Размер: ' + (size || '—') + trunc);
       setSnapText(String(data.text || ''));
+      try {
+        const savedView = loadSnapViewState(n, _snapKind);
+        if (!(savedView && restoreSnapViewState(savedView))) {
+          const fac = getSnapActiveFacade();
+          if (fac && typeof fac.scrollTo === 'function') fac.scrollTo(0, 0);
+        }
+      } catch (e2) {}
+      try { bindSnapViewStateTracking(); } catch (e3) {}
       setSnapStatus('', false);
     } catch (e) {
       console.error(e);
@@ -801,21 +1105,24 @@
     }
 
     const wantRestart = shouldRestartAfterAction();
-    const msg = wantRestart
-      ? ('Восстановить снимок ' + n + ' и перезапустить xkeen?')
-      : ('Восстановить снимок ' + n + ' без перезапуска xkeen?');
-
-    if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-      const ok = await XKeen.ui.confirm({
-        title: 'Восстановить снимок',
-        message: msg,
-        okText: 'Восстановить',
-        cancelText: 'Отменить',
-        danger: false,
-      });
-      if (!ok) return;
-    } else {
-      if (!confirm(msg)) return;
+    const ok = await confirmAction({
+      title: 'Восстановить снимок',
+      message: 'Восстановить снимок ' + n + '?',
+      details: wantRestart
+        ? [
+            'Изменения будут записаны в конфиг.',
+            'После этого будет запрошен перезапуск xkeen.',
+          ]
+        : 'Изменения будут записаны в конфиг без перезапуска xkeen.',
+      okText: 'Восстановить',
+      cancelText: 'Отменить',
+      danger: false,
+      cancelMessage: 'Восстановление снимка отменено.',
+      cancelKind: 'info',
+    });
+    if (!ok) {
+      writeStatus(el('backups-status'), 'Восстановление снимка отменено.', false);
+      return;
     }
 
     try {
@@ -835,15 +1142,21 @@
         return;
       }
 
-      setStatus('Снимок восстановлен: ' + n, false);
+      const warnings = [];
 
       // Optional restart
       if (wantRestart) {
-        await fetch('/api/restart', { method: 'POST' });
+        const restartWarning = await requestXkeenRestartWarning();
+        if (restartWarning) warnings.push(restartWarning);
       }
 
       // Refresh list and visible editors.
-      await loadSnapshots();
+      try {
+        await loadSnapshots();
+      } catch (e) {
+        console.error(e);
+        warnings.push('Список снимков не удалось обновить автоматически.');
+      }
 
       try {
         if (window.XKeen && XKeen.routing && typeof XKeen.routing.load === 'function') {
@@ -857,7 +1170,10 @@
         }
       } catch (e) {
         console.error(e);
+        warnings.push('Открытые редакторы не успели перечитать восстановленный конфиг.');
       }
+
+      emitOutcome(el('backups-status'), 'Снимок восстановлен: ' + n, warnings);
     } catch (e) {
       console.error(e);
       setStatus('Ошибка при восстановлении снимка.', true);
@@ -881,9 +1197,10 @@
     return load();
   }
 
-  async function restoreAuto(target) {
+  async function restoreAuto(target, opts) {
     // Legacy helper (auto-backups restore for panel buttons)
     const t = String(target || '').trim();
+    const o = (opts && typeof opts === 'object') ? opts : {};
     if (t !== 'routing' && t !== 'inbounds' && t !== 'outbounds') {
       toast('Неверная цель восстановления авто-бэкапа.', true);
       return;
@@ -912,7 +1229,22 @@
       t === 'routing' ? 'routing-status' : (t === 'inbounds' ? 'inbounds-status' : 'outbounds-status')
     );
 
-    if (!confirm('Восстановить из авто-бэкапа файл ' + label + '?')) return;
+    if (!o.confirmed) {
+      const ok = await confirmAction({
+        title: 'Восстановить из авто-бэкапа',
+        message: 'Восстановить файл ' + label + ' из авто-бэкапа?',
+        details: 'Текущий текст в редакторе будет заменён восстановленной версией.',
+        okText: 'Восстановить',
+        cancelText: 'Отменить',
+        danger: true,
+        cancelMessage: 'Восстановление из авто-бэкапа отменено.',
+        cancelKind: 'info',
+      });
+      if (!ok) {
+        writeStatus(statusEl, 'Восстановление из авто-бэкапа отменено.', false);
+        return;
+      }
+    }
 
     try {
       const res = await fetch('/api/restore-auto', {
@@ -927,8 +1259,7 @@
       if (res.ok && data && data.ok) {
         const fname = data.filename || '';
         const msg = 'Файл ' + label + ' восстановлен из авто-бэкапа ' + fname;
-        if (statusEl) statusEl.textContent = msg;
-        toast(msg, false);
+        const warnings = [];
 
         // Refresh UI
         try {
@@ -943,16 +1274,19 @@
           }
         } catch (e) {
           console.error(e);
+          warnings.push('Открытый редактор не успел перечитать восстановленный файл.');
         }
+
+        emitOutcome(statusEl, msg, warnings);
       } else {
         const msg = 'Ошибка восстановления из авто-бэкапа: ' + ((data && data.error) || res.statusText || ('HTTP ' + res.status));
-        if (statusEl) statusEl.textContent = msg;
+        writeStatus(statusEl, msg, true);
         toast(msg, true);
       }
     } catch (e) {
       console.error(e);
       const msg = 'Ошибка восстановления из авто-бэкапа.';
-      if (statusEl) statusEl.textContent = msg;
+      writeStatus(statusEl, msg, true);
       toast(msg, true);
     }
   }

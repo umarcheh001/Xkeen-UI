@@ -11,6 +11,41 @@
     return document.getElementById(id);
   }
 
+  function getConfigShellApi() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.configShell) return XKeen.ui.configShell;
+    } catch (e) {}
+    return null;
+  }
+
+  function getRoutingShellApi() {
+    try {
+      if (window.XKeen && XKeen.features && XKeen.features.routingShell) return XKeen.features.routingShell;
+    } catch (e) {}
+    return null;
+  }
+
+  function bindConfigAction(btnId, handler, opts) {
+    const shell = getConfigShellApi();
+    if (shell && typeof shell.bindAction === 'function') {
+      try {
+        if (shell.bindAction('routing', btnId, handler, opts || {})) return true;
+      } catch (e) {}
+    }
+
+    const btn = el(btnId);
+    if (!btn) return false;
+    if (btn.dataset && btn.dataset.xkLocalIoBound === '1') return true;
+
+    btn.addEventListener('click', (event) => {
+      if (event) event.preventDefault();
+      handler();
+    });
+
+    if (btn.dataset) btn.dataset.xkLocalIoBound = '1';
+    return true;
+  }
+
   function setStatus(msg, isError) {
     const statusEl = el('routing-status');
     if (statusEl) statusEl.textContent = String(msg ?? '');
@@ -57,17 +92,25 @@
   }
 
   function getEditorFacade() {
-    try {
-      if (window.XKeen && window.XKeen.state && window.XKeen.state.routingEditor) {
-        return window.XKeen.state.routingEditor;
-      }
-    } catch (e) {}
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.getEditorInstance === 'function') {
+      try {
+        return shell.getEditorInstance();
+      } catch (e) {}
+    }
     return null;
   }
 
   function getEditorText() {
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.getEditorText === 'function') {
+      try {
+        return String(shell.getEditorText() ?? '');
+      } catch (e) {}
+    }
     const ed = getEditorFacade();
     try {
+      if (ed && typeof ed.get === 'function') return String(ed.get() ?? '');
       if (ed && typeof ed.getValue === 'function') return String(ed.getValue() ?? '');
     } catch (e) {}
 
@@ -81,9 +124,21 @@
   }
 
   function setEditorText(text) {
+    const shell = getRoutingShellApi();
     const ed = getEditorFacade();
     const v = String(text ?? '');
+    if (shell && typeof shell.setEditorText === 'function') {
+      try {
+        return !!shell.setEditorText(v, { reason: 'local-io' });
+      } catch (e) {}
+    }
     try {
+      if (ed && typeof ed.set === 'function') {
+        ed.set(v);
+        if (typeof ed.focus === 'function') ed.focus();
+        if (typeof ed.scrollTo === 'function') ed.scrollTo(0, 0);
+        return true;
+      }
       if (ed && typeof ed.setValue === 'function') {
         ed.setValue(v);
         if (typeof ed.focus === 'function') ed.focus();
@@ -148,11 +203,30 @@
     reader.onload = () => {
       try {
         const content = String(reader.result ?? '');
-        const ok = setEditorText(content);
+        let ok = false;
+        const shell = getRoutingShellApi();
+        if (shell && typeof shell.replaceEditorText === 'function') {
+          try {
+            shell.replaceEditorText(content, {
+              reason: 'local-import',
+              markDirty: true,
+              scrollTop: true,
+            });
+            ok = true;
+          } catch (e) {}
+        }
+        if (!ok) ok = setEditorText(content);
         const fname = sanitizeFilename(file.name || 'file.json');
         if (ok) {
           // Re-validate to update routing/fragment mode UI and markers.
-          try { if (window.XKeen && XKeen.routing && typeof XKeen.routing.validate === 'function') XKeen.routing.validate(); } catch (e) {}
+          try {
+            if (shell && typeof shell.validate === 'function') shell.validate();
+            else {
+              const ed = getEditorFacade();
+              if (ed && typeof ed.validate === 'function') ed.validate();
+              else if (window.XKeen && XKeen.routing && typeof XKeen.routing.validate === 'function') XKeen.routing.validate();
+            }
+          } catch (e) {}
           setStatus('Загружено в редактор: ' + fname + ' (не сохранено).', false);
         } else {
           setStatus('Не удалось вставить содержимое в редактор.', true);
@@ -180,20 +254,14 @@
     const localConfigFileInput = el('local-config-file-input');
 
     // Export
-    if (localExportBtn) {
-      localExportBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        exportToFile();
-      });
-    }
+    if (localExportBtn) bindConfigAction('routing-export-local-btn', exportToFile, { kind: 'localExport' });
 
     // Import
     if (localImportBtn && localConfigFileInput) {
-      localImportBtn.addEventListener('click', (e) => {
-        e.preventDefault();
+      bindConfigAction('routing-import-local-btn', () => {
         localConfigFileInput.value = '';
         localConfigFileInput.click();
-      });
+      }, { kind: 'localImport' });
 
       localConfigFileInput.addEventListener('change', () => {
         const file = localConfigFileInput.files && localConfigFileInput.files[0];

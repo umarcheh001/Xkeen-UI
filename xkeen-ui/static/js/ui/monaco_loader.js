@@ -65,6 +65,9 @@
 
   applyExternalConfig();
 
+  const ENGINE = 'monaco';
+  const CONTRACT_VERSION = 1;
+
   L.getConfig = function getConfig() {
     return JSON.parse(JSON.stringify(_cfg));
   };
@@ -105,8 +108,8 @@
 
     // Prefer reusing the shared loader if present.
     try {
-      if (XK.cmLoader && typeof XK.cmLoader.loadScriptOnce === 'function') {
-        return XK.cmLoader.loadScriptOnce(url);
+      if (XK.runtime && XK.runtime.loader && typeof XK.runtime.loader.loadScriptOnce === 'function') {
+        return XK.runtime.loader.loadScriptOnce(url);
       }
     } catch (e) {}
 
@@ -185,13 +188,38 @@
 
   L.getPaths = function getPaths() {
     return {
+      engine: ENGINE,
       staticRoot: STATIC_ROOT,
+      engineRoots: (Array.isArray(_cfg.localVsPaths) ? _cfg.localVsPaths.slice(0) : []),
+      engineRoot: (Array.isArray(_cfg.localVsPaths) && _cfg.localVsPaths.length) ? _cfg.localVsPaths[0] : '',
       localVsBases: (Array.isArray(_cfg.localVsPaths) ? _cfg.localVsPaths.slice(0) : []),
     };
   };
 
   L.getActiveSource = function getActiveSource() {
-    return _activeSource ? Object.assign({}, _activeSource) : null;
+    return _activeSource ? Object.assign({ engine: ENGINE }, _activeSource) : null;
+  };
+
+  L.ENGINE = ENGINE;
+  L.CONTRACT_VERSION = CONTRACT_VERSION;
+
+  L.isReady = function isReady(opts) {
+    const o = opts || {};
+    if (o.configureOnly) return !!_configured;
+    return hasMonacoApi();
+  };
+
+  L.getStatus = function getStatus(opts) {
+    const ready = L.isReady(opts);
+    return {
+      ok: ready,
+      ready,
+      engine: ENGINE,
+      contractVersion: CONTRACT_VERSION,
+      configured: !!_configured,
+      source: L.getActiveSource(),
+      paths: L.getPaths(),
+    };
   };
 
   // Loads local AMD loader (vs/loader.js) and configures require() paths.
@@ -289,5 +317,48 @@
     } finally {
       if (!hasMonacoApi()) _monacoPromise = null;
     }
+  };
+
+  L.ensureSupport = async function ensureSupport(opts) {
+    const o = opts || {};
+    const configured = await L.ensureConfigured();
+    if (!configured || !configured.ok) {
+      return {
+        ok: false,
+        ready: false,
+        engine: ENGINE,
+        contractVersion: CONTRACT_VERSION,
+        api: null,
+        configured: false,
+        source: L.getActiveSource(),
+        paths: L.getPaths(),
+      };
+    }
+
+    if (o.configureOnly) {
+      return {
+        ok: true,
+        ready: true,
+        engine: ENGINE,
+        contractVersion: CONTRACT_VERSION,
+        api: null,
+        configured: true,
+        source: L.getActiveSource(),
+        paths: L.getPaths(),
+      };
+    }
+
+    const api = await L.ensureMonaco();
+    const ready = !!api;
+    return {
+      ok: ready,
+      ready,
+      engine: ENGINE,
+      contractVersion: CONTRACT_VERSION,
+      api: ready ? api : null,
+      configured: !!configured.ok,
+      source: L.getActiveSource(),
+      paths: L.getPaths(),
+    };
   };
 })();

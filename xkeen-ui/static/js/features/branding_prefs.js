@@ -9,10 +9,18 @@
 
   function byId(id) { return document.getElementById(id); }
 
-  function toast(msg, isErr) {
+  function normalizeToastKind(value, fallback) {
+    const kind = String(value || fallback || 'info').trim().toLowerCase();
+    if (kind === 'error' || kind === 'warning' || kind === 'success' || kind === 'info') return kind;
+    return 'info';
+  }
+
+  function toast(msg, kindOrError) {
+    const kind = (typeof kindOrError === 'string')
+      ? normalizeToastKind(kindOrError, 'info')
+      : (kindOrError ? 'error' : 'info');
     try {
       // Prefer unified toast API if present.
-      const kind = isErr ? 'error' : 'info';
       if (typeof window.toast === 'function') return window.toast(String(msg || ''), kind);
       if (typeof window.showToast === 'function') return window.showToast(String(msg || ''), kind);
       if (XK && XK.ui && typeof XK.ui.toast === 'function') return XK.ui.toast(String(msg || ''), kind);
@@ -21,11 +29,34 @@
     try { console.log('[xkeen]', msg); } catch (e) {}
   }
 
-  function setStatus(msg, isErr) {
+  function writeStatus(msg, isErr) {
     const el = byId('dt-branding-status');
     if (!el) return;
     el.textContent = msg ? String(msg) : '';
     try { el.style.color = isErr ? 'var(--sem-error, #fca5a5)' : ''; } catch (e) {}
+  }
+
+  function setStatus(msg, isErr) {
+    writeStatus(msg, isErr);
+  }
+
+  function buildConfirmText(options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    const message = String(opts.message || opts.text || opts.body || 'Continue?').trim() || 'Continue?';
+    const details = Array.isArray(opts.details)
+      ? opts.details.map((item) => String(item || '').trim()).filter(Boolean).join('\n')
+      : String(opts.details || '').trim();
+    return details ? (message + '\n\n' + details) : message;
+  }
+
+  async function confirmAction(options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    if (XK && XK.ui && typeof XK.ui.confirm === 'function') {
+      return !!(await XK.ui.confirm(opts));
+    }
+    const ok = window.confirm(buildConfirmText(opts));
+    if (!ok && opts.cancelMessage) toast(opts.cancelMessage, opts.cancelKind || 'info');
+    return !!ok;
   }
 
   function isDataUrl(s) {
@@ -406,6 +437,15 @@
 
           if (res && res.ok) {
             setStatus('Брендинг сохранён на роутере');
+            toast('Брендинг сохранён', 'success');
+          } else {
+            setStatus('Сохранено локально (не удалось записать на роутере): ' + (res && res.error ? res.error : 'error'), true);
+            toast('Сохранено локально, но запись на роутер не подтвердилась', 'warning');
+          }
+          return;
+
+          if (res && res.ok) {
+            setStatus('Брендинг сохранён на роутере');
             toast('Брендинг сохранён');
           } else {
             setStatus('Сохранено локально (не удалось записать на роутере): ' + (res && res.error ? res.error : 'error'), true);
@@ -421,6 +461,45 @@
     if (resetBtn) {
       resetBtn.addEventListener('click', async () => {
         try {
+          const confirmReset = await confirmAction({
+            title: 'Сбросить брендинг',
+            message: 'Сбросить брендинг на роутере?',
+            details: [
+              'Будут очищены глобальные branding-настройки на роутере.',
+              'Локальная форма тоже будет синхронизирована с пустым состоянием.',
+            ],
+            okText: 'Сбросить',
+            cancelText: 'Отменить',
+            focus: 'cancel',
+            danger: true,
+            cancelMessage: 'Сброс брендинга отменён.',
+            cancelKind: 'info',
+          });
+          if (!confirmReset) {
+            writeStatus('Сброс брендинга отменён.', false);
+            return;
+          }
+
+          let nextRes = null;
+          if (branding && typeof branding.reset === 'function') {
+            nextRes = await branding.reset();
+            syncFormFromPrefs(branding.load());
+          } else {
+            nextRes = await resetOnRouter();
+            const nextCfg = normalize((nextRes && nextRes.config) ? nextRes.config : {});
+            saveCache(nextCfg);
+            applyFallback(nextCfg);
+            syncFormFromPrefs(nextCfg);
+          }
+          if (nextRes && nextRes.ok) {
+            setStatus('Брендинг сброшен на роутере');
+            toast('Брендинг: сброшено', 'success');
+          } else {
+            setStatus('Сброшено локально (ошибка сброса на роутере): ' + (nextRes && nextRes.error ? nextRes.error : 'error'), true);
+            toast('Сброс частично удался: локальное состояние обновлено, но ответ от роутера не подтвердился', 'warning');
+          }
+          return;
+
           const ok = window.confirm('Сбросить брендинг на роутере (глобально)?');
           if (!ok) return;
           let res = null;

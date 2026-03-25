@@ -15,6 +15,7 @@ from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request
 
+from services.ui_settings import load_settings
 from utils.jsonc import strip_json_comments_text, format_jsonc_text
 
 
@@ -28,6 +29,33 @@ def _api_error(message: str, status: int = 400, *, ok: bool | None = None):
     if ok is not None:
         payload["ok"] = ok
     return jsonify(payload), status
+
+
+def _load_json_format_preferences() -> Dict[str, int]:
+    try:
+        cfg = load_settings()
+    except Exception:
+        cfg = {}
+
+    fmt = cfg.get("format") if isinstance(cfg, dict) else {}
+    if not isinstance(fmt, dict):
+        fmt = {}
+
+    tab_width = fmt.get("tabWidth", 2)
+    print_width = fmt.get("printWidth", 80)
+
+    try:
+        tab_width = int(tab_width)
+    except Exception:
+        tab_width = 2
+    try:
+        print_width = int(print_width)
+    except Exception:
+        print_width = 80
+
+    tab_width = max(1, min(8, tab_width))
+    print_width = max(40, min(200, print_width))
+    return {"tabWidth": tab_width, "printWidth": print_width}
 
 
 def create_utils_blueprint() -> Blueprint:
@@ -60,13 +88,15 @@ def create_utils_blueprint() -> Blueprint:
         except Exception as e:
             return _api_error(f"invalid json: {e}", 400, ok=False)
 
+        prefs = _load_json_format_preferences()
+
         # Dependency-free JSONC formatter (keeps comments).
         try:
-            formatted = format_jsonc_text(text, indent_size=2)
-            return jsonify({"ok": True, "text": formatted, "engine": "xkeen_jsonc"}), 200
+            formatted = format_jsonc_text(text, indent_size=prefs["tabWidth"])
+            return jsonify({"ok": True, "text": formatted, "engine": "xkeen_jsonc", "tabWidth": prefs["tabWidth"], "printWidth": prefs["printWidth"]}), 200
         except Exception:
             # Fallback: strict JSON pretty print (comments will be removed)
-            formatted = json.dumps(obj, ensure_ascii=False, indent=2) + "\n"
-            return jsonify({"ok": True, "text": formatted, "engine": "json"}), 200
+            formatted = json.dumps(obj, ensure_ascii=False, indent=prefs["tabWidth"]) + "\n"
+            return jsonify({"ok": True, "text": formatted, "engine": "json", "tabWidth": prefs["tabWidth"], "printWidth": prefs["printWidth"]}), 200
 
     return bp

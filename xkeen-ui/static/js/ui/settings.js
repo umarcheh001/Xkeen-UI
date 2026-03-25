@@ -16,9 +16,11 @@
 
   // Keep defaults in sync with services/ui_settings.py
   const DEFAULTS = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     editor: {
       engine: 'codemirror',
+      codemirrorFontScale: 100,
+      monacoFontScale: 100,
     },
     format: {
       preferPrettier: false,
@@ -72,6 +74,57 @@
     return null;
   }
 
+  function getUiSettingsStoreApi() {
+    try {
+      const api = XKeen.core && XKeen.core.uiSettings;
+      if (!api) return null;
+      if (typeof api.getState !== 'function' || typeof api.setState !== 'function') return null;
+      return api;
+    } catch (e) {
+      return null;
+    }
+  }
+
+
+  function clampEditorFontScale(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return 100;
+    return Math.max(75, Math.min(200, Math.round(num)));
+  }
+
+  function getEditorFontScale(settings, engine) {
+    try {
+      const editor = (settings && settings.editor && typeof settings.editor === 'object') ? settings.editor : {};
+      const kind = String(engine || '').trim().toLowerCase();
+      if (kind === 'monaco' && Object.prototype.hasOwnProperty.call(editor, 'monacoFontScale')) {
+        return clampEditorFontScale(editor.monacoFontScale);
+      }
+      if ((kind === 'codemirror' || kind === 'cm6' || kind === 'cm') && Object.prototype.hasOwnProperty.call(editor, 'codemirrorFontScale')) {
+        return clampEditorFontScale(editor.codemirrorFontScale);
+      }
+      if (Object.prototype.hasOwnProperty.call(editor, 'fontScale')) {
+        return clampEditorFontScale(editor.fontScale);
+      }
+    } catch (e) {}
+    return 100;
+  }
+
+  function applyEditorCssVars(settings) {
+    try {
+      const root = document && document.documentElement;
+      if (!root || !root.style) return;
+      const scale = getEditorFontScale(settings, 'codemirror');
+      const fontSize = Math.max(12, Math.round(15 * (scale / 100)));
+      const lineHeight = Math.max(18, Math.round(fontSize * 1.68));
+      root.style.setProperty('--xk-editor-font-scale', String(scale / 100));
+      root.style.setProperty('--xk-editor-font-size', String(fontSize) + 'px');
+      root.style.setProperty('--xk-editor-line-height', String(lineHeight) + 'px');
+      root.style.setProperty('--xk-cm-editor-font-scale', String(scale / 100));
+      root.style.setProperty('--xk-cm-editor-font-size', String(fontSize) + 'px');
+      root.style.setProperty('--xk-cm-editor-line-height', String(lineHeight) + 'px');
+    } catch (e) {}
+  }
+
   // Minimal deep-merge for JSON-like objects.
   // Arrays are replaced, not merged.
   function deepMerge(base, patch) {
@@ -106,6 +159,12 @@
   let _fetchOncePromise = null;
 
   function _ensureCache() {
+    const store = getUiSettingsStoreApi();
+    if (store && typeof store.getSnapshot === 'function') {
+      const snapshot = store.getSnapshot();
+      return deepMerge(DEFAULTS, (snapshot && typeof snapshot === 'object') ? snapshot : {});
+    }
+
     if (!_cache || typeof _cache !== 'object') {
       _cache = clone(DEFAULTS);
     }
@@ -117,33 +176,64 @@
   }
 
   function isLoadedFromServer() {
+    const store = getUiSettingsStoreApi();
+    if (store && typeof store.isLoadedFromServer === 'function') {
+      return !!store.isLoadedFromServer();
+    }
     return !!_loadedFromServer;
+  }
+
+  function emitSettingsChanged(settings, source) {
+    try {
+      document.dispatchEvent(new CustomEvent('xkeen:ui-settings-changed', {
+        detail: {
+          settings: clone(settings),
+          source: source || 'settings',
+        }
+      }));
+    } catch (e) {}
+  }
+
+  function applySnapshot(cfg, options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    const merged = deepMerge(DEFAULTS, (cfg && typeof cfg === 'object') ? cfg : {});
+    const loaded = Object.prototype.hasOwnProperty.call(opts, 'loadedFromServer')
+      ? !!opts.loadedFromServer
+      : isLoadedFromServer();
+    const store = getUiSettingsStoreApi();
+
+    if (store) {
+      store.setState({
+        snapshot: merged,
+        loadedFromServer: loaded,
+      }, {
+        source: opts.source || 'settings',
+      });
+    } else {
+      _cache = merged;
+      _loadedFromServer = loaded;
+    }
+
+    applyEditorCssVars(merged);
+    emitSettingsChanged(merged, opts.source || 'settings');
+    return clone(merged);
   }
 
   // Local-only setter (no server call). Useful for tests or forced overrides.
   function setLocal(cfg) {
-    const merged = deepMerge(DEFAULTS, (cfg && typeof cfg === 'object') ? cfg : {});
-    _cache = merged;
-    // Notify listeners (e.g. live logs) that effective settings have changed.
-    try {
-      document.dispatchEvent(new CustomEvent('xkeen:ui-settings-changed', {
-        detail: { settings: get(), source: 'setLocal' }
-      }));
-    } catch (e) {}
-    return get();
+    return applySnapshot(cfg, {
+      loadedFromServer: isLoadedFromServer(),
+      source: 'setLocal',
+    });
   }
 
   // Local-only patch (no server call).
   function patchLocal(patch) {
     const merged = deepMerge(_ensureCache(), (patch && typeof patch === 'object') ? patch : {});
-    _cache = merged;
-    // Notify listeners (e.g. live logs) that effective settings have changed.
-    try {
-      document.dispatchEvent(new CustomEvent('xkeen:ui-settings-changed', {
-        detail: { settings: get(), source: 'patchLocal' }
-      }));
-    } catch (e) {}
-    return get();
+    return applySnapshot(merged, {
+      loadedFromServer: isLoadedFromServer(),
+      source: 'patchLocal',
+    });
   }
 
   async function fetchFromServer() {
@@ -175,8 +265,10 @@
       throw new Error('Bad UI settings response');
     }
 
-    _loadedFromServer = true;
-    return setLocal(data.settings);
+    return applySnapshot(data.settings, {
+      loadedFromServer: true,
+      source: 'fetch',
+    });
   }
 
   // One-shot loader: de-duplicates parallel GET calls and caches the result.
@@ -184,7 +276,7 @@
   // - If a fetch is already in-flight, it returns the same promise.
   // - On failure, the in-flight promise is cleared so the next call can retry.
   function fetchOnceFromServer() {
-    if (_loadedFromServer) {
+    if (isLoadedFromServer()) {
       return Promise.resolve(get());
     }
     if (_fetchOncePromise) {
@@ -242,9 +334,60 @@
       throw new Error('Bad UI settings response');
     }
 
-    _loadedFromServer = true;
-    return setLocal(data.settings);
+    return applySnapshot(data.settings, {
+      loadedFromServer: true,
+      source: 'patch',
+    });
   }
+
+  function subscribe(listener, options) {
+    if (typeof listener !== 'function') return () => {};
+
+    const store = getUiSettingsStoreApi();
+    if (store && typeof store.subscribe === 'function') {
+      return store.subscribe((nextState, prevState, meta) => {
+        try {
+          listener(
+            clone(nextState && nextState.snapshot ? nextState.snapshot : DEFAULTS),
+            clone(prevState && prevState.snapshot ? prevState.snapshot : DEFAULTS),
+            Object.assign({}, meta, {
+              loadedFromServer: !!(nextState && nextState.loadedFromServer),
+            })
+          );
+        } catch (e) {}
+      }, options);
+    }
+
+    let previous = get();
+
+    if (options && options.immediate) {
+      try {
+        listener(previous, previous, {
+          immediate: true,
+          loadedFromServer: isLoadedFromServer(),
+        });
+      } catch (e) {}
+    }
+
+    const fn = (ev) => {
+      const next = ev && ev.detail && ev.detail.settings ? clone(ev.detail.settings) : get();
+      const prev = previous;
+      previous = next;
+      try {
+        listener(next, prev, {
+          source: ev && ev.detail && ev.detail.source ? ev.detail.source : 'event',
+          loadedFromServer: isLoadedFromServer(),
+        });
+      } catch (e) {}
+    };
+
+    try { document.addEventListener('xkeen:ui-settings-changed', fn); } catch (e) {}
+    return () => {
+      try { document.removeEventListener('xkeen:ui-settings-changed', fn); } catch (e) {}
+    };
+  }
+
+  try { applyEditorCssVars(_ensureCache()); } catch (e) {}
 
   XKeen.ui.settings = XKeen.ui.settings || {};
   XKeen.ui.settings.DEFAULTS = clone(DEFAULTS);
@@ -255,4 +398,7 @@
   XKeen.ui.settings.fetch = fetchFromServer;
   XKeen.ui.settings.fetchOnce = fetchOnceFromServer;
   XKeen.ui.settings.patch = patchToServer;
+  XKeen.ui.settings.subscribe = subscribe;
+  XKeen.ui.settings.clampEditorFontScale = clampEditorFontScale;
+  XKeen.ui.settings.getEditorFontScale = getEditorFontScale;
 })();

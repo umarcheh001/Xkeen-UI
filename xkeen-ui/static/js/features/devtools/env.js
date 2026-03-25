@@ -21,6 +21,25 @@
   });
   const byId = SH.byId || ((id) => { try { return document.getElementById(id); } catch (e) { return null; } });
 
+  const openModal = SH.openModal || ((modal, source) => {
+    try { modal.classList.remove('hidden'); } catch (e) {}
+    if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+      try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e2) {}
+    } else {
+      try { document.body.classList.add('modal-open'); } catch (e3) {}
+    }
+    return true;
+  });
+  const closeModal = SH.closeModal || ((modal, source) => {
+    try { modal.classList.add('hidden'); } catch (e) {}
+    if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
+      try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e2) {}
+    } else {
+      try { document.body.classList.remove('modal-open'); } catch (e3) {}
+    }
+    return true;
+  });
+
   // ------------------------- Logging settings (quick toggles) -------------------------
 
   function _itemMap(items) {
@@ -371,23 +390,13 @@
     if (!modal || !body) return;
     try { body.innerHTML = _buildEnvHelpHtml(); } catch (e) { body.textContent = 'Не удалось построить справку: ' + (e && e.message ? e.message : String(e)); }
 
-    try { modal.classList.remove('hidden'); } catch (e) {}
-    if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-      try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
-    } else {
-      try { document.body.classList.add('modal-open'); } catch (e) {}
-    }
+    openModal(modal, 'devtools_env_help');
   }
 
   function _hideEnvHelpModal() {
     const modal = byId('dt-env-help-modal');
     if (!modal) return;
-    try { modal.classList.add('hidden'); } catch (e) {}
-    if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-      try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
-    } else {
-      try { document.body.classList.remove('modal-open'); } catch (e) {}
-    }
+    closeModal(modal, 'devtools_env_help');
   }
 
   function _wireEnvHelp() {

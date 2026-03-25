@@ -174,6 +174,25 @@ def create_service_blueprint(
             return jsonify({"ok": False, "error": str(e)}), 500
 
 
+    @bp.get("/api/cores/status")
+    def api_cores_status_legacy() -> Any:
+        """Legacy alias for older UI builds that still request /api/cores/status."""
+        try:
+            cores, current_core = get_cores_status()
+            return jsonify(
+                {
+                    "ok": True,
+                    "detected_cores": cores,
+                    "available_cores": cores,
+                    "cores": cores,
+                    "current_core": current_core,
+                    "currentCore": current_core,
+                }
+            ), 200
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+
     @bp.post("/api/xkeen/core")
     def api_xkeen_core_set() -> Any:
         """Смена ядра xkeen через сервисный модуль (switch_core)."""

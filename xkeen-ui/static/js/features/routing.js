@@ -93,6 +93,8 @@
 
   // Active routing fragment file (basename or absolute). Controlled by dropdown.
   let _activeFragment = null;
+  let _fragmentItems = [];
+  let _fragmentDir = '';
 
   // Semantic mode: 'routing' (routing config) or 'fragment' (generic Xray JSON).
   let _routingMode = 'routing';
@@ -101,6 +103,7 @@
   let _engine = 'codemirror';
   let _monaco = null;
   let _monacoFacade = null;
+  let _cmFacade = null;
   let _monacoHostEl = null;
   let _routingMonacoToolbarEl = null;
   let _engineSelectEl = null;
@@ -128,7 +131,6 @@
 	  let _dirtyTimer = null;
 	  let _validateTimer = null;
 	  let _editorContentTimer = null;
-	  let _viewStateTimer = null;
   let _suppressDirty = 0;
   let _editorPerfProfile = { lite: false, manualSync: false, webkitSafari: false, lineCount: 1, charCount: 0 };
   let _editorSnapshotVersion = 0;
@@ -139,7 +141,8 @@
     fast: null,
     exact: null,
   };
-  let _viewStateCache = { key: null, value: null };
+  let _viewStateStore = null;
+  let _featureLifecycle = null;
 
   const VIEW_STATE_LS_PREFIX = 'xkeen.routing.viewstate.v1::';
   let _lastValidationState = { ok: null, message: '' };
@@ -165,6 +168,308 @@
 
   function $(id) {
     return document.getElementById(id);
+  }
+
+  function getModalApi() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.modal) return XKeen.ui.modal;
+    } catch (e) {}
+    return null;
+  }
+
+  function getConfigDirtyApi() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.configDirty) return XKeen.ui.configDirty;
+    } catch (e) {}
+    return null;
+  }
+
+  function getConfigShellApi() {
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.configShell) return XKeen.ui.configShell;
+    } catch (e) {}
+    return null;
+  }
+
+  function getRoutingShellApi() {
+    try {
+      if (window.XKeen && XKeen.features && XKeen.features.routingShell) return XKeen.features.routingShell;
+    } catch (e) {}
+    return null;
+  }
+
+  function getFeatureLifecycle() {
+    if (_featureLifecycle) return _featureLifecycle;
+    const shell = getConfigShellApi();
+    if (!shell || typeof shell.createFeatureLifecycle !== 'function') return null;
+    try {
+      _featureLifecycle = shell.createFeatureLifecycle('routing', {
+        label: 'Routing',
+        fileCodeId: IDS.fileCode,
+        dirtySourceName: 'editor',
+      });
+    } catch (e) {
+      _featureLifecycle = null;
+    }
+    return _featureLifecycle;
+  }
+
+  function registerRoutingLayers() {
+    const shell = getRoutingShellApi();
+    if (!shell || typeof shell.registerLayers !== 'function') return;
+
+    try {
+      shell.registerLayers({
+        gui: {
+          validate: () => validate(),
+          setError: (message, line) => setError(message, line),
+          openHelp: () => openHelp(),
+          closeHelp: () => closeHelp(),
+        },
+        raw: {
+          getText: () => getEditorText(),
+          setText: (text, opts) => setEditorTextAll(text, opts || {}),
+          saveViewState: (opts) => saveCurrentViewState(opts),
+          loadViewState: (file) => loadSavedViewState(file),
+          restoreViewState: (view) => restoreViewState(view),
+          switchEngine: (engine, opts) => switchEngine(engine, opts),
+        },
+        orchestration: {
+          load: () => load(),
+          save: () => save(),
+          replaceEditorText: (text, opts) => replaceEditorText(text, opts),
+          refreshFragments: (opts) => refreshFragmentsList(opts),
+          activeFragment: () => getActiveFragment(),
+        },
+      });
+    } catch (e) {}
+  }
+
+  function syncSharedRoutingEditor(editor, facade, engineOverride) {
+    const shell = getRoutingShellApi();
+    const engine = normalizeEngine(engineOverride || _engine);
+    const binding = {
+      engine: engine,
+      editor: editor || null,
+      facade: facade || null,
+      getText: () => getEditorText(),
+      setText: (text, opts) => {
+        setEditorTextAll(text, opts || {});
+        return true;
+      },
+      replaceText: (text, opts) => {
+        replaceEditorText(text, opts || {});
+        return true;
+      },
+      validate: () => validate(),
+      saveViewState: (opts) => saveCurrentViewState(opts),
+      loadViewState: (file) => loadSavedViewState(file),
+      restoreViewState: (view) => restoreViewState(view),
+    };
+
+    if (shell && typeof shell.bindEditor === 'function') {
+      try { shell.bindEditor(binding); } catch (e) {}
+      try { registerRoutingLayers(); } catch (e2) {}
+    }
+
+    try { XKeen.state.routingEditor = editor || null; } catch (e) {}
+    try { XKeen.state.routingEditorFacade = facade || null; } catch (e) {}
+  }
+
+  function setRoutingSavedContent(text) {
+    const value = String(text ?? '');
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.setSavedContent === 'function') {
+      try {
+        shell.setSavedContent(value);
+        return;
+      } catch (e) {}
+    }
+    try { window.routingSavedContent = value; } catch (e2) {}
+  }
+
+  function setRoutingDirty(dirty) {
+    const value = !!dirty;
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.setDirty === 'function') {
+      try {
+        shell.setDirty(value);
+        return;
+      } catch (e) {}
+    }
+    try { window.routingIsDirty = value; } catch (e2) {}
+  }
+
+  function isRoutingDirty() {
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.isDirty === 'function') {
+      try {
+        return !!shell.isDirty();
+      } catch (e) {}
+    }
+    try { return !!window.routingIsDirty; } catch (e2) {}
+    return false;
+  }
+
+  function syncShellState(dir, items) {
+    if (dir != null) _fragmentDir = String(dir || '');
+    if (Array.isArray(items)) _fragmentItems = items.slice();
+
+    const payload = {
+      label: 'Routing',
+      fileCodeId: IDS.fileCode,
+      dir: _fragmentDir,
+      items: _fragmentItems,
+      activeFragment: getActiveFragment(),
+    };
+
+    const lifecycle = getFeatureLifecycle();
+    if (lifecycle && typeof lifecycle.syncTab === 'function') {
+      try {
+        lifecycle.syncTab(payload);
+        return;
+      } catch (e) {}
+    }
+
+    const shell = getConfigShellApi();
+    if (!shell || typeof shell.syncTab !== 'function') return;
+
+    try {
+      shell.syncTab('routing', payload);
+    } catch (e) {}
+  }
+
+  function decorateFragmentName(name) {
+    const value = String(name || '');
+    if (!value) return '';
+    if (/_hys2\.json$/i.test(value)) return value + ' (Hysteria2)';
+    return value;
+  }
+
+  function applyActiveFragment(name, dir, items) {
+    _activeFragment = name ? String(name) : null;
+    if (_activeFragment) rememberActiveFragment(_activeFragment);
+    const nextDir = (dir != null) ? String(dir || '') : _fragmentDir;
+    const cleanDir = nextDir ? String(nextDir).replace(/\/+$/, '') : '';
+    try {
+      updateActiveFileLabel((cleanDir ? cleanDir + '/' : '') + (_activeFragment || ''), cleanDir);
+    } catch (e) {}
+    try { _updateFileScopedTooltips(); } catch (e2) {}
+    try { _updateModeBadge(); } catch (e3) {}
+    try { syncShellState(cleanDir, Array.isArray(items) ? items : null); } catch (e4) {}
+    return _activeFragment;
+  }
+
+  function restoreFragmentSelection(sel, fragment, dir, items) {
+    const selectEl = sel || $(IDS.fragmentSelect);
+    const value = String(fragment || '').trim();
+    if (!selectEl || !value) return;
+
+    let opt = null;
+    try {
+      opt = Array.from(selectEl.options || []).find((item) => String(item.value || '') === value) || null;
+    } catch (e) {}
+
+    if (!opt) {
+      try {
+        opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = decorateFragmentName(value) + ' (текущий)';
+        selectEl.appendChild(opt);
+      } catch (e2) {}
+    }
+
+    try { selectEl.value = value; } catch (e3) {}
+    applyActiveFragment(value, dir, items);
+  }
+
+  async function guardFragmentSwitch(next, prev, opts) {
+    const config = opts && typeof opts === 'object' ? opts : {};
+    const lifecycle = getFeatureLifecycle();
+    const shell = getConfigShellApi();
+    const payload = {
+      currentValue: String(prev || ''),
+      nextValue: String(next || ''),
+      title: 'Несохранённые изменения',
+      message: 'В редакторе routing есть несохранённые изменения. Переключить файл и потерять их?',
+      okText: 'Переключить',
+      cancelText: 'Остаться',
+      onCancel: config.onCancel,
+      beforeSwitch: config.beforeSwitch,
+      commit: config.commit,
+    };
+
+    if (lifecycle && typeof lifecycle.guardSwitch === 'function') {
+      try { return await lifecycle.guardSwitch(payload); } catch (e) {}
+    }
+
+    if (shell && typeof shell.guardSwitch === 'function') {
+      try { return await shell.guardSwitch('routing', payload); } catch (e) {}
+    }
+
+    const api = getConfigDirtyApi();
+    const ok = (api && typeof api.confirmDiscard === 'function')
+      ? await api.confirmDiscard('routing', {
+          title: payload.title,
+          message: payload.message,
+          okText: payload.okText,
+          cancelText: payload.cancelText,
+        })
+      : !isRoutingDirty() || !!window.confirm(payload.message);
+
+    if (!ok) {
+      if (typeof payload.onCancel === 'function') await Promise.resolve(payload.onCancel());
+      return false;
+    }
+    if (typeof payload.beforeSwitch === 'function') await Promise.resolve(payload.beforeSwitch());
+    if (typeof payload.commit === 'function') await Promise.resolve(payload.commit());
+    return true;
+  }
+
+  function bindConfigAction(btnId, handler, opts) {
+    const lifecycle = getFeatureLifecycle();
+    if (lifecycle && typeof lifecycle.bindAction === 'function') {
+      try {
+        if (lifecycle.bindAction(btnId, handler, opts || {})) return;
+      } catch (e) {}
+    }
+
+    const shell = getConfigShellApi();
+    if (shell && typeof shell.bindAction === 'function') {
+      try {
+        if (shell.bindAction('routing', btnId, handler, opts || {})) return;
+      } catch (e) {}
+    }
+    wireButton(btnId, handler);
+  }
+
+  function syncRoutingDirtyContract(dirty) {
+    const dirtyOpts = {
+      sourceName: 'editor',
+      scopeLabel: 'Routing',
+      confirmTitle: 'Несохранённые изменения',
+      confirmMessage: 'В редакторе routing есть несохранённые изменения. Переключить файл и потерять их?',
+      okText: 'Переключить',
+      cancelText: 'Остаться',
+      label: 'Редактор routing',
+      summary: dirty ? 'Текст routing отличается от последней сохранённой версии.' : '',
+      currentValue: getEditorText(),
+      savedValue: _getSavedContent(),
+    };
+
+    const lifecycle = getFeatureLifecycle();
+    if (lifecycle && typeof lifecycle.setDirty === 'function') {
+      try {
+        lifecycle.setDirty(!!dirty, dirtyOpts);
+        return;
+      } catch (e) {}
+    }
+
+    const api = getConfigDirtyApi();
+    if (!api || typeof api.setDirty !== 'function') return;
+    try {
+      api.setDirty('routing', 'editor', !!dirty, dirtyOpts);
+    } catch (e) {}
   }
 
   function isMipsTarget() {
@@ -276,15 +581,58 @@
     return !!(_editorPerfProfile && _editorPerfProfile.lite);
   }
 
-  function shouldUseCodeMirrorLintAddon() {
-    return !isWebKitSafari();
+  function buildRoutingCodeMirrorDiagnostics(rawText, opts) {
+    const raw = String(rawText ?? '');
+    if (!String(raw || '').trim()) {
+      return [{
+        line: 1,
+        column: 1,
+        length: 1,
+        severity: 'error',
+        source: 'routing-jsonc',
+        message: 'Файл пуст. Введи корректный JSON.',
+      }];
+    }
+
+    const analysis = getJsoncAnalysis(raw, opts || { preciseLocation: !isWebKitSafari() });
+    if (analysis.ok || !analysis.loc) return [];
+    const loc = analysis.loc || { line: 1, col: 1 };
+    return [{
+      line: Math.max(1, Number(loc.line || 1)),
+      column: Math.max(1, Number(loc.col || 1)),
+      length: 1,
+      severity: 'error',
+      source: 'routing-jsonc',
+      message: String(analysis.message || 'JSON parse error'),
+    }];
+  }
+
+  function clearCodeMirrorDiagnostics() {
+    try {
+      if (_cm && typeof _cm.clearDiagnostics === 'function') {
+        _cm.clearDiagnostics();
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function applyCodeMirrorDiagnostics(list) {
+    const diagnostics = Array.isArray(list) ? list : [];
+    try {
+      if (_cm && typeof _cm.setDiagnostics === 'function') {
+        if (diagnostics.length) _cm.setDiagnostics(diagnostics);
+        else _cm.clearDiagnostics();
+        return true;
+      }
+    } catch (e) {}
+    return false;
   }
 
   function syncCodeMirrorLintNow() {
     try {
-      if (_engine !== 'codemirror') return;
-      if (!shouldUseCodeMirrorLintAddon()) return;
-      if (shouldManualCodeMirrorLint() && _cm && typeof _cm.performLint === 'function') _cm.performLint();
+      if (_engine !== 'codemirror' || !_cm) return;
+      applyCodeMirrorDiagnostics(buildRoutingCodeMirrorDiagnostics(getEditorText(), { preciseLocation: !isWebKitSafari() }));
     } catch (e) {}
   }
 
@@ -295,45 +643,27 @@
     return !(_editorPerfProfile && _editorPerfProfile.lite);
   }
 
-  function ensureHashCommentOverlay() {
-    if (_hashCommentOverlay) return _hashCommentOverlay;
-    _hashCommentOverlay = {
-      token: function(stream) {
-        if (stream.sol()) {
-          stream.eatSpace();
-          if (stream.peek && stream.peek() === '#') {
-            stream.skipToEnd();
-            return 'comment';
-          }
-        }
-        stream.skipToEnd();
-        return null;
-      }
-    };
-    return _hashCommentOverlay;
-  }
 
   function syncRoutingCodeMirrorOverlays(enabled) {
-    if (!_cm || typeof _cm.addOverlay !== 'function') return;
+    if (!_cm) return;
 
     const allowRichOverlays = !!enabled;
     try {
       _cm.state = _cm.state || {};
-      const key = '__xkRoutingHashOverlayEnabled';
-      const overlay = ensureHashCommentOverlay();
-      const hasOverlay = !!_cm.state[key];
-
-      if (allowRichOverlays && !hasOverlay) {
-        _cm.addOverlay(overlay);
-        _cm.state[key] = true;
-      } else if (!allowRichOverlays && hasOverlay && typeof _cm.removeOverlay === 'function') {
-        _cm.removeOverlay(overlay);
-        _cm.state[key] = false;
-      }
+      _cm.state.__xkRoutingHashOverlayEnabled = allowRichOverlays;
     } catch (e) {}
 
     try {
-      if (typeof window.xkeenCmLinksSetEnabled === 'function') {
+      const wrapper = (typeof _cm.getWrapperElement === 'function') ? _cm.getWrapperElement() : null;
+      if (wrapper && wrapper.classList) wrapper.classList.toggle('xk-routing-rich-overlays', allowRichOverlays);
+    } catch (e) {}
+
+    try {
+      if (typeof _cm.setLinksEnabled === 'function') {
+        _cm.setLinksEnabled(allowRichOverlays);
+      } else if (typeof _cm.setOption === 'function') {
+        _cm.setOption('links', allowRichOverlays);
+      } else if (typeof window.xkeenCmLinksSetEnabled === 'function') {
         window.xkeenCmLinksSetEnabled(_cm, allowRichOverlays);
       }
     } catch (e) {}
@@ -394,15 +724,8 @@
     return analysis;
   }
 
-  function buildRoutingLintOptions(lite) {
-    if (!shouldUseCodeMirrorLintAddon()) return false;
-    return {
-      getAnnotations: jsoncLint,
-      async: false,
-      lintOnChange: !lite,
-      delay: lite ? Math.max(700, currentValidateDebounceMs()) : 300,
-      tooltips: true,
-    };
+  function buildRoutingLintOptions() {
+    return true;
   }
 
   function applyCodeMirrorPerfProfile(text) {
@@ -531,7 +854,42 @@
     return VIEW_STATE_LS_PREFIX + String(file || '__default__');
   }
 
+  function _getViewStateStore() {
+    if (_viewStateStore) return _viewStateStore;
+    try {
+      const helper = _getEditorEngineHelper();
+      if (helper && typeof helper.createViewStateStore === 'function') {
+        _viewStateStore = helper.createViewStateStore({
+          buildKey: (file) => _viewStateKey(file),
+        });
+      }
+    } catch (e) {}
+    return _viewStateStore;
+  }
+
   function captureViewState() {
+    const store = _getViewStateStore();
+    if (store && typeof store.capture === 'function') {
+      const saved = store.capture({
+        engine: _engine,
+        facade: getActiveEditorFacade(),
+        capture: () => {
+          const fac = getActiveEditorFacade();
+          if (fac && typeof fac.saveViewState === 'function') {
+            return fac.saveViewState({ memoryOnly: true });
+          }
+          return null;
+        },
+      });
+      if (saved && typeof saved === 'object') return saved;
+    }
+    try {
+      const fac = getActiveEditorFacade();
+      if (fac && typeof fac.saveViewState === 'function') {
+        const saved = fac.saveViewState({ memoryOnly: true });
+        if (saved && typeof saved === 'object') return saved;
+      }
+    } catch (e) {}
     try {
       if (_engine === 'monaco' && _monaco) {
         return {
@@ -556,11 +914,18 @@
   function saveCurrentViewState(opts) {
     const o = opts || {};
     try {
-      const key = _viewStateKey(getActiveFragment());
       const data = captureViewState();
-      _viewStateCache = { key, value: data };
-      if (!o.memoryOnly) {
-        localStorage.setItem(key, JSON.stringify(data || {}));
+      const store = _getViewStateStore();
+      if (store && typeof store.save === 'function') {
+        store.save({
+          key: _viewStateKey(getActiveFragment()),
+          engine: _engine,
+          view: data,
+          memoryOnly: !!o.memoryOnly,
+        });
+      } else {
+        const key = _viewStateKey(getActiveFragment());
+        if (!o.memoryOnly) localStorage.setItem(key, JSON.stringify(data || {}));
       }
       if (o.updateMeta !== false) updateEditorMetaStatus();
     } catch (e) {}
@@ -569,33 +934,62 @@
   function scheduleViewStateSave(waitMs, opts) {
     const wait = (typeof waitMs === 'number' && waitMs >= 0) ? waitMs : currentViewStateDebounceMs();
     const o = opts || {};
-    try { if (_viewStateTimer) clearTimeout(_viewStateTimer); } catch (e) {}
-    _viewStateTimer = setTimeout(() => {
-      _viewStateTimer = null;
-      try { saveCurrentViewState(o); } catch (e) {}
-    }, wait);
+    const store = _getViewStateStore();
+    if (store && typeof store.schedule === 'function') {
+      store.schedule({
+        key: _viewStateKey(getActiveFragment()),
+        engine: _engine,
+        waitMs: wait,
+        memoryOnly: !!o.memoryOnly,
+        capture: () => captureViewState(),
+        afterSave: () => {
+          try {
+            if (o.updateMeta !== false) updateEditorMetaStatus();
+          } catch (e) {}
+        },
+      });
+      return;
+    }
+    try { saveCurrentViewState(o); } catch (e) {}
   }
 
   function loadSavedViewState(file) {
-    const key = _viewStateKey(file);
-    if (_viewStateCache && _viewStateCache.key === key) return _viewStateCache.value;
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) {
-        _viewStateCache = { key, value: null };
-        return null;
-      }
-      const obj = JSON.parse(raw);
-      const out = (obj && typeof obj === 'object') ? obj : null;
-      _viewStateCache = { key, value: out };
-      return out;
-    } catch (e) {
-      _viewStateCache = { key, value: null };
-      return null;
+    const store = _getViewStateStore();
+    if (store && typeof store.load === 'function') {
+      return store.load({
+        key: _viewStateKey(file),
+        engine: _engine,
+      });
     }
+    try {
+      const key = _viewStateKey(file);
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      return (obj && typeof obj === 'object') ? obj : null;
+    } catch (e) {}
+    return null;
   }
 
   function restoreViewState(view) {
+    const store = _getViewStateStore();
+    if (store && typeof store.restore === 'function') {
+      try {
+        if (store.restore({
+          engine: _engine,
+          facade: getActiveEditorFacade(),
+          view,
+        })) {
+          return true;
+        }
+      } catch (e) {}
+    }
+    try {
+      const fac = getActiveEditorFacade();
+      if (fac && typeof fac.restoreViewState === 'function' && fac.restoreViewState(view)) {
+        return true;
+      }
+    } catch (e) {}
     try {
       if (_engine === 'monaco' && _monaco) {
         let pos = view && view.pos ? view.pos : null;
@@ -631,7 +1025,7 @@
 
       const ok = _lastValidationState && _lastValidationState.ok;
       const msg = _lastValidationState && _lastValidationState.message ? String(_lastValidationState.message) : '';
-      const dirty = !!window.routingIsDirty;
+      const dirty = isRoutingDirty();
 
       if (validEl) {
         validEl.textContent = ok === null ? 'JSON: —' : (ok ? 'JSON: valid' : 'JSON: invalid');
@@ -718,15 +1112,6 @@
       }
     } catch (e) {}
 
-    try {
-      const backupBtn = $(IDS.btnBackup);
-      if (backupBtn) backupBtn.setAttribute('data-tooltip', 'Backup для файла: ' + file);
-    } catch (e) {}
-
-    try {
-      const raBtn = $(IDS.btnRestoreAuto);
-      if (raBtn) raBtn.setAttribute('data-tooltip', 'Restore autobackup для файла: ' + file);
-    } catch (e) {}
   }
 
 
@@ -812,6 +1197,7 @@
     // Keep the mode badge + file-scoped tooltips in sync.
     try { _updateModeBadge(); } catch (e) {}
     try { _updateFileScopedTooltips(); } catch (e) {}
+    try { syncShellState(); } catch (e) {}
 
     // Expose current mode (handy for other modules / debugging).
     try {
@@ -953,14 +1339,6 @@
     const prevSelection = (opts && opts.prevSelection) ? String(opts.prevSelection) : null;
     const scopeChanged = (opts && opts.scopeChanged) ? String(opts.scopeChanged) : '';
 
-    function decorateName(n) {
-      const name = String(n || '');
-      if (!name) return '';
-      // Mark special Hysteria2 fragments (used only when assembling hysteria2 configs)
-      if (/_hys2\.json$/i.test(name)) return name + ' (Hysteria2)';
-      return name;
-    }
-
     // Rebuild options
     try { if (sel.dataset) sel.dataset.dir = String(data.dir || ''); } catch (e) {}
     sel.innerHTML = '';
@@ -970,7 +1348,7 @@
     if (currentDefault && names.indexOf(currentDefault) === -1) {
       const opt = document.createElement('option');
       opt.value = currentDefault;
-      opt.textContent = decorateName(currentDefault) + ' (текущий)';
+      opt.textContent = decorateFragmentName(currentDefault) + ' (текущий)';
       sel.appendChild(opt);
     }
 
@@ -979,7 +1357,7 @@
       if (!name) return;
       const opt = document.createElement('option');
       opt.value = name;
-      opt.textContent = decorateName(name);
+      opt.textContent = decorateFragmentName(name);
       sel.appendChild(opt);
     });
 
@@ -987,13 +1365,8 @@
     try {
       const finalChoice = names.indexOf(preferred) !== -1 ? preferred : (currentDefault || (names[0] || ''));
       if (finalChoice) sel.value = finalChoice;
-      _activeFragment = sel.value || finalChoice || null;
-      rememberActiveFragment(_activeFragment);
-      updateActiveFileLabel((data.dir ? String(data.dir).replace(/\/+$/, '') + '/' : '') + (_activeFragment || ''), data.dir || '');
-      // Keep legacy global in sync
-      try {
-        if (window.XKEEN_FILES) window.XKEEN_FILES.routing = (data.dir ? String(data.dir).replace(/\/+$/, '') + '/' : '') + (_activeFragment || '');
-      } catch (e) {}
+      const dir = data.dir ? String(data.dir).replace(/\/+$/, '') : '';
+      applyActiveFragment(sel.value || finalChoice || null, dir, data.items);
     } catch (e) {}
 
     // If scope was reduced and a non-routing file disappeared from the list, clarify the jump.
@@ -1010,6 +1383,7 @@
     // Keep badge/tooltips up-to-date (selection may change during refresh).
     try { _updateModeBadge(); } catch (e) {}
     try { _updateFileScopedTooltips(); } catch (e) {}
+    try { syncShellState(); } catch (e) {}
 
     // Wire refresh button (once)
     try {
@@ -1017,7 +1391,16 @@
       if (btn && !btn.dataset.xkWired) {
         btn.addEventListener('click', async (e) => {
           e.preventDefault();
+          const prev = getActiveFragment();
+          const prevDir = _fragmentDir;
           await refreshFragmentsList({ notify: true });
+          const next = getActiveFragment();
+          if (!next || next === prev) return;
+          await guardFragmentSwitch(next, prev, {
+            onCancel: () => restoreFragmentSelection(sel, prev, prevDir, _fragmentItems),
+            beforeSwitch: () => { try { saveCurrentViewState(); } catch (e2) {} },
+            commit: async () => { await load(); },
+          });
         });
         btn.dataset.xkWired = '1';
       }
@@ -1045,12 +1428,18 @@
     if (msg) toast(msg, !!isError);
   }
 
-	  function _getSavedContent() {
-	    try {
-	      return (typeof window.routingSavedContent === 'string') ? window.routingSavedContent : '';
-	    } catch (e) {}
-	    return '';
-	  }
+  function _getSavedContent() {
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.getSavedContent === 'function') {
+      try {
+        return String(shell.getSavedContent() || '');
+      } catch (e) {}
+    }
+    try {
+      return (typeof window.routingSavedContent === 'string') ? window.routingSavedContent : '';
+    } catch (e) {}
+    return '';
+  }
 
 	  function _isDirtyText(current, saved) {
 	    const cur = String(current ?? '');
@@ -1068,7 +1457,8 @@
 	      try { dirty = _isDirtyText(getEditorSnapshot().text, _getSavedContent()); } catch (e) { dirty = false; }
 	    }
 
-	    try { window.routingIsDirty = !!dirty; } catch (e) {}
+    try { setRoutingDirty(!!dirty); } catch (e) {}
+      try { syncRoutingDirtyContract(!!dirty); } catch (e) {}
 	    try {
 	      const saveBtn = $(IDS.btnSave);
 	      if (saveBtn) saveBtn.classList.toggle('dirty', !!dirty);
@@ -1110,7 +1500,7 @@
 	        detail: {
 	          reason: String(reason || 'change'),
 	          engine: String(_engine || ''),
-	          dirty: !!(typeof window !== 'undefined' && window.routingIsDirty),
+	          dirty: isRoutingDirty(),
 	          file: String(getActiveFragment() || ''),
 	          profile: snapshot && snapshot.perf ? {
 	            lite: !!snapshot.perf.lite,
@@ -1245,9 +1635,6 @@ function ensureHelpModal() {
   function close() { closeHelp(); }
   closeBtn.addEventListener('click', close);
   okBtn.addEventListener('click', close);
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) close();
-  });
 
   document.body.appendChild(modal);
   return modal;
@@ -1255,15 +1642,27 @@ function ensureHelpModal() {
 
 function openHelp() {
   const modal = ensureHelpModal();
-  modal.classList.remove('hidden');
-  try { document.body.classList.add('modal-open'); } catch (e) {}
+  const api = getModalApi();
+  try {
+    if (api && typeof api.open === 'function') api.open(modal, { source: 'routing_help_modal' });
+    else modal.classList.remove('hidden');
+  } catch (e) {}
+  try {
+    if (!api || typeof api.open !== 'function') document.body.classList.add('modal-open');
+  } catch (e2) {}
 }
 
 function closeHelp() {
   const modal = document.getElementById(HELP_MODAL_ID);
   if (!modal) return;
-  modal.classList.add('hidden');
-  try { document.body.classList.remove('modal-open'); } catch (e) {}
+  const api = getModalApi();
+  try {
+    if (api && typeof api.close === 'function') api.close(modal, { source: 'routing_help_modal' });
+    else modal.classList.add('hidden');
+  } catch (e) {}
+  try {
+    if (!api || typeof api.close !== 'function') document.body.classList.remove('modal-open');
+  } catch (e2) {}
 }
 
   function shouldAutoRestartAfterSave() {
@@ -1276,24 +1675,10 @@ function closeHelp() {
       if (_errorMarker && typeof _errorMarker.clear === 'function') _errorMarker.clear();
     } catch (e) {}
     _errorMarker = null;
-    try {
-      if (_cm && typeof _cm.setGutterMarker === 'function' && Number.isFinite(_errorGutterLine)) {
-        _cm.setGutterMarker(_errorGutterLine, 'CodeMirror-lint-markers', null);
-      }
-    } catch (e2) {}
+    try { clearCodeMirrorDiagnostics(); } catch (e2) {}
     _errorGutterLine = null;
   }
 
-  function createRoutingErrorGutterMarker(message) {
-    const marker = document.createElement('span');
-    marker.className = 'xk-routing-error-gutter-marker';
-    marker.textContent = '×';
-    try {
-      const msg = String(message || '').trim();
-      if (msg) marker.title = msg;
-    } catch (e) {}
-    return marker;
-  }
 
   function clearJsonErrorLocation() {
     _lastJsonErrorLocation = null;
@@ -1437,7 +1822,7 @@ function closeHelp() {
       } catch (e) {}
     }
 
-    if (_cm && _cm.getDoc) {
+    if (_cm) {
       try {
         let line0 = Number.isFinite(loc.line) ? Math.max(0, loc.line - 1) : null;
         let ch0 = Number.isFinite(loc.col) ? Math.max(0, loc.col - 1) : null;
@@ -1448,10 +1833,12 @@ function closeHelp() {
         }
         line0 = Math.max(0, Number(line0 || 0));
         ch0 = Math.max(0, Number(ch0 || 0));
-        const doc = _cm.getDoc();
-        doc.setCursor({ line: line0, ch: ch0 });
-        if (_cm.scrollIntoView) _cm.scrollIntoView({ line: line0, ch: ch0 }, 120);
-        if (_cm.focus) _cm.focus();
+        if (typeof _cm.setCursor === 'function') _cm.setCursor({ line: line0, ch: ch0 });
+        else if (typeof _cm.setSelections === 'function') _cm.setSelections([{ anchor: { line: line0, ch: ch0 }, head: { line: line0, ch: ch0 } }]);
+        if (typeof _cm.revealLine === 'function') _cm.revealLine(line0 + 1);
+        else if (typeof _cm.scrollIntoView === 'function') _cm.scrollIntoView({ line: line0, ch: ch0 }, 120);
+        else if (typeof _cm.scrollTo === 'function') _cm.scrollTo(null, Math.max(0, line0 * 20));
+        if (typeof _cm.focus === 'function') _cm.focus();
         return true;
       } catch (e) {}
     }
@@ -1466,31 +1853,31 @@ function closeHelp() {
     if (errEl) errEl.textContent = String(message ?? '');
     if (!String(message ?? '')) clearJsonErrorLocation();
 
-    // Always clear previous CM marker (if any).
     clearErrorMarker();
 
-    // In Monaco mode we don't create CodeMirror line markers.
-    // Monaco editor markers are managed separately (runMonacoDiagnostics).
     if (_engine === 'monaco') return;
+    if (!_cm) return;
 
-    if (!_cm || !_cm.getDoc) return;
+    if (!String(message ?? '')) {
+      clearCodeMirrorDiagnostics();
+      return;
+    }
 
-    if (typeof line !== 'number' || line < 0) return;
-    try {
-      const doc = _cm.getDoc();
-      const lineText = doc.getLine(line) || '';
-      _errorMarker = doc.markText(
-        { line, ch: 0 },
-        { line, ch: Math.max(1, lineText.length) },
-        { className: 'cm-error-line' }
-      );
-      if (!shouldUseCodeMirrorLintAddon() && typeof _cm.setGutterMarker === 'function') {
-        _cm.setGutterMarker(line, 'CodeMirror-lint-markers', createRoutingErrorGutterMarker(message));
-        _errorGutterLine = line;
+    if (typeof line === 'number' && line >= 0) {
+      applyCodeMirrorDiagnostics([{
+        line: Math.max(1, line + 1),
+        column: 1,
+        length: 1,
+        severity: 'error',
+        source: 'routing-jsonc',
+        message: String(message || 'JSON parse error'),
+      }]);
+      if (autoScroll) {
+        try {
+          if (typeof _cm.revealLine === 'function') _cm.revealLine(line + 1);
+          else if (typeof _cm.scrollIntoView === 'function') _cm.scrollIntoView({ line, ch: 0 }, 200);
+        } catch (e) {}
       }
-      if (autoScroll && _cm.scrollIntoView) _cm.scrollIntoView({ line, ch: 0 }, 200);
-    } catch (e) {
-      // ignore
     }
   }
 
@@ -1674,18 +2061,21 @@ function closeHelp() {
     return null;
   }
 
-  function probeCodeMirrorJsonLintLocation(cleanedText) {
+  function probeRuntimeJsonLintLocation(cleanedText) {
     try {
-      const CM = window.CodeMirror;
-      const helper = CM && CM.helpers && CM.helpers.lint ? CM.helpers.lint.json : null;
-      if (typeof helper !== 'function') return null;
-      const annotations = helper(String(cleanedText ?? '')) || [];
-      const ann = annotations && annotations.length ? annotations[0] : null;
-      if (!ann || !ann.from) return null;
+      const runtime = getEditorRuntime('codemirror', { mode: 'application/json' });
+      if (!runtime || typeof runtime.validateText !== 'function') return null;
+      const result = runtime.validateText(String(cleanedText ?? ''), { mode: 'application/json' }) || {};
+      const diagnostics = Array.isArray(result.diagnostics) ? result.diagnostics : [];
+      const diag = diagnostics.length ? diagnostics[0] : null;
+      if (!diag) return null;
+      const point = Number.isFinite(diag.line) && Number.isFinite(diag.column)
+        ? { line: Math.max(1, Math.floor(diag.line)), col: Math.max(1, Math.floor(diag.column)) }
+        : indexToMonacoLineCol(String(cleanedText ?? ''), Number.isFinite(diag.from) ? diag.from : 0);
       return {
-        message: String(ann.message || 'JSON parse error'),
-        line: Number.isFinite(ann.from.line) ? Math.max(1, ann.from.line + 1) : null,
-        col: Number.isFinite(ann.from.ch) ? Math.max(1, ann.from.ch + 1) : null,
+        message: String(diag.message || result.summary || 'JSON parse error'),
+        line: Number.isFinite(point && point.line) ? Math.max(1, Math.floor(point.line)) : null,
+        col: Number.isFinite(point && point.col) ? Math.max(1, Math.floor(point.col)) : null,
       };
     } catch (e) {}
     return null;
@@ -1713,7 +2103,7 @@ function closeHelp() {
     let probed = null;
 
     if (wantsParserProbe) {
-      probed = probeCodeMirrorJsonLintLocation(cleaned);
+      probed = probeRuntimeJsonLintLocation(cleaned);
       if (!probed) {
         probed = probeJsonlintErrorLocation(cleaned);
       }
@@ -1908,66 +2298,6 @@ function closeHelp() {
     } catch (e) {}
   }
 
-  function validate() {
-    // Monaco: show diagnostics as editor markers (debounced on input).
-    try {
-      if (_engine === 'monaco' && _monaco) return runMonacoDiagnostics();
-    } catch (e) {}
-
-    const raw = getEditorText();
-    const sm = stripJsonCommentsWithMap(raw);
-    const cleaned = sm.cleaned;
-
-    if (!String(raw ?? '').trim()) {
-      setError('Файл пуст. Введи корректный JSON.', null);
-      clearJsonErrorLocation();
-      _lastValidationState = { ok: false, message: 'Файл пуст' };
-      try { updateEditorMetaStatus(); } catch (e) {}
-      return false;
-    }
-
-    try {
-      const obj = JSON.parse(cleaned);
-      setError('', null);
-      clearJsonErrorLocation();
-      _maybeUpdateModeFromParsed(obj);
-      _lastValidationState = { ok: true, message: 'JSON корректен' };
-      try { updateEditorMetaStatus(); } catch (e) {}
-      return true;
-    } catch (e) {
-      const loc = extractJsonErrorLocation(e, raw, sm);
-      const errMsg = 'Ошибка JSON: ' + String(loc && loc.message ? loc.message : (e && e.message ? e.message : e));
-      setError(errMsg, loc.line - 1);
-      setJsonErrorLocation({ line: loc.line, col: loc.col, index: loc.index });
-      _lastValidationState = { ok: false, message: errMsg };
-      try { updateEditorMetaStatus(); } catch (e2) {}
-      return false;
-    }
-  }
-
-  function jsoncLint(text) {
-    // CodeMirror lint adapter: return array of annotations
-    const raw = String(text ?? '');
-    const sm = stripJsonCommentsWithMap(raw);
-    const cleaned = sm.cleaned;
-
-    try {
-      JSON.parse(cleaned);
-      return [];
-    } catch (e) {
-      const loc = extractJsonErrorLocation(e, raw, sm);
-
-      return [
-        {
-          from: { line: Math.max(0, loc.line - 1), ch: Math.max(0, loc.col - 1) },
-          to: { line: Math.max(0, loc.line - 1), ch: Math.max(0, loc.col) },
-          message: String(loc && loc.message ? loc.message : ((e && e.message) ? e.message : 'JSON parse error')),
-          severity: 'error',
-        },
-      ];
-    }
-  }
-
   async function load() {
     const statusEl = $(IDS.status);
     if (statusEl) statusEl.textContent = 'Загрузка файла…';
@@ -2009,8 +2339,8 @@ function closeHelp() {
 
       try {
         // Keep compatibility with existing monolith flags, if present.
-        window.routingSavedContent = text;
-        window.routingIsDirty = false;
+        setRoutingSavedContent(text);
+        setRoutingDirty(false);
         const saveBtn = $(IDS.btnSave);
         if (saveBtn) saveBtn.classList.remove('dirty');
       } catch (e) {}
@@ -2146,8 +2476,8 @@ function closeHelp() {
         // Saving always writes the JSONC sidecar.
         _setCommentsBadge(true, true, '');
         try {
-          window.routingSavedContent = rawText;
-          window.routingIsDirty = false;
+          setRoutingSavedContent(rawText);
+          setRoutingDirty(false);
           const saveBtn2 = $(IDS.btnSave);
           if (saveBtn2) saveBtn2.classList.remove('dirty');
         } catch (e) {}
@@ -2411,20 +2741,6 @@ function closeHelp() {
     return false;
   }
 
-  function jsoncLint(text) {
-    const analysis = getJsoncAnalysis(String(text ?? ''), { preciseLocation: !isWebKitSafari() });
-    if (analysis.ok) return [];
-
-    const loc = analysis.loc || { line: 1, col: 1 };
-    return [
-      {
-        from: { line: Math.max(0, loc.line - 1), ch: Math.max(0, loc.col - 1) },
-        to: { line: Math.max(0, loc.line - 1), ch: Math.max(0, loc.col) },
-        message: String(analysis.message || 'JSON parse error'),
-        severity: 'error',
-      },
-    ];
-  }
 
   async function resetToSaved() {
     const saved = _getSavedContent();
@@ -2455,7 +2771,7 @@ function closeHelp() {
       try { _suppressDirty = Math.max(0, _suppressDirty - 1); } catch (e) { _suppressDirty = 0; }
     }
 
-    try { window.routingIsDirty = false; } catch (e) {}
+    try { setRoutingDirty(false); } catch (e) {}
     try { syncDirtyUi(false); } catch (e) {}
     try { saveCurrentViewState(); } catch (e) {}
 
@@ -2682,7 +2998,8 @@ function closeHelp() {
     }
   }
 
-  async function restoreAuto() {
+  async function restoreAuto(opts) {
+    const o = (opts && typeof opts === 'object') ? opts : {};
     const statusEl = $(IDS.status);
     const file = getActiveFragment();
 
@@ -2702,7 +3019,9 @@ function closeHelp() {
       label = file ? String(file).split(/[\\/]/).pop() : 'выбранный файл';
     }
 
-    if (!confirm('Восстановить из авто-бэкапа файл ' + label + '?')) return;
+    if (!o.confirmed) {
+      if (!confirm('Восстановить из авто-бэкапа файл ' + label + '?')) return;
+    }
 
     try {
       let endpoint = '/api/restore-auto';
@@ -2791,8 +3110,8 @@ function closeHelp() {
     });
 	    wireButton(IDS.btnReset, resetToSaved);
     wireButton(IDS.btnFormat, format);
-    wireButton(IDS.btnBackup, backup);
-    wireButton(IDS.btnRestoreAuto, restoreAuto);
+    bindConfigAction(IDS.btnBackup, backup, { kind: 'backup' });
+    bindConfigAction(IDS.btnRestoreAuto, () => restoreAuto({ confirmed: true }), { kind: 'restoreAuto' });
 
     // Optional utilities
     wireButton(IDS.btnClearComments, clearComments);
@@ -2814,46 +3133,16 @@ function closeHelp() {
       fragSel.addEventListener('change', async (e) => {
         const next = String(fragSel.value || '');
         if (!next) return;
-
-        // If there are unsaved changes, ask before switching.
-        let dirty = false;
-        try { dirty = !!window.routingIsDirty; } catch (e) {}
-        if (dirty) {
-          const ok = await (window.XKeen && window.XKeen.ui && typeof window.XKeen.ui.confirm === 'function'
-            ? window.XKeen.ui.confirm({
-                title: 'Несохранённые изменения',
-                message: 'В редакторе есть несохранённые изменения. Переключить файл и потерять их?',
-                okText: 'Переключить',
-                cancelText: 'Остаться',
-                danger: true,
-              })
-            : Promise.resolve(window.confirm('Есть несохранённые изменения. Переключить файл и потерять их?')));
-          if (!ok) {
-            // revert selection
-            try { fragSel.value = _activeFragment || fragSel.value; } catch (e) {}
-            return;
-          }
-        }
-
-        try { saveCurrentViewState(); } catch (e) {}
-        _activeFragment = next;
-        rememberActiveFragment(_activeFragment);
-        try {
-          const dir = fragSel.dataset && fragSel.dataset.dir ? String(fragSel.dataset.dir) : '';
-          updateActiveFileLabel((dir ? dir.replace(/\/+$/, '') + '/' : '') + _activeFragment, dir);
-        } catch (e2) {}
-
-        // Update tooltips immediately so actions are self-documenting even before load() completes.
-        try { _updateFileScopedTooltips(); } catch (e) {}
-        try { _updateModeBadge(); } catch (e) {}
-
-        // Keep legacy global in sync for labels
-        try {
-          const dir2 = fragSel.dataset && fragSel.dataset.dir ? String(fragSel.dataset.dir) : '';
-          if (window.XKEEN_FILES) window.XKEEN_FILES.routing = (dir2 ? dir2.replace(/\/+$/, '') + '/' : '') + _activeFragment;
-        } catch (e3) {}
-
-        await load();
+        const prev = _activeFragment || String(fragSel.dataset.current || '');
+        const dir = fragSel.dataset && fragSel.dataset.dir ? String(fragSel.dataset.dir) : _fragmentDir;
+        await guardFragmentSwitch(next, prev, {
+          onCancel: () => restoreFragmentSelection(fragSel, prev, dir, _fragmentItems),
+          beforeSwitch: () => { try { saveCurrentViewState(); } catch (e2) {} },
+          commit: async () => {
+            applyActiveFragment(next, dir);
+            await load();
+          },
+        });
       });
       if (fragSel.dataset) fragSel.dataset.xkeenWired = '1';
     }
@@ -2864,11 +3153,23 @@ function closeHelp() {
       try { allCb.checked = restoreFragmentsScopeAll(); } catch (e) {}
       allCb.addEventListener('change', async () => {
         const enabled = !!allCb.checked;
+        const prevEnabled = !enabled;
         const prevSel = getActiveFragment();
+        const prevDir = _fragmentDir;
         rememberFragmentsScopeAll(enabled);
         await refreshFragmentsList({ notify: true, scopeChanged: enabled ? 'on' : 'off', prevSelection: prevSel });
-        // Do not auto-switch file here: keep selection. Reload content so the editor stays consistent.
-        try { await load(); } catch (e) {}
+        const nextSel = getActiveFragment();
+        if (!nextSel || nextSel === prevSel) return;
+        await guardFragmentSwitch(nextSel, prevSel, {
+          onCancel: async () => {
+            try { allCb.checked = prevEnabled; } catch (e2) {}
+            rememberFragmentsScopeAll(prevEnabled);
+            await refreshFragmentsList({ notify: false, prevSelection: prevSel });
+            restoreFragmentSelection($(IDS.fragmentSelect), prevSel, prevDir, _fragmentItems);
+          },
+          beforeSwitch: () => { try { saveCurrentViewState(); } catch (e2) {} },
+          commit: async () => { await load(); },
+        });
       });
       if (allCb.dataset) allCb.dataset.xkWired = '1';
     }
@@ -2919,10 +3220,13 @@ function closeHelp() {
 
   function createEditor() {
     const textarea = $(IDS.textarea);
-    if (!textarea || !window.CodeMirror) return null;
+    if (!textarea) return null;
 
     const existing = getExistingRoutingCodeMirror(textarea);
     if (existing) return existing;
+
+    const runtime = getEditorRuntime('codemirror', { mode: 'application/jsonc', allowComments: true });
+    if (!runtime || typeof runtime.create !== 'function') return null;
 
     const initialLite = computeEditorPerfProfile(textarea.value || '').lite;
     const safari = isWebKitSafari();
@@ -2946,10 +3250,10 @@ function closeHelp() {
       'Shift-Ctrl-H': 'replaceAll',
     });
 
-    const cm = window.CodeMirror.fromTextArea(textarea, {
-      // Routing supports JSON with comments (raw *.jsonc is saved alongside the
-      // cleaned JSON for xray), so enable commenting in the editor.
-      mode: { name: 'javascript', json: true },
+    const cm = runtime.create(textarea, {
+      mode: 'application/jsonc',
+      language: 'jsonc',
+      allowComments: true,
       theme: 'material-darker',
       lineNumbers: true,
       styleActiveLine: !initialLite,
@@ -2968,32 +3272,12 @@ function closeHelp() {
           : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']),
       maxHighlightLength: initialLite ? PERF_LIMITS.highlightLengthLite : 10000,
       crudeMeasuringFrom: initialLite ? PERF_LIMITS.measureFromLite : 10000,
-
-      // Prefer brace+comment folding when available (requires addon/fold/comment-fold.js)
-      foldOptions: (function() {
-        try {
-          const F = window.CodeMirror && window.CodeMirror.fold;
-          if (!F) return undefined;
-          const finders = [];
-          if (typeof F.brace === 'function') finders.push(F.brace);
-          if (typeof F.comment === 'function') finders.push(F.comment);
-          if (finders.length >= 2 && typeof F.combine === 'function') return { rangeFinder: F.combine.apply(null, finders) };
-          if (finders.length === 1) return { rangeFinder: finders[0] };
-          return undefined;
-        } catch (e) {
-          return undefined;
-        }
-      })(),
-
-      // IMPORTANT: JSONC-aware lint (strip comments first)
-      lint: buildRoutingLintOptions(initialLite),
-
+      lint: true,
       tabSize: 2,
       indentUnit: 2,
       indentWithTabs: false,
       extraKeys,
-      // Continue line/block comments on Enter (requires addon/comment/continuecomment.js)
-      continueComments: true,
+      links: !initialLite && !safari,
       viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : (safari ? PERF_LIMITS.viewportMarginWebkit : Infinity),
     });
 
@@ -3007,6 +3291,7 @@ function closeHelp() {
         wrapper.classList.add('xkeen-cm');
         wrapper.classList.toggle('xk-cm-lite', !!initialLite);
         try { textarea.__xkRoutingCodeMirror = cm; } catch (e) {}
+        try { wrapper.__xkRoutingCodeMirror = cm; } catch (e2) {}
         cleanupRoutingCodeMirrorWrappers(wrapper);
         if (typeof window.xkeenAttachCmToolbar === 'function' && window.XKEEN_CM_TOOLBAR_DEFAULT) {
           const base = Array.isArray(window.XKEEN_CM_TOOLBAR_DEFAULT) ? window.XKEEN_CM_TOOLBAR_DEFAULT : [];
@@ -3086,6 +3371,8 @@ function closeHelp() {
 
   function ensureCodeMirrorEditor() {
     if (_cm && typeof _cm.getWrapperElement === 'function') {
+      if (!_cmFacade) _cmFacade = createRoutingCodeMirrorFacade(_cm);
+      try { syncSharedRoutingEditor(_cm, _cmFacade, 'codemirror'); } catch (e) {}
       try { moveToolbarToHost(_cm); } catch (e) {}
       try { syncRoutingToolbarUi('codemirror'); } catch (e) {}
       return _cm;
@@ -3095,7 +3382,8 @@ function closeHelp() {
     if (!cm) return null;
 
     _cm = cm;
-    try { XKeen.state.routingEditor = _cm; } catch (e) {}
+    _cmFacade = createRoutingCodeMirrorFacade(_cm);
+    try { syncSharedRoutingEditor(_cm, _cmFacade, 'codemirror'); } catch (e) {}
     try { moveToolbarToHost(_cm); } catch (e) {}
     try { syncRoutingToolbarUi('codemirror'); } catch (e) {}
     return _cm;
@@ -3560,27 +3848,95 @@ function closeHelp() {
     return host;
   }
 
-  function _getMonacoShared() {
+  function _getEditorEngineHelper() {
     try {
-      return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null;
+      return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null;
     } catch (e) {}
     return null;
   }
 
-  async function ensureMonacoSharedApi() {
-    const existing = _getMonacoShared();
-    if (existing && typeof existing.createEditor === 'function') return existing;
+  const CM6_SCOPE = 'routing';
 
+  function withCm6Scope(opts) {
+    return Object.assign({ cm6Scope: CM6_SCOPE, scope: CM6_SCOPE }, opts || {});
+  }
+
+  function getRoutingCm6Runtime() {
     try {
-      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
-      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
-        const ok = await lazy.ensureMonacoSupport();
-        if (!ok) return null;
-      }
+      return (window.XKeen && XKeen.ui && XKeen.ui.cm6Runtime) ? XKeen.ui.cm6Runtime : null;
     } catch (e) {}
+    return null;
+  }
 
-    const loaded = _getMonacoShared();
-    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+  function getEditorRuntime(engine, opts) {
+    const next = normalizeEngine(engine);
+    if (next === 'codemirror') {
+      const cm6 = getRoutingCm6Runtime();
+      if (cm6 && typeof cm6.create === 'function') return cm6;
+      return null;
+    }
+    const helper = _getEditorEngineHelper();
+    if (!helper || typeof helper.getRuntime !== 'function') return null;
+    try { return helper.getRuntime(next, withCm6Scope(opts)); } catch (e) {}
+    return null;
+  }
+
+  async function ensureEditorRuntime(engine, opts) {
+    const next = normalizeEngine(engine);
+    const scopedOpts = withCm6Scope(opts);
+    const helper = _getEditorEngineHelper();
+
+    if (next === 'codemirror') {
+      try {
+        if (helper && typeof helper.ensureSupport === 'function') {
+          await helper.ensureSupport('codemirror', scopedOpts);
+        }
+      } catch (e) {}
+      const cm6 = getRoutingCm6Runtime();
+      if (!cm6) return null;
+      try {
+        if (typeof cm6.ensure === 'function') await cm6.ensure(scopedOpts);
+      } catch (e) {}
+      return (typeof cm6.create === 'function') ? cm6 : null;
+    }
+
+    if (!helper) return null;
+    try {
+      if (typeof helper.ensureRuntime === 'function') return await helper.ensureRuntime(next, scopedOpts);
+      if (typeof helper.getRuntime === 'function') return helper.getRuntime(next, scopedOpts);
+    } catch (e) {}
+    return null;
+  }
+
+  function createRoutingCodeMirrorFacade(cm) {
+    if (!cm) return null;
+    const helper = _getEditorEngineHelper();
+    if (!helper || typeof helper.fromCodeMirror !== 'function') return null;
+    try {
+      return helper.fromCodeMirror(cm, {
+        validate: () => validate(),
+        layout: () => {
+          try { cm.refresh(); } catch (e) {}
+        },
+      });
+    } catch (e) {}
+    return null;
+  }
+
+  function createRoutingMonacoFacade(editor) {
+    if (!editor) return null;
+    const helper = _getEditorEngineHelper();
+    if (!helper || typeof helper.fromMonaco !== 'function') return null;
+    try {
+      return helper.fromMonaco(editor, { validate: () => validate() });
+    } catch (e) {}
+    return null;
+  }
+
+  function getActiveEditorFacade() {
+    if (_engine === 'monaco' && _monacoFacade) return _monacoFacade;
+    if (_cmFacade) return _cmFacade;
+    return null;
   }
 
   function resetMonacoHostDom(hostEl) {
@@ -3600,8 +3956,8 @@ function closeHelp() {
     const host = ensureMonacoHost();
     if (!host) return null;
 
-    const ms = await ensureMonacoSharedApi();
-    if (!ms || typeof ms.createEditor !== 'function') {
+    const runtime = await ensureEditorRuntime('monaco');
+    if (!runtime || typeof runtime.create !== 'function') {
       toast('Не удалось загрузить Monaco support.', true);
       return null;
     }
@@ -3615,7 +3971,7 @@ function closeHelp() {
       resetMonacoHostDom(host);
 
       try {
-        _monaco = await ms.createEditor(host, {
+        _monaco = await runtime.create(host, {
           value: readCurrentEditorText(),
           // Xray configs commonly use JSON with user comments (JSONC-like).
           // Backend сохраняет чистый JSON + отдельный .jsonc сайдкар, поэтому в UI
@@ -3640,30 +3996,13 @@ function closeHelp() {
           return null;
         }
 
-        // Facade for modules expecting CodeMirror-like API (getValue/setValue/scrollTo).
-        try {
-          _monacoFacade = (typeof ms.toFacade === 'function') ? ms.toFacade(_monaco) : null;
-        } catch (e) {
-          _monacoFacade = null;
-        }
-
-        if (!_monacoFacade) {
-          _monacoFacade = {
-            getValue: () => { try { return _monaco.getValue(); } catch (e) { return ''; } },
-            setValue: (v) => { try { _monaco.setValue(String(v ?? '')); } catch (e) {} },
-            focus: () => { try { _monaco.focus(); } catch (e) {} },
-            scrollTo: (_x, y) => {
-              try {
-                if (typeof y === 'number') _monaco.setScrollTop(Math.max(0, y));
-                else _monaco.setScrollTop(0);
-              } catch (e) {}
-            },
-          };
-        }
+        // Facade for routing consumers so feature modules stay engine-agnostic.
+        _monacoFacade = createRoutingMonacoFacade(_monaco);
+        try { syncSharedRoutingEditor(_monaco, _monacoFacade, 'monaco'); } catch (e) {}
 
         // Ensure layout fix for hidden containers (modals/tabs/engine switch).
         try {
-          if (typeof ms.layoutOnVisible === 'function') ms.layoutOnVisible(_monaco, host, { lite: !!(_editorPerfProfile && _editorPerfProfile.lite) });
+          if (typeof runtime.layoutOnVisible === 'function') runtime.layoutOnVisible(_monaco, host, { lite: !!(_editorPerfProfile && _editorPerfProfile.lite) });
         } catch (e) {}
 
         try {
@@ -3736,12 +4075,14 @@ function closeHelp() {
     const ta = $(IDS.textarea);
     if (!ta) return [];
     try {
-      const all = Array.from(document.querySelectorAll('.CodeMirror'));
+      const cached = ta.__xkRoutingCodeMirror;
+      const cachedWrap = cached && typeof cached.getWrapperElement === 'function' ? cached.getWrapperElement() : null;
+      const all = Array.from(document.querySelectorAll('.CodeMirror, .xkeen-cm6-host'));
       return all.filter((wrap) => {
         try {
-          const cm = wrap && wrap.CodeMirror;
-          if (!cm || typeof cm.getTextArea !== 'function') return false;
-          return cm.getTextArea() === ta;
+          const cm = (wrap && (wrap.__xkRoutingCodeMirror || wrap.CodeMirror)) || null;
+          if (cm && typeof cm.getTextArea === 'function') return cm.getTextArea() === ta;
+          return !!(cachedWrap && wrap === cachedWrap);
         } catch (e) {
           return false;
         }
@@ -3786,10 +4127,11 @@ function closeHelp() {
     for (let i = 0; i < wrappers.length; i += 1) {
       const wrap = wrappers[i];
       try {
-        const cm = wrap && wrap.CodeMirror;
+        const cm = (wrap && (wrap.__xkRoutingCodeMirror || wrap.CodeMirror)) || null;
         if (!cm || typeof cm.getWrapperElement !== 'function') continue;
         if (typeof cm.getTextArea === 'function' && cm.getTextArea() !== ta) continue;
         ta.__xkRoutingCodeMirror = cm;
+        try { wrap.__xkRoutingCodeMirror = cm; } catch (e2) {}
         cleanupRoutingCodeMirrorWrappers(wrap);
         return cm;
       } catch (e) {}
@@ -3834,9 +4176,9 @@ function closeHelp() {
     else host.style.setProperty('display', 'none', 'important');
 
     if (show && _monaco && typeof _monaco.layout === 'function') {
-      const ms = _getMonacoShared();
-      if (ms && typeof ms.layoutOnVisible === 'function') {
-        try { ms.layoutOnVisible(_monaco, host, { lite: !!(_editorPerfProfile && _editorPerfProfile.lite) }); } catch (e) {}
+      const runtime = getEditorRuntime('monaco');
+      if (runtime && typeof runtime.layoutOnVisible === 'function') {
+        try { runtime.layoutOnVisible(_monaco, host, { lite: !!(_editorPerfProfile && _editorPerfProfile.lite) }); } catch (e) {}
         return;
       }
 
@@ -3887,9 +4229,9 @@ function closeHelp() {
     const doLayout = () => {
       try {
         if (!_monaco || typeof _monaco.layout !== 'function') return;
-        const ms = _getMonacoShared();
-        if (ms && typeof ms.layoutOnVisible === 'function') {
-          ms.layoutOnVisible(_monaco, host, { lite: !!(_editorPerfProfile && _editorPerfProfile.lite) });
+        const runtime = getEditorRuntime('monaco');
+        if (runtime && typeof runtime.layoutOnVisible === 'function') {
+          runtime.layoutOnVisible(_monaco, host, { lite: !!(_editorPerfProfile && _editorPerfProfile.lite) });
           return;
         }
         _monaco.layout();
@@ -4019,11 +4361,10 @@ function closeHelp() {
       try { wireMonacoFullscreenOnce(); } catch (e) {}
 
       _engine = 'monaco';
-      // Expose facade so other modules (templates/cards) keep working
-      try { XKeen.state.routingEditor = _monacoFacade || XKeen.state.routingEditor; } catch (e) {}
+      try { syncSharedRoutingEditor(_monaco, _monacoFacade, 'monaco'); } catch (e) {}
       try { restoreViewState(preservedView); } catch (e) {}
       try { if (_monacoFacade && _monacoFacade.focus) _monacoFacade.focus(); } catch (e) {}
-      try { validate(); } catch (e) {}
+      try { if (_monacoFacade && _monacoFacade.validate) _monacoFacade.validate(); else validate(); } catch (e) {}
       try { saveCurrentViewState(); } catch (e) {}
     } else {
       const cm = ensureCodeMirrorEditor();
@@ -4052,10 +4393,14 @@ function closeHelp() {
       try { syncRoutingToolbarUi('codemirror'); } catch (e) {}
 
       _engine = 'codemirror';
-      try { XKeen.state.routingEditor = cm; } catch (e) {}
+      try { syncSharedRoutingEditor(cm, _cmFacade || createRoutingCodeMirrorFacade(cm), 'codemirror'); } catch (e) {}
       try { restoreViewState(preservedView); } catch (e) {}
       try { if (cm && cm.focus) cm.focus(); } catch (e) {}
-      try { validate(); } catch (e) {}
+      try {
+        const fac = _cmFacade || createRoutingCodeMirrorFacade(cm);
+        if (fac && fac.validate) fac.validate();
+        else validate();
+      } catch (e) {}
       try { saveCurrentViewState(); } catch (e) {}
     }
   }
@@ -4168,6 +4513,11 @@ function closeHelp() {
     if (_inited) return;
     _inited = true;
 
+    try {
+      const lifecycle = getFeatureLifecycle();
+      if (lifecycle && typeof lifecycle.setInitialized === 'function') lifecycle.setInitialized(true);
+    } catch (e) {}
+
     const startInit = (resolvedEngine) => {
       const initialEngine = normalizeEngine(resolvedEngine || getPreferredEngine()) || 'codemirror';
       const bootWithMonaco = initialEngine === 'monaco';
@@ -4175,11 +4525,9 @@ function closeHelp() {
       const finishInit = () => {
         if (!bootWithMonaco) {
           _cm = ensureCodeMirrorEditor();
-          try { XKeen.state.routingEditor = _cm; } catch (e) {}
+          try { syncSharedRoutingEditor(_cm, _cmFacade || createRoutingCodeMirrorFacade(_cm), 'codemirror'); } catch (e) {}
           try { syncRoutingEngineDomState(_engine); } catch (e2) {}
-          try {
-            if (!shouldManualCodeMirrorLint() && _cm && typeof _cm.performLint === 'function') _cm.performLint();
-          } catch (e3) {}
+          try { syncCodeMirrorLintNow(); } catch (e3) {}
         } else {
           try { syncRoutingEngineDomState('monaco'); } catch (e4) {}
         }
@@ -4215,23 +4563,36 @@ function closeHelp() {
       };
 
       try {
-        const loader = (window.XKeen && XKeen.cmLoader) ? XKeen.cmLoader : null;
-        if (loader && typeof loader.ensureEditorAssets === 'function') {
-          Promise.resolve(loader.ensureEditorAssets({
-            mode: 'jsonc',
-            jsonLint: true,
-            search: true,
-            fold: true,
-            fullscreen: true,
-            rulers: true,
-            autoCloseBrackets: true,
-            trailingSpace: true,
-            comments: true,
-          }))
-            .catch(() => null)
-            .finally(finishInit);
-          return;
-        }
+        Promise.resolve(ensureEditorRuntime('codemirror', {
+          mode: 'jsonc',
+          jsonLint: true,
+          search: true,
+          fold: true,
+          fullscreen: true,
+          rulers: true,
+          autoCloseBrackets: true,
+          trailingSpace: true,
+          comments: true,
+        }))
+          .then((runtime) => {
+            if (runtime && typeof runtime.ensureAssets === 'function') {
+              return runtime.ensureAssets({
+                mode: 'jsonc',
+                jsonLint: true,
+                search: true,
+                fold: true,
+                fullscreen: true,
+                rulers: true,
+                autoCloseBrackets: true,
+                trailingSpace: true,
+                comments: true,
+              });
+            }
+            return null;
+          })
+          .catch(() => null)
+          .finally(finishInit);
+        return;
       } catch (e) {}
 
       finishInit();
@@ -4260,12 +4621,12 @@ function closeHelp() {
     try { validate(); } catch (e) {}
 
     if (o.markDirty === true) {
-      try { window.routingIsDirty = true; } catch (e) {}
+      try { setRoutingDirty(true); } catch (e) {}
       try { syncDirtyUi(true); } catch (e) {}
     } else if (o.markDirty === false) {
       try {
-        window.routingSavedContent = String(text ?? '');
-        window.routingIsDirty = false;
+        setRoutingSavedContent(String(text ?? ''));
+        setRoutingDirty(false);
       } catch (e) {}
       try { syncDirtyUi(false); } catch (e) {}
     } else {

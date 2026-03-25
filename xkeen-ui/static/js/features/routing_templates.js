@@ -61,7 +61,9 @@ editEngineSelect: 'routing-template-edit-engine-select',
 
   let _editOriginalFilename = '';
   let _editCm = null;
+  let _editCmFacade = null;
   let _previewCm = null;
+  let _previewCmFacade = null;
 
   // Monaco state (lazy; created only when engine=monaco)
   let _previewMonaco = null;
@@ -73,6 +75,8 @@ editEngineSelect: 'routing-template-edit-engine-select',
   let _editKind = 'codemirror';
 
   let _engineSyncing = false;
+  let _previewViewStateStore = null;
+  let _editViewStateStore = null;
 
   function currentCmTheme() {
     try {
@@ -84,6 +88,23 @@ editEngineSelect: 'routing-template-edit-engine-select',
 
   function el(id) {
     return document.getElementById(id);
+  }
+
+  function getRoutingShellApi() {
+    try {
+      if (window.XKeen && XKeen.features && XKeen.features.routingShell) return XKeen.features.routingShell;
+    } catch (e) {}
+    return null;
+  }
+
+  function getRoutingEditor() {
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.getEditorInstance === 'function') {
+      try {
+        return shell.getEditorInstance();
+      } catch (e) {}
+    }
+    return null;
   }
 
   function setStatus(msg, isError) {
@@ -108,24 +129,273 @@ editEngineSelect: 'routing-template-edit-engine-select',
     try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
   }
 
-  function getMonacoShared() {
-    try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
+  const CM6_SCOPE = 'routing-templates';
+
+  function withCm6Scope(opts) {
+    return Object.assign({ cm6Scope: CM6_SCOPE, scope: CM6_SCOPE }, opts || {});
   }
 
-  async function ensureMonacoSharedApi() {
-    const existing = getMonacoShared();
-    if (existing && typeof existing.createEditor === 'function') return existing;
+  function getEditorRuntime(engine, opts) {
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.getRuntime !== 'function') return null;
+    try { return helper.getRuntime(engine, withCm6Scope(opts)); } catch (e) {}
+    return null;
+  }
 
+  async function ensureEditorRuntime(engine, opts) {
+    const helper = getEngineHelper();
+    if (!helper) return null;
     try {
-      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
-      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
-        const ok = await lazy.ensureMonacoSupport();
-        if (!ok) return null;
+      if (typeof helper.ensureRuntime === 'function') return await helper.ensureRuntime(engine, withCm6Scope(opts));
+      if (typeof helper.getRuntime === 'function') return helper.getRuntime(engine, withCm6Scope(opts));
+    } catch (e) {}
+    return null;
+  }
+
+  function isCm6Runtime(runtime) {
+    try { return !!(runtime && runtime.backend === 'cm6'); } catch (e) {}
+    return false;
+  }
+
+  function isCm6Editor(editor) {
+    try {
+      if (!editor) return false;
+      if (editor.__xkeenCm6Bridge || editor.backend === 'cm6') return true;
+      const wrap = (typeof editor.getWrapperElement === 'function') ? editor.getWrapperElement() : null;
+      return !!(wrap && wrap.classList && wrap.classList.contains('xkeen-cm6-editor'));
+    } catch (e) {}
+    return false;
+  }
+
+  function disposeCodeMirrorEditor(editor) {
+    if (!editor) return false;
+    try { if (typeof editor.dispose === 'function') return !!editor.dispose(); } catch (e) {}
+    try {
+      if (typeof editor.toTextArea === 'function') {
+        editor.toTextArea();
+        return true;
       }
     } catch (e) {}
+    return false;
+  }
 
-    const loaded = getMonacoShared();
-    return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
+  function createCodeMirrorFacade(cm) {
+    if (!cm) return null;
+    const runtime = getEditorRuntime('codemirror');
+    if (runtime && typeof runtime.toFacade === 'function') {
+      try {
+        return runtime.toFacade(cm, {
+          layout: () => {
+            try { if (cm.layout) cm.layout(); else if (cm.refresh) cm.refresh(); } catch (e) {}
+          },
+        });
+      } catch (e) {}
+    }
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.fromCodeMirror !== 'function') return null;
+    try {
+      return helper.fromCodeMirror(cm, {
+        layout: () => {
+          try { if (cm.layout) cm.layout(); else if (cm.refresh) cm.refresh(); } catch (e) {}
+        },
+      });
+    } catch (e) {}
+    return null;
+  }
+
+  function createMonacoFacade(editor) {
+    if (!editor) return null;
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.fromMonaco !== 'function') return null;
+    try {
+      return helper.fromMonaco(editor);
+    } catch (e) {}
+    return null;
+  }
+
+  function previewActiveFacade() {
+    if (_previewKind === 'monaco' && _previewMonacoFacade) return _previewMonacoFacade;
+    if (_previewCmFacade) return _previewCmFacade;
+    return null;
+  }
+
+  function editActiveFacade() {
+    if (_editKind === 'monaco' && _editMonacoFacade) return _editMonacoFacade;
+    if (_editCmFacade) return _editCmFacade;
+    return null;
+  }
+
+  function getScopedViewStateStore(kind) {
+    const slot = String(kind || '').toLowerCase() === 'edit' ? 'edit' : 'preview';
+    if (slot === 'edit' && _editViewStateStore) return _editViewStateStore;
+    if (slot === 'preview' && _previewViewStateStore) return _previewViewStateStore;
+
+    const helper = getEngineHelper();
+    if (!helper || typeof helper.createViewStateStore !== 'function') return null;
+    try {
+      const store = helper.createViewStateStore({
+        buildKey: (ctx) => {
+          const filename = ctx && ctx.filename ? String(ctx.filename || '').trim() : '';
+          if (!filename) return '';
+          return 'xkeen.routing.templates.viewstate.v1::'
+            + slot
+            + '::'
+            + encodeURIComponent(filename);
+        },
+      });
+      if (slot === 'edit') _editViewStateStore = store;
+      else _previewViewStateStore = store;
+      return store;
+    } catch (e) {}
+    return null;
+  }
+
+  function getPreviewViewStateContext(filename) {
+    const value = String(filename || (_selected && _selected.filename) || '').trim();
+    if (!value) return null;
+    return { filename: value };
+  }
+
+  function getEditViewStateContext(filename) {
+    const value = String(filename || _editOriginalFilename || '').trim();
+    if (!value) return null;
+    return { filename: value };
+  }
+
+  function capturePreviewViewState() {
+    const store = getScopedViewStateStore('preview');
+    if (!store || typeof store.capture !== 'function') return null;
+    return store.capture({
+      engine: _previewKind,
+      facade: previewActiveFacade(),
+      textarea: el(IDS.preview),
+      capture: () => {
+        const fac = previewActiveFacade();
+        if (fac && typeof fac.saveViewState === 'function') {
+          return fac.saveViewState({ memoryOnly: true });
+        }
+        return null;
+      },
+    });
+  }
+
+  function savePreviewViewState(opts) {
+    const store = getScopedViewStateStore('preview');
+    const ctx = getPreviewViewStateContext(opts && opts.filename ? opts.filename : null);
+    if (!store || !ctx || typeof store.save !== 'function') return null;
+    return store.save({
+      ctx,
+      engine: (opts && opts.engine) || _previewKind,
+      view: (opts && typeof opts.view !== 'undefined') ? opts.view : capturePreviewViewState(),
+    });
+  }
+
+  function loadPreviewViewState(filename, engine) {
+    const store = getScopedViewStateStore('preview');
+    const ctx = getPreviewViewStateContext(filename);
+    if (!store || !ctx || typeof store.load !== 'function') return null;
+    return store.load({ ctx, engine: engine || _previewKind });
+  }
+
+  function restorePreviewViewState(view) {
+    const store = getScopedViewStateStore('preview');
+    if (!store || typeof store.restore !== 'function') return false;
+    return !!store.restore({
+      engine: _previewKind,
+      facade: previewActiveFacade(),
+      textarea: el(IDS.preview),
+      view,
+    });
+  }
+
+  function bindPreviewViewStateTracking() {
+    const store = getScopedViewStateStore('preview');
+    const ctx = getPreviewViewStateContext();
+    if (!store || !ctx || typeof store.bind !== 'function') return;
+    store.bind({
+      ctx,
+      engine: _previewKind,
+      monaco: _previewKind === 'monaco' ? _previewMonaco : null,
+      codemirror: _previewKind === 'codemirror' ? _previewCm : null,
+      textarea: el(IDS.preview),
+      waitMs: 180,
+      capture: () => capturePreviewViewState(),
+    });
+  }
+
+  function clearPreviewViewStateTracking() {
+    const store = getScopedViewStateStore('preview');
+    if (!store) return;
+    try { if (typeof store.clearTimer === 'function') store.clearTimer(); } catch (e) {}
+    try { if (typeof store.clearBindings === 'function') store.clearBindings(); } catch (e2) {}
+  }
+
+  function captureEditViewState() {
+    const store = getScopedViewStateStore('edit');
+    if (!store || typeof store.capture !== 'function') return null;
+    return store.capture({
+      engine: _editKind,
+      facade: editActiveFacade(),
+      textarea: el(IDS.editContent),
+      capture: () => {
+        const fac = editActiveFacade();
+        if (fac && typeof fac.saveViewState === 'function') {
+          return fac.saveViewState({ memoryOnly: true });
+        }
+        return null;
+      },
+    });
+  }
+
+  function saveEditViewState(opts) {
+    const store = getScopedViewStateStore('edit');
+    const ctx = getEditViewStateContext(opts && opts.filename ? opts.filename : null);
+    if (!store || !ctx || typeof store.save !== 'function') return null;
+    return store.save({
+      ctx,
+      engine: (opts && opts.engine) || _editKind,
+      view: (opts && typeof opts.view !== 'undefined') ? opts.view : captureEditViewState(),
+    });
+  }
+
+  function loadEditViewState(filename, engine) {
+    const store = getScopedViewStateStore('edit');
+    const ctx = getEditViewStateContext(filename);
+    if (!store || !ctx || typeof store.load !== 'function') return null;
+    return store.load({ ctx, engine: engine || _editKind });
+  }
+
+  function restoreEditViewState(view) {
+    const store = getScopedViewStateStore('edit');
+    if (!store || typeof store.restore !== 'function') return false;
+    return !!store.restore({
+      engine: _editKind,
+      facade: editActiveFacade(),
+      textarea: el(IDS.editContent),
+      view,
+    });
+  }
+
+  function bindEditViewStateTracking() {
+    const store = getScopedViewStateStore('edit');
+    const ctx = getEditViewStateContext();
+    if (!store || !ctx || typeof store.bind !== 'function') return;
+    store.bind({
+      ctx,
+      engine: _editKind,
+      monaco: _editKind === 'monaco' ? _editMonaco : null,
+      codemirror: _editKind === 'codemirror' ? _editCm : null,
+      textarea: el(IDS.editContent),
+      waitMs: 180,
+      capture: () => captureEditViewState(),
+    });
+  }
+
+  function clearEditViewStateTracking() {
+    const store = getScopedViewStateStore('edit');
+    if (!store) return;
+    try { if (typeof store.clearTimer === 'function') store.clearTimer(); } catch (e) {}
+    try { if (typeof store.clearBindings === 'function') store.clearBindings(); } catch (e2) {}
   }
 
   function setEngineSelects(engine) {
@@ -201,10 +471,8 @@ editEngineSelect: 'routing-template-edit-engine-select',
 
   function previewTextFallback() {
     try {
-      if (_previewKind === 'monaco' && _previewMonacoFacade && _previewMonacoFacade.getValue) return String(_previewMonacoFacade.getValue() || '');
-    } catch (e) {}
-    try {
-      if (_previewCm && _previewCm.getValue) return String(_previewCm.getValue() || '');
+      const fac = previewActiveFacade();
+      if (fac && typeof fac.get === 'function') return String(fac.get() || '');
     } catch (e) {}
     const ta = el(IDS.preview);
     return ta ? String(ta.value || '') : '';
@@ -213,10 +481,11 @@ editEngineSelect: 'routing-template-edit-engine-select',
   async function activatePreviewEngine(engine) {
     const next = normalizeEngine(engine);
     const host = el(IDS.previewMonaco);
+    const preservedView = capturePreviewViewState();
 
     if (next === 'monaco') {
-      const shared = await ensureMonacoSharedApi();
-      if (!shared || !host || typeof shared.createEditor !== 'function') {
+      const runtime = await ensureEditorRuntime('monaco');
+      if (!runtime || !host || typeof runtime.create !== 'function') {
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
         const ee = getEngineHelper();
         try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
@@ -233,7 +502,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
       const value = previewTextFallback() || PREVIEW_PLACEHOLDER;
 
       if (!_previewMonaco) {
-        const ed = await shared.createEditor(host, {
+        const ed = await runtime.create(host, {
           // Monaco core ships JSON support; JSONC is not always registered.
           // Templates may include comments, but for syntax highlighting we use 'json'.
           language: 'json',
@@ -248,27 +517,34 @@ editEngineSelect: 'routing-template-edit-engine-select',
           return activatePreviewEngine('codemirror');
         }
         _previewMonaco = ed;
-        try { _previewMonacoFacade = shared.toFacade(ed); } catch (e) { _previewMonacoFacade = null; }
-      } else if (_previewMonacoFacade && _previewMonacoFacade.setValue) {
-        _previewMonacoFacade.setValue(value);
+        _previewMonacoFacade = createMonacoFacade(ed);
+      } else if (_previewMonacoFacade && _previewMonacoFacade.set) {
+        _previewMonacoFacade.set(value);
       }
 
       _previewKind = 'monaco';
-      try { if (_previewMonacoFacade) _previewMonacoFacade.scrollTo(0, 0); } catch (e) {}
+      try {
+        if (!(preservedView && restorePreviewViewState(preservedView)) && _previewMonacoFacade) {
+          _previewMonacoFacade.scrollTo(0, 0);
+        }
+      } catch (e) {}
+      try { bindPreviewViewStateTracking(); } catch (e2) {}
       return 'monaco';
     }
 
     // CodeMirror
+    try { await ensureEditorRuntime('codemirror', { mode: 'application/jsonc' }); } catch (e) {}
     hideNode(host);
     try { disposePreviewMonaco(); } catch (e) {}
 
     const cm = ensurePreviewEditor();
+    const fac = _previewCmFacade || createCodeMirrorFacade(cm);
     const value = previewTextFallback() || PREVIEW_PLACEHOLDER;
     if (cm && cm.setValue) {
       try {
-        cm.setValue(value);
-        cm.scrollTo(0, 0);
-        setTimeout(() => { try { cm.refresh(); } catch (e2) {} }, 30);
+        if (fac && typeof fac.set === 'function') fac.set(value);
+        if (fac && typeof fac.scrollTo === 'function') fac.scrollTo(0, 0);
+        setTimeout(() => { try { if (fac && fac.layout) fac.layout(); } catch (e2) {} }, 30);
       } catch (e) {}
       const w = cmWrapper(cm);
       if (w) showNode(w);
@@ -281,16 +557,19 @@ editEngineSelect: 'routing-template-edit-engine-select',
     }
 
     _previewKind = 'codemirror';
+    try { if (preservedView) restorePreviewViewState(preservedView); } catch (e3) {}
+    try { bindPreviewViewStateTracking(); } catch (e4) {}
     return 'codemirror';
   }
 
   async function activateEditEngine(engine) {
     const next = normalizeEngine(engine);
     const host = el(IDS.editMonaco);
+    const preservedView = captureEditViewState();
 
     if (next === 'monaco') {
-      const shared = await ensureMonacoSharedApi();
-      if (!shared || !host || typeof shared.createEditor !== 'function') {
+      const runtime = await ensureEditorRuntime('monaco');
+      if (!runtime || !host || typeof runtime.create !== 'function') {
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
         const ee = getEngineHelper();
         try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
@@ -308,7 +587,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
       showNode(host);
 
       if (!_editMonaco) {
-        const ed = await shared.createEditor(host, {
+        const ed = await runtime.create(host, {
           // Monaco core ships JSON support; JSONC is not always registered.
           language: 'json',
           readOnly: false,
@@ -322,26 +601,30 @@ editEngineSelect: 'routing-template-edit-engine-select',
           return activateEditEngine('codemirror');
         }
         _editMonaco = ed;
-        try { _editMonacoFacade = shared.toFacade(ed); } catch (e) { _editMonacoFacade = null; }
+        _editMonacoFacade = createMonacoFacade(ed);
       }
 
-      try { if (_editMonacoFacade && _editMonacoFacade.setValue) _editMonacoFacade.setValue(value); } catch (e) {}
+      try { if (_editMonacoFacade && _editMonacoFacade.set) _editMonacoFacade.set(value); } catch (e) {}
       _editKind = 'monaco';
+      try { if (preservedView) restoreEditViewState(preservedView); } catch (e2) {}
+      try { bindEditViewStateTracking(); } catch (e3) {}
       try { if (_editMonacoFacade) _editMonacoFacade.focus(); } catch (e) {}
       return 'monaco';
     }
 
     // CodeMirror
+    try { await ensureEditorRuntime('codemirror', { mode: 'application/jsonc' }); } catch (e) {}
     hideNode(host);
     try { disposeEditMonaco(); } catch (e) {}
 
     const value = getEditEditorText();
     const cm = ensureEditEditor();
+    const fac = _editCmFacade || createCodeMirrorFacade(cm);
     if (cm && cm.setValue) {
       try {
-        cm.setValue(String(value || ''));
-        cm.scrollTo(0, 0);
-        setTimeout(() => { try { cm.refresh(); } catch (e2) {} }, 30);
+        if (fac && typeof fac.set === 'function') fac.set(String(value || ''));
+        if (fac && typeof fac.scrollTo === 'function') fac.scrollTo(0, 0);
+        setTimeout(() => { try { if (fac && fac.layout) fac.layout(); } catch (e2) {} }, 30);
       } catch (e) {}
       const w = cmWrapper(cm);
       if (w) showNode(w);
@@ -354,6 +637,8 @@ editEngineSelect: 'routing-template-edit-engine-select',
     }
 
     _editKind = 'codemirror';
+    try { if (preservedView) restoreEditViewState(preservedView); } catch (e4) {}
+    try { bindEditViewStateTracking(); } catch (e5) {}
     return 'codemirror';
   }
 
@@ -393,6 +678,8 @@ editEngineSelect: 'routing-template-edit-engine-select',
   function closeModal() {
     const m = el(IDS.modal);
     if (!m) return;
+    try { savePreviewViewState(); } catch (e) {}
+    try { clearPreviewViewStateTracking(); } catch (e2) {}
     m.classList.add('hidden');
 
     // Dispose Monaco preview editor to avoid leaks.
@@ -455,6 +742,8 @@ function openEditModal() {
 function closeEditModal() {
   const m = el(IDS.editModal);
   if (!m) return;
+  try { saveEditViewState(); } catch (e) {}
+  try { clearEditViewStateTracking(); } catch (e2) {}
   m.classList.add('hidden');
   try {
     if (XK.ui && XK.ui.modal && typeof XK.ui.modal.syncBodyScrollLock === 'function') {
@@ -484,15 +773,25 @@ function stripTemplateHeader(text) {
 function ensureEditEditor() {
   const ta = el(IDS.editContent);
   if (!ta) return null;
-  if (_editCm) return _editCm;
 
-  if (!window.CodeMirror || typeof window.CodeMirror.fromTextArea !== 'function') {
-    return null;
+  const runtime = getEditorRuntime('codemirror');
+  const preferCm6 = isCm6Runtime(runtime);
+
+  if (_editCm) {
+    if (!preferCm6 || isCm6Editor(_editCm)) {
+      if (!_editCmFacade) _editCmFacade = createCodeMirrorFacade(_editCm);
+      return _editCm;
+    }
+    try { disposeCodeMirrorEditor(_editCm); } catch (e) {}
+    _editCm = null;
+    _editCmFacade = null;
   }
 
   try {
-    _editCm = window.CodeMirror.fromTextArea(ta, {
-        mode: { name: 'javascript', json: true },
+    if (!runtime || typeof runtime.create !== 'function') return null;
+
+    _editCm = runtime.create(ta, {
+        mode: 'application/jsonc',
         theme: currentCmTheme(),
       lineNumbers: true,
       lineWrapping: true,
@@ -516,6 +815,7 @@ function ensureEditEditor() {
         window.__xkeenEditors = window.__xkeenEditors || [];
         window.__xkeenEditors.push(_editCm);
       } catch (e3) {}
+      _editCmFacade = createCodeMirrorFacade(_editCm);
   } catch (e) {
     console.error(e);
     _editCm = null;
@@ -526,15 +826,25 @@ function ensureEditEditor() {
   function ensurePreviewEditor() {
     const ta = el(IDS.preview);
     if (!ta) return null;
-    if (_previewCm) return _previewCm;
 
-    if (!window.CodeMirror || typeof window.CodeMirror.fromTextArea !== 'function') {
-      return null;
+    const runtime = getEditorRuntime('codemirror');
+    const preferCm6 = isCm6Runtime(runtime);
+
+    if (_previewCm) {
+      if (!preferCm6 || isCm6Editor(_previewCm)) {
+        if (!_previewCmFacade) _previewCmFacade = createCodeMirrorFacade(_previewCm);
+        return _previewCm;
+      }
+      try { disposeCodeMirrorEditor(_previewCm); } catch (e) {}
+      _previewCm = null;
+      _previewCmFacade = null;
     }
 
     try {
-      _previewCm = window.CodeMirror.fromTextArea(ta, {
-        mode: { name: 'javascript', json: true },
+      if (!runtime || typeof runtime.create !== 'function') return null;
+
+      _previewCm = runtime.create(ta, {
+        mode: 'application/jsonc',
         theme: currentCmTheme(),
         readOnly: 'nocursor',
         lineNumbers: false,
@@ -559,9 +869,11 @@ function ensureEditEditor() {
         window.__xkeenEditors.push(_previewCm);
       } catch (e3) {}
 
+      _previewCmFacade = createCodeMirrorFacade(_previewCm);
+
       try {
-        _previewCm.setValue(PREVIEW_PLACEHOLDER);
-        _previewCm.scrollTo(0, 0);
+        if (_previewCmFacade && typeof _previewCmFacade.set === 'function') _previewCmFacade.set(PREVIEW_PLACEHOLDER);
+        if (_previewCmFacade && typeof _previewCmFacade.scrollTo === 'function') _previewCmFacade.scrollTo(0, 0);
       } catch (e4) {}
     } catch (e) {
       console.error(e);
@@ -570,8 +882,8 @@ function ensureEditEditor() {
     return _previewCm;
   }
 
-  function setPreviewText(text) {
-    const value = String(text || '');
+function setPreviewText(text) {
+  const value = String(text || '');
 
     // Always keep textarea in sync (fallback + source of truth before editor is inited).
     const ta = el(IDS.preview);
@@ -579,31 +891,31 @@ function ensureEditEditor() {
       try { ta.value = value; } catch (e) {}
     }
 
-    // Update CodeMirror if present.
-    try {
-      if (_previewCm && typeof _previewCm.setValue === 'function') {
-        _previewCm.setValue(value);
-        try { _previewCm.scrollTo(0, 0); } catch (e2) {}
-      }
-    } catch (e) {}
+  // Update CodeMirror if present.
+  try {
+    if (_previewCmFacade && typeof _previewCmFacade.set === 'function') {
+      _previewCmFacade.set(value);
+      try { _previewCmFacade.scrollTo(0, 0); } catch (e2) {}
+    }
+  } catch (e) {}
 
-    // Update Monaco if present.
-    try {
-      if (_previewMonacoFacade && typeof _previewMonacoFacade.setValue === 'function') {
-        _previewMonacoFacade.setValue(value);
-        try { _previewMonacoFacade.scrollTo(0, 0); } catch (e2) {}
-      }
-    } catch (e) {}
-  }
+  // Update Monaco if present.
+  try {
+    if (_previewMonacoFacade && typeof _previewMonacoFacade.set === 'function') {
+      _previewMonacoFacade.set(value);
+      try { _previewMonacoFacade.scrollTo(0, 0); } catch (e2) {}
+    }
+  } catch (e) {}
+}
 
 
 function getEditEditorText() {
   try {
-    if (_editKind === 'monaco' && _editMonacoFacade && typeof _editMonacoFacade.getValue === 'function') {
-      return String(_editMonacoFacade.getValue() || '');
+    if (_editKind === 'monaco' && _editMonacoFacade && typeof _editMonacoFacade.get === 'function') {
+      return String(_editMonacoFacade.get() || '');
     }
   } catch (e) {}
-  if (_editCm && typeof _editCm.getValue === 'function') return String(_editCm.getValue() || '');
+  if (_editCmFacade && typeof _editCmFacade.get === 'function') return String(_editCmFacade.get() || '');
   const ta = el(IDS.editContent);
   if (ta) return String(ta.value || '');
   return '';
@@ -615,24 +927,24 @@ function setEditEditorText(text) {
   if (ta) {
     try { ta.value = value; } catch (e) {}
   }
-  if (_editCm && typeof _editCm.setValue === 'function') {
+  if (_editCmFacade && typeof _editCmFacade.set === 'function') {
     try {
-      _editCm.setValue(value);
-      try { _editCm.scrollTo(0, 0); } catch (e2) {}
+      _editCmFacade.set(value);
+      try { _editCmFacade.scrollTo(0, 0); } catch (e2) {}
     } catch (e) {}
   }
   try {
-    if (_editMonacoFacade && typeof _editMonacoFacade.setValue === 'function') {
-      _editMonacoFacade.setValue(value);
+    if (_editMonacoFacade && typeof _editMonacoFacade.set === 'function') {
+      _editMonacoFacade.set(value);
       try { _editMonacoFacade.scrollTo(0, 0); } catch (e2) {}
     }
   } catch (e) {}
 }
 
-async function openEditForSelected() {
-  if (!_selected || !_selected.filename) {
-    setStatus('Сначала выбери шаблон.', true);
-    return;
+  async function openEditForSelected() {
+    if (!_selected || !_selected.filename) {
+      setStatus('Сначала выбери шаблон.', true);
+      return;
   }
   if (_selected.builtin) {
     setStatus('Встроенные шаблоны нельзя редактировать.', true);
@@ -667,6 +979,11 @@ async function openEditForSelected() {
   setEditEditorText(stripTemplateHeader(content));
 
   openEditModal();
+  try {
+    const savedView = loadEditViewState(_editOriginalFilename, _editKind);
+    if (savedView) restoreEditViewState(savedView);
+  } catch (e) {}
+  try { bindEditViewStateTracking(); } catch (e2) {}
 
   try {
     const inp = el(IDS.editFilename);
@@ -781,6 +1098,8 @@ async function submitEditTemplate() {
   }
 
   function clearPreview() {
+    try { if (_selected && _selected.filename) savePreviewViewState({ filename: _selected.filename }); } catch (e) {}
+    try { clearPreviewViewStateTracking(); } catch (e2) {}
     _selected = null;
     _selectedContent = '';
 
@@ -912,6 +1231,8 @@ async function submitEditTemplate() {
 
   async function selectTemplate(tpl) {
     if (!tpl || !tpl.filename) return;
+    const prevFilename = _selected && _selected.filename ? String(_selected.filename) : '';
+    try { if (prevFilename && prevFilename !== tpl.filename) savePreviewViewState({ filename: prevFilename }); } catch (e) {}
     _selected = tpl;
     _selectedContent = '';
 
@@ -950,6 +1271,14 @@ async function submitEditTemplate() {
 
     _selectedContent = content;
     setPreviewText(normalizePreview(content));
+    try {
+      const savedView = loadPreviewViewState(tpl.filename, _previewKind);
+      if (!(savedView && restorePreviewViewState(savedView))) {
+        const fac = previewActiveFacade();
+        if (fac && typeof fac.scrollTo === 'function') fac.scrollTo(0, 0);
+      }
+    } catch (e2) {}
+    try { bindPreviewViewStateTracking(); } catch (e3) {}
     if (b) b.disabled = false;
     if (del) del.disabled = !!tpl.builtin;
     if (edit) edit.disabled = !!tpl.builtin;
@@ -958,16 +1287,23 @@ async function submitEditTemplate() {
   }
 
   async function confirmReplaceIfDirty() {
-    // Detect unsaved changes
-    const cm = (XK.state && XK.state.routingEditor) ? XK.state.routingEditor : null;
+    const shell = getRoutingShellApi();
+    const cm = getRoutingEditor();
     const ta = el('routing-editor') || el('routing-textarea');
 
     let current = '';
-    if (cm && typeof cm.getValue === 'function') current = cm.getValue();
+    if (cm && typeof cm.get === 'function') current = cm.get();
+    else if (cm && typeof cm.getValue === 'function') current = cm.getValue();
     else if (ta) current = ta.value || '';
 
-    const saved = (typeof window.routingSavedContent === 'string') ? window.routingSavedContent : '';
-    const isDirty = (typeof saved === 'string' && saved.length) ? (current !== saved) : (current.trim().length > 0);
+    let isDirty = false;
+    if (shell && typeof shell.hasUnsavedChanges === 'function') {
+      try {
+        isDirty = !!shell.hasUnsavedChanges(current);
+      } catch (e) {}
+    } else {
+      isDirty = current.trim().length > 0;
+    }
 
     if (!isDirty) return true;
 
@@ -989,9 +1325,10 @@ async function submitEditTemplate() {
   }
 
   function markDirty() {
-    try {
-      window.routingIsDirty = true;
-    } catch (e) {}
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.setDirty === 'function') {
+      try { shell.setDirty(true); } catch (e) {}
+    }
     try {
       const saveBtn = document.getElementById('routing-save-btn');
       if (saveBtn) saveBtn.classList.add('dirty');
@@ -999,8 +1336,15 @@ async function submitEditTemplate() {
   }
 
   function getEditorText() {
-    const cm = (XK.state && XK.state.routingEditor) ? XK.state.routingEditor : null;
+    const shell = getRoutingShellApi();
+    if (shell && typeof shell.getEditorText === 'function') {
+      try {
+        return String(shell.getEditorText() || '');
+      } catch (e) {}
+    }
+    const cm = getRoutingEditor();
     const ta = el('routing-editor') || el('routing-textarea');
+    if (cm && typeof cm.get === 'function') return String(cm.get() || '');
     if (cm && typeof cm.getValue === 'function') return String(cm.getValue() || '');
     if (ta) return String(ta.value || '');
     return '';
@@ -1017,7 +1361,15 @@ async function submitEditTemplate() {
 
     let replaced = false;
     try {
-      if (XK.routing && typeof XK.routing.replaceEditorText === 'function') {
+      const shell = getRoutingShellApi();
+      if (shell && typeof shell.replaceEditorText === 'function') {
+        shell.replaceEditorText(_selectedContent, {
+          reason: 'template-import',
+          markDirty: true,
+          scrollTop: true,
+        });
+        replaced = true;
+      } else if (XK.routing && typeof XK.routing.replaceEditorText === 'function') {
         XK.routing.replaceEditorText(_selectedContent, {
           reason: 'template-import',
           markDirty: true,
@@ -1028,10 +1380,13 @@ async function submitEditTemplate() {
     } catch (e) {}
 
     if (!replaced) {
-      const cm = (XK.state && XK.state.routingEditor) ? XK.state.routingEditor : null;
+      const cm = getRoutingEditor();
       const ta = el('routing-editor') || el('routing-textarea');
 
-      if (cm && typeof cm.setValue === 'function') {
+      if (cm && typeof cm.set === 'function') {
+        cm.set(_selectedContent);
+        try { if (cm.scrollTo) cm.scrollTo(0, 0); } catch (e) {}
+      } else if (cm && typeof cm.setValue === 'function') {
         cm.setValue(_selectedContent);
         try { cm.scrollTo(0, 0); } catch (e) {}
       } else if (ta) {

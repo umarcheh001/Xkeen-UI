@@ -32,15 +32,56 @@
   const LOAD_MORE_STEP = isPerfLite() ? 200 : 400;
   const MAX_MAX_LINES = 5000;
 
+  function toast(message, kindOrOptions) {
+    try {
+      if (typeof window.toast === 'function') return window.toast(message, kindOrOptions);
+      if (XKeen.ui && typeof XKeen.ui.toast === 'function') return XKeen.ui.toast(message, kindOrOptions);
+      if (typeof window.showToast === 'function') return window.showToast(message, kindOrOptions);
+    } catch (e) {}
+    return null;
+  }
+
+  function actionToast(id, message, kindOrOptions) {
+    const options = (kindOrOptions && typeof kindOrOptions === 'object' && !Array.isArray(kindOrOptions))
+      ? Object.assign({}, kindOrOptions, { id: String(id || ''), message: String(message || '') })
+      : { id: String(id || ''), message: String(message || ''), kind: kindOrOptions };
+
+    return toast(options);
+  }
+
+  function buildConfirmText(options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    const message = String(opts.message || opts.text || opts.body || 'Continue?').trim() || 'Continue?';
+    const details = Array.isArray(opts.details)
+      ? opts.details.map((item) => String(item || '').trim()).filter(Boolean).join('\n')
+      : String(opts.details || '').trim();
+    return details ? (message + '\n\n' + details) : message;
+  }
+
+  async function confirmAction(options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    try {
+      if (XKeen.ui && typeof XKeen.ui.confirm === 'function') return !!(await XKeen.ui.confirm(opts));
+    } catch (e) {}
+
+    const ok = window.confirm(buildConfirmText(opts));
+    if (!ok && opts.cancelMessage) {
+      actionToast('xray-logs-confirm-cancel', String(opts.cancelMessage || ''), String(opts.cancelKind || 'info'));
+    }
+    return !!ok;
+  }
+
   // Legacy localStorage prefs (file/interval/follow/live/lines/filter + log window height).
   // Commit 14 migrates these prefs to /api/ui-settings so they can sync across devices.
   // We keep STORAGE_KEY only for one-time seeding.
   const STORAGE_KEY = 'xkeen.ui.xrayLogs.v1';
   const SEED_KEY = 'xkeen.seed.logsPrefs.v1';
+  const FILTER_APPLY_DEBOUNCE_MS = 180;
 
   let _maxLines = DEFAULT_MAX_LINES;
   let _pollMs = DEFAULT_POLL_MS;
   let _follow = true;
+  let _liveWanted = false;
 
   // HTTP incremental tail cursor (DevTools-like)
   let _cursor = '';
@@ -81,6 +122,7 @@
   // user actually opens/starts the logs view (needed for upcoming Monaco/ANSI features).
   let _uiSettingsLoaded = false;
   let _uiSettingsLoadPromise = null;
+  let _uiSettingsUnsubscribe = null;
   let _ansiEnabled = false;
   let _ws2Enabled = false;
   // Xray logs view prefs (file/filter/follow/live/maxLines/pollMs/height)
@@ -92,10 +134,66 @@
   let _ws2FailedSession = false;
   let _ws2PendingCmd = null;
   let _ws2SwitchTimer = null;
+  let _filterApplyTimer = null;
   let _ws2FailStreak = 0;
   let _ws2LastOpenAt = 0;
+  let _chromeRenderQueued = false;
+  let _xrayLogUiStatusRenderQueued = false;
+  const _xrayLogUiStatus = {
+    phase: 'idle',
+    tone: 'muted',
+    transport: '',
+    message: '',
+    file: '',
+  };
 
-  function _applyUiSettingsSnapshot(s, reason = '') {
+  function getSettingsApi() {
+    try {
+      if (XKeen.ui && XKeen.ui.settings) return XKeen.ui.settings;
+    } catch (e) {}
+    return null;
+  }
+
+  function readSharedUiSettingsSnapshot() {
+    try {
+      const api = getSettingsApi();
+      if (!api || typeof api.get !== 'function') return null;
+      return api.get();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function sharedUiSettingsLoadedFromServer() {
+    try {
+      const api = getSettingsApi();
+      if (!api || typeof api.isLoadedFromServer !== 'function') return false;
+      return !!api.isLoadedFromServer();
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function ensureUiSettingsBinding() {
+    if (_uiSettingsUnsubscribe) return _uiSettingsUnsubscribe;
+
+    const api = getSettingsApi();
+    if (!api || typeof api.subscribe !== 'function') return null;
+
+    _uiSettingsUnsubscribe = api.subscribe((nextSnapshot, prevSnapshot, meta) => {
+      _applyUiSettingsSnapshot(
+        nextSnapshot,
+        meta && meta.source ? meta.source : 'settings',
+        meta && typeof meta.loadedFromServer === 'boolean'
+          ? !!meta.loadedFromServer
+          : sharedUiSettingsLoadedFromServer()
+      );
+    }, { immediate: true });
+
+    return _uiSettingsUnsubscribe;
+  }
+
+  function _applyUiSettingsSnapshot(s, reason = '', loadedFromServerOverride) {
     try {
       const prevAnsi = _ansiEnabled;
       const prevWs2 = _ws2Enabled;
@@ -131,31 +229,36 @@
       }
 
       // If we got a snapshot from the settings module, consider it "loaded".
-      if (reason) {
-        _uiSettingsLoaded = true;
+      if (typeof loadedFromServerOverride === 'boolean') {
+        _uiSettingsLoaded = !!loadedFromServerOverride;
+      } else if (reason) {
+        _uiSettingsLoaded = sharedUiSettingsLoadedFromServer();
       }
     } catch (e) {}
   }
 
   // Live updates: react to changes made from the "UI настройки" modal.
-  try {
-    document.addEventListener('xkeen:ui-settings-changed', (ev) => {
-      const s = ev && ev.detail ? ev.detail.settings : null;
-      _applyUiSettingsSnapshot(s, 'event');
-    });
-  } catch (e) {}
+  try { ensureUiSettingsBinding(); } catch (e) {}
 
   async function ensureUiSettingsLoadedForLogs() {
-    if (_uiSettingsLoaded) return true;
+    try { ensureUiSettingsBinding(); } catch (e) {}
+
+    if (_uiSettingsLoaded && sharedUiSettingsLoadedFromServer()) return true;
+    if (sharedUiSettingsLoadedFromServer()) {
+      const snapshot = readSharedUiSettingsSnapshot();
+      _applyUiSettingsSnapshot(snapshot, 'shared', true);
+      return true;
+    }
     if (_uiSettingsLoadPromise) return _uiSettingsLoadPromise;
 
     _uiSettingsLoadPromise = (async () => {
       try {
-        if (window.XKeen && XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.fetchOnce === 'function') {
-          const s = await XKeen.ui.settings.fetchOnce();
-          _applyUiSettingsSnapshot(s, 'fetchOnce');
+        const settingsApi = getSettingsApi();
+        if (settingsApi && typeof settingsApi.fetchOnce === 'function') {
+          const s = await settingsApi.fetchOnce();
+          _applyUiSettingsSnapshot(s, 'fetchOnce', true);
         }
-        _uiSettingsLoaded = true;
+        _uiSettingsLoaded = sharedUiSettingsLoadedFromServer();
         return true;
       } catch (e) {
         // Keep logs working even if settings endpoint is unavailable.
@@ -225,10 +328,11 @@
 
   async function _saveLogsViewPrefsToServerBestEffort(reason) {
     try {
-      if (!(window.XKeen && XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.patch === 'function')) return false;
+      const settingsApi = getSettingsApi();
+      if (!settingsApi || typeof settingsApi.patch !== 'function') return false;
       // We only write view prefs; feature flags (ansi/ws2) live alongside.
       const cur = collectUiState();
-      await XKeen.ui.settings.patch({ logs: { view: cur } });
+      await settingsApi.patch({ logs: { view: cur } });
       // Once we successfully persist view prefs to the server, consider migration complete.
       // This prevents legacy localStorage prefs from becoming the "parallel truth" again.
       try { _setSeedMarker(); } catch (e2) {}
@@ -246,21 +350,19 @@
     try { await ensureUiSettingsLoadedForLogs(); } catch (e) {}
 
     // If the settings helper is missing or the endpoint is not reachable, keep legacy behavior.
-    if (!(window.XKeen && XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.get === 'function')) {
+    const settingsApi = getSettingsApi();
+    if (!settingsApi || typeof settingsApi.get !== 'function') {
       _logsViewPrefsReady = true;
       return false;
     }
 
     // If we failed to load settings from server, don't try to seed/apply.
-    try {
-      if (typeof XKeen.ui.settings.isLoadedFromServer === 'function' && !XKeen.ui.settings.isLoadedFromServer()) {
-        _logsViewPrefsReady = true;
-        return false;
-      }
-    } catch (e) {}
+    if (!sharedUiSettingsLoadedFromServer()) {
+      _logsViewPrefsReady = true;
+      return false;
+    }
 
-    let settings = null;
-    try { settings = XKeen.ui.settings.get(); } catch (e) { settings = null; }
+    let settings = readSharedUiSettingsSnapshot();
     let view = _getServerLogsViewPrefs(settings);
 
     // One-time migration: seed server prefs from legacy localStorage.
@@ -270,11 +372,11 @@
       if (hasLegacy) {
         try {
           const seed = _extractViewPrefsFromLegacy(legacy);
-          await XKeen.ui.settings.patch({ logs: { view: seed } });
+          await settingsApi.patch({ logs: { view: seed } });
           _setSeedMarker();
           // Stop using legacy storage after successful seed.
           try { localStorage.removeItem(STORAGE_KEY); } catch (e2) {}
-          try { settings = XKeen.ui.settings.get(); } catch (e3) { settings = null; }
+          settings = readSharedUiSettingsSnapshot();
           view = _getServerLogsViewPrefs(settings);
         } catch (e) {
           console.warn('ui-settings: seed from localStorage failed', e);
@@ -310,6 +412,727 @@
     return document.getElementById(id);
   }
 
+  function clampLogLinesValue(value, fallbackValue) {
+    let next = parseInt(value, 10);
+    if (!isFinite(next)) next = parseInt(fallbackValue, 10);
+    if (!isFinite(next)) next = DEFAULT_MAX_LINES;
+    if (next < 50) next = 50;
+    if (next > MAX_MAX_LINES) next = MAX_MAX_LINES;
+    return next;
+  }
+
+  function trimLogBuffer(lines, maxLines) {
+    const src = Array.isArray(lines) ? lines : [];
+    const limit = clampLogLinesValue(maxLines, DEFAULT_MAX_LINES);
+    return src.length > limit ? src.slice(-limit) : src.slice();
+  }
+
+  function getXrayLogsDom() {
+    return {
+      headerBadge: $('xray-logs-badge'),
+      lamp: $('xray-log-lamp'),
+      file: $('xray-log-file'),
+      level: $('xray-log-level'),
+      live: $('xray-log-live'),
+      interval: $('xray-log-interval'),
+      follow: $('xray-log-follow'),
+      lines: $('xray-log-lines'),
+      filter: $('xray-log-filter'),
+      output: $('xray-log-output'),
+      status: $('xray-log-status'),
+      mode: $('xray-log-mode'),
+      stats: $('xray-log-stats'),
+      pause: $('xray-log-pause'),
+      scrollBottom: $('xray-log-scroll-bottom'),
+      fullscreen: $('xray-log-fullscreen'),
+    };
+  }
+
+  function formatXrayLogFileLabel(file) {
+    const value = String(file || '').trim().toLowerCase();
+    if (!value || value === 'access') return 'access.log';
+    if (value === 'error') return 'error.log';
+    return value.endsWith('.log') ? value : (value + '.log');
+  }
+
+  function formatXrayLogPollLabel(ms) {
+    const value = Math.max(500, parseInt(ms, 10) || DEFAULT_POLL_MS);
+    if (value % 1000 === 0) return (value / 1000) + 's';
+    return value + 'ms';
+  }
+
+  function readXrayLogUiStatus() {
+    return {
+      phase: String(_xrayLogUiStatus.phase || 'idle'),
+      tone: String(_xrayLogUiStatus.tone || 'muted'),
+      transport: String(_xrayLogUiStatus.transport || ''),
+      message: String(_xrayLogUiStatus.message || ''),
+      file: String(_xrayLogUiStatus.file || ''),
+    };
+  }
+
+  function setXrayLogUiStatus(patch) {
+    const next = (patch && typeof patch === 'object') ? patch : {};
+    if (next.reset) {
+      _xrayLogUiStatus.phase = 'idle';
+      _xrayLogUiStatus.tone = 'muted';
+      _xrayLogUiStatus.transport = '';
+      _xrayLogUiStatus.message = '';
+      _xrayLogUiStatus.file = '';
+    }
+
+    if (Object.prototype.hasOwnProperty.call(next, 'phase')) {
+      _xrayLogUiStatus.phase = String(next.phase || 'idle');
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'tone')) {
+      _xrayLogUiStatus.tone = String(next.tone || 'muted');
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'transport')) {
+      _xrayLogUiStatus.transport = String(next.transport || '').trim();
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'message')) {
+      _xrayLogUiStatus.message = String(next.message || '');
+    }
+    if (Object.prototype.hasOwnProperty.call(next, 'file')) {
+      _xrayLogUiStatus.file = String(next.file || '');
+    }
+
+    queueXrayLogUiStatusRender();
+    return readXrayLogUiStatus();
+  }
+
+  function queueXrayLogUiStatusRender() {
+    if (_xrayLogUiStatusRenderQueued) return;
+    _xrayLogUiStatusRenderQueued = true;
+
+    const flush = () => {
+      _xrayLogUiStatusRenderQueued = false;
+      try {
+        if ($('xray-log-output')) applyXrayLogFilterToOutput();
+        else updateXrayLogStats();
+      } catch (e) {
+        try { updateXrayLogStats(); } catch (e2) {}
+      }
+    };
+
+    try {
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(flush);
+        return;
+      }
+    } catch (e) {}
+
+    setTimeout(flush, 0);
+  }
+
+  function readXrayLogsRuntimeState() {
+    return {
+      maxLines: clampLogLinesValue(_maxLines, DEFAULT_MAX_LINES),
+      pollMs: parseInt(_pollMs, 10) || DEFAULT_POLL_MS,
+      follow: !!_follow,
+      cursor: String(_cursor || ''),
+      paused: !!_paused,
+      pendingCount: Math.max(0, parseInt(_pendingCount || 0, 10) || 0),
+      inited: !!_inited,
+      currentFile: String(_currentFile || 'access'),
+      lastLines: Array.isArray(_lastLines) ? _lastLines : [],
+      ws: _ws,
+      useWs: !!_useWs,
+      liveWanted: !!_liveWanted,
+      streaming: !!_streaming,
+      activeLogLevel: String(_activeLogLevel || 'none'),
+      isFullscreen: !!_isFullscreen,
+      heightBeforeFullscreen: _heightBeforeFullscreen,
+      ansiEnabled: !!_ansiEnabled,
+      ws2Enabled: !!_ws2Enabled,
+    };
+  }
+
+  function readXrayLogsViewState(dom, runtimeState) {
+    const refs = dom || getXrayLogsDom();
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+
+    let height = null;
+    try {
+      if (refs.output) height = Math.round(refs.output.getBoundingClientRect().height);
+    } catch (e) {}
+
+    if (runtime.isFullscreen && runtime.heightBeforeFullscreen != null) {
+      height = runtime.heightBeforeFullscreen;
+    }
+
+    return {
+      file: String((refs.file && refs.file.value) || runtime.currentFile || 'access'),
+      loglevel: String((refs.level && refs.level.value) || ''),
+      live: !!(refs.live && refs.live.checked),
+      follow: !!(refs.follow && refs.follow.checked),
+      pollMs: (() => {
+        const value = parseInt((refs.interval && refs.interval.value) || '', 10);
+        return isFinite(value) && value >= 500 ? value : runtime.pollMs;
+      })(),
+      maxLines: clampLogLinesValue((refs.lines && refs.lines.value) || runtime.maxLines, runtime.maxLines),
+      filter: String((refs.filter && refs.filter.value) || ''),
+      height: height,
+      ts: Date.now(),
+    };
+  }
+
+  function isXrayLogOutputNearBottom(outputEl) {
+    const el = outputEl || $('xray-log-output');
+    if (!el) return true;
+
+    try {
+      return el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function scrollXrayLogOutputToBottom() {
+    try {
+      const out = $('xray-log-output');
+      if (out) out.scrollTop = out.scrollHeight;
+    } catch (e) {}
+  }
+
+  function setXrayLogsLiveWanted(enabled, options) {
+    const opts = options || {};
+    _liveWanted = !!enabled;
+
+    try {
+      const liveEl = $('xray-log-live');
+      if (liveEl && liveEl.checked !== _liveWanted) liveEl.checked = _liveWanted;
+    } catch (e) {}
+
+    if (!opts.skipRender) {
+      try { updateXrayLogStats(); } catch (e) {}
+    }
+
+    return _liveWanted;
+  }
+
+  function setXrayLogsFollowEnabled(enabled, options) {
+    const opts = options || {};
+    _follow = !!enabled;
+
+    try {
+      const followEl = $('xray-log-follow');
+      if (followEl && followEl.checked !== _follow) followEl.checked = _follow;
+    } catch (e) {}
+
+    if (_follow && !opts.skipScroll) scrollXrayLogOutputToBottom();
+
+    if (!opts.skipRender) {
+      try { updateXrayLogStats(); } catch (e) {}
+    }
+
+    return _follow;
+  }
+
+  function readXrayLogsModeState(dom, runtimeState) {
+    const refs = dom || getXrayLogsDom();
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+    const isNearBottom = isXrayLogOutputNearBottom(refs.output);
+    const followEnabled = !!runtime.follow;
+    const liveActive = !!runtime.streaming;
+    const liveWanted = !!runtime.liveWanted;
+    const paused = !!runtime.paused;
+    const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
+
+    let state = 'manual';
+    let label = 'Manual';
+    let title = 'Manual log view without active live streaming.';
+
+    if (paused) {
+      state = 'paused';
+      label = pending ? ('Paused +' + pending) : 'Paused';
+      title = pending
+        ? ('Rendering is paused. ' + pending + ' line(s) are buffered.')
+        : 'Rendering is paused while incoming lines continue buffering.';
+    } else if (liveActive && followEnabled) {
+      state = 'live';
+      label = 'Live / Follow';
+      title = 'Live stream is active and the view stays pinned to the latest lines.';
+    } else if (liveActive) {
+      state = 'browse';
+      label = 'Live / Browse';
+      title = 'Live stream is active while Follow is disabled, so you can inspect older lines.';
+    } else if (liveWanted) {
+      state = 'armed';
+      label = 'Live / Ready';
+      title = 'Live mode is selected, but the stream is currently idle.';
+    } else if (followEnabled) {
+      state = 'manual-follow';
+      label = 'Manual / Follow';
+      title = 'Manual log view with Follow enabled for the next render.';
+    }
+
+    return {
+      state,
+      label,
+      title,
+      paused,
+      pending,
+      liveActive,
+      liveWanted,
+      followEnabled,
+      isNearBottom,
+    };
+  }
+
+  function renderXrayLogModeLayer(dom, runtimeState, modeState) {
+    const refs = dom || getXrayLogsDom();
+    const el = refs.mode;
+    if (!el) return;
+
+    const mode = modeState || readXrayLogsModeState(refs, runtimeState);
+    el.dataset.state = String(mode.state || 'manual');
+    el.textContent = String(mode.label || 'Manual');
+    el.title = String(mode.title || '');
+  }
+
+  function renderXrayLogScrollBottomLayer(dom, runtimeState, modeState) {
+    const refs = dom || getXrayLogsDom();
+    const btn = refs.scrollBottom;
+    if (!btn) return;
+
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+    const mode = modeState || readXrayLogsModeState(refs, runtime);
+    const hasLines = Array.isArray(runtime.lastLines) && runtime.lastLines.length > 0;
+    const visible = !!(hasLines && !mode.followEnabled && !mode.isNearBottom);
+
+    btn.hidden = !visible;
+    btn.disabled = !visible;
+    btn.dataset.state = visible ? 'visible' : 'hidden';
+
+    if (!visible) {
+      btn.textContent = 'Latest';
+      btn.title = 'Scroll to the latest rendered lines.';
+      return;
+    }
+
+    btn.textContent = mode.liveActive ? 'Latest' : 'Bottom';
+    btn.title = mode.liveActive
+      ? 'Scroll to the latest rendered lines without enabling Follow.'
+      : 'Scroll to the bottom of the current log output.';
+  }
+
+  function renderXrayLogsChrome(dom, runtimeState) {
+    const refs = dom || getXrayLogsDom();
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+    const mode = readXrayLogsModeState(refs, runtime);
+
+    renderXrayLogPauseLayer(refs, runtime);
+    renderXrayLogModeLayer(refs, runtime, mode);
+    renderXrayLogScrollBottomLayer(refs, runtime, mode);
+    renderXrayLogStatusLayer(refs, runtime);
+  }
+
+  function scheduleXrayLogsChromeRender() {
+    if (_chromeRenderQueued) return;
+    _chromeRenderQueued = true;
+
+    const flush = () => {
+      _chromeRenderQueued = false;
+      try { updateXrayLogStats(); } catch (e) {}
+    };
+
+    try {
+      if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(flush);
+        return;
+      }
+    } catch (e) {}
+
+    setTimeout(flush, 16);
+  }
+
+  function renderXrayHeaderBadgeLayer(dom, state, level) {
+    const refs = dom || getXrayLogsDom();
+    const badge = refs.headerBadge;
+    if (!badge) return;
+
+    const nextState = state === 'on' ? 'on' : 'off';
+    const nextLevel = level ? String(level) : '';
+    badge.dataset.state = nextState;
+
+    if (nextState === 'on') {
+      badge.title = nextLevel ? `Логи Xray включены (loglevel=${nextLevel}).` : 'Логи Xray включены.';
+      return;
+    }
+
+    badge.title = 'Логи Xray выключены.';
+  }
+
+  function renderXrayLogLampLayer(dom, state) {
+    const refs = dom || getXrayLogsDom();
+    const lamp = refs.lamp;
+    if (!lamp) return;
+
+    const nextState = String(state || '');
+    lamp.dataset.state = nextState;
+
+    if (nextState === 'on') {
+      lamp.title = 'Автообновление логов включено';
+    } else if (nextState === 'off') {
+      lamp.title = 'Автообновление логов выключено';
+    } else if (nextState === 'error') {
+      lamp.title = 'Ошибка автообновления логов';
+    } else {
+      lamp.title = 'Автообновление логов: неизвестно';
+    }
+  }
+
+  function readXrayLogTransportLabel(runtimeState) {
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+    const pollLabel = formatXrayLogPollLabel(runtime.pollMs);
+
+    try {
+      if (runtime.ws && typeof WebSocket !== 'undefined') {
+        if (runtime.ws.readyState === WebSocket.OPEN) {
+          return _isWs2Socket(runtime.ws) ? 'WS2 live' : 'WS live';
+        }
+        if (runtime.ws.readyState === WebSocket.CONNECTING) {
+          return _isWs2Socket(runtime.ws) ? 'WS2 connect' : 'WS connect';
+        }
+      }
+    } catch (e) {}
+
+    if (runtime.streaming && runtime.useWs) {
+      return _shouldUseWs2() ? 'WS2 retry' : 'WS retry';
+    }
+    if (runtime.streaming) return 'HTTP/' + pollLabel;
+    return '';
+  }
+
+  function buildXrayLogStatusModel(runtimeState) {
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+    const uiStatus = readXrayLogUiStatus();
+    const fileLabel = formatXrayLogFileLabel(uiStatus.file || runtime.currentFile);
+    const transport = String(uiStatus.transport || readXrayLogTransportLabel(runtime) || '').trim();
+    const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
+
+    let phase = String(uiStatus.phase || 'idle');
+    let tone = String(uiStatus.tone || 'muted');
+    let message = String(uiStatus.message || '').trim();
+
+    if (!message) {
+      if (runtime.paused) {
+        phase = 'paused';
+        tone = 'muted';
+        message = pending
+          ? ('Вывод на паузе, в буфере уже +' + pending + ' строк.')
+          : 'Вывод на паузе. Новые строки будут показаны после Resume.';
+      } else if (runtime.ws && typeof WebSocket !== 'undefined' && runtime.ws.readyState === WebSocket.CONNECTING) {
+        phase = 'connecting';
+        tone = 'muted';
+        message = transport
+          ? ('Подключаю ' + transport + ' для ' + fileLabel + '...')
+          : ('Подключаю live transport для ' + fileLabel + '...');
+      } else if (runtime.streaming && runtime.useWs) {
+        phase = 'reconnecting';
+        tone = 'muted';
+        message = transport
+          ? ('Поднимаю ' + transport + ' для ' + fileLabel + '...')
+          : ('Поднимаю live transport для ' + fileLabel + '...');
+      } else if (runtime.streaming) {
+        phase = 'streaming';
+        tone = 'muted';
+        message = 'Live stream идет через HTTP polling каждые ' + formatXrayLogPollLabel(runtime.pollMs) + '.';
+      } else if (_isErrorFileName(runtime.currentFile) && String(runtime.activeLogLevel || 'none') === 'none') {
+        phase = 'idle';
+        tone = 'muted';
+        message = 'Логирование Xray сейчас выключено (loglevel=none), поэтому error.log может быть пустым.';
+      } else {
+        phase = 'idle';
+        tone = 'muted';
+        message = 'Нажмите View для снимка или включите Live, чтобы ждать новые строки.';
+      }
+    }
+
+    return {
+      phase,
+      tone,
+      message,
+      transport,
+      fileLabel,
+    };
+  }
+
+  function renderXrayLogStatusLayer(dom, runtimeState) {
+    const refs = dom || getXrayLogsDom();
+    const el = refs.status;
+    if (!el) return;
+
+    const model = buildXrayLogStatusModel(runtimeState);
+    el.textContent = String(model.message || '');
+    el.dataset.phase = String(model.phase || 'idle');
+    el.dataset.transport = String(model.transport || '');
+    el.dataset.file = String(model.fileLabel || '');
+
+    try {
+      el.classList.toggle('error', model.tone === 'error');
+    } catch (e) {}
+  }
+
+  function renderXrayLogPauseLayer(dom, runtimeState) {
+    const refs = dom || getXrayLogsDom();
+    const btn = refs.pause;
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+    if (!btn) return;
+
+    if (!runtime.streaming) {
+      btn.disabled = true;
+      btn.textContent = '⏸ Pause';
+      btn.title = 'Пауза доступна только в Live режиме.';
+      btn.dataset.state = 'off';
+      return;
+    }
+
+    btn.disabled = false;
+
+    if (runtime.paused) {
+      const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
+      btn.textContent = pending ? `▶ Resume (+${pending})` : '▶ Resume';
+      btn.title = 'Возобновить обновление экрана (накопленные строки будут показаны).';
+      btn.dataset.state = 'on';
+      return;
+    }
+
+    btn.textContent = '⏸ Pause';
+    btn.title = 'Пауза: заморозить вывод (строки продолжают собираться).';
+    btn.dataset.state = 'off';
+  }
+
+  function renderXrayLogStatsLayer(dom, runtimeState) {
+    const refs = dom || getXrayLogsDom();
+    const el = refs.stats;
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+    if (!el) return;
+
+    const lines = Array.isArray(runtime.lastLines) ? runtime.lastLines.length : 0;
+    const max = runtime.maxLines || DEFAULT_MAX_LINES;
+    const transport = readXrayLogTransportLabel(runtime);
+    const parts = [lines + '/' + max];
+
+    if (transport) parts.push(transport);
+    if (runtime.paused) {
+      const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
+      parts.push(pending ? ('+' + pending + ' queued') : 'buffering');
+    }
+
+    el.textContent = parts.join(' • ');
+  }
+
+  function buildXrayLogFilterGroups(rawFilter) {
+    return String(rawFilter || '')
+      .trim()
+      .toLowerCase()
+      .split('|')
+      .map((group) => group.trim())
+      .filter(Boolean)
+      .map((group) => group.split(/\s+/).map((term) => term.trim()).filter(Boolean));
+  }
+
+  function buildFilteredXrayLogEntries(runtimeState, viewState) {
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+    const view = viewState || readXrayLogsViewState(getXrayLogsDom(), runtime);
+    const groups = buildXrayLogFilterGroups(view.filter);
+    const selectedLevel = String(view.loglevel || '').trim().toLowerCase();
+    const isErrorFile = _isErrorFileName(runtime.currentFile);
+    const levelFilter = (isErrorFile && ALLOWED_LOGLEVELS.includes(selectedLevel)) ? selectedLevel : '';
+
+    const rawEntries = (Array.isArray(runtime.lastLines) ? runtime.lastLines : [])
+      .map((line, idx) => ({ idx, line: normalizeLogLine(line) }));
+    const rawCount = rawEntries.length;
+
+    let entries = rawEntries.slice();
+
+    if (levelFilter) {
+      entries = entries.filter((entry) => shouldKeepLineForLevel(entry.line, levelFilter));
+    }
+    const levelCount = entries.length;
+
+    if (groups.length) {
+      entries = entries.filter((entry) => {
+        const lower = String(entry.line || '').toLowerCase();
+        return groups.some((terms) => terms.every((term) => lower.includes(term)));
+      });
+    }
+
+    return {
+      entries,
+      rawCount,
+      levelCount,
+      levelFilter,
+      hasTextFilter: groups.length > 0,
+      filterText: String(view.filter || '').trim(),
+    };
+  }
+
+  function buildXrayLogEmptyStateModel(runtimeState, viewState, filteredSnapshot) {
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+    const view = viewState || readXrayLogsViewState(getXrayLogsDom(), runtime);
+    const snapshot = filteredSnapshot || buildFilteredXrayLogEntries(runtime, view);
+    const uiStatus = readXrayLogUiStatus();
+    const fileLabel = formatXrayLogFileLabel(runtime.currentFile);
+    const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
+    const filterText = String(snapshot.filterText || '').trim();
+
+    if (snapshot.entries.length) return null;
+
+    if (snapshot.rawCount > 0 && snapshot.levelCount === 0 && snapshot.levelFilter) {
+      return {
+        tone: 'warning',
+        title: 'Фильтр loglevel скрывает все строки',
+        detail: 'В буфере есть ' + snapshot.rawCount + ' строк, но порог ' + snapshot.levelFilter + ' для ' + fileLabel + ' ничего не пропускает.',
+      };
+    }
+
+    if (snapshot.levelCount > 0 && snapshot.hasTextFilter) {
+      return {
+        tone: 'muted',
+        title: 'Нет совпадений по текстовому фильтру',
+        detail: filterText
+          ? ('Фильтр "' + filterText + '" не нашел совпадений в ' + snapshot.levelCount + ' строках.')
+          : 'Текстовый фильтр не нашел совпадений.',
+      };
+    }
+
+    if (runtime.paused) {
+      return {
+        tone: 'info',
+        title: 'Вывод на паузе',
+        detail: pending
+          ? ('Поток продолжает читать ' + fileLabel + ', в буфере уже +' + pending + ' строк.')
+          : 'Экран заморожен до Resume. Новые строки появятся после продолжения вывода.',
+      };
+    }
+
+    if (uiStatus.phase === 'switching') {
+      return {
+        tone: 'info',
+        title: 'Переключаю источник логов',
+        detail: String(uiStatus.message || ('Подключаю ' + fileLabel + ' и жду первый снимок.')),
+      };
+    }
+
+    if (uiStatus.phase === 'connecting' || uiStatus.phase === 'reconnecting' || uiStatus.phase === 'fallback') {
+      return {
+        tone: uiStatus.tone === 'error' ? 'warning' : 'info',
+        title: 'Подключаю live transport',
+        detail: String(uiStatus.message || ('Жду первые строки из ' + fileLabel + '.')),
+      };
+    }
+
+    if (_isErrorFileName(runtime.currentFile) && String(runtime.activeLogLevel || 'none') === 'none') {
+      return {
+        tone: 'warning',
+        title: 'Логирование Xray выключено',
+        detail: 'Backend сейчас отвечает с loglevel=none, поэтому error.log может оставаться пустым, пока вы не включите логи.',
+      };
+    }
+
+    if (runtime.streaming) {
+      return {
+        tone: 'muted',
+        title: fileLabel + ' пока пуст',
+        detail: runtime.useWs
+          ? 'Live transport уже поднимается, но новых строк в журнале пока нет.'
+          : ('HTTP polling проверяет ' + fileLabel + ' каждые ' + formatXrayLogPollLabel(runtime.pollMs) + '.'),
+      };
+    }
+
+    return {
+      tone: 'muted',
+      title: fileLabel + ' пока пуст',
+      detail: 'Нажмите View, чтобы запросить снимок, или включите Live для ожидания новых строк.',
+    };
+  }
+
+  function renderXrayLogEmptyStateHtml(model) {
+    if (!model) return '';
+
+    const tone = String(model.tone || 'muted');
+    const titleClass = tone === 'error'
+      ? 'log-line log-line-error'
+      : (tone === 'warning'
+        ? 'log-line log-line-warning'
+        : (tone === 'info' ? 'log-line log-line-info' : 'log-line'));
+
+    const title = escapeHtml(String(model.title || 'Пока нет строк'));
+    const detail = escapeHtml(String(model.detail || ''));
+
+    return [
+      '<span class="' + titleClass + '" data-empty-state="title">' + title + '</span>',
+      detail ? '<span class="log-line" data-empty-state="detail">' + detail + '</span>' : '',
+    ].join('');
+  }
+
+  function renderXrayLogOutputLayer(dom, runtimeState, viewState) {
+    const refs = dom || getXrayLogsDom();
+    const outputEl = refs.output;
+    if (!outputEl) return;
+
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+    const view = viewState || readXrayLogsViewState(refs, runtime);
+    const filtered = buildFilteredXrayLogEntries(runtime, view);
+    const entries = Array.isArray(filtered.entries) ? filtered.entries : [];
+
+    const wasAtBottom = outputEl.scrollTop + outputEl.clientHeight >= outputEl.scrollHeight - 5;
+    const shouldScroll = view.follow ? true : wasAtBottom;
+
+    if (entries.length) {
+      outputEl.innerHTML = entries.map((entry) => parseXrayLogLine(entry.line, entry.idx)).join('');
+    } else {
+      outputEl.innerHTML = renderXrayLogEmptyStateHtml(buildXrayLogEmptyStateModel(runtime, view, filtered));
+    }
+    if (shouldScroll) outputEl.scrollTop = outputEl.scrollHeight;
+  }
+
+  function resetXrayLogBuffer(options) {
+    const opts = options || {};
+    _lastLines = [];
+    if (opts.resetCursor !== false) _cursor = '';
+    if (opts.resetPending !== false) _pendingCount = 0;
+    return readXrayLogsRuntimeState();
+  }
+
+  function replaceXrayLogBuffer(lines) {
+    _lastLines = trimLogBuffer(lines, _maxLines);
+    return _lastLines;
+  }
+
+  function appendXrayLogBuffer(lines) {
+    const nextLines = Array.isArray(lines) ? lines : [];
+    _lastLines = trimLogBuffer([].concat(Array.isArray(_lastLines) ? _lastLines : [], nextLines), _maxLines);
+    return _lastLines;
+  }
+
+  function reconcileXrayLogBufferRender(options) {
+    const opts = options || {};
+    const added = Math.max(0, parseInt(opts.added || 0, 10) || 0);
+    const deferWhilePaused = !!opts.deferWhilePaused;
+    const forceRender = !!opts.forceRender;
+    const skipRender = !!opts.skipRender;
+
+    if (_paused && !forceRender && deferWhilePaused) {
+      if (added > 0) _pendingCount += added;
+      else _pendingCount = Math.max(0, _pendingCount);
+      updateXrayLogStats();
+      return false;
+    }
+
+    if (skipRender) {
+      updateXrayLogStats();
+      return false;
+    }
+
+    _pendingCount = 0;
+    applyXrayLogFilterToOutput();
+    return true;
+  }
+
   function readStoredUiState() {
     try {
       if (!window.localStorage) return {};
@@ -330,49 +1153,7 @@
   }
 
   function collectUiState() {
-    const fileSel = $('xray-log-file');
-    const lvlSel = $('xray-log-level');
-    const liveEl = $('xray-log-live');
-    const intervalEl = $('xray-log-interval');
-    const followEl = $('xray-log-follow');
-    const linesInput = $('xray-log-lines');
-    const filterEl = $('xray-log-filter');
-    const outputEl = $('xray-log-output');
-
-    let height = null;
-    try {
-      if (outputEl) height = Math.round(outputEl.getBoundingClientRect().height);
-    } catch (e) {}
-
-    // When fullscreen is active we intentionally keep the persisted height stable,
-    // so we don't store the (huge) fullscreen height and later apply it in normal mode.
-    if (_isFullscreen && _heightBeforeFullscreen != null) {
-      height = _heightBeforeFullscreen;
-    }
-
-    let maxLines = _maxLines;
-    try {
-      const v = parseInt((linesInput && linesInput.value) || '', 10);
-      if (isFinite(v)) maxLines = v;
-    } catch (e) {}
-
-    let pollMs = _pollMs;
-    try {
-      const v = parseInt((intervalEl && intervalEl.value) || '', 10);
-      if (isFinite(v)) pollMs = v;
-    } catch (e) {}
-
-    return {
-      file: String((fileSel && fileSel.value) || _currentFile || 'access'),
-      loglevel: String((lvlSel && lvlSel.value) || ''),
-      live: !!(liveEl && liveEl.checked),
-      follow: !!(followEl && followEl.checked),
-      pollMs: pollMs,
-      maxLines: maxLines,
-      filter: String((filterEl && filterEl.value) || ''),
-      height: height,
-      ts: Date.now(),
-    };
+    return readXrayLogsViewState(getXrayLogsDom(), readXrayLogsRuntimeState());
   }
 
   function scheduleSaveUiState() {
@@ -404,61 +1185,57 @@
   function applyUiStateFromPrefs(st) {
     const prefs = (st && typeof st === 'object') ? st : {};
     if (!prefs || typeof prefs !== 'object') return;
+    const dom = getXrayLogsDom();
 
     // file (default: access)
     const file = String(prefs.file || '').toLowerCase();
     const fileNorm = (file === 'access' || file === 'access.log') ? 'access' : (file === 'error' || file === 'error.log') ? 'error' : '';
-    const fileSel = $('xray-log-file');
-    if (fileSel && fileNorm) fileSel.value = fileNorm;
+    if (dom.file && fileNorm) dom.file.value = fileNorm;
     if (fileNorm) _currentFile = fileNorm;
 
     // loglevel selector (UI preference)
-    const lvlSel = $('xray-log-level');
     const lvl = String(prefs.loglevel || '').toLowerCase();
-    if (lvlSel && ALLOWED_LOGLEVELS.includes(lvl)) lvlSel.value = lvl;
+    if (dom.level && ALLOWED_LOGLEVELS.includes(lvl)) dom.level.value = lvl;
 
     // live/follow toggles
-    const liveEl = $('xray-log-live');
-    if (liveEl && typeof prefs.live === 'boolean') liveEl.checked = !!prefs.live;
+    if (typeof prefs.live === 'boolean') {
+      setXrayLogsLiveWanted(!!prefs.live, { skipRender: true });
+    }
 
-    const followEl = $('xray-log-follow');
-    if (followEl && typeof prefs.follow === 'boolean') followEl.checked = !!prefs.follow;
+    if (typeof prefs.follow === 'boolean') {
+      setXrayLogsFollowEnabled(!!prefs.follow, { skipRender: true, skipScroll: true });
+    }
 
     // interval + internal poll
-    const intervalEl = $('xray-log-interval');
     try {
       const v = parseInt(prefs.pollMs, 10);
       if (isFinite(v) && v >= 500) {
         _pollMs = v;
-        if (intervalEl) intervalEl.value = String(v);
+        if (dom.interval) dom.interval.value = String(v);
       }
     } catch (e) {}
 
     // max lines + internal window
     try {
-      let v = parseInt(prefs.maxLines, 10);
-      if (!isFinite(v)) v = DEFAULT_MAX_LINES;
-      if (v < 50) v = 50;
-      if (v > MAX_MAX_LINES) v = MAX_MAX_LINES;
+      const v = clampLogLinesValue(prefs.maxLines, DEFAULT_MAX_LINES);
       _maxLines = v;
-      const linesInput = $('xray-log-lines');
-      if (linesInput) linesInput.value = String(v);
+      if (dom.lines) dom.lines.value = String(v);
     } catch (e) {}
 
     // filter
-    const filterEl = $('xray-log-filter');
-    if (filterEl && typeof prefs.filter === 'string') filterEl.value = prefs.filter;
+    if (dom.filter && typeof prefs.filter === 'string') dom.filter.value = prefs.filter;
 
     // log window height
-    const outputEl = $('xray-log-output');
     try {
       let h = parseInt(prefs.height, 10);
       if (isFinite(h)) {
         // Keep consistent with CSS min-height.
         if (h < 420) h = 420;
-        if (outputEl) outputEl.style.height = String(h) + 'px';
+        if (dom.output) dom.output.style.height = String(h) + 'px';
       }
     } catch (e) {}
+
+    try { updateXrayLogStats(); } catch (e) {}
   }
 
   // Initial restore without triggering /api/ui-settings fetch.
@@ -732,9 +1509,9 @@
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      toast(okMsg || 'Логи Xray скопированы в буфер обмена', false);
+      actionToast('xray-logs-copy', okMsg || 'Логи Xray скопированы в буфер обмена', 'success');
     } catch (e) {
-      toast('Не удалось скопировать логи', true);
+      actionToast('xray-logs-copy', 'Не удалось скопировать логи', 'error');
     }
   }
 
@@ -905,6 +1682,21 @@
   el.textContent = parts.join(' • ');
     try { updatePauseButton(); } catch (e) {}
 }
+
+  function setXrayHeaderBadgeState(state, level) {
+    renderXrayHeaderBadgeLayer(getXrayLogsDom(), state, level);
+  }
+
+  function setXrayLogLampState(state) {
+    renderXrayLogLampLayer(getXrayLogsDom(), state);
+  }
+
+  function updateXrayLogStats() {
+    const dom = getXrayLogsDom();
+    const runtime = readXrayLogsRuntimeState();
+    renderXrayLogStatsLayer(dom, runtime);
+    renderXrayLogsChrome(dom, runtime);
+  }
 
   async function refreshXrayLogStatus() {
     try {
@@ -1292,6 +2084,16 @@
   updateXrayLogStats();
 }
 
+  function applyXrayLogFilterToOutput() {
+    const dom = getXrayLogsDom();
+    if (!dom.output) return;
+
+    const runtime = readXrayLogsRuntimeState();
+    const view = readXrayLogsViewState(dom, runtime);
+    renderXrayLogOutputLayer(dom, runtime, view);
+    updateXrayLogStats();
+  }
+
   // ---------- Data sources: HTTP + WebSocket ----------
 
   function _isWs2Socket(ws) {
@@ -1335,11 +2137,28 @@
 
     const statusEl = $('xray-log-status');
     const file = _currentFile || 'access';
+    const fileLabel = formatXrayLogFileLabel(file);
 
     const resetCursor = !!(opts && opts.resetCursor);
     const forceRender = !!(opts && opts.forceRender);
 
     const cur = resetCursor ? '' : (_cursor || '');
+
+    if (source === 'manual' || source === 'enable' || source === 'load_more' || source === 'fallback_ws') {
+      setXrayLogUiStatus({
+        phase: source === 'fallback_ws' ? 'fallback' : 'loading',
+        tone: source === 'fallback_ws' ? 'warning' : 'muted',
+        transport: source === 'fallback_ws' ? ('HTTP/' + formatXrayLogPollLabel(_pollMs)) : readXrayLogTransportLabel(),
+        message: source === 'enable'
+          ? ('Запрашиваю первый снимок ' + fileLabel + ' после включения логов...')
+          : (source === 'load_more'
+            ? ('Подгружаю более ранние строки из ' + fileLabel + '...')
+            : (source === 'fallback_ws'
+              ? 'WebSocket недоступен, переключаюсь на HTTP snapshot и polling.'
+              : ('Запрашиваю снимок ' + fileLabel + '...'))),
+        file,
+      });
+    }
 
     try {
       const params = new URLSearchParams();
@@ -1350,6 +2169,13 @@
 
       const res = await fetch('/api/xray-logs?' + params.toString());
       if (!res.ok) {
+        setXrayLogUiStatus({
+          phase: 'error',
+          tone: 'error',
+          transport: readXrayLogTransportLabel(),
+          message: 'Не удалось загрузить логи Xray.',
+          file,
+        });
         if (statusEl) statusEl.textContent = 'Не удалось загрузить логи Xray.';
         return;
       }
@@ -1363,39 +2189,45 @@
 
       if (mode === 'append') {
         if (lines.length) {
-          for (const ln of lines) _lastLines.push(ln);
-          if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
-
-          if (_paused && !forceRender && source === 'poll') {
-            _pendingCount += lines.length;
-            updateXrayLogStats();
-          } else {
-            _pendingCount = 0;
-            applyXrayLogFilterToOutput();
-          }
+          appendXrayLogBuffer(lines);
+          reconcileXrayLogBufferRender({
+            added: lines.length,
+            deferWhilePaused: source === 'poll',
+            forceRender,
+          });
         } else {
-          // still update meta/stats (cursor/transport)
-          updateXrayLogStats();
+          reconcileXrayLogBufferRender({ skipRender: true });
         }
       } else {
-        _lastLines = lines;
-        if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
-
-        if (_paused && !forceRender && source === 'poll') {
-          // keep buffer updated but don't repaint
-          _pendingCount = Math.max(0, _pendingCount);
-          updateXrayLogStats();
-        } else {
-          _pendingCount = 0;
-          applyXrayLogFilterToOutput();
-        }
+        replaceXrayLogBuffer(lines);
+        reconcileXrayLogBufferRender({
+          added: 0,
+          deferWhilePaused: source === 'poll',
+          forceRender,
+        });
       }
 
       if (statusEl) statusEl.textContent = '';
+      setXrayLogUiStatus({
+        phase: _streaming ? 'streaming' : 'ready',
+        tone: 'muted',
+        transport: readXrayLogTransportLabel(),
+        message: source === 'manual'
+          ? (lines.length ? ('Снимок ' + fileLabel + ' загружен.') : (fileLabel + ' пока пуст.'))
+          : '',
+        file,
+      });
       refreshXrayLogStatus();
     } catch (e) {
       console.error(e);
       if (statusEl) statusEl.textContent = 'Ошибка чтения логов Xray.';
+      setXrayLogUiStatus({
+        phase: 'error',
+        tone: 'error',
+        transport: readXrayLogTransportLabel(),
+        message: 'Ошибка чтения логов Xray.',
+        file,
+      });
     } finally {
       _httpFetchInFlight = false;
     }
@@ -1430,6 +2262,13 @@
     const url = proto + '//' + host + '/ws/xray-logs2?' + params.toString();
 
     wsDebug('WS2: connecting', { url: url, file: file, filter: !!filter });
+    setXrayLogUiStatus({
+      phase: 'connecting',
+      tone: 'muted',
+      transport: 'WS2 connect',
+      message: 'Подключаю WS2 live stream для ' + formatXrayLogFileLabel(file) + '...',
+      file,
+    });
 
     let ws = null;
     try {
@@ -1441,6 +2280,13 @@
     } catch (e) {
       console.error('Failed to create WebSocket2 for logs', e);
       _ws2FailedSession = true;
+      setXrayLogUiStatus({
+        phase: 'fallback',
+        tone: 'warning',
+        transport: 'WS fallback',
+        message: 'Не удалось создать WS2, переключаюсь на legacy transport.',
+        file,
+      });
       if (statusEl) statusEl.textContent = 'Не удалось создать WebSocket2, использую старый режим.';
       // fallback to legacy connect (or HTTP in legacy handler)
       try { xrayLogConnectWs(); } catch (e2) {}
@@ -1453,6 +2299,13 @@
       _wsEverOpened = true;
       _ws2FailStreak = 0;
       _ws2LastOpenAt = Date.now();
+      setXrayLogUiStatus({
+        phase: 'streaming',
+        tone: 'muted',
+        transport: 'WS2 live',
+        message: 'WS2 подключен. Жду новые строки...',
+        file,
+      });
 
       // Disable HTTP polling while WS is active
       if (_timer) {
@@ -1483,36 +2336,44 @@
       let added = 0;
 
       if (data && data.type === 'init' && Array.isArray(data.lines)) {
-        _lastLines = data.lines;
+        replaceXrayLogBuffer(data.lines);
       } else if (data && data.type === 'append' && Array.isArray(data.lines)) {
-        for (const ln of data.lines) _lastLines.push(ln);
+        appendXrayLogBuffer(data.lines);
         added = data.lines.length;
       } else if (data && data.type === 'status') {
         // status/meta update only
+        setXrayLogUiStatus({
+          phase: 'streaming',
+          tone: 'muted',
+          transport: 'WS2 live',
+          message: '',
+          file,
+        });
         try { updateXrayLogStats(); } catch (e) {}
         return;
       } else if (data && data.type === 'error') {
         const err = String(data.error || '').trim();
+        setXrayLogUiStatus({
+          phase: 'error',
+          tone: 'error',
+          transport: 'WS2 live',
+          message: err ? ('WS2: ' + err) : 'WS2: ошибка.',
+          file,
+        });
         if (statusEl) statusEl.textContent = err ? ('WS2: ' + err) : 'WS2: ошибка.';
         try { updateXrayLogStats(); } catch (e) {}
         return;
       } else if (Array.isArray(data.lines)) {
-        _lastLines = data.lines;
+        replaceXrayLogBuffer(data.lines);
       } else if (data && typeof data.line === 'string') {
-        _lastLines.push(data.line);
+        appendXrayLogBuffer([data.line]);
         added = 1;
       }
 
-      if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
-
-      if (_paused) {
-        if (added) _pendingCount += added;
-        updateXrayLogStats();
-        return;
-      }
-
-      _pendingCount = 0;
-      applyXrayLogFilterToOutput();
+      reconcileXrayLogBufferRender({
+        added,
+        deferWhilePaused: true,
+      });
     };
 
     ws.onclose = function (ev) {
@@ -1531,6 +2392,13 @@
       try { updateXrayLogStats(); } catch (e) {}
 
       if (_wsClosingManually || !visible) {
+        setXrayLogUiStatus({
+          phase: 'idle',
+          tone: 'muted',
+          transport: '',
+          message: 'WS2 live stream остановлен.',
+          file,
+        });
         if (statusEl) statusEl.textContent = 'WebSocket2 для логов закрыт.';
         return;
       }
@@ -1538,6 +2406,13 @@
       // never opened -> WS2 not supported / not available
       if (!_wsEverOpened) {
         _ws2FailedSession = true;
+        setXrayLogUiStatus({
+          phase: 'fallback',
+          tone: 'warning',
+          transport: 'WS fallback',
+          message: 'WS2 недоступен, переключаюсь на legacy transport.',
+          file,
+        });
         if (statusEl) statusEl.textContent = 'WebSocket2 недоступен, использую старый режим.';
         // fallback to legacy connect (or HTTP inside legacy handler)
         setTimeout(() => {
@@ -1551,6 +2426,13 @@
 
       if (_ws2FailStreak >= 3) {
         _ws2FailedSession = true;
+        setXrayLogUiStatus({
+          phase: 'fallback',
+          tone: 'warning',
+          transport: 'WS fallback',
+          message: 'WS2 нестабилен (code ' + String(code || '?') + '), переключаюсь на legacy transport.',
+          file,
+        });
         if (statusEl) statusEl.textContent = 'WebSocket2 нестабилен (code ' + String(code || '?') + '), использую старый режим.';
         setTimeout(() => {
           const stillVisible = isLogsViewVisible();
@@ -1565,6 +2447,13 @@
 
       setTimeout(() => {
         const stillVisible = isLogsViewVisible();
+        setXrayLogUiStatus({
+          phase: 'reconnecting',
+          tone: 'warning',
+          transport: 'WS2 retry',
+          message: 'WS2 разорван (code ' + String(code || '?') + '), пытаюсь переподключиться...',
+          file,
+        });
         if (!_ws && _useWs && stillVisible && _streaming && _shouldUseWs2()) xrayLogConnectWs2();
         // If WS2 is disabled mid-session or failed, legacy will be used by start().
       }, 1000);
@@ -1603,6 +2492,13 @@
     const url = proto + '//' + host + '/ws/xray-logs?file=' + encodeURIComponent(file) + '&max_lines=' + encodeURIComponent(String(_maxLines || DEFAULT_MAX_LINES));
 
     wsDebug('WS: connecting', { url: url, file: file });
+    setXrayLogUiStatus({
+      phase: 'connecting',
+      tone: 'muted',
+      transport: 'WS connect',
+      message: 'Подключаю WebSocket live stream для ' + formatXrayLogFileLabel(file) + '...',
+      file,
+    });
 
     let ws = null;
 
@@ -1614,6 +2510,13 @@
     } catch (e) {
       console.error('Failed to create WebSocket for logs', e);
       _useWs = false;
+      setXrayLogUiStatus({
+        phase: 'fallback',
+        tone: 'warning',
+        transport: 'HTTP/' + formatXrayLogPollLabel(_pollMs),
+        message: 'Не удалось создать WebSocket, переключаюсь на HTTP polling.',
+        file,
+      });
       if (statusEl) statusEl.textContent = 'Не удалось создать WebSocket, использую HTTP.';
       return;
     }
@@ -1622,6 +2525,13 @@
       if (ws !== _ws) return;
       wsDebug('WS: open', { file: file });
       _wsEverOpened = true;
+      setXrayLogUiStatus({
+        phase: 'streaming',
+        tone: 'muted',
+        transport: 'WS live',
+        message: 'WebSocket подключен. Жду новые строки...',
+        file,
+      });
 
       // Disable HTTP polling while WS is active
       if (_timer) {
@@ -1646,34 +2556,27 @@
 
       if (data && data.type === 'init' && Array.isArray(data.lines)) {
         // Initial snapshot (tail window). Treat as a full replace, not "new lines".
-        _lastLines = data.lines;
+        replaceXrayLogBuffer(data.lines);
       } else if (data && data.type === 'append' && Array.isArray(data.lines)) {
         // Future-proof: batch append
-        for (const ln of data.lines) _lastLines.push(ln);
+        appendXrayLogBuffer(data.lines);
         added = data.lines.length;
       } else if (data && data.type === 'line' && typeof data.line === 'string') {
-        _lastLines.push(data.line);
+        appendXrayLogBuffer([data.line]);
         added = 1;
       } else if (Array.isArray(data.lines)) {
         // Unknown payload shape: assume full snapshot
-        _lastLines = data.lines;
+        replaceXrayLogBuffer(data.lines);
       } else if (data && typeof data.line === 'string') {
         // Unknown payload shape: single line
-        _lastLines.push(data.line);
+        appendXrayLogBuffer([data.line]);
         added = 1;
       }
 
-      if (_lastLines.length > _maxLines) _lastLines = _lastLines.slice(-_maxLines);
-
-      // PAUSE must work in WS mode too: keep buffering but don't repaint.
-      if (_paused) {
-        if (added) _pendingCount += added;
-        updateXrayLogStats();
-        return;
-      }
-
-      _pendingCount = 0;
-      applyXrayLogFilterToOutput();
+      reconcileXrayLogBufferRender({
+        added,
+        deferWhilePaused: true,
+      });
     };
 
     ws.onclose = function () {
@@ -1687,6 +2590,13 @@
 
       // closed by us (tab switch/file change/stop) or view hidden
       if (_wsClosingManually || !visible) {
+        setXrayLogUiStatus({
+          phase: 'idle',
+          tone: 'muted',
+          transport: '',
+          message: 'WebSocket live stream остановлен.',
+          file,
+        });
         if (statusEl) statusEl.textContent = 'WebSocket для логов закрыт.';
         return;
       }
@@ -1694,6 +2604,13 @@
       // never opened -> WS not supported
       if (!_wsEverOpened) {
         _useWs = false;
+        setXrayLogUiStatus({
+          phase: 'fallback',
+          tone: 'warning',
+          transport: 'HTTP/' + formatXrayLogPollLabel(_pollMs),
+          message: 'WebSocket недоступен, переключаюсь на HTTP polling.',
+          file,
+        });
         if (statusEl) statusEl.textContent = 'WebSocket недоступен, использую HTTP.';
         if (!_timer) {
           fetchXrayLogsOnce('fallback_ws', { resetCursor: true, forceRender: true });
@@ -1703,6 +2620,13 @@
       }
 
       // was working -> reconnect, without enabling HTTP (avoid dupes)
+      setXrayLogUiStatus({
+        phase: 'reconnecting',
+        tone: 'warning',
+        transport: 'WS retry',
+        message: 'WebSocket разорван, пытаюсь переподключиться...',
+        file,
+      });
       if (statusEl) statusEl.textContent = 'WebSocket для логов разорван, пытаюсь переподключиться...';
 
       setTimeout(() => {
@@ -1729,6 +2653,7 @@
     // (includes one-time migration from legacy localStorage)
     try { await ensureLogsViewPrefsLoadedForLogs(); } catch (e) {}
 
+    _liveWanted = true;
     _streaming = true;
     _paused = false;
     _pendingCount = 0;
@@ -1742,6 +2667,17 @@
       const liveEl = $('xray-log-live');
       if (liveEl) liveEl.checked = true;
     } catch (e) {}
+    setXrayLogUiStatus({
+      phase: 'connecting',
+      tone: 'muted',
+      transport: (_useWs && 'WebSocket' in window)
+        ? (_shouldUseWs2() ? 'WS2 connect' : 'WS connect')
+        : ('HTTP/' + formatXrayLogPollLabel(_pollMs)),
+      message: (_useWs && 'WebSocket' in window)
+        ? ('Поднимаю live stream для ' + formatXrayLogFileLabel(_currentFile || 'access') + '...')
+        : ('Запускаю HTTP polling для ' + formatXrayLogFileLabel(_currentFile || 'access') + '...'),
+      file: _currentFile || 'access',
+    });
     try { updateXrayLogStats(); } catch (e) {}
 
     // If WS already open/connecting - nothing to do
@@ -1761,6 +2697,13 @@
 
     if (_timer) return;
     await fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
+    setXrayLogUiStatus({
+      phase: 'streaming',
+      tone: 'muted',
+      transport: 'HTTP/' + formatXrayLogPollLabel(_pollMs),
+      message: 'Live stream идет через HTTP polling каждые ' + formatXrayLogPollLabel(_pollMs) + '.',
+      file: _currentFile || 'access',
+    });
     _timer = setInterval(() => fetchXrayLogsOnce('poll'), _pollMs);
   }
 
@@ -1775,6 +2718,13 @@
     // IMPORTANT: do NOT force-toggle the "Live" checkbox here.
     // The checkbox is treated as a user preference and is persisted via /api/ui-settings
     // (with a legacy localStorage fallback when the settings endpoint is unavailable).
+    setXrayLogUiStatus({
+      phase: 'idle',
+      tone: 'muted',
+      transport: '',
+      message: 'Live stream остановлен.',
+      file: _currentFile || 'access',
+    });
     try { updateXrayLogStats(); } catch (e) {}
     if (_timer) {
       try { clearInterval(_timer); } catch (e) {}
@@ -1793,15 +2743,20 @@
 
   async function xrayLogsView() {
     try { await ensureLogsViewPrefsLoadedForLogs(); } catch (e) {}
+    setXrayLogUiStatus({
+      phase: 'loading',
+      tone: 'muted',
+      transport: '',
+      message: 'Запрашиваю снимок ' + formatXrayLogFileLabel(_currentFile || 'access') + '...',
+      file: _currentFile || 'access',
+    });
     await fetchXrayLogsOnce('manual', { resetCursor: true, forceRender: true });
   }
 
   function xrayLogsClearScreen() {
     const outputEl = $('xray-log-output');
     if (outputEl) outputEl.innerHTML = '';
-    _lastLines = [];
-    _cursor = '';
-    _pendingCount = 0;
+    resetXrayLogBuffer();
 
     // WS2: also reset server-side cursor (so it doesn't re-send buffered tail on resume).
     try {
@@ -1815,13 +2770,18 @@
   async function xrayLogChangeFile() {
     const selectEl = $('xray-log-file');
     if (selectEl) _currentFile = selectEl.value || 'access';
+    setXrayLogUiStatus({
+      phase: 'switching',
+      tone: 'muted',
+      transport: readXrayLogTransportLabel(),
+      message: 'Переключаюсь на ' + formatXrayLogFileLabel(_currentFile || 'access') + '...',
+      file: _currentFile || 'access',
+    });
     updateLoglevelUiForCurrentFile();
     try { scheduleSaveUiState(); } catch (e) {}
 
     // clear buffer + redraw
-    _lastLines = [];
-    _cursor = '';
-    _pendingCount = 0;
+    resetXrayLogBuffer();
     applyXrayLogFilterToOutput();
 
     // Load server-side UI prefs only when the logs view is actively used.
@@ -1874,6 +2834,13 @@
 
   async function xrayLogsEnable() {
     const statusEl = $('xray-log-status');
+    setXrayLogUiStatus({
+      phase: 'loading',
+      tone: 'muted',
+      transport: '',
+      message: 'Включаю логи Xray...',
+      file: _currentFile || 'access',
+    });
     try {
       // Pick the desired loglevel from the selector (UI preference).
       const lvlSel = $('xray-log-level');
@@ -1890,6 +2857,13 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error('http ' + res.status);
+      setXrayLogUiStatus({
+        phase: 'ready',
+        tone: 'muted',
+        transport: '',
+        message: 'Логи включены (loglevel=' + (data.loglevel || 'warning') + '). Xray перезапущен.',
+        file: _currentFile || 'access',
+      });
 
       if (statusEl) {
         statusEl.textContent =
@@ -1908,8 +2882,7 @@
       _cursor = '';
       _pendingCount = 0;
 
-      const liveEl = $('xray-log-live');
-      const wantStream = !!(liveEl && liveEl.checked);
+      const wantStream = !!_liveWanted;
       const visible = isLogsViewVisible();
 
       if (visible) {
@@ -1946,10 +2919,24 @@
     // Stop auto updates immediately to keep last snapshot
     stopXrayLogAuto();
     const statusEl = $('xray-log-status');
+    setXrayLogUiStatus({
+      phase: 'loading',
+      tone: 'muted',
+      transport: '',
+      message: 'Останавливаю логи Xray...',
+      file: _currentFile || 'access',
+    });
     try {
       const res = await fetch('/api/xray-logs/disable', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error('http ' + res.status);
+      setXrayLogUiStatus({
+        phase: 'ready',
+        tone: 'muted',
+        transport: '',
+        message: 'Логи остановлены (loglevel=none). Xray перезапущен.',
+        file: _currentFile || 'access',
+      });
 
       if (statusEl) statusEl.textContent = 'Логи остановлены (loglevel=none). Xray перезапущен.';
       try { await refreshXrayLogStatus(); } catch (e) {}
@@ -1962,8 +2949,41 @@
 
   async function xrayLogsClear() {
     const statusEl = $('xray-log-status');
+    const file = _currentFile || 'access';
+    const ok = await confirmAction({
+      title: 'Очистить логфайлы',
+      message: 'Очистить ' + formatXrayLogFileLabel(file) + '?',
+      details: [
+        'Будет очищен файл логов на диске, а не только видимый буфер.',
+        'Это действие необратимо.',
+      ],
+      okText: 'Очистить',
+      cancelText: 'Отменить',
+      focus: 'cancel',
+      danger: true,
+      cancelMessage: 'Очистка логфайлов отменена.',
+      cancelKind: 'info',
+    });
+    if (!ok) {
+      setXrayLogUiStatus({
+        phase: 'idle',
+        tone: 'muted',
+        transport: readXrayLogTransportLabel(),
+        message: 'Очистка логфайлов отменена.',
+        file,
+      });
+      if (statusEl) statusEl.textContent = 'Очистка логфайлов отменена.';
+      return false;
+    }
+
+    setXrayLogUiStatus({
+      phase: 'loading',
+      tone: 'muted',
+      transport: '',
+      message: 'Очищаю log files...',
+      file,
+    });
     try {
-      const file = _currentFile || 'access';
       const res = await fetch('/api/xray-logs/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1971,14 +2991,30 @@
       });
       if (!res.ok) throw new Error('http ' + res.status);
 
-      _lastLines = [];
-      _cursor = '';
-      _pendingCount = 0;
+      resetXrayLogBuffer();
       applyXrayLogFilterToOutput();
+      setXrayLogUiStatus({
+        phase: 'ready',
+        tone: 'muted',
+        transport: '',
+        message: 'Логфайлы очищены.',
+        file,
+      });
       if (statusEl) statusEl.textContent = 'Логфайлы очищены.';
+      actionToast('xray-logs-clear', 'Логфайлы очищены.', 'success');
+      return true;
     } catch (e) {
       console.error(e);
+      setXrayLogUiStatus({
+        phase: 'error',
+        tone: 'error',
+        transport: readXrayLogTransportLabel(),
+        message: 'Не удалось очистить логфайлы.',
+        file,
+      });
       if (statusEl) statusEl.textContent = 'Не удалось очистить логфайлы.';
+      actionToast('xray-logs-clear', 'Не удалось очистить логфайлы.', 'error');
+      return false;
     }
   }
 
@@ -1989,14 +3025,7 @@
     const text = outputEl.textContent || '';
     if (!text) return;
 
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(
-        () => toast('Логи Xray скопированы в буфер обмена', false),
-        () => fallbackCopyText(text)
-      );
-    } else {
-      fallbackCopyText(text);
-    }
+    copyToClipboard(text, 'Логи Xray скопированы в буфер обмена');
   }
 
 function updatePauseButton() {
@@ -2025,6 +3054,12 @@ function updatePauseButton() {
   }
 }
 
+function updatePauseButton() {
+  const dom = getXrayLogsDom();
+  const runtime = readXrayLogsRuntimeState();
+  renderXrayLogsChrome(dom, runtime);
+}
+
 function xrayLogsTogglePause() {
   if (!_streaming) return;
 
@@ -2046,7 +3081,7 @@ function copyToClipboard(text, okMsg) {
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(
-      () => toast(msg, false),
+      () => actionToast('xray-logs-copy', msg, 'success'),
       () => fallbackCopyText(text, msg)
     );
   } else {
@@ -2086,8 +3121,8 @@ function handleLogTokenClick(linkEl, e) {
         const parts = cur ? cur.split(/\s+/).filter(Boolean) : [];
         if (!parts.includes(token)) parts.push(token);
         filterEl.value = parts.join(' ');
-        try { applyXrayLogFilterToOutput(); } catch (e2) {}
-        toast(kindLabel + ' добавлен в фильтр', false);
+        try { flushXrayLogFilterApply('token_shift_click'); } catch (e2) {}
+        actionToast('xray-logs-filter', kindLabel + ' добавлен в фильтр', 'success');
         try { filterEl.focus(); } catch (e3) {}
         return;
       }
@@ -2106,12 +3141,12 @@ function xrayLogsCopySelection() {
     const sel = window.getSelection && window.getSelection();
     const text = sel ? String(sel.toString() || '') : '';
     if (!text.trim()) {
-      toast('Нет выделенного текста', true);
+      actionToast('xray-logs-copy', 'Нет выделенного текста', 'error');
       return;
     }
     copyToClipboard(text, 'Выделение скопировано');
   } catch (e) {
-    toast('Не удалось скопировать выделение', true);
+    actionToast('xray-logs-copy', 'Не удалось скопировать выделение', 'error');
   }
 }
 
@@ -2131,7 +3166,7 @@ async function xrayLogsDownload() {
     URL.revokeObjectURL(url);
   } catch (e) {
     console.error(e);
-    toast('Не удалось скачать лог', true);
+    actionToast('xray-logs-download', 'Не удалось скачать лог', 'error');
   }
 }
 
@@ -2253,15 +3288,27 @@ function openXrayContextModal(idx, radius) {
   }
 
   out.textContent = lines.join('\n');
-  modal.classList.remove('hidden');
-  try { XKeen.ui.modal && XKeen.ui.modal.syncBodyScrollLock && XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
+  try {
+    if (XKeen.ui.modal && typeof XKeen.ui.modal.open === 'function') {
+      XKeen.ui.modal.open(modal, { source: 'xray_logs_context' });
+    } else {
+      modal.classList.remove('hidden');
+      if (XKeen.ui.modal && XKeen.ui.modal.syncBodyScrollLock) XKeen.ui.modal.syncBodyScrollLock();
+    }
+  } catch (e) {}
 }
 
 function closeXrayContextModal() {
   const modal = $('xray-context-modal');
   if (!modal) return;
-  modal.classList.add('hidden');
-  try { XKeen.ui.modal && XKeen.ui.modal.syncBodyScrollLock && XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
+  try {
+    if (XKeen.ui.modal && typeof XKeen.ui.modal.close === 'function') {
+      XKeen.ui.modal.close(modal, { source: 'xray_logs_context' });
+    } else {
+      modal.classList.add('hidden');
+      if (XKeen.ui.modal && XKeen.ui.modal.syncBodyScrollLock) XKeen.ui.modal.syncBodyScrollLock();
+    }
+  } catch (e) {}
 }
 
 function copyXrayContextModal() {
@@ -2318,6 +3365,7 @@ function copyXrayContextModal() {
 	  const copySelBtn = $('xray-log-copy-selection');
 	  const dlBtn = $('xray-log-download');
 	  const outputEl = $('xray-log-output');
+	  const scrollBottomBtn = $('xray-log-scroll-bottom');
 
 	  if (viewBtn) {
 	    viewBtn.addEventListener('click', (e) => {
@@ -2362,7 +3410,9 @@ function copyXrayContextModal() {
 	  }
 
 	  if (liveEl) {
+	    _liveWanted = !!liveEl.checked;
 	    liveEl.addEventListener('change', () => {
+	      setXrayLogsLiveWanted(!!liveEl.checked, { skipRender: true });
 	      if (liveEl.checked) startXrayLogAuto();
 	      else stopXrayLogAuto();
       try { updateXrayLogStats(); } catch (e) {}
@@ -2379,7 +3429,7 @@ function copyXrayContextModal() {
 	    lvlSel.addEventListener('change', () => {
 	      try { scheduleSaveUiState(); } catch (e) {}
 	      // Re-apply view filters immediately when the threshold changes.
-	      try { applyXrayLogFilterToOutput(); } catch (e) {}
+	      try { flushXrayLogFilterApply('loglevel_change', { skipSave: true, skipWs2: true }); } catch (e) {}
 
       // If Xray logging is already enabled, changing loglevel should apply immediately
       // (restart only Xray core) so the user doesn't have to press ▶ manually.
@@ -2394,6 +3444,13 @@ function copyXrayContextModal() {
             _applyLevelTimer = null;
           }
           const statusEl = $('xray-log-status');
+          setXrayLogUiStatus({
+            phase: 'switching',
+            tone: 'muted',
+            transport: '',
+            message: 'Применяю loglevel=' + desired + '...',
+            file: _currentFile || 'access',
+          });
           if (statusEl) statusEl.textContent = 'Применяю loglevel=' + desired + '...';
           _applyLevelTimer = setTimeout(() => {
             _applyLevelTimer = null;
@@ -2425,15 +3482,10 @@ function copyXrayContextModal() {
 
   if (followEl) {
     // init from UI (default checked in HTML)
-    _follow = !!followEl.checked;
+    setXrayLogsFollowEnabled(!!followEl.checked, { skipRender: true, skipScroll: true });
     followEl.addEventListener('change', () => {
-      _follow = !!followEl.checked;
-      if (_follow) {
-        try {
-          const out = $('xray-log-output');
-          if (out) out.scrollTop = out.scrollHeight;
-        } catch (e) {}
-      }
+      setXrayLogsFollowEnabled(!!followEl.checked, { skipRender: true });
+      try { updateXrayLogStats(); } catch (e) {}
       try { scheduleSaveUiState(); } catch (e) {}
     });
   }
@@ -2442,6 +3494,14 @@ function copyXrayContextModal() {
     pauseBtn.addEventListener('click', (e) => {
       e.preventDefault();
       xrayLogsTogglePause();
+    });
+  }
+
+  if (scrollBottomBtn) {
+    scrollBottomBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      scrollXrayLogOutputToBottom();
+      try { updateXrayLogStats(); } catch (e2) {}
     });
   }
 
@@ -2548,6 +3608,13 @@ function copyXrayContextModal() {
   }
 
   if (outputEl) {
+    if (!outputEl.dataset.scrollBound) {
+      outputEl.dataset.scrollBound = '1';
+      outputEl.addEventListener('scroll', () => {
+        scheduleXrayLogsChromeRender();
+      }, { passive: true });
+    }
+
     outputEl.addEventListener('contextmenu', (e) => {
       const t = e.target;
       const lineEl = t && t.closest ? t.closest('.log-line') : null;
@@ -2581,8 +3648,7 @@ function copyXrayContextModal() {
           if (filterEl) {
             const next = buildFilterWithLevel(filterEl.value || '', lvl);
             if (next !== String(filterEl.value || '')) filterEl.value = next;
-            applyXrayLogFilterToOutput();
-            try { scheduleSaveUiState(); } catch (eSave) {}
+            flushXrayLogFilterApply('level_click');
             return;
           }
         }
@@ -2643,21 +3709,59 @@ function copyXrayContextModal() {
     }, 180);
   }
 
+  function flushXrayLogFilterApply(reason, options) {
+    const opts = options || {};
+
+    if (_filterApplyTimer) {
+      try { clearTimeout(_filterApplyTimer); } catch (e) {}
+      _filterApplyTimer = null;
+    }
+
+    applyXrayLogFilterToOutput();
+    if (!opts.skipSave) {
+      try { scheduleSaveUiState(); } catch (e) {}
+    }
+    if (!opts.skipWs2) {
+      try { scheduleWs2SwitchFromUi(reason || 'filter'); } catch (e) {}
+    }
+  }
+
+  function scheduleXrayLogFilterApply(reason, options) {
+    const opts = options || {};
+
+    if (opts.immediate) {
+      flushXrayLogFilterApply(reason, opts);
+      return;
+    }
+
+    if (_filterApplyTimer) {
+      try { clearTimeout(_filterApplyTimer); } catch (e) {}
+      _filterApplyTimer = null;
+    }
+
+    _filterApplyTimer = setTimeout(() => {
+      _filterApplyTimer = null;
+      flushXrayLogFilterApply(reason, opts);
+    }, FILTER_APPLY_DEBOUNCE_MS);
+  }
+
 function bindFilterUi() {
     const filterEl = $('xray-log-filter');
     const clearBtn = $('xray-log-filter-clear');
 
     if (filterEl) {
       filterEl.addEventListener('input', () => {
-        applyXrayLogFilterToOutput();
-        try { scheduleSaveUiState(); } catch (e) {}
-        try { scheduleWs2SwitchFromUi('filter'); } catch (e) {}
+        scheduleXrayLogFilterApply('filter');
+      });
+      filterEl.addEventListener('blur', () => {
+        if (_filterApplyTimer) flushXrayLogFilterApply('filter_blur');
       });
       filterEl.addEventListener(
         'keydown',
         (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
+            flushXrayLogFilterApply('filter_enter');
             filterEl.blur();
           }
         },
@@ -2668,9 +3772,7 @@ function bindFilterUi() {
     if (clearBtn && filterEl) {
       clearBtn.addEventListener('click', () => {
         filterEl.value = '';
-        applyXrayLogFilterToOutput();
-        try { scheduleSaveUiState(); } catch (e) {}
-        try { scheduleWs2SwitchFromUi('filter_clear'); } catch (e) {}
+        flushXrayLogFilterApply('filter_clear');
         try { filterEl.focus(); } catch (e) {}
       });
     }

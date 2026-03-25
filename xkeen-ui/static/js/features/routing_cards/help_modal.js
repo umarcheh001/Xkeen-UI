@@ -17,6 +17,13 @@
 
   let _routingHelpWired = false;
 
+  function getModalApi() {
+    try {
+      if (window.XKeen && XK.ui && XK.ui.modal) return XK.ui.modal;
+    } catch (e) {}
+    return null;
+  }
+
   function ensureFieldHelpModal() {
     let modal = document.getElementById(FIELD_HELP_MODAL_ID);
     if (modal) return modal;
@@ -72,7 +79,6 @@
     function close() { closeFieldHelp(); }
     closeBtn.addEventListener('click', close);
     okBtn.addEventListener('click', close);
-    // Close only via modal buttons.
 
     document.body.appendChild(modal);
     return modal;
@@ -122,15 +128,27 @@
     const titleEl = document.getElementById(FIELD_HELP_TITLE_ID);
     if (titleEl) titleEl.textContent = doc ? ('Параметр: ' + doc.title) : 'Описание параметра';
     renderFieldHelp(doc);
-    modal.classList.remove('hidden');
-    try { document.body.classList.add('modal-open'); } catch (e) {}
+    const api = getModalApi();
+    try {
+      if (api && typeof api.open === 'function') api.open(modal, { source: 'routing_cards_help_modal' });
+      else modal.classList.remove('hidden');
+    } catch (e) {}
+    try {
+      if (!api || typeof api.open !== 'function') document.body.classList.add('modal-open');
+    } catch (e2) {}
   }
 
   function closeFieldHelp() {
     const modal = document.getElementById(FIELD_HELP_MODAL_ID);
     if (!modal) return;
-    modal.classList.add('hidden');
-    try { document.body.classList.remove('modal-open'); } catch (e) {}
+    const api = getModalApi();
+    try {
+      if (api && typeof api.close === 'function') api.close(modal, { source: 'routing_cards_help_modal' });
+      else modal.classList.add('hidden');
+    } catch (e) {}
+    try {
+      if (!api || typeof api.close !== 'function') document.body.classList.remove('modal-open');
+    } catch (e2) {}
   }
 
   function wireRoutingHelpButtons() {

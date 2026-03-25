@@ -17,7 +17,7 @@
   <!-- Apply layout prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260214a') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260325c') }}">
 <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
 <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
 <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -48,7 +48,7 @@
             id="theme-toggle-btn"
             class="theme-toggle-btn theme-toggle-header xk-header-btn xk-header-btn-theme"
             aria-label="Переключить тему"
-          ></button>
+          ><span class="theme-toggle-icon" aria-hidden="true">☀</span><span class="theme-toggle-text">Светлая тема</span></button>
           <a
             href="{{ url_for('index') }}"
             class="service-core-text xk-header-btn xk-header-btn-ui"
@@ -97,6 +97,23 @@
 
     <div id="backups-status" class="status"></div>
 
+
+    <div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Подтверждение">
+      <div class="modal-content" style="max-width: 520px;" data-modal-key="backups-confirm">
+        <div class="modal-header">
+          <span class="modal-title" id="confirm-modal-title">Подтверждение</span>
+          <button type="button" class="modal-close" id="confirm-modal-close-btn" title="Закрыть">×</button>
+        </div>
+        <div class="modal-body">
+          <p id="confirm-modal-message" class="modal-description" style="white-space: pre-line; margin: 0;"></p>
+        </div>
+        <div class="modal-actions" style="justify-content:flex-end;">
+          <button type="button" id="confirm-modal-cancel-btn" class="btn-secondary">Отменить</button>
+          <button type="button" id="confirm-modal-ok-btn" class="btn-danger">Подтвердить</button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast-container"></div>
 
     <footer>
@@ -104,18 +121,7 @@
     </footer>
   </div>
 	<!-- Modular: page init + feature logic (no main.js on this page) -->
-	<script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/core/xk_dom.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/core/xk_http.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/core/xk_storage.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
-	<script src="{{ url_for('static', filename='js/ui/theme.js', v='20260316a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
-<script src="{{ url_for('static', filename='js/ui/monaco_loader.js', v='20260317b') }}"></script>
-	<script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/features/backups.js', v='20260317b') }}"></script>
-	<script src="{{ url_for('static', filename='js/pages/backups.init.js') }}"></script>
+  <!-- Frontend workspace entrypoint (step 37). -->
+  <script type="module" src="{{ frontend_page_entry_url('backups') }}"></script>
 </body>
 </html>

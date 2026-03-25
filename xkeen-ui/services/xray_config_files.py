@@ -368,6 +368,25 @@ def resolve_xray_fragment_file(file_arg: str, *, kind: str, default_path: str) -
         return default_path
 
 
+def is_sensitive_xray_fragment_name(name: str, *, kind: str = "") -> bool:
+    """Best-effort sensitivity flag for config fragments.
+
+    This is intentionally conservative and currently marks:
+      - Hysteria2 companion fragments (``*_hys2.json``)
+      - explicitly named secret/auth/token/password/private fragments
+    """
+    try:
+        raw = os.path.basename(str(name or "")).lower()
+    except Exception:
+        raw = ""
+    if not raw:
+        return False
+    if "_hys2" in raw:
+        return True
+    markers = ("secret", "token", "password", "passwd", "private", "credential", "auth")
+    return any(marker in raw for marker in markers)
+
+
 def list_xray_fragments(kind: str) -> list[dict]:
     """List fragment files in XRAY_CONFIGS_DIR by keyword."""
     items: list[dict] = []
@@ -391,10 +410,15 @@ def list_xray_fragments(kind: str) -> list[dict]:
                         "size": int(getattr(st, "st_size", 0) or 0),
                         "mtime": int(getattr(st, "st_mtime", 0) or 0),
                         "hys2": ("_hys2" in lname),
+                        "sensitive": is_sensitive_xray_fragment_name(name, kind=kind),
                     }
                 )
             except Exception:
-                items.append({"name": name, "hys2": ("_hys2" in lname)})
+                items.append({
+                    "name": name,
+                    "hys2": ("_hys2" in lname),
+                    "sensitive": is_sensitive_xray_fragment_name(name, kind=kind),
+                })
     except Exception:
         items = []
     try:

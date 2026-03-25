@@ -276,6 +276,12 @@ let _monacoFsWired = false;
 let _active = null; // facade: {getValue,setValue,focus,layout,dispose}
 let _isEditable = false;
 
+const CM6_SCOPE = 'mihomo-generator';
+
+function withCm6Scope(opts) {
+  return Object.assign({ cm6Scope: CM6_SCOPE, scope: CM6_SCOPE }, opts || {});
+}
+
 function normalizeEngine(v) {
   const s = String(v || '').toLowerCase();
   return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
@@ -285,8 +291,25 @@ function getEngineHelper() {
   try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
 }
 
-function getMonacoShared() {
-  try { return (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null; } catch (e) { return null; }
+function getEditorActions() {
+  try { return (window.XKeen && XKeen.ui && XKeen.ui.editorActions) ? XKeen.ui.editorActions : null; } catch (e) { return null; }
+}
+
+function getEditorRuntime(engine, opts) {
+  const helper = getEngineHelper();
+  if (!helper || typeof helper.getRuntime !== 'function') return null;
+  try { return helper.getRuntime(engine, withCm6Scope(opts)); } catch (e) {}
+  return null;
+}
+
+async function ensureEditorRuntime(engine, opts) {
+  const helper = getEngineHelper();
+  if (!helper) return null;
+  try {
+    if (typeof helper.ensureRuntime === 'function') return await helper.ensureRuntime(engine, withCm6Scope(opts));
+    if (typeof helper.getRuntime === 'function') return helper.getRuntime(engine, withCm6Scope(opts));
+  } catch (e) {}
+  return null;
 }
 
 function showNode(node) {
@@ -313,13 +336,16 @@ function showCmToolbar(show) {
 
 function cmFacade() {
   const cm = editor;
-  return {
-    getValue: () => { try { return String(cm.getValue() || ''); } catch (e) { return ''; } },
-    setValue: (v) => { try { cm.setValue(String(v ?? '')); } catch (e) {} },
-    focus: () => { try { cm.focus(); } catch (e) {} },
-    layout: () => { try { cm.refresh(); } catch (e) {} },
-    dispose: () => {},
-  };
+  const helper = getEngineHelper();
+  if (!cm || !helper || typeof helper.fromCodeMirror !== 'function') return null;
+  try {
+    return helper.fromCodeMirror(cm, {
+      layout: () => {
+        try { cm.refresh(); } catch (e) {}
+      },
+    });
+  } catch (e) {}
+  return null;
 }
 
 function showCodeMirror(show) {
@@ -335,7 +361,11 @@ function showMonaco(show) {
   if (!host) return;
   if (show) showNode(host); else hideNode(host);
   if (show && _monaco && typeof _monaco.layout === 'function') {
-    try { _monaco.layout(); } catch (e) {}
+    try {
+      const runtime = getEditorRuntime('monaco');
+      if (runtime && typeof runtime.layoutOnVisible === 'function') runtime.layoutOnVisible(_monaco, host);
+      else _monaco.layout();
+    } catch (e) {}
     try { setTimeout(() => { try { _monaco.layout(); } catch (e2) {} }, 0); } catch (e3) {}
   }
 }
@@ -461,21 +491,23 @@ function toggleEditorFullscreen(cm) {
 
   const ed = cm || editor;
   try {
-    if (ed && typeof ed.getOption === 'function' && typeof ed.setOption === 'function') {
-      ed.setOption('fullScreen', !ed.getOption('fullScreen'));
-    }
+    const actions = getEditorActions();
+    if (actions && typeof actions.toggleFullscreen === 'function' && actions.toggleFullscreen(ed)) return;
+  } catch (e) {}
+  try {
+    if (ed && typeof ed.getOption === 'function' && typeof ed.setOption === 'function') ed.setOption('fullScreen', !ed.getOption('fullScreen'));
   } catch (e) {}
 }
 
 async function ensureMonacoEditor(initialValue) {
   if (_monaco) return _monaco;
   if (!previewMonacoHost) return null;
-  const shared = getMonacoShared();
-  if (!shared || typeof shared.createEditor !== 'function') return null;
+  const runtime = await ensureEditorRuntime('monaco');
+  if (!runtime || typeof runtime.create !== 'function') return null;
 
   const value = String(initialValue ?? '');
   try {
-    _monaco = await shared.createEditor(previewMonacoHost, {
+    _monaco = await runtime.create(previewMonacoHost, {
       language: 'yaml',
       value,
       readOnly: !_isEditable,
@@ -484,7 +516,12 @@ async function ensureMonacoEditor(initialValue) {
       wordWrap: 'on',
     });
     if (!_monaco) return null;
-    try { _monacoFacade = shared.toFacade ? shared.toFacade(_monaco) : null; } catch (e) { _monacoFacade = null; }
+    try {
+      const helper = getEngineHelper();
+      _monacoFacade = (helper && typeof helper.fromMonaco === 'function') ? helper.fromMonaco(_monaco) : null;
+    } catch (e) {
+      _monacoFacade = null;
+    }
     return _monaco;
   } catch (e) {
     try { console.error(e); } catch (e2) {}
@@ -493,12 +530,12 @@ async function ensureMonacoEditor(initialValue) {
 }
 
 function getEditorText() {
-  try { return _active ? String(_active.getValue() || '') : (editor ? String(editor.getValue() || '') : ''); } catch (e) { return ''; }
+  try { return _active ? String(_active.get() || '') : (editor ? String(editor.getValue() || '') : ''); } catch (e) { return ''; }
 }
 
 function setEditorText(text) {
   if (!_active) return;
-  try { _active.setValue(String(text ?? '')); } catch (e) {}
+  try { _active.set(String(text ?? '')); } catch (e) {}
 }
 
 function setEngineSelectValue(engine) {
@@ -531,7 +568,9 @@ async function switchEngine(nextEngine, opts) {
     if (next === 'monaco') {
       // If CodeMirror was in fullscreen, exit it first to avoid CSS/layout glitches.
       try {
-        if (editor && editor.getOption && editor.setOption && editor.getOption('fullScreen')) editor.setOption('fullScreen', false);
+        const actions = getEditorActions();
+        if (actions && typeof actions.setFullscreen === 'function') actions.setFullscreen(editor, false);
+        else if (editor && editor.getOption && editor.setOption && editor.getOption('fullScreen')) editor.setOption('fullScreen', false);
       } catch (e0) {}
 
       const ed = await ensureMonacoEditor(currentText);
@@ -552,7 +591,10 @@ async function switchEngine(nextEngine, opts) {
       }
 
       // Sync text from CodeMirror to Monaco on entry.
-      try { if (ed && ed.setValue) ed.setValue(String(currentText || '')); } catch (e3) {}
+      try {
+        if (_monacoFacade && typeof _monacoFacade.set === 'function') _monacoFacade.set(String(currentText || ''));
+        else if (ed && ed.setValue) ed.setValue(String(currentText || ''));
+      } catch (e3) {}
 
       // Apply current editable flag
       try { if (ed && ed.updateOptions) ed.updateOptions({ readOnly: !_isEditable }); } catch (e4) {}
@@ -566,13 +608,7 @@ async function switchEngine(nextEngine, opts) {
       try { wireMonacoFullscreenOnce(); } catch (e) {}
 
       _engine = 'monaco';
-      _active = _monacoFacade || {
-        getValue: () => { try { return String(ed.getValue() || ''); } catch (e) { return ''; } },
-        setValue: (v) => { try { ed.setValue(String(v ?? '')); } catch (e) {} },
-        focus: () => { try { ed.focus(); } catch (e) {} },
-        layout: () => { try { ed.layout(); } catch (e) {} },
-        dispose: () => { try { ed.dispose(); } catch (e) {} },
-      };
+      _active = _monacoFacade;
       try { if (_active && _active.focus) _active.focus(); } catch (e5) {}
       return _engine;
     }
@@ -1141,8 +1177,10 @@ function initEngineToggle() {
           if (previewTextarea && previewTextarea.value !== SKELETON) {
             previewTextarea.value = SKELETON;
           }
-          editor = CodeMirror.fromTextArea(previewTextarea, {
-            mode: "text/x-yaml",
+          const runtime = getEditorRuntime('codemirror');
+          if (!runtime || typeof runtime.create !== 'function' || !previewTextarea) return;
+          editor = runtime.create(previewTextarea, {
+            mode: 'yaml',
             theme: getCurrentCmTheme(),
             lineNumbers: true,
             lineWrapping: true,
@@ -1153,13 +1191,13 @@ function initEngineToggle() {
             // Preview is read-only, но с курсором и поиском
             readOnly: true
           });
-      
+
           // Mark as XKeen editor so shared CSS fixes apply in light theme
           try {
             const w = editor.getWrapperElement && editor.getWrapperElement();
             if (w) w.classList.add('xkeen-cm');
           } catch (e) {}
-      
+
           // Register in global list so main.js theme toggle can sync it
           try {
             window.__xkeenEditors = window.__xkeenEditors || [];
@@ -2707,6 +2745,29 @@ function initEngineToggle() {
           return parts.join('\n');
         }
 
+        function wireDismissableModal(modal, dismissSelector, hideFn) {
+          if (!modal || typeof hideFn !== 'function') return;
+          if (modal.dataset && modal.dataset.xkDismissWired === '1') return;
+
+          modal.addEventListener('click', (ev) => {
+            if (ev && ev.target === modal) hideFn();
+          });
+
+          try {
+            const dismissers = modal.querySelectorAll(dismissSelector);
+            dismissers.forEach((btn) => {
+              if (!btn || (btn.dataset && btn.dataset.xkDismissWired === '1')) return;
+              btn.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                hideFn();
+              });
+              if (btn.dataset) btn.dataset.xkDismissWired = '1';
+            });
+          } catch (e) {}
+
+          if (modal.dataset) modal.dataset.xkDismissWired = '1';
+        }
+
         function hideMihomoResultModal() {
           if (!mihomoResultModal) return;
           mihomoResultModal.classList.add('hidden');
@@ -2836,6 +2897,7 @@ function initEngineToggle() {
         window.showValidationModal = showValidationModal;
         window.hideValidationModal = hideValidationModal;
         window.hideMihomoResultModal = hideMihomoResultModal;
+        wireDismissableModal(mihomoResultModal, '[data-dismiss="mihomo-result"]', hideMihomoResultModal);
 
         // ----- bulk import modal -----
         function showBulkImportModal() {
@@ -2857,6 +2919,7 @@ function initEngineToggle() {
 
         window.showBulkImportModal = showBulkImportModal;
         window.hideBulkImportModal = hideBulkImportModal;
+        wireDismissableModal(bulkImportModal, '[data-dismiss="bulk-import"]', hideBulkImportModal);
 
         document.addEventListener('keydown', (ev) => {
           try {
@@ -3317,6 +3380,30 @@ function initEngineToggle() {
         // NOTE: init() itself is called from pages/mihomo_generator.init.js on DOMContentLoaded.
         // Поэтому здесь нельзя вешать ещё один DOMContentLoaded, иначе колбэк уже не сработает.
         setStatus("Скелет загружен. Заполните поля слева и нажмите «Применить».", null);
+
+        try {
+          Promise.resolve(ensureEditorRuntime('codemirror', {
+            mode: 'yaml',
+            search: true,
+            fullscreen: true,
+            comments: true,
+          }))
+            .then((runtime) => {
+              if (runtime && typeof runtime.ensureAssets === 'function') {
+                return runtime.ensureAssets({
+                  mode: 'yaml',
+                  search: true,
+                  fullscreen: true,
+                  comments: true,
+                });
+              }
+              return null;
+            })
+            .catch(() => null)
+            .finally(() => {
+              try { if (!editor) initEditor(); } catch (e) {}
+            });
+        } catch (e) {}
 
         try { initEditor(); } catch (e) {}
         try { setEditable(!!(editToggle && editToggle.checked), false); } catch (e) {}

@@ -55,7 +55,14 @@
     ctx: null,          // { target, sid, path, name, side, truncated, readOnly }
     dirty: false,
     lastSaved: '',
+    viewStateTimer: null,
+    viewStateCache: { key: null, value: null },
+    viewStateUnsubs: [],
   };
+
+  const VIEW_STATE_LS_PREFIX = 'xkeen.fm.editor.viewstate.v1::';
+  const VIEW_STATE_SAVE_MS = 160;
+  let _viewStateStore = null;
 
   function els() {
     const modal = el('fm-editor-modal');
@@ -175,6 +182,73 @@
     }
   }
 
+  function isCm6Editor(cm) {
+    try { return !!(cm && cm.__xkeenCm6Bridge); } catch (e) {}
+    return false;
+  }
+
+  function normalizedCodeMirrorMode(mode) {
+    if (mode && typeof mode === 'object') {
+      if (mode.jsonc) return 'jsonc';
+      if (mode.json) return 'application/json';
+      if (mode.name) return normalizedCodeMirrorMode(mode.name);
+    }
+    const raw = String(mode || '').toLowerCase();
+    if (!raw) return 'text/plain';
+    if (raw === 'yaml' || raw === 'yml') return 'text/yaml';
+    if (raw === 'javascript' || raw === 'js' || raw === 'application/javascript') return 'application/javascript';
+    if (raw === 'application/json' || raw === 'json') return 'application/json';
+    if (raw === 'jsonc') return 'jsonc';
+    return 'text/plain';
+  }
+
+  function validationModeForFile(name, text) {
+    const mode = guessMode(name, text);
+    if (mode && typeof mode === 'object') {
+      if (mode.jsonc) return 'jsonc';
+      if (mode.json) return 'application/json';
+      return '';
+    }
+    return '';
+  }
+
+  function getCodeMirrorValidationRuntime() {
+    const runtime = getEditorRuntime('codemirror');
+    if (runtime && typeof runtime.validateText === 'function') return runtime;
+    return null;
+  }
+
+  function refreshEditorValidation(ui, opts = {}) {
+    const cm = STATE.cm;
+    const runtime = getCodeMirrorValidationRuntime();
+    const ctx = opts.ctx || STATE.ctx;
+    const text = String(typeof opts.text === 'string' ? opts.text : activeText(ui));
+    const mode = validationModeForFile(ctx && ctx.name, text);
+
+    if (!cm || STATE.activeKind !== 'codemirror') return { ok: true, diagnostics: [], summary: '' };
+
+    if (mode && runtime && typeof runtime.applyValidation === 'function' && typeof cm.setDiagnostics === 'function') {
+      const result = runtime.applyValidation(cm, {
+        text,
+        mode,
+        allowComments: mode === 'jsonc',
+      }) || { ok: true, diagnostics: [], summary: '' };
+      setInfo({ err: result.ok ? '' : (result.summary || 'JSON содержит ошибку.') });
+      return result;
+    }
+
+    if (typeof cm.clearDiagnostics === 'function') {
+      try { cm.clearDiagnostics(); } catch (e) {}
+    }
+
+    if (mode && !isCm6Editor(cm)) {
+      try { cm.setOption('lint', mode === 'application/json' && !hasJsonComments(text)); } catch (e) {}
+    }
+
+    setInfo({ err: '' });
+    return { ok: true, diagnostics: [], summary: '' };
+  }
+
   // -------------------------- engine helpers --------------------------
   function getEditorEngineHelper() {
     try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
@@ -185,26 +259,27 @@
     return (s === 'monaco' || s === 'codemirror') ? s : 'codemirror';
   }
 
-  async function ensureMonacoSharedApi() {
-    try {
-      const existing = (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null;
-      if (existing && typeof existing.createEditor === 'function') return existing;
-    } catch (e) {}
+  const CM6_SCOPE = 'file-manager';
 
-    try {
-      const lazy = (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
-      if (lazy && typeof lazy.ensureMonacoSupport === 'function') {
-        const ok = await lazy.ensureMonacoSupport();
-        if (!ok) return null;
-      }
-    } catch (e) {}
+  function withCm6Scope(opts) {
+    return Object.assign({ cm6Scope: CM6_SCOPE }, opts || {});
+  }
 
+  function getEditorRuntime(engine, opts) {
+    const helper = getEditorEngineHelper();
+    if (!helper || typeof helper.getRuntime !== 'function') return null;
+    try { return helper.getRuntime(engine, withCm6Scope(opts)); } catch (e) {}
+    return null;
+  }
+
+  async function ensureEditorRuntime(engine, opts) {
+    const helper = getEditorEngineHelper();
+    if (!helper) return null;
     try {
-      const loaded = (window.XKeen && XKeen.ui && XKeen.ui.monacoShared) ? XKeen.ui.monacoShared : null;
-      return (loaded && typeof loaded.createEditor === 'function') ? loaded : null;
-    } catch (e) {
-      return null;
-    }
+      if (typeof helper.ensureRuntime === 'function') return await helper.ensureRuntime(engine, withCm6Scope(opts));
+      if (typeof helper.getRuntime === 'function') return helper.getRuntime(engine, withCm6Scope(opts));
+    } catch (e) {}
+    return null;
   }
 
   function setEngineSelectValue(engine) {
@@ -213,35 +288,328 @@
     try { ui.engineSelect.value = normalizeEngine(engine); } catch (e) {}
   }
 
-  function cmFacade(cm) {
-    const ed = cm;
+  function cloneViewState(value) {
+    const helper = getEditorEngineHelper();
+    if (helper && typeof helper.cloneViewState === 'function') {
+      try { return helper.cloneViewState(value); } catch (e) {}
+    }
+    try {
+      if (value == null) return null;
+      return JSON.parse(JSON.stringify(value));
+    } catch (e) {}
+    return value || null;
+  }
+
+  function getViewStateStore() {
+    if (_viewStateStore) return _viewStateStore;
+    const helper = getEditorEngineHelper();
+    if (!helper || typeof helper.createViewStateStore !== 'function') return null;
+    try {
+      _viewStateStore = helper.createViewStateStore({
+        buildKey: (ctx) => viewStateKey(ctx),
+      });
+    } catch (e) {
+      _viewStateStore = null;
+    }
+    return _viewStateStore;
+  }
+
+  function viewStateKey(ctx) {
+    try {
+      if (!ctx) return '';
+      const target = String(ctx.target || 'local').trim() || 'local';
+      const sid = target === 'remote' ? String(ctx.sid || '').trim() : '';
+      const path = String(ctx.path || '').trim();
+      if (!path) return '';
+      return VIEW_STATE_LS_PREFIX + [target, sid, path].map((part) => encodeURIComponent(String(part || ''))).join('::');
+    } catch (e) {}
+    return '';
+  }
+
+  function viewStateEngine(engine, fallback) {
+    const normalized = normalizeEngine(engine);
+    if (normalized) return normalized;
+    return normalizeEngine(fallback) || 'codemirror';
+  }
+
+  function emptyViewStateBundle() {
     return {
-      getValue: () => {
-        try { return String(ed.getValue() || ''); } catch (e) { return ''; }
-      },
-      setValue: (v) => {
-        try { ed.setValue(String(v ?? '')); } catch (e) {}
-      },
-      focus: () => {
-        try { ed.focus(); } catch (e) {}
-      },
-      scrollTo: (_x, y) => {
-        try { ed.scrollTo(null, Math.max(0, typeof y === 'number' ? y : 0)); } catch (e) {}
-      },
-      layout: () => {
-        try { ed.refresh(); } catch (e) {}
-      },
-      dispose: () => {},
-      onChange: (cb) => {
-        if (!cb || typeof cb !== 'function') return () => {};
-        try {
-          const fn = () => { try { cb(); } catch (e) {} };
-          ed.on('change', fn);
-          return () => { try { ed.off('change', fn); } catch (e) {} };
-        } catch (e) {}
-        return () => {};
-      },
+      version: 1,
+      updatedAt: 0,
+      lastEngine: 'codemirror',
+      last: null,
+      views: {},
     };
+  }
+
+  function normalizeStoredViewBundle(raw) {
+    const base = emptyViewStateBundle();
+    try {
+      if (raw && raw.version === 1 && raw.views && typeof raw.views === 'object') {
+        base.updatedAt = Number(raw.updatedAt || 0);
+        base.lastEngine = viewStateEngine(raw.lastEngine, raw.last && raw.last.kind);
+        base.last = cloneViewState(raw.last);
+        base.views = {
+          codemirror: cloneViewState(raw.views.codemirror),
+          monaco: cloneViewState(raw.views.monaco),
+        };
+        return base;
+      }
+      if (raw && typeof raw === 'object' && (raw.kind || raw.state || raw.cursor || raw.pos || typeof raw.selectionStart === 'number')) {
+        const engine = viewStateEngine(raw.kind, 'codemirror');
+        base.lastEngine = engine;
+        base.last = cloneViewState(raw);
+        base.views[engine] = cloneViewState(raw);
+      }
+    } catch (e) {}
+    return base;
+  }
+
+  function readStoredViewBundle(key) {
+    const storageKey = String(key || '').trim();
+    if (!storageKey) return emptyViewStateBundle();
+    try {
+      if (STATE.viewStateCache.key === storageKey && STATE.viewStateCache.value) {
+        return normalizeStoredViewBundle(cloneViewState(STATE.viewStateCache.value));
+      }
+    } catch (e) {}
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return emptyViewStateBundle();
+      const parsed = JSON.parse(raw);
+      const normalized = normalizeStoredViewBundle(parsed);
+      STATE.viewStateCache = { key: storageKey, value: cloneViewState(normalized) };
+      return normalized;
+    } catch (e) {}
+    return emptyViewStateBundle();
+  }
+
+  function writeStoredViewBundle(key, bundle) {
+    const storageKey = String(key || '').trim();
+    if (!storageKey) return;
+    const normalized = normalizeStoredViewBundle(bundle);
+    STATE.viewStateCache = { key: storageKey, value: cloneViewState(normalized) };
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(normalized));
+    } catch (e) {}
+  }
+
+  function loadSavedViewState(ctx, engine) {
+    const store = getViewStateStore();
+    if (store && typeof store.load === 'function') {
+      return store.load({
+        ctx,
+        engine,
+      });
+    }
+    const storageKey = viewStateKey(ctx);
+    if (!storageKey) return null;
+    const bundle = readStoredViewBundle(storageKey);
+    const target = viewStateEngine(engine, bundle.lastEngine);
+    const exact = bundle && bundle.views ? bundle.views[target] : null;
+    if (exact) return cloneViewState(exact);
+    return cloneViewState(bundle.last);
+  }
+
+  function persistViewForContext(ctx, engine, view) {
+    const store = getViewStateStore();
+    if (store && typeof store.save === 'function') {
+      return store.save({
+        ctx,
+        engine,
+        view,
+      });
+    }
+    const storageKey = viewStateKey(ctx);
+    const nextView = cloneViewState(view);
+    if (!storageKey || !nextView) return null;
+    const bundle = readStoredViewBundle(storageKey);
+    const slot = viewStateEngine(engine, nextView && nextView.kind);
+    bundle.updatedAt = Date.now();
+    bundle.lastEngine = slot;
+    bundle.last = nextView;
+    bundle.views = bundle.views || {};
+    bundle.views[slot] = cloneViewState(nextView);
+    writeStoredViewBundle(storageKey, bundle);
+    return nextView;
+  }
+
+  function clearViewStateTimer() {
+    const store = getViewStateStore();
+    if (store && typeof store.clearTimer === 'function') {
+      store.clearTimer();
+      return;
+    }
+    try {
+      if (STATE.viewStateTimer) clearTimeout(STATE.viewStateTimer);
+    } catch (e) {}
+    STATE.viewStateTimer = null;
+  }
+
+  function clearViewStateBindings() {
+    const store = getViewStateStore();
+    if (store && typeof store.clearBindings === 'function') {
+      store.clearBindings();
+      return;
+    }
+    const unsubs = Array.isArray(STATE.viewStateUnsubs) ? STATE.viewStateUnsubs.splice(0) : [];
+    unsubs.forEach((fn) => {
+      try { if (typeof fn === 'function') fn(); } catch (e) {}
+    });
+  }
+
+  function scheduleViewStateSave(waitMs = VIEW_STATE_SAVE_MS) {
+    const store = getViewStateStore();
+    if (store && typeof store.schedule === 'function') {
+      store.schedule({
+        ctx: STATE.ctx,
+        engine: STATE.activeKind,
+        waitMs,
+        capture: () => captureCurrentViewState(),
+      });
+      return;
+    }
+    clearViewStateTimer();
+    if (!STATE.ctx) return;
+    STATE.viewStateTimer = setTimeout(() => {
+      STATE.viewStateTimer = null;
+      try { saveCurrentViewState(); } catch (e) {}
+    }, Math.max(0, Number(waitMs || 0)));
+  }
+
+  function monacoFacade(editor) {
+    const helper = getEditorEngineHelper();
+    if (!editor || !helper || typeof helper.fromMonaco !== 'function') return null;
+    try {
+      const facade = helper.fromMonaco(editor);
+      if (facade) return facade;
+    } catch (e) {}
+    return null;
+  }
+
+  function cmFacade(cm) {
+    const helper = getEditorEngineHelper();
+    if (!cm || !helper || typeof helper.fromCodeMirror !== 'function') return null;
+    try {
+      const facade = helper.fromCodeMirror(cm);
+      if (facade) return facade;
+    } catch (e) {}
+    return null;
+  }
+
+  function textareaFacade(textarea) {
+    const helper = getEditorEngineHelper();
+    if (!textarea || !helper || typeof helper.fromTextarea !== 'function') return null;
+    try {
+      const facade = helper.fromTextarea(textarea, { kind: 'codemirror' });
+      if (facade) return facade;
+    } catch (e) {}
+    return null;
+  }
+
+  function captureCurrentViewState() {
+    const store = getViewStateStore();
+    if (store && typeof store.capture === 'function') {
+      const saved = store.capture({
+        engine: STATE.activeKind,
+        facade: activeFacade(),
+        capture: () => {
+          const fac = activeFacade();
+          if (fac && typeof fac.saveViewState === 'function') {
+            return fac.saveViewState({ memoryOnly: true });
+          }
+          return null;
+        },
+      });
+      if (saved) return saved;
+    }
+    try {
+      const fac = activeFacade();
+      if (fac && typeof fac.saveViewState === 'function') {
+        return cloneViewState(fac.saveViewState({ memoryOnly: true }));
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function saveCurrentViewState(opts = {}) {
+    const ctx = opts.ctx || STATE.ctx;
+    const engine = viewStateEngine(opts.engine, STATE.activeKind);
+    const view = (typeof opts.view !== 'undefined') ? opts.view : captureCurrentViewState();
+    if (!ctx || !view) return null;
+    return persistViewForContext(ctx, engine, view);
+  }
+
+  function bindActiveViewStateTracking(ui) {
+    const store = getViewStateStore();
+    if (store && typeof store.bind === 'function') {
+      const u = ui || els();
+      store.bind({
+        ctx: STATE.ctx,
+        engine: STATE.activeKind,
+        monaco: STATE.activeKind === 'monaco' ? STATE.monaco : null,
+        codemirror: STATE.activeKind === 'codemirror' ? STATE.cm : null,
+        textarea: u && u.textarea,
+        waitMs: VIEW_STATE_SAVE_MS,
+        capture: () => captureCurrentViewState(),
+      });
+      return;
+    }
+    clearViewStateBindings();
+
+    if (STATE.activeKind === 'monaco' && STATE.monaco) {
+      const ed = STATE.monaco;
+      const bind = (register) => {
+        try {
+          const d = register();
+          if (d && typeof d.dispose === 'function') {
+            STATE.viewStateUnsubs.push(() => {
+              try { d.dispose(); } catch (e) {}
+            });
+          }
+        } catch (e) {}
+      };
+      bind(() => ed.onDidChangeModelContent(() => { scheduleViewStateSave(); }));
+      bind(() => ed.onDidChangeCursorSelection(() => { scheduleViewStateSave(); }));
+      bind(() => ed.onDidScrollChange(() => { scheduleViewStateSave(); }));
+      if (typeof ed.onDidChangeHiddenAreas === 'function') {
+        bind(() => ed.onDidChangeHiddenAreas(() => { scheduleViewStateSave(); }));
+      }
+      return;
+    }
+
+    if (STATE.cm) {
+      const cm = STATE.cm;
+      const bind = (name) => {
+        if (!cm || typeof cm.on !== 'function' || typeof cm.off !== 'function') return;
+        const handler = () => { scheduleViewStateSave(); };
+        try {
+          cm.on(name, handler);
+          STATE.viewStateUnsubs.push(() => {
+            try { cm.off(name, handler); } catch (e) {}
+          });
+        } catch (e) {}
+      };
+      bind('change');
+      bind('cursorActivity');
+      bind('scroll');
+      bind('fold');
+      bind('unfold');
+      return;
+    }
+
+    const u = ui || els();
+    const textarea = u && u.textarea;
+    if (!textarea || typeof textarea.addEventListener !== 'function' || typeof textarea.removeEventListener !== 'function') return;
+    ['input', 'change', 'scroll', 'select', 'keyup', 'mouseup'].forEach((name) => {
+      const handler = () => { scheduleViewStateSave(); };
+      try {
+        textarea.addEventListener(name, handler);
+        STATE.viewStateUnsubs.push(() => {
+          try { textarea.removeEventListener(name, handler); } catch (e) {}
+        });
+      } catch (e) {}
+    });
   }
 
   // ------------------------ fullscreen (CodeMirror + Monaco) ------------------------
@@ -309,37 +677,83 @@ function syncToolbarForEngine(engine) {
     try {
       const cm = STATE.cm;
       const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
+      const showHeaderForCm6 = !isMonaco && isCm6Editor(cm);
 
-      // Monaco header button (exists even when CodeMirror was never created).
       let headerBar = null;
       try {
         headerBar = ensureHeaderFs(els());
-        if (headerBar) headerBar.style.display = isMonaco ? '' : 'none';
+        if (headerBar) headerBar.style.display = (isMonaco || showHeaderForCm6) ? '' : 'none';
       } catch (e) {}
 
-      // CodeMirror toolbar (if present)
       if (!cm || !cm._xkeenToolbarEl || !cm._xkeenToolbarEl.querySelectorAll) return;
       const bar = cm._xkeenToolbarEl;
 
-      // In Monaco mode we already have a dedicated fullscreen control in the header.
-      // Hide the CM toolbar to avoid duplicates/confusing buttons.
-      if (isMonaco) {
+      if (isMonaco || showHeaderForCm6) {
         bar.style.display = 'none';
         return;
       }
 
-      // Keep container visible so layout doesn't jump.
       bar.style.display = '';
 
       const btns = bar.querySelectorAll('button.xkeen-cm-tool');
       (btns || []).forEach((btn) => {
         const id = (btn.dataset && btn.dataset.actionId) ? String(btn.dataset.actionId) : '';
-        // In CodeMirror mode hide the fallback button to avoid duplicates.
         btn.style.display = (id === 'fs_any') ? 'none' : '';
       });
     } catch (e) {}
   }
 
+  function isCodeMirrorFullscreen(cm) {
+    const ed = cm || STATE.cm;
+    try {
+      const wrapper = ed && typeof ed.getWrapperElement === 'function' ? ed.getWrapperElement() : null;
+      return !!(wrapper && wrapper.classList && (wrapper.classList.contains('CodeMirror-fullscreen') || wrapper.classList.contains('is-fullscreen')));
+    } catch (e) {}
+    return false;
+  }
+
+  function setCodeMirrorFullscreen(on, cm) {
+    const ed = cm || STATE.cm;
+    if (!ed || typeof ed.getWrapperElement !== 'function') return;
+    const wrapper = ed.getWrapperElement();
+    if (!wrapper) return;
+
+    const enabled = !!on;
+    const st = wrapper.__xkFs || (wrapper.__xkFs = { on: false, placeholder: null, parent: null, next: null });
+
+    if (enabled) {
+      if (!st.on) {
+        st.on = true;
+        try {
+          st.parent = wrapper.parentNode;
+          st.next = wrapper.nextSibling;
+          st.placeholder = document.createComment('xk-cm-fs');
+          if (st.parent) st.parent.insertBefore(st.placeholder, st.next);
+        } catch (e) {}
+        try { document.body.appendChild(wrapper); } catch (e) {}
+      }
+      try { wrapper.classList.add('CodeMirror-fullscreen', 'is-fullscreen'); } catch (e) {}
+      try { document.body.classList.add('xk-no-scroll'); } catch (e) {}
+    } else {
+      try { wrapper.classList.remove('CodeMirror-fullscreen', 'is-fullscreen'); } catch (e) {}
+      try { document.body.classList.remove('xk-no-scroll'); } catch (e) {}
+      if (st.on) {
+        st.on = false;
+        try {
+          if (st.placeholder && st.placeholder.parentNode) st.placeholder.parentNode.replaceChild(wrapper, st.placeholder);
+          else if (st.parent) st.parent.insertBefore(wrapper, st.next || null);
+        } catch (e) {}
+        st.placeholder = null;
+        st.parent = null;
+        st.next = null;
+      }
+    }
+
+    try { _syncToolbarFsClass(enabled); } catch (e) {}
+    try { ed.refresh(); } catch (e) {}
+    try { setTimeout(() => { try { ed.refresh(); } catch (e2) {} }, 0); } catch (e3) {}
+    try { ed.focus(); } catch (e) {}
+  }
 
   function isMonacoFullscreen(ui) {
     try {
@@ -425,16 +839,15 @@ function syncToolbarForEngine(engine) {
           }
         } catch (e2) {}
 
-        // 2) CodeMirror fullscreen (addon/display/fullscreen)
+        // 2) CodeMirror fullscreen (CSS-driven for CM6, addon-like for CM5)
         try {
           const cm = STATE.cm;
-          const isFs = !!(STATE.activeKind === 'codemirror' && cm && typeof cm.getOption === 'function' && cm.getOption('fullScreen'));
-          if (isFs && typeof cm.setOption === 'function') {
+          const isFs = !!(STATE.activeKind === 'codemirror' && isCodeMirrorFullscreen(cm));
+          if (isFs) {
             try { e.preventDefault(); } catch (e3) {}
             try { e.stopPropagation(); } catch (e3) {}
             try { e.stopImmediatePropagation(); } catch (e3) {}
-            cm.setOption('fullScreen', false);
-            try { _syncToolbarFsClass(false); } catch (e3) {}
+            setCodeMirrorFullscreen(false, cm);
             return;
           }
         } catch (e3) {}
@@ -450,25 +863,14 @@ function syncToolbarForEngine(engine) {
     }
 
     const ed = cm || STATE.cm;
-    try {
-      if (ed && typeof ed.getOption === 'function' && typeof ed.setOption === 'function') {
-        ed.setOption('fullScreen', !ed.getOption('fullScreen'));
-      }
-    } catch (e) {}
+    setCodeMirrorFullscreen(!isCodeMirrorFullscreen(ed), ed);
   }
 
   function isEditorFullscreen(ui) {
     const u = ui || els();
     if (!u) return false;
     try { if (isMonacoFullscreen(u)) return true; } catch (e) {}
-    try {
-      const cm = STATE.cm;
-      if (cm && typeof cm.getOption === 'function' && cm.getOption('fullScreen')) return true;
-      if (cm && typeof cm.getWrapperElement === 'function') {
-        const w = cm.getWrapperElement();
-        if (w && w.classList && w.classList.contains('CodeMirror-fullscreen')) return true;
-      }
-    } catch (e) {}
+    try { if (isCodeMirrorFullscreen(STATE.cm)) return true; } catch (e) {}
     return false;
   }
 
@@ -484,12 +886,11 @@ function syncToolbarForEngine(engine) {
       }
     } catch (e) {}
 
-    // CodeMirror (addon/display/fullscreen)
+    // CodeMirror (CSS-driven wrapper fullscreen)
     try {
       const cm = STATE.cm;
-      if (cm && typeof cm.getOption === 'function' && typeof cm.setOption === 'function' && cm.getOption('fullScreen')) {
-        cm.setOption('fullScreen', false);
-        try { _syncToolbarFsClass(false); } catch (e2) {}
+      if (isCodeMirrorFullscreen(cm)) {
+        setCodeMirrorFullscreen(false, cm);
         did = true;
       }
     } catch (e) {}
@@ -501,6 +902,10 @@ function syncToolbarForEngine(engine) {
     if (STATE.activeFacade) return STATE.activeFacade;
     if (STATE.activeKind === 'monaco' && STATE.monacoFacade) return STATE.monacoFacade;
     if (STATE.activeKind === 'codemirror' && STATE.cm) return cmFacade(STATE.cm);
+    if (STATE.activeKind === 'codemirror') {
+      const ui = els();
+      if (ui && ui.textarea) return textareaFacade(ui.textarea);
+    }
     return null;
   }
 
@@ -542,12 +947,10 @@ function syncToolbarForEngine(engine) {
     return '';
   }
 
-  function jsonLintAvailable() {
+  function jsonLintAvailable(runtime) {
+    const target = runtime || getCodeMirrorValidationRuntime();
     try {
-      if (!window.jsonlint) return false;
-      if (!window.CodeMirror) return false;
-      const h = window.CodeMirror.helpers;
-      return !!(h && h.lint && h.lint.json);
+      return !!(target && typeof target.validateText === 'function');
     } catch (e) {
       return false;
     }
@@ -556,21 +959,22 @@ function syncToolbarForEngine(engine) {
   async function ensureCmAssets({ mode, jsonLint } = {}) {
     const mn = modeName(mode);
     const wantJsonLint = !!jsonLint;
+    let ensured = null;
+    let runtime = null;
 
     try {
-      if (window.XKeen && XKeen.cmLoader) {
-        if (mn && typeof XKeen.cmLoader.ensureMode === 'function') {
-          await XKeen.cmLoader.ensureMode(mn);
-        }
-        if (wantJsonLint && typeof XKeen.cmLoader.ensureJsonLint === 'function') {
-          await XKeen.cmLoader.ensureJsonLint();
-        }
+      runtime = await ensureEditorRuntime('codemirror', { mode, jsonLint: wantJsonLint });
+      if (runtime && typeof runtime.ensureAssets === 'function') {
+        ensured = await runtime.ensureAssets({ mode, jsonLint: wantJsonLint });
       }
     } catch (e) {}
 
+    const runtimeSupportsMode = !!(runtime && typeof runtime.supportsMode === 'function' && runtime.supportsMode(normalizedCodeMirrorMode(mode)));
+    const runtimeSupportsValidation = !!(runtime && typeof runtime.validateText === 'function');
+
     return {
-      modeOk: !mn || (window.CodeMirror && window.CodeMirror.modes && window.CodeMirror.modes[mn]),
-      jsonLintOk: !wantJsonLint || jsonLintAvailable(),
+      modeOk: !mn || !!runtimeSupportsMode || !!(ensured && ensured.modeOk),
+      jsonLintOk: !wantJsonLint || !!runtimeSupportsValidation || !!((ensured && ensured.jsonLintOk) || jsonLintAvailable(runtime)),
     };
   }
 
@@ -578,19 +982,20 @@ function syncToolbarForEngine(engine) {
     if (STATE.cm) return STATE.cm;
     const ui = els();
     if (!ui || !ui.textarea) return null;
-    if (!window.CodeMirror || typeof window.CodeMirror.fromTextArea !== 'function') return null;
 
-    const cm = window.CodeMirror.fromTextArea(ui.textarea, {
+    const runtime = getEditorRuntime('codemirror');
+    const canUseRuntime = !!(runtime && typeof runtime.create === 'function');
+    if (!canUseRuntime) return null;
+
+    const cm = runtime.create(ui.textarea, {
       lineNumbers: true,
       lineWrapping: true,
       theme: currentTheme(),
       mode: 'text/plain',
-
+      readOnly: false,
       tabSize: 2,
       indentUnit: 2,
       indentWithTabs: false,
-
-      // Addons (loaded globally in panel.html)
       showIndentGuides: true,
       styleActiveLine: true,
       matchBrackets: true,
@@ -601,7 +1006,6 @@ function syncToolbarForEngine(engine) {
       lint: false,
       highlightSelectionMatches: { showToken: /\w/, minChars: 2 },
       viewportMargin: 50,
-
       extraKeys: {
         'Ctrl-S': () => { save(); },
         'Cmd-S': () => { save(); },
@@ -614,12 +1018,9 @@ function syncToolbarForEngine(engine) {
         'Shift-Ctrl-G': 'findPrev',
         'Shift-Cmd-G': 'findPrev',
         'Esc': () => {
-          // In fullscreen mode Esc should first exit fullscreen, not close the modal.
           try {
-            const isFs = !!(cm && typeof cm.getOption === 'function' && cm.getOption('fullScreen'));
-            if (isFs && typeof cm.setOption === 'function') {
-              cm.setOption('fullScreen', false);
-              try { _syncToolbarFsClass(false); } catch (e) {}
+            if (isCodeMirrorFullscreen(cm)) {
+              setCodeMirrorFullscreen(false, cm);
               return;
             }
           } catch (e) {}
@@ -637,30 +1038,35 @@ function syncToolbarForEngine(engine) {
       if (window.xkeenAttachCmToolbar && window.XKEEN_CM_TOOLBAR_DEFAULT) {
         const baseItems = window.XKEEN_CM_TOOLBAR_DEFAULT;
         const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
-              if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm, els()) });
-              return it;
-            });
+          if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cmRef) => toggleEditorFullscreen(cmRef, els()) });
+          return it;
+        });
 
-            // Fallback fullscreen button for Monaco even when CM fullscreen addon isn't loaded.
-            try {
-              if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
-                items.push({
-                  id: 'fs_any',
-                  svg: window.XKEEN_CM_ICONS.fullscreen,
-                  label: 'Фулскрин',
-                  fallbackHint: 'F11 / Esc',
-                  onClick: () => toggleEditorFullscreen(cm, els()),
-                });
-              }
-            } catch (e) {}
+        try {
+          if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
+            items.push({
+              id: 'fs_any',
+              svg: window.XKEEN_CM_ICONS.fullscreen,
+              label: 'Фулскрин',
+              fallbackHint: 'F11 / Esc',
+              onClick: () => toggleEditorFullscreen(cm, els()),
+            });
+          }
+        } catch (e) {}
+
         window.xkeenAttachCmToolbar(cm, items);
         try { syncToolbarForEngine('codemirror'); } catch (e) {}
       }
     } catch (e) {}
 
-    cm.on('change', () => {
-      try { updateDirtyUI(); } catch (e) {}
-    });
+    try {
+      if (cm && typeof cm.on === 'function') {
+        cm.on('change', () => {
+          try { updateDirtyUI(); } catch (e) {}
+          try { refreshEditorValidation(els()); } catch (e2) {}
+        });
+      }
+    } catch (e) {}
 
     STATE.cm = cm;
     return cm;
@@ -743,6 +1149,7 @@ function syncToolbarForEngine(engine) {
     } catch (e) {}
     STATE.monaco = null;
     STATE.monacoFacade = null;
+    if (STATE.activeKind === 'monaco') STATE.activeFacade = null;
     try {
       const host = (ui && ui.monacoHost) ? ui.monacoHost : (els() && els().monacoHost);
       if (host) host.innerHTML = '';
@@ -777,30 +1184,37 @@ function syncToolbarForEngine(engine) {
 
   function captureView() {
     const kind = STATE.activeKind;
-    try {
-      if (kind === 'monaco' && STATE.monaco) {
-        return {
-          kind: 'monaco',
-          pos: (typeof STATE.monaco.getPosition === 'function') ? STATE.monaco.getPosition() : null,
-          scrollTop: (typeof STATE.monaco.getScrollTop === 'function') ? STATE.monaco.getScrollTop() : 0,
-        };
-      }
-      if (kind === 'codemirror' && STATE.cm) {
-        const cm = STATE.cm;
-        const cur = (typeof cm.getCursor === 'function') ? cm.getCursor() : null;
-        const si = (typeof cm.getScrollInfo === 'function') ? cm.getScrollInfo() : null;
-        return {
-          kind: 'codemirror',
-          cursor: cur,
-          scrollTop: si ? si.top : 0,
-        };
-      }
-    } catch (e) {}
+    const saved = captureCurrentViewState();
+    if (saved) return saved;
     return { kind: kind || 'codemirror' };
   }
 
   function restoreView(targetKind, view) {
+    const store = getViewStateStore();
+    if (store && typeof store.restore === 'function') {
+      try {
+        if (store.restore({
+          engine: targetKind,
+          facade: activeFacade(),
+          view,
+        })) {
+          if (targetKind === 'codemirror' && STATE.cm) kickRefresh(STATE.cm, true);
+          else {
+            const fac = activeFacade();
+            if (fac && typeof fac.focus === 'function') fac.focus();
+          }
+          return;
+        }
+      } catch (e) {}
+    }
     try {
+      const fac = activeFacade();
+      if (fac && typeof fac.restoreViewState === 'function' && fac.restoreViewState(view)) {
+        if (targetKind === 'codemirror' && STATE.cm) kickRefresh(STATE.cm, true);
+        else if (typeof fac.focus === 'function') fac.focus();
+        return;
+      }
+
       if (targetKind === 'monaco' && STATE.monaco) {
         const ed = STATE.monaco;
         // Prefer converted CM cursor if present.
@@ -827,14 +1241,20 @@ function syncToolbarForEngine(engine) {
     } catch (e) {}
   }
 
-  async function activateEngine(nextEngine, { ctx, text, preserveView } = {}) {
+  async function activateEngine(nextEngine, { ctx, text, preserveView, initialView } = {}) {
     const ui = els();
     if (!ui) return 'codemirror';
 
     const engine = normalizeEngine(nextEngine);
     const ro = !!(ctx && ctx.readOnly);
     const value = String(text ?? '');
-    const view = preserveView ? captureView() : null;
+    const view = initialView || (preserveView ? captureView() : null);
+
+    clearViewStateTimer();
+    clearViewStateBindings();
+    if (preserveView && STATE.ctx && view) {
+      try { persistViewForContext(STATE.ctx, STATE.activeKind, view); } catch (e) {}
+    }
 
     // Keep the toggle UI in sync.
     setEngineSelectValue(engine);
@@ -848,26 +1268,23 @@ function syncToolbarForEngine(engine) {
 
     if (engine === 'monaco') {
       // If CodeMirror was in fullscreen, exit it first to avoid CSS/layout glitches.
-      try {
-        const cm = STATE.cm;
-        if (cm && cm.getOption && cm.setOption && cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
-      } catch (e0) {}
+      try { if (isCodeMirrorFullscreen(STATE.cm)) setCodeMirrorFullscreen(false, STATE.cm); } catch (e0) {}
 
       hideCodeMirror(ui);
       try { if (ui.monacoHost) ui.monacoHost.classList.remove('hidden'); } catch (e) {}
 
-      const shared = await ensureMonacoSharedApi();
-      if (!shared || typeof shared.createEditor !== 'function' || !ui.monacoHost) {
+      const runtime = await ensureEditorRuntime('monaco');
+      if (!runtime || typeof runtime.create !== 'function' || !ui.monacoHost) {
         // No Monaco infra → fallback.
         try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
-        return activateEngine('codemirror', { ctx, text, preserveView });
+        return activateEngine('codemirror', { ctx, text, preserveView: false, initialView: view });
       }
 
       // (Re)create Monaco fresh for the current file.
       try { disposeMonaco(ui); } catch (e) {}
 
       const lang = monacoLanguage(ctx && ctx.name, value);
-      const ed = await shared.createEditor(ui.monacoHost, {
+      const ed = await runtime.create(ui.monacoHost, {
         language: lang,
         readOnly: ro,
         value: value,
@@ -880,11 +1297,11 @@ function syncToolbarForEngine(engine) {
           const ee = getEditorEngineHelper();
           if (ee && typeof ee.set === 'function') await ee.set('codemirror');
         } catch (e) {}
-        return activateEngine('codemirror', { ctx, text, preserveView });
+        return activateEngine('codemirror', { ctx, text, preserveView: false, initialView: view });
       }
 
       STATE.monaco = ed;
-      try { STATE.monacoFacade = shared.toFacade(ed); } catch (e) { STATE.monacoFacade = null; }
+      try { STATE.monacoFacade = monacoFacade(ed); } catch (e) { STATE.monacoFacade = null; }
       STATE.activeKind = 'monaco';
       STATE.activeFacade = STATE.monacoFacade;
 
@@ -893,7 +1310,9 @@ function syncToolbarForEngine(engine) {
 
       // Restore view if we are switching while open.
       if (view) restoreView('monaco', view);
+      bindActiveViewStateTracking(ui);
 
+      try { setInfo({ err: '' }); } catch (e) {}
       updateDirtyUI();
       return 'monaco';
     }
@@ -921,24 +1340,28 @@ function syncToolbarForEngine(engine) {
           cm.setOption('gutters', gutters);
         } catch (e) {}
 
-        cm.setOption('mode', mode);
+        cm.setOption('mode', normalizedCodeMirrorMode(mode));
         cm.setOption('lint', canLintJson);
         cm.setOption('readOnly', ro ? 'nocursor' : false);
         cm.setValue(value);
         cm.clearHistory();
+        try { refreshEditorValidation(ui, { ctx, text: value }); } catch (e) {}
         kickRefresh(cm, true);
       } catch (e) {}
     } else if (ui.textarea) {
       ui.textarea.value = value;
+      try { setInfo({ err: '' }); } catch (e) {}
       setTimeout(() => { try { ui.textarea.focus(); } catch (e) {} }, 0);
     }
 
     STATE.activeKind = 'codemirror';
-    STATE.activeFacade = cm ? cmFacade(cm) : null;
+    STATE.activeFacade = cm ? cmFacade(cm) : textareaFacade(ui.textarea);
 
     try { syncToolbarForEngine('codemirror'); } catch (e) {}
 
     if (view) restoreView('codemirror', view);
+    bindActiveViewStateTracking(ui);
+    try { refreshEditorValidation(ui, { ctx, text: value }); } catch (e) {}
     updateDirtyUI();
     return 'codemirror';
   }
@@ -946,6 +1369,11 @@ function syncToolbarForEngine(engine) {
   async function open(ctx, text) {
     const ui = els();
     if (!ui) return false;
+
+    if (STATE.ctx) {
+      clearViewStateTimer();
+      try { saveCurrentViewState({ ctx: STATE.ctx, engine: STATE.activeKind }); } catch (e) {}
+    }
 
     STATE.ctx = ctx || null;
     STATE.lastSaved = String(text || '');
@@ -987,10 +1415,11 @@ function syncToolbarForEngine(engine) {
       }
     }
 
+    const initialView = loadSavedViewState(ctx, engine);
     setEngineSelectValue(engine);
     STATE.switching = true;
     try {
-      await activateEngine(engine, { ctx, text, preserveView: false });
+      await activateEngine(engine, { ctx, text, preserveView: false, initialView });
     } finally {
       STATE.switching = false;
     }
@@ -1022,18 +1451,22 @@ function syncToolbarForEngine(engine) {
       if (!ok) return;
     }
 
+    clearViewStateTimer();
+    if (has) {
+      try { saveCurrentViewState(); } catch (e) {}
+    }
+    clearViewStateBindings();
+
     try { STATE.ctx = null; } catch (e) {}
     try { STATE.dirty = false; } catch (e) {}
     try { STATE.lastSaved = ''; } catch (e) {}
+    try { STATE.activeFacade = null; } catch (e) {}
 
     // Exit any fullscreen mode before closing.
     try {
       if (isMonacoFullscreen(ui)) setMonacoFullscreen(false, ui);
     } catch (e) {}
-    try {
-      const cm = STATE.cm;
-      if (cm && cm.getOption && cm.setOption && cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
-    } catch (e2) {}
+    try { if (isCodeMirrorFullscreen(STATE.cm)) setCodeMirrorFullscreen(false, STATE.cm); } catch (e2) {}
 
     // Clean up Monaco to avoid leaks; restore default UI visibility.
     try { disposeMonaco(ui); } catch (e) {}
@@ -1063,6 +1496,14 @@ function syncToolbarForEngine(engine) {
     if (ctx.readOnly) return;
 
     const text = activeText(ui);
+    const validation = refreshEditorValidation(ui, { ctx, text });
+    if (validation && validation.ok === false) {
+      const msg = validation.summary || 'JSON содержит ошибку. Сохранение отменено.';
+      setInfo({ err: msg });
+      try { if (window.toast) window.toast(msg, 'error'); } catch (e) {}
+      try { const fac = activeFacade(); if (fac && typeof fac.focus === 'function') fac.focus(); } catch (e2) {}
+      return;
+    }
     try { if (ui.saveBtn) ui.saveBtn.disabled = true; } catch (e) {}
 
     const payload = { target: ctx.target, path: ctx.path, sid: ctx.sid || '', text };
@@ -1099,6 +1540,7 @@ function syncToolbarForEngine(engine) {
     try { if (window.toast) window.toast('Сохранено: ' + (ctx.name || 'файл'), 'success'); } catch (e) {}
 
     try { updateDirtyUI(); } catch (e) {}
+    try { saveCurrentViewState(); } catch (e) {}
 
     try {
       const lp = api().listPanel;

@@ -7,12 +7,15 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
+  XK.core = XK.core || {};
   XK.features = XK.features || {};
 
   const api = (XK.features.updateNotifier = XK.features.updateNotifier || {});
 
   let _inited = false;
   let _timer = null;
+  let _shellUnsubscribe = null;
+  let _versionSyncPromise = null;
 
   const LS_LAST_CHECK = 'xk_update_notify_last_check_ts';
   const LS_LAST_RESULT = 'xk_update_notify_last_result';
@@ -140,7 +143,66 @@
     }
   }
 
-  function _setLinkState({ visible, hasUpdate, label }) {
+  function _getUiShellApi() {
+    try {
+      const api = XK.core && XK.core.uiShell;
+      if (api && typeof api.getState === 'function' && typeof api.patchState === 'function') return api;
+    } catch (e) {}
+    return null;
+  }
+
+  function _readUpdateState() {
+    const api = _getUiShellApi();
+    if (!api) return { visible: false, hasUpdate: false, label: '', title: '' };
+    const shell = api.getState();
+    const update = shell && shell.update && typeof shell.update === 'object' ? shell.update : {};
+    return {
+      visible: !!update.visible,
+      hasUpdate: !!update.hasUpdate,
+      label: String(update.label || ''),
+      title: String(update.title || ''),
+    };
+  }
+
+  function _readVersionState() {
+    const api = _getUiShellApi();
+    if (!api) {
+      return {
+        currentLabel: '',
+        currentCommit: '',
+        currentBuiltAt: '',
+        latestLabel: '',
+        latestPublishedAt: '',
+        channel: '',
+      };
+    }
+    const shell = api.getState();
+    const version = shell && shell.version && typeof shell.version === 'object' ? shell.version : {};
+    return {
+      currentLabel: String(version.currentLabel || ''),
+      currentCommit: String(version.currentCommit || ''),
+      currentBuiltAt: String(version.currentBuiltAt || ''),
+      latestLabel: String(version.latestLabel || ''),
+      latestPublishedAt: String(version.latestPublishedAt || ''),
+      channel: String(version.channel || ''),
+    };
+  }
+
+  function _setUpdateLoadingState(isLoading) {
+    const api = _getUiShellApi();
+    if (!api) return;
+    try {
+      api.patchState({
+        loading: {
+          update: !!isLoading,
+        },
+      }, {
+        source: 'update_notifier_loading',
+      });
+    } catch (e) {}
+  }
+
+  function _renderLinkState({ visible, hasUpdate, label, title }) {
     const el = _getUpdateLinkEl();
     if (!el) return;
 
@@ -158,7 +220,8 @@
     } catch (e) {}
 
     try {
-      if (label) el.title = 'Доступно обновление: ' + String(label);
+      if (title) el.title = String(title);
+      else if (label) el.title = 'Доступно обновление: ' + String(label);
       else el.title = 'Обновление';
     } catch (e) {}
 
@@ -168,6 +231,67 @@
         lbl.textContent = label ? ('Обновление ' + String(label)) : 'Обновление';
       }
     } catch (e) {}
+  }
+
+  function _ensureShellBinding() {
+    if (_shellUnsubscribe) return;
+
+    const api = _getUiShellApi();
+    if (!api || typeof api.subscribe !== 'function') {
+      _renderLinkState(_readUpdateState());
+      return;
+    }
+
+    _shellUnsubscribe = api.subscribe((next) => {
+      const update = next && next.update && typeof next.update === 'object' ? next.update : {};
+      _renderLinkState({
+        visible: !!update.visible,
+        hasUpdate: !!update.hasUpdate,
+        label: String(update.label || ''),
+        title: String(update.title || ''),
+      });
+    }, { immediate: true });
+  }
+
+  function _setShellState(patch, source) {
+    const api = _getUiShellApi();
+    if (api) {
+      api.patchState(patch || {}, {
+        source: source || 'update_notifier',
+      });
+      return;
+    }
+
+    if (patch && patch.update) {
+      const update = patch.update;
+      _renderLinkState({
+        visible: !!update.visible,
+        hasUpdate: !!update.hasUpdate,
+        label: String(update.label || ''),
+        title: String(update.title || ''),
+      });
+    }
+  }
+
+  function _setVersionState(versionPatch, source) {
+    if (!versionPatch || typeof versionPatch !== 'object') return;
+    _setShellState({ version: versionPatch }, source || 'update_notifier_version');
+  }
+
+  function _setLinkState({ visible, hasUpdate, label, versionPatch }) {
+    const title = label ? ('Доступно обновление: ' + String(label)) : 'Обновление';
+    const patch = {
+      update: {
+        visible: !!visible,
+        hasUpdate: !!hasUpdate,
+        label: String(label || ''),
+        title,
+      },
+    };
+    if (versionPatch && typeof versionPatch === 'object') {
+      patch.version = versionPatch;
+    }
+    _setShellState(patch, 'update_notifier');
   }
 
   function _toastOncePerLatest(latestLabel) {
@@ -203,6 +327,96 @@
     } catch (e) {
       return '';
     }
+  }
+
+  function _extractLatestPublishedAt(data) {
+    try {
+      const latest = data && data.latest && typeof data.latest === 'object' ? data.latest : null;
+      if (!latest) return '';
+      return String(latest.published_at || latest.created_at || latest.date || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function _syncVersionFromPayload(data, extra) {
+    const current = _readVersionState();
+    const o = extra && typeof extra === 'object' ? extra : {};
+    let curVer = current.currentLabel;
+    let curCommit = current.currentCommit;
+    let curBuiltAt = current.currentBuiltAt;
+
+    try {
+      const payloadCurrent = data && data.current && typeof data.current === 'object' ? data.current : {};
+      curVer = String(payloadCurrent.version || curVer || '').trim();
+      curCommit = String(payloadCurrent.commit || curCommit || '').trim();
+      curBuiltAt = String(payloadCurrent.built_utc || curBuiltAt || '').trim();
+    } catch (e) {}
+
+    const latestLabel = Object.prototype.hasOwnProperty.call(o, 'latestLabel')
+      ? String(o.latestLabel || '').trim()
+      : (_extractLatestLabel(data) || current.latestLabel);
+    const latestPublishedAt = Object.prototype.hasOwnProperty.call(o, 'latestPublishedAt')
+      ? String(o.latestPublishedAt || '').trim()
+      : (_extractLatestPublishedAt(data) || current.latestPublishedAt);
+    const channel = Object.prototype.hasOwnProperty.call(o, 'channel')
+      ? String(o.channel || '').trim()
+      : String((data && data.channel) || current.channel || '').trim();
+
+    _setVersionState({
+      currentLabel: curVer,
+      currentCommit: curCommit,
+      currentBuiltAt: curBuiltAt,
+      latestLabel,
+      latestPublishedAt,
+      channel,
+    }, 'update_notifier_payload');
+
+    return {
+      currentLabel: curVer,
+      currentCommit: curCommit,
+      currentBuiltAt: curBuiltAt,
+      latestLabel,
+      latestPublishedAt,
+      channel,
+    };
+  }
+
+  function _syncVersionFromBuildInfo(opts) {
+    const o = opts && typeof opts === 'object' ? opts : {};
+    if (_versionSyncPromise && !o.force) return _versionSyncPromise;
+
+    _versionSyncPromise = (async () => {
+      try {
+        const { ok, data } = await _getJSON(BUILD_INFO_URL, 1200);
+        if (!ok || !data || !data.ok) return _readVersionState();
+
+        const build = data && data.build && typeof data.build === 'object' ? data.build : {};
+        const settings = data && data.settings && typeof data.settings === 'object' ? data.settings : {};
+        const current = _readVersionState();
+        const next = {
+          currentLabel: String(build.version || current.currentLabel || '').trim(),
+          currentCommit: String(build.commit || current.currentCommit || '').trim(),
+          currentBuiltAt: String(build.built_utc || current.currentBuiltAt || '').trim(),
+          latestLabel: Object.prototype.hasOwnProperty.call(o, 'latestLabel')
+            ? String(o.latestLabel || '').trim()
+            : current.latestLabel,
+          latestPublishedAt: Object.prototype.hasOwnProperty.call(o, 'latestPublishedAt')
+            ? String(o.latestPublishedAt || '').trim()
+            : current.latestPublishedAt,
+          channel: String(build.channel || settings.channel || current.channel || '').trim(),
+        };
+
+        _setVersionState(next, 'update_notifier_build_info');
+        return next;
+      } catch (e) {
+        return _readVersionState();
+      } finally {
+        _versionSyncPromise = null;
+      }
+    })();
+
+    return _versionSyncPromise;
   }
 
   async function _postJSON(url, body, timeoutMs) {
@@ -297,29 +511,63 @@
 
       const has = !!(ok && data && data.ok && data.update_available);
       const latestLabel = _extractLatestLabel(data);
+      const latestPublishedAt = _extractLatestPublishedAt(data);
 
       // Cache also the *current* build fingerprint so we can invalidate stale badges
       // after an update/rollback even if GitHub is unreachable.
       let curVer = '';
       let curCommit = '';
+      let curBuiltAt = '';
       try {
         const cur = (data && data.current && typeof data.current === 'object') ? data.current : {};
         curVer = String(cur.version || '').trim();
         curCommit = String(cur.commit || '').trim();
+        curBuiltAt = String(cur.built_utc || '').trim();
       } catch (e) {}
 
       _saveCachedResult({ ts: _now(), has_update: has, latest: latestLabel || '', channel: String((data && data.channel) || ''), cur_ver: curVer, cur_commit: curCommit });
+      _syncVersionFromPayload(data, {
+        latestLabel,
+        latestPublishedAt,
+        channel: String((data && data.channel) || '').trim(),
+      });
 
       if (has) {
-        _setLinkState({ visible: true, hasUpdate: true, label: latestLabel || '' });
+        _setLinkState({
+          visible: true,
+          hasUpdate: true,
+          label: latestLabel || '',
+          versionPatch: {
+            currentLabel: curVer,
+            currentCommit: curCommit,
+            currentBuiltAt: curBuiltAt,
+            latestLabel: latestLabel || '',
+            latestPublishedAt,
+            channel: String((data && data.channel) || '').trim(),
+          },
+        });
         if (!silent) _toastOncePerLatest(latestLabel || '');
       } else {
         // No update: hide the pill.
-        _setLinkState({ visible: false, hasUpdate: false, label: '' });
+        _setLinkState({
+          visible: false,
+          hasUpdate: false,
+          label: '',
+          versionPatch: {
+            currentLabel: curVer,
+            currentCommit: curCommit,
+            currentBuiltAt: curBuiltAt,
+            latestLabel: latestLabel || '',
+            latestPublishedAt,
+            channel: String((data && data.channel) || '').trim(),
+          },
+        });
       }
     } catch (e) {
       // Network errors are expected on some networks; do not annoy the user.
       // Keep any cached state (badge) intact.
+    } finally {
+      _setUpdateLoadingState(false);
     }
   }
 
@@ -343,18 +591,36 @@
 
   function _applySettings() {
     const s = _readSettings();
+    let hasResolvedVisualState = false;
+    _setUpdateLoadingState(true);
+    void _syncVersionFromBuildInfo();
 
     // If disabled: hide indicator and stop polling.
     if (!s.enabled) {
       _stopSchedule();
       _setLinkState({ visible: false, hasUpdate: false, label: '' });
+      _setUpdateLoadingState(false);
       return s;
     }
 
     // Show cached badge ASAP.
     const cached = _loadCachedResult();
     if (cached && cached.has_update) {
-      _setLinkState({ visible: true, hasUpdate: true, label: cached.latest || '' });
+      hasResolvedVisualState = true;
+      _setLinkState({
+        visible: true,
+        hasUpdate: true,
+        label: cached.latest || '',
+        versionPatch: {
+          latestLabel: String(cached.latest || '').trim(),
+          channel: String(cached.channel || '').trim(),
+        },
+      });
+      void _syncVersionFromBuildInfo({
+        latestLabel: String(cached.latest || '').trim(),
+        channel: String(cached.channel || '').trim(),
+      });
+      _setUpdateLoadingState(false);
 
       // Common complaint: after updating the panel, the cached badge may stay visible
       // until the next scheduled check (default 6h) or if GitHub is unreachable.
@@ -398,7 +664,18 @@
 
           if (upToDate) {
             _saveCachedResult({ ts: _now(), has_update: false, latest: '', channel: ch, cur_ver: localVer, cur_commit: localCommit });
-            _setLinkState({ visible: false, hasUpdate: false, label: '' });
+            _setLinkState({
+              visible: false,
+              hasUpdate: false,
+              label: '',
+              versionPatch: {
+                currentLabel: localVer,
+                currentCommit: localCommit,
+                latestLabel: '',
+                latestPublishedAt: '',
+                channel: ch,
+              },
+            });
             // Also allow an immediate re-check later (e.g. if a newer release appears soon).
             try { window.localStorage.removeItem(LS_LAST_CHECK); } catch (e) {}
             return;
@@ -410,11 +687,16 @@
       } catch (e) {}
     } else {
       _setLinkState({ visible: false, hasUpdate: false, label: '' });
+      hasResolvedVisualState = !!cached;
+      _setUpdateLoadingState(false);
     }
 
     // Immediate check if needed.
     if (_shouldCheckNow(s.intervalMs)) {
+      if (!hasResolvedVisualState) _setUpdateLoadingState(true);
       _checkOnce({ silent: false }).catch(() => {});
+    } else {
+      _setUpdateLoadingState(false);
     }
 
     // Background polling while UI is open.
@@ -427,7 +709,18 @@
     try { window.localStorage.removeItem(LS_LAST_RESULT); } catch (e) {}
     try { window.localStorage.removeItem(LS_LAST_CHECK); } catch (e) {}
     try { window.localStorage.removeItem(LS_LAST_TOAST); } catch (e) {}
-    try { _setLinkState({ visible: false, hasUpdate: false, label: '' }); } catch (e) {}
+    try {
+      _setLinkState({
+        visible: false,
+        hasUpdate: false,
+        label: '',
+        versionPatch: {
+          latestLabel: '',
+          latestPublishedAt: '',
+        },
+      });
+    } catch (e) {}
+    _setUpdateLoadingState(false);
   };
 
   api.init = function init(opts) {
@@ -436,6 +729,8 @@
 
     const linkEl = _getUpdateLinkEl();
     if (!linkEl) return; // page doesn't have the indicator
+
+    _ensureShellBinding();
 
     // Allow one-off override, but prefer stored settings.
     const s = _readSettings();
@@ -462,6 +757,25 @@
 
   api.applySettings = function applySettings() {
     return _applySettings();
+  };
+
+  api.getVersionState = function getVersionState() {
+    return _readVersionState();
+  };
+
+  api.refreshVersionInfo = function refreshVersionInfo(opts) {
+    return _syncVersionFromBuildInfo(Object.assign({ force: true }, opts || {}));
+  };
+
+  api.checkNow = async function checkNow(opts) {
+    try { await _syncVersionFromBuildInfo(); } catch (e) {}
+    await _checkOnce({
+      silent: !!(opts && opts.silent),
+    });
+    return {
+      update: _readUpdateState(),
+      version: _readVersionState(),
+    };
   };
 
   // Sync settings across multiple open tabs.

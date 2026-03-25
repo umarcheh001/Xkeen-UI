@@ -29,7 +29,7 @@ from utils.deep_merge import deep_merge
 log = logging.getLogger(__name__)
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Keep the file small and predictable on router flash.
 _MAX_FILE_CHARS = 64 * 1024
@@ -47,6 +47,10 @@ DEFAULTS: Dict[str, Any] = {
     "editor": {
         # Supported engines (today): 'codemirror'. Future: 'monaco'.
         "engine": "codemirror",
+        # Per-editor font scale. 100 keeps existing defaults,
+        # lower values make text smaller, higher values make it larger.
+        "codemirrorFontScale": 100,
+        "monacoFontScale": 100,
     },
     "format": {
         # Prefer browser-side formatting (Prettier) where available.
@@ -121,7 +125,11 @@ def _canonical_empty() -> Dict[str, Any]:
 
     return {
         "schemaVersion": SCHEMA_VERSION,
-        "editor": {"engine": DEFAULTS["editor"]["engine"]},
+        "editor": {
+            "engine": DEFAULTS["editor"]["engine"],
+            "codemirrorFontScale": int(DEFAULTS["editor"]["codemirrorFontScale"]),
+            "monacoFontScale": int(DEFAULTS["editor"]["monacoFontScale"]),
+        },
         "format": {
             "preferPrettier": bool(DEFAULTS["format"]["preferPrettier"]),
             "tabWidth": int(DEFAULTS["format"]["tabWidth"]),
@@ -258,9 +266,42 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
             else:
                 out["editor"]["engine"] = engine
 
-        # Drop unknown keys
+        legacy_font_scale = None
+        if "fontScale" in editor:
+            font_scale = editor.get("fontScale")
+            if _is_int(font_scale) and 75 <= int(font_scale) <= 200:
+                legacy_font_scale = int(font_scale)
+                rep.changed = True
+            else:
+                rep.warnings.append({"path": "editor.fontScale", "warning": "invalid value; ignored"})
+                rep.changed = True
+
+        cm_scale_present = "codemirrorFontScale" in editor
+        if cm_scale_present:
+            cm_scale = editor.get("codemirrorFontScale")
+            if _is_int(cm_scale) and 75 <= int(cm_scale) <= 200:
+                out["editor"]["codemirrorFontScale"] = int(cm_scale)
+            else:
+                rep.warnings.append({"path": "editor.codemirrorFontScale", "warning": "invalid value; ignored"})
+                rep.changed = True
+        elif legacy_font_scale is not None:
+            out["editor"]["codemirrorFontScale"] = int(legacy_font_scale)
+            rep.changed = True
+
+        monaco_scale_present = "monacoFontScale" in editor
+        if monaco_scale_present:
+            monaco_scale = editor.get("monacoFontScale")
+            if _is_int(monaco_scale) and 75 <= int(monaco_scale) <= 200:
+                out["editor"]["monacoFontScale"] = int(monaco_scale)
+            else:
+                rep.warnings.append({"path": "editor.monacoFontScale", "warning": "invalid value; ignored"})
+                rep.changed = True
+        elif legacy_font_scale is not None:
+            out["editor"]["monacoFontScale"] = int(legacy_font_scale)
+            rep.changed = True
+
         for k in editor.keys():
-            if k not in ("engine",):
+            if k not in ("engine", "fontScale", "codemirrorFontScale", "monacoFontScale"):
                 rep.warnings.append({"path": f"editor.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
@@ -412,8 +453,30 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                     else:
                         p["engine"] = engine
 
+            if "fontScale" in editor:
+                v = editor.get("fontScale")
+                if _is_int(v) and 75 <= int(v) <= 200:
+                    p["codemirrorFontScale"] = int(v)
+                    p["monacoFontScale"] = int(v)
+                else:
+                    rep.errors.append({"path": "editor.fontScale", "error": "must be int 75..200"})
+
+            if "codemirrorFontScale" in editor:
+                v = editor.get("codemirrorFontScale")
+                if _is_int(v) and 75 <= int(v) <= 200:
+                    p["codemirrorFontScale"] = int(v)
+                else:
+                    rep.errors.append({"path": "editor.codemirrorFontScale", "error": "must be int 75..200"})
+
+            if "monacoFontScale" in editor:
+                v = editor.get("monacoFontScale")
+                if _is_int(v) and 75 <= int(v) <= 200:
+                    p["monacoFontScale"] = int(v)
+                else:
+                    rep.errors.append({"path": "editor.monacoFontScale", "error": "must be int 75..200"})
+
             for k in editor.keys():
-                if k not in ("engine",):
+                if k not in ("engine", "fontScale", "codemirrorFontScale", "monacoFontScale"):
                     rep.warnings.append({"path": f"editor.{k}", "warning": "unknown key dropped"})
 
             if p:

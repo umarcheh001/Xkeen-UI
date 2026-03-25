@@ -15,9 +15,13 @@
 
   XKeen.features.outbounds = (() => {
     let inited = false;
+    let _savedUrl = '';
 
     // Active outbounds fragment file (basename or absolute). Controlled by dropdown.
     let _activeFragment = null;
+    let _fragmentItems = [];
+    let _fragmentDir = '';
+    let _featureLifecycle = null;
 
     const IDS = {
       fragmentSelect: 'outbounds-fragment-select',
@@ -27,6 +31,171 @@
 
     function $(id) {
       return document.getElementById(id);
+    }
+
+    function getConfigShellApi() {
+      try {
+        if (window.XKeen && XKeen.ui && XKeen.ui.configShell) return XKeen.ui.configShell;
+      } catch (e) {}
+      return null;
+    }
+
+    function refreshRestartLog() {
+      try {
+        const api = window.XKeen && XKeen.features ? XKeen.features.restartLog : null;
+        if (api && typeof api.load === 'function') return api.load();
+      } catch (e) {}
+      return null;
+    }
+
+    function getFeatureLifecycle() {
+      if (_featureLifecycle) return _featureLifecycle;
+      const shell = getConfigShellApi();
+      if (!shell) return null;
+      const factory = (typeof shell.getFeatureLifecycle === 'function')
+        ? shell.getFeatureLifecycle
+        : shell.createFeatureLifecycle;
+      if (typeof factory !== 'function') return null;
+      try {
+        _featureLifecycle = factory.call(shell, 'outbounds', {
+          label: 'Outbounds',
+          fileCodeId: IDS.fileCode,
+          dirtySourceName: 'form',
+        });
+      } catch (e) {
+        _featureLifecycle = null;
+      }
+      return _featureLifecycle;
+    }
+
+    function publishLifecycleState(patch, reason) {
+      const lifecycle = getFeatureLifecycle();
+      if (!lifecycle || typeof lifecycle.publish !== 'function') return null;
+      try {
+        return lifecycle.publish(patch || {}, reason || 'outbounds-state');
+      } catch (e) {}
+      return null;
+    }
+
+    function syncShellState(dir, items) {
+      if (dir != null) _fragmentDir = String(dir || '');
+      if (Array.isArray(items)) _fragmentItems = items.slice();
+
+      const lifecycle = getFeatureLifecycle();
+      if (!lifecycle || typeof lifecycle.syncTab !== 'function') return null;
+
+      try {
+        return lifecycle.syncTab({
+          label: 'Outbounds',
+          fileCodeId: IDS.fileCode,
+          dir: _fragmentDir,
+          items: _fragmentItems,
+          activeFragment: getActiveFragment(),
+        });
+      } catch (e) {}
+      return null;
+    }
+
+    function decorateFragmentName(name) {
+      const value = String(name || '');
+      if (!value) return '';
+      if (/_hys2\.json$/i.test(value)) return value + ' (Hysteria2)';
+      return value;
+    }
+
+    function applyActiveFragment(name, dir, items) {
+      _activeFragment = name ? String(name) : null;
+      if (_activeFragment) rememberActiveFragment(_activeFragment);
+      const nextDir = (dir != null) ? String(dir || '') : _fragmentDir;
+      const cleanDir = nextDir ? String(nextDir).replace(/\/+$/, '') : '';
+      try {
+        updateActiveFileLabel((cleanDir ? cleanDir + '/' : '') + (_activeFragment || ''), cleanDir);
+      } catch (e) {}
+      try { syncShellState(cleanDir, Array.isArray(items) ? items : null); } catch (e2) {}
+      return _activeFragment;
+    }
+
+    function restoreFragmentSelection(sel, fragment, dir, items) {
+      const selectEl = sel || $(IDS.fragmentSelect);
+      const value = String(fragment || '').trim();
+      if (!selectEl || !value) return;
+
+      let opt = null;
+      try {
+        opt = Array.from(selectEl.options || []).find((item) => String(item.value || '') === value) || null;
+      } catch (e) {}
+
+      if (!opt) {
+        try {
+          opt = document.createElement('option');
+          opt.value = value;
+          opt.textContent = decorateFragmentName(value) + ' (текущий)';
+          selectEl.appendChild(opt);
+        } catch (e2) {}
+      }
+
+      try { selectEl.value = value; } catch (e3) {}
+      applyActiveFragment(value, dir, items);
+    }
+
+    async function guardFragmentSwitch(next, prev, opts) {
+      const lifecycle = getFeatureLifecycle();
+      if (!lifecycle || typeof lifecycle.guardSwitch !== 'function') return false;
+      return lifecycle.guardSwitch(Object.assign({
+        currentValue: String(prev || ''),
+        nextValue: String(next || ''),
+        title: 'Несохранённые изменения',
+        message: 'Во вкладке outbounds есть несохранённые изменения. Переключить файл и потерять их?',
+        okText: 'Переключить',
+        cancelText: 'Остаться',
+      }, (opts && typeof opts === 'object') ? opts : {}));
+    }
+
+    function getCurrentUrl() {
+      try {
+        const input = $('outbounds-url');
+        return input ? String(input.value || '').trim() : '';
+      } catch (e) {}
+      return '';
+    }
+
+    function syncDirtyUi(dirty) {
+      try {
+        const saveBtn = $('outbounds-save-btn');
+        if (saveBtn) saveBtn.classList.toggle('dirty', !!dirty);
+      } catch (e) {}
+    }
+
+    function syncDirtyState(forceDirty) {
+      const currentValue = String(getCurrentUrl() || '');
+      const savedValue = String(_savedUrl || '');
+      const dirty = (typeof forceDirty === 'boolean')
+        ? !!forceDirty
+        : (currentValue !== savedValue);
+
+      syncDirtyUi(dirty);
+
+      const dirtyOpts = {
+        sourceName: 'form',
+        scopeLabel: 'Outbounds',
+        confirmTitle: 'Несохранённые изменения',
+        confirmMessage: 'Во вкладке outbounds есть несохранённые изменения. Переключить файл и потерять их?',
+        okText: 'Переключить',
+        cancelText: 'Остаться',
+        label: 'Ссылка outbounds',
+        summary: dirty ? 'Текущая ссылка отличается от последней сохранённой версии.' : '',
+        currentValue,
+        savedValue,
+      };
+
+      const lifecycle = getFeatureLifecycle();
+      if (lifecycle && typeof lifecycle.setDirty === 'function') {
+        try {
+          lifecycle.setDirty(dirty, dirtyOpts);
+        } catch (e) {}
+      }
+
+      return dirty;
     }
 
     function getSelectedFragmentFromUI() {
@@ -95,13 +264,6 @@
       const remembered = restoreRememberedFragment();
       const preferred = (getActiveFragment() || remembered || currentDefault || (data.items[0] ? data.items[0].name : '')).toString();
 
-      function decorateName(n) {
-        const name = String(n || '');
-        if (!name) return '';
-        if (/_hys2\.json$/i.test(name)) return name + ' (Hysteria2)';
-        return name;
-      }
-
       try { if (sel.dataset) sel.dataset.dir = String(data.dir || ''); } catch (e) {}
       sel.innerHTML = '';
 
@@ -109,7 +271,7 @@
       if (currentDefault && names.indexOf(currentDefault) === -1) {
         const opt = document.createElement('option');
         opt.value = currentDefault;
-        opt.textContent = decorateName(currentDefault) + ' (текущий)';
+        opt.textContent = decorateFragmentName(currentDefault) + ' (текущий)';
         sel.appendChild(opt);
       }
 
@@ -118,27 +280,15 @@
         if (!name) return;
         const opt = document.createElement('option');
         opt.value = name;
-        opt.textContent = decorateName(name);
+        opt.textContent = decorateFragmentName(name);
         sel.appendChild(opt);
       });
 
       try {
         const finalChoice = names.indexOf(preferred) !== -1 ? preferred : (currentDefault || (names[0] || ''));
         if (finalChoice) sel.value = finalChoice;
-        _activeFragment = sel.value || finalChoice || null;
-        rememberActiveFragment(_activeFragment);
-
         const dir = data.dir ? String(data.dir).replace(/\/+$/, '') : '';
-        updateActiveFileLabel((dir ? dir + '/' : '') + (_activeFragment || ''), dir);
-        try {
-          if (window.XKEEN_FILES) window.XKEEN_FILES.outbounds = (dir ? dir + '/' : '') + (_activeFragment || '');
-        } catch (e) {}
-        try {
-          window.XKeen = window.XKeen || {};
-          window.XKeen.state = window.XKeen.state || {};
-          window.XKeen.state.fragments = window.XKeen.state.fragments || {};
-          window.XKeen.state.fragments.outbounds = _activeFragment;
-        } catch (e) {}
+        applyActiveFragment(sel.value || finalChoice || null, dir, data.items);
       } catch (e) {}
 
       // Wire refresh button
@@ -147,8 +297,15 @@
         if (btn && !btn.dataset.xkWired) {
           btn.addEventListener('click', async (e) => {
             e.preventDefault();
+            const prev = getActiveFragment();
+            const prevDir = _fragmentDir;
             await refreshFragmentsList({ notify: true });
-            await load();
+            const next = getActiveFragment();
+            if (!next || next === prev) return;
+            await guardFragmentSwitch(next, prev, {
+              onCancel: () => restoreFragmentSelection(sel, prev, prevDir, _fragmentItems),
+              commit: async () => { await load(); },
+            });
           });
           btn.dataset.xkWired = '1';
         }
@@ -163,20 +320,15 @@
           sel.addEventListener('change', async () => {
             const next = String(sel.value || '');
             if (!next) return;
-            _activeFragment = next;
-            rememberActiveFragment(_activeFragment);
-            try {
-              const dir = sel.dataset && sel.dataset.dir ? String(sel.dataset.dir) : '';
-              updateActiveFileLabel((dir ? dir.replace(/\/+$/, '') + '/' : '') + _activeFragment, dir);
-              if (window.XKEEN_FILES) window.XKEEN_FILES.outbounds = (dir ? dir.replace(/\/+$/, '') + '/' : '') + _activeFragment;
-            } catch (e2) {}
-            try {
-              window.XKeen = window.XKeen || {};
-              window.XKeen.state = window.XKeen.state || {};
-              window.XKeen.state.fragments = window.XKeen.state.fragments || {};
-              window.XKeen.state.fragments.outbounds = _activeFragment;
-            } catch (e3) {}
-            await load();
+            const prev = _activeFragment || String(sel.dataset.current || '');
+            const dir = sel.dataset && sel.dataset.dir ? String(sel.dataset.dir) : _fragmentDir;
+            await guardFragmentSwitch(next, prev, {
+              onCancel: () => restoreFragmentSelection(sel, prev, dir, _fragmentItems),
+              commit: async () => {
+                applyActiveFragment(next, dir);
+                await load();
+              },
+            });
           });
           sel.dataset.xkWired = '1';
         }
@@ -194,6 +346,15 @@
       });
 
       if (btn.dataset) btn.dataset.xkeenWired = '1';
+    }
+
+    function bindConfigAction(btnId, handler, opts) {
+      const lifecycle = getFeatureLifecycle();
+      if (!lifecycle || typeof lifecycle.bindAction !== 'function') return false;
+      try {
+        return !!lifecycle.bindAction(btnId, handler, opts || {});
+      } catch (e) {}
+      return false;
     }
 
     function wireHeader(headerId, handler) {
@@ -742,6 +903,7 @@
         if (saveBtn) saveBtn.disabled = false;
         input.classList.remove('xk-invalid');
         renderParsePreview({ ok: false, scheme: '', fields: {}, errors: [], warnings: [] });
+        try { syncDirtyState(); } catch (e) {}
         return;
       }
 
@@ -758,6 +920,7 @@
         input.classList.add('xk-invalid');
         if (saveBtn) saveBtn.disabled = true;
       }
+      try { syncDirtyState(); } catch (e) {}
     }
 
     function setSelectValue(el, value) {
@@ -1184,6 +1347,7 @@
       const input = $('outbounds-url');
       if (!input) return;
 
+      publishLifecycleState({ loading: true, initialized: false }, 'outbounds-load-start');
       try {
         const file = getActiveFragment();
         const url = file ? ('/api/outbounds?file=' + encodeURIComponent(file)) : '/api/outbounds';
@@ -1194,9 +1358,15 @@
         }
         const data = await res.json().catch(() => ({}));
         if (data && data.url) {
-          input.value = data.url;
-          updateHintsFromUrl(data.url);
+          _savedUrl = String(data.url || '');
+          input.value = _savedUrl;
+          updateHintsFromUrl(_savedUrl);
           validateAndUpdateUI();
+          publishLifecycleState({
+            savedValue: String(_savedUrl || ''),
+            currentValue: String(getCurrentUrl() || _savedUrl || ''),
+            initialized: true,
+          }, 'outbounds-load-success');
           if (statusEl) statusEl.textContent = 'Текущая ссылка загружена.';
           try {
             if (typeof updateLastActivity === 'function') {
@@ -1205,9 +1375,16 @@
             }
           } catch (e) {}
         } else {
+          _savedUrl = '';
+          input.value = '';
           if (statusEl) statusEl.textContent = 'Файл outbounds отсутствует или не содержит прокси-конфиг.';
           updateHintsFromUrl('');
           validateAndUpdateUI();
+          publishLifecycleState({
+            savedValue: '',
+            currentValue: String(getCurrentUrl() || ''),
+            initialized: true,
+          }, 'outbounds-load-empty');
           try {
             if (typeof updateLastActivity === 'function') {
               const fp = window.XKEEN_FILES && window.XKEEN_FILES.outbounds ? window.XKEEN_FILES.outbounds : '';
@@ -1218,6 +1395,8 @@
       } catch (e) {
         console.error(e);
         if (statusEl) statusEl.textContent = 'Ошибка загрузки outbounds.';
+      } finally {
+        publishLifecycleState({ loading: false, initialized: true }, 'outbounds-load-finished');
       }
     }
 
@@ -1226,55 +1405,66 @@
       const input = $('outbounds-url');
       if (!input) return;
 
-      const url = String(input.value || '').trim();
-      if (!url) {
-        if (statusEl) statusEl.textContent = 'Введи ссылку прокси (vless / trojan / vmess / ss).';
-        return;
-      }
-
-      // Client-side validation guard
+      publishLifecycleState({ saving: true, initialized: true }, 'outbounds-save-start');
       try {
-        const parsed = parseProxyUrl(url);
-        renderParsePreview(parsed);
-        if (!parsed.ok) {
-          if (statusEl) statusEl.textContent = 'Ссылка содержит ошибки — исправь и попробуй снова.';
-          input.classList.add('xk-invalid');
+        const url = String(input.value || '').trim();
+        if (!url) {
+          if (statusEl) statusEl.textContent = 'Введи ссылку прокси (vless / trojan / vmess / ss).';
           return;
         }
-      } catch (e) {}
 
-      try {
-        const file = getActiveFragment();
-        const apiUrl = file ? ('/api/outbounds?file=' + encodeURIComponent(file)) : '/api/outbounds';
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, restart: shouldRestartAfterSave() }),
-        });
-        const data = await res.json().catch(() => ({}));
+        // Client-side validation guard
+        try {
+          const parsed = parseProxyUrl(url);
+          renderParsePreview(parsed);
+          if (!parsed.ok) {
+            if (statusEl) statusEl.textContent = 'Ссылка содержит ошибки — исправь и попробуй снова.';
+            input.classList.add('xk-invalid');
+            return;
+          }
+        } catch (e) {}
 
-        if (res.ok && data && data.ok) {
-          let msg = 'Outbounds сохранены.';
+        try {
+          const file = getActiveFragment();
+          const apiUrl = file ? ('/api/outbounds?file=' + encodeURIComponent(file)) : '/api/outbounds';
+          const res = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, restart: shouldRestartAfterSave() }),
+          });
+          const data = await res.json().catch(() => ({}));
+
+          if (res.ok && data && data.ok) {
+            let msg = 'Outbounds сохранены.';
+            if (statusEl) statusEl.textContent = msg;
+            _savedUrl = url;
+            try { syncDirtyState(false); } catch (e) {}
+            publishLifecycleState({
+              savedValue: String(_savedUrl || ''),
+              currentValue: String(getCurrentUrl() || _savedUrl || ''),
+            }, 'outbounds-save-success');
+            try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
+            try {
+              if (typeof updateLastActivity === 'function') {
+                const fp = window.XKEEN_FILES && window.XKEEN_FILES.outbounds ? window.XKEEN_FILES.outbounds : '';
+                updateLastActivity('saved', 'outbounds', fp);
+              }
+            } catch (e) {}
+          } else {
+            const msg = 'Save error: ' + ((data && data.error) || res.status);
+            if (statusEl) statusEl.textContent = msg;
+            try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
+          }
+        } catch (e) {
+          console.error(e);
+          const msg = 'Failed to save outbounds.';
           if (statusEl) statusEl.textContent = msg;
-          try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
-          try {
-            if (typeof updateLastActivity === 'function') {
-              const fp = window.XKEEN_FILES && window.XKEEN_FILES.outbounds ? window.XKEEN_FILES.outbounds : '';
-              updateLastActivity('saved', 'outbounds', fp);
-            }
-          } catch (e) {}
-        } else {
-          const msg = 'Save error: ' + ((data && data.error) || res.status);
-          if (statusEl) statusEl.textContent = msg;
-          try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
+          try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
+        } finally {
+          try { refreshRestartLog(); } catch (e) {}
         }
-      } catch (e) {
-        console.error(e);
-        const msg = 'Failed to save outbounds.';
-        if (statusEl) statusEl.textContent = msg;
-        try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
       } finally {
-        try { if (typeof loadRestartLog === 'function') loadRestartLog(); } catch (e) {}
+        publishLifecycleState({ saving: false, initialized: true }, 'outbounds-save-finished');
       }
     }
 
@@ -2707,6 +2897,17 @@
       if (inited) return;
       inited = true;
 
+      try { syncShellState(_fragmentDir, _fragmentItems); } catch (e) {}
+      try {
+        publishLifecycleState({
+          currentValue: String(getCurrentUrl() || ''),
+          savedValue: String(_savedUrl || ''),
+          initialized: false,
+          loading: false,
+          saving: false,
+        }, 'outbounds-init');
+      } catch (e) {}
+
       setCollapsedFromStorage();
       wireHeader('outbounds-header', toggleCard);
 
@@ -2714,19 +2915,19 @@
       refreshFragmentsList();
 
       // Buttons
-      wireButton('outbounds-save-btn', save);
-      wireButton('outbounds-normalize-btn', normalizeCurrentUrl);
-      wireButton('outbounds-backup-btn', backup);
-      wireButton('outbounds-restore-auto-btn', () => {
+      bindConfigAction('outbounds-save-btn', save);
+      bindConfigAction('outbounds-normalize-btn', normalizeCurrentUrl);
+      bindConfigAction('outbounds-backup-btn', backup, { kind: 'backup' });
+      bindConfigAction('outbounds-restore-auto-btn', () => {
         try {
           if (window.XKeen && XKeen.backups && typeof XKeen.backups.restoreAuto === 'function') {
-            XKeen.backups.restoreAuto('outbounds');
+            XKeen.backups.restoreAuto('outbounds', { confirmed: true });
           } else {
             if (typeof showToast === 'function') showToast('Модуль бэкапов не загружен.', true);
           }
         } catch (e) {}
-      });
-      wireButton('outbounds-open-editor-btn', () => {
+      }, { kind: 'restoreAuto' });
+      bindConfigAction('outbounds-open-editor-btn', () => {
         try {
           if (window.XKeen && XKeen.jsonEditor && typeof XKeen.jsonEditor.open === 'function') {
             XKeen.jsonEditor.open('outbounds');
@@ -2734,7 +2935,7 @@
             if (typeof showToast === 'function') showToast('Модуль JSON-редактора не загружен.', true);
           }
         } catch (e) {}
-      });
+      }, { kind: 'openEditor' });
 
       // Initial load
       wireHints();

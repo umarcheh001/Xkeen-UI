@@ -36,15 +36,42 @@ def read_restart_log(log_file: str, limit: int = 100) -> List[str]:
         return []
 
 
-def restart_xkeen(restart_cmd, log_file: str, source: str = "api") -> bool:
+def restart_xkeen(
+    restart_cmd,
+    log_file: str,
+    source: str = "api",
+    dispatch_timeout: float = 1.5,
+) -> bool:
     """Restart xkeen using given restart_cmd and log the result.
 
     ``restart_cmd`` is typically a list, e.g. XKEEN_RESTART_CMD.
+
+    The restart command may take a long time to return even after the service
+    restart has already been triggered. To keep the HTTP API responsive, we
+    treat a command that stays alive longer than ``dispatch_timeout`` as
+    successfully dispatched and let the UI confirm the final service state via
+    follow-up status polling.
     """
     try:
-        subprocess.check_call(restart_cmd)
-        append_restart_log(log_file, True, source=source)
-        return True
+        proc = subprocess.Popen(
+            restart_cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            start_new_session=True,
+        )
     except Exception:
         append_restart_log(log_file, False, source=source)
         return False
+
+    try:
+        rc = proc.wait(timeout=max(0.1, float(dispatch_timeout or 0)))
+        ok = (rc == 0)
+    except subprocess.TimeoutExpired:
+        ok = True
+    except Exception:
+        ok = False
+
+    append_restart_log(log_file, ok, source=source)
+    return ok

@@ -35,6 +35,11 @@
     return d;
   });
   const byId = SH.byId || ((id) => { try { return document.getElementById(id); } catch (e) { return null; } });
+  const confirmAction = SH.confirmAction || (async (opts) => {
+    if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') return !!(await XKeen.ui.confirm(opts || {}));
+    return !!window.confirm(String((opts && opts.message) || 'Продолжить?'));
+  });
+
 
   // Cross-tab reload broadcast key (handled by update_notifier.js on other tabs).
   const LS_FORCE_RELOAD = 'xk_ui_force_reload_ts';
@@ -790,10 +795,13 @@
 
   async function runRollback() {
     try {
-      let ok = true;
-      try {
-        ok = window.confirm('Откатить панель на предыдущую версию из бэкапа?');
-      } catch (e) { ok = true; }
+      const ok = await confirmAction({
+        title: 'Откатить панель?',
+        message: 'Откатить панель на предыдущую версию из бэкапа?',
+        okText: 'Откатить',
+        cancelText: 'Отменить',
+        danger: true,
+      });
       if (!ok) return;
 
       _setStatus('Starting rollback…', 'warn');
@@ -834,7 +842,13 @@
       try {
         const upToDate = !!(btnRun && btnRun.dataset && btnRun.dataset.uptodate === '1');
         if (upToDate) {
-          ok = window.confirm('У вас актуальная версия. Переустановить поверх ещё раз?');
+          ok = await confirmAction({
+            title: 'Переустановить поверх?',
+            message: 'У вас актуальная версия. Переустановить поверх ещё раз?',
+            okText: 'Переустановить',
+            cancelText: 'Отменить',
+            danger: false,
+          });
         }
       } catch (e) { ok = true; }
       if (!ok) return;

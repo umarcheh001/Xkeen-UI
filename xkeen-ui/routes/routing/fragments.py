@@ -9,6 +9,7 @@ import os
 from typing import Any
 
 from flask import Blueprint, jsonify, request
+from services.xray_config_files import is_sensitive_xray_fragment_name
 
 
 def register_fragments_routes(bp: Blueprint, *, xray_configs_dir: str, routing_file: str) -> None:
@@ -44,9 +45,13 @@ def register_fragments_routes(bp: Blueprint, *, xray_configs_dir: str, routing_f
                             "name": name,
                             "size": int(getattr(st, "st_size", 0) or 0),
                             "mtime": int(getattr(st, "st_mtime", 0) or 0),
+                            "sensitive": is_sensitive_xray_fragment_name(name, kind="routing"),
                         })
                     except Exception:
-                        items.append({"name": name})
+                        items.append({
+                            "name": name,
+                            "sensitive": is_sensitive_xray_fragment_name(name, kind="routing"),
+                        })
         except Exception:
             items = []
 

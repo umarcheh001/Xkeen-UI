@@ -8,9 +8,11 @@
 
   const CORE_DOM = (XK.core && XK.core.dom) ? XK.core.dom : null;
   const CORE_HTTP = (XK.core && XK.core.http) ? XK.core.http : null;
+  const UI = (XK.ui && XK.ui.sharedPrimitives) ? XK.ui.sharedPrimitives : null;
 
   function toast(msg, isError) {
     try {
+      if (UI && typeof UI.toast === 'function') return UI.toast(msg, isError ? 'error' : 'success');
       if (typeof window.showToast === 'function') return window.showToast(msg, !!isError);
       if (XK.ui && typeof XK.ui.showToast === 'function') return XK.ui.showToast(msg, !!isError);
       console.log(msg);
@@ -18,8 +20,8 @@
   }
 
   async function getJSON(url) {
-    // Prefer shared core wrapper when available (keeps behavior: cache=no-store, throws on !ok).
     try {
+      if (UI && typeof UI.getJSON === 'function') return await UI.getJSON(url);
       if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
         return await CORE_HTTP.fetchJSON(url, { cache: 'no-store' });
       }
@@ -37,8 +39,8 @@
   }
 
   async function postJSON(url, body) {
-    // Prefer shared core wrapper when available (keeps behavior: cache=no-store, throws on !ok).
     try {
+      if (UI && typeof UI.postJSON === 'function') return await UI.postJSON(url, body || {});
       if (CORE_HTTP && typeof CORE_HTTP.postJSON === 'function') {
         return await CORE_HTTP.postJSON(url, body || {}, { cache: 'no-store' });
       }
@@ -70,9 +72,46 @@
 
   function byId(id) {
     try {
+      if (UI && typeof UI.byId === 'function') return UI.byId(id);
       if (CORE_DOM && typeof CORE_DOM.byId === 'function') return CORE_DOM.byId(id);
     } catch (e) {}
     try { return document.getElementById(id); } catch (e2) { return null; }
+  }
+
+
+  async function confirmAction(options) {
+    try {
+      if (UI && typeof UI.confirmAction === 'function') return !!(await UI.confirmAction(options || {}));
+    } catch (e) {}
+    if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
+      try { return !!(await XKeen.ui.confirm(options || {})); } catch (e2) {}
+    }
+    return !!window.confirm(String((options && options.message) || 'Продолжить?'));
+  }
+
+  function openModal(modal, source) {
+    try {
+      if (UI && typeof UI.openModal === 'function') return UI.openModal(modal, { source: source || 'devtools' });
+    } catch (e) {}
+    if (!modal) return false;
+    try { modal.classList.remove('hidden'); } catch (e2) {}
+    return true;
+  }
+
+  function closeModal(modal, source) {
+    try {
+      if (UI && typeof UI.closeModal === 'function') return UI.closeModal(modal, { source: source || 'devtools' });
+    } catch (e) {}
+    if (!modal) return false;
+    try { modal.classList.add('hidden'); } catch (e2) {}
+    return true;
+  }
+
+  function wireCollapsibleState(options) {
+    try {
+      if (UI && typeof UI.wireCollapsibleState === 'function') return UI.wireCollapsibleState(options || {});
+    } catch (e) {}
+    return 0;
   }
 
   function escapeHtml(s) {
@@ -314,6 +353,10 @@
   api.escapeHtml = escapeHtml;
   api.ansiToHtml = ansiToHtml;
   api.fallbackCopyText = fallbackCopyText;
+  api.confirmAction = confirmAction;
+  api.openModal = openModal;
+  api.closeModal = closeModal;
+  api.wireCollapsibleState = wireCollapsibleState;
   api.formatBytes = formatBytes;
   api.formatAgeRu = formatAgeRu;
   api.toColorPickerValue = toColorPickerValue;

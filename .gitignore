@@ -1,4 +1,16 @@
+# Python
 *.pyc
+__pycache__/
 
+# OS
 .DS_Store
+
+# Project
 xkeen-ui/BUILD.json
+
+# Node / frontend
+node_modules/
+
+# Frontend build
+xkeen-ui/static/vendor/
+xkeen-ui/static/frontend-build/

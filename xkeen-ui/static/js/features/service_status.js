@@ -9,15 +9,301 @@
 
   window.XKeen = window.XKeen || {};
   XKeen.features = XKeen.features || {};
+  XKeen.core = XKeen.core || {};
   XKeen.ui = XKeen.ui || {};
 
   let _inited = false;
   let _pollTimer = null;
   let _coreModalLoading = false;
+  let _shellUnsubscribe = null;
+  let _activeControlPromise = null;
+  let _controlRequestSeq = 0;
 
 
   function $(id) {
     return document.getElementById(id);
+  }
+
+  function getUiShellApi() {
+    try {
+      const api = XKeen.core && XKeen.core.uiShell;
+      if (api && typeof api.getState === 'function' && typeof api.patchState === 'function') return api;
+    } catch (e) {}
+    return null;
+  }
+
+  function getModalApi() {
+    try {
+      if (XKeen.ui && XKeen.ui.modal) return XKeen.ui.modal;
+    } catch (e) {}
+    return null;
+  }
+
+  function getRestartLogApi() {
+    try {
+      const api = XKeen.features ? XKeen.features.restartLog : null;
+      return api && typeof api.load === 'function' ? api : null;
+    } catch (e) {}
+    return null;
+  }
+
+  function showModal(modal, source) {
+    if (!modal) return false;
+    const api = getModalApi();
+    try {
+      if (api && typeof api.open === 'function') return api.open(modal, { source: source || 'service_status' });
+    } catch (e) {}
+    try { modal.classList.remove('hidden'); } catch (e2) {}
+    try {
+      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
+    } catch (e3) {}
+    return true;
+  }
+
+  function hideModal(modal, source) {
+    if (!modal) return false;
+    const api = getModalApi();
+    try {
+      if (api && typeof api.close === 'function') return api.close(modal, { source: source || 'service_status' });
+    } catch (e) {}
+    try { modal.classList.add('hidden'); } catch (e2) {}
+    try {
+      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
+    } catch (e3) {}
+    return true;
+  }
+
+  function normalizeCore(core) {
+    const value = String(core || '').trim().toLowerCase();
+    if (!value) return '';
+    return value === 'mihomo' ? 'mihomo' : 'xray';
+  }
+
+  function readShellSnapshot() {
+    const api = getUiShellApi();
+    if (api) return api.getState();
+    return {
+      serviceStatus: '',
+      currentCore: '',
+      version: {
+        currentLabel: '',
+        currentCommit: '',
+        currentBuiltAt: '',
+        latestLabel: '',
+        latestPublishedAt: '',
+        channel: '',
+      },
+      control: { pending: false, action: '', requestId: 0 },
+      loading: {
+        serviceStatus: false,
+        currentCore: true,
+        update: true,
+      },
+      update: { visible: false, hasUpdate: false, label: '', title: '' },
+    };
+  }
+
+  function patchShellSnapshot(patch, meta) {
+    const api = getUiShellApi();
+    if (!api) return readShellSnapshot();
+    return api.patchState(patch, meta);
+  }
+
+  function normalizeAction(action) {
+    const value = String(action || '').trim().toLowerCase();
+    return value === 'start' || value === 'stop' || value === 'restart' ? value : '';
+  }
+
+  function readControlSnapshot(snapshot) {
+    const shell = snapshot || readShellSnapshot();
+    const control = shell && shell.control ? shell.control : {};
+    const requestId = Number(control.requestId);
+
+    return {
+      pending: !!control.pending,
+      action: normalizeAction(control.action),
+      requestId: Number.isFinite(requestId) ? Math.max(0, Math.floor(requestId)) : 0,
+    };
+  }
+
+  function isControlPending() {
+    return !!readControlSnapshot().pending;
+  }
+
+  function isActiveControlRequest(requestId) {
+    const current = readControlSnapshot();
+    return !!requestId && current.pending && current.requestId === Number(requestId);
+  }
+
+  function nextControlRequestId() {
+    _controlRequestSeq += 1;
+    return _controlRequestSeq;
+  }
+
+  function expectedStateForAction(action) {
+    const normalized = normalizeAction(action);
+    return normalized === 'stop' ? 'stopped' : 'running';
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, Math.max(0, Number(ms) || 0));
+    });
+  }
+
+  function applyServiceShellPatch(status, core, controlPatch, meta) {
+    const metaOptions = meta && typeof meta === 'object' ? Object.assign({}, meta) : {};
+    const patch = {};
+
+    if (typeof status !== 'undefined') {
+      patch.serviceStatus = String(status || '');
+    }
+    if (typeof core !== 'undefined') {
+      patch.currentCore = normalizeCore(core);
+    }
+    if (controlPatch && typeof controlPatch === 'object' && !Array.isArray(controlPatch)) {
+      patch.control = controlPatch;
+    }
+
+    if (metaOptions.loading && typeof metaOptions.loading === 'object') {
+      patch.loading = metaOptions.loading;
+    }
+
+    try { delete metaOptions.loading; } catch (e) {}
+
+    const snapshot = patchShellSnapshot(patch, metaOptions);
+    if (!_shellUnsubscribe) {
+      applyXkeenServiceShell(snapshot);
+    }
+    return snapshot;
+  }
+
+  function beginControlLifecycle(action) {
+    const normalizedAction = normalizeAction(action);
+    if (!normalizedAction) return null;
+
+    const current = readShellSnapshot();
+    const control = readControlSnapshot(current);
+    if (control.pending) return null;
+
+    const requestId = nextControlRequestId();
+    applyServiceShellPatch('pending', current.currentCore, {
+      pending: true,
+      action: normalizedAction,
+      requestId,
+    }, {
+      source: 'service_status_control_pending',
+      action: normalizedAction,
+      requestId,
+    });
+
+    return {
+      action: normalizedAction,
+      requestId,
+    };
+  }
+
+  async function fetchServiceStatusSnapshot() {
+    const res = await fetch('/api/xkeen/status');
+    if (!res.ok) throw new Error('status http error: ' + res.status);
+    const data = await res.json().catch(() => ({}));
+
+    return {
+      serviceStatus: data && data.running ? 'running' : 'stopped',
+      currentCore: normalizeCore(data && data.core ? data.core : null),
+    };
+  }
+
+  async function resolveFinalServiceStatus(action, requestId) {
+    const normalizedAction = normalizeAction(action);
+    const expected = expectedStateForAction(normalizedAction);
+    const attempts = normalizedAction === 'restart' ? 24 : 8;
+    const delayMs = normalizedAction === 'restart' ? 800 : 700;
+    let lastSnapshot = null;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if (!isActiveControlRequest(requestId)) return lastSnapshot;
+
+      try {
+        lastSnapshot = await fetchServiceStatusSnapshot();
+        if (lastSnapshot && lastSnapshot.serviceStatus === expected) {
+          return lastSnapshot;
+        }
+      } catch (e) {
+        if (attempt === attempts - 1) throw e;
+      }
+
+      if (attempt < attempts - 1) {
+        await sleep(delayMs);
+      }
+    }
+
+    return lastSnapshot;
+  }
+
+  function toast(message, kindOrOptions) {
+    try {
+      if (typeof window.toast === 'function') return window.toast(message, kindOrOptions);
+      if (XKeen.ui && typeof XKeen.ui.toast === 'function') return XKeen.ui.toast(message, kindOrOptions);
+      if (typeof window.showToast === 'function') return window.showToast(message, kindOrOptions);
+    } catch (e) {}
+    return null;
+  }
+
+  function notifyServiceActionPending(action) {
+    const message = action === 'start'
+      ? 'Starting xkeen...'
+      : action === 'stop'
+        ? 'Stopping xkeen...'
+        : 'Restarting xkeen...';
+
+    return toast({
+      id: 'xkeen-service-action',
+      message,
+      kind: 'info',
+      sticky: true,
+      dedupeWindowMs: 0,
+    });
+  }
+
+  function notifyServiceActionResult(message, ok) {
+    return toast({
+      id: 'xkeen-service-action',
+      message: String(message || ''),
+      kind: ok ? 'success' : 'error',
+      dedupeWindowMs: 0,
+    });
+  }
+
+  function controlRequestTimeoutMs(action) {
+    return normalizeAction(action) === 'restart' ? 25000 : 12000;
+  }
+
+  async function postControlRequest(url, action) {
+    const timeoutMs = controlRequestTimeoutMs(action);
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = controller
+      ? setTimeout(() => {
+          try { controller.abort(); } catch (e) {}
+        }, timeoutMs)
+      : null;
+
+    try {
+      return await fetch(url, {
+        method: 'POST',
+        signal: controller ? controller.signal : undefined,
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  function controlActionTimeoutMessage(action) {
+    return action === 'start'
+      ? 'Timed out while starting xkeen.'
+      : action === 'stop'
+        ? 'Timed out while stopping xkeen.'
+        : 'Timed out while restarting xkeen.';
   }
 
   // ---------- Xkeen control (start/stop/restart) ----------
@@ -37,64 +323,161 @@
     return $('routing-status') || $('xkeen-status') || null;
   }
 
+  function controlStatusTextForState(state, action) {
+    const normalizedState = String(state || '').trim().toLowerCase();
+    const normalizedAction = normalizeAction(action);
+
+    if (normalizedState === 'pending') {
+      return normalizedAction
+        ? 'xkeen: ' + normalizedAction + '...'
+        : 'xkeen: pending...';
+    }
+    if (normalizedState === 'running') return 'xkeen: running';
+    if (normalizedState === 'stopped') return 'xkeen: stopped';
+    if (normalizedState === 'error') return 'xkeen: error';
+    return '';
+  }
+
+  function controlActionSuccessMessage(action) {
+    return action === 'start'
+      ? 'xkeen started.'
+      : action === 'stop'
+        ? 'xkeen stopped.'
+        : 'xkeen restarted.';
+  }
+
+  function controlActionErrorMessage(action) {
+    return action === 'start'
+      ? 'Failed to start xkeen.'
+      : action === 'stop'
+        ? 'Failed to stop xkeen.'
+        : 'Failed to restart xkeen.';
+  }
+
+  function controlActionMismatchMessage(action, finalState) {
+    const state = String(finalState || 'unknown');
+    return action === 'start'
+      ? `xkeen start was requested, but service is ${state}.`
+      : action === 'stop'
+        ? `xkeen stop was requested, but service is ${state}.`
+        : `xkeen restart was requested, but service is ${state}.`;
+  }
+
+  async function finalizeControlLifecycle(action, requestId, requestOk, fallbackMessage) {
+    let finalSnapshot = null;
+
+    try {
+      finalSnapshot = requestOk
+        ? await resolveFinalServiceStatus(action, requestId)
+        : await fetchServiceStatusSnapshot().catch(() => null);
+    } catch (e) {
+      finalSnapshot = null;
+    }
+
+    if (!isActiveControlRequest(requestId)) return false;
+
+    if (finalSnapshot && finalSnapshot.serviceStatus) {
+      applyServiceShellPatch(finalSnapshot.serviceStatus, finalSnapshot.currentCore, {
+        pending: false,
+        action: '',
+        requestId: 0,
+      }, {
+        source: 'service_status_control_resolved',
+        action,
+        requestId,
+      });
+
+      if (requestOk) {
+        const matches = finalSnapshot.serviceStatus === expectedStateForAction(action);
+        const message = matches
+          ? controlActionSuccessMessage(action)
+          : controlActionMismatchMessage(action, finalSnapshot.serviceStatus);
+        try { notifyServiceActionResult(message, matches); } catch (e) {}
+        return matches;
+      }
+
+      try { notifyServiceActionResult(fallbackMessage || controlActionErrorMessage(action), false); } catch (e2) {}
+      return false;
+    }
+
+    applyServiceShellPatch('error', undefined, {
+      pending: false,
+      action: '',
+      requestId: 0,
+    }, {
+      source: 'service_status_control_error',
+      action,
+      requestId,
+    });
+    try { notifyServiceActionResult(fallbackMessage || 'xkeen control error.', false); } catch (e3) {}
+    return false;
+  }
+
   function controlXkeen(action) {
+    const normalizedAction = normalizeAction(action);
     const map = {
       start: '/api/xkeen/start',
       stop: '/api/xkeen/stop',
       restart: '/api/restart',
     };
-    const url = map[action];
+    const url = map[normalizedAction];
     if (!url) return Promise.resolve(false);
+    if (isControlPending()) return _activeControlPromise || Promise.resolve(false);
+
+    const lifecycle = beginControlLifecycle(normalizedAction);
+    if (!lifecycle) return _activeControlPromise || Promise.resolve(false);
 
     const statusEl = getStatusElForControl();
-    if (statusEl) statusEl.textContent = 'xkeen: ' + action + '...';
+    if (statusEl) statusEl.textContent = controlStatusTextForState('pending', normalizedAction);
+    try { notifyServiceActionPending(normalizedAction); } catch (e) {}
 
-    return fetch(url, { method: 'POST' })
-      .then((res) => res.json().catch(() => ({})))
-      .then((data) => {
-        const ok = !data || data.ok !== false;
+    const requestPromise = (async () => {
+      try {
+        const res = await postControlRequest(url, normalizedAction);
+        const data = await res.json().catch(() => ({}));
+        const ok = !!res.ok && (!data || data.ok !== false);
+        const failureMessage = ok
+          ? ''
+          : (data && data.error ? String(data.error) : controlActionErrorMessage(normalizedAction));
 
-        const base = action === 'start'
-          ? 'xkeen started.'
-          : action === 'stop'
-            ? 'xkeen stopped.'
-            : 'xkeen restarted.';
-
-        const err = action === 'start'
-          ? 'Failed to start xkeen.'
-          : action === 'stop'
-            ? 'Failed to stop xkeen.'
-            : 'Failed to restart xkeen.';
-
-        const msg = ok ? base : err;
-        if (statusEl) statusEl.textContent = msg;
-
-        try { refreshXkeenServiceStatus({ silent: true }); } catch (e) {}
-
-        // Avoid double toasts on restart success; but always show errors.
-        if (!ok || action !== 'restart') {
-          try { toast(msg, !ok); } catch (e) {}
-        }
-        if (action === 'restart') {
+        if (normalizedAction === 'restart' && ok) {
           try {
-            if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.load === 'function') {
-              XKeen.features.restartLog.load();
-            } else if (typeof window.loadRestartLog === 'function') {
-              window.loadRestartLog();
-            }
+            const restartLog = getRestartLogApi();
+            if (restartLog) restartLog.load();
           } catch (e) {}
         }
 
-        return ok;
-      })
-      .catch((e) => {
+        const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, ok, failureMessage);
+        if (statusEl) {
+          const finalShell = readShellSnapshot();
+          statusEl.textContent = controlStatusTextForState(finalShell.serviceStatus, normalizedAction)
+            || (settled
+              ? controlActionSuccessMessage(normalizedAction)
+              : (failureMessage || controlActionErrorMessage(normalizedAction)));
+        }
+        return settled;
+      } catch (e) {
         console.error(e);
-        const msg = 'xkeen control error.';
-        if (statusEl) statusEl.textContent = msg;
-        try { toast(msg, true); } catch (e2) {}
-        try { refreshXkeenServiceStatus({ silent: true }); } catch (e3) {}
-        return false;
-      });
+        const message = e && e.name === 'AbortError'
+          ? controlActionTimeoutMessage(normalizedAction)
+          : 'xkeen control error.';
+        const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, false, message);
+        if (statusEl) {
+          const finalShell = readShellSnapshot();
+          statusEl.textContent = controlStatusTextForState(finalShell.serviceStatus, normalizedAction) || message;
+        }
+        return settled;
+      }
+    })();
+
+    const exposedPromise = requestPromise.finally(() => {
+      if (_activeControlPromise === exposedPromise) {
+        _activeControlPromise = null;
+      }
+    });
+
+    _activeControlPromise = exposedPromise;
+    return _activeControlPromise;
   }
 
   // Expose for terminal.js and old code.
@@ -113,7 +496,8 @@
     if (startBtn && (!startBtn.dataset || startBtn.dataset.xkeenBound !== '1')) {
       startBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        controlXkeen('start');
+        if (startBtn.disabled) return;
+        void controlXkeen('start');
       });
       if (startBtn.dataset) startBtn.dataset.xkeenBound = '1';
     }
@@ -121,7 +505,8 @@
     if (stopBtn && (!stopBtn.dataset || stopBtn.dataset.xkeenBound !== '1')) {
       stopBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        controlXkeen('stop');
+        if (stopBtn.disabled) return;
+        void controlXkeen('stop');
       });
       if (stopBtn.dataset) stopBtn.dataset.xkeenBound = '1';
     }
@@ -130,15 +515,7 @@
       restartBtn.addEventListener('click', (e) => {
         e.preventDefault();
         if (restartBtn.disabled) return;
-        restartBtn.disabled = true;
-        restartBtn.classList.add('loading');
-        const p = controlXkeen('restart');
-        Promise.resolve(p)
-          .catch(() => {})
-          .finally(() => {
-            restartBtn.disabled = false;
-            restartBtn.classList.remove('loading');
-          });
+        void controlXkeen('restart');
       });
       if (restartBtn.dataset) restartBtn.dataset.xkeenBound = '1';
     }
@@ -170,16 +547,32 @@
     if (cb.dataset) cb.dataset.xkeenBound = '1';
   }
 
-  function setXkeenServiceStatus(state, core) {
+  function renderXkeenServiceStatus(state, core, controlState) {
     const lamp = $('xkeen-service-lamp');
     const textEl = $('xkeen-service-text');
     const coreEl = $('xkeen-core-text');
     const startBtn = $('xkeen-start-btn');
+    const stopBtn = $('xkeen-stop-btn');
+    const restartBtn = $('xkeen-restart-btn');
+    const control = readControlSnapshot({ control: controlState || {} });
+    const pendingAction = control.pending ? control.action : '';
 
     if (startBtn) {
       const showStart = String(state || '').toLowerCase() === 'stopped';
       startBtn.hidden = !showStart;
       startBtn.setAttribute('aria-hidden', showStart ? 'false' : 'true');
+      startBtn.disabled = control.pending;
+      startBtn.classList.toggle('loading', control.pending && pendingAction === 'start');
+    }
+
+    if (stopBtn) {
+      stopBtn.disabled = control.pending || String(state || '') === 'stopped' || String(state || '') === 'pending' || String(state || '') === 'error' || !String(state || '');
+      stopBtn.classList.toggle('loading', control.pending && pendingAction === 'stop');
+    }
+
+    if (restartBtn) {
+      restartBtn.disabled = control.pending || String(state || '') === 'pending' || String(state || '') === 'error' || !String(state || '');
+      restartBtn.classList.toggle('loading', control.pending && pendingAction === 'restart');
     }
 
     if (!lamp || !textEl || !coreEl) return;
@@ -205,11 +598,21 @@
         text = 'Статус неизвестен';
     }
 
+    if (st === 'pending') {
+      text = pendingAction === 'start'
+        ? '\u0417\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u043C \u0441\u0435\u0440\u0432\u0438\u0441...'
+        : pendingAction === 'stop'
+          ? '\u041E\u0441\u0442\u0430\u043D\u0430\u0432\u043B\u0438\u0432\u0430\u0435\u043C \u0441\u0435\u0440\u0432\u0438\u0441...'
+          : pendingAction === 'restart'
+            ? '\u041F\u0435\u0440\u0435\u0437\u0430\u043F\u0443\u0441\u043A\u0430\u0435\u043C \u0441\u0435\u0440\u0432\u0438\u0441...'
+            : text;
+    }
+
     textEl.textContent = text;
 
     const hasCore = !!core;
     if (hasCore) {
-      const label = String(core || '').toLowerCase() === 'mihomo' ? 'mihomo' : 'xray';
+      const label = normalizeCore(core);
       coreEl.textContent = `Ядро: ${label}`;
       coreEl.dataset.core = label;
       coreEl.classList.add('has-core');
@@ -217,7 +620,7 @@
       lamp.title = `${text} (ядро: ${label})`;
     } else {
       // Keep the core button visible/clickable even when core is unknown
-      coreEl.textContent = '';
+      coreEl.textContent = 'Ядро';
       coreEl.dataset.core = '';
       coreEl.classList.remove('has-core');
       coreEl.disabled = false;
@@ -225,29 +628,110 @@
     }
   }
 
+  function applyXkeenServiceShell(snapshot) {
+    const shell = snapshot || readShellSnapshot();
+    if (!shell.serviceStatus && !shell.currentCore) return;
+    renderXkeenServiceStatus(shell.serviceStatus, shell.currentCore, shell.control);
+  }
+
+  function ensureShellBinding() {
+    if (_shellUnsubscribe) return;
+
+    const api = getUiShellApi();
+    if (!api || typeof api.subscribe !== 'function') {
+      applyXkeenServiceShell();
+      return;
+    }
+
+    _shellUnsubscribe = api.subscribe((next) => {
+      applyXkeenServiceShell(next);
+    }, { immediate: true });
+  }
+
+  function setXkeenServiceStatus(state, core, options) {
+    const o = options || {};
+    const current = readShellSnapshot();
+    const currentControl = readControlSnapshot(current);
+    const preserveControl = !!o.keepControl || (
+      currentControl.pending &&
+      String(state || '') === 'pending' &&
+      !Object.prototype.hasOwnProperty.call(o, 'pending') &&
+      !Object.prototype.hasOwnProperty.call(o, 'action') &&
+      !Object.prototype.hasOwnProperty.call(o, 'requestId')
+    );
+
+    let nextControl;
+    if (preserveControl) {
+      nextControl = currentControl;
+    } else {
+      const nextPending = !!o.pending;
+      const nextAction = nextPending ? normalizeAction(o.action) : '';
+      const rawRequestId = nextPending
+        ? (Object.prototype.hasOwnProperty.call(o, 'requestId') ? o.requestId : currentControl.requestId)
+        : 0;
+      const parsedRequestId = Number(rawRequestId);
+
+      nextControl = {
+        pending: nextPending,
+        action: nextAction,
+        requestId: nextPending && Number.isFinite(parsedRequestId) ? Math.max(0, Math.floor(parsedRequestId)) : 0,
+      };
+    }
+
+    return applyServiceShellPatch(
+      String(state || ''),
+      typeof core === 'undefined' ? undefined : core,
+      nextControl,
+      {
+        source: o.source || 'service_status',
+        action: nextControl.action,
+        requestId: nextControl.requestId,
+        loading: o.loading,
+      }
+    );
+  }
+
   async function refreshXkeenServiceStatus(opts) {
     const o = opts || {};
     const lamp = $('xkeen-service-lamp');
-    if (!lamp) return;
+    if (!lamp) return readShellSnapshot();
+
+    const control = readControlSnapshot();
+    if (control.pending && !o.allowPending) {
+      return readShellSnapshot();
+    }
 
     // Avoid flicker on periodic polling: show "pending" only on first run or when state is unknown.
     const curState = String(lamp.dataset.state || '');
-    if (!o.silent && (!curState || curState === 'pending')) {
-      setXkeenServiceStatus('pending');
+    if (!o.silent && !control.pending && (!curState || curState === 'pending')) {
+      setXkeenServiceStatus('pending', undefined, {
+        keepControl: true,
+        source: 'service_status_refresh_pending',
+      });
     }
 
     try {
-      const res = await fetch('/api/xkeen/status');
-      if (!res.ok) throw new Error('status http error: ' + res.status);
-      const data = await res.json().catch(() => ({}));
+      const snapshot = await fetchServiceStatusSnapshot();
+      if (o.requestId && !isActiveControlRequest(o.requestId)) {
+        return readShellSnapshot();
+      }
 
-      const running = !!data.running;
-      const core = data.core || null;
-
-      setXkeenServiceStatus(running ? 'running' : 'stopped', core);
+      return setXkeenServiceStatus(snapshot.serviceStatus, snapshot.currentCore, {
+        pending: false,
+        source: 'service_status_refresh',
+        loading: { currentCore: false },
+      });
     } catch (e) {
       console.error('xkeen status error', e);
-      setXkeenServiceStatus('error');
+      if (o.requestId && !isActiveControlRequest(o.requestId)) {
+        return readShellSnapshot();
+      }
+
+      return setXkeenServiceStatus('error', undefined, {
+        pending: false,
+        source: 'service_status_refresh_error',
+        loading: { currentCore: false },
+      });
     }
   }
 
@@ -261,7 +745,7 @@
 
     if (!modal || !statusEl || !confirmBtn || !coreButtons.length) return;
 
-    modal.classList.remove('hidden');
+    showModal(modal, 'service_status_core_open');
     statusEl.textContent = 'Загрузка списка ядер...';
     confirmBtn.disabled = true;
 
@@ -328,7 +812,7 @@
   function closeXkeenCoreModal() {
     const modal = $('core-modal');
     if (!modal) return;
-    modal.classList.add('hidden');
+    hideModal(modal, 'service_status_core_close');
   }
 
   async function confirmXkeenCoreChange() {
@@ -353,6 +837,15 @@
     }
 
     statusEl.textContent = `Смена ядра на ${selectedCore}...`;
+    try {
+      toast({
+        id: 'xkeen-core-change',
+        message: `Смена ядра на ${selectedCore}...`,
+        kind: 'info',
+        sticky: true,
+        dedupeWindowMs: 0,
+      });
+    } catch (e) {}
     confirmBtn.disabled = true;
     coreButtons.forEach((btn) => {
       btn.disabled = true;
@@ -373,11 +866,21 @@
         coreButtons.forEach((btn) => {
           btn.disabled = false;
         });
-        toast('Не удалось сменить ядро', true);
+        toast({
+          id: 'xkeen-core-change',
+          message: 'Не удалось сменить ядро',
+          kind: 'error',
+          dedupeWindowMs: 0,
+        });
         return;
       }
 
-      toast(`Ядро изменено на ${selectedCore}`, false);
+      toast({
+        id: 'xkeen-core-change',
+        message: `Ядро изменено на ${selectedCore}`,
+        kind: 'success',
+        dedupeWindowMs: 0,
+      });
       closeXkeenCoreModal();
       try {
         refreshXkeenServiceStatus({ silent: true });
@@ -389,13 +892,17 @@
       coreButtons.forEach((btn) => {
         btn.disabled = false;
       });
-      toast('Не удалось сменить ядро (ошибка сети)', true);
+      toast({
+        id: 'xkeen-core-change',
+        message: 'Не удалось сменить ядро (ошибка сети)',
+        kind: 'error',
+        dedupeWindowMs: 0,
+      });
     }
   }
 
   function bindCoreModalUI() {
     const coreTextEl = $('xkeen-core-text');
-    const modal = $('core-modal');
     const closeBtn = $('core-modal-close-btn');
     const cancelBtn = $('core-modal-cancel-btn');
     const confirmBtn = $('core-modal-confirm-btn');
@@ -427,13 +934,6 @@
       });
     }
 
-    if (modal) {
-      modal.addEventListener('click', (e) => {
-        // click outside modal-content closes
-        if (e.target === modal) closeXkeenCoreModal();
-      });
-    }
-
     if (coreOptionButtons && coreOptionButtons.length) {
       coreOptionButtons.forEach((btn) => {
         btn.addEventListener('click', (e) => {
@@ -445,19 +945,6 @@
       });
     }
 
-    document.addEventListener(
-      'keydown',
-      (e) => {
-        if (e.key === 'Escape') {
-          const m = $('core-modal');
-          if (m && !m.classList.contains('hidden')) {
-            e.preventDefault();
-            closeXkeenCoreModal();
-          }
-        }
-      },
-      { passive: false }
-    );
   }
 
   function startPolling(intervalMs) {
@@ -489,6 +976,8 @@
     if (_inited) return;
     _inited = true;
 
+    try { ensureShellBinding(); } catch (e) {}
+
     // Bind only if relevant elements exist; safe on pages without these blocks.
     try {
       bindCoreModalUI();
@@ -509,6 +998,9 @@
 
   const api = {
     init,
+    isInitialized() {
+      return _inited;
+    },
     refresh: refreshXkeenServiceStatus,
     set: setXkeenServiceStatus,
     startPolling,

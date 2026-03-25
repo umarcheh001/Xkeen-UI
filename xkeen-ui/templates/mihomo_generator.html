@@ -13,42 +13,9 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
   <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
   <meta name="theme-color" content="#0f172a">
-<!-- CodeMirror for YAML editing -->
+<!-- CM6 assets are provided by the page entry bundle (editor.shared + codemirror6.shared). -->
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/codemirror.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/theme/material-darker.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/lint/lint.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/fold/foldgutter.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/dialog/dialog.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='codemirror/addon/display/fullscreen.css') }}">
-
-  <script src="{{ url_for('static', filename='codemirror/codemirror.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/display/indent-guides.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/selection/active-line.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/edit/matchbrackets.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/edit/closebrackets.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/comment/comment.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/edit/trailingspace.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/display/fullscreen.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/display/rulers.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/mode/yaml/yaml.min.js') }}"></script>
-
-  <!-- Lint (optional for YAML; safe to load) -->
-  <script src="{{ url_for('static', filename='codemirror/addon/lint/lint.min.js') }}"></script>
   <script src="{{ url_for('static', filename='jsonlint/jsonlint.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/lint/json-lint.min.js') }}"></script>
-
-  <!-- Folding -->
-  <script src="{{ url_for('static', filename='codemirror/addon/fold/foldcode.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/fold/brace-fold.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/fold/indent-fold.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/fold/foldgutter.js') }}"></script>
-
-  <!-- Search + Dialog -->
-  <script src="{{ url_for('static', filename='codemirror/addon/search/searchcursor.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/search/search.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/search/match-highlighter.js') }}"></script>
-  <script src="{{ url_for('static', filename='codemirror/addon/dialog/dialog.js') }}"></script>
 
   <!-- Apply typography prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
@@ -56,7 +23,7 @@
   <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}"></script>
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260214a') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260325c') }}">
   <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
@@ -1777,7 +1744,7 @@
             id="theme-toggle-btn"
             class="theme-toggle-btn theme-toggle-header xk-header-btn xk-header-btn-theme"
             aria-label="Переключить тему"
-          ></button>
+          ><span class="theme-toggle-icon" aria-hidden="true">☀</span><span class="theme-toggle-text">Светлая тема</span></button>
           <a
             href="{{ url_for('index') }}"
             class="service-core-text xk-header-btn xk-header-btn-ui"
@@ -1983,28 +1950,9 @@
         </div>
 
 	<!-- Modularization scaffold (no behavior changes yet) -->
-	<script src="{{ url_for('static', filename='js/00_state.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/01_bootstrap.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/core/xk_dom.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/core/xk_http.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/core/xk_storage.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/ui/toast.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/features/update_notifier.js', v='20260220b') }}"></script>
-	<script src="{{ url_for('static', filename='js/ui/modal.js') }}"></script>
-	<script src="{{ url_for('static', filename='js/ui/theme.js', v='20260316a') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/tooltips_auto.js', v='20260119d') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/codemirror_links.js', v='20260316d') }}"></script>
-  <script src="{{ url_for('static', filename='js/util/helpers.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/util/command_job.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/spinner_fetch.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/settings.js', v='20260222c') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/editor_engine.js', v='20260223a') }}"></script>
-<script src="{{ url_for('static', filename='js/ui/monaco_loader.js', v='20260317b') }}"></script>
-<script src="{{ url_for('static', filename='js/ui/monaco_shared.js', v='20260317e') }}"></script>
-<script src="{{ url_for('static', filename='js/ui/codemirror_toolbar.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/features/mihomo_generator.js', v='20260316i') }}"></script>
-  <script src="{{ url_for('static', filename='js/pages/mihomo_generator.init.js', v='20260316d') }}"></script>
-<div id="mihomoResultModal" class="modal hidden" data-kind="info" onclick="if (event.target === this) hideMihomoResultModal();">
+  <!-- Frontend workspace entrypoint (step 37). -->
+  <script type="module" src="{{ frontend_page_entry_url('mihomo_generator') }}"></script>
+<div id="mihomoResultModal" class="modal hidden" data-kind="info" data-modal-dismiss="mihomo-result">
   <div class="modal-content" role="dialog" aria-modal="true" aria-label="Результат операций генератора Mihomo">
     <div class="modal-header mihomo-result-modal-header">
       <div class="mihomo-result-titlebox">
@@ -2012,7 +1960,7 @@
         <span id="mihomoResultModalTitle" class="modal-title">Результат операции</span>
         <div id="mihomoResultModalSubtitle" class="mihomo-result-modal-subtitle">Подробности проверки, предпросмотра и применения конфигурации отображаются в одном окне.</div>
       </div>
-      <button type="button" class="modal-close" onclick="hideMihomoResultModal()">×</button>
+      <button type="button" class="modal-close" data-dismiss="mihomo-result">×</button>
     </div>
     <div class="modal-body mihomo-result-modal-body">
       <section class="mihomo-result-lead">
@@ -2054,12 +2002,12 @@
         <button type="button" id="mihomoResultJumpBtn" class="btn" style="display:none;">Перейти к ошибке</button>
         <button type="button" id="mihomoResultCopyBtn" class="btn">Скопировать детали</button>
       </div>
-      <button type="button" class="btn btn-primary" onclick="hideMihomoResultModal()">Закрыть</button>
+      <button type="button" class="btn btn-primary" data-dismiss="mihomo-result">Закрыть</button>
     </div>
   </div>
 </div>
 
-<div id="bulkImportModal" class="modal hidden bulk-import-premium-modal" onclick="if (event.target === this) hideBulkImportModal();">
+<div id="bulkImportModal" class="modal hidden bulk-import-premium-modal" data-modal-dismiss="bulk-import">
   <div class="modal-content">
     <div class="modal-header bulk-import-modal-header">
       <div class="bulk-import-modal-titlebox">
@@ -2069,7 +2017,7 @@
           Быстрый импорт ссылок, HTTPS-подписок и шаблонов именования без ручного заполнения каждой карточки.
         </div>
       </div>
-      <button type="button" class="modal-close" onclick="hideBulkImportModal()">×</button>
+      <button type="button" class="modal-close" data-dismiss="bulk-import">×</button>
     </div>
     <div class="modal-body bulk-import-modal-body">
       <div class="bulk-import-lead">
@@ -2201,7 +2149,7 @@ trojan://..."></textarea>
       <div class="bulk-import-actions">
         <div class="bulk-import-actions-note">Поддерживаются комментарии, пустые строки и массовая вставка списков из буфера обмена.</div>
         <div class="bulk-import-actions-main">
-          <button type="button" class="btn" onclick="hideBulkImportModal()">Отмена</button>
+          <button type="button" class="btn" data-dismiss="bulk-import">Отмена</button>
           <button type="button" id="bulkImportApplyBtn" class="btn btn-primary">Импортировать</button>
         </div>
       </div>

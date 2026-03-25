@@ -35,6 +35,9 @@
 
     // Active inbounds fragment file (basename or absolute). Controlled by dropdown.
     let _activeFragment = null;
+    let _fragmentItems = [];
+    let _fragmentDir = '';
+    let _featureLifecycle = null;
 
     const IDS = {
       fragmentSelect: 'inbounds-fragment-select',
@@ -44,6 +47,171 @@
 
     function $(id) {
       return document.getElementById(id);
+    }
+
+    function getConfigShellApi() {
+      try {
+        if (window.XKeen && XKeen.ui && XKeen.ui.configShell) return XKeen.ui.configShell;
+      } catch (e) {}
+      return null;
+    }
+
+    function refreshRestartLog() {
+      try {
+        const api = window.XKeen && XKeen.features ? XKeen.features.restartLog : null;
+        if (api && typeof api.load === 'function') return api.load();
+      } catch (e) {}
+      return null;
+    }
+
+    function getFeatureLifecycle() {
+      if (_featureLifecycle) return _featureLifecycle;
+      const shell = getConfigShellApi();
+      if (!shell) return null;
+      const factory = (typeof shell.getFeatureLifecycle === 'function')
+        ? shell.getFeatureLifecycle
+        : shell.createFeatureLifecycle;
+      if (typeof factory !== 'function') return null;
+      try {
+        _featureLifecycle = factory.call(shell, 'inbounds', {
+          label: 'Inbounds',
+          fileCodeId: IDS.fileCode,
+          dirtySourceName: 'mode',
+        });
+      } catch (e) {
+        _featureLifecycle = null;
+      }
+      return _featureLifecycle;
+    }
+
+    function publishLifecycleState(patch, reason) {
+      const lifecycle = getFeatureLifecycle();
+      if (!lifecycle || typeof lifecycle.publish !== 'function') return null;
+      try {
+        return lifecycle.publish(patch || {}, reason || 'inbounds-state');
+      } catch (e) {}
+      return null;
+    }
+
+    function syncShellState(dir, items) {
+      if (dir != null) _fragmentDir = String(dir || '');
+      if (Array.isArray(items)) _fragmentItems = items.slice();
+
+      const lifecycle = getFeatureLifecycle();
+      if (!lifecycle || typeof lifecycle.syncTab !== 'function') return null;
+
+      try {
+        return lifecycle.syncTab({
+          label: 'Inbounds',
+          fileCodeId: IDS.fileCode,
+          dir: _fragmentDir,
+          items: _fragmentItems,
+          activeFragment: getActiveFragment(),
+        });
+      } catch (e) {}
+      return null;
+    }
+
+    function decorateFragmentName(name) {
+      const value = String(name || '');
+      if (!value) return '';
+      if (/_hys2\.json$/i.test(value)) return value + ' (Hysteria2)';
+      return value;
+    }
+
+    function applyActiveFragment(name, dir, items) {
+      _activeFragment = name ? String(name) : null;
+      if (_activeFragment) rememberActiveFragment(_activeFragment);
+      const nextDir = (dir != null) ? String(dir || '') : _fragmentDir;
+      const cleanDir = nextDir ? String(nextDir).replace(/\/+$/, '') : '';
+      try {
+        updateActiveFileLabel((cleanDir ? cleanDir + '/' : '') + (_activeFragment || ''), cleanDir);
+      } catch (e) {}
+      try { syncShellState(cleanDir, Array.isArray(items) ? items : null); } catch (e2) {}
+      return _activeFragment;
+    }
+
+    function restoreFragmentSelection(sel, fragment, dir, items) {
+      const selectEl = sel || $(IDS.fragmentSelect);
+      const value = String(fragment || '').trim();
+      if (!selectEl || !value) return;
+
+      let opt = null;
+      try {
+        opt = Array.from(selectEl.options || []).find((item) => String(item.value || '') === value) || null;
+      } catch (e) {}
+
+      if (!opt) {
+        try {
+          opt = document.createElement('option');
+          opt.value = value;
+          opt.textContent = decorateFragmentName(value) + ' (текущий)';
+          selectEl.appendChild(opt);
+        } catch (e2) {}
+      }
+
+      try { selectEl.value = value; } catch (e3) {}
+      applyActiveFragment(value, dir, items);
+    }
+
+    async function guardFragmentSwitch(next, prev, opts) {
+      const lifecycle = getFeatureLifecycle();
+      if (!lifecycle || typeof lifecycle.guardSwitch !== 'function') return false;
+      return lifecycle.guardSwitch(Object.assign({
+        currentValue: String(prev || ''),
+        nextValue: String(next || ''),
+        title: 'Несохранённые изменения',
+        message: 'Во вкладке inbounds есть несохранённые изменения. Переключить файл и потерять их?',
+        okText: 'Переключить',
+        cancelText: 'Остаться',
+      }, (opts && typeof opts === 'object') ? opts : {}));
+    }
+
+    function getSelectedMode() {
+      try {
+        const selected = document.querySelector('input[name="inbounds_mode"]:checked');
+        return selected ? String(selected.value || '') : '';
+      } catch (e) {}
+      return '';
+    }
+
+    function syncDirtyUi(dirty) {
+      try {
+        const saveBtn = $('inbounds-save-btn');
+        if (saveBtn) saveBtn.classList.toggle('dirty', !!dirty);
+      } catch (e) {}
+    }
+
+    function syncDirtyState(forceDirty) {
+      const currentValue = String(getSelectedMode() || '');
+      const savedValue = String(currentMode || '');
+      const dirty = (typeof forceDirty === 'boolean')
+        ? !!forceDirty
+        : (currentValue !== savedValue);
+
+      syncDirtyUi(dirty);
+
+      const dirtyOpts = {
+        sourceName: 'mode',
+        scopeLabel: 'Inbounds',
+        confirmTitle: 'Несохранённые изменения',
+        confirmMessage: 'Во вкладке inbounds есть несохранённые изменения. Переключить файл и потерять их?',
+        okText: 'Переключить',
+        cancelText: 'Остаться',
+        label: 'Режим inbounds',
+        summary: dirty ? 'Выбран новый режим, но он ещё не сохранён.' : '',
+        currentValue,
+        savedValue,
+      };
+
+      const lifecycle = getFeatureLifecycle();
+      if (lifecycle && typeof lifecycle.setDirty === 'function') {
+        try {
+          lifecycle.setDirty(dirty, dirtyOpts);
+        } catch (e) {}
+      }
+
+      return dirty;
     }
 
     function getSelectedFragmentFromUI() {
@@ -113,13 +281,6 @@
       const remembered = restoreRememberedFragment();
       const preferred = (getActiveFragment() || remembered || currentDefault || (data.items[0] ? data.items[0].name : '')).toString();
 
-      function decorateName(n) {
-        const name = String(n || '');
-        if (!name) return '';
-        if (/_hys2\.json$/i.test(name)) return name + ' (Hysteria2)';
-        return name;
-      }
-
       try { if (sel.dataset) sel.dataset.dir = String(data.dir || ''); } catch (e) {}
       sel.innerHTML = '';
 
@@ -127,7 +288,7 @@
       if (currentDefault && names.indexOf(currentDefault) === -1) {
         const opt = document.createElement('option');
         opt.value = currentDefault;
-        opt.textContent = decorateName(currentDefault) + ' (текущий)';
+        opt.textContent = decorateFragmentName(currentDefault) + ' (текущий)';
         sel.appendChild(opt);
       }
 
@@ -136,28 +297,15 @@
         if (!name) return;
         const opt = document.createElement('option');
         opt.value = name;
-        opt.textContent = decorateName(name);
+        opt.textContent = decorateFragmentName(name);
         sel.appendChild(opt);
       });
 
       try {
         const finalChoice = names.indexOf(preferred) !== -1 ? preferred : (currentDefault || (names[0] || ''));
         if (finalChoice) sel.value = finalChoice;
-        _activeFragment = sel.value || finalChoice || null;
-        rememberActiveFragment(_activeFragment);
-
         const dir = data.dir ? String(data.dir).replace(/\/+$/, '') : '';
-        updateActiveFileLabel((dir ? dir + '/' : '') + (_activeFragment || ''), dir);
-        // Sync legacy global file label for other modules (modal editor, backups)
-        try {
-          if (window.XKEEN_FILES) window.XKEEN_FILES.inbounds = (dir ? dir + '/' : '') + (_activeFragment || '');
-        } catch (e) {}
-        try {
-          window.XKeen = window.XKeen || {};
-          window.XKeen.state = window.XKeen.state || {};
-          window.XKeen.state.fragments = window.XKeen.state.fragments || {};
-          window.XKeen.state.fragments.inbounds = _activeFragment;
-        } catch (e) {}
+        applyActiveFragment(sel.value || finalChoice || null, dir, data.items);
       } catch (e) {}
 
       // Wire refresh button (once)
@@ -166,8 +314,15 @@
         if (btn && !btn.dataset.xkWired) {
           btn.addEventListener('click', async (e) => {
             e.preventDefault();
+            const prev = getActiveFragment();
+            const prevDir = _fragmentDir;
             await refreshFragmentsList({ notify: true });
-            await load();
+            const next = getActiveFragment();
+            if (!next || next === prev) return;
+            await guardFragmentSwitch(next, prev, {
+              onCancel: () => restoreFragmentSelection(sel, prev, prevDir, _fragmentItems),
+              commit: async () => { await load(); },
+            });
           });
           btn.dataset.xkWired = '1';
         }
@@ -182,20 +337,15 @@
           sel.addEventListener('change', async (e) => {
             const next = String(sel.value || '');
             if (!next) return;
-            _activeFragment = next;
-            rememberActiveFragment(_activeFragment);
-            try {
-              const dir = sel.dataset && sel.dataset.dir ? String(sel.dataset.dir) : '';
-              updateActiveFileLabel((dir ? dir.replace(/\/+$/, '') + '/' : '') + _activeFragment, dir);
-              if (window.XKEEN_FILES) window.XKEEN_FILES.inbounds = (dir ? dir.replace(/\/+$/, '') + '/' : '') + _activeFragment;
-            } catch (e2) {}
-            try {
-              window.XKeen = window.XKeen || {};
-              window.XKeen.state = window.XKeen.state || {};
-              window.XKeen.state.fragments = window.XKeen.state.fragments || {};
-              window.XKeen.state.fragments.inbounds = _activeFragment;
-            } catch (e3) {}
-            await load();
+            const prev = _activeFragment || String(sel.dataset.current || '');
+            const dir = sel.dataset && sel.dataset.dir ? String(sel.dataset.dir) : _fragmentDir;
+            await guardFragmentSwitch(next, prev, {
+              onCancel: () => restoreFragmentSelection(sel, prev, dir, _fragmentItems),
+              commit: async () => {
+                applyActiveFragment(next, dir);
+                await load();
+              },
+            });
           });
           sel.dataset.xkWired = '1';
         }
@@ -213,6 +363,15 @@
       });
 
       if (btn.dataset) btn.dataset.xkeenWired = '1';
+    }
+
+    function bindConfigAction(btnId, handler, opts) {
+      const lifecycle = getFeatureLifecycle();
+      if (!lifecycle || typeof lifecycle.bindAction !== 'function') return false;
+      try {
+        return !!lifecycle.bindAction(btnId, handler, opts || {});
+      } catch (e) {}
+      return false;
     }
 
     function wireHeader(headerId, handler) {
@@ -608,6 +767,7 @@
     async function load(opts) {
       const statusEl = $('inbounds-status');
       const silent = !!(opts && opts.silent);
+      publishLifecycleState({ loading: true, initialized: false }, 'inbounds-load-start');
       try {
         const file = getActiveFragment();
         const url = file ? ('/api/inbounds?file=' + encodeURIComponent(file)) : '/api/inbounds';
@@ -631,6 +791,12 @@
           const radio = document.querySelector('input[name="inbounds_mode"][value="' + mode + '"]');
           if (radio) radio.checked = true;
         }
+        try { syncDirtyState(false); } catch (e) {}
+        publishLifecycleState({
+          savedValue: String(currentMode || ''),
+          currentValue: String(getSelectedMode() || currentMode || ''),
+          initialized: true,
+        }, 'inbounds-load-success');
 
         if (statusEl && !silent) {
           const extrasShort = formatExtrasShort(lastExtrasTags);
@@ -656,6 +822,8 @@
       } catch (e) {
         console.error(e);
         if (statusEl && !silent) statusEl.textContent = 'Ошибка загрузки inbounds.';
+      } finally {
+        publishLifecycleState({ loading: false, initialized: true }, 'inbounds-load-finished');
       }
     }
 
@@ -675,9 +843,11 @@
             // avoid redundant restarts when user clicks the already active mode
             if (currentMode === r.value && !autoSaveInFlight) {
               if (statusEl) statusEl.textContent = 'Текущий режим: ' + currentMode;
+              try { syncDirtyState(false); } catch (e) {}
               return;
             }
             if (autoSaveInFlight) return;
+            try { syncDirtyState(); } catch (e) {}
             autoSaveInFlight = true;
             try {
               await save();
@@ -691,6 +861,7 @@
           if (statusEl) {
             statusEl.textContent = 'Выбрано: ' + r.value + '. Нажмите "Save inbounds" чтобы применить.';
           }
+          try { syncDirtyState(); } catch (e) {}
         });
 
         if (r.dataset) r.dataset.xkeenWiredMode = '1';
@@ -701,75 +872,85 @@
       const statusEl = $('inbounds-status');
       const selected = document.querySelector('input[name="inbounds_mode"]:checked');
       const toggle = $('inbounds-autorestart');
-
-      if (!selected) {
-        if (statusEl) statusEl.textContent = 'Выбери режим перед сохранением.';
-        return;
-      }
-
-      const mode = selected.value;
-      const restart = toggle ? !!toggle.checked : false;
-
-      // When config is custom or contains extras, ask how to apply preset.
-      let preserve_extras = true;
-      let add_socks = false;
-      let socks_port = null;
-      const isPresetMode = (mode === 'mixed' || mode === 'tproxy' || mode === 'redirect');
-      if (isPresetMode && shouldShowApplyModal()) {
-        const opts = await showApplyModal({
-          selectedMode: mode,
-          extrasTags: lastExtrasTags,
-          socksPort: lastSocksPort,
-          config: lastConfig,
-        });
-        if (!opts) {
-          if (statusEl) statusEl.textContent = 'Отменено.';
-          // Revert selection to the last known backend mode when user cancels.
-          setModeRadio(currentMode);
+      publishLifecycleState({ saving: true, initialized: true }, 'inbounds-save-start');
+      try {
+        if (!selected) {
+          if (statusEl) statusEl.textContent = 'Выбери режим перед сохранением.';
           return;
         }
-        preserve_extras = !!opts.preserveExtras;
-        add_socks = !!opts.addSocks;
-        socks_port = opts.socksPort != null ? Number(opts.socksPort) : null;
-      }
 
-      try {
-        const file = getActiveFragment();
-        const url = file ? ('/api/inbounds?file=' + encodeURIComponent(file)) : '/api/inbounds';
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode, restart, preserve_extras, add_socks, socks_port }),
-        });
-        const data = await res.json().catch(() => ({}));
+        const mode = selected.value;
+        const restart = toggle ? !!toggle.checked : false;
 
-        if (res.ok && data && data.ok) {
-          let msg = 'Режим сохранён: ' + (data.mode || mode) + '.';
-          if (statusEl) statusEl.textContent = msg;
-
-          // keep currentMode in sync
-          currentMode = (data && data.mode) ? data.mode : mode;
-          // Refresh extras snapshot silently (so next apply doesn't show modal unnecessarily).
-          try { await load({ silent: true }); } catch (e) {}
-          try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
-          try {
-            if (typeof updateLastActivity === 'function') {
-              const fp = window.XKEEN_FILES && window.XKEEN_FILES.inbounds ? window.XKEEN_FILES.inbounds : '';
-              updateLastActivity('saved', 'inbounds', fp);
-            }
-          } catch (e) {}
-        } else {
-          const msg = 'Save error: ' + ((data && data.error) || res.status);
-          if (statusEl) statusEl.textContent = msg;
-          try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
+        // When config is custom or contains extras, ask how to apply preset.
+        let preserve_extras = true;
+        let add_socks = false;
+        let socks_port = null;
+        const isPresetMode = (mode === 'mixed' || mode === 'tproxy' || mode === 'redirect');
+        if (isPresetMode && shouldShowApplyModal()) {
+          const opts = await showApplyModal({
+            selectedMode: mode,
+            extrasTags: lastExtrasTags,
+            socksPort: lastSocksPort,
+            config: lastConfig,
+          });
+          if (!opts) {
+            if (statusEl) statusEl.textContent = 'Отменено.';
+            // Revert selection to the last known backend mode when user cancels.
+            setModeRadio(currentMode);
+            try { syncDirtyState(false); } catch (e) {}
+            return;
+          }
+          preserve_extras = !!opts.preserveExtras;
+          add_socks = !!opts.addSocks;
+          socks_port = opts.socksPort != null ? Number(opts.socksPort) : null;
         }
-      } catch (e) {
-        console.error(e);
-        const msg = 'Ошибка сохранения режима inbounds.';
-        if (statusEl) statusEl.textContent = msg;
-        try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
+
+        try {
+          const file = getActiveFragment();
+          const url = file ? ('/api/inbounds?file=' + encodeURIComponent(file)) : '/api/inbounds';
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode, restart, preserve_extras, add_socks, socks_port }),
+          });
+          const data = await res.json().catch(() => ({}));
+
+          if (res.ok && data && data.ok) {
+            let msg = 'Режим сохранён: ' + (data.mode || mode) + '.';
+            if (statusEl) statusEl.textContent = msg;
+
+            // keep currentMode in sync
+            currentMode = (data && data.mode) ? data.mode : mode;
+            try { syncDirtyState(false); } catch (e) {}
+            publishLifecycleState({
+              savedValue: String(currentMode || ''),
+              currentValue: String(getSelectedMode() || currentMode || ''),
+            }, 'inbounds-save-success');
+            // Refresh extras snapshot silently (so next apply doesn't show modal unnecessarily).
+            try { await load({ silent: true }); } catch (e) {}
+            try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
+            try {
+              if (typeof updateLastActivity === 'function') {
+                const fp = window.XKEEN_FILES && window.XKEEN_FILES.inbounds ? window.XKEEN_FILES.inbounds : '';
+                updateLastActivity('saved', 'inbounds', fp);
+              }
+            } catch (e) {}
+          } else {
+            const msg = 'Save error: ' + ((data && data.error) || res.status);
+            if (statusEl) statusEl.textContent = msg;
+            try { if (typeof showToast === 'function') showToast(msg, true); } catch (e) {}
+          }
+        } catch (e) {
+          console.error(e);
+          const msg = 'Ошибка сохранения режима inbounds.';
+          if (statusEl) statusEl.textContent = msg;
+          try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
+        } finally {
+          try { refreshRestartLog(); } catch (e) {}
+        }
       } finally {
-        try { if (typeof loadRestartLog === 'function') loadRestartLog(); } catch (e) {}
+        publishLifecycleState({ saving: false, initialized: true }, 'inbounds-save-finished');
       }
     }
 
@@ -830,6 +1011,17 @@
       if (inited) return;
       inited = true;
 
+      try { syncShellState(_fragmentDir, _fragmentItems); } catch (e) {}
+      try {
+        publishLifecycleState({
+          currentValue: String(getSelectedMode() || ''),
+          savedValue: String(currentMode || ''),
+          initialized: false,
+          loading: false,
+          saving: false,
+        }, 'inbounds-init');
+      } catch (e) {}
+
       setCollapsedFromStorage();
       wireHeader('inbounds-header', toggleCard);
 
@@ -837,18 +1029,18 @@
       refreshFragmentsList();
 
       // Buttons
-      wireButton('inbounds-save-btn', save);
-      wireButton('inbounds-backup-btn', backup);
-      wireButton('inbounds-restore-auto-btn', () => {
+      bindConfigAction('inbounds-save-btn', save);
+      bindConfigAction('inbounds-backup-btn', backup, { kind: 'backup' });
+      bindConfigAction('inbounds-restore-auto-btn', () => {
         try {
           if (window.XKeen && XKeen.backups && typeof XKeen.backups.restoreAuto === 'function') {
-            XKeen.backups.restoreAuto('inbounds');
+            XKeen.backups.restoreAuto('inbounds', { confirmed: true });
           } else {
             if (typeof showToast === 'function') showToast('Модуль бэкапов не загружен.', true);
           }
         } catch (e) {}
-      });
-      wireButton('inbounds-open-editor-btn', () => {
+      }, { kind: 'restoreAuto' });
+      bindConfigAction('inbounds-open-editor-btn', () => {
         try {
           if (window.XKeen && XKeen.jsonEditor && typeof XKeen.jsonEditor.open === 'function') {
             XKeen.jsonEditor.open('inbounds');
@@ -856,7 +1048,7 @@
             if (typeof showToast === 'function') showToast('Модуль JSON-редактора не загружен.', true);
           }
         } catch (e) {}
-      });
+      }, { kind: 'openEditor' });
 
       // Initial load
       load();

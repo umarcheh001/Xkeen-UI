@@ -91,7 +91,12 @@
     return 'light';
   }
 
+  let themeToggleInitialized = false;
+
   function initThemeToggle() {
+    if (themeToggleInitialized) return;
+    themeToggleInitialized = true;
+
     let current = getInitialTheme();
 
     // Prime the page theme early; heavy editor refresh happens later via xkeen-editors-ready.
@@ -117,5 +122,9 @@
   XKeen.ui.applyTheme = applyTheme;
   XKeen.ui.initThemeToggle = initThemeToggle;
 
-  document.addEventListener('DOMContentLoaded', initThemeToggle);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initThemeToggle, { once: true });
+  } else {
+    initThemeToggle();
+  }
 })();

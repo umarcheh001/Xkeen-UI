@@ -304,8 +304,14 @@
     const { modal, filter } = getEls();
     if (!modal) return;
 
-    modal.classList.remove('hidden');
-    syncBodyScrollLock();
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.open === 'function') {
+        XKeen.ui.modal.open(modal, { source: 'terminal_history' });
+      } else {
+        modal.classList.remove('hidden');
+        syncBodyScrollLock();
+      }
+    } catch (e) {}
 
     // reset selection on open
     H.selected = '';
@@ -320,8 +326,14 @@
   function close() {
     const { modal } = getEls();
     if (!modal) return;
-    modal.classList.add('hidden');
-    syncBodyScrollLock();
+    try {
+      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.close === 'function') {
+        XKeen.ui.modal.close(modal, { source: 'terminal_history' });
+      } else {
+        modal.classList.add('hidden');
+        syncBodyScrollLock();
+      }
+    } catch (e) {}
   }
 
   // ArrowUp/ArrowDown in #terminal-command: browse history items (lite input field)
@@ -539,7 +551,7 @@
   function bindUi(ctx) {
     if (H.uiDisposers && H.uiDisposers.length) return;
 
-    const { modal, closeBtn, filter, insertBtn, runBtn, clearBtn, openBtn } = getEls(ctx);
+    const { closeBtn, filter, insertBtn, runBtn, clearBtn, openBtn } = getEls(ctx);
 
     const disposers = [];
     function on(el, ev, fn, opts) {
@@ -556,12 +568,6 @@
     if (runBtn) on(runBtn, 'click', (e) => { try { e.preventDefault(); } catch (e2) {} runSelected(); });
     if (clearBtn) on(clearBtn, 'click', (e) => { try { e.preventDefault(); } catch (e2) {} clearAll(); });
     if (filter) on(filter, 'input', () => { try { render(); } catch (e) {} });
-
-    if (modal) {
-      on(modal, 'mousedown', (e) => {
-        try { if (e && e.target === modal) close(); } catch (e2) {}
-      });
-    }
 
     H.uiDisposers = disposers;
   }
@@ -611,21 +617,6 @@
       onOpen: () => {
         try { bindUi(ctx); } catch (e) {}
 
-        // Escape closes the history modal when it is open.
-        try {
-          if (!H.escHandler) {
-            H.escHandler = (e) => {
-              try {
-                if (!e || e.key !== 'Escape') return;
-                const { modal: m } = getEls(ctx);
-                if (!m || m.classList.contains('hidden')) return;
-                close();
-              } catch (e2) {}
-            };
-            document.addEventListener('keydown', H.escHandler);
-          }
-        } catch (e) {}
-
         // command input history keys
         try {
           const { cmdEl } = getEls(ctx);
@@ -636,9 +627,6 @@
       onClose: () => {
         try { if (isOpen()) close(); } catch (e) {}
         try { unbindUi(); } catch (e0) {}
-
-        try { if (H.escHandler) document.removeEventListener('keydown', H.escHandler); } catch (e2) {}
-        H.escHandler = null;
 
         try { if (H.cmdKeysOff) H.cmdKeysOff(); } catch (e3) {}
         H.cmdKeysOff = null;

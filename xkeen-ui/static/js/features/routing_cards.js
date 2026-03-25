@@ -82,6 +82,35 @@
 
   const _lazyHelperReady = Object.create(null);
   const _lazyHelperLoading = Object.create(null);
+  const _lazyScriptLoads = Object.create(null);
+
+  function _getEditorEngineHelper() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+  }
+
+  function _getGenericLoaderApi() {
+    try {
+      if (window.XKeen && XKeen.runtime) {
+        if (XKeen.runtime.loader && typeof XKeen.runtime.loader.loadScriptOnce === 'function') return XKeen.runtime.loader;
+        if (XKeen.runtime.lazy && XKeen.runtime.lazy.loader && typeof XKeen.runtime.lazy.loader.loadScriptOnce === 'function') return XKeen.runtime.lazy.loader;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+
+  const CM6_SCOPE = 'routing-cards';
+
+  function _withCm6Scope(opts) {
+    return Object.assign({ cm6Scope: CM6_SCOPE, scope: CM6_SCOPE }, opts || {});
+  }
+
+  function _getEditorRuntime(engine, opts) {
+    const helper = _getEditorEngineHelper();
+    if (!helper || typeof helper.getRuntime !== 'function') return null;
+    try { return helper.getRuntime(engine, _withCm6Scope(opts)); } catch (e) {}
+    return null;
+  }
 
   function _toStaticUrl(path) {
     const p = String(path || '').trim();
@@ -158,18 +187,71 @@
     } catch (e2) {}
   }
 
+  function _loadHelperScriptTagOnce(url) {
+    const key = String(url || '').trim();
+    if (!key) return Promise.resolve(false);
+    if (_lazyScriptLoads[key]) return _lazyScriptLoads[key];
+
+    _lazyScriptLoads[key] = new Promise((resolve) => {
+      try {
+        const found = document.querySelector('script[src="' + key + '"]') || document.querySelector('script[data-xk-src="' + key + '"]');
+        if (found) {
+          const state = (found.dataset && found.dataset.xkLoadState) ? String(found.dataset.xkLoadState) : '';
+          if (state === 'ready' || found.getAttribute('data-routing-helper-ready') === '1') {
+            resolve(true);
+            return;
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const script = document.createElement('script');
+        script.src = key;
+        try { script.async = false; } catch (e) {}
+        try { script.dataset.xkSrc = key; } catch (e) {}
+        try { script.dataset.xkLoadState = 'loading'; } catch (e) {}
+        script.onload = () => {
+          try { script.dataset.xkLoadState = 'ready'; } catch (e) {}
+          try { script.setAttribute('data-routing-helper-ready', '1'); } catch (e) {}
+          resolve(true);
+        };
+        script.onerror = () => {
+          try { delete _lazyScriptLoads[key]; } catch (e) {}
+          try { script.dataset.xkLoadState = 'error'; } catch (e) {}
+          try { script.remove(); } catch (e2) {}
+          resolve(false);
+        };
+        (document.body || document.documentElement || document.head).appendChild(script);
+      } catch (e) {
+        try { delete _lazyScriptLoads[key]; } catch (e2) {}
+        resolve(false);
+      }
+    });
+
+    return _lazyScriptLoads[key];
+  }
+
   function _loadHelperScriptOnce(path) {
     const url = _toStaticUrl(path);
     if (!url) return Promise.resolve(false);
 
     try {
-      const loader = (window.XKeen && XKeen.cmLoader && typeof XKeen.cmLoader.loadScriptOnce === 'function')
-        ? XKeen.cmLoader
+      const loader = _getGenericLoaderApi();
+      if (loader) return loader.loadScriptOnce(url);
+    } catch (e) {}
+
+    try {
+      const runtime = _getEditorRuntime('codemirror');
+      const loader = (runtime && runtime.loader && typeof runtime.loader.loadScriptOnce === 'function')
+        ? runtime.loader
         : null;
       if (loader) return loader.loadScriptOnce(url);
     } catch (e) {}
 
-    return Promise.resolve(false);
+    try {
+    } catch (e) {}
+
+    return _loadHelperScriptTagOnce(url);
   }
 
   async function _loadHelperScriptsInOrder(list) {
@@ -311,6 +393,49 @@
     return false;
   }
 
+  function _currentPanelView() {
+    try {
+      const shell = (XK.pages && XK.pages.panelShell) || (XK.ui && XK.ui.tabs) || null;
+      if (shell && typeof shell.getCurrentView === 'function') {
+        const name = String(shell.getCurrentView() || '').trim();
+        if (name) return name;
+      }
+    } catch (e) {}
+    try {
+      const activeBtn = document.querySelector('.top-tab-btn.active[data-view]');
+      const name = activeBtn && activeBtn.dataset ? String(activeBtn.dataset.view || '').trim() : '';
+      if (name) return name;
+    } catch (e) {}
+    try {
+      const sections = {
+        routing: document.getElementById('view-routing'),
+        mihomo: document.getElementById('view-mihomo'),
+        xkeen: document.getElementById('view-xkeen'),
+        'xray-logs': document.getElementById('view-xray-logs'),
+        commands: document.getElementById('view-commands'),
+        files: document.getElementById('view-files'),
+      };
+      for (const [name, el] of Object.entries(sections)) {
+        if (!el) continue;
+        const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+        const visible = style ? (style.display !== 'none' && style.visibility !== 'hidden') : (el.style.display !== 'none');
+        if (visible) return name;
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  function _syncFocusGroupVisibility(guiEnabled) {
+    try {
+      const focusGroup = document.querySelector('.xkeen-ctrl-group-routing-focus');
+      if (!focusGroup) return;
+      const isRoutingView = _currentPanelView() === 'routing';
+      const shouldShow = !!guiEnabled && isRoutingView;
+      focusGroup.style.display = shouldShow ? '' : 'none';
+      focusGroup.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+    } catch (e) {}
+  }
+
   const FOCUS_LS_KEY = 'xk.routing.focus-mode.v1';
 
   function _getPreferredFocusMode() {
@@ -433,13 +558,7 @@
       const card = document.getElementById('routing-rules-card');
       if (card) card.style.display = guiEnabled ? '' : 'none';
     } catch (e) {}
-    try {
-      const focusGroup = document.querySelector('.xkeen-ctrl-group-routing-focus');
-      if (focusGroup) {
-        focusGroup.style.display = guiEnabled ? '' : 'none';
-        focusGroup.setAttribute('aria-hidden', guiEnabled ? 'false' : 'true');
-      }
-    } catch (e) {}
+    try { _syncFocusGroupVisibility(guiEnabled); } catch (e) {}
     try { wireFocusToggle(); } catch (e) {}
   }
 
@@ -537,6 +656,11 @@
     try { applyUiSettings(); } catch (e) {}
     try {
       document.addEventListener('xkeen:ui-settings-changed', () => {
+        try { applyUiSettings(); } catch (e2) {}
+      });
+    } catch (e) {}
+    try {
+      document.addEventListener('xkeen:panel-view-changed', () => {
         try { applyUiSettings(); } catch (e2) {}
       });
     } catch (e) {}
