@@ -1,3 +1,14 @@
+import { getRoutingApi } from './routing.js';
+import { getRoutingShellApi as getRoutingShellModuleApi } from './routing_shell.js';
+import {
+  confirmXkeenAction,
+  getXkeenEditorEngineApi,
+  syncXkeenBodyScrollLock,
+  toastXkeen,
+} from './xkeen_runtime.js';
+
+let routingTemplatesModuleApi = null;
+
 (() => {
   'use strict';
 
@@ -6,9 +17,20 @@
   //   GET  /api/routing/templates
   //   GET  /api/routing/templates/<filename>
 
-  window.XKeen = window.XKeen || {};
-  const XK = window.XKeen;
-  XK.features = XK.features || {};
+  const XK = {
+    ui: {
+      confirm: confirmXkeenAction,
+    },
+    routing: {
+      replaceEditorText(text, opts) {
+        const api = getRoutingApi();
+        if (!api || typeof api.replaceEditorText !== 'function') return null;
+        return api.replaceEditorText(text, opts);
+      },
+    },
+  };
+  const RoutingTemplates = routingTemplatesModuleApi || {};
+  routingTemplatesModuleApi = RoutingTemplates;
 
   const IDS = {
     btnOpen: 'routing-import-template-btn',
@@ -91,10 +113,8 @@ editEngineSelect: 'routing-template-edit-engine-select',
   }
 
   function getRoutingShellApi() {
-    try {
-      if (window.XKeen && XKeen.features && XKeen.features.routingShell) return XKeen.features.routingShell;
-    } catch (e) {}
-    return null;
+    const api = getRoutingShellModuleApi();
+    return api && typeof api.getState === 'function' ? api : null;
   }
 
   function getRoutingEditor() {
@@ -126,7 +146,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
   }
 
   function getEngineHelper() {
-    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+    return getXkeenEditorEngineApi();
   }
 
   const CM6_SCOPE = 'routing-templates';
@@ -486,7 +506,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
     if (next === 'monaco') {
       const runtime = await ensureEditorRuntime('monaco');
       if (!runtime || !host || typeof runtime.create !== 'function') {
-        try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
+        try { toastXkeen('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
         const ee = getEngineHelper();
         try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
         return activatePreviewEngine('codemirror');
@@ -510,7 +530,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
           value: value,
         });
         if (!ed) {
-          try { if (window.toast) window.toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
+          try { toastXkeen('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
           const ee = getEngineHelper();
           try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
           resetPreviewVisibility();
@@ -570,7 +590,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
     if (next === 'monaco') {
       const runtime = await ensureEditorRuntime('monaco');
       if (!runtime || !host || typeof runtime.create !== 'function') {
-        try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
+        try { toastXkeen('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
         const ee = getEngineHelper();
         try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
         return activateEditEngine('codemirror');
@@ -594,7 +614,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
           value: value,
         });
         if (!ed) {
-          try { if (window.toast) window.toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
+          try { toastXkeen('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
           const ee = getEngineHelper();
           try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
           resetEditVisibility();
@@ -668,11 +688,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
     try { scheduleEngineSync(); } catch (e) {}
 
     // Make sure scroll lock is correct
-    try {
-      if (XK.ui && XK.ui.modal && typeof XK.ui.modal.syncBodyScrollLock === 'function') {
-        XK.ui.modal.syncBodyScrollLock();
-      }
-    } catch (e) {}
+    try { syncXkeenBodyScrollLock(true); } catch (e) {}
   }
 
   function closeModal() {
@@ -687,33 +703,21 @@ editEngineSelect: 'routing-template-edit-engine-select',
     try { resetPreviewVisibility(); } catch (e) {}
 
     // Make sure scroll lock is correct
-    try {
-      if (XK.ui && XK.ui.modal && typeof XK.ui.modal.syncBodyScrollLock === 'function') {
-        XK.ui.modal.syncBodyScrollLock();
-      }
-    } catch (e) {}
+    try { syncXkeenBodyScrollLock(false); } catch (e) {}
   }
 
   function openSaveModal() {
     const m = el(IDS.saveModal);
     if (!m) return;
     m.classList.remove('hidden');
-    try {
-      if (XK.ui && XK.ui.modal && typeof XK.ui.modal.syncBodyScrollLock === 'function') {
-        XK.ui.modal.syncBodyScrollLock();
-      }
-    } catch (e) {}
+    try { syncXkeenBodyScrollLock(true); } catch (e) {}
   }
 
   function closeSaveModal() {
     const m = el(IDS.saveModal);
     if (!m) return;
     m.classList.add('hidden');
-    try {
-      if (XK.ui && XK.ui.modal && typeof XK.ui.modal.syncBodyScrollLock === 'function') {
-        XK.ui.modal.syncBodyScrollLock();
-      }
-    } catch (e) {}
+    try { syncXkeenBodyScrollLock(false); } catch (e) {}
   }
 
   function setSaveStatus(msg, isError) {
@@ -729,11 +733,7 @@ function openEditModal() {
   const m = el(IDS.editModal);
   if (!m) return;
   m.classList.remove('hidden');
-  try {
-    if (XK.ui && XK.ui.modal && typeof XK.ui.modal.syncBodyScrollLock === 'function') {
-      XK.ui.modal.syncBodyScrollLock();
-    }
-  } catch (e) {}
+  try { syncXkeenBodyScrollLock(true); } catch (e) {}
 
   // Defer engine init until modal is visible (CodeMirror / Monaco).
   try { scheduleEngineSync(); } catch (e) {}
@@ -745,11 +745,7 @@ function closeEditModal() {
   try { saveEditViewState(); } catch (e) {}
   try { clearEditViewStateTracking(); } catch (e2) {}
   m.classList.add('hidden');
-  try {
-    if (XK.ui && XK.ui.modal && typeof XK.ui.modal.syncBodyScrollLock === 'function') {
-      XK.ui.modal.syncBodyScrollLock();
-    }
-  } catch (e) {}
+  try { syncXkeenBodyScrollLock(false); } catch (e) {}
 
   // Dispose Monaco editor to avoid leaks and restore default visibility.
   try { disposeEditMonaco(); } catch (e) {}
@@ -1071,7 +1067,7 @@ async function submitEditTemplate() {
 
   try {
     if (typeof window.toast === 'function') {
-      window.toast('Шаблон обновлён: ' + (data.filename || filename), false);
+      toastXkeen('Шаблон обновлён: ' + (data.filename || filename), false);
     }
   } catch (e) {}
 
@@ -1403,7 +1399,7 @@ async function submitEditTemplate() {
 
     try {
       if (typeof window.toast === 'function') {
-        window.toast('Шаблон импортирован в редактор. Проверь и нажми «Сохранить».', false);
+      toastXkeen('Шаблон импортирован в редактор. Проверь и нажми «Сохранить».', false);
       }
     } catch (e) {}
 
@@ -1512,7 +1508,7 @@ async function submitEditTemplate() {
     // Success
     try {
       if (typeof window.toast === 'function') {
-        window.toast('Шаблон сохранён: ' + (data.filename || filename), false);
+        toastXkeen('Шаблон сохранён: ' + (data.filename || filename), false);
       }
     } catch (e) {}
 
@@ -1571,7 +1567,7 @@ async function submitEditTemplate() {
 
       try {
         if (typeof window.toast === 'function') {
-          window.toast('Удалено: ' + _selected.filename, false);
+        toastXkeen('Удалено: ' + _selected.filename, false);
         }
       } catch (e) {}
 
@@ -1817,7 +1813,7 @@ const saveModal = el(IDS.saveModal);
     wireUI();
   }
 
-  XK.features.routingTemplates = {
+  Object.assign(RoutingTemplates, {
     init,
     fetchList,
     open: () => {
@@ -1825,5 +1821,42 @@ const saveModal = el(IDS.saveModal);
       fetchList();
     },
     close: closeModal,
-  };
+  });
 })();
+export function getRoutingTemplatesApi() {
+  try {
+    return routingTemplatesModuleApi;
+  } catch (error) {
+    return null;
+  }
+}
+
+function callRoutingTemplatesApi(method, ...args) {
+  const api = getRoutingTemplatesApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initRoutingTemplates(...args) {
+  return callRoutingTemplatesApi('init', ...args);
+}
+
+export function fetchRoutingTemplatesList(...args) {
+  return callRoutingTemplatesApi('fetchList', ...args);
+}
+
+export function openRoutingTemplates(...args) {
+  return callRoutingTemplatesApi('open', ...args);
+}
+
+export function closeRoutingTemplates(...args) {
+  return callRoutingTemplatesApi('close', ...args);
+}
+
+export const routingTemplatesApi = Object.freeze({
+  get: getRoutingTemplatesApi,
+  init: initRoutingTemplates,
+  fetchList: fetchRoutingTemplatesList,
+  open: openRoutingTemplates,
+  close: closeRoutingTemplates,
+});

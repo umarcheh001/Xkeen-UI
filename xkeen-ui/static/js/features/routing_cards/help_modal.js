@@ -1,3 +1,5 @@
+import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
+
 /*
   routing_cards/help_modal.js
   RC-05: Field help modal extracted from routing_cards.js.
@@ -7,8 +9,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.state = RC.state || {};
 
   const FIELD_HELP_MODAL_ID = 'xkeen-routing-field-help-modal';

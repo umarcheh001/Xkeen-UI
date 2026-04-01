@@ -1,11 +1,12 @@
+import { openXkeenTerminal, toastXkeen } from './xkeen_runtime.js';
+
+let coresStatusModuleApi = null;
+
 (() => {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.coresStatus = XKeen.features.coresStatus || {};
-
-  const CS = XKeen.features.coresStatus;
+  const CS = {};
+  coresStatusModuleApi = CS;
 
   const API_VERSIONS = '/api/cores/versions';
   const API_UPDATES = '/api/cores/updates';
@@ -64,7 +65,7 @@
     }
   }
 
-  function runXkeenCommand(flag) {
+  async function runXkeenCommand(flag) {
     // Prefer delegating to the existing command button handler (PTY when available).
     const btn = findCommandButton(flag);
     if (btn) {
@@ -74,30 +75,15 @@
     // Fallback: open terminal with prefilled command.
     const label = `xkeen ${flag}`;
     try {
-      if (window.XKeen && XKeen.terminal && XKeen.terminal.api && typeof XKeen.terminal.api.open === 'function') {
-        XKeen.terminal.api.open({ cmd: label, mode: 'xkeen' });
-        return true;
-      }
-    } catch (e2) {}
-    try {
-      if (window.XKeen && XKeen.terminal && typeof XKeen.terminal.open === 'function') {
-        XKeen.terminal.open(null, { cmd: label, mode: 'xkeen' });
-        return true;
-      }
-    } catch (e3) {}
-    try {
-      if (typeof window.openTerminal === 'function') {
-        window.openTerminal(label, 'xkeen');
-        return true;
-      }
-    } catch (e4) {}
-    return false;
+      await Promise.resolve(openXkeenTerminal({ cmd: label, mode: 'xkeen' }));
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   function toastMsg(msg, kind) {
-    try {
-      if (typeof window.toast === 'function') window.toast(String(msg || ''), kind || 'info');
-    } catch (e) {}
+    toastXkeen(String(msg || ''), kind || 'info');
   }
 
   function setLoading(isLoading) {
@@ -212,8 +198,8 @@
 
     const xUpd = $('core-xray-update-btn');
     if (xUpd && !xUpd.dataset.xkWired) {
-      xUpd.addEventListener('click', () => {
-        const ok = runXkeenCommand('-ux');
+      xUpd.addEventListener('click', async () => {
+        const ok = await runXkeenCommand('-ux');
         if (!ok) toastMsg('Терминал недоступен.', 'error');
       });
       xUpd.dataset.xkWired = '1';
@@ -221,8 +207,8 @@
 
     const mUpd = $('core-mihomo-update-btn');
     if (mUpd && !mUpd.dataset.xkWired) {
-      mUpd.addEventListener('click', () => {
-        const ok = runXkeenCommand('-um');
+      mUpd.addEventListener('click', async () => {
+        const ok = await runXkeenCommand('-um');
         if (!ok) toastMsg('Терминал недоступен.', 'error');
       });
       mUpd.dataset.xkWired = '1';
@@ -257,3 +243,21 @@
     })();
   };
 })();
+export function getCoresStatusApi() {
+  try {
+    return coresStatusModuleApi && typeof coresStatusModuleApi.init === 'function' ? coresStatusModuleApi : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function initCoresStatus(...args) {
+  const api = getCoresStatusApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export const coresStatusApi = Object.freeze({
+  get: getCoresStatusApi,
+  init: initCoresStatus,
+});

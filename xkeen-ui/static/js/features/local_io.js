@@ -1,9 +1,12 @@
+let localIoModuleApi = null;
+
+import { getRoutingShellApi as getRoutingShellModuleApi } from './routing_shell.js';
+import { getRoutingApi } from './routing.js';
+import { getXkeenUiConfigShellApi, toastXkeen } from './xkeen_runtime.js';
+
 (() => {
   // Local import/export module (routing editor file-scoped)
   // Public API: XKeen.localIO.init()
-
-  window.XKeen = window.XKeen || {};
-  XKeen.localIO = XKeen.localIO || {};
 
   let _inited = false;
 
@@ -12,17 +15,12 @@
   }
 
   function getConfigShellApi() {
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.configShell) return XKeen.ui.configShell;
-    } catch (e) {}
-    return null;
+    return getXkeenUiConfigShellApi();
   }
 
   function getRoutingShellApi() {
-    try {
-      if (window.XKeen && XKeen.features && XKeen.features.routingShell) return XKeen.features.routingShell;
-    } catch (e) {}
-    return null;
+    const api = getRoutingShellModuleApi();
+    return api && typeof api.getState === 'function' ? api : null;
   }
 
   function bindConfigAction(btnId, handler, opts) {
@@ -49,7 +47,7 @@
   function setStatus(msg, isError) {
     const statusEl = el('routing-status');
     if (statusEl) statusEl.textContent = String(msg ?? '');
-    if (msg) toast(String(msg), !!isError);
+    if (msg) toastXkeen(String(msg), !!isError);
   }
 
   function _basename(name) {
@@ -224,7 +222,10 @@
             else {
               const ed = getEditorFacade();
               if (ed && typeof ed.validate === 'function') ed.validate();
-              else if (window.XKeen && XKeen.routing && typeof XKeen.routing.validate === 'function') XKeen.routing.validate();
+              else {
+                const routingApi = getRoutingApi();
+                if (routingApi && typeof routingApi.validate === 'function') routingApi.validate();
+              }
             }
           } catch (e) {}
           setStatus('Загружено в редактор: ' + fname + ' (не сохранено).', false);
@@ -271,7 +272,59 @@
     }
   }
 
-  XKeen.localIO.init = init;
-  XKeen.localIO.exportToFile = exportToFile;
-  XKeen.localIO.importFromFile = importFromFile;
+  localIoModuleApi = {
+    init,
+    exportToFile,
+    importFromFile,
+  };
 })();
+
+export function getLocalIoApi() {
+  try {
+    if (localIoModuleApi && typeof localIoModuleApi.init === 'function') return localIoModuleApi;
+    return null;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function callLocalIoApi(method, ...args) {
+  const api = getLocalIoApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initLocalIo(...args) {
+  return callLocalIoApi('init', ...args);
+}
+
+export function exportLocalConfigToFile(...args) {
+  return callLocalIoApi('exportToFile', ...args);
+}
+
+export function importLocalConfigFromFile(...args) {
+  return callLocalIoApi('importFromFile', ...args);
+}
+
+export function loadLocalIo() {
+  return null;
+}
+
+export function onShowLocalIo() {
+  return null;
+}
+
+export function disposeLocalIo(...args) {
+  return callLocalIoApi('dispose', ...args);
+}
+
+export const localIoApi = Object.freeze({
+  get: getLocalIoApi,
+  init: initLocalIo,
+  load: loadLocalIo,
+  onShow: onShowLocalIo,
+  exportToFile: exportLocalConfigToFile,
+  importFromFile: importLocalConfigFromFile,
+  dispose: disposeLocalIo,
+});

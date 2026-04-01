@@ -1,3 +1,7 @@
+import { getXkeenUiShellApi, toastXkeen } from './xkeen_runtime.js';
+
+let updateNotifierModuleApi = null;
+
 (() => {
   'use strict';
 
@@ -5,12 +9,8 @@
   // Shows an in-app indicator when a newer version is available on GitHub.
   // Works only while the web UI is open (no background push when the tab is closed).
 
-  window.XKeen = window.XKeen || {};
-  const XK = window.XKeen;
-  XK.core = XK.core || {};
-  XK.features = XK.features || {};
-
-  const api = (XK.features.updateNotifier = XK.features.updateNotifier || {});
+  const api = updateNotifierModuleApi || {};
+  updateNotifierModuleApi = api;
 
   let _inited = false;
   let _timer = null;
@@ -144,11 +144,7 @@
   }
 
   function _getUiShellApi() {
-    try {
-      const api = XK.core && XK.core.uiShell;
-      if (api && typeof api.getState === 'function' && typeof api.patchState === 'function') return api;
-    } catch (e) {}
-    return null;
+    return getXkeenUiShellApi();
   }
 
   function _readUpdateState() {
@@ -303,11 +299,7 @@
     } catch (e) {}
 
     try {
-      if (typeof window.showToast === 'function') {
-        window.showToast('Доступно обновление: ' + String(latestLabel) + ' — откройте DevTools → Обновление', 'info');
-      } else if (XK && XK.ui && typeof XK.ui.showToast === 'function') {
-        XK.ui.showToast('Доступно обновление: ' + String(latestLabel) + ' — откройте DevTools → Обновление', 'info');
-      }
+      toastXkeen('Доступно обновление: ' + String(latestLabel) + ' — откройте DevTools → Обновление', 'info');
     } catch (e) {}
 
     try {
@@ -419,14 +411,27 @@
     return _versionSyncPromise;
   }
 
+  function _getCsrfToken() {
+    try {
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      if (!meta) return '';
+      return String(meta.getAttribute('content') || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
   async function _postJSON(url, body, timeoutMs) {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), Math.max(300, Number(timeoutMs || 3500)));
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      const csrf = _getCsrfToken();
+      if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(url, {
         cache: 'no-store',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body || {}),
         signal: controller.signal,
       });
@@ -807,3 +812,60 @@
     _autoInit();
   }
 })();
+export function getUpdateNotifierApi() {
+  try {
+    return updateNotifierModuleApi;
+  } catch (error) {
+    return null;
+  }
+}
+
+function callUpdateNotifierApi(method, ...args) {
+  const api = getUpdateNotifierApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initUpdateNotifier(...args) {
+  return callUpdateNotifierApi('init', ...args);
+}
+
+export function getUpdateNotifierSettings(...args) {
+  return callUpdateNotifierApi('getSettings', ...args);
+}
+
+export function setUpdateNotifierSettings(...args) {
+  return callUpdateNotifierApi('setSettings', ...args);
+}
+
+export function applyUpdateNotifierSettings(...args) {
+  return callUpdateNotifierApi('applySettings', ...args);
+}
+
+export function getUpdateNotifierVersionState(...args) {
+  return callUpdateNotifierApi('getVersionState', ...args);
+}
+
+export function refreshUpdateNotifierVersionInfo(...args) {
+  return callUpdateNotifierApi('refreshVersionInfo', ...args);
+}
+
+export function checkForUpdateNow(...args) {
+  return callUpdateNotifierApi('checkNow', ...args);
+}
+
+export function resetUpdateNotifierCache(...args) {
+  return callUpdateNotifierApi('resetCache', ...args);
+}
+
+export const updateNotifierApi = Object.freeze({
+  get: getUpdateNotifierApi,
+  init: initUpdateNotifier,
+  getSettings: getUpdateNotifierSettings,
+  setSettings: setUpdateNotifierSettings,
+  applySettings: applyUpdateNotifierSettings,
+  getVersionState: getUpdateNotifierVersionState,
+  refreshVersionInfo: refreshUpdateNotifierVersionInfo,
+  checkNow: checkForUpdateNow,
+  resetCache: resetUpdateNotifierCache,
+});

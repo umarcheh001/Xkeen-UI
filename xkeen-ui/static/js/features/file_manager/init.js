@@ -1,18 +1,18 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
 
   function safe(fn) {
     try { return fn(); } catch (e) { return undefined; }
   }
 
   // Thin entrypoint for the File Manager feature.
-  // All feature parts are attached under `window.XKeen.features.fileManager.*`
+  // All feature parts are attached under `the shared file manager namespace.*`
   // by their respective scripts loaded before this file.
 
   FM.initOnce = FM.initOnce || function initOnce() {

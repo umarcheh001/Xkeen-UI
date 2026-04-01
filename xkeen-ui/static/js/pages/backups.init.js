@@ -1,18 +1,37 @@
-(() => {
-  // backups.html wiring only
-  function init() {
-    try {
-      if (window.XKeen && XKeen.backups && typeof XKeen.backups.init === 'function') {
-        XKeen.backups.init();
-      }
-    } catch (e) {
-      console.error(e);
-    }
+import '../features/compat/backups.js';
+import { initBackups } from '../features/backups.js?v=20260317b';
+
+function isBackupsPage() {
+  return !!(
+    document.querySelector('.xk-backups-page') ||
+    document.getElementById('backups-table') ||
+    document.getElementById('backups-status')
+  );
+}
+
+function safe(fn) {
+  try {
+    fn();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+export function initBackupsPage() {
+  if (!isBackupsPage()) return;
+
+  safe(() => {
+    initBackups();
+  });
+}
+
+export function bootBackupsPage() {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBackupsPage, { once: true });
+    return;
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
+  initBackupsPage();
+}
+
+export default initBackupsPage;

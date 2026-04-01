@@ -1,8 +1,20 @@
-(() => {
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
+import {
+  getMihomoCommandJobApi,
+  getMihomoEditorActionsApi,
+  getMihomoEditorEngineApi,
+} from './mihomo_runtime.js';
+import {
+  attachXkeenEditorToolbar,
+  buildXkeenEditorCommonKeys,
+  getXkeenEditorToolbarDefaultItems,
+  getXkeenEditorToolbarIcons,
+  getXkeenEditorToolbarMiniItems,
+} from './xkeen_runtime.js';
 
-  XKeen.features.mihomoGenerator = (() => {
+let mihomoGeneratorModuleApi = null;
+
+(() => {
+  mihomoGeneratorModuleApi = (() => {
     let inited = false;
 
     function afterNextPaint(fn) {
@@ -288,11 +300,11 @@ function normalizeEngine(v) {
 }
 
 function getEngineHelper() {
-  try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+  return getMihomoEditorEngineApi();
 }
 
 function getEditorActions() {
-  try { return (window.XKeen && XKeen.ui && XKeen.ui.editorActions) ? XKeen.ui.editorActions : null; } catch (e) { return null; }
+  return getMihomoEditorActionsApi();
 }
 
 function getEditorRuntime(engine, opts) {
@@ -712,24 +724,27 @@ function initEngineToggle() {
 
         function syncToolbarForEditable(isEditable) {
           try {
-            if (!editor || !window || typeof window.xkeenAttachCmToolbar !== 'function') return;
+            if (!editor) return;
             resetToolbar();
-            const baseItems = (isEditable)
-              ? (window.XKEEN_CM_TOOLBAR_DEFAULT || null)
-              : (window.XKEEN_CM_TOOLBAR_MINI || window.XKEEN_CM_TOOLBAR_DEFAULT || null);
+            const baseItems = isEditable
+              ? getXkeenEditorToolbarDefaultItems()
+              : (getXkeenEditorToolbarMiniItems().length
+                ? getXkeenEditorToolbarMiniItems()
+                : getXkeenEditorToolbarDefaultItems());
+            const icons = getXkeenEditorToolbarIcons();
 
             // Replace fullscreen action: it must work for the active engine (CodeMirror/Monaco).
-            const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
+            const items = baseItems.map((it) => {
               if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) });
               return it;
             });
 
             // Fallback fullscreen button for Monaco even when CM fullscreen addon isn't loaded.
             try {
-              if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
+              if (icons.fullscreen && !items.some((it) => it && it.id === 'fs_any')) {
                 items.push({
                   id: 'fs_any',
-                  svg: window.XKEEN_CM_ICONS.fullscreen,
+                  svg: icons.fullscreen,
                   label: 'Фулскрин',
                   fallbackHint: 'F11 / Esc',
                   onClick: () => toggleEditorFullscreen(editor),
@@ -737,7 +752,7 @@ function initEngineToggle() {
               }
             } catch (e) {}
 
-            window.xkeenAttachCmToolbar(editor, items);
+            attachXkeenEditorToolbar(editor, items);
             moveToolbarToHeader();
             try { syncToolbarForEngine(_engine); } catch (e) {}
           } catch (e) {
@@ -1043,6 +1058,53 @@ function initEngineToggle() {
           validationLogEl.innerHTML = formatLogHtml(validationLogRaw);
           validationLogEl.scrollTop = validationLogEl.scrollHeight;
         }
+
+        let _restartLogModulePromise = null;
+
+        function loadRestartLogModule() {
+          if (!_restartLogModulePromise) {
+            _restartLogModulePromise = import('./restart_log.js').catch((error) => {
+              _restartLogModulePromise = null;
+              throw error;
+            });
+          }
+          return _restartLogModulePromise;
+        }
+
+        async function getSharedRestartLogApi() {
+          try {
+            const mod = await loadRestartLogModule();
+            const api = mod && typeof mod.getRestartLogApi === 'function' ? mod.getRestartLogApi() : null;
+            return api || null;
+          } catch (e) {}
+          return null;
+        }
+
+        async function clearSharedRestartLog() {
+          try {
+            const api = await getSharedRestartLogApi();
+            if (api && typeof api.setRaw === 'function') {
+              api.setRaw('');
+              return;
+            }
+          } catch (e) {}
+          try {
+            const api = await getSharedRestartLogApi();
+            if (api && typeof api.clear === 'function') {
+              api.clear();
+            }
+          } catch (e) {}
+        }
+
+        async function appendSharedRestartLog(text) {
+          if (!text) return;
+          try {
+            const api = await getSharedRestartLogApi();
+            if (api && typeof api.append === 'function') {
+              api.append(String(text));
+            }
+          } catch (e) {}
+        }
       
         function jumpToErrorPositionFromLog(log) {
   if (!log) return;
@@ -1089,7 +1151,7 @@ function initEngineToggle() {
         }
 
         function getPreviewEditorExtraKeys() {
-          return Object.assign({}, (typeof buildCmExtraKeysCommon === 'function' ? buildCmExtraKeysCommon() : {}), {
+          return Object.assign({}, buildXkeenEditorCommonKeys(), {
             'Ctrl-F': 'findPersistent',
             'Cmd-F': 'findPersistent',
             'Ctrl-G': 'findNext',
@@ -1121,17 +1183,18 @@ function initEngineToggle() {
           try { editor._xkeenToolbarAttached = true; } catch (e) {}
 
           try {
-            if (window && typeof window.xkeenAttachCmToolbar === 'function') {
-              const baseItems = window.XKEEN_CM_TOOLBAR_DEFAULT || null;
-              const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
+            const baseItems = getXkeenEditorToolbarDefaultItems();
+            if (baseItems.length) {
+              const icons = getXkeenEditorToolbarIcons();
+              const items = baseItems.map((it) => {
                 if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) });
                 return it;
               });
               try {
-                if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
+                if (icons.fullscreen && !items.some((it) => it && it.id === 'fs_any')) {
                   items.push({
                     id: 'fs_any',
-                    svg: window.XKEEN_CM_ICONS.fullscreen,
+                    svg: icons.fullscreen,
                     label: 'Фулскрин',
                     fallbackHint: 'F11 / Esc',
                     onClick: () => toggleEditorFullscreen(editor),
@@ -1139,7 +1202,7 @@ function initEngineToggle() {
                 }
               } catch (e) {}
 
-              window.xkeenAttachCmToolbar(editor, items);
+              attachXkeenEditorToolbar(editor, items);
               moveToolbarToHeader();
               try { syncToolbarForEngine(_engine); } catch (e) {}
             }
@@ -3208,15 +3271,22 @@ function initEngineToggle() {
               setStatus(finalWarnings.length ? (baseMsg + "\n" + finalWarnings.join(" • ")) : baseMsg, finalWarnings.length ? 'warn' : 'ok');
 
               try {
+                await clearSharedRestartLog();
+                await appendSharedRestartLog('⏳ Запуск xkeen -restart (job ' + jobId + ')\n');
+              } catch (e) {}
+              try {
                 appendValidationLog('');
                 appendValidationLog('--- xkeen -restart (job ' + jobId + ') ---');
               } catch (e) {}
 
-              const CJ = (window.XKeen && XKeen.util && XKeen.util.commandJob) ? XKeen.util.commandJob : null;
+              const CJ = getMihomoCommandJobApi();
               if (CJ && typeof CJ.waitForCommandJob === 'function') {
                 const result = await CJ.waitForCommandJob(jobId, {
                   maxWaitMs: 300000,
                   onChunk: (chunk) => {
+                    try {
+                      void appendSharedRestartLog(String(chunk || ''));
+                    } catch (e) {}
                     try {
                       const clean = String(chunk || '').replace(/\r\n/g, '\n').replace(/\n+$/g, '');
                       if (clean) appendValidationLog(clean);
@@ -3261,6 +3331,9 @@ function initEngineToggle() {
                     source: 'Фоновый job xkeen -restart',
                     action: 'Применение',
                   });
+                  try {
+                    await appendSharedRestartLog('\nОшибка: ' + errMsg + '\n');
+                  } catch (e) {}
                   if (notify) try { toast(errMsg, 'error'); } catch (e) {}
                 }
               } else {
@@ -3437,3 +3510,23 @@ function initEngineToggle() {
     return { init };
   })();
 })();
+
+export function getMihomoGeneratorApi() {
+  try {
+    if (mihomoGeneratorModuleApi && typeof mihomoGeneratorModuleApi.init === 'function') return mihomoGeneratorModuleApi;
+  } catch (error) {
+    return null;
+  }
+  return null;
+}
+
+export function initMihomoGenerator(...args) {
+  const api = getMihomoGeneratorApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export const mihomoGeneratorApi = Object.freeze({
+  get: getMihomoGeneratorApi,
+  init: initMihomoGenerator,
+});

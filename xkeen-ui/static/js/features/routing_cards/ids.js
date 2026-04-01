@@ -1,3 +1,5 @@
+import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
+
 /*
   routing_cards/ids.js
   Centralized DOM IDs + localStorage keys for routing_cards feature.
@@ -9,9 +11,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.state = RC.state || {};
 
   // DOM IDs
@@ -24,6 +24,8 @@
     datStatus: 'routing-dat-status',
     datGeositeMeta: 'routing-dat-geosite-meta',
     datGeoipMeta: 'routing-dat-geoip-meta',
+    datGeositeCurrentFile: 'routing-dat-geosite-current-file',
+    datGeoipCurrentFile: 'routing-dat-geoip-current-file',
     datGeositeDir: 'routing-dat-geosite-dir',
     datGeositeName: 'routing-dat-geosite-name',
     datGeositeNameList: 'routing-dat-geosite-name-list',

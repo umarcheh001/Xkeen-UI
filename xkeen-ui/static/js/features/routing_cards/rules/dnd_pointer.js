@@ -1,3 +1,5 @@
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 /*
   routing_cards/rules/dnd_pointer.js
   Pointer-based Drag & Drop (preferred) + native HTML5 fallback for Rules reorder.
@@ -9,9 +11,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.rules = RC.rules || {};
 
   // Public namespace: RC.rules.dnd

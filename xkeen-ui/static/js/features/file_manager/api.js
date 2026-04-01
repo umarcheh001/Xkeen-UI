@@ -1,16 +1,13 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager API helpers (no ES modules / bundler):
-  // attach to window.XKeen.features.fileManager.api.
+  // attach to the shared file manager namespace.api.
 
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
-
-  const CORE_HTTP = (window.XKeen && window.XKeen.core && window.XKeen.core.http) ? window.XKeen.core.http : null;
+  const FM = getFileManagerNamespace();
+  const C = FM.common || {};
 
   FM.api = FM.api || {};
   const A = FM.api;
@@ -130,7 +127,8 @@
 
   A.getCsrfToken = A.getCsrfToken || function getCsrfToken() {
     try {
-      if (CORE_HTTP && typeof CORE_HTTP.csrfToken === 'function') return String(CORE_HTTP.csrfToken() || '');
+      const coreHttp = (C && typeof C.getCoreHttp === 'function') ? C.getCoreHttp() : null;
+      if (coreHttp && typeof coreHttp.csrfToken === 'function') return String(coreHttp.csrfToken() || '');
     } catch (e) {}
     try {
       const m = document.querySelector('meta[name="csrf-token"]');
@@ -163,8 +161,9 @@
 
     // CSRF for mutating API calls (prefer core/http)
     try {
-      if (CORE_HTTP && typeof CORE_HTTP.withCSRF === 'function') {
-        const wrapped = CORE_HTTP.withCSRF(opts, method);
+      const coreHttp = (C && typeof C.getCoreHttp === 'function') ? C.getCoreHttp() : null;
+      if (coreHttp && typeof coreHttp.withCSRF === 'function') {
+        const wrapped = coreHttp.withCSRF(opts, method);
         if (wrapped) Object.assign(opts, wrapped);
       } else if (method !== 'GET' && method !== 'HEAD') {
         const tok = A.getCsrfToken();

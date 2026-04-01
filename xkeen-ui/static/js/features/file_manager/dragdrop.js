@@ -1,3 +1,5 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
@@ -6,16 +8,14 @@
   // - Internal FM drag between panels -> move/copy
   //
   // Exports:
-  //   XKeen.features.fileManager.dragdrop.wireDropOpModal()
-  //   XKeen.features.fileManager.dragdrop.openDropOpModal(opts)
-  //   XKeen.features.fileManager.dragdrop.closeDropOpModal(result)
-  //   XKeen.features.fileManager.dragdrop.attachDragDrop({ side, panelDom, openDropOpModal })
+  //   the shared file manager namespace.dragdrop.wireDropOpModal()
+  //   the shared file manager namespace.dragdrop.openDropOpModal(opts)
+  //   the shared file manager namespace.dragdrop.closeDropOpModal(result)
+  //   the shared file manager namespace.dragdrop.attachDragDrop({ side, panelDom, openDropOpModal })
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
   FM.dragdrop = FM.dragdrop || {};
   const DD = FM.dragdrop;
 
@@ -92,26 +92,14 @@
     try { if (C && typeof C.modalOpen === 'function') return C.modalOpen(modal); } catch (e) {}
     if (!modal) return;
     try { modal.classList.remove('hidden'); } catch (e) {}
-    try {
-      if (XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.add('modal-open');
-      }
-    } catch (e) {}
+    try { document.body.classList.add('modal-open'); } catch (e2) {}
   }
 
   function modalClose(modal) {
     try { if (C && typeof C.modalClose === 'function') return C.modalClose(modal); } catch (e) {}
     if (!modal) return;
     try { modal.classList.add('hidden'); } catch (e) {}
-    try {
-      if (XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.remove('modal-open');
-      }
-    } catch (e) {}
+    try { document.body.classList.remove('modal-open'); } catch (e2) {}
   }
 
   function _setDropOpButtonsDefault(defaultOp) {

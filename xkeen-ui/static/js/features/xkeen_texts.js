@@ -1,13 +1,26 @@
-(() => {
-  window.XKeen = window.XKeen || {};
-  XKeen.state = XKeen.state || {};
-  XKeen.features = XKeen.features || {};
+import { getXkeenEditorEngineApi } from './xkeen_runtime.js';
 
-  XKeen.features.xkeenTexts = (() => {
+let xkeenTextsModuleApi = null;
+
+(() => {
+  xkeenTextsModuleApi = (() => {
     let inited = false;
+    const editorState = Object.create(null);
 
     function getEditorEngineHelper() {
-      try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+      return getXkeenEditorEngineApi();
+    }
+
+    function getEditorStateValue(stateKey) {
+      const key = String(stateKey || '');
+      return key ? (editorState[key] || null) : null;
+    }
+
+    function setEditorStateValue(stateKey, editor) {
+      const key = String(stateKey || '');
+      if (!key) return null;
+      editorState[key] = editor || null;
+      return editorState[key];
     }
 
     const CM6_SCOPE = 'xkeen-texts';
@@ -82,7 +95,7 @@
         const text = (data && data.content) ? data.content : '';
         const len = text.length;
 
-        const ed = (XKeen.state && XKeen.state[stateKey]) ? XKeen.state[stateKey] : null;
+        const ed = getEditorStateValue(stateKey);
         if (ed && ed.setValue) ed.setValue(text);
         else ta.value = text;
 
@@ -98,7 +111,7 @@
       const statusEl = document.getElementById(statusId);
       if (!ta) return;
 
-      const ed = (XKeen.state && XKeen.state[stateKey]) ? XKeen.state[stateKey] : null;
+      const ed = getEditorStateValue(stateKey);
       const content = (ed && ed.getValue) ? ed.getValue() : ta.value;
 
       const restart = shouldRestartAfterSave();
@@ -139,11 +152,11 @@
       const preferCm6 = isCm6Runtime(runtime);
 
       // Prevent double-init if main.js already created it, but do not reuse a cached legacy CM5 instance when scoped CM6 is active.
-      if (XKeen.state && XKeen.state[stateKey]) {
-        const existing = XKeen.state[stateKey];
+      if (getEditorStateValue(stateKey)) {
+        const existing = getEditorStateValue(stateKey);
         if (!preferCm6 || isCm6Editor(existing)) return existing;
         try { disposeCodeMirrorEditor(existing); } catch (e) {}
-        try { XKeen.state[stateKey] = null; } catch (e2) {}
+        setEditorStateValue(stateKey, null);
       }
 
       const opts = {
@@ -170,7 +183,7 @@
       const ed = runtime.create(ta, opts);
       if (!ed) return null;
       try { ed.getWrapperElement().classList.add('xkeen-cm'); } catch (e) {}
-      XKeen.state[stateKey] = ed;
+      setEditorStateValue(stateKey, ed);
       return ed;
     }
 
@@ -204,14 +217,6 @@
         const portExcludeEd = attachEditor('port-exclude-editor', 'portExcludeEditor');
         const ipExcludeEd = attachEditor('ip-exclude-editor', 'ipExcludeEditor');
         const xkeenConfigEd = attachEditor('xkeen-config-editor', 'xkeenConfigEditor', { mode: 'application/jsonc' });
-
-        // Expose for other scripts that rely on main.js lexical vars.
-        // main.js will copy from XKeen.state.* when it detects this feature.
-        // Still expose as window.* for debugging/legacy.
-        if (portProxyEd) window.portProxyingEditor = portProxyEd;
-        if (portExcludeEd) window.portExcludeEditor = portExcludeEd;
-        if (ipExcludeEd) window.ipExcludeEditor = ipExcludeEd;
-        if (xkeenConfigEd) window.xkeenConfigEditor = xkeenConfigEd;
 
         // Save buttons
         wireButton('port-proxying-save-btn', () => saveText('/api/xkeen/port-proxying', 'port-proxying-editor', 'port-proxying-status', 'port_proxying.lst', 'portProxyingEditor'));
@@ -303,7 +308,7 @@
     function refreshAttachedEditors() {
       ['portProxyingEditor', 'portExcludeEditor', 'ipExcludeEditor', 'xkeenConfigEditor'].forEach((k) => {
         try {
-          const ed = (window.XKeen && XKeen.state) ? XKeen.state[k] : null;
+          const ed = getEditorStateValue(k);
           if (ed && ed.refresh) ed.refresh();
         } catch (e) {}
       });
@@ -353,3 +358,30 @@
     };
   })();
 })();
+
+export function getXkeenTextsApi() {
+  try {
+    if (xkeenTextsModuleApi && typeof xkeenTextsModuleApi.init === 'function') return xkeenTextsModuleApi;
+  } catch (error) {
+    return null;
+  }
+  return null;
+}
+
+export function initXkeenTexts(...args) {
+  const api = getXkeenTextsApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export function reloadAllXkeenTexts(...args) {
+  const api = getXkeenTextsApi();
+  if (!api || typeof api.reloadAll !== 'function') return null;
+  return api.reloadAll(...args);
+}
+
+export const xkeenTextsApi = Object.freeze({
+  get: getXkeenTextsApi,
+  init: initXkeenTexts,
+  reloadAll: reloadAllXkeenTexts,
+});

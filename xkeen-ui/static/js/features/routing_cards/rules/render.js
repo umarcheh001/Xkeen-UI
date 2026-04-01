@@ -1,3 +1,6 @@
+import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 /*
   routing_cards/rules/render.js
   Rules card: rendering of rules/balancers list + forms + DnD glue.
@@ -9,9 +12,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.rules = RC.rules || {};
 
   const R = RC.rules.render = RC.rules.render || {};
@@ -1983,12 +1984,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
   let _rulesRenderTimer = null;
 
   function isMipsTarget() {
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
-      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
-    } catch (e) {}
-    return false;
+    return isXkeenMipsRuntime();
   }
 
   function cancelQueuedRulesRender() {

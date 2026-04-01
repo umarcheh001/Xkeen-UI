@@ -1,3 +1,7 @@
+import { getRoutingShellApi as getRoutingShellModuleApi } from '../routing_shell.js';
+import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
+import { stripJsonComments } from '../../util/strip_json_comments.js';
+
 /*
   routing_cards/common.js
   Shared helpers for routing_cards modules.
@@ -9,9 +13,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.state = RC.state || {};
   RC.common = RC.common || {};
 
@@ -48,10 +50,7 @@
 
   C.safeJsonParse = function (text) {
     try {
-      // Prefer shared helper (handles JSONC)
-      if (XK.util && typeof XK.util.stripJsonComments === 'function') {
-        return JSON.parse(XK.util.stripJsonComments(text));
-      }
+      return JSON.parse(stripJsonComments(String(text || '')));
     } catch (e) {}
 
     // Best-effort JSONC stripping (simple)
@@ -66,10 +65,8 @@
   };
 
   function getRoutingShellApi() {
-    try {
-      if (window.XKeen && XK.features && XK.features.routingShell) return XK.features.routingShell;
-    } catch (e) {}
-    return null;
+    const api = getRoutingShellModuleApi();
+    return api && typeof api.getState === 'function' ? api : null;
   }
 
   C.editorInstance = function () {

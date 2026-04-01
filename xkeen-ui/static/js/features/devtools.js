@@ -1,11 +1,15 @@
+import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } from './devtools_namespace.js';
+
+let devtoolsModuleApi = null;
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
+  const DT = getDevtoolsNamespace();
 
-  const SH = (XK.features && XK.features.devtoolsShared) ? XK.features.devtoolsShared : {};
+  const SH = getDevtoolsSharedApi() || {};
 
   function _wireCollapsibles() {
     try {
@@ -18,9 +22,10 @@
 
   function setActiveTab(tabName) {
     try {
-      const logs = XK.features && XK.features.devtoolsLogs ? XK.features.devtoolsLogs : null;
+      const logs = DT.devtoolsLogs || null;
       if (logs && typeof logs.setActiveTab === 'function') return logs.setActiveTab(tabName);
     } catch (e) {}
+    return null;
   }
 
   function init() {
@@ -28,17 +33,44 @@
     try { _wireCollapsibles(); } catch (e) {}
 
     // Feature modules
-    try { if (XK.features.devtoolsService && typeof XK.features.devtoolsService.init === 'function') XK.features.devtoolsService.init(); } catch (e) {}
-    try { if (XK.features.devtoolsLogs && typeof XK.features.devtoolsLogs.init === 'function') XK.features.devtoolsLogs.init(); } catch (e) {}
-    try { if (XK.features.devtoolsUpdate && typeof XK.features.devtoolsUpdate.init === 'function') XK.features.devtoolsUpdate.init(); } catch (e) {}
-    try { if (XK.features.devtoolsEnv && typeof XK.features.devtoolsEnv.init === 'function') XK.features.devtoolsEnv.init(); } catch (e) {}
-    try { if (XK.features.devtoolsTheme && typeof XK.features.devtoolsTheme.init === 'function') XK.features.devtoolsTheme.init(); } catch (e) {}
-    try { if (XK.features.devtoolsTerminalTheme && typeof XK.features.devtoolsTerminalTheme.init === 'function') XK.features.devtoolsTerminalTheme.init(); } catch (e) {}
-    try { if (XK.features.devtoolsCodeMirrorTheme && typeof XK.features.devtoolsCodeMirrorTheme.init === 'function') XK.features.devtoolsCodeMirrorTheme.init(); } catch (e) {}
-    try { if (XK.features.devtoolsCustomCss && typeof XK.features.devtoolsCustomCss.init === 'function') XK.features.devtoolsCustomCss.init(); } catch (e) {}
+    try { if (DT.devtoolsService && typeof DT.devtoolsService.init === 'function') DT.devtoolsService.init(); } catch (e) {}
+    try { if (DT.devtoolsLogs && typeof DT.devtoolsLogs.init === 'function') DT.devtoolsLogs.init(); } catch (e) {}
+    try { if (DT.devtoolsUpdate && typeof DT.devtoolsUpdate.init === 'function') DT.devtoolsUpdate.init(); } catch (e) {}
+    try { if (DT.devtoolsEnv && typeof DT.devtoolsEnv.init === 'function') DT.devtoolsEnv.init(); } catch (e) {}
+    try { if (DT.devtoolsTheme && typeof DT.devtoolsTheme.init === 'function') DT.devtoolsTheme.init(); } catch (e) {}
+    try { if (DT.devtoolsTerminalTheme && typeof DT.devtoolsTerminalTheme.init === 'function') DT.devtoolsTerminalTheme.init(); } catch (e) {}
+    try { if (DT.devtoolsCustomCss && typeof DT.devtoolsCustomCss.init === 'function') DT.devtoolsCustomCss.init(); } catch (e) {}
   }
 
-  XK.features.devtools = XK.features.devtools || {};
-  XK.features.devtools.init = init;
-  XK.features.devtools.setActiveTab = setActiveTab;
+  devtoolsModuleApi = {
+    init,
+    setActiveTab,
+  };
+  setDevtoolsNamespaceApi('devtools', devtoolsModuleApi);
 })();
+
+export function getDevtoolsApi() {
+  try {
+    if (devtoolsModuleApi && typeof devtoolsModuleApi.init === 'function') return devtoolsModuleApi;
+  } catch (error) {
+    return null;
+  }
+  return null;
+}
+
+export function initDevtools(...args) {
+  const api = getDevtoolsApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export function setActiveDevtoolsTab(...args) {
+  const api = getDevtoolsApi();
+  if (!api || typeof api.setActiveTab !== 'function') return null;
+  return api.setActiveTab(...args);
+}
+export const devtoolsApi = Object.freeze({
+  get: getDevtoolsApi,
+  init: initDevtools,
+  setActiveTab: setActiveDevtoolsTab,
+});

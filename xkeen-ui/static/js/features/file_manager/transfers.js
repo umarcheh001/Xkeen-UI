@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager XHR transfers (download/upload with progress) + upload conflicts modal
-  // No ES modules / bundler: attach to window.XKeen.features.fileManager.transfers
+  // No ES modules / bundler: attach to the shared file manager namespace.transfers
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
 
   FM.transfers = FM.transfers || {};
   const T = FM.transfers;
@@ -300,8 +300,8 @@
   async function _confirmDanger(msgText) {
     let ok = true;
     try {
-      if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-        ok = await XKeen.ui.confirm({
+      if (C && typeof C.confirm === 'function') {
+        ok = await C.confirm({
           title: 'Подтверждение',
           message: String(msgText || ''),
           okText: 'Продолжить',

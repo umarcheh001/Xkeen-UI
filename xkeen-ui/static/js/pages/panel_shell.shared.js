@@ -8,159 +8,61 @@
 import '../ui/sections.js';
 import '../ui/last_activity.js';
 import '../ui/xk_brand.js';
+import {
+  ensurePanelLazyFeature,
+  getPanelLazyFeatureApi,
+  ensurePanelTerminalReady,
+  wirePanelTerminalLazyOpen,
+  initPanelTerminalCapabilityButtons,
+  wirePanelLazyFeatureClicks,
+} from './panel.lazy_bindings.runtime.js';
+import { appendTerminalDebug } from '../features/terminal_debug.js';
+import { getLogsShellApi } from './logs_shell.shared.js';
+import { initPanelCoreUiAutoDetect } from './panel.core_ui_watch.runtime.js';
+import { getServiceStatusApi } from '../features/service_status.js';
+import { getRoutingCardsNamespace } from '../features/routing_cards_namespace.js';
+import {
+  ensureXkeenUiBucket,
+  getXkeenCoreHttpApi,
+  getXkeenPageApi,
+  getXkeenUiShellApi,
+  hasXkeenXrayCore,
+  publishXkeenPageApi,
+} from '../features/xkeen_runtime.js';
 
 (() => {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  const XK = window.XKeen;
-  XK.pages = XK.pages || {};
 
   function isPanelPage() {
     return !!(document.getElementById('view-routing') || document.querySelector('.top-tab-btn[data-view]'));
   }
 
-  function safe(fn) {
-    try { return fn(); } catch (e) {
-      try { console.error(e); } catch (e2) {}
-      return undefined;
-    }
-  }
-
   function getCoreHttp() {
-    try {
-      if (window.XKeen && XKeen.core && XKeen.core.http) return XKeen.core.http;
-    } catch (e) {}
-    return null;
+    return getXkeenCoreHttpApi();
   }
 
-  function getLazyRuntimeApi() {
-    try {
-      const api = window.XKeen && XKeen.runtime && XKeen.runtime.lazy;
-      return api || null;
-    } catch (e) {}
-    return null;
-  }
 
-  function ensureTerminalReady() {
-    const api = getLazyRuntimeApi();
-    return (api && typeof api.ensureTerminalReady === 'function')
-      ? api.ensureTerminalReady()
-      : Promise.resolve(false);
-  }
-
-  function isTerminalReady() {
-    const api = getLazyRuntimeApi();
-    return !!(api && typeof api.isTerminalReady === 'function' && api.isTerminalReady());
-  }
-
-  function openTerminal(mode) {
-    const m = String(mode || 'shell').toLowerCase();
-    safe(() => {
-      const T = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal : null;
-      if (!T) return;
-      if (T.api && typeof T.api.open === 'function') {
-        void T.api.open({ cmd: '', mode: m });
-        return;
-      }
-      if (T.ui_actions && typeof T.ui_actions.openTerminal === 'function') {
-        T.ui_actions.openTerminal('', m);
-      }
-    });
-  }
-
-  function wireTerminalLazyOpen() {
-    const shellBtn = document.getElementById('terminal-open-shell-btn');
-    const ptyBtn = document.getElementById('terminal-open-pty-btn');
-
-    function wire(btn, mode) {
-      if (!btn) return;
-      if (btn.dataset && btn.dataset.xkLazyTerminal === '1') return;
-      btn.addEventListener('click', (e) => {
-        if (isTerminalReady()) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureTerminalReady().then((ready) => {
-          if (ready) openTerminal(mode);
-        });
-      }, true);
-      if (btn.dataset) btn.dataset.xkLazyTerminal = '1';
-    }
-
-    wire(shellBtn, 'shell');
-    wire(ptyBtn, 'pty');
-  }
-
-  let _terminalCapsInit = false;
-  function initTerminalCapabilityButtons() {
-    if (_terminalCapsInit) return;
-    _terminalCapsInit = true;
-
-    const shellBtn = document.getElementById('terminal-open-shell-btn');
-    const ptyBtn = document.getElementById('terminal-open-pty-btn');
-    if (!shellBtn && !ptyBtn) return;
-
-    function apply(data) {
-      const ws = !!(data && data.websocket);
-      const hasPty = !!(
-        data &&
-        data.terminal &&
-        typeof data.terminal === 'object' &&
-        'pty' in data.terminal
-          ? data.terminal.pty
-          : ws
-      );
-      try {
-        window.XKeen = window.XKeen || {};
-        window.XKeen.state = window.XKeen.state || {};
-        window.XKeen.state.hasWs = ws;
-        window.XKeen.state.hasPty = hasPty;
-      } catch (e) {}
-
-      if (hasPty) {
-        if (ptyBtn) { try { ptyBtn.style.display = ''; ptyBtn.disabled = false; } catch (e) {} }
-        if (shellBtn) { try { shellBtn.style.display = 'none'; shellBtn.disabled = true; } catch (e) {} }
-      } else {
-        if (shellBtn) { try { shellBtn.style.display = ''; shellBtn.disabled = false; } catch (e) {} }
-        if (ptyBtn) { try { ptyBtn.style.display = 'none'; ptyBtn.disabled = true; } catch (e) {} }
-      }
-    }
-
-    Promise.resolve().then(() => {
-      const http = getCoreHttp();
-      if (http && typeof http.fetchJSON === 'function') {
-        return http.fetchJSON('/api/capabilities', {
-          method: 'GET',
-          timeoutMs: 6000,
-          retry: 1,
-        }).catch(() => null);
-      }
-      return fetch('/api/capabilities', { cache: 'no-store' })
-        .then((r) => (r && r.ok) ? r.json() : null)
-        .catch(() => null);
-    })
-      .then((data) => apply(data))
-      .catch(() => {
-        // Keep server-side default button on error.
-      });
-  }
 
   function hasXrayCore() {
-    try {
-      if (typeof window.XKEEN_HAS_XRAY === 'boolean') return !!window.XKEEN_HAS_XRAY;
-      const v = String(window.XKEEN_HAS_XRAY || '').toLowerCase();
-      if (v) return v === '1' || v === 'true' || v === 'yes' || v === 'on';
-    } catch (e) {}
-    return true;
+    return hasXkeenXrayCore();
   }
 
   function getUiShellApi() {
+    return getXkeenUiShellApi();
+  }
+
+  function getRoutingCardsNamespaceApi() {
     try {
-      const api = window.XKeen && XKeen.core && XKeen.core.uiShell;
-      if (api && typeof api.getState === 'function' && typeof api.patchState === 'function') return api;
-    } catch (e) {}
+      return getRoutingCardsNamespace();
+    } catch (error) {}
     return null;
   }
+
+  function getRoutingCardsFeatureApi() {
+    const namespaceApi = getRoutingCardsNamespaceApi();
+    return namespaceApi && typeof namespaceApi === 'object' ? namespaceApi : null;
+  }
+
 
   function readUiShellState() {
     const api = getUiShellApi();
@@ -262,23 +164,24 @@ import '../ui/xk_brand.js';
     if (!badge) return;
 
     const st = String(state || '').toLowerCase() === 'on' ? 'on' : 'off';
-    badge.dataset.state = st;
-
-    if (st === 'on') {
-      const lvl = String(level || '').trim().toLowerCase();
-      badge.title = (lvl && lvl !== 'none')
+    const lvl = String(level || '').trim().toLowerCase();
+    const title = (st === 'on')
+      ? ((lvl && lvl !== 'none')
         ? ('Логи Xray включены (loglevel=' + lvl + ').')
-        : 'Логи Xray включены.';
-      return;
-    }
+        : 'Логи Xray включены.')
+      : 'Логи Xray выключены.';
 
-    badge.title = 'Логи Xray выключены.';
+    badge.dataset.state = st;
+    badge.dataset.level = lvl || 'none';
+    badge.dataset.live = 'off';
+    badge.title = title;
+    try { badge.setAttribute('aria-label', title); } catch (e) {}
   }
 
   function hasLoadedXrayLogsFeature() {
     try {
-      const api = (window.XKeen && XKeen.features) ? XKeen.features.xrayLogs : null;
-      return !!(api && typeof api.init === 'function' && typeof api.refreshStatus === 'function');
+      const api = getLogsShellApi();
+      return !!(api && typeof api.isReady === 'function' && api.isReady());
     } catch (e) {
       return false;
     }
@@ -358,11 +261,6 @@ import '../ui/xk_brand.js';
     return document.getElementById('global-autorestart-xkeen');
   }
 
-  function lightweightShouldAutoRestartAfterSave() {
-    const cb = getGlobalAutorestartCheckbox();
-    return !!(cb && cb.checked);
-  }
-
   function bindLightweightAutorestartCheckbox() {
     const cb = getGlobalAutorestartCheckbox();
     if (!cb) return;
@@ -385,10 +283,6 @@ import '../ui/xk_brand.js';
     });
 
     if (cb.dataset) cb.dataset.xkeenBound = '1';
-  }
-
-  if (typeof window.shouldAutoRestartAfterSave !== 'function') {
-    window.shouldAutoRestartAfterSave = lightweightShouldAutoRestartAfterSave;
   }
 
   function setLightweightXkeenHeaderState(state, core) {
@@ -490,7 +384,7 @@ import '../ui/xk_brand.js';
 
   function hasLoadedServiceStatusFeature() {
     try {
-      const api = (window.XKeen && XKeen.features) ? XKeen.features.serviceStatus : null;
+      const api = getServiceStatusApi();
       if (!(api && typeof api.init === 'function' && typeof api.refresh === 'function')) return false;
       if (typeof api.isInitialized === 'function') return !!api.isInitialized();
       return true;
@@ -584,544 +478,6 @@ import '../ui/xk_brand.js';
         if (document.visibilityState === 'visible') void refreshLightweightXkeenHeaderStatus({ silent: true });
       } catch (e) {}
     });
-  }
-
-  const CORE_UI_WATCH_INITIAL_DELAY_MS = 8000;
-  const CORE_UI_WATCH_POLL_MS = 15000;
-  const CORE_UI_WATCH_HIDDEN_POLL_MS = 60000;
-  const CORE_UI_WATCH_ERROR_BACKOFF_MS = 60000;
-  const CORE_UI_WATCH_FOCUS_COOLDOWN_MS = 2500;
-
-  function normalizeCoreList(list) {
-    if (!Array.isArray(list)) return [];
-    const seen = new Set();
-    const out = [];
-    list.forEach((item) => {
-      const name = String(item || '').trim().toLowerCase();
-      if (!name || seen.has(name)) return;
-      seen.add(name);
-      out.push(name);
-    });
-    out.sort();
-    return out;
-  }
-
-  function coreListSignature(list) {
-    return normalizeCoreList(list).join(',');
-  }
-
-  function getInitialDetectedCores() {
-    const raw = Array.isArray(window.XKEEN_DETECTED_CORES) && window.XKEEN_DETECTED_CORES.length
-      ? window.XKEEN_DETECTED_CORES
-      : window.XKEEN_AVAILABLE_CORES;
-    return normalizeCoreList(raw);
-  }
-
-  function formatCoreName(name) {
-    const value = String(name || '').trim().toLowerCase();
-    if (!value) return '';
-    if (value === 'mihomo') return 'Mihomo';
-    if (value === 'xray') return 'Xray';
-    return value;
-  }
-
-  function describeCoreUiTopologyChange(prevCores, nextCores) {
-    const prev = normalizeCoreList(prevCores);
-    const next = normalizeCoreList(nextCores);
-    const added = next.filter((name) => prev.indexOf(name) === -1);
-    const removed = prev.filter((name) => next.indexOf(name) === -1);
-
-    const parts = [];
-    if (added.length) {
-      parts.push('добавлены ядра: ' + added.map(formatCoreName).join(', '));
-    }
-    if (removed.length) {
-      parts.push('убраны ядра: ' + removed.map(formatCoreName).join(', '));
-    }
-    if (!parts.length) {
-      return 'Набор доступных ядер изменился.';
-    }
-    return 'Набор доступных ядер изменился: ' + parts.join('; ') + '.';
-  }
-
-  function notifyPanelInfo(message) {
-    try {
-      if (typeof window.toast === 'function') {
-        window.toast({ kind: 'info', message, duration: 6000 });
-        return;
-      }
-    } catch (e) {}
-    try {
-      console.info('[XKeen]', message);
-    } catch (e) {}
-  }
-
-  function hasUnsavedPanelChanges() {
-    try {
-      if (window.XKeen && XKeen.routing && typeof XKeen.routing.hasUnsavedChanges === 'function' && XKeen.routing.hasUnsavedChanges()) {
-        return true;
-      }
-    } catch (e) {}
-    try {
-      const inbounds = window.XKeen && XKeen.features ? XKeen.features.inbounds : null;
-      if (inbounds && typeof inbounds.hasUnsavedChanges === 'function' && inbounds.hasUnsavedChanges()) {
-        return true;
-      }
-    } catch (e) {}
-    try {
-      const outbounds = window.XKeen && XKeen.features ? XKeen.features.outbounds : null;
-      if (outbounds && typeof outbounds.hasUnsavedChanges === 'function' && outbounds.hasUnsavedChanges()) {
-        return true;
-      }
-    } catch (e) {}
-    return false;
-  }
-
-  let _coreUiTopology = getInitialDetectedCores();
-  let _coreUiWatchTimer = null;
-  let _coreUiWatchBackoffTimer = null;
-  let _coreUiWatchLastFocusTs = 0;
-
-  function getCoreUiRefreshButton() {
-    return document.getElementById('panel-core-ui-refresh-btn');
-  }
-
-  async function confirmCoreUiManualReload() {
-    const message = 'Набор ядер изменился. Обновить панель сейчас?';
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.confirm && typeof XKeen.ui.confirm.open === 'function') {
-        return !!(await XKeen.ui.confirm.open({
-          title: 'Обновить панель',
-          message,
-          confirmText: 'Обновить',
-          cancelText: 'Позже',
-          kind: 'warning',
-        }));
-      }
-    } catch (e) {}
-    return window.confirm(message);
-  }
-
-  function revealCoreUiRefreshButton(message) {
-    const btn = getCoreUiRefreshButton();
-    if (!btn) return;
-    btn.classList.remove('hidden');
-    btn.title = String(message || 'Обновить панель после изменения набора ядер.');
-  }
-
-  function reloadPanelForCoreUiChange(message) {
-    if (message) notifyPanelInfo(message);
-    try {
-      window.location.reload();
-    } catch (e) {}
-  }
-
-  function deferCoreUiReload(message, nextCores) {
-    _coreUiTopology = normalizeCoreList(nextCores);
-    revealCoreUiRefreshButton(message);
-    if (message) notifyPanelInfo(message + ' Сначала сохраните изменения, затем обновите панель.');
-  }
-
-  function parseDetectedCoresFromPayload(data) {
-    if (!data || typeof data !== 'object') return [];
-    if (Array.isArray(data.detected_cores)) return normalizeCoreList(data.detected_cores);
-    if (Array.isArray(data.available_cores)) return normalizeCoreList(data.available_cores);
-    if (Array.isArray(data.cores)) return normalizeCoreList(data.cores);
-    return [];
-  }
-
-  async function fetchDetectedCores() {
-    try {
-      const http = getCoreHttp();
-      if (http && typeof http.fetchJSON === 'function') {
-        const data = await http.fetchJSON('/api/xkeen/core', {
-          method: 'GET',
-          timeoutMs: 6000,
-          retry: 1,
-        }).catch(() => null);
-        return parseDetectedCoresFromPayload(data);
-      }
-    } catch (e) {}
-
-    const res = await fetch('/api/xkeen/core', { cache: 'no-store' });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      throw new Error('cores status http error: ' + res.status);
-    }
-    return parseDetectedCoresFromPayload(data);
-  }
-
-  function scheduleCoreUiWatch(delayMs) {
-    const timeout = Math.max(0, Number(delayMs) || 0);
-    if (_coreUiWatchTimer) {
-      try { clearTimeout(_coreUiWatchTimer); } catch (e) {}
-    }
-    _coreUiWatchTimer = setTimeout(() => {
-      _coreUiWatchTimer = null;
-      void checkCoreUiTopology('timer');
-    }, timeout);
-  }
-
-  async function handleCoreUiTopologyChange(prevCores, nextCores) {
-    const message = describeCoreUiTopologyChange(prevCores, nextCores);
-    if (hasUnsavedPanelChanges()) {
-      deferCoreUiReload(message, nextCores);
-      return;
-    }
-
-    const shouldReload = await confirmCoreUiManualReload().catch(() => false);
-    if (shouldReload) {
-      reloadPanelForCoreUiChange(message);
-      return;
-    }
-
-    deferCoreUiReload(message, nextCores);
-  }
-
-  async function checkCoreUiTopology(reason) {
-    try {
-      if (document.visibilityState === 'hidden') {
-        scheduleCoreUiWatch(CORE_UI_WATCH_HIDDEN_POLL_MS);
-        return;
-      }
-    } catch (e) {}
-
-    try {
-      const nextCores = await fetchDetectedCores();
-      const prevSig = coreListSignature(_coreUiTopology);
-      const nextSig = coreListSignature(nextCores);
-      if (nextSig && prevSig && nextSig !== prevSig) {
-        await handleCoreUiTopologyChange(_coreUiTopology, nextCores);
-      } else if (nextSig) {
-        _coreUiTopology = normalizeCoreList(nextCores);
-      }
-      scheduleCoreUiWatch(CORE_UI_WATCH_POLL_MS);
-    } catch (e) {
-      scheduleCoreUiWatch(CORE_UI_WATCH_ERROR_BACKOFF_MS);
-    }
-
-    try {
-      _coreUiWatchLastFocusTs = Date.now();
-    } catch (e) {}
-  }
-
-  function wireCoreUiRefreshButton() {
-    const btn = getCoreUiRefreshButton();
-    if (!btn || (btn.dataset && btn.dataset.xkCoreUiReloadWired === '1')) return;
-    btn.addEventListener('click', () => {
-      const title = String(btn.title || '').trim();
-      reloadPanelForCoreUiChange(title || 'Обновляем панель после изменения набора ядер.');
-    });
-    if (btn.dataset) btn.dataset.xkCoreUiReloadWired = '1';
-  }
-
-  function initCoreUiAutoDetect() {
-    wireCoreUiRefreshButton();
-    scheduleCoreUiWatch(CORE_UI_WATCH_INITIAL_DELAY_MS);
-    document.addEventListener('visibilitychange', () => {
-      try {
-        if (document.visibilityState !== 'visible') return;
-        const now = Date.now();
-        if (now - _coreUiWatchLastFocusTs < CORE_UI_WATCH_FOCUS_COOLDOWN_MS) return;
-      } catch (e) {}
-      scheduleCoreUiWatch(0);
-    });
-  }
-
-  function getLazyFeatureApi(name) {
-    const api = getLazyRuntimeApi();
-    return (api && typeof api.getFeatureApi === 'function')
-      ? api.getFeatureApi(name)
-      : null;
-  }
-
-  function isLazyFeatureReady(name) {
-    const api = getLazyRuntimeApi();
-    return !!(api && typeof api.isFeatureReady === 'function' && api.isFeatureReady(name));
-  }
-
-  function ensureLazyFeature(name) {
-    const api = getLazyRuntimeApi();
-    return (api && typeof api.ensureFeature === 'function')
-      ? api.ensureFeature(name)
-      : Promise.resolve(false);
-  }
-
-  function replayDeferredClick(el) {
-    if (!el) return;
-    try {
-      if (el.dataset) el.dataset.xkLazyReplay = '1';
-    } catch (e) {}
-    fireDeferredClick(el);
-  }
-
-  function fireDeferredClick(el) {
-    if (!el) return;
-    try {
-      el.click();
-    } catch (e) {
-      try {
-        el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-      } catch (e2) {}
-    }
-  }
-
-  function replayDeferredEvent(el, type) {
-    if (!el || !type) return;
-    if (String(type) === 'click') {
-      replayDeferredClick(el);
-      return;
-    }
-    try {
-      el.dispatchEvent(new Event(String(type), { bubbles: true, cancelable: true }));
-    } catch (e) {}
-  }
-
-  function consumeReplayFlag(el) {
-    try {
-      if (!el || !el.dataset || el.dataset.xkLazyReplay !== '1') return false;
-      delete el.dataset.xkLazyReplay;
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function wireLazyFeatureClicks() {
-    if (document.body && document.body.dataset && document.body.dataset.xkLazyFeatureClicks === '1') return;
-
-    document.addEventListener('click', (e) => {
-      const raw = e && e.target && typeof e.target.closest === 'function' ? e.target : null;
-      if (!raw) return;
-
-      const serviceTrigger = raw.closest('#xkeen-start-btn, #xkeen-stop-btn, #xkeen-restart-btn, #xkeen-core-text');
-      if (serviceTrigger && !isLazyFeatureReady('serviceStatus')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('serviceStatus').then((ready) => {
-          if (!ready) return;
-          fireDeferredClick(serviceTrigger);
-        });
-        return;
-      }
-
-      const xrayActionBtn = raw.closest('#view-xray-logs button');
-      if (xrayActionBtn && !isLazyFeatureReady('xrayLogs')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('xrayLogs').then((ready) => {
-          if (!ready) return;
-          fireDeferredClick(xrayActionBtn);
-        });
-        return;
-      }
-
-      const templateBtn = raw.closest('#routing-import-template-btn');
-      if (templateBtn) {
-        if (consumeReplayFlag(templateBtn)) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('routingTemplates').then((ready) => {
-          if (!ready) return;
-          try {
-            const api = getLazyFeatureApi('routingTemplates');
-            if (api && typeof api.open === 'function') api.open();
-            else replayDeferredClick(templateBtn);
-          } catch (err) {}
-        });
-        return;
-      }
-
-      const githubExportBtn = raw.closest('#github-export-btn');
-      if (githubExportBtn) {
-        if (consumeReplayFlag(githubExportBtn)) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('github').then((ready) => {
-          if (!ready) return;
-          try {
-            const api = getLazyFeatureApi('github');
-            if (api && typeof api.openExportModal === 'function') api.openExportModal();
-            else replayDeferredClick(githubExportBtn);
-          } catch (err) {}
-        });
-        return;
-      }
-
-      const githubCatalogBtn = raw.closest('#github-open-catalog-btn');
-      if (githubCatalogBtn) {
-        if (consumeReplayFlag(githubCatalogBtn)) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('github').then((ready) => {
-          if (!ready) return;
-          try {
-            const api = getLazyFeatureApi('github');
-            if (api && typeof api.openCatalogModal === 'function') api.openCatalogModal();
-            else replayDeferredClick(githubCatalogBtn);
-          } catch (err) {}
-        });
-        return;
-      }
-
-      const donateBtn = raw.closest('#top-tab-donate');
-      if (donateBtn) {
-        if (consumeReplayFlag(donateBtn)) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('donate').then((ready) => {
-          if (!ready) return;
-          try {
-            const api = getLazyFeatureApi('donate');
-            if (api && typeof api.open === 'function') {
-              api.open();
-              return;
-            }
-          } catch (err) {}
-          replayDeferredClick(donateBtn);
-        });
-        return;
-      }
-
-      const settingsBtn = raw.closest('#ui-settings-open-btn');
-      if (settingsBtn && !isLazyFeatureReady('uiSettingsPanel')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('uiSettingsPanel').then((ready) => {
-          if (!ready) return;
-          fireDeferredClick(settingsBtn);
-        });
-        return;
-      }
-
-      const mihomoImportBtn = raw.closest('#mihomo-import-node-btn');
-      if (mihomoImportBtn && !isLazyFeatureReady('mihomoImport')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('mihomoImport').then((ready) => {
-          if (!ready) return;
-          fireDeferredClick(mihomoImportBtn);
-        });
-        return;
-      }
-
-      const mihomoProxyToolsBtn = raw.closest('#mihomo-proxy-tools-btn');
-      if (mihomoProxyToolsBtn && !isLazyFeatureReady('mihomoProxyTools')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('mihomoProxyTools').then((ready) => {
-          if (!ready) return;
-          fireDeferredClick(mihomoProxyToolsBtn);
-        });
-        return;
-      }
-
-      const mihomoHwidBtn = raw.closest('#mihomo-hwid-sub-btn');
-      if (mihomoHwidBtn && !isLazyFeatureReady('mihomoHwidSub')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('mihomoHwidSub').then((ready) => {
-          if (!ready) return;
-          fireDeferredClick(mihomoHwidBtn);
-        });
-        return;
-      }
-
-      const xkeenAction = raw.closest('#port-proxying-save-btn, #port-exclude-save-btn, #ip-exclude-save-btn, #xkeen-config-save-btn');
-      if (xkeenAction && !isLazyFeatureReady('xkeenTexts')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('xkeenTexts').then((ready) => {
-          if (!ready) return;
-          fireDeferredClick(xkeenAction);
-        });
-        return;
-      }
-
-      const commandsAction = raw.closest('.command-item, #cores-check-btn, #core-xray-update-btn, #core-mihomo-update-btn');
-      if (commandsAction && (!isLazyFeatureReady('commandsList') || !isLazyFeatureReady('coresStatus'))) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        Promise.all([
-          ensureLazyFeature('commandsList'),
-          ensureLazyFeature('coresStatus'),
-        ]).then((results) => {
-          if (results.every(Boolean)) fireDeferredClick(commandsAction);
-        });
-        return;
-      }
-
-      const backupsHeader = raw.closest('#routing-backups-header');
-      if (backupsHeader && !isLazyFeatureReady('backups')) {
-        if (consumeReplayFlag(backupsHeader)) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('backups').then((ready) => {
-          if (!ready) return;
-          try {
-            const api = getLazyFeatureApi('backups');
-            if (api && typeof api.load === 'function') api.load();
-          } catch (err) {}
-          replayDeferredClick(backupsHeader);
-        });
-        return;
-      }
-
-      const inboundsTrigger = raw.closest('#inbounds-header, [id^="inbounds-"], [name="inbounds_mode"]');
-      if (inboundsTrigger && !isLazyFeatureReady('inbounds')) {
-        if (consumeReplayFlag(inboundsTrigger)) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('inbounds').then((ready) => {
-          if (!ready) return;
-          replayDeferredClick(inboundsTrigger);
-        });
-        return;
-      }
-
-      const outboundsTrigger = raw.closest('#outbounds-header, [id^="outbounds-"]');
-      if (outboundsTrigger && !isLazyFeatureReady('outbounds')) {
-        if (consumeReplayFlag(outboundsTrigger)) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('outbounds').then((ready) => {
-          if (!ready) return;
-          replayDeferredClick(outboundsTrigger);
-        });
-      }
-    }, true);
-
-    document.addEventListener('change', (e) => {
-      const raw = e && e.target && typeof e.target.closest === 'function' ? e.target : null;
-      if (!raw) return;
-
-      const xrayControl = raw.closest('#view-xray-logs select, #view-xray-logs input, #view-xray-logs textarea');
-      if (xrayControl && !isLazyFeatureReady('xrayLogs')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('xrayLogs').then((ready) => {
-          if (!ready) return;
-          replayDeferredEvent(xrayControl, 'change');
-        });
-      }
-    }, true);
-
-    document.addEventListener('input', (e) => {
-      const raw = e && e.target && typeof e.target.closest === 'function' ? e.target : null;
-      if (!raw) return;
-
-      const xrayInput = raw.closest('#view-xray-logs input, #view-xray-logs textarea');
-      if (xrayInput && !isLazyFeatureReady('xrayLogs')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        ensureLazyFeature('xrayLogs').then((ready) => {
-          if (!ready) return;
-          replayDeferredEvent(xrayInput, 'input');
-        });
-      }
-    }, true);
-
-    if (document.body && document.body.dataset) document.body.dataset.xkLazyFeatureClicks = '1';
   }
 
   const LAST_VIEW_KEY = 'xkeen.panel.last_view.v1';
@@ -1225,6 +581,9 @@ import '../ui/xk_brand.js';
     const prevView = _currentView;
     applyShellView(nextView);
     _currentView = nextView;
+    if (nextView === 'routing') {
+      try { scheduleRoutingInteractionRecovery(); } catch (e) {}
+    }
     emitViewChanged(nextView, prevView);
     return nextView;
   }
@@ -1255,6 +614,547 @@ import '../ui/xk_brand.js';
     });
   }
 
+  function runRoutingCardOpenCallback(kind) {
+    const key = String(kind || '').trim();
+    if (!key) return;
+
+    try {
+      const routingCards = getRoutingCardsFeatureApi();
+
+      if (key === 'dat') {
+        try { initRoutingDatActionsFallback(); } catch (error) {}
+        const refreshDat = routingCards && routingCards.dat && routingCards.dat.card && typeof routingCards.dat.card.refreshDatMeta === 'function'
+          ? routingCards.dat.card.refreshDatMeta
+          : null;
+        if (refreshDat) refreshDat();
+        else refreshRoutingDatFallback();
+        return;
+      }
+
+      if (key === 'rules') {
+        const renderRules = routingCards && routingCards.rules && routingCards.rules.controls && typeof routingCards.rules.controls.renderFromEditor === 'function'
+          ? routingCards.rules.controls.renderFromEditor
+          : null;
+        if (renderRules) renderRules({ setError: false });
+        return;
+      }
+
+      if (key === 'backups') {
+        const backups = getPanelLazyFeatureApi('backups');
+        if (backups && typeof backups.load === 'function') {
+          backups.load();
+          return;
+        }
+        ensurePanelLazyFeature('backups').then((ready) => {
+          if (!ready) return;
+          const lazyBackups = getPanelLazyFeatureApi('backups');
+          if (lazyBackups && typeof lazyBackups.load === 'function') lazyBackups.load();
+        }).catch(() => {});
+      }
+    } catch (error) {}
+  }
+
+  function ensureRoutingCollapseFallback(headerId, bodyId, arrowId, storageKey, defaultOpen, onOpenKind) {
+    const header = document.getElementById(headerId);
+    const body = document.getElementById(bodyId);
+    const arrow = document.getElementById(arrowId);
+    if (!header || !body || !arrow) return;
+
+    try {
+      if (header.dataset && header.dataset.xkCollapseWired === '1') return;
+    } catch (error) {}
+
+    const prefKey = String(storageKey || '').trim();
+    let open = !!defaultOpen;
+    if (prefKey) {
+      try {
+        const raw = localStorage.getItem(prefKey);
+        if (raw === '1') open = true;
+        if (raw === '0') open = false;
+      } catch (error) {}
+    }
+
+    function apply() {
+      try { body.style.display = open ? '' : 'none'; } catch (error) {}
+      try { arrow.textContent = open ? '▲' : '▼'; } catch (error) {}
+      try { header.setAttribute('role', 'button'); } catch (error) {}
+      try { header.setAttribute('tabindex', header.getAttribute('tabindex') || '0'); } catch (error) {}
+      try { header.setAttribute('aria-controls', bodyId); } catch (error) {}
+      try { header.setAttribute('aria-expanded', open ? 'true' : 'false'); } catch (error) {}
+      try {
+        if (header.dataset) {
+          header.dataset.xkCollapseWired = '1';
+          header.dataset.xkCollapseOpen = open ? '1' : '0';
+          header.dataset.xkCollapseBody = bodyId;
+          header.dataset.xkCollapseArrow = arrowId;
+          header.dataset.xkCollapseStorage = prefKey;
+        }
+      } catch (error) {}
+    }
+
+    function sync(openReason) {
+      apply();
+      if (open) runRoutingCardOpenCallback(onOpenKind || openReason || '');
+    }
+
+    function toggle() {
+      open = !open;
+      if (prefKey) {
+        try { localStorage.setItem(prefKey, open ? '1' : '0'); } catch (error) {}
+      }
+      sync('toggle');
+    }
+
+    const onKeyToggle = (event) => {
+      const key = String(event && event.key || '');
+      if (key !== 'Enter' && key !== ' ') return;
+      try { event.preventDefault(); } catch (error) {}
+      toggle();
+    };
+
+    header.addEventListener('click', toggle);
+    header.addEventListener('keydown', onKeyToggle);
+    sync('initial');
+  }
+
+  function toastPanelShell(message, kind) {
+    const msg = String(message || '').trim();
+    if (!msg) return;
+    try {
+      if (typeof window.toast === 'function') {
+        window.toast(msg, kind === 'error' ? 'error' : 'info');
+        return;
+      }
+    } catch (error) {}
+    try {
+      if (kind === 'error') console.error('[XKeen]', msg);
+      else console.log('[XKeen]', msg);
+    } catch (error) {}
+  }
+
+  function datFallbackMatch(kind, name) {
+    const k = String(kind || '').toLowerCase();
+    const n = String(name || '').toLowerCase();
+    if (!n || !n.endsWith('.dat')) return false;
+    if (k === 'geosite') return n.startsWith('geosite') || n === 'zkeen.dat' || n === 'geosite_zkeen.dat';
+    if (k === 'geoip') return n.startsWith('geoip') || n === 'zkeenip.dat' || n === 'geoip_zkeenip.dat';
+    return false;
+  }
+
+  function getRoutingDatRefs(kind) {
+    const k = String(kind || '').toLowerCase() === 'geoip' ? 'geoip' : 'geosite';
+    const prefix = 'routing-dat-' + k;
+    return {
+      kind: k,
+      dir: document.getElementById(prefix + '-dir'),
+      name: document.getElementById(prefix + '-name'),
+      url: document.getElementById(prefix + '-url'),
+      file: document.getElementById(prefix + '-file'),
+      meta: document.getElementById(prefix + '-meta'),
+      browse: document.getElementById(prefix + '-browse'),
+      found: document.getElementById(prefix + '-found'),
+      upload: document.getElementById(prefix + '-upload-btn'),
+      update: document.getElementById(prefix + '-update-btn'),
+      download: document.getElementById(prefix + '-download-btn'),
+      content: document.getElementById(prefix + '-content-btn'),
+    };
+  }
+
+  function getRoutingDatPath(refs) {
+    const dir = String(refs && refs.dir && refs.dir.value || '').trim().replace(/\/+$/g, '');
+    const name = String(refs && refs.name && refs.name.value || '').trim().replace(/^\/+/, '');
+    if (!dir) return name ? ('/' + name) : '';
+    if (!name) return dir;
+    return dir + '/' + name;
+  }
+
+
+  function hasModernRoutingDatFeature() {
+    try {
+      const routingCards = getRoutingCardsFeatureApi();
+      return !!(
+        routingCards &&
+        routingCards.dat &&
+        routingCards.dat.card &&
+        typeof routingCards.dat.card.initDatCard === 'function' &&
+        typeof routingCards.dat.card.refreshDatMeta === 'function'
+      );
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function isCurrentRoutingDatCardWired() {
+    try {
+      const datBody = document.getElementById('routing-dat-body');
+      return !!(datBody && datBody.dataset && datBody.dataset.xkDatCardWired === '1');
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function ensureModernRoutingDatCardReady() {
+    if (!hasModernRoutingDatFeature()) return false;
+    if (isCurrentRoutingDatCardWired()) return true;
+
+    try {
+      const routingCards = getRoutingCardsFeatureApi();
+      const initDatCard = routingCards && routingCards.dat && routingCards.dat.card && typeof routingCards.dat.card.initDatCard === 'function'
+        ? routingCards.dat.card.initDatCard
+        : null;
+      if (initDatCard) initDatCard();
+    } catch (error) {}
+
+    return isCurrentRoutingDatCardWired();
+  }
+
+  async function confirmPanelShell(opts) {
+    const o = opts || {};
+    try {
+      if (typeof window.confirmModal === 'function') {
+        return !!(await window.confirmModal(o));
+      }
+    } catch (error) {}
+    return !!window.confirm(String(o.message || o.title || 'Подтвердите действие'));
+  }
+
+  async function listRoutingDatEntries(kind, dir) {
+    const path = String(dir || '').trim();
+    if (!path) return [];
+    try {
+      const response = await fetch('/api/fs/list?target=local&path=' + encodeURIComponent(path), { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data || data.ok === false) return [];
+      const items = Array.isArray(data.items) ? data.items : [];
+      return items.filter((item) => {
+        const type = String(item && item.type || '');
+        const name = String(item && item.name || '');
+        if (type !== 'file' && type !== 'link') return false;
+        return datFallbackMatch(kind, name);
+      });
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function renderRoutingDatFallbackList(kind, refs, entries) {
+    const found = refs && refs.found ? refs.found : null;
+    if (!found) return;
+    const list = Array.isArray(entries) ? entries.slice() : [];
+    try {
+      found.innerHTML = '';
+      if (!list.length) {
+        found.textContent = '— нет .dat';
+        return;
+      }
+      const current = String(refs && refs.name && refs.name.value || '').trim().toLowerCase();
+      list.sort((a, b) => String(a && a.name || '').localeCompare(String(b && b.name || '')));
+      list.forEach((item) => {
+        const name = String(item && item.name || '').trim();
+        if (!name) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'routing-dat-found-item' + (name.toLowerCase() === current ? ' is-current' : '');
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'routing-dat-found-name';
+        nameSpan.textContent = name;
+        const metaSpan = document.createElement('span');
+        metaSpan.className = 'routing-dat-found-meta';
+        const size = Number(item && item.size || 0);
+        const bits = [];
+        if (size > 0) bits.push(size >= 1024 ? (size / 1024 / 1024 >= 1 ? (size / 1024 / 1024).toFixed(1) + ' MB' : (size / 1024).toFixed(1) + ' KB') : (size + ' B'));
+        if (item && item.mtime) {
+          try { bits.push(new Date(Number(item.mtime) * 1000).toLocaleString()); } catch (error) {}
+        }
+        metaSpan.textContent = bits.join(' • ');
+        btn.appendChild(nameSpan);
+        btn.appendChild(metaSpan);
+        btn.addEventListener('click', () => {
+          try {
+            if (refs && refs.name) {
+              refs.name.value = name;
+              refs.name.dispatchEvent(new Event('input', { bubbles: true }));
+              refs.name.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          } catch (error) {}
+          try { found.parentElement && found.parentElement.classList.remove('is-open'); } catch (error) {}
+          try { refreshRoutingDatFallback(); } catch (error) {}
+        });
+        found.appendChild(btn);
+      });
+    } catch (error) {}
+  }
+
+  async function refreshRoutingDatFallback() {
+    try {
+      const routingCards = getRoutingCardsFeatureApi();
+      const refreshDat = routingCards && routingCards.dat && routingCards.dat.card && typeof routingCards.dat.card.refreshDatMeta === 'function'
+        ? routingCards.dat.card.refreshDatMeta
+        : null;
+      if (refreshDat) {
+        const result = refreshDat();
+        if (result && typeof result.then === 'function') await result;
+        return true;
+      }
+    } catch (error) {}
+
+    const status = document.getElementById('routing-dat-status');
+    const refsList = [getRoutingDatRefs('geosite'), getRoutingDatRefs('geoip')];
+    try {
+      if (status) status.textContent = 'Проверка…';
+      for (const refs of refsList) {
+        const path = getRoutingDatPath(refs);
+        if (!refs || !refs.meta) continue;
+        if (!path) {
+          refs.meta.textContent = '—';
+          continue;
+        }
+        try {
+          const response = await fetch('/api/fs/stat-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target: 'local', paths: [path] }),
+          });
+          const data = await response.json().catch(() => ({}));
+          const item = data && data.results && data.results[path] ? data.results[path] : null;
+          if (!response.ok || !item || item.ok === false || item.exists === false) {
+            refs.meta.textContent = 'не найден';
+          } else {
+            const bits = [];
+            if (Number(item.size || 0) > 0) bits.push(Number(item.size) >= 1024 ? (Number(item.size) / 1024 / 1024 >= 1 ? (Number(item.size) / 1024 / 1024).toFixed(1) + ' MB' : (Number(item.size) / 1024).toFixed(1) + ' KB') : (String(item.size) + ' B'));
+            if (item.mtime) {
+              try { bits.push(new Date(Number(item.mtime) * 1000).toLocaleString()); } catch (error) {}
+            }
+            refs.meta.textContent = bits.join(' • ') || 'OK';
+          }
+        } catch (error) {
+          refs.meta.textContent = '—';
+        }
+      }
+
+      try {
+        const response = await fetch('/api/routing/geodat/status', { cache: 'no-store' });
+        const data = await response.json().catch(() => ({}));
+        if (status) {
+          const installed = !!(data && (data.installed === true || (data.ok === true && data.installed)));
+          status.textContent = installed ? 'OK • xk-geodat: ✓' : 'OK • xk-geodat: ✕';
+        }
+      } catch (error) {
+        if (status) status.textContent = 'OK';
+      }
+      return true;
+    } catch (error) {
+      if (status) status.textContent = 'Ошибка';
+      return false;
+    }
+  }
+
+  async function openRoutingDatContentsFallback(kind) {
+    try {
+      const lazy = window.XKeen && window.XKeen.runtime ? window.XKeen.runtime.lazy : null;
+      if (lazy && typeof lazy.ensureFeature === 'function') {
+        await lazy.ensureFeature('datContents');
+      }
+    } catch (error) {}
+
+    try {
+      if (window.XKeen && window.XKeen.ui && window.XKeen.ui.datContents && typeof window.XKeen.ui.datContents.open === 'function') {
+        window.XKeen.ui.datContents.open(String(kind || 'geosite'));
+        return true;
+      }
+    } catch (error) {}
+
+    toastPanelShell('Модуль просмотра содержимого DAT не загрузился.', 'error');
+    return false;
+  }
+
+  function bindRoutingDatFallbackButton(button, key, handler) {
+    if (!button) return;
+    try {
+      const dataKey = 'xkDatFallback' + String(key || 'Bound');
+      if (button.dataset && button.dataset[dataKey] === '1') return;
+      button.addEventListener('click', (event) => {
+        if (ensureModernRoutingDatCardReady()) return;
+        try { event.preventDefault(); } catch (error) {}
+        try { handler(event); } catch (error) { toastPanelShell(String(error && error.message || error || 'DAT action failed'), 'error'); }
+      });
+      if (button.dataset) button.dataset[dataKey] = '1';
+    } catch (error) {}
+  }
+
+  function initRoutingDatActionsFallback() {
+    const datBody = document.getElementById('routing-dat-body');
+    if (!datBody) return;
+    if (ensureModernRoutingDatCardReady()) return;
+
+    const refreshBtn = document.getElementById('routing-dat-refresh-btn');
+    bindRoutingDatFallbackButton(refreshBtn, 'RefreshBound', () => { void refreshRoutingDatFallback(); });
+
+    const installBtn = document.getElementById('routing-dat-geodat-install-btn');
+    bindRoutingDatFallbackButton(installBtn, 'InstallBound', async () => {
+      const ok = await confirmPanelShell({
+        title: 'Установка xk-geodat',
+        message: 'Установить/обновить xk-geodat? Это включит просмотр содержимого DAT.',
+        okText: 'Установить',
+        cancelText: 'Отмена',
+      });
+      if (!ok) return;
+      const response = await fetch('/api/routing/geodat/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data || data.ok === false) throw new Error(String((data && (data.hint || data.error || data.message)) || 'install_failed'));
+      toastPanelShell(data && data.installed ? 'xk-geodat установлен.' : 'xk-geodat: команда выполнена.');
+      await refreshRoutingDatFallback();
+    });
+
+    const installFileBtn = document.getElementById('routing-dat-geodat-install-file-btn');
+    const installFileInput = document.getElementById('routing-dat-geodat-install-file');
+    bindRoutingDatFallbackButton(installFileBtn, 'InstallFileBound', () => {
+      if (!installFileInput) return;
+      try { installFileInput.value = ''; } catch (error) {}
+      installFileInput.click();
+    });
+    if (installFileInput && !(installFileInput.dataset && installFileInput.dataset.xkDatFallbackChange === '1')) {
+      installFileInput.addEventListener('change', async () => {
+        if (ensureModernRoutingDatCardReady()) return;
+        try {
+          const file = installFileInput.files && installFileInput.files[0];
+          if (!file) return;
+          const ok = await confirmPanelShell({ title: 'Установка xk-geodat', message: 'Установить xk-geodat из файла ' + String(file.name || '') + '?' });
+          if (!ok) return;
+          const fd = new FormData();
+          fd.append('file', file);
+          const response = await fetch('/api/routing/geodat/install', { method: 'POST', body: fd });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data || data.ok === false) throw new Error(String((data && (data.hint || data.error || data.message)) || 'install_failed'));
+          toastPanelShell(data && data.installed ? 'xk-geodat установлен.' : 'xk-geodat: команда выполнена.');
+          await refreshRoutingDatFallback();
+        } catch (error) {
+          toastPanelShell(String(error && error.message || error || 'install_failed'), 'error');
+        }
+      });
+      if (installFileInput.dataset) installFileInput.dataset.xkDatFallbackChange = '1';
+    }
+
+    ['geosite', 'geoip'].forEach((kind) => {
+      const refs = getRoutingDatRefs(kind);
+      if (!refs) return;
+
+      bindRoutingDatFallbackButton(refs.download, 'Download' + kind, () => {
+        const path = getRoutingDatPath(refs);
+        if (!path) {
+          toastPanelShell('Не указан путь к DAT-файлу.', 'error');
+          return;
+        }
+        window.open('/api/fs/download?target=local&path=' + encodeURIComponent(path), '_blank');
+      });
+
+      bindRoutingDatFallbackButton(refs.update, 'Update' + kind, async () => {
+        const path = getRoutingDatPath(refs);
+        const url = String(refs.url && refs.url.value || '').trim();
+        if (!path) throw new Error('Не указан путь к DAT-файлу.');
+        if (!/^https?:\/\//i.test(url)) throw new Error('Укажите корректный URL (http/https).');
+        const ok = await confirmPanelShell({ title: 'Update DAT by URL', message: 'Скачать ' + kind + ' из URL и заменить файл?\n\n' + url + '\n→ ' + path, danger: true });
+        if (!ok) return;
+        const response = await fetch('/api/routing/dat/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind, url, path }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data || data.ok === false) throw new Error(String((data && (data.error || data.message)) || 'update_failed'));
+        toastPanelShell('DAT обновлён: ' + path);
+        await refreshRoutingDatFallback();
+      });
+
+      bindRoutingDatFallbackButton(refs.content, 'Content' + kind, () => { void openRoutingDatContentsFallback(kind); });
+
+      bindRoutingDatFallbackButton(refs.upload, 'Upload' + kind, () => {
+        if (!refs.file) return;
+        try { refs.file.value = ''; } catch (error) {}
+        refs.file.click();
+      });
+      if (refs.file && !(refs.file.dataset && refs.file.dataset.xkDatFallbackChange === '1')) {
+        refs.file.addEventListener('change', async () => {
+          if (ensureModernRoutingDatCardReady()) return;
+          try {
+            const file = refs.file.files && refs.file.files[0];
+            const path = getRoutingDatPath(refs);
+            if (!file || !path) return;
+            const ok = await confirmPanelShell({ title: 'Upload DAT', message: 'Загрузить файл ' + String(file.name || '') + ' в ' + path + '?' });
+            if (!ok) return;
+            let response = await fetch('/api/fs/upload?target=local&path=' + encodeURIComponent(path), { method: 'POST', body: (() => { const fd = new FormData(); fd.append('file', file); return fd; })() });
+            let data = await response.json().catch(() => ({}));
+            if (response && response.status === 409) {
+              const overwrite = await confirmPanelShell({ title: 'Файл уже существует', message: 'Файл ' + path + ' уже существует. Перезаписать?', danger: true });
+              if (!overwrite) return;
+              response = await fetch('/api/fs/upload?target=local&path=' + encodeURIComponent(path) + '&overwrite=1', { method: 'POST', body: (() => { const fd = new FormData(); fd.append('file', file); return fd; })() });
+              data = await response.json().catch(() => ({}));
+            }
+            if (!response.ok || !data || data.ok === false) throw new Error(String((data && (data.error || data.message)) || 'upload_failed'));
+            toastPanelShell('DAT загружен: ' + path);
+            await refreshRoutingDatFallback();
+          } catch (error) {
+            toastPanelShell(String(error && error.message || error || 'upload_failed'), 'error');
+          }
+        });
+        if (refs.file.dataset) refs.file.dataset.xkDatFallbackChange = '1';
+      }
+
+      bindRoutingDatFallbackButton(refs.browse, 'Browse' + kind, async (event) => {
+        try { event.stopPropagation(); } catch (error) {}
+        const entries = await listRoutingDatEntries(kind, refs.dir && refs.dir.value);
+        renderRoutingDatFallbackList(kind, refs, entries);
+        try {
+          const root = refs.browse && typeof refs.browse.closest === 'function' ? refs.browse.closest('.routing-dat-combo') : null;
+          if (root) root.classList.toggle('is-open');
+        } catch (error) {}
+      });
+    });
+  }
+
+  function initRoutingCollapseFallbacks() {
+    if (!document.getElementById('view-routing')) return;
+
+    ensureRoutingCollapseFallback('routing-dat-header', 'routing-dat-body', 'routing-dat-arrow', 'xk.routing.dat.open.v3', false, 'dat');
+    ensureRoutingCollapseFallback('routing-backups-header', 'routing-backups-body', 'routing-backups-arrow', 'xk.routing.backups.open.v1', false, 'backups');
+    ensureRoutingCollapseFallback('routing-help-header', 'routing-help-body', 'routing-help-arrow', 'xk.routing.help.open.v1', false, 'help');
+    ensureRoutingCollapseFallback('routing-rules-header', 'routing-rules-body', 'routing-rules-arrow', 'xk.routing.rules.open.v2', false, 'rules');
+  }
+
+  function refreshOpenRoutingCards() {
+    const items = [
+      { headerId: 'routing-dat-header', kind: 'dat' },
+      { headerId: 'routing-backups-header', kind: 'backups' },
+      { headerId: 'routing-rules-header', kind: 'rules' },
+    ];
+
+    items.forEach(({ headerId, kind }) => {
+      const header = document.getElementById(headerId);
+      if (!header) return;
+      let isOpen = false;
+      try {
+        isOpen = !!(header.dataset && header.dataset.xkCollapseOpen === '1');
+      } catch (error) {}
+      if (!isOpen) return;
+      runRoutingCardOpenCallback(kind);
+    });
+  }
+
+  function scheduleRoutingInteractionRecovery() {
+    if (!document.getElementById('view-routing')) return;
+
+    const run = () => {
+      try { initRoutingCollapseFallbacks(); } catch (error) {}
+      try { initRoutingDatActionsFallback(); } catch (error) {}
+      try { refreshOpenRoutingCards(); } catch (error) {}
+    };
+
+    run();
+    try { setTimeout(run, 0); } catch (error) {}
+    try { setTimeout(run, 160); } catch (error) {}
+    try { setTimeout(run, 420); } catch (error) {}
+  }
+
   function init() {
     if (_initialized || !isPanelPage()) return false;
     _initialized = true;
@@ -1263,30 +1163,31 @@ import '../ui/xk_brand.js';
     ensureHeaderAsyncShellBinding();
     wireTabs();
     wireExplicitNavigation();
-    wireLazyFeatureClicks();
+    wirePanelLazyFeatureClicks();
     startLightweightXkeenStatusPolling();
     startLightweightXrayBadgePolling();
-    wireTerminalLazyOpen();
-    initTerminalCapabilityButtons();
+    scheduleRoutingInteractionRecovery();
+    wirePanelTerminalLazyOpen();
+    initPanelTerminalCapabilityButtons();
 
     try {
       const url = new URL(window.location.href);
       const mode = String(url.searchParams.get('terminal') || '').toLowerCase();
       if (mode === 'pty' || mode === 'shell') {
-        ensureTerminalReady();
+        appendTerminalDebug('panel:auto-open-request', { mode: mode });
+        ensurePanelTerminalReady();
       }
     } catch (e) {}
 
-    XK.ui = XK.ui || {};
-    XK.ui.tabs = XK.ui.tabs || {};
-    XK.ui.tabs.show = showView;
+    const tabsApi = ensureXkeenUiBucket('tabs');
+    if (tabsApi) tabsApi.show = showView;
     window.showView = showView;
 
     const activeBtn = document.querySelector('.top-tab-btn.active[data-view]') || document.querySelector('.top-tab-btn[data-view]');
     const remembered = restoreView();
     const initial = remembered || (activeBtn && activeBtn.dataset && activeBtn.dataset.view ? activeBtn.dataset.view : 'routing');
     showView(initial);
-    initCoreUiAutoDetect();
+    initPanelCoreUiAutoDetect();
     return true;
   }
 
@@ -1305,7 +1206,7 @@ import '../ui/xk_brand.js';
     },
   };
 
-  XK.pages.panelShell = api;
+  publishXkeenPageApi('panelShell', api);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
@@ -1315,3 +1216,44 @@ import '../ui/xk_brand.js';
     api.init();
   }
 })();
+
+
+export function getPanelShellApi() {
+  try {
+    const api = getXkeenPageApi('panelShell');
+    return api && typeof api.showView === 'function' ? api : null;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function callPanelShellApi(method, ...args) {
+  const api = getPanelShellApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initPanelShell(...args) {
+  return callPanelShellApi('init', ...args);
+}
+
+export function showPanelShellView(...args) {
+  return callPanelShellApi('showView', ...args);
+}
+
+export function getCurrentPanelShellView(...args) {
+  return callPanelShellApi('getCurrentView', ...args);
+}
+
+export function isPanelShellInitialized(...args) {
+  return !!callPanelShellApi('isInitialized', ...args);
+}
+
+export const panelShellApi = Object.freeze({
+  get: getPanelShellApi,
+  init: initPanelShell,
+  showView: showPanelShellView,
+  getCurrentView: getCurrentPanelShellView,
+  isInitialized: isPanelShellInitialized,
+});

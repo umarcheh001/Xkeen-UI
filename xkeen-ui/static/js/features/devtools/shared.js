@@ -1,10 +1,14 @@
+import { getDevtoolsNamespace, setDevtoolsNamespaceApi } from '../devtools_namespace.js';
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-  const api = XK.features.devtoolsShared = XK.features.devtoolsShared || {};
+  const DT = getDevtoolsNamespace();
+  const api = DT.devtoolsShared || {};
+  DT.devtoolsShared = api;
 
   const CORE_DOM = (XK.core && XK.core.dom) ? XK.core.dom : null;
   const CORE_HTTP = (XK.core && XK.core.http) ? XK.core.http : null;
@@ -362,5 +366,6 @@
   api.toColorPickerValue = toColorPickerValue;
   api.parseHexWithAlpha = parseHexWithAlpha;
   api.hex8 = hex8;
-  api.mkThemeField = mkThemeField; 
+  api.mkThemeField = mkThemeField;
+  setDevtoolsNamespaceApi('devtoolsShared', api);
 })();

@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager selection helpers (visible selection, focus/anchor, mask)
-  // attach to window.XKeen.features.fileManager.selection
+  // attach to the shared file manager namespace.selection
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
 
   FM.selection = FM.selection || {};
   const SEL = FM.selection;

@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // Bookmarks / Quick Paths for File Manager.
-  // No ES modules / bundler: attach to window.XKeen.features.fileManager.bookmarks.
+  // No ES modules / bundler: attach to the shared file manager namespace.bookmarks.
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
   const C = FM.common || {};
   const ST = FM.state || {};
 
@@ -21,10 +21,8 @@
   }
 
   function _toast(msg, kind) {
-    try { if (typeof window.toast === 'function') return window.toast(msg, kind); } catch (e) {}
-    try {
-      if (window.XKeen && XKeen.ui && typeof XKeen.ui.toast === 'function') return XKeen.ui.toast(msg, kind);
-    } catch (e2) {}
+    try { if (C && typeof C.toast === 'function') return C.toast(msg, kind); } catch (e) {}
+    return undefined;
   }
 
   // -------------------------- trash root --------------------------

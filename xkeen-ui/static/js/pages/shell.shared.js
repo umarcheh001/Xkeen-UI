@@ -1,3 +1,6 @@
+window.XKeen = window.XKeen || {};
+const XKeen = window.XKeen;
+
 // Shared shell-side effects for gradual Vite adoption.
 //
 // These modules are safe to execute as ESM side-effect imports: they keep
@@ -10,3 +13,4 @@ import '../core/xk_store.js';
 import '../ui/toast.js';
 import '../ui/settings.js?v=20260308-stage2';
 import '../features/service_status.js';
+import '../features/feature_access.js';

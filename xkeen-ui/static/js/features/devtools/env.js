@@ -1,11 +1,14 @@
+import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_namespace.js';
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   const XK = window.XKeen;
-  XK.features = XK.features || {};
+  const DT = getDevtoolsNamespace();
 
-  const SH = (XK.features && XK.features.devtoolsShared) ? XK.features.devtoolsShared : {};
+  const SH = getDevtoolsSharedApi() || {};
   const toast = SH.toast || function (m) { try { console.log(m); } catch (e) {} };
   const getJSON = SH.getJSON || (async (u) => {
     const r = await fetch(u, { cache: 'no-store' });
@@ -594,7 +597,7 @@
       renderEnv(data.items || [], data.env_file || '');
 
       // Refresh logs list/tail (if module is present)
-      const logs = XK.features && XK.features.devtoolsLogs ? XK.features.devtoolsLogs : null;
+      const logs = DT.devtoolsLogs || null;
       if (logs && typeof logs.loadLogList === 'function') await logs.loadLogList(true);
       if (logs && typeof logs.loadLogTail === 'function') await logs.loadLogTail(false);
     } catch (e) {
@@ -614,11 +617,11 @@
     loadEnv();
   }
 
-  XK.features.devtoolsEnv = {
+  setDevtoolsNamespaceApi('devtoolsEnv', {
     init,
     loadEnv,
     renderEnv,
     saveLoggingSettings,
     syncLoggingControls,
-  };
+  });
 })();

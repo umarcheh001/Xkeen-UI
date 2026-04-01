@@ -1,9 +1,12 @@
+import { getDonateApi } from './donate.js';
+
+let uiPrefsIoModuleApi = null;
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
 
   const Feature = {};
 
@@ -250,8 +253,9 @@
 
     // donate visibility / devtools toggle
     try {
-      if (XK && XK.features && XK.features.donate && typeof XK.features.donate.init === 'function') {
-        XK.features.donate.init();
+      const donateApi = getDonateApi();
+      if (donateApi && typeof donateApi.init === 'function') {
+        donateApi.init();
       }
     } catch (e) {}
 
@@ -526,7 +530,26 @@
     else wire();
   };
 
-  XK.features.uiPrefsIO = Feature;
+  uiPrefsIoModuleApi = Feature;
 
   try { Feature.init(); } catch (e) {}
 })();
+export function getUiPrefsIoApi() {
+  try {
+    if (uiPrefsIoModuleApi && typeof uiPrefsIoModuleApi.init === 'function') return uiPrefsIoModuleApi;
+  } catch (error) {
+    return null;
+  }
+  return null;
+}
+
+export function initUiPrefsIo(...args) {
+  const api = getUiPrefsIoApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export const uiPrefsIoApi = Object.freeze({
+  get: getUiPrefsIoApi,
+  init: initUiPrefsIo,
+});

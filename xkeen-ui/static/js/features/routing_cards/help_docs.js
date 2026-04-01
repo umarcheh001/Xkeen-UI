@@ -1,3 +1,5 @@
+import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
+
 /*
   routing_cards/help_docs.js
   RC-05: Routing field docs extracted from routing_cards.js.
@@ -7,8 +9,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.state = RC.state || {};
 
   if (RC.ROUTING_FIELD_DOCS) return;

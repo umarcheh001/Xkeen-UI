@@ -1,39 +1,41 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+import {
+  attachXkeenEditorToolbar,
+  getXkeenEditorToolbarDefaultItems,
+  getXkeenEditorToolbarIcons,
+} from '../xkeen_runtime.js';
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
+  const C = FM.common || {};
 
   // Local helpers (keep module independent from file_manager.js impl details)
   function el(id) {
-    try { return document.getElementById(id); } catch (e) { return null; }
+    try { if (C && typeof C.el === 'function') return C.el(id); } catch (e) {}
+    try { return document.getElementById(id); } catch (e2) { return null; }
   }
 
   function modalOpen(modal) {
+    try { if (C && typeof C.modalOpen === 'function') return C.modalOpen(modal); } catch (e) {}
     if (!modal) return;
-    try { modal.classList.remove('hidden'); } catch (e) {}
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.add('modal-open');
-      }
-    } catch (e) {}
+    try { modal.classList.remove('hidden'); } catch (e2) {}
+    try { document.body.classList.add('modal-open'); } catch (e3) {}
   }
 
   function modalClose(modal) {
+    try { if (C && typeof C.modalClose === 'function') return C.modalClose(modal); } catch (e) {}
     if (!modal) return;
-    try { modal.classList.add('hidden'); } catch (e) {}
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.remove('modal-open');
-      }
-    } catch (e) {}
+    try { modal.classList.add('hidden'); } catch (e2) {}
+    try { document.body.classList.remove('modal-open'); } catch (e3) {}
+  }
+
+  function toast(msg, level) {
+    try { if (C && typeof C.toast === 'function') return C.toast(msg, level); } catch (e) {}
+    return undefined;
   }
 
   function api() {
@@ -251,7 +253,8 @@
 
   // -------------------------- engine helpers --------------------------
   function getEditorEngineHelper() {
-    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+    try { if (C && typeof C.getEditorEngine === 'function') return C.getEditorEngine(); } catch (e) {}
+    return null;
   }
 
   function normalizeEngine(v) {
@@ -657,7 +660,8 @@
       btn.className = 'xkeen-cm-tool';
       try { btn.dataset.actionId = 'fs_any'; } catch (e) {}
       try { btn.dataset.tip = 'Фулскрин (Esc)'; } catch (e) {}
-      btn.innerHTML = (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.fullscreen) ? window.XKEEN_CM_ICONS.fullscreen : '⛶';
+      const toolbarIcons = getXkeenEditorToolbarIcons();
+      btn.innerHTML = toolbarIcons && toolbarIcons.fullscreen ? toolbarIcons.fullscreen : '⛶';
       btn.addEventListener('click', () => {
         try { toggleEditorFullscreen(STATE.cm, els()); } catch (e) {}
       });
@@ -1035,18 +1039,19 @@ function syncToolbarForEngine(engine) {
     } catch (e) {}
 
     try {
-      if (window.xkeenAttachCmToolbar && window.XKEEN_CM_TOOLBAR_DEFAULT) {
-        const baseItems = window.XKEEN_CM_TOOLBAR_DEFAULT;
-        const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
+      const baseItems = getXkeenEditorToolbarDefaultItems();
+      if (Array.isArray(baseItems) && baseItems.length) {
+        const items = baseItems.map((it) => {
           if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cmRef) => toggleEditorFullscreen(cmRef, els()) });
           return it;
         });
 
         try {
-          if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
+          const toolbarIcons = getXkeenEditorToolbarIcons();
+          if (toolbarIcons && toolbarIcons.fullscreen && !items.some((it) => it && it.id === 'fs_any')) {
             items.push({
               id: 'fs_any',
-              svg: window.XKEEN_CM_ICONS.fullscreen,
+              svg: toolbarIcons.fullscreen,
               label: 'Фулскрин',
               fallbackHint: 'F11 / Esc',
               onClick: () => toggleEditorFullscreen(cm, els()),
@@ -1054,7 +1059,7 @@ function syncToolbarForEngine(engine) {
           }
         } catch (e) {}
 
-        window.xkeenAttachCmToolbar(cm, items);
+        attachXkeenEditorToolbar(cm, items);
         try { syncToolbarForEngine('codemirror'); } catch (e) {}
       }
     } catch (e) {}
@@ -1276,7 +1281,7 @@ function syncToolbarForEngine(engine) {
       const runtime = await ensureEditorRuntime('monaco');
       if (!runtime || typeof runtime.create !== 'function' || !ui.monacoHost) {
         // No Monaco infra → fallback.
-        try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
+        try { toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
         return activateEngine('codemirror', { ctx, text, preserveView: false, initialView: view });
       }
 
@@ -1292,7 +1297,7 @@ function syncToolbarForEngine(engine) {
       });
 
       if (!ed) {
-        try { if (window.toast) window.toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
+        try { toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
         try {
           const ee = getEditorEngineHelper();
           if (ee && typeof ee.set === 'function') await ee.set('codemirror');
@@ -1434,8 +1439,8 @@ function syncToolbarForEngine(engine) {
     if (has && STATE.dirty) {
       let ok = true;
       try {
-        if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-          ok = await XKeen.ui.confirm({
+        if (C && typeof C.confirm === 'function') {
+          ok = await C.confirm({
             title: 'Несохранённые изменения',
             message: 'Закрыть файл без сохранения?',
             okText: 'Закрыть',
@@ -1500,7 +1505,7 @@ function syncToolbarForEngine(engine) {
     if (validation && validation.ok === false) {
       const msg = validation.summary || 'JSON содержит ошибку. Сохранение отменено.';
       setInfo({ err: msg });
-      try { if (window.toast) window.toast(msg, 'error'); } catch (e) {}
+      try { toast(msg, 'error'); } catch (e) {}
       try { const fac = activeFacade(); if (fac && typeof fac.focus === 'function') fac.focus(); } catch (e2) {}
       return;
     }
@@ -1529,7 +1534,7 @@ function syncToolbarForEngine(engine) {
     if (!out || !out.res || out.res.status < 200 || out.res.status >= 300 || !(out.data && out.data.ok)) {
       const errMsg = (out && out.data && out.data.error) ? String(out.data.error) : 'save_failed';
       setInfo({ err: 'Не удалось сохранить: ' + errMsg });
-      try { if (window.toast) window.toast('FM: не удалось сохранить файл', 'error'); } catch (e) {}
+      try { toast('FM: не удалось сохранить файл', 'error'); } catch (e) {}
       try { if (ui.saveBtn) ui.saveBtn.disabled = false; } catch (e2) {}
       return;
     }
@@ -1537,7 +1542,7 @@ function syncToolbarForEngine(engine) {
     STATE.lastSaved = text;
     STATE.dirty = false;
     setInfo({ err: '' });
-    try { if (window.toast) window.toast('Сохранено: ' + (ctx.name || 'файл'), 'success'); } catch (e) {}
+    try { toast('Сохранено: ' + (ctx.name || 'файл'), 'success'); } catch (e) {}
 
     try { updateDirtyUI(); } catch (e) {}
     try { saveCurrentViewState(); } catch (e) {}

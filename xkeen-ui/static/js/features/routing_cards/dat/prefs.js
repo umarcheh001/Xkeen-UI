@@ -1,3 +1,5 @@
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 /*
   routing_cards/dat/prefs.js
   DAT card prefs + path helpers.
@@ -9,9 +11,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.state = RC.state || {};
 
   RC.dat = RC.dat || {};
@@ -45,14 +45,25 @@
     return d + '/' + n;
   }
 
+  function mergeKindDefaults(kind, value) {
+    const k = String(kind || '').toLowerCase() === 'geoip' ? 'geoip' : 'geosite';
+    const merged = { ...(DEFAULTS[k] || {}), ...((value && typeof value === 'object') ? value : {}) };
+
+    if (!String(merged.dir || '').trim()) merged.dir = DEFAULTS[k].dir;
+    if (!String(merged.name || '').trim()) merged.name = DEFAULTS[k].name;
+    if (!String(merged.url || '').trim()) merged.url = DEFAULTS[k].url;
+
+    return merged;
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(PREF_KEY);
       if (!raw) return cloneDefaults();
       const v = JSON.parse(raw);
       return {
-        geosite: { ...DEFAULTS.geosite, ...(v.geosite || {}) },
-        geoip: { ...DEFAULTS.geoip, ...(v.geoip || {}) },
+        geosite: mergeKindDefaults('geosite', v.geosite || {}),
+        geoip: mergeKindDefaults('geoip', v.geoip || {}),
       };
     } catch (e) {
       return cloneDefaults();

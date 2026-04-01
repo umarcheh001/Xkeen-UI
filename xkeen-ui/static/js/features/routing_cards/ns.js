@@ -1,17 +1,9 @@
+import { initRoutingCardsNamespace } from '../routing_cards_namespace.js';
+
 /*
-  routing_cards namespace + state container
+  routing_cards namespace bootstrap
 
-  Goal: keep routing cards modular and avoid relying on IIFE-closure globals.
-  This file is intentionally tiny and safe to load multiple times.
+  Goal: keep routing cards modular and avoid relying on window.XKeen.features
+  as the canonical namespace root.
 */
-(function () {
-  'use strict';
-
-  window.XKeen = window.XKeen || {};
-  const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
-  RC.state = RC.state || {};
-  RC.__nsReady = true;
-})();
+initRoutingCardsNamespace();

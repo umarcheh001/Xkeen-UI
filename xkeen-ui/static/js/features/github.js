@@ -1,3 +1,16 @@
+let githubModuleApi = null;
+
+import { getRoutingApi } from './routing.js';
+import { getInboundsApi } from './inbounds.js';
+import { getXkeenTextsApi } from './xkeen_texts.js';
+import {
+  closeXkeenModal,
+  getXkeenGithubRepoUrl,
+  getXkeenPageConfigShellApi,
+  openXkeenModal,
+  toastXkeen,
+} from './xkeen_runtime.js';
+
 (() => {
   // GitHub / config-server integration (configs catalog + import/export)
   // Public API:
@@ -5,9 +18,6 @@
   //   XKeen.github.openExportModal(), closeExportModal()
   //   XKeen.github.openCatalogModal(), closeCatalogModal()
   //   XKeen.github.exportUserConfigsToGithub(), importUserConfigById(id)
-
-  window.XKeen = window.XKeen || {};
-  XKeen.github = XKeen.github || {};
 
   let _inited = false;
   let _repoUrl = '';
@@ -17,37 +27,12 @@
     return document.getElementById(id);
   }
 
-  function getModalApi() {
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal) return XKeen.ui.modal;
-    } catch (e) {}
-    return null;
-  }
-
   function showModal(modal, source) {
-    if (!modal) return false;
-    const api = getModalApi();
-    try {
-      if (api && typeof api.open === 'function') return api.open(modal, { source: source || 'github' });
-    } catch (e) {}
-    try { modal.classList.remove('hidden'); } catch (e2) {}
-    try {
-      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
-    } catch (e3) {}
-    return true;
+    return openXkeenModal(modal, source || 'github', true);
   }
 
   function hideModal(modal, source) {
-    if (!modal) return false;
-    const api = getModalApi();
-    try {
-      if (api && typeof api.close === 'function') return api.close(modal, { source: source || 'github' });
-    } catch (e) {}
-    try { modal.classList.add('hidden'); } catch (e2) {}
-    try {
-      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
-    } catch (e3) {}
-    return true;
+    return closeXkeenModal(modal, source || 'github', false);
   }
 
   function setCatalogMessage({ status = '', error = '', stale = false, loading = false } = {}) {
@@ -83,7 +68,7 @@
   function setStatus(msg, isError) {
     const statusEl = el('routing-status');
     if (statusEl) statusEl.textContent = String(msg ?? '');
-    if (msg) toast(msg, !!isError);
+    if (msg) toastXkeen(msg, !!isError);
   }
 
   function openExportModal() {
@@ -115,20 +100,16 @@
   }
 
   function openRepository() {
-    const url = _repoUrl || window.XKEEN_GITHUB_REPO_URL;
+    const url = _repoUrl || getXkeenGithubRepoUrl();
     if (url) {
       window.open(url, '_blank');
     } else {
-      toast('URL репозитария не настроен на сервере (XKEEN_GITHUB_REPO_URL).', true);
+      toastXkeen('URL репозитория не настроен на сервере.', true);
     }
   }
 
   function getConfigShellApi() {
-    try {
-      const api = window.XKeen && XKeen.pages ? XKeen.pages.configShell : null;
-      return api && typeof api.activateRoutingView === 'function' ? api : null;
-    } catch (e) {}
-    return null;
+    return getXkeenPageConfigShellApi();
   }
 
   async function refreshAfterImport() {
@@ -138,7 +119,7 @@
         if (configShell && typeof configShell.activateRoutingView === 'function') {
           await configShell.activateRoutingView({ reason: 'github-import', force: true });
         }
-        const api = window.XKeen && XKeen.routing ? XKeen.routing : null;
+        const api = getRoutingApi();
         if (api && typeof api.load === 'function') await api.load();
       },
       async () => {
@@ -146,11 +127,11 @@
         if (configShell && typeof configShell.ensureInboundsReady === 'function') {
           await configShell.ensureInboundsReady();
         }
-        const api = window.XKeen && XKeen.features ? XKeen.features.inbounds : null;
+        const api = getInboundsApi();
         if (api && typeof api.load === 'function') await api.load();
       },
       async () => {
-        const texts = window.XKeen && XKeen.features ? XKeen.features.xkeenTexts : null;
+        const texts = getXkeenTextsApi();
         if (texts && typeof texts.reloadAll === 'function') await texts.reloadAll();
       },
     ];
@@ -376,7 +357,7 @@
     // Update repository link if present.
     const repoLink = el('github-repo-link');
     if (repoLink) {
-      const url = _repoUrl || window.XKEEN_GITHUB_REPO_URL;
+      const url = _repoUrl || getXkeenGithubRepoUrl();
       if (url) {
         repoLink.href = url;
         // Prefer opening via normal <a>, but also keep a fallback.
@@ -459,15 +440,78 @@
 
   }
 
-  XKeen.github.init = init;
-
-  // Export the rest of the API for future pages/features.
-  XKeen.github.openExportModal = openExportModal;
-  XKeen.github.closeExportModal = closeExportModal;
-  XKeen.github.openCatalogModal = openCatalogModal;
-  XKeen.github.closeCatalogModal = closeCatalogModal;
-  XKeen.github.openRepository = openRepository;
-  XKeen.github.exportUserConfigsToGithub = exportUserConfigsToGithub;
-  XKeen.github.loadCatalog = loadCatalog;
-  XKeen.github.importUserConfigById = importUserConfigById;
+  githubModuleApi = {
+    init,
+    openExportModal,
+    closeExportModal,
+    openCatalogModal,
+    closeCatalogModal,
+    openRepository,
+    exportUserConfigsToGithub,
+    loadCatalog,
+    importUserConfigById,
+  };
 })();
+export function getGithubApi() {
+  try {
+    if (githubModuleApi && typeof githubModuleApi.init === 'function') return githubModuleApi;
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function callGithubApi(method, ...args) {
+  const api = getGithubApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initGithub(...args) {
+  return callGithubApi('init', ...args);
+}
+
+export function openGithubExportModal(...args) {
+  return callGithubApi('openExportModal', ...args);
+}
+
+export function closeGithubExportModal(...args) {
+  return callGithubApi('closeExportModal', ...args);
+}
+
+export function openGithubCatalogModal(...args) {
+  return callGithubApi('openCatalogModal', ...args);
+}
+
+export function closeGithubCatalogModal(...args) {
+  return callGithubApi('closeCatalogModal', ...args);
+}
+
+export function openGithubRepository(...args) {
+  return callGithubApi('openRepository', ...args);
+}
+
+export function exportGithubUserConfigs(...args) {
+  return callGithubApi('exportUserConfigsToGithub', ...args);
+}
+
+export function loadGithubCatalog(...args) {
+  return callGithubApi('loadCatalog', ...args);
+}
+
+export function importGithubUserConfigById(...args) {
+  return callGithubApi('importUserConfigById', ...args);
+}
+
+export const githubApi = Object.freeze({
+  get: getGithubApi,
+  init: initGithub,
+  openExportModal: openGithubExportModal,
+  closeExportModal: closeGithubExportModal,
+  openCatalogModal: openGithubCatalogModal,
+  closeCatalogModal: closeGithubCatalogModal,
+  openRepository: openGithubRepository,
+  exportUserConfigsToGithub: exportGithubUserConfigs,
+  loadCatalog: loadGithubCatalog,
+  importUserConfigById: importGithubUserConfigById,
+});

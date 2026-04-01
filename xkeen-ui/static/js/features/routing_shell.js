@@ -1,12 +1,10 @@
+let routingShellModuleApi = null;
+
 (() => {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  const XK = window.XKeen;
-  XK.state = XK.state || {};
-  XK.features = XK.features || {};
-
-  const shell = XK.features.routingShell = XK.features.routingShell || {};
+  const shell = routingShellModuleApi || {};
+  routingShellModuleApi = shell;
   const state = shell.state = shell.state || {};
   state.layers = state.layers || {};
 
@@ -17,8 +15,6 @@
   function syncCompat() {
     try { window.routingSavedContent = String(state.savedContent ?? ''); } catch (e) {}
     try { window.routingIsDirty = !!state.dirty; } catch (e) {}
-    try { XK.state.routingEditor = state.editor || null; } catch (e) {}
-    try { XK.state.routingEditorFacade = state.facade || null; } catch (e) {}
   }
 
   function getTextarea() {
@@ -218,19 +214,25 @@
   }
   if (!hasOwn(state, 'engine')) state.engine = 'codemirror';
   if (!hasOwn(state, 'editor')) {
-    try {
-      state.editor = XK.state.routingEditor || null;
-    } catch (e) {
-      state.editor = null;
-    }
+    state.editor = null;
   }
   if (!hasOwn(state, 'facade')) {
-    try {
-      state.facade = XK.state.routingEditorFacade || null;
-    } catch (e) {
-      state.facade = null;
-    }
+    state.facade = null;
   }
 
   syncCompat();
 })();
+
+
+export function getRoutingShellApi() {
+  try {
+    return routingShellModuleApi && typeof routingShellModuleApi.getState === 'function'
+      ? routingShellModuleApi
+      : null;
+  } catch (error) {}
+  return null;
+}
+
+export const routingShellApi = Object.freeze({
+  get: getRoutingShellApi,
+});

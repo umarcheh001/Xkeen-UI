@@ -1,29 +1,32 @@
+import { getXrayLogLineClass } from './xray_log_line_class.js';
+import {
+  closeXkeenModal,
+  confirmXkeenAction,
+  escapeXkeenHtml,
+  getXkeenSettingsApi,
+  isXkeenMipsRuntime,
+  openXkeenModal,
+  syncXkeenBodyScrollLock,
+  toastXkeen,
+} from './xkeen_runtime.js';
+
+let xrayLogsModuleApi = null;
+
 (() => {
   // Xray live logs: subscribe/poll, filters, start/stop, UI rendering.
   //
   // Public API:
-  //   XKeen.features.xrayLogs.init()
-  //   XKeen.features.xrayLogs.start() / stop()
-  //   XKeen.features.xrayLogs.viewOnce()
-  //   XKeen.features.xrayLogs.changeFile(file)
-  //   XKeen.features.xrayLogs.refreshStatus()
+  //   xrayLogsApi.init()
+  //   xrayLogsApi.start() / stop()
+  //   xrayLogsApi.viewOnce()
+  //   xrayLogsApi.changeFile(file)
+  //   xrayLogsApi.refreshStatus()
   //
-  // Backwards-compat (used by inline HTML onclick/onchange + main.js):
-  //   window.startXrayLogAuto / stopXrayLogAuto / refreshXrayLogStatus / setXrayLogLampState
-  //   window.fetchXrayLogsOnce / applyXrayLogFilterToOutput / xrayLogsView / xrayLogsEnable / ...
-
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.ui = XKeen.ui || {};
-  XKeen.util = XKeen.util || {};
-
   function isPerfLite() {
     try {
       if (document.body && document.body.classList && document.body.classList.contains('xk-perf-lite')) return true;
     } catch (e) {}
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-    } catch (e2) {}
+    if (isXkeenMipsRuntime()) return true;
     return false;
   }
 
@@ -33,12 +36,7 @@
   const MAX_MAX_LINES = 5000;
 
   function toast(message, kindOrOptions) {
-    try {
-      if (typeof window.toast === 'function') return window.toast(message, kindOrOptions);
-      if (XKeen.ui && typeof XKeen.ui.toast === 'function') return XKeen.ui.toast(message, kindOrOptions);
-      if (typeof window.showToast === 'function') return window.showToast(message, kindOrOptions);
-    } catch (e) {}
-    return null;
+    return toastXkeen(message, kindOrOptions);
   }
 
   function actionToast(id, message, kindOrOptions) {
@@ -60,11 +58,7 @@
 
   async function confirmAction(options) {
     const opts = (options && typeof options === 'object') ? options : {};
-    try {
-      if (XKeen.ui && typeof XKeen.ui.confirm === 'function') return !!(await XKeen.ui.confirm(opts));
-    } catch (e) {}
-
-    const ok = window.confirm(buildConfirmText(opts));
+    const ok = await confirmXkeenAction(opts, buildConfirmText(opts));
     if (!ok && opts.cancelMessage) {
       actionToast('xray-logs-confirm-cancel', String(opts.cancelMessage || ''), String(opts.cancelKind || 'info'));
     }
@@ -148,10 +142,7 @@
   };
 
   function getSettingsApi() {
-    try {
-      if (XKeen.ui && XKeen.ui.settings) return XKeen.ui.settings;
-    } catch (e) {}
-    return null;
+    return getXkeenSettingsApi();
   }
 
   function readSharedUiSettingsSnapshot() {
@@ -753,15 +744,23 @@
     if (!badge) return;
 
     const nextState = state === 'on' ? 'on' : 'off';
-    const nextLevel = level ? String(level) : '';
+    const nextLevel = String(level || '').trim().toLowerCase();
+    const nextLive = (_streaming && nextState === 'on') ? 'on' : 'off';
+    let title = 'Логи Xray выключены.';
+
     badge.dataset.state = nextState;
+    badge.dataset.level = nextLevel || 'none';
+    badge.dataset.live = nextLive;
 
     if (nextState === 'on') {
-      badge.title = nextLevel ? `Логи Xray включены (loglevel=${nextLevel}).` : 'Логи Xray включены.';
-      return;
+      title = nextLevel && nextLevel !== 'none'
+        ? ('Логи Xray включены (loglevel=' + nextLevel + ').')
+        : 'Логи Xray включены.';
+      if (nextLive === 'on') title += ' Live stream активен.';
     }
 
-    badge.title = 'Логи Xray выключены.';
+    badge.title = title;
+    try { badge.setAttribute('aria-label', title); } catch (e) {}
   }
 
   function renderXrayLogLampLayer(dom, state) {
@@ -1273,17 +1272,7 @@
 
 
   function escapeHtml(str) {
-    try {
-      if (window.XKeen && XKeen.util && typeof XKeen.util.escapeHtml === 'function') {
-        return XKeen.util.escapeHtml(str);
-      }
-    } catch (e) {}
-    try {
-      if (typeof window.escapeHtml === 'function') return window.escapeHtml(str);
-    } catch (e) {}
-    // ultra-fallback
-    if (str == null) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return escapeXkeenHtml(str);
   }
 
   // Normalize log lines coming from backend (tail/WS) so that:
@@ -1545,13 +1534,7 @@
   }
 
   function _syncBodyScrollLock() {
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.toggle('modal-open', !!_isFullscreen);
-      }
-    } catch (e) {}
+    try { syncXkeenBodyScrollLock(!!_isFullscreen); } catch (e) {}
   }
 
   function _updateFullscreenBtn() {
@@ -1720,34 +1703,6 @@
       setXrayHeaderBadgeState('off', 'none');
     }
   }
-
-  function getXrayLogLineClass(line) {
-    const lower = (line || '').toLowerCase();
-
-    if (
-      lower.includes('error') ||
-      lower.includes('fail') ||
-      lower.includes('failed') ||
-      lower.includes('fatal')
-    ) {
-      return 'log-line log-line-error';
-    }
-
-    if (lower.includes('warning') || lower.includes('warn')) {
-      return 'log-line log-line-warning';
-    }
-
-    if (lower.includes('info')) {
-      return 'log-line log-line-info';
-    }
-
-    if (lower.includes('debug')) {
-      return 'log-line log-line-debug';
-    }
-
-    return 'log-line';
-  }
-
 
   // ---------- Clickable log level badges + quick filters (frontend-only) ----------
 
@@ -2661,6 +2616,7 @@
 
     // UI: этот индикатор показывает только автообновление (stream), а не loglevel.
     setXrayLogLampState('on');
+    try { setXrayHeaderBadgeState((_activeLogLevel && _activeLogLevel !== 'none') ? 'on' : 'off', _activeLogLevel || 'none'); } catch (e) {}
 
     // Sync UI toggle
     try {
@@ -2714,6 +2670,7 @@
     _pendingCount = 0;
     try { updatePauseButton(); } catch (e) {}
     setXrayLogLampState('off');
+    try { setXrayHeaderBadgeState((_activeLogLevel && _activeLogLevel !== 'none') ? 'on' : 'off', _activeLogLevel || 'none'); } catch (e) {}
 
     // IMPORTANT: do NOT force-toggle the "Live" checkbox here.
     // The checkbox is treated as a user preference and is persisted via /api/ui-settings
@@ -3289,12 +3246,7 @@ function openXrayContextModal(idx, radius) {
 
   out.textContent = lines.join('\n');
   try {
-    if (XKeen.ui.modal && typeof XKeen.ui.modal.open === 'function') {
-      XKeen.ui.modal.open(modal, { source: 'xray_logs_context' });
-    } else {
-      modal.classList.remove('hidden');
-      if (XKeen.ui.modal && XKeen.ui.modal.syncBodyScrollLock) XKeen.ui.modal.syncBodyScrollLock();
-    }
+    openXkeenModal(modal, 'xray_logs_context', true);
   } catch (e) {}
 }
 
@@ -3302,12 +3254,7 @@ function closeXrayContextModal() {
   const modal = $('xray-context-modal');
   if (!modal) return;
   try {
-    if (XKeen.ui.modal && typeof XKeen.ui.modal.close === 'function') {
-      XKeen.ui.modal.close(modal, { source: 'xray_logs_context' });
-    } else {
-      modal.classList.add('hidden');
-      if (XKeen.ui.modal && XKeen.ui.modal.syncBodyScrollLock) XKeen.ui.modal.syncBodyScrollLock();
-    }
+    closeXkeenModal(modal, 'xray_logs_context', false);
   } catch (e) {}
 }
 
@@ -3785,6 +3732,7 @@ function bindFilterUi() {
     // По умолчанию автообновление выключено
     _streaming = false;
     try { setXrayLogLampState('off'); } catch (e) {}
+    try { setXrayHeaderBadgeState((_activeLogLevel && _activeLogLevel !== 'none') ? 'on' : 'off', _activeLogLevel || 'none'); } catch (e) {}
 
     // Restore UI preferences for this page (file/live/follow/interval/lines/filter/height)
     // BEFORE wiring listeners, so we don't accidentally trigger actions.
@@ -3856,33 +3804,7 @@ function bindFilterUi() {
     applyFilter: applyXrayLogFilterToOutput,
   };
 
-  XKeen.features.xrayLogs = api;
-
-  // Backwards-compat globals
-  window.setXrayLogLampState = setXrayLogLampState;
-  window.refreshXrayLogStatus = refreshXrayLogStatus;
-
-  // Backwards-compat helper used by main.js restart-log renderer
-  // (main.js calls getXrayLogLineClass(line) to colorize log lines)
-  window.getXrayLogLineClass = getXrayLogLineClass;
-
-  window.fetchXrayLogsOnce = fetchXrayLogsOnce;
-  window.applyXrayLogFilterToOutput = applyXrayLogFilterToOutput;
-
-  window.startXrayLogAuto = startXrayLogAuto;
-  window.stopXrayLogAuto = stopXrayLogAuto;
-
-  window.xrayLogsView = xrayLogsView;
-  window.xrayLogsClearScreen = xrayLogsClearScreen;
-  window.xrayLogChangeFile = xrayLogChangeFile;
-
-  window.xrayLogsEnable = xrayLogsEnable;
-  window.xrayLogsDisable = xrayLogsDisable;
-  window.xrayLogsClear = xrayLogsClear;
-  window.xrayLogsCopy = xrayLogsCopy;
-
-  // Optional alias used in some older code
-  window.xrayLogApplyFilter = applyXrayLogFilterToOutput;
+  xrayLogsModuleApi = api;
 
   // Auto-init
   if (document.readyState === 'loading') {
@@ -3891,3 +3813,80 @@ function bindFilterUi() {
     init();
   }
 })();
+export function getXrayLogsApi() {
+  try {
+    return xrayLogsModuleApi && typeof xrayLogsModuleApi.init === 'function' ? xrayLogsModuleApi : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function callXrayLogsApi(method, ...args) {
+  const api = getXrayLogsApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initXrayLogs(...args) {
+  return callXrayLogsApi('init', ...args);
+}
+
+export function startXrayLogsAuto(...args) {
+  return callXrayLogsApi('start', ...args);
+}
+
+export function stopXrayLogsAuto(...args) {
+  return callXrayLogsApi('stop', ...args);
+}
+
+export function viewXrayLogsOnce(...args) {
+  return callXrayLogsApi('viewOnce', ...args);
+}
+
+export function clearXrayLogsScreen(...args) {
+  return callXrayLogsApi('clearScreen', ...args);
+}
+
+export function changeXrayLogsFile(...args) {
+  return callXrayLogsApi('changeFile', ...args);
+}
+
+export function enableXrayLogs(...args) {
+  return callXrayLogsApi('enable', ...args);
+}
+
+export function disableXrayLogs(...args) {
+  return callXrayLogsApi('disable', ...args);
+}
+
+export function clearXrayLogsFiles(...args) {
+  return callXrayLogsApi('clearFiles', ...args);
+}
+
+export function copyXrayLogs(...args) {
+  return callXrayLogsApi('copy', ...args);
+}
+
+export function refreshXrayLogsStatus(...args) {
+  return callXrayLogsApi('refreshStatus', ...args);
+}
+
+export function applyXrayLogsFilter(...args) {
+  return callXrayLogsApi('applyFilter', ...args);
+}
+
+export const xrayLogsApi = Object.freeze({
+  get: getXrayLogsApi,
+  init: initXrayLogs,
+  start: startXrayLogsAuto,
+  stop: stopXrayLogsAuto,
+  viewOnce: viewXrayLogsOnce,
+  clearScreen: clearXrayLogsScreen,
+  changeFile: changeXrayLogsFile,
+  enable: enableXrayLogs,
+  disable: disableXrayLogs,
+  clearFiles: clearXrayLogsFiles,
+  copy: copyXrayLogs,
+  refreshStatus: refreshXrayLogsStatus,
+  applyFilter: applyXrayLogsFilter,
+});

@@ -1,3 +1,5 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
@@ -5,25 +7,28 @@
   // Export: FM.terminal.openHere(side, ctx)
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
+  const C = FM.common || {};
 
   FM.terminal = FM.terminal || {};
   const T = FM.terminal;
+
+  function getLazyRuntimeApi() {
+    try {
+      if (C && typeof C.getLazyRuntime === 'function') return C.getLazyRuntime();
+    } catch (e) {
+      return null;
+    }
+    return null;
+  }
 
   function getS() {
     try { return (FM.state && FM.state.S) ? FM.state.S : {}; } catch (e) { return {}; }
   }
 
   function _toast(msg, kind) {
-    try { if (typeof toast === 'function') return toast(msg, kind); } catch (e) {}
-    try {
-      if (window.XKeen && XKeen.ui && typeof XKeen.ui.toast === 'function') {
-        return XKeen.ui.toast(msg, kind);
-      }
-    } catch (e2) {}
+    try { if (C && typeof C.toast === 'function') return C.toast(msg, kind); } catch (e) {}
     return undefined;
   }
 
@@ -35,7 +40,7 @@
 
   function _terminalApi() {
     try {
-      const term = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal : null;
+      const term = (C && typeof C.getTerminal === 'function') ? C.getTerminal() : null;
       const api = term && term.api ? term.api : null;
       if (!api) return null;
       if (typeof api.open !== 'function') return null;
@@ -49,7 +54,7 @@
   async function _terminalChooseMode() {
     // Prefer interactive PTY only when backend explicitly allows PTY.
     try {
-      const term = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal : null;
+      const term = (C && typeof C.getTerminal === 'function') ? C.getTerminal() : null;
       const caps = term && term.capabilities ? term.capabilities : null;
       if (caps && typeof caps.initCapabilities === 'function') {
         await Promise.resolve(caps.initCapabilities());
@@ -109,8 +114,9 @@
     if (!api) {
       // Terminal is lazy-loaded. If stubs are available, try to load it on-demand.
       try {
-        const lazy = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureTerminalReady === 'function')
-          ? XKeen.lazy.ensureTerminalReady
+        const lazyRuntime = getLazyRuntimeApi();
+        const lazy = (lazyRuntime && typeof lazyRuntime.ensureTerminalReady === 'function')
+          ? lazyRuntime.ensureTerminalReady
           : null;
         if (lazy) {
           await Promise.resolve(lazy());

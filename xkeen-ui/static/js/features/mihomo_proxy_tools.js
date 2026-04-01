@@ -1,14 +1,20 @@
+import { getMihomoPanelApi } from './mihomo_panel.js';
+import { getMihomoImportApi } from './mihomo_import.js';
+import { getMihomoCoreHttpApi, refreshSharedMihomoEditor } from './mihomo_runtime.js';
+import { getXkeenFilePath } from './xkeen_runtime.js';
+
+let mihomoProxyToolsModuleApi = null;
+
 (() => {
   'use strict';
 
   // Mihomo Proxy Tools (Rename / Replace) for xkeen-ui-routing2
   // - Rename proxy: updates `proxies:` name and all mentions inside `proxy-groups:`
   // - Replace proxy: replaces a single proxy block inside `proxies:` by parsing a URI or WireGuard(.conf)
+  // Legacy globals are published by features/compat/mihomo_proxy_tools.js.
 
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-
-  const PT = (XKeen.features.mihomoProxyTools = XKeen.features.mihomoProxyTools || {});
+  const PT = mihomoProxyToolsModuleApi || {};
+  mihomoProxyToolsModuleApi = PT;
 
   const IDS = {
     btnOpen: 'mihomo-proxy-tools-btn',
@@ -99,7 +105,8 @@
 
   function getEditorText() {
     try {
-      if (typeof window.getMihomoEditorText === 'function') return String(window.getMihomoEditorText() || '');
+      const api = getMihomoPanelApi();
+      if (api && typeof api.getEditorText === 'function') return String(api.getEditorText() || '');
     } catch (e) {}
     const ta = document.getElementById('mihomo-editor');
     return ta ? String(ta.value || '') : '';
@@ -107,8 +114,9 @@
 
   function setEditorText(text) {
     try {
-      if (typeof window.setMihomoEditorText === 'function') {
-        window.setMihomoEditorText(String(text ?? ''));
+      const api = getMihomoPanelApi();
+      if (api && typeof api.setEditorText === 'function') {
+        api.setEditorText(String(text ?? ''));
         return;
       }
     } catch (e) {}
@@ -118,14 +126,13 @@
 
   function refreshEditor() {
     try {
-      if (window.XKeen && XKeen.features && XKeen.features.mihomoPanel && typeof XKeen.features.mihomoPanel.refreshEditor === 'function') {
-        XKeen.features.mihomoPanel.refreshEditor();
+      const api = getMihomoPanelApi();
+      if (api && typeof api.refreshEditor === 'function') {
+        api.refreshEditor();
       }
     } catch (e) {}
     try {
-      // best-effort CodeMirror refresh
-      const cm = (window.XKeen && XKeen.state) ? XKeen.state.mihomoEditor : null;
-      if (cm && cm.refresh) cm.refresh();
+      refreshSharedMihomoEditor();
     } catch (e2) {}
   }
 
@@ -434,9 +441,9 @@
   }
 
   async function apiPost(url, body) {
-    const http = (window.XKeen && XKeen.core && XKeen.core.http) ? XKeen.core.http : null;
+    const http = getMihomoCoreHttpApi();
     const post = http && typeof http.postJSON === 'function' ? http.postJSON : null;
-    if (!post) throw new Error('XKeen.core.http.postJSON недоступен');
+    if (!post) throw new Error('core http.postJSON недоступен');
     const data = await post(url, body);
     if (data && data.ok === false) throw new Error(data.error || 'request failed');
     return data;
@@ -518,7 +525,7 @@
         if (!proxyYaml) throw new Error('Не удалось распарсить WireGuard (.conf)');
       } else {
         // Auto (proxy link)
-        const mi = (window.XKeen && XKeen.features && XKeen.features.mihomoImport) ? XKeen.features.mihomoImport : null;
+        const mi = getMihomoImportApi();
         if (!mi || typeof mi.generateConfigForMihomo !== 'function') {
           throw new Error('mihomoImport.generateConfigForMihomo недоступен');
         }
@@ -591,7 +598,7 @@
 
       try {
         if (typeof window.updateLastActivity === 'function') {
-          const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
+          const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
           window.updateLastActivity('modified', 'mihomo', fp);
         }
       } catch (e2) {}
@@ -659,3 +666,21 @@
     }
   };
 })();
+export function getMihomoProxyToolsApi() {
+  try {
+    if (mihomoProxyToolsModuleApi && typeof mihomoProxyToolsModuleApi.init === 'function') return mihomoProxyToolsModuleApi;
+  }
+  catch (error) {}
+  return null;
+}
+
+export function initMihomoProxyTools(...args) {
+  const api = getMihomoProxyToolsApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export const mihomoProxyToolsApi = Object.freeze({
+  get: getMihomoProxyToolsApi,
+  init: initMihomoProxyTools,
+});

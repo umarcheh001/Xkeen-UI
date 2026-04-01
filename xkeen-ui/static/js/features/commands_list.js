@@ -1,29 +1,33 @@
+import {
+  ensureXkeenTerminalInViewport,
+  focusXkeenTerminal,
+  getXkeenLazyRuntimeApi,
+  hasXkeenTerminalApi,
+  hasXkeenTerminalPtyCapability,
+  isXkeenTerminalPtyConnected,
+  openXkeenTerminal,
+  sendXkeenTerminal,
+  toastXkeen,
+} from './xkeen_runtime.js';
+
+let commandsListModuleApi = null;
+
 (() => {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.commandsList = XKeen.features.commandsList || {};
+  const CL = {};
+  commandsListModuleApi = CL;
 
-  const CL = XKeen.features.commandsList;
+  function getLazyRuntimeApi() {
+    return getXkeenLazyRuntimeApi();
+  }
 
   function hasTerminalApi() {
-    // Stage 8.2: prefer the stable public API.
-    if (XKeen.terminal && XKeen.terminal.api && typeof XKeen.terminal.api.open === 'function') return true;
-    return !!(XKeen.terminal && typeof XKeen.terminal.open === 'function');
+    return hasXkeenTerminalApi();
   }
 
   function hasPty() {
-    try {
-      return !!(
-        XKeen.terminal &&
-        XKeen.terminal.capabilities &&
-        typeof XKeen.terminal.capabilities.hasPty === 'function' &&
-        XKeen.terminal.capabilities.hasPty()
-      );
-    } catch (e) {
-      return false;
-    }
+    return hasXkeenTerminalPtyCapability();
   }
 
   // Terminal is now lazy-loaded; on a fresh tab capabilities may not be ready yet.
@@ -52,61 +56,30 @@
   }
 
   function isPtyConnected() {
-    // New API: ctx/transport
-    try {
-      const ctx = (XKeen.terminal && XKeen.terminal.core && typeof XKeen.terminal.core.getCtx === 'function')
-        ? XKeen.terminal.core.getCtx()
-        : null;
-      if (ctx && ctx.transport && ctx.transport.kind === 'pty' && typeof ctx.transport.isConnected === 'function') {
-        return !!ctx.transport.isConnected();
-      }
-      const st = ctx && ctx.core && ctx.core.state ? ctx.core.state : null;
-      const ws = st ? st.ptyWs : null;
-      return !!(ws && ws.readyState === WebSocket.OPEN);
-    } catch (e) {}
-    return false;
+    return isXkeenTerminalPtyConnected();
   }
 
   function sendPtyRaw(payload) {
-    const data = String(payload == null ? '' : payload);
-
-    // New API: ctx.transport
     try {
-      const ctx = (XKeen.terminal && XKeen.terminal.core && typeof XKeen.terminal.core.getCtx === 'function')
-        ? XKeen.terminal.core.getCtx()
-        : null;
-      if (ctx && ctx.transport && typeof ctx.transport.send === 'function') {
-        if (ctx.transport.kind === 'pty') return !!ctx.transport.send(data, { prefer: 'pty', allowWhenDisconnected: false, source: 'commands_list' });
-      }
-    } catch (e0) {}
-    // Backward compatibility fallback: send via modular PTY if present.
-    try {
-      const pty = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
-      if (pty && typeof pty.sendRaw === 'function') return !!pty.sendRaw(data);
-    } catch (e2) {}
-    return false;
+      return !!sendXkeenTerminal(String(payload == null ? '' : payload), {
+        prefer: 'pty',
+        allowWhenDisconnected: false,
+        source: 'commands_list',
+      });
+    } catch (e) {
+      return false;
+    }
   }
 
   function focusTerminal() {
-    try {
-      const ctx = (XKeen.terminal && XKeen.terminal.core && typeof XKeen.terminal.core.getCtx === 'function')
-        ? XKeen.terminal.core.getCtx()
-        : null;
-      const st = ctx && ctx.core && ctx.core.state ? ctx.core.state : null;
-      const t = st ? (st.term || st.xterm) : null;
-      if (t && typeof t.focus === 'function') return t.focus();
-    } catch (e) {}
+    focusXkeenTerminal();
   }
 
   // Best-effort fix for rare cases when the terminal window opens slightly
   // outside of the viewport (e.g. header ends up above the top edge).
   function clampTerminalViewportSoon() {
     const run = () => {
-      try {
-        const ch = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.chrome;
-        if (ch && typeof ch.ensureInViewport === 'function') return ch.ensureInViewport();
-        if (ch && typeof ch.onOpen === 'function') return ch.onOpen();
-      } catch (e) {}
+      try { ensureXkeenTerminalInViewport(); } catch (e) {}
     };
     try { setTimeout(run, 0); } catch (e0) {}
     try { setTimeout(run, 120); } catch (e1) {}
@@ -131,8 +104,9 @@
     // Terminal is lazy-loaded on first use; wait for it to be ready to avoid
     // timing races on slow devices (where the PTY WS may come up after our timeout).
     try {
-      const lazy = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureTerminalReady === 'function')
-        ? XKeen.lazy.ensureTerminalReady
+      const lazyRuntime = getLazyRuntimeApi();
+      const lazy = (lazyRuntime && typeof lazyRuntime.ensureTerminalReady === 'function')
+        ? lazyRuntime.ensureTerminalReady
         : null;
       if (lazy) {
         await Promise.resolve(lazy());
@@ -140,14 +114,7 @@
     } catch (e0) {}
 
     try {
-      if (XKeen.terminal && XKeen.terminal.api && typeof XKeen.terminal.api.open === 'function') {
-        // Prefer object-form to be compatible with lazy stub API.
-        await Promise.resolve(XKeen.terminal.api.open({ mode: 'pty', cmd: '' }));
-      } else if (hasTerminalApi()) {
-        XKeen.terminal.open(null, { cmd: '', mode: 'pty' });
-      } else if (typeof window.openTerminal === 'function') {
-        window.openTerminal('', 'pty');
-      }
+      await Promise.resolve(openXkeenTerminal({ mode: 'pty', cmd: '' }));
     } catch (e) {}
 
     // Safety: ensure the window is visible even if it opened with a stale/buggy geometry.
@@ -155,35 +122,32 @@
 
     const ok = await waitForPtyConnected(12000);
     if (!ok) {
-      toast('PTY не подключён (WebSocket недоступен или не успел подключиться)', 'info');
+      toastXkeen('PTY не подключён (WebSocket недоступен или не успел подключиться)', 'info');
       return false;
     }
 
     try {
-      const api = (window.XKeen && XKeen.terminal && XKeen.terminal.api) ? XKeen.terminal.api : null;
-      if (api && typeof api.send === 'function') {
-        // Use raw to avoid routing and match Enter for PTY.
-        const sendRes = await Promise.resolve(api.send(String(cmd || '') + '\r', { raw: true, prefer: 'pty', allowWhenDisconnected: false, source: 'commands_list' }));
-        const delivered = !!(
-          sendRes &&
-          ((sendRes.handled === true) || (sendRes.result && sendRes.result.ok === true))
-        );
-        if (!delivered) {
-          toast('PTY подключён, но команда не отправилась', 'error');
-          return false;
-        }
-      } else {
-        // Legacy fallback.
-        if (!sendPtyRaw(String(cmd || '') + '\r')) {
-          toast('PTY подключён, но команда не отправилась', 'error');
-          return false;
-        }
+      const sendRes = await Promise.resolve(sendXkeenTerminal(String(cmd || '') + '\r', {
+        raw: true,
+        prefer: 'pty',
+        allowWhenDisconnected: false,
+        source: 'commands_list',
+      }));
+      const delivered = !!(
+        sendRes === true ||
+        (sendRes && sendRes.ok === true) ||
+        (sendRes && sendRes.handled === true) ||
+        (sendRes && sendRes.result && sendRes.result.ok === true)
+      );
+      if (!delivered && !sendPtyRaw(String(cmd || '') + '\r')) {
+        toastXkeen('PTY подключён, но команда не отправилась', 'error');
+        return false;
       }
       focusTerminal();
       clampTerminalViewportSoon();
       return true;
     } catch (e) {
-      toast('Не удалось отправить команду в PTY', 'error');
+      toastXkeen('Не удалось отправить команду в PTY', 'error');
       return false;
     }
   }
@@ -213,25 +177,32 @@
         // No WS => keep old: open terminal with suggested command (does not auto-execute).
         if (hasTerminalApi()) {
           try {
-            if (XKeen.terminal && XKeen.terminal.api && typeof XKeen.terminal.api.open === 'function') {
-              XKeen.terminal.api.open({ cmd: label, mode: 'xkeen' });
-              clampTerminalViewportSoon();
-              return;
-            }
-            XKeen.terminal.open(null, { cmd: label, mode: 'xkeen' });
+            await Promise.resolve(openXkeenTerminal({ cmd: label, mode: 'xkeen' }));
             clampTerminalViewportSoon();
             return;
           } catch (e) {}
         }
 
-        // Very old fallback: global openTerminal.
-        try {
-          if (typeof window.openTerminal === 'function') {
-            window.openTerminal(label, 'xkeen');
-            clampTerminalViewportSoon();
-          }
-        } catch (e) {}
+        try { toastXkeen('Терминал недоступен.', 'error'); } catch (e) {}
       });
     });
   };
 })();
+export function getCommandsListApi() {
+  try {
+    return commandsListModuleApi && typeof commandsListModuleApi.init === 'function' ? commandsListModuleApi : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function initCommandsList(...args) {
+  const api = getCommandsListApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export const commandsListApi = Object.freeze({
+  get: getCommandsListApi,
+  init: initCommandsList,
+});

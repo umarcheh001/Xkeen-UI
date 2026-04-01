@@ -1,8 +1,16 @@
-(() => {
-  window.XKeen = window.XKeen || {};
-  XKeen.state = XKeen.state || {};
-  XKeen.features = XKeen.features || {};
+import { getBackupsApi } from './backups.js';
+import { getRestartLogApi } from './restart_log.js';
+import {
+  getXkeenFilePath,
+  getXkeenUiConfigShellApi,
+  openXkeenJsonEditor,
+  syncXkeenBodyScrollLock,
+  toastXkeen,
+} from './xkeen_runtime.js';
 
+let inboundsModuleApi = null;
+
+(() => {
   // Inbounds mode selector for 03_inbounds.json
   // API:
   //  - GET  /api/inbounds  -> { mode: "mixed"|"tproxy"|"redirect"|"custom"|null }
@@ -16,7 +24,7 @@
   // It is designed to coexist with legacy main.js:
   // main.js will prefer this module when present.
 
-  XKeen.features.inbounds = (() => {
+  inboundsModuleApi = (() => {
     let inited = false;
     // last mode that is known to be applied on backend (from load/save)
     let currentMode = null;
@@ -50,15 +58,12 @@
     }
 
     function getConfigShellApi() {
-      try {
-        if (window.XKeen && XKeen.ui && XKeen.ui.configShell) return XKeen.ui.configShell;
-      } catch (e) {}
-      return null;
+      return getXkeenUiConfigShellApi();
     }
 
     function refreshRestartLog() {
       try {
-        const api = window.XKeen && XKeen.features ? XKeen.features.restartLog : null;
+        const api = getRestartLogApi();
         if (api && typeof api.load === 'function') return api.load();
       } catch (e) {}
       return null;
@@ -273,7 +278,7 @@
       }
 
       if (!data || !data.ok || !Array.isArray(data.items)) {
-        try { if (notify && typeof window.toast === 'function') window.toast('Не удалось обновить список inbounds', 'error'); } catch (e) {}
+        try { if (notify) toastXkeen('Не удалось обновить список inbounds', 'error'); } catch (e) {}
         return;
       }
 
@@ -329,7 +334,7 @@
       } catch (e) {}
 
       // Success toast (only when explicitly requested)
-      try { if (notify && typeof window.toast === 'function') window.toast('Список inbounds обновлён', 'success'); } catch (e) {}
+      try { if (notify) toastXkeen('Список inbounds обновлён', 'success'); } catch (e) {}
 
       // Wire select change (once)
       try {
@@ -615,11 +620,7 @@
           try { if (ui2.error) { ui2.error.style.display = 'none'; ui2.error.textContent = ''; } } catch (e0) {}
           try { if (ui2.warn) { ui2.warn.style.display = 'none'; ui2.warn.textContent = ''; } } catch (e0w) {}
           try { ui2.modal.classList.add('hidden'); } catch (e1) {}
-          if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-            try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e2) {}
-          } else {
-            try { document.body.classList.remove('modal-open'); } catch (e3) {}
-          }
+          try { syncXkeenBodyScrollLock(false); } catch (e2) {}
 
           if (_applyModalEscHandler) {
             try { document.removeEventListener('keydown', _applyModalEscHandler); } catch (e4) {}
@@ -745,11 +746,7 @@
 
       // Show modal
       try { ui.modal.classList.remove('hidden'); } catch (e) {}
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        try { XKeen.ui.modal.syncBodyScrollLock(); } catch (e) {}
-      } else {
-        try { document.body.classList.add('modal-open'); } catch (e) {}
-      }
+      try { syncXkeenBodyScrollLock(true); } catch (e2) {}
 
       // Attach ESC handler (created in one-time binding above).
       try { if (_applyModalEscHandler) document.removeEventListener('keydown', _applyModalEscHandler); } catch (e) {}
@@ -815,7 +812,7 @@
 
         try {
           if (typeof updateLastActivity === 'function') {
-            const fp = window.XKEEN_FILES && window.XKEEN_FILES.inbounds ? window.XKEEN_FILES.inbounds : '';
+            const fp = getXkeenFilePath('inbounds', '');
             updateLastActivity('loaded', 'inbounds', fp);
           }
         } catch (e) {}
@@ -932,7 +929,7 @@
             try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
             try {
               if (typeof updateLastActivity === 'function') {
-                const fp = window.XKEEN_FILES && window.XKEEN_FILES.inbounds ? window.XKEEN_FILES.inbounds : '';
+                const fp = getXkeenFilePath('inbounds', '');
                 updateLastActivity('saved', 'inbounds', fp);
               }
             } catch (e) {}
@@ -969,7 +966,7 @@
         }
       }
 
-      const fileLabel = _baseName(window.XKEEN_FILES && window.XKEEN_FILES.inbounds, '03_inbounds.json');
+      const fileLabel = _baseName(getXkeenFilePath('inbounds', ''), '03_inbounds.json');
 
       try {
         const file = getActiveFragment();
@@ -983,9 +980,10 @@
           if (backupsStatusEl) backupsStatusEl.textContent = '';
           try { if (typeof showToast === 'function') showToast(msg, false); } catch (e) {}
           try {
-            if (window.XKeen && XKeen.backups) {
-              if (typeof XKeen.backups.refresh === 'function') await XKeen.backups.refresh();
-              else if (typeof XKeen.backups.load === 'function') await XKeen.backups.load();
+            const backupsApi = getBackupsApi();
+            if (backupsApi) {
+              if (typeof backupsApi.refresh === 'function') await backupsApi.refresh();
+              else if (typeof backupsApi.load === 'function') await backupsApi.load();
             }
           } catch (e) {}
         } else {
@@ -1033,8 +1031,9 @@
       bindConfigAction('inbounds-backup-btn', backup, { kind: 'backup' });
       bindConfigAction('inbounds-restore-auto-btn', () => {
         try {
-          if (window.XKeen && XKeen.backups && typeof XKeen.backups.restoreAuto === 'function') {
-            XKeen.backups.restoreAuto('inbounds', { confirmed: true });
+          const backupsApi = getBackupsApi();
+          if (backupsApi && typeof backupsApi.restoreAuto === 'function') {
+            backupsApi.restoreAuto('inbounds', { confirmed: true });
           } else {
             if (typeof showToast === 'function') showToast('Модуль бэкапов не загружен.', true);
           }
@@ -1042,8 +1041,8 @@
       }, { kind: 'restoreAuto' });
       bindConfigAction('inbounds-open-editor-btn', () => {
         try {
-          if (window.XKeen && XKeen.jsonEditor && typeof XKeen.jsonEditor.open === 'function') {
-            XKeen.jsonEditor.open('inbounds');
+          if (openXkeenJsonEditor('inbounds') != null) {
+            return;
           } else {
             if (typeof showToast === 'function') showToast('Модуль JSON-редактора не загружен.', true);
           }
@@ -1066,3 +1065,46 @@
     };
   })();
 })();
+export function getInboundsApi() {
+  try {
+    if (inboundsModuleApi && typeof inboundsModuleApi.init === 'function') return inboundsModuleApi;
+  } catch (error) {
+    return null;
+  }
+  return null;
+}
+
+function callInboundsApi(method, ...args) {
+  const api = getInboundsApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initInbounds(...args) {
+  return callInboundsApi('init', ...args);
+}
+
+export function loadInbounds(...args) {
+  return callInboundsApi('load', ...args);
+}
+
+export function saveInbounds(...args) {
+  return callInboundsApi('save', ...args);
+}
+
+export function backupInbounds(...args) {
+  return callInboundsApi('backup', ...args);
+}
+
+export function toggleInboundsCard(...args) {
+  return callInboundsApi('toggleCard', ...args);
+}
+
+export const inboundsApi = Object.freeze({
+  get: getInboundsApi,
+  init: initInbounds,
+  load: loadInbounds,
+  save: saveInbounds,
+  backup: backupInbounds,
+  toggleCard: toggleInboundsCard,
+});

@@ -1,18 +1,18 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager context menu (ПКМ)
   // Exports:
-  //   XKeen.features.fileManager.contextMenu.setDispatcher(fn)
-  //   XKeen.features.fileManager.contextMenu.wireGlobal()
-  //   XKeen.features.fileManager.contextMenu.show(opts)
-  //   XKeen.features.fileManager.contextMenu.hide()
+  //   the shared file manager namespace.contextMenu.setDispatcher(fn)
+  //   the shared file manager namespace.contextMenu.wireGlobal()
+  //   the shared file manager namespace.contextMenu.show(opts)
+  //   the shared file manager namespace.contextMenu.hide()
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
   FM.contextMenu = FM.contextMenu || {};
   const CM = FM.contextMenu;
 

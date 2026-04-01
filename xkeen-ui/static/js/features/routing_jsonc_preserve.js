@@ -1,12 +1,11 @@
+let routingJsoncPreserveModuleApi = null;
+
 (() => {
   "use strict";
 
   // JSONC preserve helpers (WIP, Level B).
   // This module is intentionally self-contained and unused in early commits.
   // Later commits will use it to patch rules/balancers/domainStrategy directly in JSONC text.
-
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
 
   function isWs(ch) {
     return ch === " " || ch === "\t" || ch === "\n" || ch === "\r";
@@ -1398,7 +1397,7 @@
     }
   }
 
-  XKeen.features.routingJsoncPreserve = {
+  routingJsoncPreserveModuleApi = {
     scanJsonc,
     findMatchingBracket,
     // PR3: routing section locators
@@ -1440,3 +1439,18 @@
     applyDomainStrategy,
   };
 })();
+
+export function getRoutingJsoncPreserveApi() {
+  return routingJsoncPreserveModuleApi && typeof routingJsoncPreserveModuleApi.locateRoutingObject === 'function'
+    ? routingJsoncPreserveModuleApi
+    : null;
+}
+
+export function initRoutingJsoncPreserve() {
+  return getRoutingJsoncPreserveApi();
+}
+
+export const routingJsoncPreserveApi = Object.freeze({
+  get: getRoutingJsoncPreserveApi,
+  init: initRoutingJsoncPreserve,
+});

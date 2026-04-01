@@ -1,12 +1,12 @@
+let typographyModuleApi = null;
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-  XK.features.typography = XK.features.typography || {};
-
-  const Typo = XK.features.typography;
+  const Typo = typographyModuleApi || {};
+  typographyModuleApi = Typo;
 
   function toast(msg, isError) {
     try {
@@ -149,3 +149,21 @@
   // Auto-init
   try { Typo.init(); } catch (e) {}
 })();
+export function getTypographyApi() {
+  try {
+    return typographyModuleApi;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function initTypography(...args) {
+  const api = getTypographyApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export const typographyApi = Object.freeze({
+  get: getTypographyApi,
+  init: initTypography,
+});

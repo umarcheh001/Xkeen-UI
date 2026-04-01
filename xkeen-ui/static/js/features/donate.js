@@ -1,12 +1,12 @@
+let donateModuleApi = null;
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-  XK.features.donate = XK.features.donate || {};
-
-  const Donate = XK.features.donate;
+  const Donate = donateModuleApi || {};
+  donateModuleApi = Donate;
 
   // Persisted UI preference:
   // - true  => hide 💰 Донат button
@@ -213,6 +213,44 @@
 
   // Back-compat / convenience
   window.XKeen = window.XKeen || {};
-  XK.features = XK.features || {};
-  XK.features.donate = Donate;
 })();
+
+
+export function getDonateApi() {
+  try {
+    return donateModuleApi;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function initDonate(...args) {
+  const api = getDonateApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export function openDonate(...args) {
+  const api = getDonateApi();
+  if (!api || typeof api.open !== 'function') return null;
+  return api.open(...args);
+}
+
+export function closeDonate(...args) {
+  const api = getDonateApi();
+  if (!api || typeof api.close !== 'function') return null;
+  return api.close(...args);
+}
+
+export function syncDonateVisibility(...args) {
+  const api = getDonateApi();
+  if (!api || typeof api.syncVisibility !== 'function') return null;
+  return api.syncVisibility(...args);
+}
+export const donateApi = Object.freeze({
+  get: getDonateApi,
+  init: initDonate,
+  open: openDonate,
+  close: closeDonate,
+  syncVisibility: syncDonateVisibility,
+});

@@ -7,14 +7,15 @@
 
 import '../ui/config_dirty_state.js';
 import '../ui/config_shell.js';
-import '../features/routing_shell.js';
+import { getRoutingShellApi as getRoutingShellModuleApi } from '../features/routing_shell.js';
+import {
+  getXkeenPageApi,
+  getXkeenUiConfigShellApi,
+  publishXkeenPageApi,
+} from '../features/xkeen_runtime.js';
 
 (() => {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  const XK = window.XKeen;
-  XK.pages = XK.pages || {};
 
   const FEATURE_META = {
     routing: {
@@ -22,7 +23,7 @@ import '../features/routing_shell.js';
       fileCodeId: 'routing-file-code',
       dirtySourceName: 'editor',
       fragmentSelectId: 'routing-fragment-select',
-      load: null,
+      load: () => import('../features/routing.js'),
       isVisible: () => true,
       onActivate: (api, options) => {
         try { api.init(); } catch (e) {
@@ -43,7 +44,10 @@ import '../features/routing_shell.js';
       fileCodeId: 'inbounds-file-code',
       dirtySourceName: 'mode',
       fragmentSelectId: 'inbounds-fragment-select',
-      load: () => import('../features/inbounds.js'),
+      load: () => Promise.all([
+        import('../features/inbounds.js'),
+        import('../features/compat/inbounds.js'),
+      ]).then(([mod]) => mod),
       isVisible: () => true,
       onActivate: (api) => {
         try { api.init(); } catch (e) {
@@ -59,7 +63,10 @@ import '../features/routing_shell.js';
       fileCodeId: 'outbounds-file-code',
       dirtySourceName: 'form',
       fragmentSelectId: 'outbounds-fragment-select',
-      load: () => import('../features/outbounds.js'),
+      load: () => Promise.all([
+        import('../features/outbounds.js'),
+        import('../features/compat/outbounds.js'),
+      ]).then(([mod]) => mod),
       isVisible: () => true,
       onActivate: (api) => {
         try { api.init(); } catch (e) {
@@ -74,6 +81,7 @@ import '../features/routing_shell.js';
 
   const _lifecycles = Object.create(null);
   const _featurePromises = Object.create(null);
+  const _featureModules = Object.create(null);
   const _featureActivated = Object.create(null);
 
   function getFeatureMeta(name) {
@@ -81,22 +89,24 @@ import '../features/routing_shell.js';
   }
 
   function getConfigShellApi() {
-    try {
-      const api = XK.ui ? XK.ui.configShell : null;
-      return api && typeof api.createFeatureLifecycle === 'function' ? api : null;
-    } catch (e) {}
-    return null;
+    const api = getXkeenUiConfigShellApi();
+    return api && typeof api.createFeatureLifecycle === 'function' ? api : null;
   }
 
   function getFeatureApi(name) {
     const key = String(name || '');
     try {
       if (key === 'routing') {
-        const api = XK.routing || (XK.features ? XK.features.routing : null);
+        const mod = _featureModules[key] || null;
+        const getter = mod && typeof mod.getRoutingApi === 'function' ? mod.getRoutingApi : null;
+        const api = typeof getter === 'function' ? getter() : null;
         return api && typeof api.init === 'function' ? api : null;
       }
       if (key === 'inbounds' || key === 'outbounds') {
-        const api = XK.features ? XK.features[key] : null;
+        const mod = _featureModules[key] || null;
+        if (!mod) return null;
+        const getter = key === 'inbounds' ? mod.getInboundsApi : mod.getOutboundsApi;
+        const api = typeof getter === 'function' ? getter() : null;
         return api && typeof api.init === 'function' ? api : null;
       }
     } catch (e) {}
@@ -105,7 +115,7 @@ import '../features/routing_shell.js';
 
   function getRoutingShellApi() {
     try {
-      const api = XK.features ? XK.features.routingShell : null;
+      const api = getRoutingShellModuleApi();
       return api && typeof api.getState === 'function' ? api : null;
     } catch (e) {}
     return null;
@@ -230,7 +240,8 @@ import '../features/routing_shell.js';
     }
 
     _featurePromises[key] = meta.load()
-      .then(() => {
+      .then((mod) => {
+        _featureModules[key] = mod || null;
         const api = getFeatureApi(key);
         if (!api) throw new Error('feature api unavailable after import: ' + key);
         const lifecycle = ensureFeatureLifecycle(key);
@@ -245,7 +256,10 @@ import '../features/routing_shell.js';
         throw error;
       })
       .finally(() => {
-        if (!getFeatureApi(key)) _featurePromises[key] = null;
+        if (!getFeatureApi(key)) {
+          _featurePromises[key] = null;
+          _featureModules[key] = null;
+        }
       });
 
     return _featurePromises[key];
@@ -306,7 +320,7 @@ import '../features/routing_shell.js';
     return activateFeatureView('outbounds', options);
   }
 
-  XK.pages.configShell = {
+  publishXkeenPageApi('configShell', {
     isReady,
     ensureReady,
     isFeatureReady,
@@ -322,5 +336,46 @@ import '../features/routing_shell.js';
     isOutboundsReady: () => isFeatureReady('outbounds'),
     ensureOutboundsReady,
     activateOutboundsView,
-  };
+  });
 })();
+
+
+export function getConfigShellApi() {
+  try {
+    const api = getXkeenPageApi('configShell');
+    return api && typeof api.ensureReady === 'function' ? api : null;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function callConfigShellApi(method, ...args) {
+  const api = getConfigShellApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function ensureConfigShellReady(...args) {
+  return callConfigShellApi('ensureReady', ...args);
+}
+
+export function activateRoutingConfigView(...args) {
+  return callConfigShellApi('activateRoutingView', ...args);
+}
+
+export function activateInboundsConfigView(...args) {
+  return callConfigShellApi('activateInboundsView', ...args);
+}
+
+export function activateOutboundsConfigView(...args) {
+  return callConfigShellApi('activateOutboundsView', ...args);
+}
+
+export const configShellApi = Object.freeze({
+  get: getConfigShellApi,
+  ensureReady: ensureConfigShellReady,
+  activateRoutingView: activateRoutingConfigView,
+  activateInboundsView: activateInboundsConfigView,
+  activateOutboundsView: activateOutboundsConfigView,
+});

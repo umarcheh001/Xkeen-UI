@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // USB storage UI (list + mount/unmount) for File Manager.
-  // Attaches to window.XKeen.features.fileManager.storage.
+  // Attaches to the shared file manager namespace.storage.
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
   const C = FM.common || {};
   const API = FM.api || {};
 
@@ -27,14 +27,12 @@
 
   function toast(msg, lvl) {
     try { if (C && typeof C.toast === 'function') return C.toast(msg, lvl); } catch (e) {}
-    try { if (window.XKeen && XKeen.ui && typeof XKeen.ui.toast === 'function') return XKeen.ui.toast(String(msg || ''), String(lvl || 'info')); } catch (e2) {}
+    return undefined;
   }
 
   async function confirmModal(opts) {
     try {
-      if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-        return await XKeen.ui.confirm(opts || {});
-      }
+      if (C && typeof C.confirm === 'function') return await C.confirm(opts || {});
     } catch (e) {}
     try {
       const text = String((opts && (opts.message || opts.text)) || 'Продолжить?');
