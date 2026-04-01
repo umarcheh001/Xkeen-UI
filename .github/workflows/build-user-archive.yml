@@ -1,0 +1,116 @@
+name: Build user archive
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-user-archive-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run Python tests
+        run: python -m pytest -q
+
+      - name: Build frontend
+        run: npm run frontend:build
+
+      - name: Recreate frontend bridge manifest
+        run: python scripts/sync_frontend_build_manifest.py
+
+      - name: Verify frontend build
+        run: node scripts/verify_frontend_build.mjs
+
+      - name: Prepare package root
+        run: |
+          rm -rf dist package-root
+          mkdir -p package-root/xkeen-ui-routing dist
+
+          rsync -a ./ package-root/xkeen-ui-routing/ \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.venv' \
+            --exclude 'node_modules' \
+            --exclude '__pycache__' \
+            --exclude '.pytest_cache' \
+            --exclude 'dist' \
+            --exclude 'docs' \
+            --exclude 'tests' \
+            --exclude 'tools' \
+            --exclude 'scripts' \
+            --exclude 'package.json' \
+            --exclude 'package-lock.json' \
+            --exclude 'vite.config.mjs' \
+            --exclude 'requirements-dev.txt' \
+            --exclude 'release_local.sh' \
+            --exclude 'release_fast.sh'
+
+      - name: Create release archive
+        run: |
+          tar -czf dist/xkeen-ui-routing.tar.gz -C package-root xkeen-ui-routing
+          sha256sum dist/xkeen-ui-routing.tar.gz > dist/xkeen-ui-routing.tar.gz.sha256
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xkeen-ui-routing
+          path: |
+            dist/xkeen-ui-routing.tar.gz
+            dist/xkeen-ui-routing.tar.gz.sha256
+
+      - name: Ensure GitHub CLI is available
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y gh
+          fi
+
+      - name: Create or update GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              dist/xkeen-ui-routing.tar.gz \
+              dist/xkeen-ui-routing.tar.gz.sha256 \
+              --clobber
+          else
+            gh release create "$TAG" \
+              dist/xkeen-ui-routing.tar.gz \
+              dist/xkeen-ui-routing.tar.gz.sha256 \
+              --title "$TAG" \
+              --generate-notes
+          fi
