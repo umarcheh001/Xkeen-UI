@@ -1,3 +1,7 @@
+import { getRoutingApi } from '../../routing.js';
+
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 /*
   routing_cards/rules/forced_rules_wizard.js
   Quick wizard: “forced rules” (bypass balancer): domains/IP -> specific outboundTag.
@@ -11,10 +15,9 @@
   'use strict';
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.rules = RC.rules || {};
 
   RC.rules.forcedRulesWizard = RC.rules.forcedRulesWizard || {};
@@ -627,12 +630,13 @@ geoip:private"></textarea>
 
   async function saveWithForcedRestart() {
     // Prefer routing module (job + log rendering)
-    if (window.XKeen && XKeen.routing && typeof XKeen.routing.save === 'function') {
+    const routingApi = getRoutingApi();
+    if (routingApi && typeof routingApi.save === 'function') {
       const chk = document.getElementById('global-autorestart-xkeen');
       const prev = chk ? !!chk.checked : null;
       try {
         if (chk) chk.checked = true;
-        await XKeen.routing.save();
+        await routingApi.save();
         return true;
       } finally {
         try { if (chk && prev !== null) chk.checked = prev; } catch (e) {}

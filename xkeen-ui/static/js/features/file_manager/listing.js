@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager listing/controller helpers (no ES modules / bundler):
-  // attach to window.XKeen.features.fileManager.listing.
+  // attach to the shared file manager namespace.listing.
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
   const C = (FM && FM.common) ? FM.common : {};
   const A = (FM && FM.api) ? FM.api : {};
   const E = (FM && FM.errors) ? FM.errors : {};

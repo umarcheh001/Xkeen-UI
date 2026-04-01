@@ -1,11 +1,11 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
 
   // Preferences are stored in localStorage.
   // This module keeps the keys stable so older installs keep working.

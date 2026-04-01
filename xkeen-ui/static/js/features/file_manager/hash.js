@@ -1,18 +1,18 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager: Checksum modal (md5/sha256)
-  // No ES modules / bundler: attach to window.XKeen.features.fileManager.hash
+  // No ES modules / bundler: attach to the shared file manager namespace.hash
   //
   // Exports:
   //   FM.hash.openHashModal(side)
   //   FM.actions.openHashModal(side)  (compat)
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
 
   FM.hash = FM.hash || {};
   const H = FM.hash;

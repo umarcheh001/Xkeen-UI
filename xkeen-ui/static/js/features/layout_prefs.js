@@ -1,12 +1,12 @@
+let layoutPrefsModuleApi = null;
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-  XK.features.layoutPrefs = XK.features.layoutPrefs || {};
-
-  const Feature = XK.features.layoutPrefs;
+  const Feature = layoutPrefsModuleApi || {};
+  layoutPrefsModuleApi = Feature;
 
   const TAB_DEFS = Object.freeze([
     { key: 'view:routing', label: 'Роутинг Xray' },
@@ -293,3 +293,21 @@
 
   try { Feature.init(); } catch (e) {}
 })();
+export function getLayoutPrefsApi() {
+  try {
+    return layoutPrefsModuleApi;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function initLayoutPrefs(...args) {
+  const api = getLayoutPrefsApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export const layoutPrefsApi = Object.freeze({
+  get: getLayoutPrefsApi,
+  init: initLayoutPrefs,
+});

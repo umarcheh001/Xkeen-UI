@@ -1,11 +1,13 @@
+import { getXrayLogLineClass } from './xray_log_line_class.js';
+import { ansiToXkeenHtml, toastXkeen } from './xkeen_runtime.js';
+
+let restartLogModuleApi = null;
+
 (() => {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.restartLog = XKeen.features.restartLog || {};
-
-  const RL = XKeen.features.restartLog;
+  const RL = restartLogModuleApi || {};
+  restartLogModuleApi = RL;
 
   // Keep one canonical raw buffer so multiple log blocks (across sections)
   // can render the same output.
@@ -14,18 +16,7 @@
   // ANSI -> HTML formatter.
   // Prefer shared util (it also strips non-SGR control sequences like ESC[H/ESC[J).
   function ansiToHtml(line) {
-    try {
-      if (window.XKeen && XKeen.util && typeof XKeen.util.ansiToHtml === 'function') {
-        return XKeen.util.ansiToHtml(line || '');
-      }
-    } catch (e) {}
-    // ultra-fallback: plain text
-    try {
-      if (window.XKeen && XKeen.util && typeof XKeen.util.escapeHtml === 'function') {
-        return XKeen.util.escapeHtml(line || '');
-      }
-    } catch (e) {}
-    return String(line || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return ansiToXkeenHtml(line || '');
   }
 
   // Normalize Xray-style log lines into a more terminal-like format.
@@ -100,8 +91,8 @@
       .map((line) => {
         const normalized = normalizeLineForTerminal(line || '');
         let cls = 'log-line';
-        if (typeof window.getXrayLogLineClass === 'function') {
-          cls = window.getXrayLogLineClass(normalized);
+        if (typeof getXrayLogLineClass === 'function') {
+          cls = getXrayLogLineClass(normalized);
         } else {
           const lower = normalized.toLowerCase();
           if (
@@ -201,10 +192,10 @@
     ta.select();
     try {
       document.execCommand('copy');
-      if (typeof window.showToast === 'function') window.showToast('Журнал скопирован в буфер обмена', false);
+      toastXkeen('Журнал скопирован в буфер обмена', false);
     } catch (e) {
       console.error(e);
-      if (typeof window.showToast === 'function') window.showToast('Не удалось скопировать журнал', true);
+      toastXkeen('Не удалось скопировать журнал', true);
     }
     try { ta.remove(); } catch (e) {}
   }
@@ -215,7 +206,7 @@
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(
-        () => { if (typeof window.showToast === 'function') window.showToast('Журнал скопирован в буфер обмена', false); },
+        () => { toastXkeen('Журнал скопирован в буфер обмена', false); },
         () => fallbackCopyText(text)
       );
     } else {
@@ -262,3 +253,50 @@
   };
 
 })();
+export function getRestartLogApi() {
+  try {
+    return restartLogModuleApi && typeof restartLogModuleApi.load === 'function' ? restartLogModuleApi : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function callRestartLogApi(method, ...args) {
+  const api = getRestartLogApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initRestartLog(...args) {
+  return callRestartLogApi('init', ...args);
+}
+
+export function loadRestartLog(...args) {
+  return callRestartLogApi('load', ...args);
+}
+
+export function appendRestartLog(...args) {
+  return callRestartLogApi('append', ...args);
+}
+
+export function setRestartLogRaw(...args) {
+  return callRestartLogApi('setRaw', ...args);
+}
+
+export function clearRestartLog(...args) {
+  return callRestartLogApi('clear', ...args);
+}
+
+export function copyRestartLog(...args) {
+  return callRestartLogApi('copy', ...args);
+}
+
+export const restartLogApi = Object.freeze({
+  get: getRestartLogApi,
+  init: initRestartLog,
+  load: loadRestartLog,
+  append: appendRestartLog,
+  setRaw: setRestartLogRaw,
+  clear: clearRestartLog,
+  copy: copyRestartLog,
+});

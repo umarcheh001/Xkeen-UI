@@ -4,14 +4,15 @@
 
   RC-07c
 */
+import { getRoutingJsoncPreserveApi } from '../../routing_jsonc_preserve.js';
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 (function () {
   'use strict';
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.rules = RC.rules || {};
 
   const C = RC.common || {};
@@ -48,6 +49,10 @@
   // Feature flag for incremental rollout.
   const JSONC_PRESERVE_ENABLED = true;
 
+  function getRoutingJsoncPreserve() {
+    try { return getRoutingJsoncPreserveApi(); } catch (e) { return null; }
+  }
+
   function isJsoncDebugEnabled() {
     try {
       if (C && typeof C.isDebugEnabled === 'function') return !!C.isDebugEnabled();
@@ -63,7 +68,7 @@
   function canPreserve() {
     try {
       if (!JSONC_PRESERVE_ENABLED) return false;
-      const jp = (XK.features && XK.features.routingJsoncPreserve) ? XK.features.routingJsoncPreserve : null;
+      const jp = getRoutingJsoncPreserve();
       return !!(jp && typeof jp.locateRoutingObject === 'function');
     } catch (e) {
       return false;
@@ -225,9 +230,7 @@
       return false;
     }
 
-    const jp = (XK.features && XK.features.routingJsoncPreserve)
-      ? XK.features.routingJsoncPreserve
-      : null;
+    const jp = getRoutingJsoncPreserve();
     if (!jp || typeof jp.locateRoutingObject !== 'function' || typeof jp.locateArrayByKey !== 'function') {
       toast('JSONC helper не готов для переключения правила.', true);
       return false;
@@ -345,9 +348,7 @@
       const m = (RM && typeof RM.sanitizeModelForExport === 'function') ? RM.sanitizeModelForExport(m0) : m0;
       const debugJsonc = isJsoncDebugEnabled();
   
-      const jp = (JSONC_PRESERVE_ENABLED && XK.features && XK.features.routingJsoncPreserve)
-        ? XK.features.routingJsoncPreserve
-        : null;
+      const jp = JSONC_PRESERVE_ENABLED ? getRoutingJsoncPreserve() : null;
   
       // Best-effort: apply routing.rules + routing.balancers + routing.domainStrategy via JSONC patcher.
       // On failure, ask user before falling back to the legacy full rewrite (comments will be lost).

@@ -1,39 +1,62 @@
+let routingModuleApi = null;
+
+import { getRoutingShellApi as getRoutingShellModuleApi } from './routing_shell.js';
+import { getRoutingCardsApi as getRoutingCardsModuleApi } from './routing_cards.js';
+import { getBackupsApi as getBackupsModuleApi } from './backups.js';
+import {
+  confirmXkeenAction,
+  getXkeenCm6RuntimeApi,
+  getXkeenCommandJobApi,
+  getXkeenConfigDirtyApi,
+  getXkeenCoreHttpApi,
+  getXkeenCoreStorageApi,
+  attachXkeenEditorToolbar,
+  buildXkeenEditorCommonKeys,
+  getXkeenEditorEngineApi,
+  getXkeenEditorToolbarDefaultItems,
+  getXkeenEditorToolbarIcons,
+  getXkeenFormattersApi,
+  getXkeenSettingsApi,
+  getXkeenShowXrayPreflightErrorApi,
+  getXkeenUiConfigShellApi,
+  getXkeenFilePath,
+  getXkeenModalApi,
+  isXkeenMipsRuntime,
+  toastXkeen,
+} from './xkeen_runtime.js';
+import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_comments.js';
+
 (() => {
   "use strict";
 
   // Routing editor module.
-  // Public API:
-  //   XKeen.routing.init() -> creates CodeMirror editor and wires routing buttons.
-  //   XKeen.routing.load/save/validate/format/backup/restoreAuto/toggleCard
+  // Canonical module API:
+  //   routingApi.init() -> creates CodeMirror editor and wires routing buttons.
+  //   routingApi.load/save/validate/format/backup/restoreAuto/toggleCard
   //
   // Key goals:
   //  - Own routing editor lifecycle (CodeMirror + JSONC-aware lint).
-  //  - Keep backward compatibility (main.js + terminal.js call legacy globals).
-
-  window.XKeen = window.XKeen || {};
-  XKeen.state = XKeen.state || {};
-  XKeen.features = XKeen.features || {};
-
-  const CORE_HTTP = (window.XKeen && window.XKeen.core && window.XKeen.core.http) ? window.XKeen.core.http : null;
-  const CORE_STORAGE = (window.XKeen && window.XKeen.core && window.XKeen.core.storage) ? window.XKeen.core.storage : null;
+  //  - Keep backward compatibility via features/compat/routing.js.
 
   function _storeGet(key) {
-    try { if (CORE_STORAGE && typeof CORE_STORAGE.get === 'function') return CORE_STORAGE.get(key); } catch (e) {}
+    const coreStorage = getXkeenCoreStorageApi();
+    try { if (coreStorage && typeof coreStorage.get === 'function') return coreStorage.get(key); } catch (e) {}
     try { return localStorage.getItem(String(key)); } catch (e2) { return null; }
   }
   function _storeSet(key, val) {
-    try { if (CORE_STORAGE && typeof CORE_STORAGE.set === 'function') return CORE_STORAGE.set(key, val); } catch (e) {}
+    const coreStorage = getXkeenCoreStorageApi();
+    try { if (coreStorage && typeof coreStorage.set === 'function') return coreStorage.set(key, val); } catch (e) {}
     try { localStorage.setItem(String(key), String(val)); } catch (e2) {}
   }
   function _storeRemove(key) {
-    try { if (CORE_STORAGE && typeof CORE_STORAGE.remove === 'function') return CORE_STORAGE.remove(key); } catch (e) {}
+    const coreStorage = getXkeenCoreStorageApi();
+    try { if (coreStorage && typeof coreStorage.remove === 'function') return coreStorage.remove(key); } catch (e) {}
     try { localStorage.removeItem(String(key)); } catch (e2) {}
   }
 
   function _withCSRF(init, methodHint) {
-    try {
-      if (CORE_HTTP && typeof CORE_HTTP.withCSRF === 'function') return CORE_HTTP.withCSRF(init, methodHint);
-    } catch (e) {}
+    const coreHttp = getXkeenCoreHttpApi();
+    try { if (coreHttp && typeof coreHttp.withCSRF === 'function') return coreHttp.withCSRF(init, methodHint); } catch (e) {}
     return init || {};
   }
 
@@ -123,6 +146,10 @@
 
   // Monaco fullscreen (CSS-driven)
   let _monacoFsWired = false;
+  let _routingMonacoMenuEl = null;
+  let _routingMonacoMenuCleanup = null;
+  let _routingMonacoMenuCtx = null;
+  let _routingMonacoClipboardShadow = '';
 
   // Async restart job state (xkeen -restart) for save with auto-restart.
   let _restartJobRunning = false;
@@ -149,10 +176,7 @@
   const PERF_LIMITS = {
     softLines: 1800,
     softChars: 110000,
-    webkitSoftLines: 320,
-    webkitSoftChars: 22000,
     viewportMarginLite: 96,
-    viewportMarginWebkit: 120,
     highlightLengthLite: 1200,
     measureFromLite: 1200,
     viewStateMs: 180,
@@ -171,29 +195,93 @@
   }
 
   function getModalApi() {
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal) return XKeen.ui.modal;
-    } catch (e) {}
-    return null;
+    return getXkeenModalApi();
   }
 
   function getConfigDirtyApi() {
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.configDirty) return XKeen.ui.configDirty;
-    } catch (e) {}
-    return null;
+    return getXkeenConfigDirtyApi();
   }
 
   function getConfigShellApi() {
+    return getXkeenUiConfigShellApi();
+  }
+
+  function getConfirmApi() {
+    return confirmXkeenAction;
+  }
+
+  function getUiSettingsApi() {
+    return getXkeenSettingsApi();
+  }
+
+  function getFormattersApi() {
+    return getXkeenFormattersApi();
+  }
+
+  function getEditorEngineApi() {
+    return getXkeenEditorEngineApi();
+  }
+
+  function getCm6RuntimeApi() {
+    return getXkeenCm6RuntimeApi();
+  }
+
+  function getCommandJobApi() {
+    return getXkeenCommandJobApi();
+  }
+
+  function getShowXrayPreflightErrorApi() {
+    return getXkeenShowXrayPreflightErrorApi();
+  }
+
+  async function ensureFormattersReady() {
+    await import('../ui/prettier_loader.js');
+    await import('../ui/formatters.js');
+    return getXkeenFormattersApi();
+  }
+
+  function ensureXrayPreflightReady() {
+    return import('../ui/xray_preflight_modal.js');
+  }
+
+  let _restartLogModulePromise = null;
+
+  function getRoutingShellApi() {
+    const api = getRoutingShellModuleApi();
+    return api && typeof api.getState === 'function' ? api : null;
+  }
+
+  function getRoutingCardsFeatureApi() {
     try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.configShell) return XKeen.ui.configShell;
+      const api = getRoutingCardsModuleApi();
+      return api && typeof api.init === 'function' ? api : null;
     } catch (e) {}
     return null;
   }
 
-  function getRoutingShellApi() {
+  function getBackupsFeatureApi() {
     try {
-      if (window.XKeen && XKeen.features && XKeen.features.routingShell) return XKeen.features.routingShell;
+      const api = getBackupsModuleApi();
+      return api && typeof api.init === 'function' ? api : null;
+    } catch (e) {}
+    return null;
+  }
+
+  function loadRestartLogModule() {
+    if (!_restartLogModulePromise) {
+      _restartLogModulePromise = import('./restart_log.js').catch((error) => {
+        _restartLogModulePromise = null;
+        throw error;
+      });
+    }
+    return _restartLogModulePromise;
+  }
+
+  async function getRestartLogFeatureApi() {
+    try {
+      const mod = await loadRestartLogModule();
+      const api = mod && typeof mod.getRestartLogApi === 'function' ? mod.getRestartLogApi() : null;
+      return api || null;
     } catch (e) {}
     return null;
   }
@@ -271,9 +359,6 @@
       try { shell.bindEditor(binding); } catch (e) {}
       try { registerRoutingLayers(); } catch (e2) {}
     }
-
-    try { XKeen.state.routingEditor = editor || null; } catch (e) {}
-    try { XKeen.state.routingEditorFacade = facade || null; } catch (e) {}
   }
 
   function setRoutingSavedContent(text) {
@@ -473,12 +558,7 @@
   }
 
   function isMipsTarget() {
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
-      if (!v) return false;
-      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
-    } catch (e) {}
+    if (isXkeenMipsRuntime()) return true;
     try {
       return /mips/i.test(String((window.navigator && window.navigator.userAgent) || ''));
     } catch (e2) {}
@@ -513,14 +593,11 @@
     const raw = String(text ?? '');
     const lineCount = countLines(raw);
     const charCount = raw.length;
-    const safari = isWebKitSafari();
-    const safariLite = safari
-      && (lineCount >= PERF_LIMITS.webkitSoftLines || charCount >= PERF_LIMITS.webkitSoftChars);
-    const lite = !!(isMipsTarget() || safariLite || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars);
+    const lite = !!(isMipsTarget() || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars);
     return {
       lite,
-      manualSync: safari || lite,
-      webkitSafari: safari,
+      manualSync: lite,
+      webkitSafari: false,
       lineCount,
       charCount,
     };
@@ -594,7 +671,7 @@
       }];
     }
 
-    const analysis = getJsoncAnalysis(raw, opts || { preciseLocation: !isWebKitSafari() });
+    const analysis = getJsoncAnalysis(raw, opts || { preciseLocation: true });
     if (analysis.ok || !analysis.loc) return [];
     const loc = analysis.loc || { line: 1, col: 1 };
     return [{
@@ -632,7 +709,7 @@
   function syncCodeMirrorLintNow() {
     try {
       if (_engine !== 'codemirror' || !_cm) return;
-      applyCodeMirrorDiagnostics(buildRoutingCodeMirrorDiagnostics(getEditorText(), { preciseLocation: !isWebKitSafari() }));
+      applyCodeMirrorDiagnostics(buildRoutingCodeMirrorDiagnostics(getEditorText(), { preciseLocation: true }));
     } catch (e) {}
   }
 
@@ -730,7 +807,6 @@
 
   function applyCodeMirrorPerfProfile(text) {
     const next = computeEditorPerfProfile(text);
-    const safari = isWebKitSafari();
     _editorPerfProfile = next;
 
     if (!_cm || typeof _cm.setOption !== 'function') return next;
@@ -740,10 +816,10 @@
       try { _cm.setOption('styleActiveLine', !next.lite); } catch (e) {}
       try { _cm.setOption('showIndentGuides', !next.lite); } catch (e) {}
       try { _cm.setOption('matchBrackets', !next.lite); } catch (e) {}
-      try { _cm.setOption('highlightSelectionMatches', !next.lite && !safari); } catch (e) {}
-      try { _cm.setOption('showTrailingSpace', !next.lite && !safari); } catch (e) {}
-      try { _cm.setOption('lineWrapping', !next.lite && !safari); } catch (e) {}
-      try { _cm.setOption('foldGutter', !next.lite && !safari); } catch (e) {}
+      try { _cm.setOption('highlightSelectionMatches', !next.lite); } catch (e) {}
+      try { _cm.setOption('showTrailingSpace', !next.lite); } catch (e) {}
+      try { _cm.setOption('lineWrapping', !next.lite); } catch (e) {}
+      try { _cm.setOption('foldGutter', !next.lite); } catch (e) {}
       try { _cm.setOption('rulers', next.lite ? [] : [{ column: 120 }]); } catch (e) {}
       try { _cm.setOption('maxHighlightLength', next.lite ? PERF_LIMITS.highlightLengthLite : 10000); } catch (e) {}
       try { _cm.setOption('crudeMeasuringFrom', next.lite ? PERF_LIMITS.measureFromLite : 10000); } catch (e) {}
@@ -752,9 +828,7 @@
           'gutters',
           next.lite
             ? ['CodeMirror-linenumbers', 'CodeMirror-lint-markers']
-            : (safari
-              ? ['CodeMirror-linenumbers', 'CodeMirror-lint-markers']
-              : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers'])
+            : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']
         );
       } catch (e) {}
       try { _cm.setOption('lint', buildRoutingLintOptions(next.lite)); } catch (e) {}
@@ -763,7 +837,7 @@
           'viewportMargin',
           next.lite
             ? PERF_LIMITS.viewportMarginLite
-            : (safari ? PERF_LIMITS.viewportMarginWebkit : Infinity)
+            : Infinity
         );
       } catch (e) {}
     };
@@ -776,7 +850,7 @@
     try {
       if (wrapper && wrapper.classList) wrapper.classList.toggle('xk-cm-lite', !!next.lite);
     } catch (e) {}
-    try { syncRoutingCodeMirrorOverlays(!next.lite && !safari); } catch (e) {}
+    try { syncRoutingCodeMirrorOverlays(!next.lite); } catch (e) {}
     try {
       if (_engine === 'codemirror' && typeof _cm.refresh === 'function') _cm.refresh();
     } catch (e) {}
@@ -1199,10 +1273,6 @@
     try { _updateFileScopedTooltips(); } catch (e) {}
     try { syncShellState(); } catch (e) {}
 
-    // Expose current mode (handy for other modules / debugging).
-    try {
-      if (window.XKeen && window.XKeen.state) window.XKeen.state.routingMode = isRouting ? 'routing' : 'fragment';
-    } catch (e) {}
   }
 
   function _setRoutingMode(mode, reason) {
@@ -1311,8 +1381,9 @@
     const notify = !!(opts && opts.notify);
     let data = null;
     try {
-      if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
-        data = await CORE_HTTP.fetchJSON(url, { method: 'GET', cache: 'no-store' }).catch(() => null);
+      const coreHttp = getXkeenCoreHttpApi();
+      if (coreHttp && typeof coreHttp.fetchJSON === 'function') {
+        data = await coreHttp.fetchJSON(url, { method: 'GET', cache: 'no-store' }).catch(() => null);
       } else {
         const res = await fetch(url, { cache: 'no-store' });
         data = await res.json().catch(() => null);
@@ -1323,8 +1394,8 @@
     if (!data || !data.ok || !Array.isArray(data.items)) {
       // Fallback: keep whatever is rendered by server
       try {
-        if (notify && typeof window.toast === 'function') {
-          window.toast(all ? 'Не удалось обновить список файлов Xray' : 'Не удалось обновить список файлов роутинга', 'error');
+        if (notify) {
+          toastXkeen(all ? 'Не удалось обновить список файлов Xray' : 'Не удалось обновить список файлов роутинга', 'error');
         }
       } catch (e) {}
       return;
@@ -1373,9 +1444,7 @@
     try {
       if (scopeChanged === 'off' && prevSelection && _activeFragment && prevSelection !== _activeFragment) {
         if (names.indexOf(prevSelection) === -1) {
-          if (typeof window.toast === 'function') {
-            window.toast('«Все файлы» выключено — переключено на: ' + String(_activeFragment), 'info');
-          }
+          toastXkeen('«Все файлы» выключено — переключено на: ' + String(_activeFragment), 'info');
         }
       }
     } catch (e) {}
@@ -1413,8 +1482,8 @@
 
     // Success toast (only when explicitly requested)
     try {
-      if (notify && typeof window.toast === 'function') {
-        window.toast(all ? 'Список файлов Xray обновлён' : 'Список файлов роутинга обновлён', 'success');
+      if (notify) {
+        toastXkeen(all ? 'Список файлов Xray обновлён' : 'Список файлов роутинга обновлён', 'success');
       }
     } catch (e) {}
   }
@@ -1525,17 +1594,11 @@
 
   function stripJsonComments(text) {
     try {
-      if (window.XKeen && XKeen.util && typeof XKeen.util.stripJsonComments === 'function') {
-        return XKeen.util.stripJsonComments(String(text ?? ''));
-      }
-    } catch (e) {}
-    try {
-      if (typeof window.stripJsonComments === 'function') {
-        return window.stripJsonComments(String(text ?? ''));
-      }
+      return stripJsonCommentsUtil(String(text ?? ''));
     } catch (e) {}
     return String(text ?? '');
   }
+
 
   function hasUserComments(text) {
     const s = String(text ?? '');
@@ -1549,8 +1612,9 @@
     const message = prefix + 'эта операция перезапишет документ и удалит все комментарии (//, /* */, #). Продолжить?';
 
     try {
-      if (window.XKeen && window.XKeen.ui && typeof window.XKeen.ui.confirm === 'function') {
-        return await window.XKeen.ui.confirm({
+      const confirmApi = getConfirmApi();
+      if (typeof confirmApi === 'function') {
+        return await confirmApi({
           title,
           message,
           okText: 'Продолжить',
@@ -2278,8 +2342,9 @@ function closeHelp() {
       }
       const open = () => {
         try {
-          if (window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function') {
-            XKeen.ui.showXrayPreflightError(payload);
+          const showPreflightError = getShowXrayPreflightErrorApi();
+          if (typeof showPreflightError === 'function') {
+            showPreflightError(payload);
             return true;
           }
         } catch (e) {}
@@ -2287,14 +2352,9 @@ function closeHelp() {
       };
       if (open()) return;
 
-      const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
-        ? XKeen.lazy.ensureFeature
-        : null;
-      if (ensureFeature) {
-        Promise.resolve(ensureFeature('xrayPreflight')).then(() => {
-          open();
-        }).catch(() => {});
-      }
+      Promise.resolve(ensureXrayPreflightReady()).then(() => {
+        open();
+      }).catch(() => {});
     } catch (e) {}
   }
 
@@ -2351,7 +2411,7 @@ function closeHelp() {
       if (statusEl) statusEl.textContent = okJson ? (_routingMode === 'routing' ? 'Routing загружен.' : 'Файл загружен.') : 'Файл загружен, но содержит ошибку JSON.';
       try {
         if (typeof window.updateLastActivity === 'function') {
-          const fp = window.XKEEN_FILES && window.XKEEN_FILES.routing ? window.XKEEN_FILES.routing : '';
+          const fp = getXkeenFilePath('routing', '');
           window.updateLastActivity('loaded', 'routing', fp);
         }
       } catch (e) {}
@@ -2395,16 +2455,18 @@ function closeHelp() {
       try { saveBtn.classList.toggle('is-busy', !!busy); } catch (e) {}
     };
 
-    const clearRestartLogUi = () => {
+    const clearRestartLogUi = async () => {
       try {
-        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.setRaw === 'function') {
-          XKeen.features.restartLog.setRaw('');
+        const api = await getRestartLogFeatureApi();
+        if (api && typeof api.setRaw === 'function') {
+          api.setRaw('');
           return;
         }
       } catch (e) {}
       try {
-        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.clear === 'function') {
-          XKeen.features.restartLog.clear();
+        const api = await getRestartLogFeatureApi();
+        if (api && typeof api.clear === 'function') {
+          api.clear();
           return;
         }
       } catch (e) {}
@@ -2426,11 +2488,12 @@ function closeHelp() {
       });
     };
 
-    const appendRestartLog = (chunk) => {
+    const appendRestartLog = async (chunk) => {
       if (!chunk) return;
       try {
-        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.append === 'function') {
-          XKeen.features.restartLog.append(String(chunk));
+        const api = await getRestartLogFeatureApi();
+        if (api && typeof api.append === 'function') {
+          api.append(String(chunk));
           return;
         }
       } catch (e) {}
@@ -2489,7 +2552,7 @@ function closeHelp() {
         // Update activity bookkeeping
         try {
           if (typeof window.updateLastActivity === 'function') {
-            const fp = window.XKEEN_FILES && window.XKEEN_FILES.routing ? window.XKEEN_FILES.routing : '';
+            const fp = getXkeenFilePath('routing', '');
             window.updateLastActivity('saved', 'routing', fp);
           }
         } catch (e) {}
@@ -2499,16 +2562,16 @@ function closeHelp() {
         if (restart && jobId) {
           _restartJobRunning = true;
           if (statusEl) statusEl.textContent = msg + ' Перезапуск…';
-          clearRestartLogUi();
-          appendRestartLog('⏳ Запуск xkeen -restart (job)…\n');
+          await clearRestartLogUi();
+          await appendRestartLog('⏳ Запуск xkeen -restart (job)…\n');
 
-          const CJ = (window.XKeen && XKeen.util && XKeen.util.commandJob) ? XKeen.util.commandJob : null;
+          const CJ = getCommandJobApi();
           let result = null;
 
           if (CJ && typeof CJ.waitForCommandJob === 'function') {
             result = await CJ.waitForCommandJob(jobId, {
               maxWaitMs: 5 * 60 * 1000,
-              onChunk: (chunk) => { try { appendRestartLog(chunk); } catch (e) {} }
+              onChunk: (chunk) => { try { void appendRestartLog(chunk); } catch (e) {} }
             });
           } else {
             // Minimal HTTP polling fallback.
@@ -2518,7 +2581,7 @@ function closeHelp() {
               const pj = await pr.json().catch(() => ({}));
               const out = (pj && typeof pj.output === 'string') ? pj.output : '';
               if (out.length > lastLen) {
-                appendRestartLog(out.slice(lastLen));
+                await appendRestartLog(out.slice(lastLen));
                 lastLen = out.length;
               }
               if (!pr.ok || pj.ok === false || pj.status === 'finished' || pj.status === 'error') {
@@ -2540,7 +2603,7 @@ function closeHelp() {
             const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
             const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
             const detail = err ? ('Ошибка: ' + err) : (exitCode !== null ? ('Ошибка (exit_code=' + exitCode + ')') : '');
-            if (detail) { try { appendRestartLog('\n' + detail + '\n'); } catch (e) {} }
+            if (detail) { try { await appendRestartLog('\n' + detail + '\n'); } catch (e) {} }
           }
 
           return ok;
@@ -2685,8 +2748,9 @@ function closeHelp() {
       if (line && col) payload.location = { line: line, column: col };
       const open = () => {
         try {
-          if (window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function') {
-            XKeen.ui.showXrayPreflightError(payload);
+          const showPreflightError = getShowXrayPreflightErrorApi();
+          if (typeof showPreflightError === 'function') {
+            showPreflightError(payload);
             return true;
           }
         } catch (e) {}
@@ -2694,14 +2758,9 @@ function closeHelp() {
       };
       if (open()) return;
 
-      const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
-        ? XKeen.lazy.ensureFeature
-        : null;
-      if (ensureFeature) {
-        Promise.resolve(ensureFeature('xrayPreflight')).then(() => {
-          open();
-        }).catch(() => {});
-      }
+      Promise.resolve(ensureXrayPreflightReady()).then(() => {
+        open();
+      }).catch(() => {});
     } catch (e) {}
   }
 
@@ -2720,7 +2779,7 @@ function closeHelp() {
       return false;
     }
 
-    const analysis = getJsoncAnalysis(raw, { preciseLocation: !isWebKitSafari() });
+    const analysis = getJsoncAnalysis(raw, { preciseLocation: true });
     if (analysis.ok) {
       setError('', null);
       clearJsonErrorLocation();
@@ -2752,8 +2811,9 @@ function closeHelp() {
       return;
     }
 
-    const ok = await (window.XKeen && window.XKeen.ui && typeof window.XKeen.ui.confirm === 'function'
-      ? window.XKeen.ui.confirm({
+    const confirmApi = getConfirmApi();
+    const ok = await (typeof confirmApi === 'function'
+      ? confirmApi({
           title: 'Откатить изменения?',
           message: 'Вернуть текст редактора к последней сохранённой версии? Все несохранённые правки будут потеряны.',
           okText: 'Откатить',
@@ -2777,8 +2837,8 @@ function closeHelp() {
 
     // Discard local edits in routing cards by reloading from the editor.
     try {
-      const RC = window.XKeen && window.XKeen.features ? window.XKeen.features.routingCards : null;
-      const ctrl = RC && RC.rules ? RC.rules.controls : null;
+      const routingCardsApi = getRoutingCardsFeatureApi();
+      const ctrl = routingCardsApi && routingCardsApi.rules ? routingCardsApi.rules.controls : null;
       if (ctrl && typeof ctrl.renderFromEditor === 'function') {
         ctrl.renderFromEditor({ setError: false });
       }
@@ -2791,15 +2851,16 @@ function closeHelp() {
   async function getPreferPrettierFlag() {
     // Load server settings only on demand (no auto-fetch on page load).
     try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.settings) {
-        if (typeof XKeen.ui.settings.fetchOnce === 'function') {
-          const st = await XKeen.ui.settings.fetchOnce().catch(() => null);
+      const settingsApi = getUiSettingsApi();
+      if (settingsApi) {
+        if (typeof settingsApi.fetchOnce === 'function') {
+          const st = await settingsApi.fetchOnce().catch(() => null);
           if (st && st.format && typeof st.format.preferPrettier === 'boolean') {
             return !!st.format.preferPrettier;
           }
         }
-        if (typeof XKeen.ui.settings.get === 'function') {
-          const st2 = XKeen.ui.settings.get();
+        if (typeof settingsApi.get === 'function') {
+          const st2 = settingsApi.get();
           if (st2 && st2.format && typeof st2.format.preferPrettier === 'boolean') {
             return !!st2.format.preferPrettier;
           }
@@ -2833,15 +2894,10 @@ function closeHelp() {
 
     if (preferPrettier) {
       try {
-        const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
-          ? XKeen.lazy.ensureFeature
-          : null;
-        if (ensureFeature) {
-          await Promise.resolve(ensureFeature('formatters'));
-        }
+        await ensureFormattersReady();
       } catch (e) {}
       try {
-        const F = (window.XKeen && XKeen.ui && XKeen.ui.formatters) ? XKeen.ui.formatters : null;
+        const F = getFormattersApi();
         if (F && typeof F.formatJson === 'function') {
           const r = await F.formatJson(text, { parser: 'jsonc' });
           if (r && r.ok === true && typeof r.text === 'string') {
@@ -2980,9 +3036,10 @@ function closeHelp() {
         toast(msg, false);
         // Refresh backups list (module)
         try {
-          if (window.XKeen && XKeen.backups) {
-            if (typeof XKeen.backups.refresh === 'function') await XKeen.backups.refresh();
-            else if (typeof XKeen.backups.load === 'function') await XKeen.backups.load();
+          const backupsApi = getBackupsFeatureApi();
+          if (backupsApi) {
+            if (typeof backupsApi.refresh === 'function') await backupsApi.refresh();
+            else if (typeof backupsApi.load === 'function') await backupsApi.load();
           }
         } catch (e) {}
       } else {
@@ -3011,8 +3068,9 @@ function closeHelp() {
       try {
         if (file) {
           label = String(file).split(/[\\/]/).pop() || label;
-        } else if (window.XKEEN_FILES && window.XKEEN_FILES.routing) {
-          label = String(window.XKEEN_FILES.routing).split(/[\\/]/).pop() || label;
+        } else {
+          const routingPath = getXkeenFilePath('routing', '');
+          if (routingPath) label = String(routingPath).split(/[\\/]/).pop() || label;
         }
       } catch (e) {}
     } else {
@@ -3229,14 +3287,11 @@ function closeHelp() {
     if (!runtime || typeof runtime.create !== 'function') return null;
 
     const initialLite = computeEditorPerfProfile(textarea.value || '').lite;
-    const safari = isWebKitSafari();
 
     // If main.js provides shared keybindings, reuse them.
     let cmExtraKeysCommon = null;
     try {
-      if (typeof window.buildCmExtraKeysCommon === 'function') {
-        cmExtraKeysCommon = window.buildCmExtraKeysCommon();
-      }
+      cmExtraKeysCommon = buildXkeenEditorCommonKeys();
     } catch (e) {}
 
     const extraKeys = Object.assign({}, cmExtraKeysCommon || {}, {
@@ -3260,16 +3315,14 @@ function closeHelp() {
       showIndentGuides: !initialLite,
       matchBrackets: !initialLite,
       autoCloseBrackets: true,
-      highlightSelectionMatches: !initialLite && !safari,
-      showTrailingSpace: !initialLite && !safari,
+      highlightSelectionMatches: !initialLite,
+      showTrailingSpace: !initialLite,
       rulers: initialLite ? [] : [{ column: 120 }],
-      lineWrapping: !initialLite && !safari,
-      foldGutter: !initialLite && !safari,
+      lineWrapping: !initialLite,
+      foldGutter: !initialLite,
       gutters: initialLite
         ? ['CodeMirror-linenumbers', 'CodeMirror-lint-markers']
-        : (safari
-          ? ['CodeMirror-linenumbers', 'CodeMirror-lint-markers']
-          : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers']),
+        : ['CodeMirror-linenumbers', 'CodeMirror-foldgutter', 'CodeMirror-lint-markers'],
       maxHighlightLength: initialLite ? PERF_LIMITS.highlightLengthLite : 10000,
       crudeMeasuringFrom: initialLite ? PERF_LIMITS.measureFromLite : 10000,
       lint: true,
@@ -3277,8 +3330,8 @@ function closeHelp() {
       indentUnit: 2,
       indentWithTabs: false,
       extraKeys,
-      links: !initialLite && !safari,
-      viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : (safari ? PERF_LIMITS.viewportMarginWebkit : Infinity),
+      links: !initialLite,
+      viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : Infinity,
     });
 
     // Cosmetic class + toolbar
@@ -3293,11 +3346,12 @@ function closeHelp() {
         try { textarea.__xkRoutingCodeMirror = cm; } catch (e) {}
         try { wrapper.__xkRoutingCodeMirror = cm; } catch (e2) {}
         cleanupRoutingCodeMirrorWrappers(wrapper);
-        if (typeof window.xkeenAttachCmToolbar === 'function' && window.XKEEN_CM_TOOLBAR_DEFAULT) {
-          const base = Array.isArray(window.XKEEN_CM_TOOLBAR_DEFAULT) ? window.XKEEN_CM_TOOLBAR_DEFAULT : [];
+        const base = getXkeenEditorToolbarDefaultItems();
+        if (base.length) {
+          const icons = getXkeenEditorToolbarIcons();
           const items = [];
           let inserted = false;
-          (base || []).forEach((it) => {
+          base.forEach((it) => {
             // Replace fullscreen action: in routing card it must work for the active engine
             // (CodeMirror or Monaco), not just CodeMirror.
             if (it && it.id === 'fs') {
@@ -3311,7 +3365,7 @@ function closeHelp() {
               if (!inserted) {
                 items.push({
                   id: 'help_comments',
-                  svg: (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.help) ? window.XKEEN_CM_ICONS.help : it.svg,
+                  svg: icons.help || it.svg,
                   label: 'Справка (комментарии)',
                   fallbackHint: 'JSONC',
                   isCommentsHelp: true,
@@ -3328,42 +3382,42 @@ function closeHelp() {
           if (!inserted) {
             items.push({
               id: 'help_comments',
-              svg: (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.help) ? window.XKEEN_CM_ICONS.help : '',
+              svg: icons.help || '',
               label: 'Справка (комментарии)',
               fallbackHint: 'JSONC',
               isCommentsHelp: true,
               onClick: () => openHelp(),
             });
           }
-          window.xkeenAttachCmToolbar(cm, items);
+          attachXkeenEditorToolbar(cm, items);
         }
       }
     } catch (e) {}
     _editorPerfProfile = {
       lite: !!initialLite,
-      manualSync: !!(initialLite || safari),
-      webkitSafari: !!safari,
+      manualSync: !!initialLite,
+      webkitSafari: false,
       lineCount: 1,
       charCount: 0,
     };
-    try { syncRoutingCodeMirrorOverlays(!initialLite && !safari); } catch (e) {}
+    try { syncRoutingCodeMirrorOverlays(!initialLite); } catch (e) {}
 
 	    cm.on('change', () => {
 	      if (_suppressDirty > 0) return;
 	      invalidateEditorSnapshot();
 	      scheduleValidate();
 	      scheduleDirtyCheck();
-	      if (!isWebKitSafari()) scheduleEditorContentEvent('edit');
+	      scheduleEditorContentEvent('edit');
 	    });
     try { cm.on('blur', () => {
       if (shouldManualCodeMirrorLint()) scheduleValidate(0);
       try { saveCurrentViewState({ updateMeta: false }); } catch (e2) {}
     }); } catch (e) {}
     try { cm.on('cursorActivity', () => {
-      scheduleViewStateSave(null, { updateMeta: false, memoryOnly: isWebKitSafari() });
+      scheduleViewStateSave(null, { updateMeta: false, memoryOnly: false });
     }); } catch (e) {}
     try { cm.on('scroll', () => {
-      scheduleViewStateSave(null, { updateMeta: false, memoryOnly: isWebKitSafari() });
+      scheduleViewStateSave(null, { updateMeta: false, memoryOnly: false });
     }); } catch (e) {}
 
     return cm;
@@ -3433,7 +3487,7 @@ function closeHelp() {
 
       let bar = _routingMonacoToolbarEl;
       if (!bar) {
-        const icons = window.XKEEN_CM_ICONS || {};
+        const icons = getXkeenEditorToolbarIcons();
         bar = document.createElement('div');
         bar.className = 'xkeen-cm-toolbar xk-routing-monaco-toolbar';
         bar.setAttribute('role', 'toolbar');
@@ -3624,14 +3678,16 @@ function closeHelp() {
 
   function _settingsLoadedFromServer() {
     try {
-      return !!(XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.isLoadedFromServer === 'function' && XKeen.ui.settings.isLoadedFromServer());
+      const settingsApi = getUiSettingsApi();
+      return !!(settingsApi && typeof settingsApi.isLoadedFromServer === 'function' && settingsApi.isLoadedFromServer());
     } catch (e) {}
     return false;
   }
 
   function _hasGlobalEditorEngine() {
     try {
-      return !!(XKeen.ui && XKeen.ui.editorEngine && typeof XKeen.ui.editorEngine.get === 'function' && typeof XKeen.ui.editorEngine.set === 'function');
+      const editorEngineApi = getEditorEngineApi();
+      return !!(editorEngineApi && typeof editorEngineApi.get === 'function' && typeof editorEngineApi.set === 'function');
     } catch (e) {}
     return false;
   }
@@ -3679,8 +3735,9 @@ function closeHelp() {
       if (_readLocal(LEGACY_LS_KEY)) return true;
     } catch (e) {}
     try {
-      if (_settingsLoadedFromServer() && XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.get === 'function') {
-        const st = XKeen.ui.settings.get();
+      const settingsApi = getUiSettingsApi();
+      if (_settingsLoadedFromServer() && settingsApi && typeof settingsApi.get === 'function') {
+        const st = settingsApi.get();
         return !!normalizeEngine(st && st.editor ? st.editor.engine : null);
       }
     } catch (e) {}
@@ -3708,8 +3765,9 @@ function closeHelp() {
     } catch (e) {}
 
     try {
-      if (_hasGlobalEditorEngine() && XKeen.ui && XKeen.ui.editorEngine && typeof XKeen.ui.editorEngine.ensureLoaded === 'function') {
-        const loaded = normalizeEngine(await XKeen.ui.editorEngine.ensureLoaded());
+      const editorEngineApi = getEditorEngineApi();
+      if (_hasGlobalEditorEngine() && editorEngineApi && typeof editorEngineApi.ensureLoaded === 'function') {
+        const loaded = normalizeEngine(await editorEngineApi.ensureLoaded());
         if (loaded) return loaded;
       }
     } catch (e) {}
@@ -3721,7 +3779,8 @@ function closeHelp() {
     // Primary: global helper (which itself prefers server settings).
     if (_hasGlobalEditorEngine()) {
       try {
-        const global = normalizeEngine(XKeen.ui.editorEngine.get());
+        const editorEngineApi = getEditorEngineApi();
+        const global = normalizeEngine(editorEngineApi && typeof editorEngineApi.get === 'function' ? editorEngineApi.get() : null);
         if (global && (global !== 'codemirror' || hasExplicitEnginePreference() || !isMipsTarget())) {
           return global;
         }
@@ -3730,8 +3789,9 @@ function closeHelp() {
 
     // Fallback (shouldn't happen in new builds): cached settings.
     try {
-      if (XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.get === 'function') {
-        const st = XKeen.ui.settings.get();
+      const settingsApi = getUiSettingsApi();
+      if (settingsApi && typeof settingsApi.get === 'function') {
+        const st = settingsApi.get();
         return normalizeEngine(st && st.editor ? st.editor.engine : null);
       }
     } catch (e) {}
@@ -3748,7 +3808,8 @@ function closeHelp() {
     if (_hasGlobalEditorEngine()) {
       try {
         // Async best-effort (server first, fallback local).
-        const p = XKeen.ui.editorEngine.set(next);
+        const editorEngineApi = getEditorEngineApi();
+        const p = editorEngineApi ? editorEngineApi.set(next) : null;
         if (p && typeof p.then === 'function') p.catch(() => {});
       } catch (e) {}
       return;
@@ -3758,8 +3819,9 @@ function closeHelp() {
     (async () => {
       let serverOk = false;
       try {
-        if (XKeen.ui && XKeen.ui.settings && typeof XKeen.ui.settings.patch === 'function') {
-          await XKeen.ui.settings.patch({ editor: { engine: next } });
+        const settingsApi = getUiSettingsApi();
+        if (settingsApi && typeof settingsApi.patch === 'function') {
+          await settingsApi.patch({ editor: { engine: next } });
           serverOk = true;
         }
       } catch (e) {
@@ -3780,8 +3842,9 @@ function closeHelp() {
       if (window.__xkeenRoutingEngineSyncWired) return;
       window.__xkeenRoutingEngineSyncWired = true;
 
-      if (_hasGlobalEditorEngine() && typeof XKeen.ui.editorEngine.onChange === 'function') {
-        XKeen.ui.editorEngine.onChange((detail) => {
+      const editorEngineApi = getEditorEngineApi();
+      if (_hasGlobalEditorEngine() && editorEngineApi && typeof editorEngineApi.onChange === 'function') {
+        editorEngineApi.onChange((detail) => {
           try {
             const eng = normalizeEngine(detail && detail.engine);
             if (!eng) return;
@@ -3850,7 +3913,7 @@ function closeHelp() {
 
   function _getEditorEngineHelper() {
     try {
-      return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null;
+      return getEditorEngineApi();
     } catch (e) {}
     return null;
   }
@@ -3863,7 +3926,7 @@ function closeHelp() {
 
   function getRoutingCm6Runtime() {
     try {
-      return (window.XKeen && XKeen.ui && XKeen.ui.cm6Runtime) ? XKeen.ui.cm6Runtime : null;
+      return getCm6RuntimeApi();
     } catch (e) {}
     return null;
   }
@@ -3939,9 +4002,336 @@ function closeHelp() {
     return null;
   }
 
+  function useRoutingMonacoCustomMenu() {
+    return true;
+  }
+
+  function disposeRoutingMonacoContextMenu() {
+    try { hideRoutingMonacoContextMenu(); } catch (e) {}
+    try {
+      if (typeof _routingMonacoMenuCleanup === 'function') _routingMonacoMenuCleanup();
+    } catch (e) {}
+    _routingMonacoMenuCleanup = null;
+  }
+
+  function hideRoutingMonacoContextMenu() {
+    const menu = _routingMonacoMenuEl;
+    _routingMonacoMenuCtx = null;
+    if (!menu) return;
+    try { menu.hidden = true; } catch (e) {}
+    try { menu.classList.remove('is-open'); } catch (e) {}
+    try { menu.style.removeProperty('left'); } catch (e) {}
+    try { menu.style.removeProperty('top'); } catch (e) {}
+  }
+
+  function ensureRoutingMonacoContextMenuDom() {
+    if (_routingMonacoMenuEl && _routingMonacoMenuEl.isConnected) return _routingMonacoMenuEl;
+    const menu = document.createElement('div');
+    menu.className = 'xk-routing-monaco-menu';
+    menu.hidden = true;
+    menu.innerHTML = [
+      '<button type="button" class="xk-routing-monaco-menu-item" data-action="cut">Вырезать</button>',
+      '<button type="button" class="xk-routing-monaco-menu-item" data-action="copy">Копировать</button>',
+      '<button type="button" class="xk-routing-monaco-menu-item" data-action="paste">Вставить</button>',
+      '<div class="xk-routing-monaco-menu-sep" role="separator"></div>',
+      '<button type="button" class="xk-routing-monaco-menu-item" data-action="selectAll">Выделить всё</button>',
+      '<button type="button" class="xk-routing-monaco-menu-item" data-action="format">Форматировать JSON</button>'
+    ].join('');
+    const handleMenuAction = async (ev) => {
+      const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
+      if (!btn || btn.disabled) return;
+      try { ev.preventDefault(); } catch (e) {}
+      try { ev.stopPropagation(); } catch (e) {}
+      const action = String(btn.dataset.action || '');
+      const ctx = _routingMonacoMenuCtx;
+      hideRoutingMonacoContextMenu();
+      if (!ctx || !ctx.editor) return;
+      try {
+        await runRoutingMonacoMenuAction(ctx.editor, action);
+      } catch (e) {}
+    };
+    menu.addEventListener('pointerdown', (ev) => {
+      const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
+      if (btn) {
+        handleMenuAction(ev);
+        return;
+      }
+      try { ev.stopPropagation(); } catch (e) {}
+    });
+    menu.addEventListener('mousedown', (ev) => {
+      try { ev.stopPropagation(); } catch (e) {}
+    });
+    menu.addEventListener('click', (ev) => {
+      const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
+      if (!btn) return;
+      try { ev.preventDefault(); } catch (e) {}
+      try { ev.stopPropagation(); } catch (e) {}
+    });
+    menu.addEventListener('contextmenu', (ev) => {
+      try { ev.preventDefault(); } catch (e) {}
+      try { ev.stopPropagation(); } catch (e) {}
+    });
+    document.body.appendChild(menu);
+    _routingMonacoMenuEl = menu;
+    return menu;
+  }
+
+  function getRoutingMonacoSelections(editor) {
+    if (!editor) return [];
+    try {
+      if (typeof editor.getSelections === 'function') {
+        const ranges = editor.getSelections();
+        if (Array.isArray(ranges) && ranges.length) return ranges.filter(Boolean);
+      }
+    } catch (e) {}
+    try {
+      if (typeof editor.getSelection === 'function') {
+        const sel = editor.getSelection();
+        if (sel) return [sel];
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function getRoutingMonacoSelectionText(editor) {
+    if (!editor) return '';
+    try {
+      const model = (typeof editor.getModel === 'function') ? editor.getModel() : null;
+      if (!model || typeof model.getValueInRange !== 'function') return '';
+      const selections = getRoutingMonacoSelections(editor);
+      if (!selections.length) return '';
+      return selections.map((range) => {
+        try { return String(model.getValueInRange(range) || ''); } catch (e) { return ''; }
+      }).join('\n');
+    } catch (e) {}
+    return '';
+  }
+
+  function isRoutingMonacoReadOnly(editor) {
+    try {
+      const monacoApi = window.monaco || null;
+      const readOnlyOption = monacoApi && monacoApi.editor && monacoApi.editor.EditorOption
+        ? monacoApi.editor.EditorOption.readOnly
+        : null;
+      if (editor && typeof editor.getOption === 'function' && readOnlyOption != null) {
+        return !!editor.getOption(readOnlyOption);
+      }
+    } catch (e) {}
+    try {
+      if (editor && typeof editor.getRawOptions === 'function') {
+        const raw = editor.getRawOptions();
+        if (raw && Object.prototype.hasOwnProperty.call(raw, 'readOnly')) return !!raw.readOnly;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function execRoutingMonacoEdits(editor, edits, source) {
+    if (!editor || !Array.isArray(edits) || !edits.length) return false;
+    try {
+      if (typeof editor.pushUndoStop === 'function') editor.pushUndoStop();
+    } catch (e) {}
+    try {
+      if (typeof editor.executeEdits === 'function') {
+        editor.executeEdits(String(source || 'xk-routing-menu'), edits);
+        try { if (typeof editor.pushUndoStop === 'function') editor.pushUndoStop(); } catch (e2) {}
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  async function writeRoutingClipboardText(text) {
+    const value = String(text ?? '');
+    _routingMonacoClipboardShadow = value;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+    } catch (e) {}
+
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.setAttribute('readonly', 'readonly');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      ta.style.pointerEvents = 'none';
+      ta.style.left = '-9999px';
+      ta.style.top = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = !!document.execCommand('copy');
+      try { document.body.removeChild(ta); } catch (e) {}
+      return ok;
+    } catch (e) {}
+    return false;
+  }
+
+  async function readRoutingClipboardText() {
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+        const value = await navigator.clipboard.readText();
+        if (typeof value === 'string') {
+          _routingMonacoClipboardShadow = value;
+          return value;
+        }
+      }
+    } catch (e) {}
+    return String(_routingMonacoClipboardShadow || '');
+  }
+
+  async function runRoutingMonacoMenuAction(editor, action) {
+    if (!editor) return false;
+    try { if (typeof editor.focus === 'function') editor.focus(); } catch (e) {}
+
+    const selections = getRoutingMonacoSelections(editor);
+    const hasSelection = selections.some((range) => {
+      try { return !!range && !(range.isEmpty && range.isEmpty()); } catch (e) { return false; }
+    });
+
+    if (action === 'copy') {
+      const selectedText = getRoutingMonacoSelectionText(editor);
+      if (!selectedText) return false;
+      await writeRoutingClipboardText(selectedText);
+      return true;
+    }
+
+    if (action === 'cut') {
+      if (isRoutingMonacoReadOnly(editor) || !hasSelection) return false;
+      const selectedText = getRoutingMonacoSelectionText(editor);
+      if (!selectedText) return false;
+      await writeRoutingClipboardText(selectedText);
+      return execRoutingMonacoEdits(editor, selections.map((range) => ({ range, text: '', forceMoveMarkers: true })), 'xk-routing-menu-cut');
+    }
+
+    if (action === 'paste') {
+      if (isRoutingMonacoReadOnly(editor)) return false;
+      const value = await readRoutingClipboardText();
+      if (typeof value !== 'string') return false;
+      const targetSelections = selections.length ? selections : getRoutingMonacoSelections(editor);
+      if (!targetSelections.length) return false;
+      return execRoutingMonacoEdits(editor, targetSelections.map((range) => ({ range, text: value, forceMoveMarkers: true })), 'xk-routing-menu-paste');
+    }
+
+    if (action === 'selectAll') {
+      try {
+        const cmd = editor.getAction && editor.getAction('editor.action.selectAll');
+        if (cmd && typeof cmd.run === 'function') {
+          await cmd.run();
+          return true;
+        }
+      } catch (e) {}
+      try {
+        const model = (typeof editor.getModel === 'function') ? editor.getModel() : null;
+        if (model && typeof editor.setSelection === 'function' && typeof model.getFullModelRange === 'function') {
+          editor.setSelection(model.getFullModelRange());
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    if (action === 'format') {
+      if (isRoutingMonacoReadOnly(editor)) return false;
+      try {
+        const cmd = editor.getAction && editor.getAction('editor.action.formatDocument');
+        if (cmd && typeof cmd.run === 'function') {
+          await cmd.run();
+          return true;
+        }
+      } catch (e) {}
+      try { formatEditorJson(); } catch (e) {}
+      return true;
+    }
+
+    return false;
+  }
+
+  function updateRoutingMonacoContextMenuState(editor) {
+    const menu = ensureRoutingMonacoContextMenuDom();
+    const hasSelection = !!getRoutingMonacoSelectionText(editor);
+    const readOnly = isRoutingMonacoReadOnly(editor);
+    const items = Array.from(menu.querySelectorAll('button[data-action]'));
+    items.forEach((btn) => {
+      const action = String(btn.dataset.action || '');
+      let disabled = false;
+      if (action === 'copy' || action === 'cut') disabled = !hasSelection;
+      if ((action === 'cut' || action === 'paste' || action === 'format') && readOnly) disabled = true;
+      btn.disabled = disabled;
+    });
+  }
+
+  function showRoutingMonacoContextMenu(editor, ev) {
+    if (!editor || !ev) return;
+    const menu = ensureRoutingMonacoContextMenuDom();
+    _routingMonacoMenuCtx = { editor };
+    updateRoutingMonacoContextMenuState(editor);
+    menu.hidden = false;
+    menu.classList.add('is-open');
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+    const rect = menu.getBoundingClientRect();
+    const vw = Math.max(320, window.innerWidth || 0);
+    const vh = Math.max(240, window.innerHeight || 0);
+    const left = Math.max(8, Math.min((ev.clientX || 0), vw - rect.width - 8));
+    const top = Math.max(8, Math.min((ev.clientY || 0), vh - rect.height - 8));
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+  }
+
+  function installRoutingMonacoContextMenu(editor, host) {
+    disposeRoutingMonacoContextMenu();
+    if (!editor || !host || !useRoutingMonacoCustomMenu()) return;
+
+    const onContextMenu = (ev) => {
+      if (_engine !== 'monaco') return;
+      try { ev.preventDefault(); } catch (e) {}
+      try { ev.stopPropagation(); } catch (e) {}
+      try { if (typeof editor.focus === 'function') editor.focus(); } catch (e) {}
+      showRoutingMonacoContextMenu(editor, ev);
+    };
+
+    const hide = () => { hideRoutingMonacoContextMenu(); };
+    const onDocumentMouseDown = (ev) => {
+      const menu = _routingMonacoMenuEl;
+      if (menu) {
+        try {
+          const path = ev && typeof ev.composedPath === 'function' ? ev.composedPath() : null;
+          if (Array.isArray(path) && path.includes(menu)) return;
+        } catch (e) {}
+        if (ev && ev.target && typeof menu.contains === 'function' && menu.contains(ev.target)) return;
+      }
+      hide();
+    };
+    const onKeyDown = (ev) => {
+      if (ev && (ev.key === 'Escape' || ev.key === 'Esc')) hide();
+    };
+
+    host.addEventListener('contextmenu', onContextMenu, true);
+    document.addEventListener('mousedown', onDocumentMouseDown, true);
+    document.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide, true);
+    window.addEventListener('blur', hide, true);
+    document.addEventListener('keydown', onKeyDown, true);
+
+    _routingMonacoMenuCleanup = () => {
+      try { host.removeEventListener('contextmenu', onContextMenu, true); } catch (e) {}
+      try { document.removeEventListener('mousedown', onDocumentMouseDown, true); } catch (e) {}
+      try { document.removeEventListener('scroll', hide, true); } catch (e) {}
+      try { window.removeEventListener('resize', hide, true); } catch (e) {}
+      try { window.removeEventListener('blur', hide, true); } catch (e) {}
+      try { document.removeEventListener('keydown', onKeyDown, true); } catch (e) {}
+    };
+  }
+
   function resetMonacoHostDom(hostEl) {
     const host = hostEl || ensureMonacoHost();
     if (!host) return;
+    try { hideRoutingMonacoContextMenu(); } catch (e) {}
     try {
       while (host.firstChild) host.removeChild(host.firstChild);
     } catch (e) {
@@ -3963,6 +4353,8 @@ function closeHelp() {
     }
 
     _monacoEnsurePromise = (async () => {
+      try { disposeRoutingMonacoContextMenu(); } catch (e) {}
+      try { disposeRoutingMonacoContextMenu(); } catch (e) {}
       try {
         if (_monaco && typeof _monaco.dispose === 'function') _monaco.dispose();
       } catch (e) {}
@@ -3973,6 +4365,7 @@ function closeHelp() {
       try {
         _monaco = await runtime.create(host, {
           value: readCurrentEditorText(),
+          contextmenu: !useRoutingMonacoCustomMenu(),
           // Xray configs commonly use JSON with user comments (JSONC-like).
           // Backend сохраняет чистый JSON + отдельный .jsonc сайдкар, поэтому в UI
           // разрешаем комментарии для удобства.
@@ -3986,7 +4379,7 @@ function closeHelp() {
             try { invalidateEditorSnapshot(); } catch (e) {}
             try { scheduleMonacoDiagnostics(); } catch (e) {}
 	            try { scheduleDirtyCheck(); } catch (e) {}
-            try { if (!isWebKitSafari()) scheduleEditorContentEvent('edit'); } catch (e) {}
+            try { scheduleEditorContentEvent('edit'); } catch (e) {}
           },
         });
 
@@ -3999,6 +4392,7 @@ function closeHelp() {
         // Facade for routing consumers so feature modules stay engine-agnostic.
         _monacoFacade = createRoutingMonacoFacade(_monaco);
         try { syncSharedRoutingEditor(_monaco, _monacoFacade, 'monaco'); } catch (e) {}
+        try { installRoutingMonacoContextMenu(_monaco, host); } catch (e) {}
 
         // Ensure layout fix for hidden containers (modals/tabs/engine switch).
         try {
@@ -4008,14 +4402,14 @@ function closeHelp() {
         try {
           if (_monaco && typeof _monaco.onDidScrollChange === 'function') {
             _monaco.onDidScrollChange(() => {
-              try { scheduleViewStateSave(null, { updateMeta: false, memoryOnly: isWebKitSafari() }); } catch (e) {}
+              try { scheduleViewStateSave(null, { updateMeta: false, memoryOnly: false }); } catch (e) {}
             });
           }
         } catch (e) {}
         try {
           if (_monaco && typeof _monaco.onDidChangeCursorPosition === 'function') {
             _monaco.onDidChangeCursorPosition(() => {
-              try { scheduleViewStateSave(null, { updateMeta: false, memoryOnly: isWebKitSafari() }); } catch (e) {}
+              try { scheduleViewStateSave(null, { updateMeta: false, memoryOnly: false }); } catch (e) {}
             });
           }
         } catch (e) {}
@@ -4173,7 +4567,10 @@ function closeHelp() {
     if (!host) return;
     try { syncRoutingEngineDomState(show ? 'monaco' : 'codemirror'); } catch (e) {}
     if (show) host.style.removeProperty('display');
-    else host.style.setProperty('display', 'none', 'important');
+    else {
+      try { hideRoutingMonacoContextMenu(); } catch (e) {}
+      host.style.setProperty('display', 'none', 'important');
+    }
 
     if (show && _monaco && typeof _monaco.layout === 'function') {
       const runtime = getEditorRuntime('monaco');
@@ -4283,8 +4680,9 @@ function closeHelp() {
     }
     try { updateEditorMetaStatus(); } catch (e) {}
     try {
-      if (window.XKeen && XKeen.features && XKeen.features.routingCards && typeof XKeen.features.routingCards.onShow === 'function') {
-        XKeen.features.routingCards.onShow({ reason: reason || 'show' });
+      const routingCardsApi = getRoutingCardsFeatureApi();
+      if (routingCardsApi && typeof routingCardsApi.onShow === 'function') {
+        routingCardsApi.onShow({ reason: reason || 'show' });
       }
     } catch (e) {}
   }
@@ -4485,8 +4883,9 @@ function closeHelp() {
 
     // Lazy server read (do not override user choice).
     try {
-      if (_hasGlobalEditorEngine() && XKeen.ui && XKeen.ui.editorEngine && typeof XKeen.ui.editorEngine.ensureLoaded === 'function') {
-        XKeen.ui.editorEngine.ensureLoaded().then((eng) => {
+      const editorEngineApi = getEditorEngineApi();
+      if (_hasGlobalEditorEngine() && editorEngineApi && typeof editorEngineApi.ensureLoaded === 'function') {
+        editorEngineApi.ensureLoaded().then((eng) => {
           if (_engineTouched) return;
           const desired = normalizeEngine(hasExplicitEnginePreference() ? eng : getPreferredEngine());
           try { if (_engineSelectEl) _engineSelectEl.value = desired; } catch (e) {}
@@ -4637,7 +5036,7 @@ function closeHelp() {
     try { scheduleEditorContentEvent(o.reason || 'replace', 20); } catch (e) {}
   }
 
-  XKeen.routing = {
+  routingModuleApi = {
     init,
     onShow,
     load,
@@ -4655,6 +5054,103 @@ function closeHelp() {
     replaceEditorText,
   };
 
-  // Alias for consistency with other feature modules.
-  XKeen.features.routing = XKeen.routing;
 })();
+
+export function getRoutingApi() {
+  try {
+    if (routingModuleApi && typeof routingModuleApi.init === 'function') return routingModuleApi;
+  } catch (error) {
+    console.error(error);
+  }
+  return null;
+}
+
+function callRoutingApi(method, ...args) {
+  const api = getRoutingApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initRouting(...args) {
+  return callRoutingApi('init', ...args);
+}
+
+export function loadRouting(...args) {
+  return callRoutingApi('load', ...args);
+}
+
+export function onShowRouting(...args) {
+  return callRoutingApi('onShow', ...args);
+}
+
+export function saveRouting(...args) {
+  return callRoutingApi('save', ...args);
+}
+
+export function validateRouting(...args) {
+  return callRoutingApi('validate', ...args);
+}
+
+export function formatRouting(...args) {
+  return callRoutingApi('format', ...args);
+}
+
+export function clearRoutingComments(...args) {
+  return callRoutingApi('clearComments', ...args);
+}
+
+export function sortRoutingRules(...args) {
+  return callRoutingApi('sortRules', ...args);
+}
+
+export function backupRouting(...args) {
+  return callRoutingApi('backup', ...args);
+}
+
+export function restoreRoutingAutoBackup(...args) {
+  return callRoutingApi('restoreAuto', ...args);
+}
+
+export function toggleRoutingCard(...args) {
+  return callRoutingApi('toggleCard', ...args);
+}
+
+export function openRoutingHelp(...args) {
+  return callRoutingApi('openHelp', ...args);
+}
+
+export function closeRoutingHelp(...args) {
+  return callRoutingApi('closeHelp', ...args);
+}
+
+export function setRoutingError(...args) {
+  return callRoutingApi('setError', ...args);
+}
+
+export function replaceRoutingEditorText(...args) {
+  return callRoutingApi('replaceEditorText', ...args);
+}
+
+export function disposeRouting(...args) {
+  return callRoutingApi('dispose', ...args);
+}
+
+export const routingApi = Object.freeze({
+  get: getRoutingApi,
+  init: initRouting,
+  load: loadRouting,
+  onShow: onShowRouting,
+  save: saveRouting,
+  validate: validateRouting,
+  format: formatRouting,
+  clearComments: clearRoutingComments,
+  sortRules: sortRoutingRules,
+  backup: backupRouting,
+  restoreAuto: restoreRoutingAutoBackup,
+  toggleCard: toggleRoutingCard,
+  openHelp: openRoutingHelp,
+  closeHelp: closeRoutingHelp,
+  setError: setRoutingError,
+  replaceEditorText: replaceRoutingEditorText,
+  dispose: disposeRouting,
+});

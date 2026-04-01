@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager panel renderer (renderPanel)
-  // attach to window.XKeen.features.fileManager.render
+  // attach to the shared file manager namespace.render
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
 
   FM.render = FM.render || {};
   const R = FM.render;

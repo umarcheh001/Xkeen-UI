@@ -1,0 +1,15 @@
+import '../core/xk_dom.js';
+import '../core/xk_http.js';
+import '../core/xk_storage.js';
+import '../ui/shared_primitives.js';
+import '../ui/modal.js';
+import '../ui/confirm_modal.js';
+import '../ui/theme.js?v=20260324b';
+import '../ui/tooltips_auto.js?v=20260119d';
+import '../util/helpers.js';
+import '../runtime/lazy_runtime.js?v=20260324d';
+import '../util/tab_id.js';
+import '../util/ansi.js?v=20260302a';
+import '../util/command_job.js';
+import '../ui/spinner_fetch.js?v=20260317c';
+import '../features/update_notifier.js';

@@ -1,61 +1,161 @@
+import { isXkeenMipsRuntime } from '../xkeen_runtime.js';
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager shared helpers (no ES modules / bundler):
-  // attach to window.XKeen.features.fileManager.common.
+  // attach to the shared file manager namespace.common.
 
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
+  const FM = getFileManagerNamespace();
 
-  const FM = XKeen.features.fileManager;
+  function getWindowXKeen() {
+    try { return window && window.XKeen ? window.XKeen : null; } catch (e) { return null; }
+  }
 
-  const CORE_DOM = (window.XKeen && window.XKeen.core && window.XKeen.core.dom) ? window.XKeen.core.dom : null;
-  const CORE_STORAGE = (window.XKeen && window.XKeen.core && window.XKeen.core.storage) ? window.XKeen.core.storage : null;
+  function getCoreDomApi() {
+    try {
+      const xk = getWindowXKeen();
+      return xk && xk.core ? (xk.core.dom || null) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function getCoreStorageApi() {
+    try {
+      const xk = getWindowXKeen();
+      return xk && xk.core ? (xk.core.storage || null) : null;
+    } catch (e) {
+      return null;
+    }
+  }
 
   FM.common = FM.common || {};
   const C = FM.common;
 
+  C.getXKeen = function getXKeen() {
+    return getWindowXKeen();
+  };
+
+  C.getUiApi = function getUiApi() {
+    try {
+      const xk = getWindowXKeen();
+      return xk ? (xk.ui || null) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  C.getModalApi = function getModalApi() {
+    try {
+      const ui = C.getUiApi();
+      return ui ? (ui.modal || null) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  C.getLayoutApi = function getLayoutApi() {
+    try {
+      const ui = C.getUiApi();
+      return ui ? (ui.layout || null) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  C.getCoreHttp = function getCoreHttp() {
+    try {
+      const xk = getWindowXKeen();
+      return xk && xk.core ? (xk.core.http || null) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  C.getEditorEngine = function getEditorEngine() {
+    try {
+      const ui = C.getUiApi();
+      return ui ? (ui.editorEngine || null) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  C.getLazyRuntime = function getLazyRuntime() {
+    try {
+      const xk = getWindowXKeen();
+      return xk && xk.runtime ? (xk.runtime.lazy || null) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  C.getTerminal = function getTerminal() {
+    try {
+      const xk = getWindowXKeen();
+      return xk ? (xk.terminal || null) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
   // -------------------------- DOM helpers --------------------------
   C.el = function el(id) {
     try {
-      if (CORE_DOM && typeof CORE_DOM.byId === 'function') return CORE_DOM.byId(id);
+      const coreDom = getCoreDomApi();
+      if (coreDom && typeof coreDom.byId === 'function') return coreDom.byId(id);
     } catch (e) {}
     try { return document.getElementById(id); } catch (e2) { return null; }
   };
 
   C.qs = function qs(sel, root) {
     try {
-      if (CORE_DOM && typeof CORE_DOM.q === 'function') return CORE_DOM.q(sel, root);
+      const coreDom = getCoreDomApi();
+      if (coreDom && typeof coreDom.q === 'function') return coreDom.q(sel, root);
     } catch (e) {}
     try { return (root || document).querySelector(sel); } catch (e2) { return null; }
   };
 
   C.qsa = function qsa(sel, root) {
     try {
-      if (CORE_DOM && typeof CORE_DOM.qa === 'function') return CORE_DOM.qa(sel, root);
+      const coreDom = getCoreDomApi();
+      if (coreDom && typeof coreDom.qa === 'function') return coreDom.qa(sel, root);
     } catch (e) {}
     try { return Array.from((root || document).querySelectorAll(sel) || []); } catch (e2) { return []; }
   };
 
-  // -------------------------- storage (localStorage wrapper, keys stay the same) --------------------------
+  // -------------------------- storage --------------------------
   C.storageGet = function storageGet(key) {
-    try { if (CORE_STORAGE && typeof CORE_STORAGE.get === 'function') return CORE_STORAGE.get(key); } catch (e) {}
+    try {
+      const coreStorage = getCoreStorageApi();
+      if (coreStorage && typeof coreStorage.get === 'function') return coreStorage.get(key);
+    } catch (e) {}
     try { return window.localStorage ? window.localStorage.getItem(String(key)) : null; } catch (e2) { return null; }
   };
 
   C.storageSet = function storageSet(key, val) {
-    try { if (CORE_STORAGE && typeof CORE_STORAGE.set === 'function') return CORE_STORAGE.set(key, val); } catch (e) {}
+    try {
+      const coreStorage = getCoreStorageApi();
+      if (coreStorage && typeof coreStorage.set === 'function') return coreStorage.set(key, val);
+    } catch (e) {}
     try { if (window.localStorage) window.localStorage.setItem(String(key), String(val)); } catch (e2) {}
   };
 
   C.storageRemove = function storageRemove(key) {
-    try { if (CORE_STORAGE && typeof CORE_STORAGE.remove === 'function') return CORE_STORAGE.remove(key); } catch (e) {}
+    try {
+      const coreStorage = getCoreStorageApi();
+      if (coreStorage && typeof coreStorage.remove === 'function') return coreStorage.remove(key);
+    } catch (e) {}
     try { if (window.localStorage) window.localStorage.removeItem(String(key)); } catch (e2) {}
   };
 
   C.storageGetJSON = function storageGetJSON(key, fallback) {
-    try { if (CORE_STORAGE && typeof CORE_STORAGE.getJSON === 'function') return CORE_STORAGE.getJSON(key, fallback); } catch (e) {}
+    try {
+      const coreStorage = getCoreStorageApi();
+      if (coreStorage && typeof coreStorage.getJSON === 'function') return coreStorage.getJSON(key, fallback);
+    } catch (e) {}
     try {
       const raw = C.storageGet(key);
       if (!raw) return fallback;
@@ -67,49 +167,68 @@
   };
 
   C.storageSetJSON = function storageSetJSON(key, val) {
-    try { if (CORE_STORAGE && typeof CORE_STORAGE.setJSON === 'function') return CORE_STORAGE.setJSON(key, val); } catch (e) {}
+    try {
+      const coreStorage = getCoreStorageApi();
+      if (coreStorage && typeof coreStorage.setJSON === 'function') return coreStorage.setJSON(key, val);
+    } catch (e) {}
     try { C.storageSet(key, JSON.stringify(val)); } catch (e2) {}
   };
 
-  // -------------------------- modal helpers --------------------------
+  // -------------------------- modal / ui helpers --------------------------
+  C.syncBodyScrollLock = function syncBodyScrollLock(locked) {
+    try {
+      const modalApi = C.getModalApi();
+      if (modalApi && typeof modalApi.syncBodyScrollLock === 'function') {
+        modalApi.syncBodyScrollLock();
+        return;
+      }
+    } catch (e) {}
+    try {
+      if (typeof locked === 'boolean') document.body.classList.toggle('modal-open', !!locked);
+    } catch (e2) {}
+  };
+
   C.modalOpen = function modalOpen(modal) {
     if (!modal) return;
     try { modal.classList.remove('hidden'); } catch (e) {}
-    try {
-      if (XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.add('modal-open');
-      }
-    } catch (e) {}
+    try { C.syncBodyScrollLock(true); } catch (e2) {}
   };
 
   C.modalClose = function modalClose(modal) {
     if (!modal) return;
     try { modal.classList.add('hidden'); } catch (e) {}
-    try {
-      if (XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.remove('modal-open');
-      }
-    } catch (e) {}
+    try { C.syncBodyScrollLock(false); } catch (e2) {}
+  };
 
-  // -------------------------- toast helpers (centralized) --------------------------
   C.toast = function toast(msg, level) {
     const m = (msg == null) ? '' : String(msg);
     const lvl = String(level || 'info');
     try {
-      if (window.XKeen && window.XKeen.ui && typeof window.XKeen.ui.toast === 'function') return window.XKeen.ui.toast(m, lvl);
+      const ui = C.getUiApi();
+      if (ui && typeof ui.toast === 'function') return ui.toast(m, lvl);
     } catch (e) {}
     try {
       if (typeof window.toast === 'function') return window.toast(m, lvl);
-    } catch (e) {}
+    } catch (e2) {}
     try {
-      // last resort: console
       const fn = (lvl === 'error' || lvl === 'danger') ? 'error' : 'log';
       console[fn]('[toast]', m);
+    } catch (e3) {}
+    return undefined;
+  };
+
+  C.confirm = async function confirm(opts, fallbackText) {
+    const cfg = opts || {};
+    try {
+      const ui = C.getUiApi();
+      if (ui && typeof ui.confirm === 'function') return !!(await ui.confirm(cfg));
     } catch (e) {}
+    try {
+      const text = fallbackText || cfg.message || cfg.text || cfg.title || 'Continue?';
+      return !!window.confirm(String(text));
+    } catch (e2) {
+      return false;
+    }
   };
 
   // -------------------------- misc helpers --------------------------
@@ -126,12 +245,8 @@
     };
   };
 
-  };
-
   // -------------------------- format helpers --------------------------
   C.fmtSize = function fmtSize(bytes) {
-    // NOTE: 0-byte files are valid and should be shown as "0 B".
-    // Keep empty for missing/invalid/negative values.
     if (bytes === null || bytes === undefined || bytes === '') return '';
     const n = Number(bytes);
     if (!isFinite(n) || n < 0) return '';
@@ -145,17 +260,15 @@
     }
     const s = (u === 0) ? String(Math.round(v)) : (v >= 10 ? v.toFixed(1) : v.toFixed(2));
     return s.replace(/\.0+$/, '').replace(/(\.[1-9])0$/, '$1') + ' ' + units[u];
-
-  // Alias used by some modules
-  C.fmtBytes = C.fmtBytes || C.fmtSize;
   };
+
+  C.fmtBytes = C.fmtBytes || C.fmtSize;
 
   C.fmtTime = function fmtTime(ts) {
     const t = Number(ts || 0);
     if (!isFinite(t) || t <= 0) return '';
     try {
       const d = new Date(t * 1000);
-      // Keep compact: YYYY-MM-DD HH:MM
       const yyyy = d.getFullYear();
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
@@ -250,12 +363,7 @@
       const s = (FM && FM.state && FM.state.S) ? FM.state.S : null;
       if (s && typeof s.liteMode === 'boolean') return !!s.liteMode;
     } catch (e) {}
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-      return String(window.XKEEN_IS_MIPS || '').toLowerCase() === 'true';
-    } catch (e2) {
-      return false;
-    }
+    return isXkeenMipsRuntime();
   };
 
   C.toggleHidden = function toggleHidden(node, hidden) {

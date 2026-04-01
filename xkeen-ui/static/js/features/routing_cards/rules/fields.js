@@ -1,3 +1,5 @@
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 /*
   routing_cards/rules/fields.js
   Rules card: field helpers (inputs/textarea, multi-value parsing, attrs helpers).
@@ -9,9 +11,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.rules = RC.rules || {};
 
   const F = RC.rules.fields = RC.rules.fields || {};

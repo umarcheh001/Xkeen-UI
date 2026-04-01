@@ -1,11 +1,13 @@
+import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_namespace.js';
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
+  const DT = getDevtoolsNamespace();
 
-  const SH = (XK.features && XK.features.devtoolsShared) ? XK.features.devtoolsShared : {};
+  const SH = getDevtoolsSharedApi() || {};
   const toast = SH.toast || function (m) { try { console.log(m); } catch (e) {} };
   const getJSON = SH.getJSON || (async (u) => {
     const r = await fetch(u, { cache: 'no-store' });
@@ -108,5 +110,5 @@
     loadUiStatus();
   }
 
-  XK.features.devtoolsService = { init, loadUiStatus };
+  setDevtoolsNamespaceApi('devtoolsService', { init, loadUiStatus });
 })();

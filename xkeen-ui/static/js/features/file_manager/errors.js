@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager unified error UX (normalize + present)
-  // attach to window.XKeen.features.fileManager.errors
+  // attach to the shared file manager namespace.errors
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
   const C = FM.common || {};
   const A = FM.api || {};
   const P = FM.progress || {};
@@ -22,7 +22,7 @@
 
   function _toast(msg, level) {
     try { if (C && typeof C.toast === 'function') return C.toast(msg, level); } catch (e) {}
-    try { if (typeof window.toast === 'function') return window.toast(msg, level); } catch (e) {}
+    return undefined;
   }
 
   class ApiError extends Error {

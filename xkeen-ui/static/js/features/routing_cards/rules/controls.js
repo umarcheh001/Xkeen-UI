@@ -1,3 +1,6 @@
+import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 /*
   routing_cards/rules/controls.js
   Rules card: UI wiring + editor hooks.
@@ -9,9 +12,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.rules = RC.rules || {};
 
   const CTRL = RC.rules.controls = RC.rules.controls || {};
@@ -65,12 +66,7 @@
   };
 
   function isMipsTarget() {
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
-      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
-    } catch (e) {}
-    return false;
+    return isXkeenMipsRuntime();
   }
 
   function isWebKitSafari() {
@@ -113,11 +109,10 @@
     const raw = String(text == null ? '' : text);
     const lineCount = countLines(raw);
     const charCount = raw.length;
-    const safari = isWebKitSafari();
-    const lite = !!(isMipsTarget() || safari || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars);
+    const lite = !!(isMipsTarget() || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars);
     return {
       lite,
-      manualSync: lite || safari,
+      manualSync: lite,
       lineCount,
       charCount,
     };
@@ -126,10 +121,9 @@
   function resolveGuiPerfProfile(input) {
     if (input && typeof input === 'object') {
       const lite = !!input.lite;
-      const safari = (typeof input.webkitSafari === 'boolean') ? !!input.webkitSafari : isWebKitSafari();
       return {
         lite,
-        manualSync: (typeof input.manualSync === 'boolean') ? !!input.manualSync : (lite || safari),
+        manualSync: (typeof input.manualSync === 'boolean') ? !!input.manualSync : lite,
         lineCount: Number.isFinite(input.lineCount) ? Math.max(1, Math.floor(input.lineCount)) : 1,
         charCount: Number.isFinite(input.charCount) ? Math.max(0, Math.floor(input.charCount)) : 0,
       };

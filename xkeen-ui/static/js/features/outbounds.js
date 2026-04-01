@@ -1,8 +1,16 @@
-(() => {
-  window.XKeen = window.XKeen || {};
-  XKeen.state = XKeen.state || {};
-  XKeen.features = XKeen.features || {};
+import { getBackupsApi } from './backups.js';
+import { getRestartLogApi } from './restart_log.js';
+import {
+  getXkeenFilePath,
+  getXkeenUiConfigShellApi,
+  openXkeenJsonEditor,
+  syncXkeenBodyScrollLock,
+  toastXkeen,
+} from './xkeen_runtime.js';
 
+let outboundsModuleApi = null;
+
+(() => {
   // Outbounds editor for 04_outbounds.json (VLESS URL helper)
   // API:
   //  - GET  /api/outbounds  -> { url: "vless://..." } or {}
@@ -13,7 +21,7 @@
   //  - load/save calls
   //  - backup button call (/api/backup-outbounds)
 
-  XKeen.features.outbounds = (() => {
+  outboundsModuleApi = (() => {
     let inited = false;
     let _savedUrl = '';
 
@@ -34,15 +42,12 @@
     }
 
     function getConfigShellApi() {
-      try {
-        if (window.XKeen && XKeen.ui && XKeen.ui.configShell) return XKeen.ui.configShell;
-      } catch (e) {}
-      return null;
+      return getXkeenUiConfigShellApi();
     }
 
     function refreshRestartLog() {
       try {
-        const api = window.XKeen && XKeen.features ? XKeen.features.restartLog : null;
+        const api = getRestartLogApi();
         if (api && typeof api.load === 'function') return api.load();
       } catch (e) {}
       return null;
@@ -256,7 +261,7 @@
         data = null;
       }
       if (!data || !data.ok || !Array.isArray(data.items)) {
-        try { if (notify && typeof window.toast === 'function') window.toast('Не удалось обновить список outbounds', 'error'); } catch (e) {}
+        try { if (notify) toastXkeen('Не удалось обновить список outbounds', 'error'); } catch (e) {}
         return;
       }
 
@@ -312,7 +317,7 @@
       } catch (e) {}
 
       // Success toast (only when explicitly requested)
-      try { if (notify && typeof window.toast === 'function') window.toast('Список outbounds обновлён', 'success'); } catch (e) {}
+      try { if (notify) toastXkeen('Список outbounds обновлён', 'success'); } catch (e) {}
 
       // Wire select change
       try {
@@ -908,8 +913,6 @@
       }
 
       const parsed = parseProxyUrl(url);
-      // persist for save()
-      try { XKeen.state.outboundsParse = parsed; } catch (e) {}
 
       renderParsePreview(parsed);
 
@@ -1370,7 +1373,7 @@
           if (statusEl) statusEl.textContent = 'Текущая ссылка загружена.';
           try {
             if (typeof updateLastActivity === 'function') {
-              const fp = window.XKEEN_FILES && window.XKEEN_FILES.outbounds ? window.XKEEN_FILES.outbounds : '';
+              const fp = getXkeenFilePath('outbounds', '');
               updateLastActivity('loaded', 'outbounds', fp);
             }
           } catch (e) {}
@@ -1387,7 +1390,7 @@
           }, 'outbounds-load-empty');
           try {
             if (typeof updateLastActivity === 'function') {
-              const fp = window.XKEEN_FILES && window.XKEEN_FILES.outbounds ? window.XKEEN_FILES.outbounds : '';
+              const fp = getXkeenFilePath('outbounds', '');
               updateLastActivity('loaded', 'outbounds', fp);
             }
           } catch (e) {}
@@ -1446,7 +1449,7 @@
             try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
             try {
               if (typeof updateLastActivity === 'function') {
-                const fp = window.XKEEN_FILES && window.XKEEN_FILES.outbounds ? window.XKEEN_FILES.outbounds : '';
+                const fp = getXkeenFilePath('outbounds', '');
                 updateLastActivity('saved', 'outbounds', fp);
               }
             } catch (e) {}
@@ -1483,7 +1486,7 @@
         }
       }
 
-      const fileLabel = _baseName(window.XKEEN_FILES && window.XKEEN_FILES.outbounds, '04_outbounds.json');
+      const fileLabel = _baseName(getXkeenFilePath('outbounds', ''), '04_outbounds.json');
 
       try {
         const file = getActiveFragment();
@@ -1497,9 +1500,10 @@
           if (backupsStatusEl) backupsStatusEl.textContent = '';
           try { if (typeof showToast === 'function') showToast(msg, false); } catch (e) {}
           try {
-            if (window.XKeen && XKeen.backups) {
-              if (typeof XKeen.backups.refresh === 'function') await XKeen.backups.refresh();
-              else if (typeof XKeen.backups.load === 'function') await XKeen.backups.load();
+            const backupsApi = getBackupsApi();
+            if (backupsApi) {
+              if (typeof backupsApi.refresh === 'function') await backupsApi.refresh();
+              else if (typeof backupsApi.load === 'function') await backupsApi.load();
             }
           } catch (e) {}
         } else {
@@ -1852,11 +1856,7 @@
         if (show) modal.classList.remove('hidden');
         else modal.classList.add('hidden');
       } catch (e) {}
-      try {
-        if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-          XKeen.ui.modal.syncBodyScrollLock();
-        }
-      } catch (e) {}
+      try { syncXkeenBodyScrollLock(!!show); } catch (e) {}
     }
 
     function getResolvedGenProto() {
@@ -2490,11 +2490,7 @@
         if (show) modal.classList.remove('hidden');
         else modal.classList.add('hidden');
       } catch (e) {}
-      try {
-        if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-          XKeen.ui.modal.syncBodyScrollLock();
-        }
-      } catch (e) {}
+      try { syncXkeenBodyScrollLock(!!show); } catch (e) {}
     }
 
     function poolSetStatus(msg, isErr) {
@@ -2784,13 +2780,13 @@
         if (!res.ok || !data || data.ok === false) {
           const err = (data && (data.error || data.message)) ? String(data.error || data.message) : 'Ошибка сохранения.';
           poolSetStatus(err, true);
-          try { if (typeof window.toast === 'function') window.toast(err, 'error'); } catch (e) {}
+          try { toastXkeen(err, 'error'); } catch (e) {}
           return;
         }
 
         const msg = 'Пул прокси сохранён' + (data.restarted ? ' и перезапущен.' : '.');
         poolSetStatus('✅ ' + msg, false);
-        try { if (typeof window.toast === 'function') window.toast(msg, 'success'); } catch (e) {}
+        try { toastXkeen(msg, 'success'); } catch (e) {}
 
         // Refresh outbounds state on page
         try { await load(); } catch (e) {}
@@ -2920,8 +2916,9 @@
       bindConfigAction('outbounds-backup-btn', backup, { kind: 'backup' });
       bindConfigAction('outbounds-restore-auto-btn', () => {
         try {
-          if (window.XKeen && XKeen.backups && typeof XKeen.backups.restoreAuto === 'function') {
-            XKeen.backups.restoreAuto('outbounds', { confirmed: true });
+          const backupsApi = getBackupsApi();
+          if (backupsApi && typeof backupsApi.restoreAuto === 'function') {
+            backupsApi.restoreAuto('outbounds', { confirmed: true });
           } else {
             if (typeof showToast === 'function') showToast('Модуль бэкапов не загружен.', true);
           }
@@ -2929,8 +2926,8 @@
       }, { kind: 'restoreAuto' });
       bindConfigAction('outbounds-open-editor-btn', () => {
         try {
-          if (window.XKeen && XKeen.jsonEditor && typeof XKeen.jsonEditor.open === 'function') {
-            XKeen.jsonEditor.open('outbounds');
+          if (openXkeenJsonEditor('outbounds') != null) {
+            return;
           } else {
             if (typeof showToast === 'function') showToast('Модуль JSON-редактора не загружен.', true);
           }
@@ -2953,3 +2950,46 @@
     };
   })();
 })();
+export function getOutboundsApi() {
+  try {
+    if (outboundsModuleApi && typeof outboundsModuleApi.init === 'function') return outboundsModuleApi;
+  } catch (error) {
+    return null;
+  }
+  return null;
+}
+
+function callOutboundsApi(method, ...args) {
+  const api = getOutboundsApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initOutbounds(...args) {
+  return callOutboundsApi('init', ...args);
+}
+
+export function loadOutbounds(...args) {
+  return callOutboundsApi('load', ...args);
+}
+
+export function saveOutbounds(...args) {
+  return callOutboundsApi('save', ...args);
+}
+
+export function backupOutbounds(...args) {
+  return callOutboundsApi('backup', ...args);
+}
+
+export function toggleOutboundsCard(...args) {
+  return callOutboundsApi('toggleCard', ...args);
+}
+
+export const outboundsApi = Object.freeze({
+  get: getOutboundsApi,
+  init: initOutbounds,
+  load: loadOutbounds,
+  save: saveOutbounds,
+  backup: backupOutbounds,
+  toggleCard: toggleOutboundsCard,
+});

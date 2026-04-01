@@ -7,20 +7,28 @@
   - re-exports of public methods used by other UI parts (DAT modal, etc.)
   - DOMContentLoaded auto-start
 */
+import { getRoutingCardsNamespace } from './routing_cards_namespace.js';
+import {
+  getXkeenEditorEngineApi,
+  getXkeenPanelShellApi,
+  getXkeenSettingsApi,
+  isXkeenDebugRuntime,
+  toastXkeen,
+} from './xkeen_runtime.js';
+
+let routingCardsModuleApi = null;
+
 (function () {
   'use strict';
 
-  // Namespace (must exist even if script order is wrong)
-  window.XKeen = window.XKeen || {};
-  const XK = window.XKeen;
-  XK.features = XK.features || {};
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  // Namespace container for internal routing-cards submodules.
+  // Public API publication is handled by features/compat/routing_cards.js.
+  const RC = getRoutingCardsNamespace();
 
-  // Optional debug flag (?debug=1 or window.XKEEN_DEV=true)
+  // Optional debug flag (?debug=1 or runtime compat flag)
   let IS_DEBUG = false;
   try {
-    const q = (window.location && typeof window.location.search === 'string') ? window.location.search : '';
-    IS_DEBUG = !!window.XKEEN_DEV || /(?:^|[?&])debug=1(?:&|$)/.test(q);
+    IS_DEBUG = isXkeenDebugRuntime();
   } catch (e) {}
 
   // --- Public API re-exports ---
@@ -48,35 +56,24 @@
     return { ok: false, kind: (kind === 'geoip') ? 'geoip' : 'geosite', file: null, tags: [] };
   }
 
-  RC.getDatRoutingTargets = getDatRoutingTargets;
-  RC.applyDatSelector = applyDatSelector;
-  RC.getUsedDatTags = getUsedDatTags;
-  // installGeodat/getGeodatStatus are exported by routing_cards/dat/api.js
+  // installGeodat/getGeodatStatus stay exposed through routing_cards/dat/api.js.
 
   // --- Lazy helpers (help/docs + heavy wizards) ---
 
-  const STATIC_BASE = (function () {
-    try {
-      const b = (typeof window.XKEEN_STATIC_BASE === 'string' && window.XKEEN_STATIC_BASE) ? window.XKEEN_STATIC_BASE : '/static/';
-      return b.endsWith('/') ? b : (b + '/');
-    } catch (e) {}
-    return '/static/';
-  })();
-
-  const LAZY_HELPER_SCRIPTS = {
+  const LAZY_HELPER_LOADERS = {
     fieldHelp: [
-      'js/features/routing_cards/help_docs.js',
-      'js/features/routing_cards/help_modal.js',
+      { key: 'fieldHelp:docs', load: () => import('./routing_cards/help_docs.js') },
+      { key: 'fieldHelp:modal', load: () => import('./routing_cards/help_modal.js') },
     ],
     quickBalancer: [
-      'js/features/routing_cards/rules/quick_balancer.js',
-      'js/features/routing_cards/rules/balancer_help.js',
+      { key: 'quickBalancer:wizard', load: () => import('./routing_cards/rules/quick_balancer.js') },
+      { key: 'quickBalancer:help', load: () => import('./routing_cards/rules/balancer_help.js') },
     ],
     balancerHelp: [
-      'js/features/routing_cards/rules/balancer_help.js',
+      { key: 'balancerHelp:help', load: () => import('./routing_cards/rules/balancer_help.js') },
     ],
     forcedRulesWizard: [
-      'js/features/routing_cards/rules/forced_rules_wizard.js',
+      { key: 'forcedRulesWizard:wizard', load: () => import('./routing_cards/rules/forced_rules_wizard.js') },
     ],
   };
 
@@ -85,18 +82,9 @@
   const _lazyScriptLoads = Object.create(null);
 
   function _getEditorEngineHelper() {
-    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+    return getXkeenEditorEngineApi();
   }
 
-  function _getGenericLoaderApi() {
-    try {
-      if (window.XKeen && XKeen.runtime) {
-        if (XKeen.runtime.loader && typeof XKeen.runtime.loader.loadScriptOnce === 'function') return XKeen.runtime.loader;
-        if (XKeen.runtime.lazy && XKeen.runtime.lazy.loader && typeof XKeen.runtime.lazy.loader.loadScriptOnce === 'function') return XKeen.runtime.lazy.loader;
-      }
-    } catch (e) {}
-    return null;
-  }
 
 
   const CM6_SCOPE = 'routing-cards';
@@ -112,23 +100,35 @@
     return null;
   }
 
-  function _toStaticUrl(path) {
-    const p = String(path || '').trim();
-    if (!p) return '';
-    let url = '';
-    if (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('/')) {
-      url = p;
-    } else {
-      url = STATIC_BASE + p.replace(/^\/+/, '');
-    }
-    try {
-      const ver = (typeof window.XKEEN_STATIC_VER === 'string' && window.XKEEN_STATIC_VER) ? window.XKEEN_STATIC_VER : '';
-      if (ver && url && !/[?&]v=/.test(url)) {
-        url += (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(ver);
-      }
-    } catch (e) {}
-    return url;
+
+  function _loadHelperModuleOnce(entry) {
+    const meta = entry && typeof entry === 'object' ? entry : null;
+    const key = meta && meta.key ? String(meta.key) : '';
+    const load = meta && typeof meta.load === 'function' ? meta.load : null;
+    if (!key || !load) return Promise.resolve(false);
+    if (_lazyScriptLoads[key]) return _lazyScriptLoads[key];
+
+    _lazyScriptLoads[key] = Promise.resolve()
+      .then(() => load())
+      .then(() => true)
+      .catch(() => {
+        try { delete _lazyScriptLoads[key]; } catch (e) {}
+        return false;
+      });
+
+    return _lazyScriptLoads[key];
   }
+
+  async function _loadHelperModulesInOrder(list) {
+    const items = Array.isArray(list) ? list : [];
+    for (let i = 0; i < items.length; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await _loadHelperModuleOnce(items[i]);
+      if (!ok) return false;
+    }
+    return true;
+  }
+
 
   function _helperDisplayName(name) {
     switch (String(name || '')) {
@@ -176,10 +176,8 @@
   function _toastLazyHelperFailure(name, err) {
     const msg = 'Не удалось загрузить ' + _helperDisplayName(name) + '.';
     try {
-      if (typeof window.toast === 'function') {
-        window.toast(msg, true);
-        return;
-      }
+      toastXkeen(msg, true);
+      return;
     } catch (e) {}
     try {
       // eslint-disable-next-line no-console
@@ -187,82 +185,6 @@
     } catch (e2) {}
   }
 
-  function _loadHelperScriptTagOnce(url) {
-    const key = String(url || '').trim();
-    if (!key) return Promise.resolve(false);
-    if (_lazyScriptLoads[key]) return _lazyScriptLoads[key];
-
-    _lazyScriptLoads[key] = new Promise((resolve) => {
-      try {
-        const found = document.querySelector('script[src="' + key + '"]') || document.querySelector('script[data-xk-src="' + key + '"]');
-        if (found) {
-          const state = (found.dataset && found.dataset.xkLoadState) ? String(found.dataset.xkLoadState) : '';
-          if (state === 'ready' || found.getAttribute('data-routing-helper-ready') === '1') {
-            resolve(true);
-            return;
-          }
-        }
-      } catch (e) {}
-
-      try {
-        const script = document.createElement('script');
-        script.src = key;
-        try { script.async = false; } catch (e) {}
-        try { script.dataset.xkSrc = key; } catch (e) {}
-        try { script.dataset.xkLoadState = 'loading'; } catch (e) {}
-        script.onload = () => {
-          try { script.dataset.xkLoadState = 'ready'; } catch (e) {}
-          try { script.setAttribute('data-routing-helper-ready', '1'); } catch (e) {}
-          resolve(true);
-        };
-        script.onerror = () => {
-          try { delete _lazyScriptLoads[key]; } catch (e) {}
-          try { script.dataset.xkLoadState = 'error'; } catch (e) {}
-          try { script.remove(); } catch (e2) {}
-          resolve(false);
-        };
-        (document.body || document.documentElement || document.head).appendChild(script);
-      } catch (e) {
-        try { delete _lazyScriptLoads[key]; } catch (e2) {}
-        resolve(false);
-      }
-    });
-
-    return _lazyScriptLoads[key];
-  }
-
-  function _loadHelperScriptOnce(path) {
-    const url = _toStaticUrl(path);
-    if (!url) return Promise.resolve(false);
-
-    try {
-      const loader = _getGenericLoaderApi();
-      if (loader) return loader.loadScriptOnce(url);
-    } catch (e) {}
-
-    try {
-      const runtime = _getEditorRuntime('codemirror');
-      const loader = (runtime && runtime.loader && typeof runtime.loader.loadScriptOnce === 'function')
-        ? runtime.loader
-        : null;
-      if (loader) return loader.loadScriptOnce(url);
-    } catch (e) {}
-
-    try {
-    } catch (e) {}
-
-    return _loadHelperScriptTagOnce(url);
-  }
-
-  async function _loadHelperScriptsInOrder(list) {
-    const items = Array.isArray(list) ? list : [];
-    for (let i = 0; i < items.length; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
-      const ok = await _loadHelperScriptOnce(items[i]);
-      if (!ok) return false;
-    }
-    return true;
-  }
 
   function _waitNextTask() {
     return new Promise((resolve) => {
@@ -276,10 +198,10 @@
     if (_isLazyHelperReady(key)) return Promise.resolve(true);
     if (_lazyHelperLoading[key]) return _lazyHelperLoading[key];
 
-    const scripts = Array.isArray(LAZY_HELPER_SCRIPTS[key]) ? LAZY_HELPER_SCRIPTS[key] : [];
+    const loaders = Array.isArray(LAZY_HELPER_LOADERS[key]) ? LAZY_HELPER_LOADERS[key] : [];
     _lazyHelperLoading[key] = (async () => {
-      if (!scripts.length) return false;
-      const ok = await _loadHelperScriptsInOrder(scripts);
+      if (!loaders.length) return false;
+      const ok = await _loadHelperModulesInOrder(loaders);
       if (!ok) throw new Error('failed to load helper: ' + key);
       await _waitNextTask();
       _lazyHelperReady[key] = _hasLazyHelperApi(key);
@@ -387,7 +309,8 @@
 
   function _routingGuiEnabled() {
     try {
-      const st = (XK.ui && XK.ui.settings && typeof XK.ui.settings.get === 'function') ? XK.ui.settings.get() : null;
+      const settings = getXkeenSettingsApi();
+      const st = settings && typeof settings.get === 'function' ? settings.get() : null;
       return !(st && st.routing && st.routing.guiEnabled === false);
     } catch (e) {}
     return false;
@@ -395,7 +318,7 @@
 
   function _currentPanelView() {
     try {
-      const shell = (XK.pages && XK.pages.panelShell) || (XK.ui && XK.ui.tabs) || null;
+      const shell = getXkeenPanelShellApi();
       if (shell && typeof shell.getCurrentView === 'function') {
         const name = String(shell.getCurrentView() || '').trim();
         if (name) return name;
@@ -678,11 +601,20 @@
     }
   }
 
-  RC.applyUiSettings = applyUiSettings;
-  RC.applyFocusMode = applyFocusMode;
-  RC.getPreferredFocusMode = _getPreferredFocusMode;
-  RC.onShow = onShow;
-  RC.init = init;
+  routingCardsModuleApi = {
+    init,
+    onShow,
+    applyUiSettings,
+    applyFocusMode,
+    getPreferredFocusMode: _getPreferredFocusMode,
+    getDatRoutingTargets,
+    applyDatSelector,
+    getUsedDatTags,
+    dispose(...args) {
+      if (RC && typeof RC.dispose === 'function') return RC.dispose(...args);
+      return null;
+    },
+  };
 
   // Auto-init
   if (document.readyState === 'loading') {
@@ -691,3 +623,72 @@
     init();
   }
 })();
+
+export function getRoutingCardsApi() {
+  try {
+    if (routingCardsModuleApi && typeof routingCardsModuleApi.init === 'function') return routingCardsModuleApi;
+  } catch (error) {
+    console.error(error);
+  }
+  return null;
+}
+
+function callRoutingCardsApi(method, ...args) {
+  const api = getRoutingCardsApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initRoutingCards(...args) {
+  return callRoutingCardsApi('init', ...args);
+}
+
+export function loadRoutingCards() {
+  return null;
+}
+
+export function onShowRoutingCards(...args) {
+  return callRoutingCardsApi('onShow', ...args);
+}
+
+export function applyRoutingCardsUiSettings(...args) {
+  return callRoutingCardsApi('applyUiSettings', ...args);
+}
+
+export function applyRoutingCardsFocusMode(...args) {
+  return callRoutingCardsApi('applyFocusMode', ...args);
+}
+
+export function getPreferredRoutingCardsFocusMode(...args) {
+  return callRoutingCardsApi('getPreferredFocusMode', ...args);
+}
+
+export function getRoutingCardsDatTargets(...args) {
+  return callRoutingCardsApi('getDatRoutingTargets', ...args);
+}
+
+export function applyRoutingCardsDatSelector(...args) {
+  return callRoutingCardsApi('applyDatSelector', ...args);
+}
+
+export function getRoutingCardsUsedDatTags(...args) {
+  return callRoutingCardsApi('getUsedDatTags', ...args);
+}
+
+export function disposeRoutingCards(...args) {
+  return callRoutingCardsApi('dispose', ...args);
+}
+
+export const routingCardsApi = Object.freeze({
+  get: getRoutingCardsApi,
+  init: initRoutingCards,
+  load: loadRoutingCards,
+  onShow: onShowRoutingCards,
+  applyUiSettings: applyRoutingCardsUiSettings,
+  applyFocusMode: applyRoutingCardsFocusMode,
+  getPreferredFocusMode: getPreferredRoutingCardsFocusMode,
+  getDatRoutingTargets: getRoutingCardsDatTargets,
+  applyDatSelector: applyRoutingCardsDatSelector,
+  getUsedDatTags: getRoutingCardsUsedDatTags,
+  dispose: disposeRoutingCards,
+});

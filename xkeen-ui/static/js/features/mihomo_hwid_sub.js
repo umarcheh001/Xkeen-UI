@@ -1,3 +1,15 @@
+import { getMihomoPanelApi } from './mihomo_panel.js';
+import { getMihomoYamlPatchApi } from './mihomo_yaml_patch.js';
+import {
+  getMihomoCommandJobApi,
+  getMihomoCoreHttpApi,
+  refreshSharedMihomoEditor,
+  syncMihomoModalBodyScrollLock,
+} from './mihomo_runtime.js';
+import { getXkeenFilePath } from './xkeen_runtime.js';
+
+let mihomoHwidSubModuleApi = null;
+
 (() => {
   'use strict';
 
@@ -5,11 +17,10 @@
   // - Probe subscription with HWID headers
   // - Build proxy-provider YAML snippet
   // - Insert into config.yaml editor (proxy-providers section)
+  // Legacy globals are published by features/compat/mihomo_hwid_sub.js.
 
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-
-  const HW = (XKeen.features.mihomoHwidSub = XKeen.features.mihomoHwidSub || {});
+  const HW = mihomoHwidSubModuleApi || {};
+  mihomoHwidSubModuleApi = HW;
 
   const IDS = {
     btnOpen: 'mihomo-hwid-sub-btn',
@@ -37,6 +48,7 @@
   };
 
   let _inited = false;
+  let _restartLogModulePromise = null;
   let _device = null; // device info from /api/mihomo/hwid/device
   let _lastProbe = null; // probe response
   let _busy = false;
@@ -103,6 +115,86 @@
     b.disabled = !on;
   }
 
+  function loadRestartLogModule() {
+    if (!_restartLogModulePromise) {
+      _restartLogModulePromise = import('./restart_log.js').catch((error) => {
+        _restartLogModulePromise = null;
+        throw error;
+      });
+    }
+    return _restartLogModulePromise;
+  }
+
+  async function getSharedRestartLogApi() {
+    try {
+      const mod = await loadRestartLogModule();
+      const api = mod && typeof mod.getRestartLogApi === 'function' ? mod.getRestartLogApi() : null;
+      return api || null;
+    } catch (e) {}
+    return null;
+  }
+
+  async function clearSharedRestartLog() {
+    try {
+      const api = await getSharedRestartLogApi();
+      if (api && typeof api.setRaw === 'function') {
+        api.setRaw('');
+        return;
+      }
+    } catch (e) {}
+    try {
+      const api = await getSharedRestartLogApi();
+      if (api && typeof api.clear === 'function') {
+        api.clear();
+      }
+    } catch (e) {}
+  }
+
+  async function appendSharedRestartLog(text) {
+    if (!text) return;
+    try {
+      const api = await getSharedRestartLogApi();
+      if (api && typeof api.append === 'function') {
+        api.append(String(text));
+      }
+    } catch (e) {}
+  }
+
+  async function waitForRestartJob(jobId, onChunk) {
+    const CJ = getMihomoCommandJobApi();
+    if (CJ && typeof CJ.waitForCommandJob === 'function') {
+      return CJ.waitForCommandJob(String(jobId), {
+        maxWaitMs: 5 * 60 * 1000,
+        onChunk: (chunk) => {
+          if (typeof onChunk === 'function') {
+            try { onChunk(chunk); } catch (e) {}
+          }
+        }
+      });
+    }
+
+    let result = null;
+    let lastLen = 0;
+    while (true) {
+      const pr = await fetch(`/api/run-command/${encodeURIComponent(String(jobId))}`);
+      const pj = await pr.json().catch(() => ({}));
+      const out = (pj && typeof pj.output === 'string') ? pj.output : '';
+      if (out.length > lastLen) {
+        const chunk = out.slice(lastLen);
+        lastLen = out.length;
+        if (chunk && typeof onChunk === 'function') {
+          try { onChunk(chunk); } catch (e) {}
+        }
+      }
+      if (!pr.ok || pj.ok === false || pj.status === 'finished' || pj.status === 'error') {
+        result = pj;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    return result;
+  }
+
   function modalOpen() {
     const m = $(IDS.modal);
     return !!(m && !m.classList.contains('hidden'));
@@ -117,9 +209,7 @@
     } catch (e) {}
 
     try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      }
+      syncMihomoModalBodyScrollLock();
     } catch (e2) {}
 
     if (show) {
@@ -156,11 +246,7 @@
   }
 
   function getHttp() {
-    try {
-      return (window.XKeen && XKeen.core && XKeen.core.http) ? XKeen.core.http : null;
-    } catch (e) {
-      return null;
-    }
+    return getMihomoCoreHttpApi();
   }
 
   async function postJSONAllowError(url, body) {
@@ -268,11 +354,9 @@
 
   function getEditorText() {
     try {
-      if (typeof window.getMihomoEditorText === 'function') return window.getMihomoEditorText();
-    } catch (e) {}
-    try {
-      if (window.XKeen && XKeen.features && XKeen.features.mihomoPanel && typeof XKeen.features.mihomoPanel.getEditorText === 'function') {
-        return XKeen.features.mihomoPanel.getEditorText();
+      const api = getMihomoPanelApi();
+      if (api && typeof api.getEditorText === 'function') {
+        return api.getEditorText();
       }
     } catch (e2) {}
     const ta = document.getElementById('mihomo-editor');
@@ -281,17 +365,15 @@
 
   function setEditorText(text) {
     try {
-      if (typeof window.setMihomoEditorText === 'function') return window.setMihomoEditorText(text);
+      const api = getMihomoPanelApi();
+      if (api && typeof api.setEditorText === 'function') return api.setEditorText(text);
     } catch (e) {}
     const ta = document.getElementById('mihomo-editor');
     if (ta) ta.value = String(text || '');
   }
 
   function refreshEditor() {
-    try {
-      const cm = window.XKeen && XKeen.state ? XKeen.state.mihomoEditor : null;
-      if (cm && cm.refresh) cm.refresh();
-    } catch (e) {}
+    refreshSharedMihomoEditor();
   }
 
   function updatePreviewFromState() {
@@ -524,8 +606,30 @@
 
       await reloadEditorFromServer();
       showModal(false);
-      if (job) toastMsg(`Рестарт поставлен в очередь (job: ${job}) ✅`, 'success');
-      else toastMsg(`Применено ✅ ${nm ? '(' + nm + ')' : ''}`, 'success');
+
+      if (job) {
+        try {
+          await clearSharedRestartLog();
+          await appendSharedRestartLog('⏳ Запуск xkeen -restart (job ' + job + ')\n');
+        } catch (e) {}
+
+        const result = await waitForRestartJob(job, (chunk) => {
+          try { void appendSharedRestartLog(String(chunk || '')); } catch (e) {}
+        });
+
+        const ok = !!(result && result.ok);
+        if (ok) {
+          toastMsg(`Применено ✅ ${nm ? '(' + nm + ') ' : ''}xkeen перезапущен.`, 'success');
+        } else {
+          const errMsg = (result && (result.error || result.message))
+            ? String(result.error || result.message)
+            : 'Перезапуск завершился с ошибкой';
+          try { await appendSharedRestartLog('\nОшибка: ' + errMsg + '\n'); } catch (e) {}
+          toastMsg(errMsg, 'error');
+        }
+      } else {
+        toastMsg(`Применено ✅ ${nm ? '(' + nm + ')' : ''}`, 'success');
+      }
     } catch (e) {
       setStatus(String(e && e.message ? e.message : e), true);
     } finally {
@@ -566,7 +670,7 @@
     const headers = (_lastProbe && _lastProbe.headers_used) || (_device && _device.headers) || {};
     const snippet = buildProviderSnippet(name, url, headers);
 
-    const patch = (window.XKeen && XKeen.features && XKeen.features.mihomoYamlPatch) ? XKeen.features.mihomoYamlPatch : null;
+    const patch = getMihomoYamlPatchApi();
     if (!patch || typeof patch.insertIntoSection !== 'function') {
       setStatus('mihomoYamlPatch недоступен — обнови страницу.', true);
       return;
@@ -581,7 +685,7 @@
 
     try {
       if (typeof window.updateLastActivity === 'function') {
-        const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
+        const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
         window.updateLastActivity('modified', 'mihomo', fp);
       }
     } catch (e) {}
@@ -661,3 +765,21 @@
   // Auto-init (safe, no API calls until user opens/probes)
   try { setTimeout(() => { try { HW.init(); } catch (e) {} }, 0); } catch (e) {}
 })();
+export function getMihomoHwidSubApi() {
+  try {
+    if (mihomoHwidSubModuleApi && typeof mihomoHwidSubModuleApi.init === 'function') return mihomoHwidSubModuleApi;
+  }
+  catch (error) {}
+  return null;
+}
+
+export function initMihomoHwidSub(...args) {
+  const api = getMihomoHwidSubApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export const mihomoHwidSubApi = Object.freeze({
+  get: getMihomoHwidSubApi,
+  init: initMihomoHwidSub,
+});

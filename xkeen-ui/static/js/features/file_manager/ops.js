@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager fileops jobs (ws/poll/watch/cancel) + Operations list modal
-  // No ES modules / bundler: attach to window.XKeen.features.fileManager.ops
+  // No ES modules / bundler: attach to the shared file manager namespace.ops
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
 
   FM.ops = FM.ops || {};
   const O = FM.ops;
@@ -715,8 +715,8 @@
       ? `Удалить навсегда (${names.length})?\n${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`
       : `Переместить в корзину (${names.length})?\n${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`;
 
-    const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
-      ? XKeen.ui.confirm({ title, message: msg, okText, cancelText: 'Отмена', danger: true })
+    const ok = await (C && typeof C.confirm === 'function'
+      ? C.confirm({ title, message: msg, okText, cancelText: 'Отмена', danger: true })
       : Promise.resolve(window.confirm('Delete?')));
 
     if (!ok) return;
@@ -1235,8 +1235,8 @@ return false;
     const names = getSelectionNames(side);
     if (!names.length) return;
 
-    const ok = await (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function'
-      ? XKeen.ui.confirm({
+    const ok = await (C && typeof C.confirm === 'function'
+      ? C.confirm({
         title: 'Восстановить',
         message: `Восстановить (${names.length})?\n${names.slice(0, 6).join('\n')}${names.length > 6 ? '\n…' : ''}`,
         okText: 'Восстановить',
@@ -1302,8 +1302,8 @@ return false;
       return;
     }
 
-    const ok = await (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function'
-      ? XKeen.ui.confirm({
+    const ok = await (C && typeof C.confirm === 'function'
+      ? C.confirm({
         title: 'Очистить корзину',
         message: 'Удалить ВСЕ содержимое корзины без возможности восстановления?',
         okText: 'Очистить',

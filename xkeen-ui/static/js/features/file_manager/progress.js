@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager: progress modal UI helpers (no ES modules / bundler)
-  // attach to window.XKeen.features.fileManager.progress
+  // attach to the shared file manager namespace.progress
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
   FM.progress = FM.progress || {};
   const P = FM.progress;
 

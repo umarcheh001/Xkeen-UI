@@ -1,17 +1,21 @@
+import { getRestartLogApi as getRestartLogFeatureApi } from './restart_log.js';
+import {
+  closeXkeenModal,
+  dismissXkeenToast,
+  getXkeenCommandJobApi,
+  getXkeenUiShellApi,
+  openXkeenModal,
+  toastXkeen,
+} from './xkeen_runtime.js';
+
+let serviceStatusModuleApi = null;
+
 (() => {
   // XKeen service status lamp + core selection modal
   // Public API:
-  //   XKeen.features.serviceStatus.init({ intervalMs?: number })
-  //   XKeen.features.serviceStatus.refresh({ silent?: boolean })
+  //   serviceStatusApi.init({ intervalMs?: number })
+  //   serviceStatusApi.refresh({ silent?: boolean })
   //
-  // Backwards-compat:
-  //   window.refreshXkeenServiceStatus / openXkeenCoreModal / closeXkeenCoreModal / confirmXkeenCoreChange
-
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.core = XKeen.core || {};
-  XKeen.ui = XKeen.ui || {};
-
   let _inited = false;
   let _pollTimer = null;
   let _coreModalLoading = false;
@@ -25,23 +29,20 @@
   }
 
   function getUiShellApi() {
-    try {
-      const api = XKeen.core && XKeen.core.uiShell;
-      if (api && typeof api.getState === 'function' && typeof api.patchState === 'function') return api;
-    } catch (e) {}
-    return null;
+    return getXkeenUiShellApi();
   }
 
-  function getModalApi() {
+  function getCommandJobApi() {
     try {
-      if (XKeen.ui && XKeen.ui.modal) return XKeen.ui.modal;
+      const api = getXkeenCommandJobApi();
+      return api && typeof api.waitForCommandJob === 'function' ? api : null;
     } catch (e) {}
     return null;
   }
 
   function getRestartLogApi() {
     try {
-      const api = XKeen.features ? XKeen.features.restartLog : null;
+      const api = getRestartLogFeatureApi();
       return api && typeof api.load === 'function' ? api : null;
     } catch (e) {}
     return null;
@@ -49,28 +50,12 @@
 
   function showModal(modal, source) {
     if (!modal) return false;
-    const api = getModalApi();
-    try {
-      if (api && typeof api.open === 'function') return api.open(modal, { source: source || 'service_status' });
-    } catch (e) {}
-    try { modal.classList.remove('hidden'); } catch (e2) {}
-    try {
-      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
-    } catch (e3) {}
-    return true;
+    return openXkeenModal(modal, source || 'service_status', true);
   }
 
   function hideModal(modal, source) {
     if (!modal) return false;
-    const api = getModalApi();
-    try {
-      if (api && typeof api.close === 'function') return api.close(modal, { source: source || 'service_status' });
-    } catch (e) {}
-    try { modal.classList.add('hidden'); } catch (e2) {}
-    try {
-      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
-    } catch (e3) {}
-    return true;
+    return closeXkeenModal(modal, source || 'service_status', false);
   }
 
   function normalizeCore(core) {
@@ -195,6 +180,7 @@
       source: 'service_status_control_pending',
       action: normalizedAction,
       requestId,
+      loading: { currentCore: true },
     });
 
     return {
@@ -204,7 +190,23 @@
   }
 
   async function fetchServiceStatusSnapshot() {
-    const res = await fetch('/api/xkeen/status');
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    const timer = controller
+      ? setTimeout(() => {
+          try { controller.abort(); } catch (e) {}
+        }, 2500)
+      : null;
+
+    let res;
+    try {
+      res = await fetch('/api/xkeen/status', {
+        cache: 'no-store',
+        signal: controller ? controller.signal : undefined,
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+
     if (!res.ok) throw new Error('status http error: ' + res.status);
     const data = await res.json().catch(() => ({}));
 
@@ -212,6 +214,66 @@
       serviceStatus: data && data.running ? 'running' : 'stopped',
       currentCore: normalizeCore(data && data.core ? data.core : null),
     };
+  }
+
+  async function clearRestartLogUi() {
+    const restartLog = getRestartLogApi();
+    if (!restartLog) return;
+    try {
+      if (typeof restartLog.clear === 'function') {
+        restartLog.clear();
+        return;
+      }
+    } catch (e) {}
+    try {
+      if (typeof restartLog.setRaw === 'function') restartLog.setRaw('');
+    } catch (e2) {}
+  }
+
+  async function appendRestartLogUi(chunk) {
+    if (!chunk) return;
+    const restartLog = getRestartLogApi();
+    if (!restartLog) return;
+    try {
+      if (typeof restartLog.append === 'function') {
+        restartLog.append(String(chunk));
+        return;
+      }
+    } catch (e) {}
+    try {
+      if (typeof restartLog.load === 'function') restartLog.load();
+    } catch (e2) {}
+  }
+
+  async function waitForRestartJob(jobId, onChunk) {
+    const CJ = getCommandJobApi();
+    if (CJ && typeof CJ.waitForCommandJob === 'function') {
+      return CJ.waitForCommandJob(String(jobId), {
+        maxWaitMs: 5 * 60 * 1000,
+        onChunk: (chunk) => {
+          if (!chunk) return;
+          try { onChunk(chunk); } catch (e) {}
+        }
+      });
+    }
+
+    let lastLen = 0;
+    while (true) {
+      const res = await fetch(`/api/run-command/${encodeURIComponent(String(jobId))}`);
+      const data = await res.json().catch(() => ({}));
+      const out = (data && typeof data.output === 'string') ? data.output : '';
+      if (out.length > lastLen) {
+        const chunk = out.slice(lastLen);
+        lastLen = out.length;
+        if (chunk) {
+          try { onChunk(chunk); } catch (e) {}
+        }
+      }
+      if (!res.ok || data.ok === false || data.status === 'finished' || data.status === 'error') {
+        return data;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
   }
 
   async function resolveFinalServiceStatus(action, requestId) {
@@ -242,37 +304,71 @@
   }
 
   function toast(message, kindOrOptions) {
-    try {
-      if (typeof window.toast === 'function') return window.toast(message, kindOrOptions);
-      if (XKeen.ui && typeof XKeen.ui.toast === 'function') return XKeen.ui.toast(message, kindOrOptions);
-      if (typeof window.showToast === 'function') return window.showToast(message, kindOrOptions);
-    } catch (e) {}
-    return null;
+    return toastXkeen(message, kindOrOptions);
   }
 
   function notifyServiceActionPending(action) {
     const message = action === 'start'
-      ? 'Starting xkeen...'
+      ? 'Запускаем xkeen...'
       : action === 'stop'
-        ? 'Stopping xkeen...'
-        : 'Restarting xkeen...';
+        ? 'Останавливаем xkeen...'
+        : 'Перезапускаем xkeen...';
 
     return toast({
       id: 'xkeen-service-action',
       message,
       kind: 'info',
-      sticky: true,
+      sticky: false,
+      durationMs: action === 'restart' ? 40000 : 20000,
       dedupeWindowMs: 0,
     });
   }
 
   function notifyServiceActionResult(message, ok) {
+    try { dismissXkeenToast('xkeen-service-action'); } catch (e) {}
+
     return toast({
       id: 'xkeen-service-action',
       message: String(message || ''),
       kind: ok ? 'success' : 'error',
+      sticky: false,
+      durationMs: ok ? 3200 : 4200,
       dedupeWindowMs: 0,
     });
+  }
+
+  function isAbortLikeError(error) {
+    try {
+      return !!(error && String(error.name || '') === 'AbortError');
+    } catch (e) {}
+    return false;
+  }
+
+  function isTransientControlTransportError(error) {
+    if (isAbortLikeError(error)) return true;
+
+    const message = (() => {
+      try {
+        if (!error) return '';
+        if (typeof error.message === 'string') return error.message;
+        return String(error || '');
+      } catch (e) {
+        return '';
+      }
+    })();
+
+    if (/fetch\s+is\s+aborted/i.test(message)) return true;
+    if (/failed\s+to\s+fetch/i.test(message)) return true;
+    if (/network\s*error/i.test(message)) return true;
+    if (/network\s*request\s*failed/i.test(message)) return true;
+    if (/load\s+failed/i.test(message)) return true;
+    if (/the\s+network\s+connection\s+was\s+lost/i.test(message)) return true;
+    if (/the\s+operation\s+could\s+not\s+be\s+completed/i.test(message)) return true;
+
+    try {
+      return typeof TypeError !== 'undefined' && error instanceof TypeError;
+    } catch (e) {}
+    return false;
   }
 
   function controlRequestTimeoutMs(action) {
@@ -298,12 +394,30 @@
     }
   }
 
+  async function readControlResponseData(res, action) {
+    if (!res || typeof res.json !== 'function') return {};
+
+    const timeoutMs = normalizeAction(action) === 'stop' ? 1200 : 1800;
+    let timer = null;
+
+    try {
+      return await Promise.race([
+        res.json().catch(() => ({})),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve({ __xkTimedOut: true }), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   function controlActionTimeoutMessage(action) {
     return action === 'start'
-      ? 'Timed out while starting xkeen.'
+      ? 'Истекло время ожидания запуска xkeen.'
       : action === 'stop'
-        ? 'Timed out while stopping xkeen.'
-        : 'Timed out while restarting xkeen.';
+        ? 'Истекло время ожидания остановки xkeen.'
+        : 'Истекло время ожидания перезапуска xkeen.';
   }
 
   // ---------- Xkeen control (start/stop/restart) ----------
@@ -311,11 +425,6 @@
   function shouldAutoRestartAfterSave() {
     const cb = $('global-autorestart-xkeen');
     return !!(cb && cb.checked);
-  }
-
-  // Back-compat: `window.shouldAutoRestartAfterSave()` was defined in main.js.
-  if (typeof window.shouldAutoRestartAfterSave !== 'function') {
-    window.shouldAutoRestartAfterSave = shouldAutoRestartAfterSave;
   }
 
   function getStatusElForControl() {
@@ -328,46 +437,54 @@
     const normalizedAction = normalizeAction(action);
 
     if (normalizedState === 'pending') {
-      return normalizedAction
-        ? 'xkeen: ' + normalizedAction + '...'
-        : 'xkeen: pending...';
+      return normalizedAction === 'start'
+        ? 'xkeen: запускаем...'
+        : normalizedAction === 'stop'
+          ? 'xkeen: останавливаем...'
+          : normalizedAction === 'restart'
+            ? 'xkeen: перезапускаем...'
+            : 'xkeen: ожидаем...';
     }
-    if (normalizedState === 'running') return 'xkeen: running';
-    if (normalizedState === 'stopped') return 'xkeen: stopped';
-    if (normalizedState === 'error') return 'xkeen: error';
+    if (normalizedState === 'running') return 'xkeen: работает';
+    if (normalizedState === 'stopped') return 'xkeen: остановлен';
+    if (normalizedState === 'error') return 'xkeen: ошибка';
     return '';
   }
 
   function controlActionSuccessMessage(action) {
     return action === 'start'
-      ? 'xkeen started.'
+      ? 'xkeen запущен.'
       : action === 'stop'
-        ? 'xkeen stopped.'
-        : 'xkeen restarted.';
+        ? 'xkeen остановлен.'
+        : 'xkeen перезапущен.';
   }
 
   function controlActionErrorMessage(action) {
     return action === 'start'
-      ? 'Failed to start xkeen.'
+      ? 'Не удалось запустить xkeen.'
       : action === 'stop'
-        ? 'Failed to stop xkeen.'
-        : 'Failed to restart xkeen.';
+        ? 'Не удалось остановить xkeen.'
+        : 'Не удалось перезапустить xkeen.';
   }
 
   function controlActionMismatchMessage(action, finalState) {
-    const state = String(finalState || 'unknown');
+    const state = String(finalState || 'неизвестно');
     return action === 'start'
-      ? `xkeen start was requested, but service is ${state}.`
+      ? `Запросили запуск xkeen, но сервис сейчас: ${state}.`
       : action === 'stop'
-        ? `xkeen stop was requested, but service is ${state}.`
-        : `xkeen restart was requested, but service is ${state}.`;
+        ? `Запросили остановку xkeen, но сервис сейчас: ${state}.`
+        : `Запросили перезапуск xkeen, но сервис сейчас: ${state}.`;
   }
 
-  async function finalizeControlLifecycle(action, requestId, requestOk, fallbackMessage) {
+  async function finalizeControlLifecycle(action, requestId, outcome) {
+    const details = outcome && typeof outcome === 'object' ? outcome : {};
+    const requestAccepted = !!details.requestAccepted;
+    const transportLost = !!details.transportLost;
+    const fallbackMessage = details.fallbackMessage || '';
     let finalSnapshot = null;
 
     try {
-      finalSnapshot = requestOk
+      finalSnapshot = (requestAccepted || transportLost)
         ? await resolveFinalServiceStatus(action, requestId)
         : await fetchServiceStatusSnapshot().catch(() => null);
     } catch (e) {
@@ -385,13 +502,14 @@
         source: 'service_status_control_resolved',
         action,
         requestId,
+        loading: { currentCore: false },
       });
 
-      if (requestOk) {
+      if (requestAccepted || transportLost) {
         const matches = finalSnapshot.serviceStatus === expectedStateForAction(action);
         const message = matches
           ? controlActionSuccessMessage(action)
-          : controlActionMismatchMessage(action, finalSnapshot.serviceStatus);
+          : (fallbackMessage || controlActionMismatchMessage(action, finalSnapshot.serviceStatus));
         try { notifyServiceActionResult(message, matches); } catch (e) {}
         return matches;
       }
@@ -408,8 +526,9 @@
       source: 'service_status_control_error',
       action,
       requestId,
+      loading: { currentCore: false },
     });
-    try { notifyServiceActionResult(fallbackMessage || 'xkeen control error.', false); } catch (e3) {}
+    try { notifyServiceActionResult(fallbackMessage || 'Ошибка управления xkeen.', false); } catch (e3) {}
     return false;
   }
 
@@ -433,21 +552,89 @@
 
     const requestPromise = (async () => {
       try {
+        if (normalizedAction === 'start' || normalizedAction === 'restart') {
+          const isRestartAction = normalizedAction === 'restart';
+          const controlIntro = isRestartAction
+            ? '⏳ Запуск xkeen -restart (job)…\n'
+            : '⏳ Запуск xkeen -start (job)…\n';
+          const controlFailureText = isRestartAction
+            ? 'Ошибка перезапуска xkeen'
+            : 'Ошибка запуска xkeen';
+
+          try { await clearRestartLogUi(); } catch (e) {}
+          try { await appendRestartLogUi(controlIntro); } catch (e2) {}
+
+          const res = isRestartAction
+            ? await fetch('/api/run-command', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ flag: '-restart', pty: true }),
+            })
+            : await fetch('/api/run-command', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ flag: '-start', pty: true }),
+            });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.ok === false || !data.job_id) {
+            const failureMessage = data && data.error
+              ? String(data.error)
+              : controlActionErrorMessage(normalizedAction);
+            const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, {
+              requestAccepted: false,
+              fallbackMessage: failureMessage,
+            });
+            if (statusEl) {
+              const finalShell = readShellSnapshot();
+              statusEl.textContent = controlStatusTextForState(finalShell.serviceStatus, normalizedAction)
+                || failureMessage;
+            }
+            return settled;
+          }
+
+          const jobId = String(data.job_id || '');
+          const result = await waitForRestartJob(jobId, (chunk) => {
+            try { void appendRestartLogUi(chunk); } catch (e) {}
+          });
+          const ok = !!(result && result.ok);
+          const jobError = result && (result.error || result.message)
+            ? String(result.error || result.message)
+            : '';
+          const exitCode = result && typeof result.exit_code === 'number'
+            ? result.exit_code
+            : null;
+          const failureMessage = ok
+            ? ''
+            : (jobError || (exitCode !== null
+              ? `${controlFailureText} (exit_code=${exitCode}).`
+              : controlActionErrorMessage(normalizedAction)));
+
+          const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, {
+            requestAccepted: true,
+            fallbackMessage: failureMessage,
+          });
+          if (statusEl) {
+            const finalShell = readShellSnapshot();
+            statusEl.textContent = controlStatusTextForState(finalShell.serviceStatus, normalizedAction)
+              || (settled
+                ? controlActionSuccessMessage(normalizedAction)
+                : (failureMessage || controlActionErrorMessage(normalizedAction)));
+          }
+          return settled;
+        }
+
         const res = await postControlRequest(url, normalizedAction);
-        const data = await res.json().catch(() => ({}));
+        const data = await readControlResponseData(res, normalizedAction);
         const ok = !!res.ok && (!data || data.ok !== false);
         const failureMessage = ok
           ? ''
           : (data && data.error ? String(data.error) : controlActionErrorMessage(normalizedAction));
 
-        if (normalizedAction === 'restart' && ok) {
-          try {
-            const restartLog = getRestartLogApi();
-            if (restartLog) restartLog.load();
-          } catch (e) {}
-        }
 
-        const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, ok, failureMessage);
+        const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, {
+          requestAccepted: ok,
+          fallbackMessage: failureMessage,
+        });
         if (statusEl) {
           const finalShell = readShellSnapshot();
           statusEl.textContent = controlStatusTextForState(finalShell.serviceStatus, normalizedAction)
@@ -457,11 +644,19 @@
         }
         return settled;
       } catch (e) {
-        console.error(e);
-        const message = e && e.name === 'AbortError'
+        const abortLike = isAbortLikeError(e);
+        const transportLost = isTransientControlTransportError(e);
+        if (!transportLost) {
+          console.error(e);
+        }
+        const message = abortLike
           ? controlActionTimeoutMessage(normalizedAction)
-          : 'xkeen control error.';
-        const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, false, message);
+          : 'Ошибка управления xkeen.';
+        const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, {
+          requestAccepted: false,
+          transportLost,
+          fallbackMessage: message,
+        });
         if (statusEl) {
           const finalShell = readShellSnapshot();
           statusEl.textContent = controlStatusTextForState(finalShell.serviceStatus, normalizedAction) || message;
@@ -478,14 +673,6 @@
 
     _activeControlPromise = exposedPromise;
     return _activeControlPromise;
-  }
-
-  // Expose for terminal.js and old code.
-  window.XKeen = window.XKeen || {};
-  XKeen.api = XKeen.api || {};
-  XKeen.api.controlXkeen = XKeen.api.controlXkeen || controlXkeen;
-  if (typeof window.controlXkeen !== 'function') {
-    window.controlXkeen = controlXkeen;
   }
 
   function bindControlButtons() {
@@ -1010,12 +1197,31 @@
     confirmCoreChange: confirmXkeenCoreChange,
   };
 
-  XKeen.features.serviceStatus = api;
-
-  // Backwards compatibility for code still in main.js
-  window.refreshXkeenServiceStatus = refreshXkeenServiceStatus;
-  window.setXkeenServiceStatus = setXkeenServiceStatus;
-  window.openXkeenCoreModal = openXkeenCoreModal;
-  window.closeXkeenCoreModal = closeXkeenCoreModal;
-  window.confirmXkeenCoreChange = confirmXkeenCoreChange;
+  serviceStatusModuleApi = api;
 })();
+
+export function getServiceStatusApi() {
+  try {
+    return serviceStatusModuleApi && typeof serviceStatusModuleApi.init === 'function' ? serviceStatusModuleApi : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function initServiceStatus(...args) {
+  const api = getServiceStatusApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export function refreshServiceStatus(...args) {
+  const api = getServiceStatusApi();
+  if (!api || typeof api.refresh !== 'function') return null;
+  return api.refresh(...args);
+}
+
+export const serviceStatusApi = Object.freeze({
+  get: getServiceStatusApi,
+  init: initServiceStatus,
+  refresh: refreshServiceStatus,
+});

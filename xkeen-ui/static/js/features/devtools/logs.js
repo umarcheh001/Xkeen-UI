@@ -1,11 +1,15 @@
+import { getXrayLogLineClass } from '../xray_log_line_class.js';
+import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_namespace.js';
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   const XK = window.XKeen;
-  XK.features = XK.features || {};
+  const DT = getDevtoolsNamespace();
 
-  const SH = (XK.features && XK.features.devtoolsShared) ? XK.features.devtoolsShared : {};
+  const SH = getDevtoolsSharedApi() || {};
   const toast = SH.toast || function (m) { try { console.log(m); } catch (e) {} };
   const getJSON = SH.getJSON || (async (u) => {
     const r = await fetch(u, { cache: 'no-store' });
@@ -607,12 +611,10 @@ function _exitPauseAndClearPending() {
 
     // Legacy helper (very last resort).
     try {
-      if (typeof window.getXrayLogLineClass === 'function') {
-        const cls = window.getXrayLogLineClass(lower);
-        if (cls && String(cls).includes('log-line-error')) return { level: 'error', confidence: 0.2, source: 'legacy' };
-        if (cls && String(cls).includes('log-line-warning')) return { level: 'warning', confidence: 0.2, source: 'legacy' };
-        if (cls && String(cls).includes('log-line-info')) return { level: 'info', confidence: 0.2, source: 'legacy' };
-      }
+      const cls = getXrayLogLineClass(lower);
+      if (cls && String(cls).includes('log-line-error')) return { level: 'error', confidence: 0.2, source: 'legacy' };
+      if (cls && String(cls).includes('log-line-warning')) return { level: 'warning', confidence: 0.2, source: 'legacy' };
+      if (cls && String(cls).includes('log-line-info')) return { level: 'info', confidence: 0.2, source: 'legacy' };
     } catch (e) {}
 
     return { level: 'unknown', confidence: 0, source: 'none' };
@@ -1062,8 +1064,7 @@ function _makeLogLineSpan(lineChunk, showTimestamps) {
     : (lvl === 'warning') ? 'log-line log-line-warning'
     : (lvl === 'info') ? 'log-line log-line-info'
     : (lvl === 'debug') ? 'log-line log-line-debug'
-    : (typeof window.getXrayLogLineClass === 'function') ? window.getXrayLogLineClass(original)
-    : 'log-line';
+    : getXrayLogLineClass(original);
 
   const span = document.createElement('span');
   span.className = cls;
@@ -2930,10 +2931,10 @@ function _wireLogLineActions() {
     } catch (e) {}
   }
 
-  XK.features.devtoolsLogs = {
+  setDevtoolsNamespaceApi('devtoolsLogs', {
     init,
     setActiveTab,
     loadLogList,
     loadLogTail,
-  };
+  });
 })();

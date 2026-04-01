@@ -4,14 +4,16 @@
 // injection. The legacy feature implementation remains intact, but the page now
 // loads and orchestrates it through a single build-managed contract.
 
+import {
+  getXkeenPageApi,
+  publishXkeenPageApi,
+} from '../features/xkeen_runtime.js';
+
 (() => {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  const XK = window.XKeen;
-  XK.pages = XK.pages || {};
-
   let _featurePromise = null;
+  let _featureModule = null;
 
   function safe(fn) {
     try { return fn(); } catch (e) {
@@ -22,7 +24,9 @@
 
   function getFeatureApi() {
     try {
-      const api = XK.features ? XK.features.xrayLogs : null;
+      const api = _featureModule && typeof _featureModule.getXrayLogsApi === 'function'
+        ? _featureModule.getXrayLogsApi()
+        : null;
       return api && typeof api.init === 'function' ? api : null;
     } catch (e) {}
     return null;
@@ -38,13 +42,19 @@
     if (_featurePromise) return _featurePromise;
 
     _featurePromise = import('../features/xray_logs.js')
-      .then(() => getFeatureApi())
+      .then((mod) => {
+        _featureModule = mod || null;
+        return getFeatureApi();
+      })
       .catch((error) => {
         try { console.error('[XKeen] panel logs shell failed to load xray logs feature', error); } catch (e) {}
         throw error;
       })
       .finally(() => {
-        if (!getFeatureApi()) _featurePromise = null;
+        if (!getFeatureApi()) {
+          _featurePromise = null;
+          _featureModule = null;
+        }
       });
 
     return _featurePromise;
@@ -112,11 +122,52 @@
     return false;
   }
 
-  XK.pages.logsShell = {
+  publishXkeenPageApi('logsShell', {
     isReady,
     ensureReady,
     activateView,
     deactivateView,
     refreshStatus,
-  };
+  });
 })();
+
+
+export function getLogsShellApi() {
+  try {
+    const api = getXkeenPageApi('logsShell');
+    return api && typeof api.ensureReady === 'function' ? api : null;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+function callLogsShellApi(method, ...args) {
+  const api = getLogsShellApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function ensureLogsShellReady(...args) {
+  return callLogsShellApi('ensureReady', ...args);
+}
+
+export function activateLogsShellView(...args) {
+  return callLogsShellApi('activateView', ...args);
+}
+
+export function deactivateLogsShellView(...args) {
+  return callLogsShellApi('deactivateView', ...args);
+}
+
+export function refreshLogsShellStatus(...args) {
+  return callLogsShellApi('refreshStatus', ...args);
+}
+
+export const logsShellApi = Object.freeze({
+  get: getLogsShellApi,
+  ensureReady: ensureLogsShellReady,
+  activateView: activateLogsShellView,
+  deactivateView: deactivateLogsShellView,
+  refreshStatus: refreshLogsShellStatus,
+});

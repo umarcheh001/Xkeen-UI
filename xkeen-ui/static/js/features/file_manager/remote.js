@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager remote UI (connect/disconnect + profiles + known_hosts)
-  // No ES modules / bundler: attach to window.XKeen.features.fileManager.remote
+  // No ES modules / bundler: attach to the shared file manager namespace.remote
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
 
   FM.remote = FM.remote || {};
   const R = FM.remote;
@@ -552,8 +552,8 @@
     let port = 22;
     try { if (portRaw) port = parseInt(portRaw, 10) || 22; } catch (e) {}
 
-    const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
-      ? XKeen.ui.confirm({
+    const ok = await (C && typeof C.confirm === 'function'
+      ? C.confirm({
         title: 'known_hosts',
         message: `Удалить hostkey для ${host}${(port && port !== 22) ? (':' + port) : ''}?`,
         okText: 'Удалить',
@@ -792,8 +792,8 @@
     const p = S.panels && S.panels[side] ? S.panels[side] : null;
     if (!p || !p.sid) return;
 
-    const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
-      ? XKeen.ui.confirm({ title: 'Disconnect', message: 'Отключиться от текущего удалённого сервера?', okText: 'Disconnect', cancelText: 'Отмена', danger: false })
+    const ok = await (C && typeof C.confirm === 'function'
+      ? C.confirm({ title: 'Disconnect', message: 'Отключиться от текущего удалённого сервера?', okText: 'Disconnect', cancelText: 'Отмена', danger: false })
       : Promise.resolve(window.confirm('Disconnect?')));
 
     if (!ok) return;
@@ -951,8 +951,8 @@
     if (khRefresh) khRefresh.addEventListener('click', (e) => { e.preventDefault(); void loadKnownHostsIntoModal(); });
     if (khClear) khClear.addEventListener('click', async (e) => {
       e.preventDefault();
-      const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
-        ? XKeen.ui.confirm({ title: 'known_hosts', message: 'Очистить known_hosts? Это удалит все запомненные host key.', okText: 'Очистить', cancelText: 'Отмена', danger: true })
+      const ok = await (C && typeof C.confirm === 'function'
+        ? C.confirm({ title: 'known_hosts', message: 'Очистить known_hosts? Это удалит все запомненные host key.', okText: 'Очистить', cancelText: 'Отмена', danger: true })
         : Promise.resolve(window.confirm('Clear known_hosts?')));
       if (!ok) return;
       try {
@@ -982,8 +982,8 @@
       if (!payload || !payload.host) return;
 
       const label = payload.port ? `${payload.host}:${payload.port}` : String(payload.host);
-      const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
-        ? XKeen.ui.confirm({ title: 'known_hosts', message: `Удалить hostkey для ${label}?`, okText: 'Удалить', cancelText: 'Отмена', danger: true })
+      const ok = await (C && typeof C.confirm === 'function'
+        ? C.confirm({ title: 'known_hosts', message: `Удалить hostkey для ${label}?`, okText: 'Удалить', cancelText: 'Отмена', danger: true })
         : Promise.resolve(window.confirm('Delete hostkey?')));
       if (!ok) return;
 
@@ -1010,8 +1010,8 @@
 
       if (act === 'delete' && idx !== '') {
         e.preventDefault();
-        const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
-          ? XKeen.ui.confirm({ title: 'known_hosts', message: `Удалить запись #${idx}?`, okText: 'Удалить', cancelText: 'Отмена', danger: true })
+        const ok = await (C && typeof C.confirm === 'function'
+          ? C.confirm({ title: 'known_hosts', message: `Удалить запись #${idx}?`, okText: 'Удалить', cancelText: 'Отмена', danger: true })
           : Promise.resolve(window.confirm('Delete entry?')));
         if (!ok) return;
         try {
@@ -1026,8 +1026,8 @@
         const hostTok = String(btn.getAttribute('data-kh-host') || '').trim();
         if (!hostTok) return;
         e.preventDefault();
-        const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
-          ? XKeen.ui.confirm({ title: 'known_hosts', message: `Удалить hostkey для ${hostTok}?`, okText: 'Удалить', cancelText: 'Отмена', danger: true })
+        const ok = await (C && typeof C.confirm === 'function'
+          ? C.confirm({ title: 'known_hosts', message: `Удалить hostkey для ${hostTok}?`, okText: 'Удалить', cancelText: 'Отмена', danger: true })
           : Promise.resolve(window.confirm('Delete hostkey?')));
         if (!ok) return;
         try {

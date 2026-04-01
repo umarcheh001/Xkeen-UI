@@ -1,12 +1,22 @@
+import {
+  closeXkeenModal,
+  confirmXkeenAction,
+  getXkeenEditorEngineApi,
+  getXkeenPageFilesConfig,
+  getXkeenSharedPrimitivesApi,
+  openXkeenModal,
+  toastXkeen,
+} from './xkeen_runtime.js';
+
+let backupsModuleApi = null;
+
 (() => {
   // Backups feature module.
   // Supports two modes depending on the page:
   //  - history: /backups page (old timestamped backups)  -> /api/backups, /api/restore, /api/delete-backup
   //  - snapshots: panel card (rollback snapshots per file) -> /api/xray/snapshots, /api/xray/snapshots/read, /api/xray/snapshots/restore
 
-  window.XKeen = window.XKeen || {};
-  XKeen.backups = XKeen.backups || {};
-  const UI = (window.XKeen && XKeen.ui && XKeen.ui.sharedPrimitives) ? XKeen.ui.sharedPrimitives : null;
+  const UI = getXkeenSharedPrimitivesApi();
 
   let _inited = false;
   let _mode = null; // 'history' | 'snapshots'
@@ -23,6 +33,74 @@
   let _snapEngineUnsub = null;
   let _snapCurrentName = '';
   let _snapViewStateStore = null;
+
+  let routingFeatureModulePromise = null;
+  let inboundsFeatureModulePromise = null;
+  let outboundsFeatureModulePromise = null;
+
+  function loadRoutingFeatureModule() {
+    if (!routingFeatureModulePromise) {
+      routingFeatureModulePromise = import('./routing.js').catch((error) => {
+        routingFeatureModulePromise = null;
+        throw error;
+      });
+    }
+    return routingFeatureModulePromise;
+  }
+
+  function loadInboundsFeatureModule() {
+    if (!inboundsFeatureModulePromise) {
+      inboundsFeatureModulePromise = import('./inbounds.js').catch((error) => {
+        inboundsFeatureModulePromise = null;
+        throw error;
+      });
+    }
+    return inboundsFeatureModulePromise;
+  }
+
+  function loadOutboundsFeatureModule() {
+    if (!outboundsFeatureModulePromise) {
+      outboundsFeatureModulePromise = import('./outbounds.js').catch((error) => {
+        outboundsFeatureModulePromise = null;
+        throw error;
+      });
+    }
+    return outboundsFeatureModulePromise;
+  }
+
+  async function getConfigTargetApi(target) {
+    try {
+      if (target === 'routing') {
+        const mod = await loadRoutingFeatureModule();
+        return mod && typeof mod.getRoutingApi === 'function' ? mod.getRoutingApi() : null;
+      }
+      if (target === 'inbounds') {
+        const mod = await loadInboundsFeatureModule();
+        return mod && typeof mod.getInboundsApi === 'function' ? mod.getInboundsApi() : null;
+      }
+      if (target === 'outbounds') {
+        const mod = await loadOutboundsFeatureModule();
+        return mod && typeof mod.getOutboundsApi === 'function' ? mod.getOutboundsApi() : null;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  }
+
+  async function reloadConfigTarget(target) {
+    const api = await getConfigTargetApi(target);
+    if (!api || typeof api.load !== 'function') return null;
+    return api.load();
+  }
+
+  async function reloadVisibleConfigEditors(targets) {
+    const items = Array.isArray(targets) ? targets : [];
+    for (const target of items) {
+      await reloadConfigTarget(target);
+    }
+    return null;
+  }
 
   function el(id) {
     try {
@@ -42,38 +120,17 @@
   }
 
   function getModalApi() {
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal) return XKeen.ui.modal;
-    } catch (e) {}
     return null;
   }
 
   function showModal(modal, source) {
     if (UI && typeof UI.openModal === 'function') return UI.openModal(modal, { source: source || 'backups' });
-    if (!modal) return false;
-    const api = getModalApi();
-    try {
-      if (api && typeof api.open === 'function') return api.open(modal, { source: source || 'backups' });
-    } catch (e) {}
-    try { modal.classList.remove('hidden'); } catch (e2) {}
-    try {
-      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
-    } catch (e3) {}
-    return true;
+    return openXkeenModal(modal, source || 'backups', true);
   }
 
   function hideModal(modal, source) {
     if (UI && typeof UI.closeModal === 'function') return UI.closeModal(modal, { source: source || 'backups' });
-    if (!modal) return false;
-    const api = getModalApi();
-    try {
-      if (api && typeof api.close === 'function') return api.close(modal, { source: source || 'backups' });
-    } catch (e) {}
-    try { modal.classList.add('hidden'); } catch (e2) {}
-    try {
-      if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
-    } catch (e3) {}
-    return true;
+    return closeXkeenModal(modal, source || 'backups', false);
   }
 
   function cmWrapper(cm) {
@@ -87,10 +144,7 @@
   }
 
   function getEngineHelper() {
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) return XKeen.ui.editorEngine;
-    } catch (e) {}
-    return null;
+    return getXkeenEditorEngineApi();
   }
 
   const CM6_SCOPE = 'backups';
@@ -307,15 +361,7 @@
     try {
       if (UI && typeof UI.toast === 'function') return UI.toast(text, kind);
     } catch (e) {}
-    try {
-      if (typeof window.toast === 'function') return window.toast(text, kind);
-    } catch (e2) {}
-    try {
-      if (typeof window.showToast === 'function') return window.showToast(text, kind);
-    } catch (e3) {}
-    try {
-      if (window.XKeen && XKeen.ui && typeof XKeen.ui.toast === 'function') return XKeen.ui.toast(text, kind);
-    } catch (e4) {}
+    try { return toastXkeen(text, kind); } catch (e2) {}
     try { console.log('[xkeen]', text); } catch (e5) {}
     return null;
   }
@@ -352,11 +398,7 @@
       if (UI && typeof UI.confirmAction === 'function') return !!(await UI.confirmAction(options));
     } catch (e) {}
 
-    if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-      return !!(await XKeen.ui.confirm(options));
-    }
-
-    const ok = window.confirm(buildConfirmText(options));
+    const ok = await confirmXkeenAction(options, buildConfirmText(options));
     if (!ok && options.cancelMessage) {
       toast(options.cancelMessage, options.cancelKind || 'info');
     }
@@ -673,7 +715,7 @@
     if (next === 'monaco') {
       const runtime = await ensureEditorRuntime('monaco');
       if (!runtime || !host || typeof runtime.create !== 'function') {
-        try { if (window.toast) window.toast('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
+        try { toastXkeen('Monaco недоступен — используется CodeMirror', 'warning'); } catch (e) {}
         const ee = getEngineHelper();
         try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
         return activateSnapEngine('codemirror');
@@ -695,7 +737,7 @@
           value: value,
         });
         if (!ed) {
-          try { if (window.toast) window.toast('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
+          try { toastXkeen('Не удалось загрузить Monaco — переключаю на CodeMirror', 'warning'); } catch (e) {}
           const ee = getEngineHelper();
           try { if (ee && ee.set) await ee.set('codemirror'); } catch (e2) {}
           resetSnapVisibility();
@@ -1159,15 +1201,7 @@
       }
 
       try {
-        if (window.XKeen && XKeen.routing && typeof XKeen.routing.load === 'function') {
-          await XKeen.routing.load();
-        }
-        if (window.XKeen && XKeen.features && XKeen.features.inbounds && typeof XKeen.features.inbounds.load === 'function') {
-          await XKeen.features.inbounds.load();
-        }
-        if (window.XKeen && XKeen.features && XKeen.features.outbounds && typeof XKeen.features.outbounds.load === 'function') {
-          await XKeen.features.outbounds.load();
-        }
+        await reloadVisibleConfigEditors(['routing', 'inbounds', 'outbounds']);
       } catch (e) {
         console.error(e);
         warnings.push('Открытые редакторы не успели перечитать восстановленный конфиг.');
@@ -1217,7 +1251,7 @@
       }
     }
 
-    const files = (window.XKEEN_FILES && typeof window.XKEEN_FILES === 'object') ? window.XKEEN_FILES : {};
+    const files = getXkeenPageFilesConfig();
     const label = t === 'routing'
       ? _baseName(files.routing, '05_routing.json')
       : (t === 'inbounds' ? _baseName(files.inbounds, '03_inbounds.json') : _baseName(files.outbounds, '04_outbounds.json'));
@@ -1263,15 +1297,7 @@
 
         // Refresh UI
         try {
-          if (t === 'routing' && window.XKeen && XKeen.routing && typeof XKeen.routing.load === 'function') {
-            await XKeen.routing.load();
-          }
-          if (t === 'inbounds' && window.XKeen && XKeen.features && XKeen.features.inbounds && typeof XKeen.features.inbounds.load === 'function') {
-            await XKeen.features.inbounds.load();
-          }
-          if (t === 'outbounds' && window.XKeen && XKeen.features && XKeen.features.outbounds && typeof XKeen.features.outbounds.load === 'function') {
-            await XKeen.features.outbounds.load();
-          }
+          await reloadConfigTarget(t);
         } catch (e) {
           console.error(e);
           warnings.push('Открытый редактор не успел перечитать восстановленный файл.');
@@ -1297,18 +1323,48 @@
     load();
   }
 
-  XKeen.backups.init = init;
-  XKeen.backups.load = load;
-  XKeen.backups.refresh = refresh;
+  backupsModuleApi = {
+    init,
+    load,
+    refresh,
+    restoreBackup,
+    deleteBackup,
+    viewSnapshot,
+    restoreSnapshot,
+    restoreAuto,
+  };
 
-  // History APIs (backups page)
-  XKeen.backups.restoreBackup = restoreBackup;
-  XKeen.backups.deleteBackup = deleteBackup;
-
-  // Snapshots APIs (panel)
-  XKeen.backups.viewSnapshot = viewSnapshot;
-  XKeen.backups.restoreSnapshot = restoreSnapshot;
-
-  // Legacy API
-  XKeen.backups.restoreAuto = restoreAuto;
 })();
+
+export function getBackupsApi() {
+  try {
+    if (backupsModuleApi && typeof backupsModuleApi.init === 'function') return backupsModuleApi;
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function initBackups(...args) {
+  const api = getBackupsApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export function loadBackups(...args) {
+  const api = getBackupsApi();
+  if (!api || typeof api.load !== 'function') return null;
+  return api.load(...args);
+}
+
+export function refreshBackups(...args) {
+  const api = getBackupsApi();
+  if (!api || typeof api.refresh !== 'function') return null;
+  return api.refresh(...args);
+}
+export const backupsApi = Object.freeze({
+  get: getBackupsApi,
+  init: initBackups,
+  load: loadBackups,
+  refresh: refreshBackups,
+});

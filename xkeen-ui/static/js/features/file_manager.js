@@ -1,3 +1,6 @@
+import { isXkeenMipsRuntime } from './xkeen_runtime.js';
+import { getFileManagerApiRoot, getFileManagerNamespace } from './file_manager_namespace.js';
+
 (() => {
   'use strict';
 
@@ -8,11 +11,7 @@
   // - context menu dispatcher wiring
   // - initial render/refresh/capabilities bootstrap
 
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const FM = getFileManagerNamespace();
 
   // --- tiny helpers (prefer FM.common, but keep safe fallbacks)
   function C() {
@@ -92,12 +91,7 @@
       const S = getS();
       if (S && typeof S.liteMode === 'boolean') return !!S.liteMode;
     } catch (e2) {}
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-      return String(window.XKEEN_IS_MIPS || '').toLowerCase() === 'true';
-    } catch (e3) {
-      return false;
-    }
+    return isXkeenMipsRuntime();
   }
 
   function applyLiteUi(liteMode) {
@@ -197,7 +191,8 @@
       // "Hide unused" layout preference: if enabled, hide Files tab when remote FS is unusable.
       let hideUnused = false;
       try {
-        const L = (window.XKeen && XKeen.ui && XKeen.ui.layout) ? XKeen.ui.layout : null;
+        const c = C();
+        const L = c && typeof c.getLayoutApi === 'function' ? c.getLayoutApi() : null;
         if (L && typeof L.load === 'function') hideUnused = !!(L.load() || {}).hideUnused;
         else hideUnused = !!(storageGetJSON('xkeen-layout-v1', null) || {}).hideUnused;
       } catch (e) {}
@@ -439,3 +434,30 @@
       });
   };
 })();
+export function getFileManagerApi() {
+  try {
+    return getFileManagerApiRoot();
+  } catch (error) {
+    return null;
+  }
+}
+
+function callFileManagerApi(method, ...args) {
+  const api = getFileManagerApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initFileManager(...args) {
+  return callFileManagerApi('init', ...args);
+}
+
+export function onShowFileManager(...args) {
+  return callFileManagerApi('onShow', ...args);
+}
+
+export const fileManagerApi = Object.freeze({
+  get: getFileManagerApi,
+  init: initFileManager,
+  onShow: onShowFileManager,
+});

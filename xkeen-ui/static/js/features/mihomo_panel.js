@@ -1,18 +1,40 @@
+import {
+  clearSharedMihomoEditor,
+  confirmMihomoAction,
+  escapeMihomoHtml,
+  getMihomoCommandJobApi,
+  getMihomoEditorActionsApi,
+  getMihomoEditorEngineApi,
+  getMihomoFormattersApi,
+  getSharedMihomoEditor,
+  setSharedMihomoEditor,
+} from './mihomo_runtime.js';
+import {
+  attachXkeenEditorToolbar,
+  buildXkeenEditorCommonKeys,
+  getXkeenEditorToolbarDefaultItems,
+  getXkeenEditorToolbarIcons,
+  getXkeenEditorToolbarMiniItems,
+  getXkeenFilePath,
+  getXkeenPageFlagsConfig,
+  setXkeenPageConfigValue,
+} from './xkeen_runtime.js';
+
+let mihomoPanelModuleApi = null;
+
 (() => {
   'use strict';
 
   // Mihomo panel (editor + templates + validate + profiles/backups) extracted from main.js.
-  // Public API:
-  //   XKeen.features.mihomoPanel.init()
-  //   XKeen.features.mihomoPanel.loadConfig/saveConfig
-  //   XKeen.features.mihomoPanel.validateFromEditor/saveAndRestart
-  //   XKeen.features.mihomoPanel.loadProfiles/loadBackups/cleanBackups
+  // Canonical module API:
+  //   mihomoPanelApi.init()
+  //   mihomoPanelApi.loadConfig/saveConfig
+  //   mihomoPanelApi.validateFromEditor/saveAndRestart
+  //   mihomoPanelApi.loadProfiles/loadBackups/cleanBackups
+  // Legacy globals are published by features/compat/mihomo_panel.js.
 
-  window.XKeen = window.XKeen || {};
-  XKeen.state = XKeen.state || {};
-  XKeen.features = XKeen.features || {};
-
-  const MP = (XKeen.features.mihomoPanel = XKeen.features.mihomoPanel || {});
+  const MP = mihomoPanelModuleApi || {};
+  mihomoPanelModuleApi = MP;
 
   const IDS = {
     view: 'view-mihomo',
@@ -78,30 +100,55 @@
   // Monaco fullscreen (CSS-driven)
   let _monacoFsWired = false;
 
+  async function ensureFormattersReady() {
+    await import('../ui/prettier_loader.js');
+    await import('../ui/formatters.js');
+    return getMihomoFormattersApi();
+  }
+
   // YAML error marker (CodeMirror only; backend validate / Prettier errors).
   let _yamlErrorLine = null;
   let _yamlErrorLineHandle = null;
   let _viewStateStore = null;
+  let _restartLogModulePromise = null;
 
   function $(id) {
     return document.getElementById(id);
   }
 
-  function refreshRestartLog() {
+  function loadRestartLogModule() {
+    if (!_restartLogModulePromise) {
+      _restartLogModulePromise = import('./restart_log.js').catch((error) => {
+        _restartLogModulePromise = null;
+        throw error;
+      });
+    }
+    return _restartLogModulePromise;
+  }
+
+  async function getRestartLogFeatureApi() {
     try {
-      const api = window.XKeen && XKeen.features ? XKeen.features.restartLog : null;
-      if (api && typeof api.load === 'function') return api.load();
+      const mod = await loadRestartLogModule();
+      const api = mod && typeof mod.getRestartLogApi === 'function' ? mod.getRestartLogApi() : null;
+      return api || null;
     } catch (e) {}
     return null;
   }
 
+  function refreshRestartLog() {
+    void getRestartLogFeatureApi().then((api) => {
+      if (api && typeof api.load === 'function') return api.load();
+      return null;
+    }).catch(() => {});
+    return null;
+  }
+
   function escapeHtml(s) {
-    try {
-      if (window.XKeen && XKeen.util && typeof XKeen.util.escapeHtml === 'function') {
-        return XKeen.util.escapeHtml(s);
-      }
-    } catch (e) {}
-    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return escapeMihomoHtml(s);
+  }
+
+  async function confirmAction(opts, fallbackText) {
+    return confirmMihomoAction(opts, fallbackText);
   }
 
   function setStatus(msg, isError, noToast) {
@@ -113,15 +160,9 @@
     } catch (e) {}
   }
 
-  // Back-compat: old code calls setMihomoStatus/getMihomoEditorText/setMihomoEditorText.
-  window.setMihomoStatus = window.setMihomoStatus || ((m, err) => setStatus(m, err));
-
   function hasInitialMihomoConfig() {
     try {
-      if (typeof window.XKEEN_MIHOMO_CONFIG_EXISTS === 'boolean') return !!window.XKEEN_MIHOMO_CONFIG_EXISTS;
-      const raw = String(window.XKEEN_MIHOMO_CONFIG_EXISTS || '').trim().toLowerCase();
-      if (!raw) return true;
-      return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+      return !!getXkeenPageFlagsConfig().mihomoConfigExists;
     } catch (e) {}
     return true;
   }
@@ -139,11 +180,15 @@
   }
 
   function getEngineHelper() {
-    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null; } catch (e) { return null; }
+    return getMihomoEditorEngineApi();
   }
 
   function getEditorActions() {
-    try { return (window.XKeen && XKeen.ui && XKeen.ui.editorActions) ? XKeen.ui.editorActions : null; } catch (e) { return null; }
+    return getMihomoEditorActionsApi();
+  }
+
+  function getSharedEditor() {
+    return _cm || getSharedMihomoEditor();
   }
 
   const CM6_SCOPE = 'mihomo-panel';
@@ -214,7 +259,7 @@
 
   function showCmToolbar(show) {
     try {
-      const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+      const cm = getSharedEditor();
       if (cm && cm._xkeenToolbarEl) cm._xkeenToolbarEl.style.display = show ? '' : 'none';
     } catch (e) {}
   }
@@ -235,11 +280,12 @@
       btn.className = 'xkeen-cm-tool xk-mihomo-fs-btn';
       try { btn.dataset.tip = 'Фулскрин (F11 / Esc)'; } catch (e) {}
       try { btn.dataset.actionId = 'fs_hdr'; } catch (e) {}
-      btn.innerHTML = (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.fullscreen) ? window.XKEEN_CM_ICONS.fullscreen : '⛶';
+      const icons = getXkeenEditorToolbarIcons();
+      btn.innerHTML = icons.fullscreen || '⛶';
 
       btn.addEventListener('click', (e) => {
         try { e.preventDefault(); e.stopPropagation(); } catch (err) {}
-        try { toggleEditorFullscreen(_cm || (XKeen.state ? XKeen.state.mihomoEditor : null)); } catch (err) {}
+        try { toggleEditorFullscreen(getSharedEditor()); } catch (err) {}
       });
 
       // Place it right next to the engine select.
@@ -258,7 +304,7 @@
       if (!btn) return;
 
       const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
-      const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+      const cm = getSharedEditor();
       const hasToolbar = !!(cm && cm._xkeenToolbarEl);
 
       // Show header button only when Monaco is active AND no CM toolbar exists.
@@ -336,7 +382,7 @@
   }
 
   function showCodeMirror(show) {
-    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    const cm = getSharedEditor();
     const w = cmWrapper(cm);
     const ta = $(IDS.textarea);
 
@@ -378,7 +424,7 @@
   // (to keep UI consistent), it must sit above the Monaco host instead of ending up under it.
   function repositionCmToolbarForEngine(engine) {
     try {
-      const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+      const cm = getSharedEditor();
       const bar = cm && cm._xkeenToolbarEl;
       if (!bar || !bar.parentNode) return;
 
@@ -410,14 +456,14 @@
 
   function _syncToolbarFsClass(isFs) {
     try {
-      const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+      const cm = getSharedEditor();
       if (cm && cm._xkeenToolbarEl) cm._xkeenToolbarEl.classList.toggle('is-fullscreen', !!isFs);
     } catch (e) {}
   }
 
   function syncToolbarForEngine(engine) {
     try {
-      const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+      const cm = getSharedEditor();
       if (!cm || !cm._xkeenToolbarEl || !cm._xkeenToolbarEl.querySelectorAll) return;
       const bar = cm._xkeenToolbarEl;
       const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
@@ -574,7 +620,7 @@
       if (next === 'monaco') {
         // If CodeMirror was in fullscreen, exit it first to avoid CSS/layout glitches.
         try {
-          const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+          const cm = getSharedEditor();
           const actions = getEditorActions();
           if (actions && typeof actions.setFullscreen === 'function') actions.setFullscreen(cm, false);
           else if (cm && cm.getOption && cm.setOption && cm.getOption('fullScreen')) cm.setOption('fullScreen', false);
@@ -598,7 +644,7 @@
 
         // Sync text from CodeMirror to Monaco on entry.
         try {
-          const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+          const cm = getSharedEditor();
           const v = (cm && cm.getValue) ? String(cm.getValue() || '') : String(($(IDS.textarea) && $(IDS.textarea).value) || '');
           if (ed && ed.setValue) ed.setValue(v);
         } catch (e3) {}
@@ -643,7 +689,7 @@
       try { if (preservedView) restoreCurrentViewState(preservedView); } catch (e6a) {}
       try { bindViewStateTracking(); } catch (e6b) {}
       try {
-        const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+        const cm = getSharedEditor();
         if (cm && cm.focus) cm.focus();
       } catch (e6) {}
       return _engine;
@@ -721,17 +767,17 @@
       try { disposeCodeMirrorEditor(_cm); } catch (e) {}
       _cm = null;
     }
-    if (XKeen.state.mihomoEditor) {
-      const cached = XKeen.state.mihomoEditor;
+    const cached = getSharedMihomoEditor();
+    if (cached) {
       if (!preferCm6 || isCm6Editor(cached)) {
         _cm = cached;
         return _cm;
       }
       try { disposeCodeMirrorEditor(cached); } catch (e) {}
-      try { XKeen.state.mihomoEditor = null; } catch (e) {}
+      clearSharedMihomoEditor(cached);
     }
 
-    const extra = (typeof window.buildCmExtraKeysCommon === 'function') ? window.buildCmExtraKeysCommon() : {};
+    const extra = buildXkeenEditorCommonKeys();
     if (!runtime || typeof runtime.create !== 'function') return null;
 
     _cm = runtime.create(ta, {
@@ -770,7 +816,7 @@
       _cm.getWrapperElement().classList.add('xkeen-cm');
     } catch (e) {}
 
-    XKeen.state.mihomoEditor = _cm;
+    setSharedMihomoEditor(_cm);
 
     // Dirty tracking (user edits only).
     try {
@@ -781,27 +827,28 @@
     } catch (e) {}
 
     try {
-      if (typeof window.xkeenAttachCmToolbar === 'function') {
+      const baseItems = getXkeenEditorToolbarDefaultItems();
+      const miniItems = getXkeenEditorToolbarMiniItems();
+      if (baseItems.length || miniItems.length) {
         // IMPORTANT:
-        // xkeenAttachCmToolbar(cm) expects an items list.
+        // attachXkeenEditorToolbar(cm, items) expects an items list.
         // If called without it, it creates an empty toolbar (no buttons),
         // which выглядит как "тулбар пропал".
-        const baseItems = (window && window.XKEEN_CM_TOOLBAR_DEFAULT)
-          ? window.XKEEN_CM_TOOLBAR_DEFAULT
-          : ((window && window.XKEEN_CM_TOOLBAR_MINI) ? window.XKEEN_CM_TOOLBAR_MINI : null);
+        const sourceItems = baseItems.length ? baseItems : miniItems;
+        const icons = getXkeenEditorToolbarIcons();
 
         // Replace fullscreen action: in this card it must work for the active engine.
-        const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
+        const items = sourceItems.map((it) => {
           if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) });
           return it;
         });
 
         // Fallback fullscreen button for Monaco even when CM fullscreen addon isn't loaded.
         try {
-          if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
+          if (icons.fullscreen && !items.some((it) => it && it.id === 'fs_any')) {
             items.push({
               id: 'fs_any',
-              svg: window.XKEEN_CM_ICONS.fullscreen,
+              svg: icons.fullscreen,
               label: 'Фулскрин',
               fallbackHint: 'F11 / Esc',
               onClick: () => toggleEditorFullscreen(_cm),
@@ -809,7 +856,7 @@
           }
         } catch (e) {}
 
-        window.xkeenAttachCmToolbar(_cm, items);
+        attachXkeenEditorToolbar(_cm, items);
         // Keep the toolbar in the compact topbar host (if present).
         try { repositionCmToolbarForEngine(_engine); } catch (e) {}
         try { syncToolbarForEngine(_engine); } catch (e) {}
@@ -824,7 +871,7 @@
     try {
       if (_engine === 'monaco' && _monaco) return String(_monaco.getValue() || '');
     } catch (e) {}
-    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    const cm = getSharedEditor();
     if (cm && cm.getValue) return String(cm.getValue() || '');
     const ta = $(IDS.textarea);
     return ta ? String(ta.value || '') : '';
@@ -833,7 +880,7 @@
   // Set text into all known backends so switching engines stays lossless.
   function setEditorText(text) {
     const v = String(text ?? '');
-    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    const cm = getSharedEditor();
     try { if (cm && cm.setValue) cm.setValue(v); } catch (e) {}
     try { if (_monaco && _monaco.setValue) _monaco.setValue(v); } catch (e) {}
     try {
@@ -860,7 +907,7 @@
     if (_engine === 'monaco' && _monacoFacade) return _monacoFacade;
 
     const helper = getEngineHelper();
-    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    const cm = getSharedEditor();
     if (cm) {
       const runtime = getEditorRuntime('codemirror');
       if (runtime && typeof runtime.toFacade === 'function') {
@@ -957,18 +1004,15 @@
       ctx: 'config',
       engine: _engine,
       monaco: _engine === 'monaco' ? _monaco : null,
-      codemirror: _engine === 'codemirror' ? (_cm || (XKeen.state ? XKeen.state.mihomoEditor : null)) : null,
+      codemirror: _engine === 'codemirror' ? getSharedEditor() : null,
       textarea: $(IDS.textarea),
       waitMs: 180,
       capture: () => captureCurrentViewState(),
     });
   }
 
-  window.getMihomoEditorText = window.getMihomoEditorText || getEditorText;
-  window.setMihomoEditorText = window.setMihomoEditorText || setEditorText;
-
   function clearYamlErrorMarker() {
-    const cm = _cm || XKeen.state.mihomoEditor;
+    const cm = getSharedEditor();
     if (!cm) {
       _yamlErrorLine = null;
       _yamlErrorLineHandle = null;
@@ -1002,7 +1046,7 @@
     }
 
     // CodeMirror marker (background highlight + scroll).
-    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    const cm = getSharedEditor();
     if (!cm) return;
 
     try {
@@ -1049,7 +1093,7 @@
       return;
     }
 
-    const cm = _cm || (XKeen.state ? XKeen.state.mihomoEditor : null);
+    const cm = getSharedEditor();
     try {
       if (cm && cm.refresh) cm.refresh();
     } catch (e) {}
@@ -1122,7 +1166,108 @@
     syncMihomoCardToggleState(willOpen);
     if (willOpen) refreshEditorIfAny();
   }
-  window.toggleMihomoCard = window.toggleMihomoCard || toggleMihomoCard;
+
+  function shouldAutoRestartAfterSave() {
+    const cb = document.getElementById('global-autorestart-xkeen');
+    return cb ? !!cb.checked : true;
+  }
+
+  function getCommandJobApi() {
+    return getMihomoCommandJobApi();
+  }
+
+  async function clearSharedRestartLogUi() {
+    try {
+      const api = await getRestartLogFeatureApi();
+      if (api && typeof api.setRaw === 'function') {
+        api.setRaw('');
+        return;
+      }
+    } catch (e) {}
+    try {
+      const api = await getRestartLogFeatureApi();
+      if (api && typeof api.clear === 'function') {
+        api.clear();
+        return;
+      }
+    } catch (e) {}
+
+    const els = [];
+    try {
+      document.querySelectorAll('[data-xk-restart-log="1"]').forEach((el) => {
+        if (el) els.push(el);
+      });
+    } catch (e) {}
+    try {
+      const legacy = document.getElementById('restart-log');
+      if (legacy && els.indexOf(legacy) === -1) els.push(legacy);
+    } catch (e) {}
+    els.forEach((el) => {
+      try { el.dataset.rawText = ''; } catch (e) {}
+      try { el.innerHTML = ''; } catch (e) {}
+      try { el.scrollTop = 0; } catch (e) {}
+    });
+  }
+
+  async function appendSharedRestartLog(chunk) {
+    if (!chunk) return;
+    try {
+      const api = await getRestartLogFeatureApi();
+      if (api && typeof api.append === 'function') {
+        api.append(String(chunk));
+        return;
+      }
+    } catch (e) {}
+
+    const els = [];
+    try {
+      document.querySelectorAll('[data-xk-restart-log="1"]').forEach((el) => {
+        if (el) els.push(el);
+      });
+    } catch (e) {}
+    try {
+      const legacy = document.getElementById('restart-log');
+      if (legacy && els.indexOf(legacy) === -1) els.push(legacy);
+    } catch (e) {}
+    els.forEach((el) => {
+      try {
+        const prev = el.textContent || '';
+        el.textContent = prev + String(chunk);
+        el.scrollTop = el.scrollHeight;
+      } catch (e) {}
+    });
+  }
+
+  async function waitForRestartJob(jobId, onChunk) {
+    const CJ = getCommandJobApi();
+    if (CJ && typeof CJ.waitForCommandJob === 'function') {
+      return CJ.waitForCommandJob(String(jobId), {
+        maxWaitMs: 5 * 60 * 1000,
+        onChunk: (chunk) => {
+          if (!chunk) return;
+          try { onChunk(chunk); } catch (e) {}
+        }
+      });
+    }
+
+    let lastLen = 0;
+    while (true) {
+      const pr = await fetch(`/api/run-command/${encodeURIComponent(String(jobId))}`);
+      const pj = await pr.json().catch(() => ({}));
+      const out = (pj && typeof pj.output === 'string') ? pj.output : '';
+      if (out.length > lastLen) {
+        const chunk = out.slice(lastLen);
+        lastLen = out.length;
+        if (chunk) {
+          try { onChunk(chunk); } catch (e) {}
+        }
+      }
+      if (!pr.ok || pj.ok === false || pj.status === 'finished' || pj.status === 'error') {
+        return pj;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+  }
 
   // ---------- Core actions ----------
 
@@ -1152,7 +1297,7 @@
       setStatus('config.yaml загружен (' + content.length + ' байт).', false, !notify);
       try {
         if (typeof window.updateLastActivity === 'function') {
-          const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
+          const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
           window.updateLastActivity('loaded', 'mihomo', fp);
         }
       } catch (e) {}
@@ -1171,10 +1316,33 @@
       return false;
     }
 
+    const restart = shouldAutoRestartAfterSave();
+    if (restart && MP._restartJobRunning) {
+      setStatus('Перезапуск уже выполняется…', true);
+      return false;
+    }
+
+    const btn = $(IDS.btnSave);
+    const setBtnBusy = (busy) => {
+      if (!btn) return;
+      try { btn.disabled = !!busy; } catch (e) {}
+      try { btn.classList.toggle('is-busy', !!busy); } catch (e) {}
+    };
+
     try {
-      setStatus('Сохранение config.yaml...', false);
-      const restart = (typeof window.shouldAutoRestartAfterSave === 'function') ? !!window.shouldAutoRestartAfterSave() : true;
-      const res = await fetch('/api/mihomo-config', {
+      if (restart) {
+        MP._restartJobRunning = true;
+        setBtnBusy(true);
+        clearYamlErrorMarker();
+        setStatus('Сохраняю config.yaml и запускаю перезапуск…', false, true);
+        await clearSharedRestartLogUi();
+        await appendSharedRestartLog('⏳ Запуск xkeen -restart (job)…\n');
+      } else {
+        setStatus('Сохранение config.yaml...', false);
+      }
+
+      const url = restart ? '/api/mihomo-config?async=1' : '/api/mihomo-config';
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content, restart }),
@@ -1184,26 +1352,61 @@
         setStatus((data && data.error) || 'Ошибка сохранения config.yaml.', true);
         return false;
       }
-      let msg = 'config.yaml сохранён.';
-      setStatus(msg, false, !!(data && data.restarted));
       markEditorClean();
-      try { window.XKEEN_MIHOMO_CONFIG_EXISTS = true; } catch (e) {}
+      try { setXkeenPageConfigValue('flags.mihomoConfigExists', true); } catch (e) {}
       try {
         if (typeof window.updateLastActivity === 'function') {
-          const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
+          const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
           window.updateLastActivity('saved', 'mihomo', fp);
         }
       } catch (e) {}
-      try {
-        if (data.restarted && window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.load === 'function') {
-          XKeen.features.restartLog.load();
+
+      if (restart) {
+        const jobId = data.restart_job_id || data.job_id || data.restartJobId || null;
+        if (!jobId) {
+          setStatus('Перезапуск запущен, но job_id не получен.', true);
+          return false;
         }
+
+        setStatus('Перезапуск в очереди (job ' + String(jobId) + ')…', false, true);
+        const result = await waitForRestartJob(String(jobId), (chunk) => {
+          try { void appendSharedRestartLog(chunk); } catch (e) {}
+        });
+        const ok = !!(result && result.ok);
+
+        if (ok) {
+          setStatus('Готово', false);
+        } else {
+          const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
+          const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
+          const detail = err
+            ? ('Ошибка: ' + err)
+            : (exitCode !== null
+                ? ('Ошибка (exit_code=' + exitCode + ')')
+                : 'Ошибка перезапуска.');
+          setStatus('Ошибка', true);
+          try { if (detail && detail !== 'Ошибка') await appendSharedRestartLog('\n' + detail + '\n'); } catch (e) {}
+          try { if (detail) setStatus(detail, true, true); } catch (e) {}
+        }
+
+        return ok;
+      }
+
+      const msg = 'config.yaml сохранён.';
+      setStatus(msg, false, !!(data && data.restarted));
+      try {
+        if (data.restarted) refreshRestartLog();
       } catch (e) {}
       return true;
     } catch (e) {
       console.error(e);
       setStatus('Ошибка сохранения config.yaml.', true);
       return false;
+    } finally {
+      if (restart) {
+        MP._restartJobRunning = false;
+        setBtnBusy(false);
+      }
     }
   };
 
@@ -1226,16 +1429,18 @@
       try { btn.classList.toggle('is-busy', !!busy); } catch (e) {}
     };
 
-    const clearRestartLogUi = () => {
+    const clearRestartLogUi = async () => {
       try {
-        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.setRaw === 'function') {
-          XKeen.features.restartLog.setRaw('');
+        const api = await getRestartLogFeatureApi();
+        if (api && typeof api.setRaw === 'function') {
+          api.setRaw('');
           return;
         }
       } catch (e) {}
       try {
-        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.clear === 'function') {
-          XKeen.features.restartLog.clear();
+        const api = await getRestartLogFeatureApi();
+        if (api && typeof api.clear === 'function') {
+          api.clear();
           return;
         }
       } catch (e) {}
@@ -1257,11 +1462,12 @@
       });
     };
 
-    const appendRestartLog = (chunk) => {
+    const appendRestartLog = async (chunk) => {
       if (!chunk) return;
       try {
-        if (window.XKeen && XKeen.features && XKeen.features.restartLog && typeof XKeen.features.restartLog.append === 'function') {
-          XKeen.features.restartLog.append(String(chunk));
+        const api = await getRestartLogFeatureApi();
+        if (api && typeof api.append === 'function') {
+          api.append(String(chunk));
           return;
         }
       } catch (e) {}
@@ -1291,8 +1497,8 @@
 
       // Avoid noisy "loading..." toast: status line + streaming log is enough.
       setStatus('Сохраняю config.yaml и запускаю перезапуск…', false, true);
-      clearRestartLogUi();
-      appendRestartLog('⏳ Запуск xkeen -restart (job)…\n');
+      await clearRestartLogUi();
+      await appendRestartLog('⏳ Запуск xkeen -restart (job)…\n');
 
       // Backend endpoint: returns 202 + restart_job_id.
       const res = await fetch('/api/mihomo/generate_apply', {
@@ -1324,14 +1530,14 @@
       setStatus('Перезапуск в очереди (job ' + String(jobId) + ')…', false, true);
 
       // Stream output via existing command_jobs polling/WS util.
-      const CJ = (window.XKeen && XKeen.util && XKeen.util.commandJob) ? XKeen.util.commandJob : null;
+      const CJ = getCommandJobApi();
       let result = null;
 
       if (CJ && typeof CJ.waitForCommandJob === 'function') {
         result = await CJ.waitForCommandJob(String(jobId), {
           maxWaitMs: 5 * 60 * 1000,
           onChunk: (chunk) => {
-            try { appendRestartLog(chunk); } catch (e) {}
+            try { void appendRestartLog(chunk); } catch (e) {}
           }
         });
       } else {
@@ -1342,7 +1548,7 @@
           const pj = await pr.json().catch(() => ({}));
           const out = (pj && typeof pj.output === 'string') ? pj.output : '';
           if (out.length > lastLen) {
-            appendRestartLog(out.slice(lastLen));
+            await appendRestartLog(out.slice(lastLen));
             lastLen = out.length;
           }
           if (!pr.ok || pj.ok === false || pj.status === 'finished' || pj.status === 'error') {
@@ -1362,7 +1568,7 @@
         const msg = err ? ('Ошибка: ' + err) : (exitCode !== null ? ('Ошибка (exit_code=' + exitCode + ')') : 'Ошибка перезапуска.');
         // Requirement: final toast should be exactly "Ошибка"; show details in status/log without extra toast.
         setStatus('Ошибка', true);
-        try { if (msg && msg !== 'Ошибка') appendRestartLog('\n' + msg + '\n'); } catch (e) {}
+        try { if (msg && msg !== 'Ошибка') await appendRestartLog('\n' + msg + '\n'); } catch (e) {}
         try { if (msg) setStatus(msg, true, true); } catch (e) {}
       }
 
@@ -1399,14 +1605,9 @@
 
     // Browser-side Prettier formatting (offline-capable via static/vendor).
     try {
-      const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
-        ? XKeen.lazy.ensureFeature
-        : null;
-      if (ensureFeature) {
-        await Promise.resolve(ensureFeature('formatters'));
-      }
+      const formatters = await ensureFormattersReady();
 
-      if (!window.XKeen || !XKeen.ui || !XKeen.ui.formatters || typeof XKeen.ui.formatters.formatYaml !== 'function') {
+      if (!formatters || typeof formatters.formatYaml !== 'function') {
         setStatus('Форматирование YAML недоступно (formatters не загружены).', true);
         return false;
       }
@@ -1414,7 +1615,7 @@
       // Avoid noisy "loading..." toast; keep only final result.
       setStatus('Форматирую YAML…', false, true);
 
-      const r = await XKeen.ui.formatters.formatYaml(content);
+      const r = await formatters.formatYaml(content);
       if (!r || !r.ok) {
         const err = (r && r.error) ? String(r.error) : 'unknown';
         const msg =
@@ -1485,9 +1686,6 @@
     try { document.body.classList.remove('modal-open'); } catch (e) {}
   }
 
-  // Template uses onclick="hideMihomoValidationModal()".
-  window.hideMihomoValidationModal = window.hideMihomoValidationModal || hideValidationModal;
-
   MP.validateFromEditor = async function validateFromEditor() {
     const content = String(getEditorText() || '');
     if (!content.trim()) {
@@ -1532,16 +1730,12 @@
     }
   };
 
-  // Back-compat globals used by old main.js handlers.
-  window.validateMihomoConfigFromEditor = window.validateMihomoConfigFromEditor || (() => MP.validateFromEditor());
-  window.saveMihomoAndRestart = window.saveMihomoAndRestart || (() => MP.saveAndRestart());
-
   // ---------- Templates (config.yaml snippets) ----------
 
   function bumpLastActivity(kind) {
     try {
       if (typeof window.updateLastActivity === 'function') {
-        const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
+        const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
         window.updateLastActivity(kind || 'info', 'mihomo', fp);
       }
     } catch (e) {}
@@ -1656,7 +1850,14 @@
             return false;
           }
           const tpl = _templates[idx];
-          const ok = window.confirm('Заменить содержимое редактора шаблоном ' + (tpl.name || 'template') + '?');
+          const templateConfirmText = 'Заменить содержимое редактора шаблоном ' + (tpl.name || 'template') + '?';
+          const ok = await confirmAction({
+            title: 'Загрузить шаблон',
+            message: templateConfirmText,
+            okText: 'Загрузить',
+            cancelText: 'Отмена',
+            danger: true,
+          }, templateConfirmText);
           if (!ok) {
             setStatus('Загрузка шаблона отменена.', false);
             return false;
@@ -1874,18 +2075,13 @@
       (profile ? ' для профиля ' + profile : ' для всех профилей') +
       ', оставив не более ' + limit + ' шт.?';
 
-    let ok = true;
-    if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-      ok = await XKeen.ui.confirm({
-        title: 'Очистить бэкапы',
-        message: confirmText,
-        okText: 'Очистить',
-        cancelText: 'Отменить',
-        danger: true,
-      });
-    } else {
-      ok = window.confirm(confirmText);
-    }
+    const ok = await confirmAction({
+      title: 'Очистить бэкапы',
+      message: confirmText,
+      okText: 'Очистить',
+      cancelText: 'Отменить',
+      danger: true,
+    }, confirmText);
 
     if (!ok) return false;
 
@@ -1965,18 +2161,13 @@
       }
 
       if (action === 'delete') {
-        let ok = true;
-        if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-          ok = await XKeen.ui.confirm({
-            title: 'Удалить профиль',
-            message: 'Удалить профиль ' + name + '?',
-            okText: 'Удалить',
-            cancelText: 'Отменить',
-            danger: true,
-          });
-        } else {
-          ok = window.confirm('Удалить профиль ' + name + '?');
-        }
+        const ok = await confirmAction({
+          title: 'Удалить профиль',
+          message: 'Удалить профиль ' + name + '?',
+          okText: 'Удалить',
+          cancelText: 'Отменить',
+          danger: true,
+        }, 'Удалить профиль ' + name + '?');
         if (!ok) return;
 
         try {
@@ -2036,18 +2227,13 @@
       }
 
       if (action === 'restore') {
-        let ok = true;
-        if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-          ok = await XKeen.ui.confirm({
-            title: 'Восстановить бэкап',
-            message: 'Восстановить конфиг из бэкапа ' + filename + '?',
-            okText: 'Восстановить',
-            cancelText: 'Отменить',
-            danger: true,
-          });
-        } else {
-          ok = window.confirm('Восстановить конфиг из бэкапа ' + filename + '?');
-        }
+        const ok = await confirmAction({
+          title: 'Восстановить бэкап',
+          message: 'Восстановить конфиг из бэкапа ' + filename + '?',
+          okText: 'Восстановить',
+          cancelText: 'Отменить',
+          danger: true,
+        }, 'Восстановить конфиг из бэкапа ' + filename + '?');
         if (!ok) return;
         try {
           const res = await fetch('/api/mihomo/backups/' + encodeURIComponent(filename) + '/restore', { method: 'POST' });
@@ -2068,18 +2254,13 @@
       }
 
       if (action === 'delete') {
-        let ok = true;
-        if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-          ok = await XKeen.ui.confirm({
-            title: 'Удалить бэкап',
-            message: 'Удалить бэкап ' + filename + '? Это действие необратимо.',
-            okText: 'Удалить',
-            cancelText: 'Отменить',
-            danger: true,
-          });
-        } else {
-          ok = window.confirm('Удалить бэкап ' + filename + '? Это действие необратимо.');
-        }
+        const ok = await confirmAction({
+          title: 'Удалить бэкап',
+          message: 'Удалить бэкап ' + filename + '? Это действие необратимо.',
+          okText: 'Удалить',
+          cancelText: 'Отменить',
+          danger: true,
+        }, 'Удалить бэкап ' + filename + '? Это действие необратимо.');
         if (!ok) return;
         try {
           const res = await fetch('/api/mihomo/backups/' + encodeURIComponent(filename), { method: 'DELETE' });
@@ -2156,22 +2337,13 @@
 
           if (isEditorDirty()) {
             const msg = 'Заменить содержимое редактора шаблоном “' + next + '”? Несохранённые изменения будут потеряны.';
-            let ok = false;
-            try {
-              if (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function') {
-                ok = await XKeen.ui.confirm({
-                  title: 'Загрузить шаблон',
-                  message: msg,
-                  okText: 'Загрузить',
-                  cancelText: 'Отмена',
-                  danger: true,
-                });
-              } else {
-                ok = window.confirm(msg);
-              }
-            } catch (e) {
-              ok = window.confirm(msg);
-            }
+            const ok = await confirmAction({
+              title: 'Загрузить шаблон',
+              message: msg,
+              okText: 'Загрузить',
+              cancelText: 'Отмена',
+              danger: true,
+            }, msg);
 
             if (!ok) {
               try { tplSel.value = prev; } catch (e) {}
@@ -2296,5 +2468,122 @@
     finishInit();
   };
 
+  MP.getEditorText = getEditorText;
+  MP.setEditorText = setEditorText;
+  MP.refreshEditor = refreshEditorIfAny;
   MP.isEditorDirty = isEditorDirty;
 })();
+
+export function getMihomoPanelApi() {
+  try {
+    if (mihomoPanelModuleApi && typeof mihomoPanelModuleApi.init === 'function') return mihomoPanelModuleApi;
+  } catch (error) {
+    console.error(error);
+  }
+  return null;
+}
+
+function callMihomoPanelApi(method, ...args) {
+  const api = getMihomoPanelApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initMihomoPanel(...args) {
+  return callMihomoPanelApi('init', ...args);
+}
+
+export function loadMihomoPanel(...args) {
+  return callMihomoPanelApi('loadConfig', ...args);
+}
+
+export function onShowMihomoPanel(...args) {
+  return callMihomoPanelApi('refreshEditor', ...args);
+}
+
+export function saveMihomoPanel(...args) {
+  return callMihomoPanelApi('saveConfig', ...args);
+}
+
+export function saveAndRestartMihomoPanel(...args) {
+  return callMihomoPanelApi('saveAndRestart', ...args);
+}
+
+export function validateMihomoPanel(...args) {
+  return callMihomoPanelApi('validateFromEditor', ...args);
+}
+
+export function formatMihomoPanelYaml(...args) {
+  return callMihomoPanelApi('formatYamlFromEditor', ...args);
+}
+
+export function loadMihomoTemplatesList(...args) {
+  return callMihomoPanelApi('loadTemplatesList', ...args);
+}
+
+export function saveMihomoEditorAsTemplate(...args) {
+  return callMihomoPanelApi('saveEditorAsTemplate', ...args);
+}
+
+export function loadSelectedMihomoTemplate(...args) {
+  return callMihomoPanelApi('loadSelectedTemplateToEditor', ...args);
+}
+
+export function loadMihomoProfiles(...args) {
+  return callMihomoPanelApi('loadProfiles', ...args);
+}
+
+export function loadMihomoBackups(...args) {
+  return callMihomoPanelApi('loadBackups', ...args);
+}
+
+export function createMihomoProfileFromEditor(...args) {
+  return callMihomoPanelApi('createProfileFromEditor', ...args);
+}
+
+export function cleanMihomoBackups(...args) {
+  return callMihomoPanelApi('cleanBackups', ...args);
+}
+
+export function openMihomoZashboardUi(...args) {
+  return callMihomoPanelApi('openZashboardUi', ...args);
+}
+
+export function getMihomoPanelEditorText(...args) {
+  return callMihomoPanelApi('getEditorText', ...args);
+}
+
+export function setMihomoPanelEditorText(...args) {
+  return callMihomoPanelApi('setEditorText', ...args);
+}
+
+export function isMihomoPanelEditorDirty(...args) {
+  return callMihomoPanelApi('isEditorDirty', ...args);
+}
+
+export function disposeMihomoPanel(...args) {
+  return callMihomoPanelApi('dispose', ...args);
+}
+
+export const mihomoPanelApi = Object.freeze({
+  get: getMihomoPanelApi,
+  init: initMihomoPanel,
+  load: loadMihomoPanel,
+  onShow: onShowMihomoPanel,
+  save: saveMihomoPanel,
+  saveAndRestart: saveAndRestartMihomoPanel,
+  validate: validateMihomoPanel,
+  formatYaml: formatMihomoPanelYaml,
+  loadTemplatesList: loadMihomoTemplatesList,
+  saveEditorAsTemplate: saveMihomoEditorAsTemplate,
+  loadSelectedTemplateToEditor: loadSelectedMihomoTemplate,
+  loadProfiles: loadMihomoProfiles,
+  loadBackups: loadMihomoBackups,
+  createProfileFromEditor: createMihomoProfileFromEditor,
+  cleanBackups: cleanMihomoBackups,
+  openZashboardUi: openMihomoZashboardUi,
+  getEditorText: getMihomoPanelEditorText,
+  setEditorText: setMihomoPanelEditorText,
+  isEditorDirty: isMihomoPanelEditorDirty,
+  dispose: disposeMihomoPanel,
+});

@@ -1,11 +1,12 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
+  const C = FM.common || {};
 
   // --- tiny DOM helpers (local to this module)
   function el(id) {
@@ -49,12 +50,9 @@
 
   function syncScrollLock() {
     try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      } else {
-        document.body.classList.toggle('modal-open', !!isFs);
-      }
+      if (C && typeof C.syncBodyScrollLock === 'function') return C.syncBodyScrollLock(isFs);
     } catch (e) {}
+    try { document.body.classList.toggle('modal-open', !!isFs); } catch (e2) {}
   }
 
   function updateFullscreenBtn() {

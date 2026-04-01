@@ -1,3 +1,5 @@
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 /*
   routing_cards/rules/balancer_help.js
   Help button near quick balancer (⚡): shows detailed how-to about balancers, pool proxies and quick start.
@@ -9,10 +11,9 @@
   'use strict';
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.rules = RC.rules || {};
 
   RC.rules.balancerHelp = RC.rules.balancerHelp || {};

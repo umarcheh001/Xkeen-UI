@@ -4,14 +4,15 @@
 
   RC-07a
 */
+import { getRoutingJsoncPreserveApi } from '../../routing_jsonc_preserve.js';
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 (function () {
   'use strict';
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.rules = RC.rules || {};
   const S = RC.rules.state = RC.rules.state || {};
 
@@ -30,12 +31,16 @@
     return ta ? ta.value : '';
   };
 
+  function getRoutingJsoncPreserve() {
+    try { return getRoutingJsoncPreserveApi(); } catch (e) { return null; }
+  }
+
   function refreshRuleSourceMeta(raw) {
     let ruleSegments = [];
     let disabledRules = [];
 
     try {
-      const jp = (XK.features && XK.features.routingJsoncPreserve) ? XK.features.routingJsoncPreserve : null;
+      const jp = getRoutingJsoncPreserve();
       const text = String(raw == null ? '' : raw);
       if (!jp || typeof jp.locateRoutingObject !== 'function' || typeof jp.locateArrayByKey !== 'function') {
         S._ruleSegments = ruleSegments;

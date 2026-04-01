@@ -1,41 +1,42 @@
-(() => {
-  // xkeen.html wiring: initialize only the modules needed by the XKeen settings page.
+import { initServiceStatus } from '../features/service_status.js';
+import { initXkeenTexts } from '../features/xkeen_texts.js';
 
-  function isXkeenPage() {
-    return !!(
-      document.getElementById('xkeen-body') ||
-      document.getElementById('port-proxying-editor') ||
-      document.getElementById('port-exclude-editor') ||
-      document.getElementById('ip-exclude-editor')
-    );
+function isXkeenPage() {
+  return !!(
+    document.getElementById('xkeen-body') ||
+    document.getElementById('port-proxying-editor') ||
+    document.getElementById('port-exclude-editor') ||
+    document.getElementById('ip-exclude-editor')
+  );
+}
+
+function safe(fn) {
+  try {
+    fn();
+  } catch (error) {
+    console.error(error);
   }
+}
 
-  function safe(fn) {
-    try { fn(); } catch (e) { console.error(e); }
-  }
+export function initXkeenPage() {
+  if (!isXkeenPage()) return;
 
-  function initModules() {
-    safe(() => {
-      if (window.XKeen && XKeen.features && XKeen.features.serviceStatus && typeof XKeen.features.serviceStatus.init === 'function') {
-        XKeen.features.serviceStatus.init();
-      }
-    });
+  safe(() => {
+    initServiceStatus();
+  });
 
-    safe(() => {
-      if (window.XKeen && XKeen.features && XKeen.features.xkeenTexts && typeof XKeen.features.xkeenTexts.init === 'function') {
-        XKeen.features.xkeenTexts.init();
-      }
-    });
-  }
+  safe(() => {
+    initXkeenTexts();
+  });
+}
 
-  function init() {
-    if (!isXkeenPage()) return;
-    initModules();
-  }
-
+export function bootXkeenPage() {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+    document.addEventListener('DOMContentLoaded', initXkeenPage, { once: true });
+    return;
   }
-})();
+
+  initXkeenPage();
+}
+
+export default initXkeenPage;

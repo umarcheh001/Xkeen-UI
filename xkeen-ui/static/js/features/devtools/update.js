@@ -1,11 +1,15 @@
+import { getUpdateNotifierApi } from '../update_notifier.js';
+import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_namespace.js';
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   const XK = window.XKeen;
-  XK.features = XK.features || {};
+  const DT = getDevtoolsNamespace();
 
-  const SH = (XK.features && XK.features.devtoolsShared) ? XK.features.devtoolsShared : {};
+  const SH = getDevtoolsSharedApi() || {};
   const toast = SH.toast || function (m, isErr) { try { console[(isErr ? 'error' : 'log')](m); } catch (e) {} };
   // Kind-aware toast helper: supports boolean (legacy) and 'info'|'success'|'error'.
   const toastKind = function (msg, kind) {
@@ -106,7 +110,7 @@
   function _readNotifySettings() {
     // Prefer feature API (it also applies defaults).
     try {
-      const n = XK && XK.features && XK.features.updateNotifier ? XK.features.updateNotifier : null;
+      const n = getUpdateNotifierApi();
       if (n && typeof n.getSettings === 'function') return n.getSettings();
     } catch (e) {}
 
@@ -128,7 +132,7 @@
   function _applyNotifySettings(s) {
     // Prefer feature API (so it immediately re-schedules polling).
     try {
-      const n = XK && XK.features && XK.features.updateNotifier ? XK.features.updateNotifier : null;
+      const n = getUpdateNotifierApi();
       if (n && typeof n.setSettings === 'function') return n.setSettings(s);
       if (n && typeof n.applySettings === 'function') return n.applySettings();
     } catch (e) {}
@@ -733,7 +737,7 @@
             // and refresh open tabs to pick up new assets without manual Ctrl+F5.
             if (op !== 'rollback') {
               try {
-                const n = XK && XK.features && XK.features.updateNotifier ? XK.features.updateNotifier : null;
+                const n = getUpdateNotifierApi();
                 if (n && typeof n.resetCache === 'function') n.resetCache();
               } catch (e) {}
               try { window.localStorage.setItem(LS_FORCE_RELOAD, String(Date.now())); } catch (e) {}
@@ -916,8 +920,8 @@
   function openLogsTab() {
     try {
       // Prefer feature API if present.
-      if (XK.features && XK.features.devtools && typeof XK.features.devtools.setActiveTab === 'function') {
-        XK.features.devtools.setActiveTab('logs');
+      if (DT.devtools && typeof DT.devtools.setActiveTab === 'function') {
+        DT.devtools.setActiveTab('logs');
         return;
       }
     } catch (e) {}
@@ -1011,5 +1015,5 @@
     try { setTimeout(() => checkLatest(false, true, true).catch(() => {}), 250); } catch (e) {}
   }
 
-  XK.features.devtoolsUpdate = { init, loadInfo, checkLatest, loadStatus, runUpdate, runRollback };
+  setDevtoolsNamespaceApi('devtoolsUpdate', { init, loadInfo, checkLatest, loadStatus, runUpdate, runRollback });
 })();

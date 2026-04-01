@@ -1,3 +1,5 @@
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 /*
   routing_cards/dat/combo.js
   One control: input + ▼ popover with detected .dat files.
@@ -9,9 +11,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.state = RC.state || {};
 
   RC.dat = RC.dat || {};

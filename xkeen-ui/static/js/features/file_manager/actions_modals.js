@@ -1,3 +1,5 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
@@ -8,10 +10,8 @@
   //   FM.actions.wireModals()
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
 
   FM.actions = FM.actions || {};
   const AC = FM.actions;
@@ -146,8 +146,8 @@
     if (opsClear) opsClear.addEventListener('click', async (e) => {
       try { e.preventDefault(); } catch (e2) {}
 
-      const ok = await (window.XKeen && XKeen.ui && typeof XKeen.ui.confirm === 'function'
-        ? XKeen.ui.confirm({
+      const ok = await (C && typeof C.confirm === 'function'
+        ? C.confirm({
           title: 'Очистить историю',
           message: 'Удалить завершённые и неудачные операции из списка?\n(Активные операции останутся.)',
           okText: 'Очистить',

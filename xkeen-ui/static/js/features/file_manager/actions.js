@@ -1,14 +1,14 @@
+import { getFileManagerNamespace } from '../file_manager_namespace.js';
+
 (() => {
   'use strict';
 
   // File Manager actions & dialogs (create/rename/archive/chmod/chown/pickers)
-  // No ES modules / bundler: attach to window.XKeen.features.fileManager.actions
+  // No ES modules / bundler: attach to the shared file manager namespace.actions
 
   window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-  XKeen.features.fileManager = XKeen.features.fileManager || {};
-
-  const FM = XKeen.features.fileManager;
+  const XKeen = window.XKeen;
+  const FM = getFileManagerNamespace();
 
   FM.actions = FM.actions || {};
   const AC = FM.actions;
@@ -1621,8 +1621,8 @@
 
       // Optional confirm for big batches
       if (names.length >= 8) {
-        const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
-          ? XKeen.ui.confirm({
+        const ok = await (C && typeof C.confirm === 'function'
+          ? C.confirm({
             title: 'chmod',
             message: `Применить chmod ${parts.norm} к ${names.length} элементам?`,
             okText: 'Применить',
@@ -1759,8 +1759,8 @@
       }
 
       if (names.length >= 8) {
-        const ok = await (XKeen.ui && typeof XKeen.ui.confirm === 'function'
-          ? XKeen.ui.confirm({
+        const ok = await (C && typeof C.confirm === 'function'
+          ? C.confirm({
             title: 'chown',
             message: `Применить chown ${uidRaw}${gidRaw ? ':' + gidRaw : ''} к ${names.length} элементам?`,
             okText: 'Применить',

@@ -1,14 +1,25 @@
+import { getMihomoPanelApi } from './mihomo_panel.js';
+import { getMihomoYamlPatchApi } from './mihomo_yaml_patch.js';
+import {
+  getMihomoCoreHttpApi,
+  getMihomoEditorEngineApi,
+  refreshSharedMihomoEditor,
+  syncMihomoModalBodyScrollLock,
+} from './mihomo_runtime.js';
+import { getXkeenFilePath } from './xkeen_runtime.js';
+
+let mihomoImportModuleApi = null;
+
 (() => {
   'use strict';
 
   // Mihomo Import (Parser) UI
   // - Paste vless/trojan/vmess/ss/hysteria2/hy2 or https-subscription
   // - Convert to Mihomo YAML and insert into config.yaml editor
+  // Legacy globals are published by features/compat/mihomo_import.js.
 
-  window.XKeen = window.XKeen || {};
-  XKeen.features = XKeen.features || {};
-
-  const MI = (XKeen.features.mihomoImport = XKeen.features.mihomoImport || {});
+  const MI = mihomoImportModuleApi || {};
+  mihomoImportModuleApi = MI;
 
   const IDS = {
     btnOpen: 'mihomo-import-node-btn',
@@ -290,11 +301,7 @@
   }
 
   function getEngineHelper() {
-    try {
-      return (window.XKeen && XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null;
-    } catch (e) {
-      return null;
-    }
+    return getMihomoEditorEngineApi();
   }
 
   const CM6_SCOPE = 'mihomo-import';
@@ -611,11 +618,9 @@
 
   function getEditorText() {
     try {
-      if (typeof window.getMihomoEditorText === 'function') return window.getMihomoEditorText();
-    } catch (e) {}
-    try {
-      if (window.XKeen && XKeen.features && XKeen.features.mihomoPanel && typeof XKeen.features.mihomoPanel.getEditorText === 'function') {
-        return XKeen.features.mihomoPanel.getEditorText();
+      const api = getMihomoPanelApi();
+      if (api && typeof api.getEditorText === 'function') {
+        return api.getEditorText();
       }
     } catch (e2) {}
     // fallback
@@ -625,17 +630,15 @@
 
   function setEditorText(text) {
     try {
-      if (typeof window.setMihomoEditorText === 'function') return window.setMihomoEditorText(text);
+      const api = getMihomoPanelApi();
+      if (api && typeof api.setEditorText === 'function') return api.setEditorText(text);
     } catch (e) {}
     const ta = $('mihomo-editor');
     if (ta) ta.value = String(text || '');
   }
 
   function refreshEditor() {
-    try {
-      const cm = window.XKeen && XKeen.state ? XKeen.state.mihomoEditor : null;
-      if (cm && cm.refresh) cm.refresh();
-    } catch (e) {}
+    refreshSharedMihomoEditor();
   }
 
   function showModal(show) {
@@ -646,9 +649,7 @@
       else modal.classList.add('hidden');
     } catch (e) {}
     try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        XKeen.ui.modal.syncBodyScrollLock();
-      }
+      syncMihomoModalBodyScrollLock();
     } catch (e2) {}
 
     if (show) {
@@ -1027,7 +1028,7 @@
 
   function yamlPatch() {
     try {
-      return (window.XKeen && XKeen.features && XKeen.features.mihomoYamlPatch) ? XKeen.features.mihomoYamlPatch : null;
+      return getMihomoYamlPatchApi();
     } catch (e) {
       return null;
     }
@@ -1056,9 +1057,9 @@
       groups: Array.isArray(groups) ? groups : [],
     };
 
-    const http = (window.XKeen && XKeen.core && XKeen.core.http) ? XKeen.core.http : null;
+    const http = getMihomoCoreHttpApi();
     const post = http && typeof http.postJSON === 'function' ? http.postJSON : null;
-    if (!post) throw new Error('XKeen.core.http.postJSON недоступен');
+    if (!post) throw new Error('core http.postJSON недоступен');
 
     const data = await post('/api/mihomo/patch/apply_insert', body);
     if (!data || data.ok === false) throw new Error((data && data.error) ? data.error : 'apply_insert failed');
@@ -1097,9 +1098,9 @@
   }
 
   async function parseWireguardViaApi(confText, desiredName) {
-    const http = (window.XKeen && XKeen.core && XKeen.core.http) ? XKeen.core.http : null;
+    const http = getMihomoCoreHttpApi();
     const post = http && typeof http.postJSON === 'function' ? http.postJSON : null;
-    if (!post) throw new Error('XKeen.core.http.postJSON недоступен');
+    if (!post) throw new Error('core http.postJSON недоступен');
 
     const body = { text: String(confText || '') };
     if (desiredName) body.name = String(desiredName || '');
@@ -1289,7 +1290,7 @@
       try {
         // mark last activity badge
         if (typeof window.updateLastActivity === 'function') {
-          const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
+          const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
           window.updateLastActivity('modified', 'mihomo', fp);
         }
       } catch (e4) {}
@@ -1407,3 +1408,35 @@
     }
   };
 })();
+export function getMihomoImportApi() {
+  try {
+    if (mihomoImportModuleApi && typeof mihomoImportModuleApi.init === 'function') return mihomoImportModuleApi;
+  }
+  catch (error) {}
+  return null;
+}
+
+function callMihomoImportApi(method, ...args) {
+  const api = getMihomoImportApi();
+  if (!api || typeof api[method] !== 'function') return null;
+  return api[method](...args);
+}
+
+export function initMihomoImport(...args) {
+  return callMihomoImportApi('init', ...args);
+}
+
+export function generateMihomoImportConfig(...args) {
+  return callMihomoImportApi('generateConfigForMihomo', ...args);
+}
+
+export function proxyYamlRawFromIndentedMihomo(...args) {
+  return callMihomoImportApi('proxyYamlRawFromIndented', ...args);
+}
+
+export const mihomoImportApi = Object.freeze({
+  get: getMihomoImportApi,
+  init: initMihomoImport,
+  generateConfigForMihomo: generateMihomoImportConfig,
+  proxyYamlRawFromIndented: proxyYamlRawFromIndentedMihomo,
+});

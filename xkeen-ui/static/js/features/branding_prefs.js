@@ -1,11 +1,12 @@
+let brandingPrefsModuleApi = null;
+
 (() => {
   'use strict';
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const Feature = {};
+  const Feature = brandingPrefsModuleApi || {};
+  brandingPrefsModuleApi = Feature;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -553,7 +554,23 @@
     }
   };
 
-  XK.features.brandingPrefs = Feature;
-
   try { Feature.init(); } catch (e) {}
 })();
+export function getBrandingPrefsApi() {
+  try {
+    return brandingPrefsModuleApi;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function initBrandingPrefs(...args) {
+  const api = getBrandingPrefsApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export const brandingPrefsApi = Object.freeze({
+  get: getBrandingPrefsApi,
+  init: initBrandingPrefs,
+});

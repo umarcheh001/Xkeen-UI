@@ -1,3 +1,5 @@
+import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
+
 /*
   routing_cards/rules/dat_bridge.js
   Bridge between DAT card (GeoSite/GeoIP picker) and Rules card model.
@@ -17,9 +19,7 @@
 
   window.XKeen = window.XKeen || {};
   const XK = window.XKeen;
-  XK.features = XK.features || {};
-
-  const RC = XK.features.routingCards = XK.features.routingCards || {};
+  const RC = getRoutingCardsNamespace();
   RC.rules = RC.rules || {};
 
   const S = RC.rules.state = RC.rules.state || {};
