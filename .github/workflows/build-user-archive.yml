@@ -33,9 +33,10 @@ jobs:
           cache: "npm"
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.22"
+          cache-dependency-path: tools/xk-geodat/go.sum
 
       - name: Install Python dependencies
         run: python -m pip install -r requirements-dev.txt
@@ -59,7 +60,6 @@ jobs:
         run: |
           rm -rf dist package-root
           mkdir -p dist package-root/xkeen-ui
-
           rsync -a xkeen-ui/ package-root/xkeen-ui/ \
             --exclude '__pycache__' \
             --exclude '.DS_Store'
@@ -70,23 +70,24 @@ jobs:
           sha256sum dist/xkeen-ui-routing.tar.gz > dist/xkeen-ui-routing.tar.gz.sha256
 
       - name: Build xk-geodat binaries
+        working-directory: tools/xk-geodat
         run: |
-          mkdir -p dist
+          mkdir -p ../../dist
 
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
             -trimpath -ldflags="-s -w" \
-            -o dist/xk-geodat-linux-arm64 \
-            ./tools/xk-geodat/cmd/xk-geodat
+            -o ../../dist/xk-geodat-linux-arm64 \
+            ./cmd/xk-geodat
 
           CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build \
             -trimpath -ldflags="-s -w" \
-            -o dist/xk-geodat-linux-mips \
-            ./tools/xk-geodat/cmd/xk-geodat
+            -o ../../dist/xk-geodat-linux-mips \
+            ./cmd/xk-geodat
 
           CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build \
             -trimpath -ldflags="-s -w" \
-            -o dist/xk-geodat-linux-mipsle \
-            ./tools/xk-geodat/cmd/xk-geodat
+            -o ../../dist/xk-geodat-linux-mipsle \
+            ./cmd/xk-geodat
 
       - name: Create checksums
         run: |
