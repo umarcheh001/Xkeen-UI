@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,9 +28,54 @@ _SOURCE_ENTRIES = {
 
 _BUILD_DIRNAME = "frontend-build"
 _BUILD_MANIFEST_FILENAME = f"{_BUILD_DIRNAME}/.vite/manifest.json"
-_BUILD_PAGES_ENV = "XKEEN_UI_FRONTEND_BUILD_PAGES"
-_ALL_TOKENS = {"1", "true", "yes", "on", "all", "*"}
+_SOURCE_FALLBACK_ENV = "XKEEN_UI_FRONTEND_SOURCE_FALLBACK"
+_TRUE_TOKENS = {"1", "true", "yes", "on"}
+_FALSE_TOKENS = {"0", "false", "no", "off"}
 _APP_EXTENSIONS_KEY = "xkeen_ui_assets"
+
+
+_PAGE_CONFIG_CONTRACT_VERSION = 1
+_PAGE_CONFIG_SECTION_DEFAULTS = {
+    "panelWhitelist": None,
+    "devtoolsWhitelist": None,
+}
+_PAGE_CONFIG_FLAG_DEFAULTS = {
+    "hasXray": False,
+    "hasMihomo": False,
+    "isMips": False,
+    "multiCore": False,
+    "mihomoConfigExists": False,
+}
+_PAGE_CONFIG_CORE_DEFAULTS = {
+    "available": [],
+    "detected": [],
+    "uiFallback": False,
+}
+_PAGE_CONFIG_FILE_DEFAULTS = {
+    "routing": "",
+    "inbounds": "",
+    "outbounds": "",
+    "mihomo": "",
+}
+_PAGE_CONFIG_FILE_MANAGER_DEFAULTS = {
+    "rightDefault": "",
+}
+_PAGE_CONFIG_GITHUB_DEFAULTS = {
+    "repoUrl": "",
+}
+_PAGE_CONFIG_STATIC_DEFAULTS = {
+    "base": "/static/",
+    "version": "",
+}
+_PAGE_CONFIG_RUNTIME_DEFAULTS = {
+    "debug": False,
+}
+_PAGE_CONFIG_TERMINAL_DEFAULTS = {
+    "supportsPty": False,
+    "enableOptionalAddons": False,
+    "enableLigatures": False,
+    "enableWebgl": False,
+}
 
 
 _IMMUTABLE_MAX_AGE_SECONDS = 31536000
@@ -127,23 +173,150 @@ def _no_cache(resp: Response) -> Response:
     return resp
 
 
-def _parse_build_pages(raw: str | None) -> set[str] | None:
+def _normalize_page_config_mapping(value: Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        return {str(key): item for key, item in value.items() if isinstance(key, str)}
+    return {}
+
+
+def _normalize_page_config_string(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    return str(value)
+
+
+def _normalize_page_config_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = str(value).strip().lower()
+    if not normalized:
+        return default
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return bool(value)
+
+
+def _normalize_page_config_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, tuple | set):
+        return list(value)
+    return []
+
+
+def _build_page_config_group(defaults: Mapping[str, Any], overrides: Any, *, normalizers: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    normalized_overrides = _normalize_page_config_mapping(overrides)
+    result: dict[str, Any] = {}
+    for key, default_value in defaults.items():
+        value = normalized_overrides.get(key, default_value)
+        normalizer = (normalizers or {}).get(key)
+        result[key] = normalizer(value, default_value) if callable(normalizer) else value
+
+    for key, value in normalized_overrides.items():
+        if key in result:
+            continue
+        result[key] = value
+
+    return result
+
+
+def _parse_optional_bool_env(raw: str | None) -> bool | None:
     value = str(raw or "").strip().lower()
     if not value:
-        return set()
-    if value in _ALL_TOKENS:
         return None
-    return {
-        token
-        for token in re.split(r"[\s,;]+", value)
-        if token and token not in _ALL_TOKENS
-    }
+    if value in _TRUE_TOKENS:
+        return True
+    if value in _FALSE_TOKENS:
+        return False
+    return None
+
+
+def _is_development_runtime() -> bool:
+    if _parse_optional_bool_env(os.environ.get("XKEEN_DEV")) is True:
+        return True
+    if _parse_optional_bool_env(os.environ.get("FLASK_DEBUG")) is True:
+        return True
+    if str(os.environ.get("FLASK_ENV", "")).strip().lower() == "development":
+        return True
+
+    try:
+        app = current_app
+    except Exception:
+        app = None
+
+    if app is None:
+        return False
+
+    try:
+        if bool(getattr(app, "debug", False)) or bool(getattr(app, "testing", False)):
+            return True
+    except Exception:
+        pass
+
+    try:
+        config = getattr(app, "config", None)
+        if isinstance(config, Mapping) and _parse_optional_bool_env(config.get("XKEEN_DEV")) is True:
+            return True
+        if isinstance(config, Mapping) and bool(config.get("TESTING")):
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
+@dataclass(frozen=True)
+class FrontendBuildBridgeResolution:
+    entry_name: str
+    source_filename: str
+    build_enabled: bool
+    manifest_entry: dict[str, Any] | None
+    build_filename: str | None
+    build_path: str | None
+    build_exists: bool
+    source_fallback_enabled: bool
+
+    @property
+    def fallback_reason(self) -> str | None:
+        if not self.build_enabled:
+            return "build_disabled"
+        if not self.build_filename or not self.build_exists:
+            return "missing_build_entry"
+        return None
+
+    @property
+    def should_use_build(self) -> bool:
+        return self.fallback_reason is None
+
+    @property
+    def should_use_source_fallback(self) -> bool:
+        return self.fallback_reason is not None and self.source_fallback_enabled
+
+    @property
+    def selected_filename(self) -> str:
+        if self.should_use_build and self.build_filename:
+            return self.build_filename
+        if self.should_use_source_fallback:
+            return self.source_filename
+        reason = self.fallback_reason or "build_required"
+        raise RuntimeError(
+            f"Frontend build-only mode requires a valid build entry for {self.entry_name!r} ({reason}). "
+            "Enable XKEEN_UI_FRONTEND_SOURCE_FALLBACK=1 only for dev/test/debug."
+        )
 
 
 @dataclass
 class FrontendAssetHelper:
     static_folder: str
-    build_pages_env: str = _BUILD_PAGES_ENV
+    source_fallback_env: str = _SOURCE_FALLBACK_ENV
     build_dirname: str = _BUILD_DIRNAME
     manifest_filename: str = _BUILD_MANIFEST_FILENAME
 
@@ -168,16 +341,14 @@ class FrontendAssetHelper:
     def get_manifest_path(self) -> str:
         return os.path.join(self.static_folder, self.manifest_filename)
 
-    def get_enabled_build_pages(self) -> set[str] | None:
-        return _parse_build_pages(os.environ.get(self.build_pages_env))
+    def is_source_fallback_enabled(self) -> bool:
+        explicit = _parse_optional_bool_env(os.environ.get(self.source_fallback_env))
+        if explicit is not None:
+            return explicit
+        return _is_development_runtime()
 
     def is_build_enabled_for_page(self, entry_name: str) -> bool:
-        name = self.normalize_entry_name(entry_name)
-        enabled_pages = self.get_enabled_build_pages()
-        if enabled_pages == set():
-            return False
-        if enabled_pages is not None and name not in enabled_pages:
-            return False
+        self.normalize_entry_name(entry_name)
         return True
 
     def _load_manifest(self) -> dict[str, dict[str, Any]]:
@@ -234,32 +405,130 @@ class FrontendAssetHelper:
                 return value
         return None
 
+    def _normalize_build_entry_filename(self, build_file: Any) -> str | None:
+        normalized = str(build_file or "").strip().lstrip("/")
+        if not normalized:
+            return None
+        if normalized.startswith(f"{self.build_dirname}/"):
+            return normalized
+        return f"{self.build_dirname}/{normalized}"
+
     def get_build_entry_filename(self, entry_name: str) -> str | None:
         entry = self.get_manifest_entry(entry_name)
-        build_file = str((entry or {}).get("file") or "").strip()
-        if not build_file:
+        return self._normalize_build_entry_filename((entry or {}).get("file"))
+
+    def _build_entry_path_from_filename(self, build_filename: str | None) -> str | None:
+        if not build_filename or not self.static_folder:
             return None
-        build_file = build_file.lstrip("/")
-        if build_file.startswith(f"{self.build_dirname}/"):
-            return build_file
-        return f"{self.build_dirname}/{build_file}"
+        return os.path.join(self.static_folder, build_filename)
+
+    def get_build_entry_path(self, entry_name: str) -> str | None:
+        return self._build_entry_path_from_filename(self.get_build_entry_filename(entry_name))
+
+    def _build_entry_path_exists(self, build_path: str | None) -> bool:
+        return bool(build_path and os.path.isfile(build_path))
 
     def build_entry_exists(self, entry_name: str) -> bool:
-        build_filename = self.get_build_entry_filename(entry_name)
-        if not build_filename or not self.static_folder:
-            return False
-        return os.path.isfile(os.path.join(self.static_folder, build_filename))
+        return self._build_entry_path_exists(self.get_build_entry_path(entry_name))
+
+
+    def get_build_bridge_resolution(self, entry_name: str) -> FrontendBuildBridgeResolution:
+        name = self.normalize_entry_name(entry_name)
+        source_filename = self.get_source_entry_filename(name)
+        manifest_entry = self.get_manifest_entry(name)
+        build_filename = self._normalize_build_entry_filename((manifest_entry or {}).get("file"))
+        build_path = self._build_entry_path_from_filename(build_filename)
+        build_exists = self._build_entry_path_exists(build_path)
+        return FrontendBuildBridgeResolution(
+            entry_name=name,
+            source_filename=source_filename,
+            build_enabled=self.is_build_enabled_for_page(name),
+            manifest_entry=manifest_entry,
+            build_filename=build_filename,
+            build_path=build_path,
+            build_exists=build_exists,
+            source_fallback_enabled=self.is_source_fallback_enabled(),
+        )
 
     def should_use_build_entry(self, entry_name: str) -> bool:
-        return self.is_build_enabled_for_page(entry_name) and self.build_entry_exists(entry_name)
+        return self.get_build_bridge_resolution(entry_name).should_use_build
+
+    def resolve_frontend_page_entry_filename(self, entry_name: str) -> str:
+        return self.get_build_bridge_resolution(entry_name).selected_filename
 
     def frontend_page_entry_url(self, entry_name: str) -> str:
-        filename = (
-            self.get_build_entry_filename(entry_name)
-            if self.should_use_build_entry(entry_name)
-            else self.get_source_entry_filename(entry_name)
-        )
-        return url_for("static", filename=filename)
+        return url_for("static", filename=self.resolve_frontend_page_entry_filename(entry_name))
+
+    def frontend_page_config(
+        self,
+        page_name: str,
+        *,
+        sections: dict[str, Any] | None = None,
+        flags: dict[str, Any] | None = None,
+        cores: dict[str, Any] | None = None,
+        files: dict[str, Any] | None = None,
+        file_manager: dict[str, Any] | None = None,
+        github: dict[str, Any] | None = None,
+        static: dict[str, Any] | None = None,
+        runtime: dict[str, Any] | None = None,
+        terminal: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "contractVersion": _PAGE_CONFIG_CONTRACT_VERSION,
+            "page": _normalize_page_config_string(page_name).strip(),
+            "sections": _build_page_config_group(
+                _PAGE_CONFIG_SECTION_DEFAULTS,
+                sections,
+                normalizers={
+                    "panelWhitelist": lambda value, default: value if value is None else _normalize_page_config_string(value, default or ""),
+                    "devtoolsWhitelist": lambda value, default: value if value is None else _normalize_page_config_string(value, default or ""),
+                },
+            ),
+            "flags": _build_page_config_group(
+                _PAGE_CONFIG_FLAG_DEFAULTS,
+                flags,
+                normalizers={key: _normalize_page_config_bool for key in _PAGE_CONFIG_FLAG_DEFAULTS},
+            ),
+            "cores": _build_page_config_group(
+                _PAGE_CONFIG_CORE_DEFAULTS,
+                cores,
+                normalizers={
+                    "available": lambda value, default: _normalize_page_config_list(value),
+                    "detected": lambda value, default: _normalize_page_config_list(value),
+                    "uiFallback": _normalize_page_config_bool,
+                },
+            ),
+            "files": _build_page_config_group(
+                _PAGE_CONFIG_FILE_DEFAULTS,
+                files,
+                normalizers={key: _normalize_page_config_string for key in _PAGE_CONFIG_FILE_DEFAULTS},
+            ),
+            "fileManager": _build_page_config_group(
+                _PAGE_CONFIG_FILE_MANAGER_DEFAULTS,
+                file_manager,
+                normalizers={key: _normalize_page_config_string for key in _PAGE_CONFIG_FILE_MANAGER_DEFAULTS},
+            ),
+            "github": _build_page_config_group(
+                _PAGE_CONFIG_GITHUB_DEFAULTS,
+                github,
+                normalizers={key: _normalize_page_config_string for key in _PAGE_CONFIG_GITHUB_DEFAULTS},
+            ),
+            "static": _build_page_config_group(
+                _PAGE_CONFIG_STATIC_DEFAULTS,
+                static,
+                normalizers={key: _normalize_page_config_string for key in _PAGE_CONFIG_STATIC_DEFAULTS},
+            ),
+            "runtime": _build_page_config_group(
+                _PAGE_CONFIG_RUNTIME_DEFAULTS,
+                runtime,
+                normalizers={key: _normalize_page_config_bool for key in _PAGE_CONFIG_RUNTIME_DEFAULTS},
+            ),
+            "terminal": _build_page_config_group(
+                _PAGE_CONFIG_TERMINAL_DEFAULTS,
+                terminal,
+                normalizers={key: _normalize_page_config_bool for key in _PAGE_CONFIG_TERMINAL_DEFAULTS},
+            ),
+        }
 
 
 def _get_frontend_asset_helper() -> FrontendAssetHelper:
@@ -273,11 +542,39 @@ def init_ui_assets_helpers(app: Flask) -> FrontendAssetHelper:
     helper = FrontendAssetHelper(static_folder=str(getattr(app, "static_folder", "") or ""))
     app.extensions[_APP_EXTENSIONS_KEY] = helper
     app.add_template_global(helper.frontend_page_entry_url, name="frontend_page_entry_url")
+    app.add_template_global(helper.frontend_page_config, name="frontend_page_config")
     return helper
 
 
 def frontend_page_entry_url(entry_name: str) -> str:
     return _get_frontend_asset_helper().frontend_page_entry_url(entry_name)
+
+
+def frontend_page_config(
+    page_name: str,
+    *,
+    sections: dict[str, Any] | None = None,
+    flags: dict[str, Any] | None = None,
+    cores: dict[str, Any] | None = None,
+    files: dict[str, Any] | None = None,
+    file_manager: dict[str, Any] | None = None,
+    github: dict[str, Any] | None = None,
+    static: dict[str, Any] | None = None,
+    runtime: dict[str, Any] | None = None,
+    terminal: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return _get_frontend_asset_helper().frontend_page_config(
+        page_name,
+        sections=sections,
+        flags=flags,
+        cores=cores,
+        files=files,
+        file_manager=file_manager,
+        github=github,
+        static=static,
+        runtime=runtime,
+        terminal=terminal,
+    )
 
 
 def register_ui_assets_routes(app: Flask, *, UI_STATE_DIR: str, devtools_service=None) -> None:
@@ -292,47 +589,6 @@ def register_ui_assets_routes(app: Flask, *, UI_STATE_DIR: str, devtools_service
             from services import devtools as devtools_service  # type: ignore
         except Exception:
             devtools_service = None
-
-    @app.get("/ui/custom-theme.css")
-    def custom_theme_css():
-        """Serve global UI custom theme (generated in DevTools)."""
-
-        path = os.path.join(UI_STATE_DIR, "custom_theme.css")
-        # If the user saved a theme in DevTools, keep generated CSS up to date.
-        try:
-            if devtools_service and os.path.isfile(os.path.join(UI_STATE_DIR, "custom_theme.json")):
-                devtools_service.theme_get(UI_STATE_DIR)
-        except Exception:
-            pass
-
-        try:
-            if os.path.isfile(path):
-                resp = send_file(path, mimetype="text/css")
-            else:
-                resp = Response("/* no custom theme */\n", mimetype="text/css")
-        except Exception:
-            resp = Response("/* custom theme failed */\n", mimetype="text/css")
-
-        return _no_cache(resp)
-
-    @app.get("/ui/custom.css")
-    def custom_css():
-        """Serve global UI custom CSS (authored in DevTools)."""
-
-        css_path = os.path.join(UI_STATE_DIR, "custom.css")
-        disabled_flag = os.path.join(UI_STATE_DIR, "custom_css.disabled")
-
-        try:
-            if os.path.isfile(disabled_flag):
-                resp = Response("/* custom css disabled */\n", mimetype="text/css")
-            elif os.path.isfile(css_path):
-                resp = send_file(css_path, mimetype="text/css")
-            else:
-                resp = Response("/* no custom css */\n", mimetype="text/css")
-        except Exception:
-            resp = Response("/* custom css failed */\n", mimetype="text/css")
-
-        return _no_cache(resp)
 
     @app.get("/ui/terminal-theme.css")
     def terminal_theme_css():
@@ -352,27 +608,6 @@ def register_ui_assets_routes(app: Flask, *, UI_STATE_DIR: str, devtools_service
                 resp = Response("/* no terminal theme */\n", mimetype="text/css")
         except Exception:
             resp = Response("/* terminal theme failed */\n", mimetype="text/css")
-
-        return _no_cache(resp)
-
-    @app.get("/ui/codemirror-theme.css")
-    def codemirror_theme_css():
-        """Serve optional CodeMirror theme CSS."""
-
-        path = os.path.join(UI_STATE_DIR, "codemirror_theme.css")
-        try:
-            if devtools_service and os.path.isfile(os.path.join(UI_STATE_DIR, "codemirror_theme.json")):
-                devtools_service.codemirror_theme_get(UI_STATE_DIR)
-        except Exception:
-            pass
-
-        try:
-            if os.path.isfile(path):
-                resp = send_file(path, mimetype="text/css")
-            else:
-                resp = Response("/* no codemirror theme */\n", mimetype="text/css")
-        except Exception:
-            resp = Response("/* codemirror theme failed */\n", mimetype="text/css")
 
         return _no_cache(resp)
 
