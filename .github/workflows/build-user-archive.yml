@@ -32,6 +32,11 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
       - name: Install Python dependencies
         run: python -m pip install -r requirements-dev.txt
 
@@ -50,42 +55,67 @@ jobs:
       - name: Verify frontend build
         run: node scripts/verify_frontend_build.mjs
 
-      - name: Prepare package root
+      - name: Prepare package directory
         run: |
           rm -rf dist package-root
-          mkdir -p package-root/xkeen-ui-routing dist
+          mkdir -p dist package-root/xkeen-ui
 
-          rsync -a ./ package-root/xkeen-ui-routing/ \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude '.venv' \
-            --exclude 'node_modules' \
+          rsync -a xkeen-ui/ package-root/xkeen-ui/ \
             --exclude '__pycache__' \
-            --exclude '.pytest_cache' \
-            --exclude 'dist' \
-            --exclude 'docs' \
-            --exclude 'tests' \
-            --exclude 'tools' \
-            --exclude 'scripts' \
-            --exclude 'package.json' \
-            --exclude 'package-lock.json' \
-            --exclude 'vite.config.mjs' \
-            --exclude 'requirements-dev.txt' \
-            --exclude 'release_local.sh' \
-            --exclude 'release_fast.sh'
+            --exclude '.DS_Store'
 
-      - name: Create release archive
+      - name: Create user archive
         run: |
-          tar -czf dist/xkeen-ui-routing.tar.gz -C package-root xkeen-ui-routing
+          tar -czf dist/xkeen-ui-routing.tar.gz -C package-root xkeen-ui
           sha256sum dist/xkeen-ui-routing.tar.gz > dist/xkeen-ui-routing.tar.gz.sha256
+
+      - name: Build xk-geodat binaries
+        run: |
+          mkdir -p dist
+
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+            -trimpath -ldflags="-s -w" \
+            -o dist/xk-geodat-linux-arm64 \
+            ./tools/xk-geodat/cmd/xk-geodat
+
+          CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build \
+            -trimpath -ldflags="-s -w" \
+            -o dist/xk-geodat-linux-mips \
+            ./tools/xk-geodat/cmd/xk-geodat
+
+          CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build \
+            -trimpath -ldflags="-s -w" \
+            -o dist/xk-geodat-linux-mipsle \
+            ./tools/xk-geodat/cmd/xk-geodat
+
+      - name: Create checksums
+        run: |
+          sha256sum dist/xkeen-ui-routing.tar.gz > dist/xkeen-ui-routing.tar.gz.sha256
+          sha256sum dist/xk-geodat-linux-arm64 > dist/xk-geodat-linux-arm64.sha256
+          sha256sum dist/xk-geodat-linux-mips > dist/xk-geodat-linux-mips.sha256
+          sha256sum dist/xk-geodat-linux-mipsle > dist/xk-geodat-linux-mipsle.sha256
+
+          sha256sum \
+            dist/xkeen-ui-routing.tar.gz \
+            dist/xk-geodat-linux-arm64 \
+            dist/xk-geodat-linux-mips \
+            dist/xk-geodat-linux-mipsle \
+            > dist/SHA256SUMS
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v6
         with:
-          name: xkeen-ui-routing
+          name: release-assets
           path: |
             dist/xkeen-ui-routing.tar.gz
             dist/xkeen-ui-routing.tar.gz.sha256
+            dist/xk-geodat-linux-arm64
+            dist/xk-geodat-linux-arm64.sha256
+            dist/xk-geodat-linux-mips
+            dist/xk-geodat-linux-mips.sha256
+            dist/xk-geodat-linux-mipsle
+            dist/xk-geodat-linux-mipsle.sha256
+            dist/SHA256SUMS
 
       - name: Ensure GitHub CLI is available
         if: startsWith(github.ref, 'refs/tags/')
@@ -106,11 +136,25 @@ jobs:
             gh release upload "$TAG" \
               dist/xkeen-ui-routing.tar.gz \
               dist/xkeen-ui-routing.tar.gz.sha256 \
+              dist/xk-geodat-linux-arm64 \
+              dist/xk-geodat-linux-arm64.sha256 \
+              dist/xk-geodat-linux-mips \
+              dist/xk-geodat-linux-mips.sha256 \
+              dist/xk-geodat-linux-mipsle \
+              dist/xk-geodat-linux-mipsle.sha256 \
+              dist/SHA256SUMS \
               --clobber
           else
             gh release create "$TAG" \
               dist/xkeen-ui-routing.tar.gz \
               dist/xkeen-ui-routing.tar.gz.sha256 \
+              dist/xk-geodat-linux-arm64 \
+              dist/xk-geodat-linux-arm64.sha256 \
+              dist/xk-geodat-linux-mips \
+              dist/xk-geodat-linux-mips.sha256 \
+              dist/xk-geodat-linux-mipsle \
+              dist/xk-geodat-linux-mipsle.sha256 \
+              dist/SHA256SUMS \
               --title "$TAG" \
               --generate-notes
           fi
