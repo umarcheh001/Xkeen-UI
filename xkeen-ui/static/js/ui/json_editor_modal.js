@@ -101,6 +101,17 @@ import {
     return null;
   }
 
+  async function streamRestartJob(jobId, intro) {
+    const api = getRestartLogApi();
+    if (!api || !jobId || typeof api.streamJob !== 'function') return null;
+    return api.streamJob(String(jobId), {
+      clear: true,
+      reveal: true,
+      intro: String(intro || ''),
+      maxWaitMs: 5 * 60 * 1000,
+    });
+  }
+
   function clearDirtyListener() {
     try {
       if (typeof _dirtyUnsub === 'function') _dirtyUnsub();
@@ -1054,14 +1065,18 @@ import {
     const url = target === 'inbounds'
       ? buildTargetUrl('inbounds', '/api/inbounds')
       : buildTargetUrl('outbounds', '/api/outbounds');
+    const restart = shouldRestartAfterSave();
+    const requestUrl = restart
+      ? (url + (url.indexOf('?') === -1 ? '?async=1' : '&async=1'))
+      : url;
 
     try {
-      const res = await fetch(url, {
+      const res = await fetch(requestUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text,
-          restart: shouldRestartAfterSave(),
+          restart,
         }),
       });
 
@@ -1094,7 +1109,26 @@ import {
       } catch (e) {
         console.error(e);
       }
-      if (!data || !data.restarted) {
+      function _baseNameForSaveToast(p, fallback) {
+        try {
+          if (!p) return fallback;
+          const parts = String(p).split(/[\\/]/);
+          const b = parts[parts.length - 1];
+          return b || fallback;
+        } catch (e) {
+          return fallback;
+        }
+      }
+
+      const saveFiles = getXkeenPageFilesConfig();
+      const saveLabel = target === 'inbounds'
+        ? _baseNameForSaveToast(saveFiles.inbounds, '03_inbounds.json')
+        : _baseNameForSaveToast(saveFiles.outbounds, '04_outbounds.json');
+      const restartJobId = (data && (data.restart_job_id || data.job_id || data.restartJobId))
+        ? String(data.restart_job_id || data.job_id || data.restartJobId)
+        : '';
+
+      if ((!data || !data.restarted) && !(restart && restartJobId)) {
         // Show correct file name (supports *_hys2 variants)
         function _baseName(p, fallback) {
           try {
@@ -1115,7 +1149,26 @@ import {
         toast(label + ' сохранён.', false);
       }
 
-      try { refreshRestartLog(); } catch (e) {}
+      if (restart && restartJobId) {
+        const result = await streamRestartJob(restartJobId, 'xkeen -restart (job)...\n');
+        const ok = !!(result && result.ok);
+        if (ok) {
+          toast(saveLabel + ' сохранён, xkeen перезапущен.', false);
+        } else {
+          const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
+          const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
+          const detail = err
+            ? ('Ошибка: ' + err)
+            : (exitCode !== null ? ('Ошибка (exit_code=' + exitCode + ')') : '');
+          const restartLog = getRestartLogApi();
+          if (detail && restartLog && typeof restartLog.append === 'function') {
+            try { restartLog.append('\n' + detail + '\n'); } catch (e) {}
+          }
+          toast(saveLabel + ' сохранён, но перезапуск xkeen завершился с ошибкой.', true);
+        }
+      } else {
+        try { refreshRestartLog(); } catch (e) {}
+      }
     } catch (e) {
       console.error(e);
       setError('Ошибка сохранения.');

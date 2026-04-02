@@ -403,6 +403,30 @@ let xrayLogsModuleApi = null;
     return document.getElementById(id);
   }
 
+  function syncTooltipText(el, text, ariaLabel) {
+    if (!el) return;
+
+    const nextText = String(text || '').trim();
+    const nextAria = arguments.length >= 3 ? String(ariaLabel || '').trim() : null;
+
+    if (nextText) {
+      el.title = nextText;
+      try { el.setAttribute('data-tooltip', nextText); } catch (e) {}
+    } else {
+      try { el.removeAttribute('title'); } catch (e) {}
+      try { el.removeAttribute('data-tooltip'); } catch (e) {}
+    }
+
+    if (nextAria == null) return;
+
+    if (nextAria) {
+      try { el.setAttribute('aria-label', nextAria); } catch (e) {}
+      return;
+    }
+
+    try { el.removeAttribute('aria-label'); } catch (e) {}
+  }
+
   function clampLogLinesValue(value, fallbackValue) {
     let next = parseInt(value, 10);
     if (!isFinite(next)) next = parseInt(fallbackValue, 10);
@@ -679,7 +703,7 @@ let xrayLogsModuleApi = null;
     const mode = modeState || readXrayLogsModeState(refs, runtimeState);
     el.dataset.state = String(mode.state || 'manual');
     el.textContent = String(mode.label || 'Manual');
-    el.title = String(mode.title || '');
+    syncTooltipText(el, String(mode.title || ''));
   }
 
   function renderXrayLogScrollBottomLayer(dom, runtimeState, modeState) {
@@ -698,14 +722,17 @@ let xrayLogsModuleApi = null;
 
     if (!visible) {
       btn.textContent = 'Latest';
-      btn.title = 'Scroll to the latest rendered lines.';
+      syncTooltipText(btn, 'Scroll to the latest rendered lines.');
       return;
     }
 
     btn.textContent = mode.liveActive ? 'Latest' : 'Bottom';
-    btn.title = mode.liveActive
-      ? 'Scroll to the latest rendered lines without enabling Follow.'
-      : 'Scroll to the bottom of the current log output.';
+    syncTooltipText(
+      btn,
+      mode.liveActive
+        ? 'Scroll to the latest rendered lines without enabling Follow.'
+        : 'Scroll to the bottom of the current log output.'
+    );
   }
 
   function renderXrayLogsChrome(dom, runtimeState) {
@@ -759,8 +786,7 @@ let xrayLogsModuleApi = null;
       if (nextLive === 'on') title += ' Live stream активен.';
     }
 
-    badge.title = title;
-    try { badge.setAttribute('aria-label', title); } catch (e) {}
+    syncTooltipText(badge, title, title);
   }
 
   function renderXrayLogLampLayer(dom, state) {
@@ -780,6 +806,7 @@ let xrayLogsModuleApi = null;
     } else {
       lamp.title = 'Автообновление логов: неизвестно';
     }
+    syncTooltipText(lamp, lamp.getAttribute('title') || '');
   }
 
   function readXrayLogTransportLabel(runtimeState) {
@@ -885,6 +912,7 @@ let xrayLogsModuleApi = null;
       btn.textContent = '⏸ Pause';
       btn.title = 'Пауза доступна только в Live режиме.';
       btn.dataset.state = 'off';
+      syncTooltipText(btn, btn.getAttribute('title') || '');
       return;
     }
 
@@ -895,12 +923,14 @@ let xrayLogsModuleApi = null;
       btn.textContent = pending ? `▶ Resume (+${pending})` : '▶ Resume';
       btn.title = 'Возобновить обновление экрана (накопленные строки будут показаны).';
       btn.dataset.state = 'on';
+      syncTooltipText(btn, btn.getAttribute('title') || '');
       return;
     }
 
     btn.textContent = '⏸ Pause';
     btn.title = 'Пауза: заморозить вывод (строки продолжают собираться).';
     btn.dataset.state = 'off';
+    syncTooltipText(btn, btn.getAttribute('title') || '');
   }
 
   function renderXrayLogStatsLayer(dom, runtimeState) {
@@ -1262,6 +1292,7 @@ let xrayLogsModuleApi = null;
     const isError = _isErrorFileName(_currentFile);
     lvlSel.disabled = !isError;
     lvlSel.title = isError ? 'Уровень логирования применим к error.log' : 'Уровни доступны только для error.log';
+    syncTooltipText(lvlSel, lvlSel.getAttribute('title') || '');
   }
 
   function syncCurrentFileFromUi() {

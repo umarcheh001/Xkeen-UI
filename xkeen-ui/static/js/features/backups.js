@@ -7,6 +7,7 @@ import {
   openXkeenModal,
   toastXkeen,
 } from './xkeen_runtime.js';
+import { getRestartLogApi } from './restart_log.js';
 
 let backupsModuleApi = null;
 
@@ -417,6 +418,33 @@ let backupsModuleApi = null;
 
   async function requestXkeenRestartWarning() {
     try {
+      const restartLog = getRestartLogApi();
+      if (restartLog && typeof restartLog.streamJob === 'function') {
+        const createRes = await fetch('/api/run-command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ flag: '-restart', pty: true }),
+        });
+        const createData = await createRes.json().catch(() => ({}));
+        if (!createRes.ok || createData.ok === false || !createData.job_id) {
+          return 'Не удалось запустить PTY-перезапуск xkeen. Обновите страницу позже или перезапустите xkeen вручную.';
+        }
+
+        const result = await restartLog.streamJob(String(createData.job_id), {
+          clear: true,
+          reveal: true,
+          intro: 'xkeen -restart (job)...\n',
+          maxWaitMs: 5 * 60 * 1000,
+        });
+        if (result && result.ok) return '';
+
+        const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
+        const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
+        if (err) return 'Перезапуск xkeen завершился с ошибкой: ' + err;
+        if (exitCode !== null) return 'Перезапуск xkeen завершился с ошибкой (exit_code=' + exitCode + ').';
+        return 'Не удалось подтвердить перезапуск xkeen. Обновите страницу позже или перезапустите xkeen вручную.';
+      }
+
       const res = await fetch('/api/restart', { method: 'POST' });
       if (!res || !res.ok) {
         return 'Запрос на перезапуск xkeen не подтвердился. Обновите страницу позже или перезапустите xkeen вручную.';

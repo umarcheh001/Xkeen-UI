@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from flask import Blueprint, jsonify, request
 
+from services.command_jobs import create_command_job
 from services.xkeen_lists import (
     KIND_IP_EXCLUDE,
     KIND_CONFIG,
@@ -25,12 +26,39 @@ def _get_json_payload() -> dict:
     return request.get_json(silent=True) or {}
 
 
+def _is_true_flag(value: Any) -> bool:
+    try:
+        raw = str(value or "").strip().lower()
+    except Exception:
+        raw = ""
+    return raw in ("1", "true", "yes", "on", "y")
+
+
 def create_xkeen_lists_blueprint(restart_xkeen: Callable[..., Any]) -> Blueprint:
     """Create blueprint that serves /api/xkeen/*.lst endpoints.
 
     ``restart_xkeen`` must be a callable compatible with restart_xkeen(source="...") -> bool.
     """
     bp = Blueprint("xkeen_lists", __name__)
+
+    def _restart_response(payload: dict, source: str):
+        restart_flag = bool(payload.get("restart", True))
+        async_flag = _is_true_flag(request.args.get("async", None))
+
+        if restart_flag and async_flag:
+            try:
+                job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
+                return jsonify({
+                    "ok": True,
+                    "restarted": False,
+                    "restart_queued": True,
+                    "restart_job_id": job.id,
+                }), 202
+            except Exception as e:
+                return jsonify({"ok": False, "error": f"failed to schedule restart job: {e}"}), 500
+
+        restarted = restart_flag and restart_xkeen(source=source)
+        return jsonify({"ok": True, "restarted": restarted}), 200
 
     # ----- port-proxying -----
 
@@ -44,9 +72,7 @@ def create_xkeen_lists_blueprint(restart_xkeen: Callable[..., Any]) -> Blueprint
         payload = _get_json_payload()
         content = payload.get("content", "")
         set_list_content(KIND_PORT_PROXYING, content)
-        restart_flag = bool(payload.get("restart", True))
-        restarted = restart_flag and restart_xkeen(source="port-proxying")
-        return jsonify({"ok": True, "restarted": restarted}), 200
+        return _restart_response(payload, "port-proxying")
 
     # ----- port-exclude -----
 
@@ -60,9 +86,7 @@ def create_xkeen_lists_blueprint(restart_xkeen: Callable[..., Any]) -> Blueprint
         payload = _get_json_payload()
         content = payload.get("content", "")
         set_list_content(KIND_PORT_EXCLUDE, content)
-        restart_flag = bool(payload.get("restart", True))
-        restarted = restart_flag and restart_xkeen(source="port-exclude")
-        return jsonify({"ok": True, "restarted": restarted}), 200
+        return _restart_response(payload, "port-exclude")
 
     # ----- ip-exclude -----
 
@@ -76,9 +100,7 @@ def create_xkeen_lists_blueprint(restart_xkeen: Callable[..., Any]) -> Blueprint
         payload = _get_json_payload()
         content = payload.get("content", "")
         set_list_content(KIND_IP_EXCLUDE, content)
-        restart_flag = bool(payload.get("restart", True))
-        restarted = restart_flag and restart_xkeen(source="ip-exclude")
-        return jsonify({"ok": True, "restarted": restarted}), 200
+        return _restart_response(payload, "ip-exclude")
 
 
     # ----- xkeen config (xkeen.json) -----
@@ -93,8 +115,6 @@ def create_xkeen_lists_blueprint(restart_xkeen: Callable[..., Any]) -> Blueprint
         payload = _get_json_payload()
         content = payload.get("content", "")
         set_list_content(KIND_CONFIG, content)
-        restart_flag = bool(payload.get("restart", True))
-        restarted = restart_flag and restart_xkeen(source="xkeen-config")
-        return jsonify({"ok": True, "restarted": restarted}), 200
+        return _restart_response(payload, "xkeen-config")
 
     return bp

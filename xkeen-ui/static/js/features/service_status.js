@@ -220,6 +220,15 @@ let serviceStatusModuleApi = null;
     const restartLog = getRestartLogApi();
     if (!restartLog) return;
     try {
+      if (typeof restartLog.prepareLiveStream === 'function') {
+        restartLog.prepareLiveStream({ clear: true, reveal: true });
+        return;
+      }
+    } catch (e) {}
+    try {
+      if (typeof restartLog.reveal === 'function') restartLog.reveal();
+    } catch (e) {}
+    try {
       if (typeof restartLog.clear === 'function') {
         restartLog.clear();
         return;

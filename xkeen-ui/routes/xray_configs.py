@@ -23,6 +23,7 @@ from typing import Any, Callable, Dict
 
 from flask import Blueprint, jsonify, request
 
+from services.command_jobs import create_command_job
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 
 from services.xray_backups import atomic_write_bytes as _atomic_write_bytes
@@ -137,6 +138,36 @@ def create_xray_configs_blueprint(
         except Exception:
             return ""
 
+    def _is_true_flag(value: Any) -> bool:
+        try:
+            raw = str(value or "").strip().lower()
+        except Exception:
+            raw = ""
+        return raw in ("1", "true", "yes", "on", "y")
+
+    def _async_restart_requested() -> bool:
+        return _is_true_flag(request.args.get("async", None))
+
+    def _restart_response(*, source: str, restart_flag: bool, extra: dict[str, Any] | None = None):
+        payload: dict[str, Any] = {"ok": True}
+        if extra:
+            payload.update(extra)
+
+        if restart_flag and _async_restart_requested():
+            try:
+                job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
+                payload.update({
+                    "restarted": False,
+                    "restart_queued": True,
+                    "restart_job_id": job.id,
+                })
+                return jsonify(payload), 202
+            except Exception as e:
+                return error_response(f"failed to schedule restart job: {e}", 500, ok=False)
+
+        payload["restarted"] = restart_flag and restart_xkeen(source=source)
+        return jsonify(payload), 200
+
     # --- API: inbounds ---
 
     @bp.get("/api/inbounds")
@@ -230,10 +261,13 @@ def create_xray_configs_blueprint(
             except Exception as e:
                 return error_response(f"failed to write raw file: {e}", 500, ok=False)
 
-            restart_flag = bool(payload.get("restart", True))
-            restarted = restart_flag and restart_xkeen(source="inbounds")
             mode = detect_inbounds_mode(data=obj)
-            return jsonify({"ok": True, "restarted": restarted, "file": os.path.basename(sel_path), "mode": mode}), 200
+            restart_flag = bool(payload.get("restart", True))
+            return _restart_response(
+                source="inbounds",
+                restart_flag=restart_flag,
+                extra={"file": os.path.basename(sel_path), "mode": mode},
+            )
 
         mode = (payload.get("mode") or "").strip().lower()
 
@@ -281,10 +315,13 @@ def create_xray_configs_blueprint(
         except Exception as e:
             return error_response(str(e), 500, ok=False)
 
-        restart_flag = bool(payload.get("restart", True))
-        restarted = restart_flag and restart_xkeen(source="inbounds")
         mode2 = detect_inbounds_mode(data=data)
-        return jsonify({"ok": True, "restarted": restarted, "file": os.path.basename(sel_path), "mode": mode2}), 200
+        restart_flag = bool(payload.get("restart", True))
+        return _restart_response(
+            source="inbounds",
+            restart_flag=restart_flag,
+            extra={"file": os.path.basename(sel_path), "mode": mode2},
+        )
 
     
 
@@ -392,8 +429,11 @@ def create_xray_configs_blueprint(
                 return error_response(f"failed to write raw file: {e}", 500, ok=False)
 
             restart_flag = bool(payload.get("restart", True))
-            restarted = restart_flag and restart_xkeen(source="outbounds")
-            return jsonify({"ok": True, "restarted": restarted, "file": os.path.basename(sel_path)}), 200
+            return _restart_response(
+                source="outbounds",
+                restart_flag=restart_flag,
+                extra={"file": os.path.basename(sel_path)},
+            )
 
         # New: direct config save
         if "config" in payload:
@@ -417,8 +457,11 @@ def create_xray_configs_blueprint(
             return error_response(str(e), 500, ok=False)
 
         restart_flag = bool(payload.get("restart", True))
-        restarted = restart_flag and restart_xkeen(source="outbounds")
-        return jsonify({"ok": True, "restarted": restarted, "file": os.path.basename(sel_path)}), 200
+        return _restart_response(
+            source="outbounds",
+            restart_flag=restart_flag,
+            extra={"file": os.path.basename(sel_path)},
+        )
 
     # --- API: outbounds fragments list ---
 
@@ -679,9 +722,6 @@ def create_xray_configs_blueprint(
             except Exception as e:
                 return error_response(f"failed to write raw file: {e}", 500, ok=False)
 
-        restart_flag = bool(payload.get("restart", True))
-        restarted = restart_flag and restart_xkeen(source="outbounds")
-
         tags_out: list[str] = []
         seen_out: set[str] = set()
         try:
@@ -700,17 +740,16 @@ def create_xray_configs_blueprint(
         except Exception:
             tags_out = []
 
-        return (
-            jsonify(
-                {
-                    "ok": True,
-                    "updated": len(built),
-                    "restarted": restarted,
-                    "file": os.path.basename(sel_path),
-                    "tags": tags_out,
-                }
-            ),
-            200,
+        restart_flag = bool(payload.get("restart", True))
+        return _restart_response(
+            source="outbounds",
+            restart_flag=restart_flag,
+            extra={
+                "updated": len(built),
+                "file": os.path.basename(sel_path),
+                "replaced_pool": bool(replace_pool),
+                "tags": tags_out,
+            },
         )
 
     # --- API: Xray observatory preset (for balancer leastPing) ---

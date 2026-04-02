@@ -1083,6 +1083,19 @@ function initEngineToggle() {
         async function clearSharedRestartLog() {
           try {
             const api = await getSharedRestartLogApi();
+            if (api && typeof api.prepareLiveStream === 'function') {
+              api.prepareLiveStream({ clear: true, reveal: true });
+              return;
+            }
+          } catch (e) {}
+          try {
+            const api = await getSharedRestartLogApi();
+            if (api && typeof api.reveal === 'function') {
+              api.reveal();
+            }
+          } catch (e) {}
+          try {
+            const api = await getSharedRestartLogApi();
             if (api && typeof api.setRaw === 'function') {
               api.setRaw('');
               return;

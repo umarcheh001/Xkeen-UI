@@ -53,6 +53,17 @@ let outboundsModuleApi = null;
       return null;
     }
 
+    async function streamRestartJob(jobId, intro) {
+      const api = getRestartLogApi();
+      if (!api || !jobId || typeof api.streamJob !== 'function') return null;
+      return api.streamJob(String(jobId), {
+        clear: true,
+        reveal: true,
+        intro: String(intro || ''),
+        maxWaitMs: 5 * 60 * 1000,
+      });
+    }
+
     function getFeatureLifecycle() {
       if (_featureLifecycle) return _featureLifecycle;
       const shell = getConfigShellApi();
@@ -1409,6 +1420,7 @@ let outboundsModuleApi = null;
       if (!input) return;
 
       publishLifecycleState({ saving: true, initialized: true }, 'outbounds-save-start');
+      let streamedRestart = false;
       try {
         const url = String(input.value || '').trim();
         if (!url) {
@@ -1429,11 +1441,15 @@ let outboundsModuleApi = null;
 
         try {
           const file = getActiveFragment();
-          const apiUrl = file ? ('/api/outbounds?file=' + encodeURIComponent(file)) : '/api/outbounds';
+          const restart = shouldRestartAfterSave();
+          const params = new URLSearchParams();
+          if (file) params.set('file', file);
+          if (restart) params.set('async', '1');
+          const apiUrl = '/api/outbounds' + (params.toString() ? ('?' + params.toString()) : '');
           const res = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, restart: shouldRestartAfterSave() }),
+            body: JSON.stringify({ url, restart }),
           });
           const data = await res.json().catch(() => ({}));
 
@@ -1446,13 +1462,43 @@ let outboundsModuleApi = null;
               savedValue: String(_savedUrl || ''),
               currentValue: String(getCurrentUrl() || _savedUrl || ''),
             }, 'outbounds-save-success');
-            try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
             try {
               if (typeof updateLastActivity === 'function') {
                 const fp = getXkeenFilePath('outbounds', '');
                 updateLastActivity('saved', 'outbounds', fp);
               }
             } catch (e) {}
+
+            const jobId = (data && (data.restart_job_id || data.job_id || data.restartJobId))
+              ? String(data.restart_job_id || data.job_id || data.restartJobId)
+              : '';
+
+            if (restart && jobId) {
+              streamedRestart = true;
+              if (statusEl) statusEl.textContent = 'Outbounds сохранены. Перезапуск xkeen...';
+              const result = await streamRestartJob(jobId, 'xkeen -restart (job)...\n');
+              const ok = !!(result && result.ok);
+              if (ok) {
+                msg = 'Outbounds сохранены и xkeen перезапущен.';
+                if (statusEl) statusEl.textContent = msg;
+                try { toastXkeen(msg, 'success'); } catch (e) {}
+              } else {
+                const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
+                const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
+                const detail = err
+                  ? ('Ошибка: ' + err)
+                  : (exitCode !== null ? ('Ошибка (exit_code=' + exitCode + ')') : '');
+                const restartLog = getRestartLogApi();
+                if (detail && restartLog && typeof restartLog.append === 'function') {
+                  try { restartLog.append('\n' + detail + '\n'); } catch (e) {}
+                }
+                msg = 'Outbounds сохранены, но перезапуск xkeen завершился с ошибкой.';
+                if (statusEl) statusEl.textContent = msg;
+                try { toastXkeen(msg, 'error'); } catch (e2) {}
+              }
+            } else {
+              try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
+            }
           } else {
             const msg = 'Save error: ' + ((data && data.error) || res.status);
             if (statusEl) statusEl.textContent = msg;
@@ -1464,7 +1510,9 @@ let outboundsModuleApi = null;
           if (statusEl) statusEl.textContent = msg;
           try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
         } finally {
-          try { refreshRestartLog(); } catch (e) {}
+          if (!streamedRestart) {
+            try { refreshRestartLog(); } catch (e) {}
+          }
         }
       } finally {
         publishLifecycleState({ saving: false, initialized: true }, 'outbounds-save-finished');
@@ -2764,14 +2812,16 @@ let outboundsModuleApi = null;
       if (f) apiUrl += '?file=' + encodeURIComponent(String(f));
 
       poolSetStatus('Сохраняю…', false);
+      const restart = shouldRestartAfterSave();
 
       try {
-        const res = await fetch(apiUrl, {
+        const requestUrl = apiUrl + (restart ? (apiUrl.indexOf('?') === -1 ? '?async=1' : '&async=1') : '');
+        const res = await fetch(requestUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             entries,
-            restart: shouldRestartAfterSave(),
+            restart,
             replace_pool: replacePool,
             write_raw: true,
           }),
@@ -2784,9 +2834,38 @@ let outboundsModuleApi = null;
           return;
         }
 
-        const msg = 'Пул прокси сохранён' + (data.restarted ? ' и перезапущен.' : '.');
-        poolSetStatus('✅ ' + msg, false);
-        try { toastXkeen(msg, 'success'); } catch (e) {}
+        const jobId = (data && (data.restart_job_id || data.job_id || data.restartJobId))
+          ? String(data.restart_job_id || data.job_id || data.restartJobId)
+          : '';
+
+        let msg = 'Пул прокси сохранён' + (data.restarted ? ' и перезапущен.' : '.');
+
+        if (restart && jobId) {
+          poolSetStatus('Пул прокси сохранён. Перезапуск xkeen...', false);
+          const result = await streamRestartJob(jobId, 'xkeen -restart (job)...\n');
+          const ok = !!(result && result.ok);
+          if (ok) {
+            msg = 'Пул прокси сохранён и xkeen перезапущен.';
+            poolSetStatus('✅ ' + msg, false);
+            try { toastXkeen(msg, 'success'); } catch (e) {}
+          } else {
+            const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
+            const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
+            const detail = err
+              ? ('Ошибка: ' + err)
+              : (exitCode !== null ? ('Ошибка (exit_code=' + exitCode + ')') : '');
+            const restartLog = getRestartLogApi();
+            if (detail && restartLog && typeof restartLog.append === 'function') {
+              try { restartLog.append('\n' + detail + '\n'); } catch (e) {}
+            }
+            msg = 'Пул прокси сохранён, но перезапуск xkeen завершился с ошибкой.';
+            poolSetStatus(msg, true);
+            try { toastXkeen(msg, 'error'); } catch (e2) {}
+          }
+        } else {
+          poolSetStatus('✅ ' + msg, false);
+          try { toastXkeen(msg, 'success'); } catch (e) {}
+        }
 
         // Refresh outbounds state on page
         try { await load(); } catch (e) {}

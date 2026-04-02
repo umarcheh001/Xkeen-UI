@@ -2458,6 +2458,19 @@ function closeHelp() {
     const clearRestartLogUi = async () => {
       try {
         const api = await getRestartLogFeatureApi();
+        if (api && typeof api.prepareLiveStream === 'function') {
+          api.prepareLiveStream({ clear: true, reveal: true });
+          return;
+        }
+      } catch (e) {}
+      try {
+        const api = await getRestartLogFeatureApi();
+        if (api && typeof api.reveal === 'function') {
+          api.reveal();
+        }
+      } catch (e) {}
+      try {
+        const api = await getRestartLogFeatureApi();
         if (api && typeof api.setRaw === 'function') {
           api.setRaw('');
           return;

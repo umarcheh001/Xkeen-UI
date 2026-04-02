@@ -1,3 +1,4 @@
+import { getRestartLogApi } from './restart_log.js';
 import { getXkeenEditorEngineApi } from './xkeen_runtime.js';
 
 let xkeenTextsModuleApi = null;
@@ -80,6 +81,17 @@ let xkeenTextsModuleApi = null;
       return !!cb.checked;
     }
 
+    async function streamRestartJob(jobId, intro) {
+      const api = getRestartLogApi();
+      if (!api || !jobId || typeof api.streamJob !== 'function') return null;
+      return api.streamJob(String(jobId), {
+        clear: true,
+        reveal: true,
+        intro: String(intro || ''),
+        maxWaitMs: 5 * 60 * 1000,
+      });
+    }
+
     async function loadText(url, textareaId, statusId, label, stateKey) {
       const ta = document.getElementById(textareaId);
       const statusEl = document.getElementById(statusId);
@@ -115,21 +127,53 @@ let xkeenTextsModuleApi = null;
       const content = (ed && ed.getValue) ? ed.getValue() : ta.value;
 
       const restart = shouldRestartAfterSave();
+      const requestUrl = restart
+        ? (url + (url.indexOf('?') === -1 ? '?async=1' : '&async=1'))
+        : url;
 
       try {
-        const res = await fetch(url, {
+        const res = await fetch(requestUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content, restart }),
         });
         const data = await res.json().catch(() => ({}));
         if (res.ok && data && data.ok) {
+          const restartJobId = (data && (data.restart_job_id || data.job_id || data.restartJobId))
+            ? String(data.restart_job_id || data.job_id || data.restartJobId)
+            : '';
           const msg = `${label} сохранён.`;
-          if (statusEl) statusEl.textContent = msg;
+          if (statusEl) {
+            statusEl.textContent = (restart && restartJobId)
+              ? `${label} сохранён. Перезапуск xkeen...`
+              : msg;
+          }
 
           // Если был рестарт — тост покажет spinner_fetch.js (единый тост "сохранено + перезапуск").
-          if (!data.restarted) {
+          if (!data.restarted && !(restart && restartJobId)) {
             try { toast(msg, false); } catch (e) {}
+          }
+          if (restart && restartJobId) {
+            const result = await streamRestartJob(restartJobId, 'xkeen -restart (job)...\n');
+            const ok = !!(result && result.ok);
+            if (ok) {
+              const successMsg = `${label} сохранён, xkeen перезапущен.`;
+              if (statusEl) statusEl.textContent = successMsg;
+              try { toast(successMsg, false); } catch (e) {}
+            } else {
+              const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
+              const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
+              const detail = err
+                ? ('Ошибка: ' + err)
+                : (exitCode !== null ? ('Ошибка (exit_code=' + exitCode + ')') : '');
+              const restartLog = getRestartLogApi();
+              if (detail && restartLog && typeof restartLog.append === 'function') {
+                try { restartLog.append('\n' + detail + '\n'); } catch (e) {}
+              }
+              const errorMsg = `${label} сохранён, но перезапуск xkeen завершился с ошибкой.`;
+              if (statusEl) statusEl.textContent = errorMsg;
+              try { toast(errorMsg, true); } catch (e2) {}
+            }
           }
         } else {
           const msg = 'Ошибка сохранения: ' + ((data && data.error) || res.status);

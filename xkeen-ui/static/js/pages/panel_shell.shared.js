@@ -159,6 +159,30 @@ import {
     btn.classList.toggle('hidden', getLightweightDonateHidePref());
   }
 
+  function syncTooltipText(el, text, ariaLabel) {
+    if (!el) return;
+
+    const nextText = String(text || '').trim();
+    const nextAria = arguments.length >= 3 ? String(ariaLabel || '').trim() : null;
+
+    if (nextText) {
+      el.title = nextText;
+      try { el.setAttribute('data-tooltip', nextText); } catch (e) {}
+    } else {
+      try { el.removeAttribute('title'); } catch (e) {}
+      try { el.removeAttribute('data-tooltip'); } catch (e) {}
+    }
+
+    if (nextAria == null) return;
+
+    if (nextAria) {
+      try { el.setAttribute('aria-label', nextAria); } catch (e) {}
+      return;
+    }
+
+    try { el.removeAttribute('aria-label'); } catch (e) {}
+  }
+
   function setLightweightXrayHeaderBadgeState(state, level) {
     const badge = document.getElementById('xray-logs-badge');
     if (!badge) return;
@@ -174,8 +198,7 @@ import {
     badge.dataset.state = st;
     badge.dataset.level = lvl || 'none';
     badge.dataset.live = 'off';
-    badge.title = title;
-    try { badge.setAttribute('aria-label', title); } catch (e) {}
+    syncTooltipText(badge, title, title);
   }
 
   function hasLoadedXrayLogsFeature() {
@@ -337,6 +360,7 @@ import {
     coreEl.classList.remove('has-core');
     coreEl.disabled = false;
     lamp.title = text;
+    syncTooltipText(lamp, lamp.getAttribute('title') || '');
   }
 
   let _lightXkeenShellUnsubscribe = null;

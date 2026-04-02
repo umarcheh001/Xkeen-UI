@@ -1,5 +1,5 @@
 import { getXrayLogLineClass } from './xray_log_line_class.js';
-import { ansiToXkeenHtml, toastXkeen } from './xkeen_runtime.js';
+import { ansiToXkeenHtml, getXkeenCommandJobApi, toastXkeen } from './xkeen_runtime.js';
 
 let restartLogModuleApi = null;
 
@@ -79,6 +79,77 @@ let restartLogModuleApi = null;
     } catch (e) {}
 
     return els;
+  }
+
+  function isElementVisible(el) {
+    if (!el) return false;
+    try {
+      if (el.hidden) return false;
+      if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return false;
+      const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+      if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
+      const rect = typeof el.getBoundingClientRect === 'function' ? el.getBoundingClientRect() : null;
+      if (!rect) return !!el.offsetParent;
+      return rect.width > 0 && rect.height > 0;
+    } catch (e) {}
+    return false;
+  }
+
+  function getVisibleLogEls() {
+    return getLogEls().filter(isElementVisible);
+  }
+
+  function getRevealTarget(el) {
+    if (!el) return null;
+    try {
+      return el.closest('.log-card') || el.closest('.card') || el;
+    } catch (e) {}
+    return el;
+  }
+
+  function focusLogEl(el) {
+    if (!el || typeof el.focus !== 'function') return;
+    try {
+      if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+      el.focus({ preventScroll: true });
+    } catch (e) {}
+  }
+
+  async function waitForCommandJob(jobId, options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    const onChunk = (typeof opts.onChunk === 'function') ? opts.onChunk : null;
+    const maxWaitMs = (typeof opts.maxWaitMs === 'number' && opts.maxWaitMs > 0)
+      ? opts.maxWaitMs
+      : (5 * 60 * 1000);
+
+    const CJ = getXkeenCommandJobApi();
+    if (CJ && typeof CJ.waitForCommandJob === 'function') {
+      return CJ.waitForCommandJob(String(jobId), {
+        maxWaitMs,
+        onChunk: (chunk, meta) => {
+          if (!chunk || !onChunk) return;
+          try { onChunk(chunk, meta || null); } catch (e) {}
+        },
+      });
+    }
+
+    let lastLen = 0;
+    while (true) {
+      const res = await fetch(`/api/run-command/${encodeURIComponent(String(jobId))}`);
+      const data = await res.json().catch(() => ({}));
+      const out = (data && typeof data.output === 'string') ? data.output : '';
+      if (out.length > lastLen) {
+        const chunk = out.slice(lastLen);
+        lastLen = out.length;
+        if (chunk && onChunk) {
+          try { onChunk(chunk, { via: 'http', jobId: String(jobId) }); } catch (e) {}
+        }
+      }
+      if (!res.ok || data.ok === false || data.status === 'finished' || data.status === 'error') {
+        return data;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
   }
 
   function renderInto(el, rawText) {
@@ -180,6 +251,82 @@ let restartLogModuleApi = null;
     } catch (e) {
       console.error(e);
     }
+  };
+
+  RL.reveal = function reveal(options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    const target = getVisibleLogEls()[0] || getLogEls()[0] || null;
+    if (!target) return false;
+
+    const anchor = getRevealTarget(target) || target;
+    try {
+      if (typeof anchor.scrollIntoView === 'function') {
+        anchor.scrollIntoView({
+          behavior: String(opts.behavior || 'smooth'),
+          block: String(opts.block || 'center'),
+          inline: 'nearest',
+        });
+      }
+    } catch (e) {}
+
+    if (opts.focus !== false) {
+      try {
+        setTimeout(() => { focusLogEl(target); }, 0);
+      } catch (e2) {}
+    }
+
+    return true;
+  };
+
+  RL.prepareLiveStream = function prepareLiveStream(options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+
+    if (opts.clear !== false) {
+      RL.clear();
+    } else if (opts.resetRaw === true) {
+      RL.setRaw('');
+    }
+
+    if (opts.intro) {
+      RL.append(String(opts.intro));
+    }
+
+    if (opts.reveal !== false) {
+      RL.reveal(opts.revealOptions || {});
+    }
+
+    return true;
+  };
+
+  RL.waitForJob = async function waitForJob(jobId, options) {
+    if (!jobId) return { ok: false, status: 'error', error: 'missing job id' };
+    return waitForCommandJob(jobId, options || {});
+  };
+
+  RL.streamJob = async function streamJob(jobId, options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+
+    RL.prepareLiveStream({
+      clear: opts.clear !== false,
+      resetRaw: !!opts.resetRaw,
+      reveal: opts.reveal !== false,
+      revealOptions: opts.revealOptions || {},
+      intro: (typeof opts.intro === 'string') ? opts.intro : '',
+    });
+
+    return waitForCommandJob(jobId, {
+      maxWaitMs: opts.maxWaitMs,
+      onChunk: (chunk, meta) => {
+        if (!chunk) return;
+        RL.append(String(chunk));
+        if (opts.revealOnChunk === true) {
+          try { RL.reveal(Object.assign({ focus: false, behavior: 'auto' }, opts.revealOptions || {})); } catch (e) {}
+        }
+        if (typeof opts.onChunk === 'function') {
+          try { opts.onChunk(chunk, meta || null); } catch (e2) {}
+        }
+      },
+    });
   };
 
   function fallbackCopyText(text) {
@@ -291,6 +438,22 @@ export function copyRestartLog(...args) {
   return callRestartLogApi('copy', ...args);
 }
 
+export function revealRestartLog(...args) {
+  return callRestartLogApi('reveal', ...args);
+}
+
+export function prepareRestartLogLiveStream(...args) {
+  return callRestartLogApi('prepareLiveStream', ...args);
+}
+
+export function waitForRestartLogJob(...args) {
+  return callRestartLogApi('waitForJob', ...args);
+}
+
+export function streamRestartLogJob(...args) {
+  return callRestartLogApi('streamJob', ...args);
+}
+
 export const restartLogApi = Object.freeze({
   get: getRestartLogApi,
   init: initRestartLog,
@@ -299,4 +462,8 @@ export const restartLogApi = Object.freeze({
   setRaw: setRestartLogRaw,
   clear: clearRestartLog,
   copy: copyRestartLog,
+  reveal: revealRestartLog,
+  prepareLiveStream: prepareRestartLogLiveStream,
+  waitForJob: waitForRestartLogJob,
+  streamJob: streamRestartLogJob,
 });

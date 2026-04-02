@@ -69,6 +69,17 @@ let inboundsModuleApi = null;
       return null;
     }
 
+    async function streamRestartJob(jobId, intro) {
+      const api = getRestartLogApi();
+      if (!api || !jobId || typeof api.streamJob !== 'function') return null;
+      return api.streamJob(String(jobId), {
+        clear: true,
+        reveal: true,
+        intro: String(intro || ''),
+        maxWaitMs: 5 * 60 * 1000,
+      });
+    }
+
     function getFeatureLifecycle() {
       if (_featureLifecycle) return _featureLifecycle;
       const shell = getConfigShellApi();
@@ -870,6 +881,7 @@ let inboundsModuleApi = null;
       const selected = document.querySelector('input[name="inbounds_mode"]:checked');
       const toggle = $('inbounds-autorestart');
       publishLifecycleState({ saving: true, initialized: true }, 'inbounds-save-start');
+      let streamedRestart = false;
       try {
         if (!selected) {
           if (statusEl) statusEl.textContent = 'Выбери режим перед сохранением.';
@@ -905,7 +917,10 @@ let inboundsModuleApi = null;
 
         try {
           const file = getActiveFragment();
-          const url = file ? ('/api/inbounds?file=' + encodeURIComponent(file)) : '/api/inbounds';
+          const params = new URLSearchParams();
+          if (file) params.set('file', file);
+          if (restart) params.set('async', '1');
+          const url = '/api/inbounds' + (params.toString() ? ('?' + params.toString()) : '');
           const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -926,13 +941,43 @@ let inboundsModuleApi = null;
             }, 'inbounds-save-success');
             // Refresh extras snapshot silently (so next apply doesn't show modal unnecessarily).
             try { await load({ silent: true }); } catch (e) {}
-            try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
             try {
               if (typeof updateLastActivity === 'function') {
                 const fp = getXkeenFilePath('inbounds', '');
                 updateLastActivity('saved', 'inbounds', fp);
               }
             } catch (e) {}
+
+            const jobId = (data && (data.restart_job_id || data.job_id || data.restartJobId))
+              ? String(data.restart_job_id || data.job_id || data.restartJobId)
+              : '';
+
+            if (restart && jobId) {
+              streamedRestart = true;
+              if (statusEl) statusEl.textContent = 'Режим сохранён. Перезапуск xkeen...';
+              const result = await streamRestartJob(jobId, 'xkeen -restart (job)...\n');
+              const ok = !!(result && result.ok);
+              if (ok) {
+                msg = 'Режим сохранён: ' + (data.mode || mode) + '. xkeen перезапущен.';
+                if (statusEl) statusEl.textContent = msg;
+                try { toastXkeen(msg, 'success'); } catch (e) {}
+              } else {
+                const err = (result && (result.error || result.message)) ? String(result.error || result.message) : '';
+                const exitCode = (result && typeof result.exit_code === 'number') ? result.exit_code : null;
+                const detail = err
+                  ? ('Ошибка: ' + err)
+                  : (exitCode !== null ? ('Ошибка (exit_code=' + exitCode + ')') : '');
+                const restartLog = getRestartLogApi();
+                if (detail && restartLog && typeof restartLog.append === 'function') {
+                  try { restartLog.append('\n' + detail + '\n'); } catch (e) {}
+                }
+                msg = 'Режим сохранён, но перезапуск xkeen завершился с ошибкой.';
+                if (statusEl) statusEl.textContent = msg;
+                try { toastXkeen(msg, 'error'); } catch (e2) {}
+              }
+            } else {
+              try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
+            }
           } else {
             const msg = 'Save error: ' + ((data && data.error) || res.status);
             if (statusEl) statusEl.textContent = msg;
@@ -944,7 +989,9 @@ let inboundsModuleApi = null;
           if (statusEl) statusEl.textContent = msg;
           try { if (typeof showToast === 'function') showToast(msg, true); } catch (e2) {}
         } finally {
-          try { refreshRestartLog(); } catch (e) {}
+          if (!streamedRestart) {
+            try { refreshRestartLog(); } catch (e) {}
+          }
         }
       } finally {
         publishLifecycleState({ saving: false, initialized: true }, 'inbounds-save-finished');
