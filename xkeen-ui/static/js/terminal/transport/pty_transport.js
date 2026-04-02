@@ -1,21 +1,15 @@
-// Transport adapter: PTY (WebSocket) — wraps terminal/pty.js
-//
-// Stage 4 contract:
-//   connect() / disconnect() / send(data, opts?)
-//   onMessage(cb) / onClose(cb) / onError(cb)
-//
-// Notes:
-// - No DOM access.
-// - Output is delivered via ctx.events (`transport:message`) emitted by pty.js.
+import {
+  getTerminalCompatApi,
+  getTerminalPtyApi,
+  publishTerminalTransportCompatApi,
+} from '../runtime.js';
+
+// Transport adapter: PTY (WebSocket) вЂ” wraps terminal/pty.js
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.transport = window.XKeen.terminal.transport || {};
-
   function createPtyTransport(ctx) {
-    const core = (ctx && ctx.core) ? ctx.core : (window.XKeen.terminal._core || null);
+    const core = (ctx && ctx.core) ? ctx.core : getTerminalCompatApi('_core');
     const events = (ctx && ctx.events) ? ctx.events : { on: () => () => {}, off: () => {}, emit: () => {} };
 
     const onMsgCbs = new Set();
@@ -29,7 +23,6 @@
     function ensureSubscriptions() {
       if (!events || typeof events.on !== 'function') return;
       if (!offRaw) {
-        // Stage 5: PTY output enters the system via `transport:message` events from pty.js.
         offRaw = events.on('transport:message', (payload) => {
           try {
             if (!payload || payload.source !== 'pty') return;
@@ -57,11 +50,10 @@
     }
 
     function pty() {
-      return (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.pty) ? window.XKeen.terminal.pty : null;
+      return getTerminalPtyApi();
     }
 
     function resolveTerm() {
-      // No xterm manager calls here (transport must stay UI-agnostic).
       try {
         const st = (core && core.state) ? core.state : (ctx && ctx.state ? ctx.state : null);
         return st ? (st.term || st.xterm) : null;
@@ -92,9 +84,8 @@
       return false;
     }
 
-    function send(data, opts) {
+    function send(data) {
       const payload = String(data == null ? '' : data);
-
       const P = pty();
       if (P && typeof P.sendRaw === 'function') {
         try { return !!P.sendRaw(payload); } catch (e) {}
@@ -136,5 +127,5 @@
     return { kind: 'pty', connect, disconnect, isConnected, send, resize, onMessage, onClose, onError };
   }
 
-  window.XKeen.terminal.transport.createPtyTransport = createPtyTransport;
+  publishTerminalTransportCompatApi('createPtyTransport', createPtyTransport);
 })();

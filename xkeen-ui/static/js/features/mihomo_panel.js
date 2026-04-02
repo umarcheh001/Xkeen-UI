@@ -9,16 +9,6 @@ import {
   getSharedMihomoEditor,
   setSharedMihomoEditor,
 } from './mihomo_runtime.js';
-import {
-  attachXkeenEditorToolbar,
-  buildXkeenEditorCommonKeys,
-  getXkeenEditorToolbarDefaultItems,
-  getXkeenEditorToolbarIcons,
-  getXkeenEditorToolbarMiniItems,
-  getXkeenFilePath,
-  getXkeenPageFlagsConfig,
-  setXkeenPageConfigValue,
-} from './xkeen_runtime.js';
 
 let mihomoPanelModuleApi = null;
 
@@ -162,7 +152,10 @@ let mihomoPanelModuleApi = null;
 
   function hasInitialMihomoConfig() {
     try {
-      return !!getXkeenPageFlagsConfig().mihomoConfigExists;
+      if (typeof window.XKEEN_MIHOMO_CONFIG_EXISTS === 'boolean') return !!window.XKEEN_MIHOMO_CONFIG_EXISTS;
+      const raw = String(window.XKEEN_MIHOMO_CONFIG_EXISTS || '').trim().toLowerCase();
+      if (!raw) return true;
+      return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
     } catch (e) {}
     return true;
   }
@@ -280,8 +273,7 @@ let mihomoPanelModuleApi = null;
       btn.className = 'xkeen-cm-tool xk-mihomo-fs-btn';
       try { btn.dataset.tip = 'Фулскрин (F11 / Esc)'; } catch (e) {}
       try { btn.dataset.actionId = 'fs_hdr'; } catch (e) {}
-      const icons = getXkeenEditorToolbarIcons();
-      btn.innerHTML = icons.fullscreen || '⛶';
+      btn.innerHTML = (window.XKEEN_CM_ICONS && window.XKEEN_CM_ICONS.fullscreen) ? window.XKEEN_CM_ICONS.fullscreen : '⛶';
 
       btn.addEventListener('click', (e) => {
         try { e.preventDefault(); e.stopPropagation(); } catch (err) {}
@@ -777,7 +769,7 @@ let mihomoPanelModuleApi = null;
       clearSharedMihomoEditor(cached);
     }
 
-    const extra = buildXkeenEditorCommonKeys();
+    const extra = (typeof window.buildCmExtraKeysCommon === 'function') ? window.buildCmExtraKeysCommon() : {};
     if (!runtime || typeof runtime.create !== 'function') return null;
 
     _cm = runtime.create(ta, {
@@ -827,28 +819,27 @@ let mihomoPanelModuleApi = null;
     } catch (e) {}
 
     try {
-      const baseItems = getXkeenEditorToolbarDefaultItems();
-      const miniItems = getXkeenEditorToolbarMiniItems();
-      if (baseItems.length || miniItems.length) {
+      if (typeof window.xkeenAttachCmToolbar === 'function') {
         // IMPORTANT:
-        // attachXkeenEditorToolbar(cm, items) expects an items list.
+        // xkeenAttachCmToolbar(cm) expects an items list.
         // If called without it, it creates an empty toolbar (no buttons),
         // which выглядит как "тулбар пропал".
-        const sourceItems = baseItems.length ? baseItems : miniItems;
-        const icons = getXkeenEditorToolbarIcons();
+        const baseItems = (window && window.XKEEN_CM_TOOLBAR_DEFAULT)
+          ? window.XKEEN_CM_TOOLBAR_DEFAULT
+          : ((window && window.XKEEN_CM_TOOLBAR_MINI) ? window.XKEEN_CM_TOOLBAR_MINI : null);
 
         // Replace fullscreen action: in this card it must work for the active engine.
-        const items = sourceItems.map((it) => {
+        const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
           if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) });
           return it;
         });
 
         // Fallback fullscreen button for Monaco even when CM fullscreen addon isn't loaded.
         try {
-          if (icons.fullscreen && !items.some((it) => it && it.id === 'fs_any')) {
+          if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
             items.push({
               id: 'fs_any',
-              svg: icons.fullscreen,
+              svg: window.XKEEN_CM_ICONS.fullscreen,
               label: 'Фулскрин',
               fallbackHint: 'F11 / Esc',
               onClick: () => toggleEditorFullscreen(_cm),
@@ -856,7 +847,7 @@ let mihomoPanelModuleApi = null;
           }
         } catch (e) {}
 
-        attachXkeenEditorToolbar(_cm, items);
+        window.xkeenAttachCmToolbar(_cm, items);
         // Keep the toolbar in the compact topbar host (if present).
         try { repositionCmToolbarForEngine(_engine); } catch (e) {}
         try { syncToolbarForEngine(_engine); } catch (e) {}
@@ -1297,7 +1288,7 @@ let mihomoPanelModuleApi = null;
       setStatus('config.yaml загружен (' + content.length + ' байт).', false, !notify);
       try {
         if (typeof window.updateLastActivity === 'function') {
-          const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
+          const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
           window.updateLastActivity('loaded', 'mihomo', fp);
         }
       } catch (e) {}
@@ -1353,10 +1344,10 @@ let mihomoPanelModuleApi = null;
         return false;
       }
       markEditorClean();
-      try { setXkeenPageConfigValue('flags.mihomoConfigExists', true); } catch (e) {}
+      try { window.XKEEN_MIHOMO_CONFIG_EXISTS = true; } catch (e) {}
       try {
         if (typeof window.updateLastActivity === 'function') {
-          const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
+          const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
           window.updateLastActivity('saved', 'mihomo', fp);
         }
       } catch (e) {}
@@ -1735,7 +1726,7 @@ let mihomoPanelModuleApi = null;
   function bumpLastActivity(kind) {
     try {
       if (typeof window.updateLastActivity === 'function') {
-        const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
+        const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
         window.updateLastActivity(kind || 'info', 'mihomo', fp);
       }
     } catch (e) {}

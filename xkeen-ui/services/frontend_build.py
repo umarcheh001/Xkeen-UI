@@ -7,7 +7,7 @@ imports and tests.
 
 from __future__ import annotations
 
-from routes.ui_assets import FrontendAssetHelper, FrontendBuildBridgeResolution, frontend_page_entry_url
+from routes.ui_assets import FrontendAssetHelper, frontend_page_entry_url
 
 
 def _helper() -> FrontendAssetHelper:
@@ -40,14 +40,6 @@ def should_use_build_entry(entry_name: str) -> bool:
     return _helper().should_use_build_entry(entry_name)
 
 
-def get_build_bridge_resolution(entry_name: str) -> FrontendBuildBridgeResolution:
-    return _helper().get_build_bridge_resolution(entry_name)
-
-
-def resolve_frontend_page_entry_filename(entry_name: str) -> str:
-    return _helper().resolve_frontend_page_entry_filename(entry_name)
-
-
 def iter_known_frontend_entries() -> tuple[str, ...]:
     return _helper().iter_known_frontend_entries()
 
@@ -56,11 +48,9 @@ __all__ = [
     "build_entry_exists",
     "frontend_page_entry_url",
     "get_build_entry_filename",
-    "get_build_bridge_resolution",
     "get_enabled_build_pages",
     "get_source_entry_filename",
     "is_build_enabled_for_page",
     "iter_known_frontend_entries",
-    "resolve_frontend_page_entry_filename",
     "should_use_build_entry",
 ]

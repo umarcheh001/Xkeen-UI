@@ -1,11 +1,13 @@
+import {
+  publishTerminalCompatApi,
+  toastTerminal,
+} from '../runtime.js';
+
 // Terminal output prefs module (Stage 8.3.2)
 // Owns persistent prefs for output pipeline: ANSI filter, log highlight, follow.
 // Emits: prefs:changed
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
 
   function createOutputPrefs(ctx) {
     const config = (ctx && ctx.config) ? ctx.config : null;
@@ -25,9 +27,7 @@
       try {
         if (ui && typeof ui.toast === 'function') { ui.toast(m, k); return; }
       } catch (e) {}
-      try {
-        if (typeof window.showToast === 'function') window.showToast(m, k);
-      } catch (e2) {}
+      toastTerminal(m, k);
     }
 
     function getBool(key, fallback) {
@@ -134,11 +134,11 @@
   }
 
   // Registry plugin wrapper (Stage D)
-  window.XKeen.terminal.output_prefs = {
+  const terminalOutputPrefsCompat = {
     createModule: (ctx) => {
       const prefs = createOutputPrefs(ctx);
       try { ctx.outputPrefs = prefs; } catch (e) {}
-      try { window.XKeen.terminal.outputPrefs = prefs; } catch (e2) {}
+      try { publishTerminalCompatApi('outputPrefs', prefs); } catch (e2) {}
 
       return {
         id: 'output_prefs',
@@ -149,4 +149,6 @@
       };
     },
   };
+
+  publishTerminalCompatApi('output_prefs', terminalOutputPrefsCompat);
 })();

@@ -1488,6 +1488,29 @@
     }
   }
 
+  function openPanel() {
+    const modal = $('ui-settings-modal');
+    if (!modal) return false;
+    ensureModalBinding(modal);
+    ensureSchemaRendered();
+    ensureSettingsSubscription();
+    ensureShellSubscription();
+    showModal(modal);
+    void loadAndRender();
+    return true;
+  }
+
+  function closePanel() {
+    const modal = $('ui-settings-modal');
+    if (!modal) return false;
+    hideModal(modal);
+    return true;
+  }
+
+  function reloadPanel() {
+    return loadAndRender();
+  }
+
   function wire() {
     const openBtn = $('ui-settings-open-btn');
     const modal = $('ui-settings-modal');
@@ -1504,11 +1527,10 @@
 
     openBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      showModal(modal);
-      void loadAndRender();
+      openPanel();
     });
 
-    const close = () => hideModal(modal);
+    const close = () => closePanel();
     if (closeBtn) closeBtn.addEventListener('click', close);
     if (okBtn) okBtn.addEventListener('click', close);
 
@@ -1525,9 +1547,50 @@
     if (modal.dataset) modal.dataset.xkSettingsPanelWired = '1';
   }
 
+  const SettingsPanel = XK.ui.settingsPanel = XK.ui.settingsPanel || {};
+  SettingsPanel.init = function init() {
+    wire();
+    return SettingsPanel;
+  };
+  SettingsPanel.open = openPanel;
+  SettingsPanel.close = closePanel;
+  SettingsPanel.reload = reloadPanel;
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', wire);
   } else {
     wire();
   }
 })();
+
+export function getUiSettingsPanelApi() {
+  try {
+    return window.XKeen && window.XKeen.ui ? (window.XKeen.ui.settingsPanel || null) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function initUiSettingsPanel(...args) {
+  const api = getUiSettingsPanelApi();
+  if (!api || typeof api.init !== 'function') return null;
+  return api.init(...args);
+}
+
+export function openUiSettingsPanel(...args) {
+  const api = getUiSettingsPanelApi();
+  if (!api || typeof api.open !== 'function') return null;
+  return api.open(...args);
+}
+
+export function closeUiSettingsPanel(...args) {
+  const api = getUiSettingsPanelApi();
+  if (!api || typeof api.close !== 'function') return null;
+  return api.close(...args);
+}
+
+export function reloadUiSettingsPanel(...args) {
+  const api = getUiSettingsPanelApi();
+  if (!api || typeof api.reload !== 'function') return null;
+  return api.reload(...args);
+}

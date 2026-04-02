@@ -18,57 +18,12 @@
   <!-- Apply layout prefs ASAP (stored in localStorage) -->
   <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
   <script src="{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}"></script>
-  {% include '_codemirror6_importmap.html' %}
-
-  {% set panel_page_config = frontend_page_config(
-    'panel',
-    sections={
-      'panelWhitelist': panel_sections_whitelist,
-      'devtoolsWhitelist': devtools_sections_whitelist,
-    },
-    flags={
-      'hasXray': has_xray,
-      'hasMihomo': has_mihomo,
-      'isMips': is_mips,
-      'multiCore': multi_core,
-      'mihomoConfigExists': mihomo_config_exists,
-    },
-    cores={
-      'available': available_cores,
-      'detected': detected_cores,
-      'uiFallback': core_ui_fallback,
-    },
-    files={
-      'routing': routing_file,
-      'inbounds': inbounds_file,
-      'outbounds': outbounds_file,
-      'mihomo': mihomo_config_file,
-    },
-    file_manager={
-      'rightDefault': fm_right_default,
-    },
-    github={
-      'repoUrl': github_repo_url,
-    },
-    static={
-      'base': url_for('static', filename=''),
-      'version': '20260324d',
-    },
-    runtime={
-      'debug': xkeen_runtime_debug,
-    },
-    terminal={
-      'supportsPty': terminal_supports_pty,
-      'enableOptionalAddons': xkeen_terminal_enable_optional_addons,
-      'enableLigatures': xkeen_terminal_enable_ligatures,
-      'enableWebgl': xkeen_terminal_enable_webgl,
-    },
-  ) %}
-  <!-- Page runtime contract (Stage 6 / final): publish canonical pageConfig only. -->
+  <!-- Env-driven visibility filters (section whitelist) -->
   <script>
     window.XKeen = window.XKeen || {};
-    var pageConfig = {{ panel_page_config|tojson }};
-    window.XKeen.pageConfig = pageConfig;
+    window.XKeen.env = window.XKeen.env || {};
+    window.XKeen.env.panelSectionsWhitelist = {{ panel_sections_whitelist|tojson }};
+    window.XKeen.env.devtoolsSectionsWhitelist = {{ devtools_sections_whitelist|tojson }};
   </script>
   <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
   <!-- Editor payload is lazy-loaded by js/runtime/lazy_runtime.js + js/ui/editor_engine.js. -->
@@ -96,9 +51,14 @@
       document.documentElement.style.colorScheme = theme;
     })();
   </script>
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260401f') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260325g') }}">
+  <link rel="stylesheet" id="xk-custom-theme-link" href="{{ url_for('custom_theme_css', v=custom_theme_v) }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
+  <link rel="stylesheet" id="xk-codemirror-theme-link" href="{{ url_for('codemirror_theme_css', v=codemirror_theme_v) }}">
   {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
+  {% if custom_css_enabled and not safe_mode %}
+  <link rel="stylesheet" id="xk-custom-css-link" href="{{ url_for('custom_css', v=custom_css_v) }}">
+  {% endif %}
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='xterm/xterm.css') }}">
     <!-- XTerm.js scripts are lazy-loaded on first terminal open (Commit J) -->
@@ -310,7 +270,7 @@
             <div class="layout-side routing-side">
         <div class="routing-side-grid">
     <section class="card routing-dat-card">
-              <div class="commands-header" id="routing-dat-header" role="button" tabindex="0" aria-controls="routing-dat-body" aria-expanded="false">
+              <div class="commands-header" id="routing-dat-header">
                 <h2>DAT-файлы GeoIP / GeoSite</h2>
                 <span id="routing-dat-arrow">▼</span>
               </div>
@@ -343,7 +303,7 @@
                     <div class="routing-dat-head">
                       <div class="routing-dat-title">
                         <span class="routing-dat-name">GeoSite</span>
-                        <span id="routing-dat-geosite-current-file" class="routing-dat-file">geosite.dat</span>
+                        <span class="routing-dat-file">geosite.dat</span>
                       </div>
                       <div class="routing-dat-meta" id="routing-dat-geosite-meta">—</div>
                     </div>
@@ -382,7 +342,7 @@
                     <div class="routing-dat-head">
                       <div class="routing-dat-title">
                         <span class="routing-dat-name">GeoIP</span>
-                        <span id="routing-dat-geoip-current-file" class="routing-dat-file">geoip.dat</span>
+                        <span class="routing-dat-file">geoip.dat</span>
                       </div>
                       <div class="routing-dat-meta" id="routing-dat-geoip-meta">—</div>
                     </div>
@@ -586,7 +546,7 @@
 
     <!-- Backups list -->
     <section class="card routing-side-card routing-side-card--backups">
-      <div class="commands-header" id="routing-backups-header" role="button" tabindex="0" aria-controls="routing-backups-body" aria-expanded="false">
+      <div class="commands-header" id="routing-backups-header">
         <h2>Бэкапы Xray конфигов (routing / inbounds / outbounds / dns / …)</h2>
           <span id="routing-backups-arrow">▼</span>
       </div>
@@ -633,14 +593,13 @@
 
     <!-- Help block -->
     <section class="card routing-side-card routing-side-card--help">
-      <div class="commands-header" id="routing-help-header" role="button" tabindex="0" aria-controls="routing-help-body" aria-expanded="false">
+      <div class="commands-header" id="routing-help-header">
         <h2>Справка и ссылки</h2>
           <span id="routing-help-arrow">▼</span>
       </div>
       <div id="routing-help-body" style="display:none;">
         <ul class="links">
           <li><a href="https://github.com/Corvus-Malus/XKeen" target="_blank" rel="noopener">GitHub Corvus-Malus/XKeen</a></li>
-          <li><a href="https://github.com/umarcheh001/Xkeen-UI" target="_blank" rel="noopener">Xkeen UI by umarcheh</a></li>
           <li><a href="https://jameszero.net/faq-xkeen.htm" target="_blank" rel="noopener">FAQ по XKeen (jameszero.net)</a></li>
           <li><a href="https://t.me/c/2138190368/23" target="_blank" rel="noopener">Telegram чат XKeen</a></li>
           <li><a href="https://github.com/jameszeroX/XKeen" target="_blank" rel="noopener">GitHub jameszeroX/XKeen</a></li>
@@ -670,7 +629,7 @@
 
 <div class="routing-col routing-col-center">
         <section id="routing-rules-card" class="card routing-rules-card xk-only-routing" data-focus-role="gui">
-          <div class="commands-header" id="routing-rules-header" role="button" tabindex="0" aria-controls="routing-rules-body" aria-expanded="false">
+          <div class="commands-header" id="routing-rules-header">
             <h2>Правила маршрутизации</h2>
             <span id="routing-rules-arrow">▼</span>
           </div>
@@ -3031,12 +2990,29 @@ https://..."></textarea>
     </footer>
   </div>
 
-  <!-- Monaco clipboard/context-menu compatibility patch must install before the panel bootstraps Monaco. -->
   <script>
-    try { window.__xkMonacoClipboardCompatInstalled = true; } catch (e) {}
+	    window.XKEEN_GITHUB_REPO_URL = "{{ github_repo_url|e }}";
+	    window.XKEEN_STATIC_BASE = "{{ url_for('static', filename='') }}";
+	    window.XKEEN_IS_MIPS = {{ is_mips|tojson }};
+	    window.XKEEN_AVAILABLE_CORES = {{ available_cores|tojson }};
+	    window.XKEEN_DETECTED_CORES = {{ detected_cores|tojson }};
+	    window.XKEEN_CORE_UI_FALLBACK = {{ core_ui_fallback|tojson }};
+	    window.XKEEN_HAS_XRAY = {{ has_xray|tojson }};
+	    window.XKEEN_HAS_MIHOMO = {{ has_mihomo|tojson }};
+	    window.XKEEN_MIHOMO_CONFIG_EXISTS = {{ mihomo_config_exists|tojson }};
+	    window.XKEEN_MULTI_CORE = {{ multi_core|tojson }};
+		    // Cache-buster for lazy-loaded scripts (Commit J)
+		    window.XKEEN_STATIC_VER = "20260324d";
+	    // Files shown in UI (used by last-load badge and other helpers)
+	    window.XKEEN_FILES = {
+	      routing: "{{ routing_file|e }}",
+	      inbounds: "{{ inbounds_file|e }}",
+	      outbounds: "{{ outbounds_file|e }}",
+	      mihomo: "{{ mihomo_config_file|e }}",
+	    };
+		    // File Manager initial right panel path
+		    window.XKEEN_FM_RIGHT_DEFAULT = "{{ fm_right_default|e }}";
   </script>
-  <script src="{{ url_for('static', filename='js/patches/monaco_runtime_fix.js', v='20260401f') }}"></script>
-
   <!-- Frontend workspace entrypoint (step 37): keeps page bootstrap in one file instead of a long inline script list. -->
   <script type="module" src="{{ frontend_page_entry_url('panel') }}"></script>
 

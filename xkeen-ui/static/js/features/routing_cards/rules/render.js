@@ -1,4 +1,3 @@
-import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
 /*
@@ -1984,7 +1983,12 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
   let _rulesRenderTimer = null;
 
   function isMipsTarget() {
-    return isXkeenMipsRuntime();
+    try {
+      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
+      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
+      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+    } catch (e) {}
+    return false;
   }
 
   function cancelQueuedRulesRender() {

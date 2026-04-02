@@ -1,88 +1,82 @@
-// Terminal core: createTerminalContext() — wiring for A/B stages
+import {
+  ensureTerminalRoot,
+  getTerminalCompatApi,
+  getTerminalCoreCompatApi,
+  getTerminalPtyApi,
+  getTerminalTransportCompatApi,
+  publishTerminalCoreCompatApi,
+} from '../runtime.js';
+
+// Terminal core: createTerminalContext() вЂ” wiring for A/B stages
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
-
   function createTerminalContext() {
-    const core = window.XKeen.terminal._core || null;
-    const caps = window.XKeen.terminal.capabilities || null;
+    const terminal = ensureTerminalRoot();
+    const core = getTerminalCompatApi('_core');
+    const caps = getTerminalCompatApi('capabilities');
 
-    // State (authoritative is terminal/_core.js when available).
-    // Stage 1: ctx.state is a store with get/set/subscribe, but still behaves like
-    // a plain object for backward compatibility.
     let state = null;
     try {
       state = (core && core.state) ? core.state : null;
     } catch (e) {}
     if (!state) {
       try {
-        const ds = window.XKeen.terminal.core.defaultState;
+        const ds = getTerminalCoreCompatApi('defaultState');
         state = (typeof ds === 'function') ? ds() : { mode: 'shell' };
       } catch (e2) {
         state = { mode: 'shell' };
       }
     }
 
-    const events = (window.XKeen.terminal.core.createEventBus)
-      ? window.XKeen.terminal.core.createEventBus()
+    const createEventBus = getTerminalCoreCompatApi('createEventBus');
+    const events = createEventBus
+      ? createEventBus()
       : { on: () => () => {}, off: () => {}, emit: () => {} };
 
-    // Upgrade plain state object into a tiny reactive store.
     try {
-      const mkStore = window.XKeen.terminal.core.createStateStore;
-      if (typeof mkStore === 'function') {
-        state = mkStore(state, events);
-      }
+      const mkStore = getTerminalCoreCompatApi('createStateStore');
+      if (typeof mkStore === 'function') state = mkStore(state, events);
     } catch (e) {}
 
-    // Logger + config
-    const log = (window.XKeen.terminal.core.createLogger)
-      ? window.XKeen.terminal.core.createLogger('terminal')
+    const createLogger = getTerminalCoreCompatApi('createLogger');
+    const log = createLogger
+      ? createLogger('terminal')
       : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, enabled: () => false };
 
-    const config = (window.XKeen.terminal.core.createConfig)
-      ? window.XKeen.terminal.core.createConfig()
+    const createConfig = getTerminalCoreCompatApi('createConfig');
+    const config = createConfig
+      ? createConfig()
       : { get: () => undefined, set: () => false, defaults: () => ({}), keys: () => ({}) };
 
-    const ui = (window.XKeen.terminal.core.createUiAdapter)
-      ? window.XKeen.terminal.core.createUiAdapter(core)
+    const createUiAdapter = getTerminalCoreCompatApi('createUiAdapter');
+    const ui = createUiAdapter
+      ? createUiAdapter(core)
       : { byId: (id) => { try { return (core && typeof core.byId === 'function') ? core.byId(id) : null; } catch (e) { return null; } }, get: {}, toast: () => {}, show: () => {}, hide: () => {} };
 
-    // DOM cache: resolved once (refreshable) so modules can use ctx.dom.*
     function createDomCache() {
       const dom = {};
       function refresh() {
         try {
           if (!ui || !ui.get) return dom;
           const g = ui.get;
-          // Hosts
           dom.overlay = typeof g.overlay === 'function' ? g.overlay() : null;
           dom.outputPre = typeof g.outputPre === 'function' ? g.outputPre() : (typeof g.output === 'function' ? g.output() : null);
           dom.output = typeof g.output === 'function' ? g.output() : dom.outputPre;
           dom.xtermHost = typeof g.xtermHost === 'function' ? g.xtermHost() : null;
-          // Inputs
           dom.commandInput = typeof g.commandInput === 'function' ? g.commandInput() : (typeof g.cmd === 'function' ? g.cmd() : null);
           dom.stdinInput = typeof g.stdinInput === 'function' ? g.stdinInput() : (typeof g.stdin === 'function' ? g.stdin() : null);
-          // Connection
           dom.connLamp = typeof g.connLamp === 'function' ? g.connLamp() : (typeof g.lamp === 'function' ? g.lamp() : null);
           dom.uptime = typeof g.uptime === 'function' ? g.uptime() : null;
-          // Retry
           dom.stopRetryBtn = typeof g.stopRetryBtn === 'function' ? g.stopRetryBtn() : null;
           dom.retryNowBtn = typeof g.retryNowBtn === 'function' ? g.retryNowBtn() : null;
-          // Common
           dom.followBtn = typeof g.followBtn === 'function' ? g.followBtn() : null;
           dom.bottomBtn = typeof g.bottomBtn === 'function' ? g.bottomBtn() : null;
-          // Menus
           dom.overflowMenu = typeof g.overflowMenu === 'function' ? g.overflowMenu() : null;
           dom.viewMenu = typeof g.viewMenu === 'function' ? g.viewMenu() : null;
           dom.bufferMenu = typeof g.bufferMenu === 'function' ? g.bufferMenu() : null;
-          // Capability buttons
           dom.openShellBtn = typeof g.openShellBtn === 'function' ? g.openShellBtn() : null;
           dom.openPtyBtn = typeof g.openPtyBtn === 'function' ? g.openPtyBtn() : null;
-          // SSH modals
           dom.sshModal = typeof g.sshModal === 'function' ? g.sshModal() : null;
           dom.sshEditModal = typeof g.sshEditModal === 'function' ? g.sshEditModal() : null;
           dom.sshConfirmModal = typeof g.sshConfirmModal === 'function' ? g.sshConfirmModal() : null;
@@ -108,25 +102,32 @@
 
     const dom = createDomCache();
 
-    const api = (window.XKeen.terminal.core.createApi)
-      ? window.XKeen.terminal.core.createApi(caps)
-      : { apiFetch: (...args) => fetch(...args) };
+    const createApi = getTerminalCoreCompatApi('createApi');
+    const api = createApi ? createApi(caps) : { apiFetch: (...args) => fetch(...args) };
 
-    // Transport manager is injected by transport/index.js (stage B)
     let transport = null;
     try {
-      const T = window.XKeen.terminal.transport;
-      if (T && typeof T.createTransportManager === 'function') {
-        transport = T.createTransportManager({ core, caps, ui, events, api, state, config, log, dom });
+      const createTransportManager = getTerminalTransportCompatApi('createTransportManager');
+      if (typeof createTransportManager === 'function') {
+        transport = createTransportManager({ core, caps, ui, events, api, state, config, log, dom });
       }
     } catch (e) {}
 
     if (!transport) {
-      // Safe fallback (no unified globals): best-effort adapter around existing PTY/lite modules.
       transport = {
         kind: 'unknown',
-        connect: () => { try { const P = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.pty; return P && P.connect ? P.connect() : undefined; } catch (e) {} },
-        disconnect: () => { try { const P = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.pty; return P && P.disconnect ? P.disconnect() : undefined; } catch (e) {} },
+        connect: () => {
+          try {
+            const pty = getTerminalPtyApi();
+            return pty && pty.connect ? pty.connect() : undefined;
+          } catch (e) {}
+        },
+        disconnect: () => {
+          try {
+            const pty = getTerminalPtyApi();
+            return pty && pty.disconnect ? pty.disconnect() : undefined;
+          } catch (e) {}
+        },
         isConnected: () => {
           try {
             const st = (core && core.state) ? core.state : state;
@@ -138,25 +139,23 @@
         send: (data, opts) => {
           const payload = String(data == null ? '' : data);
           const o = opts || {};
-          // Prefer PTY when requested or when in PTY mode.
           let mode = 'shell';
           try { mode = (core && typeof core.getMode === 'function') ? (core.getMode() || 'shell') : (state && state.mode) || 'shell'; } catch (e) {}
           const wantPty = (String(o.prefer || '') === 'pty') || (mode === 'pty');
           if (wantPty) {
             try {
-              const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
-              if (P && typeof P.sendRaw === 'function') { P.sendRaw(payload); return true; }
+              const pty = getTerminalPtyApi();
+              if (pty && typeof pty.sendRaw === 'function') { pty.sendRaw(payload); return true; }
             } catch (e) {}
             return false;
           }
-          // Lite mode: delegate to lite_runner when available.
           try {
-            const lr = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.lite_runner;
-            if (!lr || typeof lr.sendTerminalInput !== 'function') return false;
+            const liteRunner = getTerminalCompatApi('lite_runner');
+            if (!liteRunner || typeof liteRunner.sendTerminalInput !== 'function') return false;
             const cmdEl = ui && ui.get && typeof ui.get.cmd === 'function' ? ui.get.cmd() : ((core && typeof core.byId === 'function') ? core.byId('terminal-command') : null);
             if (cmdEl) cmdEl.value = payload.replace(/\n+$/g, '').trim();
             const shouldRun = /\n$/.test(payload) || o.run === true;
-            if (shouldRun) lr.sendTerminalInput();
+            if (shouldRun) liteRunner.sendTerminalInput();
             return true;
           } catch (e) {}
           return false;
@@ -173,17 +172,16 @@
       };
     }
 
-    // XTerm facade is lazy because xterm_manager.js is loaded after context.js.
     const xterm = {
       _mgr: null,
       getManager: () => {
         try {
           if (xterm._mgr) return xterm._mgr;
-          const XM = (window.XKeen && window.XKeen.terminal) ? window.XKeen.terminal.xterm_manager : null;
+          const XM = getTerminalCompatApi('xterm_manager');
           if (XM && typeof XM.getOrCreate === 'function') xterm._mgr = XM.getOrCreate(ctx);
           else if (XM && typeof XM.createManager === 'function') {
-            window.XKeen.terminal.__xtermManager = window.XKeen.terminal.__xtermManager || XM.createManager(ctx);
-            xterm._mgr = window.XKeen.terminal.__xtermManager;
+            if (terminal) terminal.__xtermManager = terminal.__xtermManager || XM.createManager(ctx);
+            xterm._mgr = terminal ? terminal.__xtermManager : XM.createManager(ctx);
           }
         } catch (e) {}
         return xterm._mgr;
@@ -206,7 +204,6 @@
       },
     };
 
-    // Construct ctx early so session controller can reference ctx.xterm/transport/etc.
     const ctx = {
       core,
       caps,
@@ -214,32 +211,23 @@
       xterm,
       transport,
       session: null,
-      // Legacy-compatible state object + store API
       state,
       events,
       log,
       config,
       ui,
       api,
-      // Filled below
       commands: null,
     };
 
-    // Session controller (Stage 3): unified connect/reconnect/switchMode API.
-    // Falls back to a minimal facade if controller is unavailable.
     try {
-      const mk = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core
-        ? window.XKeen.terminal.core.createSessionController
-        : null;
-      if (typeof mk === 'function') {
-        ctx.session = mk(ctx);
-      }
+      const mk = getTerminalCoreCompatApi('createSessionController');
+      if (typeof mk === 'function') ctx.session = mk(ctx);
     } catch (e) {
       ctx.session = null;
     }
 
     if (!ctx.session) {
-      // Minimal fallback (Stage 1 behavior)
       ctx.session = {
         getMode: () => {
           try { return (core && typeof core.getMode === 'function') ? (core.getMode() || 'shell') : (state && state.mode) || 'shell'; } catch (e) {}
@@ -267,26 +255,17 @@
       };
     }
 
-    // Stage 6: UI updates (lamp/uptime) are handled by ui_controller,
-    // which subscribes to session:* events.
-
-    // Commands (Stage 8.5): router/registry/builtins are wired by terminal.js bootstrap.
-    // Keep placeholders to avoid undefined checks in modules.
     try { ctx.router = ctx.router || null; } catch (e) { ctx.router = null; }
     try { ctx.commands = ctx.commands || ctx.router; } catch (e) { ctx.commands = null; }
     try { ctx.commandRegistry = ctx.commandRegistry || null; } catch (e) { ctx.commandRegistry = null; }
 
-    // Module registry (Stage D)
     try {
-      const regFactory = window.XKeen.terminal.core.createRegistry;
-      if (typeof regFactory === 'function') {
-        ctx.registry = regFactory(ctx);
-      }
+      const regFactory = getTerminalCoreCompatApi('createRegistry');
+      if (typeof regFactory === 'function') ctx.registry = regFactory(ctx);
     } catch (e) {
       ctx.registry = null;
     }
 
-    // Stage 1: normalize key PTY events -> session events.
     try {
       events.on('pty:connecting', (p) => {
         try { events.emit('session:connecting', Object.assign({ mode: 'pty' }, (p || {}))); } catch (e) {}
@@ -308,14 +287,14 @@
     return ctx;
   }
 
-  // Singleton accessor: used by legacy modules without imports
   function getCtx() {
-    if (window.XKeen.terminal.ctx) return window.XKeen.terminal.ctx;
+    const terminal = ensureTerminalRoot();
+    if (terminal && terminal.ctx) return terminal.ctx;
     const ctx = createTerminalContext();
-    window.XKeen.terminal.ctx = ctx;
+    if (terminal) terminal.ctx = ctx;
     return ctx;
   }
 
-  window.XKeen.terminal.core.createTerminalContext = createTerminalContext;
-  window.XKeen.terminal.core.getCtx = getCtx;
+  publishTerminalCoreCompatApi('createTerminalContext', createTerminalContext);
+  publishTerminalCoreCompatApi('getCtx', getCtx);
 })();

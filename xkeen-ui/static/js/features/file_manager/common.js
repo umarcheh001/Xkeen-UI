@@ -1,4 +1,3 @@
-import { isXkeenMipsRuntime } from '../xkeen_runtime.js';
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
 
 (() => {
@@ -363,7 +362,12 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       const s = (FM && FM.state && FM.state.S) ? FM.state.S : null;
       if (s && typeof s.liteMode === 'boolean') return !!s.liteMode;
     } catch (e) {}
-    return isXkeenMipsRuntime();
+    try {
+      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
+      return String(window.XKEEN_IS_MIPS || '').toLowerCase() === 'true';
+    } catch (e2) {
+      return false;
+    }
   };
 
   C.toggleHidden = function toggleHidden(node, hidden) {

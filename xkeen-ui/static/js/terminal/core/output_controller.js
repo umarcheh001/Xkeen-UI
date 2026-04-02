@@ -1,19 +1,14 @@
-// Terminal core: output controller
-//
-// Stage 5:
-//   - Subscribe to ctx.transport.onMessage
-//   - Apply optional post-processing for plain-text streams
-//   - Render to xterm and keep follow-to-bottom
-//   - Emit `term:output:raw` and `term:output` events for other modules
+import {
+  getTerminalHistoryApi,
+  publishTerminalCompatApi,
+  publishTerminalCoreCompatApi,
+} from '../runtime.js';
 
+// Terminal core: output controller
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
   function getPrefs(ctx) {
-    // Stage 8.3.2: one source of truth lives in modules/output_prefs + core/config.
     try {
       if (ctx && ctx.outputPrefs && typeof ctx.outputPrefs.getPrefs === 'function') {
         const p = ctx.outputPrefs.getPrefs();
@@ -27,7 +22,6 @@
       }
     } catch (e) {}
 
-    // Fallback: read from ctx.config (still centralized; no localStorage here).
     let ansiFilter = false;
     let logHl = true;
     let follow = true;
@@ -41,24 +35,17 @@
     return { ansiFilter, logHl, follow };
   }
 
-// In PTY mode we normally must not touch the byte stream (interactive TUIs rely on escape codes).
-  // Post-processing is allowed only for "plain text" chunks:
-  //  - no ESC/CSI
-  //  - no control chars except TAB/LF/CR/BS
   function canProcessPtyChunk(chunk) {
     if (!chunk) return false;
     const s = String(chunk);
     if (s.indexOf('\x1b') !== -1 || s.indexOf('\x9b') !== -1) return false;
     for (let i = 0; i < s.length; i++) {
       const c = s.charCodeAt(i);
-      if (c < 32) {
-        if (c !== 9 && c !== 10 && c !== 13 && c !== 8) return false;
-      }
+      if (c < 32 && c !== 9 && c !== 10 && c !== 13 && c !== 8) return false;
     }
     return true;
   }
 
-  // Basic ANSI stripper (CSI + OSC)
   function stripAnsi(text) {
     if (!text) return '';
     const s = String(text);
@@ -69,27 +56,18 @@
   function highlightLogs(text) {
     if (!text) return '';
     let s = String(text);
-
     const RESET = '\x1b[0m';
     const DIM = '\x1b[90m';
     const BOLD = '\x1b[1m';
-
     const RED = '\x1b[31m';
     const YELLOW = '\x1b[33m';
     const GREEN = '\x1b[32m';
     const BLUE = '\x1b[34m';
     const MAGENTA = '\x1b[35m';
     const CYAN = '\x1b[36m';
-
     const wrap = (color, str, bold) => `${bold ? BOLD : ''}${color}${str}${RESET}`;
 
-    // 1) Timestamps (dim)
-    s = s.replace(
-      /(\b\d{4}[-\/]\d{2}[-\/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:[\.,]\d+)?Z?\b)/g,
-      (m) => wrap(DIM, m)
-    );
-
-    // 2) Bracket-style levels
+    s = s.replace(/(\b\d{4}[-\/]\d{2}[-\/]\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:[\.,]\d+)?Z?\b)/g, (m) => wrap(DIM, m));
     s = s.replace(/\[(Warning|Warn|Info|Debug|Error)\]/gi, (m, lvl) => {
       const L = String(lvl || '').toLowerCase();
       if (L === 'error') return '[' + wrap(RED, 'Error', true) + ']';
@@ -97,8 +75,6 @@
       if (L === 'debug') return '[' + wrap(MAGENTA, 'Debug', true) + ']';
       return '[' + wrap(CYAN, 'Info', true) + ']';
     });
-
-    // 3) JSON level field
     s = s.replace(/("level"\s*:\s*")([a-zA-Z]+)(")/g, (m, p1, lvl, p3) => {
       const L = String(lvl || '').toLowerCase();
       let colored = lvl;
@@ -108,26 +84,15 @@
       else if (L === 'info') colored = wrap(CYAN, lvl, true);
       return String(p1) + colored + String(p3);
     });
-
-    // 4) Standalone level tokens
     s = s
       .replace(/\b(ERR|ERROR|FATAL|CRIT(?:ICAL)?|PANIC)\b/gi, (m) => wrap(RED, m, true))
       .replace(/\b(WARN(?:ING)?)\b/gi, (m) => wrap(YELLOW, m, true))
       .replace(/\b(INFO)\b/gi, (m) => wrap(CYAN, m, true))
       .replace(/\b(DEBUG|TRACE)\b/gi, (m) => wrap(MAGENTA, m, true));
-
-    // 5) Common components
     s = s.replace(/\b(inbound|outbound|proxy|routing|dns|sniffing|tls|http|https|socks|vmess|vless|trojan|grpc|ws|tcp|udp)\b/gi, (m) => wrap(BLUE, m));
-
-    // 6) IP(:port)
     s = s.replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?\b/g, (m) => wrap(CYAN, m));
-
-    // 7) Domains
     s = s.replace(/\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,}|xn--[a-z0-9-]{2,})\b/gi, (m) => wrap(GREEN, m));
-
-    // 8) Failure-ish verbs
     s = s.replace(/\b(failed|failure|denied|reject(?:ed)?|blocked|timeout|timed\s*out|refused|unreachable)\b/gi, (m) => wrap(RED, m));
-
     return s;
   }
 
@@ -140,14 +105,12 @@
   }
 
   function resolveTerm(ctx) {
-    // Prefer xterm manager
     try {
       if (ctx && ctx.xterm && typeof ctx.xterm.getRefs === 'function') {
         const r = ctx.xterm.getRefs();
         if (r && r.term) return r.term;
       }
     } catch (e) {}
-    // Fallback to core/state refs
     try {
       const st = (ctx && ctx.core && ctx.core.state) ? ctx.core.state : (ctx && ctx.state ? ctx.state : null);
       if (st && (st.term || st.xterm)) return st.term || st.xterm;
@@ -180,9 +143,9 @@
 
     function markSensitiveFromOutput(chunk) {
       try {
-        const H = (window.XKeen && window.XKeen.terminal) ? window.XKeen.terminal.history : null;
-        if (H && typeof H.markSensitiveFromOutput === 'function') {
-          H.markSensitiveFromOutput(chunk);
+        const historyApi = getTerminalHistoryApi();
+        if (historyApi && typeof historyApi.markSensitiveFromOutput === 'function') {
+          historyApi.markSensitiveFromOutput(chunk);
         }
       } catch (e) {}
     }
@@ -191,10 +154,8 @@
       const raw = (typeof chunk === 'string') ? chunk : String(chunk == null ? '' : chunk);
       const m = (meta && typeof meta === 'object') ? meta : {};
       const source = m.source ? String(m.source) : 'unknown';
-
       const msgSeq = (m.seq != null) ? m.seq : (++seq);
 
-      // Keep other modules compatible: raw output event
       try {
         events.emit('term:output:raw', {
           chunk: raw,
@@ -207,7 +168,6 @@
       try { markSensitiveFromOutput(raw); } catch (e2) {}
 
       let out = raw;
-
       try {
         const prefs = getPrefs(ctx);
         const allowProcess = (source !== 'pty') || canProcessPtyChunk(raw);
@@ -240,7 +200,6 @@
         });
       } catch (e5) {}
 
-      // Render
       const term = resolveTerm(ctx);
       try { safeWrite(term, out); } catch (e6) {}
       try { autoFollow(ctx, term); } catch (e7) {}
@@ -257,7 +216,6 @@
         offMsg = null;
       }
 
-      // Stage 7: allow "clean" commands to print via events (no DOM/xterm access).
       try {
         if (!offPrint && events && typeof events.on === 'function') {
           offPrint = events.on('term:print', (payload) => {
@@ -282,11 +240,8 @@
     return { init, dispose, handleMessage };
   }
 
-  // Export factory
-  window.XKeen.terminal.core.createOutputController = createOutputController;
-
-  // Registry plugin wrapper (Stage D)
-  window.XKeen.terminal.output_controller = {
+  publishTerminalCoreCompatApi('createOutputController', createOutputController);
+  publishTerminalCompatApi('output_controller', {
     createModule: (ctx) => {
       const ctl = createOutputController(ctx);
       try { ctx.output = ctl; } catch (e) {}
@@ -298,5 +253,5 @@
         onClose: () => { try { ctl.dispose(); } catch (e) {} },
       };
     },
-  };
+  });
 })();

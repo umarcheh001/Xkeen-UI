@@ -1,5 +1,6 @@
 (() => {
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
 
   // Do not re-init.
@@ -15,12 +16,101 @@
     moByHost: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
   };
 
+
+  function _installClipboardCompat() {
+    try {
+      if (window.__xkMonacoClipboardCompatInstalled) return;
+      window.__xkMonacoClipboardCompatInstalled = true;
+    } catch (e) {}
+
+    let nav = null;
+    try { nav = window.navigator || null; } catch (e) {}
+    if (!nav) return;
+
+    let clipboard = null;
+    try { clipboard = nav.clipboard || null; } catch (e) {}
+
+    const noopRead = function () { return Promise.resolve([]); };
+    const noopReadText = function () { return Promise.resolve(''); };
+    const noopWriteText = function () { return Promise.resolve(); };
+    const compatWrite = function () { return Promise.resolve(); };
+
+    if (!clipboard) {
+      const stub = {
+        read: noopRead,
+        readText: noopReadText,
+        write: compatWrite,
+        writeText: noopWriteText,
+      };
+      try {
+        Object.defineProperty(nav, 'clipboard', {
+          configurable: true,
+          enumerable: false,
+          value: stub,
+        });
+        return;
+      } catch (e) {}
+      try {
+        nav.clipboard = stub;
+        return;
+      } catch (e) {}
+      return;
+    }
+
+    try { if (typeof clipboard.read !== 'function') clipboard.read = noopRead; } catch (e) {}
+    try { if (typeof clipboard.readText !== 'function') clipboard.readText = noopReadText; } catch (e) {}
+    try { if (typeof clipboard.writeText !== 'function') clipboard.writeText = noopWriteText; } catch (e) {}
+    try { if (typeof clipboard.write !== 'function') clipboard.write = compatWrite; } catch (e) {}
+  }
+
+  function _installExpectedRejectionFilter() {
+    try {
+      if (window.__xkMonacoExpectedRejectionFilterInstalled) return;
+      window.__xkMonacoExpectedRejectionFilterInstalled = true;
+    } catch (e) {}
+
+    try {
+      window.addEventListener('unhandledrejection', function (event) {
+        const reason = event ? event.reason : null;
+        const name = (() => {
+          try { return String((reason && reason.name) || ''); } catch (e) { return ''; }
+        })();
+        const message = (() => {
+          try {
+            if (reason && typeof reason.message === 'string') return reason.message;
+            return String(reason || '');
+          } catch (e) {
+            return '';
+          }
+        })();
+        const stack = (() => {
+          try { return String((reason && reason.stack) || ''); } catch (e) { return ''; }
+        })();
+        const hint = [name, message, stack].join('\n');
+        const monacoScoped = /editor\.api-|monaco\.|\/vs\//i.test(hint);
+        const cancellationLike = /(^|\b)cancel(ed|led)?(\b|:)/i.test(name) || /Canceled:\s*Canceled/i.test(message);
+        if (monacoScoped && cancellationLike) {
+          try { event.preventDefault(); } catch (e) {}
+        }
+      }, true);
+    } catch (e) {}
+  }
+
+  _installClipboardCompat();
+  _installExpectedRejectionFilter();
+
   const PERF_LIMITS = {
     softLines: 1800,
     softChars: 110000,
     webkitSoftLines: 320,
     webkitSoftChars: 22000,
   };
+
+  function _shouldRelaxForSafari(opts) {
+    const o = opts || {};
+    if (o.disableSafariOptimizations) return false;
+    return _isWebKitSafari();
+  }
 
   function _isMipsTarget() {
     try {
@@ -65,7 +155,7 @@
     const lineCount = _countLines(raw);
     const charCount = raw.length;
     const requested = String(o.performanceProfile || '').toLowerCase().trim();
-    const safariLite = _isWebKitSafari()
+    const safariLite = _shouldRelaxForSafari(o)
       && (lineCount >= PERF_LIMITS.webkitSoftLines || charCount >= PERF_LIMITS.webkitSoftChars);
     const lite = requested === 'lite'
       || (requested !== 'default' && (_isMipsTarget() || safariLite || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars));
@@ -679,7 +769,7 @@
     const readOnly = !!o.readOnly;
     const value = String(o.value ?? '');
     const perf = _computePerfProfile(value, o);
-    const safari = _isWebKitSafari();
+    const safari = _shouldRelaxForSafari(o);
 
     try {
       const monaco = await _ensureMonaco();

@@ -1,3 +1,7 @@
+import { getInboundsApi } from '../features/inbounds.js';
+import { getOutboundsApi } from '../features/outbounds.js';
+import { getRestartLogApi } from '../features/restart_log.js';
+
 (() => {
   // JSON editor modal for 03_inbounds.json / 04_outbounds.json
   // Public API:
@@ -7,6 +11,7 @@
   //   XKeen.jsonEditor.init()  (optional)
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.state = XKeen.state || {};
   XKeen.ui = XKeen.ui || {};
   XKeen.jsonEditor = XKeen.jsonEditor || {};
@@ -56,6 +61,12 @@
     return null;
   }
 
+  async function ensureFormattersReady() {
+    await import('./prettier_loader.js');
+    await import('./formatters.js');
+    return getFormattersApi();
+  }
+
   async function getPreferPrettierFlag() {
     try {
       const api = getUiSettingsApi();
@@ -78,7 +89,7 @@
 
   function refreshRestartLog() {
     try {
-      const api = window.XKeen && XKeen.features ? XKeen.features.restartLog : null;
+      const api = getRestartLogApi();
       if (api && typeof api.load === 'function') return api.load();
     } catch (e) {}
     return null;
@@ -960,12 +971,7 @@
 
     if (preferPrettier) {
       try {
-        const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
-          ? XKeen.lazy.ensureFeature
-          : null;
-        if (ensureFeature) {
-          await Promise.resolve(ensureFeature('formatters'));
-        }
+        await ensureFormattersReady();
       } catch (e) {}
 
       try {
@@ -1066,11 +1072,17 @@
 
       // Refresh related panels (modular)
       try {
-        if (target === 'inbounds' && window.XKeen && XKeen.features && XKeen.features.inbounds && typeof XKeen.features.inbounds.load === 'function') {
-          await XKeen.features.inbounds.load();
+        if (target === 'inbounds') {
+          const inboundsApi = getInboundsApi();
+          if (inboundsApi && typeof inboundsApi.load === 'function') {
+            await inboundsApi.load();
+          }
         }
-        if (target === 'outbounds' && window.XKeen && XKeen.features && XKeen.features.outbounds && typeof XKeen.features.outbounds.load === 'function') {
-          await XKeen.features.outbounds.load();
+        if (target === 'outbounds') {
+          const outboundsApi = getOutboundsApi();
+          if (outboundsApi && typeof outboundsApi.load === 'function') {
+            await outboundsApi.load();
+          }
         }
       } catch (e) {
         console.error(e);

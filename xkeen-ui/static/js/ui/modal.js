@@ -2,6 +2,7 @@
   'use strict';
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
   XKeen.ui.modal = XKeen.ui.modal || {};
 

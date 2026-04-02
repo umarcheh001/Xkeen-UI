@@ -1,3 +1,11 @@
+import {
+  ensureTerminalRoot,
+  getTerminalCoreApi,
+  publishTerminalCompatApi,
+  publishTerminalCoreCompatApi,
+  toastTerminal,
+} from '../runtime.js';
+
 // Terminal core: xterm_manager
 //
 // Stage 2 goal:
@@ -6,14 +14,10 @@
 // - Proxy xterm subscriptions (onData/onKey/onResize) through ctx.events.
 //
 // Legacy compatibility:
-// - Keeps window.XKeen.terminal.xterm_manager.* API used by existing code.
+// - Keeps terminal compat xterm_manager API used by existing code.
 
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
 
   const PREF_FONT_SIZE_KEY = 'xkeen_term_font_size_v1';
   const PREF_CURSOR_BLINK_KEY = 'xkeen_term_cursor_blink_v1';
@@ -358,19 +362,14 @@ function readPrefs(ctx) {
     try {
       if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') return ctx.ui.toast(msg, kind);
     } catch (e) {}
-    try {
-      if (typeof window.showToast === 'function') return window.showToast(String(msg || ''), kind || 'info');
-    } catch (e2) {}
+    return toastTerminal(String(msg || ''), kind || 'info');
   }
 
   function getCore(ctx) {
     try {
       if (ctx && ctx.core) return ctx.core;
     } catch (e) {}
-    try {
-      return window.XKeen.terminal._core || null;
-    } catch (e2) {}
-    return null;
+    return getTerminalCoreApi();
   }
 
   function pickHostElements(ctx) {
@@ -1074,10 +1073,11 @@ function readPrefs(ctx) {
   }
 
   function getOrCreate(ctx) {
-    window.XKeen.terminal.__xtermManager = window.XKeen.terminal.__xtermManager || null;
-    if (window.XKeen.terminal.__xtermManager) return window.XKeen.terminal.__xtermManager;
+    const terminal = ensureTerminalRoot();
+    if (terminal) terminal.__xtermManager = terminal.__xtermManager || null;
+    if (terminal && terminal.__xtermManager) return terminal.__xtermManager;
     const mgr = createManager(ctx);
-    window.XKeen.terminal.__xtermManager = mgr;
+    if (terminal) terminal.__xtermManager = mgr;
     return mgr;
   }
 
@@ -1090,7 +1090,8 @@ function readPrefs(ctx) {
 
   function dispose() {
     try {
-      const mgr = window.XKeen.terminal.__xtermManager || null;
+      const terminal = ensureTerminalRoot();
+      const mgr = terminal ? (terminal.__xtermManager || null) : null;
       if (mgr && typeof mgr.disposeTerminal === 'function') mgr.disposeTerminal();
     } catch (e) {}
   }
@@ -1103,8 +1104,7 @@ function readPrefs(ctx) {
     };
   }
 
-  // Export (legacy path + core namespace)
-  window.XKeen.terminal.core.xterm_manager = {
+  const terminalXtermManagerApi = {
     PREF_FONT_SIZE_KEY,
     PREF_CURSOR_BLINK_KEY,
     readPrefs,
@@ -1115,6 +1115,6 @@ function readPrefs(ctx) {
     createModule,
   };
 
-  // Keep legacy global for existing code.
-  window.XKeen.terminal.xterm_manager = window.XKeen.terminal.core.xterm_manager;
+  publishTerminalCoreCompatApi('xterm_manager', terminalXtermManagerApi);
+  publishTerminalCompatApi('xterm_manager', terminalXtermManagerApi);
 })();

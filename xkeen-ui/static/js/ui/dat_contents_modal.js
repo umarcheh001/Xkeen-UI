@@ -1,3 +1,5 @@
+import { getRoutingCardsApi } from '../features/routing_cards.js';
+
 (() => {
   'use strict';
 
@@ -7,6 +9,7 @@
   //   XKeen.ui.datContents.close()
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   const XK = window.XKeen;
   XK.ui = XK.ui || {};
   XK.ui.datContents = XK.ui.datContents || {};
@@ -122,7 +125,7 @@
 
   function routingApi() {
     try {
-      return (window.XKeen && window.XKeen.features && window.XKeen.features.routingCards) ? window.XKeen.features.routingCards : null;
+      return getRoutingCardsApi();
     } catch (e) {
       return null;
     }

@@ -26,7 +26,6 @@ export { uiPrefsIoApi } from './ui_prefs_io.js';
 export { updateNotifierApi } from './update_notifier.js';
 export { xkeenTextsApi } from './xkeen_texts.js';
 export { xrayLogsApi } from './xray_logs.js';
-export { featureAccessApi, featureAccessorRegistry, getFeatureAccessorRegistry, getFeatureApi, requireFeatureApi } from './feature_access.js';
 
 import { backupsApi } from './backups.js';
 import { brandingPrefsApi } from './branding_prefs.js';

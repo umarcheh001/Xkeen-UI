@@ -68,42 +68,6 @@ def _init_settings_and_logging(*, ws_runtime: bool) -> Tuple["Settings", Dict[st
     }
 
 
-
-
-def _cleanup_legacy_global_theme_files(*, ui_state_dir: str) -> Dict[str, Any]:
-    """Best-effort removal of deprecated global theme artifacts."""
-
-    from core.logging import core_log as _core_log
-
-    removed = []
-    failed = []
-    for name in (
-        "custom_theme.json",
-        "custom_theme.css",
-        "codemirror_theme.json",
-        "codemirror_theme.css",
-        "custom.css",
-        "custom_css.disabled",
-    ):
-        path = os.path.join(ui_state_dir, name)
-        try:
-            if os.path.isfile(path):
-                os.remove(path)
-                removed.append(path)
-        except Exception as e:  # noqa: BLE001
-            failed.append({"path": path, "error": str(e)})
-
-    if removed or failed:
-        _core_log(
-            "info" if not failed else "warning",
-            "legacy theme artifact cleanup",
-            removed=removed,
-            failed=failed,
-            ui_state_dir=ui_state_dir,
-        )
-
-    return {"removed": removed, "failed": failed}
-
 def _init_xray_startup_migrations(*, base_etc_dir: str, base_var_dir: str, ui_state_dir: str) -> Dict[str, Any]:
     """Init Xray paths, backups, and jsonc migration. Never blocks startup."""
 
@@ -358,8 +322,6 @@ def create_app(*, ws_runtime: bool = False):
     BASE_ETC_DIR = env["BASE_ETC_DIR"]
     BASE_VAR_DIR = env["BASE_VAR_DIR"]
     UI_WS_LOG = env["UI_WS_LOG"]
-
-    _cleanup_legacy_global_theme_files(ui_state_dir=UI_STATE_DIR)
 
     xray_ctx = _init_xray_startup_migrations(
         base_etc_dir=BASE_ETC_DIR,

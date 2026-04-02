@@ -1,4 +1,4 @@
-import { EditorState, Compartment, EditorSelection } from '@codemirror/state';
+import { EditorState, Compartment, EditorSelection, Prec } from '@codemirror/state';
 import { EditorView, keymap, Decoration, ViewPlugin, MatchDecorator } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
 import { json } from '@codemirror/lang-json';
@@ -349,6 +349,21 @@ function createThemeExtension(theme) {
       '.cm-lintPoint-info': { color: 'var(--xk-cm-info)' },
       '.cm-link.cm-xk-url': { color: 'var(--xk-cm-link, #7ab8ff)', textDecoration: 'underline', cursor: 'pointer' },
     }, { dark }),
+    Prec.highest(EditorView.theme({
+      '.cm-selectionLayer': { display: 'none' },
+      '.cm-line': {
+        '&::selection, & ::selection': {
+          backgroundColor: 'var(--xk-cm-selection-native) !important',
+          color: 'inherit !important',
+        },
+      },
+      '.cm-content': {
+        '&::selection, & ::selection': {
+          backgroundColor: 'var(--xk-cm-selection-native) !important',
+          color: 'inherit !important',
+        },
+      },
+    }, { dark })),
     syntaxHighlighting(HighlightStyle.define([
       { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--xk-cm-comment)', fontStyle: 'italic' },
       { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: 'var(--xk-cm-keyword)', fontWeight: '600' },

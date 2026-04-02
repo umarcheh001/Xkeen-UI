@@ -2,7 +2,6 @@ import {
   closeXkeenModal,
   confirmXkeenAction,
   getXkeenEditorEngineApi,
-  getXkeenPageFilesConfig,
   getXkeenSharedPrimitivesApi,
   openXkeenModal,
   toastXkeen,
@@ -1251,7 +1250,7 @@ let backupsModuleApi = null;
       }
     }
 
-    const files = getXkeenPageFilesConfig();
+    const files = (window.XKEEN_FILES && typeof window.XKEEN_FILES === 'object') ? window.XKEEN_FILES : {};
     const label = t === 'routing'
       ? _baseName(files.routing, '05_routing.json')
       : (t === 'inbounds' ? _baseName(files.inbounds, '03_inbounds.json') : _baseName(files.outbounds, '04_outbounds.json'));

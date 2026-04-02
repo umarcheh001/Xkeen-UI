@@ -11,6 +11,7 @@
   //   await XKeen.ui.settings.patch({ logs: { ansi: true } });
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
   XKeen.core = XKeen.core || {};
 

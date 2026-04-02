@@ -5,7 +5,6 @@ import { getInboundsApi } from './inbounds.js';
 import { getXkeenTextsApi } from './xkeen_texts.js';
 import {
   closeXkeenModal,
-  getXkeenGithubRepoUrl,
   getXkeenPageConfigShellApi,
   openXkeenModal,
   toastXkeen,
@@ -100,11 +99,11 @@ import {
   }
 
   function openRepository() {
-    const url = _repoUrl || getXkeenGithubRepoUrl();
+    const url = _repoUrl || window.XKEEN_GITHUB_REPO_URL;
     if (url) {
       window.open(url, '_blank');
     } else {
-      toastXkeen('URL репозитория не настроен на сервере.', true);
+      toastXkeen('URL репозитария не настроен на сервере (XKEEN_GITHUB_REPO_URL).', true);
     }
   }
 
@@ -357,7 +356,7 @@ import {
     // Update repository link if present.
     const repoLink = el('github-repo-link');
     if (repoLink) {
-      const url = _repoUrl || getXkeenGithubRepoUrl();
+      const url = _repoUrl || window.XKEEN_GITHUB_REPO_URL;
       if (url) {
         repoLink.href = url;
         // Prefer opening via normal <a>, but also keep a fallback.

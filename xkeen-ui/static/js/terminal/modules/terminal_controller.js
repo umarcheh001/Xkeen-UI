@@ -1,3 +1,13 @@
+import {
+  getTerminalChromeApi,
+  getTerminalContext,
+  getTerminalCoreApi,
+  getTerminalPtyApi,
+  getTerminalSearchApi,
+  publishTerminalCompatApi,
+  toastTerminal,
+} from '../runtime.js';
+
 // Terminal module: terminal controller (Stage 6/7)
 //
 // Purpose:
@@ -19,17 +29,18 @@
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-
   function resolveCtx(fallbackCtx) {
     try {
       if (fallbackCtx) return fallbackCtx;
     } catch (e) {}
     try {
-      const C = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core ? window.XKeen.terminal.core : null;
-      if (C && typeof C.getCtx === 'function') return C.getCtx();
+      const C = getTerminalContext();
+      if (C) return C;
     } catch (e2) {}
+    try {
+      const C = getTerminalCoreApi();
+      if (C && typeof C.getCtx === 'function') return C.getCtx();
+    } catch (e3) {}
     return null;
   }
 
@@ -39,9 +50,7 @@
     try {
       if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') return ctx.ui.toast(m, k);
     } catch (e) {}
-    try {
-      if (typeof window.showToast === 'function') return window.showToast(m, k);
-    } catch (e2) {}
+    return toastTerminal(m, k);
   }
 
   function byId(ctx, id) {
@@ -67,7 +76,7 @@
   function getCoreState(ctx) {
     const c = resolveCtx(ctx);
     try {
-      const core = (c && c.core) ? c.core : (window.XKeen && window.XKeen.terminal ? window.XKeen.terminal._core : null);
+      const core = (c && c.core) ? c.core : getTerminalCoreApi();
       return (core && core.state) ? core.state : null;
     } catch (e) {}
     return null;
@@ -160,21 +169,21 @@
 
   function clearSearchSilent(ctx) {
     try {
-      const s = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.search : null;
+      const s = getTerminalSearchApi();
       if (s && typeof s.clear === 'function') s.clear({ silent: true });
     } catch (e) {}
   }
 
   function setFullscreenOff() {
     try {
-      const C = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.chrome : null;
+      const C = getTerminalChromeApi();
       if (C && typeof C.setFullscreen === 'function') C.setFullscreen(false);
     } catch (e) {}
   }
 
   function chromeOnOpen() {
     try {
-      const C = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.chrome : null;
+      const C = getTerminalChromeApi();
       if (C && typeof C.onOpen === 'function') C.onOpen();
     } catch (e) {}
   }
@@ -290,7 +299,7 @@
         const S = getSession(c);
         if (S && typeof S.setMode === 'function') S.setMode(m);
         else {
-          const core = (c && c.core) ? c.core : (window.XKeen && window.XKeen.terminal ? window.XKeen.terminal._core : null);
+          const core = (c && c.core) ? c.core : getTerminalCoreApi();
           if (core && typeof core.setMode === 'function') core.setMode(m);
         }
       } catch (e3) {}
@@ -503,12 +512,12 @@
             } else if (S && typeof S.connect === 'function') {
               S.connect({ mode: 'pty', term: term, preserveScreen: false });
             } else {
-              const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+              const P = getTerminalPtyApi();
               if (P && typeof P.connect === 'function') P.connect(term, { preserveScreen: false });
             }
           } catch (e6) {
             try {
-              const P2 = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+              const P2 = getTerminalPtyApi();
               if (P2 && typeof P2.connect === 'function') P2.connect(term, { preserveScreen: false });
             } catch (e7) {}
           }
@@ -544,7 +553,7 @@
       try {
         const clamp = () => {
           try {
-            const ch = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.chrome : null;
+            const ch = getTerminalChromeApi();
             if (ch && typeof ch.ensureInViewport === 'function') return ch.ensureInViewport();
             if (ch && typeof ch.onOpen === 'function') return ch.onOpen();
           } catch (e) {}
@@ -607,7 +616,7 @@
         const S = getSession(c);
         if (S && typeof S.disconnect === 'function') S.disconnect({ sendClose: true, reason: 'close' });
         else {
-          const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+          const P = getTerminalPtyApi();
           if (P && typeof P.disconnect === 'function') P.disconnect({ sendClose: true });
         }
       } catch (e5) {}
@@ -661,7 +670,7 @@
         const S = getSession(c);
         if (S && typeof S.disconnect === 'function') S.disconnect({ sendClose: false, reason: 'detach' });
         else {
-          const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+          const P = getTerminalPtyApi();
           if (P && typeof P.disconnect === 'function') P.disconnect({ sendClose: false });
         }
       } catch (e5) {}
@@ -701,7 +710,7 @@
         const S = getSession(c);
         if (S && typeof S.disconnect === 'function') S.disconnect({ sendClose: true, clearSession: true, reason: 'killSession' });
         else {
-          const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+          const P = getTerminalPtyApi();
           if (P && typeof P.disconnect === 'function') P.disconnect({ sendClose: true, clearSession: true });
         }
       } catch (e3) {}
@@ -728,7 +737,7 @@
 
       // Fallback (legacy pty.js)
       try {
-        const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+        const P = getTerminalPtyApi();
         if (P && typeof P.connect === 'function') P.connect(term, { preserveScreen: true });
       } catch (e2) {}
     }
@@ -754,7 +763,7 @@
         const S = getSession(c);
         if (S && typeof S.disconnect === 'function') S.disconnect({ sendClose: true, clearSession: true, reason: 'newSession' });
         else {
-          const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+          const P = getTerminalPtyApi();
           if (P && typeof P.disconnect === 'function') P.disconnect({ sendClose: true, clearSession: true });
         }
       } catch (e2) {}
@@ -773,7 +782,7 @@
       const c = resolveCtx(ctx);
       const s = String(data == null ? '' : data);
       try {
-        const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+        const P = getTerminalPtyApi();
         if (P && typeof P.sendRaw === 'function') {
           return !!P.sendRaw(s);
         }
@@ -814,7 +823,7 @@
       const sig = String(name || '').trim();
       if (!sig) return;
       try {
-        const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+        const P = getTerminalPtyApi();
         if (P && typeof P.sendSignal === 'function') {
           P.sendSignal(sig);
           termFocus(getTerm(c));
@@ -852,7 +861,7 @@
 
     // Expose controller on ctx for UI delegation
     try { if (ctx) ctx.terminalCtrl = api; } catch (e) {}
-    try { window.XKeen.terminal.terminalCtrl = api; } catch (e2) {}
+    try { publishTerminalCompatApi('terminalCtrl', api); } catch (e2) {}
 
     return api;
   }
@@ -878,8 +887,8 @@
   }
 
   // Export
-  window.XKeen.terminal.terminal_controller = {
+  publishTerminalCompatApi('terminal_controller', {
     createController,
     createModule,
-  };
+  });
 })();

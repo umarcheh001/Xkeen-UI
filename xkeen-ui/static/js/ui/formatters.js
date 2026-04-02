@@ -5,6 +5,7 @@
   // No behavior changes by default; consumers call these explicitly.
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   const XK = window.XKeen;
   XK.ui = XK.ui || {};
 

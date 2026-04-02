@@ -1,15 +1,22 @@
+import {
+  ensureTerminalRoot,
+  focusTerminalView,
+  getTerminalById,
+  getTerminalCompatApi,
+  getTerminalContext,
+  getTerminalMode,
+  getTerminalPtyApi,
+  isTerminalPtyConnected,
+  openTerminalCompat,
+  publishTerminalCompatApi,
+  toastTerminal,
+} from './runtime.js';
+
 // Terminal add-on: show Xray logs inside the full PTY terminal
-//
-// UX:
-//   - Toolbar button "📜" opens a mini-menu
-//   - Select error/access log
-//   - Start runs: tail -n 200 -f <logfile>
-//   - Stop sends Ctrl+C to PTY
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
+  const core = getTerminalCompatApi('_core');
 
   const API_STATUS = '/api/xray-logs/status';
   const API_ENABLE = '/api/xray-logs/enable';
@@ -22,69 +29,81 @@
   let docClickHandler = null;
   let docKeyHandler = null;
   let isRunning = false;
-  let __ctxRef = null;
+  let ctxRef = null;
 
   let uiDisposers = [];
   let restartTimer = null;
 
-  function setCtx(ctx) { __ctxRef = ctx || null; }
+  function setCtx(ctx) {
+    ctxRef = ctx || null;
+  }
+
+  function getCtx() {
+    return ctxRef || getTerminalContext();
+  }
 
   function resetRunningState() {
     isRunning = false;
     clearRestartTimer();
   }
 
-  function $(id) {
-    try {
-      const ctx = __ctxRef || (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core && window.XKeen.terminal.core.getCtx ? window.XKeen.terminal.core.getCtx() : null);
-      if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id);
-    } catch (e0) {}
-    try {
-      const core = window.XKeen && window.XKeen.terminal && window.XKeen.terminal._core;
-      if (core && typeof core.byId === 'function') return core.byId(id);
-    } catch (e1) {}
-    return null;
+  function byId(id) {
+    const ctx = getCtx();
+    return getTerminalById(id, (key) => {
+      try {
+        if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(key);
+      } catch (error) {}
+      try {
+        if (core && typeof core.byId === 'function') return core.byId(key);
+      } catch (error2) {}
+      return null;
+    });
   }
 
+  function toast(message, isError) {
+    const kind = isError ? 'error' : 'info';
+    try {
+      const ctx = getCtx();
+      if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') return ctx.ui.toast(String(message || ''), kind);
+    } catch (error) {}
+    return toastTerminal(String(message || ''), kind);
+  }
 
   function hideMenu() {
-    const m = $('terminal-xraylogs-menu');
-    if (m) m.classList.add('hidden');
+    const menu = byId('terminal-xraylogs-menu');
+    if (menu) menu.classList.add('hidden');
   }
 
   function toggleMenu(ev) {
-    try { ev && ev.stopPropagation && ev.stopPropagation(); } catch (e) {}
-
-    const m = $('terminal-xraylogs-menu');
-    if (!m) return;
-    m.classList.toggle('hidden');
+    try { if (ev && ev.stopPropagation) ev.stopPropagation(); } catch (error) {}
+    const menu = byId('terminal-xraylogs-menu');
+    if (!menu) return;
+    menu.classList.toggle('hidden');
   }
 
   function getSelectedFile() {
-    const sel = $('terminal-xraylogs-file');
-    const v = (sel && sel.value) ? String(sel.value) : 'error';
-    return (v === 'access') ? 'access' : 'error';
+    const select = byId('terminal-xraylogs-file');
+    const value = (select && select.value) ? String(select.value) : 'error';
+    return value === 'access' ? 'access' : 'error';
   }
 
   function getSelectedLevel() {
-    const sel = $('terminal-xraylogs-level');
-    const v = (sel && sel.value) ? String(sel.value).toLowerCase() : 'warning';
-    if (v === 'info' || v === 'debug' || v === 'warning') return v;
+    const select = byId('terminal-xraylogs-level');
+    const value = (select && select.value) ? String(select.value).toLowerCase() : 'warning';
+    if (value === 'info' || value === 'debug' || value === 'warning') return value;
     return 'warning';
   }
 
-  // NOTE: Intentionally do NOT auto-switch access.log -> error.log.
-  // If user wants access.log even at info/debug, respect that.
   function maybeWarnAccessOnVerbose(level) {
     try {
-      const lvl = String(level || '').toLowerCase();
-      if (lvl !== 'info' && lvl !== 'debug') return;
-      const fileSel = $('terminal-xraylogs-file');
-      const cur = String((fileSel && fileSel.value) || '').toLowerCase();
-      if (cur === 'access') {
+      const normalized = String(level || '').toLowerCase();
+      if (normalized !== 'info' && normalized !== 'debug') return;
+      const fileSel = byId('terminal-xraylogs-file');
+      const current = String((fileSel && fileSel.value) || '').toLowerCase();
+      if (current === 'access') {
         toast('Подсказка: при info/debug обычно полезнее error.log, но оставляю access.log как выбрано.', false);
       }
-    } catch (e) {}
+    } catch (error) {}
   }
 
   async function resolveLogPath(kind) {
@@ -96,8 +115,8 @@
       const error = String(data.error || '').trim();
       if (kind === 'access') return access || FALLBACK_ACCESS;
       return error || FALLBACK_ERROR;
-    } catch (e) {
-      return (kind === 'access') ? FALLBACK_ACCESS : FALLBACK_ERROR;
+    } catch (error) {
+      return kind === 'access' ? FALLBACK_ACCESS : FALLBACK_ERROR;
     }
   }
 
@@ -105,9 +124,8 @@
     try {
       const res = await fetch(API_STATUS, { cache: 'no-store' });
       if (!res.ok) throw new Error('http ' + res.status);
-      const data = await res.json().catch(() => ({}));
-      return data || {};
-    } catch (e) {
+      return await res.json().catch(() => ({}));
+    } catch (error) {
       return {};
     }
   }
@@ -116,13 +134,12 @@
     const want = String(desiredLevel || 'warning').toLowerCase();
     const target = (want === 'info' || want === 'debug' || want === 'warning') ? want : 'warning';
 
-    const st = await getLogStatus();
-    const lvl = String((st && st.loglevel) || 'none').toLowerCase();
+    const status = await getLogStatus();
+    const current = String((status && status.loglevel) || 'none').toLowerCase();
+    if (current && current !== 'none' && current === target) {
+      return { ok: true, loglevel: current, changed: false };
+    }
 
-    // If already enabled with the desired level — do nothing.
-    if (lvl && lvl !== 'none' && lvl === target) return { ok: true, loglevel: lvl, changed: false };
-
-    // If enabled but at another level OR disabled — set explicitly.
     try {
       const res = await fetch(API_ENABLE, {
         method: 'POST',
@@ -132,8 +149,8 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error('http ' + res.status);
       return { ok: true, loglevel: String(data.loglevel || target).toLowerCase(), changed: true };
-    } catch (e) {
-      return { ok: false, error: e };
+    } catch (error) {
+      return { ok: false, error };
     }
   }
 
@@ -143,92 +160,57 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error('http ' + res.status);
       return { ok: true, data };
-    } catch (e) {
-      return { ok: false, error: e };
+    } catch (error) {
+      return { ok: false, error };
     }
   }
 
   function isPtyConnected() {
-    // New API: ctx/core + ptyWs
-    try {
-      const ctx = (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core && window.XKeen.terminal.core.getCtx)
-        ? window.XKeen.terminal.core.getCtx()
-        : null;
-      if (ctx && ctx.transport && ctx.transport.kind === 'pty' && typeof ctx.transport.isConnected === 'function') {
-        return !!ctx.transport.isConnected();
-      }
-      const st = ctx && ctx.core && ctx.core.state ? ctx.core.state : null;
-      const ws = st ? st.ptyWs : null;
-      return !!(ws && ws.readyState === WebSocket.OPEN);
-    } catch (e) {}
-    return false;
+    return isTerminalPtyConnected();
   }
 
   function sendPtyRaw(data) {
     const payload = String(data == null ? '' : data);
 
-    // New API: ctx.transport
     try {
-      const ctx = (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core && window.XKeen.terminal.core.getCtx)
-        ? window.XKeen.terminal.core.getCtx()
-        : null;
-      if (ctx && ctx.transport && typeof ctx.transport.send === 'function') {
-        // Force PTY preference.
-        if (ctx.transport.kind === 'pty') return !!ctx.transport.send(payload, { prefer: 'pty', allowWhenDisconnected: false, source: 'xray_tail' });
+      const ctx = getCtx();
+      if (ctx && ctx.transport && typeof ctx.transport.send === 'function' && ctx.transport.kind === 'pty') {
+        return !!ctx.transport.send(payload, { prefer: 'pty', allowWhenDisconnected: false, source: 'xray_tail' });
       }
-    } catch (e0) {}
+    } catch (error) {}
 
     try {
-      const pty = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+      const pty = getTerminalPtyApi();
       if (pty && typeof pty.sendRaw === 'function') return !!pty.sendRaw(payload);
-    } catch (e2) {}
+    } catch (error2) {}
 
     return false;
   }
 
   function focusTerm() {
-    try {
-      const ctx = (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core && window.XKeen.terminal.core.getCtx)
-        ? window.XKeen.terminal.core.getCtx()
-        : null;
-      const st = ctx && ctx.core && ctx.core.state ? ctx.core.state : null;
-      const t = st ? (st.term || st.xterm) : null;
-      if (t && typeof t.focus === 'function') t.focus();
-    } catch (e) {}
+    focusTerminalView();
   }
 
   function ensurePtyOpen() {
     try {
-      const T = window.XKeen && XKeen.terminal ? XKeen.terminal : null;
-      if (!T || typeof T.open !== 'function') return;
-      // If not in PTY mode - switch to it.
-      let mode = 'shell';
-      try {
-        const ctx = (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core && window.XKeen.terminal.core.getCtx)
-          ? window.XKeen.terminal.core.getCtx()
-          : null;
-        const m1 = ctx && ctx.core && typeof ctx.core.getMode === 'function' ? ctx.core.getMode() : null;
-        const m2 = ctx && ctx.state ? ctx.state.mode : null;
-        mode = String(m1 || m2 || 'shell');
-      } catch (e) {}
-      if (mode !== 'pty') {
-        T.open(null, { mode: 'pty' });
+      if (getTerminalMode(getCtx()) !== 'pty') {
+        openTerminalCompat({ mode: 'pty', cmd: '' });
       }
-    } catch (e) {}
+    } catch (error) {}
   }
 
   function waitPtyConnected(maxMs) {
     const limit = Math.max(500, Number(maxMs) || 6000);
     const started = Date.now();
     return new Promise((resolve) => {
-      const t = setInterval(() => {
+      const timer = setInterval(() => {
         if (isPtyConnected()) {
-          clearInterval(t);
+          clearInterval(timer);
           resolve(true);
           return;
         }
         if (Date.now() - started > limit) {
-          clearInterval(t);
+          clearInterval(timer);
           resolve(false);
         }
       }, 150);
@@ -239,17 +221,11 @@
     hideMenu();
 
     const desiredLevel = getSelectedLevel();
-
-    // Optional UX hint only.
     maybeWarnAccessOnVerbose(desiredLevel);
 
-    // Ensure Xray logging is actually enabled (01_log.json -> loglevel!=none)
-    const en = await ensureLoggingEnabled(desiredLevel);
-    if (!en.ok) {
+    const enabled = await ensureLoggingEnabled(desiredLevel);
+    if (!enabled.ok) {
       toast('Не удалось включить логи Xray (01_log.json).', true);
-      // Still allow user to run tail (maybe logs already exist), but warn.
-    } else {
-      /* toast handled globally (spinner_fetch.js) */
     }
 
     ensurePtyOpen();
@@ -259,19 +235,15 @@
       return;
     }
 
-    // If our viewer is already running, restart it cleanly.
-    // This prevents multiple "tail -f" processes and mixed/duplicated output.
     if (isRunning) {
       stopViewer();
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((resolve) => setTimeout(resolve, 150));
     }
+
     const kind = getSelectedFile();
     const path = await resolveLogPath(kind);
-
-    // Safer across BusyBox / Entware: use -f (not -F)
     const cmd = `tail -n 200 -f "${String(path).replace(/\"/g, '\\"')}"`;
 
-    // Start on a fresh line + separator so restarts are visible
     sendPtyRaw('\r');
     sendPtyRaw(`echo "----- XRAY ${kind}.log (tail -f) -----"\r`);
     isRunning = !!sendPtyRaw(cmd + '\r');
@@ -283,48 +255,40 @@
   }
 
   function stopViewer() {
-    // Ctrl+C
     sendPtyRaw('\x03');
     isRunning = false;
     focusTerm();
   }
 
-  // Stop only the tail viewer (Ctrl+C). Do NOT change Xray logging settings.
   function stopTail() {
     hideMenu();
     if (!isRunning) return;
     stopViewer();
   }
 
-  // Disable Xray logging (01_log.json -> loglevel=none + restart), and stop tail first.
   async function disableLogs() {
     hideMenu();
-    // Stop viewer (tail) first to avoid keeping file handles while Xray restarts.
     if (isRunning) stopViewer();
 
-    const dis = await disableLogging();
-    if (!dis.ok) {
+    const disabled = await disableLogging();
+    if (!disabled.ok) {
       toast('Не удалось отключить логи Xray (01_log.json).', true);
-      return;
     }
-    /* toast handled globally (spinner_fetch.js) */
   }
 
   function clearRestartTimer() {
-    try { if (restartTimer) clearTimeout(restartTimer); } catch (e) {}
+    try { if (restartTimer) clearTimeout(restartTimer); } catch (error) {}
     restartTimer = null;
   }
 
   function restartSoon() {
     if (!isRunning) return;
     clearRestartTimer();
-    // Stop current tail and start again shortly.
     stopViewer();
-    restartTimer = setTimeout(() => { try { void start(); } catch (e) {} }, 250);
+    restartTimer = setTimeout(() => { try { void start(); } catch (error) {} }, 250);
   }
 
   function onFileChange() {
-    // If user switches log while "running", restart tail.
     restartSoon();
   }
 
@@ -332,13 +296,15 @@
     if (!el || !el.addEventListener) return;
     el.addEventListener(ev, fn, opts);
     uiDisposers.push(() => {
-      try { el.removeEventListener(ev, fn, opts); } catch (e) {}
+      try { el.removeEventListener(ev, fn, opts); } catch (error) {}
     });
   }
 
   function disposeUi() {
-    const ds = uiDisposers.splice(0, uiDisposers.length);
-    ds.forEach((d) => { try { if (typeof d === 'function') d(); } catch (e) {} });
+    const disposers = uiDisposers.splice(0, uiDisposers.length);
+    disposers.forEach((dispose) => {
+      try { if (typeof dispose === 'function') dispose(); } catch (error) {}
+    });
     inited = false;
   }
 
@@ -346,34 +312,32 @@
     if (inited) return;
     inited = true;
 
-    const btn = $('terminal-btn-xraylogs');
-    const m = $('terminal-xraylogs-menu');
-    if (!btn || !m) return;
+    const btn = byId('terminal-btn-xraylogs');
+    const menu = byId('terminal-xraylogs-menu');
+    if (!btn || !menu) return;
 
     on(btn, 'click', toggleMenu);
-    on(m, 'click', (e) => { try { e.stopPropagation(); } catch (e2) {} });
+    on(menu, 'click', (ev) => { try { ev.stopPropagation(); } catch (error) {} });
 
-    const startBtn = $('terminal-xraylogs-start');
-    const stopBtn = $('terminal-xraylogs-stop');
-    const disableBtn = $('terminal-xraylogs-disable');
-    const sel = $('terminal-xraylogs-file');
-    const lvlSel = $('terminal-xraylogs-level');
+    const startBtn = byId('terminal-xraylogs-start');
+    const stopBtn = byId('terminal-xraylogs-stop');
+    const disableBtn = byId('terminal-xraylogs-disable');
+    const fileSel = byId('terminal-xraylogs-file');
+    const levelSel = byId('terminal-xraylogs-level');
 
     if (startBtn) on(startBtn, 'click', () => { void start(); });
     if (stopBtn) on(stopBtn, 'click', () => { stopTail(); });
     if (disableBtn) on(disableBtn, 'click', () => { void disableLogs(); });
-    if (sel) on(sel, 'change', onFileChange);
+    if (fileSel) on(fileSel, 'change', onFileChange);
 
-    // Prefill level selector from current status (if already enabled)
-    if (lvlSel) {
-      void getLogStatus().then((st) => {
-        const lvl = String((st && st.loglevel) || '').toLowerCase();
-        if (lvl === 'warning' || lvl === 'info' || lvl === 'debug') {
-          lvlSel.value = lvl;
+    if (levelSel) {
+      void getLogStatus().then((status) => {
+        const level = String((status && status.loglevel) || '').toLowerCase();
+        if (level === 'warning' || level === 'info' || level === 'debug') {
+          levelSel.value = level;
         }
       });
-      on(lvlSel, 'change', () => {
-        // Optional hint only.
+      on(levelSel, 'change', () => {
         maybeWarnAccessOnVerbose(getSelectedLevel());
         restartSoon();
       });
@@ -386,18 +350,18 @@
 
     docClickHandler = (ev) => {
       try {
-        const menu = $('terminal-xraylogs-menu');
-        const btn = $('terminal-btn-xraylogs');
-        const t = ev && ev.target ? ev.target : null;
-        if (menu && t && menu.contains(t)) return;
-        if (btn && t && btn.contains(t)) return;
-      } catch (e) {}
+        const menu = byId('terminal-xraylogs-menu');
+        const btn = byId('terminal-btn-xraylogs');
+        const target = ev && ev.target ? ev.target : null;
+        if (menu && target && menu.contains(target)) return;
+        if (btn && target && btn.contains(target)) return;
+      } catch (error) {}
       hideMenu();
     };
     document.addEventListener('click', docClickHandler, true);
 
-    docKeyHandler = (e) => {
-      try { if (e && e.key === 'Escape') hideMenu(); } catch (e2) {}
+    docKeyHandler = (ev) => {
+      try { if (ev && ev.key === 'Escape') hideMenu(); } catch (error) {}
     };
     document.addEventListener('keydown', docKeyHandler, true);
   }
@@ -405,8 +369,8 @@
   function unbindWhileOpen() {
     if (!openBound) return;
     openBound = false;
-    try { if (docClickHandler) document.removeEventListener('click', docClickHandler, true); } catch (e) {}
-    try { if (docKeyHandler) document.removeEventListener('keydown', docKeyHandler, true); } catch (e) {}
+    try { if (docClickHandler) document.removeEventListener('click', docClickHandler, true); } catch (error) {}
+    try { if (docKeyHandler) document.removeEventListener('keydown', docKeyHandler, true); } catch (error2) {}
     docClickHandler = null;
     docKeyHandler = null;
   }
@@ -414,48 +378,50 @@
   function setUiEnabled(mode) {
     const enabled = String(mode || '').toLowerCase() === 'pty';
     try {
-      const btn = $('terminal-btn-xraylogs');
+      const btn = byId('terminal-btn-xraylogs');
       if (btn) btn.style.display = enabled ? '' : 'none';
-    } catch (e) {}
+    } catch (error) {}
     if (!enabled) {
       resetRunningState();
       hideMenu();
     }
   }
 
-  // Export (optional)
-  // Backward compat: keep "stop" as an alias to disableLogs.
-  window.XKeen.terminal.xray_tail = {
+  const terminalXrayTailApi = {
     init,
     start,
     stopTail,
     disableLogs,
     stop: disableLogs,
-    // Milestone C: registry plugin factory
     createModule: (ctx) => ({
       id: 'xray_tail',
       priority: 85,
-      init: () => { try { setCtx(ctx); } catch (e0) {} },
+      init: () => { try { setCtx(ctx); } catch (error) {} },
       onOpen: () => {
-        try { setCtx(ctx); } catch (e0) {}
-        try { init(); } catch (e1) {}
-        try { bindWhileOpen(); } catch (e) {}
+        try { setCtx(ctx); } catch (error) {}
+        try { init(); } catch (error2) {}
+        try { bindWhileOpen(); } catch (error3) {}
         try {
-          const mode = (ctx && ctx.core && typeof ctx.core.getMode === 'function') ? ctx.core.getMode() : null;
+          const mode = (ctx && ctx.core && typeof ctx.core.getMode === 'function') ? ctx.core.getMode() : getTerminalMode(ctx);
           setUiEnabled(mode);
-        } catch (e2) {}
+        } catch (error4) {}
       },
       onClose: () => {
-        try { unbindWhileOpen(); } catch (e) {}
-        try { hideMenu(); } catch (e2) {}
-        try { resetRunningState(); } catch (e3) {}
-        try { disposeUi(); } catch (e4) {}
-        try { setCtx(null); } catch (e5) {}
+        try { unbindWhileOpen(); } catch (error) {}
+        try { hideMenu(); } catch (error2) {}
+        try { resetRunningState(); } catch (error3) {}
+        try { disposeUi(); } catch (error4) {}
+        try { setCtx(null); } catch (error5) {}
       },
-      onModeChange: (_ctx, mode) => { try { setUiEnabled(mode); } catch (e) {} },
+      onModeChange: (_ctx, mode) => { try { setUiEnabled(mode); } catch (error) {} },
     }),
   };
-  window.XKeen.terminal.xrayTail = window.XKeen.terminal.xray_tail;
 
-  // NOTE: No auto-init. This module is initialized via terminal registry (Milestone C).
+  try {
+    const terminal = ensureTerminalRoot();
+    if (terminal) terminal.xrayTail = terminalXrayTailApi;
+  } catch (error) {}
+
+  publishTerminalCompatApi('xray_tail', terminalXrayTailApi);
+  publishTerminalCompatApi('xrayTail', terminalXrayTailApi);
 })();

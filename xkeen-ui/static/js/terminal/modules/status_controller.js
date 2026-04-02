@@ -1,3 +1,8 @@
+import {
+  getTerminalCoreApi,
+  publishTerminalCompatApi,
+} from '../runtime.js';
+
 // Terminal module: status controller (Stage 8.3.5)
 //
 // Centralizes terminal "status" UI that must not live in terminal.js:
@@ -7,9 +12,6 @@
 // Listens to session:* events and updates DOM in one place.
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
 
   function safeOn(events, name, fn) {
     try {
@@ -75,7 +77,7 @@
   function createController(ctx) {
     const events = (ctx && ctx.events) ? ctx.events : { on: () => function () {} };
     const store = getStore(ctx);
-    const legacyCore = (window.XKeen && window.XKeen.terminal) ? window.XKeen.terminal._core : null;
+    const legacyCore = (ctx && ctx.core) ? ctx.core : getTerminalCoreApi();
 
     const st = {
       inited: false,
@@ -251,7 +253,7 @@
     // Expose on ctx + global for compatibility.
     try { if (ctx) ctx.statusCtrl = api; } catch (e) {}
     try { if (ctx) ctx.status = api; } catch (e2) {}
-    try { window.XKeen.terminal.status = api; } catch (e3) {}
+    try { publishTerminalCompatApi('status', api); } catch (e3) {}
 
     return {
       id: 'status_controller',
@@ -267,8 +269,10 @@
     };
   }
 
-  window.XKeen.terminal.status_controller = {
+  const terminalStatusControllerCompat = {
     createModule: (ctx) => createController(ctx),
     createController,
   };
+
+  publishTerminalCompatApi('status_controller', terminalStatusControllerCompat);
 })();

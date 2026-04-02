@@ -1,23 +1,25 @@
+import {
+  ensureTerminalNamespaceBucket,
+  getTerminalCompatApi,
+  getTerminalContext,
+  getTerminalCoreHttpApi,
+  getTerminalMode,
+  getTerminalSharedStateApi,
+  publishTerminalCompatApi,
+  toastTerminal,
+} from './runtime.js';
+
 // Terminal PTY subsystem: WebSocket transport + session + retry/backoff + signals
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-
-  const core = window.XKeen.terminal._core || null;
-  const caps = window.XKeen.terminal.capabilities || null;
+  const core = getTerminalCompatApi('_core');
+  const caps = getTerminalCompatApi('capabilities');
 
   // Milestone A: PTY communicates with the rest of the terminal via ctx.events
   // (instead of pushing hook functions into core.*).
   function getCtx() {
-    try {
-      const C = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core
-        ? window.XKeen.terminal.core
-        : null;
-      if (C && typeof C.getCtx === 'function') return C.getCtx();
-    } catch (e) {}
-    return null;
+    return getTerminalContext();
   }
 
   function getEvents() {
@@ -40,7 +42,7 @@
     try { getEvents().emit(eventName, payload); } catch (e) {}
   }
 
-  const state = (core && core.state) ? core.state : (window.XKeen.terminal.__pty_state = window.XKeen.terminal.__pty_state || {});
+  const state = (core && core.state) ? core.state : ensureTerminalNamespaceBucket('__pty_state');
 
   // --------------------
   // Session persistence (per-tab)
@@ -52,7 +54,10 @@
     try {
       if (core && typeof core.getTabId === 'function') return core.getTabId();
     } catch (e) {}
-    try { if (window.XKeen && window.XKeen.state && window.XKeen.state.tabId) return window.XKeen.state.tabId; } catch (e) {}
+    try {
+      const sharedState = getTerminalSharedStateApi();
+      if (sharedState && sharedState.tabId) return sharedState.tabId;
+    } catch (e) {}
     try { return (window.name || 'tab'); } catch (e) {}
     return 'tab';
   }
@@ -210,14 +215,18 @@ function tryMigrateLegacyKey(base) {
       if (ctx && ctx.reconnect && typeof ctx.reconnect.getRetryState === 'function') return ctx.reconnect;
     } catch (e) {}
     try {
-      const mod = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.reconnect_controller : null;
+      const compat = getTerminalCompatApi('reconnect');
+      if (compat && typeof compat.getRetryState === 'function') return compat;
+    } catch (e2) {}
+    try {
+      const mod = getTerminalCompatApi('reconnect_controller');
       const ctx2 = getCtx();
       if (mod && typeof mod.createController === 'function' && ctx2) {
         // Ensure a singleton controller even if registry did not run yet.
         ctx2.reconnect = ctx2.reconnect || mod.createController(ctx2);
         return ctx2.reconnect;
       }
-    } catch (e2) {}
+    } catch (e3) {}
     return null;
   }
 
@@ -490,9 +499,7 @@ function tryMigrateLegacyKey(base) {
       const onResize = (payload) => {
         try {
           // Ignore if not in PTY mode.
-          try {
-            if (core && typeof core.getMode === 'function' && core.getMode() !== 'pty') return;
-          } catch (e2) {}
+          try { if (getTerminalMode() !== 'pty') return; } catch (e2) {}
 
           const cols = payload && payload.cols ? Number(payload.cols) : (term && term.cols ? Number(term.cols) : 0);
           const rows = payload && payload.rows ? Number(payload.rows) : (term && term.rows ? Number(term.rows) : 0);
@@ -534,7 +541,7 @@ function tryMigrateLegacyKey(base) {
   function sendSignal(name) {
     const ws = state.ptyWs;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      try { if (typeof showToast === 'function') showToast('PTY не подключён', 'info'); } catch (e) {}
+      try { toastTerminal('PTY не подключён', 'info'); } catch (e) {}
       return;
     }
     try {
@@ -546,7 +553,7 @@ function tryMigrateLegacyKey(base) {
   function initSignalsMenuAutoClose() { /* deprecated */ }
 
   // Export
-  window.XKeen.terminal.pty = {
+  const terminalPtyApi = {
     connect,
     disconnect,
     sendRaw,
@@ -573,4 +580,5 @@ function tryMigrateLegacyKey(base) {
     toggleSignalsMenu,
     initSignalsMenuAutoClose,
   };
+  publishTerminalCompatApi('pty', terminalPtyApi);
 })();

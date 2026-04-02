@@ -1,20 +1,24 @@
+import {
+  getTerminalCoreApi,
+  getTerminalPtyApi,
+  getTerminalPublicApi,
+  getTerminalReconnectApi,
+  getTerminalUiActionsApi,
+  publishTerminalCompatApi,
+} from '../runtime.js';
+
 // Terminal UI controller: binds buttons/hotkeys/menus and maps session events to UI.
 // Stage 6: move UI wiring out of terminal.js.
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-
   function createModule(ctx) {
     const ui = (ctx && ctx.ui) ? ctx.ui : null;
     const events = (ctx && ctx.events) ? ctx.events : { on: () => () => {}, emit: () => {} };
-    const core = (ctx && ctx.core) ? ctx.core : (window.XKeen.terminal._core || null);
+    const core = (ctx && ctx.core) ? ctx.core : getTerminalCoreApi();
 
     // Actions are exported by terminal.js (Stage 6) so UI stays dumb.
-    const actions = (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.ui_actions)
-      ? window.XKeen.terminal.ui_actions
-      : {};
+    const actions = getTerminalUiActionsApi() || {};
 
     const state = {
       inited: false,
@@ -458,9 +462,15 @@
         }
       } catch (e) {}
       try {
-        const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+        const P = getTerminalPtyApi();
         if (P && typeof P.getRetryState === 'function') return P.getRetryState() || { active: false, attempt: 0, nextAt: 0 };
       } catch (e2) {}
+      try {
+        const reconnect = (ctx && ctx.reconnect) ? ctx.reconnect : getTerminalReconnectApi();
+        if (reconnect && typeof reconnect.getRetryState === 'function') {
+          return reconnect.getRetryState() || { active: false, attempt: 0, nextAt: 0 };
+        }
+      } catch (e3) {}
       return { active: false, attempt: 0, nextAt: 0 };
     }
 
@@ -555,7 +565,10 @@
             e.preventDefault();
             try {
               if (typeof actions.hideTerminal === 'function') actions.hideTerminal();
-              else if (window.XKeen && window.XKeen.terminal && typeof window.XKeen.terminal.close === 'function') window.XKeen.terminal.close();
+              else {
+                const api = getTerminalPublicApi();
+                if (api && typeof api.close === 'function') api.close();
+              }
             } catch (e3) {}
             return;
           }
@@ -591,17 +604,26 @@
       // Open terminal from Commands view
       bindPersistentClickById('terminal-open-shell-btn', () => {
         if (typeof actions.openTerminal === 'function') actions.openTerminal('', 'shell');
-        else if (window.XKeen && window.XKeen.terminal && typeof window.XKeen.terminal.open === 'function') window.XKeen.terminal.open(null, { mode: 'shell', cmd: '' });
+        else {
+          const api = getTerminalPublicApi();
+          if (api && typeof api.open === 'function') api.open({ mode: 'shell', cmd: '' });
+        }
       });
       bindPersistentClickById('terminal-open-pty-btn', () => {
         if (typeof actions.openTerminal === 'function') actions.openTerminal('', 'pty');
-        else if (window.XKeen && window.XKeen.terminal && typeof window.XKeen.terminal.open === 'function') window.XKeen.terminal.open(null, { mode: 'pty', cmd: '' });
+        else {
+          const api = getTerminalPublicApi();
+          if (api && typeof api.open === 'function') api.open({ mode: 'pty', cmd: '' });
+        }
       });
 
       // Overlay chrome
       bindClickById('terminal-btn-close', () => {
         if (typeof actions.hideTerminal === 'function') actions.hideTerminal();
-        else if (window.XKeen && window.XKeen.terminal && typeof window.XKeen.terminal.close === 'function') window.XKeen.terminal.close();
+        else {
+          const api = getTerminalPublicApi();
+          if (api && typeof api.close === 'function') api.close();
+        }
       });
 
       // Toolbar
@@ -759,5 +781,5 @@
     };
   }
 
-  window.XKeen.terminal.ui_controller = { createModule };
+  publishTerminalCompatApi('ui_controller', { createModule });
 })();

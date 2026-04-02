@@ -1,3 +1,10 @@
+import {
+  ensureGlobalStateRoot,
+  ensureTerminalRoot,
+  getTerminalContext,
+  publishWindowCompatFunction,
+} from './runtime.js';
+
 // XKeen terminal island bootstrap (Stage 8.5)
 //
 // terminal.js is orchestration-only:
@@ -11,19 +18,11 @@
 (function () {
   'use strict';
 
-  // Namespace
-  window.XKeen = window.XKeen || {};
-  window.XKeen.state = window.XKeen.state || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-
-  const T = window.XKeen.terminal;
+  ensureGlobalStateRoot();
+  const T = ensureTerminalRoot();
 
   function getCtx() {
-    try {
-      const core = T.core;
-      if (core && typeof core.getCtx === 'function') return core.getCtx();
-    } catch (e) {}
-    return null;
+    return getTerminalContext();
   }
 
   // Stage 8.5 / этап 2: DOM registry refresh + stable aliases
@@ -541,7 +540,7 @@
   };
 
   // Global legacy functions (avoid breaking old inline handlers)
-  if (!window.terminalOpen) window.terminalOpen = (a, b) => {
+  publishWindowCompatFunction('terminalOpen', (a, b) => {
     try {
       if (T.api && typeof T.api.open === 'function') return T.api.open(a, b);
     } catch (e) {}
@@ -556,32 +555,32 @@
     if (typeof a === 'string' && (a === 'pty' || a === 'shell')) return uiActions.openTerminal('', a);
     if (typeof a === 'string') return uiActions.openTerminal(a, 'shell');
     return uiActions.openTerminal('', 'shell');
-  };
-  if (!window.terminalClose) window.terminalClose = () => (T.api && T.api.close ? T.api.close() : uiActions.hideTerminal());
-  if (!window.terminalToggle) window.terminalToggle = () => (T.api && T.api.toggle ? T.api.toggle() : T.toggle());
-  if (!window.terminalSend) window.terminalSend = (txt, meta) => (T.api && T.api.send ? T.api.send(txt, meta || {}) : T.execCommand(txt, meta || {}));
-  if (!window.terminalSetMode) window.terminalSetMode = (mode) => {
+  });
+  publishWindowCompatFunction('terminalClose', () => (T.api && T.api.close ? T.api.close() : uiActions.hideTerminal()));
+  publishWindowCompatFunction('terminalToggle', () => (T.api && T.api.toggle ? T.api.toggle() : T.toggle()));
+  publishWindowCompatFunction('terminalSend', (txt, meta) => (T.api && T.api.send ? T.api.send(txt, meta || {}) : T.execCommand(txt, meta || {})));
+  publishWindowCompatFunction('terminalSetMode', (mode) => {
     const ctx = getCtx();
     try { if (ctx && ctx.session && typeof ctx.session.setMode === 'function') return ctx.session.setMode(mode); } catch (e) {}
     return (T.api && T.api.setMode) ? T.api.setMode(mode) : false;
-  };
-  if (!window.terminalGetMode) window.terminalGetMode = () => {
+  });
+  publishWindowCompatFunction('terminalGetMode', () => {
     const ctx = getCtx();
     try { if (ctx && ctx.session && typeof ctx.session.getMode === 'function') return ctx.session.getMode() || 'shell'; } catch (e) {}
     return (T.api && T.api.getMode) ? T.api.getMode() : 'shell';
-  };
-  if (!window.terminalIsOpen) window.terminalIsOpen = () => (T.api && T.api.isOpen) ? T.api.isOpen() : false;
-  if (!window.terminalIsConnected) window.terminalIsConnected = () => (T.api && T.api.isConnected) ? T.api.isConnected() : false;
+  });
+  publishWindowCompatFunction('terminalIsOpen', () => (T.api && T.api.isOpen) ? T.api.isOpen() : false);
+  publishWindowCompatFunction('terminalIsConnected', () => (T.api && T.api.isConnected) ? T.api.isConnected() : false);
 
   // Very old fallbacks used by features/commands_list.js and some custom installs.
-  if (!window.openTerminal) window.openTerminal = (cmd, mode) => uiActions.openTerminal(cmd, mode || 'shell');
-  if (!window.hideTerminal) window.hideTerminal = () => uiActions.hideTerminal();
-  if (!window.sendTerminalInput) window.sendTerminalInput = () => uiActions.sendTerminalInput();
+  publishWindowCompatFunction('openTerminal', (cmd, mode) => uiActions.openTerminal(cmd, mode || 'shell'));
+  publishWindowCompatFunction('hideTerminal', () => uiActions.hideTerminal());
+  publishWindowCompatFunction('sendTerminalInput', () => uiActions.sendTerminalInput());
 
   // Convenience toggles (output prefs)
-  if (!window.terminalToggleAnsiFilter) window.terminalToggleAnsiFilter = () => uiActions.terminalToggleAnsiFilter();
-  if (!window.terminalToggleLogHighlight) window.terminalToggleLogHighlight = () => uiActions.terminalToggleLogHighlight();
-  if (!window.terminalToggleFollow) window.terminalToggleFollow = () => uiActions.terminalToggleFollow();
+  publishWindowCompatFunction('terminalToggleAnsiFilter', () => uiActions.terminalToggleAnsiFilter());
+  publishWindowCompatFunction('terminalToggleLogHighlight', () => uiActions.terminalToggleLogHighlight());
+  publishWindowCompatFunction('terminalToggleFollow', () => uiActions.terminalToggleFollow());
 
   // PTY helpers (used by external scripts/tests)
   T.connect = function () { return uiActions.openTerminal('', 'pty'); };

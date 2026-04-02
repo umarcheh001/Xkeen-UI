@@ -3,13 +3,6 @@ import {
   getMihomoEditorActionsApi,
   getMihomoEditorEngineApi,
 } from './mihomo_runtime.js';
-import {
-  attachXkeenEditorToolbar,
-  buildXkeenEditorCommonKeys,
-  getXkeenEditorToolbarDefaultItems,
-  getXkeenEditorToolbarIcons,
-  getXkeenEditorToolbarMiniItems,
-} from './xkeen_runtime.js';
 
 let mihomoGeneratorModuleApi = null;
 
@@ -724,27 +717,24 @@ function initEngineToggle() {
 
         function syncToolbarForEditable(isEditable) {
           try {
-            if (!editor) return;
+            if (!editor || !window || typeof window.xkeenAttachCmToolbar !== 'function') return;
             resetToolbar();
-            const baseItems = isEditable
-              ? getXkeenEditorToolbarDefaultItems()
-              : (getXkeenEditorToolbarMiniItems().length
-                ? getXkeenEditorToolbarMiniItems()
-                : getXkeenEditorToolbarDefaultItems());
-            const icons = getXkeenEditorToolbarIcons();
+            const baseItems = (isEditable)
+              ? (window.XKEEN_CM_TOOLBAR_DEFAULT || null)
+              : (window.XKEEN_CM_TOOLBAR_MINI || window.XKEEN_CM_TOOLBAR_DEFAULT || null);
 
             // Replace fullscreen action: it must work for the active engine (CodeMirror/Monaco).
-            const items = baseItems.map((it) => {
+            const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
               if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) });
               return it;
             });
 
             // Fallback fullscreen button for Monaco even when CM fullscreen addon isn't loaded.
             try {
-              if (icons.fullscreen && !items.some((it) => it && it.id === 'fs_any')) {
+              if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
                 items.push({
                   id: 'fs_any',
-                  svg: icons.fullscreen,
+                  svg: window.XKEEN_CM_ICONS.fullscreen,
                   label: 'Фулскрин',
                   fallbackHint: 'F11 / Esc',
                   onClick: () => toggleEditorFullscreen(editor),
@@ -752,7 +742,7 @@ function initEngineToggle() {
               }
             } catch (e) {}
 
-            attachXkeenEditorToolbar(editor, items);
+            window.xkeenAttachCmToolbar(editor, items);
             moveToolbarToHeader();
             try { syncToolbarForEngine(_engine); } catch (e) {}
           } catch (e) {
@@ -1151,7 +1141,7 @@ function initEngineToggle() {
         }
 
         function getPreviewEditorExtraKeys() {
-          return Object.assign({}, buildXkeenEditorCommonKeys(), {
+          return Object.assign({}, (typeof buildCmExtraKeysCommon === 'function' ? buildCmExtraKeysCommon() : {}), {
             'Ctrl-F': 'findPersistent',
             'Cmd-F': 'findPersistent',
             'Ctrl-G': 'findNext',
@@ -1183,18 +1173,17 @@ function initEngineToggle() {
           try { editor._xkeenToolbarAttached = true; } catch (e) {}
 
           try {
-            const baseItems = getXkeenEditorToolbarDefaultItems();
-            if (baseItems.length) {
-              const icons = getXkeenEditorToolbarIcons();
-              const items = baseItems.map((it) => {
+            if (window && typeof window.xkeenAttachCmToolbar === 'function') {
+              const baseItems = window.XKEEN_CM_TOOLBAR_DEFAULT || null;
+              const items = (Array.isArray(baseItems) ? baseItems : []).map((it) => {
                 if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) });
                 return it;
               });
               try {
-                if (icons.fullscreen && !items.some((it) => it && it.id === 'fs_any')) {
+                if (window.XKEEN_CM_ICONS && !items.some((it) => it && it.id === 'fs_any')) {
                   items.push({
                     id: 'fs_any',
-                    svg: icons.fullscreen,
+                    svg: window.XKEEN_CM_ICONS.fullscreen,
                     label: 'Фулскрин',
                     fallbackHint: 'F11 / Esc',
                     onClick: () => toggleEditorFullscreen(editor),
@@ -1202,7 +1191,7 @@ function initEngineToggle() {
                 }
               } catch (e) {}
 
-              attachXkeenEditorToolbar(editor, items);
+              window.xkeenAttachCmToolbar(editor, items);
               moveToolbarToHeader();
               try { syncToolbarForEngine(_engine); } catch (e) {}
             }

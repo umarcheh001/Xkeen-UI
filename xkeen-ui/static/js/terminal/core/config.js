@@ -1,14 +1,11 @@
+import { publishTerminalCoreCompatApi } from '../runtime.js';
+
 // Terminal core: config/prefs wrapper (localStorage)
 //
 // Centralizes preference keys so modules don't duplicate parsing logic.
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
-
-  // Backward-compatible keys already used by modules.
   const KEYS = {
     follow: 'xkeen_term_follow_v1',
     ansiFilter: 'xkeen_term_ansi_filter_v1',
@@ -48,10 +45,7 @@
       if (name === 'fontSize') return parseIntClamped(raw, DEFAULTS.fontSize, 8, 32);
       if (name === 'follow') return parseBool(raw, DEFAULTS.follow);
       if (name === 'ansiFilter') return parseBool(raw, DEFAULTS.ansiFilter);
-      if (name === 'logHl') {
-        // Historical semantics: missing => true; '0'/'false' => false
-        return parseBool(raw, DEFAULTS.logHl);
-      }
+      if (name === 'logHl') return parseBool(raw, DEFAULTS.logHl);
       if (name === 'cursorBlink') return parseBool(raw, DEFAULTS.cursorBlink);
       return raw;
     } catch (e) {}
@@ -97,5 +91,5 @@
     return { get, set, defaults, keys };
   }
 
-  window.XKeen.terminal.core.createConfig = createConfig;
+  publishTerminalCoreCompatApi('createConfig', createConfig);
 })();

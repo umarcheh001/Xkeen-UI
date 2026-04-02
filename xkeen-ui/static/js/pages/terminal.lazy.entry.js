@@ -1,18 +1,26 @@
-import {
-  appendTerminalDebug,
-  finishTerminalDebugRun,
-  markTerminalDebugState,
-  startTerminalDebugRun,
-} from '../features/terminal_debug.js';
-import {
-  ensureXtermVendorReady,
-  OPTIONAL_XTERM_VENDOR_SPECS,
-  REQUIRED_XTERM_VENDOR_SPECS,
-} from '../terminal/vendors/xterm_import_adapter.js';
-
 // Build-managed lazy bundle for terminal runtime.
-// Debug build: logs every vendor/app module step to localStorage so the last
-// successful import is still available after a hard tab freeze.
+// Keeps the original side-effect ordering, but moves loading to standard import().
+//
+// NOTE:
+// xterm.js vendor bundles in /static/xterm are legacy UMD browser scripts.
+// Some addons (notably unicode11 / serialize) rely on classic-script globals
+// such as top-level `this === window`. Importing them as ESM breaks that
+// contract and causes errors like:
+//   Cannot set properties of undefined (setting 'Unicode11Addon')
+// Therefore we load vendor xterm files via classic <script> tags, then import
+// only our own application modules through ESM.
+
+const XTERM_SCRIPT_IMPORTS = [
+  '../../xterm/xterm.js',
+  '../../xterm/xterm-addon-fit.js',
+  '../../xterm/xterm-addon-search.js',
+  '../../xterm/xterm-addon-web-links.js',
+  '../../xterm/xterm-addon-webgl.js',
+  '../../xterm/xterm-addon-unicode11.js',
+  '../../xterm/xterm-addon-serialize.js',
+  '../../xterm/xterm-addon-clipboard.js',
+  '../../xterm/xterm-addon-ligatures.js',
+];
 
 const TERMINAL_IMPORTS = [
   '../terminal/_core.js',
@@ -57,57 +65,100 @@ const TERMINAL_IMPORTS = [
 ];
 
 let terminalBundlePromise = null;
+const classicScriptCache = new Map();
 
-function nextTick(delay = 0) {
-  return new Promise((resolve) => {
-    try { setTimeout(resolve, delay); } catch (error) { resolve(); }
-  });
+function resolveClassicScriptUrl(specifier) {
+  return new URL(specifier, import.meta.url).toString();
 }
 
-async function importAppModule(specifier) {
-  appendTerminalDebug('lazy:module:begin', { specifier });
-  markTerminalDebugState({ status: 'loading-module', lastStage: 'lazy:module:begin', currentModule: specifier });
-  await nextTick(0);
-  const mod = await import(specifier);
-  appendTerminalDebug('lazy:module:done', { specifier, keys: mod ? Object.keys(mod).slice(0, 8) : [] });
-  return mod;
+function buildSourceUrlComment(url) {
+  return '\n//# sourceURL=' + String(url || '').replace(/\s/g, '%20');
+}
+
+function withShadowedGlobals(names, fn) {
+  const globalScope = window;
+  const restore = [];
+  const list = Array.isArray(names) ? names : [];
+
+  try {
+    for (const name of list) {
+      const key = String(name || '').trim();
+      if (!key) continue;
+      const hadOwn = Object.prototype.hasOwnProperty.call(globalScope, key);
+      restore.push({ key, hadOwn, value: globalScope[key] });
+      globalScope[key] = undefined;
+    }
+    return fn();
+  } finally {
+    for (let i = restore.length - 1; i >= 0; i -= 1) {
+      const entry = restore[i];
+      try {
+        if (entry.hadOwn) globalScope[entry.key] = entry.value;
+        else delete globalScope[entry.key];
+      } catch (error) {
+        globalScope[entry.key] = entry.value;
+      }
+    }
+  }
+}
+
+async function fetchClassicScriptSource(url) {
+  try {
+    const response = await fetch(String(url || ''), { cache: 'force-cache' });
+    if (!response || !response.ok) return '';
+    return await response.text();
+  } catch (error) {
+    return '';
+  }
+}
+
+function evalClassicScript(url, code) {
+  if (!code) return false;
+
+  try {
+    return withShadowedGlobals(['define', 'require', 'module', 'exports'], () => {
+      const globalEval = (0, eval);
+      globalEval(String(code) + buildSourceUrlComment(url));
+      return true;
+    });
+  } catch (error) {
+    return false;
+  }
+}
+
+function loadClassicScriptOnce(specifier) {
+  const url = resolveClassicScriptUrl(specifier);
+  if (classicScriptCache.has(url)) return classicScriptCache.get(url);
+
+  const promise = (async () => {
+    const code = await fetchClassicScriptSource(url);
+    if (!code) throw new Error('failed to fetch classic script: ' + url);
+    const ok = evalClassicScript(url, code);
+    if (!ok) throw new Error('failed to evaluate classic script: ' + url);
+    return true;
+  })().catch((error) => {
+    classicScriptCache.delete(url);
+    throw error;
+  });
+
+  classicScriptCache.set(url, promise);
+  return promise;
 }
 
 export async function ensureTerminalBundleReady() {
   if (terminalBundlePromise) return terminalBundlePromise;
 
   terminalBundlePromise = (async () => {
-    startTerminalDebugRun({ source: 'terminal.lazy.entry' });
-    markTerminalDebugState({ status: 'bundle-loading', lastStage: 'lazy:start' });
-    appendTerminalDebug('lazy:start', {
-      requiredVendorCount: REQUIRED_XTERM_VENDOR_SPECS.length,
-      optionalVendorCount: OPTIONAL_XTERM_VENDOR_SPECS.length,
-      moduleCount: TERMINAL_IMPORTS.length,
-    });
-
-    await ensureXtermVendorReady();
-
-
+    for (const specifier of XTERM_SCRIPT_IMPORTS) {
+      // eslint-disable-next-line no-await-in-loop
+      await loadClassicScriptOnce(specifier);
+    }
     for (const specifier of TERMINAL_IMPORTS) {
       // eslint-disable-next-line no-await-in-loop
-      await importAppModule(specifier);
-      // eslint-disable-next-line no-await-in-loop
-      await nextTick(0);
+      await import(specifier);
     }
-
-    try {
-      const root = window && window.XKeen ? (window.XKeen.terminal || null) : null;
-      if (!root || typeof root.init !== 'function') {
-        await import('../terminal/terminal.js');
-      }
-    } catch (e) {}
-
-    appendTerminalDebug('lazy:complete', { ok: true });
-    finishTerminalDebugRun('bundle-ready', { ok: true });
     return true;
   })().catch((error) => {
-    appendTerminalDebug('lazy:failed', { error: error ? String(error.message || error) : 'unknown error' });
-    finishTerminalDebugRun('bundle-failed', { error: error ? String(error.message || error) : 'unknown error' });
     terminalBundlePromise = null;
     throw error;
   });
@@ -115,4 +166,4 @@ export async function ensureTerminalBundleReady() {
   return terminalBundlePromise;
 }
 
-export { TERMINAL_IMPORTS, REQUIRED_XTERM_VENDOR_SPECS, OPTIONAL_XTERM_VENDOR_SPECS };
+export { TERMINAL_IMPORTS, XTERM_SCRIPT_IMPORTS };

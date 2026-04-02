@@ -1,13 +1,11 @@
+import { publishTerminalCoreCompatApi } from '../runtime.js';
+
 // Terminal core: tiny logger
 //
 // Debug logging can be enabled via localStorage:
 //   localStorage.setItem('xkeen_term_debug_v1', '1')
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
 
   const DEBUG_KEY = 'xkeen_term_debug_v1';
 
@@ -46,5 +44,5 @@
     return { debug, info, warn, error, enabled: isDebugEnabled };
   }
 
-  window.XKeen.terminal.core.createLogger = createLogger;
+  publishTerminalCoreCompatApi('createLogger', createLogger);
 })();

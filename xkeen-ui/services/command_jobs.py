@@ -19,6 +19,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Dict
 
+from services.restart_log import write_restart_log
+
 
 def _build_exec_env(*, term: str | None = None) -> dict:
     """Normalize env for spawned commands.
@@ -89,6 +91,31 @@ JOBS_LOCK = threading.Lock()
 MAX_JOB_AGE = 3600  # seconds to keep finished jobs
 
 
+def _restart_log_file() -> str:
+    try:
+        path = (os.environ.get("XKEEN_RESTART_LOG_FILE") or "").strip()
+    except Exception:
+        path = ""
+    return path or "/opt/etc/xkeen-ui/restart.log"
+
+
+def _sync_restart_log(job: "CommandJob" | None) -> None:
+    if not job or job.flag != "-restart":
+        return
+
+    payload = job.output or ""
+    err = str(job.error or "").strip()
+    if err and err not in payload:
+        if payload and not payload.endswith("\n"):
+            payload += "\n"
+        payload += err + "\n"
+
+    try:
+        write_restart_log(_restart_log_file(), payload)
+    except Exception:
+        pass
+
+
 def cleanup_old_jobs() -> None:
     """Remove finished jobs older than MAX_JOB_AGE."""
     now = time.time()
@@ -141,6 +168,7 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
     def _append_output(chunk: str) -> None:
         if not chunk:
             return
+        restart_job = None
         with JOBS_LOCK:
             j = JOBS.get(job_id)
             if not j:
@@ -159,8 +187,11 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
                     j.output += chunk[:room]
                     if "[output truncated]" not in j.output:
                         j.output += "\n[output truncated]\n"
+                    restart_job = j if j.flag == "-restart" else None
                     return
             j.output += chunk
+            restart_job = j if j.flag == "-restart" else None
+        _sync_restart_log(restart_job)
 
     started = time.time()
     proc: subprocess.Popen | None = None
@@ -325,6 +356,7 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
             except Exception:
                 exit_code = None
 
+        restart_job = None
         with JOBS_LOCK:
             job = JOBS.get(job_id)
             if not job:
@@ -336,8 +368,11 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
                 job.status = "finished"
             job.exit_code = int(exit_code) if exit_code is not None else None
             job.finished_at = time.time()
+            restart_job = job if job.flag == "-restart" else None
+        _sync_restart_log(restart_job)
 
     except Exception as e:  # pragma: no cover - defensive
+        restart_job = None
         with JOBS_LOCK:
             job = JOBS.get(job_id)
             if not job:
@@ -345,6 +380,8 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
             job.status = "error"
             job.error = str(e)
             job.finished_at = time.time()
+            restart_job = job if job.flag == "-restart" else None
+        _sync_restart_log(restart_job)
     finally:
         try:
             if proc is not None:
@@ -374,6 +411,9 @@ def create_command_job(flag: str | None, stdin_data: str | None, cmd: str | None
     job = CommandJob(id=job_id, flag=flag, cmd=cmd, use_pty=bool(use_pty) and stdin_data is None)
     with JOBS_LOCK:
         JOBS[job_id] = job
+
+    if flag == "-restart":
+        _sync_restart_log(job)
 
     cleanup_old_jobs()
 

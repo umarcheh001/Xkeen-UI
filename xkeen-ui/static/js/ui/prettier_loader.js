@@ -126,35 +126,7 @@
 
     if (_js.has(url)) return _js.get(url);
 
-    const p = (async () => {
-      // Local-first: use fetch+eval to avoid AMD/CommonJS interference.
-      if (looksLikeLocalStatic(url)) {
-        const ok = await evalAsGlobalNoAMD(url);
-        if (ok) return true;
-        // If eval failed (e.g. CSP blocks eval), fall back to script tag.
-      }
-
-      // Prefer shared loader for caching if available.
-      try {
-        if (XK.runtime && XK.runtime.loader && typeof XK.runtime.loader.loadScriptOnce === 'function') {
-          return await XK.runtime.loader.loadScriptOnce(url);
-        }
-      } catch (e) {}
-
-      // Fallback tiny loader
-      return await new Promise((resolve) => {
-        try {
-          const s = document.createElement('script');
-          s.src = url;
-          s.async = true;
-          s.onload = () => resolve(true);
-          s.onerror = () => resolve(false);
-          document.head.appendChild(s);
-        } catch (e) {
-          resolve(false);
-        }
-      });
-    })();
+    const p = evalAsGlobalNoAMD(url);
 
     _js.set(url, p);
     return p;

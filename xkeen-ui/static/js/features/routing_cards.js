@@ -12,7 +12,6 @@ import {
   getXkeenEditorEngineApi,
   getXkeenPanelShellApi,
   getXkeenSettingsApi,
-  isXkeenDebugRuntime,
   toastXkeen,
 } from './xkeen_runtime.js';
 
@@ -25,10 +24,11 @@ let routingCardsModuleApi = null;
   // Public API publication is handled by features/compat/routing_cards.js.
   const RC = getRoutingCardsNamespace();
 
-  // Optional debug flag (?debug=1 or runtime compat flag)
+  // Optional debug flag (?debug=1 or window.XKEEN_DEV=true)
   let IS_DEBUG = false;
   try {
-    IS_DEBUG = isXkeenDebugRuntime();
+    const q = (window.location && typeof window.location.search === 'string') ? window.location.search : '';
+    IS_DEBUG = !!window.XKEEN_DEV || /(?:^|[?&])debug=1(?:&|$)/.test(q);
   } catch (e) {}
 
   // --- Public API re-exports ---

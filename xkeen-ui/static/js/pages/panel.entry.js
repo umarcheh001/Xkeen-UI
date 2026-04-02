@@ -5,15 +5,14 @@ import './config_shell.shared.js';
 import './editor.shared.js';
 import './codemirror6.shared.js';
 import './panel.shared_compat.bundle.js';
-import { hasXkeenMihomoCore, hasXkeenXrayCore } from '../features/xkeen_runtime.js';
 import { bootPanelPage } from './panel.bootstrap_tail.bundle.js';
 
 async function loadPanelFeatureBundles() {
-  if (hasXkeenXrayCore()) {
+  if (window.XKEEN_HAS_XRAY) {
     await import('./panel.routing.bundle.js');
   }
 
-  if (hasXkeenMihomoCore()) {
+  if (window.XKEEN_HAS_MIHOMO) {
     await import('./panel.mihomo.bundle.js');
   }
 }

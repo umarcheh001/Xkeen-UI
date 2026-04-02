@@ -38,27 +38,6 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     return (String(kind || '').toLowerCase() === 'geoip') ? 'geoip' : 'geosite';
   }
 
-
-  function readKindPrefs(kind) {
-    const k = safeKind(kind);
-    const prefs = (typeof prefsMod.load === 'function') ? prefsMod.load() : {};
-    const fallback = prefs && prefs[k] ? prefs[k] : {};
-
-    const dirId = (k === 'geosite') ? IDS.datGeositeDir : IDS.datGeoipDir;
-    const nameId = (k === 'geosite') ? IDS.datGeositeName : IDS.datGeoipName;
-    const urlId = (k === 'geosite') ? IDS.datGeositeUrl : IDS.datGeoipUrl;
-
-    const dirEl = $(dirId);
-    const nameEl = $(nameId);
-    const urlEl = $(urlId);
-
-    return {
-      dir: (dirEl && String(dirEl.value || '').trim()) || String(fallback.dir || '').trim(),
-      name: (nameEl && String(nameEl.value || '').trim()) || String(fallback.name || '').trim(),
-      url: (urlEl && String(urlEl.value || '').trim()) || String(fallback.url || '').trim(),
-    };
-  }
-
   // -------- Low-level endpoints --------
 
   async function statBatch(paths) {
@@ -241,9 +220,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   async function uploadDat(kind) {
     const k = safeKind(kind);
-    const p = readKindPrefs(k);
+    const prefs = (typeof prefsMod.load === 'function') ? prefsMod.load() : {};
+    const p = prefs && prefs[k] ? prefs[k] : null;
+    if (!p) return;
+
     const path = normalizePath(p.dir, p.name);
-    if (!path) return;
 
     const inputId = (k === 'geosite') ? IDS.datGeositeFile : IDS.datGeoipFile;
     const fi = $(inputId);
@@ -295,9 +276,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   async function downloadDat(kind) {
     const k = safeKind(kind);
-    const p = readKindPrefs(k);
+    const prefs = (typeof prefsMod.load === 'function') ? prefsMod.load() : {};
+    const p = prefs && prefs[k] ? prefs[k] : null;
+    if (!p) return;
+
     const path = normalizePath(p.dir, p.name);
-    if (!path) return;
     try {
       window.open(downloadUrl(path), '_blank');
     } catch (e) {
@@ -307,9 +290,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
   async function updateDatByUrl(kind) {
     const k = safeKind(kind);
-    const p = readKindPrefs(k);
+    const prefs = (typeof prefsMod.load === 'function') ? prefsMod.load() : {};
+    const p = prefs && prefs[k] ? prefs[k] : null;
+    if (!p) return;
+
     const path = normalizePath(p.dir, p.name);
-    if (!path) return;
     const url = String(p.url || '').trim();
 
     if (!url || !(url.startsWith('http://') || url.startsWith('https://'))) {

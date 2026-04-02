@@ -1,23 +1,8 @@
+import { publishTerminalCommandsCompatApi } from '../runtime.js';
+
 // Terminal command router (Stage C)
-//
-// Goal: keep terminal.js as an orchestrator and move "special commands" out.
-//
-// API:
-//   const router = createCommandRouter(ctx)
-//   router.register(matcher, handler, { name, priority })
-//   await router.route(cmdText, meta) -> { handled, result }
-//   await router.execute(cmdText, meta) -> routes then falls back to ctx.transport.send()
-//
-// Matcher forms:
-//   - function(cmdText, meta) => true/false OR {match: any}
-//   - RegExp (tested against trimmed cmdText)
-//   - string prefix (case-sensitive, against trimmed cmdText)
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.commands = window.XKeen.terminal.commands || {};
 
   function norm(s) {
     return String(s == null ? '' : s).trim();
@@ -34,7 +19,6 @@
         matcher,
         handler,
       });
-      // Highest priority first (smaller number = earlier)
       rules.sort((a, b) => (a.priority - b.priority));
     }
 
@@ -45,7 +29,6 @@
         if (typeof m === 'function') {
           const r = m(txt, meta || {});
           if (!r) return null;
-          // allow returning {match: ...}
           if (typeof r === 'object' && r && Object.prototype.hasOwnProperty.call(r, 'match')) {
             return r.match;
           }
@@ -58,9 +41,7 @@
         if (typeof m === 'string') {
           return txt.startsWith(m) ? true : null;
         }
-      } catch (e) {
-        // ignore matcher errors
-      }
+      } catch (e) {}
       return null;
     }
 
@@ -81,7 +62,6 @@
           return { handled: true, result: res };
         } catch (e) {
           try { console.error('[terminal.router] handler error', rule.name || '', e); } catch (_) {}
-          // When a handler throws, treat it as handled to avoid accidental execution in shell.
           return { handled: true, result: { ok: false, error: e } };
         }
       }
@@ -89,7 +69,6 @@
     }
 
     async function execute(cmdText, meta) {
-      // Stage 1: command lifecycle event (UI/history integrations)
       try {
         if (ctx && ctx.events && typeof ctx.events.emit === 'function') {
           ctx.events.emit('command:run', { cmdText: norm(cmdText), meta: meta || {} });
@@ -106,10 +85,8 @@
         return r;
       }
 
-      // Default path: send to transport.
       try {
         if (ctx && ctx.transport && typeof ctx.transport.send === 'function') {
-          // Keep existing behavior: add newline if not already present.
           const payload = String(cmdText || '');
           const hasNewline = /\r|\n/.test(payload);
           const ok = !!ctx.transport.send(hasNewline ? payload : (payload + '\n'), { source: (meta && meta.source) || 'router' });
@@ -142,5 +119,5 @@
     return { register, route, execute };
   }
 
-  window.XKeen.terminal.commands.createCommandRouter = createCommandRouter;
+  publishTerminalCommandsCompatApi('createCommandRouter', createCommandRouter);
 })();

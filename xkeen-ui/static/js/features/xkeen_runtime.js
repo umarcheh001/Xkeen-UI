@@ -154,230 +154,32 @@ export function publishXkeenPageApi(name, api) {
   }
 }
 
-function getXkeenRawPageConfig() {
+export function getXkeenWindowFlag(name, fallbackValue = undefined) {
+  const key = String(name || '').trim();
+  if (!key) return fallbackValue;
   try {
-    const xk = getWindowXKeen();
-    return xk && xk.pageConfig && typeof xk.pageConfig === 'object' ? xk.pageConfig : null;
+    const win = getWindowRef();
+    if (!win || !(key in win)) return fallbackValue;
+    return win[key];
   } catch (e) {
-    return null;
+    return fallbackValue;
   }
 }
 
-function getObjectPathValue(source, path) {
-  const root = source && typeof source === 'object' ? source : null;
-  const rawPath = Array.isArray(path)
-    ? path.map((part) => String(part || '').trim()).filter(Boolean)
-    : String(path || '').split('.').map((part) => part.trim()).filter(Boolean);
-  if (!root || !rawPath.length) return undefined;
-
-  let cursor = root;
-  for (const part of rawPath) {
-    if (!cursor || typeof cursor !== 'object' || !Object.prototype.hasOwnProperty.call(cursor, part)) {
-      return undefined;
-    }
-    cursor = cursor[part];
-  }
-  return cursor;
-}
-
-function setObjectPathValue(source, path, value) {
-  const root = source && typeof source === 'object' ? source : null;
-  const rawPath = Array.isArray(path)
-    ? path.map((part) => String(part || '').trim()).filter(Boolean)
-    : String(path || '').split('.').map((part) => part.trim()).filter(Boolean);
-  if (!root || !rawPath.length) return false;
-
-  let cursor = root;
-  for (let index = 0; index < rawPath.length - 1; index += 1) {
-    const part = rawPath[index];
-    if (!cursor[part] || typeof cursor[part] !== 'object') cursor[part] = {};
-    cursor = cursor[part];
-  }
-
-  cursor[rawPath[rawPath.length - 1]] = value;
-  return true;
-}
-
-function coerceXkeenBooleanValue(value, fallbackValue = false) {
+export function getXkeenBooleanFlag(name, fallbackValue = false) {
+  const value = getXkeenWindowFlag(name, fallbackValue);
   if (typeof value === 'boolean') return value;
   const normalized = String(value == null ? '' : value).trim().toLowerCase();
   if (!normalized) return !!fallbackValue;
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
 }
 
-export function getXkeenPageConfigValue(path, fallbackValue = undefined) {
-  const key = String(path || '').trim();
-  if (!key) {
-    const rawPageConfig = getXkeenRawPageConfig();
-    return rawPageConfig == null ? fallbackValue : rawPageConfig;
-  }
-
-  const rawPageConfig = getXkeenRawPageConfig();
-  const rawValue = getObjectPathValue(rawPageConfig, key);
-  return rawValue === undefined ? fallbackValue : rawValue;
-}
-
-export function getXkeenPageName() {
-  const value = getXkeenPageConfigValue('page', '');
-  return typeof value === 'string' ? value : String(value || '');
-}
-
-export function getXkeenPageSectionsConfig() {
-  return {
-    panelWhitelist: getXkeenPageConfigValue('sections.panelWhitelist', null),
-    devtoolsWhitelist: getXkeenPageConfigValue('sections.devtoolsWhitelist', null),
-  };
-}
-
-export function getXkeenPageFilesConfig() {
-  return {
-    routing: String(getXkeenPageConfigValue('files.routing', '') || ''),
-    inbounds: String(getXkeenPageConfigValue('files.inbounds', '') || ''),
-    outbounds: String(getXkeenPageConfigValue('files.outbounds', '') || ''),
-    mihomo: String(getXkeenPageConfigValue('files.mihomo', '') || ''),
-  };
-}
-
-export function getXkeenPageFlagsConfig() {
-  return {
-    hasXray: coerceXkeenBooleanValue(getXkeenPageConfigValue('flags.hasXray', true), true),
-    hasMihomo: coerceXkeenBooleanValue(getXkeenPageConfigValue('flags.hasMihomo', false), false),
-    isMips: coerceXkeenBooleanValue(getXkeenPageConfigValue('flags.isMips', false), false),
-    multiCore: coerceXkeenBooleanValue(getXkeenPageConfigValue('flags.multiCore', false), false),
-    mihomoConfigExists: coerceXkeenBooleanValue(getXkeenPageConfigValue('flags.mihomoConfigExists', false), false),
-  };
-}
-
-export function getXkeenPageCoresConfig() {
-  const available = getXkeenPageConfigValue('cores.available', []);
-  const detected = getXkeenPageConfigValue('cores.detected', []);
-  return {
-    available: Array.isArray(available) ? available : [],
-    detected: Array.isArray(detected) ? detected : [],
-    uiFallback: coerceXkeenBooleanValue(getXkeenPageConfigValue('cores.uiFallback', false), false),
-  };
-}
-
-export function getXkeenFileManagerDefaults() {
-  return {
-    rightDefault: String(getXkeenPageConfigValue('fileManager.rightDefault', '') || ''),
-  };
-}
-
-export function getXkeenGithubConfig() {
-  return {
-    repoUrl: String(getXkeenPageConfigValue('github.repoUrl', '') || ''),
-  };
-}
-
-export function getXkeenStaticConfig() {
-  return {
-    base: String(getXkeenPageConfigValue('static.base', '') || ''),
-    version: String(getXkeenPageConfigValue('static.version', '') || ''),
-  };
-}
-
-export function getXkeenRuntimeConfig() {
-  return {
-    debug: coerceXkeenBooleanValue(getXkeenPageConfigValue('runtime.debug', false), false),
-  };
-}
-
-export function getXkeenTerminalConfig() {
-  return {
-    supportsPty: coerceXkeenBooleanValue(getXkeenPageConfigValue('terminal.supportsPty', false), false),
-    enableOptionalAddons: coerceXkeenBooleanValue(getXkeenPageConfigValue('terminal.enableOptionalAddons', false), false),
-    enableLigatures: coerceXkeenBooleanValue(getXkeenPageConfigValue('terminal.enableLigatures', false), false),
-    enableWebgl: coerceXkeenBooleanValue(getXkeenPageConfigValue('terminal.enableWebgl', false), false),
-  };
-}
-
-export function supportsXkeenTerminalPty() {
-  return !!getXkeenTerminalConfig().supportsPty;
-}
-
-export function shouldEnableXkeenTerminalOptionalAddons() {
-  return !!getXkeenTerminalConfig().enableOptionalAddons;
-}
-
-export function shouldEnableXkeenTerminalLigatures() {
-  return !!getXkeenTerminalConfig().enableLigatures;
-}
-
-export function shouldEnableXkeenTerminalWebgl() {
-  return !!getXkeenTerminalConfig().enableWebgl;
-}
-
-export function getXkeenPageConfig() {
-  const rawPageConfig = getXkeenRawPageConfig();
-  if (rawPageConfig && typeof rawPageConfig === 'object') return rawPageConfig;
-  return {
-    contractVersion: 1,
-    page: getXkeenPageName(),
-    sections: getXkeenPageSectionsConfig(),
-    flags: getXkeenPageFlagsConfig(),
-    cores: getXkeenPageCoresConfig(),
-    files: getXkeenPageFilesConfig(),
-    fileManager: getXkeenFileManagerDefaults(),
-    github: getXkeenGithubConfig(),
-    static: getXkeenStaticConfig(),
-    runtime: getXkeenRuntimeConfig(),
-    terminal: getXkeenTerminalConfig(),
-  };
-}
-
-export function setXkeenPageConfigValue(path, value) {
-  const key = String(path || '').trim();
-  if (!key) return false;
-
-  try {
-    const xk = ensureXkeenRoot();
-    if (!xk) return false;
-    if (!xk.pageConfig || typeof xk.pageConfig !== 'object') {
-      xk.pageConfig = getXkeenPageConfig();
-    }
-    if (!setObjectPathValue(xk.pageConfig, key, value)) return false;
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-export function hasXkeenMihomoCore() {
-  return !!getXkeenPageFlagsConfig().hasMihomo;
-}
-
-export function isXkeenMipsRuntime() {
-  return !!getXkeenPageFlagsConfig().isMips;
-}
-
-export function getXkeenStaticBase() {
-  return String(getXkeenStaticConfig().base || '');
-}
-
-export function getXkeenStaticVersion() {
-  return String(getXkeenStaticConfig().version || '');
-}
-
-export function getXkeenFilePath(name, fallbackValue = '') {
-  const key = String(name || '').trim();
-  if (!key) return fallbackValue;
-  const files = getXkeenPageFilesConfig();
-  if (!Object.prototype.hasOwnProperty.call(files, key)) return fallbackValue;
-  return String(files[key] || fallbackValue || '');
-}
-
-export function getXkeenCoreAvailability() {
-  const cores = getXkeenPageCoresConfig();
-  return Array.isArray(cores.available) ? cores.available : [];
-}
-
 export function hasXkeenXrayCore() {
-  return !!getXkeenPageFlagsConfig().hasXray;
+  return getXkeenBooleanFlag('XKEEN_HAS_XRAY', true);
 }
 
 export function getXkeenGithubRepoUrl() {
-  return String(getXkeenGithubConfig().repoUrl || '');
+  return String(getXkeenWindowFlag('XKEEN_GITHUB_REPO_URL', '') || '');
 }
 
 export function getXkeenLazyRuntimeApi() {
@@ -423,89 +225,6 @@ export function getXkeenEditorActionsApi() {
   } catch (e) {
     return null;
   }
-}
-
-export function getXkeenEditorToolbarApi() {
-  try {
-    const ui = getXkeenUiApi();
-    return ui ? (ui.editorToolbar || null) : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-export function getXkeenEditorToolbarIcons() {
-  try {
-    const toolbar = getXkeenEditorToolbarApi();
-    const icons = toolbar && toolbar.icons && typeof toolbar.icons === 'object' ? toolbar.icons : null;
-    return icons ? Object.assign({}, icons) : {};
-  } catch (e) {
-    return {};
-  }
-}
-
-export function getXkeenEditorToolbarDefaultItems() {
-  try {
-    const toolbar = getXkeenEditorToolbarApi();
-    const items = toolbar && Array.isArray(toolbar.defaultItems) ? toolbar.defaultItems : null;
-    return items ? items.slice() : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-export function getXkeenEditorToolbarMiniItems() {
-  try {
-    const toolbar = getXkeenEditorToolbarApi();
-    const items = toolbar && Array.isArray(toolbar.miniItems) ? toolbar.miniItems : null;
-    return items ? items.slice() : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-export function buildXkeenEditorCommonKeys(options) {
-  const opts = options && typeof options === 'object' ? options : {};
-  try {
-    const toolbar = getXkeenEditorToolbarApi();
-    if (toolbar && typeof toolbar.buildCommonKeys === 'function') {
-      return toolbar.buildCommonKeys(opts) || {};
-    }
-  } catch (e) {}
-  try {
-    const editorActions = getXkeenEditorActionsApi();
-    if (editorActions && typeof editorActions.buildCommonKeys === 'function') {
-      return editorActions.buildCommonKeys(opts) || {};
-    }
-  } catch (e2) {}
-  try {
-    const win = getWindowRef();
-    if (win && typeof win.buildCmExtraKeysCommon === 'function') {
-      return win.buildCmExtraKeysCommon(opts) || {};
-    }
-  } catch (e3) {}
-  return {};
-}
-
-export function attachXkeenEditorToolbar(editor, items, options) {
-  if (!editor) return null;
-  try {
-    const toolbar = getXkeenEditorToolbarApi();
-    if (toolbar && typeof toolbar.attach === 'function') {
-      return toolbar.attach(editor, items, options);
-    }
-  } catch (e) {}
-  try {
-    const win = getWindowRef();
-    if (win && typeof win.xkeenAttachCmToolbar === 'function') {
-      return win.xkeenAttachCmToolbar(editor, items, options);
-    }
-  } catch (e2) {}
-  return null;
-}
-
-export function isXkeenDebugRuntime() {
-  return !!getXkeenRuntimeConfig().debug;
 }
 
 export function getXkeenEditorLinksApi() {
@@ -667,16 +386,7 @@ export function getXkeenTerminalRoot() {
 export function getXkeenTerminalApi() {
   try {
     const terminal = getXkeenTerminalRoot();
-    if (!terminal) return null;
-
-    let api = terminal.api || null;
-    if ((!api || api.__xkLazyStubInstalled) && terminal.core && typeof terminal.core.createPublicApi === 'function') {
-      try {
-        api = terminal.core.createPublicApi() || null;
-        terminal.api = api;
-      } catch (error) {}
-    }
-    return api || null;
+    return terminal ? (terminal.api || null) : null;
   } catch (e) {
     return null;
   }
@@ -795,20 +505,7 @@ export function openXkeenTerminal(options) {
 
   try {
     const terminal = getXkeenTerminalRoot();
-    if (terminal && typeof terminal.init === 'function') {
-      try { terminal.init(); } catch (error) {}
-    }
     if (terminal && typeof terminal.open === 'function') return terminal.open(null, opts);
-
-    if (terminal && terminal.core && typeof terminal.core.createPublicApi === 'function') {
-      try {
-        const api = terminal.core.createPublicApi();
-        if (api && typeof api.open === 'function') {
-          terminal.api = api;
-          return api.open(opts);
-        }
-      } catch (error) {}
-    }
   } catch (e2) {}
 
   try {
@@ -988,32 +685,12 @@ export const xkeenRuntimeApi = Object.freeze({
   getCoreApi: getXkeenCoreApi,
   getPagesApi: getXkeenPagesApi,
   getUtilApi: getXkeenUtilApi,
-  getPageConfig: getXkeenPageConfig,
-  getPageConfigValue: getXkeenPageConfigValue,
-  setPageConfigValue: setXkeenPageConfigValue,
-  getPageName: getXkeenPageName,
-  getPageSectionsConfig: getXkeenPageSectionsConfig,
-  getPageFilesConfig: getXkeenPageFilesConfig,
-  getPageFlagsConfig: getXkeenPageFlagsConfig,
-  getPageCoresConfig: getXkeenPageCoresConfig,
-  getFileManagerDefaults: getXkeenFileManagerDefaults,
-  getGithubConfig: getXkeenGithubConfig,
-  getStaticConfig: getXkeenStaticConfig,
-  getRuntimeConfig: getXkeenRuntimeConfig,
-  getTerminalConfig: getXkeenTerminalConfig,
   getStateApi: getXkeenStateApi,
   getLazyRuntimeApi: getXkeenLazyRuntimeApi,
   getModalApi: getXkeenModalApi,
   getSettingsApi: getXkeenSettingsApi,
   getSharedPrimitivesApi: getXkeenSharedPrimitivesApi,
   getEditorActionsApi: getXkeenEditorActionsApi,
-  getEditorToolbarApi: getXkeenEditorToolbarApi,
-  getEditorToolbarIcons: getXkeenEditorToolbarIcons,
-  getEditorToolbarDefaultItems: getXkeenEditorToolbarDefaultItems,
-  getEditorToolbarMiniItems: getXkeenEditorToolbarMiniItems,
-  buildEditorCommonKeys: buildXkeenEditorCommonKeys,
-  attachEditorToolbar: attachXkeenEditorToolbar,
-  isDebugRuntime: isXkeenDebugRuntime,
   getEditorLinksApi: getXkeenEditorLinksApi,
   getMonacoSharedApi: getXkeenMonacoSharedApi,
   getDatContentsApi: getXkeenDatContentsApi,
@@ -1030,18 +707,6 @@ export const xkeenRuntimeApi = Object.freeze({
   getCoreStorageApi: getXkeenCoreStorageApi,
   getCommandJobApi: getXkeenCommandJobApi,
   getShowXrayPreflightErrorApi: getXkeenShowXrayPreflightErrorApi,
-  hasXrayCore: hasXkeenXrayCore,
-  hasMihomoCore: hasXkeenMihomoCore,
-  isMipsRuntime: isXkeenMipsRuntime,
-  getGithubRepoUrl: getXkeenGithubRepoUrl,
-  getStaticBase: getXkeenStaticBase,
-  getStaticVersion: getXkeenStaticVersion,
-  getFilePath: getXkeenFilePath,
-  getCoreAvailability: getXkeenCoreAvailability,
-  supportsTerminalPty: supportsXkeenTerminalPty,
-  shouldEnableTerminalOptionalAddons: shouldEnableXkeenTerminalOptionalAddons,
-  shouldEnableTerminalLigatures: shouldEnableXkeenTerminalLigatures,
-  shouldEnableTerminalWebgl: shouldEnableXkeenTerminalWebgl,
   getTerminalRoot: getXkeenTerminalRoot,
   getTerminalApi: getXkeenTerminalApi,
   getTerminalCoreContext: getXkeenTerminalCoreContext,
@@ -1065,12 +730,3 @@ export const xkeenRuntimeApi = Object.freeze({
   closeModal: closeXkeenModal,
   escapeHtml: escapeXkeenHtml,
 });
-
-
-try {
-  const xk = ensureXkeenRoot();
-  if (xk) {
-    xk.runtime = xk.runtime && typeof xk.runtime === 'object' ? xk.runtime : {};
-    Object.assign(xk.runtime, xkeenRuntimeApi);
-  }
-} catch (e) {}

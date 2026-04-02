@@ -6,7 +6,6 @@ import {
   refreshSharedMihomoEditor,
   syncMihomoModalBodyScrollLock,
 } from './mihomo_runtime.js';
-import { getXkeenFilePath } from './xkeen_runtime.js';
 
 let mihomoImportModuleApi = null;
 
@@ -1290,7 +1289,7 @@ let mihomoImportModuleApi = null;
       try {
         // mark last activity badge
         if (typeof window.updateLastActivity === 'function') {
-          const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
+          const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
           window.updateLastActivity('modified', 'mihomo', fp);
         }
       } catch (e4) {}

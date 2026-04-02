@@ -1,10 +1,13 @@
+import {
+  getTerminalCoreApi,
+  getTerminalOverlayApi,
+  publishTerminalCompatApi,
+} from '../runtime.js';
+
 // Terminal module: reconnect controller (auto-retry/backoff)
 // Stage 8.3.1: move reconnect policy/timers out of terminal.js / pty.js
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
 
   const DEFAULT_CFG = {
     baseMs: 800,
@@ -46,7 +49,7 @@
 
   function createController(ctx) {
     const events = (ctx && ctx.events) ? ctx.events : { on: () => () => {}, emit: () => {} };
-    const core = (ctx && ctx.core) ? ctx.core : (window.XKeen.terminal ? window.XKeen.terminal._core : null);
+    const core = (ctx && ctx.core) ? ctx.core : getTerminalCoreApi();
 
     const cfg = Object.assign({}, DEFAULT_CFG);
 
@@ -80,7 +83,7 @@
         if (oc && typeof oc.isOpen === 'function') return !!oc.isOpen();
       } catch (e) {}
       try {
-        const oc2 = (window.XKeen && window.XKeen.terminal) ? window.XKeen.terminal.overlay : null;
+        const oc2 = getTerminalOverlayApi();
         if (oc2 && typeof oc2.isOpen === 'function') return !!oc2.isOpen();
       } catch (e0) {}
       try {
@@ -383,6 +386,7 @@
 
     // Singleton per ctx.
     if (ctx && ctx.reconnect && typeof ctx.reconnect.getRetryState === 'function') {
+      try { publishTerminalCompatApi('reconnect', ctx.reconnect); } catch (e0) {}
       return {
         id,
         priority: 35,
@@ -393,7 +397,7 @@
 
     const controller = createController(ctx);
     try { if (ctx) ctx.reconnect = controller; } catch (e) {}
-    try { window.XKeen.terminal.reconnect = controller; } catch (e2) {}
+    try { publishTerminalCompatApi('reconnect', controller); } catch (e2) {}
 
     return {
       id,
@@ -408,8 +412,10 @@
     };
   }
 
-  window.XKeen.terminal.reconnect_controller = {
+  const terminalReconnectControllerCompat = {
     createModule,
     createController,
   };
+
+  publishTerminalCompatApi('reconnect_controller', terminalReconnectControllerCompat);
 })();

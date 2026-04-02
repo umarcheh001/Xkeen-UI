@@ -1,14 +1,10 @@
 import { getConfigShellApi, activateInboundsConfigView, activateOutboundsConfigView } from './config_shell.shared.js';
 import {
   getXkeenCoreHttpApi,
-  getXkeenGithubRepoUrl,
   getXkeenLazyRuntimeApi,
   getXkeenStateApi,
-  getXkeenTerminalRoot,
   openXkeenTerminal,
-  toastXkeen,
 } from '../features/xkeen_runtime.js';
-import { appendTerminalDebug } from '../features/terminal_debug.js';
 
 function safe(fn) {
   try { return fn(); } catch (error) {
@@ -46,7 +42,7 @@ const panelFeatureSpecs = Object.freeze({
     getApi: (mod) => (mod && typeof mod.getGithubApi === 'function') ? mod.getGithubApi() : null,
     init: (api) => {
       if (api && typeof api.init === 'function') {
-        api.init({ repoUrl: getXkeenGithubRepoUrl() });
+        api.init({ repoUrl: window.XKEEN_GITHUB_REPO_URL || '' });
       }
     },
   },
@@ -227,9 +223,9 @@ export function ensurePanelLazyFeature(name) {
 
 export function ensurePanelTerminalReady() {
   const api = getPanelLazyRuntimeApi();
-  appendTerminalDebug('panel:ensure-terminal-ready', { hasApi: !!api });
-  if (!api || typeof api.ensureTerminalReady !== 'function') return Promise.resolve(false);
-  return Promise.resolve(api.ensureTerminalReady()).then((ready) => !!ready).catch(() => false);
+  return (api && typeof api.ensureTerminalReady === 'function')
+    ? api.ensureTerminalReady()
+    : Promise.resolve(false);
 }
 
 export function isPanelTerminalReady() {
@@ -252,106 +248,10 @@ export function ensurePanelCodeMirrorSupport(opts) {
   return ensurePanelEditorSupport('codemirror', opts);
 }
 
-function isTerminalOverlayVisible() {
-  try {
-    const overlay = document.getElementById('terminal-overlay');
-    if (!overlay || !overlay.isConnected) return false;
-    const cs = window.getComputedStyle(overlay);
-    if (!cs) return false;
-    return cs.display !== 'none' && cs.visibility !== 'hidden';
-  } catch (error) {
-    return false;
-  }
-}
-
-function waitForTerminalOverlay(timeoutMs) {
-  const waitMs = Math.max(0, Number(timeoutMs) || 0);
-  if (isTerminalOverlayVisible()) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    const startedAt = Date.now();
-    function tick() {
-      if (isTerminalOverlayVisible()) return resolve(true);
-      if ((Date.now() - startedAt) >= waitMs) return resolve(isTerminalOverlayVisible());
-      setTimeout(tick, 30);
-    }
-    tick();
-  });
-}
-
-export async function openPanelTerminal(mode) {
+export function openPanelTerminal(mode) {
   const terminalMode = String(mode || 'shell').toLowerCase();
-  appendTerminalDebug('panel:open-terminal-begin', { mode: terminalMode, ready: isPanelTerminalReady() });
-
-  const terminalRoot = (getXkeenTerminalRoot() || (window.XKeen ? window.XKeen.terminal : null) || null);
   safe(() => {
-    if (terminalRoot && typeof terminalRoot.ensureReady === 'function') return terminalRoot.ensureReady();
-    if (terminalRoot && typeof terminalRoot.init === 'function') return terminalRoot.init();
-    if (terminalRoot && typeof terminalRoot.bootstrap === 'function') return terminalRoot.bootstrap();
-    return false;
-  });
-
-  const attempts = [];
-  attempts.push(async () => {
-    const result = openXkeenTerminal({ cmd: '', mode: terminalMode });
-    return Promise.resolve(result);
-  });
-  attempts.push(async () => {
-    const root = getXkeenTerminalRoot() || (window.XKeen ? window.XKeen.terminal : null) || null;
-    if (!root) return false;
-    let api = root && root.api ? root.api : null;
-    if ((!api || api.__xkLazyStubInstalled) && root.core && typeof root.core.createPublicApi === 'function') {
-      api = root.core.createPublicApi();
-      root.api = api;
-    }
-    if (api && typeof api.open === 'function') return api.open({ cmd: '', mode: terminalMode });
-    return false;
-  });
-  attempts.push(async () => {
-    const root = getXkeenTerminalRoot() || (window.XKeen ? window.XKeen.terminal : null) || null;
-    const actions = root && root.ui_actions ? root.ui_actions : null;
-    if (actions && typeof actions.openTerminal === 'function') return actions.openTerminal('', terminalMode);
-    return false;
-  });
-  attempts.push(async () => {
-    const root = getXkeenTerminalRoot() || (window.XKeen ? window.XKeen.terminal : null) || null;
-    if (root && typeof root.open === 'function') return root.open(null, { cmd: '', mode: terminalMode });
-    return false;
-  });
-
-  for (let index = 0; index < attempts.length; index += 1) {
-    try {
-      appendTerminalDebug('panel:open-terminal-attempt', { mode: terminalMode, index: index + 1 });
-      const value = await Promise.resolve(attempts[index]());
-      const visible = await waitForTerminalOverlay(index === 0 ? 120 : 220);
-      appendTerminalDebug('panel:open-terminal-attempt-result', { mode: terminalMode, index: index + 1, value: value === undefined ? 'undefined' : value, visible: visible });
-      if (visible) return true;
-      if (value === true && isTerminalOverlayVisible()) return true;
-    } catch (error) {
-      appendTerminalDebug('panel:open-terminal-attempt-error', { mode: terminalMode, index: index + 1, error: error ? String(error.message || error) : 'unknown error' });
-    }
-  }
-
-  appendTerminalDebug('panel:open-terminal-failed', { mode: terminalMode });
-  return isTerminalOverlayVisible();
-}
-
-function withTimeout(promise, timeoutMs, label) {
-  const waitMs = Math.max(1000, Number(timeoutMs) || 0);
-  if (!promise || typeof promise.then !== 'function') return Promise.resolve(!!promise);
-
-  let timer = null;
-  return Promise.race([
-    promise,
-    new Promise((resolve) => {
-      timer = setTimeout(() => {
-        resolve(false);
-        try {
-          toastXkeen(label || 'Открытие терминала заняло слишком много времени.', 'error');
-        } catch (error) {}
-      }, waitMs);
-    }),
-  ]).finally(() => {
-    if (timer) clearTimeout(timer);
+    void openXkeenTerminal({ cmd: '', mode: terminalMode });
   });
 }
 
@@ -363,37 +263,11 @@ export function wirePanelTerminalLazyOpen() {
     if (!btn) return;
     if (btn.dataset && btn.dataset.xkLazyTerminal === '1') return;
     btn.addEventListener('click', (event) => {
+      if (isPanelTerminalReady()) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (btn.dataset && btn.dataset.xkTerminalBusy === '1') return;
-
-      try {
-        if (btn.dataset) btn.dataset.xkTerminalBusy = '1';
-        btn.disabled = true;
-      } catch (error) {}
-
-      (async () => {
-        let ready = true;
-        if (!isPanelTerminalReady()) {
-          ready = await withTimeout(
-            ensurePanelTerminalReady(),
-            12000,
-            'Не удалось подготовить терминал. Попробуйте ещё раз.'
-          );
-        }
-        appendTerminalDebug('panel:open-terminal-ready', { mode: mode, ready: !!ready });
-        if (!ready) return;
-        const opened = await openPanelTerminal(mode);
-        if (!opened) {
-          try {
-            toastXkeen('Терминал инициализирован, но окно не открылось.', 'error');
-          } catch (error) {}
-        }
-      })().finally(() => {
-        try {
-          if (btn.dataset) delete btn.dataset.xkTerminalBusy;
-          btn.disabled = false;
-        } catch (error) {}
+      ensurePanelTerminalReady().then((ready) => {
+        if (ready) openPanelTerminal(mode);
       });
     }, true);
     if (btn.dataset) btn.dataset.xkLazyTerminal = '1';

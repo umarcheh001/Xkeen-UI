@@ -1,21 +1,24 @@
+import {
+  ensureTerminalNamespaceBucket,
+  getTerminalById,
+  getTerminalCompatApi,
+  getTerminalContext,
+  getTerminalPtyApi,
+  publishTerminalCompatApi,
+  syncTerminalBodyScrollLock,
+} from './runtime.js';
+
 // Terminal window chrome: drag/resize/persist geometry + fullscreen/minimize
 // Pure UI module (no fetch/ws business logic)
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-
   function getCtx() {
-    try {
-      const C = window.XKeen.terminal.core;
-      if (C && typeof C.getCtx === 'function') return C.getCtx();
-    } catch (e) {}
-    return null;
+    return getTerminalContext();
   }
 
-  const core = window.XKeen.terminal._core || null;
-  const state = (core && core.state) ? core.state : (window.XKeen.terminal.__chrome_state = window.XKeen.terminal.__chrome_state || {});
+  const core = getTerminalCompatApi('_core');
+  const state = (core && core.state) ? core.state : ensureTerminalNamespaceBucket('__chrome_state');
 
   const GEOM_KEY = 'xkeen_terminal_geom_v1';
 
@@ -35,20 +38,23 @@
   let geomBeforeFullscreen = null;
 
   function byId(id, ctx) {
-    if (!ctx) ctx = getCtx();
-    try {
-      if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id);
-    } catch (e0) {}
-    try {
-      if (core && typeof core.byId === 'function') return core.byId(id);
-    } catch (e) {}
-    return null;
+    const current = ctx || getCtx();
+    return getTerminalById(id, (key) => {
+      try {
+        if (current && current.ui && typeof current.ui.byId === 'function') return current.ui.byId(key);
+      } catch (e0) {}
+      try {
+        if (core && typeof core.byId === 'function') return core.byId(key);
+      } catch (e) {}
+      return null;
+    });
   }
 
   function syncBodyScrollLock() {
     try {
       if (core && typeof core.syncBodyScrollLock === 'function') return core.syncBodyScrollLock();
     } catch (e) {}
+    return syncTerminalBodyScrollLock();
   }
 
   function fitXterm() {
@@ -241,7 +247,7 @@
       syncBodyScrollLock();
     }
     try {
-      const pty = window.XKeen && XKeen.terminal ? XKeen.terminal.pty : null;
+      const pty = getTerminalPtyApi();
       if (pty && typeof pty.hideSignalsMenu === 'function') pty.hideSignalsMenu();
     } catch (e) {}
   }
@@ -387,7 +393,7 @@
     try { setTimeout(() => { try { ensureInViewportNow(); } catch (e2) {} }, 0); } catch (e3) {}
   }
 
-  window.XKeen.terminal.chrome = {
+  const terminalChromeApi = {
     init: () => {},
     onOpen,
     onClose: unbindWhileOpen,
@@ -407,4 +413,5 @@
       onClose: () => { try { unbindWhileOpen(); } catch (e) {} },
     }),
   };
+  publishTerminalCompatApi('chrome', terminalChromeApi);
 })();

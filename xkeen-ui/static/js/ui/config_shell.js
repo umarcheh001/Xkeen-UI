@@ -1,5 +1,6 @@
 (() => {
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.state = XKeen.state || {};
   XKeen.ui = XKeen.ui || {};
 

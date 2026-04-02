@@ -39,6 +39,7 @@ let devtoolsModuleApi = null;
     try { if (DT.devtoolsEnv && typeof DT.devtoolsEnv.init === 'function') DT.devtoolsEnv.init(); } catch (e) {}
     try { if (DT.devtoolsTheme && typeof DT.devtoolsTheme.init === 'function') DT.devtoolsTheme.init(); } catch (e) {}
     try { if (DT.devtoolsTerminalTheme && typeof DT.devtoolsTerminalTheme.init === 'function') DT.devtoolsTerminalTheme.init(); } catch (e) {}
+    try { if (DT.devtoolsCodeMirrorTheme && typeof DT.devtoolsCodeMirrorTheme.init === 'function') DT.devtoolsCodeMirrorTheme.init(); } catch (e) {}
     try { if (DT.devtoolsCustomCss && typeof DT.devtoolsCustomCss.init === 'function') DT.devtoolsCustomCss.init(); } catch (e) {}
   }
 

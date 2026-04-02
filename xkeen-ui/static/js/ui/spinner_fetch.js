@@ -1,5 +1,6 @@
 (() => {
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
 
   // ---------- Global XKeen overlay spinner (moved out of main.js, step 3) ----------
@@ -8,31 +9,71 @@
   const state = (XKeen.state = XKeen.state || {});
   if (typeof state.spinnerDepth !== 'number') state.spinnerDepth = 0;
 
+  function getInlineSpinner() {
+    try {
+      return document.querySelector('[data-xk-global-spinner-anchor]');
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function setSpinnerMessage(message) {
+    const safeMessage = message || 'Операция выполняется…';
+
+    try {
+      const textEl = document.getElementById('global-xkeen-spinner-text');
+      if (textEl) textEl.textContent = safeMessage;
+    } catch (e) {}
+
+    try {
+      const inlineSpinner = getInlineSpinner();
+      if (!inlineSpinner) return;
+      inlineSpinner.setAttribute('title', safeMessage);
+      inlineSpinner.setAttribute('aria-label', safeMessage);
+      inlineSpinner.dataset.message = safeMessage;
+      const inlineText = inlineSpinner.querySelector('[data-xk-global-spinner-text]');
+      if (inlineText) inlineText.textContent = safeMessage;
+    } catch (e) {}
+  }
+
   function showGlobalXkeenSpinner(message) {
     const overlay = document.getElementById('global-xkeen-spinner');
-    if (!overlay) return;
+    const inlineSpinner = getInlineSpinner();
+    if (!overlay && !inlineSpinner) return;
 
-    const textEl = document.getElementById('global-xkeen-spinner-text');
-    if (textEl && message) {
-      textEl.textContent = message;
+    setSpinnerMessage(message);
+    state.spinnerDepth += 1;
+
+    if (inlineSpinner) {
+      inlineSpinner.classList.add('is-active');
+      try { document.body.classList.add('xk-global-busy-inline'); } catch (e) {}
+      return;
     }
 
-    state.spinnerDepth += 1;
-    overlay.classList.add('is-active');
+    if (overlay) {
+      overlay.classList.add('is-active');
+    }
   }
 
   function hideGlobalXkeenSpinner() {
     const overlay = document.getElementById('global-xkeen-spinner');
-    if (!overlay) return;
+    const inlineSpinner = getInlineSpinner();
+    if (!overlay && !inlineSpinner) return;
 
     state.spinnerDepth = Math.max(0, state.spinnerDepth - 1);
     if (state.spinnerDepth === 0) {
-      overlay.classList.remove('is-active');
+      if (overlay) overlay.classList.remove('is-active');
+      if (inlineSpinner) inlineSpinner.classList.remove('is-active');
+      try { document.body.classList.remove('xk-global-busy-inline'); } catch (e) {}
     }
   }
 
   XKeen.ui.showGlobalXkeenSpinner = XKeen.ui.showGlobalXkeenSpinner || showGlobalXkeenSpinner;
   XKeen.ui.hideGlobalXkeenSpinner = XKeen.ui.hideGlobalXkeenSpinner || hideGlobalXkeenSpinner;
+
+  function ensureXrayPreflightReady() {
+    return import('./xray_preflight_modal.js');
+  }
 
   // ---------- fetch() wrapper: CSRF + spinner for restart-ish actions (moved out of main.js) ----------
   if (window.__xkeen_fetch_spinner_patched) return;
@@ -297,19 +338,14 @@
         if (presentModal()) return;
 
         try {
-          const ensureFeature = (window.XKeen && XKeen.lazy && typeof XKeen.lazy.ensureFeature === 'function')
-            ? XKeen.lazy.ensureFeature
-            : null;
-          if (ensureFeature) {
-            Promise.resolve(ensureFeature('xrayPreflight')).then(function () {
-              if (presentModal()) return;
-              try {
-                const summary = (data && (data.hint || data.stderr || data.stdout || data.error)) ? String(data.hint || data.stderr || data.stdout || data.error) : 'Xray не принял конфиг.';
-                if (typeof window.alert === 'function') window.alert(summary);
-              } catch (e2) {}
-            }).catch(function () {});
-            return;
-          }
+          Promise.resolve(ensureXrayPreflightReady()).then(function () {
+            if (presentModal()) return;
+            try {
+              const summary = (data && (data.hint || data.stderr || data.stdout || data.error)) ? String(data.hint || data.stderr || data.stdout || data.error) : 'Xray не принял конфиг.';
+              if (typeof window.alert === 'function') window.alert(summary);
+            } catch (e2) {}
+          }).catch(function () {});
+          return;
         } catch (e) {}
 
         try {
@@ -421,7 +457,8 @@
         try { if (timeoutId) window.clearTimeout(timeoutId); } catch (e) {}
         hideGlobalXkeenSpinner();
         try {
-          if (err && err.name === 'AbortError') {
+          const ownTimeoutAbort = !!(controller && controller.signal && controller.signal.aborted);
+          if (ownTimeoutAbort && err && err.name === 'AbortError') {
             showSpinnerTimeoutToast();
           }
         } catch (e) {}

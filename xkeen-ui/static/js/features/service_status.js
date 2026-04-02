@@ -2,7 +2,6 @@ import { getRestartLogApi as getRestartLogFeatureApi } from './restart_log.js';
 import {
   closeXkeenModal,
   dismissXkeenToast,
-  getXkeenCommandJobApi,
   getXkeenUiShellApi,
   openXkeenModal,
   toastXkeen,
@@ -30,14 +29,6 @@ let serviceStatusModuleApi = null;
 
   function getUiShellApi() {
     return getXkeenUiShellApi();
-  }
-
-  function getCommandJobApi() {
-    try {
-      const api = getXkeenCommandJobApi();
-      return api && typeof api.waitForCommandJob === 'function' ? api : null;
-    } catch (e) {}
-    return null;
   }
 
   function getRestartLogApi() {
@@ -180,7 +171,6 @@ let serviceStatusModuleApi = null;
       source: 'service_status_control_pending',
       action: normalizedAction,
       requestId,
-      loading: { currentCore: true },
     });
 
     return {
@@ -190,23 +180,7 @@ let serviceStatusModuleApi = null;
   }
 
   async function fetchServiceStatusSnapshot() {
-    const controller = typeof AbortController === 'function' ? new AbortController() : null;
-    const timer = controller
-      ? setTimeout(() => {
-          try { controller.abort(); } catch (e) {}
-        }, 2500)
-      : null;
-
-    let res;
-    try {
-      res = await fetch('/api/xkeen/status', {
-        cache: 'no-store',
-        signal: controller ? controller.signal : undefined,
-      });
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-
+    const res = await fetch('/api/xkeen/status');
     if (!res.ok) throw new Error('status http error: ' + res.status);
     const data = await res.json().catch(() => ({}));
 
@@ -214,66 +188,6 @@ let serviceStatusModuleApi = null;
       serviceStatus: data && data.running ? 'running' : 'stopped',
       currentCore: normalizeCore(data && data.core ? data.core : null),
     };
-  }
-
-  async function clearRestartLogUi() {
-    const restartLog = getRestartLogApi();
-    if (!restartLog) return;
-    try {
-      if (typeof restartLog.clear === 'function') {
-        restartLog.clear();
-        return;
-      }
-    } catch (e) {}
-    try {
-      if (typeof restartLog.setRaw === 'function') restartLog.setRaw('');
-    } catch (e2) {}
-  }
-
-  async function appendRestartLogUi(chunk) {
-    if (!chunk) return;
-    const restartLog = getRestartLogApi();
-    if (!restartLog) return;
-    try {
-      if (typeof restartLog.append === 'function') {
-        restartLog.append(String(chunk));
-        return;
-      }
-    } catch (e) {}
-    try {
-      if (typeof restartLog.load === 'function') restartLog.load();
-    } catch (e2) {}
-  }
-
-  async function waitForRestartJob(jobId, onChunk) {
-    const CJ = getCommandJobApi();
-    if (CJ && typeof CJ.waitForCommandJob === 'function') {
-      return CJ.waitForCommandJob(String(jobId), {
-        maxWaitMs: 5 * 60 * 1000,
-        onChunk: (chunk) => {
-          if (!chunk) return;
-          try { onChunk(chunk); } catch (e) {}
-        }
-      });
-    }
-
-    let lastLen = 0;
-    while (true) {
-      const res = await fetch(`/api/run-command/${encodeURIComponent(String(jobId))}`);
-      const data = await res.json().catch(() => ({}));
-      const out = (data && typeof data.output === 'string') ? data.output : '';
-      if (out.length > lastLen) {
-        const chunk = out.slice(lastLen);
-        lastLen = out.length;
-        if (chunk) {
-          try { onChunk(chunk); } catch (e) {}
-        }
-      }
-      if (!res.ok || data.ok === false || data.status === 'finished' || data.status === 'error') {
-        return data;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
   }
 
   async function resolveFinalServiceStatus(action, requestId) {
@@ -318,8 +232,7 @@ let serviceStatusModuleApi = null;
       id: 'xkeen-service-action',
       message,
       kind: 'info',
-      sticky: false,
-      durationMs: action === 'restart' ? 40000 : 20000,
+      sticky: true,
       dedupeWindowMs: 0,
     });
   }
@@ -502,7 +415,6 @@ let serviceStatusModuleApi = null;
         source: 'service_status_control_resolved',
         action,
         requestId,
-        loading: { currentCore: false },
       });
 
       if (requestAccepted || transportLost) {
@@ -526,7 +438,6 @@ let serviceStatusModuleApi = null;
       source: 'service_status_control_error',
       action,
       requestId,
-      loading: { currentCore: false },
     });
     try { notifyServiceActionResult(fallbackMessage || 'Ошибка управления xkeen.', false); } catch (e3) {}
     return false;
@@ -552,77 +463,6 @@ let serviceStatusModuleApi = null;
 
     const requestPromise = (async () => {
       try {
-        if (normalizedAction === 'start' || normalizedAction === 'restart') {
-          const isRestartAction = normalizedAction === 'restart';
-          const controlIntro = isRestartAction
-            ? '⏳ Запуск xkeen -restart (job)…\n'
-            : '⏳ Запуск xkeen -start (job)…\n';
-          const controlFailureText = isRestartAction
-            ? 'Ошибка перезапуска xkeen'
-            : 'Ошибка запуска xkeen';
-
-          try { await clearRestartLogUi(); } catch (e) {}
-          try { await appendRestartLogUi(controlIntro); } catch (e2) {}
-
-          const res = isRestartAction
-            ? await fetch('/api/run-command', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ flag: '-restart', pty: true }),
-            })
-            : await fetch('/api/run-command', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ flag: '-start', pty: true }),
-            });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || data.ok === false || !data.job_id) {
-            const failureMessage = data && data.error
-              ? String(data.error)
-              : controlActionErrorMessage(normalizedAction);
-            const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, {
-              requestAccepted: false,
-              fallbackMessage: failureMessage,
-            });
-            if (statusEl) {
-              const finalShell = readShellSnapshot();
-              statusEl.textContent = controlStatusTextForState(finalShell.serviceStatus, normalizedAction)
-                || failureMessage;
-            }
-            return settled;
-          }
-
-          const jobId = String(data.job_id || '');
-          const result = await waitForRestartJob(jobId, (chunk) => {
-            try { void appendRestartLogUi(chunk); } catch (e) {}
-          });
-          const ok = !!(result && result.ok);
-          const jobError = result && (result.error || result.message)
-            ? String(result.error || result.message)
-            : '';
-          const exitCode = result && typeof result.exit_code === 'number'
-            ? result.exit_code
-            : null;
-          const failureMessage = ok
-            ? ''
-            : (jobError || (exitCode !== null
-              ? `${controlFailureText} (exit_code=${exitCode}).`
-              : controlActionErrorMessage(normalizedAction)));
-
-          const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, {
-            requestAccepted: true,
-            fallbackMessage: failureMessage,
-          });
-          if (statusEl) {
-            const finalShell = readShellSnapshot();
-            statusEl.textContent = controlStatusTextForState(finalShell.serviceStatus, normalizedAction)
-              || (settled
-                ? controlActionSuccessMessage(normalizedAction)
-                : (failureMessage || controlActionErrorMessage(normalizedAction)));
-          }
-          return settled;
-        }
-
         const res = await postControlRequest(url, normalizedAction);
         const data = await readControlResponseData(res, normalizedAction);
         const ok = !!res.ok && (!data || data.ok !== false);
@@ -630,6 +470,12 @@ let serviceStatusModuleApi = null;
           ? ''
           : (data && data.error ? String(data.error) : controlActionErrorMessage(normalizedAction));
 
+        if (normalizedAction === 'restart' && ok) {
+          try {
+            const restartLog = getRestartLogApi();
+            if (restartLog) restartLog.load();
+          } catch (e) {}
+        }
 
         const settled = await finalizeControlLifecycle(normalizedAction, lifecycle.requestId, {
           requestAccepted: ok,

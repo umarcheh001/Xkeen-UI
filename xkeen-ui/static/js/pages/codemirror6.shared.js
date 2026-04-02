@@ -1,81 +1,57 @@
 // Build/source managed CM6 runtime bridge.
 //
-// Source-mode pages currently ship without the offline /static/vendor/npm/
-// tree, and browsers do not allow adding a new import map after module
-// loading has already started. Because this file itself runs as a module,
-// dynamically inserting an import map here is too late and causes noisy
-// browser errors. Until a page-level import map is emitted before the entry
-// module, keep the CM6 bridge opt-in: only boot when such import map already
-// exists.
+// In source mode the page runs directly from static/js/*.entry.js, so we install
+// an import map that points bare @codemirror/* specifiers to the locally
+// unpacked offline vendor files under /static/vendor/npm/ before loading the
+// actual CM6 runtime module.
 
-const IMPORTMAP_SELECTOR = 'script[type="importmap"][data-xkeen-cm6-importmap="1"]';
-const GLOBAL_KEY = '__XKEEN_CM6_RUNTIME__';
+const CM6_IMPORTS = {
+  "@codemirror/autocomplete": new URL('../../vendor/npm/@codemirror/autocomplete/dist/index.js', import.meta.url).href,
+  "@codemirror/commands": new URL('../../vendor/npm/@codemirror/commands/dist/index.js', import.meta.url).href,
+  "@codemirror/lang-json": new URL('../../vendor/npm/@codemirror/lang-json/dist/index.js', import.meta.url).href,
+  "@codemirror/lang-yaml": new URL('../../vendor/npm/@codemirror/lang-yaml/dist/index.js', import.meta.url).href,
+  "@codemirror/language": new URL('../../vendor/npm/@codemirror/language/dist/index.js', import.meta.url).href,
+  "@codemirror/lint": new URL('../../vendor/npm/@codemirror/lint/dist/index.js', import.meta.url).href,
+  "@codemirror/search": new URL('../../vendor/npm/@codemirror/search/dist/index.js', import.meta.url).href,
+  "@codemirror/state": new URL('../../vendor/npm/@codemirror/state/dist/index.js', import.meta.url).href,
+  "@codemirror/view": new URL('../../vendor/npm/@codemirror/view/dist/index.js', import.meta.url).href,
+  "@lezer/common": new URL('../../vendor/npm/@lezer/common/dist/index.js', import.meta.url).href,
+  "@lezer/highlight": new URL('../../vendor/npm/@lezer/highlight/dist/index.js', import.meta.url).href,
+  "@lezer/json": new URL('../../vendor/npm/@lezer/json/dist/index.js', import.meta.url).href,
+  "@lezer/lr": new URL('../../vendor/npm/@lezer/lr/dist/index.js', import.meta.url).href,
+  "@lezer/yaml": new URL('../../vendor/npm/@lezer/yaml/dist/index.js', import.meta.url).href,
+  "@marijn/find-cluster-break": new URL('../../vendor/npm/@marijn/find-cluster-break/src/index.js', import.meta.url).href,
+  "@replit/codemirror-indentation-markers": new URL('../../vendor/npm/@replit/codemirror-indentation-markers/dist/index.js', import.meta.url).href,
+  "argparse": new URL('../../vendor/npm/argparse/argparse.js', import.meta.url).href,
+  "codemirror": new URL('../../vendor/npm/codemirror/dist/index.js', import.meta.url).href,
+  "crelt": new URL('../../vendor/npm/crelt/index.js', import.meta.url).href,
+  "js-yaml": new URL('../../vendor/npm/js-yaml/dist/js-yaml.mjs', import.meta.url).href,
+  "jsonc-parser": new URL('../../vendor/npm/jsonc-parser/lib/esm/main.js', import.meta.url).href,
+  "style-mod": new URL('../../vendor/npm/style-mod/src/style-mod.js', import.meta.url).href,
+  "w3c-keyname": new URL('../../vendor/npm/w3c-keyname/index.js', import.meta.url).href,
+};
 
-function getWindow() {
-  if (typeof window !== 'undefined') return window;
-  return null;
-}
-
-function ensureSkippedRuntime(reason) {
-  const win = getWindow();
-  if (!win) {
-    return {
-      ok: false,
-      ready: false,
-      reason: String(reason || 'cm6-unavailable'),
-    };
-  }
-
-  win.XKeen = win.XKeen || {};
-  win.XKeen.ui = win.XKeen.ui || {};
-
-  const existing = win.XKeen.ui.cm6Runtime;
-  if (existing && typeof existing === 'object' && typeof existing.ensure === 'function') {
-    return existing;
-  }
-
-  const runtime = {
-    backend: 'cm6-unavailable',
-    contractVersion: 1,
-    ready: false,
-    reason: String(reason || 'cm6-unavailable'),
-    isReady() {
-      return false;
-    },
-    async ensure() {
-      return {
-        ok: false,
-        ready: false,
-        skipped: true,
-        reason: runtime.reason,
-      };
-    },
-  };
-
-  win[GLOBAL_KEY] = runtime;
-  win.XKeen.ui.cm6Runtime = runtime;
-  return runtime;
-}
-
-function hasPreinstalledImportMap() {
+function installImportMap() {
   try {
-    return !!document.querySelector(IMPORTMAP_SELECTOR);
+    if (document.querySelector('script[data-xkeen-cm6-importmap="1"]')) return true;
+    const script = document.createElement('script');
+    script.type = 'importmap';
+    script.dataset.xkeenCm6Importmap = '1';
+    script.textContent = JSON.stringify({ imports: CM6_IMPORTS });
+    (document.head || document.documentElement).prepend(script);
+    return true;
   } catch (e) {
+    try { console.error('[xkeen] failed to install CM6 import map', e); } catch (e2) {}
     return false;
   }
 }
 
 async function ensureCodeMirror6Runtime() {
-  if (!hasPreinstalledImportMap()) {
-    ensureSkippedRuntime('importmap-missing');
-    return false;
-  }
-
+  installImportMap();
   try {
-    await import('../ui/codemirror6_boot.js?v=20260401cm6fine2');
+    await import('../ui/codemirror6_boot.js?v=20260324cm6');
     return true;
   } catch (e) {
-    ensureSkippedRuntime('runtime-load-failed');
     try { console.error('[xkeen] failed to load CM6 runtime bridge', e); } catch (e2) {}
     return false;
   }

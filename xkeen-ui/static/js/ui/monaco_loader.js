@@ -48,6 +48,122 @@
     ],
   };
 
+  const SAFE_MONACO_DUPLICATE_MODULES = [
+    'vs/_commonjsHelpers-CT9FvmAN',
+    'vs/abap-D-t0cyap',
+    'vs/apex-CcIm7xu6',
+    'vs/azcli-BA0tQDCg',
+    'vs/bat-C397hTD6',
+    'vs/bicep-DF5aW17k',
+    'vs/cameligo-plsz8qhj',
+    'vs/clojure-Y2auQMzK',
+    'vs/coffee-Bu45yuWE',
+    'vs/cpp-CkKPQIni',
+    'vs/csharp-CX28MZyh',
+    'vs/csp-D8uWnyxW',
+    'vs/css-CaeNmE3S',
+    'vs/cssMode-CjiAH6dQ',
+    'vs/cypher-DVThT8BS',
+    'vs/dart-CmGfCvrO',
+    'vs/dockerfile-CZqqYdch',
+    'vs/ecl-30fUercY',
+    'vs/editor.api-CalNCsUg',
+    'vs/elixir-xjPaIfzF',
+    'vs/flow9-DqtmStfK',
+    'vs/freemarker2-Cz_sV6Md',
+    'vs/fsharp-BOMdg4U1',
+    'vs/go-D_hbi-Jt',
+    'vs/graphql-CKUU4kLG',
+    'vs/handlebars-OwglfO-1',
+    'vs/hcl-DTaboeZW',
+    'vs/html-Pa1xEWsY',
+    'vs/htmlMode-Bz67EXwp',
+    'vs/ini-CsNwO04R',
+    'vs/java-CI4ZMsH9',
+    'vs/javascript-PczUCGdz',
+    'vs/jsonMode-DULH5oaX',
+    'vs/julia-BwzEvaQw',
+    'vs/kotlin-IUYPiTV8',
+    'vs/less-C0eDYdqa',
+    'vs/lexon-iON-Kj97',
+    'vs/liquid-DqKjdPGy',
+    'vs/lspLanguageFeatures-kM9O9rjY',
+    'vs/lua-DtygF91M',
+    'vs/m3-CsR4AuFi',
+    'vs/markdown-C_rD0bIw',
+    'vs/mdx-DEWtB1K5',
+    'vs/mips-CiYP61RB',
+    'vs/monaco.contribution-D2OdxNBt',
+    'vs/monaco.contribution-DO3azKX8',
+    'vs/monaco.contribution-EcChJV6a',
+    'vs/monaco.contribution-qLAYrEOP',
+    'vs/msdax-C38-sJlp',
+    'vs/mysql-CdtbpvbG',
+    'vs/nls.messages-loader',
+    'vs/nls.messages.cs.js',
+    'vs/nls.messages.de.js',
+    'vs/nls.messages.es.js',
+    'vs/nls.messages.fr.js',
+    'vs/nls.messages.it.js',
+    'vs/nls.messages.ja.js',
+    'vs/nls.messages.js',
+    'vs/nls.messages.ko.js',
+    'vs/nls.messages.pl.js',
+    'vs/nls.messages.pt-br.js',
+    'vs/nls.messages.ru.js',
+    'vs/nls.messages.tr.js',
+    'vs/nls.messages.zh-cn.js',
+    'vs/nls.messages.zh-tw.js',
+    'vs/objective-c-CntZFaHX',
+    'vs/pascal-r6kuqfl_',
+    'vs/pascaligo-BiXoTmXh',
+    'vs/perl-DABw_TcH',
+    'vs/pgsql-me_jFXeX',
+    'vs/php-D_kh-9LK',
+    'vs/pla-VfZjczW0',
+    'vs/postiats-BBSzz8Pk',
+    'vs/powerquery-Dt-g_2cc',
+    'vs/powershell-B-7ap1zc',
+    'vs/protobuf-BmtuEB1A',
+    'vs/pug-BRpRNeEb',
+    'vs/python-Cr0UkIbn',
+    'vs/qsharp-BzsFaUU9',
+    'vs/r-f8dDdrp4',
+    'vs/razor-BYAHOTkz',
+    'vs/redis-fvZQY4PI',
+    'vs/redshift-45Et0LQi',
+    'vs/restructuredtext-C7UUFKFD',
+    'vs/ruby-CZO8zYTz',
+    'vs/rust-Bfetafyc',
+    'vs/sb-3GYllVck',
+    'vs/scala-foMgrKo1',
+    'vs/scheme-CHdMtr7p',
+    'vs/scss-C1cmLt9V',
+    'vs/shell-ClXCKCEW',
+    'vs/solidity-MZ6ExpPy',
+    'vs/sophia-DWkuSsPQ',
+    'vs/sparql-AUGFYSyk',
+    'vs/sql-32GpJSV2',
+    'vs/st-CuDFIVZ_',
+    'vs/swift-n-2HociN',
+    'vs/systemverilog-Ch4vA8Yt',
+    'vs/tcl-D74tq1nH',
+    'vs/tsMode-CZz1Umrk',
+    'vs/twig-C6taOxMV',
+    'vs/typescript-DfOrAzoV',
+    'vs/typespec-D-PIh9Xw',
+    'vs/vb-Dyb2648j',
+    'vs/wgsl-BhLXMOR0',
+    'vs/workers-DcJshg-q',
+    'vs/xml-CdsdnY8S',
+    'vs/yaml-DYGvmE88',
+    'vs/basic-languages/monaco.contribution',
+    'vs/language/json/monaco.contribution',
+    'vs/language/css/monaco.contribution',
+    'vs/language/html/monaco.contribution',
+    'vs/language/typescript/monaco.contribution',
+  ];
+
   function applyExternalConfig() {
     try {
       const ext = window.XKeenMonacoConfig;
@@ -88,68 +204,77 @@
   // ------------------------ loaders (cached) ------------------------
   const _js = new Map();
 
-  function alreadyPresentScript(src) {
-    try {
-      const abs = new URL(src, window.location.href).toString();
-      const nodes = document.querySelectorAll('script[src]');
-      for (const n of nodes) {
-        try {
-          const s = new URL(n.src, window.location.href).toString();
-          if (s === abs) return true;
-        } catch (e) {}
-      }
-    } catch (e) {}
-    return false;
+  function buildSourceUrlComment(url) {
+    return '\n//# sourceURL=' + String(url || '').replace(/\s/g, '%20');
   }
 
-  function loadScriptOnce(src) {
+  function withShadowedGlobals(names, fn) {
+    const globalScope = window;
+    const restore = [];
+    const list = Array.isArray(names) ? names : [];
+
+    try {
+      for (const name of list) {
+        const key = String(name || '').trim();
+        if (!key) continue;
+        const hadOwn = Object.prototype.hasOwnProperty.call(globalScope, key);
+        restore.push({ key, hadOwn, value: globalScope[key] });
+        globalScope[key] = undefined;
+      }
+      return fn();
+    } finally {
+      for (let i = restore.length - 1; i >= 0; i -= 1) {
+        const entry = restore[i];
+        try {
+          if (entry.hadOwn) globalScope[entry.key] = entry.value;
+          else delete globalScope[entry.key];
+        } catch (error) {
+          globalScope[entry.key] = entry.value;
+        }
+      }
+    }
+  }
+
+  async function fetchClassicScriptSource(url) {
+    try {
+      const response = await fetch(String(url || ''), { cache: 'force-cache' });
+      if (!response || !response.ok) return '';
+      return await response.text();
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function evalClassicScript(url, code) {
+    if (!code) return false;
+
+    try {
+      return withShadowedGlobals(['module', 'exports'], () => {
+        const globalEval = (0, eval);
+        globalEval(String(code) + buildSourceUrlComment(url));
+        return true;
+      });
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function loadClassicScriptOnce(src) {
     const url = String(src || '');
     if (!url) return Promise.resolve(false);
 
-    // Prefer reusing the shared loader if present.
-    try {
-      if (XK.runtime && XK.runtime.loader && typeof XK.runtime.loader.loadScriptOnce === 'function') {
-        return XK.runtime.loader.loadScriptOnce(url);
-      }
-    } catch (e) {}
-
     if (_js.has(url)) return _js.get(url);
-    if (alreadyPresentScript(url)) {
-      const p = Promise.resolve(true);
-      _js.set(url, p);
-      return p;
-    }
 
-    // Important: on flaky / blocked networks, <script> can hang for a long time without firing onerror.
-    // Add a soft timeout so we can fall back to the next candidate quickly.
-    const TIMEOUT_MS = 4500;
-
-    const p = new Promise((resolve) => {
-      let done = false;
-      let timer = null;
-      let s = null;
-
-      const finish = (ok) => {
-        if (done) return;
-        done = true;
-        try { if (timer) clearTimeout(timer); } catch (e) {}
-        // If we timed out, remove the script tag to reduce the chance of late onload racing.
-        try { if (!ok && s && s.parentNode) s.parentNode.removeChild(s); } catch (e) {}
-        resolve(!!ok);
-      };
-
-      try {
-        s = document.createElement('script');
-        s.src = url;
-        s.async = true;
-        s.onload = () => finish(true);
-        s.onerror = () => finish(false);
-        document.head.appendChild(s);
-
-        timer = setTimeout(() => finish(false), TIMEOUT_MS);
-      } catch (e) {
-        finish(false);
-      }
+    const p = (async () => {
+      const code = await fetchClassicScriptSource(url);
+      if (!code) return false;
+      return evalClassicScript(url, code);
+    })().then((ok) => {
+      if (!ok) _js.delete(url);
+      return ok;
+    }).catch(() => {
+      _js.delete(url);
+      return false;
     });
 
     _js.set(url, p);
@@ -170,6 +295,31 @@
         provider: 'local',
       });
     }
+    return out;
+  }
+
+  function getMergedIgnoreDuplicateModules() {
+    const seen = new Set();
+    const out = [];
+
+    function pushMany(values) {
+      if (!Array.isArray(values)) return;
+      for (const value of values) {
+        const id = String(value || '').trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push(id);
+      }
+    }
+
+    try {
+      if (window.require && typeof window.require.getConfig === 'function') {
+        const current = window.require.getConfig();
+        pushMany(current && current.ignoreDuplicateModules);
+      }
+    } catch (e) {}
+
+    pushMany(SAFE_MONACO_DUPLICATE_MODULES);
     return out;
   }
 
@@ -245,7 +395,7 @@
       const candidates = localCandidates();
 
       for (const c of candidates) {
-        const ok = await loadScriptOnce(c.loader);
+        const ok = await loadClassicScriptOnce(c.loader);
         if (!ok) continue;
 
         // AMD loader defines global require/define.
@@ -255,10 +405,7 @@
               paths: {
                 vs: c.vsBase,
               },
-              ignoreDuplicateModules: [
-                'vs/basic-languages/monaco.contribution',
-                'vs/language/json/monaco.contribution',
-              ],
+              ignoreDuplicateModules: getMergedIgnoreDuplicateModules(),
             });
             _configured = true;
             _activeSource = { provider: c.provider, loader: c.loader, vsBase: c.vsBase };

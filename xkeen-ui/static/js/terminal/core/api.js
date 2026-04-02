@@ -1,10 +1,11 @@
+import {
+  getTerminalCommandJobApi,
+  publishTerminalCoreCompatApi,
+} from '../runtime.js';
+
 // Terminal core: API wrapper (single place for fetch/command-job calls)
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
 
   function createApi(caps) {
     async function apiFetch(url, options) {
@@ -26,12 +27,13 @@
       return { res, data };
     }
 
-    // Prefer the existing util layer if present.
     async function runShellCommand(cmd, stdinValue, options) {
       try {
-        const CJ = (window.XKeen && XKeen.util && XKeen.util.commandJob) ? XKeen.util.commandJob : null;
+        const CJ = getTerminalCommandJobApi();
         if (CJ && typeof CJ.runShellCommand === 'function') {
-          const opts = Object.assign({}, (options || {}), { hasWs: (caps && typeof caps.hasWs === 'function') ? caps.hasWs() : false });
+          const opts = Object.assign({}, (options || {}), {
+            hasWs: (caps && typeof caps.hasWs === 'function') ? caps.hasWs() : false,
+          });
           return await CJ.runShellCommand(cmd, stdinValue, opts);
         }
       } catch (e) {}
@@ -40,9 +42,11 @@
 
     async function runXkeenFlag(flag, stdinValue, options) {
       try {
-        const CJ = (window.XKeen && XKeen.util && XKeen.util.commandJob) ? XKeen.util.commandJob : null;
+        const CJ = getTerminalCommandJobApi();
         if (CJ && typeof CJ.runXkeenFlag === 'function') {
-          const opts = Object.assign({}, (options || {}), { hasWs: (caps && typeof caps.hasWs === 'function') ? caps.hasWs() : false });
+          const opts = Object.assign({}, (options || {}), {
+            hasWs: (caps && typeof caps.hasWs === 'function') ? caps.hasWs() : false,
+          });
           return await CJ.runXkeenFlag(flag, stdinValue, opts);
         }
       } catch (e) {}
@@ -56,5 +60,5 @@
     };
   }
 
-  window.XKeen.terminal.core.createApi = createApi;
+  publishTerminalCoreCompatApi('createApi', createApi);
 })();
