@@ -1688,7 +1688,15 @@
     </div>
 
     
-    <div id="core-modal" class="modal hidden xk-core-modal-shell" role="dialog" aria-modal="true" aria-label="Выбор ядра XKeen">
+    <div
+      id="core-modal"
+      class="modal hidden xk-core-modal-shell"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Выбор ядра XKeen"
+      data-modal-remember="0"
+      data-modal-nopos="1"
+    >
       <div class="modal-content xk-core-modal-content">
         <div class="modal-header xk-core-modal-header">
           <div class="xk-core-titlebox">
@@ -1702,10 +1710,10 @@
             <div class="xk-core-lead-copy">
               <strong>Выберите активное ядро панели</strong>
               <p class="modal-description xk-core-description">
-              Выберите ядро, которое будет использовать сервис Xkeen. После применения сервис будет перезапущен.
+                Выберите ядро, которое будет использовать сервис Xkeen. После применения сервис будет перезапущен.
               </p>
               <p class="modal-description xk-core-description xk-core-description-secondary">
-                После применения сервис xkeen автоматически перезапустится.
+                После применения сервис Xkeen автоматически перезапустится.
               </p>
             </div>
             <span class="xk-core-lead-chip">restart on apply</span>
@@ -1745,8 +1753,9 @@
         <div class="modal-actions xk-core-modal-actions">
           <div class="xk-core-actions-copy">Панель закроет окно после успешной смены ядра и обновит статус в шапке.</div>
           <div class="xk-core-actions-row">
-          <button id="core-modal-cancel-btn" class="btn-secondary">Отмена</button>
-          <button id="core-modal-confirm-btn" class="btn-primary">Применить</button>
+            <button type="button" id="core-modal-cancel-btn" class="btn-secondary btn-compact">Отмена</button>
+            <button type="button" id="core-modal-confirm-btn" class="btn-primary btn-compact">Применить</button>
+          </div>
         </div>
       </div>
     </div>

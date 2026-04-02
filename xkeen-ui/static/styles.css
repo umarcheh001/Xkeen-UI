@@ -19517,8 +19517,8 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
 }
 
 #core-modal .xk-core-modal-content {
-  width: min(92vw, 720px);
-  max-width: 720px;
+  width: min(94vw, 840px);
+  max-width: 840px;
   max-height: min(90vh, 860px);
   padding: 12px 14px 14px;
   border-radius: 24px;
@@ -20345,7 +20345,7 @@ html[data-theme="light"] #routing-dat-contents-modal .btn-secondary {
 
 @media (max-width: 720px) {
   #core-modal .xk-core-modal-content {
-    width: min(96vw, 720px);
+    width: min(96vw, 840px);
     border-radius: 18px;
   }
 

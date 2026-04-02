@@ -1049,6 +1049,15 @@ let serviceStatusModuleApi = null;
 
     if (!modal || !statusEl || !confirmBtn || !coreButtons.length) return;
 
+    try {
+      if (modal.dataset) {
+        modal.dataset.modalRemember = '0';
+        modal.dataset.modalNopos = '1';
+      }
+      const modalApi = window.XKeen && window.XKeen.ui && window.XKeen.ui.modal ? window.XKeen.ui.modal : null;
+      if (modalApi && typeof modalApi.resetPosition === 'function') modalApi.resetPosition(modal);
+    } catch (e) {}
+
     showModal(modal, 'service_status_core_open');
     setCoreModalCurrentCore('');
     setCoreModalStatus('Загрузка списка ядер...', 'loading');
