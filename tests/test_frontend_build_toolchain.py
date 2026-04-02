@@ -30,7 +30,9 @@ def test_frontend_build_toolchain_files_exist_and_are_wired_up():
     scripts = package.get('scripts') or {}
     dev_dependencies = package.get('devDependencies') or {}
 
-    assert scripts.get('frontend:build') == 'vite build --config vite.config.mjs'
+    frontend_build_script = scripts.get('frontend:build') or ''
+    assert frontend_build_script.startswith('vite build --config vite.config.mjs')
+    assert 'scripts/sync_frontend_build_manifest.py' in frontend_build_script
     assert scripts.get('frontend:verify:static') == 'node scripts/verify_frontend_build.mjs'
     assert scripts.get('frontend:verify') == 'npm run frontend:build && npm run frontend:verify:static'
     assert dev_dependencies.get('vite') == '8.0.3'
@@ -65,7 +67,6 @@ def test_frontend_build_ci_and_status_docs_are_closed():
     assert 'node-version:' in workflow_text
     assert 'npm ci' in workflow_text
     assert 'npm run frontend:build' in workflow_text
-    assert 'scripts/sync_frontend_build_manifest.py' in workflow_text
     assert 'verify_frontend_build.mjs' in workflow_text
 
     readme_text = BUILD_WORKFLOW_DOC.read_text(encoding='utf-8')
@@ -74,4 +75,3 @@ def test_frontend_build_ci_and_status_docs_are_closed():
     assert 'npm run frontend:build' in readme_text
     assert 'sync_frontend_build_manifest.py' in readme_text
     assert 'verify_frontend_build.mjs' in readme_text
-

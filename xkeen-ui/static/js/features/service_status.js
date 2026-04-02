@@ -3,6 +3,7 @@ import {
   closeXkeenModal,
   dismissXkeenToast,
   getXkeenCommandJobApi,
+  getXkeenModalApi,
   getXkeenUiShellApi,
   openXkeenModal,
   toastXkeen,
@@ -1054,7 +1055,7 @@ let serviceStatusModuleApi = null;
         modal.dataset.modalRemember = '0';
         modal.dataset.modalNopos = '1';
       }
-      const modalApi = window.XKeen && window.XKeen.ui && window.XKeen.ui.modal ? window.XKeen.ui.modal : null;
+      const modalApi = getXkeenModalApi();
       if (modalApi && typeof modalApi.resetPosition === 'function') modalApi.resetPosition(modal);
     } catch (e) {}
 
