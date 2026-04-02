@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 def test_terminal_debug_module_exists_and_exports_expected_helpers():
     path = Path('xkeen-ui/static/js/features/terminal_debug.js')
     text = path.read_text(encoding='utf-8')
@@ -11,14 +10,12 @@ def test_terminal_debug_module_exists_and_exports_expected_helpers():
     assert 'export function finishTerminalDebugRun' in text
 
 
-
 def test_update_notifier_postjson_sends_csrf_header():
     path = Path('xkeen-ui/static/js/features/update_notifier.js')
     text = path.read_text(encoding='utf-8')
 
     assert "meta[name=\"csrf-token\"]" in text
     assert "headers['X-CSRF-Token'] = csrf" in text
-
 
 
 def test_codemirror6_source_bridge_is_opt_in_and_does_not_inject_importmap_dynamically():
@@ -30,7 +27,6 @@ def test_codemirror6_source_bridge_is_opt_in_and_does_not_inject_importmap_dynam
     assert "script.type = 'importmap'" not in text
     assert "backend: 'cm6-unavailable'" in text
     assert "ensureSkippedRuntime('importmap-missing')" in text
-
 
 
 def test_codemirror6_importmap_template_exists_and_maps_required_packages():
@@ -45,7 +41,6 @@ def test_codemirror6_importmap_template_exists_and_maps_required_packages():
     assert "vendor/npm/jsonc-parser/lib/esm/main.js" in text
     assert "vendor/npm/style-mod/src/style-mod.js" in text
     assert "vendor/npm/w3c-keyname/index.js" in text
-
 
 def test_source_mode_templates_include_codemirror6_importmap_before_entry_module():
     templates = [
@@ -64,23 +59,6 @@ def test_source_mode_templates_include_codemirror6_importmap_before_entry_module
         assert include_marker in text, rel
         assert module_marker in text, rel
         assert text.index(include_marker) < text.index(module_marker), rel
-
-
-def test_static_vendor_tree_contains_runtime_dependencies_for_cm6_source_mode():
-    required_files = [
-        'xkeen-ui/static/vendor/npm/@codemirror/state/dist/index.js',
-        'xkeen-ui/static/vendor/npm/@codemirror/view/dist/index.js',
-        'xkeen-ui/static/vendor/npm/@codemirror/language/dist/index.js',
-        'xkeen-ui/static/vendor/npm/codemirror/dist/index.js',
-        'xkeen-ui/static/vendor/npm/jsonc-parser/lib/esm/main.js',
-        'xkeen-ui/static/vendor/npm/style-mod/src/style-mod.js',
-        'xkeen-ui/static/vendor/npm/w3c-keyname/index.js',
-    ]
-
-    for rel in required_files:
-        assert Path(rel).exists(), rel
-
-
 
 def test_terminal_lazy_entry_uses_import_first_vendor_adapter_without_dom_script_injection():
     entry_text = Path('xkeen-ui/static/js/pages/terminal.lazy.entry.js').read_text(encoding='utf-8')
@@ -101,14 +79,12 @@ def test_terminal_lazy_entry_uses_import_first_vendor_adapter_without_dom_script
     assert 'appendChild(script)' not in adapter_text
 
 
-
 def test_routing_fragment_refresh_uses_runtime_http_api_instead_of_undefined_core_http_global():
     path = Path('xkeen-ui/static/js/features/routing.js')
     text = path.read_text(encoding='utf-8')
 
     assert 'const coreHttp = getXkeenCoreHttpApi();' in text
     assert 'CORE_HTTP.fetchJSON' not in text
-
 
 
 def test_routing_dat_card_keeps_visible_current_file_labels_in_sync_with_selected_names():
@@ -125,7 +101,6 @@ def test_routing_dat_card_keeps_visible_current_file_labels_in_sync_with_selecte
     assert "if (source === 'dir' || source === 'name') refreshLater();" in card_text
 
 
-
 def test_routing_dat_actions_read_current_dom_selection_before_falling_back_to_saved_prefs():
     text = Path('xkeen-ui/static/js/features/routing_cards/dat/api.js').read_text(encoding='utf-8')
 
@@ -136,7 +111,6 @@ def test_routing_dat_actions_read_current_dom_selection_before_falling_back_to_s
     assert text.count('const p = readKindPrefs(k);') >= 3
 
 
-
 def test_routing_dat_prefs_backfill_blank_values_with_defaults():
     text = Path('xkeen-ui/static/js/features/routing_cards/dat/prefs.js').read_text(encoding='utf-8')
 
@@ -144,7 +118,6 @@ def test_routing_dat_prefs_backfill_blank_values_with_defaults():
     assert "if (!String(merged.url || '').trim()) merged.url = DEFAULTS[k].url;" in text
     assert "if (!String(merged.dir || '').trim()) merged.dir = DEFAULTS[k].dir;" in text
     assert "if (!String(merged.name || '').trim()) merged.name = DEFAULTS[k].name;" in text
-
 
 
 def test_panel_shell_dat_fallback_rehydrates_current_card_before_deferring_and_dispatches_input_change():

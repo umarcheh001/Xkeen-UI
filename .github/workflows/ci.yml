@@ -39,14 +39,14 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Run Python tests
-        run: python -m pytest -q
-
       - name: Build frontend
         run: npm run frontend:build
 
       - name: Recreate frontend bridge manifest
         run: python scripts/sync_frontend_build_manifest.py
+
+      - name: Run Python tests
+        run: python -m pytest -q
 
       - name: Verify frontend build
         run: node scripts/verify_frontend_build.mjs
