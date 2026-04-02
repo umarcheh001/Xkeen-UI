@@ -9,6 +9,7 @@
 - `package.json` — минимальный frontend toolchain entrypoint;
 - `package-lock.json` — lockfile для воспроизводимой установки;
 - `vite.config.mjs` — build graph для canonical page entrypoints;
+- `scripts/sync_frontend_vendor.py` — reproducible sync generated `static/vendor` runtime assets из `node_modules`;
 - `scripts/verify_frontend_build.mjs` — проверка, что raw build graph и bridge graph не разъехались;
 - `scripts/sync_frontend_build_manifest.py` — sync thin bridge wrappers для runtime contract stages 3/8.
 
@@ -71,12 +72,14 @@ npm run frontend:build
 
 Команда:
 
+- синхронизирует `static/vendor` для CodeMirror importmap и офлайн Prettier fallback;
 - генерирует raw build output;
 - синхронизирует bridge manifest и thin wrappers;
 - удаляет stale build-managed files, на которые текущие manifest'ы уже не ссылаются.
 
 Результат записывается в:
 
+- `xkeen-ui/static/vendor/`
 - `xkeen-ui/static/frontend-build/assets/`
 - `xkeen-ui/static/frontend-build/.vite/manifest.build.json`
 - `xkeen-ui/static/frontend-build/.vite/manifest.json`
@@ -91,6 +94,7 @@ npm run frontend:verify:static
 
 Проверяется, что:
 
+- runtime-required vendor assets для importmap/Prettier реально существуют;
 - bridge manifest по-прежнему описывает только thin wrappers;
 - wrapper-файлы остаются import-only;
 - raw build manifest содержит все canonical page entrypoints;
@@ -138,4 +142,4 @@ Current pipeline steps:
 - `npm run frontend:build`
 - `node scripts/verify_frontend_build.mjs`
 
-CI and archive flow are aligned around the canonical `frontend:build` entrypoint, which now also performs wrapper sync and stale-file pruning.
+CI and archive flow are aligned around the canonical `frontend:build` entrypoint, which now also performs vendor sync, wrapper sync and stale-file pruning.

@@ -13,6 +13,7 @@ PACKAGE_JSON = ROOT / 'package.json'
 PACKAGE_LOCK = ROOT / 'package-lock.json'
 VITE_CONFIG = ROOT / 'vite.config.mjs'
 VERIFY_SCRIPT = ROOT / 'scripts' / 'verify_frontend_build.mjs'
+VENDOR_SYNC_SCRIPT = ROOT / 'scripts' / 'sync_frontend_vendor.py'
 BUILD_WORKFLOW_DOC = ROOT / 'docs' / 'frontend-build-workflow.md'
 RAW_BUILD_MANIFEST = ROOT / 'xkeen-ui' / 'static' / 'frontend-build' / '.vite' / 'manifest.build.json'
 CI_WORKFLOW = ROOT / '.github' / 'workflows' / 'ci.yml'
@@ -24,6 +25,7 @@ def test_frontend_build_toolchain_files_exist_and_are_wired_up():
     assert PACKAGE_LOCK.is_file(), 'stage 7 requires a checked-in package-lock.json'
     assert VITE_CONFIG.is_file(), 'stage 7 requires a checked-in vite.config.mjs'
     assert VERIFY_SCRIPT.is_file(), 'stage 7 requires a build verification script'
+    assert VENDOR_SYNC_SCRIPT.is_file(), 'stage 7 requires a vendor sync script for runtime importmap assets'
     assert BUILD_WORKFLOW_DOC.is_file(), 'stage 7 workflow must be documented'
 
     package = json.loads(PACKAGE_JSON.read_text(encoding='utf-8'))
@@ -31,7 +33,9 @@ def test_frontend_build_toolchain_files_exist_and_are_wired_up():
     dev_dependencies = package.get('devDependencies') or {}
 
     frontend_build_script = scripts.get('frontend:build') or ''
-    assert frontend_build_script.startswith('vite build --config vite.config.mjs')
+    assert scripts.get('frontend:vendor') == 'python scripts/sync_frontend_vendor.py'
+    assert 'scripts/sync_frontend_vendor.py' in frontend_build_script
+    assert 'vite build --config vite.config.mjs' in frontend_build_script
     assert 'scripts/sync_frontend_build_manifest.py' in frontend_build_script
     assert scripts.get('frontend:verify:static') == 'node scripts/verify_frontend_build.mjs'
     assert scripts.get('frontend:verify') == 'npm run frontend:build && npm run frontend:verify:static'
@@ -58,7 +62,7 @@ def test_frontend_build_verifier_passes_when_raw_manifest_exists():
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert 'Frontend build bridge + raw build manifests verified.' in result.stdout
+    assert 'Frontend build bridge + raw build manifests verified, including required vendor assets.' in result.stdout
 
 
 def test_frontend_build_ci_and_status_docs_are_closed():
@@ -73,5 +77,6 @@ def test_frontend_build_ci_and_status_docs_are_closed():
     assert 'build-user-archive.yml' in readme_text
     assert 'npm ci' in readme_text
     assert 'npm run frontend:build' in readme_text
+    assert 'sync_frontend_vendor.py' in readme_text
     assert 'sync_frontend_build_manifest.py' in readme_text
     assert 'verify_frontend_build.mjs' in readme_text

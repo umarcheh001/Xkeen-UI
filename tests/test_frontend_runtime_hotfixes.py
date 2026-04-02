@@ -1,4 +1,7 @@
 from pathlib import Path
+import shutil
+
+import pytest
 
 def test_terminal_debug_module_exists_and_exports_expected_helpers():
     path = Path('xkeen-ui/static/js/features/terminal_debug.js')
@@ -41,6 +44,27 @@ def test_codemirror6_importmap_template_exists_and_maps_required_packages():
     assert "vendor/npm/jsonc-parser/lib/esm/main.js" in text
     assert "vendor/npm/style-mod/src/style-mod.js" in text
     assert "vendor/npm/w3c-keyname/index.js" in text
+
+
+def test_runtime_vendor_assets_exist_after_frontend_build():
+    required = [
+        Path('xkeen-ui/static/vendor/npm/@codemirror/state/dist/index.js'),
+        Path('xkeen-ui/static/vendor/npm/@codemirror/view/dist/index.js'),
+        Path('xkeen-ui/static/vendor/npm/codemirror/dist/index.js'),
+        Path('xkeen-ui/static/vendor/npm/jsonc-parser/lib/esm/main.js'),
+        Path('xkeen-ui/static/vendor/npm/style-mod/src/style-mod.js'),
+        Path('xkeen-ui/static/vendor/npm/w3c-keyname/index.js'),
+        Path('xkeen-ui/static/vendor/prettier/standalone.js'),
+        Path('xkeen-ui/static/vendor/prettier/plugins/babel.js'),
+        Path('xkeen-ui/static/vendor/prettier/plugins/estree.js'),
+        Path('xkeen-ui/static/vendor/prettier/plugins/yaml.js'),
+    ]
+
+    if shutil.which('npm') is None and not any(path.exists() for path in required):
+        pytest.skip('npm/vendor assets are not available in this environment')
+
+    missing = [str(path) for path in required if not path.is_file()]
+    assert not missing, f"frontend runtime vendor assets are missing after build:\n" + "\n".join(missing)
 
 def test_source_mode_templates_include_codemirror6_importmap_before_entry_module():
     templates = [
