@@ -19664,22 +19664,44 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
 #core-modal .xk-core-select-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
   margin-top: 0;
-  width: min(100%, 468px);
-  align-self: flex-start;
+  width: 100%;
+  align-self: stretch;
+}
+
+#core-modal .xk-core-select-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+#core-modal .xk-core-select-kicker {
+  color: rgba(125, 211, 252, 0.88);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+#core-modal .xk-core-select-note {
+  color: rgba(191, 219, 254, 0.68);
+  font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 #core-modal .xk-core-option {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  min-height: 58px;
-  padding: 10px 16px;
-  border-radius: 16px;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 152px;
+  padding: 15px 16px 16px;
+  border-radius: 18px;
   border: 1px solid rgba(96, 165, 250, 0.14);
   background:
     linear-gradient(180deg, rgba(6, 15, 38, 0.98), rgba(2, 8, 23, 0.94)),
@@ -19687,11 +19709,24 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 14px 30px rgba(2, 8, 23, 0.18);
+  position: relative;
+  overflow: hidden;
+  text-align: left;
   transition:
     border-color 0.18s ease,
     transform 0.18s ease,
     box-shadow 0.18s ease,
     background 0.18s ease;
+}
+
+#core-modal .xk-core-option::after {
+  content: '';
+  position: absolute;
+  inset: auto 16px 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(125, 211, 252, 0), rgba(125, 211, 252, 0.54), rgba(125, 211, 252, 0));
+  opacity: 0.28;
 }
 
 #core-modal .xk-core-option:hover:not([disabled]) {
@@ -19703,6 +19738,13 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
     0 18px 34px rgba(2, 8, 23, 0.22);
+}
+
+#core-modal .xk-core-option.is-current:not(.active) {
+  border-color: rgba(125, 211, 252, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 18px 34px rgba(2, 8, 23, 0.20);
 }
 
 #core-modal .xk-core-option.active {
@@ -19721,30 +19763,100 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
   box-shadow: none;
 }
 
+#core-modal .xk-core-option-eyebrow {
+  color: rgba(148, 163, 184, 0.88);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#core-modal .xk-core-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 #core-modal .xk-core-option-title {
   color: #f8fbff;
-  font-size: 1rem;
+  font-size: 1.04rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+
+#core-modal .xk-core-option-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.14);
+  background: rgba(3, 12, 30, 0.72);
+  color: rgba(191, 219, 254, 0.82);
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#core-modal .xk-core-option.active .xk-core-option-state {
+  border-color: rgba(191, 219, 254, 0.22);
+  background: rgba(255, 255, 255, 0.14);
+  color: #eff6ff;
 }
 
 #core-modal .xk-core-option-note {
   color: rgba(191, 219, 254, 0.72);
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   line-height: 1.45;
   text-align: left;
 }
 
+#core-modal .xk-core-option-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+}
+
+#core-modal .xk-core-option-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.14);
+  background: rgba(2, 8, 23, 0.54);
+  color: rgba(191, 219, 254, 0.76);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 #core-modal .xk-core-status {
   margin: 0;
-  min-height: 22px;
-  padding: 10px 12px;
-  border-radius: 14px;
+  min-height: 44px;
+  padding: 11px 14px;
+  border-radius: 16px;
   border: 1px solid rgba(96, 165, 250, 0.12);
   background: rgba(2, 8, 23, 0.5);
   color: rgba(191, 219, 254, 0.82);
-  font-size: 0.86rem;
+  font-size: 0.84rem;
+  line-height: 1.42;
+}
+
+#core-modal .xk-core-status[data-state="loading"],
+#core-modal .xk-core-status[data-state="busy"] {
+  border-color: rgba(96, 165, 250, 0.16);
+  background:
+    linear-gradient(180deg, rgba(9, 20, 49, 0.88), rgba(3, 10, 27, 0.92)),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.10), transparent 38%);
+}
+
+#core-modal .xk-core-status[data-state="error"] {
+  border-color: rgba(248, 113, 113, 0.26);
+  background: linear-gradient(180deg, rgba(69, 10, 10, 0.44), rgba(31, 10, 10, 0.54));
+  color: rgba(254, 202, 202, 0.96);
 }
 
 #core-modal .xk-core-status:empty,
@@ -19759,6 +19871,35 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid rgba(96, 165, 250, 0.10);
+}
+
+#core-modal .xk-core-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+#core-modal .xk-core-actions-copy {
+  flex: 1 1 280px;
+  color: rgba(148, 163, 184, 0.82);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+#core-modal .xk-core-actions-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+#core-modal .xk-core-actions-row > button {
+  min-width: 122px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
 }
 
 #routing-dat-contents-modal .xk-dat-modal-content {
@@ -20208,6 +20349,7 @@ html[data-theme="light"] #routing-dat-contents-modal .btn-secondary {
     border-radius: 18px;
   }
 
+  #core-modal .xk-core-select-head,
   #core-modal .xk-core-lead,
   #core-modal .xk-core-modal-actions {
     flex-direction: column;
@@ -20217,6 +20359,15 @@ html[data-theme="light"] #routing-dat-contents-modal .btn-secondary {
   #core-modal .xk-core-select-row {
     grid-template-columns: 1fr;
     width: 100%;
+  }
+
+  #core-modal .xk-core-actions-row {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  #core-modal .xk-core-actions-row > button {
+    flex: 1 1 0;
   }
 
   #routing-dat-contents-modal .xk-dat-controls,
@@ -21846,9 +21997,16 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status.error {
 
 html[data-theme="light"] #core-modal .xk-core-description,
 html[data-theme="light"] #core-modal .xk-core-description-secondary,
+html[data-theme="light"] #core-modal .xk-core-select-note,
 html[data-theme="light"] #core-modal .xk-core-option-note,
-html[data-theme="light"] #core-modal .xk-core-status {
+html[data-theme="light"] #core-modal .xk-core-status,
+html[data-theme="light"] #core-modal .xk-core-actions-copy {
   color: #4a5d7a;
+}
+
+html[data-theme="light"] #core-modal .xk-core-select-kicker,
+html[data-theme="light"] #core-modal .xk-core-option-eyebrow {
+  color: #64748b;
 }
 
 html[data-theme="light"] #core-modal .xk-core-option {
@@ -21871,6 +22029,10 @@ html[data-theme="light"] #core-modal .xk-core-option:hover:not([disabled]) {
     0 18px 34px rgba(59, 91, 154, 0.12);
 }
 
+html[data-theme="light"] #core-modal .xk-core-option.is-current:not(.active) {
+  border-color: rgba(37, 99, 235, 0.20);
+}
+
 html[data-theme="light"] #core-modal .xk-core-option.active {
   border-color: rgba(37, 99, 235, 0.44);
   background:
@@ -21886,9 +22048,28 @@ html[data-theme="light"] #core-modal .xk-core-option.active .xk-core-option-titl
   text-shadow: 0 1px 0 rgba(15, 23, 42, 0.18);
 }
 
+html[data-theme="light"] #core-modal .xk-core-option-state,
+html[data-theme="light"] #core-modal .xk-core-option-pill {
+  border-color: rgba(63, 111, 203, 0.14);
+  background: rgba(255, 255, 255, 0.88);
+  color: #3b4c69;
+}
+
+html[data-theme="light"] #core-modal .xk-core-option.active .xk-core-option-state {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.18);
+  color: #f8fbff;
+}
+
 html[data-theme="light"] #core-modal .xk-core-option[disabled] {
   background: rgba(241, 245, 249, 0.78);
   opacity: 0.64;
+}
+
+html[data-theme="light"] #core-modal .xk-core-status[data-state="error"] {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.98), rgba(254, 226, 226, 0.92));
+  color: #b91c1c;
 }
 
 html[data-theme="light"] .xk-forced-wizard-lead-title,

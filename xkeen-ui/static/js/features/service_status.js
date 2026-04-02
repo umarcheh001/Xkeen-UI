@@ -64,6 +64,114 @@ let serviceStatusModuleApi = null;
     return value === 'mihomo' ? 'mihomo' : 'xray';
   }
 
+  function getCoreModal() {
+    return $('core-modal');
+  }
+
+  function getCoreModalButtons() {
+    try {
+      return Array.from(document.querySelectorAll('#core-modal .core-option'));
+    } catch (e) {}
+    return [];
+  }
+
+  function getCoreModalCurrentCore() {
+    const modal = getCoreModal();
+    try {
+      return modal && modal.dataset ? normalizeCore(modal.dataset.currentCore) : '';
+    } catch (e) {}
+    return '';
+  }
+
+  function setCoreModalCurrentCore(core) {
+    const modal = getCoreModal();
+    if (!modal || !modal.dataset) return '';
+    const value = normalizeCore(core);
+    if (value) modal.dataset.currentCore = value;
+    else delete modal.dataset.currentCore;
+    return value;
+  }
+
+  function setCoreModalStatus(message, state) {
+    const statusEl = $('core-modal-status');
+    if (!statusEl) return;
+    statusEl.textContent = String(message || '');
+    if (!statusEl.dataset) return;
+    const nextState = String(state || '').trim();
+    if (nextState) statusEl.dataset.state = nextState;
+    else delete statusEl.dataset.state;
+  }
+
+  function resetCoreModalUi() {
+    _coreModalLoading = false;
+    setCoreModalCurrentCore('');
+    setCoreModalStatus('', '');
+
+    const confirmBtn = $('core-modal-confirm-btn');
+    const coreButtons = getCoreModalButtons();
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    coreButtons.forEach((btn) => {
+      btn.disabled = false;
+      btn.style.display = '';
+      btn.classList.remove('active', 'is-current');
+      try { btn.setAttribute('aria-checked', 'false'); } catch (e) {}
+      const stateEl = btn.querySelector('.xk-core-option-state');
+      if (stateEl) stateEl.textContent = 'Доступно';
+    });
+  }
+
+  function syncCoreModalSelectionUi() {
+    const statusEl = $('core-modal-status');
+    const confirmBtn = $('core-modal-confirm-btn');
+    const coreButtons = getCoreModalButtons();
+    if (!statusEl || !confirmBtn || !coreButtons.length) return;
+
+    const currentCore = getCoreModalCurrentCore();
+    let selectedCore = '';
+    let anyEnabled = false;
+
+    coreButtons.forEach((btn) => {
+      const core = normalizeCore(btn.getAttribute('data-core'));
+      const isVisible = btn.style.display !== 'none';
+      const isDisabled = !!btn.disabled || !isVisible;
+      const isSelected = isVisible && btn.classList.contains('active');
+      const isCurrent = !!core && core === currentCore;
+
+      if (isVisible && !btn.disabled) anyEnabled = true;
+      if (isSelected && !isDisabled) selectedCore = core;
+
+      btn.classList.toggle('is-current', isCurrent);
+      try { btn.setAttribute('aria-checked', isSelected ? 'true' : 'false'); } catch (e) {}
+
+      const stateEl = btn.querySelector('.xk-core-option-state');
+      if (!stateEl) return;
+      if (isSelected && isCurrent) stateEl.textContent = 'Активно';
+      else if (isSelected) stateEl.textContent = 'Выбрано';
+      else if (isCurrent) stateEl.textContent = 'Текущее';
+      else stateEl.textContent = isDisabled ? 'Недоступно' : 'Доступно';
+    });
+
+    const canSubmit = !!selectedCore && anyEnabled && (!currentCore || selectedCore !== currentCore) && !_coreModalLoading;
+    confirmBtn.disabled = !canSubmit;
+
+    const state = statusEl.dataset ? String(statusEl.dataset.state || '') : '';
+    if (state === 'loading' || state === 'busy' || state === 'error') return;
+    if (!anyEnabled) return;
+
+    if (!selectedCore) {
+      setCoreModalStatus('Выберите ядро для переключения.', 'hint');
+      return;
+    }
+
+    if (currentCore && selectedCore === currentCore) {
+      setCoreModalStatus(`Сейчас активно ядро ${currentCore}. Выберите другой вариант для переключения.`, 'hint');
+      return;
+    }
+
+    setCoreModalStatus(`Будет активировано ядро ${selectedCore}. После применения сервис xkeen перезапустится.`, 'hint');
+  }
+
   function readShellSnapshot() {
     const api = getUiShellApi();
     if (api) return api.getState();
@@ -934,21 +1042,25 @@ let serviceStatusModuleApi = null;
   // ---------- Core selection modal ----------
 
   function openXkeenCoreModal() {
-    const modal = $('core-modal');
+    const modal = getCoreModal();
     const statusEl = $('core-modal-status');
     const confirmBtn = $('core-modal-confirm-btn');
-    const coreButtons = document.querySelectorAll('#core-modal .core-option');
+    const coreButtons = getCoreModalButtons();
 
     if (!modal || !statusEl || !confirmBtn || !coreButtons.length) return;
 
     showModal(modal, 'service_status_core_open');
-    statusEl.textContent = 'Загрузка списка ядер...';
+    setCoreModalCurrentCore('');
+    setCoreModalStatus('Загрузка списка ядер...', 'loading');
     confirmBtn.disabled = true;
 
     coreButtons.forEach((btn) => {
       btn.disabled = true;
-      btn.classList.remove('active');
-      btn.style.display = 'inline-block';
+      btn.style.display = '';
+      btn.classList.remove('active', 'is-current');
+      try { btn.setAttribute('aria-checked', 'false'); } catch (e) {}
+      const stateEl = btn.querySelector('.xk-core-option-state');
+      if (stateEl) stateEl.textContent = 'Недоступно';
     });
 
     _coreModalLoading = true;
@@ -963,52 +1075,76 @@ let serviceStatusModuleApi = null;
 
         const ok = data && data.ok !== false;
         if (!ok) {
-          statusEl.textContent = data && data.error ? `Ошибка: ${data.error}` : 'Не удалось получить список ядер';
+          setCoreModalStatus(data && data.error ? `Ошибка: ${data.error}` : 'Не удалось получить список ядер.', 'error');
           return;
         }
 
-        const cores = Array.isArray(data.cores) ? data.cores : [];
-        const current = data.currentCore || null;
+        const cores = Array.isArray(data.cores) ? data.cores.map((core) => normalizeCore(core)).filter(Boolean) : [];
+        const current = normalizeCore(data.currentCore || '');
+        setCoreModalCurrentCore(current);
 
         if (cores.length < 2) {
-          statusEl.textContent = cores.length
-            ? 'Доступно только одно ядро — переключение не требуется'
-            : 'Не найдено ни одного ядра';
+          setCoreModalStatus(
+            cores.length ? 'Доступно только одно ядро, переключение не требуется.' : 'Не найдено ни одного ядра.',
+            'hint'
+          );
           confirmBtn.disabled = true;
           coreButtons.forEach((btn) => {
             btn.disabled = true;
+            btn.classList.toggle('is-current', normalizeCore(btn.getAttribute('data-core')) === current);
           });
           return;
         }
 
-        statusEl.textContent = '';
+        setCoreModalStatus('', 'hint');
 
         let anyVisible = false;
+        let hasActiveSelection = false;
         coreButtons.forEach((btn) => {
-          const value = btn.getAttribute('data-core');
+          const value = normalizeCore(btn.getAttribute('data-core'));
           if (!value || !cores.includes(value)) {
             btn.style.display = 'none';
+            btn.disabled = true;
+            btn.classList.remove('active', 'is-current');
+            const stateEl = btn.querySelector('.xk-core-option-state');
+            if (stateEl) stateEl.textContent = 'Недоступно';
             return;
           }
           anyVisible = true;
+          btn.style.display = '';
           btn.disabled = false;
-          if (value === current) btn.classList.add('active');
+          btn.classList.toggle('active', !!current && value === current);
+          if (btn.classList.contains('active')) hasActiveSelection = true;
         });
 
-        confirmBtn.disabled = !anyVisible;
+        if (!hasActiveSelection) {
+          const fallbackButton = coreButtons.find((btn) => btn.style.display !== 'none' && !btn.disabled);
+          if (fallbackButton) fallbackButton.classList.add('active');
+        }
+
+        if (!anyVisible) {
+          setCoreModalStatus('Не найдено доступных ядер для переключения.', 'error');
+          confirmBtn.disabled = true;
+          return;
+        }
+
+        syncCoreModalSelectionUi();
       })
       .catch((err) => {
         console.error('core list error', err);
         _coreModalLoading = false;
-        statusEl.textContent = 'Ошибка загрузки списка ядер';
+        setCoreModalStatus('Ошибка загрузки списка ядер.', 'error');
         confirmBtn.disabled = true;
       });
   }
 
   function closeXkeenCoreModal() {
-    const modal = $('core-modal');
+    const modal = getCoreModal();
     if (!modal) return;
+    _coreModalLoading = false;
     hideModal(modal, 'service_status_core_close');
+    try { modal.classList.add('hidden'); } catch (e) {}
+    resetCoreModalUi();
   }
 
   async function confirmXkeenCoreChange() {
@@ -1016,7 +1152,7 @@ let serviceStatusModuleApi = null;
 
     const statusEl = $('core-modal-status');
     const confirmBtn = $('core-modal-confirm-btn');
-    const coreButtons = document.querySelectorAll('#core-modal .core-option');
+    const coreButtons = getCoreModalButtons();
 
     if (!statusEl || !confirmBtn || !coreButtons.length) return;
 
@@ -1028,11 +1164,11 @@ let serviceStatusModuleApi = null;
     });
 
     if (!selectedCore) {
-      statusEl.textContent = 'Пожалуйста, выберите ядро';
+      setCoreModalStatus('Пожалуйста, выберите ядро.', 'hint');
       return;
     }
 
-    statusEl.textContent = `Смена ядра на ${selectedCore}...`;
+    setCoreModalStatus(`Смена ядра на ${selectedCore}...`, 'busy');
     try {
       toast({
         id: 'xkeen-core-change',
@@ -1057,11 +1193,12 @@ let serviceStatusModuleApi = null;
       const ok = data && data.ok !== false;
 
       if (!ok) {
-        statusEl.textContent = data && data.error ? `Ошибка: ${data.error}` : 'Не удалось сменить ядро';
+        setCoreModalStatus(data && data.error ? `Ошибка: ${data.error}` : 'Не удалось сменить ядро.', 'error');
         confirmBtn.disabled = false;
         coreButtons.forEach((btn) => {
-          btn.disabled = false;
+          if (btn.style.display !== 'none') btn.disabled = false;
         });
+        syncCoreModalSelectionUi();
         toast({
           id: 'xkeen-core-change',
           message: 'Не удалось сменить ядро',
@@ -1071,23 +1208,25 @@ let serviceStatusModuleApi = null;
         return;
       }
 
+      setCoreModalCurrentCore(selectedCore);
+      closeXkeenCoreModal();
       toast({
         id: 'xkeen-core-change',
         message: `Ядро изменено на ${selectedCore}`,
         kind: 'success',
         dedupeWindowMs: 0,
       });
-      closeXkeenCoreModal();
       try {
         refreshXkeenServiceStatus({ silent: true });
       } catch (e) {}
     } catch (err) {
       console.error('core change error', err);
-      statusEl.textContent = 'Ошибка при смене ядра';
+      setCoreModalStatus('Ошибка при смене ядра.', 'error');
       confirmBtn.disabled = false;
       coreButtons.forEach((btn) => {
-        btn.disabled = false;
+        if (btn.style.display !== 'none') btn.disabled = false;
       });
+      syncCoreModalSelectionUi();
       toast({
         id: 'xkeen-core-change',
         message: 'Не удалось сменить ядро (ошибка сети)',
@@ -1102,7 +1241,7 @@ let serviceStatusModuleApi = null;
     const closeBtn = $('core-modal-close-btn');
     const cancelBtn = $('core-modal-cancel-btn');
     const confirmBtn = $('core-modal-confirm-btn');
-    const coreOptionButtons = document.querySelectorAll('#core-modal .core-option');
+    const coreOptionButtons = getCoreModalButtons();
 
     if (coreTextEl) {
       coreTextEl.addEventListener('click', (e) => {
@@ -1137,6 +1276,8 @@ let serviceStatusModuleApi = null;
           if (btn.disabled) return;
           coreOptionButtons.forEach((b) => b.classList.remove('active'));
           btn.classList.add('active');
+          setCoreModalStatus('', 'hint');
+          syncCoreModalSelectionUi();
         });
       });
     }

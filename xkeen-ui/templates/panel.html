@@ -133,6 +133,7 @@
               Проверка статуса...
             </span>
           </div>
+          </div>
         </div>
 
         <div class="header-center panel-shell-center" data-xk-shell-group="service">
@@ -1697,22 +1698,53 @@
           <button type="button" class="modal-close" id="core-modal-close-btn">×</button>
         </div>
         <div class="modal-body xk-core-modal-body">
-          <div class="xk-core-intro">
-            <p class="modal-description xk-core-description">
+          <div class="xk-core-lead">
+            <div class="xk-core-lead-copy">
+              <strong>Выберите активное ядро панели</strong>
+              <p class="modal-description xk-core-description">
               Выберите ядро, которое будет использовать сервис Xkeen. После применения сервис будет перезапущен.
-            </p>
+              </p>
+              <p class="modal-description xk-core-description xk-core-description-secondary">
+                После применения сервис xkeen автоматически перезапустится.
+              </p>
+            </div>
+            <span class="xk-core-lead-chip">restart on apply</span>
           </div>
-          <div class="core-select-row xk-core-select-row">
-            <button type="button" class="core-option xk-core-option" data-core="xray">
-              <span class="xk-core-option-title">xray</span>
+          <div class="xk-core-select-head">
+            <span class="xk-core-select-kicker">AVAILABLE CORES</span>
+            <span class="xk-core-select-note">Выберите нужный вариант и подтвердите переключение.</span>
+          </div>
+          <div class="core-select-row xk-core-select-row" role="radiogroup" aria-label="Выбор ядра XKeen">
+            <button type="button" class="core-option xk-core-option" data-core="xray" role="radio" aria-checked="false">
+              <span class="xk-core-option-eyebrow">classic core</span>
+              <span class="xk-core-option-head">
+                <span class="xk-core-option-title">Xray</span>
+                <span class="xk-core-option-state">Доступно</span>
+              </span>
+              <span class="xk-core-option-note">Лучше подходит для Xray routing, JSON/JSONC-фрагментов и live-логов.</span>
+              <span class="xk-core-option-meta">
+                <span class="xk-core-option-pill">Routing</span>
+                <span class="xk-core-option-pill">Live logs</span>
+              </span>
             </button>
-            <button type="button" class="core-option xk-core-option" data-core="mihomo">
-              <span class="xk-core-option-title">mihomo</span>
+            <button type="button" class="core-option xk-core-option" data-core="mihomo" role="radio" aria-checked="false">
+              <span class="xk-core-option-eyebrow">hybrid core</span>
+              <span class="xk-core-option-head">
+                <span class="xk-core-option-title">Mihomo</span>
+                <span class="xk-core-option-state">Доступно</span>
+              </span>
+              <span class="xk-core-option-note">Удобен для mihomo routing, генератора и сценариев со Clash-compatible stack.</span>
+              <span class="xk-core-option-meta">
+                <span class="xk-core-option-pill">Mihomo</span>
+                <span class="xk-core-option-pill">Generator</span>
+              </span>
             </button>
           </div>
-          <p id="core-modal-status" class="modal-hint xk-core-status"></p>
+          <p id="core-modal-status" class="modal-hint xk-core-status" role="status" aria-live="polite"></p>
         </div>
         <div class="modal-actions xk-core-modal-actions">
+          <div class="xk-core-actions-copy">Панель закроет окно после успешной смены ядра и обновит статус в шапке.</div>
+          <div class="xk-core-actions-row">
           <button id="core-modal-cancel-btn" class="btn-secondary">Отмена</button>
           <button id="core-modal-confirm-btn" class="btn-primary">Применить</button>
         </div>
