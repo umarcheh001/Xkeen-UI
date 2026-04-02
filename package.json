@@ -6,6 +6,7 @@
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
   },
+  "packageManager": "npm@10.9.8",
   "scripts": {
     "frontend:vendor": "python scripts/sync_frontend_vendor.py",
     "frontend:build": "python scripts/sync_frontend_vendor.py && vite build --config vite.config.mjs && python scripts/sync_frontend_build_manifest.py",
