@@ -42,9 +42,6 @@ jobs:
       - name: Build frontend
         run: npm run frontend:build
 
-      - name: Recreate frontend bridge manifest
-        run: python scripts/sync_frontend_build_manifest.py
-
       - name: Run Python tests
         run: python -m pytest -q
 

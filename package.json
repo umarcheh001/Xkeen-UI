@@ -7,7 +7,7 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "frontend:build": "vite build --config vite.config.mjs",
+    "frontend:build": "vite build --config vite.config.mjs && python scripts/sync_frontend_build_manifest.py",
     "frontend:verify:static": "node scripts/verify_frontend_build.mjs",
     "frontend:verify": "npm run frontend:build && npm run frontend:verify:static",
     "build:frontend": "npm run frontend:build",

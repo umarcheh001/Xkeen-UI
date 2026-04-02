@@ -69,12 +69,19 @@ npm ci
 npm run frontend:build
 ```
 
-Команда генерирует raw build output в:
+Команда:
+
+- генерирует raw build output;
+- синхронизирует bridge manifest и thin wrappers;
+- удаляет stale build-managed files, на которые текущие manifest'ы уже не ссылаются.
+
+Результат записывается в:
 
 - `xkeen-ui/static/frontend-build/assets/`
 - `xkeen-ui/static/frontend-build/.vite/manifest.build.json`
+- `xkeen-ui/static/frontend-build/.vite/manifest.json`
 
-При этом bridge manifest остаётся отдельным contract-слоем, через который normal production path резолвит build-managed wrappers.
+При этом bridge manifest остаётся отдельным contract-слоем, через который normal production path резолвит build-managed wrappers, но его sync теперь входит в canonical `frontend:build`.
 
 ### 3. Проверка результата
 
@@ -127,12 +134,8 @@ Stage 7 считается закрытым, когда одновременно
 The current archive workflow is .github/workflows/build-user-archive.yml.
 
 Current pipeline steps:
-- 
-pm ci
-- 
-pm run frontend:build
-- python scripts/sync_frontend_build_manifest.py
-- 
-ode scripts/verify_frontend_build.mjs
+- `npm ci`
+- `npm run frontend:build`
+- `node scripts/verify_frontend_build.mjs`
 
-CI and archive flow are aligned around the generated frontend build manifest and wrapper sync step.
+CI and archive flow are aligned around the canonical `frontend:build` entrypoint, which now also performs wrapper sync and stale-file pruning.

@@ -86,6 +86,64 @@ function verifyBuildManifest() {
   }
 }
 
+function normalizeBuildPath(value) {
+  const raw = String(value || '').trim().replace(/\\/g, '/').replace(/^\/+/, '');
+  return raw || null;
+}
+
+function collectManifestFileRefs(manifest) {
+  const refs = new Set();
+  for (const payload of Object.values(manifest || {})) {
+    if (!payload || typeof payload !== 'object') continue;
+    const buildFile = normalizeBuildPath(payload.file);
+    if (buildFile) refs.add(buildFile);
+    for (const key of ['imports', 'dynamicImports', 'css', 'assets']) {
+      const value = payload[key];
+      if (!Array.isArray(value)) continue;
+      for (const entry of value) {
+        const normalized = normalizeBuildPath(entry);
+        if (normalized) refs.add(normalized);
+      }
+    }
+  }
+  return refs;
+}
+
+function verifyNoStaleBuildFiles() {
+  const rawManifest = readJson(buildManifestPath, 'Raw Vite build manifest');
+  const bridgeManifest = readJson(bridgeManifestPath, 'Bridge manifest');
+  const keep = new Set([
+    '.vite/manifest.build.json',
+    '.vite/manifest.json',
+  ]);
+
+  for (const rel of collectManifestFileRefs(rawManifest)) keep.add(rel);
+  for (const payload of Object.values(bridgeManifest || {})) {
+    if (!payload || typeof payload !== 'object') continue;
+    const buildFile = normalizeBuildPath(payload.file);
+    if (buildFile) keep.add(buildFile);
+  }
+
+  const allFiles = [];
+  const stack = [buildRoot];
+  while (stack.length) {
+    const current = stack.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      allFiles.push(path.relative(buildRoot, fullPath).replace(/\\/g, '/'));
+    }
+  }
+
+  const stale = allFiles.filter((rel) => !keep.has(rel));
+  assert(stale.length === 0, `frontend build contains stale files not referenced by current manifests:\n${stale.slice(0, 20).join('\n')}`);
+}
+
 verifyBridgeManifest();
 verifyBuildManifest();
+verifyNoStaleBuildFiles();
 console.log('Frontend build bridge + raw build manifests verified.');
