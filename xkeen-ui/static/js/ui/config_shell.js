@@ -1,3 +1,5 @@
+import { setXkeenPageConfigValue } from '../features/xkeen_runtime.js';
+
 (() => {
   window.XKeen = window.XKeen || {};
   const XKeen = window.XKeen;
@@ -433,8 +435,8 @@
     } catch (e) {}
 
     try {
-      window.XKEEN_FILES = window.XKEEN_FILES || {};
-      if (name) window.XKEEN_FILES[name] = activeFilePath || activeFragment;
+      const nextPath = activeFilePath || activeFragment;
+      if (name) setXkeenPageConfigValue('files.' + name, nextPath);
     } catch (e2) {}
   }
 

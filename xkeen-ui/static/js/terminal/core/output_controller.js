@@ -118,6 +118,35 @@ import {
     return null;
   }
 
+
+  function getMode(ctx) {
+    try {
+      if (ctx && ctx.session && typeof ctx.session.getMode === 'function') return ctx.session.getMode() || 'shell';
+    } catch (e) {}
+    try {
+      const st = (ctx && ctx.core && ctx.core.state) ? ctx.core.state : (ctx && ctx.state ? ctx.state : null);
+      if (st && st.mode) return st.mode;
+    } catch (e2) {}
+    return 'shell';
+  }
+
+  function appendToPre(ctx, text) {
+    const chunk = String(text == null ? '' : text);
+    if (!chunk) return;
+    let out = null;
+    try {
+      out = (ctx && ctx.ui && ctx.ui.get && typeof ctx.ui.get.outputPre === 'function')
+        ? ctx.ui.get.outputPre()
+        : null;
+    } catch (e) {}
+    try {
+      if (!out && ctx && ctx.dom) out = ctx.dom.outputPre || ctx.dom.output || null;
+    } catch (e2) {}
+    if (!out) return;
+    try { out.textContent += stripAnsi(chunk); } catch (e3) {}
+    try { out.scrollTop = out.scrollHeight; } catch (e4) {}
+  }
+
   function autoFollow(ctx, term) {
     const prefs = getPrefs(ctx);
     if (!prefs.follow) return;
@@ -200,9 +229,15 @@ import {
         });
       } catch (e5) {}
 
+      const mode = getMode(ctx);
       const term = resolveTerm(ctx);
-      try { safeWrite(term, out); } catch (e6) {}
-      try { autoFollow(ctx, term); } catch (e7) {}
+      if (mode === 'pty' && term) {
+        try { safeWrite(term, out); } catch (e6) {}
+        try { autoFollow(ctx, term); } catch (e7) {}
+      } else {
+        try { appendToPre(ctx, out); } catch (e6) {}
+        try { autoFollow(ctx, null); } catch (e7) {}
+      }
     }
 
     function init() {

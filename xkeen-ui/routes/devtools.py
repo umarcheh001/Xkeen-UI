@@ -661,31 +661,7 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
             }
         )
 
-    
-
-    # --- Theme editor (global custom theme stored in UI_STATE_DIR) ---
-
-    @bp.get("/api/devtools/theme")
-    def api_devtools_theme_get() -> Any:
-        data = dt.theme_get(ui_state_dir)
-        return jsonify({"ok": True, **data})
-
-    @bp.post("/api/devtools/theme")
-    def api_devtools_theme_set() -> Any:
-        payload = request.get_json(silent=True) or {}
-        cfg_in = payload.get("config") if isinstance(payload, dict) else None
-        if cfg_in is None:
-            cfg_in = payload
-        data = dt.theme_set(ui_state_dir, cfg_in)
-        return jsonify({"ok": True, **data})
-
-    @bp.post("/api/devtools/theme/reset")
-    def api_devtools_theme_reset() -> Any:
-        data = dt.theme_reset(ui_state_dir)
-        return jsonify({"ok": True, **data})
-
-
-    # --- Independent themes (Terminal / CodeMirror) ---
+    # --- Independent theme (Terminal) ---
 
     @bp.get("/api/devtools/terminal_theme")
     def api_devtools_terminal_theme_get() -> Any:
@@ -706,24 +682,6 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         data = dt.terminal_theme_reset(ui_state_dir)
         return jsonify({"ok": True, **data})
 
-    @bp.get("/api/devtools/codemirror_theme")
-    def api_devtools_codemirror_theme_get() -> Any:
-        data = dt.codemirror_theme_get(ui_state_dir)
-        return jsonify({"ok": True, **data})
-
-    @bp.post("/api/devtools/codemirror_theme")
-    def api_devtools_codemirror_theme_set() -> Any:
-        payload = request.get_json(silent=True) or {}
-        cfg_in = payload.get("config") if isinstance(payload, dict) else None
-        if cfg_in is None:
-            cfg_in = payload
-        data = dt.codemirror_theme_set(ui_state_dir, cfg_in)
-        return jsonify({"ok": True, **data})
-
-    @bp.post("/api/devtools/codemirror_theme/reset")
-    def api_devtools_codemirror_theme_reset() -> Any:
-        data = dt.codemirror_theme_reset(ui_state_dir)
-        return jsonify({"ok": True, **data})
 
 
     # --- Branding (global, stored in UI_STATE_DIR/branding.json) ---
@@ -745,38 +703,6 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
     @bp.post("/api/devtools/branding/reset")
     def api_devtools_branding_reset() -> Any:
         data = br.branding_reset(ui_state_dir)
-        return jsonify({"ok": True, **data})
-
-
-    # --- Custom CSS editor (global custom.css stored in UI_STATE_DIR) ---
-
-    @bp.get("/api/devtools/custom_css")
-    def api_devtools_custom_css_get() -> Any:
-        data = dt.custom_css_get(ui_state_dir)
-        return jsonify({"ok": True, **data})
-
-    @bp.post("/api/devtools/custom_css/save")
-    def api_devtools_custom_css_save() -> Any:
-        payload = request.get_json(silent=True) or {}
-        css = None
-        if isinstance(payload, dict):
-            css = payload.get("css")
-            if css is None:
-                css = payload.get("content")
-        try:
-            data = dt.custom_css_set(ui_state_dir, css)
-        except ValueError as e:
-            return jsonify({"ok": False, "error": str(e) or "invalid"}), 400
-        return jsonify({"ok": True, **data})
-
-    @bp.post("/api/devtools/custom_css/disable")
-    def api_devtools_custom_css_disable() -> Any:
-        data = dt.custom_css_disable(ui_state_dir)
-        return jsonify({"ok": True, **data})
-
-    @bp.post("/api/devtools/custom_css/reset")
-    def api_devtools_custom_css_reset() -> Any:
-        data = dt.custom_css_reset(ui_state_dir)
         return jsonify({"ok": True, **data})
 
     @bp.get("/api/devtools/logs")

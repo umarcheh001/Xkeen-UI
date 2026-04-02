@@ -6,6 +6,7 @@ import {
   getXkeenConfigDirtyApi,
   getXkeenCoreHttpApi,
   getXkeenJsonEditorApi,
+  getXkeenPageCoresConfig,
   toastXkeen,
 } from '../features/xkeen_runtime.js';
 
@@ -50,15 +51,12 @@ function coreListSignature(list) {
 
 function getInitialDetectedCores() {
   try {
-    if (Array.isArray(window.XKEEN_DETECTED_CORES)) {
-      return normalizeCoreList(window.XKEEN_DETECTED_CORES);
+    const cores = getXkeenPageCoresConfig();
+    if (Array.isArray(cores.detected) && cores.detected.length) {
+      return normalizeCoreList(cores.detected);
     }
-  } catch (error) {}
-  try {
-    if (window.XKEEN_CORE_UI_FALLBACK === true) return [];
-  } catch (error) {}
-  try {
-    return normalizeCoreList(window.XKEEN_AVAILABLE_CORES);
+    if (cores && cores.uiFallback === true) return [];
+    if (Array.isArray(cores.available)) return normalizeCoreList(cores.available);
   } catch (error) {}
   return [];
 }

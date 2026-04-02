@@ -3,16 +3,22 @@ import {
   getXkeenDatContentsApi,
   getXkeenEditorActionsApi,
   getXkeenEditorLinksApi,
+  getXkeenEditorToolbarApi,
   getXkeenJsonEditorApi,
   getXkeenMonacoLoaderApi,
   getXkeenMonacoSharedApi,
   getXkeenPagesApi,
   getXkeenTerminalRoot,
+  isXkeenDebugRuntime,
 } from '../features/xkeen_runtime.js';
+import {
+  appendTerminalDebug,
+  finishTerminalDebugRun,
+  markTerminalDebugState,
+} from '../features/terminal_debug.js';
 
-// Transitional compatibility layer during the ESM migration.
-// Stage 0 guardrail: do not add new lazy feature paths here; new code must use import().
-// See docs/frontend-target-architecture.md and docs/adr/0001-frontend-esm-bootstrap.md.
+// Narrow lazy runtime adapter for generic deferred bundles and shell-bound feature APIs.
+// Do not add page-specific loaders here; new code must use direct import() or panel-local lazy bindings.
 
 (() => {
   "use strict";
@@ -152,10 +158,11 @@ import {
     try {
       const editorActions = getXkeenEditorActionsApi();
       const editorLinks = getXkeenEditorLinksApi();
+      const editorToolbar = getXkeenEditorToolbarApi();
       return !!(
         editorActions &&
-        typeof window.buildCmExtraKeysCommon === 'function' &&
-        typeof window.xkeenAttachCmToolbar === 'function' &&
+        editorToolbar && typeof editorToolbar.buildCommonKeys === 'function' &&
+        typeof editorToolbar.attach === 'function' &&
         editorLinks && typeof editorLinks.setEnabled === 'function'
       );
     } catch (e) {
@@ -386,6 +393,23 @@ import {
     return !!terminalLoaded;
   }
 
+  function withLoaderTimeout(promise, timeoutMs, label) {
+    const waitMs = Math.max(1000, Number(timeoutMs) || 0);
+    if (!promise || typeof promise.then !== 'function') return Promise.resolve(promise);
+
+    let timer = null;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(String(label || 'lazy loader timeout')));
+        }, waitMs);
+      }),
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
+  }
+
   function ensureTerminalReady() {
     if (terminalLoaded) return Promise.resolve(true);
     if (terminalPromise) return terminalPromise;
@@ -394,22 +418,44 @@ import {
       const bundleLoader = getBundleLoader('terminal');
       if (typeof bundleLoader !== 'function') throw new Error('missing terminal bundle loader');
 
-      const termOk = await bundleLoader();
+      const termOk = await withLoaderTimeout(bundleLoader(), 8000, 'terminal bundle timeout');
       if (!termOk) throw new Error('failed to load terminal bundle');
 
-      safeInvoke(() => {
-        const terminalRoot = getXkeenTerminalRoot() || XK.terminal || null;
-        if (terminalRoot && typeof terminalRoot.init === 'function') terminalRoot.init();
+      let terminalRoot = getXkeenTerminalRoot() || XK.terminal || null;
+
+      if (!terminalRoot || typeof terminalRoot.init !== 'function') {
+        try {
+          await import('../terminal/terminal.js');
+        } catch (error) {}
+        terminalRoot = getXkeenTerminalRoot() || XK.terminal || null;
+      }
+
+      const initResult = safeInvoke(() => {
+        if (terminalRoot && typeof terminalRoot.ensureReady === 'function') return terminalRoot.ensureReady();
+        if (terminalRoot && typeof terminalRoot.init === 'function') return terminalRoot.init();
+        if (terminalRoot && typeof terminalRoot.bootstrap === 'function') {
+          terminalRoot.bootstrap();
+          return true;
+        }
+        return false;
       });
 
       safeInvoke(() => {
-        const terminalRoot = getXkeenTerminalRoot() || XK.terminal || null;
+        terminalRoot = getXkeenTerminalRoot() || XK.terminal || null;
         const api = terminalRoot ? terminalRoot.api : null;
         if (api && api.__xkLazyStubInstalled && terminalRoot && terminalRoot.core && typeof terminalRoot.core.createPublicApi === 'function') {
           console.warn('[XKeen] terminal.api is still a lazy stub after init; reinstalling public API (regression guard)');
           terminalRoot.api = terminalRoot.core.createPublicApi();
         }
       });
+
+      if (initResult === false) {
+        try { console.warn('[XKeen] terminal bundle loaded but init is deferred: terminal UI/context not ready yet'); } catch (e) {}
+        terminalLoaded = false;
+        terminalPromise = null;
+        emitLazyEvent('xkeen:lazy-terminal-deferred', { terminal: getXkeenTerminalRoot() || XK.terminal || null });
+        return false;
+      }
 
       terminalLoaded = true;
       emitLazyEvent('xkeen:lazy-terminal-ready', { terminal: getXkeenTerminalRoot() || XK.terminal || null });
@@ -439,8 +485,7 @@ import {
       const fileManagerApi = await getFileManagerRuntimeApi();
 
       safeInvoke(() => {
-        const q = (window.location && typeof window.location.search === 'string') ? window.location.search : '';
-        const isDebug = !!window.XKEEN_DEV || /(?:^|[?&])debug=1(?:&|$)/.test(q);
+        const isDebug = isXkeenDebugRuntime();
         if (!isDebug) return;
         const FM = fileManagerApi;
         if (!FM) console.error('[FM] missing fileManager API after lazy load');
@@ -517,15 +562,6 @@ import {
     return ensureEditorSupport('codemirror', opts);
   }
 
-  function installLazyCompatibilityApi() {
-    XK.lazy = XK.lazy || {};
-    XK.lazy.ensureTerminalReady = ensureTerminalReady;
-    XK.lazy.ensureFileManagerReady = ensureFileManagerReady;
-    XK.lazy.ensureEditorSupport = ensureEditorSupport;
-    XK.lazy.ensureCodeMirrorSupport = ensureCodeMirrorSupport;
-    XK.lazy.ensureMonacoSupport = ensureMonacoSupport;
-    XK.lazy.ensureFeature = ensureFeature;
-  }
 
   function installTerminalStub() {
     try {
@@ -711,10 +747,7 @@ import {
     installDatContentsStub();
   }
 
-  const lazyApi = {
-    featureLoaders,
-    bundleLoaders,
-    getFeatureLoader,
+  const lazyApi = Object.freeze({
     getFeatureApi,
     isFeatureStub,
     isFeatureReady,
@@ -725,9 +758,8 @@ import {
     ensureEditorSupport,
     ensureMonacoSupport,
     ensureCodeMirrorSupport,
-  };
+  });
 
   XK.runtime.lazy = lazyApi;
-  installLazyCompatibilityApi();
   installDefaultStubs();
 })();

@@ -1,6 +1,7 @@
 import { getBackupsApi } from './backups.js';
 import { getRestartLogApi } from './restart_log.js';
 import {
+  getXkeenFilePath,
   getXkeenUiConfigShellApi,
   openXkeenJsonEditor,
   syncXkeenBodyScrollLock,
@@ -1372,7 +1373,7 @@ let outboundsModuleApi = null;
           if (statusEl) statusEl.textContent = 'Текущая ссылка загружена.';
           try {
             if (typeof updateLastActivity === 'function') {
-              const fp = window.XKEEN_FILES && window.XKEEN_FILES.outbounds ? window.XKEEN_FILES.outbounds : '';
+              const fp = getXkeenFilePath('outbounds', '');
               updateLastActivity('loaded', 'outbounds', fp);
             }
           } catch (e) {}
@@ -1389,7 +1390,7 @@ let outboundsModuleApi = null;
           }, 'outbounds-load-empty');
           try {
             if (typeof updateLastActivity === 'function') {
-              const fp = window.XKEEN_FILES && window.XKEEN_FILES.outbounds ? window.XKEEN_FILES.outbounds : '';
+              const fp = getXkeenFilePath('outbounds', '');
               updateLastActivity('loaded', 'outbounds', fp);
             }
           } catch (e) {}
@@ -1448,7 +1449,7 @@ let outboundsModuleApi = null;
             try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
             try {
               if (typeof updateLastActivity === 'function') {
-                const fp = window.XKEEN_FILES && window.XKEEN_FILES.outbounds ? window.XKEEN_FILES.outbounds : '';
+                const fp = getXkeenFilePath('outbounds', '');
                 updateLastActivity('saved', 'outbounds', fp);
               }
             } catch (e) {}
@@ -1485,7 +1486,7 @@ let outboundsModuleApi = null;
         }
       }
 
-      const fileLabel = _baseName(window.XKEEN_FILES && window.XKEEN_FILES.outbounds, '04_outbounds.json');
+      const fileLabel = _baseName(getXkeenFilePath('outbounds', ''), '04_outbounds.json');
 
       try {
         const file = getActiveFragment();

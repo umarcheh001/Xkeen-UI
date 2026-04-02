@@ -119,3 +119,17 @@ def test_panel_inventory_captures_current_bundle_split_and_lazy_runtime(tmp_path
         assert feature_name in all_lazy_features, (
             f"panel inventory should still capture panel-local lazy feature {feature_name}"
         )
+
+
+def test_frontend_inventory_docs_freeze_source_graph_as_canonical_stage1_contract():
+    inventory_doc = (ROOT / "docs" / "frontend-page-inventory.md").read_text(encoding="utf-8")
+
+    required_fragments = [
+        "## Freeze contract для stages 1 и 3",
+        "source entrypoints в `static/js/pages/*.entry.js` остаются канонической картой страниц",
+        "build-managed wrappers из `static/frontend-build/assets/*-*.js` не являются отдельной архитектурой",
+        "snapshot можно и нужно строить по source graph",
+    ]
+
+    for fragment in required_fragments:
+        assert fragment in inventory_doc, f"missing stage 1/3 freeze fragment in frontend-page-inventory.md: {fragment}"

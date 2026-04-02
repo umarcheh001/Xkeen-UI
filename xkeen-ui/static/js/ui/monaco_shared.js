@@ -1,3 +1,5 @@
+import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
+
 (() => {
   window.XKeen = window.XKeen || {};
   const XKeen = window.XKeen;
@@ -29,36 +31,15 @@
 
     let clipboard = null;
     try { clipboard = nav.clipboard || null; } catch (e) {}
+    if (!clipboard) return;
 
-    const noopRead = function () { return Promise.resolve([]); };
-    const noopReadText = function () { return Promise.resolve(''); };
     const noopWriteText = function () { return Promise.resolve(); };
     const compatWrite = function () { return Promise.resolve(); };
 
-    if (!clipboard) {
-      const stub = {
-        read: noopRead,
-        readText: noopReadText,
-        write: compatWrite,
-        writeText: noopWriteText,
-      };
-      try {
-        Object.defineProperty(nav, 'clipboard', {
-          configurable: true,
-          enumerable: false,
-          value: stub,
-        });
-        return;
-      } catch (e) {}
-      try {
-        nav.clipboard = stub;
-        return;
-      } catch (e) {}
-      return;
-    }
-
-    try { if (typeof clipboard.read !== 'function') clipboard.read = noopRead; } catch (e) {}
-    try { if (typeof clipboard.readText !== 'function') clipboard.readText = noopReadText; } catch (e) {}
+    // Never fake read()/readText() here.
+    // Monaco uses clipboard readability to decide how Paste should behave.
+    // A fake readText() that resolves to '' makes Paste appear to work while
+    // actually inserting an empty string.
     try { if (typeof clipboard.writeText !== 'function') clipboard.writeText = noopWriteText; } catch (e) {}
     try { if (typeof clipboard.write !== 'function') clipboard.write = compatWrite; } catch (e) {}
   }
@@ -113,12 +94,7 @@
   }
 
   function _isMipsTarget() {
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
-      if (!v) return false;
-      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
-    } catch (e) {}
+    if (isXkeenMipsRuntime()) return true;
     try {
       return /mips/i.test(String((window.navigator && window.navigator.userAgent) || ''));
     } catch (e) {}
@@ -787,6 +763,7 @@
       const editor = monaco.editor.create(el, {
         value,
         readOnly,
+        contextmenu: (typeof o.contextmenu === 'boolean') ? o.contextmenu : true,
         automaticLayout: !(perf.lite || safari),
         minimap: { enabled: false },
         stickyScroll: { enabled: false },

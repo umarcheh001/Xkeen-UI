@@ -36,6 +36,9 @@ import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
     const b = $(bodyId);
     const a = $(arrowId);
     if (!h || !b || !a) return;
+    try {
+      if (h.dataset && h.dataset.xkCollapseWired === '1') return;
+    } catch (e) {}
 
     const prefKey = key || null;
     let open = (typeof defaultOpen === 'boolean') ? defaultOpen : true;
@@ -50,18 +53,48 @@ import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
     function applyState() {
       b.style.display = open ? '' : 'none';
       a.textContent = open ? '▲' : '▼';
+      try { h.setAttribute('aria-expanded', open ? 'true' : 'false'); } catch (e) {}
+      try {
+        if (h.dataset) h.dataset.xkCollapseOpen = open ? '1' : '0';
+      } catch (e2) {}
     }
+
+    try {
+      h.setAttribute('role', 'button');
+      h.setAttribute('tabindex', h.getAttribute('tabindex') || '0');
+      h.setAttribute('aria-controls', String(bodyId || ''));
+    } catch (e) {}
     applyState();
     if (open) triggerOpen(onOpen, 'initial-open');
 
-    h.addEventListener('click', () => {
+    function toggle() {
       open = !open;
       if (prefKey) {
         try { localStorage.setItem(prefKey, open ? '1' : '0'); } catch (e) {}
       }
       applyState();
       if (open) triggerOpen(onOpen, 'toggle-open');
+    }
+
+    h.addEventListener('click', () => {
+      toggle();
     });
+
+    h.addEventListener('keydown', (event) => {
+      const keyName = String(event && event.key || '');
+      if (keyName !== 'Enter' && keyName !== ' ') return;
+      try { event.preventDefault(); } catch (e) {}
+      toggle();
+    });
+
+    try {
+      if (h.dataset) {
+        h.dataset.xkCollapseWired = '1';
+        h.dataset.xkCollapseBody = String(bodyId || '');
+        h.dataset.xkCollapseArrow = String(arrowId || '');
+        h.dataset.xkCollapseStorage = String(prefKey || '');
+      }
+    } catch (e) {}
   }
 
   // Sidebar-only collapses (these cards do not have their own feature modules)

@@ -59,6 +59,12 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
             assert fragment not in text, f"source entrypoint should use canonical feature import URLs in {filename}: {fragment}"
 
 
+def test_legacy_script_loader_artifact_is_removed():
+    assert not (PAGES_DIR / 'legacy_script_loader.js').exists(), (
+        'final compat cleanup should remove legacy_script_loader.js from the repository'
+    )
+
+
 def test_panel_runtime_bundle_files_exist_for_current_architecture():
     required_files = [
         "panel.bootstrap_tail.bundle.js",
@@ -85,6 +91,138 @@ def test_frontend_migration_docs_exist_for_current_contract():
 
     for path in required_docs:
         assert path.is_file(), f"missing frontend migration doc: {path.relative_to(ROOT).as_posix()}"
+
+
+
+
+def test_stage0_to_stage3_docs_are_frozen_and_non_reopenable():
+    readme_src = (DOCS_DIR / "README_frontend_migration_plan.md").read_text(encoding="utf-8")
+    feature_api_src = (DOCS_DIR / "frontend-feature-api.md").read_text(encoding="utf-8")
+
+    readme_required = [
+        "Этапы 0-3 считаются закрытыми и замороженными.",
+        "## Freeze для stages 0-3",
+        "**Stage 0. Архитектурный контракт**",
+        "**Stage 1. Page inventory**",
+        "**Stage 2. Secondary-page bootstrap**",
+        "**Stage 3. Panel bootstrap и manifest bridge**",
+        "wrapper-файлы не должны содержать runtime-логики кроме import canonical source entrypoint",
+    ]
+    feature_api_required = [
+        "## Freeze-ограничение для stages 0-3",
+        "не возвращать страницы к `legacy_script_loader.js` или `bootLegacyEntry(...)`",
+        "не превращать build wrapper assets в место для runtime-логики",
+        "не расходиться с canonical source entrypoints как источником истины для page graph",
+    ]
+
+    for fragment in readme_required:
+        assert fragment in readme_src, f"missing stage 0-3 freeze fragment in README_frontend_migration_plan.md: {fragment}"
+    for fragment in feature_api_required:
+        assert fragment in feature_api_src, f"missing stage 0-3 freeze fragment in frontend-feature-api.md: {fragment}"
+
+
+def test_stage6_status_docs_record_completion_and_remaining_stages():
+    readme_src = (DOCS_DIR / "README_frontend_migration_plan.md").read_text(encoding="utf-8")
+    stage6_src = (DOCS_DIR / "frontend-stage6-implementation-plan.md").read_text(encoding="utf-8")
+    inventory_src = (DOCS_DIR / "frontend-page-inventory.md").read_text(encoding="utf-8")
+    feature_api_src = (DOCS_DIR / "frontend-feature-api.md").read_text(encoding="utf-8")
+
+    readme_required = [
+        "Этапы 4-6 уже закрыты и подтверждены кодом, guardrails и статусной документацией.",
+        "**stages 0-6 fully closed**",
+        "**stages 0-8 fully closed**",
+        "**stages 0-9 fully closed**",
+        "| 6. Очистить Flask templates от переходных допущений | Закрыт |",
+        "| 7. Сделать сборку воспроизводимой и явной | Закрыт |",
+        "Этап 6 закрыт окончательно. Финальный template/runtime contract доведён до целевого состояния",
+        "Этап 7 закрыт. Репозиторий больше не зависит от неформального знания",
+        "- `templates/panel.html` и `templates/devtools.html` публикуют только canonical `window.XKeen.pageConfig`;",
+        "Это и есть реальный итоговый migration scope после полного закрытия stages 0-9.",
+        "| 8. Переключить production на build-only режим | Закрыт |",
+        "Этап 8 закрыт.",
+        "`XKEEN_UI_FRONTEND_SOURCE_FALLBACK=1`",
+        "| 9. Финальная чистка технического долга | Закрыт |",
+        "Этап 9 закрыт.",
+        "`legacy_script_loader.js` удалён",
+        "`window.XKeen.lazy`",
+        "**stages 0-9 fully closed**",
+    ]
+    readme_forbidden = [
+        "| 6. Очистить Flask templates от переходных допущений | Открыт |",
+        "- Этап 6: templates/runtime contract;",
+    ]
+    stage6_required = [
+        "## Статус на 31.03.2026",
+        "Этап 6 завершён окончательно.",
+        "официально закрывает stages 0-6",
+        "- `templates/panel.html` и `templates/devtools.html` публикуют только `window.XKeen.pageConfig`;",
+        "### Commit D. Final cleanup and guardrails — выполнен",
+        "Этап 6 считается завершённым, и текущий репозиторий уже соответствует всем пунктам ниже:",
+    ]
+    inventory_required = [
+        "template публикует только canonical `window.XKeen.pageConfig`",
+        "Для stages 0-9 migration contract считается закрытым",
+    ]
+
+    for fragment in readme_required:
+        assert fragment in readme_src, f"missing Stage 6 completion fragment in README_frontend_migration_plan.md: {fragment}"
+    for fragment in readme_forbidden:
+        assert fragment not in readme_src, f"Stage 6 status docs should no longer describe Stage 6 as open in README_frontend_migration_plan.md: {fragment}"
+    for fragment in stage6_required:
+        assert fragment in stage6_src, f"missing final Stage 6 status fragment in frontend-stage6-implementation-plan.md: {fragment}"
+    for fragment in inventory_required:
+        assert fragment in inventory_src, f"missing final pageConfig contract note in frontend-page-inventory.md: {fragment}"
+
+    feature_api_required = [
+        "migration stages 0-6 считаются закрытыми",
+        "## Официальный статус для stages 4-6",
+        "`window.XKeen.features.*` не является canonical read-path",
+        "`window.XKeen.pageConfig` остаётся единственным server-owned runtime contract.",
+    ]
+    feature_api_forbidden = [
+        "проект всё ещё находится в переходной фазе",
+        "Приоритетные зоны для дальнейшей чистки:",
+        "`mihomo_panel`",
+        "`mihomo_import`",
+        "`mihomo_proxy_tools`",
+        "`mihomo_hwid_sub`",
+    ]
+    for fragment in feature_api_required:
+        assert fragment in feature_api_src, f"missing final closure fragment in frontend-feature-api.md: {fragment}"
+    for fragment in feature_api_forbidden:
+        assert fragment not in feature_api_src, f"frontend-feature-api.md should no longer describe stage 4-6 canonical path as open: {fragment}"
+
+
+def test_terminal_lazy_path_forbids_dom_script_injection_and_uses_vendor_adapter():
+    entry_text = (PAGES_DIR / "terminal.lazy.entry.js").read_text(encoding="utf-8")
+    adapter_text = (ROOT / "xkeen-ui" / "static" / "js" / "terminal" / "vendors" / "xterm_import_adapter.js").read_text(encoding="utf-8")
+
+    required_entry_fragments = [
+        "from '../terminal/vendors/xterm_import_adapter.js';",
+        "await ensureXtermVendorReady();",
+        "requiredVendorCount: REQUIRED_XTERM_VENDOR_SPECS.length",
+        "optionalVendorCount: OPTIONAL_XTERM_VENDOR_SPECS.length",
+    ]
+    forbidden_fragments = [
+        "document.createElement('script')",
+        "appendChild(script)",
+        "document.head.appendChild(script)",
+        "querySelector('script[data-xk-term-src=",
+    ]
+    required_adapter_fragments = [
+        "export async function ensureXtermVendorReady()",
+        "await import(/* @vite-ignore */ url);",
+        "appendTerminalDebug('lazy:vendor:amd-shield'",
+        "restoreAmdGlobals(scope, amdStash)",
+    ]
+
+    for fragment in required_entry_fragments:
+        assert fragment in entry_text, f"missing terminal lazy import-first fragment: {fragment}"
+    for fragment in forbidden_fragments:
+        assert fragment not in entry_text, f"terminal lazy entry must not perform DOM script injection: {fragment}"
+        assert fragment not in adapter_text, f"terminal vendor adapter must not perform DOM script injection: {fragment}"
+    for fragment in required_adapter_fragments:
+        assert fragment in adapter_text, f"missing terminal vendor adapter fragment: {fragment}"
 
 
 def test_lazy_runtime_keeps_only_generic_compat_feature_paths():
@@ -882,4 +1020,501 @@ def test_terminal_remaining_core_controllers_and_modules_use_runtime_adapters():
         for fragment in fragments:
             assert fragment not in text, (
                 f"terminal controller/module should use runtime adapters instead of raw globals in {path.relative_to(ROOT).as_posix()}: {fragment}"
+            )
+
+
+def test_templates_publish_final_page_config_contract():
+    panel_src = (ROOT / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
+    devtools_src = (ROOT / "xkeen-ui" / "templates" / "devtools.html").read_text(encoding="utf-8")
+
+    panel_required = [
+        "frontend_page_config(",
+        "'panel'",
+        "window.XKeen.pageConfig = pageConfig;",
+        "<script type=\"module\" src=\"{{ frontend_page_entry_url('panel') }}\"></script>",
+    ]
+    panel_forbidden = [
+        "window.XKeen.env = window.XKeen.env || {};",
+        "window.XKeen.env.panelSectionsWhitelist",
+        "window.XKeen.env.devtoolsSectionsWhitelist",
+        "window.XKEEN_GITHUB_REPO_URL",
+        "window.XKEEN_STATIC_BASE",
+        "window.XKEEN_IS_MIPS",
+        "window.XKEEN_AVAILABLE_CORES",
+        "window.XKEEN_DETECTED_CORES",
+        "window.XKEEN_CORE_UI_FALLBACK",
+        "window.XKEEN_HAS_XRAY",
+        "window.XKEEN_HAS_MIHOMO",
+        "window.XKEEN_MIHOMO_CONFIG_EXISTS",
+        "window.XKEEN_MULTI_CORE",
+        "window.XKEEN_STATIC_VER",
+        "window.XKEEN_FILES",
+        "window.XKEEN_FM_RIGHT_DEFAULT",
+    ]
+
+    devtools_required = [
+        "frontend_page_config(",
+        "'devtools'",
+        "window.XKeen.pageConfig = pageConfig;",
+        "<script type=\"module\" src=\"{{ frontend_page_entry_url('devtools') }}\"></script>",
+    ]
+    devtools_forbidden = [
+        "window.XKeen.env = window.XKeen.env || {};",
+        "window.XKeen.env.panelSectionsWhitelist",
+        "window.XKeen.env.devtoolsSectionsWhitelist",
+    ]
+
+    for fragment in panel_required:
+        assert fragment in panel_src, f"missing panel final page-config fragment: {fragment}"
+    for fragment in panel_forbidden:
+        assert fragment not in panel_src, f"panel template should publish only final pageConfig contract: {fragment}"
+
+    for fragment in devtools_required:
+        assert fragment in devtools_src, f"missing devtools final page-config fragment: {fragment}"
+    for fragment in devtools_forbidden:
+        assert fragment not in devtools_src, f"devtools template should publish only final pageConfig contract: {fragment}"
+
+
+def test_runtime_page_config_contract_no_longer_syncs_legacy_aliases():
+    runtime_src = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "xkeen_runtime.js").read_text(encoding="utf-8")
+
+    required = [
+        "export function getXkeenPageConfigValue(path, fallbackValue = undefined)",
+        "export function setXkeenPageConfigValue(path, value)",
+        "export function getXkeenRuntimeConfig()",
+        "export function getXkeenTerminalConfig()",
+        "function coerceXkeenBooleanValue(value, fallbackValue = false) {",
+    ]
+    forbidden = [
+        "syncLegacyPageConfigAlias(",
+        "getXkeenLegacyPageConfigValue(",
+        "win.XKeen.env.panelSectionsWhitelist",
+        "win.XKeen.env.devtoolsSectionsWhitelist",
+        "win.XKEEN_FILES",
+        "win.XKEEN_GITHUB_REPO_URL",
+        "win.XKEEN_STATIC_BASE",
+        "win.XKEEN_IS_MIPS",
+        "function getRawWindowFlag(",
+        "function getXkeenLegacyEnvValue(",
+        "const WINDOW_FLAG_PAGE_CONFIG_PATHS = Object.freeze({",
+        "export function getXkeenWindowFlag(",
+        "export function getXkeenBooleanFlag(",
+    ]
+
+    for fragment in required:
+        assert fragment in runtime_src, f"missing runtime final page-config fragment in xkeen_runtime.js: {fragment}"
+    for fragment in forbidden:
+        assert fragment not in runtime_src, (
+            f"runtime page-config contract should no longer sync legacy aliases in xkeen_runtime.js: {fragment}"
+        )
+
+
+
+def test_stage6_consumer_sweep_uses_runtime_page_config_helpers_in_canonical_readers():
+    expectations = {
+        ROOT / "xkeen-ui" / "static" / "js" / "ui" / "sections.js": {
+            "required": [
+                "typeof XK.runtime.getPageSectionsConfig === 'function'",
+                "XK.pageConfig",
+            ],
+            "forbidden": [
+                "window.XKeen.env.panelSectionsWhitelist",
+                "window.XKeen.env.devtoolsSectionsWhitelist",
+                "const env = (XK && XK.env) ? XK.env : {};",
+                "panelSectionsWhitelist",
+                "devtoolsSectionsWhitelist",
+            ],
+        },
+        PAGES_DIR / "panel.entry.js": {
+            "required": [
+                "hasXkeenXrayCore()",
+                "hasXkeenMihomoCore()",
+            ],
+            "forbidden": [
+                "window.XKEEN_HAS_XRAY",
+                "window.XKEEN_HAS_MIHOMO",
+            ],
+        },
+        PAGES_DIR / "panel.init.js": {
+            "required": [
+                "import { hasXkeenXrayCore } from '../features/xkeen_runtime.js';",
+                "return hasXkeenXrayCore();",
+            ],
+            "forbidden": [
+                "window.XKEEN_HAS_XRAY",
+            ],
+        },
+        PAGES_DIR / "panel.core_ui_watch.runtime.js": {
+            "required": [
+                "getXkeenPageCoresConfig",
+                "const cores = getXkeenPageCoresConfig();",
+            ],
+            "forbidden": [
+                "window.XKEEN_DETECTED_CORES",
+                "window.XKEEN_AVAILABLE_CORES",
+                "window.XKEEN_CORE_UI_FALLBACK",
+            ],
+        },
+        PAGES_DIR / "panel.lazy_bindings.runtime.js": {
+            "required": [
+                "getXkeenGithubRepoUrl",
+                "api.init({ repoUrl: getXkeenGithubRepoUrl() });",
+            ],
+            "forbidden": [
+                "window.XKEEN_GITHUB_REPO_URL",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "ui" / "monaco_loader.js": {
+            "required": [
+                "import { getXkeenStaticBase } from '../features/xkeen_runtime.js';",
+                "const configured = String(getXkeenStaticBase() || '').trim();",
+            ],
+            "forbidden": [
+                "window.XKEEN_STATIC_BASE",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "ui" / "config_shell.js": {
+            "required": [
+                "import { setXkeenPageConfigValue } from '../features/xkeen_runtime.js';",
+                "setXkeenPageConfigValue('files.' + name, nextPath);",
+            ],
+            "forbidden": [
+                "window.XKEEN_FILES = window.XKEEN_FILES || {};",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "ui" / "last_activity.js": {
+            "required": [
+                "import { getXkeenFilePath } from '../features/xkeen_runtime.js';",
+                "getXkeenFilePath('mihomo',",
+                "getXkeenFilePath('routing', \"/opt/etc/xray/configs/05_routing.json\")",
+            ],
+            "forbidden": [
+                "window.XKEEN_FILES",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "ui" / "json_editor_modal.js": {
+            "required": [
+                "getXkeenFilePath",
+                "getXkeenPageFilesConfig",
+            ],
+            "forbidden": [
+                "window.XKEEN_FILES && window.XKEEN_FILES",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing.js": {
+            "required": [
+                "getXkeenFilePath",
+                "isXkeenMipsRuntime",
+            ],
+            "forbidden": [
+                "window.XKEEN_IS_MIPS",
+                "window.XKEEN_FILES",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "inbounds.js": {
+            "required": [
+                "getXkeenFilePath('inbounds', '')",
+            ],
+            "forbidden": [
+                "window.XKEEN_FILES",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "outbounds.js": {
+            "required": [
+                "getXkeenFilePath('outbounds', '')",
+            ],
+            "forbidden": [
+                "window.XKEEN_FILES",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "backups.js": {
+            "required": [
+                "getXkeenPageFilesConfig",
+            ],
+            "forbidden": [
+                "window.XKEEN_FILES",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "github.js": {
+            "required": [
+                "getXkeenGithubRepoUrl",
+                "_repoUrl || getXkeenGithubRepoUrl()",
+            ],
+            "forbidden": [
+                "window.XKEEN_GITHUB_REPO_URL",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_panel.js": {
+            "required": [
+                "getXkeenPageFlagsConfig",
+                "setXkeenPageConfigValue('flags.mihomoConfigExists', true);",
+                "getXkeenFilePath('mihomo',",
+            ],
+            "forbidden": [
+                "window.XKEEN_MIHOMO_CONFIG_EXISTS",
+                "window.XKEEN_FILES",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_import.js": {
+            "required": [
+                "getXkeenFilePath('mihomo',",
+            ],
+            "forbidden": [
+                "window.XKEEN_FILES",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_proxy_tools.js": {
+            "required": [
+                "getXkeenFilePath('mihomo',",
+            ],
+            "forbidden": [
+                "window.XKEEN_FILES",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_hwid_sub.js": {
+            "required": [
+                "getXkeenFilePath('mihomo',",
+            ],
+            "forbidden": [
+                "window.XKEEN_FILES",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "file_manager" / "common.js": {
+            "required": [
+                "import { isXkeenMipsRuntime } from '../xkeen_runtime.js';",
+                "return isXkeenMipsRuntime();",
+            ],
+            "forbidden": [
+                "window.XKEEN_IS_MIPS",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "file_manager" / "state.js": {
+            "required": [
+                "getXkeenFileManagerDefaults",
+                "isXkeenMipsRuntime(),",
+                "getXkeenFileManagerDefaults().rightDefault || '/tmp/mnt'",
+            ],
+            "forbidden": [
+                "window.XKEEN_IS_MIPS",
+                "window.XKEEN_FM_RIGHT_DEFAULT",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "file_manager.js": {
+            "required": [
+                "import { isXkeenMipsRuntime } from './xkeen_runtime.js';",
+                "return isXkeenMipsRuntime();",
+            ],
+            "forbidden": [
+                "window.XKEEN_IS_MIPS",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "xray_logs.js": {
+            "required": [
+                "isXkeenMipsRuntime",
+                "if (isXkeenMipsRuntime()) return true;",
+            ],
+            "forbidden": [
+                "window.XKEEN_IS_MIPS",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing_cards" / "rules" / "controls.js": {
+            "required": [
+                "import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';",
+                "return isXkeenMipsRuntime();",
+            ],
+            "forbidden": [
+                "window.XKEEN_IS_MIPS",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing_cards" / "rules" / "render.js": {
+            "required": [
+                "import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';",
+                "return isXkeenMipsRuntime();",
+            ],
+            "forbidden": [
+                "window.XKEEN_IS_MIPS",
+            ],
+        },
+    }
+
+    for path, fragments in expectations.items():
+        text = path.read_text(encoding="utf-8")
+        for fragment in fragments["required"]:
+            assert fragment in text, (
+                f"missing stage-6 consumer-sweep helper fragment in {path.relative_to(ROOT).as_posix()}: {fragment}"
+            )
+        for fragment in fragments["forbidden"]:
+            assert fragment not in text, (
+                f"consumer should not read legacy template globals directly in {path.relative_to(ROOT).as_posix()}: {fragment}"
+            )
+
+
+
+
+
+def test_editor_json_and_terminal_cluster_use_runtime_adapters_instead_of_raw_globals():
+    expectations = {
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "file_manager" / "editor.js": {
+            "required": [
+                "attachXkeenEditorToolbar",
+                "getXkeenEditorToolbarDefaultItems",
+                "getXkeenEditorToolbarIcons",
+            ],
+            "forbidden": [
+                "window.XKEEN_CM_",
+                "window.xkeenAttachCmToolbar",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "ui" / "json_editor_modal.js": {
+            "required": [
+                "attachXkeenEditorToolbar",
+                "getXkeenEditorToolbarMiniItems",
+            ],
+            "forbidden": [
+                "window.XKEEN_CM_",
+                "window.xkeenAttachCmToolbar",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "ui" / "editor_toolbar.js": {
+            "required": [
+                "icons: XKEEN_CM_ICONS",
+                "defaultItems: XKEEN_CM_TOOLBAR_DEFAULT",
+                "miniItems: XKEEN_CM_TOOLBAR_MINI",
+                "window.XKEEN_CM_ICONS = window.XKEEN_CM_ICONS || XKEEN_CM_ICONS;",
+            ],
+            "forbidden": [
+                "icons: window.XKEEN_CM_ICONS || XKEEN_CM_ICONS",
+                "defaultItems: window.XKEEN_CM_TOOLBAR_DEFAULT || XKEEN_CM_TOOLBAR_DEFAULT",
+                "miniItems: window.XKEEN_CM_TOOLBAR_MINI || XKEEN_CM_TOOLBAR_MINI",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "terminal" / "core" / "xterm_manager.js": {
+            "required": [
+                "shouldEnableXkeenTerminalOptionalAddons",
+                "shouldEnableXkeenTerminalLigatures",
+                "shouldEnableXkeenTerminalWebgl",
+                "shouldEnableXkeenTerminalOptionalAddons();",
+                "shouldEnableXkeenTerminalLigatures()",
+                "shouldEnableXkeenTerminalWebgl()",
+            ],
+            "forbidden": [
+                "window.XKEEN_ENABLE_XTERM_OPTIONAL_ADDONS",
+                "window.XKEEN_ENABLE_XTERM_LIGATURES",
+                "window.XKEEN_ENABLE_XTERM_WEBGL",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "runtime" / "lazy_runtime.js": {
+            "required": [
+                "getXkeenEditorToolbarApi",
+                "const editorToolbar = getXkeenEditorToolbarApi();",
+                "typeof editorToolbar.attach === 'function'",
+                "isXkeenDebugRuntime",
+                "const isDebug = isXkeenDebugRuntime();",
+            ],
+            "forbidden": [
+                "window.XKEEN_DEV",
+                "window.xkeenAttachCmToolbar",
+                "window.buildCmExtraKeysCommon",
+                "XK.lazy = XK.lazy || {}",
+            ],
+        },
+    }
+
+    for path, fragments in expectations.items():
+        text = path.read_text(encoding="utf-8")
+        for fragment in fragments["required"]:
+            assert fragment in text, (
+                f"missing stage-5/6 runtime-adapter fragment in {path.relative_to(ROOT).as_posix()}: {fragment}"
+            )
+        for fragment in fragments["forbidden"]:
+            assert fragment not in text, (
+                f"canonical consumer should not read raw globals directly in {path.relative_to(ROOT).as_posix()}: {fragment}"
+            )
+
+
+def test_routing_and_mihomo_cluster_use_toolbar_runtime_adapters_instead_of_raw_toolbar_globals():
+    expectations = {
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing.js": {
+            "required": [
+                "attachXkeenEditorToolbar",
+                "buildXkeenEditorCommonKeys",
+                "getXkeenEditorToolbarDefaultItems",
+                "getXkeenEditorToolbarIcons",
+            ],
+            "forbidden": [
+                "window.XKEEN_CM_",
+                "window.xkeenAttachCmToolbar",
+                "window.buildCmExtraKeysCommon",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_panel.js": {
+            "required": [
+                "attachXkeenEditorToolbar",
+                "buildXkeenEditorCommonKeys",
+                "getXkeenEditorToolbarDefaultItems",
+                "getXkeenEditorToolbarMiniItems",
+                "getXkeenEditorToolbarIcons",
+            ],
+            "forbidden": [
+                "window.XKEEN_CM_",
+                "window.xkeenAttachCmToolbar",
+                "window.buildCmExtraKeysCommon",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_generator.js": {
+            "required": [
+                "attachXkeenEditorToolbar",
+                "buildXkeenEditorCommonKeys",
+                "getXkeenEditorToolbarDefaultItems",
+                "getXkeenEditorToolbarMiniItems",
+                "getXkeenEditorToolbarIcons",
+            ],
+            "forbidden": [
+                "window.XKEEN_CM_",
+                "window.xkeenAttachCmToolbar",
+                "window.buildCmExtraKeysCommon",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing_cards.js": {
+            "required": [
+                "isXkeenDebugRuntime",
+                "IS_DEBUG = isXkeenDebugRuntime();",
+            ],
+            "forbidden": [
+                "window.XKEEN_DEV",
+            ],
+        },
+        ROOT / "xkeen-ui" / "static" / "js" / "features" / "xkeen_runtime.js": {
+            "required": [
+                "export function getXkeenEditorToolbarApi()",
+                "export function getXkeenEditorToolbarIcons()",
+                "export function getXkeenEditorToolbarDefaultItems()",
+                "export function getXkeenEditorToolbarMiniItems()",
+                "export function attachXkeenEditorToolbar(editor, items, options)",
+                "export function getXkeenRuntimeConfig()",
+                "export function getXkeenTerminalConfig()",
+                "export function isXkeenDebugRuntime()",
+                "return !!getXkeenRuntimeConfig().debug;",
+            ],
+            "forbidden": [
+                "window.location.search",
+                "debug=1",
+                "function getRawWindowFlag(",
+                "function getXkeenLegacyEnvValue(",
+                "const WINDOW_FLAG_PAGE_CONFIG_PATHS = Object.freeze({",
+                "export function getXkeenWindowFlag(",
+                "export function getXkeenBooleanFlag(",
+            ],
+        },
+    }
+
+    for path, fragments in expectations.items():
+        text = path.read_text(encoding="utf-8")
+        for fragment in fragments["required"]:
+            assert fragment in text, (
+                f"missing toolbar/debug runtime helper fragment in {path.relative_to(ROOT).as_posix()}: {fragment}"
+            )
+        for fragment in fragments["forbidden"]:
+            assert fragment not in text, (
+                f"routing/mihomo canonical consumer should not read raw toolbar/debug globals in {path.relative_to(ROOT).as_posix()}: {fragment}"
             )

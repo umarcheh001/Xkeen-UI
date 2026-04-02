@@ -1,3 +1,4 @@
+import { isXkeenMipsRuntime } from '../../xkeen_runtime.js';
 import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
 
 /*
@@ -65,12 +66,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   };
 
   function isMipsTarget() {
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
-      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
-    } catch (e) {}
-    return false;
+    return isXkeenMipsRuntime();
   }
 
   function isWebKitSafari() {

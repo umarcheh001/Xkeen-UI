@@ -223,24 +223,42 @@ export function getTerminalOverlayController() {
   return getTerminalCompatApi('overlay');
 }
 
+let terminalByIdLookupDepth = 0;
+
 export function getTerminalById(id, fallback) {
-  try {
-    const ctx = getTerminalContext();
-    if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') {
-      return ctx.ui.byId(id);
-    }
-  } catch (error) {}
+  const key = String(id || '').trim();
+  if (!key) return null;
+
   try {
     if (typeof fallback === 'function') {
-      const el = fallback(id);
+      const el = fallback(key);
       if (el) return el;
     }
-  } catch (error2) {}
+  } catch (error) {}
+
   try {
-    return document.getElementById(id);
-  } catch (error3) {
-    return null;
+    const direct = document.getElementById(key);
+    if (direct) return direct;
+  } catch (error2) {}
+
+  // Guard against recursive lookups:
+  // ctx.ui.byId -> getTerminalById -> ctx.ui.byId -> ...
+  if (terminalByIdLookupDepth > 0) return null;
+
+  terminalByIdLookupDepth += 1;
+  try {
+    const ctx = getTerminalContext();
+    const byId = (ctx && ctx.ui && typeof ctx.ui.byId === 'function') ? ctx.ui.byId : null;
+    if (byId) {
+      const el = byId(key);
+      if (el) return el;
+    }
+  } catch (error3) {}
+  finally {
+    terminalByIdLookupDepth = Math.max(0, terminalByIdLookupDepth - 1);
   }
+
+  return null;
 }
 
 export function getTerminalMode(ctx) {

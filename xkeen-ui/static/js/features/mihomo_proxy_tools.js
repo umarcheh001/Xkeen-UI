@@ -1,6 +1,7 @@
 import { getMihomoPanelApi } from './mihomo_panel.js';
 import { getMihomoImportApi } from './mihomo_import.js';
 import { getMihomoCoreHttpApi, refreshSharedMihomoEditor } from './mihomo_runtime.js';
+import { getXkeenFilePath } from './xkeen_runtime.js';
 
 let mihomoProxyToolsModuleApi = null;
 
@@ -597,7 +598,7 @@ let mihomoProxyToolsModuleApi = null;
 
       try {
         if (typeof window.updateLastActivity === 'function') {
-          const fp = window.XKEEN_FILES && window.XKEEN_FILES.mihomo ? window.XKEEN_FILES.mihomo : '/opt/etc/mihomo/config.yaml';
+          const fp = getXkeenFilePath('mihomo', '/opt/etc/mihomo/config.yaml');
           window.updateLastActivity('modified', 'mihomo', fp);
         }
       } catch (e2) {}

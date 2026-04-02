@@ -13,3 +13,4 @@ import '../core/xk_store.js';
 import '../ui/toast.js';
 import '../ui/settings.js?v=20260308-stage2';
 import '../features/service_status.js';
+import '../features/feature_access.js';

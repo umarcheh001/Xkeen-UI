@@ -411,14 +411,27 @@ let updateNotifierModuleApi = null;
     return _versionSyncPromise;
   }
 
+  function _getCsrfToken() {
+    try {
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      if (!meta) return '';
+      return String(meta.getAttribute('content') || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
   async function _postJSON(url, body, timeoutMs) {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), Math.max(300, Number(timeoutMs || 3500)));
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      const csrf = _getCsrfToken();
+      if (csrf) headers['X-CSRF-Token'] = csrf;
       const res = await fetch(url, {
         cache: 'no-store',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body || {}),
         signal: controller.signal,
       });

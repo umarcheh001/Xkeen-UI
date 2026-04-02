@@ -119,6 +119,15 @@
       // Do not override explicit tooltips.
       if (host.hasAttribute(ATTR) || host.hasAttribute('title') || host.hasAttribute(LEGACY_ATTR)) return;
 
+      // Form fields often use aria-label for accessibility/IME internals.
+      // Turning those into hover tooltips creates noisy, misplaced portal tooltips
+      // (for example xterm's helper textarea: "Terminal input").
+      const hostTag = String(host.tagName || '').toUpperCase();
+      if (hostTag === 'INPUT' || hostTag === 'TEXTAREA' || hostTag === 'SELECT') return;
+      try {
+        if (host.closest && host.closest('.xterm, .xterm-helpers, .xterm-helper-textarea')) return;
+      } catch (e0) {}
+
       // Some libraries put aria-label on the child (<svg>, <span>) instead of the button.
       const aria = normalizeText(el.getAttribute('aria-label')) || normalizeText(host.getAttribute('aria-label'));
       if (!aria) return;

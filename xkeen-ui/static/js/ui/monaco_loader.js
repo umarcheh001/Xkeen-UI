@@ -1,3 +1,5 @@
+import { getXkeenStaticBase } from '../features/xkeen_runtime.js';
+
 (() => {
   'use strict';
 
@@ -12,9 +14,7 @@
   // ------------------------ base paths ------------------------
   function guessStaticRoot() {
     try {
-      const configured = (typeof window.XKEEN_STATIC_BASE === 'string' && window.XKEEN_STATIC_BASE)
-        ? String(window.XKEEN_STATIC_BASE || '').trim()
-        : '';
+      const configured = String(getXkeenStaticBase() || '').trim();
       if (configured) return configured.endsWith('/') ? configured : (configured + '/');
     } catch (e) {}
 
@@ -204,59 +204,73 @@
   // ------------------------ loaders (cached) ------------------------
   const _js = new Map();
 
-  function buildSourceUrlComment(url) {
-    return '\n//# sourceURL=' + String(url || '').replace(/\s/g, '%20');
+  function findExistingClassicScript(url) {
+    try {
+      const scripts = document.getElementsByTagName('script');
+      for (let i = 0; i < scripts.length; i += 1) {
+        const script = scripts[i];
+        if (script && script.src === url) return script;
+      }
+    } catch (error) {}
+    return null;
   }
 
-  function withShadowedGlobals(names, fn) {
-    const globalScope = window;
-    const restore = [];
-    const list = Array.isArray(names) ? names : [];
+  function loadClassicScriptTag(url) {
+    return new Promise((resolve) => {
+      let script = findExistingClassicScript(url);
+      const attachedByLoader = !script;
 
-    try {
-      for (const name of list) {
-        const key = String(name || '').trim();
-        if (!key) continue;
-        const hadOwn = Object.prototype.hasOwnProperty.call(globalScope, key);
-        restore.push({ key, hadOwn, value: globalScope[key] });
-        globalScope[key] = undefined;
+      if (!script) {
+        script = document.createElement('script');
+        script.src = url;
+        script.async = true;
+        try { script.dataset.xkeenMonacoLoader = '1'; } catch (error) {}
       }
-      return fn();
-    } finally {
-      for (let i = restore.length - 1; i >= 0; i -= 1) {
-        const entry = restore[i];
+
+      const cleanup = () => {
+        try { script.removeEventListener('load', onLoad); } catch (error) {}
+        try { script.removeEventListener('error', onError); } catch (error2) {}
+      };
+
+      const onLoad = () => {
+        try { script.dataset.xkeenLoaded = '1'; } catch (error) {}
+        cleanup();
+        resolve(true);
+      };
+
+      const onError = () => {
+        cleanup();
+        if (attachedByLoader) {
+          try { script.remove(); } catch (error) {}
+        }
+        resolve(false);
+      };
+
+      try {
+        script.addEventListener('load', onLoad, { once: true });
+        script.addEventListener('error', onError, { once: true });
+      } catch (error) {
+        return resolve(false);
+      }
+
+      if (!attachedByLoader) {
         try {
-          if (entry.hadOwn) globalScope[entry.key] = entry.value;
-          else delete globalScope[entry.key];
+          if (script.dataset && script.dataset.xkeenLoaded === '1') {
+            cleanup();
+            return resolve(true);
+          }
+        } catch (error) {}
+      }
+
+      if (attachedByLoader) {
+        try {
+          (document.head || document.documentElement || document.body).appendChild(script);
         } catch (error) {
-          globalScope[entry.key] = entry.value;
+          cleanup();
+          return resolve(false);
         }
       }
-    }
-  }
-
-  async function fetchClassicScriptSource(url) {
-    try {
-      const response = await fetch(String(url || ''), { cache: 'force-cache' });
-      if (!response || !response.ok) return '';
-      return await response.text();
-    } catch (error) {
-      return '';
-    }
-  }
-
-  function evalClassicScript(url, code) {
-    if (!code) return false;
-
-    try {
-      return withShadowedGlobals(['module', 'exports'], () => {
-        const globalEval = (0, eval);
-        globalEval(String(code) + buildSourceUrlComment(url));
-        return true;
-      });
-    } catch (error) {
-      return false;
-    }
+    });
   }
 
   function loadClassicScriptOnce(src) {
@@ -265,11 +279,7 @@
 
     if (_js.has(url)) return _js.get(url);
 
-    const p = (async () => {
-      const code = await fetchClassicScriptSource(url);
-      if (!code) return false;
-      return evalClassicScript(url, code);
-    })().then((ok) => {
+    const p = loadClassicScriptTag(url).then((ok) => {
       if (!ok) _js.delete(url);
       return ok;
     }).catch(() => {

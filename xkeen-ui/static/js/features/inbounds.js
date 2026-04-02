@@ -1,6 +1,7 @@
 import { getBackupsApi } from './backups.js';
 import { getRestartLogApi } from './restart_log.js';
 import {
+  getXkeenFilePath,
   getXkeenUiConfigShellApi,
   openXkeenJsonEditor,
   syncXkeenBodyScrollLock,
@@ -811,7 +812,7 @@ let inboundsModuleApi = null;
 
         try {
           if (typeof updateLastActivity === 'function') {
-            const fp = window.XKEEN_FILES && window.XKEEN_FILES.inbounds ? window.XKEEN_FILES.inbounds : '';
+            const fp = getXkeenFilePath('inbounds', '');
             updateLastActivity('loaded', 'inbounds', fp);
           }
         } catch (e) {}
@@ -928,7 +929,7 @@ let inboundsModuleApi = null;
             try { if (!data || !data.restarted) { if (typeof showToast === 'function') showToast(msg, false); } } catch (e) {}
             try {
               if (typeof updateLastActivity === 'function') {
-                const fp = window.XKEEN_FILES && window.XKEEN_FILES.inbounds ? window.XKEEN_FILES.inbounds : '';
+                const fp = getXkeenFilePath('inbounds', '');
                 updateLastActivity('saved', 'inbounds', fp);
               }
             } catch (e) {}
@@ -965,7 +966,7 @@ let inboundsModuleApi = null;
         }
       }
 
-      const fileLabel = _baseName(window.XKEEN_FILES && window.XKEEN_FILES.inbounds, '03_inbounds.json');
+      const fileLabel = _baseName(getXkeenFilePath('inbounds', ''), '03_inbounds.json');
 
       try {
         const file = getActiveFragment();

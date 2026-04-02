@@ -1,3 +1,4 @@
+import { getXkeenFileManagerDefaults, isXkeenMipsRuntime } from '../xkeen_runtime.js';
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
 
 (() => {
@@ -55,9 +56,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     enabled: false,
     caps: null,
     remoteCaps: null,
-    liteMode: (typeof window.XKEEN_IS_MIPS === 'boolean')
-      ? !!window.XKEEN_IS_MIPS
-      : String(window.XKEEN_IS_MIPS || '').toLowerCase() === 'true',
+    liteMode: isXkeenMipsRuntime(),
     // UX guard: when opening a remote file for the editor, lock UI to prevent double-open spam.
     openBusy: false,
     openBusySinceMs: 0,
@@ -76,7 +75,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     panels: {
       left: { target: 'local', sid: '', cwd: '/opt/var', roots: [], items: [], selected: new Set(), focusName: '', anchorName: '', filter: '' },
       // Right panel default: on routers it's usually /tmp/mnt, but on dev machines it may not exist.
-      right: { target: 'local', sid: '', cwd: (typeof window.XKEEN_FM_RIGHT_DEFAULT === 'string' && window.XKEEN_FM_RIGHT_DEFAULT) ? window.XKEEN_FM_RIGHT_DEFAULT : '/tmp/mnt', roots: [], items: [], selected: new Set(), focusName: '', anchorName: '', filter: '' },
+      right: { target: 'local', sid: '', cwd: (getXkeenFileManagerDefaults().rightDefault || '/tmp/mnt'), roots: [], items: [], selected: new Set(), focusName: '', anchorName: '', filter: '' },
     },
     connectForSide: 'left',
     pending: null, // { op, payload, conflicts }

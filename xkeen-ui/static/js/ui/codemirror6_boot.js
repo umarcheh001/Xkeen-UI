@@ -1,9 +1,9 @@
-import { EditorState, Compartment, EditorSelection, Prec } from '@codemirror/state';
+import { EditorState, Compartment, EditorSelection, Prec, RangeSetBuilder } from '@codemirror/state';
 import { EditorView, keymap, Decoration, ViewPlugin, MatchDecorator } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
-import { json } from '@codemirror/lang-json';
+import { json, jsonLanguage } from '@codemirror/lang-json';
 import { yaml } from '@codemirror/lang-yaml';
-import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
+import { syntaxHighlighting, HighlightStyle, LanguageSupport, ensureSyntaxTree } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 import { lintGutter, setDiagnostics as cmSetDiagnostics } from '@codemirror/lint';
 import { search, openSearchPanel, closeSearchPanel, findNext, findPrevious, replaceNext, replaceAll as cmReplaceAll } from '@codemirror/search';
@@ -13,7 +13,7 @@ import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 
 const GLOBAL_KEY = '__XKEEN_CM6_RUNTIME__';
 const BACKEND = 'cm6-local-offline';
-const VERSION = '0.4.0-stage3-shared';
+const VERSION = '0.5.2-monaco-fine-tuned';
 const LINK_TOOLTIP_TEXT = 'Перейти по ссылке (Ctrl + клик)';
 const URL_FULL_RE = /(?:https?:\/\/|ftp:\/\/|file:\/\/|mailto:|magnet:)[^\s<>"'`\)\]\}]+/g;
 
@@ -55,9 +55,143 @@ function isJsonLikeMode(mode) {
   return next === 'application/json' || next === 'application/jsonc' || next === 'application/javascript';
 }
 
+function isJsonEditorMode(mode) {
+  const next = normalizeMode(mode);
+  return next === 'application/json' || next === 'application/jsonc';
+}
+
+const jsoncLanguage = jsonLanguage.configure({ dialect: 'jsonc' });
+const jsonCommentMark = Decoration.mark({ class: 'cm-json-comment' });
+const jsonBracketMarks = [
+  Decoration.mark({ class: 'cm-json-bracket-depth-0' }),
+  Decoration.mark({ class: 'cm-json-bracket-depth-1' }),
+  Decoration.mark({ class: 'cm-json-bracket-depth-2' }),
+];
+const jsonPunctuationCommaMark = Decoration.mark({ class: 'cm-json-punctuation-comma' });
+const jsonPunctuationColonMark = Decoration.mark({ class: 'cm-json-punctuation-colon' });
+
+function buildJsonDecorations(view, opts = {}) {
+  const text = asString(view && view.state && view.state.doc ? view.state.doc.toString() : '');
+  const allowComments = !!opts.allowComments;
+  if (!text) return Decoration.none;
+  const builder = new RangeSetBuilder();
+  let inString = false;
+  let escaped = false;
+  const bracketStack = [];
+  const addBracket = (from, to, depth) => {
+    const safeDepth = Math.max(0, clampNumber(depth, 0));
+    builder.add(from, to, jsonBracketMarks[safeDepth % jsonBracketMarks.length]);
+  };
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text.charCodeAt(i);
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === 92) {
+        escaped = true;
+        continue;
+      }
+      if (ch === 34) inString = false;
+      continue;
+    }
+    if (ch === 34) {
+      inString = true;
+      escaped = false;
+      continue;
+    }
+    if (allowComments && ch === 47 && text.charCodeAt(i + 1) === 47) {
+      const start = i;
+      i += 2;
+      while (i < text.length && text.charCodeAt(i) !== 10 && text.charCodeAt(i) !== 13) i += 1;
+      builder.add(start, i, jsonCommentMark);
+      i -= 1;
+      continue;
+    }
+    if (allowComments && ch === 47 && text.charCodeAt(i + 1) === 42) {
+      const start = i;
+      i += 2;
+      while (i < text.length && !(text.charCodeAt(i) === 42 && text.charCodeAt(i + 1) === 47)) i += 1;
+      const end = i < text.length ? i + 2 : text.length;
+      builder.add(start, end, jsonCommentMark);
+      i = Math.max(start, end - 1);
+      continue;
+    }
+    if (ch === 123 || ch === 91) {
+      const depth = bracketStack.length;
+      addBracket(i, i + 1, depth);
+      bracketStack.push(ch);
+      continue;
+    }
+    if (ch === 125 || ch === 93) {
+      const open = ch === 125 ? 123 : 91;
+      let depth = Math.max(0, bracketStack.length - 1);
+      if (bracketStack.length && bracketStack[bracketStack.length - 1] === open) {
+        depth = bracketStack.length - 1;
+        bracketStack.pop();
+      } else if (bracketStack.length) {
+        bracketStack.pop();
+      }
+      addBracket(i, i + 1, depth);
+      continue;
+    }
+    if (ch === 44) {
+      builder.add(i, i + 1, jsonPunctuationCommaMark);
+      continue;
+    }
+    if (ch === 58) {
+      builder.add(i, i + 1, jsonPunctuationColonMark);
+      continue;
+    }
+  }
+  return builder.finish();
+}
+
+function createJsonDecorationsExtension(getMode, opts = {}) {
+  return ViewPlugin.fromClass(class {
+    constructor(view) {
+      this.mode = normalizeMode(typeof getMode === 'function' ? getMode() : '');
+      this.allowComments = !!opts.allowComments;
+      this.decorations = buildJsonDecorations(view, { allowComments: this.allowComments });
+    }
+    update(update) {
+      const nextMode = normalizeMode(typeof getMode === 'function' ? getMode() : '');
+      if (update.docChanged || update.viewportChanged || nextMode !== this.mode) {
+        this.mode = nextMode;
+        this.decorations = buildJsonDecorations(update.view, { allowComments: this.allowComments });
+      }
+    }
+  }, {
+    decorations: (plugin) => plugin.decorations,
+  });
+}
+
+const jsoncCommentDecorator = createJsonDecorationsExtension(() => 'application/jsonc', { allowComments: true });
+const jsonStrictPunctuationDecorator = createJsonDecorationsExtension(() => 'application/json', { allowComments: false });
+const jsoncEagerParser = ViewPlugin.fromClass(class {
+  constructor(view) {
+    try { ensureSyntaxTree(view.state, view.state.doc.length, 1000); } catch (e) {}
+  }
+  update(update) {
+    if (update.docChanged) {
+      try { ensureSyntaxTree(update.view.state, update.view.state.doc.length, 1000); } catch (e) {}
+    }
+  }
+});
+
+const jsoncExtension = new LanguageSupport(jsoncLanguage, [
+  jsoncLanguage.data.of({ commentTokens: { line: '//' } }),
+  jsoncEagerParser,
+  Prec.highest(jsoncCommentDecorator),
+]);
+
+const jsonStrictExtension = [json(), jsoncEagerParser, Prec.highest(jsonStrictPunctuationDecorator)];
+
 function languageExtensionFor(mode) {
   const next = normalizeMode(mode);
-  if (next === 'application/json' || next === 'application/jsonc' || next === 'application/javascript') return json();
+  if (next === 'application/json') return jsonStrictExtension;
+  if (next === 'application/jsonc' || next === 'application/javascript') return jsoncExtension;
   if (next === 'text/yaml') return yaml();
   return [];
 }
@@ -289,8 +423,8 @@ function createThemeExtension(theme) {
       },
       '&.cm-focused': { outline: 'none' },
       '.cm-scroller': { overflow: 'auto', color: 'inherit', fontFamily: 'inherit', lineHeight: 'inherit' },
-      '.cm-content': { caretColor: 'var(--xk-cm-caret)', padding: '14px 0 18px', minHeight: '100%' },
-      '.cm-line': { padding: '0 18px 0 10px' },
+      '.cm-content': { caretColor: 'var(--xk-cm-caret)', padding: '8px 0 16px', minHeight: '100%' },
+      '.cm-line': { padding: '0 12px 0 6px' },
       '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--xk-cm-caret)', borderLeftWidth: '2px' },
       '.cm-selectionBackground': { backgroundColor: 'var(--xk-cm-selection) !important' },
       '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { backgroundColor: 'var(--xk-cm-selection) !important' },
@@ -303,6 +437,7 @@ function createThemeExtension(theme) {
       },
       '.cm-gutterElement': { padding: '0 10px 0 14px' },
       '.cm-activeLineGutter': { backgroundColor: 'var(--xk-cm-active-line-gutter)', color: 'var(--xk-cm-active-line-fg)' },
+      '.cm-foldGutter': { color: 'var(--xk-cm-fold-fg)' },
       '.cm-selectionMatch': { backgroundColor: 'var(--xk-cm-selection-match)' },
       '.cm-searchMatch': {
         backgroundColor: 'var(--xk-cm-search-bg)',
@@ -348,6 +483,12 @@ function createThemeExtension(theme) {
       '.cm-lintPoint-warning': { color: 'var(--xk-cm-warning)' },
       '.cm-lintPoint-info': { color: 'var(--xk-cm-info)' },
       '.cm-link.cm-xk-url': { color: 'var(--xk-cm-link, #7ab8ff)', textDecoration: 'underline', cursor: 'pointer' },
+      '.cm-json-comment': { color: 'var(--xk-cm-comment)' },
+      '.cm-json-bracket-depth-0': { color: 'var(--xk-cm-bracket-depth-0)' },
+      '.cm-json-bracket-depth-1': { color: 'var(--xk-cm-bracket-depth-1)' },
+      '.cm-json-bracket-depth-2': { color: 'var(--xk-cm-bracket-depth-2)' },
+      '.cm-json-punctuation-comma': { color: 'var(--xk-cm-comma)' },
+      '.cm-json-punctuation-colon': { color: 'var(--xk-cm-colon)' },
     }, { dark }),
     Prec.highest(EditorView.theme({
       '.cm-selectionLayer': { display: 'none' },
@@ -364,8 +505,8 @@ function createThemeExtension(theme) {
         },
       },
     }, { dark })),
-    syntaxHighlighting(HighlightStyle.define([
-      { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--xk-cm-comment)', fontStyle: 'italic' },
+    Prec.highest(syntaxHighlighting(HighlightStyle.define([
+      { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--xk-cm-comment)' },
       { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: 'var(--xk-cm-keyword)', fontWeight: '600' },
       { tag: [t.string, t.special(t.string), t.regexp], color: 'var(--xk-cm-string)' },
       { tag: [t.number, t.integer, t.float], color: 'var(--xk-cm-number)' },
@@ -374,10 +515,12 @@ function createThemeExtension(theme) {
       { tag: [t.variableName, t.name], color: 'var(--xk-cm-variable)' },
       { tag: [t.definition(t.variableName), t.definition(t.propertyName), t.definition(t.name)], color: 'var(--xk-cm-definition)', fontWeight: '600' },
       { tag: [t.typeName, t.className, t.namespace], color: 'var(--xk-cm-type)' },
-      { tag: [t.operator, t.punctuation, t.separator, t.brace, t.squareBracket, t.paren], color: 'var(--xk-cm-punctuation)' },
+      { tag: [t.operator], color: 'var(--xk-cm-operator, var(--xk-cm-colon, var(--xk-cm-punctuation)))' },
+      { tag: [t.punctuation, t.separator], color: 'var(--xk-cm-delimiter, var(--xk-cm-comma, var(--xk-cm-punctuation)))' },
+      { tag: [t.brace, t.squareBracket, t.paren], color: 'var(--xk-cm-bracket-depth-0, var(--xk-cm-punctuation))' },
       { tag: [t.meta, t.processingInstruction, t.annotation], color: 'var(--xk-cm-meta)' },
       { tag: [t.invalid], color: 'var(--xk-cm-invalid)', textDecoration: 'underline wavy var(--xk-cm-error)' },
-    ])),
+    ]))),
   ];
 }
 

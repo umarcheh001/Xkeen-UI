@@ -1,3 +1,4 @@
+import { isXkeenMipsRuntime } from './xkeen_runtime.js';
 import { getFileManagerApiRoot, getFileManagerNamespace } from './file_manager_namespace.js';
 
 (() => {
@@ -90,12 +91,7 @@ import { getFileManagerApiRoot, getFileManagerNamespace } from './file_manager_n
       const S = getS();
       if (S && typeof S.liteMode === 'boolean') return !!S.liteMode;
     } catch (e2) {}
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-      return String(window.XKEEN_IS_MIPS || '').toLowerCase() === 'true';
-    } catch (e3) {
-      return false;
-    }
+    return isXkeenMipsRuntime();
   }
 
   function applyLiteUi(liteMode) {

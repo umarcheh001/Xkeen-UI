@@ -1,6 +1,6 @@
 """Global UI branding (persisted in UI_STATE_DIR).
 
-Branding is intentionally simple and safe to serve publicly (like /ui/custom.css)
+Branding is intentionally simple and safe to serve publicly
 so it can affect /login and /setup as well.
 
 Stored as JSON: UI_STATE_DIR/branding.json

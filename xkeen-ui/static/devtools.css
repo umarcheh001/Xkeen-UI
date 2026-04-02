@@ -118,82 +118,6 @@ details.dt-theme-group .dt-collapsible-icon{
 
 
 
-/* Custom CSS editor */
-.dt-custom-css-editor textarea {
-  width: 100%;
-  min-height: 340px;
-  resize: vertical;
-  font-family: var(--xk-mono-font-family, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
-  font-size: calc(0.95rem * var(--xk-mono-font-scale, 1));
-  line-height: 1.35;
-}
-
-.dt-custom-css-editor .CodeMirror {
-  height: 340px;
-  border-radius: 12px;
-}
-
-.dt-custom-css-actions button {
-  white-space: nowrap;
-}
-
-.dt-custom-css-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  border: 1px solid var(--border, #1f2937);
-  border-radius: 999px;
-  font-size: calc(12px * var(--xk-font-scale));
-  opacity: 0.9;
-}
-
-.dt-custom-css-badge.is-on {
-  color: var(--sem-success);
-}
-
-.dt-custom-css-badge.is-off {
-  color: var(--sem-error);
-}
-
-
-/* Help (Custom CSS) */
-
-/*
-  Help modal is content-heavy (many examples). When CodeMirror snippets are lazily
-  initialized, the dialog height may change; if the modal is vertically centered,
-  it can appear to "jump" and even go partially off-screen on smaller viewports.
-  For the help dialog we pin it to the top with safe padding.
-*/
-
-#dt-custom-css-help-modal{
-  align-items: flex-start;
-  padding: 4vh 12px;
-}
-
-#dt-custom-css-help-modal .modal-content{
-  max-width: 980px;
-  width: min(92vw, 980px);
-  max-height: 92vh;
-}
-
-/*
-  CodeMirror adds native scrollbar containers even when lineWrapping is on.
-  On some platforms this looks like a "weird grey bar" below each snippet.
-  We render help snippets as auto-height blocks and hide those extra scrollbars.
-*/
-
-#dt-custom-css-help-modal .dt-help-code-wrap .CodeMirror-hscrollbar,
-#dt-custom-css-help-modal .dt-help-code-wrap .CodeMirror-vscrollbar,
-#dt-custom-css-help-modal .dt-help-code-wrap .CodeMirror-scrollbar-filler,
-#dt-custom-css-help-modal .dt-help-code-wrap .CodeMirror-gutter-filler{
-  display: none !important;
-}
-
-#dt-custom-css-help-modal .dt-help-code-wrap .CodeMirror-scroll{
-  overflow: hidden !important;
-}
-
 
 /* Help (ENV whitelist)
 
@@ -1157,10 +1081,7 @@ body.devtools-page #dt-ui-prefs-card { --dt-card-glyph: "⌘"; --dt-side-accent:
 body.devtools-page #dt-branding-card { --dt-card-glyph: "✦"; --dt-side-accent: rgba(251, 191, 36, 0.88); }
 body.devtools-page #dt-ui-prefs-io-card { --dt-card-glyph: "⇄"; --dt-side-accent: rgba(167, 139, 250, 0.9); }
 body.devtools-page #dt-layout-card { --dt-card-glyph: "▦"; --dt-side-accent: rgba(52, 211, 153, 0.9); }
-body.devtools-page #dt-theme-editor-card { --dt-card-glyph: "◍"; --dt-side-accent: rgba(244, 114, 182, 0.88); }
 body.devtools-page #dt-terminal-theme-card { --dt-card-glyph: ">_"; --dt-side-accent: rgba(45, 212, 191, 0.88); }
-body.devtools-page #dt-codemirror-theme-card { --dt-card-glyph: "{}"; --dt-side-accent: rgba(96, 165, 250, 0.88); }
-body.devtools-page #dt-custom-css-card { --dt-card-glyph: "/*"; --dt-side-accent: rgba(250, 204, 21, 0.88); }
 
 body.devtools-page .dt-tools-right > .card,
 body.devtools-page .dt-logs-card {

@@ -7,6 +7,7 @@ import {
   publishTerminalCompatApi,
   syncTerminalBodyScrollLock,
 } from './runtime.js';
+import { appendTerminalDebug, markTerminalDebugState } from '../features/terminal_debug.js';
 
 // Terminal window chrome: drag/resize/persist geometry + fullscreen/minimize
 // Pure UI module (no fetch/ws business logic)
@@ -26,6 +27,9 @@ import {
   let openDisposers = [];
   let resizeObserver = null;
   let saveTimer = null;
+  let roWindowStartedAt = 0;
+  let roWindowCount = 0;
+  let roMutedUntil = 0;
 
   let dragging = false;
   let dragOffsetX = 0;
@@ -58,6 +62,7 @@ import {
   }
 
   function fitXterm() {
+    appendTerminalDebug('chrome:fit-xterm', { hasFitAddon: !!(state && state.fitAddon) });
     try {
       const fa = state.fitAddon || null;
       if (fa && typeof fa.fit === 'function') fa.fit();
@@ -313,6 +318,22 @@ import {
 
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => {
+        const now = Date.now();
+        if (!roWindowStartedAt || (now - roWindowStartedAt) > 2000) {
+          roWindowStartedAt = now;
+          roWindowCount = 0;
+        }
+        roWindowCount += 1;
+        if (roWindowCount === 1 || roWindowCount === 10 || roWindowCount === 25 || roWindowCount === 50) {
+          appendTerminalDebug('chrome:resize-observer-count', { count: roWindowCount });
+        }
+        if (roWindowCount > 80) {
+          roMutedUntil = now + 3000;
+          appendTerminalDebug('chrome:resize-observer-storm', { count: roWindowCount, mutedUntil: roMutedUntil });
+          markTerminalDebugState({ status: 'chrome-resize-storm', lastStage: 'chrome:resize-observer-storm', resizeCount: roWindowCount });
+          return;
+        }
+        if (roMutedUntil && now < roMutedUntil) return;
         if (isFullscreen) return;
         try {
           const r = win.getBoundingClientRect();

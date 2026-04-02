@@ -62,6 +62,18 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     } catch (e) {}
   }
 
+  function syncDatCurrentFileLabels(prefs) {
+    const p = prefs || loadPrefs();
+    const siteEl = $(IDS.datGeositeCurrentFile);
+    const ipEl = $(IDS.datGeoipCurrentFile);
+
+    const siteName = String((p && p.geosite && p.geosite.name) || (DEFAULTS.geosite && DEFAULTS.geosite.name) || '').trim();
+    const ipName = String((p && p.geoip && p.geoip.name) || (DEFAULTS.geoip && DEFAULTS.geoip.name) || '').trim();
+
+    try { if (siteEl) siteEl.textContent = siteName || 'geosite.dat'; } catch (e) {}
+    try { if (ipEl) ipEl.textContent = ipName || 'geoip.dat'; } catch (e) {}
+  }
+
   function datKindMatch(kind, filename) {
     const k = String(kind || '').toLowerCase();
     const n = String(filename || '').toLowerCase();
@@ -248,7 +260,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       if (m.name) m.name.value = (prefs[kind] && prefs[kind].name) ? prefs[kind].name : '';
       if (m.url) m.url.value = (prefs[kind] && prefs[kind].url) ? prefs[kind].url : '';
 
-      const onChange = () => {
+      const onChange = (source) => {
         const p = loadPrefs();
         p[kind] = {
           dir: (m.dir && m.dir.value) || '',
@@ -256,12 +268,15 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
           url: (m.url && m.url.value) || '',
         };
         savePrefs(p);
+        syncDatCurrentFileLabels(p);
+
+        if (source === 'dir' || source === 'name') refreshLater();
       };
 
       ['input', 'change'].forEach((ev) => {
-        if (m.dir) m.dir.addEventListener(ev, onChange);
-        if (m.name) m.name.addEventListener(ev, onChange);
-        if (m.url) m.url.addEventListener(ev, onChange);
+        if (m.dir) m.dir.addEventListener(ev, () => onChange('dir'));
+        if (m.name) m.name.addEventListener(ev, () => onChange('name'));
+        if (m.url) m.url.addEventListener(ev, () => onChange('url'));
       });
 
       try {
@@ -277,6 +292,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     if (status) status.textContent = 'Загрузка…';
 
     const prefs = loadPrefs();
+    syncDatCurrentFileLabels(prefs);
 
     const els = {
       geosite: {
@@ -373,7 +389,10 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   }
 
   function initDatCard() {
-    if (!$(IDS.datHeader) || !$(IDS.datBody)) return;
+    const datHeader = $(IDS.datHeader);
+    const datBody = $(IDS.datBody);
+    if (!datHeader || !datBody) return false;
+    if (datBody.dataset && datBody.dataset.xkDatCardWired === '1') return true;
 
     wireDatInputs();
 
@@ -445,10 +464,15 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       }
     });
 
+    try {
+      if (datBody.dataset) datBody.dataset.xkDatCardWired = '1';
+    } catch (e) {}
+
     // Initial meta load
     setTimeout(() => {
       try { refreshDatMeta(); } catch (e) {}
     }, 400);
+    return true;
   }
 
   DAT.card = DAT.card || {};

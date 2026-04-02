@@ -2,6 +2,7 @@ import { getPanelShellApi, initPanelShell } from './panel_shell.shared.js';
 import { bindPanelShellViewRuntime } from './panel.view_runtime.js';
 import { ensurePanelLazyFeature } from './panel.lazy_bindings.runtime.js';
 import { initLocalIo } from '../features/local_io.js';
+import { hasXkeenXrayCore } from '../features/xkeen_runtime.js';
 
 function isPanelPage() {
   return !!(document.getElementById('view-routing') || document.querySelector('.top-tab-btn[data-view]'));
@@ -12,12 +13,7 @@ function safe(fn) {
 }
 
 function hasXrayCore() {
-  try {
-    if (typeof window.XKEEN_HAS_XRAY === 'boolean') return !!window.XKEEN_HAS_XRAY;
-    const value = String(window.XKEEN_HAS_XRAY || '').toLowerCase();
-    if (value) return value === '1' || value === 'true' || value === 'yes' || value === 'on';
-  } catch (error) {}
-  return true;
+  return hasXkeenXrayCore();
 }
 
 function initModules() {

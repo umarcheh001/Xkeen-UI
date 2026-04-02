@@ -1,6 +1,12 @@
 import { getInboundsApi } from '../features/inbounds.js';
 import { getOutboundsApi } from '../features/outbounds.js';
 import { getRestartLogApi } from '../features/restart_log.js';
+import {
+  attachXkeenEditorToolbar,
+  getXkeenEditorToolbarMiniItems,
+  getXkeenFilePath,
+  getXkeenPageFilesConfig,
+} from '../features/xkeen_runtime.js';
 
 (() => {
   // JSON editor modal for 03_inbounds.json / 04_outbounds.json
@@ -212,9 +218,9 @@ import { getRestartLogApi } from '../features/restart_log.js';
         return String(XKeen.state.fragments[kind] || '').trim();
       }
     } catch (e) {}
-    // Fallback: use whatever is shown as active file label in window.XKEEN_FILES
+    // Fallback: use the current active file label from the page config runtime contract.
     try {
-      const fp = window.XKEEN_FILES && window.XKEEN_FILES[kind];
+      const fp = getXkeenFilePath(kind, '');
       if (!fp) return '';
       const parts = String(fp).split('/');
       const b = parts[parts.length - 1];
@@ -249,9 +255,9 @@ import { getRestartLogApi } from '../features/restart_log.js';
           return String(XKeen.state.fragments[kind] || '').trim();
         }
       } catch (e) {}
-      // Fallback: use whatever is shown as active file label in window.XKEEN_FILES
+      // Fallback: use the current active file label from the page config runtime contract.
       try {
-        const fp = window.XKEEN_FILES && window.XKEEN_FILES[kind];
+        const fp = getXkeenFilePath(kind, '');
         const b = _baseName(fp, '');
         return b || '';
       } catch (e) {}
@@ -260,7 +266,7 @@ import { getRestartLogApi } from '../features/restart_log.js';
 
     if (target === 'inbounds') {
       const active = activeFileParam('inbounds');
-      const base = active ? active : _baseName(window.XKEEN_FILES && window.XKEEN_FILES.inbounds, '03_inbounds.json');
+      const base = active ? active : _baseName(getXkeenFilePath('inbounds', ''), '03_inbounds.json');
       if (titleEl) titleEl.textContent = 'Редактор ' + base;
       if (fileLabelEl) fileLabelEl.textContent = 'Файл: ' + base;
       return buildTargetUrl('inbounds', '/api/inbounds');
@@ -268,7 +274,7 @@ import { getRestartLogApi } from '../features/restart_log.js';
 
     if (target === 'outbounds') {
       const active = activeFileParam('outbounds');
-      const base = active ? active : _baseName(window.XKEEN_FILES && window.XKEEN_FILES.outbounds, '04_outbounds.json');
+      const base = active ? active : _baseName(getXkeenFilePath('outbounds', ''), '04_outbounds.json');
       if (titleEl) titleEl.textContent = 'Редактор ' + base;
       if (fileLabelEl) fileLabelEl.textContent = 'Файл: ' + base;
       return buildTargetUrl('outbounds', '/api/outbounds');
@@ -610,8 +616,9 @@ import { getRestartLogApi } from '../features/restart_log.js';
     } catch (e) {}
 
     try {
-      if (window.xkeenAttachCmToolbar && window.XKEEN_CM_TOOLBAR_MINI) {
-        window.xkeenAttachCmToolbar(_cm, window.XKEEN_CM_TOOLBAR_MINI);
+      const toolbarItems = getXkeenEditorToolbarMiniItems();
+      if (Array.isArray(toolbarItems) && toolbarItems.length) {
+        attachXkeenEditorToolbar(_cm, toolbarItems);
       }
     } catch (e) {}
 
@@ -1100,7 +1107,7 @@ import { getRestartLogApi } from '../features/restart_log.js';
           }
         }
 
-        const files = (window.XKEEN_FILES && typeof window.XKEEN_FILES === 'object') ? window.XKEEN_FILES : {};
+        const files = getXkeenPageFilesConfig();
         const label = target === 'inbounds'
           ? _baseName(files.inbounds, '03_inbounds.json')
           : _baseName(files.outbounds, '04_outbounds.json');

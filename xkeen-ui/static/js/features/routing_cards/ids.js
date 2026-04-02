@@ -24,6 +24,8 @@ import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
     datStatus: 'routing-dat-status',
     datGeositeMeta: 'routing-dat-geosite-meta',
     datGeoipMeta: 'routing-dat-geoip-meta',
+    datGeositeCurrentFile: 'routing-dat-geosite-current-file',
+    datGeoipCurrentFile: 'routing-dat-geoip-current-file',
     datGeositeDir: 'routing-dat-geosite-dir',
     datGeositeName: 'routing-dat-geosite-name',
     datGeositeNameList: 'routing-dat-geosite-name-list',

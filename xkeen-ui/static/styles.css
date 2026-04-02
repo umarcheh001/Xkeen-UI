@@ -240,8 +240,7 @@ html[data-theme="light"] {
    attached to <body>, so it is often NOT a descendant of .monaco-editor.
    Style both cases to keep it consistent across pages/modals. */
 .context-view.monaco-menu-container,
-.context-view .action-widget,
-.action-widget {
+.context-view .action-widget {
   --vscode-menu-background: var(--xk-monaco-widget-bg);
   --vscode-menu-foreground: var(--xk-monaco-widget-text);
   --vscode-menu-border: var(--xk-monaco-widget-border);
@@ -281,11 +280,7 @@ html[data-theme="light"] {
 .context-view .action-widget,
 .context-view .action-widget .actionList,
 .context-view .action-widget .monaco-list,
-.context-view .action-widget .monaco-list-rows,
-.action-widget,
-.action-widget .actionList,
-.action-widget .monaco-list,
-.action-widget .monaco-list-rows {
+.context-view .action-widget .monaco-list-rows {
   background: transparent !important;
   background-color: transparent !important;
   color: var(--xk-monaco-widget-text) !important;
@@ -296,38 +291,38 @@ html[data-theme="light"] {
   background: transparent !important;
 }
 
-.action-widget .monaco-list-row,
-.action-widget .monaco-list-row.action,
-.action-widget .monaco-list-row.separator,
-.action-widget .action-widget-action-bar,
-.action-widget .action-widget-action-bar:before {
+.context-view .action-widget .monaco-list-row,
+.context-view .action-widget .monaco-list-row.action,
+.context-view .action-widget .monaco-list-row.separator,
+.context-view .action-widget .action-widget-action-bar,
+.context-view .action-widget .action-widget-action-bar:before {
   background: transparent !important;
   background-color: transparent !important;
   color: var(--xk-monaco-widget-text) !important;
 }
 
-.action-widget .monaco-list .monaco-list-row.action.focused:not(.option-disabled),
-.action-widget .monaco-list:not(.drop-target):not(.dragging) .monaco-list-row.action:hover:not(.selected):not(.focused):not(.option-disabled),
-.action-widget .monaco-list .monaco-list-row.action.selected:not(.option-disabled) {
+.context-view .action-widget .monaco-list .monaco-list-row.action.focused:not(.option-disabled),
+.context-view .action-widget .monaco-list:not(.drop-target):not(.dragging) .monaco-list-row.action:hover:not(.selected):not(.focused):not(.option-disabled),
+.context-view .action-widget .monaco-list .monaco-list-row.action.selected:not(.option-disabled) {
   background: var(--xk-monaco-widget-hover) !important;
   background-color: var(--xk-monaco-widget-hover) !important;
   color: var(--xk-monaco-widget-text) !important;
   outline: 1px solid transparent !important;
 }
 
-.action-widget .monaco-list-row.separator,
-.action-widget .action-widget-action-bar {
+.context-view .action-widget .monaco-list-row.separator,
+.context-view .action-widget .action-widget-action-bar {
   border-top-color: color-mix(in srgb, var(--xk-monaco-widget-border) 84%, transparent) !important;
 }
 
-.action-widget .monaco-list-row.group-header,
-.action-widget .option-disabled,
-.action-widget .option-disabled * {
+.context-view .action-widget .monaco-list-row.group-header,
+.context-view .action-widget .option-disabled,
+.context-view .action-widget .option-disabled * {
   color: var(--xk-monaco-widget-muted) !important;
 }
 
-.action-widget .monaco-keybinding > .monaco-keybinding-key,
-.action-widget .monaco-keybinding-key {
+.context-view .action-widget .monaco-keybinding > .monaco-keybinding-key,
+.context-view .action-widget .monaco-keybinding-key {
   background-color: color-mix(in srgb, var(--xk-monaco-widget-bg) 82%, white 6%) !important;
   color: var(--xk-monaco-widget-text) !important;
   border-color: color-mix(in srgb, var(--xk-monaco-widget-border) 88%, transparent) !important;
@@ -335,10 +330,10 @@ html[data-theme="light"] {
   box-shadow: none !important;
 }
 
-.action-widget .title,
-.action-widget .codicon,
-.action-widget .action-label,
-.action-widget a {
+.context-view .action-widget .title,
+.context-view .action-widget .codicon,
+.context-view .action-widget .action-label,
+.context-view .action-widget a {
   color: var(--xk-monaco-widget-text) !important;
 }
 
@@ -423,6 +418,31 @@ html[data-theme="light"] .context-view .monaco-menu .monaco-menu-option.active {
   border: 1px solid color-mix(in srgb, var(--xk-monaco-widget-border) 88%, transparent) !important;
   border-bottom-color: color-mix(in srgb, var(--xk-monaco-widget-border) 70%, transparent) !important;
   box-shadow: none !important;
+}
+
+
+/* Monaco menu stability fix:
+   keep the custom theme, but avoid transparent/backdrop-filter layering on Monaco's portal widgets.
+   This prevents visual artifacts on Safari/WebKit and Chromium forks. */
+.context-view.monaco-menu-container,
+.context-view .action-widget,
+.monaco-editor .monaco-menu,
+.context-view .monaco-menu {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  isolation: isolate;
+}
+
+.context-view .action-widget,
+.context-view .action-widget .actionList,
+.context-view .action-widget .monaco-list,
+.context-view .action-widget .monaco-list-rows,
+.monaco-editor .monaco-menu,
+.context-view .monaco-menu,
+.context-view.monaco-menu-container .monaco-menu {
+  background: var(--xk-monaco-widget-bg) !important;
+  background-color: var(--xk-monaco-widget-bg) !important;
+  opacity: 1 !important;
 }
 
 
@@ -23137,46 +23157,53 @@ html[data-theme="light"] body.devtools-page header .header-actions .theme-toggle
 
 /* CM6 premium dark/light theme */
 .xkeen-cm6-host {
-  --xk-cm-bg: #020617;
-  --xk-cm-fg: #e5e7eb;
-  --xk-cm-caret: #60a5fa;
-  --xk-cm-selection: rgba(38, 79, 120, 0.46);
-  --xk-cm-selection-native: rgba(38, 79, 120, 0.74);
-  --xk-cm-selection-match: rgba(59, 130, 246, 0.16);
-  --xk-cm-active-line: rgba(15, 23, 42, 0.82);
-  --xk-cm-active-line-gutter: rgba(15, 23, 42, 0.82);
-  --xk-cm-active-line-fg: #f8fbff;
-  --xk-cm-gutter-bg: #020617;
-  --xk-cm-gutter-fg: #64748b;
-  --xk-cm-gutter-border: rgba(30, 41, 59, 0.88);
-  --xk-cm-search-bg: rgba(29, 78, 216, 0.2);
-  --xk-cm-search-active-bg: rgba(29, 78, 216, 0.34);
-  --xk-cm-search-border: rgba(96, 165, 250, 0.28);
-  --xk-cm-bracket-bg: rgba(30, 41, 59, 0.84);
-  --xk-cm-bracket-border: rgba(96, 165, 250, 0.22);
-  --xk-cm-fold-bg: rgba(15, 23, 42, 0.95);
-  --xk-cm-fold-border: rgba(51, 65, 85, 0.92);
-  --xk-cm-fold-fg: #cbd5e1;
-  --xk-cm-popup-bg: rgba(6, 14, 30, 0.96);
-  --xk-cm-popup-fg: #f8fbff;
-  --xk-cm-popup-border: rgba(96, 165, 250, 0.22);
-  --xk-cm-popup-shadow: rgba(2, 8, 23, 0.48);
-  --xk-cm-error: #fb7185;
-  --xk-cm-warning: #f59e0b;
-  --xk-cm-info: #38bdf8;
-  --xk-cm-comment: #65a30d;
-  --xk-cm-keyword: #93c5fd;
-  --xk-cm-string: #fca5a5;
-  --xk-cm-number: #f59e0b;
-  --xk-cm-atom: #c4b5fd;
-  --xk-cm-property: #e5e7eb;
-  --xk-cm-variable: #e5e7eb;
-  --xk-cm-definition: #e5e7eb;
-  --xk-cm-type: #67e8f9;
-  --xk-cm-punctuation: #94a3b8;
-  --xk-cm-meta: #f9a8d4;
-  --xk-cm-invalid: #ffe4e6;
-  --xk-cm-surface: #020617;
+  --xk-cm-bg: #020817;
+  --xk-cm-fg: #d4d4d4;
+  --xk-cm-caret: #d4d4d4;
+  --xk-cm-selection: #2d4f8e;
+  --xk-cm-selection-native: #2d4f8e;
+  --xk-cm-selection-match: #1e3a5f;
+  --xk-cm-active-line: transparent;
+  --xk-cm-active-line-gutter: transparent;
+  --xk-cm-active-line-fg: #c6c6c6;
+  --xk-cm-gutter-bg: #020817;
+  --xk-cm-gutter-fg: #858585;
+  --xk-cm-gutter-border: transparent;
+  --xk-cm-search-bg: rgba(45, 79, 142, 0.42);
+  --xk-cm-search-active-bg: rgba(45, 79, 142, 0.62);
+  --xk-cm-search-border: rgba(122, 162, 247, 0.45);
+  --xk-cm-bracket-bg: rgba(38, 57, 94, 0.78);
+  --xk-cm-bracket-border: rgba(96, 123, 177, 0.58);
+  --xk-cm-fold-bg: #283457;
+  --xk-cm-fold-border: #7aa2f7;
+  --xk-cm-fold-fg: #565f89;
+  --xk-cm-popup-bg: #020817;
+  --xk-cm-popup-fg: #c0caf5;
+  --xk-cm-popup-border: rgba(122, 162, 247, 0.28);
+  --xk-cm-popup-shadow: rgba(8, 14, 29, 0.55);
+  --xk-cm-error: #f7768e;
+  --xk-cm-warning: #e0af68;
+  --xk-cm-info: #7dcfff;
+  --xk-cm-comment: #6a9955;
+  --xk-cm-keyword: #569cd6;
+  --xk-cm-string: #ce9178;
+  --xk-cm-number: #b5cea8;
+  --xk-cm-atom: #569cd6;
+  --xk-cm-property: #9cdcfe;
+  --xk-cm-variable: #d4d4d4;
+  --xk-cm-definition: #d4d4d4;
+  --xk-cm-type: #4ec9b0;
+  --xk-cm-operator: #d4d4d4;
+  --xk-cm-delimiter: #d4d4d4;
+  --xk-cm-punctuation: #d4d4d4;
+  --xk-cm-bracket-depth-0: #ffd700;
+  --xk-cm-bracket-depth-1: #c586c0;
+  --xk-cm-bracket-depth-2: #4fc1ff;
+  --xk-cm-comma: #d4d4d4;
+  --xk-cm-colon: #d4d4d4;
+  --xk-cm-meta: #9cdcfe;
+  --xk-cm-invalid: #f7768e;
+  --xk-cm-surface: #020817;
   --xk-cm-editor-border: rgba(15, 23, 42, 0.96);
   --xk-cm-editor-shadow: none;
   position: relative;
@@ -23195,10 +23222,10 @@ html[data-theme="light"] .xkeen-cm6-host {
   --xk-cm-selection-native: rgba(173, 214, 255, 0.84);
   --xk-cm-selection-match: rgba(59, 130, 246, 0.1);
   --xk-cm-active-line: rgba(248, 250, 252, 0.96);
-  --xk-cm-active-line-gutter: rgba(248, 250, 252, 0.96);
-  --xk-cm-active-line-fg: #0f172a;
+  --xk-cm-active-line-gutter: #ffffff;
+  --xk-cm-active-line-fg: #1f1f1f;
   --xk-cm-gutter-bg: #ffffff;
-  --xk-cm-gutter-fg: #94a3b8;
+  --xk-cm-gutter-fg: #6e7681;
   --xk-cm-gutter-border: rgba(226, 232, 240, 0.96);
   --xk-cm-search-bg: rgba(37, 99, 235, 0.12);
   --xk-cm-search-active-bg: rgba(37, 99, 235, 0.19);
@@ -23215,16 +23242,18 @@ html[data-theme="light"] .xkeen-cm6-host {
   --xk-cm-error: #e11d48;
   --xk-cm-warning: #d97706;
   --xk-cm-info: #2563eb;
-  --xk-cm-comment: #6b7f9f;
-  --xk-cm-keyword: #2563eb;
-  --xk-cm-string: #c2410c;
-  --xk-cm-number: #b45309;
+  --xk-cm-comment: #6b7280;
+  --xk-cm-keyword: #7c3aed;
+  --xk-cm-string: #15803d;
+  --xk-cm-number: #c2410c;
   --xk-cm-atom: #7c3aed;
-  --xk-cm-property: #111827;
+  --xk-cm-property: #2563eb;
   --xk-cm-variable: #111827;
   --xk-cm-definition: #111827;
-  --xk-cm-type: #0f766e;
-  --xk-cm-punctuation: #64748b;
+  --xk-cm-type: #2563eb;
+  --xk-cm-operator: #0891b2;
+  --xk-cm-delimiter: #0891b2;
+  --xk-cm-punctuation: #0891b2;
   --xk-cm-meta: #be185d;
   --xk-cm-invalid: #7f1d1d;
   --xk-cm-surface: #ffffff;
@@ -23298,6 +23327,11 @@ html[data-theme="light"] .xkeen-cm6-host {
   font-variant-numeric: tabular-nums;
   font-size: inherit;
   line-height: inherit;
+  color: var(--xk-cm-gutter-fg);
+}
+
+.xkeen-cm6-host .cm-activeLineGutter {
+  color: var(--xk-cm-active-line-fg) !important;
 }
 
 .xkeen-cm6-host .cm-content,
@@ -23992,4 +24026,125 @@ html[data-theme="light"] body.panel-page #xray-logs-badge[data-state="on"][data-
     transform: scale(0.82);
     opacity: 0.7;
   }
+}
+
+/* ========================================================================== 
+   Tall-screen editor sizing hotfix (5K / high-DPI desktop monitors)
+   --------------------------------------------------------------------------
+   Previous rules capped the main panel editors around 900-1040px. On 4K/5K
+   displays this left a large unused area under the editor cards. Keep the
+   existing proportions, but raise the ceiling so routing/mihomo editors can
+   grow with the viewport almost to full screen height.
+   ========================================================================== */
+body.panel-page {
+  --xk-panel-editor-tall-min-height: clamp(420px, 62vh, 2200px);
+  --xk-panel-editor-tall-height: clamp(420px, 76vh, 2200px);
+  --xk-panel-editor-tall-max-height: calc(100vh - 220px);
+}
+
+body.panel-page #routing-body {
+  --xk-routing-editor-min-height: var(--xk-panel-editor-tall-min-height);
+  --xk-routing-editor-height: var(--xk-panel-editor-tall-height);
+  --xk-routing-editor-max-height: var(--xk-panel-editor-tall-max-height);
+}
+
+body.panel-page #routing-body .CodeMirror {
+  min-height: var(--xk-routing-editor-min-height) !important;
+}
+
+body.panel-page #routing-body .CodeMirror-scroll {
+  max-height: var(--xk-routing-editor-max-height) !important;
+}
+
+body.panel-page #routing-body #routing-editor-monaco,
+body.panel-page #routing-body .xkeen-cm6-host,
+body.panel-page #routing-body textarea#routing-editor {
+  min-height: var(--xk-routing-editor-min-height) !important;
+  height: var(--xk-routing-editor-height) !important;
+  max-height: var(--xk-routing-editor-max-height) !important;
+}
+
+body.panel-page #mihomo-body {
+  --xk-mihomo-editor-min-height: clamp(420px, 62vh, 2200px);
+  --xk-mihomo-editor-height: clamp(420px, 76vh, 2200px);
+  --xk-mihomo-editor-max-height: calc(100vh - 220px);
+}
+
+body.panel-page #mihomo-body .CodeMirror {
+  min-height: var(--xk-mihomo-editor-min-height) !important;
+}
+
+body.panel-page #mihomo-body .CodeMirror-scroll {
+  max-height: var(--xk-mihomo-editor-max-height) !important;
+}
+
+body.panel-page #mihomo-body #mihomo-editor-monaco,
+body.panel-page #mihomo-body .xkeen-cm6-host,
+body.panel-page #mihomo-body textarea#mihomo-editor {
+  min-height: var(--xk-mihomo-editor-min-height) !important;
+  height: var(--xk-mihomo-editor-height) !important;
+  max-height: var(--xk-mihomo-editor-max-height) !important;
+}
+
+
+/* Routing Monaco custom context menu (used to avoid Monaco clipboard issues in Safari/WebKit and Chromium variants) */
+.xk-routing-monaco-menu {
+  position: fixed;
+  z-index: 2147483000;
+  min-width: 220px;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(71, 85, 105, 0.65);
+  background: #0b1220;
+  box-shadow: 0 22px 48px rgba(2, 6, 23, 0.56), 0 0 0 1px rgba(59, 130, 246, 0.08);
+  backdrop-filter: none;
+}
+.xk-routing-monaco-menu[hidden] {
+  display: none !important;
+}
+.xk-routing-monaco-menu-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #e5eefc;
+  text-align: left;
+  font: 600 13px/1.2 Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+.xk-routing-monaco-menu-item:hover,
+.xk-routing-monaco-menu-item:focus-visible {
+  outline: none;
+  background: rgba(37, 99, 235, 0.22);
+}
+.xk-routing-monaco-menu-item[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.xk-routing-monaco-menu-item[disabled]:hover,
+.xk-routing-monaco-menu-item[disabled]:focus-visible {
+  background: transparent;
+}
+.xk-routing-monaco-menu-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: rgba(71, 85, 105, 0.55);
+}
+html[data-theme="light"] .xk-routing-monaco-menu {
+  border-color: rgba(148, 163, 184, 0.72);
+  background: #f8fafc;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+}
+html[data-theme="light"] .xk-routing-monaco-menu-item {
+  color: #0f172a;
+}
+html[data-theme="light"] .xk-routing-monaco-menu-item:hover,
+html[data-theme="light"] .xk-routing-monaco-menu-item:focus-visible {
+  background: rgba(59, 130, 246, 0.14);
+}
+html[data-theme="light"] .xk-routing-monaco-menu-sep {
+  background: rgba(148, 163, 184, 0.7);
 }

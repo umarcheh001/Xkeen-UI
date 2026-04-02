@@ -396,6 +396,22 @@ def test_xkeen_runtime_module_exposes_shared_runtime_adapter_helpers():
     runtime_src = (FEATURES_DIR / "xkeen_runtime.js").read_text(encoding="utf-8")
 
     required_fragments = [
+        "export function getXkeenPageConfig()",
+        "export function getXkeenPageConfigValue(path, fallbackValue = undefined)",
+        "export function getXkeenPageName()",
+        "export function getXkeenPageSectionsConfig()",
+        "export function getXkeenPageFilesConfig()",
+        "export function getXkeenPageFlagsConfig()",
+        "export function getXkeenPageCoresConfig()",
+        "export function getXkeenFileManagerDefaults()",
+        "export function getXkeenGithubConfig()",
+        "export function getXkeenStaticConfig()",
+        "export function getXkeenRuntimeConfig()",
+        "export function getXkeenTerminalConfig()",
+        "export function supportsXkeenTerminalPty()",
+        "export function shouldEnableXkeenTerminalOptionalAddons()",
+        "export function shouldEnableXkeenTerminalLigatures()",
+        "export function shouldEnableXkeenTerminalWebgl()",
         "export function getXkeenStateApi()",
         "export function getXkeenConfigDirtyApi()",
         "export function getXkeenFormattersApi()",
@@ -409,6 +425,18 @@ def test_xkeen_runtime_module_exposes_shared_runtime_adapter_helpers():
         "export function openXkeenJsonEditor(target, options)",
         "export function ansiToXkeenHtml(text)",
         "export const xkeenRuntimeApi = Object.freeze({",
+        "getPageConfig: getXkeenPageConfig,",
+        "getPageConfigValue: getXkeenPageConfigValue,",
+        "getPageName: getXkeenPageName,",
+        "getPageSectionsConfig: getXkeenPageSectionsConfig,",
+        "getPageFilesConfig: getXkeenPageFilesConfig,",
+        "getPageFlagsConfig: getXkeenPageFlagsConfig,",
+        "getPageCoresConfig: getXkeenPageCoresConfig,",
+        "getFileManagerDefaults: getXkeenFileManagerDefaults,",
+        "getGithubConfig: getXkeenGithubConfig,",
+        "getStaticConfig: getXkeenStaticConfig,",
+        "getRuntimeConfig: getXkeenRuntimeConfig,",
+        "getTerminalConfig: getXkeenTerminalConfig,",
         "getStateApi: getXkeenStateApi,",
         "getConfigDirtyApi: getXkeenConfigDirtyApi,",
         "getFormattersApi: getXkeenFormattersApi,",
@@ -419,6 +447,15 @@ def test_xkeen_runtime_module_exposes_shared_runtime_adapter_helpers():
         "getCoreStorageApi: getXkeenCoreStorageApi,",
         "getCommandJobApi: getXkeenCommandJobApi,",
         "getShowXrayPreflightErrorApi: getXkeenShowXrayPreflightErrorApi,",
+        "hasMihomoCore: hasXkeenMihomoCore,",
+        "getStaticBase: getXkeenStaticBase,",
+        "getStaticVersion: getXkeenStaticVersion,",
+        "getFilePath: getXkeenFilePath,",
+        "getCoreAvailability: getXkeenCoreAvailability,",
+        "supportsTerminalPty: supportsXkeenTerminalPty,",
+        "shouldEnableTerminalOptionalAddons: shouldEnableXkeenTerminalOptionalAddons,",
+        "shouldEnableTerminalLigatures: shouldEnableXkeenTerminalLigatures,",
+        "shouldEnableTerminalWebgl: shouldEnableXkeenTerminalWebgl,",
         "openJsonEditor: openXkeenJsonEditor,",
         "ansiToHtml: ansiToXkeenHtml,",
     ]
@@ -507,3 +544,82 @@ def test_routing_shell_keeps_editor_state_module_local_instead_of_window_xkeen_s
     assert "XK.state.routingEditor" not in shell_src
     assert "XK.state.routingEditorFacade" not in shell_src
     assert "window.XKeen" not in shell_src
+
+
+def test_xkeen_runtime_exposes_page_config_mutator_and_window_runtime_bridge():
+    text = (FEATURES_DIR / "xkeen_runtime.js").read_text(encoding="utf-8")
+
+    required_fragments = [
+        "export function setXkeenPageConfigValue(path, value) {",
+        "setPageConfigValue: setXkeenPageConfigValue,",
+        "Object.assign(xk.runtime, xkeenRuntimeApi);",
+    ]
+
+    for fragment in required_fragments:
+        assert fragment in text, f"missing runtime stage-6 consumer-sweep fragment: {fragment}"
+
+
+def test_feature_access_module_publishes_runtime_accessor_for_migrated_feature_consumers():
+    access_src = (FEATURES_DIR / 'feature_access.js').read_text(encoding='utf-8')
+    shell_src = (ROOT / 'xkeen-ui' / 'static' / 'js' / 'pages' / 'shell.shared.js').read_text(encoding='utf-8')
+
+    required_fragments = [
+        "const featureAccessorRegistry = Object.freeze({",
+        "devtools: () => getDevtoolsNamespaceApi('devtools'),",
+        "updateNotifier: getUpdateNotifierApi,",
+        "export function getFeatureApi(name)",
+        "export function requireFeatureApi(name)",
+        "xk.runtime.getFeatureApi = getFeatureApi;",
+        "xk.runtime.requireFeatureApi = requireFeatureApi;",
+        "xk.runtime.getFeatureAccessorRegistry = getFeatureAccessorRegistry;",
+    ]
+    for fragment in required_fragments:
+        assert fragment in access_src, f"missing feature access fragment in feature_access.js: {fragment}"
+
+    assert "import '../features/feature_access.js';" in shell_src
+
+
+def test_selected_canonical_consumers_use_feature_accessors_instead_of_window_xkeen_features():
+    expectations = {
+        ROOT / 'xkeen-ui' / 'static' / 'js' / 'ui' / 'settings_panel.js': [
+            "import { getFeatureApi } from '../features/feature_access.js';",
+            "const api = getFeatureApi('updateNotifier');",
+        ],
+        ROOT / 'xkeen-ui' / 'static' / 'js' / 'ui' / 'sections.js': [
+            "typeof XK.runtime.getFeatureApi === 'function'",
+            "const devtoolsApi = getFeatureApi('devtools');",
+        ],
+        ROOT / 'xkeen-ui' / 'static' / 'js' / 'pages' / 'panel_shell.shared.js': [
+            "import { getRoutingCardsNamespace } from '../features/routing_cards_namespace.js';",
+            "const backups = getPanelLazyFeatureApi('backups');",
+            "ensurePanelLazyFeature('backups').then((ready) => {",
+            "const routingCards = getRoutingCardsFeatureApi();",
+        ],
+    }
+    forbidden = {
+        ROOT / 'xkeen-ui' / 'static' / 'js' / 'ui' / 'settings_panel.js': [
+            'XK.features && XK.features.updateNotifier',
+            'window.XKeen.features',
+        ],
+        ROOT / 'xkeen-ui' / 'static' / 'js' / 'ui' / 'sections.js': [
+            'XK.features && XK.features.devtools',
+            'window.XKeen.features',
+        ],
+        ROOT / 'xkeen-ui' / 'static' / 'js' / 'pages' / 'panel_shell.shared.js': [
+            'window.XKeen && window.XKeen.features ? window.XKeen.features : null',
+            'window.XKeen && window.XKeen.features ? window.XKeen.features.routingCards : null',
+            'window.XKeen && window.XKeen.backups ? window.XKeen.backups : null',
+        ],
+    }
+
+    for path, fragments in expectations.items():
+        text = path.read_text(encoding='utf-8')
+        for fragment in fragments:
+            assert fragment in text, f"missing feature accessor fragment in {path.relative_to(ROOT).as_posix()}: {fragment}"
+
+    for path, fragments in forbidden.items():
+        text = path.read_text(encoding='utf-8')
+        for fragment in fragments:
+            assert fragment not in text, (
+                f"canonical consumer should not read compat feature globals in {path.relative_to(ROOT).as_posix()}: {fragment}"
+            )

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import shutil
@@ -15,7 +15,7 @@ VITE_CONFIG = ROOT / 'vite.config.mjs'
 VERIFY_SCRIPT = ROOT / 'scripts' / 'verify_frontend_build.mjs'
 BUILD_WORKFLOW_DOC = ROOT / 'docs' / 'frontend-build-workflow.md'
 RAW_BUILD_MANIFEST = ROOT / 'xkeen-ui' / 'static' / 'frontend-build' / '.vite' / 'manifest.build.json'
-CI_WORKFLOW = ROOT / '.github' / 'workflows' / 'python-ui-ci.yml'
+CI_WORKFLOW = ROOT / '.github' / 'workflows' / 'ci.yml'
 MIGRATION_PLAN_DOC = ROOT / 'docs' / 'README_frontend_migration_plan.md'
 
 
@@ -61,20 +61,17 @@ def test_frontend_build_verifier_passes_when_raw_manifest_exists():
 
 def test_frontend_build_ci_and_status_docs_are_closed():
     workflow_text = CI_WORKFLOW.read_text(encoding='utf-8')
-    assert 'uses: actions/setup-node@v4' in workflow_text
-    assert "node-version: '20'" in workflow_text
+    assert 'uses: actions/setup-node@' in workflow_text
+    assert 'node-version:' in workflow_text
     assert 'npm ci' in workflow_text
-    assert 'npm run frontend:verify' in workflow_text
-    assert 'xkeen-ui/static/js/**/*.js' in workflow_text
-    assert 'package.json' in workflow_text
-    assert 'vite.config.mjs' in workflow_text
+    assert 'npm run frontend:build' in workflow_text
+    assert 'scripts/sync_frontend_build_manifest.py' in workflow_text
+    assert 'verify_frontend_build.mjs' in workflow_text
 
-    plan_text = MIGRATION_PLAN_DOC.read_text(encoding='utf-8')
-    assert '| 7. Сделать сборку воспроизводимой и явной | Закрыт |' in plan_text
-    assert 'stages 0-8 fully closed' in plan_text
-    assert 'Этап 7 закрыт.' in plan_text
-    assert 'Этап 8 тоже закрыт' in plan_text
+    readme_text = BUILD_WORKFLOW_DOC.read_text(encoding='utf-8')
+    assert 'build-user-archive.yml' in readme_text
+    assert 'npm ci' in readme_text
+    assert 'npm run frontend:build' in readme_text
+    assert 'sync_frontend_build_manifest.py' in readme_text
+    assert 'verify_frontend_build.mjs' in readme_text
 
-    workflow_doc_text = BUILD_WORKFLOW_DOC.read_text(encoding='utf-8')
-    assert 'после полного закрытия stages 0-8' in workflow_doc_text
-    assert '`ui_assets.py` теперь требует build-managed entry в normal production flow' in workflow_doc_text

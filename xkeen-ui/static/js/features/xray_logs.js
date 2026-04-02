@@ -4,6 +4,7 @@ import {
   confirmXkeenAction,
   escapeXkeenHtml,
   getXkeenSettingsApi,
+  isXkeenMipsRuntime,
   openXkeenModal,
   syncXkeenBodyScrollLock,
   toastXkeen,
@@ -25,9 +26,7 @@ let xrayLogsModuleApi = null;
     try {
       if (document.body && document.body.classList && document.body.classList.contains('xk-perf-lite')) return true;
     } catch (e) {}
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-    } catch (e2) {}
+    if (isXkeenMipsRuntime()) return true;
     return false;
   }
 

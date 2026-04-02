@@ -99,8 +99,15 @@ def _restart_log_file() -> str:
     return path or "/opt/etc/xkeen-ui/restart.log"
 
 
+def _should_sync_restart_log(job: "CommandJob" | None) -> bool:
+    try:
+        return bool(job and job.flag in {"-restart", "-start"})
+    except Exception:
+        return False
+
+
 def _sync_restart_log(job: "CommandJob" | None) -> None:
-    if not job or job.flag != "-restart":
+    if not _should_sync_restart_log(job):
         return
 
     payload = job.output or ""
@@ -187,10 +194,10 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
                     j.output += chunk[:room]
                     if "[output truncated]" not in j.output:
                         j.output += "\n[output truncated]\n"
-                    restart_job = j if j.flag == "-restart" else None
+                    restart_job = j if _should_sync_restart_log(j) else None
                     return
             j.output += chunk
-            restart_job = j if j.flag == "-restart" else None
+            restart_job = j if _should_sync_restart_log(j) else None
         _sync_restart_log(restart_job)
 
     started = time.time()
@@ -368,7 +375,7 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
                 job.status = "finished"
             job.exit_code = int(exit_code) if exit_code is not None else None
             job.finished_at = time.time()
-            restart_job = job if job.flag == "-restart" else None
+            restart_job = job if _should_sync_restart_log(job) else None
         _sync_restart_log(restart_job)
 
     except Exception as e:  # pragma: no cover - defensive
@@ -380,7 +387,7 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
             job.status = "error"
             job.error = str(e)
             job.finished_at = time.time()
-            restart_job = job if job.flag == "-restart" else None
+            restart_job = job if _should_sync_restart_log(job) else None
         _sync_restart_log(restart_job)
     finally:
         try:
@@ -412,7 +419,7 @@ def create_command_job(flag: str | None, stdin_data: str | None, cmd: str | None
     with JOBS_LOCK:
         JOBS[job_id] = job
 
-    if flag == "-restart":
+    if flag in {"-restart", "-start"}:
         _sync_restart_log(job)
 
     cleanup_old_jobs()

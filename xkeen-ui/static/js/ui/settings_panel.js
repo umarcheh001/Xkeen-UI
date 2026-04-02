@@ -1,3 +1,4 @@
+import { getFeatureApi } from '../features/feature_access.js';
 (() => {
   'use strict';
 
@@ -95,7 +96,7 @@
 
   function getUpdateNotifierApi() {
     try {
-      const api = XK.features && XK.features.updateNotifier;
+      const api = getFeatureApi('updateNotifier');
       if (api) return api;
     } catch (e) {}
     return null;

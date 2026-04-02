@@ -4,9 +4,7 @@
 //   - XKEEN_UI_PANEL_SECTIONS_WHITELIST
 //   - XKEEN_UI_DEVTOOLS_SECTIONS_WHITELIST
 //
-// Templates expose them via:
-//   window.XKeen.env.panelSectionsWhitelist
-//   window.XKeen.env.devtoolsSectionsWhitelist
+// Templates publish them in window.XKeen.pageConfig.sections.
 //
 // Elements opt-in by having `data-xk-section`. It can contain multiple tokens
 // separated by spaces (any match allows the element).
@@ -56,6 +54,20 @@
       if (el.dataset) el.dataset.xkForceHidden = '1';
     } catch (e) {}
   }
+
+  function getFeatureApi(name) {
+    const key = String(name || '').trim();
+    if (!key) return null;
+    try {
+      const runtime = XK && XK.runtime && typeof XK.runtime.getFeatureApi === 'function'
+        ? XK.runtime
+        : null;
+      if (!runtime) return null;
+      return runtime.getFeatureApi(key) || null;
+    } catch (e) {}
+    return null;
+  }
+
 
   function applyWhitelistToElements(allowSet, root) {
     if (!allowSet) return;
@@ -126,8 +138,9 @@
       const want = (!toolsHidden) ? 'tools' : ((!logsHidden) ? 'logs' : null);
       if (!want) return;
 
-      if (XK.features && XK.features.devtools && typeof XK.features.devtools.setActiveTab === 'function') {
-        XK.features.devtools.setActiveTab(want);
+      const devtoolsApi = getFeatureApi('devtools');
+      if (devtoolsApi && typeof devtoolsApi.setActiveTab === 'function') {
+        devtoolsApi.setActiveTab(want);
       } else {
         // Best effort: click.
         const btn = (want === 'logs') ? btnLogs : btnTools;
@@ -136,10 +149,24 @@
     } catch (e) {}
   }
 
+  function getSectionsConfig() {
+    try {
+      const runtime = XK && XK.runtime && typeof XK.runtime.getPageSectionsConfig === 'function'
+        ? XK.runtime
+        : null;
+      if (runtime) return runtime.getPageSectionsConfig() || {};
+    } catch (e) {}
+    try {
+      const pageConfig = XK && XK.pageConfig && typeof XK.pageConfig === 'object' ? XK.pageConfig : null;
+      if (pageConfig && pageConfig.sections && typeof pageConfig.sections === 'object') return pageConfig.sections;
+    } catch (e2) {}
+    return {};
+  }
+
   function init() {
-    const env = (XK && XK.env) ? XK.env : {};
-    const panelSet = parseWhitelist(env.panelSectionsWhitelist);
-    const devSet = parseWhitelist(env.devtoolsSectionsWhitelist);
+    const sections = getSectionsConfig();
+    const panelSet = parseWhitelist(sections.panelWhitelist);
+    const devSet = parseWhitelist(sections.devtoolsWhitelist);
 
     // Apply on DOM ready.
     document.addEventListener('DOMContentLoaded', () => {
