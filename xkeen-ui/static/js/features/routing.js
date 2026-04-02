@@ -1897,11 +1897,28 @@ function closeHelp() {
         }
         line0 = Math.max(0, Number(line0 || 0));
         ch0 = Math.max(0, Number(ch0 || 0));
-        if (typeof _cm.setCursor === 'function') _cm.setCursor({ line: line0, ch: ch0 });
-        else if (typeof _cm.setSelections === 'function') _cm.setSelections([{ anchor: { line: line0, ch: ch0 }, head: { line: line0, ch: ch0 } }]);
+        let endCh0 = ch0;
+        try {
+          const lineText = (typeof _cm.getLine === 'function') ? String(_cm.getLine(line0) || '') : '';
+          endCh0 = Math.min(lineText.length, ch0 + 1);
+        } catch (e2) {}
+        if (endCh0 < ch0) endCh0 = ch0;
         if (typeof _cm.revealLine === 'function') _cm.revealLine(line0 + 1);
         else if (typeof _cm.scrollIntoView === 'function') _cm.scrollIntoView({ line: line0, ch: ch0 }, 120);
         else if (typeof _cm.scrollTo === 'function') _cm.scrollTo(null, Math.max(0, line0 * 20));
+        if (typeof _cm.setSelections === 'function') {
+          _cm.setSelections([{
+            anchor: { line: line0, ch: ch0 },
+            head: { line: line0, ch: endCh0 },
+          }]);
+        } else if (typeof _cm.setSelection === 'function') {
+          _cm.setSelection(
+            { line: line0, ch: ch0 },
+            { line: line0, ch: endCh0 }
+          );
+        } else if (typeof _cm.setCursor === 'function') {
+          _cm.setCursor({ line: line0, ch: ch0 });
+        }
         if (typeof _cm.focus === 'function') _cm.focus();
         return true;
       } catch (e) {}
