@@ -368,6 +368,145 @@ migrate_legacy_jsonc_files() {
 
 # --- Определяем существующую установку и её порт ---
 
+cleanup_frontend_build_dir() {
+  BUILD_DIR="$1"
+  [ -n "$BUILD_DIR" ] || return 0
+  [ -d "$BUILD_DIR" ] || return 0
+
+  BRIDGE_MANIFEST="$BUILD_DIR/.vite/manifest.json"
+  RAW_MANIFEST="$BUILD_DIR/.vite/manifest.build.json"
+
+  if [ ! -f "$BRIDGE_MANIFEST" ] && [ ! -f "$RAW_MANIFEST" ]; then
+    echo "[*] frontend-build cleanup: manifest files not found in $BUILD_DIR, skip."
+    return 0
+  fi
+
+  echo "[*] frontend-build cleanup: pruning stale generated files in $BUILD_DIR..."
+
+  CLEANUP_OUTPUT="$(
+    FRONTEND_BUILD_DIR="$BUILD_DIR" \
+    FRONTEND_BUILD_BRIDGE_MANIFEST="$BRIDGE_MANIFEST" \
+    FRONTEND_BUILD_RAW_MANIFEST="$RAW_MANIFEST" \
+    "$PYTHON_BIN" - <<'PY'
+import json
+from pathlib import Path
+import os
+
+build_dir = Path(os.environ.get("FRONTEND_BUILD_DIR", "")).resolve()
+bridge_manifest = Path(os.environ.get("FRONTEND_BUILD_BRIDGE_MANIFEST", ""))
+raw_manifest = Path(os.environ.get("FRONTEND_BUILD_RAW_MANIFEST", ""))
+
+
+def normalize_rel(value):
+    text = str(value or "").strip().replace("\\", "/").lstrip("/")
+    return text or None
+
+
+def keep_rel(keep, value):
+    rel = normalize_rel(value)
+    if rel:
+        keep.add(rel)
+
+
+def load_manifest(path, keep, errors):
+    if not path.is_file():
+        return False
+    try:
+        rel = path.resolve().relative_to(build_dir).as_posix()
+        keep.add(rel)
+    except Exception:
+        pass
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception as exc:
+        errors.append(f"{path.name}: {exc}")
+        return False
+    if not isinstance(payload, dict):
+        errors.append(f"{path.name}: root is not a JSON object")
+        return False
+    for item in payload.values():
+        if not isinstance(item, dict):
+            continue
+        keep_rel(keep, item.get("file"))
+        for key in ("imports", "dynamicImports", "css", "assets"):
+            value = item.get(key)
+            if isinstance(value, list):
+                for entry in value:
+                    keep_rel(keep, entry)
+    return True
+
+
+if not build_dir.exists() or not build_dir.is_dir():
+    print("skip:build_dir_missing")
+    raise SystemExit(0)
+
+keep = set()
+errors = []
+loaded_any = False
+
+for wrapper in build_dir.glob("assets/*-bridge.js"):
+    try:
+        keep.add(wrapper.relative_to(build_dir).as_posix())
+    except Exception:
+        pass
+
+for manifest in (bridge_manifest, raw_manifest):
+    if load_manifest(manifest, keep, errors):
+        loaded_any = True
+
+if not loaded_any:
+    print("skip:no_valid_manifest")
+    if errors:
+        print("errors=" + " | ".join(errors[:10]))
+    raise SystemExit(0)
+
+deleted = []
+
+for path in sorted(build_dir.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+    try:
+        if path.is_dir():
+            continue
+        rel = path.relative_to(build_dir).as_posix()
+        if rel in keep:
+            continue
+        path.unlink()
+        deleted.append(rel)
+    except Exception as exc:
+        errors.append(f"{path}: {exc}")
+
+for path in sorted(build_dir.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+    try:
+        if path.is_dir() and path != build_dir:
+            try:
+                next(path.iterdir())
+            except StopIteration:
+                path.rmdir()
+    except Exception:
+        pass
+
+print(f"kept={len(keep)} deleted={len(deleted)}")
+if deleted:
+    print("deleted_list=" + ",".join(deleted[:20]))
+if errors:
+    print("errors=" + " | ".join(errors[:10]))
+PY
+  )"
+
+  CLEANUP_STATUS=$?
+  if [ "$CLEANUP_STATUS" -ne 0 ]; then
+    echo "[!] frontend-build cleanup failed for $BUILD_DIR (exit $CLEANUP_STATUS). Keeping files as-is."
+    return 0
+  fi
+
+  if [ -n "$CLEANUP_OUTPUT" ]; then
+    echo "$CLEANUP_OUTPUT" | while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      echo "[*] frontend-build cleanup: $line"
+    done
+  fi
+}
+
 EXISTING_APP="$UI_DIR/app.py"
 EXISTING_RUN="$UI_DIR/run_server.py"
 EXISTING_PORT=""
@@ -493,6 +632,8 @@ fi
 #
 # Параметры можно передать через окружение (например, при сборке релиза):
 #   XKEEN_UI_UPDATE_REPO, XKEEN_UI_UPDATE_CHANNEL, XKEEN_UI_VERSION, XKEEN_UI_COMMIT
+
+cleanup_frontend_build_dir "$UI_DIR/static/frontend-build"
 
 json_escape() {
   # minimal JSON string escape
