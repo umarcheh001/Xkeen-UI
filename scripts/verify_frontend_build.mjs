@@ -20,6 +20,12 @@ const REQUIRED_PRETTIER_VENDOR_FILES = [
   'prettier/plugins/estree.js',
   'prettier/plugins/yaml.js',
 ];
+const KNOWN_MODULE_EXTENSIONS = ['.js', '.mjs', '.cjs', '.json', '.node'];
+const RELATIVE_IMPORT_PATTERNS = [
+  /\bfrom\s*["'](\.{1,2}\/[^"'?#]+(?:[?#][^"']*)?)["']/g,
+  /^\s*import\s*["'](\.{1,2}\/[^"'?#]+(?:[?#][^"']*)?)["']/gm,
+  /\bimport\s*\(\s*["'](\.{1,2}\/[^"'?#]+(?:[?#][^"']*)?)["']\s*\)/g,
+];
 
 const EXPECTED_PAGE_ENTRIES = {
   panel: 'js/pages/panel.entry.js',
@@ -178,8 +184,57 @@ function verifyVendorAssets() {
   assert(missing.length === 0, `frontend vendor assets are missing or empty:\n${missing.join('\n')}`);
 }
 
+function splitSpecifierSuffix(specifier) {
+  const queryIndex = specifier.indexOf('?');
+  const hashIndex = specifier.indexOf('#');
+  const index = [queryIndex, hashIndex].filter((value) => value >= 0).sort((a, b) => a - b)[0];
+  if (typeof index === 'number') {
+    return [specifier.slice(0, index), specifier.slice(index)];
+  }
+  return [specifier, ''];
+}
+
+function hasKnownModuleExtension(specifier) {
+  return KNOWN_MODULE_EXTENSIONS.some((extension) => specifier.endsWith(extension));
+}
+
+function verifyVendorBrowserSafeImports() {
+  const offenders = [];
+  const stack = [path.join(vendorRoot, 'npm')];
+
+  while (stack.length) {
+    const current = stack.pop();
+    if (!fs.existsSync(current)) continue;
+
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (!['.js', '.mjs'].includes(path.extname(entry.name))) continue;
+
+      const text = fs.readFileSync(fullPath, 'utf8');
+      for (const pattern of RELATIVE_IMPORT_PATTERNS) {
+        pattern.lastIndex = 0;
+        for (const match of text.matchAll(pattern)) {
+          const specifier = String(match[1] || '').trim();
+          const [baseSpecifier] = splitSpecifierSuffix(specifier);
+          if (!baseSpecifier || hasKnownModuleExtension(baseSpecifier)) continue;
+
+          offenders.push(`${path.relative(repoRoot, fullPath).replace(/\\/g, '/')} :: ${specifier}`);
+        }
+      }
+    }
+  }
+
+  assert(offenders.length === 0, `frontend vendor contains browser-unsafe relative ESM imports without file extensions:\n${offenders.slice(0, 20).join('\n')}`);
+}
+
 verifyBridgeManifest();
 verifyBuildManifest();
 verifyNoStaleBuildFiles();
 verifyVendorAssets();
+verifyVendorBrowserSafeImports();
 console.log('Frontend build bridge + raw build manifests verified, including required vendor assets.');

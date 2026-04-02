@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import re
 
 import pytest
 
@@ -65,6 +66,37 @@ def test_runtime_vendor_assets_exist_after_frontend_build():
 
     missing = [str(path) for path in required if not path.is_file()]
     assert not missing, f"frontend runtime vendor assets are missing after build:\n" + "\n".join(missing)
+
+
+def test_runtime_vendor_esm_imports_are_browser_safe():
+    vendor_root = Path('xkeen-ui/static/vendor/npm')
+    pattern_specs = [
+        re.compile(r"""\bfrom\s*["'](\.{1,2}/[^"'?#]+(?:[?#][^"']*)?)["']"""),
+        re.compile(r"""^\s*import\s*["'](\.{1,2}/[^"'?#]+(?:[?#][^"']*)?)["']""", re.MULTILINE),
+        re.compile(r"""\bimport\s*\(\s*["'](\.{1,2}/[^"'?#]+(?:[?#][^"']*)?)["']\s*\)"""),
+    ]
+    known_extensions = ('.js', '.mjs', '.cjs', '.json', '.node')
+
+    if shutil.which('npm') is None and not vendor_root.exists():
+        pytest.skip('npm/vendor assets are not available in this environment')
+
+    offenders = []
+    for path in vendor_root.rglob('*'):
+        if not path.is_file() or path.suffix not in {'.js', '.mjs'}:
+            continue
+        text = path.read_text(encoding='utf-8')
+        for pattern in pattern_specs:
+            for match in pattern.finditer(text):
+                specifier = match.group(1).strip()
+                base_specifier = re.split(r'[?#]', specifier, maxsplit=1)[0]
+                if base_specifier.endswith(known_extensions):
+                    continue
+                offenders.append(f"{path.as_posix()} :: {specifier}")
+
+    assert not offenders, (
+        'frontend runtime vendor contains browser-unsafe relative ESM imports without file extensions:\n'
+        + '\n'.join(offenders[:20])
+    )
 
 def test_source_mode_templates_include_codemirror6_importmap_before_entry_module():
     templates = [

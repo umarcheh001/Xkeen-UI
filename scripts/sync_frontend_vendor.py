@@ -21,6 +21,11 @@ PRETTIER_FILES = (
     ("plugins/yaml.js", "plugins/yaml.js"),
 )
 
+KNOWN_MODULE_EXTENSIONS = (".js", ".mjs", ".cjs", ".json", ".node")
+IMPORT_FROM_RE = re.compile(r'(?P<prefix>\bfrom\s*["\'])(?P<spec>\.{1,2}/[^"\']+)(?P<suffix>["\'])')
+SIDE_EFFECT_IMPORT_RE = re.compile(r'(?m)^(?P<prefix>\s*import\s*["\'])(?P<spec>\.{1,2}/[^"\']+)(?P<suffix>["\'])')
+DYNAMIC_IMPORT_RE = re.compile(r'(?P<prefix>\bimport\s*\(\s*["\'])(?P<spec>\.{1,2}/[^"\']+)(?P<suffix>["\']\s*\))')
+
 
 def fail(message: str) -> None:
     raise SystemExit(message)
@@ -115,6 +120,73 @@ def write_vendor_manifest(packages: list[dict[str, str]], prettier_meta: dict[st
     manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def split_specifier_suffix(specifier: str) -> tuple[str, str]:
+    for marker in ("?", "#"):
+        index = specifier.find(marker)
+        if index != -1:
+            return specifier[:index], specifier[index:]
+    return specifier, ""
+
+
+def resolve_browser_safe_specifier(source_file: Path, specifier: str) -> str | None:
+    base_specifier, suffix = split_specifier_suffix(specifier)
+    if base_specifier.endswith(KNOWN_MODULE_EXTENSIONS):
+        return None
+
+    source_dir = source_file.parent
+    candidates = (
+        base_specifier + ".js",
+        base_specifier + ".mjs",
+        base_specifier + ".cjs",
+        base_specifier + "/index.js",
+        base_specifier + "/index.mjs",
+        base_specifier + "/index.cjs",
+    )
+
+    for candidate in candidates:
+        candidate_path = source_dir.joinpath(*candidate.split("/"))
+        if candidate_path.is_file():
+            return candidate + suffix
+
+    return None
+
+
+def patch_browser_relative_imports_in_text(source_file: Path, text: str) -> tuple[str, int]:
+    replacements = 0
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal replacements
+        specifier = match.group("spec")
+        replacement = resolve_browser_safe_specifier(source_file, specifier)
+        if not replacement or replacement == specifier:
+            return match.group(0)
+        replacements += 1
+        return f"{match.group('prefix')}{replacement}{match.group('suffix')}"
+
+    updated = IMPORT_FROM_RE.sub(replace, text)
+    updated = SIDE_EFFECT_IMPORT_RE.sub(replace, updated)
+    updated = DYNAMIC_IMPORT_RE.sub(replace, updated)
+    return updated, replacements
+
+
+def patch_browser_relative_imports() -> tuple[int, int]:
+    files_changed = 0
+    replacements = 0
+    for source_file in VENDOR_ROOT.rglob("*"):
+        if not source_file.is_file():
+            continue
+        if source_file.suffix not in {".js", ".mjs"}:
+            continue
+        original = source_file.read_text(encoding="utf-8")
+        updated, file_replacements = patch_browser_relative_imports_in_text(source_file, original)
+        if file_replacements <= 0:
+            continue
+        source_file.write_text(updated, encoding="utf-8")
+        files_changed += 1
+        replacements += file_replacements
+    return files_changed, replacements
+
+
 def main() -> int:
     ensure_node_modules()
 
@@ -127,10 +199,12 @@ def main() -> int:
         copy_package_tree(package_root, copied_packages)
 
     prettier_meta = copy_prettier_files()
+    files_changed, replacements = patch_browser_relative_imports()
     write_vendor_manifest(copied_packages, prettier_meta)
 
     print(f"Synced {len(copied_packages)} vendor npm package(s).")
     print(f"Synced Prettier {prettier_meta.get('version') or 'unknown'} runtime assets.")
+    print(f"Patched {replacements} browser ESM import(s) across {files_changed} vendor file(s).")
     return 0
 
 
