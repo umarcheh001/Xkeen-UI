@@ -64,6 +64,41 @@ jobs:
             --exclude '__pycache__' \
             --exclude '.DS_Store'
 
+
+      - name: Write BUILD.json
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+            UPDATE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/xkeen-ui-routing.tar.gz"
+          else
+            VERSION="${GITHUB_SHA::7}"
+            UPDATE_URL=""
+          fi
+
+          RELEASE_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+          export VERSION RELEASE_DATE UPDATE_URL
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("package-root/xkeen-ui/BUILD.json")
+          payload = {
+              "version": os.environ["VERSION"],
+              "release_date": os.environ["RELEASE_DATE"],
+              "update_url": os.environ["UPDATE_URL"],
+          }
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          print(path.read_text(encoding="utf-8"))
+          PY
+
       - name: Create user archive
         run: |
           tar -czf dist/xkeen-ui-routing.tar.gz -C package-root xkeen-ui
