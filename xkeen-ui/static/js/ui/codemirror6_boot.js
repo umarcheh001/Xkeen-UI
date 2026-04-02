@@ -990,7 +990,21 @@ function buildBridge(view, ctx) {
       if (typeof viewState.fullScreen === 'boolean') ok = bridge.setOption('fullScreen', !!viewState.fullScreen) || ok;
       return ok;
     },
-    revealLine(line) { const offset = posFromLineCh(view.state.doc, Math.max(0, Number(line || 1) - 1), 0); return dispatch({ selection: { anchor: offset, head: offset }, scrollIntoView: true }); },
+    revealLine(line) {
+      const offset = posFromLineCh(view.state.doc, Math.max(0, Number(line || 1) - 1), 0);
+      try {
+        view.dispatch({ effects: EditorView.scrollIntoView(offset, { y: 'center' }) });
+        return true;
+      } catch (e) {}
+      try {
+        const block = view.lineBlockAt(offset);
+        const viewport = view.scrollDOM;
+        const clientHeight = clampNumber(viewport && viewport.clientHeight, 0);
+        const targetTop = Math.max(0, clampNumber(block && block.top, 0) - Math.max(0, Math.floor((clientHeight - clampNumber(block && block.height, 0)) / 2)));
+        return bridge.scrollTo(null, targetTop);
+      } catch (e) {}
+      return false;
+    },
     getOption(name) {
       const key = asString(name || '');
       if (key === 'mode') return getModeForCompat();
