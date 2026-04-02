@@ -1,11 +1,14 @@
+import {
+  getTerminalMode,
+  getTerminalPublicApi,
+  publishTerminalCompatApi,
+} from '../runtime.js';
+
 // Terminal confirm prompt module (Stage 8.3.2)
 // Shows/hides #terminal-input when output suggests a confirmation prompt.
 // Emits: confirm:show, confirm:hide, confirm:submit
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
 
   function createConfirmPrompt(ctx) {
     const events = (ctx && ctx.events) ? ctx.events : { on: () => () => {}, emit: () => {} };
@@ -25,11 +28,19 @@
 
     function getMode() {
       try { if (session && typeof session.getMode === 'function') return session.getMode(); } catch (e) {}
-      try {
-        const core = window.XKeen && window.XKeen.terminal && window.XKeen.terminal._core;
-        if (core && typeof core.getMode === 'function') return core.getMode();
-      } catch (e2) {}
+      try { return getTerminalMode(ctx); } catch (e2) {}
       return 'shell';
+    }
+
+    function sendViaTerminalApi(payload, options) {
+      try {
+        const api = getTerminalPublicApi();
+        if (api && typeof api.send === 'function') {
+          void api.send(payload, options || {});
+          return true;
+        }
+      } catch (e) {}
+      return false;
     }
 
     function detectConfirmPrompt(text) {
@@ -111,9 +122,7 @@
       try {
         if (transport && typeof transport.send === 'function') {
           ok = !!transport.send(payload, { stdin: true, source: 'confirm_prompt' });
-        } else if (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.api && typeof window.XKeen.terminal.api.send === 'function') {
-          // Fallback: raw transport send via API.
-          void window.XKeen.terminal.api.send(payload, { raw: true, stdin: true, source: 'confirm_prompt' });
+        } else if (sendViaTerminalApi(payload, { raw: true, stdin: true, source: 'confirm_prompt' })) {
           ok = true;
         }
       } catch (e1) {}
@@ -135,11 +144,9 @@
       } catch (e) {}
       // Last-resort fallback
       try {
-        if (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.api && typeof window.XKeen.terminal.api.send === 'function') {
-          const cmdEl = byId('terminal-command');
-          const cmd = cmdEl ? String(cmdEl.value || '') : '';
-          if (cmd.trim()) { void window.XKeen.terminal.api.send(cmd + '\n', { source: 'confirm_prompt_fallback' }); return true; }
-        }
+        const cmdEl = byId('terminal-command');
+        const cmd = cmdEl ? String(cmdEl.value || '') : '';
+        if (cmd.trim()) return sendViaTerminalApi(cmd + '\n', { source: 'confirm_prompt_fallback' });
       } catch (e2) {}
       return false;
     }
@@ -214,11 +221,11 @@
   }
 
   // Registry plugin wrapper
-  window.XKeen.terminal.confirm_prompt = {
+  const terminalConfirmPromptCompat = {
     createModule: (ctx) => {
       const mod = createConfirmPrompt(ctx);
       try { ctx.confirmPrompt = mod; } catch (e) {}
-      try { window.XKeen.terminal.confirmPrompt = mod; } catch (e2) {}
+      try { publishTerminalCompatApi('confirmPrompt', mod); } catch (e2) {}
 
       return {
         id: 'confirm_prompt',
@@ -229,4 +236,6 @@
       };
     },
   };
+
+  publishTerminalCompatApi('confirm_prompt', terminalConfirmPromptCompat);
 })();

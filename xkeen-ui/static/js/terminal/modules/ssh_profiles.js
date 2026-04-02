@@ -1,10 +1,12 @@
+import {
+  publishTerminalCompatApi,
+  toastTerminal,
+} from '../runtime.js';
+
 // Terminal module: SSH profiles helper (client-side only)
 // Extracted from terminal.js to reduce orchestrator size (DoD).
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
 
   function createModule(ctx) {
     const id = 'ssh_profiles';
@@ -29,9 +31,7 @@
       try {
         if (ui && typeof ui.toast === 'function') return ui.toast(msg, kind);
       } catch (e) {}
-      try {
-        if (typeof window.showToast === 'function') return window.showToast(String(msg || ''), kind || 'info');
-      } catch (e2) {}
+      return toastTerminal(String(msg || ''), kind || 'info');
     }
 
     function bindClickById(elementId, handler) {
@@ -688,5 +688,5 @@
     };
   }
 
-  window.XKeen.terminal.ssh_profiles = { createModule };
+  publishTerminalCompatApi('ssh_profiles', { createModule });
 })();

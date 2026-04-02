@@ -2,6 +2,7 @@
   'use strict';
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.util = XKeen.util || {};
 
   // ANSI -> HTML formatter.

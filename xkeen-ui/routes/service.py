@@ -1,13 +1,12 @@
 """Service-control API routes for xkeen as a Flask Blueprint."""
 from __future__ import annotations
-import os
 import subprocess
 
 from flask import Blueprint, request, jsonify
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable
 
 from routes.common.errors import error_response
-from services.xkeen_commands_catalog import build_xkeen_cmd
+from services.xkeen import control_xkeen_action
 
 # --- core.log helpers (never fail) ---
 try:
@@ -94,10 +93,13 @@ def create_service_blueprint(
     @bp.post("/api/xkeen/start")
     def api_xkeen_start() -> Any:
         try:
-            subprocess.check_call(build_xkeen_cmd("-start"))
-            append_restart_log(True, source="api-start")
-            _core_log("info", "xkeen.start", source="api-start")
-            return jsonify({"ok": True}), 200
+            ok = control_xkeen_action("start", prefer_init=True)
+            append_restart_log(ok, source="api-start")
+            if ok:
+                _core_log("info", "xkeen.start", source="api-start")
+                return jsonify({"ok": True}), 200
+            _core_log("error", "xkeen.start_failed", source="api-start")
+            return jsonify({"ok": False}), 500
         except Exception:
             append_restart_log(False, source="api-start")
             _core_log("error", "xkeen.start_failed", source="api-start")
@@ -107,10 +109,13 @@ def create_service_blueprint(
     @bp.post("/api/xkeen/stop")
     def api_xkeen_stop() -> Any:
         try:
-            subprocess.check_call(build_xkeen_cmd("-stop"))
-            append_restart_log(True, source="api-stop")
-            _core_log("info", "xkeen.stop", source="api-stop")
-            return jsonify({"ok": True}), 200
+            ok = control_xkeen_action("stop", prefer_init=True)
+            append_restart_log(ok, source="api-stop")
+            if ok:
+                _core_log("info", "xkeen.stop", source="api-stop")
+                return jsonify({"ok": True}), 200
+            _core_log("error", "xkeen.stop_failed", source="api-stop")
+            return jsonify({"ok": False}), 500
         except Exception:
             append_restart_log(False, source="api-stop")
             _core_log("error", "xkeen.stop_failed", source="api-stop")

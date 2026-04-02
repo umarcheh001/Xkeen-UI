@@ -27,6 +27,15 @@ def append_restart_log(log_file: str, ok: bool, source: str = "api") -> None:
         pass
 
 
+def write_restart_log(log_file: str, raw_text: str) -> None:
+    """Overwrite restart log with full raw output."""
+    log_dir = os.path.dirname(log_file)
+    if log_dir and not os.path.isdir(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+    with open(log_file, "w", encoding="utf-8") as f:
+        f.write(str(raw_text or ""))
+
+
 def read_restart_log(log_file: str, limit: int = 100) -> List[str]:
     """Read last ``limit`` lines from restart log file, if it exists."""
     if not os.path.isfile(log_file):

@@ -1,3 +1,11 @@
+import {
+  ensureGlobalStateRoot,
+  ensureTerminalRoot,
+  getTerminalContext,
+  publishWindowCompatFunction,
+} from './runtime.js';
+import { appendTerminalDebug, markTerminalDebugState } from '../features/terminal_debug.js';
+
 // XKeen terminal island bootstrap (Stage 8.5)
 //
 // terminal.js is orchestration-only:
@@ -11,19 +19,11 @@
 (function () {
   'use strict';
 
-  // Namespace
-  window.XKeen = window.XKeen || {};
-  window.XKeen.state = window.XKeen.state || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-
-  const T = window.XKeen.terminal;
+  ensureGlobalStateRoot();
+  const T = ensureTerminalRoot();
 
   function getCtx() {
-    try {
-      const core = T.core;
-      if (core && typeof core.getCtx === 'function') return core.getCtx();
-    } catch (e) {}
-    return null;
+    return getTerminalContext();
   }
 
   // Stage 8.5 / этап 2: DOM registry refresh + stable aliases
@@ -57,6 +57,32 @@
   function hasAnyTerminalUi(ctx) {
     const c = ctx || getCtx();
     if (!c) return false;
+
+    const hasDirect = (id) => {
+      try { return !!document.getElementById(id); } catch (e) {}
+      return false;
+    };
+
+    if (
+      hasDirect('terminal-overlay') ||
+      hasDirect('terminal-output') ||
+      hasDirect('terminal-open-pty-btn') ||
+      hasDirect('terminal-open-shell-btn')
+    ) {
+      return true;
+    }
+
+    try {
+      if (c.dom && typeof c.dom.byId === 'function') {
+        return !!(
+          c.dom.byId('terminal-overlay') ||
+          c.dom.byId('terminal-output') ||
+          c.dom.byId('terminal-open-pty-btn') ||
+          c.dom.byId('terminal-open-shell-btn')
+        );
+      }
+    } catch (e) {}
+
     try {
       if (c.ui && typeof c.ui.byId === 'function') {
         return !!(
@@ -73,15 +99,16 @@
   // Stage 8.5 / этапы 5-7: registry + commands + API wiring
   let bootstrapped = false;
   function bootstrapTerminal() {
+    appendTerminalDebug('terminal:bootstrap-enter', { bootstrapped: !!bootstrapped });
     const ctx = getCtx();
     if (!ctx) return null;
 
     // If the page has no terminal UI, keep inert (panel.init calls terminal.init unconditionally).
-    if (!hasAnyTerminalUi(ctx)) return ctx;
+    if (!hasAnyTerminalUi(ctx)) { appendTerminalDebug('terminal:bootstrap-no-ui', {}); return ctx; }
 
     refreshDom(ctx);
 
-    if (bootstrapped) return ctx;
+    if (bootstrapped) { appendTerminalDebug('terminal:bootstrap-reuse', {}); return ctx; }
     bootstrapped = true;
 
     // (A) registry wiring
@@ -174,6 +201,8 @@
       if (!T._legacy.hideTerminal) T._legacy.hideTerminal = function () { return uiActions.hideTerminal(); };
     } catch (e6) {}
 
+    appendTerminalDebug('terminal:bootstrap-done', { hasApi: !!T.api, hasRegistry: !!(ctx && ctx.registry) });
+    markTerminalDebugState({ status: 'bootstrapped', lastStage: 'terminal:bootstrap-done' });
     return ctx;
   }
 
@@ -228,6 +257,8 @@
   const uiActions = {
     // Lifecycle
     openTerminal: (cmd, mode) => {
+      appendTerminalDebug('terminal:ui-open-enter', { cmd: String(cmd || ''), mode: String(mode || 'shell') });
+      markTerminalDebugState({ status: 'opening', lastStage: 'terminal:ui-open-enter' });
       const ctx = bootstrapTerminal();
       const ctrl = getCtrl(ctx);
       if (ctrl && typeof ctrl.open === 'function') return ctrl.open(String(cmd || ''), String(mode || 'shell'));
@@ -235,6 +266,7 @@
       try {
         if (T.api && typeof T.api.open === 'function') return T.api.open({ cmd: String(cmd || ''), mode: String(mode || 'shell') });
       } catch (e) {}
+      appendTerminalDebug('terminal:ui-open-missing-handler', {});
       return false;
     },
     hideTerminal: () => {
@@ -434,16 +466,51 @@
   // --------------------
   let initDone = false;
   let capInitPromise = null;
-  function initTerminal() {
-    if (initDone) return;
-    initDone = true;
+  let initRetryTimer = null;
+  let initRetryCount = 0;
+  const MAX_INIT_RETRIES = 12;
+
+  function scheduleInitRetry(reason) {
+    if (initDone) return false;
+    if (initRetryTimer) return true;
+    if (initRetryCount >= MAX_INIT_RETRIES) {
+      return false;
+    }
+    initRetryCount += 1;
+    initRetryTimer = setTimeout(() => {
+      initRetryTimer = null;
+      try { initTerminal({ retry: true, reason: reason || 'retry-timer' }); } catch (e) {}
+    }, Math.min(240, 30 + (initRetryCount * 15)));
+    return true;
+  }
+
+  function initTerminal(meta) {
+    const info = (meta && typeof meta === 'object') ? meta : {};
+
+    // Core init first: some refactor stages create or hydrate context lazily here.
+    try { if (T._core && typeof T._core.init === 'function') T._core.init(); } catch (e) {}
 
     const ctx = getCtx();
-    if (!ctx) return;
-    if (!hasAnyTerminalUi(ctx)) return;
+    const hasCtx = !!ctx;
 
-    // Core init (tabId + legacy state bridge)
-    try { if (T._core && typeof T._core.init === 'function') T._core.init(); } catch (e) {}
+    const hasUi = hasCtx ? hasAnyTerminalUi(ctx) : false;
+
+    if (!hasCtx) {
+      scheduleInitRetry('no-context');
+      return false;
+    }
+    if (!hasUi) {
+      scheduleInitRetry('no-ui');
+      return false;
+    }
+    if (initDone) {
+      return true;
+    }
+    initDone = true;
+    if (initRetryTimer) {
+      try { clearTimeout(initRetryTimer); } catch (e) {}
+      initRetryTimer = null;
+    }
 
     // Bootstrap (modules/commands/api)
     bootstrapTerminal();
@@ -484,10 +551,22 @@
         Promise.resolve(capInitPromise).then(doOpen).catch(doOpen);
       }
     } catch (e3) {}
+
+    return true;
   }
 
   // единственный обязательный entrypoint
   T.init = initTerminal;
+  T.bootstrap = bootstrapTerminal;
+  T.ensureReady = function ensureReady() {
+    const ready = initTerminal({ reason: 'ensureReady' });
+    if (ready) return true;
+    try {
+      const ctx = getCtx();
+      return !!(ctx && hasAnyTerminalUi(ctx));
+    } catch (e) {}
+    return false;
+  };
 
   // --------------------
   // Compatibility wrappers (global functions + XKeen.terminal.*)
@@ -541,7 +620,7 @@
   };
 
   // Global legacy functions (avoid breaking old inline handlers)
-  if (!window.terminalOpen) window.terminalOpen = (a, b) => {
+  publishWindowCompatFunction('terminalOpen', (a, b) => {
     try {
       if (T.api && typeof T.api.open === 'function') return T.api.open(a, b);
     } catch (e) {}
@@ -556,32 +635,32 @@
     if (typeof a === 'string' && (a === 'pty' || a === 'shell')) return uiActions.openTerminal('', a);
     if (typeof a === 'string') return uiActions.openTerminal(a, 'shell');
     return uiActions.openTerminal('', 'shell');
-  };
-  if (!window.terminalClose) window.terminalClose = () => (T.api && T.api.close ? T.api.close() : uiActions.hideTerminal());
-  if (!window.terminalToggle) window.terminalToggle = () => (T.api && T.api.toggle ? T.api.toggle() : T.toggle());
-  if (!window.terminalSend) window.terminalSend = (txt, meta) => (T.api && T.api.send ? T.api.send(txt, meta || {}) : T.execCommand(txt, meta || {}));
-  if (!window.terminalSetMode) window.terminalSetMode = (mode) => {
+  });
+  publishWindowCompatFunction('terminalClose', () => (T.api && T.api.close ? T.api.close() : uiActions.hideTerminal()));
+  publishWindowCompatFunction('terminalToggle', () => (T.api && T.api.toggle ? T.api.toggle() : T.toggle()));
+  publishWindowCompatFunction('terminalSend', (txt, meta) => (T.api && T.api.send ? T.api.send(txt, meta || {}) : T.execCommand(txt, meta || {})));
+  publishWindowCompatFunction('terminalSetMode', (mode) => {
     const ctx = getCtx();
     try { if (ctx && ctx.session && typeof ctx.session.setMode === 'function') return ctx.session.setMode(mode); } catch (e) {}
     return (T.api && T.api.setMode) ? T.api.setMode(mode) : false;
-  };
-  if (!window.terminalGetMode) window.terminalGetMode = () => {
+  });
+  publishWindowCompatFunction('terminalGetMode', () => {
     const ctx = getCtx();
     try { if (ctx && ctx.session && typeof ctx.session.getMode === 'function') return ctx.session.getMode() || 'shell'; } catch (e) {}
     return (T.api && T.api.getMode) ? T.api.getMode() : 'shell';
-  };
-  if (!window.terminalIsOpen) window.terminalIsOpen = () => (T.api && T.api.isOpen) ? T.api.isOpen() : false;
-  if (!window.terminalIsConnected) window.terminalIsConnected = () => (T.api && T.api.isConnected) ? T.api.isConnected() : false;
+  });
+  publishWindowCompatFunction('terminalIsOpen', () => (T.api && T.api.isOpen) ? T.api.isOpen() : false);
+  publishWindowCompatFunction('terminalIsConnected', () => (T.api && T.api.isConnected) ? T.api.isConnected() : false);
 
   // Very old fallbacks used by features/commands_list.js and some custom installs.
-  if (!window.openTerminal) window.openTerminal = (cmd, mode) => uiActions.openTerminal(cmd, mode || 'shell');
-  if (!window.hideTerminal) window.hideTerminal = () => uiActions.hideTerminal();
-  if (!window.sendTerminalInput) window.sendTerminalInput = () => uiActions.sendTerminalInput();
+  publishWindowCompatFunction('openTerminal', (cmd, mode) => uiActions.openTerminal(cmd, mode || 'shell'));
+  publishWindowCompatFunction('hideTerminal', () => uiActions.hideTerminal());
+  publishWindowCompatFunction('sendTerminalInput', () => uiActions.sendTerminalInput());
 
   // Convenience toggles (output prefs)
-  if (!window.terminalToggleAnsiFilter) window.terminalToggleAnsiFilter = () => uiActions.terminalToggleAnsiFilter();
-  if (!window.terminalToggleLogHighlight) window.terminalToggleLogHighlight = () => uiActions.terminalToggleLogHighlight();
-  if (!window.terminalToggleFollow) window.terminalToggleFollow = () => uiActions.terminalToggleFollow();
+  publishWindowCompatFunction('terminalToggleAnsiFilter', () => uiActions.terminalToggleAnsiFilter());
+  publishWindowCompatFunction('terminalToggleLogHighlight', () => uiActions.terminalToggleLogHighlight());
+  publishWindowCompatFunction('terminalToggleFollow', () => uiActions.terminalToggleFollow());
 
   // PTY helpers (used by external scripts/tests)
   T.connect = function () { return uiActions.openTerminal('', 'pty'); };

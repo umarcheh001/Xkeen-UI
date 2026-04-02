@@ -240,8 +240,7 @@ html[data-theme="light"] {
    attached to <body>, so it is often NOT a descendant of .monaco-editor.
    Style both cases to keep it consistent across pages/modals. */
 .context-view.monaco-menu-container,
-.context-view .action-widget,
-.action-widget {
+.context-view .action-widget {
   --vscode-menu-background: var(--xk-monaco-widget-bg);
   --vscode-menu-foreground: var(--xk-monaco-widget-text);
   --vscode-menu-border: var(--xk-monaco-widget-border);
@@ -281,11 +280,7 @@ html[data-theme="light"] {
 .context-view .action-widget,
 .context-view .action-widget .actionList,
 .context-view .action-widget .monaco-list,
-.context-view .action-widget .monaco-list-rows,
-.action-widget,
-.action-widget .actionList,
-.action-widget .monaco-list,
-.action-widget .monaco-list-rows {
+.context-view .action-widget .monaco-list-rows {
   background: transparent !important;
   background-color: transparent !important;
   color: var(--xk-monaco-widget-text) !important;
@@ -296,38 +291,38 @@ html[data-theme="light"] {
   background: transparent !important;
 }
 
-.action-widget .monaco-list-row,
-.action-widget .monaco-list-row.action,
-.action-widget .monaco-list-row.separator,
-.action-widget .action-widget-action-bar,
-.action-widget .action-widget-action-bar:before {
+.context-view .action-widget .monaco-list-row,
+.context-view .action-widget .monaco-list-row.action,
+.context-view .action-widget .monaco-list-row.separator,
+.context-view .action-widget .action-widget-action-bar,
+.context-view .action-widget .action-widget-action-bar:before {
   background: transparent !important;
   background-color: transparent !important;
   color: var(--xk-monaco-widget-text) !important;
 }
 
-.action-widget .monaco-list .monaco-list-row.action.focused:not(.option-disabled),
-.action-widget .monaco-list:not(.drop-target):not(.dragging) .monaco-list-row.action:hover:not(.selected):not(.focused):not(.option-disabled),
-.action-widget .monaco-list .monaco-list-row.action.selected:not(.option-disabled) {
+.context-view .action-widget .monaco-list .monaco-list-row.action.focused:not(.option-disabled),
+.context-view .action-widget .monaco-list:not(.drop-target):not(.dragging) .monaco-list-row.action:hover:not(.selected):not(.focused):not(.option-disabled),
+.context-view .action-widget .monaco-list .monaco-list-row.action.selected:not(.option-disabled) {
   background: var(--xk-monaco-widget-hover) !important;
   background-color: var(--xk-monaco-widget-hover) !important;
   color: var(--xk-monaco-widget-text) !important;
   outline: 1px solid transparent !important;
 }
 
-.action-widget .monaco-list-row.separator,
-.action-widget .action-widget-action-bar {
+.context-view .action-widget .monaco-list-row.separator,
+.context-view .action-widget .action-widget-action-bar {
   border-top-color: color-mix(in srgb, var(--xk-monaco-widget-border) 84%, transparent) !important;
 }
 
-.action-widget .monaco-list-row.group-header,
-.action-widget .option-disabled,
-.action-widget .option-disabled * {
+.context-view .action-widget .monaco-list-row.group-header,
+.context-view .action-widget .option-disabled,
+.context-view .action-widget .option-disabled * {
   color: var(--xk-monaco-widget-muted) !important;
 }
 
-.action-widget .monaco-keybinding > .monaco-keybinding-key,
-.action-widget .monaco-keybinding-key {
+.context-view .action-widget .monaco-keybinding > .monaco-keybinding-key,
+.context-view .action-widget .monaco-keybinding-key {
   background-color: color-mix(in srgb, var(--xk-monaco-widget-bg) 82%, white 6%) !important;
   color: var(--xk-monaco-widget-text) !important;
   border-color: color-mix(in srgb, var(--xk-monaco-widget-border) 88%, transparent) !important;
@@ -335,10 +330,10 @@ html[data-theme="light"] {
   box-shadow: none !important;
 }
 
-.action-widget .title,
-.action-widget .codicon,
-.action-widget .action-label,
-.action-widget a {
+.context-view .action-widget .title,
+.context-view .action-widget .codicon,
+.context-view .action-widget .action-label,
+.context-view .action-widget a {
   color: var(--xk-monaco-widget-text) !important;
 }
 
@@ -423,6 +418,31 @@ html[data-theme="light"] .context-view .monaco-menu .monaco-menu-option.active {
   border: 1px solid color-mix(in srgb, var(--xk-monaco-widget-border) 88%, transparent) !important;
   border-bottom-color: color-mix(in srgb, var(--xk-monaco-widget-border) 70%, transparent) !important;
   box-shadow: none !important;
+}
+
+
+/* Monaco menu stability fix:
+   keep the custom theme, but avoid transparent/backdrop-filter layering on Monaco's portal widgets.
+   This prevents visual artifacts on Safari/WebKit and Chromium forks. */
+.context-view.monaco-menu-container,
+.context-view .action-widget,
+.monaco-editor .monaco-menu,
+.context-view .monaco-menu {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  isolation: isolate;
+}
+
+.context-view .action-widget,
+.context-view .action-widget .actionList,
+.context-view .action-widget .monaco-list,
+.context-view .action-widget .monaco-list-rows,
+.monaco-editor .monaco-menu,
+.context-view .monaco-menu,
+.context-view.monaco-menu-container .monaco-menu {
+  background: var(--xk-monaco-widget-bg) !important;
+  background-color: var(--xk-monaco-widget-bg) !important;
+  opacity: 1 !important;
 }
 
 
@@ -1539,6 +1559,15 @@ html[data-theme="light"] .xkeen-mini-editor{
   max-height: 78vh;
 }
 
+/* Keep Monaco and CM6 at the same viewport-bound height in the main routing card.
+   Monaco already feels right here, so expose one shared sizing contract and apply it
+   to both engines. This avoids the smaller-looking CM6 viewport on some layouts. */
+#routing-body {
+  --xk-routing-editor-min-height: clamp(360px, 60vh, 900px);
+  --xk-routing-editor-height: clamp(360px, 76vh, 900px);
+  --xk-routing-editor-max-height: 78vh;
+}
+
 #routing-body[data-routing-engine="monaco"] .CodeMirror,
 #routing-body[data-routing-engine="monaco"] #routing-editor {
   display: none !important;
@@ -1550,6 +1579,13 @@ html[data-theme="light"] .xkeen-mini-editor{
 
 #routing-body[data-routing-engine="codemirror"] #routing-editor-monaco {
   display: none !important;
+}
+
+#routing-body #routing-editor-monaco,
+#routing-body .xkeen-cm6-host {
+  min-height: var(--xk-routing-editor-min-height) !important;
+  height: var(--xk-routing-editor-height) !important;
+  max-height: var(--xk-routing-editor-max-height) !important;
 }
 
 /*
@@ -8727,6 +8763,134 @@ button.icon-btn {
 }
 
 
+
+.xk-visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.xk-global-header-activity {
+  --xk-header-spinner-size: 30px;
+  position: relative;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--xk-header-spinner-size);
+  height: var(--xk-header-spinner-size);
+  flex: 0 0 var(--xk-header-spinner-size);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--header-btn-border, rgba(96, 165, 250, 0.24)) 88%, transparent);
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,255,255,0.22), transparent 45%),
+    linear-gradient(180deg, color-mix(in srgb, var(--header-btn-bg, rgba(2, 6, 23, 0.9)) 96%, rgba(255,255,255,0.04)), color-mix(in srgb, var(--header-btn-bg, rgba(2, 6, 23, 0.9)) 88%, rgba(15,23,42,0.22)));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 12px 30px rgba(2, 8, 23, 0.24);
+  opacity: 0;
+  transform: translateY(-1px) scale(0.92);
+  pointer-events: none;
+}
+
+.xk-global-header-activity.is-active {
+  display: inline-flex;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  animation: xk-header-spinner-enter 0.22s ease;
+}
+
+.xk-global-header-activity::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01));
+  opacity: 0.92;
+}
+
+.xk-global-header-activity::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(96, 165, 250, 0.22), transparent 68%);
+  opacity: 0.78;
+  filter: blur(6px);
+  animation: xk-header-spinner-pulse 1.6s ease-in-out infinite;
+}
+
+.xk-global-header-activity__icon {
+  position: relative;
+  z-index: 1;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  border: 1.8px solid color-mix(in srgb, var(--sem-info, #60a5fa) 28%, transparent);
+  border-top-color: color-mix(in srgb, var(--sem-info, #60a5fa) 82%, #ffffff 12%);
+  border-right-color: color-mix(in srgb, var(--sem-success, #34d399) 52%, transparent);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.04);
+  animation: xkeen-global-spinner 0.82s linear infinite;
+}
+
+@keyframes xk-header-spinner-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes xk-header-spinner-pulse {
+  0%, 100% {
+    opacity: 0.36;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.82;
+    transform: scale(1.06);
+  }
+}
+
+html[data-theme="light"] .xk-global-header-activity {
+  border-color: color-mix(in srgb, var(--header-btn-border, rgba(37, 99, 235, 0.18)) 94%, transparent);
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,255,255,0.92), transparent 48%),
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(238, 244, 255, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.95),
+    0 12px 28px rgba(37, 99, 235, 0.14);
+}
+
+html[data-theme="light"] .xk-global-header-activity::after {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.20), transparent 68%);
+}
+
+body.panel-page .panel-shell-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+body.panel-page .panel-shell-summary .xk-global-header-activity {
+  margin-right: 0;
+}
+
+.mihomo-generator-page .generator-header-actions-row .header-actions,
+.xk-backups-page .header-actions,
+body.devtools-page .header-actions,
+body:not(.panel-page) > .container .header-actions {
+  align-items: center;
+}
+
 /* Global XKeen overlay spinner */
 #global-xkeen-spinner {
   position: fixed;
@@ -9339,19 +9503,59 @@ html[data-theme="light"] .routing-template-edit-monaco {
 
 
 /* Snapshot preview modal (read-only CodeMirror) */
+/* Snapshot preview modal: keep a single inner scroll like other mini editors */
+#xray-snapshot-modal .modal-content {
+  height: 80vh;
+}
+
+#xray-snapshot-modal .modal-body {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#xray-snapshot-modal .modal-body > :first-child,
+#xray-snapshot-modal #xray-snapshot-status {
+  flex: 0 0 auto;
+}
+
+#xray-snapshot-modal #xray-snapshot-preview {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+}
+
 .xray-snapshot-preview-cm {
-  height: 520px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
 }
 
 .xray-snapshot-preview-cm .CodeMirror-scroll {
-  max-height: 520px;
+  min-height: 0;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+#xray-snapshot-modal .xkeen-cm6-host.xray-snapshot-preview-cm {
+  overflow: hidden;
+}
+
+#xray-snapshot-modal .xkeen-cm6-host.xray-snapshot-preview-cm .cm-editor,
+#xray-snapshot-modal .xkeen-cm6-host.xray-snapshot-preview-cm .cm-scroller {
+  min-height: 0 !important;
+  height: 100% !important;
 }
 
 /* Snapshot preview modal (read-only Monaco) */
 .xray-snapshot-preview-monaco {
   width: 100%;
-  height: 520px;
-  min-height: 520px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
   border-radius: 16px;
   border: 1px solid color-mix(in srgb, var(--text-muted, #94a3b8) 22%, transparent);
   box-shadow: none;
@@ -20591,78 +20795,6 @@ body.panel-page .CodeMirror.xk-cm-lite .CodeMirror-lines {
   }
 }
 
-/* Safari/WebKit: keep panel editors on a simpler compositing path.
-   This reduces scroll/selection jank and avoids gutter/line-height drift in CM5. */
-html.xk-webkit-safari body.panel-page .card,
-html.xk-webkit-safari body.panel-page .CodeMirror,
-html.xk-webkit-safari body.panel-page .xk-monaco-editor,
-html.xk-webkit-safari body.panel-page .top-tab-btn,
-html.xk-webkit-safari body.panel-page .service-core-text,
-html.xk-webkit-safari body.panel-page .terminal-tool-btn,
-html.xk-webkit-safari body.panel-page .xk-btn-icon,
-html.xk-webkit-safari body.panel-page .routing-focus-btn {
-  box-shadow: none !important;
-  filter: none !important;
-}
-
-html.xk-webkit-safari body.panel-page .card,
-html.xk-webkit-safari body.panel-page .CodeMirror,
-html.xk-webkit-safari body.panel-page .xk-monaco-editor,
-html.xk-webkit-safari body.panel-page .top-tab-btn,
-html.xk-webkit-safari body.panel-page .service-core-text,
-html.xk-webkit-safari body.panel-page .routing-focus-btn {
-  transition: none !important;
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
-}
-
-html.xk-webkit-safari body.panel-page .CodeMirror,
-html.xk-webkit-safari body.panel-page .CodeMirror pre,
-html.xk-webkit-safari body.panel-page .CodeMirror-line,
-html.xk-webkit-safari body.panel-page .CodeMirror-gutter-elt,
-html.xk-webkit-safari body.panel-page .CodeMirror-linenumber,
-html.xk-webkit-safari body.panel-page .monaco-editor,
-html.xk-webkit-safari body.panel-page .monaco-editor .view-lines {
-  font-variant-ligatures: none !important;
-  font-feature-settings: "liga" 0, "calt" 0 !important;
-}
-
-html.xk-webkit-safari body.panel-page .CodeMirror,
-html.xk-webkit-safari body.panel-page .CodeMirror pre,
-html.xk-webkit-safari body.panel-page .CodeMirror-gutter-elt,
-html.xk-webkit-safari body.panel-page .CodeMirror-linenumber {
-  line-height: calc(23px * var(--xk-mono-font-scale)) !important;
-}
-
-html.xk-webkit-safari body.panel-page .CodeMirror-scroll {
-  overflow: auto !important;
-}
-
-html.xk-webkit-safari body.panel-page #routing-rules-card,
-html.xk-webkit-safari body.panel-page .xk-routing-log-card {
-  contain: layout paint;
-}
-
-html.xk-webkit-safari body.panel-page #view-routing[data-routing-focus="raw"] #routing-rules-card {
-  display: none !important;
-}
-
-html.xk-webkit-safari body.panel-page #routing-editor-card,
-html.xk-webkit-safari body.panel-page #routing-body {
-  contain: none !important;
-}
-
-html.xk-webkit-safari body.panel-page .xkeen-cm .CodeMirror-line::selection,
-html.xk-webkit-safari body.panel-page .xkeen-cm .CodeMirror-line > span::selection,
-html.xk-webkit-safari body.panel-page .xkeen-cm .CodeMirror-line > span > span::selection,
-html.xk-webkit-safari body.panel-page .xkeen-cm ::selection {
-  background: transparent !important;
-}
-
-html.xk-webkit-safari body.panel-page .xkeen-cm .CodeMirror-selected {
-  background: rgba(96, 165, 250, 0.18) !important;
-}
-
 /* Theme bridge: late overrides so DevTools global theme variables affect the new premium panel surfaces. */
 body.panel-page header .header-actions .xk-header-btn,
 body.panel-page header .header-actions .theme-toggle-btn.xk-header-btn-theme,
@@ -23025,45 +23157,53 @@ html[data-theme="light"] body.devtools-page header .header-actions .theme-toggle
 
 /* CM6 premium dark/light theme */
 .xkeen-cm6-host {
-  --xk-cm-bg: #020617;
-  --xk-cm-fg: #e5e7eb;
-  --xk-cm-caret: #60a5fa;
-  --xk-cm-selection: rgba(29, 78, 216, 0.31);
-  --xk-cm-selection-match: rgba(29, 78, 216, 0.18);
-  --xk-cm-active-line: rgba(15, 23, 42, 0.82);
-  --xk-cm-active-line-gutter: rgba(15, 23, 42, 0.82);
-  --xk-cm-active-line-fg: #f8fbff;
-  --xk-cm-gutter-bg: #020617;
-  --xk-cm-gutter-fg: #64748b;
-  --xk-cm-gutter-border: rgba(30, 41, 59, 0.88);
-  --xk-cm-search-bg: rgba(29, 78, 216, 0.2);
-  --xk-cm-search-active-bg: rgba(29, 78, 216, 0.34);
-  --xk-cm-search-border: rgba(96, 165, 250, 0.28);
-  --xk-cm-bracket-bg: rgba(30, 41, 59, 0.84);
-  --xk-cm-bracket-border: rgba(96, 165, 250, 0.22);
-  --xk-cm-fold-bg: rgba(15, 23, 42, 0.95);
-  --xk-cm-fold-border: rgba(51, 65, 85, 0.92);
-  --xk-cm-fold-fg: #cbd5e1;
-  --xk-cm-popup-bg: rgba(6, 14, 30, 0.96);
-  --xk-cm-popup-fg: #f8fbff;
-  --xk-cm-popup-border: rgba(96, 165, 250, 0.22);
-  --xk-cm-popup-shadow: rgba(2, 8, 23, 0.48);
-  --xk-cm-error: #fb7185;
-  --xk-cm-warning: #f59e0b;
-  --xk-cm-info: #38bdf8;
-  --xk-cm-comment: #65a30d;
-  --xk-cm-keyword: #93c5fd;
-  --xk-cm-string: #fca5a5;
-  --xk-cm-number: #f59e0b;
-  --xk-cm-atom: #c4b5fd;
-  --xk-cm-property: #e5e7eb;
-  --xk-cm-variable: #e5e7eb;
-  --xk-cm-definition: #e5e7eb;
-  --xk-cm-type: #67e8f9;
-  --xk-cm-punctuation: #94a3b8;
-  --xk-cm-meta: #f9a8d4;
-  --xk-cm-invalid: #ffe4e6;
-  --xk-cm-surface: #020617;
+  --xk-cm-bg: #020817;
+  --xk-cm-fg: #d4d4d4;
+  --xk-cm-caret: #d4d4d4;
+  --xk-cm-selection: #2d4f8e;
+  --xk-cm-selection-native: #2d4f8e;
+  --xk-cm-selection-match: #1e3a5f;
+  --xk-cm-active-line: transparent;
+  --xk-cm-active-line-gutter: transparent;
+  --xk-cm-active-line-fg: #c6c6c6;
+  --xk-cm-gutter-bg: #020817;
+  --xk-cm-gutter-fg: #858585;
+  --xk-cm-gutter-border: transparent;
+  --xk-cm-search-bg: rgba(45, 79, 142, 0.42);
+  --xk-cm-search-active-bg: rgba(45, 79, 142, 0.62);
+  --xk-cm-search-border: rgba(122, 162, 247, 0.45);
+  --xk-cm-bracket-bg: rgba(38, 57, 94, 0.78);
+  --xk-cm-bracket-border: rgba(96, 123, 177, 0.58);
+  --xk-cm-fold-bg: #283457;
+  --xk-cm-fold-border: #7aa2f7;
+  --xk-cm-fold-fg: #565f89;
+  --xk-cm-popup-bg: #020817;
+  --xk-cm-popup-fg: #c0caf5;
+  --xk-cm-popup-border: rgba(122, 162, 247, 0.28);
+  --xk-cm-popup-shadow: rgba(8, 14, 29, 0.55);
+  --xk-cm-error: #f7768e;
+  --xk-cm-warning: #e0af68;
+  --xk-cm-info: #7dcfff;
+  --xk-cm-comment: #6a9955;
+  --xk-cm-keyword: #569cd6;
+  --xk-cm-string: #ce9178;
+  --xk-cm-number: #b5cea8;
+  --xk-cm-atom: #569cd6;
+  --xk-cm-property: #9cdcfe;
+  --xk-cm-variable: #d4d4d4;
+  --xk-cm-definition: #d4d4d4;
+  --xk-cm-type: #4ec9b0;
+  --xk-cm-operator: #d4d4d4;
+  --xk-cm-delimiter: #d4d4d4;
+  --xk-cm-punctuation: #d4d4d4;
+  --xk-cm-bracket-depth-0: #ffd700;
+  --xk-cm-bracket-depth-1: #c586c0;
+  --xk-cm-bracket-depth-2: #4fc1ff;
+  --xk-cm-comma: #d4d4d4;
+  --xk-cm-colon: #d4d4d4;
+  --xk-cm-meta: #9cdcfe;
+  --xk-cm-invalid: #f7768e;
+  --xk-cm-surface: #020817;
   --xk-cm-editor-border: rgba(15, 23, 42, 0.96);
   --xk-cm-editor-shadow: none;
   position: relative;
@@ -23078,13 +23218,14 @@ html[data-theme="light"] .xkeen-cm6-host {
   --xk-cm-bg: #ffffff;
   --xk-cm-fg: #111827;
   --xk-cm-caret: #2563eb;
-  --xk-cm-selection: rgba(37, 99, 235, 0.19);
-  --xk-cm-selection-match: rgba(37, 99, 235, 0.12);
+  --xk-cm-selection: rgba(173, 214, 255, 0.44);
+  --xk-cm-selection-native: rgba(173, 214, 255, 0.84);
+  --xk-cm-selection-match: rgba(59, 130, 246, 0.1);
   --xk-cm-active-line: rgba(248, 250, 252, 0.96);
-  --xk-cm-active-line-gutter: rgba(248, 250, 252, 0.96);
-  --xk-cm-active-line-fg: #0f172a;
+  --xk-cm-active-line-gutter: #ffffff;
+  --xk-cm-active-line-fg: #1f1f1f;
   --xk-cm-gutter-bg: #ffffff;
-  --xk-cm-gutter-fg: #94a3b8;
+  --xk-cm-gutter-fg: #6e7681;
   --xk-cm-gutter-border: rgba(226, 232, 240, 0.96);
   --xk-cm-search-bg: rgba(37, 99, 235, 0.12);
   --xk-cm-search-active-bg: rgba(37, 99, 235, 0.19);
@@ -23101,16 +23242,18 @@ html[data-theme="light"] .xkeen-cm6-host {
   --xk-cm-error: #e11d48;
   --xk-cm-warning: #d97706;
   --xk-cm-info: #2563eb;
-  --xk-cm-comment: #6b7f9f;
-  --xk-cm-keyword: #2563eb;
-  --xk-cm-string: #c2410c;
-  --xk-cm-number: #b45309;
+  --xk-cm-comment: #6b7280;
+  --xk-cm-keyword: #7c3aed;
+  --xk-cm-string: #15803d;
+  --xk-cm-number: #c2410c;
   --xk-cm-atom: #7c3aed;
-  --xk-cm-property: #111827;
+  --xk-cm-property: #2563eb;
   --xk-cm-variable: #111827;
   --xk-cm-definition: #111827;
-  --xk-cm-type: #0f766e;
-  --xk-cm-punctuation: #64748b;
+  --xk-cm-type: #2563eb;
+  --xk-cm-operator: #0891b2;
+  --xk-cm-delimiter: #0891b2;
+  --xk-cm-punctuation: #0891b2;
   --xk-cm-meta: #be185d;
   --xk-cm-invalid: #7f1d1d;
   --xk-cm-surface: #ffffff;
@@ -23140,9 +23283,9 @@ html[data-theme="light"] .xkeen-cm6-host {
    which kills the internal scrollbar. Give the routing host a definite viewport-bound
    height so CM6 always scrolls inside the editor, like Monaco and the legacy CM5 path. */
 #routing-body .xkeen-cm6-host {
-  min-height: clamp(360px, 60vh, 900px) !important;
-  height: clamp(360px, 76vh, 900px) !important;
-  max-height: 78vh !important;
+  min-height: var(--xk-routing-editor-min-height) !important;
+  height: var(--xk-routing-editor-height) !important;
+  max-height: var(--xk-routing-editor-max-height) !important;
 }
 
 #routing-body .xkeen-cm6-host .cm-editor,
@@ -23184,6 +23327,11 @@ html[data-theme="light"] .xkeen-cm6-host {
   font-variant-numeric: tabular-nums;
   font-size: inherit;
   line-height: inherit;
+  color: var(--xk-cm-gutter-fg);
+}
+
+.xkeen-cm6-host .cm-activeLineGutter {
+  color: var(--xk-cm-active-line-fg) !important;
 }
 
 .xkeen-cm6-host .cm-content,
@@ -23244,7 +23392,8 @@ html[data-theme="light"] .xkeen-cm6-host {
 }
 
 .xkeen-cm6-host .cm-editor ::selection {
-  background: var(--xk-cm-selection);
+  background: var(--xk-cm-selection-native) !important;
+  color: inherit !important;
 }
 
 .xkeen-cm6-host .cm-scroller::-webkit-scrollbar {
@@ -23717,4 +23866,285 @@ body.panel-page #mihomo-body .xkeen-cm6-host .cm-panel.cm-search button[name="cl
   body.panel-page #mihomo-body .xkeen-cm6-host .cm-panel.cm-search button {
     padding: 0 9px;
   }
+}
+
+/* === Panel header: Xray logs badge polish (compact premium status chip) === */
+body.panel-page #xray-logs-badge {
+  display: none;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  overflow: hidden;
+  min-width: 42px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(95, 137, 239, 0.14);
+  background:
+    linear-gradient(180deg, rgba(16, 28, 50, 0.94), rgba(7, 14, 28, 0.92)),
+    radial-gradient(circle at 24% 50%, rgba(251, 191, 36, 0.1), transparent 46%);
+  color: rgba(232, 240, 255, 0.8);
+  box-shadow:
+    0 10px 24px rgba(1, 6, 16, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    border-color 0.22s ease,
+    background 0.22s ease,
+    box-shadow 0.22s ease,
+    color 0.22s ease,
+    opacity 0.18s ease,
+    transform 0.18s ease;
+  animation: none;
+}
+
+body.panel-page #xray-logs-badge > span {
+  position: relative;
+  z-index: 1;
+}
+
+body.panel-page #xray-logs-badge::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 65%);
+  opacity: 0.78;
+}
+
+body.panel-page #xray-logs-badge .xray-logs-badge__glyph {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border-radius: 0;
+  opacity: 0.92;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='2' y='3' width='9' height='2' rx='1'/%3E%3Crect x='2' y='7' width='12' height='2' rx='1'/%3E%3Crect x='2' y='11' width='7' height='2' rx='1'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='2' y='3' width='9' height='2' rx='1'/%3E%3Crect x='2' y='7' width='12' height='2' rx='1'/%3E%3Crect x='2' y='11' width='7' height='2' rx='1'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+body.panel-page #xray-logs-badge .xray-logs-badge__dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.84);
+  box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.08);
+}
+
+body.panel-page #xray-logs-badge[data-state="on"] {
+  display: inline-flex;
+}
+
+body.panel-page #xray-logs-badge[data-state="on"][data-live="off"] {
+  border-color: rgba(251, 191, 36, 0.18);
+  background:
+    linear-gradient(180deg, rgba(18, 28, 45, 0.96), rgba(8, 14, 25, 0.94)),
+    radial-gradient(circle at 24% 50%, rgba(251, 191, 36, 0.14), transparent 46%);
+  color: rgba(246, 238, 220, 0.9);
+  box-shadow:
+    0 12px 24px rgba(1, 6, 16, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+body.panel-page #xray-logs-badge[data-state="on"][data-live="on"] {
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    linear-gradient(180deg, rgba(17, 32, 59, 0.98), rgba(8, 17, 33, 0.95)),
+    radial-gradient(circle at 24% 50%, rgba(96, 165, 250, 0.18), transparent 48%);
+  color: #eef5ff;
+  box-shadow:
+    0 14px 28px rgba(1, 6, 16, 0.24),
+    0 0 0 1px rgba(96, 165, 250, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+body.panel-page #xray-logs-badge[data-state="on"][data-live="on"] .xray-logs-badge__dot {
+  background: #60a5fa;
+  box-shadow:
+    0 0 0 4px rgba(96, 165, 250, 0.12),
+    0 0 14px rgba(96, 165, 250, 0.42);
+  animation: xk-header-log-badge-dot-pulse 1.45s ease-in-out infinite;
+}
+
+body.panel-page #xray-logs-badge[data-state="off"] {
+  display: none;
+}
+
+html[data-theme="light"] body.panel-page #xray-logs-badge {
+  border-color: rgba(63, 111, 203, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.95)),
+    radial-gradient(circle at 24% 50%, rgba(251, 191, 36, 0.08), transparent 46%);
+  color: rgba(31, 39, 51, 0.82);
+  box-shadow:
+    0 10px 22px rgba(59, 91, 154, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+html[data-theme="light"] body.panel-page #xray-logs-badge .xray-logs-badge__dot {
+  background: rgba(217, 119, 6, 0.82);
+  box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.1);
+}
+
+html[data-theme="light"] body.panel-page #xray-logs-badge[data-state="on"][data-live="off"] {
+  border-color: rgba(217, 119, 6, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.995), rgba(249, 244, 234, 0.96)),
+    radial-gradient(circle at 24% 50%, rgba(245, 158, 11, 0.12), transparent 46%);
+  color: #5b3f12;
+}
+
+html[data-theme="light"] body.panel-page #xray-logs-badge[data-state="on"][data-live="on"] {
+  border-color: rgba(63, 111, 203, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(238, 245, 255, 0.98)),
+    radial-gradient(circle at 24% 50%, rgba(59, 130, 246, 0.14), transparent 48%);
+  color: #18335e;
+  box-shadow:
+    0 12px 24px rgba(59, 91, 154, 0.1),
+    0 0 0 1px rgba(63, 111, 203, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+html[data-theme="light"] body.panel-page #xray-logs-badge[data-state="on"][data-live="on"] .xray-logs-badge__dot {
+  background: #3566c9;
+  box-shadow:
+    0 0 0 4px rgba(53, 102, 201, 0.12),
+    0 0 12px rgba(53, 102, 201, 0.22);
+}
+
+@keyframes xk-header-log-badge-dot-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.95;
+  }
+  50% {
+    transform: scale(0.82);
+    opacity: 0.7;
+  }
+}
+
+/* ========================================================================== 
+   Tall-screen editor sizing hotfix (5K / high-DPI desktop monitors)
+   --------------------------------------------------------------------------
+   Previous rules capped the main panel editors around 900-1040px. On 4K/5K
+   displays this left a large unused area under the editor cards. Keep the
+   existing proportions, but raise the ceiling so routing/mihomo editors can
+   grow with the viewport almost to full screen height.
+   ========================================================================== */
+body.panel-page {
+  --xk-panel-editor-tall-min-height: clamp(420px, 62vh, 2200px);
+  --xk-panel-editor-tall-height: clamp(420px, 76vh, 2200px);
+  --xk-panel-editor-tall-max-height: calc(100vh - 220px);
+}
+
+body.panel-page #routing-body {
+  --xk-routing-editor-min-height: var(--xk-panel-editor-tall-min-height);
+  --xk-routing-editor-height: var(--xk-panel-editor-tall-height);
+  --xk-routing-editor-max-height: var(--xk-panel-editor-tall-max-height);
+}
+
+body.panel-page #routing-body .CodeMirror {
+  min-height: var(--xk-routing-editor-min-height) !important;
+}
+
+body.panel-page #routing-body .CodeMirror-scroll {
+  max-height: var(--xk-routing-editor-max-height) !important;
+}
+
+body.panel-page #routing-body #routing-editor-monaco,
+body.panel-page #routing-body .xkeen-cm6-host,
+body.panel-page #routing-body textarea#routing-editor {
+  min-height: var(--xk-routing-editor-min-height) !important;
+  height: var(--xk-routing-editor-height) !important;
+  max-height: var(--xk-routing-editor-max-height) !important;
+}
+
+body.panel-page #mihomo-body {
+  --xk-mihomo-editor-min-height: clamp(420px, 62vh, 2200px);
+  --xk-mihomo-editor-height: clamp(420px, 76vh, 2200px);
+  --xk-mihomo-editor-max-height: calc(100vh - 220px);
+}
+
+body.panel-page #mihomo-body .CodeMirror {
+  min-height: var(--xk-mihomo-editor-min-height) !important;
+}
+
+body.panel-page #mihomo-body .CodeMirror-scroll {
+  max-height: var(--xk-mihomo-editor-max-height) !important;
+}
+
+body.panel-page #mihomo-body #mihomo-editor-monaco,
+body.panel-page #mihomo-body .xkeen-cm6-host,
+body.panel-page #mihomo-body textarea#mihomo-editor {
+  min-height: var(--xk-mihomo-editor-min-height) !important;
+  height: var(--xk-mihomo-editor-height) !important;
+  max-height: var(--xk-mihomo-editor-max-height) !important;
+}
+
+
+/* Routing Monaco custom context menu (used to avoid Monaco clipboard issues in Safari/WebKit and Chromium variants) */
+.xk-routing-monaco-menu {
+  position: fixed;
+  z-index: 2147483000;
+  min-width: 220px;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(71, 85, 105, 0.65);
+  background: #0b1220;
+  box-shadow: 0 22px 48px rgba(2, 6, 23, 0.56), 0 0 0 1px rgba(59, 130, 246, 0.08);
+  backdrop-filter: none;
+}
+.xk-routing-monaco-menu[hidden] {
+  display: none !important;
+}
+.xk-routing-monaco-menu-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #e5eefc;
+  text-align: left;
+  font: 600 13px/1.2 Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+.xk-routing-monaco-menu-item:hover,
+.xk-routing-monaco-menu-item:focus-visible {
+  outline: none;
+  background: rgba(37, 99, 235, 0.22);
+}
+.xk-routing-monaco-menu-item[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.xk-routing-monaco-menu-item[disabled]:hover,
+.xk-routing-monaco-menu-item[disabled]:focus-visible {
+  background: transparent;
+}
+.xk-routing-monaco-menu-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: rgba(71, 85, 105, 0.55);
+}
+html[data-theme="light"] .xk-routing-monaco-menu {
+  border-color: rgba(148, 163, 184, 0.72);
+  background: #f8fafc;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+}
+html[data-theme="light"] .xk-routing-monaco-menu-item {
+  color: #0f172a;
+}
+html[data-theme="light"] .xk-routing-monaco-menu-item:hover,
+html[data-theme="light"] .xk-routing-monaco-menu-item:focus-visible {
+  background: rgba(59, 130, 246, 0.14);
+}
+html[data-theme="light"] .xk-routing-monaco-menu-sep {
+  background: rgba(148, 163, 184, 0.7);
 }

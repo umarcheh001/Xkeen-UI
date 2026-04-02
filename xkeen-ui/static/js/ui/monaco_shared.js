@@ -1,5 +1,8 @@
+import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
+
 (() => {
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
 
   // Do not re-init.
@@ -15,6 +18,68 @@
     moByHost: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
   };
 
+
+  function _installClipboardCompat() {
+    try {
+      if (window.__xkMonacoClipboardCompatInstalled) return;
+      window.__xkMonacoClipboardCompatInstalled = true;
+    } catch (e) {}
+
+    let nav = null;
+    try { nav = window.navigator || null; } catch (e) {}
+    if (!nav) return;
+
+    let clipboard = null;
+    try { clipboard = nav.clipboard || null; } catch (e) {}
+    if (!clipboard) return;
+
+    const noopWriteText = function () { return Promise.resolve(); };
+    const compatWrite = function () { return Promise.resolve(); };
+
+    // Never fake read()/readText() here.
+    // Monaco uses clipboard readability to decide how Paste should behave.
+    // A fake readText() that resolves to '' makes Paste appear to work while
+    // actually inserting an empty string.
+    try { if (typeof clipboard.writeText !== 'function') clipboard.writeText = noopWriteText; } catch (e) {}
+    try { if (typeof clipboard.write !== 'function') clipboard.write = compatWrite; } catch (e) {}
+  }
+
+  function _installExpectedRejectionFilter() {
+    try {
+      if (window.__xkMonacoExpectedRejectionFilterInstalled) return;
+      window.__xkMonacoExpectedRejectionFilterInstalled = true;
+    } catch (e) {}
+
+    try {
+      window.addEventListener('unhandledrejection', function (event) {
+        const reason = event ? event.reason : null;
+        const name = (() => {
+          try { return String((reason && reason.name) || ''); } catch (e) { return ''; }
+        })();
+        const message = (() => {
+          try {
+            if (reason && typeof reason.message === 'string') return reason.message;
+            return String(reason || '');
+          } catch (e) {
+            return '';
+          }
+        })();
+        const stack = (() => {
+          try { return String((reason && reason.stack) || ''); } catch (e) { return ''; }
+        })();
+        const hint = [name, message, stack].join('\n');
+        const monacoScoped = /editor\.api-|monaco\.|\/vs\//i.test(hint);
+        const cancellationLike = /(^|\b)cancel(ed|led)?(\b|:)/i.test(name) || /Canceled:\s*Canceled/i.test(message);
+        if (monacoScoped && cancellationLike) {
+          try { event.preventDefault(); } catch (e) {}
+        }
+      }, true);
+    } catch (e) {}
+  }
+
+  _installClipboardCompat();
+  _installExpectedRejectionFilter();
+
   const PERF_LIMITS = {
     softLines: 1800,
     softChars: 110000,
@@ -22,13 +87,14 @@
     webkitSoftChars: 22000,
   };
 
+  function _shouldRelaxForSafari(opts) {
+    const o = opts || {};
+    if (o.disableSafariOptimizations) return false;
+    return _isWebKitSafari();
+  }
+
   function _isMipsTarget() {
-    try {
-      if (typeof window.XKEEN_IS_MIPS === 'boolean') return !!window.XKEEN_IS_MIPS;
-      const v = String(window.XKEEN_IS_MIPS || '').toLowerCase();
-      if (!v) return false;
-      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
-    } catch (e) {}
+    if (isXkeenMipsRuntime()) return true;
     try {
       return /mips/i.test(String((window.navigator && window.navigator.userAgent) || ''));
     } catch (e) {}
@@ -65,7 +131,7 @@
     const lineCount = _countLines(raw);
     const charCount = raw.length;
     const requested = String(o.performanceProfile || '').toLowerCase().trim();
-    const safariLite = _isWebKitSafari()
+    const safariLite = _shouldRelaxForSafari(o)
       && (lineCount >= PERF_LIMITS.webkitSoftLines || charCount >= PERF_LIMITS.webkitSoftChars);
     const lite = requested === 'lite'
       || (requested !== 'default' && (_isMipsTarget() || safariLite || lineCount >= PERF_LIMITS.softLines || charCount >= PERF_LIMITS.softChars));
@@ -679,7 +745,7 @@
     const readOnly = !!o.readOnly;
     const value = String(o.value ?? '');
     const perf = _computePerfProfile(value, o);
-    const safari = _isWebKitSafari();
+    const safari = _shouldRelaxForSafari(o);
 
     try {
       const monaco = await _ensureMonaco();
@@ -697,6 +763,7 @@
       const editor = monaco.editor.create(el, {
         value,
         readOnly,
+        contextmenu: (typeof o.contextmenu === 'boolean') ? o.contextmenu : true,
         automaticLayout: !(perf.lite || safari),
         minimap: { enabled: false },
         stickyScroll: { enabled: false },

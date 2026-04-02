@@ -1,3 +1,8 @@
+import {
+  getTerminalModalApi,
+  publishTerminalCompatApi,
+} from '../runtime.js';
+
 // Terminal module: overlay controller (Stage 8.3.4)
 //
 // Centralizes small overlay-related helpers that used to live in terminal.js/_core.js.
@@ -5,16 +10,13 @@
 // Provides:
 //  - isOpen(): robust overlay visibility check
 //  - show()/hide(): overlay display toggles (best-effort)
-//  - syncBodyScrollLock(): delegates to XKeen.ui.modal.syncBodyScrollLock when available
+//  - syncBodyScrollLock(): delegates to shared modal runtime helpers when available
 //
 // Emits:
 //  - overlay:show
 //  - overlay:hide
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
 
   function safeEmit(events, name, payload) {
     try { if (events && typeof events.emit === 'function') events.emit(String(name || ''), payload); } catch (e) {}
@@ -90,11 +92,9 @@
     }
 
     function syncBodyScrollLock() {
-      // Preferred: global modal helper (shared across the whole UI).
       try {
-        if (window.XKeen && window.XKeen.ui && window.XKeen.ui.modal && typeof window.XKeen.ui.modal.syncBodyScrollLock === 'function') {
-          return window.XKeen.ui.modal.syncBodyScrollLock();
-        }
+        const modalApi = getTerminalModalApi();
+        if (modalApi && typeof modalApi.syncBodyScrollLock === 'function') return modalApi.syncBodyScrollLock();
       } catch (e) {}
 
       // Fallback: keep body.modal-open in sync with other visible modals.
@@ -161,7 +161,7 @@
     // Expose instance on ctx + global for legacy wrappers.
     try { if (ctx) ctx.overlay = api; } catch (e) {}
     try { if (ctx) ctx.overlayCtrl = api; } catch (e2) {}
-    try { window.XKeen.terminal.overlay = api; } catch (e3) {}
+    try { publishTerminalCompatApi('overlay', api); } catch (e3) {}
 
     return {
       id: 'overlay_controller',
@@ -177,9 +177,11 @@
     };
   }
 
-  window.XKeen.terminal.overlay_controller = {
+  const terminalOverlayControllerCompat = {
     createModule: (ctx) => createController(ctx),
     // For non-registry usage (best-effort singleton)
     createController,
   };
+
+  publishTerminalCompatApi('overlay_controller', terminalOverlayControllerCompat);
 })();

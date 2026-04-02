@@ -1,3 +1,25 @@
+import {
+  getXkeenCm6RuntimeApi,
+  getXkeenDatContentsApi,
+  getXkeenEditorActionsApi,
+  getXkeenEditorLinksApi,
+  getXkeenEditorToolbarApi,
+  getXkeenJsonEditorApi,
+  getXkeenMonacoLoaderApi,
+  getXkeenMonacoSharedApi,
+  getXkeenPagesApi,
+  getXkeenTerminalRoot,
+  isXkeenDebugRuntime,
+} from '../features/xkeen_runtime.js';
+import {
+  appendTerminalDebug,
+  finishTerminalDebugRun,
+  markTerminalDebugState,
+} from '../features/terminal_debug.js';
+
+// Narrow lazy runtime adapter for generic deferred bundles and shell-bound feature APIs.
+// Do not add page-specific loaders here; new code must use direct import() or panel-local lazy bindings.
+
 (() => {
   "use strict";
 
@@ -18,174 +40,58 @@
     } catch (e) {}
   }
 
-  const STATIC_BASE = (() => {
-    try {
-      const base = (typeof window.XKEEN_STATIC_BASE === 'string' && window.XKEEN_STATIC_BASE)
-        ? window.XKEEN_STATIC_BASE
-        : '/static/';
-      return base.endsWith('/') ? base : (base + '/');
-    } catch (e) {
-      return '/static/';
-    }
-  })();
-
-  const loadedScripts = new Set();
-  const loadingScripts = new Map();
-
-  function toStaticUrl(path) {
-    const raw = String(path || '');
-    if (!raw) return '';
-
-    let url = '';
-    if (raw.startsWith('http://') || raw.startsWith('https://')) {
-      url = raw;
-    } else if (raw.startsWith('/')) {
-      url = raw;
-    } else {
-      url = STATIC_BASE + raw.replace(/^\/+/, '');
-    }
-
-    try {
-      const ver = (typeof window.XKEEN_STATIC_VER === 'string' && window.XKEEN_STATIC_VER)
-        ? window.XKEEN_STATIC_VER
-        : '';
-      if (ver && url && !/[?&]v=/.test(url)) {
-        url += (url.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(ver);
-      }
-    } catch (e) {}
-
-    return url;
-  }
-
-  function loadScriptOnce(path) {
-    const url = toStaticUrl(path);
-    if (!url) return Promise.resolve(false);
-    if (loadedScripts.has(url)) return Promise.resolve(true);
-    if (loadingScripts.has(url)) return loadingScripts.get(url);
-
-    try {
-      const found = document.querySelector('script[src="' + url + '"]') || document.querySelector('script[data-xk-src="' + url + '"]');
-      if (found) {
-        const state = (found.dataset && found.dataset.xkLoadState) ? String(found.dataset.xkLoadState) : '';
-        if (state === 'ready') {
-          loadedScripts.add(url);
-          return Promise.resolve(true);
-        }
-        if (state === 'loading' && loadingScripts.has(url)) return loadingScripts.get(url);
-        try { found.remove(); } catch (e) {}
-      }
-    } catch (e) {}
-
-    const promise = new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = url;
-      try { script.async = false; } catch (e) {}
-      script.dataset.xkSrc = url;
-      script.dataset.xkLoadState = 'loading';
-      script.onload = () => {
-        try { script.dataset.xkLoadState = 'ready'; } catch (e) {}
-        loadedScripts.add(url);
-        resolve(true);
-      };
-      script.onerror = () => {
-        try { console.error('[xk] failed to load script:', url); } catch (e) {}
-        try { script.dataset.xkLoadState = 'error'; } catch (e) {}
-        try { script.remove(); } catch (e2) {}
-        resolve(false);
-      };
-      (document.body || document.documentElement).appendChild(script);
-    });
-
-    loadingScripts.set(url, promise.finally(() => {
-      try { loadingScripts.delete(url); } catch (e) {}
-    }));
-    return loadingScripts.get(url);
-  }
-
-  async function loadScriptsInOrder(list) {
-    const items = Array.isArray(list) ? list : [];
-    for (let i = 0; i < items.length; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
-      const ok = await loadScriptOnce(items[i]);
-      if (!ok) return false;
-    }
-    return true;
-  }
-
-  function loadIsolatedUmdScriptOnce(path) {
-    const url = toStaticUrl(path);
-    if (!url) return Promise.resolve(false);
-    if (loadedScripts.has(url)) return Promise.resolve(true);
-    if (loadingScripts.has(url)) return loadingScripts.get(url);
-
-    const promise = (async () => {
-      try {
-        const res = await fetch(url, { cache: 'force-cache' });
-        if (!res || !res.ok) return false;
-        const code = await res.text();
-        // eslint-disable-next-line no-new-func
-        const fn = new Function(
-          'self',
-          'window',
-          'globalThis',
-          'define',
-          'exports',
-          'module',
-          code + '\n//# sourceURL=' + String(url).replace(/\s/g, '%20')
-        );
-        fn.call(window, window, window, window, undefined, undefined, undefined);
-        loadedScripts.add(url);
-        return true;
-      } catch (e) {
-        try { console.error('[xk] failed to load isolated UMD script:', url, e); } catch (e2) {}
-        return false;
-      }
-    })();
-
-    loadingScripts.set(url, promise.finally(() => {
-      try { loadingScripts.delete(url); } catch (e) {}
-    }));
-    return loadingScripts.get(url);
-  }
-
-  async function loadUmdScriptsInOrder(list) {
-    const items = Array.isArray(list) ? list : [];
-    for (let i = 0; i < items.length; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
-      const ok = await loadIsolatedUmdScriptOnce(items[i]);
-      if (!ok) return false;
-    }
-    return true;
-  }
-
-  const loaderApi = {
-    staticBase: STATIC_BASE,
-    toUrl: toStaticUrl,
-    loadScriptOnce,
-    loadScriptsInOrder,
-    loadIsolatedUmdScriptOnce,
-    loadUmdScriptsInOrder,
+  const bundleLoaders = {
+    terminal: () => import('../pages/terminal.lazy.entry.js').then((mod) => {
+      if (mod && typeof mod.ensureTerminalBundleReady === 'function') return mod.ensureTerminalBundleReady();
+      return true;
+    }),
+    fileManager: () => import('../pages/file_manager.lazy.entry.js').then((mod) => {
+      if (mod && typeof mod.ensureFileManagerBundleReady === 'function') return mod.ensureFileManagerBundleReady();
+      return true;
+    }),
+    monacoShared: () => import('../pages/editor_monaco.shared.js'),
+    codemirrorShared: () => import('../pages/codemirror6.shared.js'),
   };
 
-  const featureScripts = {
-    routingTemplates: ['js/features/routing_templates.js'],
-    github: ['js/features/github.js'],
-    serviceStatus: ['js/features/service_status.js'],
-    restartLog: ['js/features/restart_log.js'],
-    donate: ['js/features/donate.js'],
-    backups: ['js/features/backups.js'],
-    jsonEditor: ['js/ui/json_editor_modal.js'],
-    datContents: ['js/ui/dat_contents_modal.js'],
-    xkeenTexts: ['js/features/xkeen_texts.js'],
-    commandsList: ['js/features/commands_list.js'],
-    coresStatus: ['js/features/cores_status.js'],
-    formatters: ['js/ui/prettier_loader.js', 'js/ui/formatters.js'],
-    xrayPreflight: ['js/ui/xray_preflight_modal.js'],
-    uiSettingsPanel: ['js/ui/settings_panel.js'],
-    mihomoImport: ['js/features/mihomo_import.js'],
-    mihomoProxyTools: ['js/features/mihomo_import.js', 'js/features/mihomo_proxy_tools.js'],
-    mihomoHwidSub: ['js/features/mihomo_hwid_sub.js'],
+  const featureLoaders = {
+    backups: () => import('../features/backups.js'),
+    jsonEditor: () => import('../ui/json_editor_modal.js'),
+    datContents: () => import('../ui/dat_contents_modal.js'),
   };
+
+  function getFeatureLoader(name) {
+    const key = String(name || '');
+    return key ? (featureLoaders[key] || null) : null;
+  }
+
+  const featureModules = Object.create(null);
+  const featureModulePromises = Object.create(null);
+
+  function loadFeatureModule(name) {
+    const key = String(name || '');
+    if (!key) return Promise.resolve(null);
+    if (featureModules[key]) return Promise.resolve(featureModules[key]);
+    if (featureModulePromises[key]) return featureModulePromises[key];
+
+    const loader = getFeatureLoader(key);
+    if (typeof loader !== 'function') return Promise.resolve(null);
+
+    featureModulePromises[key] = Promise.resolve()
+      .then(() => loader())
+      .then((mod) => {
+        featureModules[key] = mod || null;
+        return featureModules[key];
+      })
+      .catch((error) => {
+        featureModules[key] = null;
+        throw error;
+      })
+      .finally(() => {
+        featureModulePromises[key] = null;
+      });
+
+    return featureModulePromises[key];
+  }
 
   const featureReady = Object.create(null);
   const featureLoading = Object.create(null);
@@ -195,42 +101,69 @@
   let fileManagerLoaded = false;
   let fileManagerPromise = null;
 
+  let fileManagerApiModulePromise = null;
+
+  function loadFileManagerApiModule() {
+    if (!fileManagerApiModulePromise) {
+      fileManagerApiModulePromise = import('../features/file_manager.js').catch((error) => {
+        fileManagerApiModulePromise = null;
+        throw error;
+      });
+    }
+    return fileManagerApiModulePromise;
+  }
+
+  async function getFileManagerRuntimeApi() {
+    try {
+      const mod = await loadFileManagerApiModule();
+      const getter = mod && typeof mod.getFileManagerApi === 'function' ? mod.getFileManagerApi : null;
+      const api = typeof getter === 'function' ? getter() : null;
+      return api || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
   function normalizeEditorEngine(engine) {
     const next = String(engine || '').toLowerCase().trim();
     return (next === 'monaco' || next === 'codemirror') ? next : '';
   }
 
-  function getEditorSupportScripts(engine) {
+  function getBundleLoader(name) {
+    const key = String(name || '');
+    return key ? (bundleLoaders[key] || null) : null;
+  }
+
+  function getEditorSupportBundleLoader(engine) {
     const next = normalizeEditorEngine(engine);
-    if (next === 'monaco') return ['js/ui/monaco_loader.js', 'js/ui/monaco_shared.js'];
-    if (next === 'codemirror') return [];
-    return [];
+    if (next === 'monaco') return getBundleLoader('monacoShared');
+    if (next === 'codemirror') return getBundleLoader('codemirrorShared');
+    return null;
   }
 
   function getEditorLoader(engine) {
     const next = normalizeEditorEngine(engine);
     try {
-      if (!window.XKeen) return null;
-      if (next === 'monaco') return XK.monacoLoader || null;
+      if (next === 'monaco') return getXkeenMonacoLoaderApi();
       if (next === 'codemirror') return null;
     } catch (e) {}
     return null;
   }
 
   function getCodeMirror6Runtime() {
-    try {
-      return (window.XKeen && XKeen.ui && XKeen.ui.cm6Runtime) ? XKeen.ui.cm6Runtime : null;
-    } catch (e) {}
-    return null;
+    return getXkeenCm6RuntimeApi();
   }
 
   function hasCodeMirrorSharedLayer() {
     try {
+      const editorActions = getXkeenEditorActionsApi();
+      const editorLinks = getXkeenEditorLinksApi();
+      const editorToolbar = getXkeenEditorToolbarApi();
       return !!(
-        window.XKeen && XKeen.ui && XKeen.ui.editorActions &&
-        typeof window.buildCmExtraKeysCommon === 'function' &&
-        typeof window.xkeenAttachCmToolbar === 'function' &&
-        XKeen.ui.editorLinks && typeof XKeen.ui.editorLinks.setEnabled === 'function'
+        editorActions &&
+        editorToolbar && typeof editorToolbar.buildCommonKeys === 'function' &&
+        typeof editorToolbar.attach === 'function' &&
+        editorLinks && typeof editorLinks.setEnabled === 'function'
       );
     } catch (e) {
       return false;
@@ -252,14 +185,13 @@
   function hasMonacoSupport() {
     try {
       const loader = getEditorLoader('monaco');
+      const monacoShared = getXkeenMonacoSharedApi();
       return !!(
-        window.XKeen &&
         loader &&
         typeof loader.ensureSupport === 'function' &&
         ((typeof loader.isReady === 'function' && loader.isReady()) || (typeof loader.ensureMonaco === 'function')) &&
-        XK.ui &&
-        XK.ui.monacoShared &&
-        typeof XK.ui.monacoShared.createEditor === 'function'
+        monacoShared &&
+        typeof monacoShared.createEditor === 'function'
       );
     } catch (e) {
       return false;
@@ -277,11 +209,11 @@
     const next = normalizeEditorEngine(engine);
     try {
       if (next === 'monaco') {
+        const monacoShared = getXkeenMonacoSharedApi();
         return !!(
           getEditorLoader('monaco') &&
-          XK.ui &&
-          XK.ui.monacoShared &&
-          typeof XK.ui.monacoShared.createEditor === 'function'
+          monacoShared &&
+          typeof monacoShared.createEditor === 'function'
         );
       }
       if (next === 'codemirror') {
@@ -295,51 +227,25 @@
   }
 
   function getFeatureApi(name) {
+    const key = String(name || '');
     try {
-      switch (String(name || '')) {
-        case 'routingTemplates':
-          return XK.features ? XK.features.routingTemplates : null;
-        case 'github':
-          return XK.github || null;
-        case 'serviceStatus':
-          return XK.features ? XK.features.serviceStatus : null;
+      switch (key) {
+        case 'backups': {
+          const mod = featureModules[key] || null;
+          const getter = mod && typeof mod.getBackupsApi === 'function' ? mod.getBackupsApi : null;
+          const api = typeof getter === 'function' ? getter() : null;
+          return api || XK.backups || null;
+        }
         case 'xrayLogs':
-          return XK.features ? XK.features.xrayLogs : null;
-        case 'restartLog':
-          return XK.features ? XK.features.restartLog : null;
         case 'inbounds':
-          return XK.features ? XK.features.inbounds : null;
-        case 'outbounds':
-          return XK.features ? XK.features.outbounds : null;
-        case 'donate':
-          return XK.features ? XK.features.donate : null;
-        case 'backups':
-          return XK.backups || null;
+        case 'outbounds': {
+          const managed = getBuildManagedFeatureLoader(key);
+          return managed || null;
+        }
         case 'jsonEditor':
-          return XK.jsonEditor || null;
+          return getXkeenJsonEditorApi();
         case 'datContents':
-          return (XK.ui && XK.ui.datContents) ? XK.ui.datContents : null;
-        case 'xkeenTexts':
-          return XK.features ? XK.features.xkeenTexts : null;
-        case 'commandsList':
-          return XK.features ? XK.features.commandsList : null;
-        case 'coresStatus':
-          return XK.features ? XK.features.coresStatus : null;
-        case 'formatters':
-          return (XK.ui && XK.ui.formatters &&
-            (typeof XK.ui.formatters.formatJson === 'function' || typeof XK.ui.formatters.formatYaml === 'function'))
-            ? XK.ui.formatters
-            : null;
-        case 'xrayPreflight':
-          return (XK.ui && typeof XK.ui.showXrayPreflightError === 'function') ? XK.ui : null;
-        case 'uiSettingsPanel':
-          return (XK.ui && XK.ui.settingsPanel) ? XK.ui.settingsPanel : null;
-        case 'mihomoImport':
-          return XK.features ? XK.features.mihomoImport : null;
-        case 'mihomoProxyTools':
-          return XK.features ? XK.features.mihomoProxyTools : null;
-        case 'mihomoHwidSub':
-          return XK.features ? XK.features.mihomoHwidSub : null;
+          return getXkeenDatContentsApi();
         default:
           return null;
       }
@@ -350,13 +256,14 @@
 
   function getBuildManagedFeatureLoader(name) {
     try {
+      const pagesApi = getXkeenPagesApi();
       switch (String(name || '')) {
         case 'xrayLogs': {
-          const api = XK.pages ? XK.pages.logsShell : null;
+          const api = pagesApi ? (pagesApi.logsShell || null) : null;
           return api && typeof api.ensureReady === 'function' ? api : null;
         }
         case 'inbounds': {
-          const api = XK.pages ? XK.pages.configShell : null;
+          const api = pagesApi ? (pagesApi.configShell || null) : null;
           return (api && typeof api.ensureInboundsReady === 'function') ? {
             isReady: function () {
               return !!(typeof api.isInboundsReady === 'function' && api.isInboundsReady());
@@ -370,7 +277,7 @@
           } : null;
         }
         case 'outbounds': {
-          const api = XK.pages ? XK.pages.configShell : null;
+          const api = pagesApi ? (pagesApi.configShell || null) : null;
           return (api && typeof api.ensureOutboundsReady === 'function') ? {
             isReady: function () {
               return !!(typeof api.isOutboundsReady === 'function' && api.isOutboundsReady());
@@ -402,34 +309,14 @@
   function initFeature(name) {
     const feature = getFeatureApi(name);
     switch (String(name || '')) {
-      case 'routingTemplates':
-        if (feature && typeof feature.init === 'function') feature.init();
-        break;
-      case 'github':
-        if (feature && typeof feature.init === 'function') {
-          feature.init({ repoUrl: window.XKEEN_GITHUB_REPO_URL || '' });
-        }
-        break;
-      case 'serviceStatus':
       case 'xrayLogs':
-      case 'restartLog':
       case 'inbounds':
       case 'outbounds':
-      case 'donate':
+      case 'backups':
       case 'jsonEditor':
-      case 'xkeenTexts':
-      case 'commandsList':
-      case 'coresStatus':
-      case 'mihomoImport':
-      case 'mihomoProxyTools':
-      case 'mihomoHwidSub':
         if (feature && typeof feature.init === 'function') feature.init();
         break;
-      case 'backups':
       case 'datContents':
-      case 'formatters':
-      case 'xrayPreflight':
-      case 'uiSettingsPanel':
       default:
         break;
     }
@@ -462,23 +349,33 @@
         return true;
       }
 
-      const scripts = Array.isArray(featureScripts[key]) ? featureScripts[key] : [];
       const existing = getFeatureApi(key);
-      if ((!existing || isFeatureStub(existing)) && scripts.length) {
-        const ok = await loadScriptsInOrder(scripts);
-        if (!ok) throw new Error('failed to load lazy feature: ' + key);
+      if (!existing || isFeatureStub(existing)) {
+        try {
+          const mod = await loadFeatureModule(key);
+          if (!mod && typeof getFeatureLoader(key) === 'function') {
+            throw new Error('missing lazy feature module after import: ' + key);
+          }
+        } catch (error) {
+          throw new Error('failed to import lazy feature module: ' + key);
+        }
       }
 
       safeInvoke(() => initFeature(key));
+      let loadedApi = null;
       safeInvoke(() => {
-        const loaded = getFeatureApi(key);
-        if (loaded && loaded.__xkLazyStubInstalled) {
-          try { delete loaded.__xkLazyStubInstalled; } catch (e) {}
+        loadedApi = getFeatureApi(key);
+        if (loadedApi && loadedApi.__xkLazyStubInstalled) {
+          try { delete loadedApi.__xkLazyStubInstalled; } catch (e) {}
         }
       });
+      loadedApi = getFeatureApi(key) || loadedApi;
+      if (!loadedApi || isFeatureStub(loadedApi)) {
+        throw new Error('lazy feature did not install api: ' + key);
+      }
 
       featureReady[key] = true;
-      emitLazyEvent('xkeen:lazy-feature-ready', { name: key, api: getFeatureApi(key) });
+      emitLazyEvent('xkeen:lazy-feature-ready', { name: key, api: loadedApi });
       return true;
     })().catch((err) => {
       try { console.error('[XKeen] lazy feature failed:', key, err); } catch (e) {}
@@ -496,81 +393,72 @@
     return !!terminalLoaded;
   }
 
+  function withLoaderTimeout(promise, timeoutMs, label) {
+    const waitMs = Math.max(1000, Number(timeoutMs) || 0);
+    if (!promise || typeof promise.then !== 'function') return Promise.resolve(promise);
+
+    let timer = null;
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(String(label || 'lazy loader timeout')));
+        }, waitMs);
+      }),
+    ]).finally(() => {
+      if (timer) clearTimeout(timer);
+    });
+  }
+
   function ensureTerminalReady() {
     if (terminalLoaded) return Promise.resolve(true);
     if (terminalPromise) return terminalPromise;
 
     terminalPromise = (async () => {
-      const xtermOk = await loadUmdScriptsInOrder([
-        'xterm/xterm.js',
-        'xterm/xterm-addon-fit.js',
-        'xterm/xterm-addon-search.js',
-        'xterm/xterm-addon-web-links.js',
-        'xterm/xterm-addon-webgl.js',
-        'xterm/xterm-addon-unicode11.js',
-        'xterm/xterm-addon-serialize.js',
-        'xterm/xterm-addon-clipboard.js',
-        'xterm/xterm-addon-ligatures.js',
-      ]);
-      if (!xtermOk) throw new Error('failed to load xterm libraries');
+      const bundleLoader = getBundleLoader('terminal');
+      if (typeof bundleLoader !== 'function') throw new Error('missing terminal bundle loader');
 
-      const termOk = await loadScriptsInOrder([
-        'js/terminal/_core.js',
-        'js/terminal/core/events.js',
-        'js/terminal/core/logger.js',
-        'js/terminal/core/config.js',
-        'js/terminal/core/ui.js',
-        'js/terminal/core/api.js',
-        'js/terminal/transport/pty_transport.js',
-        'js/terminal/transport/lite_transport.js',
-        'js/terminal/transport/index.js',
-        'js/terminal/core/state.js',
-        'js/terminal/core/registry.js',
-        'js/terminal/commands/registry.js',
-        'js/terminal/commands/router.js',
-        'js/terminal/commands/builtins/xkeen_restart.js',
-        'js/terminal/commands/builtins/sysmon.js',
-        'js/terminal/core/session_controller.js',
-        'js/terminal/core/context.js',
-        'js/terminal/core/public_api.js',
-        'js/terminal/core/output_controller.js',
-        'js/terminal/core/input_controller.js',
-        'js/terminal/capabilities.js',
-        'js/terminal/pty.js',
-        'js/terminal/core/xterm_manager.js',
-        'js/terminal/lite_runner.js',
-        'js/terminal/search.js',
-        'js/terminal/history.js',
-        'js/terminal/quick_commands.js',
-        'js/terminal/chrome.js',
-        'js/terminal/modules/overlay_controller.js',
-        'js/terminal/modules/status_controller.js',
-        'js/terminal/modules/terminal_controller.js',
-        'js/terminal/modules/ui_controller.js',
-        'js/terminal/modules/buffer_actions.js',
-        'js/terminal/modules/ssh_profiles.js',
-        'js/terminal/modules/reconnect_controller.js',
-        'js/terminal/modules/output_prefs.js',
-        'js/terminal/modules/confirm_prompt.js',
-        'js/terminal/xray_tail.js',
-        'js/terminal/terminal.js',
-      ]);
-      if (!termOk) throw new Error('failed to load terminal modules');
+      const termOk = await withLoaderTimeout(bundleLoader(), 8000, 'terminal bundle timeout');
+      if (!termOk) throw new Error('failed to load terminal bundle');
 
-      safeInvoke(() => {
-        if (XK.terminal && typeof XK.terminal.init === 'function') XK.terminal.init();
+      let terminalRoot = getXkeenTerminalRoot() || XK.terminal || null;
+
+      if (!terminalRoot || typeof terminalRoot.init !== 'function') {
+        try {
+          await import('../terminal/terminal.js');
+        } catch (error) {}
+        terminalRoot = getXkeenTerminalRoot() || XK.terminal || null;
+      }
+
+      const initResult = safeInvoke(() => {
+        if (terminalRoot && typeof terminalRoot.ensureReady === 'function') return terminalRoot.ensureReady();
+        if (terminalRoot && typeof terminalRoot.init === 'function') return terminalRoot.init();
+        if (terminalRoot && typeof terminalRoot.bootstrap === 'function') {
+          terminalRoot.bootstrap();
+          return true;
+        }
+        return false;
       });
 
       safeInvoke(() => {
-        const api = XK.terminal && XK.terminal.api;
-        if (api && api.__xkLazyStubInstalled && XK.terminal && XK.terminal.core && typeof XK.terminal.core.createPublicApi === 'function') {
+        terminalRoot = getXkeenTerminalRoot() || XK.terminal || null;
+        const api = terminalRoot ? terminalRoot.api : null;
+        if (api && api.__xkLazyStubInstalled && terminalRoot && terminalRoot.core && typeof terminalRoot.core.createPublicApi === 'function') {
           console.warn('[XKeen] terminal.api is still a lazy stub after init; reinstalling public API (regression guard)');
-          XK.terminal.api = XK.terminal.core.createPublicApi();
+          terminalRoot.api = terminalRoot.core.createPublicApi();
         }
       });
 
+      if (initResult === false) {
+        try { console.warn('[XKeen] terminal bundle loaded but init is deferred: terminal UI/context not ready yet'); } catch (e) {}
+        terminalLoaded = false;
+        terminalPromise = null;
+        emitLazyEvent('xkeen:lazy-terminal-deferred', { terminal: getXkeenTerminalRoot() || XK.terminal || null });
+        return false;
+      }
+
       terminalLoaded = true;
-      emitLazyEvent('xkeen:lazy-terminal-ready', { terminal: XK.terminal || null });
+      emitLazyEvent('xkeen:lazy-terminal-ready', { terminal: getXkeenTerminalRoot() || XK.terminal || null });
       return true;
     })().catch((err) => {
       try { console.error('[XKeen] terminal lazy load failed:', err); } catch (e) {}
@@ -588,52 +476,26 @@
     if (fileManagerPromise) return fileManagerPromise;
 
     fileManagerPromise = (async () => {
-      const ok = await loadScriptsInOrder([
-        'js/features/file_manager/common.js',
-        'js/features/file_manager/api.js',
-        'js/features/file_manager/errors.js',
-        'js/features/file_manager/progress.js',
-        'js/features/file_manager/prefs.js',
-        'js/features/file_manager/state.js',
-        'js/features/file_manager/bookmarks.js',
-        'js/features/file_manager/terminal.js',
-        'js/features/file_manager/list_model.js',
-        'js/features/file_manager/status.js',
-        'js/features/file_manager/storage.js',
-        'js/features/file_manager/render.js',
-        'js/features/file_manager/listing.js',
-        'js/features/file_manager/selection.js',
-        'js/features/file_manager/transfers.js',
-        'js/features/file_manager/remote.js',
-        'js/features/file_manager/ops.js',
-        'js/features/file_manager/actions.js',
-        'js/features/file_manager/props.js',
-        'js/features/file_manager/hash.js',
-        'js/features/file_manager/actions_modals.js',
-        'js/features/file_manager/dragdrop.js',
-        'js/features/file_manager/context_menu.js',
-        'js/features/file_manager/chrome.js',
-        'js/features/file_manager/editor.js',
-        'js/features/file_manager/navigation.js',
-        'js/features/file_manager/wire.js',
-        'js/features/file_manager.js',
-        'js/features/file_manager/init.js',
-      ]);
-      if (!ok) throw new Error('failed to load file manager modules');
+      const bundleLoader = getBundleLoader('fileManager');
+      if (typeof bundleLoader !== 'function') throw new Error('missing file manager bundle loader');
+
+      const ok = await bundleLoader();
+      if (!ok) throw new Error('failed to load file manager bundle');
+
+      const fileManagerApi = await getFileManagerRuntimeApi();
 
       safeInvoke(() => {
-        const q = (window.location && typeof window.location.search === 'string') ? window.location.search : '';
-        const isDebug = !!window.XKEEN_DEV || /(?:^|[?&])debug=1(?:&|$)/.test(q);
+        const isDebug = isXkeenDebugRuntime();
         if (!isDebug) return;
-        const FM = (XK.features && XK.features.fileManager) ? XK.features.fileManager : null;
-        if (!FM) console.error('[FM] missing XKeen.features.fileManager after lazy load');
+        const FM = fileManagerApi;
+        if (!FM) console.error('[FM] missing fileManager API after lazy load');
         if (FM && (!FM.state || !FM.state.S)) console.error('[FM] missing FM.state.S (state container not initialized)');
         if (FM && (!FM.contextMenu || typeof FM.contextMenu.show !== 'function')) console.error('[FM] missing FM.contextMenu.show (context_menu.js not loaded)');
         if (FM && (!FM.editor)) console.error('[FM] missing FM.editor (editor.js not loaded)');
       });
 
       fileManagerLoaded = true;
-      emitLazyEvent('xkeen:lazy-file-manager-ready', { fileManager: XK.features ? XK.features.fileManager : null });
+      emitLazyEvent('xkeen:lazy-file-manager-ready', { fileManager: fileManagerApi });
       return true;
     })().catch((err) => {
       try { console.error('[XKeen] file manager lazy load failed:', err); } catch (e) {}
@@ -653,10 +515,10 @@
     if (editorSupportPromises[next]) return editorSupportPromises[next];
 
     editorSupportPromises[next] = (async () => {
-      const scripts = getEditorSupportScripts(next);
+      const bundleLoader = getEditorSupportBundleLoader(next);
       const wrappersReady = hasEditorRuntimeWrappers(next);
-      if (!wrappersReady && scripts.length) {
-        const scriptsOk = await loadScriptsInOrder(scripts);
+      if (!wrappersReady && typeof bundleLoader === 'function') {
+        const scriptsOk = await bundleLoader();
         if (!scriptsOk) throw new Error('failed to load ' + next + ' shared support');
       }
 
@@ -700,15 +562,6 @@
     return ensureEditorSupport('codemirror', opts);
   }
 
-  function installLazyCompatibilityApi() {
-    XK.lazy = XK.lazy || {};
-    XK.lazy.ensureTerminalReady = ensureTerminalReady;
-    XK.lazy.ensureFileManagerReady = ensureFileManagerReady;
-    XK.lazy.ensureEditorSupport = ensureEditorSupport;
-    XK.lazy.ensureCodeMirrorSupport = ensureCodeMirrorSupport;
-    XK.lazy.ensureMonacoSupport = ensureMonacoSupport;
-    XK.lazy.ensureFeature = ensureFeature;
-  }
 
   function installTerminalStub() {
     try {
@@ -894,9 +747,7 @@
     installDatContentsStub();
   }
 
-  const lazyApi = {
-    loader: loaderApi,
-    featureScripts,
+  const lazyApi = Object.freeze({
     getFeatureApi,
     isFeatureStub,
     isFeatureReady,
@@ -907,10 +758,8 @@
     ensureEditorSupport,
     ensureMonacoSupport,
     ensureCodeMirrorSupport,
-  };
+  });
 
-  XK.runtime.loader = loaderApi;
   XK.runtime.lazy = lazyApi;
-  installLazyCompatibilityApi();
   installDefaultStubs();
 })();

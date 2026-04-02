@@ -12,6 +12,7 @@
   // - Consumers may call ensureLoaded() (lazy) when they actually need it.
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
 
   const VALID = ['codemirror', 'monaco'];
@@ -940,7 +941,7 @@
 
   function getLazyApi() {
     try {
-      return (window.XKeen && XKeen.lazy) ? XKeen.lazy : null;
+      return (window.XKeen && XKeen.runtime && XKeen.runtime.lazy) ? XKeen.runtime.lazy : null;
     } catch (e) {}
     return null;
   }

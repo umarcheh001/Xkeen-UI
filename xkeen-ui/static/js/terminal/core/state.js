@@ -1,30 +1,15 @@
+import { publishTerminalCoreCompatApi } from '../runtime.js';
+
 // Terminal core: default state helpers for the modular context
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
-
   function defaultState() {
     return {
-      // mirrored/derived values (the authoritative state remains in terminal/_core.js)
       mode: 'shell',
     };
   }
 
-  // Stage 1: minimal reactive store on top of the (legacy) state object.
-  //
-  // Important: to preserve backward compatibility, the returned store IS the same object
-  // (so legacy code can still do ctx.state.mode), but we also attach:
-  //   - get(key, fallback)
-  //   - set(key, value)
-  //   - subscribe(key, fn)  -> unsubscribe
-  //   - subscribeAll(fn)    -> unsubscribe
-  //
-  // It emits events (if provided):
-  //   - state:changed  { key, value, prev }
-  //   - state:<key>    { value, prev }
   function createStateStore(stateObj, events) {
     const s = stateObj || {};
     const subs = Object.create(null);
@@ -53,7 +38,6 @@
       try { prev = s[k]; } catch (e) { prev = undefined; }
       try { s[k] = value; } catch (e2) { return false; }
 
-      // Key subscribers
       const arr = subs[k];
       if (arr && arr.length) {
         arr.slice().forEach((fn) => {
@@ -61,7 +45,6 @@
         });
       }
 
-      // Global subscribers
       if (all.length) {
         all.slice().forEach((fn) => {
           try { fn(k, value, prev); } catch (e) {}
@@ -94,14 +77,12 @@
       };
     }
 
-    // Attach as non-enumerable to reduce noise when iterating keys.
     try {
       Object.defineProperty(s, 'get', { value: get, enumerable: false });
       Object.defineProperty(s, 'set', { value: set, enumerable: false });
       Object.defineProperty(s, 'subscribe', { value: subscribe, enumerable: false });
       Object.defineProperty(s, 'subscribeAll', { value: subscribeAll, enumerable: false });
     } catch (e) {
-      // Fallback: assign directly
       s.get = get;
       s.set = set;
       s.subscribe = subscribe;
@@ -111,6 +92,6 @@
     return s;
   }
 
-  window.XKeen.terminal.core.defaultState = defaultState;
-  window.XKeen.terminal.core.createStateStore = createStateStore;
+  publishTerminalCoreCompatApi('defaultState', defaultState);
+  publishTerminalCoreCompatApi('createStateStore', createStateStore);
 })();

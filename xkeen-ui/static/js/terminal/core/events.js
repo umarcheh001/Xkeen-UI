@@ -1,10 +1,8 @@
+import { publishTerminalCoreCompatApi } from '../runtime.js';
+
 // Terminal core: tiny event bus
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
 
   function createEventBus() {
     const handlers = Object.create(null);
@@ -28,14 +26,13 @@
       const e = String(event || '');
       const arr = handlers[e];
       if (!arr || !arr.length) return;
-      // copy to avoid re-entrancy issues
       arr.slice().forEach((fn) => {
-        try { fn(payload); } catch (err) { /* swallow */ }
+        try { fn(payload); } catch (err) {}
       });
     }
 
     return { on, off, emit };
   }
 
-  window.XKeen.terminal.core.createEventBus = createEventBus;
+  publishTerminalCoreCompatApi('createEventBus', createEventBus);
 })();

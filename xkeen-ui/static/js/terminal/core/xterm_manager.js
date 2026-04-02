@@ -1,3 +1,17 @@
+import {
+  ensureTerminalRoot,
+  getTerminalCoreApi,
+  publishTerminalCompatApi,
+  publishTerminalCoreCompatApi,
+  toastTerminal,
+} from '../runtime.js';
+import {
+  shouldEnableXkeenTerminalLigatures,
+  shouldEnableXkeenTerminalOptionalAddons,
+  shouldEnableXkeenTerminalWebgl,
+} from '../../features/xkeen_runtime.js';
+import { appendTerminalDebug, markTerminalDebugState } from '../../features/terminal_debug.js';
+
 // Terminal core: xterm_manager
 //
 // Stage 2 goal:
@@ -6,14 +20,10 @@
 // - Proxy xterm subscriptions (onData/onKey/onResize) through ctx.events.
 //
 // Legacy compatibility:
-// - Keeps window.XKeen.terminal.xterm_manager.* API used by existing code.
+// - Keeps terminal compat xterm_manager API used by existing code.
 
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
 
   const PREF_FONT_SIZE_KEY = 'xkeen_term_font_size_v1';
   const PREF_CURSOR_BLINK_KEY = 'xkeen_term_cursor_blink_v1';
@@ -358,19 +368,14 @@ function readPrefs(ctx) {
     try {
       if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') return ctx.ui.toast(msg, kind);
     } catch (e) {}
-    try {
-      if (typeof window.showToast === 'function') return window.showToast(String(msg || ''), kind || 'info');
-    } catch (e2) {}
+    return toastTerminal(String(msg || ''), kind || 'info');
   }
 
   function getCore(ctx) {
     try {
       if (ctx && ctx.core) return ctx.core;
     } catch (e) {}
-    try {
-      return window.XKeen.terminal._core || null;
-    } catch (e2) {}
-    return null;
+    return getTerminalCoreApi();
   }
 
   function pickHostElements(ctx) {
@@ -454,6 +459,30 @@ function readPrefs(ctx) {
 
     // XTerm event disposables
     let termDisposables = [];
+
+    // Conservative mode: optional xterm addons are disabled by default because
+    // some vendor bundles or renderers can freeze the page on certain routers / browsers.
+    function shouldEnableOptionalAddons() {
+      try { return !!shouldEnableXkeenTerminalOptionalAddons(); } catch (e) {}
+      return false;
+    }
+
+    let fitScheduled = false;
+    let fitRunning = false;
+    let fitWindowStartedAt = 0;
+    let fitWindowCount = 0;
+    let fitStormMutedUntil = 0;
+
+    function scheduleFit(delayMs) {
+      const delay = Math.max(0, Number(delayMs) || 0);
+      if (fitScheduled) return;
+      fitScheduled = true;
+      const run = () => {
+        fitScheduled = false;
+        try { fit(); } catch (e) {}
+      };
+      try { window.setTimeout(run, delay); } catch (e) { run(); }
+    }
 
     // Resize dedupe
     let lastCols = 0;
@@ -701,7 +730,7 @@ function readPrefs(ctx) {
     function loadAddons(t) {
       if (!t) return;
 
-      // Fit addon
+      // Always keep only the mandatory fit addon enabled.
       try {
         if (!fitAddon && typeof FitAddon !== 'undefined' && FitAddon && typeof FitAddon.FitAddon === 'function') {
           fitAddon = new FitAddon.FitAddon();
@@ -709,7 +738,12 @@ function readPrefs(ctx) {
         }
       } catch (e) { fitAddon = null; }
 
-      // Search addon
+      // All other addons are opt-in for diagnostics only.
+      if (!shouldEnableOptionalAddons()) {
+        syncCoreRefs();
+        return;
+      }
+
       try {
         if (!searchAddon && typeof SearchAddon !== 'undefined' && SearchAddon && typeof SearchAddon.SearchAddon === 'function') {
           searchAddon = new SearchAddon.SearchAddon({ highlightLimit: 2000 });
@@ -717,7 +751,6 @@ function readPrefs(ctx) {
         }
       } catch (e2) { searchAddon = null; }
 
-      // Web links addon
       try {
         if (!webLinksAddon && typeof WebLinksAddon !== 'undefined' && WebLinksAddon && typeof WebLinksAddon.WebLinksAddon === 'function') {
           webLinksAddon = new WebLinksAddon.WebLinksAddon((event, uri) => {
@@ -732,7 +765,6 @@ function readPrefs(ctx) {
         }
       } catch (e5) { webLinksAddon = null; }
 
-      // Unicode11 addon
       try {
         if (!unicode11Addon && typeof Unicode11Addon !== 'undefined' && Unicode11Addon && typeof Unicode11Addon.Unicode11Addon === 'function') {
           unicode11Addon = new Unicode11Addon.Unicode11Addon();
@@ -741,15 +773,6 @@ function readPrefs(ctx) {
         }
       } catch (e7) { unicode11Addon = null; }
 
-      // Ligatures addon
-      try {
-        if (!ligaturesAddon && typeof LigaturesAddon !== 'undefined' && LigaturesAddon && typeof LigaturesAddon.LigaturesAddon === 'function') {
-          ligaturesAddon = new LigaturesAddon.LigaturesAddon();
-          t.loadAddon(ligaturesAddon);
-        }
-      } catch (e8) { ligaturesAddon = null; }
-
-      // Clipboard addon
       try {
         if (!clipboardAddon && typeof ClipboardAddon !== 'undefined' && ClipboardAddon && typeof ClipboardAddon.ClipboardAddon === 'function') {
           clipboardAddon = new ClipboardAddon.ClipboardAddon();
@@ -757,7 +780,6 @@ function readPrefs(ctx) {
         }
       } catch (e9) { clipboardAddon = null; }
 
-      // Serialize addon
       try {
         if (!serializeAddon && typeof SerializeAddon !== 'undefined' && SerializeAddon && typeof SerializeAddon.SerializeAddon === 'function') {
           serializeAddon = new SerializeAddon.SerializeAddon();
@@ -765,30 +787,51 @@ function readPrefs(ctx) {
         }
       } catch (e10) { serializeAddon = null; }
 
-      // WebGL renderer addon
+      // WebGL renderer and ligatures remain disabled even in optional mode unless
+      // explicitly enabled via dedicated flags. They are the most likely freeze source.
       try {
-        if (!webglAddon && typeof WebglAddon !== 'undefined' && WebglAddon && typeof WebglAddon.WebglAddon === 'function') {
+        if (
+          !ligaturesAddon &&
+          typeof LigaturesAddon !== 'undefined' &&
+          LigaturesAddon &&
+          typeof LigaturesAddon.LigaturesAddon === 'function' &&
+          shouldEnableXkeenTerminalLigatures()
+        ) {
+          ligaturesAddon = new LigaturesAddon.LigaturesAddon();
+          t.loadAddon(ligaturesAddon);
+        }
+      } catch (e11) { ligaturesAddon = null; }
+
+      try {
+        if (
+          !webglAddon &&
+          typeof WebglAddon !== 'undefined' &&
+          WebglAddon &&
+          typeof WebglAddon.WebglAddon === 'function' &&
+          shouldEnableXkeenTerminalWebgl()
+        ) {
           webglAddon = new WebglAddon.WebglAddon();
           t.loadAddon(webglAddon);
           try {
             if (webglAddon && typeof webglAddon.onContextLoss === 'function') {
               webglAddon.onContextLoss(() => {
-                try { webglAddon.dispose?.(); } catch (e11) {}
+                try { webglAddon.dispose?.(); } catch (e12) {}
                 webglAddon = null;
                 syncCoreRefs();
                 safeToast(ctx, 'WebGL-рендер терминала отключён (context loss)', 'info');
               });
             }
-          } catch (e12) {}
+          } catch (e13) {}
         }
-      } catch (e13) { webglAddon = null; }
+      } catch (e14) { webglAddon = null; }
 
       syncCoreRefs();
     }
 
     function createTerminal(opts = {}) {
+      appendTerminalDebug('xterm:create-enter', { hasTerm: !!term, terminalCtor: typeof Terminal });
       if (term) return term;
-      if (typeof Terminal === 'undefined') return null;
+      if (typeof Terminal === 'undefined') { appendTerminalDebug('xterm:create-missing-terminal', {}); return null; }
 
       const prefs = (opts && opts.prefs) ? opts.prefs : readPrefs(ctx);
 
@@ -809,6 +852,7 @@ function readPrefs(ctx) {
           theme: initialTheme,
         });
       } catch (e) {
+        appendTerminalDebug('xterm:create-error', { error: e ? String(e.message || e) : 'unknown error' });
         term = null;
         return null;
       }
@@ -845,6 +889,7 @@ function readPrefs(ctx) {
 
       try { applyThemeFromCss(); } catch (e9) {}
 
+      appendTerminalDebug('xterm:create-done', { hasTerm: !!term });
       syncCoreRefs();
       return term;
     }
@@ -864,7 +909,7 @@ function readPrefs(ctx) {
         }
       } catch (e) {}
 
-      try { fit(); } catch (e2) {}
+      try { scheduleFit(16); } catch (e2) {}
     }
 
     function applyPrefs(prefs) {
@@ -886,7 +931,7 @@ function readPrefs(ctx) {
           if (cb != null) term.options.cursorBlink = cb;
         }
       } catch (e) {}
-      try { fit(); } catch (e2) {}
+      try { scheduleFit(16); } catch (e2) {}
     }
 
     function detach() {
@@ -899,6 +944,7 @@ function readPrefs(ctx) {
     }
 
     function attachToHost(el) {
+      appendTerminalDebug('xterm:attach-enter', { hasTerm: !!term });
       if (!term) return false;
 
       const { container, xhost } = pickHostElements(ctx);
@@ -914,6 +960,7 @@ function readPrefs(ctx) {
           hostEl = host;
         } catch (e) {
           try { showXtermHost(ctx, false); } catch (e2) {}
+          appendTerminalDebug('xterm:attach-open-error', { error: e ? String(e.message || e) : 'unknown error' });
           safeToast(ctx, 'Не удалось инициализировать xterm.js (fallback на <pre>)', 'error');
           return false;
         }
@@ -921,30 +968,65 @@ function readPrefs(ctx) {
         hostEl = host;
       }
 
-      // Resize observer -> fit
+      // Resize observer -> throttled fit.
+      // Observe an outer stable box instead of the xterm host itself to avoid
+      // feedback loops where fit() changes the observed element size and causes
+      // an endless resize cycle.
       try {
         if (typeof ResizeObserver !== 'undefined') {
           if (!resizeObserver) {
             resizeObserver = new ResizeObserver(() => {
-              try { fit(); } catch (e3) {}
+              appendTerminalDebug('xterm:resize-observer', { target: 'manager' });
+              try { scheduleFit(16); } catch (e3) {}
             });
           }
-          if (resizeObserver && hostEl && typeof resizeObserver.observe === 'function') {
-            resizeObserver.observe(hostEl);
+          const observeTarget = (hostEl && hostEl.closest) ? (hostEl.closest('.terminal-window') || hostEl.parentElement || hostEl) : hostEl;
+          if (resizeObserver && observeTarget && typeof resizeObserver.observe === 'function') {
+            try { resizeObserver.disconnect(); } catch (e31) {}
+            resizeObserver.observe(observeTarget);
           }
         }
       } catch (e4) {}
 
       try { applyThemeFromCss(); } catch (e45) {}
-      try { fit(); } catch (e5) {}
+      try { scheduleFit(16); } catch (e5) {}
+      appendTerminalDebug('xterm:attach-done', { observed: true });
       syncCoreRefs();
       return true;
     }
 
     function fit() {
+      const now = Date.now();
+      if (!fitWindowStartedAt || (now - fitWindowStartedAt) > 2000) {
+        fitWindowStartedAt = now;
+        fitWindowCount = 0;
+      }
+      fitWindowCount += 1;
+      if (fitWindowCount === 1 || fitWindowCount === 10 || fitWindowCount === 25 || fitWindowCount === 50) {
+        appendTerminalDebug('xterm:fit-count', { count: fitWindowCount, term: !!term, hasAddon: !!fitAddon });
+      }
+      if (fitWindowCount > 80) {
+        fitStormMutedUntil = now + 3000;
+        appendTerminalDebug('xterm:fit-storm-detected', { count: fitWindowCount, mutedUntil: fitStormMutedUntil });
+        markTerminalDebugState({ status: 'fit-storm', lastStage: 'xterm:fit-storm-detected', fitCount: fitWindowCount });
+        return;
+      }
+      if (fitStormMutedUntil && now < fitStormMutedUntil) {
+        if (fitWindowCount < 85) appendTerminalDebug('xterm:fit-muted', { until: fitStormMutedUntil, count: fitWindowCount });
+        return;
+      }
+      if (fitRunning) {
+        appendTerminalDebug('xterm:fit-reentry-skip', { count: fitWindowCount });
+        return;
+      }
+      fitRunning = true;
       try {
         if (fitAddon && typeof fitAddon.fit === 'function') fitAddon.fit();
-      } catch (e) {}
+      } catch (e) {
+        appendTerminalDebug('xterm:fit-error', { error: e ? String(e.message || e) : 'unknown error' });
+      } finally {
+        fitRunning = false;
+      }
 
       try {
         if (term) emitResize(term.cols, term.rows, 'fit');
@@ -1074,10 +1156,11 @@ function readPrefs(ctx) {
   }
 
   function getOrCreate(ctx) {
-    window.XKeen.terminal.__xtermManager = window.XKeen.terminal.__xtermManager || null;
-    if (window.XKeen.terminal.__xtermManager) return window.XKeen.terminal.__xtermManager;
+    const terminal = ensureTerminalRoot();
+    if (terminal) terminal.__xtermManager = terminal.__xtermManager || null;
+    if (terminal && terminal.__xtermManager) return terminal.__xtermManager;
     const mgr = createManager(ctx);
-    window.XKeen.terminal.__xtermManager = mgr;
+    if (terminal) terminal.__xtermManager = mgr;
     return mgr;
   }
 
@@ -1090,7 +1173,8 @@ function readPrefs(ctx) {
 
   function dispose() {
     try {
-      const mgr = window.XKeen.terminal.__xtermManager || null;
+      const terminal = ensureTerminalRoot();
+      const mgr = terminal ? (terminal.__xtermManager || null) : null;
       if (mgr && typeof mgr.disposeTerminal === 'function') mgr.disposeTerminal();
     } catch (e) {}
   }
@@ -1103,8 +1187,7 @@ function readPrefs(ctx) {
     };
   }
 
-  // Export (legacy path + core namespace)
-  window.XKeen.terminal.core.xterm_manager = {
+  const terminalXtermManagerApi = {
     PREF_FONT_SIZE_KEY,
     PREF_CURSOR_BLINK_KEY,
     readPrefs,
@@ -1115,6 +1198,6 @@ function readPrefs(ctx) {
     createModule,
   };
 
-  // Keep legacy global for existing code.
-  window.XKeen.terminal.xterm_manager = window.XKeen.terminal.core.xterm_manager;
+  publishTerminalCoreCompatApi('xterm_manager', terminalXtermManagerApi);
+  publishTerminalCompatApi('xterm_manager', terminalXtermManagerApi);
 })();

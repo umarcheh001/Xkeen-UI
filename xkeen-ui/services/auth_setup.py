@@ -139,43 +139,15 @@ def init_auth(app) -> None:
 
     @app.context_processor
     def _inject_auth_context():
-        # Available in all templates
-        v = 0
-        try:
-            cpath = os.path.join(UI_STATE_DIR, "custom_theme.css")
-            if os.path.isfile(cpath):
-                v = int(os.path.getmtime(cpath) or 0)
-        except Exception:
-            v = 0
 
         # Independent themes (optional)
         term_v = 0
-        cm_v = 0
         try:
             tp = os.path.join(UI_STATE_DIR, "terminal_theme.css")
             if os.path.isfile(tp):
                 term_v = int(os.path.getmtime(tp) or 0)
         except Exception:
             term_v = 0
-        try:
-            cp = os.path.join(UI_STATE_DIR, "codemirror_theme.css")
-            if os.path.isfile(cp):
-                cm_v = int(os.path.getmtime(cp) or 0)
-        except Exception:
-            cm_v = 0
-
-        # Global Custom CSS (optional) — stored in UI_STATE_DIR/custom.css.
-        css_v = 0
-        css_enabled = False
-        try:
-            css_path = os.path.join(UI_STATE_DIR, "custom.css")
-            css_disabled_flag = os.path.join(UI_STATE_DIR, "custom_css.disabled")
-            if os.path.isfile(css_path):
-                css_v = int(os.path.getmtime(css_path) or 0)
-                css_enabled = not os.path.isfile(css_disabled_flag)
-        except Exception:
-            css_v = 0
-            css_enabled = False
 
         # Safe mode (URL query): ?safe=1
         safe_mode = False
@@ -194,11 +166,7 @@ def init_auth(app) -> None:
             "csrf_token": _ensure_csrf_token(),
             "auth_user": session.get("user"),
             "auth_configured": auth_is_configured(),
-            "custom_theme_v": v,
             "terminal_theme_v": term_v,
-            "codemirror_theme_v": cm_v,
-            "custom_css_v": css_v,
-            "custom_css_enabled": bool(css_enabled),
             "safe_mode": bool(safe_mode),
         }
 
@@ -215,11 +183,8 @@ def init_auth(app) -> None:
 
         # Always allow static assets
         if path.startswith("/static/") or path in (
-            "/ui/custom-theme.css",
-            "/ui/custom.css",
             "/ui/branding.json",
             "/ui/terminal-theme.css",
-            "/ui/codemirror-theme.css",
         ):
             return None
 

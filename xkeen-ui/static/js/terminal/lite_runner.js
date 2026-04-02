@@ -1,49 +1,40 @@
+import {
+  ansiToTerminalHtml,
+  ensureTerminalNamespaceBucket,
+  getTerminalById,
+  getTerminalCommandJobApi,
+  getTerminalCompatApi,
+  getTerminalContext,
+  publishTerminalCompatApi,
+} from './runtime.js';
+
 // Terminal lite runner: HTTP command execution + confirm prompt detection + ANSI filter/highlight (for lite output)
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-
-  const core = window.XKeen.terminal._core || null;
-  const caps = window.XKeen.terminal.capabilities || null;
-  const state = (core && core.state) ? core.state : (window.XKeen.terminal.__lite_state = window.XKeen.terminal.__lite_state || {});
+  const core = getTerminalCompatApi('_core');
+  const caps = getTerminalCompatApi('capabilities');
+  const state = (core && core.state) ? core.state : ensureTerminalNamespaceBucket('__lite_state');
 
   function getCtx() {
-    try {
-      const C = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core ? window.XKeen.terminal.core : null;
-      if (C && typeof C.getCtx === 'function') return C.getCtx();
-    } catch (e) {}
-    return null;
+    return getTerminalContext();
   }
 
   function byId(id) {
-    try {
-      const ctx = getCtx();
-      if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id);
-    } catch (e0) {}
-    try {
-      if (core && typeof core.byId === 'function') return core.byId(id);
-    } catch (e1) {}
-    return null;
+    return getTerminalById(id, (key) => {
+      try {
+        return (core && typeof core.byId === 'function') ? core.byId(key) : null;
+      } catch (error) {
+        return null;
+      }
+    });
   }
 
   // --------------------
   // ANSI helpers (lite output only)
   // --------------------
   function ansiToHtml(text) {
-    // Minimal conversion; if global converter exists, prefer it.
-    try {
-      if (window.XKeen && XKeen.util && XKeen.util.ansiToHtml) {
-        return XKeen.util.ansiToHtml(String(text || ''));
-      }
-    } catch (e) {}
-    const s = String(text || '');
-    // Very basic: escape HTML, keep newlines (caller handles <br>)
-    return s
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    return ansiToTerminalHtml(text);
   }
 
   // Basic ANSI stripper (CSI + OSC). Good enough for log highlighting.
@@ -132,11 +123,11 @@
   }
 
   // --------------------
-  // HTTP runner glue (delegates to XKeen.util.commandJob)
+  // HTTP runner glue (delegates to the shared command job adapter)
   // --------------------
   async function runShellCommand(cmd, stdinValue, options = {}) {
     try {
-      const CJ = (window.XKeen && XKeen.util && XKeen.util.commandJob) ? XKeen.util.commandJob : null;
+      const CJ = getTerminalCommandJobApi();
       if (CJ && typeof CJ.runShellCommand === 'function') {
         const opts = Object.assign({}, (options || {}), { hasWs: (caps && typeof caps.hasWs === 'function') ? caps.hasWs() : false });
         return await CJ.runShellCommand(cmd, stdinValue, opts);
@@ -147,7 +138,7 @@
 
   async function runXkeenFlag(flag, stdinValue, options = {}) {
     try {
-      const CJ = (window.XKeen && XKeen.util && XKeen.util.commandJob) ? XKeen.util.commandJob : null;
+      const CJ = getTerminalCommandJobApi();
       if (CJ && typeof CJ.runXkeenFlag === 'function') {
         const opts = Object.assign({}, (options || {}), { hasWs: (caps && typeof caps.hasWs === 'function') ? caps.hasWs() : false });
         return await CJ.runXkeenFlag(flag, stdinValue, opts);
@@ -199,17 +190,15 @@
     }
     // Stage C: route builtin/special commands via command router (so lite_runner can be used standalone).
     try {
-      if (window.XKeen && XKeen.terminal && XKeen.terminal.core && typeof XKeen.terminal.core.getCtx === 'function') {
-        const ctx = XKeen.terminal.core.getCtx();
-        if (ctx && ctx.router && typeof ctx.router.route === 'function') {
-          const r = await ctx.router.route(cmdText, {
-            source: 'lite_runner',
-            mode: state.currentCommandMode,
-            flag: state.currentCommandFlag,
-            label: state.currentCommandLabel,
-          });
-          if (r && r.handled) return;
-        }
+      const ctx = getCtx();
+      if (ctx && ctx.router && typeof ctx.router.route === 'function') {
+        const r = await ctx.router.route(cmdText, {
+          source: 'lite_runner',
+          mode: state.currentCommandMode,
+          flag: state.currentCommandFlag,
+          label: state.currentCommandLabel,
+        });
+        if (r && r.handled) return;
       }
     } catch (e) {
       try { console.error(e); } catch (_) {}
@@ -297,7 +286,7 @@
   }
 
   // Export
-  window.XKeen.terminal.lite_runner = {
+  const terminalLiteRunnerApi = {
     sendTerminalInput,
     detectConfirmPrompt,
     maybeRevealConfirm,
@@ -313,7 +302,7 @@
 
     // Stage 8.4: registry plugin factory (legacy compat)
     createModule: (ctx) => {
-      try { if (ctx) ctx.lite_runner = window.XKeen.terminal.lite_runner; } catch (e) {}
+      try { if (ctx) ctx.lite_runner = terminalLiteRunnerApi; } catch (e) {}
       return {
         id: 'lite_runner',
         priority: 95,
@@ -323,4 +312,6 @@
       };
     },
   };
+
+  publishTerminalCompatApi('lite_runner', terminalLiteRunnerApi);
 })();

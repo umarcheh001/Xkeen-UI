@@ -1,24 +1,19 @@
-// Terminal core: input controller
-//
-// Stage 5:
-//   - Route xterm input -> ctx.transport
-//   - Route lite UI inputs (#terminal-command + #terminal-input) -> ctx.transport
-//   - Keep terminal.js as an orchestrator only
+import {
+  getTerminalHistoryApi,
+  publishTerminalCompatApi,
+  publishTerminalCoreCompatApi,
+  toastTerminal,
+} from '../runtime.js';
 
+// Terminal core: input controller
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
 
   function safeToast(ctx, msg, kind) {
     try {
       if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') return ctx.ui.toast(String(msg || ''), kind || 'info');
     } catch (e) {}
-    try {
-      if (typeof window.showToast === 'function') return window.showToast(String(msg || ''), kind || 'info');
-    } catch (e2) {}
+    return toastTerminal(String(msg || ''), kind || 'info');
   }
 
   function getMode(ctx) {
@@ -69,9 +64,7 @@
     function routeXtermToTransport(payload) {
       if (!transport || typeof transport.send !== 'function') return;
       if (isInputLocked()) return;
-
-      const mode = getMode(ctx);
-      if (mode !== 'pty') return;
+      if (getMode(ctx) !== 'pty') return;
 
       const data = payload && typeof payload.data === 'string' ? payload.data : String(payload == null ? '' : payload);
       if (!data) return;
@@ -81,15 +74,12 @@
 
     async function submitFromUi(opts) {
       const o = opts || {};
-
-      // In PTY mode input is typed directly into xterm.
       if (getMode(ctx) === 'pty') return false;
       if (!transport || typeof transport.send !== 'function') {
         safeToast(ctx, 'Terminal transport is not available', 'error');
         return false;
       }
 
-      // UI elements
       let cmdEl = null;
       let stdinEl = null;
       try { cmdEl = ctx && ctx.dom ? (ctx.dom.commandInput || null) : null; } catch (e) {}
@@ -107,11 +97,10 @@
 
       const cmdText = cmdEl ? String(cmdEl.value || '').trim() : '';
       if (!cmdText) {
-        safeToast(ctx, 'Введите команду', 'info');
+        safeToast(ctx, 'Р’РІРµРґРёС‚Рµ РєРѕРјР°РЅРґСѓ', 'info');
         return false;
       }
 
-      // Builtin router (Stage C)
       try {
         if (ctx && ctx.router && typeof ctx.router.route === 'function') {
           const r = await ctx.router.route(cmdText, { source: 'ui' });
@@ -119,13 +108,11 @@
         }
       } catch (e6) {}
 
-      // Persist to history (Stage 5: keep history logic outside terminal.js)
       try {
-        const H = (window.XKeen && window.XKeen.terminal) ? window.XKeen.terminal.history : null;
-        if (H && typeof H.push === 'function') H.push(cmdText);
+        const historyApi = getTerminalHistoryApi();
+        if (historyApi && typeof historyApi.push === 'function') historyApi.push(cmdText);
       } catch (e7) {}
 
-      // stdin/confirm flow: if stdin field is visible and non-empty, send as stdin
       let stdinValue = '';
       try { stdinValue = stdinEl ? String(stdinEl.value || '') : ''; } catch (e8) { stdinValue = ''; }
       const stdinIsMeaningful = !!(stdinValue && stdinValue.trim());
@@ -138,14 +125,11 @@
           transport.send(payload, { prefer: 'lite', run: true });
         }
       } catch (e9) {
-        safeToast(ctx, 'Не удалось отправить команду', 'error');
+        safeToast(ctx, 'РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РїСЂР°РІРёС‚СЊ РєРѕРјР°РЅРґСѓ', 'error');
         return false;
       }
 
-      // Clear stdin after send (confirm should be re-detected from output)
       try { if (stdinEl) stdinEl.value = ''; } catch (e10) {}
-
-      // Keep focus in command field
       try { if (cmdEl && typeof cmdEl.focus === 'function') cmdEl.focus(); } catch (e11) {}
 
       return true;
@@ -161,7 +145,6 @@
         offXtermData = null;
       }
 
-      // Mirror command input changes to consumers (optional)
       try {
         const cmdEl = ctx && ctx.dom ? (ctx.dom.commandInput || null) : null;
         if (cmdEl && !cmdEl.__xkeenInputCtlBound) {
@@ -187,11 +170,8 @@
     };
   }
 
-  // Export factory
-  window.XKeen.terminal.core.createInputController = createInputController;
-
-  // Registry plugin wrapper
-  window.XKeen.terminal.input_controller = {
+  publishTerminalCoreCompatApi('createInputController', createInputController);
+  publishTerminalCompatApi('input_controller', {
     createModule: (ctx) => {
       const ctl = createInputController(ctx);
       try { ctx.input = ctl; } catch (e) {}
@@ -203,5 +183,5 @@
         onClose: () => { try { ctl.dispose(); } catch (e) {} },
       };
     },
-  };
+  });
 })();

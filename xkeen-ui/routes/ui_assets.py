@@ -14,6 +14,7 @@ import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from flask import Flask, Response, current_app, request, send_file, url_for
@@ -183,6 +184,14 @@ def _normalize_page_config_string(value: Any, default: str = "") -> str:
     if value is None:
         return default
     return str(value)
+
+
+def _normalize_page_config_path_string(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    if isinstance(value, Path):
+        return value.as_posix()
+    return str(value).replace('\\', '/')
 
 
 def _normalize_page_config_bool(value: Any, default: bool = False) -> bool:
@@ -420,7 +429,7 @@ class FrontendAssetHelper:
     def _build_entry_path_from_filename(self, build_filename: str | None) -> str | None:
         if not build_filename or not self.static_folder:
             return None
-        return os.path.join(self.static_folder, build_filename)
+        return str(Path(self.static_folder) / build_filename)
 
     def get_build_entry_path(self, entry_name: str) -> str | None:
         return self._build_entry_path_from_filename(self.get_build_entry_filename(entry_name))
@@ -501,7 +510,7 @@ class FrontendAssetHelper:
             "files": _build_page_config_group(
                 _PAGE_CONFIG_FILE_DEFAULTS,
                 files,
-                normalizers={key: _normalize_page_config_string for key in _PAGE_CONFIG_FILE_DEFAULTS},
+                normalizers={key: _normalize_page_config_path_string for key in _PAGE_CONFIG_FILE_DEFAULTS},
             ),
             "fileManager": _build_page_config_group(
                 _PAGE_CONFIG_FILE_MANAGER_DEFAULTS,

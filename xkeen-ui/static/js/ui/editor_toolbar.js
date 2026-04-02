@@ -7,6 +7,7 @@
   'use strict';
 
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
 
   function actions() {
@@ -194,9 +195,9 @@
     buildCommonKeys: buildCmExtraKeysCommon,
     openHelp,
     attach: xkeenAttachCmToolbar,
-    icons: window.XKEEN_CM_ICONS || XKEEN_CM_ICONS,
-    defaultItems: window.XKEEN_CM_TOOLBAR_DEFAULT || XKEEN_CM_TOOLBAR_DEFAULT,
-    miniItems: window.XKEEN_CM_TOOLBAR_MINI || XKEEN_CM_TOOLBAR_MINI,
+    icons: XKEEN_CM_ICONS,
+    defaultItems: XKEEN_CM_TOOLBAR_DEFAULT,
+    miniItems: XKEEN_CM_TOOLBAR_MINI,
   });
 
   window.buildCmExtraKeysCommon = buildCmExtraKeysCommon;

@@ -1,5 +1,6 @@
 (() => {
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.util = XKeen.util || {};
 
   // Common helpers moved out of main.js (step 3).

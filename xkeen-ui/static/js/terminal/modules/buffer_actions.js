@@ -1,3 +1,8 @@
+import {
+  publishTerminalCompatApi,
+  toastTerminal,
+} from '../runtime.js';
+
 // Terminal module: buffer actions (Stage 6/7)
 //
 // Responsibilities extracted from terminal.js:
@@ -9,18 +14,13 @@
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-
   function safeToast(ctx, msg, kind) {
     const m = String(msg || '');
     const k = kind || 'info';
     try {
       if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') return ctx.ui.toast(m, k);
     } catch (e) {}
-    try {
-      if (typeof window.showToast === 'function') return window.showToast(m, k);
-    } catch (e2) {}
+    return toastTerminal(m, k);
   }
 
   function byId(ctx, id) {
@@ -438,8 +438,8 @@
     };
   }
 
-  window.XKeen.terminal.buffer_actions = {
+  publishTerminalCompatApi('buffer_actions', {
     createActions,
     createModule,
-  };
+  });
 })();

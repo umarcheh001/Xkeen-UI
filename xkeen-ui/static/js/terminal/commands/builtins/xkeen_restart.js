@@ -1,19 +1,8 @@
+import { publishTerminalBuiltinCommandCompatApi } from '../../runtime.js';
+
 // Builtin command: `xkeen -restart` (Stage 7)
-//
-// Requirements:
-//   - run(ctx, args) only (no DOM, no direct globals)
-//   - UI interactions go through ctx.events (term:print / ui:toast)
-//
-// Backend endpoints:
-//   POST /api/restart
-//   GET  /api/restart-log
 (function () {
   'use strict';
-
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.commands = window.XKeen.terminal.commands || {};
-  window.XKeen.terminal.commands.builtins = window.XKeen.terminal.commands.builtins || {};
 
   const CMD_ID = 'xkeen_restart';
   const CMD_RE = /^xkeen\s+-restart(\s|$)/;
@@ -26,7 +15,6 @@
         return true;
       }
     } catch (e) {}
-    // Best-effort fallback (do not touch DOM)
     try { console.log('[terminal]', chunk); } catch (e2) {}
     return false;
   }
@@ -35,13 +23,11 @@
     try {
       if (ctx && ctx.events && typeof ctx.events.emit === 'function') {
         ctx.events.emit('ui:toast', { msg: String(msg || ''), kind: kind || 'info' });
-        return;
       }
     } catch (e) {}
   }
 
   async function fetchRestartLog(ctx) {
-    // Prefer ctx.api when present (single place for fetch wrappers)
     try {
       if (ctx && ctx.api && typeof ctx.api.apiFetch === 'function') {
         const r = await ctx.api.apiFetch('/api/restart-log', { cache: 'no-store' });
@@ -51,31 +37,29 @@
       }
     } catch (e) {}
 
-    // Fallback to direct fetch (still not DOM-related)
     try {
       const res = await fetch('/api/restart-log', { cache: 'no-store', credentials: 'same-origin' });
       const data = await res.json().catch(() => ({}));
       const lines = Array.isArray(data && data.lines) ? data.lines : [];
       return { ok: true, lines };
     } catch (e2) {
-      return { ok: false, lines: ['Не удалось загрузить журнал перезапуска.'], error: e2 };
+      return { ok: false, lines: ['РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Р¶СѓСЂРЅР°Р» РїРµСЂРµР·Р°РїСѓСЃРєР°.'], error: e2 };
     }
   }
 
-  async function run(ctx /*, args */) {
+  async function run(ctx) {
     emitPrint(ctx, '');
-    emitPrint(ctx, '[xkeen] Перезапуск...');
+    emitPrint(ctx, '[xkeen] РџРµСЂРµР·Р°РїСѓСЃРє...');
 
     try {
-      // Prefer ctx.api wrapper
       if (ctx && ctx.api && typeof ctx.api.apiFetch === 'function') {
         await ctx.api.apiFetch('/api/restart', { method: 'POST' });
       } else {
         await fetch('/api/restart', { method: 'POST', credentials: 'same-origin' });
       }
     } catch (e) {
-      emitToast(ctx, 'Ошибка при перезапуске', 'error');
-      emitPrint(ctx, '[Ошибка] Не удалось выполнить /api/restart');
+      emitToast(ctx, 'РћС€РёР±РєР° РїСЂРё РїРµСЂРµР·Р°РїСѓСЃРєРµ', 'error');
+      emitPrint(ctx, '[РћС€РёР±РєР°] РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ /api/restart');
       return { ok: false, error: e };
     }
 
@@ -84,14 +68,13 @@
 
     emitPrint(ctx, '');
     if (!lines.length) {
-      emitPrint(ctx, '(журнал пуст)');
+      emitPrint(ctx, '(Р¶СѓСЂРЅР°Р» РїСѓСЃС‚)');
     } else {
       for (const ln of lines) emitPrint(ctx, String(ln || '').replace(/\r?\n$/, ''));
     }
     return { ok: true, lines };
   }
 
-  // Stage 7 command definition (for commands/registry.js)
   const commandDef = {
     id: CMD_ID,
     matcher: CMD_RE,
@@ -99,25 +82,20 @@
     run,
   };
 
-  // Registration helpers
   function register(registryOrRouter) {
     const target = registryOrRouter;
     if (!target) return;
-
-    // Preferred: registry.register(commandDef)
     if (typeof target.register === 'function' && typeof target.bindToRouter === 'function') {
       try { target.register(commandDef); } catch (e) {}
       return;
     }
-
-    // Backward compatibility: direct router.register(...)
     if (typeof target.register === 'function') {
       try {
-        target.register(CMD_RE, async ({ ctx }) => run(ctx, {}), { name: CMD_ID, priority: 10 });
+        target.register(CMD_RE, async ({ ctx }) => run(ctx), { name: CMD_ID, priority: 10 });
       } catch (e) {}
     }
   }
 
-  window.XKeen.terminal.commands.builtins.xkeen_restart = commandDef;
-  window.XKeen.terminal.commands.builtins.registerXkeenRestart = register;
+  publishTerminalBuiltinCommandCompatApi('xkeen_restart', commandDef);
+  publishTerminalBuiltinCommandCompatApi('registerXkeenRestart', register);
 })();

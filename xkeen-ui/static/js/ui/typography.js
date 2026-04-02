@@ -61,7 +61,6 @@
     const root = document.documentElement;
     try {
       // IMPORTANT:
-      // Global theme (custom_theme.css) also defines --xk-font-scale / --xk-mono-font-scale.
       // If we always set defaults (1.0) inline on :root, it will *override* global theme
       // and Theme editor sliders will look like they "do nothing".
       // So: when typography prefs are effectively "neutral", remove inline overrides.

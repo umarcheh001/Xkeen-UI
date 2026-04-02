@@ -1,21 +1,25 @@
+import {
+  ensureTerminalNamespaceBucket,
+  getTerminalById,
+  getTerminalCompatApi,
+  getTerminalContext,
+  getTerminalPtyApi,
+  publishTerminalCompatApi,
+  syncTerminalBodyScrollLock,
+} from './runtime.js';
+import { appendTerminalDebug, markTerminalDebugState } from '../features/terminal_debug.js';
+
 // Terminal window chrome: drag/resize/persist geometry + fullscreen/minimize
 // Pure UI module (no fetch/ws business logic)
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-
   function getCtx() {
-    try {
-      const C = window.XKeen.terminal.core;
-      if (C && typeof C.getCtx === 'function') return C.getCtx();
-    } catch (e) {}
-    return null;
+    return getTerminalContext();
   }
 
-  const core = window.XKeen.terminal._core || null;
-  const state = (core && core.state) ? core.state : (window.XKeen.terminal.__chrome_state = window.XKeen.terminal.__chrome_state || {});
+  const core = getTerminalCompatApi('_core');
+  const state = (core && core.state) ? core.state : ensureTerminalNamespaceBucket('__chrome_state');
 
   const GEOM_KEY = 'xkeen_terminal_geom_v1';
 
@@ -23,6 +27,9 @@
   let openDisposers = [];
   let resizeObserver = null;
   let saveTimer = null;
+  let roWindowStartedAt = 0;
+  let roWindowCount = 0;
+  let roMutedUntil = 0;
 
   let dragging = false;
   let dragOffsetX = 0;
@@ -35,23 +42,27 @@
   let geomBeforeFullscreen = null;
 
   function byId(id, ctx) {
-    if (!ctx) ctx = getCtx();
-    try {
-      if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id);
-    } catch (e0) {}
-    try {
-      if (core && typeof core.byId === 'function') return core.byId(id);
-    } catch (e) {}
-    return null;
+    const current = ctx || getCtx();
+    return getTerminalById(id, (key) => {
+      try {
+        if (current && current.ui && typeof current.ui.byId === 'function') return current.ui.byId(key);
+      } catch (e0) {}
+      try {
+        if (core && typeof core.byId === 'function') return core.byId(key);
+      } catch (e) {}
+      return null;
+    });
   }
 
   function syncBodyScrollLock() {
     try {
       if (core && typeof core.syncBodyScrollLock === 'function') return core.syncBodyScrollLock();
     } catch (e) {}
+    return syncTerminalBodyScrollLock();
   }
 
   function fitXterm() {
+    appendTerminalDebug('chrome:fit-xterm', { hasFitAddon: !!(state && state.fitAddon) });
     try {
       const fa = state.fitAddon || null;
       if (fa && typeof fa.fit === 'function') fa.fit();
@@ -241,7 +252,7 @@
       syncBodyScrollLock();
     }
     try {
-      const pty = window.XKeen && XKeen.terminal ? XKeen.terminal.pty : null;
+      const pty = getTerminalPtyApi();
       if (pty && typeof pty.hideSignalsMenu === 'function') pty.hideSignalsMenu();
     } catch (e) {}
   }
@@ -307,6 +318,22 @@
 
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => {
+        const now = Date.now();
+        if (!roWindowStartedAt || (now - roWindowStartedAt) > 2000) {
+          roWindowStartedAt = now;
+          roWindowCount = 0;
+        }
+        roWindowCount += 1;
+        if (roWindowCount === 1 || roWindowCount === 10 || roWindowCount === 25 || roWindowCount === 50) {
+          appendTerminalDebug('chrome:resize-observer-count', { count: roWindowCount });
+        }
+        if (roWindowCount > 80) {
+          roMutedUntil = now + 3000;
+          appendTerminalDebug('chrome:resize-observer-storm', { count: roWindowCount, mutedUntil: roMutedUntil });
+          markTerminalDebugState({ status: 'chrome-resize-storm', lastStage: 'chrome:resize-observer-storm', resizeCount: roWindowCount });
+          return;
+        }
+        if (roMutedUntil && now < roMutedUntil) return;
         if (isFullscreen) return;
         try {
           const r = win.getBoundingClientRect();
@@ -387,7 +414,7 @@
     try { setTimeout(() => { try { ensureInViewportNow(); } catch (e2) {} }, 0); } catch (e3) {}
   }
 
-  window.XKeen.terminal.chrome = {
+  const terminalChromeApi = {
     init: () => {},
     onOpen,
     onClose: unbindWhileOpen,
@@ -407,4 +434,5 @@
       onClose: () => { try { unbindWhileOpen(); } catch (e) {} },
     }),
   };
+  publishTerminalCompatApi('chrome', terminalChromeApi);
 })();

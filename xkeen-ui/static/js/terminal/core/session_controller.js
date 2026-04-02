@@ -1,14 +1,15 @@
+import {
+  getTerminalCompatApi,
+  getTerminalPtyApi,
+  publishTerminalCoreCompatApi,
+} from '../runtime.js';
+
 // Terminal core: session controller (connect/reconnect/switchMode)
-// Stage 3: move connect/reconnect logic out of terminal.js
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
-
   function createSessionController(ctx) {
-    const core = (ctx && ctx.core) ? ctx.core : (window.XKeen.terminal._core || null);
+    const core = (ctx && ctx.core) ? ctx.core : getTerminalCompatApi('_core');
     const events = (ctx && ctx.events) ? ctx.events : { on: () => () => {}, off: () => {}, emit: () => {} };
     const log = (ctx && ctx.log) ? ctx.log : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
@@ -41,13 +42,8 @@
       emit('session:modeChanged', { mode: m });
     }
 
-
     function pty() {
-      try {
-        const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
-        return P || null;
-      } catch (e) {}
-      return null;
+      return getTerminalPtyApi();
     }
 
     function closePtyWsFallback(sendClose) {
@@ -56,9 +52,7 @@
         const ws = st ? st.ptyWs : null;
         if (!ws) return;
         try {
-          if (sendClose && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'close' }));
-          }
+          if (sendClose && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'close' }));
         } catch (e2) {}
         try { ws.__xkeen_manual_close = true; } catch (e3) {}
         try { ws.close(); } catch (e4) {}
@@ -69,14 +63,12 @@
     function resolveTerm(opts) {
       const o = opts || {};
       if (o.term) return o.term;
-      // Prefer xterm facade when available
       try {
         if (ctx && ctx.xterm && typeof ctx.xterm.ensureTerminal === 'function') {
           const r = ctx.xterm.ensureTerminal({});
           if (r && r.term) return r.term;
         }
       } catch (e) {}
-      // Fallback to stored refs
       try {
         const st = (core && core.state) ? core.state : (ctx && ctx.state ? ctx.state : null);
         if (st && (st.term || st.xterm)) return st.term || st.xterm;
@@ -115,9 +107,7 @@
 
     function isConnected() {
       try {
-        if (ctx && ctx.transport && typeof ctx.transport.isConnected === 'function') {
-          return !!ctx.transport.isConnected();
-        }
+        if (ctx && ctx.transport && typeof ctx.transport.isConnected === 'function') return !!ctx.transport.isConnected();
       } catch (e) {}
       try {
         const st = (core && core.state) ? core.state : (ctx && ctx.state ? ctx.state : null);
@@ -135,7 +125,6 @@
       emit('session:connecting', { mode: mode });
 
       if (mode !== 'pty') {
-        // Lite modes don't keep a persistent connection.
         emit('session:disconnected', { mode: mode, reason: 'lite' });
         return;
       }
@@ -180,14 +169,12 @@
         } catch (e) {}
       }
 
-      // Fallback: close WS directly
       closePtyWsFallback(o.sendClose !== false);
       emit('session:disconnected', { mode: 'pty', reason: 'disconnect_fallback' });
     }
 
     function reconnect(opts) {
       const o = opts || {};
-      // Always reconnect in PTY
       setMode('pty');
       try { resetRetry({ unblock: true }); } catch (e) {}
       connect({ mode: 'pty', term: o.term || null, preserveScreen: true });
@@ -204,7 +191,6 @@
         return;
       }
 
-      // Leaving PTY -> close session by default.
       if (prev === 'pty' && next !== 'pty') {
         try { stopRetry({ silent: true }); } catch (e) {}
         try { disconnect({ sendClose: true, reason: 'modeChange' }); } catch (e2) {}
@@ -218,7 +204,6 @@
         return connect({ mode: 'pty', term: o.term || null, preserveScreen: !!o.preserveScreen });
       }
 
-      // In lite modes keep lamp in a known state.
       emit('session:disconnected', { mode: next, reason: 'lite' });
     }
 
@@ -230,7 +215,6 @@
       reconnect,
       switchMode,
       isConnected,
-      // retry helpers (PTY)
       getRetryState,
       resetRetry,
       stopRetry,
@@ -238,5 +222,5 @@
     };
   }
 
-  window.XKeen.terminal.core.createSessionController = createSessionController;
+  publishTerminalCoreCompatApi('createSessionController', createSessionController);
 })();

@@ -145,9 +145,17 @@ def create_mihomo_blueprint(
             return _api_error(str(e), 400, ok=False)
 
         restart_flag = bool(data.get("restart", True))
-        restarted = restart_flag and restart_xkeen(source="mihomo-config")
+        async_q = request.args.get("async")
 
-        return jsonify({"ok": True, "restarted": restarted}), 200
+        resp = {"ok": True, "restarted": False}
+        if restart_flag and async_q in ("1", "true", "yes"):
+            job = create_command_job(flag="-restart", stdin_data=None, cmd=None, use_pty=True)
+            resp.update({"restart_queued": True, "restart_job_id": job.id})
+            return jsonify(resp), 202
+
+        restarted = restart_flag and restart_xkeen(source="mihomo-config")
+        resp["restarted"] = restarted
+        return jsonify(resp), 200
 
     @bp.post("/api/mihomo/preview")
     def api_mihomo_preview():

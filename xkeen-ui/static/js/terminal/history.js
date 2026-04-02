@@ -1,18 +1,25 @@
+import {
+  closeTerminalModal,
+  ensureTerminalNamespaceBucket,
+  ensureTerminalRoot,
+  getTerminalCompatApi,
+  getTerminalContext,
+  getTerminalPtyApi,
+  openTerminalModal,
+  publishTerminalCompatApi,
+  syncTerminalBodyScrollLock,
+  toastTerminal,
+} from './runtime.js';
+
 // Terminal history: drawer + localStorage + PTY typed-lines capture
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  const core = (window.XKeen.terminal && window.XKeen.terminal._core) ? window.XKeen.terminal._core : null;
+  const core = getTerminalCompatApi('_core');
   function getCtx() {
-    try {
-      const C = window.XKeen.terminal.core;
-      if (C && typeof C.getCtx === 'function') return C.getCtx();
-    } catch (e) {}
-    return null;
+    return getTerminalContext();
   }
-  const state = (core && core.state) ? core.state : (window.XKeen.terminal.__historyState = (window.XKeen.terminal.__historyState || {}));
+  const state = (core && core.state) ? core.state : ensureTerminalNamespaceBucket('__historyState');
 
   const KEY = 'xkeen_terminal_history'; // keep legacy key for backward compatibility
   const LIMIT = 50;
@@ -34,11 +41,7 @@
 
 
   function syncBodyScrollLock() {
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        return XKeen.ui.modal.syncBodyScrollLock();
-      }
-    } catch (e) {}
+    return syncTerminalBodyScrollLock();
   }
 
   function byId(id, ctx) {
@@ -55,7 +58,7 @@
     try {
       if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') return ctx.ui.toast(msg, kind);
     } catch (e0) {}
-    try { if (typeof window.showToast === 'function') return window.showToast(String(msg || ''), kind || 'info'); } catch (e) {}
+    try { return toastTerminal(String(msg || ''), kind || 'info'); } catch (e) {}
   }
 
   function getEls(ctx) {
@@ -152,9 +155,7 @@
   function isPtyActive() {
     try {
       // Source of truth: ctx/core state
-      const ctx = (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core && window.XKeen.terminal.core.getCtx)
-        ? window.XKeen.terminal.core.getCtx()
-        : null;
+      const ctx = getCtx();
       const m1 = ctx && ctx.core && typeof ctx.core.getMode === 'function' ? ctx.core.getMode() : null;
       const m2 = ctx && ctx.state ? ctx.state.mode : null;
       const mode = (m1 || m2 || '').toString();
@@ -168,9 +169,7 @@
   function sendToPty(raw) {
     // New API: ctx.transport is the only supported transport access.
     try {
-      const ctx = (window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core && window.XKeen.terminal.core.getCtx)
-        ? window.XKeen.terminal.core.getCtx()
-        : null;
+      const ctx = getCtx();
       if (ctx && ctx.transport) {
         // Force PTY preference — history's "run" must go to PTY when available.
         if (ctx.transport.kind === 'pty') return !!ctx.transport.send(raw, { prefer: 'pty' });
@@ -179,7 +178,7 @@
 
     // Last resort: modular PTY object (should be removed once terminal.js is fully modular).
     try {
-      const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+      const P = getTerminalPtyApi();
       if (P && typeof P.sendRaw === 'function') return !!P.sendRaw(raw);
     } catch (e2) {}
 
@@ -209,7 +208,7 @@
     // Lite: route through unified executor (Stage C) so builtins also work.
     close();
     try {
-      const T = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal : null;
+      const T = ensureTerminalRoot();
       if (T && typeof T.execCommand === 'function') {
         void T.execCommand(cmd, { source: 'history' });
         return;
@@ -225,10 +224,12 @@
     } catch (e) {}
 
     try {
-      if (window.XKeen && XKeen.terminal && XKeen.terminal.lite_runner && typeof XKeen.terminal.lite_runner.sendTerminalInput === 'function') {
-        void XKeen.terminal.lite_runner.sendTerminalInput();
-      } else if (typeof window.sendTerminalInput === 'function') {
-        void window.sendTerminalInput();
+      const terminal = ensureTerminalRoot();
+      const liteRunner = getTerminalCompatApi('lite_runner');
+      if (liteRunner && typeof liteRunner.sendTerminalInput === 'function') {
+        void liteRunner.sendTerminalInput();
+      } else if (terminal && terminal.ui_actions && typeof terminal.ui_actions.sendTerminalInput === 'function') {
+        void terminal.ui_actions.sendTerminalInput();
       }
     } catch (e) {}
   }
@@ -304,14 +305,7 @@
     const { modal, filter } = getEls();
     if (!modal) return;
 
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.open === 'function') {
-        XKeen.ui.modal.open(modal, { source: 'terminal_history' });
-      } else {
-        modal.classList.remove('hidden');
-        syncBodyScrollLock();
-      }
-    } catch (e) {}
+    try { openTerminalModal(modal, 'terminal_history', true); } catch (e) {}
 
     // reset selection on open
     H.selected = '';
@@ -326,14 +320,7 @@
   function close() {
     const { modal } = getEls();
     if (!modal) return;
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.close === 'function') {
-        XKeen.ui.modal.close(modal, { source: 'terminal_history' });
-      } else {
-        modal.classList.add('hidden');
-        syncBodyScrollLock();
-      }
-    } catch (e) {}
+    try { closeTerminalModal(modal, 'terminal_history', false); } catch (e) {}
   }
 
   // ArrowUp/ArrowDown in #terminal-command: browse history items (lite input field)
@@ -587,7 +574,7 @@
   }
 
   // Export
-  window.XKeen.terminal.history = {
+  publishTerminalCompatApi('history', {
     init,
     load,
     save,
@@ -639,5 +626,5 @@
         H.ptyDisposable = null;
       },
     }),
-  };
+  });
 })();

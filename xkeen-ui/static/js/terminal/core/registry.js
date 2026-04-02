@@ -1,3 +1,5 @@
+import { publishTerminalCoreCompatApi } from '../runtime.js';
+
 // Terminal module registry
 //
 // Provides a small plugin lifecycle system so terminal.js stays an orchestrator.
@@ -17,10 +19,6 @@
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
-
   function createRegistry(ctx) {
     const mods = [];
     let regSeq = 0;
@@ -39,10 +37,6 @@
       return sortedCache;
     }
 
-    // register(...)
-    //  - register('name', factoryOrModule, { priority })
-    //  - register(factoryOrModule, { priority })
-    //  - register(moduleObject, { priority })
     function register(nameOrModule, factoryOrModule, opts) {
       let name = null;
       let fm = null;
@@ -109,5 +103,5 @@
     return { register, initAll, onOpen, onClose, onModeChange, attachTerm, detachTerm, list };
   }
 
-  window.XKeen.terminal.core.createRegistry = createRegistry;
+  publishTerminalCoreCompatApi('createRegistry', createRegistry);
 })();

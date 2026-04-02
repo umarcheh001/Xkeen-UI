@@ -1,32 +1,37 @@
+import {
+  getTerminalById,
+  getTerminalCompatApi,
+  getTerminalContext,
+  getTerminalCoreHttpApi,
+  publishTerminalCompatApi,
+  publishXkeenCompatValue,
+  setTerminalCapabilityState,
+} from './runtime.js';
+import { appendTerminalDebug } from '../features/terminal_debug.js';
+
 // Terminal capabilities: detect backend features (/api/capabilities)
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  const core = (window.XKeen.terminal && window.XKeen.terminal._core) ? window.XKeen.terminal._core : null;
+  const core = getTerminalCompatApi('_core');
 
   let HAS_WS = false;
   let HAS_PTY = false;
   let INIT_PROMISE = null;
+  let INIT_DONE = false;
 
   function getCtx() {
-    try {
-      const C = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core ? window.XKeen.terminal.core : null;
-      if (C && typeof C.getCtx === 'function') return C.getCtx();
-    } catch (e) {}
-    return null;
+    return getTerminalContext();
   }
 
   function byId(id) {
-    try {
-      const ctx = getCtx();
-      if (ctx && ctx.ui && typeof ctx.ui.byId === 'function') return ctx.ui.byId(id);
-    } catch (e) {}
-    try {
-      if (core && typeof core.byId === 'function') return core.byId(id);
-    } catch (e2) {}
-    return null;
+    return getTerminalById(id, (key) => {
+      try {
+        return (core && typeof core.byId === 'function') ? core.byId(key) : null;
+      } catch (error) {
+        return null;
+      }
+    });
   }
 
   function setVisible(el, on) {
@@ -47,6 +52,43 @@
     try { el.disabled = !on; } catch (e2) {}
   }
 
+  function readStateCapabilityKnown() {
+    try {
+      if (core && core.state && typeof core.state.capabilitiesKnown === 'boolean') return core.state.capabilitiesKnown;
+    } catch (e) {}
+    try {
+      const ctx = getCtx();
+      const st = ctx && ctx.core ? ctx.core.state : null;
+      if (st && typeof st.capabilitiesKnown === 'boolean') return st.capabilitiesKnown;
+    } catch (e2) {}
+    return null;
+  }
+
+  function readStateCapability(key) {
+    try {
+      if (core && core.state && typeof core.state[key] === 'boolean') return core.state[key];
+    } catch (e) {}
+    try {
+      const ctx = getCtx();
+      const st = ctx && ctx.core ? ctx.core.state : null;
+      if (st && typeof st[key] === 'boolean') return st[key];
+    } catch (e2) {}
+    return null;
+  }
+
+  function seedFromState() {
+    const known = readStateCapabilityKnown();
+    const ws = readStateCapability('hasWs');
+    const pty = readStateCapability('hasPty');
+    if (known === true) {
+      if (typeof ws === 'boolean') HAS_WS = ws;
+      if (typeof pty === 'boolean') HAS_PTY = pty;
+      INIT_DONE = true;
+      return { known, ws, pty };
+    }
+    return { known: false, ws: null, pty: null };
+  }
+
   function pickPtyCapability(data) {
     if (data && data.terminal && typeof data.terminal === 'object' && 'pty' in data.terminal) {
       return !!data.terminal.pty;
@@ -55,34 +97,60 @@
   }
 
   function initCapabilities() {
-    if (INIT_PROMISE) return INIT_PROMISE;
+    if (INIT_PROMISE) {
+      appendTerminalDebug('terminal:capabilities:init-reuse', {});
+      return INIT_PROMISE;
+    }
+    const seeded = seedFromState();
+    appendTerminalDebug('terminal:capabilities:init-start', { seededWs: seeded.ws, seededPty: seeded.pty });
     INIT_PROMISE = (async () => {
       try {
-        const resp = await fetch('/api/capabilities', { cache: 'no-store' });
-        if (!resp.ok) throw new Error('http ' + resp.status);
-        const data = await resp.json().catch(() => ({}));
+        const http = getTerminalCoreHttpApi();
+        let data = null;
+        appendTerminalDebug('terminal:capabilities:request-begin', { viaCoreHttp: !!(http && typeof http.fetchJSON === 'function') });
+        if (http && typeof http.fetchJSON === 'function') {
+          data = await http.fetchJSON('/api/capabilities', {
+            method: 'GET',
+            timeoutMs: 2500,
+            retry: 0,
+          });
+        } else {
+          const resp = await fetch('/api/capabilities', { cache: 'no-store' });
+          if (!resp.ok) throw new Error('http ' + resp.status);
+          data = await resp.json().catch(() => ({}));
+        }
         HAS_WS = !!(data && data.websocket);
         HAS_PTY = pickPtyCapability(data);
+        appendTerminalDebug('terminal:capabilities:request-done', { websocket: HAS_WS, pty: HAS_PTY });
       } catch (e) {
-        // On error we assume WS/PTy are not available and fall back to HTTP mode.
-        HAS_WS = false;
-        HAS_PTY = false;
+        const msg = e ? String(e.message || e) : 'unknown error';
+        appendTerminalDebug('terminal:capabilities:request-error', { error: msg, keepSeeded: true });
+        const fallback = seedFromState();
+        HAS_WS = (typeof fallback.ws === 'boolean') ? fallback.ws : false;
+        HAS_PTY = (typeof fallback.pty === 'boolean') ? fallback.pty : false;
       }
 
       try {
-        if (core && core.state) core.state.hasWs = HAS_WS;
+        if (core && core.state) {
+          core.state.hasWs = HAS_WS;
+          core.state.hasPty = HAS_PTY;
+          core.state.capabilitiesKnown = true;
+        }
       } catch (e) {}
       try {
-        if (core && core.state) core.state.hasPty = HAS_PTY;
+        const ctx = getCtx();
+        const st = ctx && ctx.core ? ctx.core.state : null;
+        if (st) {
+          st.hasWs = HAS_WS;
+          st.hasPty = HAS_PTY;
+          st.capabilitiesKnown = true;
+        }
       } catch (e2) {}
-      try {
-        window.XKeen = window.XKeen || {};
-        window.XKeen.state = window.XKeen.state || {};
-        window.XKeen.state.hasWs = HAS_WS;
-        window.XKeen.state.hasPty = HAS_PTY;
-      } catch (e3) {}
+      try { setTerminalCapabilityState(HAS_WS, HAS_PTY); } catch (e3) {}
+      INIT_DONE = true;
 
       try { applyWsCapabilityUi(); } catch (e) {}
+      appendTerminalDebug('terminal:capabilities:apply', { websocket: HAS_WS, pty: HAS_PTY, known: true });
       return HAS_WS;
     })();
     return INIT_PROMISE;
@@ -123,17 +191,22 @@
     }
   }
 
-  function hasWs() { return !!HAS_WS; }
-  function hasPty() { return !!HAS_PTY; }
+  function hasWs() { const v = readStateCapability('hasWs'); return (typeof v === 'boolean') ? v : !!HAS_WS; }
+  function hasPty() { const v = readStateCapability('hasPty'); return (typeof v === 'boolean') ? v : !!HAS_PTY; }
+  function isReady() {
+    const known = readStateCapabilityKnown();
+    return known === true || INIT_DONE === true;
+  }
 
   // Backward compatible aliases (some legacy code used these names)
-  window.XKeen.terminalApplyWsCapabilityUi = applyWsCapabilityUi;
-  window.XKeen.terminalApplyCapabilityUi = applyWsCapabilityUi;
+  publishXkeenCompatValue('terminalApplyWsCapabilityUi', applyWsCapabilityUi);
+  publishXkeenCompatValue('terminalApplyCapabilityUi', applyWsCapabilityUi);
 
-  window.XKeen.terminal.capabilities = {
+  publishTerminalCompatApi('capabilities', {
     initCapabilities,
     applyWsCapabilityUi,
     hasWs,
     hasPty,
-  };
+    isReady,
+  });
 })();

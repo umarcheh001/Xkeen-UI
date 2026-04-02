@@ -1,3 +1,14 @@
+import {
+  getTerminalChromeApi,
+  getTerminalContext,
+  getTerminalCoreApi,
+  getTerminalPtyApi,
+  getTerminalSearchApi,
+  publishTerminalCompatApi,
+  toastTerminal,
+} from '../runtime.js';
+import { appendTerminalDebug, markTerminalDebugState } from '../../features/terminal_debug.js';
+
 // Terminal module: terminal controller (Stage 6/7)
 //
 // Purpose:
@@ -19,17 +30,18 @@
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-
   function resolveCtx(fallbackCtx) {
     try {
       if (fallbackCtx) return fallbackCtx;
     } catch (e) {}
     try {
-      const C = window.XKeen && window.XKeen.terminal && window.XKeen.terminal.core ? window.XKeen.terminal.core : null;
-      if (C && typeof C.getCtx === 'function') return C.getCtx();
+      const C = getTerminalContext();
+      if (C) return C;
     } catch (e2) {}
+    try {
+      const C = getTerminalCoreApi();
+      if (C && typeof C.getCtx === 'function') return C.getCtx();
+    } catch (e3) {}
     return null;
   }
 
@@ -39,9 +51,7 @@
     try {
       if (ctx && ctx.ui && typeof ctx.ui.toast === 'function') return ctx.ui.toast(m, k);
     } catch (e) {}
-    try {
-      if (typeof window.showToast === 'function') return window.showToast(m, k);
-    } catch (e2) {}
+    return toastTerminal(m, k);
   }
 
   function byId(ctx, id) {
@@ -67,7 +77,7 @@
   function getCoreState(ctx) {
     const c = resolveCtx(ctx);
     try {
-      const core = (c && c.core) ? c.core : (window.XKeen && window.XKeen.terminal ? window.XKeen.terminal._core : null);
+      const core = (c && c.core) ? c.core : getTerminalCoreApi();
       return (core && core.state) ? core.state : null;
     } catch (e) {}
     return null;
@@ -160,21 +170,21 @@
 
   function clearSearchSilent(ctx) {
     try {
-      const s = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.search : null;
+      const s = getTerminalSearchApi();
       if (s && typeof s.clear === 'function') s.clear({ silent: true });
     } catch (e) {}
   }
 
   function setFullscreenOff() {
     try {
-      const C = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.chrome : null;
+      const C = getTerminalChromeApi();
       if (C && typeof C.setFullscreen === 'function') C.setFullscreen(false);
     } catch (e) {}
   }
 
   function chromeOnOpen() {
     try {
-      const C = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.chrome : null;
+      const C = getTerminalChromeApi();
       if (C && typeof C.onOpen === 'function') C.onOpen();
     } catch (e) {}
   }
@@ -198,6 +208,31 @@
     }
   }
 
+  function showLiteOutput(ctx, on) {
+    const c = resolveCtx(ctx);
+    const xtermHost = byId(c, 'terminal-xterm');
+    const pre = byId(c, 'terminal-output');
+
+    try {
+      if (xtermHost) xtermHost.classList.toggle('hidden', !!on);
+    } catch (e0) {}
+    try {
+      if (pre) pre.style.display = on ? '' : 'none';
+    } catch (e1) {}
+
+    if (!on || !xtermHost) return;
+
+    // If xterm was created earlier (for a PTY session), keep its helper textarea
+    // completely out of the hit-testing/focus path while lite mode is active.
+    try {
+      xtermHost.querySelectorAll('.xterm-helper-textarea, .xterm-helpers').forEach((el) => {
+        try { if (typeof el.blur === 'function') el.blur(); } catch (e2) {}
+        try { el.setAttribute('tabindex', '-1'); } catch (e3) {}
+        try { el.setAttribute('aria-hidden', 'true'); } catch (e4) {}
+      });
+    } catch (e5) {}
+  }
+
   function supportsPty(ctx) {
     const c = resolveCtx(ctx);
     try {
@@ -214,17 +249,74 @@
     return false;
   }
 
+  function readKnownPtyState(ctx) {
+    const c = resolveCtx(ctx);
+    let ready = null;
+    try {
+      const st = getCoreState(c);
+      if (st && typeof st.capabilitiesKnown === 'boolean') ready = st.capabilitiesKnown;
+      if (ready === true && st && typeof st.hasPty === 'boolean') return st.hasPty;
+    } catch (e0) {}
+    try {
+      if (c && c.caps && typeof c.caps.isReady === 'function') ready = c.caps.isReady();
+      if (ready === true && c && c.caps && typeof c.caps.hasPty === 'function') {
+        const value = c.caps.hasPty();
+        if (typeof value === 'boolean') return value;
+      }
+    } catch (e1) {}
+    return null;
+  }
+
+  function withModeTimeout(promise, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        resolve('timeout');
+      }, Math.max(200, Number(timeoutMs) || 0));
+      Promise.resolve(promise).then((value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      }).catch((error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      });
+    });
+  }
+
   async function resolveOpenMode(ctx, requestedMode) {
     const c = resolveCtx(ctx);
     const mode = String(requestedMode || 'shell');
+    appendTerminalDebug('terminal-controller:resolve-mode-enter', { requestedMode: mode });
     if (mode !== 'pty') return mode;
-    if (supportsPty(c)) return 'pty';
+
+    const knownBefore = readKnownPtyState(c);
+    appendTerminalDebug('terminal-controller:resolve-mode-known-before', { knownPty: knownBefore });
+    if (knownBefore === true) return 'pty';
+    if (knownBefore === false) return 'shell';
+
     try {
       if (c && c.caps && typeof c.caps.initCapabilities === 'function') {
-        await Promise.resolve(c.caps.initCapabilities());
+        appendTerminalDebug('terminal-controller:resolve-mode-cap-init-begin', {});
+        const capResult = await withModeTimeout(Promise.resolve(c.caps.initCapabilities()), 1800);
+        appendTerminalDebug('terminal-controller:resolve-mode-cap-init-done', { result: capResult });
       }
-    } catch (e) {}
-    return supportsPty(c) ? 'pty' : 'shell';
+    } catch (e) {
+      appendTerminalDebug('terminal-controller:resolve-mode-cap-init-error', { error: e ? String(e.message || e) : 'unknown error' });
+    }
+
+    const knownAfter = readKnownPtyState(c);
+    appendTerminalDebug('terminal-controller:resolve-mode-known-after', { knownPty: knownAfter });
+    if (knownAfter === true) return 'pty';
+    if (knownAfter === false) return 'shell';
+
+    appendTerminalDebug('terminal-controller:resolve-mode-assume-requested', { requestedMode: mode });
+    return mode;
   }
 
   function syncSharedState(ctx, next) {
@@ -290,7 +382,7 @@
         const S = getSession(c);
         if (S && typeof S.setMode === 'function') S.setMode(m);
         else {
-          const core = (c && c.core) ? c.core : (window.XKeen && window.XKeen.terminal ? window.XKeen.terminal._core : null);
+          const core = (c && c.core) ? c.core : getTerminalCoreApi();
           if (core && typeof core.setMode === 'function') core.setMode(m);
         }
       } catch (e3) {}
@@ -443,8 +535,11 @@
     async function open(initialCommand, mode) {
       const c = resolveCtx(ctx);
       const requestedMode = String(mode || 'shell');
+      appendTerminalDebug('terminal-controller:open-enter', { requestedMode: requestedMode, initialCommand: String(initialCommand || '') });
+      markTerminalDebugState({ status: 'controller-open', lastStage: 'terminal-controller:open-enter' });
       const m = await resolveOpenMode(c, requestedMode);
       const cmd = String(initialCommand || '');
+      appendTerminalDebug('terminal-controller:mode-resolved', { requestedMode: requestedMode, resolvedMode: m, cmd: cmd });
 
       // Restore minimized PTY window without reconnecting.
       if (restoreMinimizedPtyIfPossible(m)) return;
@@ -466,9 +561,18 @@
       // Ensure confirm prompt is hidden initially
       try { resetConfirmPrompt(c); } catch (e2) {}
 
-      // Ensure xterm exists if available
-      const ensured = ensureXterm();
-      const term = ensured ? (ensured.term || null) : null;
+      // PTY needs a real xterm instance. Lite mode should stay on the <pre> fallback,
+      // otherwise hidden xterm helper inputs can steal hover/focus and show stray tooltips.
+      let term = null;
+      if (m === 'pty') {
+        appendTerminalDebug('terminal-controller:ensure-xterm-begin', { mode: m });
+        const ensured = ensureXterm();
+        term = ensured ? (ensured.term || null) : null;
+        appendTerminalDebug('terminal-controller:ensure-xterm-done', { mode: m, hasTerm: !!term, created: !!(ensured && ensured.created) });
+      } else {
+        appendTerminalDebug('terminal-controller:ensure-xterm-skip', { mode: m, reason: 'lite-mode' });
+        try { showLiteOutput(c, true); } catch (e2a) {}
+      }
 
       if (m === 'pty') {
         // Hide lite inputs in PTY
@@ -499,23 +603,26 @@
           try {
             const S = getSession(c);
             if (S && typeof S.switchMode === 'function') {
+              appendTerminalDebug('terminal-controller:session-switch-mode', { mode: 'pty' });
               S.switchMode('pty', { term: term, preserveScreen: false, autoConnect: true });
             } else if (S && typeof S.connect === 'function') {
+              appendTerminalDebug('terminal-controller:session-connect', { mode: 'pty' });
               S.connect({ mode: 'pty', term: term, preserveScreen: false });
             } else {
-              const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
-              if (P && typeof P.connect === 'function') P.connect(term, { preserveScreen: false });
+              const P = getTerminalPtyApi();
+              if (P && typeof P.connect === 'function') { appendTerminalDebug('terminal-controller:pty-connect-fallback', { mode: 'pty' }); P.connect(term, { preserveScreen: false }); }
             }
           } catch (e6) {
             try {
-              const P2 = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
-              if (P2 && typeof P2.connect === 'function') P2.connect(term, { preserveScreen: false });
+              const P2 = getTerminalPtyApi();
+              if (P2 && typeof P2.connect === 'function') { appendTerminalDebug('terminal-controller:pty-connect-fallback-catch', { mode: 'pty' }); P2.connect(term, { preserveScreen: false }); }
             } catch (e7) {}
           }
         }
       } else {
-        // Lite (shell/xkeen): show inputs
+        // Lite (shell/xkeen): show inputs and keep the plain <pre> output active.
         showInputs(c, true);
+        try { showLiteOutput(c, true); } catch (e7b) {}
         try {
           const S = getSession(c);
           if (S && typeof S.switchMode === 'function') S.switchMode(m, { autoConnect: false });
@@ -526,6 +633,7 @@
       try { applyModeUi(); } catch (e9) {}
 
       // Show overlay
+      appendTerminalDebug('terminal-controller:overlay-show-begin', { mode: m });
       try {
         const oc = getOverlayCtrl(c);
         if (oc && typeof oc.show === 'function') oc.show({ display: 'flex' });
@@ -534,6 +642,7 @@
           if (overlay) overlay.style.display = 'flex';
         }
       } catch (e10) {}
+      appendTerminalDebug('terminal-controller:overlay-show-done', { mode: m });
 
       // Restore terminal window geometry (chrome)
       try { chromeOnOpen(); } catch (e11) {}
@@ -544,7 +653,7 @@
       try {
         const clamp = () => {
           try {
-            const ch = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.chrome : null;
+            const ch = getTerminalChromeApi();
             if (ch && typeof ch.ensureInViewport === 'function') return ch.ensureInViewport();
             if (ch && typeof ch.onOpen === 'function') return ch.onOpen();
           } catch (e) {}
@@ -557,7 +666,7 @@
       try {
         const reg = getRegistry(c);
         if (reg) {
-          if (typeof reg.onOpen === 'function') reg.onOpen();
+          if (typeof reg.onOpen === 'function') { appendTerminalDebug('terminal-controller:registry-onopen', {}); reg.onOpen(); }
           if (term && typeof reg.attachTerm === 'function') reg.attachTerm(term);
         }
       } catch (e12) {}
@@ -568,14 +677,16 @@
       } catch (e13) {}
 
       // Focus terminal if PTY
-      if (m === 'pty') termFocus(term);
+      if (m === 'pty') { appendTerminalDebug('terminal-controller:focus-term', { hasTerm: !!term }); termFocus(term); }
     }
 
     function close() {
       const c = resolveCtx(ctx);
       const term = getTerm(c);
+      const mode = getMode();
 
       // Hide overlay
+      appendTerminalDebug('terminal-controller:close-enter', { mode: mode });
       try {
         const oc = getOverlayCtrl(c);
         if (oc && typeof oc.hide === 'function') oc.hide();
@@ -584,6 +695,7 @@
           if (overlay) overlay.style.display = 'none';
         }
       } catch (e0) {}
+      appendTerminalDebug('terminal-controller:close-overlay-hidden', { mode: mode });
 
       // Registry: onClose + detachTerm
       try {
@@ -607,7 +719,7 @@
         const S = getSession(c);
         if (S && typeof S.disconnect === 'function') S.disconnect({ sendClose: true, reason: 'close' });
         else {
-          const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+          const P = getTerminalPtyApi();
           if (P && typeof P.disconnect === 'function') P.disconnect({ sendClose: true });
         }
       } catch (e5) {}
@@ -622,6 +734,7 @@
 
       // Restore lite inputs visibility
       showInputs(c, true);
+      try { showLiteOutput(c, true); } catch (e6b) {}
       resetConfirmPrompt(c);
 
       // Reset mode state to shell
@@ -635,8 +748,10 @@
     function detach() {
       const c = resolveCtx(ctx);
       const term = getTerm(c);
+      const mode = getMode();
 
       // Close overlay, but keep server session alive (sendClose=false)
+      appendTerminalDebug('terminal-controller:detach-enter', { mode: mode });
       try {
         const oc = getOverlayCtrl(c);
         if (oc && typeof oc.hide === 'function') oc.hide();
@@ -645,6 +760,7 @@
           if (overlay) overlay.style.display = 'none';
         }
       } catch (e0) {}
+      appendTerminalDebug('terminal-controller:detach-overlay-hidden', { mode: mode });
 
       try { hideAllMenus(c); } catch (e1) {}
       try { clearSearchSilent(c); } catch (e2) {}
@@ -661,7 +777,7 @@
         const S = getSession(c);
         if (S && typeof S.disconnect === 'function') S.disconnect({ sendClose: false, reason: 'detach' });
         else {
-          const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+          const P = getTerminalPtyApi();
           if (P && typeof P.disconnect === 'function') P.disconnect({ sendClose: false });
         }
       } catch (e5) {}
@@ -701,7 +817,7 @@
         const S = getSession(c);
         if (S && typeof S.disconnect === 'function') S.disconnect({ sendClose: true, clearSession: true, reason: 'killSession' });
         else {
-          const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+          const P = getTerminalPtyApi();
           if (P && typeof P.disconnect === 'function') P.disconnect({ sendClose: true, clearSession: true });
         }
       } catch (e3) {}
@@ -728,7 +844,7 @@
 
       // Fallback (legacy pty.js)
       try {
-        const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+        const P = getTerminalPtyApi();
         if (P && typeof P.connect === 'function') P.connect(term, { preserveScreen: true });
       } catch (e2) {}
     }
@@ -754,7 +870,7 @@
         const S = getSession(c);
         if (S && typeof S.disconnect === 'function') S.disconnect({ sendClose: true, clearSession: true, reason: 'newSession' });
         else {
-          const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+          const P = getTerminalPtyApi();
           if (P && typeof P.disconnect === 'function') P.disconnect({ sendClose: true, clearSession: true });
         }
       } catch (e2) {}
@@ -773,7 +889,7 @@
       const c = resolveCtx(ctx);
       const s = String(data == null ? '' : data);
       try {
-        const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+        const P = getTerminalPtyApi();
         if (P && typeof P.sendRaw === 'function') {
           return !!P.sendRaw(s);
         }
@@ -814,7 +930,7 @@
       const sig = String(name || '').trim();
       if (!sig) return;
       try {
-        const P = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.pty : null;
+        const P = getTerminalPtyApi();
         if (P && typeof P.sendSignal === 'function') {
           P.sendSignal(sig);
           termFocus(getTerm(c));
@@ -852,7 +968,7 @@
 
     // Expose controller on ctx for UI delegation
     try { if (ctx) ctx.terminalCtrl = api; } catch (e) {}
-    try { window.XKeen.terminal.terminalCtrl = api; } catch (e2) {}
+    try { publishTerminalCompatApi('terminalCtrl', api); } catch (e2) {}
 
     return api;
   }
@@ -878,8 +994,8 @@
   }
 
   // Export
-  window.XKeen.terminal.terminal_controller = {
+  publishTerminalCompatApi('terminal_controller', {
     createController,
     createModule,
-  };
+  });
 })();

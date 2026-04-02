@@ -1,6 +1,7 @@
 // Theme toggle (moved out of main.js)
 (() => {
   window.XKeen = window.XKeen || {};
+  const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
   XKeen.state = XKeen.state || {};
 
@@ -34,6 +35,7 @@
     const notify = !opts || opts.notify !== false;
 
     html.setAttribute('data-theme', next);
+    html.style.colorScheme = next;
 
     // Sync CodeMirror theme with panel theme (light -> default, dark -> material-darker)
     const cmTheme = next === 'light' ? 'default' : 'material-darker';
@@ -77,6 +79,13 @@
 
   function getInitialTheme() {
     try {
+      const attr = document.documentElement.getAttribute('data-theme');
+      if (attr === 'light' || attr === 'dark') {
+        return attr;
+      }
+    } catch (e) {}
+
+    try {
       const stored = localStorage.getItem(THEME_KEY);
       if (stored === 'light' || stored === 'dark') {
         return stored;
@@ -118,6 +127,12 @@
       try { applyTheme(current); } catch (e) {}
     });
   }
+
+  window.addEventListener('pageshow', () => {
+    try {
+      applyTheme(getInitialTheme(), { syncEditors: false, notify: false });
+    } catch (e) {}
+  });
 
   XKeen.ui.applyTheme = applyTheme;
   XKeen.ui.initThemeToggle = initThemeToggle;

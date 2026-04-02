@@ -1,3 +1,5 @@
+import { getXkeenStaticBase } from '../features/xkeen_runtime.js';
+
 (() => {
   'use strict';
 
@@ -12,9 +14,7 @@
   // ------------------------ base paths ------------------------
   function guessStaticRoot() {
     try {
-      const configured = (typeof window.XKEEN_STATIC_BASE === 'string' && window.XKEEN_STATIC_BASE)
-        ? String(window.XKEEN_STATIC_BASE || '').trim()
-        : '';
+      const configured = String(getXkeenStaticBase() || '').trim();
       if (configured) return configured.endsWith('/') ? configured : (configured + '/');
     } catch (e) {}
 
@@ -47,6 +47,122 @@
       STATIC_ROOT + 'monaco-editor/vs',
     ],
   };
+
+  const SAFE_MONACO_DUPLICATE_MODULES = [
+    'vs/_commonjsHelpers-CT9FvmAN',
+    'vs/abap-D-t0cyap',
+    'vs/apex-CcIm7xu6',
+    'vs/azcli-BA0tQDCg',
+    'vs/bat-C397hTD6',
+    'vs/bicep-DF5aW17k',
+    'vs/cameligo-plsz8qhj',
+    'vs/clojure-Y2auQMzK',
+    'vs/coffee-Bu45yuWE',
+    'vs/cpp-CkKPQIni',
+    'vs/csharp-CX28MZyh',
+    'vs/csp-D8uWnyxW',
+    'vs/css-CaeNmE3S',
+    'vs/cssMode-CjiAH6dQ',
+    'vs/cypher-DVThT8BS',
+    'vs/dart-CmGfCvrO',
+    'vs/dockerfile-CZqqYdch',
+    'vs/ecl-30fUercY',
+    'vs/editor.api-CalNCsUg',
+    'vs/elixir-xjPaIfzF',
+    'vs/flow9-DqtmStfK',
+    'vs/freemarker2-Cz_sV6Md',
+    'vs/fsharp-BOMdg4U1',
+    'vs/go-D_hbi-Jt',
+    'vs/graphql-CKUU4kLG',
+    'vs/handlebars-OwglfO-1',
+    'vs/hcl-DTaboeZW',
+    'vs/html-Pa1xEWsY',
+    'vs/htmlMode-Bz67EXwp',
+    'vs/ini-CsNwO04R',
+    'vs/java-CI4ZMsH9',
+    'vs/javascript-PczUCGdz',
+    'vs/jsonMode-DULH5oaX',
+    'vs/julia-BwzEvaQw',
+    'vs/kotlin-IUYPiTV8',
+    'vs/less-C0eDYdqa',
+    'vs/lexon-iON-Kj97',
+    'vs/liquid-DqKjdPGy',
+    'vs/lspLanguageFeatures-kM9O9rjY',
+    'vs/lua-DtygF91M',
+    'vs/m3-CsR4AuFi',
+    'vs/markdown-C_rD0bIw',
+    'vs/mdx-DEWtB1K5',
+    'vs/mips-CiYP61RB',
+    'vs/monaco.contribution-D2OdxNBt',
+    'vs/monaco.contribution-DO3azKX8',
+    'vs/monaco.contribution-EcChJV6a',
+    'vs/monaco.contribution-qLAYrEOP',
+    'vs/msdax-C38-sJlp',
+    'vs/mysql-CdtbpvbG',
+    'vs/nls.messages-loader',
+    'vs/nls.messages.cs.js',
+    'vs/nls.messages.de.js',
+    'vs/nls.messages.es.js',
+    'vs/nls.messages.fr.js',
+    'vs/nls.messages.it.js',
+    'vs/nls.messages.ja.js',
+    'vs/nls.messages.js',
+    'vs/nls.messages.ko.js',
+    'vs/nls.messages.pl.js',
+    'vs/nls.messages.pt-br.js',
+    'vs/nls.messages.ru.js',
+    'vs/nls.messages.tr.js',
+    'vs/nls.messages.zh-cn.js',
+    'vs/nls.messages.zh-tw.js',
+    'vs/objective-c-CntZFaHX',
+    'vs/pascal-r6kuqfl_',
+    'vs/pascaligo-BiXoTmXh',
+    'vs/perl-DABw_TcH',
+    'vs/pgsql-me_jFXeX',
+    'vs/php-D_kh-9LK',
+    'vs/pla-VfZjczW0',
+    'vs/postiats-BBSzz8Pk',
+    'vs/powerquery-Dt-g_2cc',
+    'vs/powershell-B-7ap1zc',
+    'vs/protobuf-BmtuEB1A',
+    'vs/pug-BRpRNeEb',
+    'vs/python-Cr0UkIbn',
+    'vs/qsharp-BzsFaUU9',
+    'vs/r-f8dDdrp4',
+    'vs/razor-BYAHOTkz',
+    'vs/redis-fvZQY4PI',
+    'vs/redshift-45Et0LQi',
+    'vs/restructuredtext-C7UUFKFD',
+    'vs/ruby-CZO8zYTz',
+    'vs/rust-Bfetafyc',
+    'vs/sb-3GYllVck',
+    'vs/scala-foMgrKo1',
+    'vs/scheme-CHdMtr7p',
+    'vs/scss-C1cmLt9V',
+    'vs/shell-ClXCKCEW',
+    'vs/solidity-MZ6ExpPy',
+    'vs/sophia-DWkuSsPQ',
+    'vs/sparql-AUGFYSyk',
+    'vs/sql-32GpJSV2',
+    'vs/st-CuDFIVZ_',
+    'vs/swift-n-2HociN',
+    'vs/systemverilog-Ch4vA8Yt',
+    'vs/tcl-D74tq1nH',
+    'vs/tsMode-CZz1Umrk',
+    'vs/twig-C6taOxMV',
+    'vs/typescript-DfOrAzoV',
+    'vs/typespec-D-PIh9Xw',
+    'vs/vb-Dyb2648j',
+    'vs/wgsl-BhLXMOR0',
+    'vs/workers-DcJshg-q',
+    'vs/xml-CdsdnY8S',
+    'vs/yaml-DYGvmE88',
+    'vs/basic-languages/monaco.contribution',
+    'vs/language/json/monaco.contribution',
+    'vs/language/css/monaco.contribution',
+    'vs/language/html/monaco.contribution',
+    'vs/language/typescript/monaco.contribution',
+  ];
 
   function applyExternalConfig() {
     try {
@@ -88,68 +204,87 @@
   // ------------------------ loaders (cached) ------------------------
   const _js = new Map();
 
-  function alreadyPresentScript(src) {
+  function findExistingClassicScript(url) {
     try {
-      const abs = new URL(src, window.location.href).toString();
-      const nodes = document.querySelectorAll('script[src]');
-      for (const n of nodes) {
-        try {
-          const s = new URL(n.src, window.location.href).toString();
-          if (s === abs) return true;
-        } catch (e) {}
+      const scripts = document.getElementsByTagName('script');
+      for (let i = 0; i < scripts.length; i += 1) {
+        const script = scripts[i];
+        if (script && script.src === url) return script;
       }
-    } catch (e) {}
-    return false;
+    } catch (error) {}
+    return null;
   }
 
-  function loadScriptOnce(src) {
-    const url = String(src || '');
-    if (!url) return Promise.resolve(false);
+  function loadClassicScriptTag(url) {
+    return new Promise((resolve) => {
+      let script = findExistingClassicScript(url);
+      const attachedByLoader = !script;
 
-    // Prefer reusing the shared loader if present.
-    try {
-      if (XK.runtime && XK.runtime.loader && typeof XK.runtime.loader.loadScriptOnce === 'function') {
-        return XK.runtime.loader.loadScriptOnce(url);
+      if (!script) {
+        script = document.createElement('script');
+        script.src = url;
+        script.async = true;
+        try { script.dataset.xkeenMonacoLoader = '1'; } catch (error) {}
       }
-    } catch (e) {}
 
-    if (_js.has(url)) return _js.get(url);
-    if (alreadyPresentScript(url)) {
-      const p = Promise.resolve(true);
-      _js.set(url, p);
-      return p;
-    }
+      const cleanup = () => {
+        try { script.removeEventListener('load', onLoad); } catch (error) {}
+        try { script.removeEventListener('error', onError); } catch (error2) {}
+      };
 
-    // Important: on flaky / blocked networks, <script> can hang for a long time without firing onerror.
-    // Add a soft timeout so we can fall back to the next candidate quickly.
-    const TIMEOUT_MS = 4500;
+      const onLoad = () => {
+        try { script.dataset.xkeenLoaded = '1'; } catch (error) {}
+        cleanup();
+        resolve(true);
+      };
 
-    const p = new Promise((resolve) => {
-      let done = false;
-      let timer = null;
-      let s = null;
-
-      const finish = (ok) => {
-        if (done) return;
-        done = true;
-        try { if (timer) clearTimeout(timer); } catch (e) {}
-        // If we timed out, remove the script tag to reduce the chance of late onload racing.
-        try { if (!ok && s && s.parentNode) s.parentNode.removeChild(s); } catch (e) {}
-        resolve(!!ok);
+      const onError = () => {
+        cleanup();
+        if (attachedByLoader) {
+          try { script.remove(); } catch (error) {}
+        }
+        resolve(false);
       };
 
       try {
-        s = document.createElement('script');
-        s.src = url;
-        s.async = true;
-        s.onload = () => finish(true);
-        s.onerror = () => finish(false);
-        document.head.appendChild(s);
-
-        timer = setTimeout(() => finish(false), TIMEOUT_MS);
-      } catch (e) {
-        finish(false);
+        script.addEventListener('load', onLoad, { once: true });
+        script.addEventListener('error', onError, { once: true });
+      } catch (error) {
+        return resolve(false);
       }
+
+      if (!attachedByLoader) {
+        try {
+          if (script.dataset && script.dataset.xkeenLoaded === '1') {
+            cleanup();
+            return resolve(true);
+          }
+        } catch (error) {}
+      }
+
+      if (attachedByLoader) {
+        try {
+          (document.head || document.documentElement || document.body).appendChild(script);
+        } catch (error) {
+          cleanup();
+          return resolve(false);
+        }
+      }
+    });
+  }
+
+  function loadClassicScriptOnce(src) {
+    const url = String(src || '');
+    if (!url) return Promise.resolve(false);
+
+    if (_js.has(url)) return _js.get(url);
+
+    const p = loadClassicScriptTag(url).then((ok) => {
+      if (!ok) _js.delete(url);
+      return ok;
+    }).catch(() => {
+      _js.delete(url);
+      return false;
     });
 
     _js.set(url, p);
@@ -170,6 +305,31 @@
         provider: 'local',
       });
     }
+    return out;
+  }
+
+  function getMergedIgnoreDuplicateModules() {
+    const seen = new Set();
+    const out = [];
+
+    function pushMany(values) {
+      if (!Array.isArray(values)) return;
+      for (const value of values) {
+        const id = String(value || '').trim();
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        out.push(id);
+      }
+    }
+
+    try {
+      if (window.require && typeof window.require.getConfig === 'function') {
+        const current = window.require.getConfig();
+        pushMany(current && current.ignoreDuplicateModules);
+      }
+    } catch (e) {}
+
+    pushMany(SAFE_MONACO_DUPLICATE_MODULES);
     return out;
   }
 
@@ -245,7 +405,7 @@
       const candidates = localCandidates();
 
       for (const c of candidates) {
-        const ok = await loadScriptOnce(c.loader);
+        const ok = await loadClassicScriptOnce(c.loader);
         if (!ok) continue;
 
         // AMD loader defines global require/define.
@@ -255,10 +415,7 @@
               paths: {
                 vs: c.vsBase,
               },
-              ignoreDuplicateModules: [
-                'vs/basic-languages/monaco.contribution',
-                'vs/language/json/monaco.contribution',
-              ],
+              ignoreDuplicateModules: getMergedIgnoreDuplicateModules(),
             });
             _configured = true;
             _activeSource = { provider: c.provider, loader: c.loader, vsBase: c.vsBase };

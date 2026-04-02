@@ -1,3 +1,5 @@
+import { getXkeenFilePath } from '../features/xkeen_runtime.js';
+
 (() => {
   "use strict";
 
@@ -36,10 +38,9 @@
   }
 
   function coreFile(core) {
-    const files = (window.XKEEN_FILES && typeof window.XKEEN_FILES === "object") ? window.XKEEN_FILES : {};
-    if (core === "mihomo") return files.mihomo || "/opt/etc/mihomo/config.yaml";
+    if (core === "mihomo") return getXkeenFilePath('mihomo', "/opt/etc/mihomo/config.yaml");
     // default to routing file for xray
-    return files.routing || "/opt/etc/xray/configs/05_routing.json";
+    return getXkeenFilePath('routing', "/opt/etc/xray/configs/05_routing.json");
   }
 
   function effectiveLabel(payload) {

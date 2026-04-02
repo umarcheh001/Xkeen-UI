@@ -1,27 +1,25 @@
+import {
+  computeTerminalTabId,
+  ensureGlobalStateRoot,
+  ensureTerminalCompatState,
+  getTerminalCompatApi,
+  getTerminalOverlayController,
+  publishTerminalCompatApi,
+  setTerminalGlobalTabId,
+  syncTerminalBodyScrollLock,
+} from './runtime.js';
+
 // Terminal core: state + basic UI helpers (no fetch/ws business logic)
 (function () {
   'use strict';
 
-  // Namespace
-  window.XKeen = window.XKeen || {};
-  window.XKeen.state = window.XKeen.state || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
+  ensureGlobalStateRoot();
 
   // --------------------
   // Per-tab identity
   // --------------------
-  function computeTabId() {
-    try {
-      if (window.XKeen && XKeen.util && typeof XKeen.util.getTabId === 'function') {
-        return XKeen.util.getTabId();
-      }
-    } catch (e) {}
-    // Emergency fallback: non-persistent id (still prevents crashes).
-    return 'xkeen_tab_id_v1:' + (String(Math.random()).slice(2) + '-' + String(Date.now()));
-  }
-
-  const state = window.XKeen.terminalState = window.XKeen.terminalState || {
-    tabId: computeTabId(),
+  const state = ensureTerminalCompatState({
+    tabId: computeTerminalTabId(),
     // 'shell' | 'xkeen' | 'pty' (owner module may update)
     mode: 'shell',
     // xterm refs (owner module may update)
@@ -33,7 +31,8 @@
     // capabilities (filled by capabilities.js)
     hasWs: false,
     hasPty: false,
-  };
+    capabilitiesKnown: false,
+  });
 
   // --------------------
   // Basic DOM getters
@@ -46,16 +45,7 @@
   // Overlay visible?
   // --------------------
   function getOverlayController() {
-    try {
-      const C = window.XKeen && window.XKeen.terminal ? window.XKeen.terminal.core : null;
-      const ctx = (C && typeof C.getCtx === 'function') ? C.getCtx() : null;
-      const oc = ctx ? (ctx.overlay || ctx.overlayCtrl) : null;
-      if (oc) return oc;
-    } catch (e) {}
-    try {
-      return (window.XKeen && window.XKeen.terminal) ? (window.XKeen.terminal.overlay || null) : null;
-    } catch (e2) {}
-    return null;
+    return getTerminalOverlayController();
   }
 
   function terminalIsOverlayOpen() {
@@ -79,12 +69,7 @@
       const oc = getOverlayController();
       if (oc && typeof oc.syncBodyScrollLock === 'function') return oc.syncBodyScrollLock();
     } catch (e) {}
-    // fallback: global modal helper
-    try {
-      if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
-        return XKeen.ui.modal.syncBodyScrollLock();
-      }
-    } catch (e) {}
+    return syncTerminalBodyScrollLock();
   }
 
   // ---------------- Terminal connection status lamp + uptime ----------------
@@ -135,9 +120,8 @@
 
     // Stage 8.3.5: prefer the status controller (single source of truth for lamp + uptime).
     try {
-      const T = (window.XKeen && window.XKeen.terminal) ? window.XKeen.terminal : null;
-      const sc = T ? (T.status || null) : null;
-      if (sc && typeof sc.setConnState === 'function' && sc !== window.XKeen.terminal._core) {
+      const sc = getTerminalCompatApi('status');
+      if (sc && typeof sc.setConnState === 'function' && sc !== terminalCoreApi) {
         sc.setConnState(String(state.connState || 'error'), detail);
         return;
       }
@@ -178,7 +162,7 @@
 
   function init() {
     // idempotent init for future submodules
-    try { window.XKeen.state.tabId = state.tabId; } catch (e) {}
+    try { setTerminalGlobalTabId(state.tabId); } catch (e) {}
     return true;
   }
 
@@ -212,8 +196,7 @@
     return null;
   }
 
-
-  window.XKeen.terminal._core = {
+  const terminalCoreApi = {
     state,
     setXtermRefs,
     getXtermRef,
@@ -228,4 +211,6 @@
     getMode,
     getTabId,
   };
+
+  publishTerminalCompatApi('_core', terminalCoreApi);
 })();

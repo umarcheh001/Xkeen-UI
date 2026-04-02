@@ -1,67 +1,46 @@
+import {
+  getTerminalById,
+  publishTerminalCoreCompatApi,
+  toastTerminal,
+} from '../runtime.js';
+
 // Terminal core: UI adapter (single place for DOM lookups)
 (function () {
   'use strict';
 
-  window.XKeen = window.XKeen || {};
-  window.XKeen.terminal = window.XKeen.terminal || {};
-  window.XKeen.terminal.core = window.XKeen.terminal.core || {};
-
   function createUiAdapter(core) {
-    // NOTE: ui.js is the only place where direct document lookups are allowed.
-    const byId = (id) => {
+    const byId = (id) => getTerminalById(id, (key) => {
       try {
         if (core && typeof core.byId === 'function') {
-          const el = core.byId(id);
+          const el = core.byId(key);
           if (el) return el;
         }
       } catch (e) {}
-      try {
-        return document.getElementById(id);
-      } catch (e2) {}
       return null;
-    };
+    });
 
     const get = {
-      // Main terminal overlay + hosts
       overlay: () => byId('terminal-overlay'),
       outputPre: () => byId('terminal-output'),
-      // Backward-compatible alias
       output: () => byId('terminal-output'),
       xtermHost: () => byId('terminal-xterm'),
-
-      // Inputs
       commandInput: () => byId('terminal-command'),
-      // Backward-compatible alias
       cmd: () => byId('terminal-command'),
       stdinInput: () => byId('terminal-input'),
-      // Backward-compatible alias
       stdin: () => byId('terminal-input'),
-
-      // Retry controls (PTY)
       stopRetryBtn: () => byId('terminal-btn-stop-retry'),
       retryNowBtn: () => byId('terminal-btn-retry-now'),
-
-      // Common view controls
       followBtn: () => byId('terminal-btn-follow'),
       bottomBtn: () => byId('terminal-btn-bottom'),
-
-      // Menus
       overflowMenu: () => byId('terminal-overflow-menu'),
       viewMenu: () => byId('terminal-view-menu'),
       bufferMenu: () => byId('terminal-buffer-menu'),
-
-      // Connection status
       connLamp: () => byId('terminal-conn-lamp'),
-      // Aliases used in refactor plan/docs
       lamp: () => byId('terminal-conn-lamp'),
       statusLamp: () => byId('terminal-conn-lamp'),
       uptime: () => byId('terminal-uptime'),
-
-      // Capability-dependent open buttons
       openShellBtn: () => byId('terminal-open-shell-btn'),
       openPtyBtn: () => byId('terminal-open-pty-btn'),
-
-      // SSH modals (used by terminal.js)
       sshModal: () => byId('ssh-modal'),
       sshEditModal: () => byId('ssh-edit-modal'),
       sshConfirmModal: () => byId('ssh-confirm-modal'),
@@ -76,9 +55,7 @@
     };
 
     function toast(msg, kind) {
-      try {
-        if (typeof window.showToast === 'function') return window.showToast(String(msg || ''), kind || 'info');
-      } catch (e) {}
+      return toastTerminal(String(msg || ''), kind || 'info');
     }
 
     function show(el) {
@@ -120,5 +97,5 @@
     return { byId, get, set, toast, show, hide };
   }
 
-  window.XKeen.terminal.core.createUiAdapter = createUiAdapter;
+  publishTerminalCoreCompatApi('createUiAdapter', createUiAdapter);
 })();
