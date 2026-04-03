@@ -22,5 +22,11 @@ def test_lite_terminal_output_controller_appends_to_pre_instead_of_hidden_xterm(
     text = Path('xkeen-ui/static/js/terminal/core/output_controller.js').read_text(encoding='utf-8')
 
     assert 'function appendToPre(ctx, text)' in text
-    assert "if (mode === 'pty' && term)" in text
+    assert 'function resolveOutputTarget(ctx, source, term)' in text
+    assert "if (source === 'lite') return 'pre';" in text
+    assert "if (source === 'pty' && term) return 'term';" in text
+    assert "if (source === 'pty') return 'none';" in text
+    assert "const target = resolveOutputTarget(ctx, source, term);" in text
+    assert "if (target === 'term')" in text
+    assert "else if (target === 'pre')" in text
     assert 'appendToPre(ctx, out)' in text

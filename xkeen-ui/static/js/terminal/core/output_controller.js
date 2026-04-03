@@ -130,6 +130,13 @@ import {
     return 'shell';
   }
 
+  function resolveOutputTarget(ctx, source, term) {
+    if (source === 'lite') return 'pre';
+    if (source === 'pty' && term) return 'term';
+    if (source === 'pty') return 'none';
+    return (getMode(ctx) === 'pty' && term) ? 'term' : 'pre';
+  }
+
   function appendToPre(ctx, text) {
     const chunk = String(text == null ? '' : text);
     if (!chunk) return;
@@ -229,12 +236,12 @@ import {
         });
       } catch (e5) {}
 
-      const mode = getMode(ctx);
       const term = resolveTerm(ctx);
-      if (mode === 'pty' && term) {
+      const target = resolveOutputTarget(ctx, source, term);
+      if (target === 'term') {
         try { safeWrite(term, out); } catch (e6) {}
         try { autoFollow(ctx, term); } catch (e7) {}
-      } else {
+      } else if (target === 'pre') {
         try { appendToPre(ctx, out); } catch (e6) {}
         try { autoFollow(ctx, null); } catch (e7) {}
       }
