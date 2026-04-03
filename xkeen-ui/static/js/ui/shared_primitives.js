@@ -137,29 +137,44 @@
     return data;
   }
 
-  async function postJSON(url, body, options) {
-    const opts = (options && typeof options === 'object') ? Object.assign({}, options) : {};
+  function getCsrfToken() {
     try {
-      if (CORE_HTTP && typeof CORE_HTTP.postJSON === 'function') {
-        if (!Object.prototype.hasOwnProperty.call(opts, 'cache')) opts.cache = 'no-store';
-        return await CORE_HTTP.postJSON(url, body || {}, opts);
-      }
-      if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
-        return await CORE_HTTP.fetchJSON(url, Object.assign({
-          cache: 'no-store',
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body || {}),
-        }, opts));
+      if (CORE_HTTP && typeof CORE_HTTP.csrfToken === 'function') {
+        return String(CORE_HTTP.csrfToken() || '');
       }
     } catch (e) {}
+    try {
+      const el = document.querySelector('meta[name="csrf-token"]');
+      return (el && el.getAttribute('content')) ? String(el.getAttribute('content') || '') : '';
+    } catch (e2) {}
+    return '';
+  }
 
+  async function postJSON(url, body, options) {
+    const opts = (options && typeof options === 'object') ? Object.assign({}, options) : {};
+    if (CORE_HTTP && typeof CORE_HTTP.postJSON === 'function') {
+      if (!Object.prototype.hasOwnProperty.call(opts, 'cache')) opts.cache = 'no-store';
+      return await CORE_HTTP.postJSON(url, body || {}, opts);
+    }
+    if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
+      return await CORE_HTTP.fetchJSON(url, Object.assign({
+        cache: 'no-store',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      }, opts));
+    }
+
+    const headers = new Headers(opts.headers || {});
+    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    const csrf = getCsrfToken();
+    if (csrf && !headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', csrf);
     const res = await fetch(url, Object.assign({
       cache: 'no-store',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body || {}),
-    }, opts));
+    }, opts, { headers }));
     let data = null;
     try { data = await res.json(); } catch (e2) {}
     if (!res.ok) {

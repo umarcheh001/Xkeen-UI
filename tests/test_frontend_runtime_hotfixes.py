@@ -22,6 +22,28 @@ def test_update_notifier_postjson_sends_csrf_header():
     assert "headers['X-CSRF-Token'] = csrf" in text
 
 
+def test_devtools_postjson_uses_single_request_path_and_keeps_csrf_on_raw_fallback():
+    devtools_text = Path('xkeen-ui/static/js/features/devtools/shared.js').read_text(encoding='utf-8')
+    ui_text = Path('xkeen-ui/static/js/ui/shared_primitives.js').read_text(encoding='utf-8')
+
+    devtools_body = devtools_text.split('async function postJSON(url, body) {', 1)[1].split('\n\n  function byId', 1)[0]
+    ui_body = ui_text.split('async function postJSON(url, body, options) {', 1)[1].split('\n\n  function wireCollapsibleState', 1)[0]
+
+    assert "try {\n      if (UI && typeof UI.postJSON === 'function')" not in devtools_body
+    assert "try {\n      if (CORE_HTTP && typeof CORE_HTTP.postJSON === 'function')" not in ui_body
+    assert "headers.set('X-CSRF-Token', csrf);" in devtools_body
+    assert "headers.set('X-CSRF-Token', csrf);" in ui_body
+
+
+def test_devtools_whitelist_tokens_keep_update_and_branding_reachable_in_restrictive_setups():
+    template = Path('xkeen-ui/templates/devtools.html').read_text(encoding='utf-8')
+    env_text = Path('xkeen-ui/static/js/features/devtools/env.js').read_text(encoding='utf-8')
+
+    assert 'id="dt-update-card" data-xk-section="service update dt-update-card"' in template
+    assert 'id="dt-branding-card" data-xk-section="ui branding dt-branding-card"' in template
+    assert 'tools,logs,service,update,logging,ui,branding,layout,theme,css,env' in env_text
+
+
 def test_codemirror6_source_bridge_is_opt_in_and_does_not_inject_importmap_dynamically():
     path = Path('xkeen-ui/static/js/pages/codemirror6.shared.js')
     text = path.read_text(encoding='utf-8')

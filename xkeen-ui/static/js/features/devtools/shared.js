@@ -42,27 +42,40 @@ import { getDevtoolsNamespace, setDevtoolsNamespaceApi } from '../devtools_names
     return data;
   }
 
-  async function postJSON(url, body) {
+  function getCsrfToken() {
     try {
-      if (UI && typeof UI.postJSON === 'function') return await UI.postJSON(url, body || {});
-      if (CORE_HTTP && typeof CORE_HTTP.postJSON === 'function') {
-        return await CORE_HTTP.postJSON(url, body || {}, { cache: 'no-store' });
+      if (CORE_HTTP && typeof CORE_HTTP.csrfToken === 'function') {
+        return String(CORE_HTTP.csrfToken() || '');
       }
-      if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
-        return await CORE_HTTP.fetchJSON(url, {
-          cache: 'no-store',
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body || {}),
-        });
-      }
-    } catch (e) {
-      // Fall back to legacy implementation below
+    } catch (e) {}
+    try {
+      const el = document.querySelector('meta[name="csrf-token"]');
+      return (el && el.getAttribute('content')) ? String(el.getAttribute('content') || '') : '';
+    } catch (e2) {}
+    return '';
+  }
+
+  async function postJSON(url, body) {
+    if (UI && typeof UI.postJSON === 'function') return await UI.postJSON(url, body || {});
+    if (CORE_HTTP && typeof CORE_HTTP.postJSON === 'function') {
+      return await CORE_HTTP.postJSON(url, body || {}, { cache: 'no-store' });
     }
+    if (CORE_HTTP && typeof CORE_HTTP.fetchJSON === 'function') {
+      return await CORE_HTTP.fetchJSON(url, {
+        cache: 'no-store',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
+    }
+
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    const csrf = getCsrfToken();
+    if (csrf && !headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', csrf);
     const res = await fetch(url, {
       cache: 'no-store',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(body || {}),
     });
     let data = null;
