@@ -287,6 +287,8 @@ let _monacoFacade = null;
 let _monacoFsWired = false;
 let _active = null; // facade: {getValue,setValue,focus,layout,dispose}
 let _isEditable = false;
+let _previewRequestSeq = 0;
+let _profileDefaultsRequestSeq = 0;
 
 const CM6_SCOPE = 'mihomo-generator';
 
@@ -765,6 +767,7 @@ function initEngineToggle() {
       
         function schedulePreview(delay = 300) {
           if (!_active) return;
+          if (_isEditable) return;
           clearTimeout(previewTimeout);
           previewTimeout = setTimeout(() => {
             generatePreviewDemo(false);
@@ -1367,11 +1370,15 @@ function initEngineToggle() {
         
         async function loadProfileDefaults(profile) {
           const p = profile || (profileSelect && profileSelect.value) || "router_custom";
+          const requestSeq = ++_profileDefaultsRequestSeq;
           try {
             const res = await fetch("/api/mihomo/profile_defaults?profile=" + encodeURIComponent(p));
             if (!res.ok) return;
             const data = await res.json();
             if (!data || data.ok === false) return;
+            const currentProfile = (profileSelect && profileSelect.value) || "router_custom";
+            if (requestSeq !== _profileDefaultsRequestSeq) return;
+            if (String(currentProfile || "router_custom") !== String(p || "router_custom")) return;
       
             const enabled = Array.isArray(data.enabledRuleGroups)
               ? data.enabledRuleGroups
@@ -2600,6 +2607,7 @@ function initEngineToggle() {
             }
             return;
           }
+          if (!manual && _isEditable) return;
       
           updateStateSummary(state);
           const validation = validateState(state, "preview");
@@ -2633,6 +2641,8 @@ function initEngineToggle() {
             setStatus("Генерирую предпросмотр на сервере...", "ok");
           }
       
+          const requestSeq = ++_previewRequestSeq;
+
           fetch("/api/mihomo/preview", {
             method: "POST",
             headers: {
@@ -2642,6 +2652,8 @@ function initEngineToggle() {
           })
             .then(resp => resp.json().catch(() => ({})).then(data => ({ ok: resp.ok, status: resp.status, data })))
             .then(({ ok, status, data }) => {
+              if (requestSeq !== _previewRequestSeq) return;
+              if (!manual && _isEditable) return;
               if (!ok || !data || data.ok === false) {
                 const msg = (data && (data.error || data.message)) || "Не удалось сгенерировать предпросмотр.";
                 setStatus(msg, "err");
@@ -2684,6 +2696,7 @@ function initEngineToggle() {
                 }
                 return;
               }
+              if (!manual && _isEditable) return;
               setEditorText(cfg);
 
               const serverWarnings = uniqueStrings(Array.isArray(data.warnings) ? data.warnings : []);
@@ -2722,6 +2735,7 @@ function initEngineToggle() {
               }
             })
             .catch(err => {
+              if (requestSeq !== _previewRequestSeq) return;
               console.error("preview error", err);
               const msg = "Ошибка генерации предпросмотра: " + err;
               setStatus(msg, "err");

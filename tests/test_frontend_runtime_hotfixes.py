@@ -44,6 +44,21 @@ def test_devtools_whitelist_tokens_keep_update_and_branding_reachable_in_restric
     assert 'tools,logs,service,update,logging,ui,branding,layout,theme,css,env' in env_text
 
 
+def test_mihomo_generator_ignores_stale_profile_defaults_and_auto_preview_overwrites():
+    text = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+
+    assert 'let _previewRequestSeq = 0;' in text
+    assert 'let _profileDefaultsRequestSeq = 0;' in text
+    assert 'if (_isEditable) return;' in text
+    assert 'const requestSeq = ++_profileDefaultsRequestSeq;' in text
+    assert 'const currentProfile = (profileSelect && profileSelect.value) || "router_custom";' in text
+    assert 'if (requestSeq !== _profileDefaultsRequestSeq) return;' in text
+    assert 'if (String(currentProfile || "router_custom") !== String(p || "router_custom")) return;' in text
+    assert 'const requestSeq = ++_previewRequestSeq;' in text
+    assert 'if (!manual && _isEditable) return;' in text
+    assert text.count('if (requestSeq !== _previewRequestSeq) return;') >= 2
+
+
 def test_codemirror6_source_bridge_is_opt_in_and_does_not_inject_importmap_dynamically():
     path = Path('xkeen-ui/static/js/pages/codemirror6.shared.js')
     text = path.read_text(encoding='utf-8')
