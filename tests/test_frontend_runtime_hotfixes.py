@@ -44,6 +44,19 @@ def test_devtools_whitelist_tokens_keep_update_and_branding_reachable_in_restric
     assert 'tools,logs,service,update,logging,ui,branding,layout,theme,css,env' in env_text
 
 
+def test_devtools_env_help_button_keeps_required_modal_shell_ids():
+    template = Path('xkeen-ui/templates/devtools.html').read_text(encoding='utf-8')
+    env_text = Path('xkeen-ui/static/js/features/devtools/env.js').read_text(encoding='utf-8')
+
+    assert 'id="dt-env-help-btn"' in template
+    assert 'id="dt-env-help-modal"' in template
+    assert 'id="dt-env-help-body"' in template
+    assert 'id="dt-env-help-close-btn"' in template
+    assert 'id="dt-env-help-ok-btn"' in template
+    assert "const modal = byId('dt-env-help-modal');" in env_text
+    assert "const body = byId('dt-env-help-body');" in env_text
+
+
 def test_mihomo_generator_ignores_stale_profile_defaults_and_auto_preview_overwrites():
     text = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
 
