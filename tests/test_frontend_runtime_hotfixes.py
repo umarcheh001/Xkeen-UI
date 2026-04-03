@@ -174,6 +174,27 @@ def test_routing_comments_ux_listener_is_guarded_after_init_flag():
     assert text.index('if (_inited) return;') < text.index("document.addEventListener('xkeen:routing-comments-ux', (ev) => {")
 
 
+def test_mihomo_template_load_button_uses_dirty_guard_while_select_path_skips_duplicate_prompt():
+    text = Path('xkeen-ui/static/js/features/mihomo_panel.js').read_text(encoding='utf-8')
+
+    assert 'async function confirmDiscardDirtyEditorChanges(opts)' in text
+    assert "MP.loadSelectedTemplateToEditor = async function loadSelectedTemplateToEditor(opts) {" in text
+    assert "const confirmDirty = !Object.prototype.hasOwnProperty.call(options, 'confirmDirty') || !!options.confirmDirty;" in text
+    assert "if (confirmDirty && !(await confirmDiscardDirtyEditorChanges({" in text
+    assert "const loaded = await MP.loadSelectedTemplateToEditor({ confirmDirty: false });" in text
+
+
+def test_mihomo_server_side_config_swaps_resync_editor_after_activate_and_restore():
+    text = Path('xkeen-ui/static/js/features/mihomo_panel.js').read_text(encoding='utf-8')
+
+    assert "async function loadLiveConfigIntoEditor()" in text
+    assert text.count("const syncResult = await loadLiveConfigIntoEditor();") >= 2
+    assert "const res = await fetch('/api/mihomo/profiles/' + encodeURIComponent(name) + '/activate', { method: 'POST' });" in text
+    assert "const res = await fetch('/api/mihomo/backups/' + encodeURIComponent(filename) + '/restore', { method: 'POST' });" in text
+    assert "config.yaml уже изменён на сервере, но редактор не удалось обновить." in text
+    assert "Восстановление из бэкапа заменит текущее содержимое редактора." in text
+
+
 def test_routing_dat_card_keeps_visible_current_file_labels_in_sync_with_selected_names():
     ids_text = Path('xkeen-ui/static/js/features/routing_cards/ids.js').read_text(encoding='utf-8')
     panel_text = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')

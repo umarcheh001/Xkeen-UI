@@ -1282,6 +1282,47 @@ let mihomoPanelModuleApi = null;
     }
   }
 
+  async function loadLiveConfigIntoEditor() {
+    try {
+      const res = await fetch('/api/mihomo-config');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        return {
+          ok: false,
+          error: (data && data.error) || 'Не удалось загрузить config.yaml.',
+        };
+      }
+
+      const content = data.content || '';
+      setEditorTextClean(content);
+      try {
+        const savedView = loadSavedViewState(_engine);
+        if (savedView) restoreCurrentViewState(savedView);
+      } catch (e) {}
+      try { bindViewStateTracking(); } catch (e2) {}
+
+      return { ok: true, content };
+    } catch (e) {
+      console.error(e);
+      return { ok: false, error: 'Ошибка загрузки config.yaml.' };
+    }
+  }
+
+  async function confirmDiscardDirtyEditorChanges(opts) {
+    if (!isEditorDirty()) return true;
+
+    const o = opts || {};
+    const message = String(o.message || 'Несохранённые изменения в редакторе будут потеряны. Продолжить?');
+    const danger = !Object.prototype.hasOwnProperty.call(o, 'danger') || !!o.danger;
+    return !!(await confirmAction({
+      title: String(o.title || 'Продолжить'),
+      message,
+      okText: String(o.okText || 'Продолжить'),
+      cancelText: String(o.cancelText || 'Отмена'),
+      danger,
+    }, message));
+  }
+
   // ---------- Core actions ----------
 
   // opts:
@@ -1839,7 +1880,10 @@ let mihomoPanelModuleApi = null;
     }
   };
 
-  MP.loadSelectedTemplateToEditor = async function loadSelectedTemplateToEditor() {
+  MP.loadSelectedTemplateToEditor = async function loadSelectedTemplateToEditor(opts) {
+    const options = opts || {};
+    const confirmDirty = !Object.prototype.hasOwnProperty.call(options, 'confirmDirty') || !!options.confirmDirty;
+
     try {
       if (!_templatesLoaded) {
         await MP.loadTemplatesList({ silent: true });
@@ -1882,6 +1926,16 @@ let mihomoPanelModuleApi = null;
         }
       } else {
         _chosenTemplateName = chosen;
+      }
+
+      if (confirmDirty && !(await confirmDiscardDirtyEditorChanges({
+        title: 'Загрузить шаблон',
+        message: 'Заменить содержимое редактора шаблоном "' + (_chosenTemplateName || 'template') + '"? Несохранённые изменения будут потеряны.',
+        okText: 'Загрузить',
+        cancelText: 'Отмена',
+      }))) {
+        setStatus('Загрузка шаблона отменена.', false);
+        return false;
       }
 
       setStatus('Загрузка шаблона...', false);
@@ -2153,6 +2207,13 @@ let mihomoPanelModuleApi = null;
       }
 
       if (action === 'activate') {
+        if (!(await confirmDiscardDirtyEditorChanges({
+          title: 'Активировать профиль',
+          message: 'Активировать профиль ' + name + '? Несохранённые изменения в редакторе будут потеряны, а config.yaml будет заменён содержимым профиля.',
+          okText: 'Активировать',
+          cancelText: 'Отмена',
+        }))) return;
+
         try {
           const res = await fetch('/api/mihomo/profiles/' + encodeURIComponent(name) + '/activate', { method: 'POST' });
           const data = await res.json().catch(() => ({}));
@@ -2163,6 +2224,10 @@ let mihomoPanelModuleApi = null;
           let msg = 'Профиль ' + name + ' активирован.';
           setStatus(msg, false, !!(data && data.restarted));
           await MP.loadProfiles();
+          const syncResult = await loadLiveConfigIntoEditor();
+          if (!syncResult.ok) {
+            setStatus(msg + ' config.yaml уже изменён на сервере, но редактор не удалось обновить. Загрузите config.yaml ещё раз.', true);
+          }
           if (data.restarted) {
             try { refreshRestartLog(); } catch (e) {}
           }
@@ -2240,6 +2305,13 @@ let mihomoPanelModuleApi = null;
       }
 
       if (action === 'restore') {
+        if (!(await confirmDiscardDirtyEditorChanges({
+          title: 'Восстановить бэкап',
+          message: 'Восстановление из бэкапа заменит текущее содержимое редактора. Несохранённые изменения будут потеряны.',
+          okText: 'Продолжить',
+          cancelText: 'Отмена',
+        }))) return;
+
         const ok = await confirmAction({
           title: 'Восстановить бэкап',
           message: 'Восстановить конфиг из бэкапа ' + filename + '?',
@@ -2256,8 +2328,15 @@ let mihomoPanelModuleApi = null;
             return;
           }
           let msg = 'Бэкап ' + filename + ' восстановлен.';
-          if (!data.restarted) msg += ' Загрузите config.yaml ещё раз.';
           setStatus(msg, false, !!(data && data.restarted));
+          const syncResult = await loadLiveConfigIntoEditor();
+          if (syncResult.ok) {
+            if (!data.restarted) {
+              setStatus('Бэкап ' + filename + ' восстановлен. Перезапуск не выполнен автоматически.', false);
+            }
+          } else {
+            setStatus('Бэкап ' + filename + ' восстановлен, но редактор не удалось обновить. Загрузите config.yaml ещё раз.', true);
+          }
           try { if (data.restarted) refreshRestartLog(); } catch (e) {}
         } catch (err) {
           console.error(err);
@@ -2364,7 +2443,7 @@ let mihomoPanelModuleApi = null;
             }
           }
 
-          const loaded = await MP.loadSelectedTemplateToEditor();
+          const loaded = await MP.loadSelectedTemplateToEditor({ confirmDirty: false });
           if (!loaded) {
             try { tplSel.value = prev; } catch (e) {}
             return;
