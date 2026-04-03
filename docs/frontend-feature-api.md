@@ -101,7 +101,7 @@ export function initFeature() {
 
 ## Что остаётся в compat-слое после закрытия stages 0-6
 
-После PR-A...PR-F canonical path уже считается закрытым:
+После полного закрытия stages 0-6 canonical path считается закрытым:
 
 - business-код не должен читать `window.XKeen.features.*` как source of truth;
 - compat publish допустим только как узкий мост для старых скриптов;

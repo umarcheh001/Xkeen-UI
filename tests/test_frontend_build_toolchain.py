@@ -74,9 +74,14 @@ def test_frontend_build_ci_and_status_docs_are_closed():
     assert 'verify_frontend_build.mjs' in workflow_text
 
     readme_text = BUILD_WORKFLOW_DOC.read_text(encoding='utf-8')
+    assert 'ci.yml' in readme_text
     assert 'build-user-archive.yml' in readme_text
     assert 'npm ci' in readme_text
     assert 'npm run frontend:build' in readme_text
+    assert 'python -m pytest -q' in readme_text
+    assert 'npm run frontend:verify' in readme_text
     assert 'sync_frontend_vendor.py' in readme_text
     assert 'sync_frontend_build_manifest.py' in readme_text
     assert 'verify_frontend_build.mjs' in readme_text
+    assert 'python-ui-ci.yml' not in readme_text
+    assert 'CI выполняет `npm ci` и `npm run frontend:verify`' not in readme_text

@@ -1,6 +1,6 @@
-# Frontend Build Workflow (Stage 7)
+# Frontend Build Workflow
 
-Этот документ фиксирует reproducible build workflow для фронтенда, который был введён на Stage 7 и остаётся действующим после полного закрытия stages 0-8.
+Этот документ фиксирует текущий reproducible build workflow для фронтенда. Migration scope уже закрыт; дальше это living reference для install/build/verify path, а не stage-by-stage rollout note.
 
 ## Что теперь считается canonical build path
 
@@ -11,15 +11,15 @@
 - `vite.config.mjs` — build graph для canonical page entrypoints;
 - `scripts/sync_frontend_vendor.py` — reproducible sync generated `static/vendor` runtime assets из `node_modules`;
 - `scripts/verify_frontend_build.mjs` — проверка, что raw build graph и bridge graph не разъехались;
-- `scripts/sync_frontend_build_manifest.py` — sync thin bridge wrappers для runtime contract stages 3/8.
+- `scripts/sync_frontend_build_manifest.py` — sync thin bridge wrappers для runtime contract.
 
 ## Два manifest-файла и зачем они нужны
 
-На Stage 7 репозиторий осознанно держит **два связанных manifest-слоя**:
+Репозиторий осознанно держит два связанных manifest-слоя:
 
 1. `xkeen-ui/static/frontend-build/.vite/manifest.build.json`
 
-   Это **raw Vite manifest**. Он описывает реальный build output:
+   Это raw Vite manifest. Он описывает реальный build output:
 
    - canonical page entrypoints;
    - hashed entry chunks;
@@ -27,16 +27,17 @@
 
 2. `xkeen-ui/static/frontend-build/.vite/manifest.json`
 
-   Это **runtime bridge manifest**, который продолжает обслуживать текущий stage-3/stage-8 transition contract:
+   Это runtime bridge manifest:
 
-   - production/runtime path всё ещё смотрит на thin wrappers;
+   - production/runtime path смотрит на thin wrappers;
    - wrapper-файлы остаются import-only;
-   - canonical source of truth для runtime bridge пока не меняется.
+   - canonical source of truth для page graph остаётся в `static/js/pages/*.entry.js`.
 
 Такое разделение нужно специально:
 
-- Stage 7 делает build **воспроизводимым**;
-- Stage 8 опирается на тот же bridge manifest, но переводит production helper в build-only режим без page-by-page gating.
+- source graph остаётся главным архитектурным контрактом;
+- build output не живёт отдельной архитектурой;
+- runtime bridge можно проверять и синхронизировать отдельно от raw build graph.
 
 ## Почему Vite здесь не тянет CodeMirror из npm graph
 
@@ -46,7 +47,7 @@
 
 - build остаётся воспроизводимым;
 - browser runtime продолжает использовать существующий importmap contract;
-- Stage 7 не ломает stage-6 runtime/template contract.
+- frontend build не ломает page/runtime contract.
 
 ## Базовый workflow
 
@@ -84,9 +85,7 @@ npm run frontend:build
 - `xkeen-ui/static/frontend-build/.vite/manifest.build.json`
 - `xkeen-ui/static/frontend-build/.vite/manifest.json`
 
-При этом bridge manifest остаётся отдельным contract-слоем, через который normal production path резолвит build-managed wrappers, но его sync теперь входит в canonical `frontend:build`.
-
-### 3. Проверка результата
+### 3. Статическая проверка результата
 
 ```bash
 npm run frontend:verify:static
@@ -100,7 +99,7 @@ npm run frontend:verify:static
 - raw build manifest содержит все canonical page entrypoints;
 - соответствующие build assets реально существуют.
 
-### 4. Полная локальная проверка Stage 7
+### 4. Полная локальная проверка
 
 ```bash
 npm run frontend:verify
@@ -112,34 +111,19 @@ npm run frontend:verify
 2. проверяет raw build manifest;
 3. проверяет bridge manifest/wrapper contract.
 
-## Историческое ограничение Stage 7 и что изменилось на Stage 8
+## Что должно оставаться верным
 
-Исторически Stage 7 **не** делал production build-only: он фиксировал toolchain, но сознательно оставлял production helper в переходном состоянии.
-
-На закрытом Stage 8 это уже доведено до целевого режима:
-
-- production helper по-прежнему живёт через bridge manifest;
-- thin wrappers по-прежнему импортируют canonical source entries;
-- `ui_assets.py` теперь требует build-managed entry в normal production flow;
-- source fallback разрешён только для dev/test/debug через явный `XKEEN_UI_FRONTEND_SOURCE_FALLBACK=1` или testing/debug context.
-
-## Что считать успехом Stage 7
-
-Stage 7 считается закрытым, когда одновременно выполняется всё ниже:
+Текущий build workflow считается корректным, когда одновременно выполняется всё ниже:
 
 - новый разработчик может сделать `npm ci` и `npm run frontend:build` без ручного знания "откуда вообще взялась папка frontend-build";
 - raw build manifest появляется из репозитория воспроизводимо;
 - bridge manifest не дрейфует относительно canonical page entrypoints;
 - build graph и runtime bridge graph проверяются отдельной командой;
-- CI выполняет `npm ci` и `npm run frontend:verify` на frontend/toolchain-изменениях.
+- CI и archive workflows используют тот же canonical build path, что и локальная сборка.
 
-## Current CI and archive workflow
+## Current CI and archive workflows
 
-The current archive workflow is .github/workflows/build-user-archive.yml.
-
-Current pipeline steps:
-- `npm ci`
-- `npm run frontend:build`
-- `node scripts/verify_frontend_build.mjs`
-
-CI and archive flow are aligned around the canonical `frontend:build` entrypoint, which now also performs vendor sync, wrapper sync and stale-file pruning.
+- `.github/workflows/ci.yml` выполняет `npm ci`, `npm run frontend:build`, `python -m pytest -q` и `node scripts/verify_frontend_build.mjs`.
+- `.github/workflows/build-user-archive.yml` выполняет `npm ci`, `npm run frontend:build` и `node scripts/verify_frontend_build.mjs`.
+- Локальная полная проверка по-прежнему доступна через `npm run frontend:verify`.
+- CI и archive flow выровнены вокруг canonical `frontend:build`, который выполняет vendor sync, wrapper sync и stale-file pruning.

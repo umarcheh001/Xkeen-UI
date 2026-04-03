@@ -82,15 +82,20 @@ def test_panel_runtime_bundle_files_exist_for_current_architecture():
 
 def test_frontend_migration_docs_exist_for_current_contract():
     required_docs = [
+        DOCS_DIR / "README.md",
         DOCS_DIR / "README_frontend_migration_plan.md",
         DOCS_DIR / "frontend-target-architecture.md",
         DOCS_DIR / "frontend-feature-api.md",
         DOCS_DIR / "frontend-page-inventory.md",
+        DOCS_DIR / "frontend-build-workflow.md",
         DOCS_DIR / "adr" / "0001-frontend-esm-bootstrap.md",
     ]
 
     for path in required_docs:
         assert path.is_file(), f"missing frontend migration doc: {path.relative_to(ROOT).as_posix()}"
+    assert not (DOCS_DIR / "frontend-stage6-implementation-plan.md").exists(), (
+        "historical stage-specific implementation plan should be removed from docs/"
+    )
 
 
 
@@ -121,55 +126,55 @@ def test_stage0_to_stage3_docs_are_frozen_and_non_reopenable():
         assert fragment in feature_api_src, f"missing stage 0-3 freeze fragment in frontend-feature-api.md: {fragment}"
 
 
-def test_stage6_status_docs_record_completion_and_remaining_stages():
+def test_frontend_status_docs_focus_on_closed_current_state():
+    docs_index_src = (DOCS_DIR / "README.md").read_text(encoding="utf-8")
     readme_src = (DOCS_DIR / "README_frontend_migration_plan.md").read_text(encoding="utf-8")
-    stage6_src = (DOCS_DIR / "frontend-stage6-implementation-plan.md").read_text(encoding="utf-8")
     inventory_src = (DOCS_DIR / "frontend-page-inventory.md").read_text(encoding="utf-8")
     feature_api_src = (DOCS_DIR / "frontend-feature-api.md").read_text(encoding="utf-8")
 
+    docs_index_required = [
+        "Исторические пошаговые rollout-планы в `docs/` больше не поддерживаются.",
+        "`README_frontend_migration_plan.md`",
+        "`frontend-target-architecture.md`",
+        "`frontend-feature-api.md`",
+        "`frontend-page-inventory.md`",
+        "`frontend-build-workflow.md`",
+    ]
     readme_required = [
+        "Frontend migration закрыта: **stages 0-9 fully closed**.",
+        "Этот файл больше не является пошаговым rollout-планом.",
+        "Исторические stage-by-stage implementation plans удалены из `docs/`",
         "Этапы 4-6 уже закрыты и подтверждены кодом, guardrails и статусной документацией.",
-        "**stages 0-6 fully closed**",
-        "**stages 0-8 fully closed**",
-        "**stages 0-9 fully closed**",
-        "| 6. Очистить Flask templates от переходных допущений | Закрыт |",
-        "| 7. Сделать сборку воспроизводимой и явной | Закрыт |",
-        "Этап 6 закрыт окончательно. Финальный template/runtime contract доведён до целевого состояния",
-        "Этап 7 закрыт. Репозиторий больше не зависит от неформального знания",
-        "- `templates/panel.html` и `templates/devtools.html` публикуют только canonical `window.XKeen.pageConfig`;",
-        "Это и есть реальный итоговый migration scope после полного закрытия stages 0-9.",
-        "| 8. Переключить production на build-only режим | Закрыт |",
-        "Этап 8 закрыт.",
+        "- `panel`/`devtools` публикуют только canonical `window.XKeen.pageConfig`;",
+        "Stages 7-9 тоже закрыты и теперь считаются частью обычного repository contract.",
         "`XKEEN_UI_FRONTEND_SOURCE_FALLBACK=1`",
-        "| 9. Финальная чистка технического долга | Закрыт |",
-        "Этап 9 закрыт.",
         "`legacy_script_loader.js` удалён",
-        "`window.XKeen.lazy`",
-        "**stages 0-9 fully closed**",
+        "`lazy_runtime.js` остаётся только узким runtime adapter-слоем",
+        "`.github/workflows/ci.yml`",
+        "`.github/workflows/build-user-archive.yml`",
     ]
     readme_forbidden = [
-        "| 6. Очистить Flask templates от переходных допущений | Открыт |",
-        "- Этап 6: templates/runtime contract;",
-    ]
-    stage6_required = [
-        "## Статус на 31.03.2026",
-        "Этап 6 завершён окончательно.",
-        "официально закрывает stages 0-6",
-        "- `templates/panel.html` и `templates/devtools.html` публикуют только `window.XKeen.pageConfig`;",
-        "### Commit D. Final cleanup and guardrails — выполнен",
-        "Этап 6 считается завершённым, и текущий репозиторий уже соответствует всем пунктам ниже:",
+        "Что осталось до честного финала migration scope",
+        "## Этап 6.",
+        "## Этап 7.",
+        "## Этап 8.",
+        "## Этап 9.",
+        "## Рекомендуемый порядок выполнения",
+        "python-ui-ci.yml",
+        "template dual-write",
+        "PR-A...PR-F",
     ]
     inventory_required = [
         "template публикует только canonical `window.XKeen.pageConfig`",
         "Для stages 0-9 migration contract считается закрытым",
     ]
 
+    for fragment in docs_index_required:
+        assert fragment in docs_index_src, f"missing docs index fragment in docs/README.md: {fragment}"
     for fragment in readme_required:
-        assert fragment in readme_src, f"missing Stage 6 completion fragment in README_frontend_migration_plan.md: {fragment}"
+        assert fragment in readme_src, f"missing current-state fragment in README_frontend_migration_plan.md: {fragment}"
     for fragment in readme_forbidden:
-        assert fragment not in readme_src, f"Stage 6 status docs should no longer describe Stage 6 as open in README_frontend_migration_plan.md: {fragment}"
-    for fragment in stage6_required:
-        assert fragment in stage6_src, f"missing final Stage 6 status fragment in frontend-stage6-implementation-plan.md: {fragment}"
+        assert fragment not in readme_src, f"status doc should not keep stale rollout wording in README_frontend_migration_plan.md: {fragment}"
     for fragment in inventory_required:
         assert fragment in inventory_src, f"missing final pageConfig contract note in frontend-page-inventory.md: {fragment}"
 
@@ -182,6 +187,7 @@ def test_stage6_status_docs_record_completion_and_remaining_stages():
     feature_api_forbidden = [
         "проект всё ещё находится в переходной фазе",
         "Приоритетные зоны для дальнейшей чистки:",
+        "После PR-A...PR-F canonical path уже считается закрытым:",
         "`mihomo_panel`",
         "`mihomo_import`",
         "`mihomo_proxy_tools`",
