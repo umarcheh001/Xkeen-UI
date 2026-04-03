@@ -256,7 +256,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
   }
 
   async function refreshAll() {
-    await Promise.all([listPanel('left', { fromInput: true }), listPanel('right', { fromInput: true })]);
+    await Promise.all([listPanel('left', { fromInput: false }), listPanel('right', { fromInput: false })]);
   }
 
   // exports

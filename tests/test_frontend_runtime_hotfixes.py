@@ -256,3 +256,11 @@ def test_xray_logs_height_prefs_keep_local_draft_and_survive_hidden_view_saves()
     assert 'applyInitialLogWindowHeightFromStoredState(st);' in text
     assert text.index('applyInitialLogWindowHeightFromStoredState(st);') < text.index('if (_seedMarkerIsSet()) return;')
     assert 'if (_logsViewPrefsUserTouched) persistLocalLogsViewDraft();' in text
+
+
+def test_file_manager_non_navigation_refreshes_do_not_consume_path_input_drafts():
+    editor_text = Path('xkeen-ui/static/js/features/file_manager/editor.js').read_text(encoding='utf-8')
+    listing_text = Path('xkeen-ui/static/js/features/file_manager/listing.js').read_text(encoding='utf-8')
+
+    assert "if (ctx.side && typeof lp === 'function') await lp(ctx.side, { fromInput: false });" in editor_text
+    assert "await Promise.all([listPanel('left', { fromInput: false }), listPanel('right', { fromInput: false })]);" in listing_text

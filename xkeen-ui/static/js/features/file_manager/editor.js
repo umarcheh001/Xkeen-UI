@@ -1549,7 +1549,7 @@ function syncToolbarForEngine(engine) {
 
     try {
       const lp = api().listPanel;
-      if (ctx.side && typeof lp === 'function') await lp(ctx.side, { fromInput: true });
+      if (ctx.side && typeof lp === 'function') await lp(ctx.side, { fromInput: false });
     } catch (e) {}
   }
 
