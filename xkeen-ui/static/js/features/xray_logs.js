@@ -71,6 +71,7 @@ let xrayLogsModuleApi = null;
   const STORAGE_KEY = 'xkeen.ui.xrayLogs.v1';
   const SEED_KEY = 'xkeen.seed.logsPrefs.v1';
   const FILTER_APPLY_DEBOUNCE_MS = 180;
+  const LOG_WINDOW_MIN_HEIGHT = 420;
 
   let _maxLines = DEFAULT_MAX_LINES;
   let _pollMs = DEFAULT_POLL_MS;
@@ -317,6 +318,15 @@ let xrayLogsModuleApi = null;
     return out;
   }
 
+  function _readLogsViewPrefsTs(value) {
+    try {
+      const ts = parseInt(value && value.ts, 10);
+      return isFinite(ts) && ts > 0 ? ts : 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
   async function _saveLogsViewPrefsToServerBestEffort(reason) {
     try {
       const settingsApi = getSettingsApi();
@@ -372,6 +382,25 @@ let xrayLogsModuleApi = null;
         } catch (e) {
           console.warn('ui-settings: seed from localStorage failed', e);
         }
+      }
+    }
+
+    // Keep the latest browser-local draft if it is newer than the server copy.
+    // This covers quick exits after a manual resize, when the async server save
+    // may not have finished yet but the browser already has the right height.
+    const localDraft = _extractViewPrefsFromLegacy(readStoredUiState());
+    const localDraftTs = _readLogsViewPrefsTs(localDraft);
+    const serverViewTs = _readLogsViewPrefsTs(view);
+    if (
+      !_isViewPrefsEmpty(localDraft) &&
+      (_isViewPrefsEmpty(view) || localDraftTs > serverViewTs)
+    ) {
+      view = Object.assign({}, view || {}, localDraft || {});
+      try {
+        await settingsApi.patch({ logs: { view: view } });
+        _setSeedMarker();
+      } catch (e) {
+        console.warn('ui-settings: failed to promote local logs view draft', e);
       }
     }
 
@@ -566,15 +595,7 @@ let xrayLogsModuleApi = null;
   function readXrayLogsViewState(dom, runtimeState) {
     const refs = dom || getXrayLogsDom();
     const runtime = runtimeState || readXrayLogsRuntimeState();
-
-    let height = null;
-    try {
-      if (refs.output) height = Math.round(refs.output.getBoundingClientRect().height);
-    } catch (e) {}
-
-    if (runtime.isFullscreen && runtime.heightBeforeFullscreen != null) {
-      height = runtime.heightBeforeFullscreen;
-    }
+    const height = _resolveLogWindowHeight(refs, runtime);
 
     return {
       file: String((refs.file && refs.file.value) || runtime.currentFile || 'access'),
@@ -1192,6 +1213,50 @@ let xrayLogsModuleApi = null;
     } catch (e) {}
   }
 
+  function mergeStoredUiState(next) {
+    const cur = (next && typeof next === 'object' && !Array.isArray(next)) ? next : {};
+    const prev = readStoredUiState();
+    writeStoredUiState(Object.assign({}, prev || {}, cur || {}));
+  }
+
+  function _normalizeLogWindowHeight(value) {
+    try {
+      let height = parseInt(value, 10);
+      if (!isFinite(height) || height <= 0) return null;
+      if (height < LOG_WINDOW_MIN_HEIGHT) height = LOG_WINDOW_MIN_HEIGHT;
+      return height;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function _resolveLogWindowHeight(refs, runtimeState) {
+    const dom = refs || getXrayLogsDom();
+    const runtime = runtimeState || readXrayLogsRuntimeState();
+
+    const fullscreenHeight = _normalizeLogWindowHeight(runtime && runtime.heightBeforeFullscreen);
+    if (runtime && runtime.isFullscreen && fullscreenHeight != null) return fullscreenHeight;
+
+    try {
+      if (dom.output) {
+        const measured = _normalizeLogWindowHeight(Math.round(dom.output.getBoundingClientRect().height));
+        if (measured != null) return measured;
+      }
+    } catch (e) {}
+
+    try {
+      const inlineHeight = _normalizeLogWindowHeight(dom.output && dom.output.style ? dom.output.style.height : null);
+      if (inlineHeight != null) return inlineHeight;
+    } catch (e) {}
+
+    try {
+      const storedHeight = _normalizeLogWindowHeight(readStoredUiState().height);
+      if (storedHeight != null) return storedHeight;
+    } catch (e) {}
+
+    return LOG_WINDOW_MIN_HEIGHT;
+  }
+
   function collectUiState() {
     return readXrayLogsViewState(getXrayLogsDom(), readXrayLogsRuntimeState());
   }
@@ -1201,6 +1266,10 @@ let xrayLogsModuleApi = null;
     if (_logsViewPrefsApplying) return;
 
     _logsViewPrefsUserTouched = true;
+
+    // Keep a synchronous browser-local draft so quick tab switches or page exits
+    // cannot lose the latest user-resized height before the async server save runs.
+    try { mergeStoredUiState(collectUiState()); } catch (e) {}
 
     try {
       if (_saveTimer) clearTimeout(_saveTimer);
@@ -1214,10 +1283,7 @@ let xrayLogsModuleApi = null;
         if (saved) return;
 
         // Fallback: legacy localStorage (keeps UX working if /api/ui-settings is unavailable)
-        const prev = readStoredUiState();
-        const cur = collectUiState();
-        // merge (keep any unknown future fields)
-        writeStoredUiState(Object.assign({}, prev || {}, cur || {}));
+        mergeStoredUiState(collectUiState());
       })();
     }, 250);
   }
@@ -1267,10 +1333,8 @@ let xrayLogsModuleApi = null;
 
     // log window height
     try {
-      let h = parseInt(prefs.height, 10);
-      if (isFinite(h)) {
-        // Keep consistent with CSS min-height.
-        if (h < 420) h = 420;
+      const h = _normalizeLogWindowHeight(prefs.height);
+      if (h != null) {
         if (dom.output) dom.output.style.height = String(h) + 'px';
       }
     } catch (e) {}
@@ -3806,6 +3870,7 @@ function bindFilterUi() {
     // Clean up WS on page unload
     try {
       window.addEventListener('beforeunload', () => {
+        try { mergeStoredUiState(collectUiState()); } catch (e3) {}
         try { stopXrayLogAuto(); } catch (e) {}
         try { if (_statusTimer) clearInterval(_statusTimer); } catch (e2) {}
         _statusTimer = null;

@@ -240,3 +240,14 @@ def test_panel_shell_dat_fallback_rehydrates_current_card_before_deferring_and_d
     assert "if (datBody.dataset) datBody.dataset.xkDatCardWired = '1';" in card_text
     assert "refs.name.dispatchEvent(new Event('input', { bubbles: true }));" in text
     assert "refs.name.dispatchEvent(new Event('change', { bubbles: true }));" in text
+
+
+def test_xray_logs_height_prefs_keep_local_draft_and_survive_hidden_view_saves():
+    text = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
+
+    assert 'const LOG_WINDOW_MIN_HEIGHT = 420;' in text
+    assert 'function _resolveLogWindowHeight(refs, runtimeState)' in text
+    assert 'const storedHeight = _normalizeLogWindowHeight(readStoredUiState().height);' in text
+    assert 'const height = _resolveLogWindowHeight(refs, runtime);' in text
+    assert "try { mergeStoredUiState(collectUiState()); } catch (e) {}" in text
+    assert "ui-settings: failed to promote local logs view draft" in text
