@@ -249,8 +249,10 @@ def test_xray_logs_height_prefs_keep_local_draft_and_survive_hidden_view_saves()
     assert 'function _resolveLogWindowHeight(refs, runtimeState)' in text
     assert 'const storedHeight = _normalizeLogWindowHeight(readStoredUiState().height);' in text
     assert 'const height = _resolveLogWindowHeight(refs, runtime);' in text
-    assert "try { mergeStoredUiState(collectUiState()); } catch (e) {}" in text
+    assert 'function persistLocalLogsViewDraft()' in text
+    assert 'persistLocalLogsViewDraft();' in text
     assert "ui-settings: failed to promote local logs view draft" in text
     assert 'function applyInitialLogWindowHeightFromStoredState(st)' in text
     assert 'applyInitialLogWindowHeightFromStoredState(st);' in text
     assert text.index('applyInitialLogWindowHeightFromStoredState(st);') < text.index('if (_seedMarkerIsSet()) return;')
+    assert 'if (_logsViewPrefsUserTouched) persistLocalLogsViewDraft();' in text

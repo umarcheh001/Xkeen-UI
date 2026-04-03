@@ -1261,6 +1261,15 @@ let xrayLogsModuleApi = null;
     return readXrayLogsViewState(getXrayLogsDom(), readXrayLogsRuntimeState());
   }
 
+  function persistLocalLogsViewDraft() {
+    try {
+      mergeStoredUiState(collectUiState());
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function scheduleSaveUiState() {
     // Do not treat programmatic updates (applying server prefs) as "user touches".
     if (_logsViewPrefsApplying) return;
@@ -1269,7 +1278,7 @@ let xrayLogsModuleApi = null;
 
     // Keep a synchronous browser-local draft so quick tab switches or page exits
     // cannot lose the latest user-resized height before the async server save runs.
-    try { mergeStoredUiState(collectUiState()); } catch (e) {}
+    persistLocalLogsViewDraft();
 
     try {
       if (_saveTimer) clearTimeout(_saveTimer);
@@ -1283,7 +1292,7 @@ let xrayLogsModuleApi = null;
         if (saved) return;
 
         // Fallback: legacy localStorage (keeps UX working if /api/ui-settings is unavailable)
-        mergeStoredUiState(collectUiState());
+        persistLocalLogsViewDraft();
       })();
     }, 250);
   }
@@ -3881,7 +3890,8 @@ function bindFilterUi() {
     // Clean up WS on page unload
     try {
       window.addEventListener('beforeunload', () => {
-        try { mergeStoredUiState(collectUiState()); } catch (e3) {}
+        // Avoid promoting untouched template defaults over synced server prefs.
+        if (_logsViewPrefsUserTouched) persistLocalLogsViewDraft();
         try { stopXrayLogAuto(); } catch (e) {}
         try { if (_statusTimer) clearInterval(_statusTimer); } catch (e2) {}
         _statusTimer = null;
