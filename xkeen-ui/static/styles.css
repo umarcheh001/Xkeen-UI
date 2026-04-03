@@ -11682,18 +11682,18 @@ html[data-theme="light"] .fm-progress-details{
 
 /* Xray preflight / save-error modal */
 #xray-preflight-modal {
-  padding: 8px;
+  padding: 6px;
 }
 
 #xray-preflight-modal .modal-content {
-  width: min(98vw, 1180px);
-  max-width: 1180px;
-  max-height: min(94vh, 940px);
-  padding: 10px 12px 12px;
-  border-radius: 22px;
+  width: min(96vw, 1100px);
+  max-width: 1100px;
+  max-height: min(94vh, 900px);
+  padding: 8px 10px 10px;
+  border-radius: 20px;
   border: 1px solid rgba(71, 85, 105, 0.82);
   background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 28%),
+    radial-gradient(circle at top right, rgba(248, 113, 113, 0.10), transparent 28%),
     radial-gradient(circle at bottom left, rgba(239, 68, 68, 0.08), transparent 24%),
     linear-gradient(180deg, rgba(2, 6, 23, 0.985), rgba(2, 6, 23, 0.965));
   box-shadow:
@@ -11702,28 +11702,35 @@ html[data-theme="light"] .fm-progress-details{
 }
 
 #xray-preflight-modal .modal-header {
-  margin-bottom: 10px;
-  padding-bottom: 10px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
 }
 
 .xk-preflight-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   margin: 0;
 }
 
 .xk-preflight-lead {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(96, 165, 250, 0.18);
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   background:
-    linear-gradient(135deg, rgba(10, 31, 84, 0.90), rgba(6, 18, 46, 0.92)),
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 52%);
+    linear-gradient(135deg, rgba(18, 25, 40, 0.94), rgba(8, 13, 28, 0.96)),
+    radial-gradient(circle at top left, rgba(148, 163, 184, 0.08), transparent 52%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 18px 40px rgba(2, 6, 23, 0.24);
+}
+
+#xray-preflight-modal.is-xray .xk-preflight-lead {
+  border-color: rgba(248, 113, 113, 0.30);
+  background:
+    linear-gradient(135deg, rgba(69, 10, 10, 0.92), rgba(28, 8, 10, 0.95)),
+    radial-gradient(circle at top left, rgba(248, 113, 113, 0.18), transparent 52%);
 }
 
 #xray-preflight-modal.is-json .xk-preflight-lead {
@@ -11734,19 +11741,26 @@ html[data-theme="light"] .fm-progress-details{
 }
 
 .xk-preflight-lead-icon {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  border: 1px solid rgba(96, 165, 250, 0.30);
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.34), rgba(30, 64, 175, 0.18));
-  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.20);
-  color: #dbeafe;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.46));
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.26);
+  color: #f8fafc;
   font-size: calc(15px * var(--xk-font-scale));
   font-weight: 800;
   letter-spacing: 0.04em;
+}
+
+#xray-preflight-modal.is-xray .xk-preflight-lead-icon {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: linear-gradient(180deg, rgba(185, 28, 28, 0.34), rgba(127, 29, 29, 0.20));
+  box-shadow: 0 8px 20px rgba(127, 29, 29, 0.24);
+  color: #fee2e2;
 }
 
 #xray-preflight-modal.is-json .xk-preflight-lead-icon {
@@ -11762,26 +11776,36 @@ html[data-theme="light"] .fm-progress-details{
 }
 
 .xk-preflight-lead-title {
-  margin-bottom: 4px;
-  font-size: calc(18px * var(--xk-font-scale));
+  margin-bottom: 3px;
+  font-size: calc(17px * var(--xk-font-scale));
   font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--fg, #f8fafc);
+}
+
+.xk-preflight-lead .modal-description {
+  margin: 0;
+  color: #cbd5e1;
 }
 
 .xk-preflight-chip {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
+  min-height: 28px;
+  padding: 0 11px;
   border-radius: 999px;
-  border: 1px solid rgba(96, 165, 250, 0.24);
+  border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(15, 23, 42, 0.66);
-  color: #dbeafe;
-  font-size: calc(12px * var(--xk-font-scale));
+  color: #e2e8f0;
+  font-size: calc(11px * var(--xk-font-scale));
   font-weight: 700;
   white-space: nowrap;
+}
+
+#xray-preflight-modal.is-xray .xk-preflight-chip {
+  border-color: rgba(248, 113, 113, 0.26);
+  color: #fecaca;
 }
 
 #xray-preflight-modal.is-json .xk-preflight-chip {
@@ -11791,8 +11815,8 @@ html[data-theme="light"] .fm-progress-details{
 
 .xk-preflight-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.96fr) minmax(340px, 1.04fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 0.92fr) minmax(360px, 1.08fr);
+  gap: 10px;
   align-items: stretch;
   min-height: 0;
 }
@@ -11800,11 +11824,11 @@ html[data-theme="light"] .fm-progress-details{
 .xk-preflight-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   min-height: 0;
-  padding: 13px;
-  border-radius: 18px;
+  padding: 12px;
+  border-radius: 16px;
   border: 1px solid rgba(148, 163, 184, 0.10);
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.84), rgba(2, 6, 23, 0.76));
   box-shadow:
@@ -11815,19 +11839,19 @@ html[data-theme="light"] .fm-progress-details{
 .xk-preflight-block {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
   min-height: 0;
-  padding: 12px;
-  border-radius: 16px;
+  padding: 10px 11px;
+  border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.12);
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.40), rgba(2, 6, 23, 0.22));
 }
 
 .xk-preflight-block--summary {
-  border-color: rgba(239, 68, 68, 0.28);
-  background: linear-gradient(180deg, rgba(127, 29, 29, 0.22), rgba(2, 6, 23, 0.26));
-  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.32);
+  background: linear-gradient(180deg, rgba(127, 29, 29, 0.26), rgba(2, 6, 23, 0.28));
+  color: #fee2e2;
 }
 
 #xray-preflight-modal.is-json .xk-preflight-block--summary {
@@ -11838,6 +11862,12 @@ html[data-theme="light"] .fm-progress-details{
 
 .xk-preflight-block--hint {
   color: #dbeafe;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.56), rgba(2, 6, 23, 0.28));
+}
+
+.xk-preflight-block--stderr {
+  border-color: rgba(248, 113, 113, 0.24);
+  background: linear-gradient(180deg, rgba(69, 10, 10, 0.14), rgba(2, 6, 23, 0.22));
 }
 
 .xk-preflight-block-title {
@@ -11849,24 +11879,29 @@ html[data-theme="light"] .fm-progress-details{
 
 .xk-preflight-meta-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
 }
 
 .xk-preflight-meta-card {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-height: 76px;
-  padding: 11px 12px;
-  border-radius: 15px;
+  min-height: 62px;
+  padding: 9px 10px;
+  border-radius: 13px;
   border: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(255, 255, 255, 0.03);
 }
 
+.xk-preflight-meta-card.is-problem {
+  border-color: rgba(248, 113, 113, 0.30);
+  background: linear-gradient(180deg, rgba(127, 29, 29, 0.18), rgba(15, 23, 42, 0.18));
+}
+
 .xk-preflight-meta-label {
   opacity: 0.76;
-  font-size: calc(11px * var(--xk-font-scale));
+  font-size: calc(10px * var(--xk-font-scale));
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #94a3b8;
@@ -11875,6 +11910,7 @@ html[data-theme="light"] .fm-progress-details{
 .xk-preflight-meta-value {
   word-break: break-word;
   color: var(--fg, #e2e8f0);
+  font-weight: 600;
 }
 
 .xk-preflight-codebox,
@@ -11891,20 +11927,21 @@ html[data-theme="light"] .fm-progress-details{
 }
 
 .xk-preflight-codebox {
-  max-height: min(22vh, 180px);
+  max-height: min(18vh, 140px);
   overflow: auto;
 }
 
 .xk-preflight-terminal {
-  min-height: 170px;
-  max-height: min(40vh, 340px);
+  min-height: 150px;
+  max-height: min(38vh, 320px);
   overflow: auto;
   color: #cbd5e1;
 }
 
 .xk-preflight-terminal--stderr {
-  border-color: rgba(248, 113, 113, 0.22);
-  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.28);
+  color: #fecaca;
+  background: linear-gradient(180deg, rgba(32, 8, 11, 0.94), rgba(2, 6, 23, 0.98));
 }
 
 .xk-preflight-terminal.is-empty,
@@ -11963,15 +12000,22 @@ html[data-theme="light"] .fm-progress-details{
 html[data-theme="light"] #xray-preflight-modal .modal-content {
   border-color: rgba(2, 6, 23, 0.16);
   background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.10), transparent 28%),
+    radial-gradient(circle at top right, rgba(248, 113, 113, 0.10), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
 }
 
 html[data-theme="light"] .xk-preflight-lead {
   background:
-    linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(224, 242, 254, 0.94)),
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.10), transparent 50%);
-  border-color: rgba(96, 165, 250, 0.22);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.94)),
+    radial-gradient(circle at top left, rgba(148, 163, 184, 0.10), transparent 50%);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+html[data-theme="light"] #xray-preflight-modal.is-xray .xk-preflight-lead {
+  background:
+    linear-gradient(135deg, rgba(254, 242, 242, 0.98), rgba(254, 226, 226, 0.94)),
+    radial-gradient(circle at top left, rgba(248, 113, 113, 0.12), transparent 50%);
+  border-color: rgba(248, 113, 113, 0.22);
 }
 
 html[data-theme="light"] #xray-preflight-modal.is-json .xk-preflight-lead {
@@ -11989,8 +12033,13 @@ html[data-theme="light"] .xk-preflight-meta-card {
 }
 
 html[data-theme="light"] .xk-preflight-chip {
-  background: rgba(239, 246, 255, 0.92);
-  color: #1e3a8a;
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
+}
+
+html[data-theme="light"] #xray-preflight-modal.is-xray .xk-preflight-chip {
+  background: rgba(254, 242, 242, 0.92);
+  color: #991b1b;
 }
 
 html[data-theme="light"] #xray-preflight-modal.is-json .xk-preflight-chip {

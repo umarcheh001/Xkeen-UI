@@ -72,13 +72,16 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
     xray_bin = '/opt/sbin/xray' if os.path.exists('/opt/sbin/xray') else 'xray'
     confdir = xray_configs_dir_real or os.environ.get('XRAY_CONFDIR') or '/opt/etc/xray/configs'
     test_timeout = max(5, int(os.environ.get('XKEEN_XRAY_TEST_TIMEOUT', '15') or '15'))
+    base_cmd = f'{xray_bin} -test -confdir {confdir}'
 
     if not os.path.isdir(confdir):
         return {
             'ok': False,
             'error': 'xray config dir not found',
             'phase': 'xray_test',
-            'cmd': f'{xray_bin} -test -confdir {confdir}',
+            'cmd': base_cmd,
+            'timeout_s': test_timeout,
+            'timed_out': False,
             'hint': 'Не найден каталог конфигурации Xray.',
         }
 
@@ -104,17 +107,41 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
                 f.write('\n')
 
             cmd = [xray_bin, '-test', '-confdir', tmpdir]
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=test_timeout, check=False)
+            cmd_text = ' '.join(cmd)
+            try:
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=test_timeout, check=False)
+            except subprocess.TimeoutExpired as exc:
+                return {
+                    'ok': False,
+                    'error': 'xray test timeout',
+                    'phase': 'xray_test',
+                    'cmd': cmd_text,
+                    'timeout_s': test_timeout,
+                    'timed_out': True,
+                    'stdout': _shorten_text(getattr(exc, 'stdout', '') or ''),
+                    'stderr': _shorten_text(getattr(exc, 'stderr', '') or ''),
+                    'hint': 'Таймаут проверки конфигурации Xray.',
+                }
             stdout = _shorten_text(proc.stdout or '')
             stderr = _shorten_text(proc.stderr or '')
             if proc.returncode == 0:
-                return {'ok': True, 'phase': 'xray_test', 'cmd': ' '.join(cmd), 'stdout': stdout, 'stderr': stderr}
+                return {
+                    'ok': True,
+                    'phase': 'xray_test',
+                    'cmd': cmd_text,
+                    'timeout_s': test_timeout,
+                    'timed_out': False,
+                    'stdout': stdout,
+                    'stderr': stderr,
+                }
             return {
                 'ok': False,
                 'error': 'xray test failed',
                 'phase': 'xray_test',
-                'cmd': ' '.join(cmd),
+                'cmd': cmd_text,
                 'returncode': proc.returncode,
+                'timeout_s': test_timeout,
+                'timed_out': False,
                 'stdout': stdout,
                 'stderr': stderr,
                 'hint': 'Xray не принял конфиг. Исправьте ошибку и повторите сохранение.',
@@ -124,26 +151,19 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
             'ok': False,
             'error': 'xray binary not found',
             'phase': 'xray_test',
-            'cmd': f'{xray_bin} -test -confdir {confdir}',
-            'hint': 'Не найден бинарник Xray для preflight-проверки.',
-        }
-    except subprocess.TimeoutExpired as exc:
-        return {
-            'ok': False,
-            'error': 'xray test timeout',
-            'phase': 'xray_test',
-            'cmd': f'{xray_bin} -test -confdir {confdir}',
+            'cmd': base_cmd,
             'timeout_s': test_timeout,
-            'stdout': _shorten_text(getattr(exc, 'stdout', '') or ''),
-            'stderr': _shorten_text(getattr(exc, 'stderr', '') or ''),
-            'hint': 'Таймаут проверки конфигурации Xray.',
+            'timed_out': False,
+            'hint': 'Не найден бинарник Xray для preflight-проверки.',
         }
     except Exception as exc:
         return {
             'ok': False,
             'error': f'preflight exception: {exc}',
             'phase': 'xray_test',
-            'cmd': f'{xray_bin} -test -confdir {confdir}',
+            'cmd': base_cmd,
+            'timeout_s': test_timeout,
+            'timed_out': False,
             'hint': 'Не удалось выполнить preflight-проверку Xray.',
         }
 
@@ -412,6 +432,7 @@ def register_config_routes(
                 "cmd": preflight.get("cmd"),
                 "returncode": preflight.get("returncode"),
                 "timeout_s": preflight.get("timeout_s"),
+                "timed_out": preflight.get("timed_out"),
                 "stdout": preflight.get("stdout"),
                 "stderr": preflight.get("stderr"),
                 "hint": preflight.get("hint"),

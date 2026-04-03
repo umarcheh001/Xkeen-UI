@@ -5,6 +5,9 @@
   const XKeen = window.XKeen;
   XKeen.ui = XKeen.ui || {};
 
+  const SUMMARY_LINE_RE = /\b(failed|error|invalid|unexpected|panic|unable|cannot|unknown|duplicate|missing|malformed|timeout|timed out|not found)\b/i;
+  const NOISE_LINE_RE = /^(using confdir from arg:|xray \d+\.\d+\.\d+|a unified platform|reading config:|appended inbound|appended outbound|appended routing|configuration ok)$/i;
+
   let _els = null;
   let _escHandler = null;
   let _copyResetTimer = null;
@@ -13,22 +16,69 @@
     return String(v == null ? '' : v).replace(/\r\n/g, '\n').trim();
   }
 
-  function parseCoreError(text) {
-    const s = normText(text);
-    if (!s) return '';
-    const lines = s.split('\n').map((x) => x.trim()).filter(Boolean);
-    for (let i = lines.length - 1; i >= 0; i--) {
+  function normalizeForCompare(v) {
+    return normText(v).replace(/\s+/g, ' ').toLowerCase();
+  }
+
+  function isSameMessage(a, b) {
+    const left = normalizeForCompare(a);
+    const right = normalizeForCompare(b);
+    return !!left && !!right && left === right;
+  }
+
+  function messageIncludes(haystack, needle) {
+    const left = normalizeForCompare(haystack);
+    const right = normalizeForCompare(needle);
+    return !!left && !!right && left.indexOf(right) !== -1;
+  }
+
+  function stripLogPrefix(line) {
+    return String(line || '')
+      .trim()
+      .replace(/^\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+/, '')
+      .replace(/^\[(?:info|warning|error|debug)\]\s+/i, '')
+      .trim();
+  }
+
+  function isNoiseLine(line) {
+    const clean = stripLogPrefix(line);
+    if (!clean) return true;
+    if (NOISE_LINE_RE.test(clean)) return true;
+    if (/^\/[^\s]+$/.test(clean)) return true;
+    return false;
+  }
+
+  function extractCoreSummary(text) {
+    const source = normText(text);
+    if (!source) return '';
+    const lines = source
+      .split('\n')
+      .map((line) => stripLogPrefix(line))
+      .filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
       const line = lines[i];
-      if (/^failed to/i.test(line) || /^invalid/i.test(line) || /^unexpected/i.test(line) || /^panic:/i.test(line)) {
-        return line;
-      }
+      if (isNoiseLine(line)) continue;
+      if (SUMMARY_LINE_RE.test(line)) return line;
     }
-    return lines[lines.length - 1] || '';
+    return '';
+  }
+
+  function summarizeKnownError(errorText) {
+    const normalized = normalizeForCompare(errorText);
+    if (!normalized) return '';
+    if (normalized === 'xray test timeout') return 'Проверка не завершилась за отведённое время.';
+    if (normalized === 'xray binary not found') return 'Не найден бинарник Xray для проверки.';
+    if (normalized === 'xray config dir not found') return 'Не найден каталог конфигурации Xray.';
+    if (normalized === 'xray test failed') return '';
+    if (normalized.indexOf('preflight exception:') === 0) return 'Не удалось выполнить предварительную проверку Xray.';
+    return normText(errorText);
   }
 
   function clearCopyState(copyBtn) {
     if (!copyBtn) return;
-    try { if (_copyResetTimer) clearTimeout(_copyResetTimer); } catch (e) {}
+    try {
+      if (_copyResetTimer) clearTimeout(_copyResetTimer);
+    } catch (e) {}
     _copyResetTimer = null;
     try {
       copyBtn.textContent = copyBtn.dataset.defaultLabel || 'Скопировать детали';
@@ -65,12 +115,56 @@
     }
     return {
       title: 'Xray отклонил конфиг',
-      description: 'Конфиг не был сохранён и перезапуск не запускался. Исправьте ошибку и попробуйте снова.',
+      description: 'Конфиг не был сохранён. Исправьте ошибку и попробуйте снова.',
       defaultSummary: 'Xray не принял конфиг.',
       defaultCmd: 'xray -test -confdir ...',
       modeLabel: 'Xray preflight',
       iconText: 'XR',
     };
+  }
+
+  function formatPhase(phase) {
+    const normalized = normText(phase || 'xray_test') || 'xray_test';
+    if (normalized === 'json_parse') return 'JSON parse';
+    if (normalized === 'xray_test') return 'Xray test';
+    return normalized.replace(/_/g, ' ');
+  }
+
+  function formatTimeout(payload) {
+    if (!payload || payload.timeout_s == null || payload.timeout_s === '') return '';
+    const base = String(payload.timeout_s) + ' с';
+    return payload.timed_out ? (base + ' (превышен)') : base;
+  }
+
+  function setEmptyTerminalState(el, isEmpty) {
+    if (!el || !el.classList) return;
+    el.classList.toggle('is-empty', !!isEmpty);
+  }
+
+  function setProblemState(el, isProblem) {
+    if (!el || !el.classList) return;
+    el.classList.toggle('is-problem', !!isProblem);
+  }
+
+  function setVisible(el, isVisible) {
+    if (!el || !el.style) return;
+    el.style.display = isVisible ? '' : 'none';
+  }
+
+  function shouldShowHint(hint, summary, description, defaultSummary) {
+    return !!hint &&
+      !isSameMessage(hint, summary) &&
+      !isSameMessage(hint, description) &&
+      !isSameMessage(hint, defaultSummary) &&
+      !messageIncludes(hint, defaultSummary);
+  }
+
+  function buildSummary(payload, stderr, stdout, errorText, hint, ui) {
+    const summary = extractCoreSummary(stderr) || extractCoreSummary(stdout) || summarizeKnownError(errorText);
+    if (summary) return summary;
+    if (payload && payload.timed_out) return 'Проверка не завершилась за отведённое время.';
+    if (!stderr && !stdout && !hint) return ui.defaultSummary;
+    return '';
   }
 
   function ensureModal() {
@@ -82,7 +176,7 @@
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('aria-label', 'Ошибка проверки Xray');
-    modal.dataset.modalKey = 'xray-preflight-premium-v1';
+    modal.dataset.modalKey = 'xray-preflight-premium-v2';
 
     modal.innerHTML = '' +
       '<div class="modal-content xk-preflight-modal">' +
@@ -95,28 +189,28 @@
       '      <div class="xk-preflight-lead-icon" data-xk-preflight-icon>XR</div>' +
       '      <div class="xk-preflight-lead-copy">' +
       '        <div class="xk-preflight-lead-title" data-xk-preflight-lead-title>Xray отклонил конфиг</div>' +
-      '        <p class="modal-description" style="margin:0;"><span data-xk-preflight-description>Конфиг не был сохранён и перезапуск не запускался. Исправьте ошибку и попробуйте снова.</span></p>' +
+      '        <p class="modal-description"><span data-xk-preflight-description>Конфиг не был сохранён. Исправьте ошибку и попробуйте снова.</span></p>' +
       '      </div>' +
       '      <div class="xk-preflight-chip" data-xk-preflight-mode>Xray preflight</div>' +
       '    </section>' +
       '    <div class="xk-preflight-grid">' +
       '      <section class="xk-preflight-panel">' +
       '        <div class="xk-preflight-block xk-preflight-block--summary" data-xk-preflight-summary-wrap style="display:none;">' +
-      '          <div class="xk-preflight-block-title">Кратко</div>' +
+      '          <div class="xk-preflight-block-title">Ошибка</div>' +
       '          <div data-xk-preflight-summary></div>' +
       '        </div>' +
       '        <div class="xk-preflight-block xk-preflight-block--hint" data-xk-preflight-hint-wrap style="display:none;">' +
-      '          <div class="xk-preflight-block-title">Подсказка</div>' +
+      '          <div class="xk-preflight-block-title">Что проверить</div>' +
       '          <div data-xk-preflight-hint></div>' +
       '        </div>' +
       '        <div class="xk-preflight-meta-grid">' +
       '          <div class="xk-preflight-meta-card"><div class="xk-preflight-meta-label">Фаза</div><div class="xk-preflight-meta-value" data-xk-preflight-phase></div></div>' +
-      '          <div class="xk-preflight-meta-card"><div class="xk-preflight-meta-label">Код выхода</div><div class="xk-preflight-meta-value" data-xk-preflight-code>—</div></div>' +
-      '          <div class="xk-preflight-meta-card"><div class="xk-preflight-meta-label">Таймаут</div><div class="xk-preflight-meta-value" data-xk-preflight-timeout>—</div></div>' +
-      '          <div class="xk-preflight-meta-card" data-xk-preflight-location-card style="display:none;"><div class="xk-preflight-meta-label">Локация</div><div class="xk-preflight-meta-value" data-xk-preflight-location>—</div></div>' +
+      '          <div class="xk-preflight-meta-card"><div class="xk-preflight-meta-label">Код</div><div class="xk-preflight-meta-value" data-xk-preflight-code>—</div></div>' +
+      '          <div class="xk-preflight-meta-card" data-xk-preflight-timeout-card style="display:none;"><div class="xk-preflight-meta-label">Таймаут</div><div class="xk-preflight-meta-value" data-xk-preflight-timeout>—</div></div>' +
+      '          <div class="xk-preflight-meta-card" data-xk-preflight-location-card style="display:none;"><div class="xk-preflight-meta-label">Позиция</div><div class="xk-preflight-meta-value" data-xk-preflight-location>—</div></div>' +
       '        </div>' +
       '        <div class="xk-preflight-block">' +
-      '          <div class="xk-preflight-block-title">Команда проверки</div>' +
+      '          <div class="xk-preflight-block-title">Команда</div>' +
       '          <pre data-xk-preflight-cmd class="xk-preflight-codebox"></pre>' +
       '        </div>' +
       '      </section>' +
@@ -147,10 +241,14 @@
     if (copyBtn) copyBtn.dataset.defaultLabel = 'Скопировать детали';
 
     const close = () => {
-      try { modal.classList.add('hidden'); } catch (e) {}
+      try {
+        modal.classList.add('hidden');
+      } catch (e) {}
       clearCopyState(copyBtn);
       if (_escHandler) {
-        try { document.removeEventListener('keydown', _escHandler, true); } catch (e2) {}
+        try {
+          document.removeEventListener('keydown', _escHandler, true);
+        } catch (e2) {}
         _escHandler = null;
       }
       try {
@@ -164,7 +262,9 @@
 
     const open = () => {
       clearCopyState(copyBtn);
-      try { modal.classList.remove('hidden'); } catch (e) {}
+      try {
+        modal.classList.remove('hidden');
+      } catch (e) {}
       try {
         if (window.XKeen && XKeen.ui && XKeen.ui.modal && typeof XKeen.ui.modal.syncBodyScrollLock === 'function') {
           XKeen.ui.modal.syncBodyScrollLock();
@@ -175,22 +275,36 @@
       _escHandler = (ev) => {
         if (ev && (ev.key === 'Escape' || ev.key === 'Esc')) close();
       };
-      try { document.addEventListener('keydown', _escHandler, true); } catch (e3) {}
+      try {
+        document.addEventListener('keydown', _escHandler, true);
+      } catch (e3) {}
       try {
         requestAnimationFrame(() => {
           try {
             const body = modal.querySelector('.xk-preflight-body');
             if (body) body.scrollTop = 0;
           } catch (e4) {}
-          try { okBtn.focus(); } catch (e5) {}
+          try {
+            okBtn.focus();
+          } catch (e5) {}
         });
       } catch (e6) {
-        setTimeout(() => { try { okBtn.focus(); } catch (e7) {} }, 0);
+        setTimeout(() => {
+          try {
+            okBtn.focus();
+          } catch (e7) {}
+        }, 0);
       }
     };
 
-    closeBtn.addEventListener('click', (e) => { e.preventDefault(); close(); });
-    okBtn.addEventListener('click', (e) => { e.preventDefault(); close(); });
+    closeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      close();
+    });
+    okBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      close();
+    });
     modal.addEventListener('click', (e) => {
       if (e.target === modal) close();
     });
@@ -234,6 +348,10 @@
       } catch (e3) {}
     });
 
+    const codeEl = modal.querySelector('[data-xk-preflight-code]');
+    const timeoutEl = modal.querySelector('[data-xk-preflight-timeout]');
+    const locationEl = modal.querySelector('[data-xk-preflight-location]');
+
     _els = {
       modal,
       content,
@@ -249,10 +367,12 @@
       hintWrap: modal.querySelector('[data-xk-preflight-hint-wrap]'),
       hint: modal.querySelector('[data-xk-preflight-hint]'),
       phase: modal.querySelector('[data-xk-preflight-phase]'),
-      code: modal.querySelector('[data-xk-preflight-code]'),
-      timeout: modal.querySelector('[data-xk-preflight-timeout]'),
+      code: codeEl,
+      codeCard: codeEl ? codeEl.closest('.xk-preflight-meta-card') : null,
+      timeout: timeoutEl,
+      timeoutCard: modal.querySelector('[data-xk-preflight-timeout-card]'),
       locationCard: modal.querySelector('[data-xk-preflight-location-card]'),
-      location: modal.querySelector('[data-xk-preflight-location]'),
+      location: locationEl,
       cmd: modal.querySelector('[data-xk-preflight-cmd]'),
       stderr: modal.querySelector('[data-xk-preflight-stderr]'),
       stdoutWrap: modal.querySelector('[data-xk-preflight-stdout-wrap]'),
@@ -270,11 +390,6 @@
     modalEl.classList.add(phase === 'json_parse' ? 'is-json' : 'is-xray');
   }
 
-  function setEmptyTerminalState(el, isEmpty) {
-    if (!el || !el.classList) return;
-    el.classList.toggle('is-empty', !!isEmpty);
-  }
-
   XKeen.ui.showXrayPreflightError = function showXrayPreflightError(payload = {}) {
     const els = ensureModal();
     const stderr = normText(payload.stderr);
@@ -283,11 +398,15 @@
     const phase = normText(payload.phase || 'xray_test') || 'xray_test';
     const ui = resolvePresentation(payload);
     const cmd = normText(payload.cmd || ui.defaultCmd);
-    const code = (payload.returncode == null || payload.returncode === '') ? '—' : String(payload.returncode);
-    const timeout = (payload.timeout_s == null || payload.timeout_s === '') ? '—' : (String(payload.timeout_s) + ' c');
+    const code = payload.returncode == null || payload.returncode === '' ? '—' : String(payload.returncode);
+    const timeout = formatTimeout(payload);
     const errorText = normText(payload.error);
     const locationText = locationTextFromPayload(payload);
-    const summary = parseCoreError(stderr) || parseCoreError(stdout) || errorText || ui.defaultSummary;
+    const summary = buildSummary(payload, stderr, stdout, errorText, hint, ui);
+    const showSummary = !!summary && !isSameMessage(summary, ui.description);
+    const showHint = shouldShowHint(hint, summary, ui.description, ui.defaultSummary);
+    const showTimeout = !!timeout;
+    const showStdout = !!stdout && !isSameMessage(stdout, stderr);
 
     applyModeClass(els.modal, phase);
 
@@ -298,17 +417,21 @@
     if (els.icon) els.icon.textContent = ui.iconText;
 
     if (els.summary) els.summary.textContent = summary;
-    if (els.summaryWrap) els.summaryWrap.style.display = summary ? '' : 'none';
+    setVisible(els.summaryWrap, showSummary);
 
     if (els.hint) els.hint.textContent = hint;
-    if (els.hintWrap) els.hintWrap.style.display = hint ? '' : 'none';
+    setVisible(els.hintWrap, showHint);
 
-    if (els.phase) els.phase.textContent = phase;
+    if (els.phase) els.phase.textContent = formatPhase(phase);
     if (els.code) els.code.textContent = code;
-    if (els.timeout) els.timeout.textContent = timeout;
+    if (els.timeout) els.timeout.textContent = timeout || '—';
+    setVisible(els.timeoutCard, showTimeout);
     if (els.location) els.location.textContent = locationText || '—';
-    if (els.locationCard) els.locationCard.style.display = locationText ? '' : 'none';
+    setVisible(els.locationCard, !!locationText);
     if (els.cmd) els.cmd.textContent = cmd;
+
+    setProblemState(els.codeCard, code !== '—' && code !== '0');
+    setProblemState(els.timeoutCard, !!payload.timed_out);
 
     if (els.stderr) {
       els.stderr.textContent = stderr || 'stderr пуст';
@@ -318,23 +441,24 @@
       els.stdout.textContent = stdout || 'stdout пуст';
       setEmptyTerminalState(els.stdout, !stdout);
     }
-    if (els.stdoutWrap) els.stdoutWrap.style.display = stdout ? '' : 'none';
+    setVisible(els.stdoutWrap, showStdout);
 
     const copyParts = [
-      (phase === 'json_parse' ? 'JSON parse error' : 'Xray preflight error'),
+      phase === 'json_parse' ? 'JSON parse error' : 'Xray preflight error',
       'phase: ' + phase,
       'returncode: ' + code,
-      'timeout_s: ' + ((payload.timeout_s == null || payload.timeout_s === '') ? '' : String(payload.timeout_s)),
-      locationText ? ('location: ' + locationText) : '',
+      'timeout_s: ' + (payload.timeout_s == null || payload.timeout_s === '' ? '' : String(payload.timeout_s)),
+      payload.timed_out ? 'timed_out: true' : '',
+      locationText ? 'location: ' + locationText : '',
       'cmd: ' + cmd,
-      hint ? ('hint: ' + hint) : '',
-      errorText ? ('error: ' + errorText) : '',
+      hint ? 'hint: ' + hint : '',
+      errorText ? 'error: ' + errorText : '',
       '',
       'stderr:',
       stderr || '(empty)',
-      '',
-      'stdout:',
-      stdout || '(empty)',
+      showStdout ? '' : '',
+      showStdout ? 'stdout:' : '',
+      showStdout ? stdout : '',
     ].filter(Boolean).join('\n');
     if (els.copyBtn) els.copyBtn.dataset.copyText = copyParts;
 
