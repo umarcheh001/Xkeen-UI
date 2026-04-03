@@ -837,6 +837,11 @@ let xrayLogsModuleApi = null;
     const fileLabel = formatXrayLogFileLabel(uiStatus.file || runtime.currentFile);
     const transport = String(uiStatus.transport || readXrayLogTransportLabel(runtime) || '').trim();
     const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
+    const wsReadyState = runtime.ws && typeof runtime.ws.readyState === 'number'
+      ? runtime.ws.readyState
+      : null;
+    const wsOpen = typeof WebSocket !== 'undefined' && wsReadyState === WebSocket.OPEN;
+    const wsConnecting = typeof WebSocket !== 'undefined' && wsReadyState === WebSocket.CONNECTING;
 
     let phase = String(uiStatus.phase || 'idle');
     let tone = String(uiStatus.tone || 'muted');
@@ -849,12 +854,18 @@ let xrayLogsModuleApi = null;
         message = pending
           ? ('Вывод на паузе, в буфере уже +' + pending + ' строк.')
           : 'Вывод на паузе. Новые строки будут показаны после Resume.';
-      } else if (runtime.ws && typeof WebSocket !== 'undefined' && runtime.ws.readyState === WebSocket.CONNECTING) {
+      } else if (wsConnecting) {
         phase = 'connecting';
         tone = 'muted';
         message = transport
           ? ('Подключаю ' + transport + ' для ' + fileLabel + '...')
           : ('Подключаю live transport для ' + fileLabel + '...');
+      } else if (runtime.useWs && wsOpen) {
+        phase = 'streaming';
+        tone = 'muted';
+        message = transport
+          ? ('Подключен ' + transport + '. Идёт live stream для ' + fileLabel + '.')
+          : ('Live transport подключен для ' + fileLabel + '.');
       } else if (runtime.streaming && runtime.useWs) {
         phase = 'reconnecting';
         tone = 'muted';
@@ -2289,7 +2300,7 @@ let xrayLogsModuleApi = null;
         phase: 'streaming',
         tone: 'muted',
         transport: 'WS2 live',
-        message: 'WS2 подключен. Жду новые строки...',
+        message: 'WS2 подключен. Идёт live stream.',
         file,
       });
 
@@ -2332,7 +2343,7 @@ let xrayLogsModuleApi = null;
           phase: 'streaming',
           tone: 'muted',
           transport: 'WS2 live',
-          message: '',
+          message: 'WS2 подключен. Идёт live stream.',
           file,
         });
         try { updateXrayLogStats(); } catch (e) {}
