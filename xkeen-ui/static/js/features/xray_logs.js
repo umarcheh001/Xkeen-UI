@@ -1342,15 +1342,26 @@ let xrayLogsModuleApi = null;
     try { updateXrayLogStats(); } catch (e) {}
   }
 
+  function applyInitialLogWindowHeightFromStoredState(st) {
+    try {
+      const prefs = (st && typeof st === 'object') ? st : {};
+      const h = _normalizeLogWindowHeight(prefs.height);
+      if (h == null) return;
+      const dom = getXrayLogsDom();
+      if (dom.output) dom.output.style.height = String(h) + 'px';
+    } catch (e) {}
+  }
+
   // Initial restore without triggering /api/ui-settings fetch.
-  // - Before migration happens, we keep the old behavior (restore from localStorage).
-  // - After migration (seed marker is set), we intentionally avoid using legacy storage
-  //   so the source of truth stays on the server (prefs will be applied when the user
-  //   opens/starts the logs view).
+  // We always warm-start the log window height from the browser-local draft so
+  // cross-page navigation does not flash back to the CSS default size.
+  // Full prefs are still restored from /api/ui-settings when the user opens the
+  // logs view; before migration we keep the full legacy restore behavior.
   function applyInitialUiStateNoFetch() {
     try {
-      if (_seedMarkerIsSet()) return;
       const st = readStoredUiState();
+      applyInitialLogWindowHeightFromStoredState(st);
+      if (_seedMarkerIsSet()) return;
       if (st && typeof st === 'object') applyUiStateFromPrefs(st);
     } catch (e) {}
   }
