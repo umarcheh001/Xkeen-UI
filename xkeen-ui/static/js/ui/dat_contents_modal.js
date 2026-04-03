@@ -703,6 +703,20 @@ import { getRoutingCardsApi } from '../features/routing_cards.js';
     return _tags.filter((t) => String(t.tag || '').toLowerCase().includes(s));
   }
 
+  function isTagUsed(tag) {
+    return !!(_usedTags && _usedTags.has(String(tag || '').toLowerCase()));
+  }
+
+  function splitTagsForDisplay(items) {
+    const grouped = { used: [], rest: [] };
+    const src = Array.isArray(items) ? items : [];
+    src.forEach((it) => {
+      if (isTagUsed(it && it.tag)) grouped.used.push(it);
+      else grouped.rest.push(it);
+    });
+    return grouped;
+  }
+
   function valueQueryRaw() {
     const e = el(IDS.searchValue);
     return e ? String(e.value || '') : '';
@@ -803,6 +817,80 @@ import { getRoutingCardsApi } from '../features/routing_cards.js';
     await loadTagItems();
   }
 
+  function buildTagRow(it) {
+    const row = document.createElement('div');
+    row.className = 'dat-tag-row' + (it.tag === _selectedTag ? ' is-active' : '');
+
+    const left = document.createElement('button');
+    left.type = 'button';
+    left.className = 'dat-tag-main btn-secondary';
+    left.setAttribute('data-tooltip', 'Открыть содержимое тега');
+    left.textContent = String(it.tag || '');
+
+    const isUsed = isTagUsed(it.tag);
+    if (isUsed) row.classList.add('is-used');
+
+    const used = document.createElement('span');
+    used.className = 'dat-tag-used' + (isUsed ? ' is-on' : '');
+    used.textContent = '';
+    used.setAttribute('data-tooltip', isUsed ? 'Используется в routing' : 'Не используется');
+
+    const count = document.createElement('span');
+    count.className = 'dat-tag-count';
+    count.textContent = (it.count != null) ? String(it.count) : '—';
+    if (it.count != null) {
+      count.setAttribute('data-tooltip', _kind === 'geoip' ? 'Количество подсетей в теге' : 'Количество доменов в теге');
+    }
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'dat-tag-copy btn-secondary';
+    copyBtn.textContent = '⧉';
+    copyBtn.setAttribute('aria-label', 'Copy');
+    copyBtn.setAttribute('data-tooltip', 'Скопировать ' + selectorFor(_kind, it.tag, _path));
+
+    left.addEventListener('click', () => {
+      selectTag(String(it.tag || ''));
+    });
+    copyBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const s = selectorFor(_kind, it.tag, _path);
+      const ok = await copyText(s);
+      if (typeof toast === 'function') toast(ok ? ('Скопировано: ' + s) : 'Не удалось скопировать', !ok);
+    });
+
+    row.appendChild(left);
+    row.appendChild(used);
+    row.appendChild(count);
+    row.appendChild(copyBtn);
+    return row;
+  }
+
+  function appendTagGroup(list, title, items, secondary) {
+    const src = Array.isArray(items) ? items : [];
+    if (!list || !src.length) return;
+
+    const head = document.createElement('div');
+    head.className = 'dat-tag-group-head' + (secondary ? ' is-secondary' : '');
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'dat-tag-group-title';
+    titleEl.textContent = String(title || '');
+
+    const countEl = document.createElement('span');
+    countEl.className = 'dat-tag-group-count';
+    countEl.textContent = String(src.length);
+
+    head.appendChild(titleEl);
+    head.appendChild(countEl);
+    list.appendChild(head);
+
+    src.forEach((it) => {
+      list.appendChild(buildTagRow(it));
+    });
+  }
+
   function renderTags() {
     const list = el(IDS.tagsList);
     if (!list) return;
@@ -829,55 +917,22 @@ import { getRoutingCardsApi } from '../features/routing_cards.js';
       return;
     }
 
-    items.slice(0, 1500).forEach((it) => {
-      const row = document.createElement('div');
-      row.className = 'dat-tag-row' + (it.tag === _selectedTag ? ' is-active' : '');
+    const grouped = splitTagsForDisplay(items);
+    const ordered = grouped.used.concat(grouped.rest);
+    const visible = ordered.slice(0, 1500);
+    const visibleGrouped = splitTagsForDisplay(visible);
+    const hasUsedGroup = visibleGrouped.used.length > 0;
 
-      const left = document.createElement('button');
-      left.type = 'button';
-      left.className = 'dat-tag-main btn-secondary';
-      left.setAttribute('data-tooltip', 'Открыть содержимое тега');
-      left.textContent = String(it.tag || '');
-      const isUsed = _usedTags && _usedTags.has(String(it.tag || '').toLowerCase());
-      if (isUsed) row.classList.add('is-used');
-      const used = document.createElement('span');
-      used.className = 'dat-tag-used' + (isUsed ? ' is-on' : '');
-      used.textContent = '';
-      used.setAttribute('data-tooltip', isUsed ? 'Используется в routing' : 'Не используется');
-
-      const count = document.createElement('span');
-      count.className = 'dat-tag-count';
-      count.textContent = (it.count != null) ? String(it.count) : '—';
-      if (it.count != null) {
-        count.setAttribute('data-tooltip', _kind === 'geoip' ? 'Количество подсетей в теге' : 'Количество доменов в теге');
-      }
-
-      const copyBtn = document.createElement('button');
-      copyBtn.type = 'button';
-      copyBtn.className = 'dat-tag-copy btn-secondary';
-      copyBtn.textContent = '⧉';
-      copyBtn.setAttribute('aria-label', 'Copy');
-      copyBtn.setAttribute('data-tooltip', 'Скопировать ' + selectorFor(_kind, it.tag, _path));
-
-      left.addEventListener('click', () => {
-        selectTag(String(it.tag || ''));
+    if (hasUsedGroup) {
+      appendTagGroup(list, 'В routing', visibleGrouped.used, false);
+      appendTagGroup(list, 'Остальные', visibleGrouped.rest, true);
+    } else {
+      visible.forEach((it) => {
+        list.appendChild(buildTagRow(it));
       });
-      copyBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const s = selectorFor(_kind, it.tag, _path);
-        const ok = await copyText(s);
-        if (typeof toast === 'function') toast(ok ? ('Скопировано: ' + s) : 'Не удалось скопировать', !ok);
-      });
+    }
 
-      row.appendChild(left);
-      row.appendChild(used);
-      row.appendChild(count);
-      row.appendChild(copyBtn);
-      list.appendChild(row);
-    });
-
-    if (items.length > 1500) {
+    if (ordered.length > 1500) {
       const more = document.createElement('div');
       more.className = 'dat-contents-empty';
       more.textContent = 'Показаны первые 1500 тегов. Уточните поиск.';

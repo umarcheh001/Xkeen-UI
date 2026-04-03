@@ -15060,6 +15060,56 @@ html[data-theme="light"] .routing-observatory-warning{
   margin-bottom: 0;
 }
 
+.dat-tag-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 4px 6px;
+  padding: 0 6px;
+}
+
+.dat-tag-group-head:first-child {
+  margin-top: 0;
+}
+
+.dat-tag-group-head.is-secondary {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.dat-tag-group-title {
+  min-width: 0;
+  font-size: calc(10px * var(--xk-font-scale));
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #93c5fd;
+}
+
+.dat-tag-group-head.is-secondary .dat-tag-group-title {
+  color: #94a3b8;
+}
+
+.dat-tag-group-count {
+  flex: 0 0 auto;
+  min-width: 26px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  background: rgba(15, 23, 42, 0.46);
+  color: #dbeafe;
+  font-size: calc(11px * var(--xk-font-scale));
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.dat-tag-group-head.is-secondary .dat-tag-group-count {
+  border-color: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+}
+
 .dat-tag-main {
   flex: 1 1 auto;
   min-width: 0;
@@ -20213,6 +20263,28 @@ html[data-theme="light"] #ui-settings-modal .xk-ui-settings-status {
   background: rgba(8, 19, 47, 0.34);
 }
 
+#routing-dat-contents-modal .dat-tag-group-head {
+  margin-left: 2px;
+  margin-right: 2px;
+}
+
+#routing-dat-contents-modal .dat-tag-group-head.is-secondary {
+  border-top-color: rgba(96, 165, 250, 0.12);
+}
+
+#routing-dat-contents-modal .dat-tag-group-title {
+  color: #bfdbfe;
+}
+
+#routing-dat-contents-modal .dat-tag-group-head.is-secondary .dat-tag-group-title {
+  color: #94a3b8;
+}
+
+#routing-dat-contents-modal .dat-tag-group-count {
+  border-color: rgba(96, 165, 250, 0.16);
+  background: rgba(5, 16, 42, 0.68);
+}
+
 #routing-dat-contents-modal .dat-tag-main.btn-secondary {
   justify-content: flex-start;
   min-height: 32px;
@@ -22349,6 +22421,24 @@ html[data-theme="light"] #routing-dat-contents-modal .dat-tag-row {
 html[data-theme="light"] #routing-dat-contents-modal .dat-tag-row:hover {
   border-color: rgba(37, 99, 235, 0.18);
   background: rgba(235, 243, 255, 0.9);
+}
+
+html[data-theme="light"] #routing-dat-contents-modal .dat-tag-group-head.is-secondary {
+  border-top-color: rgba(148, 163, 184, 0.24);
+}
+
+html[data-theme="light"] #routing-dat-contents-modal .dat-tag-group-title {
+  color: #2563eb;
+}
+
+html[data-theme="light"] #routing-dat-contents-modal .dat-tag-group-head.is-secondary .dat-tag-group-title {
+  color: #64748b;
+}
+
+html[data-theme="light"] #routing-dat-contents-modal .dat-tag-group-count {
+  border-color: rgba(63, 111, 203, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  color: #35568f;
 }
 
 html[data-theme="light"] #routing-dat-contents-modal .dat-tag-main.btn-secondary,
