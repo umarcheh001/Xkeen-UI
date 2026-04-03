@@ -140,6 +140,7 @@ import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_c
 
   let _commentsBadgeBase = { found: false, using: false, bn: '' };
   let _commentsBadgeOverride = null;
+  let _commentsUxWired = false;
 
   // Monaco diagnostics debounce (markers).
   let _monacoDiagTimer = null;
@@ -443,6 +444,14 @@ import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_c
     try { _updateModeBadge(); } catch (e3) {}
     try { syncShellState(cleanDir, Array.isArray(items) ? items : null); } catch (e4) {}
     return _activeFragment;
+  }
+
+  function currentFragmentDirFromUi(sel) {
+    const selectEl = sel || $(IDS.fragmentSelect);
+    try {
+      if (selectEl && selectEl.dataset && selectEl.dataset.dir) return String(selectEl.dataset.dir);
+    } catch (e) {}
+    return String(_fragmentDir || '');
   }
 
   function restoreFragmentSelection(sel, fragment, dir, items) {
@@ -902,7 +911,26 @@ import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_c
   }
 
   function getActiveFragment() {
-    return getSelectedFragmentFromUI() || _activeFragment || restoreRememberedFragment() || null;
+    return _activeFragment || getSelectedFragmentFromUI() || restoreRememberedFragment() || null;
+  }
+
+  async function loadCommittedFragmentSelection(next, opts) {
+    const o = (opts && typeof opts === 'object') ? opts : {};
+    const selectEl = o.selectEl || $(IDS.fragmentSelect);
+    const nextValue = String(next || '').trim();
+    const prevValue = String(o.prev || '').trim();
+    const nextDir = (o.nextDir != null) ? String(o.nextDir || '') : currentFragmentDirFromUi(selectEl);
+    const prevDir = (o.prevDir != null) ? String(o.prevDir || '') : String(_fragmentDir || '');
+    const nextItems = Array.isArray(o.nextItems) ? o.nextItems.slice() : _fragmentItems.slice();
+    const prevItems = Array.isArray(o.prevItems) ? o.prevItems.slice() : _fragmentItems.slice();
+    if (!nextValue) return false;
+
+    applyActiveFragment(nextValue, nextDir, nextItems);
+    const ok = await load();
+    if (ok) return true;
+
+    if (prevValue) restoreFragmentSelection(selectEl, prevValue, prevDir, prevItems);
+    return false;
   }
 
   function updateActiveFileLabel(fullPathOrName, configsDir) {
@@ -1379,6 +1407,7 @@ import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_c
     const url = all ? '/api/routing/fragments?all=1' : '/api/routing/fragments';
 
     const notify = !!(opts && opts.notify);
+    const syncActive = !(opts && opts.syncActive === false);
     let data = null;
     try {
       const coreHttp = getXkeenCoreHttpApi();
@@ -1437,7 +1466,10 @@ import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_c
       const finalChoice = names.indexOf(preferred) !== -1 ? preferred : (currentDefault || (names[0] || ''));
       if (finalChoice) sel.value = finalChoice;
       const dir = data.dir ? String(data.dir).replace(/\/+$/, '') : '';
-      applyActiveFragment(sel.value || finalChoice || null, dir, data.items);
+      _fragmentDir = dir;
+      _fragmentItems = data.items.slice();
+      if (syncActive) applyActiveFragment(sel.value || finalChoice || null, dir, data.items);
+      else syncShellState(dir, data.items);
     } catch (e) {}
 
     // If scope was reduced and a non-routing file disappeared from the list, clarify the jump.
@@ -1454,25 +1486,9 @@ import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_c
     try { _updateFileScopedTooltips(); } catch (e) {}
     try { syncShellState(); } catch (e) {}
 
-    // Wire refresh button (once)
+    // Refresh button tooltip follows the current scope.
     try {
       const btn = $(IDS.fragmentRefresh);
-      if (btn && !btn.dataset.xkWired) {
-        btn.addEventListener('click', async (e) => {
-          e.preventDefault();
-          const prev = getActiveFragment();
-          const prevDir = _fragmentDir;
-          await refreshFragmentsList({ notify: true });
-          const next = getActiveFragment();
-          if (!next || next === prev) return;
-          await guardFragmentSwitch(next, prev, {
-            onCancel: () => restoreFragmentSelection(sel, prev, prevDir, _fragmentItems),
-            beforeSwitch: () => { try { saveCurrentViewState(); } catch (e2) {} },
-            commit: async () => { await load(); },
-          });
-        });
-        btn.dataset.xkWired = '1';
-      }
       if (btn) {
         btn.setAttribute('data-tooltip', all
           ? 'Обновить список JSON-файлов Xray из /opt/etc/xray/configs/ (кроме 01_log.json)'
@@ -2386,7 +2402,7 @@ function closeHelp() {
       if (!res.ok) {
         if (statusEl) statusEl.textContent = 'Не удалось загрузить файл.';
         toast('Не удалось загрузить файл.', true);
-        return;
+        return false;
       }
 
       // Optional server notice (e.g. JSON-with-comments -> JSONC auto-migration)
@@ -2432,11 +2448,13 @@ function closeHelp() {
           window.updateLastActivity('loaded', 'routing', fp);
         }
       } catch (e) {}
+      return true;
     } catch (e) {
       console.error(e);
       _setCommentsBadge(false, false, '');
       if (statusEl) statusEl.textContent = 'Ошибка загрузки файла.';
       toast('Ошибка загрузки файла.', true);
+      return false;
     }
   }
   async function save() {
@@ -3223,16 +3241,47 @@ function closeHelp() {
         if (!next) return;
         const prev = _activeFragment || String(fragSel.dataset.current || '');
         const dir = fragSel.dataset && fragSel.dataset.dir ? String(fragSel.dataset.dir) : _fragmentDir;
+        const prevItems = _fragmentItems.slice();
         await guardFragmentSwitch(next, prev, {
-          onCancel: () => restoreFragmentSelection(fragSel, prev, dir, _fragmentItems),
+          onCancel: () => restoreFragmentSelection(fragSel, prev, dir, prevItems),
           beforeSwitch: () => { try { saveCurrentViewState(); } catch (e2) {} },
-          commit: async () => {
-            applyActiveFragment(next, dir);
-            await load();
-          },
+          commit: async () => loadCommittedFragmentSelection(next, {
+            selectEl: fragSel,
+            nextDir: dir,
+            nextItems: _fragmentItems,
+            prev,
+            prevDir: dir,
+            prevItems,
+          }),
         });
       });
       if (fragSel.dataset) fragSel.dataset.xkeenWired = '1';
+    }
+
+    const refreshBtn = $(IDS.fragmentRefresh);
+    if (refreshBtn && !(refreshBtn.dataset && refreshBtn.dataset.xkWired === '1')) {
+      refreshBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const prev = getActiveFragment();
+        const prevDir = _fragmentDir;
+        const prevItems = _fragmentItems.slice();
+        await refreshFragmentsList({ notify: true, prevSelection: prev, syncActive: false });
+        const next = getSelectedFragmentFromUI() || getActiveFragment();
+        if (!next || next === prev) return;
+        await guardFragmentSwitch(next, prev, {
+          onCancel: () => restoreFragmentSelection(fragSel, prev, prevDir, prevItems),
+          beforeSwitch: () => { try { saveCurrentViewState(); } catch (e2) {} },
+          commit: async () => loadCommittedFragmentSelection(next, {
+            selectEl: fragSel,
+            nextDir: currentFragmentDirFromUi(fragSel),
+            nextItems: _fragmentItems,
+            prev,
+            prevDir,
+            prevItems,
+          }),
+        });
+      });
+      if (refreshBtn.dataset) refreshBtn.dataset.xkWired = '1';
     }
 
     // "All files" toggle for fragment selector (optional)
@@ -3244,19 +3293,27 @@ function closeHelp() {
         const prevEnabled = !enabled;
         const prevSel = getActiveFragment();
         const prevDir = _fragmentDir;
+        const prevItems = _fragmentItems.slice();
         rememberFragmentsScopeAll(enabled);
-        await refreshFragmentsList({ notify: true, scopeChanged: enabled ? 'on' : 'off', prevSelection: prevSel });
-        const nextSel = getActiveFragment();
+        await refreshFragmentsList({ notify: true, scopeChanged: enabled ? 'on' : 'off', prevSelection: prevSel, syncActive: false });
+        const nextSel = getSelectedFragmentFromUI() || getActiveFragment();
         if (!nextSel || nextSel === prevSel) return;
         await guardFragmentSwitch(nextSel, prevSel, {
           onCancel: async () => {
             try { allCb.checked = prevEnabled; } catch (e2) {}
             rememberFragmentsScopeAll(prevEnabled);
-            await refreshFragmentsList({ notify: false, prevSelection: prevSel });
-            restoreFragmentSelection($(IDS.fragmentSelect), prevSel, prevDir, _fragmentItems);
+            await refreshFragmentsList({ notify: false, prevSelection: prevSel, syncActive: false });
+            restoreFragmentSelection($(IDS.fragmentSelect), prevSel, prevDir, prevItems);
           },
           beforeSwitch: () => { try { saveCurrentViewState(); } catch (e2) {} },
-          commit: async () => { await load(); },
+          commit: async () => loadCommittedFragmentSelection(nextSel, {
+            selectEl: $(IDS.fragmentSelect),
+            nextDir: currentFragmentDirFromUi($(IDS.fragmentSelect)),
+            nextItems: _fragmentItems,
+            prev: prevSel,
+            prevDir,
+            prevItems,
+          }),
         });
       });
       if (allCb.dataset) allCb.dataset.xkWired = '1';
@@ -4929,18 +4986,21 @@ function closeHelp() {
 
 
   function init() {
-    try {
-      document.addEventListener('xkeen:routing-comments-ux', (ev) => {
-        const d = ev && ev.detail ? ev.detail : {};
-        _commentsBadgeOverride = (d && d.kind) ? { kind: String(d.kind || ''), reason: String(d.reason || ''), message: String(d.message || '') } : null;
-        try { updateEditorMetaStatus(); } catch (e) {}
-      });
-    } catch (e) {}
-
     const textarea = $(IDS.textarea);
     if (!textarea) return;
     if (_inited) return;
     _inited = true;
+
+    if (!_commentsUxWired) {
+      try {
+        document.addEventListener('xkeen:routing-comments-ux', (ev) => {
+          const d = ev && ev.detail ? ev.detail : {};
+          _commentsBadgeOverride = (d && d.kind) ? { kind: String(d.kind || ''), reason: String(d.reason || ''), message: String(d.message || '') } : null;
+          try { updateEditorMetaStatus(); } catch (e) {}
+        });
+        _commentsUxWired = true;
+      } catch (e) {}
+    }
 
     try {
       const lifecycle = getFeatureLifecycle();

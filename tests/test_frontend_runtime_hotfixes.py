@@ -143,6 +143,37 @@ def test_routing_fragment_refresh_uses_runtime_http_api_instead_of_undefined_cor
     assert 'CORE_HTTP.fetchJSON' not in text
 
 
+def test_routing_fragment_switch_uses_commit_helper_and_rolls_back_after_load_failure():
+    text = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+
+    assert 'async function loadCommittedFragmentSelection(next, opts)' in text
+    assert 'return _activeFragment || getSelectedFragmentFromUI() || restoreRememberedFragment() || null;' in text
+    assert 'const ok = await load();' in text
+    assert 'if (ok) return true;' in text
+    assert 'if (prevValue) restoreFragmentSelection(selectEl, prevValue, prevDir, prevItems);' in text
+    assert "commit: async () => loadCommittedFragmentSelection(next, {" in text
+    assert 'applyActiveFragment(next, dir);' not in text
+
+
+def test_routing_refresh_button_is_wired_in_wireui_instead_of_refresh_success_path():
+    text = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+
+    assert 'const refreshBtn = $(IDS.fragmentRefresh);' in text
+    assert "await refreshFragmentsList({ notify: true, prevSelection: prev, syncActive: false });" in text
+    assert "const next = getSelectedFragmentFromUI() || getActiveFragment();" in text
+    assert "if (btn && !btn.dataset.xkWired)" not in text
+
+
+def test_routing_comments_ux_listener_is_guarded_after_init_flag():
+    text = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+
+    assert 'let _commentsUxWired = false;' in text
+    assert 'if (_inited) return;' in text
+    assert "document.addEventListener('xkeen:routing-comments-ux', (ev) => {" in text
+    assert '_commentsUxWired = true;' in text
+    assert text.index('if (_inited) return;') < text.index("document.addEventListener('xkeen:routing-comments-ux', (ev) => {")
+
+
 def test_routing_dat_card_keeps_visible_current_file_labels_in_sync_with_selected_names():
     ids_text = Path('xkeen-ui/static/js/features/routing_cards/ids.js').read_text(encoding='utf-8')
     panel_text = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
