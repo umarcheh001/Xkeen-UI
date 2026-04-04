@@ -94,8 +94,10 @@ def test_panel_inventory_captures_current_p2_screen_split_and_lazy_runtime(tmp_p
     assert "static/js/runtime/lazy_runtime.js" in esm_files
     for rel in (
         "static/js/pages/top_level_panel_screen.js",
+        "static/js/pages/top_level_backups_screen.js",
         "static/js/pages/top_level_mihomo_generator_screen.js",
         "static/js/pages/top_level_screen_host.shared.js",
+        "static/js/pages/top_level_xkeen_screen.js",
         "static/js/pages/panel.screen.bootstrap.js",
         "static/js/pages/panel.bootstrap_tail.bundle.js",
         "static/js/pages/panel.shared_compat.bundle.js",
@@ -151,14 +153,75 @@ def test_devtools_inventory_captures_current_p3_screen_split_and_deferred_sectio
     assert dynamic_imports == set()
 
     for rel in (
+        "static/js/pages/top_level_backups_screen.js",
         "static/js/pages/devtools.screen.bootstrap.js",
         "static/js/pages/top_level_devtools_screen.js",
         "static/js/pages/top_level_panel_mihomo.shared.js",
+        "static/js/pages/top_level_xkeen_screen.js",
         "static/js/features/devtools.js",
         "static/js/features/devtools/logs.js",
         "static/js/features/devtools/update.js",
     ):
         assert rel in esm_files, f"devtools P3 inventory should capture screen/bootstrap module: {rel}"
+
+
+def test_backups_and_xkeen_inventory_capture_current_p8_p10_top_level_shell_contract(tmp_path):
+    output_path = tmp_path / "frontend-page-inventory.generated.json"
+    result = subprocess.run(
+        [sys.executable, str(GENERATOR), "--root", str(ROOT), "--json-out", str(output_path)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    backups = payload["pages"]["backups"]
+    xkeen = payload["pages"]["xkeen"]
+
+    backups_shared_imports = set(backups.get("shared_imports") or [])
+    backups_dynamic_imports = set(backups.get("dynamic_imports") or [])
+    backups_esm_files = {item["path"] for item in backups.get("esm_bootstrap_files", [])}
+
+    assert {
+        "./top_level_shell.shared.js",
+        "./top_level_panel_mihomo.shared.js",
+        "./backups.screen.bootstrap.js",
+    }.issubset(backups_shared_imports)
+    assert backups_dynamic_imports == set()
+    for rel in (
+        "static/js/pages/backups.screen.bootstrap.js",
+        "static/js/pages/top_level_backups_screen.js",
+        "static/js/pages/top_level_panel_mihomo.shared.js",
+        "static/js/pages/top_level_nav.shared.js",
+        "static/js/pages/backups.init.js",
+        "static/js/features/backups.js",
+    ):
+        assert rel in backups_esm_files, f"backups inventory should capture screen/bootstrap module: {rel}"
+    assert "XKeen.pageConfig" in set(backups.get("all_bootstrap_globals") or [])
+
+    xkeen_shared_imports = set(xkeen.get("shared_imports") or [])
+    xkeen_dynamic_imports = set(xkeen.get("dynamic_imports") or [])
+    xkeen_esm_files = {item["path"] for item in xkeen.get("esm_bootstrap_files", [])}
+
+    assert {
+        "./top_level_shell.shared.js",
+        "./top_level_panel_mihomo.shared.js",
+        "./xkeen.screen.bootstrap.js",
+    }.issubset(xkeen_shared_imports)
+    assert xkeen_dynamic_imports == set()
+    for rel in (
+        "static/js/pages/xkeen.screen.bootstrap.js",
+        "static/js/pages/top_level_xkeen_screen.js",
+        "static/js/pages/top_level_panel_mihomo.shared.js",
+        "static/js/pages/top_level_nav.shared.js",
+        "static/js/pages/xkeen.init.js",
+        "static/js/features/service_status.js",
+        "static/js/features/xkeen_texts.js",
+    ):
+        assert rel in xkeen_esm_files, f"xkeen inventory should capture screen/bootstrap module: {rel}"
+    assert "XKeen.pageConfig" in set(xkeen.get("all_bootstrap_globals") or [])
 
 
 def test_frontend_inventory_docs_freeze_source_graph_as_canonical_stage1_contract():
@@ -169,7 +232,34 @@ def test_frontend_inventory_docs_freeze_source_graph_as_canonical_stage1_contrac
         "source entrypoints в `static/js/pages/*.entry.js` остаются канонической картой страниц",
         "build-managed wrappers из `static/frontend-build/assets/*-*.js` не являются отдельной архитектурой",
         "snapshot можно и нужно строить по source graph",
+        "все пять canonical page entrypoints используют общий `top_level_shell.shared.js`",
+        "hard navigation остаётся только fallback-path для direct URL entry, missing screen и transition failure",
     ]
 
     for fragment in required_fragments:
         assert fragment in inventory_doc, f"missing stage 1/3 freeze fragment in frontend-page-inventory.md: {fragment}"
+
+
+def test_top_level_navigation_docs_are_synchronized_for_all_five_canonical_routes():
+    architecture_doc = (ROOT / "docs" / "frontend-target-architecture.md").read_text(encoding="utf-8")
+    readme_doc = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+    plan_doc = (ROOT / "docs" / "top-level-navigation-plan.md").read_text(encoding="utf-8")
+
+    architecture_fragments = [
+        "top-level entrypoints для `/`, `/backups`, `/devtools`, `/xkeen` и `/mihomo_generator` остаются thin wrappers над `bootTopLevelShell(...)`",
+        "все пять canonical page entrypoints используют общий `top_level_shell.shared.js`",
+        "top-level router для `/`, `/backups`, `/devtools`, `/xkeen` и `/mihomo_generator` использует фиксированный route registry",
+    ]
+    for fragment in architecture_fragments:
+        assert fragment in architecture_doc, f"missing five-route top-level contract fragment in frontend-target-architecture.md: {fragment}"
+
+    assert "итог по уже закрытому переводу всех five canonical entrypoints" in readme_doc
+
+    plan_fragments = [
+        "# Итог: top-level navigation между `/`, `/backups`, `/devtools`, `/xkeen` и `/mihomo_generator`",
+        "- `P10` — guardrails, verification, docs/inventory sync и финальная фиксация five-route runtime contract.",
+        "- hard navigation остаётся только fallback-only path для direct URL entry, missing screen и transition failure.",
+        "Документ нужно читать только как закрывающую заметку по полностью завершённому five-route rollout.",
+    ]
+    for fragment in plan_fragments:
+        assert fragment in plan_doc, f"missing final five-route status fragment in top-level-navigation-plan.md: {fragment}"

@@ -13,7 +13,7 @@
 Что это значит на практике:
 
 - entrypoint поднимает страницу через обычные `import` и общий shell bootstrap, который в итоге вызывает `boot*Page()`;
-- top-level entrypoints для `/`, `/devtools` и `/mihomo_generator` остаются thin wrappers над `bootTopLevelShell(...)` и screen bootstrap, без собственной DOM/network/runtime-логики;
+- top-level entrypoints для `/`, `/backups`, `/devtools`, `/xkeen` и `/mihomo_generator` остаются thin wrappers над `bootTopLevelShell(...)` и screen bootstrap, без собственной DOM/network/runtime-логики;
 - порядок зависимостей фиксируется модульным графом, а не URL-списком legacy-скриптов;
 - source entry остаётся источником истины и для dev, и для build-managed production path.
 
@@ -32,9 +32,9 @@ Shared-слои страницы подключаются через `import` и
 Нормальная текущая модель:
 
 - `panel.entry.js` импортирует shared shell/runtime, затем передаёт управление `top_level_shell.shared.js` и подгружает feature bundles;
-- secondary pages импортируют свои shared dependencies и передают управление `*.init.js` через тот же общий top-level shell bootstrap.
-- top-level templates `/`, `/devtools` и `/mihomo_generator` могут оставаться отдельными, но общий host-каркас должен выноситься в shared Jinja partials вместо copy-paste head/spinner/theme bootstrap блоков.
-- top-level router для `/`, `/devtools` и `/mihomo_generator` использует фиксированный route registry и `pushState`/`popstate` как normal path, а hard navigation остаётся только fallback-путём для direct entry, missing screen или transition failure.
+- все пять canonical page entrypoints используют общий `top_level_shell.shared.js`, а page-specific boot остаётся в `*.screen.bootstrap.js` и `*.init.js`;
+- top-level templates `/`, `/backups`, `/devtools`, `/xkeen` и `/mihomo_generator` могут оставаться отдельными, но общий host-каркас должен выноситься в shared Jinja partials вместо copy-paste head/spinner/theme bootstrap блоков;
+- top-level router для `/`, `/backups`, `/devtools`, `/xkeen` и `/mihomo_generator` использует фиксированный route registry и `pushState`/`popstate` как normal path, а hard navigation остаётся только fallback-путём для direct entry, missing screen или transition failure.
 
 ### 3. Feature-модули = ESM с явным API
 
