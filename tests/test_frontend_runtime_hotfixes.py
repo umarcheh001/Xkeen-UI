@@ -526,16 +526,37 @@ def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering
 
     assert "data-xk-preflight-explainer-wrap" in modal_text
     assert "data-xk-preflight-explainer" in modal_text
+    assert "data-xk-preflight-code-trigger" in modal_text
+    assert "data-xk-preflight-code-help-wrap" in modal_text
+    assert "data-xk-preflight-code-help" in modal_text
     assert 'function classifyTerminalLine(line) {' in modal_text
+    assert 'function buildHumanDiagnosis(payload, details) {' in modal_text
+    assert 'function buildReturnCodeHelp(payload, code) {' in modal_text
     assert 'function buildExplanationItems(payload, details) {' in modal_text
     assert 'function renderExplanationItems(container, items) {' in modal_text
     assert 'function renderTerminalOutput(el, text, emptyLabel) {' in modal_text
+    assert 'function scrollTerminalToDiagnostic(el) {' in modal_text
     assert 'renderTerminalOutput(els.stderr, stderr, \'stderr пуст\');' in modal_text
     assert 'renderTerminalOutput(els.stdout, stdout, \'stdout пуст\');' in modal_text
+    assert "Код 23 здесь означает только то, что `xray -test` завершился с ошибкой" in modal_text
     assert '.xk-preflight-block--explainer {' in css_text
+    assert '.xk-preflight-code-trigger {' in css_text
+    assert '.xk-preflight-block--code-help {' in css_text
     assert '.xk-preflight-explainer-item {' in css_text
     assert '.xk-preflight-terminal-line.is-problem {' in css_text
     assert '.xk-preflight-terminal-line.is-warning {' in css_text
+
+
+def test_devtools_light_theme_has_readable_update_pills_and_layout_tab_list():
+    css_text = Path('xkeen-ui/static/devtools.css').read_text(encoding='utf-8')
+
+    assert 'html[data-theme="light"] body.devtools-page .dt-badge,' in css_text
+    assert 'html[data-theme="light"] body.devtools-page .dt-pill {' in css_text
+    assert 'html[data-theme="light"] body.devtools-page .dt-badge-warn,' in css_text
+    assert 'html[data-theme="light"] body.devtools-page .dt-pill-warn {' in css_text
+    assert 'html[data-theme="light"] body.devtools-page .dt-tab-item {' in css_text
+    assert 'html[data-theme="light"] body.devtools-page .dt-tab-label {' in css_text
+    assert 'html[data-theme="light"] body.devtools-page #dt-layout-card hr {' in css_text
 
 
 def test_theme_toggle_uses_delegated_binding_and_resyncs_after_top_level_route_changes():

@@ -9,6 +9,8 @@
   const WARNING_LINE_RE = /\b(warn(?:ing)?|deprecated|retry|fallback)\b/i;
   const NOISE_LINE_RE = /^(using confdir from arg:|xray \d+\.\d+\.\d+|a unified platform|reading config:|appended inbound|appended outbound|appended routing|configuration ok)$/i;
   const CONFIG_PATH_RE = /((?:\/|[a-zA-Z]:[\\/])[^\s"'<>]+?\.(?:jsonc?|ya?ml|conf))/g;
+  const BRACKETED_CONFIG_PATH_RE = /\[([^\]]+?\.(?:jsonc?|ya?ml|conf))\]/g;
+  const LOCATION_IN_TEXT_RE = /(?:\bat\b\s*)?(?:line|строк[аи])\s*[:=]?\s*(\d+)(?:[^\d]{0,18}(?:column|col|столб(?:ец|ца))\s*[:=]?\s*(\d+))?/i;
 
   let _els = null;
   let _escHandler = null;
@@ -58,6 +60,49 @@
     return parts[parts.length - 1] || normalized;
   }
 
+  function lowerFirst(text) {
+    const source = normText(text);
+    if (!source) return '';
+    return source.charAt(0).toLowerCase() + source.slice(1);
+  }
+
+  function collapseConfigPaths(text) {
+    return String(text == null ? '' : text)
+      .replace(BRACKETED_CONFIG_PATH_RE, (_match, path) => '[' + basename(path) + ']')
+      .replace(CONFIG_PATH_RE, (match) => basename(match));
+  }
+
+  function prettifyDiagnosticText(text) {
+    let value = collapseConfigPaths(normText(text));
+    if (!value) return '';
+    value = value
+      .replace(/(?:^|>\s*)main:\s*/gi, '$1')
+      .replace(/(?:^|>\s*)infra\/conf(?:\/serial)?:\s*/gi, '$1')
+      .replace(/(?:^|>\s*)app\/(?:dispatcher|proxyman|router)[^:]*:\s*/gi, '$1')
+      .replace(/\s*>\s*/g, ' > ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    return value;
+  }
+
+  function extractLocationTextFromSources() {
+    for (let i = 0; i < arguments.length; i += 1) {
+      const source = normText(arguments[i]);
+      if (!source) continue;
+      const match = source.match(LOCATION_IN_TEXT_RE);
+      if (!match) continue;
+      const line = Number(match[1]);
+      const col = Number(match[2]);
+      if (Number.isFinite(line) && Number.isFinite(col)) {
+        return 'Строка ' + line + ', столбец ' + col;
+      }
+      if (Number.isFinite(line)) {
+        return 'Строка ' + line;
+      }
+    }
+    return '';
+  }
+
   function extractCoreSummary(text) {
     const source = normText(text);
     if (!source) return '';
@@ -82,6 +127,185 @@
     if (normalized === 'xray test failed') return '';
     if (normalized.indexOf('preflight exception:') === 0) return 'Не удалось выполнить предварительную проверку Xray.';
     return normText(errorText);
+  }
+
+  function selectPrimaryDiagnostic(diagnostics, stderr, stdout, errorText) {
+    const list = Array.isArray(diagnostics) ? diagnostics : [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      if (list[i] && list[i].kind === 'problem') return list[i];
+    }
+    if (list.length) return list[list.length - 1];
+
+    const fallback = extractCoreSummary(stderr) || extractCoreSummary(stdout) || summarizeKnownError(errorText);
+    if (!fallback) return null;
+    return {
+      kind: classifyTerminalLine(fallback),
+      text: fallback,
+    };
+  }
+
+  function extractRootCauseText(text) {
+    const clean = prettifyDiagnosticText(stripLogPrefix(text));
+    if (!clean) return '';
+    const chain = clean.split(/\s+>\s+/).map((part) => normText(part)).filter(Boolean);
+    if (chain.length) {
+      for (let i = chain.length - 1; i >= 0; i -= 1) {
+        if (SUMMARY_LINE_RE.test(chain[i])) return chain[i];
+      }
+      return chain[chain.length - 1];
+    }
+    return clean;
+  }
+
+  function resolveFocusFile(primaryLine, files) {
+    const explicit = extractConfigFileNames(primaryLine || '');
+    if (explicit.length) {
+      return { name: explicit[explicit.length - 1], source: 'explicit' };
+    }
+    const pool = Array.isArray(files) ? files.filter(Boolean) : [];
+    if (pool.length) {
+      return { name: pool[pool.length - 1], source: pool.length > 1 ? 'last_seen' : 'list' };
+    }
+    return { name: '', source: '' };
+  }
+
+  function detectIssuePattern(text, payload) {
+    const source = String(text || '');
+
+    if (payload && payload.timed_out) {
+      return {
+        id: 'timeout',
+        summary: 'Проверка конфигурации Xray не успела завершиться.',
+        action: 'Проверьте тяжёлый или проблемный фрагмент конфига и попробуйте сохранить ещё раз.',
+      };
+    }
+
+    if (/(unexpected end|unexpected eof|unexpected token|invalid character|invalid json|syntax error|after object key:value pair|comma expected|colon expected|close brace expected|close bracket expected|end of file expected|unexpected end of string|unexpected end of number|malformed)/i.test(source)) {
+      return {
+        id: 'json_syntax',
+        summary: 'Похоже, в конфиге сломан синтаксис JSON.',
+        action: 'Проверьте рядом с ошибкой запятые, кавычки и закрывающие `}` или `]`.',
+      };
+    }
+
+    if (/\bduplicat(?:e|ed|ion)\b/i.test(source)) {
+      return {
+        id: 'duplicate',
+        summary: 'Похоже, в конфиге есть дублирующийся ключ, тег или блок.',
+        action: 'Уберите дубликат или переименуйте повторяющийся элемент.',
+      };
+    }
+
+    if (/\bunknown\b.*\b(field|option|protocol|transport|network|security|tag|config|type|outbound|inbound|rule)\b/i.test(source)) {
+      return {
+        id: 'unknown_value',
+        summary: 'Xray встретил поле или значение, которое не понимает.',
+        action: 'Проверьте название параметра и его значение: возможно, это опечатка или неподдерживаемая опция.',
+      };
+    }
+
+    if (/\b(not found|no such file|cannot find|failed to open|open .+ no such file)\b/i.test(source)) {
+      return {
+        id: 'missing_resource',
+        summary: 'Конфиг ссылается на файл или ресурс, которого сейчас нет.',
+        action: 'Проверьте путь, имя файла и наличие нужного файла на роутере.',
+      };
+    }
+
+    if (/\bport\b.*\b(invalid|out of range|must be|bad)\b/i.test(source)) {
+      return {
+        id: 'invalid_port',
+        summary: 'В одном из фрагментов указан некорректный порт.',
+        action: 'Используйте порт от 1 до 65535 и проверьте, что значение записано числом.',
+      };
+    }
+
+    if (/\bfailed to (?:build|create|load|parse|start)\b/i.test(source)) {
+      return {
+        id: 'build_chain',
+        summary: 'Xray не смог собрать итоговый конфиг из фрагментов.',
+        action: 'Ориентируйтесь на последнюю красную строку: в ней обычно указан проблемный файл или параметр.',
+      };
+    }
+
+    return {
+      id: 'generic',
+      summary: 'Xray нашёл ошибку в конфиге.',
+      action: 'Посмотрите красные строки справа: они лучше всего показывают, что именно не понравилось Xray.',
+    };
+  }
+
+  function buildReturnCodeHelp(payload, code) {
+    const value = String(code == null ? '' : code).trim();
+    if (!value || value === '0' || value === '—') return '';
+    if (payload && payload.timed_out) {
+      return 'Здесь важен не код возврата, а сам таймаут: проверка не уложилась в лимит и была прервана.';
+    }
+    if (value === '23') {
+      return 'Код 23 здесь означает только то, что `xray -test` завершился с ошибкой и конфиг не прошёл проверку. Сам код не говорит, что именно сломано: причину ищите в разборе ошибки и в красных строках справа.';
+    }
+    return 'Код ' + value + ' означает только то, что `xray -test` завершился с ошибкой. Сам по себе он не объясняет причину; ориентируйтесь на разбор ошибки и красные строки справа.';
+  }
+
+  function buildHumanDiagnosis(payload, details) {
+    const summary = normText(details && details.summary);
+    const hint = normText(details && details.hint);
+    const locationText = normText(details && details.locationText);
+    const stderr = normText(details && details.stderr);
+    const stdout = normText(details && details.stdout);
+    const errorText = normText(details && details.errorText);
+    const diagnostics = collectDiagnosticLines(summary, stderr, stdout, errorText);
+    const primary = selectPrimaryDiagnostic(diagnostics, stderr, stdout, errorText);
+    const primaryLine = prettifyDiagnosticText(primary && primary.text ? primary.text : '');
+    const rootCause = extractRootCauseText(primaryLine || summary || errorText);
+    const files = extractConfigFileNames(primaryLine, stderr, stdout);
+    const focus = resolveFocusFile(primaryLine, files);
+    const issue = detectIssuePattern([rootCause, primaryLine, summary, stderr, stdout, errorText].filter(Boolean).join('\n'), payload);
+    const code = payload && payload.returncode != null && payload.returncode !== '' ? String(payload.returncode) : '';
+    const codeHelp = buildReturnCodeHelp(payload, code);
+
+    let humanSummary = issue.summary;
+    if (focus.name && issue.id === 'json_syntax' && locationText) {
+      humanSummary = 'Похоже, в ' + focus.name + ' есть синтаксическая ошибка рядом с ' + lowerFirst(locationText) + '.';
+    } else if (focus.name && issue.id === 'json_syntax') {
+      humanSummary = 'Похоже, в ' + focus.name + ' есть синтаксическая ошибка JSON.';
+    } else if (focus.name && issue.id === 'unknown_value') {
+      humanSummary = 'Похоже, в ' + focus.name + ' есть неподдерживаемое поле или значение.';
+    } else if (focus.name && issue.id === 'duplicate') {
+      humanSummary = 'Похоже, в ' + focus.name + ' есть дублирующийся ключ, тег или блок.';
+    } else if (focus.name && issue.id === 'build_chain') {
+      humanSummary = 'Xray не смог собрать конфиг; сначала проверьте ' + focus.name + '.';
+    } else if (focus.name && issue.id === 'generic') {
+      humanSummary = 'Xray нашёл проблему в конфиге; сначала проверьте ' + focus.name + '.';
+    } else if (locationText && issue.id === 'json_syntax') {
+      humanSummary = 'Похоже, в конфиге есть синтаксическая ошибка рядом с ' + lowerFirst(locationText) + '.';
+    }
+
+    let whereText = '';
+    if (focus.name && locationText) {
+      whereText = 'Начните с ' + focus.name + ': ошибка указывает на ' + lowerFirst(locationText) + '.';
+    } else if (focus.name && focus.source === 'explicit') {
+      whereText = 'Ошибка прямо указывает на файл ' + focus.name + '.';
+    } else if (focus.name && focus.source === 'last_seen') {
+      whereText = 'Последним перед ошибкой Xray обрабатывал ' + focus.name + '. Начните с него.';
+    } else if (files.length) {
+      whereText = 'Проверьте сначала эти фрагменты: ' + formatList(files, 3) + '.';
+    }
+
+    const genericHint = normalizeForCompare('Xray не принял конфиг. Исправьте ошибку и повторите сохранение.');
+    const hasCustomHint = !!hint && normalizeForCompare(hint) !== genericHint;
+    const actionText = hasCustomHint ? hint : issue.action;
+
+    return {
+      summaryText: humanSummary,
+      whereText,
+      actionText,
+      primaryLine,
+      rootCause: prettifyDiagnosticText(rootCause),
+      files,
+      focusFile: focus.name,
+      codeHelp,
+    };
   }
 
   function classifyTerminalLine(line) {
@@ -164,57 +388,37 @@
   function buildExplanationItems(payload, details) {
     const items = [];
     const seen = new Set();
-    const summary = normText(details && details.summary);
     const hint = normText(details && details.hint);
     const locationText = normText(details && details.locationText);
     const stderr = normText(details && details.stderr);
     const stdout = normText(details && details.stdout);
+    const diagnosis = buildHumanDiagnosis(payload, details);
     const diagnostics = collectDiagnosticLines(stderr, stdout);
-    const files = extractConfigFileNames(stderr, stdout);
-    const primaryDiagnostic = diagnostics.length ? diagnostics[diagnostics.length - 1].text : '';
-    const code = payload && payload.returncode != null && payload.returncode !== '' ? String(payload.returncode) : '';
 
-    if (summary) {
-      pushExplanationItem(items, seen, 'Коротко', summary, 'problem');
+    if (diagnosis.rootCause) {
+      pushExplanationItem(items, seen, 'Почему Xray остановился', diagnosis.rootCause, 'problem');
     }
 
-    if (locationText) {
-      pushExplanationItem(items, seen, 'Позиция', 'Ошибка указывает на ' + locationText.toLowerCase() + '.', 'problem');
-    } else if (files.length) {
-      pushExplanationItem(items, seen, 'Файлы', 'В проверке фигурируют: ' + formatList(files, 3) + '.', 'info');
+    if (diagnosis.whereText) {
+      pushExplanationItem(items, seen, 'Где искать', diagnosis.whereText, locationText ? 'problem' : 'info');
     }
 
-    if (primaryDiagnostic && !isSameMessage(primaryDiagnostic, summary)) {
-      pushExplanationItem(items, seen, 'Ключевая строка', primaryDiagnostic, 'problem');
+    if (diagnosis.actionText) {
+      pushExplanationItem(items, seen, 'Что исправить', diagnosis.actionText, 'action');
+    } else if (hint) {
+      pushExplanationItem(items, seen, 'Что исправить', hint, 'action');
     }
 
-    if (payload && payload.timed_out) {
-      pushExplanationItem(
-        items,
-        seen,
-        'Таймаут',
-        'Xray не успел закончить проверку за ' + String(payload.timeout_s || '') + ' с. Проверьте тяжёлые или зацикленные фрагменты конфига.',
-        'warning'
-      );
-    } else if (code && code !== '0') {
-      pushExplanationItem(
-        items,
-        seen,
-        'Код Xray',
-        'Команда `xray -test` завершилась с кодом ' + code + ', поэтому конфиг не был сохранён.',
-        'warning'
-      );
-    }
-
-    if (hint) {
-      pushExplanationItem(items, seen, 'Что сделать', hint, 'action');
+    if (diagnosis.primaryLine && !isSameMessage(diagnosis.primaryLine, diagnosis.rootCause) && !isSameMessage(diagnosis.primaryLine, diagnosis.actionText)) {
+      pushExplanationItem(items, seen, 'Красная строка из лога', diagnosis.primaryLine, 'problem');
     }
 
     if (!items.length && diagnostics.length) {
-      pushExplanationItem(items, seen, 'Ключевая строка', diagnostics[0].text, diagnostics[0].kind === 'problem' ? 'problem' : 'warning');
+      const fallback = prettifyDiagnosticText(diagnostics[0].text);
+      pushExplanationItem(items, seen, 'Красная строка из лога', fallback, diagnostics[0].kind === 'problem' ? 'problem' : 'warning');
     }
 
-    return items.slice(0, 5);
+    return items.slice(0, 4);
   }
 
   function renderExplanationItems(container, items) {
@@ -277,6 +481,21 @@
     el.appendChild(fragment);
   }
 
+  function scrollTerminalToDiagnostic(el) {
+    if (!el) return;
+    const problemRows = Array.from(el.querySelectorAll('.xk-preflight-terminal-line.is-problem'));
+    const warningRows = Array.from(el.querySelectorAll('.xk-preflight-terminal-line.is-warning'));
+    const target = (problemRows.length ? problemRows[problemRows.length - 1] : null) || (warningRows.length ? warningRows[warningRows.length - 1] : null);
+    try {
+      el.scrollTop = 0;
+    } catch (e) {}
+    if (!target) return;
+    try {
+      const offset = Math.max(0, target.offsetTop - Math.max(24, Math.round(el.clientHeight * 0.32)));
+      el.scrollTop = offset;
+    } catch (e2) {}
+  }
+
   function clearCopyState(copyBtn) {
     if (!copyBtn) return;
     try {
@@ -290,8 +509,15 @@
     } catch (e2) {}
   }
 
-  function locationTextFromPayload(payload) {
-    if (!payload || !payload.location) return '';
+  function locationTextFromPayload(payload, details) {
+    if (!payload || !payload.location) {
+      return extractLocationTextFromSources(
+        details && details.summary,
+        details && details.stderr,
+        details && details.stdout,
+        payload && payload.error
+      );
+    }
     const loc = payload.location || {};
     const line = Number(loc.line);
     const col = Number(loc.column || loc.col);
@@ -301,7 +527,12 @@
     if (Number.isFinite(line)) {
       return 'Строка ' + line;
     }
-    return '';
+    return extractLocationTextFromSources(
+      details && details.summary,
+      details && details.stderr,
+      details && details.stdout,
+      payload && payload.error
+    );
   }
 
   function resolvePresentation(payload) {
@@ -362,7 +593,8 @@
       !messageIncludes(hint, defaultSummary);
   }
 
-  function buildSummary(payload, stderr, stdout, errorText, hint, ui) {
+  function buildSummary(payload, stderr, stdout, errorText, hint, ui, diagnosis) {
+    if (diagnosis && diagnosis.summaryText) return diagnosis.summaryText;
     const summary = extractCoreSummary(stderr) || extractCoreSummary(stdout) || summarizeKnownError(errorText);
     if (summary) return summary;
     if (payload && payload.timed_out) return 'Проверка не завершилась за отведённое время.';
@@ -399,7 +631,7 @@
       '    <div class="xk-preflight-grid">' +
       '      <section class="xk-preflight-panel">' +
       '        <div class="xk-preflight-block xk-preflight-block--summary" data-xk-preflight-summary-wrap style="display:none;">' +
-      '          <div class="xk-preflight-block-title">Ошибка</div>' +
+      '          <div class="xk-preflight-block-title">Что сломалось</div>' +
       '          <div data-xk-preflight-summary></div>' +
       '        </div>' +
       '        <div class="xk-preflight-block xk-preflight-block--hint" data-xk-preflight-hint-wrap style="display:none;">' +
@@ -408,16 +640,20 @@
       '        </div>' +
       '        <div class="xk-preflight-meta-grid">' +
       '          <div class="xk-preflight-meta-card"><div class="xk-preflight-meta-label">Фаза</div><div class="xk-preflight-meta-value" data-xk-preflight-phase></div></div>' +
-      '          <div class="xk-preflight-meta-card"><div class="xk-preflight-meta-label">Код</div><div class="xk-preflight-meta-value" data-xk-preflight-code>—</div></div>' +
+      '          <div class="xk-preflight-meta-card"><div class="xk-preflight-meta-label">Код</div><button type="button" class="xk-preflight-code-trigger xk-preflight-meta-value" data-xk-preflight-code-trigger data-xk-preflight-code title="Пояснить код возврата Xray" aria-expanded="false">—</button></div>' +
       '          <div class="xk-preflight-meta-card" data-xk-preflight-timeout-card style="display:none;"><div class="xk-preflight-meta-label">Таймаут</div><div class="xk-preflight-meta-value" data-xk-preflight-timeout>—</div></div>' +
       '          <div class="xk-preflight-meta-card" data-xk-preflight-location-card style="display:none;"><div class="xk-preflight-meta-label">Позиция</div><div class="xk-preflight-meta-value" data-xk-preflight-location>—</div></div>' +
+      '        </div>' +
+      '        <div class="xk-preflight-block xk-preflight-block--code-help" data-xk-preflight-code-help-wrap style="display:none;">' +
+      '          <div class="xk-preflight-block-title">Что означает код</div>' +
+      '          <div data-xk-preflight-code-help></div>' +
       '        </div>' +
       '        <div class="xk-preflight-block">' +
       '          <div class="xk-preflight-block-title">Команда</div>' +
       '          <pre data-xk-preflight-cmd class="xk-preflight-codebox"></pre>' +
       '        </div>' +
       '        <div class="xk-preflight-block xk-preflight-block--explainer" data-xk-preflight-explainer-wrap style="display:none;">' +
-      '          <div class="xk-preflight-block-title">Расшифровка</div>' +
+      '          <div class="xk-preflight-block-title">Разбор ошибки</div>' +
       '          <div class="xk-preflight-explainer" data-xk-preflight-explainer></div>' +
       '        </div>' +
       '      </section>' +
@@ -445,6 +681,7 @@
     const closeBtn = modal.querySelector('.modal-close');
     const okBtn = modal.querySelector('[data-xk-preflight-close]');
     const copyBtn = modal.querySelector('[data-xk-preflight-copy]');
+    const codeTrigger = modal.querySelector('[data-xk-preflight-code-trigger]');
     if (copyBtn) copyBtn.dataset.defaultLabel = 'Скопировать детали';
 
     const close = () => {
@@ -512,6 +749,17 @@
       e.preventDefault();
       close();
     });
+    if (codeTrigger) {
+      codeTrigger.addEventListener('click', (e) => {
+        e.preventDefault();
+        const expanded = String(codeTrigger.getAttribute('aria-expanded') || 'false') === 'true';
+        const helpText = normText((modal.querySelector('[data-xk-preflight-code-help]') || {}).textContent || '');
+        if (!helpText) return;
+        const next = !expanded;
+        codeTrigger.setAttribute('aria-expanded', next ? 'true' : 'false');
+        setVisible(modal.querySelector('[data-xk-preflight-code-help-wrap]'), next);
+      });
+    }
     modal.addEventListener('click', (e) => {
       if (e.target === modal) close();
     });
@@ -575,7 +823,10 @@
       hint: modal.querySelector('[data-xk-preflight-hint]'),
       phase: modal.querySelector('[data-xk-preflight-phase]'),
       code: codeEl,
+      codeTrigger,
       codeCard: codeEl ? codeEl.closest('.xk-preflight-meta-card') : null,
+      codeHelpWrap: modal.querySelector('[data-xk-preflight-code-help-wrap]'),
+      codeHelp: modal.querySelector('[data-xk-preflight-code-help]'),
       timeout: timeoutEl,
       timeoutCard: modal.querySelector('[data-xk-preflight-timeout-card]'),
       locationCard: modal.querySelector('[data-xk-preflight-location-card]'),
@@ -610,10 +861,20 @@
     const code = payload.returncode == null || payload.returncode === '' ? '—' : String(payload.returncode);
     const timeout = formatTimeout(payload);
     const errorText = normText(payload.error);
-    const locationText = locationTextFromPayload(payload);
-    const summary = buildSummary(payload, stderr, stdout, errorText, hint, ui);
+    const locationText = locationTextFromPayload(payload, {
+      stderr,
+      stdout,
+      errorText,
+    });
+    const diagnosis = buildHumanDiagnosis(payload, {
+      hint,
+      locationText,
+      stderr,
+      stdout,
+      errorText,
+    });
+    const summary = buildSummary(payload, stderr, stdout, errorText, hint, ui, diagnosis);
     const showSummary = !!summary && !isSameMessage(summary, ui.description);
-    const showHint = shouldShowHint(hint, summary, ui.description, ui.defaultSummary);
     const showTimeout = !!timeout;
     const showStdout = !!stdout && !isSameMessage(stdout, stderr);
     const explanationItems = buildExplanationItems(payload, {
@@ -622,7 +883,10 @@
       locationText,
       stderr,
       stdout,
+      errorText,
     });
+    const showHint = shouldShowHint(hint, summary, ui.description, ui.defaultSummary) && explanationItems.length === 0;
+    const codeHelp = diagnosis.codeHelp;
 
     applyModeClass(els.modal, phase);
 
@@ -640,6 +904,14 @@
 
     if (els.phase) els.phase.textContent = formatPhase(phase);
     if (els.code) els.code.textContent = code;
+    if (els.codeTrigger) {
+      els.codeTrigger.title = codeHelp || 'Код возврата Xray';
+      els.codeTrigger.disabled = !codeHelp;
+      els.codeTrigger.setAttribute('aria-expanded', 'false');
+      els.codeTrigger.classList.toggle('is-helpful', !!codeHelp);
+    }
+    if (els.codeHelp) els.codeHelp.textContent = codeHelp || '';
+    setVisible(els.codeHelpWrap, false);
     if (els.timeout) els.timeout.textContent = timeout || '—';
     setVisible(els.timeoutCard, showTimeout);
     if (els.location) els.location.textContent = locationText || '—';
@@ -665,6 +937,7 @@
       phase === 'json_parse' ? 'JSON parse error' : 'Xray preflight error',
       'phase: ' + phase,
       'returncode: ' + code,
+      codeHelp ? 'returncode_help: ' + codeHelp : '',
       'timeout_s: ' + (payload.timeout_s == null || payload.timeout_s === '' ? '' : String(payload.timeout_s)),
       payload.timed_out ? 'timed_out: true' : '',
       locationText ? 'location: ' + locationText : '',
@@ -684,5 +957,11 @@
     if (els.copyBtn) els.copyBtn.dataset.copyText = copyParts;
 
     els.open();
+    try {
+      requestAnimationFrame(() => {
+        scrollTerminalToDiagnostic(els.stderr);
+        scrollTerminalToDiagnostic(els.stdout);
+      });
+    } catch (e) {}
   };
 })();

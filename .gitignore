@@ -15,3 +15,7 @@ node_modules/
 # Frontend build
 xkeen-ui/static/vendor/
 xkeen-ui/static/frontend-build/
+
+# Local packaging artifacts
+dist/
+package-root/

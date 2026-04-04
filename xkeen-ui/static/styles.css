@@ -11928,6 +11928,59 @@ html[data-theme="light"] .fm-progress-details{
   font-weight: 600;
 }
 
+.xk-preflight-code-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.xk-preflight-code-trigger::after {
+  content: '?';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  color: #93c5fd;
+  font-size: calc(11px * var(--xk-font-scale));
+  line-height: 1;
+}
+
+.xk-preflight-code-trigger[aria-expanded="true"]::after {
+  content: '–';
+}
+
+.xk-preflight-code-trigger:disabled {
+  cursor: default;
+  opacity: 0.88;
+}
+
+.xk-preflight-code-trigger:disabled::after {
+  border-color: rgba(148, 163, 184, 0.16);
+  color: #94a3b8;
+}
+
+.xk-preflight-code-trigger.is-helpful {
+  color: #fef3c7;
+}
+
+#xray-preflight-modal [data-xk-preflight-summary],
+#xray-preflight-modal [data-xk-preflight-hint],
+#xray-preflight-modal [data-xk-preflight-code-help] {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .xk-preflight-codebox,
 .xk-preflight-terminal {
   margin: 0;
@@ -11969,6 +12022,11 @@ html[data-theme="light"] .fm-progress-details{
   flex: 1 1 auto;
   justify-content: flex-start;
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.50), rgba(2, 6, 23, 0.24));
+}
+
+#xray-preflight-modal .xk-preflight-block--code-help {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.58), rgba(2, 6, 23, 0.24));
+  border-color: rgba(96, 165, 250, 0.20);
 }
 
 .xk-preflight-explainer {
@@ -12137,6 +12195,12 @@ html[data-theme="light"] .xk-preflight-explainer-item.is-warning {
 html[data-theme="light"] .xk-preflight-explainer-item.is-action {
   background: linear-gradient(180deg, rgba(239, 246, 255, 0.96), rgba(255,255,255,0.94));
   border-color: rgba(96, 165, 250, 0.20);
+}
+
+html[data-theme="light"] .xk-preflight-code-trigger::after {
+  background: rgba(239, 246, 255, 0.96);
+  border-color: rgba(96, 165, 250, 0.24);
+  color: #1d4ed8;
 }
 
 html[data-theme="light"] .xk-preflight-explainer-text {
