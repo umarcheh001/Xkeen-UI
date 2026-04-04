@@ -124,6 +124,7 @@
     if (normalized === 'xray test timeout') return 'Проверка не завершилась за отведённое время.';
     if (normalized === 'xray binary not found') return 'Не найден бинарник Xray для проверки.';
     if (normalized === 'xray config dir not found') return 'Не найден каталог конфигурации Xray.';
+    if (normalized === 'routing semantic validation failed') return 'Панель нашла ошибочную ссылку между routing.rules и outbounds.';
     if (normalized === 'xray test failed') return '';
     if (normalized.indexOf('preflight exception:') === 0) return 'Не удалось выполнить предварительную проверку Xray.';
     return normText(errorText);
@@ -162,11 +163,48 @@
     return '';
   }
 
+  function extractOutboundReference(text) {
+    const source = normText(text);
+    if (!source) return '';
+
+    const normalizedLines = source
+      .split('\n')
+      .map((line) => prettifyDiagnosticText(stripLogPrefix(line)))
+      .filter(Boolean);
+
+    const scopedPatterns = [
+      /"outboundTag"\s*:\s*"([^"\s]+)"/i,
+      /'outboundTag'\s*:\s*'([^'\s]+)'/i,
+      /\boutboundTag\s*[:=]\s*["'`]?([A-Za-z0-9_.:-]+)["'`]?/i,
+      /\boutboundTag\b[^\n"'`]{0,40}["'`]([^"'`\s]+)["'`]/i,
+      /\boutbound\s+([A-Za-z0-9_.:-]+)\s+(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b/i,
+      /\boutboundTag\s+([A-Za-z0-9_.:-]+)\s+(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b/i,
+      /["'`]([^"'`\s]+)["'`][^\n]{0,48}\boutboundTag\b/i,
+    ];
+
+    for (let lineIndex = 0; lineIndex < normalizedLines.length; lineIndex += 1) {
+      const line = normalizedLines[lineIndex];
+      if (!/\boutbound(?:Tag)?\b/i.test(line)) continue;
+      for (let i = 0; i < scopedPatterns.length; i += 1) {
+        const match = line.match(scopedPatterns[i]);
+        const value = normText(match && match[1]);
+        if (value && !/^(?:outbound|outboundTag|tag|not|found|missing|unknown|undefined|server)$/i.test(value)) {
+          return value;
+        }
+      }
+    }
+    return '';
+  }
+
   function scoreDiagnosticText(text) {
     const source = prettifyDiagnosticText(stripLogPrefix(text));
     if (!source) return Number.NEGATIVE_INFINITY;
 
     let score = 0;
+    if ((/\b(?:outboundTag|outbound)\b[^\n]{0,80}\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b/i.test(source)) ||
+        (/\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b[^\n]{0,80}\b(?:outboundTag|outbound)\b/i.test(source))) {
+      score += 230;
+    }
     if ((/\b(?:balancerTag|balancer)\b[^\n]{0,80}\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b/i.test(source)) ||
         (/\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b[^\n]{0,80}\b(?:balancerTag|balancer)\b/i.test(source))) {
       score += 220;
@@ -265,6 +303,26 @@
         id: 'timeout',
         summary: 'Проверка конфигурации Xray не успела завершиться.',
         action: 'Проверьте тяжёлый или проблемный фрагмент конфига и попробуйте сохранить ещё раз.',
+      };
+    }
+
+    if (((/\b(?:outboundTag|outbound)\b[^\n]{0,80}\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b/i.test(source)) ||
+        (/\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b[^\n]{0,80}\b(?:outboundTag|outbound)\b/i.test(source)))) {
+      const outboundRef = extractOutboundReference(source);
+      return {
+        id: 'missing_outbound',
+        summary: outboundRef
+          ? 'Правило ссылается на outboundTag "' + outboundRef + '", но такого outbound нет.'
+          : 'Правило ссылается на несуществующий outboundTag.',
+        where: outboundRef
+          ? 'Ищите правило, где указан outboundTag "' + outboundRef + '", и сверяйте его со списком outbounds.'
+          : 'Ищите правило с outboundTag и список outbounds: теги должны совпадать один в один.',
+        action: outboundRef
+          ? 'Создайте outbound с tag "' + outboundRef + '" в outbounds или исправьте это значение в правиле.'
+          : 'Проверьте, что outboundTag в правиле точно совпадает с tag существующего outbound в outbounds.',
+        rootCause: outboundRef
+          ? 'В правиле указан outboundTag "' + outboundRef + '", но outbound с таким tag не найден.'
+          : 'В одном из правил указан outboundTag, для которого нет соответствующего outbound.',
       };
     }
 
@@ -373,7 +431,11 @@
     const codeHelp = buildReturnCodeHelp(payload, code);
     let rootCauseText = prettifyDiagnosticText(rootCause);
 
-    if (issue.rootCause && (isGenericRootCauseText(rootCauseText) || (issue.id === 'missing_balancer' && !/\bbalancer(?:Tag)?\b/i.test(rootCauseText)))) {
+    if (issue.rootCause && (
+      isGenericRootCauseText(rootCauseText) ||
+      (issue.id === 'missing_balancer' && !/\bbalancer(?:Tag)?\b/i.test(rootCauseText)) ||
+      (issue.id === 'missing_outbound' && !/\boutbound(?:Tag)?\b/i.test(rootCauseText))
+    )) {
       rootCauseText = issue.rootCause;
     }
 
@@ -681,6 +743,16 @@
         iconText: '{}',
       };
     }
+    if (phase === 'routing_semantic_validate') {
+      return {
+        title: 'Панель отклонила конфиг',
+        description: 'Конфиг не был сохранён. Панель нашла сломанную ссылку между routing.rules и outbounds.',
+        defaultSummary: 'Панель нашла ошибочную ссылку в конфиге.',
+        defaultCmd: 'panel semantic validation',
+        modeLabel: 'Panel validation',
+        iconText: 'UI',
+      };
+    }
     return {
       title: 'Xray отклонил конфиг',
       description: 'Конфиг не был сохранён. Исправьте ошибку и попробуйте снова.',
@@ -694,6 +766,7 @@
   function formatPhase(phase) {
     const normalized = normText(phase || 'xray_test') || 'xray_test';
     if (normalized === 'json_parse') return 'JSON parse';
+    if (normalized === 'routing_semantic_validate') return 'Panel validation';
     if (normalized === 'xray_test') return 'Xray test';
     return normalized.replace(/_/g, ' ');
   }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 import types
@@ -133,3 +134,42 @@ def test_shorten_text_preserves_xray_root_cause_from_log_tail():
     assert 'warning line 0' in shortened
     assert 'balancerTag "balancer-s"' in shortened
     assert 'balancer was not found' in shortened
+
+
+def test_run_xray_preflight_blocks_dangling_outbound_reference_before_xray(tmp_path, monkeypatch):
+    confdir = tmp_path / "configs"
+    confdir.mkdir()
+    (confdir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "proxy", "protocol": "freedom"},
+                    {"tag": "direct", "protocol": "freedom"},
+                ]
+            },
+            ensure_ascii=False,
+        ) + "\n",
+        encoding="utf-8",
+    )
+
+    calls = []
+
+    def fake_run(cmd, capture_output, text, timeout, check):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="should not run", stderr="")
+
+    monkeypatch.setattr(routing_config.subprocess, "run", fake_run)
+
+    result = routing_config._run_xray_preflight(
+        xray_configs_dir_real=str(confdir),
+        sel_main=str(confdir / "05_routing.json"),
+        obj={"routing": {"rules": [{"type": "field", "outboundTag": "vless-reality-00"}]}},
+    )
+
+    assert result["ok"] is False
+    assert result["error"] == "routing semantic validation failed"
+    assert result["phase"] == "routing_semantic_validate"
+    assert result["cmd"] == "panel semantic validation (routing.rules -> outbounds[].tag)"
+    assert 'outboundTag "vless-reality-00"' in result["stdout"]
+    assert 'Создайте outbound с tag "vless-reality-00"' in result["hint"]
+    assert calls == []

@@ -323,7 +323,9 @@
 
     try {
       response.clone().json().then(function (data) {
-        if (!data || String(data.error || '') !== 'xray preflight failed') return;
+        if (!data) return;
+        const errorCode = String(data.error || '');
+        if (errorCode !== 'xray preflight failed' && errorCode !== 'routing semantic validation failed') return;
 
         const presentModal = function () {
           try {

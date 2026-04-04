@@ -81,6 +81,114 @@ def _shorten_text(s: str, limit: int = 4000) -> str:
     return head + marker + tail
 
 
+def _safe_tag(value: Any) -> str:
+    try:
+        return str(value or '').strip()
+    except Exception:
+        return ''
+
+
+def _iter_conf_json_objects(confdir: str):
+    try:
+        names = sorted(os.listdir(confdir))
+    except Exception:
+        return None
+
+    items = []
+    for name in names:
+        path = os.path.join(confdir, name)
+        if not os.path.isfile(path):
+            continue
+        if not str(name).lower().endswith('.json'):
+            continue
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                obj = json.load(f)
+        except Exception:
+            return None
+        items.append((name, obj))
+    return items
+
+
+def _format_available_tags(tags: set[str], limit: int = 6) -> str:
+    values = sorted(str(v) for v in tags if _safe_tag(v))
+    if not values:
+        return ''
+    shown = values[:limit]
+    tail = len(values) - len(shown)
+    if tail > 0:
+        return ', '.join(shown) + f' и ещё {tail}'
+    return ', '.join(shown)
+
+
+def _validate_routing_outbound_refs(confdir: str) -> Optional[Dict[str, Any]]:
+    loaded = _iter_conf_json_objects(confdir)
+    if loaded is None:
+        return None
+
+    outbound_tags: set[str] = set()
+    for _name, obj in loaded:
+        if not isinstance(obj, dict):
+            continue
+        outbounds = obj.get('outbounds')
+        if not isinstance(outbounds, list):
+            continue
+        for outbound in outbounds:
+            if not isinstance(outbound, dict):
+                continue
+            tag = _safe_tag(outbound.get('tag'))
+            if tag:
+                outbound_tags.add(tag)
+
+    for name, obj in loaded:
+        if not isinstance(obj, dict):
+            continue
+        routing = obj.get('routing')
+        if not isinstance(routing, dict):
+            continue
+        rules = routing.get('rules')
+        if not isinstance(rules, list):
+            continue
+
+        for idx, rule in enumerate(rules):
+            if not isinstance(rule, dict):
+                continue
+            outbound_tag = _safe_tag(rule.get('outboundTag'))
+            if not outbound_tag or outbound_tag in outbound_tags:
+                continue
+
+            rule_tag = _safe_tag(rule.get('ruleTag'))
+            rule_label = f'правило "{rule_tag}"' if rule_tag else f'routing.rules[{idx}]'
+            cfg_path = f'/xray-configs/{name}'
+            diagnostic = (
+                f'{cfg_path}: {rule_label} uses outboundTag "{outbound_tag}" '
+                'but outbound was not found'
+            )
+            summary = (
+                f'Правило "{rule_tag}" ссылается на outboundTag "{outbound_tag}", но такого outbound нет.'
+                if rule_tag else
+                f'Правило ссылается на outboundTag "{outbound_tag}", но такого outbound нет.'
+            )
+            hint = f'Создайте outbound с tag "{outbound_tag}" в outbounds или исправьте это значение в правиле.'
+            available = _format_available_tags(outbound_tags)
+            if available:
+                hint += f' Сейчас доступны: {available}.'
+
+            return {
+                'ok': False,
+                'error': 'routing semantic validation failed',
+                'phase': 'routing_semantic_validate',
+                'cmd': 'panel semantic validation (routing.rules -> outbounds[].tag)',
+                'timed_out': False,
+                'stdout': diagnostic,
+                'stderr': '',
+                'hint': hint,
+                'summary': summary,
+            }
+
+    return None
+
+
 def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) -> Dict[str, Any]:
     """Validate Xray configs with edited fragment injected into a temp confdir."""
     xray_bin = '/opt/sbin/xray' if os.path.exists('/opt/sbin/xray') else 'xray'
@@ -119,6 +227,10 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
             with open(target, 'w', encoding='utf-8') as f:
                 json.dump(obj, f, ensure_ascii=False, indent=2)
                 f.write('\n')
+
+            semantic_issue = _validate_routing_outbound_refs(tmpdir)
+            if semantic_issue:
+                return semantic_issue
 
             cmd = [xray_bin, '-test', '-confdir', tmpdir]
             cmd_text = ' '.join(cmd)
@@ -441,7 +553,7 @@ def register_config_routes(
             )
             return jsonify({
                 "ok": False,
-                "error": "xray preflight failed",
+                "error": preflight.get("error") or "xray preflight failed",
                 "phase": preflight.get("phase"),
                 "cmd": preflight.get("cmd"),
                 "returncode": preflight.get("returncode"),
@@ -450,6 +562,7 @@ def register_config_routes(
                 "stdout": preflight.get("stdout"),
                 "stderr": preflight.get("stderr"),
                 "hint": preflight.get("hint"),
+                "summary": preflight.get("summary"),
             }), 400
 
         try:
