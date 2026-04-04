@@ -41,15 +41,14 @@
 
 Это отдельный follow-up rollout для двух оставшихся canonical page entrypoints, которые пока не входят в тот же in-app top-level navigation contract, что `/`, `/devtools` и `/mihomo_generator`.
 
-На 04.04.2026 в этом follow-up уже закрыт `P6`; следующим рабочим объёмом остаются `P7-P10`.
+На 04.04.2026 в этом follow-up уже закрыты `P6-P7`; следующим рабочим объёмом остаются `P8-P10`.
 
 ### Почему эти два маршрута ещё не в том же контракте
 
 На 04.04.2026 для `/backups` и `/xkeen` всё ещё видны конкретные отличия от уже закрытого top-level runtime:
 
-- route map уже расширен до пяти canonical entrypoints, но `backups` и `xkeen` всё ещё не зарегистрированы как полноценные top-level screen modules;
+- route map уже расширен до пяти canonical entrypoints, а templates `backups` и `xkeen` уже выровнены под shared host contract, но сами страницы всё ещё не зарегистрированы как полноценные top-level screen modules;
 - `backups.entry.js` и `xkeen.entry.js` пока поднимают страницы как standalone page entrypoints, а не как thin wrappers над `bootTopLevelShell(...)`;
-- `templates/backups.html` и `templates/xkeen.html` ещё не выровнены под тот же top-level host contract: не используют shared host partials и не публикуют canonical `window.XKeen.pageConfig` через `frontend_page_config(...)`;
 - top-level nav interception для внутренних ссылок уже включён, но на самих `/backups` и `/xkeen` normal path всё ещё завершается hard navigation fallback, потому что эти страницы пока не bootstrapped через общий shell/router lifecycle.
 
 ### Поэтапный rollout для `/backups` и `/xkeen`
@@ -70,6 +69,8 @@
 #### `P7` — выровнять `backups.html` и `xkeen.html` под top-level host contract
 
 Цель этапа: сделать fetched HTML snapshot для `/backups` и `/xkeen` совместимым с тем же screen-host lifecycle, что уже работает для трёх существующих экранов.
+
+Статус: выполнено на 04.04.2026.
 
 Что входит:
 

@@ -5,57 +5,39 @@
   <title>Xkeen UI — Бэкапы Xray конфигов</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  
-  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
-  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
-  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
-  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
-  <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
-  <meta name="theme-color" content="#0f172a">
-  <!-- Apply typography prefs ASAP (stored in localStorage) -->
-  <script src="{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}"></script>
-  <!-- Apply layout prefs ASAP (stored in localStorage) -->
-  <script src="{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}"></script>
-  <script src="{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}"></script>
+
+  {% include '_top_level_host_head_assets.html' %}
   {% include '_codemirror6_importmap.html' %}
 
-
-    <script>
-    (function () {
-      var theme = 'light';
-      try {
-        var attr = document.documentElement.getAttribute('data-theme');
-        var stored = localStorage.getItem('xkeen-theme');
-        if (attr === 'light' || attr === 'dark') {
-          theme = attr;
-        } else if (stored === 'light' || stored === 'dark') {
-          theme = stored;
-        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-          theme = 'dark';
-        }
-      } catch (e) {
-        try {
-          if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            theme = 'dark';
-          }
-        } catch (e2) {}
-      }
-      document.documentElement.setAttribute('data-theme', theme);
-      document.documentElement.style.colorScheme = theme;
-    })();
+  {% set backups_page_config = frontend_page_config(
+    'backups',
+    sections={
+      'panelWhitelist': panel_sections_whitelist,
+      'devtoolsWhitelist': devtools_sections_whitelist,
+    },
+    runtime={
+      'debug': False,
+    },
+    terminal={
+      'supportsPty': False,
+      'enableOptionalAddons': False,
+      'enableLigatures': False,
+      'enableWebgl': False,
+    },
+  ) %}
+  <script>
+    window.XKeen = window.XKeen || {};
+    var pageConfig = {{ backups_page_config|tojson }};
+    window.XKeen.pageConfig = pageConfig;
   </script>
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260325c') }}">
-<link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
+
+  {% include '_top_level_host_theme_bootstrap.html' %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260325c') }}">
+  <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
 </head>
-<body class="xk-backups-page">
-  <div id="global-xkeen-spinner">
-    <div class="global-spinner-box">
-      <div class="global-spinner-icon"></div>
-      <div class="global-spinner-text" id="global-xkeen-spinner-text">
-        Применяем изменения и перезапускаем xkeen…
-      </div>
-    </div>
-  </div>
+<body class="backups-page xk-backups-page" data-xk-top-level-screen="backups">
+  {% set top_level_spinner_text = 'Применяем изменения и перезапускаем xkeen…' %}
+  {% include '_top_level_global_spinner.html' %}
 
   <!-- Wider container (match DevTools page width) -->
   <div class="container container-wide">
