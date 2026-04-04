@@ -12,7 +12,9 @@ DOCS_DIR = ROOT / "docs"
 def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
     expectations = {
         "panel.entry.js": [
+            "import { bootTopLevelShell } from './top_level_shell.shared.js';",
             "import { bootPanelPage } from './panel.bootstrap_tail.bundle.js';",
+            "initialScreen: 'panel'",
             "await import('./panel.routing.bundle.js');",
             "await import('./panel.mihomo.bundle.js');",
         ],
@@ -20,14 +22,18 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
             "import { bootBackupsPage } from './backups.init.js';",
         ],
         "devtools.entry.js": [
+            "import { bootTopLevelShell } from './top_level_shell.shared.js';",
             "import { bootDevtoolsPage } from './devtools.init.js';",
+            "initialScreen: 'devtools'",
             "import '../features/compat/devtools.js';",
         ],
         "xkeen.entry.js": [
             "import { bootXkeenPage } from './xkeen.init.js';",
         ],
         "mihomo_generator.entry.js": [
+            "import { bootTopLevelShell } from './top_level_shell.shared.js';",
             "import { bootMihomoGeneratorPage } from './mihomo_generator.init.js';",
+            "initialScreen: 'mihomo_generator'",
         ],
     }
     forbidden_fragments = {
@@ -74,6 +80,9 @@ def test_panel_runtime_bundle_files_exist_for_current_architecture():
         "panel.routing.bundle.js",
         "panel.shared_compat.bundle.js",
         "panel.view_runtime.js",
+        "top_level_shell.shared.js",
+        "top_level_router.js",
+        "top_level_screen_registry.js",
     ]
 
     for filename in required_files:

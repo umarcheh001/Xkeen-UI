@@ -13,5 +13,11 @@ import '../util/helpers.js';
 import '../util/command_job.js';
 import '../ui/spinner_fetch.js';
 import { bootMihomoGeneratorPage } from './mihomo_generator.init.js';
+import { bootTopLevelShell } from './top_level_shell.shared.js';
 
-bootMihomoGeneratorPage();
+void bootTopLevelShell({
+  initialScreen: 'mihomo_generator',
+  bootstrap() {
+    bootMihomoGeneratorPage();
+  },
+});

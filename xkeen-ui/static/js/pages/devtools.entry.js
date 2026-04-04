@@ -24,6 +24,12 @@ import '../features/devtools/env.js?v=20260109e';
 import '../features/devtools/update.js?v=20260220a';
 import '../features/devtools/terminal_theme.js?v=20260109e';
 import { bootDevtoolsPage } from './devtools.init.js';
+import { bootTopLevelShell } from './top_level_shell.shared.js';
 import '../features/compat/devtools.js';
 
-bootDevtoolsPage();
+void bootTopLevelShell({
+  initialScreen: 'devtools',
+  bootstrap() {
+    bootDevtoolsPage();
+  },
+});

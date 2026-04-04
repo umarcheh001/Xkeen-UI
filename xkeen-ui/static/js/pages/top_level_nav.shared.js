@@ -1,4 +1,5 @@
 import { getXkeenPageName } from '../features/xkeen_runtime.js';
+import { getTopLevelRouterApi } from './top_level_router.js';
 
 function getDocumentRef(root) {
   if (root && typeof root.querySelectorAll === 'function') return root;
@@ -102,6 +103,15 @@ export function navigateTopLevelHref(rawHref, opts) {
 
   try {
     emitTopLevelNavigationIntent(resolved || nextUrl, opts && opts.trigger);
+  } catch (e) {}
+
+  try {
+    if (resolved) {
+      const router = getTopLevelRouterApi();
+      if (router && typeof router.navigate === 'function' && router.navigate(resolved, opts || {})) {
+        return true;
+      }
+    }
   } catch (e) {}
 
   try {

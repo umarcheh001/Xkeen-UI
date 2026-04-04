@@ -7,6 +7,7 @@ import './codemirror6.shared.js';
 import './panel.shared_compat.bundle.js';
 import { hasXkeenMihomoCore, hasXkeenXrayCore } from '../features/xkeen_runtime.js';
 import { bootPanelPage } from './panel.bootstrap_tail.bundle.js';
+import { bootTopLevelShell } from './top_level_shell.shared.js';
 
 async function loadPanelFeatureBundles() {
   if (hasXkeenXrayCore()) {
@@ -18,10 +19,13 @@ async function loadPanelFeatureBundles() {
   }
 }
 
-void loadPanelFeatureBundles()
-  .then(() => {
+void bootTopLevelShell({
+  initialScreen: 'panel',
+  async bootstrap() {
+    await loadPanelFeatureBundles();
     bootPanelPage();
-  })
-  .catch((error) => {
+  },
+  onError(error) {
     console.error('[XKeen] panel feature bundle bootstrap failed', error);
-  });
+  },
+});

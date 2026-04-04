@@ -15,7 +15,8 @@
         "./codemirror6.shared.js",
         "./panel.shared_compat.bundle.js",
         "../features/xkeen_runtime.js",
-        "./panel.bootstrap_tail.bundle.js"
+        "./panel.bootstrap_tail.bundle.js",
+        "./top_level_shell.shared.js"
       ],
       "dynamic_imports": [
         "./panel.routing.bundle.js",
@@ -290,6 +291,16 @@
         },
         {
           "path": "static/js/pages/top_level_nav.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_router.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_screen_registry.js",
           "globals": [],
           "lazy_features": []
         },
@@ -569,6 +580,11 @@
         },
         {
           "path": "static/js/util/strip_json_comments.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_shell.shared.js",
           "globals": [],
           "lazy_features": []
         }
@@ -1179,6 +1195,7 @@
         "../features/devtools/update.js?v=20260220a",
         "../features/devtools/terminal_theme.js?v=20260109e",
         "./devtools.init.js",
+        "./top_level_shell.shared.js",
         "../features/compat/devtools.js"
       ],
       "dynamic_imports": [],
@@ -1603,6 +1620,21 @@
         },
         {
           "path": "static/js/pages/top_level_nav.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_router.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_screen_registry.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_shell.shared.js",
           "globals": [],
           "lazy_features": []
         },
@@ -2101,7 +2133,8 @@
         "../util/helpers.js",
         "../util/command_job.js",
         "../ui/spinner_fetch.js",
-        "./mihomo_generator.init.js"
+        "./mihomo_generator.init.js",
+        "./top_level_shell.shared.js"
       ],
       "dynamic_imports": [],
       "template_script_tags": [
@@ -2424,6 +2457,21 @@
         },
         {
           "path": "static/js/pages/top_level_nav.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_router.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_screen_registry.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_shell.shared.js",
           "globals": [],
           "lazy_features": []
         }

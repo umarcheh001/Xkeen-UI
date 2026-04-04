@@ -74,7 +74,13 @@ def test_mihomo_generator_ignores_stale_profile_defaults_and_auto_preview_overwr
 
 def test_top_level_navigation_controls_use_shared_helper_contract():
     helper = Path('xkeen-ui/static/js/pages/top_level_nav.shared.js').read_text(encoding='utf-8')
+    shell = Path('xkeen-ui/static/js/pages/top_level_shell.shared.js').read_text(encoding='utf-8')
+    router = Path('xkeen-ui/static/js/pages/top_level_router.js').read_text(encoding='utf-8')
+    registry = Path('xkeen-ui/static/js/pages/top_level_screen_registry.js').read_text(encoding='utf-8')
     panel_shell = Path('xkeen-ui/static/js/pages/panel_shell.shared.js').read_text(encoding='utf-8')
+    panel_entry = Path('xkeen-ui/static/js/pages/panel.entry.js').read_text(encoding='utf-8')
+    devtools_entry = Path('xkeen-ui/static/js/pages/devtools.entry.js').read_text(encoding='utf-8')
+    mihomo_entry = Path('xkeen-ui/static/js/pages/mihomo_generator.entry.js').read_text(encoding='utf-8')
     devtools_init = Path('xkeen-ui/static/js/pages/devtools.init.js').read_text(encoding='utf-8')
     mihomo_init = Path('xkeen-ui/static/js/pages/mihomo_generator.init.js').read_text(encoding='utf-8')
     panel_template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
@@ -83,8 +89,26 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
 
     assert 'export function navigateTopLevelHref(rawHref, opts)' in helper
     assert "window.dispatchEvent(new CustomEvent('xkeen:top-level-nav-intent'" in helper
+    assert "import { getTopLevelRouterApi } from './top_level_router.js';" in helper
+    assert "const router = getTopLevelRouterApi();" in helper
+    assert "router.navigate(resolved, opts || {})" in helper
     assert "const nodes = scope.querySelectorAll('[data-xk-top-nav]');" in helper
+    assert 'export async function bootTopLevelShell(opts)' in shell
+    assert "registry.registerScreen(name, screen);" in shell
+    assert 'export function getTopLevelRouterApi()' in router
+    assert 'const ROUTE_CHANGE_EVENT = \'xkeen:top-level-route-change\';' in router
+    assert "xk.topLevel = xk.topLevel && typeof xk.topLevel === 'object' ? xk.topLevel : {};" in router
+    assert 'export function getTopLevelScreenRegistryApi()' in registry
+    assert "panel: '/'" in registry
+    assert "devtools: '/devtools'" in registry
+    assert "mihomo_generator: '/mihomo_generator'" in registry
     assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in panel_shell
+    assert "import { bootTopLevelShell } from './top_level_shell.shared.js';" in panel_entry
+    assert "initialScreen: 'panel'" in panel_entry
+    assert "import { bootTopLevelShell } from './top_level_shell.shared.js';" in devtools_entry
+    assert "initialScreen: 'devtools'" in devtools_entry
+    assert "import { bootTopLevelShell } from './top_level_shell.shared.js';" in mihomo_entry
+    assert "initialScreen: 'mihomo_generator'" in mihomo_entry
     assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in devtools_init
     assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in mihomo_init
     assert panel_template.count('data-xk-top-nav="1"') >= 3

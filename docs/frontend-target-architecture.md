@@ -12,7 +12,7 @@
 
 Что это значит на практике:
 
-- entrypoint поднимает страницу через обычные `import` и вызов `boot*Page()`;
+- entrypoint поднимает страницу через обычные `import` и общий shell bootstrap, который в итоге вызывает `boot*Page()`;
 - порядок зависимостей фиксируется модульным графом, а не URL-списком legacy-скриптов;
 - source entry остаётся источником истины и для dev, и для build-managed production path.
 
@@ -30,8 +30,8 @@ Shared-слои страницы подключаются через `import` и
 
 Нормальная текущая модель:
 
-- `panel.entry.js` импортирует shared shell/runtime и затем подгружает feature bundles;
-- secondary pages импортируют свои shared dependencies и передают управление `*.init.js`.
+- `panel.entry.js` импортирует shared shell/runtime, затем передаёт управление `top_level_shell.shared.js` и подгружает feature bundles;
+- secondary pages импортируют свои shared dependencies и передают управление `*.init.js` через тот же общий top-level shell bootstrap.
 
 ### 3. Feature-модули = ESM с явным API
 
