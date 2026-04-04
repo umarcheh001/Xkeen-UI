@@ -367,6 +367,12 @@ Definition of Done:
 - единый top-level host template для `/`, `/devtools`, `/mihomo_generator`;
 - временно оставить три шаблона, но свести их к одному shared host-каркасу и разным initial route/config.
 
+Практический безопасный scope для первой волны P4:
+
+- оставить три top-level template файла;
+- вынести повторяющиеся head assets, theme bootstrap и global spinner в shared Jinja partials;
+- не трогать page-specific layout, direct URL entry и canonical `pageConfig` publish contract.
+
 Что важно:
 
 - не начинать с гигантского merge всех шаблонов;

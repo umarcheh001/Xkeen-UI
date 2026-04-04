@@ -1,0 +1,24 @@
+<script>
+  (function () {
+    var theme = 'light';
+    try {
+      var attr = document.documentElement.getAttribute('data-theme');
+      var stored = localStorage.getItem('xkeen-theme');
+      if (attr === 'light' || attr === 'dark') {
+        theme = attr;
+      } else if (stored === 'light' || stored === 'dark') {
+        theme = stored;
+      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        theme = 'dark';
+      }
+    } catch (e) {
+      try {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          theme = 'dark';
+        }
+      } catch (e2) {}
+    }
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.style.colorScheme = theme;
+  })();
+</script>

@@ -341,6 +341,53 @@ def test_source_mode_templates_include_codemirror6_importmap_before_entry_module
         assert module_marker in text, rel
         assert text.index(include_marker) < text.index(module_marker), rel
 
+
+def test_p4_top_level_templates_share_host_partials_without_forcing_single_template_merge():
+    partials = {
+        'xkeen-ui/templates/_top_level_host_head_assets.html': [
+            "favicon.ico",
+            "js/ui/typography.js",
+            "js/ui/layout.js",
+            "js/ui/xk_brand.js",
+        ],
+        'xkeen-ui/templates/_top_level_host_theme_bootstrap.html': [
+            "localStorage.getItem('xkeen-theme')",
+            "document.documentElement.style.colorScheme = theme;",
+        ],
+        'xkeen-ui/templates/_top_level_global_spinner.html': [
+            "id=\"global-xkeen-spinner\"",
+            "id=\"global-xkeen-spinner-text\"",
+            "top_level_spinner_text",
+        ],
+    }
+    template_expectations = {
+        'xkeen-ui/templates/panel.html': [
+            "{% include '_top_level_host_head_assets.html' %}",
+            "{% include '_top_level_host_theme_bootstrap.html' %}",
+            "{% include '_top_level_global_spinner.html' %}",
+        ],
+        'xkeen-ui/templates/devtools.html': [
+            "{% include '_top_level_host_head_assets.html' %}",
+            "{% include '_top_level_host_theme_bootstrap.html' %}",
+            "{% include '_top_level_global_spinner.html' %}",
+        ],
+        'xkeen-ui/templates/mihomo_generator.html': [
+            "{% include '_top_level_host_head_assets.html' %}",
+            "{% include '_top_level_host_theme_bootstrap.html' %}",
+            "{% include '_top_level_global_spinner.html' %}",
+        ],
+    }
+
+    for rel, fragments in partials.items():
+        text = Path(rel).read_text(encoding='utf-8')
+        for fragment in fragments:
+            assert fragment in text, f"missing P4 host partial fragment in {rel}: {fragment}"
+
+    for rel, fragments in template_expectations.items():
+        text = Path(rel).read_text(encoding='utf-8')
+        for fragment in fragments:
+            assert fragment in text, f"missing shared host partial include in {rel}: {fragment}"
+
 def test_terminal_lazy_entry_uses_import_first_vendor_adapter_without_dom_script_injection():
     entry_text = Path('xkeen-ui/static/js/pages/terminal.lazy.entry.js').read_text(encoding='utf-8')
     adapter_text = Path('xkeen-ui/static/js/terminal/vendors/xterm_import_adapter.js').read_text(encoding='utf-8')

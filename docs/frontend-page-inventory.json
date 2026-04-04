@@ -13,9 +13,6 @@
       ],
       "dynamic_imports": [],
       "template_script_tags": [
-        "{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}",
-        "{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}",
-        "{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}",
         "{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}",
         "{{ url_for('static', filename='js/patches/monaco_runtime_fix.js', v='20260401f') }}",
         "{{ frontend_page_entry_url('panel') }}"
@@ -1197,9 +1194,6 @@
       ],
       "dynamic_imports": [],
       "template_script_tags": [
-        "{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}",
-        "{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}",
-        "{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}",
         "{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}",
         "{{ frontend_page_entry_url('devtools') }}"
       ],
@@ -2156,9 +2150,6 @@
       "dynamic_imports": [],
       "template_script_tags": [
         "{{ url_for('static', filename='jsonlint/jsonlint.min.js') }}",
-        "{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}",
-        "{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}",
-        "{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}",
         "{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}",
         "{{ frontend_page_entry_url('mihomo_generator') }}"
       ],

@@ -32,6 +32,7 @@ Shared-слои страницы подключаются через `import` и
 
 - `panel.entry.js` импортирует shared shell/runtime, затем передаёт управление `top_level_shell.shared.js` и подгружает feature bundles;
 - secondary pages импортируют свои shared dependencies и передают управление `*.init.js` через тот же общий top-level shell bootstrap.
+- top-level templates `/`, `/devtools` и `/mihomo_generator` могут оставаться отдельными, но общий host-каркас должен выноситься в shared Jinja partials вместо copy-paste head/spinner/theme bootstrap блоков.
 
 ### 3. Feature-модули = ESM с явным API
 
