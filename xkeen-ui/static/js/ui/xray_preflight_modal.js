@@ -6,7 +6,9 @@
   XKeen.ui = XKeen.ui || {};
 
   const SUMMARY_LINE_RE = /\b(failed|error|invalid|unexpected|panic|unable|cannot|unknown|duplicate|missing|malformed|timeout|timed out|not found)\b/i;
+  const WARNING_LINE_RE = /\b(warn(?:ing)?|deprecated|retry|fallback)\b/i;
   const NOISE_LINE_RE = /^(using confdir from arg:|xray \d+\.\d+\.\d+|a unified platform|reading config:|appended inbound|appended outbound|appended routing|configuration ok)$/i;
+  const CONFIG_PATH_RE = /((?:\/|[a-zA-Z]:[\\/])[^\s"'<>]+?\.(?:jsonc?|ya?ml|conf))/g;
 
   let _els = null;
   let _escHandler = null;
@@ -48,6 +50,14 @@
     return false;
   }
 
+  function basename(path) {
+    const source = String(path || '').trim();
+    if (!source) return '';
+    const normalized = source.replace(/\\/g, '/');
+    const parts = normalized.split('/');
+    return parts[parts.length - 1] || normalized;
+  }
+
   function extractCoreSummary(text) {
     const source = normText(text);
     if (!source) return '';
@@ -72,6 +82,199 @@
     if (normalized === 'xray test failed') return '';
     if (normalized.indexOf('preflight exception:') === 0) return 'Не удалось выполнить предварительную проверку Xray.';
     return normText(errorText);
+  }
+
+  function classifyTerminalLine(line) {
+    const raw = String(line == null ? '' : line);
+    const clean = stripLogPrefix(raw);
+    if (!clean) return 'plain';
+    if (/\[(?:error|panic)\]/i.test(raw)) return 'problem';
+    if (SUMMARY_LINE_RE.test(clean)) return 'problem';
+    if (/(?:^|[^\w])(line|column)\s*:\s*\d+/i.test(clean)) return 'problem';
+    if (/\[(?:warn|warning)\]/i.test(raw)) return 'warning';
+    if (WARNING_LINE_RE.test(clean)) return 'warning';
+    return 'plain';
+  }
+
+  function collectDiagnosticLines() {
+    const seen = new Set();
+    const lines = [];
+
+    for (let i = 0; i < arguments.length; i += 1) {
+      const source = normText(arguments[i]);
+      if (!source) continue;
+      source.split('\n').forEach((line) => {
+        const clean = stripLogPrefix(line);
+        if (!clean || isNoiseLine(line)) return;
+        const kind = classifyTerminalLine(line);
+        if (kind === 'plain') return;
+        const key = normalizeForCompare(clean);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        lines.push({ kind, text: clean });
+      });
+    }
+
+    return lines;
+  }
+
+  function extractConfigFileNames() {
+    const seen = new Set();
+    const files = [];
+
+    for (let i = 0; i < arguments.length; i += 1) {
+      const source = normText(arguments[i]);
+      if (!source) continue;
+      const matches = source.match(CONFIG_PATH_RE) || [];
+      matches.forEach((match) => {
+        const name = basename(match);
+        const key = normalizeForCompare(name);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        files.push(name);
+      });
+    }
+
+    return files;
+  }
+
+  function formatList(items, limit) {
+    const source = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (!source.length) return '';
+    const max = Number.isFinite(limit) && limit > 0 ? limit : source.length;
+    const visible = source.slice(0, max);
+    const tail = source.length > visible.length ? ' и ещё ' + (source.length - visible.length) : '';
+    return visible.join(', ') + tail;
+  }
+
+  function pushExplanationItem(items, seen, label, text, tone) {
+    const nextLabel = normText(label);
+    const nextText = normText(text);
+    if (!nextLabel || !nextText) return;
+    const key = normalizeForCompare(nextLabel + ' ' + nextText);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    items.push({
+      label: nextLabel,
+      text: nextText,
+      tone: tone || 'info',
+    });
+  }
+
+  function buildExplanationItems(payload, details) {
+    const items = [];
+    const seen = new Set();
+    const summary = normText(details && details.summary);
+    const hint = normText(details && details.hint);
+    const locationText = normText(details && details.locationText);
+    const stderr = normText(details && details.stderr);
+    const stdout = normText(details && details.stdout);
+    const diagnostics = collectDiagnosticLines(stderr, stdout);
+    const files = extractConfigFileNames(stderr, stdout);
+    const primaryDiagnostic = diagnostics.length ? diagnostics[diagnostics.length - 1].text : '';
+    const code = payload && payload.returncode != null && payload.returncode !== '' ? String(payload.returncode) : '';
+
+    if (summary) {
+      pushExplanationItem(items, seen, 'Коротко', summary, 'problem');
+    }
+
+    if (locationText) {
+      pushExplanationItem(items, seen, 'Позиция', 'Ошибка указывает на ' + locationText.toLowerCase() + '.', 'problem');
+    } else if (files.length) {
+      pushExplanationItem(items, seen, 'Файлы', 'В проверке фигурируют: ' + formatList(files, 3) + '.', 'info');
+    }
+
+    if (primaryDiagnostic && !isSameMessage(primaryDiagnostic, summary)) {
+      pushExplanationItem(items, seen, 'Ключевая строка', primaryDiagnostic, 'problem');
+    }
+
+    if (payload && payload.timed_out) {
+      pushExplanationItem(
+        items,
+        seen,
+        'Таймаут',
+        'Xray не успел закончить проверку за ' + String(payload.timeout_s || '') + ' с. Проверьте тяжёлые или зацикленные фрагменты конфига.',
+        'warning'
+      );
+    } else if (code && code !== '0') {
+      pushExplanationItem(
+        items,
+        seen,
+        'Код Xray',
+        'Команда `xray -test` завершилась с кодом ' + code + ', поэтому конфиг не был сохранён.',
+        'warning'
+      );
+    }
+
+    if (hint) {
+      pushExplanationItem(items, seen, 'Что сделать', hint, 'action');
+    }
+
+    if (!items.length && diagnostics.length) {
+      pushExplanationItem(items, seen, 'Ключевая строка', diagnostics[0].text, diagnostics[0].kind === 'problem' ? 'problem' : 'warning');
+    }
+
+    return items.slice(0, 5);
+  }
+
+  function renderExplanationItems(container, items) {
+    if (!container) return;
+    container.textContent = '';
+    const source = Array.isArray(items) ? items : [];
+    if (!source.length) return;
+
+    const fragment = document.createDocumentFragment();
+    source.forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'xk-preflight-explainer-item';
+      if (item && item.tone) row.classList.add('is-' + item.tone);
+
+      const label = document.createElement('div');
+      label.className = 'xk-preflight-explainer-label';
+      label.textContent = String(item && item.label ? item.label : '');
+
+      const text = document.createElement('div');
+      text.className = 'xk-preflight-explainer-text';
+      text.textContent = String(item && item.text ? item.text : '');
+
+      row.appendChild(label);
+      row.appendChild(text);
+      fragment.appendChild(row);
+    });
+
+    container.appendChild(fragment);
+  }
+
+  function renderTerminalOutput(el, text, emptyLabel) {
+    if (!el) return;
+
+    const source = normText(text);
+    if (!source) {
+      el.textContent = emptyLabel || '';
+      return;
+    }
+
+    el.textContent = '';
+    const fragment = document.createDocumentFragment();
+
+    source.split('\n').forEach((line) => {
+      const row = document.createElement('span');
+      row.className = 'xk-preflight-terminal-line';
+
+      const kind = classifyTerminalLine(line);
+      if (kind === 'problem') {
+        row.classList.add('is-problem');
+      } else if (kind === 'warning') {
+        row.classList.add('is-warning');
+      } else if (isNoiseLine(line)) {
+        row.classList.add('is-muted');
+      }
+
+      row.textContent = line || ' ';
+      fragment.appendChild(row);
+    });
+
+    el.appendChild(fragment);
   }
 
   function clearCopyState(copyBtn) {
@@ -212,6 +415,10 @@
       '        <div class="xk-preflight-block">' +
       '          <div class="xk-preflight-block-title">Команда</div>' +
       '          <pre data-xk-preflight-cmd class="xk-preflight-codebox"></pre>' +
+      '        </div>' +
+      '        <div class="xk-preflight-block xk-preflight-block--explainer" data-xk-preflight-explainer-wrap style="display:none;">' +
+      '          <div class="xk-preflight-block-title">Расшифровка</div>' +
+      '          <div class="xk-preflight-explainer" data-xk-preflight-explainer></div>' +
       '        </div>' +
       '      </section>' +
       '      <section class="xk-preflight-panel">' +
@@ -374,6 +581,8 @@
       locationCard: modal.querySelector('[data-xk-preflight-location-card]'),
       location: locationEl,
       cmd: modal.querySelector('[data-xk-preflight-cmd]'),
+      explainerWrap: modal.querySelector('[data-xk-preflight-explainer-wrap]'),
+      explainer: modal.querySelector('[data-xk-preflight-explainer]'),
       stderr: modal.querySelector('[data-xk-preflight-stderr]'),
       stdoutWrap: modal.querySelector('[data-xk-preflight-stdout-wrap]'),
       stdout: modal.querySelector('[data-xk-preflight-stdout]'),
@@ -407,6 +616,13 @@
     const showHint = shouldShowHint(hint, summary, ui.description, ui.defaultSummary);
     const showTimeout = !!timeout;
     const showStdout = !!stdout && !isSameMessage(stdout, stderr);
+    const explanationItems = buildExplanationItems(payload, {
+      summary,
+      hint,
+      locationText,
+      stderr,
+      stdout,
+    });
 
     applyModeClass(els.modal, phase);
 
@@ -429,16 +645,18 @@
     if (els.location) els.location.textContent = locationText || '—';
     setVisible(els.locationCard, !!locationText);
     if (els.cmd) els.cmd.textContent = cmd;
+    renderExplanationItems(els.explainer, explanationItems);
+    setVisible(els.explainerWrap, explanationItems.length > 0);
 
     setProblemState(els.codeCard, code !== '—' && code !== '0');
     setProblemState(els.timeoutCard, !!payload.timed_out);
 
     if (els.stderr) {
-      els.stderr.textContent = stderr || 'stderr пуст';
+      renderTerminalOutput(els.stderr, stderr, 'stderr пуст');
       setEmptyTerminalState(els.stderr, !stderr);
     }
     if (els.stdout) {
-      els.stdout.textContent = stdout || 'stdout пуст';
+      renderTerminalOutput(els.stdout, stdout, 'stdout пуст');
       setEmptyTerminalState(els.stdout, !stdout);
     }
     setVisible(els.stdoutWrap, showStdout);
@@ -453,6 +671,9 @@
       'cmd: ' + cmd,
       hint ? 'hint: ' + hint : '',
       errorText ? 'error: ' + errorText : '',
+      explanationItems.length ? '' : '',
+      explanationItems.length ? 'explanation:' : '',
+      explanationItems.length ? explanationItems.map((item) => '- ' + item.label + ': ' + item.text).join('\n') : '',
       '',
       'stderr:',
       stderr || '(empty)',

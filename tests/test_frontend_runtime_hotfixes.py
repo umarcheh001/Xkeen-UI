@@ -520,6 +520,24 @@ def test_root_layout_keeps_body_background_painted_to_full_viewport_height():
     assert 'min-height: 100dvh;' in text
 
 
+def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering():
+    modal_text = Path('xkeen-ui/static/js/ui/xray_preflight_modal.js').read_text(encoding='utf-8')
+    css_text = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert "data-xk-preflight-explainer-wrap" in modal_text
+    assert "data-xk-preflight-explainer" in modal_text
+    assert 'function classifyTerminalLine(line) {' in modal_text
+    assert 'function buildExplanationItems(payload, details) {' in modal_text
+    assert 'function renderExplanationItems(container, items) {' in modal_text
+    assert 'function renderTerminalOutput(el, text, emptyLabel) {' in modal_text
+    assert 'renderTerminalOutput(els.stderr, stderr, \'stderr пуст\');' in modal_text
+    assert 'renderTerminalOutput(els.stdout, stdout, \'stdout пуст\');' in modal_text
+    assert '.xk-preflight-block--explainer {' in css_text
+    assert '.xk-preflight-explainer-item {' in css_text
+    assert '.xk-preflight-terminal-line.is-problem {' in css_text
+    assert '.xk-preflight-terminal-line.is-warning {' in css_text
+
+
 def test_theme_toggle_uses_delegated_binding_and_resyncs_after_top_level_route_changes():
     text = Path('xkeen-ui/static/js/ui/theme.js').read_text(encoding='utf-8')
 
