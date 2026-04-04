@@ -24,6 +24,16 @@ let serviceStatusModuleApi = null;
   let _activeControlPromise = null;
   let _controlRequestSeq = 0;
 
+  function hasServiceStatusHost() {
+    return !!(
+      $('xkeen-service-lamp') ||
+      $('core-modal') ||
+      $('xkeen-start-btn') ||
+      $('xkeen-stop-btn') ||
+      $('xkeen-restart-btn')
+    );
+  }
+
 
   function $(id) {
     return document.getElementById(id);
@@ -1320,6 +1330,7 @@ let serviceStatusModuleApi = null;
   }
 
   function init(opts) {
+    if (!hasServiceStatusHost()) return null;
     if (_inited) return;
     _inited = true;
 
@@ -1347,6 +1358,32 @@ let serviceStatusModuleApi = null;
     init,
     isInitialized() {
       return _inited;
+    },
+    isPolling() {
+      return !!_pollTimer;
+    },
+    activate(opts) {
+      if (!_inited) return null;
+      try { startPolling(opts && typeof opts === 'object' ? opts.intervalMs : undefined); } catch (e) {}
+      try { return refreshXkeenServiceStatus({ silent: true }); } catch (e2) {}
+      return null;
+    },
+    deactivate() {
+      stopPolling();
+      return true;
+    },
+    serializeState() {
+      return {
+        polling: !!_pollTimer,
+      };
+    },
+    restoreState(state) {
+      const next = state && typeof state === 'object' ? state : null;
+      if (!_inited || !next) return false;
+      if (next.polling) {
+        try { startPolling(); } catch (e) {}
+      }
+      return true;
     },
     refresh: refreshXkeenServiceStatus,
     set: setXkeenServiceStatus,

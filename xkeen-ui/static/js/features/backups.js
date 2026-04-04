@@ -20,7 +20,6 @@ let backupsModuleApi = null;
   const UI = getXkeenSharedPrimitivesApi();
 
   let _inited = false;
-  let _mode = null; // 'history' | 'snapshots'
 
   // Snapshot preview modal
   let _snapWired = false;
@@ -340,11 +339,9 @@ let backupsModuleApi = null;
   }
 
   function getMode() {
-    if (_mode) return _mode;
     const t = tableEl();
     const m = t && t.dataset ? String(t.dataset.mode || '').trim() : '';
-    _mode = (m === 'snapshots') ? 'snapshots' : 'history';
-    return _mode;
+    return (m === 'snapshots') ? 'snapshots' : 'history';
   }
 
   function normalizeToastKind(value, fallback) {
@@ -1346,13 +1343,15 @@ let backupsModuleApi = null;
   }
 
   function init() {
-    if (_inited) return;
-    _inited = true;
-    load();
+    if (!_inited) _inited = true;
+    return load();
   }
 
   backupsModuleApi = {
     init,
+    isInitialized() {
+      return _inited;
+    },
     load,
     refresh,
     restoreBackup,

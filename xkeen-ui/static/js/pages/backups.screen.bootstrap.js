@@ -15,10 +15,72 @@ import '../ui/spinner_fetch.js';
 import { bootBackupsPage } from './backups.init.js';
 import { getBackupsApi } from '../features/backups.js?v=20260317b';
 
-function createBackupsTopLevelApi() {
+function getWindowRef() {
+  try {
+    return window || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function readScrollState() {
+  const win = getWindowRef();
+  if (!win) return null;
   return {
-    activate() {},
-    deactivate() {},
+    scrollX: Number(win.scrollX || win.pageXOffset || 0) || 0,
+    scrollY: Number(win.scrollY || win.pageYOffset || 0) || 0,
+  };
+}
+
+function applyScrollState(state) {
+  const win = getWindowRef();
+  if (!win || !state || typeof state !== 'object') return false;
+
+  const x = Number(state.scrollX || 0) || 0;
+  const y = Number(state.scrollY || 0) || 0;
+  try {
+    setTimeout(() => {
+      try { win.scrollTo(x, y); } catch (error) {}
+    }, 0);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function createBackupsTopLevelApi(backupsApi) {
+  return {
+    activate(context) {
+      if (backupsApi && typeof backupsApi.activate === 'function') {
+        return backupsApi.activate(context);
+      }
+      if (backupsApi && typeof backupsApi.isInitialized === 'function' && !backupsApi.isInitialized()) {
+        return backupsApi.init();
+      }
+      return null;
+    },
+    deactivate(context) {
+      if (backupsApi && typeof backupsApi.deactivate === 'function') {
+        return backupsApi.deactivate(context);
+      }
+      return null;
+    },
+    serializeState(context) {
+      const state = Object.assign(
+        {},
+        backupsApi && typeof backupsApi.serializeState === 'function'
+          ? (backupsApi.serializeState(context) || {})
+          : {},
+        readScrollState() || {}
+      );
+      return state;
+    },
+    restoreState(state, context) {
+      if (backupsApi && typeof backupsApi.restoreState === 'function') {
+        try { backupsApi.restoreState(state, context); } catch (error) {}
+      }
+      return applyScrollState(state);
+    },
   };
 }
 
@@ -29,7 +91,7 @@ export async function bootBackupsScreen() {
 
   if (!_backupsTopLevelApi) {
     const backupsApi = getBackupsApi();
-    _backupsTopLevelApi = Object.assign(createBackupsTopLevelApi(), backupsApi || {});
+    _backupsTopLevelApi = Object.assign({}, backupsApi || {}, createBackupsTopLevelApi(backupsApi));
   }
 
   return _backupsTopLevelApi;
@@ -37,6 +99,7 @@ export async function bootBackupsScreen() {
 
 export function getBackupsTopLevelApi() {
   if (_backupsTopLevelApi) return _backupsTopLevelApi;
-  _backupsTopLevelApi = Object.assign(createBackupsTopLevelApi(), getBackupsApi() || {});
+  const backupsApi = getBackupsApi();
+  _backupsTopLevelApi = Object.assign({}, backupsApi || {}, createBackupsTopLevelApi(backupsApi));
   return _backupsTopLevelApi;
 }

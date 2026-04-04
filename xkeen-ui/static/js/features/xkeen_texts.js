@@ -1,12 +1,42 @@
 import { getRestartLogApi } from './restart_log.js';
-import { getXkeenEditorEngineApi } from './xkeen_runtime.js';
+import { getXkeenEditorEngineApi, getXkeenPageName } from './xkeen_runtime.js';
 
 let xkeenTextsModuleApi = null;
 
 (() => {
   xkeenTextsModuleApi = (() => {
-    let inited = false;
-    const editorState = Object.create(null);
+    const hostStates = Object.create(null);
+    let currentHostKey = '';
+    let editorViewStateStore = null;
+
+    function getCurrentHostKey() {
+      const page = String(getXkeenPageName() || '').trim();
+      if (page) return page;
+      try {
+        const screen = document.body && document.body.dataset
+          ? String(document.body.dataset.xkTopLevelScreen || '').trim()
+          : '';
+        if (screen) return screen;
+      } catch (e) {}
+      return 'default';
+    }
+
+    function getHostState(hostKey) {
+      const key = String(hostKey || '').trim() || 'default';
+      if (!hostStates[key] || typeof hostStates[key] !== 'object') {
+        hostStates[key] = {
+          inited: false,
+          editorState: Object.create(null),
+          serializedState: null,
+        };
+      }
+      return hostStates[key];
+    }
+
+    function getActiveHostState() {
+      currentHostKey = getCurrentHostKey();
+      return getHostState(currentHostKey);
+    }
 
     function getEditorEngineHelper() {
       return getXkeenEditorEngineApi();
@@ -14,14 +44,17 @@ let xkeenTextsModuleApi = null;
 
     function getEditorStateValue(stateKey) {
       const key = String(stateKey || '');
-      return key ? (editorState[key] || null) : null;
+      if (!key) return null;
+      const hostState = getActiveHostState();
+      return hostState.editorState[key] || null;
     }
 
     function setEditorStateValue(stateKey, editor) {
       const key = String(stateKey || '');
       if (!key) return null;
-      editorState[key] = editor || null;
-      return editorState[key];
+      const hostState = getActiveHostState();
+      hostState.editorState[key] = editor || null;
+      return hostState.editorState[key];
     }
 
     const CM6_SCOPE = 'xkeen-texts';
@@ -242,17 +275,25 @@ let xkeenTextsModuleApi = null;
       if (btn.dataset) btn.dataset.xkeenWired = '1';
     }
 
-    function init() {
-      // Only run on pages where at least one of these editors exists.
-      const hasAny =
+    function hasAnyEditorElements() {
+      return !!(
         document.getElementById('port-proxying-editor') ||
         document.getElementById('port-exclude-editor') ||
         document.getElementById('ip-exclude-editor') ||
-        document.getElementById('xkeen-config-editor');
+        document.getElementById('xkeen-config-editor')
+      );
+    }
 
-      if (!hasAny) return;
-      if (inited) return;
-      inited = true;
+    function init() {
+      // Only run on pages where at least one of these editors exists.
+      if (!hasAnyEditorElements()) return;
+
+      const hostState = getActiveHostState();
+      if (hostState.inited) {
+        return true;
+      }
+
+      hostState.inited = true;
 
       const finishInit = () => {
         wireCardToggle();
@@ -349,6 +390,24 @@ let xkeenTextsModuleApi = null;
       });
     }
 
+    function isCardOpen() {
+      const body = document.getElementById('xkeen-body');
+      if (!body) return true;
+      return body.style.display !== 'none';
+    }
+
+    function applyCardOpenState(isOpen) {
+      const body = document.getElementById('xkeen-body');
+      const arrow = document.getElementById('xkeen-arrow');
+      if (!body || !arrow) return false;
+
+      body.style.display = isOpen ? 'block' : 'none';
+      arrow.textContent = isOpen ? '▲' : '▼';
+      syncToggleHeaderState(!!isOpen);
+      if (isOpen) refreshAttachedEditors();
+      return true;
+    }
+
     function refreshAttachedEditors() {
       ['portProxyingEditor', 'portExcludeEditor', 'ipExcludeEditor', 'xkeenConfigEditor'].forEach((k) => {
         try {
@@ -356,6 +415,66 @@ let xkeenTextsModuleApi = null;
           if (ed && ed.refresh) ed.refresh();
         } catch (e) {}
       });
+    }
+
+    function getEditorViewStateStore() {
+      if (editorViewStateStore) return editorViewStateStore;
+      const helper = getEditorEngineHelper();
+      if (!helper || typeof helper.createViewStateStore !== 'function') return null;
+      try {
+        editorViewStateStore = helper.createViewStateStore({ prefix: 'xkeen.texts.viewstate.v1::' });
+      } catch (e) {
+        editorViewStateStore = null;
+      }
+      return editorViewStateStore;
+    }
+
+    function getEditorStateKeys() {
+      return ['portProxyingEditor', 'portExcludeEditor', 'ipExcludeEditor', 'xkeenConfigEditor'];
+    }
+
+    function captureEditorViewStates() {
+      const store = getEditorViewStateStore();
+      const views = {};
+      if (!store) return views;
+
+      getEditorStateKeys().forEach((stateKey) => {
+        try {
+          const editor = getEditorStateValue(stateKey);
+          if (!editor) return;
+          const view = store.capture({
+            key: 'memory::' + stateKey,
+            engine: 'codemirror',
+            editor,
+          });
+          if (view) views[stateKey] = view;
+        } catch (e) {}
+      });
+
+      return views;
+    }
+
+    function restoreEditorViewStates(views) {
+      const store = getEditorViewStateStore();
+      const rawViews = views && typeof views === 'object' ? views : null;
+      if (!store || !rawViews) return false;
+
+      let restored = false;
+      getEditorStateKeys().forEach((stateKey) => {
+        try {
+          const editor = getEditorStateValue(stateKey);
+          const view = rawViews[stateKey];
+          if (!editor || !view) return;
+          restored = store.restore({
+            key: 'memory::' + stateKey,
+            engine: 'codemirror',
+            editor,
+            view,
+          }) || restored;
+        } catch (e) {}
+      });
+
+      return restored;
     }
 
     function wireCardToggle() {
@@ -378,21 +497,71 @@ let xkeenTextsModuleApi = null;
     }
 
     function toggleCard() {
-      const body = document.getElementById('xkeen-body');
-      const arrow = document.getElementById('xkeen-arrow');
-      if (!body || !arrow) return;
-
-      const willOpen = (body.style.display === '' || body.style.display === 'none');
-      body.style.display = willOpen ? 'block' : 'none';
-      arrow.textContent = willOpen ? '▲' : '▼';
-      syncToggleHeaderState(willOpen);
-
-      if (willOpen) refreshAttachedEditors();
+      applyCardOpenState(!isCardOpen());
     }
 
+    function serializeState() {
+      const state = {
+        hostKey: getCurrentHostKey(),
+        cardOpen: isCardOpen(),
+        editorViews: captureEditorViewStates(),
+      };
+
+      try {
+        const hostState = getActiveHostState();
+        hostState.serializedState = state;
+      } catch (e) {}
+
+      return state;
+    }
+
+    function restoreState(rawState) {
+      const state = rawState && typeof rawState === 'object' ? rawState : null;
+      if (!state) return false;
+
+      ensureInited();
+
+      if (typeof state.cardOpen === 'boolean') {
+        applyCardOpenState(state.cardOpen);
+      }
+
+      const restored = restoreEditorViewStates(state.editorViews);
+      if (typeof state.cardOpen === 'boolean' && state.cardOpen) {
+        refreshAttachedEditors();
+      }
+      return restored;
+    }
+
+    function activate() {
+      ensureInited();
+      try {
+        const hostState = getActiveHostState();
+        if (hostState && hostState.serializedState) {
+          restoreState(hostState.serializedState);
+        }
+      } catch (e) {}
+      refreshAttachedEditors();
+      try { document.dispatchEvent(new CustomEvent('xkeen-editors-ready')); } catch (e) {}
+      return true;
+    }
+
+    function deactivate() {
+      return serializeState();
+    }
 
     return {
       init,
+      isInitialized() {
+        try {
+          return !!getActiveHostState().inited;
+        } catch (e) {
+          return false;
+        }
+      },
+      activate,
+      deactivate,
+      serializeState,
+      restoreState,
       toggleCard,
       reloadPortProxying,
       reloadPortExclude,

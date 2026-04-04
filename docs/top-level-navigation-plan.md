@@ -41,15 +41,15 @@
 
 Это отдельный follow-up rollout для двух оставшихся canonical page entrypoints, которые пока не входят в тот же in-app top-level navigation contract, что `/`, `/devtools` и `/mihomo_generator`.
 
-На 04.04.2026 в этом follow-up уже закрыты `P6-P8`; следующим рабочим объёмом остаются `P9-P10`.
+На 04.04.2026 в этом follow-up уже закрыты `P6-P9`; следующим рабочим объёмом остаётся `P10`.
 
 ### Почему эти два маршрута ещё не в том же контракте
 
 На 04.04.2026 для `/backups` и `/xkeen` всё ещё видны конкретные отличия от уже закрытого top-level runtime:
 
-- route map и shared host contract уже расширены до всех five canonical entrypoints, а `backups` и `xkeen` уже bootstrapped как top-level screens;
-- normal path переходов на эти страницы уже идёт через router/screen host, но их runtime lifecycle пока ещё не доведён до того же уровня зрелости, что у остальных экранов;
-- для `xkeen` и `backups` ещё не добраны explicit state retention, idempotent re-activation и cleanup/guardrails под новый контракт.
+- route map, shared host contract и top-level screen bootstrap уже расширены до всех five canonical entrypoints;
+- normal path переходов на `/backups` и `/xkeen` уже идёт через router/screen host с keep-alive snapshot lifecycle;
+- page-specific runtime lifecycle для этих экранов уже добран, но новый охват ещё не закреплён финальными guardrails, inventory updates и verification под all-five-routes contract.
 
 ### Поэтапный rollout для `/backups` и `/xkeen`
 
@@ -95,6 +95,8 @@
 #### `P9` — добрать lifecycle и state retention для page-specific runtime
 
 Цель этапа: сделать re-activation безопасным и предсказуемым, без двойной инициализации, лишних опросов и потери локального состояния.
+
+Статус: выполнено на 04.04.2026.
 
 Что входит для `/backups`:
 
