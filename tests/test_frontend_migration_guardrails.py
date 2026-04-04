@@ -18,7 +18,10 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
             "initialScreen: 'panel'",
         ],
         "backups.entry.js": [
-            "import { bootBackupsPage } from './backups.init.js';",
+            "import { bootTopLevelShell } from './top_level_shell.shared.js';",
+            "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';",
+            "import { bootBackupsScreen } from './backups.screen.bootstrap.js';",
+            "initialScreen: 'backups'",
         ],
         "devtools.entry.js": [
             "import { bootTopLevelShell } from './top_level_shell.shared.js';",
@@ -27,7 +30,10 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
             "initialScreen: 'devtools'",
         ],
         "xkeen.entry.js": [
-            "import { bootXkeenPage } from './xkeen.init.js';",
+            "import { bootTopLevelShell } from './top_level_shell.shared.js';",
+            "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';",
+            "import { bootXkeenScreen } from './xkeen.screen.bootstrap.js';",
+            "initialScreen: 'xkeen'",
         ],
         "mihomo_generator.entry.js": [
             "import { bootTopLevelShell } from './top_level_shell.shared.js';",
