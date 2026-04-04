@@ -129,12 +129,82 @@
     return normText(errorText);
   }
 
+  function extractBalancerReference(text) {
+    const source = normText(text);
+    if (!source) return '';
+
+    const patterns = [
+      /\bbalancerTag\b[^\n"'`]{0,40}["'`]([^"'`\s]+)["'`]/i,
+      /\bbalancer\b[^\n"'`]{0,40}["'`]([^"'`\s]+)["'`]/i,
+      /\bbalancerTag\s*[:=]\s*([A-Za-z0-9_.:-]+)/i,
+      /\bbalancerTag[^\n]{0,24}([A-Za-z0-9_.:-]+)/i,
+      /\bbalancer\b[^\n]{0,24}([A-Za-z0-9_.:-]+)/i,
+      /["'`]([^"'`\s]+)["'`][^\n]{0,48}\bbalancer(?:Tag)?\b/i,
+    ];
+
+    for (let i = 0; i < patterns.length; i += 1) {
+      const match = source.match(patterns[i]);
+      const value = normText(match && match[1]);
+      if (value && !/^(?:balancer|balancerTag|tag|not|found|missing|unknown)$/i.test(value)) {
+        return value;
+      }
+    }
+    return '';
+  }
+
+  function scoreDiagnosticText(text) {
+    const source = prettifyDiagnosticText(stripLogPrefix(text));
+    if (!source) return Number.NEGATIVE_INFINITY;
+
+    let score = 0;
+    if ((/\b(?:balancerTag|balancer)\b[^\n]{0,80}\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b/i.test(source)) ||
+        (/\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b[^\n]{0,80}\b(?:balancerTag|balancer)\b/i.test(source))) {
+      score += 220;
+    }
+    if (/(unexpected end|unexpected eof|unexpected token|invalid character|invalid json|syntax error|after object key:value pair|comma expected|colon expected|close brace expected|close bracket expected|end of file expected|unexpected end of string|unexpected end of number|malformed)/i.test(source)) {
+      score += 200;
+    }
+    if (/\bduplicat(?:e|ed|ion)\b/i.test(source)) {
+      score += 170;
+    }
+    if (/\bunknown\b.*\b(field|option|protocol|transport|network|security|tag|config|type|outbound|inbound|rule)\b/i.test(source)) {
+      score += 160;
+    }
+    if (/\b(not found|no such file|cannot find|failed to open|open .+ no such file)\b/i.test(source)) {
+      score += 150;
+    }
+    if (/\bport\b.*\b(invalid|out of range|must be|bad)\b/i.test(source)) {
+      score += 140;
+    }
+    if (/\bfailed to (?:build|create|load|parse|start)\b/i.test(source)) {
+      score += 60;
+    }
+    if (/^failed to start:\s*main\b/i.test(source)) {
+      score -= 40;
+    }
+    if (/\[truncated\]/i.test(source)) {
+      score -= 80;
+    }
+    return score;
+  }
+
   function selectPrimaryDiagnostic(diagnostics, stderr, stdout, errorText) {
     const list = Array.isArray(diagnostics) ? diagnostics : [];
-    for (let i = list.length - 1; i >= 0; i -= 1) {
-      if (list[i] && list[i].kind === 'problem') return list[i];
+    let bestProblem = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (let i = 0; i < list.length; i += 1) {
+      const item = list[i];
+      if (!item || item.kind !== 'problem') continue;
+      const score = scoreDiagnosticText(item.text) + (i / 1000);
+      if (!bestProblem || score >= bestScore) {
+        bestProblem = item;
+        bestScore = score;
+      }
     }
-    if (list.length) return list[list.length - 1];
+    if (bestProblem) return bestProblem;
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      if (list[i]) return list[i];
+    }
 
     const fallback = extractCoreSummary(stderr) || extractCoreSummary(stdout) || summarizeKnownError(errorText);
     if (!fallback) return null;
@@ -169,6 +239,14 @@
     return { name: '', source: '' };
   }
 
+  function isGenericRootCauseText(text) {
+    const source = normalizeForCompare(text);
+    if (!source) return true;
+    return /^failed to (?:build|create|load|parse|start)/.test(source) ||
+      source === 'xray preflight failed' ||
+      source === 'xray test failed';
+  }
+
   function detectIssuePattern(text, payload) {
     const source = String(text || '');
 
@@ -193,6 +271,26 @@
         id: 'duplicate',
         summary: 'Похоже, в конфиге есть дублирующийся ключ, тег или блок.',
         action: 'Уберите дубликат или переименуйте повторяющийся элемент.',
+      };
+    }
+
+    if (((/\b(?:balancerTag|balancer)\b[^\n]{0,80}\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b/i.test(source)) ||
+        (/\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b[^\n]{0,80}\b(?:balancerTag|balancer)\b/i.test(source)))) {
+      const balancerRef = extractBalancerReference(source);
+      return {
+        id: 'missing_balancer',
+        summary: balancerRef
+          ? 'Правило ссылается на balancerTag "' + balancerRef + '", но такого балансировщика нет.'
+          : 'Правило ссылается на несуществующий balancerTag.',
+        where: balancerRef
+          ? 'Ищите правило, где указан balancerTag "' + balancerRef + '", и сверяйте его со списком routing.balancers.'
+          : 'Ищите правило с balancerTag и список routing.balancers: теги должны совпадать один в один.',
+        action: balancerRef
+          ? 'Создайте балансировщик с tag "' + balancerRef + '" в routing.balancers или исправьте это значение в правиле.'
+          : 'Проверьте, что balancerTag в правиле точно совпадает с tag существующего балансировщика в routing.balancers.',
+        rootCause: balancerRef
+          ? 'В правиле указан balancerTag "' + balancerRef + '", но балансировщик с таким tag не найден.'
+          : 'В одном из правил указан balancerTag, для которого нет соответствующего балансировщика.',
       };
     }
 
@@ -263,6 +361,11 @@
     const issue = detectIssuePattern([rootCause, primaryLine, summary, stderr, stdout, errorText].filter(Boolean).join('\n'), payload);
     const code = payload && payload.returncode != null && payload.returncode !== '' ? String(payload.returncode) : '';
     const codeHelp = buildReturnCodeHelp(payload, code);
+    let rootCauseText = prettifyDiagnosticText(rootCause);
+
+    if (issue.rootCause && (isGenericRootCauseText(rootCauseText) || (issue.id === 'missing_balancer' && !/\bbalancer(?:Tag)?\b/i.test(rootCauseText)))) {
+      rootCauseText = issue.rootCause;
+    }
 
     let humanSummary = issue.summary;
     if (focus.name && issue.id === 'json_syntax' && locationText) {
@@ -281,14 +384,14 @@
       humanSummary = 'Похоже, в конфиге есть синтаксическая ошибка рядом с ' + lowerFirst(locationText) + '.';
     }
 
-    let whereText = '';
-    if (focus.name && locationText) {
+    let whereText = normText(issue.where);
+    if (!whereText && focus.name && locationText) {
       whereText = 'Начните с ' + focus.name + ': ошибка указывает на ' + lowerFirst(locationText) + '.';
-    } else if (focus.name && focus.source === 'explicit') {
+    } else if (!whereText && focus.name && focus.source === 'explicit') {
       whereText = 'Ошибка прямо указывает на файл ' + focus.name + '.';
-    } else if (focus.name && focus.source === 'last_seen') {
+    } else if (!whereText && focus.name && focus.source === 'last_seen') {
       whereText = 'Последним перед ошибкой Xray обрабатывал ' + focus.name + '. Начните с него.';
-    } else if (files.length) {
+    } else if (!whereText && files.length) {
       whereText = 'Проверьте сначала эти фрагменты: ' + formatList(files, 3) + '.';
     }
 
@@ -301,7 +404,7 @@
       whereText,
       actionText,
       primaryLine,
-      rootCause: prettifyDiagnosticText(rootCause),
+      rootCause: rootCauseText,
       files,
       focusFile: focus.name,
       codeHelp,
@@ -481,11 +584,32 @@
     el.appendChild(fragment);
   }
 
-  function scrollTerminalToDiagnostic(el) {
+  function findTerminalDiagnosticRow(el, preferredText) {
+    if (!el) return null;
+    const rows = Array.from(el.querySelectorAll('.xk-preflight-terminal-line.is-problem, .xk-preflight-terminal-line.is-warning'));
+    if (!rows.length) return null;
+
+    const preferred = normalizeForCompare(preferredText);
+    if (preferred) {
+      for (let i = rows.length - 1; i >= 0; i -= 1) {
+        const rowText = prettifyDiagnosticText(stripLogPrefix(rows[i].textContent || ''));
+        const normalizedRow = normalizeForCompare(rowText);
+        if (normalizedRow && (normalizedRow.indexOf(preferred) !== -1 || preferred.indexOf(normalizedRow) !== -1)) {
+          return rows[i];
+        }
+      }
+    }
+
+    const problemRows = rows.filter((row) => row.classList.contains('is-problem') && !/\[truncated\]/i.test(row.textContent || ''));
+    if (problemRows.length) return problemRows[problemRows.length - 1];
+
+    const warningRows = rows.filter((row) => row.classList.contains('is-warning'));
+    return (problemRows.length ? problemRows[problemRows.length - 1] : null) || (warningRows.length ? warningRows[warningRows.length - 1] : null);
+  }
+
+  function scrollTerminalToDiagnostic(el, preferredText) {
     if (!el) return;
-    const problemRows = Array.from(el.querySelectorAll('.xk-preflight-terminal-line.is-problem'));
-    const warningRows = Array.from(el.querySelectorAll('.xk-preflight-terminal-line.is-warning'));
-    const target = (problemRows.length ? problemRows[problemRows.length - 1] : null) || (warningRows.length ? warningRows[warningRows.length - 1] : null);
+    const target = findTerminalDiagnosticRow(el, preferredText);
     try {
       el.scrollTop = 0;
     } catch (e) {}
@@ -959,8 +1083,9 @@
     els.open();
     try {
       requestAnimationFrame(() => {
-        scrollTerminalToDiagnostic(els.stderr);
-        scrollTerminalToDiagnostic(els.stdout);
+        const preferredDiagnosticText = diagnosis.primaryLine || diagnosis.rootCause || summary;
+        scrollTerminalToDiagnostic(els.stderr, preferredDiagnosticText);
+        scrollTerminalToDiagnostic(els.stdout, preferredDiagnosticText);
       });
     } catch (e) {}
   };

@@ -535,9 +535,14 @@ def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering
     assert 'function buildExplanationItems(payload, details) {' in modal_text
     assert 'function renderExplanationItems(container, items) {' in modal_text
     assert 'function renderTerminalOutput(el, text, emptyLabel) {' in modal_text
-    assert 'function scrollTerminalToDiagnostic(el) {' in modal_text
+    assert 'function extractBalancerReference(text) {' in modal_text
+    assert 'function scoreDiagnosticText(text) {' in modal_text
+    assert "id: 'missing_balancer'" in modal_text
+    assert 'Правило ссылается на balancerTag "' in modal_text
+    assert 'function scrollTerminalToDiagnostic(el, preferredText) {' in modal_text
     assert 'renderTerminalOutput(els.stderr, stderr, \'stderr пуст\');' in modal_text
     assert 'renderTerminalOutput(els.stdout, stdout, \'stdout пуст\');' in modal_text
+    assert 'scrollTerminalToDiagnostic(els.stdout, preferredDiagnosticText);' in modal_text
     assert "Код 23 здесь означает только то, что `xray -test` завершился с ошибкой" in modal_text
     assert '.xk-preflight-block--explainer {' in css_text
     assert '.xk-preflight-code-trigger {' in css_text

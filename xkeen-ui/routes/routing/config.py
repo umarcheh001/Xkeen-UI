@@ -64,7 +64,21 @@ def _shorten_text(s: str, limit: int = 4000) -> str:
     s = str(s or '').strip()
     if len(s) <= limit:
         return s
-    return s[:limit] + "\n... [truncated]"
+    marker = "\n... [truncated] ...\n"
+    if limit <= len(marker) + 80:
+        tail = s[-max(0, limit - len(marker)) :].lstrip()
+        return marker.strip() + ("\n" + tail if tail else "")
+
+    available = max(0, limit - len(marker))
+    head_limit = max(60, int(available * 0.35))
+    head_limit = min(head_limit, max(0, available - 80))
+    tail_limit = max(0, available - head_limit)
+
+    head = s[:head_limit].rstrip()
+    tail = s[-tail_limit:].lstrip() if tail_limit else ''
+    if not tail:
+        return s[-limit:]
+    return head + marker + tail
 
 
 def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) -> Dict[str, Any]:

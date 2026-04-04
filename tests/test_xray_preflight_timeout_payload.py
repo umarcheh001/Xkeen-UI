@@ -120,3 +120,16 @@ def test_run_xray_preflight_timeout_uses_temp_confdir_in_command(tmp_path, monke
     assert str(confdir) not in result["cmd"]
     assert result["stdout"] == "stdout timeout"
     assert result["stderr"] == "stderr timeout"
+
+
+def test_shorten_text_preserves_xray_root_cause_from_log_tail():
+    head = "\n".join(f"warning line {i}" for i in range(160))
+    tail = 'router: rule uses balancerTag "balancer-s" but balancer was not found'
+    text = head + "\n" + tail
+
+    shortened = routing_config._shorten_text(text, limit=240)
+
+    assert '[truncated]' in shortened
+    assert 'warning line 0' in shortened
+    assert 'balancerTag "balancer-s"' in shortened
+    assert 'balancer was not found' in shortened
