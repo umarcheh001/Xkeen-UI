@@ -76,9 +76,9 @@
     let value = collapseConfigPaths(normText(text));
     if (!value) return '';
     value = value
-      .replace(/(?:^|>\s*)main:\s*/gi, '$1')
-      .replace(/(?:^|>\s*)infra\/conf(?:\/serial)?:\s*/gi, '$1')
-      .replace(/(?:^|>\s*)app\/(?:dispatcher|proxyman|router)[^:]*:\s*/gi, '$1')
+      .replace(/(^|>\s*)main:\s*/gi, '$1')
+      .replace(/(^|>\s*)infra\/conf(?:\/serial)?:\s*/gi, '$1')
+      .replace(/(^|>\s*)app\/(?:dispatcher|proxyman|router)[^:]*:\s*/gi, '$1')
       .replace(/\s*>\s*/g, ' > ')
       .replace(/\s{2,}/g, ' ')
       .trim();
@@ -133,20 +133,30 @@
     const source = normText(text);
     if (!source) return '';
 
-    const patterns = [
+    const normalizedLines = source
+      .split('\n')
+      .map((line) => prettifyDiagnosticText(stripLogPrefix(line)))
+      .filter(Boolean);
+
+    const scopedPatterns = [
+      /"balancerTag"\s*:\s*"([^"\s]+)"/i,
+      /'balancerTag'\s*:\s*'([^'\s]+)'/i,
+      /\bbalancerTag\s*[:=]\s*["'`]?([A-Za-z0-9_.:-]+)["'`]?/i,
       /\bbalancerTag\b[^\n"'`]{0,40}["'`]([^"'`\s]+)["'`]/i,
-      /\bbalancer\b[^\n"'`]{0,40}["'`]([^"'`\s]+)["'`]/i,
-      /\bbalancerTag\s*[:=]\s*([A-Za-z0-9_.:-]+)/i,
-      /\bbalancerTag[^\n]{0,24}([A-Za-z0-9_.:-]+)/i,
-      /\bbalancer\b[^\n]{0,24}([A-Za-z0-9_.:-]+)/i,
-      /["'`]([^"'`\s]+)["'`][^\n]{0,48}\bbalancer(?:Tag)?\b/i,
+      /\bbalancer\s+([A-Za-z0-9_.:-]+)\s+(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b/i,
+      /\bbalancerTag\s+([A-Za-z0-9_.:-]+)\s+(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b/i,
+      /["'`]([^"'`\s]+)["'`][^\n]{0,48}\bbalancerTag\b/i,
     ];
 
-    for (let i = 0; i < patterns.length; i += 1) {
-      const match = source.match(patterns[i]);
-      const value = normText(match && match[1]);
-      if (value && !/^(?:balancer|balancerTag|tag|not|found|missing|unknown)$/i.test(value)) {
-        return value;
+    for (let lineIndex = 0; lineIndex < normalizedLines.length; lineIndex += 1) {
+      const line = normalizedLines[lineIndex];
+      if (!/\bbalancer(?:Tag)?\b/i.test(line)) continue;
+      for (let i = 0; i < scopedPatterns.length; i += 1) {
+        const match = line.match(scopedPatterns[i]);
+        const value = normText(match && match[1]);
+        if (value && !/^(?:balancer|balancerTag|tag|not|found|missing|unknown|undefined|server)$/i.test(value)) {
+          return value;
+        }
       }
     }
     return '';

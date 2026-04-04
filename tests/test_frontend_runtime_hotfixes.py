@@ -539,6 +539,9 @@ def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering
     assert 'function scoreDiagnosticText(text) {' in modal_text
     assert "id: 'missing_balancer'" in modal_text
     assert 'Правило ссылается на balancerTag "' in modal_text
+    assert r"\bbalancer\s+([A-Za-z0-9_.:-]+)\s+(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b" in modal_text
+    assert ".replace(/(^|>\\s*)main:\\s*/gi, '$1')" in modal_text
+    assert ".replace(/(?:^|>\\s*)main:\\s*/gi, '$1')" not in modal_text
     assert 'function scrollTerminalToDiagnostic(el, preferredText) {' in modal_text
     assert 'renderTerminalOutput(els.stderr, stderr, \'stderr пуст\');' in modal_text
     assert 'renderTerminalOutput(els.stdout, stdout, \'stdout пуст\');' in modal_text
