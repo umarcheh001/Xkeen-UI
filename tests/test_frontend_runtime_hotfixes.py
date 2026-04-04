@@ -490,6 +490,16 @@ def test_routing_refresh_button_is_wired_in_wireui_instead_of_refresh_success_pa
     assert "if (btn && !btn.dataset.xkWired)" not in text
 
 
+def test_routing_topbar_fragment_select_keeps_intrinsic_width_after_screen_return():
+    text = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert '.xk-routing-fileline .xray-log-select{' in text
+    assert 'width: auto;' in text
+    assert 'min-width: 0;' in text
+    assert 'max-width: 100%;' in text
+    assert 'flex: 0 1 auto;' in text
+
+
 def test_routing_comments_ux_listener_is_guarded_after_init_flag():
     text = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
 

@@ -12745,6 +12745,10 @@ html[data-theme="light"] .xk-qb-statusbar.is-success{
 
 .xk-routing-fileline .xray-log-select{
   min-height: 34px;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
 }
 
 /* Routing topbar: header badges are reused here, but we don't want the default left margin. */
