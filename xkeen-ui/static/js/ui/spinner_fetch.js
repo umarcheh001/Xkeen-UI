@@ -325,7 +325,13 @@
       response.clone().json().then(function (data) {
         if (!data) return;
         const errorCode = String(data.error || '');
-        if (errorCode !== 'xray preflight failed' && errorCode !== 'routing semantic validation failed') return;
+        const phase = String(data.phase || '');
+        const isRoutingValidationFailure =
+          phase === 'xray_test' ||
+          phase === 'routing_semantic_validate' ||
+          errorCode === 'xray preflight failed' ||
+          errorCode === 'routing semantic validation failed';
+        if (!isRoutingValidationFailure) return;
 
         const presentModal = function () {
           try {

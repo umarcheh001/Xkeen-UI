@@ -560,7 +560,12 @@ def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering
     assert '.xk-preflight-explainer-item {' in css_text
     assert '.xk-preflight-terminal-line.is-problem {' in css_text
     assert '.xk-preflight-terminal-line.is-warning {' in css_text
-    assert "errorCode !== 'xray preflight failed' && errorCode !== 'routing semantic validation failed'" in spinner_text
+    assert "const phase = String(data.phase || '');" in spinner_text
+    assert "phase === 'xray_test' ||" in spinner_text
+    assert "phase === 'routing_semantic_validate' ||" in spinner_text
+    assert "errorCode === 'xray preflight failed' ||" in spinner_text
+    assert "errorCode === 'routing semantic validation failed';" in spinner_text
+    assert "if (!isRoutingValidationFailure) return;" in spinner_text
 
 
 def test_devtools_light_theme_has_readable_update_pills_and_layout_tab_list():
