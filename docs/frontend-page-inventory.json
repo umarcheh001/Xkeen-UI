@@ -476,7 +476,8 @@
             "XKeen.ui",
             "XKeen.state",
             "XKeen.ui.applyTheme",
-            "XKeen.ui.initThemeToggle"
+            "XKeen.ui.initThemeToggle",
+            "XKeen.ui.syncThemeToggleButtons"
           ],
           "lazy_features": []
         },
@@ -706,6 +707,7 @@
         "XKeen.ui.sharedPrimitives",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
+        "XKeen.ui.syncThemeToggleButtons",
         "XKeen.util.escapeHtml",
         "XKeen.backups",
         "XKeen.terminal.api",
@@ -1053,7 +1055,8 @@
             "XKeen.ui",
             "XKeen.state",
             "XKeen.ui.applyTheme",
-            "XKeen.ui.initThemeToggle"
+            "XKeen.ui.initThemeToggle",
+            "XKeen.ui.syncThemeToggleButtons"
           ],
           "lazy_features": []
         },
@@ -1174,6 +1177,7 @@
         "XKeen.ui.sharedPrimitives",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
+        "XKeen.ui.syncThemeToggleButtons",
         "XKeen.ui.showGlobalXkeenSpinner",
         "XKeen.ui.hideGlobalXkeenSpinner",
         "XKeen.ui.showXrayPreflightError",
@@ -1482,7 +1486,8 @@
             "XKeen.ui",
             "XKeen.state",
             "XKeen.ui.applyTheme",
-            "XKeen.ui.initThemeToggle"
+            "XKeen.ui.initThemeToggle",
+            "XKeen.ui.syncThemeToggleButtons"
           ],
           "lazy_features": []
         },
@@ -1745,6 +1750,7 @@
         "XKeen.ui.sharedPrimitives",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
+        "XKeen.ui.syncThemeToggleButtons",
         "XKeen.ui.showGlobalXkeenSpinner",
         "XKeen.ui.hideGlobalXkeenSpinner",
         "XKeen.ui.showXrayPreflightError",
@@ -2017,7 +2023,8 @@
             "XKeen.ui",
             "XKeen.state",
             "XKeen.ui.applyTheme",
-            "XKeen.ui.initThemeToggle"
+            "XKeen.ui.initThemeToggle",
+            "XKeen.ui.syncThemeToggleButtons"
           ],
           "lazy_features": []
         },
@@ -2129,6 +2136,7 @@
         "XKeen.core.storage",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
+        "XKeen.ui.syncThemeToggleButtons",
         "XKeen.util.escapeHtml",
         "XKeen.ui.showGlobalXkeenSpinner",
         "XKeen.ui.hideGlobalXkeenSpinner",
@@ -2431,7 +2439,8 @@
             "XKeen.ui",
             "XKeen.state",
             "XKeen.ui.applyTheme",
-            "XKeen.ui.initThemeToggle"
+            "XKeen.ui.initThemeToggle",
+            "XKeen.ui.syncThemeToggleButtons"
           ],
           "lazy_features": []
         },
@@ -2590,6 +2599,7 @@
         "XKeen.ui.modal",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
+        "XKeen.ui.syncThemeToggleButtons",
         "XKeen.util.escapeHtml",
         "XKeen.util.commandJob",
         "XKeen.ui.showGlobalXkeenSpinner",

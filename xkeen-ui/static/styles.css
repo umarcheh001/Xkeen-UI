@@ -2453,6 +2453,15 @@ html[data-theme="light"] .btn-link:hover {
   scrollbar-width: none; /* Firefox */
 }
 
+/* Xray live logs header: keep file/level selects compact after panel keep-alive
+   re-activation instead of letting Safari stretch them across the whole actions row. */
+.log-header-actions > .xray-log-select {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+
 /* Hide horizontal scrollbar but keep scrollability */
 .log-header-actions::-webkit-scrollbar {
   display: none;

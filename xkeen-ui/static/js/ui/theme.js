@@ -6,6 +6,12 @@
   XKeen.state = XKeen.state || {};
 
   const THEME_KEY = 'xkeen-theme';
+  const TOP_LEVEL_ROUTE_CHANGE_EVENT = 'xkeen:top-level-route-change';
+
+  let _currentTheme = '';
+  let _themeToggleInitialized = false;
+  let _themeToggleDelegated = false;
+  let _themeToggleLifecycleBound = false;
 
   function getEditorsForThemeSync() {
     const s = (XKeen && XKeen.state) ? XKeen.state : {};
@@ -33,6 +39,7 @@
     const next = theme === 'light' ? 'light' : 'dark';
     const syncEditors = !opts || opts.syncEditors !== false;
     const notify = !opts || opts.notify !== false;
+    _currentTheme = next;
 
     html.setAttribute('data-theme', next);
     html.style.colorScheme = next;
@@ -62,19 +69,38 @@
       } catch (e) {}
     }
 
-    const btn = document.getElementById('theme-toggle-btn');
-    if (!btn) return;
+    syncThemeToggleButtons(next);
+  }
 
-    btn.dataset.theme = next;
+  function getThemeToggleButtons() {
+    try {
+      return Array.from(document.querySelectorAll('#theme-toggle-btn'));
+    } catch (e) {
+      return [];
+    }
+  }
 
+  function renderThemeToggleButton(btn, theme) {
+    if (!btn) return false;
+
+    const next = theme === 'light' ? 'light' : 'dark';
     const isLight = next === 'light';
     const icon = isLight ? '☾' : '☀';
     const label = isLight ? 'Тёмная тема' : 'Светлая тема';
 
+    btn.dataset.theme = next;
     btn.innerHTML = `
       <span class="theme-toggle-icon">${icon}</span>
       <span class="theme-toggle-text">${label}</span>
     `;
+    return true;
+  }
+
+  function syncThemeToggleButtons(theme) {
+    const next = theme === 'light' ? 'light' : 'dark';
+    getThemeToggleButtons().forEach((btn) => {
+      try { renderThemeToggleButton(btn, next); } catch (e) {}
+    });
   }
 
   function getInitialTheme() {
@@ -100,42 +126,69 @@
     return 'light';
   }
 
-  let themeToggleInitialized = false;
+  function toggleTheme() {
+    _currentTheme = (_currentTheme || getInitialTheme()) === 'light' ? 'dark' : 'light';
+    try {
+      localStorage.setItem(THEME_KEY, _currentTheme);
+    } catch (e) {}
+    applyTheme(_currentTheme);
+  }
 
-  function initThemeToggle() {
-    if (themeToggleInitialized) return;
-    themeToggleInitialized = true;
+  function handleThemeToggleClick(event) {
+    const target = event && event.target && typeof event.target.closest === 'function'
+      ? event.target.closest('#theme-toggle-btn')
+      : null;
+    if (!target || target.disabled) return;
 
-    let current = getInitialTheme();
+    try { event.preventDefault(); } catch (e) {}
+    toggleTheme();
+  }
 
-    // Prime the page theme early; heavy editor refresh happens later via xkeen-editors-ready.
-    applyTheme(current, { syncEditors: false, notify: false });
+  function bindThemeToggleDelegation() {
+    if (_themeToggleDelegated) return;
+    _themeToggleDelegated = true;
+    document.addEventListener('click', handleThemeToggleClick);
+  }
 
-    const btn = document.getElementById('theme-toggle-btn');
-    if (!btn) return;
-
-    btn.addEventListener('click', () => {
-      current = current === 'light' ? 'dark' : 'light';
-      try {
-        localStorage.setItem(THEME_KEY, current);
-      } catch (e) {}
-      applyTheme(current);
-    });
+  function bindThemeToggleLifecycle() {
+    if (_themeToggleLifecycleBound) return;
+    _themeToggleLifecycleBound = true;
 
     // If editors are created later (panel init), re-apply theme.
     document.addEventListener('xkeen-editors-ready', () => {
-      try { applyTheme(current); } catch (e) {}
+      try { applyTheme(_currentTheme || getInitialTheme()); } catch (e) {}
+    });
+
+    window.addEventListener('pageshow', () => {
+      try {
+        applyTheme(getInitialTheme(), { syncEditors: false, notify: false });
+      } catch (e) {}
+    });
+
+    // Top-level keep-alive navigation swaps the visible header button without reloading the document.
+    window.addEventListener(TOP_LEVEL_ROUTE_CHANGE_EVENT, () => {
+      try {
+        applyTheme(_currentTheme || getInitialTheme(), { syncEditors: false, notify: false });
+      } catch (e) {}
     });
   }
 
-  window.addEventListener('pageshow', () => {
-    try {
-      applyTheme(getInitialTheme(), { syncEditors: false, notify: false });
-    } catch (e) {}
-  });
+  function initThemeToggle() {
+    _currentTheme = getInitialTheme();
+
+    // Prime the page theme early; heavy editor refresh happens later via xkeen-editors-ready.
+    applyTheme(_currentTheme, { syncEditors: false, notify: false });
+
+    bindThemeToggleDelegation();
+    bindThemeToggleLifecycle();
+
+    if (_themeToggleInitialized) return;
+    _themeToggleInitialized = true;
+  }
 
   XKeen.ui.applyTheme = applyTheme;
   XKeen.ui.initThemeToggle = initThemeToggle;
+  XKeen.ui.syncThemeToggleButtons = syncThemeToggleButtons;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initThemeToggle, { once: true });

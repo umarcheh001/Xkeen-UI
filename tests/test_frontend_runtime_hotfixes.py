@@ -500,6 +500,30 @@ def test_routing_topbar_fragment_select_keeps_intrinsic_width_after_screen_retur
     assert 'flex: 0 1 auto;' in text
 
 
+def test_xray_live_logs_header_selects_keep_compact_width_after_panel_reactivation():
+    text = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert '.log-header-actions > .xray-log-select {' in text
+    assert 'width: auto;' in text
+    assert 'min-width: 0;' in text
+    assert 'max-width: 100%;' in text
+    assert 'flex: 0 1 auto;' in text
+
+
+def test_theme_toggle_uses_delegated_binding_and_resyncs_after_top_level_route_changes():
+    text = Path('xkeen-ui/static/js/ui/theme.js').read_text(encoding='utf-8')
+
+    assert "const TOP_LEVEL_ROUTE_CHANGE_EVENT = 'xkeen:top-level-route-change';" in text
+    assert 'function syncThemeToggleButtons(theme) {' in text
+    assert "getThemeToggleButtons().forEach((btn) => {" in text
+    assert "event.target.closest('#theme-toggle-btn')" in text
+    assert "document.addEventListener('click', handleThemeToggleClick);" in text
+    assert "window.addEventListener(TOP_LEVEL_ROUTE_CHANGE_EVENT, () => {" in text
+    assert "applyTheme(_currentTheme || getInitialTheme(), { syncEditors: false, notify: false });" in text
+    assert "XKeen.ui.syncThemeToggleButtons = syncThemeToggleButtons;" in text
+    assert "btn.addEventListener('click'" not in text
+
+
 def test_routing_comments_ux_listener_is_guarded_after_init_flag():
     text = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
 
