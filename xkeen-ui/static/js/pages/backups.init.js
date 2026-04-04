@@ -1,5 +1,6 @@
 import '../features/compat/backups.js';
 import { initBackups } from '../features/backups.js?v=20260317b';
+import { wireTopLevelNavigation } from './top_level_nav.shared.js';
 
 function isBackupsPage() {
   return !!(
@@ -19,6 +20,10 @@ function safe(fn) {
 
 export function initBackupsPage() {
   if (!isBackupsPage()) return;
+
+  safe(() => {
+    wireTopLevelNavigation(document);
+  });
 
   safe(() => {
     initBackups();

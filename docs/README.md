@@ -11,9 +11,9 @@
 - `frontend-build-workflow.md` — актуальный install/build/verify workflow и связь с CI/archive workflows.
 - `adr/0001-frontend-esm-bootstrap.md` — архитектурное решение про build-managed ESM bootstrap.
 
-## Недавние закрытые инициативы
+## Недавние закрытые инициативы и follow-up scope
 
-- `top-level-navigation-plan.md` — короткий итог по уже закрытому переводу `/`, `/devtools` и `/mihomo_generator` с document navigation на in-app navigation, плюс напоминание о возможном будущем rollout для `/backups` и `/xkeen`.
+- `top-level-navigation-plan.md` — итог по уже закрытому переводу `/`, `/devtools` и `/mihomo_generator` с document navigation на in-app navigation, плюс поэтапный follow-up rollout для оставшихся `/backups` и `/xkeen`.
 
 ## Сгенерированные артефакты
 

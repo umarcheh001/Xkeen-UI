@@ -67,7 +67,7 @@
       <h1>Xkeen — настройки</h1>
       <p>Порты и IP-исключения для /opt/etc/xkeen.</p>
       <div class="actions" style="justify-content: space-between; align-items: center;">
-        <a href="{{ url_for('index') }}" class="btn-link">← Вернуться к основной панели</a>
+        <a href="{{ url_for('index') }}" class="btn-link" data-xk-top-nav="1">← Вернуться к основной панели</a>
         <div class="header-actions">
 
             <div
@@ -87,11 +87,12 @@
             class="theme-toggle-btn theme-toggle-header"
             aria-label="Переключить тему"
           ><span class="theme-toggle-icon" aria-hidden="true">☀</span><span class="theme-toggle-text">Светлая тема</span></button>
-          <a href="{{ url_for('devtools_page') }}" class="btn-link" title="DevTools">DevTools</a>
+          <a href="{{ url_for('devtools_page') }}" class="btn-link" data-xk-top-nav="1" title="DevTools">DevTools</a>
           <a
             href="{{ url_for('devtools_page') }}#dt-update-card"
             id="xk-update-link"
             class="service-core-text hidden"
+            data-xk-top-nav="1"
             title="Обновление"
           >
             <span class="xk-update-dot" aria-hidden="true"></span>
