@@ -390,6 +390,13 @@ Definition of Done:
 - тесты на то, что entrypoints остаются thin wrappers над shared shell bootstrap;
 - обновление `docs/` и inventory/guardrails там, где изменится текущий contract.
 
+Практический safe scope для P5:
+
+- зафиксировать guardrails на fixed route map для `/`, `/devtools`, `/mihomo_generator`;
+- зафиксировать `pushState` / `popstate` как normal path, а hard navigation как fallback-only path;
+- зафиксировать thin-wrapper contract для source entrypoints и build bridge wrappers;
+- не раздувать P5 в отдельный UX/perf workstream, если runtime-contract уже стабилизирован.
+
 ## Чего делать не стоит
 
 1. Не начинать с объединения всех шаблонов в один большой коммит.

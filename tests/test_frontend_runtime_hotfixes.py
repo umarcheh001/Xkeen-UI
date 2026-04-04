@@ -388,6 +388,60 @@ def test_p4_top_level_templates_share_host_partials_without_forcing_single_templ
         for fragment in fragments:
             assert fragment in text, f"missing shared host partial include in {rel}: {fragment}"
 
+
+def test_p5_top_level_router_prefers_history_navigation_and_keeps_hard_navigation_as_fallback():
+    helper = Path('xkeen-ui/static/js/pages/top_level_nav.shared.js').read_text(encoding='utf-8')
+    router = Path('xkeen-ui/static/js/pages/top_level_router.js').read_text(encoding='utf-8')
+    registry = Path('xkeen-ui/static/js/pages/top_level_screen_registry.js').read_text(encoding='utf-8')
+    shell = Path('xkeen-ui/static/js/pages/top_level_shell.shared.js').read_text(encoding='utf-8')
+
+    assert 'const TOP_LEVEL_SCREEN_ROUTES = Object.freeze({' in registry
+    assert "panel: '/'" in registry
+    assert "devtools: '/devtools'" in registry
+    assert "mihomo_generator: '/mihomo_generator'" in registry
+    assert 'export function resolveTopLevelRoute(input) {' in registry
+
+    assert """if (resolved) {
+      const router = getTopLevelRouterApi();
+      if (router && typeof router.navigate === 'function' && router.navigate(resolved, opts || {})) {
+        return true;
+      }
+    }""" in helper
+    assert """if (opts && opts.replace && typeof locationRef.replace === 'function') {
+      locationRef.replace(nextUrl);
+    } else if (typeof locationRef.assign === 'function') {
+      locationRef.assign(nextUrl);
+    } else {
+      locationRef.href = nextUrl;
+    }""" in helper
+
+    assert "const fn = replace ? historyRef.replaceState : historyRef.pushState;" in router
+    assert """if (currentScreenName && route.name === currentScreenName) {
+      pushHistoryState(route, replace);
+      return handleSameScreenNavigation(route, meta);
+    }""" in router
+    assert """if (!registry.hasScreen(route.name)) return false;
+
+    pushHistoryState(route, replace);
+    return queueTransition(route, meta);""" in router
+    assert """catch (error) {
+          try { console.error('[XKeen] top-level router transition failed', error); } catch (secondaryError) {}
+          hardNavigate(route, true);
+        }""" in router
+    assert """if (!registry.hasScreen(route.name)) {
+      hardNavigate(route, true);
+      return;
+    }""" in router
+    assert "win.addEventListener('popstate', handlePopstate);" in router
+    assert "trigger: 'popstate'," in router
+    assert "reason: 'popstate'," in router
+    assert "emitRouteChange(route, Object.assign({}, meta, { inApp: true }));" in router
+    assert 'hardNavigate(route, false);' not in router
+
+    assert "const route = resolveTopLevelRoute(getWindowRef()?.location?.href || '') || null;" in shell
+    assert "router.bootstrapCurrentScreen({" in shell
+
+
 def test_terminal_lazy_entry_uses_import_first_vendor_adapter_without_dom_script_injection():
     entry_text = Path('xkeen-ui/static/js/pages/terminal.lazy.entry.js').read_text(encoding='utf-8')
     adapter_text = Path('xkeen-ui/static/js/terminal/vendors/xterm_import_adapter.js').read_text(encoding='utf-8')

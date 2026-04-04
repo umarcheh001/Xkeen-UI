@@ -65,6 +65,72 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
             assert fragment not in text, f"source entrypoint should use canonical feature import URLs in {filename}: {fragment}"
 
 
+def test_top_level_source_entrypoints_stay_thin_wrappers_over_shared_shell_bootstrap():
+    expectations = {
+        "panel.entry.js": [
+            "void bootTopLevelShell({",
+            "initialScreen: 'panel'",
+            "await bootPanelScreen();",
+            "registerPanelMihomoTopLevelScreens();",
+        ],
+        "devtools.entry.js": [
+            "void bootTopLevelShell({",
+            "initialScreen: 'devtools'",
+            "return bootDevtoolsScreen();",
+            "registerPanelMihomoTopLevelScreens();",
+        ],
+        "mihomo_generator.entry.js": [
+            "void bootTopLevelShell({",
+            "initialScreen: 'mihomo_generator'",
+            "return bootMihomoGeneratorScreen();",
+            "registerPanelMihomoTopLevelScreens();",
+        ],
+    }
+    forbidden_fragments = [
+        "window.",
+        "document.",
+        "fetch(",
+        "querySelector",
+        "addEventListener(",
+        "localStorage",
+        "sessionStorage",
+        "new URL(",
+        "../features/",
+    ]
+
+    for filename, fragments in expectations.items():
+        text = (PAGES_DIR / filename).read_text(encoding="utf-8")
+        for fragment in fragments:
+            assert fragment in text, f"missing thin-shell wrapper fragment in {filename}: {fragment}"
+        assert text.count("bootTopLevelShell({") == 1, f"{filename} should stay a single shell-bootstrap wrapper"
+        for fragment in forbidden_fragments:
+            assert fragment not in text, f"{filename} should stay thin and not own runtime logic: {fragment}"
+
+
+def test_top_level_bridge_assets_stay_import_only_over_canonical_source_entrypoints():
+    bridge_dir = ROOT / "xkeen-ui" / "static" / "frontend-build" / "assets"
+    expectations = {
+        "panel-bridge.js": "../../js/pages/panel.entry.js",
+        "devtools-bridge.js": "../../js/pages/devtools.entry.js",
+        "mihomo_generator-bridge.js": "../../js/pages/mihomo_generator.entry.js",
+    }
+
+    for filename, import_target in expectations.items():
+        text = (bridge_dir / filename).read_text(encoding="utf-8")
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+        assert lines[-1] == f"import '{import_target}';", (
+            f"{filename} should remain an import-only bridge to {import_target}"
+        )
+        assert sum(1 for line in lines if line.startswith("import ")) == 1, (
+            f"{filename} should not grow extra runtime logic or secondary imports"
+        )
+        assert "bootTopLevelShell" not in text
+        assert "window." not in text
+        assert "document." not in text
+        assert "fetch(" not in text
+
+
 def test_legacy_script_loader_artifact_is_removed():
     assert not (PAGES_DIR / 'legacy_script_loader.js').exists(), (
         'final compat cleanup should remove legacy_script_loader.js from the repository'
