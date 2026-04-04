@@ -1732,6 +1732,26 @@ function stopLogAutoRefresh() {
     }
   }
 
+  function getActiveTab() {
+    return _activeTab === 'logs' ? 'logs' : 'tools';
+  }
+
+  function activate(options) {
+    const nextOptions = options && typeof options === 'object' ? options : {};
+    const requestedTab = String(nextOptions.activeTab || '').trim();
+    const nextTab = requestedTab === 'logs'
+      ? 'logs'
+      : (requestedTab === 'tools' ? 'tools' : getActiveTab());
+    setActiveTab(nextTab);
+    return nextTab;
+  }
+
+  function deactivate() {
+    try { _stopLogStreamingAll(); } catch (e) {}
+    try { stopLogListPolling(); } catch (e) {}
+    return true;
+  }
+
   function _manualReloadLogAndResumeLive() {
     const autoEl = byId('dt-log-live') || byId('dt-log-auto');
     const wasLive = !!(autoEl && autoEl.checked);
@@ -2943,6 +2963,9 @@ function _wireLogLineActions() {
   setDevtoolsNamespaceApi('devtoolsLogs', {
     init,
     setActiveTab,
+    getActiveTab,
+    activate,
+    deactivate,
     loadLogList,
     loadLogTail,
   });

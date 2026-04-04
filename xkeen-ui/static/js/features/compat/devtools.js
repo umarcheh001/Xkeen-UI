@@ -1,4 +1,4 @@
-import { getDevtoolsApi } from '../devtools.js';
+import { getDevtoolsApi } from '../devtools.js?v=20260219a';
 import { getDevtoolsNamespace } from '../devtools_namespace.js';
 
 window.XKeen = window.XKeen || {};

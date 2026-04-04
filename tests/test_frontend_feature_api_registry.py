@@ -376,7 +376,7 @@ def test_devtools_subtree_uses_canonical_namespace_root():
     assert "export function setDevtoolsNamespaceApi(name, api)" in namespace_src
     assert "import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } from './devtools_namespace.js';" in main_src
     assert "setDevtoolsNamespaceApi('devtools', devtoolsModuleApi);" in main_src
-    assert "import { getDevtoolsApi } from '../devtools.js';" in compat_src
+    assert "import { getDevtoolsApi } from '../devtools.js" in compat_src
     assert "XKeen.features[key] = legacyApi;" in compat_src
 
     for path in sorted((FEATURES_DIR / "devtools").rglob("*.js")):

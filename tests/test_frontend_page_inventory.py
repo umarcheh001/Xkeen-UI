@@ -125,6 +125,42 @@ def test_panel_inventory_captures_current_p2_screen_split_and_lazy_runtime(tmp_p
         )
 
 
+def test_devtools_inventory_captures_current_p3_screen_split_and_deferred_sections(tmp_path):
+    output_path = tmp_path / "frontend-page-inventory.generated.json"
+    result = subprocess.run(
+        [sys.executable, str(GENERATOR), "--root", str(ROOT), "--json-out", str(output_path)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr or result.stdout
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    devtools = payload["pages"]["devtools"]
+    shared_imports = set(devtools.get("shared_imports") or [])
+    dynamic_imports = set(devtools.get("dynamic_imports") or [])
+    esm_files = {item["path"] for item in devtools.get("esm_bootstrap_files", [])}
+
+    required_shared_imports = {
+        "./top_level_shell.shared.js",
+        "./top_level_panel_mihomo.shared.js",
+        "./devtools.screen.bootstrap.js",
+    }
+    assert required_shared_imports.issubset(shared_imports)
+    assert dynamic_imports == set()
+
+    for rel in (
+        "static/js/pages/devtools.screen.bootstrap.js",
+        "static/js/pages/top_level_devtools_screen.js",
+        "static/js/pages/top_level_panel_mihomo.shared.js",
+        "static/js/features/devtools.js",
+        "static/js/features/devtools/logs.js",
+        "static/js/features/devtools/update.js",
+    ):
+        assert rel in esm_files, f"devtools P3 inventory should capture screen/bootstrap module: {rel}"
+
+
 def test_frontend_inventory_docs_freeze_source_graph_as_canonical_stage1_contract():
     inventory_doc = (ROOT / "docs" / "frontend-page-inventory.md").read_text(encoding="utf-8")
 

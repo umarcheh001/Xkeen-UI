@@ -31,6 +31,92 @@ let devtoolsInitialized = false;
     return null;
   }
 
+  function getActiveTab() {
+    try {
+      const logs = DT.devtoolsLogs || null;
+      if (logs && typeof logs.getActiveTab === 'function') {
+        return String(logs.getActiveTab() || '');
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  function activateLogs(state) {
+    const nextState = state && typeof state === 'object' ? state : {};
+    const requestedTab = String(nextState.activeTab || '').trim();
+    const nextTab = requestedTab === 'logs'
+      ? 'logs'
+      : (requestedTab === 'tools' ? 'tools' : (getActiveTab() || 'tools'));
+
+    try {
+      const logs = DT.devtoolsLogs || null;
+      if (logs && typeof logs.activate === 'function') {
+        logs.activate({ activeTab: nextTab });
+        return nextTab;
+      }
+    } catch (e) {}
+
+    try { setActiveTab(nextTab); } catch (e) {}
+    return nextTab;
+  }
+
+  function activate(state) {
+    init();
+
+    const nextState = state && typeof state === 'object'
+      ? (state.state && typeof state.state === 'object' ? state.state : state)
+      : {};
+
+    activateLogs(nextState);
+
+    try {
+      const service = DT.devtoolsService || null;
+      if (service && typeof service.loadUiStatus === 'function') {
+        service.loadUiStatus();
+      }
+    } catch (e) {}
+
+    try {
+      const update = DT.devtoolsUpdate || null;
+      if (update && typeof update.activate === 'function') {
+        update.activate(nextState);
+      } else if (update && typeof update.loadStatus === 'function') {
+        update.loadStatus(true).catch(() => {});
+      }
+    } catch (e) {}
+
+    return true;
+  }
+
+  function deactivate() {
+    try {
+      const logs = DT.devtoolsLogs || null;
+      if (logs && typeof logs.deactivate === 'function') logs.deactivate();
+    } catch (e) {}
+
+    try {
+      const update = DT.devtoolsUpdate || null;
+      if (update && typeof update.deactivate === 'function') update.deactivate();
+    } catch (e) {}
+
+    return true;
+  }
+
+  function serializeState() {
+    return {
+      activeTab: getActiveTab() || 'tools',
+    };
+  }
+
+  function restoreState(state) {
+    activateLogs(state && typeof state === 'object' ? state : {});
+    return true;
+  }
+
+  function refreshLayout() {
+    return true;
+  }
+
   function _initModuleOnce(stateKey, namespaceKey, initArg) {
     if (_moduleInitState[stateKey]) return true;
 
@@ -129,6 +215,12 @@ let devtoolsInitialized = false;
   devtoolsModuleApi = {
     init,
     setActiveTab,
+    getActiveTab,
+    activate,
+    deactivate,
+    serializeState,
+    restoreState,
+    refreshLayout,
   };
   setDevtoolsNamespaceApi('devtools', devtoolsModuleApi);
 })();

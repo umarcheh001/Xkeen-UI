@@ -22,9 +22,9 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
         ],
         "devtools.entry.js": [
             "import { bootTopLevelShell } from './top_level_shell.shared.js';",
-            "import { bootDevtoolsPage } from './devtools.init.js';",
+            "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';",
+            "import { bootDevtoolsScreen } from './devtools.screen.bootstrap.js';",
             "initialScreen: 'devtools'",
-            "import '../features/compat/devtools.js';",
         ],
         "xkeen.entry.js": [
             "import { bootXkeenPage } from './xkeen.init.js';",
@@ -81,6 +81,7 @@ def test_panel_runtime_bundle_files_exist_for_current_architecture():
         "panel.screen.bootstrap.js",
         "panel.shared_compat.bundle.js",
         "panel.view_runtime.js",
+        "devtools.screen.bootstrap.js",
         "mihomo_generator.screen.bootstrap.js",
         "top_level_shell.shared.js",
         "top_level_router.js",
@@ -88,6 +89,7 @@ def test_panel_runtime_bundle_files_exist_for_current_architecture():
         "top_level_screen_host.shared.js",
         "top_level_panel_screen.js",
         "top_level_mihomo_generator_screen.js",
+        "top_level_devtools_screen.js",
         "top_level_panel_mihomo.shared.js",
     ]
 

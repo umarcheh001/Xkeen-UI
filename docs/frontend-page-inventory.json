@@ -64,6 +64,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/pages/top_level_devtools_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/panel.screen.bootstrap.js",
           "globals": [],
           "lazy_features": []
@@ -1186,34 +1191,9 @@
       "entry": "static/js/pages/devtools.entry.js",
       "init": "static/js/pages/devtools.init.js",
       "shared_imports": [
-        "./shell.shared.js",
-        "./editor.shared.js",
-        "./codemirror6.shared.js",
-        "../core/xk_dom.js",
-        "../core/xk_http.js",
-        "../core/xk_storage.js",
-        "../ui/shared_primitives.js",
-        "../features/update_notifier.js",
-        "../ui/theme.js?v=20260324b",
-        "../ui/tooltips_auto.js?v=20260119d",
-        "../ui/spinner_fetch.js",
-        "../ui/modal.js",
-        "../ui/confirm_modal.js",
-        "../features/donate.js",
-        "../features/typography.js",
-        "../features/layout_prefs.js",
-        "../features/branding_prefs.js",
-        "../features/ui_prefs_io.js?v=20260101f",
-        "../util/ansi.js",
-        "../features/devtools/shared.js?v=20260109e",
-        "../features/devtools/service.js?v=20260109e",
-        "../features/devtools/logs.js?v=20260109e",
-        "../features/devtools/env.js?v=20260109e",
-        "../features/devtools/update.js?v=20260220a",
-        "../features/devtools/terminal_theme.js?v=20260109e",
-        "./devtools.init.js",
         "./top_level_shell.shared.js",
-        "../features/compat/devtools.js"
+        "./top_level_panel_mihomo.shared.js",
+        "./devtools.screen.bootstrap.js"
       ],
       "dynamic_imports": [],
       "template_script_tags": [
@@ -1224,6 +1204,58 @@
         "{{ frontend_page_entry_url('devtools') }}"
       ],
       "esm_bootstrap_files": [
+        {
+          "path": "static/js/pages/top_level_shell.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_router.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/xkeen_runtime.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_screen_registry.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_panel_mihomo.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_panel_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_screen_host.shared.js",
+          "globals": [
+            "XKeen.pageConfig"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_mihomo_generator_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_devtools_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/devtools.screen.bootstrap.js",
+          "globals": [],
+          "lazy_features": []
+        },
         {
           "path": "static/js/pages/shell.shared.js",
           "globals": [],
@@ -1316,11 +1348,6 @@
         },
         {
           "path": "static/js/features/xray_log_line_class.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/features/xkeen_runtime.js",
           "globals": [],
           "lazy_features": []
         },
@@ -1641,21 +1668,6 @@
           "lazy_features": []
         },
         {
-          "path": "static/js/pages/top_level_router.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/pages/top_level_screen_registry.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/pages/top_level_shell.shared.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
           "path": "static/js/features/compat/devtools.js",
           "globals": [
             "XKeen.features"
@@ -1666,6 +1678,7 @@
       "direct_init_globals": [],
       "direct_init_lazy_features": [],
       "all_bootstrap_globals": [
+        "XKeen.pageConfig",
         "XKeen.core",
         "XKeen.state",
         "XKeen.util",
@@ -2503,6 +2516,11 @@
         },
         {
           "path": "static/js/pages/top_level_mihomo_generator_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_devtools_screen.js",
           "globals": [],
           "lazy_features": []
         }

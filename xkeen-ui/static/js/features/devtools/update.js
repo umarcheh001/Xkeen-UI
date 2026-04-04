@@ -1019,5 +1019,28 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     try { setTimeout(() => checkLatest(false, true, true).catch(() => {}), 250); } catch (e) {}
   }
 
-  setDevtoolsNamespaceApi('devtoolsUpdate', { init, loadInfo, checkLatest, loadStatus, runUpdate, runRollback });
+  function activate() {
+    if (!_inited) return false;
+    try {
+      if (!state.lastInfo) loadInfo().catch(() => {});
+      loadStatus(true).catch(() => {});
+    } catch (e) {}
+    return true;
+  }
+
+  function deactivate() {
+    _stopPolling();
+    return true;
+  }
+
+  setDevtoolsNamespaceApi('devtoolsUpdate', {
+    init,
+    activate,
+    deactivate,
+    loadInfo,
+    checkLatest,
+    loadStatus,
+    runUpdate,
+    runRollback,
+  });
 })();
