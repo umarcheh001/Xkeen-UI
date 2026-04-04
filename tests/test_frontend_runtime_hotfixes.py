@@ -510,6 +510,16 @@ def test_xray_live_logs_header_selects_keep_compact_width_after_panel_reactivati
     assert 'flex: 0 1 auto;' in text
 
 
+def test_root_layout_keeps_body_background_painted_to_full_viewport_height():
+    text = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert 'html {' in text
+    assert 'min-height: 100%;' in text
+    assert 'body {' in text
+    assert 'min-height: 100vh;' in text
+    assert 'min-height: 100dvh;' in text
+
+
 def test_theme_toggle_uses_delegated_binding_and_resyncs_after_top_level_route_changes():
     text = Path('xkeen-ui/static/js/ui/theme.js').read_text(encoding='utf-8')
 
