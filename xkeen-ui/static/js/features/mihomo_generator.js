@@ -16,6 +16,21 @@ let mihomoGeneratorModuleApi = null;
 (() => {
   mihomoGeneratorModuleApi = (() => {
     let inited = false;
+    const lifecycleApi = {
+      activate: null,
+      deactivate: null,
+      serializeState: null,
+      restoreState: null,
+      refreshLayout: null,
+    };
+
+    function callLifecycle(name, ...args) {
+      const fn = lifecycleApi && typeof lifecycleApi === 'object' ? lifecycleApi[name] : null;
+      if (typeof fn !== 'function') {
+        return name === 'serializeState' ? null : false;
+      }
+      return fn(...args);
+    }
 
     function afterNextPaint(fn) {
       if (typeof fn !== 'function') return;
@@ -2847,6 +2862,69 @@ function initEngineToggle() {
           }
           return true;
         }
+
+        function refreshLayout() {
+          try {
+            if (_active && typeof _active.layout === "function") {
+              _active.layout();
+            }
+          } catch (e) {}
+
+          try {
+            if (editor && typeof editor.refresh === "function") {
+              editor.refresh();
+            }
+          } catch (e) {}
+
+          try {
+            if (_monaco && typeof _monaco.layout === "function" && _engine === "monaco") {
+              _monaco.layout();
+            }
+          } catch (e) {}
+        }
+
+        async function activate(opts = {}) {
+          if (!inited) return false;
+
+          try {
+            if (opts && opts.state) {
+              await restoreState(opts.state);
+            }
+          } catch (e) {}
+
+          afterNextPaint(() => {
+            try { refreshLayout(); } catch (e) {}
+            try {
+              if (_engine === "monaco" && _active && typeof _active.focus === "function") _active.focus();
+              else if (editor && typeof editor.focus === "function") editor.focus();
+            } catch (e) {}
+          });
+
+          try { refreshActiveCorePill({ silent: true }); } catch (e) {}
+          return true;
+        }
+
+        function deactivate() {
+          try { if (isMonacoFullscreen()) setMonacoFullscreen(false); } catch (e) {}
+          try { persistSessionDraftNow("screen-deactivate"); } catch (e) {}
+          return true;
+        }
+
+        function serializeState() {
+          try {
+            return buildSessionDraftSnapshot();
+          } catch (e) {
+            return null;
+          }
+        }
+
+        async function restoreState(state) {
+          if (!state || typeof state !== "object") return false;
+          try { hydrateSessionDraft(state); } catch (e) {}
+          try { await finalizeSessionDraftRestore(state); } catch (e) {}
+          try { refreshLayout(); } catch (e) {}
+          return true;
+        }
       
         // ----- generate demo preview on client -----
         function generatePreviewDemo(manual = false) {
@@ -3810,9 +3888,22 @@ function initEngineToggle() {
           clearValidationLogBtn.onclick = () => { setValidationLog(""); try { toast("Лог проверки очищен.", 'info'); } catch (e) {} };
         }
         editToggle.addEventListener("change", () => setEditable(editToggle.checked, true));
+
+        lifecycleApi.activate = activate;
+        lifecycleApi.deactivate = deactivate;
+        lifecycleApi.serializeState = serializeState;
+        lifecycleApi.restoreState = restoreState;
+        lifecycleApi.refreshLayout = refreshLayout;
     }
 
-    return { init };
+    return {
+      init,
+      activate(...args) { return callLifecycle('activate', ...args); },
+      deactivate(...args) { return callLifecycle('deactivate', ...args); },
+      serializeState(...args) { return callLifecycle('serializeState', ...args); },
+      restoreState(...args) { return callLifecycle('restoreState', ...args); },
+      refreshLayout(...args) { return callLifecycle('refreshLayout', ...args); },
+    };
   })();
 })();
 

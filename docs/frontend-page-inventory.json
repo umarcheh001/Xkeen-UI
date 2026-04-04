@@ -7,21 +7,11 @@
       "entry": "static/js/pages/panel.entry.js",
       "init": "static/js/pages/panel.init.js",
       "shared_imports": [
-        "./shell.shared.js",
-        "./logs_shell.shared.js",
-        "./panel_shell.shared.js",
-        "./config_shell.shared.js",
-        "./editor.shared.js",
-        "./codemirror6.shared.js",
-        "./panel.shared_compat.bundle.js",
-        "../features/xkeen_runtime.js",
-        "./panel.bootstrap_tail.bundle.js",
-        "./top_level_shell.shared.js"
+        "./top_level_shell.shared.js",
+        "./top_level_panel_mihomo.shared.js",
+        "./panel.screen.bootstrap.js"
       ],
-      "dynamic_imports": [
-        "./panel.routing.bundle.js",
-        "./panel.mihomo.bundle.js"
-      ],
+      "dynamic_imports": [],
       "template_script_tags": [
         "{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}",
         "{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}",
@@ -31,6 +21,53 @@
         "{{ frontend_page_entry_url('panel') }}"
       ],
       "esm_bootstrap_files": [
+        {
+          "path": "static/js/pages/top_level_shell.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_router.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/xkeen_runtime.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_screen_registry.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_panel_mihomo.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_panel_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_screen_host.shared.js",
+          "globals": [
+            "XKeen.pageConfig"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_mihomo_generator_screen.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/panel.screen.bootstrap.js",
+          "globals": [],
+          "lazy_features": []
+        },
         {
           "path": "static/js/pages/shell.shared.js",
           "globals": [],
@@ -123,11 +160,6 @@
         },
         {
           "path": "static/js/features/xray_log_line_class.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/features/xkeen_runtime.js",
           "globals": [],
           "lazy_features": []
         },
@@ -291,16 +323,6 @@
         },
         {
           "path": "static/js/pages/top_level_nav.shared.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/pages/top_level_router.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/pages/top_level_screen_registry.js",
           "globals": [],
           "lazy_features": []
         },
@@ -536,6 +558,15 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/pages/panel.view_runtime.js",
+          "globals": [],
+          "lazy_features": [
+            "xkeenTexts",
+            "commandsList",
+            "coresStatus"
+          ]
+        },
+        {
           "path": "static/js/pages/panel.bootstrap_tail.bundle.js",
           "globals": [],
           "lazy_features": []
@@ -545,15 +576,6 @@
           "globals": [],
           "lazy_features": [
             "restartLog"
-          ]
-        },
-        {
-          "path": "static/js/pages/panel.view_runtime.js",
-          "globals": [],
-          "lazy_features": [
-            "xkeenTexts",
-            "commandsList",
-            "coresStatus"
           ]
         },
         {
@@ -582,11 +604,6 @@
           "path": "static/js/util/strip_json_comments.js",
           "globals": [],
           "lazy_features": []
-        },
-        {
-          "path": "static/js/pages/top_level_shell.shared.js",
-          "globals": [],
-          "lazy_features": []
         }
       ],
       "direct_init_globals": [],
@@ -594,6 +611,7 @@
         "restartLog"
       ],
       "all_bootstrap_globals": [
+        "XKeen.pageConfig",
         "XKeen.core",
         "XKeen.state",
         "XKeen.util",
@@ -638,7 +656,6 @@
         "XKeen.ui.tabs",
         "XKeen.ui.tabs.show",
         "XKeen.runtime.getPageSectionsConfig",
-        "XKeen.pageConfig",
         "XKeen.ui.sections",
         "XKeen.ui.layout",
         "XKeen.ui.layout.tabKey",
@@ -2119,22 +2136,9 @@
       "entry": "static/js/pages/mihomo_generator.entry.js",
       "init": "static/js/pages/mihomo_generator.init.js",
       "shared_imports": [
-        "./shell.shared.js",
-        "./editor.shared.js",
-        "./editor_monaco.shared.js",
-        "./codemirror6.shared.js",
-        "../core/xk_dom.js",
-        "../core/xk_http.js",
-        "../core/xk_storage.js",
-        "../features/update_notifier.js",
-        "../ui/modal.js",
-        "../ui/theme.js?v=20260324b",
-        "../ui/tooltips_auto.js?v=20260119d",
-        "../util/helpers.js",
-        "../util/command_job.js",
-        "../ui/spinner_fetch.js",
-        "./mihomo_generator.init.js",
-        "./top_level_shell.shared.js"
+        "./top_level_shell.shared.js",
+        "./mihomo_generator.screen.bootstrap.js",
+        "./top_level_panel_mihomo.shared.js"
       ],
       "dynamic_imports": [],
       "template_script_tags": [
@@ -2146,6 +2150,31 @@
         "{{ frontend_page_entry_url('mihomo_generator') }}"
       ],
       "esm_bootstrap_files": [
+        {
+          "path": "static/js/pages/top_level_shell.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_router.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/features/xkeen_runtime.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_screen_registry.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/mihomo_generator.screen.bootstrap.js",
+          "globals": [],
+          "lazy_features": []
+        },
         {
           "path": "static/js/pages/shell.shared.js",
           "globals": [],
@@ -2238,11 +2267,6 @@
         },
         {
           "path": "static/js/features/xray_log_line_class.js",
-          "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/features/xkeen_runtime.js",
           "globals": [],
           "lazy_features": []
         },
@@ -2461,17 +2485,24 @@
           "lazy_features": []
         },
         {
-          "path": "static/js/pages/top_level_router.js",
+          "path": "static/js/pages/top_level_panel_mihomo.shared.js",
           "globals": [],
           "lazy_features": []
         },
         {
-          "path": "static/js/pages/top_level_screen_registry.js",
+          "path": "static/js/pages/top_level_panel_screen.js",
           "globals": [],
           "lazy_features": []
         },
         {
-          "path": "static/js/pages/top_level_shell.shared.js",
+          "path": "static/js/pages/top_level_screen_host.shared.js",
+          "globals": [
+            "XKeen.pageConfig"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_mihomo_generator_screen.js",
           "globals": [],
           "lazy_features": []
         }
@@ -2554,7 +2585,8 @@
         "XKeen.util.commandJob",
         "XKeen.ui.showGlobalXkeenSpinner",
         "XKeen.ui.hideGlobalXkeenSpinner",
-        "XKeen.ui.showXrayPreflightError"
+        "XKeen.ui.showXrayPreflightError",
+        "XKeen.pageConfig"
       ],
       "all_bootstrap_lazy_features": [],
       "lazy_runtime_inventory": null

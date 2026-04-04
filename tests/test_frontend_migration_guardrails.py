@@ -13,10 +13,9 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
     expectations = {
         "panel.entry.js": [
             "import { bootTopLevelShell } from './top_level_shell.shared.js';",
-            "import { bootPanelPage } from './panel.bootstrap_tail.bundle.js';",
+            "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';",
+            "import { bootPanelScreen } from './panel.screen.bootstrap.js';",
             "initialScreen: 'panel'",
-            "await import('./panel.routing.bundle.js');",
-            "await import('./panel.mihomo.bundle.js');",
         ],
         "backups.entry.js": [
             "import { bootBackupsPage } from './backups.init.js';",
@@ -32,7 +31,8 @@ def test_source_entrypoints_bootstrap_pages_without_legacy_loader():
         ],
         "mihomo_generator.entry.js": [
             "import { bootTopLevelShell } from './top_level_shell.shared.js';",
-            "import { bootMihomoGeneratorPage } from './mihomo_generator.init.js';",
+            "import { bootMihomoGeneratorScreen } from './mihomo_generator.screen.bootstrap.js';",
+            "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';",
             "initialScreen: 'mihomo_generator'",
         ],
     }
@@ -78,11 +78,17 @@ def test_panel_runtime_bundle_files_exist_for_current_architecture():
         "panel.lazy_bindings.runtime.js",
         "panel.mihomo.bundle.js",
         "panel.routing.bundle.js",
+        "panel.screen.bootstrap.js",
         "panel.shared_compat.bundle.js",
         "panel.view_runtime.js",
+        "mihomo_generator.screen.bootstrap.js",
         "top_level_shell.shared.js",
         "top_level_router.js",
         "top_level_screen_registry.js",
+        "top_level_screen_host.shared.js",
+        "top_level_panel_screen.js",
+        "top_level_mihomo_generator_screen.js",
+        "top_level_panel_mihomo.shared.js",
     ]
 
     for filename in required_files:
@@ -1157,7 +1163,7 @@ def test_stage6_consumer_sweep_uses_runtime_page_config_helpers_in_canonical_rea
                 "devtoolsSectionsWhitelist",
             ],
         },
-        PAGES_DIR / "panel.entry.js": {
+        PAGES_DIR / "panel.screen.bootstrap.js": {
             "required": [
                 "hasXkeenXrayCore()",
                 "hasXkeenMihomoCore()",

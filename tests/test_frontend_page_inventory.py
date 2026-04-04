@@ -67,7 +67,7 @@ def test_frontend_inventory_snapshot_is_committed_and_matches_generator(tmp_path
     )
 
 
-def test_panel_inventory_captures_current_bundle_split_and_lazy_runtime(tmp_path):
+def test_panel_inventory_captures_current_p2_screen_split_and_lazy_runtime(tmp_path):
     output_path = tmp_path / "frontend-page-inventory.generated.json"
     result = subprocess.run(
         [sys.executable, str(GENERATOR), "--root", str(ROOT), "--json-out", str(output_path)],
@@ -85,18 +85,22 @@ def test_panel_inventory_captures_current_bundle_split_and_lazy_runtime(tmp_path
     esm_files = {item["path"] for item in panel.get("esm_bootstrap_files", [])}
 
     required_shared_imports = {
-        "./shell.shared.js",
-        "./logs_shell.shared.js",
-        "./panel_shell.shared.js",
-        "./config_shell.shared.js",
-        "./editor.shared.js",
-        "./codemirror6.shared.js",
-        "./panel.shared_compat.bundle.js",
-        "./panel.bootstrap_tail.bundle.js",
+        "./top_level_shell.shared.js",
+        "./top_level_panel_mihomo.shared.js",
+        "./panel.screen.bootstrap.js",
     }
     assert required_shared_imports.issubset(shared_imports)
-    assert dynamic_imports == {"./panel.routing.bundle.js", "./panel.mihomo.bundle.js"}
+    assert dynamic_imports == set()
     assert "static/js/runtime/lazy_runtime.js" in esm_files
+    for rel in (
+        "static/js/pages/top_level_panel_screen.js",
+        "static/js/pages/top_level_mihomo_generator_screen.js",
+        "static/js/pages/top_level_screen_host.shared.js",
+        "static/js/pages/panel.screen.bootstrap.js",
+        "static/js/pages/panel.bootstrap_tail.bundle.js",
+        "static/js/pages/panel.shared_compat.bundle.js",
+    ):
+        assert rel in esm_files, f"panel P2 inventory should capture transitive screen/bootstrap module: {rel}"
 
     lazy_runtime_inventory = panel.get("lazy_runtime_inventory") or {}
     feature_scripts = lazy_runtime_inventory.get("feature_scripts") or {}

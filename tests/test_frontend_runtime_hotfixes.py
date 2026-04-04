@@ -77,6 +77,10 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     shell = Path('xkeen-ui/static/js/pages/top_level_shell.shared.js').read_text(encoding='utf-8')
     router = Path('xkeen-ui/static/js/pages/top_level_router.js').read_text(encoding='utf-8')
     registry = Path('xkeen-ui/static/js/pages/top_level_screen_registry.js').read_text(encoding='utf-8')
+    host = Path('xkeen-ui/static/js/pages/top_level_screen_host.shared.js').read_text(encoding='utf-8')
+    panel_screen = Path('xkeen-ui/static/js/pages/top_level_panel_screen.js').read_text(encoding='utf-8')
+    mihomo_screen = Path('xkeen-ui/static/js/pages/top_level_mihomo_generator_screen.js').read_text(encoding='utf-8')
+    panel_mihomo_shared = Path('xkeen-ui/static/js/pages/top_level_panel_mihomo.shared.js').read_text(encoding='utf-8')
     panel_shell = Path('xkeen-ui/static/js/pages/panel_shell.shared.js').read_text(encoding='utf-8')
     panel_entry = Path('xkeen-ui/static/js/pages/panel.entry.js').read_text(encoding='utf-8')
     devtools_entry = Path('xkeen-ui/static/js/pages/devtools.entry.js').read_text(encoding='utf-8')
@@ -102,12 +106,23 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     assert "panel: '/'" in registry
     assert "devtools: '/devtools'" in registry
     assert "mihomo_generator: '/mihomo_generator'" in registry
+    assert 'export function ensureTopLevelScreenMount()' in host
+    assert 'export async function fetchTopLevelScreenSnapshot(name, route)' in host
+    assert 'export function registerPanelTopLevelScreen()' in panel_screen
+    assert "fetchTopLevelScreenSnapshot('panel', '/')" in panel_screen
+    assert 'export function registerMihomoGeneratorTopLevelScreen()' in mihomo_screen
+    assert "fetchTopLevelScreenSnapshot('mihomo_generator', '/mihomo_generator')" in mihomo_screen
+    assert 'export function registerPanelMihomoTopLevelScreens()' in panel_mihomo_shared
     assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in panel_shell
     assert "import { bootTopLevelShell } from './top_level_shell.shared.js';" in panel_entry
+    assert "import { bootPanelScreen } from './panel.screen.bootstrap.js';" in panel_entry
+    assert "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';" in panel_entry
     assert "initialScreen: 'panel'" in panel_entry
     assert "import { bootTopLevelShell } from './top_level_shell.shared.js';" in devtools_entry
     assert "initialScreen: 'devtools'" in devtools_entry
     assert "import { bootTopLevelShell } from './top_level_shell.shared.js';" in mihomo_entry
+    assert "import { bootMihomoGeneratorScreen } from './mihomo_generator.screen.bootstrap.js';" in mihomo_entry
+    assert "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';" in mihomo_entry
     assert "initialScreen: 'mihomo_generator'" in mihomo_entry
     assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in devtools_init
     assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in mihomo_init
@@ -143,6 +158,37 @@ def test_devtools_host_defers_noncritical_init_and_mihomo_generator_persists_ses
     assert 'window.sessionStorage.setItem(SESSION_DRAFT_KEY, JSON.stringify(payload));' in mihomo
     assert 'function hydrateSessionDraft(draft) {' in mihomo
     assert 'async function finalizeSessionDraftRestore(draft) {' in mihomo
+
+
+def test_p2_panel_mihomo_screen_modules_keep_runtime_alive_between_activations():
+    mihomo = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+    panel_bootstrap = Path('xkeen-ui/static/js/pages/panel.screen.bootstrap.js').read_text(encoding='utf-8')
+    mihomo_bootstrap = Path('xkeen-ui/static/js/pages/mihomo_generator.screen.bootstrap.js').read_text(encoding='utf-8')
+    panel_screen = Path('xkeen-ui/static/js/pages/top_level_panel_screen.js').read_text(encoding='utf-8')
+    mihomo_screen = Path('xkeen-ui/static/js/pages/top_level_mihomo_generator_screen.js').read_text(encoding='utf-8')
+
+    assert 'function refreshLayout() {' in mihomo
+    assert 'async function activate(opts = {}) {' in mihomo
+    assert 'function deactivate() {' in mihomo
+    assert 'function serializeState() {' in mihomo
+    assert 'async function restoreState(state) {' in mihomo
+    assert 'const lifecycleApi = {' in mihomo
+    assert "activate(...args) { return callLifecycle('activate', ...args); }" in mihomo
+    assert "deactivate(...args) { return callLifecycle('deactivate', ...args); }" in mihomo
+    assert "serializeState(...args) { return callLifecycle('serializeState', ...args); }" in mihomo
+    assert "restoreState(...args) { return callLifecycle('restoreState', ...args); }" in mihomo
+    assert "refreshLayout(...args) { return callLifecycle('refreshLayout', ...args); }" in mihomo
+
+    assert 'export async function bootPanelScreen()' in panel_bootstrap
+    assert 'export async function bootMihomoGeneratorScreen()' in mihomo_bootstrap
+    assert 'serializedState = runtimeApi.serializeState(context);' in panel_screen
+    assert 'serializedState = await runtimeApi.serializeState(context);' in mihomo_screen
+    assert 'attachScreenRoot(nextSnapshot);' in panel_screen
+    assert 'attachScreenRoot(nextSnapshot);' in mihomo_screen
+    assert "window.XKeen?.pageConfig?.page === 'panel'" in panel_screen
+    assert "window.XKeen?.pageConfig?.page === 'mihomo_generator'" in mihomo_screen
+    assert "String(window.location.pathname || '') === '/'" not in panel_screen
+    assert "String(window.location.pathname || '') === '/mihomo_generator'" not in mihomo_screen
     assert 'window.addEventListener("pagehide", () => persist("pagehide"));' in mihomo
     assert 'try { hydrateSessionDraft(initialSessionDraft); } catch (e) {}' in mihomo
     assert 'try { await finalizeSessionDraftRestore(initialSessionDraft); } catch (e) {}' in mihomo
