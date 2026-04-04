@@ -205,6 +205,13 @@ let mihomoGeneratorModuleApi = null;
 
         let validationLogRaw = "";
         let _lastMihomoResultPayload = null;
+        const SESSION_DRAFT_KEY = "xk.mihomo_generator.session_draft.v1";
+        const initialSessionDraft = readSessionDraft();
+        let _sessionDraftSaveTimer = null;
+        let _sessionDraftEditorUnsub = null;
+        let _isRestoringSessionDraft = false;
+        let _pendingSessionEngine = "";
+        let _pendingSessionRuleGroups = null;
 
         // ---- active core indicator (Mihomo generator page) ----
         let _lastKnownCore = '';
@@ -623,6 +630,7 @@ async function switchEngine(nextEngine, opts) {
 
       _engine = 'monaco';
       _active = _monacoFacade;
+      try { bindSessionDraftEditorListener(); } catch (e) {}
       try { if (_active && _active.focus) _active.focus(); } catch (e5) {}
       return _engine;
     }
@@ -647,10 +655,12 @@ async function switchEngine(nextEngine, opts) {
 
     _engine = 'codemirror';
     _active = cmFacade();
+    try { bindSessionDraftEditorListener(); } catch (e) {}
     try { if (editor && editor.focus) editor.focus(); } catch (e8) {}
     return _engine;
   } finally {
     _engineSyncing = false;
+    try { scheduleSessionDraftSave(60); } catch (e) {}
   }
 }
 
@@ -661,7 +671,9 @@ function initEngineToggle() {
   // Initial value from settings/local fallback (async, non-blocking).
   (async () => {
     try {
-      const pref = await resolvePreferredEngine();
+      const pref = _pendingSessionEngine
+        ? normalizeEngine(_pendingSessionEngine)
+        : await resolvePreferredEngine();
       setEngineSelectValue(pref);
       await switchEngine(pref, { force: false });
     } catch (e) {}
@@ -766,6 +778,7 @@ function initEngineToggle() {
         let previewTimeout = null;
       
         function schedulePreview(delay = 300) {
+          try { scheduleSessionDraftSave(Math.min(Math.max(Number(delay || 0), 80), 400)); } catch (e) {}
           if (!_active) return;
           if (_isEditable) return;
           clearTimeout(previewTimeout);
@@ -1287,6 +1300,7 @@ function initEngineToggle() {
 
           // Default active engine is CodeMirror until overridden by global preference.
           try { _engine = 'codemirror'; _active = cmFacade(); } catch (e) {}
+          try { bindSessionDraftEditorListener(); } catch (e) {}
         }
       
         // React on theme changes (main.js dispatches xkeen-theme-change)
@@ -1495,6 +1509,7 @@ function initEngineToggle() {
               const t = card.querySelector(".proxy-header-title");
               if (t) t.textContent = "Узел #" + (i + 1);
             });
+            schedulePreview();
           };
       
           actions.appendChild(delBtn);
@@ -2582,6 +2597,256 @@ function initEngineToggle() {
           if (enabledRuleGroups.length) state.enabledRuleGroups = enabledRuleGroups;
           return state;
         }
+
+        function readSessionDraft() {
+          try {
+            const raw = window.sessionStorage.getItem(SESSION_DRAFT_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === "object" ? parsed : null;
+          } catch (e) {
+            return null;
+          }
+        }
+
+        function buildProxyCardInitialFromDraft(proxy) {
+          if (!proxy || typeof proxy !== "object") return null;
+
+          const kind = String(proxy.kind || "auto").trim().toLowerCase() || "auto";
+          const groups = Array.isArray(proxy.groups)
+            ? proxy.groups.map((item) => String(item || "").trim()).filter(Boolean)
+            : [];
+          const tags = Array.isArray(proxy.tags)
+            ? proxy.tags.map((item) => String(item || "").trim()).filter(Boolean)
+            : [];
+
+          const initial = { kind };
+          if (proxy.name) initial.name = String(proxy.name);
+          if (groups.length) initial.groups = groups.join(", ");
+          if (tags.length) initial.tags = tags.join(", ");
+          if (proxy.icon) initial.icon = String(proxy.icon);
+          if (proxy.priority !== undefined && proxy.priority !== null && String(proxy.priority) !== "") {
+            initial.priority = proxy.priority;
+          }
+
+          if (kind === "wireguard") initial.data = String(proxy.config || "");
+          else if (kind === "yaml") initial.data = String(proxy.yaml || "");
+          else initial.data = String(proxy.link || "");
+
+          return initial;
+        }
+
+        function restoreSubscriptionRows(items) {
+          if (!subscriptionsList) return;
+          subscriptionsList.textContent = "";
+
+          const values = Array.isArray(items)
+            ? items.map((item) => String(item || "").trim()).filter(Boolean)
+            : [];
+
+          values.forEach((value) => {
+            subscriptionsList.appendChild(createSubscriptionRow(value));
+          });
+        }
+
+        function restoreProxyCards(items) {
+          if (!proxiesList) return;
+
+          proxiesList.textContent = "";
+          proxyControllers.splice(0, proxyControllers.length);
+
+          const values = Array.isArray(items) ? items : [];
+          values.forEach((item) => {
+            const initial = buildProxyCardInitialFromDraft(item);
+            if (initial) createProxyCard(initial);
+          });
+        }
+
+        function buildSessionDraftSnapshot() {
+          return {
+            version: 1,
+            savedAt: Date.now(),
+            state: collectState(),
+            engine: normalizeEngine(_engine || (previewEngineSelect && previewEngineSelect.value) || "codemirror"),
+            editable: !!_isEditable,
+            previewText: getEditorText(),
+          };
+        }
+
+        function persistSessionDraftNow(reason = "") {
+          if (_isRestoringSessionDraft) return false;
+
+          try {
+            const payload = buildSessionDraftSnapshot();
+            if (reason) payload.reason = String(reason);
+            window.sessionStorage.setItem(SESSION_DRAFT_KEY, JSON.stringify(payload));
+            return true;
+          } catch (e) {
+            return false;
+          }
+        }
+
+        function scheduleSessionDraftSave(delay = 120) {
+          if (_isRestoringSessionDraft) return;
+
+          try {
+            if (_sessionDraftSaveTimer) clearTimeout(_sessionDraftSaveTimer);
+          } catch (e) {}
+
+          _sessionDraftSaveTimer = window.setTimeout(() => {
+            _sessionDraftSaveTimer = null;
+            persistSessionDraftNow("debounced");
+          }, Math.max(0, Number(delay || 0)));
+        }
+
+        function clearSessionDraftEditorListener() {
+          if (!_sessionDraftEditorUnsub) return;
+          try { _sessionDraftEditorUnsub(); } catch (e) {}
+          _sessionDraftEditorUnsub = null;
+        }
+
+        function bindSessionDraftEditorListener() {
+          clearSessionDraftEditorListener();
+
+          const fac = _active;
+          if (fac && typeof fac.onChange === "function") {
+            try {
+              const unsub = fac.onChange(() => {
+                try { scheduleSessionDraftSave(180); } catch (e) {}
+              });
+              if (typeof unsub === "function") {
+                _sessionDraftEditorUnsub = unsub;
+                return;
+              }
+            } catch (e) {}
+          }
+
+          if (!previewTextarea) return;
+          const handler = () => {
+            try { scheduleSessionDraftSave(180); } catch (e) {}
+          };
+          previewTextarea.addEventListener("input", handler);
+          _sessionDraftEditorUnsub = () => {
+            try { previewTextarea.removeEventListener("input", handler); } catch (e) {}
+          };
+        }
+
+        function wireSessionDraftLifecycle() {
+          try {
+            if (document.body && document.body.dataset && document.body.dataset.xkMihomoDraftLifecycle === "1") return;
+          } catch (e) {}
+
+          const persist = (reason) => {
+            try {
+              if (_sessionDraftSaveTimer) clearTimeout(_sessionDraftSaveTimer);
+            } catch (e) {}
+            _sessionDraftSaveTimer = null;
+            try { persistSessionDraftNow(reason); } catch (e) {}
+          };
+
+          try {
+            window.addEventListener("pagehide", () => persist("pagehide"));
+          } catch (e) {}
+
+          try {
+            document.addEventListener("visibilitychange", () => {
+              try {
+                if (document.hidden) persist("hidden");
+              } catch (e) {}
+            });
+          } catch (e) {}
+
+          try {
+            window.addEventListener("xkeen:top-level-nav-intent", () => persist("top-level-nav"));
+          } catch (e) {}
+
+          try {
+            if (document.body && document.body.dataset) document.body.dataset.xkMihomoDraftLifecycle = "1";
+          } catch (e) {}
+        }
+
+        function hydrateSessionDraft(draft) {
+          if (!draft || typeof draft !== "object") return false;
+
+          const state = (draft.state && typeof draft.state === "object") ? draft.state : null;
+          if (!state) return false;
+
+          _isRestoringSessionDraft = true;
+          try {
+            const profile = String(state.profile || "router_custom").trim() || "router_custom";
+            if (profileSelect) profileSelect.value = profile;
+
+            if (defaultGroupsInput) {
+              const groups = Array.isArray(state.defaultGroups)
+                ? state.defaultGroups.map((item) => String(item || "").trim()).filter(Boolean)
+                : [];
+              defaultGroupsInput.value = groups.join(", ");
+            }
+
+            restoreSubscriptionRows(Array.isArray(state.subscriptions) ? state.subscriptions : []);
+            restoreProxyCards(Array.isArray(state.proxies) ? state.proxies : []);
+
+            if (editToggle && typeof draft.editable === "boolean") {
+              editToggle.checked = !!draft.editable;
+            }
+
+            _pendingSessionEngine = (typeof draft.engine === "string" && String(draft.engine || "").trim())
+              ? normalizeEngine(draft.engine)
+              : "";
+            _pendingSessionRuleGroups = Array.isArray(state.enabledRuleGroups)
+              ? state.enabledRuleGroups.map((item) => String(item || "").trim()).filter(Boolean)
+              : null;
+            return true;
+          } finally {
+            _isRestoringSessionDraft = false;
+          }
+        }
+
+        async function finalizeSessionDraftRestore(draft) {
+          if (!draft || typeof draft !== "object") return false;
+
+          _isRestoringSessionDraft = true;
+          try {
+            if (typeof draft.editable === "boolean") {
+              setEditable(!!draft.editable, false);
+            }
+
+            if (typeof draft.previewText === "string") {
+              setEditorText(draft.previewText);
+            }
+
+            if (Array.isArray(_pendingSessionRuleGroups) && _pendingSessionRuleGroups.length) {
+              setEnabledRuleGroupsInUI(_pendingSessionRuleGroups);
+              updateSelectAllCheckbox();
+            }
+
+            const requestedEngine = _pendingSessionEngine
+              ? normalizeEngine(_pendingSessionEngine)
+              : ((typeof draft.engine === "string" && String(draft.engine || "").trim())
+                ? normalizeEngine(draft.engine)
+                : "");
+
+            if (requestedEngine) {
+              setEngineSelectValue(requestedEngine);
+              await switchEngine(requestedEngine, { force: false });
+            }
+
+            if (typeof draft.previewText === "string") {
+              setEditorText(draft.previewText);
+            }
+          } finally {
+            _isRestoringSessionDraft = false;
+            _pendingSessionEngine = "";
+          }
+
+          try { bindSessionDraftEditorListener(); } catch (e) {}
+          if (!!draft.editable) {
+            try { scheduleSessionDraftSave(0); } catch (e) {}
+          } else {
+            try { schedulePreview(90); } catch (e) {}
+          }
+          return true;
+        }
       
         // ----- generate demo preview on client -----
         function generatePreviewDemo(manual = false) {
@@ -3474,6 +3739,7 @@ function initEngineToggle() {
               try { toast('Редактирование выключено.', 'info'); } catch (e) {}
             }
           }
+          try { scheduleSessionDraftSave(40); } catch (e) {}
         }
 
         // ----- init -----
@@ -3505,20 +3771,32 @@ function initEngineToggle() {
             });
         } catch (e) {}
 
+        try { wireSessionDraftLifecycle(); } catch (e) {}
+        try { hydrateSessionDraft(initialSessionDraft); } catch (e) {}
         try { initEditor(); } catch (e) {}
+        try {
+          if (initialSessionDraft && typeof initialSessionDraft.previewText === "string") {
+            setEditorText(initialSessionDraft.previewText);
+          }
+        } catch (e) {}
         try { setEditable(!!(editToggle && editToggle.checked), false); } catch (e) {}
         try { initEngineToggle(); } catch (e) {}
         try { addInitialSubscriptionRow(); } catch (e) {}
 
-        duringIdle(() => {
-          try { loadProfileDefaults(profileSelect && profileSelect.value); } catch (e) {}
+        duringIdle(async () => {
+          try { await loadProfileDefaults(profileSelect && profileSelect.value); } catch (e) {}
+          try { await finalizeSessionDraftRestore(initialSessionDraft); } catch (e) {}
           try { refreshActiveCorePill({ silent: true }); } catch (e) {}
         });
       
         addSubscriptionBtn.onclick = () => {
           subscriptionsList.appendChild(createSubscriptionRow(""));
+          try { scheduleSessionDraftSave(60); } catch (e) {}
         };
-        addProxyBtn.onclick = () => createProxyCard();
+        addProxyBtn.onclick = () => {
+          createProxyCard();
+          try { scheduleSessionDraftSave(60); } catch (e) {}
+        };
         if (bulkImportBtn) bulkImportBtn.onclick = () => showBulkImportModal();
         if (normalizeProxiesBtn) normalizeProxiesBtn.onclick = () => applyTemplatesToExistingProxies();
         if (bulkImportApplyBtn) bulkImportApplyBtn.onclick = () => doBulkImport();

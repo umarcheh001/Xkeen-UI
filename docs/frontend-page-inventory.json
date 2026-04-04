@@ -289,6 +289,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/pages/top_level_nav.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/editor.shared.js",
           "globals": [],
           "lazy_features": []
@@ -1597,6 +1602,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/pages/top_level_nav.shared.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/compat/devtools.js",
           "globals": [
             "XKeen.features"
@@ -2099,6 +2109,7 @@
         "{{ url_for('static', filename='js/ui/typography.js', v='20251230c') }}",
         "{{ url_for('static', filename='js/ui/layout.js', v='20260101c') }}",
         "{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}",
+        "{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}",
         "{{ frontend_page_entry_url('mihomo_generator') }}"
       ],
       "esm_bootstrap_files": [
@@ -2408,6 +2419,11 @@
         },
         {
           "path": "static/js/features/mihomo_runtime.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/pages/top_level_nav.shared.js",
           "globals": [],
           "lazy_features": []
         }

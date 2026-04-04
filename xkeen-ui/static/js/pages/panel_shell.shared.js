@@ -29,6 +29,7 @@ import {
   hasXkeenXrayCore,
   publishXkeenPageApi,
 } from '../features/xkeen_runtime.js';
+import { wireTopLevelNavigation } from './top_level_nav.shared.js';
 
 (() => {
   'use strict';
@@ -625,17 +626,7 @@ import {
   }
 
   function wireExplicitNavigation() {
-    const buttons = document.querySelectorAll('[data-nav-href]');
-    buttons.forEach((btn) => {
-      if (!btn || (btn.dataset && btn.dataset.xkNavWired === '1')) return;
-      btn.addEventListener('click', (e) => {
-        const href = String((btn.dataset && btn.dataset.navHref) || '').trim();
-        if (!href) return;
-        e.preventDefault();
-        window.location.href = href;
-      });
-      if (btn.dataset) btn.dataset.xkNavWired = '1';
-    });
+    try { wireTopLevelNavigation(document); } catch (e) {}
   }
 
   function runRoutingCardOpenCallback(kind) {

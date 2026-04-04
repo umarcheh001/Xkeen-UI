@@ -1,6 +1,6 @@
 # Документация по frontend
 
-Актуальная документация по frontend migration и текущему ESM-first контракту собрана в living docs. Исторические пошаговые rollout-планы в `docs/` больше не поддерживаются.
+Актуальная документация по frontend migration и текущему ESM-first контракту собрана в living docs. Исторические пошаговые rollout-планы в `docs/` больше не поддерживаются. Отдельные активные implementation plans допустимы только для новых незакрытых инициатив и не должны переоткрывать уже закрытые migration stages.
 
 ## Основные документы
 
@@ -10,6 +10,10 @@
 - `frontend-page-inventory.md` — человекочитаемая карта страниц и freeze-правила для source graph.
 - `frontend-build-workflow.md` — актуальный install/build/verify workflow и связь с CI/archive workflows.
 - `adr/0001-frontend-esm-bootstrap.md` — архитектурное решение про build-managed ESM bootstrap.
+
+## Активные планы
+
+- `top-level-navigation-plan.md` — актуальный план по переводу `/`, `/devtools` и `/mihomo_generator` с document navigation на in-app navigation без переоткрытия frontend migration.
 
 ## Сгенерированные артефакты
 

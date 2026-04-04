@@ -3887,9 +3887,9 @@ function bindFilterUi() {
       });
     } catch (e) {}
 
-    // Clean up WS on page unload
+    // Clean up polling/WS on page lifecycle transitions without blocking BFCache.
     try {
-      window.addEventListener('beforeunload', () => {
+      window.addEventListener('pagehide', () => {
         // Avoid promoting untouched template defaults over synced server prefs.
         if (_logsViewPrefsUserTouched) persistLocalLogsViewDraft();
         try { stopXrayLogAuto(); } catch (e) {}
@@ -3912,7 +3912,13 @@ function bindFilterUi() {
     // Refresh once when tab becomes active again
     try {
       document.addEventListener('visibilitychange', () => {
-        try { if (!document.hidden) void refreshXrayLogStatus(); } catch (e) {}
+        try {
+          if (document.hidden) {
+            if (_logsViewPrefsUserTouched) persistLocalLogsViewDraft();
+            return;
+          }
+          void refreshXrayLogStatus();
+        } catch (e) {}
       });
     } catch (e) {}
   }

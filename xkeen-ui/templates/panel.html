@@ -208,6 +208,7 @@
               <a
                 href="{{ url_for('devtools_page') }}"
                 class="service-core-text xk-header-btn xk-header-btn-devtools"
+                data-xk-top-nav="1"
                 title="DevTools"
               >DevTools</a>
 
@@ -215,6 +216,7 @@
                 href="{{ url_for('devtools_page') }}#dt-update-card"
                 id="xk-update-link"
                 class="service-core-text hidden"
+                data-xk-top-nav="1"
                 data-loading="true"
                 aria-busy="true"
                 title="Обновление"
@@ -268,7 +270,7 @@
           Файлы
         </button>
         {% if has_mihomo %}
-        <button class="top-tab-btn xk-top-tab xk-top-tab-generator" type="button" data-xk-section="mihomo-generator" id="top-tab-mihomo-generator" data-nav-href="{{ url_for('mihomo_generator_page') }}">
+        <button class="top-tab-btn xk-top-tab xk-top-tab-generator" type="button" data-xk-section="mihomo-generator" id="top-tab-mihomo-generator" data-nav-href="{{ url_for('mihomo_generator_page') }}" data-xk-top-nav="1">
           Mihomo Генератор
         </button>
         {% endif %}

@@ -72,6 +72,58 @@ def test_mihomo_generator_ignores_stale_profile_defaults_and_auto_preview_overwr
     assert text.count('if (requestSeq !== _previewRequestSeq) return;') >= 2
 
 
+def test_top_level_navigation_controls_use_shared_helper_contract():
+    helper = Path('xkeen-ui/static/js/pages/top_level_nav.shared.js').read_text(encoding='utf-8')
+    panel_shell = Path('xkeen-ui/static/js/pages/panel_shell.shared.js').read_text(encoding='utf-8')
+    devtools_init = Path('xkeen-ui/static/js/pages/devtools.init.js').read_text(encoding='utf-8')
+    mihomo_init = Path('xkeen-ui/static/js/pages/mihomo_generator.init.js').read_text(encoding='utf-8')
+    panel_template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    devtools_template = Path('xkeen-ui/templates/devtools.html').read_text(encoding='utf-8')
+    mihomo_template = Path('xkeen-ui/templates/mihomo_generator.html').read_text(encoding='utf-8')
+
+    assert 'export function navigateTopLevelHref(rawHref, opts)' in helper
+    assert "window.dispatchEvent(new CustomEvent('xkeen:top-level-nav-intent'" in helper
+    assert "const nodes = scope.querySelectorAll('[data-xk-top-nav]');" in helper
+    assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in panel_shell
+    assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in devtools_init
+    assert "import { wireTopLevelNavigation } from './top_level_nav.shared.js';" in mihomo_init
+    assert panel_template.count('data-xk-top-nav="1"') >= 3
+    assert 'data-xk-top-nav="1"' in devtools_template
+    assert mihomo_template.count('data-xk-top-nav="1"') >= 3
+
+
+def test_bfcache_lifecycle_uses_pagehide_instead_of_beforeunload_for_p0_paths():
+    routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+    xray_logs = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
+
+    assert 'beforeunload' not in routing
+    assert 'beforeunload' not in xray_logs
+    assert "window.addEventListener('pagehide'" in routing
+    assert "window.addEventListener('pagehide'" in xray_logs
+    assert "document.addEventListener('visibilitychange'" in xray_logs
+
+
+def test_devtools_host_defers_noncritical_init_and_mihomo_generator_persists_session_draft():
+    devtools_host = Path('xkeen-ui/static/js/features/devtools.js').read_text(encoding='utf-8')
+    devtools_logs = Path('xkeen-ui/static/js/features/devtools/logs.js').read_text(encoding='utf-8')
+    mihomo = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+
+    assert "_initModuleOnce('logs', 'devtoolsLogs', { deferInitialFetch: true });" in devtools_host
+    assert "_wireDeferredModuleInit('update', 'devtoolsUpdate', 'dt-update-card'" in devtools_host
+    assert "_wireDeferredModuleInit('env', 'devtoolsEnv', 'dt-env-card'" in devtools_host
+    assert "_wireDeferredModuleInit('terminalTheme', 'devtoolsTerminalTheme', 'dt-terminal-theme-card'" in devtools_host
+    assert "if (!initOptions.deferInitialFetch)" in devtools_logs
+    assert "try { loadLogList(true); } catch (e) {}" in devtools_logs
+
+    assert 'const SESSION_DRAFT_KEY = "xk.mihomo_generator.session_draft.v1";' in mihomo
+    assert 'window.sessionStorage.setItem(SESSION_DRAFT_KEY, JSON.stringify(payload));' in mihomo
+    assert 'function hydrateSessionDraft(draft) {' in mihomo
+    assert 'async function finalizeSessionDraftRestore(draft) {' in mihomo
+    assert 'window.addEventListener("pagehide", () => persist("pagehide"));' in mihomo
+    assert 'try { hydrateSessionDraft(initialSessionDraft); } catch (e) {}' in mihomo
+    assert 'try { await finalizeSessionDraftRestore(initialSessionDraft); } catch (e) {}' in mihomo
+
+
 def test_codemirror6_source_bridge_is_opt_in_and_does_not_inject_importmap_dynamically():
     path = Path('xkeen-ui/static/js/pages/codemirror6.shared.js')
     text = path.read_text(encoding='utf-8')

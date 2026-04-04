@@ -8,6 +8,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   const DT = getDevtoolsNamespace();
 
   const SH = getDevtoolsSharedApi() || {};
+  let _inited = false;
   const toast = SH.toast || function (m) { try { console.log(m); } catch (e) {} };
   const getJSON = SH.getJSON || (async (u) => {
     const r = await fetch(u, { cache: 'no-store' });
@@ -70,6 +71,9 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   }
 
   function init() {
+    if (_inited) return;
+    _inited = true;
+
     const btnStart = byId('dt-ui-start');
     const btnStop = byId('dt-ui-stop');
     const btnRestart = byId('dt-ui-restart');

@@ -62,6 +62,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
   // ------------------------- Logs -------------------------
 
+  let _inited = false;
   let _logList = [];
   let _logMetaByName = {};
   let _logHasNew = {};
@@ -1714,6 +1715,7 @@ function stopLogAutoRefresh() {
     if (_activeTab === 'logs') {
       startLogAutoRefresh();
       startLogListPolling();
+      try { loadLogList(true); } catch (e) {}
       // Fetch immediately on tab open.
       // If WS is available and Live is enabled, let WS deliver the snapshot (one less HTTP request).
       try {
@@ -2515,7 +2517,12 @@ function _wireLogLineActions() {
 }
 
 
-  function init() {
+  function init(opts) {
+    if (_inited) return;
+    _inited = true;
+
+    const initOptions = opts && typeof opts === 'object' ? opts : {};
+
     // Capabilities: detect WS support on backend (optional)
     try {
       getJSON('/api/capabilities').then((cap) => {
@@ -2914,8 +2921,10 @@ function _wireLogLineActions() {
     // Ensure tab state is consistent with the initial HTML
     try { _updateTailControlsUi(); } catch (e) {}
 
-    // Preload list/tail so the Logs tab opens instantly.
-    try { loadLogList().then(() => loadLogTail()); } catch (e) {}
+    // Host can defer the first fetch to reduce startup cost on the Tools tab.
+    if (!initOptions.deferInitialFetch) {
+      try { loadLogList().then(() => loadLogTail()); } catch (e) {}
+    }
 
     // Default tab
     try { setActiveTab('tools'); } catch (e) {}

@@ -24,6 +24,29 @@
   <script src="{{ url_for('static', filename='js/ui/xk_brand.js', v='20260104a') }}"></script>
   {% include '_codemirror6_importmap.html' %}
 
+  {% set mihomo_generator_page_config = frontend_page_config(
+    'mihomo_generator',
+    sections={
+      'panelWhitelist': panel_sections_whitelist,
+      'devtoolsWhitelist': devtools_sections_whitelist,
+    },
+    runtime={
+      'debug': False,
+    },
+    terminal={
+      'supportsPty': False,
+      'enableOptionalAddons': False,
+      'enableLigatures': False,
+      'enableWebgl': False,
+    },
+  ) %}
+  <script>
+    window.XKeen = window.XKeen || {};
+    var pageConfig = {{ mihomo_generator_page_config|tojson }};
+    window.XKeen.pageConfig = pageConfig;
+  </script>
+  <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
+
 
     <script>
     (function () {
@@ -1781,11 +1804,13 @@
           <a
             href="{{ url_for('index') }}"
             class="service-core-text xk-header-btn xk-header-btn-ui"
+            data-xk-top-nav="1"
             title="Назад на главную панель"
           >← Назад</a>
           <a
             href="{{ url_for('devtools_page') }}"
             class="service-core-text xk-header-btn xk-header-btn-devtools"
+            data-xk-top-nav="1"
             title="DevTools"
           >DevTools</a>
           <span
@@ -1798,6 +1823,7 @@
             href="{{ url_for('devtools_page') }}#dt-update-card"
             id="xk-update-link"
             class="service-core-text xk-header-btn xk-header-btn-devtools hidden"
+            data-xk-top-nav="1"
             title="Обновление"
           >
             <span class="xk-update-dot" aria-hidden="true"></span>

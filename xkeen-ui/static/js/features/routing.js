@@ -4801,7 +4801,7 @@ function closeHelp() {
         } catch (e) {}
       });
 
-      window.addEventListener('beforeunload', () => {
+      window.addEventListener('pagehide', () => {
         try { saveCurrentViewState({ updateMeta: false }); } catch (e) {}
       });
     } catch (e) {}

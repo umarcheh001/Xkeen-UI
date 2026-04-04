@@ -10,6 +10,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   const DT = getDevtoolsNamespace();
 
   const SH = getDevtoolsSharedApi() || {};
+  let _inited = false;
   const toast = SH.toast || function (m, isErr) { try { console[(isErr ? 'error' : 'log')](m); } catch (e) {} };
   // Kind-aware toast helper: supports boolean (legacy) and 'info'|'success'|'error'.
   const toastKind = function (msg, kind) {
@@ -990,6 +991,9 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   }
 
   function init() {
+    if (_inited) return;
+    _inited = true;
+
     const btnCheck = byId('dt-update-check');
     const btnRun = byId('dt-update-run');
     const btnRollback = byId('dt-update-rollback');

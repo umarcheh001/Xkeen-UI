@@ -1032,6 +1032,7 @@ def test_terminal_remaining_core_controllers_and_modules_use_runtime_adapters():
 def test_templates_publish_final_page_config_contract():
     panel_src = (ROOT / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
     devtools_src = (ROOT / "xkeen-ui" / "templates" / "devtools.html").read_text(encoding="utf-8")
+    mihomo_src = (ROOT / "xkeen-ui" / "templates" / "mihomo_generator.html").read_text(encoding="utf-8")
 
     panel_required = [
         "frontend_page_config(",
@@ -1069,6 +1070,17 @@ def test_templates_publish_final_page_config_contract():
         "window.XKeen.env.panelSectionsWhitelist",
         "window.XKeen.env.devtoolsSectionsWhitelist",
     ]
+    mihomo_required = [
+        "frontend_page_config(",
+        "'mihomo_generator'",
+        "window.XKeen.pageConfig = pageConfig;",
+        "<script type=\"module\" src=\"{{ frontend_page_entry_url('mihomo_generator') }}\"></script>",
+    ]
+    mihomo_forbidden = [
+        "window.XKeen.env = window.XKeen.env || {};",
+        "window.XKeen.env.panelSectionsWhitelist",
+        "window.XKeen.env.devtoolsSectionsWhitelist",
+    ]
 
     for fragment in panel_required:
         assert fragment in panel_src, f"missing panel final page-config fragment: {fragment}"
@@ -1079,6 +1091,11 @@ def test_templates_publish_final_page_config_contract():
         assert fragment in devtools_src, f"missing devtools final page-config fragment: {fragment}"
     for fragment in devtools_forbidden:
         assert fragment not in devtools_src, f"devtools template should publish only final pageConfig contract: {fragment}"
+
+    for fragment in mihomo_required:
+        assert fragment in mihomo_src, f"missing mihomo_generator final page-config fragment: {fragment}"
+    for fragment in mihomo_forbidden:
+        assert fragment not in mihomo_src, f"mihomo_generator template should publish only final pageConfig contract: {fragment}"
 
 
 def test_runtime_page_config_contract_no_longer_syncs_legacy_aliases():

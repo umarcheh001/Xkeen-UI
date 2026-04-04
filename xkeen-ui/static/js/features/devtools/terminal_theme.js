@@ -7,6 +7,7 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
   const XK = window.XKeen;
 
   const SH = getDevtoolsSharedApi() || {};
+  let _inited = false;
   const toast = SH.toast || function (m) { try { console.log(m); } catch (e) {} };
   const getJSON = SH.getJSON || (async (u) => {
     const r = await fetch(u, { cache: 'no-store' });
@@ -455,6 +456,9 @@ import { getDevtoolsSharedApi, setDevtoolsNamespaceApi } from '../devtools_names
 
 
   function init() {
+    if (_inited) return;
+    _inited = true;
+
     try { _wireTerminalThemeEditor(); } catch (e) {}
   }
 

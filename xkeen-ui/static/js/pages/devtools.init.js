@@ -1,8 +1,11 @@
 import { initDevtools } from '../features/devtools.js?v=20260219a';
 import { initDonate } from '../features/donate.js';
+import { getXkeenPageName } from '../features/xkeen_runtime.js';
+import { wireTopLevelNavigation } from './top_level_nav.shared.js';
 
 function isDevtoolsPage() {
   return !!(
+    getXkeenPageName() === 'devtools' ||
     document.body?.classList.contains('devtools-page') ||
     document.getElementById('dt-tab-tools') ||
     document.getElementById('dt-tab-logs')
@@ -20,6 +23,10 @@ function safe(fn) {
 
 export function initDevtoolsPage() {
   if (!isDevtoolsPage()) return;
+
+  safe(() => {
+    wireTopLevelNavigation(document);
+  });
 
   safe(() => {
     initDevtools();
