@@ -41,15 +41,15 @@
 
 Это отдельный follow-up rollout для двух оставшихся canonical page entrypoints, которые пока не входят в тот же in-app top-level navigation contract, что `/`, `/devtools` и `/mihomo_generator`.
 
-На 04.04.2026 в этом follow-up уже закрыты `P6-P7`; следующим рабочим объёмом остаются `P8-P10`.
+На 04.04.2026 в этом follow-up уже закрыты `P6-P8`; следующим рабочим объёмом остаются `P9-P10`.
 
 ### Почему эти два маршрута ещё не в том же контракте
 
 На 04.04.2026 для `/backups` и `/xkeen` всё ещё видны конкретные отличия от уже закрытого top-level runtime:
 
-- route map уже расширен до пяти canonical entrypoints, а templates `backups` и `xkeen` уже выровнены под shared host contract, но сами страницы всё ещё не зарегистрированы как полноценные top-level screen modules;
-- `backups.entry.js` и `xkeen.entry.js` пока поднимают страницы как standalone page entrypoints, а не как thin wrappers над `bootTopLevelShell(...)`;
-- top-level nav interception для внутренних ссылок уже включён, но на самих `/backups` и `/xkeen` normal path всё ещё завершается hard navigation fallback, потому что эти страницы пока не bootstrapped через общий shell/router lifecycle.
+- route map и shared host contract уже расширены до всех five canonical entrypoints, а `backups` и `xkeen` уже bootstrapped как top-level screens;
+- normal path переходов на эти страницы уже идёт через router/screen host, но их runtime lifecycle пока ещё не доведён до того же уровня зрелости, что у остальных экранов;
+- для `xkeen` и `backups` ещё не добраны explicit state retention, idempotent re-activation и cleanup/guardrails под новый контракт.
 
 ### Поэтапный rollout для `/backups` и `/xkeen`
 
@@ -82,6 +82,8 @@
 #### `P8` — перевести `/backups` и `/xkeen` на top-level screen bootstrap
 
 Цель этапа: убрать full document navigation как normal path и подключить оба маршрута к общему keep-alive screen host.
+
+Статус: выполнено на 04.04.2026.
 
 Что входит:
 
