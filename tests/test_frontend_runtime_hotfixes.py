@@ -462,6 +462,24 @@ def test_p5_top_level_router_prefers_history_navigation_and_keeps_hard_navigatio
     }""" in helper
 
     assert "const fn = replace ? historyRef.replaceState : historyRef.pushState;" in router
+    assert """if (currentScreen !== nextScreen || !state.currentScreenMounted) {
+      await runScreenLifecycle(nextScreen, 'mount', {
+        router: api,
+        route,
+        trigger: meta.trigger,
+        reason: meta.reason,
+      });
+    }
+
+    if (currentScreen && currentScreen !== nextScreen) {
+      await runScreenLifecycle(currentScreen, 'deactivate', {
+        router: api,
+        from: currentRoute,
+        to: route,
+        trigger: meta.trigger,
+        reason: meta.reason,
+      });
+    }""" in router
     assert """if (currentScreenName && route.name === currentScreenName) {
       pushHistoryState(route, replace);
       return handleSameScreenNavigation(route, meta);

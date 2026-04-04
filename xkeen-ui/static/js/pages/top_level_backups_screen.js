@@ -26,6 +26,31 @@ async function resolveBackupsBootstrapModule() {
   return import('./backups.screen.bootstrap.js');
 }
 
+function hasBackupsSnapshotMarkers(snapshot) {
+  const root = snapshot && snapshot.root ? snapshot.root : null;
+  if (!root || typeof root.querySelector !== 'function') return false;
+
+  try {
+    if (root.querySelector('.xk-backups-page-header')) return true;
+    if (root.querySelector('#backups-table')) return true;
+    if (root.querySelector('#backups-status')) return true;
+  } catch (error) {}
+
+  return false;
+}
+
+function hasBackupsDomHost() {
+  try {
+    return !!(
+      document.querySelector('.xk-backups-page-header') ||
+      document.getElementById('backups-table') ||
+      document.getElementById('backups-status')
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
 function createBackupsScreen() {
   let snapshot = null;
   let runtimeApi = null;
@@ -37,6 +62,15 @@ function createBackupsScreen() {
     snapshot = isBackupsLocation()
       ? captureCurrentDocumentScreenSnapshot('backups')
       : await fetchTopLevelScreenSnapshot('backups', '/backups');
+
+    if (!snapshot || !snapshot.root) {
+      throw new Error('backups snapshot root missing');
+    }
+
+    if (!snapshot.isCurrentDocument && !hasBackupsSnapshotMarkers(snapshot)) {
+      throw new Error('backups snapshot missing required host markers');
+    }
+
     return snapshot;
   }
 
@@ -62,7 +96,12 @@ function createBackupsScreen() {
       const nextSnapshot = await ensureSnapshot();
       ensureScreenStyles(nextSnapshot);
       applyScreenDocumentState(nextSnapshot);
-      attachScreenRoot(nextSnapshot);
+      if (!attachScreenRoot(nextSnapshot)) {
+        throw new Error('backups screen root attach failed');
+      }
+      if (!hasBackupsDomHost()) {
+        throw new Error('backups screen host markers missing after attach');
+      }
 
       if (!initialized) {
         await ensureRuntimeApi(true);

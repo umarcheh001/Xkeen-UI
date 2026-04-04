@@ -169,20 +169,20 @@ function createTopLevelRouterApi() {
     const nextScreen = registry.getScreen(route.name);
     if (!nextScreen) return false;
 
-    if (currentScreen && currentScreen !== nextScreen) {
-      await runScreenLifecycle(currentScreen, 'deactivate', {
+    if (currentScreen !== nextScreen || !state.currentScreenMounted) {
+      await runScreenLifecycle(nextScreen, 'mount', {
         router: api,
-        from: currentRoute,
-        to: route,
+        route,
         trigger: meta.trigger,
         reason: meta.reason,
       });
     }
 
-    if (currentScreen !== nextScreen || !state.currentScreenMounted) {
-      await runScreenLifecycle(nextScreen, 'mount', {
+    if (currentScreen && currentScreen !== nextScreen) {
+      await runScreenLifecycle(currentScreen, 'deactivate', {
         router: api,
-        route,
+        from: currentRoute,
+        to: route,
         trigger: meta.trigger,
         reason: meta.reason,
       });
