@@ -13,7 +13,9 @@
     "frontend:verify:static": "node scripts/verify_frontend_build.mjs",
     "frontend:verify": "npm run frontend:build && npm run frontend:verify:static",
     "build:frontend": "npm run frontend:build",
-    "verify:frontend": "npm run frontend:verify"
+    "verify:frontend": "npm run frontend:verify",
+    "archive:user": "python scripts/build_user_archive.py",
+    "archive:user:skip-build": "python scripts/build_user_archive.py --skip-frontend-build"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "^6.20.1",
