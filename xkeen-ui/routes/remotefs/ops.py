@@ -129,8 +129,7 @@ def register_ops_endpoints(
                 tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
                 return error_response("remove_failed", 400, ok=False, details=tail)
             _log("info", "remotefs.remove", sid=sid, path=path, recursive=True)
-            _log("info", "remotefs.remove", sid=sid, path=path, recursive=False, rmdir=True)
-        return jsonify({"ok": True})
+            return jsonify({"ok": True})
 
         # non-recursive: try rm then rmdir
         rc, out, err = mgr._run_lftp(s, [f"rm {_lftp_quote(path)}"], capture=True)
@@ -141,4 +140,5 @@ def register_ops_endpoints(
         if rc2 != 0:
             tail = (err2.decode("utf-8", errors="replace")[-400:]).strip()
             return error_response("remove_failed", 400, ok=False, details=tail)
+        _log("info", "remotefs.remove", sid=sid, path=path, recursive=False, rmdir=True)
         return jsonify({"ok": True})
