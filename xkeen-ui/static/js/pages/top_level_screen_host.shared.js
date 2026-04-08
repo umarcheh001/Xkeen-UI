@@ -1,6 +1,7 @@
 import { ensureXkeenRoot } from '../features/xkeen_runtime.js';
 
 const MOUNT_ID = 'xk-top-level-screen-mount';
+const GLOBAL_BODY_NODE_IDS = new Set(['xk-tooltip-portal']);
 
 function ensureTopLevelRoot() {
   try {
@@ -102,6 +103,16 @@ function createScreenRoot(name) {
   return root;
 }
 
+function shouldKeepBodyNodeGlobal(node) {
+  if (!node || node.nodeType !== 1) return false;
+  try {
+    const id = String(node.id || '').trim();
+    return !!(id && GLOBAL_BODY_NODE_IDS.has(id));
+  } catch (error) {
+    return false;
+  }
+}
+
 export function ensureTopLevelScreenMount() {
   const doc = getDocumentRef();
   const body = getBodyRef();
@@ -136,6 +147,7 @@ export function captureCurrentDocumentScreenSnapshot(name) {
   const movableNodes = Array.from(body.childNodes).filter((node) => {
     if (!node) return false;
     if (node === mount) return false;
+    if (shouldKeepBodyNodeGlobal(node)) return false;
     if (node.nodeType === 1 && String(node.tagName || '').toLowerCase() === 'script') return false;
     return true;
   });
@@ -167,6 +179,7 @@ function importFetchedBodyNodes(doc, name) {
 
   const sourceNodes = Array.from(doc.body ? doc.body.childNodes : []).filter((node) => {
     if (!node) return false;
+    if (shouldKeepBodyNodeGlobal(node)) return false;
     if (node.nodeType === 1 && String(node.tagName || '').toLowerCase() === 'script') return false;
     return true;
   });

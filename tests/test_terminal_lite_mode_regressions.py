@@ -8,6 +8,9 @@ def test_tooltips_do_not_convert_form_field_aria_labels_into_portal_tooltips():
 
     assert "hostTag === 'INPUT' || hostTag === 'TEXTAREA' || hostTag === 'SELECT'" in text
     assert ".xterm, .xterm-helpers, .xterm-helper-textarea" in text
+    assert 'function ensurePortalRefs() {' in text
+    assert "document.documentElement.contains(portal)" in text
+    assert 'if (!ensurePortalRefs()) return;' in text
 
 
 def test_lite_terminal_skips_xterm_boot_and_keeps_pre_output_visible():

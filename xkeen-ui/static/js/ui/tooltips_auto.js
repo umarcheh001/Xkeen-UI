@@ -219,18 +219,34 @@
   }
 
   function startPortalTooltips() {
-    const portal = ensurePortal();
-    if (!portal) return;
+    let portal = null;
+    let bubble = null;
+    let arrow = null;
+    let textEl = null;
 
-    const bubble = portal.querySelector('.xk-tooltip-bubble');
-    const arrow = portal.querySelector('.xk-tooltip-arrow');
-    const textEl = portal.querySelector('.xk-tooltip-text');
-    if (!bubble || !arrow || !textEl) return;
+    function ensurePortalRefs() {
+      try {
+        if (portal && bubble && arrow && textEl && document.documentElement.contains(portal)) {
+          return true;
+        }
+      } catch (e) {}
+
+      portal = ensurePortal();
+      if (!portal) return false;
+
+      bubble = portal.querySelector('.xk-tooltip-bubble');
+      arrow = portal.querySelector('.xk-tooltip-arrow');
+      textEl = portal.querySelector('.xk-tooltip-text');
+      return !!(bubble && arrow && textEl);
+    }
+
+    if (!ensurePortalRefs()) return;
 
     let currentEl = null;
     let raf = 0;
 
     function hide() {
+      if (!ensurePortalRefs()) return;
       if (raf) {
         cancelAnimationFrame(raf);
         raf = 0;
@@ -240,6 +256,10 @@
     }
 
     function positionFor(el) {
+      if (!ensurePortalRefs()) {
+        currentEl = null;
+        return;
+      }
       if (!el || !document.documentElement.contains(el)) {
         hide();
         return;
@@ -299,6 +319,7 @@
         hide();
         return;
       }
+      if (!ensurePortalRefs()) return;
 
       // Disabled elements don't fire mouse events reliably.
       // (But if we got here, keep showing.)

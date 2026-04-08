@@ -1,3 +1,4 @@
+import { supportsXkeenTerminalPty } from '../xkeen_runtime.js';
 import { getFileManagerNamespace } from '../file_manager_namespace.js';
 
 (() => {
@@ -6,8 +7,6 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
   // File Manager: Terminal integration ("Terminal here")
   // Export: FM.terminal.openHere(side, ctx)
 
-  window.XKeen = window.XKeen || {};
-  const XKeen = window.XKeen;
   const FM = getFileManagerNamespace();
   const C = FM.common || {};
 
@@ -38,11 +37,14 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
     return "'" + x.replace(/'/g, "'\\''") + "'";
   }
 
-  function _terminalApi() {
+  function _terminalApi(options) {
+    const opts = (options && typeof options === 'object') ? options : {};
+    const allowLazyStub = !!opts.allowLazyStub;
     try {
       const term = (C && typeof C.getTerminal === 'function') ? C.getTerminal() : null;
       const api = term && term.api ? term.api : null;
       if (!api) return null;
+      if (!allowLazyStub && api.__xkLazyStubInstalled) return null;
       if (typeof api.open !== 'function') return null;
       if (typeof api.send !== 'function') return null;
       return api;
@@ -57,16 +59,19 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       const term = (C && typeof C.getTerminal === 'function') ? C.getTerminal() : null;
       const caps = term && term.capabilities ? term.capabilities : null;
       if (caps && typeof caps.initCapabilities === 'function') {
-        await Promise.resolve(caps.initCapabilities());
+        try {
+          await Promise.resolve(caps.initCapabilities());
+        } catch (e0) {}
       }
-      if (caps && typeof caps.hasPty === 'function') {
+      const capsReady = !!(caps && typeof caps.isReady === 'function' && caps.isReady());
+      if (capsReady && caps && typeof caps.hasPty === 'function') {
         return caps.hasPty() ? 'pty' : 'shell';
       }
-      if (caps && typeof caps.hasWs === 'function') {
+      if (capsReady && caps && typeof caps.hasWs === 'function') {
         return caps.hasWs() ? 'pty' : 'shell';
       }
     } catch (e) {}
-    return 'shell';
+    return supportsXkeenTerminalPty() ? 'pty' : 'shell';
   }
 
   function _sleep(ms) {
@@ -125,6 +130,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
         }
       } catch (e0) {}
     }
+    if (!api) api = _terminalApi({ allowLazyStub: true });
 
     if (!api) {
       _toast('Терминал недоступен (api не найден)', 'error');

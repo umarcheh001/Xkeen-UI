@@ -134,6 +134,9 @@ def test_top_level_navigation_controls_use_shared_helper_contract():
     assert "fetchTopLevelScreenSnapshot('xkeen', '/xkeen')" in xkeen_screen
     assert 'export function registerPanelMihomoTopLevelScreens()' in panel_mihomo_shared
     assert 'export function registerCanonicalTopLevelScreens()' in panel_mihomo_shared
+    assert "const GLOBAL_BODY_NODE_IDS = new Set(['xk-tooltip-portal']);" in host
+    assert 'function shouldKeepBodyNodeGlobal(node) {' in host
+    assert 'if (shouldKeepBodyNodeGlobal(node)) return false;' in host
     assert "import { registerBackupsTopLevelScreen } from './top_level_backups_screen.js';" in panel_mihomo_shared
     assert "import { registerDevtoolsTopLevelScreen } from './top_level_devtools_screen.js';" in panel_mihomo_shared
     assert "import { registerXkeenTopLevelScreen } from './top_level_xkeen_screen.js';" in panel_mihomo_shared
@@ -566,6 +569,16 @@ def test_terminal_lazy_entry_uses_import_first_vendor_adapter_without_dom_script
     assert 'restoreAmdGlobals(scope, amdStash)' in adapter_text
     assert "document.createElement('script')" not in adapter_text
     assert 'appendChild(script)' not in adapter_text
+
+
+def test_file_manager_terminal_waits_for_real_terminal_api_before_first_open_and_keeps_pty_hint():
+    text = Path('xkeen-ui/static/js/features/file_manager/terminal.js').read_text(encoding='utf-8')
+
+    assert "import { supportsXkeenTerminalPty } from '../xkeen_runtime.js';" in text
+    assert "if (!allowLazyStub && api.__xkLazyStubInstalled) return null;" in text
+    assert "const capsReady = !!(caps && typeof caps.isReady === 'function' && caps.isReady());" in text
+    assert "return supportsXkeenTerminalPty() ? 'pty' : 'shell';" in text
+    assert "if (!api) api = _terminalApi({ allowLazyStub: true });" in text
 
 
 def test_routing_fragment_refresh_uses_runtime_http_api_instead_of_undefined_core_http_global():
