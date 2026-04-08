@@ -1,69 +1,57 @@
-# 🚀 Xkeen UI — веб‑панель для XKeen на Keenetic (Entware)
+# Xkeen UI
 
-**Xkeen UI** — лёгкая веб‑панель для роутеров **Keenetic** с **Entware**.  
-Позволяет управлять конфигами **Xray / Mihomo**, сервисами **XKeen**, логами, бэкапами/снапшотами, файлами (двухпанельный менеджер), а также — работать с **DAT GeoIP/GeoSite** (теги, поиск, копирование, “в правило”).
+`Xkeen UI` — веб-панель для роутеров Keenetic с Entware, Xray, Mihomo и XKeen.
 
-> ⚠️ Панель рассчитана на домашнюю сеть. Не публикуй её в интернет. Используй пароль и при необходимости ограничивай доступ (ACL / Firewall / VPN).
+Это уже не "лёгкая минимальная панель" из ранних версий проекта. Сейчас `Xkeen UI` — это единый интерфейс для управления конфигами, сервисами, логами, файлами, DAT-файлами и вспомогательными инструментами вокруг Xray/Mihomo.
 
----
+> Панель рассчитана на локальную сеть. Не публикуйте её напрямую в интернет без отдельной защиты доступа.
 
-## 🔥 Что нового / ключевые фичи
+## Что умеет
 
-### 🧩 Xray Routing / конфиги
-- Редактор конфигов Xray (inbounds / outbounds / routing) + поддержка `*.jsonc` (комментарии).
-- **Шаблоны роутинга** (routing templates) и удобное автосоздание/подстановка.
-- **Бэкапы и снапшоты конфигов Xray**:
-  - *History* (timestamp) — ручные/по действию записи.
-  - *Snapshots* по имени файла (например `07_observatory.json`) — хранит **предыдущую** версию файла перед перезаписью (как “откат”).
+- Xray: редакторы `routing / inbounds / outbounds`, поддержка `json/jsonc`, шаблоны, preflight-проверка, backups и snapshots.
+- Mihomo: профили, шаблоны, импорт/экспорт, генератор конфигов, запуск Mihomo UI.
+- Команды и терминал: каталог команд XKeen, shell/PTY-терминал, live-логи.
+- Файлы: двухпанельный файловый менеджер, upload/download, архивы, права, checksum, корзина.
+- Remote FS: SFTP/FTP/FTPS через `lftp`.
+- DAT: управление `GeoIP / GeoSite`, просмотр содержимого и интеграция с `xk-geodat`.
+- DevTools: локальные UI-настройки, диагностика, self-update и сервисные переключатели.
 
-### 🗂️ DAT GeoIP / GeoSite
-- Загрузка/обновление DAT файлов.
-- Просмотр содержимого: список тегов, поиск, просмотр элементов, copy `geosite:TAG` / `geoip:TAG`.
-- Кнопка **«В правило»** (добавить выбранный тег прямо в routing‑правило) — без ручного копипаста.
+## Локальные редакторы
 
-> Просмотр “Содержимого” DAT и быстрые действия работают через отдельный бинарник **xk-geodat** (см. ниже).
+В панели используются два локальных движка редактора:
 
-### 📦 Бэкапы Xray конфигов (UI)
-- Отдельная страница/карточка управления бэкапами: список, просмотр, восстановление, удаление.
-- Авто‑снапшоты перед перезаписью конфигов (как безопасный rollback).
+- `CodeMirror 6`
+- `Monaco`
 
-### 📜 Логи / терминал / файловый менеджер
-- Live‑логи Xray: WebSocket (если доступно) или HTTP‑polling fallback.
-- Терминал: “Command Runner” + интерактивный PTY (xterm.js), если WebSocket доступен.
-- Двухпанельный файловый менеджер, архивирование/распаковка, jobs с прогрессом.
-- Remote File Manager (опционально) через `lftp`.
+Оба поставляются прямо в релизе панели, через локальные `static/vendor` и `static/frontend-build`. Для работы редакторов роутеру не нужны CDN и не нужен Node.js.
 
----
+Переключение движка доступно в основных редакторах панели, включая:
 
-## 🧱 Что входит в релиз (Assets)
+- главный JSON-редактор Xray;
+- Routing Mihomo;
+- редактор в файловом менеджере;
+- Mihomo Generator;
+- preview-редакторы и часть модальных окон.
 
-В **GitHub Releases** обычно лежат:
-- `xkeen-ui-routing.tar.gz` — установочный архив панели.
-- `xk-geodat-linux-arm64` — бинарник xk-geodat для **arm64/aarch64**.
-- `xk-geodat-linux-mipsle` — бинарник xk-geodat для **mipsle (GOMIPS=softfloat)**.
-- `SHA256SUMS` — контрольные суммы для бинарников xk-geodat (если включён workflow).
+Если кратко:
 
----
+- `CodeMirror` обычно удобен как более простой и быстрый встроенный редактор;
+- `Monaco` полезен там, где нужен более "IDE-подобный" режим работы.
 
-## 🧠 Зачем нужен xk-geodat (и почему это отдельный бинарник)
+## Что входит в релиз
 
-`xk-geodat` — маленькая утилита‑парсер DAT, которая:
-- читает `geosite*.dat` / `geoip*.dat`,
-- показывает теги, считает элементы, даёт быстрый поиск,
-- помогает UI показывать “Содержимое” и делать кнопку **«В правило»**.
+Основной установочный артефакт:
 
-Без `xk-geodat` панель будет работать, но **просмотр содержимого DAT и быстрые действия будут ограничены/отключены**.
+- `xkeen-ui-routing.tar.gz`
 
-Поддерживаемые архитектуры:
-- ✅ `arm64/aarch64`
-- ✅ `mipsle` **softfloat**
-- ❌ другие — не собираются в этом проекте
+Обычно релизный архив уже содержит готовые `static/frontend-build` и `static/vendor`, поэтому роутеру не нужен Node.js для установки панели.
 
----
+Дополнительно в релизах могут публиковаться бинарники `xk-geodat` для поддерживаемых архитектур.
 
-## 📦 Установка панели (SSH)
+## Установка
 
-### Вариант A — архив уже на роутере
+### Архив уже на роутере
+
 ```sh
 cd /opt
 tar -xzf xkeen-ui-routing.tar.gz
@@ -71,37 +59,86 @@ cd xkeen-ui
 sh install.sh
 ```
 
-### Вариант B — скачать из Releases и поставить
+### Онлайн-установка из GitHub Releases
+
 ```sh
-cd /opt \
-  && curl -fL -o xkeen-ui-routing.tar.gz "https://github.com/umarcheh001/Xkeen-UI/releases/latest/download/xkeen-ui-routing.tar.gz" \
-  && tar -xzf xkeen-ui-routing.tar.gz \
-  && sh xkeen-ui/install.sh
+cd /opt
+curl -fL -o xkeen-ui-routing.tar.gz "https://github.com/umarcheh001/Xkeen-UI/releases/latest/download/xkeen-ui-routing.tar.gz"
+tar -xzf xkeen-ui-routing.tar.gz
+cd xkeen-ui
+sh install.sh
 ```
 
-### Что делает `install.sh`
-- ставит/проверяет **python3** (Entware) и **python3-pip**;
-- через `pip` ставит **Flask** (обязательно) и (опционально) **gevent + gevent-websocket** для WebSocket функций;
-- ставит `lftp` (для Remote File Manager);
-- выбирает порт (обычно **8088**, затем **8091**, затем диапазон **8100–8199**);
-- ставит панель в `/opt/etc/xkeen-ui`, создаёт `/opt/etc/init.d/S99xkeen-ui` и запускает сервис;
-- при **первой** установке делает авто‑бэкап базовых конфигов Xray в `/opt/etc/xray/configs/backups`;
-- (опционально) предлагает поставить **xk-geodat** (чтобы работали DAT “Содержимое” и “В правило”).
+Установщик:
 
----
+- проверяет или ставит `python3`;
+- ставит `Flask`;
+- по возможности ставит `gevent/gevent-websocket` для WebSocket-сценариев;
+- ставит `lftp` для файлового менеджера;
+- регистрирует сервис `/opt/etc/init.d/S99xkeen-ui`;
+- выбирает свободный порт: `8088`, затем `8091`, затем диапазон `8100-8199`;
+- очищает устаревшие файлы в `static/frontend-build` при обновлении;
+- может предложить установить `xk-geodat`.
 
-## 🌐 Доступ к панели
+## Установка xk-geodat
+
+`xk-geodat` нужен для расширенной работы с DAT-файлами:
+
+- просмотр содержимого `GeoIP / GeoSite`;
+- список тегов и быстрый поиск;
+- вставка значений в правила routing из UI.
+
+Без `xk-geodat` панель работает, но DAT-функции будут урезаны.
+
+Поддерживаемые архитектуры:
+
+- `arm64 / aarch64`
+- `mipsle / mipsel`
+
+### Через установщик панели
+
+Во время установки `install.sh` может предложить поставить `xk-geodat` автоматически.
+
+### Через UI
+
+Рекомендуемый вариант: открыть карточку `DAT GeoIP / GeoSite` в панели и поставить бинарник:
+
+- из GitHub Releases;
+- или из локального файла, если GitHub на роутере недоступен.
+
+### Через SSH вручную
+
+Для `arm64 / aarch64`:
+
+```sh
+mkdir -p /opt/etc/xkeen-ui/bin
+curl -fL -o /opt/etc/xkeen-ui/bin/xk-geodat "https://github.com/umarcheh001/Xkeen-UI/releases/latest/download/xk-geodat-linux-arm64"
+chmod +x /opt/etc/xkeen-ui/bin/xk-geodat
+/opt/etc/xkeen-ui/bin/xk-geodat --help
+```
+
+Для `mipsle / mipsel`:
+
+```sh
+mkdir -p /opt/etc/xkeen-ui/bin
+curl -fL -o /opt/etc/xkeen-ui/bin/xk-geodat "https://github.com/umarcheh001/Xkeen-UI/releases/latest/download/xk-geodat-linux-mipsle"
+chmod +x /opt/etc/xkeen-ui/bin/xk-geodat
+/opt/etc/xkeen-ui/bin/xk-geodat --help
+```
+
+## Доступ к панели
+
 ```text
 http://<IP_роутера>:<порт>/
 ```
 
 Логи панели:
-- install‑лог: `/opt/var/log/xkeen-ui.log`
-- runtime‑логи: `/opt/var/log/xkeen-ui/` (stdout/stderr и др.)
 
----
+- `/opt/var/log/xkeen-ui.log`
+- `/opt/var/log/xkeen-ui/`
 
-## 🧑‍💻 Управление сервисом (SSH)
+## Управление сервисом
+
 ```sh
 /opt/etc/init.d/S99xkeen-ui start
 /opt/etc/init.d/S99xkeen-ui stop
@@ -109,149 +146,83 @@ http://<IP_роутера>:<порт>/
 /opt/etc/init.d/S99xkeen-ui status
 ```
 
----
+## Сбросить логин/пароль
 
-## 🧩 Установка xk-geodat
+По умолчанию данные авторизации лежат в `/opt/etc/xkeen-ui/auth.json`.
 
-### 1) Через панель (рекомендуется)
-Открой **Routing Xray → DAT-файлы GeoIP / GeoSite**:
+Сбросить доступ можно так:
 
-- Кнопка **xk-geodat** — поставит/обновит из GitHub Releases (latest).
-- Кнопка **⬆︎** — установить **из файла** (если GitHub блокируется или ты тестируешь свой бинарник).
-
-После установки в карточке DAT появятся функции “Содержимое” и “В правило”.
-
-### 2) Через SSH (ручной способ)
-Скачать и положить в директорию панели:
-```sh
-mkdir -p /opt/etc/xkeen-ui/bin
-curl -fL -o /opt/etc/xkeen-ui/bin/xk-geodat "https://github.com/umarcheh001/Xkeen-UI/releases/latest/download/xk-geodat-linux-<arch>"
-chmod +x /opt/etc/xkeen-ui/bin/xk-geodat
-/opt/etc/xkeen-ui/bin/xk-geodat --help
-```
-
-Где `<arch>`:
-- `arm64` для arm64/aarch64
-- `mipsle` для mipsle softfloat
-
-### 3) Проверка SHA256 (если есть SHA256SUMS)
-```sh
-cd /tmp
-curl -fL -O "https://github.com/umarcheh001/Xkeen-UI/releases/latest/download/SHA256SUMS"
-sha256sum /opt/etc/xkeen-ui/bin/xk-geodat
-# сравни хеш с соответствующей строкой в SHA256SUMS
-```
-
-> Встроенный установщик xk-geodat делает “мягкую” проверку: если SHA256SUMS доступен — проверит, если нет — продолжит установку с предупреждением.
-
----
-
-## 🧰 Полезные переменные окружения
-
-### Общие
-- `XKEEN_UI_STATE_DIR` — где хранить состояние UI (auth/secret/настройки)
-- `XKEEN_UI_SECRET_KEY` — ключ сессий (если нужно фиксировать вручную)
-- `XKEEN_ALLOW_SHELL` — разрешить произвольные команды в Command Runner (`1`/`0`)
-- `XKEEN_XRAY_LOG_TZ_OFFSET` — смещение времени логов (часы), по умолчанию `3`
-- `XKEEN_LOG_DIR` — переопределить директорию runtime‑логов панели (по умолчанию `/opt/var/log/xkeen-ui`)
-- `XKEEN_UI_ENV_FILE` — файл с переменными окружения для сервиса (по умолчанию `/opt/etc/xkeen-ui/devtools.env`)
-
-### Файловый менеджер / Remote FM
-- `XKEEN_TRASH_DIR` — путь к корзине (local)
-- `XKEEN_TRASH_MAX_GB` / `XKEEN_TRASH_MAX_BYTES` — лимит корзины
-- `XKEEN_REMOTEFM_ENABLE` — включить Remote File Manager (`1`/`0`)
-- `XKEEN_REMOTEFM_MAX_UPLOAD_MB` — лимит upload для remote
-- `XKEEN_REMOTEFM_SESSION_TTL` — TTL remote сессий
-
-### xk-geodat (если нужно руками/для тестов)
-- `XKEEN_GEODAT_BIN` — путь установки бинарника (по умолчанию `/opt/etc/xkeen-ui/bin/xk-geodat`)
-- `XKEEN_GEODAT_INSTALL` — `1` установить без вопросов / `0` пропустить установку
-- `XKEEN_GEODAT_URL` — полный URL на бинарник (переопределяет latest)
-- `XKEEN_GEODAT_TAG` — скачать из конкретного релиза (tag)
-- `XKEEN_GEODAT_ASSET` — имя ассета (если нужно переопределить авто‑детект)
-- `XKEEN_GEODAT_LOCAL` — установить из локального файла
-- `XKEEN_GEODAT_SHA256SUMS_URL` — URL до `SHA256SUMS` (если нужен кастом)
-
----
-
-## 🧹 Удаление / очистка
-
-### Быстрое удаление панели (без трогания зависимостей)
-```sh
-sh /opt/etc/xkeen-ui/uninstall.sh
-```
-
-Удаление логов (опционально):
-```sh
-rm -rf /opt/var/log/xkeen-ui
-rm -f /opt/var/log/xkeen-ui.log
-rm -f /opt/var/run/xkeen-ui.pid
-```
-
-> `uninstall.sh` удаляет **файлы панели** и init‑скрипт, но **не удаляет** Python/Flask/gevent/lftp и не трогает конфиги Xray/Mihomo.
-
-### Что ещё могла поставить панель (и как удалить полностью)
-> ⚠️ Делай это только если уверен, что у тебя **нет других** сервисов на Python/Flask/gevent/lftp в Entware.
-
-1) Удалить wrapper `sysmon` (панель ставит его в `/opt/bin/sysmon`, если в архиве был `tools/sysmon_keenetic.sh`):
-```sh
-rm -f /opt/bin/sysmon
-```
-
-2) Удалить шаблоны (если хочешь убрать именно “поставленные панелью”):
-```sh
-rm -f /opt/etc/mihomo/templates/custom.yaml
-rm -f /opt/etc/mihomo/templates/zkeen.yaml
-# Xray templates обычно безопасно оставлять (они не перезаписываются и могли быть донастроены).
-```
-
-3) Удалить бэкапы/снапшоты (если они не нужны):
-```sh
-rm -rf /opt/etc/xray/configs/backups
-```
-
-4) Удалить Python pip‑пакеты, которые ставил install.sh:
-```sh
-/opt/bin/python3 -m pip uninstall -y flask gevent gevent-websocket || true
-```
-
-5) Удалить Entware пакеты (если они ставились только ради панели):
-```sh
-opkg remove lftp || true
-opkg remove python3-pip || true
-opkg remove python3 || true
-```
-
-Проверить, что установлено:
-```sh
-opkg list-installed | grep -E 'python3|python3-pip|lftp' || true
-/opt/bin/python3 -m pip list 2>/dev/null | grep -Ei 'flask|gevent' || true
-```
-
----
-
-## 🛠️ Troubleshooting
-
-### WebSocket (PTY / live‑логи) не работает
-- На некоторых устройствах `gevent` может не собраться (особенно mips/mipsel). Тогда панель автоматически перейдёт на **HTTP‑polling** для логов, а PTY‑терминал может быть недоступен.
-
-### GitHub блокируется на роутере
-- Самый простой путь: скачать `xk-geodat-linux-<arch>` на ПК и поставить **через UI кнопкой “⬆︎ из файла”**.
-
-### Сбросить логин/пароль
 ```sh
 /opt/etc/init.d/S99xkeen-ui stop
 rm -f /opt/etc/xkeen-ui/auth.json
 /opt/etc/init.d/S99xkeen-ui start
 ```
 
----
+После этого панель снова предложит пройти первичную настройку логина и пароля.
 
-## 📝 Примечания
-- Все фронтенд библиотеки (CodeMirror, xterm.js и т.д.) поставляются локально — панель не зависит от CDN.
-- Проект ориентирован на Keenetic/Entware и старается не ломать пользовательские конфиги/шаблоны (шаблоны Xray не перезаписываются).
----
+Если вы переопределяли `XKEEN_UI_STATE_DIR`, файл `auth.json` будет лежать в этой директории.
 
-![xkeen-ui-demo](https://github.com/user-attachments/assets/f2f6649c-2e9b-49a2-9cd8-f855fbd55084)
+## Полное удаление и очистка
 
+### Быстро удалить панель
 
+```sh
+sh /opt/etc/xkeen-ui/uninstall.sh
+```
+
+Это удалит:
+
+- файлы панели из `/opt/etc/xkeen-ui`;
+- init-скрипт `/opt/etc/init.d/S99xkeen-ui`;
+- PID-файл панели.
+
+### Дополнительная очистка
+
+Если нужно убрать следы полностью, можно отдельно удалить:
+
+```sh
+rm -rf /opt/var/log/xkeen-ui
+rm -f /opt/var/log/xkeen-ui.log
+rm -f /opt/var/run/xkeen-ui.pid
+rm -f /opt/bin/sysmon
+rm -f /opt/bin/entware-backup
+rm -rf /opt/etc/xray/configs/backups
+```
+
+Если больше не нужны шаблоны, поставленные панелью:
+
+```sh
+rm -f /opt/etc/mihomo/templates/custom.yaml
+rm -f /opt/etc/mihomo/templates/zkeen.yaml
+```
+
+Если зависимости ставились только ради панели и не используются другими сервисами:
+
+```sh
+/opt/bin/python3 -m pip uninstall -y flask gevent gevent-websocket || true
+opkg remove lftp || true
+opkg remove python3-pip || true
+opkg remove python3 || true
+```
+
+> Этот шаг делайте только если уверены, что эти пакеты не нужны другим сервисам на роутере.
+
+## Для разработки
+
+Пересобрать фронтенд:
+
+```sh
+npm run frontend:build
+```
+
+Собрать пользовательский архив для установки:
+
+```sh
+npm run archive:user
+```
+
+## Примечания
+
+- WebSocket-функции используются там, где это возможно; на слабых устройствах часть сценариев может работать через fallback.
+- Все основные фронтенд-ассеты поставляются локально, без зависимости от CDN.
+- Проект ориентирован на реальную эксплуатацию на Keenetic/Entware, а не на "демо-оболочку" вокруг пары конфигов.
