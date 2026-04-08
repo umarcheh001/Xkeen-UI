@@ -1,7 +1,7 @@
 #!/opt/bin/python3
 import json
 import os
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlencode
 import time
 import fcntl
 import termios
@@ -39,6 +39,20 @@ from app import (
     _get_command_job,
     EVENT_SUBSCRIBERS,
 )
+
+
+def _redact_ws_query_string(qs: str) -> str:
+    try:
+        params = parse_qs(qs or "", keep_blank_values=True)
+        if "token" in params:
+            vals = params.get("token") or []
+            params["token"] = ["***" for _ in vals] or ["***"]
+        return urlencode(params, doseq=True)
+    except Exception:
+        try:
+            return str(qs or "")
+        except Exception:
+            return ""
 
 
 # Mark WebSocket runtime as actually active (used by /api/capabilities).
@@ -571,6 +585,7 @@ def application(environ, start_response):
     method = environ.get("REQUEST_METHOD", "")
     client_ip = environ.get("REMOTE_ADDR", "unknown")
     qs = environ.get("QUERY_STRING", "")
+    qs_safe = _redact_ws_query_string(qs)
 
     # Интересует только наш WS-эндпоинт (только если доступен gevent)
     if GEVENT_AVAILABLE and path == "/ws/xray-logs":
@@ -579,7 +594,7 @@ def application(environ, start_response):
             "WSGI WS handler: request to /ws/xray-logs",
             has_ws=has_ws,
             method=method,
-            qs=qs,
+            qs=qs_safe,
             client=client_ip,
         )
 
@@ -592,6 +607,17 @@ def application(environ, start_response):
 
         # Разбираем query
         params = parse_qs(qs or "")
+        token = (params.get("token", [""])[0] or "").strip()
+        if not validate_ws_token(token, scope="logs"):
+            try:
+                ws.send(json.dumps({"type": "error", "error": "unauthorized"}, ensure_ascii=False))
+            except Exception:
+                pass
+            try:
+                ws.close()
+            except Exception:
+                pass
+            return []
         file_name = (params.get("file", ["error"])[0] or "error").lower()
 
         # max_lines (used by UI for "lines" input + "load more" reconnect)
@@ -714,7 +740,7 @@ def application(environ, start_response):
             "WSGI WS handler: request to /ws/xray-logs2",
             has_ws=has_ws,
             method=method,
-            qs=qs,
+            qs=qs_safe,
             client=client_ip,
         )
 
@@ -726,6 +752,17 @@ def application(environ, start_response):
 
         # Parse query
         params = parse_qs(qs or "")
+        token = (params.get("token", [""])[0] or "").strip()
+        if not validate_ws_token(token, scope="logs"):
+            try:
+                ws.send(json.dumps({"type": "error", "error": "unauthorized"}, ensure_ascii=False))
+            except Exception:
+                pass
+            try:
+                ws.close()
+            except Exception:
+                pass
+            return []
         file_name = (params.get("file", ["error"])[0] or "error").lower()
         filter_expr = (params.get("filter", [""])[0] or "").strip()
 
@@ -790,7 +827,7 @@ def application(environ, start_response):
             "WSGI WS handler: request to /ws/command-status",
             has_ws=has_ws,
             method=method,
-            qs=qs,
+            qs=qs_safe,
             client=client_ip,
         )
 
@@ -942,7 +979,7 @@ def application(environ, start_response):
             method=method,
             path=path,
             remote_addr=environ.get("REMOTE_ADDR"),
-            qs=qs,
+            qs=qs_safe,
         )
         if not has_ws:
             return app(environ, start_response)
@@ -1212,7 +1249,7 @@ def application(environ, start_response):
             "WSGI WS handler: request to /ws/events",
             has_ws=has_ws,
             method=method,
-            qs=qs,
+            qs=qs_safe,
             client=client_ip,
         )
 
@@ -1221,6 +1258,18 @@ def application(environ, start_response):
             return app(environ, start_response)
 
         ws = environ["wsgi.websocket"]
+        params = parse_qs(qs or "")
+        token = (params.get("token", [""])[0] or "").strip()
+        if not validate_ws_token(token, scope="events"):
+            try:
+                ws.send(json.dumps({"type": "error", "error": "unauthorized"}, ensure_ascii=False))
+            except Exception:
+                pass
+            try:
+                ws.close()
+            except Exception:
+                pass
+            return []
         EVENT_SUBSCRIBERS.append(ws)
         ws_debug("ws_events: subscriber added", total=len(EVENT_SUBSCRIBERS), client=client_ip)
 

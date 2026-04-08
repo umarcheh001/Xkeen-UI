@@ -3,7 +3,7 @@
 PR11: move WS helper endpoints out of app.py.
 
 Contains:
-- POST /api/ws-token : issue one-time WS token (scope: pty/cmd)
+- POST /api/ws-token : issue one-time WS token (scope: pty/cmd/logs/events)
 - POST /api/ws-debug : frontend sends debug events to ws.log
 
 Important: keep URL paths and response schema stable.

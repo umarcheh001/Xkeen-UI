@@ -15,7 +15,7 @@ from typing import Dict, Tuple
 
 
 # Allowed scopes: used to avoid cross-using tokens between endpoints.
-WS_TOKEN_SCOPES = {"pty", "cmd"}
+WS_TOKEN_SCOPES = {"pty", "cmd", "logs", "events"}
 
 # token -> (expires_ts, scope)
 _WS_TOKENS: Dict[str, Tuple[float, str]] = {}

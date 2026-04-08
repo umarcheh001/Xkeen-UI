@@ -428,6 +428,24 @@ let xrayLogsModuleApi = null;
     return true;
   }
 
+  async function requestXrayLogsWsToken(scope) {
+    const normalizedScope = String(scope || 'logs').trim().toLowerCase() || 'logs';
+
+    try {
+      const res = await fetch('/api/ws-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope: normalizedScope })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data && data.ok && data.token) return String(data.token || '');
+    } catch (e) {
+      // ignore, caller will fallback to HTTP
+    }
+
+    return '';
+  }
+
   function $(id) {
     return document.getElementById(id);
   }
@@ -2314,7 +2332,7 @@ let xrayLogsModuleApi = null;
     }
   }
 
-  function xrayLogConnectWs2() {
+  async function xrayLogConnectWs2() {
     // Don't connect if streaming is not enabled.
     if (!_streaming) return;
     if (!_useWs || !('WebSocket' in window)) {
@@ -2334,15 +2352,46 @@ let xrayLogsModuleApi = null;
 
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
+    const wsToken = await requestXrayLogsWsToken('logs');
 
-    const params = new URLSearchParams();
-    params.set('file', file);
-    params.set('max_lines', String(_maxLines || DEFAULT_MAX_LINES));
-    if (filter) params.set('filter', filter);
+    if (!_streaming) return;
+    if (!_useWs || !('WebSocket' in window)) {
+      _useWs = false;
+      return;
+    }
+    if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
 
+    if (!wsToken) {
+      _useWs = false;
+      setXrayLogUiStatus({
+        phase: 'fallback',
+        tone: 'warning',
+        transport: 'HTTP/' + formatXrayLogPollLabel(_pollMs),
+        message: 'Не удалось получить WS token, переключаюсь на HTTP polling.',
+        file,
+      });
+      if (statusEl) statusEl.textContent = 'Не удалось получить WS token, использую HTTP.';
+      if (!_timer) {
+        await fetchXrayLogsOnce('fallback_ws', { resetCursor: true, forceRender: true });
+        _timer = setInterval(() => fetchXrayLogsOnce('poll'), _pollMs);
+      }
+      return;
+    }
+
+    const debugParams = new URLSearchParams();
+    debugParams.set('file', file);
+    debugParams.set('max_lines', String(_maxLines || DEFAULT_MAX_LINES));
+    if (filter) debugParams.set('filter', filter);
+
+    const params = new URLSearchParams(debugParams);
+    params.set('token', wsToken);
+
+    const debugUrl = proto + '//' + host + '/ws/xray-logs2?' + debugParams.toString();
     const url = proto + '//' + host + '/ws/xray-logs2?' + params.toString();
 
-    wsDebug('WS2: connecting', { url: url, file: file, filter: !!filter });
+    wsDebug('WS2: connecting', { url: debugUrl, file: file, filter: !!filter });
     setXrayLogUiStatus({
       phase: 'connecting',
       tone: 'muted',
@@ -2552,7 +2601,7 @@ let xrayLogsModuleApi = null;
     return xrayLogConnectWs();
   }
 
-  function xrayLogConnectWs() {
+  async function xrayLogConnectWs() {
     // Don't connect if streaming is not enabled.
     if (!_streaming) return;
     if (!_useWs || !('WebSocket' in window)) {
@@ -2570,9 +2619,38 @@ let xrayLogsModuleApi = null;
 
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const url = proto + '//' + host + '/ws/xray-logs?file=' + encodeURIComponent(file) + '&max_lines=' + encodeURIComponent(String(_maxLines || DEFAULT_MAX_LINES));
+    const wsToken = await requestXrayLogsWsToken('logs');
 
-    wsDebug('WS: connecting', { url: url, file: file });
+    if (!_streaming) return;
+    if (!_useWs || !('WebSocket' in window)) {
+      _useWs = false;
+      return;
+    }
+    if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    if (!wsToken) {
+      _useWs = false;
+      setXrayLogUiStatus({
+        phase: 'fallback',
+        tone: 'warning',
+        transport: 'HTTP/' + formatXrayLogPollLabel(_pollMs),
+        message: 'Не удалось получить WS token, переключаюсь на HTTP polling.',
+        file,
+      });
+      if (statusEl) statusEl.textContent = 'Не удалось получить WS token, использую HTTP.';
+      if (!_timer) {
+        await fetchXrayLogsOnce('fallback_ws', { resetCursor: true, forceRender: true });
+        _timer = setInterval(() => fetchXrayLogsOnce('poll'), _pollMs);
+      }
+      return;
+    }
+
+    const debugUrl = proto + '//' + host + '/ws/xray-logs?file=' + encodeURIComponent(file) + '&max_lines=' + encodeURIComponent(String(_maxLines || DEFAULT_MAX_LINES));
+    const url = debugUrl + '&token=' + encodeURIComponent(wsToken);
+
+    wsDebug('WS: connecting', { url: debugUrl, file: file });
     setXrayLogUiStatus({
       phase: 'connecting',
       tone: 'muted',

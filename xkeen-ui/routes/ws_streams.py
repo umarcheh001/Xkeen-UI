@@ -15,6 +15,7 @@ from flask import Blueprint, request
 
 from services.auth_setup import auth_is_configured, _is_logged_in
 from services.ws_debug import ws_debug
+from services.ws_tokens import validate_ws_token
 from services.log_filter import build_line_matcher as _build_line_matcher
 from services.xray_log_api import (
     tail_lines,
@@ -65,6 +66,15 @@ def ws_xray_logs():
     if ws is None:
         ws_debug("ws_xray_logs: no WebSocket in environ, returning 400", path=request.path)
         return "Expected WebSocket", 400
+
+    token = (request.args.get("token") or "").strip()
+    if not validate_ws_token(token, scope="logs"):
+        _ws_send(ws, {"type": "error", "error": "unauthorized"})
+        try:
+            ws.close()
+        except Exception:
+            pass
+        return ""
 
     # Defense in depth: WS endpoints must be authenticated (auth_guard handles it too).
     if auth_is_configured() and not _is_logged_in():
@@ -125,6 +135,15 @@ def ws_xray_logs2():
     if ws is None:
         ws_debug("ws_xray_logs2: no WebSocket in environ, returning 400", path=request.path)
         return "Expected WebSocket", 400
+
+    token = (request.args.get("token") or "").strip()
+    if not validate_ws_token(token, scope="logs"):
+        _ws_send(ws, {"type": "error", "error": "unauthorized"})
+        try:
+            ws.close()
+        except Exception:
+            pass
+        return ""
 
     # Defense in depth: WS endpoints must be authenticated (auth_guard handles it too).
     if auth_is_configured() and not _is_logged_in():
