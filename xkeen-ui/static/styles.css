@@ -24604,7 +24604,7 @@ body.panel-page #mihomo-body textarea#mihomo-editor {
 }
 
 
-/* Routing Monaco custom context menu (used to avoid Monaco clipboard issues in Safari/WebKit and Chromium variants) */
+/* Shared Monaco custom context menu (used across routing, Mihomo editors and file-manager Monaco hosts) */
 .xk-routing-monaco-menu {
   position: fixed;
   z-index: 2147483000;

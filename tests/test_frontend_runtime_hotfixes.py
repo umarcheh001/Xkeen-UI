@@ -775,6 +775,37 @@ def test_routing_monaco_custom_menu_includes_symbol_occurrence_and_palette_actio
     assert '.xk-routing-monaco-menu-label {' in styles
 
 
+def test_routing_monaco_custom_menu_includes_symbol_occurrence_and_palette_actions():
+    routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+    monaco_shared = Path('xkeen-ui/static/js/ui/monaco_shared.js').read_text(encoding='utf-8')
+    mihomo_panel = Path('xkeen-ui/static/js/features/mihomo_panel.js').read_text(encoding='utf-8')
+    mihomo_generator = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+    file_manager = Path('xkeen-ui/static/js/features/file_manager/editor.js').read_text(encoding='utf-8')
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert 'function installCustomContextMenu(editor, host, opts) {' in monaco_shared
+    assert "const customContextMenu = _normalizeCustomContextMenuOptions(o, language);" in monaco_shared
+    assert "contextmenu: useCustomContextMenu ? false : ((typeof o.contextmenu === 'boolean') ? o.contextmenu : true)," in monaco_shared
+    assert "installCustomContextMenu(editor, el, o);" in monaco_shared
+    assert "_customContextMenuItemHtml('goToSymbol', labels.goToSymbol, 'Ctrl+Shift+O')" in monaco_shared
+    assert "_customContextMenuItemHtml('changeAllOccurrences', labels.changeAllOccurrences, 'Ctrl+F2')" in monaco_shared
+    assert "_customContextMenuItemHtml('commandPalette', labels.commandPalette, 'F1')" in monaco_shared
+    assert "function hideCustomContextMenu() {" in monaco_shared
+    assert "function uninstallCustomContextMenu(editor) {" in monaco_shared
+    assert "customContextMenu: useRoutingMonacoCustomMenu() ? {" in routing
+    assert "if (typeof formatEditorJson === 'function') return formatEditorJson();" in routing
+    assert "monacoShared.uninstallCustomContextMenu(_monaco || null);" in routing
+    assert "monacoShared.hideCustomContextMenu();" in routing
+    assert 'await runtime.create(host, {' in mihomo_panel
+    assert 'await runtime.create(previewMonacoHost, {' in mihomo_generator
+    assert 'await runtime.create(ui.monacoHost, {' in file_manager
+    assert 'contextmenu:' not in mihomo_panel
+    assert 'contextmenu:' not in mihomo_generator
+    assert 'contextmenu:' not in file_manager
+    assert '.xk-routing-monaco-menu-shortcut {' in styles
+    assert '.xk-routing-monaco-menu-label {' in styles
+
+
 def test_mihomo_template_load_button_uses_dirty_guard_while_select_path_skips_duplicate_prompt():
     text = Path('xkeen-ui/static/js/features/mihomo_panel.js').read_text(encoding='utf-8')
 

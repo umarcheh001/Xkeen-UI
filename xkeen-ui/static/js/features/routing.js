@@ -16,6 +16,7 @@ import {
   getXkeenEditorToolbarDefaultItems,
   getXkeenEditorToolbarIcons,
   getXkeenFormattersApi,
+  getXkeenMonacoSharedApi,
   getXkeenSettingsApi,
   getXkeenShowXrayPreflightErrorApi,
   getXkeenUiConfigShellApi,
@@ -147,10 +148,6 @@ import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_c
 
   // Monaco fullscreen (CSS-driven)
   let _monacoFsWired = false;
-  let _routingMonacoMenuEl = null;
-  let _routingMonacoMenuCleanup = null;
-  let _routingMonacoMenuCtx = null;
-  let _routingMonacoClipboardShadow = '';
 
   // Async restart job state (xkeen -restart) for save with auto-restart.
   let _restartJobRunning = false;
@@ -4093,389 +4090,30 @@ function closeHelp() {
     return true;
   }
 
-  function disposeRoutingMonacoContextMenu() {
-    try { hideRoutingMonacoContextMenu(); } catch (e) {}
+  function getRoutingMonacoSharedApi() {
     try {
-      if (typeof _routingMonacoMenuCleanup === 'function') _routingMonacoMenuCleanup();
-    } catch (e) {}
-    _routingMonacoMenuCleanup = null;
-  }
-
-  function hideRoutingMonacoContextMenu() {
-    const menu = _routingMonacoMenuEl;
-    _routingMonacoMenuCtx = null;
-    if (!menu) return;
-    try { menu.hidden = true; } catch (e) {}
-    try { menu.classList.remove('is-open'); } catch (e) {}
-    try { menu.style.removeProperty('left'); } catch (e) {}
-    try { menu.style.removeProperty('top'); } catch (e) {}
-  }
-
-  function routingMonacoMenuItemHtml(action, label, shortcut) {
-    const text = String(label || '');
-    const hint = String(shortcut || '').trim();
-    return [
-      '<button type="button" class="xk-routing-monaco-menu-item" data-action="', String(action || ''), '">',
-      '<span class="xk-routing-monaco-menu-label">', text, '</span>',
-      hint ? '<span class="xk-routing-monaco-menu-shortcut">' + hint + '</span>' : '',
-      '</button>',
-    ].join('');
-  }
-
-  function ensureRoutingMonacoContextMenuDom() {
-    if (_routingMonacoMenuEl && _routingMonacoMenuEl.isConnected) return _routingMonacoMenuEl;
-    const menu = document.createElement('div');
-    menu.className = 'xk-routing-monaco-menu';
-    menu.hidden = true;
-    menu.innerHTML = [
-      routingMonacoMenuItemHtml('goToSymbol', 'Перейти к символу...', 'Ctrl+Shift+O'),
-      routingMonacoMenuItemHtml('changeAllOccurrences', 'Изменить все вхождения', 'Ctrl+F2'),
-      '<div class="xk-routing-monaco-menu-sep" role="separator"></div>',
-      routingMonacoMenuItemHtml('cut', 'Вырезать', 'Ctrl+X'),
-      routingMonacoMenuItemHtml('copy', 'Копировать', 'Ctrl+C'),
-      routingMonacoMenuItemHtml('paste', 'Вставить', 'Ctrl+V'),
-      '<div class="xk-routing-monaco-menu-sep" role="separator"></div>',
-      routingMonacoMenuItemHtml('selectAll', 'Выделить всё', 'Ctrl+A'),
-      routingMonacoMenuItemHtml('format', 'Форматировать JSON', 'Shift+Alt+F'),
-      '<div class="xk-routing-monaco-menu-sep" role="separator"></div>',
-      routingMonacoMenuItemHtml('commandPalette', 'Палитра команд', 'F1')
-    ].join('');
-    const handleMenuAction = async (ev) => {
-      const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
-      if (!btn || btn.disabled) return;
-      try { ev.preventDefault(); } catch (e) {}
-      try { ev.stopPropagation(); } catch (e) {}
-      const action = String(btn.dataset.action || '');
-      const ctx = _routingMonacoMenuCtx;
-      hideRoutingMonacoContextMenu();
-      if (!ctx || !ctx.editor) return;
-      try {
-        await runRoutingMonacoMenuAction(ctx.editor, action);
-      } catch (e) {}
-    };
-    menu.addEventListener('pointerdown', (ev) => {
-      const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
-      if (btn) {
-        handleMenuAction(ev);
-        return;
-      }
-      try { ev.stopPropagation(); } catch (e) {}
-    });
-    menu.addEventListener('mousedown', (ev) => {
-      try { ev.stopPropagation(); } catch (e) {}
-    });
-    menu.addEventListener('click', (ev) => {
-      const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
-      if (!btn) return;
-      try { ev.preventDefault(); } catch (e) {}
-      try { ev.stopPropagation(); } catch (e) {}
-    });
-    menu.addEventListener('contextmenu', (ev) => {
-      try { ev.preventDefault(); } catch (e) {}
-      try { ev.stopPropagation(); } catch (e) {}
-    });
-    document.body.appendChild(menu);
-    _routingMonacoMenuEl = menu;
-    return menu;
-  }
-
-  function getRoutingMonacoAction(editor, actionId) {
-    try {
-      if (!editor || typeof editor.getAction !== 'function') return null;
-      const action = editor.getAction(String(actionId || ''));
-      if (!action || typeof action.run !== 'function') return null;
-      return action;
+      return getXkeenMonacoSharedApi();
     } catch (e) {}
     return null;
   }
 
-  function isRoutingMonacoActionSupported(editor, actionId) {
-    const action = getRoutingMonacoAction(editor, actionId);
-    if (!action) return false;
+  function disposeRoutingMonacoContextMenu() {
+    try { hideRoutingMonacoContextMenu(); } catch (e) {}
     try {
-      if (typeof action.isSupported === 'function') return !!action.isSupported();
-    } catch (e) {}
-    try {
-      if (typeof action.isEnabled === 'function') return !!action.isEnabled();
-    } catch (e) {}
-    return true;
-  }
-
-  async function runRoutingMonacoEditorAction(editor, actionId) {
-    const action = getRoutingMonacoAction(editor, actionId);
-    if (!action) return false;
-    try {
-      if (typeof action.isSupported === 'function' && !action.isSupported()) return false;
-    } catch (e) {}
-    try {
-      await action.run();
-      return true;
-    } catch (e) {}
-    return false;
-  }
-
-  function getRoutingMonacoSelections(editor) {
-    if (!editor) return [];
-    try {
-      if (typeof editor.getSelections === 'function') {
-        const ranges = editor.getSelections();
-        if (Array.isArray(ranges) && ranges.length) return ranges.filter(Boolean);
+      const monacoShared = getRoutingMonacoSharedApi();
+      if (monacoShared && typeof monacoShared.uninstallCustomContextMenu === 'function') {
+        monacoShared.uninstallCustomContextMenu(_monaco || null);
       }
     } catch (e) {}
+  }
+
+  function hideRoutingMonacoContextMenu() {
     try {
-      if (typeof editor.getSelection === 'function') {
-        const sel = editor.getSelection();
-        if (sel) return [sel];
+      const monacoShared = getRoutingMonacoSharedApi();
+      if (monacoShared && typeof monacoShared.hideCustomContextMenu === 'function') {
+        monacoShared.hideCustomContextMenu();
       }
     } catch (e) {}
-    return [];
-  }
-
-  function getRoutingMonacoSelectionText(editor) {
-    if (!editor) return '';
-    try {
-      const model = (typeof editor.getModel === 'function') ? editor.getModel() : null;
-      if (!model || typeof model.getValueInRange !== 'function') return '';
-      const selections = getRoutingMonacoSelections(editor);
-      if (!selections.length) return '';
-      return selections.map((range) => {
-        try { return String(model.getValueInRange(range) || ''); } catch (e) { return ''; }
-      }).join('\n');
-    } catch (e) {}
-    return '';
-  }
-
-  function isRoutingMonacoReadOnly(editor) {
-    try {
-      const monacoApi = window.monaco || null;
-      const readOnlyOption = monacoApi && monacoApi.editor && monacoApi.editor.EditorOption
-        ? monacoApi.editor.EditorOption.readOnly
-        : null;
-      if (editor && typeof editor.getOption === 'function' && readOnlyOption != null) {
-        return !!editor.getOption(readOnlyOption);
-      }
-    } catch (e) {}
-    try {
-      if (editor && typeof editor.getRawOptions === 'function') {
-        const raw = editor.getRawOptions();
-        if (raw && Object.prototype.hasOwnProperty.call(raw, 'readOnly')) return !!raw.readOnly;
-      }
-    } catch (e) {}
-    return false;
-  }
-
-  function execRoutingMonacoEdits(editor, edits, source) {
-    if (!editor || !Array.isArray(edits) || !edits.length) return false;
-    try {
-      if (typeof editor.pushUndoStop === 'function') editor.pushUndoStop();
-    } catch (e) {}
-    try {
-      if (typeof editor.executeEdits === 'function') {
-        editor.executeEdits(String(source || 'xk-routing-menu'), edits);
-        try { if (typeof editor.pushUndoStop === 'function') editor.pushUndoStop(); } catch (e2) {}
-        return true;
-      }
-    } catch (e) {}
-    return false;
-  }
-
-  async function writeRoutingClipboardText(text) {
-    const value = String(text ?? '');
-    _routingMonacoClipboardShadow = value;
-    try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        await navigator.clipboard.writeText(value);
-        return true;
-      }
-    } catch (e) {}
-
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = value;
-      ta.setAttribute('readonly', 'readonly');
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      ta.style.pointerEvents = 'none';
-      ta.style.left = '-9999px';
-      ta.style.top = '0';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      ta.setSelectionRange(0, ta.value.length);
-      const ok = !!document.execCommand('copy');
-      try { document.body.removeChild(ta); } catch (e) {}
-      return ok;
-    } catch (e) {}
-    return false;
-  }
-
-  async function readRoutingClipboardText() {
-    try {
-      if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
-        const value = await navigator.clipboard.readText();
-        if (typeof value === 'string') {
-          _routingMonacoClipboardShadow = value;
-          return value;
-        }
-      }
-    } catch (e) {}
-    return String(_routingMonacoClipboardShadow || '');
-  }
-
-  async function runRoutingMonacoMenuAction(editor, action) {
-    if (!editor) return false;
-    try { if (typeof editor.focus === 'function') editor.focus(); } catch (e) {}
-
-    const selections = getRoutingMonacoSelections(editor);
-    const hasSelection = selections.some((range) => {
-      try { return !!range && !(range.isEmpty && range.isEmpty()); } catch (e) { return false; }
-    });
-
-    if (action === 'copy') {
-      const selectedText = getRoutingMonacoSelectionText(editor);
-      if (!selectedText) return false;
-      await writeRoutingClipboardText(selectedText);
-      return true;
-    }
-
-    if (action === 'cut') {
-      if (isRoutingMonacoReadOnly(editor) || !hasSelection) return false;
-      const selectedText = getRoutingMonacoSelectionText(editor);
-      if (!selectedText) return false;
-      await writeRoutingClipboardText(selectedText);
-      return execRoutingMonacoEdits(editor, selections.map((range) => ({ range, text: '', forceMoveMarkers: true })), 'xk-routing-menu-cut');
-    }
-
-    if (action === 'paste') {
-      if (isRoutingMonacoReadOnly(editor)) return false;
-      const value = await readRoutingClipboardText();
-      if (typeof value !== 'string') return false;
-      const targetSelections = selections.length ? selections : getRoutingMonacoSelections(editor);
-      if (!targetSelections.length) return false;
-      return execRoutingMonacoEdits(editor, targetSelections.map((range) => ({ range, text: value, forceMoveMarkers: true })), 'xk-routing-menu-paste');
-    }
-
-    if (action === 'goToSymbol') {
-      return runRoutingMonacoEditorAction(editor, 'editor.action.quickOutline');
-    }
-
-    if (action === 'changeAllOccurrences') {
-      if (isRoutingMonacoReadOnly(editor)) return false;
-      return runRoutingMonacoEditorAction(editor, 'editor.action.changeAll');
-    }
-
-    if (action === 'selectAll') {
-      if (await runRoutingMonacoEditorAction(editor, 'editor.action.selectAll')) return true;
-      try {
-        const cmd = editor.getAction && editor.getAction('editor.action.selectAll');
-        if (cmd && typeof cmd.run === 'function') {
-          await cmd.run();
-          return true;
-        }
-      } catch (e) {}
-      try {
-        const model = (typeof editor.getModel === 'function') ? editor.getModel() : null;
-        if (model && typeof editor.setSelection === 'function' && typeof model.getFullModelRange === 'function') {
-          editor.setSelection(model.getFullModelRange());
-          return true;
-        }
-      } catch (e) {}
-      return false;
-    }
-
-    if (action === 'format') {
-      if (isRoutingMonacoReadOnly(editor)) return false;
-      if (await runRoutingMonacoEditorAction(editor, 'editor.action.formatDocument')) return true;
-      try { formatEditorJson(); } catch (e) {}
-      return true;
-    }
-
-    if (action === 'commandPalette') {
-      return runRoutingMonacoEditorAction(editor, 'editor.action.quickCommand');
-    }
-
-    return false;
-  }
-
-  function updateRoutingMonacoContextMenuState(editor) {
-    const menu = ensureRoutingMonacoContextMenuDom();
-    const hasSelection = !!getRoutingMonacoSelectionText(editor);
-    const readOnly = isRoutingMonacoReadOnly(editor);
-    const items = Array.from(menu.querySelectorAll('button[data-action]'));
-    items.forEach((btn) => {
-      const action = String(btn.dataset.action || '');
-      let disabled = false;
-      if (action === 'copy' || action === 'cut') disabled = !hasSelection;
-      if ((action === 'cut' || action === 'paste' || action === 'format' || action === 'changeAllOccurrences') && readOnly) disabled = true;
-      if (action === 'goToSymbol') disabled = !isRoutingMonacoActionSupported(editor, 'editor.action.quickOutline');
-      if (action === 'changeAllOccurrences') disabled = disabled || !isRoutingMonacoActionSupported(editor, 'editor.action.changeAll');
-      if (action === 'format') disabled = disabled || (!isRoutingMonacoActionSupported(editor, 'editor.action.formatDocument') && typeof formatEditorJson !== 'function');
-      if (action === 'commandPalette') disabled = !isRoutingMonacoActionSupported(editor, 'editor.action.quickCommand');
-      btn.disabled = disabled;
-    });
-  }
-
-  function showRoutingMonacoContextMenu(editor, ev) {
-    if (!editor || !ev) return;
-    const menu = ensureRoutingMonacoContextMenuDom();
-    _routingMonacoMenuCtx = { editor };
-    updateRoutingMonacoContextMenuState(editor);
-    menu.hidden = false;
-    menu.classList.add('is-open');
-    menu.style.left = '0px';
-    menu.style.top = '0px';
-    const rect = menu.getBoundingClientRect();
-    const vw = Math.max(320, window.innerWidth || 0);
-    const vh = Math.max(240, window.innerHeight || 0);
-    const left = Math.max(8, Math.min((ev.clientX || 0), vw - rect.width - 8));
-    const top = Math.max(8, Math.min((ev.clientY || 0), vh - rect.height - 8));
-    menu.style.left = left + 'px';
-    menu.style.top = top + 'px';
-  }
-
-  function installRoutingMonacoContextMenu(editor, host) {
-    disposeRoutingMonacoContextMenu();
-    if (!editor || !host || !useRoutingMonacoCustomMenu()) return;
-
-    const onContextMenu = (ev) => {
-      if (_engine !== 'monaco') return;
-      try { ev.preventDefault(); } catch (e) {}
-      try { ev.stopPropagation(); } catch (e) {}
-      try { if (typeof editor.focus === 'function') editor.focus(); } catch (e) {}
-      showRoutingMonacoContextMenu(editor, ev);
-    };
-
-    const hide = () => { hideRoutingMonacoContextMenu(); };
-    const onDocumentMouseDown = (ev) => {
-      const menu = _routingMonacoMenuEl;
-      if (menu) {
-        try {
-          const path = ev && typeof ev.composedPath === 'function' ? ev.composedPath() : null;
-          if (Array.isArray(path) && path.includes(menu)) return;
-        } catch (e) {}
-        if (ev && ev.target && typeof menu.contains === 'function' && menu.contains(ev.target)) return;
-      }
-      hide();
-    };
-    const onKeyDown = (ev) => {
-      if (ev && (ev.key === 'Escape' || ev.key === 'Esc')) hide();
-    };
-
-    host.addEventListener('contextmenu', onContextMenu, true);
-    document.addEventListener('mousedown', onDocumentMouseDown, true);
-    document.addEventListener('scroll', hide, true);
-    window.addEventListener('resize', hide, true);
-    window.addEventListener('blur', hide, true);
-    document.addEventListener('keydown', onKeyDown, true);
-
-    _routingMonacoMenuCleanup = () => {
-      try { host.removeEventListener('contextmenu', onContextMenu, true); } catch (e) {}
-      try { document.removeEventListener('mousedown', onDocumentMouseDown, true); } catch (e) {}
-      try { document.removeEventListener('scroll', hide, true); } catch (e) {}
-      try { window.removeEventListener('resize', hide, true); } catch (e) {}
-      try { window.removeEventListener('blur', hide, true); } catch (e) {}
-      try { document.removeEventListener('keydown', onKeyDown, true); } catch (e) {}
-    };
   }
 
   function resetMonacoHostDom(hostEl) {
@@ -4515,7 +4153,14 @@ function closeHelp() {
       try {
         _monaco = await runtime.create(host, {
           value: readCurrentEditorText(),
-          contextmenu: !useRoutingMonacoCustomMenu(),
+          customContextMenu: useRoutingMonacoCustomMenu() ? {
+            onFormatFallback: () => {
+              try {
+                if (typeof formatEditorJson === 'function') return formatEditorJson();
+              } catch (e) {}
+              return false;
+            },
+          } : false,
           // Xray configs commonly use JSON with user comments (JSONC-like).
           // Backend сохраняет чистый JSON + отдельный .jsonc сайдкар, поэтому в UI
           // разрешаем комментарии для удобства.
@@ -4542,7 +4187,6 @@ function closeHelp() {
         // Facade for routing consumers so feature modules stay engine-agnostic.
         _monacoFacade = createRoutingMonacoFacade(_monaco);
         try { syncSharedRoutingEditor(_monaco, _monacoFacade, 'monaco'); } catch (e) {}
-        try { installRoutingMonacoContextMenu(_monaco, host); } catch (e) {}
 
         // Ensure layout fix for hidden containers (modals/tabs/engine switch).
         try {

@@ -16,7 +16,12 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
     // WeakMaps are supported in modern browsers; if not, we fall back to expando properties.
     roByHost: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     moByHost: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
+    customContextMenuEl: null,
+    customContextMenuCtx: null,
+    customContextMenuCleanupByEditor: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
+    customContextMenuClipboardShadow: '',
   };
+  const _CUSTOM_CONTEXT_MENU_CLEANUP_KEY = '__xkMonacoCustomContextMenuCleanup';
 
 
   function _installClipboardCompat() {
@@ -730,6 +735,477 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
     return typo;
   }
 
+  function _getCustomContextMenuCleanup(editor) {
+    if (!editor) return null;
+    try {
+      if (_state.customContextMenuCleanupByEditor) return _state.customContextMenuCleanupByEditor.get(editor) || null;
+    } catch (e) {}
+    try {
+      return typeof editor[_CUSTOM_CONTEXT_MENU_CLEANUP_KEY] === 'function' ? editor[_CUSTOM_CONTEXT_MENU_CLEANUP_KEY] : null;
+    } catch (e) {}
+    return null;
+  }
+
+  function _setCustomContextMenuCleanup(editor, cleanup) {
+    if (!editor) return;
+    try {
+      if (_state.customContextMenuCleanupByEditor) {
+        if (typeof cleanup === 'function') _state.customContextMenuCleanupByEditor.set(editor, cleanup);
+        else _state.customContextMenuCleanupByEditor.delete(editor);
+        return;
+      }
+    } catch (e) {}
+    try {
+      if (typeof cleanup === 'function') editor[_CUSTOM_CONTEXT_MENU_CLEANUP_KEY] = cleanup;
+      else delete editor[_CUSTOM_CONTEXT_MENU_CLEANUP_KEY];
+    } catch (e) {}
+  }
+
+  function _defaultFormatMenuLabel(language) {
+    const lang = _normalizeLanguage(language);
+    if (lang === 'json' || lang === 'jsonc') return '\u0424\u043e\u0440\u043c\u0430\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c JSON';
+    return '\u0424\u043e\u0440\u043c\u0430\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442';
+  }
+
+  function _normalizeMenuLabel(value, fallback) {
+    const text = String(value ?? '').trim();
+    return text || String(fallback || '');
+  }
+
+  function _normalizeCustomContextMenuOptions(opts, language) {
+    const o = opts || {};
+    const hasCustomMenu = Object.prototype.hasOwnProperty.call(o, 'customContextMenu');
+    const raw = hasCustomMenu ? o.customContextMenu : null;
+    if (raw === false) return { enabled: false };
+    if (!hasCustomMenu && Object.prototype.hasOwnProperty.call(o, 'contextmenu') && o.contextmenu === false) {
+      return { enabled: false };
+    }
+    const cfg = (raw && typeof raw === 'object') ? raw : {};
+    return {
+      enabled: true,
+      labels: {
+        goToSymbol: _normalizeMenuLabel(cfg.goToSymbolLabel, '\u041f\u0435\u0440\u0435\u0439\u0442\u0438 \u043a \u0441\u0438\u043c\u0432\u043e\u043b\u0443...'),
+        changeAllOccurrences: _normalizeMenuLabel(cfg.changeAllOccurrencesLabel, '\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c \u0432\u0441\u0435 \u0432\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u044f'),
+        cut: _normalizeMenuLabel(cfg.cutLabel, '\u0412\u044b\u0440\u0435\u0437\u0430\u0442\u044c'),
+        copy: _normalizeMenuLabel(cfg.copyLabel, '\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c'),
+        paste: _normalizeMenuLabel(cfg.pasteLabel, '\u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044c'),
+        selectAll: _normalizeMenuLabel(cfg.selectAllLabel, '\u0412\u044b\u0434\u0435\u043b\u0438\u0442\u044c \u0432\u0441\u0451'),
+        format: _normalizeMenuLabel(cfg.formatLabel, _defaultFormatMenuLabel(language)),
+        commandPalette: _normalizeMenuLabel(cfg.commandPaletteLabel, '\u041f\u0430\u043b\u0438\u0442\u0440\u0430 \u043a\u043e\u043c\u0430\u043d\u0434'),
+      },
+      onFormatFallback: typeof cfg.onFormatFallback === 'function' ? cfg.onFormatFallback : null,
+    };
+  }
+
+  function _customContextMenuItemHtml(action, label, shortcut) {
+    const text = String(label || '');
+    const hint = String(shortcut || '').trim();
+    return [
+      '<button type="button" class="xk-routing-monaco-menu-item" data-action="', String(action || ''), '">',
+      '<span class="xk-routing-monaco-menu-label">', text, '</span>',
+      hint ? '<span class="xk-routing-monaco-menu-shortcut">' + hint + '</span>' : '',
+      '</button>',
+    ].join('');
+  }
+
+  function _buildCustomContextMenuMarkup(cfg) {
+    const labels = (cfg && cfg.labels) ? cfg.labels : {};
+    return [
+      _customContextMenuItemHtml('goToSymbol', labels.goToSymbol, 'Ctrl+Shift+O'),
+      _customContextMenuItemHtml('changeAllOccurrences', labels.changeAllOccurrences, 'Ctrl+F2'),
+      '<div class="xk-routing-monaco-menu-sep" role="separator"></div>',
+      _customContextMenuItemHtml('cut', labels.cut, 'Ctrl+X'),
+      _customContextMenuItemHtml('copy', labels.copy, 'Ctrl+C'),
+      _customContextMenuItemHtml('paste', labels.paste, 'Ctrl+V'),
+      '<div class="xk-routing-monaco-menu-sep" role="separator"></div>',
+      _customContextMenuItemHtml('selectAll', labels.selectAll, 'Ctrl+A'),
+      _customContextMenuItemHtml('format', labels.format, 'Shift+Alt+F'),
+      '<div class="xk-routing-monaco-menu-sep" role="separator"></div>',
+      _customContextMenuItemHtml('commandPalette', labels.commandPalette, 'F1'),
+    ].join('');
+  }
+
+  function hideCustomContextMenu() {
+    const menu = _state.customContextMenuEl;
+    _state.customContextMenuCtx = null;
+    if (!menu) return;
+    try { menu.hidden = true; } catch (e) {}
+    try { menu.classList.remove('is-open'); } catch (e) {}
+    try { menu.style.removeProperty('left'); } catch (e) {}
+    try { menu.style.removeProperty('top'); } catch (e) {}
+  }
+
+  async function _handleCustomContextMenuAction(ev) {
+    const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
+    if (!btn || btn.disabled) return;
+    try { ev.preventDefault(); } catch (e) {}
+    try { ev.stopPropagation(); } catch (e) {}
+    const action = String(btn.dataset.action || '');
+    const ctx = _state.customContextMenuCtx;
+    hideCustomContextMenu();
+    if (!ctx || !ctx.editor) return;
+    try {
+      await runCustomContextMenuAction(ctx.editor, action, ctx.options || null);
+    } catch (e) {}
+  }
+
+  function ensureCustomContextMenuDom(cfg) {
+    let menu = _state.customContextMenuEl;
+    if (!menu || !menu.isConnected) {
+      menu = document.createElement('div');
+      menu.className = 'xk-routing-monaco-menu';
+      menu.hidden = true;
+      menu.addEventListener('pointerdown', (ev) => {
+        const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
+        if (btn) {
+          _handleCustomContextMenuAction(ev);
+          return;
+        }
+        try { ev.stopPropagation(); } catch (e) {}
+      });
+      menu.addEventListener('mousedown', (ev) => {
+        try { ev.stopPropagation(); } catch (e) {}
+      });
+      menu.addEventListener('click', (ev) => {
+        const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
+        if (!btn) return;
+        try { ev.preventDefault(); } catch (e) {}
+        try { ev.stopPropagation(); } catch (e) {}
+      });
+      menu.addEventListener('contextmenu', (ev) => {
+        try { ev.preventDefault(); } catch (e) {}
+        try { ev.stopPropagation(); } catch (e) {}
+      });
+      document.body.appendChild(menu);
+      _state.customContextMenuEl = menu;
+    }
+    menu.innerHTML = _buildCustomContextMenuMarkup(cfg || _normalizeCustomContextMenuOptions({}, 'plaintext'));
+    return menu;
+  }
+
+  function _getCustomContextMenuAction(editor, actionId) {
+    try {
+      if (!editor || typeof editor.getAction !== 'function') return null;
+      const action = editor.getAction(String(actionId || ''));
+      if (!action || typeof action.run !== 'function') return null;
+      return action;
+    } catch (e) {}
+    return null;
+  }
+
+  function _isCustomContextMenuActionSupported(editor, actionId) {
+    const action = _getCustomContextMenuAction(editor, actionId);
+    if (!action) return false;
+    try {
+      if (typeof action.isSupported === 'function') return !!action.isSupported();
+    } catch (e) {}
+    try {
+      if (typeof action.isEnabled === 'function') return !!action.isEnabled();
+    } catch (e) {}
+    return true;
+  }
+
+  async function _runCustomContextMenuEditorAction(editor, actionId) {
+    const action = _getCustomContextMenuAction(editor, actionId);
+    if (!action) return false;
+    try {
+      if (typeof action.isSupported === 'function' && !action.isSupported()) return false;
+    } catch (e) {}
+    try {
+      await action.run();
+      return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function _getCustomContextMenuSelections(editor) {
+    if (!editor) return [];
+    try {
+      if (typeof editor.getSelections === 'function') {
+        const ranges = editor.getSelections();
+        if (Array.isArray(ranges) && ranges.length) return ranges.filter(Boolean);
+      }
+    } catch (e) {}
+    try {
+      if (typeof editor.getSelection === 'function') {
+        const range = editor.getSelection();
+        if (range) return [range];
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function _getCustomContextMenuSelectionText(editor) {
+    if (!editor) return '';
+    try {
+      const model = (typeof editor.getModel === 'function') ? editor.getModel() : null;
+      if (!model || typeof model.getValueInRange !== 'function') return '';
+      const selections = _getCustomContextMenuSelections(editor);
+      if (!selections.length) return '';
+      return selections.map((range) => {
+        try { return String(model.getValueInRange(range) || ''); } catch (e) { return ''; }
+      }).join('\n');
+    } catch (e) {}
+    return '';
+  }
+
+  function _isCustomContextMenuReadOnly(editor) {
+    try {
+      const monacoApi = window.monaco || null;
+      const readOnlyOption = monacoApi && monacoApi.editor && monacoApi.editor.EditorOption
+        ? monacoApi.editor.EditorOption.readOnly
+        : null;
+      if (editor && typeof editor.getOption === 'function' && readOnlyOption != null) {
+        return !!editor.getOption(readOnlyOption);
+      }
+    } catch (e) {}
+    try {
+      if (editor && typeof editor.getRawOptions === 'function') {
+        const raw = editor.getRawOptions();
+        if (raw && Object.prototype.hasOwnProperty.call(raw, 'readOnly')) return !!raw.readOnly;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function _execCustomContextMenuEdits(editor, edits, source) {
+    if (!editor || !Array.isArray(edits) || !edits.length) return false;
+    try {
+      if (typeof editor.pushUndoStop === 'function') editor.pushUndoStop();
+    } catch (e) {}
+    try {
+      if (typeof editor.executeEdits === 'function') {
+        editor.executeEdits(String(source || 'xk-monaco-menu'), edits);
+        try { if (typeof editor.pushUndoStop === 'function') editor.pushUndoStop(); } catch (e2) {}
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  async function _writeCustomContextMenuClipboardText(text) {
+    const value = String(text ?? '');
+    _state.customContextMenuClipboardShadow = value;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+    } catch (e) {}
+
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.setAttribute('readonly', 'readonly');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      ta.style.pointerEvents = 'none';
+      ta.style.left = '-9999px';
+      ta.style.top = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = !!document.execCommand('copy');
+      try { document.body.removeChild(ta); } catch (e) {}
+      return ok;
+    } catch (e) {}
+    return false;
+  }
+
+  async function _readCustomContextMenuClipboardText() {
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+        const value = await navigator.clipboard.readText();
+        if (typeof value === 'string') {
+          _state.customContextMenuClipboardShadow = value;
+          return value;
+        }
+      }
+    } catch (e) {}
+    return String(_state.customContextMenuClipboardShadow || '');
+  }
+
+  async function runCustomContextMenuAction(editor, action, cfg) {
+    if (!editor) return false;
+    try { if (typeof editor.focus === 'function') editor.focus(); } catch (e) {}
+
+    const selections = _getCustomContextMenuSelections(editor);
+    const hasSelection = selections.some((range) => {
+      try { return !!range && !(range.isEmpty && range.isEmpty()); } catch (e) { return false; }
+    });
+
+    if (action === 'copy') {
+      const selectedText = _getCustomContextMenuSelectionText(editor);
+      if (!selectedText) return false;
+      await _writeCustomContextMenuClipboardText(selectedText);
+      return true;
+    }
+
+    if (action === 'cut') {
+      if (_isCustomContextMenuReadOnly(editor) || !hasSelection) return false;
+      const selectedText = _getCustomContextMenuSelectionText(editor);
+      if (!selectedText) return false;
+      await _writeCustomContextMenuClipboardText(selectedText);
+      return _execCustomContextMenuEdits(editor, selections.map((range) => ({ range, text: '', forceMoveMarkers: true })), 'xk-monaco-menu-cut');
+    }
+
+    if (action === 'paste') {
+      if (_isCustomContextMenuReadOnly(editor)) return false;
+      const value = await _readCustomContextMenuClipboardText();
+      if (typeof value !== 'string') return false;
+      const targetSelections = selections.length ? selections : _getCustomContextMenuSelections(editor);
+      if (!targetSelections.length) return false;
+      return _execCustomContextMenuEdits(editor, targetSelections.map((range) => ({ range, text: value, forceMoveMarkers: true })), 'xk-monaco-menu-paste');
+    }
+
+    if (action === 'goToSymbol') return _runCustomContextMenuEditorAction(editor, 'editor.action.quickOutline');
+
+    if (action === 'changeAllOccurrences') {
+      if (_isCustomContextMenuReadOnly(editor)) return false;
+      return _runCustomContextMenuEditorAction(editor, 'editor.action.changeAll');
+    }
+
+    if (action === 'selectAll') {
+      if (await _runCustomContextMenuEditorAction(editor, 'editor.action.selectAll')) return true;
+      try {
+        const model = (typeof editor.getModel === 'function') ? editor.getModel() : null;
+        if (model && typeof editor.setSelection === 'function' && typeof model.getFullModelRange === 'function') {
+          editor.setSelection(model.getFullModelRange());
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    }
+
+    if (action === 'format') {
+      if (_isCustomContextMenuReadOnly(editor)) return false;
+      if (await _runCustomContextMenuEditorAction(editor, 'editor.action.formatDocument')) return true;
+      if (cfg && typeof cfg.onFormatFallback === 'function') {
+        try {
+          return (await cfg.onFormatFallback(editor)) !== false;
+        } catch (e) {}
+      }
+      return false;
+    }
+
+    if (action === 'commandPalette') return _runCustomContextMenuEditorAction(editor, 'editor.action.quickCommand');
+
+    return false;
+  }
+
+  function _updateCustomContextMenuState(editor, cfg) {
+    const menu = ensureCustomContextMenuDom(cfg);
+    const hasSelection = !!_getCustomContextMenuSelectionText(editor);
+    const readOnly = _isCustomContextMenuReadOnly(editor);
+    const items = Array.from(menu.querySelectorAll('button[data-action]'));
+    items.forEach((btn) => {
+      const action = String(btn.dataset.action || '');
+      let disabled = false;
+      if (action === 'copy' || action === 'cut') disabled = !hasSelection;
+      if ((action === 'cut' || action === 'paste' || action === 'format' || action === 'changeAllOccurrences') && readOnly) disabled = true;
+      if (action === 'goToSymbol') disabled = !_isCustomContextMenuActionSupported(editor, 'editor.action.quickOutline');
+      if (action === 'changeAllOccurrences') disabled = disabled || !_isCustomContextMenuActionSupported(editor, 'editor.action.changeAll');
+      if (action === 'format') disabled = disabled || (!_isCustomContextMenuActionSupported(editor, 'editor.action.formatDocument') && !(cfg && typeof cfg.onFormatFallback === 'function'));
+      if (action === 'commandPalette') disabled = !_isCustomContextMenuActionSupported(editor, 'editor.action.quickCommand');
+      btn.disabled = disabled;
+    });
+  }
+
+  function showCustomContextMenu(editor, ev, cfg) {
+    if (!editor || !ev) return;
+    const menu = ensureCustomContextMenuDom(cfg);
+    _state.customContextMenuCtx = { editor, options: cfg || null };
+    _updateCustomContextMenuState(editor, cfg);
+    menu.hidden = false;
+    menu.classList.add('is-open');
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+    const rect = menu.getBoundingClientRect();
+    const vw = Math.max(320, window.innerWidth || 0);
+    const vh = Math.max(240, window.innerHeight || 0);
+    const left = Math.max(8, Math.min((ev.clientX || 0), vw - rect.width - 8));
+    const top = Math.max(8, Math.min((ev.clientY || 0), vh - rect.height - 8));
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+  }
+
+  function _shouldBypassCustomContextMenuTarget(target) {
+    const el = target && target.nodeType === 3 ? target.parentElement : target;
+    if (!el || typeof el.closest !== 'function') return false;
+    if (el.closest('.xk-routing-monaco-menu')) return true;
+    if (el.closest('.quick-input-widget, .context-view, .rename-box, .rename-input, .monaco-inputbox, .monaco-findInput, .find-widget')) return true;
+    const input = el.closest('input, textarea, select, [contenteditable="true"]');
+    if (!input) return false;
+    try {
+      if (input.classList && input.classList.contains('inputarea')) return false;
+    } catch (e) {}
+    return true;
+  }
+
+  function uninstallCustomContextMenu(editor) {
+    const cleanup = _getCustomContextMenuCleanup(editor);
+    if (typeof cleanup !== 'function') return;
+    try { cleanup(); } catch (e) {}
+    _setCustomContextMenuCleanup(editor, null);
+    if (_state.customContextMenuCtx && _state.customContextMenuCtx.editor === editor) hideCustomContextMenu();
+  }
+
+  function installCustomContextMenu(editor, host, opts) {
+    uninstallCustomContextMenu(editor);
+    const cfg = _normalizeCustomContextMenuOptions(opts, (opts && opts.language) || 'plaintext');
+    if (!editor || !host || !cfg.enabled) return null;
+
+    const onContextMenu = (ev) => {
+      if (_shouldBypassCustomContextMenuTarget(ev ? ev.target : null)) return;
+      try { ev.preventDefault(); } catch (e) {}
+      try { ev.stopPropagation(); } catch (e) {}
+      try { if (typeof editor.focus === 'function') editor.focus(); } catch (e) {}
+      showCustomContextMenu(editor, ev, cfg);
+    };
+    const hide = () => { hideCustomContextMenu(); };
+    const onDocumentMouseDown = (ev) => {
+      const menu = _state.customContextMenuEl;
+      if (menu) {
+        try {
+          const path = ev && typeof ev.composedPath === 'function' ? ev.composedPath() : null;
+          if (Array.isArray(path) && path.includes(menu)) return;
+        } catch (e) {}
+        if (ev && ev.target && typeof menu.contains === 'function' && menu.contains(ev.target)) return;
+      }
+      hide();
+    };
+    const onKeyDown = (ev) => {
+      if (ev && (ev.key === 'Escape' || ev.key === 'Esc')) hide();
+    };
+    const cleanup = () => {
+      try { host.removeEventListener('contextmenu', onContextMenu, true); } catch (e) {}
+      try { document.removeEventListener('mousedown', onDocumentMouseDown, true); } catch (e) {}
+      try { document.removeEventListener('scroll', hide, true); } catch (e) {}
+      try { window.removeEventListener('resize', hide, true); } catch (e) {}
+      try { window.removeEventListener('blur', hide, true); } catch (e) {}
+      try { document.removeEventListener('keydown', onKeyDown, true); } catch (e) {}
+    };
+
+    host.addEventListener('contextmenu', onContextMenu, true);
+    document.addEventListener('mousedown', onDocumentMouseDown, true);
+    document.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide, true);
+    window.addEventListener('blur', hide, true);
+    document.addEventListener('keydown', onKeyDown, true);
+    _setCustomContextMenuCleanup(editor, cleanup);
+
+    try {
+      if (editor && typeof editor.onDidDispose === 'function') {
+        editor.onDidDispose(() => {
+          uninstallCustomContextMenu(editor);
+        });
+      }
+    } catch (e) {}
+
+    return cleanup;
+  }
+
   async function createEditor(host, opts) {
     const el = host;
     if (!el) return null;
@@ -746,6 +1222,8 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
     const value = String(o.value ?? '');
     const perf = _computePerfProfile(value, o);
     const safari = _shouldRelaxForSafari(o);
+    const customContextMenu = _normalizeCustomContextMenuOptions(o, language);
+    const useCustomContextMenu = !!customContextMenu.enabled;
 
     try {
       const monaco = await _ensureMonaco();
@@ -763,7 +1241,7 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
       const editor = monaco.editor.create(el, {
         value,
         readOnly,
-        contextmenu: (typeof o.contextmenu === 'boolean') ? o.contextmenu : true,
+        contextmenu: useCustomContextMenu ? false : ((typeof o.contextmenu === 'boolean') ? o.contextmenu : true),
         automaticLayout: !(perf.lite || safari),
         minimap: { enabled: false },
         stickyScroll: { enabled: false },
@@ -837,6 +1315,16 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
           }
         }
       } catch (e) {}
+
+      try {
+        if (useCustomContextMenu) {
+          installCustomContextMenu(editor, el, o);
+        }
+      } catch (e) {
+        try {
+          if (editor && typeof editor.updateOptions === 'function') editor.updateOptions({ contextmenu: true });
+        } catch (e2) {}
+      }
 
       // Ensure it lays out even if created in hidden container.
       try { layoutOnVisible(editor, el, { lite: perf.lite }); } catch (e) {}
@@ -929,7 +1417,10 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
     applyTheme,
     wireThemeSync,
     createEditor,
+    hideCustomContextMenu,
+    installCustomContextMenu,
     layoutOnVisible,
     toFacade,
+    uninstallCustomContextMenu,
   };
 })();
