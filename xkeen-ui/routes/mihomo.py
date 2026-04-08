@@ -41,7 +41,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict
 
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, redirect
 
 from mihomo_server_core import (
     ensure_mihomo_layout,
@@ -817,26 +817,106 @@ def create_mihomo_blueprint(
     # ---------- Same-origin proxy: Mihomo external UI (Zashboard) ----------
 
     _MIHOMO_UI_DEFAULT_PORT = 9090
+    _MIHOMO_UI_ALLOWED_PORTS_ENV = "XKEEN_MIHOMO_UI_ALLOWED_PORTS"
+    _MIHOMO_UI_PUBLIC_SCHEME_ENV = "XKEEN_MIHOMO_UI_PUBLIC_SCHEME"
+    _MIHOMO_UI_ALLOW_PROXY_FALLBACK_ENV = "XKEEN_MIHOMO_UI_ALLOW_PROXY_FALLBACK"
+    _MIHOMO_UI_SENSITIVE_REQUEST_HEADERS = {
+        'cookie',
+        'authorization',
+        'x-csrf-token',
+    }
+    _MIHOMO_UI_BLOCKED_RESPONSE_HEADERS = {
+        'set-cookie',
+        'server',
+        'date',
+        'access-control-allow-origin',
+        'access-control-allow-credentials',
+        'access-control-allow-headers',
+        'access-control-allow-methods',
+    }
+
+    def _parse_allowed_mihomo_ui_ports() -> set[int]:
+        raw = str(os.environ.get(_MIHOMO_UI_ALLOWED_PORTS_ENV) or "").strip()
+        out: set[int] = set()
+        if raw:
+            for part in raw.split(","):
+                token = str(part or "").strip()
+                if not token:
+                    continue
+                try:
+                    port = int(token)
+                except Exception:
+                    continue
+                if 1 <= port <= 65535:
+                    out.add(port)
+        if not out:
+            out.add(_MIHOMO_UI_DEFAULT_PORT)
+        return out
+
+    def _get_mihomo_ui_binding() -> tuple[str, int]:
+        '''Parse external-controller host/port from the active config.yaml (best-effort).'''
+        try:
+            cfg = load_text(MIHOMO_CONFIG_FILE, default='') or ''
+        except Exception:
+            cfg = ''
+        m = re.search(
+            r"external-controller:\s*(?:['\"]?)((?:\[[^\]]+\])|(?:[^:\s'\"]+)):(\d+)(?:['\"]?)",
+            cfg,
+        )
+        if m:
+            try:
+                host = str(m.group(1) or '').strip() or '0.0.0.0'
+            except Exception:
+                host = '0.0.0.0'
+            try:
+                port = int(m.group(2))
+                if 1 <= port <= 65535:
+                    return host, port
+            except Exception:
+                pass
+        return '0.0.0.0', _MIHOMO_UI_DEFAULT_PORT
 
     def _get_mihomo_ui_port() -> int:
         '''Parse external-controller port from the active config.yaml (best-effort).
 
         We keep it strictly local (127.0.0.1) and use only this single port.
         '''
+        return _get_mihomo_ui_binding()[1]
+
+    def _mihomo_ui_port_allowed(port: int) -> bool:
         try:
-            cfg = load_text(MIHOMO_CONFIG_FILE, default='') or ''
+            return int(port) in _parse_allowed_mihomo_ui_ports()
         except Exception:
-            cfg = ''
-        # external-controller: 0.0.0.0:9090  (quotes optional)
-        m = re.search(r"external-controller:\s*(?:['\"]?)(?:[^:]*):(\d+)(?:['\"]?)", cfg)
-        if m:
-            try:
-                port = int(m.group(1))
-                if 1 <= port <= 65535:
-                    return port
-            except Exception:
-                pass
-        return _MIHOMO_UI_DEFAULT_PORT
+            return False
+
+    def _mihomo_ui_proxy_fallback_enabled() -> bool:
+        return str(os.environ.get(_MIHOMO_UI_ALLOW_PROXY_FALLBACK_ENV) or "0").strip() == "1"
+
+    def _mihomo_ui_bind_host_is_loopback(bind_host: str) -> bool:
+        host = str(bind_host or "").strip().lower()
+        host = host.strip("[]")
+        return host in ("", "127.0.0.1", "localhost", "::1")
+
+    def _get_mihomo_ui_public_scheme() -> str:
+        raw = str(os.environ.get(_MIHOMO_UI_PUBLIC_SCHEME_ENV) or "").strip().lower()
+        if raw in ("http", "https"):
+            return raw
+        return "http"
+
+    def _get_request_host_name() -> str:
+        try:
+            parsed = urllib.parse.urlsplit(request.host_url or "")
+            return str(parsed.hostname or "").strip()
+        except Exception:
+            return ""
+
+    def _build_mihomo_ui_direct_base(port: int) -> str | None:
+        host = _get_request_host_name()
+        if not host:
+            return None
+        host_text = f'[{host}]' if ':' in host and not host.startswith('[') else host
+        scheme = _get_mihomo_ui_public_scheme()
+        return f"{scheme}://{host_text}:{int(port)}"
 
     _HOP_BY_HOP_HEADERS = {
         'connection',
@@ -852,33 +932,67 @@ def create_mihomo_blueprint(
     @bp.route('/mihomo_panel/', defaults={'path': ''}, methods=['GET', 'HEAD'])
     @bp.route('/mihomo_panel/<path:path>', methods=['GET', 'HEAD'])
     def mihomo_panel_proxy(path: str):
-        '''Proxy Mihomo UI through the same origin.
+        '''Open Mihomo UI with a direct origin when possible.
 
-        MVP: GET/HEAD only. No websockets.
-        Security: fixed upstream = http://127.0.0.1:<port>/, port derived from config.
+        Default security posture:
+        - prefer direct-origin redirect to Mihomo UI (`http://<router-host>:<port>/...`)
+          so Zashboard does not inherit panel origin/cookies;
+        - keep same-origin proxy only as an explicit loopback-only fallback.
         '''
         # Basic path hardening: disallow backslashes and parent traversal.
         sp = str(path or '')
         if '\\' in sp or any(seg == '..' for seg in sp.split('/')):
             return _api_error('bad path', 400, ok=False)
 
-        port = _get_mihomo_ui_port()
+        bind_host, port = _get_mihomo_ui_binding()
+        if not _mihomo_ui_port_allowed(port):
+            return _api_error(
+                f'Порт Mihomo UI {port} не разрешён политикой безопасности. '
+                f'Разрешите его через {_MIHOMO_UI_ALLOWED_PORTS_ENV} или верните external-controller к {_MIHOMO_UI_DEFAULT_PORT}.',
+                409,
+                ok=False,
+            )
+
         rel = sp.lstrip('/')
+        qs = request.query_string.decode('utf-8', errors='ignore')
+
+        if not _mihomo_ui_bind_host_is_loopback(bind_host):
+            direct_base = _build_mihomo_ui_direct_base(port)
+            if direct_base:
+                direct_url = f"{direct_base}/{rel}" if rel else f"{direct_base}/"
+                if qs:
+                    direct_url = direct_url + '?' + qs
+                resp = redirect(direct_url, code=302)
+                resp.headers.setdefault('Cache-Control', 'no-store, no-cache, must-revalidate')
+                resp.headers.setdefault('Pragma', 'no-cache')
+                resp.headers.setdefault('Referrer-Policy', 'no-referrer')
+                return resp
+
+        if not _mihomo_ui_proxy_fallback_enabled():
+            return _api_error(
+                'Same-origin proxy для loopback-only Mihomo UI отключён по умолчанию. '
+                f'Используйте browser-reachable external-controller (например 0.0.0.0:{_MIHOMO_UI_DEFAULT_PORT}) '
+                f'или явно включите {_MIHOMO_UI_ALLOW_PROXY_FALLBACK_ENV}=1.',
+                409,
+                ok=False,
+            )
+
         base = f'http://127.0.0.1:{port}'
         target_url = f"{base}/{rel}" if rel else f"{base}/"
-        qs = request.query_string.decode('utf-8', errors='ignore')
         if qs:
             target_url = target_url + '?' + qs
 
         method = request.method.upper()
         req = urllib.request.Request(target_url, data=None, method=method)
 
-        # Forward most headers, but keep it same-origin and avoid hop-by-hop headers.
+        # Proxy fallback is intentionally narrow: do not bridge panel credentials into Mihomo UI.
         for k, v in request.headers.items():
             kl = k.lower()
             if kl in ('host', 'origin', 'referer', 'content-length'):
                 continue
             if kl in _HOP_BY_HOP_HEADERS:
+                continue
+            if kl in _MIHOMO_UI_SENSITIVE_REQUEST_HEADERS:
                 continue
             try:
                 req.add_header(k, v)
@@ -915,19 +1029,13 @@ def create_mihomo_blueprint(
 
         r = current_app.response_class(body if method != 'HEAD' else b'', status=status)
 
-        # Copy headers (filter server/date/cors and hop-by-hop). Rewrite Location to keep same-origin.
+        # Copy headers (filter server/date/cors/cookies and hop-by-hop).
+        # Rewrite Location to keep requests inside the narrow /mihomo_panel/ fallback path.
         for k, v in (resp_headers or {}).items():
             kl = str(k).lower()
             if kl in _HOP_BY_HOP_HEADERS:
                 continue
-            if kl in (
-                'server',
-                'date',
-                'access-control-allow-origin',
-                'access-control-allow-credentials',
-                'access-control-allow-headers',
-                'access-control-allow-methods',
-            ):
+            if kl in _MIHOMO_UI_BLOCKED_RESPONSE_HEADERS:
                 continue
             if kl == 'location' and isinstance(v, str):
                 # Rewrite absolute redirects back to /mihomo_panel/...
@@ -943,6 +1051,9 @@ def create_mihomo_blueprint(
         # Prevent aggressive caching of UI assets (helps when Mihomo UI updates).
         r.headers.setdefault('Cache-Control', 'no-store, no-cache, must-revalidate')
         r.headers.setdefault('Pragma', 'no-cache')
+        r.headers.setdefault('Referrer-Policy', 'no-referrer')
+        r.headers.setdefault('X-Content-Type-Options', 'nosniff')
+        r.headers.setdefault('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
         return r
 
 

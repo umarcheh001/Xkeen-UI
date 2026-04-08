@@ -1640,7 +1640,7 @@ let mihomoPanelModuleApi = null;
   MP.openZashboardUi = function openZashboardUi() {
     const url = window.location.protocol + '//' + window.location.host + '/mihomo_panel/ui/';
     try {
-      window.open(url, '_blank', 'noopener');
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch (e) {
       window.location.href = url;
     }
