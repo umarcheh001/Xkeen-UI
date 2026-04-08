@@ -20,6 +20,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, url_fo
 from routes.common.errors import error_response
 
 from services.xray_backups import (
+    is_history_backup_filename,
     is_snapshot_filename,
     safe_basename,
     safe_child_realpath,
@@ -63,6 +64,8 @@ def _core_log(level: str, msg: str, **extra) -> None:
             _CORE_LOGGER.info(full)
     except Exception:
         pass
+
+
 def create_backups_blueprint(
     BACKUP_DIR: str,
     ROUTING_FILE: str,
@@ -196,6 +199,16 @@ def create_backups_blueprint(
         except Exception:
             return None
 
+    def _history_backup_realpath(name: Any) -> Optional[str]:
+        """Resolve a manual/history backup within BACKUP_DIR."""
+        try:
+            filename = str(name or "").strip()
+        except Exception:
+            return None
+        if not is_history_backup_filename(filename):
+            return None
+        return safe_child_realpath(BACKUP_DIR, filename)
+
     # ---- pages ----
 
     @bp.get("/backups")
@@ -220,14 +233,13 @@ def create_backups_blueprint(
     def delete_backup_from_backups_page() -> Any:
         """Legacy HTML form action: delete a backup and redirect to /backups."""
         filename = request.form.get("filename")
-        if filename:
-            path = os.path.join(BACKUP_DIR, filename)
-            if os.path.isfile(path):
-                try:
-                    os.remove(path)
-                except OSError:
-                    # Ignore deletion error and just return to the backups page
-                    pass
+        path = _history_backup_realpath(filename)
+        if path and os.path.isfile(path):
+            try:
+                os.remove(path)
+            except OSError:
+                # Ignore deletion error and just return to the backups page
+                pass
         return redirect(url_for("backups.backups_page"))
 
     # ---- API: Xray snapshots (rollback) ----
@@ -530,8 +542,8 @@ def create_backups_blueprint(
         if not filename:
             return jsonify({"ok": False, "error": "filename is required"}), 400
 
-        path = os.path.join(BACKUP_DIR, filename)
-        if not os.path.isfile(path):
+        path = _history_backup_realpath(filename)
+        if not path or not os.path.isfile(path):
             return jsonify({"ok": False, "error": "backup not found"}), 404
 
         data = load_json(path, default=None)
@@ -539,7 +551,8 @@ def create_backups_blueprint(
             return jsonify({"ok": False, "error": "backup file invalid"}), 400
 
         # Prefer explicit target from backup metadata (fragment backups).
-        target_file = _extract_target_file_from_backup(data) or _detect_backup_target_file(filename)
+        safe_filename = os.path.basename(path)
+        target_file = _extract_target_file_from_backup(data) or _detect_backup_target_file(safe_filename)
         if not target_file:
             return jsonify({"ok": False, "error": "bad target"}), 400
 
@@ -571,7 +584,7 @@ def create_backups_blueprint(
         _core_log(
             "info",
             "backup.restore",
-            filename=str(filename),
+            filename=safe_filename,
             target=str(target_file),
             remote_addr=str(request.remote_addr or ""),
         )
@@ -585,8 +598,8 @@ def create_backups_blueprint(
         if not filename:
             return jsonify({"ok": False, "error": "filename is required"}), 400
 
-        path = os.path.join(BACKUP_DIR, filename)
-        if not os.path.isfile(path):
+        path = _history_backup_realpath(filename)
+        if not path or not os.path.isfile(path):
             return jsonify({"ok": False, "error": "backup not found"}), 404
 
         try:
@@ -717,11 +730,12 @@ def create_backups_blueprint(
         if not filename:
             return redirect(url_for(".backups_page"))
 
-        path = os.path.join(BACKUP_DIR, filename)
-        if os.path.isfile(path):
+        path = _history_backup_realpath(filename)
+        if path and os.path.isfile(path):
             data = load_json(path, default=None)
             if data is not None:
-                target_file = _extract_target_file_from_backup(data) or _detect_backup_target_file(filename)
+                safe_filename = os.path.basename(path)
+                target_file = _extract_target_file_from_backup(data) or _detect_backup_target_file(safe_filename)
                 if not target_file:
                     return redirect(url_for(".backups_page"))
 
