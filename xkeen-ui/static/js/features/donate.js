@@ -12,6 +12,9 @@ let donateModuleApi = null;
   // - true  => hide 💰 Донат button
   // - false => show 💰 Донат button
   const LS_KEY_HIDE = 'xkeen_ui_hide_donate';
+  const TOP_LEVEL_ROUTE_CHANGE_EVENT = 'xkeen:top-level-route-change';
+  const DONATE_PREF_CHANGE_EVENT = 'xkeen:donate-pref-change';
+  let _donateLifecycleBound = false;
 
   function getHidePref() {
     try {
@@ -28,6 +31,11 @@ let donateModuleApi = null;
     } catch (e) {
       // ignore
     }
+    try {
+      window.dispatchEvent(new CustomEvent(DONATE_PREF_CHANGE_EVENT, {
+        detail: { hide: !!hide },
+      }));
+    } catch (e) {}
   }
 
   function getModalApi() {
@@ -51,6 +59,17 @@ let donateModuleApi = null;
         hideDonateModal();
       }
     }
+  }
+
+  function syncDevtoolsToggleState() {
+    const toggle = document.getElementById('dt-hide-donate-toggle');
+    if (!toggle) return;
+    toggle.checked = getHidePref();
+  }
+
+  function syncDonateUiState() {
+    syncDonateButtonVisibility();
+    syncDevtoolsToggleState();
   }
 
   function showDonateModal() {
@@ -184,13 +203,13 @@ let donateModuleApi = null;
     if (!toggle) return;
 
     // initial state
-    toggle.checked = getHidePref();
+    syncDevtoolsToggleState();
 
     if (!toggle.dataset || toggle.dataset.xkeenDonateWired !== '1') {
       toggle.addEventListener('change', () => {
         const hide = !!toggle.checked;
         setHidePref(hide);
-        syncDonateButtonVisibility();
+        syncDonateUiState();
         if (typeof window.toast === 'function') {
           window.toast(hide ? 'Кнопка 💰 Донат отключена' : 'Кнопка 💰 Донат включена', 'info');
         }
@@ -199,9 +218,36 @@ let donateModuleApi = null;
     }
   }
 
+  function bindDonateLifecycle() {
+    if (_donateLifecycleBound) return;
+    _donateLifecycleBound = true;
+
+    window.addEventListener('pageshow', () => {
+      try { syncDonateUiState(); } catch (e) {}
+    });
+
+    window.addEventListener(TOP_LEVEL_ROUTE_CHANGE_EVENT, () => {
+      try { syncDonateUiState(); } catch (e) {}
+    });
+
+    window.addEventListener(DONATE_PREF_CHANGE_EVENT, () => {
+      try { syncDonateUiState(); } catch (e) {}
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (!event || event.key !== LS_KEY_HIDE) return;
+      try { syncDonateUiState(); } catch (e) {}
+    });
+
+    document.addEventListener('xkeen-ui-prefs-applied', () => {
+      try { syncDonateUiState(); } catch (e) {}
+    });
+  }
+
   Donate.init = function init() {
+    bindDonateLifecycle();
     // Panel: button + modal
-    syncDonateButtonVisibility();
+    syncDonateUiState();
     wireModal();
 
     // DevTools: settings toggle
@@ -209,7 +255,7 @@ let donateModuleApi = null;
   };
   Donate.open = showDonateModal;
   Donate.close = hideDonateModal;
-  Donate.syncVisibility = syncDonateButtonVisibility;
+  Donate.syncVisibility = syncDonateUiState;
 
   // Back-compat / convenience
   window.XKeen = window.XKeen || {};

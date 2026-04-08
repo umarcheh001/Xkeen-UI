@@ -714,6 +714,22 @@ def test_theme_toggle_uses_delegated_binding_and_resyncs_after_top_level_route_c
     assert "btn.addEventListener('click'" not in text
 
 
+def test_donate_visibility_resyncs_after_same_tab_pref_changes_and_top_level_route_swaps():
+    text = Path('xkeen-ui/static/js/features/donate.js').read_text(encoding='utf-8')
+
+    assert "const TOP_LEVEL_ROUTE_CHANGE_EVENT = 'xkeen:top-level-route-change';" in text
+    assert "const DONATE_PREF_CHANGE_EVENT = 'xkeen:donate-pref-change';" in text
+    assert 'function syncDevtoolsToggleState() {' in text
+    assert 'function syncDonateUiState() {' in text
+    assert "window.dispatchEvent(new CustomEvent(DONATE_PREF_CHANGE_EVENT, {" in text
+    assert "window.addEventListener(TOP_LEVEL_ROUTE_CHANGE_EVENT, () => {" in text
+    assert "window.addEventListener(DONATE_PREF_CHANGE_EVENT, () => {" in text
+    assert "window.addEventListener('storage', (event) => {" in text
+    assert "if (!event || event.key !== LS_KEY_HIDE) return;" in text
+    assert "document.addEventListener('xkeen-ui-prefs-applied', () => {" in text
+    assert 'Donate.syncVisibility = syncDonateUiState;' in text
+
+
 def test_routing_comments_ux_listener_is_guarded_after_init_flag():
     text = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
 
