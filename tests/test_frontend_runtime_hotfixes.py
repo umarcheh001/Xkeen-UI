@@ -284,6 +284,24 @@ def test_p3_devtools_screen_module_keeps_host_alive_and_stops_background_tasks_o
     assert "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';" in entry
 
 
+def test_file_manager_monaco_modal_tracks_modal_resize_and_fills_available_height():
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    editor = Path('xkeen-ui/static/js/features/file_manager/editor.js').read_text(encoding='utf-8')
+
+    monaco_block = styles.split('#fm-editor-modal #fm-editor-monaco {', 1)[1].split('}', 1)[0]
+
+    assert 'flex: 1 1 auto;' in monaco_block
+    assert 'min-height: 0;' in monaco_block
+    assert 'height: 100%;' in monaco_block
+
+    assert 'function layoutMonacoSoon(ui, focus = false) {' in editor
+    assert "document.addEventListener('xkeen-modal-resize', (event) => {" in editor
+    assert "modalId && modalId !== 'fm-editor-modal'" in editor
+    assert "if (!STATE.ctx || STATE.activeKind !== 'monaco') return;" in editor
+    assert 'layoutMonacoSoon(els());' in editor
+    assert 'layoutMonacoSoon(ui, true);' in editor
+
+
 def test_codemirror6_source_bridge_is_opt_in_and_does_not_inject_importmap_dynamically():
     path = Path('xkeen-ui/static/js/pages/codemirror6.shared.js')
     text = path.read_text(encoding='utf-8')
@@ -738,6 +756,23 @@ def test_routing_comments_ux_listener_is_guarded_after_init_flag():
     assert "document.addEventListener('xkeen:routing-comments-ux', (ev) => {" in text
     assert '_commentsUxWired = true;' in text
     assert text.index('if (_inited) return;') < text.index("document.addEventListener('xkeen:routing-comments-ux', (ev) => {")
+
+
+def test_routing_monaco_custom_menu_includes_symbol_occurrence_and_palette_actions():
+    routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert 'function routingMonacoMenuItemHtml(action, label, shortcut) {' in routing
+    assert "routingMonacoMenuItemHtml('goToSymbol', 'Перейти к символу...', 'Ctrl+Shift+O')" in routing
+    assert "routingMonacoMenuItemHtml('changeAllOccurrences', 'Изменить все вхождения', 'Ctrl+F2')" in routing
+    assert "routingMonacoMenuItemHtml('commandPalette', 'Палитра команд', 'F1')" in routing
+    assert "return runRoutingMonacoEditorAction(editor, 'editor.action.quickOutline');" in routing
+    assert "return runRoutingMonacoEditorAction(editor, 'editor.action.changeAll');" in routing
+    assert "return runRoutingMonacoEditorAction(editor, 'editor.action.quickCommand');" in routing
+    assert "isRoutingMonacoActionSupported(editor, 'editor.action.quickOutline')" in routing
+    assert "isRoutingMonacoActionSupported(editor, 'editor.action.quickCommand')" in routing
+    assert '.xk-routing-monaco-menu-shortcut {' in styles
+    assert '.xk-routing-monaco-menu-label {' in styles
 
 
 def test_mihomo_template_load_button_uses_dirty_guard_while_select_path_skips_duplicate_prompt():

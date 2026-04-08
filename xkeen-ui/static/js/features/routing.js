@@ -4111,18 +4111,34 @@ function closeHelp() {
     try { menu.style.removeProperty('top'); } catch (e) {}
   }
 
+  function routingMonacoMenuItemHtml(action, label, shortcut) {
+    const text = String(label || '');
+    const hint = String(shortcut || '').trim();
+    return [
+      '<button type="button" class="xk-routing-monaco-menu-item" data-action="', String(action || ''), '">',
+      '<span class="xk-routing-monaco-menu-label">', text, '</span>',
+      hint ? '<span class="xk-routing-monaco-menu-shortcut">' + hint + '</span>' : '',
+      '</button>',
+    ].join('');
+  }
+
   function ensureRoutingMonacoContextMenuDom() {
     if (_routingMonacoMenuEl && _routingMonacoMenuEl.isConnected) return _routingMonacoMenuEl;
     const menu = document.createElement('div');
     menu.className = 'xk-routing-monaco-menu';
     menu.hidden = true;
     menu.innerHTML = [
-      '<button type="button" class="xk-routing-monaco-menu-item" data-action="cut">Вырезать</button>',
-      '<button type="button" class="xk-routing-monaco-menu-item" data-action="copy">Копировать</button>',
-      '<button type="button" class="xk-routing-monaco-menu-item" data-action="paste">Вставить</button>',
+      routingMonacoMenuItemHtml('goToSymbol', 'Перейти к символу...', 'Ctrl+Shift+O'),
+      routingMonacoMenuItemHtml('changeAllOccurrences', 'Изменить все вхождения', 'Ctrl+F2'),
       '<div class="xk-routing-monaco-menu-sep" role="separator"></div>',
-      '<button type="button" class="xk-routing-monaco-menu-item" data-action="selectAll">Выделить всё</button>',
-      '<button type="button" class="xk-routing-monaco-menu-item" data-action="format">Форматировать JSON</button>'
+      routingMonacoMenuItemHtml('cut', 'Вырезать', 'Ctrl+X'),
+      routingMonacoMenuItemHtml('copy', 'Копировать', 'Ctrl+C'),
+      routingMonacoMenuItemHtml('paste', 'Вставить', 'Ctrl+V'),
+      '<div class="xk-routing-monaco-menu-sep" role="separator"></div>',
+      routingMonacoMenuItemHtml('selectAll', 'Выделить всё', 'Ctrl+A'),
+      routingMonacoMenuItemHtml('format', 'Форматировать JSON', 'Shift+Alt+F'),
+      '<div class="xk-routing-monaco-menu-sep" role="separator"></div>',
+      routingMonacoMenuItemHtml('commandPalette', 'Палитра команд', 'F1')
     ].join('');
     const handleMenuAction = async (ev) => {
       const btn = ev.target && ev.target.closest ? ev.target.closest('button[data-action]') : null;
@@ -4161,6 +4177,41 @@ function closeHelp() {
     document.body.appendChild(menu);
     _routingMonacoMenuEl = menu;
     return menu;
+  }
+
+  function getRoutingMonacoAction(editor, actionId) {
+    try {
+      if (!editor || typeof editor.getAction !== 'function') return null;
+      const action = editor.getAction(String(actionId || ''));
+      if (!action || typeof action.run !== 'function') return null;
+      return action;
+    } catch (e) {}
+    return null;
+  }
+
+  function isRoutingMonacoActionSupported(editor, actionId) {
+    const action = getRoutingMonacoAction(editor, actionId);
+    if (!action) return false;
+    try {
+      if (typeof action.isSupported === 'function') return !!action.isSupported();
+    } catch (e) {}
+    try {
+      if (typeof action.isEnabled === 'function') return !!action.isEnabled();
+    } catch (e) {}
+    return true;
+  }
+
+  async function runRoutingMonacoEditorAction(editor, actionId) {
+    const action = getRoutingMonacoAction(editor, actionId);
+    if (!action) return false;
+    try {
+      if (typeof action.isSupported === 'function' && !action.isSupported()) return false;
+    } catch (e) {}
+    try {
+      await action.run();
+      return true;
+    } catch (e) {}
+    return false;
   }
 
   function getRoutingMonacoSelections(editor) {
@@ -4304,7 +4355,17 @@ function closeHelp() {
       return execRoutingMonacoEdits(editor, targetSelections.map((range) => ({ range, text: value, forceMoveMarkers: true })), 'xk-routing-menu-paste');
     }
 
+    if (action === 'goToSymbol') {
+      return runRoutingMonacoEditorAction(editor, 'editor.action.quickOutline');
+    }
+
+    if (action === 'changeAllOccurrences') {
+      if (isRoutingMonacoReadOnly(editor)) return false;
+      return runRoutingMonacoEditorAction(editor, 'editor.action.changeAll');
+    }
+
     if (action === 'selectAll') {
+      if (await runRoutingMonacoEditorAction(editor, 'editor.action.selectAll')) return true;
       try {
         const cmd = editor.getAction && editor.getAction('editor.action.selectAll');
         if (cmd && typeof cmd.run === 'function') {
@@ -4324,15 +4385,13 @@ function closeHelp() {
 
     if (action === 'format') {
       if (isRoutingMonacoReadOnly(editor)) return false;
-      try {
-        const cmd = editor.getAction && editor.getAction('editor.action.formatDocument');
-        if (cmd && typeof cmd.run === 'function') {
-          await cmd.run();
-          return true;
-        }
-      } catch (e) {}
+      if (await runRoutingMonacoEditorAction(editor, 'editor.action.formatDocument')) return true;
       try { formatEditorJson(); } catch (e) {}
       return true;
+    }
+
+    if (action === 'commandPalette') {
+      return runRoutingMonacoEditorAction(editor, 'editor.action.quickCommand');
     }
 
     return false;
@@ -4347,7 +4406,11 @@ function closeHelp() {
       const action = String(btn.dataset.action || '');
       let disabled = false;
       if (action === 'copy' || action === 'cut') disabled = !hasSelection;
-      if ((action === 'cut' || action === 'paste' || action === 'format') && readOnly) disabled = true;
+      if ((action === 'cut' || action === 'paste' || action === 'format' || action === 'changeAllOccurrences') && readOnly) disabled = true;
+      if (action === 'goToSymbol') disabled = !isRoutingMonacoActionSupported(editor, 'editor.action.quickOutline');
+      if (action === 'changeAllOccurrences') disabled = disabled || !isRoutingMonacoActionSupported(editor, 'editor.action.changeAll');
+      if (action === 'format') disabled = disabled || (!isRoutingMonacoActionSupported(editor, 'editor.action.formatDocument') && typeof formatEditorJson !== 'function');
+      if (action === 'commandPalette') disabled = !isRoutingMonacoActionSupported(editor, 'editor.action.quickCommand');
       btn.disabled = disabled;
     });
   }

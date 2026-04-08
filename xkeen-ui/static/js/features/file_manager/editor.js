@@ -60,6 +60,7 @@ import {
     viewStateTimer: null,
     viewStateCache: { key: null, value: null },
     viewStateUnsubs: [],
+    modalResizeWired: false,
   };
 
   const VIEW_STATE_LS_PREFIX = 'xkeen.fm.editor.viewstate.v1::';
@@ -1118,6 +1119,39 @@ function syncToolbarForEngine(engine) {
     if (focus) setTimeout(() => { try { cm.focus(); } catch (e) {} }, 0);
   }
 
+  function layoutMonacoSoon(ui, focus = false) {
+    const editor = STATE.monaco;
+    if (!editor || typeof editor.layout !== 'function') return;
+
+    const host = (ui && ui.monacoHost) ? ui.monacoHost : (els() && els().monacoHost);
+    const doLayout = () => {
+      try {
+        if (host && host.classList && host.classList.contains('hidden')) return;
+      } catch (e) {}
+      try { editor.layout(); } catch (e2) {}
+    };
+
+    doLayout();
+    try { requestAnimationFrame(doLayout); } catch (e) { setTimeout(doLayout, 0); }
+    setTimeout(doLayout, 0);
+    setTimeout(doLayout, 60);
+    setTimeout(doLayout, 180);
+
+    if (focus) setTimeout(() => { try { if (editor && typeof editor.focus === 'function') editor.focus(); } catch (e) {} }, 0);
+  }
+
+  function wireMonacoModalResizeOnce() {
+    if (STATE.modalResizeWired) return;
+    STATE.modalResizeWired = true;
+
+    document.addEventListener('xkeen-modal-resize', (event) => {
+      const modalId = String(event && event.detail && event.detail.modal || '').trim();
+      if (modalId && modalId !== 'fm-editor-modal') return;
+      if (!STATE.ctx || STATE.activeKind !== 'monaco') return;
+      layoutMonacoSoon(els());
+    });
+  }
+
   function showCodeMirror(ui) {
     const cm = STATE.cm;
     try {
@@ -1312,12 +1346,14 @@ function syncToolbarForEngine(engine) {
 
       try { syncToolbarForEngine('monaco'); } catch (e) {}
       try { wireMonacoFullscreenOnce(); } catch (e) {}
+      try { wireMonacoModalResizeOnce(); } catch (e) {}
 
       // Restore view if we are switching while open.
       if (view) restoreView('monaco', view);
       bindActiveViewStateTracking(ui);
 
       try { setInfo({ err: '' }); } catch (e) {}
+      try { layoutMonacoSoon(ui, true); } catch (e) {}
       updateDirtyUI();
       return 'monaco';
     }
