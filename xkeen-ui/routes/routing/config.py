@@ -20,6 +20,7 @@ from services.io.atomic import _atomic_write_json, _atomic_write_text
 
 from services.routing.templates import _paths_for_routing
 
+from services.xray_assets import ensure_xray_dat_assets
 from services.xray_config_files import ensure_xray_jsonc_dir, XRAY_JSONC_DIR_REAL
 
 from .errors import _no_cache
@@ -231,6 +232,23 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
             semantic_issue = _validate_routing_outbound_refs(tmpdir)
             if semantic_issue:
                 return semantic_issue
+
+            try:
+                dat_dir = os.environ.get('XRAY_DAT_DIR') or '/opt/etc/xray/dat'
+                asset_dir = os.environ.get('XRAY_ASSET_DIR') or '/opt/sbin'
+                ensure_xray_dat_assets(
+                    dat_dir=dat_dir,
+                    asset_dir=asset_dir,
+                    log=lambda line: _core_log('info', line),
+                )
+            except Exception as exc:
+                _core_log(
+                    'warning',
+                    'routing.preflight.xray_assets_failed',
+                    dat_dir=dat_dir if 'dat_dir' in locals() else '',
+                    asset_dir=asset_dir if 'asset_dir' in locals() else '',
+                    err=str(exc),
+                )
 
             cmd = [xray_bin, '-test', '-confdir', tmpdir]
             cmd_text = ' '.join(cmd)

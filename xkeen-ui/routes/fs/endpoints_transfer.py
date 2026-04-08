@@ -16,6 +16,34 @@ from typing import Any, Dict
 from flask import Response, jsonify, request, send_file
 
 from services.filemanager.transfer import save_filestorage_to_tmp, stream_file_then_cleanup
+from services.xray_assets import ensure_xray_dat_assets
+
+
+def _sync_uploaded_xray_dat_if_needed(path: str, *, core_log=None) -> None:
+    uploaded_path = str(path or "").strip()
+    if not uploaded_path or not uploaded_path.lower().endswith(".dat"):
+        return
+
+    dat_dir = os.environ.get("XRAY_DAT_DIR") or "/opt/etc/xray/dat"
+    asset_dir = os.environ.get("XRAY_ASSET_DIR") or "/opt/sbin"
+
+    try:
+        uploaded_real = os.path.realpath(uploaded_path)
+        dat_real = os.path.realpath(dat_dir)
+        if os.path.commonpath([uploaded_real, dat_real]) != dat_real:
+            return
+    except Exception:
+        return
+
+    try:
+        ensure_xray_dat_assets(
+            dat_dir=dat_dir,
+            asset_dir=asset_dir,
+            log=(lambda line: core_log("info", line)) if callable(core_log) else None,
+        )
+    except Exception as exc:
+        if callable(core_log):
+            core_log("warning", "fs.upload.xray_assets_failed", error=str(exc), path=uploaded_real)
 
 
 def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
@@ -448,6 +476,8 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
 
             if callable(_core_log):
                 _core_log("info", "fs.upload", target="local", path=str(rp), bytes=int(total), overwrite=bool(overwrite))
+
+            _sync_uploaded_xray_dat_if_needed(rp, core_log=_core_log)
 
             return jsonify({"ok": True, "bytes": total, "path": rp})
 

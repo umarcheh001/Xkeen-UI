@@ -173,3 +173,34 @@ def test_run_xray_preflight_blocks_dangling_outbound_reference_before_xray(tmp_p
     assert 'outboundTag "vless-reality-00"' in result["stdout"]
     assert 'Создайте outbound с tag "vless-reality-00"' in result["hint"]
     assert calls == []
+
+
+def test_run_xray_preflight_refreshes_xray_dat_assets_before_check(tmp_path, monkeypatch):
+    confdir = tmp_path / "configs"
+    confdir.mkdir()
+    (confdir / "00_base.json").write_text('{"log":{}}\n', encoding="utf-8")
+
+    monkeypatch.setenv("XRAY_DAT_DIR", str(tmp_path / "dat"))
+    monkeypatch.setenv("XRAY_ASSET_DIR", str(tmp_path / "asset"))
+
+    calls = []
+
+    def fake_ensure_xray_dat_assets(*, dat_dir, asset_dir, log=None, diag=None):
+        calls.append(("assets", dat_dir, asset_dir, callable(log), callable(diag)))
+
+    def fake_run(cmd, capture_output, text, timeout, check):
+        calls.append(("run", cmd))
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(routing_config, "ensure_xray_dat_assets", fake_ensure_xray_dat_assets)
+    monkeypatch.setattr(routing_config.subprocess, "run", fake_run)
+
+    result = routing_config._run_xray_preflight(
+        xray_configs_dir_real=str(confdir),
+        sel_main=str(confdir / "03_routing.json"),
+        obj={"routing": {"rules": []}},
+    )
+
+    assert result["ok"] is True
+    assert calls[0] == ("assets", str(tmp_path / "dat"), str(tmp_path / "asset"), True, False)
+    assert calls[1][0] == "run"
