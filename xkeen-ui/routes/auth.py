@@ -3,7 +3,7 @@
 We register routes directly on the Flask app (not via Blueprint) to preserve
 endpoint names used by templates via url_for(...).
 
-Auth/CSRF *hooks* are still configured by services.auth_setup.init_auth(app)
+Auth/CSRF hooks are still configured by services.auth_setup.init_auth(app)
 from app.py.
 """
 
@@ -17,6 +17,7 @@ from typing import Optional
 from flask import (
     Flask,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -25,6 +26,12 @@ from flask import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from services.auth_rate_limit import (
+    clear_login_rate_limit,
+    format_lockout_wait,
+    get_login_rate_limit_status,
+    register_login_failure,
+)
 from services.auth_setup import (
     AUTH_FILE,
     _atomic_write,
@@ -39,6 +46,76 @@ from services.auth_setup import (
 
 def register_auth_routes(app: Flask) -> None:
     """Register /login, /setup and /api/auth/* routes."""
+
+    def _login_rate_limit_view(remote_addr: str | None) -> dict:
+        status = get_login_rate_limit_status(remote_addr)
+        return {
+            "enabled": bool(status.get("enabled")),
+            "window_seconds": int(status.get("window_seconds") or 0),
+            "max_attempts": int(status.get("max_attempts") or 0),
+            "lockout_seconds": int(status.get("lockout_seconds") or 0),
+            "failures": int(status.get("failures") or 0),
+            "attempts_left": int(status.get("attempts_left") or 0),
+            "locked": bool(status.get("locked")),
+            "retry_after": int(status.get("retry_after") or 0),
+        }
+
+    def _login_lockout_message(rate: dict) -> str:
+        wait = format_lockout_wait(rate.get("retry_after") or 0)
+        return (
+            "Слишком много неудачных попыток входа. "
+            f"Вход с этого адреса временно заблокирован на {wait}. "
+            "Подождите и попробуйте снова."
+        )
+
+    def _invalid_credentials_message(rate: dict) -> str:
+        attempts_left = int(rate.get("attempts_left") or 0)
+        if attempts_left > 0:
+            return (
+                "Неверный логин или пароль. "
+                f"Осталось попыток до временной блокировки: {attempts_left}."
+            )
+        return "Неверный логин или пароль."
+
+    def _login_rate_limit_payload(rate: dict, *, error: str, message: str) -> dict:
+        payload = {
+            "ok": False,
+            "error": error,
+            "message": message,
+            "rate_limit": _login_rate_limit_view(request.remote_addr),
+        }
+        retry_after = int(rate.get("retry_after") or 0)
+        if retry_after > 0:
+            payload["retry_after"] = retry_after
+        return payload
+
+    def _locked_html_response(rate: dict, *, username: str = "", status_code: int = 429):
+        response = make_response(
+            render_template(
+                "login.html",
+                error=_login_lockout_message(rate),
+                username=username,
+            ),
+            status_code,
+        )
+        retry_after = int(rate.get("retry_after") or 0)
+        if retry_after > 0:
+            response.headers["Retry-After"] = str(retry_after)
+        return response
+
+    def _locked_json_response(rate: dict):
+        response = jsonify(
+            _login_rate_limit_payload(
+                rate,
+                error="login_locked",
+                message=_login_lockout_message(rate),
+            )
+        )
+        response.status_code = 429
+        retry_after = int(rate.get("retry_after") or 0)
+        if retry_after > 0:
+            response.headers["Retry-After"] = str(retry_after)
+        return response
 
     def _auth_save(username: str, password: str) -> None:
         username_ = (username or "").strip()
@@ -121,7 +198,9 @@ def register_auth_routes(app: Flask) -> None:
             return redirect(url_for("setup"))
         if _is_logged_in():
             return redirect(url_for("index"))
-        return render_template("login.html")
+        rate = _login_rate_limit_view(request.remote_addr)
+        error = _login_lockout_message(rate) if rate.get("locked") else None
+        return render_template("login.html", error=error)
 
     @app.post("/login")
     def login_post():
@@ -132,19 +211,31 @@ def register_auth_routes(app: Flask) -> None:
 
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
-        rec = _auth_load() or {}
+        rate = _login_rate_limit_view(request.remote_addr)
+        if rate.get("locked"):
+            return _locked_html_response(rate, username=username)
 
+        rec = _auth_load() or {}
         ok = False
         try:
             ok = (username == (rec.get("username") or "")) and check_password_hash(
-                (rec.get("password_hash") or ""), password
+                (rec.get("password_hash") or ""),
+                password,
             )
         except Exception:
             ok = False
 
         if not ok:
-            return render_template("login.html", error="Неверный логин или пароль", username=username)
+            rate = register_login_failure(request.remote_addr)
+            if rate.get("locked"):
+                return _locked_html_response(rate, username=username)
+            return render_template(
+                "login.html",
+                error=_invalid_credentials_message(rate),
+                username=username,
+            )
 
+        clear_login_rate_limit(request.remote_addr)
         session.clear()
         _ensure_csrf_token()
         session["auth"] = True
@@ -170,16 +261,36 @@ def register_auth_routes(app: Flask) -> None:
         if not _check_csrf():
             return _csrf_failed()
 
+        rate = _login_rate_limit_view(request.remote_addr)
+        if rate.get("locked"):
+            return _locked_json_response(rate)
+
         rec = _auth_load() or {}
+        ok = False
         try:
             ok = (username == (rec.get("username") or "")) and check_password_hash(
-                (rec.get("password_hash") or ""), password
+                (rec.get("password_hash") or ""),
+                password,
             )
         except Exception:
             ok = False
-        if not ok:
-            return jsonify({"ok": False, "error": "invalid_credentials"}), 401
 
+        if not ok:
+            rate = register_login_failure(request.remote_addr)
+            if rate.get("locked"):
+                return _locked_json_response(rate)
+            return (
+                jsonify(
+                    _login_rate_limit_payload(
+                        rate,
+                        error="invalid_credentials",
+                        message=_invalid_credentials_message(rate),
+                    )
+                ),
+                401,
+            )
+
+        clear_login_rate_limit(request.remote_addr)
         session.clear()
         _ensure_csrf_token()
         session["auth"] = True

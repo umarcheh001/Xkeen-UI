@@ -182,6 +182,9 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
   ENV_HELP.XKEEN_INIT_SCRIPT = 'Rezervnyi put k init.d-skriptu XKeen dlya fallback-scenariev sovmestimosti. Osnovnoi put upravleniya - CLI `xkeen`; pri ego nedostupnosti UI ishet S05xkeen, potom S99xkeen.';
   ENV_HELP.XKEEN_ALLOW_SHELL = 'Arbitrary shell в UI. По умолчанию 0 (выключено). Значение 1 включает shell для новых запусков терминала без Restart UI. Включайте только в доверенной сети.';
+  ENV_HELP.XKEEN_AUTH_LOGIN_WINDOW_SECONDS = 'Окно учёта неудачных логинов в секундах. По умолчанию 300.';
+  ENV_HELP.XKEEN_AUTH_LOGIN_MAX_ATTEMPTS = 'Максимум неудачных попыток входа с одного адреса в пределах окна. По умолчанию 5. Значение 0 отключает lockout.';
+  ENV_HELP.XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS = 'На сколько секунд блокировать новые попытки входа после исчерпания лимита. По умолчанию 900. Значение 0 отключает lockout.';
 
 
   
@@ -210,6 +213,9 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     'XKEEN_UI_UPDATE_MAX_CHECKSUM_BYTES',
     'XKEEN_UI_UPDATE_REQUIRE_SHA',
     'XKEEN_UI_UPDATE_SHA_STRICT',
+    'XKEEN_AUTH_LOGIN_WINDOW_SECONDS',
+    'XKEEN_AUTH_LOGIN_MAX_ATTEMPTS',
+    'XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS',
   ]);
 
   // Большинство переменных читаются на старте (константы/инициализация blueprint'ов).
@@ -271,7 +277,13 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ]);
 
   ENV_NO_RESTART_KEYS.add('XKEEN_ALLOW_SHELL');
+  ENV_NO_RESTART_KEYS.add('XKEEN_AUTH_LOGIN_WINDOW_SECONDS');
+  ENV_NO_RESTART_KEYS.add('XKEEN_AUTH_LOGIN_MAX_ATTEMPTS');
+  ENV_NO_RESTART_KEYS.add('XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS');
   ENV_RESTART_KEYS.delete('XKEEN_ALLOW_SHELL');
+  ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_WINDOW_SECONDS');
+  ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_MAX_ATTEMPTS');
+  ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS');
   ENV_RESTART_KEYS.add('XKEEN_INIT_SCRIPT');
 
   let _envSnapshot = { items: [], envFile: '' };
@@ -345,6 +357,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     parts.push('<div class="small" style="opacity:0.9; margin-bottom:6px;">Точно применяются без рестарта:</div>');
     parts.push('<ul style="margin-top:0;">');
     parts.push('<li><code>XKEEN_LOG_CORE_ENABLE</code>, <code>XKEEN_LOG_CORE_LEVEL</code>, <code>XKEEN_LOG_ACCESS_ENABLE</code>, <code>XKEEN_LOG_WS_ENABLE</code>, <code>XKEEN_LOG_ROTATE_MAX_MB</code>, <code>XKEEN_LOG_ROTATE_BACKUPS</code> — DevTools пытается обновить логирование сразу.</li>');
+    parts.push('<li><code>XKEEN_AUTH_LOGIN_WINDOW_SECONDS</code>, <code>XKEEN_AUTH_LOGIN_MAX_ATTEMPTS</code>, <code>XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS</code> — защита страницы входа применяется для новых попыток сразу.</li>');
     parts.push('</ul>');
 
     parts.push('<div class="small" style="opacity:0.9; margin-bottom:6px;">Рекомендуется делать Restart UI после изменений (самое частое):</div>');

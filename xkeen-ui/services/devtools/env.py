@@ -20,6 +20,9 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_UI_STATE_DIR",
     "XKEEN_UI_ENV_FILE",  # read-only (path to devtools.env)
     "XKEEN_UI_SECRET_KEY",  # shown as "(set)" only
+    "XKEEN_AUTH_LOGIN_WINDOW_SECONDS",
+    "XKEEN_AUTH_LOGIN_MAX_ATTEMPTS",
+    "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS",
     "XKEEN_INIT_SCRIPT",
     "XKEEN_RESTART_LOG_FILE",
     # self-update (GitHub)
@@ -232,6 +235,13 @@ def _default_effective_value(
     if k == "XKEEN_RESTART_LOG_FILE":
         # app.py uses <UI_STATE_DIR>/restart.log
         return os.path.join(ui_state_dir, "restart.log")
+
+    if k == "XKEEN_AUTH_LOGIN_WINDOW_SECONDS":
+        return "300"
+    if k == "XKEEN_AUTH_LOGIN_MAX_ATTEMPTS":
+        return "5"
+    if k == "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS":
+        return "900"
 
     # Self-update defaults
     if k == "XKEEN_UI_UPDATE_REPO":
