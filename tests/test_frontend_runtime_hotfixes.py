@@ -894,6 +894,26 @@ def test_panel_mobile_usability_pass_uses_scrollable_tabs_and_compact_editor_too
     assert '@media (max-width: 420px) {' in styles
 
 
+def test_panel_mobile_second_wave_compacts_file_manager_and_modal_shells():
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert 'Panel page: mobile second wave (file manager + modal ergonomics).' in styles
+    assert 'body.panel-page .modal-content {' in styles
+    assert 'max-height: calc(100dvh - 16px);' in styles
+    assert 'body.panel-page .fm-panel-bar {' in styles
+    assert 'body.panel-page .fm-path-input {' in styles
+    assert 'body.panel-page .fm-row,' in styles
+    assert 'body.panel-page .fm-panel.is-trash .fm-row {' in styles
+    assert 'min-width: 560px;' in styles
+    assert 'body.panel-page #json-editor-modal .xk-editor-toolbar {' in styles
+    assert 'body.panel-page #json-editor-modal .modal-actions {' in styles
+    assert 'body.panel-page #fm-editor-modal .modal-actions {' in styles
+    assert 'body.panel-page #routing-dat-contents-modal .xk-dat-modal-content {' in styles
+    assert 'body.panel-page #routing-dat-contents-modal .dat-contents-routingbar {' in styles
+    assert 'body.panel-page #ui-settings-modal .xk-ui-settings-nav {' in styles
+    assert 'body.panel-page #ui-settings-modal .xk-ui-settings-nav-btn {' in styles
+
+
 def test_routing_template_modals_stretch_preview_and_edit_editors_with_modal_resize():
     styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
     script = Path('xkeen-ui/static/js/features/routing_templates.js').read_text(encoding='utf-8')
