@@ -12,6 +12,7 @@ from typing import Any, Dict, Tuple
 
 
 _GEODAT_CACHE: Dict[Tuple[Any, ...], Tuple[float, Any]] = {}
+_GEODAT_CACHE_LOCK = threading.Lock()
 _GEODAT_INFLIGHT: Dict[Tuple[Any, ...], threading.Event] = {}
 _GEODAT_INFLIGHT_LOCK = threading.Lock()
 
@@ -20,34 +21,37 @@ def _geodat_cache_get(key: Tuple[Any, ...], ttl_s: int) -> Any | None:
     if ttl_s <= 0:
         return None
     now = time.time()
-    v = _GEODAT_CACHE.get(key)
-    if not v:
-        return None
-    ts, payload = v
-    if (now - ts) > ttl_s:
-        try:
-            del _GEODAT_CACHE[key]
-        except Exception:
-            pass
-        return None
-    return payload
+    with _GEODAT_CACHE_LOCK:
+        v = _GEODAT_CACHE.get(key)
+        if not v:
+            return None
+        ts, payload = v
+        if (now - ts) > ttl_s:
+            try:
+                del _GEODAT_CACHE[key]
+            except Exception:
+                pass
+            return None
+        return payload
 
 
 def _geodat_cache_set(key: Tuple[Any, ...], payload: Any, ttl_s: int, *, max_items: int = 256) -> None:
     if ttl_s <= 0:
         return
     try:
-        _GEODAT_CACHE[key] = (time.time(), payload)
-        # very small in-memory LRU-ish eviction
-        if len(_GEODAT_CACHE) > max_items:
-            # delete ~25% oldest
-            try:
-                items = sorted(_GEODAT_CACHE.items(), key=lambda kv: kv[1][0])
-                n_del = max(1, int(max_items * 0.25))
-                for k, _ in items[:n_del]:
-                    _GEODAT_CACHE.pop(k, None)
-            except Exception:
-                pass
+        with _GEODAT_CACHE_LOCK:
+            _GEODAT_CACHE[key] = (time.time(), payload)
+            # very small in-memory LRU-ish eviction
+            if len(_GEODAT_CACHE) > max_items:
+                # delete ~25% oldest; sort a snapshot to avoid holding the lock
+                # during an expensive sort - snapshot is already under the lock
+                try:
+                    items = sorted(_GEODAT_CACHE.items(), key=lambda kv: kv[1][0])
+                    n_del = max(1, int(max_items * 0.25))
+                    for k, _ in items[:n_del]:
+                        _GEODAT_CACHE.pop(k, None)
+                except Exception:
+                    pass
     except Exception:
         return
 

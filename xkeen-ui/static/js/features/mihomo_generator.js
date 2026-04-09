@@ -1462,7 +1462,7 @@ function initEngineToggle() {
             cb.className = "rule-group-checkbox";
       
             const span = document.createElement("span");
-            span.innerHTML = "<strong>" + preset.label + "</strong>";
+            span.innerHTML = "<strong>" + escapeHtml(preset.label) + "</strong>";
       
             label.appendChild(cb);
             label.appendChild(span);

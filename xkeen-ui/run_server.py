@@ -38,6 +38,8 @@ from app import (
     adjust_log_timezone,
     _get_command_job,
     EVENT_SUBSCRIBERS,
+    _subscribe_ws,
+    _unsubscribe_ws,
 )
 
 
@@ -1270,7 +1272,7 @@ def application(environ, start_response):
             except Exception:
                 pass
             return []
-        EVENT_SUBSCRIBERS.append(ws)
+        _subscribe_ws(ws)
         ws_debug("ws_events: subscriber added", total=len(EVENT_SUBSCRIBERS), client=client_ip)
 
         try:
@@ -1283,14 +1285,8 @@ def application(environ, start_response):
         except Exception as e:  # noqa: BLE001
             ws_debug("ws_events: unexpected error in main loop", error=str(e))
         finally:
-            try:
-                EVENT_SUBSCRIBERS.remove(ws)
-                ws_debug("ws_events: subscriber removed", total=len(EVENT_SUBSCRIBERS))
-            except ValueError:
-                # подписчик уже удалён
-                pass
-            except Exception:
-                pass
+            _unsubscribe_ws(ws)
+            ws_debug("ws_events: subscriber removed", total=len(EVENT_SUBSCRIBERS))
 
         return []
 

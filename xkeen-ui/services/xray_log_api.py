@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from services import xray_logs
@@ -32,6 +33,7 @@ _TZ_OFFSET_HOURS: int = 3
 # Simple cache for tail_lines() to avoid rereading unchanged files.
 # Key: file path, value: dict with {size, mtime, lines}.
 LOG_CACHE: Dict[str, Dict[str, Any]] = {}
+_LOG_CACHE_LOCK: threading.Lock = threading.Lock()
 
 
 def init_xray_log_api(
@@ -66,7 +68,8 @@ def _saved_path(path: str) -> str:
 
 def tail_lines(path: str, max_lines: int = 800) -> List[str]:
     """Tail file with caching."""
-    return xray_logs.tail_lines(path, max_lines=max_lines, cache=LOG_CACHE)
+    with _LOG_CACHE_LOCK:
+        return xray_logs.tail_lines(path, max_lines=max_lines, cache=LOG_CACHE)
 
 
 def adjust_log_timezone(lines: List[str], offset_hours: Optional[int] = None) -> List[str]:
@@ -142,7 +145,8 @@ def clear_logs(file_name: Optional[str] = None) -> None:
                 os.makedirs(os.path.dirname(actual), exist_ok=True)
                 with open(actual, "w", encoding="utf-8") as f:
                     f.write("")
-                LOG_CACHE.pop(actual, None)
+                with _LOG_CACHE_LOCK:
+                    LOG_CACHE.pop(actual, None)
             except Exception:
                 # Router FS can be RO; ignore.
                 pass

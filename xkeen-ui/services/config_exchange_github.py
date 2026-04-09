@@ -133,41 +133,46 @@ def github_get_index_items(
     now = time.time()
     ttl = max(5, int(_GH_INDEX_TTL))
 
-    # Serve fresh cache immediately.
-    if not force_refresh and _GH_INDEX_CACHE["items"] and (now - float(_GH_INDEX_CACHE["ts"])) < ttl:
-        # type: ignore[return-value]
-        return _GH_INDEX_CACHE["items"], False
-
-    # Ensure a background fetch is in-flight.
     with _GH_INDEX_LOCK:
+        # Serve fresh cache immediately.
+        if not force_refresh and _GH_INDEX_CACHE["items"] and (now - float(_GH_INDEX_CACHE["ts"])) < ttl:
+            # type: ignore[return-value]
+            return _GH_INDEX_CACHE["items"], False
+
+        # Ensure a background fetch is in-flight.
         global _GH_INDEX_FUTURE  # noqa: PLW0603
         if _GH_INDEX_FUTURE is None or _GH_INDEX_FUTURE.done():
             _GH_INDEX_FUTURE = NET_EXECUTOR.submit(_github_fetch_index_items)
+        future = _GH_INDEX_FUTURE
 
-    # Wait a bit for the background fetch.
+    # Wait a bit for the background fetch (outside the lock to avoid blocking).
     try:
-        items = _GH_INDEX_FUTURE.result(timeout=max(0.1, float(wait_seconds)))
+        items = future.result(timeout=max(0.1, float(wait_seconds)))
         if isinstance(items, list):
-            _GH_INDEX_CACHE["items"] = items
-            _GH_INDEX_CACHE["ts"] = time.time()
+            with _GH_INDEX_LOCK:
+                _GH_INDEX_CACHE["items"] = items
+                _GH_INDEX_CACHE["ts"] = time.time()
             # type: ignore[return-value]
             return items, False
     except FutureTimeoutError:
         # Timeout: fall back to cache if any.
-        if _GH_INDEX_CACHE["items"]:
-            # type: ignore[return-value]
-            return _GH_INDEX_CACHE["items"], True
+        with _GH_INDEX_LOCK:
+            cached = _GH_INDEX_CACHE["items"]
+        if cached:
+            return cached, True  # type: ignore[return-value]
         raise TimeoutError("timeout")
     except Exception:
-        if _GH_INDEX_CACHE["items"]:
-            # type: ignore[return-value]
-            return _GH_INDEX_CACHE["items"], True
+        with _GH_INDEX_LOCK:
+            cached = _GH_INDEX_CACHE["items"]
+        if cached:
+            return cached, True  # type: ignore[return-value]
         raise
 
     # Unexpected type; fall back to cache.
-    if _GH_INDEX_CACHE["items"]:
-        # type: ignore[return-value]
-        return _GH_INDEX_CACHE["items"], True
+    with _GH_INDEX_LOCK:
+        cached = _GH_INDEX_CACHE["items"]
+    if cached:
+        return cached, True  # type: ignore[return-value]
     return [], False
 
 

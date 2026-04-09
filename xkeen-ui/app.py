@@ -71,7 +71,7 @@ from services.xray_log_api import (  # noqa: E402
     adjust_log_timezone,
 )
 from services.command_jobs import get_command_job as _get_command_job  # noqa: E402
-from services.events import EVENT_SUBSCRIBERS  # noqa: E402
+from services.events import EVENT_SUBSCRIBERS, subscribe as _subscribe_ws, unsubscribe as _unsubscribe_ws  # noqa: E402
 
 
 __all__ = [
@@ -84,6 +84,8 @@ __all__ = [
     "adjust_log_timezone",
     "_get_command_job",
     "EVENT_SUBSCRIBERS",
+    "_subscribe_ws",
+    "_unsubscribe_ws",
     "WS_RUNTIME",
     "set_ws_runtime",
 ]
