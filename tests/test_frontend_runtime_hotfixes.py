@@ -914,6 +914,28 @@ def test_panel_mobile_second_wave_compacts_file_manager_and_modal_shells():
     assert 'body.panel-page #ui-settings-modal .xk-ui-settings-nav-btn {' in styles
 
 
+def test_panel_mobile_third_wave_switches_file_manager_to_touch_first_rows_and_stacks_editor_toolbars():
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert 'Panel page: mobile third wave (touch-first file manager + cleaner editor toolbars).' in styles
+    assert 'body.panel-page .routing-focus-note {' in styles
+    assert 'display: none;' in styles
+    assert 'body.panel-page .xk-routing-toolbararea,' in styles
+    assert 'body.panel-page .xk-mihomo-toolbararea {' in styles
+    assert 'grid-template-columns: repeat(3, 32px) minmax(0, 1fr);' in styles
+    assert 'body.panel-page .xk-routing-toolbarhost,' in styles
+    assert 'body.panel-page .xk-mihomo-toolbarhost {' in styles
+    assert 'grid-column: 1 / -1;' in styles
+    assert 'body.panel-page .fm-hints {' in styles
+    assert 'body.panel-page .fm-row-header {' in styles
+    assert 'body.panel-page .fm-row:not(.fm-row-header) {' in styles
+    assert 'grid-template-columns: 24px minmax(0, 1fr) auto;' in styles
+    assert 'body.panel-page .fm-cell.fm-perm,' in styles
+    assert 'body.panel-page .fm-cell.fm-mtime {' in styles
+    assert 'body.panel-page .fm-header-actions,' in styles
+    assert 'body.panel-page .fm-footer-actions {' in styles
+
+
 def test_routing_template_modals_stretch_preview_and_edit_editors_with_modal_resize():
     styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
     script = Path('xkeen-ui/static/js/features/routing_templates.js').read_text(encoding='utf-8')
