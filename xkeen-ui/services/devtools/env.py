@@ -23,6 +23,8 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_AUTH_LOGIN_WINDOW_SECONDS",
     "XKEEN_AUTH_LOGIN_MAX_ATTEMPTS",
     "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS",
+    "XKEEN_ROUTING_SAVE_MAX_BYTES",
+    "XKEEN_CONFIG_EXCHANGE_MAX_BYTES",
     "XKEEN_INIT_SCRIPT",
     "XKEEN_RESTART_LOG_FILE",
     # self-update (GitHub)
@@ -242,6 +244,10 @@ def _default_effective_value(
         return "5"
     if k == "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS":
         return "900"
+    if k == "XKEEN_ROUTING_SAVE_MAX_BYTES":
+        return str(1024 * 1024)
+    if k == "XKEEN_CONFIG_EXCHANGE_MAX_BYTES":
+        return str(4 * 1024 * 1024)
 
     # Self-update defaults
     if k == "XKEEN_UI_UPDATE_REPO":

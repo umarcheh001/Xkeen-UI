@@ -19,14 +19,22 @@ from typing import Any, Dict
 from flask import Blueprint, current_app, jsonify, request
 
 from services.config_exchange_local import build_user_configs_bundle, apply_user_configs_bundle
+from services.request_limits import (
+    PayloadTooLargeError,
+    get_config_exchange_max_bytes,
+    read_request_json_limited,
+    read_uploaded_file_bytes_limited,
+)
 from services import config_exchange_github as gh
 
 
-def _api_error(message: str, status: int = 400, *, ok: bool | None = None):
+def _api_error(message: str, status: int = 400, *, ok: bool | None = None, **extra: Any):
     """Local copy of app.api_error() to avoid circular imports."""
     payload: Dict[str, Any] = {"error": message}
     if ok is not None:
         payload["ok"] = ok
+    if extra:
+        payload.update(extra)
     return jsonify(payload), status
 
 
@@ -52,12 +60,21 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
     @bp.post("/api/local/import-configs")
     def api_local_import_configs():
         """Import configs from a local JSON bundle file."""
+        max_bytes = get_config_exchange_max_bytes()
+        try:
+            if request.content_length is not None and int(request.content_length) > max_bytes:
+                return _api_error("payload too large", 413, ok=False, max_bytes=max_bytes)
+        except Exception:
+            pass
+
         file = request.files.get("file")
         if not file or file.filename == "":
             return _api_error("no file uploaded", 400, ok=False)
 
         try:
-            raw = file.read().decode("utf-8", errors="replace")
+            raw = read_uploaded_file_bytes_limited(file, max_bytes=max_bytes).decode("utf-8", errors="replace")
+        except PayloadTooLargeError:
+            return _api_error("payload too large", 413, ok=False, max_bytes=max_bytes)
         except Exception as e:  # noqa: BLE001
             return _api_error(f"read failed: {e}", 400, ok=False)
 
@@ -83,9 +100,13 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
         if not gh.CONFIG_SERVER_BASE:
             return _api_error("CONFIG_SERVER_BASE is not configured", 500, ok=False)
 
-        bundle = build_user_configs_bundle(github_owner=github_owner, github_repo=github_repo)
+        max_bytes = get_config_exchange_max_bytes()
+        try:
+            data = read_request_json_limited(request, max_bytes=max_bytes, default={}) or {}
+        except PayloadTooLargeError:
+            return _api_error("payload too large", 413, ok=False, max_bytes=max_bytes)
 
-        data = request.get_json(silent=True) or {}
+        bundle = build_user_configs_bundle(github_owner=github_owner, github_repo=github_repo)
         title = (data.get("title") or "").strip()
         description = (data.get("description") or "").strip()
         tags = data.get("tags") or []
@@ -154,7 +175,11 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
     @bp.post("/api/github/import-configs")
     def api_github_import_configs():
         """Import a bundle from GitHub by cfg_id or import the latest from index."""
-        payload = request.get_json(silent=True) or {}
+        max_bytes = get_config_exchange_max_bytes()
+        try:
+            payload = read_request_json_limited(request, max_bytes=max_bytes, default={}) or {}
+        except PayloadTooLargeError:
+            return _api_error("payload too large", 413, ok=False, max_bytes=max_bytes)
         cfg_id = (payload.get("cfg_id") or "").strip()
 
         if not cfg_id:

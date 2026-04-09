@@ -17,6 +17,7 @@ from flask import Blueprint, request, jsonify, current_app
 from services.command_jobs import create_command_job
 
 from services.io.atomic import _atomic_write_json, _atomic_write_text
+from services.request_limits import PayloadTooLargeError, get_routing_save_max_bytes, read_request_bytes_limited
 
 from services.routing.templates import _paths_for_routing
 
@@ -515,7 +516,11 @@ def register_config_routes(
         - Raw body (with comments) is saved to <fragment>.jsonc
         - Cleaned JSON (without comments) is written to <fragment>.json
         """
-        raw_bytes = request.get_data(cache=False)
+        max_bytes = get_routing_save_max_bytes()
+        try:
+            raw_bytes = read_request_bytes_limited(request, max_bytes=max_bytes)
+        except PayloadTooLargeError:
+            return jsonify({"ok": False, "error": "payload too large", "max_bytes": max_bytes}), 413
         try:
             raw_text = raw_bytes.decode("utf-8")
         except UnicodeDecodeError:
