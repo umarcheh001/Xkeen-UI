@@ -975,81 +975,103 @@
         <span id="mihomo-profiles-arrow">▼</span>
       </div>
 
-      <div id="mihomo-profiles-panel" style="display:none; margin-top:8px;">
-        <div class="mihomo-grid">
-          <div class="mihomo-column">
-            <h4>Профили</h4>
-            <div class="actions">
-              <button id="mihomo-refresh-profiles-btn" class="icon-btn">
-                🔄 Обновить список профилей
+      <div id="mihomo-profiles-panel" class="xk-mihomo-vault" style="display:none; margin-top:8px;">
+        <div class="xk-mihomo-vault-grid">
+          <section class="xk-mihomo-vault-card xk-mihomo-vault-card--profiles">
+            <div class="xk-mihomo-vault-head">
+              <div class="xk-mihomo-vault-head-copy">
+                <h4>Профили</h4>
+                <p class="xk-card-desc">Локальные шаблоны для быстрого переключения и возврата к сохранённым вариантам `config.yaml`.</p>
+              </div>
+              <button id="mihomo-refresh-profiles-btn" class="btn-secondary xk-mihomo-vault-head-btn" type="button">
+                ⟳ Обновить
               </button>
             </div>
-            <table class="xkeen-table">
-              <thead>
-                <tr>
-                  <th>Профиль</th>
-                  <th>Активен</th>
-                  <th>Действия</th>
-                </tr>
-              </thead>
-              <tbody id="mihomo-profiles-list"></tbody>
-            </table>
 
-            <h5 style="margin-top:12px;">Создать профиль из редактора</h5>
-            <input id="mihomo-new-profile-name"
-                   class="xkeen-input"
-                   type="text"
-                   placeholder="Имя профиля (без .yaml)">
-            <button id="mihomo-save-profile-btn"
-                    title="Сохранить текущий config.yaml как профиль">
-              💾 Профиль
-            </button>
-          </div>
+            <div class="xk-mihomo-vault-table-shell xk-mihomo-vault-table-shell--profiles">
+              <table class="xkeen-table xk-mihomo-vault-table xk-mihomo-vault-table--profiles">
+                <thead>
+                  <tr>
+                    <th>Профиль</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody id="mihomo-profiles-list"></tbody>
+              </table>
+            </div>
 
-          <div class="mihomo-column">
-            <h4>Бэкапы</h4>
-            <div class="actions">
-              <button id="mihomo-refresh-backups-btn" class="icon-btn">
-                🔄 Обновить список бэкапов
+            <div class="xk-mihomo-profile-create">
+              <div class="xk-mihomo-profile-create-copy">
+                <h5>Новый профиль из редактора</h5>
+                <p class="xk-card-desc">Сохранить текущий текст редактора как отдельный профиль Mihomo.</p>
+              </div>
+              <div class="xk-mihomo-profile-create-row">
+                <input id="mihomo-new-profile-name"
+                       class="xkeen-input xk-mihomo-profile-input"
+                       type="text"
+                       placeholder="Имя профиля (без .yaml)">
+                <button id="mihomo-save-profile-btn"
+                        class="btn-secondary xk-mihomo-profile-save-btn"
+                        type="button"
+                        title="Сохранить текущий config.yaml как профиль">
+                  💾 Сохранить
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="xk-mihomo-vault-card xk-mihomo-vault-card--backups">
+            <div class="xk-mihomo-vault-head">
+              <div class="xk-mihomo-vault-head-copy">
+                <h4>Бэкапы</h4>
+                <p class="xk-card-desc">Точки возврата для профилей Mihomo с быстрым просмотром, откатом и очисткой хвоста.</p>
+              </div>
+              <button id="mihomo-refresh-backups-btn" class="btn-secondary xk-mihomo-vault-head-btn" type="button">
+                ⟳ Обновить
               </button>
             </div>
-            <div class="small" style="margin-top:6px;">
-              <label>
+
+            <div class="xk-mihomo-backups-toolbar">
+              <label class="xk-mihomo-backups-filter" for="mihomo-backups-active-only">
                 <input type="checkbox" id="mihomo-backups-active-only" checked>
-                Только для активного профиля
+                <span>Только активный профиль</span>
               </label>
-              <span id="mihomo-backups-active-profile-label" style="margin-left:8px;"></span>
+              <span id="mihomo-backups-active-profile-label" class="routing-editor-badge is-muted xk-mihomo-backups-active-pill">Активный профиль не выбран</span>
+              <div class="xk-mihomo-backups-clean">
+                <label class="xk-mihomo-backups-clean-label" for="mihomo-backups-clean-limit">
+                  <span>Оставить</span>
+                  <input
+                    id="mihomo-backups-clean-limit"
+                    class="xkeen-input xk-mihomo-backups-clean-input"
+                    type="number"
+                    min="0"
+                    value="5"
+                  >
+                  <span>шт.</span>
+                </label>
+                <button id="mihomo-backups-clean-btn" class="btn-secondary btn-icon xk-mihomo-backups-clean-btn" type="button" title="Очистить бэкапы">🧹</button>
+              </div>
             </div>
-            <div class="small" style="margin-top: 6px;">
-              <label>
-                Оставить не более
-                <input
-                  id="mihomo-backups-clean-limit"
-                  class="xkeen-input"
-                  type="number"
-                  min="0"
-                  value="5"
-                  style="width: 64px; margin: 0 4px;"
-                >
-                бэкапов
-              </label>
-              <button id="mihomo-backups-clean-btn" class="icon-btn" title="Очистить бэкапы">🧹</button>
-              <span class="hint xk-card-desc">
-                0 — удалить все бэкапы (с учётом фильтра профиля).
-              </span>
+
+            <div class="hint xk-card-desc xk-mihomo-backups-hint">
+              `0` — удалить все бэкапы с учётом текущего фильтра по профилю.
             </div>
-            <table class="xkeen-table">
-              <thead>
-                <tr>
-                  <th>Файл</th>
-                  <th>Профиль</th>
-                  <th>Создан</th>
-                  <th>Действия</th>
-                </tr>
-              </thead>
-              <tbody id="mihomo-backups-list"></tbody>
-            </table>
-          </div>
+
+            <div class="xk-mihomo-vault-table-shell xk-mihomo-vault-table-shell--backups">
+              <table class="xkeen-table xk-mihomo-vault-table xk-mihomo-vault-table--backups">
+                <thead>
+                  <tr>
+                    <th>Файл</th>
+                    <th>Профиль</th>
+                    <th>Создан</th>
+                    <th>Действия</th>
+                  </tr>
+                </thead>
+                <tbody id="mihomo-backups-list"></tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </div>
     </div>

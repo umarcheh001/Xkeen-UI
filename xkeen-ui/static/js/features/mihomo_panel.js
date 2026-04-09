@@ -1965,9 +1965,11 @@ let mihomoPanelModuleApi = null;
     if (!label || !checkbox) return;
     if (_activeProfileName) {
       label.textContent = 'Активный профиль: ' + _activeProfileName;
+      label.className = 'routing-editor-badge is-ok xk-mihomo-backups-active-pill';
       checkbox.disabled = false;
     } else {
       label.textContent = 'Активный профиль не выбран';
+      label.className = 'routing-editor-badge is-muted xk-mihomo-backups-active-pill';
       checkbox.disabled = true;
     }
   }
@@ -1983,6 +1985,46 @@ let mihomoPanelModuleApi = null;
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return String(value);
     try { return d.toLocaleString(); } catch (e) { return String(value); }
+  }
+
+  function buildMihomoRowBadge(label, tone) {
+    const toneClass = tone ? (' is-' + String(tone)) : '';
+    return '<span class="routing-editor-badge xk-mihomo-row-badge' + toneClass + '">' + escapeHtml(label || '') + '</span>';
+  }
+
+  function buildMihomoMiniButton(action, label, opts) {
+    const o = opts && typeof opts === 'object' ? opts : {};
+    const cls = ['xk-mihomo-mini-btn'];
+    if (o.iconOnly) cls.push('xk-mihomo-mini-btn--icon');
+    if (o.tone) cls.push('xk-mihomo-mini-btn--' + String(o.tone));
+    const attrs = [
+      'type="button"',
+      'data-action="' + escapeHtml(action || '') + '"',
+      'class="' + cls.join(' ') + '"',
+      'title="' + escapeHtml(o.title || label || '') + '"',
+      'aria-label="' + escapeHtml(o.ariaLabel || label || '') + '"',
+    ];
+    if (o.disabled) attrs.push('disabled');
+    const glyph = o.glyph ? ('<span class="xk-btn-inline-glyph" aria-hidden="true">' + escapeHtml(o.glyph) + '</span>') : '';
+    const text = o.iconOnly
+      ? '<span class="xk-visually-hidden">' + escapeHtml(label || '') + '</span>'
+      : '<span class="xk-mihomo-mini-btn-label">' + escapeHtml(label || '') + '</span>';
+    return '<button ' + attrs.join(' ') + '>' + glyph + text + '</button>';
+  }
+
+  function buildMihomoNamePill(text) {
+    return '<span class="xk-mihomo-name-pill" title="' + escapeHtml(text || '') + '">' + escapeHtml(text || '') + '</span>';
+  }
+
+  function buildMihomoScrollingNamePill(text) {
+    const safe = escapeHtml(text || '');
+    return (
+      '<span class="xk-mihomo-name-pill xk-mihomo-name-pill--scroll" title="' + safe + '">' +
+        '<span class="backup-filename-marquee" title="' + safe + '">' +
+          '<span class="backup-filename-marquee-inner">' + safe + '</span>' +
+        '</span>' +
+      '</span>'
+    );
   }
 
   function parseBackupFilename(filename) {
@@ -2019,20 +2061,41 @@ let mihomoPanelModuleApi = null;
       }
       tbody.innerHTML = '';
       _activeProfileName = null;
+      if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="3">' + buildMihomoRowBadge('Профили пока не созданы', 'muted') + '</td></tr>';
+        updateBackupsFilterUI();
+        return true;
+      }
       data.forEach((p) => {
         const name = String(p && p.name ? p.name : '');
         const isActive = !!(p && p.is_active);
         if (isActive) _activeProfileName = name;
         const tr = document.createElement('tr');
         tr.dataset.name = name;
+        const activateLabel = isActive ? 'Активен' : 'Активировать';
+        const activateTitle = isActive ? ('Профиль ' + name + ' уже активен') : ('Активировать профиль ' + name);
         tr.innerHTML = [
-          '<td>' + escapeHtml(name) + '</td>',
-          '<td>' + (isActive ? 'да' : '') + '</td>',
-          '<td>' +
-            '<button data-action="load" title="В редактор">📥</button> ' +
-            '<button data-action="activate">✅ Активировать</button> ' +
-            '<button data-action="delete">🗑️ Удалить</button>' +
-          '</td>',
+          '<td>' + buildMihomoNamePill(name) + '</td>',
+          '<td>' + (isActive ? buildMihomoRowBadge('Активен', 'ok') : buildMihomoRowBadge('Не активен', 'muted')) + '</td>',
+          '<td><div class="xk-mihomo-row-actions">' +
+            buildMihomoMiniButton('load', 'Открыть в редакторе', {
+              glyph: '📥',
+              iconOnly: true,
+              title: 'Загрузить профиль в редактор',
+            }) +
+            buildMihomoMiniButton('activate', activateLabel, {
+              glyph: '✓',
+              tone: isActive ? 'ok' : 'primary',
+              title: activateTitle,
+              disabled: isActive,
+            }) +
+            buildMihomoMiniButton('delete', 'Удалить профиль', {
+              glyph: '🗑',
+              tone: 'danger',
+              iconOnly: true,
+              title: 'Удалить профиль ' + name,
+            }) +
+          '</div></td>',
         ].join('');
         tbody.appendChild(tr);
       });
@@ -2061,30 +2124,45 @@ let mihomoPanelModuleApi = null;
       }
 
       tbody.innerHTML = '';
+      if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="4">' + buildMihomoRowBadge('Бэкапы не найдены', 'muted') + '</td></tr>';
+        return true;
+      }
       data.forEach((b) => {
         const tr = document.createElement('tr');
         tr.dataset.filename = b.filename;
 
         const created = formatBackupDate(b.created_at);
         const isOwnProfile = !_activeProfileName || !b.profile || _activeProfileName === b.profile;
-        const restoreAttrs = isOwnProfile
-          ? ' title="Восстановить"'
-          : ' disabled title="Восстановить: активный профиль (' + escapeHtml(_activeProfileName) +
-            ') не совпадает с профилем бэкапа (' + escapeHtml(b.profile) + ')"';
+        const restoreTitle = isOwnProfile
+          ? 'Восстановить бэкап'
+          : ('Восстановить нельзя: активный профиль (' + _activeProfileName +
+            ') не совпадает с профилем бэкапа (' + (b.profile || '') + ')');
 
         tr.innerHTML = [
-          '<td>' +
-            '<div class="backup-filename-marquee" title="' + escapeHtml(b.filename) + '">' +
-              '<span class="backup-filename-marquee-inner">' + escapeHtml(b.filename) + '</span>' +
-            '</div>' +
-          '</td>',
-          '<td>' + escapeHtml(b.profile || '') + '</td>',
-          '<td>' + escapeHtml(created) + '</td>',
-          '<td>' +
-            '<button data-action="preview" title="В редактор">👁️</button> ' +
-            '<button data-action="restore"' + restoreAttrs + '>⏪</button> ' +
-            '<button data-action="delete" title="Удалить бэкап">🗑️</button>' +
-          '</td>',
+          '<td>' + buildMihomoScrollingNamePill(b.filename) + '</td>',
+          '<td>' + (b.profile ? buildMihomoRowBadge(b.profile, 'muted') : buildMihomoRowBadge('Без профиля', 'muted')) + '</td>',
+          '<td><span class="xk-mihomo-created-at">' + escapeHtml(created) + '</span></td>',
+          '<td><div class="xk-mihomo-row-actions">' +
+            buildMihomoMiniButton('preview', 'Просмотреть бэкап', {
+              glyph: '👁',
+              iconOnly: true,
+              title: 'Просмотреть и загрузить бэкап в редактор',
+            }) +
+            buildMihomoMiniButton('restore', 'Восстановить бэкап', {
+              glyph: '↩',
+              tone: isOwnProfile ? 'primary' : 'muted',
+              iconOnly: true,
+              title: restoreTitle,
+              disabled: !isOwnProfile,
+            }) +
+            buildMihomoMiniButton('delete', 'Удалить бэкап', {
+              glyph: '🗑',
+              tone: 'danger',
+              iconOnly: true,
+              title: 'Удалить бэкап ' + b.filename,
+            }) +
+          '</div></td>',
         ].join('');
         tbody.appendChild(tr);
       });

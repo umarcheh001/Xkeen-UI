@@ -842,6 +842,38 @@ def test_mihomo_server_side_config_swaps_resync_editor_after_activate_and_restor
     assert "Восстановление из бэкапа заменит текущее содержимое редактора." in text
 
 
+def test_mihomo_profiles_backups_panel_uses_compact_premium_vault_layout():
+    template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    script = Path('xkeen-ui/static/js/features/mihomo_panel.js').read_text(encoding='utf-8')
+
+    assert 'class="xk-mihomo-vault"' in template
+    assert 'class="xk-mihomo-vault-grid"' in template
+    assert 'class="xk-mihomo-vault-card xk-mihomo-vault-card--profiles"' in template
+    assert 'class="xk-mihomo-vault-card xk-mihomo-vault-card--backups"' in template
+    assert 'class="xk-mihomo-backups-toolbar"' in template
+    assert 'class="routing-editor-badge is-muted xk-mihomo-backups-active-pill"' in template
+    assert 'class="xk-mihomo-vault-table-shell xk-mihomo-vault-table-shell--backups"' in template
+    assert 'class="xk-mihomo-profile-create-row"' in template
+
+    assert 'function buildMihomoMiniButton(action, label, opts) {' in script
+    assert 'function buildMihomoNamePill(text) {' in script
+    assert 'function buildMihomoScrollingNamePill(text) {' in script
+    assert "label.className = 'routing-editor-badge is-ok xk-mihomo-backups-active-pill';" in script
+    assert "label.className = 'routing-editor-badge is-muted xk-mihomo-backups-active-pill';" in script
+    assert "buildMihomoMiniButton('activate', activateLabel, {" in script
+    assert "buildMihomoMiniButton('restore', 'Восстановить бэкап', {" in script
+    assert "tbody.innerHTML = '<tr><td colspan=\"4\">' + buildMihomoRowBadge('Бэкапы не найдены', 'muted') + '</td></tr>';" in script
+
+    assert '.xk-mihomo-vault-grid {' in styles
+    assert '.xk-mihomo-vault-table-shell--backups {' in styles
+    assert '.xk-mihomo-mini-btn {' in styles
+    assert '.xk-mihomo-backups-toolbar {' in styles
+    assert '.xk-mihomo-profile-create {' in styles
+    assert 'position: sticky;' in styles
+    assert 'html[data-theme="light"] .xk-mihomo-vault-card {' in styles
+
+
 def test_routing_dat_card_keeps_visible_current_file_labels_in_sync_with_selected_names():
     ids_text = Path('xkeen-ui/static/js/features/routing_cards/ids.js').read_text(encoding='utf-8')
     panel_text = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
