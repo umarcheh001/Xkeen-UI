@@ -22,6 +22,7 @@ from core.paths import UI_STATE_DIR, BASE_ETC_DIR, BASE_VAR_DIR
 from core.mihomo_paths import init_mihomo_paths
 from mihomo_server_core import CONFIG_PATH
 from services.logging_setup import get_log_dir
+from services.xkeen_commands_catalog import get_full_shell_policy
 from services.xray_config_files import ROUTING_FILE, INBOUNDS_FILE, OUTBOUNDS_FILE, XRAY_CONFIGS_DIR
 
 
@@ -180,6 +181,7 @@ def detect_terminal_state(
     ws_ok = bool(_env_bool(env, "XKEEN_WS_RUNTIME", False) if ws_runtime is None else ws_runtime)
     machine_arch = _detect_machine_arch()
     pty_ok = bool(ws_ok and (rt_mode != "router" or _is_arm_arch(machine_arch)))
+    shell_policy = get_full_shell_policy(env)
 
     reason = None
     if not ws_ok:
@@ -191,6 +193,7 @@ def detect_terminal_state(
         "lite": True,
         "pty": bool(pty_ok),
         "ws": bool(ws_ok),
+        "shell": shell_policy,
         "arch": machine_arch,
         "reason": reason,
     }

@@ -208,6 +208,17 @@ import { appendTerminalDebug, markTerminalDebugState } from '../../features/term
     }
   }
 
+  function setInputsEnabled(ctx, on, reasonText) {
+    const c = resolveCtx(ctx);
+    const reason = String(reasonText || '');
+    ['terminal-command', 'terminal-input', 'terminal-send-btn'].forEach((id) => {
+      const el = byId(c, id);
+      if (!el) return;
+      try { el.disabled = !on; } catch (e0) {}
+      try { el.title = (!on && reason) ? reason : ''; } catch (e1) {}
+    });
+  }
+
   function showLiteOutput(ctx, on) {
     const c = resolveCtx(ctx);
     const xtermHost = byId(c, 'terminal-xterm');
@@ -231,6 +242,63 @@ import { appendTerminalDebug, markTerminalDebugState } from '../../features/term
         try { el.setAttribute('aria-hidden', 'true'); } catch (e4) {}
       });
     } catch (e5) {}
+  }
+
+  function readShellPolicy(ctx) {
+    const c = resolveCtx(ctx);
+    try {
+      if (c && c.caps && typeof c.caps.getShellPolicy === 'function') {
+        const policy = c.caps.getShellPolicy();
+        if (policy && typeof policy === 'object') return policy;
+      }
+    } catch (e0) {}
+    try {
+      const st = getCoreState(c);
+      if (st && st.shellPolicy && typeof st.shellPolicy === 'object') return st.shellPolicy;
+    } catch (e1) {}
+    return null;
+  }
+
+  function isShellEnabled(ctx) {
+    const c = resolveCtx(ctx);
+    try {
+      if (c && c.caps && typeof c.caps.hasShell === 'function') return !!c.caps.hasShell();
+    } catch (e0) {}
+    const policy = readShellPolicy(c);
+    if (policy && typeof policy.enabled === 'boolean') return !!policy.enabled;
+    return true;
+  }
+
+  async function refreshCapabilities(ctx, options) {
+    const c = resolveCtx(ctx);
+    try {
+      if (c && c.caps && typeof c.caps.initCapabilities === 'function') {
+        return await withModeTimeout(Promise.resolve(c.caps.initCapabilities(options || {})), 1800);
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function buildShellDisabledNotice(ctx, requestedCommand) {
+    const policy = readShellPolicy(ctx) || {};
+    const envName = String(policy.env || 'XKEEN_ALLOW_SHELL');
+    const message = String(policy.message || 'Shell-команды в UI отключены по умолчанию.');
+    const hint = String(policy.hint || '');
+    const cmd = String(requestedCommand || '').replace(/[\r\n]+/g, ' ').trim();
+    const lines = [
+      message,
+      '',
+      'Запуск через /bin/sh -c сейчас заблокирован политикой безопасности.',
+    ];
+    if (cmd) lines.push('Команда не была выполнена: ' + cmd);
+    lines.push('');
+    lines.push('Как включить shell при необходимости:');
+    lines.push('1. Откройте DevTools -> ENV');
+    lines.push('2. Установите ' + envName + '=1');
+    lines.push('3. Откройте терминал заново');
+    lines.push('');
+    lines.push(hint || 'Включайте shell только в доверенной сети.');
+    return lines.join('\n');
   }
 
   function supportsPty(ctx) {
@@ -539,6 +607,9 @@ import { appendTerminalDebug, markTerminalDebugState } from '../../features/term
       markTerminalDebugState({ status: 'controller-open', lastStage: 'terminal-controller:open-enter' });
       const m = await resolveOpenMode(c, requestedMode);
       const cmd = String(initialCommand || '');
+      if (m === 'shell') {
+        try { await refreshCapabilities(c, { force: true }); } catch (e0) {}
+      }
       appendTerminalDebug('terminal-controller:mode-resolved', { requestedMode: requestedMode, resolvedMode: m, cmd: cmd });
 
       // Restore minimized PTY window without reconnecting.
@@ -565,11 +636,13 @@ import { appendTerminalDebug, markTerminalDebugState } from '../../features/term
       // otherwise hidden xterm helper inputs can steal hover/focus and show stray tooltips.
       let term = null;
       if (m === 'pty') {
+        setInputsEnabled(c, true);
         appendTerminalDebug('terminal-controller:ensure-xterm-begin', { mode: m });
         const ensured = ensureXterm();
         term = ensured ? (ensured.term || null) : null;
         appendTerminalDebug('terminal-controller:ensure-xterm-done', { mode: m, hasTerm: !!term, created: !!(ensured && ensured.created) });
       } else {
+        setInputsEnabled(c, true);
         appendTerminalDebug('terminal-controller:ensure-xterm-skip', { mode: m, reason: 'lite-mode' });
         try { showLiteOutput(c, true); } catch (e2a) {}
       }
@@ -623,6 +696,17 @@ import { appendTerminalDebug, markTerminalDebugState } from '../../features/term
         // Lite (shell/xkeen): show inputs and keep the plain <pre> output active.
         showInputs(c, true);
         try { showLiteOutput(c, true); } catch (e7b) {}
+        if (m === 'shell' && !isShellEnabled(c)) {
+          const notice = buildShellDisabledNotice(c, cmd);
+          const outputEl = byId(c, 'terminal-output');
+          const titleText = notice.replace(/\s+/g, ' ').trim();
+          setInputsEnabled(c, false, titleText);
+          if (outputEl) {
+            try { outputEl.textContent = notice; } catch (e7c) {}
+          }
+        } else {
+          setInputsEnabled(c, true);
+        }
         try {
           const S = getSession(c);
           if (S && typeof S.switchMode === 'function') S.switchMode(m, { autoConnect: false });
@@ -734,6 +818,7 @@ import { appendTerminalDebug, markTerminalDebugState } from '../../features/term
 
       // Restore lite inputs visibility
       showInputs(c, true);
+      setInputsEnabled(c, true);
       try { showLiteOutput(c, true); } catch (e6b) {}
       resetConfirmPrompt(c);
 
@@ -791,6 +876,7 @@ import { appendTerminalDebug, markTerminalDebugState } from '../../features/term
       state.ptyPrevConvertEol = null;
 
       showInputs(c, true);
+      setInputsEnabled(c, true);
       resetConfirmPrompt(c);
 
       // Reset mode state to shell

@@ -31,6 +31,8 @@ import {
     // capabilities (filled by capabilities.js)
     hasWs: false,
     hasPty: false,
+    hasShell: false,
+    shellPolicy: null,
     capabilitiesKnown: false,
   });
 

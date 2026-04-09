@@ -254,7 +254,10 @@ import {
       const { res, data } = await runner;
 
       if (!res.ok || !data || !data.ok) {
-        const msg = (data && data.error) ? data.error : ('HTTP ' + (res && res.status ? res.status : 0));
+        const CJ = getTerminalCommandJobApi();
+        const msg = (CJ && typeof CJ.describeRunCommandError === 'function')
+          ? CJ.describeRunCommandError(data, res)
+          : ((data && data.error) ? data.error : ('HTTP ' + (res && res.status ? res.status : 0)));
         if (useXterm) {
           xtermWriteln(term, '');
           xtermWriteln(term, '[Ошибка] ' + msg);

@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import os
 import shutil
-from typing import Optional
+from typing import Mapping, Optional
+
+from services.utils.env import _env_bool
 
 # NOTE: Keep structure and text stable; UI uses this for rendering.
 # "tone" is used only for UI color accents (see styles.css + panel.html).
@@ -255,8 +257,51 @@ def build_xkeen_cmd(flag_or_action: str) -> list[str]:
 # Timeout for background xkeen jobs (seconds)
 COMMAND_TIMEOUT = 300
 
-# Full shell mode (arbitrary commands via /bin/sh -c), enabled by default.
-ALLOW_FULL_SHELL = bool(int(os.getenv("XKEEN_ALLOW_SHELL", "1")))
+SHELL_ENABLE_ENV = "XKEEN_ALLOW_SHELL"
+SHELL_ENABLE_DEFAULT = False
+
+
+def is_full_shell_enabled(env: Optional[Mapping[str, str]] = None) -> bool:
+    """Return whether arbitrary shell execution is allowed right now.
+
+    Reads the current process env by default so DevTools ENV changes can apply
+    without re-importing this module.
+    """
+    if env is None:
+        return _env_bool(SHELL_ENABLE_ENV, SHELL_ENABLE_DEFAULT)
+
+    try:
+        raw = str(env.get(SHELL_ENABLE_ENV, "") or "").strip().lower()
+    except Exception:
+        raw = ""
+    if not raw:
+        return bool(SHELL_ENABLE_DEFAULT)
+    if raw in {"1", "true", "yes", "y", "on"}:
+        return True
+    if raw in {"0", "false", "no", "n", "off"}:
+        return False
+    return bool(SHELL_ENABLE_DEFAULT)
+
+
+def get_full_shell_policy(env: Optional[Mapping[str, str]] = None) -> dict[str, object]:
+    """Return a stable UI/API payload describing shell execution policy."""
+    enabled = bool(is_full_shell_enabled(env))
+    return {
+        "enabled": enabled,
+        "env": SHELL_ENABLE_ENV,
+        "default": "1" if SHELL_ENABLE_DEFAULT else "0",
+        "requires_restart": False,
+        "message": "Shell-команды в UI отключены по умолчанию.",
+        "hint": (
+            f"Откройте DevTools -> ENV и установите {SHELL_ENABLE_ENV}=1 только если "
+            "доверяете сети. Изменение применяется для новых запусков терминала."
+        ),
+    }
+
+
+# Backward-compatible snapshot for older imports. New code should call
+# is_full_shell_enabled() dynamically instead of relying on this constant.
+ALLOW_FULL_SHELL = is_full_shell_enabled()
 
 # Shell path for full shell mode
 SHELL_BIN = "/bin/sh"

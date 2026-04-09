@@ -352,11 +352,16 @@ export function openTerminalCompat(options) {
   return openXkeenTerminal(opts);
 }
 
-export function setTerminalCapabilityState(hasWs, hasPty) {
+export function setTerminalCapabilityState(hasWs, hasPty, shellPolicy) {
   const state = ensureGlobalStateRoot();
   if (!state) return null;
   state.hasWs = !!hasWs;
   state.hasPty = !!hasPty;
+  if (arguments.length >= 3) {
+    const policy = shellPolicy && typeof shellPolicy === 'object' ? Object.assign({}, shellPolicy) : null;
+    state.hasShell = !!(policy && policy.enabled);
+    state.shellPolicy = policy;
+  }
   return state;
 }
 

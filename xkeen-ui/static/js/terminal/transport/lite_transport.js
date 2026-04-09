@@ -87,14 +87,18 @@ import {
         const data = r && r.data ? r.data : null;
 
         if (!resOk || (data && data.ok === false)) {
-          const msg = (data && data.error) ? String(data.error) : 'HTTP error';
+          const msg = (CJ && typeof CJ.describeRunCommandError === 'function')
+            ? CJ.describeRunCommandError(data, r && r.res)
+            : ((data && data.error) ? String(data.error) : 'HTTP error');
           emitRaw('\r\n[РћС€РёР±РєР°] ' + msg + '\r\n', { kind: 'error' });
           emitErr(msg, { stage: 'create' });
           return false;
         }
 
         if (data && data.status === 'error') {
-          const msg2 = data.error ? String(data.error) : 'command failed';
+          const msg2 = (CJ && typeof CJ.describeRunCommandError === 'function')
+            ? CJ.describeRunCommandError(data, r && r.res)
+            : (data.error ? String(data.error) : 'command failed');
           emitRaw('\r\n[РћС€РёР±РєР°] ' + msg2 + '\r\n', { kind: 'error' });
           emitErr(msg2, { stage: 'wait', jobId: data.job_id });
           return false;

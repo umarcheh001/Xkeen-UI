@@ -87,8 +87,11 @@ import {
     } catch (e) {}
 
     if (!data || data.ok === false) {
+      const msg = (CJ && typeof CJ.describeRunCommandError === 'function')
+        ? CJ.describeRunCommandError(data, r && r.res)
+        : (data && data.error ? String(data.error) : 'sysmon failed');
       emitToast(ctx, 'sysmon: РѕС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ', 'error');
-      if (data && data.error) emitPrint(ctx, '[РћС€РёР±РєР°] ' + String(data.error));
+      if (msg) emitPrint(ctx, '[РћС€РёР±РєР°] ' + msg);
       return { ok: false, data };
     }
 

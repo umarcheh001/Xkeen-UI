@@ -18,7 +18,9 @@ from flask import Blueprint, jsonify, request
 from routes.common.errors import error_response
 
 from services.command_jobs import create_command_job, get_command_job, cleanup_old_jobs
-from services.xkeen_commands_catalog import ALLOWED_FLAGS, ALLOW_FULL_SHELL
+from services.xkeen_commands_catalog import ALLOWED_FLAGS, get_full_shell_policy, is_full_shell_enabled
+
+
 def create_commands_blueprint() -> Blueprint:
     bp = Blueprint("commands", __name__)
 
@@ -55,8 +57,20 @@ def create_commands_blueprint() -> Blueprint:
 
         # Full shell mode: arbitrary command, if enabled
         if cmd:
-            if not ALLOW_FULL_SHELL:
-                return error_response("shell disabled by config", 403, ok=False)
+            if not is_full_shell_enabled():
+                shell_policy = get_full_shell_policy()
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "error": "shell_disabled",
+                            "message": str(shell_policy.get("message") or "Shell-команды в UI отключены."),
+                            "hint": str(shell_policy.get("hint") or ""),
+                            "shell": shell_policy,
+                        }
+                    ),
+                    403,
+                )
             job = create_command_job(flag=None, stdin_data=stdin_data, cmd=cmd, use_pty=use_pty)
             return (
                 jsonify(

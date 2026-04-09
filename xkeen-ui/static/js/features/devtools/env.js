@@ -181,6 +181,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   };
 
   ENV_HELP.XKEEN_INIT_SCRIPT = 'Rezervnyi put k init.d-skriptu XKeen dlya fallback-scenariev sovmestimosti. Osnovnoi put upravleniya - CLI `xkeen`; pri ego nedostupnosti UI ishet S05xkeen, potom S99xkeen.';
+  ENV_HELP.XKEEN_ALLOW_SHELL = 'Arbitrary shell в UI. По умолчанию 0 (выключено). Значение 1 включает shell для новых запусков терминала без Restart UI. Включайте только в доверенной сети.';
 
 
   
@@ -269,6 +270,8 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     'XKEEN_RESTART_LOG_FILE',
   ]);
 
+  ENV_NO_RESTART_KEYS.add('XKEEN_ALLOW_SHELL');
+  ENV_RESTART_KEYS.delete('XKEEN_ALLOW_SHELL');
   ENV_RESTART_KEYS.add('XKEEN_INIT_SCRIPT');
 
   let _envSnapshot = { items: [], envFile: '' };

@@ -376,7 +376,7 @@ def _default_effective_value(
 
     # Misc
     if k == "XKEEN_ALLOW_SHELL":
-        return "1"
+        return "0"
 
     # Xray/Mihomo log timezone offset default (+3, see app.py).
     if k == "XKEEN_XRAY_LOG_TZ_OFFSET":

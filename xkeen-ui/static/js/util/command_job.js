@@ -17,6 +17,22 @@
     return i;
   }
 
+  CJ.describeRunCommandError = function describeRunCommandError(data, res) {
+    const payload = data && typeof data === 'object' ? data : {};
+    const parts = [];
+    const message = String(payload.message || '').trim();
+    const error = String(payload.error || '').trim();
+    const hint = String(payload.hint || '').trim();
+
+    if (message) parts.push(message);
+    else if (error) parts.push(error);
+    else if (res && typeof res.status === 'number' && res.status > 0) parts.push('HTTP ' + res.status);
+    else parts.push('Command request failed');
+
+    if (hint && parts.indexOf(hint) === -1) parts.push(hint);
+    return parts.join(' ');
+  };
+
   CJ.runShellCommand = async function runShellCommand(cmd, stdinValue, options = {}) {
     const body = { cmd };
     if (typeof stdinValue === 'string') body.stdin = stdinValue;
