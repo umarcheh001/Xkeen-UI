@@ -108,7 +108,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data || data.ok === false) {
-      const msg = (data && (data.error || data.message)) || ('update_failed_' + resp.status);
+      const msg = (data && (data.hint || data.reason || data.error || data.message)) || ('update_failed_' + resp.status);
       throw new Error(msg);
     }
     return data;

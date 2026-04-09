@@ -1076,7 +1076,9 @@ import { wireTopLevelNavigation } from './top_level_nav.shared.js';
           body: JSON.stringify({ kind, url, path }),
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data || data.ok === false) throw new Error(String((data && (data.error || data.message)) || 'update_failed'));
+        if (!response.ok || !data || data.ok === false) {
+          throw new Error(String((data && (data.hint || data.reason || data.error || data.message)) || 'update_failed'));
+        }
         toastPanelShell('DAT обновлён: ' + path);
         await refreshRoutingDatFallback();
       });

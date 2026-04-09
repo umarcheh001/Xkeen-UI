@@ -33,9 +33,16 @@ from services.geodat.runner import (
     _geodat_validate,
     _run_xk_geodat_json,
 )
-from services.geodat.install import _download_to_file, _is_elf_binary
+from services.geodat.install import _is_elf_binary
 
 from services.filemanager.metadata import _apply_local_metadata_best_effort
+
+from services.url_policy import (
+    blocked_url_hint,
+    download_to_file_with_policy,
+    get_policy_from_env,
+    is_url_allowed as is_url_allowed_for_policy,
+)
 
 from services.xray_assets import ensure_xray_dat_assets
 
@@ -69,6 +76,25 @@ def _core_log(level: str, msg: str, **extra) -> None:
             _CORE_LOGGER.info(full)
     except Exception:
         pass
+
+
+def _dat_url_policy():
+    return get_policy_from_env("XKEEN_DAT")
+
+
+def _dat_url_block_response(reason: str):
+    policy = _dat_url_policy()
+    return error_response(
+        "url_blocked",
+        400,
+        ok=False,
+        reason=str(reason or "").strip() or "blocked",
+        hint=blocked_url_hint(
+            policy,
+            env_prefix="XKEEN_DAT",
+            feature_label="Обновление DAT по URL",
+        ),
+    )
 
 
 def register_dat_routes(bp: Blueprint) -> None:
@@ -874,10 +900,13 @@ def register_dat_routes(bp: Blueprint) -> None:
             return error_response("path_required", 400, ok=False)
         if not url:
             return error_response("url_required", 400, ok=False)
-        if not (url.startswith("http://") or url.startswith("https://")):
-            return error_response("bad_url", 400, ok=False)
         if not path.lower().endswith(".dat"):
             return error_response("path_must_end_with_dat", 400, ok=False)
+
+        policy = _dat_url_policy()
+        ok_url, reason = is_url_allowed_for_policy(url, policy)
+        if not ok_url:
+            return _dat_url_block_response(reason)
 
         try:
             roots = _local_allowed_roots()
@@ -908,7 +937,7 @@ def register_dat_routes(bp: Blueprint) -> None:
 
         tmp_path = rp + ".tmp"
         try:
-            size = _download_to_file(url, tmp_path, max_bytes)
+            size = download_to_file_with_policy(url, tmp_path, max_bytes, policy=policy)
             os.replace(tmp_path, rp)
             _apply_local_metadata_best_effort(rp, st0)
         except RuntimeError as e:
@@ -920,6 +949,8 @@ def register_dat_routes(bp: Blueprint) -> None:
             msg = str(e) or ""
             if msg == "size_limit":
                 return error_response("size_limit", 413, ok=False, max_mb=max_mb)
+            if msg.startswith("url_blocked:"):
+                return _dat_url_block_response(msg.split(":", 1)[1])
             return error_response("download_failed", 400, ok=False, details=msg)
         except (urllib.error.URLError, urllib.error.HTTPError) as e:
             try:

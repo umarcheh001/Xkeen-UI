@@ -13,6 +13,12 @@ from flask import Blueprint, request, jsonify
 
 from services.geodat.runner import _geodat_bin_path
 from services.geodat.install import _geodat_install_script_path, _geodat_run_help, _geodat_stat_meta, geodat_platform_info
+from services.url_policy import (
+    blocked_url_hint,
+    download_to_file_with_policy,
+    get_policy_from_env,
+    is_url_allowed as is_url_allowed_for_policy,
+)
 
 
 def _short_reason(text: str, *, limit: int = 240) -> str:
@@ -31,6 +37,24 @@ def _short_reason(text: str, *, limit: int = 240) -> str:
     if len(out) > limit:
         out = out[: max(0, limit - 3)] + '...'
     return out
+
+
+def _geodat_url_policy():
+    return get_policy_from_env("XKEEN_GEODAT")
+
+
+def _geodat_url_blocked_payload(reason: str) -> dict[str, Any]:
+    policy = _geodat_url_policy()
+    return {
+        "ok": False,
+        "error": "url_blocked",
+        "reason": str(reason or "").strip() or "blocked",
+        "hint": blocked_url_hint(
+            policy,
+            env_prefix="XKEEN_GEODAT",
+            feature_label="Установка xk-geodat по URL",
+        ),
+    }
 
 
 def register_geodat_routes(bp: Blueprint) -> None:
@@ -82,6 +106,7 @@ def register_geodat_routes(bp: Blueprint) -> None:
         env.setdefault("XKEEN_GEODAT_TIMEOUT", os.getenv("XKEEN_GEODAT_TIMEOUT", "25") or "25")
 
         tmp_uploaded = None
+        tmp_downloaded = None
 
         # multipart upload mode
         try:
@@ -106,7 +131,59 @@ def register_geodat_routes(bp: Blueprint) -> None:
             data = request.get_json(silent=True) or {}
             url = str(data.get("url") or "").strip()
             if url:
-                env["XKEEN_GEODAT_URL"] = url
+                policy = _geodat_url_policy()
+                ok, reason = is_url_allowed_for_policy(url, policy)
+                if not ok:
+                    return jsonify(_geodat_url_blocked_payload(reason)), 200
+
+                import tempfile
+                import uuid
+
+                tmpdir = tempfile.gettempdir()
+                tmp_downloaded = os.path.join(tmpdir, f"xk-geodat-url-{uuid.uuid4().hex}")
+                try:
+                    download_to_file_with_policy(
+                        url,
+                        tmp_downloaded,
+                        None,
+                        policy=policy,
+                        user_agent="Xkeen-UI geodat",
+                    )
+                    try:
+                        os.chmod(tmp_downloaded, 0o755)
+                    except Exception:
+                        pass
+                    env["XKEEN_GEODAT_LOCAL"] = tmp_downloaded
+                except RuntimeError as e:
+                    msg = str(e or "").strip()
+                    try:
+                        if tmp_downloaded and os.path.exists(tmp_downloaded):
+                            os.remove(tmp_downloaded)
+                    except Exception:
+                        pass
+                    if msg.startswith("url_blocked:"):
+                        return jsonify(_geodat_url_blocked_payload(msg.split(":", 1)[1])), 200
+                    hint = "Не удалось безопасно скачать xk-geodat по указанному URL."
+                    if msg == "size_limit":
+                        hint = "Файл xk-geodat по URL превысил допустимый размер."
+                    return jsonify({
+                        "ok": False,
+                        "error": "download_failed",
+                        "reason": msg or "download_failed",
+                        "hint": hint,
+                    }), 200
+                except Exception as e:
+                    try:
+                        if tmp_downloaded and os.path.exists(tmp_downloaded):
+                            os.remove(tmp_downloaded)
+                    except Exception:
+                        pass
+                    return jsonify({
+                        "ok": False,
+                        "error": "download_failed",
+                        "reason": _short_reason(str(e)),
+                        "hint": "Не удалось скачать xk-geodat по указанному URL.",
+                    }), 200
         except Exception:
             data = {}
 
@@ -135,6 +212,11 @@ def register_geodat_routes(bp: Blueprint) -> None:
             try:
                 if tmp_uploaded and os.path.exists(tmp_uploaded):
                     os.remove(tmp_uploaded)
+            except Exception:
+                pass
+            try:
+                if tmp_downloaded and os.path.exists(tmp_downloaded):
+                    os.remove(tmp_downloaded)
             except Exception:
                 pass
 

@@ -187,6 +187,14 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_HELP.XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS = 'На сколько секунд блокировать новые попытки входа после исчерпания лимита. По умолчанию 900. Значение 0 отключает lockout.';
   ENV_HELP.XKEEN_ROUTING_SAVE_MAX_BYTES = 'Максимальный размер тела для сохранения JSON/JSONC роутинга Xray, в байтах. По умолчанию 1048576.';
   ENV_HELP.XKEEN_CONFIG_EXCHANGE_MAX_BYTES = 'Максимальный размер входящего тела для config exchange import/export API, в байтах. По умолчанию 4194304.';
+  ENV_HELP.XKEEN_DAT_ALLOW_HOSTS = 'Доверенные хосты для обновления DAT по URL. Формат: через запятую. По умолчанию: GitHub/release/raw хосты.';
+  ENV_HELP.XKEEN_DAT_ALLOW_HTTP = 'Разрешить plain HTTP для DAT update. По умолчанию 0 (только HTTPS).';
+  ENV_HELP.XKEEN_DAT_ALLOW_CUSTOM_URLS = 'Разрешить DAT update с произвольных public URL вне allow-list. По умолчанию 0. Включайте только осознанно.';
+  ENV_HELP.XKEEN_DAT_ALLOW_PRIVATE_HOSTS = 'Разрешить DAT update с локальных/private host/IP. По умолчанию 0.';
+  ENV_HELP.XKEEN_GEODAT_ALLOW_HOSTS = 'Доверенные хосты для установки xk-geodat по URL. Формат: через запятую. По умолчанию: GitHub/release/raw хосты.';
+  ENV_HELP.XKEEN_GEODAT_ALLOW_HTTP = 'Разрешить plain HTTP для установки xk-geodat по URL. По умолчанию 0 (только HTTPS).';
+  ENV_HELP.XKEEN_GEODAT_ALLOW_CUSTOM_URLS = 'Разрешить установку xk-geodat с произвольных public URL вне allow-list. По умолчанию 0.';
+  ENV_HELP.XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS = 'Разрешить установку xk-geodat по URL с локальных/private host/IP. По умолчанию 0.';
 
 
   
@@ -220,6 +228,14 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     'XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS',
     'XKEEN_ROUTING_SAVE_MAX_BYTES',
     'XKEEN_CONFIG_EXCHANGE_MAX_BYTES',
+    'XKEEN_DAT_ALLOW_HOSTS',
+    'XKEEN_DAT_ALLOW_HTTP',
+    'XKEEN_DAT_ALLOW_CUSTOM_URLS',
+    'XKEEN_DAT_ALLOW_PRIVATE_HOSTS',
+    'XKEEN_GEODAT_ALLOW_HOSTS',
+    'XKEEN_GEODAT_ALLOW_HTTP',
+    'XKEEN_GEODAT_ALLOW_CUSTOM_URLS',
+    'XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS',
   ]);
 
   // Большинство переменных читаются на старте (константы/инициализация blueprint'ов).
@@ -286,12 +302,28 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_NO_RESTART_KEYS.add('XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS');
   ENV_NO_RESTART_KEYS.add('XKEEN_ROUTING_SAVE_MAX_BYTES');
   ENV_NO_RESTART_KEYS.add('XKEEN_CONFIG_EXCHANGE_MAX_BYTES');
+  ENV_NO_RESTART_KEYS.add('XKEEN_DAT_ALLOW_HOSTS');
+  ENV_NO_RESTART_KEYS.add('XKEEN_DAT_ALLOW_HTTP');
+  ENV_NO_RESTART_KEYS.add('XKEEN_DAT_ALLOW_CUSTOM_URLS');
+  ENV_NO_RESTART_KEYS.add('XKEEN_DAT_ALLOW_PRIVATE_HOSTS');
+  ENV_NO_RESTART_KEYS.add('XKEEN_GEODAT_ALLOW_HOSTS');
+  ENV_NO_RESTART_KEYS.add('XKEEN_GEODAT_ALLOW_HTTP');
+  ENV_NO_RESTART_KEYS.add('XKEEN_GEODAT_ALLOW_CUSTOM_URLS');
+  ENV_NO_RESTART_KEYS.add('XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS');
   ENV_RESTART_KEYS.delete('XKEEN_ALLOW_SHELL');
   ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_WINDOW_SECONDS');
   ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_MAX_ATTEMPTS');
   ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS');
   ENV_RESTART_KEYS.delete('XKEEN_ROUTING_SAVE_MAX_BYTES');
   ENV_RESTART_KEYS.delete('XKEEN_CONFIG_EXCHANGE_MAX_BYTES');
+  ENV_RESTART_KEYS.delete('XKEEN_DAT_ALLOW_HOSTS');
+  ENV_RESTART_KEYS.delete('XKEEN_DAT_ALLOW_HTTP');
+  ENV_RESTART_KEYS.delete('XKEEN_DAT_ALLOW_CUSTOM_URLS');
+  ENV_RESTART_KEYS.delete('XKEEN_DAT_ALLOW_PRIVATE_HOSTS');
+  ENV_RESTART_KEYS.delete('XKEEN_GEODAT_ALLOW_HOSTS');
+  ENV_RESTART_KEYS.delete('XKEEN_GEODAT_ALLOW_HTTP');
+  ENV_RESTART_KEYS.delete('XKEEN_GEODAT_ALLOW_CUSTOM_URLS');
+  ENV_RESTART_KEYS.delete('XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS');
   ENV_RESTART_KEYS.add('XKEEN_INIT_SCRIPT');
 
   let _envSnapshot = { items: [], envFile: '' };

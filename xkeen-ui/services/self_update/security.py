@@ -13,68 +13,42 @@ The runner enforces these policies independently.
 
 from __future__ import annotations
 
-import os
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import urlparse
 
+from services.url_policy import (
+    DEFAULT_TRUSTED_DOWNLOAD_HOSTS,
+    URLPolicy,
+    env_flag,
+    get_policy_from_env,
+    is_url_allowed as is_url_allowed_for_policy,
+    parse_allow_hosts as parse_allow_hosts_shared,
+    url_host,
+)
 
-DEFAULT_ALLOW_HOSTS = [
-    "github.com",
-    "objects.githubusercontent.com",
-    "codeload.github.com",
-]
+DEFAULT_ALLOW_HOSTS = list(DEFAULT_TRUSTED_DOWNLOAD_HOSTS)
 
 
 def parse_allow_hosts(raw: Optional[str] = None) -> List[str]:
-    raw = (raw if raw is not None else os.environ.get("XKEEN_UI_UPDATE_ALLOW_HOSTS")) or ""
-    parts = [p.strip().lower() for p in raw.split(",") if p.strip()]
-    if not parts:
-        parts = list(DEFAULT_ALLOW_HOSTS)
-    # de-dup
-    out: List[str] = []
-    for p in parts:
-        if p not in out:
-            out.append(p)
-    return out
+    return parse_allow_hosts_shared(
+        raw,
+        env_key="XKEEN_UI_UPDATE_ALLOW_HOSTS",
+        default_hosts=DEFAULT_ALLOW_HOSTS,
+    )
 
 
 def is_http_allowed() -> bool:
-    return str(os.environ.get("XKEEN_UI_UPDATE_ALLOW_HTTP") or "0").strip() == "1"
-
-
-def url_host(url: str) -> Optional[str]:
-    try:
-        return (urlparse(url).hostname or "").lower() or None
-    except Exception:
-        return None
+    return env_flag("XKEEN_UI_UPDATE_ALLOW_HTTP", False)
 
 
 def is_url_allowed(url: str, allow_hosts: Optional[List[str]] = None) -> Tuple[bool, str]:
     """Return (ok, reason)."""
-    url = str(url or "").strip()
-    if not url:
-        return False, "empty"
-
-    try:
-        p = urlparse(url)
-    except Exception:
-        return False, "parse_failed"
-
-    scheme = (p.scheme or "").lower()
-    if scheme not in ("https", "http"):
-        return False, f"bad_scheme:{scheme or 'none'}"
-    if scheme == "http" and not is_http_allowed():
-        return False, "http_not_allowed"
-
-    host = (p.hostname or "").lower()
-    if not host:
-        return False, "no_host"
-
-    ah = allow_hosts or parse_allow_hosts()
-    for h in ah:
-        if host == h or host.endswith("." + h):
-            return True, "ok"
-    return False, f"host_not_allowed:{host}"
+    policy = URLPolicy(
+        allow_hosts=tuple(allow_hosts or parse_allow_hosts()),
+        allow_http=is_http_allowed(),
+        allow_private_hosts=False,
+        allow_custom_urls=False,
+    )
+    return is_url_allowed_for_policy(url, policy)
 
 
 def security_snapshot() -> Dict[str, str]:

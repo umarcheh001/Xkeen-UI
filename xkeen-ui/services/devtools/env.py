@@ -25,6 +25,14 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS",
     "XKEEN_ROUTING_SAVE_MAX_BYTES",
     "XKEEN_CONFIG_EXCHANGE_MAX_BYTES",
+    "XKEEN_DAT_ALLOW_HOSTS",
+    "XKEEN_DAT_ALLOW_HTTP",
+    "XKEEN_DAT_ALLOW_CUSTOM_URLS",
+    "XKEEN_DAT_ALLOW_PRIVATE_HOSTS",
+    "XKEEN_GEODAT_ALLOW_HOSTS",
+    "XKEEN_GEODAT_ALLOW_HTTP",
+    "XKEEN_GEODAT_ALLOW_CUSTOM_URLS",
+    "XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS",
     "XKEEN_INIT_SCRIPT",
     "XKEEN_RESTART_LOG_FILE",
     # self-update (GitHub)
@@ -248,6 +256,22 @@ def _default_effective_value(
         return str(1024 * 1024)
     if k == "XKEEN_CONFIG_EXCHANGE_MAX_BYTES":
         return str(4 * 1024 * 1024)
+    if k == "XKEEN_DAT_ALLOW_HOSTS":
+        return "github.com,raw.githubusercontent.com,objects.githubusercontent.com,release-assets.githubusercontent.com,codeload.github.com"
+    if k == "XKEEN_DAT_ALLOW_HTTP":
+        return "0"
+    if k == "XKEEN_DAT_ALLOW_CUSTOM_URLS":
+        return "0"
+    if k == "XKEEN_DAT_ALLOW_PRIVATE_HOSTS":
+        return "0"
+    if k == "XKEEN_GEODAT_ALLOW_HOSTS":
+        return "github.com,raw.githubusercontent.com,objects.githubusercontent.com,release-assets.githubusercontent.com,codeload.github.com"
+    if k == "XKEEN_GEODAT_ALLOW_HTTP":
+        return "0"
+    if k == "XKEEN_GEODAT_ALLOW_CUSTOM_URLS":
+        return "0"
+    if k == "XKEEN_GEODAT_ALLOW_PRIVATE_HOSTS":
+        return "0"
 
     # Self-update defaults
     if k == "XKEEN_UI_UPDATE_REPO":
