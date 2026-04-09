@@ -284,6 +284,21 @@ def test_p3_devtools_screen_module_keeps_host_alive_and_stops_background_tasks_o
     assert "import { registerPanelMihomoTopLevelScreens } from './top_level_panel_mihomo.shared.js';" in entry
 
 
+def test_devtools_update_blocked_runs_render_inline_diagnostics_and_stop_retry_launch():
+    text = Path('xkeen-ui/static/js/features/devtools/update.js').read_text(encoding='utf-8')
+
+    assert 'function _showBlockedUpdateReason(btnRun) {' in text
+    assert 'function _buildClientSideCheckFailureData(error) {' in text
+    assert "toastKind(blockedSummary + ' Подробности показаны в карточке обновления.', 'error');" in text
+    assert '_scrollToUpdateSecurityBox();' in text
+    assert "const failureData = _buildClientSideCheckFailureData(e);" in text
+    assert 'state.lastCheck = failureData;' in text
+    assert '_renderCheck(failureData);' in text
+    assert 'if (_showBlockedUpdateReason(btnRun)) return;' in text
+    assert 'Сломалась не установка, а предварительная проверка обновления' in text
+    assert 'Частая причина: GitHub, GitHub API или release asset URLs недоступны с роутера' in text
+
+
 def test_file_manager_monaco_modal_tracks_modal_resize_and_fills_available_height():
     styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
     editor = Path('xkeen-ui/static/js/features/file_manager/editor.js').read_text(encoding='utf-8')

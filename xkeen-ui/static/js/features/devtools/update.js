@@ -303,28 +303,177 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     return r;
   }
 
-  function _renderSecurity(sec) {
+  function _scrollToUpdateSecurityBox() {
+    const box = byId('dt-update-security');
+    if (!box) return;
+    try {
+      if (box.style && box.style.display === 'none') return;
+    } catch (e) {}
+    try {
+      box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {
+      try { box.scrollIntoView(); } catch (e2) {}
+    }
+  }
+
+  function _setRunBlockedState(btn, blocked, kind, message) {
+    if (!btn) return;
+    try {
+      if (btn.dataset) {
+        delete btn.dataset.blocked;
+        delete btn.dataset.blockedKind;
+        delete btn.dataset.blockedMessage;
+      }
+    } catch (e) {}
+    if (!blocked) return;
+    try {
+      if (btn.dataset) {
+        btn.dataset.blocked = '1';
+        if (kind) btn.dataset.blockedKind = String(kind);
+        if (message) btn.dataset.blockedMessage = String(message);
+      }
+    } catch (e) {}
+  }
+
+  function _showBlockedUpdateReason(btnRun) {
+    try {
+      if (!(btnRun && btnRun.dataset && btnRun.dataset.blocked === '1')) return false;
+      const blockKind = btnRun.dataset.blockedKind ? String(btnRun.dataset.blockedKind) : '';
+      const blockedSummary = btnRun.dataset.blockedMessage
+        ? String(btnRun.dataset.blockedMessage)
+        : (blockKind === 'policy'
+          ? 'Автообновление остановлено политикой безопасности.'
+          : 'Панель не смогла проверить обновление.');
+      toastKind(blockedSummary + ' Подробности показаны в карточке обновления.', 'error');
+      _scrollToUpdateSecurityBox();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _buildClientSideCheckFailureData(error) {
+    const info = (state.lastInfo && typeof state.lastInfo === 'object') ? state.lastInfo : {};
+    const settings = (info.settings && typeof info.settings === 'object') ? info.settings : {};
+    const build = (info.build && typeof info.build === 'object') ? info.build : {};
+    const message = error && error.message ? String(error.message) : String(error || 'check_failed');
+    return {
+      ok: false,
+      error: 'check_failed',
+      repo: settings.repo ? String(settings.repo) : (build.repo ? String(build.repo) : ''),
+      channel: settings.channel ? String(settings.channel) : (build.channel ? String(build.channel) : ''),
+      branch: settings.branch ? String(settings.branch) : '',
+      current: build,
+      latest: null,
+      update_available: false,
+      stale: false,
+      meta: message ? { message } : {},
+      security: (info.security && typeof info.security === 'object') ? info.security : null,
+    };
+  }
+
+  function _extractHostFromUrl(url) {
+    try {
+      return String(new URL(String(url || ''), window.location.href).host || '').trim();
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function _summarizeSecurityBlock(sec) {
+    const warnings = Array.isArray(sec && sec.warnings) ? sec.warnings.map((w) => String(w)) : [];
+    const dl = (sec && sec.download && typeof sec.download === 'object') ? sec.download : null;
+    const checksum = (sec && sec.checksum && typeof sec.checksum === 'object') ? sec.checksum : null;
+
+    for (const w of warnings) {
+      if (w.startsWith('download_url_blocked:')) {
+        const reason = w.slice('download_url_blocked:'.length);
+        const host = _extractHostFromUrl(dl && dl.url);
+        if (reason === 'http_not_allowed') return 'Автообновление остановлено: URL архива использует HTTP, а политика разрешает только HTTPS.';
+        if (reason.startsWith('host_not_allowed:')) return 'Автообновление остановлено: хост загрузки' + (host ? (' ' + host) : '') + ' не разрешён политикой обновления.';
+        if (reason === 'missing' || reason === 'empty') return 'Автообновление остановлено: панель не получила корректный URL архива обновления.';
+        return 'Автообновление остановлено: URL архива не проходит текущую политику безопасности.';
+      }
+      if (w.startsWith('checksum_url_blocked:')) {
+        const reason = w.slice('checksum_url_blocked:'.length);
+        const host = _extractHostFromUrl(checksum && checksum.url);
+        if (reason === 'http_not_allowed') return 'Автообновление остановлено: checksum доступен только по HTTP, а политика требует HTTPS.';
+        if (reason.startsWith('host_not_allowed:')) return 'Автообновление остановлено: хост checksum' + (host ? (' ' + host) : '') + ' не разрешён политикой обновления.';
+        return 'Автообновление остановлено: URL checksum не проходит текущую политику безопасности.';
+      }
+      if (w === 'checksum_required_missing') {
+        return 'Автообновление остановлено: политика требует checksum, но для релиза он не найден.';
+      }
+    }
+
+    return 'Автообновление остановлено политикой безопасности. Подробности показаны в карточке обновления.';
+  }
+
+  function _summarizeCheckFailure(data) {
+    const err = data && data.error ? String(data.error) : 'check_failed';
+    const meta = (data && data.meta && typeof data.meta === 'object') ? data.meta : {};
+    const rawMsg = meta && meta.message ? String(meta.message) : '';
+    const low = (err + ' ' + rawMsg).toLowerCase();
+
+    if (meta && meta.reason === 'no_releases') {
+      return 'Панель не нашла опубликованный release для self-update. Подробности показаны в карточке обновления.';
+    }
+    if (err === 'timeout' || low.indexOf('timeout') >= 0 || low.indexOf('timed out') >= 0) {
+      return 'Панель не дождалась ответа от GitHub. Возможно, GitHub недоступен с роутера или соединение режется по пути.';
+    }
+    if (
+      low.indexOf('temporary failure') >= 0 ||
+      low.indexOf('name or service not known') >= 0 ||
+      low.indexOf('getaddrinfo') >= 0 ||
+      low.indexOf('failed to resolve') >= 0 ||
+      low.indexOf('nodename nor servname') >= 0
+    ) {
+      return 'Панель не смогла разрешить адрес GitHub по DNS. Часто это означает сетевую блокировку или проблему DNS на роутере.';
+    }
+    if (
+      low.indexOf('403') >= 0 ||
+      low.indexOf('forbidden') >= 0 ||
+      low.indexOf('429') >= 0 ||
+      low.indexOf('rate limit') >= 0
+    ) {
+      return 'GitHub отклонил запрос или ограничил доступ. Подробности показаны в карточке обновления.';
+    }
+    if (
+      low.indexOf('ssl') >= 0 ||
+      low.indexOf('tls') >= 0 ||
+      low.indexOf('certificate') >= 0
+    ) {
+      return 'Панель не смогла пройти TLS/SSL-проверку при обращении к GitHub.';
+    }
+    return 'Панель не смогла проверить обновление через GitHub. Часто это означает, что GitHub или release asset URLs недоступны с роутера.';
+  }
+
+  function _renderSecurity(sec, opts) {
     const box = byId('dt-update-security');
     if (!box) return;
 
     _clearEl(box);
 
-    if (!sec || typeof sec !== 'object') {
+    const options = (opts && typeof opts === 'object') ? opts : {};
+    const checkError = !!options.checkError;
+    const checkData = (options.data && typeof options.data === 'object') ? options.data : {};
+
+    if ((!sec || typeof sec !== 'object') && !checkError) {
       try { box.style.display = 'none'; } catch (e) {}
       try { box.className = 'dt-alert'; } catch (e) {}
       return;
     }
 
-    const warnings = Array.isArray(sec.warnings) ? sec.warnings.map((w) => String(w)) : [];
-    const willBlock = !!sec.will_block_run;
+    const warnings = Array.isArray(sec && sec.warnings) ? sec.warnings.map((w) => String(w)) : [];
+    const willBlock = !!(sec && sec.will_block_run);
 
     // Derive severity from warnings.
     let sev = 'warn';
-    if (willBlock) sev = 'bad';
+    if (checkError || willBlock) sev = 'bad';
     if (warnings.some((w) => w.indexOf('blocked') >= 0 || w.indexOf('required_missing') >= 0 || w === 'checksum_required_missing')) sev = 'bad';
 
     // If nothing to show — hide.
-    if (!willBlock && (!warnings || !warnings.length)) {
+    if (!checkError && !willBlock && (!warnings || !warnings.length)) {
       try { box.style.display = 'none'; } catch (e) {}
       try { box.className = 'dt-alert'; } catch (e) {}
       return;
@@ -334,7 +483,8 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     try { box.className = 'dt-alert ' + sev; } catch (e) {}
 
     const title = document.createElement('strong');
-    if (willBlock) title.textContent = '⚠️ Обновление будет заблокировано политикой безопасности';
+    if (checkError) title.textContent = '⚠️ Не удалось проверить обновление';
+    else if (willBlock) title.textContent = '⚠️ Обновление будет заблокировано политикой безопасности';
     else title.textContent = '⚠️ Предупреждения безопасности';
     box.appendChild(title);
 
@@ -348,40 +498,90 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       linesWrap.appendChild(d);
     }
 
-    for (const w of warnings) {
-      if (w === 'checksum_required_missing') {
-        addLine('Checksum required: не найден sha-файл (XKEEN_UI_UPDATE_REQUIRE_SHA=1).');
-        continue;
+    if (checkError) {
+      const err = checkData && checkData.error ? String(checkData.error) : 'check_failed';
+      const meta = (checkData && checkData.meta && typeof checkData.meta === 'object') ? checkData.meta : {};
+      const rawMsg = meta && meta.message ? String(meta.message) : '';
+      const low = (err + ' ' + rawMsg).toLowerCase();
+
+      addLine('Сломалась не установка, а предварительная проверка обновления: панель не смогла понять, что именно скачивать и откуда.');
+
+      if (meta && meta.reason === 'no_releases') {
+        addLine('Для выбранного канала нет опубликованного release или подходящего install-архива.');
+      } else if (err === 'timeout' || low.indexOf('timeout') >= 0 || low.indexOf('timed out') >= 0) {
+        addLine('GitHub не ответил вовремя: проверка упёрлась в таймаут.');
+      } else if (
+        low.indexOf('temporary failure') >= 0 ||
+        low.indexOf('name or service not known') >= 0 ||
+        low.indexOf('getaddrinfo') >= 0 ||
+        low.indexOf('failed to resolve') >= 0 ||
+        low.indexOf('nodename nor servname') >= 0
+      ) {
+        addLine('Роутер не смог разрешить адрес GitHub по DNS.');
+      } else if (
+        low.indexOf('403') >= 0 ||
+        low.indexOf('forbidden') >= 0 ||
+        low.indexOf('429') >= 0 ||
+        low.indexOf('rate limit') >= 0
+      ) {
+        addLine('GitHub отклонил запрос или ограничил доступ к API/asset URL.');
+      } else if (
+        low.indexOf('ssl') >= 0 ||
+        low.indexOf('tls') >= 0 ||
+        low.indexOf('certificate') >= 0
+      ) {
+        addLine('При обращении к GitHub возникла TLS/SSL-ошибка.');
+      } else {
+        addLine('Частая причина: GitHub, GitHub API или release asset URLs недоступны с роутера из-за блокировки, DNS или firewall.');
       }
-      if (w.startsWith('download_url_blocked:')) {
-        const reason = w.slice('download_url_blocked:'.length);
-        addLine('Загрузка архива заблокирована: ' + _prettyUrlReason(reason) + '.');
-        continue;
+
+      if (rawMsg) addLine('Техническая деталь: ' + rawMsg + '.');
+      const repo = checkData && checkData.repo ? String(checkData.repo) : '';
+      const channel = checkData && checkData.channel ? String(checkData.channel) : '';
+      if (repo || channel) addLine('Источник проверки: ' + [repo, channel].filter(Boolean).join(' · '), 0.9);
+    } else {
+      if (willBlock) {
+        addLine('Self-update остановлен до запуска: URL архива или checksum не проходит текущую политику безопасности панели.');
       }
-      if (w.startsWith('checksum_url_blocked:')) {
-        const reason = w.slice('checksum_url_blocked:'.length);
-        addLine('Загрузка checksum заблокирована: ' + _prettyUrlReason(reason) + '.');
-        continue;
+      for (const w of warnings) {
+        if (w === 'checksum_required_missing') {
+          addLine('Политика требует checksum, но для релиза не найден sha-файл (XKEEN_UI_UPDATE_REQUIRE_SHA=1).');
+          continue;
+        }
+        if (w.startsWith('download_url_blocked:')) {
+          const reason = w.slice('download_url_blocked:'.length);
+          const host = _extractHostFromUrl(sec && sec.download && sec.download.url);
+          addLine('Загрузка install-архива заблокирована: ' + _prettyUrlReason(reason) + (host ? (' · host=' + host) : '') + '.');
+          continue;
+        }
+        if (w.startsWith('checksum_url_blocked:')) {
+          const reason = w.slice('checksum_url_blocked:'.length);
+          const host = _extractHostFromUrl(sec && sec.checksum && sec.checksum.url);
+          addLine('Загрузка checksum заблокирована: ' + _prettyUrlReason(reason) + (host ? (' · host=' + host) : '') + '.');
+          continue;
+        }
+        addLine(w);
       }
-      addLine(w);
     }
 
     // Add compact policy summary (helps debug allow-list / strict sha).
-    try {
-      const st = (sec.settings && typeof sec.settings === 'object') ? sec.settings : {};
-      const allowHosts = st.allow_hosts ? String(st.allow_hosts) : '';
-      const requireSha = st.require_sha ? String(st.require_sha) : '';
-      const shaStrict = st.sha_strict ? String(st.sha_strict) : '';
-      const maxBytes = st.max_bytes ? _fmtBytes(st.max_bytes) : '';
-      const dlTimeout = st.download_timeout ? String(st.download_timeout) : '';
-      const parts = [];
-      if (allowHosts) parts.push('allow_hosts=' + allowHosts);
-      if (requireSha) parts.push('require_sha=' + requireSha);
-      if (shaStrict) parts.push('sha_strict=' + shaStrict);
-      if (maxBytes) parts.push('max=' + maxBytes);
-      if (dlTimeout) parts.push('dl_timeout=' + dlTimeout + 's');
-      if (parts.length) addLine('Policy: ' + parts.join(' · '), 0.85);
-    } catch (e) {}
+    if (sec && typeof sec === 'object') {
+      try {
+        const st = (sec.settings && typeof sec.settings === 'object') ? sec.settings : {};
+        const allowHosts = st.allow_hosts ? String(st.allow_hosts) : '';
+        const requireSha = st.require_sha ? String(st.require_sha) : '';
+        const shaStrict = st.sha_strict ? String(st.sha_strict) : '';
+        const maxBytes = st.max_bytes ? _fmtBytes(st.max_bytes) : '';
+        const dlTimeout = st.download_timeout ? String(st.download_timeout) : '';
+        const parts = [];
+        if (allowHosts) parts.push('allow_hosts=' + allowHosts);
+        if (requireSha) parts.push('require_sha=' + requireSha);
+        if (shaStrict) parts.push('sha_strict=' + shaStrict);
+        if (maxBytes) parts.push('max=' + maxBytes);
+        if (dlTimeout) parts.push('dl_timeout=' + dlTimeout + 's');
+        if (parts.length) addLine('Policy: ' + parts.join(' · '), 0.85);
+      } catch (e) {}
+    }
 
     box.appendChild(linesWrap);
   }
@@ -473,7 +673,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     const ok = !!(data && data.ok);
     const updateAvail = !!(data && data.update_available);
 
-    _renderSecurity((data && data.security) ? data.security : null);
+    _renderSecurity((data && data.security) ? data.security : null, (!latest || !ok) ? { checkError: true, data } : null);
 
     // Defaults
     _setClass('dt-update-current-version', 'dt-value dt-value-neutral');
@@ -482,20 +682,23 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
     const btnRun = byId('dt-update-run');
     if (btnRun) {
-      try { delete btnRun.dataset.uptodate; delete btnRun.dataset.blocked; } catch (e) {}
+      try { delete btnRun.dataset.uptodate; } catch (e) {}
+      _setRunBlockedState(btnRun, false);
       try { btnRun.disabled = false; } catch (e) {}
     }
 
     if (!latest || !ok) {
+      const blockedSummary = _summarizeCheckFailure(data || {});
       _setText('dt-update-latest-kind', '—');
       _setText('dt-update-latest-version', '—');
       _setText('dt-update-latest-date', '');
       _setText('dt-update-latest-hint', '');
       _setText('dt-update-verdict', '⚠️ Не удалось получить информацию о latest');
       _setClass('dt-update-verdict', 'dt-pill dt-pill-bad');
-      _setStatus('Check failed', 'bad');
+      _setStatus(blockedSummary, 'bad');
       if (btnRun) {
-        try { btnRun.dataset.blocked = '1'; } catch (e) {}
+        _setRunBlockedState(btnRun, true, 'check_failed', blockedSummary);
+        try { btnRun.title = blockedSummary; } catch (e) {}
       }
       return;
     }
@@ -540,14 +743,15 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     // Policy block: if security says will_block_run, show as error verdict and disable Update.
     const willBlock = !!(data && data.security && data.security.will_block_run);
     if (willBlock) {
+      const blockedSummary = _summarizeSecurityBlock(data && data.security);
       _setText('dt-update-verdict', '⛔ Обновление заблокировано политикой безопасности');
       _setClass('dt-update-verdict', 'dt-pill dt-pill-bad');
-      _setStatus('Blocked by policy', 'bad');
+      _setStatus(blockedSummary, 'bad');
       _setClass('dt-update-latest-version', 'dt-value dt-value-neutral');
       if (btnRun) {
-        try { btnRun.disabled = true; } catch (e) {}
-        try { btnRun.dataset.blocked = '1'; } catch (e) {}
-        try { btnRun.title = 'Обновление заблокировано политикой (allow-list/sha/лимиты). См. предупреждение ниже.'; } catch (e) {}
+        _setRunBlockedState(btnRun, true, 'policy', blockedSummary);
+        try { btnRun.disabled = false; } catch (e) {}
+        try { btnRun.title = blockedSummary; } catch (e) {}
       }
     } else if (updateAvail) {
       _setText('dt-update-verdict', '⬆️ Доступно обновление');
@@ -781,9 +985,10 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
         _renderCheck(data || {});
       }
     } catch (e) {
-      const msg = 'Check error: ' + (e && e.message ? e.message : String(e));
-      _setStatus(msg, 'bad');
-      if (!silentToast) toastKind(msg, 'error');
+      const failureData = _buildClientSideCheckFailureData(e);
+      state.lastCheck = failureData;
+      _renderCheck(failureData);
+      if (!silentToast) toastKind(_summarizeCheckFailure(failureData), 'error');
     }
   }
 
@@ -836,12 +1041,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   async function runUpdate() {
     try {
       const btnRun = byId('dt-update-run');
-      try {
-        if (btnRun && btnRun.dataset && btnRun.dataset.blocked === '1') {
-          toastKind('Обновление заблокировано политикой. См. предупреждение ниже.', 'error');
-          return;
-        }
-      } catch (e) {}
+      if (_showBlockedUpdateReason(btnRun)) return;
 
       let ok = true;
       try {
@@ -867,6 +1067,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
         } catch (e) {
           // ignore; will fallback to runner's own check_latest
         }
+        if (_showBlockedUpdateReason(btnRun)) return;
       }
 
       const resolved = {};
