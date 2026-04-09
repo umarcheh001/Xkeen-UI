@@ -9895,6 +9895,7 @@ html[data-theme="light"] .xkeen-cm ::selection {
   grid-template-columns: 320px 1fr;
   gap: 16px;
   align-items: stretch;
+  min-height: 0;
 }
 
 @media (max-width: 720px) {
@@ -9982,10 +9983,11 @@ html[data-theme="light"] .xkeen-cm ::selection {
 }
 
 .routing-template-preview {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-width: 280px;
+  min-height: 0;
 }
 
 .routing-template-preview-header {
@@ -10005,7 +10007,7 @@ html[data-theme="light"] .xkeen-cm ::selection {
 }
 
 .routing-template-preview-code {
-  flex: 1;
+  flex: 1 1 auto;
   margin: 0;
   max-height: 440px;
   overflow: auto;
@@ -10021,7 +10023,7 @@ html[data-theme="light"] .xkeen-cm ::selection {
 
 /* When preview is rendered via CodeMirror (textarea -> CodeMirror wrapper) */
 .routing-template-preview-cm {
-  flex: 1;
+  flex: 1 1 auto;
   height: 440px;
   border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--text-muted, #94a3b8) 22%, transparent);
@@ -10033,7 +10035,7 @@ html[data-theme="light"] .xkeen-cm ::selection {
 
 /* Routing templates: Monaco containers (preview + edit) */
 .routing-template-preview-monaco {
-  flex: 1;
+  flex: 1 1 auto;
   height: 440px;
   min-height: 440px;
   border-radius: 14px;
@@ -10242,16 +10244,63 @@ html[data-theme="light"] .routing-template-edit-cm{
   border-color: #e5e7eb;
 }
 
-/* Routing templates (CM6): the generic `.xkeen-cm6-host { height: 100%; }` rule
-   overrides the template preview/edit fixed heights (`440px` / `360px`). In these
-   modals the parent does not have a definite height, so CM6 grows with content,
-   stretches the modal and loses its own internal scrolling. Re-apply explicit
-   heights for the CM6 host and its inner scroller. */
-#routing-template-modal .xkeen-cm6-host.routing-template-preview-cm {
+/* Routing templates: keep preview/edit editors stretched with the resizable modal. */
+#routing-template-modal .modal-content,
+#routing-template-edit-modal .modal-content {
+  height: 80vh;
+}
+
+#routing-template-modal .modal-body,
+#routing-template-edit-modal .modal-body {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#routing-template-modal .modal-body > .modal-description,
+#routing-template-modal #routing-template-status,
+#routing-template-edit-modal .modal-body > .modal-description,
+#routing-template-edit-modal #routing-template-edit-status {
   flex: 0 0 auto;
-  min-height: 440px !important;
-  height: 440px !important;
-  max-height: 440px !important;
+}
+
+#routing-template-modal .routing-template-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#routing-template-modal .routing-template-list,
+#routing-template-modal .routing-template-preview {
+  min-height: 0;
+  height: 100%;
+}
+
+#routing-template-modal .routing-template-list {
+  max-height: none;
+}
+
+#routing-template-modal .routing-template-preview-header {
+  flex: 0 0 auto;
+}
+
+#routing-template-modal .routing-template-preview-code,
+#routing-template-modal .routing-template-preview-cm,
+#routing-template-modal .routing-template-preview-monaco,
+#routing-template-modal .xkeen-cm6-host.routing-template-preview-cm {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+}
+
+#routing-template-modal .routing-template-preview-cm .CodeMirror-scroll {
+  min-height: 0;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+#routing-template-modal .xkeen-cm6-host.routing-template-preview-cm {
   overflow: hidden;
 }
 
@@ -10261,11 +10310,37 @@ html[data-theme="light"] .routing-template-edit-cm{
   height: 100% !important;
 }
 
+#routing-template-edit-modal .routing-template-edit-form {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#routing-template-edit-modal .routing-template-edit-form > label:last-of-type {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#routing-template-edit-modal .routing-template-edit-form > label:last-of-type > .routing-template-edit-textarea,
+#routing-template-edit-modal .routing-template-edit-form > label:last-of-type > .routing-template-edit-cm,
+#routing-template-edit-modal .routing-template-edit-form > label:last-of-type > .routing-template-edit-monaco,
 #routing-template-edit-modal .xkeen-cm6-host.routing-template-edit-cm {
-  width: 100%;
-  min-height: 260px !important;
-  height: 360px !important;
-  max-height: 360px !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+}
+
+#routing-template-edit-modal .routing-template-edit-form > label:last-of-type > .routing-template-edit-textarea {
+  resize: none;
+}
+
+#routing-template-edit-modal .routing-template-edit-cm .CodeMirror-scroll {
+  min-height: 0;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+#routing-template-edit-modal .xkeen-cm6-host.routing-template-edit-cm {
   overflow: hidden;
 }
 

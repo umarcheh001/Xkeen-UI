@@ -874,6 +874,36 @@ def test_mihomo_profiles_backups_panel_uses_compact_premium_vault_layout():
     assert 'html[data-theme="light"] .xk-mihomo-vault-card {' in styles
 
 
+def test_routing_template_modals_stretch_preview_and_edit_editors_with_modal_resize():
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    script = Path('xkeen-ui/static/js/features/routing_templates.js').read_text(encoding='utf-8')
+
+    assert '#routing-template-modal .modal-content,' in styles
+    assert '#routing-template-edit-modal .modal-content {' in styles
+    assert 'height: 80vh;' in styles
+    assert '#routing-template-modal .modal-body,' in styles
+    assert 'overflow: hidden;' in styles
+    assert '#routing-template-modal .routing-template-grid {' in styles
+    assert '#routing-template-modal .routing-template-preview-monaco,' in styles
+    assert '#routing-template-modal .xkeen-cm6-host.routing-template-preview-cm {' in styles
+    assert '#routing-template-edit-modal .routing-template-edit-form > label:last-of-type > .routing-template-edit-monaco,' in styles
+    assert '#routing-template-edit-modal .routing-template-edit-cm .CodeMirror-scroll {' in styles
+    assert 'height: 100%;' in styles
+    assert 'max-height: none;' in styles
+    assert 'resize: none;' in styles
+
+    assert 'let _modalResizeWired = false;' in script
+    assert 'function layoutPreviewEditorsSoon() {' in script
+    assert 'function layoutEditEditorsSoon() {' in script
+    assert 'function wireTemplateModalResizeOnce() {' in script
+    assert "document.addEventListener('xkeen-modal-resize', (event) => {" in script
+    assert 'if (modalId === IDS.modal) {' in script
+    assert 'if (modalId === IDS.editModal) {' in script
+    assert 'wireTemplateModalResizeOnce();' in script
+    assert 'layoutPreviewEditorsSoon();' in script
+    assert 'layoutEditEditorsSoon();' in script
+
+
 def test_routing_dat_card_keeps_visible_current_file_labels_in_sync_with_selected_names():
     ids_text = Path('xkeen-ui/static/js/features/routing_cards/ids.js').read_text(encoding='utf-8')
     panel_text = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')

@@ -99,6 +99,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
   let _engineSyncing = false;
   let _previewViewStateStore = null;
   let _editViewStateStore = null;
+  let _modalResizeWired = false;
 
   function currentCmTheme() {
     try {
@@ -243,6 +244,54 @@ editEngineSelect: 'routing-template-edit-engine-select',
     if (_editKind === 'monaco' && _editMonacoFacade) return _editMonacoFacade;
     if (_editCmFacade) return _editCmFacade;
     return null;
+  }
+
+  function layoutPreviewEditorsSoon() {
+    const doLayout = () => {
+      if (!modalOpen(IDS.modal)) return;
+      try {
+        const fac = previewActiveFacade();
+        if (fac && typeof fac.layout === 'function') fac.layout();
+      } catch (e) {}
+    };
+
+    doLayout();
+    try { requestAnimationFrame(doLayout); } catch (e) { setTimeout(doLayout, 0); }
+    setTimeout(doLayout, 0);
+    setTimeout(doLayout, 60);
+    setTimeout(doLayout, 180);
+  }
+
+  function layoutEditEditorsSoon() {
+    const doLayout = () => {
+      if (!modalOpen(IDS.editModal)) return;
+      try {
+        const fac = editActiveFacade();
+        if (fac && typeof fac.layout === 'function') fac.layout();
+      } catch (e) {}
+    };
+
+    doLayout();
+    try { requestAnimationFrame(doLayout); } catch (e) { setTimeout(doLayout, 0); }
+    setTimeout(doLayout, 0);
+    setTimeout(doLayout, 60);
+    setTimeout(doLayout, 180);
+  }
+
+  function wireTemplateModalResizeOnce() {
+    if (_modalResizeWired) return;
+    _modalResizeWired = true;
+
+    document.addEventListener('xkeen-modal-resize', (event) => {
+      const modalId = String(event && event.detail && event.detail.modal || '').trim();
+      if (modalId === IDS.modal) {
+        layoutPreviewEditorsSoon();
+        return;
+      }
+      if (modalId === IDS.editModal) {
+        layoutEditEditorsSoon();
+      }
+    });
   }
 
   function getScopedViewStateStore(kind) {
@@ -549,6 +598,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
         }
       } catch (e) {}
       try { bindPreviewViewStateTracking(); } catch (e2) {}
+      try { layoutPreviewEditorsSoon(); } catch (e3) {}
       return 'monaco';
     }
 
@@ -579,6 +629,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
     _previewKind = 'codemirror';
     try { if (preservedView) restorePreviewViewState(preservedView); } catch (e3) {}
     try { bindPreviewViewStateTracking(); } catch (e4) {}
+    try { layoutPreviewEditorsSoon(); } catch (e5) {}
     return 'codemirror';
   }
 
@@ -629,6 +680,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
       try { if (preservedView) restoreEditViewState(preservedView); } catch (e2) {}
       try { bindEditViewStateTracking(); } catch (e3) {}
       try { if (_editMonacoFacade) _editMonacoFacade.focus(); } catch (e) {}
+      try { layoutEditEditorsSoon(); } catch (e4) {}
       return 'monaco';
     }
 
@@ -659,6 +711,7 @@ editEngineSelect: 'routing-template-edit-engine-select',
     _editKind = 'codemirror';
     try { if (preservedView) restoreEditViewState(preservedView); } catch (e4) {}
     try { bindEditViewStateTracking(); } catch (e5) {}
+    try { layoutEditEditorsSoon(); } catch (e6) {}
     return 'codemirror';
   }
 
@@ -686,9 +739,10 @@ editEngineSelect: 'routing-template-edit-engine-select',
 
     // Defer engine init until modal is visible (CodeMirror / Monaco).
     try { scheduleEngineSync(); } catch (e) {}
+    try { layoutPreviewEditorsSoon(); } catch (e2) {}
 
     // Make sure scroll lock is correct
-    try { syncXkeenBodyScrollLock(true); } catch (e) {}
+    try { syncXkeenBodyScrollLock(true); } catch (e3) {}
   }
 
   function closeModal() {
@@ -737,6 +791,7 @@ function openEditModal() {
 
   // Defer engine init until modal is visible (CodeMirror / Monaco).
   try { scheduleEngineSync(); } catch (e) {}
+  try { layoutEditEditorsSoon(); } catch (e2) {}
 }
 
 function closeEditModal() {
@@ -1810,6 +1865,7 @@ const saveModal = el(IDS.saveModal);
     if (_inited) return;
     _inited = true;
 
+    wireTemplateModalResizeOnce();
     wireUI();
   }
 
