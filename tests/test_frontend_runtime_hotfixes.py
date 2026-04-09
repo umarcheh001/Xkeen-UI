@@ -874,6 +874,26 @@ def test_mihomo_profiles_backups_panel_uses_compact_premium_vault_layout():
     assert 'html[data-theme="light"] .xk-mihomo-vault-card {' in styles
 
 
+def test_panel_mobile_usability_pass_uses_scrollable_tabs_and_compact_editor_toolbar_overrides():
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert 'Panel page: mobile usability pass' in styles
+    assert '@media (max-width: 760px) {' in styles
+    assert 'body.panel-page .top-tabs.header-tabs {' in styles
+    assert 'scroll-snap-type: x proximity;' in styles
+    assert 'body.panel-page .xkeen-ctrl-group-main {' in styles
+    assert 'grid-template-columns: repeat(3, minmax(0, 1fr));' in styles
+    assert 'body.panel-page .xk-routing-toolbararea,' in styles
+    assert 'body.panel-page .xk-mihomo-toolbararea {' in styles
+    assert 'body.panel-page .xk-routing-toolbarhost,' in styles
+    assert 'body.panel-page .xk-mihomo-toolbarhost {' in styles
+    assert 'body.panel-page #routing-body {' in styles
+    assert '--xk-routing-editor-height: min(44vh, 360px);' in styles
+    assert 'body.panel-page .routing-dat-actions-inline {' in styles
+    assert 'body.panel-page .theme-toggle-btn.xk-header-btn-theme .theme-toggle-text {' in styles
+    assert '@media (max-width: 420px) {' in styles
+
+
 def test_routing_template_modals_stretch_preview_and_edit_editors_with_modal_resize():
     styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
     script = Path('xkeen-ui/static/js/features/routing_templates.js').read_text(encoding='utf-8')
