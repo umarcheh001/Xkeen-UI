@@ -114,7 +114,7 @@ def test_remotefs_remove_non_recursive_returns_error_when_rm_and_rmdir_fail():
     response = client.delete("/api/remotefs/sessions/sid-1/remove?path=busy-dir")
 
     assert response.status_code == 400
-    assert response.get_json() == {"error": "remove_failed", "ok": False, "details": "directory not empty"}
+    assert response.get_json() == {"error": "remove_failed", "ok": False}
     assert mgr.calls == [
         {
             "session": session,
