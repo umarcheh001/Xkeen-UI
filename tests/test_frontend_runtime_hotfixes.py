@@ -106,6 +106,19 @@ def test_mihomo_result_modal_collapses_empty_log_column_and_uses_compact_section
     assert '.mihomo-result-log-shell {' in template
 
 
+def test_mihomo_result_modal_supports_compact_validate_mode():
+    script = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+    template = Path('xkeen-ui/templates/mihomo_generator.html').read_text(encoding='utf-8')
+
+    assert 'function normalizeResultMode(rawMode, action) {' in script
+    assert "try { mihomoResultModal.dataset.mode = normalizedMode; } catch (e) {}" in script
+    assert "mode: 'validate'," in script
+    assert '#mihomoResultModal[data-mode="validate"] .modal-content {' in template
+    assert '#mihomoResultModal[data-mode="validate"] .mihomo-result-grid {' in template
+    assert '#mihomoResultModal[data-mode="validate"] .mihomo-result-meta-grid {' in template
+    assert '#mihomoResultModal[data-mode="validate"] .mihomo-result-terminal {' in template
+
+
 def test_top_level_navigation_controls_use_shared_helper_contract():
     helper = Path('xkeen-ui/static/js/pages/top_level_nav.shared.js').read_text(encoding='utf-8')
     shell = Path('xkeen-ui/static/js/pages/top_level_shell.shared.js').read_text(encoding='utf-8')

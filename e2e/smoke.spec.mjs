@@ -109,3 +109,19 @@ test('mihomo preview modal collapses the empty log column', async ({ page }) => 
   await expect(page.locator('.mihomo-result-overview')).toBeVisible();
   await expect(page.locator('#mihomoResultWarnings')).toContainText('Неизвестные группы по умолчанию');
 });
+
+
+test('mihomo validation modal uses compact validate layout', async ({ page }) => {
+  await page.goto('/mihomo_generator');
+  await waitForMihomoGeneratorPreview(page);
+
+  await page.locator('#validateBtn').click();
+
+  await expect(page.locator('#mihomoResultModal')).toBeVisible();
+  await expect(page.locator('#mihomoResultModal')).toHaveAttribute('data-mode', 'validate');
+  await expect(page.locator('#mihomoResultGrid')).toHaveAttribute('data-has-log', '1');
+  await expect(page.locator('#mihomoResultSidePanel')).toBeVisible();
+  await expect(page.locator('#mihomoResultMetaWrap')).toContainText('Источник');
+  await expect(page.locator('#mihomoResultMetaWrap')).toContainText('Операция');
+  await expect(page.locator('#mihomoResultModal .mihomo-result-terminal')).toBeVisible();
+});

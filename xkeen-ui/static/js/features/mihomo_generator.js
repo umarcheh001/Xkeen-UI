@@ -3145,6 +3145,15 @@ function initEngineToggle() {
           return (String(text || "").split("\n").find((line) => String(line || "").trim()) || "").trim();
         }
 
+        function normalizeResultMode(rawMode, action) {
+          const source = String(rawMode || action || '').trim().toLowerCase();
+          if (!source) return 'result';
+          if (/validate|валид/.test(source)) return 'validate';
+          if (/preview|предпросмотр/.test(source)) return 'preview';
+          if (/apply|примен/.test(source)) return 'apply';
+          return 'result';
+        }
+
         function renderResultItems(items, tone) {
           const arr = uniqueStrings(items || []);
           if (!arr.length) return "";
@@ -3218,6 +3227,7 @@ function initEngineToggle() {
 
           const payload = Object.assign({
             kind: 'info',
+            mode: '',
             kicker: 'Mihomo / result',
             title: 'Результат операции',
             subtitle: 'Подробности проверки, предпросмотра и применения конфигурации отображаются в одном окне.',
@@ -3233,6 +3243,7 @@ function initEngineToggle() {
 
           const kind = (String(payload.kind || 'info').toLowerCase());
           const normalizedKind = (kind === 'success' || kind === 'warning' || kind === 'error') ? kind : 'info';
+          const normalizedMode = normalizeResultMode(payload.mode, payload.action);
           const icons = { success: 'OK', warning: '!', error: 'ERR', info: 'MH' };
           const badges = { success: 'Готово', warning: 'Внимание', error: 'Ошибка', info: 'Инфо' };
           const lineCol = payload.lineCol || extractLineColFromText([payload.summary, payload.log, (payload.errors || []).join('\n')].join('\n'));
@@ -3244,6 +3255,7 @@ function initEngineToggle() {
           _lastMihomoResultPayload = Object.assign({}, payload, { kind: normalizedKind, lineCol });
 
           try { mihomoResultModal.dataset.kind = normalizedKind; } catch (e) {}
+          try { mihomoResultModal.dataset.mode = normalizedMode; } catch (e) {}
           if (mihomoResultModalKicker) mihomoResultModalKicker.textContent = String(payload.kicker || 'Mihomo / result');
           if (mihomoResultModalTitle) mihomoResultModalTitle.textContent = String(payload.title || 'Результат операции');
           if (mihomoResultModalSubtitle) mihomoResultModalSubtitle.textContent = String(payload.subtitle || '');
@@ -3323,6 +3335,7 @@ function initEngineToggle() {
           const raw = text == null ? '' : String(text);
           showMihomoResultModal({
             kind: /\[exit code:\s*0\]/i.test(raw) ? 'success' : 'error',
+            mode: 'validate',
             kicker: 'Mihomo / validate',
             title: /\[exit code:\s*0\]/i.test(raw) ? 'Проверка конфигурации пройдена' : 'Проверка конфигурации не пройдена',
             subtitle: 'Проверка выполняется через mihomo -t без сохранения и перезапуска.',
@@ -3398,6 +3411,7 @@ function initEngineToggle() {
             if (showPopup) {
               showMihomoResultModal({
                 kind: 'error',
+                mode: 'validate',
                 kicker: 'Mihomo / validate',
                 title: 'Проверка невозможна',
                 subtitle: 'Перед проверкой нужно получить или вставить config.yaml в редактор.',
@@ -3433,6 +3447,7 @@ function initEngineToggle() {
               if (showPopup) {
                 showMihomoResultModal({
                   kind: 'error',
+                  mode: 'validate',
                   kicker: 'Mihomo / validate',
                   title: 'Сервер не смог проверить конфиг',
                   subtitle: 'Проверка через mihomo -t не завершилась успешно.',
@@ -3455,6 +3470,7 @@ function initEngineToggle() {
               if (showPopup) {
                 showMihomoResultModal({
                   kind: 'success',
+                  mode: 'validate',
                   kicker: 'Mihomo / validate',
                   title: 'Проверка конфигурации пройдена',
                   subtitle: 'Mihomo принял config.yaml — ядро не нашло ошибок в синтаксисе и структуре.',
@@ -3474,6 +3490,7 @@ function initEngineToggle() {
               if (showPopup) {
                 showMihomoResultModal({
                   kind: 'error',
+                  mode: 'validate',
                   kicker: 'Mihomo / validate',
                   title: 'Проверка конфигурации не пройдена',
                   subtitle: 'Конфиг не был сохранён и не должен применяться, пока ошибка не исправлена.',
@@ -3495,6 +3512,7 @@ function initEngineToggle() {
             if (showPopup) {
               showMihomoResultModal({
                 kind: 'error',
+                mode: 'validate',
                 kicker: 'Mihomo / validate',
                 title: 'Проверка прервалась из-за ошибки сети',
                 subtitle: 'Браузер не смог получить ответ от сервера проверки.',
