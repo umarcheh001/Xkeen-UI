@@ -81,6 +81,14 @@ def test_mihomo_generator_preserves_explicit_empty_rule_group_selection():
     assert 'if (Array.isArray(_pendingSessionRuleGroups) && _pendingSessionRuleGroups.length) {' not in text
 
 
+def test_mihomo_generator_initializes_preview_toolbar_without_engine_toggle():
+    text = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+
+    assert "try { enhanceEditorOptions(); } catch (e) {}" in text
+    assert "try { attachPreviewToolbar(); } catch (e) {}" in text
+    assert text.index("try { attachPreviewToolbar(); } catch (e) {}") < text.index("try { wireLazyPreviewToolbar(); } catch (e) {}")
+
+
 def test_top_level_navigation_controls_use_shared_helper_contract():
     helper = Path('xkeen-ui/static/js/pages/top_level_nav.shared.js').read_text(encoding='utf-8')
     shell = Path('xkeen-ui/static/js/pages/top_level_shell.shared.js').read_text(encoding='utf-8')

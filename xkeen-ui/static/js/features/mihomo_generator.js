@@ -1311,11 +1311,12 @@ function initEngineToggle() {
             window.__xkeenEditors.push(editor);
           } catch (e) {}
 
-          try { wireLazyPreviewToolbar(); } catch (e) {}
-
           // Default active engine is CodeMirror until overridden by global preference.
           try { _engine = 'codemirror'; _active = cmFacade(); } catch (e) {}
           try { bindSessionDraftEditorListener(); } catch (e) {}
+          try { enhanceEditorOptions(); } catch (e) {}
+          try { attachPreviewToolbar(); } catch (e) {}
+          try { wireLazyPreviewToolbar(); } catch (e) {}
         }
       
         // React on theme changes (main.js dispatches xkeen-theme-change)

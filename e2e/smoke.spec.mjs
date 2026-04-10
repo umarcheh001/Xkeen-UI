@@ -69,6 +69,7 @@ test('mihomo generator page renders source and preview panes', async ({ page }) 
   await expect(page.locator('#previewTextarea')).toBeAttached();
   await expect(page.locator('body')).toContainText('Исходные данные');
   await expect(page.locator('body')).toContainText('Предпросмотр');
+  await expect(page.locator('#previewToolbarHost button[data-action-id="fs"], #previewToolbarHost button[data-action-id="fs_any"]').first()).toBeVisible();
 });
 
 
