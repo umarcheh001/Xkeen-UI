@@ -89,6 +89,23 @@ def test_mihomo_generator_initializes_preview_toolbar_without_engine_toggle():
     assert text.index("try { attachPreviewToolbar(); } catch (e) {}") < text.index("try { wireLazyPreviewToolbar(); } catch (e) {}")
 
 
+def test_mihomo_result_modal_collapses_empty_log_column_and_uses_compact_sections():
+    script = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+    template = Path('xkeen-ui/templates/mihomo_generator.html').read_text(encoding='utf-8')
+
+    assert 'const mihomoResultGrid = document.getElementById("mihomoResultGrid");' in script
+    assert 'const mihomoResultSidePanel = document.getElementById("mihomoResultSidePanel");' in script
+    assert "if (mihomoResultSidePanel) mihomoResultSidePanel.style.display = hasLog ? '' : 'none';" in script
+    assert "if (mihomoResultGrid && mihomoResultGrid.dataset) mihomoResultGrid.dataset.hasLog = hasLog ? '1' : '0';" in script
+    assert "return '<div class=\"mihomo-result-list\">' + itemsHtml + '</div>';" in script
+
+    assert 'id="mihomoResultGrid"' in template
+    assert 'id="mihomoResultSidePanel"' in template
+    assert 'class="mihomo-result-overview"' in template
+    assert '.mihomo-result-grid[data-has-log="0"] {' in template
+    assert '.mihomo-result-log-shell {' in template
+
+
 def test_top_level_navigation_controls_use_shared_helper_contract():
     helper = Path('xkeen-ui/static/js/pages/top_level_nav.shared.js').read_text(encoding='utf-8')
     shell = Path('xkeen-ui/static/js/pages/top_level_shell.shared.js').read_text(encoding='utf-8')

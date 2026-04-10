@@ -94,3 +94,18 @@ test('mihomo generator removes optional rule groups from preview when all checkb
   await expect.poll(() => getMihomoGeneratorPreviewText(page)).not.toContain('- name: Discord');
   await expect.poll(() => getMihomoGeneratorPreviewText(page)).toContain('- name: Заблок. сервисы');
 });
+
+
+test('mihomo preview modal collapses the empty log column', async ({ page }) => {
+  await page.goto('/mihomo_generator');
+  await waitForMihomoGeneratorPreview(page);
+
+  await page.locator('#defaultGroupsInput').fill('GhostGroup');
+  await page.locator('#generateBtn').click();
+
+  await expect(page.locator('#mihomoResultModal')).toBeVisible();
+  await expect(page.locator('#mihomoResultGrid')).toHaveAttribute('data-has-log', '0');
+  await expect(page.locator('#mihomoResultSidePanel')).toBeHidden();
+  await expect(page.locator('.mihomo-result-overview')).toBeVisible();
+  await expect(page.locator('#mihomoResultWarnings')).toContainText('Неизвестные группы по умолчанию');
+});

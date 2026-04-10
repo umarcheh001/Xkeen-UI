@@ -212,6 +212,8 @@ let mihomoGeneratorModuleApi = null;
         const mihomoResultWarnings = document.getElementById("mihomoResultWarnings");
         const mihomoResultErrorsWrap = document.getElementById("mihomoResultErrorsWrap");
         const mihomoResultErrors = document.getElementById("mihomoResultErrors");
+        const mihomoResultGrid = document.getElementById("mihomoResultGrid");
+        const mihomoResultSidePanel = document.getElementById("mihomoResultSidePanel");
         const mihomoResultMetaWrap = document.getElementById("mihomoResultMetaWrap");
         const mihomoResultLogWrap = document.getElementById("mihomoResultLogWrap");
         const mihomoResultModalLog = document.getElementById("mihomoResultModalLog");
@@ -3147,12 +3149,13 @@ function initEngineToggle() {
           const arr = uniqueStrings(items || []);
           if (!arr.length) return "";
           const toneClass = tone === 'error' ? 'mihomo-result-item--error' : (tone === 'warning' ? 'mihomo-result-item--warning' : '');
-          return arr.map((item, index) => {
+          const itemsHtml = arr.map((item, index) => {
             return '<div class="mihomo-result-item ' + toneClass + '">' +
               '<span class="mihomo-result-item-index">' + (index + 1) + '</span>' +
               '<span>' + escapeHtml(item) + '</span>' +
             '</div>';
           }).join('');
+          return '<div class="mihomo-result-list">' + itemsHtml + '</div>';
         }
 
         function setResultSectionVisible(node, visible) {
@@ -3276,7 +3279,10 @@ function initEngineToggle() {
           }
 
           const logText = String(payload.log || '').trim();
-          setResultSectionVisible(mihomoResultLogWrap, !!logText);
+          const hasLog = !!logText;
+          setResultSectionVisible(mihomoResultLogWrap, hasLog);
+          if (mihomoResultSidePanel) mihomoResultSidePanel.style.display = hasLog ? '' : 'none';
+          if (mihomoResultGrid && mihomoResultGrid.dataset) mihomoResultGrid.dataset.hasLog = hasLog ? '1' : '0';
           if (mihomoResultModalLog) mihomoResultModalLog.innerHTML = logText ? formatLogHtml(logText) : '';
 
           if (mihomoResultJumpBtn) {
