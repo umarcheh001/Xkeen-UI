@@ -186,7 +186,7 @@ import {
         if (descInput) descInput.value = '';
         closeExportModal();
       } else {
-        const errMsg = 'Ошибка выгрузки: ' + ((data && data.error) || 'неизвестная ошибка');
+        const errMsg = 'Ошибка выгрузки: ' + ((data && (data.hint || data.error)) || 'неизвестная ошибка');
         setStatus(errMsg, true);
       }
     } catch (e) {
@@ -220,7 +220,7 @@ import {
         await refreshAfterImport();
         closeCatalogModal();
       } else {
-        const errMsg = 'Ошибка загрузки: ' + ((data && data.error) || 'неизвестная ошибка');
+        const errMsg = 'Ошибка загрузки: ' + ((data && (data.hint || data.error)) || 'неизвестная ошибка');
         setStatus(errMsg, true);
       }
     } catch (e) {
@@ -231,7 +231,7 @@ import {
 
   function _humanizeCatalogError(res, data, err) {
     // Prefer a short and understandable message.
-    const serverMsg = (data && (data.error || data.message)) ? String(data.error || data.message) : '';
+    const serverMsg = (data && (data.hint || data.error || data.message)) ? String(data.hint || data.error || data.message) : '';
 
     if (err && err.name === 'AbortError') {
       return 'Таймаут: GitHub не отвечает. Нажмите «Повторить».';

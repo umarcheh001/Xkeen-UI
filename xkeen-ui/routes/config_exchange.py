@@ -38,6 +38,28 @@ def _api_error(message: str, status: int = 400, *, ok: bool | None = None, **ext
     return jsonify(payload), status
 
 
+def _log_exception(tag: str, exc: Exception, **extra: Any) -> None:
+    try:
+        if extra:
+            current_app.logger.exception("config_exchange.%s | %r", tag, extra)
+        else:
+            current_app.logger.exception("config_exchange.%s", tag)
+    except Exception:
+        pass
+
+
+def _api_exception(
+    error: str,
+    hint: str,
+    *,
+    status: int,
+    exc: Exception,
+    **extra: Any,
+):
+    _log_exception(error, exc, **extra)
+    return _api_error(error, status, ok=False, hint=hint, **extra)
+
+
 def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str = "") -> Blueprint:
     bp = Blueprint("config_exchange", __name__)
 
@@ -76,12 +98,24 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
         except PayloadTooLargeError:
             return _api_error("payload too large", 413, ok=False, max_bytes=max_bytes)
         except Exception as e:  # noqa: BLE001
-            return _api_error(f"read failed: {e}", 400, ok=False)
+            return _api_exception(
+                "read_failed",
+                "Не удалось прочитать загруженный файл конфигурации.",
+                status=400,
+                exc=e,
+                filename=str(getattr(file, "filename", "") or ""),
+            )
 
         try:
             bundle = json.loads(raw)
         except Exception as e:  # noqa: BLE001
-            return _api_error(f"invalid json: {e}", 400, ok=False)
+            return _api_exception(
+                "invalid_json",
+                "Файл конфигурации содержит некорректный JSON.",
+                status=400,
+                exc=e,
+                filename=str(getattr(file, "filename", "") or ""),
+            )
 
         if not isinstance(bundle, dict):
             return _api_error("bundle must be a dict", 400, ok=False)
@@ -89,7 +123,12 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
         try:
             apply_user_configs_bundle(bundle)
         except Exception as e:  # noqa: BLE001
-            return _api_error(f"apply failed: {e}", 500, ok=False)
+            return _api_exception(
+                "apply_failed",
+                "Не удалось применить импортированный набор конфигураций.",
+                status=500,
+                exc=e,
+            )
 
         return jsonify({"ok": True}), 200
 
@@ -129,18 +168,23 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
                 wait_seconds=10.0,
             )
         except Exception as e:  # noqa: BLE001
-            return _api_error(f"upload failed: {e}", 500, ok=False)
+            return _api_exception(
+                "upload_failed",
+                "Не удалось выгрузить конфигурацию на config-server.",
+                status=500,
+                exc=e,
+            )
 
         ok = bool(server_resp.get("ok")) if isinstance(server_resp, dict) else False
         cfg_id = server_resp.get("id") if isinstance(server_resp, dict) else None
 
         if not ok or not cfg_id:
-            payload = {
-                "error": "upload failed on config server",
-                "ok": False,
-                "server_response": server_resp,
-            }
-            return jsonify(payload), 500
+            return _api_error(
+                "upload_failed",
+                500,
+                ok=False,
+                hint="Config-server отклонил выгрузку конфигурации.",
+            )
 
         return jsonify({"ok": True, "id": cfg_id, "server_response": server_resp}), 200
 
@@ -162,7 +206,12 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
         except TimeoutError:
             return _api_error("GitHub timeout while loading configs index (try again later)", 504, ok=False)
         except Exception as e:  # noqa: BLE001
-            return _api_error(f"github index failed: {e}", 500, ok=False)
+            return _api_exception(
+                "github_index_failed",
+                "Не удалось загрузить каталог конфигураций из GitHub.",
+                status=500,
+                exc=e,
+            )
 
         safe_items = gh.sanitize_github_index_items(items)
         total = len(safe_items)
@@ -188,7 +237,12 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
             except TimeoutError:
                 return _api_error("GitHub timeout while loading configs index", 504, ok=False)
             except Exception as e:  # noqa: BLE001
-                return _api_error(f"github index failed: {e}", 500, ok=False)
+                return _api_exception(
+                    "github_index_failed",
+                    "Не удалось загрузить каталог конфигураций из GitHub.",
+                    status=500,
+                    exc=e,
+                )
 
             safe_items = gh.sanitize_github_index_items(items)
             if not safe_items:
@@ -204,7 +258,13 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
         except TimeoutError:
             return _api_error("GitHub timeout while loading bundle.json", 504, ok=False)
         except Exception as e:  # noqa: BLE001
-            return _api_error(f"github get {cfg_id} failed: {e}", 500, ok=False)
+            return _api_exception(
+                "github_fetch_failed",
+                "Не удалось получить bundle конфигурации из GitHub.",
+                status=500,
+                exc=e,
+                cfg_id=cfg_id,
+            )
 
         if not raw_bundle:
             return _api_error(f"config {cfg_id} not found in repo", 404, ok=False)
@@ -212,7 +272,13 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
         try:
             bundle = json.loads(raw_bundle)
         except Exception as e:  # noqa: BLE001
-            return _api_error(f"invalid bundle JSON for {cfg_id}: {e}", 500, ok=False)
+            return _api_exception(
+                "invalid_bundle_json",
+                "Полученный bundle содержит некорректный JSON.",
+                status=500,
+                exc=e,
+                cfg_id=cfg_id,
+            )
 
         if not isinstance(bundle, dict):
             return _api_error("invalid bundle structure from repo", 500, ok=False)
@@ -220,7 +286,13 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
         try:
             apply_user_configs_bundle(bundle)
         except Exception as e:  # noqa: BLE001
-            return _api_error(f"apply failed: {e}", 500, ok=False)
+            return _api_exception(
+                "apply_failed",
+                "Не удалось применить импортированный набор конфигураций.",
+                status=500,
+                exc=e,
+                cfg_id=cfg_id,
+            )
 
         return jsonify({"ok": True, "cfg_id": cfg_id}), 200
 

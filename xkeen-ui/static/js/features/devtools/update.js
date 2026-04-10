@@ -410,6 +410,8 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   }
 
   function _summarizeCheckFailure(data) {
+    const hint = data && data.hint ? String(data.hint) : '';
+    if (hint) return hint;
     const err = data && data.error ? String(data.error) : 'check_failed';
     const meta = (data && data.meta && typeof data.meta === 'object') ? data.meta : {};
     const rawMsg = meta && meta.message ? String(meta.message) : '';
@@ -1030,7 +1032,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
           toastKind('Откат не запущен', 'error');
         }
       } else {
-        const err = data && data.error ? String(data.error) : 'rollback_failed';
+        const err = data && (data.hint || data.error) ? String(data.hint || data.error) : 'rollback_failed';
         _setStatus('Rollback failed: ' + err, 'bad');
       }
     } catch (e) {
@@ -1111,7 +1113,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
           toastKind('Обновление не запущено', 'error');
         }
       } else {
-        const err = data && data.error ? String(data.error) : 'run_failed';
+        const err = data && (data.hint || data.error) ? String(data.hint || data.error) : 'run_failed';
         _setStatus('Run failed: ' + err, 'bad');
       }
     } catch (e) {

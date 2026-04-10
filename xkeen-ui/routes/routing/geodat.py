@@ -9,7 +9,7 @@ import os
 import subprocess
 from typing import Any
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, current_app, request, jsonify
 
 from services.geodat.runner import _geodat_bin_path
 from services.geodat.install import _geodat_install_script_path, _geodat_run_help, _geodat_stat_meta, geodat_platform_info
@@ -37,6 +37,16 @@ def _short_reason(text: str, *, limit: int = 240) -> str:
     if len(out) > limit:
         out = out[: max(0, limit - 3)] + '...'
     return out
+
+
+def _log_exception(tag: str, exc: Exception, **extra) -> None:
+    try:
+        if extra:
+            current_app.logger.exception("routing.geodat.%s | %r", tag, extra)
+        else:
+            current_app.logger.exception("routing.geodat.%s", tag)
+    except Exception:
+        pass
 
 
 def _geodat_url_policy():
@@ -93,10 +103,14 @@ def register_geodat_routes(bp: Blueprint) -> None:
         """
         script_path = _geodat_install_script_path()
         if not os.path.isfile(script_path):
+            try:
+                current_app.logger.error("routing.geodat.install_script_missing | path=%s", script_path)
+            except Exception:
+                pass
             return jsonify({
                 "ok": False,
                 "error": "install_script_missing",
-                "hint": f"Не найден скрипт установки: {script_path}",
+                "hint": "Не найден скрипт установки xk-geodat на роутере.",
             }), 200
 
         bin_path = _geodat_bin_path()
@@ -178,11 +192,11 @@ def register_geodat_routes(bp: Blueprint) -> None:
                             os.remove(tmp_downloaded)
                     except Exception:
                         pass
+                    _log_exception("download_failed", e, url=url)
                     return jsonify({
                         "ok": False,
                         "error": "download_failed",
-                        "reason": _short_reason(str(e)),
-                        "hint": "Не удалось скачать xk-geodat по указанному URL.",
+                        "hint": "Не удалось скачать xk-geodat по указанному URL. Подробности смотрите в server logs.",
                     }), 200
         except Exception:
             data = {}
@@ -206,7 +220,12 @@ def register_geodat_routes(bp: Blueprint) -> None:
                 "hint": "Скрипт установки не завершился вовремя.",
             }), 200
         except Exception as e:
-            return jsonify({"ok": False, "error": "install_failed", "details": str(e)}), 200
+            _log_exception("install_failed", e, script_path=script_path)
+            return jsonify({
+                "ok": False,
+                "error": "install_failed",
+                "hint": "Не удалось запустить установку xk-geodat. Подробности смотрите в server logs.",
+            }), 200
         finally:
             # cleanup uploaded tmp file
             try:

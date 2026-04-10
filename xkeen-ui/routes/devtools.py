@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import time
 
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, current_app, jsonify, request, send_file
 
 from typing import Any, Dict
 
@@ -39,6 +39,16 @@ def _core_log(level: str, msg: str, **extra) -> None:
             fn(full)
         else:
             _CORE_LOGGER.info(full)
+    except Exception:
+        pass
+
+
+def _log_exception(tag: str, exc: Exception, **extra) -> None:
+    try:
+        if extra:
+            current_app.logger.exception("devtools.%s | %r", tag, extra)
+        else:
+            current_app.logger.exception("devtools.%s", tag)
     except Exception:
         pass
 
@@ -225,17 +235,18 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
                 }
             )
         except Exception as e:
+            _log_exception("update_check_failed", e, repo=repo, channel=channel, branch=branch)
             return jsonify(
                 {
                     "ok": False,
                     "error": "check_failed",
+                    "hint": "Не удалось проверить обновление. Подробности смотрите в server logs.",
                     "repo": repo,
                     "channel": channel,
                 "branch": branch,
                     "current": build,
                     "latest": None,
                     "update_available": False,
-                    "meta": {"message": str(e)[:200]},
                 }
             )
 
@@ -482,12 +493,17 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
             base_status["state"] = "failed"
             base_status["step"] = "spawn"
             base_status["error"] = "spawn_failed"
-            base_status["message"] = str(e)[:200]
+            base_status["message"] = "Не удалось запустить update runner"
             base_status["finished_ts"] = time.time()
             base_status["updated_ts"] = time.time()
             write_status(paths["status_file"], base_status)
-            _core_log("error", "self_update: failed to start runner", error=str(e)[:200])
-            return jsonify({"ok": False, "error": "spawn_failed", "meta": {"message": str(e)[:200]}})
+            _log_exception("update_run_spawn_failed", e, runner=runner)
+            _core_log("error", "self_update: failed to start runner", error="spawn_failed")
+            return jsonify({
+                "ok": False,
+                "error": "spawn_failed",
+                "hint": "Не удалось запустить update runner. Подробности смотрите в server logs.",
+            })
 
 
     @bp.post("/api/devtools/update/rollback")
@@ -593,12 +609,17 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
             base_status["state"] = "failed"
             base_status["step"] = "spawn"
             base_status["error"] = "spawn_failed"
-            base_status["message"] = str(e)[:200]
+            base_status["message"] = "Не удалось запустить rollback runner"
             base_status["finished_ts"] = time.time()
             base_status["updated_ts"] = time.time()
             write_status(paths["status_file"], base_status)
-            _core_log("error", "self_update: failed to start rollback runner", error=str(e)[:200])
-            return jsonify({"ok": False, "error": "spawn_failed", "meta": {"message": str(e)[:200]}})
+            _log_exception("update_rollback_spawn_failed", e, runner=runner)
+            _core_log("error", "self_update: failed to start rollback runner", error="spawn_failed")
+            return jsonify({
+                "ok": False,
+                "error": "spawn_failed",
+                "hint": "Не удалось запустить rollback runner. Подробности смотрите в server logs.",
+            })
 
 
     @bp.get("/api/devtools/env")
