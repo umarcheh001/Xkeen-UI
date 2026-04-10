@@ -742,8 +742,20 @@ ts="$(date -u +%Y%m%d-%H%M%S 2>/dev/null || date +%Y%m%d-%H%M%S)"
 backup_file="$BACKUP_DIR/xkeen-ui-$ts.tgz"
 if [ -d "$UI_DIR" ]; then
   log "[*] Backup: $backup_file"
-  tar -czf "$backup_file" -C "$(dirname "$UI_DIR")" "$(basename "$UI_DIR")" >>"$LOG_FILE" 2>&1
-  trim_backups "$BACKUP_KEEP"
+  if tar \
+    --exclude='*pycache*' \
+    --exclude='*.pyc' \
+    --exclude='*.pyo' \
+    -czf "$backup_file" \
+    -C "$(dirname "$UI_DIR")" \
+    "$(basename "$UI_DIR")" >>"$LOG_FILE" 2>&1; then
+    trim_backups "$BACKUP_KEEP"
+  else
+    rm -f "$backup_file" 2>/dev/null || true
+    log "[!] Backup failed"
+    write_status "failed" "backup" "Backup failed" "backup failed"
+    exit 18
+  fi
 else
   log "[!] UI_DIR ($UI_DIR) не найден. Backup пропущен."
 fi

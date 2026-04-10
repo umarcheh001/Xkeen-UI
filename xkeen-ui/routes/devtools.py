@@ -78,6 +78,7 @@ from services.self_update.state import (
     read_lock,
     read_status,
     read_update_log_tail,
+    reconcile_runtime_status,
     release_lock,
     try_acquire_lock,
     write_status,
@@ -145,8 +146,7 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
 
         paths = get_update_paths(ui_state_dir)
 
-        status = read_status(paths["status_file"])
-        lock_info = read_lock(paths["lock_file"])
+        status, lock_info, reconciled = reconcile_runtime_status(paths["status_file"], paths["lock_file"])
 
         try:
             tail = int(request.args.get("tail") or 200)
@@ -161,7 +161,18 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         log_tail = read_update_log_tail(paths["log_file"], lines=tail) if tail else []
 
         # Keep response compact and UI-friendly.
-        return jsonify({"ok": True, "status": status, "lock": lock_info, "log_tail": log_tail, "backup_dir": backup_dir, "backups": backups, "has_backup": bool(backups)})
+        return jsonify(
+            {
+                "ok": True,
+                "status": status,
+                "lock": lock_info,
+                "log_tail": log_tail,
+                "backup_dir": backup_dir,
+                "backups": backups,
+                "has_backup": bool(backups),
+                "reconciled": bool(reconciled),
+            }
+        )
 
     @bp.post("/api/devtools/update/check")
     def api_devtools_update_check() -> Any:

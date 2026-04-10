@@ -88,6 +88,26 @@ def _default_status() -> Dict[str, Any]:
     }
 
 
+def _pid_is_running(pid: Any) -> bool:
+    try:
+        pid_int = int(pid)
+    except Exception:
+        return False
+
+    if pid_int <= 0:
+        return False
+
+    try:
+        os.kill(pid_int, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except Exception:
+        return False
+
+
 def read_status(status_file: str) -> Dict[str, Any]:
     """Read status.json. Returns defaults if missing/invalid."""
     base = _default_status()
@@ -129,8 +149,10 @@ def read_lock(lock_file: str) -> Dict[str, Any]:
       pid: int|None
       created_ts: float|None
       age_sec: float|None
+      alive: bool
+      stale: bool
     """
-    out: Dict[str, Any] = {"exists": False, "pid": None, "created_ts": None, "age_sec": None}
+    out: Dict[str, Any] = {"exists": False, "pid": None, "created_ts": None, "age_sec": None, "alive": False, "stale": False}
     if not os.path.isfile(lock_file):
         return out
 
@@ -146,6 +168,8 @@ def read_lock(lock_file: str) -> Dict[str, Any]:
             out["age_sec"] = max(0.0, time.time() - ct)
     except Exception:
         pass
+    out["alive"] = _pid_is_running(out.get("pid"))
+    out["stale"] = bool(out["exists"] and not out["alive"])
     return out
 
 
@@ -156,21 +180,67 @@ def try_acquire_lock(lock_file: str) -> Tuple[bool, Dict[str, Any]]:
     """
     os.makedirs(os.path.dirname(lock_file) or ".", exist_ok=True)
     payload = _lock_payload()
-    try:
-        fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    for attempt in range(2):
         try:
-            os.write(fd, json.dumps(payload).encode("utf-8"))
-        finally:
-            os.close(fd)
-        info = {"exists": True, **payload, "age_sec": 0.0}
-        return True, info
-    except FileExistsError:
-        return False, read_lock(lock_file)
-    except Exception:
-        # If lock cannot be created due to FS errors, treat as locked to be safe.
-        info = read_lock(lock_file)
-        info["exists"] = True
-        return False, info
+            fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            try:
+                os.write(fd, json.dumps(payload).encode("utf-8"))
+            finally:
+                os.close(fd)
+            info = {"exists": True, **payload, "age_sec": 0.0, "alive": True, "stale": False}
+            return True, info
+        except FileExistsError:
+            info = read_lock(lock_file)
+            if attempt == 0 and info.get("stale"):
+                try:
+                    os.remove(lock_file)
+                    continue
+                except Exception:
+                    pass
+            return False, info
+        except Exception:
+            # If lock cannot be created due to FS errors, treat as locked to be safe.
+            info = read_lock(lock_file)
+            info["exists"] = True
+            return False, info
+    info = read_lock(lock_file)
+    info["exists"] = True
+    return False, info
+
+
+def reconcile_runtime_status(status_file: str, lock_file: str) -> Tuple[Dict[str, Any], Dict[str, Any], bool]:
+    """Finalize stale `running` status when the runner is no longer alive.
+
+    This recovers the UI after abrupt runner exits: status.json may still say
+    `running`, while the lock file is gone (cleanup on shell EXIT) or stale.
+    """
+
+    status = read_status(status_file)
+    lock_info = read_lock(lock_file)
+    if status.get("state") != "running":
+        return status, lock_info, False
+
+    if lock_info.get("alive"):
+        return status, lock_info, False
+
+    if _pid_is_running(status.get("pid")):
+        return status, lock_info, False
+
+    now = time.time()
+    op = str(status.get("op") or "update").strip().lower()
+    failed = dict(status)
+    failed["state"] = "failed"
+    failed["finished_ts"] = failed.get("finished_ts") or now
+    failed["updated_ts"] = now
+    failed["error"] = "runner_stale"
+    failed["message"] = (
+        "Предыдущий rollback-runner завершился аварийно. Проверьте update.log."
+        if op == "rollback"
+        else "Предыдущее обновление завершилось аварийно. Проверьте update.log."
+    )
+    failed["stale"] = True
+    write_status(status_file, failed)
+    return failed, lock_info, True
 
 
 def release_lock(lock_file: str) -> None:

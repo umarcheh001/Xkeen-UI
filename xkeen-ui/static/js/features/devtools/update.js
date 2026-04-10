@@ -888,7 +888,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       const pid = st && st.pid ? String(st.pid) : '';
       if (pid) parts.push('Runner pid: ' + pid);
       const msg = st && st.message ? String(st.message) : '';
-      if (msg && stateVal === 'running') parts.push(msg);
+      if (msg) parts.push(msg);
     } catch (e) {}
 
     _setSubStatus(parts.join(' · '));
