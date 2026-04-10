@@ -21,6 +21,8 @@ import subprocess
 
 from flask import Blueprint, jsonify, request
 
+from routes.common.errors import log_route_exception
+
 
 def _env_int(name: str, default: int) -> int:
     v = os.environ.get(name)
@@ -161,7 +163,8 @@ def _github_latest_release_tag(repo: str, *, timeout_s: float) -> Dict[str, Any]
             "meta": {"status": int(getattr(e, "code", 0) or 0), "body": body[:200]},
         }
     except Exception as e:
-        return {"ok": False, "repo": repo, "tag": None, "url": None, "error": "request_failed", "meta": {"message": str(e)[:200]}}
+        log_route_exception("cores_status.request_failed", repo=repo)
+        return {"ok": False, "repo": repo, "tag": None, "url": None, "error": "request_failed", "meta": {}}
 
 
 def _latest_release_or_skip(repo: str, *, installed: bool, timeout_s: float) -> Dict[str, Any]:
@@ -220,7 +223,8 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
             data = _detect_installed()
             return jsonify({"ok": True, "cores": data, "ts": time.time()})
         except Exception as e:
-            return jsonify({"ok": False, "error": "detect_failed", "meta": {"message": str(e)[:200]}})
+            log_route_exception("cores_status.detect_failed")
+            return jsonify({"ok": False, "error": "detect_failed", "meta": {}})
 
     @bp.get("/api/cores/updates")
     def api_cores_updates() -> Any:

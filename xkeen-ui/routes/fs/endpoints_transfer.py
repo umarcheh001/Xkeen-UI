@@ -15,6 +15,7 @@ from typing import Any, Dict
 
 from flask import Response, jsonify, request, send_file
 
+from routes.common.errors import log_route_exception
 from services.filemanager.transfer import save_filestorage_to_tmp, stream_file_then_cleanup
 from services.xray_assets import ensure_xray_dat_assets
 
@@ -209,8 +210,7 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
 
         rc, out, err = mgr._run_lftp(s, [f"cls -ld {_lftp_quote(path)}"], capture=True)
         if rc != 0:
-            tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
-            return error_response("not_found", 404, ok=False, details=tail)
+            return error_response("not_found", 404, ok=False)
 
         is_dir = False
         size_bytes = None
@@ -326,8 +326,10 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
                         message="Создание архива прервано: превышен лимит использования /tmp (см. XKEEN_MAX_ZIP_MB).",
                     )
                 if "mirror_failed:" in msg:
-                    det = msg.split("mirror_failed:", 1)[1].strip()[-400:]
-                return error_response("zip_failed", 400, ok=False, details=det)
+                    log_route_exception("fs.transfer.mirror_failed")
+                    return error_response("zip_failed", 400, ok=False, code="mirror_failed")
+                log_route_exception("fs.transfer.zip_failed")
+                return error_response("zip_failed", 400, ok=False)
 
         p = mgr._popen_lftp(s, [f"cat {_lftp_quote(path)}"])
         stdout = p.stdout
@@ -543,15 +545,11 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
                 if parent and parent not in ("", "."):
                     rc_m, out_m, err_m = mgr._run_lftp(s, [f"mkdir -p {_lftp_quote(parent)}"], capture=True)
                     if rc_m != 0:
-                        tail_err = (err_m.decode("utf-8", errors="replace")[-400:]).strip()
-                        tail_out = (out_m.decode("utf-8", errors="replace")[-400:]).strip()
-                        tail = tail_err or tail_out or f"rc={rc_m}"
-                        return error_response("remote_mkdir_failed", 400, ok=False, details=tail)
+                        return error_response("remote_mkdir_failed", 400, ok=False)
 
             rc, out, err = mgr._run_lftp(s, [f"put {_lftp_quote(tmp_path)} -o {_lftp_quote(remote_path)}"], capture=True)
             if rc != 0:
-                tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
-                return error_response("remote_put_failed", 400, ok=False, details=tail)
+                return error_response("remote_put_failed", 400, ok=False)
 
             if callable(_core_log):
                 _core_log("info", "fs.upload", target="remote", sid=sid, path=remote_path, bytes=int(total), overwrite=bool(overwrite))

@@ -348,14 +348,14 @@ def create_xray_configs_blueprint(
             except ValueError as e:
                 msg = str(e)
                 code = "invalid"
-                hint = None
+                hint = "Проверьте параметры и попробуйте снова."
                 if "invalid socks_port" in msg:
                     code = "invalid_port"
                     hint = "Укажите порт 1…65535."
                 elif msg.startswith("port conflict"):
                     code = "port_conflict"
                     hint = "Выберите другой порт: текущий конфликтует с другим inbound."
-                return error_response(msg, 400, ok=False, code=code, hint=hint)
+                return error_response(code, 400, ok=False, code=code, hint=hint)
             except Exception as e:
                 return _xray_exception(
                     "Не удалось применить выбранный preset к inbounds.",

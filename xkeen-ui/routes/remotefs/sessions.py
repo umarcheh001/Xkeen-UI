@@ -125,7 +125,6 @@ def register_sessions_endpoints(
                 "connect_failed",
                 400,
                 ok=False,
-                details=tail[-400:],
                 kind=info.get("kind"),
                 hint=info.get("hint"),
                 security={**(effective_sec or {}), "protocol": protocol},

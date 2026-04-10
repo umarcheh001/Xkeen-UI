@@ -8,6 +8,7 @@ import sys
 import tempfile
 import types
 from pathlib import Path
+from types import SimpleNamespace
 
 from flask import Blueprint, Flask
 
@@ -313,3 +314,133 @@ def test_routing_geodat_error_payload_drops_raw_details():
     assert "Причина:" not in str(payload.get("hint") or "")
     assert "secret" not in raw
     assert "/private/tmp" not in raw
+
+
+def test_mihomo_invalid_yaml_hides_parser_details(tmp_path: Path, monkeypatch):
+    mihomo = _reload("routes.mihomo")
+    app = Flask("mihomo-sanitize-yaml")
+    app.register_blueprint(
+        mihomo.create_mihomo_blueprint(
+            MIHOMO_CONFIG_FILE=str(tmp_path / "config.yaml"),
+            MIHOMO_TEMPLATES_DIR=str(tmp_path / "templates"),
+            MIHOMO_DEFAULT_TEMPLATE=str(tmp_path / "default.yaml"),
+            restart_xkeen=lambda **_kwargs: True,
+        )
+    )
+    client = app.test_client()
+
+    monkeypatch.setattr(
+        mihomo,
+        "validate_yaml_syntax",
+        lambda _cfg: (False, "ParserError: /opt/etc/mihomo/config.yaml line 7 near secret-token"),
+    )
+
+    response = client.post("/api/mihomo/save_raw", json={"config": "bad: ["})
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    raw = json.dumps(payload, ensure_ascii=False)
+    assert payload["ok"] is False
+    assert payload["error"] == "Некорректный YAML-конфиг."
+    assert payload["code"] == "yaml_invalid"
+    assert payload["hint"] == "Проверьте YAML и попробуйте снова."
+    assert "ParserError" not in raw
+    assert "secret-token" not in raw
+    assert "/opt/etc/mihomo" not in raw
+
+
+def test_fs_remote_chmod_hides_lftp_tail():
+    perms = _reload("routes.fs.endpoints_perms")
+    app = Flask("fs-perms-sanitize-remote")
+    bp = Blueprint("fs_perms_test", __name__)
+
+    class _FakeMgr:
+        def _run_lftp(self, _session, _cmds, capture=True):
+            return 1, b"", b"/remote/secret chmod failed: permission denied"
+
+    perms.register_perms_endpoints(
+        bp,
+        {
+            "error_response": _reload("routes.common.errors").error_response,
+            "_require_enabled": lambda: None,
+            "_get_session_or_404": lambda sid: (SimpleNamespace(session_id=sid, protocol="sftp"), None),
+            "_core_log": lambda *_args, **_kwargs: None,
+            "LOCALFS_ROOTS": ["/tmp"],
+            "mgr": _FakeMgr(),
+            "_lftp_quote": lambda value: value,
+            "_local_resolve": lambda path, _roots: path,
+        },
+    )
+    app.register_blueprint(bp)
+    client = app.test_client()
+
+    response = client.post(
+        "/api/fs/chmod",
+        json={"target": "remote", "sid": "s1", "path": "/remote/secret", "mode": "644"},
+    )
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    raw = json.dumps(payload, ensure_ascii=False)
+    assert payload["ok"] is False
+    assert payload["error"] == "chmod_failed"
+    assert "details" not in payload
+    assert "/remote/secret" not in raw
+    assert "permission denied" not in raw
+
+
+def test_remotefs_connect_failed_hides_lftp_tail():
+    sessions = _reload("routes.remotefs.sessions")
+    app = Flask("remotefs-sanitize-connect")
+    bp = Blueprint("remotefs_sessions_test", __name__)
+
+    class _FakeMgr:
+        known_hosts_path = ""
+        default_ca_file = ""
+
+        def create(self, protocol, host, port, username, auth_type, auth, options):
+            return SimpleNamespace(
+                session_id="sid-1",
+                protocol=protocol,
+                host=host,
+                port=port,
+                username=username,
+            )
+
+        def close(self, _sid):
+            return True
+
+        def _run_lftp(self, _session, _cmds, capture=True):
+            return 1, b"", b"ssh: connect to host private.example port 22: Permission denied (publickey)"
+
+    sessions.register_sessions_endpoints(
+        bp,
+        require_enabled=lambda: None,
+        mgr=_FakeMgr(),
+        normalize_security_options=lambda protocol, options, **_kwargs: (options, {"mode": "strict"}, []),
+        classify_connect_error=lambda _tail: {"kind": "auth_failed", "hint": "Проверьте логин, ключ и доступ к хосту."},
+        core_log=lambda *_args, **_kwargs: None,
+    )
+    app.register_blueprint(bp)
+    client = app.test_client()
+
+    response = client.post(
+        "/api/remotefs/sessions",
+        json={
+            "protocol": "sftp",
+            "host": "private.example",
+            "username": "root",
+            "auth": {"type": "password", "password": "secret"},
+        },
+    )
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    raw = json.dumps(payload, ensure_ascii=False)
+    assert payload["ok"] is False
+    assert payload["error"] == "connect_failed"
+    assert payload["kind"] == "auth_failed"
+    assert payload["hint"] == "Проверьте логин, ключ и доступ к хосту."
+    assert "details" not in payload
+    assert "private.example" not in raw
+    assert "Permission denied" not in raw

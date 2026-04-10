@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Tuple
 
 from flask import Blueprint, Response, jsonify, request
 
+from routes.common.errors import log_route_exception
 from services.filemanager.archive import (
     is_safe_extract_path,
     join_local_cwd,
@@ -184,9 +185,11 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
                     pass
                 msg = str(e) or "zip_failed"
                 if "Permission" in msg or "forbidden" in msg:
-                    return error_response(msg, 403, ok=False)
+                    log_route_exception("fs.archive.zip_permission")
+                    return error_response("forbidden", 403, ok=False)
                 if msg == "not_found":
                     return error_response("not_found", 404, ok=False)
+                log_route_exception("fs.archive.zip_failed")
                 return error_response("zip_failed", 400, ok=False)
 
         # remote
@@ -405,8 +408,8 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
                     message="Создание архива прервано: превышен лимит использования /tmp (см. XKEEN_MAX_ZIP_MB).",
                 )
             if "mirror_failed:" in msg:
-                det = msg.split("mirror_failed:", 1)[1].strip()[-400:]
-                return error_response("zip_failed", 400, ok=False, details=det)
+                log_route_exception("fs.archive.mirror_failed")
+                return error_response("zip_failed", 400, ok=False, code="mirror_failed")
             if msg == "not_found":
                 return error_response("not_found", 404, ok=False)
             return error_response("zip_failed", 400, ok=False)
@@ -520,8 +523,8 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
                     os.remove(tmp_out)
             except Exception:
                 pass
-            msg = str(e) or "archive_create_failed"
-            return error_response("archive_create_failed", 400, ok=False, details=msg[-400:])
+            log_route_exception("fs.archive.create_failed")
+            return error_response("archive_create_failed", 400, ok=False)
 
     @bp.post("/api/fs/archive/extract")
     def api_fs_archive_extract() -> Any:
@@ -888,8 +891,8 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
             )
             return jsonify({"ok": True, "archive": arch, "dest": dest, "extracted": extracted, "skipped": skipped, "renamed": renamed})
         except Exception as e:
-            msg = str(e) or "extract_failed"
-            return error_response("extract_failed", 400, ok=False, details=msg[-400:])
+            log_route_exception("fs.archive.extract_failed")
+            return error_response("extract_failed", 400, ok=False)
 
     @bp.get("/api/fs/archive/list")
     def api_fs_archive_list() -> Any:
@@ -926,5 +929,5 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
         except ValueError:
             return error_response("unsupported_archive", 400, ok=False)
         except Exception as e:
-            msg = str(e) or "archive_list_failed"
-            return error_response("archive_list_failed", 400, ok=False, details=msg[-400:])
+            log_route_exception("fs.archive.list_failed")
+            return error_response("archive_list_failed", 400, ok=False)

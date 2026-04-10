@@ -33,8 +33,8 @@ def register_perms_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
             return error_response('path_required', 400, ok=False)
         try:
             mode_i = parse_mode_value(data.get('mode'))
-        except RuntimeError as e:
-            return error_response(str(e), 400, ok=False)
+        except RuntimeError:
+            return error_response('bad_mode', 400, ok=False)
         except Exception:
             return error_response('bad_mode', 400, ok=False)
 
@@ -58,8 +58,7 @@ def register_perms_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
             return resp
         rc, out, err = mgr._run_lftp(s, [f"chmod {mode_i:o} {_lftp_quote(path_s)}"], capture=True)
         if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('chmod_failed', 400, ok=False, details=tail)
+            return error_response('chmod_failed', 400, ok=False)
         _core_log("info", "fs.chmod", target="remote", sid=sid, path=path_s, mode=oct(mode_i))
         return jsonify({'ok': True, 'target': 'remote', 'sid': sid, 'path': path_s, 'mode': mode_i})
 
@@ -106,7 +105,6 @@ def register_perms_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
         owner = f"{uid_i}:{gid_i}" if gid_i >= 0 else str(uid_i)
         rc, out, err = mgr._run_lftp(s, [f"chown {owner} {_lftp_quote(path_s)}"], capture=True)
         if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('chown_failed', 400, ok=False, details=tail)
+            return error_response('chown_failed', 400, ok=False)
         _core_log("info", "fs.chown", target="remote", sid=sid, path=path_s, uid=int(uid_i), gid=int(gid_i))
         return jsonify({'ok': True, 'target': 'remote', 'sid': sid, 'path': path_s, 'uid': uid_i, 'gid': gid_i})

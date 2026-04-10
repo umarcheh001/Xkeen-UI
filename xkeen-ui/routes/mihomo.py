@@ -139,6 +139,29 @@ def _mihomo_exception(
     )
 
 
+def _mihomo_yaml_invalid(*, stage: str | None = None):
+    code = "yaml_invalid"
+    message = "Некорректный YAML-конфиг."
+    hint = "Проверьте YAML и попробуйте снова."
+    if stage:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "stage": stage,
+                    "error": {
+                        "code": code,
+                        "message": message,
+                        "hint": hint,
+                        "retryable": False,
+                    },
+                }
+            ),
+            400,
+        )
+    return _mihomo_error(message, 400, ok=False, code=code, hint=hint)
+
+
 def _safe_template_path(templates_dir: str, name: str) -> str | None:
     # не даём уходить вверх по дереву и использовать подкаталоги
     if not name or "/" in name or "\\" in name or ".." in name:
@@ -413,18 +436,7 @@ def create_mihomo_blueprint(
         # Validate YAML (fast, optional) to prevent writing broken config.
         ok_yaml, yaml_err = validate_yaml_syntax(cfg_new)
         if not ok_yaml:
-            return jsonify(
-                {
-                    "ok": False,
-                    "stage": "validate",
-                    "error": {
-                        "code": "YAML_INVALID",
-                        "message": f"Invalid YAML syntax: {yaml_err}",
-                        "hint": "Проверьте шаблон/вставку и попробуйте снова.",
-                        "retryable": False,
-                    },
-                }
-            ), 400
+            return _mihomo_yaml_invalid(stage="validate")
 
         try:
             ensure_mihomo_layout()
@@ -647,7 +659,7 @@ def create_mihomo_blueprint(
             if cfg_override.strip():
                 ok_yaml, yaml_err = validate_yaml_syntax(cfg_override)
                 if not ok_yaml:
-                    return _api_error(f"Invalid YAML syntax: {yaml_err}", 400, ok=False)
+                    return _mihomo_yaml_invalid()
 
             # Build generated config (for warnings) but save override if provided.
             cfg_generated, warnings = mihomo_svc.generate_preview(data)
@@ -689,7 +701,13 @@ def create_mihomo_blueprint(
                 status=404,
             )
         except ValueError as e:
-            return _mihomo_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Некорректные параметры генерации конфигурации.",
+                code="invalid_config_params",
+                hint="Проверьте параметры и попробуйте снова.",
+                exc=e,
+                status=400,
+            )
         except Exception as e:
             return _mihomo_exception(
                 "Не удалось сгенерировать, сохранить и поставить перезапуск в очередь.",
@@ -709,7 +727,7 @@ def create_mihomo_blueprint(
 
         ok_yaml, yaml_err = validate_yaml_syntax(cfg)
         if not ok_yaml:
-            return _api_error(f"Invalid YAML syntax: {yaml_err}", 400, ok=False)
+            return _mihomo_yaml_invalid()
 
         try:
             ensure_mihomo_layout()
@@ -738,7 +756,7 @@ def create_mihomo_blueprint(
 
         ok_yaml, yaml_err = validate_yaml_syntax(cfg)
         if not ok_yaml:
-            return _api_error(f"Invalid YAML syntax: {yaml_err}", 400, ok=False)
+            return _mihomo_yaml_invalid()
 
         try:
             ensure_mihomo_layout()

@@ -41,8 +41,7 @@ def register_ops_endpoints(
         cmd = "cls -l" if (not path or path in (".",)) else f"cls -l {path_q}"
         rc, out, err = mgr._run_lftp(s, [cmd], capture=True)
         if rc != 0:
-            tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
-            return error_response("list_failed", 400, ok=False, details=tail)
+            return error_response("list_failed", 400, ok=False)
 
         text = out.decode("utf-8", errors="replace")
         items: List[Dict[str, Any]] = []
@@ -64,8 +63,7 @@ def register_ops_endpoints(
 
         rc, out, err = mgr._run_lftp(s, [f"cls -ld {path_q}"], capture=True)
         if rc != 0:
-            tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
-            return error_response("stat_failed", 400, ok=False, details=tail)
+            return error_response("stat_failed", 400, ok=False)
 
         text = out.decode("utf-8", errors="replace")
         first = None
@@ -90,8 +88,7 @@ def register_ops_endpoints(
         cmd = f"mkdir {'-p ' if parents else ''}{_lftp_quote(path)}"
         rc, out, err = mgr._run_lftp(s, [cmd], capture=True)
         if rc != 0:
-            tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
-            return error_response("mkdir_failed", 400, ok=False, details=tail)
+            return error_response("mkdir_failed", 400, ok=False)
         _log("info", "remotefs.mkdir", sid=sid, path=path, parents=bool(parents))
         return jsonify({"ok": True})
 
@@ -107,8 +104,7 @@ def register_ops_endpoints(
             return error_response("src_dst_required", 400, ok=False)
         rc, out, err = mgr._run_lftp(s, [f"mv {_lftp_quote(src)} {_lftp_quote(dst)}"], capture=True)
         if rc != 0:
-            tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
-            return error_response("rename_failed", 400, ok=False, details=tail)
+            return error_response("rename_failed", 400, ok=False)
         _log("info", "remotefs.rename", sid=sid, src=src, dst=dst)
         return jsonify({"ok": True})
 
@@ -126,8 +122,7 @@ def register_ops_endpoints(
             cmds = [f"rm -r {_lftp_quote(path)}"]
             rc, out, err = mgr._run_lftp(s, cmds, capture=True)
             if rc != 0:
-                tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
-                return error_response("remove_failed", 400, ok=False, details=tail)
+                return error_response("remove_failed", 400, ok=False)
             _log("info", "remotefs.remove", sid=sid, path=path, recursive=True)
             return jsonify({"ok": True})
 
@@ -138,7 +133,6 @@ def register_ops_endpoints(
             return jsonify({"ok": True})
         rc2, out2, err2 = mgr._run_lftp(s, [f"rmdir {_lftp_quote(path)}"], capture=True)
         if rc2 != 0:
-            tail = (err2.decode("utf-8", errors="replace")[-400:]).strip()
-            return error_response("remove_failed", 400, ok=False, details=tail)
+            return error_response("remove_failed", 400, ok=False)
         _log("info", "remotefs.remove", sid=sid, path=path, recursive=False, rmdir=True)
         return jsonify({"ok": True})

@@ -62,8 +62,7 @@ def register_trash_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
         if recursive:
             rc, out, err = mgr._run_lftp(s, [f"rm -r {_lftp_quote(path_s)}"], capture=True)
             if rc != 0:
-                tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-                return error_response('remove_failed', 400, ok=False, details=tail)
+                return error_response('remove_failed', 400, ok=False)
             _core_log("info", "fs.remove", target="remote", sid=sid, path=path_s, recursive=True)
             return jsonify({'ok': True})
         rc, out, err = mgr._run_lftp(s, [f"rm {_lftp_quote(path_s)}"], capture=True)
@@ -72,8 +71,7 @@ def register_trash_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
             return jsonify({'ok': True})
         rc2, out2, err2 = mgr._run_lftp(s, [f"rmdir {_lftp_quote(path_s)}"], capture=True)
         if rc2 != 0:
-            tail = (err2.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('remove_failed', 400, ok=False, details=tail)
+            return error_response('remove_failed', 400, ok=False)
         _core_log("info", "fs.remove", target="remote", sid=sid, path=path_s, recursive=False, rmdir=True)
         return jsonify({'ok': True})
 

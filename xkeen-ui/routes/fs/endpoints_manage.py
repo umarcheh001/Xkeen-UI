@@ -59,8 +59,7 @@ def register_manage_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
         cmd = f"mkdir {'-p ' if parents else ''}{_lftp_quote(path_s)}"
         rc, out, err = mgr._run_lftp(s, [cmd], capture=True)
         if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('mkdir_failed', 400, ok=False, details=tail)
+            return error_response('mkdir_failed', 400, ok=False)
         return jsonify({'ok': True})
 
 
@@ -102,8 +101,7 @@ def register_manage_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
             return resp
         rc, out, err = mgr._run_lftp(s, [f"mv {_lftp_quote(src_p)} {_lftp_quote(dst_p)}"], capture=True)
         if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('rename_failed', 400, ok=False, details=tail)
+            return error_response('rename_failed', 400, ok=False)
         return jsonify({'ok': True})
 
 
@@ -156,7 +154,6 @@ def register_manage_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
                 mgr._run_lftp(s, [f"mkdir -p {_lftp_quote(parent)}"], capture=True)
         rc, out, err = mgr._run_lftp(s, [f"put /dev/null -o {_lftp_quote(path_s)}"], capture=True)
         if rc != 0:
-            tail = (err.decode('utf-8', errors='replace')[-400:]).strip()
-            return error_response('touch_failed', 400, ok=False, details=tail)
+            return error_response('touch_failed', 400, ok=False)
         _core_log("info", "fs.touch", target="remote", sid=sid, path=path_s, skipped=False)
         return jsonify({'ok': True, 'target': 'remote', 'sid': sid, 'path': path_s})

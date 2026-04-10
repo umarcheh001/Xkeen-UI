@@ -207,12 +207,7 @@ def register_list_endpoints(bp, deps: Dict[str, Any]) -> None:
         cmd = "cls -l" if (not rpath or rpath in (".",)) else f"cls -l {_lftp_quote(rpath)}"
         rc, out, err = mgr._run_lftp(s, [cmd], capture=True)
         if rc != 0:
-            # lftp sometimes writes useful diagnostics to stdout (not stderr),
-            # and on embedded systems stderr can be empty. Include a short tail.
-            tail_err = (err.decode("utf-8", errors="replace")[-400:]).strip()
-            tail_out = (out.decode("utf-8", errors="replace")[-400:]).strip()
-            tail = tail_err or tail_out or f"rc={rc}"
-            return error_response("list_failed", 400, ok=False, details=tail)
+            return error_response("list_failed", 400, ok=False)
         text = out.decode("utf-8", errors="replace")
         items2: List[Dict[str, Any]] = []
         for line in text.splitlines():

@@ -43,8 +43,7 @@ def register_transfer_endpoints(
 
         rc, out, err = mgr._run_lftp(s, [f"cls -ld {_lftp_quote(path)}"], capture=True)
         if rc != 0:
-            tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
-            return error_response("not_found", 404, ok=False, details=tail)
+            return error_response("not_found", 404, ok=False)
 
         size_bytes: int | None = None
         try:
@@ -158,8 +157,7 @@ def register_transfer_endpoints(
                 capture=True,
             )
             if rc != 0:
-                tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
-                return error_response("remote_put_failed", 400, ok=False, details=tail)
+                return error_response("remote_put_failed", 400, ok=False)
             _log("info", "remotefs.upload", sid=sid, path=remote_path, bytes=int(total))
             return jsonify({"ok": True, "bytes": total})
         finally:

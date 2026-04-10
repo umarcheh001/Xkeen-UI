@@ -68,9 +68,10 @@ def create_ui_settings_blueprint() -> Blueprint:
         except UISettingsValidationError as e:
             # Predictable client feedback for bad patches.
             return error_response(
-                str(e) or "bad patch",
+                "validation_error",
                 400,
                 ok=False,
+                code=str(e) or "bad_patch",
                 errors=getattr(e, "errors", []) or [],
             )
         except Exception as e:  # noqa: BLE001

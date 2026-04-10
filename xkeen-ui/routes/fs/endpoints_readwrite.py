@@ -286,8 +286,7 @@ def register_readwrite_endpoints(bp, deps: Dict[str, Any]) -> None:
                 capture=True,
             )
             if rc != 0:
-                tail = (err.decode("utf-8", errors="replace")[-400:]).strip()
-                return error_response("remote_put_failed", 400, ok=False, details=tail)
+                return error_response("remote_put_failed", 400, ok=False)
             _core_log("info", "fs.write", target="remote", sid=sid, path=path_s, bytes=len(raw), dry_run=False)
             return jsonify({"ok": True, "bytes": len(raw)})
         except Exception:
