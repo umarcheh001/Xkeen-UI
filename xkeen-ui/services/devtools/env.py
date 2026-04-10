@@ -23,6 +23,11 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_AUTH_LOGIN_WINDOW_SECONDS",
     "XKEEN_AUTH_LOGIN_MAX_ATTEMPTS",
     "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS",
+    "XKEEN_UI_MAX_CONTENT_LENGTH",
+    "XKEEN_JSON_BODY_MAX_BYTES",
+    "XKEEN_JSON_HEAVY_MAX_BYTES",
+    "XKEEN_MIHOMO_JSON_MAX_BYTES",
+    "XKEEN_GEODAT_UPLOAD_MAX_BYTES",
     "XKEEN_ROUTING_SAVE_MAX_BYTES",
     "XKEEN_CONFIG_EXCHANGE_MAX_BYTES",
     "XKEEN_DAT_ALLOW_HOSTS",
@@ -252,6 +257,16 @@ def _default_effective_value(
         return "5"
     if k == "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS":
         return "900"
+    if k == "XKEEN_UI_MAX_CONTENT_LENGTH":
+        return str(16 * 1024 * 1024)
+    if k == "XKEEN_JSON_BODY_MAX_BYTES":
+        return str(64 * 1024)
+    if k == "XKEEN_JSON_HEAVY_MAX_BYTES":
+        return str(1024 * 1024)
+    if k == "XKEEN_MIHOMO_JSON_MAX_BYTES":
+        return str(4 * 1024 * 1024)
+    if k == "XKEEN_GEODAT_UPLOAD_MAX_BYTES":
+        return str(16 * 1024 * 1024)
     if k == "XKEEN_ROUTING_SAVE_MAX_BYTES":
         return str(1024 * 1024)
     if k == "XKEEN_CONFIG_EXCHANGE_MAX_BYTES":

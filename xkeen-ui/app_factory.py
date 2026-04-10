@@ -225,6 +225,7 @@ def _init_xray_startup_migrations(*, base_etc_dir: str, base_var_dir: str, ui_st
 def _create_flask_app():
     from flask import Flask
     from routes.ui_assets import apply_response_cache_policy, get_static_asset_max_age
+    from services.request_limits import install_request_size_guards
 
     class XkeenFlask(Flask):
         def get_send_file_max_age(self, filename):  # type: ignore[override]
@@ -248,6 +249,8 @@ def _create_flask_app():
             )
         except Exception:
             pass
+
+    install_request_size_guards(app)
 
     @app.after_request
     def _apply_ui_cache_policy(response):

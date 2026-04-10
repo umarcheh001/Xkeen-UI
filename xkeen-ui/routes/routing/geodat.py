@@ -10,9 +10,15 @@ import subprocess
 from typing import Any
 
 from flask import Blueprint, current_app, request, jsonify
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from services.geodat.runner import _geodat_bin_path
 from services.geodat.install import _geodat_install_script_path, _geodat_run_help, _geodat_stat_meta, geodat_platform_info
+from services.request_limits import (
+    PayloadTooLargeError,
+    get_geodat_upload_max_bytes,
+    read_uploaded_file_bytes_limited,
+)
 from services.url_policy import (
     blocked_url_hint,
     download_to_file_with_policy,
@@ -131,14 +137,29 @@ def register_geodat_routes(bp: Blueprint) -> None:
                     import uuid
                     tmpdir = tempfile.gettempdir()
                     tmp_uploaded = os.path.join(tmpdir, f"xk-geodat-upload-{uuid.uuid4().hex}")
-                    f.save(tmp_uploaded)
+                    raw_uploaded = read_uploaded_file_bytes_limited(
+                        f,
+                        max_bytes=get_geodat_upload_max_bytes(),
+                    )
+                    with open(tmp_uploaded, "wb") as fp:
+                        fp.write(raw_uploaded)
                     try:
                         os.chmod(tmp_uploaded, 0o755)
                     except Exception:
                         pass
                     env["XKEEN_GEODAT_LOCAL"] = tmp_uploaded
-        except Exception:
-            pass
+        except PayloadTooLargeError as e:
+            return jsonify({"ok": False, "error": "payload too large", "max_bytes": int(e.max_bytes)}), 413
+        except RequestEntityTooLarge:
+            max_bytes = get_geodat_upload_max_bytes()
+            return jsonify({"ok": False, "error": "payload too large", "max_bytes": int(max_bytes)}), 413
+        except Exception as e:
+            _log_exception("upload_prepare_failed", e)
+            return jsonify({
+                "ok": False,
+                "error": "upload_failed",
+                "hint": "Не удалось подготовить загруженный бинарник xk-geodat. Подробности смотрите в server logs.",
+            }), 200
 
         # JSON overrides (URL install)
         try:

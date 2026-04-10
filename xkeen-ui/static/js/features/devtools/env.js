@@ -185,6 +185,11 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_HELP.XKEEN_AUTH_LOGIN_WINDOW_SECONDS = 'Окно учёта неудачных логинов в секундах. По умолчанию 300.';
   ENV_HELP.XKEEN_AUTH_LOGIN_MAX_ATTEMPTS = 'Максимум неудачных попыток входа с одного адреса в пределах окна. По умолчанию 5. Значение 0 отключает lockout.';
   ENV_HELP.XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS = 'На сколько секунд блокировать новые попытки входа после исчерпания лимита. По умолчанию 900. Значение 0 отключает lockout.';
+  ENV_HELP.XKEEN_UI_MAX_CONTENT_LENGTH = 'Явный app-wide ceiling для любого HTTP request body в UI, в байтах. По умолчанию 16777216 (16 MiB).';
+  ENV_HELP.XKEEN_JSON_BODY_MAX_BYTES = 'Лимит обычных JSON API-запросов, в байтах. По умолчанию 65536 (64 KiB).';
+  ENV_HELP.XKEEN_JSON_HEAVY_MAX_BYTES = 'Лимит для “тяжёлых” JSON API (Xray config editor, JSON formatter, xkeen lists), в байтах. По умолчанию 1048576 (1 MiB).';
+  ENV_HELP.XKEEN_MIHOMO_JSON_MAX_BYTES = 'Лимит JSON-тела для Mihomo API, в байтах. По умолчанию 4194304 (4 MiB).';
+  ENV_HELP.XKEEN_GEODAT_UPLOAD_MAX_BYTES = 'Максимальный размер загружаемого бинарника xk-geodat через UI, в байтах. По умолчанию 16777216 (16 MiB).';
   ENV_HELP.XKEEN_ROUTING_SAVE_MAX_BYTES = 'Максимальный размер тела для сохранения JSON/JSONC роутинга Xray, в байтах. По умолчанию 1048576.';
   ENV_HELP.XKEEN_CONFIG_EXCHANGE_MAX_BYTES = 'Максимальный размер входящего тела для config exchange import/export API, в байтах. По умолчанию 4194304.';
   ENV_HELP.XKEEN_DAT_ALLOW_HOSTS = 'Доверенные хосты для обновления DAT по URL. Формат: через запятую. По умолчанию: GitHub/release/raw хосты.';
@@ -226,6 +231,11 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     'XKEEN_AUTH_LOGIN_WINDOW_SECONDS',
     'XKEEN_AUTH_LOGIN_MAX_ATTEMPTS',
     'XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS',
+    'XKEEN_UI_MAX_CONTENT_LENGTH',
+    'XKEEN_JSON_BODY_MAX_BYTES',
+    'XKEEN_JSON_HEAVY_MAX_BYTES',
+    'XKEEN_MIHOMO_JSON_MAX_BYTES',
+    'XKEEN_GEODAT_UPLOAD_MAX_BYTES',
     'XKEEN_ROUTING_SAVE_MAX_BYTES',
     'XKEEN_CONFIG_EXCHANGE_MAX_BYTES',
     'XKEEN_DAT_ALLOW_HOSTS',
@@ -300,6 +310,11 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_NO_RESTART_KEYS.add('XKEEN_AUTH_LOGIN_WINDOW_SECONDS');
   ENV_NO_RESTART_KEYS.add('XKEEN_AUTH_LOGIN_MAX_ATTEMPTS');
   ENV_NO_RESTART_KEYS.add('XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS');
+  ENV_NO_RESTART_KEYS.add('XKEEN_UI_MAX_CONTENT_LENGTH');
+  ENV_NO_RESTART_KEYS.add('XKEEN_JSON_BODY_MAX_BYTES');
+  ENV_NO_RESTART_KEYS.add('XKEEN_JSON_HEAVY_MAX_BYTES');
+  ENV_NO_RESTART_KEYS.add('XKEEN_MIHOMO_JSON_MAX_BYTES');
+  ENV_NO_RESTART_KEYS.add('XKEEN_GEODAT_UPLOAD_MAX_BYTES');
   ENV_NO_RESTART_KEYS.add('XKEEN_ROUTING_SAVE_MAX_BYTES');
   ENV_NO_RESTART_KEYS.add('XKEEN_CONFIG_EXCHANGE_MAX_BYTES');
   ENV_NO_RESTART_KEYS.add('XKEEN_DAT_ALLOW_HOSTS');
@@ -316,6 +331,11 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   ENV_RESTART_KEYS.delete('XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS');
   ENV_RESTART_KEYS.delete('XKEEN_ROUTING_SAVE_MAX_BYTES');
   ENV_RESTART_KEYS.delete('XKEEN_CONFIG_EXCHANGE_MAX_BYTES');
+  ENV_RESTART_KEYS.delete('XKEEN_UI_MAX_CONTENT_LENGTH');
+  ENV_RESTART_KEYS.delete('XKEEN_JSON_BODY_MAX_BYTES');
+  ENV_RESTART_KEYS.delete('XKEEN_JSON_HEAVY_MAX_BYTES');
+  ENV_RESTART_KEYS.delete('XKEEN_MIHOMO_JSON_MAX_BYTES');
+  ENV_RESTART_KEYS.delete('XKEEN_GEODAT_UPLOAD_MAX_BYTES');
   ENV_RESTART_KEYS.delete('XKEEN_DAT_ALLOW_HOSTS');
   ENV_RESTART_KEYS.delete('XKEEN_DAT_ALLOW_HTTP');
   ENV_RESTART_KEYS.delete('XKEEN_DAT_ALLOW_CUSTOM_URLS');
@@ -398,7 +418,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     parts.push('<ul style="margin-top:0;">');
     parts.push('<li><code>XKEEN_LOG_CORE_ENABLE</code>, <code>XKEEN_LOG_CORE_LEVEL</code>, <code>XKEEN_LOG_ACCESS_ENABLE</code>, <code>XKEEN_LOG_WS_ENABLE</code>, <code>XKEEN_LOG_ROTATE_MAX_MB</code>, <code>XKEEN_LOG_ROTATE_BACKUPS</code> — DevTools пытается обновить логирование сразу.</li>');
     parts.push('<li><code>XKEEN_AUTH_LOGIN_WINDOW_SECONDS</code>, <code>XKEEN_AUTH_LOGIN_MAX_ATTEMPTS</code>, <code>XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS</code> — защита страницы входа применяется для новых попыток сразу.</li>');
-    parts.push('<li><code>XKEEN_ROUTING_SAVE_MAX_BYTES</code>, <code>XKEEN_CONFIG_EXCHANGE_MAX_BYTES</code> — новые лимиты тел запросов применяются сразу для следующих API-вызовов.</li>');
+    parts.push('<li><code>XKEEN_UI_MAX_CONTENT_LENGTH</code>, <code>XKEEN_JSON_BODY_MAX_BYTES</code>, <code>XKEEN_JSON_HEAVY_MAX_BYTES</code>, <code>XKEEN_MIHOMO_JSON_MAX_BYTES</code>, <code>XKEEN_GEODAT_UPLOAD_MAX_BYTES</code>, <code>XKEEN_ROUTING_SAVE_MAX_BYTES</code>, <code>XKEEN_CONFIG_EXCHANGE_MAX_BYTES</code> — новые лимиты запросов применяются сразу для следующих API-вызовов.</li>');
     parts.push('</ul>');
 
     parts.push('<div class="small" style="opacity:0.9; margin-bottom:6px;">Рекомендуется делать Restart UI после изменений (самое частое):</div>');
