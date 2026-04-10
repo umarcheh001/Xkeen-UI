@@ -2609,7 +2609,8 @@ function initEngineToggle() {
 
           const state = { profile, subscriptions: uniqSubscriptions, proxies };
           if (defaultGroups.length) state.defaultGroups = defaultGroups;
-          if (enabledRuleGroups.length) state.enabledRuleGroups = enabledRuleGroups;
+          // Preserve an explicit "no optional rule groups" choice.
+          state.enabledRuleGroups = enabledRuleGroups;
           return state;
         }
 
@@ -2830,7 +2831,7 @@ function initEngineToggle() {
               setEditorText(draft.previewText);
             }
 
-            if (Array.isArray(_pendingSessionRuleGroups) && _pendingSessionRuleGroups.length) {
+            if (Array.isArray(_pendingSessionRuleGroups)) {
               setEnabledRuleGroupsInUI(_pendingSessionRuleGroups);
               updateSelectAllCheckbox();
             }
@@ -2852,6 +2853,7 @@ function initEngineToggle() {
           } finally {
             _isRestoringSessionDraft = false;
             _pendingSessionEngine = "";
+            _pendingSessionRuleGroups = null;
           }
 
           try { bindSessionDraftEditorListener(); } catch (e) {}

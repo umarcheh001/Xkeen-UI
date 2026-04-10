@@ -72,6 +72,15 @@ def test_mihomo_generator_ignores_stale_profile_defaults_and_auto_preview_overwr
     assert text.count('if (requestSeq !== _previewRequestSeq) return;') >= 2
 
 
+def test_mihomo_generator_preserves_explicit_empty_rule_group_selection():
+    text = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+
+    assert 'state.enabledRuleGroups = enabledRuleGroups;' in text
+    assert 'if (enabledRuleGroups.length) state.enabledRuleGroups = enabledRuleGroups;' not in text
+    assert 'if (Array.isArray(_pendingSessionRuleGroups)) {' in text
+    assert 'if (Array.isArray(_pendingSessionRuleGroups) && _pendingSessionRuleGroups.length) {' not in text
+
+
 def test_top_level_navigation_controls_use_shared_helper_contract():
     helper = Path('xkeen-ui/static/js/pages/top_level_nav.shared.js').read_text(encoding='utf-8')
     shell = Path('xkeen-ui/static/js/pages/top_level_shell.shared.js').read_text(encoding='utf-8')
