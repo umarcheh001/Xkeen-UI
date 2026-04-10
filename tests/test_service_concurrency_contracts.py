@@ -94,3 +94,55 @@ def test_mihomo_generator_metadata_is_extracted_from_main_generator_module():
     assert 'def load_template_text(filename: str) -> str:' in meta_text
     assert 'def get_profile_rule_presets(profile: str | None) -> Dict[str, Any]:' in meta_text
     assert generator_text.count('def get_profile_rule_presets(') == 0
+
+
+def test_mihomo_generator_provider_and_proxy_injection_helpers_are_extracted():
+    generator_text = Path('xkeen-ui/mihomo_config_generator.py').read_text(encoding='utf-8')
+    provider_text = Path('xkeen-ui/services/mihomo_generator_providers.py').read_text(encoding='utf-8')
+    proxy_text = Path('xkeen-ui/services/mihomo_generator_proxies.py').read_text(encoding='utf-8')
+
+    assert 'from services.mihomo_generator_providers import (' in generator_text
+    assert 'from services.mihomo_generator_proxies import (' in generator_text
+    assert 'def replace_provider_urls(content: str, subscriptions: Sequence[str]) -> str:' in provider_text
+    assert 'def filter_proxy_group_uses(content: str, subscriptions: Sequence[str]) -> str:' in provider_text
+    assert 'def maybe_strip_example_vless(content: str, state: Dict[str, Any], subscriptions: Sequence[str]) -> str:' in provider_text
+    assert 'def ensure_empty_proxy_providers_map(content: str) -> str:' in provider_text
+    assert 'def ensure_leading_dash_for_yaml_block(yaml_block: str) -> str:' in proxy_text
+    assert 'def append_proxy_meta_yaml(proxy_yaml: str, item: Dict[str, Any]) -> str:' in proxy_text
+    assert 'def insert_proxies_from_state(content: str, state: Dict[str, Any]) -> str:' in proxy_text
+    assert generator_text.count('def _replace_provider_urls(') == 0
+    assert generator_text.count('def _filter_proxy_group_uses(') == 0
+    assert generator_text.count('def _maybe_strip_example_vless(') == 0
+    assert generator_text.count('def _ensure_empty_proxy_providers_map(') == 0
+    assert generator_text.count('def _insert_proxies_from_state(') == 0
+
+
+def test_mihomo_generator_rule_filtering_helpers_are_extracted():
+    generator_text = Path('xkeen-ui/mihomo_config_generator.py').read_text(encoding='utf-8')
+    rules_text = Path('xkeen-ui/services/mihomo_generator_rules.py').read_text(encoding='utf-8')
+
+    assert 'from services.mihomo_generator_rules import (' in generator_text
+    assert 'def apply_rule_group_filtering(content: str, enabled_ids: Sequence[str], profile: str | None = None) -> str:' in rules_text
+    assert generator_text.count('def _remove_proxy_groups_by_name(') == 0
+    assert generator_text.count('def _apply_pkg_markers(') == 0
+    assert generator_text.count('def _cleanup_rules_section(') == 0
+    assert generator_text.count('def _apply_rule_group_filtering(') == 0
+
+
+def test_mihomo_proxy_config_edit_helpers_are_extracted_from_core_module():
+    core_text = Path('xkeen-ui/mihomo_server_core.py').read_text(encoding='utf-8')
+    proxy_cfg_text = Path('xkeen-ui/services/mihomo_proxy_config.py').read_text(encoding='utf-8')
+    routes_text = Path('xkeen-ui/routes/mihomo.py').read_text(encoding='utf-8')
+    generator_proxy_text = Path('xkeen-ui/services/mihomo_generator_proxies.py').read_text(encoding='utf-8')
+
+    assert 'from services.mihomo_proxy_config import (' in core_text
+    assert 'def insert_proxy_into_groups(content: str, proxy_name: str, target_groups: Iterable[str]) -> str:' in proxy_cfg_text
+    assert 'def replace_proxy_in_config(content: str, proxy_name: str, new_proxy_yaml: str) -> Tuple[str, bool]:' in proxy_cfg_text
+    assert 'def rename_proxy_in_config(content: str, old_name: str, new_name: str) -> str:' in proxy_cfg_text
+    assert 'def apply_proxy_insert(' in proxy_cfg_text
+    assert 'from services.mihomo_proxy_config import (' in routes_text
+    assert 'from services.mihomo_proxy_config import apply_proxy_insert' in generator_proxy_text
+    assert core_text.count('def insert_proxy_into_groups(') == 0
+    assert core_text.count('def replace_proxy_in_config(') == 0
+    assert core_text.count('def rename_proxy_in_config(') == 0
+    assert core_text.count('def apply_proxy_insert(') == 0

@@ -50,11 +50,12 @@ from mihomo_server_core import (
     save_config,
     restart_mihomo_and_get_log,
     validate_config,
-    # YAML patch helpers (ported ideas from mihomo_editor)
+    parse_wireguard,
+)
+from services.mihomo_proxy_config import (
     apply_proxy_insert,
     rename_proxy_in_config,
     replace_proxy_in_config,
-    parse_wireguard,
 )
 
 
