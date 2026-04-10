@@ -8,14 +8,14 @@
   },
   "packageManager": "npm@10.9.8",
   "scripts": {
-    "frontend:vendor": "python3 scripts/sync_frontend_vendor.py",
-    "frontend:build": "python3 scripts/sync_frontend_vendor.py && vite build --config vite.config.mjs && python3 scripts/sync_frontend_build_manifest.py",
+    "frontend:vendor": "python scripts/sync_frontend_vendor.py",
+    "frontend:build": "python scripts/sync_frontend_vendor.py && vite build --config vite.config.mjs && python scripts/sync_frontend_build_manifest.py",
     "frontend:verify:static": "node scripts/verify_frontend_build.mjs",
     "frontend:verify": "npm run frontend:build && npm run frontend:verify:static",
     "build:frontend": "npm run frontend:build",
     "verify:frontend": "npm run frontend:verify",
-    "archive:user": "python3 scripts/build_user_archive.py",
-    "archive:user:skip-build": "python3 scripts/build_user_archive.py --skip-frontend-build",
+    "archive:user": "python scripts/build_user_archive.py",
+    "archive:user:skip-build": "python scripts/build_user_archive.py --skip-frontend-build",
     "e2e:install": "playwright install chromium",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
@@ -23,7 +23,6 @@
     "e2e:smoke:headed": "playwright test e2e/smoke.spec.mjs --headed"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.1",
     "@codemirror/autocomplete": "^6.20.1",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-json": "^6.0.2",
