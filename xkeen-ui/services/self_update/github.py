@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Any, Dict, List, Optional, Tuple
@@ -30,6 +32,21 @@ def _cfg_github_api_base() -> str:
 def _cfg_user_agent() -> str:
     ua = os.environ.get("XKEEN_UI_HTTP_USER_AGENT", "xkeen-ui") or "xkeen-ui"
     return str(ua)
+
+
+def _cfg_github_web_base() -> str:
+    base = (os.environ.get("XKEEN_UI_GITHUB_WEB_BASE") or "").strip()
+    if base:
+        return str(base).rstrip("/")
+
+    api_base = _cfg_github_api_base()
+    parsed = urllib.parse.urlsplit(api_base)
+    if parsed.scheme and parsed.netloc:
+        host = parsed.netloc
+        if host == "api.github.com":
+            host = "github.com"
+        return f"{parsed.scheme}://{host}".rstrip("/")
+    return "https://github.com"
 
 
 def _cfg_api_timeout() -> float:
@@ -65,6 +82,58 @@ def _cfg_prefer_asset_name() -> str:
     return v or "xkeen-ui-routing.tar.gz"
 
 
+def _release_asset_candidates() -> List[str]:
+    names: List[str] = []
+    for nm in (_cfg_prefer_asset_name(), "xkeen-ui-routing.tar.gz", "xkeen-ui.tar.gz"):
+        s = str(nm or "").strip()
+        if s and s not in names:
+            names.append(s)
+    return names
+
+
+def _sha_candidate_names(asset_name: str) -> List[str]:
+    if not asset_name:
+        return []
+
+    candidates = [
+        asset_name + ".sha256",
+        asset_name + ".sha256.txt",
+        asset_name + ".sha256sum",
+        asset_name + ".sha256sum.txt",
+        asset_name + ".sha",
+        asset_name + ".sha.txt",
+    ]
+
+    base = asset_name
+    for suf in (".tar.gz", ".tgz", ".tar", ".zip"):
+        if base.endswith(suf):
+            base0 = base[: -len(suf)]
+            candidates += [
+                base0 + ".sha256",
+                base0 + ".sha256.txt",
+                base0 + ".sha256sum",
+                base0 + ".sha",
+            ]
+            break
+
+    for nm in (
+        "SHA256SUMS",
+        "SHA256SUMS.txt",
+        "sha256sums",
+        "sha256sums.txt",
+        "checksums.txt",
+        "checksums.sha256",
+        "checksums",
+    ):
+        candidates.append(nm)
+
+    out: List[str] = []
+    for nm in candidates:
+        if nm not in out:
+            out.append(nm)
+    return out
+
+
 # Cache and in-flight futures are keyed by repo string ("owner/name").
 _REL_CACHE: Dict[str, Dict[str, Any]] = {}
 _REL_FUTURES: Dict[str, Any] = {}
@@ -73,6 +142,14 @@ _LOCK = threading.Lock()
 # Cache and in-flight futures for main-channel (branch tarball).
 _MAIN_CACHE: Dict[str, Dict[str, Any]] = {}
 _MAIN_FUTURES: Dict[str, Any] = {}
+
+
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+        return None
+
+
+_NO_REDIRECT_OPENER = urllib.request.build_opener(_NoRedirectHandler)
 
 
 def _req_json(url: str, *, timeout: Optional[float] = None) -> Tuple[Any, Dict[str, Any]]:
@@ -158,49 +235,11 @@ def _pick_sha_for_asset(assets: List[Dict[str, Any]], asset_name: str) -> Option
         if n:
             name_map[n] = a
 
-    candidates = [
-        asset_name + '.sha256',
-        asset_name + '.sha256.txt',
-        asset_name + '.sha256sum',
-        asset_name + '.sha256sum.txt',
-        asset_name + '.sha',
-        asset_name + '.sha.txt',
-    ]
-
-    base = asset_name
-    for suf in ('.tar.gz', '.tgz', '.tar', '.zip'):
-        if base.endswith(suf):
-            base0 = base[: -len(suf)]
-            candidates += [
-                base0 + '.sha256',
-                base0 + '.sha256.txt',
-                base0 + '.sha256sum',
-                base0 + '.sha',
-            ]
-            break
-
-    for nm in candidates:
+    for nm in _sha_candidate_names(asset_name):
         a = name_map.get(nm)
         if a:
             out = dict(a)
-            out['kind'] = 'sidecar'
-            out['for_asset'] = asset_name
-            return out
-
-    manifests = [
-        'SHA256SUMS',
-        'SHA256SUMS.txt',
-        'sha256sums',
-        'sha256sums.txt',
-        'checksums.txt',
-        'checksums.sha256',
-        'checksums',
-    ]
-    for nm in manifests:
-        a = name_map.get(nm)
-        if a:
-            out = dict(a)
-            out['kind'] = 'manifest'
+            out['kind'] = 'manifest' if nm.lower().startswith("sha256sums") or nm.lower().startswith("checksums") else 'sidecar'
             out['for_asset'] = asset_name
             return out
 
@@ -247,15 +286,8 @@ def _sanitize_release(raw: Dict[str, Any]) -> Dict[str, Any]:
     # Pick the main artifact and optional sha file.
     # Respect XKEEN_UI_UPDATE_ASSET_NAME (runner also uses it), but keep backward
     # compatibility with older releases.
-    prefer = _cfg_prefer_asset_name()
-    candidates = [prefer]
-    if prefer != 'xkeen-ui-routing.tar.gz':
-        candidates.append('xkeen-ui-routing.tar.gz')
-    if prefer != 'xkeen-ui.tar.gz':
-        candidates.append('xkeen-ui.tar.gz')
-
     main_asset = None
-    for nm in candidates:
+    for nm in _release_asset_candidates():
         main_asset = _pick_asset(assets_out, prefer_name=nm)
         if main_asset:
             break
@@ -272,6 +304,150 @@ def _sanitize_release(raw: Dict[str, Any]) -> Dict[str, Any]:
         "asset": main_asset,
         "sha256_asset": sha_asset,
     }
+
+
+def _req_no_redirect(url: str, *, timeout: Optional[float] = None, headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    req_headers = {
+        "User-Agent": _cfg_user_agent(),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    if headers:
+        req_headers.update(headers)
+
+    req = urllib.request.Request(url, headers=req_headers, method="GET")
+    meta: Dict[str, Any] = {"url": url}
+    tmo = _cfg_api_timeout() if (timeout is None) else float(timeout)
+    try:
+        with _NO_REDIRECT_OPENER.open(req, timeout=float(tmo)) as resp:
+            meta["status"] = int(getattr(resp, "status", 200) or 200)
+            meta["location"] = resp.headers.get("Location")
+            meta["final_url"] = resp.geturl()
+            return meta
+    except urllib.error.HTTPError as e:
+        meta["status"] = int(getattr(e, "code", 0) or 0)
+        meta["location"] = e.headers.get("Location") if getattr(e, "headers", None) else None
+        meta["final_url"] = e.geturl()
+        if meta["status"] in (301, 302, 303, 307, 308):
+            return meta
+        raise
+
+
+def _extract_release_tag(url: str) -> Optional[str]:
+    path = urllib.parse.urlsplit(str(url or "")).path or ""
+    match = re.search(r"/releases/tag/([^/?#]+)/?$", path)
+    if not match:
+        return None
+    return urllib.parse.unquote(match.group(1))
+
+
+def _release_download_url(repo: str, asset_name: str) -> str:
+    base = _cfg_github_web_base()
+    return f"{base}/{repo}/releases/latest/download/{asset_name}"
+
+
+def _fetch_latest_release_from_web(repo: str, *, fallback_meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    repo = (repo or "").strip()
+    if not repo or "/" not in repo:
+        return {"ok": False, "error": "invalid_repo", "latest": None, "meta": {"repo": repo}}
+
+    web_base = _cfg_github_web_base()
+    latest_url = f"{web_base}/{repo}/releases/latest"
+    meta: Dict[str, Any] = {"repo": repo, "source": "github_web_fallback", "web_base": web_base}
+    if isinstance(fallback_meta, dict) and fallback_meta:
+        meta["api"] = dict(fallback_meta)
+
+    try:
+        latest_meta = _req_no_redirect(latest_url, timeout=_cfg_api_timeout())
+        meta["release_meta"] = latest_meta
+    except urllib.error.HTTPError as e:
+        if getattr(e, "code", None) == 404:
+            meta["status"] = 404
+            meta["reason"] = "no_releases"
+            return {"ok": True, "error": None, "latest": None, "meta": meta}
+        try:
+            msg = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else ""
+        except Exception:
+            msg = ""
+        meta["status"] = getattr(e, "code", None)
+        meta["message"] = msg[:400]
+        return {"ok": False, "error": f"http_{getattr(e, 'code', 'error')}", "latest": None, "meta": meta}
+    except Exception as e:
+        meta["message"] = str(e)[:400]
+        return {"ok": False, "error": "network_error", "latest": None, "meta": meta}
+
+    tag_location = latest_meta.get("location") or latest_meta.get("final_url") or latest_url
+    html_url = urllib.parse.urljoin(web_base + "/", str(tag_location or ""))
+    tag = _extract_release_tag(html_url)
+    if not tag:
+        meta["message"] = "release tag redirect was not resolved"
+        return {"ok": False, "error": "bad_response", "latest": None, "meta": meta}
+
+    assets_out: List[Dict[str, Any]] = []
+    main_asset = None
+    for nm in _release_asset_candidates():
+        stable_url = _release_download_url(repo, nm)
+        try:
+            asset_meta = _req_no_redirect(stable_url, timeout=_cfg_api_timeout(), headers={"Range": "bytes=0-0"})
+        except urllib.error.HTTPError as e:
+            code = int(getattr(e, "code", 0) or 0)
+            if code in (404, 410):
+                continue
+            meta.setdefault("asset_errors", {})[nm] = {"status": code}
+            continue
+        except Exception as e:
+            meta.setdefault("asset_errors", {})[nm] = {"message": str(e)[:200]}
+            continue
+
+        status = int(asset_meta.get("status") or 0)
+        if status not in (200, 206, 301, 302, 303, 307, 308):
+            continue
+        main_asset = {"name": nm, "download_url": stable_url}
+        assets_out.append(main_asset)
+        meta["asset_meta"] = asset_meta
+        break
+
+    sha_asset = None
+    if isinstance(main_asset, dict) and main_asset.get("name"):
+        for nm in _sha_candidate_names(str(main_asset.get("name") or "")):
+            stable_url = _release_download_url(repo, nm)
+            try:
+                sha_meta = _req_no_redirect(stable_url, timeout=_cfg_api_timeout(), headers={"Range": "bytes=0-0"})
+            except urllib.error.HTTPError as e:
+                code = int(getattr(e, "code", 0) or 0)
+                if code in (404, 410):
+                    continue
+                meta.setdefault("sha_errors", {})[nm] = {"status": code}
+                continue
+            except Exception as e:
+                meta.setdefault("sha_errors", {})[nm] = {"message": str(e)[:200]}
+                continue
+
+            status = int(sha_meta.get("status") or 0)
+            if status not in (200, 206, 301, 302, 303, 307, 308):
+                continue
+            sha_asset = {
+                "name": nm,
+                "download_url": stable_url,
+                "kind": "manifest" if nm.lower().startswith("sha256sums") or nm.lower().startswith("checksums") else "sidecar",
+                "for_asset": str(main_asset.get("name") or ""),
+            }
+            assets_out.append({"name": nm, "download_url": stable_url})
+            meta["sha_meta"] = sha_meta
+            break
+
+    latest = {
+        "tag": tag,
+        "name": tag,
+        "html_url": html_url,
+        "published_at": None,
+        "draft": False,
+        "prerelease": False,
+        "body": "",
+        "assets": assets_out,
+        "asset": main_asset,
+        "sha256_asset": sha_asset,
+    }
+    return {"ok": True, "error": None, "latest": latest, "meta": meta}
 
 
 def _fetch_latest_release(repo: str) -> Dict[str, Any]:
@@ -296,9 +472,23 @@ def _fetch_latest_release(repo: str) -> Dict[str, Any]:
             msg = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else ""
         except Exception:
             msg = ""
-        return {"ok": False, "error": f"http_{getattr(e, 'code', 'error')}", "latest": None, "meta": {"repo": repo, "status": getattr(e, "code", None), "message": msg[:400]}}
+        fallback_meta = {"repo": repo, "status": getattr(e, "code", None), "message": msg[:400], "url": url}
+        fallback = _fetch_latest_release_from_web(repo, fallback_meta=fallback_meta)
+        if bool(fallback.get("ok")) or (isinstance(fallback.get("meta"), dict) and fallback["meta"].get("reason") == "no_releases"):
+            return fallback
+        merged_meta = dict(fallback_meta)
+        if isinstance(fallback.get("meta"), dict):
+            merged_meta["web"] = dict(fallback.get("meta") or {})
+        return {"ok": False, "error": f"http_{getattr(e, 'code', 'error')}", "latest": None, "meta": merged_meta}
     except Exception as e:
-        return {"ok": False, "error": "network_error", "latest": None, "meta": {"repo": repo, "message": str(e)[:400]}}
+        fallback_meta = {"repo": repo, "message": str(e)[:400], "url": url}
+        fallback = _fetch_latest_release_from_web(repo, fallback_meta=fallback_meta)
+        if bool(fallback.get("ok")) or (isinstance(fallback.get("meta"), dict) and fallback["meta"].get("reason") == "no_releases"):
+            return fallback
+        merged_meta = dict(fallback_meta)
+        if isinstance(fallback.get("meta"), dict):
+            merged_meta["web"] = dict(fallback.get("meta") or {})
+        return {"ok": False, "error": "network_error", "latest": None, "meta": merged_meta}
 
 
 def github_get_latest_release(repo: str, *, wait_seconds: float = 2.0, force_refresh: bool = False) -> Tuple[Dict[str, Any], bool]:
