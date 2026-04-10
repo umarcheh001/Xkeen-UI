@@ -19,3 +19,14 @@ xkeen-ui/static/frontend-build/
 # Local packaging artifacts
 dist/
 package-root/
+/xkeen-ui-routing.tar.gz
+/xkeen-ui-routing.tar.gz.sha256
+
+# Playwright / e2e
+playwright-report/
+test-results/
+e2e/.auth/
+.tmp/
+
+# Local assistant / editor state
+.claude/

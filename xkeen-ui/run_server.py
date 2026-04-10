@@ -29,6 +29,17 @@ except Exception:
     def _gevent_sleep(sec: float) -> None:
         time.sleep(sec)
 
+
+def _server_port() -> int:
+    raw = str(os.environ.get("XKEEN_UI_PORT") or "8088").strip()
+    try:
+        port = int(raw)
+    except Exception:
+        port = 8088
+    if port <= 0 or port > 65535:
+        port = 8088
+    return port
+
 from app import (
     app,
     ws_debug,
@@ -1295,6 +1306,7 @@ def application(environ, start_response):
 
 
 if __name__ == "__main__":
+    server_port = _server_port()
     if GEVENT_AVAILABLE:
         try:
             if _gspawn:
@@ -1303,7 +1315,7 @@ if __name__ == "__main__":
             pass
 
         server = pywsgi.WSGIServer(
-            ("0.0.0.0", 8088),
+            ("0.0.0.0", server_port),
             application,
             handler_class=WebSocketHandler,
         )
@@ -1311,4 +1323,4 @@ if __name__ == "__main__":
     else:
         # Fallback: simple Flask dev server without WebSocket support.
         # Xray logs will still be available via HTTP polling (/api/xray-logs).
-        app.run(host="0.0.0.0", port=8088)
+        app.run(host="0.0.0.0", port=server_port)
