@@ -43,11 +43,9 @@ from __future__ import annotations
 
 import os
 import re
-from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 
 from mihomo_server_core import (
-    MIHOMO_ROOT,
     parse_vless,
     parse_proxy_uri,
     parse_wireguard,
@@ -55,160 +53,17 @@ from mihomo_server_core import (
     _yaml_str,
     _yaml_list,
 )
-
-
-# ---------------------------------------------------------------------------
-# Template lookup
-# ---------------------------------------------------------------------------
-
-HERE = Path(__file__).resolve().parent
-
-# In router environment: /opt/etc/mihomo/templates
-# In development / tests: ./opt/etc/mihomo/templates relative to this file.
-DEFAULT_TEMPLATES_DIR = (MIHOMO_ROOT / "templates").resolve()
-DEVEL_TEMPLATES_DIR = (HERE / "opt" / "etc" / "mihomo" / "templates").resolve()
-
-if DEFAULT_TEMPLATES_DIR.is_dir():
-    TEMPLATES_DIR = DEFAULT_TEMPLATES_DIR
-elif DEVEL_TEMPLATES_DIR.is_dir():
-    TEMPLATES_DIR = DEVEL_TEMPLATES_DIR
-else:
-    # Fallback – still use the router path, even if it does not exist yet.
-    TEMPLATES_DIR = DEFAULT_TEMPLATES_DIR
-
-
-# Map "profile" + optional explicit template to actual filename.
-# Сейчас используется один общий шаблон custom.yaml для всех профилей.
-DEFAULT_TEMPLATES: Dict[str, str] = {
-    "router_zkeen": "zkeen.yaml",
-    "router": "custom.yaml",          # backward compatible profile name
-    "router_custom": "custom.yaml",
-    "app": "custom.yaml",             # legacy / fallback
-}
-
-# Provider names in both templates, in desired order (first 5 stubs exist in templates).
-#
-# NOTE: The generator UI historically supported only 5 subscriptions.
-# Newer versions allow passing more than 5 URLs – extra providers are
-# auto-appended to the resulting config.
-ROUTER_PROVIDER_NAMES: List[str] = [
-    "proxy-sub",
-    "proxy-sub-2",
-    "proxy-sub-3",
-    "proxy-sub-4",
-    "proxy-sub-5",
-]
-
-
-def _provider_name_for_index(idx: int) -> str:
-    """Return provider name for a subscription index (0-based).
-
-    Pattern matches bundled templates:
-      0 -> proxy-sub
-      1 -> proxy-sub-2
-      2 -> proxy-sub-3
-      ...
-    """
-    if idx <= 0:
-        return "proxy-sub"
-    return f"proxy-sub-{idx + 1}"
-
-
-# Mapping from UI rule-group IDs to actual group names in templates.
-# If some ID has no mapping for a particular template, it is simply ignored.
-RULE_GROUP_ID_TO_GROUP_NAMES: Dict[str, Sequence[str]] = {
-    # Базовая группа с заблокированными сервисами и основным списком доменов
-    "Blocked": ("Заблок. сервисы", "refilter@domain"),
-
-    # Контентные сервисы
-    "YouTube": ("YouTube", "youtube@domain"),
-    "Discord": ("Discord", "discord@classical"),
-    "Twitch": ("Twitch", "twitch@domain"),
-    "Reddit": ("Reddit", "reddit@domain"),
-    "Spotify": ("Spotify", "spotify@domain"),
-    "Steam": ("Steam", "steam@domain"),
-    "Telegram": ("Telegram", "telegram@domain", "telegram@ipcidr", "telegram@ip"),
-
-    # Крупные сети / сети / соцсети
-    "Meta": ("Meta", "meta@domain", "meta@ipcidr"),
-    "Twitter": ("Twitter", "twitter@domain"),
-
-    # CDN / хостинги (единая группа CDN)
-    "CDN": (
-        "CDN",
-        "akamai@domain",
-        "akamai@ipcidr",
-        "amazon@domain",
-        "amazon@ipcidr",
-        "cloudflare@domain",
-        "cloudflare@ipcidr",
-        "cdn77@ipcidr",
-        "digitalocean@domain",
-        "digitalocean@ipcidr",
-        "fastly@domain",
-        "fastly@ipcidr",
-        "gcore@ipcidr",
-        "hetzner@domain",
-        "hetzner@ipcidr",
-        "oracle@domain",
-        "oracle@ipcidr",
-        "ovh@ipcidr",
-        "scaleway@ipcidr",
-        "vultr@ipcidr",
-    ),
-
-    # Общие сервисы
-    "Google": ("Google", "google@domain", "google@ipcidr"),
-    "GitHub": ("GitHub", "github@domain"),
-    "AI": ("AI", "category-ai@domain"),
-
-    # Специальная группа для QUIC-трафика (в UI не показываем, всегда включена)
-    "QUIC": ("QUIC",),
-}
-
-
-# Rule-group IDs that must always remain enabled in all profiles.
-ALWAYS_ENABLED_RULE_IDS: Set[str] = set()
-
-
-# IDs of rule packages that are specific to the ZKeen router profile only.
-ZKEEN_ONLY_RULE_IDS: Set[str] = set()
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _normalise_profile_name(profile: str | None) -> str:
-    if not profile:
-        return "router_zkeen"
-    profile = str(profile).strip().lower()
-    if profile in {"router", "router_zkeen", "router-zkeen"}:
-        return "router_zkeen"
-    if profile in {"router_custom", "router-custom", "custom"}:
-        return "router_custom"
-    if profile == "app":
-        return "app"
-    # Default to router_custom for unknown but router-ish names
-    if "router" in profile:
-        return "router_custom"
-    return profile
-
-
-def _select_template_filename(profile: str, explicit_template: Optional[str]) -> str:
-    """Return template filename to use, not path."""
-    if explicit_template:
-        return explicit_template
-    return DEFAULT_TEMPLATES.get(profile, "custom.yaml")
-
-
-def _load_template_text(filename: str) -> str:
-    path = TEMPLATES_DIR / filename
-    try:
-        return path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        # Better to raise a clear error – caller can show it to the user.
-        raise FileNotFoundError(f"Template file not found: {path}")
+from services.mihomo_generator_meta import (
+    ROUTER_PROVIDER_NAMES,
+    RULE_GROUP_ID_TO_GROUP_NAMES,
+    ALWAYS_ENABLED_RULE_IDS,
+    ZKEEN_ONLY_RULE_IDS,
+    provider_name_for_index as _provider_name_for_index,
+    normalise_profile_name as _normalise_profile_name,
+    select_template_filename as _select_template_filename,
+    load_template_text as _load_template_text,
+    get_profile_rule_presets,
+)
 
 
 def _replace_provider_urls(content: str, subscriptions: Sequence[str]) -> str:
@@ -1370,56 +1225,6 @@ def build_full_config(state: Dict[str, Any]) -> str:
         return build_app_config(state)
     # Everything else is router-style
     return build_router_config(state)
-
-
-
-def get_profile_rule_presets(profile: str | None) -> Dict[str, Any]:
-    """Return profile-specific rule-group presets for the Mihomo generator UI.
-
-    This exposes two lists for the selected profile:
-
-    * ``availableRuleGroups`` – which optional rule packages are even
-      meaningful for this profile and should be shown as checkboxes.
-    * ``enabledRuleGroups`` – which of those packages should be enabled
-      by default when the user selects the profile in the UI.
-
-    Mandatory packages (``"Blocked"``, ``"QUIC"``) are always enforced
-    server-side and therefore never exposed to the UI.
-    """
-    # Normalise profile name exactly the same way as the main generator.
-    norm = _normalise_profile_name(profile)
-
-    # All rule IDs that are meaningful for the UI (everything except the
-    # mandatory packages which are always enabled internally).
-    ui_candidate_ids: List[str] = [
-        gid for gid in RULE_GROUP_ID_TO_GROUP_NAMES.keys()
-        if gid not in {"Blocked", "QUIC"} and gid not in ALWAYS_ENABLED_RULE_IDS
-    ]
-
-    # Available packages depend on the profile. ZKeen and router_custom
-    # profiles expose the full set, while simpler router profiles hide the
-    # ZKeen-only extras (GEOIP/GEOSITE helpers, Ru-Traffic, etc.).
-    if norm in {"router_zkeen", "router_custom"}:
-        available: Sequence[str] = ui_candidate_ids
-    else:
-        available = [
-            gid for gid in ui_candidate_ids
-            if gid not in ZKEEN_ONLY_RULE_IDS
-        ]
-
-    # Profile-specific defaults. For more "advanced" profiles like
-    # router_custom we keep everything unchecked so that the user explicitly
-    # opts in. Simpler profiles enable all available packages by default.
-    if norm == "router_custom":
-        enabled: Sequence[str] = []
-    else:
-        enabled = available
-
-    return {
-        "profile": norm,
-        "availableRuleGroups": list(available),
-        "enabledRuleGroups": list(enabled),
-    }
 
 
 __all__ = [

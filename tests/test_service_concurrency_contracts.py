@@ -68,3 +68,29 @@ def test_pty_runtime_is_extracted_from_run_server_into_dedicated_service_module(
     assert 'def handle_pty_request(' in pty_text
     assert 'class PtySession:' not in server_text
     assert 'def _pty_cleanup_loop()' not in server_text
+
+
+def test_mihomo_runtime_helpers_are_extracted_from_core_module():
+    core_text = Path('xkeen-ui/mihomo_server_core.py').read_text(encoding='utf-8')
+    runtime_text = Path('xkeen-ui/services/mihomo_runtime.py').read_text(encoding='utf-8')
+
+    assert 'from services.mihomo_runtime import (' in core_text
+    assert 'def ensure_mihomo_layout() -> None:' in runtime_text
+    assert 'def list_profiles() -> List[ProfileInfo]:' in runtime_text
+    assert 'def list_backups(profile: Optional[str] = None) -> List[BackupInfo]:' in runtime_text
+    assert 'def save_config(new_content: str) -> BackupInfo:' in runtime_text
+    assert 'def restart_mihomo_and_get_log(new_content: Optional[str] = None) -> str:' in runtime_text
+    assert 'def validate_config(new_content: Optional[str] = None) -> str:' in runtime_text
+
+
+def test_mihomo_generator_metadata_is_extracted_from_main_generator_module():
+    generator_text = Path('xkeen-ui/mihomo_config_generator.py').read_text(encoding='utf-8')
+    meta_text = Path('xkeen-ui/services/mihomo_generator_meta.py').read_text(encoding='utf-8')
+
+    assert 'from services.mihomo_generator_meta import (' in generator_text
+    assert 'def provider_name_for_index(idx: int) -> str:' in meta_text
+    assert 'def normalise_profile_name(profile: str | None) -> str:' in meta_text
+    assert 'def select_template_filename(profile: str, explicit_template: Optional[str]) -> str:' in meta_text
+    assert 'def load_template_text(filename: str) -> str:' in meta_text
+    assert 'def get_profile_rule_presets(profile: str | None) -> Dict[str, Any]:' in meta_text
+    assert generator_text.count('def get_profile_rule_presets(') == 0
