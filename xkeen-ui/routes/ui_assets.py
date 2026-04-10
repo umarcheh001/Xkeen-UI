@@ -86,6 +86,12 @@ _HASHED_BUILD_ASSET_RE = re.compile(
 _HTML_MIME_TYPES = {"text/html", "application/xhtml+xml"}
 _JSON_MIME_TYPES = {"application/json", "application/ld+json"}
 _API_PATH_PREFIXES = ("/api/", "/routing/", "/remotefs/", "/fs/")
+_BASELINE_SECURITY_HEADERS = {
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
+    "X-Content-Type-Options": "nosniff",
+}
 
 
 def _normalize_static_filename(filename: str | None) -> str:
@@ -169,6 +175,24 @@ def _no_cache(resp: Response) -> Response:
         resp.headers["Cache-Control"] = "no-store, max-age=0"
         resp.headers["Pragma"] = "no-cache"
         resp.headers["X-Content-Type-Options"] = "nosniff"
+    except Exception:
+        pass
+    return resp
+
+
+def apply_response_security_headers(resp: Response) -> Response:
+    """Attach a conservative app-wide browser security-header baseline.
+
+    More specific routes may set stricter values before this hook; we preserve
+    them via ``setdefault`` so Mihomo proxy hardening and future endpoint-
+    specific policies continue to win.
+    """
+    if resp is None:
+        return resp
+
+    try:
+        for key, value in _BASELINE_SECURITY_HEADERS.items():
+            resp.headers.setdefault(key, value)
     except Exception:
         pass
     return resp

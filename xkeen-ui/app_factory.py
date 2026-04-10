@@ -224,7 +224,11 @@ def _init_xray_startup_migrations(*, base_etc_dir: str, base_var_dir: str, ui_st
 
 def _create_flask_app():
     from flask import Flask
-    from routes.ui_assets import apply_response_cache_policy, get_static_asset_max_age
+    from routes.ui_assets import (
+        apply_response_cache_policy,
+        apply_response_security_headers,
+        get_static_asset_max_age,
+    )
     from services.request_limits import install_request_size_guards
 
     class XkeenFlask(Flask):
@@ -254,7 +258,8 @@ def _create_flask_app():
 
     @app.after_request
     def _apply_ui_cache_policy(response):
-        return apply_response_cache_policy(response)
+        response = apply_response_cache_policy(response)
+        return apply_response_security_headers(response)
 
     return app
 
