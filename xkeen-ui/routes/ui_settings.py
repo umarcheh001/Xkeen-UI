@@ -18,7 +18,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 
-from routes.common.errors import error_response
+from routes.common.errors import error_response, exception_response
 from services import get_ui_settings_store
 from services.ui_settings import UISettingsValidationError
 
@@ -34,7 +34,15 @@ def create_ui_settings_blueprint() -> Blueprint:
         try:
             cfg = get_ui_settings_store().load()
         except Exception as e:  # noqa: BLE001
-            return error_response(f"failed to load settings: {e}", 500, ok=False)
+            return exception_response(
+                "Не удалось загрузить настройки интерфейса.",
+                500,
+                ok=False,
+                code="settings_load_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_tag="ui_settings.load_failed",
+            )
         return jsonify({"ok": True, "settings": cfg}), 200
 
     @bp.patch("/api/ui-settings")
@@ -66,7 +74,15 @@ def create_ui_settings_blueprint() -> Blueprint:
                 errors=getattr(e, "errors", []) or [],
             )
         except Exception as e:  # noqa: BLE001
-            return error_response(f"failed to save settings: {e}", 500, ok=False)
+            return exception_response(
+                "Не удалось сохранить настройки интерфейса.",
+                500,
+                ok=False,
+                code="settings_save_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_tag="ui_settings.save_failed",
+            )
 
         # Client can ignore report; it is helpful for debugging.
         resp: dict[str, Any] = {"ok": True, "settings": cfg}

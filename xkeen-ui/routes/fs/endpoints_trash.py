@@ -114,10 +114,16 @@ def register_trash_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
 
         try:
             res = clear_local_trash(LOCALFS_ROOTS)
-        except PermissionError as e:
-            return error_response(str(e), 403, ok=False)
-        except Exception as e:
-            return error_response('trash_clear_failed', 400, ok=False, details=str(e) or '')
+        except PermissionError:
+            return error_response("Доступ к корзине запрещён.", 403, ok=False, code="forbidden")
+        except Exception:
+            return error_response(
+                "Не удалось очистить корзину.",
+                400,
+                ok=False,
+                code="trash_clear_failed",
+                hint="Подробности смотрите в server logs.",
+            )
 
         _core_log(
             "info",

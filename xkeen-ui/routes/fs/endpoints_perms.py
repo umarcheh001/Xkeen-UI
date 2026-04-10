@@ -41,8 +41,8 @@ def register_perms_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
         if target == 'local':
             try:
                 rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
             try:
                 chmod_local(rp, mode_i)
             except Exception:
@@ -86,8 +86,8 @@ def register_perms_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
         if target == 'local':
             try:
                 rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
             try:
                 chown_local(rp, uid_i, gid_i)
             except Exception:

@@ -193,3 +193,123 @@ def test_geodat_install_hides_exception_details(monkeypatch, tmp_path: Path):
     assert "details" not in payload
     assert "/opt/etc/xkeen-ui" not in raw
     assert "failed to exec" not in raw
+
+
+def test_service_core_switch_hides_exception_details(monkeypatch, tmp_path: Path):
+    service = _reload("routes.service")
+    app = Flask("service-sanitize-core-switch")
+    app.register_blueprint(
+        service.create_service_blueprint(
+            restart_xkeen=lambda **_kwargs: True,
+            append_restart_log=lambda *_args, **_kwargs: None,
+            XRAY_ERROR_LOG=str(tmp_path / "xray-error.log"),
+        )
+    )
+    client = app.test_client()
+
+    def fake_switch_core(*_args, **_kwargs):
+        raise service.CoreSwitchError(
+            "/opt/etc/xkeen-ui/bin/xkeen -mihomo failed",
+            details={"cmd": "/opt/etc/xkeen-ui/bin/xkeen -mihomo"},
+        )
+
+    monkeypatch.setattr(service, "switch_core", fake_switch_core)
+
+    response = client.post("/api/xkeen/core", json={"core": "mihomo"})
+
+    assert response.status_code == 500
+    payload = response.get_json()
+    raw = json.dumps(payload, ensure_ascii=False)
+    assert payload["ok"] is False
+    assert payload["error"] == "Не удалось переключить ядро xkeen."
+    assert payload["code"] == "core_switch_failed"
+    assert payload["hint"] == "Подробности смотрите в server logs."
+    assert "details" not in payload
+    assert "/opt/etc/xkeen-ui" not in raw
+    assert "-mihomo failed" not in raw
+
+
+def test_xray_inbounds_write_failure_hides_exception_details(monkeypatch, tmp_path: Path):
+    xray_configs = _reload("routes.xray_configs")
+    app = Flask("xray-configs-sanitize-write")
+    app.register_blueprint(
+        xray_configs.create_xray_configs_blueprint(
+            restart_xkeen=lambda **_kwargs: True,
+            load_json=lambda _path, default=None: default,
+            save_json=lambda _path, data: data,
+            strip_json_comments_text=lambda text: text,
+            snapshot_xray_config_before_overwrite=lambda _path: None,
+        )
+    )
+    client = app.test_client()
+
+    monkeypatch.setattr(
+        xray_configs,
+        "resolve_xray_fragment_file",
+        lambda *_args, **_kwargs: str(tmp_path / "01_inbounds.json"),
+    )
+
+    def fake_atomic_write_json(*_args, **_kwargs):
+        raise OSError("/opt/etc/xray/01_inbounds.json permission denied")
+
+    monkeypatch.setattr(xray_configs, "_atomic_write_json", fake_atomic_write_json)
+
+    response = client.post("/api/inbounds", json={"text": "{}", "restart": False})
+
+    assert response.status_code == 500
+    payload = response.get_json()
+    raw = json.dumps(payload, ensure_ascii=False)
+    assert payload["ok"] is False
+    assert payload["error"] == "Не удалось сохранить основной JSON-файл."
+    assert payload["code"] == "write_failed"
+    assert payload["hint"] == "Подробности смотрите в server logs."
+    assert "/opt/etc/xray" not in raw
+    assert "permission denied" not in raw
+
+
+def test_mihomo_preview_hides_exception_details(monkeypatch, tmp_path: Path):
+    mihomo = _reload("routes.mihomo")
+    app = Flask("mihomo-sanitize-preview")
+    app.register_blueprint(
+        mihomo.create_mihomo_blueprint(
+            MIHOMO_CONFIG_FILE=str(tmp_path / "config.yaml"),
+            MIHOMO_TEMPLATES_DIR=str(tmp_path / "templates"),
+            MIHOMO_DEFAULT_TEMPLATE=str(tmp_path / "default.yaml"),
+            restart_xkeen=lambda **_kwargs: True,
+        )
+    )
+    client = app.test_client()
+
+    def fake_generate_preview(_payload):
+        raise RuntimeError("/opt/etc/xkeen-ui/templates/default.yaml failed to load")
+
+    monkeypatch.setattr(mihomo.mihomo_svc, "generate_preview", fake_generate_preview)
+
+    response = client.post("/api/mihomo/preview", json={})
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    raw = json.dumps(payload, ensure_ascii=False)
+    assert payload["ok"] is False
+    assert payload["error"] == "Не удалось сгенерировать предпросмотр."
+    assert payload["code"] == "preview_failed"
+    assert payload["hint"] == "Проверьте входные данные и повторите попытку."
+    assert "/opt/etc/xkeen-ui" not in raw
+    assert "failed to load" not in raw
+
+
+def test_routing_geodat_error_payload_drops_raw_details():
+    routing_errors = _load_routing_module("errors")
+
+    payload = routing_errors._geodat_error_payload(
+        "xk_geodat_failed",
+        details="secret crash at /private/tmp/xk-geodat",
+    )
+
+    raw = json.dumps(payload, ensure_ascii=False)
+    assert payload["ok"] is False
+    assert payload["error"] == "xk_geodat_failed"
+    assert "details" not in payload
+    assert "Причина:" not in str(payload.get("hint") or "")
+    assert "secret" not in raw
+    assert "/private/tmp" not in raw

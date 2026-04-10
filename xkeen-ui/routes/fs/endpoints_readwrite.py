@@ -64,8 +64,8 @@ def register_readwrite_endpoints(bp, deps: Dict[str, Any]) -> None:
         if target == "local":
             try:
                 rp = _local_resolve(path, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
 
             if os.path.isdir(rp):
                 return error_response("not_a_file", 400, ok=False)
@@ -214,8 +214,8 @@ def register_readwrite_endpoints(bp, deps: Dict[str, Any]) -> None:
         if target == "local":
             try:
                 rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
 
             if os.path.isdir(rp):
                 return error_response("not_a_file", 400, ok=False)

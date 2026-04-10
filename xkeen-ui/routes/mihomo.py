@@ -43,6 +43,7 @@ from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request, current_app, redirect
 
+from routes.common.errors import exception_response
 from mihomo_server_core import (
     ensure_mihomo_layout,
     get_active_profile_name,
@@ -92,11 +93,50 @@ from services.command_jobs import create_command_job
 from services.cores import detect_running_core
 
 
-def _api_error(message: str, status: int = 400, *, ok: bool | None = None):
+def _api_error(message: str, status: int = 400, *, ok: bool | None = None, **extra: Any):
     payload: Dict[str, Any] = {"error": message}
     if ok is not None:
         payload["ok"] = ok
+    if extra:
+        payload.update(extra)
     return jsonify(payload), status
+
+
+def _mihomo_error(
+    message: str,
+    status: int = 400,
+    *,
+    code: str | None = None,
+    hint: str | None = None,
+    ok: bool | None = False,
+    **extra: Any,
+):
+    if code and "code" not in extra:
+        extra["code"] = code
+    if hint and "hint" not in extra:
+        extra["hint"] = hint
+    return _api_error(message, status, ok=ok, **extra)
+
+
+def _mihomo_exception(
+    message: str,
+    *,
+    code: str,
+    hint: str,
+    exc: BaseException,
+    status: int = 500,
+    **extra: Any,
+):
+    return exception_response(
+        message,
+        status,
+        ok=False,
+        code=code,
+        hint=hint,
+        exc=exc,
+        log_tag=f"mihomo.{code}",
+        **extra,
+    )
 
 
 def _safe_template_path(templates_dir: str, name: str) -> str | None:
@@ -129,7 +169,7 @@ def create_mihomo_blueprint(
     def api_get_mihomo_config():
         content = load_text(MIHOMO_CONFIG_FILE, default=None)
         if content is None:
-            return _api_error(f"Файл {MIHOMO_CONFIG_FILE} не найден", 404, ok=False)
+            return _mihomo_error("Файл config.yaml не найден.", 404, code="config_not_found")
         return jsonify({"ok": True, "content": content}), 200
 
     @bp.post("/api/mihomo-config")
@@ -142,7 +182,13 @@ def create_mihomo_blueprint(
             ensure_mihomo_layout()
             save_config(content)
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось сохранить active config.yaml.",
+                code="config_save_failed",
+                hint="Проверьте конфиг и server logs.",
+                exc=e,
+                status=400,
+            )
 
         restart_flag = bool(data.get("restart", True))
         async_q = request.args.get("async")
@@ -164,7 +210,13 @@ def create_mihomo_blueprint(
         try:
             cfg, warnings = mihomo_svc.generate_preview(data)
         except Exception as exc:  # pragma: no cover - defensive
-            return _api_error(f"Ошибка генерации предпросмотра: {exc}", 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось сгенерировать предпросмотр.",
+                code="preview_failed",
+                hint="Проверьте входные данные и повторите попытку.",
+                exc=exc,
+                status=400,
+            )
         return jsonify({"ok": True, "content": cfg, "warnings": warnings}), 200
 
     @bp.get("/api/mihomo/profile_defaults")
@@ -174,8 +226,12 @@ def create_mihomo_blueprint(
         try:
             data = mihomo_svc.get_profile_defaults(profile)
         except Exception as exc:  # pragma: no cover - defensive
-            return _api_error(
-                f"Ошибка получения пресета профиля Mihomo: {exc}", 400, ok=False
+            return _mihomo_exception(
+                "Не удалось получить пресет профиля Mihomo.",
+                code="profile_defaults_failed",
+                hint="Проверьте выбранный профиль и повторите попытку.",
+                exc=exc,
+                status=400,
             )
 
         resp = {"ok": True}
@@ -190,7 +246,13 @@ def create_mihomo_blueprint(
         try:
             info = _mh_hwid_get_device_info()
         except Exception as exc:  # pragma: no cover - defensive
-            return _api_error(f"HWID device info error: {exc}", 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось получить данные устройства для HWID.",
+                code="hwid_device_failed",
+                hint="Повторите попытку позже. Подробности смотрите в server logs.",
+                exc=exc,
+                status=400,
+            )
         return jsonify({"ok": True, **info}), 200
 
     @bp.post("/api/mihomo/hwid/probe")
@@ -322,7 +384,7 @@ def create_mihomo_blueprint(
                 else:
                     tmpl_yaml = load_text(MIHOMO_DEFAULT_TEMPLATE, default=None)
                     if tmpl_yaml is None:
-                        return _api_error("Default template not found", 404, ok=False)
+                        return _mihomo_error("Шаблон Mihomo по умолчанию не найден.", 404, code="template_not_found")
             base_for_name = tmpl_yaml or ""
         else:
             base_for_name = base_yaml
@@ -332,10 +394,21 @@ def create_mihomo_blueprint(
 
         try:
             cfg_new = _mh_hwid_apply_mode(base_yaml, mode, entry, template_yaml=tmpl_yaml)
-        except ValueError as e:
-            return _api_error(str(e), 400, ok=False)
+        except ValueError:
+            return _mihomo_error(
+                "Не удалось применить HWID-подписку.",
+                400,
+                code="hwid_apply_invalid",
+                hint="Проверьте параметры режима и выбранный шаблон.",
+            )
         except Exception as e:
-            return _api_error(f"apply failed: {e}", 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось применить HWID-подписку.",
+                code="hwid_apply_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=400,
+            )
 
         # Validate YAML (fast, optional) to prevent writing broken config.
         ok_yaml, yaml_err = validate_yaml_syntax(cfg_new)
@@ -377,15 +450,19 @@ def create_mihomo_blueprint(
             resp["restart_queued"] = False
             return jsonify(resp), 200
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось сохранить изменения после применения HWID-подписки.",
+                code="hwid_apply_save_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=400,
+            )
 
     @bp.get("/api/mihomo-config/template")
     def api_get_mihomo_default_template():
         content = load_text(MIHOMO_DEFAULT_TEMPLATE, default=None)
         if content is None:
-            return _api_error(
-                f"Файл шаблона {MIHOMO_DEFAULT_TEMPLATE} не найден", 404, ok=False
-            )
+            return _mihomo_error("Шаблон Mihomo по умолчанию не найден.", 404, code="template_not_found")
         return jsonify({"ok": True, "content": content}), 200
 
     # ---------- API: mihomo templates directory ----------
@@ -445,7 +522,13 @@ def create_mihomo_blueprint(
             cfg = mihomo_svc.generate_config_from_state(state)
             return current_app.response_class(cfg, mimetype="text/plain; charset=utf-8")
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось сгенерировать конфиг Mihomo.",
+                code="generate_failed",
+                hint="Проверьте входные данные и попробуйте снова.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/download")
     def api_mihomo_download():
@@ -458,7 +541,13 @@ def create_mihomo_blueprint(
                 headers={"Content-Disposition": "attachment; filename=config.yaml"},
             )
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось подготовить конфиг Mihomo для скачивания.",
+                code="download_failed",
+                hint="Проверьте входные данные и попробуйте снова.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/save")
     def api_mihomo_save():
@@ -477,7 +566,13 @@ def create_mihomo_blueprint(
                 200,
             )
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось сохранить конфиг Mihomo.",
+                code="save_failed",
+                hint="Проверьте входные данные и попробуйте снова.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/restart")
     def api_mihomo_restart():
@@ -512,7 +607,13 @@ def create_mihomo_blueprint(
                     202,
                 )
             except Exception as e:
-                return _api_error(str(e), 400, ok=False)
+                return _mihomo_exception(
+                    "Не удалось сохранить конфиг Mihomo и поставить перезапуск в очередь.",
+                    code="restart_prepare_failed",
+                    hint="Проверьте конфиг и повторите попытку.",
+                    exc=e,
+                    status=400,
+                )
         try:
             state = _mihomo_get_state_from_request()
             cfg, log, warnings = mihomo_svc.generate_save_and_restart(state)
@@ -521,7 +622,13 @@ def create_mihomo_blueprint(
                 200,
             )
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось сохранить и перезапустить конфиг Mihomo.",
+                code="restart_failed",
+                hint="Проверьте входные данные и попробуйте снова.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/generate_apply")
     def api_mihomo_generate_apply():
@@ -574,11 +681,23 @@ def create_mihomo_blueprint(
                 202,
             )
         except FileNotFoundError as e:
-            return _api_error(str(e), 404, ok=False)
+            return _mihomo_exception(
+                "Не найден требуемый файл Mihomo.",
+                code="file_not_found",
+                hint="Проверьте профиль и шаблоны Mihomo.",
+                exc=e,
+                status=404,
+            )
         except ValueError as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_error(str(e), 400, ok=False)
         except Exception as e:
-            return _api_error(str(e), 500, ok=False)
+            return _mihomo_exception(
+                "Не удалось сгенерировать, сохранить и поставить перезапуск в очередь.",
+                code="generate_apply_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=500,
+            )
 
     @bp.post("/api/mihomo/save_raw")
     def api_mihomo_save_raw():
@@ -601,7 +720,13 @@ def create_mihomo_blueprint(
                 200,
             )
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось сохранить raw config.yaml.",
+                code="save_raw_failed",
+                hint="Проверьте конфиг и повторите попытку.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/restart_raw")
     def api_mihomo_restart_raw():
@@ -623,7 +748,13 @@ def create_mihomo_blueprint(
                 200,
             )
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось сохранить raw config.yaml и перезапустить Mihomo.",
+                code="restart_raw_failed",
+                hint="Проверьте конфиг и повторите попытку.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/validate_raw")
     def api_mihomo_validate_raw():
@@ -649,7 +780,8 @@ def create_mihomo_blueprint(
             try:
                 mh_log = validate_config(new_content=cfg)
             except Exception as e:
-                mh_log = f"Failed to run mihomo validate: {e}"
+                current_app.logger.exception("mihomo.validate_raw.runner_failed")
+                mh_log = "Не удалось запустить проверку конфигурации Mihomo. Подробности смотрите в server logs."
 
             if mh_log:
                 log_lines.append(mh_log)
@@ -660,7 +792,13 @@ def create_mihomo_blueprint(
             log = "\n".join(log_lines)
             return jsonify({"ok": rc == 0, "log": log})
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось проверить конфигурацию Mihomo.",
+                code="validate_failed",
+                hint="Проверьте конфиг и повторите попытку.",
+                exc=e,
+                status=400,
+            )
 
 
     # ---------- API: Mihomo YAML patch helpers (pure text) ----------
@@ -734,7 +872,13 @@ def create_mihomo_blueprint(
             patched = apply_proxy_insert(content, proxy_yaml, proxy_name, groups)
             return jsonify({"ok": True, "content": patched}), 200
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось вставить прокси в конфиг Mihomo.",
+                code="apply_insert_failed",
+                hint="Проверьте YAML прокси и список целевых групп.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/patch/rename_proxy")
     def api_mihomo_patch_rename_proxy():
@@ -760,7 +904,13 @@ def create_mihomo_blueprint(
             patched = rename_proxy_in_config(content, old_name, new_name)
             return jsonify({"ok": True, "content": patched}), 200
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось переименовать прокси в конфиге Mihomo.",
+                code="rename_proxy_failed",
+                hint="Проверьте имена прокси и попробуйте снова.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/patch/replace_proxy")
     def api_mihomo_patch_replace_proxy():
@@ -786,7 +936,13 @@ def create_mihomo_blueprint(
             patched, changed = replace_proxy_in_config(content, proxy_name, proxy_yaml)
             return jsonify({"ok": True, "content": patched, "changed": bool(changed)}), 200
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось заменить прокси в конфиге Mihomo.",
+                code="replace_proxy_failed",
+                hint="Проверьте YAML прокси и попробуйте снова.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/parse/wireguard")
     def api_mihomo_parse_wireguard():
@@ -811,7 +967,13 @@ def create_mihomo_blueprint(
             r = parse_wireguard(text, custom_name=name)
             return jsonify({"ok": True, "proxy_name": r.name, "proxy_yaml": r.yaml}), 200
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось преобразовать WireGuard-конфиг в формат Mihomo.",
+                code="parse_wireguard_failed",
+                hint="Проверьте содержимое конфигурации и попробуйте снова.",
+                exc=e,
+                status=400,
+            )
 
 
     # ---------- Same-origin proxy: Mihomo external UI (Zashboard) ----------
@@ -1025,7 +1187,13 @@ def create_mihomo_blueprint(
                     body = b''
         except Exception as e:
             # Do not expose internal errors; this is an upstream availability issue.
-            return _api_error(f'Не удалось открыть Mihomo UI на 127.0.0.1:{port}: {e}', 502, ok=False)
+            return _mihomo_exception(
+                "Не удалось открыть Mihomo UI через proxy fallback.",
+                code="mihomo_ui_unavailable",
+                hint="Проверьте доступность Mihomo UI и server logs.",
+                exc=e,
+                status=502,
+            )
 
         r = current_app.response_class(body if method != 'HEAD' else b'', status=status)
 
@@ -1066,7 +1234,13 @@ def create_mihomo_blueprint(
             infos = _mh_list_profiles_for_api()
             return jsonify(infos)
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось получить список профилей Mihomo.",
+                code="profiles_list_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=400,
+            )
 
     @bp.get("/api/mihomo/profiles/<name>")
     def api_mihomo_profiles_get(name: str):
@@ -1077,7 +1251,13 @@ def create_mihomo_blueprint(
         except FileNotFoundError:
             return _api_error("profile not found", 404, ok=False)
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось прочитать профиль Mihomo.",
+                code="profile_read_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=400,
+            )
 
     @bp.put("/api/mihomo/profiles/<name>")
     def api_mihomo_profiles_put(name: str):
@@ -1091,7 +1271,13 @@ def create_mihomo_blueprint(
         except FileExistsError:
             return _api_error("profile already exists", 409, ok=False)
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось сохранить профиль Mihomo.",
+                code="profile_write_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=400,
+            )
 
     @bp.delete("/api/mihomo/profiles/<name>")
     def api_mihomo_profiles_delete(name: str):
@@ -1099,11 +1285,20 @@ def create_mihomo_blueprint(
         try:
             _mh_delete_profile_by_name(name)
             return jsonify({"ok": True})
-        except RuntimeError as e:
-            # For example: attempt to delete active profile.
-            return _api_error(str(e), 400, ok=False)
+        except RuntimeError:
+            return _mihomo_error(
+                "Нельзя удалить активный профиль Mihomo.",
+                400,
+                code="profile_delete_blocked",
+            )
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось удалить профиль Mihomo.",
+                code="profile_delete_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/profiles/<name>/activate")
     def api_mihomo_profiles_activate(name: str):
@@ -1115,7 +1310,13 @@ def create_mihomo_blueprint(
         except FileNotFoundError:
             return _api_error("profile not found", 404, ok=False)
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось активировать профиль Mihomo.",
+                code="profile_activate_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=400,
+            )
 
     # ---------- Backups ----------
 
@@ -1137,7 +1338,13 @@ def create_mihomo_blueprint(
             result = _mh_clean_backups_for_api(limit, profile)
             return jsonify(result)
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось очистить бэкапы Mihomo.",
+                code="backups_clean_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=400,
+            )
 
     @bp.get("/api/mihomo/backups")
     def api_mihomo_backups_list():
@@ -1159,7 +1366,13 @@ def create_mihomo_blueprint(
             _mh_delete_backup_file(filename)
             return jsonify({"ok": True})
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось удалить бэкап Mihomo.",
+                code="backup_delete_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=400,
+            )
 
     @bp.post("/api/mihomo/backups/<filename>/restore")
     def api_mihomo_backup_restore(filename: str):
@@ -1171,6 +1384,12 @@ def create_mihomo_blueprint(
         except FileNotFoundError:
             return _api_error("backup not found", 404, ok=False)
         except Exception as e:
-            return _api_error(str(e), 400, ok=False)
+            return _mihomo_exception(
+                "Не удалось восстановить бэкап Mihomo.",
+                code="backup_restore_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                status=400,
+            )
 
     return bp

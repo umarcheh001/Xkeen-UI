@@ -13,7 +13,7 @@ from typing import Any, Callable, Dict
 
 from flask import Blueprint, request, jsonify, current_app
 
-from routes.common.errors import error_response
+from routes.common.errors import error_response, exception_response
 
 from services.routing.templates import (
     _compose_template_text,
@@ -119,7 +119,16 @@ def register_templates_routes(
             with open(path, "r", encoding="utf-8") as f:
                 text = f.read()
         except Exception as e:
-            return error_response(f"failed to read template: {e}", 500, ok=False)
+            return exception_response(
+                "Не удалось прочитать шаблон маршрутизации.",
+                500,
+                ok=False,
+                code="template_read_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_tag="routing_templates.read_failed",
+                filename=fname,
+            )
 
         resp = current_app.response_class(text, mimetype="text/plain; charset=utf-8")
         return _no_cache(resp)
@@ -146,8 +155,14 @@ def register_templates_routes(
         try:
             cleaned = strip_json_comments_text(content)
             json.loads(cleaned)
-        except Exception as e:
-            return error_response(f"invalid json/jsonc: {e}", 400, ok=False)
+        except Exception:
+            return error_response(
+                "Шаблон содержит некорректный JSON/JSONC.",
+                400,
+                ok=False,
+                code="invalid_json",
+                hint="Исправьте синтаксис и попробуйте снова.",
+            )
 
         try:
             os.makedirs(routing_templates_dir, exist_ok=True)
@@ -177,7 +192,16 @@ def register_templates_routes(
                 f.write(final_text)
             os.replace(tmp_path, path)
         except Exception as e:
-            return error_response(f"failed to write template: {e}", 500, ok=False)
+            return exception_response(
+                "Не удалось сохранить шаблон маршрутизации.",
+                500,
+                ok=False,
+                code="template_write_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_tag="routing_templates.write_failed",
+                filename=fname,
+            )
 
         out_meta = _read_template_file_meta(path)
         return jsonify({
@@ -203,5 +227,14 @@ def register_templates_routes(
         try:
             os.remove(path)
         except Exception as e:
-            return error_response(f"failed to delete template: {e}", 500, ok=False)
+            return exception_response(
+                "Не удалось удалить шаблон маршрутизации.",
+                500,
+                ok=False,
+                code="template_delete_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_tag="routing_templates.delete_failed",
+                filename=fname,
+            )
         return jsonify({"ok": True, "deleted": fname})

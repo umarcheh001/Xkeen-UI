@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, Optional
 
 from flask import Blueprint, request, jsonify, current_app
 
+from routes.common.errors import exception_response
 from services.command_jobs import create_command_job
 
 from services.io.atomic import _atomic_write_json, _atomic_write_text
@@ -558,8 +559,15 @@ def register_config_routes(
         cleaned = strip_json_comments_text(raw_text)
         try:
             obj = json.loads(cleaned)
-        except Exception as e:
-            return jsonify({"ok": False, "error": f"invalid json: {e}"}), 400
+        except Exception:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "Некорректный JSON/JSONC.",
+                    "code": "invalid_json",
+                    "hint": "Исправьте синтаксис и попробуйте снова.",
+                }
+            ), 400
 
         preflight = _run_xray_preflight(
             xray_configs_dir_real=xray_configs_dir_real,
@@ -613,7 +621,16 @@ def register_config_routes(
                 os.makedirs(d, exist_ok=True)
             _atomic_write_json(sel_main, obj)
         except Exception as e:
-            return jsonify({"ok": False, "error": f"failed to write routing file: {e}"}), 500
+            return exception_response(
+                "Не удалось сохранить routing JSON-файл.",
+                500,
+                ok=False,
+                code="write_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_tag="routing_config.write_failed",
+                file=os.path.basename(str(sel_main or "")),
+            )
 
         try:
             d_raw = os.path.dirname(sel_raw)
@@ -621,7 +638,16 @@ def register_config_routes(
                 os.makedirs(d_raw, exist_ok=True)
             _atomic_write_text(sel_raw, raw_text)
         except Exception as e:
-            return jsonify({"ok": False, "error": f"failed to write raw file: {e}"}), 500
+            return exception_response(
+                "Не удалось сохранить raw routing JSONC-файл.",
+                500,
+                ok=False,
+                code="write_raw_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_tag="routing_config.write_raw_failed",
+                file=os.path.basename(str(sel_raw or "")),
+            )
 
         # After saving canonical raw JSONC outside configs dir, remove any legacy
         # sidecar next to main JSON so Xray won't parse it.
@@ -666,7 +692,15 @@ def register_config_routes(
                 )
             except Exception as e:
                 _core_log("warning", "routing.save.async_restart_failed", err=str(e))
-                return jsonify({"ok": False, "error": f"failed to schedule restart job: {e}"}), 500
+                return exception_response(
+                    "Не удалось поставить перезапуск xkeen в очередь.",
+                    500,
+                    ok=False,
+                    code="restart_schedule_failed",
+                    hint="Повторите попытку позже. Подробности смотрите в server logs.",
+                    exc=e,
+                    log_tag="routing_config.restart_schedule_failed",
+                )
 
         restarted = restart_flag and restart_xkeen(source="routing")
         _core_log(

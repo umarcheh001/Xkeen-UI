@@ -5,7 +5,7 @@ import subprocess
 from flask import Blueprint, request, jsonify
 from typing import Any, Callable
 
-from routes.common.errors import error_response
+from routes.common.errors import error_response, exception_response
 from services.xkeen import control_xkeen_action
 
 # --- core.log helpers (never fail) ---
@@ -50,6 +50,40 @@ def create_service_blueprint(
     """Create blueprint with xkeen service-control endpoints."""
     bp = Blueprint("service", __name__)
 
+    def _service_error(
+        message: str,
+        status: int,
+        *,
+        code: str,
+        hint: str | None = None,
+        **extra,
+    ):
+        payload_extra = {"code": code}
+        if hint:
+            payload_extra["hint"] = hint
+        payload_extra.update(extra)
+        return error_response(message, status, ok=False, **payload_extra)
+
+    def _service_exception(
+        message: str,
+        *,
+        code: str,
+        hint: str,
+        exc: BaseException,
+        status: int = 500,
+        log_extra: dict | None = None,
+    ):
+        return exception_response(
+            message,
+            status,
+            ok=False,
+            code=code,
+            hint=hint,
+            exc=exc,
+            log_tag=f"service.{code}",
+            log_extra=log_extra,
+        )
+
     # Локальный шорткат: безопасно вызываем broadcast_event, даже если он не передан.
     def _emit_event(event: dict) -> None:
         if broadcast_event is None:
@@ -78,7 +112,12 @@ def create_service_blueprint(
             lines = read_restart_log(limit=100)
             return jsonify({"lines": lines}), 200
         except Exception as e:  # noqa: BLE001
-            return error_response(str(e), 500)
+            return _service_exception(
+                "Не удалось прочитать лог перезапуска.",
+                code="restart_log_read_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+            )
 
     @bp.post("/api/restart-log/clear")
     def api_restart_log_clear() -> Any:
@@ -86,7 +125,12 @@ def create_service_blueprint(
             clear_restart_log()
             return jsonify({"ok": True}), 200
         except Exception as e:  # noqa: BLE001
-            return error_response(str(e), 500, ok=False)
+            return _service_exception(
+                "Не удалось очистить лог перезапуска.",
+                code="restart_log_clear_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+            )
 
 
 
@@ -159,8 +203,13 @@ def create_service_blueprint(
                 }
             ), 200
         except Exception as e:
-            _core_log("error", "xkeen.core_set_failed", error=str(e))
-            return jsonify({"ok": False, "error": str(e)}), 500
+            _core_log("error", "xkeen.status_failed", error=str(e))
+            return _service_exception(
+                "Не удалось получить статус xkeen.",
+                code="status_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+            )
 
 
     @bp.get("/api/xkeen/core")
@@ -176,7 +225,12 @@ def create_service_blueprint(
                 }
             ), 200
         except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
+            return _service_exception(
+                "Не удалось получить список ядер xkeen.",
+                code="cores_status_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+            )
 
 
     @bp.get("/api/cores/status")
@@ -195,26 +249,48 @@ def create_service_blueprint(
                 }
             ), 200
         except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
+            return _service_exception(
+                "Не удалось получить список ядер xkeen.",
+                code="cores_status_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+            )
 
 
     @bp.post("/api/xkeen/core")
     def api_xkeen_core_set() -> Any:
         """Смена ядра xkeen через сервисный модуль (switch_core)."""
+        core = ""
         try:
             payload = request.get_json(silent=True) or {}
             core = str(payload.get("core", "")).strip()
             try:
                 switch_core(core, XRAY_ERROR_LOG)
-            except ValueError as e:
-                return jsonify({"ok": False, "error": str(e)}), 400
+            except ValueError:
+                return _service_error(
+                    "Недопустимое ядро.",
+                    400,
+                    code="invalid_core",
+                    hint="Укажите допустимое ядро: xray или mihomo.",
+                )
             except CoreSwitchError as e:
-                # Diagnostic payload (safe, local admin UI).
                 _core_log("error", "xkeen.core_set_failed", core=core, error=str(e), **(e.details or {}))
-                return jsonify({"ok": False, "error": str(e), "details": e.details}), 500
+                return _service_exception(
+                    "Не удалось переключить ядро xkeen.",
+                    code="core_switch_failed",
+                    hint="Подробности смотрите в server logs.",
+                    exc=e,
+                    log_extra={"core": core},
+                )
             except RuntimeError as e:
                 _core_log("error", "xkeen.core_set_failed", core=core, error=str(e))
-                return jsonify({"ok": False, "error": str(e)}), 500
+                return _service_exception(
+                    "Не удалось переключить ядро xkeen.",
+                    code="core_switch_failed",
+                    hint="Подробности смотрите в server logs.",
+                    exc=e,
+                    log_extra={"core": core},
+                )
 
             # Уведомляем всех WS-подписчиков о смене ядра.
             _emit_event({"event": "core_changed", "core": core, "ok": True})
@@ -222,9 +298,14 @@ def create_service_blueprint(
             _core_log("info", "xkeen.core_set", core=core)
             return jsonify({"ok": True, "core": core}), 200
         except Exception as e:
-            # Ошибку смены ядра также можно пробрасывать как событие (необязательно).
-            _emit_event({"event": "core_change_error", "core": core, "ok": False, "error": str(e)})
-            return jsonify({"ok": False, "error": str(e)}), 500
+            _emit_event({"event": "core_change_error", "core": core, "ok": False, "error": "core_switch_failed"})
+            return _service_exception(
+                "Не удалось переключить ядро xkeen.",
+                code="core_switch_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_extra={"core": core},
+            )
 
 
     # ---------- API: restart xkeen ----------

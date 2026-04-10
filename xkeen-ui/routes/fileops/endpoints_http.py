@@ -61,8 +61,8 @@ def register_http_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
                 if not callable(_normalize_dirsize):
                     raise RuntimeError('unsupported_op')
                 data = _normalize_dirsize(data)
-        except RuntimeError as e:
-            return error_response(str(e), 400, ok=False)
+        except RuntimeError:
+            return error_response("unsupported_op", 400, ok=False)
         except Exception:
             return error_response("bad_request", 400, ok=False)
 

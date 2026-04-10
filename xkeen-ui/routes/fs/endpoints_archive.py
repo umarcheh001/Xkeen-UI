@@ -447,8 +447,8 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
                 pth = join_local_cwd(cwd, pth)
             try:
                 rp = _local_resolve(pth, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e) or "forbidden", 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
             except Exception:
                 return error_response("bad_path", 400, ok=False)
             if not os.path.exists(rp):
@@ -463,8 +463,8 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
         out_path = join_local_cwd(cwd, name)
         try:
             rp_out = _local_resolve(out_path, LOCALFS_ROOTS)
-        except PermissionError as e:
-            return error_response(str(e) or "forbidden", 403, ok=False)
+        except PermissionError:
+            return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
         except Exception:
             return error_response("bad_path", 400, ok=False)
 
@@ -558,8 +558,8 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
 
         try:
             rp_arch = _local_resolve(arch, LOCALFS_ROOTS)
-        except PermissionError as e:
-            return error_response(str(e) or "forbidden", 403, ok=False)
+        except PermissionError:
+            return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
         except Exception:
             return error_response("bad_path", 400, ok=False)
         if not os.path.isfile(rp_arch):
@@ -567,8 +567,8 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
 
         try:
             rp_dest = _local_resolve(dest, LOCALFS_ROOTS)
-        except PermissionError as e:
-            return error_response(str(e) or "forbidden", 403, ok=False)
+        except PermissionError:
+            return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
         except Exception:
             return error_response("bad_path", 400, ok=False)
 
@@ -913,8 +913,8 @@ def register_archive_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
 
         try:
             rp_arch = _local_resolve(arch, LOCALFS_ROOTS)
-        except PermissionError as e:
-            return error_response(str(e) or "forbidden", 403, ok=False)
+        except PermissionError:
+            return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
         except Exception:
             return error_response("bad_path", 400, ok=False)
         if not os.path.isfile(rp_arch):

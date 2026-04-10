@@ -56,8 +56,8 @@ def register_list_endpoints(bp, deps: Dict[str, Any]) -> None:
                 # while still resolving realpath for security checks and actual FS access.
                 ap = _local_norm_abs(path_in, LOCALFS_ROOTS)
                 rp = _local_resolve(path_in, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
 
             # Distinguish "missing" from "not a directory" to keep UI messages sane.
             if not os.path.exists(rp):
@@ -159,8 +159,8 @@ def register_list_endpoints(bp, deps: Dict[str, Any]) -> None:
                             continue
             except FileNotFoundError:
                 return error_response("not_found", 404, ok=False)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
             except Exception:
                 return error_response("list_failed", 400, ok=False)
 

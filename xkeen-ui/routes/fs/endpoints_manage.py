@@ -39,8 +39,8 @@ def register_manage_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
         if target == 'local':
             try:
                 rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
             try:
                 mkdir_local(rp, parents=bool(parents))
             except FileExistsError:
@@ -81,8 +81,8 @@ def register_manage_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
             try:
                 sp = _local_resolve_nofollow(src_p, LOCALFS_ROOTS)
                 dp = _local_resolve_nofollow(dst_p, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
             if _local_is_protected_entry_abs(sp) or _local_is_protected_entry_abs(dp):
                 return error_response('protected_path', 403, ok=False)
             try:
@@ -124,8 +124,8 @@ def register_manage_endpoints(bp: Blueprint, deps: Dict[str, Any]) -> None:
         if target == 'local':
             try:
                 rp = _local_resolve(path_s, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
             try:
                 skipped = touch_local(
                     rp,

@@ -16,7 +16,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 
-from routes.common.errors import error_response
+from routes.common.errors import error_response, exception_response
 
 
 def create_storage_usb_blueprint() -> Blueprint:
@@ -28,7 +28,15 @@ def create_storage_usb_blueprint() -> Blueprint:
             from services.storage_usb import list_usb_filesystems
             payload = list_usb_filesystems()
         except Exception as e:  # noqa: BLE001
-            return error_response(f"storage list failed: {e}", 500, ok=False)
+            return exception_response(
+                "Не удалось получить список USB-накопителей.",
+                500,
+                ok=False,
+                code="storage_list_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_tag="storage_usb.list_failed",
+            )
 
         if not payload.get("ok"):
             code = str(payload.get("code") or "error")
@@ -52,7 +60,16 @@ def create_storage_usb_blueprint() -> Blueprint:
             from services.storage_usb import mount_filesystem
             payload = mount_filesystem(name)
         except Exception as e:  # noqa: BLE001
-            return error_response(f"mount failed: {e}", 500, ok=False)
+            return exception_response(
+                "Не удалось смонтировать USB-накопитель.",
+                500,
+                ok=False,
+                code="mount_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_tag="storage_usb.mount_failed",
+                name=name,
+            )
 
         if not payload.get("ok"):
             code = str(payload.get("code") or "error")
@@ -70,7 +87,16 @@ def create_storage_usb_blueprint() -> Blueprint:
             from services.storage_usb import unmount_filesystem
             payload = unmount_filesystem(name)
         except Exception as e:  # noqa: BLE001
-            return error_response(f"unmount failed: {e}", 500, ok=False)
+            return exception_response(
+                "Не удалось размонтировать USB-накопитель.",
+                500,
+                ok=False,
+                code="unmount_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+                log_tag="storage_usb.unmount_failed",
+                name=name,
+            )
 
         if not payload.get("ok"):
             code = str(payload.get("code") or "error")

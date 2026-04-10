@@ -106,8 +106,8 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
         if target == "local":
             try:
                 rp = _local_resolve(path, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
 
             # Distinguish missing path from wrong type so UI can show correct message.
             if not os.path.exists(rp):
@@ -408,8 +408,8 @@ def register_transfer_endpoints(bp, deps: Dict[str, Any]) -> None:
 
             try:
                 rp = _local_resolve(dest, LOCALFS_ROOTS)
-            except PermissionError as e:
-                return error_response(str(e), 403, ok=False)
+            except PermissionError:
+                return error_response("Доступ к пути запрещён.", 403, ok=False, code="forbidden")
 
             # Guard against accidental uploads into /tmp/mnt root (mount hub).
             # Those "loose" files are confusing and were historically undeletable.

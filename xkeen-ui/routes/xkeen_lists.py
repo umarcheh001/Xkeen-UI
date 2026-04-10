@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from flask import Blueprint, jsonify, request
 
+from routes.common.errors import exception_response
 from services.command_jobs import create_command_job
 from services.xkeen_lists import (
     KIND_IP_EXCLUDE,
@@ -55,7 +56,15 @@ def create_xkeen_lists_blueprint(restart_xkeen: Callable[..., Any]) -> Blueprint
                     "restart_job_id": job.id,
                 }), 202
             except Exception as e:
-                return jsonify({"ok": False, "error": f"failed to schedule restart job: {e}"}), 500
+                return exception_response(
+                    "Не удалось поставить перезапуск xkeen в очередь.",
+                    500,
+                    ok=False,
+                    code="restart_schedule_failed",
+                    hint="Повторите попытку позже. Подробности смотрите в server logs.",
+                    exc=e,
+                    log_tag="xkeen_lists.restart_schedule_failed",
+                )
 
         restarted = restart_flag and restart_xkeen(source=source)
         return jsonify({"ok": True, "restarted": restarted}), 200

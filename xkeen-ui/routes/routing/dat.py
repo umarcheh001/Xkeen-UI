@@ -106,15 +106,34 @@ def register_dat_routes(bp: Blueprint) -> None:
 
         try:
             k, rp, meta = _geodat_validate(kind, path)
-        except ValueError as e:
-            return error_response(str(e), 400, ok=False)
-        except PermissionError as e:
-            return error_response(str(e), 403, ok=False)
-        except FileNotFoundError as e:
-            # Expected UX state: "нет файла".
-            return jsonify({"ok": False, "error": str(e), "kind": str(kind or ''), "path": str(path or '')}), 200
-        except Exception as e:
-            return error_response(f"validate_failed: {e}", 400, ok=False)
+        except ValueError:
+            return error_response(
+                "Некорректный запрос к DAT-файлу.",
+                400,
+                ok=False,
+                code="bad_request",
+                hint="Проверьте kind/path и попробуйте снова.",
+            )
+        except PermissionError:
+            return error_response("Доступ к DAT-файлу запрещён.", 403, ok=False, code="forbidden")
+        except FileNotFoundError:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "DAT-файл не найден.",
+                    "code": "missing_dat_file",
+                    "kind": str(kind or ''),
+                    "path": str(path or ''),
+                }
+            ), 200
+        except Exception:
+            return error_response(
+                "Не удалось подготовить запрос к DAT-файлу.",
+                400,
+                ok=False,
+                code="validate_failed",
+                hint="Проверьте kind/path и попробуйте снова.",
+            )
 
         ttl_s = _geodat_cache_ttl_s()
         key = ('tags', k, rp, meta.get('size'), meta.get('mtime'))
@@ -157,8 +176,8 @@ def register_dat_routes(bp: Blueprint) -> None:
             payload_err = _geodat_error_payload('xk_geodat_timeout', kind=k, path=rp)
             _geodat_cache_set(key, payload_err, min(ttl_s, 10))
             return jsonify(payload_err), 200
-        except Exception as e:
-            payload_err = _geodat_error_payload('xk_geodat_failed', kind=k, path=rp, details=str(e))
+        except Exception:
+            payload_err = _geodat_error_payload('xk_geodat_failed', kind=k, path=rp)
             _geodat_cache_set(key, payload_err, min(ttl_s, 10))
             return jsonify(payload_err), 200
         finally:
@@ -247,14 +266,34 @@ def register_dat_routes(bp: Blueprint) -> None:
 
         try:
             k, rp, meta = _geodat_validate(kind, path)
-        except ValueError as e:
-            return error_response(str(e), 400, ok=False)
-        except PermissionError as e:
-            return error_response(str(e), 403, ok=False)
-        except FileNotFoundError as e:
-            return jsonify({"ok": False, "error": str(e), "kind": str(kind or ''), "path": str(path or '')}), 200
-        except Exception as e:
-            return error_response(f"validate_failed: {e}", 400, ok=False)
+        except ValueError:
+            return error_response(
+                "Некорректный запрос к DAT-файлу.",
+                400,
+                ok=False,
+                code="bad_request",
+                hint="Проверьте kind/path и попробуйте снова.",
+            )
+        except PermissionError:
+            return error_response("Доступ к DAT-файлу запрещён.", 403, ok=False, code="forbidden")
+        except FileNotFoundError:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "DAT-файл не найден.",
+                    "code": "missing_dat_file",
+                    "kind": str(kind or ''),
+                    "path": str(path or ''),
+                }
+            ), 200
+        except Exception:
+            return error_response(
+                "Не удалось подготовить запрос к DAT-файлу.",
+                400,
+                ok=False,
+                code="validate_failed",
+                hint="Проверьте kind/path и попробуйте снова.",
+            )
 
         ttl_s = _geodat_cache_ttl_s()
 
@@ -309,8 +348,8 @@ def register_dat_routes(bp: Blueprint) -> None:
                     payload_err = _geodat_error_payload('xk_geodat_timeout', kind=k, path=rp)
                     _geodat_cache_set(key_win, payload_err, min(ttl_s, 10))
                     return jsonify(payload_err), 200
-                except Exception as e:
-                    payload_err = _geodat_error_payload('xk_geodat_failed', kind=k, path=rp, details=str(e))
+                except Exception:
+                    payload_err = _geodat_error_payload('xk_geodat_failed', kind=k, path=rp)
                     _geodat_cache_set(key_win, payload_err, min(ttl_s, 10))
                     return jsonify(payload_err), 200
                 finally:
@@ -424,14 +463,34 @@ def register_dat_routes(bp: Blueprint) -> None:
 
         try:
             k, rp, meta = _geodat_validate(kind, path)
-        except ValueError as e:
-            return error_response(str(e), 400, ok=False)
-        except PermissionError as e:
-            return error_response(str(e), 403, ok=False)
-        except FileNotFoundError as e:
-            return jsonify({"ok": False, "error": str(e), "kind": str(kind or ''), "path": str(path or '')}), 200
-        except Exception as e:
-            return error_response(f"validate_failed: {e}", 400, ok=False)
+        except ValueError:
+            return error_response(
+                "Некорректный запрос к DAT-файлу.",
+                400,
+                ok=False,
+                code="bad_request",
+                hint="Проверьте kind/path и попробуйте снова.",
+            )
+        except PermissionError:
+            return error_response("Доступ к DAT-файлу запрещён.", 403, ok=False, code="forbidden")
+        except FileNotFoundError:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "DAT-файл не найден.",
+                    "code": "missing_dat_file",
+                    "kind": str(kind or ''),
+                    "path": str(path or ''),
+                }
+            ), 200
+        except Exception:
+            return error_response(
+                "Не удалось подготовить запрос к DAT-файлу.",
+                400,
+                ok=False,
+                code="validate_failed",
+                hint="Проверьте kind/path и попробуйте снова.",
+            )
 
         ttl_s = _geodat_cache_ttl_s()
 
@@ -554,8 +613,8 @@ def register_dat_routes(bp: Blueprint) -> None:
                 return out
             except subprocess.TimeoutExpired:
                 return _geodat_error_payload('xk_geodat_timeout', kind=k, path=rp)
-            except Exception as e:
-                return _geodat_error_payload('xk_geodat_failed', kind=k, path=rp, details=str(e))
+            except Exception:
+                return _geodat_error_payload('xk_geodat_failed', kind=k, path=rp)
             finally:
                 try:
                     if is_leader:
@@ -704,14 +763,34 @@ def register_dat_routes(bp: Blueprint) -> None:
 
         try:
             k, rp, meta = _geodat_validate(kind, path)
-        except ValueError as e:
-            return error_response(str(e), 400, ok=False)
-        except PermissionError as e:
-            return error_response(str(e), 403, ok=False)
-        except FileNotFoundError as e:
-            return jsonify({"ok": False, "error": str(e), "kind": str(kind or ''), "path": str(path or '')}), 200
-        except Exception as e:
-            return error_response(f"validate_failed: {e}", 400, ok=False)
+        except ValueError:
+            return error_response(
+                "Некорректный запрос к DAT-файлу.",
+                400,
+                ok=False,
+                code="bad_request",
+                hint="Проверьте kind/path и попробуйте снова.",
+            )
+        except PermissionError:
+            return error_response("Доступ к DAT-файлу запрещён.", 403, ok=False, code="forbidden")
+        except FileNotFoundError:
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "DAT-файл не найден.",
+                    "code": "missing_dat_file",
+                    "kind": str(kind or ''),
+                    "path": str(path or ''),
+                }
+            ), 200
+        except Exception:
+            return error_response(
+                "Не удалось подготовить запрос к DAT-файлу.",
+                400,
+                ok=False,
+                code="validate_failed",
+                hint="Проверьте kind/path и попробуйте снова.",
+            )
 
         def _norm_value(kind_: str, v: str) -> str:
             s = (v or '').strip()
@@ -818,11 +897,11 @@ def register_dat_routes(bp: Blueprint) -> None:
                 payload_err['hint'] = 'Ваша версия xk-geodat не поддерживает lookup. Обновите xk-geodat (кнопка ⬇︎ в модалке) и попробуйте снова.'
                 _geodat_cache_set(key, payload_err, min(ttl_s, 10))
                 return jsonify(payload_err), 200
-            payload_err = _geodat_error_payload('xk_geodat_failed', kind=k, path=rp, details=str(e))
+            payload_err = _geodat_error_payload('xk_geodat_failed', kind=k, path=rp)
             _geodat_cache_set(key, payload_err, min(ttl_s, 10))
             return jsonify(payload_err), 200
-        except Exception as e:
-            payload_err = _geodat_error_payload('xk_geodat_failed', kind=k, path=rp, details=str(e))
+        except Exception:
+            payload_err = _geodat_error_payload('xk_geodat_failed', kind=k, path=rp)
             _geodat_cache_set(key, payload_err, min(ttl_s, 10))
             return jsonify(payload_err), 200
         finally:
@@ -911,8 +990,8 @@ def register_dat_routes(bp: Blueprint) -> None:
         try:
             roots = _local_allowed_roots()
             rp = _local_resolve(path, roots)
-        except PermissionError as e:
-            return error_response(str(e), 403, ok=False)
+        except PermissionError:
+            return error_response("Доступ к DAT-пути запрещён.", 403, ok=False, code="forbidden")
 
         max_mb_raw = str(os.getenv("XKEEN_MAX_DAT_MB", "128") or "128").strip()
         try:
@@ -925,8 +1004,14 @@ def register_dat_routes(bp: Blueprint) -> None:
         if parent and not os.path.isdir(parent):
             try:
                 os.makedirs(parent, exist_ok=True)
-            except Exception as e:
-                return error_response(f"mkdir_failed: {e}", 500, ok=False)
+            except Exception:
+                return error_response(
+                    "Не удалось подготовить каталог для DAT-файла.",
+                    500,
+                    ok=False,
+                    code="mkdir_failed",
+                    hint="Подробности смотрите в server logs.",
+                )
 
         st0 = None
         try:
@@ -951,21 +1036,39 @@ def register_dat_routes(bp: Blueprint) -> None:
                 return error_response("size_limit", 413, ok=False, max_mb=max_mb)
             if msg.startswith("url_blocked:"):
                 return _dat_url_block_response(msg.split(":", 1)[1])
-            return error_response("download_failed", 400, ok=False, details=msg)
-        except (urllib.error.URLError, urllib.error.HTTPError) as e:
+            return error_response(
+                "Не удалось скачать DAT-файл.",
+                400,
+                ok=False,
+                code="download_failed",
+                hint="Проверьте URL и попробуйте снова. Подробности смотрите в server logs.",
+            )
+        except (urllib.error.URLError, urllib.error.HTTPError):
             try:
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
             except Exception:
                 pass
-            return error_response(f"download_failed: {e}", 400, ok=False)
-        except Exception as e:
+            return error_response(
+                "Не удалось скачать DAT-файл.",
+                400,
+                ok=False,
+                code="download_failed",
+                hint="Проверьте URL и попробуйте снова.",
+            )
+        except Exception:
             try:
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
             except Exception:
                 pass
-            return error_response(f"download_failed: {e}", 400, ok=False)
+            return error_response(
+                "Не удалось скачать DAT-файл.",
+                400,
+                ok=False,
+                code="download_failed",
+                hint="Проверьте URL и попробуйте снова. Подробности смотрите в server logs.",
+            )
 
         _core_log(
             "info",

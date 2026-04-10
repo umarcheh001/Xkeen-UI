@@ -15,11 +15,12 @@ from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request
 
+from routes.common.errors import error_response
 from services.ui_settings import load_settings
 from utils.jsonc import strip_json_comments_text, format_jsonc_text
 
 
-def _api_error(message: str, status: int = 400, *, ok: bool | None = None):
+def _api_error(message: str, status: int = 400, *, ok: bool | None = None, **extra: Any):
     """Local copy of api_error() to avoid circular imports.
 
     Must match app.api_error() response schema:
@@ -28,6 +29,8 @@ def _api_error(message: str, status: int = 400, *, ok: bool | None = None):
     payload: Dict[str, Any] = {"error": message}
     if ok is not None:
         payload["ok"] = ok
+    if extra:
+        payload.update(extra)
     return jsonify(payload), status
 
 
@@ -85,8 +88,14 @@ def create_utils_blueprint() -> Blueprint:
         cleaned = strip_json_comments_text(text)
         try:
             obj = json.loads(cleaned)
-        except Exception as e:
-            return _api_error(f"invalid json: {e}", 400, ok=False)
+        except Exception:
+            return error_response(
+                "Передан некорректный JSON.",
+                400,
+                ok=False,
+                code="invalid_json",
+                hint="Исправьте синтаксис JSON и попробуйте снова.",
+            )
 
         prefs = _load_json_format_preferences()
 

@@ -51,7 +51,7 @@ from services.xray_outbounds import (
 )
 
 
-from routes.common.errors import error_response
+from routes.common.errors import error_response, exception_response
 
 
 def create_xray_configs_blueprint(
@@ -65,6 +65,40 @@ def create_xray_configs_blueprint(
     bp = Blueprint("xray_configs", __name__)
 
     # --- helpers ---
+
+    def _xray_error(
+        message: str,
+        status: int,
+        *,
+        code: str,
+        hint: str | None = None,
+        **extra,
+    ):
+        payload_extra = {"code": code}
+        if hint:
+            payload_extra["hint"] = hint
+        payload_extra.update(extra)
+        return error_response(message, status, ok=False, **payload_extra)
+
+    def _xray_exception(
+        message: str,
+        *,
+        code: str,
+        hint: str,
+        exc: BaseException,
+        status: int = 500,
+        log_extra: dict[str, Any] | None = None,
+    ):
+        return exception_response(
+            message,
+            status,
+            ok=False,
+            code=code,
+            hint=hint,
+            exc=exc,
+            log_tag=f"xray_configs.{code}",
+            log_extra=log_extra,
+        )
 
     def _normalize_main_json_path(p: str) -> str:
         """Normalize selected path to the main *.json fragment in XRAY_CONFIGS_DIR.
@@ -163,7 +197,12 @@ def create_xray_configs_blueprint(
                 })
                 return jsonify(payload), 202
             except Exception as e:
-                return error_response(f"failed to schedule restart job: {e}", 500, ok=False)
+                return _xray_exception(
+                    "Не удалось поставить перезапуск xkeen в очередь.",
+                    code="restart_schedule_failed",
+                    hint="Повторите попытку позже. Подробности смотрите в server logs.",
+                    exc=e,
+                )
 
         payload["restarted"] = restart_flag and restart_xkeen(source=source)
         return jsonify(payload), 200
@@ -232,8 +271,13 @@ def create_xray_configs_blueprint(
             cleaned = strip_json_comments_text(raw_text)
             try:
                 obj = json.loads(cleaned)
-            except Exception as e:
-                return error_response(f"invalid json: {e}", 400, ok=False)
+            except Exception:
+                return _xray_error(
+                    "JSON/JSONC содержит синтаксическую ошибку.",
+                    400,
+                    code="invalid_json",
+                    hint="Исправьте синтаксис и попробуйте снова.",
+                )
 
             if not isinstance(obj, dict):
                 return error_response("config must be object", 400, ok=False)
@@ -251,7 +295,12 @@ def create_xray_configs_blueprint(
                     os.makedirs(d, exist_ok=True)
                 _atomic_write_json(sel_path, obj)
             except Exception as e:
-                return error_response(f"failed to write file: {e}", 500, ok=False)
+                return _xray_exception(
+                    "Не удалось сохранить основной JSON-файл.",
+                    code="write_failed",
+                    hint="Подробности смотрите в server logs.",
+                    exc=e,
+                )
 
             try:
                 d_raw = os.path.dirname(raw_path)
@@ -259,7 +308,12 @@ def create_xray_configs_blueprint(
                     os.makedirs(d_raw, exist_ok=True)
                 _atomic_write_text(raw_path, raw_text)
             except Exception as e:
-                return error_response(f"failed to write raw file: {e}", 500, ok=False)
+                return _xray_exception(
+                    "Не удалось сохранить raw JSONC-файл.",
+                    code="write_raw_failed",
+                    hint="Подробности смотрите в server logs.",
+                    exc=e,
+                )
 
             mode = detect_inbounds_mode(data=obj)
             restart_flag = bool(payload.get("restart", True))
@@ -303,7 +357,12 @@ def create_xray_configs_blueprint(
                     hint = "Выберите другой порт: текущий конфликтует с другим inbound."
                 return error_response(msg, 400, ok=False, code=code, hint=hint)
             except Exception as e:
-                return error_response(f"merge failed: {e}", 500, ok=False)
+                return _xray_exception(
+                    "Не удалось применить выбранный preset к inbounds.",
+                    code="merge_failed",
+                    hint="Проверьте текущую конфигурацию и попробуйте снова.",
+                    exc=e,
+                )
         else:
             data = payload.get("config")
             if not isinstance(data, dict):
@@ -313,7 +372,12 @@ def create_xray_configs_blueprint(
         try:
             save_json(sel_path, data)
         except Exception as e:
-            return error_response(str(e), 500, ok=False)
+            return _xray_exception(
+                "Не удалось сохранить конфигурацию inbounds.",
+                code="save_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+            )
 
         mode2 = detect_inbounds_mode(data=data)
         restart_flag = bool(payload.get("restart", True))
@@ -399,8 +463,13 @@ def create_xray_configs_blueprint(
             cleaned = strip_json_comments_text(raw_text)
             try:
                 obj = json.loads(cleaned)
-            except Exception as e:
-                return error_response(f"invalid json: {e}", 400, ok=False)
+            except Exception:
+                return _xray_error(
+                    "JSON/JSONC содержит синтаксическую ошибку.",
+                    400,
+                    code="invalid_json",
+                    hint="Исправьте синтаксис и попробуйте снова.",
+                )
 
             if not isinstance(obj, dict):
                 return error_response("config must be object", 400, ok=False)
@@ -418,7 +487,12 @@ def create_xray_configs_blueprint(
                     os.makedirs(d, exist_ok=True)
                 _atomic_write_json(sel_path, obj)
             except Exception as e:
-                return error_response(f"failed to write file: {e}", 500, ok=False)
+                return _xray_exception(
+                    "Не удалось сохранить основной JSON-файл.",
+                    code="write_failed",
+                    hint="Подробности смотрите в server logs.",
+                    exc=e,
+                )
 
             try:
                 d_raw = os.path.dirname(raw_path)
@@ -426,7 +500,12 @@ def create_xray_configs_blueprint(
                     os.makedirs(d_raw, exist_ok=True)
                 _atomic_write_text(raw_path, raw_text)
             except Exception as e:
-                return error_response(f"failed to write raw file: {e}", 500, ok=False)
+                return _xray_exception(
+                    "Не удалось сохранить raw JSONC-файл.",
+                    code="write_raw_failed",
+                    hint="Подробности смотрите в server logs.",
+                    exc=e,
+                )
 
             restart_flag = bool(payload.get("restart", True))
             return _restart_response(
@@ -447,14 +526,24 @@ def create_xray_configs_blueprint(
                 return error_response("url is required", 400, ok=False)
             try:
                 cfg = build_outbounds_config_from_link(url)
-            except Exception as e:
-                return error_response(str(e), 400, ok=False)
+            except Exception:
+                return _xray_error(
+                    "Ссылка прокси имеет некорректный или неподдерживаемый формат.",
+                    400,
+                    code="invalid_link",
+                    hint="Проверьте формат ссылки и попробуйте снова.",
+                )
 
         snapshot_xray_config_before_overwrite(sel_path)
         try:
             save_json(sel_path, cfg)
         except Exception as e:
-            return error_response(str(e), 500, ok=False)
+            return _xray_exception(
+                "Не удалось сохранить конфигурацию outbounds.",
+                code="save_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+            )
 
         restart_flag = bool(payload.get("restart", True))
         return _restart_response(
@@ -622,8 +711,10 @@ def create_xray_configs_blueprint(
             try:
                 ob = build_proxy_outbound_from_link(url, tag)
                 built.append(ob)
-            except Exception as e:
-                errors.append({"idx": i, "tag": tag, "error": str(e)})
+            except ValueError:
+                errors.append({"idx": i, "tag": tag, "error": "Некорректная ссылка прокси"})
+            except Exception:
+                errors.append({"idx": i, "tag": tag, "error": "Не удалось разобрать ссылку прокси"})
 
         if errors:
             return jsonify({"ok": False, "error": "invalid entries", "errors": errors}), 400
@@ -711,7 +802,12 @@ def create_xray_configs_blueprint(
                 os.makedirs(d, exist_ok=True)
             _atomic_write_json(sel_path, final_obj)
         except Exception as e:
-            return error_response(f"failed to write file: {e}", 500, ok=False)
+            return _xray_exception(
+                "Не удалось сохранить основной JSON-файл.",
+                code="write_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+            )
 
         if write_raw:
             try:
@@ -720,7 +816,12 @@ def create_xray_configs_blueprint(
                 ) + "\n"
                 _atomic_write_text(raw_path, raw_text)
             except Exception as e:
-                return error_response(f"failed to write raw file: {e}", 500, ok=False)
+                return _xray_exception(
+                    "Не удалось сохранить raw JSONC-файл.",
+                    code="write_raw_failed",
+                    hint="Подробности смотрите в server logs.",
+                    exc=e,
+                )
 
         tags_out: list[str] = []
         seen_out: set[str] = set()
