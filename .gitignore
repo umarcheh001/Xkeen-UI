@@ -30,3 +30,6 @@ e2e/.auth/
 
 # Local assistant / editor state
 .claude/
+
+# Local audit working notes
+/README_AUDIT_CHECKLIST_CURRENT.md
