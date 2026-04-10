@@ -30,11 +30,21 @@ fi
 # Определяем архитектуру устройства, чтобы решить, устанавливать ли gevent
 ARCH="$(uname -m 2>/dev/null || echo unknown)"
 WANT_GEVENT=1
+GEVENT_PIP_SPEC="${XKEEN_GEVENT_PIP_SPEC:-gevent}"
+GEVENT_PIN_REASON=""
 case "$ARCH" in
   mipsel*|mips*)
     # На слабых MIPS/MIPSEL-роутерах сборка gevent/greenlet часто не проходит.
     # В этом случае панель будет работать через HTTP-пуллинг без gevent.
     WANT_GEVENT=0
+    ;;
+  aarch64|arm64)
+    # Для части Entware/aarch64 устройств gevent 26.x не подбирает совместимый
+    # wheel и падает в source-build, где обычно нет C compiler.
+    if [ -z "${XKEEN_GEVENT_PIP_SPEC:-}" ]; then
+      GEVENT_PIP_SPEC="gevent<26"
+      GEVENT_PIN_REASON="совместимость wheel на Entware/aarch64"
+    fi
     ;;
 esac
 
@@ -87,6 +97,66 @@ BACKUP_DIR="$XRAY_CONFIG_DIR/backups"
 
 DEFAULT_PORT=8088
 ALT_PORT=8091
+PIP_PRIMARY_INDEX_DEFAULT="https://pypi.org/simple"
+PIP_FALLBACK_INDEX_DEFAULT="https://mirrors.aliyun.com/pypi/simple/"
+
+append_pip_index_candidate() {
+  URL="$1"
+  [ -n "$URL" ] || return 0
+
+  case " $PIP_INDEX_CANDIDATES " in
+    *" $URL "*) return 0 ;;
+  esac
+
+  if [ -n "${PIP_INDEX_CANDIDATES:-}" ]; then
+    PIP_INDEX_CANDIDATES="$PIP_INDEX_CANDIDATES $URL"
+  else
+    PIP_INDEX_CANDIDATES="$URL"
+  fi
+}
+
+build_pip_index_candidates() {
+  PIP_INDEX_CANDIDATES=""
+  append_pip_index_candidate "${XKEEN_PIP_INDEX_URL:-}"
+  append_pip_index_candidate "$PIP_PRIMARY_INDEX_DEFAULT"
+  append_pip_index_candidate "${XKEEN_PIP_FALLBACK_INDEX_URL:-$PIP_FALLBACK_INDEX_DEFAULT}"
+}
+
+print_pip_index_candidates() {
+  build_pip_index_candidates
+  echo "[*] pip index fallback order: $PIP_INDEX_CANDIDATES"
+}
+
+pip_install_with_fallback() {
+  PHASE="$1"
+  shift
+
+  build_pip_index_candidates
+  if [ -z "${PIP_INDEX_CANDIDATES:-}" ]; then
+    echo "[!] [$PHASE] Не задан ни один pip index URL."
+    return 1
+  fi
+
+  LAST_STATUS=1
+  for INDEX_URL in $PIP_INDEX_CANDIDATES; do
+    [ -n "$INDEX_URL" ] || continue
+
+    echo "[*] [$PHASE] pip install через индекс: $INDEX_URL"
+    if "$PYTHON_BIN" -m pip install \
+      --upgrade \
+      --index-url "$INDEX_URL" \
+      --default-timeout "${XKEEN_PIP_TIMEOUT:-60}" \
+      "$@"; then
+      echo "[*] [$PHASE] pip install успешно через: $INDEX_URL"
+      return 0
+    fi
+
+    LAST_STATUS=$?
+    echo "[!] [$PHASE] pip install не удался через: $INDEX_URL"
+  done
+
+  return "$LAST_STATUS"
+}
 
 echo "========================================"
 echo "  Xkeen Web UI — УСТАНОВКА"
@@ -162,10 +232,15 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
     echo "[!] Не найден пакетный менеджер opkg Entware."
     echo "    Поставь зависимости вручную:"
     echo "      opkg update && opkg install python3 python3-pip"
+    echo "      export XKEEN_PIP_INDEX_URL=${XKEEN_PIP_INDEX_URL:-$PIP_FALLBACK_INDEX_DEFAULT}"
+    echo "      export XKEEN_GEVENT_PIP_SPEC=${XKEEN_GEVENT_PIP_SPEC:-$GEVENT_PIP_SPEC}"
     if [ "$WANT_GEVENT" -eq 1 ]; then
-      echo "      $PYTHON_BIN -m pip install --upgrade pip flask gevent gevent-websocket"
+      echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" pip setuptools wheel"
+      echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" flask"
+      echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" \"\$XKEEN_GEVENT_PIP_SPEC\" gevent-websocket"
     else
-      echo "      $PYTHON_BIN -m pip install --upgrade pip flask"
+      echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" pip setuptools wheel"
+      echo "      $PYTHON_BIN -m pip install --upgrade --index-url \"\$XKEEN_PIP_INDEX_URL\" flask"
     fi
     echo "    После этого запусти установщик ещё раз."
     exit 1
@@ -181,15 +256,36 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
     exit 1
   fi
 
-  # pip может не суметь собрать gevent/gevent-websocket на слабых роутерах (mipsel),
-  # поэтому ошибка здесь НЕ фатальная — продолжаем установку без WebSocket.
-  PIP_PKGS="flask"
-  if [ "$WANT_GEVENT" -eq 1 ]; then
-    PIP_PKGS="$PIP_PKGS gevent gevent-websocket"
+  print_pip_index_candidates
+
+  if ! pip_install_with_fallback "bootstrap" pip setuptools wheel; then
+    echo "[!] Не удалось обновить pip/setuptools/wheel через доступные индексы."
+    echo "    Продолжаю установку с текущим pip."
   fi
-  if ! "$PYTHON_BIN" -m pip install --upgrade pip $PIP_PKGS; then
-    echo "[!] Не удалось полностью установить Flask и/или gevent через pip."
-    echo "    Продолжаю установку, но WebSocket может быть недоступен."
+
+  if [ "$NEED_FLASK" -eq 1 ]; then
+    if ! pip_install_with_fallback "flask" flask; then
+      echo "[!] Не удалось установить Flask через доступные pip-индексы."
+      echo "    Можно повторить установку с зеркалом вручную, например:"
+      echo "      XKEEN_PIP_INDEX_URL=$PIP_FALLBACK_INDEX_DEFAULT sh install.sh"
+      exit 1
+    fi
+  else
+    echo "[*] Flask уже доступен из $PYTHON_BIN, отдельная pip-установка не требуется."
+  fi
+
+  # pip может не суметь собрать gevent/gevent-websocket на слабых роутерах,
+  # поэтому ошибка здесь НЕ фатальная — продолжаем установку без WebSocket.
+  if [ "$WANT_GEVENT" -eq 1 ]; then
+    if [ -n "$GEVENT_PIN_REASON" ]; then
+      echo "[*] Архитектура $ARCH: использую '$GEVENT_PIP_SPEC' ($GEVENT_PIN_REASON)."
+    fi
+    if ! pip_install_with_fallback "gevent" "$GEVENT_PIP_SPEC" gevent-websocket; then
+      echo "[!] Не удалось полностью установить gevent/gevent-websocket через pip."
+      echo "    Продолжаю установку, но WebSocket может быть недоступен."
+      echo "    При необходимости можно повторить отдельно с зеркалом:"
+      echo "      XKEEN_PIP_INDEX_URL=$PIP_FALLBACK_INDEX_DEFAULT XKEEN_GEVENT_PIP_SPEC=$GEVENT_PIP_SPEC $PYTHON_BIN -m pip install --upgrade \"\$XKEEN_GEVENT_PIP_SPEC\" gevent-websocket"
+    fi
   fi
 fi
 
