@@ -5,6 +5,7 @@ def test_events_service_exposes_locked_subscriber_helpers_and_run_server_uses_th
     events_text = Path('xkeen-ui/services/events.py').read_text(encoding='utf-8')
     app_text = Path('xkeen-ui/app.py').read_text(encoding='utf-8')
     server_text = Path('xkeen-ui/run_server.py').read_text(encoding='utf-8')
+    wsgi_text = Path('xkeen-ui/services/ws_wsgi.py').read_text(encoding='utf-8')
 
     assert 'import threading' in events_text
     assert '_EVENT_SUBSCRIBERS_LOCK: threading.Lock = threading.Lock()' in events_text
@@ -20,8 +21,10 @@ def test_events_service_exposes_locked_subscriber_helpers_and_run_server_uses_th
 
     assert '_subscribe_ws,' in server_text
     assert '_unsubscribe_ws,' in server_text
-    assert '_subscribe_ws(ws)' in server_text
-    assert '_unsubscribe_ws(ws)' in server_text
+    assert 'subscribe_ws=_subscribe_ws' in server_text
+    assert 'unsubscribe_ws=_unsubscribe_ws' in server_text
+    assert 'subscribe_ws(ws)' in wsgi_text
+    assert 'unsubscribe_ws(ws)' in wsgi_text
     assert 'EVENT_SUBSCRIBERS.append(ws)' not in server_text
     assert 'EVENT_SUBSCRIBERS.remove(ws)' not in server_text
 
@@ -53,3 +56,15 @@ def test_mihomo_generator_escapes_rule_group_labels_before_innerhtml_injection()
 
     assert 'function escapeHtml(str) {' in text
     assert 'span.innerHTML = "<strong>" + escapeHtml(preset.label) + "</strong>";' in text
+
+
+def test_pty_runtime_is_extracted_from_run_server_into_dedicated_service_module():
+    server_text = Path('xkeen-ui/run_server.py').read_text(encoding='utf-8')
+    pty_text = Path('xkeen-ui/services/ws_pty.py').read_text(encoding='utf-8')
+
+    assert 'class PtySession:' in pty_text
+    assert 'def cleanup_sessions(now: float | None = None) -> None:' in pty_text
+    assert 'def start_cleanup_loop() -> bool:' in pty_text
+    assert 'def handle_pty_request(' in pty_text
+    assert 'class PtySession:' not in server_text
+    assert 'def _pty_cleanup_loop()' not in server_text
