@@ -13,6 +13,8 @@ The runner enforces these policies independently.
 
 from __future__ import annotations
 
+import os
+
 from typing import Dict, List, Optional, Tuple
 
 from services.url_policy import (
