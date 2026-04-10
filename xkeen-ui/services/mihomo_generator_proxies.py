@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional, Set
 
-from mihomo_server_core import (
+from services.mihomo_proxy_parsers import (
     _yaml_list,
     _yaml_str,
     parse_proxy_uri,

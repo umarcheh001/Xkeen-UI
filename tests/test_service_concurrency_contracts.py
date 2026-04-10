@@ -146,3 +146,25 @@ def test_mihomo_proxy_config_edit_helpers_are_extracted_from_core_module():
     assert core_text.count('def replace_proxy_in_config(') == 0
     assert core_text.count('def rename_proxy_in_config(') == 0
     assert core_text.count('def apply_proxy_insert(') == 0
+
+
+def test_mihomo_proxy_parsers_are_extracted_from_core_module():
+    core_text = Path('xkeen-ui/mihomo_server_core.py').read_text(encoding='utf-8')
+    parser_text = Path('xkeen-ui/services/mihomo_proxy_parsers.py').read_text(encoding='utf-8')
+    routes_text = Path('xkeen-ui/routes/mihomo.py').read_text(encoding='utf-8')
+    generator_proxy_text = Path('xkeen-ui/services/mihomo_generator_proxies.py').read_text(encoding='utf-8')
+
+    assert 'from services.mihomo_proxy_parsers import (' in core_text
+    assert 'class ProxyParseResult:' in parser_text
+    assert 'def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResult:' in parser_text
+    assert 'def parse_wireguard(conf_text: str, custom_name: Optional[str] = None) -> ProxyParseResult:' in parser_text
+    assert 'def parse_proxy_uri(link: str, custom_name: Optional[str] = None) -> ProxyParseResult:' in parser_text
+    assert 'from services.mihomo_proxy_parsers import parse_wireguard' in routes_text
+    assert 'from services.mihomo_proxy_parsers import (' in generator_proxy_text
+    assert core_text.count('def parse_vless(') == 0
+    assert core_text.count('def parse_wireguard(') == 0
+    assert core_text.count('def parse_trojan(') == 0
+    assert core_text.count('def parse_vmess(') == 0
+    assert core_text.count('def parse_shadowsocks(') == 0
+    assert core_text.count('def parse_hysteria2(') == 0
+    assert core_text.count('def parse_proxy_uri(') == 0

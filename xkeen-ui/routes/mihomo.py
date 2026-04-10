@@ -50,8 +50,8 @@ from mihomo_server_core import (
     save_config,
     restart_mihomo_and_get_log,
     validate_config,
-    parse_wireguard,
 )
+from services.mihomo_proxy_parsers import parse_wireguard
 from services.mihomo_proxy_config import (
     apply_proxy_insert,
     rename_proxy_in_config,

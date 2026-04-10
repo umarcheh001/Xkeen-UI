@@ -2,8 +2,7 @@
 
 This module takes a high-level `state` object coming from the web UI
 (mihomo_generator.html) and turns it into a full Mihomo config.yaml
-string, based on YAML templates and parser helpers from
-`mihomo_server_core.py`.
+string, based on YAML templates and extracted Mihomo service helpers.
 
 Expected state structure (as produced by the new generator UI)
 ----------------------------------------------------------------
