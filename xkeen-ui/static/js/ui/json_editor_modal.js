@@ -33,6 +33,7 @@ import {
   let _currentTarget = null;
   let _savedText = '';
   let _viewStateStore = null;
+  let _modalResizeWired = false;
 
   function el(id) {
     return document.getElementById(id);
@@ -439,6 +440,35 @@ import {
     return getTextareaFacade();
   }
 
+  function layoutEditorSoon(focus = false) {
+    const doLayout = () => {
+      const modal = el('json-editor-modal');
+      const monacoHost = el('json-editor-monaco');
+      const fac = getActiveFacade();
+      if (!modal || !fac || typeof fac.layout !== 'function') return;
+      try {
+        if (modal.classList && modal.classList.contains('hidden')) return;
+      } catch (e) {}
+      try {
+        if (_kind === 'monaco' && monacoHost && monacoHost.classList && monacoHost.classList.contains('hidden')) return;
+      } catch (e) {}
+      try { fac.layout(); } catch (e) {}
+    };
+
+    doLayout();
+    try { requestAnimationFrame(doLayout); } catch (e) { setTimeout(doLayout, 0); }
+    setTimeout(doLayout, 0);
+    setTimeout(doLayout, 60);
+    setTimeout(doLayout, 180);
+
+    if (focus) {
+      setTimeout(() => {
+        const fac = getActiveFacade();
+        try { if (fac && typeof fac.focus === 'function') fac.focus(); } catch (e) {}
+      }, 0);
+    }
+  }
+
   function getViewStateStore() {
     if (_viewStateStore) return _viewStateStore;
     const helper = getEngineHelper();
@@ -731,6 +761,7 @@ import {
 
     showEditorKind(_kind);
     try { if (preservedView) restoreCurrentViewState(preservedView); } catch (e) {}
+    try { layoutEditorSoon(true); } catch (e) {}
     try { bindViewStateTracking(); } catch (e) {}
     try { bindDirtyListener(); } catch (e) {}
     try { syncTargetDirtyState(); } catch (e) {}
@@ -802,6 +833,16 @@ import {
         });
       }
     } catch (e) {}
+
+    if (!_modalResizeWired) {
+      _modalResizeWired = true;
+      document.addEventListener('xkeen-modal-resize', (event) => {
+        const modalId = String(event && event.detail && event.detail.modal || '').trim();
+        if (modalId && modalId !== 'json-editor-modal') return;
+        if (!_currentTarget) return;
+        layoutEditorSoon();
+      });
+    }
 
   }
 
@@ -895,6 +936,7 @@ import {
         const savedView = loadSavedViewState(_currentTarget, _kind);
         if (savedView) restoreCurrentViewState(savedView);
       } catch (e) {}
+      try { layoutEditorSoon(true); } catch (e) {}
       try { bindViewStateTracking(); } catch (e) {}
       try { bindDirtyListener(); } catch (e) {}
       try { syncTargetDirtyState(false); } catch (e) {}

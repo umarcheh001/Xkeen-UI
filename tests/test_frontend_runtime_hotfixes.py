@@ -397,6 +397,33 @@ def test_file_manager_monaco_modal_tracks_modal_resize_and_fills_available_heigh
     assert 'layoutMonacoSoon(ui, true);' in editor
 
 
+def test_json_editor_modal_tracks_modal_resize_and_stretches_monaco_and_cm6_hosts():
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    editor = Path('xkeen-ui/static/js/ui/json_editor_modal.js').read_text(encoding='utf-8')
+
+    monaco_block = styles.split('#json-editor-modal #json-editor-monaco {', 1)[1].split('}', 1)[0]
+    cm6_block = styles.split('#json-editor-modal .xkeen-cm6-host,\n#fm-editor-modal .xkeen-cm6-host {', 1)[1].split('}', 1)[0]
+
+    assert 'flex: 1 1 auto;' in monaco_block
+    assert 'min-height: 0;' in monaco_block
+    assert 'height: 100%;' in monaco_block
+    assert 'max-height: none;' in monaco_block
+
+    assert '#json-editor-modal .modal-body > .xk-editor-toolbar,' in styles
+    assert '#json-editor-modal .xkeen-cm6-host,' in styles
+    assert '#json-editor-modal .xkeen-cm6-host .cm-scroller,' in styles
+    assert 'flex: 1 1 auto;' in cm6_block
+    assert 'width: 100%;' in cm6_block
+    assert 'max-height: none;' in cm6_block
+
+    assert 'let _modalResizeWired = false;' in editor
+    assert 'function layoutEditorSoon(focus = false) {' in editor
+    assert "document.addEventListener('xkeen-modal-resize', (event) => {" in editor
+    assert "modalId && modalId !== 'json-editor-modal'" in editor
+    assert 'layoutEditorSoon();' in editor
+    assert 'layoutEditorSoon(true);' in editor
+
+
 def test_codemirror6_source_bridge_is_opt_in_and_does_not_inject_importmap_dynamically():
     path = Path('xkeen-ui/static/js/pages/codemirror6.shared.js')
     text = path.read_text(encoding='utf-8')

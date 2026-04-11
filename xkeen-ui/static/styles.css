@@ -7555,10 +7555,16 @@ html[data-theme="light"] .dt-env-help-table thead th {
   gap: 6px;
 }
 
+#json-editor-modal .modal-body > .xk-editor-toolbar,
+#json-editor-modal .modal-body > #json-editor-error {
+  flex: 0 0 auto;
+}
+
 /* CodeMirror wrapper inside JSON editor modal should occupy remaining height */
 #json-editor-modal .CodeMirror {
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
   height: 100% !important; /* override CodeMirror's default 300px */
 }
 
@@ -7566,8 +7572,17 @@ html[data-theme="light"] .dt-env-help-table thead th {
 #json-editor-modal textarea#json-editor-textarea {
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
   height: 100%;
   overflow: auto;
+}
+
+#json-editor-modal #json-editor-monaco {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
 }
 
 
@@ -24559,6 +24574,19 @@ html[data-theme="light"] .xkeen-cm6-host {
 #fm-editor-modal .xkeen-cm6-host .cm-editor {
   height: 100%;
   min-height: 0;
+}
+
+#json-editor-modal .xkeen-cm6-host,
+#fm-editor-modal .xkeen-cm6-host {
+  flex: 1 1 auto;
+  width: 100%;
+  max-height: none;
+}
+
+#json-editor-modal .xkeen-cm6-host .cm-scroller,
+#fm-editor-modal .xkeen-cm6-host .cm-scroller {
+  min-height: 0;
+  height: 100%;
 }
 
 .CodeMirror.xkeen-cm6-host.CodeMirror-fullscreen {
