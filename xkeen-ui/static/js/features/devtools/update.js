@@ -608,8 +608,14 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     try { if (btnRefresh) btnRefresh.disabled = false; } catch (e) {}
   }
 
+  // Track consecutive polling failures during update to detect service restart.
+  let _pollFailCount = 0;
+  let _waitingForRestart = false;
+
   function _startPolling() {
     if (state.pollTimer) return;
+    _pollFailCount = 0;
+    _waitingForRestart = false;
     state.pollTimer = setInterval(() => {
       loadStatus(true).catch(() => {});
     }, 1500);
@@ -619,6 +625,8 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     if (!state.pollTimer) return;
     try { clearInterval(state.pollTimer); } catch (e) {}
     state.pollTimer = null;
+    _pollFailCount = 0;
+    _waitingForRestart = false;
   }
 
   function _renderInfo(data) {
@@ -998,10 +1006,39 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     try {
       const tail = 200;
       const data = await getJSON('/api/devtools/update/status?tail=' + tail);
+      _pollFailCount = 0;
+      // If we were waiting for restart and backend is back, auto-reload.
+      if (_waitingForRestart) {
+        _waitingForRestart = false;
+        _stopPolling();
+        const st = (data && data.status && typeof data.status === 'object') ? data.status : {};
+        const stateVal = st.state ? String(st.state) : '';
+        if (stateVal === 'done') {
+          _setStatus('Обновление завершено, перезагрузка…', 'ok');
+          _setProgress(false, 0, false, '');
+          try { window.localStorage.setItem(LS_FORCE_RELOAD, String(Date.now())); } catch (e) {}
+          setTimeout(() => _reloadWithCacheBust(), 500);
+          return;
+        }
+      }
       state.lastStatus = data;
       _renderStatus(data);
     } catch (e) {
-      if (!isSilent) _setStatus('Status error: ' + (e && e.message ? e.message : String(e)), 'bad');
+      // During an active update, network errors likely mean the service is restarting.
+      const lastSt = state.lastStatus && state.lastStatus.status;
+      const lastState = lastSt && lastSt.state ? String(lastSt.state) : '';
+      const lastStep = lastSt && lastSt.step ? String(lastSt.step) : '';
+      if (lastState === 'running' && state.pollTimer) {
+        _pollFailCount++;
+        // After a few failures (especially at "restart" step), show a waiting message.
+        if (_pollFailCount >= 2 || lastStep === 'restart') {
+          _waitingForRestart = true;
+          _setStatus('Панель перезапускается, ожидание…', 'warn');
+          _setProgress(true, 95, true, 'Перезапуск сервиса…');
+        }
+      } else if (!isSilent) {
+        _setStatus('Status error: ' + (e && e.message ? e.message : String(e)), 'bad');
+      }
     }
   }
 
