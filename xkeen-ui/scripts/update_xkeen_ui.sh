@@ -56,7 +56,7 @@ MAX_CHECKSUM_BYTES="${XKEEN_UI_UPDATE_MAX_CHECKSUM_BYTES:-1048576}"  # 1 MiB
 
 # SHA policy
 SHA_STRICT="${XKEEN_UI_UPDATE_SHA_STRICT:-1}"     # 1: fail if checksum file exists but no matching entry
-REQUIRE_SHA="${XKEEN_UI_UPDATE_REQUIRE_SHA:-0}"   # 1: require checksum for stable channel
+REQUIRE_SHA="${XKEEN_UI_UPDATE_REQUIRE_SHA:-1}"   # 1: require checksum for stable channel
 
 now_utc() {
   # busybox date поддерживает -u

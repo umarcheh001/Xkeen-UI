@@ -329,7 +329,7 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
                             sec["warnings"].append("checksum_url_blocked:" + s_reason)
                     else:
                         sec["checksum"] = {"present": False, "kind": sha.get("kind"), "url": None}
-                        if str(os.environ.get("XKEEN_UI_UPDATE_REQUIRE_SHA") or "0").strip() == "1":
+                        if str(os.environ.get("XKEEN_UI_UPDATE_REQUIRE_SHA") or "1").strip() == "1":
                             sec["warnings"].append("checksum_required_missing")
                 elif ch == "main":
                     durl = str(latest.get("tarball_url") or "")

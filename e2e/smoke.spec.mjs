@@ -82,7 +82,7 @@ test('devtools update card completes load-info and manual check flow', async ({ 
         },
         security: {
           sha_strict: '1',
-          require_sha: '0',
+          require_sha: '1',
         },
       }),
     });
@@ -128,7 +128,7 @@ test('devtools update card completes load-info and manual check flow', async ({ 
         security: {
           settings: {
             sha_strict: '1',
-            require_sha: '0',
+            require_sha: '1',
           },
           download: {
             url: 'https://github.com/umarcheh001/Xkeen-UI/releases/download/v1.7.4/xkeen-ui-routing.tar.gz',

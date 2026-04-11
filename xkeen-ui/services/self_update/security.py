@@ -64,5 +64,5 @@ def security_snapshot() -> Dict[str, str]:
         "download_timeout": str(os.environ.get("XKEEN_UI_UPDATE_DOWNLOAD_TIMEOUT") or "300"),
         "api_timeout": str(os.environ.get("XKEEN_UI_UPDATE_API_TIMEOUT") or "10"),
         "sha_strict": str(os.environ.get("XKEEN_UI_UPDATE_SHA_STRICT") or "1"),
-        "require_sha": str(os.environ.get("XKEEN_UI_UPDATE_REQUIRE_SHA") or "0"),
+        "require_sha": str(os.environ.get("XKEEN_UI_UPDATE_REQUIRE_SHA") or "1"),
     }

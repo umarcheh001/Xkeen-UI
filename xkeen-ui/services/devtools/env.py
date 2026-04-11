@@ -315,7 +315,7 @@ def _default_effective_value(
     if k == "XKEEN_UI_UPDATE_SHA_STRICT":
         return "1"
     if k == "XKEEN_UI_UPDATE_REQUIRE_SHA":
-        return "0"
+        return "1"
 
     # Logging defaults (services/logging_setup.py + app.py fallback on non-router dev).
     if k == "XKEEN_LOG_DIR":

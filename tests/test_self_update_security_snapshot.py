@@ -32,6 +32,8 @@ class SelfUpdateSecuritySnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot["max_bytes"], "62914560")
         self.assertEqual(snapshot["max_checksum_bytes"], "1048576")
         self.assertEqual(snapshot["api_timeout"], "10")
+        self.assertEqual(snapshot["sha_strict"], "1")
+        self.assertEqual(snapshot["require_sha"], "1")
         self.assertIn("github.com", snapshot["allow_hosts"])
 
 
