@@ -32,7 +32,7 @@ GITHUB_OWNER = os.environ.get("XKEEN_GITHUB_OWNER", "umarcheh001")
 GITHUB_REPO = os.environ.get("XKEEN_GITHUB_REPO", "xkeen-community-configs")
 GITHUB_BRANCH = os.environ.get("XKEEN_GITHUB_BRANCH", "main")
 
-CONFIG_SERVER_BASE = os.environ.get("XKEEN_CONFIG_SERVER_BASE", "http://144.31.17.58:8000")
+CONFIG_SERVER_BASE_ENV = "XKEEN_CONFIG_SERVER_BASE"
 
 # Seconds: how long to consider cached index "fresh".
 _GH_INDEX_TTL = int(os.environ.get("XKEEN_GITHUB_INDEX_CACHE_TTL", "60") or 60)
@@ -43,9 +43,16 @@ _GH_INDEX_TTL = int(os.environ.get("XKEEN_GITHUB_INDEX_CACHE_TTL", "60") or 60)
 # ---------------------------
 
 
+def get_config_server_base() -> str:
+    """Return the explicitly configured config-server base URL."""
+    return str(os.environ.get(CONFIG_SERVER_BASE_ENV) or "").strip()
+
+
 def config_server_request(path: str, *, method: str = "GET", payload=None):
     """Perform a blocking HTTP request to the config server and parse JSON."""
-    base = (CONFIG_SERVER_BASE or "").rstrip("/")
+    base = get_config_server_base().rstrip("/")
+    if not base:
+        raise RuntimeError("CONFIG_SERVER_BASE is not configured")
     url = base + path
 
     data = None

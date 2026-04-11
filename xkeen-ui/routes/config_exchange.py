@@ -136,7 +136,7 @@ def create_config_exchange_blueprint(*, github_owner: str = "", github_repo: str
 
     @bp.post("/api/github/export-configs")
     def api_github_export_configs():
-        if not gh.CONFIG_SERVER_BASE:
+        if not gh.get_config_server_base():
             return _api_error("CONFIG_SERVER_BASE is not configured", 500, ok=False)
 
         max_bytes = get_config_exchange_max_bytes()

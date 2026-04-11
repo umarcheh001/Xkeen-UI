@@ -191,12 +191,12 @@ def test_local_config_import_rejects_oversized_upload_before_apply(tmp_path: Pat
 
 def test_github_export_rejects_oversized_json_body_before_server_upload(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("XKEEN_CONFIG_EXCHANGE_MAX_BYTES", "96")
+    monkeypatch.setenv("XKEEN_CONFIG_SERVER_BASE", "https://configs.invalid")
     config_exchange = _reload("routes.config_exchange")
 
     upload_calls: list[dict] = []
     bundle_calls: list[dict] = []
 
-    monkeypatch.setattr(config_exchange.gh, "CONFIG_SERVER_BASE", "https://configs.invalid")
     monkeypatch.setattr(
         config_exchange,
         "build_user_configs_bundle",
@@ -226,6 +226,50 @@ def test_github_export_rejects_oversized_json_body_before_server_upload(tmp_path
     assert payload["max_bytes"] == 64 * 1024
     assert bundle_calls == []
     assert upload_calls == []
+
+
+def test_github_export_requires_explicit_config_server_base(monkeypatch):
+    monkeypatch.delenv("XKEEN_CONFIG_SERVER_BASE", raising=False)
+    config_exchange = _reload("routes.config_exchange")
+
+    bundle_calls: list[dict] = []
+    upload_calls: list[dict] = []
+
+    monkeypatch.setattr(
+        config_exchange,
+        "build_user_configs_bundle",
+        lambda **kwargs: bundle_calls.append(kwargs) or {"version": 1, "files": []},
+    )
+    monkeypatch.setattr(
+        config_exchange.gh,
+        "config_server_request_safe",
+        lambda *args, **kwargs: upload_calls.append({"args": args, "kwargs": kwargs}) or {"ok": True, "id": "cfg-1"},
+    )
+
+    app = Flask("config-exchange-config-server-required")
+    app.register_blueprint(config_exchange.create_config_exchange_blueprint())
+    client = app.test_client()
+
+    response = client.post(
+        "/api/github/export-configs",
+        json={"title": "example"},
+    )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "CONFIG_SERVER_BASE is not configured", "ok": False}
+    assert bundle_calls == []
+    assert upload_calls == []
+
+
+def test_config_server_base_defaults_to_empty_and_honors_explicit_env(monkeypatch):
+    monkeypatch.delenv("XKEEN_CONFIG_SERVER_BASE", raising=False)
+    gh = _reload("services.config_exchange_github")
+
+    assert gh.get_config_server_base() == ""
+
+    monkeypatch.setenv("XKEEN_CONFIG_SERVER_BASE", " http://config.internal:8000 ")
+
+    assert gh.get_config_server_base() == "http://config.internal:8000"
 
 
 def test_small_json_guard_rejects_oversized_body_before_command_handler(monkeypatch):

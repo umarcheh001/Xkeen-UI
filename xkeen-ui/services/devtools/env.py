@@ -345,9 +345,9 @@ def _default_effective_value(
         repo = _eff_str("XKEEN_GITHUB_REPO") or "xkeen-community-configs"
         return f"https://github.com/{owner}/{repo}"
 
-    # Config server (app.py)
+    # Config server (explicit env only)
     if k == "XKEEN_CONFIG_SERVER_BASE":
-        return "http://144.31.17.58:8000"
+        return ""
 
     # Terminal (run_server.py)
     if k == "XKEEN_PTY_MAX_BUF_CHARS":

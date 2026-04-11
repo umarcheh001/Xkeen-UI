@@ -408,10 +408,6 @@ def create_app(*, ws_runtime: bool = False):
     GITHUB_REPO = os.environ.get("XKEEN_GITHUB_REPO", "xkeen-community-configs")
     GITHUB_BRANCH = os.environ.get("XKEEN_GITHUB_BRANCH", "main")
 
-    CONFIG_SERVER_BASE = os.environ.get(
-        "XKEEN_CONFIG_SERVER_BASE", "http://144.31.17.58:8000"
-    )
-
     GITHUB_REPO_URL = os.environ.get(
         "XKEEN_GITHUB_REPO_URL", f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
     )
