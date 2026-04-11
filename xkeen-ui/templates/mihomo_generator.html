@@ -1893,11 +1893,8 @@
             <span class="xk-update-dot" aria-hidden="true"></span>
             <span data-xk-update-label>Обновление</span>
           </a>
-          <a
-            href="{{ url_for('logout') }}"
-            class="service-core-text xk-header-btn xk-header-btn-logout"
-            title="Выйти из панели"
-          >Выйти</a>
+          {% set logout_button_class = 'service-core-text xk-header-btn xk-header-btn-logout' %}
+          {% include '_logout_button.html' %}
         </div>
       </div>
     </header>

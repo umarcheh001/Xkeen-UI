@@ -354,12 +354,8 @@ import { getFeatureApi } from '../features/feature_access.js';
     }
   }
 
-  function getLogoutHref() {
-    try {
-      const link = document.querySelector('.xk-header-btn-logout[href]');
-      if (link && link.href) return String(link.href);
-    } catch (e) {}
-    return '/logout';
+  function getLogoutRedirectHref() {
+    return '/login';
   }
 
   async function saveServerPatch(patch, successMessage) {
@@ -541,7 +537,7 @@ import { getFeatureApi } from '../features/feature_access.js';
       message: 'Завершить текущую сессию?',
       details: [
         'Текущая сессия браузера будет закрыта сразу.',
-        'После этого откроется существующий маршрут выхода.',
+        'После этого откроется страница входа.',
       ],
       okText: 'Выйти',
       cancelText: 'Остаться',
@@ -572,7 +568,7 @@ import { getFeatureApi } from '../features/feature_access.js';
         throw new Error('Не удалось завершить сессию.');
       }
 
-      window.location.assign(getLogoutHref());
+      window.location.assign(getLogoutRedirectHref());
       return true;
     } catch (e) {
       const msg = (e && e.message) ? String(e.message) : 'Не удалось завершить сессию.';

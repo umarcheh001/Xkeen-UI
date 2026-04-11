@@ -194,11 +194,8 @@
             </div>
 
             <div class="panel-shell-actions-secondary" data-xk-shell-slot="session-actions">
-              <a
-                href="{{ url_for('logout') }}"
-                class="service-core-text xk-header-btn xk-header-btn-logout"
-                title="Выйти из панели"
-              >Выйти</a>
+              {% set logout_button_class = 'service-core-text xk-header-btn xk-header-btn-logout' %}
+              {% include '_logout_button.html' %}
             </div>
           </div>
         </div>

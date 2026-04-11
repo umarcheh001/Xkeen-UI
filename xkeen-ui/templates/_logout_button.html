@@ -1,0 +1,9 @@
+<form method="post" action="{{ url_for('logout_post') }}" class="{{ logout_form_class|default('xk-logout-form') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button
+    type="submit"
+    class="{{ logout_button_class|default('btn-link') }}"
+    title="{{ logout_title|default('Выйти из панели') }}"
+    data-logout-button="1"
+  >{{ logout_label|default('Выйти') }}</button>
+</form>

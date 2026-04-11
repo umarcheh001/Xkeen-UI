@@ -57,6 +57,15 @@ def test_devtools_env_help_button_keeps_required_modal_shell_ids():
     assert "const body = byId('dt-env-help-body');" in env_text
 
 
+def test_settings_panel_logout_redirects_to_login_after_api_logout():
+    text = Path('xkeen-ui/static/js/ui/settings_panel.js').read_text(encoding='utf-8')
+
+    assert "function getLogoutRedirectHref() {" in text
+    assert "return '/login';" in text
+    assert "document.querySelector('.xk-header-btn-logout[href]')" not in text
+    assert "window.location.assign(getLogoutRedirectHref());" in text
+
+
 def test_mihomo_generator_ignores_stale_profile_defaults_and_auto_preview_overwrites():
     text = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
 

@@ -248,6 +248,12 @@ def register_auth_routes(app: Flask) -> None:
 
     @app.get("/logout")
     def logout():
+        return redirect(url_for("login"))
+
+    @app.post("/logout")
+    def logout_post():
+        if not _check_csrf():
+            return "csrf_failed", 403
         session.clear()
         return redirect(url_for("login"))
 

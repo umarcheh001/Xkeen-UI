@@ -2263,6 +2263,18 @@ html[data-theme="light"] .btn-link:hover {
   color: var(--header-btn-hover-text, var(--header-btn-text, #111827));
 }
 
+.xk-logout-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.xk-logout-form .btn-link,
+.xk-logout-form .xk-header-btn {
+  font: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 .links {
   list-style: none;
   padding-left: 0;
