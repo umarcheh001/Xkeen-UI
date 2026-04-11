@@ -117,6 +117,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   // ------------------------- ENV -------------------------
 
   const ENV_HELP = {
+    'XKEEN_UI_PORT': 'Порт веб-панели Xkeen UI. По умолчанию: 8088. Installer сохраняет его в devtools.env, чтобы обновления не сбрасывали порт назад на дефолт. После изменения нужен Restart UI.',
     'XKEEN_UI_STATE_DIR': 'Каталог состояния UI (auth, devtools.env, restart.log и т.п.). По умолчанию: /opt/etc/xkeen-ui.',
     'XKEEN_UI_ENV_FILE': 'Путь к env‑файлу DevTools (по умолчанию <UI_STATE_DIR>/devtools.env). Обычно менять не нужно. Эта переменная отображается только для информации (read‑only).',
     'XKEEN_UI_SECRET_KEY': 'Секретный ключ Flask/сессий. При смене ключа текущие сессии станут недействительными. Значение не отображается.',
@@ -264,6 +265,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
   // Большинство переменных читаются на старте (константы/инициализация blueprint'ов).
   // Для них изменения надёжнее применять через Restart UI.
   const ENV_RESTART_KEYS = new Set([
+    'XKEEN_UI_PORT',
     'XKEEN_UI_STATE_DIR',
     'XKEEN_UI_ENV_FILE',
     'XKEEN_UI_SECRET_KEY',

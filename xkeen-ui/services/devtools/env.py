@@ -20,6 +20,7 @@ ENV_WHITELIST: Tuple[str, ...] = (
     "XKEEN_UI_STATE_DIR",
     "XKEEN_UI_ENV_FILE",  # read-only (path to devtools.env)
     "XKEEN_UI_SECRET_KEY",  # shown as "(set)" only
+    "XKEEN_UI_PORT",
     "XKEEN_AUTH_LOGIN_WINDOW_SECONDS",
     "XKEEN_AUTH_LOGIN_MAX_ATTEMPTS",
     "XKEEN_AUTH_LOGIN_LOCKOUT_SECONDS",
@@ -237,6 +238,10 @@ def _default_effective_value(
     if k == "XKEEN_UI_ENV_FILE":
         # Path to the persisted env file used by the init script.
         return os.path.join(ui_state_dir, "devtools.env")
+
+    if k == "XKEEN_UI_PORT":
+        # run_server.py default listener port (can be overridden in devtools.env).
+        return "8088"
 
     if k == "XKEEN_INIT_SCRIPT":
         # Keep DevTools aligned with the runtime resolver for old/new XKeen init.d names.

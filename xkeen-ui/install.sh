@@ -603,17 +603,134 @@ PY
   fi
 }
 
+extract_env_numeric_field() {
+  # extract export KEY='1234' / export KEY=1234 from devtools.env-like files
+  _field="$1"
+  _file="$2"
+  [ -f "$_file" ] || return 0
+  grep -E "^[[:space:]]*export[[:space:]]+${_field}=['\"]?[0-9]+['\"]?[[:space:]]*$" "$_file" 2>/dev/null \
+    | tail -n 1 \
+    | sed -E "s/^[[:space:]]*export[[:space:]]+${_field}=['\"]?([0-9]+)['\"]?[[:space:]]*$/\\1/" \
+    || true
+}
+
+extract_run_server_port() {
+  _file="$1"
+  [ -f "$_file" ] || return 0
+  "$PYTHON_BIN" - "$_file" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+path = sys.argv[1]
+try:
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+except Exception:
+    raise SystemExit(0)
+
+patterns = [
+    r'XKEEN_UI_PORT["\']\)\s*or\s*["\']([0-9]{2,5})["\']',
+    r'XKEEN_UI_PORT["\']\)\s*or\s*([0-9]{2,5})',
+    r'"0\.0\.0\.0",\s*([0-9]{2,5})',
+    r'app\.run\([^)]*port\s*=\s*([0-9]{2,5})',
+]
+
+for pattern in patterns:
+    match = re.search(pattern, text, flags=re.MULTILINE)
+    if not match:
+        continue
+    try:
+        port = int(match.group(1))
+    except Exception:
+        continue
+    if 1 <= port <= 65535:
+        print(port)
+        raise SystemExit(0)
+PY
+}
+
+write_env_numeric_field() {
+  _file="$1"
+  _field="$2"
+  _value="$3"
+  [ -n "$_field" ] || return 0
+  [ -n "$_value" ] || return 0
+  "$PYTHON_BIN" - "$_file" "$_field" "$_value" <<'PY'
+import os
+import re
+import sys
+
+path = sys.argv[1]
+key = sys.argv[2]
+value = sys.argv[3]
+
+try:
+    port = int(str(value).strip())
+except Exception:
+    raise SystemExit(0)
+
+if port < 1 or port > 65535:
+    raise SystemExit(0)
+
+lines = []
+if os.path.isfile(path):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            lines = fh.readlines()
+    except Exception:
+        lines = []
+
+pattern = re.compile(r"^[ \t]*export[ \t]+" + re.escape(key) + r"=.*$")
+entry = f"export {key}='{port}'\n"
+updated = False
+out = []
+for line in lines:
+    if pattern.match(line):
+        if not updated:
+            out.append(entry)
+            updated = True
+        continue
+    out.append(line)
+
+if not updated:
+    if out and not out[-1].endswith("\n"):
+        out[-1] += "\n"
+    if out and out[-1].strip():
+        out.append("\n")
+    out.append(entry)
+
+os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as fh:
+    fh.writelines(out)
+os.replace(tmp, path)
+PY
+}
+
 EXISTING_APP="$UI_DIR/app.py"
 EXISTING_RUN="$UI_DIR/run_server.py"
+EXISTING_ENV_FILE="$UI_DIR/devtools.env"
 EXISTING_PORT=""
 FIRST_INSTALL="yes"
 
-if [ -f "$EXISTING_APP" ] || [ -f "$EXISTING_RUN" ]; then
+if [ -f "$EXISTING_APP" ] || [ -f "$EXISTING_RUN" ] || [ -f "$EXISTING_ENV_FILE" ]; then
   FIRST_INSTALL="no"
 fi
 
 # 1) Пробуем вытащить порт из run_server.py (WSGIServer(("0.0.0.0", PORT ...))
-if [ -f "$EXISTING_RUN" ]; then
+if [ -z "$EXISTING_PORT" ] && [ -n "${XKEEN_UI_PORT:-}" ]; then
+  EXISTING_PORT="$XKEEN_UI_PORT"
+fi
+
+if [ -z "$EXISTING_PORT" ] && [ -f "$EXISTING_ENV_FILE" ]; then
+  EXISTING_PORT="$(extract_env_numeric_field "XKEEN_UI_PORT" "$EXISTING_ENV_FILE")"
+fi
+
+if [ -z "$EXISTING_PORT" ] && [ -f "$EXISTING_RUN" ]; then
+  EXISTING_PORT="$(extract_run_server_port "$EXISTING_RUN")"
+fi
+
+if [ -z "$EXISTING_PORT" ] && [ -f "$EXISTING_RUN" ]; then
   EXISTING_PORT=$(grep -E '"0\.0\.0\.0",[[:space:]]*[0-9]+' "$EXISTING_RUN" 2>/dev/null | \
     sed -E 's/.*"0\.0\.0\.0",[[:space:]]*([0-9]+).*/\1/' | tail -n 1 || true)
 fi
@@ -693,6 +810,9 @@ if [ -z "$EXISTING_PORT" ] || [ "${USE_EXISTING:-0}" -eq 0 ]; then
 fi
 
 # --- Бэкапы Xray на самой первой установке ---
+
+echo "[*] Сохраняю порт панели в $EXISTING_ENV_FILE (XKEEN_UI_PORT=$PANEL_PORT)..."
+write_env_numeric_field "$EXISTING_ENV_FILE" "XKEEN_UI_PORT" "$PANEL_PORT"
 
 if [ "$FIRST_INSTALL" = "yes" ]; then
   echo "[*] Первая установка: создаю бэкапы конфигов Xray в $BACKUP_DIR..."
@@ -1091,6 +1211,7 @@ UI_DIR="/opt/etc/xkeen-ui"
 PYTHON_BIN="/opt/bin/python3"
 RUN_SERVER="$UI_DIR/run_server.py"
 APP_PY="$UI_DIR/app.py"
+PANEL_PORT="__XKEEN_UI_PORT__"
 
 LOG_DIR_DEFAULT="/opt/var/log/xkeen-ui"
 LOG_DIR="$LOG_DIR_DEFAULT"
@@ -1131,6 +1252,10 @@ start_service() {
     # shellcheck disable=SC1090
     . "$ENV_FILE"
   fi
+
+  # Keep the selected installer port stable across updates even when
+  # run_server.py reads it from env instead of a hard-coded literal.
+  export XKEEN_UI_PORT="${XKEEN_UI_PORT:-$PANEL_PORT}"
 
   # Re-resolve log dir after env overrides (DevTools can set XKEEN_LOG_DIR)
   LOG_DIR="${XKEEN_LOG_DIR:-$LOG_DIR_DEFAULT}"
@@ -1214,6 +1339,10 @@ esac
 
 exit 0
 EOF
+
+if grep -q "__XKEEN_UI_PORT__" "$INIT_SCRIPT" 2>/dev/null; then
+  sed -i -E "s/__XKEEN_UI_PORT__/${PANEL_PORT}/g" "$INIT_SCRIPT" || true
+fi
 
 chmod +x "$INIT_SCRIPT"
 
