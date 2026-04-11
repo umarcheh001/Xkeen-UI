@@ -86,6 +86,12 @@ import {
       },
       html: (el, v) => {
         if (!el) return;
+        // Safe-by-default: raw strings should not become live DOM markup.
+        // Use trustedHtml() only for explicitly reviewed local templates.
+        try { el.textContent = String(v == null ? '' : v); } catch (e) {}
+      },
+      trustedHtml: (el, v) => {
+        if (!el) return;
         try { el.innerHTML = String(v == null ? '' : v); } catch (e) {}
       },
       value: (el, v) => {

@@ -57,6 +57,19 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     return m;
   }
 
+  function renderEnvTableMessage(message) {
+    const tbody = byId('dt-env-tbody');
+    if (!tbody) return;
+    try { tbody.innerHTML = ''; } catch (e) {}
+
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 4;
+    td.textContent = String(message || '');
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+
   function syncLoggingControls(items) {
     const mp = _itemMap(items);
     const coreEn = byId('dt-log-core-enable');
@@ -469,7 +482,11 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     const modal = byId('dt-env-help-modal');
     const body = byId('dt-env-help-body');
     if (!modal || !body) return;
-    try { body.innerHTML = _buildEnvHelpHtml(); } catch (e) { body.textContent = 'Не удалось построить справку: ' + (e && e.message ? e.message : String(e)); }
+    try {
+      body.innerHTML = _buildEnvHelpHtml();
+    } catch (e) {
+      body.textContent = 'Не удалось построить справку: ' + (e && e.message ? e.message : String(e));
+    }
 
     openModal(modal, 'devtools_env_help');
   }
@@ -525,9 +542,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     tbody.innerHTML = '';
 
     if (!items || !items.length) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td colspan="4">(empty)</td>';
-      tbody.appendChild(tr);
+      renderEnvTableMessage('(empty)');
       return;
     }
 
@@ -634,10 +649,7 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       const data = await getJSON('/api/devtools/env');
       renderEnv(data.items || [], data.env_file || '');
     } catch (e) {
-      const tbody = byId('dt-env-tbody');
-      if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="4">Ошибка: ' + (e && e.message ? e.message : String(e)) + '</td></tr>';
-      }
+      renderEnvTableMessage('Ошибка: ' + (e && e.message ? e.message : String(e)));
     }
   }
 
