@@ -87,6 +87,38 @@ class SelfUpdateStatusRecoveryTests(unittest.TestCase):
             self.assertEqual(persisted["error"], "runner_stale")
             self.assertTrue(persisted["stale"])
 
+    def test_reconcile_runtime_status_keeps_running_state_when_runner_pid_is_alive(self):
+        state = _reload("services.self_update.state")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            status_file = Path(tmp) / "status.json"
+            lock_file = Path(tmp) / "lock"
+
+            state.write_status(
+                str(status_file),
+                {
+                    "state": "running",
+                    "step": "restart",
+                    "progress": None,
+                    "created_ts": time.time() - 5,
+                    "started_ts": time.time() - 4,
+                    "finished_ts": None,
+                    "error": None,
+                    "pid": os.getpid(),
+                    "op": "update",
+                    "message": "Restarting UI service",
+                    "updated_ts": time.time() - 1,
+                },
+            )
+
+            status, lock_info, reconciled = state.reconcile_runtime_status(str(status_file), str(lock_file))
+
+            self.assertFalse(reconciled)
+            self.assertFalse(lock_info["exists"])
+            self.assertEqual(status["state"], "running")
+            self.assertEqual(status["step"], "restart")
+            self.assertIsNone(status["error"])
+
     def test_devtools_status_endpoint_returns_reconciled_stale_status(self):
         state = _reload("services.self_update.state")
         devtools = _reload("routes.devtools")

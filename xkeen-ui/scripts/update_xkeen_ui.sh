@@ -85,6 +85,12 @@ if [ -z "$PY" ]; then
   exit 1
 fi
 
+# Persist the long-lived shell runner PID across helper Python processes.
+# DevTools status/lock reconciliation relies on this PID remaining stable even
+# while the script spawns short-lived JSON/progress helpers.
+RUNNER_PID="$$"
+export XKEEN_UI_UPDATE_RUNNER_PID="$RUNNER_PID"
+
 is_writable_dir() {
   d="$1"
   [ -d "$d" ] || return 1
@@ -164,6 +170,15 @@ step = sys.argv[3]
 message = sys.argv[4]
 err = sys.argv[5] if len(sys.argv) > 5 else ""
 
+runner_pid_raw = os.environ.get("XKEEN_UI_UPDATE_RUNNER_PID") or ""
+try:
+  runner_pid = int(str(runner_pid_raw).strip())
+except Exception:
+  try:
+    runner_pid = int(os.getppid())
+  except Exception:
+    runner_pid = int(os.getpid())
+
 now = time.time()
 
 base = {
@@ -174,7 +189,7 @@ base = {
   "started_ts": None,
   "finished_ts": None,
   "error": None,
-  "pid": os.getpid(),
+  "pid": runner_pid,
   "op": os.environ.get("XKEEN_UI_UPDATE_ACTION") or "update",
   # дополнительные поля (UI может показывать):
   "message": message,
@@ -223,6 +238,14 @@ acquire_lock() {
 import json, os, sys, time
 p = sys.argv[1]
 created_ts = time.time()
+runner_pid_raw = os.environ.get("XKEEN_UI_UPDATE_RUNNER_PID") or ""
+try:
+  runner_pid = int(str(runner_pid_raw).strip())
+except Exception:
+  try:
+    runner_pid = int(os.getppid())
+  except Exception:
+    runner_pid = int(os.getpid())
 try:
   with open(p, 'r', encoding='utf-8') as f:
     d = json.load(f)
@@ -234,7 +257,7 @@ try:
 except Exception:
   pass
 
-d = {"pid": os.getpid(), "created_ts": created_ts}
+d = {"pid": runner_pid, "created_ts": created_ts}
 tmp = p + ".tmp"
 os.makedirs(os.path.dirname(p), exist_ok=True)
 with open(tmp, 'w', encoding='utf-8') as f:
@@ -268,7 +291,15 @@ PY
   "$PY" - "$LOCK_FILE" <<'PY'
 import json, os, sys, time
 p = sys.argv[1]
-d = {"pid": os.getpid(), "created_ts": time.time()}
+runner_pid_raw = os.environ.get("XKEEN_UI_UPDATE_RUNNER_PID") or ""
+try:
+  runner_pid = int(str(runner_pid_raw).strip())
+except Exception:
+  try:
+    runner_pid = int(os.getppid())
+  except Exception:
+    runner_pid = int(os.getpid())
+d = {"pid": runner_pid, "created_ts": time.time()}
 tmp = p + ".tmp"
 os.makedirs(os.path.dirname(p), exist_ok=True)
 with open(tmp, 'w', encoding='utf-8') as f:
@@ -287,7 +318,10 @@ cleanup() {
   release_lock
 }
 
-trap cleanup EXIT INT TERM
+# Release the lock only on final shell exit. During service restart the runner
+# can receive transient signals while it is still alive; dropping the lock too
+# early makes DevTools think the updater crashed.
+trap cleanup EXIT
 
 download() {
   url="$1"; out="$2"; max_bytes="${3:-}"; label="${4:-file}"; show_progress="${5:-0}"
@@ -430,9 +464,18 @@ def write_status_patch(patch: dict):
     d = read_status()
     if not isinstance(d, dict):
         d = {}
+    runner_pid_raw = os.environ.get("XKEEN_UI_UPDATE_RUNNER_PID") or ""
+    try:
+        runner_pid = int(str(runner_pid_raw).strip())
+    except Exception:
+        try:
+            runner_pid = int(os.getppid())
+        except Exception:
+            runner_pid = int(os.getpid())
     d.update(patch)
     d.setdefault("state", "running")
     d.setdefault("step", "download")
+    d.setdefault("pid", runner_pid)
     d.setdefault("created_ts", time.time())
     d.setdefault("started_ts", time.time())
     d["updated_ts"] = time.time()
@@ -1296,9 +1339,18 @@ def write_status_patch(patch: dict):
     d = read_status()
     if not isinstance(d, dict):
         d = {}
+    runner_pid_raw = os.environ.get("XKEEN_UI_UPDATE_RUNNER_PID") or ""
+    try:
+        runner_pid = int(str(runner_pid_raw).strip())
+    except Exception:
+        try:
+            runner_pid = int(os.getppid())
+        except Exception:
+            runner_pid = int(os.getpid())
     d.update(patch)
     d.setdefault('state', 'running')
     d.setdefault('step', 'verify')
+    d.setdefault('pid', runner_pid)
     d.setdefault('created_ts', time.time())
     d.setdefault('started_ts', time.time())
     d['updated_ts'] = time.time()
@@ -1519,9 +1571,18 @@ def write_patch(patch: dict):
     d = read_status()
     if not isinstance(d, dict):
         d = {}
+    runner_pid_raw = os.environ.get("XKEEN_UI_UPDATE_RUNNER_PID") or ""
+    try:
+        runner_pid = int(str(runner_pid_raw).strip())
+    except Exception:
+        try:
+            runner_pid = int(os.getppid())
+        except Exception:
+            runner_pid = int(os.getpid())
     d.update(patch)
     d.setdefault('state', 'running')
     d.setdefault('step', 'extract')
+    d.setdefault('pid', runner_pid)
     now = time.time()
     d.setdefault('created_ts', now)
     d.setdefault('started_ts', now)
