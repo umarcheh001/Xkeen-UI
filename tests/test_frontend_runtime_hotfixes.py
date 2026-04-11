@@ -71,7 +71,8 @@ def test_mihomo_generator_ignores_stale_profile_defaults_and_auto_preview_overwr
 
     assert 'let _previewRequestSeq = 0;' in text
     assert 'let _profileDefaultsRequestSeq = 0;' in text
-    assert 'if (_isEditable) return;' in text
+    assert 'if (_isEditable) {' in text
+    assert 'setStatus(getEditablePreviewDirtyMessage(), "warn");' in text
     assert 'const requestSeq = ++_profileDefaultsRequestSeq;' in text
     assert 'const currentProfile = (profileSelect && profileSelect.value) || "router_custom";' in text
     assert 'if (requestSeq !== _profileDefaultsRequestSeq) return;' in text
@@ -79,6 +80,29 @@ def test_mihomo_generator_ignores_stale_profile_defaults_and_auto_preview_overwr
     assert 'const requestSeq = ++_previewRequestSeq;' in text
     assert 'if (!manual && _isEditable) return;' in text
     assert text.count('if (requestSeq !== _previewRequestSeq) return;') >= 2
+
+
+def test_mihomo_generator_tracks_dirty_preview_state_while_manual_editing_is_enabled():
+    text = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+
+    assert 'let _previewDirtyWhileEditable = false;' in text
+    assert 'function syncStateSummaryFromInputs() {' in text
+    assert 'function getEditablePreviewDirtyMessage() {' in text
+    assert 'try { syncStateSummaryFromInputs(); } catch (e) {}' in text
+    assert '_previewDirtyWhileEditable = true;' in text
+    assert 'setStatus(getEditablePreviewDirtyMessage(), "warn");' in text
+    assert 'previewDirty: !!_previewDirtyWhileEditable,' in text
+    assert '_previewDirtyWhileEditable = !!draft.previewDirty;' in text
+    assert 'if (_previewDirtyWhileEditable) {' in text
+
+
+def test_mihomo_generator_rebuilds_preview_after_exiting_manual_edit_mode_with_stale_inputs():
+    text = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+
+    assert 'const wasEditable = _isEditable;' in text
+    assert "setStatus('Редактирование выключено. Пересобираю YAML из исходных данных…', 'warn');" in text
+    assert 'if (!_isEditable && wasEditable && _previewDirtyWhileEditable) {' in text
+    assert 'try { schedulePreview(90); } catch (e) {}' in text
 
 
 def test_mihomo_generator_preserves_explicit_empty_rule_group_selection():

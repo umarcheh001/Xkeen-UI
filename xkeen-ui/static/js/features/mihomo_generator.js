@@ -313,6 +313,7 @@ let _active = null; // facade: {getValue,setValue,focus,layout,dispose}
 let _isEditable = false;
 let _previewRequestSeq = 0;
 let _profileDefaultsRequestSeq = 0;
+let _previewDirtyWhileEditable = false;
 
 const CM6_SCOPE = 'mihomo-generator';
 
@@ -795,9 +796,15 @@ function initEngineToggle() {
         let previewTimeout = null;
       
         function schedulePreview(delay = 300) {
+          try { syncStateSummaryFromInputs(); } catch (e) {}
           try { scheduleSessionDraftSave(Math.min(Math.max(Number(delay || 0), 80), 400)); } catch (e) {}
           if (!_active) return;
-          if (_isEditable) return;
+          if (_isEditable) {
+            _previewDirtyWhileEditable = true;
+            setStatus(getEditablePreviewDirtyMessage(), "warn");
+            return;
+          }
+          _previewDirtyWhileEditable = false;
           clearTimeout(previewTimeout);
           previewTimeout = setTimeout(() => {
             generatePreviewDemo(false);
@@ -814,6 +821,14 @@ function initEngineToggle() {
           if (!el) return;
           const handler = () => schedulePreview(delay);
           events.forEach(ev => el.addEventListener(ev, handler));
+        }
+
+        function syncStateSummaryFromInputs() {
+          try { updateStateSummary(collectState()); } catch (e) {}
+        }
+
+        function getEditablePreviewDirtyMessage() {
+          return "Исходные данные изменены. Режим редактирования включён: автопредпросмотр приостановлен. Нажмите ⚙️ или выключите «Редактирование», чтобы пересобрать YAML.";
         }
       
         // Обновление сводки состояния над предпросмотром
@@ -2688,6 +2703,7 @@ function initEngineToggle() {
             state: collectState(),
             engine: normalizeEngine(_engine || (previewEngineSelect && previewEngineSelect.value) || "codemirror"),
             editable: !!_isEditable,
+            previewDirty: !!_previewDirtyWhileEditable,
             previewText: getEditorText(),
           };
         }
@@ -2815,6 +2831,8 @@ function initEngineToggle() {
             _pendingSessionRuleGroups = Array.isArray(state.enabledRuleGroups)
               ? state.enabledRuleGroups.map((item) => String(item || "").trim()).filter(Boolean)
               : null;
+            _previewDirtyWhileEditable = !!draft.previewDirty;
+            try { syncStateSummaryFromInputs(); } catch (e) {}
             return true;
           } finally {
             _isRestoringSessionDraft = false;
@@ -2861,6 +2879,9 @@ function initEngineToggle() {
 
           try { bindSessionDraftEditorListener(); } catch (e) {}
           if (!!draft.editable) {
+            if (_previewDirtyWhileEditable) {
+              setStatus(getEditablePreviewDirtyMessage(), "warn");
+            }
             try { scheduleSessionDraftSave(0); } catch (e) {}
           } else {
             try { schedulePreview(90); } catch (e) {}
@@ -3046,6 +3067,7 @@ function initEngineToggle() {
               }
               if (!manual && _isEditable) return;
               setEditorText(cfg);
+              _previewDirtyWhileEditable = false;
 
               const serverWarnings = uniqueStrings(Array.isArray(data.warnings) ? data.warnings : []);
               const dg = (state && Array.isArray(state.defaultGroups)) ? state.defaultGroups : [];
@@ -3815,6 +3837,7 @@ function initEngineToggle() {
 
         // ----- edit toggle -----
         function setEditable(flag, notify = false) {
+          const wasEditable = _isEditable;
           _isEditable = !!flag;
 
           // Apply to CodeMirror if present
@@ -3839,12 +3862,19 @@ function initEngineToggle() {
               try { toast('Режим редактирования включён.', 'info'); } catch (e) {}
             }
           } else {
-            setStatus('Редактирование выключено, конфиг защищён от случайных правок.', null);
+            if (wasEditable && _previewDirtyWhileEditable) {
+              setStatus('Редактирование выключено. Пересобираю YAML из исходных данных…', 'warn');
+            } else {
+              setStatus('Редактирование выключено, конфиг защищён от случайных правок.', null);
+            }
             if (notify) {
               try { toast('Редактирование выключено.', 'info'); } catch (e) {}
             }
           }
           try { scheduleSessionDraftSave(40); } catch (e) {}
+          if (!_isEditable && wasEditable && _previewDirtyWhileEditable) {
+            try { schedulePreview(90); } catch (e) {}
+          }
         }
 
         // ----- init -----
@@ -3887,6 +3917,7 @@ function initEngineToggle() {
         try { setEditable(!!(editToggle && editToggle.checked), false); } catch (e) {}
         try { initEngineToggle(); } catch (e) {}
         try { addInitialSubscriptionRow(); } catch (e) {}
+        try { syncStateSummaryFromInputs(); } catch (e) {}
 
         duringIdle(async () => {
           try { await loadProfileDefaults(profileSelect && profileSelect.value); } catch (e) {}
