@@ -76,14 +76,18 @@ def validate_ws_token(token: str, scope: str = "pty") -> bool:
     if scope not in WS_TOKEN_SCOPES:
         scope = "pty"
 
-    # Atomic one-time consume under lock.
+    now = time.time()
+
+    # Predictable cleanup: validation traffic should also prune expired entries,
+    # not only opportunistic issue-side growth checks.
     with _WS_TOKENS_LOCK:
+        _cleanup_ws_tokens_locked(now)
         rec = _WS_TOKENS.pop(token, None)
 
     if not rec:
         return False
     exp, tok_scope = rec
-    if time.time() > float(exp):
+    if now > float(exp):
         return False
     if tok_scope != scope:
         return False

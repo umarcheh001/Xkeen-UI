@@ -5,6 +5,7 @@ def test_ws_token_scopes_cover_logs_and_events():
     text = Path('xkeen-ui/services/ws_tokens.py').read_text(encoding='utf-8')
 
     assert 'WS_TOKEN_SCOPES = {"pty", "cmd", "logs", "events"}' in text
+    assert '_cleanup_ws_tokens_locked(now)' in text
 
 
 def test_wsgi_ws_handlers_require_scoped_tokens_for_raw_logs_and_events_and_redact_qs():
