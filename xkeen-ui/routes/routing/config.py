@@ -428,9 +428,25 @@ def register_config_routes(
                 raw_mtime_ns = getattr(st_raw, "st_mtime_ns", int(st_raw.st_mtime * 1_000_000_000))
                 main_mtime_ns = getattr(st_main, "st_mtime_ns", int(st_main.st_mtime * 1_000_000_000))
                 if main_mtime_ns > raw_mtime_ns:
+                    # Main JSON is newer — could be a genuine external edit,
+                    # or xkeen restart just touched the file.  Compare content
+                    # to tell the difference before discarding JSONC comments.
                     with open(sel_main, "r", encoding="utf-8") as f:
-                        text = f.read()
-                    return _wrap(text, found=(raw_exists or legacy_exists), using_raw=False)
+                        main_text = f.read()
+                    try:
+                        with open(raw_for_read, "r", encoding="utf-8") as f:
+                            raw_text = f.read()
+                        stripped = strip_json_comments_text(raw_text)
+                        main_obj = json.loads(main_text or "{}")
+                        raw_obj = json.loads(stripped or "{}")
+                        if main_obj == raw_obj:
+                            # Content identical — JSONC sidecar is still valid,
+                            # mtime difference is just a restart/touch artefact.
+                            return _wrap(raw_text, found=True, using_raw=True)
+                    except Exception:
+                        pass
+                    # Content actually differs — external edit wins.
+                    return _wrap(main_text, found=(raw_exists or legacy_exists), using_raw=False)
             except Exception:
                 pass
 
