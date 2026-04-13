@@ -378,8 +378,30 @@ get_opkg_storage_rci() {
   return 1
 }
 
+section() {
+  # Colored box header with emoji and right border.
+  # Uses ANSI escape \033[36G to position right ║ at column 36
+  # so emoji width doesn't break alignment.
+  # Usage: section "НАЗВАНИЕ" "$COLOR_VAR" "emoji"
+  name="$1"
+  color="${2:-$B_CYN}"
+  emoji="${3:-}"
+
+  # 34 x ═ = 34 display columns; + ╔/╗ = 36 total
+  bar="══════════════════════════════════"
+
+  _out ""
+  _out "${color}╔${bar}╗${NC}"
+  if [ -n "$emoji" ]; then
+    _out "${color}║${NC}      ${emoji}  ${color}${name}\033[36G${color}║${NC}"
+  else
+    _out "${color}║${NC}   ${color}${name}\033[36G${color}║${NC}"
+  fi
+  _out "${color}╚${bar}╝${NC}"
+}
+
 print_device_summary() {
-  section "УСТРОЙСТВО"
+  # Section header drawn externally — skip here to avoid double header.
 
   label_w=13
   _kv() {
@@ -443,8 +465,18 @@ if [ "$NO_COLOR" -eq 0 ] && [ -t 1 ]; then
   CYAN='\033[0;36m'
   DIM='\033[2m'
   NC='\033[0m'
+  # Bold variants for the info banner (matching .profile style)
+  B_BLK='\033[1;30m'
+  B_RED='\033[1;31m'
+  B_GRN='\033[1;32m'
+  B_YLW='\033[1;33m'
+  B_BLU='\033[1;34m'
+  B_PUR='\033[1;35m'
+  B_CYN='\033[1;36m'
+  B_WHT='\033[1;37m'
 else
   RED=''; GREEN=''; YELLOW=''; CYAN=''; DIM=''; NC=''
+  B_BLK=''; B_RED=''; B_GRN=''; B_YLW=''; B_BLU=''; B_PUR=''; B_CYN=''; B_WHT=''
 fi
 
 _ts() { date '+%H:%M:%S' 2>/dev/null || echo '??:??:??'; }
@@ -477,6 +509,192 @@ hdr() {
   _out "Время: $(date 2>/dev/null || echo '')"
   _out "Режим: ${CYAN}${MODE}${NC}"
   _out "========================================"
+}
+
+# ---------------------------------------------------------------------------
+#  Colored info banner (adapted from .profile style on the screenshot)
+# ---------------------------------------------------------------------------
+
+_banner_row() {
+  # Print one or two key-value pairs on a line.
+  # No %-Ns padding on values — avoids emoji/UTF-8 alignment issues in BusyBox.
+  # Usage: _banner_row <color> "Key:" "value" ["Key2:" "value2"]
+  _bc="$1"; _k1="$2"; _v1="$3"; _k2="${4:-}"; _v2="${5:-}"
+  if [ -n "$_k2" ]; then
+    printf "   ${B_WHT}%-14s${_bc}%-28s${B_WHT}%-14s${_bc}%s${NC}\n" "$_k1" "$_v1" "$_k2" "$_v2"
+  else
+    printf "   ${B_WHT}%-14s${_bc}%s${NC}\n" "$_k1" "$_v1"
+  fi
+}
+
+get_uptime_human() {
+  # Best-effort human-readable uptime. Try uptime -p, then /proc/uptime, then RCI.
+  if have uptime; then
+    up_p="$(uptime -p 2>/dev/null || true)"
+    if [ -n "$up_p" ]; then
+      echo "$up_p"
+      return 0
+    fi
+  fi
+  if [ -r /proc/uptime ]; then
+    up_s="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+    [ -n "$up_s" ] && { fmt_uptime "$up_s"; return 0; }
+  fi
+  rci_up="$(get_uptime_rci 2>/dev/null || true)"
+  [ -n "$rci_up" ] && { fmt_uptime "$rci_up"; return 0; }
+  echo "неизвестно"
+}
+
+get_ram_usage() {
+  # Best-effort RAM from /proc/meminfo. Returns "USED / TOTAL MB" string.
+  [ -r /proc/meminfo ] || return 1
+  total="$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null)"
+  avail="$(awk '/MemAvailable/ {print $2}' /proc/meminfo 2>/dev/null)"
+  free_m="$(awk '/MemFree/ {print $2}' /proc/meminfo 2>/dev/null)"
+  [ -z "$avail" ] && avail="$free_m"
+  [ -n "$total" ] && [ -n "$avail" ] || return 1
+
+  used=$((total - avail))
+  free_left="$avail"
+
+  # Try procps-ng-free for nicer output.
+  if have free; then
+    free_out="$(free -h --mega 2>/dev/null || true)"
+    if [ -n "$free_out" ]; then
+      printf '%s' "$free_out" | awk '/Mem/{print $2" (всего) / "$3" (использовано) / "$7" (свободно)"}'
+      return 0
+    fi
+  fi
+
+  echo "$((total/1024))M (всего) / $((used/1024))M (использовано) / $((free_left/1024))M (свободно)"
+  return 0
+}
+
+get_swap_usage() {
+  if have free; then
+    free_out="$(free -h --mega 2>/dev/null || true)"
+    if [ -n "$free_out" ]; then
+      swap_line="$(printf '%s' "$free_out" | awk '/Swap/{print $2" (total) / "$3" (used) / "$4" (free)"}')"
+      [ -n "$swap_line" ] && { echo "$swap_line"; return 0; }
+    fi
+  fi
+  [ -r /proc/meminfo ] || return 1
+  swt="$(awk '/SwapTotal/ {print $2}' /proc/meminfo 2>/dev/null)"
+  swf="$(awk '/SwapFree/ {print $2}' /proc/meminfo 2>/dev/null)"
+  [ -n "$swt" ] && [ "$swt" -gt 0 ] 2>/dev/null || return 1
+  swu=$((swt - swf))
+  echo "$((swt/1024))M (total) / $((swu/1024))M (used) / $((swf/1024))M (free)"
+  return 0
+}
+
+get_opkg_storage() {
+  # /opt disk usage in human-readable format for the banner.
+  line="$(df -h 2>/dev/null | grep '/opt' | head -1 | awk '{print $2" (size) / "$3" (used) / "$4" (free) / "$5" (used %) : \360\237\222\276 "$6}')"
+  if [ -n "$line" ]; then
+    echo "$line"
+    return 0
+  fi
+  # Fallback: try df -Pk
+  line="$(df -Pk /opt 2>/dev/null | awk 'NR==2{
+    used_m=int($3/1024); total_m=int($2/1024); free_m=int($4/1024);
+    printf "%dM (size) / %dM (used) / %dM (free) / %s (used %%)", total_m, used_m, free_m, $5;
+  }')"
+  [ -n "$line" ] && { echo "$line"; return 0; }
+  echo "—"
+}
+
+get_device_model_line() {
+  # Model name: try RCI first, then /proc.
+  dev="$(get_device_name 2>/dev/null || true)"
+  hw="$(get_hw_id 2>/dev/null || true)"
+  if [ -n "$dev" ]; then
+    line="$dev"
+    [ -n "$hw" ] && line="$line ($hw)"
+    echo "$line"
+    return 0
+  fi
+  if [ -r /proc/device-tree/model ]; then
+    tr -d '\000' < /proc/device-tree/model 2>/dev/null
+    return 0
+  fi
+  hostname 2>/dev/null
+}
+
+get_wifi_temp_max_c() {
+  t0="$(get_radio_temp_c WifiMaster0 2>/dev/null || true)"
+  t1="$(get_radio_temp_c WifiMaster1 2>/dev/null || true)"
+  max=""
+  [ -n "$t0" ] && max="$t0"
+  if [ -n "$t1" ]; then
+    if [ -z "$max" ] || [ "$t1" -gt "$max" ] 2>/dev/null; then
+      max="$t1"
+    fi
+  fi
+  [ -n "$max" ] && echo "$max"
+}
+
+print_colored_banner() {
+  # Colorful two-column system info banner (like .profile on the screenshot).
+  # Uses best-effort data sources; gracefully degrades on minimal BusyBox.
+
+  _hostname="$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo 'router')"
+  _accessed_ip="$(hostname -i 2>/dev/null || echo '—')"
+  _date="$(date 2>/dev/null || echo '—')"
+  _uptime="$(get_uptime_human 2>/dev/null || echo '—')"
+  _os="$(uname -s 2>/dev/null || echo 'Linux')"
+  _kernel="$(uname -r 2>/dev/null || echo '—')"
+  _arch="$(uname -m 2>/dev/null || echo '—')"
+
+  # CPU type (adapted from the provided .profile snippet)
+  _cpu_type="$(awk -F: '/(model|system)/{print $2; exit}' /proc/cpuinfo 2>/dev/null | sed 's/^ //')"
+  if [ "$_arch" != "aarch64" ]; then
+    _cpu_model_extra="$(awk -F: '/cpu model/{print $2; exit}' /proc/cpuinfo 2>/dev/null)"
+    [ -n "$_cpu_model_extra" ] && _cpu_type="${_cpu_type}${_cpu_model_extra}"
+  fi
+  [ -z "$_cpu_type" ] && _cpu_type="$_arch"
+
+  # Disk, Memory, Swap, LA
+  _disk="$(get_opkg_storage 2>/dev/null || echo '—')"
+  _memory="$(get_ram_usage 2>/dev/null || echo '—')"
+  _swap="$(get_swap_usage 2>/dev/null || echo '—')"
+  _la="$(awk '{print $1" (1m) / "$2" (5m) / "$3" (15m)"}' /proc/loadavg 2>/dev/null || echo '—')"
+
+  # User
+  _user="${USER:-$(whoami 2>/dev/null || echo 'root')}"
+
+  # Distribution
+  if [ -f "/opt/etc/entware_release" ]; then
+    _dist="$(grep ^PRETTY /opt/etc/entware_release 2>/dev/null | cut -d'"' -f2)"
+  else
+    _dist="Entware"
+  fi
+  [ -z "$_dist" ] && _dist="Entware"
+
+  # Package counts
+  _installed=""
+  _upgradable=""
+  if have opkg; then
+    _installed="$(opkg list-installed 2>/dev/null | wc -l | tr -d ' ')"
+    _upgradable="$(opkg list-upgradable 2>/dev/null | wc -l | tr -d ' ')"
+  fi
+
+  printf "\n"
+  _banner_row "$B_YLW" "Date:" "$_date"           "Uptime:" "$_uptime"
+  _banner_row "$B_BLU" "Hostname:" "$_hostname"    "Accessed IP:" "$_accessed_ip"
+  _banner_row "$B_GRN" "OS:" "$_os"                "CPU:" "$_cpu_type"
+  _banner_row "$B_GRN" "Kernel:" "$_kernel"        "Architecture:" "$_arch"
+  _banner_row "$B_PUR" "Disk:" "$_disk"
+  _banner_row "$B_PUR" "Memory:" "$_memory"
+  _banner_row "$B_PUR" "Swap:" "$_swap"
+  _banner_row "$B_PUR" "LA:" "$_la"
+  _banner_row "$B_RED" "User:" "$_user"
+  _banner_row "$B_GRN" "Dist:" "$_dist"
+
+  if [ -n "$_installed" ]; then
+    _banner_row "$B_CYN" "Installed:" "$_installed" "Upgrade:" "${_upgradable:-0}"
+  fi
+
+  printf "\n"
 }
 
 fmt_uptime() {
@@ -579,6 +797,38 @@ cpu_usage_pct() {
   return 0
 }
 
+progress_bar() {
+  # ASCII progress bar: [███████████████░░░░░] 75%
+  # Usage: progress_bar 75
+  # Colors: green <70%, yellow 70-89%, red 90+%
+  pct="$1"
+  width=20
+  filled=$((pct * width / 100))
+  empty=$((width - filled))
+
+  # Build bar
+  bar=""
+  i=0
+  while [ "$i" -lt "$filled" ]; do
+    bar="${bar}█"
+    i=$((i+1))
+  done
+  i=0
+  while [ "$i" -lt "$empty" ]; do
+    bar="${bar}░"
+    i=$((i+1))
+  done
+
+  # Color based on percentage
+  if [ "$pct" -ge 90 ] 2>/dev/null; then
+    printf "${B_RED}[%s] %d%%${NC}" "$bar" "$pct"
+  elif [ "$pct" -ge 70 ] 2>/dev/null; then
+    printf "${B_YLW}[%s] %d%%${NC}" "$bar" "$pct"
+  else
+    printf "${B_GRN}[%s] %d%%${NC}" "$bar" "$pct"
+  fi
+}
+
 check_df() {
   mp="$1"
   label="$2"
@@ -639,11 +889,11 @@ check_df() {
   fi
 
   if [ "$use" -ge 95 ] 2>/dev/null; then
-    crit "${label}: ${details}"
+    crit "${label}: ${details} $(progress_bar "$use")"
   elif [ "$use" -ge 85 ] 2>/dev/null; then
-    warn "${label}: ${details}"
+    warn "${label}: ${details} $(progress_bar "$use")"
   else
-    ok "${label}: ${details}"
+    ok "${label}: ${details} $(progress_bar "$use")"
   fi
 }
 
@@ -976,22 +1226,54 @@ proc_top_full() {
 
 START_TS="$(date +%s 2>/dev/null || echo '')"
 
+# 0) Colored banner (like .profile on the screenshot)
+print_colored_banner 2>/dev/null || true
+
 hdr
 
-# 0) УСТРОЙСТВО (best-effort)
-_out "=== УСТРОЙСТВО ==="
+# 0b) Detailed device summary (for diagnostic sections below)
+section "УСТРОЙСТВО" "$B_CYN" "🖥️"
 print_device_summary 2>/dev/null || true
 _out ""
 
 # 1) ДИСКИ
-_out "=== ДИСКИ ==="
+section "ДИСКИ" "$B_PUR" "💾"
 check_df /opt "/opt" || true
 check_inodes /opt "/opt" || true
 check_df /tmp "/tmp" || true
 check_df / "/" || true
 
+# USB devices
+usb_devices=""
+if have lsusb; then
+  usb_devices="$(lsusb 2>/dev/null | grep -v 'root hub' | head -10)"
+fi
+if [ -z "$usb_devices" ]; then
+  for d in /sys/bus/usb/devices/[0-9]*-[0-9]*; do
+    [ -r "$d/product" ] || continue
+    prod="$(cat "$d/product" 2>/dev/null | tr -d '\r\n')"
+    [ -n "$prod" ] && usb_devices="${usb_devices}${usb_devices:+
+}$prod"
+  done
+fi
+if [ -n "$usb_devices" ]; then
+  log "USB устройства:"
+  printf '%b\n' "$usb_devices" | while IFS= read -r l; do
+    [ -n "$l" ] && _out "  ${DIM}${l}${NC}"
+  done
+fi
+
+# Wi-Fi clients count (Keenetic RCI)
+if command -v rci_request >/dev/null 2>&1; then
+  wifi_clients_json="$(rci_request "show/ip/hotspot" 2>/dev/null || true)"
+  if [ -n "$wifi_clients_json" ]; then
+    wifi_count="$(printf '%s' "$wifi_clients_json" | grep -c '"mac"' 2>/dev/null || echo 0)"
+    [ "$wifi_count" -gt 0 ] 2>/dev/null && log "Wi-Fi клиентов: ${CYAN}${wifi_count}${NC}"
+  fi
+fi
+
 # 2) ПАМЯТЬ
-_out "=== ПАМЯТЬ ==="
+section "ПАМЯТЬ" "$B_PUR" "🧠"
 if [ -r /proc/meminfo ]; then
   total="$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null)"
   avail="$(awk '/MemAvailable/ {print $2}' /proc/meminfo 2>/dev/null)"
@@ -1012,7 +1294,7 @@ if [ -r /proc/meminfo ]; then
     total_m=$((total/1024))
     avail_m=$((avail/1024))
 
-    msg="Память: ${pct}% (исп.: ${used_m}M/${total_m}M, доступно: ${avail_m}M)"
+    msg="Память: ${pct}% (исп.: ${used_m}M/${total_m}M, доступно: ${avail_m}M) $(progress_bar "$pct")"
 
     if [ "$pct" -ge 95 ] 2>/dev/null; then
       crit "$msg"
@@ -1047,7 +1329,7 @@ else
 fi
 
 # 3) CPU
-_out "=== CPU ==="
+section "CPU" "$B_YLW" "⚡"
 cores="$(grep -c '^processor' /proc/cpuinfo 2>/dev/null)"
 [ -z "$cores" ] && cores=1
 load=""; [ -r /proc/loadavg ] && load="$(cut -d' ' -f1 /proc/loadavg 2>/dev/null)"
@@ -1078,7 +1360,7 @@ if [ -n "$tc" ]; then
 fi
 
 # 4) СЕТЬ
-_out "=== СЕТЬ ==="
+section "СЕТЬ" "$B_BLU" "🌐"
 ri="$(get_route_info 2>/dev/null || true)"
 GW=""; IFACE=""; SRCIP=""
 if [ -n "$ri" ]; then
@@ -1111,12 +1393,6 @@ fi
 [ -n "$SRCIP" ] && json_add wan_src "$SRCIP" s
 [ -n "$WAN_MODEM" ] && json_add wan_modem "$WAN_MODEM" s
 [ -n "$WAN_MODEM_DETAILS" ] && json_add wan_modem_details "$WAN_MODEM_DETAILS" s
-
-# DNS servers
-if [ -r /etc/resolv.conf ]; then
-  dns="$(awk '/^nameserver[ \t]+/ {print $2}' /etc/resolv.conf 2>/dev/null | head -n 2 | tr '\n' ' ' | sed 's/[[:space:]]\+$//')"
-  [ -n "$dns" ] && log "DNS: ${CYAN}${dns}${NC}"
-fi
 
 # ICMP
 p8="$(ping_stats 8.8.8.8 3 1 2>/dev/null || true)"
@@ -1167,9 +1443,59 @@ if have ip; then
   fi
 fi
 
+# 4.5) DNS section
+section "DNS" "$B_GRN" "🔒"
+
+# Detect encrypted DNS
+dns_encrypted=0
+dns_method=""
+
+# DoH: https_dns_proxy (Keenetic built-in)
+if is_running https_dns_proxy; then
+  dns_encrypted=1
+  dns_method="DoH (https_dns_proxy)"
+fi
+
+# DoH: dnscrypt-proxy
+if is_running dnscrypt_proxy 2>/dev/null || is_running dnscrypt-proxy 2>/dev/null; then
+  dns_encrypted=1
+  dns_method="${dns_method:+$dns_method + }DoH (dnscrypt-proxy)"
+fi
+
+# DoT: stubby
+if is_running stubby; then
+  dns_encrypted=1
+  dns_method="${dns_method:+$dns_method + }DoT (stubby)"
+fi
+
+# DoT: port 853 connections
+if command -v netstat >/dev/null 2>&1 && netstat -tln 2>/dev/null | grep -q ':853'; then
+  dns_encrypted=1
+  [ -z "$dns_method" ] && dns_method="DoT (порт 853 активен)"
+fi
+
+# DNS servers from resolv.conf files
+dns_output_done=0
+for rc_file in /etc/resolv.conf /tmp/resolv.conf; do
+  if [ -r "$rc_file" ]; then
+    dns_servers="$(awk '/^nameserver/ {print $2}' "$rc_file" 2>/dev/null | head -5 | tr '\n' ' ' | sed 's/[[:space:]]\+$//')"
+    if [ -n "$dns_servers" ]; then
+      log "DNS серверы ($(basename $rc_file)): ${CYAN}${dns_servers}${NC}"
+      dns_output_done=1
+    fi
+  fi
+done
+
+# Summary status
+if [ "$dns_encrypted" -eq 1 ]; then
+  ok "DNS шифрованный: ${CYAN}${dns_method}${NC}"
+else
+  warn "DNS нешифрованный (plaintext UDP/53)"
+fi
+
 # Интерфейсные ошибки
 if [ -n "$IFACE" ] && [ -d "/sys/class/net/$IFACE" ]; then
-  _out "=== ИНТЕРФЕЙСЫ ==="
+  section "ИНТЕРФЕЙСЫ" "$B_CYN" "🔌"
   st="$(cat "/sys/class/net/$IFACE/operstate" 2>/dev/null | tr -d '\r\n')"
   [ -n "$st" ] && log "${IFACE}: state ${CYAN}${st}${NC}"
 
@@ -1244,7 +1570,7 @@ fi
 # Conntrack
 ct="$(conntrack_usage 2>/dev/null || true)"
 if [ -n "$ct" ]; then
-  _out "=== CONNTRACK ==="
+  section "CONNTRACK" "$B_YLW" "🔗"
   # shellcheck disable=SC2086
   set -- $ct
   ctc="$1"; ctm="$2"; ctp="$3"
@@ -1261,7 +1587,7 @@ if [ -n "$ct" ]; then
 fi
 
 # 5) СЛУЖБЫ/ПРОЦЕССЫ
-_out "=== СЛУЖБЫ ==="
+section "СЛУЖБЫ" "$B_GRN" "⚙️"
 
 # SSH: Keenetic обычно использует dropbear, sshd может отсутствовать — это нормально.
 if is_running dropbear; then
@@ -1316,14 +1642,53 @@ check_proc mihomo "mihomo" || true
 check_proc_contains "xkeen-ui" "xkeen-ui" || true
 check_proc_contains "run_server.py" "xkeen-ui" || true
 
+# VPN tunnels (Keenetic: PPTP/L2TP/IPsec/WireGuard/OpenVPN via ndmc)
+if have ndmc; then
+  vpn_ifaces="$(ndmc -c 'show interface' 2>/dev/null | tr -d '\r' | grep -oE '(Wireguard|OpenVPN|PPTP|L2TP|IPsec)[0-9]+' | sort -u || true)"
+  if [ -n "$vpn_ifaces" ]; then
+    for vifc in $vpn_ifaces; do
+      vstate="$(ndmc -c "show interface $vifc" 2>/dev/null | awk -F': ' '/^[[:space:]]*state:/ {print $2; exit}' | tr -d '\r\n' || echo '?')"
+      if [ "$vstate" = "up" ]; then
+        log "${GREEN}✓ VPN ${vifc}: up${NC}"
+      else
+        log "${YELLOW}✗ VPN ${vifc}: ${vstate}${NC}"
+      fi
+    done
+  else
+    [ "$MODE" = "short" ] || log "${DIM}VPN туннели не обнаружены${NC}"
+  fi
+fi
+
+# Xray config validation
+for xray_conf in /opt/etc/xray/config.json /opt/etc/xkeen/xkeen.conf; do
+  if [ -f "$xray_conf" ]; then
+    if have xray && xray run -test -c "$xray_conf" >/dev/null 2>&1; then
+      ok "Xray конфиг ($xray_conf): валидный"
+    elif have xray; then
+      warn "Xray конфиг ($xray_conf): ошибка валидации"
+    fi
+  fi
+done
+
+# Mihomo config validation (YAML — just check it's not empty and parseable)
+for mihomo_conf in /opt/etc/mihomo/config.yaml /opt/etc/mihomo/config.yml; do
+  if [ -f "$mihomo_conf" ]; then
+    if [ -s "$mihomo_conf" ]; then
+      ok "Mihomo конфиг ($mihomo_conf): файл найден ($(wc -l < "$mihomo_conf") строк)"
+    else
+      warn "Mihomo конфиг ($mihomo_conf): пустой файл"
+    fi
+  fi
+done
+
 # 6) ПРОЦЕССЫ (TOP) — только full
 if [ "$MODE" = "full" ]; then
-  _out "=== TOP (процессы) ==="
+  section "TOP (процессы)" "$B_CYN" "📊"
   proc_top_full 2>/dev/null || true
 fi
 
 # 7) ЛОГИ (best-effort)
-_out "=== ЛОГИ ==="
+section "ЛОГИ" "$B_YLW" "📋"
 LOGSRC=""
 if have logread; then
   LOGSRC="logread"
@@ -1376,7 +1741,7 @@ else
 fi
 
 # 8) ИНФОРМАЦИЯ
-_out "=== ИНФОРМАЦИЯ ==="
+section "ИНФОРМАЦИЯ" "$B_BLU" "ℹ️"
 if [ -r /proc/uptime ]; then
   up_s="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
   log "Аптайм: $(fmt_uptime "$up_s")"

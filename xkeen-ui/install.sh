@@ -357,6 +357,39 @@ if ! command -v lftp >/dev/null 2>&1; then
 fi
 
 
+# --- sysmon: утилиты для расширенной диагностики (coreutils-df, procps-ng-free, procps-ng-uptime) ---
+
+echo "[*] Проверяю утилиты для системного монитора (sysmon)..."
+
+SYSMON_PKGS=""
+# coreutils-df — для df -h с человекочитаемыми размерами
+command -v df >/dev/null 2>&1 && df -h / >/dev/null 2>&1 || SYSMON_PKGS="$SYSMON_PKGS coreutils-df"
+# procps-ng-free — для free -h --mega (подробная информация об ОЗУ/Swap)
+command -v free >/dev/null 2>&1 && free -h >/dev/null 2>&1 || SYSMON_PKGS="$SYSMON_PKGS procps-ng-free"
+# procps-ng-uptime — для uptime -p (человекочитаемый аптайм)
+command -v uptime >/dev/null 2>&1 && uptime -p >/dev/null 2>&1 || SYSMON_PKGS="$SYSMON_PKGS procps-ng-uptime"
+
+if [ -n "$SYSMON_PKGS" ]; then
+  echo "[*] Устанавливаю пакеты для sysmon:$SYSMON_PKGS"
+  if command -v opkg >/dev/null 2>&1; then
+    OPKG_BIN="$(command -v opkg)"
+  elif [ -x "/opt/bin/opkg" ]; then
+    OPKG_BIN="/opt/bin/opkg"
+  fi
+  if [ -n "$OPKG_BIN" ]; then
+    "$OPKG_BIN" update >/dev/null 2>&1 || true
+    # shellcheck disable=SC2086
+    "$OPKG_BIN" install $SYSMON_PKGS 2>/dev/null || \
+      echo "[!] Не все пакеты sysmon удалось установить (некритично, sysmon будет работать с фолбэками)."
+  else
+    echo "[!] opkg не найден — пропускаю установку пакетов sysmon."
+    echo "    Для полного вывода sysmon установи вручную: opkg install$SYSMON_PKGS"
+  fi
+else
+  echo "[*] Утилиты sysmon уже установлены."
+fi
+
+
 # --- Функции ---
 
 is_port_in_use() {
@@ -970,6 +1003,132 @@ EOF
   chmod +x "$ENTWARE_BACKUP_SRC" 2>/dev/null || true
 else
   echo "[*] entware-backup: скрипт не найден в $ENTWARE_BACKUP_SRC (пропуск)"
+fi
+
+# --- Storage dashboard wrapper ---
+_STORAGE_DASH_SRC="$UI_DIR/tools/storage_dashboard.sh"
+_STORAGE_DASH_BIN="/opt/bin/storage-dashboard"
+
+if [ -f "$_STORAGE_DASH_SRC" ]; then
+  echo "[*] Устанавливаю storage-dashboard в $_STORAGE_DASH_BIN..."
+  cat > "$_STORAGE_DASH_BIN" <<'EOF'
+#!/bin/sh
+SCRIPT="/opt/etc/xkeen-ui/tools/storage_dashboard.sh"
+if [ ! -f "$SCRIPT" ]; then
+  echo "storage-dashboard: script not found: $SCRIPT" >&2
+  exit 127
+fi
+exec sh "$SCRIPT" "$@"
+EOF
+  chmod +x "$_STORAGE_DASH_BIN" 2>/dev/null || true
+  chmod +x "$_STORAGE_DASH_SRC" 2>/dev/null || true
+else
+  echo "[*] storage-dashboard: скрипт не найден в $_STORAGE_DASH_SRC (пропуск)"
+fi
+
+# --- I/O monitor wrapper ---
+_IO_MON_SRC="$UI_DIR/tools/io_monitor.sh"
+_IO_MON_BIN="/opt/bin/io-monitor"
+
+if [ -f "$_IO_MON_SRC" ]; then
+  echo "[*] Устанавливаю io-monitor в $_IO_MON_BIN..."
+  cat > "$_IO_MON_BIN" <<'EOF'
+#!/bin/sh
+SCRIPT="/opt/etc/xkeen-ui/tools/io_monitor.sh"
+if [ ! -f "$SCRIPT" ]; then
+  echo "io-monitor: script not found: $SCRIPT" >&2
+  exit 127
+fi
+exec sh "$SCRIPT" "$@"
+EOF
+  chmod +x "$_IO_MON_BIN" 2>/dev/null || true
+  chmod +x "$_IO_MON_SRC" 2>/dev/null || true
+else
+  echo "[*] io-monitor: скрипт не найден в $_IO_MON_SRC (пропуск)"
+fi
+
+# --- Device lock detector wrapper ---
+_DEV_LOCK_SRC="$UI_DIR/tools/device_lock_detector.sh"
+_DEV_LOCK_BIN="/opt/bin/device-locks"
+
+if [ -f "$_DEV_LOCK_SRC" ]; then
+  echo "[*] Устанавливаю device-locks в $_DEV_LOCK_BIN..."
+  cat > "$_DEV_LOCK_BIN" <<'EOF'
+#!/bin/sh
+SCRIPT="/opt/etc/xkeen-ui/tools/device_lock_detector.sh"
+if [ ! -f "$SCRIPT" ]; then
+  echo "device-locks: script not found: $SCRIPT" >&2
+  exit 127
+fi
+exec sh "$SCRIPT" "$@"
+EOF
+  chmod +x "$_DEV_LOCK_BIN" 2>/dev/null || true
+  chmod +x "$_DEV_LOCK_SRC" 2>/dev/null || true
+else
+  echo "[*] device-locks: скрипт не найден в $_DEV_LOCK_SRC (пропуск)"
+fi
+
+# --- Memory check wrapper ---
+_MEM_CHECK_SRC="$UI_DIR/tools/memory_check.sh"
+_MEM_CHECK_BIN="/opt/bin/memory-check"
+
+if [ -f "$_MEM_CHECK_SRC" ]; then
+  echo "[*] Устанавливаю memory-check в $_MEM_CHECK_BIN..."
+  cat > "$_MEM_CHECK_BIN" <<'EOF'
+#!/bin/sh
+SCRIPT="/opt/etc/xkeen-ui/tools/memory_check.sh"
+if [ ! -f "$SCRIPT" ]; then
+  echo "memory-check: script not found: $SCRIPT" >&2
+  exit 127
+fi
+exec sh "$SCRIPT" "$@"
+EOF
+  chmod +x "$_MEM_CHECK_BIN" 2>/dev/null || true
+  chmod +x "$_MEM_CHECK_SRC" 2>/dev/null || true
+else
+  echo "[*] memory-check: скрипт не найден в $_MEM_CHECK_SRC (пропуск)"
+fi
+
+# --- Version check wrapper ---
+_VER_CHECK_SRC="$UI_DIR/tools/version_check.sh"
+_VER_CHECK_BIN="/opt/bin/version-check"
+
+if [ -f "$_VER_CHECK_SRC" ]; then
+  echo "[*] Устанавливаю version-check в $_VER_CHECK_BIN..."
+  cat > "$_VER_CHECK_BIN" <<'EOF'
+#!/bin/sh
+SCRIPT="/opt/etc/xkeen-ui/tools/version_check.sh"
+if [ ! -f "$SCRIPT" ]; then
+  echo "version-check: script not found: $SCRIPT" >&2
+  exit 127
+fi
+exec sh "$SCRIPT" "$@"
+EOF
+  chmod +x "$_VER_CHECK_BIN" 2>/dev/null || true
+  chmod +x "$_VER_CHECK_SRC" 2>/dev/null || true
+else
+  echo "[*] version-check: скрипт не найден в $_VER_CHECK_SRC (пропуск)"
+fi
+
+# --- Backup monitor wrapper ---
+_BKUP_MON_SRC="$UI_DIR/tools/backup_monitor.sh"
+_BKUP_MON_BIN="/opt/bin/backup-monitor"
+
+if [ -f "$_BKUP_MON_SRC" ]; then
+  echo "[*] Устанавливаю backup-monitor в $_BKUP_MON_BIN..."
+  cat > "$_BKUP_MON_BIN" <<'EOF'
+#!/bin/sh
+SCRIPT="/opt/etc/xkeen-ui/tools/backup_monitor.sh"
+if [ ! -f "$SCRIPT" ]; then
+  echo "backup-monitor: script not found: $SCRIPT" >&2
+  exit 127
+fi
+exec sh "$SCRIPT" "$@"
+EOF
+  chmod +x "$_BKUP_MON_BIN" 2>/dev/null || true
+  chmod +x "$_BKUP_MON_SRC" 2>/dev/null || true
+else
+  echo "[*] backup-monitor: скрипт не найден в $_BKUP_MON_SRC (пропуск)"
 fi
 
 

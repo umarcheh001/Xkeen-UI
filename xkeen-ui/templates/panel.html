@@ -62,7 +62,7 @@
   <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
   <!-- Editor payload is lazy-loaded by js/runtime/lazy_runtime.js + js/ui/editor_engine.js. -->
   {% include '_top_level_host_theme_bootstrap.html' %}
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260401f') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260411a') }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
@@ -1249,7 +1249,7 @@
     <div class="command-group tone-info" data-tone="info">
       <div class="command-group-head">
         <div class="command-group-title tone-info">Утилиты панели</div>
-        <span class="command-group-count">2</span>
+        <span class="command-group-count">8</span>
       </div>
       <ul class="command-list">
         <li class="command-item-wrap">
@@ -1270,6 +1270,66 @@
                   data-tooltip="Создать tar.gz-бэкап Entware (/opt) на выбранный накопитель">
             <span class="command-item-prefix">panel</span>
             <code>entware-backup</code>
+          </button>
+        </li>
+        <li class="command-item-wrap">
+          <button type="button"
+                  class="command-item"
+                  data-flag="__storage_dashboard"
+                  data-label="storage-dashboard"
+                  data-tooltip="Дашборд хранилища: разделы, размеры, тип FS, использование, swap">
+            <span class="command-item-prefix">panel</span>
+            <code>storage-dashboard</code>
+          </button>
+        </li>
+        <li class="command-item-wrap">
+          <button type="button"
+                  class="command-item"
+                  data-flag="__io_monitor"
+                  data-label="io-monitor"
+                  data-tooltip="I/O мониторинг: скорость чтения/записи дисков в реальном времени">
+            <span class="command-item-prefix">panel</span>
+            <code>io-monitor</code>
+          </button>
+        </li>
+        <li class="command-item-wrap">
+          <button type="button"
+                  class="command-item"
+                  data-flag="__device_lock_detector"
+                  data-label="device-locks"
+                  data-tooltip="Детектор блокировок: какие процессы удерживают диски">
+            <span class="command-item-prefix">panel</span>
+            <code>device-locks</code>
+          </button>
+        </li>
+        <li class="command-item-wrap">
+          <button type="button"
+                  class="command-item"
+                  data-flag="__memory_check"
+                  data-label="memory-check"
+                  data-tooltip="Диагностика памяти: RAM, swap, буферы, предупреждения, топ процессов">
+            <span class="command-item-prefix">panel</span>
+            <code>memory-check</code>
+          </button>
+        </li>
+        <li class="command-item-wrap">
+          <button type="button"
+                  class="command-item"
+                  data-flag="__version_check"
+                  data-label="version-check"
+                  data-tooltip="Проверка версий: xkeen, xkeen-ui, xray, mihomo — сравнение с GitHub">
+            <span class="command-item-prefix">panel</span>
+            <code>version-check</code>
+          </button>
+        </li>
+        <li class="command-item-wrap">
+          <button type="button"
+                  class="command-item"
+                  data-flag="__backup_monitor"
+                  data-label="backup-monitor"
+                  data-tooltip="Монитор бэкапов: список архивов, валидация, статус последнего бэкапа">
+            <span class="command-item-prefix">panel</span>
+            <code>backup-monitor</code>
           </button>
         </li>
       </ul>
@@ -3192,13 +3252,72 @@ https://..."></textarea>
       </div>
     </div>
 
-<div id="mihomo-validation-modal" class="modal hidden" data-modal-dismiss="mihomo-validation">
+<div
+  id="mihomo-validation-modal"
+  class="modal hidden"
+  data-kind="info"
+  data-modal-dismiss="mihomo-validation"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="mihomo-validation-modal-title"
+>
   <div class="modal-content">
-    <div class="modal-header">
-      <span class="modal-title">Результат проверки конфигурации Mihomo</span>
-      <button type="button" class="modal-close" data-dismiss="mihomo-validation">×</button>
+    <div class="modal-header xk-mihomo-validation-header">
+      <div class="xk-mihomo-validation-titlebox">
+        <div id="mihomo-validation-modal-kicker" class="xk-mihomo-validation-kicker">Mihomo / validate</div>
+        <span id="mihomo-validation-modal-title" class="modal-title">Проверка конфигурации Mihomo</span>
+        <div id="mihomo-validation-modal-subtitle" class="xk-mihomo-validation-subtitle">
+          Подробности проверки, ключевая причина и лог ядра показываются в одном компактном окне.
+        </div>
+      </div>
+      <button type="button" class="modal-close" data-dismiss="mihomo-validation" aria-label="Закрыть">×</button>
     </div>
-    <div id="mihomo-validation-modal-body" class="modal-body modal-body-logs"></div>
+
+    <div class="modal-body xk-mihomo-validation-body">
+      <section class="xk-mihomo-validation-lead">
+        <div id="mihomo-validation-modal-icon" class="xk-mihomo-validation-lead-icon">MH</div>
+        <div class="xk-mihomo-validation-lead-copy">
+          <div id="mihomo-validation-modal-lead-title" class="xk-mihomo-validation-lead-title">Mihomo сообщает результат проверки</div>
+          <p id="mihomo-validation-modal-lead-desc" class="xk-mihomo-validation-lead-desc">
+            После проверки смотрите не только на лог, но и на расшифровку ниже: она подсказывает, где искать проблему и что исправить в первую очередь.
+          </p>
+        </div>
+        <div id="mihomo-validation-modal-badge" class="xk-mihomo-validation-state-badge">Инфо</div>
+      </section>
+
+      <div id="mihomo-validation-grid" class="xk-mihomo-validation-grid" data-has-log="0">
+        <section class="xk-mihomo-validation-panel xk-mihomo-validation-panel--main">
+          <div class="xk-mihomo-validation-overview">
+            <div id="mihomo-validation-summary-wrap" class="xk-mihomo-validation-block" style="display:none;">
+              <div class="xk-mihomo-validation-block-title">Сводка</div>
+              <div id="mihomo-validation-summary" class="xk-mihomo-validation-summary"></div>
+            </div>
+
+            <div id="mihomo-validation-explain-wrap" class="xk-mihomo-validation-block" style="display:none;">
+              <div class="xk-mihomo-validation-block-title">Расшифровка</div>
+              <div id="mihomo-validation-explain" class="xk-mihomo-validation-explainer"></div>
+            </div>
+
+            <div id="mihomo-validation-meta-wrap" class="xk-mihomo-validation-meta-grid" style="display:none;"></div>
+          </div>
+        </section>
+
+        <section id="mihomo-validation-side-panel" class="xk-mihomo-validation-panel xk-mihomo-validation-panel--side" style="display:none;">
+          <div id="mihomo-validation-log-wrap" class="xk-mihomo-validation-log-shell" style="display:none;">
+            <div class="xk-mihomo-validation-block-title">Лог / детали</div>
+            <div id="mihomo-validation-modal-body" class="xk-mihomo-validation-terminal" aria-live="polite"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="modal-actions xk-mihomo-validation-footer">
+      <div id="mihomo-validation-copy-status" class="xk-mihomo-validation-copy-status" aria-live="polite"></div>
+      <div class="xk-mihomo-validation-footer-actions">
+        <button type="button" id="mihomo-validation-copy-btn" class="btn-secondary">Скопировать детали</button>
+        <button type="button" class="btn-primary" data-dismiss="mihomo-validation">Закрыть</button>
+      </div>
+    </div>
   </div>
 </div>
 
