@@ -77,6 +77,23 @@ let mihomoPanelModuleApi = null;
     // Validation modal
     validationModal: 'mihomo-validation-modal',
     validationBody: 'mihomo-validation-modal-body',
+    validationKicker: 'mihomo-validation-modal-kicker',
+    validationTitle: 'mihomo-validation-modal-title',
+    validationSubtitle: 'mihomo-validation-modal-subtitle',
+    validationIcon: 'mihomo-validation-modal-icon',
+    validationLeadTitle: 'mihomo-validation-modal-lead-title',
+    validationLeadDesc: 'mihomo-validation-modal-lead-desc',
+    validationBadge: 'mihomo-validation-modal-badge',
+    validationGrid: 'mihomo-validation-grid',
+    validationSummaryWrap: 'mihomo-validation-summary-wrap',
+    validationSummary: 'mihomo-validation-summary',
+    validationExplainWrap: 'mihomo-validation-explain-wrap',
+    validationExplain: 'mihomo-validation-explain',
+    validationMetaWrap: 'mihomo-validation-meta-wrap',
+    validationSidePanel: 'mihomo-validation-side-panel',
+    validationLogWrap: 'mihomo-validation-log-wrap',
+    validationCopyBtn: 'mihomo-validation-copy-btn',
+    validationCopyStatus: 'mihomo-validation-copy-status',
   };
 
   let _inited = false;
@@ -90,6 +107,8 @@ let mihomoPanelModuleApi = null;
   let _templatesLoaded = false;
   let _chosenTemplateName = null;
   let _activeProfileName = null;
+  let _lastValidationPayload = null;
+  let _validationCopyResetTimer = null;
 
   // Editor dirty tracking (to avoid accidental overwrites when loading templates/config).
   let _editorDirty = false;
@@ -1153,6 +1172,29 @@ let mihomoPanelModuleApi = null;
       });
     } catch (e) {}
 
+    try {
+      const copyBtn = $(IDS.validationCopyBtn);
+      if (copyBtn && (!copyBtn.dataset || copyBtn.dataset.xkCopyWired !== '1')) {
+        copyBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await copyValidationDetails();
+        });
+        if (copyBtn.dataset) copyBtn.dataset.xkCopyWired = '1';
+      }
+    } catch (e) {}
+
+    try {
+      document.addEventListener('keydown', (e) => {
+        try {
+          if (!e || e.key !== 'Escape') return;
+          const currentModal = $(IDS.validationModal);
+          if (!currentModal || currentModal.classList.contains('hidden')) return;
+          e.preventDefault();
+          hideValidationModal();
+        } catch (err) {}
+      }, true);
+    } catch (e) {}
+
     if (modal.dataset) modal.dataset.xkDismissWired = '1';
   }
 
@@ -1724,12 +1766,324 @@ let mihomoPanelModuleApi = null;
       .join('');
   }
 
-  function showValidationModal(text) {
+  function uniqueStrings(items) {
+    const seen = new Set();
+    const out = [];
+    (Array.isArray(items) ? items : [items]).forEach((item) => {
+      const value = String(item ?? '').trim();
+      if (!value || seen.has(value)) return;
+      seen.add(value);
+      out.push(value);
+    });
+    return out;
+  }
+
+  function firstMeaningfulValidationLine(text) {
+    const lines = String(text ?? '')
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map((line) => String(line || '').trim())
+      .filter(Boolean);
+    if (!lines.length) return '';
+
+    const filtered = lines.filter((line) => {
+      if (/^\$\s+/.test(line)) return false;
+      if (/^---\s*STDERR\s*---$/i.test(line)) return false;
+      if (/^\[exit code:/i.test(line)) return false;
+      return true;
+    });
+    if (!filtered.length) return '';
+
+    const priority = filtered.find((line) => /error|fatal|panic|yaml:|failed|not found|unknown|missing|invalid|exception/i.test(line));
+    return String(priority || filtered[0] || '').trim();
+  }
+
+  function extractValidationExitCode(text) {
+    const m = /\[exit code:\s*(-?\d+)\]/i.exec(String(text ?? ''));
+    if (!m) return null;
+    const rc = parseInt(m[1], 10);
+    return Number.isFinite(rc) ? rc : null;
+  }
+
+  function normalizeValidationKind(rawKind, ok) {
+    const kind = String(rawKind || '').trim().toLowerCase();
+    if (kind === 'success' || kind === 'warning' || kind === 'error' || kind === 'info') return kind;
+    if (ok === true) return 'success';
+    if (ok === false) return 'error';
+    return 'info';
+  }
+
+  function setValidationSectionVisible(node, visible) {
+    if (!node) return;
+    node.style.display = visible ? '' : 'none';
+  }
+
+  function renderValidationExplainHtml(items) {
+    const arr = uniqueStrings(items);
+    if (!arr.length) return '';
+    return (
+      '<div class="xk-mihomo-validation-hint-list">' +
+        arr.map((item) => (
+          '<div class="xk-mihomo-validation-hint-item">' +
+            '<span class="xk-mihomo-validation-hint-dot" aria-hidden="true"></span>' +
+            '<span>' + escapeHtml(item) + '</span>' +
+          '</div>'
+        )).join('') +
+      '</div>'
+    );
+  }
+
+  function buildValidationExplainItems(payload) {
+    const sourceText = [
+      payload && payload.error,
+      payload && payload.hint,
+      payload && payload.summary,
+      payload && payload.log,
+    ].filter(Boolean).join('\n');
+
+    const items = [];
+    if (payload && payload.hint) items.push(String(payload.hint));
+
+    const lc = payload && payload.lineCol;
+    if (lc && Number.isFinite(lc.line)) {
+      items.push('Проверьте блок около строки ' + lc.line + '. Панель уже подсветила проблемную строку в редакторе.');
+    }
+
+    if (/could not find expected ':'|mapping values are not allowed|did not find expected key|did not find expected '-' indicator|found character that cannot start any token|bad indentation|indentation/i.test(sourceText)) {
+      items.push('Похоже на синтаксис YAML: проверьте отступы пробелами, двоеточия, дефисы списков и кавычки рядом с указанной строкой.');
+    }
+
+    if (/cannot unmarshal|unknown field|field .* not found|invalid type|type mismatch|expected .* but found/i.test(sourceText)) {
+      items.push('Структура секции не совпадает с форматом Mihomo: проверьте имена полей и типы значений в проблемном блоке.');
+    }
+
+    if (/proxy(?:-group)? .* not found|proxy group .* not found|rule provider .* not found|proxy provider .* not found|not found in proxies|not found in proxy-groups|group .* not found/i.test(sourceText)) {
+      items.push('Одна из ссылок ведёт на отсутствующий proxy, proxy-group или provider. Проверьте имена без опечаток и дубликатов.');
+    }
+
+    if (/duplicate|already exists|already in use|bind|listen tcp|address already in use/i.test(sourceText)) {
+      items.push('Проверьте конфликтующие имена, порты и listen-адреса: часть параметров может уже использоваться другим блоком или сервисом.');
+    }
+
+    if (/tls|certificate|reality|public key|private key|fingerprint|servername|short-id|shortid|client-fingerprint/i.test(sourceText)) {
+      items.push('Если ошибка связана с прокси, перепроверьте TLS/Reality-поля: servername, fingerprint, public-key, short-id, alpn и transport settings.');
+    }
+
+    if (!items.length) {
+      if (payload && payload.ok) {
+        items.push('Mihomo не сообщил ошибок. При необходимости сверьтесь с полным логом проверки справа.');
+      } else {
+        items.push('Сверьтесь с первой строкой ошибки и полным логом справа: обычно Mihomo указывает либо проблемную строку YAML, либо неверную ссылку на proxy/group/provider.');
+      }
+    }
+
+    return uniqueStrings(items);
+  }
+
+  function buildValidationMetaItems(payload) {
+    const meta = [];
+    const exitCode = payload ? payload.exitCode : null;
+    const lineCol = payload ? payload.lineCol : null;
+    if (payload && payload.source) meta.push({ label: 'Источник', value: String(payload.source) });
+    if (payload && payload.action) meta.push({ label: 'Операция', value: String(payload.action) });
+    meta.push({ label: 'Статус', value: payload && payload.ok ? 'Конфиг валиден' : 'Есть ошибка проверки' });
+    if (typeof exitCode === 'number') meta.push({ label: 'Exit code', value: String(exitCode) });
+    if (lineCol && Number.isFinite(lineCol.line)) {
+      meta.push({
+        label: 'Локация',
+        value: 'строка ' + lineCol.line + (Number.isFinite(lineCol.col) ? (', столбец ' + lineCol.col) : ''),
+      });
+    }
+    return meta;
+  }
+
+  function renderValidationMetaHtml(items) {
+    const arr = Array.isArray(items) ? items : [];
+    if (!arr.length) return '';
+    return arr.map((item) => (
+      '<div class="xk-mihomo-validation-meta-card">' +
+        '<div class="xk-mihomo-validation-meta-label">' + escapeHtml(item.label) + '</div>' +
+        '<div class="xk-mihomo-validation-meta-value">' + escapeHtml(item.value) + '</div>' +
+      '</div>'
+    )).join('');
+  }
+
+  function setValidationCopyStatus(text, isError) {
+    const status = $(IDS.validationCopyStatus);
+    if (!status) return;
+    try {
+      status.textContent = String(text || '');
+      status.classList.toggle('is-error', !!isError);
+      status.classList.toggle('is-visible', !!text);
+    } catch (e) {}
+
+    if (_validationCopyResetTimer) {
+      try { clearTimeout(_validationCopyResetTimer); } catch (e) {}
+      _validationCopyResetTimer = null;
+    }
+    if (text) {
+      try {
+        _validationCopyResetTimer = setTimeout(() => {
+          try {
+            status.textContent = '';
+            status.classList.remove('is-error');
+            status.classList.remove('is-visible');
+          } catch (e) {}
+          _validationCopyResetTimer = null;
+        }, 2200);
+      } catch (e) {}
+    }
+  }
+
+  function buildValidationCopyText(payload) {
+    const parts = [];
+    const title = String((payload && payload.title) || 'Проверка конфигурации Mihomo').trim();
+    const summary = String((payload && payload.summary) || '').trim();
+    const explain = uniqueStrings(payload && payload.explain);
+    const log = String((payload && payload.log) || '').trim();
+
+    if (title) parts.push(title);
+    if (summary) parts.push('', summary);
+    if (explain.length) {
+      parts.push('', 'Расшифровка:');
+      explain.forEach((item) => parts.push('- ' + item));
+    }
+    const meta = buildValidationMetaItems(payload);
+    if (meta.length) {
+      parts.push('', 'Детали:');
+      meta.forEach((item) => parts.push('- ' + item.label + ': ' + item.value));
+    }
+    if (log) parts.push('', 'Лог / детали:', log);
+    return parts.join('\n');
+  }
+
+  async function copyValidationDetails() {
+    const payload = _lastValidationPayload || {};
+    const text = buildValidationCopyText(payload);
+    if (!text.trim()) {
+      setValidationCopyStatus('Нечего копировать.', true);
+      try { toast('Нечего копировать.', true); } catch (e) {}
+      return false;
+    }
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setValidationCopyStatus('Детали скопированы.', false);
+      try { toast('Детали проверки скопированы.', false); } catch (e) {}
+      return true;
+    } catch (e) {
+      setValidationCopyStatus('Не удалось скопировать.', true);
+      try { toast('Не удалось скопировать детали.', true); } catch (err) {}
+    }
+    return false;
+  }
+
+  function showValidationModal(textOrPayload) {
     const modal = $(IDS.validationModal);
     const body = $(IDS.validationBody);
     if (!modal || !body) return;
-    body.innerHTML = formatValidationLogHtml(String(text ?? ''));
+
+    const rawPayload = (textOrPayload && typeof textOrPayload === 'object' && !Array.isArray(textOrPayload))
+      ? Object.assign({}, textOrPayload)
+      : { log: String(textOrPayload ?? '') };
+
+    const log = String(rawPayload.log || '').trim();
+    const exitCode = (typeof rawPayload.exitCode === 'number') ? rawPayload.exitCode : extractValidationExitCode(log);
+    const ok = (typeof rawPayload.ok === 'boolean') ? !!rawPayload.ok : (exitCode === 0);
+    const lineCol = rawPayload.lineCol || extractYamlLineCol([rawPayload.error, rawPayload.hint, rawPayload.summary, log].filter(Boolean).join('\n'));
+    const summary = String(
+      rawPayload.summary ||
+      firstMeaningfulValidationLine(log) ||
+      rawPayload.error ||
+      (ok ? 'Mihomo сообщает, что конфиг валиден.' : 'Mihomo сообщил об ошибке проверки.')
+    ).trim();
+    const kind = normalizeValidationKind(rawPayload.kind, ok);
+    const explain = buildValidationExplainItems(Object.assign({}, rawPayload, { ok, log, summary, lineCol }));
+    const title = String(rawPayload.title || (ok ? 'Проверка конфигурации пройдена' : 'Проверка конфигурации не пройдена'));
+    const subtitle = String(rawPayload.subtitle || 'Проверка выполняется через mihomo -t без сохранения и перезапуска.');
+    const leadTitle = String(rawPayload.leadTitle || 'Результат проверки config.yaml');
+    const leadDesc = String(rawPayload.leadDesc || summary || subtitle);
+    const source = String(rawPayload.source || 'mihomo -t');
+    const action = String(rawPayload.action || 'Валидация');
+    const icons = { success: 'OK', warning: '!', error: 'ERR', info: 'MH' };
+    const badges = { success: 'Готово', warning: 'Внимание', error: 'Ошибка', info: 'Инфо' };
+    const meta = buildValidationMetaItems({ source, action, ok, exitCode, lineCol });
+
+    _lastValidationPayload = {
+      kind,
+      ok,
+      title,
+      subtitle,
+      leadTitle,
+      leadDesc,
+      summary,
+      explain,
+      log,
+      exitCode,
+      lineCol,
+      source,
+      action,
+      error: rawPayload.error || '',
+      hint: rawPayload.hint || '',
+    };
+
+    const kicker = $(IDS.validationKicker);
+    const titleNode = $(IDS.validationTitle);
+    const subtitleNode = $(IDS.validationSubtitle);
+    const iconNode = $(IDS.validationIcon);
+    const leadTitleNode = $(IDS.validationLeadTitle);
+    const leadDescNode = $(IDS.validationLeadDesc);
+    const badgeNode = $(IDS.validationBadge);
+    const grid = $(IDS.validationGrid);
+    const summaryWrap = $(IDS.validationSummaryWrap);
+    const summaryNode = $(IDS.validationSummary);
+    const explainWrap = $(IDS.validationExplainWrap);
+    const explainNode = $(IDS.validationExplain);
+    const metaWrap = $(IDS.validationMetaWrap);
+    const sidePanel = $(IDS.validationSidePanel);
+    const logWrap = $(IDS.validationLogWrap);
+
+    try { modal.dataset.kind = kind; } catch (e) {}
+    if (kicker) kicker.textContent = String(rawPayload.kicker || 'Mihomo / validate');
+    if (titleNode) titleNode.textContent = title;
+    if (subtitleNode) subtitleNode.textContent = subtitle;
+    if (iconNode) iconNode.textContent = icons[kind] || 'MH';
+    if (leadTitleNode) leadTitleNode.textContent = leadTitle;
+    if (leadDescNode) leadDescNode.textContent = leadDesc;
+    if (badgeNode) badgeNode.textContent = badges[kind] || 'Инфо';
+
+    setValidationSectionVisible(summaryWrap, !!summary);
+    if (summaryNode) summaryNode.textContent = summary;
+
+    const explainHtml = renderValidationExplainHtml(explain);
+    setValidationSectionVisible(explainWrap, !!explainHtml);
+    if (explainNode) explainNode.innerHTML = explainHtml;
+
+    const metaHtml = renderValidationMetaHtml(meta);
+    setValidationSectionVisible(metaWrap, !!metaHtml);
+    if (metaWrap) metaWrap.innerHTML = metaHtml;
+
+    const hasLog = !!log;
+    if (grid && grid.dataset) grid.dataset.hasLog = hasLog ? '1' : '0';
+    if (sidePanel) sidePanel.style.display = hasLog ? '' : 'none';
+    setValidationSectionVisible(logWrap, hasLog);
+    body.innerHTML = hasLog ? formatValidationLogHtml(log) : '';
+
+    setValidationCopyStatus('', false);
     modal.classList.remove('hidden');
+    try {
+      const bodyNode = modal.querySelector('.xk-mihomo-validation-body');
+      if (bodyNode) bodyNode.scrollTop = 0;
+    } catch (e) {}
     try { document.body.classList.add('modal-open'); } catch (e) {}
   }
 
@@ -1737,10 +2091,12 @@ let mihomoPanelModuleApi = null;
     const modal = $(IDS.validationModal);
     if (!modal) return;
     modal.classList.add('hidden');
+    _lastValidationPayload = null;
+    setValidationCopyStatus('', false);
     try { document.body.classList.remove('modal-open'); } catch (e) {}
   }
 
-  MP.validateFromEditor = async function validateFromEditor() {
+  async function performValidationFromEditor() {
     const content = String(getEditorText() || '');
     if (!content.trim()) {
       setStatus('config.yaml пустой, проверять нечего.', true);
@@ -1758,30 +2114,83 @@ let mihomoPanelModuleApi = null;
       });
       const data = await res.json().catch(() => ({}));
       const log = (data && typeof data.log === 'string') ? data.log : '';
-      if (log.trim()) showValidationModal(log);
 
       if (!res.ok) {
-        setStatus('Ошибка проверки конфига: ' + (data && (data.error || res.status)), true);
+        const msg = 'Ошибка проверки конфига: ' + (data && (data.error || res.status));
+        showValidationModal({
+          ok: false,
+          kind: 'error',
+          title: 'Проверка не выполнена',
+          leadTitle: 'Сервер не смог завершить валидацию',
+          leadDesc: msg,
+          summary: msg,
+          error: data && data.error ? String(data.error) : '',
+          hint: data && data.hint ? String(data.hint) : '',
+          log,
+          source: 'Mihomo API',
+          action: 'Валидация',
+        });
+        setStatus(msg, true);
         return false;
       }
 
       const firstLine = (log.split('\n').find((l) => l.trim()) || '').trim();
       if (data.ok) {
+        showValidationModal({
+          ok: true,
+          kind: 'success',
+          title: 'Проверка конфигурации пройдена',
+          leadTitle: 'Mihomo подтвердил, что конфиг валиден',
+          leadDesc: firstMeaningfulValidationLine(log) || 'Проверка через mihomo -t завершилась без ошибок.',
+          summary: firstMeaningfulValidationLine(log) || 'Конфиг принят без ошибок.',
+          log,
+          source: 'mihomo -t',
+          action: 'Валидация',
+        });
         clearYamlErrorMarker();
         setStatus(firstLine || 'mihomo сообщает, что конфиг валиден (exit code 0).', false);
         return true;
       }
+
       try {
         const lc = extractYamlLineCol(firstLine || log);
         if (lc && Number.isFinite(lc.line)) markYamlErrorLine(Math.max(0, lc.line - 1));
       } catch (e2) {}
+
+      showValidationModal({
+        ok: false,
+        kind: 'error',
+        title: 'Проверка конфигурации не пройдена',
+        leadTitle: 'Mihomo нашёл проблему в config.yaml',
+        leadDesc: firstMeaningfulValidationLine(log) || 'Смотрите расшифровку и лог: там указано, где искать причину.',
+        summary: firstMeaningfulValidationLine(log) || 'Конфиг не прошёл проверку.',
+        log,
+        source: 'mihomo -t',
+        action: 'Валидация',
+      });
       setStatus('В таком виде конфиг не будет работать: ' + (firstLine || 'ошибка проверки.'), true);
       return false;
     } catch (e) {
       console.error(e);
-      setStatus('Ошибка сети при проверке конфига: ' + e, true);
+      const msg = 'Ошибка сети при проверке конфига: ' + e;
+      showValidationModal({
+        ok: false,
+        kind: 'error',
+        title: 'Проверка не выполнена',
+        leadTitle: 'Не удалось получить ответ от сервера',
+        leadDesc: msg,
+        summary: msg,
+        error: String(e || ''),
+        source: 'Браузер / fetch',
+        action: 'Валидация',
+      });
+      setStatus(msg, true);
       return false;
     }
+  }
+
+  MP.validateFromEditor = async function validateFromEditor() {
+    return performValidationFromEditor();
   };
 
   // ---------- Templates (config.yaml snippets) ----------
