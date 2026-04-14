@@ -52,19 +52,20 @@ format_size_kb() {
   fi
 }
 
+# Получить поле из blkid (LABEL, UUID, TYPE) — совместимо с BusyBox
+# BusyBox blkid может не поддерживать -s/-o, поэтому всегда парсим полный вывод
+_blkid_field() {
+  dev="$1"; field="$2"
+  if has_cmd blkid; then
+    blkid "$dev" 2>/dev/null | sed -n "s/.* ${field}=\"\\([^\"]*\\)\".*/\\1/p"
+  fi
+}
+
 # Получить тип FS для устройства
 get_fs_type() {
   dev="$1"
-  fs=""
-  if has_cmd blkid; then
-    fs=$(blkid -s TYPE -o value "$dev" 2>/dev/null)
-    # Фолбэк — парсинг полной строки blkid
-    if [ -z "$fs" ]; then
-      info=$(blkid "$dev" 2>/dev/null)
-      fs=$(printf '%s\n' "$info" | sed -n 's/.*[[:space:]]TYPE="\([^"]*\)".*/\1/p')
-    fi
-  fi
-  # Ещё фолбэк — /proc/mounts
+  fs=$(_blkid_field "$dev" "TYPE")
+  # Фолбэк — /proc/mounts
   if [ -z "$fs" ]; then
     fs=$(awk -v d="$dev" '$1==d {print $3; exit}' /proc/mounts 2>/dev/null)
   fi
@@ -74,14 +75,7 @@ get_fs_type() {
 # Получить метку раздела
 get_label() {
   dev="$1"
-  label=""
-  if has_cmd blkid; then
-    label=$(blkid -s LABEL -o value "$dev" 2>/dev/null)
-    if [ -z "$label" ]; then
-      info=$(blkid "$dev" 2>/dev/null)
-      label=$(printf '%s\n' "$info" | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
-    fi
-  fi
+  label=$(_blkid_field "$dev" "LABEL")
   printf '%s' "${label:--}"
 }
 
@@ -93,12 +87,10 @@ is_mounted() {
     return 0
   fi
   # Проверка по UUID (Keenetic может монтировать по UUID)
-  if has_cmd blkid; then
-    dev_uuid=$(blkid -s UUID -o value "$dev" 2>/dev/null | tr -d '\r\n')
-    if [ -n "$dev_uuid" ]; then
-      if awk -v u="UUID=$dev_uuid" '$1==u {found=1; exit} END{exit found?0:1}' /proc/mounts 2>/dev/null; then
-        return 0
-      fi
+  dev_uuid=$(_blkid_field "$dev" "UUID")
+  if [ -n "$dev_uuid" ]; then
+    if awk -v u="UUID=$dev_uuid" '$1==u {found=1; exit} END{exit found?0:1}' /proc/mounts 2>/dev/null; then
+      return 0
     fi
   fi
   return 1
@@ -108,8 +100,8 @@ is_mounted() {
 get_mountpoint() {
   dev="$1"
   mp=$(awk -v d="$dev" '$1==d {print $2; exit}' /proc/mounts 2>/dev/null)
-  if [ -z "$mp" ] && has_cmd blkid; then
-    dev_uuid=$(blkid -s UUID -o value "$dev" 2>/dev/null | tr -d '\r\n')
+  if [ -z "$mp" ]; then
+    dev_uuid=$(_blkid_field "$dev" "UUID")
     if [ -n "$dev_uuid" ]; then
       mp=$(awk -v u="UUID=$dev_uuid" '$1==u {print $2; exit}' /proc/mounts 2>/dev/null)
     fi
