@@ -152,19 +152,85 @@ snapshot_io() {
 }
 
 # --- Живой мониторинг ---
+# Отдельный цикл: читаем начальные stats, спим, читаем новые, печатаем.
+# Данные остаются на экране во время sleep, а не исчезают.
 live_monitor() {
   interval="${1:-2}"
   filter="$2"
 
-  trap 'printf "\033[?25h"; exit 0' INT TERM
+  _cleanup() { printf '\033[?25h\n'; exit 0; }
+  trap _cleanup INT TERM HUP
   printf '\033[?25l'  # Скрыть курсор
 
+  disks=$(get_disk_list "$filter")
+  if [ -z "$disks" ]; then
+    printf '\033[?25h'
+    _out "  ${YLW}Диски не найдены${NC}"
+    return 1
+  fi
+
+  # Первое чтение
+  for disk in $disks; do
+    stats=$(read_disk_stats "$disk")
+    eval "prev_rd_${disk}=$(echo "$stats" | awk '{print $1+0}')"
+    eval "prev_wr_${disk}=$(echo "$stats" | awk '{print $2+0}')"
+  done
+
+  printf '\033[2J\033[H'
+  _out "${B_CYN}═══ I/O Мониторинг (обновление каждые ${interval}с, Ctrl+C для выхода) ═══${NC}"
+  _out "  ${YLW}Первое измерение...${NC}"
+
   while true; do
-    printf '\033[2J\033[H'  # Очистить экран
+    # sleep в фоне + wait — позволяет BusyBox ash обработать SIGINT
+    sleep "$interval" &
+    wait $!
+
+    # Второе чтение + расчёт
+    output=""
+    for disk in $disks; do
+      stats=$(read_disk_stats "$disk")
+      rd_sect=$(echo "$stats" | awk '{print $1+0}')
+      wr_sect=$(echo "$stats" | awk '{print $2+0}')
+
+      eval "p_rd=\$prev_rd_${disk}"
+      eval "p_wr=\$prev_wr_${disk}"
+
+      d_rd=$((rd_sect - p_rd))
+      d_wr=$((wr_sect - p_wr))
+      [ "$d_rd" -lt 0 ] 2>/dev/null && d_rd=0
+      [ "$d_wr" -lt 0 ] 2>/dev/null && d_wr=0
+
+      rd_bps=$((d_rd * 512 / interval))
+      wr_bps=$((d_wr * 512 / interval))
+      total_bps=$((rd_bps + wr_bps))
+
+      mp=$(get_disk_info "$disk")
+      mp_short=$(printf '%.14s' "$mp")
+
+      rd_color=$(speed_color "$rd_bps")
+      wr_color=$(speed_color "$wr_bps")
+
+      rd_str=$(format_speed "$rd_bps")
+      wr_str=$(format_speed "$wr_bps")
+      tot_str=$(format_speed "$total_bps")
+
+      output="${output}$(printf "  %-10s %-14s ${rd_color}%-16s${NC} ${wr_color}%-16s${NC} %-10s" \
+        "$disk" "$mp_short" "$rd_str" "$wr_str" "$tot_str")\n"
+
+      # Сохраняем текущие значения как предыдущие
+      eval "prev_rd_${disk}=${rd_sect}"
+      eval "prev_wr_${disk}=${wr_sect}"
+    done
+
+    # Очищаем и рисуем — данные видны до следующего sleep
+    printf '\033[2J\033[H'
     _out "${B_CYN}═══ I/O Мониторинг (обновление каждые ${interval}с, Ctrl+C для выхода) ═══${NC}"
     _out "  $(date '+%H:%M:%S')"
-    snapshot_io "$interval" "$filter"
     _out ""
+    printf "  ${B_WHT}%-10s %-14s %-16s %-16s %-10s${NC}\n" \
+      "ДИСК" "МОНТИРОВАНИЕ" "ЧТЕНИЕ" "ЗАПИСЬ" "ИТОГО"
+    _out "  ${CYN}────────── ────────────── ──────────────── ──────────────── ──────────${NC}"
+    printf '%b\n' "$output"
   done
 }
 
