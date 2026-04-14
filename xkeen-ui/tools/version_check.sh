@@ -504,7 +504,7 @@ show_versions_section() {
     local_v=$(get_local_xkeen_version)
     remote_v=""
     if [ "$offline" != "1" ]; then
-      remote_v=$(get_github_latest "Jakomnom/xkeen")
+      remote_v=$(get_github_latest "jameszeroX/XKeen")
     fi
     print_component "xkeen" "$local_v" "$remote_v"
   fi
