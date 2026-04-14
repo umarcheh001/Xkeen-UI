@@ -468,15 +468,20 @@ select_drive_add_option() {
 }
 
 select_drive_add_usb_options() {
-  mount_rows=$(awk '$1 ~ /^\/dev\/(sd|mmcblk)/ {print $2 "\t" $3}' /proc/mounts 2>/dev/null | awk -F '\t' '!seen[$1]++ { print $0 }')
+  mount_rows=$(awk '$1 ~ /^\/dev\/(sd|mmcblk)/ {print $1 "\t" $2 "\t" $3}' /proc/mounts 2>/dev/null | awk -F '\t' '!seen[$2]++ { print $0 }')
   [ -n "$mount_rows" ] || return 0
 
-  while IFS="$(printf '\t')" read -r mount_point fs_type; do
+  while IFS="$(printf '\t')" read -r device mount_point fs_type; do
     [ -d "$mount_point" ] || continue
     [ "$mount_point" = "$STORAGE_DIR" ] && continue
 
-    mount_name=$(basename "$mount_point")
-    [ -n "$mount_name" ] || mount_name="$mount_point"
+    # Метка раздела из blkid (BusyBox-совместимый парсинг)
+    disk_label=""
+    if command -v blkid >/dev/null 2>&1 && [ -n "$device" ]; then
+      disk_label=$(blkid "$device" 2>/dev/null | sed -n 's/.* LABEL="\([^"]*\)".*/\1/p')
+    fi
+    mount_name="${disk_label:-$(basename "$mount_point")}"
+
     fs_label=$(printf '%s' "$fs_type" | tr '[:lower:]' '[:upper:]')
     select_drive_add_option \
       "$mount_point" \
@@ -494,7 +499,6 @@ select_drive() {
   mkdir -p "$LOCAL_BACKUP_DIR" 2>/dev/null || true
 
   echo "00. Выход"
-  select_drive_add_option "$TMP_DIR" "Временное хранилище (tmp)"
   [ -d "$STORAGE_DIR" ] && \
     select_drive_add_option "$STORAGE_DIR" "Встроенное хранилище ($(get_path_usage_label "$STORAGE_DIR"))"
   select_drive_add_option "$LOCAL_BACKUP_DIR" "Локальная папка бэкапов ($(get_path_usage_label "$LOCAL_BACKUP_DIR"))"
