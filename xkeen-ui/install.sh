@@ -1026,25 +1026,13 @@ else
   echo "[*] storage-dashboard: скрипт не найден в $_STORAGE_DASH_SRC (пропуск)"
 fi
 
-# --- I/O monitor wrapper ---
+# --- Cleanup removed legacy io-monitor utility ---
 _IO_MON_SRC="$UI_DIR/tools/io_monitor.sh"
 _IO_MON_BIN="/opt/bin/io-monitor"
 
-if [ -f "$_IO_MON_SRC" ]; then
-  echo "[*] Устанавливаю io-monitor в $_IO_MON_BIN..."
-  cat > "$_IO_MON_BIN" <<'EOF'
-#!/bin/sh
-SCRIPT="/opt/etc/xkeen-ui/tools/io_monitor.sh"
-if [ ! -f "$SCRIPT" ]; then
-  echo "io-monitor: script not found: $SCRIPT" >&2
-  exit 127
-fi
-exec sh "$SCRIPT" "$@"
-EOF
-  chmod +x "$_IO_MON_BIN" 2>/dev/null || true
-  chmod +x "$_IO_MON_SRC" 2>/dev/null || true
-else
-  echo "[*] io-monitor: скрипт не найден в $_IO_MON_SRC (пропуск)"
+if [ -f "$_IO_MON_BIN" ] || [ -f "$_IO_MON_SRC" ]; then
+  echo "[*] Удаляю legacy io-monitor..."
+  rm -f "$_IO_MON_BIN" "$_IO_MON_SRC" 2>/dev/null || true
 fi
 
 # --- Device lock detector wrapper ---

@@ -276,14 +276,23 @@ restore_backup() {
 #   (unset) -> ask if TTY, else try install (non-blocking)
 INSTALL="${XKEEN_GEODAT_INSTALL:-}"
 
+normalize_install_answer() {
+  printf '%s' "$1" | sed 'y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/'
+}
+
 if [ -z "$INSTALL" ] && [ -t 0 ]; then
   echo ""
   echo "Установить xk-geodat (включит 'Содержимое' и 'В routing' для DAT GeoIP/GeoSite)?"
   printf "Введите Y/n: "
   read ans || ans=""
-  case "$ans" in
-    n|N|no|NO) INSTALL="0" ;;
-    *)         INSTALL="1" ;;
+  ans_norm="$(normalize_install_answer "$ans")"
+  case "$ans_norm" in
+    ""|y|yes) INSTALL="1" ;;
+    n|no)     INSTALL="0" ;;
+    *)
+      INSTALL="0"
+      echo "xk-geodat: ответ не распознан — пропуск"
+      ;;
   esac
 fi
 
