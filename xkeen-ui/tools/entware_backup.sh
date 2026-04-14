@@ -25,13 +25,19 @@ NC='\033[0m'
 TMP_DIR="/tmp"
 OPT_DIR="/opt"
 STORAGE_DIR="/storage"
+LOCAL_BACKUP_DIR="${XKEEN_LOCAL_BACKUP_DIR:-/opt/backups}"
 DATE="$(date +%Y-%m-%d_%H-%M)"
 PACKAGES_LIST="tar libacl"
+STATE_DIR="${XKEEN_UI_STATE_DIR:-/opt/var/lib/xkeen-ui}"
+STATE_FILE="$STATE_DIR/backup.state"
 
 # --- Globals for backup monitor ---
 BACKUP_MONITOR_PID=""
 BACKUP_MONITOR_STATE_FILE=""
 BACKUP_START_TS=""
+LAST_BACKUP_FINAL_BYTES=0
+LAST_BACKUP_ELAPSED=0
+LAST_BACKUP_AVG_SPEED_BPS=0
 
 # ---------------------------------------------------------------------------
 #  Formatting helpers
@@ -88,6 +94,43 @@ format_elapsed() {
   printf "%02d:%02d:%02d" "$h" "$m" "$sec"
 }
 
+get_file_size_bytes() {
+  file="$1"
+  size=$(stat -c %s "$file" 2>/dev/null || true)
+  [ -z "$size" ] && size=$(stat -f %z "$file" 2>/dev/null || true)
+  if [ -z "$size" ]; then
+    size_kib=$(du -sk "$file" 2>/dev/null | awk 'NR==1{print $1+0}')
+    [ -n "$size_kib" ] || size_kib=0
+    size=$((size_kib * 1024))
+  fi
+  printf "%s" "${size:-0}"
+}
+
+ensure_state_dir() {
+  mkdir -p "$STATE_DIR" 2>/dev/null || true
+}
+
+save_last_backup_state() {
+  backup_file="$1"
+  start_ts="$2"
+  current_size="$3"
+  speed_bps="$4"
+  elapsed="$5"
+
+  [ -n "$backup_file" ] || return 0
+  ensure_state_dir
+
+  cat > "$STATE_FILE" <<EOF
+state=done
+file=$backup_file
+start_ts=$start_ts
+current_size=$current_size
+speed_bps=$speed_bps
+elapsed=$elapsed
+timestamp=$(date +%s 2>/dev/null)
+EOF
+}
+
 # ---------------------------------------------------------------------------
 #  Backup monitor — real-time speed & size (adapted from flashkeen)
 # ---------------------------------------------------------------------------
@@ -116,15 +159,8 @@ start_backup_monitor() {
       fi
 
       if [ -n "$latest" ] && [ -f "$latest" ]; then
-        # Get current size in bytes via stat, fallback to du.
-        cur_bytes=$(stat -c %s "$latest" 2>/dev/null || true)
-        [ -z "$cur_bytes" ] && cur_bytes=$(stat -f %z "$latest" 2>/dev/null || true)
-        if [ -n "$cur_bytes" ] 2>/dev/null; then
-          cur_kib=$((cur_bytes / 1024))
-        else
-          cur_kib=$(du -sk "$latest" 2>/dev/null | awk 'NR==1{print $1+0}')
-          [ -n "$cur_kib" ] || cur_kib=0
-        fi
+        cur_bytes=$(get_file_size_bytes "$latest")
+        cur_kib=$((cur_bytes / 1024))
 
         if [ "$latest" != "$last_file" ]; then
           last_file="$latest"
@@ -178,21 +214,15 @@ print_backup_summary() {
   elapsed=$((end_ts - start_ts))
   [ "$elapsed" -le 0 ] 2>/dev/null && elapsed=1
 
-  # Get final size
-  final_bytes=$(stat -c %s "$backup_file" 2>/dev/null || true)
-  [ -z "$final_bytes" ] && final_bytes=$(stat -f %z "$backup_file" 2>/dev/null || true)
-  if [ -z "$final_bytes" ]; then
-    final_kib=$(du -sk "$backup_file" 2>/dev/null | awk 'NR==1{print $1+0}')
-    [ -n "$final_kib" ] || final_kib=0
-    final_bytes=$((final_kib * 1024))
-  fi
-
+  final_bytes=$(get_file_size_bytes "$backup_file")
+  avg_speed_bps=$((final_bytes / elapsed))
   size_h=$(format_size_precise "$final_bytes")
   elapsed_h=$(format_elapsed "$elapsed")
-  speed=$(awk -v b="$final_bytes" -v s="$elapsed" 'BEGIN{
-    if (s <= 0) s = 1;
-    printf "%.1f", (b/1024/1024)/s;
-  }')
+  speed=$(awk -v b="$avg_speed_bps" 'BEGIN{ printf "%.1f", b/1024/1024 }')
+
+  LAST_BACKUP_FINAL_BYTES="$final_bytes"
+  LAST_BACKUP_ELAPSED="$elapsed"
+  LAST_BACKUP_AVG_SPEED_BPS="$avg_speed_bps"
 
   printf "${GREEN}  Итого: %s за %s (средняя скорость %s MB/s)${NC}\n" "$size_h" "$elapsed_h" "$speed"
 }
@@ -304,14 +334,14 @@ cleanup_failed_backups() {
 
 rci_request() {
   endpoint="$1"
-  curl -s "http://localhost:79/rci/$endpoint"
+  curl -fsS "http://localhost:79/rci/$endpoint" 2>/dev/null
 }
 
 rci_parse() {
   command="$1"
   curl -fsS -H "Content-Type: application/json" \
     -d "[{\"parse\":\"$command\"}]" \
-    "http://localhost:79/rci/"
+    "http://localhost:79/rci/" 2>/dev/null
 }
 
 # ---------------------------------------------------------------------------
@@ -408,68 +438,72 @@ select_drive_add_partition() {
   select_drive_reset_partition
 }
 
+get_path_usage_label() {
+  path="$1"
+  line=$(df -kP "$path" 2>/dev/null | awk 'NR==2 {print $2 "\t" $4}')
+  [ -n "$line" ] || {
+    echo "—"
+    return 0
+  }
+
+  total_kb=$(echo "$line" | awk -F '\t' '{print $1 + 0}')
+  free_kb=$(echo "$line" | awk -F '\t' '{print $2 + 0}')
+  used_bytes=$(((total_kb - free_kb) * 1024))
+  total_bytes=$((total_kb * 1024))
+
+  format_size "$used_bytes" "$total_bytes"
+}
+
+select_drive_add_option() {
+  option_path="$1"
+  option_label="$2"
+
+  [ -n "$option_path" ] || return 0
+  [ -d "$option_path" ] || return 0
+
+  echo "$index. $option_label"
+  DRIVE_OPTIONS="${DRIVE_OPTIONS}${index}|$option_path
+"
+  index=$((index + 1))
+}
+
+select_drive_add_usb_options() {
+  mount_rows=$(awk '$1 ~ /^\/dev\/(sd|mmcblk)/ {print $2 "\t" $3}' /proc/mounts 2>/dev/null | awk -F '\t' '!seen[$1]++ { print $0 }')
+  [ -n "$mount_rows" ] || return 0
+
+  while IFS="$(printf '\t')" read -r mount_point fs_type; do
+    [ -d "$mount_point" ] || continue
+    [ "$mount_point" = "$STORAGE_DIR" ] && continue
+
+    mount_name=$(basename "$mount_point")
+    [ -n "$mount_name" ] || mount_name="$mount_point"
+    fs_label=$(printf '%s' "$fs_type" | tr '[:lower:]' '[:upper:]')
+    select_drive_add_option \
+      "$mount_point" \
+      "USB: $mount_name ($fs_label, $(get_path_usage_label "$mount_point"))"
+  done <<EOF2
+$mount_rows
+EOF2
+}
+
 select_drive() {
   message="$1"
 
-  uuids=""
-  index=2
-  media_found=0
-  media_is_usb=0
-  media_output=$(rci_parse "show media")
-  current_manufacturer=""
-  select_drive_reset_partition
-
-  if [ -z "$media_output" ]; then
-    print_message "Не удалось получить список накопителей" "$RED"
-    return 1
-  fi
+  index=0
+  DRIVE_OPTIONS=""
+  mkdir -p "$LOCAL_BACKUP_DIR" 2>/dev/null || true
 
   echo "00. Выход"
-  echo "0. Временное хранилище (tmp)"
-  echo "1. Встроенное хранилище ($(get_internal_storage_size))"
+  select_drive_add_option "$TMP_DIR" "Временное хранилище (tmp)"
+  [ -d "$STORAGE_DIR" ] && \
+    select_drive_add_option "$STORAGE_DIR" "Встроенное хранилище ($(get_path_usage_label "$STORAGE_DIR"))"
+  select_drive_add_option "$LOCAL_BACKUP_DIR" "Локальная папка бэкапов ($(get_path_usage_label "$LOCAL_BACKUP_DIR"))"
+  select_drive_add_usb_options
 
-  while IFS= read -r line; do
-    value=$(select_drive_extract_value "$line")
-    case "$line" in
-      *"\"Media"*"\":"* | *"name: Media"*)
-        select_drive_reset_media
-        ;;
-      *"\"bus\":"* | *"bus:"*)
-        if [ "$media_found" = "1" ] && [ "$value" = "usb" ]; then
-          media_is_usb=1
-        fi
-        ;;
-      *"\"manufacturer\":"* | *"manufacturer:"*)
-        if [ "$media_found" = "1" ]; then
-          current_manufacturer="$value"
-        fi
-        ;;
-      *"\"uuid\":"* | *"uuid:"*)
-        if [ "$media_found" = "1" ] && [ "$media_is_usb" = "1" ]; then
-          select_drive_reset_partition
-          in_partition=1
-          uuid="$value"
-        fi
-        ;;
-      *"\"label\":"* | *"label:"*)
-        [ "$in_partition" = "1" ] && label="$value"
-        ;;
-      *"\"fstype\":"* | *"fstype:"*)
-        [ "$in_partition" = "1" ] && fstype="$value"
-        ;;
-      *"\"total\":"* | *"total:"*)
-        [ "$in_partition" = "1" ] && total_bytes="$value"
-        ;;
-      *"\"free\":"* | *"free:"*)
-        if [ "$in_partition" = "1" ]; then
-          free_bytes="$value"
-          select_drive_add_partition
-        fi
-        ;;
-    esac
-  done <<EOF2
-$media_output
-EOF2
+  [ -n "$DRIVE_OPTIONS" ] || {
+    print_message "Не найдено доступных путей для бэкапа" "$RED"
+    return 1
+  }
 
   echo ""
   if ! read -r -p "$message " choice; then
@@ -484,17 +518,9 @@ EOF2
       print_message "Выход из entware-backup" "$YELLOW"
       exit 0
       ;;
-    0) selected_drive="$TMP_DIR" ;;
-    1) selected_drive="$STORAGE_DIR" ;;
     *)
-      if [ -n "$uuids" ]; then
-        selected_drive=$(echo "$uuids" | awk -v choice="$choice" '{split($0, a, " "); print a[choice-1]}')
-        if [ -z "$selected_drive" ]; then
-          print_message "Неверный выбор" "$RED"
-          return 1
-        fi
-        selected_drive="/tmp/mnt/$selected_drive"
-      else
+      selected_drive=$(printf '%s' "$DRIVE_OPTIONS" | awk -F '|' -v choice="$choice" '$1 == choice { print $2; exit }')
+      if [ -z "$selected_drive" ]; then
         print_message "Неверный выбор" "$RED"
         return 1
       fi
@@ -596,6 +622,12 @@ backup_entware() {
 
   # --- Print summary ---
   print_backup_summary "$backup_file" "$session_start_ts"
+  save_last_backup_state \
+    "$backup_file" \
+    "$session_start_ts" \
+    "$LAST_BACKUP_FINAL_BYTES" \
+    "$LAST_BACKUP_AVG_SPEED_BPS" \
+    "$LAST_BACKUP_ELAPSED"
   echo ""
   print_message "Бэкап успешно сохранён в $backup_file" "$GREEN"
 }
