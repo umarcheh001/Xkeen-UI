@@ -69,6 +69,12 @@ get_fs_type() {
   if [ -z "$fs" ]; then
     fs=$(awk -v d="$dev" '$1==d {print $3; exit}' /proc/mounts 2>/dev/null)
   fi
+  # Фолбэк — /proc/swaps (swap-разделы не в mounts)
+  if [ -z "$fs" ] && [ -r /proc/swaps ]; then
+    if awk -v d="$dev" '$1==d {found=1; exit} END{exit found?0:1}' /proc/swaps 2>/dev/null; then
+      fs="swap"
+    fi
+  fi
   printf '%s' "${fs:-???}"
 }
 
@@ -162,9 +168,9 @@ print_storage_dashboard() {
 
   # Заголовок таблицы
   _out ""
-  printf "  ${B_WHT}%-12s %-10s %-8s %-10s %-10s %-8s %-6s${NC}\n" \
+  printf "  ${B_WHT}%-12s %-20s %-8s %-10s %-10s %-8s %-6s${NC}\n" \
     "УСТРОЙСТВО" "МЕТКА" "ТИП FS" "РАЗМЕР" "СВОБОДНО" "ИСПОЛЬ." "СТАТУС"
-  _out "  ${CYN}────────── ────────── ──────── ────────── ────────── ──────── ──────${NC}"
+  _out "  ${CYN}────────── ──────────────────── ──────── ────────── ────────── ──────── ──────${NC}"
 
   echo "$devices" | while IFS= read -r dev; do
     [ -z "$dev" ] && continue
@@ -199,11 +205,11 @@ print_storage_dashboard() {
       pct_str="—"
     fi
 
-    # Обрезаем длинные имена
+    # Обрезаем длинные имена (%.20s — до 20 байт, хватает на 10 кириллических символов)
     dev_short=$(basename "$dev")
-    label_short=$(printf '%.10s' "$label")
+    label_short=$(printf '%.20s' "$label")
 
-    printf "  %-12s %-10s %-8s %-10s %-10s %-8s %b\n" \
+    printf "  %-12s %-20s %-8s %-10s %-10s %-8s %b\n" \
       "$dev_short" "$label_short" "$fs" "$total_h" "$avail_h" "$pct_str" "$status"
   done
 
