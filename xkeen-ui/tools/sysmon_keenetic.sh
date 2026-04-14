@@ -521,10 +521,59 @@ _banner_row() {
   # Usage: _banner_row <color> "Key:" "value" ["Key2:" "value2"]
   _bc="$1"; _k1="$2"; _v1="$3"; _k2="${4:-}"; _v2="${5:-}"
   if [ -n "$_k2" ]; then
-    printf "   ${B_WHT}%-14s${_bc}%-28s${B_WHT}%-14s${_bc}%s${NC}\n" "$_k1" "$_v1" "$_k2" "$_v2"
+    printf "   ${B_WHT}%-14s${_bc}%-32s${B_WHT}%-14s${_bc}%s${NC}\n" "$_k1" "$_v1" "$_k2" "$_v2"
   else
     printf "   ${B_WHT}%-14s${_bc}%s${NC}\n" "$_k1" "$_v1"
   fi
+}
+
+first_ipv4_from_text() {
+  tr ' \t' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | grep -v '^127\.' | head -n1
+}
+
+get_banner_accessed_ip() {
+  # Best-effort "accessed IP" for banner:
+  # 1) server IP from SSH_CONNECTION
+  # 2) explicit env overrides (future/web-runtime)
+  # 3) first non-loopback IPv4 from hostname -i / ip / ifconfig
+  # 4) prefer RFC1918/LAN-looking addresses when available
+
+  if [ -n "${SSH_CONNECTION:-}" ]; then
+    ip="$(printf '%s\n' "$SSH_CONNECTION" | awk '{print $3}' | first_ipv4_from_text)"
+    [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+  fi
+
+  for raw in "${XKEEN_UI_ACCESSED_IP:-}" "${XKEEN_UI_HOST_IP:-}" "${HTTP_HOST:-}"; do
+    ip="$(printf '%s\n' "$raw" | sed 's/:.*$//' | first_ipv4_from_text)"
+    [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+  done
+
+  if have hostname; then
+    ips="$(hostname -i 2>/dev/null || true)"
+    ip="$(printf '%s\n' "$ips" | tr ' ' '\n' | grep -E '^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)' | head -n1)"
+    [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+    ip="$(printf '%s\n' "$ips" | first_ipv4_from_text)"
+    [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+  fi
+
+  if have ip; then
+    ips="$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)"
+    ip="$(printf '%s\n' "$ips" | grep -E '^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)' | head -n1)"
+    [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+    ip="$(printf '%s\n' "$ips" | first_ipv4_from_text)"
+    [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+  fi
+
+  if have ifconfig; then
+    ips="$(ifconfig 2>/dev/null | grep -Eo 'inet (addr:)?[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sed 's/inet addr://; s/^inet //')"
+    ip="$(printf '%s\n' "$ips" | grep -E '^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)' | head -n1)"
+    [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+    ip="$(printf '%s\n' "$ips" | first_ipv4_from_text)"
+    [ -n "$ip" ] && { printf '%s\n' "$ip"; return 0; }
+  fi
+
+  printf '—\n'
+  return 0
 }
 
 get_uptime_human() {
@@ -638,7 +687,8 @@ print_colored_banner() {
   # Uses best-effort data sources; gracefully degrades on minimal BusyBox.
 
   _hostname="$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo 'router')"
-  _accessed_ip="$(hostname -i 2>/dev/null || echo '—')"
+  _accessed_ip="$(get_banner_accessed_ip 2>/dev/null || echo '—')"
+  [ -n "$_accessed_ip" ] || _accessed_ip='—'
   _date="$(date 2>/dev/null || echo '—')"
   _uptime="$(get_uptime_human 2>/dev/null || echo '—')"
   _os="$(uname -s 2>/dev/null || echo 'Linux')"
