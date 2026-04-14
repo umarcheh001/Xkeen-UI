@@ -104,7 +104,7 @@ def test_entware_backup_uses_local_backup_dir_when_rci_is_unavailable(tmp_path: 
         [SH_PATH, str(script_dst)],
         cwd=str(tmp_path),
         env=env,
-        input="1\n",
+        input="0\n",
         text=True,
         encoding="utf-8",
         errors="replace",
