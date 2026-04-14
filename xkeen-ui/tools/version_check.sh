@@ -189,6 +189,32 @@ get_github_latest() {
   return 1
 }
 
+# Получить версию XKeen Beta из test/README.md в репозитории
+get_xkeen_beta_version() {
+  repo="$1"
+  cache_key="github_beta_$(printf '%s' "$repo" | tr '/:' '__')"
+
+  cached=$(read_cache "$cache_key")
+  if [ -n "$cached" ]; then
+    printf '%s' "$cached"
+    return 0
+  fi
+
+  readme=$(http_get "https://raw.githubusercontent.com/${repo}/main/test/README.md" 10)
+  if [ -n "$readme" ]; then
+    # Парсим "## XKeen 2.0 Beta" → "2.0 Beta"
+    beta_ver=$(printf '%s\n' "$readme" | sed -n 's/^##[[:space:]]*[Xx][Kk]een[[:space:]]*\(.*\)/\1/p' | head -n 1)
+    beta_ver=$(trim_text "$beta_ver")
+    if [ -n "$beta_ver" ]; then
+      write_cache "$cache_key" "$beta_ver"
+      printf '%s' "$beta_ver"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 get_local_xkeen_version() {
   line=""
   display=""
@@ -503,10 +529,24 @@ show_versions_section() {
   if want_component "$selected" "xkeen"; then
     local_v=$(get_local_xkeen_version)
     remote_v=""
+    beta_v=""
     if [ "$offline" != "1" ]; then
       remote_v=$(get_github_latest "jameszeroX/XKeen")
+      beta_v=$(get_xkeen_beta_version "jameszeroX/XKeen")
     fi
     print_component "xkeen" "$local_v" "$remote_v"
+    if [ -n "$beta_v" ]; then
+      beta_num=$(extract_version "$beta_v")
+      local_num=$(extract_version "$local_v")
+      if [ -n "$beta_num" ] && [ -n "$local_num" ]; then
+        cmp=$(compare_versions "$local_num" "$beta_num")
+        if [ "$cmp" -lt 0 ] 2>/dev/null; then
+          printf "  ${B_WHT}%-16s${NC} ${CYN}%s${NC}  ${B_YLW}доступна${NC}\n" "" "$beta_v"
+        fi
+      else
+        printf "  ${B_WHT}%-16s${NC} ${CYN}%s${NC}\n" "" "$beta_v"
+      fi
+    fi
   fi
 
   if want_component "$selected" "xkeen-ui"; then
