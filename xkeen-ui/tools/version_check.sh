@@ -534,19 +534,20 @@ show_versions_section() {
       remote_v=$(get_github_latest "jameszeroX/XKeen")
       beta_v=$(get_xkeen_beta_version "jameszeroX/XKeen")
     fi
-    print_component "xkeen" "$local_v" "$remote_v"
-    if [ -n "$beta_v" ]; then
+    # Если бета новее локальной — показываем стрелку на бету
+    # Иначе сравниваем со стабильным релизом
+    show_v="$remote_v"
+    if [ -n "$beta_v" ] && [ -n "$local_v" ]; then
       beta_num=$(extract_version "$beta_v")
       local_num=$(extract_version "$local_v")
       if [ -n "$beta_num" ] && [ -n "$local_num" ]; then
         cmp=$(compare_versions "$local_num" "$beta_num")
         if [ "$cmp" -lt 0 ] 2>/dev/null; then
-          printf "  ${B_WHT}%-16s${NC} ${CYN}%s${NC}  ${B_YLW}доступна${NC}\n" "" "$beta_v"
+          show_v="$beta_v"
         fi
-      else
-        printf "  ${B_WHT}%-16s${NC} ${CYN}%s${NC}\n" "" "$beta_v"
       fi
     fi
+    print_component "xkeen" "$local_v" "$show_v"
   fi
 
   if want_component "$selected" "xkeen-ui"; then
