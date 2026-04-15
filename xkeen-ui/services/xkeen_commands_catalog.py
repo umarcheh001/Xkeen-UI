@@ -18,8 +18,9 @@ COMMAND_GROUPS = [
         "title": "Установка",
         "tone": "warn",
         "items": [
-            {"flag": "-i",  "desc": "Основной режим установки XKeen + Xray + GeoFile + Mihomo"},
-            {"flag": "-io", "desc": "OffLine установка XKeen"},
+            {"flag": "-i",    "desc": "Основной режим установки XKeen + Xray + GeoFile/GeoIPSET + Mihomo"},
+            {"flag": "-io",   "desc": "OffLine установка XKeen"},
+            {"flag": "-toff", "desc": "Отключение таймаута при медленной загрузке с GitHub"},
         ],
     },
     {
@@ -27,16 +28,16 @@ COMMAND_GROUPS = [
         "tone": "warn",
         "items": [
             {"flag": "-uk", "desc": "XKeen"},
-            {"flag": "-ug", "desc": "GeoFile"},
+            {"flag": "-ug", "desc": "GeoFile/GeoIPSET"},
             {"flag": "-ux", "desc": "Xray (повышение/понижение версии)"},
             {"flag": "-um", "desc": "Mihomo (повышение/понижение версии)"},
         ],
     },
     {
-        "title": "Включение или изменение задачи автообновления",
+        "title": "Запланированная задача автообновления GeoFile/GeoIPSET",
         "tone": "warn",
         "items": [
-            {"flag": "-ugc", "desc": "GeoFile"},
+            {"flag": "-ugc", "desc": "Создание"},
         ],
     },
     {
@@ -56,6 +57,7 @@ COMMAND_GROUPS = [
             {"flag": "-remove", "desc": "Полная деинсталляция XKeen"},
             {"flag": "-dgs",    "desc": "GeoSite"},
             {"flag": "-dgi",    "desc": "GeoIP"},
+            {"flag": "-dgips",  "desc": "GeoIPSET"},
             {"flag": "-dx",     "desc": "Xray"},
             {"flag": "-dm",     "desc": "Mihomo"},
             {"flag": "-dk",     "desc": "XKeen"},
@@ -65,7 +67,7 @@ COMMAND_GROUPS = [
         "title": "Удаление | Задачи автообновления",
         "tone": "danger",
         "items": [
-            {"flag": "-dgc", "desc": "GeoFile"},
+            {"flag": "-dgc", "desc": "GeoFile/GeoIPSET"},
         ],
     },
     {
@@ -101,6 +103,7 @@ COMMAND_GROUPS = [
         "items": [
             {"flag": "-k", "desc": "XKeen"},
             {"flag": "-g", "desc": "GeoFile"},
+            {"flag": "-gips", "desc": "GeoIPSET"},
         ],
     },
     {
@@ -115,8 +118,8 @@ COMMAND_GROUPS = [
         "title": "Резервная копия конфигурации Xray",
         "tone": "ok",
         "items": [
-            {"flag": "-cb",  "desc": "Создание"},
-            {"flag": "-cbr", "desc": "Восстановление"},
+            {"flag": "-xb",  "desc": "Создание"},
+            {"flag": "-xbr", "desc": "Восстановление"},
         ],
     },
     {
@@ -135,17 +138,20 @@ COMMAND_GROUPS = [
             {"flag": "-stop",    "desc": "Остановка"},
             {"flag": "-restart", "desc": "Перезапуск"},
             {"flag": "-status",  "desc": "Статус работы"},
-            {"flag": "-tpx",     "desc": "Порты, шлюз и протокол прокси-клиента"},
+            {"flag": "-tp",      "desc": "Порты, шлюз и протокол прокси-клиента"},
             {"flag": "-auto",    "desc": "Включить | Отключить автозапуск прокси-клиента"},
             {"flag": "-d",       "desc": "Установить задержку автозапуска прокси-клиента"},
             {"flag": "-fd",      "desc": "Включить | Отключить контроль файловых дескрипторов прокси-клиента"},
             {"flag": "-diag",    "desc": "Выполнить диагностику"},
-            {"flag": "-ipv6",    "desc": "Включить | Отключить протокол IPv6 в KeeneticOS"},
-            {"flag": "-dns",     "desc": "Включить | Отключить перенаправление DNS в прокси"},
-            {"flag": "-toff",    "desc": "Отключение таймаута при меделенной загрузке с GitHub"},
             {"flag": "-channel", "desc": "Переключить канал получения обновлений XKeen (Stable/Dev версия)"},
             {"flag": "-xray",    "desc": "Переключить XKeen на ядро Xray"},
             {"flag": "-mihomo",  "desc": "Переключить XKeen на ядро Mihomo"},
+            {"flag": "-ipv6",    "desc": "Включить | Отключить протокол IPv6 в KeeneticOS"},
+            {"flag": "-dns",     "desc": "Включить | Отключить перенаправление DNS в прокси"},
+            {"flag": "-pr",      "desc": "Включить | Отключить проксирование трафика Entware"},
+            {"flag": "-extmsg",  "desc": "Включить | Отключить расширенные сообщения при запуске XKeen"},
+            {"flag": "-cbk",     "desc": "Включить | Отключить резервное копирование XKeen при обновлении"},
+            {"flag": "-aghfix",  "desc": "Включить | Отключить отображение клиентов XKeen под своими IP в журнале AdGuard Home"},
         ],
     },
     {
