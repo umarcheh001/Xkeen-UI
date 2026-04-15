@@ -6,10 +6,20 @@ import {
 export const REQUIRED_XTERM_VENDOR_SPECS = [
   '../../../xterm/xterm.js',
   '../../../xterm/xterm-addon-fit.js',
+];
+
+export const OPTIONAL_XTERM_VENDOR_SPECS = [
+  '../../../xterm/xterm-addon-search.js',
+  '../../../xterm/xterm-addon-web-links.js',
+  '../../../xterm/xterm-addon-unicode11.js',
+  '../../../xterm/xterm-addon-clipboard.js',
   '../../../xterm/xterm-addon-serialize.js',
 ];
 
-export const OPTIONAL_XTERM_VENDOR_SPECS = [];
+const THIS_BOUND_CLASSIC_VENDOR_SPECS = new Set([
+  '../../../xterm/xterm-addon-unicode11.js',
+  '../../../xterm/xterm-addon-serialize.js',
+]);
 
 const vendorImportCache = new Map();
 
@@ -21,7 +31,7 @@ function getGlobalScope() {
 }
 
 function stashAmdGlobals(scope) {
-  const names = ['define', 'require', 'requirejs'];
+  const names = ['define', 'require', 'requirejs', 'exports', 'module'];
   const stash = [];
   for (const name of names) {
     let existed = false;
@@ -59,17 +69,35 @@ function resolveVendorUrl(specifier) {
   return new URL(specifier, import.meta.url).toString();
 }
 
+async function runClassicVendorWithGlobalThis(url, scope) {
+  if (!scope) throw new Error('global scope is unavailable');
+  if (typeof fetch !== 'function') throw new Error('fetch is unavailable');
+
+  const resp = await fetch(url, { cache: 'force-cache' });
+  if (!resp || !resp.ok) {
+    const status = resp ? String(resp.status || '') : '';
+    throw new Error('vendor fetch failed' + (status ? ': ' + status : ''));
+  }
+
+  const source = await resp.text();
+  const run = new Function('window', 'self', 'globalThis', String(source || '') + '\n//# sourceURL=' + url);
+  run.call(scope, scope, scope, scope);
+  return true;
+}
+
 async function importClassicVendorOnce(specifier, required = true) {
   const url = resolveVendorUrl(specifier);
   if (vendorImportCache.has(url)) return vendorImportCache.get(url);
 
   const promise = (async () => {
-    appendTerminalDebug('lazy:vendor:begin', { url, required, loader: 'dynamic-import' });
+    const classicThis = THIS_BOUND_CLASSIC_VENDOR_SPECS.has(specifier);
+    const loader = classicThis ? 'classic-global-this' : 'dynamic-import';
+    appendTerminalDebug('lazy:vendor:begin', { url, required, loader });
     markTerminalDebugState({
       status: 'loading-vendor',
       lastStage: 'lazy:vendor:begin',
       currentUrl: url,
-      loader: 'dynamic-import',
+      loader,
     });
 
     const scope = getGlobalScope();
@@ -79,14 +107,15 @@ async function importClassicVendorOnce(specifier, required = true) {
         appendTerminalDebug('lazy:vendor:amd-shield', { url, active: true });
         amdStash = stashAmdGlobals(scope);
       }
-      await import(/* @vite-ignore */ url);
-      appendTerminalDebug('lazy:vendor:done', { url, loader: 'dynamic-import' });
+      if (classicThis) await runClassicVendorWithGlobalThis(url, scope);
+      else await import(/* @vite-ignore */ url);
+      appendTerminalDebug('lazy:vendor:done', { url, loader });
       return true;
     } catch (error) {
       appendTerminalDebug('lazy:vendor:error', {
         url,
         required,
-        loader: 'dynamic-import',
+        loader,
         error: error ? String(error.message || error) : 'load failed',
       });
       if (required) throw error;

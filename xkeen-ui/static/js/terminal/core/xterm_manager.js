@@ -747,12 +747,8 @@ function readPrefs(ctx) {
         }
       } catch (e10) { serializeAddon = null; }
 
-      // All other addons are opt-in for diagnostics only.
-      if (!shouldEnableOptionalAddons()) {
-        syncCoreRefs();
-        return;
-      }
-
+      // Safe optional addons are useful in the router UI and isolated:
+      // missing or failed vendor files must never prevent PTY from opening.
       try {
         if (!searchAddon && typeof SearchAddon !== 'undefined' && SearchAddon && typeof SearchAddon.SearchAddon === 'function') {
           searchAddon = new SearchAddon.SearchAddon({ highlightLimit: 2000 });
@@ -784,13 +780,32 @@ function readPrefs(ctx) {
 
       try {
         if (!clipboardAddon && typeof ClipboardAddon !== 'undefined' && ClipboardAddon && typeof ClipboardAddon.ClipboardAddon === 'function') {
-          clipboardAddon = new ClipboardAddon.ClipboardAddon();
+          const safeClipboardProvider = {
+            readText: async (type) => {
+              if (type !== 'c') return '';
+              try {
+                if (typeof navigator !== 'undefined' && navigator && navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+                  return await navigator.clipboard.readText();
+                }
+              } catch (e) {}
+              return '';
+            },
+            writeText: async (type, text) => {
+              if (type !== 'c') return;
+              try {
+                if (typeof navigator !== 'undefined' && navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                  await navigator.clipboard.writeText(String(text == null ? '' : text));
+                }
+              } catch (e) {}
+            },
+          };
+          clipboardAddon = new ClipboardAddon.ClipboardAddon(undefined, safeClipboardProvider);
           t.loadAddon(clipboardAddon);
         }
       } catch (e9) { clipboardAddon = null; }
 
-      // WebGL renderer and ligatures remain disabled even in optional mode unless
-      // explicitly enabled via dedicated flags. They are the most likely freeze source.
+      // WebGL renderer and ligatures remain disabled unless explicitly enabled
+      // via dedicated flags. They are the most likely freeze source.
       try {
         if (
           !ligaturesAddon &&
