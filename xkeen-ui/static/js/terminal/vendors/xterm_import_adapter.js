@@ -6,6 +6,7 @@ import {
 export const REQUIRED_XTERM_VENDOR_SPECS = [
   '../../../xterm/xterm.js',
   '../../../xterm/xterm-addon-fit.js',
+  '../../../xterm/xterm-addon-serialize.js',
 ];
 
 export const OPTIONAL_XTERM_VENDOR_SPECS = [];

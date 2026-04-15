@@ -738,6 +738,15 @@ function readPrefs(ctx) {
         }
       } catch (e) { fitAddon = null; }
 
+      // Serialize is lightweight and powers the visible buffer export actions
+      // (.html and VT snapshot). Keep it available without enabling heavier addons.
+      try {
+        if (!serializeAddon && typeof SerializeAddon !== 'undefined' && SerializeAddon && typeof SerializeAddon.SerializeAddon === 'function') {
+          serializeAddon = new SerializeAddon.SerializeAddon();
+          t.loadAddon(serializeAddon);
+        }
+      } catch (e10) { serializeAddon = null; }
+
       // All other addons are opt-in for diagnostics only.
       if (!shouldEnableOptionalAddons()) {
         syncCoreRefs();
@@ -779,13 +788,6 @@ function readPrefs(ctx) {
           t.loadAddon(clipboardAddon);
         }
       } catch (e9) { clipboardAddon = null; }
-
-      try {
-        if (!serializeAddon && typeof SerializeAddon !== 'undefined' && SerializeAddon && typeof SerializeAddon.SerializeAddon === 'function') {
-          serializeAddon = new SerializeAddon.SerializeAddon();
-          t.loadAddon(serializeAddon);
-        }
-      } catch (e10) { serializeAddon = null; }
 
       // WebGL renderer and ligatures remain disabled even in optional mode unless
       // explicitly enabled via dedicated flags. They are the most likely freeze source.

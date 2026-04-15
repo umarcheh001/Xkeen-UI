@@ -327,37 +327,6 @@
   box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
 }
 
-#mihomo-validation-modal .xk-mihomo-validation-meta-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-#mihomo-validation-modal .xk-mihomo-validation-meta-card {
-  flex: 0 1 auto;
-  min-width: 136px;
-  padding: 8px 9px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.08);
-  background: rgba(2, 6, 23, 0.24);
-}
-
-#mihomo-validation-modal .xk-mihomo-validation-meta-label {
-  margin-bottom: 3px;
-  font-size: calc(10.5px * var(--xk-font-scale));
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.82);
-}
-
-#mihomo-validation-modal .xk-mihomo-validation-meta-value {
-  font-size: calc(12.5px * var(--xk-font-scale));
-  font-weight: 700;
-  line-height: 1.4;
-  color: #f8fafc;
-  word-break: break-word;
-}
-
 #mihomo-validation-modal .xk-mihomo-validation-log-shell {
   padding: 8px 9px 9px;
   border-radius: 17px;
@@ -483,8 +452,7 @@ html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-lead {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(226, 232, 240, 0.64));
 }
 
-html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-lead-title,
-html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-meta-value {
+html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-lead-title {
   color: #0f172a;
 }
 
@@ -500,15 +468,13 @@ html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-log-shel
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(241, 245, 249, 0.86));
 }
 
-html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-block,
-html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-meta-card {
+html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-block {
   border-color: rgba(148, 163, 184, 0.18);
   background: rgba(255, 255, 255, 0.78);
 }
 
 html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-kicker,
-html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-block-title,
-html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-meta-label {
+html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-block-title {
   color: #3b82f6;
 }
 
@@ -555,9 +521,6 @@ html[data-theme="light"] #mihomo-validation-modal .xk-mihomo-validation-copy-sta
     justify-self: start;
   }
 
-  #mihomo-validation-modal .xk-mihomo-validation-meta-card {
-    min-width: calc(50% - 4px);
-  }
 }
 
 /* Semantic colors: light theme defaults */

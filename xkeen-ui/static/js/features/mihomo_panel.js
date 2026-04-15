@@ -89,7 +89,6 @@ let mihomoPanelModuleApi = null;
     validationSummary: 'mihomo-validation-summary',
     validationExplainWrap: 'mihomo-validation-explain-wrap',
     validationExplain: 'mihomo-validation-explain',
-    validationMetaWrap: 'mihomo-validation-meta-wrap',
     validationSidePanel: 'mihomo-validation-side-panel',
     validationLogWrap: 'mihomo-validation-log-wrap',
     validationCopyBtn: 'mihomo-validation-copy-btn',
@@ -1943,17 +1942,6 @@ let mihomoPanelModuleApi = null;
     return meta;
   }
 
-  function renderValidationMetaHtml(items) {
-    const arr = Array.isArray(items) ? items : [];
-    if (!arr.length) return '';
-    return arr.map((item) => (
-      '<div class="xk-mihomo-validation-meta-card">' +
-        '<div class="xk-mihomo-validation-meta-label">' + escapeHtml(item.label) + '</div>' +
-        '<div class="xk-mihomo-validation-meta-value">' + escapeHtml(item.value) + '</div>' +
-      '</div>'
-    )).join('');
-  }
-
   function setValidationCopyStatus(text, isError) {
     const status = $(IDS.validationCopyStatus);
     if (!status) return;
@@ -2063,7 +2051,6 @@ let mihomoPanelModuleApi = null;
     const action = String(rawPayload.action || 'Валидация');
     const icons = { success: 'OK', warning: '!', error: 'ERR', info: 'MH' };
     const badges = { success: 'Готово', warning: 'Внимание', error: 'Ошибка', info: 'Инфо' };
-    const meta = buildValidationMetaItems({ source, action, ok, exitCode, lineCol });
 
     _lastValidationPayload = {
       kind,
@@ -2095,7 +2082,6 @@ let mihomoPanelModuleApi = null;
     const summaryNode = $(IDS.validationSummary);
     const explainWrap = $(IDS.validationExplainWrap);
     const explainNode = $(IDS.validationExplain);
-    const metaWrap = $(IDS.validationMetaWrap);
     const sidePanel = $(IDS.validationSidePanel);
     const logWrap = $(IDS.validationLogWrap);
 
@@ -2114,10 +2100,6 @@ let mihomoPanelModuleApi = null;
     const explainHtml = renderValidationExplainHtml(explain);
     setValidationSectionVisible(explainWrap, !!explainHtml);
     if (explainNode) explainNode.innerHTML = explainHtml;
-
-    const metaHtml = renderValidationMetaHtml(meta);
-    setValidationSectionVisible(metaWrap, !!metaHtml);
-    if (metaWrap) metaWrap.innerHTML = metaHtml;
 
     const hasLog = !!log;
     if (grid && grid.dataset) grid.dataset.hasLog = hasLog ? '1' : '0';

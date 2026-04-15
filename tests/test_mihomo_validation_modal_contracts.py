@@ -23,11 +23,13 @@ def test_mihomo_panel_validation_modal_uses_compact_premium_rendering_contract()
     assert "if (grid && grid.dataset) grid.dataset.hasLog = hasLog ? '1' : '0';" in script
     assert "if (sidePanel) sidePanel.style.display = hasLog ? '' : 'none';" in script
     assert "setValidationSectionVisible(explainWrap, !!explainHtml);" in script
-    assert "setValidationSectionVisible(metaWrap, !!metaHtml);" in script
+    assert "buildValidationMetaItems(payload)" in script
+    assert "validationMetaWrap" not in script
+    assert "renderValidationMetaHtml" not in script
 
     assert 'id="mihomo-validation-grid"' in template
     assert 'id="mihomo-validation-explain"' in template
-    assert 'id="mihomo-validation-meta-wrap"' in template
+    assert 'id="mihomo-validation-meta-wrap"' not in template
     assert 'id="mihomo-validation-copy-btn"' in template
     assert 'class="xk-mihomo-validation-terminal"' in template
 
@@ -36,4 +38,5 @@ def test_mihomo_panel_validation_modal_uses_compact_premium_rendering_contract()
     assert "#mihomo-validation-modal .xk-mihomo-validation-grid[data-has-log=\"0\"] {" in styles
     assert "#mihomo-validation-modal .xk-mihomo-validation-terminal {" in styles
     assert "#mihomo-validation-modal .xk-mihomo-validation-copy-status.is-error {" in styles
+    assert ".xk-mihomo-validation-meta-card" not in styles
     assert "html[data-theme=\"light\"] #mihomo-validation-modal .modal-content {" in styles

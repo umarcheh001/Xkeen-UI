@@ -403,10 +403,13 @@ import {
   function createActions(ctx) {
     const api = {
       copy: () => copy(ctx),
+      copySelection: () => copy(ctx),
       copyAll: () => copyAll(ctx),
       paste: () => paste(ctx),
+      pasteFromClipboard: () => paste(ctx),
       clear: () => clear(ctx),
       downloadTxt: () => downloadTxt(ctx),
+      downloadText: () => downloadTxt(ctx),
       downloadHtml: () => downloadHtml(ctx),
       downloadVtSnapshot: () => downloadVtSnapshot(ctx),
       scrollToBottom: () => scrollToBottom(ctx),
