@@ -54,6 +54,8 @@ def test_routing_comments_help_modal_uses_inline_shadow_dom_loader():
     assert "function renderRoutingHelpInline(htmlText)" in text
     assert "function highlightRoutingHelpCodeBlocks(root)" in text
     assert "fetch(HELP_URL, { cache: 'no-store', credentials: 'same-origin' })" in text
+    assert "helpHost.style.cssText = 'width:100%;height:100%;min-height:0;flex:1 1 auto;overflow:auto;" in text
+    assert "overscroll-behavior:contain" in text
     assert "attachShadow({ mode: 'open' })" in text
     assert "new DOMParser()" in text
     assert "05_routing" in text

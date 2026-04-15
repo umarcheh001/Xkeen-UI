@@ -1686,7 +1686,7 @@ function ensureHelpModal() {
 
   const helpHost = document.createElement('div');
   helpHost.id = HELP_CONTENT_ID;
-  helpHost.style.cssText = 'width:100%;height:100%;min-height:0;flex:1 1 auto;overflow:hidden;border-radius:10px;background:rgba(2,6,23,.65)';
+  helpHost.style.cssText = 'width:100%;height:100%;min-height:0;flex:1 1 auto;overflow:auto;overscroll-behavior:contain;border-radius:10px;background:rgba(2,6,23,.65)';
 
   function showHelpFallback() {
     if (helpState === 'fallback') return;
