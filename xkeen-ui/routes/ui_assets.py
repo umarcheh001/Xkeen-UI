@@ -74,6 +74,8 @@ _PAGE_CONFIG_RUNTIME_DEFAULTS = {
 _PAGE_CONFIG_TERMINAL_DEFAULTS = {
     "supportsPty": False,
     "enableOptionalAddons": False,
+    "enableLigatures": False,
+    "enableWebgl": True,
 }
 
 
@@ -90,6 +92,12 @@ _BASELINE_SECURITY_HEADERS = {
     "Permissions-Policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
     "X-Content-Type-Options": "nosniff",
 }
+
+# Static pages that are loaded inside modal iframes within the same UI.
+# For these paths X-Frame-Options is set to SAMEORIGIN instead of DENY.
+_SAMEORIGIN_FRAME_PATHS: frozenset[str] = frozenset({
+    "/static/routing-comments-help.html",
+})
 
 
 def _normalize_static_filename(filename: str | None) -> str:
@@ -189,6 +197,15 @@ def apply_response_security_headers(resp: Response) -> Response:
         return resp
 
     try:
+        # Allow same-origin framing for specific static pages that are loaded
+        # inside modal iframes within the same UI.  This intentionally wins over
+        # the conservative DENY baseline below for the whitelisted help page.
+        try:
+            if request.path in _SAMEORIGIN_FRAME_PATHS:
+                resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+        except Exception:
+            pass
+
         for key, value in _BASELINE_SECURITY_HEADERS.items():
             resp.headers.setdefault(key, value)
     except Exception:

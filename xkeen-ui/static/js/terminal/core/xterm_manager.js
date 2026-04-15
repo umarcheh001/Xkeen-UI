@@ -6,7 +6,9 @@ import {
   toastTerminal,
 } from '../runtime.js';
 import {
+  shouldEnableXkeenTerminalLigatures,
   shouldEnableXkeenTerminalOptionalAddons,
+  shouldEnableXkeenTerminalWebgl,
 } from '../../features/xkeen_runtime.js';
 import { appendTerminalDebug, markTerminalDebugState } from '../../features/terminal_debug.js';
 
@@ -464,6 +466,16 @@ function readPrefs(ctx) {
       return false;
     }
 
+    function shouldEnableLigaturesAddon() {
+      try { return !!shouldEnableXkeenTerminalLigatures(); } catch (e) {}
+      return false;
+    }
+
+    function shouldEnableWebglRenderer() {
+      try { return !!shouldEnableXkeenTerminalWebgl(); } catch (e) {}
+      return true;
+    }
+
     let fitScheduled = false;
     let fitRunning = false;
     let fitWindowStartedAt = 0;
@@ -800,14 +812,23 @@ function readPrefs(ctx) {
         }
       } catch (e9) { clipboardAddon = null; }
 
-      // WebGL renderer: load unconditionally for GPU-accelerated rendering.
-      // Falls back to Canvas 2D on context loss or if browser doesn't support it.
+      // Ligatures are intentionally not shipped anymore, but keep the runtime
+      // adapter wired so the pageConfig contract remains stable.
+      try {
+        if (shouldEnableLigaturesAddon()) {
+          appendTerminalDebug('xterm:ligatures-skipped', { reason: 'addon-not-shipped' });
+        }
+      } catch (e11) {}
+
+      // WebGL renderer: enabled by default for GPU-accelerated rendering, but
+      // still controlled via the runtime adapter for safe opt-out.
       try {
         if (
           !webglAddon &&
           typeof WebglAddon !== 'undefined' &&
           WebglAddon &&
-          typeof WebglAddon.WebglAddon === 'function'
+          typeof WebglAddon.WebglAddon === 'function' &&
+          shouldEnableWebglRenderer()
         ) {
           webglAddon = new WebglAddon.WebglAddon();
           t.loadAddon(webglAddon);

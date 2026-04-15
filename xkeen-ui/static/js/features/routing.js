@@ -1680,16 +1680,76 @@ function ensureHelpModal() {
   body.className = 'modal-body';
   body.style.paddingTop = '8px';
 
+  const HELP_PATH = '/static/routing-comments-help.html';
+  const HELP_URL = HELP_PATH + '?v=20260415a';
+  let helpFrameState = 'loading';
+
   const iframe = document.createElement('iframe');
   iframe.id = HELP_IFRAME_ID;
-  iframe.src = '/static/routing-comments-help.html';
+  iframe.src = HELP_URL;
   iframe.loading = 'lazy';
+  iframe.referrerPolicy = 'same-origin';
+  iframe.title = 'Справка по комментариям routing JSONC';
   iframe.style.width = '100%';
   // Let the iframe occupy the whole modal body. We disable the modal-body
   // scrolling for this modal via CSS to avoid a "double scroll" (modal + iframe).
   iframe.style.height = '100%';
   iframe.style.border = '0';
   iframe.style.borderRadius = '10px';
+
+  function showHelpFallback() {
+    if (helpFrameState === 'fallback') return;
+    helpFrameState = 'fallback';
+    try {
+      const fallback = document.createElement('div');
+      fallback.style.cssText = 'padding:28px;text-align:center;color:var(--text,#e5e7eb);border:1px solid rgba(148,163,184,.24);border-radius:12px;background:rgba(15,23,42,.28)';
+
+      const titleEl = document.createElement('div');
+      titleEl.style.cssText = 'font-weight:800;margin-bottom:8px';
+      titleEl.textContent = 'Не удалось загрузить справку во встроенном окне';
+
+      const hintEl = document.createElement('div');
+      hintEl.style.cssText = 'color:var(--muted,#94a3b8);line-height:1.45;margin:0 auto 16px;max-width:520px';
+      hintEl.textContent = 'Браузер или старый кеш мог заблокировать iframe. Справку можно открыть отдельной вкладкой.';
+
+      const link = document.createElement('a');
+      link.href = HELP_URL;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.className = 'btn-secondary';
+      link.textContent = 'Открыть справку';
+
+      fallback.appendChild(titleEl);
+      fallback.appendChild(hintEl);
+      fallback.appendChild(link);
+
+      if (iframe.parentNode === body) body.replaceChild(fallback, iframe);
+      else if (!fallback.parentNode) body.appendChild(fallback);
+    } catch (e) {}
+  }
+
+  function verifyHelpFrameLoaded() {
+    if (helpFrameState === 'fallback') return;
+    try {
+      const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+      const bodyText = doc && doc.body ? String(doc.body.textContent || '') : '';
+      const titleText = doc && doc.title ? String(doc.title || '') : '';
+      if (bodyText.indexOf('05_routing') === -1 && titleText.indexOf('05_routing') === -1) {
+        showHelpFallback();
+        return;
+      }
+      helpFrameState = 'ready';
+    } catch (e) {
+      showHelpFallback();
+    }
+  }
+
+  // X-Frame-Options blocks often render a browser error page and do not fire a
+  // useful error event, so verify the loaded document contains our help marker.
+  iframe.onerror = showHelpFallback;
+  iframe.onload = function () {
+    try { window.setTimeout(verifyHelpFrameLoaded, 0); } catch (e) { verifyHelpFrameLoaded(); }
+  };
 
   body.appendChild(iframe);
 
