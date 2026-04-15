@@ -74,8 +74,6 @@ _PAGE_CONFIG_RUNTIME_DEFAULTS = {
 _PAGE_CONFIG_TERMINAL_DEFAULTS = {
     "supportsPty": False,
     "enableOptionalAddons": False,
-    "enableLigatures": False,
-    "enableWebgl": False,
 }
 
 

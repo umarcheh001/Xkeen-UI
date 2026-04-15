@@ -14,6 +14,7 @@ export const OPTIONAL_XTERM_VENDOR_SPECS = [
   '../../../xterm/xterm-addon-unicode11.js',
   '../../../xterm/xterm-addon-clipboard.js',
   '../../../xterm/xterm-addon-serialize.js',
+  '../../../xterm/xterm-addon-webgl.js',
 ];
 
 const THIS_BOUND_CLASSIC_VENDOR_SPECS = new Set([

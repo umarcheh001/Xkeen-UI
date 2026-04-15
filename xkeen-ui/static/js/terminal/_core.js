@@ -184,7 +184,6 @@ import {
         serializeAddon: 1,
         unicode11Addon: 1,
         clipboardAddon: 1,
-        ligaturesAddon: 1,
       };
       Object.keys(refs).forEach((k) => {
         if (!allowed[k]) return;

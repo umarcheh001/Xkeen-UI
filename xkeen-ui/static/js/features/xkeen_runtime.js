@@ -287,8 +287,6 @@ export function getXkeenTerminalConfig() {
   return {
     supportsPty: coerceXkeenBooleanValue(getXkeenPageConfigValue('terminal.supportsPty', false), false),
     enableOptionalAddons: coerceXkeenBooleanValue(getXkeenPageConfigValue('terminal.enableOptionalAddons', false), false),
-    enableLigatures: coerceXkeenBooleanValue(getXkeenPageConfigValue('terminal.enableLigatures', false), false),
-    enableWebgl: coerceXkeenBooleanValue(getXkeenPageConfigValue('terminal.enableWebgl', false), false),
   };
 }
 
@@ -300,13 +298,7 @@ export function shouldEnableXkeenTerminalOptionalAddons() {
   return !!getXkeenTerminalConfig().enableOptionalAddons;
 }
 
-export function shouldEnableXkeenTerminalLigatures() {
-  return !!getXkeenTerminalConfig().enableLigatures;
-}
 
-export function shouldEnableXkeenTerminalWebgl() {
-  return !!getXkeenTerminalConfig().enableWebgl;
-}
 
 export function getXkeenPageConfig() {
   const rawPageConfig = getXkeenRawPageConfig();
@@ -1040,8 +1032,6 @@ export const xkeenRuntimeApi = Object.freeze({
   getCoreAvailability: getXkeenCoreAvailability,
   supportsTerminalPty: supportsXkeenTerminalPty,
   shouldEnableTerminalOptionalAddons: shouldEnableXkeenTerminalOptionalAddons,
-  shouldEnableTerminalLigatures: shouldEnableXkeenTerminalLigatures,
-  shouldEnableTerminalWebgl: shouldEnableXkeenTerminalWebgl,
   getTerminalRoot: getXkeenTerminalRoot,
   getTerminalApi: getXkeenTerminalApi,
   getTerminalCoreContext: getXkeenTerminalCoreContext,

@@ -6,9 +6,7 @@ import {
   toastTerminal,
 } from '../runtime.js';
 import {
-  shouldEnableXkeenTerminalLigatures,
   shouldEnableXkeenTerminalOptionalAddons,
-  shouldEnableXkeenTerminalWebgl,
 } from '../../features/xkeen_runtime.js';
 import { appendTerminalDebug, markTerminalDebugState } from '../../features/terminal_debug.js';
 
@@ -455,7 +453,6 @@ function readPrefs(ctx) {
     let unicode11Addon = null;
     let serializeAddon = null;
     let clipboardAddon = null;
-    let ligaturesAddon = null;
 
     // XTerm event disposables
     let termDisposables = [];
@@ -508,7 +505,7 @@ function readPrefs(ctx) {
             unicode11Addon,
             serializeAddon,
             clipboardAddon,
-            ligaturesAddon,
+
             resizeObserver,
           });
         }
@@ -645,7 +642,6 @@ function readPrefs(ctx) {
         unicode11Addon,
         serializeAddon,
         clipboardAddon,
-        ligaturesAddon,
         resizeObserver,
       };
     }
@@ -804,28 +800,14 @@ function readPrefs(ctx) {
         }
       } catch (e9) { clipboardAddon = null; }
 
-      // WebGL renderer and ligatures remain disabled unless explicitly enabled
-      // via dedicated flags. They are the most likely freeze source.
-      try {
-        if (
-          !ligaturesAddon &&
-          typeof LigaturesAddon !== 'undefined' &&
-          LigaturesAddon &&
-          typeof LigaturesAddon.LigaturesAddon === 'function' &&
-          shouldEnableXkeenTerminalLigatures()
-        ) {
-          ligaturesAddon = new LigaturesAddon.LigaturesAddon();
-          t.loadAddon(ligaturesAddon);
-        }
-      } catch (e11) { ligaturesAddon = null; }
-
+      // WebGL renderer: load unconditionally for GPU-accelerated rendering.
+      // Falls back to Canvas 2D on context loss or if browser doesn't support it.
       try {
         if (
           !webglAddon &&
           typeof WebglAddon !== 'undefined' &&
           WebglAddon &&
-          typeof WebglAddon.WebglAddon === 'function' &&
-          shouldEnableXkeenTerminalWebgl()
+          typeof WebglAddon.WebglAddon === 'function'
         ) {
           webglAddon = new WebglAddon.WebglAddon();
           t.loadAddon(webglAddon);
@@ -1084,7 +1066,6 @@ function readPrefs(ctx) {
       unicode11Addon = null;
       serializeAddon = null;
       clipboardAddon = null;
-      ligaturesAddon = null;
 
       lastCols = 0;
       lastRows = 0;
