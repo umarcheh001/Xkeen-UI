@@ -1643,7 +1643,7 @@ import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_c
 
 
 const HELP_MODAL_ID = 'xkeen-routing-help-modal';
-const HELP_IFRAME_ID = 'xkeen-routing-help-iframe';
+const HELP_CONTENT_ID = 'xkeen-routing-help-content';
 
 function ensureHelpModal() {
   let modal = document.getElementById(HELP_MODAL_ID);
@@ -1681,28 +1681,19 @@ function ensureHelpModal() {
   body.style.paddingTop = '8px';
 
   const HELP_PATH = '/static/routing-comments-help.html';
-  const HELP_URL = HELP_PATH + '?v=20260415a';
-  let helpFrameState = 'loading';
+  const HELP_URL = HELP_PATH + '?v=20260415b';
+  let helpState = 'loading';
 
-  const iframe = document.createElement('iframe');
-  iframe.id = HELP_IFRAME_ID;
-  iframe.src = HELP_URL;
-  iframe.loading = 'lazy';
-  iframe.referrerPolicy = 'same-origin';
-  iframe.title = 'Справка по комментариям routing JSONC';
-  iframe.style.width = '100%';
-  // Let the iframe occupy the whole modal body. We disable the modal-body
-  // scrolling for this modal via CSS to avoid a "double scroll" (modal + iframe).
-  iframe.style.height = '100%';
-  iframe.style.border = '0';
-  iframe.style.borderRadius = '10px';
+  const helpHost = document.createElement('div');
+  helpHost.id = HELP_CONTENT_ID;
+  helpHost.style.cssText = 'width:100%;height:100%;min-height:0;flex:1 1 auto;overflow:hidden;border-radius:10px;background:rgba(2,6,23,.65)';
 
   function showHelpFallback() {
-    if (helpFrameState === 'fallback') return;
-    helpFrameState = 'fallback';
+    if (helpState === 'fallback') return;
+    helpState = 'fallback';
     try {
       const fallback = document.createElement('div');
-      fallback.style.cssText = 'padding:28px;text-align:center;color:var(--text,#e5e7eb);border:1px solid rgba(148,163,184,.24);border-radius:12px;background:rgba(15,23,42,.28)';
+      fallback.style.cssText = 'height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;text-align:center;color:var(--text,#e5e7eb);border:1px solid rgba(148,163,184,.24);border-radius:12px;background:rgba(15,23,42,.28)';
 
       const titleEl = document.createElement('div');
       titleEl.style.cssText = 'font-weight:800;margin-bottom:8px';
@@ -1716,42 +1707,244 @@ function ensureHelpModal() {
       link.href = HELP_URL;
       link.target = '_blank';
       link.rel = 'noopener';
-      link.className = 'btn-secondary';
+      link.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 16px;border-radius:999px;border:1px solid rgba(96,165,250,.45);color:#dbeafe;text-decoration:none;background:rgba(37,99,235,.18);font-weight:700';
       link.textContent = 'Открыть справку';
 
       fallback.appendChild(titleEl);
       fallback.appendChild(hintEl);
       fallback.appendChild(link);
 
-      if (iframe.parentNode === body) body.replaceChild(fallback, iframe);
-      else if (!fallback.parentNode) body.appendChild(fallback);
+      const target = helpHost.shadowRoot || helpHost;
+      while (target.firstChild) target.removeChild(target.firstChild);
+      target.appendChild(fallback);
     } catch (e) {}
   }
 
-  function verifyHelpFrameLoaded() {
-    if (helpFrameState === 'fallback') return;
+  function normalizeRoutingHelpCss(cssText) {
+    return String(cssText || '')
+      .replace(/html\[data-theme="dark"\]\s+body/g, ':host([data-theme="dark"]) .routing-help-document')
+      .replace(/html\[data-theme="dark"\]/g, ':host([data-theme="dark"])')
+      .replace(/:root/g, ':host')
+      .replace(/\bbody\b/g, '.routing-help-document');
+  }
+
+  function getRoutingHelpTheme() {
     try {
-      const doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+      const attr = document.documentElement && document.documentElement.getAttribute('data-theme');
+      if (attr === 'light' || attr === 'dark') return attr;
+    } catch (e) {}
+    try {
+      const stored = window.localStorage && localStorage.getItem('xkeen-theme');
+      if (stored === 'light' || stored === 'dark') return stored;
+    } catch (e2) {}
+    try {
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return 'dark';
+    } catch (e3) {}
+    return 'light';
+  }
+
+  function syncRoutingHelpTheme() {
+    try { helpHost.setAttribute('data-theme', getRoutingHelpTheme()); } catch (e) {}
+  }
+
+  function escapeHelpHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function highlightRoutingHelpCodeBlocks(root) {
+    function wrap(cls, raw) {
+      return '<span class="' + cls + '">' + escapeHelpHtml(raw) + '</span>';
+    }
+    function isDigit(ch) {
+      return ch >= '0' && ch <= '9';
+    }
+    function isWordStart(ch) {
+      return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_';
+    }
+    function highlightCodeBlock(codeEl) {
+      const text = codeEl.textContent || '';
+      const len = text.length;
+      let i = 0;
+      let out = '';
+      while (i < len) {
+        const ch = text[i];
+        const next = i + 1 < len ? text[i + 1] : '';
+        if (ch === '/' && next === '/') {
+          let j = i + 2;
+          while (j < len && text[j] !== '\n') j++;
+          out += wrap('cm-comment', text.slice(i, j));
+          i = j;
+          continue;
+        }
+        if (ch === '#') {
+          let j = i + 1;
+          while (j < len && text[j] !== '\n') j++;
+          out += wrap('cm-comment', text.slice(i, j));
+          i = j;
+          continue;
+        }
+        if (ch === '/' && next === '*') {
+          const end = text.indexOf('*/', i + 2);
+          const j = end === -1 ? len : end + 2;
+          out += wrap('cm-comment', text.slice(i, j));
+          i = j;
+          continue;
+        }
+        if (ch === '"') {
+          let j = i + 1;
+          let esc = false;
+          while (j < len) {
+            const c = text[j];
+            if (esc) esc = false;
+            else if (c === '\\') esc = true;
+            else if (c === '"') {
+              j++;
+              break;
+            }
+            j++;
+          }
+          const raw = text.slice(i, j);
+          let k = j;
+          while (k < len && (text[k] === ' ' || text[k] === '\t' || text[k] === '\r' || text[k] === '\n')) k++;
+          out += wrap((k < len && text[k] === ':') ? 'cm-property' : 'cm-string', raw);
+          i = j;
+          continue;
+        }
+        if (ch === '-' || isDigit(ch)) {
+          let j = i;
+          if (text[j] === '-') j++;
+          let hasDigits = false;
+          while (j < len && isDigit(text[j])) {
+            hasDigits = true;
+            j++;
+          }
+          if (j < len && text[j] === '.') {
+            j++;
+            while (j < len && isDigit(text[j])) {
+              hasDigits = true;
+              j++;
+            }
+          }
+          if (hasDigits && j < len && (text[j] === 'e' || text[j] === 'E')) {
+            let k = j + 1;
+            if (k < len && (text[k] === '+' || text[k] === '-')) k++;
+            let expDigits = 0;
+            while (k < len && isDigit(text[k])) {
+              expDigits++;
+              k++;
+            }
+            if (expDigits > 0) j = k;
+          }
+          if (hasDigits) {
+            out += wrap('cm-number', text.slice(i, j));
+            i = j;
+            continue;
+          }
+        }
+        if (isWordStart(ch)) {
+          let j = i + 1;
+          while (j < len) {
+            const c = text[j];
+            if (isWordStart(c) || isDigit(c)) j++;
+            else break;
+          }
+          const raw = text.slice(i, j);
+          out += (raw === 'true' || raw === 'false' || raw === 'null')
+            ? wrap('cm-atom', raw)
+            : escapeHelpHtml(raw);
+          i = j;
+          continue;
+        }
+        if (ch === '{' || ch === '}' || ch === '[' || ch === ']') {
+          out += wrap('cm-bracket', ch);
+          i++;
+          continue;
+        }
+        if (ch === ':' || ch === ',') {
+          out += wrap('cm-punctuation', ch);
+          i++;
+          continue;
+        }
+        out += escapeHelpHtml(ch);
+        i++;
+      }
+      codeEl.innerHTML = out;
+    }
+    try {
+      root.querySelectorAll('pre code').forEach(highlightCodeBlock);
+    } catch (e) {}
+  }
+
+  function renderRoutingHelpInline(htmlText) {
+    if (helpState === 'fallback') return;
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(String(htmlText || ''), 'text/html');
       const bodyText = doc && doc.body ? String(doc.body.textContent || '') : '';
       const titleText = doc && doc.title ? String(doc.title || '') : '';
       if (bodyText.indexOf('05_routing') === -1 && titleText.indexOf('05_routing') === -1) {
-        showHelpFallback();
-        return;
+        throw new Error('routing help marker missing');
       }
-      helpFrameState = 'ready';
+      if (!helpHost.attachShadow) {
+        throw new Error('shadow dom unavailable');
+      }
+
+      const shadow = helpHost.shadowRoot || helpHost.attachShadow({ mode: 'open' });
+      while (shadow.firstChild) shadow.removeChild(shadow.firstChild);
+
+      const style = document.createElement('style');
+      const sourceCss = Array.from(doc.querySelectorAll('style'))
+        .map((styleEl) => styleEl.textContent || '')
+        .join('\n');
+      style.textContent = [
+        ':host{display:block;height:100%;min-height:0;overflow:auto;border-radius:10px;background:var(--bg);color:var(--text);}',
+        '*{box-sizing:border-box;}',
+        normalizeRoutingHelpCss(sourceCss),
+        '.routing-help-document{min-height:100%;}'
+      ].join('\n');
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'routing-help-document';
+      Array.from(doc.body ? doc.body.childNodes : []).forEach((node) => {
+        if (node && String(node.nodeName || '').toLowerCase() === 'script') return;
+        wrapper.appendChild(document.importNode(node, true));
+      });
+
+      shadow.appendChild(style);
+      shadow.appendChild(wrapper);
+      syncRoutingHelpTheme();
+      highlightRoutingHelpCodeBlocks(shadow);
+      helpState = 'ready';
     } catch (e) {
       showHelpFallback();
     }
   }
 
-  // X-Frame-Options blocks often render a browser error page and do not fire a
-  // useful error event, so verify the loaded document contains our help marker.
-  iframe.onerror = showHelpFallback;
-  iframe.onload = function () {
-    try { window.setTimeout(verifyHelpFrameLoaded, 0); } catch (e) { verifyHelpFrameLoaded(); }
-  };
+  function loadRoutingHelpInline() {
+    try {
+      fetch(HELP_URL, { cache: 'no-store', credentials: 'same-origin' })
+        .then((resp) => {
+          if (!resp || !resp.ok) throw new Error('routing help fetch failed');
+          return resp.text();
+        })
+        .then(renderRoutingHelpInline)
+        .catch(showHelpFallback);
+    } catch (e) {
+      showHelpFallback();
+    }
+  }
 
-  body.appendChild(iframe);
+  try {
+    syncRoutingHelpTheme();
+    const observer = new MutationObserver(syncRoutingHelpTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  } catch (e) {}
+
+  body.appendChild(helpHost);
+  loadRoutingHelpInline();
 
   const actions = document.createElement('div');
   actions.className = 'modal-actions';

@@ -8012,7 +8012,7 @@ html[data-theme="light"] .dt-env-help-table thead th {
   overflow: auto;
 }
 
-/* Routing help modal (iframe): avoid "double scroll" (outer modal-body + inner iframe) */
+/* Routing help modal: inline Shadow DOM content owns the inner scroll. */
 #xkeen-routing-help-modal .modal-content {
   height: 80vh;
 }
@@ -8023,7 +8023,7 @@ html[data-theme="light"] .dt-env-help-table thead th {
   flex-direction: column;
 }
 
-#xkeen-routing-help-modal iframe {
+#xkeen-routing-help-content {
   flex: 1 1 auto;
   min-height: 0;
 }
