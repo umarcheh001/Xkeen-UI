@@ -21,6 +21,11 @@ dist/
 package-root/
 /xkeen-ui-routing.tar.gz
 /xkeen-ui-routing.tar.gz.sha256
+/xkeen-ui-debian.tar.gz
+/xkeen-ui-debian.tar.gz.sha256
+/packaging/debian/
+/scripts/build_debian_archive.py
+/tests/test_debian_packaging_contract.py
 
 # Playwright / e2e
 playwright-report/
@@ -33,3 +38,4 @@ e2e/.auth/
 
 # Local audit working notes
 /README_AUDIT_CHECKLIST_CURRENT.md
+/docs/README_AUDIT_CHECKLIST_CURRENT.md

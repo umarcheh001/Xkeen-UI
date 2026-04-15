@@ -1790,8 +1790,9 @@ let mihomoPanelModuleApi = null;
       if (/^\$\s+/.test(line)) return false;
       if (/^---\s*STDERR\s*---$/i.test(line)) return false;
       if (/^\[exit code:/i.test(line)) return false;
+      if (/^configuration file .* test failed$/i.test(line)) return false;
       return true;
-    });
+    }).map((line) => extractMihomoValidationMessage(line)).filter(Boolean);
     if (!filtered.length) return '';
 
     const priority = filtered.find((line) => /error|fatal|panic|yaml:|failed|not found|unknown|missing|invalid|exception/i.test(line));
@@ -1831,6 +1832,51 @@ let mihomoPanelModuleApi = null;
         )).join('') +
       '</div>'
     );
+  }
+
+  function decodeValidationLogValue(value) {
+    return String(value ?? '')
+      .replace(/\\"/g, '"')
+      .replace(/\\'/g, "'")
+      .replace(/\\\\/g, '\\')
+      .trim();
+  }
+
+  function extractMihomoValidationMessage(line) {
+    const raw = String(line ?? '').trim();
+    if (!raw) return '';
+    const doubleQuoted = /\bmsg="((?:\\.|[^"\\])*)"/.exec(raw);
+    if (doubleQuoted && doubleQuoted[1]) return decodeValidationLogValue(doubleQuoted[1]);
+    const singleQuoted = /\bmsg='((?:\\.|[^'\\])*)'/.exec(raw);
+    if (singleQuoted && singleQuoted[1]) return decodeValidationLogValue(singleQuoted[1]);
+    return raw;
+  }
+
+  function humanizeValidationMessage(message, lineCol) {
+    const text = extractMihomoValidationMessage(message);
+    if (!text) return '';
+
+    const lc = lineCol || extractYamlLineCol(text);
+    const loc = lc && Number.isFinite(lc.line) ? (' в строке ' + lc.line) : '';
+    const lower = text.toLowerCase();
+
+    let headline = '';
+    if (/mapping values are not allowed/.test(lower)) {
+      headline = 'YAML: лишнее двоеточие, сломанный отступ или значение в неправильном месте';
+    } else if (/could not find expected ':'/.test(lower)) {
+      headline = 'YAML: не найдено ожидаемое двоеточие';
+    } else if (/did not find expected key|did not find expected '-' indicator/.test(lower)) {
+      headline = 'YAML: нарушена структура ключей или списка';
+    } else if (/found character that cannot start any token/.test(lower)) {
+      headline = 'YAML: недопустимый символ в конфиге';
+    } else if (/bad indentation|indentation/.test(lower)) {
+      headline = 'YAML: ошибка отступов';
+    }
+
+    if (!headline) return text;
+
+    const original = text.replace(/^yaml:\s*/i, '').trim();
+    return headline + loc + '. Оригинал: ' + original;
   }
 
   function buildValidationExplainItems(payload) {
@@ -2000,12 +2046,13 @@ let mihomoPanelModuleApi = null;
     const exitCode = (typeof rawPayload.exitCode === 'number') ? rawPayload.exitCode : extractValidationExitCode(log);
     const ok = (typeof rawPayload.ok === 'boolean') ? !!rawPayload.ok : (exitCode === 0);
     const lineCol = rawPayload.lineCol || extractYamlLineCol([rawPayload.error, rawPayload.hint, rawPayload.summary, log].filter(Boolean).join('\n'));
-    const summary = String(
+    const rawSummary = String(
       rawPayload.summary ||
       firstMeaningfulValidationLine(log) ||
       rawPayload.error ||
       (ok ? 'Mihomo сообщает, что конфиг валиден.' : 'Mihomo сообщил об ошибке проверки.')
     ).trim();
+    const summary = humanizeValidationMessage(rawSummary, lineCol);
     const kind = normalizeValidationKind(rawPayload.kind, ok);
     const explain = buildValidationExplainItems(Object.assign({}, rawPayload, { ok, log, summary, lineCol }));
     const title = String(rawPayload.title || (ok ? 'Проверка конфигурации пройдена' : 'Проверка конфигурации не пройдена'));
@@ -2135,14 +2182,15 @@ let mihomoPanelModuleApi = null;
       }
 
       const firstLine = (log.split('\n').find((l) => l.trim()) || '').trim();
+      const firstIssue = firstMeaningfulValidationLine(log);
       if (data.ok) {
         showValidationModal({
           ok: true,
           kind: 'success',
           title: 'Проверка конфигурации пройдена',
           leadTitle: 'Mihomo подтвердил, что конфиг валиден',
-          leadDesc: firstMeaningfulValidationLine(log) || 'Проверка через mihomo -t завершилась без ошибок.',
-          summary: firstMeaningfulValidationLine(log) || 'Конфиг принят без ошибок.',
+          leadDesc: firstIssue || 'Проверка через mihomo -t завершилась без ошибок.',
+          summary: firstIssue || 'Конфиг принят без ошибок.',
           log,
           source: 'mihomo -t',
           action: 'Валидация',
@@ -2162,13 +2210,13 @@ let mihomoPanelModuleApi = null;
         kind: 'error',
         title: 'Проверка конфигурации не пройдена',
         leadTitle: 'Mihomo нашёл проблему в config.yaml',
-        leadDesc: firstMeaningfulValidationLine(log) || 'Смотрите расшифровку и лог: там указано, где искать причину.',
-        summary: firstMeaningfulValidationLine(log) || 'Конфиг не прошёл проверку.',
+        leadDesc: firstIssue || 'Смотрите расшифровку и лог: там указано, где искать причину.',
+        summary: firstIssue || 'Конфиг не прошёл проверку.',
         log,
         source: 'mihomo -t',
         action: 'Валидация',
       });
-      setStatus('В таком виде конфиг не будет работать: ' + (firstLine || 'ошибка проверки.'), true);
+      setStatus('В таком виде конфиг не будет работать: ' + (humanizeValidationMessage(firstIssue || firstLine) || 'ошибка проверки.'), true);
       return false;
     } catch (e) {
       console.error(e);

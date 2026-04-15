@@ -12,6 +12,10 @@ def test_mihomo_panel_validation_modal_uses_compact_premium_rendering_contract()
     assert "validationGrid: 'mihomo-validation-grid'" in script
     assert "validationCopyBtn: 'mihomo-validation-copy-btn'" in script
     assert "function buildValidationExplainItems(payload) {" in script
+    assert "function extractMihomoValidationMessage(line) {" in script
+    assert "function humanizeValidationMessage(message, lineCol) {" in script
+    assert "mapping values are not allowed" in script
+    assert "const rawSummary = String(" in script
     assert "function buildValidationCopyText(payload) {" in script
     assert "async function copyValidationDetails() {" in script
     assert "async function performValidationFromEditor() {" in script
@@ -28,6 +32,7 @@ def test_mihomo_panel_validation_modal_uses_compact_premium_rendering_contract()
     assert 'class="xk-mihomo-validation-terminal"' in template
 
     assert "#mihomo-validation-modal .modal-content {" in styles
+    assert "max-height: min(86vh, 720px);" in styles
     assert "#mihomo-validation-modal .xk-mihomo-validation-grid[data-has-log=\"0\"] {" in styles
     assert "#mihomo-validation-modal .xk-mihomo-validation-terminal {" in styles
     assert "#mihomo-validation-modal .xk-mihomo-validation-copy-status.is-error {" in styles
