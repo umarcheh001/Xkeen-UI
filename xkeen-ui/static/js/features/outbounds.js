@@ -2997,11 +2997,25 @@ let outboundsModuleApi = null;
       document.body.insertAdjacentHTML('beforeend', `
         <div id="outbounds-subscriptions-modal" class="modal hidden" data-modal-key="outbounds-subscriptions-v1" data-modal-remember="0" data-modal-nopos="1" data-modal-noresize="1" role="dialog" aria-modal="true" aria-label="Подписки Xray">
           <div class="modal-content xk-sub-modal" data-modal-key="outbounds-subscriptions-v1-content">
-            <div class="modal-header">
-              <span class="modal-title">Подписки Xray</span>
-              <button type="button" class="modal-close" id="outbounds-subscriptions-close-btn" title="Закрыть">×</button>
+            <div class="modal-header xk-sub-header">
+              <div class="xk-sub-titleblock">
+                <span class="modal-title">Подписки Xray</span>
+                <span class="xk-sub-subtitle">Автообновление generated outbounds и observatory.</span>
+              </div>
+              <button type="button" class="modal-close" id="outbounds-subscriptions-close-btn" title="Закрыть" data-tooltip="Закрыть окно подписок.">×</button>
             </div>
             <div class="modal-body">
+              <div class="xk-sub-brief">
+                <div>
+                  <div class="xk-sub-brief-title">LeastPing за минуту</div>
+                  <div class="xk-sub-brief-text">Подписка пишет отдельный <code>04_outbounds.&lt;tag&gt;.json</code>. В балансировщике LeastPing выбери теги с этим prefix; включенный «Пинг» добавит их в <code>07_observatory.json</code>.</div>
+                </div>
+                <div class="xk-sub-steps" aria-hidden="true">
+                  <span>URL</span>
+                  <span>Фрагмент</span>
+                  <span>LeastPing</span>
+                </div>
+              </div>
               <div class="xk-sub-grid">
                 <section class="xk-sub-panel xk-sub-form-panel">
                   <div class="xk-sub-panelhead">
@@ -3012,30 +3026,30 @@ let outboundsModuleApi = null;
                   </div>
                   <form id="outbounds-subscriptions-form" class="xk-sub-form">
                     <input id="outbounds-subscriptions-id" type="hidden">
-                    <label>
+                    <label data-tooltip="Короткое имя подписки в списке. Можно оставить пустым.">
                       <span class="xk-pool-fieldlabel">Название</span>
-                      <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription">
+                      <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription" title="Название подписки" data-tooltip="Короткое имя подписки в списке.">
                     </label>
-                    <label>
+                    <label data-tooltip="Префикс для generated outbound tags, например sub--node. Его удобно выбирать в LeastPing.">
                       <span class="xk-pool-fieldlabel">Tag prefix</span>
-                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub">
+                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Используй его в selector/balancer LeastPing.">
                     </label>
-                    <label class="xk-sub-wide">
+                    <label class="xk-sub-wide" data-tooltip="HTTP(S) URL подписки. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
                       <span class="xk-pool-fieldlabel">URL</span>
-                      <input id="outbounds-subscriptions-url" class="xray-log-filter" type="url" placeholder="https://...">
+                      <input id="outbounds-subscriptions-url" class="xray-log-filter" type="url" placeholder="https://..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки. Панель скачает nodes и создаст отдельный outbounds-фрагмент.">
                     </label>
-                    <label>
+                    <label data-tooltip="Как часто обновлять подписку. Заголовок provider profile-update-interval может уточнить значение.">
                       <span class="xk-pool-fieldlabel">Интервал, ч</span>
-                      <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="6">
+                      <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="6" title="Интервал обновления" data-tooltip="Интервал автообновления в часах: от 1 до 168.">
                     </label>
                     <div class="xk-sub-options">
-                      <label class="xk-sub-check"><input id="outbounds-subscriptions-enabled" type="checkbox" checked><span>Авто</span></label>
-                      <label class="xk-sub-check"><input id="outbounds-subscriptions-ping" type="checkbox" checked><span>Пинг</span></label>
-                      <label class="xk-sub-check"><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked><span>Обновить сразу</span></label>
+                      <label class="xk-sub-check" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span>Авто</span></label>
+                      <label class="xk-sub-check" data-tooltip="Добавлять generated tags в observatory для leastPing-проверок."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" data-tooltip="Добавлять generated outbound tags в 07_observatory.json для LeastPing."><span>Пинг</span></label>
+                      <label class="xk-sub-check" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span>Обновить сразу</span></label>
                     </div>
                     <div class="xk-sub-actions">
-                      <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact">Новая</button>
-                      <button type="submit" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact">Сохранить</button>
+                      <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Новая подписка" data-tooltip="Очистить форму и добавить новую подписку.">Новая</button>
+                      <button type="submit" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить подписку" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
                     </div>
                   </form>
                 </section>
@@ -3049,7 +3063,7 @@ let outboundsModuleApi = null;
                     <div id="outbounds-subscriptions-summary" class="xk-pool-summary">0</div>
                   </div>
                   <div class="xk-sub-toolbar">
-                    <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact">Обновить due</button>
+                    <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact" title="Обновить due" data-tooltip="Обновить все подписки, у которых уже наступило время next update.">Обновить due</button>
                   </div>
                   <div class="xk-sub-tablewrap">
                     <table class="xk-pool-table xk-sub-table">
@@ -3072,7 +3086,7 @@ let outboundsModuleApi = null;
             <div class="modal-actions xk-pool-footer">
               <div></div>
               <div class="xk-pool-footer-actions">
-                <button type="button" id="outbounds-subscriptions-cancel-btn" class="btn-compact">Закрыть</button>
+                <button type="button" id="outbounds-subscriptions-cancel-btn" class="btn-compact" title="Закрыть" data-tooltip="Закрыть окно подписок.">Закрыть</button>
               </div>
             </div>
           </div>
@@ -3191,15 +3205,15 @@ let outboundsModuleApi = null;
             <div class="xk-sub-muted">next: ${escapeHtml(next)}</div>
           </td>
           <td class="xk-sub-file-cell">
-            <button type="button" class="xk-sub-file-link" data-file="${file}" title="${filePath || file}">
+            <button type="button" class="xk-sub-file-link" data-file="${file}" title="${filePath || file}" data-tooltip="Открыть generated outbounds-фрагмент этой подписки.">
               <code>${file || '—'}</code>
             </button>
           </td>
           <td class="xk-sub-row-actions">
-            <button type="button" class="btn-secondary btn-compact xk-sub-open" data-file="${file}" title="Открыть generated-фрагмент">↗</button>
-            <button type="button" class="btn-secondary btn-compact xk-sub-refresh" data-id="${id}" title="Обновить">↻</button>
-            <button type="button" class="btn-secondary btn-compact xk-sub-edit" data-id="${id}" title="Редактировать">✎</button>
-            <button type="button" class="btn-secondary btn-compact xk-sub-delete" data-id="${id}" title="Удалить">×</button>
+            <button type="button" class="btn-secondary btn-compact xk-sub-open" data-file="${file}" title="Открыть generated-фрагмент" data-tooltip="Переключить Прокси на этот фрагмент и открыть JSON-редактор.">↗</button>
+            <button type="button" class="btn-secondary btn-compact xk-sub-refresh" data-id="${id}" title="Обновить" data-tooltip="Скачать подписку сейчас и перегенерировать outbounds-фрагмент.">↻</button>
+            <button type="button" class="btn-secondary btn-compact xk-sub-edit" data-id="${id}" title="Редактировать" data-tooltip="Загрузить настройки подписки в форму слева.">✎</button>
+            <button type="button" class="btn-secondary btn-compact xk-sub-delete" data-id="${id}" title="Удалить" data-tooltip="Удалить подписку и generated-фрагмент.">×</button>
           </td>
         `;
         tbody.appendChild(tr);

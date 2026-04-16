@@ -1870,6 +1870,7 @@
             <div class="terminal-menu-title" style="margin:0 0 8px;">Содержание</div>
             <a href="#" data-help-target="xk-bhelp-what">Как это устроено</a>
             <a href="#" data-help-target="xk-bhelp-step1">Шаг 1: серверы (outbounds)</a>
+            <a href="#" data-help-target="xk-bhelp-subscriptions">Подписки Xray</a>
             <a href="#" data-help-target="xk-bhelp-step2">Шаг 2: балансировщик</a>
             <a href="#" data-help-target="xk-bhelp-step3">Шаг 3: правила</a>
             <a href="#" data-help-target="xk-bhelp-forced">Исключения (🔒)</a>
@@ -1883,9 +1884,10 @@
               Дальше Xray сам выбирает “какой outbound использовать сейчас”.
             </div>
 
-            <h3 id="xk-bhelp-what">Как это устроено в панели (3 файла)</h3>
+            <h3 id="xk-bhelp-what">Как это устроено в панели</h3>
             <ul>
               <li><code>04_outbounds.json</code> — список ваших серверов/прокси (каждый с уникальным <code>tag</code>).</li>
+              <li><code>04_outbounds.&lt;tag&gt;.json</code> — generated-фрагменты подписок. Основной <code>04_outbounds.json</code> при этом не перезаписывается.</li>
               <li><code>05_routing.json</code> — <code>routing.balancers</code> (балансировщики) и <code>routing.rules</code> (правила).
                 <span class="modal-hint">(в некоторых сборках/профилях может быть <code>05_routing_hys2.json</code>; панель показывает активный файл в селекторе сверху)</span>
               </li>
@@ -1923,6 +1925,21 @@
                 <li>Теги <code>direct</code>/<code>block</code>/<code>dns</code> — служебные, их не используйте для прокси.</li>
                 <li>После сохранения пул попадёт в <code>04_outbounds</code>. Далее в мастерах можно “подтянуть” теги автоматически.</li>
               </ul>
+            </details>
+
+            <h3 id="xk-bhelp-subscriptions">Подписки Xray. Как создать и использовать</h3>
+            <details class="xk-balancer-help-details" open>
+              <summary>Подписка → generated outbounds → LeastPing</summary>
+              <ol>
+                <li>Откройте карточку <b>Прокси</b> и нажмите кнопку <b>Подписки</b>.</li>
+                <li>Вставьте URL подписки, задайте <b>Tag prefix</b> вроде <code>sub</code> или <code>cdn.pecan.run</code>.</li>
+                <li>Оставьте <b>Пинг</b> включенным: панель добавит generated-теги в <code>07_observatory.json</code> для <code>leastPing</code>.</li>
+                <li>Нажмите <b>Сохранить</b>. Подписка создаст файл вида <code>04_outbounds.sub.json</code> с outbound-тегами <code>sub--...</code>.</li>
+                <li>В балансировщике выберите selector по этому prefix, например <code>sub--</code>, и стратегию <code>leastPing</code>.</li>
+              </ol>
+              <div class="xk-balancer-help-callout" style="margin-top:10px;">
+                <b>Коротко:</b> подписки не меняют ручной <code>04_outbounds.json</code>. Они живут отдельными фрагментами, а быстрый мастер LeastPing видит теги из всех outbounds-файлов.
+              </div>
             </details>
 
             <h3 id="xk-bhelp-step2">Шаг 2. Создайте балансировщик</h3>
