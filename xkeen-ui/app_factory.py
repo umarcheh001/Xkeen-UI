@@ -589,4 +589,26 @@ def create_app(*, ws_runtime: bool = False):
 
     _register_api_blueprints(app, ctx)
 
+    try:
+        from services.xray_subscriptions import start_subscription_scheduler
+
+        start_subscription_scheduler(
+            UI_STATE_DIR,
+            xray_configs_dir=XRAY_CONFIGS_DIR,
+            snapshot=snapshot_xray_config_before_overwrite,
+            restart_xkeen=restart_xkeen,
+        )
+    except Exception as e:  # noqa: BLE001
+        try:
+            from core.logging import core_log_once
+
+            core_log_once(
+                "warning",
+                "xray_subscriptions_scheduler_failed",
+                "xray subscriptions scheduler init failed (non-fatal)",
+                error=str(e),
+            )
+        except Exception:
+            pass
+
     return app

@@ -147,10 +147,10 @@ import { stripJsonComments } from '../../util/strip_json_comments.js';
   };
 
   C.buildOutboundTagsUrl = function () {
-    let url = '/api/xray/outbound-tags';
+    let url = '/api/xray/outbound-tags?all=1';
     try {
       const file = C.getActiveOutboundsFragment();
-      if (file) url += '?file=' + encodeURIComponent(String(file));
+      if (file) url += '&file=' + encodeURIComponent(String(file));
     } catch (e) {}
     return url;
   };

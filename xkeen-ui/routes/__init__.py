@@ -45,6 +45,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
     from .config_exchange import create_config_exchange_blueprint
     from .routing import create_routing_blueprint
     from .xray_configs import create_xray_configs_blueprint
+    from .xray_subscriptions import create_xray_subscriptions_blueprint
     from .mihomo import create_mihomo_blueprint
     from .backups import create_backups_blueprint
     from .service import create_service_blueprint
@@ -92,6 +93,15 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             load_json=ctx.load_json,
             save_json=ctx.save_json,
             strip_json_comments_text=ctx.strip_json_comments_text,
+            snapshot_xray_config_before_overwrite=ctx.snapshot_xray_config_before_overwrite,
+        )
+    )
+
+    app.register_blueprint(
+        create_xray_subscriptions_blueprint(
+            ui_state_dir=ctx.ui_state_dir,
+            xray_configs_dir=ctx.xray_configs_dir,
+            restart_xkeen=ctx.restart_xkeen,
             snapshot_xray_config_before_overwrite=ctx.snapshot_xray_config_before_overwrite,
         )
     )

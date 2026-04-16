@@ -564,45 +564,59 @@ def create_xray_configs_blueprint(
 
     @bp.get("/api/xray/outbound-tags")
     def api_xray_outbound_tags():
-        file_arg = request.args.get("file", "")
-        sel_path = resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=OUTBOUNDS_FILE)
-        sel_path = _normalize_main_json_path(sel_path)
-
-        # Prefer raw JSONC variant (with comments) if present.
-        chosen_path, raw_path, raw_exists = _choose_raw_or_main(sel_path)
-
-        text = _read_text_silent(chosen_path)
-
         tags: list[str] = []
         seen: set[str] = set()
-        try:
-            obj: Any = None
-            if text.strip():
-                cleaned = strip_json_comments_text(text)
-                obj = json.loads(cleaned) if cleaned.strip() else None
-            else:
-                obj = load_json(sel_path, default=None)
 
-            outbounds = None
-            if isinstance(obj, dict):
-                outbounds = obj.get("outbounds")
-            elif isinstance(obj, list):
-                outbounds = obj
+        def _collect_from_path(sel_path: str) -> None:
+            # Prefer raw JSONC variant (with comments) if present.
+            chosen_path, _raw_path, _raw_exists = _choose_raw_or_main(sel_path)
+            text = _read_text_silent(chosen_path)
 
-            if isinstance(outbounds, list):
-                for o in outbounds:
-                    if not isinstance(o, dict):
+            try:
+                obj: Any = None
+                if text.strip():
+                    cleaned = strip_json_comments_text(text)
+                    obj = json.loads(cleaned) if cleaned.strip() else None
+                else:
+                    obj = load_json(sel_path, default=None)
+
+                outbounds = None
+                if isinstance(obj, dict):
+                    outbounds = obj.get("outbounds")
+                elif isinstance(obj, list):
+                    outbounds = obj
+
+                if isinstance(outbounds, list):
+                    for o in outbounds:
+                        if not isinstance(o, dict):
+                            continue
+                        t = o.get("tag")
+                        if not isinstance(t, str):
+                            continue
+                        t = t.strip()
+                        if not t or t in seen:
+                            continue
+                        seen.add(t)
+                        tags.append(t)
+            except Exception:
+                return
+
+        if _is_true_flag(request.args.get("all", None)):
+            try:
+                for item in list_xray_fragments("outbounds"):
+                    name = str((item or {}).get("name") or "")
+                    if not name:
                         continue
-                    t = o.get("tag")
-                    if not isinstance(t, str):
-                        continue
-                    t = t.strip()
-                    if not t or t in seen:
-                        continue
-                    seen.add(t)
-                    tags.append(t)
-        except Exception:
-            tags = []
+                    sel_path = resolve_xray_fragment_file(name, kind="outbounds", default_path=OUTBOUNDS_FILE)
+                    sel_path = _normalize_main_json_path(sel_path)
+                    _collect_from_path(sel_path)
+            except Exception:
+                tags = []
+        else:
+            file_arg = request.args.get("file", "")
+            sel_path = resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=OUTBOUNDS_FILE)
+            sel_path = _normalize_main_json_path(sel_path)
+            _collect_from_path(sel_path)
 
         return jsonify({"ok": True, "tags": tags}), 200
 

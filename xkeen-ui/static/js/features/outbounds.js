@@ -2961,6 +2961,506 @@ let outboundsModuleApi = null;
       if (modal.dataset) modal.dataset.xkWired = '1';
     }
 
+    // --- Xray subscriptions (auto-updated generated outbounds) ---
+
+    const SUB_IDS = {
+      open: 'outbounds-subscriptions-btn',
+      modal: 'outbounds-subscriptions-modal',
+      close: 'outbounds-subscriptions-close-btn',
+      cancel: 'outbounds-subscriptions-cancel-btn',
+      form: 'outbounds-subscriptions-form',
+      id: 'outbounds-subscriptions-id',
+      name: 'outbounds-subscriptions-name',
+      tag: 'outbounds-subscriptions-tag',
+      url: 'outbounds-subscriptions-url',
+      interval: 'outbounds-subscriptions-interval',
+      enabled: 'outbounds-subscriptions-enabled',
+      ping: 'outbounds-subscriptions-ping',
+      refreshNow: 'outbounds-subscriptions-refresh-now',
+      save: 'outbounds-subscriptions-save-btn',
+      reset: 'outbounds-subscriptions-reset-btn',
+      refreshDue: 'outbounds-subscriptions-refresh-due-btn',
+      tbody: 'outbounds-subscriptions-tbody',
+      empty: 'outbounds-subscriptions-empty',
+      status: 'outbounds-subscriptions-status',
+      summary: 'outbounds-subscriptions-summary',
+    };
+
+    let _subscriptions = [];
+    let _subscriptionEditId = '';
+
+    function subsEnsureModal() {
+      let modal = $(SUB_IDS.modal);
+      if (modal) return modal;
+      if (!document.body) return null;
+
+      document.body.insertAdjacentHTML('beforeend', `
+        <div id="outbounds-subscriptions-modal" class="modal hidden" data-modal-key="outbounds-subscriptions-v1" data-modal-remember="0" data-modal-nopos="1" data-modal-noresize="1" role="dialog" aria-modal="true" aria-label="Подписки Xray">
+          <div class="modal-content xk-sub-modal" data-modal-key="outbounds-subscriptions-v1-content">
+            <div class="modal-header">
+              <span class="modal-title">Подписки Xray</span>
+              <button type="button" class="modal-close" id="outbounds-subscriptions-close-btn" title="Закрыть">×</button>
+            </div>
+            <div class="modal-body">
+              <div class="xk-sub-grid">
+                <section class="xk-sub-panel xk-sub-form-panel">
+                  <div class="xk-sub-panelhead">
+                    <div>
+                      <div class="xk-pool-kicker">Источник</div>
+                      <div class="terminal-menu-title" style="margin:0;">HTTP(S) subscription</div>
+                    </div>
+                  </div>
+                  <form id="outbounds-subscriptions-form" class="xk-sub-form">
+                    <input id="outbounds-subscriptions-id" type="hidden">
+                    <label>
+                      <span class="xk-pool-fieldlabel">Название</span>
+                      <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription">
+                    </label>
+                    <label>
+                      <span class="xk-pool-fieldlabel">Tag prefix</span>
+                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub">
+                    </label>
+                    <label class="xk-sub-wide">
+                      <span class="xk-pool-fieldlabel">URL</span>
+                      <input id="outbounds-subscriptions-url" class="xray-log-filter" type="url" placeholder="https://...">
+                    </label>
+                    <label>
+                      <span class="xk-pool-fieldlabel">Интервал, ч</span>
+                      <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="6">
+                    </label>
+                    <div class="xk-sub-options">
+                      <label class="xk-sub-check"><input id="outbounds-subscriptions-enabled" type="checkbox" checked><span>Авто</span></label>
+                      <label class="xk-sub-check"><input id="outbounds-subscriptions-ping" type="checkbox" checked><span>Пинг</span></label>
+                      <label class="xk-sub-check"><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked><span>Обновить сразу</span></label>
+                    </div>
+                    <div class="xk-sub-actions">
+                      <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact">Новая</button>
+                      <button type="submit" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact">Сохранить</button>
+                    </div>
+                  </form>
+                </section>
+
+                <section class="xk-sub-panel xk-sub-list-panel">
+                  <div class="xk-sub-panelhead">
+                    <div>
+                      <div class="xk-pool-kicker">Список</div>
+                      <div class="terminal-menu-title" style="margin:0;">Сгенерированные фрагменты</div>
+                    </div>
+                    <div id="outbounds-subscriptions-summary" class="xk-pool-summary">0</div>
+                  </div>
+                  <div class="xk-sub-toolbar">
+                    <button type="button" id="outbounds-subscriptions-refresh-due-btn" class="btn-secondary btn-compact">Обновить due</button>
+                  </div>
+                  <div class="xk-sub-tablewrap">
+                    <table class="xk-pool-table xk-sub-table">
+                      <thead>
+                        <tr>
+                          <th>Tag</th>
+                          <th>Статус</th>
+                          <th>Файл</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="outbounds-subscriptions-tbody"></tbody>
+                    </table>
+                    <div id="outbounds-subscriptions-empty" class="xk-pool-empty">Подписок пока нет.</div>
+                  </div>
+                  <div id="outbounds-subscriptions-status" class="modal-hint xk-sub-status"></div>
+                </section>
+              </div>
+            </div>
+            <div class="modal-actions xk-pool-footer">
+              <div></div>
+              <div class="xk-pool-footer-actions">
+                <button type="button" id="outbounds-subscriptions-cancel-btn" class="btn-compact">Закрыть</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `);
+
+      modal = $(SUB_IDS.modal);
+      return modal;
+    }
+
+    function subsShow(show) {
+      const modal = subsEnsureModal();
+      if (!modal) return;
+      try {
+        if (show) modal.classList.remove('hidden');
+        else modal.classList.add('hidden');
+      } catch (e) {}
+      try { syncXkeenBodyScrollLock(!!show); } catch (e2) {}
+    }
+
+    function subsSetStatus(msg, isErr, isOk) {
+      const el = $(SUB_IDS.status);
+      if (!el) return;
+      try {
+        el.textContent = String(msg || '');
+        el.classList.toggle('is-error', !!isErr);
+        el.classList.toggle('is-success', !isErr && !!isOk);
+      } catch (e) {}
+    }
+
+    function subsFormatTime(ts) {
+      const n = Number(ts || 0);
+      if (!Number.isFinite(n) || n <= 0) return '—';
+      try {
+        return new Date(n * 1000).toLocaleString();
+      } catch (e) {
+        return String(Math.round(n));
+      }
+    }
+
+    function subsShortUrl(url) {
+      const raw = String(url || '');
+      if (!raw) return '';
+      try {
+        const u = new URL(raw);
+        const path = String(u.pathname || '').replace(/\/+$/g, '');
+        return u.hostname + (path ? path.slice(0, 28) : '');
+      } catch (e) {}
+      return raw.length > 42 ? raw.slice(0, 39) + '…' : raw;
+    }
+
+    function subsGeneratedFilePath(file) {
+      const name = String(file || '').trim();
+      if (!name) return '';
+      const dir = String(_fragmentDir || '/opt/etc/xray/configs').replace(/\/+$/g, '');
+      return dir + '/' + name;
+    }
+
+    function subsResetForm() {
+      _subscriptionEditId = '';
+      try { $(SUB_IDS.id).value = ''; } catch (e) {}
+      try { $(SUB_IDS.name).value = ''; } catch (e) {}
+      try { $(SUB_IDS.tag).value = ''; } catch (e) {}
+      try { $(SUB_IDS.url).value = ''; } catch (e) {}
+      try { $(SUB_IDS.interval).value = '6'; } catch (e) {}
+      try { $(SUB_IDS.enabled).checked = true; } catch (e) {}
+      try { $(SUB_IDS.ping).checked = true; } catch (e) {}
+      try { $(SUB_IDS.refreshNow).checked = true; } catch (e) {}
+    }
+
+    function subsFillForm(sub) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      _subscriptionEditId = String(s.id || '');
+      try { $(SUB_IDS.id).value = _subscriptionEditId; } catch (e) {}
+      try { $(SUB_IDS.name).value = String(s.name || ''); } catch (e) {}
+      try { $(SUB_IDS.tag).value = String(s.tag || ''); } catch (e) {}
+      try { $(SUB_IDS.url).value = String(s.url || ''); } catch (e) {}
+      try { $(SUB_IDS.interval).value = String(s.interval_hours || 6); } catch (e) {}
+      try { $(SUB_IDS.enabled).checked = s.enabled !== false; } catch (e) {}
+      try { $(SUB_IDS.ping).checked = s.ping_enabled !== false; } catch (e) {}
+      try { $(SUB_IDS.refreshNow).checked = false; } catch (e) {}
+      try { $(SUB_IDS.url).focus(); } catch (e) {}
+    }
+
+    function subsRender() {
+      const tbody = $(SUB_IDS.tbody);
+      const empty = $(SUB_IDS.empty);
+      const summary = $(SUB_IDS.summary);
+      if (!tbody) return;
+      const items = Array.isArray(_subscriptions) ? _subscriptions : [];
+      tbody.innerHTML = '';
+
+      items.forEach((sub) => {
+        const tr = document.createElement('tr');
+        const ok = sub && sub.last_ok === true;
+        const bad = sub && sub.last_ok === false;
+        const count = Number(sub && sub.last_count ? sub.last_count : 0);
+        const statusText = ok
+          ? (`OK · ${count}`)
+          : (bad ? ('Ошибка · ' + escapeHtml(String(sub.last_error || ''))) : '—');
+        const next = subsFormatTime(sub && sub.next_update_ts);
+        const title = escapeHtml(String(sub && sub.name ? sub.name : sub && sub.id ? sub.id : ''));
+        const tag = escapeHtml(String(sub && sub.tag ? sub.tag : ''));
+        const url = escapeHtml(subsShortUrl(sub && sub.url));
+        const fileRaw = String(sub && sub.output_file ? sub.output_file : '');
+        const file = escapeHtml(fileRaw);
+        const filePath = escapeHtml(subsGeneratedFilePath(fileRaw));
+        const id = escapeHtml(String(sub && sub.id ? sub.id : ''));
+        tr.innerHTML = `
+          <td>
+            <div class="xk-sub-main">${tag || id}</div>
+            <div class="xk-sub-muted">${title}${url ? ' · ' + url : ''}</div>
+          </td>
+          <td>
+            <div class="${bad ? 'xk-sub-bad' : (ok ? 'xk-sub-ok' : 'xk-sub-muted')}">${statusText}</div>
+            <div class="xk-sub-muted">next: ${escapeHtml(next)}</div>
+          </td>
+          <td class="xk-sub-file-cell">
+            <button type="button" class="xk-sub-file-link" data-file="${file}" title="${filePath || file}">
+              <code>${file || '—'}</code>
+            </button>
+          </td>
+          <td class="xk-sub-row-actions">
+            <button type="button" class="btn-secondary btn-compact xk-sub-open" data-file="${file}" title="Открыть generated-фрагмент">↗</button>
+            <button type="button" class="btn-secondary btn-compact xk-sub-refresh" data-id="${id}" title="Обновить">↻</button>
+            <button type="button" class="btn-secondary btn-compact xk-sub-edit" data-id="${id}" title="Редактировать">✎</button>
+            <button type="button" class="btn-secondary btn-compact xk-sub-delete" data-id="${id}" title="Удалить">×</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      try { if (empty) empty.style.display = items.length ? 'none' : 'block'; } catch (e) {}
+      try { if (summary) summary.textContent = String(items.length) + ' шт.'; } catch (e) {}
+
+      Array.from(tbody.querySelectorAll('.xk-sub-open, .xk-sub-file-link')).forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          subsOpenGeneratedFragment(btn.getAttribute('data-file') || '');
+        });
+      });
+      Array.from(tbody.querySelectorAll('.xk-sub-refresh')).forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          subsRefresh(btn.getAttribute('data-id') || '');
+        });
+      });
+      Array.from(tbody.querySelectorAll('.xk-sub-edit')).forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const id = btn.getAttribute('data-id') || '';
+          const sub = _subscriptions.find((item) => String(item && item.id || '') === id);
+          if (sub) subsFillForm(sub);
+        });
+      });
+      Array.from(tbody.querySelectorAll('.xk-sub-delete')).forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          subsDelete(btn.getAttribute('data-id') || '');
+        });
+      });
+    }
+
+    async function subsOpenGeneratedFragment(file) {
+      const name = String(file || '').trim();
+      if (!name) return false;
+
+      async function commitOpen() {
+        applyActiveFragment(name, _fragmentDir, _fragmentItems);
+        try { await load(); } catch (e) {}
+        subsShow(false);
+        const opened = openXkeenJsonEditor('outbounds');
+        if (opened == null) {
+          try { toastXkeen('JSON-редактор не загружен.', 'error'); } catch (e) {}
+          return false;
+        }
+        return true;
+      }
+
+      subsSetStatus('Открываю фрагмент: ' + name, false);
+      try { await refreshFragmentsList({ notify: false }); } catch (e) {}
+
+      const prev = getActiveFragment();
+      if (prev && prev !== name) {
+        return guardFragmentSwitch(name, prev, {
+          onCancel: () => restoreFragmentSelection($(IDS.fragmentSelect), prev, _fragmentDir, _fragmentItems),
+          commit: commitOpen,
+        });
+      }
+      return commitOpen();
+    }
+
+    async function subsLoad() {
+      try {
+        const res = await fetch('/api/xray/subscriptions', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok === false) {
+          throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+        }
+        _subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+        subsRender();
+        return true;
+      } catch (e) {
+        subsSetStatus('Ошибка загрузки: ' + String(e && e.message ? e.message : e), true);
+        return false;
+      }
+    }
+
+    async function subsRefresh(id) {
+      const subId = String(id || '').trim();
+      if (!subId) return false;
+      subsSetStatus('Обновляю подписку…', false);
+      const restart = shouldRestartAfterSave();
+      try {
+        const res = await fetch('/api/xray/subscriptions/' + encodeURIComponent(subId) + '/refresh?restart=' + (restart ? '1' : '0'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok === false) {
+          const err = String((data && (data.error || data.message)) || ('HTTP ' + res.status));
+          throw new Error(err);
+        }
+        const msg = `Готово: ${Number(data.count || 0)} outbound` + (data.changed ? ' · файл обновлён' : ' · без изменений');
+        const fileNote = data.output_file ? (' · ' + String(data.output_file)) : '';
+        subsSetStatus(msg + fileNote, false, true);
+        try { toastXkeen(msg, 'success'); } catch (e) {}
+        try { await refreshFragmentsList({ notify: false }); } catch (e2) {}
+        try { await refreshRestartLog(); } catch (e3) {}
+        await subsLoad();
+        return true;
+      } catch (e) {
+        const msg = 'Ошибка обновления: ' + String(e && e.message ? e.message : e);
+        subsSetStatus(msg, true);
+        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        await subsLoad();
+        return false;
+      }
+    }
+
+    async function subsRefreshDue() {
+      subsSetStatus('Проверяю due-подписки…', false);
+      const restart = shouldRestartAfterSave();
+      try {
+        const res = await fetch('/api/xray/subscriptions/refresh-due?restart=' + (restart ? '1' : '0'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok === false) {
+          throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+        }
+        const msg = `Due обновлены: ${Number(data.ok_count || 0)} / ${Number(data.updated || 0)}`;
+        subsSetStatus(msg, false, true);
+        try { await refreshFragmentsList({ notify: false }); } catch (e) {}
+        await subsLoad();
+      } catch (e) {
+        subsSetStatus('Ошибка: ' + String(e && e.message ? e.message : e), true);
+      }
+    }
+
+    async function subsSave(e) {
+      if (e && typeof e.preventDefault === 'function') e.preventDefault();
+      const payload = {
+        id: String(($(SUB_IDS.id) && $(SUB_IDS.id).value) || _subscriptionEditId || '').trim(),
+        name: String(($(SUB_IDS.name) && $(SUB_IDS.name).value) || '').trim(),
+        tag: String(($(SUB_IDS.tag) && $(SUB_IDS.tag).value) || '').trim(),
+        url: String(($(SUB_IDS.url) && $(SUB_IDS.url).value) || '').trim(),
+        interval_hours: Number(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || 6),
+        enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
+        ping_enabled: !!($(SUB_IDS.ping) && $(SUB_IDS.ping).checked),
+      };
+      if (!payload.url) {
+        subsSetStatus('URL обязателен.', true);
+        return false;
+      }
+
+      subsSetStatus('Сохраняю…', false);
+      try {
+        const res = await fetch('/api/xray/subscriptions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok === false) {
+          throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+        }
+        const sub = data.subscription || {};
+        const id = String(sub.id || payload.id || '');
+        subsSetStatus('Сохранено.', false, true);
+        await subsLoad();
+        if ($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked && id) {
+          await subsRefresh(id);
+        } else {
+          try { toastXkeen('Подписка сохранена', 'success'); } catch (e2) {}
+        }
+        subsFillForm(sub);
+        return true;
+      } catch (err) {
+        const msg = 'Ошибка сохранения: ' + String(err && err.message ? err.message : err);
+        subsSetStatus(msg, true);
+        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        return false;
+      }
+    }
+
+    async function subsDelete(id) {
+      const subId = String(id || '').trim();
+      if (!subId) return false;
+      try {
+        if (!window.confirm('Удалить подписку и сгенерированный outbounds-файл?')) return false;
+      } catch (e) {}
+      const restart = shouldRestartAfterSave();
+      subsSetStatus('Удаляю…', false);
+      try {
+        const res = await fetch('/api/xray/subscriptions/' + encodeURIComponent(subId) + '?restart=' + (restart ? '1' : '0'), {
+          method: 'DELETE',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok === false) {
+          throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+        }
+        subsSetStatus('Удалено.', false, true);
+        if (_subscriptionEditId === subId) subsResetForm();
+        try { await refreshFragmentsList({ notify: false }); } catch (e) {}
+        await subsLoad();
+        return true;
+      } catch (err) {
+        subsSetStatus('Ошибка удаления: ' + String(err && err.message ? err.message : err), true);
+        return false;
+      }
+    }
+
+    async function subsOpen() {
+      subsEnsureModal();
+      subsShow(true);
+      subsSetStatus('', false);
+      await subsLoad();
+      try { $(SUB_IDS.url).focus(); } catch (e) {}
+    }
+
+    function subsClose() {
+      subsShow(false);
+    }
+
+    function wireSubscriptionsModal() {
+      const openBtn = $(SUB_IDS.open);
+      if (!openBtn) return;
+      if (openBtn.dataset && openBtn.dataset.xkSubWired === '1') return;
+
+      openBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        subsOpen();
+      });
+      if (openBtn.dataset) openBtn.dataset.xkSubWired = '1';
+
+      const modal = subsEnsureModal();
+      if (!modal || (modal.dataset && modal.dataset.xkWired === '1')) return;
+
+      wireButton(SUB_IDS.close, subsClose);
+      wireButton(SUB_IDS.cancel, subsClose);
+      wireButton(SUB_IDS.reset, () => {
+        subsResetForm();
+        subsSetStatus('', false);
+      });
+      wireButton(SUB_IDS.refreshDue, subsRefreshDue);
+
+      const form = $(SUB_IDS.form);
+      if (form) {
+        form.addEventListener('submit', subsSave);
+      }
+
+      modal.addEventListener('click', (e) => {
+        try { if (e && e.target === modal) subsClose(); } catch (e2) {}
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (!e || e.key !== 'Escape') return;
+        const m = $(SUB_IDS.modal);
+        if (m && !m.classList.contains('hidden')) subsClose();
+      });
+
+      if (modal.dataset) modal.dataset.xkWired = '1';
+    }
+
 
     function init() {
       const hasAny =
@@ -3017,6 +3517,7 @@ let outboundsModuleApi = null;
       wireHints();
       wireGeneratorModal();
       wirePoolModal();
+      wireSubscriptionsModal();
       load();
     }
 
