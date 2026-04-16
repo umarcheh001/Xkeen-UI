@@ -59,6 +59,34 @@ class DevtoolsUpdateSmokeTests(unittest.TestCase):
         self.assertIn("capabilities", payload)
         self.assertEqual(payload["security"]["sha_strict"], "1")
 
+    def test_update_log_is_exposed_in_devtools_logs(self):
+        devtools = _reload("routes.devtools")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            update_log = Path(tmp) / "update.log"
+            update_log.write_text("update started\nupdate done\n", encoding="utf-8")
+
+            app = Flask("devtools-update-log-smoke")
+            with patch.dict(os.environ, {"XKEEN_UI_UPDATE_DIR": tmp}, clear=False):
+                app.register_blueprint(devtools.create_devtools_blueprint(tmp))
+                client = app.test_client()
+
+                list_response = client.get("/api/devtools/logs")
+                tail_response = client.get("/api/devtools/logs/update?lines=50")
+
+        self.assertEqual(list_response.status_code, 200)
+        list_payload = list_response.get_json()
+        update_meta = next((item for item in list_payload["logs"] if item["name"] == "update"), None)
+        self.assertIsNotNone(update_meta)
+        self.assertTrue(update_meta["exists"])
+        self.assertEqual(update_meta["path"], str(update_log))
+
+        self.assertEqual(tail_response.status_code, 200)
+        tail_payload = tail_response.get_json()
+        self.assertTrue(tail_payload["ok"])
+        self.assertEqual(tail_payload["name"], "update")
+        self.assertIn("update done", "".join(tail_payload["lines"]))
+
     def test_update_check_endpoint_returns_latest_release_without_500(self):
         devtools = _reload("routes.devtools")
 

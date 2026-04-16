@@ -337,16 +337,19 @@ def test_p3_devtools_screen_module_keeps_host_alive_and_stops_background_tasks_o
     assert "if (update && typeof update.deactivate === 'function') update.deactivate();" in devtools
 
     assert 'function getActiveTab() {' in logs
+    assert 'async function openLog(name, opts) {' in logs
     assert 'function activate(options) {' in logs
     assert 'function deactivate() {' in logs
     assert 'try { _stopLogStreamingAll(); } catch (e) {}' in logs
     assert 'try { stopLogListPolling(); } catch (e) {}' in logs
     assert 'getActiveTab,' in logs
+    assert 'openLog,' in logs
     assert 'activate,' in logs
     assert 'deactivate,' in logs
 
     assert 'function activate() {' in update
     assert 'function deactivate() {' in update
+    assert "logs.openLog('update')" in update
     assert '_stopPolling();' in update
     assert 'loadStatus(true).catch(() => {});' in update
 

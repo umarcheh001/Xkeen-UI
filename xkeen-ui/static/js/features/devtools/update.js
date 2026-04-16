@@ -1160,6 +1160,14 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
   function openLogsTab() {
     try {
+      const logs = DT.devtoolsLogs || null;
+      if (logs && typeof logs.openLog === 'function') {
+        logs.openLog('update').catch(() => {});
+        return;
+      }
+    } catch (e) {}
+
+    try {
       // Prefer feature API if present.
       if (DT.devtools && typeof DT.devtools.setActiveTab === 'function') {
         DT.devtools.setActiveTab('logs');

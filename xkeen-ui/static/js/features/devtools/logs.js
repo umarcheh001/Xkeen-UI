@@ -1736,6 +1736,31 @@ function stopLogAutoRefresh() {
     return _activeTab === 'logs' ? 'logs' : 'tools';
   }
 
+  async function openLog(name, opts) {
+    const desired = String(name || '').trim();
+    setActiveTab('logs');
+    if (desired) {
+      await loadLogList(true);
+      const sel = byId('dt-log-select');
+      if (sel) {
+        try { sel.value = desired; } catch (e) {}
+        if (String(sel.value || '') !== desired) {
+          try {
+            const opt = document.createElement('option');
+            opt.value = desired;
+            opt.textContent = desired;
+            sel.appendChild(opt);
+            sel.value = desired;
+          } catch (e) {}
+        }
+      }
+      try { _logHasNew[desired] = false; } catch (e) {}
+      try { _renderLogSidebar(); } catch (e) {}
+    }
+    await loadLogTail(false, opts || {});
+    return true;
+  }
+
   function activate(options) {
     const nextOptions = options && typeof options === 'object' ? options : {};
     const requestedTab = String(nextOptions.activeTab || '').trim();
@@ -2964,6 +2989,7 @@ function _wireLogLineActions() {
     init,
     setActiveTab,
     getActiveTab,
+    openLog,
     activate,
     deactivate,
     loadLogList,
