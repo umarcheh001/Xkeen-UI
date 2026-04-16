@@ -22,19 +22,19 @@ import { setXkeenPageConfigValue } from '../features/xkeen_runtime.js';
     openEditor: {
       dirty: true,
       sensitive: true,
-      tooltip: (file) => file ? ('Open raw JSON editor for file: ' + file) : 'Open raw JSON editor',
+      tooltip: (file) => file ? ('Открыть JSON-редактор файла: ' + file) : 'Открыть JSON-редактор',
       dirtyMessage: (tab) => 'Во вкладке ' + tab.label + ' есть несохраненные изменения. Открыть raw-редактор и потерять их?',
       sensitiveMessage: (file) => 'Файл ' + file + ' помечен как чувствительный. Открыть raw-редактор и показать его содержимое?',
     },
     backup: {
       dirty: false,
       sensitive: false,
-      tooltip: (file) => file ? ('Create backup for file: ' + file) : 'Create backup for active file',
+      tooltip: (file) => file ? ('Создать бэкап файла: ' + file) : 'Создать бэкап активного файла',
     },
     restoreAuto: {
       dirty: true,
       sensitive: false,
-      tooltip: (file) => file ? ('Restore auto-backup for file: ' + file) : 'Restore auto-backup',
+      tooltip: (file) => file ? ('Восстановить авто-бэкап файла: ' + file) : 'Восстановить авто-бэкап',
       dirtyMessage: (tab) => 'Во вкладке ' + tab.label + ' есть несохраненные изменения. Восстановить auto-backup и потерять их?',
       confirm: true,
       confirmTitle: 'Восстановить из авто-бэкапа',
@@ -48,13 +48,13 @@ import { setXkeenPageConfigValue } from '../features/xkeen_runtime.js';
     localExport: {
       dirty: false,
       sensitive: true,
-      tooltip: (file) => file ? ('Export file to local disk: ' + file) : 'Export current file',
+      tooltip: (file) => file ? ('Экспортировать файл на локальный диск: ' + file) : 'Экспортировать текущий файл',
       sensitiveMessage: (file) => 'Файл ' + file + ' помечен как чувствительный. Экспортировать его на локальный диск?',
     },
     localImport: {
       dirty: true,
       sensitive: true,
-      tooltip: (file) => file ? ('Import local file into: ' + file) : 'Import local file',
+      tooltip: (file) => file ? ('Импортировать локальный файл в: ' + file) : 'Импортировать локальный файл',
       dirtyMessage: (tab) => 'Во вкладке ' + tab.label + ' есть несохраненные изменения. Импортировать локальный файл и потерять их?',
       sensitiveMessage: (file) => 'Файл ' + file + ' помечен как чувствительный. Импортировать поверх него локальный файл?',
     },

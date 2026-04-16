@@ -329,18 +329,18 @@ let outboundsModuleApi = null;
         .sort()
         .map((key) => `${escapeHtml(key)} × ${Number(s.protocolCounts[key] || 0)}`)
         .join(' · ');
-      const shownTags = (s.tags || []).slice(0, 6).map((tag) => `<code>${escapeHtml(tag)}</code>`).join('');
-      const more = (s.tags || []).length > 6 ? `<span class="outbounds-fragment-more">+${(s.tags || []).length - 6}</span>` : '';
+      const tags = (s.tags || []).map((tag) => `<code>${escapeHtml(tag)}</code>`).join('')
+        || '<span class="outbounds-fragment-empty">Теги не найдены</span>';
       el.innerHTML = `
         <div class="outbounds-fragment-summary-head">
           <div>
-            <div class="outbounds-fragment-summary-title">Generated-фрагмент подписки</div>
+            <div class="outbounds-fragment-summary-title">Сгенерированный фрагмент подписки</div>
             <div class="outbounds-fragment-summary-file"><code>${escapeHtml(fileName || '04_outbounds.*.json')}</code></div>
           </div>
-          <div class="outbounds-fragment-count">${Number((s.proxies || []).length)} proxy</div>
+          <div class="outbounds-fragment-count">${Number((s.proxies || []).length)} прокси</div>
         </div>
-        <div class="outbounds-fragment-summary-meta">${protocols || 'proxy outbounds'}</div>
-        <div class="outbounds-fragment-tags">${shownTags}${more}</div>
+        <div class="outbounds-fragment-summary-meta">${protocols || 'outbounds подписки'}</div>
+        <div class="outbounds-fragment-tags">${tags}</div>
       `;
     }
 
@@ -1507,7 +1507,7 @@ let outboundsModuleApi = null;
             initialized: true,
           }, 'outbounds-load-subscription-fragment');
           if (statusEl) {
-            statusEl.textContent = `Подписочный фрагмент загружен: ${summary.proxies.length} proxy outbound. Для правок используйте «Подписки» или JSON-редактор.`;
+            statusEl.textContent = `Подписочный фрагмент загружен: ${summary.proxies.length} прокси. Для правок используйте «Подписки» или JSON-редактор.`;
           }
           try {
             if (typeof updateLastActivity === 'function') {
@@ -2453,7 +2453,7 @@ let outboundsModuleApi = null;
 
     function openGeneratorModal() {
       if (isSubscriptionFragmentMode()) {
-        try { toastXkeen('Мини-генератор работает только с одиночной proxy-ссылкой, не с generated-фрагментом подписки.', 'error'); } catch (e) {}
+        try { toastXkeen('Мини-генератор работает только с одиночной proxy-ссылкой, не со сгенерированным фрагментом подписки.', 'error'); } catch (e) {}
         return;
       }
       updateGeneratorSummary();

@@ -2538,10 +2538,31 @@ button[data-tooltip]:focus-visible::before {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+  max-height: 118px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-color: rgba(96, 165, 250, 0.45) rgba(15, 23, 42, 0.18);
+  scrollbar-width: thin;
+}
+
+.outbounds-fragment-tags::-webkit-scrollbar {
+  width: 8px;
+}
+
+.outbounds-fragment-tags::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.18);
+  border-radius: 999px;
+}
+
+.outbounds-fragment-tags::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.45);
+  border-radius: 999px;
 }
 
 .outbounds-fragment-tags code,
-.outbounds-fragment-more {
+.outbounds-fragment-more,
+.outbounds-fragment-empty {
   display: inline-flex;
   max-width: 100%;
   padding: 3px 7px;
@@ -2552,6 +2573,10 @@ button[data-tooltip]:focus-visible::before {
   font-size: calc(11px * var(--xk-font-scale));
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.outbounds-fragment-empty {
+  color: #94a3b8;
 }
 
 #outbounds-body.xk-outbounds-subscription-fragment .outbounds-hints,
@@ -11584,7 +11609,8 @@ html[data-theme="light"] .outbounds-fragment-summary {
 
 html[data-theme="light"] .outbounds-fragment-summary-title,
 html[data-theme="light"] .outbounds-fragment-tags code,
-html[data-theme="light"] .outbounds-fragment-more {
+html[data-theme="light"] .outbounds-fragment-more,
+html[data-theme="light"] .outbounds-fragment-empty {
   color: #111827;
 }
 
@@ -11594,7 +11620,8 @@ html[data-theme="light"] .outbounds-fragment-summary-meta {
 }
 
 html[data-theme="light"] .outbounds-fragment-tags code,
-html[data-theme="light"] .outbounds-fragment-more {
+html[data-theme="light"] .outbounds-fragment-more,
+html[data-theme="light"] .outbounds-fragment-empty {
   background: rgba(255, 255, 255, 0.86);
   border-color: #dbe3ef;
 }
