@@ -30,6 +30,8 @@ let outboundsModuleApi = null;
     let _fragmentItems = [];
     let _fragmentDir = '';
     let _featureLifecycle = null;
+    let _subscriptionOutputFiles = null;
+    let _subscriptionOutputFilesTs = 0;
 
     const IDS = {
       fragmentSelect: 'outbounds-fragment-select',
@@ -155,8 +157,14 @@ let outboundsModuleApi = null;
     }
 
     async function guardFragmentSwitch(next, prev, opts) {
+      const config = (opts && typeof opts === 'object') ? opts : {};
       const lifecycle = getFeatureLifecycle();
-      if (!lifecycle || typeof lifecycle.guardSwitch !== 'function') return false;
+      if (!lifecycle || typeof lifecycle.guardSwitch !== 'function') {
+        if (typeof config.commit === 'function') {
+          await Promise.resolve(config.commit());
+        }
+        return true;
+      }
       return lifecycle.guardSwitch(Object.assign({
         currentValue: String(prev || ''),
         nextValue: String(next || ''),
@@ -164,7 +172,7 @@ let outboundsModuleApi = null;
         message: 'Во вкладке outbounds есть несохранённые изменения. Переключить файл и потерять их?',
         okText: 'Переключить',
         cancelText: 'Остаться',
-      }, (opts && typeof opts === 'object') ? opts : {}));
+      }, config));
     }
 
     function getCurrentUrl() {
@@ -256,6 +264,116 @@ let outboundsModuleApi = null;
           codeEl.textContent = f;
         }
       } catch (e) {}
+    }
+
+    function baseName(value) {
+      try {
+        const parts = String(value || '').split(/[\\/]+/);
+        return String(parts[parts.length - 1] || '').trim();
+      } catch (e) {}
+      return String(value || '').trim();
+    }
+
+    async function refreshSubscriptionOutputFiles(force) {
+      const now = Date.now();
+      if (!force && _subscriptionOutputFiles && (now - _subscriptionOutputFilesTs) < 15000) {
+        return _subscriptionOutputFiles;
+      }
+      const files = new Set();
+      try {
+        const res = await fetch('/api/xray/subscriptions', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        const items = Array.isArray(data && data.subscriptions) ? data.subscriptions : [];
+        items.forEach((sub) => {
+          const name = baseName(sub && sub.output_file);
+          if (name) files.add(name);
+        });
+      } catch (e) {}
+      _subscriptionOutputFiles = files;
+      _subscriptionOutputFilesTs = now;
+      return files;
+    }
+
+    function getConfigOutbounds(cfg) {
+      if (Array.isArray(cfg)) return cfg;
+      if (cfg && typeof cfg === 'object' && Array.isArray(cfg.outbounds)) return cfg.outbounds;
+      return [];
+    }
+
+    function isProxyOutbound(ob) {
+      if (!ob || typeof ob !== 'object') return false;
+      const protocol = String(ob.protocol || '').trim().toLowerCase();
+      if (!protocol) return false;
+      return !['freedom', 'blackhole', 'dns', 'loopback'].includes(protocol);
+    }
+
+    function summarizeOutboundsConfig(cfg) {
+      const outbounds = getConfigOutbounds(cfg);
+      const proxies = outbounds.filter(isProxyOutbound);
+      const protocolCounts = {};
+      const tags = [];
+      proxies.forEach((ob) => {
+        const protocol = String(ob.protocol || '').trim() || 'proxy';
+        protocolCounts[protocol] = (protocolCounts[protocol] || 0) + 1;
+        const tag = String(ob.tag || '').trim();
+        if (tag) tags.push(tag);
+      });
+      return { outbounds, proxies, protocolCounts, tags };
+    }
+
+    function renderOutboundsFragmentSummary(fileName, summary) {
+      const el = $('outbounds-fragment-summary');
+      if (!el) return;
+      const s = summary || summarizeOutboundsConfig(null);
+      const protocols = Object.keys(s.protocolCounts || {})
+        .sort()
+        .map((key) => `${escapeHtml(key)} × ${Number(s.protocolCounts[key] || 0)}`)
+        .join(' · ');
+      const shownTags = (s.tags || []).slice(0, 6).map((tag) => `<code>${escapeHtml(tag)}</code>`).join('');
+      const more = (s.tags || []).length > 6 ? `<span class="outbounds-fragment-more">+${(s.tags || []).length - 6}</span>` : '';
+      el.innerHTML = `
+        <div class="outbounds-fragment-summary-head">
+          <div>
+            <div class="outbounds-fragment-summary-title">Generated-фрагмент подписки</div>
+            <div class="outbounds-fragment-summary-file"><code>${escapeHtml(fileName || '04_outbounds.*.json')}</code></div>
+          </div>
+          <div class="outbounds-fragment-count">${Number((s.proxies || []).length)} proxy</div>
+        </div>
+        <div class="outbounds-fragment-summary-meta">${protocols || 'proxy outbounds'}</div>
+        <div class="outbounds-fragment-tags">${shownTags}${more}</div>
+      `;
+    }
+
+    function setSubscriptionFragmentMode(enabled, fileName, summary) {
+      const body = $('outbounds-body');
+      const input = $('outbounds-url');
+      const summaryEl = $('outbounds-fragment-summary');
+      try { if (body) body.classList.toggle('xk-outbounds-subscription-fragment', !!enabled); } catch (e) {}
+
+      if (enabled) {
+        if (input) {
+          input.value = '';
+          input.classList.remove('xk-invalid');
+        }
+        try { renderParsePreview({ ok: false, scheme: '', fields: {}, errors: [], warnings: [] }); } catch (e) {}
+        renderOutboundsFragmentSummary(fileName, summary);
+        try { if (summaryEl) summaryEl.classList.remove('hidden'); } catch (e2) {}
+      } else {
+        try { if (summaryEl) summaryEl.classList.add('hidden'); } catch (e) {}
+      }
+    }
+
+    function isSubscriptionFragmentMode() {
+      const body = $('outbounds-body');
+      try { return !!(body && body.classList.contains('xk-outbounds-subscription-fragment')); } catch (e) {}
+      return false;
+    }
+
+    async function isSubscriptionOutputFragment(fileName) {
+      const name = baseName(fileName);
+      if (!name) return false;
+      const files = await refreshSubscriptionOutputFiles(false);
+      return !!(files && files.has(name));
     }
 
     async function refreshFragmentsList(opts) {
@@ -1247,6 +1365,10 @@ let outboundsModuleApi = null;
       const typeSel = $('outbounds-type');
       const secSel = $('outbounds-security');
       if (!input) return;
+      if (isSubscriptionFragmentMode()) {
+        if (statusEl) statusEl.textContent = 'Подписочный фрагмент нельзя нормализовать как одну ссылку. Откройте JSON-редактор или модал подписок.';
+        return;
+      }
 
       const raw = String(input.value || '').trim();
       if (!raw) {
@@ -1371,6 +1493,32 @@ let outboundsModuleApi = null;
           return;
         }
         const data = await res.json().catch(() => ({}));
+        const fileName = baseName((data && data.file) || file || '');
+        const summary = summarizeOutboundsConfig(data && data.config);
+        const isSubscriptionFragment = await isSubscriptionOutputFragment(fileName);
+
+        if (isSubscriptionFragment) {
+          _savedUrl = '';
+          setSubscriptionFragmentMode(true, fileName, summary);
+          try { syncDirtyState(false); } catch (e) {}
+          publishLifecycleState({
+            savedValue: '',
+            currentValue: '',
+            initialized: true,
+          }, 'outbounds-load-subscription-fragment');
+          if (statusEl) {
+            statusEl.textContent = `Подписочный фрагмент загружен: ${summary.proxies.length} proxy outbound. Для правок используйте «Подписки» или JSON-редактор.`;
+          }
+          try {
+            if (typeof updateLastActivity === 'function') {
+              const fp = getXkeenFilePath('outbounds', '');
+              updateLastActivity('loaded', 'outbounds', fp);
+            }
+          } catch (e) {}
+          return;
+        }
+
+        setSubscriptionFragmentMode(false, fileName, summary);
         if (data && data.url) {
           _savedUrl = String(data.url || '');
           input.value = _savedUrl;
@@ -1418,6 +1566,10 @@ let outboundsModuleApi = null;
       const statusEl = $('outbounds-status');
       const input = $('outbounds-url');
       if (!input) return;
+      if (isSubscriptionFragmentMode()) {
+        if (statusEl) statusEl.textContent = 'Подписочный фрагмент не сохраняется через single-link форму. Используйте «Подписки» или JSON-редактор.';
+        return;
+      }
 
       publishLifecycleState({ saving: true, initialized: true }, 'outbounds-save-start');
       let streamedRestart = false;
@@ -2300,6 +2452,10 @@ let outboundsModuleApi = null;
     }
 
     function openGeneratorModal() {
+      if (isSubscriptionFragmentMode()) {
+        try { toastXkeen('Мини-генератор работает только с одиночной proxy-ссылкой, не с generated-фрагментом подписки.', 'error'); } catch (e) {}
+        return;
+      }
       updateGeneratorSummary();
       // Sync selects from main hints for convenience
       try {
@@ -3287,6 +3443,10 @@ let outboundsModuleApi = null;
           throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
         }
         _subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+        try {
+          _subscriptionOutputFiles = new Set(_subscriptions.map((sub) => baseName(sub && sub.output_file)).filter(Boolean));
+          _subscriptionOutputFilesTs = Date.now();
+        } catch (e2) {}
         subsRender();
         return true;
       } catch (e) {
