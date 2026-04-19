@@ -3160,7 +3160,7 @@ let outboundsModuleApi = null;
       if (!document.body) return null;
 
       document.body.insertAdjacentHTML('beforeend', `
-        <div id="outbounds-subscriptions-modal" class="modal hidden" data-modal-key="outbounds-subscriptions-v1" data-modal-remember="0" data-modal-nopos="1" role="dialog" aria-modal="true" aria-label="Подписки Xray">
+        <div id="outbounds-subscriptions-modal" class="modal hidden" data-modal-key="outbounds-subscriptions-v1" data-modal-remember="0" data-modal-nopos="1" data-modal-nodrag="1" data-modal-noresize="1" role="dialog" aria-modal="true" aria-label="Подписки Xray">
           <div class="modal-content xk-sub-modal" data-modal-key="outbounds-subscriptions-v1-content">
             <div class="modal-header xk-sub-header">
               <div class="xk-sub-titleblock">
@@ -3192,15 +3192,15 @@ let outboundsModuleApi = null;
                   <form id="outbounds-subscriptions-form" class="xk-sub-form">
                     <input id="outbounds-subscriptions-id" type="hidden">
                     <input id="outbounds-subscriptions-excluded-keys" type="hidden">
-                    <label data-tooltip="Короткое имя подписки в списке. Можно оставить пустым.">
+                    <label class="xk-sub-span-5" data-tooltip="Короткое имя подписки в списке. Можно оставить пустым.">
                       <span class="xk-pool-fieldlabel">Название</span>
                       <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription" title="Название подписки" data-tooltip="Короткое имя подписки в списке.">
                     </label>
-                    <label data-tooltip="Префикс для generated outbound tags, например sub--node. Его удобно выбирать в LeastPing.">
+                    <label class="xk-sub-span-4" data-tooltip="Префикс для generated outbound tags, например sub--node. Его удобно выбирать в LeastPing.">
                       <span class="xk-pool-fieldlabel">Tag prefix</span>
                       <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Используй его в selector/balancer LeastPing.">
                     </label>
-                    <label data-tooltip="Как часто обновлять подписку. Заголовок provider profile-update-interval может уточнить значение.">
+                    <label class="xk-sub-span-3" data-tooltip="Как часто обновлять подписку. Заголовок provider profile-update-interval может уточнить значение.">
                       <span class="xk-pool-fieldlabel">Интервал, ч</span>
                       <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="6" title="Интервал обновления" data-tooltip="Интервал автообновления в часах: от 1 до 168.">
                     </label>
@@ -3208,16 +3208,16 @@ let outboundsModuleApi = null;
                       <span class="xk-pool-fieldlabel">URL</span>
                       <input id="outbounds-subscriptions-url" class="xray-log-filter" type="url" placeholder="https://..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки. Панель скачает nodes и создаст отдельный outbounds-фрагмент.">
                     </label>
-                    <label data-tooltip="Regex по имени ноды из подписки. Например: Germany|Netherlands|SG. Пусто — без фильтра.">
-                      <span class="xk-pool-fieldlabel">Фильтр имени (regex)</span>
+                    <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по имени ноды из подписки. Например: Germany|Netherlands|SG. Пусто — без фильтра.">
+                      <span class="xk-pool-fieldlabel">Имя</span>
                       <input id="outbounds-subscriptions-name-filter" class="xray-log-filter" type="text" placeholder="Germany|Netherlands|SG" title="Фильтр имени" data-tooltip="Оставить только ноды, чьё имя совпадает с regex. Например: Germany|Netherlands|SG.">
                     </label>
-                    <label data-tooltip="Regex по типу прокси/протоколу. Например: vless|trojan|vmess. Пусто — без фильтра.">
-                      <span class="xk-pool-fieldlabel">Фильтр типа (regex)</span>
+                    <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по типу прокси/протоколу. Например: vless|trojan|vmess. Пусто — без фильтра.">
+                      <span class="xk-pool-fieldlabel">Тип</span>
                       <input id="outbounds-subscriptions-type-filter" class="xray-log-filter" type="text" placeholder="vless|trojan|vmess" title="Фильтр типа" data-tooltip="Оставить только указанные типы нод. Например: vless|trojan|vmess|ss|hy2.">
                     </label>
-                    <label data-tooltip="Regex по транспорту. Например: ws|grpc|tcp|xhttp. Пусто — без фильтра.">
-                      <span class="xk-pool-fieldlabel">Фильтр транспорта (regex)</span>
+                    <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по транспорту. Например: ws|grpc|tcp|xhttp. Пусто — без фильтра.">
+                      <span class="xk-pool-fieldlabel">Транспорт</span>
                       <input id="outbounds-subscriptions-transport-filter" class="xray-log-filter" type="text" placeholder="ws|grpc|tcp|xhttp" title="Фильтр транспорта" data-tooltip="Оставить только ноды с нужным transport/network. Например: ws|grpc|tcp|xhttp|quic.">
                     </label>
                     <div class="xk-sub-controls">
@@ -3289,6 +3289,42 @@ let outboundsModuleApi = null;
       return modal;
     }
 
+    function subsApplyModalGeometry() {
+      const modal = $(SUB_IDS.modal);
+      const content = modal && modal.querySelector ? modal.querySelector('.modal-content') : null;
+      if (!modal || !content) return;
+
+      const viewportWidth = Math.max(
+        Number(window.innerWidth || 0),
+        Number(document.documentElement && document.documentElement.clientWidth ? document.documentElement.clientWidth : 0)
+      );
+      const viewportHeight = Math.max(
+        Number(window.innerHeight || 0),
+        Number(document.documentElement && document.documentElement.clientHeight ? document.documentElement.clientHeight : 0)
+      );
+      if (!Number.isFinite(viewportWidth) || !Number.isFinite(viewportHeight) || viewportWidth <= 0 || viewportHeight <= 0) return;
+
+      const compact = viewportWidth <= 760;
+      const width = compact
+        ? Math.max(320, Math.min(viewportWidth - 12, 760))
+        : Math.min(980, Math.max(860, Math.round(viewportWidth * 0.62)));
+      const height = compact
+        ? Math.max(440, Math.min(viewportHeight - 12, 720))
+        : Math.min(760, Math.max(620, Math.round(viewportHeight * 0.78)));
+
+      try {
+        content.style.position = '';
+        content.style.left = '';
+        content.style.top = '';
+        content.style.transform = '';
+        content.style.width = `${width}px`;
+        content.style.maxWidth = `${width}px`;
+        content.style.height = `${height}px`;
+        content.style.minHeight = compact ? '440px' : '620px';
+        content.style.maxHeight = `${Math.max(height, Math.min(viewportHeight - 12, compact ? 720 : 800))}px`;
+      } catch (e) {}
+    }
+
     function subsShow(show) {
       const modal = subsEnsureModal();
       if (!modal) return;
@@ -3296,6 +3332,16 @@ let outboundsModuleApi = null;
         if (show) modal.classList.remove('hidden');
         else modal.classList.add('hidden');
       } catch (e) {}
+      if (show) {
+        const apply = () => {
+          try { subsApplyModalGeometry(); } catch (e2) {}
+        };
+        try {
+          requestAnimationFrame(() => requestAnimationFrame(apply));
+        } catch (e3) {
+          apply();
+        }
+      }
       try { syncXkeenBodyScrollLock(!!show); } catch (e2) {}
     }
 
@@ -3654,6 +3700,14 @@ let outboundsModuleApi = null;
         const endpoint = [host, port].filter(Boolean).join(':');
         const reasonLabel = escapeHtml(subsNodeReasonLabel(reasons));
         const manualExcluded = !!(node && node.key && excluded.has(String(node.key)));
+        const toggleTitle = manualExcluded ? 'Вернуть узел' : 'Исключить узел';
+        const toggleTooltip = manualExcluded
+          ? 'Вернуть этот узел в generated fragment. Изменение применится после сохранения подписки.'
+          : 'Исключить этот узел из generated fragment. Изменение применится после сохранения подписки.';
+        const toggleClass = manualExcluded
+          ? 'btn-secondary btn-compact xk-sub-node-toggle xk-sub-node-toggle-restore'
+          : 'btn-danger btn-compact xk-sub-node-toggle';
+        const toggleIcon = manualExcluded ? '↺' : '×';
         rows.push(`
           <div class="xk-sub-node-item ${enabled ? 'is-enabled' : 'is-disabled'}" data-node-key="${key}">
             <div class="xk-sub-node-main">
@@ -3668,8 +3722,8 @@ let outboundsModuleApi = null;
             </div>
             <div class="xk-sub-node-side">
               <div class="xk-sub-node-state ${enabled ? 'is-enabled' : 'is-disabled'}">${reasonLabel}</div>
-              <button type="button" class="btn-secondary btn-compact xk-sub-node-toggle" data-node-key="${key}" data-node-action="${manualExcluded ? 'include' : 'exclude'}">
-                ${manualExcluded ? 'Вернуть' : 'Исключить'}
+              <button type="button" class="${toggleClass}" data-node-key="${key}" data-node-action="${manualExcluded ? 'include' : 'exclude'}" title="${escapeHtml(toggleTitle)}" data-tooltip="${escapeHtml(toggleTooltip)}" aria-label="${escapeHtml(toggleTitle)}">
+                ${toggleIcon}
               </button>
             </div>
           </div>
@@ -3957,6 +4011,14 @@ let outboundsModuleApi = null;
         });
         if (el.dataset) el.dataset.xkSubPreviewBound = '1';
       });
+      if (!(modal.dataset && modal.dataset.xkSubResizeBound === '1')) {
+        window.addEventListener('resize', () => {
+          const m = $(SUB_IDS.modal);
+          if (!m || m.classList.contains('hidden')) return;
+          try { subsApplyModalGeometry(); } catch (e) {}
+        });
+        if (modal.dataset) modal.dataset.xkSubResizeBound = '1';
+      }
 
       modal.addEventListener('click', (e) => {
         try { if (e && e.target === modal) subsClose(); } catch (e2) {}
