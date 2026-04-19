@@ -91,6 +91,8 @@ NODE_LATENCY_KEYS = ("node_latency", "nodeLatency")
 DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
 DEFAULT_PROBE_TIMEOUT_SECONDS = 8.0
 PROBE_PROCESS_START_TIMEOUT_SECONDS = 4.0
+PROBE_PROCESS_START_ATTEMPTS = 3
+PROBE_BATCH_CONCURRENCY = 3
 NODE_LATENCY_HISTORY_LIMIT = 5
 
 
@@ -1595,15 +1597,36 @@ def _reserve_local_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def _is_local_port_open(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.2)
+        return sock.connect_ex(("127.0.0.1", int(port))) == 0
+
+
 def _wait_for_local_port(port: int, proc: subprocess.Popen[Any], timeout_s: float) -> bool:
     deadline = time.time() + max(0.5, float(timeout_s or 0))
     while time.time() < deadline:
         if proc.poll() is not None:
             return False
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(0.2)
-            if sock.connect_ex(("127.0.0.1", int(port))) == 0:
-                return True
+        if _is_local_port_open(port):
+            return True
+        time.sleep(0.08)
+    return False
+
+
+def _wait_for_local_ports(ports: Iterable[int], proc: subprocess.Popen[Any], timeout_s: float) -> bool:
+    pending = {int(port) for port in ports if int(port) > 0}
+    if not pending:
+        return True
+    deadline = time.time() + max(0.5, float(timeout_s or 0))
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            return False
+        for port in tuple(pending):
+            if _is_local_port_open(port):
+                pending.discard(port)
+        if not pending:
+            return True
         time.sleep(0.08)
     return False
 
@@ -1674,41 +1697,6 @@ def _load_generated_outbounds_map(sub: Dict[str, Any], xray_configs_dir: str) ->
             continue
         out[tag] = copy.deepcopy(outbound)
     return out
-
-
-def _load_generated_outbound(sub: Dict[str, Any], xray_configs_dir: str, tag: str) -> Dict[str, Any]:
-    outbound = _load_generated_outbounds_map(sub, xray_configs_dir).get(str(tag or "").strip())
-    if outbound is None:
-        raise KeyError("node tag not found")
-    return outbound
-
-
-def _build_probe_config(outbound: Dict[str, Any], inbound_port: int) -> Dict[str, Any]:
-    outbound_tag = str(outbound.get("tag") or "probe-out").strip() or "probe-out"
-    return {
-        "log": {"loglevel": "warning"},
-        "inbounds": [
-            {
-                "tag": "probe-http",
-                "listen": "127.0.0.1",
-                "port": int(inbound_port),
-                "protocol": "http",
-                "settings": {},
-                "sniffing": {"enabled": False},
-            }
-        ],
-        "outbounds": [
-            outbound,
-            {"tag": "direct", "protocol": "freedom"},
-            {"tag": "block", "protocol": "blackhole"},
-        ],
-        "routing": {
-            "domainStrategy": "AsIs",
-            "rules": [
-                {"type": "field", "inboundTag": ["probe-http"], "outboundTag": outbound_tag},
-            ],
-        },
-    }
 
 
 def _reserve_local_ports(count: int) -> List[int]:
@@ -1788,6 +1776,32 @@ def _probe_via_local_proxy(port: int, probe_url: str, timeout_value: float) -> t
     return delay_ms, error_text
 
 
+def _start_probe_process(
+    *,
+    xray_bin: str,
+    config_path: str,
+    wait_ports: Iterable[int],
+) -> tuple[subprocess.Popen[Any] | None, str]:
+    cmd_options = (
+        [xray_bin, "run", "-c", config_path],
+        [xray_bin, "-c", config_path],
+    )
+    last_error = "xray probe start failed"
+    ports = [int(port) for port in wait_ports if int(port) > 0]
+    for cmd in cmd_options:
+        candidate = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if _wait_for_local_ports(ports, candidate, PROBE_PROCESS_START_TIMEOUT_SECONDS):
+            return candidate, ""
+        stdout, stderr = _terminate_process(candidate)
+        last_error = (stderr or stdout or "xray probe start failed").strip()
+    return None, last_error
+
+
 def _probe_outbounds_batch(
     *,
     xray_bin: str,
@@ -1798,65 +1812,54 @@ def _probe_outbounds_batch(
 ) -> Dict[str, Dict[str, Any]]:
     if not targets:
         return {}
+    last_error = "xray probe start failed"
+    max_attempts = max(1, int(PROBE_PROCESS_START_ATTEMPTS or 1))
+    for _attempt_idx in range(max_attempts):
+        ports = _reserve_local_ports(len(targets))
+        prepared: List[Dict[str, Any]] = []
+        for item, port in zip(targets, ports):
+            prepared.append({**item, "port": int(port)})
 
-    ports = _reserve_local_ports(len(targets))
-    prepared: List[Dict[str, Any]] = []
-    for item, port in zip(targets, ports):
-        prepared.append({**item, "port": int(port)})
+        with tempfile.TemporaryDirectory(prefix="xkeen-xray-probe-batch-") as tmpdir:
+            config_path = os.path.join(tmpdir, "probe-batch.json")
+            with open(config_path, "w", encoding="utf-8") as fh:
+                json.dump(_build_batch_probe_config(prepared), fh, ensure_ascii=False, indent=2)
+                fh.write("\n")
 
-    with tempfile.TemporaryDirectory(prefix="xkeen-xray-probe-batch-") as tmpdir:
-        config_path = os.path.join(tmpdir, "probe-batch.json")
-        with open(config_path, "w", encoding="utf-8") as fh:
-            json.dump(_build_batch_probe_config(prepared), fh, ensure_ascii=False, indent=2)
-            fh.write("\n")
-
-        cmd_options = (
-            [xray_bin, "run", "-c", config_path],
-            [xray_bin, "-c", config_path],
-        )
-        proc: subprocess.Popen[Any] | None = None
-        last_error = "xray probe start failed"
-        wait_port = int(prepared[0]["port"])
-        for cmd in cmd_options:
-            candidate = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
+            proc, last_error = _start_probe_process(
+                xray_bin=xray_bin,
+                config_path=config_path,
+                wait_ports=[int(item["port"]) for item in prepared],
             )
-            if _wait_for_local_port(wait_port, candidate, PROBE_PROCESS_START_TIMEOUT_SECONDS):
-                proc = candidate
-                last_error = ""
-                break
-            stdout, stderr = _terminate_process(candidate)
-            last_error = (stderr or stdout or "xray probe start failed").strip()
+            if proc is None:
+                continue
 
-        if proc is None:
-            return {
-                str(item.get("key") or ""): {"delay_ms": None, "error": last_error}
-                for item in prepared
-                if str(item.get("key") or "")
-            }
+            results: Dict[str, Dict[str, Any]] = {}
+            try:
+                max_workers = max(1, min(int(concurrency or 1), len(prepared)))
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    future_map = {
+                        executor.submit(_probe_via_local_proxy, int(item["port"]), probe_url, timeout_value): str(item.get("key") or "")
+                        for item in prepared
+                        if str(item.get("key") or "")
+                    }
+                    for future in concurrent.futures.as_completed(future_map):
+                        key = future_map[future]
+                        try:
+                            delay_ms, error_text = future.result()
+                        except Exception as exc:
+                            delay_ms, error_text = None, str(exc)
+                        results[key] = {"delay_ms": delay_ms, "error": error_text}
+            finally:
+                _terminate_process(proc)
+            return results
 
-        results: Dict[str, Dict[str, Any]] = {}
-        try:
-            max_workers = max(1, min(int(concurrency or 1), len(prepared)))
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_map = {
-                    executor.submit(_probe_via_local_proxy, int(item["port"]), probe_url, timeout_value): str(item.get("key") or "")
-                    for item in prepared
-                    if str(item.get("key") or "")
-                }
-                for future in concurrent.futures.as_completed(future_map):
-                    key = future_map[future]
-                    try:
-                        delay_ms, error_text = future.result()
-                    except Exception as exc:
-                        delay_ms, error_text = None, str(exc)
-                    results[key] = {"delay_ms": delay_ms, "error": error_text}
-        finally:
-            _terminate_process(proc)
-    return results
+    error_text = last_error or "xray probe start failed"
+    return {
+        str(item.get("key") or ""): {"delay_ms": None, "error": error_text}
+        for item in targets
+        if str(item.get("key") or "")
+    }
 
 
 def _probe_url_for_subscription(xray_configs_dir: str) -> str:
@@ -1882,67 +1885,6 @@ def _normalize_probe_node_keys(value: Any) -> List[str]:
         seen.add(key)
         out.append(key)
     return out
-
-
-def _probe_outbound_latency(
-    *,
-    xray_bin: str,
-    outbound: Dict[str, Any],
-    probe_url: str,
-    timeout_value: float,
-) -> tuple[int | None, str]:
-    delay_ms: int | None = None
-    error_text = ""
-    with tempfile.TemporaryDirectory(prefix="xkeen-xray-probe-") as tmpdir:
-        proxy_port = _reserve_local_port()
-        config_path = os.path.join(tmpdir, "probe.json")
-        with open(config_path, "w", encoding="utf-8") as fh:
-            json.dump(_build_probe_config(outbound, proxy_port), fh, ensure_ascii=False, indent=2)
-            fh.write("\n")
-
-        cmd_options = (
-            [xray_bin, "run", "-c", config_path],
-            [xray_bin, "-c", config_path],
-        )
-        last_error = ""
-        for cmd in cmd_options:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            try:
-                if not _wait_for_local_port(proxy_port, proc, PROBE_PROCESS_START_TIMEOUT_SECONDS):
-                    stdout, stderr = _terminate_process(proc)
-                    last_error = (stderr or stdout or "xray probe start failed").strip()
-                    continue
-
-                proxy_url = f"http://127.0.0.1:{proxy_port}"
-                opener = urllib.request.build_opener(
-                    urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
-                )
-                started = time.perf_counter()
-                req = urllib.request.Request(
-                    probe_url,
-                    headers={"User-Agent": "XKeen-UI Latency Probe"},
-                    method="GET",
-                )
-                with opener.open(req, timeout=timeout_value) as resp:
-                    with contextlib.suppress(Exception):
-                        resp.read(1)
-                delay_ms = max(0, int(round((time.perf_counter() - started) * 1000.0)))
-                error_text = ""
-                last_error = ""
-                _terminate_process(proc)
-                break
-            except Exception as exc:
-                error_text = str(exc)
-                last_error = error_text
-                _terminate_process(proc)
-        if delay_ms is None and last_error:
-            error_text = last_error
-    return delay_ms, error_text
 
 
 def _save_subscription_latency_entries(
@@ -1989,117 +1931,21 @@ def probe_subscription_node_latency(
     target_key = str(node_key or "").strip()
     if not target_key:
         raise ValueError("node_key is required")
-
-    with _STATE_LOCK:
-        state = load_subscription_state(ui_state_dir)
-        idx, sub = _find_subscription(state, sub_id)
-        if idx < 0 or sub is None:
-            raise KeyError("subscription not found")
-        sub = dict(sub)
-
-    nodes = _normalize_last_nodes(sub.get("last_nodes"))
-    node = next((item for item in nodes if str(item.get("key") or "").strip() == target_key), None)
-    if not node:
-        raise KeyError("node not found")
-    tag = str(node.get("tag") or "").strip()
-    if not tag:
-        raise ValueError("Узел сейчас не входит в generated fragment.")
-
-    outbound = _load_generated_outbound(sub, xray_configs_dir, tag)
-    xray_bin = _find_xray_binary()
-    if not xray_bin:
-        raise RuntimeError("xray binary not found")
-
-    timeout_value = max(2.0, float(timeout_s or DEFAULT_PROBE_TIMEOUT_SECONDS))
-    probe_url = _probe_url_for_subscription(xray_configs_dir)
-    checked_at = _now()
-    delay_ms: int | None = None
-    error_text = ""
-
-    with tempfile.TemporaryDirectory(prefix="xkeen-xray-probe-") as tmpdir:
-        proxy_port = _reserve_local_port()
-        config_path = os.path.join(tmpdir, "probe.json")
-        with open(config_path, "w", encoding="utf-8") as fh:
-            json.dump(_build_probe_config(outbound, proxy_port), fh, ensure_ascii=False, indent=2)
-            fh.write("\n")
-
-        cmd_options = (
-            [xray_bin, "run", "-c", config_path],
-            [xray_bin, "-c", config_path],
-        )
-        last_error = ""
-        for cmd in cmd_options:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            try:
-                if not _wait_for_local_port(proxy_port, proc, PROBE_PROCESS_START_TIMEOUT_SECONDS):
-                    stdout, stderr = _terminate_process(proc)
-                    last_error = (stderr or stdout or "xray probe start failed").strip()
-                    continue
-
-                proxy_url = f"http://127.0.0.1:{proxy_port}"
-                opener = urllib.request.build_opener(
-                    urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
-                )
-                started = time.perf_counter()
-                req = urllib.request.Request(
-                    probe_url,
-                    headers={"User-Agent": "XKeen-UI Latency Probe"},
-                    method="GET",
-                )
-                with opener.open(req, timeout=timeout_value) as resp:
-                    with contextlib.suppress(Exception):
-                        resp.read(1)
-                delay_ms = max(0, int(round((time.perf_counter() - started) * 1000.0)))
-                error_text = ""
-                last_error = ""
-                _terminate_process(proc)
-                break
-            except Exception as exc:
-                error_text = str(exc)
-                last_error = error_text
-                _terminate_process(proc)
-        if delay_ms is None and last_error:
-            error_text = last_error
-
-    entry = _merge_latency_entry(
-        sub.get("node_latency", {}).get(target_key) if isinstance(sub.get("node_latency"), dict) else None,
-        checked_at=checked_at,
-        probe_url=probe_url,
-        delay_ms=delay_ms,
-        error=error_text,
+    batch_result = probe_subscription_nodes_latency(
+        ui_state_dir,
+        sub_id,
+        [target_key],
+        xray_configs_dir=xray_configs_dir,
+        timeout_s=timeout_s,
+        strict=True,
     )
-
-    with _STATE_LOCK:
-        state = load_subscription_state(ui_state_dir)
-        idx, current = _find_subscription(state, sub_id)
-        if idx < 0 or current is None or not isinstance(state.get("subscriptions"), list):
-            raise KeyError("subscription not found")
-        current = dict(current)
-        node_latency = _prune_node_latency_map(current.get("node_latency"), _normalize_last_nodes(current.get("last_nodes")))
-        node_latency[target_key] = entry
-        current["node_latency"] = node_latency
-        state["subscriptions"][idx] = current
-        _write_state(ui_state_dir, _normalize_state(state))
-
-    result: Dict[str, Any] = {
-        "ok": delay_ms is not None,
-        "id": str(sub.get("id") or sub_id),
-        "node_key": target_key,
-        "tag": tag,
-        "probe_url": probe_url,
-        "checked_at": checked_at,
-        "entry": entry,
-    }
-    if delay_ms is not None:
-        result["delay_ms"] = delay_ms
-    if error_text:
-        result["error"] = error_text
-    return result
+    items = batch_result.get("results") if isinstance(batch_result, dict) else None
+    if not isinstance(items, list) or not items:
+        raise RuntimeError("node latency probe returned no results")
+    first = items[0]
+    if not isinstance(first, dict):
+        raise RuntimeError("node latency probe returned invalid result")
+    return dict(first)
 
 
 def probe_subscription_nodes_latency(
@@ -2109,6 +1955,7 @@ def probe_subscription_nodes_latency(
     *,
     xray_configs_dir: str,
     timeout_s: float = DEFAULT_PROBE_TIMEOUT_SECONDS,
+    strict: bool = False,
 ) -> Dict[str, Any]:
     target_keys = _normalize_probe_node_keys(list(node_keys) if not isinstance(node_keys, list) else node_keys)
     if not target_keys:
@@ -2142,6 +1989,8 @@ def probe_subscription_nodes_latency(
     for target_key in target_keys:
         node = nodes_by_key.get(target_key)
         if not node:
+            if strict:
+                raise KeyError("node not found")
             immediate_results[target_key] = {
                 "ok": False,
                 "id": str(sub.get("id") or sub_id),
@@ -2153,6 +2002,8 @@ def probe_subscription_nodes_latency(
 
         tag = str(node.get("tag") or "").strip()
         if not tag:
+            if strict:
+                raise ValueError("Узел сейчас не входит в generated fragment.")
             immediate_results[target_key] = {
                 "ok": False,
                 "id": str(sub.get("id") or sub_id),
@@ -2166,6 +2017,8 @@ def probe_subscription_nodes_latency(
             generated_outbounds = _load_generated_outbounds_map(sub, xray_configs_dir)
         outbound = generated_outbounds.get(tag)
         if outbound is None:
+            if strict:
+                raise KeyError("node tag not found")
             immediate_results[target_key] = {
                 "ok": False,
                 "id": str(sub.get("id") or sub_id),
@@ -2194,7 +2047,7 @@ def probe_subscription_nodes_latency(
             targets=probe_targets,
             probe_url=probe_url,
             timeout_value=timeout_value,
-            concurrency=3,
+            concurrency=PROBE_BATCH_CONCURRENCY,
         )
 
     for target_key in target_keys:
