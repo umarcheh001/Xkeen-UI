@@ -3160,7 +3160,7 @@ let outboundsModuleApi = null;
       if (!document.body) return null;
 
       document.body.insertAdjacentHTML('beforeend', `
-        <div id="outbounds-subscriptions-modal" class="modal hidden" data-modal-key="outbounds-subscriptions-v1" data-modal-remember="0" data-modal-nopos="1" data-modal-noresize="1" role="dialog" aria-modal="true" aria-label="Подписки Xray">
+        <div id="outbounds-subscriptions-modal" class="modal hidden" data-modal-key="outbounds-subscriptions-v1" data-modal-remember="0" data-modal-nopos="1" role="dialog" aria-modal="true" aria-label="Подписки Xray">
           <div class="modal-content xk-sub-modal" data-modal-key="outbounds-subscriptions-v1-content">
             <div class="modal-header xk-sub-header">
               <div class="xk-sub-titleblock">
@@ -3200,6 +3200,10 @@ let outboundsModuleApi = null;
                       <span class="xk-pool-fieldlabel">Tag prefix</span>
                       <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Используй его в selector/balancer LeastPing.">
                     </label>
+                    <label data-tooltip="Как часто обновлять подписку. Заголовок provider profile-update-interval может уточнить значение.">
+                      <span class="xk-pool-fieldlabel">Интервал, ч</span>
+                      <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="6" title="Интервал обновления" data-tooltip="Интервал автообновления в часах: от 1 до 168.">
+                    </label>
                     <label class="xk-sub-wide" data-tooltip="HTTP(S) URL подписки. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
                       <span class="xk-pool-fieldlabel">URL</span>
                       <input id="outbounds-subscriptions-url" class="xray-log-filter" type="url" placeholder="https://..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки. Панель скачает nodes и создаст отдельный outbounds-фрагмент.">
@@ -3216,18 +3220,16 @@ let outboundsModuleApi = null;
                       <span class="xk-pool-fieldlabel">Фильтр транспорта (regex)</span>
                       <input id="outbounds-subscriptions-transport-filter" class="xray-log-filter" type="text" placeholder="ws|grpc|tcp|xhttp" title="Фильтр транспорта" data-tooltip="Оставить только ноды с нужным transport/network. Например: ws|grpc|tcp|xhttp|quic.">
                     </label>
-                    <label data-tooltip="Как часто обновлять подписку. Заголовок provider profile-update-interval может уточнить значение.">
-                      <span class="xk-pool-fieldlabel">Интервал, ч</span>
-                      <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="6" title="Интервал обновления" data-tooltip="Интервал автообновления в часах: от 1 до 168.">
-                    </label>
-                    <div class="xk-sub-options">
-                      <label class="xk-sub-check" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span>Авто</span></label>
-                      <label class="xk-sub-check" data-tooltip="Добавлять generated tags в observatory для leastPing-проверок."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" data-tooltip="Добавлять generated outbound tags в 07_observatory.json для LeastPing."><span>Пинг</span></label>
-                      <label class="xk-sub-check" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span>Обновить сразу</span></label>
-                    </div>
-                    <div class="xk-sub-actions">
-                      <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Новая подписка" data-tooltip="Очистить форму и добавить новую подписку.">Новая</button>
-                      <button type="submit" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить подписку" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
+                    <div class="xk-sub-controls">
+                      <div class="xk-sub-options">
+                        <label class="xk-sub-check" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span>Авто</span></label>
+                        <label class="xk-sub-check" data-tooltip="Добавлять generated tags в observatory для leastPing-проверок."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" data-tooltip="Добавлять generated outbound tags в 07_observatory.json для LeastPing."><span>Пинг</span></label>
+                        <label class="xk-sub-check" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span>Обновить сразу</span></label>
+                      </div>
+                      <div class="xk-sub-actions">
+                        <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Новая подписка" data-tooltip="Очистить форму и добавить новую подписку.">Новая</button>
+                        <button type="submit" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить подписку" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
+                      </div>
                     </div>
                   </form>
                 </section>

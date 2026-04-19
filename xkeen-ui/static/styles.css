@@ -7508,14 +7508,16 @@ html[data-theme="light"] .xk-mi-status.error {
 }
 
 #outbounds-subscriptions-modal {
-  padding: 10px;
+  align-items: flex-start;
+  padding: 32px 10px 10px;
 }
 
 #outbounds-subscriptions-modal .modal-content {
   width: min(92vw, 960px);
   max-width: 960px;
   height: auto;
-  max-height: min(86vh, 720px);
+  min-height: 420px;
+  max-height: min(92vh, 900px);
   padding: 12px 14px 14px;
   border-color: rgba(125, 211, 252, 0.20);
   background:
@@ -7602,10 +7604,10 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-grid {
   display: grid;
-  grid-template-columns: minmax(290px, 360px) minmax(0, 1fr);
+  grid-template-columns: minmax(420px, 520px) minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
-  align-items: start;
+  align-items: stretch;
 }
 
 .xk-sub-panel {
@@ -7637,8 +7639,8 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-form {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 9px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .xk-sub-form label {
@@ -7652,12 +7654,32 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-wide,
 .xk-sub-options,
-.xk-sub-actions {
+.xk-sub-actions,
+.xk-sub-controls {
   grid-column: 1 / -1;
 }
 
 .xk-sub-options {
   flex-wrap: wrap;
+}
+
+.xk-sub-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.xk-sub-controls .xk-sub-options,
+.xk-sub-controls .xk-sub-actions {
+  grid-column: auto;
+  flex: 0 1 auto;
+}
+
+.xk-sub-controls .xk-sub-actions {
+  margin-left: auto;
 }
 
 .xk-sub-check {
@@ -7689,8 +7711,8 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-tablewrap {
   position: relative;
+  flex: 1 1 auto;
   min-height: 172px;
-  max-height: min(44vh, 390px);
   overflow: auto;
   border: 1px solid rgba(148, 163, 184, 0.10);
   border-radius: 8px;
@@ -7836,8 +7858,8 @@ html[data-theme="light"] .xk-mi-status.error {
 }
 
 .xk-sub-node-list {
-  min-height: 120px;
-  max-height: min(34vh, 320px);
+  min-height: 160px;
+  max-height: min(52vh, 520px);
   overflow: auto;
   padding: 4px;
   border: 1px solid rgba(148, 163, 184, 0.10);
