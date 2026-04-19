@@ -73,6 +73,10 @@ _SUPPORTED_LINK_RE = re.compile(
 _STATE_LOCK = threading.RLock()
 _SCHEDULER_LOCK = threading.Lock()
 _SCHEDULER_STARTED = False
+_MISSING = object()
+
+NAME_FILTER_KEYS = ("name_filter", "nameFilter", "name_regex", "nameRegex")
+TYPE_FILTER_KEYS = ("type_filter", "typeFilter", "type_regex", "typeRegex")
 
 
 SnapshotCallback = Callable[[str], None]
@@ -132,6 +136,34 @@ def _clean_tag_prefix(value: Any, fallback: str) -> str:
     if raw.lower() in RESERVED_TAGS:
         raw = raw + "_sub"
     return raw[:32].strip("_.:-") or "sub"
+
+
+def _clean_regex_filter(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _read_filter_value(data: Any, keys: tuple[str, ...]) -> Any:
+    if not isinstance(data, dict):
+        return _MISSING
+    for key in keys:
+        if key in data:
+            return _clean_regex_filter(data.get(key))
+    return _MISSING
+
+
+def _stored_filter_value(data: Any, keys: tuple[str, ...]) -> str:
+    value = _read_filter_value(data, keys)
+    return "" if value is _MISSING else str(value)
+
+
+def _compile_regex_filter(value: Any, label: str) -> re.Pattern[str] | None:
+    raw = _clean_regex_filter(value)
+    if not raw:
+        return None
+    try:
+        return re.compile(raw, re.IGNORECASE)
+    except re.error as exc:
+        raise ValueError(f"Некорректный regex для {label}: {exc}") from exc
 
 
 def _unique_id(base: str, existing: Iterable[str]) -> str:
@@ -194,14 +226,20 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
         output_file = os.path.basename(output_file) or _subscription_output_file(sub_id)
         if not output_file.lower().endswith(".json"):
             output_file += ".json"
+        name_filter = _stored_filter_value(item, NAME_FILTER_KEYS)
+        type_filter = _stored_filter_value(item, TYPE_FILTER_KEYS)
 
         clean = dict(item)
+        for alias in NAME_FILTER_KEYS[1:] + TYPE_FILTER_KEYS[1:]:
+            clean.pop(alias, None)
         clean.update(
             {
                 "id": sub_id,
                 "name": str(item.get("name") or tag).strip() or tag,
                 "tag": tag,
                 "url": url,
+                "name_filter": name_filter,
+                "type_filter": type_filter,
                 "enabled": bool(item.get("enabled", True)),
                 "ping_enabled": bool(item.get("ping_enabled", item.get("pingEnabled", True))),
                 "interval_hours": interval,
@@ -264,15 +302,29 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
         output_file = os.path.basename(output_file) or _subscription_output_file(sub_id)
         if not output_file.lower().endswith(".json"):
             output_file += ".json"
+        name_filter_raw = _read_filter_value(data, NAME_FILTER_KEYS)
+        type_filter_raw = _read_filter_value(data, TYPE_FILTER_KEYS)
+        name_filter = _clean_regex_filter(
+            _stored_filter_value(base, NAME_FILTER_KEYS) if name_filter_raw is _MISSING else name_filter_raw
+        )
+        type_filter = _clean_regex_filter(
+            _stored_filter_value(base, TYPE_FILTER_KEYS) if type_filter_raw is _MISSING else type_filter_raw
+        )
+        _compile_regex_filter(name_filter, "фильтра имени")
+        _compile_regex_filter(type_filter, "фильтра типа")
 
         now_ts = _now()
         sub = dict(base)
+        for alias in NAME_FILTER_KEYS[1:] + TYPE_FILTER_KEYS[1:]:
+            sub.pop(alias, None)
         sub.update(
             {
                 "id": sub_id,
                 "name": str(data.get("name") or base.get("name") or tag).strip() or tag,
                 "tag": tag,
                 "url": url,
+                "name_filter": name_filter,
+                "type_filter": type_filter,
                 "enabled": bool(data.get("enabled", base.get("enabled", True))),
                 "ping_enabled": bool(data.get("ping_enabled", data.get("pingEnabled", base.get("ping_enabled", True)))),
                 "interval_hours": interval,
@@ -601,6 +653,34 @@ def _node_name_from_link(link: str) -> str:
         return ""
 
 
+def _protocol_from_link(link: str) -> str:
+    match = re.match(r"^([a-z0-9+.-]+)://", str(link or "").strip(), re.IGNORECASE)
+    return str(match.group(1) or "").strip().lower() if match else ""
+
+
+def _protocol_filter_text(protocol: Any) -> str:
+    value = str(protocol or "").strip().lower()
+    if value in {"ss", "shadowsocks"}:
+        return "ss shadowsocks"
+    if value in {"hy2", "hysteria2", "hysteria"}:
+        return "hy2 hysteria2 hysteria"
+    return value
+
+
+def _match_subscription_filters(
+    *,
+    node_name: str,
+    protocol: str,
+    name_filter: re.Pattern[str] | None,
+    type_filter: re.Pattern[str] | None,
+) -> bool:
+    if name_filter and not name_filter.search(str(node_name or "")):
+        return False
+    if type_filter and not type_filter.search(_protocol_filter_text(protocol)):
+        return False
+    return True
+
+
 def _clean_node_name(name: str, fallback: str) -> str:
     out: List[str] = []
     for ch in str(name or ""):
@@ -634,13 +714,35 @@ def _unique_tag(base: str, used: set[str]) -> str:
         idx += 1
 
 
-def build_subscription_outbounds(links: List[str], *, tag_prefix: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def build_subscription_outbounds(
+    links: List[str],
+    *,
+    tag_prefix: str,
+    name_filter: str = "",
+    type_filter: str = "",
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, int]]:
     prefix = _clean_tag_prefix(tag_prefix, "sub")
+    name_pattern = _compile_regex_filter(name_filter, "фильтра имени")
+    type_pattern = _compile_regex_filter(type_filter, "фильтра типа")
+    source_count = len(list(links or []))
+    filtered_links: List[str] = []
+    for link in links or []:
+        protocol = _protocol_from_link(link)
+        node_name = _node_name_from_link(link) or protocol or "node"
+        if not _match_subscription_filters(
+            node_name=node_name,
+            protocol=protocol,
+            name_filter=name_pattern,
+            type_filter=type_pattern,
+        ):
+            continue
+        filtered_links.append(link)
+
     outbounds: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     used: set[str] = set()
 
-    for idx, link in enumerate(links):
+    for idx, link in enumerate(filtered_links):
         node = _clean_node_name(_node_name_from_link(link), f"node{idx + 1}")
         tag = _unique_tag(f"{prefix}--{node}", used)
         try:
@@ -649,20 +751,47 @@ def build_subscription_outbounds(links: List[str], *, tag_prefix: str) -> Tuple[
         except Exception as exc:
             errors.append({"idx": idx, "tag": tag, "error": str(exc)})
 
-    return outbounds, errors
+    return outbounds, errors, {
+        "source_count": source_count,
+        "filtered_out_count": max(0, source_count - len(filtered_links)),
+    }
 
 
-def build_subscription_json_outbounds(body: str, *, tag_prefix: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def build_subscription_json_outbounds(
+    body: str,
+    *,
+    tag_prefix: str,
+    name_filter: str = "",
+    type_filter: str = "",
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, int]]:
     obj = _load_subscription_json(body)
     if obj is None:
-        return [], []
+        return [], [], {"source_count": 0, "filtered_out_count": 0}
 
     prefix = _clean_tag_prefix(tag_prefix, "sub")
+    name_pattern = _compile_regex_filter(name_filter, "фильтра имени")
+    type_pattern = _compile_regex_filter(type_filter, "фильтра типа")
+    candidates = list(_iter_json_proxy_outbounds(obj))
+    source_count = len(candidates)
+    filtered_candidates: List[Tuple[Dict[str, Any], str]] = []
+    for source, name_hint in candidates:
+        protocol = str(source.get("protocol") or "node").strip().lower() or "node"
+        original_tag = str(source.get("tag") or "").strip()
+        node_name = name_hint or original_tag or protocol
+        if not _match_subscription_filters(
+            node_name=node_name,
+            protocol=protocol,
+            name_filter=name_pattern,
+            type_filter=type_pattern,
+        ):
+            continue
+        filtered_candidates.append((source, name_hint))
+
     outbounds: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     used: set[str] = set()
 
-    for idx, (source, name_hint) in enumerate(_iter_json_proxy_outbounds(obj)):
+    for idx, (source, name_hint) in enumerate(filtered_candidates):
         protocol = str(source.get("protocol") or "node").strip() or "node"
         fallback = f"node{idx + 1}"
         original_tag = str(source.get("tag") or "").strip()
@@ -675,7 +804,10 @@ def build_subscription_json_outbounds(body: str, *, tag_prefix: str) -> Tuple[Li
         except Exception as exc:
             errors.append({"idx": idx, "tag": tag, "error": str(exc)})
 
-    return outbounds, errors
+    return outbounds, errors, {
+        "source_count": source_count,
+        "filtered_out_count": max(0, source_count - len(filtered_candidates)),
+    }
 
 
 def _content_hash(obj: Any) -> str:
@@ -793,29 +925,41 @@ def refresh_subscription(
         "observatory_changed": False,
         "restarted": False,
         "count": 0,
+        "source_count": 0,
+        "filtered_out_count": 0,
         "tags": [],
         "errors": [],
         "source_format": "",
     }
     now_ts = _now()
+    source_count = 0
+    filtered_out_count = 0
 
     try:
         body, headers = fetch_subscription_body(str(sub.get("url") or ""))
         links = parse_subscription_links(body)
         source_format = "links"
         if links:
-            outbounds, errors = build_subscription_outbounds(
+            outbounds, errors, stats = build_subscription_outbounds(
                 links,
                 tag_prefix=str(sub.get("tag") or sub.get("id") or "sub"),
+                name_filter=str(sub.get("name_filter") or ""),
+                type_filter=str(sub.get("type_filter") or ""),
             )
         else:
             source_format = "xray-json"
-            outbounds, errors = build_subscription_json_outbounds(
+            outbounds, errors, stats = build_subscription_json_outbounds(
                 body,
                 tag_prefix=str(sub.get("tag") or sub.get("id") or "sub"),
+                name_filter=str(sub.get("name_filter") or ""),
+                type_filter=str(sub.get("type_filter") or ""),
             )
+        source_count = int(stats.get("source_count") or 0)
+        filtered_out_count = int(stats.get("filtered_out_count") or 0)
         if not links and not outbounds:
             raise RuntimeError("no_supported_proxies")
+        if source_count > 0 and not outbounds and filtered_out_count >= source_count:
+            raise RuntimeError("Ни один узел не подошёл под фильтры подписки.")
         if not outbounds:
             raise RuntimeError("no_valid_outbounds")
 
@@ -875,6 +1019,8 @@ def refresh_subscription(
                 "last_error": "",
                 "last_update_ts": now_ts,
                 "last_count": len(outbounds),
+                "last_source_count": source_count,
+                "last_filtered_out_count": filtered_out_count,
                 "last_tags": tags,
                 "last_hash": _content_hash(output_obj),
                 "last_changed": bool(changed),
@@ -902,6 +1048,8 @@ def refresh_subscription(
                 "observatory_changed": bool(observatory_changed),
                 "restarted": restarted,
                 "count": len(outbounds),
+                "source_count": source_count,
+                "filtered_out_count": filtered_out_count,
                 "tags": tags,
                 "errors": errors,
                 "source_format": source_format,
@@ -916,10 +1064,20 @@ def refresh_subscription(
                 "last_ok": False,
                 "last_error": str(exc),
                 "last_update_ts": now_ts,
+                "last_source_count": source_count,
+                "last_filtered_out_count": filtered_out_count,
                 "next_update_ts": now_ts + (interval * 3600) if bool(sub.get("enabled", True)) else None,
             }
         )
-        result.update({"ok": False, "error": str(exc), "next_update_ts": sub.get("next_update_ts")})
+        result.update(
+            {
+                "ok": False,
+                "error": str(exc),
+                "source_count": source_count,
+                "filtered_out_count": filtered_out_count,
+                "next_update_ts": sub.get("next_update_ts"),
+            }
+        )
 
     with _STATE_LOCK:
         state = load_subscription_state(ui_state_dir)

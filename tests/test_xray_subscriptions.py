@@ -4,6 +4,8 @@ import base64
 import json
 from pathlib import Path
 
+import pytest
+
 
 def _vless(name: str = "Node") -> str:
     return (
@@ -11,6 +13,11 @@ def _vless(name: str = "Node") -> str:
         "?type=tcp&security=reality&sni=edge.example.com&pbk=pubkey&encryption=none"
         f"#{name}"
     )
+
+
+def _trojan(name: str = "Node") -> str:
+    safe_name = str(name or "").replace(" ", "%20")
+    return f"trojan://secret@example.net:443?security=tls&sni=edge.example.com#{safe_name}"
 
 
 def test_parse_subscription_links_accepts_plain_and_base64_payloads():
@@ -21,6 +28,23 @@ def test_parse_subscription_links_accepts_plain_and_base64_payloads():
 
     encoded = base64.b64encode(plain.encode("utf-8")).decode("ascii")
     assert parse_subscription_links(encoded) == [_vless("Plain"), _vless("Second")]
+
+
+def test_upsert_subscription_validates_regex_filters(tmp_path: Path):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    ui_state_dir.mkdir()
+
+    with pytest.raises(ValueError, match="regex"):
+        subs.upsert_subscription(
+            str(ui_state_dir),
+            {
+                "id": "demo",
+                "url": "https://example.com/sub",
+                "name_filter": "(",
+            },
+        )
 
 
 def test_refresh_subscription_writes_generated_fragment_and_observatory(tmp_path: Path, monkeypatch):
@@ -105,6 +129,72 @@ def test_refresh_subscription_writes_generated_fragment_and_observatory(tmp_path
     assert restarts == []
 
 
+def test_refresh_subscription_applies_name_and_type_filters_to_links(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (
+            "\n".join(
+                [
+                    _vless("Germany-01"),
+                    _trojan("Sweden-02"),
+                    _vless("Netherlands-03"),
+                ]
+            ),
+            {},
+        ),
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "filtered",
+            "tag": "flt",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": False,
+            "name_filter": "Germany|Netherlands",
+            "type_filter": "vless",
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "filtered",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    assert result["count"] == 2
+    assert result["source_count"] == 3
+    assert result["filtered_out_count"] == 1
+    assert result["tags"] == ["flt--Germany-01", "flt--Netherlands-03"]
+
+    generated = json.loads((xray_dir / "04_outbounds.filtered.json").read_text(encoding="utf-8"))
+    assert [item["tag"] for item in generated["outbounds"]] == ["flt--Germany-01", "flt--Netherlands-03"]
+
+    state = subs.load_subscription_state(str(ui_state_dir))
+    saved = state["subscriptions"][0]
+    assert saved["name_filter"] == "Germany|Netherlands"
+    assert saved["type_filter"] == "vless"
+    assert saved["last_source_count"] == 3
+    assert saved["last_filtered_out_count"] == 1
+
+
 def test_refresh_subscription_accepts_xray_json_config_arrays(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 
@@ -172,9 +262,94 @@ def test_refresh_subscription_accepts_xray_json_config_arrays(tmp_path: Path, mo
     assert result["ok"] is True
     assert result["source_format"] == "xray-json"
     assert result["count"] == 1
+    assert result["source_count"] == 1
+    assert result["filtered_out_count"] == 0
     assert result["tags"] == ["json--JSON_Node"]
 
     generated = json.loads((xray_dir / "04_outbounds.json-demo.json").read_text(encoding="utf-8"))
     assert len(generated["outbounds"]) == 1
     assert generated["outbounds"][0]["protocol"] == "vless"
     assert generated["outbounds"][0]["tag"] == "json--JSON_Node"
+
+
+def test_refresh_subscription_applies_filters_to_xray_json_payloads(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    subscription_body = json.dumps(
+        [
+            {
+                "remarks": "Primary Germany",
+                "outbounds": [
+                    {
+                        "tag": "proxy",
+                        "protocol": "vless",
+                        "settings": {
+                            "vnext": [
+                                {
+                                    "address": "example.com",
+                                    "port": 443,
+                                    "users": [{"id": "user", "encryption": "none"}],
+                                }
+                            ]
+                        },
+                    }
+                ],
+            },
+            {
+                "remarks": "Backup Sweden",
+                "outbounds": [
+                    {
+                        "tag": "proxy",
+                        "protocol": "trojan",
+                        "settings": {
+                            "servers": [{"address": "backup.example.com", "port": 443, "password": "secret"}]
+                        },
+                    }
+                ],
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (subscription_body, {"content-type": "application/json"}),
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "json-filter",
+            "tag": "jsonf",
+            "url": "https://example.com/json",
+            "enabled": True,
+            "ping_enabled": False,
+            "name_filter": "Primary",
+            "type_filter": "vless",
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "json-filter",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    assert result["source_format"] == "xray-json"
+    assert result["count"] == 1
+    assert result["source_count"] == 2
+    assert result["filtered_out_count"] == 1
+    assert result["tags"] == ["jsonf--Primary_Germany"]

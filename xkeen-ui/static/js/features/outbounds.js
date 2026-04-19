@@ -3129,6 +3129,8 @@ let outboundsModuleApi = null;
       name: 'outbounds-subscriptions-name',
       tag: 'outbounds-subscriptions-tag',
       url: 'outbounds-subscriptions-url',
+      nameFilter: 'outbounds-subscriptions-name-filter',
+      typeFilter: 'outbounds-subscriptions-type-filter',
       interval: 'outbounds-subscriptions-interval',
       enabled: 'outbounds-subscriptions-enabled',
       ping: 'outbounds-subscriptions-ping',
@@ -3193,6 +3195,14 @@ let outboundsModuleApi = null;
                     <label class="xk-sub-wide" data-tooltip="HTTP(S) URL подписки. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
                       <span class="xk-pool-fieldlabel">URL</span>
                       <input id="outbounds-subscriptions-url" class="xray-log-filter" type="url" placeholder="https://..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки. Панель скачает nodes и создаст отдельный outbounds-фрагмент.">
+                    </label>
+                    <label data-tooltip="Regex по имени ноды из подписки. Например: Germany|Netherlands|SG. Пусто — без фильтра.">
+                      <span class="xk-pool-fieldlabel">Фильтр имени (regex)</span>
+                      <input id="outbounds-subscriptions-name-filter" class="xray-log-filter" type="text" placeholder="Germany|Netherlands|SG" title="Фильтр имени" data-tooltip="Оставить только ноды, чьё имя совпадает с regex. Например: Germany|Netherlands|SG.">
+                    </label>
+                    <label data-tooltip="Regex по типу прокси/протоколу. Например: vless|trojan|vmess. Пусто — без фильтра.">
+                      <span class="xk-pool-fieldlabel">Фильтр типа (regex)</span>
+                      <input id="outbounds-subscriptions-type-filter" class="xray-log-filter" type="text" placeholder="vless|trojan|vmess" title="Фильтр типа" data-tooltip="Оставить только указанные типы нод. Например: vless|trojan|vmess|ss|hy2.">
                     </label>
                     <label data-tooltip="Как часто обновлять подписку. Заголовок provider profile-update-interval может уточнить значение.">
                       <span class="xk-pool-fieldlabel">Интервал, ч</span>
@@ -3301,12 +3311,24 @@ let outboundsModuleApi = null;
       return dir + '/' + name;
     }
 
+    function subsFilterSummary(sub) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      const parts = [];
+      const nameFilter = String(s.name_filter || '').trim();
+      const typeFilter = String(s.type_filter || '').trim();
+      if (nameFilter) parts.push('имя~' + nameFilter);
+      if (typeFilter) parts.push('тип~' + typeFilter);
+      return parts.join(' · ');
+    }
+
     function subsResetForm() {
       _subscriptionEditId = '';
       try { $(SUB_IDS.id).value = ''; } catch (e) {}
       try { $(SUB_IDS.name).value = ''; } catch (e) {}
       try { $(SUB_IDS.tag).value = ''; } catch (e) {}
       try { $(SUB_IDS.url).value = ''; } catch (e) {}
+      try { $(SUB_IDS.nameFilter).value = ''; } catch (e) {}
+      try { $(SUB_IDS.typeFilter).value = ''; } catch (e) {}
       try { $(SUB_IDS.interval).value = '6'; } catch (e) {}
       try { $(SUB_IDS.enabled).checked = true; } catch (e) {}
       try { $(SUB_IDS.ping).checked = true; } catch (e) {}
@@ -3320,6 +3342,8 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.name).value = String(s.name || ''); } catch (e) {}
       try { $(SUB_IDS.tag).value = String(s.tag || ''); } catch (e) {}
       try { $(SUB_IDS.url).value = String(s.url || ''); } catch (e) {}
+      try { $(SUB_IDS.nameFilter).value = String(s.name_filter || ''); } catch (e) {}
+      try { $(SUB_IDS.typeFilter).value = String(s.type_filter || ''); } catch (e) {}
       try { $(SUB_IDS.interval).value = String(s.interval_hours || 6); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = s.enabled !== false; } catch (e) {}
       try { $(SUB_IDS.ping).checked = s.ping_enabled !== false; } catch (e) {}
@@ -3340,25 +3364,35 @@ let outboundsModuleApi = null;
         const ok = sub && sub.last_ok === true;
         const bad = sub && sub.last_ok === false;
         const count = Number(sub && sub.last_count ? sub.last_count : 0);
+        const rawSourceCount = Number(sub && sub.last_source_count ? sub.last_source_count : 0);
+        const sourceCount = Number.isFinite(rawSourceCount) && rawSourceCount > 0 ? rawSourceCount : count;
+        const filteredOutCount = Number(sub && sub.last_filtered_out_count ? sub.last_filtered_out_count : 0);
         const statusText = ok
-          ? (`OK · ${count}`)
+          ? (`OK · ${count}` + (sourceCount > count ? ` из ${sourceCount}` : ''))
           : (bad ? ('Ошибка · ' + escapeHtml(String(sub.last_error || ''))) : '—');
         const next = subsFormatTime(sub && sub.next_update_ts);
         const title = escapeHtml(String(sub && sub.name ? sub.name : sub && sub.id ? sub.id : ''));
         const tag = escapeHtml(String(sub && sub.tag ? sub.tag : ''));
         const url = escapeHtml(subsShortUrl(sub && sub.url));
+        const filterText = escapeHtml(subsFilterSummary(sub));
         const fileRaw = String(sub && sub.output_file ? sub.output_file : '');
         const file = escapeHtml(fileRaw);
         const filePath = escapeHtml(subsGeneratedFilePath(fileRaw));
         const id = escapeHtml(String(sub && sub.id ? sub.id : ''));
+        const metaBits = [];
+        if (title) metaBits.push(title);
+        if (url) metaBits.push(url);
+        if (filterText) metaBits.push(filterText);
+        const nextBits = ['next: ' + next];
+        if (filteredOutCount > 0) nextBits.push('фильтр: -' + String(filteredOutCount));
         tr.innerHTML = `
           <td>
             <div class="xk-sub-main">${tag || id}</div>
-            <div class="xk-sub-muted">${title}${url ? ' · ' + url : ''}</div>
+            <div class="xk-sub-muted">${metaBits.join(' · ')}</div>
           </td>
           <td>
             <div class="${bad ? 'xk-sub-bad' : (ok ? 'xk-sub-ok' : 'xk-sub-muted')}">${statusText}</div>
-            <div class="xk-sub-muted">next: ${escapeHtml(next)}</div>
+            <div class="xk-sub-muted">${escapeHtml(nextBits.join(' · '))}</div>
           </td>
           <td class="xk-sub-file-cell">
             <button type="button" class="xk-sub-file-link" data-file="${file}" title="${filePath || file}" data-tooltip="Открыть generated outbounds-фрагмент этой подписки.">
@@ -3473,7 +3507,12 @@ let outboundsModuleApi = null;
         }
         const changed = !!(data.changed || data.observatory_changed);
         data.changed = changed;
-        const msg = `Готово: ${Number(data.count || 0)} outbound` + (data.changed ? ' · файл обновлён' : ' · без изменений');
+        const sourceCount = Number(data.source_count || data.count || 0);
+        const filteredOutCount = Number(data.filtered_out_count || 0);
+        const filterNote = filteredOutCount > 0 && sourceCount > 0
+          ? ` · по фильтру ${Number(data.count || 0)} из ${sourceCount}`
+          : '';
+        const msg = `Готово: ${Number(data.count || 0)} outbound` + filterNote + (data.changed ? ' · файл обновлён' : ' · без изменений');
         const fileNote = data.output_file ? (' · ' + String(data.output_file)) : '';
         subsSetStatus(msg + fileNote, false, true);
         if (!changed) {
@@ -3537,6 +3576,8 @@ let outboundsModuleApi = null;
         name: String(($(SUB_IDS.name) && $(SUB_IDS.name).value) || '').trim(),
         tag: String(($(SUB_IDS.tag) && $(SUB_IDS.tag).value) || '').trim(),
         url: String(($(SUB_IDS.url) && $(SUB_IDS.url).value) || '').trim(),
+        name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim(),
+        type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim(),
         interval_hours: Number(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || 6),
         enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
         ping_enabled: !!($(SUB_IDS.ping) && $(SUB_IDS.ping).checked),
