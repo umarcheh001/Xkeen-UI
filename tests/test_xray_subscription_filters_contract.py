@@ -32,8 +32,9 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")
 
-    assert 'data-modal-nodrag="1"' in outbounds_src
-    assert 'data-modal-noresize="1"' in outbounds_src
+    assert 'delete modal.dataset.modalRemember;' in outbounds_src
+    assert 'delete modal.dataset.modalNopos;' in outbounds_src
+    assert 'delete modal.dataset.modalNodrag;' in outbounds_src
     assert "transportFilter: 'outbounds-subscriptions-transport-filter'" in outbounds_src
     assert "excludedKeys: 'outbounds-subscriptions-excluded-keys'" in outbounds_src
     assert "nodesPanel: 'outbounds-subscriptions-nodes-panel'" in outbounds_src
@@ -42,14 +43,39 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim()," in outbounds_src
     assert "excluded_node_keys: subsGetExcludedKeysValue()," in outbounds_src
     assert "function subsRenderNodeList() {" in outbounds_src
-    assert "function subsApplyModalGeometry() {" in outbounds_src
+    assert "function subsSyncModalLayout() {" in outbounds_src
+    assert "function subsDecorateActionButtons(modal) {" in outbounds_src
     assert "function subsTransportFilterText(transport, protocol) {" in outbounds_src
     assert "function subsProtocolFilterText(protocol) {" in outbounds_src
     assert "xk-sub-node-toggle" in outbounds_src
+    assert "resetBtn.classList.add('xk-sub-icon-btn');" in outbounds_src
+    assert "saveBtn.classList.add('xk-sub-icon-btn');" in outbounds_src
+    assert "xk-visually-hidden" in outbounds_src
+    assert "&#10133;" in outbounds_src
+    assert "&#128190;" in outbounds_src
     assert "btn-danger btn-compact xk-sub-node-toggle" in outbounds_src
     assert "xk-sub-node-toggle-restore" in outbounds_src
     assert ".xk-sub-node-list" in styles_src
     assert ".xk-sub-modal {" in styles_src
+    assert ".xk-sub-modal.xk-sub-modal-compact .xk-sub-grid" in styles_src
+    assert "#outbounds-subscriptions-modal .modal-body {" in styles_src
+    assert "const isUserSized = !!(content.dataset && content.dataset.xkDragged === '1');" in outbounds_src
+    assert "const maxReadableWidth = viewportWidth > 0" in outbounds_src
+    assert "const maxViewportWidth = viewportWidth > 0" in outbounds_src
+    assert "const clampWidth = isUserSized ? maxViewportWidth : maxReadableWidth;" in outbounds_src
+    assert "content.style.maxWidth = `${Math.round(clampWidth)}px`;" in outbounds_src
+    assert ".xk-sub-brief,\n.xk-sub-grid,\n.xk-sub-node-panel,\n#outbounds-subscriptions-modal .modal-actions {" not in styles_src
+    assert ".xk-sub-grid {" in styles_src
+    assert "flex: 0 0 auto;" in styles_src
+    assert "overflow: hidden;" in styles_src
+    assert "min-height: 220px;" in styles_src
+    assert ".xk-sub-icon-btn.btn-compact {" in styles_src
+    assert "flex-wrap: nowrap;" in styles_src
+    assert "min-height: 88px;" in styles_src
+    assert ".xk-sub-node-main {" in styles_src
+    assert "gap: 7px;" in styles_src
+    assert "width: min(96vw, 1080px) !important;" not in styles_src
+    assert "max-width: 1080px !important;" not in styles_src
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in styles_src
     assert "grid-template-columns: repeat(12, minmax(0, 1fr));" in styles_src
     assert ".xk-sub-span-5" in styles_src

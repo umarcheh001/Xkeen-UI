@@ -3154,13 +3154,35 @@ let outboundsModuleApi = null;
     let _subscriptions = [];
     let _subscriptionEditId = '';
 
+    function subsDecorateActionButtons(modal) {
+      const root = modal || $(SUB_IDS.modal);
+      if (!root || !root.querySelector) return;
+      try {
+        const resetBtn = root.querySelector(`#${SUB_IDS.reset}`);
+        if (resetBtn) {
+          resetBtn.classList.add('xk-sub-icon-btn');
+          resetBtn.setAttribute('aria-label', String(resetBtn.getAttribute('title') || 'New'));
+          resetBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">&#10133;</span><span class="xk-visually-hidden">New</span>';
+        }
+        const saveBtn = root.querySelector(`#${SUB_IDS.save}`);
+        if (saveBtn) {
+          saveBtn.classList.add('xk-sub-icon-btn');
+          saveBtn.setAttribute('aria-label', String(saveBtn.getAttribute('title') || 'Save'));
+          saveBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">&#128190;</span><span class="xk-visually-hidden">Save</span>';
+        }
+      } catch (e) {}
+    }
+
     function subsEnsureModal() {
       let modal = $(SUB_IDS.modal);
-      if (modal) return modal;
+      if (modal) {
+        try { subsDecorateActionButtons(modal); } catch (e0) {}
+        return modal;
+      }
       if (!document.body) return null;
 
       document.body.insertAdjacentHTML('beforeend', `
-        <div id="outbounds-subscriptions-modal" class="modal hidden" data-modal-key="outbounds-subscriptions-v1" data-modal-remember="0" data-modal-nopos="1" data-modal-nodrag="1" data-modal-noresize="1" role="dialog" aria-modal="true" aria-label="Подписки Xray">
+        <div id="outbounds-subscriptions-modal" class="modal hidden" data-modal-key="outbounds-subscriptions-v1" data-modal-remember="0" data-modal-nopos="1" data-modal-nodrag="1" role="dialog" aria-modal="true" aria-label="Подписки Xray">
           <div class="modal-content xk-sub-modal" data-modal-key="outbounds-subscriptions-v1-content">
             <div class="modal-header xk-sub-header">
               <div class="xk-sub-titleblock">
@@ -3286,43 +3308,81 @@ let outboundsModuleApi = null;
       `);
 
       modal = $(SUB_IDS.modal);
+      try {
+        if (modal && modal.dataset) {
+          delete modal.dataset.modalRemember;
+          delete modal.dataset.modalNopos;
+          delete modal.dataset.modalNodrag;
+        }
+      } catch (e) {}
+      try {
+        const resetBtn = $(SUB_IDS.reset);
+        if (resetBtn) {
+          resetBtn.classList.add('xk-sub-icon-btn');
+          resetBtn.setAttribute('aria-label', String(resetBtn.getAttribute('title') || 'New'));
+          resetBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">✚</span><span class="xk-visually-hidden">New</span>';
+        }
+        const saveBtn = $(SUB_IDS.save);
+        if (saveBtn) {
+          saveBtn.classList.add('xk-sub-icon-btn');
+          saveBtn.setAttribute('aria-label', String(saveBtn.getAttribute('title') || 'Save'));
+          saveBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">💾</span><span class="xk-visually-hidden">Save</span>';
+        }
+      } catch (e2) {}
+      try { subsDecorateActionButtons(modal); } catch (e3) {}
       return modal;
     }
 
-    function subsApplyModalGeometry() {
+    function subsSyncModalLayout() {
       const modal = $(SUB_IDS.modal);
       const content = modal && modal.querySelector ? modal.querySelector('.modal-content') : null;
       if (!modal || !content) return;
 
-      const viewportWidth = Math.max(
-        Number(window.innerWidth || 0),
-        Number(document.documentElement && document.documentElement.clientWidth ? document.documentElement.clientWidth : 0)
-      );
-      const viewportHeight = Math.max(
-        Number(window.innerHeight || 0),
-        Number(document.documentElement && document.documentElement.clientHeight ? document.documentElement.clientHeight : 0)
-      );
-      if (!Number.isFinite(viewportWidth) || !Number.isFinite(viewportHeight) || viewportWidth <= 0 || viewportHeight <= 0) return;
-
-      const compact = viewportWidth <= 760;
-      const width = compact
-        ? Math.max(320, Math.min(viewportWidth - 12, 760))
-        : Math.min(980, Math.max(860, Math.round(viewportWidth * 0.62)));
-      const height = compact
-        ? Math.max(440, Math.min(viewportHeight - 12, 720))
-        : Math.min(760, Math.max(620, Math.round(viewportHeight * 0.78)));
-
+      let viewportWidth = 0;
       try {
-        content.style.position = '';
-        content.style.left = '';
-        content.style.top = '';
-        content.style.transform = '';
-        content.style.width = `${width}px`;
-        content.style.maxWidth = `${width}px`;
-        content.style.height = `${height}px`;
-        content.style.minHeight = compact ? '440px' : '620px';
-        content.style.maxHeight = `${Math.max(height, Math.min(viewportHeight - 12, compact ? 720 : 800))}px`;
+        viewportWidth = Math.max(
+          Number(window.innerWidth || 0),
+          Number(document.documentElement && document.documentElement.clientWidth ? document.documentElement.clientWidth : 0)
+        );
+      } catch (e0) {}
+
+      let width = 0;
+      try {
+        width = Number(content.getBoundingClientRect ? content.getBoundingClientRect().width : 0);
       } catch (e) {}
+      if (!Number.isFinite(width) || width <= 0) {
+        try { width = Number(content.offsetWidth || 0); } catch (e2) {}
+      }
+      const isUserSized = !!(content.dataset && content.dataset.xkDragged === '1');
+      const maxReadableWidth = viewportWidth > 0
+        ? Math.max(760, Math.min(1080, viewportWidth - 20))
+        : 1080;
+      const maxViewportWidth = viewportWidth > 0
+        ? Math.max(760, viewportWidth - 20)
+        : maxReadableWidth;
+      const clampWidth = isUserSized ? maxViewportWidth : maxReadableWidth;
+      if (width > clampWidth + 1) {
+        try {
+          content.style.width = `${Math.round(clampWidth)}px`;
+          content.style.maxWidth = `${Math.round(clampWidth)}px`;
+        } catch (e3) {}
+        if (viewportWidth > 0) {
+          try {
+            const currentLeft = Number.parseFloat(content.style.left || '');
+            if (Number.isFinite(currentLeft)) {
+              const maxLeft = Math.max(10, viewportWidth - clampWidth - 10);
+              if (currentLeft > maxLeft) content.style.left = `${Math.round(maxLeft)}px`;
+            }
+          } catch (e4) {}
+        }
+        width = clampWidth;
+      }
+      const compact = width > 0 ? width < 900 : false;
+      const narrow = width > 0 ? width < 720 : false;
+      try {
+        content.classList.toggle('xk-sub-modal-compact', compact);
+        content.classList.toggle('xk-sub-modal-narrow', narrow);
+      } catch (e5) {}
     }
 
     function subsShow(show) {
@@ -3334,7 +3394,7 @@ let outboundsModuleApi = null;
       } catch (e) {}
       if (show) {
         const apply = () => {
-          try { subsApplyModalGeometry(); } catch (e2) {}
+          try { subsSyncModalLayout(); } catch (e2) {}
         };
         try {
           requestAnimationFrame(() => requestAnimationFrame(apply));
@@ -4015,8 +4075,17 @@ let outboundsModuleApi = null;
         window.addEventListener('resize', () => {
           const m = $(SUB_IDS.modal);
           if (!m || m.classList.contains('hidden')) return;
-          try { subsApplyModalGeometry(); } catch (e) {}
+          try { subsSyncModalLayout(); } catch (e) {}
         });
+        try {
+          const content = modal.querySelector ? modal.querySelector('.modal-content') : null;
+          if (content && typeof ResizeObserver !== 'undefined') {
+            const ro = new ResizeObserver(() => {
+              try { subsSyncModalLayout(); } catch (e) {}
+            });
+            ro.observe(content);
+          }
+        } catch (e2) {}
         if (modal.dataset) modal.dataset.xkSubResizeBound = '1';
       }
 
