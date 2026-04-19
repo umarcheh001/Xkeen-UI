@@ -3656,15 +3656,41 @@ let outboundsModuleApi = null;
             <div class="xk-sub-muted">${escapeHtml(nextBits.join(' · '))}</div>
           </td>
           <td class="xk-sub-file-cell">
-            <button type="button" class="xk-sub-file-link" data-file="${file}" title="${filePath || file}" data-tooltip="Открыть generated outbounds-фрагмент этой подписки.">
+            <button
+              type="button"
+              class="xk-sub-file-link"
+              data-file="${file}"
+              title="${filePath || file}"
+              data-tooltip="Открыть generated outbounds-фрагмент этой подписки."
+              aria-label="Открыть generated outbounds-фрагмент"
+            >
+              <span class="xk-sub-file-badge">JSON</span>
               <code>${file || '—'}</code>
             </button>
           </td>
           <td class="xk-sub-row-actions">
-            <button type="button" class="btn-secondary btn-compact xk-sub-open" data-file="${file}" title="Открыть generated-фрагмент" data-tooltip="Переключить Прокси на этот фрагмент и открыть JSON-редактор.">↗</button>
-            <button type="button" class="btn-secondary btn-compact xk-sub-refresh" data-id="${id}" title="Обновить" data-tooltip="Скачать подписку сейчас и перегенерировать outbounds-фрагмент.">↻</button>
-            <button type="button" class="btn-secondary btn-compact xk-sub-edit" data-id="${id}" title="Редактировать" data-tooltip="Загрузить настройки подписки в форму слева.">✎</button>
-            <button type="button" class="btn-secondary btn-compact xk-sub-delete" data-id="${id}" title="Удалить" data-tooltip="Удалить подписку и generated-фрагмент.">×</button>
+            <button
+              type="button"
+              class="btn-secondary btn-compact xk-sub-list-action xk-sub-list-action-refresh xk-sub-refresh"
+              data-id="${id}"
+              title="Обновить"
+              data-tooltip="Скачать подписку сейчас и перегенерировать outbounds-фрагмент."
+              aria-label="Обновить подписку"
+            >
+              <span class="xk-sub-icon-glyph" aria-hidden="true">&#8635;</span>
+              <span class="xk-visually-hidden">Обновить</span>
+            </button>
+            <button
+              type="button"
+              class="btn-danger btn-compact xk-sub-list-action xk-sub-list-action-delete xk-sub-delete"
+              data-id="${id}"
+              title="Удалить"
+              data-tooltip="Удалить подписку и generated-фрагмент."
+              aria-label="Удалить подписку"
+            >
+              <span class="xk-sub-icon-glyph" aria-hidden="true">&#215;</span>
+              <span class="xk-visually-hidden">Удалить</span>
+            </button>
           </td>
         `;
         tbody.appendChild(tr);
@@ -3673,7 +3699,7 @@ let outboundsModuleApi = null;
       try { if (empty) empty.style.display = items.length ? 'none' : 'block'; } catch (e) {}
       try { if (summary) summary.textContent = String(items.length) + ' шт.'; } catch (e) {}
 
-      Array.from(tbody.querySelectorAll('.xk-sub-open, .xk-sub-file-link')).forEach((btn) => {
+      Array.from(tbody.querySelectorAll('.xk-sub-file-link')).forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.preventDefault();
           subsOpenGeneratedFragment(btn.getAttribute('data-file') || '');
@@ -3683,14 +3709,6 @@ let outboundsModuleApi = null;
         btn.addEventListener('click', (e) => {
           e.preventDefault();
           subsRefresh(btn.getAttribute('data-id') || '');
-        });
-      });
-      Array.from(tbody.querySelectorAll('.xk-sub-edit')).forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const id = btn.getAttribute('data-id') || '';
-          const sub = _subscriptions.find((item) => String(item && item.id || '') === id);
-          if (sub) subsFillForm(sub);
         });
       });
       Array.from(tbody.querySelectorAll('.xk-sub-delete')).forEach((btn) => {
