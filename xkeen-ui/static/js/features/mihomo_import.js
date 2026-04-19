@@ -711,14 +711,116 @@ let mihomoImportModuleApi = null;
   const toYaml = (obj, indent = 0) => {
     const padding = ' '.repeat(indent);
     return Object.entries(obj).reduce((result, [key, value]) => {
-      if (value == null || value === '') return result;
+      if (value == null || (value === '' && key !== 'encryption')) return result;
       if (Array.isArray(value))
         return value.length
           ? result + `${padding}${key}:\n` + value.map((item) => `${padding}  - ${item}`).join('\n') + '\n'
           : result;
       if (typeof value === 'object') return result + `${padding}${key}:\n${toYaml(value, indent + 2)}`;
-      return result + `${padding}${key}: ${key === 'name' ? `'${String(value).replace(/'/g, "''")}'` : value}\n`;
+      const rendered =
+        key === 'name'
+          ? `'${String(value).replace(/'/g, "''")}'`
+          : (key === 'encryption' && value === '' ? '""' : value);
+      return result + `${padding}${key}: ${rendered}\n`;
     }, '');
+  };
+
+  const decodeMaybe = (value) => {
+    if (value == null || value === '') return undefined;
+    try { return decodeURIComponent(String(value)); } catch (e) {}
+    return String(value);
+  };
+
+  const parseJsonMaybe = (raw) => {
+    if (raw == null || raw === '') return undefined;
+    if (typeof raw === 'object') return raw;
+    try { return JSON.parse(String(raw)); } catch (e) {}
+    try { return JSON.parse(decodeURIComponent(String(raw))); } catch (e2) {}
+    return undefined;
+  };
+
+  const firstDefined = (obj, ...keys) => {
+    if (!obj || typeof obj !== 'object') return undefined;
+    for (const key of keys) {
+      const value = obj[key];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return undefined;
+  };
+
+  const boolMaybe = (obj, ...keys) => {
+    const raw = firstDefined(obj, ...keys);
+    if (raw === undefined) return undefined;
+    if (raw === true || raw === 1) return true;
+    if (raw === false || raw === 0) return false;
+    const text = String(raw).trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(text)) return true;
+    if (['0', 'false', 'no', 'off'].includes(text)) return false;
+    return undefined;
+  };
+
+  const cleanHeaders = (headers) => {
+    if (!headers || typeof headers !== 'object') return undefined;
+    const out = {};
+    Object.entries(headers).forEach(([key, value]) => {
+      const cleanKey = String(key || '').trim();
+      if (!cleanKey || value == null || value === '') return;
+      if (Array.isArray(value)) {
+        const items = value.map((item) => String(item || '').trim()).filter(Boolean);
+        if (items.length) out[cleanKey] = items;
+        return;
+      }
+      out[cleanKey] = typeof value === 'number' || typeof value === 'boolean' ? value : String(value);
+    });
+    return Object.keys(out).length ? out : undefined;
+  };
+
+  const cleanReuseSettings = (reuse) => {
+    if (!reuse || typeof reuse !== 'object') return undefined;
+    const out = {};
+    const mappings = {
+      'max-concurrency': firstDefined(reuse, 'max-concurrency', 'maxConcurrency'),
+      'max-connections': firstDefined(reuse, 'max-connections', 'maxConnections'),
+      'c-max-reuse-times': firstDefined(reuse, 'c-max-reuse-times', 'cMaxReuseTimes'),
+      'h-max-request-times': firstDefined(reuse, 'h-max-request-times', 'hMaxRequestTimes'),
+      'h-max-reusable-secs': firstDefined(reuse, 'h-max-reusable-secs', 'hMaxReusableSecs'),
+    };
+    Object.entries(mappings).forEach(([key, value]) => {
+      if (value === undefined) return;
+      out[key] = typeof value === 'number' || typeof value === 'boolean' ? value : String(value);
+    });
+    return Object.keys(out).length ? out : undefined;
+  };
+
+  const normalizeXhttpSettings = (params) => {
+    const extra = parseJsonMaybe(params.extra);
+    const xhttp = {
+      path: decodeMaybe(params.path) || '/',
+      host: decodeMaybe(params.host) || decodeMaybe(params.sni),
+      mode: decodeMaybe(params.mode),
+    };
+
+    const headers = cleanHeaders(firstDefined(extra, 'headers'));
+    if (headers) xhttp.headers = headers;
+
+    const noGrpcHeader = boolMaybe(extra, 'no-grpc-header', 'noGrpcHeader', 'noGRPCHeader');
+    if (noGrpcHeader === true) xhttp['no-grpc-header'] = true;
+
+    const xPaddingBytes = firstDefined(extra, 'x-padding-bytes', 'xPaddingBytes');
+    if (xPaddingBytes !== undefined) {
+      xhttp['x-padding-bytes'] = typeof xPaddingBytes === 'number' ? xPaddingBytes : String(xPaddingBytes);
+    }
+
+    const scMaxEachPostBytes = firstDefined(extra, 'sc-max-each-post-bytes', 'scMaxEachPostBytes');
+    if (scMaxEachPostBytes !== undefined) {
+      xhttp['sc-max-each-post-bytes'] =
+        typeof scMaxEachPostBytes === 'number' ? scMaxEachPostBytes : String(scMaxEachPostBytes);
+    }
+
+    const reuseSettings = cleanReuseSettings(firstDefined(extra, 'reuse-settings', 'reuseSettings'));
+    if (reuseSettings) xhttp['reuse-settings'] = reuseSettings;
+
+    return Object.fromEntries(Object.entries(xhttp).filter(([, value]) => value != null && value !== ''));
   };
 
   const getStreamSettings = (type, params) => {
@@ -773,6 +875,7 @@ let mihomoImportModuleApi = null;
       };
 
     if (type === 'httpupgrade') output.httpupgradeSettings = { path: params.path || '/', host: string(params.host) };
+    if (type === 'xhttp') output.xhttpSettings = normalizeXhttpSettings(params);
 
     return output;
   };
@@ -899,8 +1002,13 @@ let mihomoImportModuleApi = null;
     };
 
     if (proxyConfig.protocol === 'vless') {
-      Object.assign(common, { uuid: settings.id, flow: settings.flow, 'packet-encoding': 'xudp' });
-      if (settings.encryption) common.encryption = settings.encryption;
+      const enc = String(settings.encryption || '').trim().toLowerCase();
+      Object.assign(common, {
+        uuid: settings.id,
+        flow: settings.flow,
+        'packet-encoding': 'xudp',
+        encryption: !enc || enc === 'none' ? '' : settings.encryption,
+      });
     } else if (proxyConfig.protocol === 'vmess') {
       Object.assign(common, { uuid: settings.id, alterId: settings.alterId, cipher: settings.security });
     } else if (proxyConfig.protocol === 'trojan') {
@@ -949,6 +1057,10 @@ let mihomoImportModuleApi = null;
       }
     }
 
+    if (streamSettings.network === 'xhttp' && proxyConfig.protocol !== 'vless') {
+      throw new Error('XHTTP transport поддерживается в Mihomo только для VLESS');
+    }
+
     if (streamSettings.network === 'ws') {
       common['ws-opts'] = {
         path: streamSettings.wsSettings?.path,
@@ -960,6 +1072,17 @@ let mihomoImportModuleApi = null;
       common['http-upgrade-opts'] = {
         path: streamSettings.httpupgradeSettings?.path,
         headers: streamSettings.httpupgradeSettings?.host ? { Host: streamSettings.httpupgradeSettings.host } : undefined,
+      };
+    } else if (streamSettings.network === 'xhttp') {
+      common['xhttp-opts'] = {
+        path: streamSettings.xhttpSettings?.path,
+        host: streamSettings.xhttpSettings?.host,
+        mode: streamSettings.xhttpSettings?.mode,
+        headers: streamSettings.xhttpSettings?.headers,
+        'no-grpc-header': streamSettings.xhttpSettings?.['no-grpc-header'],
+        'x-padding-bytes': streamSettings.xhttpSettings?.['x-padding-bytes'],
+        'sc-max-each-post-bytes': streamSettings.xhttpSettings?.['sc-max-each-post-bytes'],
+        'reuse-settings': streamSettings.xhttpSettings?.['reuse-settings'],
       };
     }
 
@@ -1004,8 +1127,16 @@ let mihomoImportModuleApi = null;
         ),
       };
     }
-
-    if (uri.includes('type=xhttp')) throw new Error('XHTTP в Mihomo не поддерживается');
+    // Keep xhttp synchronous in the shared parser API used by import and proxy tools.
+    if (uri.includes('type=xhttp')) {
+      const config = parseProxyUri(uri);
+      if (config.tag === 'PROXY' || configHasProxyName(existingConfig, config.tag)) {
+        config.tag = generateName(config.protocol, configHasProxyName);
+      }
+      const indented = convertToMihomoYaml(config);
+      const raw = proxyYamlRawFromIndented(indented);
+      return { type: 'proxy', proxy_name: config.tag, content: raw + '\n' };
+    }
 
     const config = parseProxyUri(uri);
     if (config.tag === 'PROXY' || configHasProxyName(existingConfig, config.tag)) {

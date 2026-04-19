@@ -11,7 +11,7 @@ import base64
 import json
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
 
@@ -43,6 +43,166 @@ def _yaml_str(v) -> str:
 def _yaml_list(items) -> str:
     """YAML flow-style list with safe string scalars."""
     return "[" + ", ".join(_yaml_str(x) for x in items) + "]"
+
+
+def _yaml_append_key(lines: List[str], indent: int, key: str, value: Any) -> None:
+    """Append a nested YAML key/value pair using safe scalars."""
+    if value is None or value == "":
+        return
+
+    pad = " " * indent
+    if isinstance(value, dict):
+        if not value:
+            return
+        lines.append(f"{pad}{key}:")
+        for sub_key, sub_value in value.items():
+            _yaml_append_key(lines, indent + 2, str(sub_key), sub_value)
+        return
+
+    if isinstance(value, list):
+        items = [item for item in value if item not in (None, "")]
+        if not items:
+            return
+        lines.append(f"{pad}{key}:")
+        for item in items:
+            if isinstance(item, bool):
+                lines.append(f"{pad}  - {'true' if item else 'false'}")
+            elif isinstance(item, (int, float)) and not isinstance(item, bool):
+                lines.append(f"{pad}  - {item}")
+            else:
+                lines.append(f"{pad}  - {_yaml_str(item)}")
+        return
+
+    if isinstance(value, bool):
+        lines.append(f"{pad}{key}: {'true' if value else 'false'}")
+        return
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        lines.append(f"{pad}{key}: {value}")
+        return
+
+    lines.append(f"{pad}{key}: {_yaml_str(value)}")
+
+
+def _mapping_first(mapping: Any, *keys: str, default: Any = None) -> Any:
+    if not isinstance(mapping, dict):
+        return default
+    for key in keys:
+        if key in mapping:
+            value = mapping.get(key)
+            if value is not None and value != "":
+                return value
+    return default
+
+
+def _mapping_bool(mapping: Any, *keys: str) -> Optional[bool]:
+    raw = _mapping_first(mapping, *keys, default=None)
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return None
+    text = str(raw).strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    return None
+
+
+def _sanitize_headers(value: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(value, dict):
+        return None
+
+    out: Dict[str, Any] = {}
+    for raw_key, raw_value in value.items():
+        key = str(raw_key or "").strip()
+        if not key or raw_value is None or raw_value == "":
+            continue
+        if isinstance(raw_value, list):
+            items = [str(item) for item in raw_value if item is not None and str(item) != ""]
+            if items:
+                out[key] = items
+            continue
+        out[key] = raw_value if isinstance(raw_value, (bool, int, float)) else str(raw_value)
+    return out or None
+
+
+def _sanitize_reuse_settings(value: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(value, dict):
+        return None
+
+    alias_map = {
+        "max-concurrency": ("max-concurrency", "maxConcurrency"),
+        "max-connections": ("max-connections", "maxConnections"),
+        "c-max-reuse-times": ("c-max-reuse-times", "cMaxReuseTimes"),
+        "h-max-request-times": ("h-max-request-times", "hMaxRequestTimes"),
+        "h-max-reusable-secs": ("h-max-reusable-secs", "hMaxReusableSecs"),
+    }
+
+    out: Dict[str, Any] = {}
+    for target_key, aliases in alias_map.items():
+        raw = _mapping_first(value, *aliases, default=None)
+        if raw is None or raw == "":
+            continue
+        out[target_key] = raw if isinstance(raw, (bool, int, float)) else str(raw)
+    return out or None
+
+
+def _parse_xhttp_extra(raw: str) -> Dict[str, Any]:
+    text = str(raw or "").strip()
+    if not text:
+        return {}
+    try:
+        parsed = json.loads(unquote(text))
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _build_xhttp_opts(path: str, host: str, mode: str, extra: Any) -> Dict[str, Any]:
+    opts: Dict[str, Any] = {"path": path or "/"}
+    if host:
+        opts["host"] = host
+    if mode:
+        opts["mode"] = mode
+
+    headers = _sanitize_headers(_mapping_first(extra, "headers", default=None))
+    if headers:
+        opts["headers"] = headers
+
+    no_grpc_header = _mapping_bool(extra, "no-grpc-header", "noGrpcHeader", "noGRPCHeader")
+    if no_grpc_header is True:
+        opts["no-grpc-header"] = True
+
+    x_padding_bytes = _mapping_first(extra, "x-padding-bytes", "xPaddingBytes", default=None)
+    if x_padding_bytes not in (None, ""):
+        opts["x-padding-bytes"] = (
+            x_padding_bytes if isinstance(x_padding_bytes, (bool, int, float)) else str(x_padding_bytes)
+        )
+
+    sc_max_each_post_bytes = _mapping_first(
+        extra, "sc-max-each-post-bytes", "scMaxEachPostBytes", default=None
+    )
+    if sc_max_each_post_bytes not in (None, ""):
+        opts["sc-max-each-post-bytes"] = (
+            sc_max_each_post_bytes
+            if isinstance(sc_max_each_post_bytes, (bool, int, float))
+            else str(sc_max_each_post_bytes)
+        )
+
+    reuse_settings = _sanitize_reuse_settings(_mapping_first(extra, "reuse-settings", "reuseSettings", default=None))
+    if reuse_settings:
+        opts["reuse-settings"] = reuse_settings
+
+    return opts
+
+
+def _extract_xhttp_opts_from_query(query_params: Dict[str, str], *, fallback_host: str = "") -> Dict[str, Any]:
+    path = unquote(str(query_params.get("path", "/") or "/"))
+    host = unquote(str(query_params.get("host") or fallback_host or ""))
+    mode = unquote(str(query_params.get("mode") or ""))
+    extra = _parse_xhttp_extra(str(query_params.get("extra") or ""))
+    return _build_xhttp_opts(path, host, mode, extra)
 
 
 @dataclass
@@ -180,9 +340,11 @@ def parse_vless(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
             yaml_lines.append("  skip-cert-verify: true")
 
     if type_ == "xhttp":
-        raise ValueError("xhttp transport is not supported for mihomo proxies")
-
-    if type_ == "ws":
+        xhttp_opts = _extract_xhttp_opts_from_query(qs, fallback_host=sni)
+        yaml_lines.append("  xhttp-opts:")
+        for key, value in xhttp_opts.items():
+            _yaml_append_key(yaml_lines, 4, key, value)
+    elif type_ == "ws":
         path = qs.get("path", "/")
         if path:
             path = _safe_unquote(path)
@@ -384,7 +546,7 @@ def parse_trojan(link: str, custom_name: Optional[str] = None) -> ProxyParseResu
 
     yaml_lines.append(f"  network: {_yaml_str(net)}")
     if net == "xhttp":
-        raise ValueError("xhttp transport is not supported for mihomo proxies")
+        raise ValueError("xhttp transport is supported by Mihomo only for VLESS proxies")
     if net == "ws":
         path = unquote(_qs_first(qs, "path", "/") or "/")
         host = unquote(_qs_first(qs, "host", "") or "")
@@ -478,6 +640,8 @@ def parse_vmess(link: str, custom_name: Optional[str] = None) -> ProxyParseResul
             yaml_lines.append("    support-x25519mlkem768: true")
 
     yaml_lines.append(f"  network: {_yaml_str(net)}")
+    if net == "xhttp":
+        raise ValueError("xhttp transport is supported by Mihomo only for VLESS proxies")
     if net == "ws":
         path = str(data.get("path") or "/")
         host = str(data.get("host") or "")
