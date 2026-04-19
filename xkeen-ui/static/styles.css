@@ -7662,6 +7662,12 @@ html[data-theme="light"] .xk-mi-status.error {
   align-items: flex-start;
 }
 
+.xk-sub-nodes-head-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .xk-sub-form {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));

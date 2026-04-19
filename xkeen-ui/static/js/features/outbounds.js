@@ -3147,6 +3147,7 @@ let outboundsModuleApi = null;
       nodesPanel: 'outbounds-subscriptions-nodes-panel',
       nodesCaption: 'outbounds-subscriptions-nodes-caption',
       nodesSummary: 'outbounds-subscriptions-nodes-summary',
+      nodesPingAll: 'outbounds-subscriptions-nodes-pingall',
       nodesList: 'outbounds-subscriptions-nodes-list',
       nodesEmpty: 'outbounds-subscriptions-nodes-empty',
     };
@@ -3154,6 +3155,7 @@ let outboundsModuleApi = null;
     let _subscriptions = [];
     let _subscriptionEditId = '';
     let _subscriptionNodePingState = Object.create(null);
+    let _subscriptionPingAllBusy = false;
 
     function subsDecorateActionButtons(modal) {
       const root = modal || $(SUB_IDS.modal);
@@ -3292,7 +3294,12 @@ let outboundsModuleApi = null;
                     <div class="terminal-menu-title" style="margin:0;">Серверы подписки</div>
                     <div id="outbounds-subscriptions-nodes-caption" class="xk-sub-muted">Нажми ✎ у нужной подписки, чтобы посмотреть состав и transport.</div>
                   </div>
-                  <div id="outbounds-subscriptions-nodes-summary" class="xk-pool-summary">0</div>
+                  <div class="xk-sub-nodes-head-actions">
+                    <button type="button" id="outbounds-subscriptions-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Запустить проверку задержки для всех активных узлов, входящих в generated fragment." aria-label="Пинг всех узлов" disabled>
+                      <span class="xk-sub-icon-glyph" aria-hidden="true">⏱</span>
+                    </button>
+                    <div id="outbounds-subscriptions-nodes-summary" class="xk-pool-summary">0</div>
+                  </div>
                 </div>
                 <div id="outbounds-subscriptions-nodes-list" class="xk-sub-node-list"></div>
                 <div id="outbounds-subscriptions-nodes-empty" class="xk-pool-empty">Список узлов появится после обновления подписки.</div>
@@ -3924,6 +3931,8 @@ let outboundsModuleApi = null;
         : 'Список узлов появится после обновления этой подписки.';
       empty.style.display = rows.length ? 'none' : 'block';
 
+      try { subsUpdatePingAllBtnState(); } catch (e) {}
+
       Array.from(listEl.querySelectorAll('.xk-sub-node-toggle')).forEach((btn) => {
         btn.addEventListener('click', (e) => {
           e.preventDefault();
@@ -3994,6 +4003,110 @@ let outboundsModuleApi = null;
         delete _subscriptionNodePingState[pendingKey];
         try { subsRenderNodeList(); } catch (e3) {}
       }
+    }
+
+    function subsUpdatePingAllBtnState() {
+      const btn = $(SUB_IDS.nodesPingAll);
+      if (!btn) return;
+      if (_subscriptionPingAllBusy) {
+        btn.classList.add('is-busy');
+        btn.disabled = true;
+        return;
+      }
+      btn.classList.remove('is-busy');
+      const subId = String(_subscriptionEditId || '').trim();
+      const sub = subId
+        ? _subscriptions.find((item) => String(item && item.id || '') === subId) || null
+        : null;
+      const hasPingable = !!(sub && Array.isArray(sub.last_nodes) && sub.last_nodes.some((n) => n && n.tag));
+      btn.disabled = !hasPingable;
+    }
+
+    async function subsProbeAllNodes() {
+      if (_subscriptionPingAllBusy) return false;
+      const subId = String(_subscriptionEditId || '').trim();
+      if (!subId) return false;
+      const sub = _subscriptions.find((item) => String(item && item.id || '') === subId) || null;
+      if (!sub) return false;
+
+      const nodes = Array.isArray(sub.last_nodes) ? sub.last_nodes : [];
+      const draft = subsCurrentDraftFor(sub);
+      const compiled = {
+        name: subsCompilePreviewRegex(SUB_IDS.nameFilter),
+        type: subsCompilePreviewRegex(SUB_IDS.typeFilter),
+        transport: subsCompilePreviewRegex(SUB_IDS.transportFilter),
+      };
+      const targets = nodes.filter((node) => {
+        if (!node || !node.key || !node.tag) return false;
+        return subsNodeReasonCodes(node, draft, compiled).length === 0;
+      });
+      if (targets.length === 0) {
+        subsSetStatus('Нет активных узлов для проверки задержки.', false);
+        return false;
+      }
+
+      _subscriptionPingAllBusy = true;
+      subsUpdatePingAllBtnState();
+      subsSetStatus(`Проверка задержки: 0/${targets.length}…`, false);
+
+      let done = 0;
+      let failed = 0;
+
+      async function probeOne(node) {
+        const key = String(node.key || '');
+        if (!key) { done += 1; return; }
+        const pendingKey = subsNodePingStateKey(subId, key);
+        if (_subscriptionNodePingState[pendingKey]) { done += 1; return; }
+        _subscriptionNodePingState[pendingKey] = true;
+        try { subsRenderNodeList(); } catch (e) {}
+        try {
+          const res = await fetch(`/api/xray/subscriptions/${encodeURIComponent(subId)}/nodes/ping`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ node_key: key }),
+          });
+          const data = await res.json().catch(() => ({}));
+          const sub2 = _subscriptions.find((item) => String(item && item.id || '') === subId);
+          if (sub2 && data && data.entry) {
+            const map = subsNodeLatencyMap(sub2);
+            map[key] = data.entry;
+            sub2.node_latency = map;
+          }
+          if (!res.ok || !data || data.ok === false) failed += 1;
+        } catch (e) {
+          failed += 1;
+        } finally {
+          delete _subscriptionNodePingState[pendingKey];
+          done += 1;
+          try { subsRenderNodeList(); } catch (e) {}
+          subsSetStatus(`Проверка задержки: ${done}/${targets.length}…`, false);
+        }
+      }
+
+      const queue = targets.slice();
+      const concurrency = Math.min(3, queue.length);
+      const workers = Array.from({ length: concurrency }, async () => {
+        while (queue.length) {
+          const node = queue.shift();
+          if (!node) break;
+          await probeOne(node);
+        }
+      });
+
+      try {
+        await Promise.all(workers);
+        const ok = targets.length - failed;
+        if (failed === 0) {
+          subsSetStatus(`Проверено узлов: ${ok}.`, false, true);
+        } else {
+          subsSetStatus(`Проверено ${ok} из ${targets.length}, ошибок: ${failed}.`, true);
+        }
+      } finally {
+        _subscriptionPingAllBusy = false;
+        subsUpdatePingAllBtnState();
+        try { subsRenderNodeList(); } catch (e) {}
+      }
+      return failed === 0;
     }
 
     async function subsOpenGeneratedFragment(file) {
@@ -4238,6 +4351,9 @@ let outboundsModuleApi = null;
         subsSetStatus('', false);
       });
       wireButton(SUB_IDS.refreshDue, subsRefreshDue);
+      wireButton(SUB_IDS.nodesPingAll, () => {
+        subsProbeAllNodes();
+      });
 
       const form = $(SUB_IDS.form);
       if (form) {
