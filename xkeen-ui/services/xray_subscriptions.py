@@ -18,7 +18,7 @@ import time
 import urllib.error
 import urllib.request
 from typing import Any, Callable, Dict, Iterable, List, Tuple
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.url_policy import URLPolicy, env_flag, is_url_allowed
@@ -77,6 +77,9 @@ _MISSING = object()
 
 NAME_FILTER_KEYS = ("name_filter", "nameFilter", "name_regex", "nameRegex")
 TYPE_FILTER_KEYS = ("type_filter", "typeFilter", "type_regex", "typeRegex")
+TRANSPORT_FILTER_KEYS = ("transport_filter", "transportFilter", "transport_regex", "transportRegex")
+EXCLUDED_NODE_KEYS_KEYS = ("excluded_node_keys", "excludedNodeKeys", "exclude_node_keys", "excludeNodeKeys")
+LAST_NODES_KEYS = ("last_nodes", "lastNodes")
 
 
 SnapshotCallback = Callable[[str], None]
@@ -156,6 +159,69 @@ def _stored_filter_value(data: Any, keys: tuple[str, ...]) -> str:
     return "" if value is _MISSING else str(value)
 
 
+def _clean_string_list(value: Any) -> List[str]:
+    items = value if isinstance(value, list) else []
+    out: List[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def _read_string_list_value(data: Any, keys: tuple[str, ...]) -> List[str]:
+    if not isinstance(data, dict):
+        return []
+    for key in keys:
+        if key in data:
+            return _clean_string_list(data.get(key))
+    return []
+
+
+def _has_any_key(data: Any, keys: tuple[str, ...]) -> bool:
+    if not isinstance(data, dict):
+        return False
+    return any(key in data for key in keys)
+
+
+def _normalize_last_nodes(value: Any) -> List[Dict[str, Any]]:
+    allowed_fields = {
+        "key",
+        "name",
+        "protocol",
+        "transport",
+        "security",
+        "host",
+        "port",
+        "detail",
+        "source_format",
+    }
+    out: List[Dict[str, Any]] = []
+    for item in value if isinstance(value, list) else []:
+        if not isinstance(item, dict):
+            continue
+        clean: Dict[str, Any] = {}
+        for field in allowed_fields:
+            if field == "port":
+                port = item.get("port")
+                try:
+                    clean["port"] = int(port)
+                except Exception:
+                    text = str(port or "").strip()
+                    if text:
+                        clean["port"] = text
+                continue
+            text = str(item.get(field) or "").strip()
+            if text:
+                clean[field] = text
+        if clean.get("key") and clean.get("name"):
+            out.append(clean)
+    return out
+
+
 def _compile_regex_filter(value: Any, label: str) -> re.Pattern[str] | None:
     raw = _clean_regex_filter(value)
     if not raw:
@@ -228,9 +294,20 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
             output_file += ".json"
         name_filter = _stored_filter_value(item, NAME_FILTER_KEYS)
         type_filter = _stored_filter_value(item, TYPE_FILTER_KEYS)
+        transport_filter = _stored_filter_value(item, TRANSPORT_FILTER_KEYS)
+        excluded_node_keys = _read_string_list_value(item, EXCLUDED_NODE_KEYS_KEYS)
+        last_nodes = _normalize_last_nodes(
+            item.get("last_nodes") if "last_nodes" in item else item.get("lastNodes")
+        )
 
         clean = dict(item)
-        for alias in NAME_FILTER_KEYS[1:] + TYPE_FILTER_KEYS[1:]:
+        for alias in (
+            NAME_FILTER_KEYS[1:]
+            + TYPE_FILTER_KEYS[1:]
+            + TRANSPORT_FILTER_KEYS[1:]
+            + EXCLUDED_NODE_KEYS_KEYS[1:]
+            + LAST_NODES_KEYS[1:]
+        ):
             clean.pop(alias, None)
         clean.update(
             {
@@ -240,10 +317,13 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 "url": url,
                 "name_filter": name_filter,
                 "type_filter": type_filter,
+                "transport_filter": transport_filter,
+                "excluded_node_keys": excluded_node_keys,
                 "enabled": bool(item.get("enabled", True)),
                 "ping_enabled": bool(item.get("ping_enabled", item.get("pingEnabled", True))),
                 "interval_hours": interval,
                 "output_file": output_file,
+                "last_nodes": last_nodes,
                 "last_tags": [str(x) for x in item.get("last_tags", []) if str(x or "").strip()]
                 if isinstance(item.get("last_tags"), list)
                 else [],
@@ -304,18 +384,34 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
             output_file += ".json"
         name_filter_raw = _read_filter_value(data, NAME_FILTER_KEYS)
         type_filter_raw = _read_filter_value(data, TYPE_FILTER_KEYS)
+        transport_filter_raw = _read_filter_value(data, TRANSPORT_FILTER_KEYS)
+        excluded_node_keys = (
+            _read_string_list_value(data, EXCLUDED_NODE_KEYS_KEYS)
+            if _has_any_key(data, EXCLUDED_NODE_KEYS_KEYS)
+            else _read_string_list_value(base, EXCLUDED_NODE_KEYS_KEYS)
+        )
         name_filter = _clean_regex_filter(
             _stored_filter_value(base, NAME_FILTER_KEYS) if name_filter_raw is _MISSING else name_filter_raw
         )
         type_filter = _clean_regex_filter(
             _stored_filter_value(base, TYPE_FILTER_KEYS) if type_filter_raw is _MISSING else type_filter_raw
         )
+        transport_filter = _clean_regex_filter(
+            _stored_filter_value(base, TRANSPORT_FILTER_KEYS) if transport_filter_raw is _MISSING else transport_filter_raw
+        )
         _compile_regex_filter(name_filter, "фильтра имени")
         _compile_regex_filter(type_filter, "фильтра типа")
+        _compile_regex_filter(transport_filter, "фильтра транспорта")
 
         now_ts = _now()
         sub = dict(base)
-        for alias in NAME_FILTER_KEYS[1:] + TYPE_FILTER_KEYS[1:]:
+        for alias in (
+            NAME_FILTER_KEYS[1:]
+            + TYPE_FILTER_KEYS[1:]
+            + TRANSPORT_FILTER_KEYS[1:]
+            + EXCLUDED_NODE_KEYS_KEYS[1:]
+            + LAST_NODES_KEYS[1:]
+        ):
             sub.pop(alias, None)
         sub.update(
             {
@@ -325,6 +421,8 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
                 "url": url,
                 "name_filter": name_filter,
                 "type_filter": type_filter,
+                "transport_filter": transport_filter,
+                "excluded_node_keys": excluded_node_keys,
                 "enabled": bool(data.get("enabled", base.get("enabled", True))),
                 "ping_enabled": bool(data.get("ping_enabled", data.get("pingEnabled", base.get("ping_enabled", True)))),
                 "interval_hours": interval,
@@ -653,6 +751,205 @@ def _node_name_from_link(link: str) -> str:
         return ""
 
 
+def _first_qs_value(qs: Dict[str, List[str]], *keys: str) -> str:
+    for key in keys:
+        values = qs.get(key)
+        if not values:
+            continue
+        value = str(values[0] or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _default_transport_for_protocol(protocol: str) -> str:
+    value = str(protocol or "").strip().lower()
+    if value in {"vless", "trojan", "vmess"}:
+        return "tcp"
+    if value in {"ss", "shadowsocks"}:
+        return "tcp+udp"
+    if value in {"hy2", "hysteria2", "hysteria"}:
+        return "quic"
+    return ""
+
+
+def _default_security_for_protocol(protocol: str) -> str:
+    value = str(protocol or "").strip().lower()
+    if value == "trojan":
+        return "tls"
+    if value in {"hy2", "hysteria2", "hysteria"}:
+        return "tls"
+    return ""
+
+
+def _transport_filter_text(transport: str, protocol: str = "") -> str:
+    parts = [str(transport or "").strip().lower()]
+    proto = str(protocol or "").strip().lower()
+    if proto in {"hy2", "hysteria2", "hysteria"}:
+        parts.extend(["quic", "udp"])
+    unique: List[str] = []
+    seen: set[str] = set()
+    for item in parts:
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        unique.append(item)
+    return " ".join(unique)
+
+
+def _node_fingerprint(value: Any) -> str:
+    raw = str(value or "").strip().encode("utf-8", errors="replace")
+    return hashlib.sha1(raw).hexdigest()[:16]
+
+
+def _build_node_detail(parts: Iterable[str]) -> str:
+    out: List[str] = []
+    for part in parts:
+        text = str(part or "").strip()
+        if text:
+            out.append(text)
+    return " · ".join(out[:4])
+
+
+def _link_node_meta(link: str, index: int) -> Dict[str, Any]:
+    raw = str(link or "").strip()
+    protocol = _protocol_from_link(raw)
+    name = str(_node_name_from_link(raw) or f"node{index + 1}").strip() or f"node{index + 1}"
+    host = ""
+    port: int | str = ""
+    transport = _default_transport_for_protocol(protocol)
+    security = _default_security_for_protocol(protocol)
+    detail = ""
+
+    if protocol == "vmess":
+        try:
+            payload = raw[8:].strip().replace("-", "+").replace("_", "/")
+            payload += "=" * (-len(payload) % 4)
+            data = json.loads(base64.b64decode(payload.encode("utf-8")).decode("utf-8", errors="replace"))
+            host = str(data.get("add") or "").strip()
+            port = str(data.get("port") or "").strip()
+            name = str(data.get("ps") or name).strip() or name
+            transport = str(data.get("net") or transport or "").strip().lower() or transport
+            security = str(data.get("security") or data.get("tls") or security or "").strip().lower() or security
+            path = str(data.get("path") or "").strip()
+            host_header = str(data.get("host") or "").strip()
+            detail = _build_node_detail(
+                [
+                    f"path={path}" if path else "",
+                    f"host={host_header}" if host_header and host_header != host else "",
+                ]
+            )
+        except Exception:
+            pass
+    else:
+        try:
+            parsed = urlparse(raw)
+            host = str(parsed.hostname or "").strip()
+            try:
+                port = parsed.port or ""
+            except Exception:
+                port = ""
+            qs = parse_qs(parsed.query)
+            transport = _first_qs_value(qs, "type", "network") or transport
+            security = _first_qs_value(qs, "security", "tls") or security
+            path = _first_qs_value(qs, "path")
+            service = _first_qs_value(qs, "serviceName")
+            host_header = _first_qs_value(qs, "host")
+            mode = _first_qs_value(qs, "mode")
+            sni = _first_qs_value(qs, "sni")
+            detail = _build_node_detail(
+                [
+                    f"path={unquote(path)}" if path else "",
+                    f"service={service}" if service else "",
+                    f"host={unquote(host_header)}" if host_header and unquote(host_header) != host else "",
+                    f"sni={sni}" if sni and sni != host else "",
+                    f"mode={mode}" if mode else "",
+                ]
+            )
+        except Exception:
+            pass
+
+    return {
+        "key": _node_fingerprint(raw),
+        "name": name,
+        "protocol": protocol,
+        "transport": str(transport or "").strip().lower(),
+        "security": str(security or "").strip().lower(),
+        "host": host,
+        "port": port,
+        "detail": detail,
+        "source_format": "links",
+    }
+
+
+def _extract_outbound_endpoint(source: Dict[str, Any]) -> Tuple[str, int | str]:
+    settings = source.get("settings") if isinstance(source.get("settings"), dict) else {}
+    if isinstance(settings.get("vnext"), list) and settings["vnext"]:
+        first = settings["vnext"][0] if isinstance(settings["vnext"][0], dict) else {}
+        return str(first.get("address") or "").strip(), first.get("port") or ""
+    if isinstance(settings.get("servers"), list) and settings["servers"]:
+        first = settings["servers"][0] if isinstance(settings["servers"][0], dict) else {}
+        return str(first.get("address") or "").strip(), first.get("port") or ""
+    host = str(source.get("server") or source.get("address") or settings.get("address") or "").strip()
+    port = source.get("server_port") or source.get("port") or settings.get("port") or ""
+    return host, port
+
+
+def _json_outbound_node_meta(source: Dict[str, Any], name_hint: str, index: int) -> Dict[str, Any]:
+    protocol = str(source.get("protocol") or "").strip().lower()
+    stream = source.get("streamSettings") if isinstance(source.get("streamSettings"), dict) else {}
+    transport = str(stream.get("network") or _default_transport_for_protocol(protocol) or "").strip().lower()
+    security = str(stream.get("security") or _default_security_for_protocol(protocol) or "").strip().lower()
+    host, port = _extract_outbound_endpoint(source)
+    name = str(name_hint or source.get("tag") or host or protocol or f"node{index + 1}").strip() or f"node{index + 1}"
+
+    path = ""
+    service = ""
+    host_header = ""
+    if transport == "ws" and isinstance(stream.get("wsSettings"), dict):
+        ws = stream["wsSettings"]
+        path = str(ws.get("path") or "").strip()
+        headers = ws.get("headers") if isinstance(ws.get("headers"), dict) else {}
+        host_header = str(headers.get("Host") or headers.get("host") or "").strip()
+    elif transport == "grpc" and isinstance(stream.get("grpcSettings"), dict):
+        grpc = stream["grpcSettings"]
+        service = str(grpc.get("serviceName") or "").strip()
+        host_header = str(grpc.get("authority") or "").strip()
+    elif transport == "httpupgrade" and isinstance(stream.get("httpupgradeSettings"), dict):
+        httpup = stream["httpupgradeSettings"]
+        path = str(httpup.get("path") or "").strip()
+        host_header = str(httpup.get("host") or "").strip()
+    elif transport == "xhttp" and isinstance(stream.get("xhttpSettings"), dict):
+        xhttp = stream["xhttpSettings"]
+        path = str(xhttp.get("path") or "").strip()
+        host_header = str(xhttp.get("host") or "").strip()
+
+    detail = _build_node_detail(
+        [
+            f"path={path}" if path else "",
+            f"service={service}" if service else "",
+            f"host={host_header}" if host_header and host_header != host else "",
+        ]
+    )
+
+    try:
+        fingerprint_payload = json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    except Exception:
+        fingerprint_payload = f"{protocol}|{name}|{host}|{port}|{transport}|{security}"
+
+    return {
+        "key": _node_fingerprint(fingerprint_payload),
+        "name": name,
+        "protocol": protocol,
+        "transport": transport,
+        "security": security,
+        "host": host,
+        "port": port,
+        "detail": detail,
+        "source_format": "xray-json",
+    }
+
+
 def _protocol_from_link(link: str) -> str:
     match = re.match(r"^([a-z0-9+.-]+)://", str(link or "").strip(), re.IGNORECASE)
     return str(match.group(1) or "").strip().lower() if match else ""
@@ -667,18 +964,28 @@ def _protocol_filter_text(protocol: Any) -> str:
     return value
 
 
-def _match_subscription_filters(
+def _subscription_filter_reasons(
     *,
+    key: str,
     node_name: str,
     protocol: str,
+    transport: str,
     name_filter: re.Pattern[str] | None,
     type_filter: re.Pattern[str] | None,
-) -> bool:
+    transport_filter: re.Pattern[str] | None,
+    excluded_node_keys: set[str] | None = None,
+) -> List[str]:
+    reasons: List[str] = []
+    excluded = excluded_node_keys or set()
+    if key and key in excluded:
+        reasons.append("manual")
     if name_filter and not name_filter.search(str(node_name or "")):
-        return False
+        reasons.append("name")
     if type_filter and not type_filter.search(_protocol_filter_text(protocol)):
-        return False
-    return True
+        reasons.append("type")
+    if transport_filter and not transport_filter.search(_transport_filter_text(transport, protocol)):
+        reasons.append("transport")
+    return reasons
 
 
 def _clean_node_name(name: str, fallback: str) -> str:
@@ -720,30 +1027,40 @@ def build_subscription_outbounds(
     tag_prefix: str,
     name_filter: str = "",
     type_filter: str = "",
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, int]]:
+    transport_filter: str = "",
+    excluded_node_keys: List[str] | None = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
     prefix = _clean_tag_prefix(tag_prefix, "sub")
     name_pattern = _compile_regex_filter(name_filter, "фильтра имени")
     type_pattern = _compile_regex_filter(type_filter, "фильтра типа")
-    source_count = len(list(links or []))
-    filtered_links: List[str] = []
-    for link in links or []:
-        protocol = _protocol_from_link(link)
-        node_name = _node_name_from_link(link) or protocol or "node"
-        if not _match_subscription_filters(
-            node_name=node_name,
-            protocol=protocol,
+    transport_pattern = _compile_regex_filter(transport_filter, "фильтра транспорта")
+    excluded_keys = {str(item or "").strip() for item in (excluded_node_keys or []) if str(item or "").strip()}
+    candidates = [(link, _link_node_meta(link, idx)) for idx, link in enumerate(links or [])]
+    source_count = len(candidates)
+    filtered_links: List[Tuple[str, Dict[str, Any]]] = []
+    preview_nodes: List[Dict[str, Any]] = []
+    for link, meta in candidates:
+        reasons = _subscription_filter_reasons(
+            key=str(meta.get("key") or ""),
+            node_name=str(meta.get("name") or ""),
+            protocol=str(meta.get("protocol") or ""),
+            transport=str(meta.get("transport") or ""),
             name_filter=name_pattern,
             type_filter=type_pattern,
-        ):
+            transport_filter=transport_pattern,
+            excluded_node_keys=excluded_keys,
+        )
+        preview_nodes.append(dict(meta))
+        if reasons:
             continue
-        filtered_links.append(link)
+        filtered_links.append((link, meta))
 
     outbounds: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     used: set[str] = set()
 
-    for idx, link in enumerate(filtered_links):
-        node = _clean_node_name(_node_name_from_link(link), f"node{idx + 1}")
+    for idx, (link, meta) in enumerate(filtered_links):
+        node = _clean_node_name(str(meta.get("name") or ""), f"node{idx + 1}")
         tag = _unique_tag(f"{prefix}--{node}", used)
         try:
             outbound = build_proxy_outbound_from_link(link, tag)
@@ -754,6 +1071,7 @@ def build_subscription_outbounds(
     return outbounds, errors, {
         "source_count": source_count,
         "filtered_out_count": max(0, source_count - len(filtered_links)),
+        "nodes": preview_nodes,
     }
 
 
@@ -763,39 +1081,49 @@ def build_subscription_json_outbounds(
     tag_prefix: str,
     name_filter: str = "",
     type_filter: str = "",
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, int]]:
+    transport_filter: str = "",
+    excluded_node_keys: List[str] | None = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
     obj = _load_subscription_json(body)
     if obj is None:
-        return [], [], {"source_count": 0, "filtered_out_count": 0}
+        return [], [], {"source_count": 0, "filtered_out_count": 0, "nodes": []}
 
     prefix = _clean_tag_prefix(tag_prefix, "sub")
     name_pattern = _compile_regex_filter(name_filter, "фильтра имени")
     type_pattern = _compile_regex_filter(type_filter, "фильтра типа")
-    candidates = list(_iter_json_proxy_outbounds(obj))
+    transport_pattern = _compile_regex_filter(transport_filter, "фильтра транспорта")
+    excluded_keys = {str(item or "").strip() for item in (excluded_node_keys or []) if str(item or "").strip()}
+    candidates = [
+        (source, _json_outbound_node_meta(source, name_hint, idx))
+        for idx, (source, name_hint) in enumerate(_iter_json_proxy_outbounds(obj))
+    ]
     source_count = len(candidates)
-    filtered_candidates: List[Tuple[Dict[str, Any], str]] = []
-    for source, name_hint in candidates:
-        protocol = str(source.get("protocol") or "node").strip().lower() or "node"
-        original_tag = str(source.get("tag") or "").strip()
-        node_name = name_hint or original_tag or protocol
-        if not _match_subscription_filters(
-            node_name=node_name,
-            protocol=protocol,
+    filtered_candidates: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+    preview_nodes: List[Dict[str, Any]] = []
+    for source, meta in candidates:
+        reasons = _subscription_filter_reasons(
+            key=str(meta.get("key") or ""),
+            node_name=str(meta.get("name") or ""),
+            protocol=str(meta.get("protocol") or ""),
+            transport=str(meta.get("transport") or ""),
             name_filter=name_pattern,
             type_filter=type_pattern,
-        ):
+            transport_filter=transport_pattern,
+            excluded_node_keys=excluded_keys,
+        )
+        preview_nodes.append(dict(meta))
+        if reasons:
             continue
-        filtered_candidates.append((source, name_hint))
+        filtered_candidates.append((source, meta))
 
     outbounds: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     used: set[str] = set()
 
-    for idx, (source, name_hint) in enumerate(filtered_candidates):
+    for idx, (source, meta) in enumerate(filtered_candidates):
         protocol = str(source.get("protocol") or "node").strip() or "node"
         fallback = f"node{idx + 1}"
-        original_tag = str(source.get("tag") or "").strip()
-        node = _clean_node_name(name_hint or original_tag or protocol, fallback)
+        node = _clean_node_name(str(meta.get("name") or protocol), fallback)
         tag = _unique_tag(f"{prefix}--{node}", used)
         try:
             outbound = copy.deepcopy(source)
@@ -807,6 +1135,7 @@ def build_subscription_json_outbounds(
     return outbounds, errors, {
         "source_count": source_count,
         "filtered_out_count": max(0, source_count - len(filtered_candidates)),
+        "nodes": preview_nodes,
     }
 
 
@@ -927,6 +1256,7 @@ def refresh_subscription(
         "count": 0,
         "source_count": 0,
         "filtered_out_count": 0,
+        "last_nodes": [],
         "tags": [],
         "errors": [],
         "source_format": "",
@@ -934,6 +1264,7 @@ def refresh_subscription(
     now_ts = _now()
     source_count = 0
     filtered_out_count = 0
+    preview_nodes: List[Dict[str, Any]] = []
 
     try:
         body, headers = fetch_subscription_body(str(sub.get("url") or ""))
@@ -945,6 +1276,8 @@ def refresh_subscription(
                 tag_prefix=str(sub.get("tag") or sub.get("id") or "sub"),
                 name_filter=str(sub.get("name_filter") or ""),
                 type_filter=str(sub.get("type_filter") or ""),
+                transport_filter=str(sub.get("transport_filter") or ""),
+                excluded_node_keys=_read_string_list_value(sub, EXCLUDED_NODE_KEYS_KEYS),
             )
         else:
             source_format = "xray-json"
@@ -953,9 +1286,12 @@ def refresh_subscription(
                 tag_prefix=str(sub.get("tag") or sub.get("id") or "sub"),
                 name_filter=str(sub.get("name_filter") or ""),
                 type_filter=str(sub.get("type_filter") or ""),
+                transport_filter=str(sub.get("transport_filter") or ""),
+                excluded_node_keys=_read_string_list_value(sub, EXCLUDED_NODE_KEYS_KEYS),
             )
         source_count = int(stats.get("source_count") or 0)
         filtered_out_count = int(stats.get("filtered_out_count") or 0)
+        preview_nodes = _normalize_last_nodes(stats.get("nodes"))
         if not links and not outbounds:
             raise RuntimeError("no_supported_proxies")
         if source_count > 0 and not outbounds and filtered_out_count >= source_count:
@@ -1021,6 +1357,7 @@ def refresh_subscription(
                 "last_count": len(outbounds),
                 "last_source_count": source_count,
                 "last_filtered_out_count": filtered_out_count,
+                "last_nodes": preview_nodes,
                 "last_tags": tags,
                 "last_hash": _content_hash(output_obj),
                 "last_changed": bool(changed),
@@ -1050,6 +1387,7 @@ def refresh_subscription(
                 "count": len(outbounds),
                 "source_count": source_count,
                 "filtered_out_count": filtered_out_count,
+                "last_nodes": preview_nodes,
                 "tags": tags,
                 "errors": errors,
                 "source_format": source_format,
@@ -1066,6 +1404,7 @@ def refresh_subscription(
                 "last_update_ts": now_ts,
                 "last_source_count": source_count,
                 "last_filtered_out_count": filtered_out_count,
+                "last_nodes": preview_nodes or _normalize_last_nodes(sub.get("last_nodes")),
                 "next_update_ts": now_ts + (interval * 3600) if bool(sub.get("enabled", True)) else None,
             }
         )
@@ -1075,6 +1414,7 @@ def refresh_subscription(
                 "error": str(exc),
                 "source_count": source_count,
                 "filtered_out_count": filtered_out_count,
+                "last_nodes": preview_nodes,
                 "next_update_ts": sub.get("next_update_ts"),
             }
         )

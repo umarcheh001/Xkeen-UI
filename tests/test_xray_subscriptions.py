@@ -20,6 +20,18 @@ def _trojan(name: str = "Node") -> str:
     return f"trojan://secret@example.net:443?security=tls&sni=edge.example.com#{safe_name}"
 
 
+def _vless_transport(name: str, transport: str, *, host: str = "example.com") -> str:
+    safe_name = str(name or "").replace(" ", "%20")
+    query = [f"type={transport}", "security=tls", "sni=edge.example.com", "encryption=none"]
+    if transport == "ws":
+        query.extend(["host=cdn.example.com", "path=%2Fws"])
+    elif transport == "grpc":
+        query.append("serviceName=grpc")
+    elif transport == "xhttp":
+        query.extend(["host=cdn.example.com", "path=%2Fx"])
+    return f"vless://user@{host}:443?{'&'.join(query)}#{safe_name}"
+
+
 def test_parse_subscription_links_accepts_plain_and_base64_payloads():
     from services.xray_subscriptions import parse_subscription_links
 
@@ -195,6 +207,41 @@ def test_refresh_subscription_applies_name_and_type_filters_to_links(tmp_path: P
     assert saved["last_filtered_out_count"] == 1
 
 
+def test_build_subscription_outbounds_applies_transport_filter_and_manual_exclusions():
+    from services import xray_subscriptions as subs
+
+    links = [
+        _vless_transport("Germany WS", "ws"),
+        _vless_transport("Sweden GRPC", "grpc"),
+        _vless_transport("Netherlands TCP", "tcp"),
+    ]
+
+    outbounds, errors, stats = subs.build_subscription_outbounds(
+        links,
+        tag_prefix="flt",
+        transport_filter="ws|grpc",
+    )
+
+    assert errors == []
+    assert [item["tag"] for item in outbounds] == ["flt--Germany_WS", "flt--Sweden_GRPC"]
+    assert stats["source_count"] == 3
+    assert stats["filtered_out_count"] == 1
+    assert [item["transport"] for item in stats["nodes"]] == ["ws", "grpc", "tcp"]
+
+    grpc_key = next(item["key"] for item in stats["nodes"] if item["transport"] == "grpc")
+    outbounds, errors, stats = subs.build_subscription_outbounds(
+        links,
+        tag_prefix="flt",
+        transport_filter="ws|grpc",
+        excluded_node_keys=[grpc_key],
+    )
+
+    assert errors == []
+    assert [item["tag"] for item in outbounds] == ["flt--Germany_WS"]
+    assert stats["source_count"] == 3
+    assert stats["filtered_out_count"] == 2
+
+
 def test_refresh_subscription_accepts_xray_json_config_arrays(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 
@@ -353,3 +400,113 @@ def test_refresh_subscription_applies_filters_to_xray_json_payloads(tmp_path: Pa
     assert result["source_count"] == 2
     assert result["filtered_out_count"] == 1
     assert result["tags"] == ["jsonf--Primary_Germany"]
+
+
+def test_refresh_subscription_persists_last_nodes_with_transport_metadata(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    subscription_body = json.dumps(
+        [
+            {
+                "remarks": "WS Germany",
+                "outbounds": [
+                    {
+                        "tag": "proxy",
+                        "protocol": "vless",
+                        "settings": {
+                            "vnext": [
+                                {
+                                    "address": "ws.example.com",
+                                    "port": 443,
+                                    "users": [{"id": "user", "encryption": "none"}],
+                                }
+                            ]
+                        },
+                        "streamSettings": {
+                            "network": "ws",
+                            "security": "tls",
+                            "wsSettings": {
+                                "path": "/ws",
+                                "headers": {"Host": "cdn.example.com"},
+                            },
+                        },
+                    }
+                ],
+            },
+            {
+                "remarks": "GRPC Sweden",
+                "outbounds": [
+                    {
+                        "tag": "proxy",
+                        "protocol": "vless",
+                        "settings": {
+                            "vnext": [
+                                {
+                                    "address": "grpc.example.com",
+                                    "port": 443,
+                                    "users": [{"id": "user", "encryption": "none"}],
+                                }
+                            ]
+                        },
+                        "streamSettings": {
+                            "network": "grpc",
+                            "security": "reality",
+                            "grpcSettings": {"serviceName": "grpc-svc"},
+                        },
+                    }
+                ],
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (subscription_body, {"content-type": "application/json"}),
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "json-transport",
+            "tag": "jsont",
+            "url": "https://example.com/json",
+            "enabled": True,
+            "ping_enabled": False,
+            "transport_filter": "grpc",
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "json-transport",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    assert result["source_format"] == "xray-json"
+    assert result["count"] == 1
+    assert result["source_count"] == 2
+    assert result["filtered_out_count"] == 1
+    assert result["tags"] == ["jsont--GRPC_Sweden"]
+    assert [item["transport"] for item in result["last_nodes"]] == ["ws", "grpc"]
+    assert result["last_nodes"][0]["detail"] == "path=/ws · host=cdn.example.com"
+    assert result["last_nodes"][1]["detail"] == "service=grpc-svc"
+
+    state = subs.load_subscription_state(str(ui_state_dir))
+    saved = state["subscriptions"][0]
+    assert saved["transport_filter"] == "grpc"
+    assert saved["last_filtered_out_count"] == 1
+    assert [item["transport"] for item in saved["last_nodes"]] == ["ws", "grpc"]

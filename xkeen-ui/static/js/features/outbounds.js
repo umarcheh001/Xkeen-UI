@@ -3131,6 +3131,8 @@ let outboundsModuleApi = null;
       url: 'outbounds-subscriptions-url',
       nameFilter: 'outbounds-subscriptions-name-filter',
       typeFilter: 'outbounds-subscriptions-type-filter',
+      transportFilter: 'outbounds-subscriptions-transport-filter',
+      excludedKeys: 'outbounds-subscriptions-excluded-keys',
       interval: 'outbounds-subscriptions-interval',
       enabled: 'outbounds-subscriptions-enabled',
       ping: 'outbounds-subscriptions-ping',
@@ -3142,6 +3144,11 @@ let outboundsModuleApi = null;
       empty: 'outbounds-subscriptions-empty',
       status: 'outbounds-subscriptions-status',
       summary: 'outbounds-subscriptions-summary',
+      nodesPanel: 'outbounds-subscriptions-nodes-panel',
+      nodesCaption: 'outbounds-subscriptions-nodes-caption',
+      nodesSummary: 'outbounds-subscriptions-nodes-summary',
+      nodesList: 'outbounds-subscriptions-nodes-list',
+      nodesEmpty: 'outbounds-subscriptions-nodes-empty',
     };
 
     let _subscriptions = [];
@@ -3184,6 +3191,7 @@ let outboundsModuleApi = null;
                   </div>
                   <form id="outbounds-subscriptions-form" class="xk-sub-form">
                     <input id="outbounds-subscriptions-id" type="hidden">
+                    <input id="outbounds-subscriptions-excluded-keys" type="hidden">
                     <label data-tooltip="Короткое имя подписки в списке. Можно оставить пустым.">
                       <span class="xk-pool-fieldlabel">Название</span>
                       <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription" title="Название подписки" data-tooltip="Короткое имя подписки в списке.">
@@ -3203,6 +3211,10 @@ let outboundsModuleApi = null;
                     <label data-tooltip="Regex по типу прокси/протоколу. Например: vless|trojan|vmess. Пусто — без фильтра.">
                       <span class="xk-pool-fieldlabel">Фильтр типа (regex)</span>
                       <input id="outbounds-subscriptions-type-filter" class="xray-log-filter" type="text" placeholder="vless|trojan|vmess" title="Фильтр типа" data-tooltip="Оставить только указанные типы нод. Например: vless|trojan|vmess|ss|hy2.">
+                    </label>
+                    <label data-tooltip="Regex по транспорту. Например: ws|grpc|tcp|xhttp. Пусто — без фильтра.">
+                      <span class="xk-pool-fieldlabel">Фильтр транспорта (regex)</span>
+                      <input id="outbounds-subscriptions-transport-filter" class="xray-log-filter" type="text" placeholder="ws|grpc|tcp|xhttp" title="Фильтр транспорта" data-tooltip="Оставить только ноды с нужным transport/network. Например: ws|grpc|tcp|xhttp|quic.">
                     </label>
                     <label data-tooltip="Как часто обновлять подписку. Заголовок provider profile-update-interval может уточнить значение.">
                       <span class="xk-pool-fieldlabel">Интервал, ч</span>
@@ -3248,6 +3260,18 @@ let outboundsModuleApi = null;
                   <div id="outbounds-subscriptions-status" class="modal-hint xk-sub-status"></div>
                 </section>
               </div>
+              <section id="outbounds-subscriptions-nodes-panel" class="xk-sub-panel xk-sub-node-panel">
+                <div class="xk-sub-panelhead">
+                  <div>
+                    <div class="xk-pool-kicker">Узлы</div>
+                    <div class="terminal-menu-title" style="margin:0;">Серверы подписки</div>
+                    <div id="outbounds-subscriptions-nodes-caption" class="xk-sub-muted">Нажми ✎ у нужной подписки, чтобы посмотреть состав и transport.</div>
+                  </div>
+                  <div id="outbounds-subscriptions-nodes-summary" class="xk-pool-summary">0</div>
+                </div>
+                <div id="outbounds-subscriptions-nodes-list" class="xk-sub-node-list"></div>
+                <div id="outbounds-subscriptions-nodes-empty" class="xk-pool-empty">Список узлов появится после обновления подписки.</div>
+              </section>
             </div>
             <div class="modal-actions xk-pool-footer">
               <div></div>
@@ -3311,13 +3335,129 @@ let outboundsModuleApi = null;
       return dir + '/' + name;
     }
 
+    function subsParseExcludedKeys(raw) {
+      const text = String(raw || '').trim();
+      if (!text) return [];
+      try {
+        const parsed = JSON.parse(text);
+        return Array.isArray(parsed)
+          ? Array.from(new Set(parsed.map((item) => String(item || '').trim()).filter(Boolean)))
+          : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function subsGetExcludedKeysValue() {
+      try {
+        return subsParseExcludedKeys($(SUB_IDS.excludedKeys).value);
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function subsSetExcludedKeysValue(items) {
+      const values = Array.from(new Set((Array.isArray(items) ? items : []).map((item) => String(item || '').trim()).filter(Boolean)));
+      try { $(SUB_IDS.excludedKeys).value = JSON.stringify(values); } catch (e) {}
+      return values;
+    }
+
+    function subsCompilePreviewRegex(id) {
+      const el = $(id);
+      if (!el) return null;
+      const raw = String(el.value || '').trim();
+      try { el.classList.remove('is-invalid'); } catch (e) {}
+      if (!raw) return null;
+      try {
+        return new RegExp(raw, 'i');
+      } catch (e) {
+        try { el.classList.add('is-invalid'); } catch (e2) {}
+        return null;
+      }
+    }
+
+    function subsSafeRegExp(raw) {
+      const text = String(raw || '').trim();
+      if (!text) return null;
+      try {
+        return new RegExp(text, 'i');
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function subsCurrentDraftFor(sub) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      const currentId = String(_subscriptionEditId || '');
+      const subId = String(s.id || '');
+      const isCurrent = !!currentId && currentId === subId;
+      return {
+        nameFilter: isCurrent ? String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim() : String(s.name_filter || '').trim(),
+        typeFilter: isCurrent ? String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim() : String(s.type_filter || '').trim(),
+        transportFilter: isCurrent ? String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim() : String(s.transport_filter || '').trim(),
+        excludedKeys: isCurrent ? subsGetExcludedKeysValue() : (Array.isArray(s.excluded_node_keys) ? s.excluded_node_keys.map((item) => String(item || '').trim()).filter(Boolean) : []),
+      };
+    }
+
+    function subsProtocolFilterText(protocol) {
+      const value = String(protocol || '').trim().toLowerCase();
+      if (value === 'ss') return 'ss shadowsocks';
+      if (value === 'shadowsocks') return 'ss shadowsocks';
+      if (value === 'hy2' || value === 'hysteria2' || value === 'hysteria') return 'hy2 hysteria2 hysteria';
+      return value;
+    }
+
+    function subsTransportFilterText(transport, protocol) {
+      const items = [String(transport || '').trim().toLowerCase()];
+      const proto = String(protocol || '').trim().toLowerCase();
+      if (proto === 'hy2' || proto === 'hysteria2' || proto === 'hysteria') {
+        items.push('quic');
+        items.push('udp');
+      }
+      return Array.from(new Set(items.filter(Boolean))).join(' ');
+    }
+
+    function subsSyncSelection() {
+      const tbody = $(SUB_IDS.tbody);
+      if (!tbody) return;
+      Array.from(tbody.querySelectorAll('tr[data-sub-id]')).forEach((row) => {
+        row.classList.toggle('is-selected', String(row.getAttribute('data-sub-id') || '') === String(_subscriptionEditId || ''));
+      });
+    }
+
+    function subsNodeReasonCodes(node, draft, compiled) {
+      const reasons = [];
+      const excluded = new Set(Array.isArray(draft && draft.excludedKeys) ? draft.excludedKeys : []);
+      const key = String(node && node.key ? node.key : '').trim();
+      const name = String(node && node.name ? node.name : '').trim();
+      const protocol = String(node && node.protocol ? node.protocol : '').trim().toLowerCase();
+      const transport = String(node && node.transport ? node.transport : '').trim().toLowerCase();
+      if (key && excluded.has(key)) reasons.push('manual');
+      if (compiled && compiled.name && !compiled.name.test(name)) reasons.push('name');
+      if (compiled && compiled.type && !compiled.type.test(subsProtocolFilterText(protocol))) reasons.push('type');
+      if (compiled && compiled.transport && !compiled.transport.test(subsTransportFilterText(transport, protocol))) reasons.push('transport');
+      return reasons;
+    }
+
+    function subsNodeReasonLabel(reasons) {
+      const list = Array.isArray(reasons) ? reasons : [];
+      if (!list.length) return 'включён';
+      if (list.includes('manual')) return 'исключён вручную';
+      if (list.includes('transport')) return 'скрыт фильтром transport';
+      if (list.includes('type')) return 'скрыт фильтром type';
+      if (list.includes('name')) return 'скрыт фильтром имени';
+      return 'скрыт фильтром';
+    }
+
     function subsFilterSummary(sub) {
       const s = sub && typeof sub === 'object' ? sub : {};
       const parts = [];
       const nameFilter = String(s.name_filter || '').trim();
       const typeFilter = String(s.type_filter || '').trim();
+      const transportFilter = String(s.transport_filter || '').trim();
       if (nameFilter) parts.push('имя~' + nameFilter);
       if (typeFilter) parts.push('тип~' + typeFilter);
+      if (transportFilter) parts.push('transport~' + transportFilter);
       return parts.join(' · ');
     }
 
@@ -3329,14 +3469,19 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.url).value = ''; } catch (e) {}
       try { $(SUB_IDS.nameFilter).value = ''; } catch (e) {}
       try { $(SUB_IDS.typeFilter).value = ''; } catch (e) {}
+      try { $(SUB_IDS.transportFilter).value = ''; } catch (e) {}
+      subsSetExcludedKeysValue([]);
       try { $(SUB_IDS.interval).value = '6'; } catch (e) {}
       try { $(SUB_IDS.enabled).checked = true; } catch (e) {}
       try { $(SUB_IDS.ping).checked = true; } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = true; } catch (e) {}
+      try { subsSyncSelection(); } catch (e2) {}
+      try { subsRenderNodeList(); } catch (e2) {}
     }
 
-    function subsFillForm(sub) {
+    function subsFillForm(sub, options) {
       const s = sub && typeof sub === 'object' ? sub : {};
+      const opts = options && typeof options === 'object' ? options : {};
       _subscriptionEditId = String(s.id || '');
       try { $(SUB_IDS.id).value = _subscriptionEditId; } catch (e) {}
       try { $(SUB_IDS.name).value = String(s.name || ''); } catch (e) {}
@@ -3344,11 +3489,15 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.url).value = String(s.url || ''); } catch (e) {}
       try { $(SUB_IDS.nameFilter).value = String(s.name_filter || ''); } catch (e) {}
       try { $(SUB_IDS.typeFilter).value = String(s.type_filter || ''); } catch (e) {}
+      try { $(SUB_IDS.transportFilter).value = String(s.transport_filter || ''); } catch (e) {}
+      subsSetExcludedKeysValue(Array.isArray(s.excluded_node_keys) ? s.excluded_node_keys : []);
       try { $(SUB_IDS.interval).value = String(s.interval_hours || 6); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = s.enabled !== false; } catch (e) {}
       try { $(SUB_IDS.ping).checked = s.ping_enabled !== false; } catch (e) {}
-      try { $(SUB_IDS.refreshNow).checked = false; } catch (e) {}
-      try { $(SUB_IDS.url).focus(); } catch (e) {}
+      try { $(SUB_IDS.refreshNow).checked = opts.keepRefreshNow === true ? !!($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked) : false; } catch (e) {}
+      try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
+      try { subsSyncSelection(); } catch (e2) {}
+      try { subsRenderNodeList(); } catch (e2) {}
     }
 
     function subsRender() {
@@ -3361,6 +3510,10 @@ let outboundsModuleApi = null;
 
       items.forEach((sub) => {
         const tr = document.createElement('tr');
+        try {
+          tr.setAttribute('data-sub-id', String(sub && sub.id ? sub.id : ''));
+          tr.classList.toggle('is-selected', String(sub && sub.id ? sub.id : '') === String(_subscriptionEditId || ''));
+        } catch (e0) {}
         const ok = sub && sub.last_ok === true;
         const bad = sub && sub.last_ok === false;
         const count = Number(sub && sub.last_count ? sub.last_count : 0);
@@ -3438,6 +3591,113 @@ let outboundsModuleApi = null;
           subsDelete(btn.getAttribute('data-id') || '');
         });
       });
+
+      Array.from(tbody.querySelectorAll('tr[data-sub-id]')).forEach((row) => {
+        row.addEventListener('click', (e) => {
+          const target = e && e.target ? e.target : null;
+          if (target && target.closest && target.closest('button')) return;
+          const id = row.getAttribute('data-sub-id') || '';
+          const sub = _subscriptions.find((item) => String(item && item.id || '') === id);
+          if (sub) subsFillForm(sub, { focus: false, keepRefreshNow: true });
+        });
+      });
+
+      try { subsRenderNodeList(); } catch (e) {}
+    }
+
+    function subsRenderNodeList() {
+      const panel = $(SUB_IDS.nodesPanel);
+      const caption = $(SUB_IDS.nodesCaption);
+      const summary = $(SUB_IDS.nodesSummary);
+      const listEl = $(SUB_IDS.nodesList);
+      const empty = $(SUB_IDS.nodesEmpty);
+      if (!panel || !caption || !summary || !listEl || !empty) return;
+
+      const subId = String(_subscriptionEditId || '').trim();
+      const sub = _subscriptions.find((item) => String(item && item.id || '') === subId) || null;
+      if (!sub) {
+        listEl.innerHTML = '';
+        empty.textContent = 'Нажми ✎ у нужной подписки, чтобы посмотреть список её узлов.';
+        empty.style.display = 'block';
+        summary.textContent = '0';
+        caption.textContent = 'Выбери подписку в списке справа.';
+        return;
+      }
+
+      const nodes = Array.isArray(sub.last_nodes) ? sub.last_nodes : [];
+      const draft = subsCurrentDraftFor(sub);
+      const compiled = {
+        name: subId === String(_subscriptionEditId || '') ? subsCompilePreviewRegex(SUB_IDS.nameFilter) : subsSafeRegExp(draft.nameFilter),
+        type: subId === String(_subscriptionEditId || '') ? subsCompilePreviewRegex(SUB_IDS.typeFilter) : subsSafeRegExp(draft.typeFilter),
+        transport: subId === String(_subscriptionEditId || '') ? subsCompilePreviewRegex(SUB_IDS.transportFilter) : subsSafeRegExp(draft.transportFilter),
+      };
+      const rows = [];
+      let enabledCount = 0;
+      let hiddenCount = 0;
+      const excluded = new Set(Array.isArray(draft.excludedKeys) ? draft.excludedKeys : []);
+
+      nodes.forEach((node) => {
+        const reasons = subsNodeReasonCodes(node, draft, compiled);
+        const enabled = reasons.length === 0;
+        if (enabled) enabledCount += 1;
+        else hiddenCount += 1;
+        const key = escapeHtml(String(node && node.key ? node.key : ''));
+        const name = escapeHtml(String(node && node.name ? node.name : 'node'));
+        const protocol = escapeHtml(String(node && node.protocol ? node.protocol : ''));
+        const transport = escapeHtml(String(node && node.transport ? node.transport : ''));
+        const security = escapeHtml(String(node && node.security ? node.security : ''));
+        const host = escapeHtml(String(node && node.host ? node.host : ''));
+        const port = escapeHtml(String(node && (node.port || node.port === 0) ? node.port : ''));
+        const detail = escapeHtml(String(node && node.detail ? node.detail : ''));
+        const endpoint = [host, port].filter(Boolean).join(':');
+        const reasonLabel = escapeHtml(subsNodeReasonLabel(reasons));
+        const manualExcluded = !!(node && node.key && excluded.has(String(node.key)));
+        rows.push(`
+          <div class="xk-sub-node-item ${enabled ? 'is-enabled' : 'is-disabled'}" data-node-key="${key}">
+            <div class="xk-sub-node-main">
+              <div class="xk-sub-node-name">${name}</div>
+              <div class="xk-sub-node-meta">
+                ${protocol ? `<span class="xk-sub-node-pill">${protocol}</span>` : ''}
+                ${transport ? `<span class="xk-sub-node-pill xk-sub-node-pill-transport">${transport}</span>` : ''}
+                ${security ? `<span class="xk-sub-node-pill xk-sub-node-pill-security">${security}</span>` : ''}
+                ${endpoint ? `<span class="xk-sub-node-endpoint">${endpoint}</span>` : ''}
+              </div>
+              ${detail ? `<div class="xk-sub-node-detail">${detail}</div>` : ''}
+            </div>
+            <div class="xk-sub-node-side">
+              <div class="xk-sub-node-state ${enabled ? 'is-enabled' : 'is-disabled'}">${reasonLabel}</div>
+              <button type="button" class="btn-secondary btn-compact xk-sub-node-toggle" data-node-key="${key}" data-node-action="${manualExcluded ? 'include' : 'exclude'}">
+                ${manualExcluded ? 'Вернуть' : 'Исключить'}
+              </button>
+            </div>
+          </div>
+        `);
+      });
+
+      summary.textContent = `${enabledCount}/${nodes.length}`;
+      caption.textContent = `${String(sub.name || sub.tag || sub.id || 'Подписка')} · включено ${enabledCount}${hiddenCount ? ` · скрыто ${hiddenCount}` : ''}`;
+
+      listEl.innerHTML = rows.join('');
+      empty.textContent = nodes.length
+        ? 'Нет совпадений по текущим фильтрам.'
+        : 'Список узлов появится после обновления этой подписки.';
+      empty.style.display = rows.length ? 'none' : 'block';
+
+      Array.from(listEl.querySelectorAll('.xk-sub-node-toggle')).forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const nodeKey = String(btn.getAttribute('data-node-key') || '').trim();
+          if (!nodeKey) return;
+          const next = new Set(subsGetExcludedKeysValue());
+          if (next.has(nodeKey)) next.delete(nodeKey);
+          else next.add(nodeKey);
+          subsSetExcludedKeysValue(Array.from(next));
+          subsRenderNodeList();
+          const changedSub = _subscriptions.find((item) => String(item && item.id || '') === subId);
+          if (changedSub) changedSub.excluded_node_keys = Array.from(next);
+          subsSetStatus('Список узлов обновлён. Сохрани подписку, чтобы применить изменения к generated fragment.', false, true);
+        });
+      });
     }
 
     async function subsOpenGeneratedFragment(file) {
@@ -3481,6 +3741,9 @@ let outboundsModuleApi = null;
           _subscriptionOutputFiles = new Set(_subscriptions.map((sub) => baseName(sub && sub.output_file)).filter(Boolean));
           _subscriptionOutputFilesTs = Date.now();
         } catch (e2) {}
+        const active = _subscriptions.find((sub) => String(sub && sub.id || '') === String(_subscriptionEditId || '')) || null;
+        if (active) subsFillForm(active, { focus: false, keepRefreshNow: true });
+        else if (_subscriptionEditId) subsResetForm();
         subsRender();
         return true;
       } catch (e) {
@@ -3578,6 +3841,8 @@ let outboundsModuleApi = null;
         url: String(($(SUB_IDS.url) && $(SUB_IDS.url).value) || '').trim(),
         name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim(),
         type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim(),
+        transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim(),
+        excluded_node_keys: subsGetExcludedKeysValue(),
         interval_hours: Number(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || 6),
         enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
         ping_enabled: !!($(SUB_IDS.ping) && $(SUB_IDS.ping).checked),
@@ -3682,6 +3947,14 @@ let outboundsModuleApi = null;
       if (form) {
         form.addEventListener('submit', subsSave);
       }
+      [SUB_IDS.nameFilter, SUB_IDS.typeFilter, SUB_IDS.transportFilter].forEach((id) => {
+        const el = $(id);
+        if (!el || (el.dataset && el.dataset.xkSubPreviewBound === '1')) return;
+        el.addEventListener('input', () => {
+          try { subsRenderNodeList(); } catch (e) {}
+        });
+        if (el.dataset) el.dataset.xkSubPreviewBound = '1';
+      });
 
       modal.addEventListener('click', (e) => {
         try { if (e && e.target === modal) subsClose(); } catch (e2) {}

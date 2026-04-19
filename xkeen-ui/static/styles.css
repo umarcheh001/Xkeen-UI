@@ -7773,6 +7773,18 @@ html[data-theme="light"] .xk-mi-status.error {
   border-color: rgba(96, 165, 250, 0.42);
 }
 
+.xk-sub-table tbody tr[data-sub-id] {
+  cursor: pointer;
+}
+
+.xk-sub-table tbody tr.is-selected {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.xk-sub-table tbody tr.is-selected td {
+  box-shadow: inset 0 1px 0 rgba(96, 165, 250, 0.14), inset 0 -1px 0 rgba(96, 165, 250, 0.10);
+}
+
 .xk-sub-file-link {
   width: 100%;
   min-width: 0;
@@ -7817,6 +7829,111 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-status.is-success {
   color: #86efac;
+}
+
+.xk-sub-node-panel {
+  margin-top: 12px;
+}
+
+.xk-sub-node-list {
+  min-height: 120px;
+  max-height: min(34vh, 320px);
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.10);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.22);
+}
+
+.xk-sub-node-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.10);
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.xk-sub-node-item + .xk-sub-node-item {
+  margin-top: 8px;
+}
+
+.xk-sub-node-item.is-disabled {
+  opacity: 0.88;
+}
+
+.xk-sub-node-name {
+  font-weight: 700;
+  color: var(--fg, #f8fafc);
+  word-break: break-word;
+}
+
+.xk-sub-node-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.xk-sub-node-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  background: rgba(37, 99, 235, 0.10);
+  color: #bfdbfe;
+  font-size: calc(11px * var(--xk-font-scale));
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.xk-sub-node-pill-transport {
+  border-color: rgba(45, 212, 191, 0.18);
+  background: rgba(20, 184, 166, 0.10);
+  color: #ccfbf1;
+}
+
+.xk-sub-node-pill-security {
+  border-color: rgba(251, 191, 36, 0.18);
+  background: rgba(245, 158, 11, 0.10);
+  color: #fde68a;
+}
+
+.xk-sub-node-endpoint {
+  color: #93a4b8;
+  font-size: calc(12px * var(--xk-font-scale));
+}
+
+.xk-sub-node-detail {
+  margin-top: 6px;
+  color: #7dd3fc;
+  font-size: calc(12px * var(--xk-font-scale));
+  word-break: break-word;
+}
+
+.xk-sub-node-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.xk-sub-node-state {
+  font-size: calc(11px * var(--xk-font-scale));
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.xk-sub-node-state.is-enabled {
+  color: #86efac;
+}
+
+.xk-sub-node-state.is-disabled {
+  color: #fbbf24;
 }
 
 .xk-pool-lead {
@@ -8215,6 +8332,14 @@ html[data-theme="light"] .xk-mi-status.error {
     min-height: 220px;
   }
 
+  .xk-sub-node-item {
+    grid-template-columns: 1fr;
+  }
+
+  .xk-sub-node-side {
+    align-items: flex-start;
+  }
+
   .xk-sub-table {
     min-width: 620px;
   }
@@ -8291,7 +8416,9 @@ html[data-theme="light"] .xk-pool-summary {
 
 html[data-theme="light"] .xk-sub-panel,
 html[data-theme="light"] .xk-sub-tablewrap,
-html[data-theme="light"] .xk-sub-check {
+html[data-theme="light"] .xk-sub-check,
+html[data-theme="light"] .xk-sub-node-list,
+html[data-theme="light"] .xk-sub-node-item {
   border-color: rgba(172, 188, 214, 0.42);
   background: rgba(255, 255, 255, 0.78);
 }
@@ -8300,8 +8427,40 @@ html[data-theme="light"] .xk-sub-main {
   color: #1d2b44;
 }
 
-html[data-theme="light"] .xk-sub-muted {
+html[data-theme="light"] .xk-sub-muted,
+html[data-theme="light"] .xk-sub-node-endpoint,
+html[data-theme="light"] .xk-sub-node-state {
   color: #465975;
+}
+
+html[data-theme="light"] .xk-sub-table tbody tr.is-selected {
+  background: rgba(59, 130, 246, 0.10);
+}
+
+html[data-theme="light"] .xk-sub-node-name {
+  color: #1d2b44;
+}
+
+html[data-theme="light"] .xk-sub-node-pill {
+  border-color: rgba(59, 130, 246, 0.24);
+  background: rgba(219, 234, 254, 0.78);
+  color: #1e3a8a;
+}
+
+html[data-theme="light"] .xk-sub-node-pill-transport {
+  border-color: rgba(13, 148, 136, 0.22);
+  background: rgba(204, 251, 241, 0.78);
+  color: #115e59;
+}
+
+html[data-theme="light"] .xk-sub-node-pill-security {
+  border-color: rgba(217, 119, 6, 0.22);
+  background: rgba(254, 243, 199, 0.82);
+  color: #92400e;
+}
+
+html[data-theme="light"] .xk-sub-node-detail {
+  color: #0f766e;
 }
 
 /* Donate modal (💰 Донат) */
