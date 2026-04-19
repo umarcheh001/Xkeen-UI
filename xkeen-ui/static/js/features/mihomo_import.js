@@ -792,6 +792,104 @@ let mihomoImportModuleApi = null;
     return Object.keys(out).length ? out : undefined;
   };
 
+  const cleanStringList = (value) => {
+    if (value == null || value === '') return undefined;
+    const rawItems = Array.isArray(value) ? value : String(value).split(',');
+    const items = rawItems.map((item) => String(item ?? '').trim()).filter(Boolean);
+    return items.length ? items : undefined;
+  };
+
+  const cleanValueTree = (value) => {
+    if (value == null || value === '') return undefined;
+    if (typeof value === 'number' || typeof value === 'boolean') return value;
+    if (Array.isArray(value)) {
+      const items = value.map((item) => cleanValueTree(item)).filter((item) => item !== undefined);
+      return items.length ? items : undefined;
+    }
+    if (typeof value === 'object') {
+      const out = {};
+      Object.entries(value).forEach(([key, nestedValue]) => {
+        const cleanKey = String(key || '').trim();
+        if (!cleanKey) return;
+        const cleanNested = cleanValueTree(nestedValue);
+        if (cleanNested === undefined) return;
+        out[cleanKey] = cleanNested;
+      });
+      return Object.keys(out).length ? out : undefined;
+    }
+    return String(value);
+  };
+
+  const cleanDownloadSettings = (download) => {
+    if (!download || typeof download !== 'object') return undefined;
+
+    const out = {};
+
+    const path = firstDefined(download, 'path');
+    if (path !== undefined) out.path = String(path);
+
+    const host = firstDefined(download, 'host');
+    if (host !== undefined) out.host = String(host);
+
+    const headers = cleanHeaders(firstDefined(download, 'headers'));
+    if (headers) out.headers = headers;
+
+    const noGrpcHeader = boolMaybe(download, 'no-grpc-header', 'noGrpcHeader', 'noGRPCHeader');
+    if (noGrpcHeader !== undefined) out['no-grpc-header'] = noGrpcHeader;
+
+    const xPaddingBytes = firstDefined(download, 'x-padding-bytes', 'xPaddingBytes');
+    if (xPaddingBytes !== undefined) {
+      out['x-padding-bytes'] = typeof xPaddingBytes === 'number' ? xPaddingBytes : String(xPaddingBytes);
+    }
+
+    const scMaxEachPostBytes = firstDefined(download, 'sc-max-each-post-bytes', 'scMaxEachPostBytes');
+    if (scMaxEachPostBytes !== undefined) {
+      out['sc-max-each-post-bytes'] =
+        typeof scMaxEachPostBytes === 'number' ? scMaxEachPostBytes : String(scMaxEachPostBytes);
+    }
+
+    const reuseSettings = cleanReuseSettings(firstDefined(download, 'reuse-settings', 'reuseSettings'));
+    if (reuseSettings) out['reuse-settings'] = reuseSettings;
+
+    const server = firstDefined(download, 'server');
+    if (server !== undefined) out.server = String(server);
+
+    const port = firstDefined(download, 'port');
+    if (port !== undefined) out.port = typeof port === 'number' ? port : String(port);
+
+    const tls = boolMaybe(download, 'tls');
+    if (tls !== undefined) out.tls = tls;
+
+    const alpn = cleanStringList(firstDefined(download, 'alpn'));
+    if (alpn) out.alpn = alpn;
+
+    const echOpts = cleanValueTree(firstDefined(download, 'ech-opts', 'echOpts'));
+    if (echOpts !== undefined) out['ech-opts'] = echOpts;
+
+    const realityOpts = cleanValueTree(firstDefined(download, 'reality-opts', 'realityOpts'));
+    if (realityOpts !== undefined) out['reality-opts'] = realityOpts;
+
+    const skipCertVerify = boolMaybe(download, 'skip-cert-verify', 'skipCertVerify');
+    if (skipCertVerify !== undefined) out['skip-cert-verify'] = skipCertVerify;
+
+    const fingerprint = firstDefined(download, 'fingerprint');
+    if (fingerprint !== undefined) out.fingerprint = String(fingerprint);
+
+    const certificate = cleanValueTree(firstDefined(download, 'certificate'));
+    if (certificate !== undefined) out.certificate = certificate;
+
+    const privateKey = cleanValueTree(firstDefined(download, 'private-key', 'privateKey'));
+    if (privateKey !== undefined) out['private-key'] = privateKey;
+
+    const servername = firstDefined(download, 'servername', 'serverName');
+    if (servername !== undefined) out.servername = String(servername);
+
+    const clientFingerprint = firstDefined(download, 'client-fingerprint', 'clientFingerprint');
+    if (clientFingerprint !== undefined) out['client-fingerprint'] = String(clientFingerprint);
+
+    return Object.keys(out).length ? out : undefined;
+  };
+
   const normalizeXhttpSettings = (params) => {
     const extra = parseJsonMaybe(params.extra);
     const xhttp = {
@@ -819,6 +917,9 @@ let mihomoImportModuleApi = null;
 
     const reuseSettings = cleanReuseSettings(firstDefined(extra, 'reuse-settings', 'reuseSettings'));
     if (reuseSettings) xhttp['reuse-settings'] = reuseSettings;
+
+    const downloadSettings = cleanDownloadSettings(firstDefined(extra, 'download-settings', 'downloadSettings'));
+    if (downloadSettings) xhttp['download-settings'] = downloadSettings;
 
     return Object.fromEntries(Object.entries(xhttp).filter(([, value]) => value != null && value !== ''));
   };
@@ -1083,6 +1184,7 @@ let mihomoImportModuleApi = null;
         'x-padding-bytes': streamSettings.xhttpSettings?.['x-padding-bytes'],
         'sc-max-each-post-bytes': streamSettings.xhttpSettings?.['sc-max-each-post-bytes'],
         'reuse-settings': streamSettings.xhttpSettings?.['reuse-settings'],
+        'download-settings': streamSettings.xhttpSettings?.['download-settings'],
       };
     }
 

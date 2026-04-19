@@ -127,6 +127,46 @@ def _sanitize_headers(value: Any) -> Optional[Dict[str, Any]]:
     return out or None
 
 
+def _sanitize_string_list(value: Any) -> Optional[List[str]]:
+    if value in (None, ""):
+        return None
+
+    if isinstance(value, str):
+        items = [part.strip() for part in value.split(",") if part.strip()]
+        return items or None
+
+    if not isinstance(value, list):
+        return None
+
+    items = [str(item).strip() for item in value if item is not None and str(item).strip()]
+    return items or None
+
+
+def _sanitize_tree(value: Any) -> Any:
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value
+    if isinstance(value, list):
+        items = [_sanitize_tree(item) for item in value]
+        items = [item for item in items if item not in (None, "", [], {})]
+        return items or None
+    if isinstance(value, dict):
+        out: Dict[str, Any] = {}
+        for raw_key, raw_value in value.items():
+            key = str(raw_key or "").strip()
+            if not key:
+                continue
+            clean_value = _sanitize_tree(raw_value)
+            if clean_value in (None, "", [], {}):
+                continue
+            out[key] = clean_value
+        return out or None
+    return str(value)
+
+
 def _sanitize_reuse_settings(value: Any) -> Optional[Dict[str, Any]]:
     if not isinstance(value, dict):
         return None
@@ -145,6 +185,99 @@ def _sanitize_reuse_settings(value: Any) -> Optional[Dict[str, Any]]:
         if raw is None or raw == "":
             continue
         out[target_key] = raw if isinstance(raw, (bool, int, float)) else str(raw)
+    return out or None
+
+
+def _sanitize_download_settings(value: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(value, dict):
+        return None
+
+    out: Dict[str, Any] = {}
+
+    path = _mapping_first(value, "path", default=None)
+    if path not in (None, ""):
+        out["path"] = str(path)
+
+    host = _mapping_first(value, "host", default=None)
+    if host not in (None, ""):
+        out["host"] = str(host)
+
+    headers = _sanitize_headers(_mapping_first(value, "headers", default=None))
+    if headers:
+        out["headers"] = headers
+
+    no_grpc_header = _mapping_bool(value, "no-grpc-header", "noGrpcHeader", "noGRPCHeader")
+    if no_grpc_header is not None:
+        out["no-grpc-header"] = no_grpc_header
+
+    x_padding_bytes = _mapping_first(value, "x-padding-bytes", "xPaddingBytes", default=None)
+    if x_padding_bytes not in (None, ""):
+        out["x-padding-bytes"] = (
+            x_padding_bytes if isinstance(x_padding_bytes, (bool, int, float)) else str(x_padding_bytes)
+        )
+
+    sc_max_each_post_bytes = _mapping_first(
+        value, "sc-max-each-post-bytes", "scMaxEachPostBytes", default=None
+    )
+    if sc_max_each_post_bytes not in (None, ""):
+        out["sc-max-each-post-bytes"] = (
+            sc_max_each_post_bytes
+            if isinstance(sc_max_each_post_bytes, (bool, int, float))
+            else str(sc_max_each_post_bytes)
+        )
+
+    reuse_settings = _sanitize_reuse_settings(_mapping_first(value, "reuse-settings", "reuseSettings", default=None))
+    if reuse_settings:
+        out["reuse-settings"] = reuse_settings
+
+    server = _mapping_first(value, "server", default=None)
+    if server not in (None, ""):
+        out["server"] = str(server)
+
+    port = _mapping_first(value, "port", default=None)
+    if port not in (None, ""):
+        out["port"] = port if isinstance(port, (int, float)) and not isinstance(port, bool) else str(port)
+
+    tls = _mapping_bool(value, "tls")
+    if tls is not None:
+        out["tls"] = tls
+
+    alpn = _sanitize_string_list(_mapping_first(value, "alpn", default=None))
+    if alpn:
+        out["alpn"] = alpn
+
+    ech_opts = _sanitize_tree(_mapping_first(value, "ech-opts", "echOpts", default=None))
+    if ech_opts is not None:
+        out["ech-opts"] = ech_opts
+
+    reality_opts = _sanitize_tree(_mapping_first(value, "reality-opts", "realityOpts", default=None))
+    if reality_opts is not None:
+        out["reality-opts"] = reality_opts
+
+    skip_cert_verify = _mapping_bool(value, "skip-cert-verify", "skipCertVerify")
+    if skip_cert_verify is not None:
+        out["skip-cert-verify"] = skip_cert_verify
+
+    fingerprint = _mapping_first(value, "fingerprint", default=None)
+    if fingerprint not in (None, ""):
+        out["fingerprint"] = str(fingerprint)
+
+    certificate = _sanitize_tree(_mapping_first(value, "certificate", default=None))
+    if certificate is not None:
+        out["certificate"] = certificate
+
+    private_key = _sanitize_tree(_mapping_first(value, "private-key", "privateKey", default=None))
+    if private_key is not None:
+        out["private-key"] = private_key
+
+    servername = _mapping_first(value, "servername", "serverName", default=None)
+    if servername not in (None, ""):
+        out["servername"] = str(servername)
+
+    client_fingerprint = _mapping_first(value, "client-fingerprint", "clientFingerprint", default=None)
+    if client_fingerprint not in (None, ""):
+        out["client-fingerprint"] = str(client_fingerprint)
+
     return out or None
 
 
@@ -193,6 +326,12 @@ def _build_xhttp_opts(path: str, host: str, mode: str, extra: Any) -> Dict[str, 
     reuse_settings = _sanitize_reuse_settings(_mapping_first(extra, "reuse-settings", "reuseSettings", default=None))
     if reuse_settings:
         opts["reuse-settings"] = reuse_settings
+
+    download_settings = _sanitize_download_settings(
+        _mapping_first(extra, "download-settings", "downloadSettings", default=None)
+    )
+    if download_settings:
+        opts["download-settings"] = download_settings
 
     return opts
 
