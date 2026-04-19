@@ -49,6 +49,7 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "function subsProtocolFilterText(protocol) {" in outbounds_src
     assert "function subsNodeLatencyEntry(sub, nodeKey) {" in outbounds_src
     assert "function subsProbeNode(subId, nodeKey) {" in outbounds_src
+    assert "function subsPingAllTooltipText(sub, hasPingable) {" in outbounds_src
     assert "class=\"xk-sub-file-badge\">JSON</span>" in outbounds_src
     assert "xk-sub-list-action xk-sub-list-action-refresh xk-sub-refresh" in outbounds_src
     assert "xk-sub-list-action xk-sub-list-action-delete xk-sub-delete" in outbounds_src
@@ -58,6 +59,10 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "/nodes/ping" in outbounds_src
     assert "xk-sub-node-ping" in outbounds_src
     assert "xk-sub-node-latency" in outbounds_src
+    assert "btn.setAttribute('data-tooltip', tooltip);" in outbounds_src
+    assert "btn.disabled = false;" in outbounds_src
+    assert "Нет активных узлов в generated fragment." in outbounds_src
+    assert "Tag prefix" in outbounds_src
     assert "xk-sub-node-toggle" in outbounds_src
     assert "resetBtn.classList.add('xk-sub-icon-btn');" in outbounds_src
     assert "saveBtn.classList.add('xk-sub-icon-btn');" in outbounds_src

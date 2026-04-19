@@ -3176,6 +3176,19 @@ let outboundsModuleApi = null;
       } catch (e) {}
     }
 
+    function subsPingAllTooltipText(sub, hasPingable) {
+      if (_subscriptionPingAllBusy) {
+        return 'Идёт проверка задержки для активных узлов этой подписки.';
+      }
+      if (!sub) {
+        return 'Сначала выбери подписку в списке справа, чтобы увидеть её узлы и запустить массовую проверку задержки.';
+      }
+      if (hasPingable) {
+        return 'Запустить проверку задержки для всех активных узлов, входящих в generated fragment.';
+      }
+      return 'Нет активных узлов в generated fragment. Сначала обнови подписку кнопкой ↻ в списке справа или сохрани её с флагом «Обновить сразу». Поле Tag prefix задаёт только префикс, а сами generated tags назначаются узлам автоматически после обновления подписки.';
+    }
+
     function subsEnsureModal() {
       let modal = $(SUB_IDS.modal);
       if (modal) {
@@ -4008,26 +4021,36 @@ let outboundsModuleApi = null;
     function subsUpdatePingAllBtnState() {
       const btn = $(SUB_IDS.nodesPingAll);
       if (!btn) return;
+      const subId = String(_subscriptionEditId || '').trim();
+      const sub = subId
+        ? _subscriptions.find((item) => String(item && item.id || '') === subId) || null
+        : null;
+      const hasPingable = !!(sub && Array.isArray(sub.last_nodes) && sub.last_nodes.some((n) => n && n.tag));
+      const tooltip = subsPingAllTooltipText(sub, hasPingable);
+      btn.setAttribute('data-tooltip', tooltip);
+      btn.setAttribute('title', tooltip);
+      btn.setAttribute('aria-label', hasPingable ? 'Пинг всех узлов' : 'Пинг всех узлов: нужна подготовка подписки');
       if (_subscriptionPingAllBusy) {
         btn.classList.add('is-busy');
         btn.disabled = true;
         return;
       }
       btn.classList.remove('is-busy');
-      const subId = String(_subscriptionEditId || '').trim();
-      const sub = subId
-        ? _subscriptions.find((item) => String(item && item.id || '') === subId) || null
-        : null;
-      const hasPingable = !!(sub && Array.isArray(sub.last_nodes) && sub.last_nodes.some((n) => n && n.tag));
-      btn.disabled = !hasPingable;
+      btn.disabled = false;
     }
 
     async function subsProbeAllNodes() {
       if (_subscriptionPingAllBusy) return false;
       const subId = String(_subscriptionEditId || '').trim();
-      if (!subId) return false;
+      if (!subId) {
+        subsSetStatus('Сначала выбери подписку в списке справа, чтобы запустить массовую проверку задержки.', false);
+        return false;
+      }
       const sub = _subscriptions.find((item) => String(item && item.id || '') === subId) || null;
-      if (!sub) return false;
+      if (!sub) {
+        subsSetStatus('Подписка не найдена. Обнови список подписок и попробуй снова.', true);
+        return false;
+      }
 
       const nodes = Array.isArray(sub.last_nodes) ? sub.last_nodes : [];
       const draft = subsCurrentDraftFor(sub);
@@ -4036,12 +4059,16 @@ let outboundsModuleApi = null;
         type: subsCompilePreviewRegex(SUB_IDS.typeFilter),
         transport: subsCompilePreviewRegex(SUB_IDS.transportFilter),
       };
+      const hasPingableNodes = nodes.some((node) => node && node.tag);
       const targets = nodes.filter((node) => {
         if (!node || !node.key || !node.tag) return false;
         return subsNodeReasonCodes(node, draft, compiled).length === 0;
       });
       if (targets.length === 0) {
-        subsSetStatus('Нет активных узлов для проверки задержки.', false);
+        const msg = hasPingableNodes
+          ? 'Нет активных узлов для проверки задержки по текущим фильтрам. Сними фильтры по имени, типу или транспорту, либо верни исключённые узлы.'
+          : subsPingAllTooltipText(sub, false);
+        subsSetStatus(msg, false);
         return false;
       }
 
