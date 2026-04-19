@@ -1,5 +1,5 @@
 import { getXrayLogLineClass } from './xray_log_line_class.js';
-import { ansiToXkeenHtml, getXkeenCommandJobApi, toastXkeen } from './xkeen_runtime.js';
+import { ansiToXkeenHtml, escapeXkeenHtml, getXkeenCommandJobApi, toastXkeen } from './xkeen_runtime.js';
 
 let restartLogModuleApi = null;
 
@@ -9,50 +9,242 @@ let restartLogModuleApi = null;
   const RL = restartLogModuleApi || {};
   restartLogModuleApi = RL;
 
-  // Keep one canonical raw buffer so multiple log blocks (across sections)
-  // can render the same output.
-  RL._rawText = (typeof RL._rawText === 'string') ? RL._rawText : '';
+  RL._rawText = typeof RL._rawText === 'string' ? RL._rawText : '';
+  RL._knownEntryKeys = RL._knownEntryKeys instanceof Set ? RL._knownEntryKeys : new Set();
+  RL._hasBaseline = !!RL._hasBaseline;
+  RL._pollTimer = RL._pollTimer || null;
 
-  // ANSI -> HTML formatter.
-  // Prefer shared util (it also strips non-SGR control sequences like ESC[H/ESC[J).
+  const RESTART_LOG_POLL_MS = 15000;
+  const RESTART_SUMMARY_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+source=([^\s]+)\s+result=([A-Z]+)\s*$/i;
+  const RESTART_SOURCE_META = Object.freeze({
+    api: {
+      label: 'Xkeen',
+      successText: 'перезапущен успешно',
+      failureText: 'перезапуск завершился ошибкой',
+      bucket: 'service',
+    },
+    'api-start': {
+      label: 'Xkeen',
+      successText: 'запущен',
+      failureText: 'не удалось запустить',
+      bucket: 'service',
+    },
+    'api-stop': {
+      label: 'Xkeen',
+      successText: 'остановлен',
+      failureText: 'не удалось остановить',
+      bucket: 'service',
+    },
+    'mihomo-config': {
+      label: 'Mihomo',
+      successText: 'конфиг применён, xkeen перезапущен',
+      failureText: 'конфиг применён, но перезапуск xkeen завершился ошибкой',
+      bucket: 'mihomo',
+    },
+    'xray-subscription-refresh': {
+      label: 'Подписка Xray',
+      successText: 'обновлена, xkeen перезапущен',
+      failureText: 'обновлена, но перезапуск xkeen завершился ошибкой',
+      bucket: 'subscription',
+      toastSuccess: 'Подписка Xray обновлена. xkeen перезапущен.',
+      toastFailure: 'Подписка Xray обновлена, но перезапуск xkeen завершился ошибкой.',
+    },
+  });
+
+  const XRAY_TS_LINE_RE = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s*(?:\[([^\]]+)\])?\s*(.*)$/;
+
+  function safeEscapeHtml(text) {
+    try {
+      return escapeXkeenHtml(text || '');
+    } catch (error) {}
+    return String(text || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function ansiToHtml(line) {
     return ansiToXkeenHtml(line || '');
   }
 
-  // Normalize Xray-style log lines into a more terminal-like format.
-  // Example:
-  //   2026/03/02 21:48:55.631491 [Info] infra/conf/serial: ...
-  // becomes:
-  //   INFO[2026-03-02T21:48:55.631491] infra/conf/serial: ...
-  const XRAY_TS_LINE_RE = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s*(?:\[([^\]]+)\])?\s*(.*)$/;
+  function titleCaseWords(text) {
+    return String(text || '').replace(/\b([a-zа-яё])/gi, (match) => match.toUpperCase());
+  }
+
+  function fallbackRestartSourceLabel(source) {
+    const raw = String(source || '').trim();
+    if (!raw) return 'Событие';
+    return titleCaseWords(raw.replace(/[-_]+/g, ' '));
+  }
+
+  function parseStructuredRestartLine(line) {
+    const raw = String(line || '');
+    if (!raw) return null;
+
+    const match = raw.match(RESTART_SUMMARY_RE);
+    if (!match) return null;
+
+    const ts = String(match[1] || '').trim();
+    const source = String(match[2] || '').trim();
+    const result = String(match[3] || '').trim().toUpperCase();
+    const ok = result === 'OK';
+    const meta = RESTART_SOURCE_META[source] || null;
+    const label = meta && meta.label ? meta.label : fallbackRestartSourceLabel(source);
+    const message = ok
+      ? (meta && meta.successText ? meta.successText : 'операция завершилась успешно')
+      : (meta && meta.failureText ? meta.failureText : 'операция завершилась с ошибкой');
+    const kind = ok ? 'success' : 'error';
+    const bucket = meta && meta.bucket ? meta.bucket : 'generic';
+    const copyText = `[${ts}] ${label} — ${message}`;
+    const rawSourceText = meta ? '' : `Источник: ${source}`;
+
+    return {
+      ts,
+      source,
+      result,
+      ok,
+      kind,
+      bucket,
+      label,
+      message,
+      copyText,
+      rawSourceText,
+      isSubscriptionRefresh: source === 'xray-subscription-refresh',
+      toastMessage: source === 'xray-subscription-refresh'
+        ? (ok
+          ? (meta && meta.toastSuccess ? meta.toastSuccess : 'Подписка Xray обновлена.')
+          : (meta && meta.toastFailure ? meta.toastFailure : 'Подписка Xray обновлена с ошибкой перезапуска.'))
+        : '',
+    };
+  }
+
+  function parseRenderedEntries(rawText) {
+    const text = String(rawText || '');
+    if (!text) return [];
+
+    const lines = text.split(/\r?\n/);
+    if (lines.length && lines[lines.length - 1] === '') lines.pop();
+
+    const duplicateCounts = new Map();
+    return lines.map((line, index) => {
+      const raw = String(line || '');
+      const seen = Number(duplicateCounts.get(raw) || 0) + 1;
+      duplicateCounts.set(raw, seen);
+      return {
+        raw,
+        index,
+        key: `${raw}@@${seen}`,
+        summary: parseStructuredRestartLine(raw),
+      };
+    });
+  }
+
+  function showSubscriptionRefreshToast(events) {
+    const list = Array.isArray(events) ? events.filter(Boolean) : [];
+    if (!list.length) return;
+
+    if (list.length === 1) {
+      const event = list[0];
+      try {
+        toastXkeen({
+          id: `xray-subscription-refresh:${event.ts}:${event.result}`,
+          dedupeKey: `xray-subscription-refresh:${event.ts}:${event.result}`,
+          message: event.toastMessage || 'Подписка Xray обновлена.',
+          kind: event.kind || 'success',
+          duration: event.ok ? 3800 : 5200,
+        });
+      } catch (error) {}
+      return;
+    }
+
+    const successCount = list.filter((event) => event && event.ok).length;
+    const errorCount = list.length - successCount;
+    const tail = list[list.length - 1];
+    const keyTail = tail && tail.ts ? tail.ts : String(Date.now());
+    const message = errorCount
+      ? `Обновления подписок Xray: успешно ${successCount}, с ошибкой ${errorCount}.`
+      : `Подписки Xray обновлены: ${successCount}.`;
+    const kind = errorCount ? (successCount ? 'warning' : 'error') : 'success';
+
+    try {
+      toastXkeen({
+        id: `xray-subscription-refresh-batch:${keyTail}`,
+        dedupeKey: `xray-subscription-refresh-batch:${keyTail}`,
+        message,
+        kind,
+        duration: errorCount ? 5200 : 4200,
+      });
+    } catch (error) {}
+  }
+
+  function syncKnownEntries(entries, options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const shouldToast = opts.toastNewSubscription !== false;
+    const previousKeys = RL._knownEntryKeys instanceof Set ? RL._knownEntryKeys : new Set();
+    const nextKeys = new Set();
+    const freshSubscriptionEvents = [];
+
+    entries.forEach((entry) => {
+      if (!entry || !entry.key) return;
+      nextKeys.add(entry.key);
+      if (!RL._hasBaseline || !shouldToast || previousKeys.has(entry.key)) return;
+      if (entry.summary && entry.summary.isSubscriptionRefresh) {
+        freshSubscriptionEvents.push(entry.summary);
+      }
+    });
+
+    RL._knownEntryKeys = nextKeys;
+    RL._hasBaseline = true;
+
+    if (freshSubscriptionEvents.length) {
+      showSubscriptionRefreshToast(freshSubscriptionEvents);
+    }
+  }
+
+  function buildStructuredLineHtml(summary) {
+    if (!summary) return '';
+
+    const bucket = String(summary.bucket || 'generic').trim().toLowerCase() || 'generic';
+    const tsHtml = safeEscapeHtml(`[${summary.ts}]`);
+    const labelHtml = safeEscapeHtml(summary.label || 'Событие');
+    const messageHtml = safeEscapeHtml(summary.message || '');
+    const rawSourceHtml = summary.rawSourceText ? safeEscapeHtml(summary.rawSourceText) : '';
+
+    return [
+      '<span class="restart-log-entry">',
+      `<span class="log-ts restart-log-ts">${tsHtml}</span>`,
+      `<span class="restart-log-pill restart-log-pill-${bucket}">${labelHtml}</span>`,
+      `<span class="restart-log-message">${messageHtml}</span>`,
+      rawSourceHtml ? `<span class="restart-log-meta">${rawSourceHtml}</span>` : '',
+      '</span>',
+    ].join('');
+  }
 
   function normalizeLineForTerminal(line) {
     const s = String(line || '');
     if (!s) return s;
 
-    // Keep ANSI / already-terminal lines intact.
+    const summary = parseStructuredRestartLine(s);
+    if (summary) return summary.copyText;
+
     if (s.indexOf('\x1b') !== -1) return s;
     if (/^(?:INFO|WARN|WARNING|ERROR|ERRO|FATA|DEBUG)\[/.test(s)) return s;
 
-    const m = s.match(XRAY_TS_LINE_RE);
-    if (!m) return s;
+    const match = s.match(XRAY_TS_LINE_RE);
+    if (!match) return s;
 
-    const y = m[1];
-    const mo = m[2];
-    const d = m[3];
-    const t = m[4];
-    const iso = `${y}-${mo}-${d}T${t}`;
+    const iso = `${match[1]}-${match[2]}-${match[3]}T${match[4]}`;
+    const levelRaw = String(match[5] || '').trim().toLowerCase();
+    let level = 'INFO';
+    if (levelRaw.startsWith('warn')) level = 'WARN';
+    else if (levelRaw.startsWith('error')) level = 'ERROR';
+    else if (levelRaw.startsWith('fatal')) level = 'FATA';
+    else if (levelRaw.startsWith('debug')) level = 'DEBUG';
 
-    let lvl = 'INFO';
-    const low = String(m[5] || '').trim().toLowerCase();
-    if (low.startsWith('warn')) lvl = 'WARN';
-    else if (low.startsWith('error')) lvl = 'ERROR';
-    else if (low.startsWith('fatal')) lvl = 'FATA';
-    else if (low.startsWith('debug')) lvl = 'DEBUG';
-    else if (low.startsWith('info')) lvl = 'INFO';
-
-    const msg = String(m[6] || '').replace(/^\s+/, '');
-    return msg ? `${lvl}[${iso}] ${msg}` : `${lvl}[${iso}]`;
+    const message = String(match[6] || '').replace(/^\s+/, '');
+    return message ? `${level}[${iso}] ${message}` : `${level}[${iso}]`;
   }
 
   function normalizeTextForTerminal(text) {
@@ -61,22 +253,22 @@ let restartLogModuleApi = null;
     const hasTrailingNl = raw.endsWith('\n');
     const lines = raw.split(/\r?\n/);
     if (hasTrailingNl && lines.length && lines[lines.length - 1] === '') lines.pop();
-    const norm = lines.map(normalizeLineForTerminal).join('\n');
-    return hasTrailingNl ? (norm + '\n') : norm;
+    const normalized = lines.map(normalizeLineForTerminal).join('\n');
+    return hasTrailingNl ? `${normalized}\n` : normalized;
   }
 
   function getLogEls() {
     const els = [];
     try {
-      const q = document.querySelectorAll('[data-xk-restart-log="1"]');
-      q.forEach((el) => { if (el) els.push(el); });
-    } catch (e) {}
+      document.querySelectorAll('[data-xk-restart-log="1"]').forEach((el) => {
+        if (el) els.push(el);
+      });
+    } catch (error) {}
 
-    // Back-compat: old markup
     try {
       const legacy = document.getElementById('restart-log');
       if (legacy && els.indexOf(legacy) === -1) els.push(legacy);
-    } catch (e) {}
+    } catch (error) {}
 
     return els;
   }
@@ -91,7 +283,7 @@ let restartLogModuleApi = null;
       const rect = typeof el.getBoundingClientRect === 'function' ? el.getBoundingClientRect() : null;
       if (!rect) return !!el.offsetParent;
       return rect.width > 0 && rect.height > 0;
-    } catch (e) {}
+    } catch (error) {}
     return false;
   }
 
@@ -103,7 +295,7 @@ let restartLogModuleApi = null;
     if (!el) return null;
     try {
       return el.closest('.log-card') || el.closest('.card') || el;
-    } catch (e) {}
+    } catch (error) {}
     return el;
   }
 
@@ -112,23 +304,23 @@ let restartLogModuleApi = null;
     try {
       if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
       el.focus({ preventScroll: true });
-    } catch (e) {}
+    } catch (error) {}
   }
 
   async function waitForCommandJob(jobId, options) {
-    const opts = (options && typeof options === 'object') ? options : {};
-    const onChunk = (typeof opts.onChunk === 'function') ? opts.onChunk : null;
-    const maxWaitMs = (typeof opts.maxWaitMs === 'number' && opts.maxWaitMs > 0)
+    const opts = options && typeof options === 'object' ? options : {};
+    const onChunk = typeof opts.onChunk === 'function' ? opts.onChunk : null;
+    const maxWaitMs = typeof opts.maxWaitMs === 'number' && opts.maxWaitMs > 0
       ? opts.maxWaitMs
       : (5 * 60 * 1000);
 
-    const CJ = getXkeenCommandJobApi();
-    if (CJ && typeof CJ.waitForCommandJob === 'function') {
-      return CJ.waitForCommandJob(String(jobId), {
+    const jobsApi = getXkeenCommandJobApi();
+    if (jobsApi && typeof jobsApi.waitForCommandJob === 'function') {
+      return jobsApi.waitForCommandJob(String(jobId), {
         maxWaitMs,
         onChunk: (chunk, meta) => {
           if (!chunk || !onChunk) return;
-          try { onChunk(chunk, meta || null); } catch (e) {}
+          try { onChunk(chunk, meta || null); } catch (error) {}
         },
       });
     }
@@ -137,12 +329,12 @@ let restartLogModuleApi = null;
     while (true) {
       const res = await fetch(`/api/run-command/${encodeURIComponent(String(jobId))}`);
       const data = await res.json().catch(() => ({}));
-      const out = (data && typeof data.output === 'string') ? data.output : '';
-      if (out.length > lastLen) {
-        const chunk = out.slice(lastLen);
-        lastLen = out.length;
+      const output = data && typeof data.output === 'string' ? data.output : '';
+      if (output.length > lastLen) {
+        const chunk = output.slice(lastLen);
+        lastLen = output.length;
         if (chunk && onChunk) {
-          try { onChunk(chunk, { via: 'http', jobId: String(jobId) }); } catch (e) {}
+          try { onChunk(chunk, { via: 'http', jobId: String(jobId) }); } catch (error) {}
         }
       }
       if (!res.ok || data.ok === false || data.status === 'finished' || data.status === 'error') {
@@ -154,13 +346,16 @@ let restartLogModuleApi = null;
 
   function renderInto(el, rawText) {
     if (!el) return;
-    const text = rawText || '';
-    const lines = String(text).split(/\r?\n/);
-    // Avoid an extra empty block caused by trailing newline in the raw text.
-    if (lines.length && lines[lines.length - 1] === '') lines.pop();
-    const html = lines
-      .map((line) => {
-        const normalized = normalizeLineForTerminal(line || '');
+    const entries = parseRenderedEntries(rawText || '');
+    const html = entries
+      .map((entry) => {
+        const summary = entry && entry.summary ? entry.summary : null;
+        if (summary) {
+          const cls = `log-line restart-log-line log-line-${summary.kind} restart-log-line-${summary.bucket}`;
+          return `<span class="${cls}">${buildStructuredLineHtml(summary)}</span>`;
+        }
+
+        const normalized = normalizeLineForTerminal(entry && entry.raw ? entry.raw : '');
         let cls = 'log-line';
         if (typeof getXrayLogLineClass === 'function') {
           cls = getXrayLogLineClass(normalized);
@@ -181,14 +376,12 @@ let restartLogModuleApi = null;
             cls = 'log-line log-line-debug';
           }
         }
-        const inner = ansiToHtml(normalized);
-        return '<span class="' + cls + '">' + inner + '</span>';
+        return `<span class="${cls}">${ansiToHtml(normalized)}</span>`;
       })
-      // Each line is rendered as a block-level <span>. Adding <br> creates empty rows in <pre>.
       .join('');
 
     el.innerHTML = html;
-    try { el.scrollTop = el.scrollHeight; } catch (e) {}
+    try { el.scrollTop = el.scrollHeight; } catch (error) {}
   }
 
   function renderAll() {
@@ -196,41 +389,49 @@ let restartLogModuleApi = null;
     if (!els.length) return;
     const raw = RL._rawText || '';
     els.forEach((el) => {
-      try { el.dataset.rawText = raw; } catch (e) {}
+      try { el.dataset.rawText = raw; } catch (error) {}
       renderInto(el, raw);
     });
   }
 
-  RL.renderFromRaw = function renderFromRaw(rawText) {
+  function ensurePolling() {
+    if (RL._pollTimer) return;
+    RL._pollTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (!getLogEls().length) return;
+      try { RL.load({ toastNewSubscription: true, silent: true }); } catch (error) {}
+    }, RESTART_LOG_POLL_MS);
+  }
+
+  RL.renderFromRaw = function renderFromRaw(rawText, options) {
     RL._rawText = String(rawText || '');
+    syncKnownEntries(parseRenderedEntries(RL._rawText), options);
     renderAll();
   };
 
-  RL.setRaw = function setRaw(rawText) {
-    RL._rawText = String(rawText || '');
-    renderAll();
+  RL.setRaw = function setRaw(rawText, options) {
+    RL.renderFromRaw(rawText, options);
   };
 
-  RL.load = async function load() {
+  RL.load = async function load(options) {
+    const opts = options && typeof options === 'object' ? options : {};
     const els = getLogEls();
     if (!els.length) return false;
 
     try {
-      const res = await fetch('/api/restart-log');
+      const res = await fetch('/api/restart-log', { cache: 'no-store' });
       if (!res.ok) {
-        const msg = 'Не удалось загрузить журнал.';
-        RL.setRaw(msg);
+        RL.setRaw('Не удалось загрузить журнал.', { toastNewSubscription: false });
         return false;
       }
       const data = await res.json().catch(() => ({}));
       const lines = Array.isArray(data.lines) ? data.lines : [];
       const text = lines.length ? lines.join('') : 'Журнал пуст.';
-      RL.setRaw(text);
+      RL.setRaw(text, { toastNewSubscription: opts.toastNewSubscription !== false });
       return true;
-    } catch (e) {
-      console.error(e);
-      const msg = 'Ошибка загрузки журнала.';
-      RL.setRaw(msg);
+    } catch (error) {
+      if (opts.silent !== true) console.error(error);
+      RL.setRaw('Ошибка загрузки журнала.', { toastNewSubscription: false });
       return false;
     }
   };
@@ -245,16 +446,18 @@ let restartLogModuleApi = null;
   };
 
   RL.clear = function clear() {
-    RL.setRaw('');
+    RL._knownEntryKeys = new Set();
+    RL._hasBaseline = true;
+    RL.setRaw('', { toastNewSubscription: false });
     try {
       fetch('/api/restart-log/clear', { method: 'POST' });
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
     }
   };
 
   RL.reveal = function reveal(options) {
-    const opts = (options && typeof options === 'object') ? options : {};
+    const opts = options && typeof options === 'object' ? options : {};
     const target = getVisibleLogEls()[0] || getLogEls()[0] || null;
     if (!target) return false;
 
@@ -267,24 +470,24 @@ let restartLogModuleApi = null;
           inline: 'nearest',
         });
       }
-    } catch (e) {}
+    } catch (error) {}
 
     if (opts.focus !== false) {
       try {
         setTimeout(() => { focusLogEl(target); }, 0);
-      } catch (e2) {}
+      } catch (error) {}
     }
 
     return true;
   };
 
   RL.prepareLiveStream = function prepareLiveStream(options) {
-    const opts = (options && typeof options === 'object') ? options : {};
+    const opts = options && typeof options === 'object' ? options : {};
 
     if (opts.clear !== false) {
       RL.clear();
     } else if (opts.resetRaw === true) {
-      RL.setRaw('');
+      RL.setRaw('', { toastNewSubscription: false });
     }
 
     if (opts.intro) {
@@ -304,14 +507,14 @@ let restartLogModuleApi = null;
   };
 
   RL.streamJob = async function streamJob(jobId, options) {
-    const opts = (options && typeof options === 'object') ? options : {};
+    const opts = options && typeof options === 'object' ? options : {};
 
     RL.prepareLiveStream({
       clear: opts.clear !== false,
       resetRaw: !!opts.resetRaw,
       reveal: opts.reveal !== false,
       revealOptions: opts.revealOptions || {},
-      intro: (typeof opts.intro === 'string') ? opts.intro : '',
+      intro: typeof opts.intro === 'string' ? opts.intro : '',
     });
 
     return waitForCommandJob(jobId, {
@@ -320,10 +523,12 @@ let restartLogModuleApi = null;
         if (!chunk) return;
         RL.append(String(chunk));
         if (opts.revealOnChunk === true) {
-          try { RL.reveal(Object.assign({ focus: false, behavior: 'auto' }, opts.revealOptions || {})); } catch (e) {}
+          try {
+            RL.reveal(Object.assign({ focus: false, behavior: 'auto' }, opts.revealOptions || {}));
+          } catch (error) {}
         }
         if (typeof opts.onChunk === 'function') {
-          try { opts.onChunk(chunk, meta || null); } catch (e2) {}
+          try { opts.onChunk(chunk, meta || null); } catch (error) {}
         }
       },
     });
@@ -340,11 +545,11 @@ let restartLogModuleApi = null;
     try {
       document.execCommand('copy');
       toastXkeen('Журнал скопирован в буфер обмена', false);
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       toastXkeen('Не удалось скопировать журнал', true);
     }
-    try { ta.remove(); } catch (e) {}
+    try { ta.remove(); } catch (error) {}
   }
 
   RL.copy = function copy() {
@@ -367,39 +572,38 @@ let restartLogModuleApi = null;
       if (el.dataset && el.dataset.xkeenBound === '1') return;
       el.addEventListener('click', handler);
       if (el.dataset) el.dataset.xkeenBound = '1';
-    } catch (e) {}
+    } catch (error) {}
   }
 
   RL.init = function init() {
-    // Data-attr buttons (preferred)
     try {
-      const btns = document.querySelectorAll('[data-xk-restart-log-action]');
-      btns.forEach((btn) => {
-        const act = btn.getAttribute('data-xk-restart-log-action');
-        if (!act) return;
-        if (act === 'clear') {
-          bindOnce(btn, (e) => { e.preventDefault(); RL.clear(); });
-        } else if (act === 'copy') {
-          bindOnce(btn, (e) => { e.preventDefault(); RL.copy(); });
+      const buttons = document.querySelectorAll('[data-xk-restart-log-action]');
+      buttons.forEach((btn) => {
+        const action = btn.getAttribute('data-xk-restart-log-action');
+        if (!action) return;
+        if (action === 'clear') {
+          bindOnce(btn, (event) => { event.preventDefault(); RL.clear(); });
+        } else if (action === 'copy') {
+          bindOnce(btn, (event) => { event.preventDefault(); RL.copy(); });
         }
       });
-    } catch (e) {}
+    } catch (error) {}
 
-    // Back-compat: old ids
     try {
       const clearBtn = document.getElementById('restart-log-clear-btn');
       const copyBtn = document.getElementById('restart-log-copy-btn');
-      bindOnce(clearBtn, (e) => { e.preventDefault(); RL.clear(); });
-      bindOnce(copyBtn, (e) => { e.preventDefault(); RL.copy(); });
-    } catch (e) {}
+      bindOnce(clearBtn, (event) => { event.preventDefault(); RL.clear(); });
+      bindOnce(copyBtn, (event) => { event.preventDefault(); RL.copy(); });
+    } catch (error) {}
 
-    // Auto-load when any restart log block exists.
     try {
-      if (getLogEls().length) RL.load();
-    } catch (e) {}
-  };
+      if (getLogEls().length) RL.load({ toastNewSubscription: false });
+    } catch (error) {}
 
+    ensurePolling();
+  };
 })();
+
 export function getRestartLogApi() {
   try {
     return restartLogModuleApi && typeof restartLogModuleApi.load === 'function' ? restartLogModuleApi : null;

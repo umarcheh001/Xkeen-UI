@@ -5133,6 +5133,7 @@ html[data-theme="light"] .xray-log-select option{
 /* Logs: keep line text neutral; mark level via a subtle left accent */
 .log-block .log-line-info,
 .log-block .log-line-warning,
+.log-block .log-line-success,
 .log-block .log-line-error,
 .log-block .log-line-debug {
   color: var(--fm-btn-text, var(--header-btn-text, inherit));
@@ -5150,6 +5151,13 @@ html[data-theme="light"] .xray-log-select option{
 .log-block .log-line-warning {
   box-shadow: inset 2px 0 0 var(--sem-warning, #fbbf24);
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sem-warning, #fbbf24) 65%, transparent);
+}
+
+.dt-log-view .log-line-success,
+#dt-log-context-body .log-line-success,
+.log-block .log-line-success {
+  box-shadow: inset 2px 0 0 var(--sem-success, #4ade80);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--sem-success, #4ade80) 65%, transparent);
 }
 
 .dt-log-view .log-line-error,
@@ -5179,6 +5187,10 @@ html[data-theme="light"] .xray-log-select option{
   color: color-mix(in srgb, var(--sem-warning, #fbbf24) 82%, white 18%);
 }
 
+.log-card .log-line-success {
+  color: color-mix(in srgb, var(--sem-success, #4ade80) 82%, white 18%);
+}
+
 .log-card .log-line-error {
   color: color-mix(in srgb, var(--sem-error, #f87171) 82%, white 18%);
 }
@@ -5186,6 +5198,90 @@ html[data-theme="light"] .xray-log-select option{
 .log-card .log-line-debug {
   color: color-mix(in srgb, var(--sem-debug, #a1a1aa) 82%, white 18%);
   opacity: 0.9;
+}
+
+.log-card .restart-log-line {
+  padding: 4px 0 4px 8px;
+}
+
+.log-card .restart-log-entry {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.log-card .restart-log-ts {
+  margin-right: 0;
+}
+
+.log-card .restart-log-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.42);
+  font-size: 0.92em;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.log-card .restart-log-pill-subscription {
+  border-color: color-mix(in srgb, var(--sem-success, #4ade80) 38%, transparent);
+  background: color-mix(in srgb, var(--sem-success, #4ade80) 16%, rgba(15, 23, 42, 0.78));
+  color: color-mix(in srgb, var(--sem-success, #4ade80) 86%, white 14%);
+}
+
+.log-card .restart-log-pill-service {
+  border-color: color-mix(in srgb, var(--sem-info, #93c5fd) 38%, transparent);
+  background: color-mix(in srgb, var(--sem-info, #93c5fd) 14%, rgba(15, 23, 42, 0.78));
+  color: color-mix(in srgb, var(--sem-info, #93c5fd) 84%, white 16%);
+}
+
+.log-card .restart-log-pill-mihomo {
+  border-color: color-mix(in srgb, var(--sem-warning, #fbbf24) 38%, transparent);
+  background: color-mix(in srgb, var(--sem-warning, #fbbf24) 14%, rgba(15, 23, 42, 0.78));
+  color: color-mix(in srgb, var(--sem-warning, #fbbf24) 84%, white 16%);
+}
+
+.log-card .restart-log-pill-generic {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.5);
+  color: color-mix(in srgb, var(--text, #e5e7eb) 90%, white 10%);
+}
+
+.log-card .restart-log-message {
+  font-weight: 600;
+}
+
+.log-card .restart-log-meta {
+  opacity: 0.74;
+  font-size: 0.92em;
+}
+
+html[data-theme="light"] .log-card .restart-log-pill {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+html[data-theme="light"] .log-card .restart-log-pill-subscription {
+  border-color: color-mix(in srgb, var(--sem-success, #16a34a) 28%, rgba(15, 23, 42, 0.08));
+  background: color-mix(in srgb, var(--sem-success, #16a34a) 10%, white 90%);
+  color: color-mix(in srgb, var(--sem-success, #16a34a) 86%, #14532d 14%);
+}
+
+html[data-theme="light"] .log-card .restart-log-pill-service {
+  border-color: color-mix(in srgb, var(--sem-info, #2563eb) 24%, rgba(15, 23, 42, 0.08));
+  background: color-mix(in srgb, var(--sem-info, #2563eb) 10%, white 90%);
+  color: color-mix(in srgb, var(--sem-info, #2563eb) 82%, #1e3a8a 18%);
+}
+
+html[data-theme="light"] .log-card .restart-log-pill-mihomo {
+  border-color: color-mix(in srgb, var(--sem-warning, #d97706) 24%, rgba(15, 23, 42, 0.08));
+  background: color-mix(in srgb, var(--sem-warning, #d97706) 10%, white 90%);
+  color: color-mix(in srgb, var(--sem-warning, #d97706) 82%, #78350f 18%);
 }
 
 

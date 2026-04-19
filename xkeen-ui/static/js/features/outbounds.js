@@ -3471,10 +3471,17 @@ let outboundsModuleApi = null;
           const err = String((data && (data.error || data.message)) || ('HTTP ' + res.status));
           throw new Error(err);
         }
+        const changed = !!(data.changed || data.observatory_changed);
+        data.changed = changed;
         const msg = `Готово: ${Number(data.count || 0)} outbound` + (data.changed ? ' · файл обновлён' : ' · без изменений');
         const fileNote = data.output_file ? (' · ' + String(data.output_file)) : '';
         subsSetStatus(msg + fileNote, false, true);
-        try { toastXkeen(msg, 'success'); } catch (e) {}
+        if (!changed) {
+          try { toastXkeen('Подписка проверена: изменений нет.', 'info'); } catch (e4) {}
+        } else if (!data.restarted) {
+          const restartNote = restart ? ' Перезапуск xkeen не выполнялся.' : ' Авто-перезапуск xkeen выключен.';
+          try { toastXkeen('Подписка Xray обновлена.' + restartNote, 'success'); } catch (e5) {}
+        }
         try { await refreshFragmentsList({ notify: false }); } catch (e2) {}
         try { await refreshRestartLog(); } catch (e3) {}
         await subsLoad();
@@ -3504,6 +3511,19 @@ let outboundsModuleApi = null;
         const msg = `Due обновлены: ${Number(data.ok_count || 0)} / ${Number(data.updated || 0)}`;
         subsSetStatus(msg, false, true);
         try { await refreshFragmentsList({ notify: false }); } catch (e) {}
+        try { await refreshRestartLog(); } catch (e2) {}
+        const results = Array.isArray(data.results) ? data.results : [];
+        const changedCount = results.filter((item) => !!(item && (item.changed || item.observatory_changed))).length;
+        const restartedCount = results.filter((item) => !!(item && item.restarted)).length;
+        if (!changedCount) {
+          const idleMsg = Number(data.updated || 0) > 0
+            ? 'Due-подписки проверены: изменений нет.'
+            : 'Due-подписки: обновлять пока нечего.';
+          try { toastXkeen(idleMsg, 'info'); } catch (e3) {}
+        } else if (!restartedCount) {
+          const restartNote = restart ? ' Перезапуск xkeen не выполнялся.' : ' Авто-перезапуск xkeen выключен.';
+          try { toastXkeen(`Подписки Xray обновлены: ${changedCount}.` + restartNote, 'success'); } catch (e4) {}
+        }
         await subsLoad();
       } catch (e) {
         subsSetStatus('Ошибка: ' + String(e && e.message ? e.message : e), true);
