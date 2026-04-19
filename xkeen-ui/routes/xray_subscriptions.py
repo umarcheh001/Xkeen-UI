@@ -10,6 +10,7 @@ from routes.common.errors import error_response, exception_response
 from services.xray_subscriptions import (
     delete_subscription,
     list_subscriptions,
+    probe_subscription_node_latency,
     refresh_due_subscriptions,
     refresh_subscription,
     upsert_subscription,
@@ -118,6 +119,48 @@ def create_xray_subscriptions_blueprint(
                 hint="Подробности смотрите в server logs.",
                 exc=exc,
                 log_tag="xray_subscriptions.refresh_failed",
+            )
+        status = 200 if result.get("ok") else 400
+        return jsonify(result), status
+
+    @bp.post("/api/xray/subscriptions/<string:sub_id>/nodes/ping")
+    def api_probe_xray_subscription_node(sub_id: str):
+        payload = request.get_json(silent=True) or {}
+        node_key = str(
+            payload.get("node_key")
+            or payload.get("nodeKey")
+            or payload.get("key")
+            or ""
+        ).strip()
+        timeout_raw = payload.get("timeout_s", payload.get("timeoutSec", payload.get("timeout")))
+        try:
+            timeout_s = float(timeout_raw) if timeout_raw is not None and str(timeout_raw).strip() != "" else 8.0
+        except Exception:
+            timeout_s = 8.0
+        try:
+            result = probe_subscription_node_latency(
+                ui_state_dir,
+                sub_id,
+                node_key,
+                xray_configs_dir=xray_configs_dir,
+                timeout_s=timeout_s,
+            )
+        except KeyError as exc:
+            msg = str(exc)
+            if "subscription" in msg:
+                return error_response("subscription not found", 404, ok=False)
+            return error_response("node not found", 404, ok=False)
+        except ValueError as exc:
+            return error_response(str(exc), 400, ok=False)
+        except Exception as exc:
+            return exception_response(
+                "Не удалось проверить задержку узла подписки.",
+                500,
+                ok=False,
+                code="subscription_node_ping_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=exc,
+                log_tag="xray_subscriptions.node_ping_failed",
             )
         status = 200 if result.get("ok") else 400
         return jsonify(result), status

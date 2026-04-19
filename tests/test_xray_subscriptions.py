@@ -502,6 +502,8 @@ def test_refresh_subscription_persists_last_nodes_with_transport_metadata(tmp_pa
     assert result["filtered_out_count"] == 1
     assert result["tags"] == ["jsont--GRPC_Sweden"]
     assert [item["transport"] for item in result["last_nodes"]] == ["ws", "grpc"]
+    assert result["last_nodes"][0].get("tag") in ("", None)
+    assert result["last_nodes"][1]["tag"] == "jsont--GRPC_Sweden"
     assert result["last_nodes"][0]["detail"] == "path=/ws · host=cdn.example.com"
     assert result["last_nodes"][1]["detail"] == "service=grpc-svc"
 
@@ -510,3 +512,95 @@ def test_refresh_subscription_persists_last_nodes_with_transport_metadata(tmp_pa
     assert saved["transport_filter"] == "grpc"
     assert saved["last_filtered_out_count"] == 1
     assert [item["transport"] for item in saved["last_nodes"]] == ["ws", "grpc"]
+    assert saved["last_nodes"][1]["tag"] == "jsont--GRPC_Sweden"
+
+
+def test_probe_subscription_node_latency_updates_state(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("Ping Node", "ws", host="ping.example.com"), {}),
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "probe-demo",
+            "tag": "probed",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": False,
+        },
+    )
+
+    refresh = subs.refresh_subscription(
+        str(ui_state_dir),
+        "probe-demo",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    node = refresh["last_nodes"][0]
+    assert node["tag"] == refresh["tags"][0]
+
+    class _FakeProc:
+        def poll(self):
+            return None
+
+    class _FakeResponse:
+        def read(self, _size=None):
+            return b""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakeOpener:
+        def open(self, req, timeout=None):
+            assert req.full_url == "https://probe.example.com/generate_204"
+            assert float(timeout or 0) == pytest.approx(8.0)
+            return _FakeResponse()
+
+    perf_values = iter([10.0, 10.123])
+    monkeypatch.setattr(subs, "_find_xray_binary", lambda: "/opt/sbin/xray")
+    monkeypatch.setattr(subs, "_wait_for_local_port", lambda _port, _proc, _timeout: True)
+    monkeypatch.setattr(subs, "_terminate_process", lambda _proc, timeout_s=1.5: ("", ""))
+    monkeypatch.setattr(subs, "_probe_url_for_subscription", lambda _dir: "https://probe.example.com/generate_204")
+    monkeypatch.setattr(subs.subprocess, "Popen", lambda *args, **kwargs: _FakeProc())
+    monkeypatch.setattr(subs.urllib.request, "build_opener", lambda *handlers: _FakeOpener())
+    monkeypatch.setattr(subs.time, "perf_counter", lambda: next(perf_values))
+
+    result = subs.probe_subscription_node_latency(
+        str(ui_state_dir),
+        "probe-demo",
+        node["key"],
+        xray_configs_dir=str(xray_dir),
+        timeout_s=8,
+    )
+
+    assert result["ok"] is True
+    assert result["tag"] == node["tag"]
+    assert result["delay_ms"] == 123
+    assert result["entry"]["delay_ms"] == 123
+    assert result["entry"]["status"] == "ok"
+    assert result["entry"]["history"][0]["delay_ms"] == 123
+
+    state = subs.load_subscription_state(str(ui_state_dir))
+    saved = state["subscriptions"][0]
+    assert saved["node_latency"][node["key"]]["delay_ms"] == 123
+    assert saved["node_latency"][node["key"]]["history"][0]["status"] == "ok"

@@ -3153,6 +3153,7 @@ let outboundsModuleApi = null;
 
     let _subscriptions = [];
     let _subscriptionEditId = '';
+    let _subscriptionNodePingState = Object.create(null);
 
     function subsDecorateActionButtons(modal) {
       const root = modal || $(SUB_IDS.modal);
@@ -3423,6 +3424,98 @@ let outboundsModuleApi = null;
       } catch (e) {
         return String(Math.round(n));
       }
+    }
+
+    function subsFormatClockTime(ts) {
+      const n = Number(ts || 0);
+      if (!Number.isFinite(n) || n <= 0) return '—';
+      try {
+        return new Date(n * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      } catch (e) {
+        return subsFormatTime(ts);
+      }
+    }
+
+    function subsNodePingStateKey(subId, nodeKey) {
+      return String(subId || '') + '::' + String(nodeKey || '');
+    }
+
+    function subsNodeLatencyMap(sub) {
+      const raw = sub && typeof sub === 'object' ? sub.node_latency : null;
+      return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    }
+
+    function subsNodeLatencyEntry(sub, nodeKey) {
+      const key = String(nodeKey || '').trim();
+      if (!key) return null;
+      const map = subsNodeLatencyMap(sub);
+      const entry = map[key];
+      return entry && typeof entry === 'object' ? entry : null;
+    }
+
+    function subsNodeLatencyTone(entry, pending, canPing) {
+      if (pending) return 'is-pending';
+      if (!canPing) return 'is-unavailable';
+      const delay = Number(entry && entry.delay_ms);
+      const status = String(entry && entry.status || '').trim().toLowerCase();
+      if (status === 'error') return 'is-error';
+      if (Number.isFinite(delay) && delay >= 0) {
+        if (delay <= 250) return 'is-fast';
+        if (delay <= 700) return 'is-mid';
+        return 'is-slow';
+      }
+      return 'is-idle';
+    }
+
+    function subsNodeLatencyLabel(entry, pending, canPing) {
+      if (pending) return '…';
+      if (!canPing) return 'n/a';
+      const delay = Number(entry && entry.delay_ms);
+      if (Number.isFinite(delay) && delay >= 0) return `${Math.round(delay)} ms`;
+      const status = String(entry && entry.status || '').trim().toLowerCase();
+      if (status === 'error') return 'fail';
+      return '—';
+    }
+
+    function subsNodeLatencyTooltip(entry, pending, canPing) {
+      if (pending) return 'Проверяю задержку узла через текущий generated fragment…';
+      if (!canPing) return 'Узел сейчас не входит в generated fragment, поэтому проверка задержки недоступна.';
+      const parts = [];
+      const delay = Number(entry && entry.delay_ms);
+      const checkedAt = Number(entry && entry.checked_at);
+      const status = String(entry && entry.status || '').trim().toLowerCase();
+      const error = String(entry && entry.error || '').trim();
+      const probeUrl = String(entry && entry.probe_url || '').trim();
+      if (Number.isFinite(delay) && delay >= 0) {
+        parts.push(`Последняя задержка: ${Math.round(delay)} ms`);
+      } else if (status === 'error' && error) {
+        parts.push(`Последняя проверка: ${error}`);
+      } else {
+        parts.push('Пока нет данных по задержке.');
+      }
+      if (Number.isFinite(checkedAt) && checkedAt > 0) {
+        parts.push(`Проверено: ${subsFormatTime(checkedAt)}`);
+      }
+      if (probeUrl) {
+        parts.push(`Probe URL: ${probeUrl}`);
+      }
+      const history = Array.isArray(entry && entry.history) ? entry.history : [];
+      if (history.length) {
+        const rows = history.slice(0, 5).map((item) => {
+          const rowDelay = Number(item && item.delay_ms);
+          const rowStatus = String(item && item.status || '').trim().toLowerCase();
+          const rowError = String(item && item.error || '').trim();
+          const rowChecked = subsFormatClockTime(item && item.checked_at);
+          const rowValue = Number.isFinite(rowDelay) && rowDelay >= 0
+            ? `${Math.round(rowDelay)} ms`
+            : (rowStatus === 'error' && rowError ? rowError : rowStatus || '—');
+          return `${rowChecked} · ${rowValue}`;
+        });
+        parts.push(`История:\n${rows.join('\n')}`);
+      } else {
+        parts.push('Нажми кнопку рядом, чтобы выполнить проверку.');
+      }
+      return parts.join('\n');
     }
 
     function subsShortUrl(url) {
@@ -3743,7 +3836,7 @@ let outboundsModuleApi = null;
       const sub = _subscriptions.find((item) => String(item && item.id || '') === subId) || null;
       if (!sub) {
         listEl.innerHTML = '';
-        empty.textContent = 'Нажми ✎ у нужной подписки, чтобы посмотреть список её узлов.';
+        empty.textContent = 'Нажми на нужную подписку в списке справа, чтобы посмотреть её узлы.';
         empty.style.display = 'block';
         summary.textContent = '0';
         caption.textContent = 'Выбери подписку в списке справа.';
@@ -3778,6 +3871,14 @@ let outboundsModuleApi = null;
         const endpoint = [host, port].filter(Boolean).join(':');
         const reasonLabel = escapeHtml(subsNodeReasonLabel(reasons));
         const manualExcluded = !!(node && node.key && excluded.has(String(node.key)));
+        const nodeTag = String(node && node.tag ? node.tag : '').trim();
+        const canPing = !!nodeTag;
+        const pingStateKey = subsNodePingStateKey(subId, String(node && node.key ? node.key : ''));
+        const pingBusy = !!_subscriptionNodePingState[pingStateKey];
+        const latencyEntry = subsNodeLatencyEntry(sub, String(node && node.key ? node.key : ''));
+        const latencyLabel = escapeHtml(subsNodeLatencyLabel(latencyEntry, pingBusy, canPing));
+        const latencyTooltip = escapeHtml(subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing));
+        const latencyClass = subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
         const toggleTitle = manualExcluded ? 'Вернуть узел' : 'Исключить узел';
         const toggleTooltip = manualExcluded
           ? 'Вернуть этот узел в generated fragment. Изменение применится после сохранения подписки.'
@@ -3799,10 +3900,16 @@ let outboundsModuleApi = null;
               ${detail ? `<div class="xk-sub-node-detail">${detail}</div>` : ''}
             </div>
             <div class="xk-sub-node-side">
+              <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
               <div class="xk-sub-node-state ${enabled ? 'is-enabled' : 'is-disabled'}">${reasonLabel}</div>
-              <button type="button" class="${toggleClass}" data-node-key="${key}" data-node-action="${manualExcluded ? 'include' : 'exclude'}" title="${escapeHtml(toggleTitle)}" data-tooltip="${escapeHtml(toggleTooltip)}" aria-label="${escapeHtml(toggleTitle)}">
-                ${toggleIcon}
-              </button>
+              <div class="xk-sub-node-actions">
+                <button type="button" class="btn-secondary btn-compact xk-sub-node-ping ${pingBusy ? 'is-busy' : ''}" data-node-key="${key}" data-node-tag="${escapeHtml(nodeTag)}" title="Проверить задержку" data-tooltip="${escapeHtml(canPing ? 'Проверить задержку узла через текущий generated fragment.' : 'Этот узел сейчас не входит в generated fragment, поэтому проверка недоступна.')}" aria-label="Проверить задержку" ${canPing ? '' : 'disabled'}>
+                  <span class="xk-sub-icon-glyph" aria-hidden="true">⏱</span>
+                </button>
+                <button type="button" class="${toggleClass}" data-node-key="${key}" data-node-action="${manualExcluded ? 'include' : 'exclude'}" title="${escapeHtml(toggleTitle)}" data-tooltip="${escapeHtml(toggleTooltip)}" aria-label="${escapeHtml(toggleTitle)}">
+                  ${toggleIcon}
+                </button>
+              </div>
             </div>
           </div>
         `);
@@ -3832,6 +3939,61 @@ let outboundsModuleApi = null;
           subsSetStatus('Список узлов обновлён. Сохрани подписку, чтобы применить изменения к generated fragment.', false, true);
         });
       });
+      Array.from(listEl.querySelectorAll('.xk-sub-node-ping')).forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (btn.disabled) return;
+          const nodeKey = String(btn.getAttribute('data-node-key') || '').trim();
+          if (!nodeKey) return;
+          await subsProbeNode(subId, nodeKey);
+        });
+      });
+    }
+
+    async function subsProbeNode(subId, nodeKey) {
+      const sid = String(subId || '').trim();
+      const key = String(nodeKey || '').trim();
+      if (!sid || !key) return false;
+      const pendingKey = subsNodePingStateKey(sid, key);
+      if (_subscriptionNodePingState[pendingKey]) return false;
+      _subscriptionNodePingState[pendingKey] = true;
+      try { subsRenderNodeList(); } catch (e) {}
+      subsSetStatus('Проверяю задержку узла…', false);
+      try {
+        const res = await fetch(`/api/xray/subscriptions/${encodeURIComponent(sid)}/nodes/ping`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node_key: key }),
+        });
+        const data = await res.json().catch(() => ({}));
+        const sub = _subscriptions.find((item) => String(item && item.id || '') === sid);
+        if (sub && data && data.entry) {
+          const map = subsNodeLatencyMap(sub);
+          map[key] = data.entry;
+          sub.node_latency = map;
+        }
+        if (!res.ok || !data || data.ok === false) {
+          const msg = String((data && (data.error || data.message)) || 'Не удалось проверить задержку узла.');
+          subsSetStatus(msg, true);
+          try { toastXkeen(msg, 'error'); } catch (e2) {}
+          return false;
+        }
+        const delay = Number(data.delay_ms || (data.entry && data.entry.delay_ms));
+        const msg = Number.isFinite(delay) && delay >= 0
+          ? `Задержка узла: ${Math.round(delay)} ms.`
+          : 'Проверка узла завершена.';
+        subsSetStatus(msg, false, true);
+        return true;
+      } catch (e) {
+        const msg = 'Ошибка проверки задержки: ' + String(e && e.message ? e.message : e);
+        subsSetStatus(msg, true);
+        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        return false;
+      } finally {
+        delete _subscriptionNodePingState[pendingKey];
+        try { subsRenderNodeList(); } catch (e3) {}
+      }
     }
 
     async function subsOpenGeneratedFragment(file) {

@@ -8,11 +8,16 @@ keep Xray observatory subjects in sync for leastPing/probing.
 from __future__ import annotations
 
 import base64
+import contextlib
 import copy
 import hashlib
 import json
 import os
 import re
+import shutil
+import socket
+import subprocess
+import tempfile
 import threading
 import time
 import urllib.error
@@ -80,6 +85,12 @@ TYPE_FILTER_KEYS = ("type_filter", "typeFilter", "type_regex", "typeRegex")
 TRANSPORT_FILTER_KEYS = ("transport_filter", "transportFilter", "transport_regex", "transportRegex")
 EXCLUDED_NODE_KEYS_KEYS = ("excluded_node_keys", "excludedNodeKeys", "exclude_node_keys", "excludeNodeKeys")
 LAST_NODES_KEYS = ("last_nodes", "lastNodes")
+NODE_LATENCY_KEYS = ("node_latency", "nodeLatency")
+
+DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
+DEFAULT_PROBE_TIMEOUT_SECONDS = 8.0
+PROBE_PROCESS_START_TIMEOUT_SECONDS = 4.0
+NODE_LATENCY_HISTORY_LIMIT = 5
 
 
 SnapshotCallback = Callable[[str], None]
@@ -190,6 +201,7 @@ def _has_any_key(data: Any, keys: tuple[str, ...]) -> bool:
 def _normalize_last_nodes(value: Any) -> List[Dict[str, Any]]:
     allowed_fields = {
         "key",
+        "tag",
         "name",
         "protocol",
         "transport",
@@ -220,6 +232,85 @@ def _normalize_last_nodes(value: Any) -> List[Dict[str, Any]]:
         if clean.get("key") and clean.get("name"):
             out.append(clean)
     return out
+
+
+def _safe_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _safe_positive_int(value: Any) -> int | None:
+    try:
+        out = int(float(value))
+    except Exception:
+        return None
+    return out if out >= 0 else None
+
+
+def _normalize_latency_history(value: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for item in value if isinstance(value, list) else []:
+        if not isinstance(item, dict):
+            continue
+        checked_at = _safe_float(item.get("checked_at") if "checked_at" in item else item.get("checkedAt"))
+        status = str(item.get("status") or "").strip().lower() or "unknown"
+        delay_ms = _safe_positive_int(item.get("delay_ms") if "delay_ms" in item else item.get("delayMs"))
+        error = str(item.get("error") or "").strip()
+        clean: Dict[str, Any] = {"status": status}
+        if checked_at is not None:
+            clean["checked_at"] = checked_at
+        if delay_ms is not None:
+            clean["delay_ms"] = delay_ms
+        if error:
+            clean["error"] = error[:240]
+        out.append(clean)
+        if len(out) >= NODE_LATENCY_HISTORY_LIMIT:
+            break
+    return out
+
+
+def _normalize_node_latency_map(value: Any) -> Dict[str, Dict[str, Any]]:
+    out: Dict[str, Dict[str, Any]] = {}
+    if not isinstance(value, dict):
+        return out
+    for raw_key, item in value.items():
+        key = str(raw_key or "").strip()
+        if not key or not isinstance(item, dict):
+            continue
+        checked_at = _safe_float(item.get("checked_at") if "checked_at" in item else item.get("checkedAt"))
+        delay_ms = _safe_positive_int(item.get("delay_ms") if "delay_ms" in item else item.get("delayMs"))
+        status = str(item.get("status") or ("ok" if delay_ms is not None else "unknown")).strip().lower() or "unknown"
+        error = str(item.get("error") or "").strip()
+        probe_url = str(item.get("probe_url") if "probe_url" in item else item.get("probeUrl") or "").strip()
+        history = _normalize_latency_history(item.get("history"))
+        clean: Dict[str, Any] = {
+            "status": status,
+            "history": history,
+        }
+        if checked_at is not None:
+            clean["checked_at"] = checked_at
+        if delay_ms is not None:
+            clean["delay_ms"] = delay_ms
+        if error:
+            clean["error"] = error[:240]
+        if probe_url:
+            clean["probe_url"] = probe_url
+        out[key] = clean
+    return out
+
+
+def _prune_node_latency_map(value: Any, nodes: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    raw = _normalize_node_latency_map(value)
+    allowed = {
+        str(item.get("key") or "").strip()
+        for item in (nodes or [])
+        if isinstance(item, dict) and str(item.get("key") or "").strip()
+    }
+    if not allowed:
+        return {}
+    return {key: entry for key, entry in raw.items() if key in allowed}
 
 
 def _compile_regex_filter(value: Any, label: str) -> re.Pattern[str] | None:
@@ -299,6 +390,9 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
         last_nodes = _normalize_last_nodes(
             item.get("last_nodes") if "last_nodes" in item else item.get("lastNodes")
         )
+        node_latency = _normalize_node_latency_map(
+            item.get("node_latency") if "node_latency" in item else item.get("nodeLatency")
+        )
 
         clean = dict(item)
         for alias in (
@@ -307,6 +401,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
             + TRANSPORT_FILTER_KEYS[1:]
             + EXCLUDED_NODE_KEYS_KEYS[1:]
             + LAST_NODES_KEYS[1:]
+            + NODE_LATENCY_KEYS[1:]
         ):
             clean.pop(alias, None)
         clean.update(
@@ -324,6 +419,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 "interval_hours": interval,
                 "output_file": output_file,
                 "last_nodes": last_nodes,
+                "node_latency": _prune_node_latency_map(node_latency, last_nodes),
                 "last_tags": [str(x) for x in item.get("last_tags", []) if str(x or "").strip()]
                 if isinstance(item.get("last_tags"), list)
                 else [],
@@ -411,6 +507,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
             + TRANSPORT_FILTER_KEYS[1:]
             + EXCLUDED_NODE_KEYS_KEYS[1:]
             + LAST_NODES_KEYS[1:]
+            + NODE_LATENCY_KEYS[1:]
         ):
             sub.pop(alias, None)
         sub.update(
@@ -427,6 +524,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
                 "ping_enabled": bool(data.get("ping_enabled", data.get("pingEnabled", base.get("ping_enabled", True)))),
                 "interval_hours": interval,
                 "output_file": output_file,
+                "node_latency": _prune_node_latency_map(base.get("node_latency"), _normalize_last_nodes(base.get("last_nodes"))),
                 "updated_ts": now_ts,
             }
         )
@@ -1037,7 +1135,7 @@ def build_subscription_outbounds(
     excluded_keys = {str(item or "").strip() for item in (excluded_node_keys or []) if str(item or "").strip()}
     candidates = [(link, _link_node_meta(link, idx)) for idx, link in enumerate(links or [])]
     source_count = len(candidates)
-    filtered_links: List[Tuple[str, Dict[str, Any]]] = []
+    filtered_links: List[Tuple[str, Dict[str, Any], int]] = []
     preview_nodes: List[Dict[str, Any]] = []
     for link, meta in candidates:
         reasons = _subscription_filter_reasons(
@@ -1050,18 +1148,20 @@ def build_subscription_outbounds(
             transport_filter=transport_pattern,
             excluded_node_keys=excluded_keys,
         )
+        preview_idx = len(preview_nodes)
         preview_nodes.append(dict(meta))
         if reasons:
             continue
-        filtered_links.append((link, meta))
+        filtered_links.append((link, meta, preview_idx))
 
     outbounds: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     used: set[str] = set()
 
-    for idx, (link, meta) in enumerate(filtered_links):
+    for idx, (link, meta, preview_idx) in enumerate(filtered_links):
         node = _clean_node_name(str(meta.get("name") or ""), f"node{idx + 1}")
         tag = _unique_tag(f"{prefix}--{node}", used)
+        preview_nodes[preview_idx]["tag"] = tag
         try:
             outbound = build_proxy_outbound_from_link(link, tag)
             outbounds.append(outbound)
@@ -1098,7 +1198,7 @@ def build_subscription_json_outbounds(
         for idx, (source, name_hint) in enumerate(_iter_json_proxy_outbounds(obj))
     ]
     source_count = len(candidates)
-    filtered_candidates: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+    filtered_candidates: List[Tuple[Dict[str, Any], Dict[str, Any], int]] = []
     preview_nodes: List[Dict[str, Any]] = []
     for source, meta in candidates:
         reasons = _subscription_filter_reasons(
@@ -1111,20 +1211,22 @@ def build_subscription_json_outbounds(
             transport_filter=transport_pattern,
             excluded_node_keys=excluded_keys,
         )
+        preview_idx = len(preview_nodes)
         preview_nodes.append(dict(meta))
         if reasons:
             continue
-        filtered_candidates.append((source, meta))
+        filtered_candidates.append((source, meta, preview_idx))
 
     outbounds: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
     used: set[str] = set()
 
-    for idx, (source, meta) in enumerate(filtered_candidates):
+    for idx, (source, meta, preview_idx) in enumerate(filtered_candidates):
         protocol = str(source.get("protocol") or "node").strip() or "node"
         fallback = f"node{idx + 1}"
         node = _clean_node_name(str(meta.get("name") or protocol), fallback)
         tag = _unique_tag(f"{prefix}--{node}", used)
+        preview_nodes[preview_idx]["tag"] = tag
         try:
             outbound = copy.deepcopy(source)
             outbound["tag"] = tag
@@ -1265,6 +1367,7 @@ def refresh_subscription(
     source_count = 0
     filtered_out_count = 0
     preview_nodes: List[Dict[str, Any]] = []
+    node_latency: Dict[str, Dict[str, Any]] = _prune_node_latency_map(sub.get("node_latency"), _normalize_last_nodes(sub.get("last_nodes")))
 
     try:
         body, headers = fetch_subscription_body(str(sub.get("url") or ""))
@@ -1292,6 +1395,7 @@ def refresh_subscription(
         source_count = int(stats.get("source_count") or 0)
         filtered_out_count = int(stats.get("filtered_out_count") or 0)
         preview_nodes = _normalize_last_nodes(stats.get("nodes"))
+        node_latency = _prune_node_latency_map(node_latency, preview_nodes)
         if not links and not outbounds:
             raise RuntimeError("no_supported_proxies")
         if source_count > 0 and not outbounds and filtered_out_count >= source_count:
@@ -1358,6 +1462,7 @@ def refresh_subscription(
                 "last_source_count": source_count,
                 "last_filtered_out_count": filtered_out_count,
                 "last_nodes": preview_nodes,
+                "node_latency": node_latency,
                 "last_tags": tags,
                 "last_hash": _content_hash(output_obj),
                 "last_changed": bool(changed),
@@ -1388,6 +1493,7 @@ def refresh_subscription(
                 "source_count": source_count,
                 "filtered_out_count": filtered_out_count,
                 "last_nodes": preview_nodes,
+                "node_latency": node_latency,
                 "tags": tags,
                 "errors": errors,
                 "source_format": source_format,
@@ -1405,6 +1511,7 @@ def refresh_subscription(
                 "last_source_count": source_count,
                 "last_filtered_out_count": filtered_out_count,
                 "last_nodes": preview_nodes or _normalize_last_nodes(sub.get("last_nodes")),
+                "node_latency": _prune_node_latency_map(node_latency, preview_nodes or _normalize_last_nodes(sub.get("last_nodes"))),
                 "next_update_ts": now_ts + (interval * 3600) if bool(sub.get("enabled", True)) else None,
             }
         )
@@ -1415,6 +1522,7 @@ def refresh_subscription(
                 "source_count": source_count,
                 "filtered_out_count": filtered_out_count,
                 "last_nodes": preview_nodes,
+                "node_latency": node_latency,
                 "next_update_ts": sub.get("next_update_ts"),
             }
         )
@@ -1464,6 +1572,266 @@ def refresh_due_subscriptions(
         except Exception as exc:
             results.append({"id": sub.get("id"), "ok": False, "error": str(exc)})
     return results
+
+
+def _find_xray_binary() -> str | None:
+    for cand in ("/opt/sbin/xray", "/opt/bin/xray", "xray"):
+        try:
+            resolved = shutil.which(cand) if os.path.basename(cand) == cand else cand
+        except Exception:
+            resolved = cand if os.path.isfile(cand) else None
+        if resolved and os.path.isfile(resolved) and os.access(resolved, os.X_OK):
+            return resolved
+        if resolved and os.path.basename(cand) == cand:
+            return resolved
+    return None
+
+
+def _reserve_local_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen(1)
+        return int(sock.getsockname()[1])
+
+
+def _wait_for_local_port(port: int, proc: subprocess.Popen[Any], timeout_s: float) -> bool:
+    deadline = time.time() + max(0.5, float(timeout_s or 0))
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            return False
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.2)
+            if sock.connect_ex(("127.0.0.1", int(port))) == 0:
+                return True
+        time.sleep(0.08)
+    return False
+
+
+def _terminate_process(proc: subprocess.Popen[Any], timeout_s: float = 1.5) -> tuple[str, str]:
+    if proc.poll() is None:
+        with contextlib.suppress(Exception):
+            proc.terminate()
+        try:
+            stdout, stderr = proc.communicate(timeout=max(0.2, float(timeout_s or 0)))
+            return str(stdout or ""), str(stderr or "")
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(Exception):
+                proc.kill()
+    try:
+        stdout, stderr = proc.communicate(timeout=0.4)
+    except Exception:
+        stdout, stderr = "", ""
+    return str(stdout or ""), str(stderr or "")
+
+
+def _history_entry(*, status: str, checked_at: float, delay_ms: int | None = None, error: str = "") -> Dict[str, Any]:
+    item: Dict[str, Any] = {
+        "status": str(status or "unknown").strip().lower() or "unknown",
+        "checked_at": float(checked_at),
+    }
+    if delay_ms is not None:
+        item["delay_ms"] = int(delay_ms)
+    if error:
+        item["error"] = str(error)[:240]
+    return item
+
+
+def _merge_latency_entry(existing: Any, *, checked_at: float, probe_url: str, delay_ms: int | None = None, error: str = "") -> Dict[str, Any]:
+    base = _normalize_node_latency_map({"node": existing}).get("node", {})
+    status = "ok" if delay_ms is not None else "error"
+    latest = _history_entry(status=status, checked_at=checked_at, delay_ms=delay_ms, error=error)
+    history = [latest]
+    for item in base.get("history") if isinstance(base.get("history"), list) else []:
+        if len(history) >= NODE_LATENCY_HISTORY_LIMIT:
+            break
+        history.append(item)
+    out: Dict[str, Any] = {
+        "status": status,
+        "checked_at": float(checked_at),
+        "probe_url": str(probe_url or "").strip(),
+        "history": history[:NODE_LATENCY_HISTORY_LIMIT],
+    }
+    if delay_ms is not None:
+        out["delay_ms"] = int(delay_ms)
+    if error:
+        out["error"] = str(error)[:240]
+    return out
+
+
+def _load_generated_outbound(sub: Dict[str, Any], xray_configs_dir: str, tag: str) -> Dict[str, Any]:
+    output_path = _subscription_output_path(xray_configs_dir, sub)
+    obj = _read_json_file(output_path, {})
+    outbounds = obj.get("outbounds") if isinstance(obj, dict) else []
+    if not isinstance(outbounds, list):
+        raise RuntimeError("generated_fragment_invalid")
+    for outbound in outbounds:
+        if isinstance(outbound, dict) and str(outbound.get("tag") or "").strip() == str(tag or "").strip():
+            return copy.deepcopy(outbound)
+    raise KeyError("node tag not found")
+
+
+def _build_probe_config(outbound: Dict[str, Any], inbound_port: int) -> Dict[str, Any]:
+    outbound_tag = str(outbound.get("tag") or "probe-out").strip() or "probe-out"
+    return {
+        "log": {"loglevel": "warning"},
+        "inbounds": [
+            {
+                "tag": "probe-http",
+                "listen": "127.0.0.1",
+                "port": int(inbound_port),
+                "protocol": "http",
+                "settings": {},
+                "sniffing": {"enabled": False},
+            }
+        ],
+        "outbounds": [
+            outbound,
+            {"tag": "direct", "protocol": "freedom"},
+            {"tag": "block", "protocol": "blackhole"},
+        ],
+        "routing": {
+            "domainStrategy": "AsIs",
+            "rules": [
+                {"type": "field", "inboundTag": ["probe-http"], "outboundTag": outbound_tag},
+            ],
+        },
+    }
+
+
+def _probe_url_for_subscription(xray_configs_dir: str) -> str:
+    try:
+        cfg = _load_observatory(os.path.join(str(xray_configs_dir or ""), "07_observatory.json"))
+        obs = cfg.get("observatory") if isinstance(cfg.get("observatory"), dict) else {}
+        probe_url = str(obs.get("probeUrl") or "").strip()
+        if probe_url:
+            return probe_url
+    except Exception:
+        pass
+    return DEFAULT_PROBE_URL
+
+
+def probe_subscription_node_latency(
+    ui_state_dir: str,
+    sub_id: str,
+    node_key: str,
+    *,
+    xray_configs_dir: str,
+    timeout_s: float = DEFAULT_PROBE_TIMEOUT_SECONDS,
+) -> Dict[str, Any]:
+    target_key = str(node_key or "").strip()
+    if not target_key:
+        raise ValueError("node_key is required")
+
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        idx, sub = _find_subscription(state, sub_id)
+        if idx < 0 or sub is None:
+            raise KeyError("subscription not found")
+        sub = dict(sub)
+
+    nodes = _normalize_last_nodes(sub.get("last_nodes"))
+    node = next((item for item in nodes if str(item.get("key") or "").strip() == target_key), None)
+    if not node:
+        raise KeyError("node not found")
+    tag = str(node.get("tag") or "").strip()
+    if not tag:
+        raise ValueError("Узел сейчас не входит в generated fragment.")
+
+    outbound = _load_generated_outbound(sub, xray_configs_dir, tag)
+    xray_bin = _find_xray_binary()
+    if not xray_bin:
+        raise RuntimeError("xray binary not found")
+
+    timeout_value = max(2.0, float(timeout_s or DEFAULT_PROBE_TIMEOUT_SECONDS))
+    probe_url = _probe_url_for_subscription(xray_configs_dir)
+    checked_at = _now()
+    delay_ms: int | None = None
+    error_text = ""
+
+    with tempfile.TemporaryDirectory(prefix="xkeen-xray-probe-") as tmpdir:
+        proxy_port = _reserve_local_port()
+        config_path = os.path.join(tmpdir, "probe.json")
+        with open(config_path, "w", encoding="utf-8") as fh:
+            json.dump(_build_probe_config(outbound, proxy_port), fh, ensure_ascii=False, indent=2)
+            fh.write("\n")
+
+        cmd_options = (
+            [xray_bin, "run", "-c", config_path],
+            [xray_bin, "-c", config_path],
+        )
+        last_error = ""
+        for cmd in cmd_options:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                if not _wait_for_local_port(proxy_port, proc, PROBE_PROCESS_START_TIMEOUT_SECONDS):
+                    stdout, stderr = _terminate_process(proc)
+                    last_error = (stderr or stdout or "xray probe start failed").strip()
+                    continue
+
+                proxy_url = f"http://127.0.0.1:{proxy_port}"
+                opener = urllib.request.build_opener(
+                    urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+                )
+                started = time.perf_counter()
+                req = urllib.request.Request(
+                    probe_url,
+                    headers={"User-Agent": "XKeen-UI Latency Probe"},
+                    method="GET",
+                )
+                with opener.open(req, timeout=timeout_value) as resp:
+                    with contextlib.suppress(Exception):
+                        resp.read(1)
+                delay_ms = max(0, int(round((time.perf_counter() - started) * 1000.0)))
+                error_text = ""
+                last_error = ""
+                _terminate_process(proc)
+                break
+            except Exception as exc:
+                error_text = str(exc)
+                last_error = error_text
+                _terminate_process(proc)
+        if delay_ms is None and last_error:
+            error_text = last_error
+
+    entry = _merge_latency_entry(
+        sub.get("node_latency", {}).get(target_key) if isinstance(sub.get("node_latency"), dict) else None,
+        checked_at=checked_at,
+        probe_url=probe_url,
+        delay_ms=delay_ms,
+        error=error_text,
+    )
+
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        idx, current = _find_subscription(state, sub_id)
+        if idx < 0 or current is None or not isinstance(state.get("subscriptions"), list):
+            raise KeyError("subscription not found")
+        current = dict(current)
+        node_latency = _prune_node_latency_map(current.get("node_latency"), _normalize_last_nodes(current.get("last_nodes")))
+        node_latency[target_key] = entry
+        current["node_latency"] = node_latency
+        state["subscriptions"][idx] = current
+        _write_state(ui_state_dir, _normalize_state(state))
+
+    result: Dict[str, Any] = {
+        "ok": delay_ms is not None,
+        "id": str(sub.get("id") or sub_id),
+        "node_key": target_key,
+        "tag": tag,
+        "probe_url": probe_url,
+        "checked_at": checked_at,
+        "entry": entry,
+    }
+    if delay_ms is not None:
+        result["delay_ms"] = delay_ms
+    if error_text:
+        result["error"] = error_text
+    return result
 
 
 def _log(level: str, message: str, **extra: Any) -> None:

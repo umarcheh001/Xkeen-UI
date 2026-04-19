@@ -47,12 +47,17 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "function subsDecorateActionButtons(modal) {" in outbounds_src
     assert "function subsTransportFilterText(transport, protocol) {" in outbounds_src
     assert "function subsProtocolFilterText(protocol) {" in outbounds_src
+    assert "function subsNodeLatencyEntry(sub, nodeKey) {" in outbounds_src
+    assert "function subsProbeNode(subId, nodeKey) {" in outbounds_src
     assert "class=\"xk-sub-file-badge\">JSON</span>" in outbounds_src
     assert "xk-sub-list-action xk-sub-list-action-refresh xk-sub-refresh" in outbounds_src
     assert "xk-sub-list-action xk-sub-list-action-delete xk-sub-delete" in outbounds_src
     assert "Array.from(tbody.querySelectorAll('.xk-sub-file-link')).forEach((btn) => {" in outbounds_src
     assert "xk-sub-open" not in outbounds_src
     assert "xk-sub-edit" not in outbounds_src
+    assert "/nodes/ping" in outbounds_src
+    assert "xk-sub-node-ping" in outbounds_src
+    assert "xk-sub-node-latency" in outbounds_src
     assert "xk-sub-node-toggle" in outbounds_src
     assert "resetBtn.classList.add('xk-sub-icon-btn');" in outbounds_src
     assert "saveBtn.classList.add('xk-sub-icon-btn');" in outbounds_src
@@ -82,6 +87,9 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert ".xk-sub-file-badge {" in styles_src
     assert ".xk-sub-list-action {" in styles_src
     assert ".xk-sub-file-link {" in styles_src
+    assert ".xk-sub-node-latency {" in styles_src
+    assert ".xk-sub-node-ping.btn-compact" in styles_src
+    assert "@keyframes xk-sub-node-ping-pulse" in styles_src
     assert "display: inline-flex;" in styles_src
     assert ".xk-sub-node-main {" in styles_src
     assert "gap: 7px;" in styles_src
