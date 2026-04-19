@@ -4073,67 +4073,62 @@ let outboundsModuleApi = null;
       }
 
       _subscriptionPingAllBusy = true;
-      subsUpdatePingAllBtnState();
-      subsSetStatus(`Проверка задержки: 0/${targets.length}…`, false);
-
-      let done = 0;
-      let failed = 0;
-
-      async function probeOne(node) {
-        const key = String(node.key || '');
-        if (!key) { done += 1; return; }
-        const pendingKey = subsNodePingStateKey(subId, key);
-        if (_subscriptionNodePingState[pendingKey]) { done += 1; return; }
-        _subscriptionNodePingState[pendingKey] = true;
-        try { subsRenderNodeList(); } catch (e) {}
-        try {
-          const res = await fetch(`/api/xray/subscriptions/${encodeURIComponent(subId)}/nodes/ping`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ node_key: key }),
-          });
-          const data = await res.json().catch(() => ({}));
-          const sub2 = _subscriptions.find((item) => String(item && item.id || '') === subId);
-          if (sub2 && data && data.entry) {
-            const map = subsNodeLatencyMap(sub2);
-            map[key] = data.entry;
-            sub2.node_latency = map;
-          }
-          if (!res.ok || !data || data.ok === false) failed += 1;
-        } catch (e) {
-          failed += 1;
-        } finally {
-          delete _subscriptionNodePingState[pendingKey];
-          done += 1;
-          try { subsRenderNodeList(); } catch (e) {}
-          subsSetStatus(`Проверка задержки: ${done}/${targets.length}…`, false);
-        }
-      }
-
-      const queue = targets.slice();
-      const concurrency = Math.min(3, queue.length);
-      const workers = Array.from({ length: concurrency }, async () => {
-        while (queue.length) {
-          const node = queue.shift();
-          if (!node) break;
-          await probeOne(node);
-        }
+      const pendingStateKeys = targets
+        .map((node) => subsNodePingStateKey(subId, String(node && node.key ? node.key : '')))
+        .filter(Boolean);
+      pendingStateKeys.forEach((key) => {
+        _subscriptionNodePingState[key] = true;
       });
+      subsUpdatePingAllBtnState();
+      try { subsRenderNodeList(); } catch (e) {}
+      subsSetStatus(`Проверяю задержку: ${targets.length} узлов…`, false);
 
       try {
-        await Promise.all(workers);
-        const ok = targets.length - failed;
-        if (failed === 0) {
+        const res = await fetch(`/api/xray/subscriptions/${encodeURIComponent(subId)}/nodes/ping-bulk`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            node_keys: targets.map((node) => String(node && node.key ? node.key : '')).filter(Boolean),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data) {
+          throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+        }
+
+        const sub2 = _subscriptions.find((item) => String(item && item.id || '') === subId);
+        if (sub2 && Array.isArray(data.results)) {
+          const map = subsNodeLatencyMap(sub2);
+          data.results.forEach((item) => {
+            const key = String(item && item.node_key || '').trim();
+            if (!key || !item || !item.entry) return;
+            map[key] = item.entry;
+          });
+          sub2.node_latency = map;
+        }
+
+        const ok = Number(data.ok_count || 0);
+        const failed = Number(data.failed_count || 0);
+        const total = Number(data.requested || targets.length);
+        if (failed <= 0) {
           subsSetStatus(`Проверено узлов: ${ok}.`, false, true);
         } else {
-          subsSetStatus(`Проверено ${ok} из ${targets.length}, ошибок: ${failed}.`, true);
+          subsSetStatus(`Проверено ${ok} из ${total}, ошибок: ${failed}.`, true);
         }
+        return failed <= 0;
+      } catch (e) {
+        const msg = 'Ошибка массовой проверки задержки: ' + String(e && e.message ? e.message : e);
+        subsSetStatus(msg, true);
+        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        return false;
       } finally {
+        pendingStateKeys.forEach((key) => {
+          delete _subscriptionNodePingState[key];
+        });
         _subscriptionPingAllBusy = false;
         subsUpdatePingAllBtnState();
         try { subsRenderNodeList(); } catch (e) {}
       }
-      return failed === 0;
     }
 
     async function subsOpenGeneratedFragment(file) {

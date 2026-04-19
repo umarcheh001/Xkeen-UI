@@ -57,6 +57,7 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "xk-sub-open" not in outbounds_src
     assert "xk-sub-edit" not in outbounds_src
     assert "/nodes/ping" in outbounds_src
+    assert "/nodes/ping-bulk" in outbounds_src
     assert "xk-sub-node-ping" in outbounds_src
     assert "xk-sub-node-latency" in outbounds_src
     assert "btn.setAttribute('data-tooltip', tooltip);" in outbounds_src

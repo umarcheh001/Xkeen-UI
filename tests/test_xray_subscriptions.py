@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -604,3 +605,109 @@ def test_probe_subscription_node_latency_updates_state(tmp_path: Path, monkeypat
     saved = state["subscriptions"][0]
     assert saved["node_latency"][node["key"]]["delay_ms"] == 123
     assert saved["node_latency"][node["key"]]["history"][0]["status"] == "ok"
+
+
+def test_probe_subscription_nodes_latency_updates_state_once(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (
+            "\n".join(
+                [
+                    _vless_transport("Ping One", "ws", host="one.example.com"),
+                    _vless_transport("Ping Two", "grpc", host="two.example.com"),
+                ]
+            ),
+            {},
+        ),
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "probe-bulk",
+            "tag": "probebulk",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": False,
+        },
+    )
+
+    refresh = subs.refresh_subscription(
+        str(ui_state_dir),
+        "probe-bulk",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    nodes = list(refresh["last_nodes"])
+    assert len(nodes) == 2
+
+    class _FakeProc:
+        def poll(self):
+            return None
+
+    popen_calls = {"count": 0}
+    write_calls = {"count": 0}
+    original_write_state = subs._write_state
+
+    def _counting_write_state(*args, **kwargs):
+        write_calls["count"] += 1
+        return original_write_state(*args, **kwargs)
+
+    def _counting_popen(*args, **kwargs):
+        popen_calls["count"] += 1
+        return _FakeProc()
+
+    probe_delays = [(123, ""), (456, "")]
+    probe_lock = threading.Lock()
+
+    def _fake_probe_via_local_proxy(_port, _probe_url, timeout_value):
+        assert _probe_url == "https://probe.example.com/generate_204"
+        assert float(timeout_value or 0) == pytest.approx(8.0)
+        with probe_lock:
+            return probe_delays.pop(0)
+
+    monkeypatch.setattr(subs, "_find_xray_binary", lambda: "/opt/sbin/xray")
+    monkeypatch.setattr(subs, "_wait_for_local_port", lambda _port, _proc, _timeout: True)
+    monkeypatch.setattr(subs, "_terminate_process", lambda _proc, timeout_s=1.5: ("", ""))
+    monkeypatch.setattr(subs, "_probe_url_for_subscription", lambda _dir: "https://probe.example.com/generate_204")
+    monkeypatch.setattr(subs.subprocess, "Popen", _counting_popen)
+    monkeypatch.setattr(subs, "_probe_via_local_proxy", _fake_probe_via_local_proxy)
+    monkeypatch.setattr(subs, "_write_state", _counting_write_state)
+
+    result = subs.probe_subscription_nodes_latency(
+        str(ui_state_dir),
+        "probe-bulk",
+        [nodes[0]["key"], nodes[1]["key"]],
+        xray_configs_dir=str(xray_dir),
+        timeout_s=8,
+    )
+
+    assert result["ok"] is True
+    assert result["ok_count"] == 2
+    assert result["failed_count"] == 0
+    assert result["updated"] == 2
+    assert len(result["results"]) == 2
+    assert result["results"][0]["entry"]["status"] == "ok"
+    assert result["results"][1]["entry"]["status"] == "ok"
+    assert write_calls["count"] == 1
+    assert popen_calls["count"] == 1
+
+    state = subs.load_subscription_state(str(ui_state_dir))
+    saved = state["subscriptions"][0]
+    assert saved["node_latency"][nodes[0]["key"]]["delay_ms"] == 123
+    assert saved["node_latency"][nodes[1]["key"]]["delay_ms"] == 456
