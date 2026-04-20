@@ -4209,7 +4209,7 @@ let outboundsModuleApi = null;
           const err = String((data && (data.error || data.message)) || ('HTTP ' + res.status));
           throw new Error(err);
         }
-        const changed = !!(data.changed || data.observatory_changed || data.routing_changed);
+        const changed = !!(data.changed || data.observatory_changed);
         data.changed = changed;
         const sourceCount = Number(data.source_count || data.count || 0);
         const filteredOutCount = Number(data.filtered_out_count || 0);
