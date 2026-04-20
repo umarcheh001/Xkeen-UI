@@ -7711,17 +7711,17 @@ html[data-theme="light"] .xk-mi-status.error {
 }
 
 .xk-sub-options {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex: 1 1 auto;
   min-width: 0;
+  gap: 5px;
 }
 
 .xk-sub-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(188px, 0.72fr) auto;
   align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  flex-wrap: nowrap;
+  gap: 10px 12px;
   margin-top: 2px;
 }
 
@@ -7735,15 +7735,18 @@ html[data-theme="light"] .xk-mi-status.error {
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-  margin-left: auto;
+  justify-self: end;
+  margin-left: 0;
 }
 
 .xk-sub-routing-mode {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  padding: 0 4px;
+  width: 100%;
+  padding: 0;
 }
 
 .xk-sub-inline-label {
@@ -7756,15 +7759,17 @@ html[data-theme="light"] .xk-mi-status.error {
 }
 
 .xk-sub-routing-mode .xray-log-filter {
-  min-width: 178px;
-  height: 30px;
+  width: 100%;
+  min-width: 0;
+  height: 34px;
 }
 
 .xk-sub-check {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 9px;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 8px;
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(2, 6, 23, 0.28);
@@ -7772,6 +7777,7 @@ html[data-theme="light"] .xk-mi-status.error {
   font-size: calc(12px * var(--xk-font-scale));
   cursor: pointer;
   user-select: none;
+  white-space: nowrap;
 }
 
 .xk-sub-check:hover {
@@ -7784,10 +7790,10 @@ html[data-theme="light"] .xk-mi-status.error {
 }
 
 .xk-sub-icon-btn.btn-compact {
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  min-height: 30px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
   padding: 0;
   border-radius: 999px;
   display: inline-flex;
@@ -8646,17 +8652,21 @@ html[data-theme="light"] .xk-mi-status.error {
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-controls {
-  flex-wrap: wrap;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-routing-mode {
-  width: 100%;
-  justify-content: space-between;
-  padding: 0;
+  grid-column: 1 / 2;
+}
+
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-options {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-controls .xk-sub-actions {
-  width: 100%;
+  grid-column: 2 / 3;
+  width: auto;
   margin-left: 0;
   justify-content: flex-end;
 }
@@ -8677,6 +8687,25 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-form {
   grid-template-columns: 1fr;
+}
+
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls {
+  grid-template-columns: 1fr;
+}
+
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-options {
+  flex-wrap: wrap;
+}
+
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-routing-mode,
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls .xk-sub-actions {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls .xk-sub-actions {
+  justify-self: stretch;
+  justify-content: flex-end;
 }
 
 @media (max-width: 720px) {
