@@ -3214,12 +3214,13 @@ let outboundsModuleApi = null;
               <div class="xk-sub-brief">
                 <div>
                   <div class="xk-sub-brief-title">LeastPing за минуту</div>
-                  <div class="xk-sub-brief-text">Подписка пишет отдельный <code>04_outbounds.&lt;tag&gt;.json</code>. В балансировщике LeastPing выбери теги с этим prefix; включенный «Пинг» добавит их в <code>07_observatory.json</code>.</div>
+                  <div class="xk-sub-brief-text">Подписка пишет отдельный <code>04_outbounds.&lt;tag&gt;.json</code>. <code>Tag prefix</code> затем используется как <code>selector</code>-префикс в leastPing-балансировщике, а включенный «Пинг» добавит generated tags в <code>07_observatory.json</code>. <b>Применение → Безопасно</b> сохраняет явные правила на <code>vless-reality</code> и только синхронизирует общий leastPing/fallback; <b>Жёстко</b> переводит auto-правила с <code>outboundTag=vless-reality</code> на общий <code>balancerTag</code> пула.</div>
                 </div>
                 <div class="xk-sub-steps" aria-hidden="true">
                   <span>URL</span>
                   <span>Фрагмент</span>
                   <span>LeastPing</span>
+                  <span>Применение</span>
                 </div>
               </div>
               <div class="xk-sub-grid">
@@ -3267,9 +3268,9 @@ let outboundsModuleApi = null;
                         <label class="xk-sub-check" data-tooltip="Добавлять generated tags в observatory для leastPing-проверок."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" data-tooltip="Добавлять generated outbound tags в 07_observatory.json для LeastPing."><span>Пинг</span></label>
                         <label class="xk-sub-check" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span>Обновить сразу</span></label>
                       </div>
-                      <label class="xk-sub-routing-mode" for="outbounds-subscriptions-routing-mode" data-tooltip="Как панель должна подвязывать подписку к маршрутизации. Безопасно: оставить явные правила на vless-reality и просто добавить leastPing выше final direct. Жёстко: автоматически перевести auto-правила с outboundTag=vless-reality на общий balancerTag пула.">
+                      <label class="xk-sub-routing-mode" for="outbounds-subscriptions-routing-mode" data-tooltip="Как панель должна подвязывать подписку к маршрутизации. Безопасно: selector/fallback leastPing синхронизируются, а явные правила на vless-reality сохраняются. Жёстко: auto-правила с outboundTag=vless-reality автоматически переводятся на общий balancerTag пула.">
                         <span class="xk-sub-inline-label">Применение</span>
-                        <select id="outbounds-subscriptions-routing-mode" class="xray-log-filter" title="Режим маршрутизации подписки" data-tooltip="Безопасно: явные правила на vless-reality сохраняются. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула.">
+                        <select id="outbounds-subscriptions-routing-mode" class="xray-log-filter" title="Режим маршрутизации подписки" data-tooltip="Безопасно: leastPing-balancer и fallback синхронизируются, но явные правила на vless-reality остаются. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула.">
                           <option value="safe-fallback">Безопасно</option>
                           <option value="migrate-vless-rules">Жёстко · pool</option>
                         </select>
