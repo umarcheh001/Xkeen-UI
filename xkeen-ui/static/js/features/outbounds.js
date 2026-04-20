@@ -4199,21 +4199,25 @@ let outboundsModuleApi = null;
           const err = String((data && (data.error || data.message)) || ('HTTP ' + res.status));
           throw new Error(err);
         }
-        const changed = !!(data.changed || data.observatory_changed);
+        const changed = !!(data.changed || data.observatory_changed || data.routing_changed);
         data.changed = changed;
         const sourceCount = Number(data.source_count || data.count || 0);
         const filteredOutCount = Number(data.filtered_out_count || 0);
         const filterNote = filteredOutCount > 0 && sourceCount > 0
           ? ` · по фильтру ${Number(data.count || 0)} из ${sourceCount}`
           : '';
+        const routingNote = data.routing_changed
+          ? ` · leastPing → ${String(data.routing_balancer_tag || 'proxy')} (${Number(data.routing_selector_count || 0)} tag)`
+          : '';
         const msg = `Готово: ${Number(data.count || 0)} outbound` + filterNote + (data.changed ? ' · файл обновлён' : ' · без изменений');
         const fileNote = data.output_file ? (' · ' + String(data.output_file)) : '';
-        subsSetStatus(msg + fileNote, false, true);
+        subsSetStatus(msg + fileNote + routingNote, false, true);
         if (!changed) {
           try { toastXkeen('Подписка проверена: изменений нет.', 'info'); } catch (e4) {}
         } else if (!data.restarted) {
           const restartNote = restart ? ' Перезапуск xkeen не выполнялся.' : ' Авто-перезапуск xkeen выключен.';
-          try { toastXkeen('Подписка Xray обновлена.' + restartNote, 'success'); } catch (e5) {}
+          const routeToast = data.routing_changed ? ' leastPing и routing тоже синхронизированы.' : '';
+          try { toastXkeen('Подписка Xray обновлена.' + routeToast + restartNote, 'success'); } catch (e5) {}
         }
         try { await refreshFragmentsList({ notify: false }); } catch (e2) {}
         try { await refreshRestartLog(); } catch (e3) {}
@@ -4246,7 +4250,7 @@ let outboundsModuleApi = null;
         try { await refreshFragmentsList({ notify: false }); } catch (e) {}
         try { await refreshRestartLog(); } catch (e2) {}
         const results = Array.isArray(data.results) ? data.results : [];
-        const changedCount = results.filter((item) => !!(item && (item.changed || item.observatory_changed))).length;
+        const changedCount = results.filter((item) => !!(item && (item.changed || item.observatory_changed || item.routing_changed))).length;
         const restartedCount = results.filter((item) => !!(item && item.restarted)).length;
         if (!changedCount) {
           const idleMsg = Number(data.updated || 0) > 0
