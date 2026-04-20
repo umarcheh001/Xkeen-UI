@@ -4212,14 +4212,19 @@ let outboundsModuleApi = null;
 
     async function subsSyncRoutingViewAfterMutation(options) {
       const opts = (options && typeof options === 'object') ? options : {};
-      if (!opts.routingChanged) return false;
+      const routingChanged = !!opts.routingChanged;
+      const observatoryChanged = !!opts.observatoryChanged;
+      if (!routingChanged && !observatoryChanged) return false;
 
       const routingApi = getRoutingApi();
       if (!routingApi || typeof routingApi.load !== 'function') return false;
 
       const activeRoutingFile = baseName(getActiveRoutingFragmentName() || '');
       const touchedRoutingFile = baseName(opts.routingFile || '');
-      if (touchedRoutingFile && activeRoutingFile && touchedRoutingFile !== activeRoutingFile) {
+      const observatoryFile = baseName(opts.observatoryFile || '07_observatory.json');
+      const routingTouched = !!(routingChanged && (!touchedRoutingFile || !activeRoutingFile || touchedRoutingFile === activeRoutingFile));
+      const observatoryTouched = !!(observatoryChanged && observatoryFile && activeRoutingFile === observatoryFile);
+      if (!routingTouched && !observatoryTouched) {
         return false;
       }
 
@@ -4320,6 +4325,8 @@ let outboundsModuleApi = null;
         await subsSyncRoutingViewAfterMutation({
           routingChanged: !!data.routing_changed,
           routingFile: data.routing_file,
+          observatoryChanged: !!data.observatory_changed,
+          observatoryFile: '07_observatory.json',
         });
         try { await refreshRestartLog(); } catch (e3) {}
         await subsLoad();
@@ -4361,6 +4368,8 @@ let outboundsModuleApi = null;
           routingFile: results
             .map((item) => item && item.routing_file)
             .find((value) => !!String(value || '').trim()),
+          observatoryChanged: results.some((item) => !!(item && item.observatory_changed)),
+          observatoryFile: '07_observatory.json',
         });
         try { await refreshRestartLog(); } catch (e2) {}
         const changedCount = results.filter((item) => !!(item && (item.changed || item.observatory_changed || item.routing_changed))).length;
@@ -4457,6 +4466,8 @@ let outboundsModuleApi = null;
         await subsSyncRoutingViewAfterMutation({
           routingChanged: !!(data && data.routing_changed),
           routingFile: data && data.routing_file,
+          observatoryChanged: !!(data && data.observatory_changed),
+          observatoryFile: '07_observatory.json',
         });
         await subsLoad();
         return true;
