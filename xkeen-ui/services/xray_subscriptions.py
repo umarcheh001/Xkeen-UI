@@ -98,6 +98,9 @@ AUTO_BALANCER_RULE_TAG = "xk_auto_leastPing"
 AUTO_BALANCER_TAG = "proxy"
 AUTO_BALANCER_FALLBACK_TAG = "direct"
 AUTO_BALANCER_PRESERVE_TAGS = ("vless-reality",)
+AUTO_MIGRATED_RULE_TAG_PREFIX = "xk_auto_vless_pool_"
+ROUTING_MODE_SAFE = "safe-fallback"
+ROUTING_MODE_STRICT = "migrate-vless-rules"
 
 
 SnapshotCallback = Callable[[str], None]
@@ -161,6 +164,19 @@ def _clean_tag_prefix(value: Any, fallback: str) -> str:
 
 def _clean_regex_filter(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _clean_routing_mode(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {
+        ROUTING_MODE_STRICT,
+        "migrate_vless_rules",
+        "strict",
+        "pool",
+        "prefer-subscription-pool",
+    }:
+        return ROUTING_MODE_STRICT
+    return ROUTING_MODE_SAFE
 
 
 def _read_filter_value(data: Any, keys: tuple[str, ...]) -> Any:
@@ -423,6 +439,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 "excluded_node_keys": excluded_node_keys,
                 "enabled": bool(item.get("enabled", True)),
                 "ping_enabled": bool(item.get("ping_enabled", item.get("pingEnabled", True))),
+                "routing_mode": _clean_routing_mode(item.get("routing_mode", item.get("routingMode"))),
                 "interval_hours": interval,
                 "output_file": output_file,
                 "last_nodes": last_nodes,
@@ -502,6 +519,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
         transport_filter = _clean_regex_filter(
             _stored_filter_value(base, TRANSPORT_FILTER_KEYS) if transport_filter_raw is _MISSING else transport_filter_raw
         )
+        routing_mode = _clean_routing_mode(data.get("routing_mode", data.get("routingMode", base.get("routing_mode"))))
         _compile_regex_filter(name_filter, "фильтра имени")
         _compile_regex_filter(type_filter, "фильтра типа")
         _compile_regex_filter(transport_filter, "фильтра транспорта")
@@ -529,6 +547,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
                 "excluded_node_keys": excluded_node_keys,
                 "enabled": bool(data.get("enabled", base.get("enabled", True))),
                 "ping_enabled": bool(data.get("ping_enabled", data.get("pingEnabled", base.get("ping_enabled", True)))),
+                "routing_mode": routing_mode,
                 "interval_hours": interval,
                 "output_file": output_file,
                 "node_latency": _prune_node_latency_map(base.get("node_latency"), _normalize_last_nodes(base.get("last_nodes"))),
@@ -586,6 +605,7 @@ def delete_subscription(
     routing_changed = False
     old_tags = removed.get("last_tags") if removed else []
     preserved_tags = _preserved_balancer_tags(xray_configs_dir)
+    effective_routing_mode = _effective_subscription_routing_mode(ui_state_dir)
     if isinstance(old_tags, list) and old_tags:
         observatory_changed = sync_observatory_subjects(
             xray_configs_dir=xray_configs_dir,
@@ -597,6 +617,7 @@ def delete_subscription(
             xray_configs_dir=xray_configs_dir,
             add_tags=preserved_tags,
             remove_tags=[str(t) for t in old_tags],
+            routing_mode=effective_routing_mode,
             snapshot=snapshot,
         )
         routing_changed = bool(routing_sync.get("changed"))
@@ -1497,6 +1518,97 @@ def _choose_auto_balancer_tag(routing: Dict[str, Any]) -> str:
     return AUTO_BALANCER_TAG
 
 
+def _auto_migrated_rule_tag(rule: Any) -> str:
+    if not isinstance(rule, dict):
+        return ""
+    return str(rule.get("ruleTag") or "").strip()
+
+
+def _is_auto_migrated_vless_rule(rule: Any) -> bool:
+    return _auto_migrated_rule_tag(rule).startswith(AUTO_MIGRATED_RULE_TAG_PREFIX)
+
+
+def _rule_targets_vless_reality(rule: Any) -> bool:
+    return isinstance(rule, dict) and str(rule.get("outboundTag") or "").strip() == "vless-reality"
+
+
+def _rule_touches_proxy_inbound(rule: Any) -> bool:
+    inbound = set(_rule_inbound_tags(rule))
+    return not inbound or bool(inbound.intersection({"redirect", "tproxy"}))
+
+
+def _next_auto_migrated_rule_tag(rules: List[Any]) -> str:
+    max_idx = 0
+    for rule in rules if isinstance(rules, list) else []:
+        tag = _auto_migrated_rule_tag(rule)
+        if not tag.startswith(AUTO_MIGRATED_RULE_TAG_PREFIX):
+            continue
+        suffix = tag[len(AUTO_MIGRATED_RULE_TAG_PREFIX) :]
+        try:
+            max_idx = max(max_idx, int(suffix))
+        except Exception:
+            continue
+    return f"{AUTO_MIGRATED_RULE_TAG_PREFIX}{max_idx + 1:03d}"
+
+
+def _sync_vless_reality_rules_to_balancer(
+    routing: Dict[str, Any],
+    *,
+    balancer_tag: str,
+    enabled: bool,
+) -> Dict[str, int | bool]:
+    rules = routing.get("rules")
+    if not isinstance(rules, list):
+        return {"changed": False, "migrated": 0, "reverted": 0, "skipped": 0}
+
+    changed = False
+    migrated = 0
+    reverted = 0
+    skipped = 0
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        if enabled:
+            if _is_auto_migrated_vless_rule(rule):
+                before = copy.deepcopy(rule)
+                rule.pop("outboundTag", None)
+                rule["balancerTag"] = str(balancer_tag or AUTO_BALANCER_TAG).strip() or AUTO_BALANCER_TAG
+                if before != rule:
+                    changed = True
+                continue
+            if not _rule_targets_vless_reality(rule) or not _rule_touches_proxy_inbound(rule):
+                continue
+            if str(rule.get("ruleTag") or "").strip():
+                skipped += 1
+                continue
+            rule["balancerTag"] = str(balancer_tag or AUTO_BALANCER_TAG).strip() or AUTO_BALANCER_TAG
+            rule.pop("outboundTag", None)
+            rule["ruleTag"] = _next_auto_migrated_rule_tag(rules)
+            migrated += 1
+            changed = True
+            continue
+        if not _is_auto_migrated_vless_rule(rule):
+            continue
+        rule.pop("balancerTag", None)
+        rule["outboundTag"] = "vless-reality"
+        rule.pop("ruleTag", None)
+        reverted += 1
+        changed = True
+    return {"changed": changed, "migrated": migrated, "reverted": reverted, "skipped": skipped}
+
+
+def _effective_subscription_routing_mode(ui_state_dir: str) -> str:
+    state = load_subscription_state(ui_state_dir)
+    for item in state.get("subscriptions") if isinstance(state, dict) else []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("enabled", True) is False:
+            continue
+        if _clean_routing_mode(item.get("routing_mode")) == ROUTING_MODE_STRICT:
+            return ROUTING_MODE_STRICT
+    return ROUTING_MODE_SAFE
+
+
 def _ensure_least_ping_balancer(
     routing: Dict[str, Any],
     *,
@@ -1569,6 +1681,7 @@ def sync_subscription_routing(
     xray_configs_dir: str,
     add_tags: Iterable[str],
     remove_tags: Iterable[str] | None = None,
+    routing_mode: str = ROUTING_MODE_SAFE,
     snapshot: SnapshotCallback | None = None,
 ) -> Dict[str, Any]:
     add = _clean_tags_list(add_tags)
@@ -1605,6 +1718,10 @@ def sync_subscription_routing(
             selector.append(tag)
 
     changed = False
+    strict_enabled = (
+        _clean_routing_mode(routing_mode) == ROUTING_MODE_STRICT
+        and any(tag not in AUTO_BALANCER_PRESERVE_TAGS for tag in selector)
+    )
     if selector:
         balancer_changed = _ensure_least_ping_balancer(
             routing,
@@ -1612,9 +1729,19 @@ def sync_subscription_routing(
             selector_tags=selector,
         )
         rule_changed = _ensure_default_balancer_rule(routing, balancer_tag=balancer_tag)
-        changed = bool(balancer_changed or rule_changed)
+        migrate_stats = _sync_vless_reality_rules_to_balancer(
+            routing,
+            balancer_tag=balancer_tag,
+            enabled=strict_enabled,
+        )
+        changed = bool(balancer_changed or rule_changed or migrate_stats.get("changed"))
     else:
-        changed = _remove_auto_balancer_rule(routing)
+        migrate_stats = _sync_vless_reality_rules_to_balancer(
+            routing,
+            balancer_tag=balancer_tag,
+            enabled=False,
+        )
+        changed = bool(_remove_auto_balancer_rule(routing) or migrate_stats.get("changed"))
 
     if not changed:
         return {
@@ -1622,6 +1749,10 @@ def sync_subscription_routing(
             "selector": selector,
             "balancer_tag": balancer_tag,
             "routing_file": os.path.basename(routing_path),
+            "routing_mode": _clean_routing_mode(routing_mode),
+            "migrated_rules": 0,
+            "reverted_rules": 0,
+            "skipped_rules": 0,
         }
 
     main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
@@ -1636,6 +1767,10 @@ def sync_subscription_routing(
         "selector": selector,
         "balancer_tag": balancer_tag,
         "routing_file": os.path.basename(routing_path),
+        "routing_mode": ROUTING_MODE_STRICT if strict_enabled else ROUTING_MODE_SAFE,
+        "migrated_rules": int(migrate_stats.get("migrated") or 0),
+        "reverted_rules": int(migrate_stats.get("reverted") or 0),
+        "skipped_rules": int(migrate_stats.get("skipped") or 0),
     }
 
 
@@ -1808,6 +1943,7 @@ def refresh_subscription(
         observatory_changed = False
         routing_changed = False
         preserved_tags = _preserved_balancer_tags(xray_configs_dir)
+        effective_routing_mode = _effective_subscription_routing_mode(ui_state_dir)
         if bool(sub.get("ping_enabled", True)):
             observatory_changed = sync_observatory_subjects(
                 xray_configs_dir=xray_configs_dir,
@@ -1819,6 +1955,7 @@ def refresh_subscription(
                 xray_configs_dir=xray_configs_dir,
                 add_tags=tags,
                 remove_tags=previous_tags,
+                routing_mode=effective_routing_mode,
                 snapshot=snapshot,
             )
             routing_changed = bool(routing_sync.get("changed"))
@@ -1833,6 +1970,7 @@ def refresh_subscription(
                 xray_configs_dir=xray_configs_dir,
                 add_tags=[],
                 remove_tags=previous_tags,
+                routing_mode=effective_routing_mode,
                 snapshot=snapshot,
             )
             routing_changed = bool(routing_sync.get("changed"))
@@ -1893,6 +2031,10 @@ def refresh_subscription(
                 "routing_file": (routing_sync.get("routing_file") if "routing_sync" in locals() else ""),
                 "routing_balancer_tag": (routing_sync.get("balancer_tag") if "routing_sync" in locals() else ""),
                 "routing_selector_count": len(routing_sync.get("selector") or []) if "routing_sync" in locals() else 0,
+                "routing_mode": (routing_sync.get("routing_mode") if "routing_sync" in locals() else _clean_routing_mode(sub.get("routing_mode"))),
+                "routing_migrated_rules": int(routing_sync.get("migrated_rules") or 0) if "routing_sync" in locals() else 0,
+                "routing_reverted_rules": int(routing_sync.get("reverted_rules") or 0) if "routing_sync" in locals() else 0,
+                "routing_skipped_rules": int(routing_sync.get("skipped_rules") or 0) if "routing_sync" in locals() else 0,
                 "next_update_ts": sub.get("next_update_ts"),
             }
         )

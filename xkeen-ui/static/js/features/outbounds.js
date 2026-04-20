@@ -3132,6 +3132,7 @@ let outboundsModuleApi = null;
       nameFilter: 'outbounds-subscriptions-name-filter',
       typeFilter: 'outbounds-subscriptions-type-filter',
       transportFilter: 'outbounds-subscriptions-transport-filter',
+      routingMode: 'outbounds-subscriptions-routing-mode',
       excludedKeys: 'outbounds-subscriptions-excluded-keys',
       interval: 'outbounds-subscriptions-interval',
       enabled: 'outbounds-subscriptions-enabled',
@@ -3264,6 +3265,13 @@ let outboundsModuleApi = null;
                         <label class="xk-sub-check" data-tooltip="Добавлять generated tags в observatory для leastPing-проверок."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" data-tooltip="Добавлять generated outbound tags в 07_observatory.json для LeastPing."><span>Пинг</span></label>
                         <label class="xk-sub-check" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span>Обновить сразу</span></label>
                       </div>
+                      <label class="xk-sub-routing-mode" for="outbounds-subscriptions-routing-mode" data-tooltip="Как панель должна подвязывать подписку к маршрутизации. Безопасно: оставить явные правила на vless-reality и просто добавить leastPing выше final direct. Жёстко: автоматически перевести auto-правила с outboundTag=vless-reality на общий balancerTag пула.">
+                        <span class="xk-sub-inline-label">Применение</span>
+                        <select id="outbounds-subscriptions-routing-mode" class="xray-log-filter" title="Режим маршрутизации подписки" data-tooltip="Безопасно: явные правила на vless-reality сохраняются. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула.">
+                          <option value="safe-fallback">Безопасно</option>
+                          <option value="migrate-vless-rules">Жёстко · pool</option>
+                        </select>
+                      </label>
                       <div class="xk-sub-actions">
                         <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Новая подписка" data-tooltip="Очистить форму и добавить новую подписку.">Новая</button>
                         <button type="submit" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить подписку" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
@@ -3695,6 +3703,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.interval).value = '6'; } catch (e) {}
       try { $(SUB_IDS.enabled).checked = true; } catch (e) {}
       try { $(SUB_IDS.ping).checked = true; } catch (e) {}
+      try { $(SUB_IDS.routingMode).value = 'safe-fallback'; } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = true; } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
       try { subsRenderNodeList(); } catch (e2) {}
@@ -3715,6 +3724,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.interval).value = String(s.interval_hours || 6); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = s.enabled !== false; } catch (e) {}
       try { $(SUB_IDS.ping).checked = s.ping_enabled !== false; } catch (e) {}
+      try { $(SUB_IDS.routingMode).value = String(s.routing_mode || 'safe-fallback') || 'safe-fallback'; } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = opts.keepRefreshNow === true ? !!($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked) : false; } catch (e) {}
       try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
@@ -4209,15 +4219,25 @@ let outboundsModuleApi = null;
         const routingNote = data.routing_changed
           ? ` · leastPing → ${String(data.routing_balancer_tag || 'proxy')} (${Number(data.routing_selector_count || 0)} tag)`
           : '';
+        const routingModeNote = data.routing_mode === 'migrate-vless-rules'
+          ? (Number(data.routing_migrated_rules || 0) > 0
+            ? ` · strict: ${Number(data.routing_migrated_rules || 0)} rule → pool`
+            : ' · strict mode')
+          : (Number(data.routing_reverted_rules || 0) > 0
+            ? ` · safe: ${Number(data.routing_reverted_rules || 0)} rule ← vless`
+            : '');
         const msg = `Готово: ${Number(data.count || 0)} outbound` + filterNote + (data.changed ? ' · файл обновлён' : ' · без изменений');
         const fileNote = data.output_file ? (' · ' + String(data.output_file)) : '';
-        subsSetStatus(msg + fileNote + routingNote, false, true);
+        subsSetStatus(msg + fileNote + routingNote + routingModeNote, false, true);
         if (!changed) {
           try { toastXkeen('Подписка проверена: изменений нет.', 'info'); } catch (e4) {}
         } else if (!data.restarted) {
           const restartNote = restart ? ' Перезапуск xkeen не выполнялся.' : ' Авто-перезапуск xkeen выключен.';
           const routeToast = data.routing_changed ? ' leastPing и routing тоже синхронизированы.' : '';
-          try { toastXkeen('Подписка Xray обновлена.' + routeToast + restartNote, 'success'); } catch (e5) {}
+          const modeToast = data.routing_mode === 'migrate-vless-rules'
+            ? ' Включён жёсткий режим pool.'
+            : '';
+          try { toastXkeen('Подписка Xray обновлена.' + routeToast + modeToast + restartNote, 'success'); } catch (e5) {}
         }
         try { await refreshFragmentsList({ notify: false }); } catch (e2) {}
         try { await refreshRestartLog(); } catch (e3) {}
@@ -4277,6 +4297,7 @@ let outboundsModuleApi = null;
         name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim(),
         type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim(),
         transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim(),
+        routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback',
         excluded_node_keys: subsGetExcludedKeysValue(),
         interval_hours: Number(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || 6),
         enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),

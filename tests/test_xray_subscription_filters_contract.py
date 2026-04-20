@@ -15,6 +15,7 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
 
     assert "nameFilter: 'outbounds-subscriptions-name-filter'" in outbounds_src
     assert "typeFilter: 'outbounds-subscriptions-type-filter'" in outbounds_src
+    assert "routingMode: 'outbounds-subscriptions-routing-mode'" in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Имя</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Тип</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Транспорт</span>' in outbounds_src
@@ -24,6 +25,7 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert 'class="xk-sub-span-3"' in outbounds_src
     assert "name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim()," in outbounds_src
     assert "type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim()," in outbounds_src
+    assert "routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback'," in outbounds_src
     assert "function subsFilterSummary(sub) {" in outbounds_src
     assert "data.filtered_out_count" in outbounds_src
 
@@ -36,11 +38,13 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert 'delete modal.dataset.modalNopos;' in outbounds_src
     assert 'delete modal.dataset.modalNodrag;' in outbounds_src
     assert "transportFilter: 'outbounds-subscriptions-transport-filter'" in outbounds_src
+    assert "routingMode: 'outbounds-subscriptions-routing-mode'" in outbounds_src
     assert "excludedKeys: 'outbounds-subscriptions-excluded-keys'" in outbounds_src
     assert "nodesPanel: 'outbounds-subscriptions-nodes-panel'" in outbounds_src
     assert "nodesList: 'outbounds-subscriptions-nodes-list'" in outbounds_src
     assert "nodesSummary: 'outbounds-subscriptions-nodes-summary'" in outbounds_src
     assert "transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim()," in outbounds_src
+    assert "routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback'," in outbounds_src
     assert "excluded_node_keys: subsGetExcludedKeysValue()," in outbounds_src
     assert "function subsRenderNodeList() {" in outbounds_src
     assert "function subsSyncModalLayout() {" in outbounds_src
@@ -72,6 +76,8 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "&#128190;" in outbounds_src
     assert "btn-danger btn-compact xk-sub-node-toggle" in outbounds_src
     assert "xk-sub-node-toggle-restore" in outbounds_src
+    assert "outbounds-subscriptions-routing-mode" in outbounds_src
+    assert "Жёстко · pool" in outbounds_src
     assert ".xk-sub-node-list" in styles_src
     assert ".xk-sub-modal {" in styles_src
     assert ".xk-sub-modal.xk-sub-modal-compact .xk-sub-grid" in styles_src
@@ -87,6 +93,8 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "overflow: hidden;" in styles_src
     assert "min-height: 220px;" in styles_src
     assert ".xk-sub-icon-btn.btn-compact {" in styles_src
+    assert ".xk-sub-routing-mode {" in styles_src
+    assert ".xk-sub-inline-label {" in styles_src
     assert "flex-wrap: nowrap;" in styles_src
     assert "min-height: 88px;" in styles_src
     assert ".xk-sub-list-panel {" in styles_src

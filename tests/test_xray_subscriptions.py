@@ -256,6 +256,144 @@ def test_refresh_subscription_auto_syncs_routing_and_keeps_vless_reality(tmp_pat
     assert rules[2]["outboundTag"] == "direct"
 
 
+def test_refresh_subscription_strict_mode_migrates_and_reverts_vless_rules(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {
+                        "tag": "vless-reality",
+                        "protocol": "vless",
+                        "settings": {
+                            "vnext": [
+                                {
+                                    "address": "edge.example.com",
+                                    "port": 443,
+                                    "users": [{"id": "user", "encryption": "none"}],
+                                }
+                            ]
+                        },
+                    },
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "rules": [
+                        {
+                            "type": "field",
+                            "inboundTag": ["redirect", "tproxy"],
+                            "outboundTag": "vless-reality",
+                            "domain": ["ext:geosite_v2fly.dat:openai"],
+                        },
+                        {
+                            "type": "field",
+                            "inboundTag": ["redirect", "tproxy"],
+                            "outboundTag": "direct",
+                        },
+                    ]
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "strict-route",
+            "tag": "cdn.pecan.run",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_mode": "migrate-vless-rules",
+        },
+    )
+
+    strict = subs.refresh_subscription(
+        str(ui_state_dir),
+        "strict-route",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert strict["ok"] is True
+    assert strict["routing_mode"] == "migrate-vless-rules"
+    assert strict["routing_migrated_rules"] == 1
+
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    rules = routing["routing"]["rules"]
+    assert rules[0]["balancerTag"] == "proxy"
+    assert rules[0]["ruleTag"].startswith("xk_auto_vless_pool_")
+    assert "outboundTag" not in rules[0]
+    assert rules[1]["ruleTag"] == "xk_auto_leastPing"
+    assert rules[2]["outboundTag"] == "direct"
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "strict-route",
+            "tag": "cdn.pecan.run",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_mode": "safe-fallback",
+        },
+    )
+
+    safe = subs.refresh_subscription(
+        str(ui_state_dir),
+        "strict-route",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert safe["ok"] is True
+    assert safe["routing_mode"] == "safe-fallback"
+    assert safe["routing_reverted_rules"] == 1
+
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    rules = routing["routing"]["rules"]
+    assert rules[0]["outboundTag"] == "vless-reality"
+    assert "balancerTag" not in rules[0]
+    assert "ruleTag" not in rules[0]
+    assert rules[1]["ruleTag"] == "xk_auto_leastPing"
+    assert rules[2]["outboundTag"] == "direct"
+
+
 def test_delete_subscription_removes_tags_from_routing_but_keeps_vless_reality(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

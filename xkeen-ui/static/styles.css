@@ -7738,6 +7738,28 @@ html[data-theme="light"] .xk-mi-status.error {
   margin-left: auto;
 }
 
+.xk-sub-routing-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.xk-sub-inline-label {
+  color: #94a3b8;
+  font-size: calc(11px * var(--xk-font-scale));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.xk-sub-routing-mode .xray-log-filter {
+  min-width: 178px;
+  height: 30px;
+}
+
 .xk-sub-check {
   display: inline-flex;
   align-items: center;
@@ -8625,6 +8647,12 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-controls {
   flex-wrap: wrap;
+}
+
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-routing-mode {
+  width: 100%;
+  justify-content: space-between;
+  padding: 0;
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-controls .xk-sub-actions {
