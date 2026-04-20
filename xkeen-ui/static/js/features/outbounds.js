@@ -1,6 +1,8 @@
 import { getBackupsApi } from './backups.js';
 import { getRestartLogApi } from './restart_log.js';
+import { getRoutingApi } from './routing.js';
 import {
+  getXkeenConfigDirtyApi,
   getXkeenFilePath,
   getXkeenUiConfigShellApi,
   openXkeenJsonEditor,
@@ -4195,6 +4197,51 @@ let outboundsModuleApi = null;
       return false;
     }
 
+    function getActiveRoutingFragmentName() {
+      try {
+        const sel = document.getElementById('routing-fragment-select');
+        if (sel && sel.value) return baseName(sel.value);
+      } catch (e) {}
+      try {
+        const code = document.getElementById('routing-file-code');
+        if (code && code.textContent) return baseName(code.textContent);
+      } catch (e2) {}
+      return '';
+    }
+
+    async function subsSyncRoutingViewAfterMutation(options) {
+      const opts = (options && typeof options === 'object') ? options : {};
+      if (!opts.routingChanged) return false;
+
+      const routingApi = getRoutingApi();
+      if (!routingApi || typeof routingApi.load !== 'function') return false;
+
+      const activeRoutingFile = baseName(getActiveRoutingFragmentName() || '');
+      const touchedRoutingFile = baseName(opts.routingFile || '');
+      if (touchedRoutingFile && activeRoutingFile && touchedRoutingFile !== activeRoutingFile) {
+        return false;
+      }
+
+      let routingDirty = false;
+      try {
+        const dirtyApi = getXkeenConfigDirtyApi();
+        routingDirty = !!(dirtyApi && typeof dirtyApi.isDirty === 'function' && dirtyApi.isDirty('routing'));
+      } catch (e) {}
+
+      if (routingDirty) {
+        try {
+          toastXkeen('Routing обновлён на диске после изменения подписки, но редактор не перезагружен из-за несохранённых правок.', 'warning');
+        } catch (e) {}
+        return false;
+      }
+
+      try {
+        await routingApi.load();
+        return true;
+      } catch (e) {}
+      return false;
+    }
+
     async function subsLoad() {
       try {
         const res = await fetch('/api/xray/subscriptions', { cache: 'no-store' });
@@ -4269,6 +4316,10 @@ let outboundsModuleApi = null;
           prevActive,
           touchedFiles: changed && data.output_file ? [data.output_file] : [],
         });
+        await subsSyncRoutingViewAfterMutation({
+          routingChanged: !!data.routing_changed,
+          routingFile: data.routing_file,
+        });
         try { await refreshRestartLog(); } catch (e3) {}
         await subsLoad();
         return true;
@@ -4303,6 +4354,12 @@ let outboundsModuleApi = null;
           touchedFiles: results
             .filter((item) => !!(item && item.changed && item.output_file))
             .map((item) => item.output_file),
+        });
+        await subsSyncRoutingViewAfterMutation({
+          routingChanged: results.some((item) => !!(item && item.routing_changed)),
+          routingFile: results
+            .map((item) => item && item.routing_file)
+            .find((value) => !!String(value || '').trim()),
         });
         try { await refreshRestartLog(); } catch (e2) {}
         const changedCount = results.filter((item) => !!(item && (item.changed || item.observatory_changed || item.routing_changed))).length;
@@ -4395,6 +4452,10 @@ let outboundsModuleApi = null;
         await subsSyncOutboundsViewAfterMutation({
           prevActive,
           touchedFiles: [data && data.deleted && data.deleted.output_file],
+        });
+        await subsSyncRoutingViewAfterMutation({
+          routingChanged: !!(data && data.routing_changed),
+          routingFile: data && data.routing_file,
         });
         await subsLoad();
         return true;

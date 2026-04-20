@@ -603,6 +603,7 @@ def delete_subscription(
 
     observatory_changed = False
     routing_changed = False
+    routing_sync: Dict[str, Any] = {}
     old_tags = removed.get("last_tags") if removed else []
     preserved_tags = _preserved_balancer_tags(xray_configs_dir)
     effective_routing_mode = _effective_subscription_routing_mode(ui_state_dir)
@@ -636,6 +637,7 @@ def delete_subscription(
         "output_removed": output_removed,
         "observatory_changed": observatory_changed,
         "routing_changed": routing_changed,
+        "routing_file": str(routing_sync.get("routing_file") or ""),
         "restarted": restarted,
     }
 
