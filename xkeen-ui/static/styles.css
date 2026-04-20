@@ -7741,9 +7741,9 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-routing-mode {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 4px;
   min-width: 0;
   width: 100%;
   padding: 0;
@@ -7751,14 +7751,19 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-inline-label {
   color: #94a3b8;
-  font-size: calc(11px * var(--xk-font-scale));
+  order: 2;
+  font-size: calc(10px * var(--xk-font-scale));
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.15;
+  padding-left: 4px;
+  opacity: 0.84;
 }
 
 .xk-sub-routing-mode .xray-log-filter {
+  order: 1;
   width: 100%;
   min-width: 0;
   height: 34px;
