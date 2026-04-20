@@ -4170,6 +4170,31 @@ let outboundsModuleApi = null;
       return commitOpen();
     }
 
+    async function subsSyncOutboundsViewAfterMutation(options) {
+      const opts = (options && typeof options === 'object') ? options : {};
+      const prevActive = baseName(opts.prevActive || getActiveFragment() || '');
+      const touchedFiles = new Set(
+        (Array.isArray(opts.touchedFiles) ? opts.touchedFiles : [opts.touchedFile])
+          .map((value) => baseName(value))
+          .filter(Boolean)
+      );
+
+      try { await refreshFragmentsList({ notify: false }); } catch (e) {}
+
+      const nextActive = baseName(getActiveFragment() || '');
+      const selectionChanged = !!(prevActive && prevActive !== nextActive);
+      const activeTouched = !!(nextActive && touchedFiles.has(nextActive));
+      const removedActive = !!(prevActive && touchedFiles.has(prevActive) && prevActive !== nextActive);
+
+      if (!selectionChanged && !activeTouched && !removedActive) return false;
+
+      try {
+        await load();
+        return true;
+      } catch (e) {}
+      return false;
+    }
+
     async function subsLoad() {
       try {
         const res = await fetch('/api/xray/subscriptions', { cache: 'no-store' });
@@ -4196,6 +4221,7 @@ let outboundsModuleApi = null;
     async function subsRefresh(id) {
       const subId = String(id || '').trim();
       if (!subId) return false;
+      const prevActive = getActiveFragment();
       subsSetStatus('Обновляю подписку…', false);
       const restart = shouldRestartAfterSave();
       try {
@@ -4239,7 +4265,10 @@ let outboundsModuleApi = null;
             : '';
           try { toastXkeen('Подписка Xray обновлена.' + routeToast + modeToast + restartNote, 'success'); } catch (e5) {}
         }
-        try { await refreshFragmentsList({ notify: false }); } catch (e2) {}
+        await subsSyncOutboundsViewAfterMutation({
+          prevActive,
+          touchedFiles: changed && data.output_file ? [data.output_file] : [],
+        });
         try { await refreshRestartLog(); } catch (e3) {}
         await subsLoad();
         return true;
@@ -4254,6 +4283,7 @@ let outboundsModuleApi = null;
 
     async function subsRefreshDue() {
       subsSetStatus('Проверяю due-подписки…', false);
+      const prevActive = getActiveFragment();
       const restart = shouldRestartAfterSave();
       try {
         const res = await fetch('/api/xray/subscriptions/refresh-due?restart=' + (restart ? '1' : '0'), {
@@ -4265,11 +4295,16 @@ let outboundsModuleApi = null;
         if (!res.ok || !data || data.ok === false) {
           throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
         }
+        const results = Array.isArray(data.results) ? data.results : [];
         const msg = `Due обновлены: ${Number(data.ok_count || 0)} / ${Number(data.updated || 0)}`;
         subsSetStatus(msg, false, true);
-        try { await refreshFragmentsList({ notify: false }); } catch (e) {}
+        await subsSyncOutboundsViewAfterMutation({
+          prevActive,
+          touchedFiles: results
+            .filter((item) => !!(item && item.changed && item.output_file))
+            .map((item) => item.output_file),
+        });
         try { await refreshRestartLog(); } catch (e2) {}
-        const results = Array.isArray(data.results) ? data.results : [];
         const changedCount = results.filter((item) => !!(item && (item.changed || item.observatory_changed || item.routing_changed))).length;
         const restartedCount = results.filter((item) => !!(item && item.restarted)).length;
         if (!changedCount) {
@@ -4341,6 +4376,7 @@ let outboundsModuleApi = null;
     async function subsDelete(id) {
       const subId = String(id || '').trim();
       if (!subId) return false;
+      const prevActive = getActiveFragment();
       try {
         if (!window.confirm('Удалить подписку и сгенерированный outbounds-файл?')) return false;
       } catch (e) {}
@@ -4356,7 +4392,10 @@ let outboundsModuleApi = null;
         }
         subsSetStatus('Удалено.', false, true);
         if (_subscriptionEditId === subId) subsResetForm();
-        try { await refreshFragmentsList({ notify: false }); } catch (e) {}
+        await subsSyncOutboundsViewAfterMutation({
+          prevActive,
+          touchedFiles: [data && data.deleted && data.deleted.output_file],
+        });
         await subsLoad();
         return true;
       } catch (err) {

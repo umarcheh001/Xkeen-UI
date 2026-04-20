@@ -7723,6 +7723,7 @@ html[data-theme="light"] .xk-mi-status.error {
   align-items: center;
   gap: 10px 12px;
   margin-top: 2px;
+  padding-bottom: 18px;
 }
 
 .xk-sub-controls .xk-sub-options,
@@ -7740,30 +7741,29 @@ html[data-theme="light"] .xk-mi-status.error {
 }
 
 .xk-sub-routing-mode {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 4px;
+  position: relative;
+  display: block;
   min-width: 0;
   width: 100%;
   padding: 0;
 }
 
 .xk-sub-inline-label {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 4px;
   color: #94a3b8;
-  order: 2;
   font-size: calc(10px * var(--xk-font-scale));
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: normal;
   line-height: 1.15;
-  padding-left: 4px;
   opacity: 0.84;
 }
 
 .xk-sub-routing-mode .xray-log-filter {
-  order: 1;
+  display: block;
   width: 100%;
   min-width: 0;
   height: 34px;
@@ -8696,10 +8696,21 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls {
   grid-template-columns: 1fr;
+  padding-bottom: 0;
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-options {
   flex-wrap: wrap;
+}
+
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-routing-mode {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-inline-label {
+  position: static;
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-routing-mode,
