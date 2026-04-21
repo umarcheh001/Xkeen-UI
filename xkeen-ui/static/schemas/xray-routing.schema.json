@@ -256,6 +256,10 @@
             "splithttp",
             "xhttp"
           ],
+          "deprecatedValues": [
+            "grpc"
+          ],
+          "deprecationMessage": "Transport gRPC устарел в актуальных версиях Xray; по возможности используйте XHTTP (stream-up H2).",
           "default": "tcp"
         },
         "security": {

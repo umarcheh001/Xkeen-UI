@@ -3981,6 +3981,15 @@ let outboundsModuleApi = null;
       return Array.from(new Set(items.filter(Boolean))).join(' ');
     }
 
+    function subsDeprecatedTransportNote(transport, enabled) {
+      const value = String(transport || '').trim().toLowerCase();
+      if (value !== 'grpc') return '';
+      if (enabled) {
+        return 'Xray считает gRPC transport устаревшим и рекомендует XHTTP (stream-up H2).';
+      }
+      return 'Если этот узел войдёт в generated fragment, Xray предупредит, что gRPC transport устарел, и порекомендует XHTTP.';
+    }
+
     function subsSyncSelection() {
       const tbody = $(SUB_IDS.tbody);
       if (!tbody) return;
@@ -4233,6 +4242,8 @@ let outboundsModuleApi = null;
         const host = escapeHtml(String(node && node.host ? node.host : ''));
         const port = escapeHtml(String(node && (node.port || node.port === 0) ? node.port : ''));
         const detail = escapeHtml(String(node && node.detail ? node.detail : ''));
+        const deprecatedTransportNote = subsDeprecatedTransportNote(node && node.transport, enabled);
+        const deprecatedTransportNoteHtml = escapeHtml(deprecatedTransportNote);
         const endpoint = [host, port].filter(Boolean).join(':');
         const reasonLabel = escapeHtml(subsNodeReasonLabel(reasons));
         const manualExcluded = !!(node && node.key && excluded.has(String(node.key)));
@@ -4260,9 +4271,11 @@ let outboundsModuleApi = null;
                 ${protocol ? `<span class="xk-sub-node-pill">${protocol}</span>` : ''}
                 ${transport ? `<span class="xk-sub-node-pill xk-sub-node-pill-transport">${transport}</span>` : ''}
                 ${security ? `<span class="xk-sub-node-pill xk-sub-node-pill-security">${security}</span>` : ''}
+                ${deprecatedTransportNote ? `<span class="xk-sub-node-pill xk-sub-node-pill-warning" data-tooltip="${deprecatedTransportNoteHtml}">deprecated</span>` : ''}
                 ${endpoint ? `<span class="xk-sub-node-endpoint">${endpoint}</span>` : ''}
               </div>
               ${detail ? `<div class="xk-sub-node-detail">${detail}</div>` : ''}
+              ${deprecatedTransportNote ? `<div class="xk-sub-node-warning">${deprecatedTransportNoteHtml}</div>` : ''}
             </div>
             <div class="xk-sub-node-side">
               <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
@@ -4624,6 +4637,7 @@ let outboundsModuleApi = null;
         data.changed = changed;
         const sourceCount = Number(data.source_count || data.count || 0);
         const filteredOutCount = Number(data.filtered_out_count || 0);
+        const warningList = Array.isArray(data.warnings) ? data.warnings.map((item) => String(item || '').trim()).filter(Boolean) : [];
         const filterNote = filteredOutCount > 0 && sourceCount > 0
           ? ` · по фильтру ${Number(data.count || 0)} из ${sourceCount}`
           : '';
@@ -4639,7 +4653,14 @@ let outboundsModuleApi = null;
             : '');
         const msg = `Готово: ${Number(data.count || 0)} outbound` + filterNote + (data.changed ? ' · файл обновлён' : ' · без изменений');
         const fileNote = data.output_file ? (' · ' + String(data.output_file)) : '';
-        subsSetStatus(msg + fileNote + routingNote + routingModeNote, false, true);
+        subsSetStatus(msg + fileNote + routingNote + routingModeNote + (warningList.length ? ` В· warning: ${warningList[0]}` : ''), false, true);
+        const warningStatusNote = warningList.length ? ' | warning: ' + warningList[0] : '';
+        if (warningStatusNote) {
+          subsSetStatus(msg + fileNote + routingNote + routingModeNote + warningStatusNote, false, true);
+        }
+        if (warningList.length) {
+          try { toastXkeen(warningList.join(' '), 'warning'); } catch (eWarn) {}
+        }
         if (!changed) {
           try { toastXkeen('Подписка проверена: изменений нет.', 'info'); } catch (e4) {}
         } else if (!data.restarted) {

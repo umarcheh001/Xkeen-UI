@@ -8171,6 +8171,12 @@ html[data-theme="light"] .xk-mi-status.error {
   color: #fde68a;
 }
 
+.xk-sub-node-pill-warning {
+  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.14);
+  color: #fde68a;
+}
+
 .xk-sub-node-endpoint {
   display: inline-flex;
   align-items: center;
@@ -8185,6 +8191,14 @@ html[data-theme="light"] .xk-mi-status.error {
   color: #7dd3fc;
   font-size: calc(12px * var(--xk-font-scale));
   line-height: 1.34;
+  word-break: break-word;
+}
+
+.xk-sub-node-warning {
+  margin-top: 2px;
+  color: #fcd34d;
+  font-size: calc(11px * var(--xk-font-scale));
+  line-height: 1.35;
   word-break: break-word;
 }
 
@@ -9010,8 +9024,18 @@ html[data-theme="light"] .xk-sub-node-pill-security {
   color: #92400e;
 }
 
+html[data-theme="light"] .xk-sub-node-pill-warning {
+  border-color: rgba(217, 119, 6, 0.24);
+  background: rgba(254, 243, 199, 0.9);
+  color: #92400e;
+}
+
 html[data-theme="light"] .xk-sub-node-detail {
   color: #0f766e;
+}
+
+html[data-theme="light"] .xk-sub-node-warning {
+  color: #9a3412;
 }
 
 /* Donate modal (💰 Донат) */

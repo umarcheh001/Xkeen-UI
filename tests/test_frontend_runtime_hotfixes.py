@@ -553,6 +553,27 @@ def test_xray_routing_schema_covers_subscription_generated_fragments():
         assert fragment_schema['definitions']['routingRule']['additionalProperties'] is False
 
 
+def test_xray_stream_network_schema_marks_grpc_as_deprecated():
+    for schema_path in [
+        Path('xkeen-ui/static/schemas/xray-config.schema.json'),
+        Path('xkeen-ui/static/schemas/xray-inbounds.schema.json'),
+        Path('xkeen-ui/static/schemas/xray-outbounds.schema.json'),
+        Path('xkeen-ui/static/schemas/xray-routing.schema.json'),
+    ]:
+        schema = json.loads(schema_path.read_text(encoding='utf-8'))
+        network_schema = schema['definitions']['streamSettings']['properties']['network']
+        assert network_schema['deprecatedValues'] == ['grpc']
+        assert 'XHTTP' in network_schema['deprecationMessage']
+
+    panel = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    assert 'gRPC (deprecated)' in panel
+
+    outbounds_src = Path('xkeen-ui/static/js/features/outbounds.js').read_text(encoding='utf-8')
+    assert 'function subsDeprecatedTransportNote' in outbounds_src
+    assert 'Array.isArray(data.warnings)' in outbounds_src
+    assert 'xk-sub-node-pill-warning' in outbounds_src
+
+
 def test_runtime_vendor_assets_exist_after_frontend_build():
     required = [
         Path('xkeen-ui/static/vendor/npm/@codemirror/state/dist/index.js'),

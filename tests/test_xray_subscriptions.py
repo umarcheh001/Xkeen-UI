@@ -1036,6 +1036,9 @@ def test_refresh_subscription_persists_last_nodes_with_transport_metadata(tmp_pa
     assert result["source_count"] == 2
     assert result["filtered_out_count"] == 1
     assert result["tags"] == ["jsont--GRPC_Sweden"]
+    assert result["warnings"]
+    assert "gRPC" in result["warnings"][0]
+    assert "XHTTP" in result["warnings"][0]
     assert [item["transport"] for item in result["last_nodes"]] == ["ws", "grpc"]
     assert result["last_nodes"][0].get("tag") in ("", None)
     assert result["last_nodes"][1]["tag"] == "jsont--GRPC_Sweden"
@@ -1046,6 +1049,8 @@ def test_refresh_subscription_persists_last_nodes_with_transport_metadata(tmp_pa
     saved = state["subscriptions"][0]
     assert saved["transport_filter"] == "grpc"
     assert saved["last_filtered_out_count"] == 1
+    assert saved["last_warnings"]
+    assert "gRPC" in saved["last_warnings"][0]
     assert [item["transport"] for item in saved["last_nodes"]] == ["ws", "grpc"]
     assert saved["last_nodes"][1]["tag"] == "jsont--GRPC_Sweden"
 

@@ -87,6 +87,7 @@ TRANSPORT_FILTER_KEYS = ("transport_filter", "transportFilter", "transport_regex
 EXCLUDED_NODE_KEYS_KEYS = ("excluded_node_keys", "excludedNodeKeys", "exclude_node_keys", "excludeNodeKeys")
 LAST_NODES_KEYS = ("last_nodes", "lastNodes")
 NODE_LATENCY_KEYS = ("node_latency", "nodeLatency")
+LAST_WARNINGS_KEYS = ("last_warnings", "lastWarnings")
 
 DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
 DEFAULT_PROBE_TIMEOUT_SECONDS = 8.0
@@ -257,6 +258,42 @@ def _normalize_last_nodes(value: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _deprecated_transport_message(transport: str) -> str:
+    value = str(transport or "").strip().lower()
+    if value == "grpc":
+        return "Transport gRPC устарел в актуальных версиях Xray; по возможности используйте XHTTP (stream-up H2)."
+    return ""
+
+
+def _subscription_result_warnings(nodes: Iterable[Dict[str, Any]]) -> List[str]:
+    grpc_nodes: List[str] = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        if str(node.get("transport") or "").strip().lower() != "grpc":
+            continue
+        if not str(node.get("tag") or "").strip():
+            continue
+        name = str(node.get("name") or node.get("tag") or "node").strip() or "node"
+        grpc_nodes.append(name)
+
+    if not grpc_nodes:
+        return []
+
+    if len(grpc_nodes) == 1:
+        name = grpc_nodes[0]
+        return [
+            f'Узел "{name}" использует устаревший transport gRPC. {_deprecated_transport_message("grpc")}'
+        ]
+
+    preview = ", ".join(grpc_nodes[:3])
+    if len(grpc_nodes) > 3:
+        preview += f" и ещё {len(grpc_nodes) - 3}"
+    return [
+        f"В generated fragment есть {len(grpc_nodes)} узла с устаревшим transport gRPC ({preview}). {_deprecated_transport_message('grpc')}"
+    ]
+
+
 def _safe_float(value: Any) -> float | None:
     try:
         return float(value)
@@ -410,6 +447,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
         type_filter = _stored_filter_value(item, TYPE_FILTER_KEYS)
         transport_filter = _stored_filter_value(item, TRANSPORT_FILTER_KEYS)
         excluded_node_keys = _read_string_list_value(item, EXCLUDED_NODE_KEYS_KEYS)
+        last_warnings = _read_string_list_value(item, LAST_WARNINGS_KEYS)
         last_nodes = _normalize_last_nodes(
             item.get("last_nodes") if "last_nodes" in item else item.get("lastNodes")
         )
@@ -423,6 +461,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
             + TYPE_FILTER_KEYS[1:]
             + TRANSPORT_FILTER_KEYS[1:]
             + EXCLUDED_NODE_KEYS_KEYS[1:]
+            + LAST_WARNINGS_KEYS[1:]
             + LAST_NODES_KEYS[1:]
             + NODE_LATENCY_KEYS[1:]
         ):
@@ -442,6 +481,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 "routing_mode": _clean_routing_mode(item.get("routing_mode", item.get("routingMode"))),
                 "interval_hours": interval,
                 "output_file": output_file,
+                "last_warnings": last_warnings,
                 "last_nodes": last_nodes,
                 "node_latency": _prune_node_latency_map(node_latency, last_nodes),
                 "last_tags": [str(x) for x in item.get("last_tags", []) if str(x or "").strip()]
@@ -531,6 +571,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
             + TYPE_FILTER_KEYS[1:]
             + TRANSPORT_FILTER_KEYS[1:]
             + EXCLUDED_NODE_KEYS_KEYS[1:]
+            + LAST_WARNINGS_KEYS[1:]
             + LAST_NODES_KEYS[1:]
             + NODE_LATENCY_KEYS[1:]
         ):
@@ -2278,6 +2319,7 @@ def refresh_subscription(
         "count": 0,
         "source_count": 0,
         "filtered_out_count": 0,
+        "warnings": [],
         "last_nodes": [],
         "tags": [],
         "errors": [],
@@ -2392,6 +2434,8 @@ def refresh_subscription(
             interval = profile_interval
             sub["profile_update_interval_hours"] = profile_interval
 
+        warnings = _subscription_result_warnings(preview_nodes)
+
         sub.update(
             {
                 "last_ok": True,
@@ -2400,6 +2444,7 @@ def refresh_subscription(
                 "last_count": len(outbounds),
                 "last_source_count": source_count,
                 "last_filtered_out_count": filtered_out_count,
+                "last_warnings": warnings,
                 "last_nodes": preview_nodes,
                 "node_latency": node_latency,
                 "last_tags": tags,
@@ -2433,6 +2478,7 @@ def refresh_subscription(
                 "count": len(outbounds),
                 "source_count": source_count,
                 "filtered_out_count": filtered_out_count,
+                "warnings": warnings,
                 "last_nodes": preview_nodes,
                 "node_latency": node_latency,
                 "tags": tags,

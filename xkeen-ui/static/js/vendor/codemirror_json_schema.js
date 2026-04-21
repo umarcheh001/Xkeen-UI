@@ -147,6 +147,45 @@ function branchObjectFitScore(value, schema, rootSchema) {
   return score;
 }
 
+function sameJsonValue(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function schemaDeprecationMessage(schema, value) {
+  if (!schema || typeof schema !== 'object') return '';
+  if (schema.deprecated === true) {
+    return String(schema.deprecationMessage || 'Это значение устарело.');
+  }
+  if (Array.isArray(schema.deprecatedValues)) {
+    const matched = schema.deprecatedValues.some((item) => sameJsonValue(item, value));
+    if (matched) {
+      const label = typeof value === 'string' ? `\`${value}\`` : `\`${JSON.stringify(value)}\``;
+      return String(schema.deprecationMessage || `Значение ${label} устарело.`);
+    }
+  }
+  return '';
+}
+
+function getValueAtPointer(rootValue, pointer) {
+  if (!pointer) return rootValue;
+  const parts = String(pointer).slice(1).split('/').map((part) =>
+    part.replace(/~1/g, '/').replace(/~0/g, '~')
+  );
+  let current = rootValue;
+  for (const part of parts) {
+    if (current == null) return undefined;
+    if (Array.isArray(current)) {
+      const index = Number(part);
+      if (!Number.isInteger(index) || index < 0 || index >= current.length) return undefined;
+      current = current[index];
+      continue;
+    }
+    if (typeof current !== 'object') return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
 /**
  * Validate a parsed JSON value against a JSON Schema.
  * Returns an array of { pointer, message } error objects.
@@ -182,6 +221,12 @@ function validateValue(value, schema, rootSchema, pointer) {
     if (JSON.stringify(value) !== JSON.stringify(schema.const)) {
       errors.push({ pointer: p, message: `Значение должно быть: ${JSON.stringify(schema.const)}` });
     }
+  }
+
+  // --- deprecation ---
+  const deprecationMessage = schemaDeprecationMessage(schema, value);
+  if (deprecationMessage) {
+    errors.push({ pointer: p, message: deprecationMessage });
   }
 
   // --- string constraints ---
@@ -679,6 +724,9 @@ function jsonSchemaHover(options) {
 
     const subSchema = getSchemaAtPointer(schema, schema, pointer);
     if (!subSchema || typeof subSchema !== 'object') return null;
+    const docValue = safeParseJson(doc.toString());
+    const currentValue = docValue == null ? undefined : getValueAtPointer(docValue, pointer);
+    const deprecationMessage = schemaDeprecationMessage(subSchema, currentValue);
 
     // Build tooltip content
     const parts = [];
@@ -689,6 +737,9 @@ function jsonSchemaHover(options) {
 
     if (subSchema.description) {
       parts.push(`<div style="margin-bottom:6px">${escapeHtml(subSchema.description)}</div>`);
+    }
+    if (deprecationMessage) {
+      parts.push(`<div style="margin-bottom:6px;padding:6px 8px;border-radius:8px;border:1px solid rgba(245, 158, 11, 0.35);background:rgba(245, 158, 11, 0.12);color:#fcd34d">${escapeHtml(deprecationMessage)}</div>`);
     }
 
     const typeInfo = [];
@@ -1056,17 +1107,24 @@ function valueCompletionResult(schema, valueSchema, opts) {
   const prefixLower = prefix.toLowerCase();
   const completions = [];
   const seen = new Set();
-  const pushCompletion = (label, apply, type, detail) => {
+  const pushCompletion = (label, apply, type, detail, info) => {
     if (prefixLower && !String(label).toLowerCase().startsWith(prefixLower)) return;
     const dedupeKey = `${String(label)}\u0000${String(apply)}`;
     if (seen.has(dedupeKey)) return;
     seen.add(dedupeKey);
-    completions.push({ label, apply, type, detail });
+    completions.push({ label, apply, type, detail, info });
   };
 
   if (resolved.enum) {
     for (const val of resolved.enum) {
-      pushCompletion(valueCompletionLabel(val), JSON.stringify(val), resolved.type || 'enum', 'enum');
+      const info = schemaDeprecationMessage(resolved, val) || undefined;
+      pushCompletion(
+        valueCompletionLabel(val),
+        JSON.stringify(val),
+        resolved.type || 'enum',
+        info ? 'deprecated' : 'enum',
+        info
+      );
     }
   }
 
