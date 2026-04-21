@@ -510,6 +510,88 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+function pointerLabel(pointer) {
+  if (!pointer) return 'root';
+  const parts = pointer.slice(1).split('/').map(p =>
+    p.replace(/~1/g, '/').replace(/~0/g, '~')
+  );
+  const label = parts.map((part, index) => {
+    if (/^\d+$/.test(part)) return '[]';
+    return index > 0 && /^\d+$/.test(parts[index - 1]) ? `.${part}` : part;
+  }).join('.').replace(/\.\[\]/g, '[]').replace(/\[\]\./g, '[].');
+  return label || 'root';
+}
+
+function schemaTypeLabel(schema) {
+  if (!schema || typeof schema !== 'object') return '';
+  if (schema.type) return Array.isArray(schema.type) ? schema.type.join(' | ') : String(schema.type);
+  if (schema.enum) return 'enum';
+  if (schema.const !== undefined) return 'const';
+  if (schema.properties || schema.additionalProperties || schema.patternProperties) return 'object';
+  if (schema.items) return 'array';
+  if (schema.anyOf) return 'anyOf';
+  if (schema.oneOf) return 'oneOf';
+  if (schema.allOf) return 'allOf';
+  return '';
+}
+
+function schemaHint(schema) {
+  if (!schema || typeof schema !== 'object') return '';
+  if (schema.description) return String(schema.description);
+  const bits = [];
+  const type = schemaTypeLabel(schema);
+  if (type) bits.push(type);
+  if (schema.enum && Array.isArray(schema.enum)) bits.push(schema.enum.map(v => JSON.stringify(v)).join(', '));
+  if (schema.default !== undefined) bits.push(`default ${JSON.stringify(schema.default)}`);
+  if (schema.format) bits.push(`format ${schema.format}`);
+  return bits.join(' · ');
+}
+
+function renderPropertiesSummary(schema, rootSchema) {
+  const props = collectAllProperties(schema, rootSchema);
+  const entries = Object.entries(props || {});
+  if (!entries.length) return '';
+
+  const required = new Set(Array.isArray(schema.required) ? schema.required : []);
+  const shown = entries.slice(0, 12).map(([key, value]) => {
+    const resolved = resolveSchema(value, rootSchema) || value;
+    const hint = schemaHint(resolved);
+    const req = required.has(key) ? ' *' : '';
+    const suffix = hint ? ` — ${escapeHtml(hint)}` : '';
+    return `<li><code>${escapeHtml(key)}</code>${req}${suffix}</li>`;
+  }).join('');
+  const more = entries.length > 12
+    ? `<li style="opacity:.72">и ещё ${entries.length - 12}</li>`
+    : '';
+  const requiredLine = required.size
+    ? `<div style="margin-top:6px;font-size:.9em;opacity:.86">обязательные: ${Array.from(required).map(k => `<code>${escapeHtml(k)}</code>`).join(', ')}</div>`
+    : '';
+
+  return [
+    '<div style="margin-top:8px">',
+    '<div style="margin-bottom:4px;font-size:.9em;opacity:.86">поля:</div>',
+    `<ul style="margin:0;padding-left:18px">${shown}${more}</ul>`,
+    requiredLine,
+    '</div>',
+  ].join('');
+}
+
+function renderArrayItemsSummary(schema, rootSchema) {
+  if (!schema || typeof schema !== 'object' || !schema.items) return '';
+  const itemSchema = resolveSchema(Array.isArray(schema.items) ? schema.items[0] : schema.items, rootSchema);
+  if (!itemSchema || typeof itemSchema !== 'object') return '';
+  const itemType = schemaTypeLabel(itemSchema);
+  const itemHint = schemaHint(itemSchema);
+  const parts = [];
+  if (itemType) parts.push(`элементы: <code>${escapeHtml(itemType)}</code>`);
+  if (itemHint && itemHint !== itemType) parts.push(escapeHtml(itemHint));
+  const props = renderPropertiesSummary(itemSchema, rootSchema);
+  return [
+    parts.length ? `<div style="margin-top:8px;font-size:.9em;opacity:.88">${parts.join(' · ')}</div>` : '',
+    props,
+  ].join('');
+}
+
 function jsonSchemaHover(options) {
   return async function schemaHoverSource(view, pos, side) {
     const schema = getJSONSchema(view.state);
@@ -526,6 +608,10 @@ function jsonSchemaHover(options) {
 
     // Build tooltip content
     const parts = [];
+    const label = pointerLabel(pointer);
+    if (label) {
+      parts.push(`<div style="margin-bottom:5px;font-size:.9em;opacity:.74"><code>${escapeHtml(label)}</code></div>`);
+    }
 
     if (subSchema.description) {
       parts.push(`<div style="margin-bottom:6px">${escapeHtml(subSchema.description)}</div>`);
@@ -559,6 +645,16 @@ function jsonSchemaHover(options) {
       parts.push(`<div style="font-size:0.9em;opacity:0.85">${typeInfo.join(' · ')}</div>`);
     }
 
+    if (schemaTypeLabel(subSchema).includes('object') || subSchema.properties || subSchema.anyOf || subSchema.allOf || subSchema.oneOf) {
+      const propertiesSummary = renderPropertiesSummary(subSchema, schema);
+      if (propertiesSummary) parts.push(propertiesSummary);
+    }
+
+    if (schemaTypeLabel(subSchema).includes('array') || subSchema.items) {
+      const arraySummary = renderArrayItemsSummary(subSchema, schema);
+      if (arraySummary) parts.push(arraySummary);
+    }
+
     if (!parts.length) return null;
 
     return {
@@ -568,7 +664,7 @@ function jsonSchemaHover(options) {
       create() {
         const dom = document.createElement('div');
         dom.className = 'cm6-json-schema-hover';
-        dom.style.cssText = 'padding:8px 12px;max-width:420px;line-height:1.45;font-size:13px;';
+        dom.style.cssText = 'padding:8px 12px;max-width:520px;line-height:1.45;font-size:13px;';
         dom.innerHTML = parts.join('');
         return { dom };
       },

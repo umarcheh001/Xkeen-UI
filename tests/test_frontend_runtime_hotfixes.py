@@ -469,6 +469,7 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
     vite = Path('vite.config.mjs').read_text(encoding='utf-8')
     schema_loader = schema_loader_path.read_text(encoding='utf-8')
+    schema_shim = shim_path.read_text(encoding='utf-8')
 
     assert shim_path.is_file()
     assert schema_loader_path.is_file()
@@ -480,7 +481,12 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "xray-inbounds.schema.json" in schema_loader
     assert "xray-outbounds.schema.json" in schema_loader
     assert "adaptXraySchema" not in schema_loader
-    assert "parse as parseJsonc" in shim_path.read_text(encoding='utf-8')
+    assert "parse as parseJsonc" in schema_shim
+    assert "function pointerLabel" in schema_shim
+    assert "function renderPropertiesSummary" in schema_shim
+    assert "function renderArrayItemsSummary" in schema_shim
+    assert "поля:" in schema_shim
+    assert "элементы:" in schema_shim
     assert "jsonSchemaWithSyntaxLinter" in boot
     assert "jsonSchemaSyntaxAwareHover" in boot
     assert "isSchemaHoverTarget" in boot

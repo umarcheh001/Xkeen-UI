@@ -163,6 +163,8 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
 
   await hoverRenderedToken(page, '"rules"');
   await expect(page.locator('.cm-tooltip-hover')).toContainText('Массив правил маршрутизации');
+  await expect(page.locator('.cm-tooltip-hover')).toContainText('поля:');
+  await expect(page.locator('.cm-tooltip-hover')).toContainText('outboundTag');
 
   await replaceRoutingText(page, COMPLETION_ROUTING);
   await waitForRoutingSchema(page);
