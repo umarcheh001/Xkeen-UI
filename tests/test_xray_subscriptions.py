@@ -484,6 +484,81 @@ def test_delete_subscription_removes_tags_from_routing_but_keeps_vless_reality(t
     assert rules[1]["outboundTag"] == "direct"
 
 
+def test_delete_subscription_removes_empty_generated_balancer(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("gRPC Russia", "grpc", host="ru.example.com"), {}),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps({"routing": {"rules": []}}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "auto-route",
+            "tag": "cdn.pecan.run",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+        },
+    )
+    refreshed = subs.refresh_subscription(
+        str(ui_state_dir),
+        "auto-route",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+    assert refreshed["routing_changed"] is True
+    assert refreshed["routing_selector_count"] == 1
+
+    result = subs.delete_subscription(
+        str(ui_state_dir),
+        "auto-route",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        remove_file=True,
+        restart_xkeen=None,
+    )
+
+    assert result["routing_changed"] is True
+    routing_text = (xray_dir / "05_routing.json").read_text(encoding="utf-8")
+    assert "cdn.pecan.run" not in routing_text
+    routing = json.loads(routing_text)
+    assert routing["routing"]["rules"] == []
+    assert routing["routing"]["balancers"] == []
+
+
 def test_refresh_subscription_applies_name_and_type_filters_to_links(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

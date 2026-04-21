@@ -1678,6 +1678,34 @@ def _remove_auto_balancer_rule(routing: Dict[str, Any]) -> bool:
     return True
 
 
+def _remove_auto_least_ping_balancer(
+    routing: Dict[str, Any],
+    *,
+    balancer_tag: str,
+    removed_tags: set[str],
+    previous_selector: List[str],
+) -> bool:
+    balancers = routing.get("balancers")
+    if not isinstance(balancers, list):
+        return False
+
+    tag = str(balancer_tag or AUTO_BALANCER_TAG).strip() or AUTO_BALANCER_TAG
+    selector_before = _clean_tags_list(previous_selector)
+    if selector_before and not all(item in removed_tags for item in selector_before):
+        return False
+
+    for idx, item in enumerate(balancers):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("tag") or "").strip() != tag:
+            continue
+        if _balancer_strategy_type(item) != "leastping":
+            return False
+        balancers.pop(idx)
+        return True
+    return False
+
+
 def sync_subscription_routing(
     *,
     xray_configs_dir: str,
@@ -1743,7 +1771,14 @@ def sync_subscription_routing(
             balancer_tag=balancer_tag,
             enabled=False,
         )
-        changed = bool(_remove_auto_balancer_rule(routing) or migrate_stats.get("changed"))
+        rule_changed = _remove_auto_balancer_rule(routing)
+        balancer_changed = _remove_auto_least_ping_balancer(
+            routing,
+            balancer_tag=balancer_tag,
+            removed_tags=remove,
+            previous_selector=current_selector,
+        )
+        changed = bool(rule_changed or balancer_changed or migrate_stats.get("changed"))
 
     if not changed:
         return {
