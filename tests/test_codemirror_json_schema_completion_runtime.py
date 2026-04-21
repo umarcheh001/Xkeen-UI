@@ -48,6 +48,39 @@ console.log(JSON.stringify(result ? result.options.map((option) => option.label)
     return json.loads(result.stdout.strip())
 
 
+def _run_linter_messages(doc: str) -> list[str]:
+    if shutil.which("node") is None:
+        pytest.skip("node is not available in this environment")
+
+    script = f"""
+import fs from 'node:fs';
+import {{ EditorState }} from '@codemirror/state';
+import {{ json }} from '@codemirror/lang-json';
+import {{ jsonSchemaLinter, stateExtensions }} from './xkeen-ui/static/js/vendor/codemirror_json_schema.js';
+
+const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/xray-routing.schema.json', 'utf8'));
+const doc = {json.dumps(doc)};
+const state = EditorState.create({{
+  doc,
+  extensions: [json(), stateExtensions(schema)],
+}});
+const diagnostics = jsonSchemaLinter()({{ state }});
+console.log(JSON.stringify(diagnostics.map((item) => item.message)));
+"""
+
+    result = subprocess.run(
+        ["node", "--input-type=module"],
+        input=script,
+        capture_output=True,
+        cwd=str(ROOT),
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    return json.loads(result.stdout.strip())
+
+
 def test_routing_schema_completion_supports_rule_value_enum_inside_array_items():
     labels = _run_completion_labels(
         "\n".join([
@@ -107,3 +140,30 @@ def test_routing_schema_completion_supports_example_tags_for_inbound_arrays():
 
     assert labels is not None
     assert "tproxy" in labels
+
+
+def test_routing_schema_linter_prefers_nested_anyof_branch_errors_over_root_mismatch():
+    messages = _run_linter_messages(
+        "\n".join([
+            "{",
+            '  "routing": {',
+            '    "rules": [',
+            "      {",
+            '        "IP": ["1.1.1.1/32"]',
+            "      }",
+            "    ],",
+            '    "balancers": [',
+            "      {",
+            '        "Tag": "proxy",',
+            '        "selector": []',
+            "      }",
+            "    ]",
+            "  }",
+            "}",
+            "",
+        ])
+    )
+
+    assert all("`routing`" not in message for message in messages)
+    assert any("`IP`" in message for message in messages)
+    assert any("`tag`" in message for message in messages)

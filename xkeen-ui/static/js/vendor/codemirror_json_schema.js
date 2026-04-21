@@ -96,6 +96,57 @@ function matchesType(value, schemaType) {
   return vt === schemaType;
 }
 
+function errorPointerDepth(err) {
+  return String((err && err.pointer) || '').split('/').filter(Boolean).length;
+}
+
+function branchObjectFitScore(value, schema, rootSchema) {
+  if (typeOf(value) !== 'object' || !schema || typeof schema !== 'object') return 0;
+  const resolved = resolveSchema(schema, rootSchema);
+  if (!resolved || typeof resolved !== 'object') return 0;
+
+  const props = collectAllProperties(resolved, rootSchema);
+  const patterns = resolved.patternProperties || {};
+  const additional = resolved.additionalProperties;
+  let score = 0;
+
+  for (const key of Object.keys(value)) {
+    if (key in props) {
+      score += 4;
+      continue;
+    }
+
+    let matchedPattern = false;
+    for (const pat of Object.keys(patterns)) {
+      try {
+        if (new RegExp(pat, 'u').test(key)) {
+          matchedPattern = true;
+          break;
+        }
+      } catch (e) {}
+    }
+    if (matchedPattern) {
+      score += 3;
+      continue;
+    }
+
+    if (additional && typeof additional === 'object') {
+      score += 1;
+      continue;
+    }
+
+    if (additional === false) score -= 2;
+  }
+
+  if (Array.isArray(resolved.required)) {
+    for (const req of resolved.required) {
+      if (req in value) score += 1;
+    }
+  }
+
+  return score;
+}
+
 /**
  * Validate a parsed JSON value against a JSON Schema.
  * Returns an array of { pointer, message } error objects.
@@ -258,24 +309,32 @@ function validateValue(value, schema, rootSchema, pointer) {
 
   // --- anyOf ---
   if (Array.isArray(schema.anyOf)) {
-    const branchErrors = [];
+    const baseDepth = errorPointerDepth({ pointer: p });
+    const branchResults = [];
     const matching = schema.anyOf.some(sub => {
       const resolved = resolveSchema(sub, rootSchema);
       const subErrors = validateValue(value, resolved, rootSchema, p);
-      branchErrors.push(subErrors);
+      branchResults.push({
+        errors: subErrors,
+        fitScore: branchObjectFitScore(value, resolved, rootSchema),
+        maxDepth: subErrors.length ? Math.max(...subErrors.map(errorPointerDepth)) : baseDepth,
+        topLevelAdditionalCount: subErrors.filter(err =>
+          errorPointerDepth(err) <= baseDepth + 1 &&
+          String((err && err.message) || '').includes('не разрешено')
+        ).length,
+      });
       return subErrors.length === 0;
     });
     if (!matching) {
-      const pointerDepth = (err) => String((err && err.pointer) || '').split('/').filter(Boolean).length;
-      const sorted = branchErrors
-        .filter(items => Array.isArray(items) && items.length)
+      const sorted = branchResults
+        .filter(branch => Array.isArray(branch.errors) && branch.errors.length)
         .sort((a, b) => {
-          if (a.length !== b.length) return a.length - b.length;
-          const aDepth = Math.max(...a.map(pointerDepth));
-          const bDepth = Math.max(...b.map(pointerDepth));
-          return bDepth - aDepth;
+          if (a.fitScore !== b.fitScore) return b.fitScore - a.fitScore;
+          if (a.topLevelAdditionalCount !== b.topLevelAdditionalCount) return a.topLevelAdditionalCount - b.topLevelAdditionalCount;
+          if (a.maxDepth !== b.maxDepth) return b.maxDepth - a.maxDepth;
+          return a.errors.length - b.errors.length;
         });
-      if (sorted.length) errors.push(...sorted[0]);
+      if (sorted.length) errors.push(...sorted[0].errors);
       else errors.push({ pointer: p, message: `Значение не соответствует ни одной из anyOf-схем` });
     }
   }
