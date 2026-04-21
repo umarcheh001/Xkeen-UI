@@ -20,7 +20,9 @@ import '../features/routing_cards/rules/dnd_pointer.js?v=20260308-stage3';
 import '../features/routing_cards/rules/render.js?v=20260317a';
 import '../features/routing_cards/rules/controls.js?v=20260317g';
 import '../features/routing_cards/rules/dat_bridge.js?v=20260304h4';
-import '../features/routing_cards.js';
+import { initRoutingCards } from '../features/routing_cards.js';
 import '../features/compat/routing_cards.js';
 import '../features/local_io.js';
 import '../features/compat/local_io.js';
+
+initRoutingCards();

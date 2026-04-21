@@ -543,13 +543,7 @@ let routingCardsModuleApi = null;
     }
   }
 
-  let _inited = false;
-  function init() {
-    if (_inited) return;
-    _inited = true;
-
-    try { wireLazyHelperClicks(); } catch (e) {}
-
+  function initAvailableModules() {
     // Order is explicit, each module is responsible for its own guards.
     try {
       if (RC.helpModal && typeof RC.helpModal.wireRoutingHelpButtons === 'function') {
@@ -574,21 +568,39 @@ let routingCardsModuleApi = null;
         RC.rules.controls.initRulesCard();
       }
     } catch (e) {}
+  }
+
+  let _inited = false;
+  function init() {
+    const firstRun = !_inited;
+    if (firstRun) {
+      _inited = true;
+      try { wireLazyHelperClicks(); } catch (e) {}
+    }
+
+    // routing_cards.js can be imported by lightweight helpers before the full
+    // routing bundle registers rules/dat submodules. Keep init idempotent so a
+    // later bundle-level call wires newly available controls.
+    initAvailableModules();
 
     try { wireFocusToggle(); } catch (e) {}
     try { applyUiSettings(); } catch (e) {}
-    try {
-      document.addEventListener('xkeen:ui-settings-changed', () => {
-        try { applyUiSettings(); } catch (e2) {}
-      });
-    } catch (e) {}
-    try {
-      document.addEventListener('xkeen:panel-view-changed', () => {
-        try { applyUiSettings(); } catch (e2) {}
-      });
-    } catch (e) {}
+    if (firstRun) {
+      try {
+        document.addEventListener('xkeen:ui-settings-changed', () => {
+          try { initAvailableModules(); } catch (e2) {}
+          try { applyUiSettings(); } catch (e2) {}
+        });
+      } catch (e) {}
+      try {
+        document.addEventListener('xkeen:panel-view-changed', () => {
+          try { initAvailableModules(); } catch (e2) {}
+          try { applyUiSettings(); } catch (e2) {}
+        });
+      } catch (e) {}
+    }
 
-    if (IS_DEBUG) {
+    if (IS_DEBUG && firstRun) {
       try {
         // eslint-disable-next-line no-console
         console.log('[RC] init (facade)', {

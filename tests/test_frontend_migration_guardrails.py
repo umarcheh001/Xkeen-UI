@@ -473,8 +473,9 @@ def test_routing_compat_bridges_use_canonical_import_urls_and_explicit_shell_bri
             "import '../features/routing.js';",
             "import '../features/compat/routing.js';",
             "import '../features/compat/routing_shell.js';",
-            "import '../features/routing_cards.js';",
+            "import { initRoutingCards } from '../features/routing_cards.js';",
             "import '../features/compat/routing_cards.js';",
+            "initRoutingCards();",
         ],
         ROOT / "xkeen-ui" / "static" / "js" / "features" / "compat" / "routing.js": [
             "import { getRoutingApi } from '../routing.js';",
