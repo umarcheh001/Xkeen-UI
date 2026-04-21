@@ -1190,3 +1190,89 @@ def test_probe_subscription_nodes_latency_retries_process_start(tmp_path: Path, 
     assert result["failed_count"] == 0
     assert popen_calls["count"] >= 2
     assert wait_calls["count"] >= 2
+
+
+def _probeable_outbound(tag: str, *, host: str = "example.com", port: int = 443, transport: str = "tcp") -> dict:
+    stream = {"network": transport, "security": "none"}
+    if transport == "ws":
+        stream["wsSettings"] = {"path": "/ws", "headers": {"Host": host}}
+    return {
+        "tag": tag,
+        "protocol": "vless",
+        "settings": {
+            "vnext": [
+                {
+                    "address": host,
+                    "port": port,
+                    "users": [{"id": "11111111-1111-4111-8111-111111111111", "encryption": "none"}],
+                }
+            ]
+        },
+        "streamSettings": stream,
+    }
+
+
+def test_build_xray_outbounds_nodes_hides_legacy_single_link_alias():
+    from services import xray_subscriptions as subs
+
+    proxy = _probeable_outbound("proxy", host="single.example.com")
+    alias = json.loads(json.dumps(proxy))
+    alias["tag"] = "vless-reality"
+    cfg = {
+        "outbounds": [
+            proxy,
+            alias,
+            {"tag": "direct", "protocol": "freedom"},
+            {"tag": "block", "protocol": "blackhole"},
+        ]
+    }
+
+    nodes = subs.build_xray_outbounds_nodes(cfg)
+
+    assert [node["tag"] for node in nodes] == ["proxy"]
+    assert nodes[0]["host"] == "single.example.com"
+    assert nodes[0]["transport"] == "tcp"
+
+
+def test_probe_xray_outbounds_nodes_latency_uses_pool_outbounds(monkeypatch, tmp_path: Path):
+    from services import xray_subscriptions as subs
+
+    cfg = {
+        "outbounds": [
+            _probeable_outbound("pool-one", host="one.example.com"),
+            _probeable_outbound("pool-two", host="two.example.com", transport="ws"),
+            {"tag": "direct", "protocol": "freedom"},
+            {"tag": "block", "protocol": "blackhole"},
+        ]
+    }
+    nodes = subs.build_xray_outbounds_nodes(cfg)
+    captured = {}
+
+    monkeypatch.setattr(subs, "_find_xray_binary", lambda: "/bin/xray")
+    monkeypatch.setattr(subs, "_probe_url_for_subscription", lambda _dir: "https://probe.example.com/generate_204")
+
+    def _fake_probe_outbounds_batch(*, xray_bin, targets, probe_url, timeout_value, concurrency=3):
+        captured["xray_bin"] = xray_bin
+        captured["probe_url"] = probe_url
+        captured["tags"] = [item["tag"] for item in targets]
+        return {
+            targets[0]["key"]: {"delay_ms": 111, "error": ""},
+            targets[1]["key"]: {"delay_ms": 222, "error": ""},
+        }
+
+    monkeypatch.setattr(subs, "_probe_outbounds_batch", _fake_probe_outbounds_batch)
+
+    result = subs.probe_xray_outbounds_nodes_latency(
+        cfg,
+        [nodes[0]["key"], nodes[1]["key"]],
+        xray_configs_dir=str(tmp_path),
+        existing_latency={},
+        timeout_s=3,
+    )
+
+    assert result["ok"] is True
+    assert result["ok_count"] == 2
+    assert result["failed_count"] == 0
+    assert captured["tags"] == ["pool-one", "pool-two"]
+    assert result["node_latency"][nodes[0]["key"]]["delay_ms"] == 111
+    assert result["node_latency"][nodes[1]["key"]]["delay_ms"] == 222

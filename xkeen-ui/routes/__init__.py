@@ -94,6 +94,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             save_json=ctx.save_json,
             strip_json_comments_text=ctx.strip_json_comments_text,
             snapshot_xray_config_before_overwrite=ctx.snapshot_xray_config_before_overwrite,
+            ui_state_dir=ctx.ui_state_dir,
         )
     )
 

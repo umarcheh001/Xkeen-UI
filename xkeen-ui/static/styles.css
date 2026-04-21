@@ -8078,6 +8078,24 @@ html[data-theme="light"] .xk-mi-status.error {
   background: rgba(2, 6, 23, 0.22);
 }
 
+.xk-outbounds-node-panel {
+  margin: 10px 0 12px;
+}
+
+.xk-outbounds-node-list {
+  grid-template-columns: 1fr;
+  gap: 8px;
+  min-height: 0;
+  max-height: min(36vh, 320px);
+  padding: 8px;
+}
+
+.xk-outbounds-node-item {
+  min-height: 74px;
+  padding: 11px 12px;
+  border-radius: 10px;
+}
+
 .xk-sub-node-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -49,6 +49,12 @@ from services.xray_outbounds import (
     build_proxy_outbound_from_link,
     build_proxy_url_from_config,
 )
+from services.xray_subscriptions import (
+    build_xray_outbounds_nodes,
+    normalize_xray_outbounds_node_latency,
+    probe_xray_outbounds_node_latency,
+    probe_xray_outbounds_nodes_latency,
+)
 
 
 from routes.common.errors import error_response, exception_response
@@ -61,6 +67,7 @@ def create_xray_configs_blueprint(
     save_json: Callable[..., Any],
     strip_json_comments_text: Callable[[str], str],
     snapshot_xray_config_before_overwrite: Callable[[str], None],
+    ui_state_dir: str = "",
 ) -> Blueprint:
     bp = Blueprint("xray_configs", __name__)
 
@@ -171,6 +178,89 @@ def create_xray_configs_blueprint(
                 return f.read()
         except Exception:
             return ""
+
+    def _load_outbounds_selection(file_arg: str):
+        sel_path = resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=OUTBOUNDS_FILE)
+        sel_path = _normalize_main_json_path(sel_path)
+        chosen_path, raw_path, raw_exists = _choose_raw_or_main(sel_path)
+        text = _read_text_silent(chosen_path)
+
+        cfg = None
+        try:
+            if text.strip():
+                cleaned = strip_json_comments_text(text)
+                cfg = json.loads(cleaned) if cleaned.strip() else None
+            else:
+                cfg = load_json(sel_path, default=None)
+        except Exception:
+            cfg = load_json(sel_path, default=None)
+
+        if not text.strip():
+            try:
+                text = (json.dumps(cfg, ensure_ascii=False, indent=2) if cfg is not None else "{}") + "\n"
+            except Exception:
+                text = "{}\n"
+
+        return {
+            "path": sel_path,
+            "raw_path": raw_path,
+            "raw_exists": raw_exists,
+            "chosen_path": chosen_path,
+            "text": text,
+            "config": cfg,
+        }
+
+    def _outbounds_node_latency_state_path() -> str:
+        root = str(ui_state_dir or "").strip()
+        if not root:
+            return ""
+        return os.path.join(root, "xray_outbounds_node_latency.json")
+
+    def _outbounds_node_latency_fragment_key(sel_path: str) -> str:
+        name = os.path.basename(str(sel_path or "")) or os.path.basename(OUTBOUNDS_FILE)
+        return name or "04_outbounds.json"
+
+    def _load_outbounds_node_latency(sel_path: str, nodes: list[dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        state_path = _outbounds_node_latency_state_path()
+        if not state_path:
+            return {}
+        try:
+            obj = load_json(state_path, default={})
+        except Exception:
+            obj = {}
+        if not isinstance(obj, dict):
+            return {}
+        fragments = obj.get("fragments") if isinstance(obj.get("fragments"), dict) else {}
+        item = fragments.get(_outbounds_node_latency_fragment_key(sel_path)) if isinstance(fragments, dict) else {}
+        raw = item.get("node_latency") if isinstance(item, dict) else {}
+        return normalize_xray_outbounds_node_latency(raw, nodes)
+
+    def _save_outbounds_node_latency(sel_path: str, nodes: list[dict[str, Any]], latency: Any) -> Dict[str, Dict[str, Any]]:
+        clean = normalize_xray_outbounds_node_latency(latency, nodes)
+        state_path = _outbounds_node_latency_state_path()
+        if not state_path:
+            return clean
+        try:
+            root = os.path.dirname(state_path)
+            if root and not os.path.isdir(root):
+                os.makedirs(root, exist_ok=True)
+            try:
+                obj = load_json(state_path, default={})
+            except Exception:
+                obj = {}
+            if not isinstance(obj, dict):
+                obj = {}
+            fragments = obj.get("fragments")
+            if not isinstance(fragments, dict):
+                fragments = {}
+            fragments[_outbounds_node_latency_fragment_key(sel_path)] = {
+                "node_latency": clean,
+            }
+            obj["fragments"] = fragments
+            _atomic_write_json(state_path, obj)
+        except Exception:
+            pass
+        return clean
 
     def _is_true_flag(value: Any) -> bool:
         try:
@@ -619,6 +709,115 @@ def create_xray_configs_blueprint(
             _collect_from_path(sel_path)
 
         return jsonify({"ok": True, "tags": tags}), 200
+
+    # --- API: current outbounds nodes + latency probes ---
+
+    @bp.get("/api/xray/outbounds/nodes")
+    def api_xray_outbounds_nodes():
+        file_arg = request.args.get("file", "")
+        selection = _load_outbounds_selection(file_arg)
+        nodes = build_xray_outbounds_nodes(selection.get("config"))
+        latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes)
+        return (
+            jsonify(
+                {
+                    "ok": True,
+                    "file": os.path.basename(str(selection.get("path") or "")),
+                    "path": selection.get("path"),
+                    "nodes": nodes,
+                    "node_latency": latency,
+                }
+            ),
+            200,
+        )
+
+    def _outbounds_node_timeout(payload: dict[str, Any]) -> float:
+        timeout_raw = payload.get("timeout_s", payload.get("timeoutSec", payload.get("timeout")))
+        try:
+            return float(timeout_raw) if timeout_raw is not None and str(timeout_raw).strip() != "" else 8.0
+        except Exception:
+            return 8.0
+
+    @bp.post("/api/xray/outbounds/nodes/ping")
+    def api_probe_xray_outbounds_node():
+        payload = request.get_json(silent=True) or {}
+        node_key = str(
+            payload.get("node_key")
+            or payload.get("nodeKey")
+            or payload.get("key")
+            or ""
+        ).strip()
+        file_arg = request.args.get("file", "")
+        selection = _load_outbounds_selection(file_arg)
+        nodes = build_xray_outbounds_nodes(selection.get("config"))
+        existing_latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes)
+        try:
+            result = probe_xray_outbounds_node_latency(
+                selection.get("config"),
+                node_key,
+                xray_configs_dir=os.path.dirname(str(selection.get("path") or "")) or XRAY_CONFIGS_DIR,
+                existing_latency=existing_latency,
+                timeout_s=_outbounds_node_timeout(payload),
+            )
+        except KeyError:
+            return error_response("node not found", 404, ok=False)
+        except ValueError as exc:
+            return error_response(str(exc), 400, ok=False)
+        except Exception as exc:
+            return exception_response(
+                "Не удалось проверить задержку proxy-узла.",
+                500,
+                ok=False,
+                code="outbounds_node_ping_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=exc,
+                log_tag="xray_configs.outbounds_node_ping_failed",
+            )
+
+        if result.get("entry"):
+            existing_latency[str(result.get("node_key") or node_key)] = result.get("entry")
+            _save_outbounds_node_latency(str(selection.get("path") or ""), nodes, existing_latency)
+        status = 200 if result.get("ok") else 400
+        return jsonify(result), status
+
+    @bp.post("/api/xray/outbounds/nodes/ping-bulk")
+    def api_probe_xray_outbounds_nodes():
+        payload = request.get_json(silent=True) or {}
+        node_keys = payload.get("node_keys", payload.get("nodeKeys", payload.get("keys")))
+        file_arg = request.args.get("file", "")
+        selection = _load_outbounds_selection(file_arg)
+        nodes = build_xray_outbounds_nodes(selection.get("config"))
+        existing_latency = _load_outbounds_node_latency(str(selection.get("path") or ""), nodes)
+        try:
+            result = probe_xray_outbounds_nodes_latency(
+                selection.get("config"),
+                node_keys,
+                xray_configs_dir=os.path.dirname(str(selection.get("path") or "")) or XRAY_CONFIGS_DIR,
+                existing_latency=existing_latency,
+                timeout_s=_outbounds_node_timeout(payload),
+            )
+        except KeyError:
+            return error_response("node not found", 404, ok=False)
+        except ValueError as exc:
+            return error_response(str(exc), 400, ok=False)
+        except Exception as exc:
+            return exception_response(
+                "Не удалось проверить задержку proxy-узлов.",
+                500,
+                ok=False,
+                code="outbounds_nodes_ping_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=exc,
+                log_tag="xray_configs.outbounds_nodes_ping_failed",
+            )
+
+        saved_latency = _save_outbounds_node_latency(
+            str(selection.get("path") or ""),
+            nodes,
+            result.get("node_latency"),
+        )
+        result["node_latency"] = saved_latency
+        return jsonify(result), 200
 
     # --- API: batch add/update proxy outbounds (for balancer pools) ---
 

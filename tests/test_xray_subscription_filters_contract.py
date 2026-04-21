@@ -45,6 +45,26 @@ def test_outbounds_proxy_pool_uses_fragment_summary_without_hiding_pool_button()
     assert "#outbounds-body.xk-outbounds-summary-fragment #outbounds-pool-btn" not in styles_src
 
 
+def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
+    template_src = _read("xkeen-ui/templates/panel.html")
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    styles_src = _read("xkeen-ui/static/styles.css")
+    routes_src = _read("xkeen-ui/routes/xray_configs.py")
+
+    assert 'id="outbounds-nodes-panel"' in template_src
+    assert 'id="outbounds-nodes-pingall"' in template_src
+    assert 'id="outbounds-nodes-list"' in template_src
+    assert "OUTBOUND_NODE_IDS" in outbounds_src
+    assert "function refreshOutboundsNodes(visible) {" in outbounds_src
+    assert "function outboundsProbeNode(nodeKey) {" in outbounds_src
+    assert "function outboundsProbeAllNodes() {" in outbounds_src
+    assert "/api/xray/outbounds/nodes" in outbounds_src
+    assert "/api/xray/outbounds/nodes/ping" in routes_src
+    assert "/api/xray/outbounds/nodes/ping-bulk" in routes_src
+    assert ".xk-outbounds-node-list" in styles_src
+    assert "max-height: min(36vh, 320px);" in styles_src
+
+
 def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")

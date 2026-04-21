@@ -460,6 +460,23 @@
       </div>
       <p class="xk-card-desc">Активный фрагмент: <code id="outbounds-file-code">{{ outbounds_file }}</code></p>
       <div id="outbounds-fragment-summary" class="outbounds-fragment-summary hidden" aria-live="polite"></div>
+      <section id="outbounds-nodes-panel" class="xk-sub-panel xk-sub-node-panel xk-outbounds-node-panel hidden">
+        <div class="xk-sub-panelhead">
+          <div>
+            <div class="xk-pool-kicker">Серверы</div>
+            <div class="terminal-menu-title" style="margin:0;">Узлы текущего proxy-фрагмента</div>
+            <div id="outbounds-nodes-caption" class="xk-sub-muted">Список появится после загрузки proxy-фрагмента.</div>
+          </div>
+          <div class="xk-sub-nodes-head-actions">
+            <button type="button" id="outbounds-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Проверить задержку всех proxy-узлов в текущем 04_outbounds-фрагменте." aria-label="Пинг всех узлов" disabled>
+              <span class="xk-sub-icon-glyph" aria-hidden="true">⏱</span>
+            </button>
+            <div id="outbounds-nodes-summary" class="xk-pool-summary">0</div>
+          </div>
+        </div>
+        <div id="outbounds-nodes-list" class="xk-sub-node-list xk-outbounds-node-list"></div>
+        <div id="outbounds-nodes-empty" class="xk-pool-empty">Proxy-узлы не найдены.</div>
+      </section>
 
       <div class="outbounds-hints">
         <label class="outbounds-hint-field">

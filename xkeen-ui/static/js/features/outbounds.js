@@ -34,11 +34,24 @@ let outboundsModuleApi = null;
     let _featureLifecycle = null;
     let _subscriptionOutputFiles = null;
     let _subscriptionOutputFilesTs = 0;
+    let _outboundsNodes = [];
+    let _outboundsNodeLatency = Object.create(null);
+    let _outboundsNodePingState = Object.create(null);
+    let _outboundsPingAllBusy = false;
 
     const IDS = {
       fragmentSelect: 'outbounds-fragment-select',
       fragmentRefresh: 'outbounds-fragment-refresh-btn',
       fileCode: 'outbounds-file-code',
+    };
+
+    const OUTBOUND_NODE_IDS = {
+      panel: 'outbounds-nodes-panel',
+      caption: 'outbounds-nodes-caption',
+      summary: 'outbounds-nodes-summary',
+      pingAll: 'outbounds-nodes-pingall',
+      list: 'outbounds-nodes-list',
+      empty: 'outbounds-nodes-empty',
     };
 
     function $(id) {
@@ -410,6 +423,256 @@ let outboundsModuleApi = null;
       if (proxyCount <= 0) return false;
       if (isPoolGeneratedText(data && data.text)) return true;
       return !((data && data.url) || '') && proxyCount > 0;
+    }
+
+    function outboundsNodesApiUrl(suffix) {
+      let url = '/api/xray/outbounds/nodes' + String(suffix || '');
+      const f = getActiveFragment();
+      if (f) url += '?file=' + encodeURIComponent(String(f));
+      return url;
+    }
+
+    function outboundsNodePingStateKey(nodeKey) {
+      return [String(getActiveFragment() || ''), String(nodeKey || '')].join('::');
+    }
+
+    function outboundsNodeLatencyEntry(nodeKey) {
+      const key = String(nodeKey || '').trim();
+      const map = (_outboundsNodeLatency && typeof _outboundsNodeLatency === 'object') ? _outboundsNodeLatency : {};
+      const item = key ? map[key] : null;
+      return (item && typeof item === 'object') ? item : null;
+    }
+
+    function outboundsSetNodes(nodes, latency) {
+      _outboundsNodes = Array.isArray(nodes) ? nodes : [];
+      _outboundsNodeLatency = (latency && typeof latency === 'object') ? latency : Object.create(null);
+      outboundsRenderNodeList();
+    }
+
+    function outboundsSetNodesVisible(visible) {
+      const panel = $(OUTBOUND_NODE_IDS.panel);
+      if (!panel) return;
+      try { panel.classList.toggle('hidden', !visible); } catch (e) {}
+    }
+
+    async function refreshOutboundsNodes(visible) {
+      if (isSubscriptionFragmentMode()) {
+        outboundsSetNodes([], {});
+        outboundsSetNodesVisible(false);
+        return false;
+      }
+      try {
+        const res = await fetch(outboundsNodesApiUrl(''), { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok === false) {
+          outboundsSetNodes([], {});
+          outboundsSetNodesVisible(false);
+          return false;
+        }
+        outboundsSetNodes(
+          Array.isArray(data.nodes) ? data.nodes : [],
+          (data.node_latency && typeof data.node_latency === 'object') ? data.node_latency : {},
+        );
+        const hasNodes = Array.isArray(data.nodes) && data.nodes.length > 0;
+        outboundsSetNodesVisible(visible !== false && hasNodes);
+        return hasNodes;
+      } catch (e) {
+        outboundsSetNodes([], {});
+        outboundsSetNodesVisible(false);
+        return false;
+      }
+    }
+
+    function outboundsUpdatePingAllBtnState() {
+      const btn = $(OUTBOUND_NODE_IDS.pingAll);
+      if (!btn) return;
+      const nodes = Array.isArray(_outboundsNodes) ? _outboundsNodes : [];
+      const hasPingable = nodes.some((node) => node && node.key && node.tag);
+      const tooltip = _outboundsPingAllBusy
+        ? 'Идёт проверка задержки всех proxy-узлов.'
+        : (hasPingable
+          ? 'Проверить задержку всех proxy-узлов в текущем 04_outbounds-фрагменте.'
+          : 'В текущем outbounds-фрагменте нет proxy-узлов для проверки.');
+      btn.setAttribute('data-tooltip', tooltip);
+      btn.setAttribute('title', tooltip);
+      btn.setAttribute('aria-label', hasPingable ? 'Пинг всех proxy-узлов' : 'Пинг всех proxy-узлов недоступен');
+      btn.disabled = _outboundsPingAllBusy || !hasPingable;
+      btn.classList.toggle('is-busy', !!_outboundsPingAllBusy);
+    }
+
+    function outboundsRenderNodeList() {
+      const panel = $(OUTBOUND_NODE_IDS.panel);
+      const caption = $(OUTBOUND_NODE_IDS.caption);
+      const summary = $(OUTBOUND_NODE_IDS.summary);
+      const listEl = $(OUTBOUND_NODE_IDS.list);
+      const empty = $(OUTBOUND_NODE_IDS.empty);
+      if (!panel || !caption || !summary || !listEl || !empty) return;
+
+      const nodes = Array.isArray(_outboundsNodes) ? _outboundsNodes : [];
+      const rows = [];
+      nodes.forEach((node) => {
+        const keyText = String(node && node.key ? node.key : '').trim();
+        const tagText = String(node && node.tag ? node.tag : '').trim();
+        const key = escapeHtml(keyText);
+        const name = escapeHtml(String(node && node.name ? node.name : tagText || 'proxy'));
+        const tag = escapeHtml(tagText);
+        const protocol = escapeHtml(String(node && node.protocol ? node.protocol : ''));
+        const transport = escapeHtml(String(node && node.transport ? node.transport : ''));
+        const security = escapeHtml(String(node && node.security ? node.security : ''));
+        const host = escapeHtml(String(node && node.host ? node.host : ''));
+        const port = escapeHtml(String(node && (node.port || node.port === 0) ? node.port : ''));
+        const detail = escapeHtml(String(node && node.detail ? node.detail : ''));
+        const endpoint = [host, port].filter(Boolean).join(':');
+        const canPing = !!(keyText && tagText);
+        const pingBusy = !!_outboundsNodePingState[outboundsNodePingStateKey(keyText)];
+        const latencyEntry = outboundsNodeLatencyEntry(keyText);
+        const latencyLabel = escapeHtml(subsNodeLatencyLabel(latencyEntry, pingBusy, canPing));
+        const latencyTooltip = escapeHtml(subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing));
+        const latencyClass = subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
+        rows.push(`
+          <div class="xk-sub-node-item xk-outbounds-node-item is-enabled" data-node-key="${key}">
+            <div class="xk-sub-node-main">
+              <div class="xk-sub-node-name">${name}</div>
+              <div class="xk-sub-node-meta">
+                ${protocol ? `<span class="xk-sub-node-pill">${protocol}</span>` : ''}
+                ${transport ? `<span class="xk-sub-node-pill xk-sub-node-pill-transport">${transport}</span>` : ''}
+                ${security ? `<span class="xk-sub-node-pill xk-sub-node-pill-security">${security}</span>` : ''}
+                ${endpoint ? `<span class="xk-sub-node-endpoint">${endpoint}</span>` : ''}
+              </div>
+              ${detail ? `<div class="xk-sub-node-detail">${detail}</div>` : ''}
+            </div>
+            <div class="xk-sub-node-side">
+              <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
+              <div class="xk-sub-node-state is-enabled">${tag || 'proxy'}</div>
+              <div class="xk-sub-node-actions">
+                <button type="button" class="btn-secondary btn-compact xk-sub-node-ping xk-outbounds-node-ping ${pingBusy ? 'is-busy' : ''}" data-node-key="${key}" title="Проверить задержку" data-tooltip="${escapeHtml(canPing ? 'Проверить задержку этого proxy-узла.' : 'Узел нельзя проверить: не найден tag.')}" aria-label="Проверить задержку" ${canPing ? '' : 'disabled'}>
+                  <span class="xk-sub-icon-glyph" aria-hidden="true">⏱</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        `);
+      });
+
+      summary.textContent = String(nodes.length || 0);
+      caption.textContent = nodes.length === 1
+        ? 'Одиночный proxy-узел из текущего outbounds-фрагмента.'
+        : (nodes.length > 1 ? `Пул proxy-узлов: ${nodes.length}.` : 'Proxy-узлы не найдены.');
+      listEl.innerHTML = rows.join('');
+      empty.style.display = rows.length ? 'none' : 'block';
+      empty.textContent = 'Proxy-узлы не найдены.';
+      outboundsSetNodesVisible(nodes.length > 0);
+      outboundsUpdatePingAllBtnState();
+
+      Array.from(listEl.querySelectorAll('.xk-outbounds-node-ping')).forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (btn.disabled) return;
+          const nodeKey = String(btn.getAttribute('data-node-key') || '').trim();
+          if (!nodeKey) return;
+          await outboundsProbeNode(nodeKey);
+        });
+      });
+    }
+
+    async function outboundsProbeNode(nodeKey) {
+      const key = String(nodeKey || '').trim();
+      if (!key) return false;
+      const pendingKey = outboundsNodePingStateKey(key);
+      if (_outboundsNodePingState[pendingKey]) return false;
+      _outboundsNodePingState[pendingKey] = true;
+      try { outboundsRenderNodeList(); } catch (e) {}
+      const statusEl = $('outbounds-status');
+      if (statusEl) statusEl.textContent = 'Проверяю задержку proxy-узла…';
+      try {
+        const res = await fetch(outboundsNodesApiUrl('/ping'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node_key: key }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (data && data.entry) _outboundsNodeLatency[key] = data.entry;
+        if (!res.ok || !data || data.ok === false) {
+          const msg = String((data && (data.error || data.message)) || 'Не удалось проверить задержку proxy-узла.');
+          if (statusEl) statusEl.textContent = msg;
+          try { toastXkeen(msg, 'error'); } catch (e2) {}
+          return false;
+        }
+        const delay = Number(data.delay_ms || (data.entry && data.entry.delay_ms));
+        if (statusEl) {
+          statusEl.textContent = Number.isFinite(delay) && delay >= 0
+            ? `Задержка proxy-узла: ${Math.round(delay)} ms.`
+            : 'Проверка proxy-узла завершена.';
+        }
+        return true;
+      } catch (e) {
+        const msg = 'Ошибка проверки задержки: ' + String(e && e.message ? e.message : e);
+        if (statusEl) statusEl.textContent = msg;
+        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        return false;
+      } finally {
+        delete _outboundsNodePingState[pendingKey];
+        try { outboundsRenderNodeList(); } catch (e3) {}
+      }
+    }
+
+    async function outboundsProbeAllNodes() {
+      if (_outboundsPingAllBusy) return false;
+      const nodes = (Array.isArray(_outboundsNodes) ? _outboundsNodes : [])
+        .filter((node) => node && node.key && node.tag);
+      const statusEl = $('outbounds-status');
+      if (!nodes.length) {
+        if (statusEl) statusEl.textContent = 'В текущем outbounds-фрагменте нет proxy-узлов для проверки.';
+        return false;
+      }
+
+      _outboundsPingAllBusy = true;
+      const pendingKeys = nodes.map((node) => outboundsNodePingStateKey(String(node.key || ''))).filter(Boolean);
+      pendingKeys.forEach((key) => { _outboundsNodePingState[key] = true; });
+      outboundsUpdatePingAllBtnState();
+      try { outboundsRenderNodeList(); } catch (e) {}
+      if (statusEl) statusEl.textContent = `Проверяю задержку: ${nodes.length} proxy-узлов…`;
+
+      try {
+        const res = await fetch(outboundsNodesApiUrl('/ping-bulk'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node_keys: nodes.map((node) => String(node.key || '')).filter(Boolean) }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data) {
+          throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+        }
+        if (data.node_latency && typeof data.node_latency === 'object') {
+          _outboundsNodeLatency = data.node_latency;
+        } else if (Array.isArray(data.results)) {
+          data.results.forEach((item) => {
+            const key = String(item && item.node_key || '').trim();
+            if (!key || !item || !item.entry) return;
+            _outboundsNodeLatency[key] = item.entry;
+          });
+        }
+        const ok = Number(data.ok_count || 0);
+        const failed = Number(data.failed_count || 0);
+        const total = Number(data.requested || nodes.length);
+        if (statusEl) {
+          statusEl.textContent = failed <= 0
+            ? `Проверено proxy-узлов: ${ok}.`
+            : `Проверено ${ok} из ${total}, ошибок: ${failed}.`;
+        }
+        return failed <= 0;
+      } catch (e) {
+        const msg = 'Ошибка массовой проверки задержки: ' + String(e && e.message ? e.message : e);
+        if (statusEl) statusEl.textContent = msg;
+        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        return false;
+      } finally {
+        pendingKeys.forEach((key) => { delete _outboundsNodePingState[key]; });
+        _outboundsPingAllBusy = false;
+        outboundsUpdatePingAllBtnState();
+        try { outboundsRenderNodeList(); } catch (e) {}
+      }
     }
 
     async function isSubscriptionOutputFragment(fileName) {
@@ -1543,6 +1806,7 @@ let outboundsModuleApi = null;
         if (isSubscriptionFragment) {
           _savedUrl = '';
           setSubscriptionFragmentMode(true, fileName, summary);
+          try { await refreshOutboundsNodes(false); } catch (e) {}
           try { syncDirtyState(false); } catch (e) {}
           publishLifecycleState({
             savedValue: '',
@@ -1564,6 +1828,7 @@ let outboundsModuleApi = null;
         if (shouldUsePoolFragmentSummary(data, summary)) {
           _savedUrl = '';
           setPoolFragmentMode(true, fileName, summary);
+          try { await refreshOutboundsNodes(true); } catch (e) {}
           try { syncDirtyState(false); } catch (e) {}
           publishLifecycleState({
             savedValue: '',
@@ -1588,6 +1853,7 @@ let outboundsModuleApi = null;
           input.value = _savedUrl;
           updateHintsFromUrl(_savedUrl);
           validateAndUpdateUI();
+          try { await refreshOutboundsNodes(true); } catch (e) {}
           publishLifecycleState({
             savedValue: String(_savedUrl || ''),
             currentValue: String(getCurrentUrl() || _savedUrl || ''),
@@ -1603,6 +1869,7 @@ let outboundsModuleApi = null;
         } else {
           _savedUrl = '';
           input.value = '';
+          try { await refreshOutboundsNodes(false); } catch (e) {}
           if (statusEl) statusEl.textContent = 'Файл outbounds отсутствует или не содержит прокси-конфиг.';
           updateHintsFromUrl('');
           validateAndUpdateUI();
@@ -3549,7 +3816,8 @@ let outboundsModuleApi = null;
     function subsNodeLatencyTone(entry, pending, canPing) {
       if (pending) return 'is-pending';
       if (!canPing) return 'is-unavailable';
-      const delay = Number(entry && entry.delay_ms);
+      const hasDelay = !!(entry && entry.delay_ms != null && entry.delay_ms !== '');
+      const delay = hasDelay ? Number(entry.delay_ms) : NaN;
       const status = String(entry && entry.status || '').trim().toLowerCase();
       if (status === 'error') return 'is-error';
       if (Number.isFinite(delay) && delay >= 0) {
@@ -3563,7 +3831,8 @@ let outboundsModuleApi = null;
     function subsNodeLatencyLabel(entry, pending, canPing) {
       if (pending) return '…';
       if (!canPing) return 'n/a';
-      const delay = Number(entry && entry.delay_ms);
+      const hasDelay = !!(entry && entry.delay_ms != null && entry.delay_ms !== '');
+      const delay = hasDelay ? Number(entry.delay_ms) : NaN;
       if (Number.isFinite(delay) && delay >= 0) return `${Math.round(delay)} ms`;
       const status = String(entry && entry.status || '').trim().toLowerCase();
       if (status === 'error') return 'fail';
@@ -3574,7 +3843,8 @@ let outboundsModuleApi = null;
       if (pending) return 'Проверяю задержку узла через текущий generated fragment…';
       if (!canPing) return 'Узел сейчас не входит в generated fragment, поэтому проверка задержки недоступна.';
       const parts = [];
-      const delay = Number(entry && entry.delay_ms);
+      const hasDelay = !!(entry && entry.delay_ms != null && entry.delay_ms !== '');
+      const delay = hasDelay ? Number(entry.delay_ms) : NaN;
       const checkedAt = Number(entry && entry.checked_at);
       const status = String(entry && entry.status || '').trim().toLowerCase();
       const error = String(entry && entry.error || '').trim();
@@ -4676,6 +4946,9 @@ let outboundsModuleApi = null;
       wireGeneratorModal();
       wirePoolModal();
       wireSubscriptionsModal();
+      wireButton(OUTBOUND_NODE_IDS.pingAll, () => {
+        outboundsProbeAllNodes();
+      });
       load();
     }
 
