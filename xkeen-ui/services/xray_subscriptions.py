@@ -35,7 +35,7 @@ from services.xray_outbounds import LEGACY_VLESS_TAG, build_proxy_outbound_from_
 STATE_VERSION = 1
 STATE_FILENAME = "xray_subscriptions.json"
 
-DEFAULT_INTERVAL_HOURS = 6
+DEFAULT_INTERVAL_HOURS = 24
 MIN_INTERVAL_HOURS = 1
 MAX_INTERVAL_HOURS = 168
 DEFAULT_FETCH_TIMEOUT_SECONDS = 20
@@ -2431,8 +2431,9 @@ def refresh_subscription(
         interval = _clamp_interval(sub.get("interval_hours") or DEFAULT_INTERVAL_HOURS)
         profile_interval = _parse_profile_interval_hours(headers)
         if profile_interval is not None:
-            interval = profile_interval
             sub["profile_update_interval_hours"] = profile_interval
+        else:
+            sub.pop("profile_update_interval_hours", None)
 
         warnings = _subscription_result_warnings(preview_nodes)
 
@@ -2485,6 +2486,8 @@ def refresh_subscription(
                 "errors": errors,
                 "source_format": source_format,
                 "output_file": os.path.basename(output_path),
+                "interval_hours": interval,
+                "profile_update_interval_hours": sub.get("profile_update_interval_hours"),
                 "routing_file": (routing_sync.get("routing_file") if "routing_sync" in locals() else ""),
                 "routing_balancer_tag": (routing_sync.get("balancer_tag") if "routing_sync" in locals() else ""),
                 "routing_selector_count": len(routing_sync.get("selector") or []) if "routing_sync" in locals() else 0,

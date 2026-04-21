@@ -7687,6 +7687,13 @@ html[data-theme="light"] .xk-mi-status.error {
   border-radius: 8px;
 }
 
+.xk-sub-fieldhint {
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: calc(11px * var(--xk-font-scale));
+  line-height: 1.25;
+}
+
 .xk-sub-span-3 {
   grid-column: span 3;
 }
@@ -8929,6 +8936,7 @@ html[data-theme="light"] .xk-sub-main {
 }
 
 html[data-theme="light"] .xk-sub-muted,
+html[data-theme="light"] .xk-sub-fieldhint,
 html[data-theme="light"] .xk-sub-node-endpoint,
 html[data-theme="light"] .xk-sub-node-state {
   color: #465975;

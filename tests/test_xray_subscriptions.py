@@ -124,7 +124,8 @@ def test_refresh_subscription_writes_generated_fragment_and_observatory(tmp_path
     assert saved["last_ok"] is True
     assert saved["last_count"] == 1
     assert saved["profile_update_interval_hours"] == 2
-    assert saved["interval_hours"] == 2
+    assert saved["interval_hours"] == 6
+    assert saved["next_update_ts"] - saved["last_update_ts"] == 6 * 3600
 
     restarts.clear()
     second = subs.refresh_subscription(
@@ -141,6 +142,25 @@ def test_refresh_subscription_writes_generated_fragment_and_observatory(tmp_path
     assert second["routing_changed"] is False
     assert second["restarted"] is False
     assert restarts == []
+
+
+def test_new_subscription_defaults_to_daily_interval(tmp_path: Path):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    ui_state_dir.mkdir()
+
+    sub = subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "daily",
+            "name": "Daily",
+            "tag": "daily",
+            "url": "https://example.com/sub",
+        },
+    )
+
+    assert sub["interval_hours"] == 24
 
 
 def test_refresh_subscription_auto_syncs_routing_and_keeps_vless_reality(tmp_path: Path, monkeypatch):

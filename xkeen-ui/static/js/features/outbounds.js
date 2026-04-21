@@ -3488,6 +3488,7 @@ let outboundsModuleApi = null;
     let _subscriptionEditId = '';
     let _subscriptionNodePingState = Object.create(null);
     let _subscriptionPingAllBusy = false;
+    const SUB_DEFAULT_INTERVAL_HOURS = 24;
 
     function subsDecorateActionButtons(modal) {
       const root = modal || $(SUB_IDS.modal);
@@ -3571,9 +3572,10 @@ let outboundsModuleApi = null;
                       <span class="xk-pool-fieldlabel">Tag prefix</span>
                       <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Используй его в selector/balancer LeastPing.">
                     </label>
-                    <label class="xk-sub-span-3" data-tooltip="Как часто обновлять подписку. Заголовок provider profile-update-interval может уточнить значение.">
-                      <span class="xk-pool-fieldlabel">Интервал, ч</span>
-                      <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="6" title="Интервал обновления" data-tooltip="Интервал автообновления в часах: от 1 до 168.">
+                    <label class="xk-sub-span-3" data-tooltip="Локальный интервал автообновления. По умолчанию 24 часа; серверный profile-update-interval показывается как рекомендация и не перезаписывает это поле.">
+                      <span class="xk-pool-fieldlabel">Обновлять, ч</span>
+                      <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" data-tooltip="Как часто панель будет обновлять подписку: от 1 до 168 часов. Рекомендация провайдера не меняет выбранное значение.">
+                      <span class="xk-sub-fieldhint">По умолчанию 24 ч; рекомендация провайдера не перезаписывает поле.</span>
                     </label>
                     <label class="xk-sub-wide" data-tooltip="HTTP(S) URL подписки. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
                       <span class="xk-pool-fieldlabel">URL</span>
@@ -4034,6 +4036,18 @@ let outboundsModuleApi = null;
       return parts.join(' · ');
     }
 
+    function subsIntervalSummary(sub) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      const interval = Number(s.interval_hours || SUB_DEFAULT_INTERVAL_HOURS);
+      const profileInterval = Number(s.profile_update_interval_hours || 0);
+      const safeInterval = Number.isFinite(interval) && interval > 0 ? interval : SUB_DEFAULT_INTERVAL_HOURS;
+      const parts = [`каждые ${safeInterval} ч`];
+      if (Number.isFinite(profileInterval) && profileInterval > 0 && profileInterval !== safeInterval) {
+        parts.push(`провайдер советует ${profileInterval} ч`);
+      }
+      return parts.join(' · ');
+    }
+
     function subsResetForm() {
       _subscriptionEditId = '';
       try { $(SUB_IDS.id).value = ''; } catch (e) {}
@@ -4044,7 +4058,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.typeFilter).value = ''; } catch (e) {}
       try { $(SUB_IDS.transportFilter).value = ''; } catch (e) {}
       subsSetExcludedKeysValue([]);
-      try { $(SUB_IDS.interval).value = '6'; } catch (e) {}
+      try { $(SUB_IDS.interval).value = String(SUB_DEFAULT_INTERVAL_HOURS); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = true; } catch (e) {}
       try { $(SUB_IDS.ping).checked = true; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = 'safe-fallback'; } catch (e) {}
@@ -4065,7 +4079,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.typeFilter).value = String(s.type_filter || ''); } catch (e) {}
       try { $(SUB_IDS.transportFilter).value = String(s.transport_filter || ''); } catch (e) {}
       subsSetExcludedKeysValue(Array.isArray(s.excluded_node_keys) ? s.excluded_node_keys : []);
-      try { $(SUB_IDS.interval).value = String(s.interval_hours || 6); } catch (e) {}
+      try { $(SUB_IDS.interval).value = String(s.interval_hours || SUB_DEFAULT_INTERVAL_HOURS); } catch (e) {}
       try { $(SUB_IDS.enabled).checked = s.enabled !== false; } catch (e) {}
       try { $(SUB_IDS.ping).checked = s.ping_enabled !== false; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = String(s.routing_mode || 'safe-fallback') || 'safe-fallback'; } catch (e) {}
@@ -4111,7 +4125,7 @@ let outboundsModuleApi = null;
         if (title) metaBits.push(title);
         if (url) metaBits.push(url);
         if (filterText) metaBits.push(filterText);
-        const nextBits = ['next: ' + next];
+        const nextBits = ['next: ' + next, subsIntervalSummary(sub)];
         if (filteredOutCount > 0) nextBits.push('фильтр: -' + String(filteredOutCount));
         tr.innerHTML = `
           <td>
@@ -4754,7 +4768,7 @@ let outboundsModuleApi = null;
         transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim(),
         routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback',
         excluded_node_keys: subsGetExcludedKeysValue(),
-        interval_hours: Number(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || 6),
+        interval_hours: Number(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || SUB_DEFAULT_INTERVAL_HOURS),
         enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
         ping_enabled: !!($(SUB_IDS.ping) && $(SUB_IDS.ping).checked),
       };
