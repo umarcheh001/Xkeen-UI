@@ -1060,11 +1060,6 @@ function jsonCompletion(options) {
     const schema = getJSONSchema(ctx.state);
     if (!schema) return null;
 
-    const earlyValueCompletion = fallbackValueCompletion(ctx, schema);
-    if (earlyValueCompletion) return earlyValueCompletion;
-    const earlyPropertyCompletion = fallbackPropertyCompletion(ctx, schema);
-    if (earlyPropertyCompletion) return earlyPropertyCompletion;
-
     const tree = syntaxTree(ctx.state);
     const node = tree.resolveInner(ctx.pos, -1);
     const doc = ctx.state.doc;

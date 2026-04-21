@@ -355,6 +355,23 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
     return editor && typeof editor.getValue === 'function' ? editor.getValue() : '';
   })).toContain('"domainStrategy": "IPIfNonMatch"');
 
+  await replaceRoutingText(page, VALID_ROUTING);
+  await waitForRoutingSchema(page);
+  await moveRoutingCursorAfterText(page, '"domainStrategy": "');
+  await page.keyboard.press('Control+Space');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('IPIfNonMatch');
+  await page.locator('.cm-tooltip-autocomplete li').filter({ hasText: 'IPIfNonMatch' }).first().click();
+  await expect.poll(() => page.evaluate(() => {
+    const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
+    const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
+    return editor && typeof editor.getValue === 'function' ? editor.getValue() : '';
+  })).toContain('"domainStrategy": "IPIfNonMatch",');
+  await expect.poll(() => page.evaluate(() => {
+    const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
+    const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
+    return editor && typeof editor.getValue === 'function' ? editor.getValue() : '';
+  })).not.toContain('AsIs');
+
   await replaceRoutingText(page, RULE_VALUE_COMPLETION_ROUTING);
   await waitForRoutingSchema(page);
   await moveRoutingCursorAfterText(page, '"network": "');
