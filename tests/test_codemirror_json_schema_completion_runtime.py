@@ -154,6 +154,48 @@ def test_routing_schema_completion_supports_example_tags_for_inbound_arrays():
     assert "tproxy" in labels
 
 
+def test_inbounds_schema_completion_supports_inbound_object_keys():
+    labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "inbounds": [',
+            "    {",
+            "      __CURSOR__",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-inbounds.schema.json",
+    )
+
+    assert labels is not None
+    assert "protocol" in labels
+    assert "port" in labels
+    assert "settings" in labels
+
+
+def test_outbounds_schema_completion_supports_outbound_object_keys():
+    labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            "      __CURSOR__",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    assert labels is not None
+    assert "protocol" in labels
+    assert "tag" in labels
+    assert "streamSettings" in labels
+
+
 def test_routing_schema_linter_prefers_nested_anyof_branch_errors_over_root_mismatch():
     messages = _run_linter_messages(
         "\n".join([

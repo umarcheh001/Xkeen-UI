@@ -59,6 +59,7 @@ export function resolveEditorSchemaSpec(ctx) {
       family: 'mihomo',
       url: SCHEMA_URLS.mihomo,
       title: 'Mihomo config',
+      label: 'Mihomo config',
       mode: 'yaml',
     };
   }
@@ -68,12 +69,18 @@ export function resolveEditorSchemaSpec(ctx) {
     inbounds: SCHEMA_URLS.xrayInbounds,
     outbounds: SCHEMA_URLS.xrayOutbounds,
   };
+  const fragmentLabels = {
+    routing: 'Xray routing',
+    inbounds: 'Xray inbounds',
+    outbounds: 'Xray outbounds',
+  };
   return {
     id: fragment ? `xray:${fragment}` : 'xray',
     family: 'xray',
     fragment,
     url: fragmentUrls[fragment] || SCHEMA_URLS.xray,
     title: fragment ? `Xray ${fragment} fragment` : 'Xray config',
+    label: fragment ? (fragmentLabels[fragment] || `Xray ${fragment}`) : 'Xray config',
     mode: 'json',
   };
 }

@@ -271,6 +271,7 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await waitForRoutingSchema(page);
   await waitForUiSettings(page);
   await saveSchemaHoverEnabled(page, true);
+  await expect(page.locator('#routing-editor-schema-badge')).toContainText('Schema: Xray routing');
 
   await replaceRoutingText(page, INVALID_ROUTING);
 

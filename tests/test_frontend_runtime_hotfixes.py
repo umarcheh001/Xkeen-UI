@@ -468,6 +468,7 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     boot = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
     json_modal = Path('xkeen-ui/static/js/ui/json_editor_modal.js').read_text(encoding='utf-8')
     routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+    template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
     vite = Path('vite.config.mjs').read_text(encoding='utf-8')
     schema_loader = schema_loader_path.read_text(encoding='utf-8')
     schema_shim = shim_path.read_text(encoding='utf-8')
@@ -483,6 +484,9 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "xray-routing.schema.json" in schema_loader
     assert "xray-inbounds.schema.json" in schema_loader
     assert "xray-outbounds.schema.json" in schema_loader
+    assert "routing: 'Xray routing'" in schema_loader
+    assert "inbounds: 'Xray inbounds'" in schema_loader
+    assert "outbounds: 'Xray outbounds'" in schema_loader
     assert "adaptXraySchema" not in schema_loader
     assert "parse as parseJsonc" in schema_shim
     assert "parseTree as parseJsoncTree" in schema_shim
@@ -515,10 +519,15 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "schemaUpdateSchema(view, schema)" in boot
     assert "setSchema(editor, schema)" in boot
     assert "applySchemaToEditor(_cm" in json_modal
+    assert "function updateJsonEditorSchemaBadge(result)" in json_modal
+    assert "json-editor-schema-status" in template
     assert "__xkeenCm6Bridge === true" in json_modal
     assert "target: 'routing'" in routing
     assert "target: _routingMode === 'routing' ? 'routing' : 'xray'" in routing
+    assert "function updateRoutingSchemaBadge(result)" in routing
+    assert "editorSchemaBadge: 'routing-editor-schema-badge'" in routing
     assert "await applyRoutingSchemaToCodeMirror(_cm, text)" in routing
+    assert "routing-editor-schema-badge" in template
     assert "'codemirror-json-schema'" in vite
 
 

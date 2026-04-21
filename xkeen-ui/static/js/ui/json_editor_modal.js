@@ -351,17 +351,43 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
     return null;
   }
 
+  function schemaStatusLabel(spec) {
+    const label = spec && (spec.label || spec.title || spec.id);
+    return String(label || '').trim();
+  }
+
+  function updateJsonEditorSchemaBadge(result) {
+    const badge = el('json-editor-schema-status');
+    if (!badge) return;
+    const spec = result && result.spec ? result.spec : null;
+    const ok = !!(result && result.ok && spec);
+    const label = schemaStatusLabel(spec);
+    badge.classList.toggle('xk-schema-on', ok);
+    badge.classList.toggle('xk-schema-off', !ok);
+    badge.textContent = ok && label ? `Schema: ${label}` : 'Schema: —';
+    badge.setAttribute('data-tooltip', ok && label
+      ? `Активна JSON-схема: ${label}.`
+      : 'JSON-схема пока не загружена для текущего редактора.');
+  }
+
   async function applyCurrentSchemaToCodeMirror(text) {
-    if (!_cm) return null;
+    if (!_cm) {
+      updateJsonEditorSchemaBadge(null);
+      return null;
+    }
     try {
-      return await applySchemaToEditor(_cm, {
+      const result = await applySchemaToEditor(_cm, {
         target: _currentTarget || '',
         file: _currentTarget ? activeFileParam(_currentTarget) : '',
         mode: 'jsonc',
         text: typeof text === 'string' ? text : getCurrentValue(),
         feature: 'json-modal',
       });
-    } catch (e) {}
+      updateJsonEditorSchemaBadge(result);
+      return result;
+    } catch (e) {
+      updateJsonEditorSchemaBadge(null);
+    }
     return null;
   }
 
@@ -744,6 +770,7 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
     setEngineSelect(_kind);
 
     if (_kind === 'monaco') {
+      updateJsonEditorSchemaBadge(null);
       const fac = await ensureMonacoEditor(prevText);
       if (fac) {
         try { fac.set(prevText); } catch (e) {}
@@ -770,6 +797,7 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
         }, 0);
       } else if (textarea) {
         textarea.value = prevText;
+        updateJsonEditorSchemaBadge(null);
         try { validateCurrentJson(prevText, { silent: false }); } catch (e) {}
         textarea.focus();
       }
@@ -920,6 +948,7 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
       } catch (e) {}
 
       if (_kind === 'monaco') {
+        updateJsonEditorSchemaBadge(null);
         await ensureMonacoEditor(finalText || '');
         try {
           if (_monacoFacade) {
@@ -943,6 +972,7 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
           }, 0);
         } else {
           textarea.value = finalText || '';
+          updateJsonEditorSchemaBadge(null);
           try { validateCurrentJson(finalText || '', { silent: false }); } catch (e) {}
           textarea.focus();
         }
@@ -971,6 +1001,7 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
     if (modal) hideModal(modal, 'json_editor_close');
     try { clearDirtyListener(); } catch (e) {}
     try { if (_cm) clearSchemaFromEditor(_cm, { feature: 'json-modal' }); } catch (e) {}
+    try { updateJsonEditorSchemaBadge(null); } catch (e) {}
     try { if (_cm && typeof _cm.clearDiagnostics === 'function') _cm.clearDiagnostics(); } catch (e2) {}
     try { clearTargetDirtyState(target); } catch (e3) {}
     setError('');

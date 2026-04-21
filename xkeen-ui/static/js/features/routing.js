@@ -88,6 +88,7 @@ import { applySchemaToEditor } from '../ui/editor_schema.js';
     // Compact editor meta/status row
     editorMeta: 'routing-editor-meta',
     editorValidBadge: 'routing-editor-valid-badge',
+    editorSchemaBadge: 'routing-editor-schema-badge',
     editorDirtyBadge: 'routing-editor-dirty-badge',
     editorCommentsBadge: 'routing-editor-comments-badge',
 
@@ -621,19 +622,45 @@ import { applySchemaToEditor } from '../ui/editor_schema.js';
     return ta ? String(ta.value || '') : '';
   }
 
-  function applyRoutingSchemaToCodeMirror(cm, text) {
+  function schemaStatusLabel(spec) {
+    const label = spec && (spec.label || spec.title || spec.id);
+    return String(label || '').trim();
+  }
+
+  function updateRoutingSchemaBadge(result) {
+    const el = $(IDS.editorSchemaBadge);
+    if (!el) return;
+    const spec = result && result.spec ? result.spec : null;
+    const ok = !!(result && result.ok && spec);
+    const label = schemaStatusLabel(spec);
+    el.textContent = ok && label ? `Schema: ${label}` : 'Schema: —';
+    el.classList.toggle('is-ok', ok);
+    el.classList.toggle('is-muted', !ok);
+    el.setAttribute('data-tooltip', ok && label
+      ? `Активна JSON-схема: ${label}.`
+      : 'JSON-схема пока не загружена для текущего редактора.');
+  }
+
+  async function applyRoutingSchemaToCodeMirror(cm, text) {
     const editor = cm || _cm;
-    if (!editor) return null;
+    if (!editor) {
+      updateRoutingSchemaBadge(null);
+      return null;
+    }
     try {
       const file = getActiveFragment() || getXkeenFilePath('routing', '');
-      return applySchemaToEditor(editor, {
+      const result = await applySchemaToEditor(editor, {
         target: _routingMode === 'routing' ? 'routing' : 'xray',
         file,
         mode: 'jsonc',
         text: typeof text === 'string' ? text : readCurrentEditorText(),
         feature: 'routing',
       });
-    } catch (e) {}
+      updateRoutingSchemaBadge(result);
+      return result;
+    } catch (e) {
+      updateRoutingSchemaBadge(null);
+    }
     return null;
   }
 
@@ -4823,6 +4850,7 @@ function closeHelp() {
 
       showCodeMirror(false);
       showMonaco(true);
+      try { updateRoutingSchemaBadge(null); } catch (e) {}
       // Keep only JSONC help + fullscreen visible in the toolbar host.
       try { syncToolbarForEngine('monaco'); } catch (e) {}
       try { syncRoutingToolbarUi('monaco'); } catch (e) {}
@@ -4862,6 +4890,7 @@ function closeHelp() {
 
       _engine = 'codemirror';
       try { syncSharedRoutingEditor(cm, _cmFacade || createRoutingCodeMirrorFacade(cm), 'codemirror'); } catch (e) {}
+      try { await applyRoutingSchemaToCodeMirror(cm); } catch (e) {}
       try { restoreViewState(preservedView); } catch (e) {}
       try { if (cm && cm.focus) cm.focus(); } catch (e) {}
       try {
