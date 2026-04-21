@@ -291,6 +291,7 @@
         "attrs": { "type": "object", "description": "Атрибуты для сопоставления" },
         "outboundTag": { "type": "string", "description": "Тег outbound для маршрутизации" },
         "balancerTag": { "type": "string", "description": "Тег балансировщика" },
+        "ruleTag": { "type": "string", "description": "Имя правила маршрутизации. Xkeen использует xk_auto_* для автоматически добавленных правил подписок." },
         "domainMatcher": { "type": "string", "enum": ["hybrid", "linear"] }
       }
     },

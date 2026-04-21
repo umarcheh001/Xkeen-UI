@@ -92,6 +92,10 @@
           "type": "string",
           "description": "Тег балансировщика"
         },
+        "ruleTag": {
+          "type": "string",
+          "description": "Имя правила маршрутизации. Xkeen использует xk_auto_* для автоматически добавленных правил подписок."
+        },
         "domainMatcher": {
           "type": "string",
           "enum": [
@@ -135,6 +139,68 @@
         "tag",
         "selector"
       ]
+    },
+    "observatory": {
+      "description": "Мониторинг доступности outbound-узлов для balancer.strategy.type=leastPing",
+      "type": "object",
+      "properties": {
+        "subjectSelector": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Теги или префиксы outbound, которые нужно проверять"
+        },
+        "probeUrl": {
+          "type": "string",
+          "default": "https://www.google.com/generate_204",
+          "description": "URL для проверки доступности"
+        },
+        "probeInterval": {
+          "type": "string",
+          "default": "60s",
+          "description": "Интервал проверки, например 10s, 60s, 5m"
+        },
+        "enableConcurrency": {
+          "type": "boolean",
+          "default": false,
+          "description": "Проверять несколько outbound параллельно"
+        }
+      },
+      "additionalProperties": false
+    },
+    "burstObservatory": {
+      "description": "Альтернативный observatory с burst-проверками",
+      "type": "object",
+      "properties": {
+        "subjectSelector": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pingConfig": {
+          "type": "object",
+          "properties": {
+            "destination": {
+              "type": "string"
+            },
+            "connectivity": {
+              "type": "string"
+            },
+            "interval": {
+              "type": "string"
+            },
+            "sampling": {
+              "type": "integer"
+            },
+            "timeout": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "streamSettings": {
       "type": "object",
@@ -650,7 +716,7 @@
     }
   },
   "title": "Xray Routing Fragment",
-  "description": "JSON Schema for 05_routing.json. Accepts either { routing: ... } fragments or routing-only objects with rules/balancers/domainStrategy at the root.",
+  "description": "JSON Schema for 05_routing.json. Accepts { routing: ... } fragments, optional observatory blocks used by leastPing, or routing-only objects with rules/balancers/domainStrategy at the root.",
   "anyOf": [
     {
       "title": "05_routing.json object",
@@ -695,6 +761,12 @@
             }
           },
           "additionalProperties": false
+        },
+        "observatory": {
+          "$ref": "#/definitions/observatory"
+        },
+        "burstObservatory": {
+          "$ref": "#/definitions/burstObservatory"
         }
       },
       "required": [

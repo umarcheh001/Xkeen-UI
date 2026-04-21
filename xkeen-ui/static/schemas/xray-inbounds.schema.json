@@ -92,6 +92,10 @@
           "type": "string",
           "description": "Тег балансировщика"
         },
+        "ruleTag": {
+          "type": "string",
+          "description": "Имя правила маршрутизации. Xkeen использует xk_auto_* для автоматически добавленных правил подписок."
+        },
         "domainMatcher": {
           "type": "string",
           "enum": [

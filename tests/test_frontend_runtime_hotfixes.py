@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import shutil
 import re
 
@@ -502,6 +503,30 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "target: _routingMode === 'routing' ? 'routing' : 'xray'" in routing
     assert "await applyRoutingSchemaToCodeMirror(_cm, text)" in routing
     assert "'codemirror-json-schema'" in vite
+
+
+def test_xray_routing_schema_covers_subscription_generated_fragments():
+    routing_schema = json.loads(Path('xkeen-ui/static/schemas/xray-routing.schema.json').read_text(encoding='utf-8'))
+    full_schema = json.loads(Path('xkeen-ui/static/schemas/xray-config.schema.json').read_text(encoding='utf-8'))
+
+    routing_rule_props = routing_schema['definitions']['routingRule']['properties']
+    assert 'ruleTag' in routing_rule_props
+    assert 'xk_auto_*' in routing_rule_props['ruleTag']['description']
+
+    fragment_props = routing_schema['anyOf'][0]['properties']
+    assert 'routing' in fragment_props
+    assert fragment_props['observatory']['$ref'] == '#/definitions/observatory'
+    assert fragment_props['burstObservatory']['$ref'] == '#/definitions/burstObservatory'
+    assert routing_schema['definitions']['observatory']['properties']['subjectSelector']['items']['type'] == 'string'
+    assert routing_schema['definitions']['burstObservatory']['properties']['pingConfig']['type'] == 'object'
+
+    assert 'ruleTag' in full_schema['definitions']['routingRule']['properties']
+    for fragment_path in [
+        Path('xkeen-ui/static/schemas/xray-inbounds.schema.json'),
+        Path('xkeen-ui/static/schemas/xray-outbounds.schema.json'),
+    ]:
+        fragment_schema = json.loads(fragment_path.read_text(encoding='utf-8'))
+        assert 'ruleTag' in fragment_schema['definitions']['routingRule']['properties']
 
 
 def test_runtime_vendor_assets_exist_after_frontend_build():
