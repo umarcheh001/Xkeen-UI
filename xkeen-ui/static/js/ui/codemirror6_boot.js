@@ -20,6 +20,8 @@ const BACKEND = 'cm6-local-offline';
 const VERSION = '0.5.2-monaco-fine-tuned';
 const LINK_TOOLTIP_TEXT = 'Перейти по ссылке (Ctrl + клик)';
 const URL_FULL_RE = /(?:https?:\/\/|ftp:\/\/|file:\/\/|mailto:|magnet:)[^\s<>"'`\)\]\}]+/g;
+let _schemaHoverSettingsPromise = null;
+let _schemaHoverSettingsLoadFinished = false;
 
 function getWindow() {
   if (typeof window !== 'undefined') return window;
@@ -43,15 +45,72 @@ function readUiSettingsSnapshot() {
   return {};
 }
 
+function getUiSettingsApi() {
+  const win = getWindow();
+  try {
+    return win && win.XKeen && win.XKeen.ui ? (win.XKeen.ui.settings || null) : null;
+  } catch (e) {}
+  return null;
+}
+
+function areUiSettingsLoadedFromServer() {
+  try {
+    const api = getUiSettingsApi();
+    return !!(api && typeof api.isLoadedFromServer === 'function' && api.isLoadedFromServer());
+  } catch (e) {}
+  return false;
+}
+
+function shouldDeferSchemaHoverForSettings() {
+  try {
+    const api = getUiSettingsApi();
+    return !!(api
+      && typeof api.fetchOnce === 'function'
+      && !areUiSettingsLoadedFromServer()
+      && !_schemaHoverSettingsLoadFinished);
+  } catch (e) {}
+  return false;
+}
+
+function ensureSchemaHoverSettingsLoaded() {
+  const api = getUiSettingsApi();
+  if (!api || typeof api.fetchOnce !== 'function' || areUiSettingsLoadedFromServer()) {
+    _schemaHoverSettingsLoadFinished = true;
+    return Promise.resolve(readUiSettingsSnapshot());
+  }
+  if (_schemaHoverSettingsPromise) return _schemaHoverSettingsPromise;
+  _schemaHoverSettingsPromise = Promise.resolve()
+    .then(() => api.fetchOnce())
+    .catch(() => null)
+    .finally(() => {
+      _schemaHoverSettingsLoadFinished = true;
+      _schemaHoverSettingsPromise = null;
+    });
+  return _schemaHoverSettingsPromise;
+}
+
 function isSchemaHoverEnabled(opts) {
   if (opts && opts.schemaHover === false) return false;
   if (opts && opts.schemaHoverEnabled === false) return false;
+  if (shouldDeferSchemaHoverForSettings()) return false;
   try {
     const settings = readUiSettingsSnapshot();
     const editor = settings && settings.editor && typeof settings.editor === 'object' ? settings.editor : {};
     return editor.schemaHoverEnabled !== false;
   } catch (e) {}
   return true;
+}
+
+function hideSchemaHoverTooltips() {
+  try {
+    const nodes = document.querySelectorAll('.cm-tooltip-hover, .cm6-json-schema-hover');
+    nodes.forEach((node) => {
+      try {
+        const tip = node.closest && node.closest('.cm-tooltip') ? node.closest('.cm-tooltip') : node;
+        if (tip && tip.parentNode) tip.parentNode.removeChild(tip);
+      } catch (e) {}
+    });
+  } catch (e) {}
 }
 
 function clampNumber(value, fallback = 0) {
@@ -1002,6 +1061,16 @@ function buildBridge(view, ctx) {
     return false;
   }
 
+  function refreshSchemaExtensions() {
+    if (!schemaInstalled || !ctx.schema) {
+      if (!isSchemaHoverEnabled(options)) hideSchemaHoverTooltips();
+      return false;
+    }
+    const ok = dispatch({ effects: ctx.schemaCompartment.reconfigure(schemaExtensionFor(ctx.schema, options)) });
+    if (!isSchemaHoverEnabled(options)) hideSchemaHoverTooltips();
+    return ok;
+  }
+
   function commandRunner(name) {
     const command = normalizeCommandName(name);
     if (!command) return false;
@@ -1053,6 +1122,7 @@ function buildBridge(view, ctx) {
     setDiagnostics(list) { return setDiagnosticsList(list); },
     clearDiagnostics() { lastDiagnostics = []; try { view.dispatch(cmSetDiagnostics(view.state, [])); return true; } catch (e) {} return false; },
     getDiagnostics() { return lastDiagnostics.slice(); },
+    refreshSchemaExtensions,
     setLinksEnabled(flag) {
       options.links = flag !== false;
       hideLinkTooltip();
@@ -1063,16 +1133,19 @@ function buildBridge(view, ctx) {
       ctx.schema = schema || null;
       if (!schema) {
         schemaInstalled = false;
+        hideSchemaHoverTooltips();
         return dispatch({ effects: ctx.schemaCompartment.reconfigure([]) });
       }
       if (schemaInstalled) {
         try {
           schemaUpdateSchema(view, schema);
+          refreshSchemaExtensions();
           return true;
         } catch (e) {}
       }
       const ok = dispatch({ effects: ctx.schemaCompartment.reconfigure(schemaExtensionFor(schema, options)) });
       schemaInstalled = !!ok;
+      if (!isSchemaHoverEnabled(options)) hideSchemaHoverTooltips();
       return ok;
     },
     getSchema() {
@@ -1216,16 +1289,18 @@ function createBridge(target, opts = {}) {
     } catch (e) {}
   };
   const uiSettingsListener = () => {
-    try {
-      if (schemaInstalled && ctx.schema) {
-        view.dispatch({ effects: ctx.schemaCompartment.reconfigure(schemaExtensionFor(ctx.schema, options)) });
-      }
-    } catch (e) {}
+    try { if (bridge && typeof bridge.refreshSchemaExtensions === 'function') bridge.refreshSchemaExtensions(); } catch (e) {}
     try { view.requestMeasure(); } catch (e) {}
     try { bridge.refresh(); } catch (e) {}
   };
   try { document.addEventListener('xkeen-theme-change', themeListener); } catch (e) {}
   try { document.addEventListener('xkeen:ui-settings-changed', uiSettingsListener); } catch (e) {}
+  try {
+    ensureSchemaHoverSettingsLoaded().then(() => {
+      try { if (bridge && typeof bridge.refreshSchemaExtensions === 'function') bridge.refreshSchemaExtensions(); } catch (e) {}
+      try { bridge.refresh(); } catch (e) {}
+    });
+  } catch (e) {}
   try { if (ctx.options.extraKeys && Object.keys(ctx.options.extraKeys).length) bridge.setOption('extraKeys', ctx.options.extraKeys); } catch (e) {}
   const baseDispose = bridge.dispose.bind(bridge);
   bridge.dispose = function disposeWithThemeListener() {

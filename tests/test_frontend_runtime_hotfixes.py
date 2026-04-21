@@ -496,8 +496,11 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "jsonSchemaWithSyntaxLinter" in boot
     assert "jsonSchemaSyntaxAwareHover" in boot
     assert "function isSchemaHoverEnabled" in boot
+    assert "function ensureSchemaHoverSettingsLoaded" in boot
+    assert "function hideSchemaHoverTooltips" in boot
+    assert "if (shouldDeferSchemaHoverForSettings()) return false" in boot
     assert "isSchemaHoverEnabled(opts)" in boot
-    assert "schemaCompartment.reconfigure(schemaExtensionFor(ctx.schema, options))" in boot
+    assert "refreshSchemaExtensions()" in boot
     assert "isSchemaHoverTarget" in boot
     assert "!/[{}\\[\\]:,]/.test(ch)" in boot
     assert "makeJsonDiagnostics(source" in boot

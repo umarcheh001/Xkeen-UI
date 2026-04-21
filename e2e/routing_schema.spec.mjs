@@ -110,6 +110,12 @@ async function waitForRoutingSchema(page) {
   });
 }
 
+async function waitForUiSettings(page) {
+  await page.waitForFunction(() => {
+    return !!window.XKeen?.ui?.settings?.isLoadedFromServer?.();
+  });
+}
+
 async function findTokenCenter(page, needle) {
   const box = await page.evaluate((token) => {
     const root = document.querySelector('.cm-content');
@@ -176,11 +182,22 @@ async function setSchemaHoverEnabled(page, enabled) {
   await page.waitForTimeout(200);
 }
 
+async function saveSchemaHoverEnabled(page, enabled) {
+  await page.evaluate(async (nextEnabled) => {
+    const api = window.XKeen?.ui?.settings;
+    if (!api || typeof api.patch !== 'function') throw new Error('ui settings API missing');
+    await api.patch({ editor: { schemaHoverEnabled: !!nextEnabled } });
+  }, enabled);
+  await page.waitForTimeout(250);
+}
+
 test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema help', async ({ page }) => {
   await page.goto('/');
   await waitForRoutingEditor(page);
   await ensureCodeMirrorRouting(page);
   await waitForRoutingSchema(page);
+  await waitForUiSettings(page);
+  await saveSchemaHoverEnabled(page, true);
 
   await replaceRoutingText(page, INVALID_ROUTING);
 
@@ -216,7 +233,9 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await setSchemaHoverEnabled(page, false);
   await clearEditorTooltips(page);
   await hoverRenderedToken(page, '"rules"');
+  await page.waitForTimeout(700);
   await expect.poll(() => tooltipText(page, '.cm-tooltip-hover')).not.toContain('Массив правил маршрутизации');
+  await expect.poll(() => page.evaluate(() => document.querySelectorAll('.cm-tooltip-hover, .cm6-json-schema-hover').length)).toBe(0);
   await setSchemaHoverEnabled(page, true);
   await clearEditorTooltips(page);
 
@@ -226,4 +245,17 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await page.keyboard.press('Control+Space');
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('domainStrategy');
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('rules');
+
+  await saveSchemaHoverEnabled(page, false);
+  await page.reload();
+  await waitForRoutingEditor(page);
+  await ensureCodeMirrorRouting(page);
+  await waitForRoutingSchema(page);
+  await waitForUiSettings(page);
+  await replaceRoutingText(page, SUBSCRIPTION_ROUTING);
+  await clearEditorTooltips(page);
+  await hoverRenderedToken(page, '"rules"');
+  await page.waitForTimeout(700);
+  await expect.poll(() => page.evaluate(() => document.querySelectorAll('.cm-tooltip-hover, .cm6-json-schema-hover').length)).toBe(0);
+  await saveSchemaHoverEnabled(page, true);
 });
