@@ -20,7 +20,7 @@
 import { StateEffect, StateField } from '@codemirror/state';
 import { hoverTooltip } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
-import { parse as parseJsonc } from 'jsonc-parser';
+import { parse as parseJsonc, parseTree as parseJsoncTree } from 'jsonc-parser';
 
 /* ════════════════════════════════════════════════════════════
  *  1. Schema StateField — stores the current JSON Schema
@@ -166,6 +166,19 @@ function schemaDeprecationMessage(schema, value) {
   return '';
 }
 
+function findCaseInsensitivePropertyName(key, props) {
+  const lower = String(key || '').toLowerCase();
+  if (!lower || !props || typeof props !== 'object') return '';
+  for (const candidate of Object.keys(props)) {
+    if (candidate.toLowerCase() === lower && candidate !== key) return candidate;
+  }
+  return '';
+}
+
+function wrongCasePropertyMessage(actual, expected) {
+  return `Свойство \`${actual}\` написано с другим регистром. Ключи Xray регистрозависимы; используйте \`${expected}\`.`;
+}
+
 function getValueAtPointer(rootValue, pointer) {
   if (!pointer) return rootValue;
   const parts = String(pointer).slice(1).split('/').map((part) =>
@@ -255,21 +268,28 @@ function validateValue(value, schema, rootSchema, pointer) {
   // --- object ---
   if (typeOf(value) === 'object') {
     const keys = Object.keys(value);
+    const props = schema.properties || {};
+    const patterns = schema.patternProperties || {};
+    const additional = schema.additionalProperties;
 
     // required
     if (Array.isArray(schema.required)) {
       for (const req of schema.required) {
         if (!(req in value)) {
+          const caseVariant = keys.find(key => key.toLowerCase() === String(req).toLowerCase());
+          if (caseVariant) {
+            if (additional !== false) {
+              const childPointer = `${p}/${caseVariant.replace(/~/g, '~0').replace(/\//g, '~1')}`;
+              errors.push({ pointer: childPointer, message: wrongCasePropertyMessage(caseVariant, req) });
+            }
+            continue;
+          }
           errors.push({ pointer: p ? `${p}/${req}` : `/${req}`, message: `Обязательное свойство \`${req}\` отсутствует` });
         }
       }
     }
 
     // properties
-    const props = schema.properties || {};
-    const patterns = schema.patternProperties || {};
-    const additional = schema.additionalProperties;
-
     for (const key of keys) {
       const childPointer = `${p}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`;
       let matched = false;
@@ -295,7 +315,13 @@ function validateValue(value, schema, rootSchema, pointer) {
       }
 
       if (!matched && additional === false) {
-        errors.push({ pointer: childPointer, message: `Свойство \`${key}\` не разрешено схемой` });
+        const suggestedKey = findCaseInsensitivePropertyName(key, props);
+        errors.push({
+          pointer: childPointer,
+          message: suggestedKey
+            ? wrongCasePropertyMessage(key, suggestedKey)
+            : `Свойство \`${key}\` не разрешено схемой`,
+        });
       } else if (!matched && additional && typeof additional === 'object') {
         errors.push(...validateValue(value[key], additional, rootSchema, childPointer));
       }
@@ -464,10 +490,59 @@ function getJsonPointerAt(doc, node) {
   return path.length ? '/' + path.join('/') : '';
 }
 
+function buildJsoncPointerMap(text) {
+  const pointers = new Map();
+  let root = null;
+  try {
+    const errors = [];
+    root = parseJsoncTree(text, errors, { allowTrailingComma: true, disallowComments: false });
+  } catch (e) {}
+  if (!root) return pointers;
+
+  const visit = (node, pointer, keyNode) => {
+    if (!node) return;
+    const from = Math.max(0, Number(node.offset || 0));
+    const to = Math.max(from, from + Math.max(0, Number(node.length || 0)));
+    const keyFrom = keyNode ? Math.max(0, Number(keyNode.offset || 0)) : from;
+    const keyTo = keyNode ? Math.max(keyFrom, keyFrom + Math.max(0, Number(keyNode.length || 0))) : Math.min(to, from + 1);
+    pointers.set(pointer || '', {
+      keyFrom,
+      keyTo,
+      valueFrom: from,
+      valueTo: to,
+    });
+
+    if (node.type === 'object' && Array.isArray(node.children)) {
+      for (const propNode of node.children) {
+        const children = Array.isArray(propNode.children) ? propNode.children : [];
+        const propKeyNode = children[0];
+        const valueNode = children[1];
+        if (!propKeyNode || !valueNode) continue;
+        const key = propKeyNode.value == null ? '' : String(propKeyNode.value);
+        const childPointer = joinPointer(pointer || '', key);
+        visit(valueNode, childPointer, propKeyNode);
+      }
+      return;
+    }
+
+    if (node.type === 'array' && Array.isArray(node.children)) {
+      node.children.forEach((childNode, index) => {
+        visit(childNode, joinPointer(pointer || '', String(index)), null);
+      });
+    }
+  };
+
+  visit(root, '', null);
+  return pointers;
+}
+
 /**
  * Build a Map<pointer, {keyFrom, keyTo, valueFrom, valueTo}> from the syntax tree
  */
 function buildPointerMap(state) {
+  const jsoncPointers = buildJsoncPointerMap(state.doc.toString());
+  if (jsoncPointers.size) return jsoncPointers;
+
   const tree = syntaxTree(state);
   const doc = state.doc;
   const pointers = new Map();
@@ -488,6 +563,61 @@ function buildPointerMap(state) {
     },
   });
   return pointers;
+}
+
+function parentPointer(pointer) {
+  const text = String(pointer || '');
+  if (!text || text === '/') return null;
+  const index = text.lastIndexOf('/');
+  if (index <= 0) return '';
+  return text.slice(0, index);
+}
+
+function findDiagnosticMapping(pointerMap, pointer) {
+  let current = String(pointer || '');
+  while (current != null) {
+    const mapping = pointerMap.get(current);
+    if (mapping) return mapping;
+    current = parentPointer(current);
+  }
+  return null;
+}
+
+function diagnosticPointerLabel(pointer) {
+  if (!pointer) return 'root';
+  const parts = String(pointer).slice(1).split('/').filter(Boolean).map(part =>
+    part.replace(/~1/g, '/').replace(/~0/g, '~')
+  );
+  if (!parts.length) return 'root';
+  return parts.reduce((acc, part) => {
+    if (/^\d+$/.test(part)) return `${acc}[${part}]`;
+    return acc ? `${acc}.${part}` : part;
+  }, '');
+}
+
+function locationForMapping(doc, mapping) {
+  if (!mapping) return null;
+  const pos = Number.isFinite(mapping.keyFrom) ? mapping.keyFrom : mapping.valueFrom;
+  if (!Number.isFinite(pos)) return null;
+  try {
+    const safePos = Math.max(0, Math.min(doc.length, pos));
+    const line = doc.lineAt(safePos);
+    return {
+      line: line.number,
+      column: Math.max(1, safePos - line.from + 1),
+    };
+  } catch (e) {}
+  return null;
+}
+
+function withDiagnosticContext(message, pointer, doc, mapping) {
+  const parts = [];
+  const loc = locationForMapping(doc, mapping);
+  if (loc) parts.push(`строка ${loc.line}, столбец ${loc.column}`);
+  const path = diagnosticPointerLabel(pointer);
+  if (path && path !== 'root') parts.push(`путь ${path}`);
+  if (!parts.length) return message;
+  return `${message} (${parts.join('; ')})`;
 }
 
 /**
@@ -530,13 +660,17 @@ function jsonSchemaLinter(options) {
     const diagnostics = [];
     for (const err of schemaErrors) {
       const pointer = err.pointer || '';
-      const mapping = pointerMap.get(pointer);
+      const mapping = findDiagnosticMapping(pointerMap, pointer);
 
       let from = 0, to = 0;
       if (mapping) {
         // For "property missing" errors, highlight the parent object key
         // For value errors, highlight the value
-        if (err.message.includes('отсутствует') || err.message.includes('не разрешено')) {
+        if (
+          err.message.includes('отсутствует') ||
+          err.message.includes('не разрешено') ||
+          err.message.includes('написано с другим регистром')
+        ) {
           from = mapping.keyFrom;
           to = mapping.keyTo;
         } else if (mapping.valueFrom !== undefined) {
@@ -547,12 +681,13 @@ function jsonSchemaLinter(options) {
           to = mapping.keyTo;
         }
       }
+      const message = withDiagnosticContext(err.message, pointer, view.state.doc, mapping);
 
       diagnostics.push({
         from,
         to,
         severity: 'warning',
-        message: err.message,
+        message,
         source: schema.title || 'json-schema',
       });
     }

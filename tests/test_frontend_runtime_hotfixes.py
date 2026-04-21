@@ -485,6 +485,10 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "xray-outbounds.schema.json" in schema_loader
     assert "adaptXraySchema" not in schema_loader
     assert "parse as parseJsonc" in schema_shim
+    assert "parseTree as parseJsoncTree" in schema_shim
+    assert "function buildJsoncPointerMap" in schema_shim
+    assert "function diagnosticPointerLabel" in schema_shim
+    assert "function wrongCasePropertyMessage" in schema_shim
     assert "function pointerLabel" in schema_shim
     assert "function renderPropertiesSummary" in schema_shim
     assert "function renderArrayItemsSummary" in schema_shim

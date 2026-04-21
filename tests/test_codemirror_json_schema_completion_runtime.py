@@ -48,7 +48,7 @@ console.log(JSON.stringify(result ? result.options.map((option) => option.label)
     return json.loads(result.stdout.strip())
 
 
-def _run_linter_messages(doc: str, schema_path: str = "./xkeen-ui/static/schemas/xray-routing.schema.json") -> list[str]:
+def _run_linter_diagnostics(doc: str, schema_path: str = "./xkeen-ui/static/schemas/xray-routing.schema.json") -> list[dict[str, object]]:
     if shutil.which("node") is None:
         pytest.skip("node is not available in this environment")
 
@@ -65,7 +65,15 @@ const state = EditorState.create({{
   extensions: [json(), stateExtensions(schema)],
 }});
 const diagnostics = jsonSchemaLinter()({{ state }});
-console.log(JSON.stringify(diagnostics.map((item) => item.message)));
+console.log(JSON.stringify(diagnostics.map((item) => {{
+  const line = state.doc.lineAt(item.from);
+  return {{
+    message: item.message,
+    line: line.number,
+    column: item.from - line.from + 1,
+    text: doc.slice(item.from, item.to),
+  }};
+}})));
 """
 
     result = subprocess.run(
@@ -79,6 +87,10 @@ console.log(JSON.stringify(diagnostics.map((item) => item.message)));
 
     assert result.returncode == 0, result.stdout + result.stderr
     return json.loads(result.stdout.strip())
+
+
+def _run_linter_messages(doc: str, schema_path: str = "./xkeen-ui/static/schemas/xray-routing.schema.json") -> list[str]:
+    return [str(item["message"]) for item in _run_linter_diagnostics(doc, schema_path)]
 
 
 def test_routing_schema_completion_supports_rule_value_enum_inside_array_items():
@@ -167,6 +179,45 @@ def test_routing_schema_linter_prefers_nested_anyof_branch_errors_over_root_mism
     assert all("`routing`" not in message for message in messages)
     assert any("`IP`" in message for message in messages)
     assert any("`tag`" in message for message in messages)
+
+
+def test_routing_schema_linter_reports_jsonc_line_path_and_case_hint():
+    diagnostics = _run_linter_diagnostics(
+        "\n".join([
+            "{",
+            "  // JSONC comment before routing",
+            '  "routing": {',
+            '    "rules": [',
+            "      {",
+            '        "IP": ["1.1.1.1/32"]',
+            "      }",
+            "    ],",
+            '    "balancers": [',
+            "      {",
+            '        "Tag": "proxy",',
+            '        "selector": []',
+            "      }",
+            "    ]",
+            "  }",
+            "}",
+            "",
+        ])
+    )
+
+    ip_diag = next(item for item in diagnostics if "`IP`" in str(item["message"]))
+    assert ip_diag["line"] == 6
+    assert ip_diag["column"] == 9
+    assert ip_diag["text"] == '"IP"'
+    assert "строка 6, столбец 9" in str(ip_diag["message"])
+    assert "путь routing.rules[0].IP" in str(ip_diag["message"])
+    assert "используйте `ip`" in str(ip_diag["message"])
+
+    tag_diag = next(item for item in diagnostics if "`Tag`" in str(item["message"]))
+    assert tag_diag["line"] == 11
+    assert tag_diag["column"] == 9
+    assert tag_diag["text"] == '"Tag"'
+    assert "путь routing.balancers[0].Tag" in str(tag_diag["message"])
+    assert "используйте `tag`" in str(tag_diag["message"])
 
 
 def test_outbounds_schema_linter_warns_when_grpc_transport_is_used():
