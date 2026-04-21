@@ -1,15 +1,19 @@
 import { EditorState, Compartment, EditorSelection, Prec, RangeSetBuilder } from '@codemirror/state';
-import { EditorView, keymap, Decoration, ViewPlugin, MatchDecorator } from '@codemirror/view';
+import { EditorView, keymap, Decoration, ViewPlugin, MatchDecorator, hoverTooltip } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
 import { json, jsonLanguage } from '@codemirror/lang-json';
 import { yaml } from '@codemirror/lang-yaml';
 import { syntaxHighlighting, HighlightStyle, LanguageSupport, ensureSyntaxTree } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
-import { lintGutter, setDiagnostics as cmSetDiagnostics } from '@codemirror/lint';
+import { lintGutter, linter, setDiagnostics as cmSetDiagnostics } from '@codemirror/lint';
 import { search, openSearchPanel, closeSearchPanel, findNext, findPrevious, replaceNext, replaceAll as cmReplaceAll } from '@codemirror/search';
 import { toggleComment, undo, redo } from '@codemirror/commands';
 import { indentationMarkers } from '@replit/codemirror-indentation-markers';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
+import {
+  jsonSchemaLinter, handleRefresh, jsonSchemaHover, jsonCompletion,
+  stateExtensions as schemaStateExtensions, updateSchema as schemaUpdateSchema, getJSONSchema
+} from 'codemirror-json-schema';
 
 const GLOBAL_KEY = '__XKEEN_CM6_RUNTIME__';
 const BACKEND = 'cm6-local-offline';
@@ -187,6 +191,46 @@ const jsoncExtension = new LanguageSupport(jsoncLanguage, [
 ]);
 
 const jsonStrictExtension = [json(), jsoncEagerParser, Prec.highest(jsonStrictPunctuationDecorator)];
+
+function jsonSchemaWithSyntaxLinter(opts) {
+  const options = opts || {};
+  const schemaLintSource = jsonSchemaLinter();
+  return function jsonSchemaSyntaxAwareLintSource(view) {
+    const source = view && view.state && view.state.doc ? view.state.doc.toString() : '';
+    const syntax = makeJsonDiagnostics(source, {
+      mode: options.mode,
+      allowComments: options.allowComments,
+    });
+    if (syntax && syntax.ok === false) {
+      return Array.isArray(syntax.diagnostics) ? syntax.diagnostics : [];
+    }
+    return schemaLintSource(view);
+  };
+}
+
+function jsonSchemaSyntaxAwareHover(opts) {
+  const options = opts || {};
+  const schemaHoverSource = jsonSchemaHover();
+  return function jsonSchemaSyntaxAwareHoverSource(view, pos, side) {
+    const source = view && view.state && view.state.doc ? view.state.doc.toString() : '';
+    const syntax = makeJsonDiagnostics(source, {
+      mode: options.mode,
+      allowComments: options.allowComments,
+    });
+    if (syntax && syntax.ok === false) return null;
+    return schemaHoverSource(view, pos, side);
+  };
+}
+
+function schemaExtensionFor(schema, opts) {
+  if (!schema) return [];
+  return [
+    linter(jsonSchemaWithSyntaxLinter(opts), { needsRefresh: handleRefresh }),
+    hoverTooltip(jsonSchemaSyntaxAwareHover(opts)),
+    jsonLanguage.data.of({ autocomplete: jsonCompletion() }),
+    ...schemaStateExtensions(schema),
+  ];
+}
 
 function languageExtensionFor(mode) {
   const next = normalizeMode(mode);
@@ -757,6 +801,7 @@ function buildState(ctx, options, value, selection) {
       ctx.searchCompartment.of(search({ top: true })),
       ctx.linksCompartment.of(options.links !== false ? createLinksExtension() : []),
       ctx.extraKeysCompartment.of([]),
+      ctx.schemaCompartment.of(schemaExtensionFor(ctx.schema, options)),
       EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto' } }),
     ],
   });
@@ -861,6 +906,7 @@ function buildBridge(view, ctx) {
   const host = ctx.host || view.dom;
   const options = ctx.options || {};
   let lastDiagnostics = Array.isArray(ctx.diagnostics) ? ctx.diagnostics.slice() : [];
+  let schemaInstalled = !!ctx.schema;
   let disposed = false;
   let bridge = null;
 
@@ -933,6 +979,7 @@ function buildBridge(view, ctx) {
 
   bridge = {
     __xkeenCm6Bridge: true,
+    __xkeen_cm6_bridge: true,
     engine: 'codemirror',
     backend: BACKEND,
     version: VERSION,
@@ -969,6 +1016,26 @@ function buildBridge(view, ctx) {
       return dispatch({ effects: ctx.linksCompartment.reconfigure(options.links ? createLinksExtension() : []) });
     },
     getLinksEnabled() { return options.links !== false; },
+    setSchema(schema) {
+      ctx.schema = schema || null;
+      if (!schema) {
+        schemaInstalled = false;
+        return dispatch({ effects: ctx.schemaCompartment.reconfigure([]) });
+      }
+      if (schemaInstalled) {
+        try {
+          schemaUpdateSchema(view, schema);
+          return true;
+        } catch (e) {}
+      }
+      const ok = dispatch({ effects: ctx.schemaCompartment.reconfigure(schemaExtensionFor(schema, options)) });
+      schemaInstalled = !!ok;
+      return ok;
+    },
+    getSchema() {
+      try { return getJSONSchema(view.state); } catch (e) {}
+      return undefined;
+    },
     saveViewState() {
       const scroll = bridge.getScrollInfo();
       return {
@@ -1088,6 +1155,7 @@ function createBridge(target, opts = {}) {
     searchCompartment: new Compartment(),
     linksCompartment: new Compartment(),
     extraKeysCompartment: new Compartment(),
+    schemaCompartment: new Compartment(),
     fullscreenState: createFullscreenState(),
     restoreHost: hostInfo && typeof hostInfo.restore === 'function' ? hostInfo.restore : null,
     scrollHandler: null,
@@ -1170,6 +1238,7 @@ const runtime = {
     return result;
   },
   clearValidation(editor) { const target = editor && editor.raw ? editor.raw : editor; try { if (target && typeof target.clearDiagnostics === 'function') target.clearDiagnostics(); } catch (e) {} return true; },
+  setSchema(editor, schema) { const target = editor && editor.raw ? editor.raw : editor; try { if (target && typeof target.setSchema === 'function') return target.setSchema(schema); } catch (e) {} return false; },
   supportsMode(mode) { const next = normalizeMode(mode); return ['application/json', 'application/jsonc', 'application/javascript', 'text/yaml', 'text/plain'].includes(next); },
   isAvailable() { return true; },
   describe() { return { engine: 'codemirror', backend: BACKEND, version: VERSION, source: 'local-offline-bundle', ready: true }; },

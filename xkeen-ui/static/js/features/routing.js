@@ -26,6 +26,7 @@ import {
   toastXkeen,
 } from './xkeen_runtime.js';
 import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_comments.js';
+import { applySchemaToEditor } from '../ui/editor_schema.js';
 
 (() => {
   "use strict";
@@ -618,6 +619,21 @@ import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_c
     } catch (e) {}
     const ta = $(IDS.textarea);
     return ta ? String(ta.value || '') : '';
+  }
+
+  function applyRoutingSchemaToCodeMirror(cm, text) {
+    const editor = cm || _cm;
+    if (!editor) return null;
+    try {
+      return applySchemaToEditor(editor, {
+        target: 'routing',
+        file: getActiveFragment() || getXkeenFilePath('routing', ''),
+        mode: 'jsonc',
+        text: typeof text === 'string' ? text : readCurrentEditorText(),
+        feature: 'routing',
+      });
+    } catch (e) {}
+    return null;
   }
 
   function cacheEditorSnapshot(text) {
@@ -3738,6 +3754,7 @@ function closeHelp() {
       charCount: 0,
     };
     try { syncRoutingCodeMirrorOverlays(!initialLite); } catch (e) {}
+    try { Promise.resolve(applyRoutingSchemaToCodeMirror(cm, textarea.value || '')).catch(() => null); } catch (e) {}
 
 	    cm.on('change', () => {
 	      if (_suppressDirty > 0) return;
@@ -3763,6 +3780,7 @@ function closeHelp() {
   function ensureCodeMirrorEditor() {
     if (_cm && typeof _cm.getWrapperElement === 'function') {
       if (!_cmFacade) _cmFacade = createRoutingCodeMirrorFacade(_cm);
+      try { Promise.resolve(applyRoutingSchemaToCodeMirror(_cm)).catch(() => null); } catch (e) {}
       try { syncSharedRoutingEditor(_cm, _cmFacade, 'codemirror'); } catch (e) {}
       try { moveToolbarToHost(_cm); } catch (e) {}
       try { syncRoutingToolbarUi('codemirror'); } catch (e) {}
@@ -3774,6 +3792,7 @@ function closeHelp() {
 
     _cm = cm;
     _cmFacade = createRoutingCodeMirrorFacade(_cm);
+    try { Promise.resolve(applyRoutingSchemaToCodeMirror(_cm)).catch(() => null); } catch (e) {}
     try { syncSharedRoutingEditor(_cm, _cmFacade, 'codemirror'); } catch (e) {}
     try { moveToolbarToHost(_cm); } catch (e) {}
     try { syncRoutingToolbarUi('codemirror'); } catch (e) {}

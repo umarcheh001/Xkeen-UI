@@ -1,0 +1,747 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "routingRule": {
+      "type": "object",
+      "description": "Правило маршрутизации",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "field"
+          ],
+          "default": "field"
+        },
+        "domain": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Домены (regexp:, domain:, full:, geosite:, ext:)"
+        },
+        "ip": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IP/CIDR (geoip:, ext:)"
+        },
+        "port": {
+          "type": [
+            "string",
+            "integer"
+          ],
+          "description": "Порт или диапазон (например '53', '1024-65535', '80,443')"
+        },
+        "sourcePort": {
+          "type": [
+            "string",
+            "integer"
+          ]
+        },
+        "network": {
+          "type": "string",
+          "enum": [
+            "tcp",
+            "udp",
+            "tcp,udp"
+          ],
+          "description": "Тип сети"
+        },
+        "source": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IP-адреса источника"
+        },
+        "user": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Email-адреса пользователей"
+        },
+        "inboundTag": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Теги inbound"
+        },
+        "protocol": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "http",
+              "tls",
+              "bittorrent"
+            ]
+          }
+        },
+        "attrs": {
+          "type": "object",
+          "description": "Атрибуты для сопоставления"
+        },
+        "outboundTag": {
+          "type": "string",
+          "description": "Тег outbound для маршрутизации"
+        },
+        "balancerTag": {
+          "type": "string",
+          "description": "Тег балансировщика"
+        },
+        "domainMatcher": {
+          "type": "string",
+          "enum": [
+            "hybrid",
+            "linear"
+          ]
+        }
+      }
+    },
+    "balancer": {
+      "type": "object",
+      "properties": {
+        "tag": {
+          "type": "string"
+        },
+        "selector": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fallbackTag": {
+          "type": "string"
+        },
+        "strategy": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "random",
+                "leastPing",
+                "roundRobin",
+                "leastLoad"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "tag",
+        "selector"
+      ]
+    },
+    "streamSettings": {
+      "type": "object",
+      "description": "Настройки транспорта",
+      "properties": {
+        "network": {
+          "type": "string",
+          "enum": [
+            "tcp",
+            "kcp",
+            "ws",
+            "http",
+            "quic",
+            "grpc",
+            "httpupgrade",
+            "splithttp",
+            "xhttp"
+          ],
+          "default": "tcp"
+        },
+        "security": {
+          "type": "string",
+          "enum": [
+            "none",
+            "tls",
+            "reality"
+          ],
+          "default": "none"
+        },
+        "tlsSettings": {
+          "type": "object",
+          "properties": {
+            "serverName": {
+              "type": "string"
+            },
+            "alpn": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "allowInsecure": {
+              "type": "boolean",
+              "default": false
+            },
+            "fingerprint": {
+              "type": "string",
+              "enum": [
+                "chrome",
+                "firefox",
+                "safari",
+                "ios",
+                "android",
+                "edge",
+                "360",
+                "qq",
+                "random",
+                "randomized",
+                ""
+              ]
+            },
+            "certificates": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/certificate"
+              }
+            },
+            "disableSystemRoot": {
+              "type": "boolean",
+              "default": false
+            },
+            "pinnedPeerCertificateChainSha256": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "minVersion": {
+              "type": "string"
+            },
+            "maxVersion": {
+              "type": "string"
+            },
+            "rejectUnknownSni": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "realitySettings": {
+          "type": "object",
+          "properties": {
+            "show": {
+              "type": "boolean",
+              "default": false
+            },
+            "dest": {
+              "type": [
+                "string",
+                "integer"
+              ],
+              "description": "Адрес назначения (например 'example.com:443')"
+            },
+            "xver": {
+              "type": "integer",
+              "enum": [
+                0,
+                1,
+                2
+              ],
+              "default": 0
+            },
+            "serverNames": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "privateKey": {
+              "type": "string"
+            },
+            "publicKey": {
+              "type": "string"
+            },
+            "shortIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "fingerprint": {
+              "type": "string"
+            },
+            "serverName": {
+              "type": "string"
+            },
+            "spiderX": {
+              "type": "string"
+            },
+            "minClientVer": {
+              "type": "string"
+            },
+            "maxClientVer": {
+              "type": "string"
+            },
+            "maxTimeDiff": {
+              "type": "integer"
+            }
+          }
+        },
+        "tcpSettings": {
+          "type": "object"
+        },
+        "kcpSettings": {
+          "type": "object"
+        },
+        "wsSettings": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "host": {
+              "type": "string"
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "httpSettings": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "path": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string"
+            },
+            "headers": {
+              "type": "object"
+            }
+          }
+        },
+        "grpcSettings": {
+          "type": "object",
+          "properties": {
+            "serviceName": {
+              "type": "string"
+            },
+            "multiMode": {
+              "type": "boolean"
+            },
+            "authority": {
+              "type": "string"
+            }
+          }
+        },
+        "httpupgradeSettings": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "host": {
+              "type": "string"
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "sockopt": {
+          "type": "object",
+          "properties": {
+            "mark": {
+              "type": "integer"
+            },
+            "tcpFastOpen": {
+              "type": "boolean"
+            },
+            "tproxy": {
+              "type": "string",
+              "enum": [
+                "redirect",
+                "tproxy",
+                "off"
+              ]
+            },
+            "domainStrategy": {
+              "type": "string",
+              "enum": [
+                "AsIs",
+                "UseIP",
+                "UseIPv4",
+                "UseIPv6"
+              ]
+            },
+            "dialerProxy": {
+              "type": "string"
+            },
+            "tcpKeepAliveInterval": {
+              "type": "integer"
+            },
+            "tcpKeepAliveIdle": {
+              "type": "integer"
+            },
+            "tcpMptcp": {
+              "type": "boolean"
+            },
+            "tcpNoDelay": {
+              "type": "boolean"
+            },
+            "tcpcongestion": {
+              "type": "string"
+            },
+            "interface": {
+              "type": "string"
+            },
+            "v6only": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "certificate": {
+      "type": "object",
+      "properties": {
+        "usage": {
+          "type": "string",
+          "enum": [
+            "encipherment",
+            "verify",
+            "issue",
+            "verifyclient"
+          ]
+        },
+        "certificateFile": {
+          "type": "string"
+        },
+        "keyFile": {
+          "type": "string"
+        },
+        "certificate": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "key": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ocspStapling": {
+          "type": "integer"
+        },
+        "oneTimeLoading": {
+          "type": "boolean"
+        },
+        "buildChain": {
+          "type": "boolean"
+        }
+      }
+    },
+    "inbound": {
+      "type": "object",
+      "description": "Входящее подключение",
+      "properties": {
+        "listen": {
+          "type": "string",
+          "default": "0.0.0.0",
+          "description": "Адрес прослушивания"
+        },
+        "port": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Порт или диапазон"
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "dokodemo-door",
+            "http",
+            "socks",
+            "vmess",
+            "vless",
+            "trojan",
+            "shadowsocks"
+          ],
+          "description": "Протокол"
+        },
+        "settings": {
+          "type": "object",
+          "description": "Настройки протокола (зависят от protocol)"
+        },
+        "streamSettings": {
+          "$ref": "#/definitions/streamSettings"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Уникальный тег"
+        },
+        "sniffing": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false
+            },
+            "destOverride": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "http",
+                  "tls",
+                  "quic",
+                  "fakedns",
+                  "fakedns+others"
+                ]
+              }
+            },
+            "metadataOnly": {
+              "type": "boolean",
+              "default": false
+            },
+            "domainsExcluded": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "routeOnly": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "allocate": {
+          "type": "object",
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "enum": [
+                "always",
+                "random"
+              ]
+            },
+            "refresh": {
+              "type": "integer"
+            },
+            "concurrency": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "required": [
+        "port",
+        "protocol"
+      ]
+    },
+    "outbound": {
+      "type": "object",
+      "description": "Исходящее подключение",
+      "properties": {
+        "sendThrough": {
+          "type": "string",
+          "default": "0.0.0.0",
+          "description": "IP для отправки"
+        },
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "blackhole",
+            "dns",
+            "freedom",
+            "http",
+            "socks",
+            "vmess",
+            "vless",
+            "shadowsocks",
+            "trojan",
+            "wireguard",
+            "loopback"
+          ],
+          "description": "Протокол"
+        },
+        "settings": {
+          "type": "object",
+          "description": "Настройки протокола (зависят от protocol)"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Уникальный тег"
+        },
+        "streamSettings": {
+          "$ref": "#/definitions/streamSettings"
+        },
+        "proxySettings": {
+          "type": "object",
+          "properties": {
+            "tag": {
+              "type": "string",
+              "description": "Тег outbound-прокси"
+            },
+            "transportLayer": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "mux": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false
+            },
+            "concurrency": {
+              "type": "integer",
+              "default": 8,
+              "minimum": -1,
+              "maximum": 1024
+            },
+            "xudpConcurrency": {
+              "type": "integer",
+              "default": 0
+            },
+            "xudpProxyUDP443": {
+              "type": "string",
+              "enum": [
+                "reject",
+                "allow",
+                "skip"
+              ]
+            }
+          }
+        },
+        "domainStrategy": {
+          "type": "string",
+          "enum": [
+            "AsIs",
+            "UseIP",
+            "UseIPv4",
+            "UseIPv6",
+            "ForceIP",
+            "ForceIPv4",
+            "ForceIPv6"
+          ]
+        }
+      },
+      "required": [
+        "protocol"
+      ]
+    }
+  },
+  "title": "Xray Routing Fragment",
+  "description": "JSON Schema for 05_routing.json. Accepts either { routing: ... } fragments or routing-only objects with rules/balancers/domainStrategy at the root.",
+  "anyOf": [
+    {
+      "title": "05_routing.json object",
+      "type": "object",
+      "properties": {
+        "routing": {
+          "description": "Правила маршрутизации трафика",
+          "type": "object",
+          "properties": {
+            "domainStrategy": {
+              "type": "string",
+              "enum": [
+                "AsIs",
+                "IPIfNonMatch",
+                "IPOnDemand"
+              ],
+              "default": "AsIs",
+              "description": "Стратегия сопоставления доменов"
+            },
+            "domainMatcher": {
+              "type": "string",
+              "enum": [
+                "hybrid",
+                "linear"
+              ],
+              "default": "hybrid",
+              "description": "Алгоритм сопоставления доменов"
+            },
+            "rules": {
+              "type": "array",
+              "description": "Массив правил маршрутизации",
+              "items": {
+                "$ref": "#/definitions/routingRule"
+              }
+            },
+            "balancers": {
+              "type": "array",
+              "description": "Балансировщики нагрузки",
+              "items": {
+                "$ref": "#/definitions/balancer"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "routing"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "title": "Routing object",
+      "description": "Правила маршрутизации трафика",
+      "type": "object",
+      "properties": {
+        "domainStrategy": {
+          "type": "string",
+          "enum": [
+            "AsIs",
+            "IPIfNonMatch",
+            "IPOnDemand"
+          ],
+          "default": "AsIs",
+          "description": "Стратегия сопоставления доменов"
+        },
+        "domainMatcher": {
+          "type": "string",
+          "enum": [
+            "hybrid",
+            "linear"
+          ],
+          "default": "hybrid",
+          "description": "Алгоритм сопоставления доменов"
+        },
+        "rules": {
+          "type": "array",
+          "description": "Массив правил маршрутизации",
+          "items": {
+            "$ref": "#/definitions/routingRule"
+          }
+        },
+        "balancers": {
+          "type": "array",
+          "description": "Балансировщики нагрузки",
+          "items": {
+            "$ref": "#/definitions/balancer"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

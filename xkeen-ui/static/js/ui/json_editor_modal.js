@@ -7,6 +7,7 @@ import {
   getXkeenFilePath,
   getXkeenPageFilesConfig,
 } from '../features/xkeen_runtime.js';
+import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
 
 (() => {
   // JSON editor modal for 03_inbounds.json / 04_outbounds.json
@@ -338,7 +339,7 @@ import {
 
   function isCm6Editor(cm) {
     try {
-      return !!(cm && cm.__xkeen_cm6_bridge === true);
+      return !!(cm && (cm.__xkeenCm6Bridge === true || cm.__xkeen_cm6_bridge === true || cm.backend === 'cm6'));
     } catch (e) {}
     return false;
   }
@@ -346,6 +347,20 @@ import {
   function getCodeMirrorValidationRuntime() {
     try {
       return (window.XKeen && XKeen.ui && XKeen.ui.cm6Runtime) ? XKeen.ui.cm6Runtime : null;
+    } catch (e) {}
+    return null;
+  }
+
+  async function applyCurrentSchemaToCodeMirror(text) {
+    if (!_cm) return null;
+    try {
+      return await applySchemaToEditor(_cm, {
+        target: _currentTarget || '',
+        file: _currentTarget ? activeFileParam(_currentTarget) : '',
+        mode: 'jsonc',
+        text: typeof text === 'string' ? text : getCurrentValue(),
+        feature: 'json-modal',
+      });
     } catch (e) {}
     return null;
   }
@@ -743,6 +758,7 @@ import {
       if (cm) {
         try { cm.setOption('theme', cmThemeFromPage()); } catch (e) {}
         try { if (fac && typeof fac.set === 'function') fac.set(prevText); } catch (e) {}
+        try { await applyCurrentSchemaToCodeMirror(prevText); } catch (e) {}
         try { validateCurrentJson(prevText, { silent: false }); } catch (e2) {}
         try {
           if (cmCursor) cm.setCursor(cmCursor);
@@ -919,6 +935,7 @@ import {
         if (cm) {
           try { cm.setOption('theme', cmThemeFromPage()); } catch (e) {}
           try { if (fac && typeof fac.set === 'function') fac.set(finalText || ''); } catch (e) {}
+          try { await applyCurrentSchemaToCodeMirror(finalText || ''); } catch (e) {}
           try { validateCurrentJson(finalText || '', { silent: false }); } catch (e2) {}
           setTimeout(() => {
             try { if (fac && typeof fac.layout === 'function') fac.layout(); } catch (e) {}
@@ -953,6 +970,7 @@ import {
     const modal = el('json-editor-modal');
     if (modal) hideModal(modal, 'json_editor_close');
     try { clearDirtyListener(); } catch (e) {}
+    try { if (_cm) clearSchemaFromEditor(_cm, { feature: 'json-modal' }); } catch (e) {}
     try { if (_cm && typeof _cm.clearDiagnostics === 'function') _cm.clearDiagnostics(); } catch (e2) {}
     try { clearTargetDirtyState(target); } catch (e3) {}
     setError('');

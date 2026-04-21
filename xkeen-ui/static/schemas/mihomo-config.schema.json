@@ -1,0 +1,619 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Mihomo (Clash Meta) Config",
+  "description": "JSON Schema для конфигурации Mihomo / Clash Meta. Описывает основные поля YAML-конфига.",
+  "type": "object",
+  "properties": {
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "HTTP-прокси порт"
+    },
+    "socks-port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "SOCKS5-прокси порт"
+    },
+    "redir-port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "Порт для прозрачного проксирования (redirect)"
+    },
+    "tproxy-port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "Порт для TPROXY (прозрачное проксирование)"
+    },
+    "mixed-port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "Универсальный порт (HTTP + SOCKS5)"
+    },
+    "allow-lan": {
+      "type": "boolean",
+      "default": false,
+      "description": "Разрешить подключения из LAN"
+    },
+    "bind-address": {
+      "type": "string",
+      "default": "*",
+      "description": "Адрес привязки (по умолчанию все интерфейсы)"
+    },
+    "lan-allowed-ips": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Список разрешённых IP/CIDR из LAN"
+    },
+    "lan-disallowed-ips": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Список запрещённых IP/CIDR из LAN"
+    },
+    "authentication": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Аутентификация для HTTP/SOCKS (формат 'user:pass')"
+    },
+    "skip-auth-prefixes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "CIDR-диапазоны без аутентификации"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["rule", "global", "direct"],
+      "default": "rule",
+      "description": "Режим работы: rule (правила), global (все через прокси), direct (все напрямую)"
+    },
+    "log-level": {
+      "type": "string",
+      "enum": ["silent", "error", "warning", "info", "debug"],
+      "default": "info",
+      "description": "Уровень логирования"
+    },
+    "ipv6": {
+      "type": "boolean",
+      "default": true,
+      "description": "Поддержка IPv6"
+    },
+    "external-controller": {
+      "type": "string",
+      "description": "Адрес RESTful API (например '0.0.0.0:9090')"
+    },
+    "external-controller-tls": {
+      "type": "string",
+      "description": "Адрес RESTful API с TLS"
+    },
+    "external-ui": {
+      "type": "string",
+      "description": "Имя папки с веб-интерфейсом (например 'zashboard', 'yacd')"
+    },
+    "external-ui-name": {
+      "type": "string",
+      "description": "Имя папки веб-интерфейса"
+    },
+    "external-ui-url": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL для скачивания веб-интерфейса"
+    },
+    "secret": {
+      "type": "string",
+      "description": "Секретный ключ для API"
+    },
+    "interface-name": {
+      "type": "string",
+      "description": "Имя сетевого интерфейса для исходящего трафика"
+    },
+    "routing-mark": {
+      "type": "integer",
+      "description": "fwmark для маршрутизации"
+    },
+    "unified-delay": {
+      "type": "boolean",
+      "default": false,
+      "description": "Единая задержка (учитывает handshake в измерении)"
+    },
+    "tcp-concurrent": {
+      "type": "boolean",
+      "default": false,
+      "description": "TCP Concurrent (Happy Eyeballs)"
+    },
+    "keep-alive-interval": {
+      "type": "integer",
+      "default": 30,
+      "description": "Интервал TCP Keep-Alive (секунды)"
+    },
+    "keep-alive-idle": {
+      "type": "integer",
+      "default": 600,
+      "description": "TCP Keep-Alive idle (секунды)"
+    },
+    "find-process-mode": {
+      "type": "string",
+      "enum": ["off", "strict", "always"],
+      "default": "strict",
+      "description": "Режим определения процесса"
+    },
+    "global-client-fingerprint": {
+      "type": "string",
+      "enum": ["chrome", "firefox", "safari", "iOS", "android", "edge", "360", "qq", "random", "randomized"],
+      "description": "Глобальный TLS fingerprint клиента"
+    },
+    "global-ua": {
+      "type": "string",
+      "description": "Глобальный User-Agent"
+    },
+
+    "geodata-mode": {
+      "type": "boolean",
+      "default": false,
+      "description": "Использовать .dat файлы вместо mmdb"
+    },
+    "geodata-loader": {
+      "type": "string",
+      "enum": ["standard", "memconservative"],
+      "default": "memconservative",
+      "description": "Загрузчик geodata"
+    },
+    "geo-auto-update": {
+      "type": "boolean",
+      "default": false,
+      "description": "Автоматическое обновление geo-баз"
+    },
+    "geo-update-interval": {
+      "type": "integer",
+      "default": 24,
+      "description": "Интервал обновления geo-баз (часы)"
+    },
+    "geox-url": {
+      "type": "object",
+      "description": "URL-адреса для скачивания geo-баз",
+      "properties": {
+        "geoip": { "type": "string", "format": "uri" },
+        "geosite": { "type": "string", "format": "uri" },
+        "mmdb": { "type": "string", "format": "uri" },
+        "asn": { "type": "string", "format": "uri" }
+      }
+    },
+
+    "profile": {
+      "type": "object",
+      "description": "Настройки профиля",
+      "properties": {
+        "store-selected": { "type": "boolean", "default": true, "description": "Сохранять выбранные прокси между перезапусками" },
+        "store-fake-ip": { "type": "boolean", "default": true, "description": "Сохранять FakeIP-маппинги" },
+        "tracing": { "type": "boolean", "default": false }
+      }
+    },
+
+    "tun": {
+      "type": "object",
+      "description": "TUN-устройство",
+      "properties": {
+        "enable": { "type": "boolean", "default": false },
+        "stack": { "type": "string", "enum": ["system", "gvisor", "mixed", "lwip"], "default": "gvisor" },
+        "device": { "type": "string", "default": "utun" },
+        "auto-route": { "type": "boolean", "default": true },
+        "auto-detect-interface": { "type": "boolean", "default": true },
+        "dns-hijack": { "type": "array", "items": { "type": "string" } },
+        "strict-route": { "type": "boolean", "default": false },
+        "mtu": { "type": "integer", "default": 9000 },
+        "inet4-address": { "type": ["string", "array"] },
+        "inet6-address": { "type": ["string", "array"] },
+        "inet4-route-address": { "type": "array", "items": { "type": "string" } },
+        "inet6-route-address": { "type": "array", "items": { "type": "string" } },
+        "inet4-route-exclude-address": { "type": "array", "items": { "type": "string" } },
+        "inet6-route-exclude-address": { "type": "array", "items": { "type": "string" } },
+        "endpoint-independent-nat": { "type": "boolean", "default": false },
+        "include-uid": { "type": "array", "items": { "type": "integer" } },
+        "exclude-uid": { "type": "array", "items": { "type": "integer" } },
+        "include-package": { "type": "array", "items": { "type": "string" } },
+        "exclude-package": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "dns": {
+      "type": "object",
+      "description": "Настройки DNS",
+      "properties": {
+        "enable": { "type": "boolean", "default": true },
+        "prefer-h3": { "type": "boolean", "default": false },
+        "listen": { "type": "string", "default": "0.0.0.0:1053" },
+        "ipv6": { "type": "boolean", "default": false },
+        "ipv6-timeout": { "type": "integer", "default": 300 },
+        "enhanced-mode": {
+          "type": "string",
+          "enum": ["normal", "fake-ip", "redir-host"],
+          "default": "normal",
+          "description": "Режим DNS"
+        },
+        "fake-ip-range": { "type": "string", "default": "198.18.0.1/16", "description": "CIDR-диапазон для Fake IP" },
+        "fake-ip-filter": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Домены, исключённые из FakeIP"
+        },
+        "fake-ip-filter-mode": {
+          "type": "string",
+          "enum": ["blacklist", "whitelist"],
+          "default": "blacklist"
+        },
+        "default-nameserver": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "DNS для разрешения адресов DoH/DoT-серверов"
+        },
+        "nameserver": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Основные DNS-серверы"
+        },
+        "fallback": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Резервные DNS-серверы"
+        },
+        "fallback-filter": {
+          "type": "object",
+          "properties": {
+            "geoip": { "type": "boolean", "default": true },
+            "geoip-code": { "type": "string", "default": "CN" },
+            "geosite": { "type": "array", "items": { "type": "string" } },
+            "ipcidr": { "type": "array", "items": { "type": "string" } },
+            "domain": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "nameserver-policy": {
+          "type": "object",
+          "description": "DNS-политики для доменов",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ]
+          }
+        },
+        "proxy-server-nameserver": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "DNS для разрешения адресов прокси-серверов"
+        },
+        "use-hosts": { "type": "boolean", "default": true },
+        "use-system-hosts": { "type": "boolean", "default": true },
+        "respect-rules": { "type": "boolean", "default": false },
+        "cache-algorithm": { "type": "string", "enum": ["lru", "arc"], "default": "lru" }
+      }
+    },
+
+    "hosts": {
+      "type": "object",
+      "description": "Статические DNS-записи",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "array", "items": { "type": "string" } }
+        ]
+      }
+    },
+
+    "sniffer": {
+      "type": "object",
+      "description": "Настройки снифера протоколов",
+      "properties": {
+        "enable": { "type": "boolean", "default": false },
+        "force-dns-mapping": { "type": "boolean", "default": true },
+        "parse-pure-ip": { "type": "boolean", "default": false },
+        "override-destination": { "type": "boolean", "default": false },
+        "sniff": {
+          "type": "object",
+          "description": "Протоколы для обнаружения (HTTP, TLS, QUIC)",
+          "properties": {
+            "HTTP": {
+              "type": "object",
+              "properties": {
+                "ports": { "type": "array", "items": { "type": ["integer", "string"] } },
+                "override-destination": { "type": "boolean" }
+              }
+            },
+            "TLS": {
+              "type": "object",
+              "properties": {
+                "ports": { "type": "array", "items": { "type": ["integer", "string"] } }
+              }
+            },
+            "QUIC": {
+              "type": "object",
+              "properties": {
+                "ports": { "type": "array", "items": { "type": ["integer", "string"] } }
+              }
+            }
+          }
+        },
+        "force-domain": { "type": "array", "items": { "type": "string" } },
+        "skip-domain": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "proxies": {
+      "type": "array",
+      "description": "Список прокси-серверов",
+      "items": { "$ref": "#/definitions/proxy" }
+    },
+
+    "proxy-providers": {
+      "type": "object",
+      "description": "Провайдеры прокси (подписки, файлы)",
+      "additionalProperties": { "$ref": "#/definitions/proxyProvider" }
+    },
+
+    "proxy-groups": {
+      "type": "array",
+      "description": "Группы прокси (select, url-test, fallback, load-balance, relay)",
+      "items": { "$ref": "#/definitions/proxyGroup" }
+    },
+
+    "rule-providers": {
+      "type": "object",
+      "description": "Провайдеры правил (загружаемые наборы правил)",
+      "additionalProperties": { "$ref": "#/definitions/ruleProvider" }
+    },
+
+    "rules": {
+      "type": "array",
+      "description": "Список правил маршрутизации",
+      "items": { "type": "string" }
+    },
+
+    "sub-rules": {
+      "type": "object",
+      "description": "Подправила (вложенные наборы правил)",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+
+    "listeners": {
+      "type": "array",
+      "description": "Дополнительные слушатели (inbound)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "enum": ["http", "socks", "mixed", "redir", "tproxy", "tunnel", "tun", "shadowsocks", "vmess"] },
+          "port": { "type": "integer" },
+          "listen": { "type": "string" },
+          "rule": { "type": "string" },
+          "proxy": { "type": "string" }
+        }
+      }
+    },
+
+    "anchors": {
+      "description": "YAML-якоря (для повторного использования в конфиге)",
+      "type": "object"
+    },
+
+    "experimental": {
+      "type": "object",
+      "description": "Экспериментальные настройки"
+    },
+
+    "ntp": {
+      "type": "object",
+      "description": "NTP-клиент",
+      "properties": {
+        "enable": { "type": "boolean", "default": false },
+        "server": { "type": "string" },
+        "port": { "type": "integer", "default": 123 },
+        "interval": { "type": "integer", "default": 30 },
+        "write-to-system": { "type": "boolean", "default": false }
+      }
+    }
+  },
+
+  "definitions": {
+    "proxy": {
+      "type": "object",
+      "description": "Прокси-сервер",
+      "required": ["name", "type", "server", "port"],
+      "properties": {
+        "name": { "type": "string", "description": "Уникальное имя прокси" },
+        "type": {
+          "type": "string",
+          "enum": ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "wireguard", "tuic", "socks5", "http", "ssh", "snell", "anytls"],
+          "description": "Тип протокола"
+        },
+        "server": { "type": "string", "description": "Адрес сервера" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535, "description": "Порт сервера" },
+        "password": { "type": "string" },
+        "uuid": { "type": "string", "description": "UUID (для vmess/vless)" },
+        "alterId": { "type": "integer", "description": "Alter ID (для vmess)" },
+        "cipher": { "type": "string", "description": "Метод шифрования" },
+        "tls": { "type": "boolean", "default": false },
+        "skip-cert-verify": { "type": "boolean", "default": false, "description": "Пропустить проверку сертификата" },
+        "servername": { "type": "string", "description": "SNI (Server Name Indication)" },
+        "fingerprint": { "type": "string", "description": "TLS fingerprint" },
+        "client-fingerprint": { "type": "string", "enum": ["chrome", "firefox", "safari", "iOS", "android", "edge", "360", "qq", "random", "randomized"] },
+        "network": { "type": "string", "enum": ["ws", "grpc", "h2", "http", "tcp"], "description": "Транспорт" },
+        "udp": { "type": "boolean", "default": true, "description": "Поддержка UDP" },
+        "tfo": { "type": "boolean", "default": false, "description": "TCP Fast Open" },
+        "mptcp": { "type": "boolean", "default": false, "description": "Multipath TCP" },
+        "ip-version": { "type": "string", "enum": ["dual", "ipv4", "ipv6", "ipv4-prefer", "ipv6-prefer"] },
+        "dialer-proxy": { "type": "string", "description": "Тег прокси для подключения (цепочки)" },
+
+        "flow": { "type": "string", "enum": ["xtls-rprx-vision", ""], "description": "XTLS flow (для VLESS)" },
+        "reality-opts": {
+          "type": "object",
+          "properties": {
+            "public-key": { "type": "string" },
+            "short-id": { "type": "string" }
+          }
+        },
+        "ws-opts": {
+          "type": "object",
+          "properties": {
+            "path": { "type": "string" },
+            "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+            "max-early-data": { "type": "integer" },
+            "early-data-header-name": { "type": "string" },
+            "v2ray-http-upgrade": { "type": "boolean" },
+            "v2ray-http-upgrade-fast-open": { "type": "boolean" }
+          }
+        },
+        "grpc-opts": {
+          "type": "object",
+          "properties": {
+            "grpc-service-name": { "type": "string" }
+          }
+        },
+        "h2-opts": {
+          "type": "object",
+          "properties": {
+            "host": { "type": "array", "items": { "type": "string" } },
+            "path": { "type": "string" }
+          }
+        },
+        "plugin": { "type": "string" },
+        "plugin-opts": { "type": "object" },
+        "smux": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "protocol": { "type": "string", "enum": ["smux", "yamux", "h2mux"] },
+            "max-connections": { "type": "integer" },
+            "min-streams": { "type": "integer" },
+            "max-streams": { "type": "integer" },
+            "statistic": { "type": "boolean" },
+            "only-tcp": { "type": "boolean" },
+            "padding": { "type": "boolean" },
+            "brutal-opts": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "up": { "type": "string" },
+                "down": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "proxyProvider": {
+      "type": "object",
+      "description": "Провайдер прокси",
+      "properties": {
+        "type": { "type": "string", "enum": ["http", "file", "inline"], "description": "Тип провайдера" },
+        "url": { "type": "string", "format": "uri", "description": "URL подписки" },
+        "path": { "type": "string", "description": "Локальный путь для кэша" },
+        "interval": { "type": "integer", "description": "Интервал обновления (секунды)" },
+        "proxy": { "type": "string", "description": "Прокси для загрузки" },
+        "header": { "type": "object", "description": "HTTP-заголовки для запроса" },
+        "health-check": {
+          "type": "object",
+          "properties": {
+            "enable": { "type": "boolean", "default": true },
+            "url": { "type": "string", "default": "https://www.gstatic.com/generate_204" },
+            "interval": { "type": "integer", "default": 300, "description": "Интервал проверки (секунды)" },
+            "timeout": { "type": "integer", "default": 5000, "description": "Таймаут проверки (мс)" },
+            "lazy": { "type": "boolean", "default": true },
+            "expected-status": { "type": ["integer", "string"] }
+          }
+        },
+        "override": {
+          "type": "object",
+          "description": "Перезаписать параметры всех прокси из провайдера",
+          "properties": {
+            "tfo": { "type": "boolean" },
+            "mptcp": { "type": "boolean" },
+            "udp": { "type": "boolean" },
+            "up": { "type": "string" },
+            "down": { "type": "string" },
+            "skip-cert-verify": { "type": "boolean" },
+            "dialer-proxy": { "type": "string" },
+            "interface-name": { "type": "string" },
+            "routing-mark": { "type": "integer" },
+            "ip-version": { "type": "string" }
+          }
+        },
+        "filter": { "type": "string", "description": "Regex-фильтр прокси по имени" },
+        "exclude-filter": { "type": "string", "description": "Regex исключения прокси по имени" },
+        "exclude-type": { "type": "string", "description": "Исключить прокси по типу" },
+        "payload": { "type": "array", "items": { "type": "object" }, "description": "Inline-список прокси" }
+      }
+    },
+
+    "proxyGroup": {
+      "type": "object",
+      "description": "Группа прокси",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string", "description": "Имя группы" },
+        "type": {
+          "type": "string",
+          "enum": ["select", "url-test", "fallback", "load-balance", "relay"],
+          "description": "Тип группы"
+        },
+        "proxies": { "type": "array", "items": { "type": "string" }, "description": "Список имён прокси/групп (DIRECT, REJECT, PASS)" },
+        "use": { "type": "array", "items": { "type": "string" }, "description": "Имена proxy-providers" },
+        "include-all": { "type": "boolean", "description": "Включить все прокси из providers" },
+        "include-all-proxies": { "type": "boolean", "description": "Включить все proxies" },
+        "include-all-providers": { "type": "boolean", "description": "Включить все providers" },
+        "filter": { "type": "string", "description": "Regex-фильтр по имени" },
+        "exclude-filter": { "type": "string", "description": "Regex исключения по имени" },
+        "exclude-type": { "type": "string" },
+        "url": { "type": "string", "description": "URL для проверки доступности" },
+        "interval": { "type": "integer", "description": "Интервал проверки (секунды)" },
+        "timeout": { "type": "integer", "description": "Таймаут (мс)" },
+        "lazy": { "type": "boolean", "default": true },
+        "expected-status": { "type": ["integer", "string"] },
+        "tolerance": { "type": "integer", "description": "Допустимое отклонение задержки (мс, для url-test)" },
+        "max-failed-times": { "type": "integer" },
+        "strategy": {
+          "type": "string",
+          "enum": ["consistent-hashing", "round-robin", "sticky-sessions"],
+          "description": "Стратегия балансировки (для load-balance)"
+        },
+        "disable-udp": { "type": "boolean", "default": false },
+        "interface-name": { "type": "string" },
+        "routing-mark": { "type": "integer" },
+        "icon": { "type": "string", "description": "URL иконки для UI" },
+        "hidden": { "type": "boolean", "default": false, "description": "Скрыть из UI" }
+      }
+    },
+
+    "ruleProvider": {
+      "type": "object",
+      "description": "Провайдер правил",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["http", "file", "inline"],
+          "description": "Тип провайдера"
+        },
+        "behavior": {
+          "type": "string",
+          "enum": ["domain", "ipcidr", "classical"],
+          "description": "Тип правил в наборе"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["yaml", "text", "mrs"],
+          "description": "Формат файла правил"
+        },
+        "url": { "type": "string", "format": "uri", "description": "URL для загрузки" },
+        "path": { "type": "string", "description": "Локальный путь" },
+        "interval": { "type": "integer", "description": "Интервал обновления (секунды)" },
+        "proxy": { "type": "string" },
+        "payload": { "type": "array", "items": { "type": "string" }, "description": "Inline-список правил" }
+      }
+    }
+  }
+}

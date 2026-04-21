@@ -450,6 +450,48 @@ def test_codemirror6_importmap_template_exists_and_maps_required_packages():
     assert "vendor/npm/jsonc-parser/lib/esm/main.js" in text
     assert "vendor/npm/style-mod/src/style-mod.js" in text
     assert "vendor/npm/w3c-keyname/index.js" in text
+    assert "codemirror-json-schema" in text
+    assert "js/vendor/codemirror_json_schema.js" in text
+    assert "vendor/npm/codemirror-json-schema" not in text
+
+
+def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
+    importmap = Path('xkeen-ui/templates/_codemirror6_importmap.html').read_text(encoding='utf-8')
+    shim_path = Path('xkeen-ui/static/js/vendor/codemirror_json_schema.js')
+    schema_loader_path = Path('xkeen-ui/static/js/ui/editor_schema.js')
+    fragment_schema_paths = [
+        Path('xkeen-ui/static/schemas/xray-routing.schema.json'),
+        Path('xkeen-ui/static/schemas/xray-inbounds.schema.json'),
+        Path('xkeen-ui/static/schemas/xray-outbounds.schema.json'),
+    ]
+    boot = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
+    json_modal = Path('xkeen-ui/static/js/ui/json_editor_modal.js').read_text(encoding='utf-8')
+    routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+    vite = Path('vite.config.mjs').read_text(encoding='utf-8')
+    schema_loader = schema_loader_path.read_text(encoding='utf-8')
+
+    assert shim_path.is_file()
+    assert schema_loader_path.is_file()
+    for fragment_schema_path in fragment_schema_paths:
+        assert fragment_schema_path.is_file()
+        assert '"anyOf"' in fragment_schema_path.read_text(encoding='utf-8')
+    assert "js/vendor/codemirror_json_schema.js" in importmap
+    assert "xray-routing.schema.json" in schema_loader
+    assert "xray-inbounds.schema.json" in schema_loader
+    assert "xray-outbounds.schema.json" in schema_loader
+    assert "adaptXraySchema" not in schema_loader
+    assert "parse as parseJsonc" in shim_path.read_text(encoding='utf-8')
+    assert "jsonSchemaWithSyntaxLinter" in boot
+    assert "jsonSchemaSyntaxAwareHover" in boot
+    assert "makeJsonDiagnostics(source" in boot
+    assert "__xkeenCm6Bridge: true" in boot
+    assert "__xkeen_cm6_bridge: true" in boot
+    assert "schemaUpdateSchema(view, schema)" in boot
+    assert "setSchema(editor, schema)" in boot
+    assert "applySchemaToEditor(_cm" in json_modal
+    assert "__xkeenCm6Bridge === true" in json_modal
+    assert "target: 'routing'" in routing
+    assert "'codemirror-json-schema'" in vite
 
 
 def test_runtime_vendor_assets_exist_after_frontend_build():

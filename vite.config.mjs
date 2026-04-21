@@ -32,6 +32,7 @@ const EXTERNAL_IMPORT_SPECIFIERS = new Set([
   '@marijn/find-cluster-break',
   '@replit/codemirror-indentation-markers',
   'codemirror',
+  'codemirror-json-schema',
   'crelt',
   'jsonc-parser',
   'js-yaml',
