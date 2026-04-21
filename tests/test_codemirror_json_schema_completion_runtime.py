@@ -11,37 +11,26 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_routing_schema_completion_supports_rule_value_enum_inside_array_items():
+def _run_completion_labels(doc_with_marker: str) -> list[str] | None:
     if shutil.which("node") is None:
         pytest.skip("node is not available in this environment")
 
-    script = """
+    script = f"""
 import fs from 'node:fs';
-import { EditorState } from '@codemirror/state';
-import { CompletionContext } from '@codemirror/autocomplete';
-import { json } from '@codemirror/lang-json';
-import { stateExtensions, jsonCompletion } from './xkeen-ui/static/js/vendor/codemirror_json_schema.js';
+import {{ EditorState }} from '@codemirror/state';
+import {{ CompletionContext }} from '@codemirror/autocomplete';
+import {{ json }} from '@codemirror/lang-json';
+import {{ stateExtensions, jsonCompletion }} from './xkeen-ui/static/js/vendor/codemirror_json_schema.js';
 
 const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/xray-routing.schema.json', 'utf8'));
-const doc = [
-  '{',
-  '  "routing": {',
-  '    "domainStrategy": "",',
-  '    "rules": [',
-  '      {',
-  '        "network": "u"',
-  '      }',
-  '    ]',
-  '  }',
-  '}',
-  ''
-].join('\\n');
-
-const pos = doc.indexOf('"u"') + 2;
-const state = EditorState.create({
+const marker = '__CURSOR__';
+const docWithMarker = {json.dumps(doc_with_marker)};
+const pos = docWithMarker.indexOf(marker);
+const doc = docWithMarker.replace(marker, '');
+const state = EditorState.create({{
   doc,
   extensions: [json(), stateExtensions(schema)],
-});
+}});
 const result = await jsonCompletion()(new CompletionContext(state, pos, true));
 console.log(JSON.stringify(result ? result.options.map((option) => option.label) : null));
 """
@@ -56,6 +45,65 @@ console.log(JSON.stringify(result ? result.options.map((option) => option.label)
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    labels = json.loads(result.stdout.strip())
+    return json.loads(result.stdout.strip())
+
+
+def test_routing_schema_completion_supports_rule_value_enum_inside_array_items():
+    labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "routing": {',
+            '    "domainStrategy": "",',
+            '    "rules": [',
+            "      {",
+            '        "network": "u__CURSOR__"',
+            "      }",
+            "    ]",
+            "  }",
+            "}",
+            "",
+        ])
+    )
+
     assert labels is not None
     assert "udp" in labels
+
+
+def test_routing_schema_completion_supports_example_tags_for_outbound_rules():
+    labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "routing": {',
+            '    "rules": [',
+            "      {",
+            '        "outboundTag": "d__CURSOR__"',
+            "      }",
+            "    ]",
+            "  }",
+            "}",
+            "",
+        ])
+    )
+
+    assert labels is not None
+    assert "direct" in labels
+
+
+def test_routing_schema_completion_supports_example_tags_for_inbound_arrays():
+    labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "routing": {',
+            '    "rules": [',
+            "      {",
+            '        "inboundTag": ["t__CURSOR__"]',
+            "      }",
+            "    ]",
+            "  }",
+            "}",
+            "",
+        ])
+    )
+
+    assert labels is not None
+    assert "tproxy" in labels

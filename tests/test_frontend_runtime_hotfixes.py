@@ -525,6 +525,10 @@ def test_xray_routing_schema_covers_subscription_generated_fragments():
     routing_rule_props = routing_schema['definitions']['routingRule']['properties']
     assert 'ruleTag' in routing_rule_props
     assert 'xk_auto_*' in routing_rule_props['ruleTag']['description']
+    assert routing_rule_props['inboundTag']['items']['examples'] == ['redirect', 'tproxy']
+    assert 'direct' in routing_rule_props['outboundTag']['examples']
+    assert routing_rule_props['balancerTag']['examples'] == ['proxy']
+    assert routing_rule_props['ruleTag']['examples'] == ['xk_auto_leastPing']
     assert routing_schema['definitions']['routingRule']['additionalProperties'] is False
 
     fragment_props = routing_schema['anyOf'][0]['properties']
@@ -532,9 +536,12 @@ def test_xray_routing_schema_covers_subscription_generated_fragments():
     assert fragment_props['observatory']['$ref'] == '#/definitions/observatory'
     assert fragment_props['burstObservatory']['$ref'] == '#/definitions/burstObservatory'
     assert routing_schema['definitions']['observatory']['properties']['subjectSelector']['items']['type'] == 'string'
+    assert routing_schema['definitions']['observatory']['properties']['subjectSelector']['items']['examples'] == ['vless-reality', 'proxy']
+    assert routing_schema['definitions']['balancer']['properties']['fallbackTag']['examples'] == ['direct', 'block']
     assert routing_schema['definitions']['burstObservatory']['properties']['pingConfig']['type'] == 'object'
 
     assert 'ruleTag' in full_schema['definitions']['routingRule']['properties']
+    assert full_schema['definitions']['routingRule']['properties']['balancerTag']['examples'] == ['proxy']
     assert full_schema['definitions']['routingRule']['additionalProperties'] is False
     for fragment_path in [
         Path('xkeen-ui/static/schemas/xray-inbounds.schema.json'),
@@ -542,6 +549,7 @@ def test_xray_routing_schema_covers_subscription_generated_fragments():
     ]:
         fragment_schema = json.loads(fragment_path.read_text(encoding='utf-8'))
         assert 'ruleTag' in fragment_schema['definitions']['routingRule']['properties']
+        assert fragment_schema['definitions']['routingRule']['properties']['outboundTag']['examples'][0] == 'direct'
         assert fragment_schema['definitions']['routingRule']['additionalProperties'] is False
 
 

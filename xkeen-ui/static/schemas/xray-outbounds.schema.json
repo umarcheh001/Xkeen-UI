@@ -65,7 +65,11 @@
         "inboundTag": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "examples": [
+              "redirect",
+              "tproxy"
+            ]
           },
           "description": "Теги inbound"
         },
@@ -86,15 +90,27 @@
         },
         "outboundTag": {
           "type": "string",
-          "description": "Тег outbound для маршрутизации"
+          "description": "Тег outbound для маршрутизации",
+          "examples": [
+            "direct",
+            "block",
+            "dns",
+            "vless-reality"
+          ]
         },
         "balancerTag": {
           "type": "string",
-          "description": "Тег балансировщика"
+          "description": "Тег балансировщика",
+          "examples": [
+            "proxy"
+          ]
         },
         "ruleTag": {
           "type": "string",
-          "description": "Имя правила маршрутизации. Xkeen использует xk_auto_* для автоматически добавленных правил подписок."
+          "description": "Имя правила маршрутизации. Xkeen использует xk_auto_* для автоматически добавленных правил подписок.",
+          "examples": [
+            "xk_auto_leastPing"
+          ]
         },
         "domainMatcher": {
           "type": "string",
@@ -110,16 +126,28 @@
       "type": "object",
       "properties": {
         "tag": {
-          "type": "string"
+          "type": "string",
+          "examples": [
+            "proxy"
+          ]
         },
         "selector": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "examples": [
+              "vless-reality",
+              "direct",
+              "block"
+            ]
           }
         },
         "fallbackTag": {
-          "type": "string"
+          "type": "string",
+          "examples": [
+            "direct",
+            "block"
+          ]
         },
         "strategy": {
           "type": "object",

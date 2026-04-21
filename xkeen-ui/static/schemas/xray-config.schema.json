@@ -235,7 +235,7 @@
       "description": "Мониторинг доступности outbound (для leastPing)",
       "type": "object",
       "properties": {
-        "subjectSelector": { "type": "array", "items": { "type": "string" }, "description": "Теги/префиксы outbound для мониторинга" },
+        "subjectSelector": { "type": "array", "items": { "type": "string", "examples": ["vless-reality", "proxy"] }, "description": "Теги/префиксы outbound для мониторинга" },
         "probeUrl": { "type": "string", "default": "https://www.google.com/generate_204" },
         "probeInterval": { "type": "string", "default": "10s", "description": "Интервал проверки (например '60s')" },
         "enableConcurrency": { "type": "boolean", "default": false, "description": "Параллельная проверка" }
@@ -247,7 +247,7 @@
       "description": "Альтернативный observatory с burst-проверкой",
       "type": "object",
       "properties": {
-        "subjectSelector": { "type": "array", "items": { "type": "string" } },
+        "subjectSelector": { "type": "array", "items": { "type": "string", "examples": ["vless-reality", "proxy"] } },
         "pingConfig": {
           "type": "object",
           "properties": {
@@ -286,12 +286,12 @@
         "network": { "type": "string", "enum": ["tcp", "udp", "tcp,udp"], "description": "Тип сети" },
         "source": { "type": "array", "items": { "type": "string" }, "description": "IP-адреса источника" },
         "user": { "type": "array", "items": { "type": "string" }, "description": "Email-адреса пользователей" },
-        "inboundTag": { "type": "array", "items": { "type": "string" }, "description": "Теги inbound" },
+        "inboundTag": { "type": "array", "items": { "type": "string", "examples": ["redirect", "tproxy"] }, "description": "Теги inbound" },
         "protocol": { "type": "array", "items": { "type": "string", "enum": ["http", "tls", "bittorrent"] } },
         "attrs": { "type": "object", "description": "Атрибуты для сопоставления" },
-        "outboundTag": { "type": "string", "description": "Тег outbound для маршрутизации" },
-        "balancerTag": { "type": "string", "description": "Тег балансировщика" },
-        "ruleTag": { "type": "string", "description": "Имя правила маршрутизации. Xkeen использует xk_auto_* для автоматически добавленных правил подписок." },
+        "outboundTag": { "type": "string", "description": "Тег outbound для маршрутизации", "examples": ["direct", "block", "dns", "vless-reality"] },
+        "balancerTag": { "type": "string", "description": "Тег балансировщика", "examples": ["proxy"] },
+        "ruleTag": { "type": "string", "description": "Имя правила маршрутизации. Xkeen использует xk_auto_* для автоматически добавленных правил подписок.", "examples": ["xk_auto_leastPing"] },
         "domainMatcher": { "type": "string", "enum": ["hybrid", "linear"] }
       },
       "additionalProperties": false
@@ -300,9 +300,9 @@
     "balancer": {
       "type": "object",
       "properties": {
-        "tag": { "type": "string" },
-        "selector": { "type": "array", "items": { "type": "string" } },
-        "fallbackTag": { "type": "string" },
+        "tag": { "type": "string", "examples": ["proxy"] },
+        "selector": { "type": "array", "items": { "type": "string", "examples": ["vless-reality", "direct", "block"] } },
+        "fallbackTag": { "type": "string", "examples": ["direct", "block"] },
         "strategy": {
           "type": "object",
           "properties": {

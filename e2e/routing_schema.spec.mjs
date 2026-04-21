@@ -56,6 +56,20 @@ const RULE_VALUE_COMPLETION_ROUTING = [
   '',
 ].join('\n');
 
+const RULE_TAG_VALUE_COMPLETION_ROUTING = [
+  '{',
+  '  "routing": {',
+  '    "rules": [',
+  '      {',
+  '        "inboundTag": [""],',
+  '        "outboundTag": ""',
+  '      }',
+  '    ]',
+  '  }',
+  '}',
+  '',
+].join('\n');
+
 const UNKNOWN_RULE_FIELD_ROUTING = [
   '{',
   '  "routing": {',
@@ -389,6 +403,32 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
     const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
     return editor && typeof editor.getValue === 'function' ? editor.getValue() : '';
   })).toContain('"network": "udp"');
+
+  await replaceRoutingText(page, RULE_TAG_VALUE_COMPLETION_ROUTING);
+  await waitForRoutingSchema(page);
+  await moveRoutingCursorAfterText(page, '"outboundTag": "');
+  await page.keyboard.type('d');
+  await page.keyboard.press('Control+Space');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('direct');
+  await clickAutocompleteOption(page, 'direct');
+  await expect.poll(() => page.evaluate(() => {
+    const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
+    const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
+    return editor && typeof editor.getValue === 'function' ? editor.getValue() : '';
+  })).toContain('"outboundTag": "direct"');
+
+  await replaceRoutingText(page, RULE_TAG_VALUE_COMPLETION_ROUTING);
+  await waitForRoutingSchema(page);
+  await moveRoutingCursorAfterText(page, '"inboundTag": ["');
+  await page.keyboard.type('t');
+  await page.keyboard.press('Control+Space');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('tproxy');
+  await clickAutocompleteOption(page, 'tproxy');
+  await expect.poll(() => page.evaluate(() => {
+    const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
+    const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
+    return editor && typeof editor.getValue === 'function' ? editor.getValue() : '';
+  })).toContain('"inboundTag": ["tproxy"]');
 
   await replaceRoutingText(page, UNKNOWN_RULE_FIELD_ROUTING);
   await waitForRoutingSchema(page);

@@ -554,6 +554,9 @@ function schemaHint(schema) {
   const type = schemaTypeLabel(schema);
   if (type) bits.push(type);
   if (schema.enum && Array.isArray(schema.enum)) bits.push(schema.enum.map(v => JSON.stringify(v)).join(', '));
+  if (schema.examples && Array.isArray(schema.examples) && schema.examples.length) {
+    bits.push(`examples ${schema.examples.map(v => JSON.stringify(v)).join(', ')}`);
+  }
   if (schema.default !== undefined) bits.push(`default ${JSON.stringify(schema.default)}`);
   if (schema.format) bits.push(`format ${schema.format}`);
   return bits.join(' · ');
@@ -636,6 +639,9 @@ function jsonSchemaHover(options) {
     }
     if (subSchema.enum) {
       typeInfo.push(`enum: ${subSchema.enum.map(e => `<code>${escapeHtml(JSON.stringify(e))}</code>`).join(', ')}`);
+    }
+    if (subSchema.examples && Array.isArray(subSchema.examples) && subSchema.examples.length) {
+      typeInfo.push(`примеры: ${subSchema.examples.map(e => `<code>${escapeHtml(JSON.stringify(e))}</code>`).join(', ')}`);
     }
     if (subSchema.default !== undefined) {
       typeInfo.push(`по-умолчанию: <code>${escapeHtml(JSON.stringify(subSchema.default))}</code>`);
@@ -990,8 +996,12 @@ function valueCompletionResult(schema, valueSchema, opts) {
   const prefix = String((opts && opts.prefix) || '').replace(/^["']/, '');
   const prefixLower = prefix.toLowerCase();
   const completions = [];
+  const seen = new Set();
   const pushCompletion = (label, apply, type, detail) => {
     if (prefixLower && !String(label).toLowerCase().startsWith(prefixLower)) return;
+    const dedupeKey = `${String(label)}\u0000${String(apply)}`;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
     completions.push({ label, apply, type, detail });
   };
 
@@ -1003,6 +1013,12 @@ function valueCompletionResult(schema, valueSchema, opts) {
 
   if (resolved.const !== undefined) {
     pushCompletion(valueCompletionLabel(resolved.const), JSON.stringify(resolved.const), 'constant', 'const');
+  }
+
+  if (Array.isArray(resolved.examples)) {
+    for (const val of resolved.examples) {
+      pushCompletion(valueCompletionLabel(val), JSON.stringify(val), resolved.type || 'text', 'example');
+    }
   }
 
   if (resolved.type === 'boolean') {
