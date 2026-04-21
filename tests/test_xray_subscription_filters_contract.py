@@ -30,6 +30,21 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert "data.filtered_out_count" in outbounds_src
 
 
+def test_outbounds_proxy_pool_uses_fragment_summary_without_hiding_pool_button():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    styles_src = _read("xkeen-ui/static/styles.css")
+
+    assert "function setOutboundsSummaryFragmentMode(mode, fileName, summary) {" in outbounds_src
+    assert "body.classList.toggle('xk-outbounds-pool-fragment', normalizedMode === 'pool');" in outbounds_src
+    assert "function isPoolGeneratedText(text) {" in outbounds_src
+    assert "isPoolGeneratedText(data && data.text)" in outbounds_src
+    assert "outbounds-load-pool-fragment" in outbounds_src
+    assert "Пул прокси загружен:" in outbounds_src
+    assert "#outbounds-body.xk-outbounds-summary-fragment #outbounds-save-btn" in styles_src
+    assert "#outbounds-body.xk-outbounds-subscription-fragment #outbounds-pool-btn" in styles_src
+    assert "#outbounds-body.xk-outbounds-summary-fragment #outbounds-pool-btn" not in styles_src
+
+
 def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")

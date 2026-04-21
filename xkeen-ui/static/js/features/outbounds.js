@@ -323,10 +323,13 @@ let outboundsModuleApi = null;
       return { outbounds, proxies, protocolCounts, tags };
     }
 
-    function renderOutboundsFragmentSummary(fileName, summary) {
+    function renderOutboundsFragmentSummary(fileName, summary, opts) {
       const el = $('outbounds-fragment-summary');
       if (!el) return;
+      const options = (opts && typeof opts === 'object') ? opts : {};
       const s = summary || summarizeOutboundsConfig(null);
+      const title = String(options.title || 'Сгенерированный фрагмент подписки');
+      const emptyMeta = String(options.emptyMeta || 'outbounds подписки');
       const protocols = Object.keys(s.protocolCounts || {})
         .sort()
         .map((key) => `${escapeHtml(key)} × ${Number(s.protocolCounts[key] || 0)}`)
@@ -336,21 +339,29 @@ let outboundsModuleApi = null;
       el.innerHTML = `
         <div class="outbounds-fragment-summary-head">
           <div>
-            <div class="outbounds-fragment-summary-title">Сгенерированный фрагмент подписки</div>
+            <div class="outbounds-fragment-summary-title">${escapeHtml(title)}</div>
             <div class="outbounds-fragment-summary-file"><code>${escapeHtml(fileName || '04_outbounds.*.json')}</code></div>
           </div>
           <div class="outbounds-fragment-count">${Number((s.proxies || []).length)} прокси</div>
         </div>
-        <div class="outbounds-fragment-summary-meta">${protocols || 'outbounds подписки'}</div>
+        <div class="outbounds-fragment-summary-meta">${protocols || escapeHtml(emptyMeta)}</div>
         <div class="outbounds-fragment-tags">${tags}</div>
       `;
     }
 
-    function setSubscriptionFragmentMode(enabled, fileName, summary) {
+    function setOutboundsSummaryFragmentMode(mode, fileName, summary) {
       const body = $('outbounds-body');
       const input = $('outbounds-url');
       const summaryEl = $('outbounds-fragment-summary');
-      try { if (body) body.classList.toggle('xk-outbounds-subscription-fragment', !!enabled); } catch (e) {}
+      const normalizedMode = String(mode || '').trim().toLowerCase();
+      const enabled = !!normalizedMode;
+      try {
+        if (body) {
+          body.classList.toggle('xk-outbounds-summary-fragment', enabled);
+          body.classList.toggle('xk-outbounds-subscription-fragment', normalizedMode === 'subscription');
+          body.classList.toggle('xk-outbounds-pool-fragment', normalizedMode === 'pool');
+        }
+      } catch (e) {}
 
       if (enabled) {
         if (input) {
@@ -358,17 +369,47 @@ let outboundsModuleApi = null;
           input.classList.remove('xk-invalid');
         }
         try { renderParsePreview({ ok: false, scheme: '', fields: {}, errors: [], warnings: [] }); } catch (e) {}
-        renderOutboundsFragmentSummary(fileName, summary);
+        const isPool = normalizedMode === 'pool';
+        renderOutboundsFragmentSummary(fileName, summary, {
+          title: isPool ? 'Пул прокси' : 'Сгенерированный фрагмент подписки',
+          emptyMeta: isPool ? 'outbounds пула' : 'outbounds подписки',
+        });
         try { if (summaryEl) summaryEl.classList.remove('hidden'); } catch (e2) {}
       } else {
         try { if (summaryEl) summaryEl.classList.add('hidden'); } catch (e) {}
       }
     }
 
+    function setSubscriptionFragmentMode(enabled, fileName, summary) {
+      setOutboundsSummaryFragmentMode(enabled ? 'subscription' : '', fileName, summary);
+    }
+
+    function setPoolFragmentMode(enabled, fileName, summary) {
+      setOutboundsSummaryFragmentMode(enabled ? 'pool' : '', fileName, summary);
+    }
+
     function isSubscriptionFragmentMode() {
       const body = $('outbounds-body');
       try { return !!(body && body.classList.contains('xk-outbounds-subscription-fragment')); } catch (e) {}
       return false;
+    }
+
+    function isOutboundsSummaryFragmentMode() {
+      const body = $('outbounds-body');
+      try { return !!(body && body.classList.contains('xk-outbounds-summary-fragment')); } catch (e) {}
+      return false;
+    }
+
+    function isPoolGeneratedText(text) {
+      return /Generated\s+by\s+XKeen\s+UI\s+\(outbounds\s+pool\)/i.test(String(text || ''));
+    }
+
+    function shouldUsePoolFragmentSummary(data, summary) {
+      const s = summary || summarizeOutboundsConfig(null);
+      const proxyCount = Array.isArray(s.proxies) ? s.proxies.length : 0;
+      if (proxyCount <= 0) return false;
+      if (isPoolGeneratedText(data && data.text)) return true;
+      return !((data && data.url) || '') && proxyCount > 0;
     }
 
     async function isSubscriptionOutputFragment(fileName) {
@@ -1367,8 +1408,8 @@ let outboundsModuleApi = null;
       const typeSel = $('outbounds-type');
       const secSel = $('outbounds-security');
       if (!input) return;
-      if (isSubscriptionFragmentMode()) {
-        if (statusEl) statusEl.textContent = 'Подписочный фрагмент нельзя нормализовать как одну ссылку. Откройте JSON-редактор или модал подписок.';
+      if (isOutboundsSummaryFragmentMode()) {
+        if (statusEl) statusEl.textContent = 'Фрагмент со списком прокси нельзя нормализовать как одну ссылку. Откройте JSON-редактор, «Пул прокси» или «Подписки».';
         return;
       }
 
@@ -1520,6 +1561,27 @@ let outboundsModuleApi = null;
           return;
         }
 
+        if (shouldUsePoolFragmentSummary(data, summary)) {
+          _savedUrl = '';
+          setPoolFragmentMode(true, fileName, summary);
+          try { syncDirtyState(false); } catch (e) {}
+          publishLifecycleState({
+            savedValue: '',
+            currentValue: '',
+            initialized: true,
+          }, 'outbounds-load-pool-fragment');
+          if (statusEl) {
+            statusEl.textContent = `Пул прокси загружен: ${summary.proxies.length} прокси. Для правок используйте «Пул прокси» или JSON-редактор.`;
+          }
+          try {
+            if (typeof updateLastActivity === 'function') {
+              const fp = getXkeenFilePath('outbounds', '');
+              updateLastActivity('loaded', 'outbounds', fp);
+            }
+          } catch (e) {}
+          return;
+        }
+
         setSubscriptionFragmentMode(false, fileName, summary);
         if (data && data.url) {
           _savedUrl = String(data.url || '');
@@ -1568,8 +1630,8 @@ let outboundsModuleApi = null;
       const statusEl = $('outbounds-status');
       const input = $('outbounds-url');
       if (!input) return;
-      if (isSubscriptionFragmentMode()) {
-        if (statusEl) statusEl.textContent = 'Подписочный фрагмент не сохраняется через single-link форму. Используйте «Подписки» или JSON-редактор.';
+      if (isOutboundsSummaryFragmentMode()) {
+        if (statusEl) statusEl.textContent = 'Фрагмент со списком прокси не сохраняется через single-link форму. Используйте «Пул прокси», «Подписки» или JSON-редактор.';
         return;
       }
 
@@ -2454,8 +2516,8 @@ let outboundsModuleApi = null;
     }
 
     function openGeneratorModal() {
-      if (isSubscriptionFragmentMode()) {
-        try { toastXkeen('Мини-генератор работает только с одиночной proxy-ссылкой, не со сгенерированным фрагментом подписки.', 'error'); } catch (e) {}
+      if (isOutboundsSummaryFragmentMode()) {
+        try { toastXkeen('Мини-генератор работает только с одиночной proxy-ссылкой, не со списком прокси.', 'error'); } catch (e) {}
         return;
       }
       updateGeneratorSummary();

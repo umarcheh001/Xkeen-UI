@@ -2579,13 +2579,13 @@ button[data-tooltip]:focus-visible::before {
   color: #94a3b8;
 }
 
-#outbounds-body.xk-outbounds-subscription-fragment .outbounds-hints,
-#outbounds-body.xk-outbounds-subscription-fragment #outbounds-url,
-#outbounds-body.xk-outbounds-subscription-fragment #outbounds-parse-box,
-#outbounds-body.xk-outbounds-subscription-fragment #outbounds-normalize-btn,
-#outbounds-body.xk-outbounds-subscription-fragment #outbounds-build-btn,
-#outbounds-body.xk-outbounds-subscription-fragment #outbounds-pool-btn,
-#outbounds-body.xk-outbounds-subscription-fragment #outbounds-save-btn {
+#outbounds-body.xk-outbounds-summary-fragment .outbounds-hints,
+#outbounds-body.xk-outbounds-summary-fragment #outbounds-url,
+#outbounds-body.xk-outbounds-summary-fragment #outbounds-parse-box,
+#outbounds-body.xk-outbounds-summary-fragment #outbounds-normalize-btn,
+#outbounds-body.xk-outbounds-summary-fragment #outbounds-build-btn,
+#outbounds-body.xk-outbounds-summary-fragment #outbounds-save-btn,
+#outbounds-body.xk-outbounds-subscription-fragment #outbounds-pool-btn {
   display: none !important;
 }
 
