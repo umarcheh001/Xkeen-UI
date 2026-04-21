@@ -720,6 +720,232 @@ function getValueSnippet(propSchema) {
   }
 }
 
+function escapePointerPart(part) {
+  return String(part == null ? '' : part).replace(/~/g, '~0').replace(/\//g, '~1');
+}
+
+function joinPointer(base, part) {
+  const clean = escapePointerPart(part);
+  return base ? `${base}/${clean}` : `/${clean}`;
+}
+
+function readJsonStringToken(text, start) {
+  const quote = text[start];
+  let escaped = false;
+  let raw = quote;
+  for (let i = start + 1; i < text.length; i += 1) {
+    const ch = text[i];
+    raw += ch;
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch === quote) {
+      try {
+        return { value: JSON.parse(raw), end: i + 1 };
+      } catch (e) {
+        return { value: raw.slice(1, -1), end: i + 1 };
+      }
+    }
+  }
+  return { value: raw.slice(1), end: text.length };
+}
+
+function inferObjectPointerBefore(text) {
+  const stack = [{ type: 'root', path: '', index: 0, pendingKey: null }];
+  let lastString = null;
+
+  const top = () => stack[stack.length - 1];
+  const pathForNewValue = () => {
+    const frame = top();
+    if (!frame) return '';
+    if (frame.type === 'object' && frame.pendingKey != null) {
+      const pointer = joinPointer(frame.path, frame.pendingKey);
+      frame.pendingKey = null;
+      return pointer;
+    }
+    if (frame.type === 'array') return joinPointer(frame.path, String(frame.index || 0));
+    return frame.path || '';
+  };
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+
+    if (ch === '/' && text[i + 1] === '/') {
+      i += 2;
+      while (i < text.length && text[i] !== '\n' && text[i] !== '\r') i += 1;
+      continue;
+    }
+    if (ch === '/' && text[i + 1] === '*') {
+      i += 2;
+      while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) i += 1;
+      if (i < text.length) i += 1;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      lastString = readJsonStringToken(text, i);
+      i = lastString.end - 1;
+      continue;
+    }
+    if (/\s/.test(ch)) continue;
+
+    if (ch === ':') {
+      const frame = top();
+      if (frame && frame.type === 'object' && lastString) frame.pendingKey = lastString.value;
+      lastString = null;
+      continue;
+    }
+    if (ch === '{') {
+      stack.push({ type: 'object', path: pathForNewValue(), index: 0, pendingKey: null });
+      lastString = null;
+      continue;
+    }
+    if (ch === '[') {
+      stack.push({ type: 'array', path: pathForNewValue(), index: 0, pendingKey: null });
+      lastString = null;
+      continue;
+    }
+    if (ch === '}' || ch === ']') {
+      if (stack.length > 1) stack.pop();
+      lastString = null;
+      continue;
+    }
+    if (ch === ',') {
+      const frame = top();
+      if (frame) {
+        if (frame.type === 'array') frame.index = (frame.index || 0) + 1;
+        if (frame.type === 'object') frame.pendingKey = null;
+      }
+      lastString = null;
+      continue;
+    }
+
+    lastString = null;
+  }
+
+  const frame = top();
+  return frame && frame.type === 'object' ? frame.path || '' : null;
+}
+
+function findPreviousSignificantChar(doc, pos) {
+  const text = doc.sliceString(0, pos);
+  let inString = false;
+  let quote = '';
+  let escaped = false;
+  let last = '';
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (ch === quote) inString = false;
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      inString = true;
+      quote = ch;
+      last = ch;
+      continue;
+    }
+    if (ch === '/' && text[i + 1] === '/') {
+      i += 2;
+      while (i < text.length && text[i] !== '\n' && text[i] !== '\r') i += 1;
+      continue;
+    }
+    if (ch === '/' && text[i + 1] === '*') {
+      i += 2;
+      while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) i += 1;
+      if (i < text.length) i += 1;
+      continue;
+    }
+    if (!/\s/.test(ch)) last = ch;
+  }
+
+  return last;
+}
+
+function completionKeyToken(ctx) {
+  const token = ctx.matchBefore(/["']?[A-Za-z_$][\w$-]*$/);
+  if (!token) return null;
+  const previous = findPreviousSignificantChar(ctx.state.doc, token.from);
+  if (previous && previous !== '{' && previous !== ',') return null;
+  const quote = token.text[0] === '"' || token.text[0] === "'";
+  const prefix = quote ? token.text.slice(1) : token.text;
+  const to = quote && ctx.state.doc.sliceString(ctx.pos, ctx.pos + 1) === token.text[0]
+    ? ctx.pos + 1
+    : token.to;
+  return {
+    from: token.from,
+    to,
+    prefix,
+  };
+}
+
+function propertyCompletionResult(schema, parentSchema, opts) {
+  const allProps = collectAllProperties(parentSchema, schema);
+  const requiredSet = new Set(parentSchema.required || []);
+  const existingKeys = opts && opts.existingKeys ? opts.existingKeys : new Set();
+  const prefix = String((opts && opts.prefix) || '').replace(/^["']/, '');
+  const prefixLower = prefix.toLowerCase();
+  const hasColon = !!(opts && opts.hasColon);
+  const completions = [];
+
+  for (const [key, propSchema] of Object.entries(allProps)) {
+    if (existingKeys.has(key)) continue;
+    if (prefixLower && !key.toLowerCase().startsWith(prefixLower)) continue;
+
+    const resolved = resolveSchema(propSchema, schema);
+    const detail = resolved ? (Array.isArray(resolved.type) ? resolved.type.join('|') : resolved.type || '') : '';
+    const info = resolved && resolved.description ? resolved.description : undefined;
+    const boost = requiredSet.has(key) ? 10 : 0;
+    const apply = hasColon ? `"${key}"` : `"${key}": ${getValueSnippet(resolved)}`;
+
+    completions.push({
+      label: key,
+      detail,
+      info,
+      type: 'property',
+      boost,
+      apply,
+    });
+  }
+
+  if (!completions.length) return null;
+  return {
+    from: opts.from,
+    to: opts.to,
+    options: completions,
+    filter: false,
+    validFor: /^["']?[\w$-]*$/,
+  };
+}
+
+function fallbackPropertyCompletion(ctx, schema) {
+  const token = completionKeyToken(ctx);
+  if (!token) return null;
+  const pointer = inferObjectPointerBefore(ctx.state.doc.sliceString(0, token.from));
+  if (pointer == null) return null;
+  const parentSchema = getSchemaAtPointer(schema, schema, pointer);
+  if (!parentSchema || typeof parentSchema !== 'object') return null;
+  return propertyCompletionResult(schema, parentSchema, {
+    from: token.from,
+    to: token.to,
+    prefix: token.prefix,
+  });
+}
+
 function jsonCompletion(options) {
   return function jsonDoCompletion(ctx) {
     const schema = getJSONSchema(ctx.state);
@@ -755,7 +981,7 @@ function jsonCompletion(options) {
     // Also handle: cursor is right after a colon (between colon and value)
     if (!isPropertyName && !isValue) {
       // check if explicit completion was requested
-      if (!ctx.explicit) return null;
+      if (!ctx.explicit) return fallbackPropertyCompletion(ctx, schema);
 
       // Try to figure out context from ancestors
       let n = node;
@@ -774,7 +1000,7 @@ function jsonCompletion(options) {
       }
     }
 
-    if (!isPropertyName && !isValue) return null;
+    if (!isPropertyName && !isValue) return fallbackPropertyCompletion(ctx, schema);
 
     // Find the JSON pointer to the parent object
     const pointer = parentObjectNode ? getJsonPointerAt(doc, parentObjectNode) : '';
@@ -783,9 +1009,6 @@ function jsonCompletion(options) {
 
     // --- Property name completions ---
     if (isPropertyName) {
-      const allProps = collectAllProperties(parentSchema, schema);
-      const requiredSet = new Set(parentSchema.required || []);
-
       // Find existing keys in this object
       const existingKeys = new Set();
       if (parentObjectNode) {
@@ -807,41 +1030,15 @@ function jsonCompletion(options) {
 
       const prefix = doc.sliceString(from, ctx.pos).replace(/^"/, '');
 
-      const completions = [];
-      for (const [key, propSchema] of Object.entries(allProps)) {
-        if (existingKeys.has(key)) continue;
-        if (prefix && !key.startsWith(prefix)) continue;
-
-        const resolved = resolveSchema(propSchema, schema);
-        const detail = resolved ? (Array.isArray(resolved.type) ? resolved.type.join('|') : resolved.type || '') : '';
-        const info = resolved && resolved.description ? resolved.description : undefined;
-        const boost = requiredSet.has(key) ? 10 : 0;
-
-        // Determine if we need to add `: value` part
-        // Check if there's already a colon after the property name
-        const afterNode = node.name === 'PropertyName' ? node.nextSibling : null;
-        const hasColon = afterNode && doc.sliceString(afterNode.from, afterNode.from + 1) === ':';
-
-        let apply;
-        if (hasColon) {
-          apply = `"${key}"`;
-        } else {
-          const valSnippet = getValueSnippet(resolved);
-          apply = `"${key}": ${valSnippet}`;
-        }
-
-        completions.push({
-          label: key,
-          detail,
-          info,
-          type: 'property',
-          boost,
-          apply,
-        });
-      }
-
-      if (!completions.length) return null;
-      return { from, to, options: completions, filter: false };
+      const afterNode = node.name === 'PropertyName' ? node.nextSibling : null;
+      const hasColon = afterNode && doc.sliceString(afterNode.from, afterNode.from + 1) === ':';
+      return propertyCompletionResult(schema, parentSchema, {
+        from,
+        to,
+        prefix,
+        existingKeys,
+        hasColon,
+      });
     }
 
     // --- Value completions ---

@@ -241,6 +241,22 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
 
   await replaceRoutingText(page, COMPLETION_ROUTING);
   await waitForRoutingSchema(page);
+  await setSchemaHoverEnabled(page, false);
+  await moveRoutingCursor(page, { line: 2, ch: 4 });
+  await page.keyboard.type('domainS');
+  await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('domainStrategy');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => {
+    const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
+    const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
+    return editor && typeof editor.getValue === 'function' ? editor.getValue() : '';
+  })).toContain('"domainStrategy": "AsIs"');
+  await expect.poll(() => page.evaluate(() => document.querySelectorAll('.cm-tooltip-hover, .cm6-json-schema-hover').length)).toBe(0);
+  await setSchemaHoverEnabled(page, true);
+  await clearEditorTooltips(page);
+
+  await replaceRoutingText(page, COMPLETION_ROUTING);
+  await waitForRoutingSchema(page);
   await moveRoutingCursor(page, { line: 2, ch: 4 });
   await page.keyboard.press('Control+Space');
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('domainStrategy');

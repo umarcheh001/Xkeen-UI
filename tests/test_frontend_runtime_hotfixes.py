@@ -488,6 +488,8 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "function pointerLabel" in schema_shim
     assert "function renderPropertiesSummary" in schema_shim
     assert "function renderArrayItemsSummary" in schema_shim
+    assert "function inferObjectPointerBefore" in schema_shim
+    assert "function fallbackPropertyCompletion" in schema_shim
     assert "поля:" in schema_shim
     assert "элементы:" in schema_shim
     assert "schemaHoverEnabled: true" in settings_src
