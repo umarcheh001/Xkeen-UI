@@ -625,9 +625,10 @@ import { applySchemaToEditor } from '../ui/editor_schema.js';
     const editor = cm || _cm;
     if (!editor) return null;
     try {
+      const file = getActiveFragment() || getXkeenFilePath('routing', '');
       return applySchemaToEditor(editor, {
-        target: 'routing',
-        file: getActiveFragment() || getXkeenFilePath('routing', ''),
+        target: _routingMode === 'routing' ? 'routing' : 'xray',
+        file,
         mode: 'jsonc',
         text: typeof text === 'string' ? text : readCurrentEditorText(),
         feature: 'routing',
@@ -2695,6 +2696,9 @@ function closeHelp() {
       try { updateEditorMetaStatus(); } catch (e) {}
 
       try { _setRoutingMode(_detectRoutingModeFromText(text), 'load'); } catch (e) {}
+      try {
+        if (_cm) await applyRoutingSchemaToCodeMirror(_cm, text);
+      } catch (e) {}
 
       try {
         // Keep compatibility with existing monolith flags, if present.

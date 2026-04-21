@@ -114,6 +114,19 @@ async function hoverRenderedToken(page, needle) {
   await page.mouse.move(box.x, box.y);
 }
 
+async function clearEditorTooltips(page) {
+  await page.mouse.move(8, 8);
+  await page.waitForTimeout(200);
+}
+
+async function tooltipText(page, selector) {
+  return page.evaluate((css) => {
+    return Array.from(document.querySelectorAll(css))
+      .map((node) => String(node.textContent || ''))
+      .join('\n');
+  }, selector);
+}
+
 async function moveRoutingCursor(page, pos) {
   await page.evaluate(({ line, ch }) => {
     const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
@@ -138,17 +151,18 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
 
   const diagnosticTarget = page.locator('.cm-lintRange-error, .cm-lint-marker-error').first();
   await diagnosticTarget.hover();
-  await expect(page.locator('.cm-tooltip')).toContainText(/Недопустимый символ|JSON|Ожидается/);
-  await expect(page.locator('.cm-tooltip')).not.toContainText('Правило маршрутизации');
+  await expect(page.locator('.cm-tooltip-lint')).toContainText(/Недопустимый символ|JSON|Ожидается/);
+  await expect.poll(() => tooltipText(page, '.cm-tooltip-hover')).not.toContain('Правило маршрутизации');
 
   await replaceRoutingText(page, VALID_ROUTING);
+  await clearEditorTooltips(page);
   await expect(page.locator('#routing-error')).toHaveText('');
   await expect
     .poll(() => page.evaluate(() => document.querySelectorAll('.cm-lintRange-error, .cm-lint-marker-error').length))
     .toBe(0);
 
   await hoverRenderedToken(page, '"rules"');
-  await expect(page.locator('.cm-tooltip')).toContainText('Массив правил маршрутизации');
+  await expect(page.locator('.cm-tooltip-hover')).toContainText('Массив правил маршрутизации');
 
   await replaceRoutingText(page, COMPLETION_ROUTING);
   await waitForRoutingSchema(page);

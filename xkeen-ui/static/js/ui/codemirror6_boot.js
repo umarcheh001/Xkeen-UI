@@ -208,6 +208,25 @@ function jsonSchemaWithSyntaxLinter(opts) {
   };
 }
 
+function isSchemaHoverTarget(view, pos, side) {
+  try {
+    const doc = view && view.state && view.state.doc ? view.state.doc : null;
+    if (!doc) return false;
+    const length = doc.length;
+    const safePos = Math.max(0, Math.min(length, clampNumber(pos, 0)));
+    const text = doc.toString();
+    const current = safePos < length ? text.charAt(safePos) : '';
+    const previous = safePos > 0 ? text.charAt(safePos - 1) : '';
+    const preferred = side < 0 ? previous || current : current || previous;
+    const ch = preferred && !/\s/.test(preferred)
+      ? preferred
+      : (current && !/\s/.test(current) ? current : (previous && !/\s/.test(previous) ? previous : ''));
+    if (!ch) return false;
+    return !/[{}\[\]:,]/.test(ch);
+  } catch (e) {}
+  return true;
+}
+
 function jsonSchemaSyntaxAwareHover(opts) {
   const options = opts || {};
   const schemaHoverSource = jsonSchemaHover();
@@ -218,6 +237,7 @@ function jsonSchemaSyntaxAwareHover(opts) {
       allowComments: options.allowComments,
     });
     if (syntax && syntax.ok === false) return null;
+    if (!isSchemaHoverTarget(view, pos, side)) return null;
     return schemaHoverSource(view, pos, side);
   };
 }

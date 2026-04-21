@@ -483,6 +483,8 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "parse as parseJsonc" in shim_path.read_text(encoding='utf-8')
     assert "jsonSchemaWithSyntaxLinter" in boot
     assert "jsonSchemaSyntaxAwareHover" in boot
+    assert "isSchemaHoverTarget" in boot
+    assert "!/[{}\\[\\]:,]/.test(ch)" in boot
     assert "makeJsonDiagnostics(source" in boot
     assert "__xkeenCm6Bridge: true" in boot
     assert "__xkeen_cm6_bridge: true" in boot
@@ -491,6 +493,8 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "applySchemaToEditor(_cm" in json_modal
     assert "__xkeenCm6Bridge === true" in json_modal
     assert "target: 'routing'" in routing
+    assert "target: _routingMode === 'routing' ? 'routing' : 'xray'" in routing
+    assert "await applyRoutingSchemaToCodeMirror(_cm, text)" in routing
     assert "'codemirror-json-schema'" in vite
 
 
