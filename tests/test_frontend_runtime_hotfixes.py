@@ -525,6 +525,7 @@ def test_xray_routing_schema_covers_subscription_generated_fragments():
     routing_rule_props = routing_schema['definitions']['routingRule']['properties']
     assert 'ruleTag' in routing_rule_props
     assert 'xk_auto_*' in routing_rule_props['ruleTag']['description']
+    assert routing_schema['definitions']['routingRule']['additionalProperties'] is False
 
     fragment_props = routing_schema['anyOf'][0]['properties']
     assert 'routing' in fragment_props
@@ -534,12 +535,14 @@ def test_xray_routing_schema_covers_subscription_generated_fragments():
     assert routing_schema['definitions']['burstObservatory']['properties']['pingConfig']['type'] == 'object'
 
     assert 'ruleTag' in full_schema['definitions']['routingRule']['properties']
+    assert full_schema['definitions']['routingRule']['additionalProperties'] is False
     for fragment_path in [
         Path('xkeen-ui/static/schemas/xray-inbounds.schema.json'),
         Path('xkeen-ui/static/schemas/xray-outbounds.schema.json'),
     ]:
         fragment_schema = json.loads(fragment_path.read_text(encoding='utf-8'))
         assert 'ruleTag' in fragment_schema['definitions']['routingRule']['properties']
+        assert fragment_schema['definitions']['routingRule']['additionalProperties'] is False
 
 
 def test_runtime_vendor_assets_exist_after_frontend_build():

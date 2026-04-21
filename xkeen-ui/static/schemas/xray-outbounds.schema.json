@@ -103,7 +103,8 @@
             "linear"
           ]
         }
-      }
+      },
+      "additionalProperties": false
     },
     "balancer": {
       "type": "object",

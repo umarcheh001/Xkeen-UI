@@ -258,11 +258,26 @@ function validateValue(value, schema, rootSchema, pointer) {
 
   // --- anyOf ---
   if (Array.isArray(schema.anyOf)) {
+    const branchErrors = [];
     const matching = schema.anyOf.some(sub => {
       const resolved = resolveSchema(sub, rootSchema);
-      return validateValue(value, resolved, rootSchema, p).length === 0;
+      const subErrors = validateValue(value, resolved, rootSchema, p);
+      branchErrors.push(subErrors);
+      return subErrors.length === 0;
     });
-    if (!matching) errors.push({ pointer: p, message: `Значение не соответствует ни одной из anyOf-схем` });
+    if (!matching) {
+      const pointerDepth = (err) => String((err && err.pointer) || '').split('/').filter(Boolean).length;
+      const sorted = branchErrors
+        .filter(items => Array.isArray(items) && items.length)
+        .sort((a, b) => {
+          if (a.length !== b.length) return a.length - b.length;
+          const aDepth = Math.max(...a.map(pointerDepth));
+          const bDepth = Math.max(...b.map(pointerDepth));
+          return bDepth - aDepth;
+        });
+      if (sorted.length) errors.push(...sorted[0]);
+      else errors.push({ pointer: p, message: `Значение не соответствует ни одной из anyOf-схем` });
+    }
   }
 
   // --- allOf ---
@@ -756,6 +771,11 @@ function readJsonStringToken(text, start) {
 }
 
 function inferObjectPointerBefore(text) {
+  const context = inferJsonContextBefore(text);
+  return context && context.objectPointer != null ? context.objectPointer : null;
+}
+
+function inferJsonContextBefore(text) {
   const stack = [{ type: 'root', path: '', index: 0, pendingKey: null }];
   let lastString = null;
 
@@ -828,7 +848,19 @@ function inferObjectPointerBefore(text) {
   }
 
   const frame = top();
-  return frame && frame.type === 'object' ? frame.path || '' : null;
+  if (!frame) return null;
+  const objectPointer = frame.type === 'object' ? frame.path || '' : null;
+  let valuePointer = null;
+  if (frame.type === 'object' && frame.pendingKey != null) {
+    valuePointer = joinPointer(frame.path || '', frame.pendingKey);
+  } else if (frame.type === 'array') {
+    valuePointer = joinPointer(frame.path || '', String(frame.index || 0));
+  }
+  return {
+    objectPointer,
+    pendingKey: frame.type === 'object' ? frame.pendingKey : null,
+    valuePointer,
+  };
 }
 
 function findPreviousSignificantChar(doc, pos) {
@@ -932,6 +964,69 @@ function propertyCompletionResult(schema, parentSchema, opts) {
   };
 }
 
+function completionValueToken(ctx) {
+  const token = ctx.matchBefore(/["']?[\w$.-]*$/);
+  if (!token && !ctx.explicit) return null;
+  const base = token || { from: ctx.pos, to: ctx.pos, text: '' };
+  const previous = findPreviousSignificantChar(ctx.state.doc, base.from);
+  if (previous !== ':' && previous !== '[' && previous !== ',') return null;
+  const quote = base.text[0] === '"' || base.text[0] === "'";
+  const prefix = quote ? base.text.slice(1) : base.text;
+  const to = quote && ctx.state.doc.sliceString(ctx.pos, ctx.pos + 1) === base.text[0]
+    ? ctx.pos + 1
+    : base.to;
+  return {
+    from: base.from,
+    to,
+    prefix,
+  };
+}
+
+function valueCompletionLabel(value) {
+  return JSON.stringify(value).replace(/^"(.*)"$/, '$1');
+}
+
+function valueCompletionResult(schema, valueSchema, opts) {
+  const resolved = resolveSchema(valueSchema, schema);
+  if (!resolved || typeof resolved !== 'object') return null;
+
+  const prefix = String((opts && opts.prefix) || '').replace(/^["']/, '');
+  const prefixLower = prefix.toLowerCase();
+  const completions = [];
+  const pushCompletion = (label, apply, type, detail) => {
+    if (prefixLower && !String(label).toLowerCase().startsWith(prefixLower)) return;
+    completions.push({ label, apply, type, detail });
+  };
+
+  if (resolved.enum) {
+    for (const val of resolved.enum) {
+      pushCompletion(valueCompletionLabel(val), JSON.stringify(val), resolved.type || 'enum', 'enum');
+    }
+  }
+
+  if (resolved.const !== undefined) {
+    pushCompletion(valueCompletionLabel(resolved.const), JSON.stringify(resolved.const), 'constant', 'const');
+  }
+
+  if (resolved.type === 'boolean') {
+    pushCompletion('true', 'true', 'keyword', 'boolean');
+    pushCompletion('false', 'false', 'keyword', 'boolean');
+  }
+
+  if (resolved.default !== undefined && !resolved.enum) {
+    pushCompletion(valueCompletionLabel(resolved.default), JSON.stringify(resolved.default), 'text', 'default');
+  }
+
+  if (!completions.length) return null;
+  return {
+    from: opts.from,
+    to: opts.to,
+    options: completions,
+    filter: false,
+    validFor: /^["']?[\w$.-]*$/,
+  };
+}
+
 function fallbackPropertyCompletion(ctx, schema) {
   const token = completionKeyToken(ctx);
   if (!token) return null;
@@ -946,10 +1041,29 @@ function fallbackPropertyCompletion(ctx, schema) {
   });
 }
 
+function fallbackValueCompletion(ctx, schema) {
+  const token = completionValueToken(ctx);
+  if (!token) return null;
+  const context = inferJsonContextBefore(ctx.state.doc.sliceString(0, token.from));
+  const pointer = context && context.valuePointer;
+  if (!pointer) return null;
+  const valueSchema = getSchemaAtPointer(schema, schema, pointer);
+  return valueCompletionResult(schema, valueSchema, {
+    from: token.from,
+    to: token.to,
+    prefix: token.prefix,
+  });
+}
+
 function jsonCompletion(options) {
   return function jsonDoCompletion(ctx) {
     const schema = getJSONSchema(ctx.state);
     if (!schema) return null;
+
+    const earlyValueCompletion = fallbackValueCompletion(ctx, schema);
+    if (earlyValueCompletion) return earlyValueCompletion;
+    const earlyPropertyCompletion = fallbackPropertyCompletion(ctx, schema);
+    if (earlyPropertyCompletion) return earlyPropertyCompletion;
 
     const tree = syntaxTree(ctx.state);
     const node = tree.resolveInner(ctx.pos, -1);
@@ -960,6 +1074,7 @@ function jsonCompletion(options) {
     let isValue = false;
     let parentObjectNode = null;
     let propertyKey = null;
+    let valuePointer = null;
 
     if (node.name === 'PropertyName' || (node.name === '⚠' && node.parent && node.parent.name === 'Property')) {
       isPropertyName = true;
@@ -974,14 +1089,18 @@ function jsonCompletion(options) {
           propertyKey = getWord(doc, nameNode);
           isValue = true;
           parentObjectNode = prop.parent;
+          valuePointer = getJsonPointerAt(doc, node);
         }
+      } else {
+        valuePointer = getJsonPointerAt(doc, node);
+        if (valuePointer) isValue = true;
       }
     }
 
     // Also handle: cursor is right after a colon (between colon and value)
     if (!isPropertyName && !isValue) {
       // check if explicit completion was requested
-      if (!ctx.explicit) return fallbackPropertyCompletion(ctx, schema);
+      if (!ctx.explicit) return fallbackPropertyCompletion(ctx, schema) || fallbackValueCompletion(ctx, schema);
 
       // Try to figure out context from ancestors
       let n = node;
@@ -993,6 +1112,7 @@ function jsonCompletion(options) {
             propertyKey = getWord(doc, nameNode);
             isValue = true;
             parentObjectNode = n.parent;
+            valuePointer = getJsonPointerAt(doc, node);
           }
           break;
         }
@@ -1000,22 +1120,23 @@ function jsonCompletion(options) {
       }
     }
 
-    if (!isPropertyName && !isValue) return fallbackPropertyCompletion(ctx, schema);
+    if (!isPropertyName && !isValue) return fallbackPropertyCompletion(ctx, schema) || fallbackValueCompletion(ctx, schema);
 
     // Find the JSON pointer to the parent object
     const pointer = parentObjectNode ? getJsonPointerAt(doc, parentObjectNode) : '';
     const parentSchema = getSchemaAtPointer(schema, schema, pointer);
-    if (!parentSchema || typeof parentSchema !== 'object') return null;
 
     // --- Property name completions ---
     if (isPropertyName) {
+      if (!parentSchema || typeof parentSchema !== 'object') return null;
       // Find existing keys in this object
       const existingKeys = new Set();
       if (parentObjectNode) {
         for (const child of getChildNodes(parentObjectNode)) {
           if (child.name === 'Property') {
             const kn = getChildNodes(child).find(c => c.name === 'PropertyName');
-            if (kn) existingKeys.add(getWord(doc, kn));
+            const isCurrentKey = node.name === 'PropertyName' && kn && kn.from === node.from && kn.to === node.to;
+            if (kn && !isCurrentKey) existingKeys.add(getWord(doc, kn));
           }
         }
       }
@@ -1042,57 +1163,20 @@ function jsonCompletion(options) {
     }
 
     // --- Value completions ---
-    if (isValue && propertyKey) {
-      const propSchema = resolveSchema(
-        (parentSchema.properties && parentSchema.properties[propertyKey]) || null,
-        schema
-      );
+    if (isValue) {
+      const propSchema = valuePointer
+        ? getSchemaAtPointer(schema, schema, valuePointer)
+        : resolveSchema(
+            (parentSchema && parentSchema.properties && propertyKey && parentSchema.properties[propertyKey]) || null,
+            schema
+          );
       if (!propSchema || typeof propSchema !== 'object') return null;
 
-      const completions = [];
       let from = node.from;
       let to = node.to;
-
-      // enum values
-      if (propSchema.enum) {
-        for (const val of propSchema.enum) {
-          completions.push({
-            label: JSON.stringify(val).replace(/^"(.*)"$/, '$1'),
-            apply: JSON.stringify(val),
-            type: propSchema.type || 'enum',
-            detail: 'enum',
-          });
-        }
-      }
-
-      // const
-      if (propSchema.const !== undefined) {
-        completions.push({
-          label: JSON.stringify(propSchema.const).replace(/^"(.*)"$/, '$1'),
-          apply: JSON.stringify(propSchema.const),
-          type: 'constant',
-          detail: 'const',
-        });
-      }
-
-      // boolean
-      if (propSchema.type === 'boolean') {
-        completions.push({ label: 'true', type: 'keyword' });
-        completions.push({ label: 'false', type: 'keyword' });
-      }
-
-      // default
-      if (propSchema.default !== undefined && !propSchema.enum) {
-        completions.push({
-          label: JSON.stringify(propSchema.default).replace(/^"(.*)"$/, '$1'),
-          apply: JSON.stringify(propSchema.default),
-          type: 'text',
-          detail: 'default',
-        });
-      }
-
-      if (!completions.length) return null;
-      return { from, to, options: completions };
+      const rawBeforeCursor = doc.sliceString(node.from, Math.min(ctx.pos, node.to));
+      const prefix = rawBeforeCursor.replace(/^["']/, '');
+      return valueCompletionResult(schema, propSchema, { from, to, prefix });
     }
 
     return null;
