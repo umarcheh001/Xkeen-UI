@@ -70,6 +70,10 @@ def _is_arm_arch(machine: str) -> bool:
     return m.startswith("arm") or "aarch64" in m or "arm64" in m
 
 
+def _pty_runtime_supported() -> bool:
+    return os.name != "nt" and hasattr(os, "setsid")
+
+
 def _which_lftp(which: Callable[[str], Optional[str]]) -> Optional[str]:
     """Resolve lftp binary path.
 
@@ -180,7 +184,11 @@ def detect_terminal_state(
     rt_mode = runtime_mode or _detect_runtime_mode(env)
     ws_ok = bool(_env_bool(env, "XKEEN_WS_RUNTIME", False) if ws_runtime is None else ws_runtime)
     machine_arch = _detect_machine_arch()
-    pty_ok = bool(ws_ok and (rt_mode != "router" or _is_arm_arch(machine_arch)))
+    pty_ok = bool(
+        ws_ok
+        and _pty_runtime_supported()
+        and (rt_mode != "router" or _is_arm_arch(machine_arch))
+    )
     shell_policy = get_full_shell_policy(env)
 
     reason = None

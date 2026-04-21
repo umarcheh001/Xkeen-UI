@@ -336,6 +336,10 @@ function getChildNodes(node) {
   return children;
 }
 
+function isSameSyntaxNode(a, b) {
+  return !!(a && b && a.from === b.from && a.to === b.to && a.name === b.name);
+}
+
 function getJsonPointerAt(doc, node) {
   const path = [];
   for (let n = node; n && n.parent; n = n.parent) {
@@ -346,17 +350,10 @@ function getJsonPointerAt(doc, node) {
         path.unshift(key);
       }
     } else if (n.parent.name === 'Array') {
-      let idx = 0;
-      let sibling = n.parent.firstChild;
-      while (sibling && sibling !== n) {
-        if (sibling.name !== '[' && sibling.name !== ']' && sibling.name !== ',') idx++;
-        sibling = sibling.nextSibling;
-      }
-      // Adjust: only count value nodes
       const valueChildren = getChildNodes(n.parent).filter(c =>
         c.name !== '[' && c.name !== ']' && c.name !== ','
       );
-      const foundIdx = valueChildren.indexOf(n);
+      const foundIdx = valueChildren.findIndex(c => isSameSyntaxNode(c, n));
       if (foundIdx >= 0) path.unshift(`${foundIdx}`);
     }
   }
@@ -1063,6 +1060,14 @@ function jsonCompletion(options) {
     const tree = syntaxTree(ctx.state);
     const node = tree.resolveInner(ctx.pos, -1);
     const doc = ctx.state.doc;
+    const nodeIsError = !!(node && node.type && node.type.isError);
+
+    if (nodeIsError) {
+      const earlyValueCompletion = fallbackValueCompletion(ctx, schema);
+      if (earlyValueCompletion) return earlyValueCompletion;
+      const earlyPropertyCompletion = fallbackPropertyCompletion(ctx, schema);
+      if (earlyPropertyCompletion) return earlyPropertyCompletion;
+    }
 
     // Determine if we're in a property name or value context
     let isPropertyName = false;

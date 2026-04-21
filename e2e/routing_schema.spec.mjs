@@ -206,6 +206,10 @@ async function tooltipText(page, selector) {
   }, selector);
 }
 
+async function clickAutocompleteOption(page, label) {
+  await page.locator('.cm-tooltip-autocomplete li').filter({ hasText: label }).first().click();
+}
+
 async function moveRoutingCursor(page, pos) {
   await page.evaluate(({ line, ch }) => {
     const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
@@ -300,7 +304,7 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await moveRoutingCursor(page, { line: 2, ch: 4 });
   await page.keyboard.type('domainS');
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('domainStrategy');
-  await page.keyboard.press('Enter');
+  await clickAutocompleteOption(page, 'domainStrategy');
   await expect.poll(() => page.evaluate(() => {
     const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
     const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
@@ -323,7 +327,7 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await moveRoutingCursor(page, { line: 4, ch: 8 });
   await page.keyboard.type('inboundT');
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('inboundTag');
-  await page.keyboard.press('Enter');
+  await clickAutocompleteOption(page, 'inboundTag');
   await expect.poll(() => page.evaluate(() => {
     const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
     const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
@@ -336,7 +340,7 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await moveRoutingCursor(page, { line: 4, ch: 8 });
   await page.keyboard.type('netw');
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('network');
-  await page.keyboard.press('Enter');
+  await clickAutocompleteOption(page, 'network');
   await expect.poll(() => page.evaluate(() => {
     const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
     const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
@@ -347,8 +351,9 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await waitForRoutingSchema(page);
   await moveRoutingCursorAfterText(page, '"domainStrategy": "');
   await page.keyboard.type('IPIf');
+  await page.keyboard.press('Control+Space');
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('IPIfNonMatch');
-  await page.keyboard.press('Enter');
+  await clickAutocompleteOption(page, 'IPIfNonMatch');
   await expect.poll(() => page.evaluate(() => {
     const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
     const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
@@ -376,8 +381,9 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await waitForRoutingSchema(page);
   await moveRoutingCursorAfterText(page, '"network": "');
   await page.keyboard.type('u');
+  await page.keyboard.press('Control+Space');
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('udp');
-  await page.keyboard.press('Enter');
+  await clickAutocompleteOption(page, 'udp');
   await expect.poll(() => page.evaluate(() => {
     const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
     const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;

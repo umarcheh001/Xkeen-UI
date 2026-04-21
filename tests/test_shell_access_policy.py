@@ -110,3 +110,15 @@ def test_capabilities_expose_terminal_shell_policy(monkeypatch):
     assert caps["terminal"]["shell"]["enabled"] is False
     assert caps["terminal"]["shell"]["default"] == "0"
     assert caps["terminal"]["shell"]["env"] == "XKEEN_ALLOW_SHELL"
+
+
+def test_terminal_capabilities_disable_pty_when_runtime_lacks_posix_support(monkeypatch):
+    from services import capabilities as caps_mod
+
+    monkeypatch.setattr(caps_mod.os, "name", "nt", raising=False)
+
+    state = caps_mod.detect_terminal_state({}, runtime_mode="dev", ws_runtime=True)
+
+    assert state["ws"] is True
+    assert state["pty"] is False
+    assert state["reason"] is None

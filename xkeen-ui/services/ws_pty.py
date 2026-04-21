@@ -6,13 +6,11 @@ runtime entrypoint can stay focused on server bootstrap and WS dispatch.
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import signal
 import struct
 import subprocess
-import termios
 import threading
 import time
 import uuid
@@ -21,6 +19,16 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable
 from urllib.parse import parse_qs
+
+try:
+    import fcntl
+except Exception:  # pragma: no cover - platform-specific fallback
+    fcntl = None  # type: ignore[assignment]
+
+try:
+    import termios
+except Exception:  # pragma: no cover - platform-specific fallback
+    termios = None  # type: ignore[assignment]
 
 try:
     from gevent import spawn as _gspawn  # type: ignore
@@ -56,7 +64,18 @@ def _make_lock():
     return threading.Lock()
 
 
+PTY_RUNTIME_SUPPORTED = bool(
+    os.name != "nt"
+    and fcntl is not None
+    and termios is not None
+    and hasattr(os, "openpty")
+    and hasattr(os, "setsid")
+)
+
+
 def _pty_set_winsize(fd, rows, cols):
+    if not PTY_RUNTIME_SUPPORTED:
+        return
     try:
         rows_i = int(rows)
         cols_i = int(cols)
@@ -96,6 +115,8 @@ def _pty_shell_args(shell_path: str):
 
 def _pty_preexec(slave_fd: int) -> None:
     """Ensure the spawned shell has a controlling TTY."""
+    if not PTY_RUNTIME_SUPPORTED:
+        return
     os.setsid()
     try:
         fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
@@ -464,6 +485,8 @@ def _cleanup_loop():
 
 
 def start_cleanup_loop() -> bool:
+    if not PTY_RUNTIME_SUPPORTED:
+        return False
     global _PTY_CLEANUP_LOOP_STARTED
     if _PTY_CLEANUP_LOOP_STARTED:
         return False
@@ -478,6 +501,8 @@ def start_cleanup_loop() -> bool:
 
 
 def _create_session(rows0: int = 0, cols0: int = 0) -> PtySession:
+    if not PTY_RUNTIME_SUPPORTED:
+        raise RuntimeError("pty runtime unavailable on this platform")
     master_fd, slave_fd = os.openpty()
     shell = _pty_choose_shell()
 
@@ -518,6 +543,22 @@ def handle_pty_request(
     ws_debug: Callable[..., Any],
     validate_ws_token: Callable[[str, str], bool],
 ):
+    if not PTY_RUNTIME_SUPPORTED:
+        has_ws = "wsgi.websocket" in environ and environ.get("wsgi.websocket") is not None
+        if has_ws:
+            try:
+                environ["wsgi.websocket"].send(
+                    json.dumps({"type": "error", "message": "pty runtime unavailable"}, ensure_ascii=False)
+                )
+            except Exception:
+                pass
+            try:
+                environ["wsgi.websocket"].close()
+            except Exception:
+                pass
+            return []
+        return fallback_app(environ, start_response)
+
     has_ws = "wsgi.websocket" in environ and environ.get("wsgi.websocket") is not None
     ws_debug(
         "WSGI WS handler: request to /ws/pty",

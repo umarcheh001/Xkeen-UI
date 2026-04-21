@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import codecs
 import errno
-import pty
 import os
 import select
 import signal
@@ -20,6 +19,23 @@ from dataclasses import dataclass, field
 from typing import Dict
 
 from services.restart_log import write_restart_log
+
+try:
+    import pty as _pty
+except Exception:  # pragma: no cover - platform-specific fallback
+    _pty = None
+
+
+PTY_RUNTIME_SUPPORTED = bool(_pty is not None and os.name != "nt" and hasattr(os, "setsid"))
+
+
+def _spawn_process(cmd: list[str], **kwargs):
+    popen_kwargs = dict(kwargs)
+    if PTY_RUNTIME_SUPPORTED:
+        popen_kwargs.setdefault("preexec_fn", os.setsid)
+    elif os.name == "nt":
+        popen_kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+    return subprocess.Popen(cmd, **popen_kwargs)
 
 
 def _build_exec_env(*, term: str | None = None) -> dict:
@@ -144,7 +160,7 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
             return
         job.status = "running"
 
-    use_pty = bool(getattr(job, 'use_pty', False))
+    use_pty = bool(getattr(job, 'use_pty', False) and PTY_RUNTIME_SUPPORTED)
 
     if job.cmd:
         cmd = [SHELL_BIN, "-c", job.cmd]
@@ -211,17 +227,16 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
         if use_pty:
             # Run the command with stdout/stderr attached to a pseudo-terminal so
             # programs detect TTY and switch to console-friendly log format (INFO[...]).
-            master_fd, slave_fd = pty.openpty()
+            master_fd, slave_fd = _pty.openpty()
             pty_master_fd = master_fd
 
-            proc = subprocess.Popen(
+            proc = _spawn_process(
                 cmd,
                 stdin=slave_fd,
                 stdout=slave_fd,
                 stderr=slave_fd,
                 text=False,
                 close_fds=True,
-                preexec_fn=os.setsid,
                 env=_build_exec_env(term=os.environ.get('TERM') or 'xterm-256color'),
             )
 
@@ -238,15 +253,14 @@ def _run_command_job(job_id: str, stdin_data: str | None) -> None:
 
             read_fd = master_fd
         else:
-            proc = subprocess.Popen(
+            proc = _spawn_process(
                 cmd,
                 stdin=subprocess.PIPE if stdin_data is not None else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=False,
                 close_fds=True,
-                preexec_fn=os.setsid,
-                           env=_build_exec_env(),
+                env=_build_exec_env(),
             )
             if proc.stdout is None:
                 raise RuntimeError('no stdout')
