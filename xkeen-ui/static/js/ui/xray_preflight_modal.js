@@ -122,6 +122,7 @@
     const normalized = normalizeForCompare(errorText);
     if (!normalized) return '';
     if (normalized === 'xray test timeout') return 'Проверка не завершилась за отведённое время.';
+    if (normalized === 'xray out of memory') return 'Xray не хватило памяти для загрузки конфигурации.';
     if (normalized === 'xray binary not found') return 'Не найден бинарник Xray для проверки.';
     if (normalized === 'xray config dir not found') return 'Не найден каталог конфигурации Xray.';
     if (normalized === 'routing semantic validation failed') return 'Панель нашла ошибочную ссылку между routing.rules и outbounds.';
@@ -298,11 +299,25 @@
   function detectIssuePattern(text, payload) {
     const source = String(text || '');
 
+    var isOom = (payload && payload.oom) || /\bout of memory\b/i.test(source) || /\bcannot allocate memory\b/i.test(source);
+
+    if (isOom) {
+      return {
+        id: 'oom',
+        summary: 'Xray не хватило оперативной памяти при загрузке конфигурации.',
+        where: 'Проблема в объёме GeoSite/GeoIP-списков или в observatory, который создаёт дополнительную нагрузку.',
+        action: 'Уменьшите количество доменов в routing rules, отключите observatory в конфиге или уберите неиспользуемые GeoSite-категории.',
+        rootCause: 'Xray: out of memory при построении domain matcher',
+      };
+    }
+
     if (payload && payload.timed_out) {
       return {
         id: 'timeout',
         summary: 'Проверка конфигурации Xray не успела завершиться.',
-        action: 'Проверьте тяжёлый или проблемный фрагмент конфига и попробуйте сохранить ещё раз.',
+        where: 'На роутерах с ограниченной памятью загрузка больших GeoSite-списков может занимать десятки секунд.',
+        action: 'Попробуйте увеличить таймаут (XKEEN_XRAY_TEST_TIMEOUT), уменьшить GeoSite-списки или отключить observatory.',
+        rootCause: 'xray test timeout',
       };
     }
 

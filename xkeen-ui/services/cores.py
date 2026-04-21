@@ -49,6 +49,15 @@ def _core_log(level: str, msg: str, **extra) -> None:
         return
 
 
+def _is_arm_platform() -> bool:
+    """Detect ARM-based routers where Xray preflight needs more time."""
+    try:
+        machine = os.uname().machine.lower()
+        return 'aarch64' in machine or 'arm' in machine
+    except Exception:
+        return False
+
+
 def _env_int(name: str, default: int) -> int:
     v = os.environ.get(name)
     if v is None:
@@ -268,7 +277,8 @@ def switch_core(core: str, error_log_path: str) -> None:
                 try:
                     xray_bin = "/opt/sbin/xray" if os.path.exists("/opt/sbin/xray") else "xray"
                     confdir = os.environ.get("XRAY_CONFDIR") or "/opt/etc/xray/configs"
-                    test_timeout = max(5, _env_int("XKEEN_XRAY_TEST_TIMEOUT", 15))
+                    _default_test_timeout = 30 if _is_arm_platform() else 15
+                    test_timeout = max(5, _env_int("XKEEN_XRAY_TEST_TIMEOUT", _default_test_timeout))
                     cmd = [xray_bin, "-test", "-confdir", confdir]
                     cmd_s = " ".join(str(x) for x in cmd)
                     _core_log("info", "xkeen.cmd_start", phase="xray_test", cmd=cmd_s, timeout=test_timeout)

@@ -192,11 +192,27 @@ def _validate_routing_outbound_refs(confdir: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _is_arm_platform() -> bool:
+    """Detect ARM-based routers where Xray preflight needs more time."""
+    try:
+        machine = os.uname().machine.lower()
+        return 'aarch64' in machine or 'arm' in machine
+    except Exception:
+        return False
+
+
+def _detect_oom_in_output(stderr: str, stdout: str) -> bool:
+    """Check if Xray crashed with out-of-memory."""
+    combined = (stderr or '') + (stdout or '')
+    return 'out of memory' in combined or 'cannot allocate memory' in combined
+
+
 def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) -> Dict[str, Any]:
     """Validate Xray configs with edited fragment injected into a temp confdir."""
     xray_bin = '/opt/sbin/xray' if os.path.exists('/opt/sbin/xray') else 'xray'
     confdir = xray_configs_dir_real or os.environ.get('XRAY_CONFDIR') or '/opt/etc/xray/configs'
-    test_timeout = max(5, int(os.environ.get('XKEEN_XRAY_TEST_TIMEOUT', '15') or '15'))
+    default_timeout = 30 if _is_arm_platform() else 15
+    test_timeout = max(5, int(os.environ.get('XKEEN_XRAY_TEST_TIMEOUT', str(default_timeout)) or str(default_timeout)))
     base_cmd = f'{xray_bin} -test -confdir {confdir}'
 
     if not os.path.isdir(confdir):
@@ -257,16 +273,35 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
             try:
                 proc = subprocess.run(cmd, capture_output=True, text=True, timeout=test_timeout, check=False)
             except subprocess.TimeoutExpired as exc:
+                exc_stdout = _shorten_text(getattr(exc, 'stdout', '') or '')
+                exc_stderr = _shorten_text(getattr(exc, 'stderr', '') or '')
+                is_oom = _detect_oom_in_output(exc_stderr, exc_stdout)
+                if is_oom:
+                    hint = (
+                        'Xray не хватило памяти при загрузке GeoSite/GeoIP. '
+                        'Попробуйте уменьшить количество доменов в routing rules, '
+                        'отключить observatory или увеличить таймаут через '
+                        'XKEEN_XRAY_TEST_TIMEOUT.'
+                    )
+                    error = 'xray out of memory'
+                else:
+                    hint = (
+                        'Таймаут проверки конфигурации Xray. '
+                        'На слабых роутерах загрузка GeoSite-списков может занимать больше времени. '
+                        'Попробуйте увеличить таймаут через XKEEN_XRAY_TEST_TIMEOUT.'
+                    )
+                    error = 'xray test timeout'
                 return {
                     'ok': False,
-                    'error': 'xray test timeout',
+                    'error': error,
                     'phase': 'xray_test',
                     'cmd': cmd_text,
                     'timeout_s': test_timeout,
                     'timed_out': True,
-                    'stdout': _shorten_text(getattr(exc, 'stdout', '') or ''),
-                    'stderr': _shorten_text(getattr(exc, 'stderr', '') or ''),
-                    'hint': 'Таймаут проверки конфигурации Xray.',
+                    'oom': is_oom,
+                    'stdout': exc_stdout,
+                    'stderr': exc_stderr,
+                    'hint': hint,
                 }
             stdout = _shorten_text(proc.stdout or '')
             stderr = _shorten_text(proc.stderr or '')
@@ -279,6 +314,25 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
                     'timed_out': False,
                     'stdout': stdout,
                     'stderr': stderr,
+                }
+            is_oom = _detect_oom_in_output(stderr, stdout)
+            if is_oom:
+                return {
+                    'ok': False,
+                    'error': 'xray out of memory',
+                    'phase': 'xray_test',
+                    'cmd': cmd_text,
+                    'returncode': proc.returncode,
+                    'timeout_s': test_timeout,
+                    'timed_out': False,
+                    'oom': True,
+                    'stdout': stdout,
+                    'stderr': stderr,
+                    'hint': (
+                        'Xray не хватило памяти при загрузке GeoSite/GeoIP. '
+                        'Попробуйте уменьшить количество доменов в routing rules, '
+                        'отключить observatory или увеличить объём доступной памяти.'
+                    ),
                 }
             return {
                 'ok': False,
