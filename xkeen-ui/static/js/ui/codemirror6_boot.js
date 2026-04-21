@@ -34,6 +34,26 @@ function ensureGlobalScope() {
   return win;
 }
 
+function readUiSettingsSnapshot() {
+  const win = getWindow();
+  try {
+    const api = win && win.XKeen && win.XKeen.ui ? win.XKeen.ui.settings : null;
+    if (api && typeof api.get === 'function') return api.get();
+  } catch (e) {}
+  return {};
+}
+
+function isSchemaHoverEnabled(opts) {
+  if (opts && opts.schemaHover === false) return false;
+  if (opts && opts.schemaHoverEnabled === false) return false;
+  try {
+    const settings = readUiSettingsSnapshot();
+    const editor = settings && settings.editor && typeof settings.editor === 'object' ? settings.editor : {};
+    return editor.schemaHoverEnabled !== false;
+  } catch (e) {}
+  return true;
+}
+
 function clampNumber(value, fallback = 0) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -244,12 +264,15 @@ function jsonSchemaSyntaxAwareHover(opts) {
 
 function schemaExtensionFor(schema, opts) {
   if (!schema) return [];
-  return [
+  const extensions = [
     linter(jsonSchemaWithSyntaxLinter(opts), { needsRefresh: handleRefresh }),
-    hoverTooltip(jsonSchemaSyntaxAwareHover(opts)),
     jsonLanguage.data.of({ autocomplete: jsonCompletion() }),
     ...schemaStateExtensions(schema),
   ];
+  if (isSchemaHoverEnabled(opts)) {
+    extensions.splice(1, 0, hoverTooltip(jsonSchemaSyntaxAwareHover(opts)));
+  }
+  return extensions;
 }
 
 function languageExtensionFor(mode) {
@@ -1193,6 +1216,11 @@ function createBridge(target, opts = {}) {
     } catch (e) {}
   };
   const uiSettingsListener = () => {
+    try {
+      if (schemaInstalled && ctx.schema) {
+        view.dispatch({ effects: ctx.schemaCompartment.reconfigure(schemaExtensionFor(ctx.schema, options)) });
+      }
+    } catch (e) {}
     try { view.requestMeasure(); } catch (e) {}
     try { bridge.refresh(); } catch (e) {}
   };

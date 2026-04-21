@@ -51,6 +51,9 @@ DEFAULTS: Dict[str, Any] = {
         # lower values make text smaller, higher values make it larger.
         "codemirrorFontScale": 100,
         "monacoFontScale": 100,
+        # Show JSON Schema hover popups in CodeMirror editors. Validation,
+        # lint markers and autocomplete stay enabled when this is off.
+        "schemaHoverEnabled": True,
     },
     "format": {
         # Prefer browser-side formatting (Prettier) where available.
@@ -129,6 +132,7 @@ def _canonical_empty() -> Dict[str, Any]:
             "engine": DEFAULTS["editor"]["engine"],
             "codemirrorFontScale": int(DEFAULTS["editor"]["codemirrorFontScale"]),
             "monacoFontScale": int(DEFAULTS["editor"]["monacoFontScale"]),
+            "schemaHoverEnabled": bool(DEFAULTS["editor"]["schemaHoverEnabled"]),
         },
         "format": {
             "preferPrettier": bool(DEFAULTS["format"]["preferPrettier"]),
@@ -300,8 +304,16 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
             out["editor"]["monacoFontScale"] = int(legacy_font_scale)
             rep.changed = True
 
+        schema_hover_enabled = editor.get("schemaHoverEnabled")
+        if schema_hover_enabled is not None:
+            if _is_bool(schema_hover_enabled):
+                out["editor"]["schemaHoverEnabled"] = bool(schema_hover_enabled)
+            else:
+                rep.warnings.append({"path": "editor.schemaHoverEnabled", "warning": "invalid type; ignored"})
+                rep.changed = True
+
         for k in editor.keys():
-            if k not in ("engine", "fontScale", "codemirrorFontScale", "monacoFontScale"):
+            if k not in ("engine", "fontScale", "codemirrorFontScale", "monacoFontScale", "schemaHoverEnabled"):
                 rep.warnings.append({"path": f"editor.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
@@ -475,8 +487,15 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 else:
                     rep.errors.append({"path": "editor.monacoFontScale", "error": "must be int 75..200"})
 
+            if "schemaHoverEnabled" in editor:
+                v = editor.get("schemaHoverEnabled")
+                if _is_bool(v):
+                    p["schemaHoverEnabled"] = bool(v)
+                else:
+                    rep.errors.append({"path": "editor.schemaHoverEnabled", "error": "must be boolean"})
+
             for k in editor.keys():
-                if k not in ("engine", "fontScale", "codemirrorFontScale", "monacoFontScale"):
+                if k not in ("engine", "fontScale", "codemirrorFontScale", "monacoFontScale", "schemaHoverEnabled"):
                     rep.warnings.append({"path": f"editor.{k}", "warning": "unknown key dropped"})
 
             if p:

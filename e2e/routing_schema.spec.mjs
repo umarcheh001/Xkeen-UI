@@ -167,6 +167,15 @@ async function moveRoutingCursor(page, pos) {
   }, pos);
 }
 
+async function setSchemaHoverEnabled(page, enabled) {
+  await page.evaluate((nextEnabled) => {
+    window.XKeen?.ui?.settings?.patchLocal?.({
+      editor: { schemaHoverEnabled: !!nextEnabled },
+    });
+  }, enabled);
+  await page.waitForTimeout(200);
+}
+
 test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema help', async ({ page }) => {
   await page.goto('/');
   await waitForRoutingEditor(page);
@@ -203,6 +212,13 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await expect(page.locator('.cm-tooltip-hover')).toContainText('Массив правил маршрутизации');
   await expect(page.locator('.cm-tooltip-hover')).toContainText('поля:');
   await expect(page.locator('.cm-tooltip-hover')).toContainText('outboundTag');
+
+  await setSchemaHoverEnabled(page, false);
+  await clearEditorTooltips(page);
+  await hoverRenderedToken(page, '"rules"');
+  await expect.poll(() => tooltipText(page, '.cm-tooltip-hover')).not.toContain('Массив правил маршрутизации');
+  await setSchemaHoverEnabled(page, true);
+  await clearEditorTooltips(page);
 
   await replaceRoutingText(page, COMPLETION_ROUTING);
   await waitForRoutingSchema(page);

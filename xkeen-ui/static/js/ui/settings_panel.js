@@ -677,6 +677,13 @@ import { getFeatureApi } from '../features/feature_access.js';
           'Команда форматирования сначала попробует встроенный в браузер Prettier, а затем использует резервный сценарий.',
           'Настройка форматирования сохранена.'
         ),
+        createServerSwitch(
+          'editor-schema-hover',
+          'editor.schemaHoverEnabled',
+          'Показывать подсказки JSON-схемы',
+          'Отключает всплывающие окна с описанием полей при наведении в CodeMirror. Подчёркивание ошибок, маркеры и автодополнение остаются включены.',
+          'Настройка подсказок JSON-схемы сохранена.'
+        ),
         createServerNumber(
           'editor-codemirror-font-scale',
           'editor.codemirrorFontScale',

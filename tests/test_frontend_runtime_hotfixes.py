@@ -471,6 +471,8 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     vite = Path('vite.config.mjs').read_text(encoding='utf-8')
     schema_loader = schema_loader_path.read_text(encoding='utf-8')
     schema_shim = shim_path.read_text(encoding='utf-8')
+    settings_src = Path('xkeen-ui/static/js/ui/settings.js').read_text(encoding='utf-8')
+    settings_panel = Path('xkeen-ui/static/js/ui/settings_panel.js').read_text(encoding='utf-8')
 
     assert shim_path.is_file()
     assert schema_loader_path.is_file()
@@ -488,8 +490,14 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "function renderArrayItemsSummary" in schema_shim
     assert "поля:" in schema_shim
     assert "элементы:" in schema_shim
+    assert "schemaHoverEnabled: true" in settings_src
+    assert "editor.schemaHoverEnabled" in settings_panel
+    assert "Показывать подсказки JSON-схемы" in settings_panel
     assert "jsonSchemaWithSyntaxLinter" in boot
     assert "jsonSchemaSyntaxAwareHover" in boot
+    assert "function isSchemaHoverEnabled" in boot
+    assert "isSchemaHoverEnabled(opts)" in boot
+    assert "schemaCompartment.reconfigure(schemaExtensionFor(ctx.schema, options))" in boot
     assert "isSchemaHoverTarget" in boot
     assert "!/[{}\\[\\]:,]/.test(ch)" in boot
     assert "makeJsonDiagnostics(source" in boot

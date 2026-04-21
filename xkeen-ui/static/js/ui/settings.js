@@ -22,6 +22,7 @@
       engine: 'codemirror',
       codemirrorFontScale: 100,
       monacoFontScale: 100,
+      schemaHoverEnabled: true,
     },
     format: {
       preferPrettier: false,
