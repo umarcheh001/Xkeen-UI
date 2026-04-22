@@ -470,6 +470,7 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
     template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
     vite = Path('vite.config.mjs').read_text(encoding='utf-8')
+    monaco_shared = Path('xkeen-ui/static/js/ui/monaco_shared.js').read_text(encoding='utf-8')
     schema_loader = schema_loader_path.read_text(encoding='utf-8')
     schema_shim = shim_path.read_text(encoding='utf-8')
     settings_src = Path('xkeen-ui/static/js/ui/settings.js').read_text(encoding='utf-8')
@@ -509,6 +510,10 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "function isSchemaHoverEnabled" in boot
     assert "function ensureSchemaHoverSettingsLoaded" in boot
     assert "function hideSchemaHoverTooltips" in boot
+    assert "jsonSchemasByModelUri: new Map()" in monaco_shared
+    assert "function _setModelJsonSchema(model, schema, monaco)" in monaco_shared
+    assert "function _applyManagedJsonDiagnostics(monaco)" in monaco_shared
+    assert "editor.setSchema = (schema) => {" in monaco_shared
     assert "if (shouldDeferSchemaHoverForSettings()) return false" in boot
     assert "isSchemaHoverEnabled(opts)" in boot
     assert "refreshSchemaExtensions()" in boot
@@ -520,11 +525,16 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "schemaUpdateSchema(view, schema)" in boot
     assert "setSchema(editor, schema)" in boot
     assert "applySchemaToEditor(_cm" in json_modal
+    assert "applySchemaToEditor(_monaco" in json_modal
+    assert "async function applyCurrentSchemaToMonaco(text)" in json_modal
     assert "function updateJsonEditorSchemaBadge(result)" in json_modal
     assert "json-editor-schema-status" in template
     assert "__xkeenCm6Bridge === true" in json_modal
     assert "target: 'routing'" in routing
     assert "target: _routingMode === 'routing' ? 'routing' : 'xray'" in routing
+    assert "async function applyRoutingSchemaToMonaco(editor, text)" in routing
+    assert "await applyRoutingSchemaToMonaco(_monaco, text)" in routing
+    assert "await applyRoutingSchemaToMonaco(ed)" in routing
     assert "function updateRoutingSchemaBadge(result)" in routing
     assert "editorSchemaBadge: 'routing-editor-schema-badge'" in routing
     assert "await applyRoutingSchemaToCodeMirror(_cm, text)" in routing

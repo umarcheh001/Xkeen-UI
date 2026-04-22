@@ -641,7 +641,7 @@ import { applySchemaToEditor } from '../ui/editor_schema.js';
       : 'JSON-схема пока не загружена для текущего редактора.');
   }
 
-  async function applyRoutingSchemaToCodeMirror(cm, text) {
+async function applyRoutingSchemaToCodeMirror(cm, text) {
     const editor = cm || _cm;
     if (!editor) {
       updateRoutingSchemaBadge(null);
@@ -1344,16 +1344,20 @@ import { applySchemaToEditor } from '../ui/editor_schema.js';
 
   }
 
-  function _setRoutingMode(mode, reason) {
-    const next = String(mode || '').toLowerCase() === 'routing' ? 'routing' : 'fragment';
-    if (next === _routingMode) return;
-    _routingMode = next;
-    try { _applyRoutingModeUI(_routingMode); } catch (e) {}
-    try {
-      const ev = new CustomEvent('xkeen-routing-mode', { detail: { mode: _routingMode, reason: String(reason || '') } });
-      window.dispatchEvent(ev);
-    } catch (e2) {}
-  }
+function _setRoutingMode(mode, reason) {
+  const next = String(mode || '').toLowerCase() === 'routing' ? 'routing' : 'fragment';
+  if (next === _routingMode) return;
+  _routingMode = next;
+  try { _applyRoutingModeUI(_routingMode); } catch (e) {}
+  try {
+    const ev = new CustomEvent('xkeen-routing-mode', { detail: { mode: _routingMode, reason: String(reason || '') } });
+    window.dispatchEvent(ev);
+  } catch (e2) {}
+  try {
+    if (_cm) Promise.resolve(applyRoutingSchemaToCodeMirror(_cm)).catch(() => null);
+    if (_monaco) Promise.resolve(applyRoutingSchemaToMonaco(_monaco)).catch(() => null);
+  } catch (e3) {}
+}
 
   function _maybeUpdateModeFromParsed(obj) {
     try {
@@ -2725,6 +2729,9 @@ function closeHelp() {
       try { _setRoutingMode(_detectRoutingModeFromText(text), 'load'); } catch (e) {}
       try {
         if (_cm) await applyRoutingSchemaToCodeMirror(_cm, text);
+      } catch (e) {}
+      try {
+        if (_monaco) await applyRoutingSchemaToMonaco(_monaco, text);
       } catch (e) {}
 
       try {
@@ -4490,6 +4497,7 @@ function closeHelp() {
         // Facade for routing consumers so feature modules stay engine-agnostic.
         _monacoFacade = createRoutingMonacoFacade(_monaco);
         try { syncSharedRoutingEditor(_monaco, _monacoFacade, 'monaco'); } catch (e) {}
+        try { await applyRoutingSchemaToMonaco(_monaco); } catch (e) {}
 
         // Ensure layout fix for hidden containers (modals/tabs/engine switch).
         try {
@@ -4850,7 +4858,7 @@ function closeHelp() {
 
       showCodeMirror(false);
       showMonaco(true);
-      try { updateRoutingSchemaBadge(null); } catch (e) {}
+      try { await applyRoutingSchemaToMonaco(ed); } catch (e) {}
       // Keep only JSONC help + fullscreen visible in the toolbar host.
       try { syncToolbarForEngine('monaco'); } catch (e) {}
       try { syncRoutingToolbarUi('monaco'); } catch (e) {}
@@ -5166,6 +5174,29 @@ export function getRoutingApi() {
   }
   return null;
 }
+
+  async function applyRoutingSchemaToMonaco(editor, text) {
+    const targetEditor = editor || _monaco;
+    if (!targetEditor) {
+      updateRoutingSchemaBadge(null);
+      return null;
+    }
+    try {
+      const file = getActiveFragment() || getXkeenFilePath('routing', '');
+      const result = await applySchemaToEditor(targetEditor, {
+        target: _routingMode === 'routing' ? 'routing' : 'xray',
+        file,
+        mode: 'jsonc',
+        text: typeof text === 'string' ? text : readCurrentEditorText(),
+        feature: 'routing',
+      });
+      updateRoutingSchemaBadge(result);
+      return result;
+    } catch (e) {
+      updateRoutingSchemaBadge(null);
+    }
+    return null;
+  }
 
 function callRoutingApi(method, ...args) {
   const api = getRoutingApi();

@@ -14,6 +14,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     themesDefined: false,
     langLoaded: new Set(),
     jsonCommentsEnabled: false,
+    jsonSchemasByModelUri: new Map(),
     // WeakMaps are supported in modern browsers; if not, we fall back to expando properties.
     roByHost: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     moByHost: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
@@ -179,22 +180,89 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
   function _maybeEnableJsonComments(monaco) {
     try {
       if (_state.jsonCommentsEnabled) return;
-      if (!monaco || !monaco.languages || !monaco.languages.json || !monaco.languages.json.jsonDefaults) return;
-      if (typeof monaco.languages.json.jsonDefaults.setDiagnosticsOptions !== 'function') return;
-
-      const cur = (typeof monaco.languages.json.jsonDefaults.diagnosticsOptions === 'function')
-        ? monaco.languages.json.jsonDefaults.diagnosticsOptions()
-        : {};
-
-      // Enable JSON-with-comments (JSONC-like) behavior.
-      // Note: Monaco JSON diagnostics options are global for the page.
-      monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-        ...(cur || {}),
-        allowComments: true,
-        trailingCommas: 'ignore',
-      });
+      if (!_applyManagedJsonDiagnostics(monaco)) return;
       _state.jsonCommentsEnabled = true;
     } catch (e) {}
+  }
+
+  function _getJsonDefaults(monaco) {
+    try {
+      if (!monaco || !monaco.languages || !monaco.languages.json || !monaco.languages.json.jsonDefaults) return null;
+      const defaults = monaco.languages.json.jsonDefaults;
+      if (!defaults || typeof defaults.setDiagnosticsOptions !== 'function') return null;
+      return defaults;
+    } catch (e) {}
+    return null;
+  }
+
+  function _jsonModelUri(model) {
+    try {
+      if (!model || !model.uri || typeof model.uri.toString !== 'function') return '';
+      return String(model.uri.toString());
+    } catch (e) {}
+    return '';
+  }
+
+  function _supportsJsonSchemaOnModel(model) {
+    try {
+      if (!model || typeof model.getLanguageId !== 'function') return false;
+      const languageId = String(model.getLanguageId() || '').toLowerCase();
+      return languageId === 'json' || languageId === 'jsonc';
+    } catch (e) {}
+    return false;
+  }
+
+  function _schemaRegistrationUriForModel(modelUri) {
+    return `xkeen://json-schema/${encodeURIComponent(String(modelUri || 'model'))}`;
+  }
+
+  function _applyManagedJsonDiagnostics(monaco) {
+    try {
+      const defaults = _getJsonDefaults(monaco);
+      if (!defaults) return false;
+
+      const current = (typeof defaults.diagnosticsOptions === 'function')
+        ? (defaults.diagnosticsOptions() || {})
+        : {};
+      const externalSchemas = Array.isArray(current.schemas)
+        ? current.schemas.filter((entry) => !String((entry && entry.uri) || '').startsWith('xkeen://json-schema/'))
+        : [];
+      const managedSchemas = Array.from(_state.jsonSchemasByModelUri.entries()).map(([modelUri, entry]) => ({
+        uri: entry && entry.uri ? entry.uri : _schemaRegistrationUriForModel(modelUri),
+        fileMatch: [modelUri],
+        schema: entry ? entry.schema : null,
+      })).filter((entry) => !!(entry && entry.schema));
+
+      defaults.setDiagnosticsOptions({
+        ...(current || {}),
+        validate: true,
+        allowComments: true,
+        trailingCommas: 'ignore',
+        schemas: [...externalSchemas, ...managedSchemas],
+      });
+      return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function _setModelJsonSchema(model, schema, monaco) {
+    const modelUri = _jsonModelUri(model);
+    if (!modelUri) return false;
+    if (!_supportsJsonSchemaOnModel(model)) {
+      _state.jsonSchemasByModelUri.delete(modelUri);
+      try { _applyManagedJsonDiagnostics(monaco); } catch (e) {}
+      return false;
+    }
+    if (schema && typeof schema === 'object') {
+      _state.jsonSchemasByModelUri.set(modelUri, {
+        uri: _schemaRegistrationUriForModel(modelUri),
+        schema,
+      });
+    } else {
+      _state.jsonSchemasByModelUri.delete(modelUri);
+    }
+    try { _applyManagedJsonDiagnostics(monaco); } catch (e) {}
+    return true;
   }
 
   async function _ensureLanguage(monaco, language) {
@@ -1394,14 +1462,26 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         lineHeight: (typeof o.lineHeight === 'number') ? o.lineHeight : typo.lineHeight,
       });
 
+      const model = editor && typeof editor.getModel === 'function' ? editor.getModel() : null;
+
       // Apply language to the model explicitly (Monaco may ignore unknown option fields).
       try {
-        const m = editor && editor.getModel ? editor.getModel() : null;
-        if (m && monaco.editor && monaco.editor.setModelLanguage && language && language !== 'plaintext') {
+        if (model && monaco.editor && monaco.editor.setModelLanguage && language && language !== 'plaintext') {
           const langToSet = _isLanguageRegistered(monaco, language) ? _runtimeLanguageId(language) : 'plaintext';
-          monaco.editor.setModelLanguage(m, langToSet);
+          monaco.editor.setModelLanguage(model, langToSet);
         }
-        if (m) _setModelYamlAssist(m, (language === 'yaml' && o.yamlAssist) ? o.yamlAssist : null);
+        if (model) _setModelYamlAssist(model, (language === 'yaml' && o.yamlAssist) ? o.yamlAssist : null);
+      } catch (e) {}
+      try {
+        if (model && o.schema) _setModelJsonSchema(model, o.schema, monaco);
+      } catch (e) {}
+      try {
+        if (editor) {
+          editor.setSchema = (schema) => {
+            if (!model) return false;
+            return _setModelJsonSchema(model, schema || null, monaco);
+          };
+        }
       } catch (e) {}
 
       // Attach onChange callback (best-effort).
@@ -1444,10 +1524,8 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
           if (editor && typeof editor.onDidDispose === 'function') {
             editor.onDidDispose(() => {
               try { unsubscribeUiSettings(); } catch (e2) {}
-              try {
-                const model = editor && typeof editor.getModel === 'function' ? editor.getModel() : null;
-                if (model) _setModelYamlAssist(model, null);
-              } catch (e3) {}
+              try { if (model) _setModelYamlAssist(model, null); } catch (e3) {}
+              try { if (model) _setModelJsonSchema(model, null, monaco); } catch (e4) {}
             });
           }
         }
@@ -1466,10 +1544,8 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
       try {
         if (editor && typeof editor.onDidDispose === 'function') {
           editor.onDidDispose(() => {
-            try {
-              const model = editor && typeof editor.getModel === 'function' ? editor.getModel() : null;
-              if (model) _setModelYamlAssist(model, null);
-            } catch (e2) {}
+            try { if (model) _setModelYamlAssist(model, null); } catch (e2) {}
+            try { if (model) _setModelJsonSchema(model, null, monaco); } catch (e3) {}
           });
         }
       } catch (e) {}

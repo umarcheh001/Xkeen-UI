@@ -391,6 +391,27 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
     return null;
   }
 
+  async function applyCurrentSchemaToMonaco(text) {
+    if (!_monaco) {
+      updateJsonEditorSchemaBadge(null);
+      return null;
+    }
+    try {
+      const result = await applySchemaToEditor(_monaco, {
+        target: _currentTarget || '',
+        file: _currentTarget ? activeFileParam(_currentTarget) : '',
+        mode: 'jsonc',
+        text: typeof text === 'string' ? text : getCurrentValue(),
+        feature: 'json-modal',
+      });
+      updateJsonEditorSchemaBadge(result);
+      return result;
+    } catch (e) {
+      updateJsonEditorSchemaBadge(null);
+    }
+    return null;
+  }
+
   function jsonValidationMode(text) {
     return hasJsonComments(text) ? 'jsonc' : 'application/json';
   }
@@ -730,6 +751,7 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
       wordWrap: 'on',
     });
 
+    try { await applyCurrentSchemaToMonaco(initialText); } catch (e) {}
     if (_monaco) _monacoFacade = createMonacoFacade(_monaco);
     return _monacoFacade;
   }
@@ -770,11 +792,11 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
     setEngineSelect(_kind);
 
     if (_kind === 'monaco') {
-      updateJsonEditorSchemaBadge(null);
       const fac = await ensureMonacoEditor(prevText);
       if (fac) {
         try { fac.set(prevText); } catch (e) {}
-        try { setError(''); } catch (e2) {}
+        try { await applyCurrentSchemaToMonaco(prevText); } catch (e2) {}
+        try { setError(''); } catch (e3) {}
         try { fac.layout(); } catch (e3) {}
         try { fac.focus(); } catch (e4) {}
       }
@@ -948,11 +970,11 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
       } catch (e) {}
 
       if (_kind === 'monaco') {
-        updateJsonEditorSchemaBadge(null);
         await ensureMonacoEditor(finalText || '');
         try {
           if (_monacoFacade) {
             _monacoFacade.set(finalText || '');
+            try { await applyCurrentSchemaToMonaco(finalText || ''); } catch (e2) {}
             setError('');
             _monacoFacade.focus();
             _monacoFacade.layout();
