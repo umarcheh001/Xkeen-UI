@@ -91,6 +91,9 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "function subsDecorateActionButtons(modal) {" in outbounds_src
     assert "function subsTransportFilterText(transport, protocol) {" in outbounds_src
     assert "function subsProtocolFilterText(protocol) {" in outbounds_src
+    assert "xk-sub-update-note" in outbounds_src
+    assert "Автообновление" in outbounds_src
+    assert "LeastPing и generated fragments" in outbounds_src
     assert "function subsNodeLatencyEntry(sub, nodeKey) {" in outbounds_src
     assert "function subsProbeNode(subId, nodeKey) {" in outbounds_src
     assert "function subsPingAllTooltipText(sub, hasPingable) {" in outbounds_src
@@ -104,7 +107,11 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "/nodes/ping-bulk" in outbounds_src
     assert "xk-sub-node-ping" in outbounds_src
     assert "xk-sub-node-latency" in outbounds_src
+    assert "xk-sub-pingall-spinner" in outbounds_src
+    assert "xk-sub-pingall-glyph" in outbounds_src
     assert "btn.setAttribute('data-tooltip', tooltip);" in outbounds_src
+    assert "btn.setAttribute('aria-busy', 'true');" in outbounds_src
+    assert "btn.removeAttribute('aria-busy');" in outbounds_src
     assert "btn.disabled = false;" in outbounds_src
     assert "Нет активных узлов в generated fragment." in outbounds_src
     assert "Tag prefix" in outbounds_src
@@ -133,11 +140,16 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "overflow: hidden;" in styles_src
     assert "min-height: 220px;" in styles_src
     assert ".xk-sub-icon-btn.btn-compact {" in styles_src
+    assert ".xk-sub-pingall-spinner {" in styles_src
+    assert ".xk-sub-icon-btn.btn-compact.is-busy {" in styles_src
+    assert "@keyframes xk-sub-pingall-spin" in styles_src
     assert ".xk-sub-routing-mode {" in styles_src
     assert ".xk-sub-inline-label {" in styles_src
     assert "flex-wrap: nowrap;" in styles_src
-    assert "min-height: 88px;" in styles_src
+    assert "min-height: 0;" in styles_src
     assert ".xk-sub-list-panel {" in styles_src
+    assert ".xk-sub-node-panel {\n  flex: 0 0 auto;" in styles_src
+    assert "overflow: visible;" in styles_src
     assert ".xk-sub-file-badge {" in styles_src
     assert ".xk-sub-list-action {" in styles_src
     assert ".xk-sub-file-link {" in styles_src
@@ -146,13 +158,16 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "@keyframes xk-sub-node-ping-pulse" in styles_src
     assert "display: inline-flex;" in styles_src
     assert ".xk-sub-node-main {" in styles_src
-    assert "gap: 7px;" in styles_src
+    assert "gap: 6px;" in styles_src
+    assert "max-height: none;" in styles_src
     assert "width: min(96vw, 1080px) !important;" not in styles_src
     assert "max-width: 1080px !important;" not in styles_src
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in styles_src
+    assert "grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr));" in styles_src
     assert "grid-template-columns: repeat(12, minmax(0, 1fr));" in styles_src
     assert ".xk-sub-span-5" in styles_src
     assert ".xk-sub-filter-field .xk-pool-fieldlabel" in styles_src
     assert ".xk-sub-interval-note {" in styles_src
+    assert ".xk-sub-update-note {" in styles_src
+    assert ".xk-sub-update-title {" in styles_src
     assert ".xk-sub-node-pill-transport" in styles_src
     assert ".xk-sub-table tbody tr.is-selected" in styles_src

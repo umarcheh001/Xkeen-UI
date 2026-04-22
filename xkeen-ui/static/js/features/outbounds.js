@@ -3543,15 +3543,13 @@ let outboundsModuleApi = null;
             </div>
             <div class="modal-body">
               <div class="xk-sub-brief">
-                <div>
-                  <div class="xk-sub-brief-title">LeastPing за минуту</div>
-                  <div class="xk-sub-brief-text">Подписка пишет отдельный <code>04_outbounds.&lt;tag&gt;.json</code>. <code>Tag prefix</code> затем используется как <code>selector</code>-префикс в leastPing-балансировщике, а включенный «Пинг» добавит generated tags в <code>07_observatory.json</code>. <b>Применение → Безопасно</b> сохраняет явные правила на <code>vless-reality</code> и только синхронизирует общий leastPing/fallback; <b>Жёстко</b> переводит auto-правила с <code>outboundTag=vless-reality</code> на общий <code>balancerTag</code> пула.</div>
+                <div class="xk-sub-brief-main">
+                  <div class="xk-sub-brief-title">LeastPing и generated fragments</div>
+                  <div class="xk-sub-brief-text">Подписка создаёт отдельный <code>04_outbounds.&lt;tag&gt;.json</code>, использует <code>Tag prefix</code> как <code>selector</code>-префикс для leastPing и при включённом «Пинг» добавляет generated tags в <code>07_observatory.json</code>. Режим <b>Применение</b> управляет только синхронизацией routing с пулом.</div>
                 </div>
-                <div class="xk-sub-steps" aria-hidden="true">
-                  <span>URL</span>
-                  <span>Фрагмент</span>
-                  <span>LeastPing</span>
-                  <span>Применение</span>
+                <div class="xk-sub-update-note">
+                  <div class="xk-sub-update-title">Автообновление</div>
+                  <div class="xk-sub-update-text">Интервал задаётся в форме ниже. <b>Обновить due</b> запускает только просроченные подписки, а <b>Обновить сразу</b> скачивает узлы и создаёт fragment после сохранения.</div>
                 </div>
               </div>
               <div class="xk-sub-grid">
@@ -3651,7 +3649,9 @@ let outboundsModuleApi = null;
                   </div>
                   <div class="xk-sub-nodes-head-actions">
                     <button type="button" id="outbounds-subscriptions-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Запустить проверку задержки для всех активных узлов, входящих в generated fragment." aria-label="Пинг всех узлов" disabled>
-                      <span class="xk-sub-icon-glyph" aria-hidden="true">⏱</span>
+                      <span class="xk-sub-icon-glyph xk-sub-pingall-glyph" aria-hidden="true">⏱</span>
+                      <span class="xk-sub-pingall-spinner" aria-hidden="true"></span>
+                      <span class="xk-visually-hidden">Запустить проверку задержки для всех активных узлов</span>
                     </button>
                     <div id="outbounds-subscriptions-nodes-summary" class="xk-pool-summary">0</div>
                   </div>
@@ -4398,15 +4398,21 @@ let outboundsModuleApi = null;
         : null;
       const hasPingable = !!(sub && Array.isArray(sub.last_nodes) && sub.last_nodes.some((n) => n && n.tag));
       const tooltip = subsPingAllTooltipText(sub, hasPingable);
+      const busyTooltip = 'Идёт проверка задержки для активных узлов этой подписки.';
       btn.setAttribute('data-tooltip', tooltip);
       btn.setAttribute('title', tooltip);
       btn.setAttribute('aria-label', hasPingable ? 'Пинг всех узлов' : 'Пинг всех узлов: нужна подготовка подписки');
       if (_subscriptionPingAllBusy) {
         btn.classList.add('is-busy');
+        btn.setAttribute('data-tooltip', busyTooltip);
+        btn.setAttribute('title', busyTooltip);
+        btn.setAttribute('aria-label', 'Идёт проверка задержки для всех активных узлов');
+        btn.setAttribute('aria-busy', 'true');
         btn.disabled = true;
         return;
       }
       btn.classList.remove('is-busy');
+      btn.removeAttribute('aria-busy');
       btn.disabled = false;
     }
 
