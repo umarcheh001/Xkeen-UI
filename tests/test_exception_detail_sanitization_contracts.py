@@ -100,3 +100,5 @@ def test_frontend_prefers_server_hint_over_raw_error_code_for_sanitized_response
     assert "const hint = data && data.hint ? String(data.hint) : '';" in update_js
     assert "const err = data && (data.hint || data.error) ? String(data.hint || data.error) : 'run_failed';" in update_js
     assert "const err = data && (data.hint || data.error) ? String(data.hint || data.error) : 'rollback_failed';" in update_js
+    assert "backup_tar_unsupported" in update_js
+    assert "{ skip_backup: true }" in update_js

@@ -26,6 +26,12 @@ def _reload(name: str):
 
 
 class DevtoolsUpdateSmokeTests(unittest.TestCase):
+    @staticmethod
+    def _which_with_update_deps(name: str):
+        if name in {"python3", "tar", "curl", "sha256sum"}:
+            return f"/usr/bin/{name}"
+        return None
+
     def test_update_info_endpoint_returns_compact_local_update_snapshot(self):
         devtools = _reload("routes.devtools")
 
@@ -57,7 +63,73 @@ class DevtoolsUpdateSmokeTests(unittest.TestCase):
         self.assertEqual(payload["settings"]["repo"], "umarcheh001/Xkeen-UI")
         self.assertEqual(payload["settings"]["channel"], "stable")
         self.assertIn("capabilities", payload)
+        self.assertIn("tar_exclude", payload["capabilities"])
         self.assertEqual(payload["security"]["sha_strict"], "1")
+
+    def test_update_run_reports_busybox_tar_without_exclude_as_actionable_backup_error(self):
+        devtools = _reload("routes.devtools")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Flask("devtools-update-tar-exclude")
+            with patch.dict(os.environ, {"XKEEN_UI_UPDATE_DIR": tmp}, clear=False):
+                app.register_blueprint(devtools.create_devtools_blueprint(tmp))
+
+            with patch.dict(os.environ, {"XKEEN_UI_UPDATE_DIR": tmp}, clear=False), patch.object(
+                devtools.shutil,
+                "which",
+                self._which_with_update_deps,
+            ), patch.object(
+                devtools, "_tar_supports_exclude", return_value=False
+            ):
+                client = app.test_client()
+                response = client.post("/api/devtools/update/run", json={})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "backup_tar_unsupported")
+        self.assertTrue(payload["can_skip_backup"])
+        self.assertEqual(payload["install_command"], "opkg update && opkg install tar")
+        self.assertIn("opkg update && opkg install tar", payload["hint"])
+        self.assertIn("без бэкапа", payload["hint"])
+
+    def test_update_run_skip_backup_bypasses_tar_exclude_preflight_and_passes_env(self):
+        devtools = _reload("routes.devtools")
+        captured = {}
+
+        class FakeProcess:
+            pid = 4242
+
+        def fake_popen(*args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+            return FakeProcess()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Flask("devtools-update-skip-backup")
+            with patch.dict(os.environ, {"XKEEN_UI_UPDATE_DIR": tmp}, clear=False):
+                app.register_blueprint(devtools.create_devtools_blueprint(tmp))
+
+            with patch.dict(os.environ, {"XKEEN_UI_UPDATE_DIR": tmp}, clear=False), patch.object(
+                devtools.shutil,
+                "which",
+                self._which_with_update_deps,
+            ), patch.object(
+                devtools, "_tar_supports_exclude", return_value=False
+            ), patch.object(
+                devtools.subprocess, "Popen", fake_popen
+            ), patch.object(
+                devtools, "get_build_info", return_value={"repo": "umarcheh001/Xkeen-UI", "channel": "stable"}
+            ):
+                client = app.test_client()
+                response = client.post("/api/devtools/update/run", json={"skip_backup": True})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["started"])
+        env = captured["kwargs"]["env"]
+        self.assertEqual(env["XKEEN_UI_UPDATE_SKIP_BACKUP"], "1")
 
     def test_update_log_is_exposed_in_devtools_logs(self):
         devtools = _reload("routes.devtools")

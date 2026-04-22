@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 
 from flask import Blueprint, current_app, jsonify, request, send_file
@@ -92,6 +93,62 @@ except Exception:  # logging is optional
     _refresh_logging = None
 
 
+BACKUP_TAR_INSTALL_COMMAND = "opkg update && opkg install tar"
+BACKUP_TAR_UNSUPPORTED_HINT = (
+    "Бэкап перед обновлением не может быть создан: текущий tar не поддерживает --exclude "
+    "(часто это BusyBox tar). Установите полноценный tar командой "
+    f"`{BACKUP_TAR_INSTALL_COMMAND}` или запустите обновление без бэкапа."
+)
+
+
+def _tar_supports_exclude() -> bool:
+    """Return False only when tar is present and clearly rejects --exclude."""
+
+    tar_bin = shutil.which("tar")
+    if not tar_bin:
+        return False
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="xkeen-tar-probe-") as tmp:
+            src_dir = os.path.join(tmp, "src")
+            os.makedirs(src_dir, exist_ok=True)
+            with open(os.path.join(src_dir, "keep.txt"), "w", encoding="utf-8") as f:
+                f.write("ok\n")
+            with open(os.path.join(src_dir, "drop.pyc"), "w", encoding="utf-8") as f:
+                f.write("skip\n")
+            out_file = os.path.join(tmp, "probe.tgz")
+            result = subprocess.run(
+                [tar_bin, "--exclude=*.pyc", "-czf", out_file, "-C", src_dir, "."],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+    except Exception:
+        # Unknown probe failure should not block updates; the shell runner will
+        # still write a precise backup error if the real tar command fails.
+        return True
+
+    if result.returncode == 0:
+        return True
+
+    err = str(result.stderr or "").lower()
+    if "--exclude" in err or "unrecognized option" in err or "unknown option" in err or "illegal option" in err:
+        return False
+    return True
+
+
+def _backup_tar_unsupported_payload() -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "error": "backup_tar_unsupported",
+        "hint": BACKUP_TAR_UNSUPPORTED_HINT,
+        "can_skip_backup": True,
+        "install_command": BACKUP_TAR_INSTALL_COMMAND,
+    }
+
+
 
 def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
     bp = Blueprint("devtools", __name__)
@@ -121,6 +178,7 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         caps = {
             "curl": bool(shutil.which("curl")),
             "tar": bool(shutil.which("tar")),
+            "tar_exclude": _tar_supports_exclude(),
             "sha256sum": bool(shutil.which("sha256sum")),
         }
         settings = {
@@ -378,6 +436,7 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         """
 
         payload = request.get_json(silent=True) or {}
+        skip_backup = bool(payload.get("skip_backup") or payload.get("no_backup") or False)
         # Optional "preflight" data from /api/devtools/update/check so runner can skip network check_latest.
         resolved = payload.get("resolved") if isinstance(payload, dict) else None
         if not isinstance(resolved, dict):
@@ -416,6 +475,8 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
                     },
                 }
             )
+        if not skip_backup and not _tar_supports_exclude():
+            return jsonify(_backup_tar_unsupported_payload())
 
         # Acquire lock for this run (runner will adopt it using XKEEN_UI_LOCK_PRECREATED=1).
         acquired, lock_info = try_acquire_lock(paths["lock_file"])
@@ -451,6 +512,8 @@ def create_devtools_blueprint(ui_state_dir: str) -> Blueprint:
         env["XKEEN_UI_LOCK_PRECREATED"] = "1"
         env["XKEEN_UI_UPDATE_DIR"] = paths["update_dir"]
         env["XKEEN_UI_UPDATE_ACTION"] = "update"
+        if skip_backup:
+            env["XKEEN_UI_UPDATE_SKIP_BACKUP"] = "1"
 
         # Pass effective update settings to runner (so it works without restarting UI).
         build_eff = get_build_info(ui_state_dir)

@@ -12,6 +12,7 @@
 #   XKEEN_UI_UPDATE_DIR=/opt/var/lib/xkeen-ui/update
 #   XKEEN_UI_BACKUP_DIR=/opt/var/backups/xkeen-ui
 #   XKEEN_UI_BACKUP_KEEP=1
+#   XKEEN_UI_UPDATE_SKIP_BACKUP=0     # 1: run update without pre-update backup
 #
 # Важно:
 # - Скрипт пишет лог и status.json в update-dir.
@@ -31,6 +32,7 @@ ASSET_URL_OVERRIDE="${XKEEN_UI_UPDATE_ASSET_URL:-}"
 TAG_OVERRIDE="${XKEEN_UI_UPDATE_TAG:-}"
 SHA_URL_OVERRIDE="${XKEEN_UI_UPDATE_SHA_URL:-}"
 SHA_KIND_OVERRIDE="${XKEEN_UI_UPDATE_SHA_KIND:-}"
+SKIP_BACKUP="${XKEEN_UI_UPDATE_SKIP_BACKUP:-0}"
 
 
 BACKUP_KEEP="1"  # hard limit: keep only ONE UI backup
@@ -674,6 +676,33 @@ trim_backups() {
   done
 }
 
+tar_supports_exclude() {
+  # BusyBox tar on some routers does not understand GNU-style --exclude.
+  # Probe with a tiny archive; if the probe cannot run for unrelated reasons,
+  # fail open and let the real backup command report its own error.
+  tmp_dir="$UPDATE_DIR/.tar-exclude-test.$$"
+  rm -rf "$tmp_dir" 2>/dev/null || true
+  mkdir -p "$tmp_dir/src" 2>/dev/null || return 0
+  : >"$tmp_dir/src/keep.txt" 2>/dev/null || {
+    rm -rf "$tmp_dir" 2>/dev/null || true
+    return 0
+  }
+  : >"$tmp_dir/src/drop.pyc" 2>/dev/null || true
+
+  tar_probe_out="$(tar --exclude='*.pyc' -czf "$tmp_dir/probe.tgz" -C "$tmp_dir/src" . 2>&1)" && {
+    rm -rf "$tmp_dir" 2>/dev/null || true
+    return 0
+  }
+
+  rm -rf "$tmp_dir" 2>/dev/null || true
+  case "$tar_probe_out" in
+    *"--exclude"*|*"unrecognized option"*|*"unknown option"*|*"illegal option"*)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
 if [ "$ACTION" != "rollback" ]; then
   if [ "$CHANNEL" != "stable" ] && [ "$CHANNEL" != "main" ]; then
     echo "[!] Unsupported channel: $CHANNEL (use stable or main)." >&2
@@ -783,8 +812,17 @@ fi
 write_status "running" "backup" "Creating backup"
 ts="$(date -u +%Y%m%d-%H%M%S 2>/dev/null || date +%Y%m%d-%H%M%S)"
 backup_file="$BACKUP_DIR/xkeen-ui-$ts.tgz"
-if [ -d "$UI_DIR" ]; then
+if [ "$SKIP_BACKUP" = "1" ]; then
+  log "[!] Backup skipped by user request. Rollback for this update will not be available."
+elif [ -d "$UI_DIR" ]; then
   log "[*] Backup: $backup_file"
+  if ! tar_supports_exclude; then
+    log "[!] Backup cannot be created: current tar does not support --exclude (usually BusyBox tar)."
+    log "[!] Fix: run 'opkg update && opkg install tar' and start the update again."
+    log "[!] Alternative: start the update without backup from DevTools."
+    write_status "failed" "backup" "Бэкап не создан: tar не поддерживает --exclude" "backup_tar_unsupported"
+    exit 18
+  fi
   if tar \
     --exclude='*pycache*' \
     --exclude='*.pyc' \

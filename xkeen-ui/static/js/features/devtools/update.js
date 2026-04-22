@@ -588,6 +588,54 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
     box.appendChild(linesWrap);
   }
 
+  function _isBackupTarUnsupported(data) {
+    try {
+      return !!(data && String(data.error || '') === 'backup_tar_unsupported');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function _backupTarUnsupportedHint(data) {
+    const hint = data && data.hint ? String(data.hint) : '';
+    if (hint) return hint;
+    return 'Бэкап перед обновлением не может быть создан: текущий tar не поддерживает --exclude. Установите полноценный tar командой opkg update && opkg install tar или запустите обновление без бэкапа.';
+  }
+
+  function _renderBackupTarUnsupported(data) {
+    const box = byId('dt-update-security');
+    if (!box) return;
+    _clearEl(box);
+    try { box.style.display = ''; } catch (e) {}
+    try { box.className = 'dt-alert bad'; } catch (e) {}
+
+    const title = document.createElement('strong');
+    title.textContent = '⚠️ Бэкап перед обновлением не создан';
+    box.appendChild(title);
+
+    const lines = document.createElement('div');
+    lines.className = 'dt-alert-lines';
+
+    const addLine = (text) => {
+      const d = document.createElement('div');
+      d.textContent = String(text || '');
+      lines.appendChild(d);
+    };
+
+    addLine('На роутере найден tar без поддержки --exclude, обычно это BusyBox tar. Такой бэкап updater не запускает, чтобы не оставить пользователя с ложным rollback.');
+    addLine('Надёжный вариант: установить полноценный tar и повторить обновление.');
+
+    const cmd = document.createElement('code');
+    cmd.textContent = String((data && data.install_command) || 'opkg update && opkg install tar');
+    const cmdLine = document.createElement('div');
+    cmdLine.appendChild(document.createTextNode('Команда: '));
+    cmdLine.appendChild(cmd);
+    lines.appendChild(cmdLine);
+
+    addLine('Альтернатива: подтвердить запуск без бэкапа. В этом режиме rollback на предыдущую версию будет недоступен.');
+    box.appendChild(lines);
+  }
+
   const state = {
     pollTimer: null,
     lastCheck: null,
@@ -673,6 +721,8 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
 
     if (miss.length) {
       _setSubStatus('Внимание: отсутствуют зависимости: ' + miss.join(', '));
+    } else if (caps && caps.tar === true && caps.tar_exclude === false) {
+      _setSubStatus('Внимание: текущий tar не поддерживает --exclude. Для бэкапа обновления нужен: opkg update && opkg install tar');
     }
   }
 
@@ -1135,7 +1185,23 @@ import { getDevtoolsNamespace, getDevtoolsSharedApi, setDevtoolsNamespaceApi } f
       const payload = (resolved && resolved.asset_url) ? { resolved } : {};
 
       _setStatus('Starting update…', 'warn');
-      const data = await postJSON('/api/devtools/update/run', payload);
+      let data = await postJSON('/api/devtools/update/run', payload);
+      if (!(data && data.ok) && _isBackupTarUnsupported(data)) {
+        _renderBackupTarUnsupported(data);
+        _setStatus(_backupTarUnsupportedHint(data), 'bad');
+        const skipBackup = await confirmAction({
+          title: 'Обновить без бэкапа?',
+          message: 'Бэкап не создан, потому что текущий tar не поддерживает --exclude. Можно установить tar командой opkg update && opkg install tar и повторить обновление, либо продолжить без бэкапа. Без бэкапа rollback на предыдущую версию будет недоступен.',
+          okText: 'Без бэкапа',
+          cancelText: 'Отменить',
+          danger: true,
+        });
+        if (!skipBackup) return;
+
+        const noBackupPayload = Object.assign({}, payload || {}, { skip_backup: true });
+        _setStatus('Starting update without backup…', 'warn');
+        data = await postJSON('/api/devtools/update/run', noBackupPayload);
+      }
       if (data && data.ok) {
         if (data.started) {
           toastKind('Обновление запущено', 'info');
