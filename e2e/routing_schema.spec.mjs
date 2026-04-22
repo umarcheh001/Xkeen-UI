@@ -147,6 +147,23 @@ async function ensureCodeMirrorRouting(page) {
   });
 }
 
+async function ensureMonacoRouting(page) {
+  const select = page.locator('#routing-editor-engine-select');
+  await expect(select).toBeVisible();
+  await select.selectOption('monaco');
+
+  await page.waitForFunction(() => {
+    const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
+    const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
+    return !!(
+      editor &&
+      typeof editor.getModel === 'function' &&
+      typeof editor.getAction === 'function' &&
+      editor.getModel()
+    );
+  });
+}
+
 async function replaceRoutingText(page, text) {
   await page.evaluate((nextText) => {
     window.XKeen.features.routing.replaceEditorText(nextText, {
@@ -155,6 +172,14 @@ async function replaceRoutingText(page, text) {
       scrollTop: true,
     });
   }, text);
+}
+
+async function waitForRoutingText(page, needle) {
+  await expect.poll(() => page.evaluate((target) => {
+    const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
+    const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
+    return editor && typeof editor.getValue === 'function' ? editor.getValue() : '';
+  }, needle)).toContain(needle);
 }
 
 async function waitForRoutingSchema(page) {
@@ -210,6 +235,31 @@ async function hoverRenderedToken(page, needle) {
 async function clearEditorTooltips(page) {
   await page.mouse.move(8, 8);
   await page.waitForTimeout(200);
+}
+
+async function showMonacoHoverForToken(page, needle) {
+  await page.evaluate(async (target) => {
+    const maybeEditor = window.XKeen?.features?.routingShell?.getEditorInstance?.({ preferRaw: true });
+    const editor = maybeEditor && maybeEditor.raw ? maybeEditor.raw : maybeEditor;
+    const model = editor && typeof editor.getModel === 'function' ? editor.getModel() : null;
+    if (!editor || !model || typeof model.findMatches !== 'function') {
+      throw new Error('Monaco routing editor is not ready');
+    }
+    const matches = model.findMatches(target, false, false, false, null, false);
+    const range = Array.isArray(matches) && matches.length ? matches[0].range : null;
+    if (!range) throw new Error(`Text not found in Monaco editor: ${target}`);
+    const position = {
+      lineNumber: Number(range.startLineNumber || 1),
+      column: Math.max(1, Number(range.startColumn || 1) + 2),
+    };
+    if (typeof editor.setPosition === 'function') editor.setPosition(position);
+    if (typeof editor.revealPositionInCenter === 'function') editor.revealPositionInCenter(position);
+    try { editor.focus?.(); } catch (e) {}
+    const action = typeof editor.getAction === 'function' ? editor.getAction('editor.action.showHover') : null;
+    if (!action || typeof action.run !== 'function') throw new Error('Monaco hover action is unavailable');
+    await action.run();
+  }, needle);
+  await page.waitForTimeout(350);
 }
 
 async function tooltipText(page, selector) {
@@ -454,4 +504,21 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await page.waitForTimeout(700);
   await expect.poll(() => page.evaluate(() => document.querySelectorAll('.cm-tooltip-hover, .cm6-json-schema-hover').length)).toBe(0);
   await saveSchemaHoverEnabled(page, true);
+});
+
+test('routing Monaco shows Xray schema hover in browser', async ({ page }) => {
+  await page.goto('/');
+  await waitForRoutingEditor(page);
+  await ensureMonacoRouting(page);
+  await waitForRoutingSchema(page);
+  await waitForUiSettings(page);
+  await saveSchemaHoverEnabled(page, true);
+
+  await replaceRoutingText(page, SUBSCRIPTION_ROUTING);
+  await waitForRoutingText(page, '"rules"');
+  await waitForRoutingSchema(page);
+  await expect(page.locator('#routing-editor-schema-badge')).toContainText('Schema: Xray routing');
+
+  await showMonacoHoverForToken(page, '"rules"');
+  await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('Массив правил маршрутизации');
 });

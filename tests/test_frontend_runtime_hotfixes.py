@@ -475,6 +475,7 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     schema_shim = shim_path.read_text(encoding='utf-8')
     settings_src = Path('xkeen-ui/static/js/ui/settings.js').read_text(encoding='utf-8')
     settings_panel = Path('xkeen-ui/static/js/ui/settings_panel.js').read_text(encoding='utf-8')
+    editor_engine = Path('xkeen-ui/static/js/ui/editor_engine.js').read_text(encoding='utf-8')
 
     assert shim_path.is_file()
     assert schema_loader_path.is_file()
@@ -511,9 +512,20 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "function ensureSchemaHoverSettingsLoaded" in boot
     assert "function hideSchemaHoverTooltips" in boot
     assert "jsonSchemasByModelUri: new Map()" in monaco_shared
+    assert "jsonModeConfigured: false" in monaco_shared
     assert "function _setModelJsonSchema(model, schema, monaco)" in monaco_shared
     assert "function _applyManagedJsonDiagnostics(monaco)" in monaco_shared
+    assert "function _schemaFileMatchPatternsForModel(model)" in monaco_shared
+    assert "function _ensureJsonModeConfiguration(monaco)" in monaco_shared
+    assert "function _normalizeModelUri(monaco, rawUri, language)" in monaco_shared
+    assert "defaults.setModeConfiguration({" in monaco_shared
+    assert "hovers: true" in monaco_shared
+    assert "completionItems: true" in monaco_shared
+    assert "fileMatch: Array.isArray(entry && entry.fileMatch) && entry.fileMatch.length ? entry.fileMatch : [modelUri]" in monaco_shared
+    assert "fileMatch: _schemaFileMatchPatternsForModel(model)" in monaco_shared
+    assert "return monaco.Uri.parse(`xkeen://json/model-${nextId}.jsonc`);" in monaco_shared
     assert "editor.setSchema = (schema) => {" in monaco_shared
+    assert "editor.getSchema = () => currentSchema || null;" in monaco_shared
     assert "if (shouldDeferSchemaHoverForSettings()) return false" in boot
     assert "isSchemaHoverEnabled(opts)" in boot
     assert "refreshSchemaExtensions()" in boot
@@ -535,9 +547,15 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "async function applyRoutingSchemaToMonaco(editor, text)" in routing
     assert "await applyRoutingSchemaToMonaco(_monaco, text)" in routing
     assert "await applyRoutingSchemaToMonaco(ed)" in routing
+    assert routing.index("async function applyRoutingSchemaToMonaco(editor, text)") < routing.index("})();")
+    assert "function getRoutingMonacoModelUri() {" in routing
+    assert "uri: getRoutingMonacoModelUri()," in routing
+    assert "return `xkeen://routing/${safeName}`;" in routing
     assert "function updateRoutingSchemaBadge(result)" in routing
     assert "editorSchemaBadge: 'routing-editor-schema-badge'" in routing
     assert "await applyRoutingSchemaToCodeMirror(_cm, text)" in routing
+    assert "api.getSchema = () => {" in editor_engine
+    assert "api.setSchema = (schema) => {" in editor_engine
     assert "routing-editor-schema-badge" in template
     assert "'codemirror-json-schema'" in vite
 

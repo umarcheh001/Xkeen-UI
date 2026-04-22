@@ -908,6 +908,20 @@
     api.getValue = () => api.get();
     api.setValue = (value) => api.set(value);
     api.captureViewState = (viewOpts) => api.saveViewState(viewOpts);
+    api.getSchema = () => {
+      try {
+        const obj = target || raw;
+        if (obj && isFn(obj.getSchema)) return obj.getSchema();
+      } catch (e) {}
+      return null;
+    };
+    api.setSchema = (schema) => {
+      try {
+        const obj = target || raw;
+        if (obj && isFn(obj.setSchema)) return !!obj.setSchema(schema || null);
+      } catch (e) {}
+      return false;
+    };
 
     return api;
   }

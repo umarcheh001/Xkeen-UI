@@ -664,6 +664,29 @@ async function applyRoutingSchemaToCodeMirror(cm, text) {
     return null;
   }
 
+  async function applyRoutingSchemaToMonaco(editor, text) {
+    const targetEditor = editor || _monaco;
+    if (!targetEditor) {
+      updateRoutingSchemaBadge(null);
+      return null;
+    }
+    try {
+      const file = getActiveFragment() || getXkeenFilePath('routing', '');
+      const result = await applySchemaToEditor(targetEditor, {
+        target: _routingMode === 'routing' ? 'routing' : 'xray',
+        file,
+        mode: 'jsonc',
+        text: typeof text === 'string' ? text : readCurrentEditorText(),
+        feature: 'routing',
+      });
+      updateRoutingSchemaBadge(result);
+      return result;
+    } catch (e) {
+      updateRoutingSchemaBadge(null);
+    }
+    return null;
+  }
+
   function cacheEditorSnapshot(text) {
     const raw = String(text ?? '');
     const perf = computeEditorPerfProfile(raw);
@@ -4437,6 +4460,17 @@ function closeHelp() {
     }
   }
 
+  function getRoutingMonacoModelUri() {
+    try {
+      const active = String(getActiveFragment() || '').trim().replace(/\\/g, '/');
+      const parts = active ? active.split('/') : [];
+      const fileName = String(parts.length ? (parts[parts.length - 1] || '') : '').trim() || 'routing.jsonc';
+      const safeName = encodeURIComponent(fileName);
+      return `xkeen://routing/${safeName}`;
+    } catch (e) {}
+    return 'xkeen://routing/routing.jsonc';
+  }
+
   async function ensureMonacoEditor() {
     if (isMonacoAlive(_monaco)) return _monaco;
     if (_monacoEnsurePromise) return _monacoEnsurePromise;
@@ -4463,6 +4497,7 @@ function closeHelp() {
       try {
         _monaco = await runtime.create(host, {
           value: readCurrentEditorText(),
+          uri: getRoutingMonacoModelUri(),
           customContextMenu: useRoutingMonacoCustomMenu() ? {
             onFormatFallback: () => {
               try {
@@ -5174,29 +5209,6 @@ export function getRoutingApi() {
   }
   return null;
 }
-
-  async function applyRoutingSchemaToMonaco(editor, text) {
-    const targetEditor = editor || _monaco;
-    if (!targetEditor) {
-      updateRoutingSchemaBadge(null);
-      return null;
-    }
-    try {
-      const file = getActiveFragment() || getXkeenFilePath('routing', '');
-      const result = await applySchemaToEditor(targetEditor, {
-        target: _routingMode === 'routing' ? 'routing' : 'xray',
-        file,
-        mode: 'jsonc',
-        text: typeof text === 'string' ? text : readCurrentEditorText(),
-        feature: 'routing',
-      });
-      updateRoutingSchemaBadge(result);
-      return result;
-    } catch (e) {
-      updateRoutingSchemaBadge(null);
-    }
-    return null;
-  }
 
 function callRoutingApi(method, ...args) {
   const api = getRoutingApi();
