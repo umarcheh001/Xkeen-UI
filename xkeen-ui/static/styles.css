@@ -7568,6 +7568,8 @@ html[data-theme="light"] .xk-mi-status.error {
 }
 
 .xk-sub-header {
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 8px;
   padding-bottom: 8px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
@@ -7584,6 +7586,23 @@ html[data-theme="light"] .xk-mi-status.error {
   color: #93a4b8;
   font-size: calc(11px * var(--xk-font-scale));
   line-height: 1.25;
+}
+
+.xk-sub-interval-note {
+  display: inline-block;
+  align-self: flex-start;
+  max-width: 100%;
+  margin-top: 2px;
+  padding: 3px 8px;
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.10);
+  color: #fde68a;
+  font-size: calc(11px * var(--xk-font-scale));
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .xk-sub-brief {
@@ -7707,13 +7726,6 @@ html[data-theme="light"] .xk-mi-status.error {
   border-radius: 8px;
 }
 
-.xk-sub-fieldhint {
-  margin-top: 4px;
-  color: #94a3b8;
-  font-size: calc(11px * var(--xk-font-scale));
-  line-height: 1.25;
-}
-
 .xk-sub-span-3 {
   grid-column: span 3;
 }
@@ -7746,7 +7758,7 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(188px, 0.72fr) auto;
+  grid-template-columns: minmax(0, 1fr) max-content auto;
   align-items: center;
   gap: 10px 12px;
   margin-top: 2px;
@@ -7771,7 +7783,8 @@ html[data-theme="light"] .xk-mi-status.error {
   position: relative;
   display: block;
   min-width: 0;
-  width: 100%;
+  width: max-content;
+  justify-self: start;
   padding: 0;
 }
 
@@ -7791,8 +7804,9 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-routing-mode .xray-log-filter {
   display: block;
-  width: 100%;
-  min-width: 0;
+  width: auto;
+  min-width: 128px;
+  max-width: 148px;
   height: 34px;
 }
 
@@ -8129,6 +8143,10 @@ html[data-theme="light"] .xk-mi-status.error {
   gap: 14px;
   align-items: start;
   align-self: start;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 88px;
   padding: 14px 16px 13px;
   border-radius: 14px;
@@ -8150,6 +8168,7 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-node-main {
   min-width: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -8170,6 +8189,7 @@ html[data-theme="light"] .xk-mi-status.error {
   gap: 6px;
   margin-top: 0;
   align-items: center;
+  min-width: 0;
 }
 
 .xk-sub-node-pill {
@@ -8207,10 +8227,15 @@ html[data-theme="light"] .xk-mi-status.error {
 .xk-sub-node-endpoint {
   display: inline-flex;
   align-items: center;
+  min-width: 0;
+  max-width: 100%;
   min-height: 22px;
   color: #93a4b8;
   font-size: calc(12px * var(--xk-font-scale));
   line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .xk-sub-node-detail {
@@ -8218,6 +8243,7 @@ html[data-theme="light"] .xk-mi-status.error {
   color: #7dd3fc;
   font-size: calc(12px * var(--xk-font-scale));
   line-height: 1.34;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 
@@ -8226,6 +8252,7 @@ html[data-theme="light"] .xk-mi-status.error {
   color: #fcd34d;
   font-size: calc(11px * var(--xk-font-scale));
   line-height: 1.35;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 
@@ -8778,6 +8805,11 @@ html[data-theme="light"] .xk-mi-status.error {
   width: 100%;
 }
 
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-routing-mode .xray-log-filter {
+  width: 100%;
+  max-width: none;
+}
+
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls .xk-sub-actions {
   justify-self: stretch;
   justify-content: flex-end;
@@ -8955,8 +8987,13 @@ html[data-theme="light"] .xk-sub-main {
   color: #1d2b44;
 }
 
+html[data-theme="light"] .xk-sub-interval-note {
+  border-color: rgba(217, 119, 6, 0.24);
+  background: rgba(254, 243, 199, 0.78);
+  color: #92400e;
+}
+
 html[data-theme="light"] .xk-sub-muted,
-html[data-theme="light"] .xk-sub-fieldhint,
 html[data-theme="light"] .xk-sub-node-endpoint,
 html[data-theme="light"] .xk-sub-node-state {
   color: #465975;

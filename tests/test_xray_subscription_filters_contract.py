@@ -21,6 +21,7 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert '<span class="xk-pool-fieldlabel">Транспорт</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Обновлять, ч</span>' in outbounds_src
     assert "const SUB_DEFAULT_INTERVAL_HOURS = 24;" in outbounds_src
+    assert "xk-sub-interval-note" in outbounds_src
     assert "function subsIntervalSummary(sub) {" in outbounds_src
     assert "profile_update_interval_hours" in outbounds_src
     assert 'xk-sub-filter-field xk-sub-span-4' in outbounds_src
@@ -152,6 +153,6 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "grid-template-columns: repeat(12, minmax(0, 1fr));" in styles_src
     assert ".xk-sub-span-5" in styles_src
     assert ".xk-sub-filter-field .xk-pool-fieldlabel" in styles_src
-    assert ".xk-sub-fieldhint {" in styles_src
+    assert ".xk-sub-interval-note {" in styles_src
     assert ".xk-sub-node-pill-transport" in styles_src
     assert ".xk-sub-table tbody tr.is-selected" in styles_src

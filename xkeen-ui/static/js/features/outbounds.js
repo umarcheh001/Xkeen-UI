@@ -3537,6 +3537,7 @@ let outboundsModuleApi = null;
               <div class="xk-sub-titleblock">
                 <span class="modal-title">Подписки Xray</span>
                 <span class="xk-sub-subtitle">Автообновление generated outbounds и observatory.</span>
+                <span class="xk-sub-interval-note">Интервал: по умолчанию 24 ч; рекомендация провайдера не перезаписывает выбранное значение.</span>
               </div>
               <button type="button" class="modal-close" id="outbounds-subscriptions-close-btn" title="Закрыть" data-tooltip="Закрыть окно подписок.">×</button>
             </div>
@@ -3575,7 +3576,6 @@ let outboundsModuleApi = null;
                     <label class="xk-sub-span-3" data-tooltip="Локальный интервал автообновления. По умолчанию 24 часа; серверный profile-update-interval показывается как рекомендация и не перезаписывает это поле.">
                       <span class="xk-pool-fieldlabel">Обновлять, ч</span>
                       <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" data-tooltip="Как часто панель будет обновлять подписку: от 1 до 168 часов. Рекомендация провайдера не меняет выбранное значение.">
-                      <span class="xk-sub-fieldhint">По умолчанию 24 ч; рекомендация провайдера не перезаписывает поле.</span>
                     </label>
                     <label class="xk-sub-wide" data-tooltip="HTTP(S) URL подписки. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
                       <span class="xk-pool-fieldlabel">URL</span>
@@ -4289,7 +4289,6 @@ let outboundsModuleApi = null;
                 ${endpoint ? `<span class="xk-sub-node-endpoint">${endpoint}</span>` : ''}
               </div>
               ${detail ? `<div class="xk-sub-node-detail">${detail}</div>` : ''}
-              ${deprecatedTransportNote ? `<div class="xk-sub-node-warning">${deprecatedTransportNoteHtml}</div>` : ''}
             </div>
             <div class="xk-sub-node-side">
               <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>
