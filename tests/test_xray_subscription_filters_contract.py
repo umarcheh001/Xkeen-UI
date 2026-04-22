@@ -66,8 +66,11 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "/api/xray/outbounds/nodes" in outbounds_src
     assert "/api/xray/outbounds/nodes/ping" in routes_src
     assert "/api/xray/outbounds/nodes/ping-bulk" in routes_src
+    assert ".xk-outbounds-node-panel {" in styles_src
     assert ".xk-outbounds-node-list" in styles_src
-    assert "max-height: min(36vh, 320px);" in styles_src
+    assert ".xk-outbounds-node-panel {\n  flex: 1 1 auto;" in styles_src
+    assert ".xk-outbounds-node-panel {\n  flex: 1 1 auto;\n  margin: 10px 0 12px;\n  overflow: hidden;" in styles_src
+    assert ".xk-outbounds-node-list {\n  grid-template-columns: 1fr;\n  gap: 8px;\n  min-height: 0;\n  max-height: min(36vh, 320px);\n  overflow: auto;" in styles_src
 
 
 def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions():
@@ -138,8 +141,6 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "content.style.maxWidth = `${Math.round(clampWidth)}px`;" in outbounds_src
     assert ".xk-sub-brief,\n.xk-sub-grid,\n.xk-sub-node-panel,\n#outbounds-subscriptions-modal .modal-actions {" not in styles_src
     assert ".xk-sub-grid {" in styles_src
-    assert "flex: 0 0 auto;" in styles_src
-    assert "overflow: hidden;" in styles_src
     assert "min-height: 220px;" in styles_src
     assert ".xk-sub-icon-btn.btn-compact {" in styles_src
     assert ".xk-sub-pingall-spinner {" in styles_src
@@ -150,8 +151,10 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "flex-wrap: nowrap;" in styles_src
     assert "min-height: 0;" in styles_src
     assert ".xk-sub-list-panel {" in styles_src
-    assert ".xk-sub-node-panel {\n  flex: 0 0 auto;" in styles_src
-    assert "overflow: visible;" in styles_src
+    assert ".xk-sub-node-panel {\n  flex: 1 1 auto;" in styles_src
+    assert ".xk-sub-node-panel {\n  flex: 1 1 auto;\n  margin-top: 0;\n  min-height: 0;\n  overflow: hidden;" in styles_src
+    assert ".xk-sub-node-list {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));" in styles_src
+    assert "#outbounds-subscriptions-modal .xk-sub-node-panel {\n  flex: 0 0 auto;\n  overflow: visible;" in styles_src
     assert ".xk-sub-file-badge {" in styles_src
     assert ".xk-sub-list-action {" in styles_src
     assert ".xk-sub-file-link {" in styles_src
@@ -162,10 +165,9 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "display: inline-flex;" in styles_src
     assert ".xk-sub-node-main {" in styles_src
     assert "gap: 6px;" in styles_src
-    assert "max-height: none;" in styles_src
+    assert "#outbounds-subscriptions-nodes-list {\n  grid-template-columns: repeat(auto-fit, minmax(min(100%, 272px), 1fr));\n  gap: 10px;\n  padding: 8px;\n  flex: 0 0 auto;\n  max-height: none;\n  overflow: visible;" in styles_src
     assert "width: min(96vw, 1080px) !important;" not in styles_src
     assert "max-width: 1080px !important;" not in styles_src
-    assert "grid-template-columns: repeat(auto-fit, minmax(min(100%, 272px), 1fr));" in styles_src
     assert "grid-template-columns: repeat(12, minmax(0, 1fr));" in styles_src
     assert "white-space: nowrap;" in styles_src
     assert "text-overflow: ellipsis;" in styles_src

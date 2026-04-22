@@ -8158,22 +8158,22 @@ html[data-theme="light"] .xk-mi-status.error {
 }
 
 .xk-sub-node-panel {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   margin-top: 0;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .xk-sub-node-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   align-content: start;
   align-items: start;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   min-height: 220px;
   max-height: none;
-  overflow: visible;
+  overflow: auto;
   width: 100%;
   padding: 10px;
   border: 1px solid rgba(148, 163, 184, 0.10);
@@ -8181,14 +8181,24 @@ html[data-theme="light"] .xk-mi-status.error {
   background: rgba(2, 6, 23, 0.22);
 }
 
+#outbounds-subscriptions-modal .xk-sub-node-panel {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
 #outbounds-subscriptions-nodes-list {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 272px), 1fr));
   gap: 10px;
   padding: 8px;
+  flex: 0 0 auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .xk-outbounds-node-panel {
+  flex: 1 1 auto;
   margin: 10px 0 12px;
+  overflow: hidden;
 }
 
 .xk-outbounds-node-list {
@@ -8196,6 +8206,7 @@ html[data-theme="light"] .xk-mi-status.error {
   gap: 8px;
   min-height: 0;
   max-height: min(36vh, 320px);
+  overflow: auto;
   padding: 8px;
 }
 

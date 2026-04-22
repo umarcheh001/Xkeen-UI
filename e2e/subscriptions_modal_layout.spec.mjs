@@ -78,11 +78,108 @@ function buildDemoSubscription(nodes = buildDemoNodes()) {
 
 async function openSubscriptionsModal(page) {
   await page.goto('/');
-  await page.locator('#outbounds-header').click();
-  await expect(page.locator('#outbounds-body')).toBeVisible();
+  const body = page.locator('#outbounds-body');
+  if (!(await body.isVisible())) {
+    await page.locator('#outbounds-header').click();
+  }
+  await expect(body).toBeVisible();
   await page.locator('#outbounds-subscriptions-btn').click();
   await expect(page.locator('#outbounds-subscriptions-modal')).toBeVisible();
 }
+
+async function openOutboundsPanel(page) {
+  await page.goto('/');
+  const body = page.locator('#outbounds-body');
+  if (!(await body.isVisible())) {
+    await page.locator('#outbounds-header').click();
+  }
+  await expect(body).toBeVisible();
+}
+
+test('main outbounds card keeps proxy nodes inside scrollable panel', async ({ page }) => {
+  const nodes = buildDemoNodes();
+  const nodeLatency = buildNodeLatency(nodes);
+
+  await page.route('**/api/outbounds', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        file: '04_outbounds.json',
+        url: 'vless://demo@example.com:443?type=tcp&security=reality#demo',
+        config: {
+          outbounds: [
+            { tag: 'proxy', protocol: 'vless' },
+          ],
+        },
+      }),
+    });
+  });
+
+  await page.route('**/api/xray/outbounds/nodes**', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, nodes, node_latency: nodeLatency }),
+    });
+  });
+
+  await openOutboundsPanel(page);
+  await expect(page.locator('#outbounds-nodes-panel')).toBeVisible();
+  await expect(page.locator('#outbounds-nodes-list .xk-outbounds-node-item')).toHaveCount(nodes.length);
+  await page.waitForTimeout(250);
+
+  const layout = await page.evaluate(() => {
+    const panel = document.querySelector('#outbounds-nodes-panel');
+    const list = document.querySelector('#outbounds-nodes-list');
+    const cards = Array.from(document.querySelectorAll('#outbounds-nodes-list .xk-outbounds-node-item'));
+    const rects = cards.map((card, index) => {
+      const rect = card.getBoundingClientRect();
+      return {
+        index,
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+      };
+    });
+    const overlaps = [];
+    for (let i = 0; i < rects.length; i += 1) {
+      for (let j = i + 1; j < rects.length; j += 1) {
+        const a = rects[i];
+        const b = rects[j];
+        const x = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+        const y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        if (x > 2 && y > 2) overlaps.push({ i, j, x, y });
+      }
+    }
+    const listStyle = list ? window.getComputedStyle(list) : null;
+    const panelStyle = panel ? window.getComputedStyle(panel) : null;
+    return {
+      panelOverflow: panelStyle ? panelStyle.overflow : '',
+      listOverflowY: listStyle ? listStyle.overflowY : '',
+      clientHeight: list ? Math.round(list.clientHeight) : 0,
+      scrollHeight: list ? Math.round(list.scrollHeight) : 0,
+      maxHeight: listStyle ? listStyle.maxHeight : '',
+      overlaps,
+    };
+  });
+
+  expect(layout.panelOverflow).toBe('hidden');
+  expect(['auto', 'scroll']).toContain(layout.listOverflowY);
+  expect(layout.maxHeight).not.toBe('none');
+  expect(layout.scrollHeight).toBeGreaterThan(layout.clientHeight);
+  expect(layout.overlaps).toEqual([]);
+});
 
 test('subscriptions modal cards stay separated at medium width', async ({ page }) => {
   const nodes = buildDemoNodes();
