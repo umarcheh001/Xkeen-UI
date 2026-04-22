@@ -580,10 +580,14 @@ def test_xray_routing_schema_covers_subscription_generated_fragments():
     assert routing_schema['definitions']['observatory']['properties']['subjectSelector']['items']['type'] == 'string'
     assert routing_schema['definitions']['observatory']['properties']['subjectSelector']['items']['examples'] == ['vless-reality', 'proxy']
     assert routing_schema['definitions']['balancer']['properties']['fallbackTag']['examples'] == ['direct', 'block']
+    assert 'Тип правила маршрутизации' in routing_schema['definitions']['routingRule']['properties']['type']['description']
+    assert 'Тип стратегии балансировщика' in routing_schema['definitions']['balancer']['properties']['strategy']['properties']['type']['description']
     assert routing_schema['definitions']['burstObservatory']['properties']['pingConfig']['type'] == 'object'
 
     assert 'ruleTag' in full_schema['definitions']['routingRule']['properties']
     assert full_schema['definitions']['routingRule']['properties']['balancerTag']['examples'] == ['proxy']
+    assert 'Тип правила маршрутизации' in full_schema['definitions']['routingRule']['properties']['type']['description']
+    assert 'Тип стратегии балансировщика' in full_schema['definitions']['balancer']['properties']['strategy']['properties']['type']['description']
     assert full_schema['definitions']['routingRule']['additionalProperties'] is False
     for fragment_path in [
         Path('xkeen-ui/static/schemas/xray-inbounds.schema.json'),
@@ -592,6 +596,8 @@ def test_xray_routing_schema_covers_subscription_generated_fragments():
         fragment_schema = json.loads(fragment_path.read_text(encoding='utf-8'))
         assert 'ruleTag' in fragment_schema['definitions']['routingRule']['properties']
         assert fragment_schema['definitions']['routingRule']['properties']['outboundTag']['examples'][0] == 'direct'
+        assert 'Тип правила маршрутизации' in fragment_schema['definitions']['routingRule']['properties']['type']['description']
+        assert 'Тип стратегии балансировщика' in fragment_schema['definitions']['balancer']['properties']['strategy']['properties']['type']['description']
         assert fragment_schema['definitions']['routingRule']['additionalProperties'] is False
 
 

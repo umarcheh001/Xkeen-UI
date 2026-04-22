@@ -278,7 +278,7 @@
       "type": "object",
       "description": "Правило маршрутизации",
       "properties": {
-        "type": { "type": "string", "enum": ["field"], "default": "field" },
+        "type": { "type": "string", "enum": ["field"], "default": "field", "description": "Тип правила маршрутизации. Для routing rules используется значение field." },
         "domain": { "type": "array", "items": { "type": "string" }, "description": "Домены (regexp:, domain:, full:, geosite:, ext:)" },
         "ip": { "type": "array", "items": { "type": "string" }, "description": "IP/CIDR (geoip:, ext:)" },
         "port": { "type": ["string", "integer"], "description": "Порт или диапазон (например '53', '1024-65535', '80,443')" },
@@ -306,7 +306,7 @@
         "strategy": {
           "type": "object",
           "properties": {
-            "type": { "type": "string", "enum": ["random", "leastPing", "roundRobin", "leastLoad"] }
+            "type": { "type": "string", "enum": ["random", "leastPing", "roundRobin", "leastLoad"], "description": "Тип стратегии балансировщика: random, leastPing, roundRobin или leastLoad." }
           }
         }
       },

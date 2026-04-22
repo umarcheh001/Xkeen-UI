@@ -10,7 +10,8 @@
           "enum": [
             "field"
           ],
-          "default": "field"
+          "default": "field",
+          "description": "Тип правила маршрутизации. Для routing rules используется значение field."
         },
         "domain": {
           "type": "array",
@@ -159,7 +160,8 @@
                 "leastPing",
                 "roundRobin",
                 "leastLoad"
-              ]
+              ],
+              "description": "Тип стратегии балансировщика: random, leastPing, roundRobin или leastLoad."
             }
           }
         }

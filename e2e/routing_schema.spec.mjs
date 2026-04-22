@@ -521,4 +521,8 @@ test('routing Monaco shows Xray schema hover in browser', async ({ page }) => {
 
   await showMonacoHoverForToken(page, '"rules"');
   await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('Массив правил маршрутизации');
+
+  await clearEditorTooltips(page);
+  await showMonacoHoverForToken(page, '"type"');
+  await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('Тип правила маршрутизации');
 });
