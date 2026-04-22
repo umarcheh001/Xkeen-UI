@@ -166,6 +166,66 @@ test('subscriptions modal cards stay separated at medium width', async ({ page }
   expect(layout.overlaps).toEqual([]);
 });
 
+test('subscriptions modal fits three compact node columns on desktop width', async ({ page }) => {
+  await page.setViewportSize({ width: 1365, height: 768 });
+  const nodes = buildDemoNodes();
+  const subscription = buildDemoSubscription(nodes);
+
+  await page.route('**/api/xray/subscriptions', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, subscriptions: [subscription] }),
+    });
+  });
+
+  await openSubscriptionsModal(page);
+  await page.locator('tr[data-sub-id="demo-sub"]').click();
+  await expect(page.locator('#outbounds-subscriptions-modal .xk-sub-node-item')).toHaveCount(nodes.length);
+  await page.waitForTimeout(250);
+
+  const layout = await page.evaluate(() => {
+    const modal = document.querySelector('#outbounds-subscriptions-modal .modal-content');
+    const list = document.querySelector('#outbounds-subscriptions-nodes-list');
+    const cards = Array.from(document.querySelectorAll('#outbounds-subscriptions-nodes-list .xk-sub-node-item'));
+    const rects = cards.map((card) => {
+      const rect = card.getBoundingClientRect();
+      return {
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom),
+        width: Math.round(rect.width),
+      };
+    });
+    const overlaps = [];
+    for (let i = 0; i < rects.length; i += 1) {
+      for (let j = i + 1; j < rects.length; j += 1) {
+        const a = rects[i];
+        const b = rects[j];
+        const x = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+        const y = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        if (x > 2 && y > 2) overlaps.push({ i, j, x, y });
+      }
+    }
+    return {
+      modalWidth: modal ? Math.round(modal.getBoundingClientRect().width) : 0,
+      listWidth: list ? Math.round(list.getBoundingClientRect().width) : 0,
+      columns: Array.from(new Set(rects.map((item) => item.left))).length,
+      minCardWidth: rects.length ? Math.min(...rects.map((item) => item.width)) : 0,
+      overlaps,
+    };
+  });
+
+  expect(layout.columns).toBeGreaterThanOrEqual(3);
+  expect(layout.minCardWidth).toBeGreaterThanOrEqual(250);
+  expect(layout.overlaps).toEqual([]);
+});
+
 test('subscriptions modal ping-all button shows compact spinner while probing', async ({ page }) => {
   const nodes = buildDemoNodes();
   const subscription = buildDemoSubscription(nodes);

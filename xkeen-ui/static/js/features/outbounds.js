@@ -4259,6 +4259,8 @@ let outboundsModuleApi = null;
         const deprecatedTransportNote = subsDeprecatedTransportNote(node && node.transport, enabled);
         const deprecatedTransportNoteHtml = escapeHtml(deprecatedTransportNote);
         const endpoint = [host, port].filter(Boolean).join(':');
+        const connectionSummary = [endpoint, detail].filter(Boolean).join(' · ');
+        const connectionSummaryHtml = escapeHtml(connectionSummary);
         const reasonLabel = escapeHtml(subsNodeReasonLabel(reasons));
         const manualExcluded = !!(node && node.key && excluded.has(String(node.key)));
         const nodeTag = String(node && node.tag ? node.tag : '').trim();
@@ -4286,9 +4288,8 @@ let outboundsModuleApi = null;
                 ${transport ? `<span class="xk-sub-node-pill xk-sub-node-pill-transport">${transport}</span>` : ''}
                 ${security ? `<span class="xk-sub-node-pill xk-sub-node-pill-security">${security}</span>` : ''}
                 ${deprecatedTransportNote ? `<span class="xk-sub-node-pill xk-sub-node-pill-warning" data-tooltip="${deprecatedTransportNoteHtml}">deprecated</span>` : ''}
-                ${endpoint ? `<span class="xk-sub-node-endpoint">${endpoint}</span>` : ''}
               </div>
-              ${detail ? `<div class="xk-sub-node-detail">${detail}</div>` : ''}
+              ${connectionSummary ? `<div class="xk-sub-node-detail" data-tooltip="${connectionSummaryHtml}">${connectionSummaryHtml}</div>` : ''}
             </div>
             <div class="xk-sub-node-side">
               <div class="xk-sub-node-latency ${latencyClass}" data-tooltip="${latencyTooltip}">${latencyLabel}</div>

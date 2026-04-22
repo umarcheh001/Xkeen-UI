@@ -109,6 +109,8 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "xk-sub-node-latency" in outbounds_src
     assert "xk-sub-pingall-spinner" in outbounds_src
     assert "xk-sub-pingall-glyph" in outbounds_src
+    assert "const connectionSummary = [endpoint, detail].filter(Boolean).join(' · ');" in outbounds_src
+    assert "data-tooltip=\"${connectionSummaryHtml}\"" in outbounds_src
     assert "btn.setAttribute('data-tooltip', tooltip);" in outbounds_src
     assert "btn.setAttribute('aria-busy', 'true');" in outbounds_src
     assert "btn.removeAttribute('aria-busy');" in outbounds_src
@@ -153,6 +155,7 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert ".xk-sub-file-badge {" in styles_src
     assert ".xk-sub-list-action {" in styles_src
     assert ".xk-sub-file-link {" in styles_src
+    assert "#outbounds-subscriptions-nodes-list {" in styles_src
     assert ".xk-sub-node-latency {" in styles_src
     assert ".xk-sub-node-ping.btn-compact" in styles_src
     assert "@keyframes xk-sub-node-ping-pulse" in styles_src
@@ -162,8 +165,10 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "max-height: none;" in styles_src
     assert "width: min(96vw, 1080px) !important;" not in styles_src
     assert "max-width: 1080px !important;" not in styles_src
-    assert "grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr));" in styles_src
+    assert "grid-template-columns: repeat(auto-fit, minmax(min(100%, 272px), 1fr));" in styles_src
     assert "grid-template-columns: repeat(12, minmax(0, 1fr));" in styles_src
+    assert "white-space: nowrap;" in styles_src
+    assert "text-overflow: ellipsis;" in styles_src
     assert ".xk-sub-span-5" in styles_src
     assert ".xk-sub-filter-field .xk-pool-fieldlabel" in styles_src
     assert ".xk-sub-interval-note {" in styles_src
