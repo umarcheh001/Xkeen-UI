@@ -329,6 +329,14 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/editor_schema.js",
+          "globals": [
+            "XKeen.ui",
+            "XKeen.ui.cm6Runtime"
+          ],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/routing_cards_namespace.js",
           "globals": [],
           "lazy_features": []
@@ -616,14 +624,6 @@
         {
           "path": "static/js/util/strip_json_comments.js",
           "globals": [],
-          "lazy_features": []
-        },
-        {
-          "path": "static/js/ui/editor_schema.js",
-          "globals": [
-            "XKeen.ui",
-            "XKeen.ui.cm6Runtime"
-          ],
           "lazy_features": []
         }
       ],
@@ -2515,6 +2515,11 @@
             "XKeen.ui.settings",
             "XKeen.ui.editorEngine"
           ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/yaml_schema.js",
+          "globals": [],
           "lazy_features": []
         },
         {
