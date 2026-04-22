@@ -73,6 +73,19 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert ".xk-outbounds-node-list {\n  grid-template-columns: 1fr;\n  gap: 8px;\n  min-height: 0;\n  max-height: min(36vh, 320px);\n  overflow: auto;" in styles_src
 
 
+def test_outbounds_pool_nodes_relayout_after_card_open_and_async_load():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+
+    assert "let _outboundsNodeLayoutSeq = 0;" in outbounds_src
+    assert "function outboundsCanRelayoutNodeList() {" in outbounds_src
+    assert "function scheduleOutboundsNodeListLayout() {" in outbounds_src
+    assert "try { requestAnimationFrame(run); } catch (e) { setTimeout(run, 0); }" in outbounds_src
+    assert "setTimeout(run, 60);" in outbounds_src
+    assert "setTimeout(run, 180);" in outbounds_src
+    assert "if (visible !== false && hasNodes) scheduleOutboundsNodeListLayout();" in outbounds_src
+    assert "if (willOpen) scheduleOutboundsNodeListLayout();" in outbounds_src
+
+
 def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")

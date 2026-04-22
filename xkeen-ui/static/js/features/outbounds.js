@@ -38,6 +38,7 @@ let outboundsModuleApi = null;
     let _outboundsNodeLatency = Object.create(null);
     let _outboundsNodePingState = Object.create(null);
     let _outboundsPingAllBusy = false;
+    let _outboundsNodeLayoutSeq = 0;
 
     const IDS = {
       fragmentSelect: 'outbounds-fragment-select',
@@ -455,6 +456,53 @@ let outboundsModuleApi = null;
       try { panel.classList.toggle('hidden', !visible); } catch (e) {}
     }
 
+    function outboundsCanRelayoutNodeList() {
+      const body = $('outbounds-body');
+      const panel = $(OUTBOUND_NODE_IDS.panel);
+      const listEl = $(OUTBOUND_NODE_IDS.list);
+      if (!body || !panel || !listEl) return false;
+      try {
+        if (body.style && body.style.display === 'none') return false;
+      } catch (e) {}
+      try {
+        if (panel.classList && panel.classList.contains('hidden')) return false;
+      } catch (e2) {}
+      try {
+        const bodyStyle = (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function')
+          ? window.getComputedStyle(body)
+          : null;
+        if (bodyStyle && bodyStyle.display === 'none') return false;
+      } catch (e3) {}
+      try {
+        const panelStyle = (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function')
+          ? window.getComputedStyle(panel)
+          : null;
+        if (panelStyle && panelStyle.display === 'none') return false;
+      } catch (e4) {}
+      const width = Number(listEl.clientWidth || panel.clientWidth || body.clientWidth || 0);
+      return width > 0;
+    }
+
+    function scheduleOutboundsNodeListLayout() {
+      const nodes = Array.isArray(_outboundsNodes) ? _outboundsNodes : [];
+      if (!nodes.length) return;
+      const seq = ++_outboundsNodeLayoutSeq;
+      const run = () => {
+        if (seq !== _outboundsNodeLayoutSeq) return;
+        if (!outboundsCanRelayoutNodeList()) return;
+        const listEl = $(OUTBOUND_NODE_IDS.list);
+        if (!listEl) return;
+        try { void listEl.offsetHeight; } catch (e) {}
+        try { outboundsRenderNodeList(); } catch (e2) {}
+      };
+
+      run();
+      try { requestAnimationFrame(run); } catch (e) { setTimeout(run, 0); }
+      setTimeout(run, 0);
+      setTimeout(run, 60);
+      setTimeout(run, 180);
+    }
+
     async function refreshOutboundsNodes(visible) {
       if (isSubscriptionFragmentMode()) {
         outboundsSetNodes([], {});
@@ -475,6 +523,7 @@ let outboundsModuleApi = null;
         );
         const hasNodes = Array.isArray(data.nodes) && data.nodes.length > 0;
         outboundsSetNodesVisible(visible !== false && hasNodes);
+        if (visible !== false && hasNodes) scheduleOutboundsNodeListLayout();
         return hasNodes;
       } catch (e) {
         outboundsSetNodes([], {});
@@ -1773,6 +1822,7 @@ let outboundsModuleApi = null;
 
       const willOpen = body.style.display === 'none';
       body.style.display = willOpen ? 'block' : 'none';
+      if (willOpen) scheduleOutboundsNodeListLayout();
       arrow.textContent = willOpen ? '▲' : '▼';
 
       try {
