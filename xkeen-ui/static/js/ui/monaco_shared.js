@@ -1,4 +1,5 @@
 import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
+import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_schema.js';
 
 (() => {
   window.XKeen = window.XKeen || {};
@@ -20,6 +21,8 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
     customContextMenuCtx: null,
     customContextMenuCleanupByEditor: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     customContextMenuClipboardShadow: '',
+    yamlAssistByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
+    yamlAssistProvidersInstalled: false,
   };
   const _CUSTOM_CONTEXT_MENU_CLEANUP_KEY = '__xkMonacoCustomContextMenuCleanup';
 
@@ -1206,6 +1209,106 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
     return cleanup;
   }
 
+  function _setModelYamlAssist(model, assist) {
+    if (!model) return;
+    if (_state.yamlAssistByModel) {
+      try {
+        if (assist) _state.yamlAssistByModel.set(model, assist);
+        else _state.yamlAssistByModel.delete(model);
+        return;
+      } catch (e) {}
+    }
+    try {
+      if (assist) model.__xkYamlAssist = assist;
+      else delete model.__xkYamlAssist;
+    } catch (e) {}
+  }
+
+  function _getModelYamlAssist(model) {
+    if (!model) return null;
+    if (_state.yamlAssistByModel) {
+      try { return _state.yamlAssistByModel.get(model) || null; } catch (e) {}
+    }
+    try { return model.__xkYamlAssist || null; } catch (e) {}
+    return null;
+  }
+
+  function _resolveYamlAssistSchema(assist) {
+    if (!assist) return null;
+    try {
+      if (typeof assist.getSchema === 'function') return assist.getSchema() || null;
+    } catch (e) {}
+    try {
+      if (assist && typeof assist === 'object' && assist.schema) return assist.schema;
+    } catch (e) {}
+    return null;
+  }
+
+  function _monacoCompletionKind(monaco, item) {
+    try {
+      if (item && item.type === 'property') return monaco.languages.CompletionItemKind.Field;
+      return monaco.languages.CompletionItemKind.Value;
+    } catch (e) {}
+    return 12;
+  }
+
+  function _ensureYamlAssistProviders(monaco) {
+    if (!monaco || !monaco.languages || _state.yamlAssistProvidersInstalled) return;
+
+    monaco.languages.registerCompletionItemProvider('yaml', {
+      triggerCharacters: [':', '-', ' '],
+      provideCompletionItems(model, position) {
+        const assist = _getModelYamlAssist(model);
+        const schema = _resolveYamlAssistSchema(assist);
+        if (!schema || !model || typeof model.getOffsetAt !== 'function') return { suggestions: [] };
+
+        const result = completeYamlTextFromSchema(model.getValue(), schema, {
+          offset: model.getOffsetAt(position),
+        });
+        if (!result || !Array.isArray(result.options) || !result.options.length) return { suggestions: [] };
+
+        const start = model.getPositionAt(Math.max(0, Number(result.from || 0)));
+        const end = model.getPositionAt(Math.max(0, Number(result.to || result.from || 0)));
+        const range = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column);
+
+        return {
+          suggestions: result.options.map((item, index) => ({
+            label: item.label,
+            kind: _monacoCompletionKind(monaco, item),
+            insertText: item.insertText || item.label,
+            detail: item.detail || '',
+            documentation: item.documentation && item.documentation.markdown
+              ? { value: item.documentation.markdown }
+              : (item.documentation && item.documentation.plain ? item.documentation.plain : ''),
+            range,
+            sortText: `${item.type === 'property' ? '0' : '1'}-${String(index).padStart(4, '0')}-${item.label}`,
+            filterText: item.label,
+          })),
+        };
+      },
+    });
+
+    monaco.languages.registerHoverProvider('yaml', {
+      provideHover(model, position) {
+        const assist = _getModelYamlAssist(model);
+        const schema = _resolveYamlAssistSchema(assist);
+        if (!schema || !model || typeof model.getOffsetAt !== 'function') return null;
+        const result = hoverYamlTextFromSchema(model.getValue(), schema, {
+          offset: model.getOffsetAt(position),
+        });
+        if (!result || !result.markdown) return null;
+        const start = model.getPositionAt(Math.max(0, Number(result.from || 0)));
+        const end = model.getPositionAt(Math.max(0, Number(result.to || result.from || 0)));
+        return {
+          range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+          contents: [{ value: result.markdown }],
+        };
+      },
+    });
+
+    _state.yamlAssistProvidersInstalled = true;
+  }
+
   async function createEditor(host, opts) {
     const el = host;
     if (!el) return null;
@@ -1233,6 +1336,7 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
       } catch (e) {}
       // Ensure the requested language is registered (best-effort).
       try { await _ensureLanguage(monaco, language); } catch (e) {}
+      try { _ensureYamlAssistProviders(monaco); } catch (e) {}
       try { applyTheme(monaco); } catch (e) {}
       try { wireThemeSync(monaco); } catch (e) {}
 
@@ -1274,6 +1378,7 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
           const langToSet = _isLanguageRegistered(monaco, language) ? _runtimeLanguageId(language) : 'plaintext';
           monaco.editor.setModelLanguage(m, langToSet);
         }
+        if (m) _setModelYamlAssist(m, (language === 'yaml' && o.yamlAssist) ? o.yamlAssist : null);
       } catch (e) {}
 
       // Attach onChange callback (best-effort).
@@ -1311,6 +1416,10 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
           if (editor && typeof editor.onDidDispose === 'function') {
             editor.onDidDispose(() => {
               try { unsubscribeTypography(); } catch (e2) {}
+              try {
+                const model = editor && typeof editor.getModel === 'function' ? editor.getModel() : null;
+                if (model) _setModelYamlAssist(model, null);
+              } catch (e3) {}
             });
           }
         }
@@ -1325,6 +1434,17 @@ import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
           if (editor && typeof editor.updateOptions === 'function') editor.updateOptions({ contextmenu: true });
         } catch (e2) {}
       }
+
+      try {
+        if (editor && typeof editor.onDidDispose === 'function') {
+          editor.onDidDispose(() => {
+            try {
+              const model = editor && typeof editor.getModel === 'function' ? editor.getModel() : null;
+              if (model) _setModelYamlAssist(model, null);
+            } catch (e2) {}
+          });
+        }
+      } catch (e) {}
 
       // Ensure it lays out even if created in hidden container.
       try { layoutOnVisible(editor, el, { lite: perf.lite }); } catch (e) {}

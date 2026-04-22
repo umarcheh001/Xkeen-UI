@@ -19,6 +19,7 @@ import {
   getXkeenPageFlagsConfig,
   setXkeenPageConfigValue,
 } from './xkeen_runtime.js';
+import { loadEditorSchema } from '../ui/editor_schema.js';
 
 let mihomoPanelModuleApi = null;
 
@@ -41,6 +42,9 @@ let mihomoPanelModuleApi = null;
     textarea: 'mihomo-editor',
     monacoHost: 'mihomo-editor-monaco',
     engineSelect: 'mihomo-editor-engine-select',
+    editorMeta: 'mihomo-editor-meta',
+    editorYamlBadge: 'mihomo-editor-yaml-badge',
+    editorSchemaBadge: 'mihomo-editor-schema-badge',
     status: 'mihomo-status',
     body: 'mihomo-body',
     arrow: 'mihomo-arrow',
@@ -108,6 +112,9 @@ let mihomoPanelModuleApi = null;
   let _activeProfileName = null;
   let _lastValidationPayload = null;
   let _validationCopyResetTimer = null;
+  let _mihomoSchemaState = null;
+  let _mihomoYamlSchemaModulePromise = null;
+  let _mihomoSchemaValidationTimer = null;
 
   // Editor dirty tracking (to avoid accidental overwrites when loading templates/config).
   let _editorDirty = false;
@@ -176,6 +183,97 @@ let mihomoPanelModuleApi = null;
     try {
       if (msg) toast(String(msg), !!isError);
     } catch (e) {}
+  }
+
+  function schemaStatusLabel(spec) {
+    const label = spec && (spec.label || spec.title || spec.id);
+    return String(label || '').trim();
+  }
+
+  function updateMihomoSchemaBadge(result) {
+    const badge = $(IDS.editorSchemaBadge);
+    if (!badge) return;
+    const spec = result && result.spec ? result.spec : null;
+    const ok = !!(result && result.ok && spec);
+    const label = schemaStatusLabel(spec);
+    badge.textContent = ok && label ? `Schema: ${label}` : 'Schema: —';
+    badge.classList.toggle('is-ok', ok);
+    badge.classList.toggle('is-muted', !ok);
+    badge.classList.toggle('is-bad', !!(result && result.reason === 'schema-load-failed'));
+    badge.setAttribute('data-tooltip', ok && label
+      ? `Активна схема: ${label}.`
+      : 'JSON-схема Mihomo пока не загружена.');
+  }
+
+  function updateMihomoYamlBadge(result) {
+    const badge = $(IDS.editorYamlBadge);
+    if (!badge) return;
+
+    if (!result || result.empty) {
+      badge.textContent = 'YAML: —';
+      badge.classList.remove('is-ok', 'is-bad', 'is-warn');
+      badge.classList.add('is-muted');
+      badge.setAttribute('data-tooltip', 'Локальная YAML-проверка пока не выполнялась.');
+      return;
+    }
+
+    const ok = !!result.ok;
+    const parseOk = result.parseOk !== false;
+    badge.textContent = ok ? 'YAML: OK' : (parseOk ? 'YAML: schema' : 'YAML: syntax');
+    badge.classList.toggle('is-ok', ok);
+    badge.classList.toggle('is-bad', !ok);
+    badge.classList.toggle('is-muted', false);
+    badge.classList.toggle('is-warn', !ok && parseOk);
+    badge.setAttribute('data-tooltip', result.summary
+      ? String(result.summary)
+      : (ok ? 'YAML и локальная схема не нашли ошибок.' : 'Локальная проверка YAML нашла проблему.'));
+  }
+
+  function getMonacoApi() {
+    try {
+      return window.monaco || null;
+    } catch (e) {}
+    return null;
+  }
+
+  async function loadMihomoYamlSchemaModule() {
+    if (_mihomoYamlSchemaModulePromise) return _mihomoYamlSchemaModulePromise;
+    _mihomoYamlSchemaModulePromise = import('../ui/yaml_schema.js').catch((error) => {
+      _mihomoYamlSchemaModulePromise = null;
+      throw error;
+    });
+    return _mihomoYamlSchemaModulePromise;
+  }
+
+  function getMihomoYamlAssistOptions() {
+    return {
+      getSchema() {
+        try {
+          return _mihomoSchemaState && _mihomoSchemaState.schema ? _mihomoSchemaState.schema : null;
+        } catch (e) {}
+        return null;
+      },
+    };
+  }
+
+  async function ensureMihomoSchemaDocument() {
+    if (_mihomoSchemaState && _mihomoSchemaState.schema) {
+      return { ok: true, spec: _mihomoSchemaState.spec, schema: _mihomoSchemaState.schema };
+    }
+    const loaded = await loadEditorSchema({
+      target: 'mihomo',
+      file: 'config.yaml',
+      mode: 'yaml',
+      feature: 'mihomo',
+    });
+    if (loaded && loaded.ok && loaded.schema) {
+      _mihomoSchemaState = {
+        spec: loaded.spec || null,
+        schema: loaded.schema,
+      };
+    }
+    updateMihomoSchemaBadge(loaded);
+    return loaded;
   }
 
   function hasInitialMihomoConfig() {
@@ -374,6 +472,7 @@ let mihomoPanelModuleApi = null;
         tabSize: 2,
         insertSpaces: true,
         wordWrap: 'on',
+        yamlAssist: getMihomoYamlAssistOptions(),
       });
       if (!_monaco) return null;
 
@@ -382,6 +481,7 @@ let mihomoPanelModuleApi = null;
         if (!_monacoDirtyDisposable && typeof _monaco.onDidChangeModelContent === 'function') {
           _monacoDirtyDisposable = _monaco.onDidChangeModelContent(() => {
             if (!_suppressDirty) _editorDirty = true;
+            scheduleMihomoSchemaValidation();
           });
         }
       } catch (e) {}
@@ -682,6 +782,7 @@ let mihomoPanelModuleApi = null;
         _engine = 'monaco';
         try { if (preservedView) restoreCurrentViewState(preservedView); } catch (e5a) {}
         try { bindViewStateTracking(); } catch (e5b) {}
+        scheduleMihomoSchemaValidation({ immediate: true });
         try { if (_monacoFacade && _monacoFacade.focus) _monacoFacade.focus(); else if (_monaco && _monaco.focus) _monaco.focus(); } catch (e4) {}
         return _engine;
       }
@@ -706,6 +807,7 @@ let mihomoPanelModuleApi = null;
       _engine = 'codemirror';
       try { if (preservedView) restoreCurrentViewState(preservedView); } catch (e6a) {}
       try { bindViewStateTracking(); } catch (e6b) {}
+      scheduleMihomoSchemaValidation({ immediate: true });
       try {
         const cm = getSharedEditor();
         if (cm && cm.focus) cm.focus();
@@ -828,6 +930,7 @@ let mihomoPanelModuleApi = null;
         'Shift-Ctrl-H': 'replaceAll',
       }),
       viewportMargin: 30,
+      yamlAssist: getMihomoYamlAssistOptions(),
     });
 
     try {
@@ -839,7 +942,10 @@ let mihomoPanelModuleApi = null;
     // Dirty tracking (user edits only).
     try {
       if (!_cm._xkeenDirtyWired) {
-        _cm.on('change', () => { if (!_suppressDirty) _editorDirty = true; });
+        _cm.on('change', () => {
+          if (!_suppressDirty) _editorDirty = true;
+          scheduleMihomoSchemaValidation();
+        });
         _cm._xkeenDirtyWired = true;
       }
     } catch (e) {}
@@ -911,6 +1017,7 @@ let mihomoPanelModuleApi = null;
     _suppressDirty = true;
     try { setEditorText(text); } finally { _suppressDirty = false; }
     _editorDirty = false;
+    scheduleMihomoSchemaValidation({ immediate: true, text: String(text ?? '') });
   }
 
   function markEditorClean() {
@@ -1029,6 +1136,135 @@ let mihomoPanelModuleApi = null;
     });
   }
 
+  function clearMihomoSchemaDiagnostics() {
+    try {
+      const cm = getSharedEditor();
+      if (cm && typeof cm.clearDiagnostics === 'function') cm.clearDiagnostics();
+    } catch (e) {}
+    try {
+      const monaco = getMonacoApi();
+      const model = _monaco && typeof _monaco.getModel === 'function' ? _monaco.getModel() : null;
+      if (monaco && monaco.editor && typeof monaco.editor.setModelMarkers === 'function' && model) {
+        monaco.editor.setModelMarkers(model, 'xkeen-mihomo-schema', []);
+      }
+    } catch (e) {}
+  }
+
+  function applyMihomoSchemaDiagnostics(result) {
+    const diagnostics = result && Array.isArray(result.diagnostics) ? result.diagnostics : [];
+    const firstLine = result && Number.isFinite(result.line) ? Math.max(0, Number(result.line) - 1) : null;
+    const cm = getSharedEditor();
+
+    try {
+      if (cm && typeof cm.setDiagnostics === 'function') {
+        cm.setDiagnostics(diagnostics);
+      } else if (cm && typeof cm.clearDiagnostics === 'function' && !diagnostics.length) {
+        cm.clearDiagnostics();
+      }
+    } catch (e) {}
+
+    try {
+      const monaco = getMonacoApi();
+      const model = _monaco && typeof _monaco.getModel === 'function' ? _monaco.getModel() : null;
+      if (monaco && monaco.editor && typeof monaco.editor.setModelMarkers === 'function' && model) {
+        const severity = monaco.MarkerSeverity || {};
+        const markers = diagnostics.map((item) => {
+          const line = Math.max(1, Number(item && item.line ? item.line : 1));
+          const column = Math.max(1, Number(item && item.column ? item.column : 1));
+          const length = Math.max(1, Number(item && item.length ? item.length : 1));
+          return {
+            startLineNumber: line,
+            startColumn: column,
+            endLineNumber: line,
+            endColumn: column + length,
+            severity: item && item.severity === 'warning' ? (severity.Warning || 4) : (severity.Error || 8),
+            source: String((item && item.source) || 'mihomo-schema'),
+            message: String((item && item.message) || 'Ошибка схемы'),
+          };
+        });
+        monaco.editor.setModelMarkers(model, 'xkeen-mihomo-schema', markers);
+      }
+    } catch (e) {}
+
+    if (firstLine === null) {
+      clearYamlErrorMarker();
+      return;
+    }
+    if (_engine === 'codemirror' || !_monaco) {
+      markYamlErrorLine(firstLine, { reveal: false });
+    }
+  }
+
+  async function runMihomoSchemaValidation(opts) {
+    const options = opts && typeof opts === 'object' ? opts : {};
+    const text = Object.prototype.hasOwnProperty.call(options, 'text')
+      ? String(options.text ?? '')
+      : String(getEditorText() || '');
+
+    if (!text.trim()) {
+      clearMihomoSchemaDiagnostics();
+      clearYamlErrorMarker();
+      updateMihomoYamlBadge({ ok: true, empty: true, summary: '' });
+      const schemaState = _mihomoSchemaState && _mihomoSchemaState.schema
+        ? { ok: true, spec: _mihomoSchemaState.spec, schema: _mihomoSchemaState.schema }
+        : null;
+      updateMihomoSchemaBadge(schemaState);
+      return { ok: true, empty: true, diagnostics: [], summary: '' };
+    }
+
+    let schemaDoc = null;
+    try {
+      schemaDoc = await ensureMihomoSchemaDocument();
+    } catch (e) {
+      schemaDoc = { ok: false, reason: 'schema-load-failed', error: e, spec: null };
+      updateMihomoSchemaBadge(schemaDoc);
+    }
+
+    let validator = null;
+    try {
+      validator = await loadMihomoYamlSchemaModule();
+    } catch (e) {
+      clearMihomoSchemaDiagnostics();
+      clearYamlErrorMarker();
+      updateMihomoYamlBadge({ ok: true, empty: true, summary: '' });
+      return { ok: false, skipped: true, reason: 'validator-load-failed', diagnostics: [], summary: '' };
+    }
+
+    const validate = validator && typeof validator.validateYamlTextAgainstSchema === 'function'
+      ? validator.validateYamlTextAgainstSchema
+      : null;
+    if (!validate) {
+      clearMihomoSchemaDiagnostics();
+      clearYamlErrorMarker();
+      updateMihomoYamlBadge({ ok: true, empty: true, summary: '' });
+      return { ok: false, skipped: true, reason: 'validator-missing', diagnostics: [], summary: '' };
+    }
+
+    const result = validate(text, (schemaDoc && schemaDoc.schema) || {}, { maxErrors: 24 }) || { ok: true, diagnostics: [], summary: '' };
+    updateMihomoSchemaBadge(schemaDoc);
+    updateMihomoYamlBadge(result);
+    applyMihomoSchemaDiagnostics(result);
+    return Object.assign({}, result, {
+      schemaReady: !!(schemaDoc && schemaDoc.ok && schemaDoc.schema),
+    });
+  }
+
+  function scheduleMihomoSchemaValidation(opts) {
+    const options = opts && typeof opts === 'object' ? opts : {};
+    if (_mihomoSchemaValidationTimer) {
+      try { clearTimeout(_mihomoSchemaValidationTimer); } catch (e) {}
+      _mihomoSchemaValidationTimer = null;
+    }
+    if (options.immediate) {
+      return Promise.resolve(runMihomoSchemaValidation(options)).catch(() => null);
+    }
+    _mihomoSchemaValidationTimer = setTimeout(() => {
+      _mihomoSchemaValidationTimer = null;
+      void runMihomoSchemaValidation(options).catch(() => null);
+    }, 180);
+    return null;
+  }
+
   function clearYamlErrorMarker() {
     const cm = getSharedEditor();
     if (!cm) {
@@ -1047,13 +1283,15 @@ let mihomoPanelModuleApi = null;
     _yamlErrorLineHandle = null;
   }
 
-  function markYamlErrorLine(line0) {
+  function markYamlErrorLine(line0, opts) {
+    const options = opts && typeof opts === 'object' ? opts : {};
+    const shouldReveal = options.reveal !== false;
     // Always clear previous marker in CodeMirror.
     clearYamlErrorMarker();
     if (typeof line0 !== 'number' || line0 < 0) return;
 
     // Monaco: best-effort focus on the line (no background marker for now).
-    if (_engine === 'monaco' && _monaco) {
+    if (_engine === 'monaco' && _monaco && shouldReveal) {
       try {
         const line1 = Math.max(1, line0 + 1);
         if (_monaco.revealLineInCenter) _monaco.revealLineInCenter(line1);
@@ -1070,7 +1308,7 @@ let mihomoPanelModuleApi = null;
     try {
       _yamlErrorLine = line0;
       _yamlErrorLineHandle = cm.addLineClass(line0, 'background', 'cm-error-line');
-      if (cm.scrollIntoView) cm.scrollIntoView({ line: line0, ch: 0 }, 200);
+      if (shouldReveal && cm.scrollIntoView) cm.scrollIntoView({ line: line0, ch: 0 }, 200);
     } catch (e) {}
   }
 
@@ -2913,6 +3151,7 @@ let mihomoPanelModuleApi = null;
 
     const finishInit = () => {
       ensureEditor();
+      void ensureMihomoSchemaDocument().catch(() => null);
       try { initEngineToggle(); } catch (e) {}
       try { syncHeaderFsButton(_engine); } catch (e) {}
       try { bindViewStateTracking(); } catch (e2) {}

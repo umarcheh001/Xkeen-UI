@@ -105,6 +105,17 @@ async function loadSchema(url) {
   }
 }
 
+export async function loadEditorSchema(ctx) {
+  const spec = resolveEditorSchemaSpec(ctx || {});
+  if (!spec) return { ok: false, skipped: true, reason: 'schema-unmatched', spec: null, schema: null };
+  try {
+    const schema = await loadSchema(spec.url);
+    return { ok: true, skipped: false, spec, schema };
+  } catch (error) {
+    return { ok: false, skipped: true, reason: 'schema-load-failed', error, spec, schema: null };
+  }
+}
+
 function getRuntime(ctx) {
   try {
     if (ctx && ctx.runtime && typeof ctx.runtime === 'object') return ctx.runtime;
@@ -147,18 +158,24 @@ export async function applySchemaToEditor(editor, ctx) {
     return { ok: false, skipped: true, reason: 'mode-not-json', spec };
   }
 
-  try {
-    const schema = await loadSchema(spec.url);
-    const ok = setEditorSchema(target, schema, o);
-    return { ok, skipped: false, spec, schema };
-  } catch (e) {
+  const loaded = await loadEditorSchema(o);
+  if (!loaded || !loaded.ok || !loaded.schema) {
     clearSchemaFromEditor(target, o);
-    return { ok: false, skipped: true, reason: 'schema-load-failed', error: e, spec };
+    return {
+      ok: false,
+      skipped: true,
+      reason: loaded && loaded.reason ? loaded.reason : 'schema-load-failed',
+      error: loaded && loaded.error ? loaded.error : null,
+      spec,
+    };
   }
+  const ok = setEditorSchema(target, loaded.schema, o);
+  return { ok, skipped: false, spec, schema: loaded.schema };
 }
 
 export const editorSchemaApi = Object.freeze({
   resolveEditorSchemaSpec,
+  loadEditorSchema,
   applySchemaToEditor,
   clearSchemaFromEditor,
 });

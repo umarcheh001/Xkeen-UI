@@ -8,12 +8,14 @@ import { tags as t } from '@lezer/highlight';
 import { lintGutter, linter, setDiagnostics as cmSetDiagnostics } from '@codemirror/lint';
 import { search, openSearchPanel, closeSearchPanel, findNext, findPrevious, replaceNext, replaceAll as cmReplaceAll } from '@codemirror/search';
 import { toggleComment, undo, redo } from '@codemirror/commands';
+import { autocompletion } from '@codemirror/autocomplete';
 import { indentationMarkers } from '@replit/codemirror-indentation-markers';
 import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 import {
   jsonSchemaLinter, handleRefresh, jsonSchemaHover, jsonCompletion,
   stateExtensions as schemaStateExtensions, updateSchema as schemaUpdateSchema, getJSONSchema
 } from 'codemirror-json-schema';
+import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_schema.js';
 
 const GLOBAL_KEY = '__XKEEN_CM6_RUNTIME__';
 const BACKEND = 'cm6-local-offline';
@@ -332,6 +334,77 @@ function schemaExtensionFor(schema, opts) {
     extensions.splice(1, 0, hoverTooltip(jsonSchemaSyntaxAwareHover(opts)));
   }
   return extensions;
+}
+
+function yamlAssistResolver(opts) {
+  const assist = opts && opts.yamlAssist ? opts.yamlAssist : null;
+  if (!assist) return null;
+  try {
+    if (typeof assist.getSchema === 'function') return assist.getSchema;
+  } catch (e) {}
+  if (assist && typeof assist === 'object' && assist.schema) {
+    return () => assist.schema;
+  }
+  return null;
+}
+
+function buildYamlAssistTooltipContent(text) {
+  const root = document.createElement('div');
+  root.className = 'cm6-json-schema-hover xk-yaml-schema-hover';
+  const parts = asString(text).split(/\n{2,}/);
+  parts.forEach((part) => {
+    const block = document.createElement('div');
+    block.textContent = part.replace(/\n/g, ' ');
+    root.appendChild(block);
+  });
+  return root;
+}
+
+function yamlAssistExtensionFor(opts) {
+  const mode = normalizeMode(opts && (opts.mode || opts.language || opts.mime));
+  if (mode !== 'text/yaml') return [];
+  const getSchema = yamlAssistResolver(opts);
+  if (!getSchema) return [];
+
+  const completionSource = async (context) => {
+    let schema = null;
+    try { schema = getSchema(); } catch (e) {}
+    if (!schema) return null;
+    const result = completeYamlTextFromSchema(context.state.doc.toString(), schema, { offset: context.pos });
+    if (!result || !Array.isArray(result.options) || !result.options.length) return null;
+    return {
+      from: Math.max(0, Number(result.from || 0)),
+      to: Math.max(0, Number(result.to || result.from || 0)),
+      options: result.options.map((item) => ({
+        label: item.label,
+        type: item.type === 'property' ? 'property' : 'keyword',
+        detail: item.detail || '',
+        apply: item.insertText || item.label,
+        info: item.documentation && item.documentation.plain ? item.documentation.plain : '',
+      })),
+    };
+  };
+
+  const hoverSource = (view, pos, side) => {
+    let schema = null;
+    try { schema = getSchema(); } catch (e) {}
+    if (!schema) return null;
+    const probe = Math.max(0, pos + (side < 0 ? -1 : 0));
+    const result = hoverYamlTextFromSchema(view.state.doc.toString(), schema, { offset: probe });
+    if (!result || !result.plain) return null;
+    return {
+      pos: Math.max(0, Number(result.from || 0)),
+      end: Math.max(0, Number(result.to || result.from || 0)),
+      create() {
+        return { dom: buildYamlAssistTooltipContent(result.plain) };
+      },
+    };
+  };
+
+  return [
+    autocompletion({ override: [completionSource] }),
+    hoverTooltip(hoverSource),
+  ];
 }
 
 function languageExtensionFor(mode) {
@@ -904,6 +977,7 @@ function buildState(ctx, options, value, selection) {
       ctx.linksCompartment.of(options.links !== false ? createLinksExtension() : []),
       ctx.extraKeysCompartment.of([]),
       ctx.schemaCompartment.of(schemaExtensionFor(ctx.schema, options)),
+      ctx.yamlAssistCompartment.of(yamlAssistExtensionFor(options)),
       EditorView.theme({ '&': { height: '100%' }, '.cm-scroller': { overflow: 'auto' } }),
     ],
   });
@@ -1117,7 +1191,15 @@ function buildBridge(view, ctx) {
     getLine(index) { try { return view.state.doc.line(Math.max(1, Number(index || 0) + 1)).text; } catch (e) {} return ''; },
     replaceRange(text, from, to) { const insert = asString(text); return dispatch({ changes: { from: cmPosToOffset(from || { line: 0, ch: 0 }), to: cmPosToOffset(to || from || { line: 0, ch: 0 }), insert } }); },
     replaceAll(text) { return bridge.setValue(text); },
-    setLanguage(mode) { options.mode = normalizeMode(mode); return dispatch({ effects: ctx.languageCompartment.reconfigure(languageExtensionFor(options.mode)) }); },
+    setLanguage(mode) {
+      options.mode = normalizeMode(mode);
+      return dispatch({
+        effects: [
+          ctx.languageCompartment.reconfigure(languageExtensionFor(options.mode)),
+          ctx.yamlAssistCompartment.reconfigure(yamlAssistExtensionFor(options)),
+        ],
+      });
+    },
     setReadOnly(flag) { options.readOnly = !!flag; return dispatch({ effects: ctx.readOnlyCompartment.reconfigure(EditorState.readOnly.of(!!options.readOnly)) }); },
     setDiagnostics(list) { return setDiagnosticsList(list); },
     clearDiagnostics() { lastDiagnostics = []; try { view.dispatch(cmSetDiagnostics(view.state, [])); return true; } catch (e) {} return false; },
@@ -1213,6 +1295,10 @@ function buildBridge(view, ctx) {
         options.extraKeys = (value && typeof value === 'object') ? value : {};
         return dispatch({ effects: ctx.extraKeysCompartment.reconfigure(createExtraKeymap(options.extraKeys, () => bridge)) });
       }
+      if (key === 'yamlAssist') {
+        options.yamlAssist = value || null;
+        return dispatch({ effects: ctx.yamlAssistCompartment.reconfigure(yamlAssistExtensionFor(options)) });
+      }
       return true;
     },
     getMode() { return getModeForCompat(); },
@@ -1262,6 +1348,7 @@ function createBridge(target, opts = {}) {
       lint: opts.lint !== false,
       links: opts.links !== false,
       extraKeys: (opts.extraKeys && typeof opts.extraKeys === 'object') ? opts.extraKeys : {},
+      yamlAssist: opts.yamlAssist || null,
     },
     languageCompartment: new Compartment(),
     readOnlyCompartment: new Compartment(),
@@ -1272,6 +1359,7 @@ function createBridge(target, opts = {}) {
     linksCompartment: new Compartment(),
     extraKeysCompartment: new Compartment(),
     schemaCompartment: new Compartment(),
+    yamlAssistCompartment: new Compartment(),
     fullscreenState: createFullscreenState(),
     restoreHost: hostInfo && typeof hostInfo.restore === 'function' ? hostInfo.restore : null,
     scrollHandler: null,

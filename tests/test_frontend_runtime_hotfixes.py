@@ -587,6 +587,39 @@ def test_xray_stream_network_schema_marks_grpc_as_deprecated():
     assert 'xk-sub-node-pill-warning' in outbounds_src
 
 
+def test_mihomo_yaml_schema_runtime_is_wired_into_panel_editor():
+    schema_loader = Path('xkeen-ui/static/js/ui/editor_schema.js').read_text(encoding='utf-8')
+    yaml_schema_runtime = Path('xkeen-ui/static/js/ui/yaml_schema.js').read_text(encoding='utf-8')
+    codemirror_runtime = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
+    monaco_shared = Path('xkeen-ui/static/js/ui/monaco_shared.js').read_text(encoding='utf-8')
+    mihomo_panel = Path('xkeen-ui/static/js/features/mihomo_panel.js').read_text(encoding='utf-8')
+    template = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    schema_path = Path('xkeen-ui/static/schemas/mihomo-config.schema.json')
+
+    assert schema_path.is_file()
+    assert "mihomo-config.schema.json" in schema_loader
+    assert "export async function loadEditorSchema(ctx)" in schema_loader
+    assert "validateYamlTextAgainstSchema" in yaml_schema_runtime
+    assert "completeYamlTextFromSchema" in yaml_schema_runtime
+    assert "hoverYamlTextFromSchema" in yaml_schema_runtime
+    assert "load as loadYaml" in yaml_schema_runtime
+    assert "function yamlAssistExtensionFor(opts)" in codemirror_runtime
+    assert "ctx.yamlAssistCompartment.of(yamlAssistExtensionFor(options))" in codemirror_runtime
+    assert "ctx.yamlAssistCompartment.reconfigure(yamlAssistExtensionFor(options))" in codemirror_runtime
+    assert "function _ensureYamlAssistProviders(monaco)" in monaco_shared
+    assert "registerCompletionItemProvider('yaml'" in monaco_shared
+    assert "registerHoverProvider('yaml'" in monaco_shared
+    assert "function updateMihomoSchemaBadge(result)" in mihomo_panel
+    assert "function updateMihomoYamlBadge(result)" in mihomo_panel
+    assert "function getMihomoYamlAssistOptions()" in mihomo_panel
+    assert "async function ensureMihomoSchemaDocument()" in mihomo_panel
+    assert "scheduleMihomoSchemaValidation" in mihomo_panel
+    assert "applyMihomoSchemaDiagnostics(result)" in mihomo_panel
+    assert "yamlAssist: getMihomoYamlAssistOptions()" in mihomo_panel
+    assert "mihomo-editor-schema-badge" in template
+    assert "mihomo-editor-yaml-badge" in template
+
+
 def test_runtime_vendor_assets_exist_after_frontend_build():
     required = [
         Path('xkeen-ui/static/vendor/npm/@codemirror/state/dist/index.js'),

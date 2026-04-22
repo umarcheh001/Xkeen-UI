@@ -315,20 +315,23 @@
           "description": "Протоколы для обнаружения (HTTP, TLS, QUIC)",
           "properties": {
             "HTTP": {
-              "type": "object",
+              "type": ["object", "null"],
+              "description": "Настройки HTTP sniff. Допускается короткая YAML-запись `HTTP:` без вложенных полей.",
               "properties": {
                 "ports": { "type": "array", "items": { "type": ["integer", "string"] } },
                 "override-destination": { "type": "boolean" }
               }
             },
             "TLS": {
-              "type": "object",
+              "type": ["object", "null"],
+              "description": "Настройки TLS sniff. Допускается короткая YAML-запись `TLS:` без вложенных полей.",
               "properties": {
                 "ports": { "type": "array", "items": { "type": ["integer", "string"] } }
               }
             },
             "QUIC": {
-              "type": "object",
+              "type": ["object", "null"],
+              "description": "Настройки QUIC sniff. Допускается короткая YAML-запись `QUIC:` без вложенных полей.",
               "properties": {
                 "ports": { "type": "array", "items": { "type": ["integer", "string"] } }
               }
