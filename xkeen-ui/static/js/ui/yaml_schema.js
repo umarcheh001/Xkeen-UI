@@ -921,6 +921,7 @@ function buildYamlCursorContext(text, offset) {
           replaceFrom: keyBase + kv.keyStart,
           replaceTo: keyBase + kv.keyEnd,
           prefix: prefix.slice(hyphenOffset + 1 + kv.keyStart),
+          preserveExistingDelimiter: true,
         };
       }
       if (kv.hasInlineValue && column >= hyphenOffset + 1 + kv.valueStart) {
@@ -938,6 +939,18 @@ function buildYamlCursorContext(text, offset) {
         replaceFrom: safeOffset,
         replaceTo: safeOffset,
         prefix: '',
+      };
+    }
+    const fullAfterDash = lineText.slice(hyphenOffset + 1);
+    const fullKv = splitYamlKeyValue(fullAfterDash);
+    if (fullKv && column <= hyphenOffset + 1 + fullKv.delimiterIndex) {
+      return {
+        kind: 'key',
+        path: itemPath,
+        replaceFrom: lineStart + hyphenOffset + 1 + fullKv.keyStart,
+        replaceTo: lineStart + hyphenOffset + 1 + fullKv.keyEnd,
+        prefix: prefix.slice(hyphenOffset + 1 + fullKv.keyStart),
+        preserveExistingDelimiter: true,
       };
     }
     const leading = afterDash.match(/^\s*/);
@@ -973,6 +986,7 @@ function buildYamlCursorContext(text, offset) {
         replaceFrom: keyBase + kv.keyStart,
         replaceTo: keyBase + kv.keyEnd,
         prefix: prefix.slice(indent + kv.keyStart),
+        preserveExistingDelimiter: true,
       };
     }
     if (kv.hasInlineValue && column >= indent + kv.valueStart) {
@@ -990,6 +1004,18 @@ function buildYamlCursorContext(text, offset) {
       replaceFrom: safeOffset,
       replaceTo: safeOffset,
       prefix: '',
+    };
+  }
+  const fullContent = lineText.slice(indent);
+  const fullKv = splitYamlKeyValue(fullContent);
+  if (fullKv && column <= indent + fullKv.delimiterIndex) {
+    return {
+      kind: 'key',
+      path: parent.path.slice(),
+      replaceFrom: lineStart + indent + fullKv.keyStart,
+      replaceTo: lineStart + indent + fullKv.keyEnd,
+      prefix: prefix.slice(indent + fullKv.keyStart),
+      preserveExistingDelimiter: true,
     };
   }
 
@@ -1030,7 +1056,8 @@ function yamlScalarLiteral(value) {
   return asString(value);
 }
 
-function buildKeyCompletionOptions(rawSchema, rootSchema, prefix) {
+function buildKeyCompletionOptions(rawSchema, rootSchema, prefix, options = {}) {
+  const preserveExistingDelimiter = !!options.preserveExistingDelimiter;
   const properties = collectObjectProperties(rawSchema, rootSchema);
   return properties
     .filter((item) => prefixMatches(item.label, prefix))
@@ -1043,7 +1070,7 @@ function buildKeyCompletionOptions(rawSchema, rootSchema, prefix) {
       return {
         label: item.label,
         type: 'property',
-        insertText: `${item.label}: `,
+        insertText: preserveExistingDelimiter ? item.label : `${item.label}: `,
         detail: item.required ? 'обязательное поле' : 'поле',
         documentation: help,
       };
@@ -1108,12 +1135,12 @@ export function completeYamlTextFromSchema(text, schema, options = {}) {
 
   if (context.kind === 'array-item') {
     if (isSchemaObjectLike(targetSchema, rootSchema)) {
-      list = buildKeyCompletionOptions(targetSchema, rootSchema, context.prefix);
+      list = buildKeyCompletionOptions(targetSchema, rootSchema, context.prefix, context);
     } else {
       list = buildValueCompletionOptions(targetSchema, rootSchema, context.prefix);
     }
   } else if (context.kind === 'key') {
-    list = buildKeyCompletionOptions(targetSchema, rootSchema, context.prefix);
+    list = buildKeyCompletionOptions(targetSchema, rootSchema, context.prefix, context);
   } else if (context.kind === 'value') {
     list = buildValueCompletionOptions(targetSchema, rootSchema, context.prefix);
   }

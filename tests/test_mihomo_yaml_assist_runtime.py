@@ -47,6 +47,55 @@ console.log(JSON.stringify(result ? {{
     return json.loads(result.stdout.strip())
 
 
+def _apply_completion(doc_with_marker: str, label: str) -> dict[str, object] | None:
+    if shutil.which("node") is None:
+        pytest.skip("node is not available in this environment")
+
+    script = f"""
+import fs from 'node:fs';
+import {{ completeYamlTextFromSchema }} from './xkeen-ui/static/js/ui/yaml_schema.js';
+
+const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/mihomo-config.schema.json', 'utf8'));
+const marker = '__CURSOR__';
+const targetLabel = {json.dumps(label)};
+const docWithMarker = {json.dumps(doc_with_marker)};
+const offset = docWithMarker.indexOf(marker);
+const doc = docWithMarker.replace(marker, '');
+const result = completeYamlTextFromSchema(doc, schema, {{ offset }});
+if (!result) {{
+  console.log('null');
+}} else {{
+  const item = (result.options || []).find((entry) => entry.label === targetLabel) || null;
+  if (!item) {{
+    console.log('null');
+  }} else {{
+    const insertText = item.insertText || item.label;
+    const applied = doc.slice(0, result.from) + insertText + doc.slice(result.to);
+    console.log(JSON.stringify({{
+      from: result.from,
+      to: result.to,
+      insertText,
+      applied,
+      context: result.context,
+    }}));
+  }}
+}}
+"""
+
+    result = subprocess.run(
+        ["node", "--input-type=module"],
+        input=script,
+        capture_output=True,
+        cwd=str(ROOT),
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    return json.loads(result.stdout.strip())
+
+
 def _run_hover(doc_with_marker: str) -> dict[str, object] | None:
     if shutil.which("node") is None:
         pytest.skip("node is not available in this environment")
@@ -99,6 +148,24 @@ def test_hwid_subscription_template_completion_suggests_rule_provider_format_enu
     assert result is not None
     assert result["context"]["kind"] == "value"
     assert "mrs" in result["labels"]
+
+
+def test_key_completion_reuses_existing_yaml_mapping_delimiter_without_duplicating_colon():
+    result = _apply_completion("log-lev__CURSOR__: silent\n", "log-level")
+
+    assert result is not None
+    assert result["context"]["kind"] == "key"
+    assert result["insertText"] == "log-level"
+    assert result["applied"] == "log-level: silent\n"
+
+
+def test_key_completion_reuses_existing_yaml_mapping_delimiter_without_duplicating_empty_value_colon():
+    result = _apply_completion("log-lev__CURSOR__:\n", "log-level")
+
+    assert result is not None
+    assert result["context"]["kind"] == "key"
+    assert result["insertText"] == "log-level"
+    assert result["applied"] == "log-level:\n"
 
 
 def test_zkeen_template_hover_exposes_description_and_default_for_geodata_mode():
