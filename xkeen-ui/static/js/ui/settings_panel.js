@@ -680,9 +680,9 @@ import { getFeatureApi } from '../features/feature_access.js';
         createServerSwitch(
           'editor-schema-hover',
           'editor.schemaHoverEnabled',
-          'Показывать подсказки JSON-схемы',
-          'Отключает всплывающие окна с описанием полей при наведении в CodeMirror. Подчёркивание ошибок, маркеры и автодополнение остаются включены.',
-          'Настройка подсказок JSON-схемы сохранена.'
+          'Показывать всплывающие подсказки редактора',
+          'Отключает hover-подсказки в редакторах CodeMirror и Monaco, включая JSON/Xray и YAML/Mihomo. Подчёркивание ошибок, маркеры и автодополнение остаются включены.',
+          'Настройка всплывающих подсказок сохранена.'
         ),
         createServerNumber(
           'editor-codemirror-font-scale',

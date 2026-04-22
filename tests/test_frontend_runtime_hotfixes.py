@@ -502,7 +502,8 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "элементы:" in schema_shim
     assert "schemaHoverEnabled: true" in settings_src
     assert "editor.schemaHoverEnabled" in settings_panel
-    assert "Показывать подсказки JSON-схемы" in settings_panel
+    assert "Показывать всплывающие подсказки редактора" in settings_panel
+    assert "CodeMirror и Monaco" in settings_panel
     assert "jsonSchemaWithSyntaxLinter" in boot
     assert "jsonSchemaSyntaxAwareHover" in boot
     assert "function isSchemaHoverEnabled" in boot
@@ -604,11 +605,17 @@ def test_mihomo_yaml_schema_runtime_is_wired_into_panel_editor():
     assert "hoverYamlTextFromSchema" in yaml_schema_runtime
     assert "load as loadYaml" in yaml_schema_runtime
     assert "function yamlAssistExtensionFor(opts)" in codemirror_runtime
+    assert "if (!isSchemaHoverEnabled(opts)) return null;" in codemirror_runtime
     assert "ctx.yamlAssistCompartment.of(yamlAssistExtensionFor(options))" in codemirror_runtime
     assert "ctx.yamlAssistCompartment.reconfigure(yamlAssistExtensionFor(options))" in codemirror_runtime
     assert "function _ensureYamlAssistProviders(monaco)" in monaco_shared
+    assert "function _isEditorHoverEnabled(opts, snapshot)" in monaco_shared
+    assert "function _resolveEditorHoverOptions(opts, snapshot)" in monaco_shared
     assert "registerCompletionItemProvider('yaml'" in monaco_shared
     assert "registerHoverProvider('yaml'" in monaco_shared
+    assert "if (!_isEditorHoverEnabled()) return null;" in monaco_shared
+    assert "hover: _resolveEditorHoverOptions(o)" in monaco_shared
+    assert "patch.hover = _resolveEditorHoverOptions(o, snapshot);" in monaco_shared
     assert "function updateMihomoSchemaBadge(result)" in mihomo_panel
     assert "function updateMihomoYamlBadge(result)" in mihomo_panel
     assert "function getMihomoYamlAssistOptions()" in mihomo_panel

@@ -386,6 +386,7 @@ function yamlAssistExtensionFor(opts) {
   };
 
   const hoverSource = (view, pos, side) => {
+    if (!isSchemaHoverEnabled(opts)) return null;
     let schema = null;
     try { schema = getSchema(); } catch (e) {}
     if (!schema) return null;

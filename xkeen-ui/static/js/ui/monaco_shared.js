@@ -710,6 +710,27 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     }
   }
 
+  function _isEditorHoverEnabled(opts, snapshot) {
+    if (opts && opts.schemaHover === false) return false;
+    if (opts && opts.schemaHoverEnabled === false) return false;
+    try {
+      const settings = snapshot && typeof snapshot === 'object'
+        ? snapshot
+        : ((_getSettingsApi() && typeof _getSettingsApi().get === 'function') ? _getSettingsApi().get() : null);
+      const editor = (settings && settings.editor && typeof settings.editor === 'object') ? settings.editor : {};
+      return editor.schemaHoverEnabled !== false;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  function _resolveEditorHoverOptions(opts, snapshot) {
+    const options = (opts && opts.hover && typeof opts.hover === 'object') ? { ...opts.hover } : {};
+    if (opts && typeof opts.hoverEnabled === 'boolean') options.enabled = opts.hoverEnabled;
+    if (typeof options.enabled !== 'boolean') options.enabled = _isEditorHoverEnabled(opts, snapshot);
+    return options;
+  }
+
   function _getEditorFontScaleFromSettings(snapshot) {
     try {
       const editor = (snapshot && snapshot.editor && typeof snapshot.editor === 'object') ? snapshot.editor : {};
@@ -1290,6 +1311,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
 
     monaco.languages.registerHoverProvider('yaml', {
       provideHover(model, position) {
+        if (!_isEditorHoverEnabled()) return null;
         const assist = _getModelYamlAssist(model);
         const schema = _resolveYamlAssistSchema(assist);
         if (!schema || !model || typeof model.getOffsetAt !== 'function') return null;
@@ -1362,6 +1384,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         folding: !perf.lite && !safari,
         matchBrackets: (perf.lite || safari) ? 'never' : 'always',
         parameterHints: { enabled: !perf.lite && !safari },
+        hover: _resolveEditorHoverOptions(o),
         smoothScrolling: false,
         cursorSmoothCaretAnimation: 'off',
         tabSize: (typeof o.tabSize === 'number') ? o.tabSize : 2,
@@ -1390,32 +1413,37 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         }
       } catch (e) {}
 
-      // React to UI settings changes (editor font scale) unless caller explicitly overrides typography.
+      // React to UI settings changes (editor font scale and hover hints) unless caller explicitly overrides typography.
       try {
         const settingsApi = _getSettingsApi();
         const manageFontFamily = !o.fontFamily;
         const manageFontSize = typeof o.fontSize !== 'number';
         const manageLineHeight = typeof o.lineHeight !== 'number';
-        if (settingsApi && typeof settingsApi.subscribe === 'function' && (manageFontFamily || manageFontSize || manageLineHeight)) {
-          const applyManagedTypography = (snapshot) => {
+        if (settingsApi && typeof settingsApi.subscribe === 'function') {
+          const applyManagedUiSettings = (snapshot) => {
             try {
-              const nextTypo = _editorTypographyOpts(snapshot);
               const patch = {};
-              if (manageFontFamily) patch.fontFamily = nextTypo.fontFamily;
-              if (manageFontSize) patch.fontSize = nextTypo.fontSize;
-              if (manageLineHeight) patch.lineHeight = nextTypo.lineHeight;
+              if (manageFontFamily || manageFontSize || manageLineHeight) {
+                const nextTypo = _editorTypographyOpts(snapshot);
+                if (manageFontFamily) patch.fontFamily = nextTypo.fontFamily;
+                if (manageFontSize) patch.fontSize = nextTypo.fontSize;
+                if (manageLineHeight) patch.lineHeight = nextTypo.lineHeight;
+              }
+              patch.hover = _resolveEditorHoverOptions(o, snapshot);
               if (Object.keys(patch).length && editor && typeof editor.updateOptions === 'function') {
                 editor.updateOptions(patch);
-                try { if (editor.layout) editor.layout(); } catch (e2) {}
+                try {
+                  if ((manageFontFamily || manageFontSize || manageLineHeight) && editor.layout) editor.layout();
+                } catch (e2) {}
               }
             } catch (e2) {}
           };
-          const unsubscribeTypography = settingsApi.subscribe((nextSnapshot) => {
-            applyManagedTypography(nextSnapshot);
+          const unsubscribeUiSettings = settingsApi.subscribe((nextSnapshot) => {
+            applyManagedUiSettings(nextSnapshot);
           });
           if (editor && typeof editor.onDidDispose === 'function') {
             editor.onDidDispose(() => {
-              try { unsubscribeTypography(); } catch (e2) {}
+              try { unsubscribeUiSettings(); } catch (e2) {}
               try {
                 const model = editor && typeof editor.getModel === 'function' ? editor.getModel() : null;
                 if (model) _setModelYamlAssist(model, null);
