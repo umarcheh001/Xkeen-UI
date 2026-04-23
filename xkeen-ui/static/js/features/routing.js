@@ -4,6 +4,11 @@ import { getRoutingShellApi as getRoutingShellModuleApi } from './routing_shell.
 import { getRoutingCardsApi as getRoutingCardsModuleApi } from './routing_cards.js';
 import { getBackupsApi as getBackupsModuleApi } from './backups.js';
 import {
+  buildJsoncPointerMap,
+  findDiagnosticMapping,
+  withDiagnosticContext,
+} from '../vendor/codemirror_json_schema.js';
+import {
   confirmXkeenAction,
   getXkeenCm6RuntimeApi,
   getXkeenCommandJobApi,
@@ -26,7 +31,8 @@ import {
   toastXkeen,
 } from './xkeen_runtime.js';
 import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_comments.js';
-import { applySchemaToEditor } from '../ui/editor_schema.js';
+import { applySchemaToEditor, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
+import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';
 
 (() => {
   "use strict";
@@ -147,6 +153,14 @@ import { applySchemaToEditor } from '../ui/editor_schema.js';
 
   // Monaco diagnostics debounce (markers).
   let _monacoDiagTimer = null;
+  let _routingSemanticContext = {
+    key: '',
+    outboundTags: [],
+    inboundTags: [],
+    ready: false,
+  };
+  let _routingSemanticContextPromise = null;
+  let _routingSemanticContextTs = 0;
 
   // Monaco fullscreen (CSS-driven)
   let _monacoFsWired = false;
@@ -627,6 +641,16 @@ import { applySchemaToEditor } from '../ui/editor_schema.js';
     return String(label || '').trim();
   }
 
+  function getRoutingSnippetProvider() {
+    const file = getActiveFragment() || getXkeenFilePath('routing', '');
+    return resolveEditorSnippetProvider({
+      target: _routingMode === 'routing' ? 'routing' : 'xray',
+      file,
+      mode: 'jsonc',
+      feature: 'routing',
+    });
+  }
+
   function updateRoutingSchemaBadge(result) {
     const el = $(IDS.editorSchemaBadge);
     if (!el) return;
@@ -641,7 +665,176 @@ import { applySchemaToEditor } from '../ui/editor_schema.js';
       : 'JSON-схема пока не загружена для текущего редактора.');
   }
 
-async function applyRoutingSchemaToCodeMirror(cm, text) {
+  function readRememberedFragment(key) {
+    try {
+      const value = localStorage.getItem(String(key || ''));
+      return value ? String(value) : '';
+    } catch (e) {}
+    return '';
+  }
+
+  function collectConfigTagNames(config, field) {
+    const targetField = String(field || 'tag');
+    let list = null;
+    if (Array.isArray(config)) {
+      list = config;
+    } else if (config && typeof config === 'object') {
+      if (Array.isArray(config.outbounds)) list = config.outbounds;
+      else if (Array.isArray(config.inbounds)) list = config.inbounds;
+    }
+    if (!Array.isArray(list)) return [];
+    const values = [];
+    list.forEach((item) => {
+      if (!item || typeof item !== 'object') return;
+      const tag = String(item[targetField] || '').trim();
+      if (tag) values.push(tag);
+    });
+    return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
+  }
+
+  function buildRoutingSemanticContextKey() {
+    const outboundsFile = readRememberedFragment('xkeen.outbounds.fragment');
+    const inboundsFile = readRememberedFragment('xkeen.inbounds.fragment');
+    return `${outboundsFile}::${inboundsFile}`;
+  }
+
+  function getRoutingSemanticValidationConfig() {
+    return {
+      kind: 'xray-routing',
+      options: {
+        knownOutboundTags: Array.isArray(_routingSemanticContext.outboundTags) ? _routingSemanticContext.outboundTags.slice() : [],
+        knownInboundTags: Array.isArray(_routingSemanticContext.inboundTags) ? _routingSemanticContext.inboundTags.slice() : [],
+      },
+    };
+  }
+
+  function getRoutingSemanticDiagnostics(data) {
+    return validateXrayRoutingSemantics(data, getRoutingSemanticValidationConfig().options);
+  }
+
+  function createMonacoDocShim(text) {
+    const source = String(text || '');
+    return {
+      length: source.length,
+      lineAt(pos) {
+        const safe = Math.max(0, Math.min(source.length, Number(pos || 0)));
+        let number = 1;
+        let from = 0;
+        for (let index = 0; index < safe; index += 1) {
+          if (source.charCodeAt(index) === 10) {
+            number += 1;
+            from = index + 1;
+          }
+        }
+        return { number, from };
+      },
+    };
+  }
+
+  function buildRoutingSemanticMarkers(text, diagnostics) {
+    const raw = String(text || '');
+    const list = Array.isArray(diagnostics) ? diagnostics : [];
+    if (!list.length) return [];
+    const pointerMap = buildJsoncPointerMap(raw);
+    const doc = createMonacoDocShim(raw);
+    const monaco = window.monaco;
+    const severity = monaco && monaco.MarkerSeverity ? monaco.MarkerSeverity : {};
+    return list.map((item) => {
+      const pointer = String((item && item.pointer) || '');
+      const mapping = findDiagnosticMapping(pointerMap, pointer);
+      const start = mapping && Number.isFinite(mapping.valueFrom)
+        ? indexToMonacoLineCol(raw, mapping.valueFrom)
+        : { line: 1, col: 1 };
+      const end = mapping && Number.isFinite(mapping.valueTo)
+        ? indexToMonacoLineCol(raw, Math.max(Number(mapping.valueFrom || 0), Number(mapping.valueTo || 0)))
+        : { line: start.line, col: start.col + 1 };
+      return {
+        startLineNumber: Math.max(1, Number(start.line || 1)),
+        startColumn: Math.max(1, Number(start.col || 1)),
+        endLineNumber: Math.max(1, Number(end.line || start.line || 1)),
+        endColumn: Math.max(1, Number(end.col || start.col || 1)),
+        severity: item && item.severity === 'warning' ? (severity.Warning || 4) : (severity.Error || 8),
+        source: String((item && item.source) || 'xray-semantic'),
+        message: withDiagnosticContext(String((item && item.message) || 'Semantic validation error'), pointer, doc, mapping),
+      };
+    });
+  }
+
+  function applyRoutingSemanticValidationState() {
+    const semanticValidation = getRoutingSemanticValidationConfig();
+    try {
+      if (_cm && typeof _cm.setOption === 'function') {
+        _cm.setOption('semanticValidation', semanticValidation);
+      }
+    } catch (e) {}
+    try {
+      if (_engine === 'monaco' && _monaco) {
+        runMonacoDiagnostics();
+      }
+    } catch (e) {}
+  }
+
+  async function refreshRoutingSemanticContext(opts) {
+    const options = opts && typeof opts === 'object' ? opts : {};
+    const force = !!options.force;
+    const key = buildRoutingSemanticContextKey();
+    const now = Date.now();
+    if (!force && _routingSemanticContextPromise) return _routingSemanticContextPromise;
+    if (!force && _routingSemanticContext.key === key && (now - _routingSemanticContextTs) < 15000) {
+      return _routingSemanticContext;
+    }
+
+    const outboundsFile = readRememberedFragment('xkeen.outbounds.fragment');
+    const inboundsFile = readRememberedFragment('xkeen.inbounds.fragment');
+    const fetchConfig = async (url, file) => {
+      const suffix = file ? `?file=${encodeURIComponent(file)}` : '';
+      const response = await fetch(`${url}${suffix}`, { cache: 'no-store' });
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null);
+      return payload && typeof payload === 'object' ? payload.config : null;
+    };
+
+    _routingSemanticContextPromise = Promise.all([
+      fetchConfig('/api/outbounds', outboundsFile),
+      fetchConfig('/api/inbounds', inboundsFile),
+    ]).then(([outboundsConfig, inboundsConfig]) => {
+      _routingSemanticContext = {
+        key,
+        outboundTags: collectConfigTagNames(outboundsConfig, 'tag'),
+        inboundTags: collectConfigTagNames(inboundsConfig, 'tag'),
+        ready: true,
+      };
+      _routingSemanticContextTs = Date.now();
+      applyRoutingSemanticValidationState();
+      return _routingSemanticContext;
+    }).catch(() => {
+      _routingSemanticContext = {
+        key,
+        outboundTags: [],
+        inboundTags: [],
+        ready: false,
+      };
+      _routingSemanticContextTs = Date.now();
+      applyRoutingSemanticValidationState();
+      return _routingSemanticContext;
+    }).finally(() => {
+      _routingSemanticContextPromise = null;
+    });
+
+    return _routingSemanticContextPromise;
+  }
+
+  function ensureRoutingSemanticContextFresh() {
+    const key = buildRoutingSemanticContextKey();
+    const stale = !key
+      ? !_routingSemanticContext.ready
+      : (_routingSemanticContext.key !== key || (Date.now() - _routingSemanticContextTs) >= 15000);
+    if (!stale) return false;
+    Promise.resolve(refreshRoutingSemanticContext({ force: false })).catch(() => null);
+    return true;
+  }
+
+  async function applyRoutingSchemaToCodeMirror(cm, text) {
     const editor = cm || _cm;
     if (!editor) {
       updateRoutingSchemaBadge(null);
@@ -656,6 +849,11 @@ async function applyRoutingSchemaToCodeMirror(cm, text) {
         text: typeof text === 'string' ? text : readCurrentEditorText(),
         feature: 'routing',
       });
+      try {
+        if (typeof editor.setOption === 'function') {
+          editor.setOption('semanticValidation', getRoutingSemanticValidationConfig());
+        }
+      } catch (e2) {}
       updateRoutingSchemaBadge(result);
       return result;
     } catch (e) {
@@ -679,6 +877,7 @@ async function applyRoutingSchemaToCodeMirror(cm, text) {
         text: typeof text === 'string' ? text : readCurrentEditorText(),
         feature: 'routing',
       });
+      try { ensureRoutingSemanticContextFresh(); } catch (e2) {}
       updateRoutingSchemaBadge(result);
       return result;
     } catch (e) {
@@ -2600,6 +2799,7 @@ function closeHelp() {
   function runMonacoDiagnostics() {
     // Validate JSONC (strip comments) and show errors as Monaco markers (no auto-fix).
     const raw = getEditorText();
+    try { ensureRoutingSemanticContextFresh(); } catch (e) {}
 
     if (!String(raw ?? '').trim()) {
       setError('Файл пуст. Введи корректный JSON.', null);
@@ -2626,13 +2826,21 @@ function closeHelp() {
 
     try {
       const obj = JSON.parse(cleaned);
-      setError('', null);
+      const semanticDiagnostics = getRoutingSemanticDiagnostics(obj);
+      const semanticMarkers = buildRoutingSemanticMarkers(raw, semanticDiagnostics);
+      const blockingSemantic = semanticDiagnostics.find((item) => item && item.severity !== 'warning') || null;
+      const semanticSummary = blockingSemantic ? String(blockingSemantic.message || '') : '';
+      if (semanticSummary) setError('Semantic error: ' + semanticSummary, null);
+      else setError('', null);
       clearJsonErrorLocation();
-      clearMonacoMarkers();
+      if (semanticMarkers.length) setMonacoMarkers(semanticMarkers);
+      else clearMonacoMarkers();
       _maybeUpdateModeFromParsed(obj);
-      _lastValidationState = { ok: true, message: 'JSON корректен' };
+      _lastValidationState = blockingSemantic
+        ? { ok: false, message: semanticSummary || 'Semantic validation failed' }
+        : { ok: true, message: 'JSON корректен' };
       try { updateEditorMetaStatus(); } catch (e) {}
-      return true;
+      return !blockingSemantic;
     } catch (e) {
       const loc = extractJsonErrorLocation(e, raw, sm);
       const msg = String(loc && loc.message ? loc.message : ((e && e.message) ? e.message : e));
@@ -2750,6 +2958,7 @@ function closeHelp() {
       try { updateEditorMetaStatus(); } catch (e) {}
 
       try { _setRoutingMode(_detectRoutingModeFromText(text), 'load'); } catch (e) {}
+      try { await refreshRoutingSemanticContext({ force: false }); } catch (e) {}
       try {
         if (_cm) await applyRoutingSchemaToCodeMirror(_cm, text);
       } catch (e) {}
@@ -3140,6 +3349,7 @@ function closeHelp() {
   }
 
   function validate() {
+    try { ensureRoutingSemanticContextFresh(); } catch (e) {}
     try {
       if (_engine === 'monaco' && _monaco) return runMonacoDiagnostics();
     } catch (e) {}
@@ -3156,13 +3366,19 @@ function closeHelp() {
 
     const analysis = getJsoncAnalysis(raw, { preciseLocation: true });
     if (analysis.ok) {
-      setError('', null);
+      const semanticDiagnostics = getRoutingSemanticDiagnostics(analysis.parsed);
+      const blockingSemantic = semanticDiagnostics.find((item) => item && item.severity !== 'warning') || null;
+      const semanticSummary = blockingSemantic ? String(blockingSemantic.message || '') : '';
+      if (semanticSummary) setError('Semantic error: ' + semanticSummary, null);
+      else setError('', null);
       clearJsonErrorLocation();
       _maybeUpdateModeFromParsed(analysis.parsed);
-      _lastValidationState = { ok: true, message: 'JSON is valid' };
+      _lastValidationState = blockingSemantic
+        ? { ok: false, message: semanticSummary || 'Semantic validation failed' }
+        : { ok: true, message: 'JSON is valid' };
       try { updateEditorMetaStatus(); } catch (e) {}
       try { syncCodeMirrorLintNow(); } catch (e2) {}
-      return true;
+      return !blockingSemantic;
     }
 
     const loc = analysis.loc || { line: 1, col: 1, index: 0 };
@@ -3746,6 +3962,8 @@ function closeHelp() {
       extraKeys,
       links: !initialLite,
       viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : Infinity,
+      semanticValidation: getRoutingSemanticValidationConfig(),
+      snippetProvider: getRoutingSnippetProvider(),
     });
 
     // Cosmetic class + toolbar
@@ -4495,6 +4713,7 @@ function closeHelp() {
       resetMonacoHostDom(host);
 
       try {
+        try { await refreshRoutingSemanticContext({ force: false }); } catch (e) {}
         _monaco = await runtime.create(host, {
           value: readCurrentEditorText(),
           uri: getRoutingMonacoModelUri(),
@@ -4515,6 +4734,7 @@ function closeHelp() {
           insertSpaces: true,
           performanceProfile: (_editorPerfProfile && _editorPerfProfile.lite) ? 'lite' : 'default',
           wordWrap: isMipsTarget() ? 'off' : 'on',
+          snippetProvider: getRoutingSnippetProvider(),
           onChange: () => {
             try { invalidateEditorSnapshot(); } catch (e) {}
             try { scheduleMonacoDiagnostics(); } catch (e) {}
@@ -4803,6 +5023,8 @@ function closeHelp() {
         await switchEngine(desired, { persist: false });
       }
     } catch (e) {}
+
+    try { await refreshRoutingSemanticContext({ force: false }); } catch (e) {}
 
     // Refresh CodeMirror if active.
     try {

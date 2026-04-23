@@ -21,6 +21,7 @@ import { StateEffect, StateField } from '@codemirror/state';
 import { hoverTooltip } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
 import { parse as parseJsonc, parseTree as parseJsoncTree } from 'jsonc-parser';
+import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';
 
 /* ════════════════════════════════════════════════════════════
  *  1. Schema StateField — stores the current JSON Schema
@@ -620,6 +621,32 @@ function withDiagnosticContext(message, pointer, doc, mapping) {
   return `${message} (${parts.join('; ')})`;
 }
 
+function normalizeSemanticDiagnostics(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((item) => item && typeof item === 'object' && item.message);
+}
+
+function resolveSemanticDiagnostics(options, payload) {
+  const semantic = options && options.semanticValidation ? options.semanticValidation : null;
+  if (!semantic) return [];
+  try {
+    if (typeof semantic === 'function') {
+      return normalizeSemanticDiagnostics(semantic(payload));
+    }
+  } catch (e) {}
+  try {
+    if (semantic && typeof semantic.getDiagnostics === 'function') {
+      return normalizeSemanticDiagnostics(semantic.getDiagnostics(payload));
+    }
+  } catch (e) {}
+  try {
+    if (semantic && semantic.kind === 'xray-routing') {
+      return normalizeSemanticDiagnostics(validateXrayRoutingSemantics(payload.data, semantic.options || {}));
+    }
+  } catch (e) {}
+  return [];
+}
+
 /**
  * Parse JSON from editor, with fallback for partial content
  */
@@ -655,6 +682,14 @@ function jsonSchemaLinter(options) {
 
     const pointerMap = buildPointerMap(view.state);
     const schemaErrors = validateValue(data, schema, schema, '');
+    const semanticErrors = resolveSemanticDiagnostics(options, {
+      data,
+      text,
+      schema,
+      pointerMap,
+      state: view.state,
+      doc: view.state.doc,
+    });
 
     // Map pointer-based errors to document positions
     const diagnostics = [];
@@ -689,6 +724,29 @@ function jsonSchemaLinter(options) {
         severity: 'warning',
         message,
         source: schema.title || 'json-schema',
+      });
+    }
+
+    for (const err of semanticErrors) {
+      const pointer = err.pointer || '';
+      const mapping = findDiagnosticMapping(pointerMap, pointer);
+      let from = 0;
+      let to = 0;
+      if (mapping) {
+        if (mapping.valueFrom !== undefined && mapping.valueTo !== undefined) {
+          from = mapping.valueFrom;
+          to = mapping.valueTo;
+        } else {
+          from = mapping.keyFrom;
+          to = mapping.keyTo;
+        }
+      }
+      diagnostics.push({
+        from,
+        to,
+        severity: err.severity === 'warning' ? 'warning' : 'error',
+        message: withDiagnosticContext(err.message, pointer, view.state.doc, mapping),
+        source: err.source || 'semantic-validation',
       });
     }
 
@@ -1485,6 +1543,76 @@ function fallbackValueCompletion(ctx, schema) {
   });
 }
 
+function resolveSnippetProvider(options) {
+  if (!options || typeof options !== 'object') return null;
+  const provider = options.snippetProvider;
+  if (typeof provider === 'function') return provider;
+  if (provider && typeof provider.getSnippets === 'function') {
+    return (ctx) => provider.getSnippets(ctx);
+  }
+  return null;
+}
+
+function buildSnippetCompletionOptions(snippets) {
+  const list = Array.isArray(snippets) ? snippets : [];
+  return list
+    .filter((item) => item && item.label && item.insertText)
+    .map((item) => {
+      const info = [];
+      if (item.documentation) info.push(String(item.documentation));
+      if (item.warning) info.push(`⚠ ${String(item.warning)}`);
+      return {
+        label: `📦 ${String(item.label)}`,
+        type: 'snippet',
+        detail: String(item.detail || 'snippet'),
+        info: info.join('\n\n') || undefined,
+        apply: String(item.insertText),
+        boost: -5,
+      };
+    });
+}
+
+function mergeSnippetCompletions(result, snippetOptions) {
+  if (!snippetOptions || !snippetOptions.length) return result;
+  if (!result) {
+    return null;
+  }
+  const mergedOptions = Array.isArray(result.options) ? result.options.concat(snippetOptions) : snippetOptions.slice();
+  return { ...result, options: mergedOptions };
+}
+
+function resolveSnippetPointerFromContext(ctx, node) {
+  try {
+    const doc = ctx.state.doc;
+    let current = node || null;
+    while (current) {
+      if (current.name === 'Object' || current.name === 'Array') {
+        return getJsonPointerAt(doc, current) || '';
+      }
+      current = current.parent;
+    }
+  } catch (e) {}
+  return '';
+}
+
+function collectSnippetOptionsFor(ctx, options, fallbackPointer) {
+  const provider = resolveSnippetProvider(options);
+  if (!provider) return [];
+  let snippets = null;
+  try {
+    snippets = provider({
+      pointer: fallbackPointer || '',
+      schemaKind: options && options.schemaKind ? options.schemaKind : '',
+      state: ctx.state,
+      pos: ctx.pos,
+      explicit: !!ctx.explicit,
+    });
+  } catch (e) {
+    snippets = null;
+  }
+  return buildSnippetCompletionOptions(snippets);
+}
+
 function jsonCompletion(options) {
   return function jsonDoCompletion(ctx) {
     const schema = getJSONSchema(ctx.state);
@@ -1494,12 +1622,17 @@ function jsonCompletion(options) {
     const node = tree.resolveInner(ctx.pos, -1);
     const doc = ctx.state.doc;
     const nodeIsError = !!(node && node.type && node.type.isError);
+    const snippetPointer = resolveSnippetPointerFromContext(ctx, node);
+    const snippetOptions = collectSnippetOptionsFor(ctx, options, snippetPointer);
 
     if (nodeIsError) {
       const earlyValueCompletion = fallbackValueCompletion(ctx, schema);
-      if (earlyValueCompletion) return earlyValueCompletion;
+      if (earlyValueCompletion) return mergeSnippetCompletions(earlyValueCompletion, snippetOptions);
       const earlyPropertyCompletion = fallbackPropertyCompletion(ctx, schema);
-      if (earlyPropertyCompletion) return earlyPropertyCompletion;
+      if (earlyPropertyCompletion) return mergeSnippetCompletions(earlyPropertyCompletion, snippetOptions);
+      if (snippetOptions.length && ctx.explicit) {
+        return { from: ctx.pos, to: ctx.pos, options: snippetOptions, filter: false };
+      }
     }
 
     // Determine if we're in a property name or value context
@@ -1553,7 +1686,14 @@ function jsonCompletion(options) {
       }
     }
 
-    if (!isPropertyName && !isValue) return fallbackPropertyCompletion(ctx, schema) || fallbackValueCompletion(ctx, schema);
+    if (!isPropertyName && !isValue) {
+      const genericResult = fallbackPropertyCompletion(ctx, schema) || fallbackValueCompletion(ctx, schema);
+      if (genericResult) return mergeSnippetCompletions(genericResult, snippetOptions);
+      if (snippetOptions.length && ctx.explicit) {
+        return { from: ctx.pos, to: ctx.pos, options: snippetOptions, filter: false };
+      }
+      return null;
+    }
 
     // Find the JSON pointer to the parent object
     const pointer = parentObjectNode ? getJsonPointerAt(doc, parentObjectNode) : '';
@@ -1586,13 +1726,13 @@ function jsonCompletion(options) {
 
       const afterNode = node.name === 'PropertyName' ? node.nextSibling : null;
       const hasColon = afterNode && doc.sliceString(afterNode.from, afterNode.from + 1) === ':';
-      return propertyCompletionResult(schema, parentSchema, {
+      return mergeSnippetCompletions(propertyCompletionResult(schema, parentSchema, {
         from,
         to,
         prefix,
         existingKeys,
         hasColon,
-      });
+      }), snippetOptions);
     }
 
     // --- Value completions ---
@@ -1609,9 +1749,12 @@ function jsonCompletion(options) {
       let to = node.to;
       const rawBeforeCursor = doc.sliceString(node.from, Math.min(ctx.pos, node.to));
       const prefix = rawBeforeCursor.replace(/^["']/, '');
-      return valueCompletionResult(schema, propSchema, { from, to, prefix });
+      return mergeSnippetCompletions(valueCompletionResult(schema, propSchema, { from, to, prefix }), snippetOptions);
     }
 
+    if (snippetOptions.length && ctx.explicit) {
+      return { from: ctx.pos, to: ctx.pos, options: snippetOptions, filter: false };
+    }
     return null;
   };
 }
@@ -1625,6 +1768,10 @@ export {
   updateSchema,
   getJSONSchema,
   schemaStateField,
+  buildJsoncPointerMap,
+  findDiagnosticMapping,
+  withDiagnosticContext,
+  safeParseJson,
   jsonSchemaLinter,
   handleRefresh,
   jsonSchemaHover,

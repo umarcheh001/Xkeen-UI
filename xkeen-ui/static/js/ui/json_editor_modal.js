@@ -7,7 +7,11 @@ import {
   getXkeenFilePath,
   getXkeenPageFilesConfig,
 } from '../features/xkeen_runtime.js';
-import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
+import {
+  applySchemaToEditor,
+  clearSchemaFromEditor,
+  resolveEditorSnippetProvider,
+} from './editor_schema.js';
 
 (() => {
   // JSON editor modal for 03_inbounds.json / 04_outbounds.json
@@ -354,6 +358,16 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
   function schemaStatusLabel(spec) {
     const label = spec && (spec.label || spec.title || spec.id);
     return String(label || '').trim();
+  }
+
+  function getJsonEditorSnippetProvider() {
+    if (!_currentTarget) return null;
+    return resolveEditorSnippetProvider({
+      target: _currentTarget,
+      file: activeFileParam(_currentTarget),
+      mode: 'jsonc',
+      feature: 'json-modal',
+    });
   }
 
   function updateJsonEditorSchemaBadge(result) {
@@ -710,6 +724,7 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
         'Shift-Ctrl-H': 'replaceAll',
       },
       viewportMargin: Infinity,
+      snippetProvider: getJsonEditorSnippetProvider(),
     });
 
     try {
@@ -749,6 +764,7 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
       tabSize: 2,
       insertSpaces: true,
       wordWrap: 'on',
+      snippetProvider: getJsonEditorSnippetProvider(),
     });
 
     try { await applyCurrentSchemaToMonaco(initialText); } catch (e) {}
@@ -1023,9 +1039,10 @@ import { applySchemaToEditor, clearSchemaFromEditor } from './editor_schema.js';
     if (modal) hideModal(modal, 'json_editor_close');
     try { clearDirtyListener(); } catch (e) {}
     try { if (_cm) clearSchemaFromEditor(_cm, { feature: 'json-modal' }); } catch (e) {}
+    try { if (_monaco) clearSchemaFromEditor(_monaco, { feature: 'json-modal' }); } catch (e2) {}
     try { updateJsonEditorSchemaBadge(null); } catch (e) {}
-    try { if (_cm && typeof _cm.clearDiagnostics === 'function') _cm.clearDiagnostics(); } catch (e2) {}
-    try { clearTargetDirtyState(target); } catch (e3) {}
+    try { if (_cm && typeof _cm.clearDiagnostics === 'function') _cm.clearDiagnostics(); } catch (e3) {}
+    try { clearTargetDirtyState(target); } catch (e4) {}
     setError('');
     _currentTarget = null;
     _savedText = '';

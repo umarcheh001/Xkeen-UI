@@ -41,6 +41,8 @@ console.log(JSON.stringify(result ? result.options.map((option) => option.label)
         capture_output=True,
         cwd=str(ROOT),
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
 
@@ -82,6 +84,8 @@ console.log(JSON.stringify(diagnostics.map((item) => {{
         capture_output=True,
         cwd=str(ROOT),
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=False,
     )
 

@@ -19,7 +19,7 @@ import {
   getXkeenPageFlagsConfig,
   setXkeenPageConfigValue,
 } from './xkeen_runtime.js';
-import { loadEditorSchema } from '../ui/editor_schema.js';
+import { loadEditorSchema, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
 
 let mihomoPanelModuleApi = null;
 
@@ -253,7 +253,17 @@ let mihomoPanelModuleApi = null;
         } catch (e) {}
         return null;
       },
+      snippetProvider: getMihomoSnippetProvider(),
     };
+  }
+
+  function getMihomoSnippetProvider() {
+    return resolveEditorSnippetProvider({
+      target: 'mihomo',
+      file: 'config.yaml',
+      mode: 'yaml',
+      feature: 'mihomo',
+    });
   }
 
   async function ensureMihomoSchemaDocument() {
@@ -473,6 +483,7 @@ let mihomoPanelModuleApi = null;
         insertSpaces: true,
         wordWrap: 'on',
         yamlAssist: getMihomoYamlAssistOptions(),
+        snippetProvider: getMihomoSnippetProvider(),
       });
       if (!_monaco) return null;
 
@@ -931,6 +942,7 @@ let mihomoPanelModuleApi = null;
       }),
       viewportMargin: 30,
       yamlAssist: getMihomoYamlAssistOptions(),
+      snippetProvider: getMihomoSnippetProvider(),
     });
 
     try {

@@ -1,5 +1,5 @@
 import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
-import { buildJsonSchemaHoverInfo } from '../vendor/codemirror_json_schema.js';
+import { buildJsonSchemaHoverInfo, buildJsoncPointerMap } from '../vendor/codemirror_json_schema.js';
 import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_schema.js';
 
 (() => {
@@ -26,8 +26,10 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     customContextMenuCleanupByEditor: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     customContextMenuClipboardShadow: '',
     yamlAssistByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
+    snippetProvidersByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     jsonHoverProvidersInstalled: false,
     yamlAssistProvidersInstalled: false,
+    jsonSnippetProvidersInstalled: false,
   };
   const _CUSTOM_CONTEXT_MENU_CLEANUP_KEY = '__xkMonacoCustomContextMenuCleanup';
 
@@ -1437,9 +1439,76 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
   function _monacoCompletionKind(monaco, item) {
     try {
       if (item && item.type === 'property') return monaco.languages.CompletionItemKind.Field;
+      if (item && item.type === 'snippet') return monaco.languages.CompletionItemKind.Snippet;
       return monaco.languages.CompletionItemKind.Value;
     } catch (e) {}
     return 12;
+  }
+
+  function _setModelSnippetProvider(model, provider) {
+    if (!model) return;
+    if (_state.snippetProvidersByModel) {
+      try {
+        if (provider) _state.snippetProvidersByModel.set(model, provider);
+        else _state.snippetProvidersByModel.delete(model);
+        return;
+      } catch (e) {}
+    }
+    try {
+      if (provider) model.__xkSnippetProvider = provider;
+      else delete model.__xkSnippetProvider;
+    } catch (e) {}
+  }
+
+  function _getModelSnippetProvider(model) {
+    if (!model) return null;
+    if (_state.snippetProvidersByModel) {
+      try { return _state.snippetProvidersByModel.get(model) || null; } catch (e) {}
+    }
+    try { return model.__xkSnippetProvider || null; } catch (e) {}
+    return null;
+  }
+
+  function _resolveJsoncPointerAtOffset(text, offset) {
+    try {
+      const map = buildJsoncPointerMap(String(text || ''));
+      if (!map || typeof map.forEach !== 'function') return '';
+      const safeOffset = Math.max(0, Number(offset || 0));
+      let bestPointer = '';
+      let bestSpan = Infinity;
+      map.forEach((range, pointer) => {
+        const from = Math.max(0, Number(range && range.valueFrom || 0));
+        const to = Math.max(from, Number(range && range.valueTo || from));
+        if (safeOffset < from || safeOffset > to) return;
+        const span = to - from;
+        if (span < bestSpan) {
+          bestSpan = span;
+          bestPointer = String(pointer || '');
+        }
+      });
+      return bestPointer;
+    } catch (e) {}
+    return '';
+  }
+
+  function _invokeJsonSnippetProvider(provider, model, position) {
+    if (!provider || !model || typeof model.getOffsetAt !== 'function') return [];
+    let text = '';
+    try { text = model.getValue() || ''; } catch (e) { text = ''; }
+    let offset = 0;
+    try { offset = model.getOffsetAt(position); } catch (e) { offset = 0; }
+    const pointer = _resolveJsoncPointerAtOffset(text, offset);
+    let snippets = null;
+    try {
+      const fn = typeof provider === 'function'
+        ? provider
+        : (provider && typeof provider.getSnippets === 'function' ? (ctx) => provider.getSnippets(ctx) : null);
+      if (!fn) return [];
+      snippets = fn({ text, offset, pointer, model, position, language: 'json' });
+    } catch (e) {
+      snippets = null;
+    }
+    return Array.isArray(snippets) ? snippets : [];
   }
 
   function _ensureYamlAssistProviders(monaco) {
@@ -1452,8 +1521,10 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         const schema = _resolveYamlAssistSchema(assist);
         if (!schema || !model || typeof model.getOffsetAt !== 'function') return { suggestions: [] };
 
+        const snippetProvider = _getModelSnippetProvider(model) || (assist && assist.snippetProvider) || null;
         const result = completeYamlTextFromSchema(model.getValue(), schema, {
           offset: model.getOffsetAt(position),
+          snippetProvider,
         });
         if (!result || !Array.isArray(result.options) || !result.options.length) return { suggestions: [] };
 
@@ -1462,18 +1533,30 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         const range = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column);
 
         return {
-          suggestions: result.options.map((item, index) => ({
-            label: item.label,
-            kind: _monacoCompletionKind(monaco, item),
-            insertText: item.insertText || item.label,
-            detail: item.detail || '',
-            documentation: item.documentation && item.documentation.markdown
-              ? { value: item.documentation.markdown }
-              : (item.documentation && item.documentation.plain ? item.documentation.plain : ''),
-            range,
-            sortText: `${item.type === 'property' ? '0' : '1'}-${String(index).padStart(4, '0')}-${item.label}`,
-            filterText: item.label,
-          })),
+          suggestions: result.options.map((item, index) => {
+            const isSnippet = item.type === 'snippet';
+            const insertText = isSnippet
+              ? (item.monacoSnippet || item.insertText || item.label)
+              : (item.insertText || item.label);
+            const base = {
+              label: item.label,
+              kind: _monacoCompletionKind(monaco, item),
+              insertText,
+              detail: item.detail || '',
+              documentation: item.documentation && item.documentation.markdown
+                ? { value: item.documentation.markdown }
+                : (item.documentation && item.documentation.plain ? item.documentation.plain : ''),
+              range,
+              sortText: `${isSnippet ? '9' : (item.type === 'property' ? '0' : '1')}-${String(index).padStart(4, '0')}-${item.label}`,
+              filterText: item.label,
+            };
+            if (isSnippet) {
+              try {
+                base.insertTextRules = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
+              } catch (e) {}
+            }
+            return base;
+          }),
         };
       },
     });
@@ -1498,6 +1581,54 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     });
 
     _state.yamlAssistProvidersInstalled = true;
+  }
+
+  function _ensureJsonSnippetProviders(monaco) {
+    if (!monaco || !monaco.languages || _state.jsonSnippetProvidersInstalled) return;
+
+    const provider = {
+      triggerCharacters: ['/', '"', ' ', ','],
+      provideCompletionItems(model, position) {
+        if (!_supportsJsonSchemaOnModel(model) || !model || typeof model.getOffsetAt !== 'function') {
+          return { suggestions: [] };
+        }
+        const snippetProvider = _getModelSnippetProvider(model);
+        if (!snippetProvider) return { suggestions: [] };
+
+        const snippets = _invokeJsonSnippetProvider(snippetProvider, model, position);
+        if (!snippets.length) return { suggestions: [] };
+
+        const offset = (() => { try { return model.getOffsetAt(position); } catch (e) { return 0; } })();
+        const start = model.getPositionAt(offset);
+        const end = model.getPositionAt(offset);
+        const range = new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column);
+
+        const suggestions = snippets
+          .filter((item) => item && item.label && (item.insertText || item.monacoSnippet))
+          .map((item, index) => {
+            const insertText = item.monacoSnippet || item.insertText || '';
+            const docParts = [];
+            if (item.documentation) docParts.push(String(item.documentation));
+            if (item.warning) docParts.push(`⚠ ${String(item.warning)}`);
+            const docValue = docParts.join('\n\n');
+            return {
+              label: `📦 ${String(item.label)}`,
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText,
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              detail: String(item.detail || 'snippet'),
+              documentation: docValue ? { value: docValue } : '',
+              range,
+              sortText: `9-${String(index).padStart(4, '0')}-${item.label}`,
+              filterText: `snippet ${item.label}`,
+            };
+          });
+        return { suggestions };
+      },
+    };
+    try { monaco.languages.registerCompletionItemProvider('json', provider); } catch (e) {}
+    try { monaco.languages.registerCompletionItemProvider('jsonc', provider); } catch (e) {}
+    _state.jsonSnippetProvidersInstalled = true;
   }
 
   function _ensureJsonHoverProviders(monaco) {
@@ -1554,6 +1685,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
       // Ensure the requested language is registered (best-effort).
       try { await _ensureLanguage(monaco, language); } catch (e) {}
       try { _ensureJsonHoverProviders(monaco); } catch (e) {}
+      try { _ensureJsonSnippetProviders(monaco); } catch (e) {}
       try { _ensureYamlAssistProviders(monaco); } catch (e) {}
       try { applyTheme(monaco); } catch (e) {}
       try { wireThemeSync(monaco); } catch (e) {}
@@ -1622,6 +1754,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
           monaco.editor.setModelLanguage(model, runtimeLanguage);
         }
         if (model) _setModelYamlAssist(model, (language === 'yaml' && o.yamlAssist) ? o.yamlAssist : null);
+        if (model) _setModelSnippetProvider(model, o.snippetProvider || null);
       } catch (e) {}
       try {
         if (model && o.schema) _setModelJsonSchema(model, o.schema, monaco);
@@ -1634,6 +1767,12 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
             return _setModelJsonSchema(model, currentSchema, monaco);
           };
           editor.getSchema = () => currentSchema || null;
+          editor.setSnippetProvider = (provider) => {
+            if (!model) return false;
+            _setModelSnippetProvider(model, provider || null);
+            return true;
+          };
+          editor.getSnippetProvider = () => (model ? _getModelSnippetProvider(model) : null);
         }
       } catch (e) {}
 
@@ -1678,6 +1817,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
             editor.onDidDispose(() => {
               try { unsubscribeUiSettings(); } catch (e2) {}
               try { if (model) _setModelYamlAssist(model, null); } catch (e3) {}
+              try { if (model) _setModelSnippetProvider(model, null); } catch (e3b) {}
               try { if (model) _setModelJsonSchema(model, null, monaco); } catch (e4) {}
               try { if (ownedModel && typeof ownedModel.dispose === 'function') ownedModel.dispose(); } catch (e5) {}
             });
@@ -1699,6 +1839,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         if (editor && typeof editor.onDidDispose === 'function') {
           editor.onDidDispose(() => {
             try { if (model) _setModelYamlAssist(model, null); } catch (e2) {}
+            try { if (model) _setModelSnippetProvider(model, null); } catch (e2b) {}
             try { if (model) _setModelJsonSchema(model, null, monaco); } catch (e3) {}
             try { if (ownedModel && typeof ownedModel.dispose === 'function') ownedModel.dispose(); } catch (e4) {}
           });
@@ -1801,5 +1942,12 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     layoutOnVisible,
     toFacade,
     uninstallCustomContextMenu,
+    setModelSnippetProvider(model, provider) {
+      _setModelSnippetProvider(model, provider || null);
+      return true;
+    },
+    getModelSnippetProvider(model) {
+      return _getModelSnippetProvider(model);
+    },
   };
 })();
