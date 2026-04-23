@@ -2518,6 +2518,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/vendor/codemirror_json_schema.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/ui/yaml_schema.js",
           "globals": [],
           "lazy_features": []

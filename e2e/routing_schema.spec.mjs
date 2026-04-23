@@ -521,8 +521,22 @@ test('routing Monaco shows Xray schema hover in browser', async ({ page }) => {
 
   await showMonacoHoverForToken(page, '"rules"');
   await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('Массив правил маршрутизации');
+  await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('outboundTag');
 
   await clearEditorTooltips(page);
   await showMonacoHoverForToken(page, '"type"');
   await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('Тип правила маршрутизации');
+
+  await replaceRoutingText(page, VALID_ROUTING);
+  await waitForRoutingText(page, '"domainStrategy"');
+  await waitForRoutingSchema(page);
+  await clearEditorTooltips(page);
+  await showMonacoHoverForToken(page, '"domainStrategy"');
+  await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('Стратегия сопоставления доменов');
+  await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('Тип:');
+  await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('string');
+  await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('Допустимые значения');
+  await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('IPIfNonMatch');
+  await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('По умолчанию');
+  await expect.poll(() => tooltipText(page, '.monaco-hover, .monaco-editor-hover')).toContain('AsIs');
 });

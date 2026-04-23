@@ -497,7 +497,12 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "function wrongCasePropertyMessage" in schema_shim
     assert "function pointerLabel" in schema_shim
     assert "function renderPropertiesSummary" in schema_shim
+    assert "function renderPropertiesSummaryMarkdown" in schema_shim
     assert "function renderArrayItemsSummary" in schema_shim
+    assert "function renderArrayItemsSummaryMarkdown" in schema_shim
+    assert "function buildJsonSchemaHoverContent(rootSchema, subSchema, pointer, currentValue)" in schema_shim
+    assert "function buildJsonSchemaHoverInfo(text, schema, offset)" in schema_shim
+    assert "buildJsonSchemaHoverInfo," in schema_shim
     assert "function inferObjectPointerBefore" in schema_shim
     assert "function fallbackPropertyCompletion" in schema_shim
     assert "поля:" in schema_shim
@@ -514,15 +519,21 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "jsonSchemasByModelUri: new Map()" in monaco_shared
     assert "jsonModeConfigured: false" in monaco_shared
     assert "function _setModelJsonSchema(model, schema, monaco)" in monaco_shared
+    assert "function _getModelJsonSchema(model)" in monaco_shared
     assert "function _applyManagedJsonDiagnostics(monaco)" in monaco_shared
     assert "function _schemaFileMatchPatternsForModel(model)" in monaco_shared
     assert "function _ensureJsonModeConfiguration(monaco)" in monaco_shared
+    assert "function _ensureJsonHoverProviders(monaco)" in monaco_shared
     assert "function _normalizeModelUri(monaco, rawUri, language)" in monaco_shared
+    assert "buildJsonSchemaHoverInfo" in monaco_shared
     assert "defaults.setModeConfiguration({" in monaco_shared
-    assert "hovers: true" in monaco_shared
+    assert "hovers: false" in monaco_shared
     assert "completionItems: true" in monaco_shared
     assert "fileMatch: Array.isArray(entry && entry.fileMatch) && entry.fileMatch.length ? entry.fileMatch : [modelUri]" in monaco_shared
     assert "fileMatch: _schemaFileMatchPatternsForModel(model)" in monaco_shared
+    assert "registerHoverProvider('json'" in monaco_shared
+    assert "const schema = _getModelJsonSchema(model);" in monaco_shared
+    assert "const result = buildJsonSchemaHoverInfo(model.getValue(), schema, model.getOffsetAt(position));" in monaco_shared
     assert "return monaco.Uri.parse(`xkeen://json/model-${nextId}.jsonc`);" in monaco_shared
     assert "editor.setSchema = (schema) => {" in monaco_shared
     assert "editor.getSchema = () => currentSchema || null;" in monaco_shared

@@ -761,6 +761,14 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+function escapeMarkdownCode(str) {
+  return String(str || '').replace(/\\/g, '\\\\').replace(/`/g, '\\`');
+}
+
+function markdownCode(str) {
+  return `\`${escapeMarkdownCode(str)}\``;
+}
+
 function pointerLabel(pointer) {
   if (!pointer) return 'root';
   const parts = pointer.slice(1).split('/').map(p =>
@@ -830,6 +838,34 @@ function renderPropertiesSummary(schema, rootSchema) {
   ].join('');
 }
 
+function renderPropertiesSummaryMarkdown(schema, rootSchema) {
+  const props = collectAllProperties(schema, rootSchema);
+  const entries = Object.entries(props || {});
+  if (!entries.length) return '';
+
+  const required = new Set(Array.isArray(schema.required) ? schema.required : []);
+  const shown = entries.slice(0, 12).map(([key, value]) => {
+    const resolved = resolveSchema(value, rootSchema) || value;
+    const hint = schemaHint(resolved);
+    const req = required.has(key) ? ' (обязательное)' : '';
+    const suffix = hint ? ` — ${hint}` : '';
+    return `- ${markdownCode(key)}${req}${suffix}`;
+  }).join('\n');
+  const more = entries.length > 12
+    ? `- и ещё ${entries.length - 12}`
+    : '';
+  const requiredLine = required.size
+    ? `Обязательные: ${Array.from(required).map((key) => markdownCode(key)).join(', ')}`
+    : '';
+
+  return [
+    'Поля:',
+    shown,
+    more,
+    requiredLine,
+  ].filter(Boolean).join('\n');
+}
+
 function renderArrayItemsSummary(schema, rootSchema) {
   if (!schema || typeof schema !== 'object' || !schema.items) return '';
   const itemSchema = resolveSchema(Array.isArray(schema.items) ? schema.items[0] : schema.items, rootSchema);
@@ -846,89 +882,218 @@ function renderArrayItemsSummary(schema, rootSchema) {
   ].join('');
 }
 
+function renderArrayItemsSummaryMarkdown(schema, rootSchema) {
+  if (!schema || typeof schema !== 'object' || !schema.items) return '';
+  const itemSchema = resolveSchema(Array.isArray(schema.items) ? schema.items[0] : schema.items, rootSchema);
+  if (!itemSchema || typeof itemSchema !== 'object') return '';
+  const itemType = schemaTypeLabel(itemSchema);
+  const itemHint = schemaHint(itemSchema);
+  const headerParts = [];
+  if (itemType) headerParts.push(`Элементы: ${markdownCode(itemType)}`);
+  if (itemHint && itemHint !== itemType) headerParts.push(itemHint);
+  const props = renderPropertiesSummaryMarkdown(itemSchema, rootSchema);
+  return [
+    headerParts.join(' · '),
+    props,
+  ].filter(Boolean).join('\n\n');
+}
+
+function buildJsonSchemaHoverContent(rootSchema, subSchema, pointer, currentValue) {
+  const deprecationMessage = schemaDeprecationMessage(subSchema, currentValue);
+  const label = pointerLabel(pointer);
+  const htmlParts = [];
+  const markdownParts = [];
+  const plainParts = [];
+
+  if (label) {
+    htmlParts.push(`<div style="margin-bottom:5px;font-size:.9em;opacity:.74"><code>${escapeHtml(label)}</code></div>`);
+    markdownParts.push(`**${markdownCode(label)}**`);
+    plainParts.push(label);
+  }
+
+  if (subSchema.description) {
+    const description = String(subSchema.description);
+    htmlParts.push(`<div style="margin-bottom:6px">${escapeHtml(description)}</div>`);
+    markdownParts.push(description);
+    plainParts.push(description);
+  }
+
+  if (deprecationMessage) {
+    const message = String(deprecationMessage);
+    htmlParts.push(`<div style="margin-bottom:6px;padding:6px 8px;border-radius:8px;border:1px solid rgba(245, 158, 11, 0.35);background:rgba(245, 158, 11, 0.12);color:#fcd34d">${escapeHtml(message)}</div>`);
+    markdownParts.push(`> ${message}`);
+    plainParts.push(message);
+  }
+
+  const typeInfoHtml = [];
+  const typeInfoMarkdown = [];
+  const typeInfoPlain = [];
+  if (subSchema.type) {
+    const typeText = Array.isArray(subSchema.type) ? subSchema.type.join(' | ') : subSchema.type;
+    typeInfoHtml.push(`тип: <code>${escapeHtml(typeText)}</code>`);
+    typeInfoMarkdown.push(`Тип: ${markdownCode(typeText)}`);
+    typeInfoPlain.push(`Тип: ${typeText}`);
+  }
+  if (subSchema.enum) {
+    const enumHtml = subSchema.enum.map((value) => `<code>${escapeHtml(JSON.stringify(value))}</code>`).join(', ');
+    const enumMarkdown = subSchema.enum.map((value) => markdownCode(JSON.stringify(value))).join(', ');
+    typeInfoHtml.push(`enum: ${enumHtml}`);
+    typeInfoMarkdown.push(`Допустимые значения: ${enumMarkdown}`);
+    typeInfoPlain.push(`Допустимые значения: ${subSchema.enum.map((value) => JSON.stringify(value)).join(', ')}`);
+  }
+  if (subSchema.examples && Array.isArray(subSchema.examples) && subSchema.examples.length) {
+    const examplesHtml = subSchema.examples.map((value) => `<code>${escapeHtml(JSON.stringify(value))}</code>`).join(', ');
+    const examplesMarkdown = subSchema.examples.map((value) => markdownCode(JSON.stringify(value))).join(', ');
+    typeInfoHtml.push(`примеры: ${examplesHtml}`);
+    typeInfoMarkdown.push(`Примеры: ${examplesMarkdown}`);
+    typeInfoPlain.push(`Примеры: ${subSchema.examples.map((value) => JSON.stringify(value)).join(', ')}`);
+  }
+  if (subSchema.default !== undefined) {
+    const defaultText = JSON.stringify(subSchema.default);
+    typeInfoHtml.push(`по-умолчанию: <code>${escapeHtml(defaultText)}</code>`);
+    typeInfoMarkdown.push(`По умолчанию: ${markdownCode(defaultText)}`);
+    typeInfoPlain.push(`По умолчанию: ${defaultText}`);
+  }
+  if (subSchema.format) {
+    const formatText = String(subSchema.format);
+    typeInfoHtml.push(`формат: <code>${escapeHtml(formatText)}</code>`);
+    typeInfoMarkdown.push(`Формат: ${markdownCode(formatText)}`);
+    typeInfoPlain.push(`Формат: ${formatText}`);
+  }
+  if (subSchema.pattern) {
+    const patternText = String(subSchema.pattern);
+    typeInfoHtml.push(`паттерн: <code>${escapeHtml(patternText)}</code>`);
+    typeInfoMarkdown.push(`Паттерн: ${markdownCode(patternText)}`);
+    typeInfoPlain.push(`Паттерн: ${patternText}`);
+  }
+  if (subSchema.minimum !== undefined || subSchema.maximum !== undefined) {
+    const rangeHtml = [];
+    const rangeMarkdown = [];
+    const rangePlain = [];
+    if (subSchema.minimum !== undefined) {
+      rangeHtml.push(`мин: ${subSchema.minimum}`);
+      rangeMarkdown.push(`мин: ${subSchema.minimum}`);
+      rangePlain.push(`мин: ${subSchema.minimum}`);
+    }
+    if (subSchema.maximum !== undefined) {
+      rangeHtml.push(`макс: ${subSchema.maximum}`);
+      rangeMarkdown.push(`макс: ${subSchema.maximum}`);
+      rangePlain.push(`макс: ${subSchema.maximum}`);
+    }
+    typeInfoHtml.push(rangeHtml.join(', '));
+    typeInfoMarkdown.push(rangeMarkdown.join(', '));
+    typeInfoPlain.push(rangePlain.join(', '));
+  }
+
+  if (typeInfoHtml.length) {
+    htmlParts.push(`<div style="font-size:0.9em;opacity:0.85">${typeInfoHtml.join(' · ')}</div>`);
+    markdownParts.push(typeInfoMarkdown.join(' · '));
+    plainParts.push(typeInfoPlain.join(' · '));
+  }
+
+  if (schemaTypeLabel(subSchema).includes('object') || subSchema.properties || subSchema.anyOf || subSchema.allOf || subSchema.oneOf) {
+    const propertiesSummary = renderPropertiesSummary(subSchema, rootSchema);
+    const propertiesSummaryMarkdown = renderPropertiesSummaryMarkdown(subSchema, rootSchema);
+    if (propertiesSummary) htmlParts.push(propertiesSummary);
+    if (propertiesSummaryMarkdown) markdownParts.push(propertiesSummaryMarkdown);
+    if (propertiesSummaryMarkdown) plainParts.push(propertiesSummaryMarkdown.replace(/`/g, ''));
+  }
+
+  if (schemaTypeLabel(subSchema).includes('array') || subSchema.items) {
+    const arraySummary = renderArrayItemsSummary(subSchema, rootSchema);
+    const arraySummaryMarkdown = renderArrayItemsSummaryMarkdown(subSchema, rootSchema);
+    if (arraySummary) htmlParts.push(arraySummary);
+    if (arraySummaryMarkdown) markdownParts.push(arraySummaryMarkdown);
+    if (arraySummaryMarkdown) plainParts.push(arraySummaryMarkdown.replace(/`/g, ''));
+  }
+
+  return {
+    html: htmlParts.join(''),
+    markdown: markdownParts.filter(Boolean).join('\n\n').trim(),
+    plain: plainParts.filter(Boolean).join('\n\n').trim(),
+  };
+}
+
+function findJsonSchemaHoverTarget(pointerMap, offset) {
+  if (!(pointerMap instanceof Map)) return null;
+  const probe = Math.max(0, Number(offset || 0));
+  const candidates = [];
+  pointerMap.forEach((mapping, pointer) => {
+    const keyFrom = Math.max(0, Number(mapping && mapping.keyFrom));
+    const keyTo = Math.max(keyFrom, Number(mapping && mapping.keyTo));
+    const valueFrom = Math.max(0, Number(mapping && mapping.valueFrom));
+    const valueTo = Math.max(valueFrom, Number(mapping && mapping.valueTo));
+    if (probe >= keyFrom && probe <= keyTo) {
+      candidates.push({
+        pointer,
+        from: keyFrom,
+        to: keyTo,
+        span: Math.max(0, keyTo - keyFrom),
+        depth: errorPointerDepth({ pointer }),
+        kind: 'key',
+      });
+    }
+    if (probe >= valueFrom && probe <= valueTo) {
+      candidates.push({
+        pointer,
+        from: valueFrom,
+        to: valueTo,
+        span: Math.max(0, valueTo - valueFrom),
+        depth: errorPointerDepth({ pointer }),
+        kind: 'value',
+      });
+    }
+  });
+  if (!candidates.length) return null;
+  candidates.sort((left, right) => {
+    if (left.span !== right.span) return left.span - right.span;
+    if (left.depth !== right.depth) return right.depth - left.depth;
+    if (left.kind !== right.kind) return left.kind === 'key' ? -1 : 1;
+    return 0;
+  });
+  return candidates[0] || null;
+}
+
+function buildJsonSchemaHoverInfo(text, schema, offset) {
+  if (!schema || typeof schema !== 'object') return null;
+  const source = String(text || '');
+  if (!source.trim()) return null;
+  const pointerMap = buildJsoncPointerMap(source);
+  const target = findJsonSchemaHoverTarget(pointerMap, offset);
+  if (!target) return null;
+  const subSchema = getSchemaAtPointer(schema, schema, target.pointer);
+  if (!subSchema || typeof subSchema !== 'object') return null;
+  const docValue = safeParseJson(source);
+  const currentValue = docValue == null ? undefined : getValueAtPointer(docValue, target.pointer);
+  const content = buildJsonSchemaHoverContent(schema, subSchema, target.pointer, currentValue);
+  if (!content.html && !content.markdown && !content.plain) return null;
+  return {
+    from: target.from,
+    to: target.to,
+    pointer: target.pointer,
+    html: content.html,
+    markdown: content.markdown,
+    plain: content.plain,
+  };
+}
+
 function jsonSchemaHover(options) {
   return async function schemaHoverSource(view, pos, side) {
     const schema = getJSONSchema(view.state);
     if (!schema) return null;
-
-    const tree = syntaxTree(view.state);
-    const node = tree.resolveInner(pos, side);
-    const doc = view.state.doc;
-    const pointer = getJsonPointerAt(doc, node);
-    if (pointer === '' && node.name === 'JsonText') return null;
-
-    const subSchema = getSchemaAtPointer(schema, schema, pointer);
-    if (!subSchema || typeof subSchema !== 'object') return null;
-    const docValue = safeParseJson(doc.toString());
-    const currentValue = docValue == null ? undefined : getValueAtPointer(docValue, pointer);
-    const deprecationMessage = schemaDeprecationMessage(subSchema, currentValue);
-
-    // Build tooltip content
-    const parts = [];
-    const label = pointerLabel(pointer);
-    if (label) {
-      parts.push(`<div style="margin-bottom:5px;font-size:.9em;opacity:.74"><code>${escapeHtml(label)}</code></div>`);
-    }
-
-    if (subSchema.description) {
-      parts.push(`<div style="margin-bottom:6px">${escapeHtml(subSchema.description)}</div>`);
-    }
-    if (deprecationMessage) {
-      parts.push(`<div style="margin-bottom:6px;padding:6px 8px;border-radius:8px;border:1px solid rgba(245, 158, 11, 0.35);background:rgba(245, 158, 11, 0.12);color:#fcd34d">${escapeHtml(deprecationMessage)}</div>`);
-    }
-
-    const typeInfo = [];
-    if (subSchema.type) {
-      const t = Array.isArray(subSchema.type) ? subSchema.type.join(' | ') : subSchema.type;
-      typeInfo.push(`тип: <code>${escapeHtml(t)}</code>`);
-    }
-    if (subSchema.enum) {
-      typeInfo.push(`enum: ${subSchema.enum.map(e => `<code>${escapeHtml(JSON.stringify(e))}</code>`).join(', ')}`);
-    }
-    if (subSchema.examples && Array.isArray(subSchema.examples) && subSchema.examples.length) {
-      typeInfo.push(`примеры: ${subSchema.examples.map(e => `<code>${escapeHtml(JSON.stringify(e))}</code>`).join(', ')}`);
-    }
-    if (subSchema.default !== undefined) {
-      typeInfo.push(`по-умолчанию: <code>${escapeHtml(JSON.stringify(subSchema.default))}</code>`);
-    }
-    if (subSchema.format) {
-      typeInfo.push(`формат: <code>${escapeHtml(subSchema.format)}</code>`);
-    }
-    if (subSchema.pattern) {
-      typeInfo.push(`паттерн: <code>${escapeHtml(subSchema.pattern)}</code>`);
-    }
-    if (subSchema.minimum !== undefined || subSchema.maximum !== undefined) {
-      const range = [];
-      if (subSchema.minimum !== undefined) range.push(`мин: ${subSchema.minimum}`);
-      if (subSchema.maximum !== undefined) range.push(`макс: ${subSchema.maximum}`);
-      typeInfo.push(range.join(', '));
-    }
-
-    if (typeInfo.length) {
-      parts.push(`<div style="font-size:0.9em;opacity:0.85">${typeInfo.join(' · ')}</div>`);
-    }
-
-    if (schemaTypeLabel(subSchema).includes('object') || subSchema.properties || subSchema.anyOf || subSchema.allOf || subSchema.oneOf) {
-      const propertiesSummary = renderPropertiesSummary(subSchema, schema);
-      if (propertiesSummary) parts.push(propertiesSummary);
-    }
-
-    if (schemaTypeLabel(subSchema).includes('array') || subSchema.items) {
-      const arraySummary = renderArrayItemsSummary(subSchema, schema);
-      if (arraySummary) parts.push(arraySummary);
-    }
-
-    if (!parts.length) return null;
+    const probe = Math.max(0, pos + (side < 0 ? -1 : 0));
+    const result = buildJsonSchemaHoverInfo(view.state.doc.toString(), schema, probe);
+    if (!result || !result.html) return null;
 
     return {
-      pos: node.from,
-      end: node.to,
+      pos: Math.max(0, Number(result.from || 0)),
+      end: Math.max(0, Number(result.to || result.from || 0)),
       above: true,
       create() {
         const dom = document.createElement('div');
         dom.className = 'cm6-json-schema-hover';
         dom.style.cssText = 'padding:8px 12px;max-width:520px;line-height:1.45;font-size:13px;';
-        dom.innerHTML = parts.join('');
+        dom.innerHTML = result.html;
         return { dom };
       },
     };
@@ -1463,5 +1628,6 @@ export {
   jsonSchemaLinter,
   handleRefresh,
   jsonSchemaHover,
+  buildJsonSchemaHoverInfo,
   jsonCompletion,
 };

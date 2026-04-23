@@ -1,4 +1,5 @@
 import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
+import { buildJsonSchemaHoverInfo } from '../vendor/codemirror_json_schema.js';
 import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_schema.js';
 
 (() => {
@@ -25,6 +26,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     customContextMenuCleanupByEditor: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     customContextMenuClipboardShadow: '',
     yamlAssistByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
+    jsonHoverProvidersInstalled: false,
     yamlAssistProvidersInstalled: false,
   };
   const _CUSTOM_CONTEXT_MENU_CLEANUP_KEY = '__xkMonacoCustomContextMenuCleanup';
@@ -314,6 +316,16 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     return true;
   }
 
+  function _getModelJsonSchema(model) {
+    const modelUri = _jsonModelUri(model);
+    if (!modelUri) return null;
+    try {
+      const entry = _state.jsonSchemasByModelUri.get(modelUri);
+      return entry && entry.schema && typeof entry.schema === 'object' ? entry.schema : null;
+    } catch (e) {}
+    return null;
+  }
+
   function _ensureJsonModeConfiguration(monaco) {
     try {
       const defaults = _getJsonDefaults(monaco);
@@ -326,7 +338,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
           documentRangeFormattingEdits: true,
           documentSymbols: true,
           foldingRanges: true,
-          hovers: true,
+          hovers: false,
           colors: true,
           selectionRanges: true,
           tokens: true,
@@ -1488,6 +1500,31 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     _state.yamlAssistProvidersInstalled = true;
   }
 
+  function _ensureJsonHoverProviders(monaco) {
+    if (!monaco || !monaco.languages || _state.jsonHoverProvidersInstalled) return;
+
+    monaco.languages.registerHoverProvider('json', {
+      provideHover(model, position) {
+        if (!_isEditorHoverEnabled()) return null;
+        if (!_supportsJsonSchemaOnModel(model) || !model || typeof model.getOffsetAt !== 'function') return null;
+        const schema = _getModelJsonSchema(model);
+        if (!schema) return null;
+
+        const result = buildJsonSchemaHoverInfo(model.getValue(), schema, model.getOffsetAt(position));
+        if (!result || !result.markdown) return null;
+
+        const start = model.getPositionAt(Math.max(0, Number(result.from || 0)));
+        const end = model.getPositionAt(Math.max(0, Number(result.to || result.from || 0)));
+        return {
+          range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+          contents: [{ value: result.markdown }],
+        };
+      },
+    });
+
+    _state.jsonHoverProvidersInstalled = true;
+  }
+
   async function createEditor(host, opts) {
     const el = host;
     if (!el) return null;
@@ -1516,6 +1553,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
       } catch (e) {}
       // Ensure the requested language is registered (best-effort).
       try { await _ensureLanguage(monaco, language); } catch (e) {}
+      try { _ensureJsonHoverProviders(monaco); } catch (e) {}
       try { _ensureYamlAssistProviders(monaco); } catch (e) {}
       try { applyTheme(monaco); } catch (e) {}
       try { wireThemeSync(monaco); } catch (e) {}
