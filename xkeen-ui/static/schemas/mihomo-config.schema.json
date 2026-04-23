@@ -444,7 +444,7 @@
         "servername": { "type": "string", "description": "SNI (Server Name Indication)" },
         "fingerprint": { "type": "string", "description": "TLS fingerprint" },
         "client-fingerprint": { "type": "string", "enum": ["chrome", "firefox", "safari", "iOS", "android", "edge", "360", "qq", "random", "randomized"] },
-        "network": { "type": "string", "enum": ["ws", "grpc", "h2", "http", "tcp"], "description": "Транспорт" },
+        "network": { "type": "string", "enum": ["ws", "grpc", "h2", "http", "tcp", "xhttp"], "description": "Транспорт" },
         "udp": { "type": "boolean", "default": true, "description": "Поддержка UDP" },
         "tfo": { "type": "boolean", "default": false, "description": "TCP Fast Open" },
         "mptcp": { "type": "boolean", "default": false, "description": "Multipath TCP" },
@@ -473,7 +473,11 @@
         "grpc-opts": {
           "type": "object",
           "properties": {
-            "grpc-service-name": { "type": "string" }
+            "grpc-service-name": { "type": "string" },
+            "ping-interval": { "type": "integer", "minimum": 0, "description": "Интервал ping для gRPC в секундах" },
+            "max-connections": { "type": "integer", "minimum": 0, "description": "Максимум gRPC-соединений для мультиплексирования" },
+            "min-streams": { "type": "integer", "minimum": 0, "description": "Минимум потоков на соединение перед открытием нового" },
+            "max-streams": { "type": "integer", "minimum": 0, "description": "Максимум потоков на соединение" }
           }
         },
         "h2-opts": {
@@ -483,6 +487,7 @@
             "path": { "type": "string" }
           }
         },
+        "xhttp-opts": { "$ref": "#/definitions/xhttpOpts" },
         "plugin": { "type": "string" },
         "plugin-opts": { "type": "object" },
         "smux": {
@@ -506,6 +511,72 @@
             }
           }
         }
+      }
+    },
+
+    "xhttpReuseSettings": {
+      "type": "object",
+      "description": "Параметры повторного использования XHTTP-соединений (XMUX / reuse-settings).",
+      "properties": {
+        "max-concurrency": { "type": ["integer", "string"], "description": "Максимум параллельных запросов в диапазоне или фиксированным значением." },
+        "max-connections": { "type": ["integer", "string"], "description": "Максимум XHTTP-соединений." },
+        "c-max-reuse-times": { "type": ["integer", "string"], "description": "Лимит повторного использования соединения клиентом." },
+        "h-max-request-times": { "type": ["integer", "string"], "description": "Лимит количества запросов на HTTP-соединение." },
+        "h-max-reusable-secs": { "type": ["integer", "string"], "description": "Максимальное время повторного использования HTTP-соединения в секундах." }
+      }
+    },
+
+    "xhttpDownloadSettings": {
+      "type": "object",
+      "description": "Дополнительные настройки XHTTP download-settings.",
+      "properties": {
+        "path": { "type": "string", "description": "Путь для download-settings." },
+        "host": { "type": "string", "description": "Host для download-settings." },
+        "headers": { "type": "object", "description": "Дополнительные HTTP-заголовки.", "additionalProperties": { "type": "string" } },
+        "no-grpc-header": { "type": "boolean", "description": "Не добавлять gRPC-совместимый заголовок." },
+        "x-padding-bytes": { "type": ["integer", "string"], "description": "Диапазон или количество XPadding-байтов." },
+        "sc-max-each-post-bytes": { "type": ["integer", "string"], "description": "Максимальный размер каждого POST-запроса для stream-up." },
+        "reuse-settings": { "$ref": "#/definitions/xhttpReuseSettings" },
+        "server": { "type": "string", "description": "Переопределённый адрес download-сервера." },
+        "port": { "type": ["integer", "string"], "description": "Переопределённый порт download-сервера." },
+        "tls": { "type": "boolean", "description": "Включить TLS для download-settings." },
+        "alpn": { "type": "array", "items": { "type": "string" }, "description": "ALPN-список для download-settings." },
+        "ech-opts": { "type": "object", "description": "Параметры ECH для download-settings." },
+        "reality-opts": { "type": "object", "description": "Параметры REALITY для download-settings." },
+        "skip-cert-verify": { "type": "boolean", "description": "Пропустить проверку сертификата." },
+        "fingerprint": { "type": "string", "description": "TLS fingerprint." },
+        "certificate": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ],
+          "description": "Клиентский сертификат или список сертификатов."
+        },
+        "private-key": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ],
+          "description": "Приватный ключ клиента."
+        },
+        "servername": { "type": "string", "description": "SNI для download-settings." },
+        "client-fingerprint": { "type": "string", "description": "Клиентский TLS fingerprint." }
+      }
+    },
+
+    "xhttpOpts": {
+      "type": "object",
+      "description": "Настройки транспорта XHTTP.",
+      "properties": {
+        "path": { "type": "string", "description": "HTTP-путь XHTTP." },
+        "host": { "type": "string", "description": "Host для XHTTP." },
+        "mode": { "type": "string", "enum": ["stream-one", "stream-up", "packet-up"], "description": "Режим XHTTP." },
+        "headers": { "type": "object", "description": "Дополнительные HTTP-заголовки.", "additionalProperties": { "type": "string" } },
+        "no-grpc-header": { "type": "boolean", "description": "Не добавлять gRPC-совместимый заголовок." },
+        "x-padding-bytes": { "type": ["integer", "string"], "description": "Диапазон или количество XPadding-байтов." },
+        "sc-max-each-post-bytes": { "type": ["integer", "string"], "description": "Максимальный размер каждого POST-запроса для stream-up." },
+        "reuse-settings": { "$ref": "#/definitions/xhttpReuseSettings" },
+        "download-settings": { "$ref": "#/definitions/xhttpDownloadSettings" }
       }
     },
 

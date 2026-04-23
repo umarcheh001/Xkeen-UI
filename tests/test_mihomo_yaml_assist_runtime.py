@@ -150,6 +150,25 @@ def test_hwid_subscription_template_completion_suggests_rule_provider_format_enu
     assert "mrs" in result["labels"]
 
 
+def test_proxy_network_completion_suggests_xhttp_transport():
+    result = _run_completion(
+        "\n".join([
+            "proxies:",
+            "  - name: xhttp-node",
+            "    type: vless",
+            "    server: edge.example.com",
+            "    port: 443",
+            "    uuid: 11111111-1111-1111-1111-111111111111",
+            "    network: x__CURSOR__",
+            "",
+        ])
+    )
+
+    assert result is not None
+    assert result["context"]["kind"] == "value"
+    assert "xhttp" in result["labels"]
+
+
 def test_key_completion_reuses_existing_yaml_mapping_delimiter_without_duplicating_colon():
     result = _apply_completion("log-lev__CURSOR__: silent\n", "log-level")
 

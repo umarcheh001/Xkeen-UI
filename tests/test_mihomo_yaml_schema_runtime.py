@@ -83,6 +83,57 @@ def test_mihomo_yaml_schema_runtime_accepts_sniffer_protocol_shorthand_with_empt
     assert result["diagnostics"] == []
 
 
+def test_mihomo_yaml_schema_runtime_accepts_xhttp_and_reuse_settings():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: xhttp-node",
+            "    type: vless",
+            "    server: edge.example.com",
+            "    port: 443",
+            "    uuid: 11111111-1111-1111-1111-111111111111",
+            "    network: xhttp",
+            "    tls: true",
+            "    xhttp-opts:",
+            "      path: /gateway",
+            "      mode: stream-up",
+            "      reuse-settings:",
+            "        max-connections: 0",
+            '        max-concurrency: "16-32"',
+            "",
+        ])
+    )
+
+    assert result["ok"] is True
+    assert result["parseOk"] is True
+    assert result["diagnostics"] == []
+
+
+def test_mihomo_yaml_schema_runtime_accepts_grpc_multiplexing_fields():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: grpc-node",
+            "    type: vless",
+            "    server: edge.example.com",
+            "    port: 443",
+            "    uuid: 11111111-1111-1111-1111-111111111111",
+            "    network: grpc",
+            "    tls: true",
+            "    grpc-opts:",
+            "      grpc-service-name: api",
+            "      max-connections: 2",
+            "      min-streams: 4",
+            "      max-streams: 16",
+            "",
+        ])
+    )
+
+    assert result["ok"] is True
+    assert result["parseOk"] is True
+    assert result["diagnostics"] == []
+
+
 def test_mihomo_yaml_schema_runtime_reports_enum_and_type_errors_with_paths():
     result = _run_mihomo_yaml_schema(
         "\n".join([

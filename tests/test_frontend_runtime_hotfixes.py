@@ -661,6 +661,29 @@ def test_mihomo_yaml_schema_runtime_is_wired_into_panel_editor():
     assert "mihomo-editor-yaml-badge" in template
 
 
+def test_mihomo_schema_tracks_xhttp_transport_and_multiplexing_fields():
+    schema = json.loads(Path('xkeen-ui/static/schemas/mihomo-config.schema.json').read_text(encoding='utf-8'))
+    proxy_props = schema['definitions']['proxy']['properties']
+
+    assert 'xhttp' in proxy_props['network']['enum']
+    assert proxy_props['xhttp-opts']['$ref'] == '#/definitions/xhttpOpts'
+
+    grpc_props = proxy_props['grpc-opts']['properties']
+    assert 'max-connections' in grpc_props
+    assert 'min-streams' in grpc_props
+    assert 'max-streams' in grpc_props
+
+    xhttp_opts = schema['definitions']['xhttpOpts']['properties']
+    assert xhttp_opts['reuse-settings']['$ref'] == '#/definitions/xhttpReuseSettings'
+    assert xhttp_opts['download-settings']['$ref'] == '#/definitions/xhttpDownloadSettings'
+
+    reuse_props = schema['definitions']['xhttpReuseSettings']['properties']
+    assert 'max-concurrency' in reuse_props
+    assert 'max-connections' in reuse_props
+    assert 'h-max-request-times' in reuse_props
+    assert 'h-max-reusable-secs' in reuse_props
+
+
 def test_runtime_vendor_assets_exist_after_frontend_build():
     required = [
         Path('xkeen-ui/static/vendor/npm/@codemirror/state/dist/index.js'),
