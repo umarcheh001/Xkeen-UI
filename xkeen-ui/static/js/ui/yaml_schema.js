@@ -1126,6 +1126,38 @@ function parseYamlBestEffort(text) {
   return undefined;
 }
 
+function resolveYamlSnippetProvider(options) {
+  if (!options || typeof options !== 'object') return null;
+  const provider = options.snippetProvider;
+  if (typeof provider === 'function') return provider;
+  if (provider && typeof provider.getSnippets === 'function') {
+    return (ctx) => provider.getSnippets(ctx);
+  }
+  return null;
+}
+
+function buildYamlSnippetCompletionOptions(snippets) {
+  const list = Array.isArray(snippets) ? snippets : [];
+  return list
+    .filter((item) => item && item.label && (item.insertText || item.monacoSnippet))
+    .map((item) => {
+      const plainParts = [];
+      if (item.documentation) plainParts.push(String(item.documentation));
+      if (item.warning) plainParts.push(`⚠ ${String(item.warning)}`);
+      const plain = plainParts.join('\n\n') || '';
+      const insertPlain = String(item.insertText || item.monacoSnippet || '');
+      const insertSnippet = String(item.monacoSnippet || item.insertText || '');
+      return {
+        label: `📦 ${String(item.label)}`,
+        type: 'snippet',
+        insertText: insertPlain,
+        monacoSnippet: insertSnippet,
+        detail: String(item.detail || 'snippet'),
+        documentation: plain ? { plain, markdown: plain } : {},
+      };
+    });
+}
+
 export function completeYamlTextFromSchema(text, schema, options = {}) {
   const source = asString(text);
   const rootSchema = schema || {};
@@ -1146,6 +1178,24 @@ export function completeYamlTextFromSchema(text, schema, options = {}) {
     list = buildKeyCompletionOptions(targetSchema, rootSchema, context.prefix, context);
   } else if (context.kind === 'value') {
     list = buildValueCompletionOptions(targetSchema, rootSchema, context.prefix);
+  }
+
+  const provider = resolveYamlSnippetProvider(options);
+  let snippetOptions = [];
+  if (provider) {
+    let snippets = null;
+    try {
+      snippets = provider({
+        path: Array.isArray(context.path) ? context.path.slice() : [],
+        kind: context.kind || '',
+        prefix: context.prefix || '',
+        offset: options.offset,
+      });
+    } catch (e) {
+      snippets = null;
+    }
+    snippetOptions = buildYamlSnippetCompletionOptions(snippets);
+    if (snippetOptions.length) list = list.concat(snippetOptions);
   }
 
   if (!list.length) return null;

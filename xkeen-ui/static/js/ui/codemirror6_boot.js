@@ -325,9 +325,13 @@ function jsonSchemaSyntaxAwareHover(opts) {
 
 function schemaExtensionFor(schema, opts) {
   if (!schema) return [];
+  const completionOpts = {
+    snippetProvider: opts && opts.snippetProvider ? opts.snippetProvider : null,
+    schemaKind: opts && opts.schemaKind ? opts.schemaKind : '',
+  };
   const extensions = [
     linter(jsonSchemaWithSyntaxLinter(opts), { needsRefresh: handleRefresh }),
-    jsonLanguage.data.of({ autocomplete: jsonCompletion() }),
+    jsonLanguage.data.of({ autocomplete: jsonCompletion(completionOpts) }),
     ...schemaStateExtensions(schema),
   ];
   if (isSchemaHoverEnabled(opts)) {
@@ -370,18 +374,27 @@ function yamlAssistExtensionFor(opts) {
     let schema = null;
     try { schema = getSchema(); } catch (e) {}
     if (!schema) return null;
-    const result = completeYamlTextFromSchema(context.state.doc.toString(), schema, { offset: context.pos });
+    const result = completeYamlTextFromSchema(context.state.doc.toString(), schema, {
+      offset: context.pos,
+      snippetProvider: opts && opts.snippetProvider ? opts.snippetProvider : null,
+    });
     if (!result || !Array.isArray(result.options) || !result.options.length) return null;
     return {
       from: Math.max(0, Number(result.from || 0)),
       to: Math.max(0, Number(result.to || result.from || 0)),
-      options: result.options.map((item) => ({
-        label: item.label,
-        type: item.type === 'property' ? 'property' : 'keyword',
-        detail: item.detail || '',
-        apply: item.insertText || item.label,
-        info: item.documentation && item.documentation.plain ? item.documentation.plain : '',
-      })),
+      options: result.options.map((item) => {
+        let type = 'keyword';
+        if (item.type === 'property') type = 'property';
+        else if (item.type === 'snippet') type = 'snippet';
+        return {
+          label: item.label,
+          type,
+          detail: item.detail || '',
+          apply: item.insertText || item.label,
+          info: item.documentation && item.documentation.plain ? item.documentation.plain : '',
+          boost: item.type === 'snippet' ? -5 : 0,
+        };
+      }),
     };
   };
 
@@ -1304,6 +1317,10 @@ function buildBridge(view, ctx) {
         options.semanticValidation = value || null;
         return bridge.refreshSchemaExtensions();
       }
+      if (key === 'snippetProvider') {
+        options.snippetProvider = value || null;
+        return bridge.refreshSchemaExtensions();
+      }
       return true;
     },
     getMode() { return getModeForCompat(); },
@@ -1355,6 +1372,7 @@ function createBridge(target, opts = {}) {
       extraKeys: (opts.extraKeys && typeof opts.extraKeys === 'object') ? opts.extraKeys : {},
       yamlAssist: opts.yamlAssist || null,
       semanticValidation: opts.semanticValidation || null,
+      snippetProvider: opts.snippetProvider || null,
     },
     languageCompartment: new Compartment(),
     readOnlyCompartment: new Compartment(),

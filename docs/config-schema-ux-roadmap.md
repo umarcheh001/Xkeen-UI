@@ -174,11 +174,16 @@ validation, а не пытаться насильно выразить всё ч
   - proxy-group;
   - proxy-provider;
   - rule-provider;
-  - DNS block;
+  - DNS block (опционально, для Keenetic обычно не default path);
   - sniffer block;
-  - TUN block;
+  - TUN block (опционально, для Keenetic обычно не default path);
 - предпочтение минимальным рабочим scaffold-блокам вместо пустых объектов;
 - по возможности адаптация шаблона под текущий контекст курсора.
+
+### Keenetic note
+
+- для Keenetic не продвигать Mihomo DNS/TUN как стандартный стартовый сценарий: эти блоки обычно требуют отдельной перенастройки DNS/firewall/TUN на роутере;
+- для Xray DNS не предлагать "универсальный" DNS scaffold без оговорок: в Keenetic-сценарии лучше ориентироваться на DNS-over-VLESS flow по инструкции <https://jameszero.net/3398.htm>.
 
 ### Пример
 
@@ -377,6 +382,7 @@ xhttp-opts:
 
 - новичок может вставлять типовые рабочие блоки без ручной сборки;
 - вставленный блок сразу синтаксически валиден.
+- Keenetic-специфичные non-default блоки (Mihomo DNS/TUN, Xray DNS) помечены предупреждением и не выглядят как рекомендуемый baseline.
 
 ### После Phase 4
 

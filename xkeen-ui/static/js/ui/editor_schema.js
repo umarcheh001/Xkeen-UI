@@ -1,3 +1,8 @@
+import {
+  createMihomoSnippetProvider,
+  createXraySnippetProvider,
+} from './schema_snippets.js';
+
 const SCHEMA_URLS = Object.freeze({
   xray: '/static/schemas/xray-config.schema.json',
   xrayRouting: '/static/schemas/xray-routing.schema.json',
@@ -7,6 +12,13 @@ const SCHEMA_URLS = Object.freeze({
 });
 
 const _schemaCache = new Map();
+const _snippetProviderCache = Object.freeze({
+  'xray-config': createXraySnippetProvider('xray-config'),
+  'xray-routing': createXraySnippetProvider('xray-routing'),
+  'xray-inbounds': createXraySnippetProvider('xray-inbounds'),
+  'xray-outbounds': createXraySnippetProvider('xray-outbounds'),
+  mihomo: createMihomoSnippetProvider(),
+});
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -138,8 +150,44 @@ function setEditorSchema(editor, schema, ctx) {
   return false;
 }
 
+function setEditorSnippetProvider(editor, provider, ctx) {
+  const target = editor && editor.raw ? editor.raw : editor;
+  const runtime = getRuntime(ctx);
+  try {
+    if (runtime && typeof runtime.setSnippetProvider === 'function') return !!runtime.setSnippetProvider(target, provider || null);
+  } catch (e) {}
+  try {
+    if (target && typeof target.setSnippetProvider === 'function') return !!target.setSnippetProvider(provider || null);
+  } catch (e2) {}
+  try {
+    if (target && typeof target.setOption === 'function') return !!target.setOption('snippetProvider', provider || null);
+  } catch (e3) {}
+  return false;
+}
+
+function normalizeSnippetKind(value) {
+  const raw = normalizeLower(value);
+  if (!raw) return '';
+  if (raw === 'xray') return 'xray-config';
+  return raw;
+}
+
+export function resolveEditorSnippetProvider(ctx) {
+  const o = ctx || {};
+  const explicitKind = normalizeSnippetKind(o.snippetKind || o.schemaKind);
+  if (explicitKind && _snippetProviderCache[explicitKind]) return _snippetProviderCache[explicitKind];
+
+  const inferredKind = normalizeSnippetKind(inferSchemaKind(o));
+  if (!inferredKind) return null;
+  return _snippetProviderCache[inferredKind] || null;
+}
+
 export function clearSchemaFromEditor(editor, ctx) {
-  return setEditorSchema(editor, null, ctx || {});
+  const target = editor && editor.raw ? editor.raw : editor;
+  const context = ctx || {};
+  const schemaCleared = setEditorSchema(target, null, context);
+  const snippetCleared = setEditorSnippetProvider(target, null, context);
+  return schemaCleared || snippetCleared;
 }
 
 export async function applySchemaToEditor(editor, ctx) {
@@ -170,12 +218,21 @@ export async function applySchemaToEditor(editor, ctx) {
     };
   }
   const ok = setEditorSchema(target, loaded.schema, o);
-  return { ok, skipped: false, spec, schema: loaded.schema };
+  const snippetProvider = resolveEditorSnippetProvider({
+    ...o,
+    schemaKind: spec.family === 'xray'
+      ? (spec.fragment ? `xray-${spec.fragment}` : 'xray-config')
+      : spec.family,
+  });
+  const snippetsOk = setEditorSnippetProvider(target, snippetProvider, o);
+  return { ok: ok || snippetsOk, skipped: false, spec, schema: loaded.schema, snippetProvider };
 }
 
 export const editorSchemaApi = Object.freeze({
   resolveEditorSchemaSpec,
+  resolveEditorSnippetProvider,
   loadEditorSchema,
   applySchemaToEditor,
   clearSchemaFromEditor,
+  setEditorSnippetProvider,
 });

@@ -31,7 +31,7 @@ import {
   toastXkeen,
 } from './xkeen_runtime.js';
 import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_comments.js';
-import { applySchemaToEditor } from '../ui/editor_schema.js';
+import { applySchemaToEditor, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
 import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';
 
 (() => {
@@ -639,6 +639,16 @@ import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.j
   function schemaStatusLabel(spec) {
     const label = spec && (spec.label || spec.title || spec.id);
     return String(label || '').trim();
+  }
+
+  function getRoutingSnippetProvider() {
+    const file = getActiveFragment() || getXkeenFilePath('routing', '');
+    return resolveEditorSnippetProvider({
+      target: _routingMode === 'routing' ? 'routing' : 'xray',
+      file,
+      mode: 'jsonc',
+      feature: 'routing',
+    });
   }
 
   function updateRoutingSchemaBadge(result) {
@@ -3953,6 +3963,7 @@ function closeHelp() {
       links: !initialLite,
       viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : Infinity,
       semanticValidation: getRoutingSemanticValidationConfig(),
+      snippetProvider: getRoutingSnippetProvider(),
     });
 
     // Cosmetic class + toolbar
@@ -4723,6 +4734,7 @@ function closeHelp() {
           insertSpaces: true,
           performanceProfile: (_editorPerfProfile && _editorPerfProfile.lite) ? 'lite' : 'default',
           wordWrap: isMipsTarget() ? 'off' : 'on',
+          snippetProvider: getRoutingSnippetProvider(),
           onChange: () => {
             try { invalidateEditorSnapshot(); } catch (e) {}
             try { scheduleMonacoDiagnostics(); } catch (e) {}
