@@ -275,7 +275,7 @@ const jsonStrictExtension = [json(), jsoncEagerParser, Prec.highest(jsonStrictPu
 
 function jsonSchemaWithSyntaxLinter(opts) {
   const options = opts || {};
-  const schemaLintSource = jsonSchemaLinter();
+  const schemaLintSource = jsonSchemaLinter(options);
   return function jsonSchemaSyntaxAwareLintSource(view) {
     const source = view && view.state && view.state.doc ? view.state.doc.toString() : '';
     const syntax = makeJsonDiagnostics(source, {
@@ -1300,6 +1300,10 @@ function buildBridge(view, ctx) {
         options.yamlAssist = value || null;
         return dispatch({ effects: ctx.yamlAssistCompartment.reconfigure(yamlAssistExtensionFor(options)) });
       }
+      if (key === 'semanticValidation') {
+        options.semanticValidation = value || null;
+        return bridge.refreshSchemaExtensions();
+      }
       return true;
     },
     getMode() { return getModeForCompat(); },
@@ -1350,6 +1354,7 @@ function createBridge(target, opts = {}) {
       links: opts.links !== false,
       extraKeys: (opts.extraKeys && typeof opts.extraKeys === 'object') ? opts.extraKeys : {},
       yamlAssist: opts.yamlAssist || null,
+      semanticValidation: opts.semanticValidation || null,
     },
     languageCompartment: new Compartment(),
     readOnlyCompartment: new Compartment(),

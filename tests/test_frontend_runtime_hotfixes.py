@@ -672,6 +672,31 @@ def test_mihomo_yaml_schema_runtime_is_wired_into_panel_editor():
     assert "mihomo-editor-yaml-badge" in template
 
 
+def test_phase2_semantic_validation_runtime_is_wired_into_mihomo_and_xray_editors():
+    semantic_runtime = Path('xkeen-ui/static/js/ui/schema_semantic_validation.js').read_text(encoding='utf-8')
+    yaml_schema_runtime = Path('xkeen-ui/static/js/ui/yaml_schema.js').read_text(encoding='utf-8')
+    codemirror_runtime = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
+    json_schema_runtime = Path('xkeen-ui/static/js/vendor/codemirror_json_schema.js').read_text(encoding='utf-8')
+    routing_runtime = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+
+    assert 'export function validateMihomoConfigSemantics(data, options = {})' in semantic_runtime
+    assert 'export function validateXrayRoutingSemantics(data, options = {})' in semantic_runtime
+    assert "import { validateMihomoConfigSemantics } from './schema_semantic_validation.js';" in yaml_schema_runtime
+    assert 'const semanticErrors = validateMihomoConfigSemantics(parsed, options);' in yaml_schema_runtime
+    assert "import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';" in json_schema_runtime
+    assert 'const semanticErrors = resolveSemanticDiagnostics(options, {' in json_schema_runtime
+    assert 'buildJsoncPointerMap,' in json_schema_runtime
+    assert 'safeParseJson,' in json_schema_runtime
+    assert 'const schemaLintSource = jsonSchemaLinter(options);' in codemirror_runtime
+    assert "if (key === 'semanticValidation') {" in codemirror_runtime
+    assert 'semanticValidation: opts.semanticValidation || null,' in codemirror_runtime
+    assert "import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';" in routing_runtime
+    assert 'function refreshRoutingSemanticContext(opts) {' in routing_runtime
+    assert 'function buildRoutingSemanticMarkers(text, diagnostics) {' in routing_runtime
+    assert "editor.setOption('semanticValidation', getRoutingSemanticValidationConfig());" in routing_runtime
+    assert 'const semanticDiagnostics = getRoutingSemanticDiagnostics(obj);' in routing_runtime
+
+
 def test_mihomo_schema_tracks_xhttp_transport_and_multiplexing_fields():
     schema = json.loads(Path('xkeen-ui/static/schemas/mihomo-config.schema.json').read_text(encoding='utf-8'))
     proxy_props = schema['definitions']['proxy']['properties']

@@ -1,4 +1,5 @@
 import { load as loadYaml } from 'js-yaml';
+import { validateMihomoConfigSemantics } from './schema_semantic_validation.js';
 
 function asString(value) {
   return value == null ? '' : String(value);
@@ -577,7 +578,9 @@ export function validateYamlTextAgainstSchema(text, schema, options = {}) {
     rootSchema: schema || {},
     maxErrors: Math.max(1, Number(options.maxErrors || 40)),
   };
-  const errors = validateNode(parsed, schema, ctx, []);
+  const schemaErrors = validateNode(parsed, schema, ctx, []);
+  const semanticErrors = validateMihomoConfigSemantics(parsed, options);
+  const errors = schemaErrors.concat(Array.isArray(semanticErrors) ? semanticErrors : []);
   const diagnostics = errors.map((item) => makeDiagnostic(index, item)).slice(0, ctx.maxErrors);
   const first = diagnostics[0] || null;
   return {

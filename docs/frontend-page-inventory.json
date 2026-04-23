@@ -622,6 +622,16 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/vendor/codemirror_json_schema.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/schema_semantic_validation.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/util/strip_json_comments.js",
           "globals": [],
           "lazy_features": []
@@ -2519,6 +2529,11 @@
         },
         {
           "path": "static/js/vendor/codemirror_json_schema.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/schema_semantic_validation.js",
           "globals": [],
           "lazy_features": []
         },

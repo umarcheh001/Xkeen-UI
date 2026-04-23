@@ -21,6 +21,7 @@ import { StateEffect, StateField } from '@codemirror/state';
 import { hoverTooltip } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
 import { parse as parseJsonc, parseTree as parseJsoncTree } from 'jsonc-parser';
+import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';
 
 /* ════════════════════════════════════════════════════════════
  *  1. Schema StateField — stores the current JSON Schema
@@ -620,6 +621,32 @@ function withDiagnosticContext(message, pointer, doc, mapping) {
   return `${message} (${parts.join('; ')})`;
 }
 
+function normalizeSemanticDiagnostics(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((item) => item && typeof item === 'object' && item.message);
+}
+
+function resolveSemanticDiagnostics(options, payload) {
+  const semantic = options && options.semanticValidation ? options.semanticValidation : null;
+  if (!semantic) return [];
+  try {
+    if (typeof semantic === 'function') {
+      return normalizeSemanticDiagnostics(semantic(payload));
+    }
+  } catch (e) {}
+  try {
+    if (semantic && typeof semantic.getDiagnostics === 'function') {
+      return normalizeSemanticDiagnostics(semantic.getDiagnostics(payload));
+    }
+  } catch (e) {}
+  try {
+    if (semantic && semantic.kind === 'xray-routing') {
+      return normalizeSemanticDiagnostics(validateXrayRoutingSemantics(payload.data, semantic.options || {}));
+    }
+  } catch (e) {}
+  return [];
+}
+
 /**
  * Parse JSON from editor, with fallback for partial content
  */
@@ -655,6 +682,14 @@ function jsonSchemaLinter(options) {
 
     const pointerMap = buildPointerMap(view.state);
     const schemaErrors = validateValue(data, schema, schema, '');
+    const semanticErrors = resolveSemanticDiagnostics(options, {
+      data,
+      text,
+      schema,
+      pointerMap,
+      state: view.state,
+      doc: view.state.doc,
+    });
 
     // Map pointer-based errors to document positions
     const diagnostics = [];
@@ -689,6 +724,29 @@ function jsonSchemaLinter(options) {
         severity: 'warning',
         message,
         source: schema.title || 'json-schema',
+      });
+    }
+
+    for (const err of semanticErrors) {
+      const pointer = err.pointer || '';
+      const mapping = findDiagnosticMapping(pointerMap, pointer);
+      let from = 0;
+      let to = 0;
+      if (mapping) {
+        if (mapping.valueFrom !== undefined && mapping.valueTo !== undefined) {
+          from = mapping.valueFrom;
+          to = mapping.valueTo;
+        } else {
+          from = mapping.keyFrom;
+          to = mapping.keyTo;
+        }
+      }
+      diagnostics.push({
+        from,
+        to,
+        severity: err.severity === 'warning' ? 'warning' : 'error',
+        message: withDiagnosticContext(err.message, pointer, view.state.doc, mapping),
+        source: err.source || 'semantic-validation',
       });
     }
 
@@ -1625,6 +1683,10 @@ export {
   updateSchema,
   getJSONSchema,
   schemaStateField,
+  buildJsoncPointerMap,
+  findDiagnosticMapping,
+  withDiagnosticContext,
+  safeParseJson,
   jsonSchemaLinter,
   handleRefresh,
   jsonSchemaHover,
