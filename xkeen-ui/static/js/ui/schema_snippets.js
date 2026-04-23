@@ -43,6 +43,14 @@ const XRAY_ROUTING_RULES_SNIPPETS = [
     monacoSnippet: '{\n  "type": "field",\n  "ip": [\n    "${1:geoip:private}"\n  ],\n  "outboundTag": "${2:block}"\n}$0',
   },
   {
+    id: 'xray-rule-block-quic',
+    label: 'rule: block QUIC',
+    detail: 'Xray В· routing.rules[]',
+    documentation: 'Блокировка QUIC в Xray через правило для UDP/443. Обычно такое правило ставят выше общих proxy/direct rules.',
+    insertText: '{\n  "type": "field",\n  "network": "udp",\n  "port": "443",\n  "outboundTag": "block"\n}',
+    monacoSnippet: '{\n  "type": "field",\n  "network": "udp",\n  "port": "${1:443}",\n  "outboundTag": "${2:block}"\n}$0',
+  },
+  {
     id: 'xray-rule-proxy-domain',
     label: 'rule: proxy by domain',
     detail: 'Xray · routing.rules[]',
