@@ -396,8 +396,8 @@ const MIHOMO_TOP_LEVEL_SNIPPETS = [
     label: 'sniffer block',
     detail: 'Mihomo · sniffer',
     documentation: 'Sniffer — восстанавливает host/SNI из пакетов для правильного матчинга в rules. На Keenetic безопасен и рекомендуется.',
-    insertText: 'sniffer:\n  enable: true\n  sniff:\n    HTTP:\n      ports: [80, 8080-8880]\n      override-destination: true\n    TLS:\n      ports: [443, 8443]\n    QUIC:\n      ports: [443, 8443]\n  force-domain:\n    - "+.v2ex.com"\n  skip-domain:\n    - "Mijia Cloud"',
-    monacoSnippet: 'sniffer:\n  enable: true\n  sniff:\n    HTTP:\n      ports: [80, 8080-8880]\n      override-destination: ${1|true,false|}\n    TLS:\n      ports: [443, 8443]\n    QUIC:\n      ports: [443, 8443]\n  force-domain:\n    - "${2:+.v2ex.com}"\n  skip-domain:\n    - "${3:Mijia Cloud}"$0',
+    insertText: 'sniffer:\n  enable: true\n  sniff:\n    HTTP:\n    TLS:',
+    monacoSnippet: 'sniffer:\n  enable: ${1|true,false|}\n  sniff:\n    HTTP:\n    TLS:$0',
   },
 ];
 

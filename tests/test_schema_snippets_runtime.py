@@ -214,6 +214,30 @@ console.log(JSON.stringify({
     assert '"queryStrategy": "UseIP"' in payload["insertText"]
 
 
+def test_mihomo_sniffer_snippet_stays_minimal_for_common_router_setup():
+    payload = _run_node_json(
+        """
+import { getMihomoSnippets } from './xkeen-ui/static/js/ui/schema_snippets.js';
+
+const snifferSnippet = getMihomoSnippets({
+  path: [],
+}).find((item) => item && item.id === 'mihomo-sniffer-block');
+
+console.log(JSON.stringify({
+  label: snifferSnippet ? snifferSnippet.label : '',
+  insertText: snifferSnippet ? snifferSnippet.insertText : '',
+  monacoSnippet: snifferSnippet ? snifferSnippet.monacoSnippet : '',
+}));
+"""
+    )
+
+    assert payload["label"] == "sniffer block"
+    assert payload["insertText"] == "sniffer:\n  enable: true\n  sniff:\n    HTTP:\n    TLS:"
+    assert "QUIC" not in payload["insertText"]
+    assert "force-domain" not in payload["insertText"]
+    assert "skip-domain" not in payload["insertText"]
+
+
 def test_feature_editors_wire_schema_snippet_providers():
     routing_src = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing.js").read_text(encoding="utf-8")
     mihomo_src = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_panel.js").read_text(encoding="utf-8")
