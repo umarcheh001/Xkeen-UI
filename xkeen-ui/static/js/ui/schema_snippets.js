@@ -434,29 +434,29 @@ function isNumericSegment(segment) {
 function matchesXrayRoutingRulesPointer(pointer) {
   const normalized = normalizePointer(pointer);
   if (!normalized) return false;
-  if (/^\/rules(\/\d+)?$/.test(normalized)) return true;
-  if (/^\/routing\/rules(\/\d+)?$/.test(normalized)) return true;
+  if (/^\/rules$/.test(normalized)) return true;
+  if (/^\/routing\/rules$/.test(normalized)) return true;
   return false;
 }
 
 function matchesXrayRoutingBalancersPointer(pointer) {
   const normalized = normalizePointer(pointer);
   if (!normalized) return false;
-  if (/^\/balancers(\/\d+)?$/.test(normalized)) return true;
-  if (/^\/routing\/balancers(\/\d+)?$/.test(normalized)) return true;
+  if (/^\/balancers$/.test(normalized)) return true;
+  if (/^\/routing\/balancers$/.test(normalized)) return true;
   return false;
 }
 
 function matchesXrayOutboundsArrayPointer(pointer) {
   const normalized = normalizePointer(pointer);
   if (!normalized) return false;
-  return /^\/outbounds(\/\d+)?$/.test(normalized);
+  return /^\/outbounds$/.test(normalized);
 }
 
 function matchesXrayInboundsArrayPointer(pointer) {
   const normalized = normalizePointer(pointer);
   if (!normalized) return false;
-  return /^\/inbounds(\/\d+)?$/.test(normalized);
+  return /^\/inbounds$/.test(normalized);
 }
 
 function matchesXrayStreamSettingsPointer(pointer) {

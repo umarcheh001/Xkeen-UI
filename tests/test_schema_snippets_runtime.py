@@ -52,8 +52,8 @@ const mihomoProvider = resolveEditorSnippetProvider({
 });
 
 console.log(JSON.stringify({
-  routing: routingProvider ? routingProvider({ pointer: '/routing/rules/0' }).map((item) => item.id) : [],
-  outbounds: outboundsProvider ? outboundsProvider({ pointer: '/outbounds/0' }).map((item) => item.id) : [],
+  routing: routingProvider ? routingProvider({ pointer: '/routing/rules' }).map((item) => item.id) : [],
+  outbounds: outboundsProvider ? outboundsProvider({ pointer: '/outbounds' }).map((item) => item.id) : [],
   mihomo: mihomoProvider ? mihomoProvider({ path: [] }).map((item) => item.id) : [],
 }));
 """
@@ -69,99 +69,28 @@ console.log(JSON.stringify({
     assert "mihomo-sniffer-block" in payload["mihomo"]
 
 
-def test_json_completion_runtime_surfaces_routing_rule_snippets_when_provider_is_wired():
+def test_routing_snippet_provider_surfaces_rule_block_templates_on_rules_array():
     labels = _run_node_json(
         """
-import fs from 'node:fs';
-import { EditorState } from '@codemirror/state';
-import { CompletionContext } from '@codemirror/autocomplete';
-import { json } from '@codemirror/lang-json';
-import { stateExtensions, jsonCompletion } from './xkeen-ui/static/js/vendor/codemirror_json_schema.js';
 import { resolveEditorSnippetProvider } from './xkeen-ui/static/js/ui/editor_schema.js';
 
-const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/xray-routing.schema.json', 'utf8'));
-const marker = '__CURSOR__';
-const docWithMarker = [
-  '{',
-  '  "routing": {',
-  '    "rules": [',
-  '      {',
-  '        __CURSOR__',
-  '      }',
-  '    ]',
-  '  }',
-  '}',
-  '',
-].join('\\n');
-const pos = docWithMarker.indexOf(marker);
-const doc = docWithMarker.replace(marker, '');
 const provider = resolveEditorSnippetProvider({
   target: 'routing',
   file: '05_routing.jsonc',
   mode: 'jsonc',
 });
-const state = EditorState.create({
-  doc,
-  extensions: [json(), stateExtensions(schema)],
-});
-const result = await jsonCompletion({
-  schemaKind: 'xray-routing',
-  snippetProvider: provider,
-})(new CompletionContext(state, pos, true));
 
-console.log(JSON.stringify(result ? result.options.map((option) => option.label) : []));
+const labels = provider
+  ? provider({ pointer: '/routing/rules' }).map((item) => item.label)
+  : [];
+
+console.log(JSON.stringify(labels));
 """
     )
 
-    assert "📦 rule: block by domain" in labels
-    assert "📦 rule: direct by domain" in labels
-
-
-def test_json_completion_runtime_surfaces_quic_block_snippet():
-    labels = _run_node_json(
-        """
-import fs from 'node:fs';
-import { EditorState } from '@codemirror/state';
-import { CompletionContext } from '@codemirror/autocomplete';
-import { json } from '@codemirror/lang-json';
-import { stateExtensions, jsonCompletion } from './xkeen-ui/static/js/vendor/codemirror_json_schema.js';
-import { resolveEditorSnippetProvider } from './xkeen-ui/static/js/ui/editor_schema.js';
-
-const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/xray-routing.schema.json', 'utf8'));
-const marker = '__CURSOR__';
-const docWithMarker = [
-  '{',
-  '  "routing": {',
-  '    "rules": [',
-  '      {',
-  '        __CURSOR__',
-  '      }',
-  '    ]',
-  '  }',
-  '}',
-  '',
-].join('\\n');
-const pos = docWithMarker.indexOf(marker);
-const doc = docWithMarker.replace(marker, '');
-const provider = resolveEditorSnippetProvider({
-  target: 'routing',
-  file: '05_routing.jsonc',
-  mode: 'jsonc',
-});
-const state = EditorState.create({
-  doc,
-  extensions: [json(), stateExtensions(schema)],
-});
-const result = await jsonCompletion({
-  schemaKind: 'xray-routing',
-  snippetProvider: provider,
-})(new CompletionContext(state, pos, true));
-
-console.log(JSON.stringify(result ? result.options.map((option) => option.label) : []));
-"""
-    )
-
-    assert any("block QUIC" in label for label in labels)
+    assert "rule: block by domain" in labels
+    assert "rule: direct by domain" in labels
+    assert "rule: block QUIC" in labels
 
 
 def test_xray_quic_block_snippet_matches_common_udp_443_rule():
@@ -171,7 +100,7 @@ import { getXraySnippets } from './xkeen-ui/static/js/ui/schema_snippets.js';
 
 const quicSnippet = getXraySnippets({
   schemaKind: 'xray-routing',
-  pointer: '/routing/rules/0',
+  pointer: '/routing/rules',
 }).find((item) => item && item.id === 'xray-rule-block-quic');
 
 console.log(JSON.stringify({
@@ -187,6 +116,77 @@ console.log(JSON.stringify({
     assert '"network": "udp"' in payload["insertText"]
     assert '"port": "443"' in payload["insertText"]
     assert '"outboundTag": "block"' in payload["insertText"]
+
+
+def test_xray_rule_block_snippets_are_not_offered_inside_existing_rule_object():
+    payload = _run_node_json(
+        """
+import { getXraySnippets } from './xkeen-ui/static/js/ui/schema_snippets.js';
+
+const arrayLevel = getXraySnippets({
+  schemaKind: 'xray-routing',
+  pointer: '/routing/rules',
+}).map((item) => item.id);
+
+const objectLevel = getXraySnippets({
+  schemaKind: 'xray-routing',
+  pointer: '/routing/rules/0',
+}).map((item) => item.id);
+
+console.log(JSON.stringify({ arrayLevel, objectLevel }));
+"""
+    )
+
+    assert "xray-rule-block-quic" in payload["arrayLevel"]
+    assert "xray-rule-block-quic" not in payload["objectLevel"]
+
+
+def test_json_completion_runtime_hides_rule_block_snippets_while_typing_rule_property_name():
+    labels = _run_node_json(
+        """
+import fs from 'node:fs';
+import { EditorState } from '@codemirror/state';
+import { CompletionContext } from '@codemirror/autocomplete';
+import { json } from '@codemirror/lang-json';
+import { stateExtensions, jsonCompletion } from './xkeen-ui/static/js/vendor/codemirror_json_schema.js';
+import { resolveEditorSnippetProvider } from './xkeen-ui/static/js/ui/editor_schema.js';
+
+const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/xray-routing.schema.json', 'utf8'));
+const marker = '__CURSOR__';
+const docWithMarker = [
+  '{',
+  '  "routing": {',
+  '    "rules": [',
+  '      {',
+  '        "net__CURSOR__"',
+  '      }',
+  '    ]',
+  '  }',
+  '}',
+  '',
+].join('\\n');
+const pos = docWithMarker.indexOf(marker);
+const doc = docWithMarker.replace(marker, '');
+const provider = resolveEditorSnippetProvider({
+  target: 'routing',
+  file: '05_routing.jsonc',
+  mode: 'jsonc',
+});
+const state = EditorState.create({
+  doc,
+  extensions: [json(), stateExtensions(schema)],
+});
+const result = await jsonCompletion({
+  schemaKind: 'xray-routing',
+  snippetProvider: provider,
+})(new CompletionContext(state, pos, true));
+
+console.log(JSON.stringify(result ? result.options.map((option) => option.label) : []));
+"""
+    )
+
+    assert "network" in labels
+    assert not any("block QUIC" in label for label in labels)
 
 
 def test_xray_dns_snippet_points_to_keenetic_dns_over_vless_flow():
