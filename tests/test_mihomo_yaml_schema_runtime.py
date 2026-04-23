@@ -172,6 +172,29 @@ def test_mihomo_yaml_schema_runtime_reports_required_fields_for_proxy_groups():
     assert result["diagnostics"][0]["line"] == 2
 
 
+def test_mihomo_yaml_schema_runtime_accepts_http_rule_provider_without_path():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "anchors:",
+            "  a1: &domain { type: http, format: mrs, behavior: domain, interval: 86400 }",
+            "proxy-groups:",
+            "  - name: GitHub",
+            "    type: select",
+            "    proxies: [DIRECT]",
+            "rule-providers:",
+            "  github@domain: { <<: *domain, url: https://example.invalid/github.mrs }",
+            "rules:",
+            "  - RULE-SET,github@domain,GitHub",
+            "  - MATCH,DIRECT",
+            "",
+        ])
+    )
+
+    assert result["ok"] is True
+    assert result["parseOk"] is True
+    assert result["diagnostics"] == []
+
+
 def test_mihomo_yaml_schema_runtime_reports_yaml_parser_location():
     result = _run_mihomo_yaml_schema(
         "\n".join([

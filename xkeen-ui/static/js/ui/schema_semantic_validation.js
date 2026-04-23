@@ -196,7 +196,7 @@ function expectedProviderFields(kind, type) {
   const nextType = cleanName(type);
   if (nextType === 'http') {
     return {
-      required: ['url', 'path'],
+      required: ['url'],
       warn: ['interval'],
       noun: kind === 'rule' ? 'rule-provider' : 'proxy-provider',
     };
