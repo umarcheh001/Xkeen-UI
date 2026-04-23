@@ -27,9 +27,11 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     customContextMenuClipboardShadow: '',
     yamlAssistByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     snippetProvidersByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
+    quickFixProvidersByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     jsonHoverProvidersInstalled: false,
     yamlAssistProvidersInstalled: false,
     jsonSnippetProvidersInstalled: false,
+    quickFixProvidersInstalled: false,
   };
   const _CUSTOM_CONTEXT_MENU_CLEANUP_KEY = '__xkMonacoCustomContextMenuCleanup';
 
@@ -1469,6 +1471,30 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     return null;
   }
 
+  function _setModelQuickFixProvider(model, provider) {
+    if (!model) return;
+    if (_state.quickFixProvidersByModel) {
+      try {
+        if (provider) _state.quickFixProvidersByModel.set(model, provider);
+        else _state.quickFixProvidersByModel.delete(model);
+        return;
+      } catch (e) {}
+    }
+    try {
+      if (provider) model.__xkQuickFixProvider = provider;
+      else delete model.__xkQuickFixProvider;
+    } catch (e) {}
+  }
+
+  function _getModelQuickFixProvider(model) {
+    if (!model) return null;
+    if (_state.quickFixProvidersByModel) {
+      try { return _state.quickFixProvidersByModel.get(model) || null; } catch (e) {}
+    }
+    try { return model.__xkQuickFixProvider || null; } catch (e) {}
+    return null;
+  }
+
   function _resolveJsoncPointerAtOffset(text, offset) {
     try {
       const map = buildJsoncPointerMap(String(text || ''));
@@ -1509,6 +1535,70 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
       snippets = null;
     }
     return Array.isArray(snippets) ? snippets : [];
+  }
+
+  function _resolveQuickFixGetter(provider) {
+    if (!provider) return null;
+    if (typeof provider === 'function') return provider;
+    if (provider && typeof provider.getQuickFixes === 'function') {
+      return (ctx) => provider.getQuickFixes(ctx);
+    }
+    return null;
+  }
+
+  function _offsetRangeForModel(monaco, model, from, to) {
+    const safeFrom = Math.max(0, Number(from || 0));
+    const safeTo = Math.max(safeFrom, Number(to || safeFrom));
+    const start = model.getPositionAt(safeFrom);
+    const end = model.getPositionAt(safeTo);
+    return new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column);
+  }
+
+  function _buildQuickFixWorkspaceEdits(monaco, model, fix) {
+    if (!monaco || !model || !fix || !Array.isArray(fix.edits) || !fix.edits.length) return [];
+    return fix.edits.map((item) => ({
+      resource: model.uri,
+      versionId: (typeof model.getVersionId === 'function') ? model.getVersionId() : undefined,
+      textEdit: {
+        range: _offsetRangeForModel(monaco, model, item.from, item.to),
+        text: item.insert || '',
+      },
+    }));
+  }
+
+  function _getQuickFixesForModel(model, ctx) {
+    const provider = _getModelQuickFixProvider(model);
+    const getter = _resolveQuickFixGetter(provider);
+    if (!getter || !model) return [];
+    let text = '';
+    try { text = model.getValue() || ''; } catch (e) { text = ''; }
+    const language = (() => {
+      try { return model.getLanguageId ? model.getLanguageId() : ''; } catch (e) {}
+      return '';
+    })();
+    const schema = _getModelJsonSchema(model);
+    const yamlAssist = _getModelYamlAssist(model);
+    let offset = Number.isFinite(ctx && ctx.offset) ? Number(ctx.offset) : NaN;
+    if (!Number.isFinite(offset)) {
+      try {
+        if (ctx && ctx.position && typeof model.getOffsetAt === 'function') offset = model.getOffsetAt(ctx.position);
+      } catch (e) {
+        offset = NaN;
+      }
+    }
+    try {
+      const list = getter({
+        ...(ctx || {}),
+        text,
+        model,
+        language,
+        schema,
+        yamlAssist,
+        offset,
+      });
+      return Array.isArray(list) ? list : [];
+    } catch (e) {}
+    return [];
   }
 
   function _ensureYamlAssistProviders(monaco) {
@@ -1656,6 +1746,36 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     _state.jsonHoverProvidersInstalled = true;
   }
 
+  function _ensureQuickFixProviders(monaco) {
+    if (!monaco || !monaco.languages || _state.quickFixProvidersInstalled) return;
+    const kind = (monaco.languages.CodeActionKind && monaco.languages.CodeActionKind.QuickFix)
+      ? monaco.languages.CodeActionKind.QuickFix
+      : 'quickfix';
+    const provider = {
+      providedCodeActionKinds: [kind],
+      provideCodeActions(model, range) {
+        if (!model || typeof model.getOffsetAt !== 'function') return { actions: [], dispose() {} };
+        const position = {
+          lineNumber: Math.max(1, Number(range && range.startLineNumber || 1)),
+          column: Math.max(1, Number(range && range.startColumn || 1)),
+        };
+        const fixes = _getQuickFixesForModel(model, { position });
+        if (!fixes.length) return { actions: [], dispose() {} };
+        const actions = fixes.map((fix) => ({
+          title: fix.title || 'Исправить',
+          kind,
+          isPreferred: !!fix.isPreferred,
+          edit: { edits: _buildQuickFixWorkspaceEdits(monaco, model, fix) },
+        })).filter((item) => item && item.edit && Array.isArray(item.edit.edits) && item.edit.edits.length);
+        return { actions, dispose() {} };
+      },
+    };
+    try { monaco.languages.registerCodeActionProvider('json', provider); } catch (e) {}
+    try { monaco.languages.registerCodeActionProvider('jsonc', provider); } catch (e) {}
+    try { monaco.languages.registerCodeActionProvider('yaml', provider); } catch (e) {}
+    _state.quickFixProvidersInstalled = true;
+  }
+
   async function createEditor(host, opts) {
     const el = host;
     if (!el) return null;
@@ -1687,6 +1807,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
       try { _ensureJsonHoverProviders(monaco); } catch (e) {}
       try { _ensureJsonSnippetProviders(monaco); } catch (e) {}
       try { _ensureYamlAssistProviders(monaco); } catch (e) {}
+      try { _ensureQuickFixProviders(monaco); } catch (e) {}
       try { applyTheme(monaco); } catch (e) {}
       try { wireThemeSync(monaco); } catch (e) {}
 
@@ -1755,6 +1876,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         }
         if (model) _setModelYamlAssist(model, (language === 'yaml' && o.yamlAssist) ? o.yamlAssist : null);
         if (model) _setModelSnippetProvider(model, o.snippetProvider || null);
+        if (model) _setModelQuickFixProvider(model, o.quickFixProvider || null);
       } catch (e) {}
       try {
         if (model && o.schema) _setModelJsonSchema(model, o.schema, monaco);
@@ -1773,6 +1895,38 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
             return true;
           };
           editor.getSnippetProvider = () => (model ? _getModelSnippetProvider(model) : null);
+          editor.setQuickFixProvider = (provider) => {
+            if (!model) return false;
+            _setModelQuickFixProvider(model, provider || null);
+            return true;
+          };
+          editor.getQuickFixProvider = () => (model ? _getModelQuickFixProvider(model) : null);
+          editor.getQuickFixes = (request) => {
+            if (!model) return [];
+            const req = request && typeof request === 'object' ? { ...request } : {};
+            if (!req.position) {
+              try {
+                if (typeof editor.getPosition === 'function') req.position = editor.getPosition();
+              } catch (e) {}
+            }
+            return _getQuickFixesForModel(model, req);
+          };
+          editor.applyQuickFix = (fix) => {
+            if (!model || !fix) return false;
+            const edits = _buildQuickFixWorkspaceEdits(monaco, model, fix);
+            if (!edits.length) return false;
+            try {
+              const operations = edits.map((item) => ({
+                range: item.textEdit.range,
+                text: item.textEdit.text,
+              }));
+              editor.pushUndoStop();
+              editor.executeEdits('xkeen-quickfix', operations);
+              editor.pushUndoStop();
+              return true;
+            } catch (e) {}
+            return false;
+          };
         }
       } catch (e) {}
 
@@ -1818,6 +1972,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
               try { unsubscribeUiSettings(); } catch (e2) {}
               try { if (model) _setModelYamlAssist(model, null); } catch (e3) {}
               try { if (model) _setModelSnippetProvider(model, null); } catch (e3b) {}
+              try { if (model) _setModelQuickFixProvider(model, null); } catch (e3c) {}
               try { if (model) _setModelJsonSchema(model, null, monaco); } catch (e4) {}
               try { if (ownedModel && typeof ownedModel.dispose === 'function') ownedModel.dispose(); } catch (e5) {}
             });
@@ -1838,11 +1993,12 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
       try {
         if (editor && typeof editor.onDidDispose === 'function') {
           editor.onDidDispose(() => {
-            try { if (model) _setModelYamlAssist(model, null); } catch (e2) {}
-            try { if (model) _setModelSnippetProvider(model, null); } catch (e2b) {}
-            try { if (model) _setModelJsonSchema(model, null, monaco); } catch (e3) {}
-            try { if (ownedModel && typeof ownedModel.dispose === 'function') ownedModel.dispose(); } catch (e4) {}
-          });
+          try { if (model) _setModelYamlAssist(model, null); } catch (e2) {}
+          try { if (model) _setModelSnippetProvider(model, null); } catch (e2b) {}
+          try { if (model) _setModelQuickFixProvider(model, null); } catch (e2c) {}
+          try { if (model) _setModelJsonSchema(model, null, monaco); } catch (e3) {}
+          try { if (ownedModel && typeof ownedModel.dispose === 'function') ownedModel.dispose(); } catch (e4) {}
+        });
         }
       } catch (e) {}
 
@@ -1948,6 +2104,20 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     },
     getModelSnippetProvider(model) {
       return _getModelSnippetProvider(model);
+    },
+    setQuickFixProvider(editor, provider) {
+      const target = editor && editor.raw ? editor.raw : editor;
+      try { if (target && typeof target.setQuickFixProvider === 'function') return target.setQuickFixProvider(provider || null); } catch (e) {}
+      const model = target && typeof target.getModel === 'function' ? target.getModel() : null;
+      if (!model) return false;
+      _setModelQuickFixProvider(model, provider || null);
+      return true;
+    },
+    getQuickFixProvider(editor) {
+      const target = editor && editor.raw ? editor.raw : editor;
+      try { if (target && typeof target.getQuickFixProvider === 'function') return target.getQuickFixProvider(); } catch (e) {}
+      const model = target && typeof target.getModel === 'function' ? target.getModel() : null;
+      return model ? _getModelQuickFixProvider(model) : null;
     },
   };
 })();

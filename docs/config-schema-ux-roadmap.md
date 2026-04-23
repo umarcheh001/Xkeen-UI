@@ -253,6 +253,18 @@ xhttp-opts:
 - CM6 toolbar action или inline fix affordance;
 - feature-level helper API для безопасных мутаций текста.
 
+### Статус
+
+- выполнено как MVP в routing/Xray и Mihomo editors;
+- quick fixes теперь покрывают:
+  - missing/unknown tags и references;
+  - missing required fields;
+  - scalar -> array coercion;
+  - transport option block scaffolds (`wsSettings`, `ws-opts`, `grpc-opts`, `xhttp-opts`, etc.);
+  - создание missing `rule-provider`, `proxy-provider`, `proxy-group`;
+  - deprecated value replacement там, где replacement можно вывести из schema;
+- Monaco получает code actions, а CodeMirror/общий toolbar — кнопку применения best quick fix.
+
 ## Phase 5: Beginner mode и explain-first hover
 
 Приоритет: высокий

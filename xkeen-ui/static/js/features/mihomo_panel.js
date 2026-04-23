@@ -20,6 +20,7 @@ import {
   setXkeenPageConfigValue,
 } from './xkeen_runtime.js';
 import { loadEditorSchema, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
+import { createMihomoQuickFixProvider } from '../ui/schema_quickfixes.js';
 
 let mihomoPanelModuleApi = null;
 
@@ -266,6 +267,36 @@ let mihomoPanelModuleApi = null;
     });
   }
 
+  let _mihomoQuickFixProvider = null;
+  function getMihomoQuickFixProvider() {
+    if (_mihomoQuickFixProvider) return _mihomoQuickFixProvider;
+    _mihomoQuickFixProvider = createMihomoQuickFixProvider();
+    return _mihomoQuickFixProvider;
+  }
+
+  function applyBestMihomoQuickFix() {
+    const editor = _engine === 'monaco' ? _monaco : getSharedEditor();
+    if (!editor || typeof editor.getQuickFixes !== 'function' || typeof editor.applyQuickFix !== 'function') {
+      try { if (typeof window.toast === 'function') window.toast('Quick fixes пока недоступны для текущего редактора.', 'warning'); } catch (e) {}
+      return false;
+    }
+    let fixes = [];
+    try { fixes = editor.getQuickFixes({ limit: 1 }); } catch (e) { fixes = []; }
+    const fix = Array.isArray(fixes) && fixes.length ? fixes[0] : null;
+    if (!fix) {
+      try { if (typeof window.toast === 'function') window.toast('Под курсором не нашёл подходящего quick fix.', 'info'); } catch (e) {}
+      return false;
+    }
+    const applied = !!editor.applyQuickFix(fix);
+    if (applied) {
+      try { if (typeof window.toast === 'function') window.toast(`Исправлено: ${String(fix.title || 'quick fix')}`, 'success'); } catch (e) {}
+      try { scheduleMihomoSchemaValidation(); } catch (e2) {}
+    } else {
+      try { if (typeof window.toast === 'function') window.toast('Не удалось применить quick fix.', 'error'); } catch (e3) {}
+    }
+    return applied;
+  }
+
   async function ensureMihomoSchemaDocument() {
     if (_mihomoSchemaState && _mihomoSchemaState.schema) {
       return { ok: true, spec: _mihomoSchemaState.spec, schema: _mihomoSchemaState.schema };
@@ -484,6 +515,7 @@ let mihomoPanelModuleApi = null;
         wordWrap: 'on',
         yamlAssist: getMihomoYamlAssistOptions(),
         snippetProvider: getMihomoSnippetProvider(),
+        quickFixProvider: getMihomoQuickFixProvider(),
       });
       if (!_monaco) return null;
 
@@ -615,10 +647,15 @@ let mihomoPanelModuleApi = null;
         const id = (btn.dataset && btn.dataset.actionId) ? String(btn.dataset.actionId) : '';
         const isFs = (id === 'fs');
         const isFsAny = (id === 'fs_any');
+        const isQuickFix = (id === 'quick_fix');
 
         if (isMonaco) {
-          // In Monaco mode show only one fullscreen button: fs (preferred) or fs_any.
-          btn.style.display = hasFs ? (isFs ? '' : 'none') : (isFsAny ? '' : 'none');
+          // In Monaco mode show quick fix + one fullscreen button: fs (preferred) or fs_any.
+          if (isQuickFix) {
+            btn.style.display = '';
+          } else {
+            btn.style.display = hasFs ? (isFs ? '' : 'none') : (isFsAny ? '' : 'none');
+          }
         } else {
           // In CodeMirror mode hide the fallback button to avoid duplicates.
           btn.style.display = isFsAny ? 'none' : '';
@@ -943,6 +980,7 @@ let mihomoPanelModuleApi = null;
       viewportMargin: 30,
       yamlAssist: getMihomoYamlAssistOptions(),
       snippetProvider: getMihomoSnippetProvider(),
+      quickFixProvider: getMihomoQuickFixProvider(),
     });
 
     try {
@@ -974,10 +1012,34 @@ let mihomoPanelModuleApi = null;
         const icons = getXkeenEditorToolbarIcons();
 
         // Replace fullscreen action: in this card it must work for the active engine.
-        const items = sourceItems.map((it) => {
-          if (it && it.id === 'fs') return Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) });
-          return it;
+        const items = [];
+        let quickFixInserted = false;
+        sourceItems.forEach((it) => {
+          if (!quickFixInserted && it && it.id === 'help') {
+            items.push({
+              id: 'quick_fix',
+              icon: 'FX',
+              label: 'Quick fix',
+              fallbackHint: 'Лучшее исправление',
+              onClick: () => applyBestMihomoQuickFix(),
+            });
+            quickFixInserted = true;
+          }
+          if (it && it.id === 'fs') {
+            items.push(Object.assign({}, it, { onClick: (cm) => toggleEditorFullscreen(cm) }));
+            return;
+          }
+          items.push(it);
         });
+        if (!quickFixInserted) {
+          items.push({
+            id: 'quick_fix',
+            icon: 'FX',
+            label: 'Quick fix',
+            fallbackHint: 'Лучшее исправление',
+            onClick: () => applyBestMihomoQuickFix(),
+          });
+        }
 
         // Fallback fullscreen button for Monaco even when CM fullscreen addon isn't loaded.
         try {

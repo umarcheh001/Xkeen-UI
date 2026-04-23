@@ -2,6 +2,10 @@ import {
   createMihomoSnippetProvider,
   createXraySnippetProvider,
 } from './schema_snippets.js';
+import {
+  createMihomoQuickFixProvider,
+  createXrayQuickFixProvider,
+} from './schema_quickfixes.js';
 
 const SCHEMA_URLS = Object.freeze({
   xray: '/static/schemas/xray-config.schema.json',
@@ -18,6 +22,13 @@ const _snippetProviderCache = Object.freeze({
   'xray-inbounds': createXraySnippetProvider('xray-inbounds'),
   'xray-outbounds': createXraySnippetProvider('xray-outbounds'),
   mihomo: createMihomoSnippetProvider(),
+});
+const _quickFixProviderCache = Object.freeze({
+  'xray-config': createXrayQuickFixProvider(),
+  'xray-routing': createXrayQuickFixProvider(),
+  'xray-inbounds': createXrayQuickFixProvider(),
+  'xray-outbounds': createXrayQuickFixProvider(),
+  mihomo: createMihomoQuickFixProvider(),
 });
 
 function normalizeText(value) {
@@ -165,6 +176,21 @@ function setEditorSnippetProvider(editor, provider, ctx) {
   return false;
 }
 
+function setEditorQuickFixProvider(editor, provider, ctx) {
+  const target = editor && editor.raw ? editor.raw : editor;
+  const runtime = getRuntime(ctx);
+  try {
+    if (runtime && typeof runtime.setQuickFixProvider === 'function') return !!runtime.setQuickFixProvider(target, provider || null);
+  } catch (e) {}
+  try {
+    if (target && typeof target.setQuickFixProvider === 'function') return !!target.setQuickFixProvider(provider || null);
+  } catch (e2) {}
+  try {
+    if (target && typeof target.setOption === 'function') return !!target.setOption('quickFixProvider', provider || null);
+  } catch (e3) {}
+  return false;
+}
+
 function normalizeSnippetKind(value) {
   const raw = normalizeLower(value);
   if (!raw) return '';
@@ -182,12 +208,23 @@ export function resolveEditorSnippetProvider(ctx) {
   return _snippetProviderCache[inferredKind] || null;
 }
 
+export function resolveEditorQuickFixProvider(ctx) {
+  const o = ctx || {};
+  const explicitKind = normalizeSnippetKind(o.quickFixKind || o.schemaKind);
+  if (explicitKind && _quickFixProviderCache[explicitKind]) return _quickFixProviderCache[explicitKind];
+
+  const inferredKind = normalizeSnippetKind(inferSchemaKind(o));
+  if (!inferredKind) return null;
+  return _quickFixProviderCache[inferredKind] || null;
+}
+
 export function clearSchemaFromEditor(editor, ctx) {
   const target = editor && editor.raw ? editor.raw : editor;
   const context = ctx || {};
   const schemaCleared = setEditorSchema(target, null, context);
   const snippetCleared = setEditorSnippetProvider(target, null, context);
-  return schemaCleared || snippetCleared;
+  const quickFixCleared = setEditorQuickFixProvider(target, null, context);
+  return schemaCleared || snippetCleared || quickFixCleared;
 }
 
 export async function applySchemaToEditor(editor, ctx) {
@@ -224,15 +261,24 @@ export async function applySchemaToEditor(editor, ctx) {
       ? (spec.fragment ? `xray-${spec.fragment}` : 'xray-config')
       : spec.family,
   });
+  const quickFixProvider = o.quickFixProvider || resolveEditorQuickFixProvider({
+    ...o,
+    schemaKind: spec.family === 'xray'
+      ? (spec.fragment ? `xray-${spec.fragment}` : 'xray-config')
+      : spec.family,
+  });
   const snippetsOk = setEditorSnippetProvider(target, snippetProvider, o);
-  return { ok: ok || snippetsOk, skipped: false, spec, schema: loaded.schema, snippetProvider };
+  const quickFixOk = setEditorQuickFixProvider(target, quickFixProvider, o);
+  return { ok: ok || snippetsOk || quickFixOk, skipped: false, spec, schema: loaded.schema, snippetProvider, quickFixProvider };
 }
 
 export const editorSchemaApi = Object.freeze({
   resolveEditorSchemaSpec,
   resolveEditorSnippetProvider,
+  resolveEditorQuickFixProvider,
   loadEditorSchema,
   applySchemaToEditor,
   clearSchemaFromEditor,
   setEditorSnippetProvider,
+  setEditorQuickFixProvider,
 });

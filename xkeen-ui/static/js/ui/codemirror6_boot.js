@@ -327,6 +327,7 @@ function schemaExtensionFor(schema, opts) {
   if (!schema) return [];
   const completionOpts = {
     snippetProvider: opts && opts.snippetProvider ? opts.snippetProvider : null,
+    quickFixProvider: opts && opts.quickFixProvider ? opts.quickFixProvider : null,
     schemaKind: opts && opts.schemaKind ? opts.schemaKind : '',
   };
   const extensions = [
@@ -377,6 +378,7 @@ function yamlAssistExtensionFor(opts) {
     const result = completeYamlTextFromSchema(context.state.doc.toString(), schema, {
       offset: context.pos,
       snippetProvider: opts && opts.snippetProvider ? opts.snippetProvider : null,
+      quickFixProvider: opts && opts.quickFixProvider ? opts.quickFixProvider : null,
     });
     if (!result || !Array.isArray(result.options) || !result.options.length) return null;
     return {
@@ -1177,6 +1179,15 @@ function buildBridge(view, ctx) {
     return false;
   }
 
+  function resolveQuickFixGetter(provider) {
+    if (!provider) return null;
+    if (typeof provider === 'function') return provider;
+    if (provider && typeof provider.getQuickFixes === 'function') {
+      return (ctx) => provider.getQuickFixes(ctx);
+    }
+    return null;
+  }
+
   bridge = {
     __xkeenCm6Bridge: true,
     __xkeen_cm6_bridge: true,
@@ -1247,6 +1258,48 @@ function buildBridge(view, ctx) {
     getSchema() {
       try { return getJSONSchema(view.state); } catch (e) {}
       return undefined;
+    },
+    setQuickFixProvider(provider) {
+      options.quickFixProvider = provider || null;
+      return true;
+    },
+    getQuickFixProvider() {
+      return options.quickFixProvider || null;
+    },
+    getQuickFixes(request) {
+      const getter = resolveQuickFixGetter(options.quickFixProvider);
+      if (!getter) return [];
+      const req = request && typeof request === 'object' ? { ...request } : {};
+      if (!Number.isFinite(req.offset)) {
+        try { req.offset = view.state.selection.main.head; } catch (e) {}
+      }
+      try {
+        const list = getter({
+          ...req,
+          text: view.state.doc.toString(),
+          schema: bridge.getSchema(),
+          yamlAssist: options.yamlAssist || null,
+          language: options.mode,
+        });
+        return Array.isArray(list) ? list : [];
+      } catch (e) {}
+      return [];
+    },
+    applyQuickFix(fix) {
+      if (!fix || typeof fix !== 'object') return false;
+      if (Array.isArray(fix.edits) && fix.edits.length) {
+        const changes = fix.edits.map((item) => ({
+          from: Math.max(0, Number(item && item.from || 0)),
+          to: Math.max(0, Number(item && item.to != null ? item.to : item && item.from || 0)),
+          insert: asString(item && item.insert),
+        }));
+        return dispatch({ changes, scrollIntoView: true });
+      }
+      if (typeof fix.text === 'string') {
+        bridge.setValue(fix.text);
+        return true;
+      }
+      return false;
     },
     saveViewState() {
       const scroll = bridge.getScrollInfo();
@@ -1321,6 +1374,10 @@ function buildBridge(view, ctx) {
         options.snippetProvider = value || null;
         return bridge.refreshSchemaExtensions();
       }
+      if (key === 'quickFixProvider') {
+        options.quickFixProvider = value || null;
+        return true;
+      }
       return true;
     },
     getMode() { return getModeForCompat(); },
@@ -1373,6 +1430,7 @@ function createBridge(target, opts = {}) {
       yamlAssist: opts.yamlAssist || null,
       semanticValidation: opts.semanticValidation || null,
       snippetProvider: opts.snippetProvider || null,
+      quickFixProvider: opts.quickFixProvider || null,
     },
     languageCompartment: new Compartment(),
     readOnlyCompartment: new Compartment(),
@@ -1474,6 +1532,7 @@ const runtime = {
   },
   clearValidation(editor) { const target = editor && editor.raw ? editor.raw : editor; try { if (target && typeof target.clearDiagnostics === 'function') target.clearDiagnostics(); } catch (e) {} return true; },
   setSchema(editor, schema) { const target = editor && editor.raw ? editor.raw : editor; try { if (target && typeof target.setSchema === 'function') return target.setSchema(schema); } catch (e) {} return false; },
+  setQuickFixProvider(editor, provider) { const target = editor && editor.raw ? editor.raw : editor; try { if (target && typeof target.setQuickFixProvider === 'function') return target.setQuickFixProvider(provider); } catch (e) {} return false; },
   supportsMode(mode) { const next = normalizeMode(mode); return ['application/json', 'application/jsonc', 'application/javascript', 'text/yaml', 'text/plain'].includes(next); },
   isAvailable() { return true; },
   describe() { return { engine: 'codemirror', backend: BACKEND, version: VERSION, source: 'local-offline-bundle', ready: true }; },

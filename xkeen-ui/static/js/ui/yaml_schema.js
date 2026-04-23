@@ -1269,4 +1269,12 @@ export const yamlSchemaApi = Object.freeze({
   validateYamlTextAgainstSchema,
   completeYamlTextFromSchema,
   hoverYamlTextFromSchema,
+  buildYamlPathLocationMap,
+  resolveSchemaAtPath,
 });
+
+export {
+  buildYamlPathLocationMap,
+  resolveSchemaAtPath,
+  pathToString,
+};

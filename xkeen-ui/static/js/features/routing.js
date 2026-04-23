@@ -33,6 +33,7 @@ import {
 import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_comments.js';
 import { applySchemaToEditor, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
 import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';
+import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
 
 (() => {
   "use strict";
@@ -651,6 +652,44 @@ import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.j
     });
   }
 
+  let _routingQuickFixProvider = null;
+  function getRoutingQuickFixProvider() {
+    if (_routingQuickFixProvider) return _routingQuickFixProvider;
+    _routingQuickFixProvider = createXrayQuickFixProvider({
+      getSemanticOptions: () => getRoutingSemanticValidationConfig().options,
+    });
+    return _routingQuickFixProvider;
+  }
+
+  function getActiveRoutingEditorRaw() {
+    if (_engine === 'monaco' && _monaco) return _monaco;
+    if (_cm) return _cm;
+    return null;
+  }
+
+  function applyBestRoutingQuickFix() {
+    const editor = getActiveRoutingEditorRaw();
+    if (!editor || typeof editor.getQuickFixes !== 'function' || typeof editor.applyQuickFix !== 'function') {
+      try { toastXkeen('Quick fixes пока недоступны для текущего редактора.', 'warning'); } catch (e) {}
+      return false;
+    }
+    let fixes = [];
+    try { fixes = editor.getQuickFixes({ limit: 1 }); } catch (e) { fixes = []; }
+    const fix = Array.isArray(fixes) && fixes.length ? fixes[0] : null;
+    if (!fix) {
+      try { toastXkeen('Под курсором не нашёл подходящего quick fix.', 'info'); } catch (e) {}
+      return false;
+    }
+    const applied = !!editor.applyQuickFix(fix);
+    if (applied) {
+      try { toastXkeen(`Исправлено: ${String(fix.title || 'quick fix')}`, 'success'); } catch (e) {}
+      try { scheduleValidate(0); } catch (e2) {}
+    } else {
+      try { toastXkeen('Не удалось применить quick fix.', 'error'); } catch (e3) {}
+    }
+    return applied;
+  }
+
   function updateRoutingSchemaBadge(result) {
     const el = $(IDS.editorSchemaBadge);
     if (!el) return;
@@ -848,6 +887,7 @@ import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.j
         mode: 'jsonc',
         text: typeof text === 'string' ? text : readCurrentEditorText(),
         feature: 'routing',
+        quickFixProvider: getRoutingQuickFixProvider(),
       });
       try {
         if (typeof editor.setOption === 'function') {
@@ -876,6 +916,7 @@ import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.j
         mode: 'jsonc',
         text: typeof text === 'string' ? text : readCurrentEditorText(),
         feature: 'routing',
+        quickFixProvider: getRoutingQuickFixProvider(),
       });
       try { ensureRoutingSemanticContextFresh(); } catch (e2) {}
       updateRoutingSchemaBadge(result);
@@ -3964,6 +4005,7 @@ function closeHelp() {
       viewportMargin: initialLite ? PERF_LIMITS.viewportMarginLite : Infinity,
       semanticValidation: getRoutingSemanticValidationConfig(),
       snippetProvider: getRoutingSnippetProvider(),
+      quickFixProvider: getRoutingQuickFixProvider(),
     });
 
     // Cosmetic class + toolbar
@@ -3983,6 +4025,7 @@ function closeHelp() {
           const icons = getXkeenEditorToolbarIcons();
           const items = [];
           let inserted = false;
+          let fixInserted = false;
           base.forEach((it) => {
             // Replace fullscreen action: in routing card it must work for the active engine
             // (CodeMirror or Monaco), not just CodeMirror.
@@ -3991,6 +4034,16 @@ function closeHelp() {
                 onClick: () => toggleEditorFullscreen(cm),
               }));
               return;
+            }
+            if (!fixInserted && it && it.id === 'help') {
+              items.push({
+                id: 'quick_fix',
+                icon: 'FX',
+                label: 'Quick fix',
+                fallbackHint: 'Лучшее исправление',
+                onClick: () => applyBestRoutingQuickFix(),
+              });
+              fixInserted = true;
             }
             // Drop the default CodeMirror help button (red '?').
             if (it && it.id === 'help') {
@@ -4012,6 +4065,15 @@ function closeHelp() {
 
           // If defaults did not contain a help button at all, still add JSONC help at the end.
           if (!inserted) {
+            if (!fixInserted) {
+              items.push({
+                id: 'quick_fix',
+                icon: 'FX',
+                label: 'Quick fix',
+                fallbackHint: 'Лучшее исправление',
+                onClick: () => applyBestRoutingQuickFix(),
+              });
+            }
             items.push({
               id: 'help_comments',
               svg: icons.help || '',
@@ -4127,6 +4189,13 @@ function closeHelp() {
         bar.className = 'xkeen-cm-toolbar xk-routing-monaco-toolbar';
         bar.setAttribute('role', 'toolbar');
         bar.appendChild(buildRoutingToolbarButton({
+          actionId: 'quick_fix',
+          label: 'Quick fix',
+          tip: 'Применить лучшее исправление',
+          fallbackText: 'FX',
+          onClick: () => applyBestRoutingQuickFix(),
+        }));
+        bar.appendChild(buildRoutingToolbarButton({
           actionId: 'help_comments',
           label: 'Справка (комментарии)',
           tip: 'Справка (комментарии)',
@@ -4187,9 +4256,10 @@ function closeHelp() {
         );
 
         const isFs = !!(btn.dataset && btn.dataset.actionId === 'fs');
+        const isQuickFix = !!(btn.dataset && btn.dataset.actionId === 'quick_fix');
 
-        // In Monaco mode show only the yellow JSONC help + fullscreen.
-        btn.style.display = (isMonaco && !(isCommentsHelp || isFs)) ? 'none' : '';
+        // In Monaco mode show quick fix + yellow JSONC help + fullscreen.
+        btn.style.display = (isMonaco && !(isCommentsHelp || isFs || isQuickFix)) ? 'none' : '';
       });
     } catch (e) {}
   }
@@ -4735,6 +4805,7 @@ function closeHelp() {
           performanceProfile: (_editorPerfProfile && _editorPerfProfile.lite) ? 'lite' : 'default',
           wordWrap: isMipsTarget() ? 'off' : 'on',
           snippetProvider: getRoutingSnippetProvider(),
+          quickFixProvider: getRoutingQuickFixProvider(),
           onChange: () => {
             try { invalidateEditorSnapshot(); } catch (e) {}
             try { scheduleMonacoDiagnostics(); } catch (e) {}
