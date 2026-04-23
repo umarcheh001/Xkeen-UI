@@ -337,6 +337,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/schema_snippets.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/features/routing_cards_namespace.js",
           "globals": [],
           "lazy_features": []
