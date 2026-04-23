@@ -75,15 +75,24 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
 
 def test_outbounds_pool_nodes_relayout_after_card_open_and_async_load():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    config_shell_src = _read("xkeen-ui/static/js/pages/config_shell.shared.js")
+    panel_runtime_src = _read("xkeen-ui/static/js/pages/panel.view_runtime.js")
 
     assert "let _outboundsNodeLayoutSeq = 0;" in outbounds_src
     assert "function outboundsCanRelayoutNodeList() {" in outbounds_src
     assert "function scheduleOutboundsNodeListLayout() {" in outbounds_src
+    assert "function onShow(opts) {" in outbounds_src
     assert "try { requestAnimationFrame(run); } catch (e) { setTimeout(run, 0); }" in outbounds_src
     assert "setTimeout(run, 60);" in outbounds_src
     assert "setTimeout(run, 180);" in outbounds_src
     assert "if (visible !== false && hasNodes) scheduleOutboundsNodeListLayout();" in outbounds_src
     assert "if (willOpen) scheduleOutboundsNodeListLayout();" in outbounds_src
+    assert "setTimeout(rerunLayout, 120);" in outbounds_src
+    assert "setTimeout(rerunLayout, 260);" in outbounds_src
+    assert "onShow," in outbounds_src
+    assert "export function onShowOutbounds(...args) {" in outbounds_src
+    assert "if (typeof api.onShow === 'function') {" in config_shell_src
+    assert "safe(() => configShell.activateOutboundsView({ reason: 'tab' }));" in panel_runtime_src
 
 
 def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions():

@@ -68,12 +68,17 @@ import {
         import('../features/compat/outbounds.js'),
       ]).then(([mod]) => mod),
       isVisible: () => true,
-      onActivate: (api) => {
+      onActivate: (api, options) => {
         try { api.init(); } catch (e) {
           try { console.error('[XKeen] outbounds config shell init failed', e); } catch (e2) {}
           return false;
         }
         try { syncFeatureTab('outbounds', 'outbounds-view-init'); } catch (e3) {}
+        if (typeof api.onShow === 'function') {
+          try {
+            api.onShow({ reason: String((options && options.reason) || 'config-shell') });
+          } catch (e4) {}
+        }
         return true;
       },
     },

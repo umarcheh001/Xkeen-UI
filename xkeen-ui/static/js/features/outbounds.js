@@ -503,6 +503,30 @@ let outboundsModuleApi = null;
       setTimeout(run, 180);
     }
 
+    function onShow(opts) {
+      const reason = String((opts && opts.reason) || 'show');
+      const rerunLayout = () => {
+        try {
+          const body = $('outbounds-body');
+          if (!body || body.style.display === 'none') return;
+        } catch (e) {}
+        try { scheduleOutboundsNodeListLayout(); } catch (e2) {}
+      };
+
+      try {
+        requestAnimationFrame(() => {
+          rerunLayout();
+          try { setTimeout(rerunLayout, 0); } catch (e) {}
+          try { setTimeout(rerunLayout, 120); } catch (e2) {}
+          try { setTimeout(rerunLayout, 260); } catch (e3) {}
+        });
+      } catch (e) {
+        rerunLayout();
+      }
+
+      return reason;
+    }
+
     async function refreshOutboundsNodes(visible) {
       if (isSubscriptionFragmentMode()) {
         outboundsSetNodes([], {});
@@ -5045,6 +5069,7 @@ let outboundsModuleApi = null;
 
     return {
       init,
+      onShow,
       load,
       save,
       backup,
@@ -5075,6 +5100,10 @@ export function loadOutbounds(...args) {
   return callOutboundsApi('load', ...args);
 }
 
+export function onShowOutbounds(...args) {
+  return callOutboundsApi('onShow', ...args);
+}
+
 export function saveOutbounds(...args) {
   return callOutboundsApi('save', ...args);
 }
@@ -5091,6 +5120,7 @@ export const outboundsApi = Object.freeze({
   get: getOutboundsApi,
   init: initOutbounds,
   load: loadOutbounds,
+  onShow: onShowOutbounds,
   save: saveOutbounds,
   backup: backupOutbounds,
   toggleCard: toggleOutboundsCard,

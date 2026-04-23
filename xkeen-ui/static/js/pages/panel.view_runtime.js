@@ -117,6 +117,9 @@ export function applyPanelViewRuntime(name) {
     const configShell = getConfigShellApi();
     if (configShell) {
       safe(() => activateRoutingConfigView({ reason: 'tab' }));
+      if (typeof configShell.isOutboundsReady === 'function' && configShell.isOutboundsReady()) {
+        safe(() => configShell.activateOutboundsView({ reason: 'tab' }));
+      }
     }
   }
 
