@@ -26477,11 +26477,17 @@ html[data-theme="light"] .xkeen-cm6-host {
   max-height: 320px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 12px;
-  line-height: 1.45;
-  font-size: 13px;
+  padding: 10px 14px;
+  line-height: 1.5;
+  font-size: 14px;
+  color: #e6edf7;
   word-wrap: break-word;
   overflow-wrap: anywhere;
+}
+
+.xkeen-cm6-host.xkeen-cm6-light .cm6-json-schema-hover,
+html[data-theme="light"] .xkeen-cm6-host .cm6-json-schema-hover {
+  color: #0f172a;
 }
 
 .xkeen-cm6-host .cm6-json-schema-hover pre,

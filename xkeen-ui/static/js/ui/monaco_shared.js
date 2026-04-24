@@ -1858,6 +1858,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         automaticLayout: !(perf.lite || safari),
         minimap: { enabled: false },
         stickyScroll: { enabled: false },
+        fixedOverflowWidgets: true,
         scrollBeyondLastLine: false,
         wordWrap: o.wordWrap || ((perf.lite || safari) ? 'off' : 'on'),
         disableLayerHinting: safari,
