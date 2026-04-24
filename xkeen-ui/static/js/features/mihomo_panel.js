@@ -1246,14 +1246,21 @@ let mihomoPanelModuleApi = null;
           const line = Math.max(1, Number(item && item.line ? item.line : 1));
           const column = Math.max(1, Number(item && item.column ? item.column : 1));
           const length = Math.max(1, Number(item && item.length ? item.length : 1));
+          const rawSev = item && typeof item.severity === 'string' ? item.severity : '';
+          const mappedSeverity = rawSev === 'info' || rawSev === 'suggestion' || rawSev === 'hint'
+            ? (severity.Info || severity.Hint || 2)
+            : (rawSev === 'warning' ? (severity.Warning || 4) : (severity.Error || 8));
+          const baseMessage = String((item && item.message) || 'Ошибка схемы');
+          const hint = item && typeof item.hint === 'string' ? item.hint.trim() : '';
+          const fullMessage = hint ? `${baseMessage}\nПодсказка: ${hint}` : baseMessage;
           return {
             startLineNumber: line,
             startColumn: column,
             endLineNumber: line,
             endColumn: column + length,
-            severity: item && item.severity === 'warning' ? (severity.Warning || 4) : (severity.Error || 8),
+            severity: mappedSeverity,
             source: String((item && item.source) || 'mihomo-schema'),
-            message: String((item && item.message) || 'Ошибка схемы'),
+            message: fullMessage,
           };
         });
         monaco.editor.setModelMarkers(model, 'xkeen-mihomo-schema', markers);

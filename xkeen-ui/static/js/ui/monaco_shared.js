@@ -897,6 +897,17 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     }
   }
 
+  function _isBeginnerModeEnabled() {
+    try {
+      const api = _getSettingsApi();
+      const settings = (api && typeof api.get === 'function') ? api.get() : null;
+      const editor = (settings && settings.editor && typeof settings.editor === 'object') ? settings.editor : {};
+      return editor.beginnerModeEnabled === true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function _resolveEditorHoverOptions(opts, snapshot) {
     const options = (opts && opts.hover && typeof opts.hover === 'object') ? { ...opts.hover } : {};
     if (opts && typeof opts.hoverEnabled === 'boolean') options.enabled = opts.hoverEnabled;
@@ -1659,6 +1670,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         if (!schema || !model || typeof model.getOffsetAt !== 'function') return null;
         const result = hoverYamlTextFromSchema(model.getValue(), schema, {
           offset: model.getOffsetAt(position),
+          beginnerMode: _isBeginnerModeEnabled(),
         });
         if (!result || !result.markdown) return null;
         const start = model.getPositionAt(Math.max(0, Number(result.from || 0)));
@@ -1731,7 +1743,9 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         const schema = _getModelJsonSchema(model);
         if (!schema) return null;
 
-        const result = buildJsonSchemaHoverInfo(model.getValue(), schema, model.getOffsetAt(position));
+        const result = buildJsonSchemaHoverInfo(model.getValue(), schema, model.getOffsetAt(position), {
+          beginnerMode: _isBeginnerModeEnabled(),
+        });
         if (!result || !result.markdown) return null;
 
         const start = model.getPositionAt(Math.max(0, Number(result.from || 0)));

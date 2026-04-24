@@ -684,6 +684,13 @@ import { getFeatureApi } from '../features/feature_access.js';
           'Отключает hover-подсказки в редакторах CodeMirror и Monaco, включая JSON/Xray и YAML/Mihomo. Подчёркивание ошибок, маркеры и автодополнение остаются включены.',
           'Настройка всплывающих подсказок сохранена.'
         ),
+        createServerSwitch(
+          'editor-beginner-mode',
+          'editor.beginnerModeEnabled',
+          'Режим новичка в подсказках',
+          'Добавляет в hover простое объяснение, типичный use case, короткий пример и предупреждение о частой ошибке для полей с расширенными метаданными схемы. Не меняет правила валидации.',
+          'Режим новичка сохранён.'
+        ),
         createServerNumber(
           'editor-codemirror-font-scale',
           'editor.codemirrorFontScale',

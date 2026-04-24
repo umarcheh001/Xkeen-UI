@@ -956,7 +956,64 @@ function renderArrayItemsSummaryMarkdown(schema, rootSchema) {
   ].filter(Boolean).join('\n\n');
 }
 
-function buildJsonSchemaHoverContent(rootSchema, subSchema, pointer, currentValue) {
+function _readBeginnerMeta(schema) {
+  if (!schema || typeof schema !== 'object') return null;
+  const explain = typeof schema['x-ui-explain'] === 'string' ? schema['x-ui-explain'].trim() : '';
+  const useCase = typeof schema['x-ui-use-case'] === 'string' ? schema['x-ui-use-case'].trim() : '';
+  const example = typeof schema['x-ui-example'] === 'string' ? schema['x-ui-example'].trim() : '';
+  const warning = typeof schema['x-ui-warning'] === 'string' ? schema['x-ui-warning'].trim() : '';
+  const docLink = typeof schema['x-ui-doc-link'] === 'string' ? schema['x-ui-doc-link'].trim() : '';
+  if (!explain && !useCase && !example && !warning && !docLink) return null;
+  return { explain, useCase, example, warning, docLink };
+}
+
+function renderBeginnerBlockHtml(meta) {
+  if (!meta) return '';
+  const rows = [];
+  if (meta.explain) {
+    rows.push(`<div style="margin-bottom:4px"><span style="font-weight:600;opacity:.85">Простыми словами:</span> ${escapeHtml(meta.explain)}</div>`);
+  }
+  if (meta.useCase) {
+    rows.push(`<div style="margin-bottom:4px"><span style="font-weight:600;opacity:.85">Когда нужно:</span> ${escapeHtml(meta.useCase)}</div>`);
+  }
+  if (meta.example) {
+    rows.push(`<div style="margin-bottom:4px"><span style="font-weight:600;opacity:.85">Пример:</span> <code>${escapeHtml(meta.example)}</code></div>`);
+  }
+  if (meta.warning) {
+    rows.push(`<div style="margin-bottom:4px;color:#fcd34d"><span style="font-weight:600">⚠ Осторожно:</span> ${escapeHtml(meta.warning)}</div>`);
+  }
+  if (meta.docLink) {
+    rows.push(`<div style="margin-bottom:4px;opacity:.8"><span style="font-weight:600">Подробнее:</span> <code>${escapeHtml(meta.docLink)}</code></div>`);
+  }
+  if (!rows.length) return '';
+  return `<div style="margin:6px 0 8px 0;padding:7px 9px;border-radius:8px;border:1px solid rgba(56, 189, 248, 0.35);background:rgba(56, 189, 248, 0.10)"><div style="font-size:.78em;letter-spacing:.03em;text-transform:uppercase;opacity:.75;margin-bottom:4px">режим новичка</div>${rows.join('')}</div>`;
+}
+
+function renderBeginnerBlockMarkdown(meta) {
+  if (!meta) return '';
+  const rows = [];
+  if (meta.explain) rows.push(`**Простыми словами:** ${meta.explain}`);
+  if (meta.useCase) rows.push(`**Когда нужно:** ${meta.useCase}`);
+  if (meta.example) rows.push(`**Пример:** ${markdownCode(meta.example)}`);
+  if (meta.warning) rows.push(`**⚠ Осторожно:** ${meta.warning}`);
+  if (meta.docLink) rows.push(`**Подробнее:** ${markdownCode(meta.docLink)}`);
+  return rows.join('\n\n');
+}
+
+function renderBeginnerBlockPlain(meta) {
+  if (!meta) return '';
+  const rows = [];
+  if (meta.explain) rows.push(`Простыми словами: ${meta.explain}`);
+  if (meta.useCase) rows.push(`Когда нужно: ${meta.useCase}`);
+  if (meta.example) rows.push(`Пример: ${meta.example}`);
+  if (meta.warning) rows.push(`Осторожно: ${meta.warning}`);
+  if (meta.docLink) rows.push(`Подробнее: ${meta.docLink}`);
+  return rows.join('\n');
+}
+
+function buildJsonSchemaHoverContent(rootSchema, subSchema, pointer, currentValue, options) {
+  const opts = (options && typeof options === 'object') ? options : {};
+  const beginnerMode = !!opts.beginnerMode;
   const deprecationMessage = schemaDeprecationMessage(subSchema, currentValue);
   const label = pointerLabel(pointer);
   const htmlParts = [];
@@ -974,6 +1031,18 @@ function buildJsonSchemaHoverContent(rootSchema, subSchema, pointer, currentValu
     htmlParts.push(`<div style="margin-bottom:6px">${escapeHtml(description)}</div>`);
     markdownParts.push(description);
     plainParts.push(description);
+  }
+
+  if (beginnerMode) {
+    const beginnerMeta = _readBeginnerMeta(subSchema);
+    if (beginnerMeta) {
+      const beginnerHtml = renderBeginnerBlockHtml(beginnerMeta);
+      if (beginnerHtml) htmlParts.push(beginnerHtml);
+      const beginnerMd = renderBeginnerBlockMarkdown(beginnerMeta);
+      if (beginnerMd) markdownParts.push(beginnerMd);
+      const beginnerPlain = renderBeginnerBlockPlain(beginnerMeta);
+      if (beginnerPlain) plainParts.push(beginnerPlain);
+    }
   }
 
   if (deprecationMessage) {
@@ -1112,7 +1181,7 @@ function findJsonSchemaHoverTarget(pointerMap, offset) {
   return candidates[0] || null;
 }
 
-function buildJsonSchemaHoverInfo(text, schema, offset) {
+function buildJsonSchemaHoverInfo(text, schema, offset, options) {
   if (!schema || typeof schema !== 'object') return null;
   const source = String(text || '');
   if (!source.trim()) return null;
@@ -1123,7 +1192,7 @@ function buildJsonSchemaHoverInfo(text, schema, offset) {
   if (!subSchema || typeof subSchema !== 'object') return null;
   const docValue = safeParseJson(source);
   const currentValue = docValue == null ? undefined : getValueAtPointer(docValue, target.pointer);
-  const content = buildJsonSchemaHoverContent(schema, subSchema, target.pointer, currentValue);
+  const content = buildJsonSchemaHoverContent(schema, subSchema, target.pointer, currentValue, options);
   if (!content.html && !content.markdown && !content.plain) return null;
   return {
     from: target.from,
@@ -1135,12 +1204,25 @@ function buildJsonSchemaHoverInfo(text, schema, offset) {
   };
 }
 
+function _resolveHoverOptions(options) {
+  if (!options || typeof options !== 'object') return {};
+  const getter = typeof options.getBeginnerMode === 'function' ? options.getBeginnerMode : null;
+  let beginnerMode = false;
+  if (getter) {
+    try { beginnerMode = !!getter(); } catch (e) { beginnerMode = false; }
+  } else if (Object.prototype.hasOwnProperty.call(options, 'beginnerMode')) {
+    beginnerMode = !!options.beginnerMode;
+  }
+  return { beginnerMode };
+}
+
 function jsonSchemaHover(options) {
   return async function schemaHoverSource(view, pos, side) {
     const schema = getJSONSchema(view.state);
     if (!schema) return null;
     const probe = Math.max(0, pos + (side < 0 ? -1 : 0));
-    const result = buildJsonSchemaHoverInfo(view.state.doc.toString(), schema, probe);
+    const hoverOptions = _resolveHoverOptions(options);
+    const result = buildJsonSchemaHoverInfo(view.state.doc.toString(), schema, probe, hoverOptions);
     if (!result || !result.html) return null;
 
     return {

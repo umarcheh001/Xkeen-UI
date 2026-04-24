@@ -787,14 +787,21 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
       const end = mapping && Number.isFinite(mapping.valueTo)
         ? indexToMonacoLineCol(raw, Math.max(Number(mapping.valueFrom || 0), Number(mapping.valueTo || 0)))
         : { line: start.line, col: start.col + 1 };
+      const rawSev = item && typeof item.severity === 'string' ? item.severity : '';
+      const mappedSeverity = rawSev === 'info' || rawSev === 'suggestion' || rawSev === 'hint'
+        ? (severity.Info || severity.Hint || 2)
+        : (rawSev === 'warning' ? (severity.Warning || 4) : (severity.Error || 8));
+      const baseMessage = String((item && item.message) || 'Semantic validation error');
+      const hint = item && typeof item.hint === 'string' ? item.hint.trim() : '';
+      const fullMessage = hint ? `${baseMessage}\nПодсказка: ${hint}` : baseMessage;
       return {
         startLineNumber: Math.max(1, Number(start.line || 1)),
         startColumn: Math.max(1, Number(start.col || 1)),
         endLineNumber: Math.max(1, Number(end.line || start.line || 1)),
         endColumn: Math.max(1, Number(end.col || start.col || 1)),
-        severity: item && item.severity === 'warning' ? (severity.Warning || 4) : (severity.Error || 8),
+        severity: mappedSeverity,
         source: String((item && item.source) || 'xray-semantic'),
-        message: withDiagnosticContext(String((item && item.message) || 'Semantic validation error'), pointer, doc, mapping),
+        message: withDiagnosticContext(fullMessage, pointer, doc, mapping),
       };
     });
   }

@@ -728,6 +728,39 @@ function formatEnumValues(values) {
   return list.join(', ');
 }
 
+function _readYamlBeginnerMeta(schema) {
+  if (!schema || typeof schema !== 'object') return null;
+  const explain = asString(schema['x-ui-explain'] || '').trim();
+  const useCase = asString(schema['x-ui-use-case'] || '').trim();
+  const example = asString(schema['x-ui-example'] || '').trim();
+  const warning = asString(schema['x-ui-warning'] || '').trim();
+  const docLink = asString(schema['x-ui-doc-link'] || '').trim();
+  if (!explain && !useCase && !example && !warning && !docLink) return null;
+  return { explain, useCase, example, warning, docLink };
+}
+
+function _formatYamlBeginnerBlockPlain(meta) {
+  if (!meta) return '';
+  const rows = [];
+  if (meta.explain) rows.push(`Простыми словами: ${meta.explain}`);
+  if (meta.useCase) rows.push(`Когда нужно: ${meta.useCase}`);
+  if (meta.example) rows.push(`Пример: ${meta.example}`);
+  if (meta.warning) rows.push(`Осторожно: ${meta.warning}`);
+  if (meta.docLink) rows.push(`Подробнее: ${meta.docLink}`);
+  return rows.join('\n');
+}
+
+function _formatYamlBeginnerBlockMarkdown(meta) {
+  if (!meta) return '';
+  const rows = [];
+  if (meta.explain) rows.push(`**Простыми словами:** ${meta.explain}`);
+  if (meta.useCase) rows.push(`**Когда нужно:** ${meta.useCase}`);
+  if (meta.example) rows.push('**Пример:** `' + meta.example + '`');
+  if (meta.warning) rows.push(`**⚠ Осторожно:** ${meta.warning}`);
+  if (meta.docLink) rows.push('**Подробнее:** `' + meta.docLink + '`');
+  return rows.join('\n\n');
+}
+
 function buildSchemaHelp(rawSchema, options = {}) {
   const rootSchema = options.rootSchema || rawSchema || {};
   const schema = resolveSchema(rawSchema, rootSchema);
@@ -740,13 +773,23 @@ function buildSchemaHelp(rawSchema, options = {}) {
   if (Array.isArray(schema.enum) && schema.enum.length) details.push(`Допустимые значения: ${formatEnumValues(schema.enum)}.`);
   if (Object.prototype.hasOwnProperty.call(schema, 'default')) details.push(`По умолчанию: ${formatSchemaDefault(schema.default)}.`);
   if (options.required) details.push('Обязательное поле.');
+  const beginnerMode = !!options.beginnerMode;
+  const beginnerMeta = beginnerMode ? _readYamlBeginnerMeta(schema) : null;
   const plainParts = [];
   if (label) plainParts.push(label);
   if (description) plainParts.push(description);
+  if (beginnerMeta) {
+    const beginnerPlain = _formatYamlBeginnerBlockPlain(beginnerMeta);
+    if (beginnerPlain) plainParts.push(beginnerPlain);
+  }
   if (details.length) plainParts.push(details.join(' '));
   const markdownParts = [];
   if (label) markdownParts.push(`**\`${label}\`**`);
   if (description) markdownParts.push(description);
+  if (beginnerMeta) {
+    const beginnerMd = _formatYamlBeginnerBlockMarkdown(beginnerMeta);
+    if (beginnerMd) markdownParts.push(beginnerMd);
+  }
   if (details.length) markdownParts.push(details.join('\n\n'));
   return {
     plain: plainParts.join('\n\n').trim(),
@@ -1251,6 +1294,7 @@ export function hoverYamlTextFromSchema(text, schema, options = {}) {
     label,
     required: isPathRequired(rootSchema, token.path, data),
     rootSchema,
+    beginnerMode: !!options.beginnerMode,
   });
   if (!help.plain && !help.markdown) return null;
   return {

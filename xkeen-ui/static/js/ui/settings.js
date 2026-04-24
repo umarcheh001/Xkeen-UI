@@ -23,6 +23,7 @@
       codemirrorFontScale: 100,
       monacoFontScale: 100,
       schemaHoverEnabled: true,
+      beginnerModeEnabled: false,
     },
     format: {
       preferPrettier: false,

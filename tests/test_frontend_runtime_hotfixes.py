@@ -500,8 +500,8 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "function renderPropertiesSummaryMarkdown" in schema_shim
     assert "function renderArrayItemsSummary" in schema_shim
     assert "function renderArrayItemsSummaryMarkdown" in schema_shim
-    assert "function buildJsonSchemaHoverContent(rootSchema, subSchema, pointer, currentValue)" in schema_shim
-    assert "function buildJsonSchemaHoverInfo(text, schema, offset)" in schema_shim
+    assert "function buildJsonSchemaHoverContent(rootSchema, subSchema, pointer, currentValue, options)" in schema_shim
+    assert "function buildJsonSchemaHoverInfo(text, schema, offset, options)" in schema_shim
     assert "buildJsonSchemaHoverInfo," in schema_shim
     assert "function inferObjectPointerBefore" in schema_shim
     assert "function fallbackPropertyCompletion" in schema_shim
@@ -533,7 +533,8 @@ def test_codemirror6_json_schema_bridge_is_tracked_and_wired_to_xray_editors():
     assert "fileMatch: _schemaFileMatchPatternsForModel(model)" in monaco_shared
     assert "registerHoverProvider('json'" in monaco_shared
     assert "const schema = _getModelJsonSchema(model);" in monaco_shared
-    assert "const result = buildJsonSchemaHoverInfo(model.getValue(), schema, model.getOffsetAt(position));" in monaco_shared
+    assert "const result = buildJsonSchemaHoverInfo(model.getValue(), schema, model.getOffsetAt(position), {" in monaco_shared
+    assert "beginnerMode: _isBeginnerModeEnabled()," in monaco_shared
     assert "return monaco.Uri.parse(`xkeen://json/model-${nextId}.jsonc`);" in monaco_shared
     assert "editor.setSchema = (schema) => {" in monaco_shared
     assert "editor.getSchema = () => currentSchema || null;" in monaco_shared

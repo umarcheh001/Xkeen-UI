@@ -657,6 +657,10 @@
     "inbound": {
       "type": "object",
       "description": "Входящее подключение — локальный слушающий сокет, через который Xray принимает клиентский трафик (прозрачный прокси, socks/http для LAN или туннелируемые vless/vmess/trojan/shadowsocks для удалённых клиентов).",
+      "x-ui-explain": "Inbound — это «вход» для трафика: порт, на котором Xray слушает. Всё, что в него прилетает, дальше проходит через `routing.rules` и уходит в один из outbound.",
+      "x-ui-use-case": "На роутере обычно настраивают dokodemo-door (прозрачный перехват) и/или socks/http для LAN-клиентов. Для туннеля с других устройств — vless/trojan с TLS.",
+      "x-ui-example": "{\n  \"tag\": \"socks-in\",\n  \"listen\": \"0.0.0.0\",\n  \"port\": 1080,\n  \"protocol\": \"socks\",\n  \"settings\": { \"auth\": \"noauth\", \"udp\": true }\n}",
+      "x-ui-warning": "Inbound на `0.0.0.0` без авторизации и без фильтрации по IP делает прокси открытым для всех — если порт случайно пробросится в интернет, им начнут пользоваться третьи лица.",
       "properties": {
         "listen": {
           "type": "string",
@@ -808,6 +812,10 @@
     "outbound": {
       "type": "object",
       "description": "Исходящее подключение — маршрут наружу: freedom (прямое соединение), blackhole (отбрасывание) или прокси-протокол до удалённого сервера.",
+      "x-ui-explain": "Outbound — это «выход» трафика: куда Xray направляет запрос. На outbound ссылаются правила (`routing.rules[].outboundTag`) и балансировщики (`balancers[].selector`).",
+      "x-ui-use-case": "Стандартный набор: `direct` (freedom — напрямую в интернет), `block` (blackhole — дропнуть) и один-несколько прокси-outbound (vless/trojan/shadowsocks) до ваших серверов.",
+      "x-ui-example": "{\n  \"tag\": \"proxy-1\",\n  \"protocol\": \"vless\",\n  \"settings\": { \"vnext\": [{ \"address\": \"example.com\", \"port\": 443, \"users\": [...] }] },\n  \"streamSettings\": { \"network\": \"tcp\", \"security\": \"reality\" }\n}",
+      "x-ui-warning": "Тег outbound должен быть уникальным: если два outbound имеют одинаковый `tag`, поведение зависит от порядка в конфиге и может стать непредсказуемым. На выбор outbound также влияет `routing.domainStrategy`.",
       "properties": {
         "sendThrough": {
           "type": "string",

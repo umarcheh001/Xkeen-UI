@@ -103,6 +103,18 @@ function isSchemaHoverEnabled(opts) {
   return true;
 }
 
+function isBeginnerModeEnabled(opts) {
+  try {
+    if (opts && Object.prototype.hasOwnProperty.call(opts, 'beginnerMode')) return !!opts.beginnerMode;
+  } catch (e) {}
+  try {
+    const settings = readUiSettingsSnapshot();
+    const editor = settings && settings.editor && typeof settings.editor === 'object' ? settings.editor : {};
+    return editor.beginnerModeEnabled === true;
+  } catch (e) {}
+  return false;
+}
+
 function hideSchemaHoverTooltips() {
   try {
     const nodes = document.querySelectorAll('.cm-tooltip-hover, .cm6-json-schema-hover');
@@ -310,7 +322,9 @@ function isSchemaHoverTarget(view, pos, side) {
 
 function jsonSchemaSyntaxAwareHover(opts) {
   const options = opts || {};
-  const schemaHoverSource = jsonSchemaHover();
+  const schemaHoverSource = jsonSchemaHover({
+    getBeginnerMode: () => isBeginnerModeEnabled(options),
+  });
   return function jsonSchemaSyntaxAwareHoverSource(view, pos, side) {
     const source = view && view.state && view.state.doc ? view.state.doc.toString() : '';
     const syntax = makeJsonDiagnostics(source, {
@@ -406,7 +420,10 @@ function yamlAssistExtensionFor(opts) {
     try { schema = getSchema(); } catch (e) {}
     if (!schema) return null;
     const probe = Math.max(0, pos + (side < 0 ? -1 : 0));
-    const result = hoverYamlTextFromSchema(view.state.doc.toString(), schema, { offset: probe });
+    const result = hoverYamlTextFromSchema(view.state.doc.toString(), schema, {
+      offset: probe,
+      beginnerMode: isBeginnerModeEnabled(opts),
+    });
     if (!result || !result.plain) return null;
     return {
       pos: Math.max(0, Number(result.from || 0)),
@@ -549,11 +566,18 @@ function normalizeDiagnostics(view, list) {
     if (!Number.isFinite(from)) from = 0;
     if (!Number.isFinite(to)) to = from;
     if (to < from) to = from;
+    const rawSeverity = String(raw.severity || '').toLowerCase();
+    let severity = 'error';
+    if (rawSeverity === 'warning') severity = 'warning';
+    else if (rawSeverity === 'info' || rawSeverity === 'suggestion' || rawSeverity === 'hint') severity = 'info';
+    const baseMessage = asString(raw.message || raw.text || raw.reason || 'Issue detected');
+    const hintText = asString(raw.hint || '').trim();
+    const message = hintText ? `${baseMessage}\nПодсказка: ${hintText}` : baseMessage;
     return {
       from,
       to,
-      severity: raw.severity || 'error',
-      message: asString(raw.message || raw.text || raw.reason || 'Issue detected'),
+      severity,
+      message,
       source: raw.source ? asString(raw.source) : 'xkeen-cm6',
     };
   });

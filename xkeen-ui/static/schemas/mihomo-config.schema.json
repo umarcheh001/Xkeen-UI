@@ -23,26 +23,42 @@
       "minimum": 1,
       "maximum": 65535,
       "description": "Порт прозрачного проксирования TCP через iptables REDIRECT. В XKeen используется совместно с `tproxy-port` — одновременное задание обоих портов включает гибридный (hybrid/mixed) режим прозрачного проксирования: TCP идёт через REDIRECT, UDP — через TPROXY.",
-      "examples": [5000, 7892]
+      "examples": [5000, 7892],
+      "x-ui-explain": "Порт, на котором Mihomo ловит TCP-трафик, уже перенаправленный роутером через iptables REDIRECT.",
+      "x-ui-use-case": "В XKeen задаётся вместе с `tproxy-port`, чтобы получить гибридный режим: TCP — через REDIRECT, UDP — через TPROXY.",
+      "x-ui-example": "redir-port: 5000",
+      "x-ui-warning": "Сам по себе ничего не перехватывает — нужны правила iptables/nftables, которые в XKeen ставят скрипты. Без них порт просто слушает и ждёт."
     },
     "tproxy-port": {
       "type": "integer",
       "minimum": 1,
       "maximum": 65535,
       "description": "Порт TPROXY для прозрачного проксирования (в первую очередь UDP, в том числе QUIC). В XKeen обычно задаётся вместе с `redir-port` для гибридного режима: `redir-port` ловит TCP через REDIRECT, `tproxy-port` — UDP через TPROXY.",
-      "examples": [5001, 7893]
+      "examples": [5001, 7893],
+      "x-ui-explain": "Порт TPROXY, на котором Mihomo принимает прозрачно завернутый UDP-трафик (DNS, QUIC, игры).",
+      "x-ui-use-case": "В XKeen задаётся в паре с `redir-port` — это и есть гибридный режим.",
+      "x-ui-example": "tproxy-port: 5001",
+      "x-ui-warning": "UDP через обычный REDIRECT не работает — если нужен прозрачный UDP, без TPROXY не обойтись."
     },
     "mixed-port": {
       "type": "integer",
       "minimum": 1,
       "maximum": 65535,
       "description": "Универсальный порт HTTP+SOCKS5 — один порт обслуживает оба протокола. Обычно используется вместо раздельных `port`/`socks-port`.",
-      "examples": [7890]
+      "examples": [7890],
+      "x-ui-explain": "Один порт сразу для HTTP- и SOCKS5-клиентов. Браузер сам выберет нужный протокол при настройке прокси.",
+      "x-ui-use-case": "Когда нужен прокси для приложений, но не нужен прозрачный режим через роутер.",
+      "x-ui-example": "mixed-port: 7890",
+      "x-ui-warning": "Не используйте одновременно с `port` и `socks-port` — это обычно признак старого конфига."
     },
     "allow-lan": {
       "type": "boolean",
       "default": false,
-      "description": "Разрешить подключения из LAN (не только 127.0.0.1). Для использования Mihomo как шлюза для других устройств — `true`."
+      "description": "Разрешить подключения из LAN (не только 127.0.0.1). Для использования Mihomo как шлюза для других устройств — `true`.",
+      "x-ui-explain": "По умолчанию Mihomo слушает только локальный компьютер (127.0.0.1). `true` открывает порты для других устройств в той же сети.",
+      "x-ui-use-case": "Когда Mihomo на роутере/сервере работает как прокси-шлюз для телефона, ТВ и соседних ПК.",
+      "x-ui-example": "allow-lan: true",
+      "x-ui-warning": "Без `lan-allowed-ips`/`authentication` прокси доступен всей LAN — в публичных Wi-Fi это риск утечки трафика через вас."
     },
     "bind-address": {
       "type": "string",
@@ -224,6 +240,10 @@
     "tun": {
       "type": "object",
       "description": "Виртуальное TUN-устройство для прозрачного проксирования. Mihomo создаёт сетевой интерфейс и перехватывает трафик через маршруты. Альтернатива гибридному режиму `redir-port` + `tproxy-port`. На Keenetic TUN работает ТОЛЬКО с XKeen-интеграцией (кастомные маршруты и policy-routing настраиваются скриптами XKeen) — нативный `auto-route: true` на Keenetic не сработает.",
+      "x-ui-explain": "TUN — это «виртуальная сетевая карта»: Mihomo поднимает отдельный интерфейс и принимает весь IP-трафик, который туда маршрутизируется.",
+      "x-ui-use-case": "На десктопах — простой путь к прозрачному проксированию. На Keenetic TUN имеет смысл только с готовыми XKeen-скриптами; в остальных случаях на роутере чаще используют `redir-port` + `tproxy-port`.",
+      "x-ui-example": "tun:\n  enable: true\n  stack: gvisor\n  auto-route: true",
+      "x-ui-warning": "Одновременно включать `tun` и пару `redir-port` + `tproxy-port` обычно не нужно — это два разных режима перехвата.",
       "properties": {
         "enable": {
           "type": "boolean",
@@ -516,6 +536,10 @@
     "sniffer": {
       "type": "object",
       "description": "Распознавание протоколов и SNI внутри трафика. Позволяет применять доменные правила, даже когда клиент обратился по IP (актуально для TUN/transparent-режима с fake-ip).",
+      "x-ui-explain": "Mihomo смотрит внутрь первых пакетов TLS/HTTP/QUIC и достаёт доменное имя (SNI/Host). Это позволяет правилам `DOMAIN*` срабатывать, даже когда клиент обратился по IP.",
+      "x-ui-use-case": "Практически обязателен для fake-ip и для прозрачного режима: без него доменные правила промахиваются.",
+      "x-ui-example": "sniffer:\n  enable: true\n  sniff:\n    TLS: { ports: [443] }\n    QUIC: { ports: [443] }",
+      "x-ui-warning": "Sniffer работает на старте соединения. Если клиент шлёт ESNI/ECH без открытого SNI — распознать домен не получится, правило должно ловить по IP.",
       "properties": {
         "enable": {
           "type": "boolean",
@@ -596,7 +620,11 @@
     "proxies": {
       "type": "array",
       "description": "Список прокси-серверов. Каждый прокси — объект с `name`, `type`, `server`, `port` и настройками транспорта. Используются в `proxy-groups.proxies` по имени.",
-      "items": { "$ref": "#/definitions/proxy" }
+      "items": { "$ref": "#/definitions/proxy" },
+      "x-ui-explain": "Список конкретных серверов, к которым Mihomo умеет подключаться. Поля различаются для разных `type` (ss, vmess, vless, trojan, hysteria2 и т.д.).",
+      "x-ui-use-case": "Сюда добавляют новые узлы вручную; массовые подписки удобнее подключать через `proxy-providers`.",
+      "x-ui-example": "- name: node-1\n  type: vless\n  server: example.com\n  port: 443\n  uuid: ...",
+      "x-ui-warning": "Имена (`name`) уникальные — именно по ним `proxy-groups` и `rules` ссылаются на узлы. Дубли ломают выбор."
     },
 
     "proxy-providers": {
@@ -608,18 +636,30 @@
     "proxy-groups": {
       "type": "array",
       "description": "Группы прокси — агрегаты нескольких узлов с общей стратегией. `select` — ручной выбор, `url-test` — автоматический по задержке, `fallback` — переход на следующий при сбое, `load-balance` — балансировка, `relay` — цепочка.",
-      "items": { "$ref": "#/definitions/proxyGroup" }
+      "items": { "$ref": "#/definitions/proxyGroup" },
+      "x-ui-explain": "Группы — это «виртуальные» прокси. В `rules` маршрут указывает на имя группы, а группа уже сама выбирает конкретный узел из `proxies` или `use`.",
+      "x-ui-use-case": "`select` — для ручного переключения из UI; `url-test` — авто-выбор самого быстрого; `fallback` — резервирование.",
+      "x-ui-example": "- name: PROXY\n  type: select\n  proxies: [node-1, node-2, DIRECT]",
+      "x-ui-warning": "Группа без `proxies` и без `use` — пустая: выбрать не из чего, и правило, указывающее в неё, фактически не работает."
     },
 
     "rule-providers": {
       "type": "object",
       "description": "Провайдеры правил — внешние наборы правил (geosite/geoip-аналоги). Подключаются в `rules` через `RULE-SET,имя,target`.",
-      "additionalProperties": { "$ref": "#/definitions/ruleProvider" }
+      "additionalProperties": { "$ref": "#/definitions/ruleProvider" },
+      "x-ui-explain": "Внешние списки правил (домены, IP-подсети, классический classical-формат). Экономит ручной труд — подписываетесь один раз, Mihomo сам обновляет.",
+      "x-ui-use-case": "Типично подключают geosite/geoip-ruleset для категорий (ads, youtube, ru), обновление раз в сутки.",
+      "x-ui-example": "youtube:\n  type: http\n  behavior: classical\n  url: https://.../youtube.yaml\n  interval: 86400",
+      "x-ui-warning": "Без `interval` список не обновляется — устаревшие правила могут начать «промахиваться» по новым доменам."
     },
 
     "rules": {
       "type": "array",
       "description": "Список правил маршрутизации (обрабатываются сверху вниз до первого совпадения). Формат: `TYPE,value,target[,options]`. Типы: DOMAIN, DOMAIN-SUFFIX, DOMAIN-KEYWORD, IP-CIDR, GEOIP, GEOSITE, RULE-SET, SRC-IP-CIDR, DST-PORT, SRC-PORT, PROCESS-NAME, MATCH.",
+      "x-ui-explain": "Список применяется сверху вниз, до первого совпадения. Правило указывает тип матча, значение и куда слать трафик (имя proxy/group/DIRECT/REJECT).",
+      "x-ui-use-case": "Последним правилом принято ставить `MATCH,FINAL_GROUP` — это «всё остальное».",
+      "x-ui-example": "- DOMAIN-SUFFIX,google.com,PROXY\n- IP-CIDR,192.168.0.0/16,DIRECT,no-resolve\n- MATCH,PROXY",
+      "x-ui-warning": "Порядок важен: если `MATCH` стоит первым — остальные правила никогда не сработают.",
       "items": {
         "type": "string",
         "examples": [

@@ -25,14 +25,23 @@ function previewNames(values, limit = 8) {
   return tail > 0 ? `${shown.join(', ')} ... (+${tail})` : shown.join(', ');
 }
 
+function _normalizeSeverity(value) {
+  const text = String(value == null ? '' : value).trim().toLowerCase();
+  if (text === 'warning' || text === 'warn') return 'warning';
+  if (text === 'info' || text === 'suggestion' || text === 'hint') return 'info';
+  return 'error';
+}
+
 function pushDiagnostic(target, item) {
   if (!item || typeof item !== 'object') return;
   const message = cleanName(item.message);
   if (!message) return;
+  const hint = cleanName(item.hint);
   target.push({
-    severity: item.severity === 'warning' ? 'warning' : 'error',
+    severity: _normalizeSeverity(item.severity),
     source: cleanName(item.source) || 'semantic-validation',
     message,
+    hint,
     path: Array.isArray(item.path) ? item.path.slice() : [],
     pointer: cleanName(item.pointer),
     code: cleanName(item.code),
@@ -62,9 +71,10 @@ function createYamlDiagnostic(path, message, options = {}) {
   return {
     path: nextPath,
     message: cleanName(message),
-    severity: options.severity === 'warning' ? 'warning' : 'error',
+    severity: _normalizeSeverity(options.severity),
     source: cleanName(options.source) || 'mihomo-semantic',
     code: cleanName(options.code),
+    hint: cleanName(options.hint),
   };
 }
 
@@ -74,9 +84,10 @@ function createJsonDiagnostic(pointer, message, options = {}) {
     pointer: nextPointer,
     path: pathFromPointer(nextPointer),
     message: cleanName(message),
-    severity: options.severity === 'warning' ? 'warning' : 'error',
+    severity: _normalizeSeverity(options.severity),
     source: cleanName(options.source) || 'xray-semantic',
     code: cleanName(options.code),
+    hint: cleanName(options.hint),
   };
 }
 
