@@ -251,3 +251,122 @@ def test_phase4_quickfix_runtime_is_wired_into_editors():
     assert "quickFixProvider: getMihomoQuickFixProvider()," in mihomo_src
     assert "icons.quickFix" in routing_src
     assert "icons.quickFix" in mihomo_src
+
+
+def test_xray_semantic_flags_private_ip_rule_after_negated_geoip():
+    payload = _run_node_json(
+        """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const data = {
+  routing: {
+    rules: [
+      { port: '443', network: 'udp', outboundTag: 'block' },
+      { network: 'udp', ip: ['ext:zkeenip.dat:!ru'], outboundTag: 'proxy' },
+      { ip: ['127.0.0.0/8', '10.0.0.0/8', '192.168.0.0/16'], outboundTag: 'direct' }
+    ]
+  }
+};
+const diags = validateXrayRoutingSemantics(data, {});
+const match = diags.find((item) => item.code === 'private-ip-rule-not-first');
+console.log(JSON.stringify({
+  hasMatch: !!match,
+  pointer: match ? match.pointer : null,
+  severity: match ? match.severity : null,
+  hint: match ? match.hint : null,
+}));
+"""
+    )
+
+    assert payload["hasMatch"] is True
+    assert payload["pointer"] == "/routing/rules/2"
+    assert payload["severity"] == "warning"
+    assert "Перенесите правило" in payload["hint"]
+
+
+def test_xray_semantic_quiet_when_private_ip_rule_is_first():
+    payload = _run_node_json(
+        """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const data = {
+  routing: {
+    rules: [
+      { ip: ['127.0.0.0/8', '10.0.0.0/8', '192.168.0.0/16'], outboundTag: 'direct' },
+      { port: '443', network: 'udp', outboundTag: 'block' },
+      { network: 'udp', ip: ['ext:zkeenip.dat:!ru'], outboundTag: 'proxy' }
+    ]
+  }
+};
+const diags = validateXrayRoutingSemantics(data, {});
+console.log(JSON.stringify({
+  codes: diags.map((item) => item.code),
+}));
+"""
+    )
+
+    assert "private-ip-rule-not-first" not in payload["codes"]
+
+
+def test_xray_semantic_quiet_when_no_negated_geoip_earlier():
+    payload = _run_node_json(
+        """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const data = {
+  routing: {
+    rules: [
+      { port: '443', network: 'udp', outboundTag: 'block' },
+      { protocol: ['bittorrent'], outboundTag: 'direct' },
+      { ip: ['127.0.0.0/8', '10.0.0.0/8', '192.168.0.0/16'], outboundTag: 'direct' }
+    ]
+  }
+};
+const diags = validateXrayRoutingSemantics(data, {});
+console.log(JSON.stringify({
+  codes: diags.map((item) => item.code),
+}));
+"""
+    )
+
+    assert "private-ip-rule-not-first" not in payload["codes"]
+
+
+def test_xray_quickfix_moves_private_ip_rule_to_first_position():
+    payload = _run_node_json(
+        """
+import { applyQuickFixText, createXrayQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const provider = createXrayQuickFixProvider();
+const text = [
+  '{',
+  '  "routing": {',
+  '    "rules": [',
+  '      { "port": "443", "network": "udp", "outboundTag": "block" },',
+  '      { "network": "udp", "ip": ["ext:zkeenip.dat:!ru"], "outboundTag": "proxy" },',
+  '      { "ip": ["127.0.0.0/8", "10.0.0.0/8", "192.168.0.0/16"], "outboundTag": "direct" }',
+  '    ]',
+  '  }',
+  '}',
+  '',
+].join('\\n');
+const fixes = provider.getQuickFixes({ text });
+const move = fixes.find((item) => item.code === 'private-ip-rule-not-first');
+const next = move ? applyQuickFixText(text, move) : text;
+const parsed = JSON.parse(next);
+const first = parsed && parsed.routing && parsed.routing.rules && parsed.routing.rules[0];
+console.log(JSON.stringify({
+  hasFix: !!move,
+  title: move ? move.title : null,
+  ruleCount: parsed && parsed.routing && parsed.routing.rules && parsed.routing.rules.length,
+  firstIp: first && first.ip,
+  firstOutbound: first && first.outboundTag,
+}));
+"""
+    )
+
+    assert payload["hasFix"] is True
+    assert "LAN" in payload["title"]
+    assert payload["ruleCount"] == 3
+    assert payload["firstIp"] == ["127.0.0.0/8", "10.0.0.0/8", "192.168.0.0/16"]
+    assert payload["firstOutbound"] == "direct"

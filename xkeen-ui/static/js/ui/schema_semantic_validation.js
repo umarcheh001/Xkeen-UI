@@ -519,6 +519,68 @@ function quoteRuleLabel(ruleTag, index) {
   return ruleTag ? `Правило "${ruleTag}"` : `Правило routing.rules[${index}]`;
 }
 
+const PRIVATE_CIDR_SET = new Set([
+  '127.0.0.0/8',
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  '169.254.0.0/16',
+  'fc00::/7',
+  'fe80::/10',
+]);
+
+function countPrivateCidrs(ips) {
+  if (!Array.isArray(ips)) return 0;
+  let matches = 0;
+  for (let i = 0; i < ips.length; i += 1) {
+    if (PRIVATE_CIDR_SET.has(cleanName(ips[i]))) matches += 1;
+  }
+  return matches;
+}
+
+function hasNegatedGeoip(ips) {
+  if (!Array.isArray(ips)) return false;
+  for (let i = 0; i < ips.length; i += 1) {
+    if (/^ext:[^:]+:!/.test(cleanName(ips[i]))) return true;
+  }
+  return false;
+}
+
+function detectPrivateIpRuleOrdering(rules, rulesPointer, diagnostics) {
+  let privateRuleIndex = -1;
+  for (let index = 0; index < rules.length; index += 1) {
+    const rule = rules[index];
+    if (!isPlainObject(rule)) continue;
+    if (cleanName(rule.outboundTag) !== 'direct') continue;
+    if (countPrivateCidrs(rule.ip) < 2) continue;
+    privateRuleIndex = index;
+    break;
+  }
+  if (privateRuleIndex <= 0) return;
+
+  let riskyEarlierIndex = -1;
+  for (let index = 0; index < privateRuleIndex; index += 1) {
+    const rule = rules[index];
+    if (!isPlainObject(rule)) continue;
+    if (hasNegatedGeoip(rule.ip)) {
+      riskyEarlierIndex = index;
+      break;
+    }
+  }
+  if (riskyEarlierIndex < 0) return;
+
+  pushDiagnostic(diagnostics, createJsonDiagnostic(
+    `${rulesPointer}/${privateRuleIndex}`,
+    `Правило с приватными подсетями (routing.rules[${privateRuleIndex}]) расположено после правила с негированным geoip routing.rules[${riskyEarlierIndex}] (ext:…:!…). Такое ext-негирование совпадает с любым IP, который не входит в указанный geoip-набор — в том числе с LAN-адресами — и может неожиданно отправить локальный трафик в прокси.`,
+    {
+      severity: 'warning',
+      source: 'xray-semantic',
+      code: 'private-ip-rule-not-first',
+      hint: 'Перенесите правило с приватными подсетями в начало routing.rules, чтобы LAN-трафик всегда уходил direct до остальных правил.',
+    },
+  ));
+}
+
 export function validateXrayRoutingSemantics(data, options = {}) {
   const diagnostics = [];
   const shape = getXrayRoutingShape(data);
@@ -591,6 +653,8 @@ export function validateXrayRoutingSemantics(data, options = {}) {
       }));
     });
   });
+
+  detectPrivateIpRuleOrdering(rules, shape.rulesPointer, diagnostics);
 
   balancers.forEach((balancer, index) => {
     if (!isPlainObject(balancer)) return;

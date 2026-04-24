@@ -553,6 +553,41 @@ function buildXraySemanticQuickFixes(text, data, semanticOptions) {
         family: 'semantic',
       });
       if (fix) fixes.push(fix);
+      return;
+    }
+
+    if (code === 'private-ip-rule-not-first' && path.length >= 3) {
+      const ruleIndex = path[path.length - 1];
+      if (typeof ruleIndex !== 'number' || ruleIndex <= 0) return;
+      const rulesPath = path.slice(0, -1);
+      const rulesArray = getValueAtPath(data, rulesPath);
+      if (!Array.isArray(rulesArray)) return;
+      const ruleToMove = rulesArray[ruleIndex];
+      if (!isPlainObject(ruleToMove)) return;
+      let combined = [];
+      try {
+        const insertEdits = modifyJsonc(asString(text), rulesPath.concat(0), cloneValue(ruleToMove), {
+          formattingOptions: JSONC_FORMATTING_OPTIONS,
+          isArrayInsertion: true,
+        });
+        const deleteEdits = modifyJsonc(asString(text), rulesPath.concat(ruleIndex), undefined, {
+          formattingOptions: JSONC_FORMATTING_OPTIONS,
+        });
+        combined = normalizeJsoncEdits([].concat(insertEdits, deleteEdits));
+      } catch (e) {
+        combined = [];
+      }
+      if (!combined.length) return;
+      const fix = createQuickFix({
+        id: `xray-private-ip-move-${path.join('.')}`,
+        title: 'Переместить LAN-правило в начало routing.rules',
+        code,
+        isPreferred: true,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        family: 'semantic',
+      }, combined);
+      if (fix) fixes.push(fix);
     }
   });
 
