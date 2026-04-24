@@ -4038,7 +4038,7 @@ function closeHelp() {
             if (!fixInserted && it && it.id === 'help') {
               items.push({
                 id: 'quick_fix',
-                icon: 'FX',
+                svg: icons.quickFix || '',
                 label: 'Quick fix',
                 fallbackHint: 'Лучшее исправление',
                 onClick: () => applyBestRoutingQuickFix(),
@@ -4068,7 +4068,7 @@ function closeHelp() {
             if (!fixInserted) {
               items.push({
                 id: 'quick_fix',
-                icon: 'FX',
+                svg: icons.quickFix || '',
                 label: 'Quick fix',
                 fallbackHint: 'Лучшее исправление',
                 onClick: () => applyBestRoutingQuickFix(),
@@ -4192,6 +4192,7 @@ function closeHelp() {
           actionId: 'quick_fix',
           label: 'Quick fix',
           tip: 'Применить лучшее исправление',
+          svg: icons.quickFix || '',
           fallbackText: 'FX',
           onClick: () => applyBestRoutingQuickFix(),
         }));

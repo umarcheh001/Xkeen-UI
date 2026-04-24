@@ -233,6 +233,7 @@ def test_phase4_quickfix_runtime_is_wired_into_editors():
     quickfix_src = (ROOT / "xkeen-ui" / "static" / "js" / "ui" / "schema_quickfixes.js").read_text(encoding="utf-8")
     monaco_src = (ROOT / "xkeen-ui" / "static" / "js" / "ui" / "monaco_shared.js").read_text(encoding="utf-8")
     cm_src = (ROOT / "xkeen-ui" / "static" / "js" / "ui" / "codemirror6_boot.js").read_text(encoding="utf-8")
+    toolbar_src = (ROOT / "xkeen-ui" / "static" / "js" / "ui" / "editor_toolbar.js").read_text(encoding="utf-8")
     routing_src = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing.js").read_text(encoding="utf-8")
     mihomo_src = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_panel.js").read_text(encoding="utf-8")
 
@@ -245,5 +246,8 @@ def test_phase4_quickfix_runtime_is_wired_into_editors():
     assert "editor.setQuickFixProvider = (provider) => {" in monaco_src
     assert "getQuickFixes(request)" in cm_src
     assert "applyQuickFix(fix)" in cm_src
+    assert "quickFix:" in toolbar_src
     assert "quickFixProvider: getRoutingQuickFixProvider()," in routing_src
     assert "quickFixProvider: getMihomoQuickFixProvider()," in mihomo_src
+    assert "icons.quickFix" in routing_src
+    assert "icons.quickFix" in mihomo_src

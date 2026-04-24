@@ -1018,7 +1018,7 @@ let mihomoPanelModuleApi = null;
           if (!quickFixInserted && it && it.id === 'help') {
             items.push({
               id: 'quick_fix',
-              icon: 'FX',
+              svg: icons.quickFix || '',
               label: 'Quick fix',
               fallbackHint: 'Лучшее исправление',
               onClick: () => applyBestMihomoQuickFix(),
@@ -1034,7 +1034,7 @@ let mihomoPanelModuleApi = null;
         if (!quickFixInserted) {
           items.push({
             id: 'quick_fix',
-            icon: 'FX',
+            svg: icons.quickFix || '',
             label: 'Quick fix',
             fallbackHint: 'Лучшее исправление',
             onClick: () => applyBestMihomoQuickFix(),
