@@ -1232,7 +1232,6 @@ function jsonSchemaHover(options) {
       create() {
         const dom = document.createElement('div');
         dom.className = 'cm6-json-schema-hover';
-        dom.style.cssText = 'padding:8px 12px;max-width:520px;line-height:1.45;font-size:13px;';
         dom.innerHTML = result.html;
         return { dom };
       },

@@ -26472,6 +26472,24 @@ html[data-theme="light"] .xkeen-cm6-host {
   background: transparent;
 }
 
+.xkeen-cm6-host .cm6-json-schema-hover {
+  max-width: 520px;
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 12px;
+  line-height: 1.45;
+  font-size: 13px;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.xkeen-cm6-host .cm6-json-schema-hover pre,
+.xkeen-cm6-host .cm6-json-schema-hover code {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .xkeen-cm6-host .cm-panels input,
 .xkeen-cm6-host .cm-panels button,
 .xkeen-cm6-host .cm-panels label {
