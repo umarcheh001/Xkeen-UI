@@ -8,146 +8,175 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 65535,
-      "description": "HTTP-прокси порт"
+      "description": "Порт HTTP-прокси. Обычно не задают, используя `mixed-port` для единого HTTP+SOCKS-порта.",
+      "examples": [7890]
     },
     "socks-port": {
       "type": "integer",
       "minimum": 1,
       "maximum": 65535,
-      "description": "SOCKS5-прокси порт"
+      "description": "Порт SOCKS5-прокси. Рекомендуется использовать `mixed-port` вместо отдельных `port`/`socks-port`.",
+      "examples": [7891]
     },
     "redir-port": {
       "type": "integer",
       "minimum": 1,
       "maximum": 65535,
-      "description": "Порт для прозрачного проксирования (redirect)"
+      "description": "Порт прозрачного проксирования через iptables REDIRECT. На Keenetic прозрачный режим обычно реализуется через TUN — используйте `tun.enable: true`, а не этот порт.",
+      "examples": [7892]
     },
     "tproxy-port": {
       "type": "integer",
       "minimum": 1,
       "maximum": 65535,
-      "description": "Порт для TPROXY (прозрачное проксирование)"
+      "description": "Порт TPROXY для прозрачного проксирования через iptables TPROXY. На Keenetic/XKeen предпочтительнее TUN.",
+      "examples": [7893]
     },
     "mixed-port": {
       "type": "integer",
       "minimum": 1,
       "maximum": 65535,
-      "description": "Универсальный порт (HTTP + SOCKS5)"
+      "description": "Универсальный порт HTTP+SOCKS5 — один порт обслуживает оба протокола. Обычно используется вместо раздельных `port`/`socks-port`.",
+      "examples": [7890]
     },
     "allow-lan": {
       "type": "boolean",
       "default": false,
-      "description": "Разрешить подключения из LAN"
+      "description": "Разрешить подключения из LAN (не только 127.0.0.1). Для использования Mihomo как шлюза для других устройств — `true`."
     },
     "bind-address": {
       "type": "string",
       "default": "*",
-      "description": "Адрес привязки (по умолчанию все интерфейсы)"
+      "description": "Адрес привязки слушающих сокетов. `*` — все интерфейсы, конкретный IP — ограничить один.",
+      "examples": ["*", "0.0.0.0", "192.168.1.1"]
     },
     "lan-allowed-ips": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Список разрешённых IP/CIDR из LAN"
+      "description": "Белый список IP/CIDR, которым разрешено подключаться к прокси (применяется, если `allow-lan: true`).",
+      "items": {
+        "type": "string",
+        "examples": ["192.168.0.0/16", "10.0.0.0/8"]
+      }
     },
     "lan-disallowed-ips": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Список запрещённых IP/CIDR из LAN"
+      "description": "Чёрный список IP/CIDR, которым запрещено подключаться к прокси.",
+      "items": {
+        "type": "string",
+        "examples": ["192.168.100.0/24"]
+      }
     },
     "authentication": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Аутентификация для HTTP/SOCKS (формат 'user:pass')"
+      "description": "Список учётных данных для HTTP/SOCKS в формате `user:password`. Если указан — подключение без авторизации будет отклонено.",
+      "items": {
+        "type": "string",
+        "examples": ["admin:secret", "alice:p@ssw0rd"]
+      }
     },
     "skip-auth-prefixes": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "CIDR-диапазоны без аутентификации"
+      "description": "CIDR-диапазоны, для которых аутентификация пропускается (например, домашняя подсеть).",
+      "items": {
+        "type": "string",
+        "examples": ["127.0.0.1/32", "192.168.1.0/24"]
+      }
     },
     "mode": {
       "type": "string",
       "enum": ["rule", "global", "direct"],
       "default": "rule",
-      "description": "Режим работы: rule (правила), global (все через прокси), direct (все напрямую)"
+      "description": "Режим работы. `rule` — применять правила из `rules` (основной режим), `global` — весь трафик через текущий выбранный прокси (игнорирует rules), `direct` — весь трафик напрямую мимо прокси."
     },
     "log-level": {
       "type": "string",
       "enum": ["silent", "error", "warning", "info", "debug"],
       "default": "info",
-      "description": "Уровень логирования"
+      "description": "Уровень логирования. `silent` — отключить, `error`/`warning` — только проблемы (рекомендуется на проде), `info` — умеренно, `debug` — подробно (только для отладки, сильно раздувает логи)."
     },
     "ipv6": {
       "type": "boolean",
       "default": true,
-      "description": "Поддержка IPv6"
+      "description": "Глобальная поддержка IPv6 для соединений. На Keenetic без нативного IPv6 лучше установить `false`, чтобы избежать таймаутов AAAA-запросов."
     },
     "external-controller": {
       "type": "string",
-      "description": "Адрес RESTful API (например '0.0.0.0:9090')"
+      "description": "Адрес RESTful API для управления Mihomo (dashboard zashboard/yacd/metacubexd). По соображениям безопасности на публичных интерфейсах используйте `external-controller-tls` + `secret`.",
+      "examples": ["0.0.0.0:9090", "127.0.0.1:9090"]
     },
     "external-controller-tls": {
       "type": "string",
-      "description": "Адрес RESTful API с TLS"
+      "description": "Адрес RESTful API с TLS. Требует сертификата, заданного через `tls.certificate`/`tls.private-key`.",
+      "examples": ["0.0.0.0:9443"]
     },
     "external-ui": {
       "type": "string",
-      "description": "Имя папки с веб-интерфейсом (например 'zashboard', 'yacd')"
+      "description": "Путь к папке с веб-интерфейсом (zashboard, yacd, metacubexd). Относительный путь считается от рабочего каталога Mihomo.",
+      "examples": ["ui", "/opt/etc/mihomo/ui", "zashboard"]
     },
     "external-ui-name": {
       "type": "string",
-      "description": "Имя папки веб-интерфейса"
+      "description": "Имя подпапки веб-интерфейса (используется, когда `external-ui-url` скачивает архив с несколькими UI).",
+      "examples": ["zashboard", "yacd"]
     },
     "external-ui-url": {
       "type": "string",
       "format": "uri",
-      "description": "URL для скачивания веб-интерфейса"
+      "description": "URL для автоматического скачивания и установки веб-интерфейса при запуске.",
+      "examples": [
+        "https://github.com/Zephyruso/zashboard/archive/gh-pages.zip",
+        "https://github.com/MetaCubeX/metacubexd/archive/gh-pages.zip"
+      ]
     },
     "secret": {
       "type": "string",
-      "description": "Секретный ключ для API"
+      "description": "Секретный ключ для авторизации запросов к RESTful API. Пустая строка — без авторизации (НЕ рекомендуется для `external-controller` на 0.0.0.0).",
+      "examples": ["", "my-strong-api-secret"]
     },
     "interface-name": {
       "type": "string",
-      "description": "Имя сетевого интерфейса для исходящего трафика"
+      "description": "Имя сетевого интерфейса для исходящего трафика (глобально, можно переопределить в прокси/группе). На Keenetic обычно WAN — `nwan0` или имя от провайдера.",
+      "examples": ["nwan0", "eth0", "ppp0"]
     },
     "routing-mark": {
       "type": "integer",
-      "description": "fwmark для маршрутизации"
+      "description": "fwmark для исходящих соединений (для iptables/nftables mangle). На Keenetic совместно с XKeen используется для выделения прокси-трафика."
     },
     "unified-delay": {
       "type": "boolean",
       "default": false,
-      "description": "Единая задержка (учитывает handshake в измерении)"
+      "description": "Унифицированный способ измерения задержки — учитывает TCP handshake в RTT. Даёт более честные числа, но обычно выше на ~50–150 мс, чем старый режим."
     },
     "tcp-concurrent": {
       "type": "boolean",
       "default": false,
-      "description": "TCP Concurrent (Happy Eyeballs)"
+      "description": "Параллельное подключение к IPv4/IPv6 (Happy Eyeballs). Ускоряет dual-stack connect, но удваивает исходящий burst."
     },
     "keep-alive-interval": {
       "type": "integer",
       "default": 30,
-      "description": "Интервал TCP Keep-Alive (секунды)"
+      "description": "Интервал отправки TCP Keep-Alive пакетов (секунды). Помогает держать NAT-таблицы провайдера открытыми."
     },
     "keep-alive-idle": {
       "type": "integer",
       "default": 600,
-      "description": "TCP Keep-Alive idle (секунды)"
+      "description": "Период простоя TCP-соединения (секунды) до начала отправки Keep-Alive пакетов."
     },
     "find-process-mode": {
       "type": "string",
       "enum": ["off", "strict", "always"],
       "default": "strict",
-      "description": "Режим определения процесса"
+      "description": "Режим определения процесса-источника трафика (для правил `PROCESS-NAME`, `PROCESS-PATH`). `off` — не определять, `strict` — только при необходимости (правила с PROCESS-*), `always` — для каждого соединения (медленно). На роутере обычно `off` — правила PROCESS-* там бессмысленны."
     },
     "global-client-fingerprint": {
       "type": "string",
       "enum": ["chrome", "firefox", "safari", "iOS", "android", "edge", "360", "qq", "random", "randomized"],
-      "description": "Глобальный TLS fingerprint клиента"
+      "description": "Глобальный TLS ClientHello fingerprint (uTLS). Маскирует TLS-подпись клиента под популярный браузер — помогает против DPI. Обычно `chrome` или `randomized`."
     },
     "global-ua": {
       "type": "string",
-      "description": "Глобальный User-Agent"
+      "description": "Глобальный User-Agent для HTTP-запросов, инициируемых Mihomo (подписки, health-check).",
+      "examples": ["mihomo", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"]
     },
 
     "geodata-mode": {
@@ -194,84 +223,243 @@
 
     "tun": {
       "type": "object",
-      "description": "TUN-устройство",
+      "description": "Виртуальное TUN-устройство для прозрачного проксирования. Mihomo создаёт сетевой интерфейс и перехватывает трафик через маршруты. На Keenetic TUN работает ТОЛЬКО с XKeen-интеграцией (кастомные маршруты и policy-routing настраиваются отдельно скриптами XKeen) — нативный `auto-route: true` на Keenetic не сработает.",
       "properties": {
-        "enable": { "type": "boolean", "default": false },
-        "stack": { "type": "string", "enum": ["system", "gvisor", "mixed", "lwip"], "default": "gvisor" },
-        "device": { "type": "string", "default": "utun" },
-        "auto-route": { "type": "boolean", "default": true },
-        "auto-detect-interface": { "type": "boolean", "default": true },
-        "dns-hijack": { "type": "array", "items": { "type": "string" } },
-        "strict-route": { "type": "boolean", "default": false },
-        "mtu": { "type": "integer", "default": 9000 },
-        "inet4-address": { "type": ["string", "array"] },
-        "inet6-address": { "type": ["string", "array"] },
-        "inet4-route-address": { "type": "array", "items": { "type": "string" } },
-        "inet6-route-address": { "type": "array", "items": { "type": "string" } },
-        "inet4-route-exclude-address": { "type": "array", "items": { "type": "string" } },
-        "inet6-route-exclude-address": { "type": "array", "items": { "type": "string" } },
-        "endpoint-independent-nat": { "type": "boolean", "default": false },
-        "include-uid": { "type": "array", "items": { "type": "integer" } },
-        "exclude-uid": { "type": "array", "items": { "type": "integer" } },
-        "include-package": { "type": "array", "items": { "type": "string" } },
-        "exclude-package": { "type": "array", "items": { "type": "string" } }
+        "enable": {
+          "type": "boolean",
+          "default": false,
+          "description": "Включить TUN. Обязательно для прозрачного режима без iptables/nftables REDIRECT/TPROXY."
+        },
+        "stack": {
+          "type": "string",
+          "enum": ["system", "gvisor", "mixed", "lwip"],
+          "default": "gvisor",
+          "description": "TCP-стек TUN. `gvisor` — пользовательский, безопасный, средняя производительность (рекомендуется для Keenetic); `system` — системный стек (быстрее, но только Linux/Android); `mixed` — системный для TCP + gvisor для UDP; `lwip` — lightweight IP."
+        },
+        "device": {
+          "type": "string",
+          "default": "utun",
+          "description": "Имя создаваемого TUN-интерфейса. Для XKeen обычно `Mihomo` или `utun`.",
+          "examples": ["Mihomo", "utun", "mihomo-tun"]
+        },
+        "auto-route": {
+          "type": "boolean",
+          "default": true,
+          "description": "Автоматически добавить default-маршрут через TUN. На Keenetic НЕ работает из коробки — маршруты настраиваются XKeen-скриптами, оставляйте `false`."
+        },
+        "auto-detect-interface": {
+          "type": "boolean",
+          "default": true,
+          "description": "Автоматически определять upstream-интерфейс (WAN). Без него нужно задавать `interface-name` вручную."
+        },
+        "dns-hijack": {
+          "type": "array",
+          "description": "DNS-серверы/адреса, запросы к которым будут перехвачены и отправлены во внутренний DNS Mihomo. `any:53` — перехватывать все DNS-запросы.",
+          "items": {
+            "type": "string",
+            "examples": ["any:53", "tcp://any:53", "198.18.0.2:53"]
+          }
+        },
+        "strict-route": {
+          "type": "boolean",
+          "default": false,
+          "description": "Жёсткий routing через TUN (блокирует обход через альтернативные маршруты). Может ломать интернет, если маршруты заданы неправильно."
+        },
+        "mtu": {
+          "type": "integer",
+          "default": 9000,
+          "description": "MTU TUN-интерфейса. Для домашнего роутера типичные значения 1500 (Ethernet), 1492 (PPPoE), 9000 (jumbo frames для внутренних нужд).",
+          "examples": [1500, 1492, 9000]
+        },
+        "inet4-address": {
+          "type": ["string", "array"],
+          "description": "IPv4-адрес TUN-интерфейса (CIDR). Значение по умолчанию — `198.18.0.1/30`.",
+          "examples": ["198.18.0.1/30", ["198.19.0.1/24"]]
+        },
+        "inet6-address": {
+          "type": ["string", "array"],
+          "description": "IPv6-адрес TUN-интерфейса (CIDR). Значение по умолчанию — `fdfe:dcba:9876::1/126`.",
+          "examples": ["fdfe:dcba:9876::1/126"]
+        },
+        "inet4-route-address": {
+          "type": "array",
+          "description": "Список IPv4 CIDR, которые будут маршрутизироваться через TUN (если не задано — используется `0.0.0.0/0`).",
+          "items": { "type": "string", "examples": ["0.0.0.0/0", "10.0.0.0/8"] }
+        },
+        "inet6-route-address": {
+          "type": "array",
+          "description": "Список IPv6 CIDR, которые будут маршрутизироваться через TUN.",
+          "items": { "type": "string", "examples": ["::/0"] }
+        },
+        "inet4-route-exclude-address": {
+          "type": "array",
+          "description": "IPv4 CIDR, исключаемые из TUN-маршрутизации (идут в обход прокси). Полезно для LAN и CGNAT-диапазонов.",
+          "items": { "type": "string", "examples": ["192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"] }
+        },
+        "inet6-route-exclude-address": {
+          "type": "array",
+          "description": "IPv6 CIDR, исключаемые из TUN-маршрутизации.",
+          "items": { "type": "string", "examples": ["fe80::/10", "fc00::/7"] }
+        },
+        "endpoint-independent-nat": {
+          "type": "boolean",
+          "default": false,
+          "description": "Включить EIM/EIF NAT для UDP (Full Cone). Улучшает работу P2P/голосовых приложений, но увеличивает расход памяти."
+        },
+        "include-uid": {
+          "type": "array",
+          "description": "Захватывать трафик только от указанных UID (только Linux). На роутере обычно не используется.",
+          "items": { "type": "integer" }
+        },
+        "exclude-uid": {
+          "type": "array",
+          "description": "Исключать трафик указанных UID. Пример: UID самого Mihomo для предотвращения петли.",
+          "items": { "type": "integer" }
+        },
+        "include-package": {
+          "type": "array",
+          "description": "Захватывать трафик только указанных пакетов (только Android).",
+          "items": { "type": "string" }
+        },
+        "exclude-package": {
+          "type": "array",
+          "description": "Исключать трафик указанных пакетов (только Android).",
+          "items": { "type": "string" }
+        }
       }
     },
 
     "dns": {
       "type": "object",
-      "description": "Настройки DNS",
+      "description": "Встроенный DNS-резолвер Mihomo. На Keenetic без TUN обычно НЕ используется (роутер имеет свой DNS через Keenetic Cloud/AdGuard Home), но с TUN-режимом `dns.enable: true` + `enhanced-mode: fake-ip` необходим для перехвата доменных запросов.",
       "properties": {
-        "enable": { "type": "boolean", "default": true },
-        "prefer-h3": { "type": "boolean", "default": false },
-        "listen": { "type": "string", "default": "0.0.0.0:1053" },
-        "ipv6": { "type": "boolean", "default": false },
-        "ipv6-timeout": { "type": "integer", "default": 300 },
+        "enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Включить встроенный DNS. Для TUN-режима — обязательно `true`. Для режима без TUN часто устанавливают `false`, чтобы роутер сам обслуживал DNS."
+        },
+        "prefer-h3": {
+          "type": "boolean",
+          "default": false,
+          "description": "Предпочитать DoH3 (HTTP/3 over QUIC) для DoH-серверов. Быстрее, но может ломаться на провайдерах с UDP-фильтрацией."
+        },
+        "listen": {
+          "type": "string",
+          "default": "0.0.0.0:1053",
+          "description": "Адрес и порт DNS-сервера Mihomo. Пустая строка — не слушать (используется только внутренне для TUN).",
+          "examples": ["", "0.0.0.0:1053", "127.0.0.1:1053", "0.0.0.0:53"]
+        },
+        "ipv6": {
+          "type": "boolean",
+          "default": false,
+          "description": "Разрешать AAAA-ответы. На Keenetic без нативного IPv6 лучше `false`."
+        },
+        "ipv6-timeout": {
+          "type": "integer",
+          "default": 300,
+          "description": "Таймаут ожидания AAAA-ответа в миллисекундах. Короткий таймаут ускоряет резолвинг на IPv4-only сетях."
+        },
         "enhanced-mode": {
           "type": "string",
           "enum": ["normal", "fake-ip", "redir-host"],
           "default": "normal",
-          "description": "Режим DNS"
+          "description": "Режим обработки DNS. `normal` — обычный резолвинг в IP (без подмены), `fake-ip` — выдаёт фейковые IP из `fake-ip-range` и восстанавливает домен при подключении (рекомендуется для TUN), `redir-host` — возвращает домен вместо IP (работает только с sniff)."
         },
-        "fake-ip-range": { "type": "string", "default": "198.18.0.1/16", "description": "CIDR-диапазон для Fake IP" },
+        "fake-ip-range": {
+          "type": "string",
+          "default": "198.18.0.1/16",
+          "description": "CIDR-диапазон для фейковых IP. По умолчанию — из RFC 2544 benchmark-диапазона. НЕ должен пересекаться с реальными сетями.",
+          "examples": ["198.18.0.1/16", "28.0.0.1/8"]
+        },
         "fake-ip-filter": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Домены, исключённые из FakeIP"
+          "description": "Домены, которые резолвятся нормально (без fake-ip). Нужно для локальных сервисов, проверок связи, mDNS и прочего.",
+          "items": {
+            "type": "string",
+            "examples": [
+              "*.lan",
+              "*.local",
+              "+.msftncsi.com",
+              "localhost.ptlogin2.qq.com",
+              "rule-set:geosite:private"
+            ]
+          }
         },
         "fake-ip-filter-mode": {
           "type": "string",
           "enum": ["blacklist", "whitelist"],
-          "default": "blacklist"
+          "default": "blacklist",
+          "description": "`blacklist` — fake-ip применяется ко всем, кроме указанных в `fake-ip-filter`. `whitelist` — fake-ip только для доменов из фильтра (остальные резолвятся нормально)."
         },
         "default-nameserver": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "DNS для разрешения адресов DoH/DoT-серверов"
+          "description": "DNS-серверы для разрешения адресов самих DoH/DoT/DoQ-серверов (bootstrap). Должны быть IP-адреса, не домены. Предпочтительно нейтральные (Cloudflare, Google).",
+          "items": {
+            "type": "string",
+            "examples": ["1.1.1.1", "8.8.8.8", "223.5.5.5"]
+          }
         },
         "nameserver": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Основные DNS-серверы"
+          "description": "Основные DNS-серверы для резолвинга трафика. Поддерживаются plain (IP:port), DoH (`https://`), DoT (`tls://`), DoQ (`quic://`), DHCP (`dhcp://eth0`).",
+          "items": {
+            "type": "string",
+            "examples": [
+              "1.1.1.1",
+              "https://dns.google/dns-query",
+              "tls://dns.google",
+              "quic://dns.adguard.com",
+              "dhcp://nwan0",
+              "system"
+            ]
+          }
         },
         "fallback": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Резервные DNS-серверы"
+          "description": "Резервные DNS-серверы. Если основной вернул IP, попадающий под `fallback-filter`, запрос переправляется в fallback. Классический приём для обхода DNS-poisoning.",
+          "items": {
+            "type": "string",
+            "examples": [
+              "https://1.1.1.1/dns-query",
+              "tls://8.8.8.8"
+            ]
+          }
         },
         "fallback-filter": {
           "type": "object",
+          "description": "Условия срабатывания fallback. Если результат от основных серверов подходит под эти критерии — запрос повторяется через fallback.",
           "properties": {
-            "geoip": { "type": "boolean", "default": true },
-            "geoip-code": { "type": "string", "default": "CN" },
-            "geosite": { "type": "array", "items": { "type": "string" } },
-            "ipcidr": { "type": "array", "items": { "type": "string" } },
-            "domain": { "type": "array", "items": { "type": "string" } }
+            "geoip": {
+              "type": "boolean",
+              "default": true,
+              "description": "Включить проверку по GeoIP."
+            },
+            "geoip-code": {
+              "type": "string",
+              "default": "CN",
+              "description": "Код страны для GeoIP-фильтра. Если ответ попадает в эту страну — использовать fallback. Для РФ — `RU`.",
+              "examples": ["RU", "CN", "US"]
+            },
+            "geosite": {
+              "type": "array",
+              "description": "Домены из указанных geosite-категорий всегда резолвятся через fallback.",
+              "items": { "type": "string", "examples": ["gfw", "geolocation-!cn"] }
+            },
+            "ipcidr": {
+              "type": "array",
+              "description": "CIDR-диапазоны ответов, запускающие fallback (если ответ попал в диапазон — перезапрос).",
+              "items": { "type": "string", "examples": ["0.0.0.0/8", "127.0.0.0/8", "10.0.0.0/8"] }
+            },
+            "domain": {
+              "type": "array",
+              "description": "Домены, всегда резолвящиеся через fallback.",
+              "items": { "type": "string", "examples": ["+.google.com", "+.youtube.com"] }
+            }
           }
         },
         "nameserver-policy": {
           "type": "object",
-          "description": "DNS-политики для доменов",
+          "description": "DNS-маршрутизация: какие серверы использовать для конкретных доменов (минует `nameserver`/`fallback`). Ключ — домен/rule-set, значение — один сервер или массив.",
           "additionalProperties": {
             "oneOf": [
               { "type": "string" },
@@ -281,13 +469,36 @@
         },
         "proxy-server-nameserver": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "DNS для разрешения адресов прокси-серверов"
+          "description": "DNS-серверы для резолвинга доменов самих прокси-серверов (в `proxies[*].server`). Обычно это «чистый» DNS, который точно достижим без прокси.",
+          "items": {
+            "type": "string",
+            "examples": [
+              "1.1.1.1",
+              "https://1.1.1.1/dns-query"
+            ]
+          }
         },
-        "use-hosts": { "type": "boolean", "default": true },
-        "use-system-hosts": { "type": "boolean", "default": true },
-        "respect-rules": { "type": "boolean", "default": false },
-        "cache-algorithm": { "type": "string", "enum": ["lru", "arc"], "default": "lru" }
+        "use-hosts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Использовать `hosts` из конфига Mihomo при резолвинге."
+        },
+        "use-system-hosts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Использовать системный /etc/hosts при резолвинге."
+        },
+        "respect-rules": {
+          "type": "boolean",
+          "default": false,
+          "description": "DNS-запросы сами проходят через правила маршрутизации (могут идти через прокси). Полезно, если основной DNS доступен только через VPN."
+        },
+        "cache-algorithm": {
+          "type": "string",
+          "enum": ["lru", "arc"],
+          "default": "lru",
+          "description": "Алгоритм DNS-кеша. `lru` — простой Least Recently Used (дефолт), `arc` — Adaptive Replacement Cache (чуть лучший hit-rate, больше RAM)."
+        }
       }
     },
 
@@ -304,73 +515,124 @@
 
     "sniffer": {
       "type": "object",
-      "description": "Настройки снифера протоколов",
+      "description": "Распознавание протоколов и SNI внутри трафика. Позволяет применять доменные правила, даже когда клиент обратился по IP (актуально для TUN/transparent-режима с fake-ip).",
       "properties": {
-        "enable": { "type": "boolean", "default": false },
-        "force-dns-mapping": { "type": "boolean", "default": true },
-        "parse-pure-ip": { "type": "boolean", "default": false },
-        "override-destination": { "type": "boolean", "default": false },
+        "enable": {
+          "type": "boolean",
+          "default": false,
+          "description": "Включить sniffer. Обязательно `true` для эффективной маршрутизации по доменам в TUN-режиме."
+        },
+        "force-dns-mapping": {
+          "type": "boolean",
+          "default": true,
+          "description": "Восстанавливать домен из fake-ip, даже если sniffer не смог распознать его в трафике."
+        },
+        "parse-pure-ip": {
+          "type": "boolean",
+          "default": false,
+          "description": "Пробовать распознавать sniff даже для соединений по чистому IP (без DNS-запроса)."
+        },
+        "override-destination": {
+          "type": "boolean",
+          "default": false,
+          "description": "Заменять адрес назначения на распознанный sniff-домен. Глобальный дефолт; может быть переопределён per-protocol в `sniff.HTTP.override-destination`."
+        },
         "sniff": {
           "type": "object",
-          "description": "Протоколы для обнаружения (HTTP, TLS, QUIC)",
+          "description": "Конкретные протоколы для анализа и порты, на которых их искать. Синтаксис YAML допускает короткую форму `HTTP:` (без вложенного объекта) — это эквивалентно `HTTP: {}`.",
           "properties": {
             "HTTP": {
               "type": ["object", "null"],
-              "description": "Настройки HTTP sniff. Допускается короткая YAML-запись `HTTP:` без вложенных полей.",
+              "description": "Sniff HTTP Host-заголовка. Короткая форма `HTTP:` без значения — применить дефолты. Типовой дефолтный порт — 80.",
               "properties": {
-                "ports": { "type": "array", "items": { "type": ["integer", "string"] } },
-                "override-destination": { "type": "boolean" }
+                "ports": {
+                  "type": "array",
+                  "description": "Порты HTTP. Можно указывать диапазоны строками, например `\"8080-8099\"`.",
+                  "items": { "type": ["integer", "string"] },
+                  "examples": [[80], [80, 8080], ["80", "8080-8099"]]
+                },
+                "override-destination": { "type": "boolean", "description": "Переопределить глобальный `override-destination` для HTTP." }
               }
             },
             "TLS": {
               "type": ["object", "null"],
-              "description": "Настройки TLS sniff. Допускается короткая YAML-запись `TLS:` без вложенных полей.",
+              "description": "Sniff SNI из TLS ClientHello. Короткая форма `TLS:` без значения — дефолты. Типовой порт — 443.",
               "properties": {
-                "ports": { "type": "array", "items": { "type": ["integer", "string"] } }
+                "ports": {
+                  "type": "array",
+                  "description": "Порты TLS.",
+                  "items": { "type": ["integer", "string"] },
+                  "examples": [[443], [443, 8443], ["443", "8443"]]
+                }
               }
             },
             "QUIC": {
               "type": ["object", "null"],
-              "description": "Настройки QUIC sniff. Допускается короткая YAML-запись `QUIC:` без вложенных полей.",
+              "description": "Sniff SNI в QUIC-пакетах (Initial Handshake). Короткая форма `QUIC:` без значения — дефолты.",
               "properties": {
-                "ports": { "type": "array", "items": { "type": ["integer", "string"] } }
+                "ports": {
+                  "type": "array",
+                  "description": "Порты QUIC.",
+                  "items": { "type": ["integer", "string"] },
+                  "examples": [[443], ["443"]]
+                }
               }
             }
           }
         },
-        "force-domain": { "type": "array", "items": { "type": "string" } },
-        "skip-domain": { "type": "array", "items": { "type": "string" } }
+        "force-domain": {
+          "type": "array",
+          "description": "Домены/правила, для которых sniffer обязательно срабатывает (даже если clicent sniffing пропустил).",
+          "items": { "type": "string", "examples": ["+.v2ex.com", "www.google.com"] }
+        },
+        "skip-domain": {
+          "type": "array",
+          "description": "Домены/правила, для которых sniffer игнорируется. Полезно для доменов, где sniff ломает соединение.",
+          "items": { "type": "string", "examples": ["Mijia Cloud", "+.push.apple.com"] }
+        }
       }
     },
 
     "proxies": {
       "type": "array",
-      "description": "Список прокси-серверов",
+      "description": "Список прокси-серверов. Каждый прокси — объект с `name`, `type`, `server`, `port` и настройками транспорта. Используются в `proxy-groups.proxies` по имени.",
       "items": { "$ref": "#/definitions/proxy" }
     },
 
     "proxy-providers": {
       "type": "object",
-      "description": "Провайдеры прокси (подписки, файлы)",
+      "description": "Провайдеры прокси: подписки (HTTP), локальные файлы (file), inline-списки. Загружают списки серверов извне, их можно подключить к группе через `use: [имя-провайдера]`.",
       "additionalProperties": { "$ref": "#/definitions/proxyProvider" }
     },
 
     "proxy-groups": {
       "type": "array",
-      "description": "Группы прокси (select, url-test, fallback, load-balance, relay)",
+      "description": "Группы прокси — агрегаты нескольких узлов с общей стратегией. `select` — ручной выбор, `url-test` — автоматический по задержке, `fallback` — переход на следующий при сбое, `load-balance` — балансировка, `relay` — цепочка.",
       "items": { "$ref": "#/definitions/proxyGroup" }
     },
 
     "rule-providers": {
       "type": "object",
-      "description": "Провайдеры правил (загружаемые наборы правил)",
+      "description": "Провайдеры правил — внешние наборы правил (geosite/geoip-аналоги). Подключаются в `rules` через `RULE-SET,имя,target`.",
       "additionalProperties": { "$ref": "#/definitions/ruleProvider" }
     },
 
     "rules": {
       "type": "array",
-      "description": "Список правил маршрутизации",
-      "items": { "type": "string" }
+      "description": "Список правил маршрутизации (обрабатываются сверху вниз до первого совпадения). Формат: `TYPE,value,target[,options]`. Типы: DOMAIN, DOMAIN-SUFFIX, DOMAIN-KEYWORD, IP-CIDR, GEOIP, GEOSITE, RULE-SET, SRC-IP-CIDR, DST-PORT, SRC-PORT, PROCESS-NAME, MATCH.",
+      "items": {
+        "type": "string",
+        "examples": [
+          "DOMAIN-SUFFIX,google.com,PROXY",
+          "DOMAIN-KEYWORD,youtube,PROXY",
+          "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve",
+          "GEOIP,RU,DIRECT",
+          "GEOSITE,category-ads-all,REJECT",
+          "RULE-SET,my-rules,PROXY",
+          "DST-PORT,22,DIRECT",
+          "MATCH,PROXY"
+        ]
+      }
     },
 
     "sub-rules": {
@@ -424,39 +686,124 @@
   "definitions": {
     "proxy": {
       "type": "object",
-      "description": "Прокси-сервер",
+      "description": "Прокси-сервер — одиночный узел. Обязательны `name`, `type`, `server`, `port`. Остальные поля зависят от `type` (uuid для vless/vmess, password для trojan/ss, и т.д.).",
       "required": ["name", "type", "server", "port"],
       "properties": {
-        "name": { "type": "string", "description": "Уникальное имя прокси" },
+        "name": {
+          "type": "string",
+          "description": "Уникальное имя прокси. Используется в `proxy-groups[*].proxies` и в rules (`MATCH,name`). Произвольная строка, но без пробелов в начале/конце.",
+          "examples": ["🇩🇪 Germany-01", "proxy-ru-1", "warp"]
+        },
         "type": {
           "type": "string",
           "enum": ["ss", "ssr", "vmess", "vless", "trojan", "hysteria", "hysteria2", "wireguard", "tuic", "socks5", "http", "ssh", "snell", "anytls"],
-          "description": "Тип протокола"
+          "description": "Тип протокола. `vless`+`reality` и `hysteria2` — современные рекомендуемые варианты. `ssr` устарел, `vmess` нежелателен из-за проблем с fingerprint'ом."
         },
-        "server": { "type": "string", "description": "Адрес сервера" },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535, "description": "Порт сервера" },
-        "password": { "type": "string" },
-        "uuid": { "type": "string", "description": "UUID (для vmess/vless)" },
-        "alterId": { "type": "integer", "description": "Alter ID (для vmess)" },
-        "cipher": { "type": "string", "description": "Метод шифрования" },
-        "tls": { "type": "boolean", "default": false },
-        "skip-cert-verify": { "type": "boolean", "default": false, "description": "Пропустить проверку сертификата" },
-        "servername": { "type": "string", "description": "SNI (Server Name Indication)" },
-        "fingerprint": { "type": "string", "description": "TLS fingerprint" },
-        "client-fingerprint": { "type": "string", "enum": ["chrome", "firefox", "safari", "iOS", "android", "edge", "360", "qq", "random", "randomized"] },
-        "network": { "type": "string", "enum": ["ws", "grpc", "h2", "http", "tcp", "xhttp"], "description": "Транспорт" },
-        "udp": { "type": "boolean", "default": true, "description": "Поддержка UDP" },
-        "tfo": { "type": "boolean", "default": false, "description": "TCP Fast Open" },
-        "mptcp": { "type": "boolean", "default": false, "description": "Multipath TCP" },
-        "ip-version": { "type": "string", "enum": ["dual", "ipv4", "ipv6", "ipv4-prefer", "ipv6-prefer"] },
-        "dialer-proxy": { "type": "string", "description": "Тег прокси для подключения (цепочки)" },
+        "server": {
+          "type": "string",
+          "description": "Адрес сервера — домен или IP.",
+          "examples": ["edge.example.com", "192.0.2.1", "2001:db8::1"]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Порт сервера.",
+          "examples": [443, 8443]
+        },
+        "password": {
+          "type": "string",
+          "description": "Пароль — для ss/trojan/hysteria2/snell/tuic."
+        },
+        "uuid": {
+          "type": "string",
+          "description": "UUID клиента — для vmess/vless. Обычно в формате 8-4-4-4-12.",
+          "examples": ["11111111-1111-1111-1111-111111111111"]
+        },
+        "alterId": {
+          "type": "integer",
+          "default": 0,
+          "description": "AlterId (устаревшее поле vmess). Для современного vmess всегда `0`, старое шифрование с AlterId > 0 больше не поддерживается."
+        },
+        "cipher": {
+          "type": "string",
+          "description": "Метод шифрования. Для ss — aes-256-gcm, chacha20-ietf-poly1305, 2022-blake3-aes-256-gcm и т.д. Для vmess — auto (рекомендуется).",
+          "examples": ["auto", "aes-256-gcm", "chacha20-ietf-poly1305", "2022-blake3-aes-256-gcm"]
+        },
+        "tls": {
+          "type": "boolean",
+          "default": false,
+          "description": "Включить TLS. Для vless/trojan/vmess поверх TLS — `true`. Для vless+reality — `true` (параметры в `reality-opts`)."
+        },
+        "skip-cert-verify": {
+          "type": "boolean",
+          "default": false,
+          "description": "Пропустить проверку TLS-сертификата сервера. Безопасно ТОЛЬКО для тестов/self-signed. На проде всегда `false`."
+        },
+        "servername": {
+          "type": "string",
+          "description": "SNI (Server Name Indication). Для reality — это тот домен, которым маскируется соединение (должен быть в allow-listе сервера).",
+          "examples": ["www.cloudflare.com", "edge.example.com", "www.microsoft.com"]
+        },
+        "fingerprint": {
+          "type": "string",
+          "description": "SHA-256 отпечаток сертификата сервера (pinning). Если задан — сертификат проверяется по отпечатку вместо цепочки CA."
+        },
+        "client-fingerprint": {
+          "type": "string",
+          "enum": ["chrome", "firefox", "safari", "iOS", "android", "edge", "360", "qq", "random", "randomized"],
+          "description": "uTLS ClientHello fingerprint. Маскирует клиентский TLS под популярный браузер. Для reality — обязательно (`chrome`/`firefox`/`randomized`)."
+        },
+        "network": {
+          "type": "string",
+          "enum": ["ws", "grpc", "h2", "http", "tcp", "xhttp"],
+          "description": "Транспортный протокол поверх TCP/TLS. `tcp` — простой TCP (дефолт), `ws` — WebSocket (часто с CDN), `xhttp` — современный HTTP-based (рекомендуется вместо gRPC), `grpc` — устарел, `h2`/`http` — HTTP/2.",
+          "examples": ["tcp", "ws", "xhttp", "grpc"]
+        },
+        "udp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Поддержка UDP через прокси (только если серверная сторона это умеет)."
+        },
+        "tfo": {
+          "type": "boolean",
+          "default": false,
+          "description": "TCP Fast Open. Снижает задержку установки соединения. Поддерживается не всеми роутерами/ядрами."
+        },
+        "mptcp": {
+          "type": "boolean",
+          "default": false,
+          "description": "Multipath TCP. Требует поддержки на сервере и в ядре Linux 5.6+."
+        },
+        "ip-version": {
+          "type": "string",
+          "enum": ["dual", "ipv4", "ipv6", "ipv4-prefer", "ipv6-prefer"],
+          "description": "Предпочтение семейства адресов при резолве сервера. На Keenetic без IPv6 безопасно задать `ipv4`."
+        },
+        "dialer-proxy": {
+          "type": "string",
+          "description": "Имя другого прокси, через который будет установлено соединение к данному серверу (цепочка).",
+          "examples": ["warp", "jumphost"]
+        },
 
-        "flow": { "type": "string", "enum": ["xtls-rprx-vision", ""], "description": "XTLS flow (для VLESS)" },
+        "flow": {
+          "type": "string",
+          "enum": ["xtls-rprx-vision", ""],
+          "description": "XTLS flow для VLESS. `xtls-rprx-vision` — рекомендуемый flow для vless+reality/tls (несовместим с mux/grpc/xhttp). Пустая строка — flow выключен."
+        },
         "reality-opts": {
           "type": "object",
+          "description": "Параметры VLESS Reality. Используются с `type: vless`, `tls: true` и подходящим `client-fingerprint`.",
           "properties": {
-            "public-key": { "type": "string" },
-            "short-id": { "type": "string" }
+            "public-key": {
+              "type": "string",
+              "description": "Публичный ключ сервера (выдаётся генератором пары Reality)."
+            },
+            "short-id": {
+              "type": "string",
+              "description": "Короткий идентификатор (hex, 0–16 символов). Должен совпадать с одним из `shortIds` на сервере.",
+              "examples": ["", "abcd1234", "0123456789abcdef"]
+            }
           }
         },
         "ws-opts": {
@@ -582,111 +929,286 @@
 
     "proxyProvider": {
       "type": "object",
-      "description": "Провайдер прокси",
+      "description": "Провайдер прокси — внешний источник списка серверов (подписка по HTTP, локальный файл или inline-список).",
       "properties": {
-        "type": { "type": "string", "enum": ["http", "file", "inline"], "description": "Тип провайдера" },
-        "url": { "type": "string", "format": "uri", "description": "URL подписки" },
-        "path": { "type": "string", "description": "Локальный путь для кэша" },
-        "interval": { "type": "integer", "description": "Интервал обновления (секунды)" },
-        "proxy": { "type": "string", "description": "Прокси для загрузки" },
-        "header": { "type": "object", "description": "HTTP-заголовки для запроса" },
+        "type": {
+          "type": "string",
+          "enum": ["http", "file", "inline"],
+          "description": "Источник. `http` — скачать по URL (подписка), `file` — локальный YAML/JSON, `inline` — задать `payload` прямо в конфиге."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL подписки (для `type: http`). Может быть обычным YAML/Clash Meta форматом или Base64 от provider'а.",
+          "examples": [
+            "https://sub.example.com/clash/?token=abc123"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "description": "Локальный путь — для `type: file` это источник, для `type: http` — кэш скачанной подписки. Относительные пути — от рабочего каталога Mihomo.",
+          "examples": ["./providers/subscribe.yaml", "/opt/etc/mihomo/providers/sub.yaml"]
+        },
+        "interval": {
+          "type": "integer",
+          "description": "Интервал обновления в секундах (для `type: http`). Типовые значения: 21600 (6 ч), 86400 (сутки).",
+          "examples": [3600, 21600, 86400]
+        },
+        "proxy": {
+          "type": "string",
+          "description": "Имя прокси/группы, через которую скачивать подписку (если сам URL недоступен напрямую).",
+          "examples": ["DIRECT", "fallback"]
+        },
+        "header": {
+          "type": "object",
+          "description": "Дополнительные HTTP-заголовки для подписки (например, User-Agent для обхода UA-фильтра)."
+        },
         "health-check": {
           "type": "object",
+          "description": "Параметры health-check всех прокси из этого провайдера.",
           "properties": {
-            "enable": { "type": "boolean", "default": true },
-            "url": { "type": "string", "default": "https://www.gstatic.com/generate_204" },
-            "interval": { "type": "integer", "default": 300, "description": "Интервал проверки (секунды)" },
-            "timeout": { "type": "integer", "default": 5000, "description": "Таймаут проверки (мс)" },
-            "lazy": { "type": "boolean", "default": true },
-            "expected-status": { "type": ["integer", "string"] }
+            "enable": {
+              "type": "boolean",
+              "default": true,
+              "description": "Включить health-check."
+            },
+            "url": {
+              "type": "string",
+              "default": "https://www.gstatic.com/generate_204",
+              "description": "URL для проверки. Должен быстро отвечать (204 No Content).",
+              "examples": [
+                "https://www.gstatic.com/generate_204",
+                "https://cp.cloudflare.com/generate_204"
+              ]
+            },
+            "interval": {
+              "type": "integer",
+              "default": 300,
+              "description": "Интервал проверки в секундах."
+            },
+            "timeout": {
+              "type": "integer",
+              "default": 5000,
+              "description": "Таймаут отдельной проверки в миллисекундах."
+            },
+            "lazy": {
+              "type": "boolean",
+              "default": true,
+              "description": "Ленивая проверка — пинговать только реально используемые узлы."
+            },
+            "expected-status": {
+              "type": ["integer", "string"],
+              "description": "Ожидаемый HTTP-статус. Можно задавать как число (200) или строку с диапазоном (`\"200-299\"`).",
+              "examples": [204, 200, "200-299", "2xx"]
+            }
           }
         },
         "override": {
           "type": "object",
-          "description": "Перезаписать параметры всех прокси из провайдера",
+          "description": "Перезаписать общие параметры всех прокси из этого провайдера (используется, когда провайдер отдаёт неподходящие для данного роутера настройки).",
           "properties": {
-            "tfo": { "type": "boolean" },
-            "mptcp": { "type": "boolean" },
-            "udp": { "type": "boolean" },
-            "up": { "type": "string" },
-            "down": { "type": "string" },
-            "skip-cert-verify": { "type": "boolean" },
-            "dialer-proxy": { "type": "string" },
-            "interface-name": { "type": "string" },
-            "routing-mark": { "type": "integer" },
-            "ip-version": { "type": "string" }
+            "tfo": { "type": "boolean", "description": "Глобально включить/выключить TCP Fast Open." },
+            "mptcp": { "type": "boolean", "description": "Глобально переопределить MPTCP." },
+            "udp": { "type": "boolean", "description": "Глобально переопределить UDP-поддержку." },
+            "up": { "type": "string", "description": "Uplink (для hysteria/tuic/hy2)." },
+            "down": { "type": "string", "description": "Downlink (для hysteria/tuic/hy2)." },
+            "skip-cert-verify": { "type": "boolean", "description": "Переопределить проверку сертификата." },
+            "dialer-proxy": { "type": "string", "description": "Переопределить dialer-proxy для всех прокси." },
+            "interface-name": { "type": "string", "description": "Переопределить interface-name." },
+            "routing-mark": { "type": "integer", "description": "Переопределить routing-mark." },
+            "ip-version": { "type": "string", "description": "Переопределить ip-version." }
           }
         },
-        "filter": { "type": "string", "description": "Regex-фильтр прокси по имени" },
-        "exclude-filter": { "type": "string", "description": "Regex исключения прокси по имени" },
-        "exclude-type": { "type": "string", "description": "Исключить прокси по типу" },
-        "payload": { "type": "array", "items": { "type": "object" }, "description": "Inline-список прокси" }
+        "filter": {
+          "type": "string",
+          "description": "Regex-фильтр: оставить только прокси, имя которых матчится. Полезно, когда подписка содержит десятки локаций, а нужны только выбранные.",
+          "examples": ["(?i)germany|🇩🇪", "^(?!.*expire).*$"]
+        },
+        "exclude-filter": {
+          "type": "string",
+          "description": "Regex исключения по имени — прокси с совпавшим именем игнорируются.",
+          "examples": ["(?i)expire|traffic|website", "免费|test"]
+        },
+        "exclude-type": {
+          "type": "string",
+          "description": "Исключить прокси по типу. Список типов через `|`.",
+          "examples": ["ssr", "vmess|ssr"]
+        },
+        "payload": {
+          "type": "array",
+          "description": "Inline-список прокси (для `type: inline`).",
+          "items": { "type": "object" }
+        }
       }
     },
 
     "proxyGroup": {
       "type": "object",
-      "description": "Группа прокси",
+      "description": "Группа прокси — агрегат нескольких узлов с общей стратегией выбора. Можно составлять иерархию (группа внутри группы). Спецзначения в `proxies`: `DIRECT` (прямо), `REJECT` (отбросить), `PASS` (следующее правило).",
       "required": ["name", "type"],
       "properties": {
-        "name": { "type": "string", "description": "Имя группы" },
+        "name": {
+          "type": "string",
+          "description": "Имя группы. Используется в `rules` и в `proxies` других групп.",
+          "examples": ["PROXY", "🎯 Select", "auto", "fallback"]
+        },
         "type": {
           "type": "string",
           "enum": ["select", "url-test", "fallback", "load-balance", "relay"],
-          "description": "Тип группы"
+          "description": "Тип группы. `select` — ручной выбор через API/UI; `url-test` — автовыбор по минимальной задержке; `fallback` — первый рабочий из списка (по порядку); `load-balance` — распределение по стратегии; `relay` — цепочка (трафик идёт последовательно через все прокси в списке)."
         },
-        "proxies": { "type": "array", "items": { "type": "string" }, "description": "Список имён прокси/групп (DIRECT, REJECT, PASS)" },
-        "use": { "type": "array", "items": { "type": "string" }, "description": "Имена proxy-providers" },
-        "include-all": { "type": "boolean", "description": "Включить все прокси из providers" },
-        "include-all-proxies": { "type": "boolean", "description": "Включить все proxies" },
-        "include-all-providers": { "type": "boolean", "description": "Включить все providers" },
-        "filter": { "type": "string", "description": "Regex-фильтр по имени" },
-        "exclude-filter": { "type": "string", "description": "Regex исключения по имени" },
-        "exclude-type": { "type": "string" },
-        "url": { "type": "string", "description": "URL для проверки доступности" },
-        "interval": { "type": "integer", "description": "Интервал проверки (секунды)" },
-        "timeout": { "type": "integer", "description": "Таймаут (мс)" },
-        "lazy": { "type": "boolean", "default": true },
-        "expected-status": { "type": ["integer", "string"] },
-        "tolerance": { "type": "integer", "description": "Допустимое отклонение задержки (мс, для url-test)" },
-        "max-failed-times": { "type": "integer" },
+        "proxies": {
+          "type": "array",
+          "description": "Имена прокси/групп. Также допустимы `DIRECT`, `REJECT`, `PASS`.",
+          "items": {
+            "type": "string",
+            "examples": ["DIRECT", "REJECT", "proxy-de-1", "auto", "🇩🇪 Germany"]
+          }
+        },
+        "use": {
+          "type": "array",
+          "description": "Имена `proxy-providers`, из которых берутся серверы (все узлы провайдера автоматически добавляются в группу).",
+          "items": { "type": "string", "examples": ["my-subscription"] }
+        },
+        "include-all": {
+          "type": "boolean",
+          "description": "Включить все прокси из proxies + все providers. Синоним `include-all-proxies: true` + `include-all-providers: true`."
+        },
+        "include-all-proxies": {
+          "type": "boolean",
+          "description": "Включить все прокси из секции `proxies` на верхнем уровне."
+        },
+        "include-all-providers": {
+          "type": "boolean",
+          "description": "Включить все `proxy-providers` автоматически."
+        },
+        "filter": {
+          "type": "string",
+          "description": "Regex: оставить только прокси с подходящим именем.",
+          "examples": ["(?i)germany", "🇩🇪|🇳🇱"]
+        },
+        "exclude-filter": {
+          "type": "string",
+          "description": "Regex: исключить прокси с подходящим именем.",
+          "examples": ["(?i)expire|traffic"]
+        },
+        "exclude-type": {
+          "type": "string",
+          "description": "Исключить прокси по типу (`|`-разделённый список).",
+          "examples": ["ssr", "vmess|ssr"]
+        },
+        "url": {
+          "type": "string",
+          "description": "URL для проверки (для `url-test`/`fallback`/`load-balance`).",
+          "examples": ["https://www.gstatic.com/generate_204"]
+        },
+        "interval": {
+          "type": "integer",
+          "description": "Интервал проверки доступности в секундах.",
+          "examples": [60, 300, 600]
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Таймаут одиночной проверки в миллисекундах.",
+          "examples": [5000]
+        },
+        "lazy": {
+          "type": "boolean",
+          "default": true,
+          "description": "Проверять только тот прокси, который в данный момент используется (экономит ресурсы)."
+        },
+        "expected-status": {
+          "type": ["integer", "string"],
+          "description": "Ожидаемый HTTP-статус.",
+          "examples": [204, "200-299"]
+        },
+        "tolerance": {
+          "type": "integer",
+          "description": "Допустимое отклонение задержки в мс (для `url-test`). Если текущий прокси быстрее ±tolerance — не переключаться."
+        },
+        "max-failed-times": {
+          "type": "integer",
+          "description": "Число подряд неудачных проверок, после которого узел считается мёртвым (для `fallback`)."
+        },
         "strategy": {
           "type": "string",
           "enum": ["consistent-hashing", "round-robin", "sticky-sessions"],
-          "description": "Стратегия балансировки (для load-balance)"
+          "description": "Стратегия балансировки (только для `load-balance`). `consistent-hashing` — по хешу dst-домена (один домен → один прокси), `round-robin` — по кругу, `sticky-sessions` — по хешу src-IP+dst."
         },
-        "disable-udp": { "type": "boolean", "default": false },
-        "interface-name": { "type": "string" },
-        "routing-mark": { "type": "integer" },
-        "icon": { "type": "string", "description": "URL иконки для UI" },
-        "hidden": { "type": "boolean", "default": false, "description": "Скрыть из UI" }
+        "disable-udp": {
+          "type": "boolean",
+          "default": false,
+          "description": "Отключить UDP через эту группу (полезно, если серверы группы не поддерживают UDP)."
+        },
+        "interface-name": {
+          "type": "string",
+          "description": "Переопределить исходящий интерфейс для группы."
+        },
+        "routing-mark": {
+          "type": "integer",
+          "description": "Переопределить fwmark для группы."
+        },
+        "icon": {
+          "type": "string",
+          "description": "URL иконки группы для отображения в dashboard (zashboard/metacubexd).",
+          "examples": ["https://example.com/icon.svg"]
+        },
+        "hidden": {
+          "type": "boolean",
+          "default": false,
+          "description": "Скрыть группу из UI."
+        }
       }
     },
 
     "ruleProvider": {
       "type": "object",
-      "description": "Провайдер правил",
+      "description": "Провайдер правил — внешний набор правил (geosite/geoip/mrs). Подключается в `rules` через `RULE-SET,имя-провайдера,target`.",
       "properties": {
         "type": {
           "type": "string",
           "enum": ["http", "file", "inline"],
-          "description": "Тип провайдера"
+          "description": "Источник. `http` — скачать по URL, `file` — локальный файл, `inline` — задать `payload` в конфиге."
         },
         "behavior": {
           "type": "string",
           "enum": ["domain", "ipcidr", "classical"],
-          "description": "Тип правил в наборе"
+          "description": "Тип правил в наборе. `domain` — только домены/суффиксы, `ipcidr` — только IP/CIDR, `classical` — смешанный формат (DOMAIN-SUFFIX, IP-CIDR и т.д., как в основных `rules`)."
         },
         "format": {
           "type": "string",
           "enum": ["yaml", "text", "mrs"],
-          "description": "Формат файла правил"
+          "description": "Формат файла. `yaml` — YAML-список с `payload:`, `text` — простой текстовый список (строка=правило), `mrs` — бинарный формат Mihomo (максимум производительности для больших rule-set)."
         },
-        "url": { "type": "string", "format": "uri", "description": "URL для загрузки" },
-        "path": { "type": "string", "description": "Локальный путь" },
-        "interval": { "type": "integer", "description": "Интервал обновления (секунды)" },
-        "proxy": { "type": "string" },
-        "payload": { "type": "array", "items": { "type": "string" }, "description": "Inline-список правил" }
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL для загрузки.",
+          "examples": [
+            "https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/reject.txt",
+            "https://github.com/MetaCubeX/meta-rules-dat/raw/meta/geo/geosite/youtube.mrs"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "description": "Локальный путь. Для `type: file` — источник, для `type: http` — кэш. Опционален: если не задан, Mihomo сгенерирует путь автоматически.",
+          "examples": ["./rules/reject.yaml", "/opt/etc/mihomo/rules/ads.mrs"]
+        },
+        "interval": {
+          "type": "integer",
+          "description": "Интервал обновления в секундах (для `type: http`).",
+          "examples": [86400, 21600]
+        },
+        "proxy": {
+          "type": "string",
+          "description": "Прокси/группа для загрузки rule-set (если URL недоступен напрямую).",
+          "examples": ["DIRECT", "fallback"]
+        },
+        "payload": {
+          "type": "array",
+          "description": "Inline-список правил (для `type: inline`).",
+          "items": { "type": "string", "examples": ["DOMAIN-SUFFIX,google.com", "IP-CIDR,8.8.8.8/32"] }
+        }
       }
     }
   }

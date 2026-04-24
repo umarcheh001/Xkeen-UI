@@ -589,7 +589,9 @@ def test_xray_routing_schema_covers_subscription_generated_fragments():
     assert fragment_props['observatory']['$ref'] == '#/definitions/observatory'
     assert fragment_props['burstObservatory']['$ref'] == '#/definitions/burstObservatory'
     assert routing_schema['definitions']['observatory']['properties']['subjectSelector']['items']['type'] == 'string'
-    assert routing_schema['definitions']['observatory']['properties']['subjectSelector']['items']['examples'] == ['vless-reality', 'proxy']
+    observatory_selector_examples = routing_schema['definitions']['observatory']['properties']['subjectSelector']['items']['examples']
+    assert 'vless-reality' in observatory_selector_examples
+    assert 'proxy' in observatory_selector_examples
     assert routing_schema['definitions']['balancer']['properties']['fallbackTag']['examples'] == ['direct', 'block']
     assert 'Тип правила маршрутизации' in routing_schema['definitions']['routingRule']['properties']['type']['description']
     assert 'Тип стратегии балансировщика' in routing_schema['definitions']['balancer']['properties']['strategy']['properties']['type']['description']

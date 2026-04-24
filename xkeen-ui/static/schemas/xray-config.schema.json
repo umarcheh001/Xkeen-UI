@@ -5,47 +5,67 @@
   "type": "object",
   "properties": {
     "log": {
-      "description": "Настройки логирования",
+      "description": "Настройки логирования Xray. На Keenetic с пакетом XKeen логи обычно выводятся в /opt/var/log/xray.",
       "type": "object",
       "properties": {
-        "access": { "type": "string", "description": "Путь к файлу лога доступа. Пусто — stdout, 'none' — отключить" },
-        "error": { "type": "string", "description": "Путь к файлу лога ошибок. Пусто — stderr" },
+        "access": {
+          "type": "string",
+          "description": "Путь к файлу лога доступа. Пустая строка — вывод в stdout, `none` — полностью отключить access-лог. На проде обычно `none` или путь в /opt/var/log.",
+          "examples": ["", "none", "/opt/var/log/xray/access.log"]
+        },
+        "error": {
+          "type": "string",
+          "description": "Путь к файлу лога ошибок. Пустая строка — вывод в stderr. На Keenetic рекомендуется указать файл для ротации.",
+          "examples": ["", "/opt/var/log/xray/error.log"]
+        },
         "loglevel": {
           "type": "string",
           "enum": ["debug", "info", "warning", "error", "none"],
           "default": "warning",
-          "description": "Уровень логирования"
+          "description": "Уровень логирования. `debug` и `info` сильно раздувают логи — включайте только для отладки. `warning` — разумный дефолт, `error` — только ошибки, `none` — полностью отключить."
         },
-        "dnsLog": { "type": "boolean", "default": false, "description": "Логировать DNS-запросы" }
+        "dnsLog": {
+          "type": "boolean",
+          "default": false,
+          "description": "Логировать каждый DNS-запрос через встроенный резолвер. Создаёт много записей — использовать только для диагностики DNS-проблем."
+        }
       },
       "additionalProperties": false
     },
 
     "api": {
-      "description": "gRPC API для управления Xray",
+      "description": "gRPC API для runtime-управления Xray (горячая перезагрузка правил, статистика). Требует отдельного inbound с `protocol: dokodemo-door` и тем же тегом, что указан ниже, а также правила в `routing.rules` с `inboundTag`, ведущего на `outboundTag: api`.",
       "type": "object",
       "properties": {
-        "tag": { "type": "string", "description": "Тег для inbound (обычно 'api')" },
-        "listen": { "type": "string", "description": "Адрес gRPC (например '127.0.0.1:10085')" },
+        "tag": {
+          "type": "string",
+          "description": "Тег для сопоставления с inbound, принимающим API-трафик. Стандартное значение — `api`.",
+          "examples": ["api"]
+        },
+        "listen": {
+          "type": "string",
+          "description": "Адрес и порт gRPC-сервера. По соображениям безопасности используйте только loopback (`127.0.0.1`).",
+          "examples": ["127.0.0.1:10085", "127.0.0.1:8080"]
+        },
         "services": {
           "type": "array",
+          "description": "Список gRPC-сервисов, которые будут доступны через API. `HandlerService` — управление inbound/outbound, `LoggerService` — реконфигурация логов, `StatsService` — статистика трафика, `RoutingService` — управление правилами, `ReflectionService` — gRPC reflection для клиентов вроде grpcurl.",
           "items": {
             "type": "string",
             "enum": ["HandlerService", "LoggerService", "StatsService", "RoutingService", "ReflectionService"]
-          },
-          "description": "Список gRPC-сервисов"
+          }
         }
       },
       "additionalProperties": false
     },
 
     "dns": {
-      "description": "Встроенный DNS-сервер",
+      "description": "Встроенный DNS-резолвер Xray. Для прозрачного прокси на Keenetic обычно используется для обхода DNS-leak и выбора DoH/DoT-серверов (например, Cloudflare `https+local://1.1.1.1/dns-query`).",
       "type": "object",
       "properties": {
         "hosts": {
           "type": "object",
-          "description": "Статические DNS-записи (домен → IP или домен)",
+          "description": "Статические DNS-записи (домен → IP или целевой домен). Используется для пиннинга или аналога /etc/hosts. Значение может быть строкой, массивом строк или адресом другого домена (CNAME-like).",
           "additionalProperties": {
             "oneOf": [
               { "type": "string" },
@@ -55,65 +75,127 @@
         },
         "servers": {
           "type": "array",
-          "description": "Список DNS-серверов",
+          "description": "Список DNS-серверов в порядке приоритета. Можно использовать простые строки (`8.8.8.8`) или объекты с `domains`/`expectIPs` для таргетирования. Первый подошедший сервер обрабатывает запрос.",
           "items": {
             "oneOf": [
-              { "type": "string", "description": "DNS-адрес (например '8.8.8.8', 'https+local://dns.google/dns-query', 'localhost')" },
+              {
+                "type": "string",
+                "description": "DNS-адрес: IP (`8.8.8.8`), DoH (`https://dns.google/dns-query`), DoH локальный (`https+local://`), DoT (`tls://1.1.1.1`), QUIC (`quic+local://`), `localhost` — системный резолвер, `fakedns` — FakeDNS-пул.",
+                "examples": [
+                  "8.8.8.8",
+                  "1.1.1.1",
+                  "https://dns.google/dns-query",
+                  "https+local://1.1.1.1/dns-query",
+                  "tls://1.1.1.1",
+                  "localhost",
+                  "fakedns"
+                ]
+              },
               {
                 "type": "object",
                 "properties": {
-                  "address": { "type": "string", "description": "DNS-адрес" },
-                  "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 53 },
-                  "clientIp": { "type": "string", "description": "IP-адрес клиента для EDNS" },
-                  "skipFallback": { "type": "boolean", "default": false },
-                  "domains": { "type": "array", "items": { "type": "string" }, "description": "Домены для этого сервера" },
-                  "expectIPs": { "type": "array", "items": { "type": "string" }, "description": "Ожидаемые IP-диапазоны" },
-                  "queryStrategy": { "type": "string", "enum": ["UseIP", "UseIPv4", "UseIPv6"] }
+                  "address": {
+                    "type": "string",
+                    "description": "DNS-адрес (см. формат выше).",
+                    "examples": ["8.8.8.8", "https+local://1.1.1.1/dns-query"]
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "default": 53,
+                    "description": "Порт DNS-сервера. Обычно 53 (plain), 853 (DoT), 443 (DoH)."
+                  },
+                  "clientIp": {
+                    "type": "string",
+                    "description": "IP-адрес клиента для EDNS Client Subnet. Помогает CDN выбирать ближайший узел.",
+                    "examples": ["1.2.3.4"]
+                  },
+                  "skipFallback": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Пропустить этот сервер при fallback'е (используется только для целевых доменов)."
+                  },
+                  "domains": {
+                    "type": "array",
+                    "description": "Домены, для которых именно этот сервер будет авторитетным. Формат как в routing rules: `domain:`, `full:`, `geosite:`, `regexp:`.",
+                    "items": { "type": "string", "examples": ["geosite:cn", "domain:google.com", "full:example.com"] }
+                  },
+                  "expectIPs": {
+                    "type": "array",
+                    "description": "Ожидаемые IP/CIDR-диапазоны ответов. Если ответ не попадает — резолвер пробует следующий сервер. Формат: `geoip:cn`, `1.1.1.1/32`.",
+                    "items": { "type": "string", "examples": ["geoip:cn", "geoip:private", "192.168.0.0/16"] }
+                  },
+                  "queryStrategy": {
+                    "type": "string",
+                    "enum": ["UseIP", "UseIPv4", "UseIPv6"],
+                    "description": "Стратегия для конкретно этого сервера: `UseIP` — оба семейства, `UseIPv4`/`UseIPv6` — только одно."
+                  }
                 },
                 "required": ["address"]
               }
             ]
           }
         },
-        "clientIp": { "type": "string", "description": "IP-адрес клиента для EDNS" },
+        "clientIp": {
+          "type": "string",
+          "description": "IP-адрес клиента для EDNS Client Subnet на уровне всего DNS-блока.",
+          "examples": ["1.2.3.4"]
+        },
         "queryStrategy": {
           "type": "string",
           "enum": ["UseIP", "UseIPv4", "UseIPv6"],
           "default": "UseIP",
-          "description": "Стратегия DNS-запросов"
+          "description": "Глобальная стратегия DNS-запросов. `UseIP` — A+AAAA, `UseIPv4` — только A (рекомендуется для Keenetic без IPv6), `UseIPv6` — только AAAA."
         },
-        "disableCache": { "type": "boolean", "default": false },
-        "disableFallback": { "type": "boolean", "default": false },
-        "disableFallbackIfMatch": { "type": "boolean", "default": false },
-        "tag": { "type": "string", "description": "Тег для маршрутизации DNS-трафика" }
+        "disableCache": {
+          "type": "boolean",
+          "default": false,
+          "description": "Отключить кеширование DNS-ответов. Обычно `false` — кеш снижает нагрузку на upstream."
+        },
+        "disableFallback": {
+          "type": "boolean",
+          "default": false,
+          "description": "Отключить механизм fallback на следующий сервер, если текущий не ответил."
+        },
+        "disableFallbackIfMatch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Не применять fallback, если домен совпал с `domains` какого-либо сервера (даже если тот вернул ошибку)."
+        },
+        "tag": {
+          "type": "string",
+          "description": "Тег DNS-трафика, используется для маршрутизации (например, правило `inboundTag: [\"dns-query\"]` → `outboundTag: \"direct\"`).",
+          "examples": ["dns-query"]
+        }
       },
       "additionalProperties": false
     },
 
     "routing": {
-      "description": "Правила маршрутизации трафика",
+      "description": "Правила маршрутизации трафика между inbound'ами и outbound'ами. Правила применяются сверху вниз — первое совпадение выигрывает. Если ни одно не сработало — используется первый outbound в списке.",
       "type": "object",
       "properties": {
         "domainStrategy": {
           "type": "string",
           "enum": ["AsIs", "IPIfNonMatch", "IPOnDemand"],
           "default": "AsIs",
-          "description": "Стратегия сопоставления доменов"
+          "description": "Глобальная стратегия сопоставления доменов с IP-правилами. `AsIs` — не резолвить домены (быстро, но IP-правила работают только для IP-запросов), `IPIfNonMatch` — если домен не подошёл под доменные правила, резолвить в IP и проверить IP-правила, `IPOnDemand` — резолвить при первой же проверке IP."
         },
         "domainMatcher": {
           "type": "string",
           "enum": ["hybrid", "linear"],
           "default": "hybrid",
-          "description": "Алгоритм сопоставления доменов"
+          "description": "Алгоритм сопоставления доменов. `hybrid` — быстрый гибридный (рекомендуется), `linear` — совместимый со старыми V2Ray-правилами, но медленнее."
         },
         "rules": {
           "type": "array",
-          "description": "Массив правил маршрутизации",
+          "description": "Массив правил маршрутизации. Обрабатываются сверху вниз.",
           "items": { "$ref": "#/definitions/routingRule" }
         },
         "balancers": {
           "type": "array",
-          "description": "Балансировщики нагрузки",
+          "description": "Балансировщики нагрузки между несколькими outbound. Используются через `balancerTag` в правилах вместо `outboundTag`.",
           "items": { "$ref": "#/definitions/balancer" }
         }
       },
@@ -138,33 +220,82 @@
     },
 
     "policy": {
-      "description": "Политики (таймауты, статистика)",
+      "description": "Политики таймаутов, буферов и статистики. Позволяет настроить поведение соединений и сбор трафика по уровням пользователей и системных счётчиков.",
       "type": "object",
       "properties": {
         "levels": {
           "type": "object",
-          "description": "Политики по уровням пользователей",
+          "description": "Политики по уровням пользователей (клиент может иметь `level: 0`, `level: 1` и т.д.). Ключ — строка с номером уровня: `\"0\"`, `\"1\"`.",
           "additionalProperties": {
             "type": "object",
             "properties": {
-              "handshake": { "type": "integer", "default": 4 },
-              "connIdle": { "type": "integer", "default": 300 },
-              "uplinkOnly": { "type": "integer", "default": 2 },
-              "downlinkOnly": { "type": "integer", "default": 5 },
-              "statsUserUplink": { "type": "boolean", "default": false },
-              "statsUserDownlink": { "type": "boolean", "default": false },
-              "bufferSize": { "type": "integer", "default": 512, "description": "Буфер на соединение (КБ). 0 — без буфера, -1 — без лимита" }
+              "handshake": {
+                "type": "integer",
+                "default": 4,
+                "description": "Таймаут рукопожатия в секундах. Соединения, не установившиеся за это время, закрываются."
+              },
+              "connIdle": {
+                "type": "integer",
+                "default": 300,
+                "description": "Таймаут простоя соединения в секундах. После этого времени без активности соединение закрывается."
+              },
+              "uplinkOnly": {
+                "type": "integer",
+                "default": 2,
+                "description": "Таймаут в секундах, после которого закрывается соединение, если остался только исходящий поток (клиент не закрывает свою сторону)."
+              },
+              "downlinkOnly": {
+                "type": "integer",
+                "default": 5,
+                "description": "Таймаут в секундах, после которого закрывается соединение, если остался только входящий поток."
+              },
+              "statsUserUplink": {
+                "type": "boolean",
+                "default": false,
+                "description": "Включить сбор статистики по исходящему трафику на пользователя (видно через `stats` API)."
+              },
+              "statsUserDownlink": {
+                "type": "boolean",
+                "default": false,
+                "description": "Включить сбор статистики по входящему трафику на пользователя."
+              },
+              "bufferSize": {
+                "type": "integer",
+                "default": 512,
+                "description": "Размер буфера на одно соединение в КБ. `0` — без буфера (низкая задержка, но больше overhead), `-1` — без лимита (использует столько, сколько нужно)."
+              }
             }
           }
         },
         "system": {
           "type": "object",
+          "description": "Системная статистика (агрегированная по inbound/outbound).",
           "properties": {
-            "statsInboundUplink": { "type": "boolean", "default": false },
-            "statsInboundDownlink": { "type": "boolean", "default": false },
-            "statsOutboundUplink": { "type": "boolean", "default": false },
-            "statsOutboundDownlink": { "type": "boolean", "default": false },
-            "overrideAccessLogDest": { "type": "boolean", "default": false }
+            "statsInboundUplink": {
+              "type": "boolean",
+              "default": false,
+              "description": "Считать исходящий трафик по inbound'ам."
+            },
+            "statsInboundDownlink": {
+              "type": "boolean",
+              "default": false,
+              "description": "Считать входящий трафик по inbound'ам."
+            },
+            "statsOutboundUplink": {
+              "type": "boolean",
+              "default": false,
+              "description": "Считать исходящий трафик по outbound'ам."
+            },
+            "statsOutboundDownlink": {
+              "type": "boolean",
+              "default": false,
+              "description": "Считать входящий трафик по outbound'ам."
+            },
+            "overrideAccessLogDest": {
+              "type": "boolean",
+              "default": false,
+              "description": "Переопределить путь access-лога значением из `log.access` (когда меняется runtime через API)."
+            }
           }
         }
       },
@@ -172,34 +303,52 @@
     },
 
     "stats": {
-      "description": "Включить сбор статистики (пустой объект для активации)",
+      "description": "Активирует подсистему сбора статистики. Достаточно указать пустой объект `{}` в конфиге. Данные читаются через gRPC API (`StatsService`).",
       "type": "object",
       "properties": {},
       "additionalProperties": false
     },
 
     "reverse": {
-      "description": "Обратный прокси (reverse proxy)",
+      "description": "Обратный прокси (reverse proxy) — позволяет выставлять внутренние сервисы наружу через внешний Xray. `bridges` — на стороне, спрятанной за NAT, `portals` — на внешней стороне с публичным IP.",
       "type": "object",
       "properties": {
         "bridges": {
           "type": "array",
+          "description": "Точки входа обратного прокси на стороне за NAT.",
           "items": {
             "type": "object",
             "properties": {
-              "tag": { "type": "string" },
-              "domain": { "type": "string" }
+              "tag": {
+                "type": "string",
+                "description": "Уникальный тег bridge.",
+                "examples": ["bridge"]
+              },
+              "domain": {
+                "type": "string",
+                "description": "Внутренний домен, на который будет ходить внешняя сторона.",
+                "examples": ["test.example.com"]
+              }
             },
             "required": ["tag", "domain"]
           }
         },
         "portals": {
           "type": "array",
+          "description": "Точки выхода обратного прокси на внешней стороне.",
           "items": {
             "type": "object",
             "properties": {
-              "tag": { "type": "string" },
-              "domain": { "type": "string" }
+              "tag": {
+                "type": "string",
+                "description": "Уникальный тег portal.",
+                "examples": ["portal"]
+              },
+              "domain": {
+                "type": "string",
+                "description": "Тот же домен, что в соответствующем `bridge`.",
+                "examples": ["test.example.com"]
+              }
             },
             "required": ["tag", "domain"]
           }
@@ -209,22 +358,33 @@
     },
 
     "fakedns": {
-      "description": "FakeDNS для sniffing",
+      "description": "FakeDNS-пул — резервирует диапазон IP для подмены ответов DNS, чтобы sniff на следующем hop мог восстановить реальный домен по IP. Используется в паре с `sniffing.destOverride: [\"fakedns\"]` и DNS-сервером `fakedns` в списке `dns.servers`.",
       "oneOf": [
         {
           "type": "object",
+          "description": "Один fakedns-пул.",
           "properties": {
-            "ipPool": { "type": "string", "default": "198.18.0.0/15", "description": "CIDR-диапазон для фейковых IP" },
-            "poolSize": { "type": "integer", "default": 65535 }
+            "ipPool": {
+              "type": "string",
+              "default": "198.18.0.0/15",
+              "description": "CIDR-диапазон для фейковых IP. По умолчанию используется диапазон, зарезервированный для benchmark-тестирования RFC 2544.",
+              "examples": ["198.18.0.0/15", "240.0.0.0/8"]
+            },
+            "poolSize": {
+              "type": "integer",
+              "default": 65535,
+              "description": "Размер LRU-пула фейковых IP. Когда пул заполнен, старые записи вытесняются."
+            }
           }
         },
         {
           "type": "array",
+          "description": "Несколько fakedns-пулов одновременно (например, отдельные пулы для IPv4 и IPv6).",
           "items": {
             "type": "object",
             "properties": {
-              "ipPool": { "type": "string" },
-              "poolSize": { "type": "integer" }
+              "ipPool": { "type": "string", "description": "CIDR-диапазон пула." },
+              "poolSize": { "type": "integer", "description": "Размер пула." }
             }
           }
         }
@@ -232,30 +392,84 @@
     },
 
     "observatory": {
-      "description": "Мониторинг доступности outbound (для leastPing)",
+      "description": "Мониторинг доступности outbound. Необходим для `balancer.strategy.type=leastPing` и автоматического исключения мёртвых узлов. Xray периодически отправляет probe-запросы на `probeUrl` через каждый подходящий outbound.",
       "type": "object",
       "properties": {
-        "subjectSelector": { "type": "array", "items": { "type": "string", "examples": ["vless-reality", "proxy"] }, "description": "Теги/префиксы outbound для мониторинга" },
-        "probeUrl": { "type": "string", "default": "https://www.google.com/generate_204" },
-        "probeInterval": { "type": "string", "default": "10s", "description": "Интервал проверки (например '60s')" },
-        "enableConcurrency": { "type": "boolean", "default": false, "description": "Параллельная проверка" }
+        "subjectSelector": {
+          "type": "array",
+          "description": "Список префиксов или полных тегов outbound для проверки. Префикс `proxy-` матчит `proxy-1`, `proxy-2` и т.д.",
+          "items": {
+            "type": "string",
+            "examples": ["vless-reality", "proxy", "proxy-", "warp"]
+          }
+        },
+        "probeUrl": {
+          "type": "string",
+          "default": "https://www.google.com/generate_204",
+          "description": "URL для проверки доступности. Должен возвращать быстрый успешный ответ (обычно 204). Альтернативы — `cp.cloudflare.com/generate_204`, `www.gstatic.com/generate_204`.",
+          "examples": [
+            "https://www.google.com/generate_204",
+            "http://www.gstatic.com/generate_204",
+            "https://cp.cloudflare.com/generate_204"
+          ]
+        },
+        "probeInterval": {
+          "type": "string",
+          "default": "10s",
+          "description": "Интервал проверки. Формат `<число><s|m|h>`. Меньшие значения быстрее реагируют на деградацию, но нагружают роутер и узлы.",
+          "examples": ["10s", "30s", "60s", "5m"]
+        },
+        "enableConcurrency": {
+          "type": "boolean",
+          "default": false,
+          "description": "Параллельная проверка всех outbound. Ускоряет probe-цикл, но даёт одновременный всплеск — на Keenetic лучше оставить `false`."
+        }
       },
       "additionalProperties": false
     },
 
     "burstObservatory": {
-      "description": "Альтернативный observatory с burst-проверкой",
+      "description": "Альтернативный observatory с burst-проверкой через TCP-connect (используется с `leastLoad`-стратегией балансировщика). Подходит, когда нужен более точный ping вместо HTTP-probe.",
       "type": "object",
       "properties": {
-        "subjectSelector": { "type": "array", "items": { "type": "string", "examples": ["vless-reality", "proxy"] } },
+        "subjectSelector": {
+          "type": "array",
+          "description": "Список префиксов или полных тегов outbound для проверки.",
+          "items": {
+            "type": "string",
+            "examples": ["vless-reality", "proxy", "proxy-", "warp"]
+          }
+        },
         "pingConfig": {
           "type": "object",
+          "description": "Параметры burst-пинга.",
           "properties": {
-            "destination": { "type": "string" },
-            "connectivity": { "type": "string" },
-            "interval": { "type": "string" },
-            "sampling": { "type": "integer" },
-            "timeout": { "type": "string" }
+            "destination": {
+              "type": "string",
+              "description": "Адрес назначения в формате `host:port` (TCP-connect вместо ICMP).",
+              "examples": ["1.1.1.1:80", "www.google.com:443"]
+            },
+            "connectivity": {
+              "type": "string",
+              "description": "URL проверки наличия интернета в целом — если недоступен, probe-цикл пропускается.",
+              "examples": ["http://connectivitycheck.gstatic.com/generate_204"]
+            },
+            "interval": {
+              "type": "string",
+              "description": "Интервал между burst-проверками.",
+              "examples": ["30s", "1m", "5m"]
+            },
+            "sampling": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Размер скользящего окна для усреднения задержек.",
+              "examples": [3, 5, 10]
+            },
+            "timeout": {
+              "type": "string",
+              "description": "Таймаут одиночного пинга. Узлы, не ответившие за это время, считаются мертвыми.",
+              "examples": ["3s", "5s", "10s"]
+            }
           }
         }
       },
@@ -263,10 +477,14 @@
     },
 
     "metrics": {
-      "description": "Встроенный HTTP-сервер метрик (Prometheus-совместимый)",
+      "description": "Встроенный HTTP-сервер метрик (Prometheus-совместимый endpoint). Активируется через inbound с тем же тегом, что указан в `tag`. Доступ к `/debug/vars` и `/metrics` по этому тегу.",
       "type": "object",
       "properties": {
-        "tag": { "type": "string" }
+        "tag": {
+          "type": "string",
+          "description": "Тег inbound'а для метрик. Чтобы эндпоинт работал, нужно объявить inbound с этим тегом и `protocol: dokodemo-door`, а правило маршрутизации должно вести на `outboundTag: metrics`.",
+          "examples": ["metrics"]
+        }
       },
       "additionalProperties": false
     }
