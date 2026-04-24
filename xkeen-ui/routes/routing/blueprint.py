@@ -25,11 +25,11 @@ _TEMPLATE_META: Dict[str, Dict[str, str]] = {
     },
     "05_routing_zkeen_only.jsonc": {
         "title": "Только заблокированное (zkeen)",
-        "description": "Проксирует только списки ext:geosite_zkeen.dat, остальное идёт напрямую.",
+        "description": "Проксирует только списки ext:zkeen.dat (domains/other/youtube) и IP крупных CDN/VPS (akamai, amazon, cloudflare, discord, hetzner, ovh и др.) через vless-reality; остальное — direct; блокирует QUIC.",
     },
     "05_routing_all_proxy_except_ru.jsonc": {
         "title": "Всё в proxy, кроме RU",
-        "description": "Проксирует весь трафик, кроме geoip/geosite RU и локальных сетей.",
+        "description": "Проксирует весь трафик через vless-reality; RU-домены (category-ru + steam) и ext:zkeenip.dat:ru идут direct; bittorrent — direct; блокирует QUIC.",
     },
 }
 

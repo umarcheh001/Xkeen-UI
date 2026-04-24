@@ -8,17 +8,31 @@
       },
       {
         "domain": [
-          "ext:geosite_zkeen.dat:domains",
-          "ext:geosite_zkeen.dat:other",
-          "ext:geosite_zkeen.dat:youtube"
+          "ext:zkeen.dat:domains",
+          "ext:zkeen.dat:other",
+          "ext:zkeen.dat:youtube"
         ],
-        "outboundTag": "vless_1"
+        "outboundTag": "vless-reality"
       },
       {
         "ip": [
-          "ext:geoip_zkeenip.dat:discord"
+          "ext:zkeenip.dat:akamai",
+          "ext:zkeenip.dat:amazon",
+          "ext:zkeenip.dat:cdn77",
+          "ext:zkeenip.dat:contabo",
+          "ext:zkeenip.dat:cloudflare",
+          "ext:zkeenip.dat:discord",
+          "ext:zkeenip.dat:digitalocean",
+          "ext:zkeenip.dat:fastly",
+          "ext:zkeenip.dat:gcore",
+          "ext:zkeenip.dat:hetzner",
+          "ext:zkeenip.dat:meta",
+          "ext:zkeenip.dat:oracle",
+          "ext:zkeenip.dat:ovh",
+          "ext:zkeenip.dat:scaleway",
+          "ext:zkeenip.dat:vultr"
         ],
-        "outboundTag": "vless_1"
+        "outboundTag": "vless-reality"
       },
       {
         "network": "tcp,udp",
