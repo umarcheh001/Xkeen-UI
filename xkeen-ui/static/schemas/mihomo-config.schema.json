@@ -22,15 +22,15 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 65535,
-      "description": "Порт прозрачного проксирования через iptables REDIRECT. На Keenetic прозрачный режим обычно реализуется через TUN — используйте `tun.enable: true`, а не этот порт.",
-      "examples": [7892]
+      "description": "Порт прозрачного проксирования TCP через iptables REDIRECT. В XKeen используется совместно с `tproxy-port` — одновременное задание обоих портов включает гибридный (hybrid/mixed) режим прозрачного проксирования: TCP идёт через REDIRECT, UDP — через TPROXY.",
+      "examples": [5000, 7892]
     },
     "tproxy-port": {
       "type": "integer",
       "minimum": 1,
       "maximum": 65535,
-      "description": "Порт TPROXY для прозрачного проксирования через iptables TPROXY. На Keenetic/XKeen предпочтительнее TUN.",
-      "examples": [7893]
+      "description": "Порт TPROXY для прозрачного проксирования (в первую очередь UDP, в том числе QUIC). В XKeen обычно задаётся вместе с `redir-port` для гибридного режима: `redir-port` ловит TCP через REDIRECT, `tproxy-port` — UDP через TPROXY.",
+      "examples": [5001, 7893]
     },
     "mixed-port": {
       "type": "integer",
@@ -223,7 +223,7 @@
 
     "tun": {
       "type": "object",
-      "description": "Виртуальное TUN-устройство для прозрачного проксирования. Mihomo создаёт сетевой интерфейс и перехватывает трафик через маршруты. На Keenetic TUN работает ТОЛЬКО с XKeen-интеграцией (кастомные маршруты и policy-routing настраиваются отдельно скриптами XKeen) — нативный `auto-route: true` на Keenetic не сработает.",
+      "description": "Виртуальное TUN-устройство для прозрачного проксирования. Mihomo создаёт сетевой интерфейс и перехватывает трафик через маршруты. Альтернатива гибридному режиму `redir-port` + `tproxy-port`. На Keenetic TUN работает ТОЛЬКО с XKeen-интеграцией (кастомные маршруты и policy-routing настраиваются скриптами XKeen) — нативный `auto-route: true` на Keenetic не сработает.",
       "properties": {
         "enable": {
           "type": "boolean",
