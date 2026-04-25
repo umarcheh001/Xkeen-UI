@@ -1058,8 +1058,14 @@ html[data-theme="light"] .monaco-editor .find-widget .monaco-action-bar .action-
   --vscode-widget-shadow: var(--xk-monaco-widget-shadow);
   border-color: var(--xk-monaco-widget-border) !important;
   box-shadow: 0 14px 32px var(--xk-monaco-widget-shadow) !important;
-  max-width: min(calc(100% - 32px), 720px) !important;
+  max-width: calc(100% - 32px) !important;
   overflow: hidden;
+}
+
+.monaco-editor .zone-widget,
+.monaco-editor .marker-widget {
+  width: 100% !important;
+  max-width: none !important;
 }
 
 .monaco-editor .zone-widget,
@@ -1075,6 +1081,12 @@ html[data-theme="light"] .monaco-editor .find-widget .monaco-action-bar .action-
   border-top-color: color-mix(in srgb, var(--xk-monaco-widget-border) 84%, transparent) !important;
   border-bottom-color: color-mix(in srgb, var(--xk-monaco-widget-border) 84%, transparent) !important;
   overflow: hidden;
+}
+
+.monaco-editor .zone-widget .zone-widget-container,
+.monaco-editor .marker-widget .zone-widget-container {
+  width: 100% !important;
+  max-width: none !important;
 }
 
 .monaco-editor .zone-widget .zone-widget-head,
@@ -1098,6 +1110,11 @@ html[data-theme="light"] .monaco-editor .find-widget .monaco-action-bar .action-
   max-width: 100% !important;
 }
 
+.monaco-editor .marker-widget .monaco-scrollable-element,
+.monaco-editor .zone-widget .monaco-scrollable-element {
+  width: 100% !important;
+}
+
 .monaco-editor .marker-widget .descriptioncontainer a,
 .monaco-editor .marker-widget .descriptioncontainer .filename,
 .monaco-editor .marker-widget .descriptioncontainer .code-link > span,
@@ -1109,10 +1126,29 @@ html[data-theme="light"] .monaco-editor .find-widget .monaco-action-bar .action-
 
 .monaco-editor .marker-widget .descriptioncontainer,
 .monaco-editor .zone-widget .descriptioncontainer {
-  right: 12px !important;
-  width: auto !important;
-  padding-right: 12px !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  padding-right: 20px !important;
   box-sizing: border-box !important;
+}
+
+@media (max-width: 640px) {
+  .monaco-editor .marker-widget .descriptioncontainer,
+  .monaco-editor .zone-widget .descriptioncontainer {
+    padding-right: 14px !important;
+  }
+
+  .monaco-editor .marker-widget .descriptioncontainer .source,
+  .monaco-editor .zone-widget .descriptioncontainer .source {
+    display: none !important;
+  }
+
+  .monaco-editor .marker-widget .descriptioncontainer .message,
+  .monaco-editor .zone-widget .descriptioncontainer .message {
+    font-size: 13px !important;
+    line-height: 17px !important;
+  }
 }
 
 

@@ -1054,6 +1054,66 @@ def test_root_layout_keeps_body_background_painted_to_full_viewport_height():
     assert 'min-height: 100dvh;' in text
 
 
+def test_monaco_marker_widget_uses_full_available_width_without_forcing_extra_detail_rows():
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    common_widget_block = styles.split(
+        '.monaco-editor .zone-widget,\n.monaco-editor .marker-widget,\n.monaco-editor .peekview-widget {',
+        1,
+    )[1].split('}', 1)[0]
+    assert 'max-width: calc(100% - 32px) !important;' in common_widget_block
+    assert 'min(calc(100% - 32px), 720px)' not in common_widget_block
+
+    width_block = styles.split(
+        '.monaco-editor .zone-widget,\n.monaco-editor .marker-widget {',
+        1,
+    )[1].split('}', 1)[0]
+    assert 'width: 100% !important;' in width_block
+    assert 'max-width: none !important;' in width_block
+
+    assert '.monaco-editor .marker-widget .monaco-scrollable-element,' in styles
+    assert '.monaco-editor .zone-widget .monaco-scrollable-element {' in styles
+
+    container_block = styles.split(
+        '.monaco-editor .zone-widget .zone-widget-container,\n.monaco-editor .marker-widget .zone-widget-container {',
+        1,
+    )[1].split('}', 1)[0]
+    assert 'width: 100% !important;' in container_block
+    assert 'max-width: none !important;' in container_block
+
+    desc_block = styles.split(
+        '.monaco-editor .marker-widget .descriptioncontainer,\n.monaco-editor .zone-widget .descriptioncontainer {',
+        1,
+    )[1].split('}', 1)[0]
+    assert 'left: 0 !important;' in desc_block
+    assert 'right: 0 !important;' in desc_block
+    assert 'width: 100% !important;' in desc_block
+    assert 'padding-right: 20px !important;' in desc_block
+    assert 'box-sizing: border-box !important;' in desc_block
+    assert '.monaco-editor .marker-widget .descriptioncontainer .message .details,' not in styles
+
+    assert '@media (max-width: 640px) {' in styles
+    assert (
+        '  .monaco-editor .marker-widget .descriptioncontainer,\n'
+        '  .monaco-editor .zone-widget .descriptioncontainer {\n'
+        '    padding-right: 14px !important;\n'
+        '  }'
+    ) in styles
+    assert (
+        '  .monaco-editor .marker-widget .descriptioncontainer .source,\n'
+        '  .monaco-editor .zone-widget .descriptioncontainer .source {\n'
+        '    display: none !important;\n'
+        '  }'
+    ) in styles
+    assert (
+        '  .monaco-editor .marker-widget .descriptioncontainer .message,\n'
+        '  .monaco-editor .zone-widget .descriptioncontainer .message {\n'
+        '    font-size: 13px !important;\n'
+        '    line-height: 17px !important;\n'
+        '  }'
+    ) in styles
+
+
 def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering():
     modal_text = Path('xkeen-ui/static/js/ui/xray_preflight_modal.js').read_text(encoding='utf-8')
     css_text = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
