@@ -1515,3 +1515,16 @@ def test_routing_editor_uses_all_fragments_for_semantic_context_and_separates_js
     assert "JSONC: valid · semantic: invalid" in routing
     assert "Файл загружен, но содержит semantic/schema ошибки." in routing
     assert "Файл загружен, но содержит ошибку JSON/JSONC." in routing
+
+
+def test_codemirror_lint_tooltips_are_scrollable_and_width_limited_inside_editor():
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert '.xkeen-cm6-host .cm-tooltip-lint {' in styles
+    assert 'max-width: min(560px, calc(100% - 16px), calc(100vw - 32px));' in styles
+    assert '.xkeen-cm6-host .cm-tooltip-lint > ul {' in styles
+    assert 'max-height: min(220px, 38vh);' in styles
+    assert 'overflow-y: auto;' in styles
+    assert 'overflow-x: hidden;' in styles
+    assert '.xkeen-cm6-host .cm-tooltip-lint .cm-diagnosticText,' in styles
+    assert 'overflow-wrap: anywhere;' in styles

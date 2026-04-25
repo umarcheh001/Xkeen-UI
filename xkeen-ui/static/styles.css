@@ -26508,6 +26508,30 @@ html[data-theme="light"] .xkeen-cm6-host {
   background: transparent;
 }
 
+.xkeen-cm6-host .cm-tooltip-lint {
+  box-sizing: border-box;
+  max-width: min(560px, calc(100% - 16px), calc(100vw - 32px));
+}
+
+.xkeen-cm6-host .cm-tooltip-lint > ul {
+  max-width: 100%;
+  max-height: min(220px, 38vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  list-style: none;
+}
+
+.xkeen-cm6-host .cm-tooltip-lint .cm-diagnostic,
+.xkeen-cm6-host .cm-tooltip-lint .cm-diagnosticText,
+.xkeen-cm6-host .cm-tooltip-lint .cm-diagnosticSource {
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .xkeen-cm6-host .cm6-json-schema-hover {
   max-width: 520px;
   max-height: 320px;
