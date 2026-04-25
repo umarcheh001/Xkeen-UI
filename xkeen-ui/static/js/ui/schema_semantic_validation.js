@@ -625,6 +625,15 @@ function xrayItemPointer(basePointer, index) {
   return base ? `${base}/${index}` : `/${index}`;
 }
 
+function getExternalXrayBlock(options, key) {
+  const source = options && typeof options === 'object' ? options : null;
+  if (!source) return null;
+  const suffix = cleanName(key);
+  if (!suffix) return null;
+  const candidate = `external${suffix.charAt(0).toUpperCase()}${suffix.slice(1)}`;
+  return isPlainObject(source[candidate]) ? source[candidate] : null;
+}
+
 function getXrayConfigShape(data, options = {}) {
   let kind = cleanName(options.kind || options.schemaKind || options.fragment || options.target).toLowerCase();
 
@@ -683,6 +692,10 @@ function getXrayConfigShape(data, options = {}) {
   const routing = isPlainObject(data.routing)
     ? data.routing
     : ((Array.isArray(data.rules) || Array.isArray(data.balancers)) ? data : null);
+  const localObservatory = isPlainObject(data.observatory) ? data.observatory : null;
+  const localBurstObservatory = isPlainObject(data.burstObservatory) ? data.burstObservatory : null;
+  const externalObservatory = getExternalXrayBlock(options, 'observatory');
+  const externalBurstObservatory = getExternalXrayBlock(options, 'burstObservatory');
 
   return {
     kind,
@@ -694,10 +707,14 @@ function getXrayConfigShape(data, options = {}) {
     routing,
     rulesPointer: routing ? (routing === data ? '/rules' : '/routing/rules') : '',
     balancersPointer: routing ? (routing === data ? '/balancers' : '/routing/balancers') : '',
-    observatory: isPlainObject(data.observatory) ? data.observatory : null,
-    observatoryPointer: '/observatory',
-    burstObservatory: isPlainObject(data.burstObservatory) ? data.burstObservatory : null,
-    burstObservatoryPointer: '/burstObservatory',
+    localObservatory,
+    observatory: localObservatory || externalObservatory || null,
+    observatoryPointer: localObservatory ? '/observatory' : cleanName(options.externalObservatoryPointer || '/observatory'),
+    externalObservatory,
+    localBurstObservatory,
+    burstObservatory: localBurstObservatory || externalBurstObservatory || null,
+    burstObservatoryPointer: localBurstObservatory ? '/burstObservatory' : cleanName(options.externalBurstObservatoryPointer || '/burstObservatory'),
+    externalBurstObservatory,
   };
 }
 
@@ -1355,6 +1372,15 @@ export function validateXrayRoutingSemantics(data, options = {}) {
 
   detectPrivateIpRuleOrdering(rules, shape.rulesPointer, diagnostics);
   validateXrayBalancers(shape, options, diagnostics);
+
+  if (shape.kind === 'xray-routing' && isPlainObject(shape.localObservatory) && isPlainObject(shape.externalObservatory)) {
+    pushDiagnostic(diagnostics, createJsonDiagnostic('/observatory', 'В текущем routing-фрагменте уже есть блок `observatory`, но отдельный `07_observatory.json` тоже существует. Для фрагментированной Xray-конфигурации это обычно дублирование одного и того же observatory-слоя.', {
+      severity: 'suggestion',
+      source: 'xray-semantic',
+      code: 'observatory-duplicates-external',
+      hint: 'Обычно observatory лучше оставить в `07_observatory.json`, а из `05_routing.json` удалить локальный дубль.',
+    }));
+  }
 
   return diagnostics;
 }

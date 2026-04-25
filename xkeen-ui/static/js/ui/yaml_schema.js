@@ -1004,6 +1004,8 @@ function buildYamlCursorContext(text, offset) {
         replaceFrom: safeOffset,
         replaceTo: safeOffset,
         prefix: '',
+        lineStart,
+        lineText,
       };
     }
     const kv = splitYamlKeyValue(afterDash);
@@ -1018,6 +1020,8 @@ function buildYamlCursorContext(text, offset) {
           replaceTo: keyBase + kv.keyEnd,
           prefix: prefix.slice(hyphenOffset + 1 + kv.keyStart),
           preserveExistingDelimiter: true,
+          lineStart,
+          lineText,
         };
       }
       if (kv.hasInlineValue && column >= hyphenOffset + 1 + kv.valueStart) {
@@ -1027,6 +1031,8 @@ function buildYamlCursorContext(text, offset) {
           replaceFrom: keyBase + kv.valueStart,
           replaceTo: keyBase + kv.valueEnd,
           prefix: prefix.slice(hyphenOffset + 1 + kv.valueStart),
+          lineStart,
+          lineText,
         };
       }
       return {
@@ -1035,6 +1041,8 @@ function buildYamlCursorContext(text, offset) {
         replaceFrom: safeOffset,
         replaceTo: safeOffset,
         prefix: '',
+        lineStart,
+        lineText,
       };
     }
     const fullAfterDash = lineText.slice(hyphenOffset + 1);
@@ -1047,6 +1055,8 @@ function buildYamlCursorContext(text, offset) {
         replaceTo: lineStart + hyphenOffset + 1 + fullKv.keyEnd,
         prefix: prefix.slice(hyphenOffset + 1 + fullKv.keyStart),
         preserveExistingDelimiter: true,
+        lineStart,
+        lineText,
       };
     }
     const leading = afterDash.match(/^\s*/);
@@ -1057,6 +1067,8 @@ function buildYamlCursorContext(text, offset) {
       replaceFrom: lineStart + keyStart,
       replaceTo: safeOffset,
       prefix: prefix.slice(keyStart),
+      lineStart,
+      lineText,
     };
   }
 
@@ -1068,6 +1080,8 @@ function buildYamlCursorContext(text, offset) {
       replaceFrom: lineStart + indent,
       replaceTo: safeOffset,
       prefix: '',
+      lineStart,
+      lineText,
     };
   }
 
@@ -1083,6 +1097,8 @@ function buildYamlCursorContext(text, offset) {
         replaceTo: keyBase + kv.keyEnd,
         prefix: prefix.slice(indent + kv.keyStart),
         preserveExistingDelimiter: true,
+        lineStart,
+        lineText,
       };
     }
     if (kv.hasInlineValue && column >= indent + kv.valueStart) {
@@ -1092,6 +1108,8 @@ function buildYamlCursorContext(text, offset) {
         replaceFrom: keyBase + kv.valueStart,
         replaceTo: keyBase + kv.valueEnd,
         prefix: prefix.slice(indent + kv.valueStart),
+        lineStart,
+        lineText,
       };
     }
     return {
@@ -1100,6 +1118,8 @@ function buildYamlCursorContext(text, offset) {
       replaceFrom: safeOffset,
       replaceTo: safeOffset,
       prefix: '',
+        lineStart,
+        lineText,
     };
   }
   const fullContent = lineText.slice(indent);
@@ -1112,6 +1132,8 @@ function buildYamlCursorContext(text, offset) {
       replaceTo: lineStart + indent + fullKv.keyEnd,
       prefix: prefix.slice(indent + fullKv.keyStart),
       preserveExistingDelimiter: true,
+      lineStart,
+      lineText,
     };
   }
 
@@ -1121,6 +1143,8 @@ function buildYamlCursorContext(text, offset) {
     replaceFrom: lineStart + indent,
     replaceTo: safeOffset,
     prefix: content,
+    lineStart,
+    lineText,
   };
 }
 
@@ -1229,7 +1253,38 @@ function resolveYamlSnippetProvider(options) {
   return null;
 }
 
-function buildYamlSnippetCompletionOptions(snippets) {
+function looksLikeYamlBlockSnippet(text) {
+  return /^[^\s:#][^:\n]*:\n/.test(asString(text));
+}
+
+function formatYamlSnippetInsertText(text, context) {
+  const source = asString(text);
+  if (!source.includes('\n')) return source;
+  const ctx = context && typeof context === 'object' ? context : {};
+  const lineStart = Math.max(0, Number(ctx.lineStart || 0));
+  const replaceFrom = Math.max(lineStart, Number(ctx.replaceFrom != null ? ctx.replaceFrom : lineStart));
+  const indentWidth = Math.max(0, replaceFrom - lineStart);
+  if (!indentWidth) return source;
+  const prefix = ' '.repeat(indentWidth);
+  return source
+    .split('\n')
+    .map((line, index) => (index === 0 || !line) ? line : `${prefix}${line}`)
+    .join('\n');
+}
+
+function buildYamlSnippetRange(context, insertText) {
+  const ctx = context && typeof context === 'object' ? context : {};
+  const from = Math.max(0, Number(ctx.replaceFrom || 0));
+  let to = Math.max(from, Number(ctx.replaceTo != null ? ctx.replaceTo : from));
+  if (ctx.kind === 'key' && ctx.preserveExistingDelimiter && looksLikeYamlBlockSnippet(insertText)) {
+    const lineStart = Math.max(0, Number(ctx.lineStart || 0));
+    const lineText = asString(ctx.lineText);
+    to = Math.max(to, lineStart + lineText.length);
+  }
+  return { from, to };
+}
+
+function buildYamlSnippetCompletionOptions(snippets, context) {
   const list = Array.isArray(snippets) ? snippets : [];
   return list
     .filter((item) => item && item.label && (item.insertText || item.monacoSnippet))
@@ -1238,13 +1293,18 @@ function buildYamlSnippetCompletionOptions(snippets) {
       if (item.documentation) plainParts.push(String(item.documentation));
       if (item.warning) plainParts.push(`⚠ ${String(item.warning)}`);
       const plain = plainParts.join('\n\n') || '';
-      const insertPlain = String(item.insertText || item.monacoSnippet || '');
-      const insertSnippet = String(item.monacoSnippet || item.insertText || '');
+      const rawPlain = String(item.insertText || item.monacoSnippet || '');
+      const rawSnippet = String(item.monacoSnippet || item.insertText || '');
+      const range = buildYamlSnippetRange(context, rawPlain);
+      const insertPlain = formatYamlSnippetInsertText(rawPlain, context);
+      const insertSnippet = formatYamlSnippetInsertText(rawSnippet, context);
       return {
         label: `📦 ${String(item.label)}`,
         type: 'snippet',
         insertText: insertPlain,
         monacoSnippet: insertSnippet,
+        from: range.from,
+        to: range.to,
         detail: String(item.detail || 'snippet'),
         documentation: plain ? { plain, markdown: plain } : {},
       };
@@ -1287,7 +1347,7 @@ export function completeYamlTextFromSchema(text, schema, options = {}) {
     } catch (e) {
       snippets = null;
     }
-    snippetOptions = buildYamlSnippetCompletionOptions(snippets);
+    snippetOptions = buildYamlSnippetCompletionOptions(snippets, context);
     if (snippetOptions.length) list = list.concat(snippetOptions);
   }
 

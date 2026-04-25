@@ -424,13 +424,22 @@ function buildXrayBurstObservatoryScaffold(selectors) {
   };
 }
 
-function collectXrayObservabilityQuickFixes(text, data) {
+function collectXrayObservabilityQuickFixes(text, data, semanticOptions) {
   const fixes = [];
   const root = isPlainObject(data && data.routing) ? data.routing : data;
   const rootPath = root === data ? [] : ['routing'];
   const balancers = Array.isArray(root && root.balancers) ? root.balancers : [];
-  const hasObservatory = !!(isPlainObject(data && data.observatory) || isPlainObject(root && root.observatory));
-  const hasBurstObservatory = !!(isPlainObject(data && data.burstObservatory) || isPlainObject(root && root.burstObservatory));
+  const options = semanticOptions && typeof semanticOptions === 'object' ? semanticOptions : {};
+  const hasObservatory = !!(
+    isPlainObject(data && data.observatory)
+    || isPlainObject(root && root.observatory)
+    || isPlainObject(options.externalObservatory)
+  );
+  const hasBurstObservatory = !!(
+    isPlainObject(data && data.burstObservatory)
+    || isPlainObject(root && root.burstObservatory)
+    || isPlainObject(options.externalBurstObservatory)
+  );
 
   balancers.forEach((balancer, index) => {
     if (!isPlainObject(balancer)) return;
@@ -687,6 +696,21 @@ function buildXraySemanticQuickFixes(text, data, semanticOptions) {
       return;
     }
 
+    if (code === 'observatory-duplicates-external') {
+      const fix = modifyJsonText(text, ['observatory'], undefined, {
+        id: 'xray-observatory-remove-duplicate-external',
+        title: 'Удалить локальный дубль `observatory`',
+        code,
+        isPreferred: true,
+        priority: 100,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+      return;
+    }
+
     if (code === 'outbound-tls-server-name-suggested' && path.length >= 2) {
       const itemPath = path.slice(0, -2);
       const itemValue = getValueAtPath(data, itemPath);
@@ -776,7 +800,7 @@ function buildXraySemanticQuickFixes(text, data, semanticOptions) {
     }
   });
 
-  fixes.push(...collectXrayObservabilityQuickFixes(text, data));
+  fixes.push(...collectXrayObservabilityQuickFixes(text, data, semanticOptions));
   return fixes;
 }
 

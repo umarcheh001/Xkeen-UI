@@ -18,13 +18,14 @@ def _run_completion(doc_with_marker: str) -> dict[str, object] | None:
     script = f"""
 import fs from 'node:fs';
 import {{ completeYamlTextFromSchema }} from './xkeen-ui/static/js/ui/yaml_schema.js';
+import {{ createMihomoSnippetProvider }} from './xkeen-ui/static/js/ui/schema_snippets.js';
 
 const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/mihomo-config.schema.json', 'utf8'));
 const marker = '__CURSOR__';
 const docWithMarker = {json.dumps(doc_with_marker)};
 const offset = docWithMarker.indexOf(marker);
 const doc = docWithMarker.replace(marker, '');
-const result = completeYamlTextFromSchema(doc, schema, {{ offset }});
+const result = completeYamlTextFromSchema(doc, schema, {{ offset, snippetProvider: createMihomoSnippetProvider() }});
 console.log(JSON.stringify(result ? {{
   from: result.from,
   to: result.to,
@@ -54,6 +55,7 @@ def _apply_completion(doc_with_marker: str, label: str) -> dict[str, object] | N
     script = f"""
 import fs from 'node:fs';
 import {{ completeYamlTextFromSchema }} from './xkeen-ui/static/js/ui/yaml_schema.js';
+import {{ createMihomoSnippetProvider }} from './xkeen-ui/static/js/ui/schema_snippets.js';
 
 const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/mihomo-config.schema.json', 'utf8'));
 const marker = '__CURSOR__';
@@ -61,8 +63,8 @@ const targetLabel = {json.dumps(label)};
 const docWithMarker = {json.dumps(doc_with_marker)};
 const offset = docWithMarker.indexOf(marker);
 const doc = docWithMarker.replace(marker, '');
-const result = completeYamlTextFromSchema(doc, schema, {{ offset }});
-if (!result) {{
+const result = completeYamlTextFromSchema(doc, schema, {{ offset, snippetProvider: createMihomoSnippetProvider() }});
+  if (!result) {{
   console.log('null');
 }} else {{
   const item = (result.options || []).find((entry) => entry.label === targetLabel) || null;
@@ -70,10 +72,12 @@ if (!result) {{
     console.log('null');
   }} else {{
     const insertText = item.insertText || item.label;
-    const applied = doc.slice(0, result.from) + insertText + doc.slice(result.to);
+    const from = Number.isFinite(item.from) ? item.from : result.from;
+    const to = Number.isFinite(item.to) ? item.to : result.to;
+    const applied = doc.slice(0, from) + insertText + doc.slice(to);
     console.log(JSON.stringify({{
-      from: result.from,
-      to: result.to,
+      from,
+      to,
       insertText,
       applied,
       context: result.context,
@@ -239,3 +243,39 @@ def test_beginner_hover_explains_rule_provider_behavior():
     assert "Простыми словами:" in result["plain"]
     assert "что именно лежит внутри rule-provider" in result["plain"]
     assert "Если `behavior` не совпадает" in result["plain"]
+
+
+def test_root_sniffer_snippet_replaces_partial_key_with_colon_cleanly():
+    result = _apply_completion("snif__CURSOR__:\n", "📦 sniffer block")
+
+    assert result is not None
+    assert result["context"]["kind"] == "key"
+    assert result["applied"] == "sniffer:\n  enable: true\n  sniff:\n    HTTP:\n    TLS:\n"
+
+
+def test_proxy_snippet_keeps_nested_yaml_indent_inside_array_item():
+    result = _apply_completion(
+        "\n".join([
+            "proxies:",
+            "  - __CURSOR__",
+            "",
+        ]),
+        "📦 proxy: vless",
+    )
+
+    assert result is not None
+    assert result["context"]["kind"] == "array-item"
+    assert result["applied"] == "\n".join([
+        "proxies:",
+        '  - name: "vless-proxy"',
+        "    type: vless",
+        "    server: example.com",
+        "    port: 443",
+        '    uuid: "00000000-0000-0000-0000-000000000000"',
+        "    network: tcp",
+        "    tls: true",
+        "    servername: example.com",
+        "    flow: xtls-rprx-vision",
+        "    udp: true",
+        "",
+    ])

@@ -2089,6 +2089,8 @@ import {
             const insertText = isSnippet
               ? (item.monacoSnippet || item.insertText || item.label)
               : (item.insertText || item.label);
+            const itemStart = model.getPositionAt(Math.max(0, Number(item && item.from != null ? item.from : result.from || 0)));
+            const itemEnd = model.getPositionAt(Math.max(0, Number(item && item.to != null ? item.to : (result.to || result.from || 0))));
             const base = {
               label: item.label,
               kind: _monacoCompletionKind(monaco, item),
@@ -2097,7 +2099,7 @@ import {
               documentation: item.documentation && item.documentation.markdown
                 ? { value: item.documentation.markdown }
                 : (item.documentation && item.documentation.plain ? item.documentation.plain : ''),
-              range,
+              range: new monaco.Range(itemStart.lineNumber, itemStart.column, itemEnd.lineNumber, itemEnd.column),
               sortText: `${isSnippet ? '9' : (item.type === 'property' ? '0' : '1')}-${String(index).padStart(4, '0')}-${item.label}`,
               filterText: item.label,
             };

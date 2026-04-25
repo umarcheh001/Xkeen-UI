@@ -617,3 +617,51 @@ console.log(JSON.stringify(result.map((item) => ({
     assert "warning" in severities
     assert "outbounds.0.streamSettings.network" in paths
     assert any("gRPC" in message and "XHTTP" in message for message in messages)
+
+
+def test_xray_routing_semantics_respects_external_observatory_and_flags_local_duplicate():
+    payload = _run_node_json(
+        """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayRoutingSemantics({
+  routing: {
+    balancers: [
+      {
+        tag: 'proxy',
+        selector: ['cdn.pecan.run--'],
+        strategy: { type: 'leastPing' }
+      }
+    ]
+  },
+  observatory: {
+    subjectSelector: ['cdn.pecan.run--'],
+    probeUrl: 'http://www.gstatic.com/generate_204',
+    probeInterval: '60s'
+  }
+}, {
+  externalObservatory: {
+    subjectSelector: ['cdn.pecan.run--'],
+    probeUrl: 'http://www.gstatic.com/generate_204',
+    probeInterval: '60s'
+  }
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  severity: item.severity || '',
+  code: item.code || '',
+  hint: item.hint || '',
+  message: item.message || '',
+}))));
+"""
+    )
+
+    codes = [str(item["code"]) for item in payload]
+    pointers = [str(item["pointer"]) for item in payload]
+    hints = [str(item["hint"]) for item in payload]
+
+    assert "balancer-observatory-missing" not in codes
+    assert "observatory-duplicates-external" in codes
+    assert "/observatory" in pointers
+    assert any("07_observatory.json" in hint for hint in hints)

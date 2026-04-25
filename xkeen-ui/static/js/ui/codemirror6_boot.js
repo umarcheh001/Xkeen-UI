@@ -395,18 +395,29 @@ function yamlAssistExtensionFor(opts) {
       quickFixProvider: opts && opts.quickFixProvider ? opts.quickFixProvider : null,
     });
     if (!result || !Array.isArray(result.options) || !result.options.length) return null;
+    const defaultFrom = Math.max(0, Number(result.from || 0));
+    const defaultTo = Math.max(0, Number(result.to || result.from || 0));
     return {
-      from: Math.max(0, Number(result.from || 0)),
-      to: Math.max(0, Number(result.to || result.from || 0)),
+      from: defaultFrom,
+      to: defaultTo,
       options: result.options.map((item) => {
         let type = 'keyword';
         if (item.type === 'property') type = 'property';
         else if (item.type === 'snippet') type = 'snippet';
+        const itemFrom = Math.max(0, Number(item && item.from != null ? item.from : defaultFrom));
+        const itemTo = Math.max(itemFrom, Number(item && item.to != null ? item.to : defaultTo));
+        const insertText = item.insertText || item.label;
         return {
           label: item.label,
           type,
           detail: item.detail || '',
-          apply: item.insertText || item.label,
+          apply: (itemFrom !== defaultFrom || itemTo !== defaultTo)
+            ? ((view) => {
+                try {
+                  view.dispatch({ changes: { from: itemFrom, to: itemTo, insert: insertText } });
+                } catch (e) {}
+              })
+            : insertText,
           info: item.documentation && item.documentation.plain ? item.documentation.plain : '',
           boost: item.type === 'snippet' ? -5 : 0,
         };

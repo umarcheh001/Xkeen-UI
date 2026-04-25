@@ -1511,6 +1511,8 @@ def test_routing_editor_uses_all_fragments_for_semantic_context_and_separates_js
     assert "return 'all-fragments';" in routing
     assert "fetchTags('/api/xray/outbound-tags?all=1')" in routing
     assert "fetchTags('/api/xray/inbound-tags?all=1')" in routing
+    assert "fetch('/api/xray/observatory/config'" in routing
+    assert "externalObservatory:" in routing
     assert "try { await refreshRoutingSemanticContext({ force: true }); } catch (e) {}" in routing
     assert "JSONC: valid · semantic: invalid" in routing
     assert "Файл загружен, но содержит semantic/schema ошибки." in routing

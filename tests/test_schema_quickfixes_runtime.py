@@ -192,6 +192,96 @@ console.log(JSON.stringify({
     assert '"proxy-"' in payload["next"]
 
 
+def test_xray_quickfix_does_not_add_observatory_when_external_fragment_already_exists():
+    payload = _run_node_json(
+        """
+import { createXrayQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const provider = createXrayQuickFixProvider({
+  semanticOptions: {
+    externalObservatory: {
+      subjectSelector: ['cdn.pecan.run--'],
+      probeUrl: 'http://www.gstatic.com/generate_204',
+      probeInterval: '60s'
+    }
+  },
+});
+const text = [
+  '{',
+  '  "routing": {',
+  '    "balancers": [',
+  '      {',
+  '        "tag": "auto",',
+  '        "selector": ["cdn.pecan.run--"],',
+  '        "strategy": {',
+  '          "type": "leastPing"',
+  '        }',
+  '      }',
+  '    ]',
+  '  }',
+  '}',
+  '',
+].join('\\n');
+const fixes = provider.getQuickFixes({ text });
+console.log(JSON.stringify(fixes.map((item) => ({ title: item.title, code: item.code }))));
+"""
+    )
+
+    codes = [str(item["code"]) for item in payload]
+    assert "balancer-observatory-missing" not in codes
+
+
+def test_xray_quickfix_removes_local_observatory_when_external_fragment_already_exists():
+    payload = _run_node_json(
+        """
+import { applyQuickFixText, createXrayQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const provider = createXrayQuickFixProvider({
+  semanticOptions: {
+    externalObservatory: {
+      subjectSelector: ['cdn.pecan.run--'],
+      probeUrl: 'http://www.gstatic.com/generate_204',
+      probeInterval: '60s'
+    }
+  },
+});
+const text = [
+  '{',
+  '  "routing": {',
+  '    "balancers": [',
+  '      {',
+  '        "tag": "auto",',
+  '        "selector": ["cdn.pecan.run--"],',
+  '        "strategy": {',
+  '          "type": "leastPing"',
+  '        }',
+  '      }',
+  '    ]',
+  '  },',
+  '  "observatory": {',
+  '    "subjectSelector": ["cdn.pecan.run--"],',
+  '    "probeUrl": "http://www.gstatic.com/generate_204",',
+  '    "probeInterval": "60s"',
+  '  }',
+  '}',
+  '',
+].join('\\n');
+const fixes = provider.getQuickFixes({ text });
+const fix = fixes.find((item) => item.code === 'observatory-duplicates-external');
+const next = fix ? applyQuickFixText(text, fix) : text;
+console.log(JSON.stringify({
+  titles: fixes.map((item) => item.title),
+  hasFix: !!fix,
+  next,
+}));
+"""
+    )
+
+    assert payload["hasFix"] is True
+    assert "Удалить локальный дубль `observatory`" in payload["titles"]
+    assert '"observatory": {' not in payload["next"]
+
+
 def test_xray_quickfix_adds_server_name_from_endpoint_host():
     payload = _run_node_json(
         """

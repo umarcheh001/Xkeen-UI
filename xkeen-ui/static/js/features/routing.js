@@ -158,6 +158,7 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
     key: '',
     outboundTags: [],
     inboundTags: [],
+    externalObservatory: null,
     ready: false,
   };
   let _routingSemanticContextPromise = null;
@@ -773,6 +774,10 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
       options: {
         knownOutboundTags: Array.isArray(_routingSemanticContext.outboundTags) ? _routingSemanticContext.outboundTags.slice() : [],
         knownInboundTags: Array.isArray(_routingSemanticContext.inboundTags) ? _routingSemanticContext.inboundTags.slice() : [],
+        externalObservatory: (_routingSemanticContext && _routingSemanticContext.externalObservatory && typeof _routingSemanticContext.externalObservatory === 'object')
+          ? _routingSemanticContext.externalObservatory
+          : null,
+        externalObservatoryPointer: '/observatory',
       },
     };
   }
@@ -861,22 +866,41 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
     }
 
     const fetchTags = async (url) => {
-      const response = await fetch(url, { cache: 'no-store' });
-      if (!response.ok) return null;
-      const payload = await response.json().catch(() => null);
-      return payload && typeof payload === 'object' && Array.isArray(payload.tags)
-        ? payload.tags.slice()
-        : null;
+      try {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.ok) return null;
+        const payload = await response.json().catch(() => null);
+        return payload && typeof payload === 'object' && Array.isArray(payload.tags)
+          ? payload.tags.slice()
+          : null;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const fetchObservatoryConfig = async () => {
+      try {
+        const response = await fetch('/api/xray/observatory/config', { cache: 'no-store' });
+        if (!response.ok) return null;
+        const payload = await response.json().catch(() => null);
+        if (!payload || typeof payload !== 'object' || payload.exists !== true) return null;
+        const config = payload && typeof payload.config === 'object' ? payload.config : null;
+        return (config && typeof config === 'object') ? config : null;
+      } catch (e) {
+        return null;
+      }
     };
 
     _routingSemanticContextPromise = Promise.all([
       fetchTags('/api/xray/outbound-tags?all=1'),
       fetchTags('/api/xray/inbound-tags?all=1'),
-    ]).then(([outboundTags, inboundTags]) => {
+      fetchObservatoryConfig(),
+    ]).then(([outboundTags, inboundTags, externalObservatory]) => {
       _routingSemanticContext = {
         key,
         outboundTags: Array.isArray(outboundTags) ? outboundTags.slice() : [],
         inboundTags: Array.isArray(inboundTags) ? inboundTags.slice() : [],
+        externalObservatory: (externalObservatory && typeof externalObservatory === 'object') ? externalObservatory : null,
         ready: true,
       };
       _routingSemanticContextTs = Date.now();
@@ -887,6 +911,7 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
         key,
         outboundTags: [],
         inboundTags: [],
+        externalObservatory: null,
         ready: false,
       };
       _routingSemanticContextTs = Date.now();
