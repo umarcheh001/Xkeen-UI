@@ -383,7 +383,13 @@ import { enrichSchemaDiagnostic, isEnrichedMessage, findPointerAtRange } from '.
         continue;
       }
 
-      const next = { ...marker, message: enriched.message };
+      // Monaco's marker peek widget sizes itself from logical line count
+      // (split on \n), not visual wrap, so a long single-line message gets
+      // clipped vertically. Break the suffix onto its own line so the
+      // widget reserves enough rows for "(строка N, столбец M; путь P)".
+      const displayMessage = enriched.message.replace(' (строка ', '\n(строка ');
+
+      const next = { ...marker, message: displayMessage };
       if (enriched.source) next.source = enriched.source;
       bucket.push(next);
       changed = true;

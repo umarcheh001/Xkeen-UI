@@ -232,6 +232,38 @@ console.log(JSON.stringify({ result }));
     assert payload["result"] is None
 
 
+def test_enriched_message_uses_marker_safe_separator_for_monaco_peek():
+    """Monaco's MarkerNavigationWidget sizes itself by the logical newline
+    count of the message, not visual wrap. A long single-line enriched
+    message is therefore vertically clipped in the peek (Alt+F8).
+
+    The fix in monaco_shared.js is to replace ' (строка ' with '\\n(строка '
+    before pushing the marker. Verify that the suffix is still discoverable
+    by the same separator the patcher relies on, so the fix keeps working
+    if the formatter is touched later.
+    """
+    script = """
+import { formatEnrichedMessage } from './xkeen-ui/static/js/ui/schema_diagnostic_format.js';
+
+const message = formatEnrichedMessage('Свойство `foo` не разрешено схемой', {
+  line: 5, column: 5, pathLabel: 'routing.rules[0].domain',
+});
+const swapped = message.replace(' (строка ', '\\n(строка ');
+console.log(JSON.stringify({
+  message,
+  swapped,
+  separatorPresent: message.includes(' (строка '),
+  swappedLineCount: swapped.split('\\n').length,
+}));
+"""
+    payload = _run_node_json(script)
+    assert payload["separatorPresent"] is True, (
+        "shared formatter must keep ' (строка ' so monaco_shared.js can split into two lines"
+    )
+    assert payload["swappedLineCount"] == 2
+    assert payload["swapped"].split("\n", 1)[1].startswith("(строка ")
+
+
 def test_enrich_schema_diagnostic_matches_cm6_diagnostic_context_format():
     """Parity check: enriched Monaco message uses the same '(строка N, столбец M; путь P)'
     suffix shape that CM6's withDiagnosticContext produces."""
