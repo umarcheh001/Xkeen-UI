@@ -16,6 +16,7 @@ import {
 } from './yaml_schema.js';
 import {
   validateMihomoConfigSemantics,
+  validateXrayConfigSemantics,
   validateXrayRoutingSemantics,
 } from './schema_semantic_validation.js';
 
@@ -493,7 +494,7 @@ function buildXraySchemaQuickFixes(text, data, schema) {
 
 function buildXraySemanticQuickFixes(text, data, semanticOptions) {
   const fixes = [];
-  const diagnostics = validateXrayRoutingSemantics(data, semanticOptions || {});
+  const diagnostics = validateXrayConfigSemantics(data, semanticOptions || {});
   const outboundTags = uniqueStrings((semanticOptions && semanticOptions.knownOutboundTags) || []);
   const inboundTags = uniqueStrings((semanticOptions && semanticOptions.knownInboundTags) || []);
   const balancerTags = collectXrayBalancerTags(data);

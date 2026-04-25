@@ -631,9 +631,10 @@ export function validateYamlTextAgainstSchema(text, schema, options = {}) {
   const semanticErrors = validateMihomoConfigSemantics(parsed, options);
   const errors = schemaErrors.concat(Array.isArray(semanticErrors) ? semanticErrors : []);
   const diagnostics = errors.map((item) => makeDiagnostic(index, item)).slice(0, ctx.maxErrors);
-  const first = diagnostics[0] || null;
+  const blockingDiagnostics = diagnostics.filter((item) => String(item && item.severity || '') !== 'info');
+  const first = blockingDiagnostics[0] || diagnostics[0] || null;
   return {
-    ok: diagnostics.length === 0,
+    ok: blockingDiagnostics.length === 0,
     parseOk: true,
     diagnostics,
     summary: first ? first.message : '',

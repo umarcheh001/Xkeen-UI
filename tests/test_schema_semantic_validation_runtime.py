@@ -68,6 +68,54 @@ console.log(JSON.stringify({{
     assert any("missing-provider" in message for message in messages)
 
 
+def test_mihomo_yaml_runtime_reports_name_collisions_reserved_names_and_info_diagnostics():
+    doc = "\n".join([
+        "proxies:",
+        "  - name: DIRECT",
+        "    type: vless",
+        "    server: 198.51.100.10",
+        "    port: 443",
+        "    uuid: 11111111-1111-1111-1111-111111111111",
+        "    tls: true",
+        "  - name: Auto",
+        "    type: vless",
+        "    server: edge.example.com",
+        "    port: 443",
+        "    uuid: 22222222-2222-2222-2222-222222222222",
+        "proxy-groups:",
+        "  - name: Auto",
+        "    type: select",
+        "    proxies: [DIRECT]",
+        "",
+    ])
+
+    script = f"""
+import fs from 'node:fs';
+import {{ validateYamlTextAgainstSchema }} from './xkeen-ui/static/js/ui/yaml_schema.js';
+
+const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/mihomo-config.schema.json', 'utf8'));
+const result = validateYamlTextAgainstSchema({json.dumps(doc)}, schema, {{ maxErrors: 16 }});
+console.log(JSON.stringify({{
+  ok: !!result.ok,
+  diagnostics: (result.diagnostics || []).map((item) => ({{
+    path: item.path || '',
+    severity: item.severity || '',
+    message: item.message || '',
+  }})),
+}}));
+"""
+
+    payload = _run_node_json(script)
+    messages = [str(item["message"]) for item in payload["diagnostics"]]
+    severities = [str(item["severity"]) for item in payload["diagnostics"]]
+    paths = [str(item["path"]) for item in payload["diagnostics"]]
+
+    assert any("спец-именем Mihomo" in message for message in messages)
+    assert any("используется и в `proxies`, и в `proxy-groups`" in message for message in messages)
+    assert "info" in severities
+    assert "proxies[0].servername" in paths
+
+
 def test_xray_semantic_validation_runtime_reports_missing_refs_and_duplicates():
     script = """
 import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
@@ -106,6 +154,102 @@ console.log(JSON.stringify(result.map((item) => ({
     assert any("ghost-out" in message for message in messages)
     assert any("ghost-balancer" in message for message in messages)
     assert any("dup" in message for message in messages)
+
+
+def test_xray_config_semantic_validation_reports_transport_and_reference_gaps():
+    script = """
+import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayConfigSemantics({
+  inbounds: [
+    {
+      tag: 'vless-in',
+      protocol: 'trojan',
+      streamSettings: {
+        security: 'reality',
+        realitySettings: {
+          serverName: 'edge.example.com'
+        }
+      }
+    }
+  ],
+  outbounds: [
+    {
+      tag: 'dup',
+      protocol: 'vless',
+      settings: {
+        vnext: [
+          {
+            address: 'cdn.example.com',
+            port: 443,
+            users: [
+              { id: '11111111-1111-1111-1111-111111111111', encryption: 'none', flow: 'xtls-rprx-vision' }
+            ]
+          }
+        ]
+      },
+      streamSettings: {
+        network: 'xhttp',
+        security: 'tls',
+        tlsSettings: {}
+      },
+      proxySettings: { tag: 'ghost-upstream' },
+      mux: { enabled: true }
+    },
+    {
+      tag: 'dup',
+      protocol: 'trojan',
+      settings: {
+        servers: [{ address: 'edge.example.com', port: 443, password: 'secret' }]
+      },
+      streamSettings: {
+        security: 'reality',
+        realitySettings: {}
+      }
+    }
+  ],
+  routing: {
+    balancers: [
+      {
+        tag: 'proxy',
+        selector: ['missing-'],
+        fallbackTag: 'ghost-fallback',
+        strategy: { type: 'leastPing' }
+      }
+    ],
+    rules: [
+      { outboundTag: 'dup' }
+    ]
+  }
+}, {
+  kind: 'xray-config'
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  severity: item.severity || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    pointers = [str(item["pointer"]) for item in payload]
+    codes = [str(item["code"]) for item in payload]
+    messages = [str(item["message"]) for item in payload]
+
+    assert "/inbounds/0/streamSettings/realitySettings" in pointers
+    assert "/outbounds/0/proxySettings/tag" in pointers
+    assert "/outbounds/0/mux/enabled" in pointers
+    assert "/outbounds/0/streamSettings/network" in pointers
+    assert "/outbounds/1/tag" in pointers
+    assert "/routing/balancers/0/selector/0" in pointers
+    assert "/routing/balancers/0/fallbackTag" in pointers
+    assert "/routing/balancers/0/strategy/type" in pointers
+    assert "outbound-mux-network-incompatible" in codes
+    assert "outbound-flow-network-incompatible" in codes
+    assert any("ghost-upstream" in message for message in messages)
+    assert any("leastPing" in message for message in messages)
 
 
 def test_codemirror_json_schema_linter_supports_xray_semantic_validation():
@@ -155,3 +299,104 @@ console.log(JSON.stringify(diagnostics.map((item) => ({{
 
     assert any("ghost-out" in message for message in messages)
     assert any(source == "xray-semantic" for source in sources)
+
+
+def test_codemirror_json_schema_linter_supports_xray_outbounds_semantic_validation():
+    doc = "\n".join([
+        "{",
+        '  "outbounds": [',
+        "    {",
+        '      "tag": "proxy-a",',
+        '      "protocol": "vless",',
+        '      "settings": {',
+        '        "vnext": [',
+        "          {",
+        '            "address": "cdn.example.com",',
+        '            "port": 443,',
+        '            "users": [',
+        '              { "id": "11111111-1111-1111-1111-111111111111", "encryption": "none" }',
+        "            ]",
+        "          }",
+        "        ]",
+        "      },",
+        '      "proxySettings": { "tag": "ghost-upstream" },',
+        '      "streamSettings": {',
+        '        "security": "tls",',
+        '        "tlsSettings": {}',
+        "      }",
+        "    }",
+        "  ]",
+        "}",
+        "",
+    ])
+
+    script = f"""
+import fs from 'node:fs';
+import {{ EditorState }} from '@codemirror/state';
+import {{ json }} from '@codemirror/lang-json';
+import {{ jsonSchemaLinter, stateExtensions }} from './xkeen-ui/static/js/vendor/codemirror_json_schema.js';
+
+const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/xray-outbounds.schema.json', 'utf8'));
+const state = EditorState.create({{
+  doc: {json.dumps(doc)},
+  extensions: [json(), stateExtensions(schema)],
+}});
+const diagnostics = jsonSchemaLinter({{
+  semanticValidation: {{
+    kind: 'xray-outbounds',
+    options: {{}},
+  }},
+}})({{ state }});
+
+console.log(JSON.stringify(diagnostics.map((item) => ({{
+  severity: item.severity || '',
+  source: item.source || '',
+  message: item.message || '',
+}}))));
+"""
+
+    payload = _run_node_json(script)
+    messages = [str(item["message"]) for item in payload]
+    severities = [str(item["severity"]) for item in payload]
+    sources = [str(item["source"]) for item in payload]
+
+    assert any("ghost-upstream" in message for message in messages)
+    assert any("serverName" in message for message in messages)
+    assert any(source == "xray-semantic" for source in sources)
+    assert any(severity == "info" for severity in severities)
+
+
+def test_editor_schema_resolves_semantic_validation_for_xray_targets():
+    payload = _run_node_json(
+        """
+import { resolveEditorSemanticValidation } from './xkeen-ui/static/js/ui/editor_schema.js';
+
+const routingValidation = resolveEditorSemanticValidation({
+  target: 'routing',
+  file: '05_routing.jsonc',
+  mode: 'jsonc',
+});
+const outboundsValidation = resolveEditorSemanticValidation({
+  target: 'outbounds',
+  file: '04_outbounds.json',
+  mode: 'json',
+});
+const mihomoValidation = resolveEditorSemanticValidation({
+  target: 'mihomo',
+  file: 'config.yaml',
+  mode: 'yaml',
+});
+
+console.log(JSON.stringify({
+  routingKind: routingValidation ? routingValidation.kind : null,
+  outboundsKind: outboundsValidation ? outboundsValidation.kind : null,
+  mihomoKind: mihomoValidation ? mihomoValidation.kind : null,
+}));
+"""
+    )
+
+    assert payload == {
+        "routingKind": "xray-routing",
+        "outboundsKind": "xray-outbounds",
+        "mihomoKind": None,
+    }

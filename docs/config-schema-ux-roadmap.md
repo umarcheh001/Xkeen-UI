@@ -107,7 +107,7 @@
 
 ## Phase 2: Semantic Validation Поверх Схем
 
-Статус: частично закрыта
+Статус: почти закрыта
 
 ### Что закрыто
 
@@ -132,31 +132,48 @@
   - правило без target;
   - пустой `balancer.selector`;
   - отдельный warning по опасному порядку private-IP rule после negated geoip.
+- Для Xray full config / fragment-level editor теперь ловятся:
+  - duplicate `inbounds[].tag`, `outbounds[].tag`, `balancers[].tag`;
+  - missing `proxySettings.tag` и `streamSettings.sockopt.dialerProxy`;
+  - `balancer.selector`, который не матчится ни в один outbound tag/prefix;
+  - missing `fallbackTag`;
+  - `leastPing` без `observatory`;
+  - `leastLoad` без `burstObservatory`;
+  - `observatory.subjectSelector` / `burstObservatory.subjectSelector`, которые не матчятся ни в один outbound;
+  - `reality` не на `protocol: vless`;
+  - missing client/server Reality keys (`publicKey`, `privateKey`, `shortIds`);
+  - mux + `grpc` / `xhttp`;
+  - `xtls-rprx-vision` вместе с mux или `grpc` / `xhttp`.
+- Generic JSON editor schema-loader теперь умеет автоматически подцеплять
+  semanticValidation по `schemaKind`, а не только вручную в routing feature.
+- Severity pipeline реально начала использовать `info` / `suggestion`, а не
+  только `error` / `warning`.
 - Semantic diagnostics уже реально доходят до editor runtimes.
 
 ### Что закрыто частично
 
-- Xray semantic coverage по сути сейчас сосредоточена на routing, а не на полном
-  config UX.
-- Для Xray inbounds/outbounds/full config многие transport/TLS/protocol
-  compatibility checks ещё не выражены как полноценный semantic-pass.
-- Severity pipeline уже готов к `error` / `warning` / `suggestion`, но реальные
-  producers почти всё ещё отдают только `error` и `warning`.
+- Semantic checks всё ещё не покрывают весь protocol-specific payload Xray
+  глубоко внутри `settings` для каждого протокола.
+- Monaco generic JSON path всё ещё слабее CodeMirror по semantic feedback:
+  shared config уже резолвится, но основной богатый semantic flow лучше покрыт
+  в CM/runtime слоях.
+- Часть Xray/Mihomo diagnostics всё ещё может звучать менее "domain-aware", чем
+  хотелось бы для самых сложных transport/protocol сценариев.
 
 ### Что осталось доделать
 
-- Расширить Xray semantic validation с routing на:
-  - `streamSettings`
-  - `tlsSettings`
-  - `realitySettings`
-  - protocol-specific outbound/inbound checks
-  - взаимоисключающие transport/security combinations
-- Добавить больше Mihomo semantic checks для сомнительных, но формально
-  валидных конфигов.
-- Начать реально эмитить `suggestion`/`info` diagnostics там, где это полезнее,
-  чем `warning`.
-- Добиться более полной parity между schema-level и semantic-level diagnostic
-  explanations.
+- Дошлифовать Xray protocol-specific semantics глубже по `settings`:
+  - `vnext` / `clients` / `servers` payload-specific проверки;
+  - more domain-aware hints по TLS/REALITY edge-cases;
+  - дополнительные cross-file checks там, где fragment может ссылаться на
+    внешние блоки.
+- Добавить ещё несколько high-signal Mihomo checks для сомнительных, но
+  формально валидных конфигов:
+  - циклы/двусмысленности в ссылках;
+  - risky transport mixes;
+  - рекомендации по операционно важным полям.
+- При желании довести Monaco generic semantic markers до той же степени
+  автоподключения и richness, что уже есть в CodeMirror/YAML flow.
 
 ### Когда можно считать Phase 2 закрытой
 

@@ -21,7 +21,10 @@ import { StateEffect, StateField } from '@codemirror/state';
 import { hoverTooltip } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
 import { parse as parseJsonc, parseTree as parseJsoncTree } from 'jsonc-parser';
-import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';
+import {
+  validateXrayConfigSemantics,
+  validateXrayRoutingSemantics,
+} from '../ui/schema_semantic_validation.js';
 
 /* ════════════════════════════════════════════════════════════
  *  1. Schema StateField — stores the current JSON Schema
@@ -658,6 +661,19 @@ function resolveSemanticDiagnostics(options, payload) {
       return normalizeSemanticDiagnostics(validateXrayRoutingSemantics(payload.data, semantic.options || {}));
     }
   } catch (e) {}
+  try {
+    if (semantic && (
+      semantic.kind === 'xray'
+      || semantic.kind === 'xray-config'
+      || semantic.kind === 'xray-inbounds'
+      || semantic.kind === 'xray-outbounds'
+    )) {
+      return normalizeSemanticDiagnostics(validateXrayConfigSemantics(payload.data, {
+        ...(semantic.options || {}),
+        kind: semantic.kind,
+      }));
+    }
+  } catch (e) {}
   return [];
 }
 
@@ -758,7 +774,9 @@ function jsonSchemaLinter(options) {
       diagnostics.push({
         from,
         to,
-        severity: err.severity === 'warning' ? 'warning' : 'error',
+        severity: err.severity === 'warning'
+          ? 'warning'
+          : ((err.severity === 'info' || err.severity === 'suggestion' || err.severity === 'hint') ? 'info' : 'error'),
         message: withDiagnosticContext(err.message, pointer, view.state.doc, mapping),
         source: err.source || 'semantic-validation',
       });

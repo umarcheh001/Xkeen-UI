@@ -677,17 +677,25 @@ def test_mihomo_yaml_schema_runtime_is_wired_into_panel_editor():
 
 def test_phase2_semantic_validation_runtime_is_wired_into_mihomo_and_xray_editors():
     semantic_runtime = Path('xkeen-ui/static/js/ui/schema_semantic_validation.js').read_text(encoding='utf-8')
+    editor_schema_runtime = Path('xkeen-ui/static/js/ui/editor_schema.js').read_text(encoding='utf-8')
     yaml_schema_runtime = Path('xkeen-ui/static/js/ui/yaml_schema.js').read_text(encoding='utf-8')
     codemirror_runtime = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
     json_schema_runtime = Path('xkeen-ui/static/js/vendor/codemirror_json_schema.js').read_text(encoding='utf-8')
     routing_runtime = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
 
     assert 'export function validateMihomoConfigSemantics(data, options = {})' in semantic_runtime
+    assert 'export function validateXrayConfigSemantics(data, options = {})' in semantic_runtime
     assert 'export function validateXrayRoutingSemantics(data, options = {})' in semantic_runtime
+    assert 'export function resolveEditorSemanticValidation(ctx)' in editor_schema_runtime
+    assert "setEditorSemanticValidation(target, semanticValidation, o);" in editor_schema_runtime
+    assert "kind: inferredKind === 'xray' ? 'xray-config' : inferredKind," in editor_schema_runtime
     assert "import { validateMihomoConfigSemantics } from './schema_semantic_validation.js';" in yaml_schema_runtime
     assert 'const semanticErrors = validateMihomoConfigSemantics(parsed, options);' in yaml_schema_runtime
-    assert "import { validateXrayRoutingSemantics } from '../ui/schema_semantic_validation.js';" in json_schema_runtime
+    assert 'validateXrayConfigSemantics,' in json_schema_runtime
+    assert 'validateXrayRoutingSemantics,' in json_schema_runtime
     assert 'const semanticErrors = resolveSemanticDiagnostics(options, {' in json_schema_runtime
+    assert "semantic.kind === 'xray-config'" in json_schema_runtime
+    assert "semantic.kind === 'xray-outbounds'" in json_schema_runtime
     assert 'buildJsoncPointerMap,' in json_schema_runtime
     assert 'safeParseJson,' in json_schema_runtime
     assert 'const schemaLintSource = jsonSchemaLinter(options);' in codemirror_runtime

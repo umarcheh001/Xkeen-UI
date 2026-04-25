@@ -124,6 +124,75 @@ function isReservedMihomoTarget(name) {
   return !!MIHOMO_RESERVED_PROXY_NAMES[key];
 }
 
+function looksLikeIpLiteral(value) {
+  const text = cleanName(value);
+  if (!text) return false;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(text)) return true;
+  if (text.includes(':')) return true;
+  return false;
+}
+
+function collectNamedOccurrences(list, nameKey = 'name') {
+  const out = new Map();
+  (Array.isArray(list) ? list : []).forEach((item, index) => {
+    if (!isPlainObject(item)) return;
+    const name = cleanName(item[nameKey]);
+    if (!name) return;
+    if (!out.has(name)) out.set(name, []);
+    out.get(name).push(index);
+  });
+  return out;
+}
+
+function validateNamedDuplicates(target, list, pathPrefix, noun) {
+  const seen = new Map();
+  (Array.isArray(list) ? list : []).forEach((item, index) => {
+    if (!isPlainObject(item)) return;
+    const name = cleanName(item.name);
+    if (!name) return;
+    const path = [pathPrefix, index, 'name'];
+    if (isReservedMihomoTarget(name)) {
+      pushDiagnostic(target, createYamlDiagnostic(path, `${noun} \`${name}\` совпадает со спец-именем Mihomo (\`DIRECT\`, \`REJECT\`, \`PASS\`). Такое имя создаёт путаницу в \`rules\` и \`proxy-groups\`.`, {
+        severity: 'warning',
+        source: 'mihomo-semantic',
+        code: `${pathPrefix}-reserved-name`,
+      }));
+    }
+    if (seen.has(name)) {
+      const firstIndex = seen.get(name);
+      pushDiagnostic(target, createYamlDiagnostic(path, `${noun} \`${name}\` уже существует в \`${pathPrefix}[${firstIndex}]\`. Повторяющиеся имена ломают понятные ссылки из \`rules\` и \`proxy-groups\`.`, {
+        severity: 'warning',
+        source: 'mihomo-semantic',
+        code: `${pathPrefix}-duplicate-name`,
+      }));
+      return;
+    }
+    seen.set(name, index);
+  });
+}
+
+function validateMihomoTargetNameCollisions(target, proxies, proxyGroups) {
+  const proxyNames = collectNamedOccurrences(proxies, 'name');
+  const groupNames = collectNamedOccurrences(proxyGroups, 'name');
+  proxyNames.forEach((proxyIndexes, name) => {
+    if (!groupNames.has(name)) return;
+    proxyIndexes.forEach((proxyIndex) => {
+      pushDiagnostic(target, createYamlDiagnostic(['proxies', proxyIndex, 'name'], `Имя \`${name}\` используется и в \`proxies\`, и в \`proxy-groups\`. Для правил и групп это неоднозначная ссылка.`, {
+        severity: 'warning',
+        source: 'mihomo-semantic',
+        code: 'proxy-name-collides-with-group',
+      }));
+    });
+    groupNames.get(name).forEach((groupIndex) => {
+      pushDiagnostic(target, createYamlDiagnostic(['proxy-groups', groupIndex, 'name'], `Имя \`${name}\` уже занято в \`proxies\`. Лучше развести имена proxy и proxy-group, чтобы target в \`rules\` читался однозначно.`, {
+        severity: 'warning',
+        source: 'mihomo-semantic',
+        code: 'group-name-collides-with-proxy',
+      }));
+    });
+  });
+}
+
 function splitTopLevelRuleParts(rule) {
   const text = cleanName(rule);
   if (!text) return [];
@@ -248,7 +317,7 @@ function validateProviderShape(target, mapLike, pathPrefix, kind) {
     spec.warn.forEach((field) => {
       if (item[field] == null || (typeof item[field] === 'string' && !cleanName(item[field]))) {
         pushDiagnostic(target, createYamlDiagnostic(itemPath, `${spec.noun} \`${name}\` типа \`${type}\` обычно лучше указывать с полем \`${field}\`, чтобы обновления не зависели от runtime defaults.`, {
-          severity: 'warning',
+          severity: 'suggestion',
           source: 'mihomo-semantic',
           code: `${kind}-provider-missing-${field}-warning`,
         }));
@@ -264,6 +333,13 @@ function validateMihomoProxyCompat(target, proxies) {
     const type = cleanName(proxy.type);
     const network = cleanName(proxy.network);
     const tls = proxy.tls === true;
+    const server = cleanName(proxy.server);
+    const flow = cleanName(proxy.flow);
+    const wsHost = cleanName(proxy && proxy['ws-opts'] && proxy['ws-opts'].headers && (proxy['ws-opts'].headers.Host || proxy['ws-opts'].headers.host));
+    const xhttpHost = cleanName(proxy && proxy['xhttp-opts'] && proxy['xhttp-opts'].host);
+    const h2Hosts = Array.isArray(proxy && proxy['h2-opts'] && proxy['h2-opts'].host)
+      ? proxy['h2-opts'].host.map(cleanName).filter(Boolean)
+      : [];
 
     const networkBlocks = [
       ['ws-opts', 'ws'],
@@ -309,6 +385,24 @@ function validateMihomoProxyCompat(target, proxies) {
         code: 'proxy-type-flow',
       }));
     }
+
+    if (flow === 'xtls-rprx-vision' && (network === 'grpc' || network === 'xhttp')) {
+      pushDiagnostic(target, createYamlDiagnostic(path.concat('flow'), `Flow \`xtls-rprx-vision\` не сочетается с \`network: ${network}\`. Для Vision обычно оставляют raw TCP/TLS/REALITY без gRPC/XHTTP.`, {
+        source: 'mihomo-semantic',
+        code: 'proxy-flow-network-incompatible',
+      }));
+    }
+
+    if (tls && !cleanName(proxy.servername) && ['vless', 'vmess', 'trojan'].includes(type) && (
+      looksLikeIpLiteral(server) || !!wsHost || !!xhttpHost || h2Hosts.length
+    )) {
+      pushDiagnostic(target, createYamlDiagnostic(path.concat('servername'), `Для \`${type}\` c \`tls: true\` обычно лучше явно указать \`servername\`, чтобы SNI не зависел от того, как потом меняется \`server\` или CDN-host.`, {
+        severity: 'suggestion',
+        source: 'mihomo-semantic',
+        code: 'proxy-servername-suggested',
+        hint: 'Если сервер маскируется под другой домен или работает через CDN, задайте `servername` явно.',
+      }));
+    }
   });
 }
 
@@ -332,6 +426,9 @@ export function validateMihomoConfigSemantics(data, options = {}) {
     ...groupInfo.names,
   ]);
 
+  validateNamedDuplicates(diagnostics, proxies, 'proxies', 'Proxy');
+  validateNamedDuplicates(diagnostics, proxyGroups, 'proxy-groups', 'Proxy-group');
+  validateMihomoTargetNameCollisions(diagnostics, proxies, proxyGroups);
   validateMihomoProxyCompat(diagnostics, proxies);
   validateProviderShape(diagnostics, proxyProviders, 'proxy-providers', 'proxy');
   validateProviderShape(diagnostics, ruleProviders, 'rule-providers', 'rule');
@@ -460,27 +557,91 @@ function collectXrayTagsFromArray(list, field = 'tag') {
   return uniqueSorted(tags);
 }
 
-function getXrayRoutingShape(data) {
+function xrayItemPointer(basePointer, index) {
+  const base = cleanName(basePointer);
+  return base ? `${base}/${index}` : `/${index}`;
+}
+
+function getXrayConfigShape(data, options = {}) {
+  let kind = cleanName(options.kind || options.schemaKind || options.fragment || options.target).toLowerCase();
+
+  if (!kind && isPlainObject(data)) {
+    const keys = Object.keys(data);
+    if (Array.isArray(data.inbounds) && !Array.isArray(data.outbounds) && !isPlainObject(data.routing)) kind = 'xray-inbounds';
+    else if (Array.isArray(data.outbounds) && !Array.isArray(data.inbounds) && !isPlainObject(data.routing)) kind = 'xray-outbounds';
+    else if (isPlainObject(data.routing) || Array.isArray(data.rules) || Array.isArray(data.balancers)) {
+      const routingOnlyKeys = new Set(['routing', 'rules', 'balancers', 'domainStrategy', 'observatory', 'burstObservatory']);
+      kind = keys.length && keys.every((key) => routingOnlyKeys.has(key)) ? 'xray-routing' : 'xray-config';
+    } else if (Array.isArray(data.inbounds) || Array.isArray(data.outbounds)) {
+      kind = 'xray-config';
+    }
+  }
+
+  if (Array.isArray(data)) {
+    if (kind.includes('inbounds')) {
+      return {
+        kind,
+        data,
+        inbounds: data,
+        inboundsPointer: '',
+        outbounds: [],
+        outboundsPointer: '/outbounds',
+        routing: null,
+        rulesPointer: '',
+        balancersPointer: '',
+        observatory: null,
+        observatoryPointer: '/observatory',
+        burstObservatory: null,
+        burstObservatoryPointer: '/burstObservatory',
+      };
+    }
+    if (kind.includes('outbounds')) {
+      return {
+        kind,
+        data,
+        inbounds: [],
+        inboundsPointer: '/inbounds',
+        outbounds: data,
+        outboundsPointer: '',
+        routing: null,
+        rulesPointer: '',
+        balancersPointer: '',
+        observatory: null,
+        observatoryPointer: '/observatory',
+        burstObservatory: null,
+        burstObservatoryPointer: '/burstObservatory',
+      };
+    }
+    return null;
+  }
+
   if (!isPlainObject(data)) return null;
-  if (isPlainObject(data.routing)) {
-    return {
-      routing: data.routing,
-      rulesPointer: '/routing/rules',
-      balancersPointer: '/routing/balancers',
-      outbounds: Array.isArray(data.outbounds) ? data.outbounds : [],
-      inbounds: Array.isArray(data.inbounds) ? data.inbounds : [],
-    };
-  }
-  if (Array.isArray(data.rules) || Array.isArray(data.balancers)) {
-    return {
-      routing: data,
-      rulesPointer: '/rules',
-      balancersPointer: '/balancers',
-      outbounds: Array.isArray(data.outbounds) ? data.outbounds : [],
-      inbounds: Array.isArray(data.inbounds) ? data.inbounds : [],
-    };
-  }
-  return null;
+
+  const routing = isPlainObject(data.routing)
+    ? data.routing
+    : ((Array.isArray(data.rules) || Array.isArray(data.balancers)) ? data : null);
+
+  return {
+    kind,
+    data,
+    inbounds: Array.isArray(data.inbounds) ? data.inbounds : [],
+    inboundsPointer: '/inbounds',
+    outbounds: Array.isArray(data.outbounds) ? data.outbounds : [],
+    outboundsPointer: '/outbounds',
+    routing,
+    rulesPointer: routing ? (routing === data ? '/rules' : '/routing/rules') : '',
+    balancersPointer: routing ? (routing === data ? '/balancers' : '/routing/balancers') : '',
+    observatory: isPlainObject(data.observatory) ? data.observatory : null,
+    observatoryPointer: '/observatory',
+    burstObservatory: isPlainObject(data.burstObservatory) ? data.burstObservatory : null,
+    burstObservatoryPointer: '/burstObservatory',
+  };
+}
+
+function getXrayRoutingShape(data, options = {}) {
+  const shape = getXrayConfigShape(data, options);
+  if (!shape || !isPlainObject(shape.routing)) return null;
+  return shape;
 }
 
 function collectXrayKnownTags(shape, options, kind) {
@@ -517,6 +678,317 @@ function collectXrayKnownTags(shape, options, kind) {
 
 function quoteRuleLabel(ruleTag, index) {
   return ruleTag ? `Правило "${ruleTag}"` : `Правило routing.rules[${index}]`;
+}
+
+function selectorMatchesAnyTag(selector, tags) {
+  const token = cleanName(selector);
+  if (!token) return false;
+  const list = Array.isArray(tags) ? tags : [];
+  for (let index = 0; index < list.length; index += 1) {
+    const tag = cleanName(list[index]);
+    if (!tag) continue;
+    if (tag === token || tag.startsWith(token)) return true;
+  }
+  return false;
+}
+
+function collectDuplicateXrayTags(list) {
+  const seen = new Map();
+  const duplicates = [];
+  (Array.isArray(list) ? list : []).forEach((item, index) => {
+    if (!isPlainObject(item)) return;
+    const tag = cleanName(item.tag);
+    if (!tag) return;
+    if (seen.has(tag)) {
+      duplicates.push({ tag, index, firstIndex: seen.get(tag) });
+      return;
+    }
+    seen.set(tag, index);
+  });
+  return duplicates;
+}
+
+function getXrayPrimaryEndpointHost(item) {
+  if (!isPlainObject(item) || !isPlainObject(item.settings)) return '';
+  const settings = item.settings;
+  if (Array.isArray(settings.vnext) && settings.vnext.length) {
+    return cleanName(settings.vnext[0] && settings.vnext[0].address);
+  }
+  if (Array.isArray(settings.servers) && settings.servers.length) {
+    return cleanName(settings.servers[0] && settings.servers[0].address);
+  }
+  return cleanName(settings.address);
+}
+
+function collectXrayFlowValues(item, role) {
+  const flows = [];
+  if (!isPlainObject(item) || !isPlainObject(item.settings)) return flows;
+  if (role === 'outbound') {
+    const vnext = Array.isArray(item.settings.vnext) ? item.settings.vnext : [];
+    vnext.forEach((server) => {
+      const users = Array.isArray(server && server.users) ? server.users : [];
+      users.forEach((user) => {
+        const flow = cleanName(user && user.flow);
+        if (flow) flows.push(flow);
+      });
+    });
+    return uniqueSorted(flows);
+  }
+  const clients = Array.isArray(item.settings.clients) ? item.settings.clients : [];
+  clients.forEach((client) => {
+    const flow = cleanName(client && client.flow);
+    if (flow) flows.push(flow);
+  });
+  return uniqueSorted(flows);
+}
+
+function validateXrayTagDuplicates(list, basePointer, noun, diagnostics) {
+  collectDuplicateXrayTags(list).forEach(({ tag, index, firstIndex }) => {
+    pushDiagnostic(diagnostics, createJsonDiagnostic(`${xrayItemPointer(basePointer, index)}/tag`, `${noun} "${tag}" уже используется в ${basePointer || '(корне)'}[${firstIndex}]. Повторяющиеся tag мешают routing, balancer selector и chain proxy ссылкам.`, {
+      severity: 'warning',
+      source: 'xray-semantic',
+      code: `${noun.toLowerCase().replace(/\s+/g, '-')}-duplicate-tag`,
+    }));
+  });
+}
+
+function validateXrayOutboundLinks(shape, options, diagnostics) {
+  const outboundTags = collectXrayKnownTags(shape, options, 'outbound');
+  const outbounds = Array.isArray(shape.outbounds) ? shape.outbounds : [];
+
+  outbounds.forEach((item, index) => {
+    if (!isPlainObject(item)) return;
+    const basePointer = xrayItemPointer(shape.outboundsPointer, index);
+    const ownTag = cleanName(item.tag);
+
+    const proxyTag = cleanName(item && item.proxySettings && item.proxySettings.tag);
+    if (proxyTag) {
+      if (ownTag && proxyTag === ownTag) {
+        pushDiagnostic(diagnostics, createJsonDiagnostic(`${basePointer}/proxySettings/tag`, `Outbound "${ownTag}" ссылается на самого себя в \`proxySettings.tag\`. Такая chain proxy ссылка создаёт цикл.`, {
+          severity: 'warning',
+          source: 'xray-semantic',
+          code: 'proxy-settings-self-reference',
+        }));
+      } else if (outboundTags.length && !outboundTags.includes(proxyTag)) {
+        pushDiagnostic(diagnostics, createJsonDiagnostic(`${basePointer}/proxySettings/tag`, `Outbound "${ownTag || index}" ссылается на proxySettings.tag "${proxyTag}", но такого outbound нет.${previewNames(outboundTags) ? ` Сейчас доступны: ${previewNames(outboundTags)}.` : ''}`, {
+          source: 'xray-semantic',
+          code: 'proxy-settings-tag-missing',
+        }));
+      }
+    }
+
+    const dialerProxy = cleanName(item && item.streamSettings && item.streamSettings.sockopt && item.streamSettings.sockopt.dialerProxy);
+    if (dialerProxy) {
+      if (ownTag && dialerProxy === ownTag) {
+        pushDiagnostic(diagnostics, createJsonDiagnostic(`${basePointer}/streamSettings/sockopt/dialerProxy`, `Outbound "${ownTag}" указывает самого себя в \`streamSettings.sockopt.dialerProxy\`. Такая цепочка не сможет разрешиться корректно.`, {
+          severity: 'warning',
+          source: 'xray-semantic',
+          code: 'dialer-proxy-self-reference',
+        }));
+      } else if (outboundTags.length && !outboundTags.includes(dialerProxy)) {
+        pushDiagnostic(diagnostics, createJsonDiagnostic(`${basePointer}/streamSettings/sockopt/dialerProxy`, `Outbound "${ownTag || index}" ссылается на dialerProxy "${dialerProxy}", но такого outbound tag нет.${previewNames(outboundTags) ? ` Сейчас доступны: ${previewNames(outboundTags)}.` : ''}`, {
+          source: 'xray-semantic',
+          code: 'dialer-proxy-missing',
+        }));
+      }
+    }
+  });
+}
+
+function validateXrayBalancers(shape, options, diagnostics) {
+  if (!shape || !isPlainObject(shape.routing)) return;
+  const routing = shape.routing;
+  const balancers = Array.isArray(routing.balancers) ? routing.balancers : [];
+  const outboundTags = collectXrayKnownTags(shape, options, 'outbound');
+
+  validateXrayTagDuplicates(balancers, shape.balancersPointer, 'Balancer tag', diagnostics);
+
+  balancers.forEach((balancer, index) => {
+    if (!isPlainObject(balancer)) return;
+    const pointer = xrayItemPointer(shape.balancersPointer, index);
+    const tag = cleanName(balancer.tag);
+    const selector = Array.isArray(balancer.selector) ? balancer.selector.map(cleanName).filter(Boolean) : [];
+
+    if (!selector.length) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(pointer, `Balancer "${tag || index}" не содержит selector. Без selector ему будет нечего выбирать среди outbound тегов.`, {
+        severity: 'warning',
+        source: 'xray-semantic',
+        code: 'balancer-selector-empty',
+      }));
+    }
+
+    selector.forEach((token, selectorIndex) => {
+      if (!outboundTags.length || selectorMatchesAnyTag(token, outboundTags)) return;
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/selector/${selectorIndex}`, `Selector "${token}" у balancer "${tag || index}" не совпадает ни с одним известным outbound tag или префиксом.${previewNames(outboundTags) ? ` Сейчас доступны: ${previewNames(outboundTags)}.` : ''}`, {
+        severity: 'warning',
+        source: 'xray-semantic',
+        code: 'balancer-selector-unmatched',
+      }));
+    });
+
+    const fallbackTag = cleanName(balancer.fallbackTag);
+    if (fallbackTag && outboundTags.length && !outboundTags.includes(fallbackTag)) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/fallbackTag`, `Balancer "${tag || index}" использует fallbackTag "${fallbackTag}", но такого outbound нет.${previewNames(outboundTags) ? ` Сейчас доступны: ${previewNames(outboundTags)}.` : ''}`, {
+        source: 'xray-semantic',
+        code: 'balancer-fallback-tag-missing',
+      }));
+    }
+  });
+}
+
+function validateXrayObservabilityDependencies(shape, diagnostics) {
+  if (!shape || !isPlainObject(shape.routing)) return;
+  const routing = shape.routing;
+  const balancers = Array.isArray(routing.balancers) ? routing.balancers : [];
+  const shouldCheckLeastPing = shape.kind === 'xray-config' || !!shape.observatory;
+  const shouldCheckLeastLoad = shape.kind === 'xray-config' || !!shape.burstObservatory;
+  if (!shouldCheckLeastPing && !shouldCheckLeastLoad) return;
+
+  balancers.forEach((balancer, index) => {
+    if (!isPlainObject(balancer)) return;
+    const strategyType = cleanName(balancer && balancer.strategy && balancer.strategy.type) || 'random';
+    const pointer = `${xrayItemPointer(shape.balancersPointer, index)}/strategy/type`;
+    const tag = cleanName(balancer.tag) || index;
+
+    if (strategyType === 'leastPing' && !shape.observatory) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(pointer, `Balancer "${tag}" использует стратегию \`leastPing\`, но в конфиге не видно блока \`observatory\`. Без него Xray не знает фактическую задержку outbound-ов.`, {
+        severity: 'warning',
+        source: 'xray-semantic',
+        code: 'balancer-observatory-missing',
+        hint: 'Добавьте top-level `observatory` или переключите strategy.type на random/roundRobin.',
+      }));
+    }
+
+    if (strategyType === 'leastLoad' && !shape.burstObservatory) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(pointer, `Balancer "${tag}" использует стратегию \`leastLoad\`, но в конфиге не видно блока \`burstObservatory\`. Без burst probe стратегия не сможет измерять нагрузку.`, {
+        severity: 'warning',
+        source: 'xray-semantic',
+        code: 'balancer-burst-observatory-missing',
+        hint: 'Добавьте top-level `burstObservatory` или используйте random/roundRobin.',
+      }));
+    }
+  });
+}
+
+function validateXrayObservatorySelectors(shape, options, diagnostics) {
+  const outboundTags = collectXrayKnownTags(shape, options, 'outbound');
+  if (!outboundTags.length) return;
+  [
+    ['observatory', shape.observatory, shape.observatoryPointer, 'observatory-selector-unmatched'],
+    ['burstObservatory', shape.burstObservatory, shape.burstObservatoryPointer, 'burst-observatory-selector-unmatched'],
+  ].forEach(([label, block, pointer, code]) => {
+    if (!isPlainObject(block) || !Array.isArray(block.subjectSelector)) return;
+    block.subjectSelector.forEach((token, index) => {
+      const selector = cleanName(token);
+      if (!selector || selectorMatchesAnyTag(selector, outboundTags)) return;
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/subjectSelector/${index}`, `Selector "${selector}" в \`${label}.subjectSelector\` не совпадает ни с одним известным outbound tag или префиксом.${previewNames(outboundTags) ? ` Сейчас доступны: ${previewNames(outboundTags)}.` : ''}`, {
+        severity: 'warning',
+        source: 'xray-semantic',
+        code,
+      }));
+    });
+  });
+}
+
+function validateXrayStreamSettingsItem(item, pointer, role, diagnostics) {
+  if (!isPlainObject(item) || !isPlainObject(item.streamSettings)) return;
+  const streamSettings = item.streamSettings;
+  const protocol = cleanName(item.protocol);
+  const security = cleanName(streamSettings.security) || 'none';
+  const network = cleanName(streamSettings.network) || 'tcp';
+  const hasReality = isPlainObject(streamSettings.realitySettings);
+  const hasTls = isPlainObject(streamSettings.tlsSettings);
+  const flowValues = collectXrayFlowValues(item, role);
+  const itemLabel = cleanName(item.tag) || `${role}[${pointer}]`;
+
+  if ((security === 'reality' || hasReality) && protocol && protocol !== 'vless') {
+    pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/${hasReality ? 'realitySettings' : 'security'}`, `${role === 'outbound' ? 'Outbound' : 'Inbound'} "${itemLabel}" использует REALITY, но протокол сейчас \`${protocol}\`. Reality обычно ожидает \`protocol: vless\`.`, {
+      source: 'xray-semantic',
+      code: `${role}-reality-protocol-incompatible`,
+    }));
+  }
+
+  if (role === 'outbound' && security === 'tls' && hasTls && ['vless', 'vmess', 'trojan'].includes(protocol)) {
+    const serverName = cleanName(streamSettings.tlsSettings && streamSettings.tlsSettings.serverName);
+    const host = getXrayPrimaryEndpointHost(item);
+    if (!serverName && host && !looksLikeIpLiteral(host)) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/tlsSettings`, `Outbound "${itemLabel}" использует TLS для \`${protocol}\`, но в \`tlsSettings\` не указан \`serverName\`. Xray может попытаться взять SNI из address, но явный \`serverName\` делает конфиг стабильнее для CDN и маскировки.`, {
+        severity: 'suggestion',
+        source: 'xray-semantic',
+        code: 'outbound-tls-server-name-suggested',
+        hint: 'Обычно сюда кладут домен, который сервер ждёт в SNI.',
+      }));
+    }
+  }
+
+  if (role === 'outbound' && (security === 'reality' || hasReality)) {
+    const realitySettings = isPlainObject(streamSettings.realitySettings) ? streamSettings.realitySettings : {};
+    if (!cleanName(realitySettings.publicKey)) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/realitySettings`, `Outbound "${itemLabel}" использует REALITY, но в \`realitySettings\` не указан \`publicKey\`. Без публичного ключа клиент не сможет собрать рабочее соединение.`, {
+        source: 'xray-semantic',
+        code: 'outbound-reality-public-key-missing',
+      }));
+    }
+    if (!cleanName(realitySettings.serverName)) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/realitySettings`, `Outbound "${itemLabel}" использует REALITY, но в \`realitySettings\` не указан \`serverName\`. Без SNI-кандидата маскировка и matching на сервере становятся непредсказуемыми.`, {
+        severity: 'warning',
+        source: 'xray-semantic',
+        code: 'outbound-reality-server-name-missing',
+      }));
+    }
+  }
+
+  if (role === 'inbound' && (security === 'reality' || hasReality)) {
+    const realitySettings = isPlainObject(streamSettings.realitySettings) ? streamSettings.realitySettings : {};
+    if (!cleanName(realitySettings.privateKey)) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/realitySettings`, `Inbound "${itemLabel}" использует REALITY, но в \`realitySettings\` не указан \`privateKey\`. Серверный REALITY без приватного ключа не заработает.`, {
+        source: 'xray-semantic',
+        code: 'inbound-reality-private-key-missing',
+      }));
+    }
+    if (!Array.isArray(realitySettings.shortIds) || !realitySettings.shortIds.some((itemValue) => cleanName(itemValue) || itemValue === '')) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/realitySettings`, `Inbound "${itemLabel}" использует REALITY, но в \`realitySettings.shortIds\` не видно ни одного shortId. Обычно серверу нужен хотя бы пустой или явный shortId для сопоставления клиентов.`, {
+        severity: 'warning',
+        source: 'xray-semantic',
+        code: 'inbound-reality-shortids-missing',
+      }));
+    }
+  }
+
+  if (role === 'outbound') {
+    const muxEnabled = !!(item && item.mux && item.mux.enabled === true);
+    if (muxEnabled && (network === 'grpc' || network === 'xhttp')) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/mux/enabled`, `Outbound "${itemLabel}" включает mux вместе с \`network: ${network}\`. Для gRPC/XHTTP mux обычно не поддерживается и даёт ложное ощущение ускорения.`, {
+        source: 'xray-semantic',
+        code: 'outbound-mux-network-incompatible',
+      }));
+    }
+    if (muxEnabled && flowValues.includes('xtls-rprx-vision')) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/mux/enabled`, `Outbound "${itemLabel}" включает mux, но среди пользователей есть \`flow: xtls-rprx-vision\`. Vision ожидает отдельный поток и плохо сочетается с mux.`, {
+        source: 'xray-semantic',
+        code: 'outbound-flow-mux-incompatible',
+      }));
+    }
+    if (flowValues.includes('xtls-rprx-vision') && (network === 'grpc' || network === 'xhttp')) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/network`, `Outbound "${itemLabel}" использует \`flow: xtls-rprx-vision\` вместе с \`network: ${network}\`. Такой набор обычно конфликтует: для Vision чаще оставляют raw TCP/TLS/REALITY без gRPC/XHTTP.`, {
+        source: 'xray-semantic',
+        code: 'outbound-flow-network-incompatible',
+      }));
+    }
+  }
+}
+
+function validateXrayEndpoints(shape, options, diagnostics) {
+  validateXrayTagDuplicates(shape.inbounds, shape.inboundsPointer, 'Inbound tag', diagnostics);
+  validateXrayTagDuplicates(shape.outbounds, shape.outboundsPointer, 'Outbound tag', diagnostics);
+  validateXrayOutboundLinks(shape, options, diagnostics);
+
+  (Array.isArray(shape.inbounds) ? shape.inbounds : []).forEach((item, index) => {
+    validateXrayStreamSettingsItem(item, xrayItemPointer(shape.inboundsPointer, index), 'inbound', diagnostics);
+  });
+  (Array.isArray(shape.outbounds) ? shape.outbounds : []).forEach((item, index) => {
+    validateXrayStreamSettingsItem(item, xrayItemPointer(shape.outboundsPointer, index), 'outbound', diagnostics);
+  });
 }
 
 const PRIVATE_CIDR_SET = new Set([
@@ -583,7 +1055,7 @@ function detectPrivateIpRuleOrdering(rules, rulesPointer, diagnostics) {
 
 export function validateXrayRoutingSemantics(data, options = {}) {
   const diagnostics = [];
-  const shape = getXrayRoutingShape(data);
+  const shape = getXrayRoutingShape(data, options);
   if (!shape || !isPlainObject(shape.routing)) return diagnostics;
 
   const routing = shape.routing;
@@ -655,24 +1127,26 @@ export function validateXrayRoutingSemantics(data, options = {}) {
   });
 
   detectPrivateIpRuleOrdering(rules, shape.rulesPointer, diagnostics);
+  validateXrayBalancers(shape, options, diagnostics);
 
-  balancers.forEach((balancer, index) => {
-    if (!isPlainObject(balancer)) return;
-    const tag = cleanName(balancer.tag);
-    const selector = Array.isArray(balancer.selector) ? balancer.selector.map(cleanName).filter(Boolean) : [];
-    if (!selector.length) {
-      pushDiagnostic(diagnostics, createJsonDiagnostic(`${shape.balancersPointer}/${index}`, `Balancer "${tag || index}" не содержит selector. Без selector ему будет нечего выбирать среди outbound тегов.`, {
-        severity: 'warning',
-        source: 'xray-semantic',
-        code: 'balancer-selector-empty',
-      }));
-    }
-  });
+  return diagnostics;
+}
+
+export function validateXrayConfigSemantics(data, options = {}) {
+  const diagnostics = [];
+  const shape = getXrayConfigShape(data, options);
+  if (!shape) return diagnostics;
+
+  diagnostics.push(...validateXrayRoutingSemantics(data, options));
+  validateXrayEndpoints(shape, options, diagnostics);
+  validateXrayObservabilityDependencies(shape, diagnostics);
+  validateXrayObservatorySelectors(shape, options, diagnostics);
 
   return diagnostics;
 }
 
 export const schemaSemanticValidationApi = Object.freeze({
   validateMihomoConfigSemantics,
+  validateXrayConfigSemantics,
   validateXrayRoutingSemantics,
 });

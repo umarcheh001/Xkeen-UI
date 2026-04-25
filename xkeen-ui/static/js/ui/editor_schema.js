@@ -191,6 +191,21 @@ function setEditorQuickFixProvider(editor, provider, ctx) {
   return false;
 }
 
+function setEditorSemanticValidation(editor, provider, ctx) {
+  const target = editor && editor.raw ? editor.raw : editor;
+  const runtime = getRuntime(ctx);
+  try {
+    if (runtime && typeof runtime.setSemanticValidation === 'function') return !!runtime.setSemanticValidation(target, provider || null);
+  } catch (e) {}
+  try {
+    if (target && typeof target.setSemanticValidation === 'function') return !!target.setSemanticValidation(provider || null);
+  } catch (e2) {}
+  try {
+    if (target && typeof target.setOption === 'function') return !!target.setOption('semanticValidation', provider || null);
+  } catch (e3) {}
+  return false;
+}
+
 function normalizeSnippetKind(value) {
   const raw = normalizeLower(value);
   if (!raw) return '';
@@ -218,13 +233,30 @@ export function resolveEditorQuickFixProvider(ctx) {
   return _quickFixProviderCache[inferredKind] || null;
 }
 
+export function resolveEditorSemanticValidation(ctx) {
+  const o = ctx || {};
+  const explicitKind = normalizeSnippetKind(o.semanticKind || o.schemaKind);
+  const inferredKind = explicitKind || normalizeSnippetKind(inferSchemaKind(o));
+  if (!inferredKind) return null;
+  if (inferredKind === 'xray-config' || inferredKind === 'xray' || inferredKind === 'xray-routing' || inferredKind === 'xray-inbounds' || inferredKind === 'xray-outbounds') {
+    return {
+      kind: inferredKind === 'xray' ? 'xray-config' : inferredKind,
+      options: {
+        schemaKind: inferredKind,
+      },
+    };
+  }
+  return null;
+}
+
 export function clearSchemaFromEditor(editor, ctx) {
   const target = editor && editor.raw ? editor.raw : editor;
   const context = ctx || {};
   const schemaCleared = setEditorSchema(target, null, context);
   const snippetCleared = setEditorSnippetProvider(target, null, context);
   const quickFixCleared = setEditorQuickFixProvider(target, null, context);
-  return schemaCleared || snippetCleared || quickFixCleared;
+  const semanticCleared = setEditorSemanticValidation(target, null, context);
+  return schemaCleared || snippetCleared || quickFixCleared || semanticCleared;
 }
 
 export async function applySchemaToEditor(editor, ctx) {
@@ -267,18 +299,35 @@ export async function applySchemaToEditor(editor, ctx) {
       ? (spec.fragment ? `xray-${spec.fragment}` : 'xray-config')
       : spec.family,
   });
+  const semanticValidation = o.semanticValidation || resolveEditorSemanticValidation({
+    ...o,
+    schemaKind: spec.family === 'xray'
+      ? (spec.fragment ? `xray-${spec.fragment}` : 'xray-config')
+      : spec.family,
+  });
   const snippetsOk = setEditorSnippetProvider(target, snippetProvider, o);
   const quickFixOk = setEditorQuickFixProvider(target, quickFixProvider, o);
-  return { ok: ok || snippetsOk || quickFixOk, skipped: false, spec, schema: loaded.schema, snippetProvider, quickFixProvider };
+  const semanticOk = setEditorSemanticValidation(target, semanticValidation, o);
+  return {
+    ok: ok || snippetsOk || quickFixOk || semanticOk,
+    skipped: false,
+    spec,
+    schema: loaded.schema,
+    snippetProvider,
+    quickFixProvider,
+    semanticValidation,
+  };
 }
 
 export const editorSchemaApi = Object.freeze({
   resolveEditorSchemaSpec,
   resolveEditorSnippetProvider,
   resolveEditorQuickFixProvider,
+  resolveEditorSemanticValidation,
   loadEditorSchema,
   applySchemaToEditor,
   clearSchemaFromEditor,
   setEditorSnippetProvider,
   setEditorQuickFixProvider,
+  setEditorSemanticValidation,
 });
