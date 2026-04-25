@@ -156,7 +156,8 @@
             "XKeen.ui.settings.fetchOnce",
             "XKeen.ui.settings.subscribe",
             "XKeen.ui.settings.clampEditorFontScale",
-            "XKeen.ui.settings.getEditorFontScale"
+            "XKeen.ui.settings.getEditorFontScale",
+            "XKeen.ui.settings.isEditorExpertModeEnabled"
           ],
           "lazy_features": []
         },
@@ -332,6 +333,7 @@
           "path": "static/js/ui/editor_schema.js",
           "globals": [
             "XKeen.ui",
+            "XKeen.ui.settings",
             "XKeen.ui.cm6Runtime"
           ],
           "lazy_features": []
@@ -694,6 +696,7 @@
         "XKeen.ui.settings.subscribe",
         "XKeen.ui.settings.clampEditorFontScale",
         "XKeen.ui.settings.getEditorFontScale",
+        "XKeen.ui.settings.isEditorExpertModeEnabled",
         "XKeen.runtime.lazy",
         "XKeen.ui.datContents",
         "XKeen.ui.datContents.open",
@@ -963,7 +966,8 @@
             "XKeen.ui.settings.fetchOnce",
             "XKeen.ui.settings.subscribe",
             "XKeen.ui.settings.clampEditorFontScale",
-            "XKeen.ui.settings.getEditorFontScale"
+            "XKeen.ui.settings.getEditorFontScale",
+            "XKeen.ui.settings.isEditorExpertModeEnabled"
           ],
           "lazy_features": []
         },
@@ -1232,6 +1236,7 @@
         "XKeen.ui.settings.subscribe",
         "XKeen.ui.settings.clampEditorFontScale",
         "XKeen.ui.settings.getEditorFontScale",
+        "XKeen.ui.settings.isEditorExpertModeEnabled",
         "XKeen.runtime.lazy",
         "XKeen.ui.cm6Runtime",
         "XKeen.monacoLoader",
@@ -1431,7 +1436,8 @@
             "XKeen.ui.settings.fetchOnce",
             "XKeen.ui.settings.subscribe",
             "XKeen.ui.settings.clampEditorFontScale",
-            "XKeen.ui.settings.getEditorFontScale"
+            "XKeen.ui.settings.getEditorFontScale",
+            "XKeen.ui.settings.isEditorExpertModeEnabled"
           ],
           "lazy_features": []
         },
@@ -1815,6 +1821,7 @@
         "XKeen.ui.settings.subscribe",
         "XKeen.ui.settings.clampEditorFontScale",
         "XKeen.ui.settings.getEditorFontScale",
+        "XKeen.ui.settings.isEditorExpertModeEnabled",
         "XKeen.runtime.lazy",
         "XKeen.ui.cm6Runtime",
         "XKeen.monacoLoader",
@@ -2028,7 +2035,8 @@
             "XKeen.ui.settings.fetchOnce",
             "XKeen.ui.settings.subscribe",
             "XKeen.ui.settings.clampEditorFontScale",
-            "XKeen.ui.settings.getEditorFontScale"
+            "XKeen.ui.settings.getEditorFontScale",
+            "XKeen.ui.settings.isEditorExpertModeEnabled"
           ],
           "lazy_features": []
         },
@@ -2255,6 +2263,7 @@
         "XKeen.ui.settings.subscribe",
         "XKeen.ui.settings.clampEditorFontScale",
         "XKeen.ui.settings.getEditorFontScale",
+        "XKeen.ui.settings.isEditorExpertModeEnabled",
         "XKeen.runtime.lazy",
         "XKeen.ui.cm6Runtime",
         "XKeen.monacoLoader",
@@ -2415,7 +2424,8 @@
             "XKeen.ui.settings.fetchOnce",
             "XKeen.ui.settings.subscribe",
             "XKeen.ui.settings.clampEditorFontScale",
-            "XKeen.ui.settings.getEditorFontScale"
+            "XKeen.ui.settings.getEditorFontScale",
+            "XKeen.ui.settings.isEditorExpertModeEnabled"
           ],
           "lazy_features": []
         },
@@ -2746,6 +2756,7 @@
         "XKeen.ui.settings.subscribe",
         "XKeen.ui.settings.clampEditorFontScale",
         "XKeen.ui.settings.getEditorFontScale",
+        "XKeen.ui.settings.isEditorExpertModeEnabled",
         "XKeen.runtime.lazy",
         "XKeen.ui.cm6Runtime",
         "XKeen.monacoLoader",
