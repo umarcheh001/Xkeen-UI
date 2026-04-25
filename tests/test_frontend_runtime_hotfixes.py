@@ -1503,3 +1503,15 @@ def test_file_manager_non_navigation_refreshes_do_not_consume_path_input_drafts(
 
     assert "if (ctx.side && typeof lp === 'function') await lp(ctx.side, { fromInput: false });" in editor_text
     assert "await Promise.all([listPanel('left', { fromInput: false }), listPanel('right', { fromInput: false })]);" in listing_text
+
+
+def test_routing_editor_uses_all_fragments_for_semantic_context_and_separates_jsonc_from_semantic_errors():
+    routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+
+    assert "return 'all-fragments';" in routing
+    assert "fetchTags('/api/xray/outbound-tags?all=1')" in routing
+    assert "fetchTags('/api/xray/inbound-tags?all=1')" in routing
+    assert "try { await refreshRoutingSemanticContext({ force: true }); } catch (e) {}" in routing
+    assert "JSONC: valid · semantic: invalid" in routing
+    assert "Файл загружен, но содержит semantic/schema ошибки." in routing
+    assert "Файл загружен, но содержит ошибку JSON/JSONC." in routing

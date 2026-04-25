@@ -209,6 +209,36 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
     return document.getElementById(id);
   }
 
+  function setRoutingValidationState(ok, message, kind) {
+    _lastValidationState = {
+      ok: ok === null ? null : !!ok,
+      kind: String(kind || (ok ? 'ok' : 'json')),
+      message: String(message || ''),
+    };
+  }
+
+  function getRoutingValidationKind() {
+    const state = _lastValidationState && typeof _lastValidationState === 'object' ? _lastValidationState : null;
+    const explicit = state && typeof state.kind === 'string' ? state.kind.trim() : '';
+    if (explicit) return explicit;
+    if (state && state.ok === true) return 'ok';
+    if (state && state.ok === null) return '';
+    return 'json';
+  }
+
+  function getRoutingLoadedStatusText() {
+    const kind = getRoutingValidationKind();
+    if (kind === 'semantic') {
+      return _routingMode === 'routing'
+        ? 'Routing загружен, но содержит semantic/schema ошибки.'
+        : 'Файл загружен, но содержит semantic/schema ошибки.';
+    }
+    if (kind === 'json' || kind === 'empty') {
+      return 'Файл загружен, но содержит ошибку JSON/JSONC.';
+    }
+    return _routingMode === 'routing' ? 'Routing загружен.' : 'Файл загружен.';
+  }
+
   function getModalApi() {
     return getXkeenModalApi();
   }
@@ -732,9 +762,7 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
   }
 
   function buildRoutingSemanticContextKey() {
-    const outboundsFile = readRememberedFragment('xkeen.outbounds.fragment');
-    const inboundsFile = readRememberedFragment('xkeen.inbounds.fragment');
-    return `${outboundsFile}::${inboundsFile}`;
+    return 'all-fragments';
   }
 
   function getRoutingSemanticValidationConfig() {
@@ -830,24 +858,23 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
       return _routingSemanticContext;
     }
 
-    const outboundsFile = readRememberedFragment('xkeen.outbounds.fragment');
-    const inboundsFile = readRememberedFragment('xkeen.inbounds.fragment');
-    const fetchConfig = async (url, file) => {
-      const suffix = file ? `?file=${encodeURIComponent(file)}` : '';
-      const response = await fetch(`${url}${suffix}`, { cache: 'no-store' });
+    const fetchTags = async (url) => {
+      const response = await fetch(url, { cache: 'no-store' });
       if (!response.ok) return null;
       const payload = await response.json().catch(() => null);
-      return payload && typeof payload === 'object' ? payload.config : null;
+      return payload && typeof payload === 'object' && Array.isArray(payload.tags)
+        ? payload.tags.slice()
+        : null;
     };
 
     _routingSemanticContextPromise = Promise.all([
-      fetchConfig('/api/outbounds', outboundsFile),
-      fetchConfig('/api/inbounds', inboundsFile),
-    ]).then(([outboundsConfig, inboundsConfig]) => {
+      fetchTags('/api/xray/outbound-tags?all=1'),
+      fetchTags('/api/xray/inbound-tags?all=1'),
+    ]).then(([outboundTags, inboundTags]) => {
       _routingSemanticContext = {
         key,
-        outboundTags: collectConfigTagNames(outboundsConfig, 'tag'),
-        inboundTags: collectConfigTagNames(inboundsConfig, 'tag'),
+        outboundTags: Array.isArray(outboundTags) ? outboundTags.slice() : [],
+        inboundTags: Array.isArray(inboundTags) ? inboundTags.slice() : [],
         ready: true,
       };
       _routingSemanticContextTs = Date.now();
@@ -1437,16 +1464,27 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
       _updateEditorCommentsBadge();
 
       const ok = _lastValidationState && _lastValidationState.ok;
+      const kind = getRoutingValidationKind();
       const msg = _lastValidationState && _lastValidationState.message ? String(_lastValidationState.message) : '';
       const dirty = isRoutingDirty();
 
       if (validEl) {
-        validEl.textContent = ok === null ? 'JSON: —' : (ok ? 'JSON: valid' : 'JSON: invalid');
+        let validText = 'JSONC: —';
+        let validTitle = msg || 'Состояние проверки JSON/JSONC пока не определено.';
+        if (ok === true) {
+          validText = 'JSONC: valid';
+          validTitle = msg || 'JSON/JSONC синтаксис корректен.';
+        } else if (ok === false && kind === 'semantic') {
+          validText = 'JSONC: valid · semantic: invalid';
+          validTitle = msg || 'JSON/JSONC синтаксис корректен, но есть semantic/schema ошибки.';
+        } else if (ok === false) {
+          validText = 'JSONC: invalid';
+          validTitle = msg || 'В тексте есть ошибка синтаксиса JSON/JSONC.';
+        }
+        validEl.textContent = validText;
         validEl.classList.toggle('is-ok', !!ok);
         validEl.classList.toggle('is-bad', ok === false);
-        validEl.setAttribute('data-tooltip', msg || (ok === null
-          ? 'Состояние проверки JSON/JSONC пока не определено.'
-          : (ok ? 'JSON/JSONC синтаксис корректен.' : 'В тексте есть ошибка синтаксиса JSON/JSONC.')));
+        validEl.setAttribute('data-tooltip', validTitle);
       }
       if (dirtyEl) {
         dirtyEl.textContent = dirty ? 'Состояние: изменён' : 'Состояние: сохранён';
@@ -2852,7 +2890,7 @@ function closeHelp() {
     if (!String(raw ?? '').trim()) {
       setError('Файл пуст. Введи корректный JSON.', null);
       clearJsonErrorLocation();
-      _lastValidationState = { ok: false, message: 'Файл пуст' };
+      setRoutingValidationState(false, 'Файл пуст', 'empty');
       try { updateEditorMetaStatus(); } catch (e) {}
       try {
         const api = window.monaco;
@@ -2884,9 +2922,8 @@ function closeHelp() {
       if (semanticMarkers.length) setMonacoMarkers(semanticMarkers);
       else clearMonacoMarkers();
       _maybeUpdateModeFromParsed(obj);
-      _lastValidationState = blockingSemantic
-        ? { ok: false, message: semanticSummary || 'Semantic validation failed' }
-        : { ok: true, message: 'JSON корректен' };
+      if (blockingSemantic) setRoutingValidationState(false, semanticSummary || 'Semantic validation failed', 'semantic');
+      else setRoutingValidationState(true, 'JSON корректен', 'ok');
       try { updateEditorMetaStatus(); } catch (e) {}
       return !blockingSemantic;
     } catch (e) {
@@ -2910,7 +2947,7 @@ function closeHelp() {
       const errMsg = 'Ошибка JSON: ' + msg;
       setError(errMsg, null);
       setJsonErrorLocation({ line: lc.line, col: lc.col, index: loc.index });
-      _lastValidationState = { ok: false, message: errMsg };
+      setRoutingValidationState(false, errMsg, 'json');
       try { updateEditorMetaStatus(); } catch (e4) {}
       return false;
     }
@@ -3006,7 +3043,7 @@ function closeHelp() {
       try { updateEditorMetaStatus(); } catch (e) {}
 
       try { _setRoutingMode(_detectRoutingModeFromText(text), 'load'); } catch (e) {}
-      try { await refreshRoutingSemanticContext({ force: false }); } catch (e) {}
+      try { await refreshRoutingSemanticContext({ force: true }); } catch (e) {}
       try {
         if (_cm) await applyRoutingSchemaToCodeMirror(_cm, text);
       } catch (e) {}
@@ -3025,7 +3062,7 @@ function closeHelp() {
 
       const okJson = validate();
       try { scheduleEditorContentEvent('load', 30); } catch (e) {}
-      if (statusEl) statusEl.textContent = okJson ? (_routingMode === 'routing' ? 'Routing загружен.' : 'Файл загружен.') : 'Файл загружен, но содержит ошибку JSON.';
+      if (statusEl) statusEl.textContent = okJson ? (_routingMode === 'routing' ? 'Routing загружен.' : 'Файл загружен.') : getRoutingLoadedStatusText();
       try {
         if (typeof window.updateLastActivity === 'function') {
           const fp = getXkeenFilePath('routing', '');
@@ -3272,7 +3309,7 @@ function closeHelp() {
     if (!String(raw ?? '').trim()) {
       setError('File is empty. Enter valid JSON.', null);
       clearJsonErrorLocation();
-      _lastValidationState = { ok: false, message: 'Empty file' };
+      setRoutingValidationState(false, 'Empty file', 'empty');
       try { updateEditorMetaStatus(); } catch (e) {}
       try {
         const api = window.monaco;
@@ -3295,7 +3332,7 @@ function closeHelp() {
       clearJsonErrorLocation();
       clearMonacoMarkers();
       _maybeUpdateModeFromParsed(analysis.parsed);
-      _lastValidationState = { ok: true, message: 'JSON is valid' };
+      setRoutingValidationState(true, 'JSON is valid', 'ok');
       try { updateEditorMetaStatus(); } catch (e) {}
       return true;
     }
@@ -3337,7 +3374,7 @@ function closeHelp() {
     const errMsg = 'JSON error: ' + msg;
     setError(errMsg, null);
     setJsonErrorLocation({ line: loc.line, col: loc.col, index: loc.index, message: msg });
-    _lastValidationState = { ok: false, message: errMsg };
+    setRoutingValidationState(false, errMsg, 'json');
     try { updateEditorMetaStatus(); } catch (e) {}
 
     if (safari) {
@@ -3349,7 +3386,7 @@ function closeHelp() {
           const refreshedMsg = String(refreshed.message || msg || 'JSON parse error');
           setError('JSON error: ' + refreshedMsg, null);
           setJsonErrorLocation({ line: refreshed.line, col: refreshed.col, index: null, message: refreshedMsg });
-          _lastValidationState = { ok: false, message: 'JSON error: ' + refreshedMsg };
+          setRoutingValidationState(false, 'JSON error: ' + refreshedMsg, 'json');
           try { updateEditorMetaStatus(); } catch (e2) {}
         }, 80);
       } catch (e) {}
@@ -3406,7 +3443,7 @@ function closeHelp() {
     if (!String(raw ?? '').trim()) {
       setError('File is empty. Enter valid JSON.', null);
       clearJsonErrorLocation();
-      _lastValidationState = { ok: false, message: 'Empty file' };
+      setRoutingValidationState(false, 'Empty file', 'empty');
       try { updateEditorMetaStatus(); } catch (e) {}
       try { syncCodeMirrorLintNow(); } catch (e2) {}
       return false;
@@ -3421,9 +3458,8 @@ function closeHelp() {
       else setError('', null);
       clearJsonErrorLocation();
       _maybeUpdateModeFromParsed(analysis.parsed);
-      _lastValidationState = blockingSemantic
-        ? { ok: false, message: semanticSummary || 'Semantic validation failed' }
-        : { ok: true, message: 'JSON is valid' };
+      if (blockingSemantic) setRoutingValidationState(false, semanticSummary || 'Semantic validation failed', 'semantic');
+      else setRoutingValidationState(true, 'JSON is valid', 'ok');
       try { updateEditorMetaStatus(); } catch (e) {}
       try { syncCodeMirrorLintNow(); } catch (e2) {}
       return !blockingSemantic;
@@ -3433,7 +3469,7 @@ function closeHelp() {
     const errMsg = 'JSON error: ' + String(analysis.message || 'JSON parse error');
     setError(errMsg, loc.line - 1);
     setJsonErrorLocation({ line: loc.line, col: loc.col, index: loc.index });
-    _lastValidationState = { ok: false, message: errMsg };
+    setRoutingValidationState(false, errMsg, 'json');
     try { updateEditorMetaStatus(); } catch (e) {}
     try { syncCodeMirrorLintNow(); } catch (e2) {}
     return false;

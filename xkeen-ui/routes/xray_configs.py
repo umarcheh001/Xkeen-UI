@@ -6,6 +6,7 @@ Routes:
 - GET/POST /api/inbounds
 - GET/POST /api/outbounds
 - GET /api/outbounds/fragments
+- GET /api/xray/inbound-tags
 - GET /api/xray/outbound-tags
 - POST /api/xray/observatory/preset
  - GET /api/xray/observatory/config
@@ -272,6 +273,62 @@ def create_xray_configs_blueprint(
     def _async_restart_requested() -> bool:
         return _is_true_flag(request.args.get("async", None))
 
+    def _collect_fragment_tags(*, kind: str, tag_field: str, default_path: str, all_fragments: bool) -> list[str]:
+        tags: list[str] = []
+        seen: set[str] = set()
+
+        def _collect_from_path(sel_path: str) -> None:
+            chosen_path, _raw_path, _raw_exists = _choose_raw_or_main(sel_path)
+            text = _read_text_silent(chosen_path)
+
+            try:
+                obj: Any = None
+                if text.strip():
+                    cleaned = strip_json_comments_text(text)
+                    obj = json.loads(cleaned) if cleaned.strip() else None
+                else:
+                    obj = load_json(sel_path, default=None)
+
+                items = None
+                if isinstance(obj, dict):
+                    items = obj.get(kind)
+                elif isinstance(obj, list):
+                    items = obj
+
+                if isinstance(items, list):
+                    for item in items:
+                        if not isinstance(item, dict):
+                            continue
+                        value = item.get(tag_field)
+                        if not isinstance(value, str):
+                            continue
+                        value = value.strip()
+                        if not value or value in seen:
+                            continue
+                        seen.add(value)
+                        tags.append(value)
+            except Exception:
+                return
+
+        if all_fragments:
+            try:
+                for item in list_xray_fragments(kind):
+                    name = str((item or {}).get("name") or "")
+                    if not name:
+                        continue
+                    sel_path = resolve_xray_fragment_file(name, kind=kind, default_path=default_path)
+                    sel_path = _normalize_main_json_path(sel_path)
+                    _collect_from_path(sel_path)
+            except Exception:
+                return []
+        else:
+            file_arg = request.args.get("file", "")
+            sel_path = resolve_xray_fragment_file(file_arg, kind=kind, default_path=default_path)
+            sel_path = _normalize_main_json_path(sel_path)
+            _collect_from_path(sel_path)
+
+        return tags
+
     def _restart_response(*, source: str, restart_flag: bool, extra: dict[str, Any] | None = None):
         payload: dict[str, Any] = {"ok": True}
         if extra:
@@ -487,6 +544,16 @@ def create_xray_configs_blueprint(
         current_name = os.path.basename(INBOUNDS_FILE)
         return jsonify({"ok": True, "dir": XRAY_CONFIGS_DIR, "current": current_name, "items": items}), 200
 
+    @bp.get("/api/xray/inbound-tags")
+    def api_xray_inbound_tags():
+        tags = _collect_fragment_tags(
+            kind="inbounds",
+            tag_field="tag",
+            default_path=INBOUNDS_FILE,
+            all_fragments=_is_true_flag(request.args.get("all", None)),
+        )
+        return jsonify({"ok": True, "tags": tags}), 200
+
 # --- API: outbounds ---
 
     @bp.get("/api/outbounds")
@@ -654,60 +721,12 @@ def create_xray_configs_blueprint(
 
     @bp.get("/api/xray/outbound-tags")
     def api_xray_outbound_tags():
-        tags: list[str] = []
-        seen: set[str] = set()
-
-        def _collect_from_path(sel_path: str) -> None:
-            # Prefer raw JSONC variant (with comments) if present.
-            chosen_path, _raw_path, _raw_exists = _choose_raw_or_main(sel_path)
-            text = _read_text_silent(chosen_path)
-
-            try:
-                obj: Any = None
-                if text.strip():
-                    cleaned = strip_json_comments_text(text)
-                    obj = json.loads(cleaned) if cleaned.strip() else None
-                else:
-                    obj = load_json(sel_path, default=None)
-
-                outbounds = None
-                if isinstance(obj, dict):
-                    outbounds = obj.get("outbounds")
-                elif isinstance(obj, list):
-                    outbounds = obj
-
-                if isinstance(outbounds, list):
-                    for o in outbounds:
-                        if not isinstance(o, dict):
-                            continue
-                        t = o.get("tag")
-                        if not isinstance(t, str):
-                            continue
-                        t = t.strip()
-                        if not t or t in seen:
-                            continue
-                        seen.add(t)
-                        tags.append(t)
-            except Exception:
-                return
-
-        if _is_true_flag(request.args.get("all", None)):
-            try:
-                for item in list_xray_fragments("outbounds"):
-                    name = str((item or {}).get("name") or "")
-                    if not name:
-                        continue
-                    sel_path = resolve_xray_fragment_file(name, kind="outbounds", default_path=OUTBOUNDS_FILE)
-                    sel_path = _normalize_main_json_path(sel_path)
-                    _collect_from_path(sel_path)
-            except Exception:
-                tags = []
-        else:
-            file_arg = request.args.get("file", "")
-            sel_path = resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=OUTBOUNDS_FILE)
-            sel_path = _normalize_main_json_path(sel_path)
-            _collect_from_path(sel_path)
-
+        tags = _collect_fragment_tags(
+            kind="outbounds",
+            tag_field="tag",
+            default_path=OUTBOUNDS_FILE,
+            all_fragments=_is_true_flag(request.args.get("all", None)),
+        )
         return jsonify({"ok": True, "tags": tags}), 200
 
     # --- API: current outbounds nodes + latency probes ---
