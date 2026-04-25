@@ -34,6 +34,13 @@ from services.xray_outbounds import LEGACY_VLESS_TAG, build_proxy_outbound_from_
 
 STATE_VERSION = 1
 STATE_FILENAME = "xray_subscriptions.json"
+MANAGED_BASELINES_KEY = "managed_baselines"
+MANAGED_BASELINE_ROUTING_KEY = "routing"
+MANAGED_BASELINE_OBSERVATORY_KEY = "observatory"
+MANAGED_BASELINE_TARGETS = {
+    MANAGED_BASELINE_ROUTING_KEY: ROUTING_FILE,
+    MANAGED_BASELINE_OBSERVATORY_KEY: "07_observatory.json",
+}
 
 DEFAULT_INTERVAL_HOURS = 24
 MIN_INTERVAL_HOURS = 1
@@ -430,6 +437,37 @@ def _subscription_output_path(xray_configs_dir: str, sub: Dict[str, Any]) -> str
     return os.path.join(str(xray_configs_dir or ""), name)
 
 
+def _normalize_managed_file_baseline(value: Any) -> Dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    path = os.path.basename(str(value.get("path") or "").strip())
+    if not path:
+        return None
+    exists = bool(value.get("exists"))
+    jsonc_exists = bool(value.get("jsonc_exists", value.get("jsoncExists")))
+    clean: Dict[str, Any] = {
+        "path": path,
+        "exists": exists,
+        "jsonc_exists": jsonc_exists,
+    }
+    if exists:
+        clean["text"] = str(value.get("text") or "")
+    if jsonc_exists:
+        clean["jsonc_text"] = str(value.get("jsonc_text", value.get("jsoncText")) or "")
+    return clean
+
+
+def _normalize_managed_baselines(value: Any) -> Dict[str, Dict[str, Any]]:
+    if not isinstance(value, dict):
+        return {}
+    out: Dict[str, Dict[str, Any]] = {}
+    for key in MANAGED_BASELINE_TARGETS:
+        clean = _normalize_managed_file_baseline(value.get(key))
+        if clean is not None:
+            out[key] = clean
+    return out
+
+
 def _normalize_state(obj: Any) -> Dict[str, Any]:
     if not isinstance(obj, dict):
         obj = {}
@@ -501,7 +539,11 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
             }
         )
         clean_subs.append(clean)
-    return {"version": STATE_VERSION, "subscriptions": clean_subs}
+    state = {"version": STATE_VERSION, "subscriptions": clean_subs}
+    baselines = _normalize_managed_baselines(obj.get(MANAGED_BASELINES_KEY))
+    if baselines:
+        state[MANAGED_BASELINES_KEY] = baselines
+    return state
 
 
 def load_subscription_state(ui_state_dir: str) -> Dict[str, Any]:
@@ -630,6 +672,7 @@ def delete_subscription(
     restart_xkeen: RestartCallback | None = None,
 ) -> Dict[str, Any]:
     removed: Dict[str, Any] | None = None
+    remaining_state: Dict[str, Any] = {"subscriptions": []}
     with _STATE_LOCK:
         state = load_subscription_state(ui_state_dir)
         idx, sub = _find_subscription(state, sub_id)
@@ -639,27 +682,59 @@ def delete_subscription(
         subs = state.get("subscriptions")
         if isinstance(subs, list):
             subs.pop(idx)
-        _write_state(ui_state_dir, _normalize_state(state))
+        remaining_state = _normalize_state(state)
+        _write_state(ui_state_dir, remaining_state)
 
     output_removed = False
     if remove_file and removed:
         output_path = _subscription_output_path(xray_configs_dir, removed)
+        output_removed = bool(_remove_file_if_exists(output_path, snapshot=snapshot) or output_removed)
         try:
-            if os.path.isfile(output_path):
-                if snapshot:
-                    snapshot(output_path)
-                os.remove(output_path)
-                output_removed = True
+            raw_path = jsonc_path_for(output_path)
         except Exception:
-            output_removed = False
+            raw_path = ""
+        if raw_path:
+            output_removed = bool(_remove_file_if_exists(raw_path, snapshot=snapshot) or output_removed)
 
     observatory_changed = False
     routing_changed = False
     routing_sync: Dict[str, Any] = {}
     old_tags = removed.get("last_tags") if removed else []
-    preserved_tags = _preserved_balancer_tags(xray_configs_dir)
-    effective_routing_mode = _effective_subscription_routing_mode(ui_state_dir)
-    if isinstance(old_tags, list) and old_tags:
+    remaining_tags = _collect_runtime_subscription_tags(remaining_state)
+    restored_baseline = False
+    if remaining_state.get(MANAGED_BASELINES_KEY):
+        restore_stats = _restore_subscription_managed_baselines(
+            ui_state_dir,
+            xray_configs_dir=xray_configs_dir,
+            snapshot=snapshot,
+        )
+        restored_baseline = bool(restore_stats.get("restored"))
+        observatory_changed = bool(restore_stats.get("observatory_changed"))
+        routing_changed = bool(restore_stats.get("routing_changed"))
+        if remaining_tags:
+            preserved_tags = _preserved_balancer_tags(xray_configs_dir)
+            observatory_changed = bool(
+                sync_observatory_subjects(
+                    xray_configs_dir=xray_configs_dir,
+                    add_tags=remaining_tags + preserved_tags,
+                    remove_tags=[],
+                    snapshot=snapshot,
+                )
+                or observatory_changed
+            )
+            routing_sync = sync_subscription_routing(
+                xray_configs_dir=xray_configs_dir,
+                add_tags=remaining_tags,
+                remove_tags=[],
+                routing_mode=_effective_runtime_routing_mode_from_state(remaining_state),
+                snapshot=snapshot,
+            )
+            routing_changed = bool(routing_sync.get("changed") or routing_changed)
+        else:
+            _clear_subscription_managed_baselines(ui_state_dir)
+    elif isinstance(old_tags, list) and old_tags:
+        preserved_tags = _preserved_balancer_tags(xray_configs_dir)
+        effective_routing_mode = _effective_subscription_routing_mode(ui_state_dir)
         observatory_changed = sync_observatory_subjects(
             xray_configs_dir=xray_configs_dir,
             add_tags=preserved_tags,
@@ -690,6 +765,7 @@ def delete_subscription(
         "observatory_changed": observatory_changed,
         "routing_changed": routing_changed,
         "routing_file": str(routing_sync.get("routing_file") or ""),
+        "baseline_restored": restored_baseline,
         "restarted": restarted,
     }
 
@@ -1359,6 +1435,159 @@ def _write_json_if_changed(path: str, obj: Any, *, snapshot: SnapshotCallback | 
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     _atomic_write_text(path, new_text)
     return True
+
+
+def _write_text_if_changed(path: str, text: str, *, snapshot: SnapshotCallback | None = None) -> bool:
+    next_text = str(text or "")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            if f.read() == next_text:
+                return False
+    except Exception:
+        pass
+    if snapshot and os.path.exists(path):
+        snapshot(path)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    _atomic_write_text(path, next_text)
+    return True
+
+
+def _remove_file_if_exists(path: str, *, snapshot: SnapshotCallback | None = None) -> bool:
+    try:
+        if not os.path.isfile(path):
+            return False
+    except Exception:
+        return False
+    try:
+        if snapshot:
+            snapshot(path)
+    except Exception:
+        pass
+    try:
+        os.remove(path)
+        return True
+    except Exception:
+        return False
+
+
+def _capture_managed_file_baseline(state: Dict[str, Any], *, key: str, path: str) -> bool:
+    baselines = state.get(MANAGED_BASELINES_KEY)
+    if not isinstance(baselines, dict):
+        baselines = {}
+        state[MANAGED_BASELINES_KEY] = baselines
+    if isinstance(baselines.get(key), dict):
+        return False
+
+    entry: Dict[str, Any] = {"path": os.path.basename(path), "exists": False, "jsonc_exists": False}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            entry["text"] = f.read()
+            entry["exists"] = True
+    except Exception:
+        pass
+
+    try:
+        jsonc = jsonc_path_for(path)
+    except Exception:
+        jsonc = ""
+    if jsonc:
+        try:
+            with open(jsonc, "r", encoding="utf-8") as f:
+                entry["jsonc_text"] = f.read()
+                entry["jsonc_exists"] = True
+        except Exception:
+            pass
+
+    baselines[key] = entry
+    return True
+
+
+def _ensure_subscription_managed_baselines(ui_state_dir: str, xray_configs_dir: str) -> bool:
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        changed = False
+        for key, default_name in MANAGED_BASELINE_TARGETS.items():
+            path = _config_fragment_path(xray_configs_dir, default_name)
+            changed = bool(_capture_managed_file_baseline(state, key=key, path=path) or changed)
+        if changed:
+            _write_state(ui_state_dir, state)
+        return changed
+
+
+def _restore_managed_file_baseline(
+    xray_configs_dir: str,
+    baseline: Dict[str, Any],
+    *,
+    default_name: str,
+    snapshot: SnapshotCallback | None = None,
+) -> bool:
+    path = _config_fragment_path(xray_configs_dir, baseline.get("path") or default_name)
+    changed = False
+    if baseline.get("exists"):
+        changed = bool(_write_text_if_changed(path, str(baseline.get("text") or ""), snapshot=snapshot) or changed)
+    else:
+        changed = bool(_remove_file_if_exists(path, snapshot=snapshot) or changed)
+
+    try:
+        jsonc = jsonc_path_for(path)
+    except Exception:
+        jsonc = ""
+    if jsonc:
+        if baseline.get("jsonc_exists"):
+            changed = bool(
+                _write_text_if_changed(jsonc, str(baseline.get("jsonc_text") or ""), snapshot=snapshot) or changed
+            )
+        else:
+            changed = bool(_remove_file_if_exists(jsonc, snapshot=snapshot) or changed)
+    return changed
+
+
+def _restore_subscription_managed_baselines(
+    ui_state_dir: str,
+    *,
+    xray_configs_dir: str,
+    snapshot: SnapshotCallback | None = None,
+) -> Dict[str, bool]:
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        baselines = _normalize_managed_baselines(state.get(MANAGED_BASELINES_KEY))
+
+    if not baselines:
+        return {"restored": False, "routing_changed": False, "observatory_changed": False}
+
+    routing_changed = False
+    observatory_changed = False
+    routing_baseline = baselines.get(MANAGED_BASELINE_ROUTING_KEY)
+    if routing_baseline is not None:
+        routing_changed = _restore_managed_file_baseline(
+            xray_configs_dir,
+            routing_baseline,
+            default_name=ROUTING_FILE,
+            snapshot=snapshot,
+        )
+    observatory_baseline = baselines.get(MANAGED_BASELINE_OBSERVATORY_KEY)
+    if observatory_baseline is not None:
+        observatory_changed = _restore_managed_file_baseline(
+            xray_configs_dir,
+            observatory_baseline,
+            default_name="07_observatory.json",
+            snapshot=snapshot,
+        )
+    return {
+        "restored": True,
+        "routing_changed": bool(routing_changed),
+        "observatory_changed": bool(observatory_changed),
+    }
+
+
+def _clear_subscription_managed_baselines(ui_state_dir: str) -> bool:
+    with _STATE_LOCK:
+        state = load_subscription_state(ui_state_dir)
+        if MANAGED_BASELINES_KEY not in state:
+            return False
+        state.pop(MANAGED_BASELINES_KEY, None)
+        _write_state(ui_state_dir, state)
+        return True
 
 
 def _strip_jsonc_comments(text: str) -> str:
@@ -2061,6 +2290,42 @@ def _effective_subscription_routing_mode(ui_state_dir: str) -> str:
     return ROUTING_MODE_SAFE
 
 
+def _collect_runtime_subscription_tags(state: Any) -> List[str]:
+    tags: List[str] = []
+    seen: set[str] = set()
+    for item in state.get("subscriptions") if isinstance(state, dict) else []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("ping_enabled", True) is False:
+            continue
+        raw = item.get("last_tags")
+        if not isinstance(raw, list):
+            continue
+        for value in raw:
+            tag = str(value or "").strip()
+            if not tag or tag in seen:
+                continue
+            seen.add(tag)
+            tags.append(tag)
+    return tags
+
+
+def _effective_runtime_routing_mode_from_state(state: Any) -> str:
+    for item in state.get("subscriptions") if isinstance(state, dict) else []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("ping_enabled", True) is False:
+            continue
+        raw_tags = item.get("last_tags")
+        if not isinstance(raw_tags, list):
+            continue
+        if not any(str(tag or "").strip() for tag in raw_tags):
+            continue
+        if _clean_routing_mode(item.get("routing_mode")) == ROUTING_MODE_STRICT:
+            return ROUTING_MODE_STRICT
+    return ROUTING_MODE_SAFE
+
+
 def _ensure_least_ping_balancer(
     routing: Dict[str, Any],
     *,
@@ -2434,6 +2699,7 @@ def refresh_subscription(
         preserved_tags = _preserved_balancer_tags(xray_configs_dir)
         effective_routing_mode = _effective_subscription_routing_mode(ui_state_dir)
         if bool(sub.get("ping_enabled", True)):
+            _ensure_subscription_managed_baselines(ui_state_dir, xray_configs_dir)
             observatory_changed = sync_observatory_subjects(
                 xray_configs_dir=xray_configs_dir,
                 add_tags=tags + preserved_tags,
@@ -2449,6 +2715,7 @@ def refresh_subscription(
             )
             routing_changed = bool(routing_sync.get("changed"))
         elif previous_tags:
+            _ensure_subscription_managed_baselines(ui_state_dir, xray_configs_dir)
             observatory_changed = sync_observatory_subjects(
                 xray_configs_dir=xray_configs_dir,
                 add_tags=preserved_tags,

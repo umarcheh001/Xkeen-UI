@@ -774,7 +774,7 @@ def test_refresh_subscription_strict_mode_migrates_and_reverts_vless_rules(tmp_p
     assert rules[2]["outboundTag"] == "direct"
 
 
-def test_delete_subscription_removes_tags_from_routing_but_keeps_vless_reality(tmp_path: Path, monkeypatch):
+def test_delete_last_subscription_restores_pre_subscription_runtime_state(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 
     ui_state_dir = tmp_path / "state"
@@ -819,10 +819,69 @@ def test_delete_subscription_removes_tags_from_routing_but_keeps_vless_reality(t
         + "\n",
         encoding="utf-8",
     )
-    (xray_dir / "05_routing.json").write_text(
-        json.dumps({"routing": {"rules": [{"type": "field", "inboundTag": ["redirect", "tproxy"], "outboundTag": "direct"}]}}, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    routing_before = (
+        json.dumps(
+            {
+                "routing": {
+                    "domainStrategy": "AsIs",
+                    "rules": [{"type": "field", "inboundTag": ["redirect", "tproxy"], "outboundTag": "direct"}],
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n"
     )
+    observatory_before = (
+        json.dumps(
+            {
+                "observatory": {
+                    "subjectSelector": ["vless-reality"],
+                    "probeUrl": "https://probe.example.com",
+                    "probeInterval": "120s",
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n"
+    )
+    routing_jsonc_before = "\n".join(
+        [
+            "// user routing header",
+            "{",
+            '  "routing": {',
+            '    "domainStrategy": "AsIs",',
+            "    // keep this rule comment",
+            '    "rules": [',
+            "      {",
+            '        "type": "field",',
+            '        "inboundTag": ["redirect", "tproxy"],',
+            '        "outboundTag": "direct"',
+            "      }",
+            "    ]",
+            "  }",
+            "}",
+            "",
+        ]
+    )
+    observatory_jsonc_before = "\n".join(
+        [
+            "// user observatory header",
+            "{",
+            '  "observatory": {',
+            '    "subjectSelector": ["vless-reality"],',
+            '    "probeUrl": "https://probe.example.com",',
+            '    "probeInterval": "120s"',
+            "  }",
+            "}",
+            "",
+        ]
+    )
+    (xray_dir / "05_routing.json").write_text(routing_before, encoding="utf-8")
+    (xray_dir / "07_observatory.json").write_text(observatory_before, encoding="utf-8")
+    (jsonc_dir / "05_routing.jsonc").write_text(routing_jsonc_before, encoding="utf-8")
+    (jsonc_dir / "07_observatory.jsonc").write_text(observatory_jsonc_before, encoding="utf-8")
 
     subs.upsert_subscription(
         str(ui_state_dir),
@@ -853,15 +912,16 @@ def test_delete_subscription_removes_tags_from_routing_but_keeps_vless_reality(t
     )
 
     assert result["routing_changed"] is True
-    observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
-    assert observatory["observatory"]["subjectSelector"] == ["vless-reality"]
+    assert result["baseline_restored"] is True
+    assert not (xray_dir / "04_outbounds.auto-route.json").exists()
+    assert not (jsonc_dir / "04_outbounds.auto-route.jsonc").exists()
+    assert (xray_dir / "05_routing.json").read_text(encoding="utf-8") == routing_before
+    assert (xray_dir / "07_observatory.json").read_text(encoding="utf-8") == observatory_before
+    assert (jsonc_dir / "05_routing.jsonc").read_text(encoding="utf-8") == routing_jsonc_before
+    assert (jsonc_dir / "07_observatory.jsonc").read_text(encoding="utf-8") == observatory_jsonc_before
 
-    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
-    balancers = routing["routing"]["balancers"]
-    assert balancers[0]["selector"] == ["vless-reality"]
-    rules = routing["routing"]["rules"]
-    assert rules[0]["ruleTag"] == "xk_auto_leastPing"
-    assert rules[1]["outboundTag"] == "direct"
+    state = subs.load_subscription_state(str(ui_state_dir))
+    assert subs.MANAGED_BASELINES_KEY not in state
 
 
 def test_delete_subscription_removes_empty_generated_balancer(tmp_path: Path, monkeypatch):
@@ -932,11 +992,124 @@ def test_delete_subscription_removes_empty_generated_balancer(tmp_path: Path, mo
     )
 
     assert result["routing_changed"] is True
+    assert result["baseline_restored"] is True
     routing_text = (xray_dir / "05_routing.json").read_text(encoding="utf-8")
     assert "cdn.pecan.run" not in routing_text
     routing = json.loads(routing_text)
     assert routing["routing"]["rules"] == []
-    assert routing["routing"]["balancers"] == []
+    assert "balancers" not in routing["routing"]
+    assert not (xray_dir / "04_outbounds.auto-route.json").exists()
+    assert not (jsonc_dir / "04_outbounds.auto-route.jsonc").exists()
+
+
+def test_delete_subscription_rebuilds_runtime_from_baseline_for_remaining_subscriptions(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    def _fetch(url: str):
+        if url.endswith("/a"):
+            return (_vless_transport("WS Germany", "ws", host="ws.example.com"), {})
+        return (_vless_transport("TCP Sweden", "tcp", host="tcp.example.com"), {})
+
+    monkeypatch.setattr(subs, "fetch_subscription_body", _fetch)
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    routing_before = json.dumps({"routing": {"rules": []}}, ensure_ascii=False, indent=2) + "\n"
+    observatory_before = json.dumps({"observatory": {"subjectSelector": []}}, ensure_ascii=False, indent=2) + "\n"
+    (xray_dir / "05_routing.json").write_text(routing_before, encoding="utf-8")
+    (xray_dir / "07_observatory.json").write_text(observatory_before, encoding="utf-8")
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "alpha",
+            "tag": "alpha",
+            "url": "https://example.com/a",
+            "enabled": True,
+            "ping_enabled": True,
+        },
+    )
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "beta",
+            "tag": "beta",
+            "url": "https://example.com/b",
+            "enabled": True,
+            "ping_enabled": True,
+        },
+    )
+
+    first = subs.refresh_subscription(
+        str(ui_state_dir),
+        "alpha",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+    second = subs.refresh_subscription(
+        str(ui_state_dir),
+        "beta",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert first["ok"] is True
+    assert second["ok"] is True
+
+    result = subs.delete_subscription(
+        str(ui_state_dir),
+        "alpha",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        remove_file=True,
+        restart_xkeen=None,
+    )
+
+    assert result["baseline_restored"] is True
+    assert result["routing_changed"] is True
+    assert result["observatory_changed"] is True
+    assert not (xray_dir / "04_outbounds.alpha.json").exists()
+    assert not (jsonc_dir / "04_outbounds.alpha.jsonc").exists()
+
+    observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
+    assert observatory["observatory"]["subjectSelector"] == ["beta--TCP_Sweden"]
+
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    balancers = routing["routing"]["balancers"]
+    assert len(balancers) == 1
+    assert balancers[0]["selector"] == ["beta--TCP_Sweden"]
+    rules = routing["routing"]["rules"]
+    assert rules[0]["ruleTag"] == "xk_auto_leastPing"
+    assert rules[0]["balancerTag"] == "proxy"
+
+    state = subs.load_subscription_state(str(ui_state_dir))
+    assert "managed_baselines" in state
 
 
 def test_refresh_subscription_applies_name_and_type_filters_to_links(tmp_path: Path, monkeypatch):
