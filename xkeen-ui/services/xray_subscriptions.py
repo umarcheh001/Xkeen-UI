@@ -102,6 +102,7 @@ AUTO_BALANCER_PRESERVE_TAGS = ("vless-reality",)
 AUTO_MIGRATED_RULE_TAG_PREFIX = "xk_auto_vless_pool_"
 ROUTING_MODE_SAFE = "safe-fallback"
 ROUTING_MODE_STRICT = "migrate-vless-rules"
+ROUTING_ROOT_KEYS = ("domainStrategy", "domainMatcher", "rules", "balancers")
 
 
 SnapshotCallback = Callable[[str], None]
@@ -263,6 +264,16 @@ def _deprecated_transport_message(transport: str) -> str:
     if value == "grpc":
         return "Transport gRPC устарел в актуальных версиях Xray; по возможности используйте XHTTP (stream-up H2)."
     return ""
+
+
+def _normalize_xhttp_mode_value(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text or text.lower() == "auto":
+        return None
+    lowered = text.lower()
+    if lowered in {"stream-one", "stream-up", "packet-up"}:
+        return lowered
+    return text
 
 
 def _subscription_result_warnings(nodes: Iterable[Dict[str, Any]]) -> List[str]:
@@ -1310,6 +1321,14 @@ def build_subscription_json_outbounds(
         preview_nodes[preview_idx]["tag"] = tag
         try:
             outbound = copy.deepcopy(source)
+            stream_settings = outbound.get("streamSettings") if isinstance(outbound.get("streamSettings"), dict) else None
+            xhttp_settings = stream_settings.get("xhttpSettings") if isinstance(stream_settings, dict) and isinstance(stream_settings.get("xhttpSettings"), dict) else None
+            if isinstance(xhttp_settings, dict):
+                normalized_mode = _normalize_xhttp_mode_value(xhttp_settings.get("mode"))
+                if normalized_mode is None:
+                    xhttp_settings.pop("mode", None)
+                else:
+                    xhttp_settings["mode"] = normalized_mode
             outbound["tag"] = tag
             outbounds.append(outbound)
         except Exception as exc:
@@ -1794,17 +1813,34 @@ def _preserved_balancer_tags(xray_configs_dir: str) -> List[str]:
     return [tag for tag in AUTO_BALANCER_PRESERVE_TAGS if tag in available]
 
 
-def _ensure_routing_model(cfg: Any) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def _routing_field_missing(routing: Dict[str, Any], key: str) -> bool:
+    if key in {"rules", "balancers"}:
+        return not isinstance(routing.get(key), list)
+    return not str(routing.get(key) or "").strip()
+
+
+def _ensure_routing_model(cfg: Any) -> Tuple[Dict[str, Any], Dict[str, Any], bool]:
     obj = cfg if isinstance(cfg, dict) else {}
+    normalized = False
     routing = obj.get("routing")
     if not isinstance(routing, dict):
         routing = {}
         obj["routing"] = routing
+        normalized = True
+    for key in ROUTING_ROOT_KEYS:
+        if key not in obj:
+            continue
+        if _routing_field_missing(routing, key):
+            routing[key] = copy.deepcopy(obj.get(key))
+        del obj[key]
+        normalized = True
     if not isinstance(routing.get("balancers"), list):
         routing["balancers"] = []
+        normalized = True
     if not isinstance(routing.get("rules"), list):
         routing["rules"] = []
-    return obj, routing
+        normalized = True
+    return obj, routing, normalized
 
 
 def _find_balancer_by_tag(balancers: List[Any], tag: str) -> Dict[str, Any] | None:
@@ -2134,7 +2170,7 @@ def sync_subscription_routing(
         return {"changed": False, "selector": [], "balancer_tag": "", "routing_file": ""}
 
     routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
-    cfg, routing = _ensure_routing_model(_read_json_file(routing_path, {}))
+    cfg, routing, normalized_model = _ensure_routing_model(_read_json_file(routing_path, {}))
     balancer_tag = _choose_auto_balancer_tag(routing)
     balancer = _find_balancer_by_tag(routing.get("balancers", []), balancer_tag)
     current_selector = _clean_tags_list(
@@ -2161,7 +2197,7 @@ def sync_subscription_routing(
             seen.add(tag)
             selector.append(tag)
 
-    changed = False
+    changed = bool(normalized_model)
     strict_enabled = (
         _clean_routing_mode(routing_mode) == ROUTING_MODE_STRICT
         and any(tag not in AUTO_BALANCER_PRESERVE_TAGS for tag in selector)
@@ -2178,7 +2214,7 @@ def sync_subscription_routing(
             balancer_tag=balancer_tag,
             enabled=strict_enabled,
         )
-        changed = bool(balancer_changed or rule_changed or migrate_stats.get("changed"))
+        changed = bool(changed or balancer_changed or rule_changed or migrate_stats.get("changed"))
     else:
         migrate_stats = _sync_vless_reality_rules_to_balancer(
             routing,
@@ -2192,7 +2228,7 @@ def sync_subscription_routing(
             removed_tags=remove,
             previous_selector=current_selector,
         )
-        changed = bool(rule_changed or balancer_changed or migrate_stats.get("changed"))
+        changed = bool(changed or rule_changed or balancer_changed or migrate_stats.get("changed"))
 
     if not changed:
         return {

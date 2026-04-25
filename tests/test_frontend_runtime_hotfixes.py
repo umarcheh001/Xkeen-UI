@@ -636,6 +636,16 @@ def test_xray_stream_network_schema_marks_grpc_as_deprecated():
     assert 'xk-sub-node-pill-warning' in outbounds_src
 
 
+def test_monaco_schema_runtime_sanitizes_deprecated_value_metadata():
+    monaco_src = Path('xkeen-ui/static/js/ui/monaco_shared.js').read_text(encoding='utf-8')
+
+    assert 'function _sanitizeJsonSchemaForMonaco(value)' in monaco_src
+    assert "if (key === 'deprecatedValues') return;" in monaco_src
+    assert "if (hasDeprecatedValues && key === 'deprecationMessage') return;" in monaco_src
+    assert 'const sanitizedSchema = _sanitizeJsonSchemaForMonaco(schema);' in monaco_src
+    assert 'schema: sanitizedSchema,' in monaco_src
+
+
 def test_mihomo_yaml_schema_runtime_is_wired_into_panel_editor():
     schema_loader = Path('xkeen-ui/static/js/ui/editor_schema.js').read_text(encoding='utf-8')
     yaml_schema_runtime = Path('xkeen-ui/static/js/ui/yaml_schema.js').read_text(encoding='utf-8')

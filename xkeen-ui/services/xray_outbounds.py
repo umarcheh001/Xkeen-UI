@@ -71,6 +71,16 @@ def _to_bool(v) -> bool:
     s = str(v).strip().lower()
     return s in ("1", "true", "yes", "on", "y")
 
+
+def _normalize_xhttp_mode(value: Any) -> str | None:
+    text = unquote(str(value or "")).strip()
+    if not text or text.lower() == "auto":
+        return None
+    lowered = text.lower()
+    if lowered in {"stream-one", "stream-up", "packet-up"}:
+        return lowered
+    return text
+
 def build_vless_url_from_config(cfg):
     """Пытается восстановить VLESS ссылку из 04_outbounds.json.
 
@@ -926,8 +936,10 @@ def build_outbounds_config_from_vless(url):
         xhttp = {
             "host": unquote(xhttp_host) if xhttp_host else None,
             "path": unquote(xhttp_path) if xhttp_path else "/",
-            "mode": unquote(xhttp_mode) if xhttp_mode else "auto",
         }
+        normalized_mode = _normalize_xhttp_mode(xhttp_mode)
+        if normalized_mode is not None:
+            xhttp["mode"] = normalized_mode
         if extra_obj is not None:
             xhttp["extra"] = extra_obj
         xhttp = {k: v for k, v in xhttp.items() if v is not None}
@@ -1139,8 +1151,10 @@ def _build_stream_settings_from_qs(qs: dict, host_fallback: str, default_securit
         xhttp = {
             'host': unquote(str(xhttp_host)) if xhttp_host else None,
             'path': unquote(str(xhttp_path)) if xhttp_path else '/',
-            'mode': unquote(str(xhttp_mode)) if xhttp_mode else 'auto',
         }
+        normalized_mode = _normalize_xhttp_mode(xhttp_mode)
+        if normalized_mode is not None:
+            xhttp['mode'] = normalized_mode
         if extra_obj is not None:
             xhttp['extra'] = extra_obj
         xhttp = {k: v for k, v in xhttp.items() if v is not None}
@@ -1345,6 +1359,5 @@ def build_outbounds_config_from_vmess(url: str) -> dict:
     }
 
     return _wrap_outbounds_with_common(outbound)
-
 
 

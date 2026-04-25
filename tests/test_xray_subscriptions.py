@@ -163,6 +163,249 @@ def test_new_subscription_defaults_to_daily_interval(tmp_path: Path):
     assert sub["interval_hours"] == 24
 
 
+def test_refresh_subscription_omits_auto_xhttp_mode_for_link_payload(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("XHTTP Node", "xhttp", host="edge.example.com"), {}),
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "xhttp-link",
+            "tag": "xhttp-link",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": False,
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "xhttp-link",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    generated = json.loads((xray_dir / result["output_file"]).read_text(encoding="utf-8"))
+    xhttp_settings = generated["outbounds"][0]["streamSettings"]["xhttpSettings"]
+    assert xhttp_settings["path"] == "/x"
+    assert xhttp_settings["host"] == "cdn.example.com"
+    assert "mode" not in xhttp_settings
+
+
+def test_refresh_subscription_json_outbounds_strips_xhttp_auto_mode(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    subscription_body = json.dumps(
+        [
+            {
+                "remarks": "XHTTP Auto",
+                "outbounds": [
+                    {
+                        "tag": "proxy",
+                        "protocol": "vless",
+                        "settings": {
+                            "vnext": [
+                                {
+                                    "address": "edge.example.com",
+                                    "port": 443,
+                                    "users": [{"id": "user", "encryption": "none"}],
+                                }
+                            ]
+                        },
+                        "streamSettings": {
+                            "network": "xhttp",
+                            "security": "tls",
+                            "tlsSettings": {"serverName": "edge.example.com"},
+                            "xhttpSettings": {
+                                "host": "cdn.example.com",
+                                "path": "/api/v2/",
+                                "mode": "auto",
+                            },
+                        },
+                    }
+                ],
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (subscription_body, {"content-type": "application/json"}),
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "json-xhttp",
+            "tag": "json-xhttp",
+            "url": "https://example.com/json",
+            "enabled": True,
+            "ping_enabled": False,
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "json-xhttp",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    assert result["source_format"] == "xray-json"
+    generated = json.loads((xray_dir / result["output_file"]).read_text(encoding="utf-8"))
+    xhttp_settings = generated["outbounds"][0]["streamSettings"]["xhttpSettings"]
+    assert xhttp_settings["path"] == "/api/v2/"
+    assert xhttp_settings["host"] == "cdn.example.com"
+    assert "mode" not in xhttp_settings
+
+
+def test_refresh_subscription_canonicalizes_legacy_root_routing_shape(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless("Canonical Node"), {}),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps({"domainStrategy": "AsIs", "rules": []}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "canon-route",
+            "tag": "canon-route",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "canon-route",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    assert "domainStrategy" not in routing
+    assert "rules" not in routing
+    assert routing["routing"]["domainStrategy"] == "AsIs"
+    assert routing["routing"]["rules"][0]["ruleTag"] == "xk_auto_leastPing"
+
+
+def test_sync_subscription_routing_rewrites_legacy_hybrid_shape_when_selector_is_already_current(tmp_path: Path):
+    from services import xray_subscriptions as subs
+
+    xray_dir = tmp_path / "xray" / "configs"
+    xray_dir.mkdir(parents=True)
+
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(
+            {
+                "domainStrategy": "AsIs",
+                "rules": [],
+                "routing": {
+                    "balancers": [
+                        {
+                            "tag": "proxy",
+                            "selector": ["demo--Node"],
+                            "strategy": {"type": "leastPing"},
+                            "fallbackTag": "direct",
+                        }
+                    ],
+                    "rules": [
+                        {
+                            "type": "field",
+                            "balancerTag": "proxy",
+                            "inboundTag": ["redirect", "tproxy"],
+                            "ruleTag": "xk_auto_leastPing",
+                        }
+                    ],
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subs.sync_subscription_routing(
+        xray_configs_dir=str(xray_dir),
+        add_tags=["demo--Node"],
+        remove_tags=[],
+        routing_mode=subs.ROUTING_MODE_SAFE,
+        snapshot=None,
+    )
+
+    assert result["changed"] is True
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    assert "domainStrategy" not in routing
+    assert "rules" not in routing
+    assert routing["routing"]["balancers"][0]["selector"] == ["demo--Node"]
+
+
 def test_refresh_subscription_auto_syncs_routing_and_keeps_vless_reality(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

@@ -529,3 +529,52 @@ console.log(JSON.stringify({
         "outboundsKind": "xray-outbounds",
         "mihomoKind": None,
     }
+
+
+def test_xray_semantic_validation_runtime_warns_on_grpc_transport_deprecation():
+    payload = _run_node_json(
+        """
+import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayConfigSemantics({
+  outbounds: [
+    {
+      tag: 'grpc-node',
+      protocol: 'vless',
+      settings: {
+        vnext: [
+          {
+            address: 'edge.example.com',
+            port: 443,
+            users: [{ id: '11111111-1111-1111-1111-111111111111', encryption: 'none' }]
+          }
+        ]
+      },
+      streamSettings: {
+        network: 'grpc',
+        security: 'tls',
+        tlsSettings: { serverName: 'edge.example.com' },
+        grpcSettings: { serviceName: 'grpc-svc' }
+      }
+    }
+  ]
+}, { kind: 'xray-outbounds' });
+
+console.log(JSON.stringify(result.map((item) => ({
+  path: Array.isArray(item.path) ? item.path.join('.') : '',
+  severity: item.severity || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+    )
+
+    codes = [str(item["code"]) for item in payload]
+    messages = [str(item["message"]) for item in payload]
+    severities = [str(item["severity"]) for item in payload]
+    paths = [str(item["path"]) for item in payload]
+
+    assert "outbound-stream-network-grpc-deprecated" in codes
+    assert "warning" in severities
+    assert "outbounds.0.streamSettings.network" in paths
+    assert any("gRPC" in message and "XHTTP" in message for message in messages)

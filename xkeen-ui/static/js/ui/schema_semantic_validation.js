@@ -1115,6 +1115,15 @@ function validateXrayStreamSettingsItem(item, pointer, role, diagnostics) {
   const flowValues = collectXrayFlowValues(item, role);
   const itemLabel = cleanName(item.tag) || `${role}[${pointer}]`;
 
+  if (network === 'grpc') {
+    pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/network`, `${role === 'outbound' ? 'Outbound' : 'Inbound'} "${itemLabel}" использует устаревший transport gRPC. Для новых конфигов Xray обычно лучше перейти на XHTTP (\`network: xhttp\`), если сервер поддерживает этот transport.`, {
+      severity: 'warning',
+      source: 'xray-semantic',
+      code: `${role}-stream-network-grpc-deprecated`,
+      hint: 'Если сервер поддерживает XHTTP, замените `streamSettings.network` на `xhttp` и перенесите transport-specific поля в `xhttpSettings`.',
+    }));
+  }
+
   if ((security === 'reality' || hasReality) && protocol && protocol !== 'vless') {
     pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/streamSettings/${hasReality ? 'realitySettings' : 'security'}`, `${role === 'outbound' ? 'Outbound' : 'Inbound'} "${itemLabel}" использует REALITY, но протокол сейчас \`${protocol}\`. Reality обычно ожидает \`protocol: vless\`.`, {
       source: 'xray-semantic',

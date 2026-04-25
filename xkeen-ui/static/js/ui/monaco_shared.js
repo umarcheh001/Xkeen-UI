@@ -441,6 +441,22 @@ import {
     } catch (e) {}
   }
 
+  function _sanitizeJsonSchemaForMonaco(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => _sanitizeJsonSchemaForMonaco(item));
+    }
+    if (!value || typeof value !== 'object') return value;
+
+    const hasDeprecatedValues = Array.isArray(value.deprecatedValues) && value.deprecatedValues.length > 0;
+    const out = {};
+    Object.keys(value).forEach((key) => {
+      if (key === 'deprecatedValues') return;
+      if (hasDeprecatedValues && key === 'deprecationMessage') return;
+      out[key] = _sanitizeJsonSchemaForMonaco(value[key]);
+    });
+    return out;
+  }
+
   function _setModelJsonSchema(model, schema, monaco) {
     const modelUri = _jsonModelUri(model);
     if (!modelUri) return false;
@@ -450,10 +466,11 @@ import {
       return false;
     }
     if (schema && typeof schema === 'object') {
+      const sanitizedSchema = _sanitizeJsonSchemaForMonaco(schema);
       _state.jsonSchemasByModelUri.set(modelUri, {
         uri: _schemaRegistrationUriForModel(modelUri),
         fileMatch: _schemaFileMatchPatternsForModel(model),
-        schema,
+        schema: sanitizedSchema,
       });
     } else {
       _state.jsonSchemasByModelUri.delete(modelUri);
