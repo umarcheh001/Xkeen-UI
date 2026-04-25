@@ -33,6 +33,7 @@ def _assert_beginner_meta(node: dict, label: str) -> None:
         "tproxy-port",
         "allow-lan",
         "proxies",
+        "proxy-providers",
         "proxy-groups",
         "rule-providers",
         "rules",
@@ -84,3 +85,11 @@ def test_xray_aux_schema_definition_has_beginner_metadata(schema_name, definitio
     defs = schema.get("definitions") or {}
     assert definition in defs, f"{schema_name} missing definition `{definition}`"
     _assert_beginner_meta(defs[definition], f"{schema_name}#{definition}")
+
+
+@pytest.mark.parametrize("key", ["dns", "observatory"])
+def test_xray_config_top_level_field_has_beginner_metadata(key):
+    schema = _load(SCHEMAS_DIR / "xray-config.schema.json")
+    props = schema.get("properties") or {}
+    assert key in props, f"xray-config schema missing top-level property `{key}`"
+    _assert_beginner_meta(props[key], f"xray-config.{key}")

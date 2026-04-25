@@ -296,3 +296,99 @@ def test_outbounds_schema_linter_warns_when_grpc_transport_is_used():
     )
 
     assert any("gRPC" in message or "XHTTP" in message for message in messages)
+
+
+def test_json_schema_linter_supports_dependent_required(tmp_path: Path):
+    schema_path = tmp_path / "dependent-required.schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "properties": {
+                    "mode": {"type": "string"},
+                    "client-fingerprint": {"type": "string"},
+                },
+                "dependentRequired": {
+                    "mode": ["client-fingerprint"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    messages = _run_linter_messages(
+        '{"mode":"reality"}',
+        schema_path=str(schema_path),
+    )
+
+    assert any("`mode`" in message and "`client-fingerprint`" in message for message in messages)
+
+
+def test_outbounds_schema_linter_requires_matching_network_for_xhttp_settings():
+    messages = _run_linter_messages(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "vless",',
+            '      "tag": "proxy-xhttp",',
+            '      "settings": {',
+            '        "vnext": [',
+            "          {",
+            '            "address": "edge.example.com",',
+            '            "port": 443,',
+            '            "users": [',
+            '              { "id": "11111111-1111-1111-1111-111111111111", "encryption": "none" }',
+            "            ]",
+            "          }",
+            "        ]",
+            "      },",
+            '      "streamSettings": {',
+            '        "network": "ws",',
+            '        "xhttpSettings": {',
+            '          "path": "/"',
+            "        }",
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    assert any('"xhttp"' in message for message in messages)
+
+
+def test_outbounds_schema_linter_requires_tls_security_for_tls_settings():
+    messages = _run_linter_messages(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "trojan",',
+            '      "tag": "proxy-tls",',
+            '      "settings": {',
+            '        "servers": [',
+            "          {",
+            '            "address": "edge.example.com",',
+            '            "port": 443,',
+            '            "password": "secret"',
+            "          }",
+            "        ]",
+            "      },",
+            '      "streamSettings": {',
+            '        "security": "none",',
+            '        "tlsSettings": {',
+            '          "serverName": "edge.example.com"',
+            "        }",
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    assert any('"tls"' in message for message in messages)

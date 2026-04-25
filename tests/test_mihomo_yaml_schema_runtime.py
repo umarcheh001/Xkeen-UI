@@ -172,6 +172,83 @@ def test_mihomo_yaml_schema_runtime_reports_required_fields_for_proxy_groups():
     assert result["diagnostics"][0]["line"] == 2
 
 
+def test_mihomo_yaml_schema_runtime_requires_provider_url_for_http_proxy_provider():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxy-providers:",
+            "  sample:",
+            "    type: http",
+            "",
+        ])
+    )
+
+    assert result["ok"] is False
+    messages = [str(item["message"]) for item in result["diagnostics"]]
+    assert any("`url`" in message for message in messages)
+    assert any(str(item["path"]) == "proxy-providers.sample" for item in result["diagnostics"])
+
+
+def test_mihomo_yaml_schema_runtime_requires_url_for_url_test_group():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxy-groups:",
+            "  - name: Auto",
+            "    type: url-test",
+            "    proxies: [DIRECT]",
+            "",
+        ])
+    )
+
+    assert result["ok"] is False
+    messages = [str(item["message"]) for item in result["diagnostics"]]
+    assert any("`url`" in message for message in messages)
+    assert any(str(item["path"]) == "proxy-groups[0]" for item in result["diagnostics"])
+
+
+def test_mihomo_yaml_schema_runtime_requires_matching_network_for_ws_opts():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: ws-node",
+            "    type: vless",
+            "    server: edge.example.com",
+            "    port: 443",
+            "    uuid: 11111111-1111-1111-1111-111111111111",
+            "    ws-opts:",
+            "      path: /",
+            "",
+        ])
+    )
+
+    assert result["ok"] is False
+    messages = [str(item["message"]) for item in result["diagnostics"]]
+    assert any("`network`" in message for message in messages)
+    assert any(str(item["path"]) == "proxies[0]" for item in result["diagnostics"])
+
+
+def test_mihomo_yaml_schema_runtime_requires_reality_companion_fields():
+    result = _run_mihomo_yaml_schema(
+        "\n".join([
+            "proxies:",
+            "  - name: reality-node",
+            "    type: vless",
+            "    server: edge.example.com",
+            "    port: 443",
+            "    uuid: 11111111-1111-1111-1111-111111111111",
+            "    tls: true",
+            "    reality-opts:",
+            "      public-key: abcdefghijklmnop",
+            "",
+        ])
+    )
+
+    assert result["ok"] is False
+    messages = [str(item["message"]) for item in result["diagnostics"]]
+    assert any("`client-fingerprint`" in message for message in messages)
+    assert any("`servername`" in message for message in messages)
+    assert any(str(item["path"]) == "proxies[0]" for item in result["diagnostics"])
+
+
 def test_mihomo_yaml_schema_runtime_accepts_http_rule_provider_without_path():
     result = _run_mihomo_yaml_schema(
         "\n".join([

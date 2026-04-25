@@ -436,6 +436,7 @@
           "properties": {
             "path": {
               "type": "string",
+              "default": "/",
               "description": "HTTP-путь WebSocket-подключения. Обычно должен совпадать с серверным.",
               "examples": [
                 "/",
@@ -475,6 +476,7 @@
             },
             "path": {
               "type": "string",
+              "default": "/",
               "description": "HTTP-путь.",
               "examples": [
                 "/"
@@ -508,6 +510,7 @@
             },
             "multiMode": {
               "type": "boolean",
+              "default": false,
               "description": "Мультиплексирование gRPC-потоков внутри одного соединения."
             },
             "authority": {
@@ -522,6 +525,7 @@
           "properties": {
             "path": {
               "type": "string",
+              "default": "/",
               "description": "HTTP-путь.",
               "examples": [
                 "/",
@@ -531,6 +535,45 @@
             "host": {
               "type": "string",
               "description": "HTTP Host header."
+            },
+            "headers": {
+              "type": "object",
+              "description": "Дополнительные HTTP-заголовки.",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "xhttpSettings": {
+          "type": "object",
+          "description": "Настройки XHTTP-транспорта. Применимо только если `network = \"xhttp\"`.",
+          "properties": {
+            "path": {
+              "type": "string",
+              "default": "/",
+              "description": "HTTP-путь XHTTP.",
+              "examples": [
+                "/",
+                "/gateway"
+              ]
+            },
+            "host": {
+              "type": "string",
+              "description": "Host / authority для XHTTP.",
+              "examples": [
+                "edge.example.com"
+              ]
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "stream-one",
+                "stream-up",
+                "packet-up"
+              ],
+              "default": "stream-one",
+              "description": "Режим XHTTP. `stream-one` — безопасный baseline, `stream-up` — чаще для browser-like TCP, `packet-up` — для packet/UDP-like сценариев."
             },
             "headers": {
               "type": "object",
@@ -611,7 +654,128 @@
             }
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "tlsSettings"
+            ]
+          },
+          "then": {
+            "required": [
+              "security"
+            ],
+            "properties": {
+              "security": {
+                "const": "tls"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "realitySettings"
+            ]
+          },
+          "then": {
+            "required": [
+              "security"
+            ],
+            "properties": {
+              "security": {
+                "const": "reality"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "wsSettings"
+            ]
+          },
+          "then": {
+            "required": [
+              "network"
+            ],
+            "properties": {
+              "network": {
+                "const": "ws"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "httpSettings"
+            ]
+          },
+          "then": {
+            "required": [
+              "network"
+            ],
+            "properties": {
+              "network": {
+                "const": "http"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "grpcSettings"
+            ]
+          },
+          "then": {
+            "required": [
+              "network"
+            ],
+            "properties": {
+              "network": {
+                "const": "grpc"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "httpupgradeSettings"
+            ]
+          },
+          "then": {
+            "required": [
+              "network"
+            ],
+            "properties": {
+              "network": {
+                "const": "httpupgrade"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "xhttpSettings"
+            ]
+          },
+          "then": {
+            "required": [
+              "network"
+            ],
+            "properties": {
+              "network": {
+                "const": "xhttp"
+              }
+            }
+          }
+        }
+      ]
     },
     "certificate": {
       "type": "object",

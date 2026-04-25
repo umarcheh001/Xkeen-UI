@@ -290,6 +290,20 @@ function validateValue(value, schema, rootSchema, pointer) {
       }
     }
 
+    // dependentRequired
+    if (schema.dependentRequired && typeof schema.dependentRequired === 'object') {
+      for (const [key, peers] of Object.entries(schema.dependentRequired)) {
+        if (!(key in value) || !Array.isArray(peers)) continue;
+        for (const peer of peers) {
+          if (!peer || peer in value) continue;
+          errors.push({
+            pointer: p ? `${p}/${String(peer).replace(/~/g, '~0').replace(/\//g, '~1')}` : `/${String(peer).replace(/~/g, '~0').replace(/\//g, '~1')}`,
+            message: `Поле \`${key}\` требует также поле \`${peer}\``,
+          });
+        }
+      }
+    }
+
     // properties
     for (const key of keys) {
       const childPointer = `${p}/${key.replace(/~/g, '~0').replace(/\//g, '~1')}`;
@@ -1265,6 +1279,7 @@ function collectAllProperties(schema, rootSchema) {
   }
   // if/then
   if (schema.then) Object.assign(result, collectAllProperties(schema.then, rootSchema));
+  if (schema.else) Object.assign(result, collectAllProperties(schema.else, rootSchema));
 
   return result;
 }

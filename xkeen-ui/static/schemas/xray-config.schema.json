@@ -61,6 +61,10 @@
 
     "dns": {
       "description": "Встроенный DNS-резолвер Xray. Для прозрачного прокси на Keenetic обычно используется для обхода DNS-leak и выбора DoH/DoT-серверов (например, Cloudflare `https+local://1.1.1.1/dns-query`).",
+      "x-ui-explain": "DNS-блок управляет тем, как сам Xray резолвит домены: через обычный DNS, DoH, DoT, FakeDNS и адресные правила.",
+      "x-ui-use-case": "Нужен, когда важно убрать DNS-leak, направить разные домены в разные резолверы или включить FakeDNS для transparent/sniff сценариев.",
+      "x-ui-example": "{\n  \"servers\": [\n    \"https+local://1.1.1.1/dns-query\",\n    \"fakedns\"\n  ],\n  \"tag\": \"dns-query\"\n}",
+      "x-ui-warning": "Ошибки в `dns.servers` ломают не только резолв доменов, но и весь transparent flow: правила по доменам перестают матчиться, а трафик начинает «утекать» в системный DNS.",
       "type": "object",
       "properties": {
         "hosts": {
@@ -393,6 +397,10 @@
 
     "observatory": {
       "description": "Мониторинг доступности outbound. Необходим для `balancer.strategy.type=leastPing` и автоматического исключения мёртвых узлов. Xray периодически отправляет probe-запросы на `probeUrl` через каждый подходящий outbound.",
+      "x-ui-explain": "Observatory регулярно проверяет доступность и задержку outbound-ов, чтобы балансировщик мог выбирать живые и быстрые узлы.",
+      "x-ui-use-case": "Нужен для `leastPing`, `leastLoad` и любых сценариев, где Xray должен сам отличать рабочий узел от умершего.",
+      "x-ui-example": "{\n  \"subjectSelector\": [\"proxy-\", \"warp\"],\n  \"probeUrl\": \"https://www.gstatic.com/generate_204\",\n  \"probeInterval\": \"30s\"\n}",
+      "x-ui-warning": "Слишком частый probe на слабом роутере создаёт лишнюю нагрузку и может сам ухудшать latency, особенно если outbound-ов много.",
       "type": "object",
       "properties": {
         "subjectSelector": {
@@ -588,7 +596,7 @@
         "wsSettings": {
           "type": "object",
           "properties": {
-            "path": { "type": "string" },
+            "path": { "type": "string", "default": "/" },
             "host": { "type": "string" },
             "headers": { "type": "object", "additionalProperties": { "type": "string" } }
           }
@@ -597,7 +605,7 @@
           "type": "object",
           "properties": {
             "host": { "type": "array", "items": { "type": "string" } },
-            "path": { "type": "string" },
+            "path": { "type": "string", "default": "/" },
             "method": { "type": "string" },
             "headers": { "type": "object" }
           }
@@ -606,16 +614,44 @@
           "type": "object",
           "properties": {
             "serviceName": { "type": "string" },
-            "multiMode": { "type": "boolean" },
+            "multiMode": { "type": "boolean", "default": false },
             "authority": { "type": "string" }
           }
         },
         "httpupgradeSettings": {
           "type": "object",
           "properties": {
-            "path": { "type": "string" },
+            "path": { "type": "string", "default": "/" },
             "host": { "type": "string" },
             "headers": { "type": "object", "additionalProperties": { "type": "string" } }
+          }
+        },
+        "xhttpSettings": {
+          "type": "object",
+          "description": "Настройки XHTTP-транспорта. Применимо только если `network = \"xhttp\"`.",
+          "properties": {
+            "path": {
+              "type": "string",
+              "default": "/",
+              "description": "HTTP-путь XHTTP.",
+              "examples": ["/", "/gateway"]
+            },
+            "host": {
+              "type": "string",
+              "description": "Host / authority для XHTTP.",
+              "examples": ["edge.example.com"]
+            },
+            "mode": {
+              "type": "string",
+              "enum": ["stream-one", "stream-up", "packet-up"],
+              "default": "stream-one",
+              "description": "Режим XHTTP."
+            },
+            "headers": {
+              "type": "object",
+              "description": "Дополнительные HTTP-заголовки.",
+              "additionalProperties": { "type": "string" }
+            }
           }
         },
         "sockopt": {
@@ -635,7 +671,72 @@
             "v6only": { "type": "boolean" }
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["tlsSettings"] },
+          "then": {
+            "required": ["security"],
+            "properties": {
+              "security": { "const": "tls" }
+            }
+          }
+        },
+        {
+          "if": { "required": ["realitySettings"] },
+          "then": {
+            "required": ["security"],
+            "properties": {
+              "security": { "const": "reality" }
+            }
+          }
+        },
+        {
+          "if": { "required": ["wsSettings"] },
+          "then": {
+            "required": ["network"],
+            "properties": {
+              "network": { "const": "ws" }
+            }
+          }
+        },
+        {
+          "if": { "required": ["httpSettings"] },
+          "then": {
+            "required": ["network"],
+            "properties": {
+              "network": { "const": "http" }
+            }
+          }
+        },
+        {
+          "if": { "required": ["grpcSettings"] },
+          "then": {
+            "required": ["network"],
+            "properties": {
+              "network": { "const": "grpc" }
+            }
+          }
+        },
+        {
+          "if": { "required": ["httpupgradeSettings"] },
+          "then": {
+            "required": ["network"],
+            "properties": {
+              "network": { "const": "httpupgrade" }
+            }
+          }
+        },
+        {
+          "if": { "required": ["xhttpSettings"] },
+          "then": {
+            "required": ["network"],
+            "properties": {
+              "network": { "const": "xhttp" }
+            }
+          }
+        }
+      ]
     },
 
     "certificate": {

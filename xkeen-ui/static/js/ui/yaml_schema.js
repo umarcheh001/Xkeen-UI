@@ -472,6 +472,14 @@ function validateNode(value, rawSchema, ctx, path) {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(schema, 'const') && !deepEqual(schema.const, value)) {
+    errors.push({
+      path,
+      message: `Значение должно быть ${valuePreview(schema.const)} (путь ${pathLabel(path)}).`,
+    });
+    return errors;
+  }
+
   if (typeof value === 'number' && Number.isFinite(value)) {
     if (typeof schema.minimum === 'number' && value < schema.minimum) {
       errors.push({
@@ -498,6 +506,7 @@ function validateNode(value, rawSchema, ctx, path) {
   if (isPlainObject(value)) {
     const properties = isPlainObject(schema.properties) ? schema.properties : {};
     const required = Array.isArray(schema.required) ? schema.required : [];
+    const dependentRequired = isPlainObject(schema.dependentRequired) ? schema.dependentRequired : {};
 
     for (let index = 0; index < required.length; index += 1) {
       const key = String(required[index] || '');
@@ -508,6 +517,20 @@ function validateNode(value, rawSchema, ctx, path) {
       });
       if (errors.length >= ctx.maxErrors) return errors.slice(0, ctx.maxErrors);
     }
+
+    Object.keys(dependentRequired).forEach((key) => {
+      if (!key || !Object.prototype.hasOwnProperty.call(value, key)) return;
+      const peers = Array.isArray(dependentRequired[key]) ? dependentRequired[key] : [];
+      peers.forEach((peer) => {
+        const peerKey = String(peer || '');
+        if (!peerKey || Object.prototype.hasOwnProperty.call(value, peerKey)) return;
+        errors.push({
+          path,
+          message: `Поле \`${key}\` требует также поле \`${peerKey}\` (путь ${pathLabel(path)}).`,
+        });
+      });
+    });
+    if (errors.length >= ctx.maxErrors) return errors.slice(0, ctx.maxErrors);
 
     const keys = Object.keys(value);
     for (let index = 0; index < keys.length; index += 1) {
@@ -524,6 +547,32 @@ function validateNode(value, rawSchema, ctx, path) {
         errors.push(...validateNode(value[key], schema.additionalProperties, ctx, childPath));
       }
       if (errors.length >= ctx.maxErrors) return errors.slice(0, ctx.maxErrors);
+    }
+  }
+
+  if (Array.isArray(schema.allOf) && schema.allOf.length) {
+    for (let index = 0; index < schema.allOf.length; index += 1) {
+      errors.push(...validateNode(value, schema.allOf[index], ctx, path));
+      if (errors.length >= ctx.maxErrors) return errors.slice(0, ctx.maxErrors);
+    }
+  }
+
+  if (schema.not) {
+    const nestedErrors = validateNode(value, schema.not, ctx, path);
+    if (!nestedErrors.length) {
+      errors.push({
+        path,
+        message: `Значение не должно соответствовать запрещённой схеме (путь ${pathLabel(path)}).`,
+      });
+    }
+  }
+
+  if (schema.if) {
+    const matchesIf = validateNode(value, schema.if, ctx, path).length === 0;
+    if (matchesIf && schema.then) {
+      errors.push(...validateNode(value, schema.then, ctx, path));
+    } else if (!matchesIf && schema.else) {
+      errors.push(...validateNode(value, schema.else, ctx, path));
     }
   }
 

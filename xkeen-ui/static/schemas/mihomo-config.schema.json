@@ -630,7 +630,11 @@
     "proxy-providers": {
       "type": "object",
       "description": "Провайдеры прокси: подписки (HTTP), локальные файлы (file), inline-списки. Загружают списки серверов извне, их можно подключить к группе через `use: [имя-провайдера]`.",
-      "additionalProperties": { "$ref": "#/definitions/proxyProvider" }
+      "additionalProperties": { "$ref": "#/definitions/proxyProvider" },
+      "x-ui-explain": "Список внешних источников прокси. Сам по себе provider трафик не маршрутизирует: он только подгружает узлы, а использовать их потом нужно через `proxy-groups.use`.",
+      "x-ui-use-case": "Подходит для подписок и больших наборов узлов, которые надо регулярно обновлять без ручного редактирования `proxies`.",
+      "x-ui-example": "my-sub:\n  type: http\n  url: https://example.com/sub.yaml\n  interval: 21600",
+      "x-ui-warning": "Провайдер, который нигде не подключён через `proxy-groups.use`, просто висит в конфиге и не влияет на маршрутизацию."
     },
 
     "proxy-groups": {
@@ -728,6 +732,9 @@
       "type": "object",
       "description": "Прокси-сервер — одиночный узел. Обязательны `name`, `type`, `server`, `port`. Остальные поля зависят от `type` (uuid для vless/vmess, password для trojan/ss, и т.д.).",
       "required": ["name", "type", "server", "port"],
+      "dependentRequired": {
+        "reality-opts": ["client-fingerprint", "servername"]
+      },
       "properties": {
         "name": {
           "type": "string",
@@ -849,7 +856,12 @@
         "ws-opts": {
           "type": "object",
           "properties": {
-            "path": { "type": "string" },
+            "path": {
+              "type": "string",
+              "default": "/",
+              "description": "HTTP-путь WebSocket-подключения. Обычно должен совпадать с серверным.",
+              "examples": ["/", "/ws", "/vless"]
+            },
             "headers": { "type": "object", "additionalProperties": { "type": "string" } },
             "max-early-data": { "type": "integer" },
             "early-data-header-name": { "type": "string" },
@@ -860,7 +872,11 @@
         "grpc-opts": {
           "type": "object",
           "properties": {
-            "grpc-service-name": { "type": "string" },
+            "grpc-service-name": {
+              "type": "string",
+              "description": "Имя gRPC service. Должно совпадать с серверным.",
+              "examples": ["api", "GunService"]
+            },
             "ping-interval": { "type": "integer", "minimum": 0, "description": "Интервал ping для gRPC в секундах" },
             "max-connections": { "type": "integer", "minimum": 0, "description": "Максимум gRPC-соединений для мультиплексирования" },
             "min-streams": { "type": "integer", "minimum": 0, "description": "Минимум потоков на соединение перед открытием нового" },
@@ -871,7 +887,12 @@
           "type": "object",
           "properties": {
             "host": { "type": "array", "items": { "type": "string" } },
-            "path": { "type": "string" }
+            "path": {
+              "type": "string",
+              "default": "/",
+              "description": "HTTP/2 path.",
+              "examples": ["/", "/api"]
+            }
           }
         },
         "xhttp-opts": { "$ref": "#/definitions/xhttpOpts" },
@@ -898,7 +919,87 @@
             }
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["ws-opts"]
+          },
+          "then": {
+            "required": ["network"],
+            "properties": {
+              "network": { "const": "ws" }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["grpc-opts"]
+          },
+          "then": {
+            "required": ["network"],
+            "properties": {
+              "network": { "const": "grpc" }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["h2-opts"]
+          },
+          "then": {
+            "required": ["network"],
+            "properties": {
+              "network": { "enum": ["h2", "http"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["xhttp-opts"]
+          },
+          "then": {
+            "required": ["network"],
+            "properties": {
+              "network": { "const": "xhttp" }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["servername"]
+          },
+          "then": {
+            "required": ["tls"],
+            "properties": {
+              "tls": { "const": true }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["client-fingerprint"]
+          },
+          "then": {
+            "required": ["tls"],
+            "properties": {
+              "tls": { "const": true }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["reality-opts"]
+          },
+          "then": {
+            "required": ["tls", "type"],
+            "properties": {
+              "tls": { "const": true },
+              "type": { "const": "vless" }
+            }
+          }
+        }
+      ]
     },
 
     "xhttpReuseSettings": {
@@ -955,9 +1056,24 @@
       "type": "object",
       "description": "Настройки транспорта XHTTP.",
       "properties": {
-        "path": { "type": "string", "description": "HTTP-путь XHTTP." },
-        "host": { "type": "string", "description": "Host для XHTTP." },
-        "mode": { "type": "string", "enum": ["stream-one", "stream-up", "packet-up"], "description": "Режим XHTTP." },
+        "path": {
+          "type": "string",
+          "default": "/",
+          "description": "HTTP-путь XHTTP. Обычно совпадает с серверным.",
+          "examples": ["/", "/gateway", "/up"]
+        },
+        "host": {
+          "type": "string",
+          "description": "Host для XHTTP. Часто совпадает с `servername`/SNI.",
+          "examples": ["edge.example.com", "cdn.example.com"]
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["stream-one", "stream-up", "packet-up"],
+          "default": "stream-one",
+          "description": "Режим XHTTP. `stream-one` — безопасный baseline, `stream-up` — чаще для browser-like TCP, `packet-up` — для packet/UDP-like сценариев.",
+          "examples": ["stream-one", "stream-up", "packet-up"]
+        },
         "headers": { "type": "object", "description": "Дополнительные HTTP-заголовки.", "additionalProperties": { "type": "string" } },
         "no-grpc-header": { "type": "boolean", "description": "Не добавлять gRPC-совместимый заголовок." },
         "x-padding-bytes": { "type": ["integer", "string"], "description": "Диапазон или количество XPadding-байтов." },
@@ -1079,7 +1195,42 @@
           "description": "Inline-список прокси (для `type: inline`).",
           "items": { "type": "object" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["type"],
+            "properties": {
+              "type": { "const": "http" }
+            }
+          },
+          "then": {
+            "required": ["url"]
+          }
+        },
+        {
+          "if": {
+            "required": ["type"],
+            "properties": {
+              "type": { "const": "file" }
+            }
+          },
+          "then": {
+            "required": ["path"]
+          }
+        },
+        {
+          "if": {
+            "required": ["type"],
+            "properties": {
+              "type": { "const": "inline" }
+            }
+          },
+          "then": {
+            "required": ["payload"]
+          }
+        }
+      ]
     },
 
     "proxyGroup": {
@@ -1198,7 +1349,20 @@
           "default": false,
           "description": "Скрыть группу из UI."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["type"],
+            "properties": {
+              "type": { "enum": ["url-test", "fallback", "load-balance"] }
+            }
+          },
+          "then": {
+            "required": ["url"]
+          }
+        }
+      ]
     },
 
     "ruleProvider": {
@@ -1249,7 +1413,42 @@
           "description": "Inline-список правил (для `type: inline`).",
           "items": { "type": "string", "examples": ["DOMAIN-SUFFIX,google.com", "IP-CIDR,8.8.8.8/32"] }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["type"],
+            "properties": {
+              "type": { "const": "http" }
+            }
+          },
+          "then": {
+            "required": ["url"]
+          }
+        },
+        {
+          "if": {
+            "required": ["type"],
+            "properties": {
+              "type": { "const": "file" }
+            }
+          },
+          "then": {
+            "required": ["path"]
+          }
+        },
+        {
+          "if": {
+            "required": ["type"],
+            "properties": {
+              "type": { "const": "inline" }
+            }
+          },
+          "then": {
+            "required": ["payload"]
+          }
+        }
+      ]
     }
   }
 }
