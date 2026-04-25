@@ -96,7 +96,7 @@ if (!result) {{
     return json.loads(result.stdout.strip())
 
 
-def _run_hover(doc_with_marker: str) -> dict[str, object] | None:
+def _run_hover(doc_with_marker: str, *, beginner_mode: bool = False) -> dict[str, object] | None:
     if shutil.which("node") is None:
         pytest.skip("node is not available in this environment")
 
@@ -109,7 +109,7 @@ const marker = '__CURSOR__';
 const docWithMarker = {json.dumps(doc_with_marker)};
 const offset = docWithMarker.indexOf(marker);
 const doc = docWithMarker.replace(marker, '');
-const result = hoverYamlTextFromSchema(doc, schema, {{ offset }});
+const result = hoverYamlTextFromSchema(doc, schema, {{ offset, beginnerMode: {str(beginner_mode).lower()} }});
 console.log(JSON.stringify(result));
 """
 
@@ -197,3 +197,45 @@ def test_zkeen_template_hover_exposes_description_and_default_for_geodata_mode()
     assert result["path"] == "geodata-mode"
     assert "Использовать .dat файлы вместо mmdb" in result["plain"]
     assert "По умолчанию: false." in result["plain"]
+
+
+def test_beginner_hover_explains_proxy_group_use_as_provider_reference():
+    result = _run_hover(
+        "\n".join([
+            "proxy-groups:",
+            "  - name: Auto",
+            "    type: url-test",
+            "    u__CURSOR__se:",
+            "      - my-subscription",
+            "    url: https://www.gstatic.com/generate_204",
+            "",
+        ]),
+        beginner_mode=True,
+    )
+
+    assert result is not None
+    assert result["path"] == "proxy-groups[0].use"
+    assert "Простыми словами:" in result["plain"]
+    assert "список provider-ов" in result["plain"]
+    assert "имена provider-ов" in result["plain"]
+
+
+def test_beginner_hover_explains_rule_provider_behavior():
+    result = _run_hover(
+        "\n".join([
+            "rule-providers:",
+            "  youtube:",
+            "    type: http",
+            "    beha__CURSOR__vior: domain",
+            "    format: mrs",
+            "    url: https://example.com/youtube.mrs",
+            "",
+        ]),
+        beginner_mode=True,
+    )
+
+    assert result is not None
+    assert result["path"] == "rule-providers.youtube.behavior"
+    assert "Простыми словами:" in result["plain"]
+    assert "что именно лежит внутри rule-provider" in result["plain"]
+    assert "Если `behavior` не совпадает" in result["plain"]

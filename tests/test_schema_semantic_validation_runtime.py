@@ -381,6 +381,45 @@ console.log(JSON.stringify(result.map((item) => ({
     assert any("Auto -> Fallback -> Auto" in message for message in messages)
 
 
+def test_mihomo_semantic_validation_uses_suggestion_severity_for_soft_protocol_mismatches():
+    script = """
+import { validateMihomoConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateMihomoConfigSemantics({
+  proxies: [
+    {
+      name: 'trojan-node',
+      type: 'trojan',
+      server: 'edge.example.com',
+      port: 443,
+      password: 'secret',
+      tls: true,
+      alterId: 0,
+      flow: 'xtls-rprx-vision'
+    }
+  ]
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  path: Array.isArray(item.path) ? item.path.join('.') : '',
+  severity: item.severity || '',
+  code: item.code || '',
+  hint: item.hint || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    by_code = {str(item["code"]): item for item in payload}
+
+    assert "proxy-type-alterid" in by_code
+    assert "proxy-type-flow" in by_code
+    assert by_code["proxy-type-alterid"]["severity"] == "info"
+    assert by_code["proxy-type-flow"]["severity"] == "info"
+    assert "можно просто удалить" in str(by_code["proxy-type-alterid"]["hint"])
+    assert "VLESS Reality / TLS-сценариев" in str(by_code["proxy-type-flow"]["hint"])
+
+
 def test_codemirror_json_schema_linter_supports_xray_semantic_validation():
     doc = "\n".join([
         "{",

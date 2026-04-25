@@ -731,6 +731,10 @@
     "proxy": {
       "type": "object",
       "description": "Прокси-сервер — одиночный узел. Обязательны `name`, `type`, `server`, `port`. Остальные поля зависят от `type` (uuid для vless/vmess, password для trojan/ss, и т.д.).",
+      "x-ui-explain": "Это один конкретный сервер/узел, к которому Mihomo подключается. Здесь описывают адрес, порт, тип протокола и transport/TLS-параметры этого узла.",
+      "x-ui-use-case": "Используется, когда вы добавляете сервер вручную или хотите понять, что именно приехало из подписки provider-а.",
+      "x-ui-example": "{ name: \"DE-01\", type: \"vless\", server: \"edge.example.com\", port: 443, uuid: \"11111111-1111-1111-1111-111111111111\", tls: true }",
+      "x-ui-warning": "Обязательные поля зависят от `type`, а transport-блоки (`ws-opts`, `grpc-opts`, `xhttp-opts`) работают только вместе с подходящим `network`.",
       "required": ["name", "type", "server", "port"],
       "dependentRequired": {
         "reality-opts": ["client-fingerprint", "servername"]
@@ -805,6 +809,10 @@
           "type": "string",
           "enum": ["ws", "grpc", "h2", "http", "tcp", "xhttp"],
           "description": "Транспортный протокол поверх TCP/TLS. `tcp` — простой TCP (дефолт), `ws` — WebSocket (часто с CDN), `xhttp` — современный HTTP-based (рекомендуется вместо gRPC), `grpc` — устарел, `h2`/`http` — HTTP/2.",
+          "x-ui-explain": "Это способ, которым прокси маскирует или упаковывает трафик поверх базового TCP/TLS-соединения.",
+          "x-ui-use-case": "Меняют, когда сервер работает не на чистом TCP, а через CDN, WebSocket, XHTTP или другой transport.",
+          "x-ui-example": "\"network\": \"xhttp\"",
+          "x-ui-warning": "Значение здесь должно совпадать с тем, как настроен сервер, а transport-опции ниже должны соответствовать выбранной сети.",
           "examples": ["tcp", "ws", "xhttp", "grpc"]
         },
         "udp": {
@@ -841,6 +849,10 @@
         "reality-opts": {
           "type": "object",
           "description": "Параметры VLESS Reality. Используются с `type: vless`, `tls: true` и подходящим `client-fingerprint`.",
+          "x-ui-explain": "Это клиентские параметры Reality: публичный ключ сервера и short-id, по которым маскированное соединение вообще сможет установиться.",
+          "x-ui-use-case": "Нужны только для `type: vless` с `tls: true`, когда сервер работает в режиме Reality.",
+          "x-ui-example": "{ public-key: \"<server-public-key>\", short-id: \"abcd1234\" }",
+          "x-ui-warning": "Обычно вместе с этим блоком нужны ещё `servername` и `client-fingerprint`; без них Reality-клиент часто не поднимается.",
           "properties": {
             "public-key": {
               "type": "string",
@@ -1086,6 +1098,10 @@
     "proxyProvider": {
       "type": "object",
       "description": "Провайдер прокси — внешний источник списка серверов (подписка по HTTP, локальный файл или inline-список).",
+      "x-ui-explain": "Это источник, из которого Mihomo загружает список прокси. Сам provider не маршрутизирует трафик, он только приносит узлы в конфиг.",
+      "x-ui-use-case": "Используется для подписок и больших наборов серверов, которые нужно периодически обновлять без ручного редактирования `proxies`.",
+      "x-ui-example": "{ type: \"http\", url: \"https://sub.example.com/clash\", path: \"./providers/sub.yaml\", interval: 21600 }",
+      "x-ui-warning": "Чтобы узлы из provider-а реально начали использоваться, его имя нужно потом подключить в `proxy-groups[].use` или иным образом включить в группу.",
       "properties": {
         "type": {
           "type": "string",
@@ -1122,6 +1138,10 @@
         "health-check": {
           "type": "object",
           "description": "Параметры health-check всех прокси из этого провайдера.",
+          "x-ui-explain": "Это фоновые проверки доступности и задержки узлов из provider-а.",
+          "x-ui-use-case": "Нужны для auto/url-test/fallback сценариев, чтобы не выбирать мёртвые или слишком медленные узлы.",
+          "x-ui-example": "{ enable: true, url: \"https://www.gstatic.com/generate_204\", interval: 300 }",
+          "x-ui-warning": "Слишком частые проверки расходуют трафик и ресурсы роутера, а слишком редкие медленно замечают падение узлов.",
           "properties": {
             "enable": {
               "type": "boolean",
@@ -1236,6 +1256,10 @@
     "proxyGroup": {
       "type": "object",
       "description": "Группа прокси — агрегат нескольких узлов с общей стратегией выбора. Можно составлять иерархию (группа внутри группы). Спецзначения в `proxies`: `DIRECT` (прямо), `REJECT` (отбросить), `PASS` (следующее правило).",
+      "x-ui-explain": "Это виртуальный прокси, который сам выбирает один или несколько реальных узлов из списка или provider-ов.",
+      "x-ui-use-case": "`select` подходит для ручного выбора, `url-test` — для автоподбора самого быстрого, `fallback` — для резервирования.",
+      "x-ui-example": "{ name: \"PROXY\", type: \"url-test\", use: [\"main-sub\"], url: \"https://www.gstatic.com/generate_204\" }",
+      "x-ui-warning": "Группа должна ссылаться только на существующие `proxies`/`proxy-providers`, а циклы вида группа -> группа ломают выбор маршрута.",
       "required": ["name", "type"],
       "properties": {
         "name": {
@@ -1251,6 +1275,10 @@
         "proxies": {
           "type": "array",
           "description": "Имена прокси/групп. Также допустимы `DIRECT`, `REJECT`, `PASS`.",
+          "x-ui-explain": "Это явный список узлов и/или других групп, из которых будет состоять текущая группа.",
+          "x-ui-use-case": "Используется, когда вы вручную собираете группу из нескольких конкретных серверов без provider-а.",
+          "x-ui-example": "[\"DIRECT\", \"proxy-de-1\", \"proxy-nl-1\"]",
+          "x-ui-warning": "Каждое имя здесь должно уже существовать в `proxies` или `proxy-groups`; опечатка превратится в нерабочую ссылку.",
           "items": {
             "type": "string",
             "examples": ["DIRECT", "REJECT", "proxy-de-1", "auto", "🇩🇪 Germany"]
@@ -1259,6 +1287,10 @@
         "use": {
           "type": "array",
           "description": "Имена `proxy-providers`, из которых берутся серверы (все узлы провайдера автоматически добавляются в группу).",
+          "x-ui-explain": "Это список provider-ов, чьи узлы Mihomo автоматически подтянет в текущую группу.",
+          "x-ui-use-case": "Основной способ подключать подписку к `select`, `url-test` или `fallback` без копирования серверов вручную.",
+          "x-ui-example": "[\"my-subscription\"]",
+          "x-ui-warning": "Здесь нужны имена provider-ов из секции `proxy-providers`, а не названия отдельных узлов.",
           "items": { "type": "string", "examples": ["my-subscription"] }
         },
         "include-all": {
@@ -1368,6 +1400,10 @@
     "ruleProvider": {
       "type": "object",
       "description": "Провайдер правил — внешний набор правил (geosite/geoip/mrs). Подключается в `rules` через `RULE-SET,имя-провайдера,target`.",
+      "x-ui-explain": "Это внешний набор доменных/IP правил, который потом подключают в `rules` через `RULE-SET`.",
+      "x-ui-use-case": "Используется, когда не хочется вручную перечислять тысячи доменов, подсетей или рекламных списков.",
+      "x-ui-example": "{ type: \"http\", behavior: \"domain\", format: \"mrs\", url: \"https://example.com/youtube.mrs\", interval: 86400 }",
+      "x-ui-warning": "Самое важное здесь — правильно выбрать `behavior`: если тип содержимого и описание набора не совпадут, правила будут работать непредсказуемо.",
       "properties": {
         "type": {
           "type": "string",
@@ -1378,6 +1414,11 @@
           "type": "string",
           "enum": ["domain", "ipcidr", "classical"],
           "description": "Тип правил в наборе. `domain` — только домены/суффиксы, `ipcidr` — только IP/CIDR, `classical` — смешанный формат (DOMAIN-SUFFIX, IP-CIDR и т.д., как в основных `rules`)."
+          ,
+          "x-ui-explain": "Это подсказка Mihomo, что именно лежит внутри rule-provider: домены, IP-подсети или смешанные правила.",
+          "x-ui-use-case": "`domain` берут для geosite/списков доменов, `ipcidr` — для IP-подсетей, `classical` — для строк формата `DOMAIN-SUFFIX,...` и похожих.",
+          "x-ui-example": "\"behavior\": \"domain\"",
+          "x-ui-warning": "Если `behavior` не совпадает с реальным форматом файла, RULE-SET может загрузиться, но будет матчиться неправильно."
         },
         "format": {
           "type": "string",

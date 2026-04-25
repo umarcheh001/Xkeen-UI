@@ -432,17 +432,19 @@ function validateMihomoProxyCompat(target, proxies) {
 
     if (Object.prototype.hasOwnProperty.call(proxy, 'alterId') && type && type !== 'vmess') {
       pushDiagnostic(target, createYamlDiagnostic(path.concat('alterId'), `Поле \`alterId\` ожидается у \`type: vmess\`, а сейчас указан \`${type}\`.`, {
-        severity: 'warning',
+        severity: 'suggestion',
         source: 'mihomo-semantic',
         code: 'proxy-type-alterid',
+        hint: 'Если это современный non-vmess прокси, поле `alterId` обычно можно просто удалить.',
       }));
     }
 
     if (Object.prototype.hasOwnProperty.call(proxy, 'flow') && cleanName(proxy.flow) && type && type !== 'vless') {
       pushDiagnostic(target, createYamlDiagnostic(path.concat('flow'), `Поле \`flow\` обычно используется только у \`type: vless\`, а сейчас указан \`${type}\`.`, {
-        severity: 'warning',
+        severity: 'suggestion',
         source: 'mihomo-semantic',
         code: 'proxy-type-flow',
+        hint: 'Обычно это поле имеет смысл только для VLESS Reality / TLS-сценариев.',
       }));
     }
 

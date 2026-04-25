@@ -542,21 +542,37 @@
     "streamSettings": {
       "type": "object",
       "description": "Настройки транспорта",
+      "x-ui-explain": "Это блок, который описывает, как именно Xray устанавливает соединение: по какому транспорту (`network`) и с каким уровнем защиты (`security`).",
+      "x-ui-use-case": "Меняйте его, когда сервер работает не на чистом TCP, а через WebSocket, XHTTP, REALITY, CDN или другой transport/security stack.",
+      "x-ui-example": "\"streamSettings\": { \"network\": \"xhttp\", \"security\": \"tls\", \"tlsSettings\": { \"serverName\": \"edge.example.com\" } }",
+      "x-ui-warning": "Transport- и security-подблоки жёстко связаны: `tlsSettings` требует `security: tls`, `realitySettings` — `security: reality`, а `xhttpSettings` — `network: xhttp`.",
       "properties": {
         "network": {
           "type": "string",
           "enum": ["tcp", "kcp", "ws", "http", "quic", "grpc", "httpupgrade", "splithttp", "xhttp"],
           "deprecatedValues": ["grpc"],
           "deprecationMessage": "Transport gRPC устарел в актуальных версиях Xray; по возможности используйте XHTTP (stream-up H2).",
-          "default": "tcp"
+          "default": "tcp",
+          "x-ui-explain": "Это конкретный transport, которым Xray будет упаковывать трафик поверх обычного соединения.",
+          "x-ui-use-case": "Чаще всего тут оставляют `tcp`, а меняют на `ws`/`xhttp`, когда сервер и CDN настроены именно под такой transport.",
+          "x-ui-example": "\"network\": \"xhttp\"",
+          "x-ui-warning": "Значение должно совпадать с настройкой сервера, иначе transport-подблоки ниже не сработают."
         },
         "security": {
           "type": "string",
           "enum": ["none", "tls", "reality"],
-          "default": "none"
+          "default": "none",
+          "x-ui-explain": "Это уровень шифрования и маскировки поверх выбранного транспорта.",
+          "x-ui-use-case": "`tls` подходит для обычных HTTPS-подобных соединений, `reality` — для VLESS Reality, `none` — в основном для локальных inbound-сценариев.",
+          "x-ui-example": "\"security\": \"tls\"",
+          "x-ui-warning": "Если выбрали `tls` или `reality`, не забудьте добавить соответствующий блок настроек ниже."
         },
         "tlsSettings": {
           "type": "object",
+          "x-ui-explain": "Это настройки обычного TLS: SNI, ALPN, проверка сертификата и fingerprint клиента.",
+          "x-ui-use-case": "Нужен почти для всех внешних VLESS/Trojan/VMess соединений на 443 и для большинства CDN-сценариев.",
+          "x-ui-example": "{ \"serverName\": \"edge.example.com\", \"fingerprint\": \"chrome\", \"alpn\": [\"h2\", \"http/1.1\"] }",
+          "x-ui-warning": "Обычно нельзя оставлять `allowInsecure: true` в рабочем конфиге — это отключает нормальную проверку сертификата.",
           "properties": {
             "serverName": { "type": "string" },
             "alpn": { "type": "array", "items": { "type": "string" } },
@@ -575,6 +591,10 @@
         },
         "realitySettings": {
           "type": "object",
+          "x-ui-explain": "Это параметры REALITY-маскировки: ключи, SNI-кандидат и short-id, по которым клиент и сервер узнают друг друга.",
+          "x-ui-use-case": "Используется для VLESS Reality, когда соединение должно выглядеть как обычный TLS-трафик к популярному сайту.",
+          "x-ui-example": "{ \"serverName\": \"www.microsoft.com\", \"publicKey\": \"<server-public-key>\", \"shortIds\": [\"6ba85179e30d4fc2\"] }",
+          "x-ui-warning": "Не путайте роли: на клиенте обычно нужен `publicKey`, на сервере — `privateKey`; также `serverName` и `shortIds` должны совпадать с серверной настройкой.",
           "properties": {
             "show": { "type": "boolean", "default": false },
             "dest": { "type": ["string", "integer"], "description": "Адрес назначения (например 'example.com:443')" },
@@ -629,6 +649,10 @@
         "xhttpSettings": {
           "type": "object",
           "description": "Настройки XHTTP-транспорта. Применимо только если `network = \"xhttp\"`.",
+          "x-ui-explain": "Это настройки современного HTTP-based транспорта XHTTP, который в новых Xray-конфигах обычно приходит на смену gRPC.",
+          "x-ui-use-case": "Нужен, когда сервер настроен на XHTTP и вы хотите браузероподобный transport для CDN или современных VLESS/TLS-сценариев.",
+          "x-ui-example": "{ \"path\": \"/gateway\", \"mode\": \"stream-up\" }",
+          "x-ui-warning": "Параметры XHTTP должны совпадать с сервером, а `mode` нельзя оставлять произвольным вроде `auto` — здесь допустимы только конкретные режимы схемы.",
           "properties": {
             "path": {
               "type": "string",

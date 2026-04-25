@@ -32,7 +32,7 @@
 - Phase 2: закрыта.
 - Phase 3: закрыта.
 - Phase 4: закрыта.
-- Phase 5: частично закрыта.
+- Phase 5: закрыта.
 - Phase 6: пока не начата как полноценный слой.
 
 Если смотреть на реальный UX-эффект, проект уже сильно продвинулся вперёд:
@@ -44,11 +44,10 @@
 - есть quick fixes;
 - есть beginner-mode hover и recovery hints.
 
-Но до "финального результата" всё ещё не хватает трёх вещей:
+Но до "финального результата" всё ещё не хватает двух вещей:
 
-1. добить оставшиеся conditional/schema constraints и beginner-oriented polish;
-2. отполировать Phase 4-5 до состояния без явных UX-зазоров и флейков;
-3. добавить guided builders для самых частых beginner flows.
+1. добить оставшиеся conditional/schema constraints;
+2. добавить guided builders для самых частых beginner flows.
 
 ## Что Уже Реально Есть
 
@@ -292,7 +291,7 @@
 
 ## Phase 5: Beginner Mode И Explain-First Hover
 
-Статус: частично закрыта
+Статус: закрыта
 
 ### Что закрыто
 
@@ -310,27 +309,25 @@
   - `warning`
   - `info` / `suggestion` / `hint`
 - Есть UI setting для `beginnerModeEnabled`.
-
-### Что закрыто частично
-
-- Beginner metadata покрывает не все важные schema nodes одинаково полно.
-- "Почему поле показано именно здесь" пока закрыто только частично:
-  conditional reasoning объясняется не везде.
-- Severity tiers поддерживаются инфраструктурно лучше, чем реально используются
-  semantic producers.
-- Для части сложных протокольных полей hover уже богаче, но ещё не всегда
-  достаточно "без глубокого знания темы".
+- Coverage `x-ui-*` metadata доведён на самых confusing/high-impact узлах:
+  - Xray `streamSettings`, `security`, `tlsSettings`, `realitySettings`,
+    `xhttpSettings`
+  - Mihomo `proxy`, `proxyProvider`, `proxyGroup`, `ruleProvider`
+  - Mihomo nested explain-first fields: `reality-opts`, `health-check`,
+    `proxies`, `use`, `behavior`
+- Explain-first hover теперь реально покрыт runtime-тестами и для JSON/Xray, и
+  для YAML/Mihomo.
+- Semantic producers начали использовать более мягкий уровень там, где warning
+  слишком агрессивен (`alterId`, `flow`, `servername`-style suggestions).
 
 ### Что осталось доделать
 
-- Добить coverage `x-ui-*` metadata на оставшихся high-impact fields.
-- Добавить explain-first пояснения для conditional fields и частых confusing
-  branches.
-- Начать реально выдавать `suggestion` diagnostics там, где не нужен warning.
-- Провести финальную beginner-polish волну по самым сложным местам:
-  - Xray transport/security
-  - Mihomo proxy/proxy-group/provider
-  - routing target selection
+- Обязательных blocker-задач для закрытия Phase 5 больше нет.
+- Как optional polish позже можно:
+  - добавить beginner metadata на менее частые edge-case поля;
+  - расширить explain-first формулировки для совсем редких transport-веток;
+  - при желании сохранить отдельный `suggestion` tier до UI вместо текущего
+    общего `info`.
 
 ### Когда можно считать Phase 5 закрытой
 
@@ -388,8 +385,6 @@
 
 - Phase 1: добавить настоящие `if/then/else` и `dependentRequired`, а не только
   текстовые описания зависимостей.
-- Phase 5: выровнять beginner metadata coverage и начать реально использовать
-  `suggestion` tier.
 
 ### Блок B: Сделать финальный UX-скачок
 
@@ -400,7 +395,7 @@
 Если брать один короткий milestone, который даст максимальный реальный эффект,
 лучший порядок сейчас такой:
 
-1. завершить Phase 5 polish на top confusing fields;
+1. закрыть оставшиеся formal constraints из Phase 1;
 2. после этого начать Phase 6 с двух мастеров:
    - VLESS Reality proxy
    - Mihomo proxy-group/url-test
