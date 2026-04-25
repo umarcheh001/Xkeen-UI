@@ -37,6 +37,13 @@ function cleanName(value) {
   return asString(value).trim();
 }
 
+function looksLikeIpLiteral(value) {
+  const raw = cleanName(value);
+  if (!raw) return false;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(raw)) return true;
+  return /^[0-9a-f:.]+$/i.test(raw) && raw.includes(':');
+}
+
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const proto = Object.getPrototypeOf(value);
@@ -255,6 +262,7 @@ function createQuickFix(meta, edits) {
     label: cleanName(meta && meta.label) || cleanName(meta && meta.title) || 'Исправить',
     code: cleanName(meta && meta.code),
     isPreferred: !!(meta && meta.isPreferred),
+    priority: Number.isFinite(meta && meta.priority) ? Number(meta.priority) : 0,
     rangeFrom,
     rangeTo,
     family: cleanName(meta && meta.family),
@@ -276,6 +284,7 @@ function dedupeQuickFixes(list) {
 function finalizeQuickFixes(list, ctx) {
   const items = dedupeQuickFixes(list).sort((a, b) => {
     if (!!a.isPreferred !== !!b.isPreferred) return a.isPreferred ? -1 : 1;
+    if ((Number(a.priority) || 0) !== (Number(b.priority) || 0)) return (Number(b.priority) || 0) - (Number(a.priority) || 0);
     if (a.rangeFrom !== b.rangeFrom) return a.rangeFrom - b.rangeFrom;
     return a.title.localeCompare(b.title);
   });
@@ -378,6 +387,88 @@ function collectXrayBalancerTags(data) {
   const root = isPlainObject(data && data.routing) ? data.routing : data;
   const balancers = Array.isArray(root && root.balancers) ? root.balancers : [];
   return uniqueStrings(balancers.map((item) => item && item.tag));
+}
+
+function getXrayPrimaryEndpointHost(item) {
+  if (!isPlainObject(item) || !isPlainObject(item.settings)) return '';
+  const settings = item.settings;
+  if (Array.isArray(settings.vnext) && settings.vnext.length) {
+    return cleanName(settings.vnext[0] && settings.vnext[0].address);
+  }
+  if (Array.isArray(settings.servers) && settings.servers.length) {
+    return cleanName(settings.servers[0] && settings.servers[0].address);
+  }
+  return cleanName(settings.address);
+}
+
+function buildXrayObservatoryScaffold(selectors) {
+  const subjectSelector = uniqueStrings(selectors);
+  return {
+    subjectSelector: subjectSelector.length ? subjectSelector : ['proxy-'],
+    probeUrl: DEFAULT_HEALTHCHECK_URL,
+    probeInterval: '60s',
+  };
+}
+
+function buildXrayBurstObservatoryScaffold(selectors) {
+  const subjectSelector = uniqueStrings(selectors);
+  return {
+    subjectSelector: subjectSelector.length ? subjectSelector : ['proxy-'],
+    pingConfig: {
+      destination: '1.1.1.1:80',
+      connectivity: DEFAULT_HEALTHCHECK_URL,
+      interval: '30s',
+      sampling: 5,
+      timeout: '5s',
+    },
+  };
+}
+
+function collectXrayObservabilityQuickFixes(text, data) {
+  const fixes = [];
+  const root = isPlainObject(data && data.routing) ? data.routing : data;
+  const rootPath = root === data ? [] : ['routing'];
+  const balancers = Array.isArray(root && root.balancers) ? root.balancers : [];
+  const hasObservatory = !!(isPlainObject(data && data.observatory) || isPlainObject(root && root.observatory));
+  const hasBurstObservatory = !!(isPlainObject(data && data.burstObservatory) || isPlainObject(root && root.burstObservatory));
+
+  balancers.forEach((balancer, index) => {
+    if (!isPlainObject(balancer)) return;
+    const strategyType = cleanName(balancer && balancer.strategy && balancer.strategy.type) || 'random';
+    const balancerPath = rootPath.concat('balancers', index);
+    const range = jsonRangeForPointer(text, pointerFromPath(balancerPath.concat('strategy', 'type')));
+    const selectors = uniqueStrings(Array.isArray(balancer.selector) ? balancer.selector : []);
+
+    if (strategyType === 'leastPing' && !hasObservatory) {
+      const fix = modifyJsonText(text, ['observatory'], buildXrayObservatoryScaffold(selectors), {
+        id: `xray-observatory-add-${balancerPath.join('.')}`,
+        title: 'Добавить блок `observatory`',
+        code: 'balancer-observatory-missing',
+        isPreferred: true,
+        priority: 90,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+    }
+
+    if (strategyType === 'leastLoad' && !hasBurstObservatory) {
+      const fix = modifyJsonText(text, ['burstObservatory'], buildXrayBurstObservatoryScaffold(selectors), {
+        id: `xray-burst-observatory-add-${balancerPath.join('.')}`,
+        title: 'Добавить блок `burstObservatory`',
+        code: 'balancer-burst-observatory-missing',
+        isPreferred: true,
+        priority: 90,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+    }
+  });
+
+  return fixes;
 }
 
 function walkJsonTree(value, path, visit) {
@@ -512,6 +603,7 @@ function buildXraySemanticQuickFixes(text, data, semanticOptions) {
         title: `Добавить \`outboundTag: ${tag}\``,
         code,
         isPreferred: true,
+        priority: 95,
         rangeFrom: range.from,
         rangeTo: range.to,
         family: 'semantic',
@@ -533,6 +625,7 @@ function buildXraySemanticQuickFixes(text, data, semanticOptions) {
         title: `Заменить на \`${suggestion}\``,
         code,
         isPreferred: true,
+        priority: 95,
         rangeFrom: range.from,
         rangeTo: range.to,
         family: 'semantic',
@@ -549,6 +642,96 @@ function buildXraySemanticQuickFixes(text, data, semanticOptions) {
         title: `Добавить selector с \`${selectorTag}\``,
         code,
         isPreferred: true,
+        priority: 90,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+      return;
+    }
+
+    if (code === 'balancer-observatory-missing' && path.length >= 2) {
+      const balancerPath = path.slice(0, -2);
+      const balancer = getValueAtPath(data, balancerPath);
+      const selectors = uniqueStrings(Array.isArray(balancer && balancer.selector) ? balancer.selector : []);
+      const fix = modifyJsonText(text, ['observatory'], buildXrayObservatoryScaffold(selectors), {
+        id: `xray-observatory-add-${balancerPath.join('.')}`,
+        title: 'Добавить блок `observatory`',
+        code,
+        isPreferred: true,
+        priority: 90,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+      return;
+    }
+
+    if (code === 'balancer-burst-observatory-missing' && path.length >= 2) {
+      const balancerPath = path.slice(0, -2);
+      const balancer = getValueAtPath(data, balancerPath);
+      const selectors = uniqueStrings(Array.isArray(balancer && balancer.selector) ? balancer.selector : []);
+      const fix = modifyJsonText(text, ['burstObservatory'], buildXrayBurstObservatoryScaffold(selectors), {
+        id: `xray-burst-observatory-add-${balancerPath.join('.')}`,
+        title: 'Добавить блок `burstObservatory`',
+        code,
+        isPreferred: true,
+        priority: 90,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+      return;
+    }
+
+    if (code === 'outbound-tls-server-name-suggested' && path.length >= 2) {
+      const itemPath = path.slice(0, -2);
+      const itemValue = getValueAtPath(data, itemPath);
+      const host = getXrayPrimaryEndpointHost(itemValue);
+      if (!host || looksLikeIpLiteral(host)) return;
+      const fix = modifyJsonText(text, path.concat('serverName'), host, {
+        id: `xray-tls-servername-${path.join('.')}`,
+        title: `Добавить \`serverName: ${host}\``,
+        code,
+        isPreferred: true,
+        priority: 80,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+      return;
+    }
+
+    if (code === 'outbound-reality-server-name-missing' && path.length >= 2) {
+      const itemPath = path.slice(0, -2);
+      const itemValue = getValueAtPath(data, itemPath);
+      const host = getXrayPrimaryEndpointHost(itemValue);
+      if (!host || looksLikeIpLiteral(host)) return;
+      const fix = modifyJsonText(text, path.concat('serverName'), host, {
+        id: `xray-reality-servername-${path.join('.')}`,
+        title: `Добавить \`serverName: ${host}\``,
+        code,
+        isPreferred: true,
+        priority: 80,
+        rangeFrom: range.from,
+        rangeTo: range.to,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+      return;
+    }
+
+    if (code === 'inbound-reality-shortids-missing' && path.length) {
+      const fix = modifyJsonText(text, path.concat('shortIds'), [''], {
+        id: `xray-reality-shortids-${path.join('.')}`,
+        title: 'Добавить `shortIds: [""]`',
+        code,
+        isPreferred: true,
+        priority: 85,
         rangeFrom: range.from,
         rangeTo: range.to,
         family: 'semantic',
@@ -584,6 +767,7 @@ function buildXraySemanticQuickFixes(text, data, semanticOptions) {
         title: 'Переместить LAN-правило в начало routing.rules',
         code,
         isPreferred: true,
+        priority: 100,
         rangeFrom: range.from,
         rangeTo: range.to,
         family: 'semantic',
@@ -592,6 +776,7 @@ function buildXraySemanticQuickFixes(text, data, semanticOptions) {
     }
   });
 
+  fixes.push(...collectXrayObservabilityQuickFixes(text, data));
   return fixes;
 }
 
@@ -767,6 +952,17 @@ function replaceYamlValue(text, index, path, value, meta) {
   return createQuickFix(meta, [edit]);
 }
 
+function upsertYamlMappingEntry(text, index, data, parentPath, key, value, meta) {
+  const basePath = Array.isArray(parentPath) ? parentPath.slice() : splitPathString(parentPath);
+  const targetPath = basePath.concat(key);
+  const currentValue = getValueAtPath(data, targetPath);
+  if (currentValue !== undefined) {
+    const replaced = replaceYamlValue(text, index, targetPath, value, meta);
+    if (replaced) return replaced;
+  }
+  return insertYamlMappingEntry(text, index, basePath, key, value, meta);
+}
+
 function splitTopLevelRuleParts(rule) {
   const text = cleanName(rule);
   if (!text) return [];
@@ -910,6 +1106,21 @@ function buildMihomoProxyGroupSkeleton(name) {
   };
 }
 
+function suggestMihomoServerName(proxy) {
+  if (!isPlainObject(proxy)) return '';
+  const wsHost = cleanName(proxy && proxy['ws-opts'] && proxy['ws-opts'].headers && proxy['ws-opts'].headers.Host);
+  if (wsHost) return wsHost;
+  const xhttpHost = cleanName(proxy && proxy['xhttp-opts'] && proxy['xhttp-opts'].host);
+  if (xhttpHost) return xhttpHost;
+  const h2Hosts = Array.isArray(proxy && proxy['h2-opts'] && proxy['h2-opts'].host)
+    ? proxy['h2-opts'].host.map(cleanName).filter(Boolean)
+    : [];
+  if (h2Hosts.length) return h2Hosts[0];
+  const server = cleanName(proxy && proxy.server);
+  if (server && !looksLikeIpLiteral(server)) return server;
+  return '';
+}
+
 function buildMihomoSchemaQuickFixes(text, data, schema) {
   if (!schema) return [];
   const fixes = [];
@@ -1042,6 +1253,7 @@ function buildMihomoSemanticQuickFixes(text, data) {
         title: `Заменить на \`${suggestion}\``,
         code,
         isPreferred: true,
+        priority: 95,
         rangeFrom,
         rangeTo,
         family: 'semantic',
@@ -1059,6 +1271,7 @@ function buildMihomoSemanticQuickFixes(text, data) {
           title: `Заменить provider на \`${suggestion}\``,
           code,
           isPreferred: true,
+          priority: 90,
           rangeFrom,
           rangeTo,
           family: 'semantic',
@@ -1093,6 +1306,7 @@ function buildMihomoSemanticQuickFixes(text, data) {
             title: `Заменить rule-provider на \`${suggestion}\``,
             code,
             isPreferred: true,
+            priority: 90,
             rangeFrom,
             rangeTo,
             family: 'semantic',
@@ -1128,6 +1342,7 @@ function buildMihomoSemanticQuickFixes(text, data) {
           title: `Заменить target на \`${suggestion}\``,
           code,
           isPreferred: true,
+          priority: 90,
           rangeFrom,
           rangeTo,
           family: 'semantic',
@@ -1175,12 +1390,29 @@ function buildMihomoSemanticQuickFixes(text, data) {
       return;
     }
 
+    if (code.startsWith('proxy-tls-') && path.length >= 2) {
+      const proxyPath = path.slice(0, -1);
+      const fix = upsertYamlMappingEntry(text, index, data, proxyPath, 'tls', true, {
+        id: `mihomo-proxy-tls-${path.join('.')}`,
+        title: 'Включить `tls: true`',
+        code,
+        isPreferred: true,
+        priority: 85,
+        rangeFrom,
+        rangeTo,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+      return;
+    }
+
     if (code === 'proxy-group-empty' && path.length) {
       const fix = insertYamlMappingEntry(text, index, path, 'proxies', ['DIRECT'], {
         id: `mihomo-group-empty-${path.join('.')}`,
         title: 'Добавить `proxies: [DIRECT]`',
         code,
         isPreferred: true,
+        priority: 85,
         rangeFrom,
         rangeTo,
         family: 'semantic',
@@ -1195,6 +1427,26 @@ function buildMihomoSemanticQuickFixes(text, data) {
         title: `Добавить \`url: ${DEFAULT_HEALTHCHECK_URL}\``,
         code,
         isPreferred: true,
+        priority: 80,
+        rangeFrom,
+        rangeTo,
+        family: 'semantic',
+      });
+      if (fix) fixes.push(fix);
+      return;
+    }
+
+    if (code === 'proxy-servername-suggested' && path.length >= 2) {
+      const proxyPath = path.slice(0, -1);
+      const proxy = getValueAtPath(data, proxyPath);
+      const serverName = suggestMihomoServerName(proxy);
+      if (!serverName) return;
+      const fix = upsertYamlMappingEntry(text, index, data, proxyPath, 'servername', serverName, {
+        id: `mihomo-servername-${path.join('.')}`,
+        title: `Добавить \`servername: ${serverName}\``,
+        code,
+        isPreferred: true,
+        priority: 80,
         rangeFrom,
         rangeTo,
         family: 'semantic',

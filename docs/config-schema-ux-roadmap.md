@@ -31,7 +31,7 @@
 - Phase 1: частично закрыта.
 - Phase 2: закрыта.
 - Phase 3: закрыта.
-- Phase 4: закрыта как MVP, нужна полировка.
+- Phase 4: закрыта.
 - Phase 5: частично закрыта.
 - Phase 6: пока не начата как полноценный слой.
 
@@ -245,7 +245,7 @@
 
 ## Phase 4: Quick Fixes
 
-Статус: закрыта как MVP, нужна полировка
+Статус: закрыта
 
 ### Что закрыто
 
@@ -258,27 +258,31 @@
   - replacement unknown tag/reference на ближайший существующий;
   - создание missing `proxy-group`, `proxy-provider`, `rule-provider`;
   - deprecated value replacement;
+  - observatory / burstObservatory scaffolds для leastPing / leastLoad;
+  - TLS/SNI safe-fixes (`tls: true`, `serverName` / `servername`);
   - некоторые semantic-fixes вроде подъёма LAN/private-IP rule вверх.
 - Monaco получает code actions / quick fixes.
 - CodeMirror и shared toolbar умеют применять best quick fix.
 - Quick fix providers реально подключены в routing и Mihomo editors.
+- Ranking/prioritization стала заметно ровнее:
+  - replace-fix обычно идёт выше create-fix;
+  - safe one-shot fixes приоритетнее общих scaffold-ов.
+- Browser-level routing quick fix e2e стабилизирован:
+  - stale load больше не перетирает более новые локальные правки;
+  - toolbar quick fix стабильно срабатывает и в CodeMirror, и в Monaco.
 
 ### Что закрыто частично
 
-- Phase 4 пока больше "сильный MVP", чем финально отполированный UX.
-- Не все quick fixes сопровождаются одинаково хорошим ranking/prioritization.
-- Browser-level e2e по routing quick fix сейчас не полностью зелёный: есть
-  race/flaky scenario вокруг загрузки исходного routing текста и cursor setup.
+- Можно ещё полировать wording/title отдельных fixes, но это уже quality-pass,
+  а не blocker фазы.
 
 ### Что осталось доделать
 
-- Починить и стабилизировать routing quick fix e2e.
-- Пройтись по top-10 реальных частых проблем и проверить, что на каждую есть
-  либо fix, либо сознательное объяснение, почему fix не нужен.
-- Доработать ranking/prioritization fixes, чтобы best fix почти всегда совпадал
-  с ожидаемым действием пользователя.
-- При необходимости добавить ещё несколько safe-fix сценариев для transport/TLS
-  mismatches.
+- Обязательных blocker-задач для закрытия Phase 4 больше нет.
+- Как optional polish можно добавить:
+  - ещё несколько safe-fix сценариев для более спорных transport mixes;
+  - дополнительный ranking-pass на редких edge-cases, где возможно несколько
+    одинаково правдоподобных действий.
 
 ### Когда можно считать Phase 4 закрытой
 
@@ -375,7 +379,7 @@
 - Monaco + CodeMirror parity по основным assist-функциям
 - Semantic validation как отдельный слой
 - Task-oriented snippets
-- Quick fixes как MVP
+- Quick fixes
 - Beginner-mode foundation
 
 ## Что Осталось До Финального Результата
@@ -384,7 +388,6 @@
 
 - Phase 1: добавить настоящие `if/then/else` и `dependentRequired`, а не только
   текстовые описания зависимостей.
-- Phase 4: стабилизировать routing quick-fix e2e и добить top-10 error flows.
 - Phase 5: выровнять beginner metadata coverage и начать реально использовать
   `suggestion` tier.
 
@@ -397,9 +400,8 @@
 Если брать один короткий milestone, который даст максимальный реальный эффект,
 лучший порядок сейчас такой:
 
-1. довести Phase 4 до стабильного green-state в e2e;
-2. завершить Phase 5 polish на top confusing fields;
-3. после этого начать Phase 6 с двух мастеров:
+1. завершить Phase 5 polish на top confusing fields;
+2. после этого начать Phase 6 с двух мастеров:
    - VLESS Reality proxy
    - Mihomo proxy-group/url-test
 

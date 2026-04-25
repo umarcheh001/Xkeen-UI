@@ -152,6 +152,129 @@ console.log(JSON.stringify(fixes.map((item) => item.title)));
     assert "Добавить блок `wsSettings`" in titles
 
 
+def test_xray_quickfix_adds_observatory_for_leastping_balancer():
+    payload = _run_node_json(
+        """
+import { applyQuickFixText, createXrayQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const provider = createXrayQuickFixProvider();
+const text = [
+  '{',
+  '  "routing": {',
+  '    "balancers": [',
+  '      {',
+  '        "tag": "auto",',
+  '        "selector": ["proxy-"],',
+  '        "strategy": {',
+  '          "type": "leastPing"',
+  '        }',
+  '      }',
+  '    ]',
+  '  }',
+  '}',
+  '',
+].join('\\n');
+const fixes = provider.getQuickFixes({ text });
+const observatoryFix = fixes.find((item) => item.code === 'balancer-observatory-missing');
+const next = observatoryFix ? applyQuickFixText(text, observatoryFix) : text;
+console.log(JSON.stringify({
+  firstTitle: fixes.length ? fixes[0].title : '',
+  hasFix: !!observatoryFix,
+  next,
+}));
+"""
+    )
+
+    assert payload["firstTitle"] == "Добавить блок `observatory`"
+    assert payload["hasFix"] is True
+    assert '"observatory": {' in payload["next"]
+    assert '"subjectSelector": [' in payload["next"]
+    assert '"proxy-"' in payload["next"]
+
+
+def test_xray_quickfix_adds_server_name_from_endpoint_host():
+    payload = _run_node_json(
+        """
+import { applyQuickFixText, createXrayQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const provider = createXrayQuickFixProvider();
+const text = [
+  '{',
+  '  "outbounds": [',
+  '    {',
+  '      "protocol": "vless",',
+  '      "settings": {',
+  '        "vnext": [',
+  '          {',
+  '            "address": "cdn.example.com",',
+  '            "port": 443,',
+  '            "users": [{ "id": "00000000-0000-0000-0000-000000000000", "encryption": "none" }]',
+  '          }',
+  '        ]',
+  '      },',
+  '      "streamSettings": {',
+  '        "security": "tls",',
+  '        "tlsSettings": {}',
+  '      }',
+  '    }',
+  '  ]',
+  '}',
+  '',
+].join('\\n');
+const fixes = provider.getQuickFixes({ text });
+const fix = fixes.find((item) => item.code === 'outbound-tls-server-name-suggested');
+const next = fix ? applyQuickFixText(text, fix) : text;
+console.log(JSON.stringify({
+  hasFix: !!fix,
+  title: fix ? fix.title : '',
+  next,
+}));
+"""
+    )
+
+    assert payload["hasFix"] is True
+    assert payload["title"] == "Добавить `serverName: cdn.example.com`"
+    assert '"serverName": "cdn.example.com"' in payload["next"]
+
+
+def test_xray_quickfix_adds_reality_shortids_placeholder():
+    payload = _run_node_json(
+        """
+import { applyQuickFixText, createXrayQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const provider = createXrayQuickFixProvider();
+const text = [
+  '{',
+  '  "inbounds": [',
+  '    {',
+  '      "protocol": "vless",',
+  '      "streamSettings": {',
+  '        "security": "reality",',
+  '        "realitySettings": {',
+  '          "privateKey": "secret"',
+  '        }',
+  '      }',
+  '    }',
+  '  ]',
+  '}',
+  '',
+].join('\\n');
+const fixes = provider.getQuickFixes({ text });
+const fix = fixes.find((item) => item.code === 'inbound-reality-shortids-missing');
+const next = fix ? applyQuickFixText(text, fix) : text;
+console.log(JSON.stringify({
+  hasFix: !!fix,
+  title: fix ? fix.title : '',
+  next,
+}));
+"""
+    )
+
+    assert payload["hasFix"] is True
+    assert payload["title"] == 'Добавить `shortIds: [""]`'
+    assert '"shortIds": [' in payload["next"]
+
+
 def test_mihomo_quickfix_adds_default_proxies_list_for_empty_group():
     payload = _run_node_json(
         """
@@ -175,6 +298,75 @@ console.log(JSON.stringify({ titles: fixes.map((item) => item.title), next }));
     assert "Добавить `proxies: [DIRECT]`" in payload["titles"]
     assert "proxies:" in payload["next"]
     assert "DIRECT" in payload["next"]
+
+
+def test_mihomo_quickfix_enables_tls_for_tls_only_fields():
+    payload = _run_node_json(
+        """
+import { applyQuickFixText, createMihomoQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const provider = createMihomoQuickFixProvider();
+const text = [
+  'proxies:',
+  '  - name: edge',
+  '    type: vless',
+  '    server: 1.2.3.4',
+  '    port: 443',
+  '    uuid: 11111111-1111-1111-1111-111111111111',
+  '    tls: false',
+  '    servername: cdn.example.com',
+  '',
+].join('\\n');
+const fixes = provider.getQuickFixes({ text });
+const fix = fixes.find((item) => item.code === 'proxy-tls-servername');
+const next = fix ? applyQuickFixText(text, fix) : text;
+console.log(JSON.stringify({
+  hasFix: !!fix,
+  title: fix ? fix.title : '',
+  next,
+}));
+"""
+    )
+
+    assert payload["hasFix"] is True
+    assert payload["title"] == "Включить `tls: true`"
+    assert "tls: true" in payload["next"]
+
+
+def test_mihomo_quickfix_adds_servername_from_transport_host():
+    payload = _run_node_json(
+        """
+import { applyQuickFixText, createMihomoQuickFixProvider } from './xkeen-ui/static/js/ui/schema_quickfixes.js';
+
+const provider = createMihomoQuickFixProvider();
+const text = [
+  'proxies:',
+  '  - name: edge',
+  '    type: vless',
+  '    server: 1.2.3.4',
+  '    port: 443',
+  '    uuid: 11111111-1111-1111-1111-111111111111',
+  '    tls: true',
+  '    ws-opts:',
+  '      path: /',
+  '      headers:',
+  '        Host: cdn.example.com',
+  '',
+].join('\\n');
+const fixes = provider.getQuickFixes({ text });
+const fix = fixes.find((item) => item.code === 'proxy-servername-suggested');
+const next = fix ? applyQuickFixText(text, fix) : text;
+console.log(JSON.stringify({
+  hasFix: !!fix,
+  title: fix ? fix.title : '',
+  next,
+}));
+"""
+    )
+
+    assert payload["hasFix"] is True
+    assert payload["title"] == "Добавить `servername: cdn.example.com`"
+    assert "servername: cdn.example.com" in payload["next"]
 
 
 def test_mihomo_quickfix_creates_missing_rule_provider_block():

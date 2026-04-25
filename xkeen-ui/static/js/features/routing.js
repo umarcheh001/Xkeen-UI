@@ -177,6 +177,8 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
   let _editorPerfProfile = { lite: false, manualSync: false, webkitSafari: false, lineCount: 1, charCount: 0 };
   let _editorSnapshotVersion = 0;
   let _editorSnapshotCache = null;
+  let _editorContentMutationVersion = 0;
+  let _loadRequestSerial = 0;
   let _hashCommentOverlay = null;
   let _jsoncAnalysisCache = {
     raw: null,
@@ -976,6 +978,13 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
   function invalidateEditorSnapshot() {
     _editorSnapshotVersion += 1;
     _editorSnapshotCache = null;
+  }
+
+  function noteEditorContentMutation(nextText) {
+    _editorContentMutationVersion += 1;
+    invalidateEditorSnapshot();
+    if (arguments.length > 0) return cacheEditorSnapshot(nextText);
+    return _editorContentMutationVersion;
   }
 
   function getEditorSnapshot() {
@@ -3008,6 +3017,8 @@ function closeHelp() {
   async function load() {
     const statusEl = $(IDS.status);
     if (statusEl) statusEl.textContent = 'Загрузка файла…';
+    const requestSerial = ++_loadRequestSerial;
+    const mutationVersionAtStart = _editorContentMutationVersion;
     try {
       const file = getActiveFragment();
       const url = file ? ('/api/routing?file=' + encodeURIComponent(file)) : '/api/routing';
@@ -3031,11 +3042,18 @@ function closeHelp() {
       } catch (e) {}
 
 	      const text = await res.text();
+      if (requestSerial !== _loadRequestSerial) {
+        return true;
+      }
+      if (_editorContentMutationVersion !== mutationVersionAtStart) {
+        try { updateEditorMetaStatus(); } catch (e) {}
+        if (statusEl) statusEl.textContent = 'Локальные правки уже новее ответа сервера.';
+        return true;
+      }
 	      try { _suppressDirty++; } catch (e) {}
-	      try { setEditorTextAll(text); } finally {
+	      try { setEditorTextAll(text, { trackMutation: false }); } finally {
 	        try { _suppressDirty = Math.max(0, _suppressDirty - 1); } catch (e) { _suppressDirty = 0; }
 	      }
-
       const savedView = loadSavedViewState(file);
       if (!(savedView && restoreViewState(savedView))) {
         scrollEditorsTop();
@@ -3500,7 +3518,7 @@ function closeHelp() {
 
     try { _suppressDirty++; } catch (e) {}
     try {
-      setEditorTextAll(saved);
+      setEditorTextAll(saved, { trackMutation: true });
       scrollEditorsTop();
     } finally {
       try { _suppressDirty = Math.max(0, _suppressDirty - 1); } catch (e) { _suppressDirty = 0; }
@@ -4142,7 +4160,7 @@ function closeHelp() {
 
 	    cm.on('change', () => {
 	      if (_suppressDirty > 0) return;
-	      invalidateEditorSnapshot();
+	      noteEditorContentMutation();
 	      scheduleValidate();
 	      scheduleDirtyCheck();
 	      scheduleEditorContentEvent('edit');
@@ -4851,7 +4869,7 @@ function closeHelp() {
           snippetProvider: getRoutingSnippetProvider(),
           quickFixProvider: getRoutingQuickFixProvider(),
           onChange: () => {
-            try { invalidateEditorSnapshot(); } catch (e) {}
+            try { noteEditorContentMutation(); } catch (e) {}
             try { scheduleMonacoDiagnostics(); } catch (e) {}
 	            try { scheduleDirtyCheck(); } catch (e) {}
             try { scheduleEditorContentEvent('edit'); } catch (e) {}
@@ -4922,6 +4940,8 @@ function closeHelp() {
   function setEditorTextAll(text, opts) {
     const v = String(text ?? '');
     const o = opts || {};
+    let prevText = '';
+    try { prevText = readCurrentEditorText(); } catch (e) { prevText = ''; }
     try { applyCodeMirrorPerfProfile(v); } catch (e) {}
     try { if (_cm && typeof _cm.setValue === 'function') _cm.setValue(v); } catch (e) {}
     try { if (_monaco && typeof _monaco.setValue === 'function') _monaco.setValue(v); } catch (e) {}
@@ -4929,7 +4949,14 @@ function closeHelp() {
       const ta = $(IDS.textarea);
       if (ta) ta.value = v;
     } catch (e) {}
-    try { cacheEditorSnapshot(v); } catch (e) {}
+    if (o.trackMutation === true) {
+      try {
+        if (prevText !== v) noteEditorContentMutation(v);
+        else cacheEditorSnapshot(v);
+      } catch (e) {}
+    } else {
+      try { cacheEditorSnapshot(v); } catch (e) {}
+    }
     if (o.broadcast !== false) {
       try { scheduleEditorContentEvent(o.reason || 'set', typeof o.wait === 'number' ? o.wait : 60); } catch (e) {}
     }
@@ -5492,6 +5519,7 @@ function closeHelp() {
         reason: o.reason || 'replace',
         wait: (typeof o.wait === 'number') ? o.wait : 40,
         broadcast: true,
+        trackMutation: true,
       });
     } finally {
       try { _suppressDirty = Math.max(0, _suppressDirty - 1); } catch (e) { _suppressDirty = 0; }

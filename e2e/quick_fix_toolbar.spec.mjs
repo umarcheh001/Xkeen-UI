@@ -70,6 +70,7 @@ async function replaceRoutingText(page, text) {
       scrollTop: true,
     });
   }, text);
+  await expect.poll(() => getRoutingText(page)).toBe(text);
 }
 
 async function getRoutingText(page) {
