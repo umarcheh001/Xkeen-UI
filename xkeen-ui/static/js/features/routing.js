@@ -151,6 +151,7 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
   let _commentsBadgeBase = { found: false, using: false, bn: '' };
   let _commentsBadgeOverride = null;
   let _commentsUxWired = false;
+  let _routingUiSettingsSyncWired = false;
 
   // Monaco diagnostics debounce (markers).
   let _monacoDiagTimer = null;
@@ -260,6 +261,19 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
 
   function getUiSettingsApi() {
     return getXkeenSettingsApi();
+  }
+
+  function isRoutingExpertModeEnabled() {
+    try {
+      const api = getUiSettingsApi();
+      if (api && typeof api.isEditorExpertModeEnabled === 'function') return api.isEditorExpertModeEnabled();
+      if (api && typeof api.get === 'function') {
+        const settings = api.get();
+        const editor = (settings && settings.editor && typeof settings.editor === 'object') ? settings.editor : {};
+        return editor.expertModeEnabled === true;
+      }
+    } catch (e) {}
+    return false;
   }
 
   function getFormattersApi() {
@@ -687,6 +701,7 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
 
   let _routingQuickFixProvider = null;
   function getRoutingQuickFixProvider() {
+    if (isRoutingExpertModeEnabled()) return null;
     if (_routingQuickFixProvider) return _routingQuickFixProvider;
     _routingQuickFixProvider = createXrayQuickFixProvider({
       getSemanticOptions: () => getRoutingSemanticValidationConfig().options,
@@ -701,6 +716,10 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
   }
 
   function applyBestRoutingQuickFix() {
+    if (isRoutingExpertModeEnabled()) {
+      try { toastXkeen('Экспертный режим отключает quick fix для этого редактора.', 'info'); } catch (e) {}
+      return false;
+    }
     const editor = getActiveRoutingEditorRaw();
     if (!editor || typeof editor.getQuickFixes !== 'function' || typeof editor.applyQuickFix !== 'function') {
       try { toastXkeen('Quick fixes пока недоступны для текущего редактора.', 'warning'); } catch (e) {}
@@ -769,6 +788,7 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
   }
 
   function getRoutingSemanticValidationConfig() {
+    if (isRoutingExpertModeEnabled()) return null;
     return {
       kind: 'xray-routing',
       options: {
@@ -783,7 +803,9 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
   }
 
   function getRoutingSemanticDiagnostics(data) {
-    return validateXrayRoutingSemantics(data, getRoutingSemanticValidationConfig().options);
+    const config = getRoutingSemanticValidationConfig();
+    if (!config || !config.options) return [];
+    return validateXrayRoutingSemantics(data, config.options);
   }
 
   function createMonacoDocShim(text) {
@@ -4320,6 +4342,12 @@ function closeHelp() {
     try {
       if (_routingMonacoToolbarEl) {
         _routingMonacoToolbarEl.style.display = (!_cm && next === 'monaco') ? '' : 'none';
+        const expert = isRoutingExpertModeEnabled();
+        const btns = _routingMonacoToolbarEl.querySelectorAll('button.xkeen-cm-tool');
+        (btns || []).forEach((btn) => {
+          const isQuickFix = !!(btn.dataset && btn.dataset.actionId === 'quick_fix');
+          btn.style.display = isQuickFix && expert ? 'none' : '';
+        });
       } else if (!_cm && next === 'monaco') {
         ensureRoutingMonacoToolbar();
       }
@@ -4331,6 +4359,7 @@ function closeHelp() {
       if (!_cm || !_cm._xkeenToolbarEl || !_cm._xkeenToolbarEl.querySelectorAll) return;
       const bar = _cm._xkeenToolbarEl;
       const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
+      const expert = isRoutingExpertModeEnabled();
 
       // Always keep the toolbar container visible in the host so layout doesn't jump.
       bar.style.display = '';
@@ -4346,6 +4375,10 @@ function closeHelp() {
         const isQuickFix = !!(btn.dataset && btn.dataset.actionId === 'quick_fix');
 
         // In Monaco mode show quick fix + yellow JSONC help + fullscreen.
+        if (isQuickFix && expert) {
+          btn.style.display = 'none';
+          return;
+        }
         btn.style.display = (isMonaco && !(isCommentsHelp || isFs || isQuickFix)) ? 'none' : '';
       });
     } catch (e) {}
@@ -4454,6 +4487,24 @@ function closeHelp() {
       if (ed && typeof ed.getOption === 'function' && typeof ed.setOption === 'function') {
         ed.setOption('fullScreen', !ed.getOption('fullScreen'));
       }
+    } catch (e) {}
+  }
+
+  function wireRoutingUiSettingsSyncOnce() {
+    if (_routingUiSettingsSyncWired) return;
+    _routingUiSettingsSyncWired = true;
+    try {
+      const settingsApi = getUiSettingsApi();
+      if (!settingsApi || typeof settingsApi.subscribe !== 'function') return;
+      settingsApi.subscribe(() => {
+        try { syncRoutingToolbarUi(_engine); } catch (e) {}
+        try { applyRoutingSemanticValidationState(); } catch (e2) {}
+        try {
+          const active = _engine === 'monaco' ? applyRoutingSchemaToMonaco() : applyRoutingSchemaToCodeMirror();
+          Promise.resolve(active).catch(() => null);
+        } catch (e3) {}
+        try { validate(); } catch (e4) {}
+      });
     } catch (e) {}
   }
 
@@ -5445,6 +5496,7 @@ function closeHelp() {
         _commentsUxWired = true;
       } catch (e) {}
     }
+    try { wireRoutingUiSettingsSyncOnce(); } catch (e) {}
 
     try {
       const lifecycle = getFeatureLifecycle();

@@ -570,6 +570,47 @@ console.log(JSON.stringify({
     }
 
 
+def test_editor_schema_disables_semantic_validation_in_expert_mode():
+    payload = _run_node_json(
+        """
+global.window = {
+  XKeen: {
+    ui: {
+      settings: {
+        get() {
+          return { editor: { expertModeEnabled: true } };
+        },
+      },
+    },
+  },
+};
+
+const { resolveEditorSemanticValidation } = await import('./xkeen-ui/static/js/ui/editor_schema.js');
+
+const routingValidation = resolveEditorSemanticValidation({
+  target: 'routing',
+  file: '05_routing.jsonc',
+  mode: 'jsonc',
+});
+const outboundsValidation = resolveEditorSemanticValidation({
+  target: 'outbounds',
+  file: '04_outbounds.json',
+  mode: 'json',
+});
+
+console.log(JSON.stringify({
+  routingKind: routingValidation ? routingValidation.kind : null,
+  outboundsKind: outboundsValidation ? outboundsValidation.kind : null,
+}));
+"""
+    )
+
+    assert payload == {
+        "routingKind": None,
+        "outboundsKind": None,
+    }
+
+
 def test_xray_semantic_validation_runtime_warns_on_grpc_transport_deprecation():
     payload = _run_node_json(
         """

@@ -110,6 +110,6 @@ def test_settings_panel_exposes_beginner_mode_switch():
     assert "editor.beginnerModeEnabled" in src
 
 
-def test_settings_module_defaults_beginner_mode_to_false():
+def test_settings_module_defaults_beginner_mode_to_true():
     src = _read(JS_DIR / "ui" / "settings.js")
-    assert "beginnerModeEnabled: false" in src
+    assert "beginnerModeEnabled: true" in src

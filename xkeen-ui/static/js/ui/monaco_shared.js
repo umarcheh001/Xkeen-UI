@@ -1045,6 +1045,7 @@ import {
   function _isEditorHoverEnabled(opts, snapshot) {
     if (opts && opts.schemaHover === false) return false;
     if (opts && opts.schemaHoverEnabled === false) return false;
+    if (_isEditorExpertModeEnabled(opts, snapshot)) return false;
     try {
       const settings = snapshot && typeof snapshot === 'object'
         ? snapshot
@@ -1053,6 +1054,21 @@ import {
       return editor.schemaHoverEnabled !== false;
     } catch (e) {
       return true;
+    }
+  }
+
+  function _isEditorExpertModeEnabled(opts, snapshot) {
+    try {
+      if (opts && Object.prototype.hasOwnProperty.call(opts, 'expertModeEnabled')) return opts.expertModeEnabled === true;
+    } catch (e) {}
+    try {
+      const settings = snapshot && typeof snapshot === 'object'
+        ? snapshot
+        : ((_getSettingsApi() && typeof _getSettingsApi().get === 'function') ? _getSettingsApi().get() : null);
+      const editor = (settings && settings.editor && typeof settings.editor === 'object') ? settings.editor : {};
+      return editor.expertModeEnabled === true;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -1845,6 +1861,10 @@ import {
 
   function _runSemanticDiagnosticsForModel(monaco, model) {
     if (!monaco || !monaco.editor || typeof monaco.editor.setModelMarkers !== 'function' || !model) return;
+    if (_isEditorExpertModeEnabled()) {
+      _clearSemanticMarkers(monaco, model);
+      return;
+    }
     const provider = _getModelSemanticValidation(model);
     if (!provider) {
       _clearSemanticMarkers(monaco, model);
@@ -2028,6 +2048,7 @@ import {
   }
 
   function _getQuickFixesForModel(model, ctx) {
+    if (_isEditorExpertModeEnabled()) return [];
     const provider = _getModelQuickFixProvider(model);
     const getter = _resolveQuickFixGetter(provider);
     if (!getter || !model) return [];
@@ -2068,6 +2089,7 @@ import {
     monaco.languages.registerCompletionItemProvider('yaml', {
       triggerCharacters: [':', '-', ' '],
       provideCompletionItems(model, position) {
+        if (_isEditorExpertModeEnabled()) return { suggestions: [] };
         const assist = _getModelYamlAssist(model);
         const schema = _resolveYamlAssistSchema(assist);
         if (!schema || !model || typeof model.getOffsetAt !== 'function') return { suggestions: [] };
@@ -2116,6 +2138,7 @@ import {
 
     monaco.languages.registerHoverProvider('yaml', {
       provideHover(model, position) {
+        if (_isEditorExpertModeEnabled()) return null;
         if (!_isEditorHoverEnabled()) return null;
         const assist = _getModelYamlAssist(model);
         const schema = _resolveYamlAssistSchema(assist);
@@ -2143,6 +2166,7 @@ import {
     const provider = {
       triggerCharacters: ['/', '"', ' ', ','],
       provideCompletionItems(model, position) {
+        if (_isEditorExpertModeEnabled()) return { suggestions: [] };
         if (!_supportsJsonSchemaOnModel(model) || !model || typeof model.getOffsetAt !== 'function') {
           return { suggestions: [] };
         }
@@ -2190,6 +2214,7 @@ import {
 
     monaco.languages.registerHoverProvider('json', {
       provideHover(model, position) {
+        if (_isEditorExpertModeEnabled()) return null;
         if (!_isEditorHoverEnabled()) return null;
         if (!_supportsJsonSchemaOnModel(model) || !model || typeof model.getOffsetAt !== 'function') return null;
         const schema = _getModelJsonSchema(model);
@@ -2348,14 +2373,14 @@ import {
         if (model) _applyModelSemanticValidation(monaco, model, o.semanticValidation || null);
       } catch (e) {}
       try {
-        if (model && o.schema) _setModelJsonSchema(model, o.schema, monaco);
+        if (model) _setModelJsonSchema(model, _isEditorExpertModeEnabled(o) ? null : (o.schema || null), monaco);
       } catch (e) {}
       try {
         if (editor) {
           editor.setSchema = (schema) => {
             if (!model) return false;
             currentSchema = (schema && typeof schema === 'object') ? schema : null;
-            return _setModelJsonSchema(model, currentSchema, monaco);
+            return _setModelJsonSchema(model, _isEditorExpertModeEnabled() ? null : currentSchema, monaco);
           };
           editor.getSchema = () => currentSchema || null;
           editor.setSnippetProvider = (provider) => {
@@ -2430,6 +2455,10 @@ import {
                 if (manageLineHeight) patch.lineHeight = nextTypo.lineHeight;
               }
               patch.hover = _resolveEditorHoverOptions(o, snapshot);
+              if (model) {
+                try { _setModelJsonSchema(model, _isEditorExpertModeEnabled(null, snapshot) ? null : currentSchema, monaco); } catch (e3) {}
+                try { _runSemanticDiagnosticsForModel(monaco, model); } catch (e4) {}
+              }
               if (Object.keys(patch).length && editor && typeof editor.updateOptions === 'function') {
                 editor.updateOptions(patch);
                 try {

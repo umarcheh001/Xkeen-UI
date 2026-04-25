@@ -17,6 +17,7 @@ import {
   getXkeenEditorToolbarMiniItems,
   getXkeenFilePath,
   getXkeenPageFlagsConfig,
+  getXkeenSettingsApi,
   setXkeenPageConfigValue,
 } from './xkeen_runtime.js';
 import { loadEditorSchema, resolveEditorSnippetProvider } from '../ui/editor_schema.js';
@@ -137,6 +138,7 @@ let mihomoPanelModuleApi = null;
   let _yamlErrorLineHandle = null;
   let _viewStateStore = null;
   let _restartLogModulePromise = null;
+  let _mihomoUiSettingsSyncWired = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -237,6 +239,23 @@ let mihomoPanelModuleApi = null;
     return null;
   }
 
+  function getUiSettingsApi() {
+    return getXkeenSettingsApi();
+  }
+
+  function isMihomoExpertModeEnabled() {
+    try {
+      const api = getUiSettingsApi();
+      if (api && typeof api.isEditorExpertModeEnabled === 'function') return api.isEditorExpertModeEnabled();
+      if (api && typeof api.get === 'function') {
+        const settings = api.get();
+        const editor = (settings && settings.editor && typeof settings.editor === 'object') ? settings.editor : {};
+        return editor.expertModeEnabled === true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
   async function loadMihomoYamlSchemaModule() {
     if (_mihomoYamlSchemaModulePromise) return _mihomoYamlSchemaModulePromise;
     _mihomoYamlSchemaModulePromise = import('../ui/yaml_schema.js').catch((error) => {
@@ -269,12 +288,17 @@ let mihomoPanelModuleApi = null;
 
   let _mihomoQuickFixProvider = null;
   function getMihomoQuickFixProvider() {
+    if (isMihomoExpertModeEnabled()) return null;
     if (_mihomoQuickFixProvider) return _mihomoQuickFixProvider;
     _mihomoQuickFixProvider = createMihomoQuickFixProvider();
     return _mihomoQuickFixProvider;
   }
 
   function applyBestMihomoQuickFix() {
+    if (isMihomoExpertModeEnabled()) {
+      try { if (typeof window.toast === 'function') window.toast('Экспертный режим отключает quick fix для этого редактора.', 'info'); } catch (e) {}
+      return false;
+    }
     const editor = _engine === 'monaco' ? _monaco : getSharedEditor();
     if (!editor || typeof editor.getQuickFixes !== 'function' || typeof editor.applyQuickFix !== 'function') {
       try { if (typeof window.toast === 'function') window.toast('Quick fixes пока недоступны для текущего редактора.', 'warning'); } catch (e) {}
@@ -628,6 +652,7 @@ let mihomoPanelModuleApi = null;
       if (!cm || !cm._xkeenToolbarEl || !cm._xkeenToolbarEl.querySelectorAll) return;
       const bar = cm._xkeenToolbarEl;
       const isMonaco = (String(engine || '').toLowerCase() === 'monaco');
+      const expert = isMihomoExpertModeEnabled();
 
       // Keep the toolbar container visible so layout doesn't jump.
       bar.style.display = '';
@@ -652,12 +677,20 @@ let mihomoPanelModuleApi = null;
         if (isMonaco) {
           // In Monaco mode show quick fix + one fullscreen button: fs (preferred) or fs_any.
           if (isQuickFix) {
+            if (expert) {
+              btn.style.display = 'none';
+              return;
+            }
             btn.style.display = '';
           } else {
             btn.style.display = hasFs ? (isFs ? '' : 'none') : (isFsAny ? '' : 'none');
           }
         } else {
           // In CodeMirror mode hide the fallback button to avoid duplicates.
+          if (isQuickFix && expert) {
+            btn.style.display = 'none';
+            return;
+          }
           btn.style.display = isFsAny ? 'none' : '';
         }
       });
@@ -1282,6 +1315,14 @@ let mihomoPanelModuleApi = null;
       ? String(options.text ?? '')
       : String(getEditorText() || '');
 
+    if (isMihomoExpertModeEnabled()) {
+      clearMihomoSchemaDiagnostics();
+      clearYamlErrorMarker();
+      updateMihomoSchemaBadge(null);
+      updateMihomoYamlBadge({ ok: true, empty: true, summary: '' });
+      return { ok: true, skipped: true, reason: 'expert-mode', diagnostics: [], summary: '' };
+    }
+
     if (!text.trim()) {
       clearMihomoSchemaDiagnostics();
       clearYamlErrorMarker();
@@ -1344,6 +1385,20 @@ let mihomoPanelModuleApi = null;
       void runMihomoSchemaValidation(options).catch(() => null);
     }, 180);
     return null;
+  }
+
+  function wireMihomoUiSettingsSyncOnce() {
+    if (_mihomoUiSettingsSyncWired) return;
+    _mihomoUiSettingsSyncWired = true;
+    try {
+      const settingsApi = getUiSettingsApi();
+      if (!settingsApi || typeof settingsApi.subscribe !== 'function') return;
+      settingsApi.subscribe(() => {
+        try { syncToolbarForEngine(_engine); } catch (e) {}
+        try { syncHeaderFsButton(_engine); } catch (e2) {}
+        try { scheduleMihomoSchemaValidation({ immediate: true }); } catch (e3) {}
+      });
+    } catch (e) {}
   }
 
   function clearYamlErrorMarker() {
@@ -3229,6 +3284,7 @@ let mihomoPanelModuleApi = null;
     if (_inited || (root.dataset && root.dataset.xkeenMihomoPanelInited === '1')) return;
     _inited = true;
     if (root.dataset) root.dataset.xkeenMihomoPanelInited = '1';
+    try { wireMihomoUiSettingsSyncOnce(); } catch (e) {}
 
     const finishInit = () => {
       ensureEditor();

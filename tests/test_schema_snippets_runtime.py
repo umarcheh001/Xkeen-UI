@@ -93,6 +93,44 @@ console.log(JSON.stringify(labels));
     assert "rule: block QUIC" in labels
 
 
+def test_editor_schema_disables_snippet_providers_in_expert_mode():
+    payload = _run_node_json(
+        """
+global.window = {
+  XKeen: {
+    ui: {
+      settings: {
+        get() {
+          return { editor: { expertModeEnabled: true } };
+        },
+      },
+    },
+  },
+};
+
+const { resolveEditorSnippetProvider } = await import('./xkeen-ui/static/js/ui/editor_schema.js');
+
+const routingProvider = resolveEditorSnippetProvider({
+  target: 'routing',
+  file: '05_routing.jsonc',
+  mode: 'jsonc',
+});
+const mihomoProvider = resolveEditorSnippetProvider({
+  target: 'mihomo',
+  file: 'config.yaml',
+  mode: 'yaml',
+});
+
+console.log(JSON.stringify({
+  routing: routingProvider,
+  mihomo: mihomoProvider,
+}));
+"""
+    )
+
+    assert payload == {"routing": None, "mihomo": None}
+
+
 def test_xray_quic_block_snippet_matches_common_udp_443_rule():
     payload = _run_node_json(
         """

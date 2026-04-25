@@ -691,6 +691,13 @@ import { getFeatureApi } from '../features/feature_access.js';
           'Добавляет в hover простое объяснение, типичный use case, короткий пример и предупреждение о частой ошибке для полей с расширенными метаданными схемы. Не меняет правила валидации.',
           'Режим новичка сохранён.'
         ),
+        createServerSwitch(
+          'editor-expert-mode',
+          'editor.expertModeEnabled',
+          'Эксперт',
+          'Полностью отключает Xkeen schema-assist: схемы JSON/YAML, semantic/schema validation, hover, автодополнение, сниппеты и кнопку Quick fix. Оставляет только базовый редактор.',
+          'Экспертный режим сохранён.'
+        ),
         createServerNumber(
           'editor-codemirror-font-scale',
           'editor.codemirrorFontScale',

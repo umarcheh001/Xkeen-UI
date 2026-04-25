@@ -94,6 +94,7 @@ function ensureSchemaHoverSettingsLoaded() {
 function isSchemaHoverEnabled(opts) {
   if (opts && opts.schemaHover === false) return false;
   if (opts && opts.schemaHoverEnabled === false) return false;
+  if (isEditorExpertModeEnabled(opts)) return false;
   if (shouldDeferSchemaHoverForSettings()) return false;
   try {
     const settings = readUiSettingsSnapshot();
@@ -101,6 +102,18 @@ function isSchemaHoverEnabled(opts) {
     return editor.schemaHoverEnabled !== false;
   } catch (e) {}
   return true;
+}
+
+function isEditorExpertModeEnabled(opts) {
+  try {
+    if (opts && Object.prototype.hasOwnProperty.call(opts, 'expertModeEnabled')) return opts.expertModeEnabled === true;
+  } catch (e) {}
+  try {
+    const settings = readUiSettingsSnapshot();
+    const editor = settings && settings.editor && typeof settings.editor === 'object' ? settings.editor : {};
+    return editor.expertModeEnabled === true;
+  } catch (e) {}
+  return false;
 }
 
 function isBeginnerModeEnabled(opts) {
@@ -338,7 +351,7 @@ function jsonSchemaSyntaxAwareHover(opts) {
 }
 
 function schemaExtensionFor(schema, opts) {
-  if (!schema) return [];
+  if (!schema || isEditorExpertModeEnabled(opts)) return [];
   const completionOpts = {
     snippetProvider: opts && opts.snippetProvider ? opts.snippetProvider : null,
     quickFixProvider: opts && opts.quickFixProvider ? opts.quickFixProvider : null,
@@ -386,6 +399,7 @@ function yamlAssistExtensionFor(opts) {
   if (!getSchema) return [];
 
   const completionSource = async (context) => {
+    if (isEditorExpertModeEnabled(opts)) return null;
     let schema = null;
     try { schema = getSchema(); } catch (e) {}
     if (!schema) return null;
@@ -426,6 +440,7 @@ function yamlAssistExtensionFor(opts) {
   };
 
   const hoverSource = (view, pos, side) => {
+    if (isEditorExpertModeEnabled(opts)) return null;
     if (!isSchemaHoverEnabled(opts)) return null;
     let schema = null;
     try { schema = getSchema(); } catch (e) {}
@@ -1187,11 +1202,18 @@ function buildBridge(view, ctx) {
   }
 
   function refreshSchemaExtensions() {
-    if (!schemaInstalled || !ctx.schema) {
+    const effects = [];
+    if (ctx.schema || schemaInstalled) {
+      effects.push(ctx.schemaCompartment.reconfigure(schemaExtensionFor(ctx.schema, options)));
+    }
+    if (options.yamlAssist) {
+      effects.push(ctx.yamlAssistCompartment.reconfigure(yamlAssistExtensionFor(options)));
+    }
+    if (!effects.length) {
       if (!isSchemaHoverEnabled(options)) hideSchemaHoverTooltips();
       return false;
     }
-    const ok = dispatch({ effects: ctx.schemaCompartment.reconfigure(schemaExtensionFor(ctx.schema, options)) });
+    const ok = dispatch({ effects });
     if (!isSchemaHoverEnabled(options)) hideSchemaHoverTooltips();
     return ok;
   }
@@ -1302,6 +1324,7 @@ function buildBridge(view, ctx) {
       return options.quickFixProvider || null;
     },
     getQuickFixes(request) {
+      if (isEditorExpertModeEnabled(options)) return [];
       const getter = resolveQuickFixGetter(options.quickFixProvider);
       if (!getter) return [];
       const req = request && typeof request === 'object' ? { ...request } : {};

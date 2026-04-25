@@ -23,7 +23,8 @@
       codemirrorFontScale: 100,
       monacoFontScale: 100,
       schemaHoverEnabled: true,
-      beginnerModeEnabled: false,
+      beginnerModeEnabled: true,
+      expertModeEnabled: false,
     },
     format: {
       preferPrettier: false,
@@ -110,6 +111,15 @@
       }
     } catch (e) {}
     return 100;
+  }
+
+  function isEditorExpertModeEnabled(settings) {
+    try {
+      const snapshot = (settings && typeof settings === 'object') ? settings : get();
+      const editor = (snapshot && snapshot.editor && typeof snapshot.editor === 'object') ? snapshot.editor : {};
+      return editor.expertModeEnabled === true;
+    } catch (e) {}
+    return false;
   }
 
   function applyEditorCssVars(settings) {
@@ -404,4 +414,5 @@
   XKeen.ui.settings.subscribe = subscribe;
   XKeen.ui.settings.clampEditorFontScale = clampEditorFontScale;
   XKeen.ui.settings.getEditorFontScale = getEditorFontScale;
+  XKeen.ui.settings.isEditorExpertModeEnabled = isEditorExpertModeEnabled;
 })();

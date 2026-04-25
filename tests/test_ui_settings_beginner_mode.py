@@ -1,9 +1,9 @@
 from services import ui_settings
 
 
-def test_ui_settings_default_beginner_mode_is_disabled(tmp_path):
+def test_ui_settings_default_beginner_mode_is_enabled(tmp_path):
     loaded = ui_settings.load_settings(ui_state_dir=str(tmp_path))
-    assert loaded["editor"]["beginnerModeEnabled"] is False
+    assert loaded["editor"]["beginnerModeEnabled"] is True
 
 
 def test_ui_settings_persists_editor_beginner_mode_toggle(tmp_path):
@@ -53,4 +53,4 @@ def test_ui_settings_save_warns_on_invalid_beginner_mode_then_keeps_default(tmp_
         ui_state_dir=str(tmp_path),
     )
 
-    assert saved["editor"]["beginnerModeEnabled"] is False
+    assert saved["editor"]["beginnerModeEnabled"] is True

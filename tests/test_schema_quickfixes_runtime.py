@@ -56,6 +56,44 @@ console.log(JSON.stringify({
     assert payload == {"routing": True, "mihomo": True}
 
 
+def test_editor_schema_disables_quickfix_providers_in_expert_mode():
+    payload = _run_node_json(
+        """
+global.window = {
+  XKeen: {
+    ui: {
+      settings: {
+        get() {
+          return { editor: { expertModeEnabled: true } };
+        },
+      },
+    },
+  },
+};
+
+const { resolveEditorQuickFixProvider } = await import('./xkeen-ui/static/js/ui/editor_schema.js');
+
+const routingProvider = resolveEditorQuickFixProvider({
+  target: 'routing',
+  file: '05_routing.jsonc',
+  mode: 'jsonc',
+});
+const mihomoProvider = resolveEditorQuickFixProvider({
+  target: 'mihomo',
+  file: 'config.yaml',
+  mode: 'yaml',
+});
+
+console.log(JSON.stringify({
+  routing: routingProvider,
+  mihomo: mihomoProvider,
+}));
+"""
+    )
+
+    assert payload == {"routing": None, "mihomo": None}
+
+
 def test_xray_quickfix_adds_missing_outbound_tag_for_rule_without_target():
     payload = _run_node_json(
         """

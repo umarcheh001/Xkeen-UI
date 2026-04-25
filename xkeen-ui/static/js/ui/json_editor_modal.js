@@ -34,6 +34,7 @@ import {
   let _monacoFacade = null;
   let _kind = 'codemirror';
   let _engineUnsub = null;
+  let _settingsUnsub = null;
   let _dirtyUnsub = null;
   let _currentTarget = null;
   let _savedText = '';
@@ -911,6 +912,20 @@ import {
             if (!m || m.classList.contains('hidden')) return;
             const eng = normalizeEngine(d && d.engine);
             if (eng && eng !== _kind) switchEngine(eng, { noPersist: true });
+          } catch (e) {}
+        });
+      }
+    } catch (e) {}
+
+    try {
+      const settingsApi = getUiSettingsApi();
+      if (settingsApi && typeof settingsApi.subscribe === 'function' && !_settingsUnsub) {
+        _settingsUnsub = settingsApi.subscribe(() => {
+          try {
+            const modal = el('json-editor-modal');
+            if (!modal || modal.classList.contains('hidden') || !_currentTarget) return;
+            const active = _kind === 'monaco' ? applyCurrentSchemaToMonaco() : applyCurrentSchemaToCodeMirror();
+            Promise.resolve(active).catch(() => null);
           } catch (e) {}
         });
       }

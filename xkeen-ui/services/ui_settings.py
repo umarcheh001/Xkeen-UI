@@ -57,7 +57,9 @@ DEFAULTS: Dict[str, Any] = {
         # Beginner-friendly hover mode (Phase 5): enriches hover and diagnostics
         # with plain-language explanations, typical use cases, short examples
         # and common-mistake warnings sourced from `x-ui-*` metadata in schemas.
-        "beginnerModeEnabled": False,
+        "beginnerModeEnabled": True,
+        # Expert mode disables Xkeen editor assistance layers and quick-fix UI.
+        "expertModeEnabled": False,
     },
     "format": {
         # Prefer browser-side formatting (Prettier) where available.
@@ -138,6 +140,7 @@ def _canonical_empty() -> Dict[str, Any]:
             "monacoFontScale": int(DEFAULTS["editor"]["monacoFontScale"]),
             "schemaHoverEnabled": bool(DEFAULTS["editor"]["schemaHoverEnabled"]),
             "beginnerModeEnabled": bool(DEFAULTS["editor"]["beginnerModeEnabled"]),
+            "expertModeEnabled": bool(DEFAULTS["editor"]["expertModeEnabled"]),
         },
         "format": {
             "preferPrettier": bool(DEFAULTS["format"]["preferPrettier"]),
@@ -325,8 +328,16 @@ def _sanitize_full(raw: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 rep.warnings.append({"path": "editor.beginnerModeEnabled", "warning": "invalid type; ignored"})
                 rep.changed = True
 
+        expert_mode_enabled = editor.get("expertModeEnabled")
+        if expert_mode_enabled is not None:
+            if _is_bool(expert_mode_enabled):
+                out["editor"]["expertModeEnabled"] = bool(expert_mode_enabled)
+            else:
+                rep.warnings.append({"path": "editor.expertModeEnabled", "warning": "invalid type; ignored"})
+                rep.changed = True
+
         for k in editor.keys():
-            if k not in ("engine", "fontScale", "codemirrorFontScale", "monacoFontScale", "schemaHoverEnabled", "beginnerModeEnabled"):
+            if k not in ("engine", "fontScale", "codemirrorFontScale", "monacoFontScale", "schemaHoverEnabled", "beginnerModeEnabled", "expertModeEnabled"):
                 rep.warnings.append({"path": f"editor.{k}", "warning": "unknown key dropped"})
                 rep.changed = True
 
@@ -514,8 +525,15 @@ def _sanitize_patch(patch: Any) -> Tuple[Dict[str, Any], SettingsReport]:
                 else:
                     rep.errors.append({"path": "editor.beginnerModeEnabled", "error": "must be boolean"})
 
+            if "expertModeEnabled" in editor:
+                v = editor.get("expertModeEnabled")
+                if _is_bool(v):
+                    p["expertModeEnabled"] = bool(v)
+                else:
+                    rep.errors.append({"path": "editor.expertModeEnabled", "error": "must be boolean"})
+
             for k in editor.keys():
-                if k not in ("engine", "fontScale", "codemirrorFontScale", "monacoFontScale", "schemaHoverEnabled", "beginnerModeEnabled"):
+                if k not in ("engine", "fontScale", "codemirrorFontScale", "monacoFontScale", "schemaHoverEnabled", "beginnerModeEnabled", "expertModeEnabled"):
                     rep.warnings.append({"path": f"editor.{k}", "warning": "unknown key dropped"})
 
             if p:

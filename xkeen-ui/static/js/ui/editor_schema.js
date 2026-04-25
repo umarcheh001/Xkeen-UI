@@ -46,6 +46,23 @@ function basename(value) {
   return parts[parts.length - 1] || '';
 }
 
+function isEditorExpertModeEnabled(ctx) {
+  const o = ctx || {};
+  try {
+    if (Object.prototype.hasOwnProperty.call(o, 'expertModeEnabled')) return o.expertModeEnabled === true;
+  } catch (e) {}
+  try {
+    const api = window.XKeen && window.XKeen.ui && window.XKeen.ui.settings;
+    if (api && typeof api.isEditorExpertModeEnabled === 'function') return api.isEditorExpertModeEnabled();
+    if (api && typeof api.get === 'function') {
+      const settings = api.get();
+      const editor = (settings && settings.editor && typeof settings.editor === 'object') ? settings.editor : {};
+      return editor.expertModeEnabled === true;
+    }
+  } catch (e) {}
+  return false;
+}
+
 function isJsonMode(mode) {
   const raw = normalizeLower(mode);
   if (!raw) return true;
@@ -129,6 +146,9 @@ async function loadSchema(url) {
 }
 
 export async function loadEditorSchema(ctx) {
+  if (isEditorExpertModeEnabled(ctx)) {
+    return { ok: false, skipped: true, reason: 'expert-mode', spec: null, schema: null };
+  }
   const spec = resolveEditorSchemaSpec(ctx || {});
   if (!spec) return { ok: false, skipped: true, reason: 'schema-unmatched', spec: null, schema: null };
   try {
@@ -214,6 +234,7 @@ function normalizeSnippetKind(value) {
 }
 
 export function resolveEditorSnippetProvider(ctx) {
+  if (isEditorExpertModeEnabled(ctx)) return null;
   const o = ctx || {};
   const explicitKind = normalizeSnippetKind(o.snippetKind || o.schemaKind);
   if (explicitKind && _snippetProviderCache[explicitKind]) return _snippetProviderCache[explicitKind];
@@ -224,6 +245,7 @@ export function resolveEditorSnippetProvider(ctx) {
 }
 
 export function resolveEditorQuickFixProvider(ctx) {
+  if (isEditorExpertModeEnabled(ctx)) return null;
   const o = ctx || {};
   const explicitKind = normalizeSnippetKind(o.quickFixKind || o.schemaKind);
   if (explicitKind && _quickFixProviderCache[explicitKind]) return _quickFixProviderCache[explicitKind];
@@ -234,6 +256,7 @@ export function resolveEditorQuickFixProvider(ctx) {
 }
 
 export function resolveEditorSemanticValidation(ctx) {
+  if (isEditorExpertModeEnabled(ctx)) return null;
   const o = ctx || {};
   const explicitKind = normalizeSnippetKind(o.semanticKind || o.schemaKind);
   const inferredKind = explicitKind || normalizeSnippetKind(inferSchemaKind(o));
@@ -264,6 +287,10 @@ export async function applySchemaToEditor(editor, ctx) {
   if (!target) return { ok: false, skipped: true, reason: 'editor-missing' };
 
   const o = ctx || {};
+  if (isEditorExpertModeEnabled(o)) {
+    clearSchemaFromEditor(target, o);
+    return { ok: false, skipped: true, reason: 'expert-mode' };
+  }
   const spec = resolveEditorSchemaSpec(o);
   if (!spec) {
     clearSchemaFromEditor(target, o);
