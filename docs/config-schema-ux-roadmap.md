@@ -30,7 +30,7 @@
 
 - Phase 1: частично закрыта.
 - Phase 2: закрыта.
-- Phase 3: почти закрыта.
+- Phase 3: закрыта.
 - Phase 4: закрыта как MVP, нужна полировка.
 - Phase 5: частично закрыта.
 - Phase 6: пока не начата как полноценный слой.
@@ -179,7 +179,7 @@
 
 ## Phase 3: Task-Oriented Snippets И Шаблоны Блоков
 
-Статус: почти закрыта
+Статус: закрыта
 
 ### Что закрыто
 
@@ -197,6 +197,7 @@
   - inbounds
   - balancers
   - observatory
+  - observatory + balancer scaffold
   - stream/transport settings
   - DNS block
 - Для Mihomo уже есть snippets как минимум для:
@@ -204,31 +205,37 @@
   - proxy-groups
   - proxy-providers
   - rule-providers
+  - rules
+  - rule-provider + RULE-SET scaffold
   - DNS block
   - TUN block
   - sniffer block
+- Контекстная выдача сниппетов стала точнее:
+  - `proxy-providers` / `rule-providers` больше не предлагаются внутри вложенных
+    provider-объектов;
+  - array-snippets для Mihomo корректно работают и по numeric-path контексту из
+    YAML runtime.
+- Top beginner flows теперь закрыты коротким scaffold-путём:
+  - VLESS Reality
+  - proxy-group url-test
+  - rule-provider + rule
+  - observatory + balancer
 - Keenetic-specific non-default blocks уже помечены warning-ами и не выглядят
   как baseline-by-default.
 - Сниппеты в целом вставляют рабочие scaffold-блоки, а не пустые объекты.
 
 ### Что закрыто частично
 
-- Контекстная адаптация под текущее место курсора есть, но не для всех
-  сценариев одинаково глубока.
-- Не все типовые beginner flows ещё доступны как "один лучший scaffold" без
-  выбора из нескольких вариантов.
+- Можно ещё полировать ranking и wording отдельных snippet descriptions, но это
+  уже quality-pass, а не blocker фазы.
 
 ### Что осталось доделать
 
-- Дошлифовать context-aware snippet selection, чтобы реже предлагались
-  нерелевантные варианты.
-- Проверить, что top beginner tasks покрыты кратчайшим путём:
-  - VLESS Reality
-  - proxy-group url-test
-  - rule-provider + rule
-  - observatory + balancer
-- При необходимости добавить ещё 2-3 high-value snippets для самых частых
-  сценариев из поддержки/полевой практики.
+- Обязательных blocker-задач для закрытия Phase 3 больше нет.
+- Как optional polish можно добавить:
+  - ещё более domain-aware ranking для сниппетов в спорных местах курсора;
+  - 2-3 дополнительных support-driven scaffolds, если их реально подтвердит
+    полевая практика.
 
 ### Когда можно считать Phase 3 закрытой
 

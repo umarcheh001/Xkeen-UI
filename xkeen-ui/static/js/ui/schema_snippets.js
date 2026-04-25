@@ -262,6 +262,14 @@ const XRAY_CONFIG_TOP_LEVEL_SNIPPETS = [
     insertText: '"observatory": {\n  "subjectSelector": [\n    "proxy-"\n  ],\n  "probeUrl": "http://www.gstatic.com/generate_204",\n  "probeInterval": "5m"\n}',
     monacoSnippet: '"observatory": {\n  "subjectSelector": [\n    "${1:proxy-}"\n  ],\n  "probeUrl": "${2:http://www.gstatic.com/generate_204}",\n  "probeInterval": "${3:5m}"\n}$0',
   },
+  {
+    id: 'xray-config-observatory-balancer',
+    label: 'observatory + balancer scaffold',
+    detail: 'Xray · observatory + routing',
+    documentation: 'Полный scaffold для leastPing-маршрутизации: observatory, balancer и базовое rule через balancerTag.',
+    insertText: '"observatory": {\n  "subjectSelector": [\n    "proxy-"\n  ],\n  "probeUrl": "http://www.gstatic.com/generate_204",\n  "probeInterval": "5m"\n},\n"routing": {\n  "balancers": [\n    {\n      "tag": "balancer-auto",\n      "selector": [\n        "proxy-"\n      ],\n      "strategy": {\n        "type": "leastPing"\n      },\n      "fallbackTag": "direct"\n    }\n  ],\n  "rules": [\n    {\n      "type": "field",\n      "domain": [\n        "geosite:geolocation-!cn"\n      ],\n      "balancerTag": "balancer-auto"\n    }\n  ]\n}',
+    monacoSnippet: '"observatory": {\n  "subjectSelector": [\n    "${1:proxy-}"\n  ],\n  "probeUrl": "${2:http://www.gstatic.com/generate_204}",\n  "probeInterval": "${3:5m}"\n},\n"routing": {\n  "balancers": [\n    {\n      "tag": "${4:balancer-auto}",\n      "selector": [\n        "${5:proxy-}"\n      ],\n      "strategy": {\n        "type": "${6|leastPing,leastLoad,random,roundRobin|}"\n      },\n      "fallbackTag": "${7:direct}"\n    }\n  ],\n  "rules": [\n    {\n      "type": "field",\n      "domain": [\n        "${8:geosite:geolocation-!cn}"\n      ],\n      "balancerTag": "${4:balancer-auto}"\n    }\n  ]\n}$0',
+  },
 ];
 
 /* ════════════════════════════════════════════════════════════
@@ -369,10 +377,49 @@ const MIHOMO_RULE_PROVIDERS_SNIPPETS = [
 ];
 
 /* ════════════════════════════════════════════════════════════
+ *  Mihomo · rules
+ * ════════════════════════════════════════════════════════════ */
+
+const MIHOMO_RULES_SNIPPETS = [
+  {
+    id: 'mihomo-rule-ruleset',
+    label: 'rule: RULE-SET -> group',
+    detail: 'Mihomo · rules[]',
+    documentation: 'Применяет rule-provider через RULE-SET и направляет совпадения в proxy-group или встроенный target.',
+    insertText: 'RULE-SET,custom-list,auto',
+    monacoSnippet: 'RULE-SET,${1:custom-list},${2:auto}$0',
+  },
+  {
+    id: 'mihomo-rule-domain-suffix',
+    label: 'rule: DOMAIN-SUFFIX -> group',
+    detail: 'Mihomo · rules[]',
+    documentation: 'Маршрутизация по доменному суффиксу. Подходит для простых targeted-rules без provider.',
+    insertText: 'DOMAIN-SUFFIX,example.com,auto',
+    monacoSnippet: 'DOMAIN-SUFFIX,${1:example.com},${2:auto}$0',
+  },
+  {
+    id: 'mihomo-rule-geoip-direct',
+    label: 'rule: GEOIP -> DIRECT',
+    detail: 'Mihomo · rules[]',
+    documentation: 'Направляет трафик выбранной страны напрямую. Типовой baseline для локального/регионального трафика.',
+    insertText: 'GEOIP,RU,DIRECT',
+    monacoSnippet: 'GEOIP,${1:RU},${2:DIRECT}$0',
+  },
+];
+
+/* ════════════════════════════════════════════════════════════
  *  Mihomo · top-level (dns, tun, sniffer)
  * ════════════════════════════════════════════════════════════ */
 
 const MIHOMO_TOP_LEVEL_SNIPPETS = [
+  {
+    id: 'mihomo-bundle-rule-provider-ruleset',
+    label: 'rule-provider + RULE-SET',
+    detail: 'Mihomo · rule-providers + rules',
+    documentation: 'Готовый scaffold для provider и соответствующего RULE-SET правила. Хороший старт для ads/custom lists.',
+    insertText: 'rule-providers:\n  custom-list:\n    type: http\n    behavior: domain\n    url: "https://example.com/rules/custom-list.yaml"\n    interval: 86400\n    path: ./rules/custom-list.yaml\n    format: yaml\nrules:\n  - RULE-SET,custom-list,auto',
+    monacoSnippet: 'rule-providers:\n  ${1:custom-list}:\n    type: http\n    behavior: ${2|domain,ipcidr,classical|}\n    url: "${3:https://example.com/rules/custom-list.yaml}"\n    interval: ${4:86400}\n    path: ${5:./rules/custom-list.yaml}\n    format: ${6|yaml,text,mrs|}\nrules:\n  - RULE-SET,${1:custom-list},${7:auto}$0',
+  },
   {
     id: 'mihomo-dns-block',
     label: 'dns block (Keenetic — обычно не нужен)',
@@ -415,12 +462,11 @@ function normalizePointer(pointer) {
 
 function normalizePath(path) {
   if (!Array.isArray(path)) return [];
-  return path.map((item) => (typeof item === 'number' ? `[${item}]` : String(item || '')));
+  return path.map((item) => String(item == null ? '' : item));
 }
 
 function pathToPointer(path) {
   const parts = normalizePath(path).map((item) => {
-    if (item.startsWith('[') && item.endsWith(']')) return item.slice(1, -1);
     return item.replace(/~/g, '~0').replace(/\//g, '~1');
   });
   return parts.length ? `/${parts.join('/')}` : '';
@@ -429,6 +475,11 @@ function pathToPointer(path) {
 function isNumericSegment(segment) {
   if (segment == null) return false;
   return /^\d+$/.test(String(segment));
+}
+
+function normalizeContextKind(kind) {
+  const value = String(kind || '').toLowerCase();
+  return value === 'array-item' || value === 'key' || value === 'value' ? value : '';
 }
 
 function matchesXrayRoutingRulesPointer(pointer) {
@@ -475,32 +526,44 @@ function matchesMihomoRootPath(path) {
   return normalized.length === 0;
 }
 
-function matchesMihomoProxiesArrayPath(path) {
+function matchesMihomoArrayPath(path, rootKey, kind, options = {}) {
   const normalized = normalizePath(path);
+  const contextKind = normalizeContextKind(kind);
+  const allowValue = Boolean(options.allowValue);
   if (!normalized.length) return false;
-  if (normalized[0] !== 'proxies') return false;
-  if (normalized.length === 1) return true;
-  return normalized.length === 2 && isNumericSegment(normalized[1]);
+  if (normalized[0] !== rootKey) return false;
+  if (normalized.length === 1) return !contextKind || contextKind === 'key';
+  if (normalized.length !== 2 || !isNumericSegment(normalized[1])) return false;
+  if (!contextKind || contextKind === 'array-item' || contextKind === 'key') return true;
+  return allowValue && contextKind === 'value';
 }
 
-function matchesMihomoProxyGroupsArrayPath(path) {
+function matchesMihomoMapEntryPath(path, rootKey, kind) {
   const normalized = normalizePath(path);
+  const contextKind = normalizeContextKind(kind);
   if (!normalized.length) return false;
-  if (normalized[0] !== 'proxy-groups') return false;
-  if (normalized.length === 1) return true;
-  return normalized.length === 2 && isNumericSegment(normalized[1]);
+  if (normalized[0] !== rootKey) return false;
+  return normalized.length === 1 && (!contextKind || contextKind === 'key');
 }
 
-function matchesMihomoProxyProvidersPath(path) {
-  const normalized = normalizePath(path);
-  if (!normalized.length) return false;
-  return normalized[0] === 'proxy-providers';
+function matchesMihomoProxiesArrayPath(path, kind) {
+  return matchesMihomoArrayPath(path, 'proxies', kind);
 }
 
-function matchesMihomoRuleProvidersPath(path) {
-  const normalized = normalizePath(path);
-  if (!normalized.length) return false;
-  return normalized[0] === 'rule-providers';
+function matchesMihomoProxyGroupsArrayPath(path, kind) {
+  return matchesMihomoArrayPath(path, 'proxy-groups', kind);
+}
+
+function matchesMihomoRulesArrayPath(path, kind) {
+  return matchesMihomoArrayPath(path, 'rules', kind, { allowValue: true });
+}
+
+function matchesMihomoProxyProvidersPath(path, kind) {
+  return matchesMihomoMapEntryPath(path, 'proxy-providers', kind);
+}
+
+function matchesMihomoRuleProvidersPath(path, kind) {
+  return matchesMihomoMapEntryPath(path, 'rule-providers', kind);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -557,22 +620,26 @@ export function getXraySnippets(params) {
 export function getMihomoSnippets(params) {
   const input = params && typeof params === 'object' ? params : {};
   const path = normalizePath(input.path);
+  const kind = normalizeContextKind(input.kind);
   const list = [];
 
   if (matchesMihomoRootPath(path)) {
     list.push(...MIHOMO_TOP_LEVEL_SNIPPETS);
   }
-  if (matchesMihomoProxiesArrayPath(path)) {
+  if (matchesMihomoProxiesArrayPath(path, kind)) {
     list.push(...MIHOMO_PROXIES_SNIPPETS);
   }
-  if (matchesMihomoProxyGroupsArrayPath(path)) {
+  if (matchesMihomoProxyGroupsArrayPath(path, kind)) {
     list.push(...MIHOMO_PROXY_GROUPS_SNIPPETS);
   }
-  if (matchesMihomoProxyProvidersPath(path)) {
+  if (matchesMihomoProxyProvidersPath(path, kind)) {
     list.push(...MIHOMO_PROXY_PROVIDERS_SNIPPETS);
   }
-  if (matchesMihomoRuleProvidersPath(path)) {
+  if (matchesMihomoRuleProvidersPath(path, kind)) {
     list.push(...MIHOMO_RULE_PROVIDERS_SNIPPETS);
+  }
+  if (matchesMihomoRulesArrayPath(path, kind)) {
+    list.push(...MIHOMO_RULES_SNIPPETS);
   }
 
   return list.map(cloneSnippet);
@@ -596,7 +663,10 @@ export function createXraySnippetProvider(schemaKind) {
 export function createMihomoSnippetProvider() {
   return function mihomoSnippetProvider(ctx) {
     const context = ctx && typeof ctx === 'object' ? ctx : {};
-    return getMihomoSnippets({ path: context.path || [] });
+    return getMihomoSnippets({
+      path: context.path || [],
+      kind: context.kind || '',
+    });
   };
 }
 

@@ -238,6 +238,89 @@ console.log(JSON.stringify({
     assert "skip-domain" not in payload["insertText"]
 
 
+def test_mihomo_snippet_matching_supports_numeric_array_indexes_and_filters_nested_provider_context():
+    payload = _run_node_json(
+        """
+import { getMihomoSnippets } from './xkeen-ui/static/js/ui/schema_snippets.js';
+
+console.log(JSON.stringify({
+  proxiesArray: getMihomoSnippets({
+    path: ['proxies', 0],
+    kind: 'array-item',
+  }).map((item) => item.id),
+  rulesArray: getMihomoSnippets({
+    path: ['rules', 0],
+    kind: 'array-item',
+  }).map((item) => item.id),
+  proxyProvidersTopLevel: getMihomoSnippets({
+    path: ['proxy-providers'],
+    kind: 'key',
+  }).map((item) => item.id),
+  proxyProvidersNested: getMihomoSnippets({
+    path: ['proxy-providers', 'subscription', 'health-check'],
+    kind: 'key',
+  }).map((item) => item.id),
+}));
+"""
+    )
+
+    assert "mihomo-proxy-vless" in payload["proxiesArray"]
+    assert "mihomo-rule-ruleset" in payload["rulesArray"]
+    assert "mihomo-proxy-provider-http" in payload["proxyProvidersTopLevel"]
+    assert "mihomo-proxy-provider-http" not in payload["proxyProvidersNested"]
+
+
+def test_phase3_high_value_composite_snippets_are_available_at_root_and_rules_array():
+    payload = _run_node_json(
+        """
+import { getXraySnippets, getMihomoSnippets } from './xkeen-ui/static/js/ui/schema_snippets.js';
+
+const xrayComposite = getXraySnippets({
+  schemaKind: 'xray-config',
+  pointer: '/',
+}).find((item) => item && item.id === 'xray-config-observatory-balancer');
+
+const mihomoRootComposite = getMihomoSnippets({
+  path: [],
+  kind: 'key',
+}).find((item) => item && item.id === 'mihomo-bundle-rule-provider-ruleset');
+
+const mihomoRuleSnippet = getMihomoSnippets({
+  path: ['rules', 0],
+  kind: 'array-item',
+}).find((item) => item && item.id === 'mihomo-rule-ruleset');
+
+console.log(JSON.stringify({
+  xrayComposite: xrayComposite ? {
+    label: xrayComposite.label,
+    insertText: xrayComposite.insertText,
+  } : null,
+  mihomoRootComposite: mihomoRootComposite ? {
+    label: mihomoRootComposite.label,
+    insertText: mihomoRootComposite.insertText,
+  } : null,
+  mihomoRuleSnippet: mihomoRuleSnippet ? {
+    label: mihomoRuleSnippet.label,
+    insertText: mihomoRuleSnippet.insertText,
+  } : null,
+}));
+"""
+    )
+
+    assert payload["xrayComposite"]["label"] == "observatory + balancer scaffold"
+    assert '"observatory": {' in payload["xrayComposite"]["insertText"]
+    assert '"balancers": [' in payload["xrayComposite"]["insertText"]
+    assert '"balancerTag": "balancer-auto"' in payload["xrayComposite"]["insertText"]
+
+    assert payload["mihomoRootComposite"]["label"] == "rule-provider + RULE-SET"
+    assert "rule-providers:" in payload["mihomoRootComposite"]["insertText"]
+    assert "rules:" in payload["mihomoRootComposite"]["insertText"]
+    assert "RULE-SET,custom-list,auto" in payload["mihomoRootComposite"]["insertText"]
+
+    assert payload["mihomoRuleSnippet"]["label"] == "rule: RULE-SET -> group"
+    assert payload["mihomoRuleSnippet"]["insertText"] == "RULE-SET,custom-list,auto"
+
+
 def test_feature_editors_wire_schema_snippet_providers():
     routing_src = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "routing.js").read_text(encoding="utf-8")
     mihomo_src = (ROOT / "xkeen-ui" / "static" / "js" / "features" / "mihomo_panel.js").read_text(encoding="utf-8")
