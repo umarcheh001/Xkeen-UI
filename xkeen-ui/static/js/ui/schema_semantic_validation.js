@@ -193,6 +193,66 @@ function validateMihomoTargetNameCollisions(target, proxies, proxyGroups) {
   });
 }
 
+function validateMihomoProxyGroupCycles(target, proxyGroups) {
+  const groupIndexes = new Map();
+  const edgesByGroup = new Map();
+  (Array.isArray(proxyGroups) ? proxyGroups : []).forEach((group, index) => {
+    if (!isPlainObject(group)) return;
+    const groupName = cleanName(group.name);
+    if (!groupName) return;
+    if (!groupIndexes.has(groupName)) groupIndexes.set(groupName, index);
+    const edges = [];
+    const proxies = Array.isArray(group.proxies) ? group.proxies : [];
+    proxies.forEach((value, itemIndex) => {
+      const targetName = cleanName(value);
+      if (!targetName || targetName === groupName) return;
+      edges.push({
+        from: groupName,
+        to: targetName,
+        groupIndex: index,
+        itemIndex,
+      });
+    });
+    edgesByGroup.set(groupName, edges);
+  });
+
+  const reported = new Set();
+  const settled = new Set();
+
+  function visit(groupName, stackNames, stackEdges) {
+    const cycleStart = stackNames.indexOf(groupName);
+    if (cycleStart >= 0) {
+      const cycleEdges = stackEdges.slice(cycleStart);
+      const cycleNames = stackNames.slice(cycleStart).concat(groupName);
+      const cycleLabel = cycleNames.join(' -> ');
+      if (!reported.has(cycleLabel)) {
+        reported.add(cycleLabel);
+        cycleEdges.forEach((edge) => {
+          pushDiagnostic(target, createYamlDiagnostic(['proxy-groups', edge.groupIndex, 'proxies', edge.itemIndex], `Proxy-group cycle: \`${cycleLabel}\`. Такая цепочка не даст группам собрать конечный список proxy target-ов и часто приводит к "пустому" выбору в UI.`, {
+            severity: 'warning',
+            source: 'mihomo-semantic',
+            code: 'proxy-group-cycle',
+          }));
+        });
+      }
+      return;
+    }
+
+    if (settled.has(groupName)) return;
+    const nextNames = stackNames.concat(groupName);
+    const edges = edgesByGroup.get(groupName) || [];
+    edges.forEach((edge) => {
+      if (!groupIndexes.has(edge.to)) return;
+      visit(edge.to, nextNames, stackEdges.concat(edge));
+    });
+    settled.add(groupName);
+  }
+
+  Array.from(groupIndexes.keys()).forEach((groupName) => {
+    visit(groupName, [], []);
+  });
+}
+
 function splitTopLevelRuleParts(rule) {
   const text = cleanName(rule);
   if (!text) return [];
@@ -429,6 +489,7 @@ export function validateMihomoConfigSemantics(data, options = {}) {
   validateNamedDuplicates(diagnostics, proxies, 'proxies', 'Proxy');
   validateNamedDuplicates(diagnostics, proxyGroups, 'proxy-groups', 'Proxy-group');
   validateMihomoTargetNameCollisions(diagnostics, proxies, proxyGroups);
+  validateMihomoProxyGroupCycles(diagnostics, proxyGroups);
   validateMihomoProxyCompat(diagnostics, proxies);
   validateProviderShape(diagnostics, proxyProviders, 'proxy-providers', 'proxy');
   validateProviderShape(diagnostics, ruleProviders, 'rule-providers', 'rule');
@@ -742,6 +803,159 @@ function collectXrayFlowValues(item, role) {
   return uniqueSorted(flows);
 }
 
+function hasConfiguredScalar(value) {
+  if (value == null) return false;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'boolean') return true;
+  return !!cleanName(value);
+}
+
+function validateXraySettingsCollection(diagnostics, pointer, roleLabel, itemLabel, protocol, collection, field, spec) {
+  const list = Array.isArray(collection) ? collection : [];
+  if (!list.length) {
+    pushDiagnostic(diagnostics, createJsonDiagnostic(pointer, `${roleLabel} "${itemLabel}" с \`protocol: ${protocol}\` ожидает непустой блок \`${field}\`. Сейчас semantic-проверка не видит ни одной записи для подключения.`, {
+      source: 'xray-semantic',
+      code: `${roleLabel.toLowerCase()}-${protocol}-${field}-missing`,
+    }));
+    return [];
+  }
+
+  list.forEach((entry, entryIndex) => {
+    if (!isPlainObject(entry)) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/${entryIndex}`, `${roleLabel} "${itemLabel}" ожидает объект внутри \`${field}[${entryIndex}]\`, а получил другое значение.`, {
+        source: 'xray-semantic',
+        code: `${roleLabel.toLowerCase()}-${protocol}-${field}-entry-invalid`,
+      }));
+      return;
+    }
+    (Array.isArray(spec) ? spec : []).forEach((rule) => {
+      const value = entry[rule.key];
+      if (hasConfiguredScalar(value)) return;
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/${entryIndex}/${rule.key}`, `${roleLabel} "${itemLabel}" с \`protocol: ${protocol}\` ожидает поле \`${rule.key}\` внутри \`${field}[${entryIndex}]\`. ${rule.hint}`, {
+        source: 'xray-semantic',
+        code: `${roleLabel.toLowerCase()}-${protocol}-${field}-${rule.key}-missing`,
+      }));
+    });
+  });
+  return list;
+}
+
+function validateXrayUserCollection(diagnostics, pointer, roleLabel, itemLabel, protocol, users, field, options = {}) {
+  const list = Array.isArray(users) ? users : [];
+  if (!list.length) {
+    pushDiagnostic(diagnostics, createJsonDiagnostic(pointer, `${roleLabel} "${itemLabel}" с \`protocol: ${protocol}\` не содержит ни одной записи в \`${field}\`. Без пользователей/клиентов Xray не сможет принять или установить соединение.`, {
+      source: 'xray-semantic',
+      code: `${roleLabel.toLowerCase()}-${protocol}-${field}-empty`,
+    }));
+    return [];
+  }
+
+  list.forEach((entry, entryIndex) => {
+    if (!isPlainObject(entry)) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/${entryIndex}`, `${roleLabel} "${itemLabel}" ожидает объект внутри \`${field}[${entryIndex}]\`, а получил другое значение.`, {
+        source: 'xray-semantic',
+        code: `${roleLabel.toLowerCase()}-${protocol}-${field}-entry-invalid`,
+      }));
+      return;
+    }
+    const required = Array.isArray(options.required) ? options.required : [];
+    required.forEach((rule) => {
+      const value = entry[rule.key];
+      if (hasConfiguredScalar(value)) return;
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/${entryIndex}/${rule.key}`, `${roleLabel} "${itemLabel}" с \`protocol: ${protocol}\` ожидает поле \`${rule.key}\` внутри \`${field}[${entryIndex}]\`. ${rule.hint}`, {
+        source: 'xray-semantic',
+        code: `${roleLabel.toLowerCase()}-${protocol}-${field}-${rule.key}-missing`,
+      }));
+    });
+
+    if (protocol === 'vless') {
+      const encryption = cleanName(entry.encryption);
+      if (encryption && encryption !== 'none') {
+        pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/${entryIndex}/encryption`, `${roleLabel} "${itemLabel}" использует \`protocol: vless\`, но указывает \`encryption: ${encryption}\`. Для VLESS здесь обычно ожидается только \`none\`.`, {
+          severity: 'warning',
+          source: 'xray-semantic',
+          code: `${roleLabel.toLowerCase()}-vless-encryption-invalid`,
+        }));
+      }
+    }
+  });
+  return list;
+}
+
+function validateXrayOutboundProtocolSettingsItem(item, pointer, diagnostics) {
+  if (!isPlainObject(item)) return;
+  const settings = isPlainObject(item.settings) ? item.settings : {};
+  const protocol = cleanName(item.protocol);
+  const itemLabel = cleanName(item.tag) || pointer;
+  const roleLabel = 'Outbound';
+
+  if (protocol === 'vless' || protocol === 'vmess') {
+    const vnext = validateXraySettingsCollection(diagnostics, `${pointer}/settings/vnext`, roleLabel, itemLabel, protocol, settings.vnext, 'vnext', [
+      { key: 'address', hint: 'Без адреса Xray не поймёт, к какому серверу подключаться.' },
+      { key: 'port', hint: 'Без порта нельзя собрать endpoint для remote-сервера.' },
+    ]);
+    vnext.forEach((server, serverIndex) => {
+      validateXrayUserCollection(diagnostics, `${pointer}/settings/vnext/${serverIndex}/users`, roleLabel, itemLabel, protocol, server && server.users, 'users', {
+        required: [
+          { key: 'id', hint: 'Это UUID пользователя/клиента на удалённом сервере.' },
+        ],
+      });
+    });
+    return;
+  }
+
+  if (protocol === 'trojan') {
+    validateXraySettingsCollection(diagnostics, `${pointer}/settings/servers`, roleLabel, itemLabel, protocol, settings.servers, 'servers', [
+      { key: 'address', hint: 'Без адреса Xray не поймёт, к какому Trojan-серверу подключаться.' },
+      { key: 'port', hint: 'Без порта нельзя собрать endpoint для Trojan.' },
+      { key: 'password', hint: 'Для Trojan пароль обязателен: это основной credential клиента.' },
+    ]);
+    return;
+  }
+
+  if (protocol === 'shadowsocks') {
+    validateXraySettingsCollection(diagnostics, `${pointer}/settings/servers`, roleLabel, itemLabel, protocol, settings.servers, 'servers', [
+      { key: 'address', hint: 'Без адреса Xray не поймёт, где находится Shadowsocks-сервер.' },
+      { key: 'port', hint: 'Без порта endpoint сервера будет неполным.' },
+      { key: 'method', hint: 'Shadowsocks ожидает явный шифр в поле `method`.' },
+      { key: 'password', hint: 'Пароль нужен для формирования Shadowsocks-credential.' },
+    ]);
+    return;
+  }
+
+  if (protocol === 'http' || protocol === 'socks') {
+    validateXraySettingsCollection(diagnostics, `${pointer}/settings/servers`, roleLabel, itemLabel, protocol, settings.servers, 'servers', [
+      { key: 'address', hint: 'Без адреса Xray не поймёт, куда слать запросы этого proxy-outbound.' },
+      { key: 'port', hint: 'Порт нужен даже если upstream выглядит "очевидным".' },
+    ]);
+  }
+}
+
+function validateXrayInboundProtocolSettingsItem(item, pointer, diagnostics) {
+  if (!isPlainObject(item)) return;
+  const settings = isPlainObject(item.settings) ? item.settings : {};
+  const protocol = cleanName(item.protocol);
+  const itemLabel = cleanName(item.tag) || pointer;
+  const roleLabel = 'Inbound';
+
+  if (protocol === 'vless' || protocol === 'vmess') {
+    validateXrayUserCollection(diagnostics, `${pointer}/settings/clients`, roleLabel, itemLabel, protocol, settings.clients, 'clients', {
+      required: [
+        { key: 'id', hint: 'Это UUID клиента, по которому сервер узнаёт пользователя.' },
+      ],
+    });
+    return;
+  }
+
+  if (protocol === 'trojan') {
+    validateXrayUserCollection(diagnostics, `${pointer}/settings/clients`, roleLabel, itemLabel, protocol, settings.clients, 'clients', {
+      required: [
+        { key: 'password', hint: 'Trojan inbound аутентифицирует клиентов именно по паролю.' },
+      ],
+    });
+  }
+}
+
 function validateXrayTagDuplicates(list, basePointer, noun, diagnostics) {
   collectDuplicateXrayTags(list).forEach(({ tag, index, firstIndex }) => {
     pushDiagnostic(diagnostics, createJsonDiagnostic(`${xrayItemPointer(basePointer, index)}/tag`, `${noun} "${tag}" уже используется в ${basePointer || '(корне)'}[${firstIndex}]. Повторяющиеся tag мешают routing, balancer selector и chain proxy ссылкам.`, {
@@ -984,9 +1198,11 @@ function validateXrayEndpoints(shape, options, diagnostics) {
   validateXrayOutboundLinks(shape, options, diagnostics);
 
   (Array.isArray(shape.inbounds) ? shape.inbounds : []).forEach((item, index) => {
+    validateXrayInboundProtocolSettingsItem(item, xrayItemPointer(shape.inboundsPointer, index), diagnostics);
     validateXrayStreamSettingsItem(item, xrayItemPointer(shape.inboundsPointer, index), 'inbound', diagnostics);
   });
   (Array.isArray(shape.outbounds) ? shape.outbounds : []).forEach((item, index) => {
+    validateXrayOutboundProtocolSettingsItem(item, xrayItemPointer(shape.outboundsPointer, index), diagnostics);
     validateXrayStreamSettingsItem(item, xrayItemPointer(shape.outboundsPointer, index), 'outbound', diagnostics);
   });
 }

@@ -1,7 +1,16 @@
 import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
-import { buildJsonSchemaHoverInfo, buildJsoncPointerMap } from '../vendor/codemirror_json_schema.js';
+import {
+  buildJsonSchemaHoverInfo,
+  buildJsoncPointerMap,
+  findDiagnosticMapping,
+  safeParseJson,
+} from '../vendor/codemirror_json_schema.js';
 import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_schema.js';
 import { enrichSchemaDiagnostic, isEnrichedMessage, findPointerAtRange } from './schema_diagnostic_format.js';
+import {
+  validateXrayConfigSemantics,
+  validateXrayRoutingSemantics,
+} from './schema_semantic_validation.js';
 
 (() => {
   window.XKeen = window.XKeen || {};
@@ -29,6 +38,9 @@ import { enrichSchemaDiagnostic, isEnrichedMessage, findPointerAtRange } from '.
     yamlAssistByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     snippetProvidersByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     quickFixProvidersByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
+    semanticValidationByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
+    semanticValidationCleanupByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
+    semanticValidationTimersByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null,
     jsonHoverProvidersInstalled: false,
     yamlAssistProvidersInstalled: false,
     jsonSnippetProvidersInstalled: false,
@@ -1636,6 +1648,297 @@ import { enrichSchemaDiagnostic, isEnrichedMessage, findPointerAtRange } from '.
     return null;
   }
 
+  function _setModelSemanticValidation(model, provider) {
+    if (!model) return;
+    if (_state.semanticValidationByModel) {
+      try {
+        if (provider) _state.semanticValidationByModel.set(model, provider);
+        else _state.semanticValidationByModel.delete(model);
+        return;
+      } catch (e) {}
+    }
+    try {
+      if (provider) model.__xkSemanticValidation = provider;
+      else delete model.__xkSemanticValidation;
+    } catch (e) {}
+  }
+
+  function _getModelSemanticValidation(model) {
+    if (!model) return null;
+    if (_state.semanticValidationByModel) {
+      try { return _state.semanticValidationByModel.get(model) || null; } catch (e) {}
+    }
+    try { return model.__xkSemanticValidation || null; } catch (e) {}
+    return null;
+  }
+
+  function _setModelSemanticValidationCleanup(model, cleanup) {
+    if (!model) return;
+    if (_state.semanticValidationCleanupByModel) {
+      try {
+        if (cleanup) _state.semanticValidationCleanupByModel.set(model, cleanup);
+        else _state.semanticValidationCleanupByModel.delete(model);
+        return;
+      } catch (e) {}
+    }
+    try {
+      if (cleanup) model.__xkSemanticValidationCleanup = cleanup;
+      else delete model.__xkSemanticValidationCleanup;
+    } catch (e) {}
+  }
+
+  function _getModelSemanticValidationCleanup(model) {
+    if (!model) return null;
+    if (_state.semanticValidationCleanupByModel) {
+      try { return _state.semanticValidationCleanupByModel.get(model) || null; } catch (e) {}
+    }
+    try { return model.__xkSemanticValidationCleanup || null; } catch (e) {}
+    return null;
+  }
+
+  function _setModelSemanticValidationTimer(model, timer) {
+    if (!model) return;
+    if (_state.semanticValidationTimersByModel) {
+      try {
+        if (timer) _state.semanticValidationTimersByModel.set(model, timer);
+        else _state.semanticValidationTimersByModel.delete(model);
+        return;
+      } catch (e) {}
+    }
+    try {
+      if (timer) model.__xkSemanticValidationTimer = timer;
+      else delete model.__xkSemanticValidationTimer;
+    } catch (e) {}
+  }
+
+  function _getModelSemanticValidationTimer(model) {
+    if (!model) return null;
+    if (_state.semanticValidationTimersByModel) {
+      try { return _state.semanticValidationTimersByModel.get(model) || null; } catch (e) {}
+    }
+    try { return model.__xkSemanticValidationTimer || null; } catch (e) {}
+    return null;
+  }
+
+  function _clearModelSemanticValidationTimer(model) {
+    const timer = _getModelSemanticValidationTimer(model);
+    if (timer) {
+      try { clearTimeout(timer); } catch (e) {}
+    }
+    _setModelSemanticValidationTimer(model, null);
+  }
+
+  function _clearSemanticMarkers(monaco, model) {
+    try {
+      if (!monaco || !monaco.editor || typeof monaco.editor.setModelMarkers !== 'function' || !model) return;
+      monaco.editor.setModelMarkers(model, 'xkeen-semantic', []);
+    } catch (e) {}
+  }
+
+  function _normalizeSemanticDiagnostics(list) {
+    return Array.isArray(list)
+      ? list.filter((item) => item && typeof item === 'object' && item.message)
+      : [];
+  }
+
+  function _resolveSemanticDiagnostics(provider, payload) {
+    if (!provider) return [];
+    try {
+      if (typeof provider === 'function') {
+        return _normalizeSemanticDiagnostics(provider(payload));
+      }
+    } catch (e) {}
+    try {
+      if (provider && typeof provider.getDiagnostics === 'function') {
+        return _normalizeSemanticDiagnostics(provider.getDiagnostics(payload));
+      }
+    } catch (e) {}
+    try {
+      if (provider && provider.kind === 'xray-routing') {
+        return _normalizeSemanticDiagnostics(validateXrayRoutingSemantics(payload.data, provider.options || {}));
+      }
+    } catch (e) {}
+    try {
+      if (provider && (
+        provider.kind === 'xray'
+        || provider.kind === 'xray-config'
+        || provider.kind === 'xray-inbounds'
+        || provider.kind === 'xray-outbounds'
+      )) {
+        return _normalizeSemanticDiagnostics(validateXrayConfigSemantics(payload.data, {
+          ...(provider.options || {}),
+          kind: provider.kind,
+        }));
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function _diagnosticPointerLabel(pointer) {
+    if (!pointer) return 'root';
+    const parts = String(pointer).slice(1).split('/').filter(Boolean).map((part) =>
+      part.replace(/~1/g, '/').replace(/~0/g, '~')
+    );
+    if (!parts.length) return 'root';
+    return parts.reduce((acc, part) => {
+      if (/^\d+$/.test(part)) return `${acc}[${part}]`;
+      return acc ? `${acc}.${part}` : part;
+    }, '');
+  }
+
+  function _withMonacoDiagnosticContext(message, pointer, model, mapping) {
+    const parts = [];
+    try {
+      const offset = Number.isFinite(mapping && mapping.keyFrom) ? Number(mapping.keyFrom) : Number(mapping && mapping.valueFrom);
+      if (Number.isFinite(offset) && model && typeof model.getPositionAt === 'function') {
+        const pos = model.getPositionAt(Math.max(0, offset));
+        if (pos) parts.push(`строка ${pos.lineNumber}, столбец ${pos.column}`);
+      }
+    } catch (e) {}
+    const path = _diagnosticPointerLabel(pointer);
+    if (path && path !== 'root') parts.push(`путь ${path}`);
+    if (!parts.length) return message;
+    return `${message} (${parts.join('; ')})`;
+  }
+
+  function _semanticSeverityToMonaco(monaco, value) {
+    const severity = monaco && monaco.MarkerSeverity ? monaco.MarkerSeverity : {};
+    const raw = String(value || '').toLowerCase();
+    if (raw === 'warning' || raw === 'warn') return severity.Warning || 4;
+    if (raw === 'info' || raw === 'suggestion' || raw === 'hint') return severity.Info || severity.Hint || 2;
+    return severity.Error || 8;
+  }
+
+  function _semanticOffsetsFromMapping(mapping, textLength) {
+    if (mapping && Number.isFinite(mapping.valueFrom) && Number.isFinite(mapping.valueTo)) {
+      return {
+        from: Math.max(0, Number(mapping.valueFrom)),
+        to: Math.max(Number(mapping.valueFrom), Number(mapping.valueTo)),
+      };
+    }
+    if (mapping && Number.isFinite(mapping.keyFrom) && Number.isFinite(mapping.keyTo)) {
+      return {
+        from: Math.max(0, Number(mapping.keyFrom)),
+        to: Math.max(Number(mapping.keyFrom), Number(mapping.keyTo)),
+      };
+    }
+    const textSize = Math.max(0, Number(textLength || 0));
+    return { from: 0, to: Math.min(1, textSize) };
+  }
+
+  function _runSemanticDiagnosticsForModel(monaco, model) {
+    if (!monaco || !monaco.editor || typeof monaco.editor.setModelMarkers !== 'function' || !model) return;
+    const provider = _getModelSemanticValidation(model);
+    if (!provider) {
+      _clearSemanticMarkers(monaco, model);
+      return;
+    }
+
+    let text = '';
+    try { text = String(model.getValue() || ''); } catch (e) { text = ''; }
+    if (!text.trim()) {
+      _clearSemanticMarkers(monaco, model);
+      return;
+    }
+
+    const data = safeParseJson(text);
+    if (data == null) {
+      _clearSemanticMarkers(monaco, model);
+      return;
+    }
+
+    let pointerMap = null;
+    try { pointerMap = buildJsoncPointerMap(text); } catch (e) { pointerMap = new Map(); }
+    if (!pointerMap || typeof pointerMap.get !== 'function') pointerMap = new Map();
+
+    const diagnostics = _resolveSemanticDiagnostics(provider, {
+      data,
+      text,
+      schema: _getModelJsonSchema(model),
+      pointerMap,
+      model,
+      language: (() => {
+        try { return model.getLanguageId ? model.getLanguageId() : ''; } catch (e) {}
+        return '';
+      })(),
+    });
+
+    const markers = diagnostics.map((item) => {
+      const pointer = String((item && item.pointer) || '');
+      const mapping = findDiagnosticMapping(pointerMap, pointer);
+      const offsets = _semanticOffsetsFromMapping(mapping, text.length);
+      let from = Math.max(0, Number(offsets.from || 0));
+      let to = Math.max(from, Number(offsets.to || from));
+      if (to <= from && text.length > 0) {
+        from = Math.min(from, Math.max(0, text.length - 1));
+        to = Math.min(text.length, from + 1);
+      }
+
+      const start = model.getPositionAt(from);
+      const end = model.getPositionAt(to);
+      const baseMessage = _withMonacoDiagnosticContext(String((item && item.message) || 'Semantic validation error'), pointer, model, mapping);
+      const hint = item && typeof item.hint === 'string' ? item.hint.trim() : '';
+      const fullMessage = hint ? `${baseMessage}\nПодсказка: ${hint}` : baseMessage;
+      return {
+        startLineNumber: start.lineNumber,
+        startColumn: start.column,
+        endLineNumber: end.lineNumber,
+        endColumn: end.column,
+        severity: _semanticSeverityToMonaco(monaco, item && item.severity),
+        source: String((item && item.source) || 'semantic-validation'),
+        message: fullMessage,
+      };
+    });
+
+    try { monaco.editor.setModelMarkers(model, 'xkeen-semantic', markers); } catch (e) {}
+  }
+
+  function _scheduleSemanticDiagnostics(monaco, model, waitMs) {
+    if (!model) return;
+    _clearModelSemanticValidationTimer(model);
+    const timer = setTimeout(() => {
+      _setModelSemanticValidationTimer(model, null);
+      _runSemanticDiagnosticsForModel(monaco, model);
+    }, Math.max(0, Number(waitMs || 0)));
+    _setModelSemanticValidationTimer(model, timer);
+  }
+
+  function _ensureSemanticValidationWatcher(monaco, model) {
+    if (!model) return;
+    if (_getModelSemanticValidationCleanup(model)) return;
+    if (typeof model.onDidChangeContent !== 'function') return;
+    let disposable = null;
+    try {
+      disposable = model.onDidChangeContent(() => {
+        _scheduleSemanticDiagnostics(monaco, model, 120);
+      });
+    } catch (e) {
+      disposable = null;
+    }
+    if (!disposable || typeof disposable.dispose !== 'function') return;
+    _setModelSemanticValidationCleanup(model, () => {
+      _clearModelSemanticValidationTimer(model);
+      try { disposable.dispose(); } catch (e) {}
+    });
+  }
+
+  function _applyModelSemanticValidation(monaco, model, provider) {
+    if (!model) return false;
+    _setModelSemanticValidation(model, provider || null);
+    if (!provider) {
+      const cleanup = _getModelSemanticValidationCleanup(model);
+      if (cleanup) {
+        try { cleanup(); } catch (e) {}
+      }
+      _setModelSemanticValidationCleanup(model, null);
+      _clearSemanticMarkers(monaco, model);
+      return true;
+    }
+    _ensureSemanticValidationWatcher(monaco, model);
+    _scheduleSemanticDiagnostics(monaco, model, 0);
+    return true;
+  }
+
   function _resolveJsoncPointerAtOffset(text, offset) {
     try {
       const map = buildJsoncPointerMap(String(text || ''));
@@ -2023,6 +2326,7 @@ import { enrichSchemaDiagnostic, isEnrichedMessage, findPointerAtRange } from '.
         if (model) _setModelYamlAssist(model, (language === 'yaml' && o.yamlAssist) ? o.yamlAssist : null);
         if (model) _setModelSnippetProvider(model, o.snippetProvider || null);
         if (model) _setModelQuickFixProvider(model, o.quickFixProvider || null);
+        if (model) _applyModelSemanticValidation(monaco, model, o.semanticValidation || null);
       } catch (e) {}
       try {
         if (model && o.schema) _setModelJsonSchema(model, o.schema, monaco);
@@ -2047,6 +2351,11 @@ import { enrichSchemaDiagnostic, isEnrichedMessage, findPointerAtRange } from '.
             return true;
           };
           editor.getQuickFixProvider = () => (model ? _getModelQuickFixProvider(model) : null);
+          editor.setSemanticValidation = (provider) => {
+            if (!model) return false;
+            return _applyModelSemanticValidation(monaco, model, provider || null);
+          };
+          editor.getSemanticValidation = () => (model ? _getModelSemanticValidation(model) : null);
           editor.getQuickFixes = (request) => {
             if (!model) return [];
             const req = request && typeof request === 'object' ? { ...request } : {};
@@ -2119,6 +2428,7 @@ import { enrichSchemaDiagnostic, isEnrichedMessage, findPointerAtRange } from '.
               try { if (model) _setModelYamlAssist(model, null); } catch (e3) {}
               try { if (model) _setModelSnippetProvider(model, null); } catch (e3b) {}
               try { if (model) _setModelQuickFixProvider(model, null); } catch (e3c) {}
+              try { if (model) _applyModelSemanticValidation(monaco, model, null); } catch (e3d) {}
               try { if (model) _setModelJsonSchema(model, null, monaco); } catch (e4) {}
               try { if (ownedModel && typeof ownedModel.dispose === 'function') ownedModel.dispose(); } catch (e5) {}
             });
@@ -2142,6 +2452,7 @@ import { enrichSchemaDiagnostic, isEnrichedMessage, findPointerAtRange } from '.
           try { if (model) _setModelYamlAssist(model, null); } catch (e2) {}
           try { if (model) _setModelSnippetProvider(model, null); } catch (e2b) {}
           try { if (model) _setModelQuickFixProvider(model, null); } catch (e2c) {}
+          try { if (model) _applyModelSemanticValidation(monaco, model, null); } catch (e2d) {}
           try { if (model) _setModelJsonSchema(model, null, monaco); } catch (e3) {}
           try { if (ownedModel && typeof ownedModel.dispose === 'function') ownedModel.dispose(); } catch (e4) {}
         });
@@ -2264,6 +2575,19 @@ import { enrichSchemaDiagnostic, isEnrichedMessage, findPointerAtRange } from '.
       try { if (target && typeof target.getQuickFixProvider === 'function') return target.getQuickFixProvider(); } catch (e) {}
       const model = target && typeof target.getModel === 'function' ? target.getModel() : null;
       return model ? _getModelQuickFixProvider(model) : null;
+    },
+    setSemanticValidation(editor, provider) {
+      const target = editor && editor.raw ? editor.raw : editor;
+      try { if (target && typeof target.setSemanticValidation === 'function') return target.setSemanticValidation(provider || null); } catch (e) {}
+      const model = target && typeof target.getModel === 'function' ? target.getModel() : null;
+      if (!model) return false;
+      return _applyModelSemanticValidation(window.monaco || null, model, provider || null);
+    },
+    getSemanticValidation(editor) {
+      const target = editor && editor.raw ? editor.raw : editor;
+      try { if (target && typeof target.getSemanticValidation === 'function') return target.getSemanticValidation(); } catch (e) {}
+      const model = target && typeof target.getModel === 'function' ? target.getModel() : null;
+      return model ? _getModelSemanticValidation(model) : null;
     },
   };
 })();

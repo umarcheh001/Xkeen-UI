@@ -252,6 +252,135 @@ console.log(JSON.stringify(result.map((item) => ({
     assert any("leastPing" in message for message in messages)
 
 
+def test_xray_semantic_validation_reports_protocol_specific_settings_gaps():
+    script = """
+import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayConfigSemantics({
+  inbounds: [
+    {
+      tag: 'vless-in',
+      protocol: 'vless',
+      settings: {
+        clients: [
+          { email: 'user@example.com', encryption: 'aes-128-gcm' }
+        ]
+      }
+    },
+    {
+      tag: 'trojan-in',
+      protocol: 'trojan',
+      settings: {}
+    }
+  ],
+  outbounds: [
+    {
+      tag: 'vless-out',
+      protocol: 'vless',
+      settings: {
+        vnext: [
+          {
+            port: 443,
+            users: [
+              { encryption: 'aes-128-gcm' }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      tag: 'ss-out',
+      protocol: 'shadowsocks',
+      settings: {
+        servers: [
+          {
+            address: 'ss.example.com',
+            port: 8388,
+            method: 'chacha20-ietf-poly1305'
+          }
+        ]
+      }
+    },
+    {
+      tag: 'http-out',
+      protocol: 'http',
+      settings: {}
+    },
+    {
+      tag: 'trojan-out',
+      protocol: 'trojan',
+      settings: {
+        servers: [
+          {
+            address: 'edge.example.com',
+            port: 443
+          }
+        ]
+      }
+    }
+  ]
+}, {
+  kind: 'xray-config'
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  severity: item.severity || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    pointers = [str(item["pointer"]) for item in payload]
+    codes = [str(item["code"]) for item in payload]
+    messages = [str(item["message"]) for item in payload]
+
+    assert "/inbounds/0/settings/clients/0/id" in pointers
+    assert "/inbounds/0/settings/clients/0/encryption" in pointers
+    assert "/inbounds/1/settings/clients" in pointers
+    assert "/outbounds/0/settings/vnext/0/address" in pointers
+    assert "/outbounds/0/settings/vnext/0/users/0/id" in pointers
+    assert "/outbounds/0/settings/vnext/0/users/0/encryption" in pointers
+    assert "/outbounds/1/settings/servers/0/password" in pointers
+    assert "/outbounds/2/settings/servers" in pointers
+    assert "/outbounds/3/settings/servers/0/password" in pointers
+    assert "inbound-vless-clients-id-missing" in codes
+    assert "outbound-vless-vnext-address-missing" in codes
+    assert "outbound-shadowsocks-servers-password-missing" in codes
+    assert any("protocol: vless" in message for message in messages)
+
+
+def test_mihomo_semantic_validation_reports_proxy_group_cycles():
+    script = """
+import { validateMihomoConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateMihomoConfigSemantics({
+  'proxy-groups': [
+    { name: 'Auto', type: 'select', proxies: ['Fallback'] },
+    { name: 'Fallback', type: 'select', proxies: ['Auto'] }
+  ]
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  path: Array.isArray(item.path) ? item.path.join('.') : '',
+  severity: item.severity || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    paths = [str(item["path"]) for item in payload]
+    codes = [str(item["code"]) for item in payload]
+    messages = [str(item["message"]) for item in payload]
+
+    assert "proxy-group-cycle" in codes
+    assert "proxy-groups.0.proxies.0" in paths
+    assert "proxy-groups.1.proxies.0" in paths
+    assert any("Auto -> Fallback -> Auto" in message for message in messages)
+
+
 def test_codemirror_json_schema_linter_supports_xray_semantic_validation():
     doc = "\n".join([
         "{",

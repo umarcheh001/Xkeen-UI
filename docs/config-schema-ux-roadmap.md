@@ -29,7 +29,7 @@
 ## Краткий итог аудита
 
 - Phase 1: частично закрыта.
-- Phase 2: частично закрыта.
+- Phase 2: закрыта.
 - Phase 3: почти закрыта.
 - Phase 4: закрыта как MVP, нужна полировка.
 - Phase 5: частично закрыта.
@@ -46,7 +46,7 @@
 
 Но до "финального результата" всё ещё не хватает трёх вещей:
 
-1. добить conditional/schema constraints и semantic coverage до полного Xray/Mihomo сценария;
+1. добить оставшиеся conditional/schema constraints и beginner-oriented polish;
 2. отполировать Phase 4-5 до состояния без явных UX-зазоров и флейков;
 3. добавить guided builders для самых частых beginner flows.
 
@@ -107,7 +107,7 @@
 
 ## Phase 2: Semantic Validation Поверх Схем
 
-Статус: почти закрыта
+Статус: закрыта
 
 ### Что закрыто
 
@@ -117,6 +117,7 @@
   - missing `proxy-group.proxies` targets;
   - missing `proxy-group.use` providers;
   - missing `proxy-provider` / `rule-provider` references;
+  - циклы между `proxy-groups`;
   - empty groups;
   - groups без `url` для `url-test` / `fallback` / `load-balance`;
   - transport option blocks на неподходящем `network`;
@@ -135,6 +136,8 @@
 - Для Xray full config / fragment-level editor теперь ловятся:
   - duplicate `inbounds[].tag`, `outbounds[].tag`, `balancers[].tag`;
   - missing `proxySettings.tag` и `streamSettings.sockopt.dialerProxy`;
+  - protocol-specific gaps внутри `settings.vnext` / `settings.clients` /
+    `settings.servers`;
   - `balancer.selector`, который не матчится ни в один outbound tag/prefix;
   - missing `fallbackTag`;
   - `leastPing` без `observatory`;
@@ -146,34 +149,26 @@
   - `xtls-rprx-vision` вместе с mux или `grpc` / `xhttp`.
 - Generic JSON editor schema-loader теперь умеет автоматически подцеплять
   semanticValidation по `schemaKind`, а не только вручную в routing feature.
+- Generic Monaco JSON path теперь тоже получает shared semantic markers, а не
+  только schema-level diagnostics.
 - Severity pipeline реально начала использовать `info` / `suggestion`, а не
   только `error` / `warning`.
 - Semantic diagnostics уже реально доходят до editor runtimes.
 
 ### Что закрыто частично
 
-- Semantic checks всё ещё не покрывают весь protocol-specific payload Xray
-  глубоко внутри `settings` для каждого протокола.
-- Monaco generic JSON path всё ещё слабее CodeMirror по semantic feedback:
-  shared config уже резолвится, но основной богатый semantic flow лучше покрыт
-  в CM/runtime слоях.
 - Часть Xray/Mihomo diagnostics всё ещё может звучать менее "domain-aware", чем
-  хотелось бы для самых сложных transport/protocol сценариев.
+  хотелось бы для самых сложных transport/protocol сценариев, но это уже polish,
+  а не blocker фазы.
 
 ### Что осталось доделать
 
-- Дошлифовать Xray protocol-specific semantics глубже по `settings`:
-  - `vnext` / `clients` / `servers` payload-specific проверки;
-  - more domain-aware hints по TLS/REALITY edge-cases;
-  - дополнительные cross-file checks там, где fragment может ссылаться на
-    внешние блоки.
-- Добавить ещё несколько high-signal Mihomo checks для сомнительных, но
-  формально валидных конфигов:
-  - циклы/двусмысленности в ссылках;
-  - risky transport mixes;
-  - рекомендации по операционно важным полям.
-- При желании довести Monaco generic semantic markers до той же степени
-  автоподключения и richness, что уже есть в CodeMirror/YAML flow.
+- Обязательных blocker-задач для закрытия Phase 2 больше нет.
+- Как optional polish можно добавить:
+  - ещё более "domain-aware" hints по TLS/REALITY edge-cases;
+  - дополнительные cross-file/context-aware checks там, где fragment ссылается
+    на внешний блок;
+  - ещё 2-3 Mihomo warnings для спорных, но формально валидных transport mixes.
 
 ### Когда можно считать Phase 2 закрытой
 
@@ -382,8 +377,6 @@
 
 - Phase 1: добавить настоящие `if/then/else` и `dependentRequired`, а не только
   текстовые описания зависимостей.
-- Phase 2: расширить semantic validation на полный Xray config, а не только
-  routing.
 - Phase 4: стабилизировать routing quick-fix e2e и добить top-10 error flows.
 - Phase 5: выровнять beginner metadata coverage и начать реально использовать
   `suggestion` tier.
@@ -397,10 +390,9 @@
 Если брать один короткий milestone, который даст максимальный реальный эффект,
 лучший порядок сейчас такой:
 
-1. закрыть remaining gaps Phase 2 для Xray inbounds/outbounds/full config;
-2. довести Phase 4 до стабильного green-state в e2e;
-3. завершить Phase 5 polish на top confusing fields;
-4. после этого начать Phase 6 с двух мастеров:
+1. довести Phase 4 до стабильного green-state в e2e;
+2. завершить Phase 5 polish на top confusing fields;
+3. после этого начать Phase 6 с двух мастеров:
    - VLESS Reality proxy
    - Mihomo proxy-group/url-test
 

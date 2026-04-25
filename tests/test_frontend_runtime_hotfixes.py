@@ -681,11 +681,15 @@ def test_phase2_semantic_validation_runtime_is_wired_into_mihomo_and_xray_editor
     yaml_schema_runtime = Path('xkeen-ui/static/js/ui/yaml_schema.js').read_text(encoding='utf-8')
     codemirror_runtime = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
     json_schema_runtime = Path('xkeen-ui/static/js/vendor/codemirror_json_schema.js').read_text(encoding='utf-8')
+    monaco_shared_runtime = Path('xkeen-ui/static/js/ui/monaco_shared.js').read_text(encoding='utf-8')
     routing_runtime = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
 
     assert 'export function validateMihomoConfigSemantics(data, options = {})' in semantic_runtime
     assert 'export function validateXrayConfigSemantics(data, options = {})' in semantic_runtime
     assert 'export function validateXrayRoutingSemantics(data, options = {})' in semantic_runtime
+    assert 'function validateMihomoProxyGroupCycles(target, proxyGroups) {' in semantic_runtime
+    assert 'function validateXrayOutboundProtocolSettingsItem(item, pointer, diagnostics) {' in semantic_runtime
+    assert 'function validateXrayInboundProtocolSettingsItem(item, pointer, diagnostics) {' in semantic_runtime
     assert 'export function resolveEditorSemanticValidation(ctx)' in editor_schema_runtime
     assert "setEditorSemanticValidation(target, semanticValidation, o);" in editor_schema_runtime
     assert "kind: inferredKind === 'xray' ? 'xray-config' : inferredKind," in editor_schema_runtime
@@ -698,6 +702,11 @@ def test_phase2_semantic_validation_runtime_is_wired_into_mihomo_and_xray_editor
     assert "semantic.kind === 'xray-outbounds'" in json_schema_runtime
     assert 'buildJsoncPointerMap,' in json_schema_runtime
     assert 'safeParseJson,' in json_schema_runtime
+    assert "semanticValidationByModel: typeof WeakMap !== 'undefined' ? new WeakMap() : null," in monaco_shared_runtime
+    assert 'function _applyModelSemanticValidation(monaco, model, provider) {' in monaco_shared_runtime
+    assert "monaco.editor.setModelMarkers(model, 'xkeen-semantic', markers);" in monaco_shared_runtime
+    assert 'editor.setSemanticValidation = (provider) => {' in monaco_shared_runtime
+    assert 'setSemanticValidation(editor, provider) {' in monaco_shared_runtime
     assert 'const schemaLintSource = jsonSchemaLinter(options);' in codemirror_runtime
     assert "if (key === 'semanticValidation') {" in codemirror_runtime
     assert 'semanticValidation: opts.semanticValidation || null,' in codemirror_runtime
