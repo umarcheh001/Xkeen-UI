@@ -2558,6 +2558,11 @@
           "lazy_features": []
         },
         {
+          "path": "static/js/ui/schema_diagnostic_format.js",
+          "globals": [],
+          "lazy_features": []
+        },
+        {
           "path": "static/js/pages/codemirror6.shared.js",
           "globals": [
             "XKeen.ui",

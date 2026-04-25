@@ -1,6 +1,7 @@
 import { isXkeenMipsRuntime } from '../features/xkeen_runtime.js';
 import { buildJsonSchemaHoverInfo, buildJsoncPointerMap } from '../vendor/codemirror_json_schema.js';
 import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_schema.js';
+import { enrichSchemaDiagnostic, isEnrichedMessage, findPointerAtRange } from './schema_diagnostic_format.js';
 
 (() => {
   window.XKeen = window.XKeen || {};
@@ -32,6 +33,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
     yamlAssistProvidersInstalled: false,
     jsonSnippetProvidersInstalled: false,
     quickFixProvidersInstalled: false,
+    jsonMarkerEnricherInstalled: false,
   };
   const _CUSTOM_CONTEXT_MENU_CLEANUP_KEY = '__xkMonacoCustomContextMenuCleanup';
 
@@ -294,9 +296,131 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
         trailingCommas: 'ignore',
         schemas: [...externalSchemas, ...managedSchemas],
       });
+      try { _ensureJsonMarkerEnricher(monaco); } catch (e) {}
       return true;
     } catch (e) {}
     return false;
+  }
+
+  function _enrichJsonMarkersForModel(monaco, model) {
+    if (!monaco || !monaco.editor || !model) return;
+    if (typeof model.getOffsetAt !== 'function') return;
+    if (typeof monaco.editor.getModelMarkers !== 'function') return;
+    if (typeof monaco.editor.setModelMarkers !== 'function') return;
+
+    const modelUri = _jsonModelUri(model);
+    if (!modelUri) return;
+
+    const schemaEntry = _state.jsonSchemasByModelUri.get(modelUri);
+    if (!schemaEntry || !schemaEntry.schema) return;
+
+    const schemaTitle = String((schemaEntry.schema && schemaEntry.schema.title) || '').trim();
+
+    let markers = [];
+    try {
+      markers = monaco.editor.getModelMarkers({ resource: model.uri }) || [];
+    } catch (e) { return; }
+    if (!markers.length) return;
+
+    let text = '';
+    try { text = String(model.getValue() || ''); } catch (e) {}
+    let pointerMap = null;
+
+    const byOwner = new Map();
+    let changed = false;
+
+    for (let i = 0; i < markers.length; i += 1) {
+      const marker = markers[i] || {};
+      const owner = String(marker.owner || '').toLowerCase();
+      if (owner !== 'json' && owner !== 'jsonc') continue;
+
+      if (!byOwner.has(owner)) byOwner.set(owner, []);
+      const bucket = byOwner.get(owner);
+
+      const message = String(marker.message || '');
+      if (!message || isEnrichedMessage(message)) {
+        bucket.push(marker);
+        continue;
+      }
+
+      let from = 0;
+      let to = 0;
+      try {
+        from = model.getOffsetAt({
+          lineNumber: Math.max(1, Number(marker.startLineNumber || 1)),
+          column: Math.max(1, Number(marker.startColumn || 1)),
+        });
+        to = model.getOffsetAt({
+          lineNumber: Math.max(1, Number(marker.endLineNumber || marker.startLineNumber || 1)),
+          column: Math.max(1, Number(marker.endColumn || marker.startColumn || 1)),
+        });
+      } catch (e) { from = 0; to = 0; }
+
+      if (!pointerMap && text) {
+        try { pointerMap = buildJsoncPointerMap(text); } catch (e) { pointerMap = null; }
+      }
+      let pointer = '';
+      if (pointerMap) {
+        try { pointer = findPointerAtRange(pointerMap, from, to); } catch (e) {}
+      }
+
+      let enriched = null;
+      try {
+        enriched = enrichSchemaDiagnostic({
+          message,
+          text,
+          from,
+          to,
+          line: Number(marker.startLineNumber || 0),
+          column: Number(marker.startColumn || 0),
+          pointer,
+          source: schemaTitle || marker.source || '',
+        });
+      } catch (e) { enriched = null; }
+
+      if (!enriched || !enriched.message || enriched.message === message) {
+        bucket.push(marker);
+        continue;
+      }
+
+      const next = { ...marker, message: enriched.message };
+      if (enriched.source) next.source = enriched.source;
+      bucket.push(next);
+      changed = true;
+    }
+
+    if (!changed) return;
+
+    byOwner.forEach((bucket, owner) => {
+      try { monaco.editor.setModelMarkers(model, owner, bucket); } catch (e) {}
+    });
+  }
+
+  function _ensureJsonMarkerEnricher(monaco) {
+    if (!monaco || !monaco.editor) return;
+    if (_state.jsonMarkerEnricherInstalled) return;
+    if (typeof monaco.editor.onDidChangeMarkers !== 'function') return;
+
+    try {
+      monaco.editor.onDidChangeMarkers((uris) => {
+        try {
+          const list = Array.isArray(uris) ? uris : [];
+          for (let i = 0; i < list.length; i += 1) {
+            const uri = list[i];
+            let modelUri = '';
+            try { modelUri = String(uri && typeof uri.toString === 'function' ? uri.toString() : uri); } catch (e) { modelUri = ''; }
+            if (!modelUri) continue;
+            if (!_state.jsonSchemasByModelUri.has(modelUri)) continue;
+            let model = null;
+            try { model = monaco.editor.getModel(uri); } catch (e) { model = null; }
+            if (!model) continue;
+            if (!_supportsJsonSchemaOnModel(model)) continue;
+            _enrichJsonMarkersForModel(monaco, model);
+          }
+        } catch (e) {}
+      });
+      _state.jsonMarkerEnricherInstalled = true;
+    } catch (e) {}
   }
 
   function _setModelJsonSchema(model, schema, monaco) {
@@ -1822,6 +1946,7 @@ import { completeYamlTextFromSchema, hoverYamlTextFromSchema } from './yaml_sche
       try { _ensureJsonSnippetProviders(monaco); } catch (e) {}
       try { _ensureYamlAssistProviders(monaco); } catch (e) {}
       try { _ensureQuickFixProviders(monaco); } catch (e) {}
+      try { _ensureJsonMarkerEnricher(monaco); } catch (e) {}
       try { applyTheme(monaco); } catch (e) {}
       try { wireThemeSync(monaco); } catch (e) {}
 
