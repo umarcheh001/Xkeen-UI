@@ -454,6 +454,44 @@
     return setFullscreen(target, !isFullscreen(target), opts);
   }
 
+  function diffApi() {
+    try { return (window.XKeen && XKeen.ui && XKeen.ui.diff) ? XKeen.ui.diff : null; } catch (e) {}
+    return null;
+  }
+
+  function setDiffScope(target, scope) {
+    const raw = rawEditor(target);
+    if (!raw) return false;
+    const key = String(scope == null ? '' : scope).trim();
+    try { raw._xkeenDiffScope = key || null; } catch (e) {}
+    try {
+      const wrapper = getWrapperElement(raw);
+      if (wrapper && wrapper.dataset) {
+        if (key) wrapper.dataset.xkeenDiffScope = key;
+        else delete wrapper.dataset.xkeenDiffScope;
+      }
+    } catch (e2) {}
+    try {
+      if (raw._xkeenToolbarItemsBase) attachToolbar(raw, raw._xkeenToolbarItemsBase, { force: true });
+    } catch (e3) {}
+    return true;
+  }
+
+  function getDiffScope(target) {
+    const raw = rawEditor(target);
+    return (raw && raw._xkeenDiffScope) ? String(raw._xkeenDiffScope) : '';
+  }
+
+  function openDiff(target, opts) {
+    const raw = rawEditor(target);
+    const api = diffApi();
+    if (!api || typeof api.openForScope !== 'function') return Promise.resolve(null);
+    const scope = (raw && raw._xkeenDiffScope) ? String(raw._xkeenDiffScope) : '';
+    if (!scope) return Promise.resolve(null);
+    try { return Promise.resolve(api.openForScope(scope, opts || {})); }
+    catch (e) { return Promise.resolve(null); }
+  }
+
   function detachToolbar(target) {
     const raw = rawEditor(target);
     try {
@@ -465,9 +503,12 @@
 
   function filterToolbarItems(target, items) {
     const caps = detectCapabilities(target);
+    const raw = rawEditor(target);
+    const hasDiffScope = !!(raw && raw._xkeenDiffScope);
     const out = [];
     (items || []).forEach((item) => {
       if (!item) return;
+      if (item.requiresDiffScope === true && !hasDiffScope) return;
       const id = normalizeCommandName(item.id || item.command || '');
       if (!item.command && !item.id) {
         out.push(item);
@@ -483,6 +524,7 @@
       if (id === 'links') { if (caps.links) out.push(item); return; }
       if (id === 'undo') { if (caps.undo) out.push(item); return; }
       if (id === 'redo') { if (caps.redo) out.push(item); return; }
+      if (id === 'compare') { if (hasDiffScope) out.push(item); return; }
       out.push(item);
     });
     return out;
@@ -608,6 +650,9 @@
     setFullscreen,
     toggleFullscreen,
     buildCommonKeys,
+    setDiffScope,
+    getDiffScope,
+    openDiff,
   };
 
   XKeen.ui.editorActions = api;

@@ -427,6 +427,15 @@ export function getXkeenEditorActionsApi() {
   }
 }
 
+export function getXkeenDiffApi() {
+  try {
+    const ui = getXkeenUiApi();
+    return ui ? (ui.diff || null) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 export function getXkeenEditorToolbarApi() {
   try {
     const ui = getXkeenUiApi();
@@ -1009,6 +1018,7 @@ export const xkeenRuntimeApi = Object.freeze({
   getSettingsApi: getXkeenSettingsApi,
   getSharedPrimitivesApi: getXkeenSharedPrimitivesApi,
   getEditorActionsApi: getXkeenEditorActionsApi,
+  getDiffApi: getXkeenDiffApi,
   getEditorToolbarApi: getXkeenEditorToolbarApi,
   getEditorToolbarIcons: getXkeenEditorToolbarIcons,
   getEditorToolbarDefaultItems: getXkeenEditorToolbarDefaultItems,

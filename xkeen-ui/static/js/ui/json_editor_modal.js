@@ -3,6 +3,8 @@ import { getOutboundsApi } from '../features/outbounds.js';
 import { getRestartLogApi } from '../features/restart_log.js';
 import {
   attachXkeenEditorToolbar,
+  getXkeenDiffApi,
+  getXkeenEditorActionsApi,
   getXkeenEditorToolbarMiniItems,
   getXkeenFilePath,
   getXkeenPageFilesConfig,
@@ -40,6 +42,7 @@ import {
   let _savedText = '';
   let _viewStateStore = null;
   let _modalResizeWired = false;
+  let _diffScopeRegistered = false;
 
   function el(id) {
     return document.getElementById(id);
@@ -65,6 +68,91 @@ import {
       if (window.XKeen && XKeen.ui && XKeen.ui.settings) return XKeen.ui.settings;
     } catch (e) {}
     return null;
+  }
+
+  async function _diffReloadActiveJsonFile() {
+    const target = _currentTarget;
+    if (!target) throw new Error('json-editor: no active target');
+    const baseUrl = target === 'inbounds' ? '/api/inbounds' : '/api/outbounds';
+    const url = buildTargetUrl(target, baseUrl);
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('json-editor reload: HTTP ' + res.status);
+    return String(await res.text());
+  }
+
+  async function _diffListJsonEditorSnapshots() {
+    try {
+      const res = await fetch('/api/xray/snapshots', { cache: 'no-store' });
+      if (!res.ok) return [];
+      const items = await res.json();
+      if (!Array.isArray(items)) return [];
+
+      const activeBase = _currentTarget ? activeFileParam(_currentTarget) : '';
+      const out = [];
+      items.forEach((it) => {
+        if (!it || typeof it !== 'object') return;
+        const name = String(it.name || '').trim();
+        if (!name) return;
+        if (activeBase && name !== activeBase) return;
+        out.push({
+          id: name,
+          label: name + (it.mtime ? ' · ' + it.mtime : ''),
+          createdAt: String(it.mtime || ''),
+        });
+      });
+      return out;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function _diffReadJsonEditorSnapshot(snapId) {
+    const name = String(snapId || '').trim();
+    if (!name) throw new Error('json-editor snapshot: missing name');
+    const url = '/api/xray/snapshots/read?name=' + encodeURIComponent(name);
+    const res = await fetch(url, { cache: 'no-store' });
+    let payload = null;
+    try { payload = await res.json(); } catch (e) {}
+    if (!res.ok || !payload || payload.ok === false) {
+      const err = (payload && payload.error) || ('json-editor snapshot: HTTP ' + res.status);
+      throw new Error(err);
+    }
+    return String(payload.text || '');
+  }
+
+  function ensureJsonEditorDiffScopeRegistered() {
+    if (_diffScopeRegistered) return true;
+    const diff = getXkeenDiffApi();
+    if (!diff || typeof diff.registerScope !== 'function') return false;
+    try {
+      diff.registerScope({
+        scope: 'json-editor',
+        label: 'JSON Editor',
+        language: 'jsonc',
+        getCurrent: () => {
+          try { return getCurrentValue(); } catch (e) { return ''; }
+        },
+        getBaseline: () => String(_savedText || ''),
+        reloadFromDisk: () => _diffReloadActiveJsonFile(),
+        listSnapshots: () => _diffListJsonEditorSnapshots(),
+        readSnapshot: (id) => _diffReadJsonEditorSnapshot(id),
+      });
+      _diffScopeRegistered = true;
+      return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function tagJsonEditorWithDiffScope(editor) {
+    if (!editor) return;
+    try {
+      const actions = getXkeenEditorActionsApi();
+      if (actions && typeof actions.setDiffScope === 'function') {
+        actions.setDiffScope(editor, 'json-editor');
+        return;
+      }
+    } catch (e) {}
+    try { editor._xkeenDiffScope = 'json-editor'; } catch (e2) {}
   }
 
   function getFormattersApi() {
@@ -734,6 +822,9 @@ import {
       }
     } catch (e) {}
 
+    try { ensureJsonEditorDiffScopeRegistered(); } catch (e) {}
+    try { tagJsonEditorWithDiffScope(_cm); } catch (e) {}
+
     try {
       const toolbarItems = getXkeenEditorToolbarMiniItems();
       if (Array.isArray(toolbarItems) && toolbarItems.length) {
@@ -769,7 +860,11 @@ import {
     });
 
     try { await applyCurrentSchemaToMonaco(initialText); } catch (e) {}
-    if (_monaco) _monacoFacade = createMonacoFacade(_monaco);
+    if (_monaco) {
+      try { ensureJsonEditorDiffScopeRegistered(); } catch (e) {}
+      try { tagJsonEditorWithDiffScope(_monaco); } catch (e) {}
+      _monacoFacade = createMonacoFacade(_monaco);
+    }
     return _monacoFacade;
   }
 

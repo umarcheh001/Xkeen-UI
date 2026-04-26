@@ -162,7 +162,23 @@
     comment: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path></svg>',
     fullscreen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>',
     help: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+    compare: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v18"></path><path d="M15 3v18"></path><path d="M5 7l-2 2 2 2"></path><path d="M19 13l2 2-2 2"></path></svg>',
   };
+
+  function openDiffForEditor(editor) {
+    const api = actions();
+    if (api && typeof api.openDiff === 'function') {
+      try { api.openDiff(editor); return; } catch (e) {}
+    }
+    try {
+      const scope = (editor && (editor._xkeenDiffScope
+        || (editor.getWrapperElement && editor.getWrapperElement().dataset && editor.getWrapperElement().dataset.xkeenDiffScope)
+        || (editor.getDomNode && editor.getDomNode().dataset && editor.getDomNode().dataset.xkeenDiffScope))) || '';
+      if (scope && window.XKeen && XKeen.ui && XKeen.ui.diff && typeof XKeen.ui.diff.openForScope === 'function') {
+        XKeen.ui.diff.openForScope(scope).catch(() => {});
+      }
+    } catch (e) {}
+  }
 
   const XKEEN_CM_TOOLBAR_DEFAULT = [
     { id: 'find', svg: XKEEN_CM_ICONS.search, label: 'Поиск', command: 'findPersistent', fallbackHint: 'Ctrl+F' },
@@ -170,6 +186,7 @@
     { id: 'prev', svg: XKEEN_CM_ICONS.up, label: 'Предыдущее', command: 'findPrev', fallbackHint: 'Shift+Ctrl+G' },
     { id: 'replace', svg: XKEEN_CM_ICONS.replace, label: 'Замена', command: 'replace', fallbackHint: 'Ctrl+H' },
     { id: 'comment', svg: XKEEN_CM_ICONS.comment, label: 'Коммент', command: 'toggleComment', fallbackHint: 'Ctrl+/' },
+    { id: 'compare', svg: XKEEN_CM_ICONS.compare, label: 'Сравнить', fallbackHint: 'Diff', requiresDiffScope: true, onClick: (editor) => openDiffForEditor(editor) },
     { id: 'help', svg: XKEEN_CM_ICONS.help, label: 'Справка', fallbackHint: '?', isHelp: true, onClick: (editor) => openHelp(editor) },
     { id: 'fs', svg: XKEEN_CM_ICONS.fullscreen, label: 'Фулскрин', fallbackHint: 'F11 / Esc', onClick: (editor) => {
       const api = actions();
@@ -179,6 +196,7 @@
 
   const XKEEN_CM_TOOLBAR_MINI = [
     { id: 'find', svg: XKEEN_CM_ICONS.search, label: 'Поиск', command: 'findPersistent', fallbackHint: 'Ctrl+F' },
+    { id: 'compare', svg: XKEEN_CM_ICONS.compare, label: 'Сравнить', fallbackHint: 'Diff', requiresDiffScope: true, onClick: (editor) => openDiffForEditor(editor) },
     { id: 'help', svg: XKEEN_CM_ICONS.help, label: 'Справка', fallbackHint: '?', isHelp: true, onClick: (editor) => openHelp(editor) },
     { id: 'fs', svg: XKEEN_CM_ICONS.fullscreen, label: 'Фулскрин', fallbackHint: 'F11 / Esc', onClick: (editor) => {
       const api = actions();

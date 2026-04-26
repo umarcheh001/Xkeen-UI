@@ -28315,3 +28315,228 @@ html[data-theme="light"] .xk-routing-monaco-menu-sep {
     min-width: 0;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Diff viewer modal (compare two text versions side-by-side / inline).
+   Built around the standard .modal/.modal-content layout, but the body is a
+   flexible host for the Monaco diff editor that fills available height.
+   --------------------------------------------------------------------------- */
+.xkeen-diff-modal {
+  z-index: 90;
+}
+
+.xkeen-diff-modal .modal-content.xkeen-diff-card {
+  width: min(96vw, 1280px);
+  max-width: 1280px;
+  height: min(86vh, 880px);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px 14px;
+  gap: 8px;
+}
+
+.xkeen-diff-modal .xkeen-diff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.xkeen-diff-modal .xkeen-diff-head .modal-title {
+  font-size: calc(14px * var(--xk-font-scale, 1));
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xkeen-diff-modal .xkeen-diff-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.xkeen-diff-modal .xkeen-diff-mode {
+  display: inline-flex;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--modal-border, #475569d1);
+}
+
+.xkeen-diff-modal .xkeen-diff-mode-btn {
+  padding: 4px 10px;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  border-radius: 0;
+  border: 0;
+}
+
+.xkeen-diff-modal .xkeen-diff-mode-btn.is-active {
+  background: var(--accent, #2563eb);
+  color: #f8fafc;
+}
+
+.xkeen-diff-modal .xkeen-diff-nav {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.xkeen-diff-modal .xkeen-diff-close-x {
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 8px;
+}
+
+.xkeen-diff-modal .xkeen-diff-labels {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  color: var(--muted, #9ca3af);
+  flex: 0 0 auto;
+}
+
+.xkeen-diff-modal .xkeen-diff-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.xkeen-diff-modal .xkeen-diff-side-right {
+  justify-content: flex-end;
+}
+
+.xkeen-diff-modal .xkeen-diff-side-sep {
+  flex: 0 0 auto;
+  opacity: 0.6;
+  padding: 0 4px;
+  color: var(--muted, #9ca3af);
+}
+
+.xkeen-diff-modal .xkeen-diff-label {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(96, 165, 250, 0.08);
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 46%;
+  flex: 0 0 auto;
+}
+
+.xkeen-diff-modal .xkeen-diff-label-left {
+  text-align: left;
+}
+
+.xkeen-diff-modal .xkeen-diff-label-right {
+  text-align: left;
+}
+
+.xkeen-diff-modal .xkeen-diff-source {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 280px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  background: rgba(96, 165, 250, 0.06);
+  color: var(--text, #e5e7eb);
+  font: inherit;
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  cursor: pointer;
+}
+
+.xkeen-diff-modal .xkeen-diff-source:focus {
+  outline: 2px solid rgba(96, 165, 250, 0.55);
+  outline-offset: 1px;
+}
+
+.xkeen-diff-modal .xkeen-diff-source.hidden {
+  display: none;
+}
+
+.xkeen-diff-modal .xkeen-diff-error {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #fecaca;
+  font-size: calc(12px * var(--xk-font-scale, 1));
+}
+
+.xkeen-diff-modal .xkeen-diff-error.hidden {
+  display: none;
+}
+
+.xkeen-diff-modal .xkeen-diff-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--modal-border, #475569d1);
+  background: var(--modal-bg, #060e1eeb);
+}
+
+.xkeen-diff-modal .xkeen-diff-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 0;
+}
+
+.xkeen-diff-modal .xkeen-diff-summary {
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  color: var(--muted, #9ca3af);
+}
+
+/* Toolbar "Сравнить" button — shares the .xkeen-cm-tool look so it matches
+   existing fullscreen/help icons in routing/inbounds/outbounds/mihomo. */
+.xkeen-cm-tool.xkeen-diff-trigger {
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .xkeen-diff-modal .modal-content.xkeen-diff-card {
+    width: 96vw;
+    height: 90vh;
+    max-height: 90vh;
+    padding: 10px;
+  }
+
+  .xkeen-diff-modal .xkeen-diff-head-actions {
+    flex-wrap: wrap;
+  }
+
+  .xkeen-diff-modal .xkeen-diff-labels {
+    flex-wrap: wrap;
+  }
+
+  .xkeen-diff-modal .xkeen-diff-side {
+    flex: 1 1 100%;
+  }
+
+  .xkeen-diff-modal .xkeen-diff-side-right {
+    justify-content: flex-start;
+  }
+
+  .xkeen-diff-modal .xkeen-diff-side-sep {
+    display: none;
+  }
+
+  .xkeen-diff-modal .xkeen-diff-source {
+    max-width: none;
+  }
+}
+

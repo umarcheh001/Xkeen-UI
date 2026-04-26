@@ -12,6 +12,8 @@ import {
 import {
   attachXkeenEditorToolbar,
   buildXkeenEditorCommonKeys,
+  getXkeenDiffApi,
+  getXkeenEditorActionsApi,
   getXkeenEditorToolbarDefaultItems,
   getXkeenEditorToolbarIcons,
   getXkeenEditorToolbarMiniItems,
@@ -123,6 +125,10 @@ let mihomoPanelModuleApi = null;
   let _suppressDirty = false;
   let _lastTemplateSelectValue = '';
   let _monacoDirtyDisposable = null;
+
+  // Snapshot of last "clean" text — used as the on-disk baseline for diff viewer.
+  let _diffBaselineText = '';
+  let _diffScopeRegistered = false;
 
   // Monaco fullscreen (CSS-driven)
   let _monacoFsWired = false;
@@ -552,6 +558,9 @@ let mihomoPanelModuleApi = null;
           });
         }
       } catch (e) {}
+
+      try { ensureMihomoDiffScopeRegistered(); } catch (e) {}
+      try { tagMihomoEditorWithDiffScope(_monaco); } catch (e) {}
 
       try {
         const helper = getEngineHelper();
@@ -1033,6 +1042,9 @@ let mihomoPanelModuleApi = null;
       }
     } catch (e) {}
 
+    try { ensureMihomoDiffScopeRegistered(); } catch (e) {}
+    try { tagMihomoEditorWithDiffScope(_cm); } catch (e) {}
+
     try {
       const baseItems = getXkeenEditorToolbarDefaultItems();
       const miniItems = getXkeenEditorToolbarMiniItems();
@@ -1124,7 +1136,52 @@ let mihomoPanelModuleApi = null;
     _suppressDirty = true;
     try { setEditorText(text); } finally { _suppressDirty = false; }
     _editorDirty = false;
+    _diffBaselineText = String(text ?? '');
     scheduleMihomoSchemaValidation({ immediate: true, text: String(text ?? '') });
+  }
+
+  async function _diffReloadMihomoFromDisk() {
+    const res = await fetch('/api/mihomo-config', { cache: 'no-store' });
+    let payload = null;
+    try { payload = await res.json(); } catch (e) {}
+    if (!res.ok || !payload || payload.ok === false) {
+      const err = (payload && payload.error) || ('mihomo reload: HTTP ' + res.status);
+      throw new Error(err);
+    }
+    return String(payload.content || '');
+  }
+
+  function ensureMihomoDiffScopeRegistered() {
+    if (_diffScopeRegistered) return true;
+    const diff = getXkeenDiffApi();
+    if (!diff || typeof diff.registerScope !== 'function') return false;
+    try {
+      diff.registerScope({
+        scope: 'mihomo',
+        label: 'Mihomo config.yaml',
+        language: 'yaml',
+        getCurrent: () => {
+          try { return getEditorText(); } catch (e) { return ''; }
+        },
+        getBaseline: () => String(_diffBaselineText || ''),
+        reloadFromDisk: () => _diffReloadMihomoFromDisk(),
+      });
+      _diffScopeRegistered = true;
+      return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function tagMihomoEditorWithDiffScope(editor) {
+    if (!editor) return;
+    try {
+      const actions = getXkeenEditorActionsApi();
+      if (actions && typeof actions.setDiffScope === 'function') {
+        actions.setDiffScope(editor, 'mihomo');
+        return;
+      }
+    } catch (e) {}
+    try { editor._xkeenDiffScope = 'mihomo'; } catch (e2) {}
   }
 
   function markEditorClean() {

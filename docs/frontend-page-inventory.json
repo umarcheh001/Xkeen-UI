@@ -419,6 +419,7 @@
           "globals": [
             "XKeen.ui",
             "XKeen.ui.editorEngine",
+            "XKeen.ui.diff",
             "XKeen.ui.editorActions"
           ],
           "lazy_features": []
@@ -428,7 +429,9 @@
           "globals": [
             "XKeen.ui.editorToolbar",
             "XKeen.ui.editorActions",
-            "XKeen.ui"
+            "XKeen.ui",
+            "XKeen.ui.diff",
+            "XKeen.ui.diff.openForScope"
           ],
           "lazy_features": []
         },
@@ -439,6 +442,45 @@
             "XKeen.ui.editorEngine",
             "XKeen.ui.editorActions",
             "XKeen.ui.editorLinks"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/diff_engine.js",
+          "globals": [
+            "XKeen.ui.diff.registerScope",
+            "XKeen.ui.diff.unregisterScope",
+            "XKeen.ui.diff.getScope",
+            "XKeen.ui.diff.openForScope",
+            "XKeen.ui.diff.open",
+            "XKeen.ui",
+            "XKeen.ui.diffModal",
+            "XKeen.ui.diffModal.open",
+            "XKeen.core",
+            "XKeen.core.http",
+            "XKeen.ui.diff",
+            "XKeen.ui.diff.listScopes",
+            "XKeen.ui.diff.resolveSourceText",
+            "XKeen.ui.diff.describeSource",
+            "XKeen.ui.diff.logDiff"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/diff_modal.js",
+          "globals": [
+            "XKeen.ui.diffModal.open",
+            "XKeen.ui.diffModal.close",
+            "XKeen.ui.diffModal.isOpen",
+            "XKeen.ui",
+            "XKeen.ui.modal",
+            "XKeen.ui.editorEngine",
+            "XKeen.ui.toast",
+            "XKeen.ui.diff",
+            "XKeen.runtime",
+            "XKeen.runtime.lazy",
+            "XKeen.ui.diffModal",
+            "XKeen.ui.diffModal.setMode"
           ],
           "lazy_features": []
         },
@@ -744,12 +786,27 @@
         "XKeen.ui.editorEngine.resetFallback",
         "XKeen.ui.editorEngine.cloneViewState",
         "XKeen.ui.editorEngine.createViewStateStore",
+        "XKeen.ui.diff",
         "XKeen.ui.editorActions",
         "XKeen.ui.editorToolbar",
+        "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
+        "XKeen.ui.diff.registerScope",
+        "XKeen.ui.diff.unregisterScope",
+        "XKeen.ui.diff.getScope",
+        "XKeen.ui.diff.open",
+        "XKeen.ui.diffModal",
+        "XKeen.ui.diffModal.open",
+        "XKeen.ui.diff.listScopes",
+        "XKeen.ui.diff.resolveSourceText",
+        "XKeen.ui.diff.describeSource",
+        "XKeen.ui.diff.logDiff",
+        "XKeen.ui.diffModal.close",
+        "XKeen.ui.diffModal.isOpen",
+        "XKeen.ui.modal",
+        "XKeen.ui.diffModal.setMode",
         "XKeen.core.dom",
         "XKeen.core.storage",
-        "XKeen.ui.modal",
         "XKeen.ui.sharedPrimitives",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
@@ -1047,6 +1104,7 @@
           "globals": [
             "XKeen.ui",
             "XKeen.ui.editorEngine",
+            "XKeen.ui.diff",
             "XKeen.ui.editorActions"
           ],
           "lazy_features": []
@@ -1056,7 +1114,9 @@
           "globals": [
             "XKeen.ui.editorToolbar",
             "XKeen.ui.editorActions",
-            "XKeen.ui"
+            "XKeen.ui",
+            "XKeen.ui.diff",
+            "XKeen.ui.diff.openForScope"
           ],
           "lazy_features": []
         },
@@ -1067,6 +1127,45 @@
             "XKeen.ui.editorEngine",
             "XKeen.ui.editorActions",
             "XKeen.ui.editorLinks"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/diff_engine.js",
+          "globals": [
+            "XKeen.ui.diff.registerScope",
+            "XKeen.ui.diff.unregisterScope",
+            "XKeen.ui.diff.getScope",
+            "XKeen.ui.diff.openForScope",
+            "XKeen.ui.diff.open",
+            "XKeen.ui",
+            "XKeen.ui.diffModal",
+            "XKeen.ui.diffModal.open",
+            "XKeen.core",
+            "XKeen.core.http",
+            "XKeen.ui.diff",
+            "XKeen.ui.diff.listScopes",
+            "XKeen.ui.diff.resolveSourceText",
+            "XKeen.ui.diff.describeSource",
+            "XKeen.ui.diff.logDiff"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/diff_modal.js",
+          "globals": [
+            "XKeen.ui.diffModal.open",
+            "XKeen.ui.diffModal.close",
+            "XKeen.ui.diffModal.isOpen",
+            "XKeen.ui",
+            "XKeen.ui.modal",
+            "XKeen.ui.editorEngine",
+            "XKeen.ui.toast",
+            "XKeen.ui.diff",
+            "XKeen.runtime",
+            "XKeen.runtime.lazy",
+            "XKeen.ui.diffModal",
+            "XKeen.ui.diffModal.setMode"
           ],
           "lazy_features": []
         },
@@ -1263,13 +1362,28 @@
         "XKeen.ui.editorEngine.resetFallback",
         "XKeen.ui.editorEngine.cloneViewState",
         "XKeen.ui.editorEngine.createViewStateStore",
+        "XKeen.ui.diff",
         "XKeen.ui.editorActions",
         "XKeen.ui.editorToolbar",
+        "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
+        "XKeen.ui.diff.registerScope",
+        "XKeen.ui.diff.unregisterScope",
+        "XKeen.ui.diff.getScope",
+        "XKeen.ui.diff.open",
+        "XKeen.ui.diffModal",
+        "XKeen.ui.diffModal.open",
+        "XKeen.ui.diff.listScopes",
+        "XKeen.ui.diff.resolveSourceText",
+        "XKeen.ui.diff.describeSource",
+        "XKeen.ui.diff.logDiff",
+        "XKeen.ui.diffModal.close",
+        "XKeen.ui.diffModal.isOpen",
+        "XKeen.ui.modal",
+        "XKeen.ui.diffModal.setMode",
         "XKeen.core.dom",
         "XKeen.core.storage",
         "XKeen.ui.confirm",
-        "XKeen.ui.modal",
         "XKeen.ui.sharedPrimitives",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
@@ -1517,6 +1631,7 @@
           "globals": [
             "XKeen.ui",
             "XKeen.ui.editorEngine",
+            "XKeen.ui.diff",
             "XKeen.ui.editorActions"
           ],
           "lazy_features": []
@@ -1526,7 +1641,9 @@
           "globals": [
             "XKeen.ui.editorToolbar",
             "XKeen.ui.editorActions",
-            "XKeen.ui"
+            "XKeen.ui",
+            "XKeen.ui.diff",
+            "XKeen.ui.diff.openForScope"
           ],
           "lazy_features": []
         },
@@ -1537,6 +1654,45 @@
             "XKeen.ui.editorEngine",
             "XKeen.ui.editorActions",
             "XKeen.ui.editorLinks"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/diff_engine.js",
+          "globals": [
+            "XKeen.ui.diff.registerScope",
+            "XKeen.ui.diff.unregisterScope",
+            "XKeen.ui.diff.getScope",
+            "XKeen.ui.diff.openForScope",
+            "XKeen.ui.diff.open",
+            "XKeen.ui",
+            "XKeen.ui.diffModal",
+            "XKeen.ui.diffModal.open",
+            "XKeen.core",
+            "XKeen.core.http",
+            "XKeen.ui.diff",
+            "XKeen.ui.diff.listScopes",
+            "XKeen.ui.diff.resolveSourceText",
+            "XKeen.ui.diff.describeSource",
+            "XKeen.ui.diff.logDiff"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/diff_modal.js",
+          "globals": [
+            "XKeen.ui.diffModal.open",
+            "XKeen.ui.diffModal.close",
+            "XKeen.ui.diffModal.isOpen",
+            "XKeen.ui",
+            "XKeen.ui.modal",
+            "XKeen.ui.editorEngine",
+            "XKeen.ui.toast",
+            "XKeen.ui.diff",
+            "XKeen.runtime",
+            "XKeen.runtime.lazy",
+            "XKeen.ui.diffModal",
+            "XKeen.ui.diffModal.setMode"
           ],
           "lazy_features": []
         },
@@ -1848,13 +2004,28 @@
         "XKeen.ui.editorEngine.resetFallback",
         "XKeen.ui.editorEngine.cloneViewState",
         "XKeen.ui.editorEngine.createViewStateStore",
+        "XKeen.ui.diff",
         "XKeen.ui.editorActions",
         "XKeen.ui.editorToolbar",
+        "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
+        "XKeen.ui.diff.registerScope",
+        "XKeen.ui.diff.unregisterScope",
+        "XKeen.ui.diff.getScope",
+        "XKeen.ui.diff.open",
+        "XKeen.ui.diffModal",
+        "XKeen.ui.diffModal.open",
+        "XKeen.ui.diff.listScopes",
+        "XKeen.ui.diff.resolveSourceText",
+        "XKeen.ui.diff.describeSource",
+        "XKeen.ui.diff.logDiff",
+        "XKeen.ui.diffModal.close",
+        "XKeen.ui.diffModal.isOpen",
+        "XKeen.ui.modal",
+        "XKeen.ui.diffModal.setMode",
         "XKeen.core.dom",
         "XKeen.core.storage",
         "XKeen.ui.confirm",
-        "XKeen.ui.modal",
         "XKeen.ui.sharedPrimitives",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
@@ -2116,6 +2287,7 @@
           "globals": [
             "XKeen.ui",
             "XKeen.ui.editorEngine",
+            "XKeen.ui.diff",
             "XKeen.ui.editorActions"
           ],
           "lazy_features": []
@@ -2125,7 +2297,9 @@
           "globals": [
             "XKeen.ui.editorToolbar",
             "XKeen.ui.editorActions",
-            "XKeen.ui"
+            "XKeen.ui",
+            "XKeen.ui.diff",
+            "XKeen.ui.diff.openForScope"
           ],
           "lazy_features": []
         },
@@ -2136,6 +2310,45 @@
             "XKeen.ui.editorEngine",
             "XKeen.ui.editorActions",
             "XKeen.ui.editorLinks"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/diff_engine.js",
+          "globals": [
+            "XKeen.ui.diff.registerScope",
+            "XKeen.ui.diff.unregisterScope",
+            "XKeen.ui.diff.getScope",
+            "XKeen.ui.diff.openForScope",
+            "XKeen.ui.diff.open",
+            "XKeen.ui",
+            "XKeen.ui.diffModal",
+            "XKeen.ui.diffModal.open",
+            "XKeen.core",
+            "XKeen.core.http",
+            "XKeen.ui.diff",
+            "XKeen.ui.diff.listScopes",
+            "XKeen.ui.diff.resolveSourceText",
+            "XKeen.ui.diff.describeSource",
+            "XKeen.ui.diff.logDiff"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/diff_modal.js",
+          "globals": [
+            "XKeen.ui.diffModal.open",
+            "XKeen.ui.diffModal.close",
+            "XKeen.ui.diffModal.isOpen",
+            "XKeen.ui",
+            "XKeen.ui.modal",
+            "XKeen.ui.editorEngine",
+            "XKeen.ui.toast",
+            "XKeen.ui.diff",
+            "XKeen.runtime",
+            "XKeen.runtime.lazy",
+            "XKeen.ui.diffModal",
+            "XKeen.ui.diffModal.setMode"
           ],
           "lazy_features": []
         },
@@ -2290,9 +2503,25 @@
         "XKeen.ui.editorEngine.resetFallback",
         "XKeen.ui.editorEngine.cloneViewState",
         "XKeen.ui.editorEngine.createViewStateStore",
+        "XKeen.ui.diff",
         "XKeen.ui.editorActions",
         "XKeen.ui.editorToolbar",
+        "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
+        "XKeen.ui.diff.registerScope",
+        "XKeen.ui.diff.unregisterScope",
+        "XKeen.ui.diff.getScope",
+        "XKeen.ui.diff.open",
+        "XKeen.ui.diffModal",
+        "XKeen.ui.diffModal.open",
+        "XKeen.ui.diff.listScopes",
+        "XKeen.ui.diff.resolveSourceText",
+        "XKeen.ui.diff.describeSource",
+        "XKeen.ui.diff.logDiff",
+        "XKeen.ui.diffModal.close",
+        "XKeen.ui.diffModal.isOpen",
+        "XKeen.ui.modal",
+        "XKeen.ui.diffModal.setMode",
         "XKeen.core.dom",
         "XKeen.core.storage",
         "XKeen.ui.applyTheme",
@@ -2505,6 +2734,7 @@
           "globals": [
             "XKeen.ui",
             "XKeen.ui.editorEngine",
+            "XKeen.ui.diff",
             "XKeen.ui.editorActions"
           ],
           "lazy_features": []
@@ -2514,7 +2744,9 @@
           "globals": [
             "XKeen.ui.editorToolbar",
             "XKeen.ui.editorActions",
-            "XKeen.ui"
+            "XKeen.ui",
+            "XKeen.ui.diff",
+            "XKeen.ui.diff.openForScope"
           ],
           "lazy_features": []
         },
@@ -2525,6 +2757,45 @@
             "XKeen.ui.editorEngine",
             "XKeen.ui.editorActions",
             "XKeen.ui.editorLinks"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/diff_engine.js",
+          "globals": [
+            "XKeen.ui.diff.registerScope",
+            "XKeen.ui.diff.unregisterScope",
+            "XKeen.ui.diff.getScope",
+            "XKeen.ui.diff.openForScope",
+            "XKeen.ui.diff.open",
+            "XKeen.ui",
+            "XKeen.ui.diffModal",
+            "XKeen.ui.diffModal.open",
+            "XKeen.core",
+            "XKeen.core.http",
+            "XKeen.ui.diff",
+            "XKeen.ui.diff.listScopes",
+            "XKeen.ui.diff.resolveSourceText",
+            "XKeen.ui.diff.describeSource",
+            "XKeen.ui.diff.logDiff"
+          ],
+          "lazy_features": []
+        },
+        {
+          "path": "static/js/ui/diff_modal.js",
+          "globals": [
+            "XKeen.ui.diffModal.open",
+            "XKeen.ui.diffModal.close",
+            "XKeen.ui.diffModal.isOpen",
+            "XKeen.ui",
+            "XKeen.ui.modal",
+            "XKeen.ui.editorEngine",
+            "XKeen.ui.toast",
+            "XKeen.ui.diff",
+            "XKeen.runtime",
+            "XKeen.runtime.lazy",
+            "XKeen.ui.diffModal",
+            "XKeen.ui.diffModal.setMode"
           ],
           "lazy_features": []
         },
@@ -2783,13 +3054,28 @@
         "XKeen.ui.editorEngine.resetFallback",
         "XKeen.ui.editorEngine.cloneViewState",
         "XKeen.ui.editorEngine.createViewStateStore",
+        "XKeen.ui.diff",
         "XKeen.ui.editorActions",
         "XKeen.ui.editorToolbar",
+        "XKeen.ui.diff.openForScope",
         "XKeen.ui.editorLinks",
+        "XKeen.ui.diff.registerScope",
+        "XKeen.ui.diff.unregisterScope",
+        "XKeen.ui.diff.getScope",
+        "XKeen.ui.diff.open",
+        "XKeen.ui.diffModal",
+        "XKeen.ui.diffModal.open",
+        "XKeen.ui.diff.listScopes",
+        "XKeen.ui.diff.resolveSourceText",
+        "XKeen.ui.diff.describeSource",
+        "XKeen.ui.diff.logDiff",
+        "XKeen.ui.diffModal.close",
+        "XKeen.ui.diffModal.isOpen",
+        "XKeen.ui.modal",
+        "XKeen.ui.diffModal.setMode",
         "XKeen.monacoLoader.ensureMonaco",
         "XKeen.core.dom",
         "XKeen.core.storage",
-        "XKeen.ui.modal",
         "XKeen.ui.applyTheme",
         "XKeen.ui.initThemeToggle",
         "XKeen.ui.syncThemeToggleButtons",

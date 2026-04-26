@@ -17,6 +17,8 @@ import {
   getXkeenCoreStorageApi,
   attachXkeenEditorToolbar,
   buildXkeenEditorCommonKeys,
+  getXkeenDiffApi,
+  getXkeenEditorActionsApi,
   getXkeenEditorEngineApi,
   getXkeenEditorToolbarDefaultItems,
   getXkeenEditorToolbarIcons,
@@ -67,6 +69,106 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
     const coreHttp = getXkeenCoreHttpApi();
     try { if (coreHttp && typeof coreHttp.withCSRF === 'function') return coreHttp.withCSRF(init, methodHint); } catch (e) {}
     return init || {};
+  }
+
+  function _routingShellApiSafe() {
+    try { return (typeof getRoutingShellModuleApi === 'function') ? getRoutingShellModuleApi() : null; } catch (e) { return null; }
+  }
+
+  async function _diffReloadActiveFragment() {
+    try {
+      const file = (typeof getActiveFragment === 'function') ? getActiveFragment() : (_activeFragment || '');
+      const url = file ? ('/api/routing?file=' + encodeURIComponent(file)) : '/api/routing';
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('routing reload: HTTP ' + res.status);
+      return String(await res.text());
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  async function _diffListXraySnapshots() {
+    try {
+      const res = await fetch('/api/xray/snapshots', { cache: 'no-store' });
+      if (!res.ok) return [];
+      const items = await res.json();
+      if (!Array.isArray(items)) return [];
+
+      const file = (typeof getActiveFragment === 'function') ? getActiveFragment() : (_activeFragment || '');
+      const activeBase = file ? String(file).split('/').pop() : '';
+
+      const out = [];
+      items.forEach((it) => {
+        if (!it || typeof it !== 'object') return;
+        const name = String(it.name || '').trim();
+        if (!name) return;
+        if (activeBase && name !== activeBase) return;
+        out.push({
+          id: name,
+          label: name + (it.mtime ? ' · ' + it.mtime : ''),
+          createdAt: String(it.mtime || ''),
+        });
+      });
+      return out;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async function _diffReadXraySnapshot(snapId) {
+    const name = String(snapId || '').trim();
+    if (!name) throw new Error('routing snapshot: missing name');
+    const url = '/api/xray/snapshots/read?name=' + encodeURIComponent(name);
+    const res = await fetch(url, { cache: 'no-store' });
+    let payload = null;
+    try { payload = await res.json(); } catch (e) {}
+    if (!res.ok || !payload || payload.ok === false) {
+      const err = (payload && payload.error) || ('routing snapshot: HTTP ' + res.status);
+      throw new Error(err);
+    }
+    return String(payload.text || '');
+  }
+
+  function ensureRoutingDiffScopeRegistered() {
+    if (_diffScopeRegistered) return true;
+    const diff = getXkeenDiffApi();
+    if (!diff || typeof diff.registerScope !== 'function') return false;
+    try {
+      diff.registerScope({
+        scope: 'routing',
+        label: 'Routing',
+        language: 'jsonc',
+        getCurrent: () => {
+          const shell = _routingShellApiSafe();
+          if (shell && typeof shell.getEditorText === 'function') return shell.getEditorText();
+          try { return _cm && typeof _cm.getValue === 'function' ? _cm.getValue() : ''; } catch (e) {}
+          return '';
+        },
+        getBaseline: () => {
+          const shell = _routingShellApiSafe();
+          if (shell && typeof shell.getSavedContent === 'function') return shell.getSavedContent();
+          return '';
+        },
+        reloadFromDisk: () => _diffReloadActiveFragment(),
+        listSnapshots: () => _diffListXraySnapshots(),
+        readSnapshot: (id) => _diffReadXraySnapshot(id),
+      });
+      _diffScopeRegistered = true;
+      return true;
+    } catch (e) {}
+    return false;
+  }
+
+  function tagEditorWithDiffScope(editor) {
+    if (!editor) return;
+    try {
+      const actions = getXkeenEditorActionsApi();
+      if (actions && typeof actions.setDiffScope === 'function') {
+        actions.setDiffScope(editor, 'routing');
+        return;
+      }
+    } catch (e) {}
+    try { editor._xkeenDiffScope = 'routing'; } catch (e2) {}
   }
 
 
@@ -120,6 +222,7 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
 
   let _inited = false;
   let _cm = null;
+  let _diffScopeRegistered = false;
   let _errorMarker = null;
   let _errorGutterLine = null;
   let _lastJsonErrorLocation = null;
@@ -4120,6 +4223,8 @@ function closeHelp() {
     // IMPORTANT: Keep ONLY one help entry in the toolbar.
     // The default CodeMirror help (red '?') is removed, because its purpose overlaps with
     // our routing comments help. We keep the yellow JSONC help button only.
+    try { ensureRoutingDiffScopeRegistered(); } catch (e) {}
+    try { tagEditorWithDiffScope(cm); } catch (e) {}
     try {
       if (cm.getWrapperElement) {
         const wrapper = cm.getWrapperElement();
@@ -4303,6 +4408,20 @@ function closeHelp() {
           svg: icons.quickFix || '',
           fallbackText: 'FX',
           onClick: () => applyBestRoutingQuickFix(),
+        }));
+        bar.appendChild(buildRoutingToolbarButton({
+          actionId: 'compare',
+          label: 'Сравнить',
+          tip: 'Сравнить с диском',
+          svg: icons.compare || '',
+          fallbackText: '⇄',
+          onClick: () => {
+            try { ensureRoutingDiffScopeRegistered(); } catch (e) {}
+            try {
+              const diff = getXkeenDiffApi();
+              if (diff && typeof diff.openForScope === 'function') diff.openForScope('routing').catch(() => {});
+            } catch (e) {}
+          },
         }));
         bar.appendChild(buildRoutingToolbarButton({
           actionId: 'help_comments',
@@ -4961,6 +5080,8 @@ function closeHelp() {
         // Facade for routing consumers so feature modules stay engine-agnostic.
         _monacoFacade = createRoutingMonacoFacade(_monaco);
         try { syncSharedRoutingEditor(_monaco, _monacoFacade, 'monaco'); } catch (e) {}
+        try { ensureRoutingDiffScopeRegistered(); } catch (e) {}
+        try { tagEditorWithDiffScope(_monaco); } catch (e) {}
         try { await applyRoutingSchemaToMonaco(_monaco); } catch (e) {}
 
         // Ensure layout fix for hidden containers (modals/tabs/engine switch).
@@ -5485,6 +5606,8 @@ function closeHelp() {
     if (!textarea) return;
     if (_inited) return;
     _inited = true;
+
+    try { ensureRoutingDiffScopeRegistered(); } catch (e) {}
 
     if (!_commentsUxWired) {
       try {
