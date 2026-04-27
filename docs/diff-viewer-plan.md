@@ -118,13 +118,24 @@ XKeen.ui.editorActions.openDiff({
 `editor_actions.openDiff()`. Routing/Inbounds/Outbounds/Mihomo сами
 регистрируют свой scope при инициализации редактора.
 
-### Phase 2 — паритет на CodeMirror 6
+### Phase 2 — паритет на CodeMirror 6 — **закрыта**
 
 - Подключить `@codemirror/merge` в `package.json` и `vite.config.mjs`.
 - `diff_engine_cm.js` с тем же API.
 - Цель: ни одна кнопка не зависит от выбранного движка.
 - E2E-тест Playwright: переключить движок CM6 ↔ Monaco — diff-modal работает в
   обоих случаях.
+
+Фактически: `@codemirror/merge@6.12.1` подключён как dev-зависимость, добавлен
+в importmap (`templates/_codemirror6_importmap.html`), в Vite externals и
+синхронизирован в `static/vendor/npm/`. Отдельный файл `diff_engine_cm.js` не
+делали — CM6-бэкенд (`MergeView` для split, `unifiedMergeView` для inline)
+живёт прямо в `diff_modal.js` рядом с Monaco-бэкендом, переключение по
+`pickBackend()` через `XKeen.ui.editorEngine.get()`. Все toolbar-операции
+(setMode / navigateDiff / updateSummary / onSourceChanged) диспатчатся по
+`_backendKind`. Стили под dark Monaco-палитру (`.cm-mergeView`,
+`.cm-changedLine`, `.cm-deletedChunk`, `.cm-insertedLine`) добавлены в
+`static/styles.css`.
 
 ### Phase 3 — снэпшоты как источник — **закрыта**
 

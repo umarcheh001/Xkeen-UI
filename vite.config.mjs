@@ -21,6 +21,7 @@ const EXTERNAL_IMPORT_SPECIFIERS = new Set([
   '@codemirror/lang-yaml',
   '@codemirror/language',
   '@codemirror/lint',
+  '@codemirror/merge',
   '@codemirror/search',
   '@codemirror/state',
   '@codemirror/view',

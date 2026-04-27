@@ -28507,6 +28507,53 @@ html[data-theme="light"] .xk-routing-monaco-menu-sep {
   font-weight: 600;
 }
 
+/* CodeMirror 6 @codemirror/merge backend — fits the merge view inside our
+   .xkeen-diff-host card and matches the dark Monaco palette. */
+.xkeen-diff-modal .xkeen-diff-host .cm-mergeView,
+.xkeen-diff-modal .xkeen-diff-host .cm-mergeViewEditors {
+  height: 100%;
+  width: 100%;
+  display: flex;
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-mergeView {
+  background: transparent;
+  color: var(--text, #e5e7eb);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-mergeViewEditor {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-editor {
+  height: 100%;
+  font-family: 'Consolas', 'Menlo', 'Liberation Mono', monospace;
+  font-size: calc(13px * var(--xk-font-scale, 1));
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-scroller {
+  font-family: inherit;
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-changedLine {
+  background: rgba(96, 165, 250, 0.10);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-deletedChunk {
+  background: rgba(239, 68, 68, 0.16);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-insertedLine,
+.xkeen-diff-modal .xkeen-diff-host .cm-changedText {
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-changedText {
+  color: inherit;
+}
+
 @media (max-width: 720px) {
   .xkeen-diff-modal .modal-content.xkeen-diff-card {
     width: 96vw;

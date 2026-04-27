@@ -52,6 +52,13 @@
   let _resolveOpen = null;
   let _sourceOptions = [];
 
+  // 'monaco' | 'cm6' — chosen at open() time per the active editor engine.
+  let _backendKind = null;
+  let _cm6Runtime = null;
+  let _cm6MergeView = null;
+  let _cm6View = null;
+  let _cm6BackendMode = null; // 'split' | 'inline'
+
   function isFn(x) { return typeof x === 'function'; }
   function asString(v) { return v == null ? '' : String(v); }
   function clone(o) { try { return JSON.parse(JSON.stringify(o || {})); } catch (e) { return {}; } }
@@ -343,10 +350,14 @@
       showError((side === 'left' ? 'Слева: ' : 'Справа: ') + String(err && err.message || err));
       return;
     }
-    const model = side === 'left' ? _originalModel : _modifiedModel;
-    try {
-      if (model && isFn(model.setValue)) model.setValue(asString(text));
-    } catch (e) {}
+    if (_backendKind === 'cm6') {
+      cm6SetText(side, asString(text));
+    } else {
+      const model = side === 'left' ? _originalModel : _modifiedModel;
+      try {
+        if (model && isFn(model.setValue)) model.setValue(asString(text));
+      } catch (e) {}
+    }
     if (_activeSpec) {
       const sideKey = side === 'left' ? 'left' : 'right';
       const cur = _activeSpec[sideKey] || {};
@@ -375,20 +386,32 @@
     const next = (String(mode || '').toLowerCase() === 'inline') ? 'inline' : 'split';
     if (_modeBtnSplitEl) _modeBtnSplitEl.classList.toggle('is-active', next === 'split');
     if (_modeBtnInlineEl) _modeBtnInlineEl.classList.toggle('is-active', next === 'inline');
-    if (_diffEditor && isFn(_diffEditor.updateOptions)) {
+    if (_backendKind === 'monaco' && _diffEditor && isFn(_diffEditor.updateOptions)) {
       try { _diffEditor.updateOptions({ renderSideBySide: next === 'split' }); } catch (e) {}
+    } else if (_backendKind === 'cm6' && next !== _cm6BackendMode && _activeSpec) {
+      const left = (_activeSpec.left && _activeSpec.left.text) || '';
+      const right = (_activeSpec.right && _activeSpec.right.text) || '';
+      const language = _activeSpec.language || 'text';
+      const readOnly = _activeSpec.readOnly !== false;
+      renderCM6Diff(_hostEl, { leftText: left, rightText: right, language: language, mode: next, readOnly: readOnly })
+        .then(() => setTimeout(updateSummary, 60))
+        .catch((err) => showError(String(err && err.message || err)));
     }
     if (_activeSpec) _activeSpec.mode = next;
     try {
       const lazy = window.XKeen && XKeen.runtime && XKeen.runtime.lazy;
       if (lazy && isFn(lazy.scheduleLayout)) lazy.scheduleLayout();
     } catch (e) {}
-    try { if (_diffEditor && isFn(_diffEditor.layout)) _diffEditor.layout(); } catch (e2) {}
+    try { if (_backendKind === 'monaco' && _diffEditor && isFn(_diffEditor.layout)) _diffEditor.layout(); } catch (e2) {}
   }
 
   function navigateDiff(direction) {
-    if (!_diffEditor) return;
     const dir = (Number(direction) || 0) >= 0 ? 1 : -1;
+    if (_backendKind === 'cm6') {
+      cm6Navigate(dir);
+      return;
+    }
+    if (!_diffEditor) return;
     const id = dir > 0 ? 'editor.action.diffReview.next' : 'editor.action.diffReview.prev';
 
     try {
@@ -440,6 +463,15 @@
   function updateSummary() {
     if (!_summaryEl) return;
     try {
+      if (_backendKind === 'cm6') {
+        const stats = cm6Stats();
+        if (!stats.count) {
+          _summaryEl.textContent = 'Различий нет';
+          return;
+        }
+        _summaryEl.textContent = 'Изменений: ' + stats.count + '  ·  +' + stats.added + ' / −' + stats.removed;
+        return;
+      }
       const changes = _diffEditor && isFn(_diffEditor.getLineChanges) ? (_diffEditor.getLineChanges() || []) : [];
       if (!changes.length) {
         _summaryEl.textContent = 'Различий нет';
@@ -483,6 +515,207 @@
     try { if (_modifiedModel && isFn(_modifiedModel.dispose)) _modifiedModel.dispose(); } catch (e) {}
     _originalModel = null;
     _modifiedModel = null;
+    disposeCM6();
+    _backendKind = null;
+  }
+
+  function disposeCM6() {
+    try { if (_cm6MergeView && isFn(_cm6MergeView.destroy)) _cm6MergeView.destroy(); } catch (e) {}
+    try { if (_cm6View && isFn(_cm6View.destroy)) _cm6View.destroy(); } catch (e) {}
+    _cm6MergeView = null;
+    _cm6View = null;
+    _cm6BackendMode = null;
+  }
+
+  function pickBackend() {
+    try {
+      const eng = (XKeen.ui && XKeen.ui.editorEngine) ? XKeen.ui.editorEngine : null;
+      if (eng && isFn(eng.get) && String(eng.get() || '') === 'codemirror') return 'cm6';
+    } catch (e) {}
+    return 'monaco';
+  }
+
+  async function ensureCM6Merge() {
+    if (_cm6Runtime) return _cm6Runtime;
+    const merge = await import('@codemirror/merge');
+    const state = await import('@codemirror/state');
+    const view = await import('@codemirror/view');
+    const cm = await import('codemirror');
+    let langJson = null;
+    let langYaml = null;
+    try { langJson = await import('@codemirror/lang-json'); } catch (e) {}
+    try { langYaml = await import('@codemirror/lang-yaml'); } catch (e) {}
+    _cm6Runtime = { merge, state, view, cm, langJson, langYaml };
+    return _cm6Runtime;
+  }
+
+  function cm6LanguageExtension(rt, language) {
+    const want = String(language || '').toLowerCase().trim();
+    if ((want === 'json' || want === 'jsonc') && rt.langJson && isFn(rt.langJson.json)) {
+      try { return rt.langJson.json(); } catch (e) {}
+    }
+    if ((want === 'yaml' || want === 'yml') && rt.langYaml && isFn(rt.langYaml.yaml)) {
+      try { return rt.langYaml.yaml(); } catch (e) {}
+    }
+    return null;
+  }
+
+  function cm6BaseExtensions(rt, language, readOnly) {
+    const ext = [];
+    if (rt.cm && rt.cm.basicSetup) ext.push(rt.cm.basicSetup);
+    const langExt = cm6LanguageExtension(rt, language);
+    if (langExt) ext.push(langExt);
+    if (readOnly && rt.view && rt.view.EditorView && isFn(rt.view.EditorView.editable && rt.view.EditorView.editable.of)) {
+      ext.push(rt.view.EditorView.editable.of(false));
+    }
+    return ext;
+  }
+
+  async function renderCM6Diff(host, opts) {
+    const rt = await ensureCM6Merge();
+    const leftText = asString(opts.leftText);
+    const rightText = asString(opts.rightText);
+    const language = opts.language || 'text';
+    const mode = String(opts.mode || 'split').toLowerCase() === 'inline' ? 'inline' : 'split';
+    const readOnly = opts.readOnly !== false;
+    const collapseUnchanged = { margin: 3, minSize: 4 };
+
+    disposeCM6();
+    while (host && host.firstChild) host.removeChild(host.firstChild);
+
+    if (mode === 'inline') {
+      const baseExt = cm6BaseExtensions(rt, language, readOnly);
+      const unified = rt.merge.unifiedMergeView({
+        original: leftText,
+        collapseUnchanged: collapseUnchanged,
+        mergeControls: false,
+      });
+      const state = rt.state.EditorState.create({
+        doc: rightText,
+        extensions: [].concat(baseExt, unified),
+      });
+      _cm6View = new rt.view.EditorView({ state: state, parent: host });
+      _cm6BackendMode = 'inline';
+    } else {
+      const baseExtA = cm6BaseExtensions(rt, language, true);
+      const baseExtB = cm6BaseExtensions(rt, language, readOnly);
+      _cm6MergeView = new rt.merge.MergeView({
+        a: { doc: leftText, extensions: baseExtA },
+        b: { doc: rightText, extensions: baseExtB },
+        parent: host,
+        orientation: 'a-b',
+        highlightChanges: true,
+        gutter: true,
+        collapseUnchanged: collapseUnchanged,
+      });
+      _cm6BackendMode = 'split';
+    }
+    _backendKind = 'cm6';
+  }
+
+  function cm6PrimaryView() {
+    if (_cm6BackendMode === 'inline') return _cm6View;
+    return _cm6MergeView ? _cm6MergeView.b : null;
+  }
+
+  function cm6SetText(side, text) {
+    const rt = _cm6Runtime;
+    if (!rt) return;
+    const value = asString(text);
+    if (_cm6BackendMode === 'inline') {
+      const view = _cm6View;
+      if (!view) return;
+      if (side === 'left') {
+        try {
+          if (rt.merge && rt.merge.updateOriginalDoc && rt.state && rt.state.Text && rt.state.ChangeSet) {
+            const newDoc = rt.state.Text.of(value.split('\n'));
+            const empty = rt.state.ChangeSet.empty(view.state.doc.length);
+            view.dispatch({
+              effects: rt.merge.updateOriginalDoc.of({ doc: newDoc, changes: empty }),
+            });
+            return;
+          }
+        } catch (e) {}
+        // Fallback: rebuild the view with the new "original".
+        renderCM6Diff(_hostEl, {
+          leftText: value,
+          rightText: view.state.doc.toString(),
+          language: _activeSpec && _activeSpec.language,
+          mode: 'inline',
+          readOnly: _activeSpec && _activeSpec.readOnly !== false,
+        }).then(() => setTimeout(updateSummary, 60)).catch(() => {});
+        return;
+      }
+      try {
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
+      } catch (e) {}
+      return;
+    }
+    const target = side === 'left' ? (_cm6MergeView && _cm6MergeView.a) : (_cm6MergeView && _cm6MergeView.b);
+    if (!target) return;
+    try {
+      target.dispatch({ changes: { from: 0, to: target.state.doc.length, insert: value } });
+    } catch (e) {}
+  }
+
+  function cm6Navigate(dir) {
+    const rt = _cm6Runtime;
+    if (!rt || !rt.merge) return;
+    const view = cm6PrimaryView();
+    if (!view) return;
+    try {
+      if (dir > 0 && isFn(rt.merge.goToNextChunk)) rt.merge.goToNextChunk(view);
+      else if (dir < 0 && isFn(rt.merge.goToPreviousChunk)) rt.merge.goToPreviousChunk(view);
+    } catch (e) {}
+  }
+
+  function _cm6CountLines(doc, from, to) {
+    if (!doc || from === to) return 0;
+    try {
+      const lo = Math.max(0, Math.min(from, to));
+      const hi = Math.min(doc.length, Math.max(from, to));
+      if (lo === hi) return 0;
+      const startLine = doc.lineAt(lo).number;
+      const endLine = doc.lineAt(hi === lo ? hi : hi - 1).number;
+      return Math.max(1, endLine - startLine + 1);
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function cm6Stats() {
+    const rt = _cm6Runtime;
+    if (!rt || !rt.merge || !isFn(rt.merge.getChunks)) return { count: 0, added: 0, removed: 0 };
+    const view = cm6PrimaryView();
+    if (!view) return { count: 0, added: 0, removed: 0 };
+
+    let chunks = [];
+    try {
+      const got = rt.merge.getChunks(view.state);
+      if (got && Array.isArray(got.chunks)) chunks = got.chunks;
+    } catch (e) {}
+    if (!chunks.length) return { count: 0, added: 0, removed: 0 };
+
+    let docA = null;
+    let docB = null;
+    if (_cm6BackendMode === 'inline') {
+      docB = view.state.doc;
+      try {
+        if (rt.merge && isFn(rt.merge.getOriginalDoc)) docA = rt.merge.getOriginalDoc(view.state);
+      } catch (e) {}
+    } else if (_cm6MergeView) {
+      docA = _cm6MergeView.a && _cm6MergeView.a.state ? _cm6MergeView.a.state.doc : null;
+      docB = _cm6MergeView.b && _cm6MergeView.b.state ? _cm6MergeView.b.state.doc : null;
+    }
+
+    let added = 0;
+    let removed = 0;
+    for (let i = 0; i < chunks.length; i += 1) {
+      const c = chunks[i] || {};
+      removed += _cm6CountLines(docA, Number(c.fromA || 0), Number(c.toA || 0));
+      added += _cm6CountLines(docB, Number(c.fromB || 0), Number(c.toB || 0));
+    }
+    return { count: chunks.length, added: added, removed: removed };
   }
 
   function bindLayoutHooks(monaco) {
@@ -549,40 +782,54 @@
     } catch (e) { _modalEl.classList.remove('hidden'); }
 
     try {
-      const monaco = await ensureMonaco();
-      _activeMonaco = monaco;
-      bindLayoutHooks(monaco);
-
+      const useCM6 = pickBackend() === 'cm6';
       disposeDiff();
 
-      while (_hostEl && _hostEl.firstChild) _hostEl.removeChild(_hostEl.firstChild);
+      if (useCM6) {
+        await renderCM6Diff(_hostEl, {
+          leftText: o.left.text,
+          rightText: o.right.text,
+          language: o.language || 'text',
+          mode: o.mode || 'split',
+          readOnly: o.readOnly !== false,
+        });
+        bindLayoutHooks(null);
+        setTimeout(updateSummary, 60);
+      } else {
+        const monaco = await ensureMonaco();
+        _activeMonaco = monaco;
+        bindLayoutHooks(monaco);
 
-      const lang = languageFor(monaco, o.language || 'text');
-      _originalModel = monaco.editor.createModel(asString(o.left.text), lang);
-      _modifiedModel = monaco.editor.createModel(asString(o.right.text), lang);
+        while (_hostEl && _hostEl.firstChild) _hostEl.removeChild(_hostEl.firstChild);
 
-      _diffEditor = monaco.editor.createDiffEditor(_hostEl, {
-        renderSideBySide: o.mode !== 'inline',
-        readOnly: o.readOnly !== false,
-        originalEditable: false,
-        automaticLayout: true,
-        scrollBeyondLastLine: false,
-        minimap: { enabled: false },
-        renderOverviewRuler: true,
-        ignoreTrimWhitespace: false,
-        diffWordWrap: 'on',
-      });
+        const lang = languageFor(monaco, o.language || 'text');
+        _originalModel = monaco.editor.createModel(asString(o.left.text), lang);
+        _modifiedModel = monaco.editor.createModel(asString(o.right.text), lang);
 
-      _diffEditor.setModel({ original: _originalModel, modified: _modifiedModel });
+        _diffEditor = monaco.editor.createDiffEditor(_hostEl, {
+          renderSideBySide: o.mode !== 'inline',
+          readOnly: o.readOnly !== false,
+          originalEditable: false,
+          automaticLayout: true,
+          scrollBeyondLastLine: false,
+          minimap: { enabled: false },
+          renderOverviewRuler: true,
+          ignoreTrimWhitespace: false,
+          diffWordWrap: 'on',
+        });
 
-      try {
-        if (isFn(_diffEditor.onDidUpdateDiff)) {
-          _diffEditor.onDidUpdateDiff(updateSummary);
-        }
-      } catch (e) {}
-      setTimeout(updateSummary, 80);
+        _diffEditor.setModel({ original: _originalModel, modified: _modifiedModel });
+        _backendKind = 'monaco';
 
-      try { if (isFn(_diffEditor.layout)) _diffEditor.layout(); } catch (e) {}
+        try {
+          if (isFn(_diffEditor.onDidUpdateDiff)) {
+            _diffEditor.onDidUpdateDiff(updateSummary);
+          }
+        } catch (e) {}
+        setTimeout(updateSummary, 80);
+
+        try { if (isFn(_diffEditor.layout)) _diffEditor.layout(); } catch (e) {}
+      }
 
       try {
         const diffApi = (XKeen.ui && XKeen.ui.diff) || null;
