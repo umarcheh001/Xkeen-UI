@@ -586,18 +586,22 @@
     const language = opts.language || 'text';
     const mode = String(opts.mode || 'split').toLowerCase() === 'inline' ? 'inline' : 'split';
     const readOnly = opts.readOnly !== false;
-    const collapseUnchanged = { margin: 3, minSize: 4 };
+    // Don't fold when both sides are identical — otherwise the entire document
+    // collapses into a single "N unchanged lines" stub and the user sees an
+    // empty modal (Monaco shows full text in this case, so match that).
+    const collapseUnchanged = (leftText === rightText) ? null : { margin: 3, minSize: 4 };
 
     disposeCM6();
     while (host && host.firstChild) host.removeChild(host.firstChild);
 
     if (mode === 'inline') {
       const baseExt = cm6BaseExtensions(rt, language, readOnly);
-      const unified = rt.merge.unifiedMergeView({
+      const unifiedOpts = {
         original: leftText,
-        collapseUnchanged: collapseUnchanged,
         mergeControls: false,
-      });
+      };
+      if (collapseUnchanged) unifiedOpts.collapseUnchanged = collapseUnchanged;
+      const unified = rt.merge.unifiedMergeView(unifiedOpts);
       const state = rt.state.EditorState.create({
         doc: rightText,
         extensions: [].concat(baseExt, unified),
@@ -607,15 +611,16 @@
     } else {
       const baseExtA = cm6BaseExtensions(rt, language, true);
       const baseExtB = cm6BaseExtensions(rt, language, readOnly);
-      _cm6MergeView = new rt.merge.MergeView({
+      const mergeOpts = {
         a: { doc: leftText, extensions: baseExtA },
         b: { doc: rightText, extensions: baseExtB },
         parent: host,
         orientation: 'a-b',
         highlightChanges: true,
         gutter: true,
-        collapseUnchanged: collapseUnchanged,
-      });
+      };
+      if (collapseUnchanged) mergeOpts.collapseUnchanged = collapseUnchanged;
+      _cm6MergeView = new rt.merge.MergeView(mergeOpts);
       _cm6BackendMode = 'split';
     }
     _backendKind = 'cm6';
