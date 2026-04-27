@@ -256,6 +256,31 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
     exit 1
   fi
 
+  # Auto-repair python3-pip if an Entware update left it structurally broken.
+  # Symptom: opkg reports "Package python3-pip ... is up to date" but
+  # `python3 -m pip` raises ModuleNotFoundError: No module named 'pip'.
+  # opkg install is idempotent — it won't re-extract files for an already
+  # "installed" package, so we have to remove first to force a clean reinstall.
+  if ! "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
+    echo "[!] python3-pip установлен пакетом, но модуль pip недоступен (часто после обновления Entware)."
+    echo "[*] Автоматический ремонт: opkg remove python3-pip -> opkg update -> opkg install python3-pip..."
+    "$OPKG_BIN" remove python3-pip >/dev/null 2>&1 || true
+    "$OPKG_BIN" update >/dev/null 2>&1 || true
+    if ! "$OPKG_BIN" install python3-pip; then
+      echo "[!] Не удалось переустановить python3-pip через opkg."
+      echo "    Выполни вручную и запусти установщик ещё раз:"
+      echo "      opkg remove python3-pip && opkg update && opkg install python3-pip"
+      exit 1
+    fi
+    if ! "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
+      echo "[!] python3-pip переустановлен, но модуль pip всё ещё недоступен из $PYTHON_BIN."
+      echo "    Выполни вручную и запусти установщик ещё раз:"
+      echo "      opkg remove python3-pip && opkg update && opkg install python3-pip"
+      exit 1
+    fi
+    echo "[*] python3-pip успешно восстановлен."
+  fi
+
   print_pip_index_candidates
 
   if ! pip_install_with_fallback "bootstrap" pip setuptools wheel; then
