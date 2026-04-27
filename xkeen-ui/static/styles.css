@@ -28385,6 +28385,12 @@ html[data-theme="light"] .xk-routing-monaco-menu-sep {
   gap: 4px;
 }
 
+.xkeen-diff-modal .xkeen-diff-apply-btn {
+  font-size: calc(12px * var(--xk-font-scale, 1));
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
 .xkeen-diff-modal .xkeen-diff-close-x {
   font-size: 18px;
   line-height: 1;

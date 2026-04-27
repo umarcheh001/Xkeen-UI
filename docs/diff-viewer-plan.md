@@ -181,13 +181,30 @@ XKeen.ui.editorActions.openDiff({
 из-за чего модал прячет dropdown'ы и показывает плоские лейблы. Подсказка
 языка — по расширению (`json`/`yaml`/`js`/…).
 
-### Phase 5 (опционально) — apply hunk
+### Phase 5 (опционально) — apply hunk — **закрыта**
 
 - В модале появляются стрелки "взять слева" / "взять справа" текущего хунка.
 - `applyTo: facade` целью применения — обычно левая сторона = текущий буфер.
 - Только в side-by-side режиме.
 - Учесть dirty-state: после apply редактор помечается dirty, baseline не
   меняется.
+
+Фактически: scope-API расширен опциональным `applyText(newText)`. Wired
+в `routing.js` (`setEditorTextAll`), `json_editor_modal.js` (`setCurrentValue`)
+и `mihomo_panel.js` (`setEditorText`) — каждый вызывает свой существующий
+writer, dirty-state и валидаторы срабатывают сами. Модал
+(`diff_modal.js`) показывает кнопку «Применить хунк ←» в шапке, видна
+только когда `scope.applyText` зарегистрирован, левая сторона привязана
+к buffer (descriptor `source: 'buffer'`) и режим split. Поиск текущего
+хунка — по позиции курсора (Monaco — `getOriginalEditor().getPosition()`,
+CM6 — `view.state.selection.main.head`); fallback — первый хунк в
+списке. Splice реализован отдельно для Monaco (1-based line numbers,
+обработка чистых вставок при `originalEndLineNumber === 0`) и CM6
+(character offsets `fromA/toA/fromB/toB`). После apply:
+`scope.applyText(newText)` пишет в активный редактор, модал обновляет
+свою левую сторону через `cm6SetText('left', …)` или
+`_originalModel.setValue(…)`, и пересчитывает summary. FM-сравнения
+кнопку не показывают — у них нет scope, applyText недоступен.
 
 ## Файлы
 

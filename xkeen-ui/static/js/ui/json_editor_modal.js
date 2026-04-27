@@ -136,6 +136,9 @@ import {
         reloadFromDisk: () => _diffReloadActiveJsonFile(),
         listSnapshots: () => _diffListJsonEditorSnapshots(),
         readSnapshot: (id) => _diffReadJsonEditorSnapshot(id),
+        applyText: (newText) => {
+          try { setCurrentValue(String(newText == null ? '' : newText)); } catch (e) {}
+        },
       });
       _diffScopeRegistered = true;
       return true;

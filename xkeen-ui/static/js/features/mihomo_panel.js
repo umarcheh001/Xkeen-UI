@@ -1165,6 +1165,9 @@ let mihomoPanelModuleApi = null;
         },
         getBaseline: () => String(_diffBaselineText || ''),
         reloadFromDisk: () => _diffReloadMihomoFromDisk(),
+        applyText: (newText) => {
+          try { setEditorText(String(newText == null ? '' : newText)); } catch (e) {}
+        },
       });
       _diffScopeRegistered = true;
       return true;

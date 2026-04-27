@@ -152,6 +152,10 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
         reloadFromDisk: () => _diffReloadActiveFragment(),
         listSnapshots: () => _diffListXraySnapshots(),
         readSnapshot: (id) => _diffReadXraySnapshot(id),
+        applyText: (newText) => {
+          try { setEditorTextAll(String(newText == null ? '' : newText), { reason: 'diff.apply' }); }
+          catch (e) {}
+        },
       });
       _diffScopeRegistered = true;
       return true;

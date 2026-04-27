@@ -40,6 +40,7 @@
   let _modeBtnInlineEl = null;
   let _navPrevBtnEl = null;
   let _navNextBtnEl = null;
+  let _applyBtnEl = null;
   let _closeBtnEl = null;
   let _xBtnEl = null;
 
@@ -128,10 +129,15 @@
     navGroup.appendChild(_navPrevBtnEl);
     navGroup.appendChild(_navNextBtnEl);
 
+    _applyBtnEl = makeBtn('Применить хунк ←', 'btn-secondary xkeen-diff-apply-btn hidden',
+      () => applyHunkFromRight(),
+      'Применить текущий хунк из правой стороны в активный буфер');
+
     _xBtnEl = makeBtn('×', 'btn-icon xkeen-diff-close-x', () => close('x'), 'Закрыть');
 
     headRight.appendChild(modeGroup);
     headRight.appendChild(navGroup);
+    headRight.appendChild(_applyBtnEl);
     headRight.appendChild(_xBtnEl);
 
     head.appendChild(title);
@@ -368,6 +374,7 @@
         error: '',
       });
     }
+    refreshApplyButton();
     try {
       const leftDesc = _activeSpec && _activeSpec.left && _activeSpec.left.descriptor;
       const rightDesc = _activeSpec && _activeSpec.right && _activeSpec.right.descriptor;
@@ -398,6 +405,7 @@
         .catch((err) => showError(String(err && err.message || err)));
     }
     if (_activeSpec) _activeSpec.mode = next;
+    refreshApplyButton();
     try {
       const lazy = window.XKeen && XKeen.runtime && XKeen.runtime.lazy;
       if (lazy && isFn(lazy.scheduleLayout)) lazy.scheduleLayout();
@@ -718,6 +726,180 @@
     return { count: chunks.length, added: added, removed: removed };
   }
 
+  // -------------------------- apply-hunk (Phase 5) --------------------------
+
+  function _splitLines(text) {
+    return String(text == null ? '' : text).split('\n');
+  }
+
+  function _spliceLines(originalLines, oStart, oEndInclusive, insertLines) {
+    // Line numbers are 1-based; oEndInclusive < oStart means a pure insertion.
+    const before = originalLines.slice(0, Math.max(0, oStart - 1));
+    const skip = (oEndInclusive >= oStart) ? (oEndInclusive - oStart + 1) : 0;
+    const after = originalLines.slice(Math.max(0, oStart - 1) + skip);
+    return before.concat(insertLines || []).concat(after);
+  }
+
+  function _pickMonacoHunk(changes, currentLine, dir) {
+    if (!changes || !changes.length) return null;
+    const cur = Math.max(1, Number(currentLine || 1));
+    let best = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < changes.length; i += 1) {
+      const c = changes[i] || {};
+      const ms = Number(c.modifiedStartLineNumber || 0);
+      const me = Number(c.modifiedEndLineNumber || 0);
+      const os = Number(c.originalStartLineNumber || 0);
+      const oe = Number(c.originalEndLineNumber || 0);
+      // Cursor inside a chunk wins.
+      if ((ms > 0 && me >= ms && cur >= ms && cur <= me) ||
+          (os > 0 && oe >= os && cur >= os && cur <= oe)) {
+        return c;
+      }
+      const anchor = ms || os || 0;
+      if (anchor) {
+        const dist = Math.abs(anchor - cur);
+        if (dist < bestDist) { bestDist = dist; best = c; }
+      }
+    }
+    return best || changes[0];
+  }
+
+  function _pickCm6Chunk(chunks, doc, pos) {
+    if (!chunks || !chunks.length) return null;
+    const p = Math.max(0, Number(pos || 0));
+    let best = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < chunks.length; i += 1) {
+      const c = chunks[i] || {};
+      const fromB = Number(c.fromB || 0);
+      const toB = Number(c.toB || 0);
+      if (toB >= fromB && p >= fromB && p <= toB) return c;
+      const dist = Math.min(Math.abs(p - fromB), Math.abs(p - toB));
+      if (dist < bestDist) { bestDist = dist; best = c; }
+    }
+    return best || chunks[0];
+  }
+
+  function _applyMonacoHunk(originalText, modifiedText, change) {
+    const oLines = _splitLines(originalText);
+    const mLines = _splitLines(modifiedText);
+    const oStart = Number(change.originalStartLineNumber || 0);
+    const oEnd = Number(change.originalEndLineNumber || 0); // 0 = pure insertion in modified
+    const mStart = Number(change.modifiedStartLineNumber || 0);
+    const mEnd = Number(change.modifiedEndLineNumber || 0); // 0 = pure deletion from original
+    const insert = (mEnd >= mStart && mStart > 0) ? mLines.slice(mStart - 1, mEnd) : [];
+    // For pure insertions (oEnd === 0), Monaco reports oStart as the line BEFORE
+    // the insertion. We splice after that line by passing oStart+1 with no removal.
+    if (oEnd === 0) {
+      return _spliceLines(oLines, Math.max(1, oStart + 1), 0, insert).join('\n');
+    }
+    return _spliceLines(oLines, Math.max(1, oStart), oEnd, insert).join('\n');
+  }
+
+  function _applyCm6Chunk(originalText, modifiedText, chunk) {
+    const original = String(originalText == null ? '' : originalText);
+    const modified = String(modifiedText == null ? '' : modifiedText);
+    const fromA = Math.max(0, Math.min(original.length, Number(chunk.fromA || 0)));
+    const toA = Math.max(fromA, Math.min(original.length, Number(chunk.toA || 0)));
+    const fromB = Math.max(0, Math.min(modified.length, Number(chunk.fromB || 0)));
+    const toB = Math.max(fromB, Math.min(modified.length, Number(chunk.toB || 0)));
+    return original.slice(0, fromA) + modified.slice(fromB, toB) + original.slice(toA);
+  }
+
+  function _readDescriptorKind(d) {
+    if (!d || typeof d !== 'object') return '';
+    return String(d.source || '').trim().toLowerCase();
+  }
+
+  function _canApplyHunk() {
+    if (!_activeSpec) return false;
+    const scope = _activeSpec.scope;
+    if (!scope || !isFn(scope.applyText)) return false;
+    // Apply only makes sense in split mode and when LEFT is the buffer.
+    const mode = String(_activeSpec.mode || 'split').toLowerCase();
+    if (mode === 'inline') return false;
+    const leftKind = _readDescriptorKind(_activeSpec.left && _activeSpec.left.descriptor);
+    if (leftKind && leftKind !== 'buffer') return false;
+    return true;
+  }
+
+  function refreshApplyButton() {
+    if (!_applyBtnEl) return;
+    const ok = _canApplyHunk();
+    try { _applyBtnEl.classList.toggle('hidden', !ok); } catch (e) {}
+  }
+
+  async function applyHunkFromRight() {
+    if (!_canApplyHunk()) return;
+    const scope = _activeSpec && _activeSpec.scope;
+    const leftText = asString(_activeSpec.left && _activeSpec.left.text);
+    const rightText = asString(_activeSpec.right && _activeSpec.right.text);
+
+    let newText = '';
+    if (_backendKind === 'monaco' && _diffEditor && isFn(_diffEditor.getLineChanges)) {
+      const changes = _diffEditor.getLineChanges() || [];
+      if (!changes.length) {
+        showFeedback('Различий нет', 'info');
+        return;
+      }
+      const inner = isFn(_diffEditor.getOriginalEditor) ? _diffEditor.getOriginalEditor() : null;
+      const pos = inner && isFn(inner.getPosition) ? inner.getPosition() : null;
+      const cur = pos ? Number(pos.lineNumber || 1) : 1;
+      const chunk = _pickMonacoHunk(changes, cur, 1);
+      if (!chunk) return;
+      newText = _applyMonacoHunk(leftText, rightText, chunk);
+    } else if (_backendKind === 'cm6' && _cm6Runtime && _cm6Runtime.merge && isFn(_cm6Runtime.merge.getChunks)) {
+      const view = cm6PrimaryView();
+      if (!view) return;
+      let chunks = [];
+      try {
+        const got = _cm6Runtime.merge.getChunks(view.state);
+        if (got && Array.isArray(got.chunks)) chunks = got.chunks;
+      } catch (e) {}
+      if (!chunks.length) {
+        showFeedback('Различий нет', 'info');
+        return;
+      }
+      const head = view.state.selection && view.state.selection.main ? view.state.selection.main.head : 0;
+      // For split mode the cursor sits in pane B; for inline the cursor is in
+      // the merged view. Either way we use offsets in B for the lookup.
+      const docB = (_cm6BackendMode === 'inline') ? view.state.doc
+        : (_cm6MergeView && _cm6MergeView.b && _cm6MergeView.b.state ? _cm6MergeView.b.state.doc : view.state.doc);
+      const docA = (_cm6BackendMode === 'inline')
+        ? (isFn(_cm6Runtime.merge.getOriginalDoc) ? _cm6Runtime.merge.getOriginalDoc(view.state) : null)
+        : (_cm6MergeView && _cm6MergeView.a && _cm6MergeView.a.state ? _cm6MergeView.a.state.doc : null);
+      const chunk = _pickCm6Chunk(chunks, docB, Number(head || 0));
+      if (!chunk) return;
+      const aText = docA ? docA.toString() : leftText;
+      const bText = docB ? docB.toString() : rightText;
+      newText = _applyCm6Chunk(aText, bText, chunk);
+    } else {
+      showFeedback('Apply: backend недоступен', 'error');
+      return;
+    }
+
+    try {
+      await Promise.resolve(scope.applyText(newText));
+    } catch (err) {
+      showError('Apply: ' + String(err && err.message || err));
+      return;
+    }
+
+    // Reflect the new buffer in the modal so subsequent navigations and apply
+    // operations see the post-apply state.
+    if (_activeSpec) {
+      _activeSpec.left = Object.assign({}, _activeSpec.left || {}, { text: newText });
+    }
+    if (_backendKind === 'cm6') {
+      try { cm6SetText('left', newText); } catch (e) {}
+    } else if (_originalModel && isFn(_originalModel.setValue)) {
+      try { _originalModel.setValue(newText); } catch (e) {}
+    }
+    setTimeout(updateSummary, 60);
+    showFeedback('Хунк применён', 'success');
+  }
+
   function bindLayoutHooks(monaco) {
     if (_resizeBound) return;
     _resizeBound = true;
@@ -839,6 +1021,7 @@
           diffApi.logDiff(scopeDef.scope || '', lk, rk);
         }
       } catch (e) {}
+      refreshApplyButton();
     } catch (err) {
       showError(String(err && err.message || err));
       showFeedback('Не удалось открыть сравнение: ' + (err && err.message || err), 'error');

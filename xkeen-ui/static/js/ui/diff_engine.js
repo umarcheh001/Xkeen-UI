@@ -16,6 +16,9 @@
   //     reloadFromDisk?(),           // string|Promise<string>
   //     listSnapshots?(),            // [{id,label,createdAt}]|Promise<...>
   //     readSnapshot?(id),           // string|Promise<string>
+  //     applyText?(newText),         // void|Promise<void> — write back into the
+  //                                   // active editor buffer; required for the
+  //                                   // diff-modal "apply hunk" toolbar (Phase 5)
   //   })
   //   XKeen.ui.diff.unregisterScope(scope)
   //   XKeen.ui.diff.getScope(scope)
@@ -45,6 +48,7 @@
       reloadFromDisk: isFn(o.reloadFromDisk) ? o.reloadFromDisk : null,
       listSnapshots: isFn(o.listSnapshots) ? o.listSnapshots : null,
       readSnapshot: isFn(o.readSnapshot) ? o.readSnapshot : null,
+      applyText: isFn(o.applyText) ? o.applyText : null,
     };
   }
 
@@ -222,6 +226,13 @@
     return modal.open(o);
   }
 
+  async function applyTextToScope(scopeKey, newText) {
+    const def = getScope(scopeKey);
+    if (!def) throw new Error('diff: scope "' + asString(scopeKey) + '" is not registered');
+    if (!isFn(def.applyText)) throw new Error('diff: scope ' + def.scope + ' is read-only');
+    return await Promise.resolve(def.applyText(asString(newText)));
+  }
+
   XKeen.ui.diff = XKeen.ui.diff || {};
   XKeen.ui.diff.registerScope = registerScope;
   XKeen.ui.diff.unregisterScope = unregisterScope;
@@ -230,6 +241,7 @@
   XKeen.ui.diff.openForScope = openForScope;
   XKeen.ui.diff.open = openRaw;
   XKeen.ui.diff.resolveSourceText = resolveSourceText;
+  XKeen.ui.diff.applyTextToScope = applyTextToScope;
   XKeen.ui.diff.describeSource = describeSource;
   XKeen.ui.diff.logDiff = logDiff;
 })();
