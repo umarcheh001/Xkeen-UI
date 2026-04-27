@@ -28570,6 +28570,62 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
   color: inherit;
 }
 
+/* "$ unchanged lines" fold marker — @codemirror/merge default styles use a
+   white-ish gradient that screams against our dark palette. Repaint it so it
+   matches the modal background but stays visible (subtle blue tint on hover
+   makes the click affordance obvious). */
+.xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines {
+  background: linear-gradient(
+      to bottom,
+      transparent 0,
+      rgba(59, 90, 140, 0.32) 30%,
+      rgba(59, 90, 140, 0.32) 70%,
+      transparent 100%
+    );
+  color: var(--muted, #9ca3af);
+  border-top: 1px solid rgba(96, 165, 250, 0.18);
+  border-bottom: 1px solid rgba(96, 165, 250, 0.18);
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:hover,
+.xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:focus-visible {
+  background: linear-gradient(
+      to bottom,
+      transparent 0,
+      rgba(96, 165, 250, 0.40) 30%,
+      rgba(96, 165, 250, 0.40) 70%,
+      transparent 100%
+    );
+  color: var(--text, #e5e7eb);
+  outline: none;
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines {
+  background: linear-gradient(
+      to bottom,
+      transparent 0,
+      rgba(96, 165, 250, 0.18) 30%,
+      rgba(96, 165, 250, 0.18) 70%,
+      transparent 100%
+    );
+  color: #475569;
+  border-top: 1px solid rgba(96, 165, 250, 0.32);
+  border-bottom: 1px solid rgba(96, 165, 250, 0.32);
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:hover,
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:focus-visible {
+  background: linear-gradient(
+      to bottom,
+      transparent 0,
+      rgba(96, 165, 250, 0.32) 30%,
+      rgba(96, 165, 250, 0.32) 70%,
+      transparent 100%
+    );
+  color: #1e293b;
+}
+
 @media (max-width: 720px) {
   .xkeen-diff-modal .modal-content.xkeen-diff-card {
     width: 96vw;

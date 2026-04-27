@@ -115,17 +115,21 @@
     modeGroup.setAttribute('role', 'group');
     modeGroup.setAttribute('aria-label', 'Режим сравнения');
 
-    _modeBtnSplitEl = makeBtn('Бок-о-бок', 'btn-secondary xkeen-diff-mode-btn is-active', () => setMode('split'));
+    _modeBtnSplitEl = makeBtn('Бок-о-бок', 'btn-secondary xkeen-diff-mode-btn is-active',
+      () => setMode('split'),
+      'Бок-о-бок · оригинал и новая версия в двух колонках');
     _modeBtnSplitEl.dataset.mode = 'split';
-    _modeBtnInlineEl = makeBtn('Подряд', 'btn-secondary xkeen-diff-mode-btn', () => setMode('inline'));
+    _modeBtnInlineEl = makeBtn('Подряд', 'btn-secondary xkeen-diff-mode-btn',
+      () => setMode('inline'),
+      'Подряд · все изменения в одном потоке (как git diff)');
     _modeBtnInlineEl.dataset.mode = 'inline';
     modeGroup.appendChild(_modeBtnSplitEl);
     modeGroup.appendChild(_modeBtnInlineEl);
 
     const navGroup = document.createElement('div');
     navGroup.className = 'xkeen-diff-nav';
-    _navPrevBtnEl = makeBtn('▲', 'btn-secondary btn-icon', () => navigateDiff(-1), 'К предыдущему изменению');
-    _navNextBtnEl = makeBtn('▼', 'btn-secondary btn-icon', () => navigateDiff(1), 'К следующему изменению');
+    _navPrevBtnEl = makeBtn('▲', 'btn-secondary btn-icon', () => navigateDiff(-1), 'К предыдущему изменению (Shift+F3)');
+    _navNextBtnEl = makeBtn('▼', 'btn-secondary btn-icon', () => navigateDiff(1), 'К следующему изменению (F3)');
     navGroup.appendChild(_navPrevBtnEl);
     navGroup.appendChild(_navNextBtnEl);
 
@@ -133,7 +137,7 @@
       () => applyHunkFromRight(),
       'Применить текущий хунк из правой стороны в активный буфер');
 
-    _xBtnEl = makeBtn('×', 'btn-icon xkeen-diff-close-x', () => close('x'), 'Закрыть');
+    _xBtnEl = makeBtn('×', 'btn-icon xkeen-diff-close-x', () => close('x'), 'Закрыть окно сравнения (Esc)');
 
     headRight.appendChild(modeGroup);
     headRight.appendChild(navGroup);
@@ -154,6 +158,7 @@
     _leftSelectEl = document.createElement('select');
     _leftSelectEl.className = 'xkeen-diff-source';
     _leftSelectEl.setAttribute('aria-label', 'Источник слева');
+    _leftSelectEl.setAttribute('data-tooltip', 'Источник для левой стороны: текущий буфер редактора, файл с диска или сохранённый снэпшот');
     _leftSelectEl.addEventListener('change', () => onSourceChanged('left'));
     leftWrap.appendChild(_leftLabelEl);
     leftWrap.appendChild(_leftSelectEl);
@@ -170,6 +175,7 @@
     _rightSelectEl = document.createElement('select');
     _rightSelectEl.className = 'xkeen-diff-source';
     _rightSelectEl.setAttribute('aria-label', 'Источник справа');
+    _rightSelectEl.setAttribute('data-tooltip', 'Источник для правой стороны: текущий буфер редактора, файл с диска или сохранённый снэпшот');
     _rightSelectEl.addEventListener('change', () => onSourceChanged('right'));
     rightWrap.appendChild(_rightLabelEl);
     rightWrap.appendChild(_rightSelectEl);
@@ -194,7 +200,7 @@
 
     const foot = document.createElement('div');
     foot.className = 'modal-actions xkeen-diff-foot';
-    _closeBtnEl = makeBtn('Закрыть', 'btn-secondary', () => close('close'));
+    _closeBtnEl = makeBtn('Закрыть', 'btn-secondary', () => close('close'), 'Закрыть окно сравнения (Esc)');
     foot.appendChild(summary);
     foot.appendChild(_closeBtnEl);
 
@@ -576,6 +582,17 @@
     if (readOnly && rt.view && rt.view.EditorView && isFn(rt.view.EditorView.editable && rt.view.EditorView.editable.of)) {
       ext.push(rt.view.EditorView.editable.of(false));
     }
+    // Localize the merge view's "$ unchanged lines" placeholder shown by
+    // collapsedUnchanged folds — the default English copy looks foreign in
+    // the panel and gives no hint that it's clickable. The phrase facet
+    // substitutes "$" with the line count automatically.
+    try {
+      if (rt.state && rt.state.EditorState && isFn(rt.state.EditorState.phrases && rt.state.EditorState.phrases.of)) {
+        ext.push(rt.state.EditorState.phrases.of({
+          '$ unchanged lines': '$ одинаковых строк свёрнуто · нажмите, чтобы развернуть',
+        }));
+      }
+    } catch (e) {}
     return ext;
   }
 
