@@ -1366,25 +1366,75 @@ STDOUT_LOG="$LOG_DIR/stdout.log"
 STDERR_LOG="$LOG_DIR/stderr.log"
 PID_FILE="/opt/var/run/xkeen-ui.pid"
 
+audit_boot() {
+  # Lightweight diagnostic log so users can debug boot-time autostart failures
+  # without re-running install.sh. Survives reboot, no rotation (small file).
+  echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> /opt/var/log/xkeen-ui-boot.log 2>/dev/null || true
+}
+
 start_service() {
+  # Entware's rc.unslung calls S99 scripts very early at boot, before
+  # /opt/etc/profile has been sourced for the user shell. Pull it in so
+  # PATH/LD_LIBRARY_PATH point at /opt/{bin,sbin,lib} and Python's native
+  # extensions can dlopen() Entware libraries.
+  [ -f "/opt/etc/profile" ] && . /opt/etc/profile >/dev/null 2>&1 || true
+  case ":$PATH:" in
+    *":/opt/bin:"*) ;;
+    *) PATH="/opt/bin:/opt/sbin:$PATH"; export PATH ;;
+  esac
+
+  # Make sure runtime dirs exist before we touch them. /opt/var/run can be
+  # missing on a fresh Entware install, which would silently lose the PID
+  # file and make every subsequent stop/restart a no-op.
+  mkdir -p "/opt/var/run" "/opt/var/log" 2>/dev/null || true
+
+  audit_boot "[start] begin (caller=$(ps -o comm= -p $PPID 2>/dev/null), arg=${1:-start})"
+
+  # USB-mounted /opt sometimes lags the init.d invocation by a few seconds
+  # on Keenetic. Wait up to 30s for python3 instead of failing immediately.
+  i=0
+  while [ ! -x "$PYTHON_BIN" ] && [ "$i" -lt 30 ]; do
+    sleep 1
+    i=$((i + 1))
+  done
   if [ ! -x "$PYTHON_BIN" ]; then
+    audit_boot "[start] abort: python3 missing at $PYTHON_BIN after ${i}s"
     echo "python3 не найден по пути $PYTHON_BIN"
     return 1
   fi
+  [ "$i" -gt 0 ] && audit_boot "[start] python3 became available after ${i}s wait"
 
+  # Wait for the target script for the same reason.
   TARGET=""
-  if [ -f "$RUN_SERVER" ]; then
-    TARGET="$RUN_SERVER"
-  elif [ -f "$APP_PY" ]; then
-    TARGET="$APP_PY"
-  else
+  j=0
+  while [ -z "$TARGET" ] && [ "$j" -lt 30 ]; do
+    if [ -f "$RUN_SERVER" ]; then
+      TARGET="$RUN_SERVER"
+    elif [ -f "$APP_PY" ]; then
+      TARGET="$APP_PY"
+    else
+      sleep 1
+      j=$((j + 1))
+    fi
+  done
+  if [ -z "$TARGET" ]; then
+    audit_boot "[start] abort: neither $RUN_SERVER nor $APP_PY exists after ${j}s"
     echo "Не найден ни run_server.py, ни app.py в $UI_DIR"
     return 1
   fi
+  [ "$j" -gt 0 ] && audit_boot "[start] target became available after ${j}s wait"
+  audit_boot "[start] target=$TARGET"
 
-  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+  if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
+    audit_boot "[start] already running, PID $(cat "$PID_FILE")"
     echo "Сервис уже запущен (PID $(cat "$PID_FILE"))."
     return 0
+  fi
+
+  # Stale PID file from a previous boot — clean it up so status/stop work.
+  if [ -f "$PID_FILE" ]; then
+    audit_boot "[start] removing stale pid file (was $(cat "$PID_FILE" 2>/dev/null))"
+    rm -f "$PID_FILE"
   fi
 
   echo "Запуск Xkeen Web UI..."
@@ -1404,36 +1454,63 @@ start_service() {
   # run_server.py reads it from env instead of a hard-coded literal.
   export XKEEN_UI_PORT="${XKEEN_UI_PORT:-$PANEL_PORT}"
 
-  # Re-resolve log dir after env overrides (DevTools can set XKEEN_LOG_DIR)
+  # Re-resolve log dir after env overrides (DevTools can set XKEEN_LOG_DIR).
+  # Fall back to /tmp if the chosen dir is not writable — otherwise the
+  # nohup redirect below silently drops both stdout and stderr.
   LOG_DIR="${XKEEN_LOG_DIR:-$LOG_DIR_DEFAULT}"
+  if ! mkdir -p "$LOG_DIR" 2>/dev/null; then
+    audit_boot "[start] mkdir $LOG_DIR failed, falling back to /tmp"
+    LOG_DIR="/tmp"
+  fi
   STDOUT_LOG="$LOG_DIR/stdout.log"
   STDERR_LOG="$LOG_DIR/stderr.log"
-  mkdir -p "$LOG_DIR" 2>/dev/null || true
 
   if ! command -v nohup >/dev/null 2>&1; then
+    audit_boot "[start] nohup missing, attempting opkg install coreutils-nohup"
     echo "Команда nohup не найдена. Пытаюсь установить пакет coreutils-nohup..."
     if command -v opkg >/dev/null 2>&1; then
       opkg update || true
       if ! opkg install coreutils-nohup; then
+        audit_boot "[start] opkg install coreutils-nohup failed"
         echo "Не удалось установить coreutils-nohup автоматически."
         echo "Установите пакет вручную: opkg install coreutils-nohup"
         return 1
       fi
       if ! command -v nohup >/dev/null 2>&1; then
+        audit_boot "[start] nohup still missing after opkg install"
         echo "Пакет coreutils-nohup установлен, но команда nohup по-прежнему недоступна."
         echo "Проверьте PATH или установите пакет вручную: opkg install coreutils-nohup"
         return 1
       fi
     else
+      audit_boot "[start] nohup missing and opkg unavailable"
       echo "Команда nohup не найдена, и opkg недоступен для автоустановки."
       echo "Установите пакет вручную: opkg install coreutils-nohup"
       return 1
     fi
   fi
 
-  nohup "$PYTHON_BIN" "$TARGET" >> "$STDOUT_LOG" 2>> "$STDERR_LOG" &
-  echo $! > "$PID_FILE"
-  echo "Запущено, PID $(cat "$PID_FILE")."
+  audit_boot "[start] spawn: $PYTHON_BIN $TARGET (port=$XKEEN_UI_PORT, log=$LOG_DIR)"
+  # `< /dev/null` keeps Python detached from the controlling tty so it
+  # survives even when rc.unslung's stdin is closed mid-boot.
+  nohup "$PYTHON_BIN" "$TARGET" >> "$STDOUT_LOG" 2>> "$STDERR_LOG" < /dev/null &
+  CHILD_PID=$!
+  echo "$CHILD_PID" > "$PID_FILE" 2>/dev/null || true
+
+  # Catch the common case where Python imports fail at boot (e.g. gevent's
+  # native extension can't find Entware libs). Without this check we'd
+  # report success even though the panel never bound to its port.
+  sleep 1
+  if kill -0 "$CHILD_PID" 2>/dev/null; then
+    audit_boot "[start] OK, PID $CHILD_PID"
+    echo "Запущено, PID $CHILD_PID."
+    return 0
+  else
+    audit_boot "[start] child PID $CHILD_PID died within 1s; tail $STDERR_LOG for cause"
+    echo "Не удалось запустить процесс. Смотри логи: $STDERR_LOG"
+    rm -f "$PID_FILE"
+    return 1
+  fi
 }
 
 stop_service() {
