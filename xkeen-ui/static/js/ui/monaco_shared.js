@@ -2209,14 +2209,54 @@ import {
     _state.jsonSnippetProvidersInstalled = true;
   }
 
+  function _hasErrorMarkerAt(monaco, model, position) {
+    // Monaco merges every hover provider's output with its own marker
+    // tooltip into a single floating widget. When the user hovers a JSON
+    // syntax error we don't want our schema docs piled on top of the
+    // parser error — that's exactly the noisy popup users complain about
+    // (CM6 stays clean because it routes diagnostics and hover docs to
+    // separate widgets). Detect overlapping error/warning markers so the
+    // hover provider can yield in that case.
+    try {
+      if (!monaco || !monaco.editor || typeof monaco.editor.getModelMarkers !== 'function') return false;
+      if (!model || !model.uri) return false;
+      const markers = monaco.editor.getModelMarkers({ resource: model.uri }) || [];
+      if (!markers.length) return false;
+      const ln = Number(position && position.lineNumber);
+      const col = Number(position && position.column);
+      if (!ln) return false;
+      const minSeverity = (monaco.MarkerSeverity && monaco.MarkerSeverity.Warning) || 4;
+      for (let i = 0; i < markers.length; i += 1) {
+        const m = markers[i];
+        if (!m) continue;
+        if (Number(m.severity || 0) < minSeverity) continue;
+        const sl = Number(m.startLineNumber || 0);
+        const el = Number(m.endLineNumber || sl);
+        if (!sl) continue;
+        if (ln < sl || ln > el) continue;
+        const sc = Number(m.startColumn || 0);
+        const ec = Number(m.endColumn || sc);
+        if (ln === sl && ln === el) {
+          if (col >= sc && col <= ec) return true;
+          continue;
+        }
+        if (ln === sl && col < sc) continue;
+        if (ln === el && col > ec) continue;
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
   function _ensureJsonHoverProviders(monaco) {
     if (!monaco || !monaco.languages || _state.jsonHoverProvidersInstalled) return;
 
-    monaco.languages.registerHoverProvider('json', {
+    const hoverProvider = {
       provideHover(model, position) {
         if (_isEditorExpertModeEnabled()) return null;
         if (!_isEditorHoverEnabled()) return null;
         if (!_supportsJsonSchemaOnModel(model) || !model || typeof model.getOffsetAt !== 'function') return null;
+        if (_hasErrorMarkerAt(monaco, model, position)) return null;
         const schema = _getModelJsonSchema(model);
         if (!schema) return null;
 
@@ -2232,7 +2272,9 @@ import {
           contents: [{ value: result.markdown }],
         };
       },
-    });
+    };
+    try { monaco.languages.registerHoverProvider('json', hoverProvider); } catch (e) {}
+    try { monaco.languages.registerHoverProvider('jsonc', hoverProvider); } catch (e) {}
 
     _state.jsonHoverProvidersInstalled = true;
   }
