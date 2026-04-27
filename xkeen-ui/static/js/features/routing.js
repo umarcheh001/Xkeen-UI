@@ -4393,12 +4393,6 @@ function closeHelp() {
       const host = document.getElementById('routing-toolbar-host');
       if (!host) return null;
 
-      if (_cm && _cm._xkeenToolbarEl) {
-        try { moveToolbarToHost(_cm); } catch (e) {}
-        if (_routingMonacoToolbarEl) _routingMonacoToolbarEl.style.display = 'none';
-        return _cm._xkeenToolbarEl;
-      }
-
       let bar = _routingMonacoToolbarEl;
       if (!bar) {
         const icons = getXkeenEditorToolbarIcons();
@@ -4448,7 +4442,7 @@ function closeHelp() {
       }
 
       if (!host.contains(bar)) host.appendChild(bar);
-      bar.style.display = (_engine === 'monaco' && !_cm) ? '' : 'none';
+      bar.style.display = (_engine === 'monaco') ? '' : 'none';
       return bar;
     } catch (e) {}
     return null;
@@ -4456,23 +4450,31 @@ function closeHelp() {
 
   function syncRoutingToolbarUi(engine) {
     const next = normalizeEngine(engine || _engine);
+    const isMonaco = (next === 'monaco');
     try {
       if (_cm && _cm._xkeenToolbarEl) {
         moveToolbarToHost(_cm);
-        syncToolbarForEngine(next);
+        // In Monaco mode the dedicated Monaco toolbar takes over; hide the CM
+        // toolbar entirely so quick-fix/fullscreen don't duplicate. In CM mode
+        // restore full visibility via syncToolbarForEngine.
+        if (isMonaco) {
+          _cm._xkeenToolbarEl.style.display = 'none';
+        } else {
+          _cm._xkeenToolbarEl.style.display = '';
+          syncToolbarForEngine(next);
+        }
       }
     } catch (e) {}
     try {
+      if (isMonaco) ensureRoutingMonacoToolbar();
       if (_routingMonacoToolbarEl) {
-        _routingMonacoToolbarEl.style.display = (!_cm && next === 'monaco') ? '' : 'none';
+        _routingMonacoToolbarEl.style.display = isMonaco ? '' : 'none';
         const expert = isRoutingExpertModeEnabled();
         const btns = _routingMonacoToolbarEl.querySelectorAll('button.xkeen-cm-tool');
         (btns || []).forEach((btn) => {
           const isQuickFix = !!(btn.dataset && btn.dataset.actionId === 'quick_fix');
           btn.style.display = isQuickFix && expert ? 'none' : '';
         });
-      } else if (!_cm && next === 'monaco') {
-        ensureRoutingMonacoToolbar();
       }
     } catch (e) {}
   }

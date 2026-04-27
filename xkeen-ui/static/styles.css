@@ -28464,6 +28464,16 @@ html[data-theme="light"] .xk-routing-monaco-menu-sep {
   outline-offset: 1px;
 }
 
+.xkeen-diff-modal .xkeen-diff-source option {
+  background: var(--card-bg, #020617);
+  color: var(--text, #e5e7eb);
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
+  background: var(--card-bg, #ffffff);
+  color: var(--text, #111827);
+}
+
 .xkeen-diff-modal .xkeen-diff-source.hidden {
   display: none;
 }
