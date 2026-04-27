@@ -682,14 +682,18 @@ let mihomoPanelModuleApi = null;
         const isFs = (id === 'fs');
         const isFsAny = (id === 'fs_any');
         const isQuickFix = (id === 'quick_fix');
+        const isCompare = (id === 'compare');
 
         if (isMonaco) {
-          // In Monaco mode show quick fix + one fullscreen button: fs (preferred) or fs_any.
+          // In Monaco mode show quick fix + compare + one fullscreen button:
+          // fs (preferred) or fs_any.
           if (isQuickFix) {
             if (expert) {
               btn.style.display = 'none';
               return;
             }
+            btn.style.display = '';
+          } else if (isCompare) {
             btn.style.display = '';
           } else {
             btn.style.display = hasFs ? (isFs ? '' : 'none') : (isFsAny ? '' : 'none');
