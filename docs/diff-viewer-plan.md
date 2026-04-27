@@ -156,13 +156,30 @@ XKeen.ui.editorActions.openDiff({
 Логирование идёт через `XKeen.ui.diff.logDiff()` → `POST /api/log/event` →
 `core.log` (`ui.event diff.compare | scope=…, left=…, right=…`).
 
-### Phase 4 — File Manager
+### Phase 4 — File Manager — **закрыта**
 
 - Пункт контекстного меню "Сравнить с…" над файлом.
 - Picker второго файла — переиспользовать существующий FM-навигатор.
 - Те же компоненты `diff_modal` / `diff_engine`.
 - Защита от больших файлов: лимит ~2 MB, выше — confirm-модал с
   предупреждением.
+
+Фактически: вместо отдельного file-picker используем парность панелей FM.
+В `context_menu.js` добавлена единая запись «Сравнить…» с двумя режимами
+доступности (`canCompareSelected` / `canCompareCross`). Если на активной
+панели выбрано ровно два не-каталога — пункт называется «Сравнить
+выделенные» и сравнивает эти два файла. Если выделен один файл —
+«Сравнить с другой панелью», берётся focused/selected файл с другой панели.
+Действие `compare` в диспетчере `file_manager.js` маршрутизируется на
+`AC.openCompare(side, ctx)` (см. `static/js/features/file_manager/actions.js`).
+Хэндлер читает оба файла через `/api/fs/read?target=…&path=…&sid=…`,
+поддерживает кросс-панельный режим (local↔remote — разные target/sid),
+показывает confirm-модал при размере >2 МБ
+(`COMPARE_SOFT_LIMIT_BYTES = 2 MB`), уважает флаг `truncated`,
+обрабатывает 415/`not_text` для бинарных файлов и подкидывает результат
+в `XKeen.ui.diff.open()` с descriptor `{source: 'text'}` без scope —
+из-за чего модал прячет dropdown'ы и показывает плоские лейблы. Подсказка
+языка — по расширению (`json`/`yaml`/`js`/…).
 
 ### Phase 5 (опционально) — apply hunk
 

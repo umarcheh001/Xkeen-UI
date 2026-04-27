@@ -181,6 +181,33 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       }
     } catch (e) { canExtract = false; }
 
+    // Diff: appear on a single non-dir file row (cross-panel mode), or when
+    // exactly two non-dir files are selected (pair mode). No remote/local
+    // restriction — both panels independently fetch via /api/fs/read.
+    let canCompareSelected = false;
+    let canCompareCross = false;
+    try {
+      const _itemByName = (n) => (p && p.items)
+        ? (p.items || []).find(x => safeName(x && x.name) === n) : null;
+      const _isDirItem = (it) => {
+        const t = String((it && it.type) || '');
+        return t === 'dir' || (t === 'link' && !!(it && it.link_dir));
+      };
+      if (!inTrash && selNames.length === 2) {
+        const both = selNames.every((n) => {
+          const it = _itemByName(n);
+          return !!it && !_isDirItem(it);
+        });
+        if (both) canCompareSelected = true;
+      }
+      if (!inTrash && hasRow && !isDir && rowName) {
+        canCompareCross = true;
+      }
+    } catch (e) {
+      canCompareSelected = false;
+      canCompareCross = false;
+    }
+
     // Capabilities (best-effort; default allow)
     let canChmod = true;
     let canChown = true;
@@ -218,6 +245,7 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       if (!lite && canArchive) menu.appendChild(_ctxBtn('Архивировать…', 'archive_create', ''));
       if (canExtract) menu.appendChild(_ctxBtn('Содержимое архива…', 'archive_list', ''));
       if (!lite && canExtract) menu.appendChild(_ctxBtn('Распаковать…', 'archive_extract', ''));
+      if (canCompareSelected) menu.appendChild(_ctxBtn('Сравнить выделенные', 'compare', ''));
       menu.appendChild(_ctxBtn('Свойства…', 'props', ''));
       menu.appendChild(_ctxSep());
     }
@@ -232,6 +260,11 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       if (canExtract) menu.appendChild(_ctxBtn('Содержимое архива…', 'archive_list', ''));
       if (!lite && canExtract) menu.appendChild(_ctxBtn('Распаковать…', 'archive_extract', ''));
       menu.appendChild(_ctxBtn('Копировать полный путь', 'copy_path', 'Ctrl+Shift+C'));
+      if (canCompareSelected) {
+        menu.appendChild(_ctxBtn('Сравнить выделенные', 'compare', ''));
+      } else if (canCompareCross) {
+        menu.appendChild(_ctxBtn('Сравнить с другой панелью', 'compare', ''));
+      }
       menu.appendChild(_ctxSep());
       if (!lite) menu.appendChild(_ctxBtn('Копировать', 'copy', 'F5'));
       if (!lite) menu.appendChild(_ctxBtn('Переместить', 'move', 'F6'));

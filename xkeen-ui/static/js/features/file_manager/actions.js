@@ -927,6 +927,228 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
       } catch (e) {}
     }
 
+    // -------------------------- compare (diff) --------------------------
+
+    const COMPARE_SOFT_LIMIT_BYTES = 2 * 1024 * 1024; // 2 MB
+
+    function _itemByName(panel, name) {
+      try {
+        const items = (panel && panel.items) ? panel.items : [];
+        const want = safeName(name);
+        return items.find((it) => safeName(it && it.name) === want) || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function _itemIsDir(it) {
+      const t = String((it && it.type) || '');
+      return t === 'dir' || (t === 'link' && !!(it && it.link_dir));
+    }
+
+    function _fullPathFor(panel, name) {
+      if (!panel) return '';
+      const nm = safeName(name);
+      if (!nm) return '';
+      if (panel.target === 'remote') return joinRemote(panel.cwd, nm);
+      return joinLocal(panel.cwd, nm);
+    }
+
+    function _guessLanguage(name) {
+      const lower = String(name || '').toLowerCase();
+      if (!lower.includes('.')) return 'text';
+      const ext = lower.split('.').pop();
+      if (ext === 'json' || ext === 'jsonc') return 'json';
+      if (ext === 'yaml' || ext === 'yml') return 'yaml';
+      if (ext === 'js' || ext === 'mjs' || ext === 'cjs') return 'javascript';
+      if (ext === 'ts' || ext === 'tsx') return 'typescript';
+      if (ext === 'css') return 'css';
+      if (ext === 'html' || ext === 'htm') return 'html';
+      if (ext === 'sh' || ext === 'bash') return 'shell';
+      if (ext === 'py') return 'python';
+      if (ext === 'sql') return 'sql';
+      if (ext === 'md') return 'markdown';
+      if (ext === 'xml') return 'xml';
+      if (ext === 'toml') return 'toml';
+      return 'text';
+    }
+
+    function _readFsText(target, sid, fullPath) {
+      const t = (target === 'remote') ? 'remote' : 'local';
+      const url = `/api/fs/read?target=${encodeURIComponent(t)}&path=${encodeURIComponent(fullPath)}`
+        + (t === 'remote' ? `&sid=${encodeURIComponent(sid || '')}` : '');
+      return A.fetchJson(url, { method: 'GET' });
+    }
+
+    async function _confirmLargeIfNeeded(items) {
+      const big = (items || []).filter((x) => x && Number(x.size || 0) > COMPARE_SOFT_LIMIT_BYTES);
+      if (!big.length) return true;
+      const lines = big.map((x) => `• ${safeName(x.name)} — ${fmtSize(x.size || 0)}`);
+      return await (C && typeof C.confirm === 'function'
+        ? C.confirm({
+            title: 'Большие файлы',
+            message: 'Один или оба файла больше 2 МБ. Загрузить и сравнить?\n\n' + lines.join('\n'),
+            okText: 'Сравнить',
+            cancelText: 'Отмена',
+            danger: false,
+          })
+        : Promise.resolve(window.confirm('Большие файлы (>2 МБ). Сравнить?')));
+    }
+
+    function _resolveCompareSources(side, ctx) {
+      const s0 = String(side || S.activeSide || 'left');
+      const p = S.panels && S.panels[s0] ? S.panels[s0] : null;
+      if (!p) return null;
+      const selNames = (SEL && typeof SEL.getSelectionNames === 'function') ? (SEL.getSelectionNames(s0) || []) : [];
+      // Mode A: exactly two non-dir items selected on the active panel.
+      if (selNames.length === 2) {
+        const items = selNames.map((n) => _itemByName(p, n));
+        if (items.every((it) => it && !_itemIsDir(it))) {
+          return {
+            mode: 'pair',
+            sources: items.map((it) => ({
+              name: safeName(it.name),
+              size: Number(it.size || 0),
+              target: String(p.target || 'local'),
+              sid: (p.target === 'remote') ? String(p.sid || '') : '',
+              path: _fullPathFor(p, it.name),
+              panelLabel: s0.toUpperCase(),
+            })),
+          };
+        }
+      }
+      // Mode B: row + other panel's focused single non-dir file.
+      const rowName = safeName((ctx && ctx.name) || '');
+      if (!rowName) return null;
+      const rowIt = _itemByName(p, rowName);
+      if (!rowIt || _itemIsDir(rowIt)) return null;
+      const otherSide = (s0 === 'left') ? 'right' : 'left';
+      const op = S.panels && S.panels[otherSide] ? S.panels[otherSide] : null;
+      if (!op) return null;
+      const otherSel = (SEL && typeof SEL.getSelectionNames === 'function') ? (SEL.getSelectionNames(otherSide) || []) : [];
+      let otherName = '';
+      if (otherSel.length === 1) otherName = safeName(otherSel[0]);
+      if (!otherName && op.focusName) otherName = safeName(op.focusName);
+      if (!otherName) return { mode: 'cross', error: 'no_other' };
+      const otherIt = _itemByName(op, otherName);
+      if (!otherIt || _itemIsDir(otherIt)) return { mode: 'cross', error: 'other_is_dir' };
+      return {
+        mode: 'cross',
+        sources: [
+          {
+            name: rowName,
+            size: Number(rowIt.size || 0),
+            target: String(p.target || 'local'),
+            sid: (p.target === 'remote') ? String(p.sid || '') : '',
+            path: _fullPathFor(p, rowName),
+            panelLabel: s0.toUpperCase(),
+          },
+          {
+            name: otherName,
+            size: Number(otherIt.size || 0),
+            target: String(op.target || 'local'),
+            sid: (op.target === 'remote') ? String(op.sid || '') : '',
+            path: _fullPathFor(op, otherName),
+            panelLabel: otherSide.toUpperCase(),
+          },
+        ],
+      };
+    }
+
+    async function openCompare(side, ctx) {
+      const diffApi = (window.XKeen && XKeen.ui && XKeen.ui.diff) || null;
+      if (!diffApi || typeof diffApi.open !== 'function') {
+        toast('FM: модуль сравнения недоступен', 'error');
+        return;
+      }
+      const resolved = _resolveCompareSources(side, ctx);
+      if (!resolved) {
+        toast('FM: выберите файл для сравнения', 'info');
+        return;
+      }
+      if (resolved.error === 'no_other') {
+        toast('FM: фокусируйте файл на другой панели для сравнения', 'info');
+        return;
+      }
+      if (resolved.error === 'other_is_dir') {
+        toast('FM: на другой панели выбрана папка', 'info');
+        return;
+      }
+      const [a, b] = resolved.sources || [];
+      if (!a || !b) return;
+
+      const ok = await _confirmLargeIfNeeded([a, b]);
+      if (!ok) return;
+
+      let outA = null;
+      let outB = null;
+      try {
+        [outA, outB] = await Promise.all([
+          _readFsText(a.target, a.sid, a.path),
+          _readFsText(b.target, b.sid, b.path),
+        ]);
+      } catch (e) {
+        toast('FM: не удалось прочитать файлы', 'error');
+        return;
+      }
+
+      const partFor = (out, src) => {
+        if (!out || !out.res) return { error: 'нет ответа' };
+        if (out.res.status === 415 && out.data && out.data.error === 'not_text') {
+          return { error: 'файл бинарный' };
+        }
+        if (out.res.status < 200 || out.res.status >= 300 || !(out.data && out.data.ok)) {
+          const m = (out.data && (out.data.error || out.data.message)) ? String(out.data.error || out.data.message) : `HTTP ${out.res.status}`;
+          return { error: m };
+        }
+        return { text: String(out.data.text || ''), truncated: !!out.data.truncated };
+      };
+      const left = partFor(outA, a);
+      const right = partFor(outB, b);
+      if (left.error || right.error) {
+        const parts = [];
+        if (left.error) parts.push(`${a.name}: ${left.error}`);
+        if (right.error) parts.push(`${b.name}: ${right.error}`);
+        toast('FM: ' + parts.join(' · '), 'error');
+        return;
+      }
+      if (left.truncated || right.truncated) {
+        toast('FM: файл(ы) урезаны до лимита размера; сравнение неполное', 'warn');
+      }
+
+      const language = _guessLanguage(a.name) === _guessLanguage(b.name)
+        ? _guessLanguage(a.name)
+        : 'text';
+
+      try {
+        await diffApi.open({
+          title: `Сравнить · ${a.name} ↔ ${b.name}`,
+          language: language,
+          mode: 'split',
+          readOnly: true,
+          left: {
+            text: left.text,
+            title: `${a.panelLabel} · ${a.name}`,
+            descriptor: { source: 'text', label: a.name, path: a.path },
+          },
+          right: {
+            text: right.text,
+            title: `${b.panelLabel} · ${b.name}`,
+            descriptor: { source: 'text', label: b.name, path: b.path },
+          },
+        });
+      } catch (e) {
+        toast('FM: не удалось открыть сравнение', 'error');
+        return;
+      }
+
+      try {
+        if (typeof diffApi.logDiff === 'function') {
+          diffApi.logDiff('file_manager', 'fs:' + a.target, 'fs:' + b.target);
+        }
+      } catch (e) {}
+    }
+
   function openExtractModalWithItems(side, name, items) {
       const s0 = String(side || S.activeSide || 'left');
       const p = S.panels && S.panels[s0] ? S.panels[s0] : null;
@@ -2203,4 +2425,6 @@ import { getFileManagerNamespace } from '../file_manager_namespace.js';
   AC.closeChmodModal = closeChmodModal;
   AC.openChownModal = openChownModal;
   AC.closeChownModal = closeChownModal;
+
+  AC.openCompare = openCompare;
 })();

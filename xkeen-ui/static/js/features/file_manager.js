@@ -342,6 +342,7 @@ import { getFileManagerApiRoot, getFileManagerNamespace } from './file_manager_n
 
         if (act === 'props') { if (ACT && typeof ACT.openPropsModal === 'function') await ACT.openPropsModal(side); return; }
         if (act === 'checksum') { if (ACT && typeof ACT.openHashModal === 'function') await ACT.openHashModal(side); return; }
+        if (act === 'compare') { if (ACT && typeof ACT.openCompare === 'function') await ACT.openCompare(side, ctx); return; }
 
         // Upload
         if (act === 'upload') {
