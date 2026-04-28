@@ -28780,6 +28780,80 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
   overflow: hidden;
   border: 1px solid var(--modal-border, #475569d1);
   background: var(--modal-bg, #060e1eeb);
+  /* Mirror the CM6 palette defined on .xkeen-cm6-host so that the highlight
+     style applied to the diff editor (which resolves var(--xk-cm-keyword)
+     etc.) renders the same vibrant Monaco-like colors instead of cascading
+     to undefined and falling back to the inherited fg color. */
+  --xk-cm-bg: #020817;
+  --xk-cm-fg: #d4d4d4;
+  --xk-cm-caret: #d4d4d4;
+  --xk-cm-selection: #2d4f8e;
+  --xk-cm-selection-native: #2d4f8e;
+  --xk-cm-selection-match: #1e3a5f;
+  --xk-cm-active-line: transparent;
+  --xk-cm-active-line-gutter: transparent;
+  --xk-cm-active-line-fg: #c6c6c6;
+  --xk-cm-gutter-bg: transparent;
+  --xk-cm-gutter-fg: #858585;
+  --xk-cm-gutter-border: transparent;
+  --xk-cm-comment: #6a9955;
+  --xk-cm-keyword: #569cd6;
+  --xk-cm-string: #ce9178;
+  --xk-cm-number: #b5cea8;
+  --xk-cm-atom: #569cd6;
+  --xk-cm-property: #9cdcfe;
+  --xk-cm-variable: #d4d4d4;
+  --xk-cm-definition: #d4d4d4;
+  --xk-cm-type: #4ec9b0;
+  --xk-cm-operator: #d4d4d4;
+  --xk-cm-delimiter: #d4d4d4;
+  --xk-cm-punctuation: #d4d4d4;
+  --xk-cm-bracket-depth-0: #ffd700;
+  --xk-cm-bracket-depth-1: #c586c0;
+  --xk-cm-bracket-depth-2: #4fc1ff;
+  --xk-cm-comma: #d4d4d4;
+  --xk-cm-colon: #d4d4d4;
+  --xk-cm-meta: #9cdcfe;
+  --xk-cm-invalid: #f7768e;
+  --xk-cm-error: #f7768e;
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host {
+  --xk-cm-fg: #111827;
+  --xk-cm-caret: #2563eb;
+  --xk-cm-selection: rgba(173, 214, 255, 0.44);
+  --xk-cm-selection-native: rgba(173, 214, 255, 0.84);
+  --xk-cm-selection-match: rgba(59, 130, 246, 0.10);
+  --xk-cm-comment: #6b7280;
+  --xk-cm-keyword: #7c3aed;
+  --xk-cm-string: #15803d;
+  --xk-cm-number: #c2410c;
+  --xk-cm-atom: #7c3aed;
+  --xk-cm-property: #2563eb;
+  --xk-cm-variable: #111827;
+  --xk-cm-definition: #111827;
+  --xk-cm-type: #2563eb;
+  --xk-cm-operator: #0891b2;
+  --xk-cm-delimiter: #0891b2;
+  --xk-cm-punctuation: #0891b2;
+  --xk-cm-meta: #be185d;
+  --xk-cm-invalid: #7f1d1d;
+  --xk-cm-error: #e11d48;
+}
+
+/* Selection: CM6 default cm-selectionLayer is light grey on dark and white on
+   light, both invisible against changed-line backgrounds. Bind it to our own
+   --xk-cm-selection so highlighted text remains readable. */
+.xkeen-diff-modal .xkeen-diff-host .cm-selectionBackground,
+.xkeen-diff-modal .xkeen-diff-host .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+  background-color: var(--xk-cm-selection) !important;
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-content ::selection,
+.xkeen-diff-modal .xkeen-diff-host .cm-line::selection,
+.xkeen-diff-modal .xkeen-diff-host .cm-line ::selection {
+  background-color: var(--xk-cm-selection-native);
+  color: inherit;
 }
 
 .xkeen-diff-modal .xkeen-diff-foot {

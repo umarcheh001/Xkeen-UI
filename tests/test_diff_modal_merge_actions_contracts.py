@@ -102,6 +102,10 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "_bindCm6ScrollSync();" in diff_modal
     assert "@codemirror/language" in diff_modal
     assert "@lezer/highlight" in diff_modal
+    # CM6 palette must cascade to .xkeen-diff-host so var(--xk-cm-keyword) etc.
+    # resolve to the shared dark-Monaco-like palette and selection stays visible.
+    assert "--xk-cm-keyword: #569cd6;" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-host .cm-selectionBackground" in styles
 
     assert "reason: 'diff.apply.side'" in routing
     assert "applyTextToSide: (_side, newText) => {" in routing
@@ -114,4 +118,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260428-diff12" in editor_shared
+    assert "?v=20260428-diff13" in editor_shared
