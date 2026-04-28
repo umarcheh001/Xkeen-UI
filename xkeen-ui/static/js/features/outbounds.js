@@ -4043,7 +4043,10 @@ let outboundsModuleApi = null;
       const s = sub && typeof sub === 'object' ? sub : {};
       const currentId = String(_subscriptionEditId || '');
       const subId = String(s.id || '');
-      const isCurrent = !!currentId && currentId === subId;
+      // Match by id when both are non-empty. Also treat the preview/draft case
+      // (both ids empty + an active preview) as "current" so the form's live
+      // filters and the hidden excluded-keys input drive what's rendered.
+      const isCurrent = currentId === subId && (currentId !== '' || !!_subscriptionPreview);
       return {
         nameFilter: isCurrent ? String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim() : String(s.name_filter || '').trim(),
         typeFilter: isCurrent ? String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim() : String(s.type_filter || '').trim(),
