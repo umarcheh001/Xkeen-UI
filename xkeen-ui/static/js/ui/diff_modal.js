@@ -55,6 +55,7 @@
   let _resolveOpen = null;
   let _sourceOptions = [];
   let _draftSideState = { left: false, right: false };
+  let _dirtySinceOpen = false;
 
   // 'monaco' | 'cm6' — chosen at open() time per the active editor engine.
   let _backendKind = null;
@@ -981,8 +982,14 @@
       'Перенести текущий хунк из правой версии в левую');
     _setBtnState(_applyToRightBtnEl, _applyDisabledReason('right'),
       'Перенести текущий хунк из левой версии в правую');
-    _setBtnState(_saveBtnEl, _saveDisabledReason(),
-      'Сохранить активный буфер в файл (Ctrl+S)');
+    const saveActive = _saveDisabledReason() === '';
+    const saveTip = (_dirtySinceOpen && saveActive)
+      ? 'Сохранить · есть несохранённые изменения (Ctrl+S)'
+      : 'Сохранить активный буфер в файл (Ctrl+S)';
+    _setBtnState(_saveBtnEl, _saveDisabledReason(), saveTip);
+    if (_saveBtnEl) {
+      try { _saveBtnEl.classList.toggle('is-dirty', !!(_dirtySinceOpen && saveActive)); } catch (e) {}
+    }
   }
 
   function _reverseMonacoHunk(change) {
@@ -1165,6 +1172,7 @@
 
     if (!writesLiveBuffer) {
       _setSideTextState(targetSide, newText, true);
+      _dirtySinceOpen = true;
       refreshActionButtons();
       setTimeout(updateSummary, 60);
       showFeedback(targetSide === 'left' ? 'Хунк перенесён в левую версию' : 'Хунк перенесён в правую версию', 'success');
@@ -1179,6 +1187,7 @@
     }
 
     _syncBufferSideText(targetSide, newText);
+    _dirtySinceOpen = true;
     refreshActionButtons();
     setTimeout(updateSummary, 60);
     showFeedback(targetSide === 'left' ? 'Хунк перенесён в левую версию' : 'Хунк перенесён в правую версию', 'success');
@@ -1219,6 +1228,8 @@
       return;
     }
     if (result === false) return;
+
+    _dirtySinceOpen = false;
 
     if (scope.saveClosesOwner) {
       close('save');
@@ -1263,6 +1274,7 @@
     o.scope = scopeDef;
     _activeSpec = o;
     _draftSideState = { left: false, right: false };
+    _dirtySinceOpen = false;
 
     if (_titleEl) _titleEl.textContent = asString(o.title) || 'Сравнить версии';
 
@@ -1364,11 +1376,35 @@
     });
   }
 
-  function close(reason) {
+  async function _confirmDiscardDraft() {
+    const ui = (window.XKeen && XKeen.ui && isFn(XKeen.ui.confirm)) ? XKeen.ui.confirm : null;
+    const message = 'В сравнении есть перенесённые блоки, которые ещё не записаны на диск.\n' +
+      'Закрыть без сохранения?';
+    if (!ui) {
+      try { return !!window.confirm(message); } catch (e) { return true; }
+    }
+    try {
+      return !!(await ui({
+        title: 'Несохранённые изменения',
+        message: message,
+        okText: 'Закрыть без сохранения',
+        cancelText: 'Отменить',
+        danger: true,
+        focus: 'cancel',
+      }));
+    } catch (e) { return true; }
+  }
+
+  async function close(reason) {
     if (!_modalEl) return;
+    const r = String(reason || 'close');
+    if (r !== 'save' && _hasAnyDraft()) {
+      const ok = await _confirmDiscardDraft();
+      if (!ok) return;
+    }
     const api = getModalApi();
     try {
-      if (api && isFn(api.close)) api.close(_modalEl, { source: 'diff_modal:' + (reason || 'close') });
+      if (api && isFn(api.close)) api.close(_modalEl, { source: 'diff_modal:' + r });
       else _modalEl.classList.add('hidden');
     } catch (e) { _modalEl.classList.add('hidden'); }
     disposeDiff();
@@ -1376,10 +1412,11 @@
     _activeSpec = null;
     _sourceOptions = [];
     _draftSideState = { left: false, right: false };
-    const r = _resolveOpen;
+    _dirtySinceOpen = false;
+    const resolver = _resolveOpen;
     _resolveOpen = null;
-    if (isFn(r)) {
-      try { r({ reason: asString(reason) || 'close' }); } catch (e) {}
+    if (isFn(resolver)) {
+      try { resolver({ reason: r }); } catch (e) {}
     }
   }
 

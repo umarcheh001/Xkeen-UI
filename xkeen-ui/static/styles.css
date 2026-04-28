@@ -28583,6 +28583,13 @@ html[data-theme="light"] .xk-routing-monaco-menu-sep {
   cursor: not-allowed;
 }
 
+.xkeen-diff-modal .xkeen-diff-save-btn.is-dirty::before {
+  content: '● ';
+  color: var(--accent, #f59e0b);
+  font-size: 0.85em;
+  margin-right: 2px;
+}
+
 .xkeen-diff-modal .xkeen-diff-close-x {
   font-size: 18px;
   line-height: 1;

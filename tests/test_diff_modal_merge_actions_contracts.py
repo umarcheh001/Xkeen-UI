@@ -41,11 +41,22 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "Нет изменений для сохранения" in diff_modal
     assert "btn.classList.toggle('is-disabled', disabled);" in diff_modal
 
+    # Dirty-state contract: Save button surfaces a visual indicator after Apply
+    # and the modal asks for confirmation before discarding a non-buffer draft.
+    assert "let _dirtySinceOpen = false;" in diff_modal
+    assert "_dirtySinceOpen = true;" in diff_modal
+    assert "_dirtySinceOpen = false;" in diff_modal
+    assert "_saveBtnEl.classList.toggle('is-dirty'" in diff_modal
+    assert "async function _confirmDiscardDraft()" in diff_modal
+    assert "Несохранённые изменения" in diff_modal
+    assert "if (r !== 'save' && _hasAnyDraft()) {" in diff_modal
+
     assert ".xkeen-diff-apply-group {" in styles
     assert ".xkeen-diff-foot-actions {" in styles
     assert ".xkeen-diff-save-btn {" in styles
     assert ".xkeen-diff-apply-btn.is-disabled" in styles
     assert ".xkeen-diff-save-btn.is-disabled" in styles
+    assert ".xkeen-diff-save-btn.is-dirty::before" in styles
 
     assert "reason: 'diff.apply.side'" in routing
     assert "applyTextToSide: (_side, newText) => {" in routing
@@ -58,4 +69,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260428-diff3" in editor_shared
+    assert "?v=20260428-diff4" in editor_shared
