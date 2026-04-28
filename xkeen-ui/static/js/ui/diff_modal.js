@@ -68,6 +68,8 @@
   let _lastAppliedTransferCount = 0;
   let _activeMonacoHunk = null;
   let _activeMonacoDecorationIds = { left: [], right: [] };
+  let _activeCm6Chunk = null;
+  let _cm6ActiveHunkSyncTimer = 0;
   let _ignoreTrimWhitespace = false;
 
   // 'monaco' | 'cm6' — chosen at open() time per the active editor engine.
@@ -680,6 +682,7 @@
     const dir = (Number(direction) || 0) >= 0 ? 1 : -1;
     if (_backendKind === 'cm6') {
       cm6Navigate(dir);
+      _scheduleCm6ActiveHunkHighlight('right');
       return;
     }
     if (!_diffEditor) return;
@@ -740,12 +743,15 @@
       if (_backendKind === 'cm6') {
         const stats = cm6Stats();
         if (!stats.count) {
+          _clearActiveCm6HunkHighlight();
           _clearActiveMonacoHunkHighlight();
           _summaryEl.textContent = _formatSummaryText('Различий нет');
           return;
         }
         _clearActiveMonacoHunkHighlight();
         _summaryEl.textContent = _formatSummaryText('Изменений: ' + stats.count + '  ·  +' + stats.added + ' / −' + stats.removed);
+        if (_cm6BackendMode === 'split') _scheduleCm6ActiveHunkHighlight('right');
+        else _clearActiveCm6HunkHighlight();
         return;
       }
       const changes = _diffEditor && isFn(_diffEditor.getLineChanges) ? (_diffEditor.getLineChanges() || []) : [];
@@ -804,6 +810,7 @@
   }
 
   function disposeCM6() {
+    _clearCm6ActiveHunkSyncTimer();
     if (_cm6ScrollUnbinders && _cm6ScrollUnbinders.length) {
       for (let i = 0; i < _cm6ScrollUnbinders.length; i += 1) {
         try { _cm6ScrollUnbinders[i](); } catch (e) {}
@@ -816,6 +823,7 @@
     _cm6View = null;
     _cm6BackendMode = null;
     _cm6RefreshPromise = Promise.resolve();
+    _activeCm6Chunk = null;
   }
 
   function pickBackend() {
@@ -842,6 +850,123 @@
     try { lezerHighlight = await import('@lezer/highlight'); } catch (e) {}
     _cm6Runtime = { merge, state, view, cm, langJson, langYaml, language, lezerHighlight };
     return _cm6Runtime;
+  }
+
+  function _clearCm6ActiveHunkSyncTimer() {
+    if (!_cm6ActiveHunkSyncTimer) return;
+    try { clearTimeout(_cm6ActiveHunkSyncTimer); } catch (e) {}
+    _cm6ActiveHunkSyncTimer = 0;
+  }
+
+  function _sameCm6Chunk(a, b) {
+    if (!a || !b) return false;
+    return Number(a.fromA || 0) === Number(b.fromA || 0)
+      && Number(a.toA || 0) === Number(b.toA || 0)
+      && Number(a.fromB || 0) === Number(b.fromB || 0)
+      && Number(a.toB || 0) === Number(b.toB || 0);
+  }
+
+  function _cm6ClampDocPos(doc, pos) {
+    const max = doc && typeof doc.length === 'number' ? Math.max(0, Number(doc.length || 0)) : 0;
+    return Math.max(0, Math.min(max, Number(pos || 0)));
+  }
+
+  function _cm6ChunkLineNumbers(doc, chunk, side) {
+    if (!doc || !chunk) return [];
+    const isLeft = side === 'left';
+    const from = _cm6ClampDocPos(doc, isLeft ? Number(chunk.fromA || 0) : Number(chunk.fromB || 0));
+    const to = _cm6ClampDocPos(doc, isLeft ? Number(chunk.toA || 0) : Number(chunk.toB || 0));
+    let startLine = 1;
+    let endLine = 1;
+    try {
+      if (to > from) {
+        startLine = doc.lineAt(from).number;
+        endLine = doc.lineAt(Math.max(from, to - 1)).number;
+      } else {
+        const anchorLine = doc.lineAt(from).number;
+        startLine = anchorLine;
+        endLine = anchorLine;
+      }
+    } catch (e) {
+      startLine = 1;
+      endLine = 1;
+    }
+    if (endLine < startLine) endLine = startLine;
+    const out = [];
+    for (let lineNo = startLine; lineNo <= endLine; lineNo += 1) out.push(lineNo);
+    return out;
+  }
+
+  function _ensureCm6ActiveHunkSupport(rt) {
+    if (!rt) return null;
+    if (rt.activeHunkSupport) return rt.activeHunkSupport;
+    const state = rt.state || null;
+    const view = rt.view || null;
+    const StateEffect = state && state.StateEffect ? state.StateEffect : null;
+    const StateField = state && state.StateField ? state.StateField : null;
+    const RangeSetBuilder = state && state.RangeSetBuilder ? state.RangeSetBuilder : null;
+    const Decoration = view && view.Decoration ? view.Decoration : null;
+    const EditorView = view && view.EditorView ? view.EditorView : null;
+    if (!StateEffect || !StateField || !RangeSetBuilder || !Decoration || !EditorView || !EditorView.decorations || !isFn(EditorView.decorations.from)) {
+      rt.activeHunkSupport = null;
+      return null;
+    }
+    const setActiveHunk = StateEffect.define();
+    const field = StateField.define({
+      create() { return Decoration.none; },
+      update(deco, tr) {
+        try { deco = deco.map(tr.changes); } catch (e) {}
+        for (let i = 0; i < tr.effects.length; i += 1) {
+          const eff = tr.effects[i];
+          if (eff && isFn(eff.is) && eff.is(setActiveHunk)) return eff.value || Decoration.none;
+        }
+        return deco;
+      },
+      provide: (f) => EditorView.decorations.from(f),
+    });
+    function buildForState(side, chunk, cmState) {
+      if (!cmState || !cmState.doc || !chunk) return Decoration.none;
+      const lines = _cm6ChunkLineNumbers(cmState.doc, chunk, side);
+      if (!lines.length) return Decoration.none;
+      const builder = new RangeSetBuilder();
+      for (let i = 0; i < lines.length; i += 1) {
+        let line = null;
+        try { line = cmState.doc.line(lines[i]); } catch (e) { line = null; }
+        if (!line) continue;
+        const classes = [
+          'xkeen-diff-cm6-active-hunk-line',
+          'xkeen-diff-cm6-active-hunk-line-' + side,
+        ];
+        if (i === 0) classes.push('xkeen-diff-cm6-active-hunk-start');
+        if (i === lines.length - 1) classes.push('xkeen-diff-cm6-active-hunk-end');
+        builder.add(line.from, line.from, Decoration.line({ class: classes.join(' ') }));
+      }
+      return builder.finish();
+    }
+    rt.activeHunkSupport = {
+      effect: setActiveHunk,
+      field: field,
+      buildForState: buildForState,
+      empty: Decoration.none,
+    };
+    return rt.activeHunkSupport;
+  }
+
+  function cm6ActiveHunkExtension(rt) {
+    const support = _ensureCm6ActiveHunkSupport(rt);
+    return support ? support.field : null;
+  }
+
+  function cm6SelectionSyncExtension(rt, side) {
+    const EditorView = rt && rt.view && rt.view.EditorView ? rt.view.EditorView : null;
+    if (!EditorView || !EditorView.updateListener || !isFn(EditorView.updateListener.of)) return null;
+    const sideKey = side === 'left' ? 'left' : 'right';
+    return EditorView.updateListener.of((update) => {
+      if (!update) return;
+      const focusChanged = Object.prototype.hasOwnProperty.call(update, 'focusChanged') ? !!update.focusChanged : false;
+      if (!update.selectionSet && !focusChanged) return;
+      _scheduleCm6ActiveHunkHighlight(sideKey);
+    });
   }
 
   function cm6HighlightExtension(rt) {
@@ -884,9 +1009,13 @@
     return null;
   }
 
-  function cm6BaseExtensions(rt, language, readOnly) {
+  function cm6BaseExtensions(rt, language, readOnly, side) {
     const ext = [];
     if (rt.cm && rt.cm.basicSetup) ext.push(rt.cm.basicSetup);
+    const activeHunkExt = cm6ActiveHunkExtension(rt);
+    if (activeHunkExt) ext.push(activeHunkExt);
+    const selectionSyncExt = cm6SelectionSyncExtension(rt, side);
+    if (selectionSyncExt) ext.push(selectionSyncExt);
     // Diff modal should prefer wrapped lines over horizontal scrolling so
     // long YAML/JSON comments and URLs stay readable in both panes.
     try {
@@ -931,7 +1060,7 @@
     while (host && host.firstChild) host.removeChild(host.firstChild);
 
     if (mode === 'inline') {
-      const baseExt = cm6BaseExtensions(rt, language, readOnly);
+      const baseExt = cm6BaseExtensions(rt, language, readOnly, 'right');
       const unifiedOpts = {
         original: leftText,
         mergeControls: false,
@@ -944,9 +1073,10 @@
       });
       _cm6View = new rt.view.EditorView({ state: state, parent: host });
       _cm6BackendMode = 'inline';
+      _clearActiveCm6HunkHighlight();
     } else {
-      const baseExtA = cm6BaseExtensions(rt, language, true);
-      const baseExtB = cm6BaseExtensions(rt, language, readOnly);
+      const baseExtA = cm6BaseExtensions(rt, language, true, 'left');
+      const baseExtB = cm6BaseExtensions(rt, language, readOnly, 'right');
       const mergeOpts = {
         a: { doc: leftText, extensions: baseExtA },
         b: { doc: rightText, extensions: baseExtB },
@@ -959,6 +1089,7 @@
       _cm6MergeView = new rt.merge.MergeView(mergeOpts);
       _cm6BackendMode = 'split';
       _bindCm6ScrollSync();
+      _scheduleCm6ActiveHunkHighlight('right');
     }
     _backendKind = 'cm6';
   }
@@ -1096,6 +1227,85 @@
       if (dir > 0 && isFn(rt.merge.goToNextChunk)) rt.merge.goToNextChunk(view);
       else if (dir < 0 && isFn(rt.merge.goToPreviousChunk)) rt.merge.goToPreviousChunk(view);
     } catch (e) {}
+  }
+
+  function _dispatchCm6ActiveHunkDecorations(view, effect, decorations) {
+    if (!view || !effect || !isFn(view.dispatch)) return;
+    try {
+      view.dispatch({ effects: effect.of(decorations) });
+    } catch (e) {}
+  }
+
+  function _clearActiveCm6HunkHighlight() {
+    _clearCm6ActiveHunkSyncTimer();
+    const rt = _cm6Runtime;
+    const support = _ensureCm6ActiveHunkSupport(rt);
+    if (support && _cm6MergeView) {
+      _dispatchCm6ActiveHunkDecorations(_cm6MergeView.a, support.effect, support.empty);
+      _dispatchCm6ActiveHunkDecorations(_cm6MergeView.b, support.effect, support.empty);
+    }
+    _activeCm6Chunk = null;
+  }
+
+  function _applyActiveCm6HunkHighlight(chunk) {
+    if (_backendKind !== 'cm6' || _cm6BackendMode !== 'split' || !_cm6MergeView || !_cm6MergeView.a || !_cm6MergeView.b) {
+      _clearActiveCm6HunkHighlight();
+      return null;
+    }
+    const rt = _cm6Runtime;
+    const support = _ensureCm6ActiveHunkSupport(rt);
+    if (!support) {
+      _activeCm6Chunk = chunk || null;
+      return chunk || null;
+    }
+    if (!chunk) {
+      _clearActiveCm6HunkHighlight();
+      return null;
+    }
+    if (_activeCm6Chunk && _sameCm6Chunk(_activeCm6Chunk, chunk)) return chunk;
+    const leftDecorations = support.buildForState('left', chunk, _cm6MergeView.a.state);
+    const rightDecorations = support.buildForState('right', chunk, _cm6MergeView.b.state);
+    _dispatchCm6ActiveHunkDecorations(_cm6MergeView.a, support.effect, leftDecorations || support.empty);
+    _dispatchCm6ActiveHunkDecorations(_cm6MergeView.b, support.effect, rightDecorations || support.empty);
+    _activeCm6Chunk = chunk || null;
+    return chunk;
+  }
+
+  function _syncActiveCm6HunkHighlight(preferredSide) {
+    if (_backendKind !== 'cm6' || _cm6BackendMode !== 'split' || !_cm6Runtime || !_cm6Runtime.merge || !isFn(_cm6Runtime.merge.getChunks)) {
+      _clearActiveCm6HunkHighlight();
+      return null;
+    }
+    const view = cm6PrimaryView();
+    if (!view) {
+      _clearActiveCm6HunkHighlight();
+      return null;
+    }
+    let chunks = [];
+    try {
+      const got = _cm6Runtime.merge.getChunks(view.state);
+      if (got && Array.isArray(got.chunks)) chunks = got.chunks;
+    } catch (e) {}
+    if (!chunks.length) {
+      _clearActiveCm6HunkHighlight();
+      return null;
+    }
+    const sideKey = preferredSide === 'left' ? 'left' : 'right';
+    const pos = _getCm6CursorPos(sideKey);
+    const chunk = _pickCm6Chunk(chunks, pos, sideKey);
+    if (!chunk) {
+      _clearActiveCm6HunkHighlight();
+      return null;
+    }
+    return _applyActiveCm6HunkHighlight(chunk);
+  }
+
+  function _scheduleCm6ActiveHunkHighlight(preferredSide) {
+    _clearCm6ActiveHunkSyncTimer();
+    _cm6ActiveHunkSyncTimer = setTimeout(() => {
+      _cm6ActiveHunkSyncTimer = 0;
+      try { _syncActiveCm6HunkHighlight(preferredSide); } catch (e) {}
+    }, 0);
   }
 
   function _cm6CountLines(doc, from, to) {

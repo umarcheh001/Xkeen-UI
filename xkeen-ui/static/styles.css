@@ -29018,6 +29018,38 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
   color: inherit;
 }
 
+.xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line {
+  position: relative;
+  background: rgba(147, 197, 253, 0.16) !important;
+  box-shadow:
+    inset 4px 0 0 rgba(191, 219, 254, 0.92),
+    inset 0 0 0 1px rgba(191, 219, 254, 0.20);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line-left {
+  background: rgba(245, 158, 11, 0.22) !important;
+  box-shadow:
+    inset 4px 0 0 rgba(251, 191, 36, 0.96),
+    inset 0 0 0 1px rgba(251, 191, 36, 0.24);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line-right {
+  background: rgba(59, 130, 246, 0.18) !important;
+  box-shadow:
+    inset 4px 0 0 rgba(96, 165, 250, 0.98),
+    inset 0 0 0 1px rgba(96, 165, 250, 0.22);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-start {
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-end {
+  border-bottom-left-radius: 3px;
+  border-bottom-right-radius: 3px;
+}
+
 html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-changedLine,
 html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-deletedChunk {
   background: rgba(229, 83, 83, 0.18);
@@ -29034,6 +29066,27 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-insertedLine {
 
 html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-changedText {
   background: rgba(46, 160, 67, 0.36);
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line {
+  background: rgba(37, 99, 235, 0.10) !important;
+  box-shadow:
+    inset 4px 0 0 rgba(37, 99, 235, 0.55),
+    inset 0 0 0 1px rgba(37, 99, 235, 0.14);
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line-left {
+  background: rgba(245, 158, 11, 0.16) !important;
+  box-shadow:
+    inset 4px 0 0 rgba(217, 119, 6, 0.56),
+    inset 0 0 0 1px rgba(217, 119, 6, 0.14);
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line-right {
+  background: rgba(59, 130, 246, 0.12) !important;
+  box-shadow:
+    inset 4px 0 0 rgba(37, 99, 235, 0.58),
+    inset 0 0 0 1px rgba(37, 99, 235, 0.14);
 }
 
 /* "$ unchanged lines" fold marker — @codemirror/merge default styles use a

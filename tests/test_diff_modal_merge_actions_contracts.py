@@ -31,6 +31,8 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "let _dirtySinceOpen = false;" in diff_modal
     assert "let _baselineLeft = '';" in diff_modal
     assert "let _baselineRight = '';" in diff_modal
+    assert "let _activeCm6Chunk = null;" in diff_modal
+    assert "let _cm6ActiveHunkSyncTimer = 0;" in diff_modal
     assert "function _getDraftSaveSide()" in diff_modal
     assert "function _captureBaselineState()" in diff_modal
     assert "function _resetBaselineState()" in diff_modal
@@ -47,6 +49,12 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function _formatSummaryText(base)" in diff_modal
     assert "function _readCm6SideText(side)" in diff_modal
     assert "function _queueCm6SplitRefresh(next)" in diff_modal
+    assert "function _ensureCm6ActiveHunkSupport(rt)" in diff_modal
+    assert "function cm6ActiveHunkExtension(rt)" in diff_modal
+    assert "function cm6SelectionSyncExtension(rt, side)" in diff_modal
+    assert "function _applyActiveCm6HunkHighlight(chunk)" in diff_modal
+    assert "function _syncActiveCm6HunkHighlight(preferredSide)" in diff_modal
+    assert "function _scheduleCm6ActiveHunkHighlight(preferredSide)" in diff_modal
     assert "function _getMonacoInnerEditor(side)" in diff_modal
     assert "function _applyActiveMonacoHunkHighlight(change)" in diff_modal
     assert "function _syncActiveMonacoHunkHighlight(preferredSide)" in diff_modal
@@ -112,6 +120,11 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-lineWrapping {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-lineWrapping .cm-line {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-gutters {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line-left {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-line-right {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-start {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-host .cm-line.xkeen-diff-cm6-active-hunk-end {" in styles
     assert "background: var(--xk-cm-bg, #020617);" in styles
     assert "background-color: var(--xk-cm-bg, #020617);" in styles
     assert "background-color: var(--xk-cm-gutter-bg, var(--xk-cm-bg, #020617));" in styles
@@ -129,4 +142,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260429-diff17" in editor_shared
+    assert "?v=20260429-diff18" in editor_shared

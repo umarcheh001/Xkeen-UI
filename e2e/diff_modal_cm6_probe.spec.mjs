@@ -191,6 +191,22 @@ async function collectCm6State(page) {
   });
 }
 
+async function collectCm6ActiveHunk(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector('#xkeen-diff-modal');
+    const textboxes = Array.from(root?.querySelectorAll('.cm-mergeView [role="textbox"]') || []);
+    const leftBox = textboxes[0] || null;
+    const rightBox = textboxes[1] || null;
+    const collect = (box) => Array.from(box?.querySelectorAll('.cm-line.xkeen-diff-cm6-active-hunk-line') || [])
+      .map((el) => String(el.textContent || '').trim())
+      .filter(Boolean);
+    return {
+      leftLines: collect(leftBox),
+      rightLines: collect(rightBox),
+    };
+  });
+}
+
 async function collectCm6WrapMetrics(page) {
   return page.evaluate(() => {
     const boxes = Array.from(document.querySelectorAll('#xkeen-diff-modal .cm-mergeView [role="textbox"]'));
@@ -275,6 +291,24 @@ test('CodeMirror diff modal keeps panes stable across apply-right, apply-all, an
   const afterRevert = await collectCm6State(page);
   expectPanesVisible(afterRevert);
   expect(afterRevert.summary).toContain('Изменений: 2');
+});
+
+test('CodeMirror diff modal clearly highlights the hunk clicked with the mouse', async ({ page }) => {
+  await page.goto('/');
+  await waitForRoutingEditor(page);
+  await ensureCodeMirrorRouting(page);
+  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await installProbeScope(page);
+  await openProbeDiff(page);
+
+  const rightPane = page.locator('#xkeen-diff-modal .cm-mergeView [role="textbox"]').nth(1);
+  await rightPane.locator('.cm-line').filter({ hasText: '"bbb",' }).first().click();
+  await page.waitForTimeout(220);
+
+  const active = await collectCm6ActiveHunk(page);
+  expect(active.leftLines.length).toBeGreaterThan(0);
+  expect(active.rightLines.length).toBeGreaterThan(0);
+  expect(active.rightLines.join('\n')).toContain('"bbb",');
 });
 
 test('CodeMirror diff modal wraps long lines without horizontal pane overflow', async ({ page }) => {
