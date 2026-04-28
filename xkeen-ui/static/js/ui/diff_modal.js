@@ -13,6 +13,7 @@
   //     left:  { text, title?, descriptor?, error? },
   //     right: { text, title?, descriptor?, error? },
   //     mode:  'split' | 'inline',
+  //     ignoreTrimWhitespace: false,
   //     readOnly: true,
   //     scope: <scopeDef>     // optional, used for snapshot dropdown (Phase 3)
   //   })
@@ -38,6 +39,8 @@
   let _errorEl = null;
   let _modeBtnSplitEl = null;
   let _modeBtnInlineEl = null;
+  let _ignoreWhitespaceToggleEl = null;
+  let _ignoreWhitespaceInputEl = null;
   let _navPrevBtnEl = null;
   let _navNextBtnEl = null;
   let _applyToLeftBtnEl = null;
@@ -63,6 +66,7 @@
   let _baselineRight = '';
   let _activeMonacoHunk = null;
   let _activeMonacoDecorationIds = { left: [], right: [] };
+  let _ignoreTrimWhitespace = false;
 
   // 'monaco' | 'cm6' — chosen at open() time per the active editor engine.
   let _backendKind = null;
@@ -137,6 +141,20 @@
     modeGroup.appendChild(_modeBtnSplitEl);
     modeGroup.appendChild(_modeBtnInlineEl);
 
+    const ignoreWhitespaceToggle = document.createElement('label');
+    ignoreWhitespaceToggle.className = 'xkeen-diff-ignore-toggle';
+    ignoreWhitespaceToggle.setAttribute('data-tooltip', 'Игнорировать различия только в пробельных символах');
+    const ignoreWhitespaceInput = document.createElement('input');
+    ignoreWhitespaceInput.type = 'checkbox';
+    ignoreWhitespaceInput.setAttribute('aria-label', 'Игнорировать пробелы');
+    ignoreWhitespaceInput.addEventListener('change', () => setIgnoreTrimWhitespace(!!ignoreWhitespaceInput.checked));
+    const ignoreWhitespaceText = document.createElement('span');
+    ignoreWhitespaceText.textContent = 'Игнорировать пробелы';
+    ignoreWhitespaceToggle.appendChild(ignoreWhitespaceInput);
+    ignoreWhitespaceToggle.appendChild(ignoreWhitespaceText);
+    _ignoreWhitespaceToggleEl = ignoreWhitespaceToggle;
+    _ignoreWhitespaceInputEl = ignoreWhitespaceInput;
+
     const navGroup = document.createElement('div');
     navGroup.className = 'xkeen-diff-nav';
     _navPrevBtnEl = makeBtn('▲', 'btn-secondary btn-icon', () => navigateDiff(-1), 'К предыдущему изменению (Shift+F3)');
@@ -166,6 +184,7 @@
     _xBtnEl = makeBtn('×', 'btn-icon xkeen-diff-close-x', () => close('x'), 'Закрыть окно сравнения (Esc)');
 
     headRight.appendChild(modeGroup);
+    headRight.appendChild(ignoreWhitespaceToggle);
     headRight.appendChild(navGroup);
     headRight.appendChild(applyGroup);
     headRight.appendChild(_xBtnEl);
@@ -463,6 +482,35 @@
     if (_backendKind === 'monaco') setTimeout(() => _syncActiveMonacoHunkHighlight('right'), 0);
   }
 
+  function _supportsIgnoreTrimWhitespace() {
+    return _backendKind === 'monaco';
+  }
+
+  function _syncIgnoreWhitespaceToggle() {
+    if (!_ignoreWhitespaceToggleEl || !_ignoreWhitespaceInputEl) return;
+    const supported = _supportsIgnoreTrimWhitespace();
+    try {
+      _ignoreWhitespaceInputEl.checked = !!_ignoreTrimWhitespace;
+      _ignoreWhitespaceInputEl.disabled = !supported;
+      _ignoreWhitespaceToggleEl.classList.toggle('is-disabled', !supported);
+      _ignoreWhitespaceToggleEl.setAttribute('data-tooltip', supported
+        ? 'Игнорировать различия только в пробельных символах'
+        : 'Игнорирование пробелов сейчас доступно только для Monaco diff');
+    } catch (e) {}
+  }
+
+  function setIgnoreTrimWhitespace(flag) {
+    const next = !!flag;
+    _ignoreTrimWhitespace = next;
+    if (_activeSpec) _activeSpec.ignoreTrimWhitespace = next;
+    _syncIgnoreWhitespaceToggle();
+    if (_backendKind !== 'monaco' || !_diffEditor || !isFn(_diffEditor.updateOptions)) return;
+    try {
+      _diffEditor.updateOptions({ ignoreTrimWhitespace: next });
+    } catch (e) {}
+    setTimeout(updateSummary, 80);
+  }
+
   function _getMonacoInnerEditor(side) {
     if (!_diffEditor) return null;
     try {
@@ -706,6 +754,7 @@
     _activeMonacoHunk = null;
     disposeCM6();
     _backendKind = null;
+    _syncIgnoreWhitespaceToggle();
   }
 
   function disposeCM6() {
@@ -1535,7 +1584,9 @@
     _activeSpec = o;
     _draftSideState = { left: false, right: false };
     _dirtySinceOpen = false;
+    _ignoreTrimWhitespace = !!o.ignoreTrimWhitespace;
     _captureBaselineState();
+    _syncIgnoreWhitespaceToggle();
 
     if (_titleEl) _titleEl.textContent = asString(o.title) || 'Сравнить версии';
 
@@ -1601,7 +1652,7 @@
           scrollBeyondLastLine: false,
           minimap: { enabled: false },
           renderOverviewRuler: true,
-          ignoreTrimWhitespace: false,
+          ignoreTrimWhitespace: !!_ignoreTrimWhitespace,
           diffWordWrap: 'on',
         });
 
@@ -1638,6 +1689,7 @@
           diffApi.logDiff(scopeDef.scope || '', lk, rk);
         }
       } catch (e) {}
+      _syncIgnoreWhitespaceToggle();
       refreshActionButtons();
     } catch (err) {
       showError(String(err && err.message || err));

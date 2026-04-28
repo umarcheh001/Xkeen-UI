@@ -28547,6 +28547,37 @@ html[data-theme="light"] .xk-routing-monaco-menu-sep {
   border: 1px solid var(--modal-border, #475569d1);
 }
 
+.xkeen-diff-modal .xkeen-diff-ignore-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  min-height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--modal-border, #475569d1);
+  background: rgba(15, 23, 42, 0.18);
+  color: var(--muted, #cbd5e1);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+}
+
+.xkeen-diff-modal .xkeen-diff-ignore-toggle input {
+  margin: 0;
+  accent-color: var(--accent, #2563eb);
+  cursor: pointer;
+}
+
+.xkeen-diff-modal .xkeen-diff-ignore-toggle.is-disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.xkeen-diff-modal .xkeen-diff-ignore-toggle.is-disabled input {
+  cursor: not-allowed;
+}
+
 .xkeen-diff-modal .xkeen-diff-mode-btn {
   padding: 4px 10px;
   font-size: calc(11.5px * var(--xk-font-scale, 1));
@@ -28622,6 +28653,11 @@ html[data-theme="light"] .xk-routing-monaco-menu-sep {
 html[data-theme="light"] .xkeen-diff-modal .monaco-editor .xkeen-diff-active-hunk-line {
   background: rgba(37, 99, 235, 0.10);
   box-shadow: inset 3px 0 0 rgba(29, 78, 216, 0.35);
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-ignore-toggle {
+  background: rgba(255, 255, 255, 0.88);
+  color: #334155;
 }
 
 html[data-theme="light"] .xkeen-diff-modal .monaco-editor .xkeen-diff-active-hunk-line-left {

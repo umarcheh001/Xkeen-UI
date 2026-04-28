@@ -20,6 +20,8 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "_applyAllToRightBtnEl = makeBtn(" in diff_modal
     assert "_revertBtnEl = makeBtn(" in diff_modal
     assert "_saveBtnEl = makeBtn(" in diff_modal
+    assert "_ignoreWhitespaceToggleEl" in diff_modal
+    assert "_ignoreWhitespaceInputEl" in diff_modal
     assert "function refreshActionButtons()" in diff_modal
     assert "async function applyAllChangesToSide(side)" in diff_modal
     assert "async function applyHunkToSide(side)" in diff_modal
@@ -35,6 +37,9 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function _scheduleNextDiffNavigation()" in diff_modal
     assert "function _canRevertFromDiff()" in diff_modal
     assert "function _revertDisabledReason()" in diff_modal
+    assert "function _supportsIgnoreTrimWhitespace()" in diff_modal
+    assert "function _syncIgnoreWhitespaceToggle()" in diff_modal
+    assert "function setIgnoreTrimWhitespace(flag)" in diff_modal
     assert "function _getMonacoInnerEditor(side)" in diff_modal
     assert "function _applyActiveMonacoHunkHighlight(change)" in diff_modal
     assert "function _syncActiveMonacoHunkHighlight(preferredSide)" in diff_modal
@@ -45,10 +50,12 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "() => applyAllChangesToSide('left')" in diff_modal
     assert "() => applyAllChangesToSide('right')" in diff_modal
     assert "() => revertComparedChanges()" in diff_modal
+    assert "() => setIgnoreTrimWhitespace(!!ignoreWhitespaceInput.checked)" in diff_modal
     assert "_scheduleNextDiffNavigation();" in diff_modal
     assert "_captureBaselineState();" in diff_modal
     assert "_resetBaselineState();" in diff_modal
     assert "_syncActiveMonacoHunkHighlight('right')" in diff_modal
+    assert "ignoreTrimWhitespace: !!_ignoreTrimWhitespace" in diff_modal
     assert "scope.saveClosesOwner" in diff_modal
     assert "String(ev.key || '').toLowerCase() === 's'" in diff_modal
 
@@ -68,6 +75,9 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert ".xkeen-diff-foot-actions {" in styles
     assert ".xkeen-diff-save-btn {" in styles
     assert ".xkeen-diff-revert-btn {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-ignore-toggle {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-ignore-toggle input {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-ignore-toggle.is-disabled {" in styles
     assert ".xkeen-diff-modal .monaco-editor .xkeen-diff-active-hunk-line {" in styles
     assert ".xkeen-diff-modal .monaco-editor .xkeen-diff-active-hunk-line-left {" in styles
     assert ".xkeen-diff-modal .monaco-editor .xkeen-diff-active-hunk-line-right {" in styles
@@ -87,4 +97,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260428-diff7" in editor_shared
+    assert "?v=20260428-diff8" in editor_shared
