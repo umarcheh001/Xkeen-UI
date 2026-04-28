@@ -28818,12 +28818,19 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
 }
 
 /* CodeMirror 6 @codemirror/merge backend — fits the merge view inside our
-   .xkeen-diff-host card and matches the dark Monaco palette. */
+   .xkeen-diff-host card and matches the dark Monaco palette.
+   Scrolling: every level on the chain to .cm-scroller MUST keep min-height:0
+   and overflow:hidden so that expanding a collapsed-fold doesn't push the
+   document past the modal's viewport. The .cm-scroller itself must take
+   overflow:auto + a bounded height for the internal scrollbar to appear,
+   matching the fix already applied to .xkeen-cm6-host above. */
 .xkeen-diff-modal .xkeen-diff-host .cm-mergeView,
 .xkeen-diff-modal .xkeen-diff-host .cm-mergeViewEditors {
   height: 100%;
   width: 100%;
   display: flex;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .xkeen-diff-modal .xkeen-diff-host .cm-mergeView {
@@ -28834,17 +28841,26 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
 .xkeen-diff-modal .xkeen-diff-host .cm-mergeViewEditor {
   flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
 .xkeen-diff-modal .xkeen-diff-host .cm-editor {
   height: 100%;
+  min-height: 0;
+  max-height: 100%;
   font-family: 'Consolas', 'Menlo', 'Liberation Mono', monospace;
   font-size: calc(13px * var(--xk-font-scale, 1));
 }
 
 .xkeen-diff-modal .xkeen-diff-host .cm-scroller {
   font-family: inherit;
+  overflow: auto;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overscroll-behavior: contain;
 }
 
 .xkeen-diff-modal .xkeen-diff-host .cm-changedLine {

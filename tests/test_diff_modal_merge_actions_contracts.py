@@ -106,4 +106,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260428-diff10" in editor_shared
+    assert "?v=20260428-diff11" in editor_shared
