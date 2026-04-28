@@ -3215,7 +3215,8 @@ html[data-theme="light"] .btn-link:hover {
 }
 
 .commands-status-row .core-ver,
-.commands-status-row .core-latest {
+.commands-status-row .core-latest,
+.commands-status-row .core-prerelease {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: calc(12px * var(--xk-font-scale));
 }
@@ -3234,6 +3235,44 @@ html[data-theme="light"] .btn-link:hover {
 .commands-status-row .core-latest:hover {
   text-decoration: underline;
   opacity: 1;
+}
+
+.commands-status-row .core-prerelease {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 146, 60, 0.28);
+  background: rgba(251, 146, 60, 0.12);
+  color: #fdba74;
+  text-decoration: none;
+  opacity: 0.95;
+}
+
+.commands-status-row .core-prerelease:hover {
+  border-color: rgba(251, 191, 36, 0.34);
+  background: rgba(251, 191, 36, 0.14);
+  color: #fcd34d;
+}
+
+.commands-status-row .core-prerelease-ver {
+  font-weight: 600;
+}
+
+.commands-status-row .btn-prerelease-action {
+  border-color: rgba(251, 146, 60, 0.34);
+  color: #fdba74;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.commands-status-row .btn-prerelease-action:hover {
+  border-color: rgba(251, 191, 36, 0.42);
+  color: #fcd34d;
+}
+
+.commands-status-row .btn-prerelease-action.loading::after {
+  content: ' ...';
 }
 
 .commands-status-row .core-pill.has-update {
@@ -3643,6 +3682,15 @@ html[data-theme="light"] .commands-status-row .core-pill {
 html[data-theme="light"] .commands-status-row .core-name { color: #1f2a44; }
 html[data-theme="light"] .commands-status-row .core-ver { color: #0f172a; }
 html[data-theme="light"] .commands-status-row .core-latest { color: #2563eb; }
+html[data-theme="light"] .commands-status-row .core-prerelease {
+  border-color: rgba(194, 65, 12, 0.18);
+  background: rgba(251, 146, 60, 0.12);
+  color: #c2410c;
+}
+html[data-theme="light"] .commands-status-row .btn-prerelease-action {
+  border-color: rgba(194, 65, 12, 0.24);
+  color: #c2410c;
+}
 html[data-theme="light"] .commands-status-row .cores-checked-at { color: #475569; }
 
 html[data-theme="light"] #view-commands #commands-body .command-group {
@@ -28789,4 +28837,3 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:f
     max-width: none;
   }
 }
-

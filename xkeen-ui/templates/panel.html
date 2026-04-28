@@ -60,7 +60,7 @@
   <script src="{{ url_for('static', filename='js/ui/sections.js', v='20260101c') }}"></script>
   <!-- Editor payload is lazy-loaded by js/runtime/lazy_runtime.js + js/ui/editor_engine.js. -->
   {% include '_top_level_host_theme_bootstrap.html' %}
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260411a') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='20260428b') }}">
   <link rel="stylesheet" id="xk-terminal-theme-link" href="{{ url_for('terminal_theme_css', v=terminal_theme_v) }}">
   {# Global Custom CSS (DevTools) — last in order so it can override everything. #}
 <!-- XTerm.js для веб-терминала XKeen (локально из static/xterm) -->
@@ -1223,6 +1223,8 @@
         <span class="core-name">Xray</span>
         <span class="core-ver" id="core-xray-installed">—</span>
         <a class="core-latest" id="core-xray-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
+        <a class="core-prerelease" id="core-xray-prerelease" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть pre-release на GitHub">pre <span class="core-prerelease-ver">—</span></a>
+        <button type="button" class="btn-secondary btn-mini btn-prerelease-action" id="core-xray-prerelease-update-btn" data-core="xray" style="display:none;" data-tooltip="Запустить обновление Xray до pre-release через терминал.">Pre</button>
         <button type="button" class="btn-secondary btn-mini" id="core-xray-update-btn" data-core="xray" style="display:none;" data-tooltip="Запустить обновление Xray (xkeen -ux) через терминал.">Обновить</button>
       </div>
       {% endif %}
@@ -1231,6 +1233,8 @@
         <span class="core-name">Mihomo</span>
         <span class="core-ver" id="core-mihomo-installed">—</span>
         <a class="core-latest" id="core-mihomo-latest" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть релиз на GitHub">↑ <span class="core-latest-ver">—</span></a>
+        <a class="core-prerelease" id="core-mihomo-prerelease" href="#" target="_blank" rel="noopener" style="display:none;" title="Открыть pre-release на GitHub">pre <span class="core-prerelease-ver">—</span></a>
+        <button type="button" class="btn-secondary btn-mini btn-prerelease-action" id="core-mihomo-prerelease-update-btn" data-core="mihomo" style="display:none;" data-tooltip="Запустить обновление Mihomo до pre-release через терминал.">Pre</button>
         <button type="button" class="btn-secondary btn-mini" id="core-mihomo-update-btn" data-core="mihomo" style="display:none;" data-tooltip="Запустить обновление Mihomo (xkeen -um) через терминал.">Обновить</button>
       </div>
       {% endif %}

@@ -65,6 +65,78 @@ def _norm_ver(v: Optional[str]) -> str:
     return s
 
 
+def _parse_prerelease_parts(value: str) -> Tuple[Tuple[int, Any], ...]:
+    out: List[Tuple[int, Any]] = []
+    for raw_part in str(value or "").split("."):
+        part = str(raw_part or "").strip()
+        if not part:
+            continue
+        if part.isdigit():
+            out.append((0, int(part)))
+        else:
+            out.append((1, part.lower()))
+    return tuple(out)
+
+
+def _parse_version_key(value: Optional[str]) -> Optional[Tuple[int, int, int, Tuple[Tuple[int, Any], ...]]]:
+    s = _norm_ver(value)
+    if not s:
+        return None
+    match = re.match(r"^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?$", s)
+    if not match:
+        return None
+    major = int(match.group(1) or 0)
+    minor = int(match.group(2) or 0)
+    patch = int(match.group(3) or 0)
+    prerelease = _parse_prerelease_parts(match.group(4) or "")
+    return (major, minor, patch, prerelease)
+
+
+def _cmp_prerelease_parts(
+    left: Tuple[Tuple[int, Any], ...],
+    right: Tuple[Tuple[int, Any], ...],
+) -> int:
+    if not left and not right:
+        return 0
+    if not left:
+        return 1
+    if not right:
+        return -1
+    limit = min(len(left), len(right))
+    for idx in range(limit):
+        a_kind, a_value = left[idx]
+        b_kind, b_value = right[idx]
+        if a_kind != b_kind:
+            return 1 if a_kind > b_kind else -1
+        if a_value == b_value:
+            continue
+        return 1 if a_value > b_value else -1
+    if len(left) == len(right):
+        return 0
+    return 1 if len(left) > len(right) else -1
+
+
+def _cmp_versions(left: Optional[str], right: Optional[str]) -> int:
+    lk = _parse_version_key(left)
+    rk = _parse_version_key(right)
+    if lk is None or rk is None:
+        return 0
+    if lk[:3] != rk[:3]:
+        return 1 if lk[:3] > rk[:3] else -1
+    return _cmp_prerelease_parts(lk[3], rk[3])
+
+
+def _is_update_available(installed_version: Optional[str], latest_tag: Optional[str]) -> bool:
+    installed = _norm_ver(installed_version)
+    latest = _norm_ver(latest_tag)
+    if not installed or not latest:
+        return False
+    cmp_res = _cmp_versions(latest, installed)
+    if cmp_res != 0:
+        return cmp_res > 0
+    return latest != installed
+
+
 def _run_cmd(cmd: List[str], *, timeout_s: float = 2.5) -> Tuple[int, str]:
     try:
         res = subprocess.run(
@@ -132,6 +204,40 @@ def _write_json_atomic(path: str, data: dict) -> None:
     os.replace(tmp, path)
 
 
+def _release_summary(raw: Optional[dict]) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return None
+    tag = str(raw.get("tag_name") or "").strip()
+    if not tag:
+        return None
+    return {
+        "tag": tag,
+        "url": raw.get("html_url"),
+        "name": raw.get("name"),
+        "published_at": raw.get("published_at") or raw.get("created_at"),
+        "prerelease": bool(raw.get("prerelease")),
+    }
+
+
+def _pick_release(raw_releases: List[dict], *, prerelease: bool) -> Optional[dict]:
+    best: Optional[dict] = None
+    best_key: Optional[Tuple[str, int]] = None
+    for idx, raw in enumerate(raw_releases):
+        if not isinstance(raw, dict):
+            continue
+        if bool(raw.get("draft")):
+            continue
+        if bool(raw.get("prerelease")) != bool(prerelease):
+            continue
+        if not str(raw.get("tag_name") or "").strip():
+            continue
+        key = (str(raw.get("published_at") or raw.get("created_at") or ""), -idx)
+        if best is None or key > best_key:
+            best = raw
+            best_key = key
+    return best
+
+
 def _github_latest_release_tag(repo: str, *, timeout_s: float) -> Dict[str, Any]:
     """Return {ok, repo, tag, url, error?, meta?}."""
     base = os.environ.get("XKEEN_UI_GITHUB_API_BASE", "https://api.github.com") or "https://api.github.com"
@@ -167,6 +273,56 @@ def _github_latest_release_tag(repo: str, *, timeout_s: float) -> Dict[str, Any]
         return {"ok": False, "repo": repo, "tag": None, "url": None, "error": "request_failed", "meta": {}}
 
 
+def _github_release_snapshot(repo: str, *, timeout_s: float) -> Dict[str, Any]:
+    """Return stable + prerelease release info for a repo."""
+    base = os.environ.get("XKEEN_UI_GITHUB_API_BASE", "https://api.github.com") or "https://api.github.com"
+    base = str(base).rstrip("/")
+    url = f"{base}/repos/{repo}/releases?per_page=20"
+    headers = {
+        "User-Agent": _cfg_user_agent(),
+        "Accept": "application/vnd.github+json",
+    }
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=float(timeout_s)) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            data = json.loads(raw)
+            if not isinstance(data, list):
+                raise ValueError("bad_releases_payload")
+            stable_release = _release_summary(_pick_release(data, prerelease=False))
+            prerelease_release = _release_summary(_pick_release(data, prerelease=True))
+            primary = stable_release or prerelease_release or {}
+            return {
+                "ok": True,
+                "repo": repo,
+                "tag": primary.get("tag"),
+                "url": primary.get("url"),
+                "stable": stable_release,
+                "prerelease": prerelease_release,
+            }
+    except Exception:
+        stable_only = _github_latest_release_tag(repo, timeout_s=timeout_s)
+        stable_release = None
+        if stable_only.get("tag"):
+            stable_release = {
+                "tag": stable_only.get("tag"),
+                "url": stable_only.get("url"),
+                "name": None,
+                "published_at": None,
+                "prerelease": False,
+            }
+        return {
+            "ok": bool(stable_only.get("ok")),
+            "repo": repo,
+            "tag": stable_only.get("tag"),
+            "url": stable_only.get("url"),
+            "stable": stable_release,
+            "prerelease": None,
+            "error": stable_only.get("error"),
+            "meta": stable_only.get("meta"),
+        }
+
+
 def _latest_release_or_skip(repo: str, *, installed: bool, timeout_s: float) -> Dict[str, Any]:
     if not installed:
         return {
@@ -174,17 +330,21 @@ def _latest_release_or_skip(repo: str, *, installed: bool, timeout_s: float) -> 
             "repo": repo,
             "tag": None,
             "url": None,
+            "stable": None,
+            "prerelease": None,
             "error": None,
             "meta": {"reason": "not_installed"},
             "skipped": True,
         }
 
-    data = _github_latest_release_tag(repo, timeout_s=timeout_s)
+    data = _github_release_snapshot(repo, timeout_s=timeout_s)
     return {
         "ok": bool(data.get("ok")),
         "repo": repo,
         "tag": data.get("tag"),
         "url": data.get("url"),
+        "stable": data.get("stable"),
+        "prerelease": data.get("prerelease"),
         "error": data.get("error"),
         "meta": data.get("meta"),
         "skipped": False,
@@ -253,10 +413,18 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
                             resp["update_available"] = {
                                 "xray": bool(installed.get("xray", {}).get("installed"))
                                 and _norm_ver(installed.get("xray", {}).get("version"))
-                                and _norm_ver(installed.get("xray", {}).get("version")) != _norm_ver(latest.get("xray", {}).get("tag")),
+                                and _is_update_available(
+                                    installed.get("xray", {}).get("version"),
+                                    ((latest.get("xray", {}).get("stable") or {}).get("tag"))
+                                    or latest.get("xray", {}).get("tag"),
+                                ),
                                 "mihomo": bool(installed.get("mihomo", {}).get("installed"))
                                 and _norm_ver(installed.get("mihomo", {}).get("version"))
-                                and _norm_ver(installed.get("mihomo", {}).get("version")) != _norm_ver(latest.get("mihomo", {}).get("tag")),
+                                and _is_update_available(
+                                    installed.get("mihomo", {}).get("version"),
+                                    ((latest.get("mihomo", {}).get("stable") or {}).get("tag"))
+                                    or latest.get("mihomo", {}).get("tag"),
+                                ),
                             }
                             return jsonify(resp)
             except Exception:
@@ -288,10 +456,16 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
         upd = {
             "xray": bool(installed.get("xray", {}).get("installed"))
             and _norm_ver(installed.get("xray", {}).get("version"))
-            and _norm_ver(installed.get("xray", {}).get("version")) != _norm_ver(latest["xray"].get("tag")),
+            and _is_update_available(
+                installed.get("xray", {}).get("version"),
+                ((latest["xray"].get("stable") or {}).get("tag")) or latest["xray"].get("tag"),
+            ),
             "mihomo": bool(installed.get("mihomo", {}).get("installed"))
             and _norm_ver(installed.get("mihomo", {}).get("version"))
-            and _norm_ver(installed.get("mihomo", {}).get("version")) != _norm_ver(latest["mihomo"].get("tag")),
+            and _is_update_available(
+                installed.get("mihomo", {}).get("version"),
+                ((latest["mihomo"].get("stable") or {}).get("tag")) or latest["mihomo"].get("tag"),
+            ),
         }
 
         resp = {
