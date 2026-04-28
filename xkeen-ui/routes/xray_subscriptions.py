@@ -10,6 +10,7 @@ from routes.common.errors import error_response, exception_response
 from services.xray_subscriptions import (
     delete_subscription,
     list_subscriptions,
+    preview_subscription,
     probe_subscription_node_latency,
     probe_subscription_nodes_latency,
     refresh_due_subscriptions,
@@ -69,6 +70,25 @@ def create_xray_subscriptions_blueprint(
                 log_tag="xray_subscriptions.save_failed",
             )
         return jsonify({"ok": True, "subscription": sub}), 200
+
+    @bp.post("/api/xray/subscriptions/preview")
+    def api_preview_xray_subscription():
+        payload = request.get_json(silent=True) or {}
+        try:
+            result = preview_subscription(payload)
+        except ValueError as exc:
+            return error_response(str(exc), 400, ok=False)
+        except Exception as exc:
+            return exception_response(
+                "Не удалось получить предпросмотр подписки Xray.",
+                500,
+                ok=False,
+                code="subscription_preview_failed",
+                hint="Проверьте URL подписки и фильтры.",
+                exc=exc,
+                log_tag="xray_subscriptions.preview_failed",
+            )
+        return jsonify(result), 200
 
     @bp.delete("/api/xray/subscriptions/<string:sub_id>")
     def api_delete_xray_subscription(sub_id: str):

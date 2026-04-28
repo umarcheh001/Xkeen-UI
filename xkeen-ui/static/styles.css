@@ -7805,6 +7805,42 @@ html[data-theme="light"] .xk-mi-status.error {
   grid-column: 1 / -1;
 }
 
+.xk-sub-form .xk-sub-wide > input {
+  max-width: 520px;
+}
+
+.xk-sub-draft-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: calc(10px * var(--xk-font-scale));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fef3c7;
+  background: linear-gradient(135deg, #b45309 0%, #d97706 100%);
+  border: 1px solid #f59e0b;
+  border-radius: 999px;
+  vertical-align: middle;
+  box-shadow: 0 1px 4px rgba(180, 83, 9, 0.35);
+  animation: xkSubDraftPulse 1.6s ease-in-out infinite;
+}
+
+.xk-sub-draft-badge[hidden] {
+  display: none;
+}
+
+@keyframes xkSubDraftPulse {
+  0%, 100% { box-shadow: 0 1px 4px rgba(180, 83, 9, 0.35); }
+  50% { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25), 0 1px 4px rgba(180, 83, 9, 0.55); }
+}
+
+html[data-theme="light"] .xk-sub-draft-badge {
+  color: #fff;
+  background: linear-gradient(135deg, #c2410c 0%, #ea580c 100%);
+  border-color: #fb923c;
+}
+
 .xk-sub-options {
   flex-wrap: nowrap;
   flex: 1 1 auto;

@@ -3545,6 +3545,7 @@ let outboundsModuleApi = null;
       refreshNow: 'outbounds-subscriptions-refresh-now',
       save: 'outbounds-subscriptions-save-btn',
       reset: 'outbounds-subscriptions-reset-btn',
+      preview: 'outbounds-subscriptions-preview-btn',
       refreshDue: 'outbounds-subscriptions-refresh-due-btn',
       tbody: 'outbounds-subscriptions-tbody',
       empty: 'outbounds-subscriptions-empty',
@@ -3562,6 +3563,7 @@ let outboundsModuleApi = null;
     let _subscriptionEditId = '';
     let _subscriptionNodePingState = Object.create(null);
     let _subscriptionPingAllBusy = false;
+    let _subscriptionPreview = null;
     const SUB_DEFAULT_INTERVAL_HOURS = 24;
 
     function subsDecorateActionButtons(modal) {
@@ -3579,6 +3581,12 @@ let outboundsModuleApi = null;
           saveBtn.classList.add('xk-sub-icon-btn');
           saveBtn.setAttribute('aria-label', String(saveBtn.getAttribute('title') || 'Save'));
           saveBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">&#128190;</span><span class="xk-visually-hidden">Save</span>';
+        }
+        const previewBtn = root.querySelector(`#${SUB_IDS.preview}`);
+        if (previewBtn) {
+          previewBtn.classList.add('xk-sub-icon-btn');
+          previewBtn.setAttribute('aria-label', String(previewBtn.getAttribute('title') || 'Preview'));
+          previewBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">&#128065;</span><span class="xk-visually-hidden">Preview</span>';
         }
       } catch (e) {}
     }
@@ -3679,6 +3687,7 @@ let outboundsModuleApi = null;
                         </select>
                       </label>
                       <div class="xk-sub-actions">
+                        <button type="button" id="outbounds-subscriptions-preview-btn" class="btn-secondary btn-compact" title="Предпросмотр" data-tooltip="Скачать подписку и показать узлы в карточке справа без сохранения и без перезапуска xkeen. Используй фильтры и × у узла, чтобы исключить лишние, потом нажми «Сохранить».">Предпросмотр</button>
                         <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Новая подписка" data-tooltip="Очистить форму и добавить новую подписку.">Новая</button>
                         <button type="submit" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить подписку" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
                       </div>
@@ -3717,7 +3726,7 @@ let outboundsModuleApi = null;
               <section id="outbounds-subscriptions-nodes-panel" class="xk-sub-panel xk-sub-node-panel">
                 <div class="xk-sub-panelhead">
                   <div>
-                    <div class="xk-pool-kicker">Узлы</div>
+                    <div class="xk-pool-kicker">Узлы<span id="outbounds-subscriptions-nodes-draft" class="xk-sub-draft-badge" hidden>Черновик · нажми «Сохранить»</span></div>
                     <div class="terminal-menu-title" style="margin:0;">Серверы подписки</div>
                     <div id="outbounds-subscriptions-nodes-caption" class="xk-sub-muted">Нажми ✎ у нужной подписки, чтобы посмотреть состав и transport.</div>
                   </div>
@@ -4124,6 +4133,7 @@ let outboundsModuleApi = null;
 
     function subsResetForm() {
       _subscriptionEditId = '';
+      _subscriptionPreview = null;
       try { $(SUB_IDS.id).value = ''; } catch (e) {}
       try { $(SUB_IDS.name).value = ''; } catch (e) {}
       try { $(SUB_IDS.tag).value = ''; } catch (e) {}
@@ -4137,6 +4147,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.ping).checked = true; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = 'safe-fallback'; } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = true; } catch (e) {}
+      try { subsUpdateDraftBadge(); } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
       try { subsRenderNodeList(); } catch (e2) {}
     }
@@ -4144,7 +4155,9 @@ let outboundsModuleApi = null;
     function subsFillForm(sub, options) {
       const s = sub && typeof sub === 'object' ? sub : {};
       const opts = options && typeof options === 'object' ? options : {};
-      _subscriptionEditId = String(s.id || '');
+      const nextId = String(s.id || '');
+      if (nextId !== String(_subscriptionEditId || '')) _subscriptionPreview = null;
+      _subscriptionEditId = nextId;
       try { $(SUB_IDS.id).value = _subscriptionEditId; } catch (e) {}
       try { $(SUB_IDS.name).value = String(s.name || ''); } catch (e) {}
       try { $(SUB_IDS.tag).value = String(s.tag || ''); } catch (e) {}
@@ -4158,6 +4171,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.ping).checked = s.ping_enabled !== false; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = String(s.routing_mode || 'safe-fallback') || 'safe-fallback'; } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = opts.keepRefreshNow === true ? !!($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked) : false; } catch (e) {}
+      try { subsUpdateDraftBadge(); } catch (e) {}
       try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
       try { subsRenderNodeList(); } catch (e2) {}
@@ -4295,17 +4309,21 @@ let outboundsModuleApi = null;
       if (!panel || !caption || !summary || !listEl || !empty) return;
 
       const subId = String(_subscriptionEditId || '').trim();
-      const sub = _subscriptions.find((item) => String(item && item.id || '') === subId) || null;
+      const savedSub = _subscriptions.find((item) => String(item && item.id || '') === subId) || null;
+      const preview = _subscriptionPreview;
+      const isPreview = !!preview;
+      const sub = savedSub
+        || (isPreview ? { id: '', name: 'Черновик', tag: String(preview.tagPrefix || ''), last_nodes: preview.nodes } : null);
       if (!sub) {
         listEl.innerHTML = '';
-        empty.textContent = 'Нажми на нужную подписку в списке справа, чтобы посмотреть её узлы.';
+        empty.textContent = 'Нажми «Предпросмотр» в форме слева, чтобы скачать узлы без сохранения, или выбери существующую подписку справа.';
         empty.style.display = 'block';
         summary.textContent = '0';
-        caption.textContent = 'Выбери подписку в списке справа.';
+        caption.textContent = 'Выбери подписку или нажми «Предпросмотр».';
         return;
       }
 
-      const nodes = Array.isArray(sub.last_nodes) ? sub.last_nodes : [];
+      const nodes = isPreview ? preview.nodes : (Array.isArray(sub.last_nodes) ? sub.last_nodes : []);
       const draft = subsCurrentDraftFor(sub);
       const compiled = {
         name: subId === String(_subscriptionEditId || '') ? subsCompilePreviewRegex(SUB_IDS.nameFilter) : subsSafeRegExp(draft.nameFilter),
@@ -4338,7 +4356,7 @@ let outboundsModuleApi = null;
         const reasonLabel = escapeHtml(subsNodeReasonLabel(reasons));
         const manualExcluded = !!(node && node.key && excluded.has(String(node.key)));
         const nodeTag = String(node && node.tag ? node.tag : '').trim();
-        const canPing = !!nodeTag;
+        const canPing = !!nodeTag && !isPreview;
         const pingStateKey = subsNodePingStateKey(subId, String(node && node.key ? node.key : ''));
         const pingBusy = !!_subscriptionNodePingState[pingStateKey];
         const latencyEntry = subsNodeLatencyEntry(sub, String(node && node.key ? node.key : ''));
@@ -4382,7 +4400,9 @@ let outboundsModuleApi = null;
       });
 
       summary.textContent = `${enabledCount}/${nodes.length}`;
-      caption.textContent = `${String(sub.name || sub.tag || sub.id || 'Подписка')} · включено ${enabledCount}${hiddenCount ? ` · скрыто ${hiddenCount}` : ''}`;
+      caption.textContent = isPreview
+        ? `Черновик · включено ${enabledCount}${hiddenCount ? ` · скрыто ${hiddenCount}` : ''} · нажми «Сохранить», чтобы применить.`
+        : `${String(sub.name || sub.tag || sub.id || 'Подписка')} · включено ${enabledCount}${hiddenCount ? ` · скрыто ${hiddenCount}` : ''}`;
 
       listEl.innerHTML = rows.join('');
       empty.textContent = nodes.length
@@ -4710,6 +4730,83 @@ let outboundsModuleApi = null;
       }
     }
 
+    function subsClearPreview(silent) {
+      if (!_subscriptionPreview) return;
+      _subscriptionPreview = null;
+      try { subsUpdateDraftBadge(); } catch (e) {}
+      try { subsRenderNodeList(); } catch (e) {}
+      if (!silent) {
+        try { subsSetStatus('', false); } catch (e) {}
+      }
+    }
+
+    function subsUpdateDraftBadge() {
+      const badge = document.getElementById('outbounds-subscriptions-nodes-draft');
+      if (!badge) return;
+      const active = !!_subscriptionPreview;
+      badge.hidden = !active;
+    }
+
+    async function subsPreview() {
+      const url = String(($(SUB_IDS.url) && $(SUB_IDS.url).value) || '').trim();
+      if (!url) {
+        subsSetStatus('Сначала вставь URL подписки.', true);
+        return false;
+      }
+      const payload = {
+        url,
+        tag: String(($(SUB_IDS.tag) && $(SUB_IDS.tag).value) || '').trim(),
+        name: String(($(SUB_IDS.name) && $(SUB_IDS.name).value) || '').trim(),
+        name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim(),
+        type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim(),
+        transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim(),
+        excluded_node_keys: subsGetExcludedKeysValue(),
+      };
+      const previewBtn = $(SUB_IDS.preview);
+      const wasDisabled = previewBtn ? previewBtn.disabled : false;
+      try {
+        if (previewBtn) previewBtn.disabled = true;
+        subsSetStatus('Скачиваю предпросмотр…', false);
+        const res = await fetch('/api/xray/subscriptions/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || data.ok === false) {
+          throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
+        }
+        _subscriptionPreview = {
+          url,
+          nodes: Array.isArray(data.nodes) ? data.nodes : [],
+          sourceCount: Number(data.source_count || 0),
+          filteredOutCount: Number(data.filtered_out_count || 0),
+          warnings: Array.isArray(data.warnings) ? data.warnings : [],
+          tagPrefix: String(data.tag_prefix || payload.tag || ''),
+          ts: Date.now(),
+        };
+        subsUpdateDraftBadge();
+        subsRenderNodeList();
+        const nodeCount = _subscriptionPreview.nodes.length;
+        const okCount = Number(data.count || 0);
+        const filteredNote = _subscriptionPreview.filteredOutCount > 0
+          ? ` · скрыто фильтрами ${_subscriptionPreview.filteredOutCount}`
+          : '';
+        subsSetStatus(`Черновик: ${okCount} из ${nodeCount} узлов${filteredNote}. Подписка не сохранена — нажми «Сохранить», чтобы применить.`, false, true);
+        if (_subscriptionPreview.warnings.length) {
+          try { toastXkeen(_subscriptionPreview.warnings.join(' '), 'warning'); } catch (e) {}
+        }
+        return true;
+      } catch (err) {
+        const msg = 'Ошибка предпросмотра: ' + String(err && err.message ? err.message : err);
+        subsSetStatus(msg, true);
+        try { toastXkeen(msg, 'error'); } catch (e) {}
+        return false;
+      } finally {
+        if (previewBtn) previewBtn.disabled = wasDisabled;
+      }
+    }
+
     async function subsRefresh(id) {
       const subId = String(id || '').trim();
       if (!subId) return false;
@@ -4870,6 +4967,8 @@ let outboundsModuleApi = null;
         }
         const sub = data.subscription || {};
         const id = String(sub.id || payload.id || '');
+        _subscriptionPreview = null;
+        try { subsUpdateDraftBadge(); } catch (eBadge) {}
         subsSetStatus('Сохранено.', false, true);
         await subsLoad();
         if ($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked && id) {
@@ -4957,9 +5056,20 @@ let outboundsModuleApi = null;
         subsSetStatus('', false);
       });
       wireButton(SUB_IDS.refreshDue, subsRefreshDue);
+      wireButton(SUB_IDS.preview, () => { subsPreview(); });
       wireButton(SUB_IDS.nodesPingAll, () => {
         subsProbeAllNodes();
       });
+
+      const urlEl = $(SUB_IDS.url);
+      if (urlEl && !(urlEl.dataset && urlEl.dataset.xkSubPreviewBound === '1')) {
+        urlEl.addEventListener('input', () => {
+          if (!_subscriptionPreview) return;
+          const current = String(urlEl.value || '').trim();
+          if (current !== String(_subscriptionPreview.url || '')) subsClearPreview(true);
+        });
+        if (urlEl.dataset) urlEl.dataset.xkSubPreviewBound = '1';
+      }
 
       const form = $(SUB_IDS.form);
       if (form) {

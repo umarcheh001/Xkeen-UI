@@ -163,6 +163,121 @@ def test_new_subscription_defaults_to_daily_interval(tmp_path: Path):
     assert sub["interval_hours"] == 24
 
 
+def test_new_enabled_subscription_schedules_first_refresh_one_interval_out(tmp_path: Path):
+    """Regression: a freshly saved subscription must NOT be marked due
+    immediately, otherwise the background scheduler picks it up within ~60s
+    and triggers a refresh+restart even when the user explicitly unchecked
+    "Обновить сразу".
+    """
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    ui_state_dir.mkdir()
+
+    before = subs._now()
+    sub = subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "name": "Pending",
+            "tag": "pending",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "interval_hours": 6,
+        },
+    )
+    after = subs._now()
+
+    assert sub["enabled"] is True
+    delta = sub["next_update_ts"] - before
+    assert delta >= 6 * 3600
+    assert sub["next_update_ts"] - after <= 6 * 3600
+
+
+def test_new_disabled_subscription_keeps_next_update_null(tmp_path: Path):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    ui_state_dir.mkdir()
+
+    sub = subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "name": "Off",
+            "tag": "off",
+            "url": "https://example.com/sub",
+            "enabled": False,
+        },
+    )
+
+    assert sub["enabled"] is False
+    assert sub["next_update_ts"] is None
+
+
+def test_preview_subscription_returns_nodes_without_state_changes(tmp_path: Path, monkeypatch):
+    """Preview must fetch+parse only — no state file, no disk writes,
+    no observatory/routing sync, no restart side-effects.
+    """
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    ui_state_dir.mkdir()
+
+    body = "\n".join([_vless("Germany"), _vless("Netherlands"), _trojan("USA")])
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (body, {}),
+    )
+
+    result = subs.preview_subscription(
+        {
+            "url": "https://example.com/sub",
+            "tag": "demo",
+        }
+    )
+
+    assert result["ok"] is True
+    assert result["count"] == 3
+    assert result["source_count"] == 3
+    assert result["filtered_out_count"] == 0
+    assert result["source_format"] == "links"
+    assert {n["name"] for n in result["nodes"]} == {"Germany", "Netherlands", "USA"}
+
+    # No state file should have been created.
+    assert not any(ui_state_dir.iterdir())
+
+
+def test_preview_subscription_applies_filters_and_exclusions(tmp_path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    body = "\n".join([_vless("Germany"), _vless("Russia"), _trojan("USA")])
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (body, {}),
+    )
+
+    result = subs.preview_subscription(
+        {
+            "url": "https://example.com/sub",
+            "tag": "demo",
+            "type_filter": "vless",
+        }
+    )
+
+    # Trojan should be filtered out by type filter.
+    assert result["count"] == 2
+    assert result["source_count"] == 3
+    assert result["filtered_out_count"] == 1
+
+
+def test_preview_subscription_requires_url():
+    from services import xray_subscriptions as subs
+
+    with pytest.raises(ValueError):
+        subs.preview_subscription({})
+
+
 def test_refresh_subscription_omits_auto_xhttp_mode_for_link_payload(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

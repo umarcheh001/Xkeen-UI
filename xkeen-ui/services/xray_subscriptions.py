@@ -651,7 +651,13 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
         if not sub.get("created_ts"):
             sub["created_ts"] = now_ts
         if not sub.get("next_update_ts"):
-            sub["next_update_ts"] = 0 if sub["enabled"] else None
+            # Schedule the first auto-refresh one full interval out instead of
+            # marking the subscription due immediately. The UI provides an
+            # explicit "Обновить сразу" path that does the immediate fetch+
+            # restart; without this guard the background scheduler would pick
+            # up a freshly-saved sub within ~60s and restart Xray even when
+            # the user unchecked that option.
+            sub["next_update_ts"] = (now_ts + interval * 3600) if sub["enabled"] else None
 
         if idx >= 0:
             subs[idx] = sub
@@ -2592,6 +2598,70 @@ def sync_observatory_subjects(
         pass
 
     return changed
+
+
+def preview_subscription(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Fetch and parse a subscription URL without saving anything to disk.
+
+    Mirrors the parse path of :func:`refresh_subscription` but performs no
+    state mutation, no file writes, no observatory/routing sync, and no
+    Xray restart. Used by the modal's "Предпросмотр" button so users can
+    inspect, filter, and exclude nodes before committing the subscription.
+    """
+    data = payload if isinstance(payload, dict) else {}
+    url = str(data.get("url") or "").strip()
+    if not url:
+        raise ValueError("url is required")
+
+    tag_prefix = _clean_tag_prefix(data.get("tag") or data.get("name") or _default_id_from_url(url), "sub")
+    name_filter = _stored_filter_value(data, NAME_FILTER_KEYS)
+    type_filter = _stored_filter_value(data, TYPE_FILTER_KEYS)
+    transport_filter = _stored_filter_value(data, TRANSPORT_FILTER_KEYS)
+    excluded = _read_string_list_value(data, EXCLUDED_NODE_KEYS_KEYS)
+    _compile_regex_filter(name_filter, "фильтра имени")
+    _compile_regex_filter(type_filter, "фильтра типа")
+    _compile_regex_filter(transport_filter, "фильтра транспорта")
+
+    body, headers = fetch_subscription_body(url)
+    links = parse_subscription_links(body)
+    if links:
+        source_format = "links"
+        outbounds, errors, stats = build_subscription_outbounds(
+            links,
+            tag_prefix=tag_prefix,
+            name_filter=name_filter,
+            type_filter=type_filter,
+            transport_filter=transport_filter,
+            excluded_node_keys=excluded,
+        )
+    else:
+        source_format = "xray-json"
+        outbounds, errors, stats = build_subscription_json_outbounds(
+            body,
+            tag_prefix=tag_prefix,
+            name_filter=name_filter,
+            type_filter=type_filter,
+            transport_filter=transport_filter,
+            excluded_node_keys=excluded,
+        )
+
+    nodes = _normalize_last_nodes(stats.get("nodes"))
+    source_count = int(stats.get("source_count") or 0)
+    filtered_out_count = int(stats.get("filtered_out_count") or 0)
+    profile_interval = _parse_profile_interval_hours(headers)
+
+    return {
+        "ok": True,
+        "nodes": nodes,
+        "count": len(outbounds),
+        "source_count": source_count,
+        "filtered_out_count": filtered_out_count,
+        "warnings": _subscription_result_warnings(nodes),
+        "errors": errors,
+        "source_format": source_format,
+        "profile_update_interval_hours": profile_interval,
+        "tag_prefix": tag_prefix,
+    }
 
 
 def refresh_subscription(
