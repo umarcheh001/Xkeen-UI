@@ -42,6 +42,8 @@
   let _navNextBtnEl = null;
   let _applyToLeftBtnEl = null;
   let _applyToRightBtnEl = null;
+  let _applyAllToLeftBtnEl = null;
+  let _applyAllToRightBtnEl = null;
   let _saveBtnEl = null;
   let _closeBtnEl = null;
   let _xBtnEl = null;
@@ -139,12 +141,20 @@
 
     const applyGroup = document.createElement('div');
     applyGroup.className = 'xkeen-diff-apply-group';
+    _applyAllToLeftBtnEl = makeBtn('Все ←', 'btn-secondary xkeen-diff-apply-btn hidden',
+      () => applyAllChangesToSide('left'),
+      'Перенести все изменения из правой версии в левую');
+    _applyAllToRightBtnEl = makeBtn('Все →', 'btn-secondary xkeen-diff-apply-btn hidden',
+      () => applyAllChangesToSide('right'),
+      'Перенести все изменения из левой версии в правую');
     _applyToLeftBtnEl = makeBtn('← Влево', 'btn-secondary xkeen-diff-apply-btn hidden',
       () => applyHunkToSide('left'),
       'Перенести текущий хунк из правой версии в левую');
     _applyToRightBtnEl = makeBtn('Вправо →', 'btn-secondary xkeen-diff-apply-btn hidden',
       () => applyHunkToSide('right'),
       'Перенести текущий хунк из левой версии в правую');
+    applyGroup.appendChild(_applyAllToLeftBtnEl);
+    applyGroup.appendChild(_applyAllToRightBtnEl);
     applyGroup.appendChild(_applyToLeftBtnEl);
     applyGroup.appendChild(_applyToRightBtnEl);
 
@@ -978,6 +988,10 @@
   }
 
   function refreshActionButtons() {
+    _setBtnState(_applyAllToLeftBtnEl, _applyDisabledReason('left'),
+      'Перенести все изменения из правой версии в левую');
+    _setBtnState(_applyAllToRightBtnEl, _applyDisabledReason('right'),
+      'Перенести все изменения из левой версии в правую');
     _setBtnState(_applyToLeftBtnEl, _applyDisabledReason('left'),
       'Перенести текущий хунк из правой версии в левую');
     _setBtnState(_applyToRightBtnEl, _applyDisabledReason('right'),
@@ -1123,6 +1137,51 @@
     }
   }
 
+  function _scheduleNextDiffNavigation() {
+    setTimeout(() => {
+      try { updateSummary(); } catch (e) {}
+      try {
+        if (_hasAnyDiff()) navigateDiff(1);
+      } catch (e2) {}
+    }, 60);
+  }
+
+  async function applyAllChangesToSide(side) {
+    const targetSide = side === 'right' ? 'right' : 'left';
+    if (!_canWriteSide(targetSide)) return;
+    if (!_hasAnyDiff()) {
+      showFeedback('Различий нет', 'info');
+      return;
+    }
+
+    const sourceSide = targetSide === 'left' ? 'right' : 'left';
+    const targetDescriptor = _activeSpec && _activeSpec[targetSide] ? _activeSpec[targetSide].descriptor : null;
+    const writesLiveBuffer = _isBufferDescriptor(targetDescriptor);
+    const sourceText = asString(_activeSpec && _activeSpec[sourceSide] && _activeSpec[sourceSide].text);
+
+    if (!writesLiveBuffer) {
+      _setSideTextState(targetSide, sourceText, true);
+      _dirtySinceOpen = true;
+      refreshActionButtons();
+      setTimeout(updateSummary, 60);
+      showFeedback(targetSide === 'left' ? 'Все изменения перенесены в левую версию' : 'Все изменения перенесены в правую версию', 'success');
+      return;
+    }
+
+    try {
+      await _writeTextToSide(targetSide, sourceText);
+    } catch (err) {
+      showError('Применение всех хунков: ' + String(err && err.message || err));
+      return;
+    }
+
+    _syncBufferSideText(targetSide, sourceText);
+    _dirtySinceOpen = true;
+    refreshActionButtons();
+    setTimeout(updateSummary, 60);
+    showFeedback(targetSide === 'left' ? 'Все изменения перенесены в левую версию' : 'Все изменения перенесены в правую версию', 'success');
+  }
+
   async function applyHunkToSide(side) {
     const targetSide = side === 'right' ? 'right' : 'left';
     if (!_canWriteSide(targetSide)) return;
@@ -1174,7 +1233,7 @@
       _setSideTextState(targetSide, newText, true);
       _dirtySinceOpen = true;
       refreshActionButtons();
-      setTimeout(updateSummary, 60);
+      _scheduleNextDiffNavigation();
       showFeedback(targetSide === 'left' ? 'Хунк перенесён в левую версию' : 'Хунк перенесён в правую версию', 'success');
       return;
     }
@@ -1189,7 +1248,7 @@
     _syncBufferSideText(targetSide, newText);
     _dirtySinceOpen = true;
     refreshActionButtons();
-    setTimeout(updateSummary, 60);
+    _scheduleNextDiffNavigation();
     showFeedback(targetSide === 'left' ? 'Хунк перенесён в левую версию' : 'Хунк перенесён в правую версию', 'success');
   }
 
