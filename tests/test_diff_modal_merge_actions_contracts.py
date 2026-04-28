@@ -18,22 +18,33 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "_applyToRightBtnEl = makeBtn(" in diff_modal
     assert "_applyAllToLeftBtnEl = makeBtn(" in diff_modal
     assert "_applyAllToRightBtnEl = makeBtn(" in diff_modal
+    assert "_revertBtnEl = makeBtn(" in diff_modal
     assert "_saveBtnEl = makeBtn(" in diff_modal
     assert "function refreshActionButtons()" in diff_modal
     assert "async function applyAllChangesToSide(side)" in diff_modal
     assert "async function applyHunkToSide(side)" in diff_modal
+    assert "async function revertComparedChanges()" in diff_modal
     assert "async function saveComparedFile()" in diff_modal
     assert "let _draftSideState = { left: false, right: false };" in diff_modal
     assert "let _dirtySinceOpen = false;" in diff_modal
+    assert "let _baselineLeft = '';" in diff_modal
+    assert "let _baselineRight = '';" in diff_modal
     assert "function _getDraftSaveSide()" in diff_modal
+    assert "function _captureBaselineState()" in diff_modal
+    assert "function _resetBaselineState()" in diff_modal
     assert "function _scheduleNextDiffNavigation()" in diff_modal
+    assert "function _canRevertFromDiff()" in diff_modal
+    assert "function _revertDisabledReason()" in diff_modal
     assert "_setSideTextState(targetSide, newText, true);" in diff_modal
     assert "const draftSaveSide = _getDraftSaveSide();" in diff_modal
     assert "() => applyHunkToSide('left')" in diff_modal
     assert "() => applyHunkToSide('right')" in diff_modal
     assert "() => applyAllChangesToSide('left')" in diff_modal
     assert "() => applyAllChangesToSide('right')" in diff_modal
+    assert "() => revertComparedChanges()" in diff_modal
     assert "_scheduleNextDiffNavigation();" in diff_modal
+    assert "_captureBaselineState();" in diff_modal
+    assert "_resetBaselineState();" in diff_modal
     assert "scope.saveClosesOwner" in diff_modal
     assert "String(ev.key || '').toLowerCase() === 's'" in diff_modal
 
@@ -52,7 +63,9 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert ".xkeen-diff-apply-group {" in styles
     assert ".xkeen-diff-foot-actions {" in styles
     assert ".xkeen-diff-save-btn {" in styles
+    assert ".xkeen-diff-revert-btn {" in styles
     assert ".xkeen-diff-apply-btn.is-disabled" in styles
+    assert ".xkeen-diff-revert-btn.is-disabled" in styles
     assert ".xkeen-diff-save-btn.is-disabled" in styles
     assert ".xkeen-diff-save-btn.is-dirty::before" in styles
 
@@ -67,4 +80,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260428-diff5" in editor_shared
+    assert "?v=20260428-diff6" in editor_shared

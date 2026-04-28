@@ -28578,7 +28578,8 @@ html[data-theme="light"] .xk-routing-monaco-menu-sep {
 }
 
 .xkeen-diff-modal .xkeen-diff-apply-btn.is-disabled,
-.xkeen-diff-modal .xkeen-diff-save-btn.is-disabled {
+.xkeen-diff-modal .xkeen-diff-save-btn.is-disabled,
+.xkeen-diff-modal .xkeen-diff-revert-btn.is-disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -28724,6 +28725,10 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
 }
 
 .xkeen-diff-modal .xkeen-diff-save-btn {
+  white-space: nowrap;
+}
+
+.xkeen-diff-modal .xkeen-diff-revert-btn {
   white-space: nowrap;
 }
 

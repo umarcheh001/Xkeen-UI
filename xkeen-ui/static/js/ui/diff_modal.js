@@ -44,6 +44,7 @@
   let _applyToRightBtnEl = null;
   let _applyAllToLeftBtnEl = null;
   let _applyAllToRightBtnEl = null;
+  let _revertBtnEl = null;
   let _saveBtnEl = null;
   let _closeBtnEl = null;
   let _xBtnEl = null;
@@ -58,6 +59,8 @@
   let _sourceOptions = [];
   let _draftSideState = { left: false, right: false };
   let _dirtySinceOpen = false;
+  let _baselineLeft = '';
+  let _baselineRight = '';
 
   // 'monaco' | 'cm6' — chosen at open() time per the active editor engine.
   let _backendKind = null;
@@ -223,10 +226,14 @@
     foot.className = 'modal-actions xkeen-diff-foot';
     const footActions = document.createElement('div');
     footActions.className = 'xkeen-diff-foot-actions';
+    _revertBtnEl = makeBtn('Отменить изменения', 'btn-secondary xkeen-diff-revert-btn hidden',
+      () => revertComparedChanges(),
+      'Вернуть обе стороны к состоянию на момент открытия сравнения');
     _saveBtnEl = makeBtn('Сохранить файл', 'btn-primary xkeen-diff-save-btn hidden',
       () => saveComparedFile(),
       'Сохранить активный буфер в файл (Ctrl+S)');
     _closeBtnEl = makeBtn('Закрыть', 'btn-secondary', () => close('close'), 'Закрыть окно сравнения (Esc)');
+    footActions.appendChild(_revertBtnEl);
     footActions.appendChild(_saveBtnEl);
     footActions.appendChild(_closeBtnEl);
     foot.appendChild(summary);
@@ -413,6 +420,7 @@
       });
     }
     _setSideDraft(side, false);
+    if (!_dirtySinceOpen && !_hasAnyDraft()) _captureBaselineState();
     refreshActionButtons();
     try {
       const leftDesc = _activeSpec && _activeSpec.left && _activeSpec.left.descriptor;
@@ -904,6 +912,16 @@
     _draftSideState[sideKey] = !!flag;
   }
 
+  function _captureBaselineState() {
+    _baselineLeft = asString(_activeSpec && _activeSpec.left && _activeSpec.left.text);
+    _baselineRight = asString(_activeSpec && _activeSpec.right && _activeSpec.right.text);
+  }
+
+  function _resetBaselineState() {
+    _baselineLeft = '';
+    _baselineRight = '';
+  }
+
   function _getDraftSaveSide() {
     if (_isSideDraft('left')) return 'left';
     if (_isSideDraft('right')) return 'right';
@@ -938,6 +956,11 @@
     return !!(scope && isFn(scope.save) && _hasWritableBufferSide());
   }
 
+  function _canRevertFromDiff() {
+    if (!_activeSpec) return false;
+    return _hasWritableBufferSide();
+  }
+
   function _hasAnyDiff() {
     if (_backendKind === 'monaco') {
       if (!_diffEditor || !isFn(_diffEditor.getLineChanges)) return false;
@@ -964,6 +987,12 @@
   function _saveDisabledReason() {
     if (!_canSaveFromDiff()) return null;
     if (!_hasAnyDiff() && !_hasAnyDraft()) return 'Нет изменений для сохранения';
+    return '';
+  }
+
+  function _revertDisabledReason() {
+    if (!_canRevertFromDiff()) return null;
+    if (!_dirtySinceOpen && !_hasAnyDraft()) return 'Нет изменений для отката';
     return '';
   }
 
@@ -996,6 +1025,8 @@
       'Перенести текущий хунк из правой версии в левую');
     _setBtnState(_applyToRightBtnEl, _applyDisabledReason('right'),
       'Перенести текущий хунк из левой версии в правую');
+    _setBtnState(_revertBtnEl, _revertDisabledReason(),
+      'Отменить все перенесённые изменения и вернуть исходное состояние');
     const saveActive = _saveDisabledReason() === '';
     const saveTip = (_dirtySinceOpen && saveActive)
       ? 'Сохранить · есть несохранённые изменения (Ctrl+S)'
@@ -1252,6 +1283,42 @@
     showFeedback(targetSide === 'left' ? 'Хунк перенесён в левую версию' : 'Хунк перенесён в правую версию', 'success');
   }
 
+  async function revertComparedChanges() {
+    if (!_canRevertFromDiff()) return;
+    if (!_dirtySinceOpen && !_hasAnyDraft()) {
+      showFeedback('Нет изменений для отката', 'info');
+      return;
+    }
+
+    showError('');
+    const leftBaseline = asString(_baselineLeft);
+    const rightBaseline = asString(_baselineRight);
+    const bufferSide = _getVisibleBufferSide();
+
+    if (bufferSide) {
+      const bufferBaseline = bufferSide === 'left' ? leftBaseline : rightBaseline;
+      try {
+        await _writeTextToSide(bufferSide, bufferBaseline);
+      } catch (err) {
+        showError('Отмена изменений: ' + String(err && err.message || err));
+        return;
+      }
+      _syncBufferSideText(bufferSide, bufferBaseline);
+    }
+
+    if (!_isBufferDescriptor(_activeSpec && _activeSpec.left && _activeSpec.left.descriptor)) {
+      _setSideTextState('left', leftBaseline, false);
+    }
+    if (!_isBufferDescriptor(_activeSpec && _activeSpec.right && _activeSpec.right.descriptor)) {
+      _setSideTextState('right', rightBaseline, false);
+    }
+
+    _dirtySinceOpen = false;
+    refreshActionButtons();
+    setTimeout(updateSummary, 60);
+    showFeedback('Изменения отменены', 'success');
+  }
+
   async function saveComparedFile() {
     if (!_canSaveFromDiff()) return;
     if (!_hasAnyDiff() && !_hasAnyDraft()) {
@@ -1297,6 +1364,7 @@
 
     await _refreshSideFromDescriptor('left');
     await _refreshSideFromDescriptor('right');
+    _captureBaselineState();
     refreshActionButtons();
     setTimeout(updateSummary, 60);
   }
@@ -1334,6 +1402,7 @@
     _activeSpec = o;
     _draftSideState = { left: false, right: false };
     _dirtySinceOpen = false;
+    _captureBaselineState();
 
     if (_titleEl) _titleEl.textContent = asString(o.title) || 'Сравнить версии';
 
@@ -1472,6 +1541,7 @@
     _sourceOptions = [];
     _draftSideState = { left: false, right: false };
     _dirtySinceOpen = false;
+    _resetBaselineState();
     const resolver = _resolveOpen;
     _resolveOpen = null;
     if (isFn(resolver)) {
