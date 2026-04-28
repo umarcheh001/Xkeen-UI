@@ -61,6 +61,8 @@
   let _dirtySinceOpen = false;
   let _baselineLeft = '';
   let _baselineRight = '';
+  let _activeMonacoHunk = null;
+  let _activeMonacoDecorationIds = { left: [], right: [] };
 
   // 'monaco' | 'cm6' — chosen at open() time per the active editor engine.
   let _backendKind = null;
@@ -458,6 +460,126 @@
       if (lazy && isFn(lazy.scheduleLayout)) lazy.scheduleLayout();
     } catch (e) {}
     try { if (_backendKind === 'monaco' && _diffEditor && isFn(_diffEditor.layout)) _diffEditor.layout(); } catch (e2) {}
+    if (_backendKind === 'monaco') setTimeout(() => _syncActiveMonacoHunkHighlight('right'), 0);
+  }
+
+  function _getMonacoInnerEditor(side) {
+    if (!_diffEditor) return null;
+    try {
+      if (side === 'left' && isFn(_diffEditor.getOriginalEditor)) return _diffEditor.getOriginalEditor();
+      if (side === 'right' && isFn(_diffEditor.getModifiedEditor)) return _diffEditor.getModifiedEditor();
+    } catch (e) {}
+    return null;
+  }
+
+  function _normalizeMonacoHighlightLine(startLine, endLine, fallbackLine) {
+    let start = Number(startLine || 0);
+    let end = Number(endLine || 0);
+    const fallback = Math.max(1, Number(fallbackLine || 1));
+    if (start <= 0 && end <= 0) {
+      start = fallback;
+      end = fallback;
+    } else {
+      if (start <= 0) start = end > 0 ? end : fallback;
+      if (end <= 0) end = start;
+    }
+    if (end < start) end = start;
+    return { start: start, end: end };
+  }
+
+  function _createMonacoHunkDecoration(side, change) {
+    if (!_activeMonaco || !change) return null;
+    const isLeft = side === 'left';
+    const startLine = isLeft ? change.originalStartLineNumber : change.modifiedStartLineNumber;
+    const endLine = isLeft ? change.originalEndLineNumber : change.modifiedEndLineNumber;
+    const fallbackLine = isLeft
+      ? (change.originalStartLineNumber || change.modifiedStartLineNumber || change.modifiedEndLineNumber || 1)
+      : (change.modifiedStartLineNumber || change.originalStartLineNumber || change.originalEndLineNumber || 1);
+    const span = _normalizeMonacoHighlightLine(startLine, endLine, fallbackLine);
+    return {
+      range: new _activeMonaco.Range(span.start, 1, span.end, 1),
+      options: {
+        description: 'xkeen-diff-active-hunk-' + side,
+        isWholeLine: true,
+        className: 'xkeen-diff-active-hunk-line xkeen-diff-active-hunk-line-' + side,
+        linesDecorationsClassName: 'xkeen-diff-active-hunk-gutter xkeen-diff-active-hunk-gutter-' + side,
+      },
+    };
+  }
+
+  function _clearActiveMonacoHunkHighlight() {
+    const leftEditor = _getMonacoInnerEditor('left');
+    const rightEditor = _getMonacoInnerEditor('right');
+    try {
+      if (leftEditor && isFn(leftEditor.deltaDecorations)) {
+        _activeMonacoDecorationIds.left = leftEditor.deltaDecorations(_activeMonacoDecorationIds.left || [], []);
+      }
+    } catch (e) {}
+    try {
+      if (rightEditor && isFn(rightEditor.deltaDecorations)) {
+        _activeMonacoDecorationIds.right = rightEditor.deltaDecorations(_activeMonacoDecorationIds.right || [], []);
+      }
+    } catch (e2) {}
+    _activeMonacoHunk = null;
+  }
+
+  function _applyActiveMonacoHunkHighlight(change) {
+    if (!_activeMonaco || !_diffEditor || !change) {
+      _clearActiveMonacoHunkHighlight();
+      return;
+    }
+    const leftEditor = _getMonacoInnerEditor('left');
+    const rightEditor = _getMonacoInnerEditor('right');
+    const leftDecorations = [];
+    const rightDecorations = [];
+    const leftDecoration = _createMonacoHunkDecoration('left', change);
+    const rightDecoration = _createMonacoHunkDecoration('right', change);
+    if (leftDecoration) leftDecorations.push(leftDecoration);
+    if (rightDecoration) rightDecorations.push(rightDecoration);
+    try {
+      if (leftEditor && isFn(leftEditor.deltaDecorations)) {
+        _activeMonacoDecorationIds.left = leftEditor.deltaDecorations(_activeMonacoDecorationIds.left || [], leftDecorations);
+      }
+    } catch (e) {}
+    try {
+      if (rightEditor && isFn(rightEditor.deltaDecorations)) {
+        _activeMonacoDecorationIds.right = rightEditor.deltaDecorations(_activeMonacoDecorationIds.right || [], rightDecorations);
+      }
+    } catch (e2) {}
+    _activeMonacoHunk = change || null;
+  }
+
+  function _syncActiveMonacoHunkHighlight(preferredSide) {
+    if (_backendKind !== 'monaco' || !_diffEditor || !isFn(_diffEditor.getLineChanges)) {
+      _clearActiveMonacoHunkHighlight();
+      return null;
+    }
+    let changes = [];
+    try {
+      changes = _diffEditor.getLineChanges() || [];
+    } catch (e) {
+      changes = [];
+    }
+    if (!changes.length) {
+      _clearActiveMonacoHunkHighlight();
+      return null;
+    }
+    const sideKey = preferredSide === 'left' ? 'left' : 'right';
+    const primaryEditor = _getMonacoInnerEditor(sideKey);
+    const fallbackEditor = _getMonacoInnerEditor(sideKey === 'left' ? 'right' : 'left');
+    const editor = primaryEditor || fallbackEditor;
+    let currentLine = 1;
+    try {
+      const pos = editor && isFn(editor.getPosition) ? editor.getPosition() : null;
+      currentLine = pos ? Number(pos.lineNumber || 1) : 1;
+    } catch (e2) {}
+    const chunk = _pickMonacoHunk(changes, currentLine, 1);
+    if (!chunk) {
+      _clearActiveMonacoHunkHighlight();
+      return null;
+    }
+    _applyActiveMonacoHunkHighlight(chunk);
+    return chunk;
   }
 
   function navigateDiff(direction) {
@@ -474,7 +596,9 @@
       if (inner && isFn(inner.getAction)) {
         const action = inner.getAction(id);
         if (action && isFn(action.run)) {
-          Promise.resolve(action.run()).catch(() => {});
+          Promise.resolve(action.run())
+            .then(() => setTimeout(() => _syncActiveMonacoHunkHighlight('right'), 20))
+            .catch(() => {});
           return;
         }
       }
@@ -511,6 +635,7 @@
             column: 1,
           });
         }
+        _applyActiveMonacoHunkHighlight(target);
       }
     } catch (e) {}
   }
@@ -521,14 +646,17 @@
       if (_backendKind === 'cm6') {
         const stats = cm6Stats();
         if (!stats.count) {
+          _clearActiveMonacoHunkHighlight();
           _summaryEl.textContent = 'Различий нет';
           return;
         }
+        _clearActiveMonacoHunkHighlight();
         _summaryEl.textContent = 'Изменений: ' + stats.count + '  ·  +' + stats.added + ' / −' + stats.removed;
         return;
       }
       const changes = _diffEditor && isFn(_diffEditor.getLineChanges) ? (_diffEditor.getLineChanges() || []) : [];
       if (!changes.length) {
+        _clearActiveMonacoHunkHighlight();
         _summaryEl.textContent = 'Различий нет';
         return;
       }
@@ -544,7 +672,9 @@
         if (oe >= os && os > 0) removed += (oe - os + 1);
       }
       _summaryEl.textContent = 'Изменений: ' + changes.length + '  ·  +' + added + ' / −' + removed;
+      _syncActiveMonacoHunkHighlight('right');
     } catch (e) {
+      _clearActiveMonacoHunkHighlight();
       _summaryEl.textContent = '';
     }
     try { refreshActionButtons(); } catch (e) {}
@@ -565,12 +695,15 @@
   }
 
   function disposeDiff() {
+    _clearActiveMonacoHunkHighlight();
     try { if (_diffEditor && isFn(_diffEditor.dispose)) _diffEditor.dispose(); } catch (e) {}
     _diffEditor = null;
     try { if (_originalModel && isFn(_originalModel.dispose)) _originalModel.dispose(); } catch (e) {}
     try { if (_modifiedModel && isFn(_modifiedModel.dispose)) _modifiedModel.dispose(); } catch (e) {}
     _originalModel = null;
     _modifiedModel = null;
+    _activeMonacoDecorationIds = { left: [], right: [] };
+    _activeMonacoHunk = null;
     disposeCM6();
     _backendKind = null;
   }
@@ -1480,6 +1613,18 @@
             _diffEditor.onDidUpdateDiff(updateSummary);
           }
         } catch (e) {}
+        try {
+          const originalEditor = _getMonacoInnerEditor('left');
+          if (originalEditor && isFn(originalEditor.onDidChangeCursorPosition)) {
+            originalEditor.onDidChangeCursorPosition(() => _syncActiveMonacoHunkHighlight('left'));
+          }
+        } catch (e2) {}
+        try {
+          const modifiedEditor = _getMonacoInnerEditor('right');
+          if (modifiedEditor && isFn(modifiedEditor.onDidChangeCursorPosition)) {
+            modifiedEditor.onDidChangeCursorPosition(() => _syncActiveMonacoHunkHighlight('right'));
+          }
+        } catch (e3) {}
         setTimeout(updateSummary, 80);
 
         try { if (isFn(_diffEditor.layout)) _diffEditor.layout(); } catch (e) {}
