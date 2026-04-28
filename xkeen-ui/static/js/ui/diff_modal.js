@@ -76,6 +76,7 @@
   let _cm6MergeView = null;
   let _cm6View = null;
   let _cm6BackendMode = null; // 'split' | 'inline'
+  let _cm6ScrollUnbinders = [];
 
   function isFn(x) { return typeof x === 'function'; }
   function asString(v) { return v == null ? '' : String(v); }
@@ -802,6 +803,12 @@
   }
 
   function disposeCM6() {
+    if (_cm6ScrollUnbinders && _cm6ScrollUnbinders.length) {
+      for (let i = 0; i < _cm6ScrollUnbinders.length; i += 1) {
+        try { _cm6ScrollUnbinders[i](); } catch (e) {}
+      }
+    }
+    _cm6ScrollUnbinders = [];
     try { if (_cm6MergeView && isFn(_cm6MergeView.destroy)) _cm6MergeView.destroy(); } catch (e) {}
     try { if (_cm6View && isFn(_cm6View.destroy)) _cm6View.destroy(); } catch (e) {}
     _cm6MergeView = null;
@@ -825,10 +832,43 @@
     const cm = await import('codemirror');
     let langJson = null;
     let langYaml = null;
+    let language = null;
+    let lezerHighlight = null;
     try { langJson = await import('@codemirror/lang-json'); } catch (e) {}
     try { langYaml = await import('@codemirror/lang-yaml'); } catch (e) {}
-    _cm6Runtime = { merge, state, view, cm, langJson, langYaml };
+    try { language = await import('@codemirror/language'); } catch (e) {}
+    try { lezerHighlight = await import('@lezer/highlight'); } catch (e) {}
+    _cm6Runtime = { merge, state, view, cm, langJson, langYaml, language, lezerHighlight };
     return _cm6Runtime;
+  }
+
+  function cm6HighlightExtension(rt) {
+    const lang = rt && rt.language;
+    const lez = rt && rt.lezerHighlight;
+    if (!lang || !lez || !lang.HighlightStyle || !isFn(lang.HighlightStyle.define) || !isFn(lang.syntaxHighlighting)) {
+      return null;
+    }
+    const t = lez.tags;
+    if (!t) return null;
+    try {
+      const style = lang.HighlightStyle.define([
+        { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--xk-cm-comment)' },
+        { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword], color: 'var(--xk-cm-keyword)', fontWeight: '600' },
+        { tag: [t.string, t.special(t.string), t.regexp], color: 'var(--xk-cm-string)' },
+        { tag: [t.number, t.integer, t.float], color: 'var(--xk-cm-number)' },
+        { tag: [t.bool, t.null, t.atom], color: 'var(--xk-cm-atom)', fontWeight: '600' },
+        { tag: [t.propertyName, t.attributeName, t.labelName], color: 'var(--xk-cm-property)' },
+        { tag: [t.variableName, t.name], color: 'var(--xk-cm-variable)' },
+        { tag: [t.definition(t.variableName), t.definition(t.propertyName), t.definition(t.name)], color: 'var(--xk-cm-definition)', fontWeight: '600' },
+        { tag: [t.typeName, t.className, t.namespace], color: 'var(--xk-cm-type)' },
+        { tag: [t.operator], color: 'var(--xk-cm-operator, var(--xk-cm-punctuation))' },
+        { tag: [t.punctuation, t.separator], color: 'var(--xk-cm-delimiter, var(--xk-cm-punctuation))' },
+        { tag: [t.brace, t.squareBracket, t.paren], color: 'var(--xk-cm-bracket-depth-0, var(--xk-cm-punctuation))' },
+        { tag: [t.meta, t.processingInstruction, t.annotation], color: 'var(--xk-cm-meta)' },
+        { tag: [t.invalid], color: 'var(--xk-cm-invalid)', textDecoration: 'underline wavy var(--xk-cm-error)' },
+      ]);
+      return lang.syntaxHighlighting(style);
+    } catch (e) { return null; }
   }
 
   function cm6LanguageExtension(rt, language) {
@@ -847,6 +887,8 @@
     if (rt.cm && rt.cm.basicSetup) ext.push(rt.cm.basicSetup);
     const langExt = cm6LanguageExtension(rt, language);
     if (langExt) ext.push(langExt);
+    const hlExt = cm6HighlightExtension(rt);
+    if (hlExt) ext.push(hlExt);
     if (readOnly && rt.view && rt.view.EditorView && isFn(rt.view.EditorView.editable && rt.view.EditorView.editable.of)) {
       ext.push(rt.view.EditorView.editable.of(false));
     }
@@ -907,8 +949,36 @@
       if (collapseUnchanged) mergeOpts.collapseUnchanged = collapseUnchanged;
       _cm6MergeView = new rt.merge.MergeView(mergeOpts);
       _cm6BackendMode = 'split';
+      _bindCm6ScrollSync();
     }
     _backendKind = 'cm6';
+  }
+
+  function _bindCm6ScrollSync() {
+    if (!_cm6MergeView || !_cm6MergeView.a || !_cm6MergeView.b) return;
+    const aDom = _cm6MergeView.a.scrollDOM;
+    const bDom = _cm6MergeView.b.scrollDOM;
+    if (!aDom || !bDom) return;
+    let suppress = false;
+    function handler(src, dst) {
+      return () => {
+        if (suppress) return;
+        suppress = true;
+        try {
+          dst.scrollTop = src.scrollTop;
+          dst.scrollLeft = src.scrollLeft;
+        } catch (e) {}
+        // Reset on next frame so genuine user scrolls aren't swallowed.
+        try { requestAnimationFrame(() => { suppress = false; }); }
+        catch (e) { setTimeout(() => { suppress = false; }, 0); }
+      };
+    }
+    const aHandler = handler(aDom, bDom);
+    const bHandler = handler(bDom, aDom);
+    aDom.addEventListener('scroll', aHandler, { passive: true });
+    bDom.addEventListener('scroll', bHandler, { passive: true });
+    _cm6ScrollUnbinders.push(() => aDom.removeEventListener('scroll', aHandler));
+    _cm6ScrollUnbinders.push(() => bDom.removeEventListener('scroll', bHandler));
   }
 
   function cm6PrimaryView() {

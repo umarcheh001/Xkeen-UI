@@ -95,6 +95,14 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert ".xkeen-diff-save-btn.is-disabled" in styles
     assert ".xkeen-diff-save-btn.is-dirty::before" in styles
 
+    # CM6 backend visual contracts: vibrant Monaco-like syntax highlight,
+    # synchronized two-pane scrolling.
+    assert "function cm6HighlightExtension(rt)" in diff_modal
+    assert "function _bindCm6ScrollSync()" in diff_modal
+    assert "_bindCm6ScrollSync();" in diff_modal
+    assert "@codemirror/language" in diff_modal
+    assert "@lezer/highlight" in diff_modal
+
     assert "reason: 'diff.apply.side'" in routing
     assert "applyTextToSide: (_side, newText) => {" in routing
 
@@ -106,4 +114,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260428-diff11" in editor_shared
+    assert "?v=20260428-diff12" in editor_shared

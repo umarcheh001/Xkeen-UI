@@ -28863,21 +28863,48 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
   overscroll-behavior: contain;
 }
 
+/* Diff line/text backgrounds — calibrated against Monaco's default vs-dark
+   diff palette (subtle red for removed lines, subtle green for added lines,
+   stronger inline highlights for the actual changed runs of text). */
 .xkeen-diff-modal .xkeen-diff-host .cm-changedLine {
-  background: rgba(96, 165, 250, 0.10);
+  background: rgba(255, 0, 0, 0.18);
 }
 
 .xkeen-diff-modal .xkeen-diff-host .cm-deletedChunk {
-  background: rgba(239, 68, 68, 0.16);
+  background: rgba(255, 0, 0, 0.18);
 }
 
-.xkeen-diff-modal .xkeen-diff-host .cm-insertedLine,
-.xkeen-diff-modal .xkeen-diff-host .cm-changedText {
-  background: rgba(34, 197, 94, 0.18);
-}
-
-.xkeen-diff-modal .xkeen-diff-host .cm-changedText {
+.xkeen-diff-modal .xkeen-diff-host .cm-deletedChunk .cm-deletedText,
+.xkeen-diff-modal .xkeen-diff-host .cm-deletedLine .cm-deletedText {
+  background: rgba(255, 0, 0, 0.42);
   color: inherit;
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-insertedLine {
+  background: rgba(46, 204, 113, 0.20);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-changedText {
+  background: rgba(46, 204, 113, 0.42);
+  color: inherit;
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-changedLine,
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-deletedChunk {
+  background: rgba(229, 83, 83, 0.18);
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-deletedChunk .cm-deletedText,
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-deletedLine .cm-deletedText {
+  background: rgba(229, 83, 83, 0.36);
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-insertedLine {
+  background: rgba(46, 160, 67, 0.20);
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-changedText {
+  background: rgba(46, 160, 67, 0.36);
 }
 
 /* "$ unchanged lines" fold marker — @codemirror/merge default styles use a
