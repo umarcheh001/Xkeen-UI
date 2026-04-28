@@ -44,6 +44,8 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function _setAppliedSummaryCount(count)" in diff_modal
     assert "function _resetAppliedSummaryCount()" in diff_modal
     assert "function _formatSummaryText(base)" in diff_modal
+    assert "function _readCm6SideText(side)" in diff_modal
+    assert "function _queueCm6SplitRefresh(next)" in diff_modal
     assert "function _getMonacoInnerEditor(side)" in diff_modal
     assert "function _applyActiveMonacoHunkHighlight(change)" in diff_modal
     assert "function _syncActiveMonacoHunkHighlight(preferredSide)" in diff_modal
@@ -119,4 +121,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260428-diff14" in editor_shared
+    assert "?v=20260429-diff15" in editor_shared

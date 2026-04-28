@@ -77,6 +77,7 @@
   let _cm6View = null;
   let _cm6BackendMode = null; // 'split' | 'inline'
   let _cm6ScrollUnbinders = [];
+  let _cm6RefreshPromise = Promise.resolve();
 
   function isFn(x) { return typeof x === 'function'; }
   function asString(v) { return v == null ? '' : String(v); }
@@ -814,6 +815,7 @@
     _cm6MergeView = null;
     _cm6View = null;
     _cm6BackendMode = null;
+    _cm6RefreshPromise = Promise.resolve();
   }
 
   function pickBackend() {
@@ -986,6 +988,54 @@
     return _cm6MergeView ? _cm6MergeView.b : null;
   }
 
+  function _readCm6SideText(side) {
+    const sideKey = side === 'right' ? 'right' : 'left';
+    try {
+      if (_activeSpec && _activeSpec[sideKey] && typeof _activeSpec[sideKey].text === 'string') {
+        return _activeSpec[sideKey].text;
+      }
+    } catch (e) {}
+    if (_cm6BackendMode === 'inline') {
+      try {
+        if (sideKey === 'right' && _cm6View && _cm6View.state && _cm6View.state.doc) {
+          return _cm6View.state.doc.toString();
+        }
+        if (sideKey === 'left' && _cm6Runtime && _cm6Runtime.merge && isFn(_cm6Runtime.merge.getOriginalDoc) && _cm6View && _cm6View.state) {
+          const originalDoc = _cm6Runtime.merge.getOriginalDoc(_cm6View.state);
+          return originalDoc ? originalDoc.toString() : '';
+        }
+      } catch (e2) {}
+      return '';
+    }
+    const view = sideKey === 'left'
+      ? (_cm6MergeView && _cm6MergeView.a ? _cm6MergeView.a : null)
+      : (_cm6MergeView && _cm6MergeView.b ? _cm6MergeView.b : null);
+    try {
+      return view && view.state && view.state.doc ? view.state.doc.toString() : '';
+    } catch (e3) {}
+    return '';
+  }
+
+  function _queueCm6SplitRefresh(next) {
+    const snapshot = {
+      leftText: asString(next && next.leftText),
+      rightText: asString(next && next.rightText),
+      language: (next && next.language) || (_activeSpec && _activeSpec.language) || 'text',
+      mode: 'split',
+      readOnly: next && next.readOnly !== false,
+    };
+    _cm6RefreshPromise = Promise.resolve(_cm6RefreshPromise)
+      .catch(() => {})
+      .then(() => renderCM6Diff(_hostEl, snapshot))
+      .then(() => {
+        setTimeout(updateSummary, 60);
+      })
+      .catch((err) => {
+        showError('CM6 diff render: ' + String(err && err.message || err));
+      });
+    return _cm6RefreshPromise;
+  }
+
   function cm6SetText(side, text) {
     const rt = _cm6Runtime;
     if (!rt) return;
@@ -1019,11 +1069,15 @@
       } catch (e) {}
       return;
     }
-    const target = side === 'left' ? (_cm6MergeView && _cm6MergeView.a) : (_cm6MergeView && _cm6MergeView.b);
-    if (!target) return;
-    try {
-      target.dispatch({ changes: { from: 0, to: target.state.doc.length, insert: value } });
-    } catch (e) {}
+    const sideKey = side === 'right' ? 'right' : 'left';
+    const leftText = sideKey === 'left' ? value : _readCm6SideText('left');
+    const rightText = sideKey === 'right' ? value : _readCm6SideText('right');
+    _queueCm6SplitRefresh({
+      leftText: leftText,
+      rightText: rightText,
+      language: _activeSpec && _activeSpec.language,
+      readOnly: _activeSpec && _activeSpec.readOnly !== false,
+    });
   }
 
   function cm6Navigate(dir) {
@@ -1465,6 +1519,19 @@
   }
 
   function _scheduleNextDiffNavigation() {
+    if (_backendKind === 'cm6') {
+      Promise.resolve(_cm6RefreshPromise)
+        .catch(() => {})
+        .then(() => {
+          setTimeout(() => {
+            try { updateSummary(); } catch (e) {}
+            try {
+              if (_hasAnyDiff()) navigateDiff(1);
+            } catch (e2) {}
+          }, 60);
+        });
+      return;
+    }
     setTimeout(() => {
       try { updateSummary(); } catch (e) {}
       try {
