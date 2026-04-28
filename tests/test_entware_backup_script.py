@@ -119,3 +119,94 @@ def test_entware_backup_uses_local_backup_dir_when_rci_is_unavailable(tmp_path: 
     assert "Локальная папка бэкапов" in output
     assert "Бэкап успешно сохранён" in output
     assert list(local_backup_dir.glob("*entware_backup*.tar.gz"))
+
+
+def test_entware_backup_deduplicates_same_device_mounted_via_opt(tmp_path: Path) -> None:
+    opt_dir = tmp_path / "opt"
+    tmp_dir = tmp_path / "tmp"
+    local_backup_dir = tmp_path / "opt-backups"
+    usb_reserve_dir = tmp_path / "usb-reserve"
+    usb_entware_dir = tmp_path / "usb-entware"
+    bin_dir = tmp_path / "bin"
+    mounts_file = tmp_path / "mounts.txt"
+
+    for path in (opt_dir, tmp_dir, local_backup_dir, usb_reserve_dir, usb_entware_dir, bin_dir):
+        path.mkdir(parents=True, exist_ok=True)
+
+    script_text = SCRIPT_SRC.read_text(encoding="utf-8")
+    script_text = script_text.replace('TMP_DIR="/tmp"', f'TMP_DIR="{_to_sh_path(tmp_dir)}"')
+    script_text = script_text.replace('OPT_DIR="/opt"', f'OPT_DIR="{_to_sh_path(opt_dir)}"')
+    script_text = script_text.replace(
+        'LOCAL_BACKUP_DIR="${XKEEN_LOCAL_BACKUP_DIR:-/opt/backups}"',
+        f'LOCAL_BACKUP_DIR="${{XKEEN_LOCAL_BACKUP_DIR:-{_to_sh_path(local_backup_dir)}}}"',
+    )
+    script_text = script_text.replace('STORAGE_DIR="/storage"', 'STORAGE_DIR="/definitely-missing-storage"')
+
+    script_dst = tmp_path / "entware_backup.sh"
+    script_dst.write_text(script_text, encoding="utf-8")
+    script_dst.chmod(script_dst.stat().st_mode | stat.S_IEXEC)
+
+    mounts_file.write_text(
+        "\n".join(
+            [
+                f"/dev/sda2 {_to_sh_path(usb_reserve_dir)} ext4 rw 0 0",
+                f"/dev/sda3 {_to_sh_path(usb_entware_dir)} ext4 rw 0 0",
+                f"/dev/sda3 {_to_sh_path(opt_dir)} ext4 rw 0 0",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    _write_exec(
+        bin_dir / "curl",
+        "#!/bin/sh\n"
+        "exit 1\n",
+    )
+    _write_exec(
+        bin_dir / "opkg",
+        "#!/bin/sh\n"
+        "case \"$1\" in\n"
+        "  list-installed)\n"
+        "    printf '%s\\n' 'tar - 1.0'\n"
+        "    printf '%s\\n' 'libacl - 1.0'\n"
+        "    ;;\n"
+        "esac\n"
+        "exit 0\n",
+    )
+    _write_exec(
+        bin_dir / "blkid",
+        "#!/bin/sh\n"
+        "case \"$1\" in\n"
+        "  /dev/sda2)\n"
+        "    printf '%s\\n' '/dev/sda2: LABEL=\"Rezerv\"'\n"
+        "    ;;\n"
+        "  /dev/sda3)\n"
+        "    printf '%s\\n' '/dev/sda3: LABEL=\"Entware\"'\n"
+        "    ;;\n"
+        "esac\n"
+        "exit 0\n",
+    )
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env["XKEEN_UI_STATE_DIR"] = _to_sh_path(tmp_path / "state")
+    env["XKEEN_PROC_MOUNTS_FILE"] = _to_sh_path(mounts_file)
+
+    result = subprocess.run(
+        [SH_PATH, str(script_dst)],
+        cwd=str(tmp_path),
+        env=env,
+        input="00\n",
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+
+    output = _strip_ansi(result.stdout + result.stderr)
+
+    assert result.returncode == 0, output
+    assert output.count("USB: Entware") == 1
+    assert "USB: Rezerv" in output

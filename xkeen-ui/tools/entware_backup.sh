@@ -30,6 +30,7 @@ DATE="$(date +%Y-%m-%d_%H-%M)"
 PACKAGES_LIST="tar libacl"
 STATE_DIR="${XKEEN_UI_STATE_DIR:-/opt/var/lib/xkeen-ui}"
 STATE_FILE="$STATE_DIR/backup.state"
+PROC_MOUNTS_FILE="${XKEEN_PROC_MOUNTS_FILE:-/proc/mounts}"
 
 # --- Globals for backup monitor ---
 BACKUP_MONITOR_PID=""
@@ -467,11 +468,39 @@ select_drive_add_option() {
   index=$((index + 1))
 }
 
-select_drive_add_usb_options() {
-  mount_rows=$(awk '$1 ~ /^\/dev\/(sd|mmcblk)/ {print $1 "\t" $2 "\t" $3}' /proc/mounts 2>/dev/null | awk -F '\t' '!seen[$2]++ { print $0 }')
-  [ -n "$mount_rows" ] || return 0
+get_usb_candidate_devices() {
+  awk '$1 ~ /^\/dev\/(sd|mmcblk|nvme)/ && !seen[$1]++ { print $1 }' "$PROC_MOUNTS_FILE" 2>/dev/null
+}
 
-  while IFS="$(printf '\t')" read -r device mount_point fs_type; do
+get_usb_device_mount_row() {
+  device="$1"
+  [ -n "$device" ] || return 0
+
+  awk -v dev="$device" -v opt_dir="$OPT_DIR" '
+    function rank(mp) {
+      if (mp ~ /^\/tmp\/mnt\//) return 0
+      if (mp ~ /^\/media\//) return 1
+      if (mp ~ /^\/mnt\//) return 2
+      if (mp == opt_dir) return 9
+      return 5
+    }
+
+    $1 == dev && !seen[$2]++ {
+      print rank($2) "\t" $2 "\t" $3
+    }
+  ' "$PROC_MOUNTS_FILE" 2>/dev/null | sort -n | awk -F '\t' 'NR == 1 { print $2 "\t" $3 }'
+}
+
+select_drive_add_usb_options() {
+  candidate_devices=$(get_usb_candidate_devices)
+  [ -n "$candidate_devices" ] || return 0
+
+  while IFS= read -r device; do
+    [ -n "$device" ] || continue
+    mount_row=$(get_usb_device_mount_row "$device")
+    mount_point=$(printf '%s' "$mount_row" | awk -F '\t' 'NR==1 {print $1}')
+    fs_type=$(printf '%s' "$mount_row" | awk -F '\t' 'NR==1 {print $2}')
+
     [ -d "$mount_point" ] || continue
     [ "$mount_point" = "$STORAGE_DIR" ] && continue
 
@@ -487,7 +516,7 @@ select_drive_add_usb_options() {
       "$mount_point" \
       "USB: $mount_name ($fs_label, $(get_path_usage_label "$mount_point"))"
   done <<EOF2
-$mount_rows
+$candidate_devices
 EOF2
 }
 
