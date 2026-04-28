@@ -106,6 +106,7 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     # resolve to the shared dark-Monaco-like palette and selection stays visible.
     assert "--xk-cm-keyword: #569cd6;" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-selectionBackground" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-host .cm-gutters {" in styles
 
     assert "reason: 'diff.apply.side'" in routing
     assert "applyTextToSide: (_side, newText) => {" in routing
@@ -118,4 +119,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260428-diff13" in editor_shared
+    assert "?v=20260428-diff14" in editor_shared

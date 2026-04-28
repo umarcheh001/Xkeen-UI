@@ -28856,6 +28856,46 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host {
   color: inherit;
 }
 
+/* Gutters & editor surface: the CM6 baseTheme paints .cm-gutters white on
+   light system and unstyled (= white) when no JS theme is registered. We
+   apply only HighlightStyle here, not EditorView.theme(...), so style the
+   gutters via CSS to match the rest of the dark panel. */
+.xkeen-diff-modal .xkeen-diff-host .cm-editor {
+  background-color: transparent;
+  color: var(--xk-cm-fg, var(--text, #e5e7eb));
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-content {
+  caret-color: var(--xk-cm-caret, #d4d4d4);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-gutters {
+  background-color: transparent;
+  color: var(--xk-cm-gutter-fg, #858585);
+  border-right: 1px solid rgba(96, 165, 250, 0.10);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-lineNumbers .cm-gutterElement,
+.xkeen-diff-modal .xkeen-diff-host .cm-foldGutter .cm-gutterElement {
+  color: var(--xk-cm-gutter-fg, #858585);
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-activeLineGutter {
+  background-color: transparent;
+  color: var(--xk-cm-active-line-fg, #c6c6c6);
+}
+
+/* mergeView center strip and per-side change indicator gutter */
+.xkeen-diff-modal .xkeen-diff-host .cm-mergeSpacer,
+.xkeen-diff-modal .xkeen-diff-host .cm-merge-revert,
+.xkeen-diff-modal .xkeen-diff-host .cm-changeGutter {
+  background-color: transparent;
+}
+
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
+  border-right-color: rgba(37, 99, 235, 0.16);
+}
+
 .xkeen-diff-modal .xkeen-diff-foot {
   flex: 0 0 auto;
   display: flex;
