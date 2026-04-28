@@ -70,7 +70,10 @@ def test_commands_panel_has_dedicated_prerelease_links_and_styles():
     assert 'id="core-mihomo-prerelease-update-btn"' in template
     assert '.commands-status-row .core-prerelease {' in styles
     assert '.commands-status-row .btn-prerelease-action {' in styles
-    assert 'function buildPrereleaseUpdateCommand(flag, tag)' in script
+    assert 'function buildPrereleaseUpdateCommand(flag, tag, coreLabel)' in script
+    assert "Авто-обновление ${normalizedCore} до pre-release ${normalizedTag}" in script
+    assert "UI автоматически ответит в меню xkeen:" in script
     assert "printf '%s\\\\n%s\\\\n' '9'" in script
+    assert 'btn.dataset.tooltip = btn.title;' in script
     assert "const xPre = x.prerelease || null;" in script
     assert "const mPre = m.prerelease || null;" in script

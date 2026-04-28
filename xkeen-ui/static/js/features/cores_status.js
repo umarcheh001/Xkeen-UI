@@ -114,6 +114,10 @@ let coresStatusModuleApi = null;
     return `'${raw.replace(/'/g, `'\\''`)}'`;
   }
 
+  function buildShellPrintfLine(text) {
+    return `printf '%s\\n' ${shSingleQuote(String(text == null ? '' : text))}`;
+  }
+
   async function getJSON(url) {
     const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
     const data = await res.json().catch(() => ({}));
@@ -178,11 +182,32 @@ let coresStatusModuleApi = null;
     );
   }
 
-  function buildPrereleaseUpdateCommand(flag, tag) {
+  function buildPrereleaseUpdateCommand(flag, tag, coreLabel) {
     const normalizedFlag = String(flag || '').trim();
     const normalizedTag = String(tag || '').trim();
+    const normalizedCore = String(coreLabel || '').trim() || 'core';
     if (!normalizedFlag || !normalizedTag) return '';
-    return `printf '%s\\n%s\\n' '9' ${shSingleQuote(normalizedTag)} | xkeen ${normalizedFlag}`;
+
+    const introLines = [
+      '',
+      `[Xkeen UI] Авто-обновление ${normalizedCore} до pre-release ${normalizedTag}`,
+      '[Xkeen UI] UI автоматически ответит в меню xkeen:',
+      '  1) 9 - ручной ввод версии',
+      `  2) ${normalizedTag} - выбранный pre-release`,
+      '',
+    ];
+
+    return [
+      ...introLines.map((line) => buildShellPrintfLine(line)),
+      `printf '%s\\n%s\\n' '9' ${shSingleQuote(normalizedTag)} | xkeen ${normalizedFlag}`,
+      '__xk_prerelease_status="$?"',
+      'if [ "$__xk_prerelease_status" -eq 0 ]; then',
+      `  ${buildShellPrintfLine('[Xkeen UI] Сценарий обновления завершён.')}`,
+      'else',
+      `  printf '%s\\n' "[Xkeen UI] Сценарий завершился с кодом $__xk_prerelease_status. Проверьте вывод выше."`,
+      'fi',
+      'unset __xk_prerelease_status',
+    ].join('; ');
   }
 
   async function runTerminalCommand(command, source = 'cores_status') {
@@ -265,7 +290,7 @@ let coresStatusModuleApi = null;
     const flag = String(btn.dataset.prereleaseFlag || '').trim();
     const tag = String(btn.dataset.prereleaseTag || '').trim();
     const coreLabel = String(btn.dataset.prereleaseCore || '').trim() || 'ядра';
-    const command = buildPrereleaseUpdateCommand(flag, tag);
+    const command = buildPrereleaseUpdateCommand(flag, tag, coreLabel);
     if (!command) {
       toastMsg(`Не удалось определить pre-release для ${coreLabel}.`, 'error');
       return;
@@ -278,7 +303,7 @@ let coresStatusModuleApi = null;
         toastMsg(`Не удалось запустить обновление ${coreLabel} до pre-release.`, 'error');
         return;
       }
-      toastMsg(`${coreLabel}: команда обновления до pre-release ${tag} отправлена в терминал.`, 'info');
+      toastMsg(`${coreLabel}: авто-обновление до pre-release ${tag} запущено, в терминале показаны подсказки по шагам.`, 'info');
     } finally {
       setBusy(btn, false);
     }
@@ -294,12 +319,14 @@ let coresStatusModuleApi = null;
       btn.removeAttribute('data-prerelease-flag');
       btn.removeAttribute('data-prerelease-core');
       btn.title = '';
+      btn.removeAttribute('data-tooltip');
       return;
     }
     btn.dataset.prereleaseTag = tag;
     btn.dataset.prereleaseFlag = String(flag || '').trim();
     btn.dataset.prereleaseCore = String(coreLabel || '').trim();
-    btn.title = `Запустить обновление ${coreLabel} до pre-release ${tag} через терминал.`;
+    btn.title = `Запустить обновление ${coreLabel} до pre-release ${tag} через терминал с авто-вводом: 9 и выбранный тег.`;
+    btn.dataset.tooltip = btn.title;
   }
 
   function setLoading(isLoading) {
