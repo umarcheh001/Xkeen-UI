@@ -28869,6 +28869,18 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host {
   caret-color: var(--xk-cm-caret, #d4d4d4);
 }
 
+.xkeen-diff-modal .xkeen-diff-host .cm-lineWrapping {
+  white-space: break-spaces;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.xkeen-diff-modal .xkeen-diff-host .cm-lineWrapping .cm-line {
+  white-space: inherit;
+  overflow-wrap: inherit;
+  word-break: inherit;
+}
+
 .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
   background-color: transparent;
   color: var(--xk-cm-gutter-fg, #858585);
@@ -28970,7 +28982,8 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
 
 .xkeen-diff-modal .xkeen-diff-host .cm-scroller {
   font-family: inherit;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   height: 100%;
   min-height: 0;
   max-height: 100%;

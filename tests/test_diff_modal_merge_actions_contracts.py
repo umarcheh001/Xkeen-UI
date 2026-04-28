@@ -40,6 +40,7 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function _supportsIgnoreTrimWhitespace()" in diff_modal
     assert "function _syncIgnoreWhitespaceToggle()" in diff_modal
     assert "function setIgnoreTrimWhitespace(flag)" in diff_modal
+    assert "rt.view.EditorView.lineWrapping" in diff_modal
     assert "async function _refreshSourceOptions(scopeDef)" in diff_modal
     assert "function _setAppliedSummaryCount(count)" in diff_modal
     assert "function _resetAppliedSummaryCount()" in diff_modal
@@ -108,7 +109,11 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     # resolve to the shared dark-Monaco-like palette and selection stays visible.
     assert "--xk-cm-keyword: #569cd6;" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-selectionBackground" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-host .cm-lineWrapping {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-host .cm-lineWrapping .cm-line {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-gutters {" in styles
+    assert "overflow-x: hidden;" in styles
+    assert "overflow-y: auto;" in styles
 
     assert "reason: 'diff.apply.side'" in routing
     assert "applyTextToSide: (_side, newText) => {" in routing
@@ -121,4 +126,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260429-diff15" in editor_shared
+    assert "?v=20260429-diff16" in editor_shared

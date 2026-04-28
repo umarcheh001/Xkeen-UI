@@ -887,6 +887,13 @@
   function cm6BaseExtensions(rt, language, readOnly) {
     const ext = [];
     if (rt.cm && rt.cm.basicSetup) ext.push(rt.cm.basicSetup);
+    // Diff modal should prefer wrapped lines over horizontal scrolling so
+    // long YAML/JSON comments and URLs stay readable in both panes.
+    try {
+      if (rt.view && rt.view.EditorView && rt.view.EditorView.lineWrapping) {
+        ext.push(rt.view.EditorView.lineWrapping);
+      }
+    } catch (e) {}
     const langExt = cm6LanguageExtension(rt, language);
     if (langExt) ext.push(langExt);
     const hlExt = cm6HighlightExtension(rt);
