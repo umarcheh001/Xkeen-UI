@@ -112,6 +112,9 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-lineWrapping {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-lineWrapping .cm-line {" in styles
     assert ".xkeen-diff-modal .xkeen-diff-host .cm-gutters {" in styles
+    assert "background: var(--xk-cm-bg, #020617);" in styles
+    assert "background-color: var(--xk-cm-bg, #020617);" in styles
+    assert "background-color: var(--xk-cm-gutter-bg, var(--xk-cm-bg, #020617));" in styles
     assert "overflow-x: hidden;" in styles
     assert "overflow-y: auto;" in styles
 
@@ -126,4 +129,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260429-diff16" in editor_shared
+    assert "?v=20260429-diff17" in editor_shared

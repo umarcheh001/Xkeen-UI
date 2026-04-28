@@ -28779,12 +28779,12 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--modal-border, #475569d1);
-  background: var(--modal-bg, #060e1eeb);
+  background: var(--xk-cm-bg, #020617);
   /* Mirror the CM6 palette defined on .xkeen-cm6-host so that the highlight
      style applied to the diff editor (which resolves var(--xk-cm-keyword)
      etc.) renders the same vibrant Monaco-like colors instead of cascading
      to undefined and falling back to the inherited fg color. */
-  --xk-cm-bg: #020817;
+  --xk-cm-bg: #020617;
   --xk-cm-fg: #d4d4d4;
   --xk-cm-caret: #d4d4d4;
   --xk-cm-selection: #2d4f8e;
@@ -28793,7 +28793,7 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
   --xk-cm-active-line: transparent;
   --xk-cm-active-line-gutter: transparent;
   --xk-cm-active-line-fg: #c6c6c6;
-  --xk-cm-gutter-bg: transparent;
+  --xk-cm-gutter-bg: #020617;
   --xk-cm-gutter-fg: #858585;
   --xk-cm-gutter-border: transparent;
   --xk-cm-comment: #6a9955;
@@ -28861,11 +28861,12 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host {
    apply only HighlightStyle here, not EditorView.theme(...), so style the
    gutters via CSS to match the rest of the dark panel. */
 .xkeen-diff-modal .xkeen-diff-host .cm-editor {
-  background-color: transparent;
+  background-color: var(--xk-cm-bg, #020617);
   color: var(--xk-cm-fg, var(--text, #e5e7eb));
 }
 
 .xkeen-diff-modal .xkeen-diff-host .cm-content {
+  background-color: transparent;
   caret-color: var(--xk-cm-caret, #d4d4d4);
 }
 
@@ -28882,7 +28883,7 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host {
 }
 
 .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
-  background-color: transparent;
+  background-color: var(--xk-cm-gutter-bg, var(--xk-cm-bg, #020617));
   color: var(--xk-cm-gutter-fg, #858585);
   border-right: 1px solid rgba(96, 165, 250, 0.10);
 }
@@ -28901,7 +28902,7 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host {
 .xkeen-diff-modal .xkeen-diff-host .cm-mergeSpacer,
 .xkeen-diff-modal .xkeen-diff-host .cm-merge-revert,
 .xkeen-diff-modal .xkeen-diff-host .cm-changeGutter {
-  background-color: transparent;
+  background-color: color-mix(in srgb, var(--xk-cm-bg, #020617) 88%, #071427 12%);
 }
 
 html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
@@ -28960,7 +28961,7 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
 }
 
 .xkeen-diff-modal .xkeen-diff-host .cm-mergeView {
-  background: transparent;
+  background: var(--xk-cm-bg, #020617);
   color: var(--text, #e5e7eb);
 }
 
@@ -28982,6 +28983,7 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-gutters {
 
 .xkeen-diff-modal .xkeen-diff-host .cm-scroller {
   font-family: inherit;
+  background-color: var(--xk-cm-bg, #020617);
   overflow-x: hidden;
   overflow-y: auto;
   height: 100%;
@@ -29042,8 +29044,8 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-changedText {
   background: linear-gradient(
       to bottom,
       transparent 0,
-      rgba(59, 90, 140, 0.32) 30%,
-      rgba(59, 90, 140, 0.32) 70%,
+      rgba(37, 65, 106, 0.30) 30%,
+      rgba(37, 65, 106, 0.30) 70%,
       transparent 100%
     );
   color: var(--muted, #9ca3af);
