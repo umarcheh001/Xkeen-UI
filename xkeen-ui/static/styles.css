@@ -28564,6 +28564,13 @@ html[data-theme="light"] .xk-routing-monaco-menu-sep {
   gap: 4px;
 }
 
+.xkeen-diff-modal .xkeen-diff-apply-group {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .xkeen-diff-modal .xkeen-diff-apply-btn {
   font-size: calc(12px * var(--xk-font-scale, 1));
   padding: 4px 10px;
@@ -28696,6 +28703,17 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
   color: var(--muted, #9ca3af);
 }
 
+.xkeen-diff-modal .xkeen-diff-foot-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.xkeen-diff-modal .xkeen-diff-save-btn {
+  white-space: nowrap;
+}
+
 /* Toolbar "Сравнить" button — shares the .xkeen-cm-tool look so it matches
    existing fullscreen/help icons in routing/inbounds/outbounds/mihomo. */
 .xkeen-cm-tool.xkeen-diff-trigger {
@@ -28817,6 +28835,11 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:f
     flex-wrap: wrap;
   }
 
+  .xkeen-diff-modal .xkeen-diff-apply-group {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .xkeen-diff-modal .xkeen-diff-labels {
     flex-wrap: wrap;
   }
@@ -28835,5 +28858,14 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-host .cm-collapsedLines:f
 
   .xkeen-diff-modal .xkeen-diff-source {
     max-width: none;
+  }
+
+  .xkeen-diff-modal .xkeen-diff-foot {
+    flex-wrap: wrap;
+  }
+
+  .xkeen-diff-modal .xkeen-diff-foot-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 }

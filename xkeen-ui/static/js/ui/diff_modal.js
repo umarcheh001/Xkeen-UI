@@ -40,7 +40,9 @@
   let _modeBtnInlineEl = null;
   let _navPrevBtnEl = null;
   let _navNextBtnEl = null;
-  let _applyBtnEl = null;
+  let _applyToLeftBtnEl = null;
+  let _applyToRightBtnEl = null;
+  let _saveBtnEl = null;
   let _closeBtnEl = null;
   let _xBtnEl = null;
 
@@ -133,15 +135,22 @@
     navGroup.appendChild(_navPrevBtnEl);
     navGroup.appendChild(_navNextBtnEl);
 
-    _applyBtnEl = makeBtn('Применить хунк ←', 'btn-secondary xkeen-diff-apply-btn hidden',
-      () => applyHunkFromRight(),
-      'Применить текущий хунк из правой стороны в активный буфер');
+    const applyGroup = document.createElement('div');
+    applyGroup.className = 'xkeen-diff-apply-group';
+    _applyToLeftBtnEl = makeBtn('← Влево', 'btn-secondary xkeen-diff-apply-btn hidden',
+      () => applyHunkToSide('left'),
+      'Перенести текущий хунк из правой версии в левую');
+    _applyToRightBtnEl = makeBtn('Вправо →', 'btn-secondary xkeen-diff-apply-btn hidden',
+      () => applyHunkToSide('right'),
+      'Перенести текущий хунк из левой версии в правую');
+    applyGroup.appendChild(_applyToLeftBtnEl);
+    applyGroup.appendChild(_applyToRightBtnEl);
 
     _xBtnEl = makeBtn('×', 'btn-icon xkeen-diff-close-x', () => close('x'), 'Закрыть окно сравнения (Esc)');
 
     headRight.appendChild(modeGroup);
     headRight.appendChild(navGroup);
-    headRight.appendChild(_applyBtnEl);
+    headRight.appendChild(applyGroup);
     headRight.appendChild(_xBtnEl);
 
     head.appendChild(title);
@@ -200,9 +209,16 @@
 
     const foot = document.createElement('div');
     foot.className = 'modal-actions xkeen-diff-foot';
+    const footActions = document.createElement('div');
+    footActions.className = 'xkeen-diff-foot-actions';
+    _saveBtnEl = makeBtn('Сохранить файл', 'btn-primary xkeen-diff-save-btn hidden',
+      () => saveComparedFile(),
+      'Сохранить активный буфер в файл (Ctrl+S)');
     _closeBtnEl = makeBtn('Закрыть', 'btn-secondary', () => close('close'), 'Закрыть окно сравнения (Esc)');
+    footActions.appendChild(_saveBtnEl);
+    footActions.appendChild(_closeBtnEl);
     foot.appendChild(summary);
-    foot.appendChild(_closeBtnEl);
+    foot.appendChild(footActions);
 
     card.appendChild(head);
     card.appendChild(labels);
@@ -226,6 +242,10 @@
         } else if (ev && ev.key === 'F3') {
           ev.preventDefault();
           navigateDiff(ev.shiftKey ? -1 : 1);
+        } else if (ev && (ev.ctrlKey || ev.metaKey) && !ev.altKey && String(ev.key || '').toLowerCase() === 's') {
+          if (!_canSaveFromDiff()) return;
+          ev.preventDefault();
+          saveComparedFile();
         }
       });
     }
@@ -380,7 +400,7 @@
         error: '',
       });
     }
-    refreshApplyButton();
+    refreshActionButtons();
     try {
       const leftDesc = _activeSpec && _activeSpec.left && _activeSpec.left.descriptor;
       const rightDesc = _activeSpec && _activeSpec.right && _activeSpec.right.descriptor;
@@ -411,7 +431,7 @@
         .catch((err) => showError(String(err && err.message || err)));
     }
     if (_activeSpec) _activeSpec.mode = next;
-    refreshApplyButton();
+    refreshActionButtons();
     try {
       const lazy = window.XKeen && XKeen.runtime && XKeen.runtime.lazy;
       if (lazy && isFn(lazy.scheduleLayout)) lazy.scheduleLayout();
@@ -787,17 +807,19 @@
     return best || changes[0];
   }
 
-  function _pickCm6Chunk(chunks, doc, pos) {
+  function _pickCm6Chunk(chunks, pos, side) {
     if (!chunks || !chunks.length) return null;
     const p = Math.max(0, Number(pos || 0));
+    const keyFrom = side === 'left' ? 'fromA' : 'fromB';
+    const keyTo = side === 'left' ? 'toA' : 'toB';
     let best = null;
     let bestDist = Infinity;
     for (let i = 0; i < chunks.length; i += 1) {
       const c = chunks[i] || {};
-      const fromB = Number(c.fromB || 0);
-      const toB = Number(c.toB || 0);
-      if (toB >= fromB && p >= fromB && p <= toB) return c;
-      const dist = Math.min(Math.abs(p - fromB), Math.abs(p - toB));
+      const from = Number(c[keyFrom] || 0);
+      const to = Number(c[keyTo] || 0);
+      if (to >= from && p >= from && p <= to) return c;
+      const dist = Math.min(Math.abs(p - from), Math.abs(p - to));
       if (dist < bestDist) { bestDist = dist; best = c; }
     }
     return best || chunks[0];
@@ -834,25 +856,257 @@
     return String(d.source || '').trim().toLowerCase();
   }
 
-  function _canApplyHunk() {
-    if (!_activeSpec) return false;
-    const scope = _activeSpec.scope;
-    if (!scope || !isFn(scope.applyText)) return false;
-    // Apply only makes sense in split mode and when LEFT is the buffer.
-    const mode = String(_activeSpec.mode || 'split').toLowerCase();
-    if (mode === 'inline') return false;
-    const leftKind = _readDescriptorKind(_activeSpec.left && _activeSpec.left.descriptor);
-    if (leftKind && leftKind !== 'buffer') return false;
-    return true;
+  function _isBufferDescriptor(d) {
+    const kind = _readDescriptorKind(d);
+    return !kind || kind === 'buffer';
   }
 
-  function refreshApplyButton() {
-    if (!_applyBtnEl) return;
-    const ok = _canApplyHunk();
-    try { _applyBtnEl.classList.toggle('hidden', !ok); } catch (e) {}
+  function _canWriteSide(side) {
+    if (!_activeSpec) return false;
+    const scope = _activeSpec.scope;
+    if (!scope) return false;
+    if (!isFn(scope.applyTextToSide) && !isFn(scope.applyText)) return false;
+    const mode = String(_activeSpec.mode || 'split').toLowerCase();
+    if (mode === 'inline') return false;
+    const sideKey = side === 'right' ? 'right' : 'left';
+    const descriptor = _activeSpec[sideKey] && _activeSpec[sideKey].descriptor;
+    return _isBufferDescriptor(descriptor);
+  }
+
+  function _hasVisibleBufferSide() {
+    if (!_activeSpec) return false;
+    return _isBufferDescriptor(_activeSpec.left && _activeSpec.left.descriptor) ||
+      _isBufferDescriptor(_activeSpec.right && _activeSpec.right.descriptor);
+  }
+
+  function _canSaveFromDiff() {
+    if (!_activeSpec) return false;
+    const scope = _activeSpec && _activeSpec.scope;
+    return !!(scope && isFn(scope.save) && _hasVisibleBufferSide());
+  }
+
+  function refreshActionButtons() {
+    if (_applyToLeftBtnEl) {
+      try { _applyToLeftBtnEl.classList.toggle('hidden', !_canWriteSide('left')); } catch (e) {}
+    }
+    if (_applyToRightBtnEl) {
+      try { _applyToRightBtnEl.classList.toggle('hidden', !_canWriteSide('right')); } catch (e) {}
+    }
+    if (_saveBtnEl) {
+      try { _saveBtnEl.classList.toggle('hidden', !_canSaveFromDiff()); } catch (e) {}
+    }
+  }
+
+  function _reverseMonacoHunk(change) {
+    const c = change || {};
+    return {
+      originalStartLineNumber: Number(c.modifiedStartLineNumber || 0),
+      originalEndLineNumber: Number(c.modifiedEndLineNumber || 0),
+      modifiedStartLineNumber: Number(c.originalStartLineNumber || 0),
+      modifiedEndLineNumber: Number(c.originalEndLineNumber || 0),
+    };
+  }
+
+  function _reverseCm6Chunk(chunk) {
+    const c = chunk || {};
+    return {
+      fromA: Number(c.fromB || 0),
+      toA: Number(c.toB || 0),
+      fromB: Number(c.fromA || 0),
+      toB: Number(c.toA || 0),
+    };
+  }
+
+  function _getMonacoEditorForSide(side) {
+    if (!_diffEditor) return null;
+    try {
+      return side === 'left'
+        ? (isFn(_diffEditor.getOriginalEditor) ? _diffEditor.getOriginalEditor() : null)
+        : (isFn(_diffEditor.getModifiedEditor) ? _diffEditor.getModifiedEditor() : null);
+    } catch (e) {}
+    return null;
+  }
+
+  function _getMonacoCursorLine(side) {
+    const preferred = _getMonacoEditorForSide(side);
+    const fallback = _getMonacoEditorForSide(side === 'left' ? 'right' : 'left');
+    const editor = preferred || fallback;
+    try {
+      const pos = editor && isFn(editor.getPosition) ? editor.getPosition() : null;
+      return pos ? Math.max(1, Number(pos.lineNumber || 1)) : 1;
+    } catch (e) {}
+    return 1;
+  }
+
+  function _getCm6ViewForSide(side) {
+    if (_cm6BackendMode === 'inline') return _cm6View;
+    return side === 'left'
+      ? (_cm6MergeView && _cm6MergeView.a ? _cm6MergeView.a : null)
+      : (_cm6MergeView && _cm6MergeView.b ? _cm6MergeView.b : null);
+  }
+
+  function _getCm6CursorPos(side) {
+    const preferred = _getCm6ViewForSide(side);
+    const fallback = _getCm6ViewForSide(side === 'left' ? 'right' : 'left');
+    const view = preferred || fallback;
+    try {
+      const sel = view && view.state && view.state.selection ? view.state.selection.main : null;
+      return sel ? Math.max(0, Number(sel.head || 0)) : 0;
+    } catch (e) {}
+    return 0;
+  }
+
+  async function _writeTextToSide(side, newText) {
+    const scope = _activeSpec && _activeSpec.scope;
+    if (!scope) throw new Error('Scope is not available');
+    if (isFn(scope.applyTextToSide)) {
+      await Promise.resolve(scope.applyTextToSide(side, newText));
+      return;
+    }
+    if (!isFn(scope.applyText)) throw new Error('Target side is read-only');
+    await Promise.resolve(scope.applyText(newText));
+  }
+
+  function _setRenderedSideText(side, text) {
+    const value = asString(text);
+    if (_backendKind === 'cm6') {
+      try { cm6SetText(side, value); } catch (e) {}
+      return;
+    }
+    const model = side === 'left' ? _originalModel : _modifiedModel;
+    try {
+      if (model && isFn(model.setValue)) model.setValue(value);
+    } catch (e) {}
+  }
+
+  function _syncBufferSideText(side, text) {
+    const sideKey = side === 'right' ? 'right' : 'left';
+    const otherKey = sideKey === 'left' ? 'right' : 'left';
+    const value = asString(text);
+    if (_activeSpec) {
+      const cur = _activeSpec[sideKey] || {};
+      _activeSpec[sideKey] = Object.assign({}, cur, { text: value, error: '' });
+    }
+    _setRenderedSideText(sideKey, value);
+
+    if (_activeSpec && _isBufferDescriptor(_activeSpec[otherKey] && _activeSpec[otherKey].descriptor)) {
+      const otherCur = _activeSpec[otherKey] || {};
+      _activeSpec[otherKey] = Object.assign({}, otherCur, { text: value, error: '' });
+      _setRenderedSideText(otherKey, value);
+    }
+  }
+
+  async function _refreshSideFromDescriptor(side) {
+    const scopeDef = _activeSpec && _activeSpec.scope;
+    const diffApi = (XKeen.ui && XKeen.ui.diff) || null;
+    if (!scopeDef || !diffApi || !isFn(diffApi.resolveSourceText)) return;
+    const sideKey = side === 'right' ? 'right' : 'left';
+    const current = _activeSpec && _activeSpec[sideKey] ? _activeSpec[sideKey] : {};
+    const descriptor = current && current.descriptor ? current.descriptor : { source: 'buffer' };
+    const opt = findOption(descriptorToValue(descriptor));
+    const title = opt && opt.label ? opt.label : (current && current.title) || '';
+    showError('');
+    try {
+      const text = await Promise.resolve(diffApi.resolveSourceText(scopeDef, descriptor));
+      _setRenderedSideText(sideKey, text);
+      if (_activeSpec) {
+        _activeSpec[sideKey] = Object.assign({}, current, {
+          text: asString(text),
+          descriptor: descriptor,
+          title: title || current.title || '',
+          error: '',
+        });
+      }
+    } catch (err) {
+      showError((sideKey === 'left' ? 'Слева: ' : 'Справа: ') + String(err && err.message || err));
+    }
+  }
+
+  async function applyHunkToSide(side) {
+    const targetSide = side === 'right' ? 'right' : 'left';
+    if (!_canWriteSide(targetSide)) return;
+    const sourceSide = targetSide === 'left' ? 'right' : 'left';
+    const targetText = asString(_activeSpec && _activeSpec[targetSide] && _activeSpec[targetSide].text);
+    const sourceText = asString(_activeSpec && _activeSpec[sourceSide] && _activeSpec[sourceSide].text);
+
+    let newText = '';
+    if (_backendKind === 'monaco' && _diffEditor && isFn(_diffEditor.getLineChanges)) {
+      const changes = _diffEditor.getLineChanges() || [];
+      if (!changes.length) {
+        showFeedback('Различий нет', 'info');
+        return;
+      }
+      const cur = _getMonacoCursorLine(targetSide);
+      const chunk = _pickMonacoHunk(changes, cur, 1);
+      if (!chunk) return;
+      const patch = targetSide === 'left' ? chunk : _reverseMonacoHunk(chunk);
+      newText = _applyMonacoHunk(targetText, sourceText, patch);
+    } else if (_backendKind === 'cm6' && _cm6Runtime && _cm6Runtime.merge && isFn(_cm6Runtime.merge.getChunks)) {
+      if (_cm6BackendMode === 'inline') {
+        showFeedback('Перенос хунков доступен только в режиме "Бок-о-бок"', 'info');
+        return;
+      }
+      const view = cm6PrimaryView();
+      if (!view) return;
+      let chunks = [];
+      try {
+        const got = _cm6Runtime.merge.getChunks(view.state);
+        if (got && Array.isArray(got.chunks)) chunks = got.chunks;
+      } catch (e) {}
+      if (!chunks.length) {
+        showFeedback('Различий нет', 'info');
+        return;
+      }
+      const head = _getCm6CursorPos(targetSide);
+      const chunk = _pickCm6Chunk(chunks, head, targetSide);
+      if (!chunk) return;
+      const patch = targetSide === 'left' ? chunk : _reverseCm6Chunk(chunk);
+      newText = _applyCm6Chunk(targetText, sourceText, patch);
+    } else {
+      showFeedback('Перенос хунка недоступен для текущего backend', 'error');
+      return;
+    }
+
+    try {
+      await _writeTextToSide(targetSide, newText);
+    } catch (err) {
+      showError('Применение хунка: ' + String(err && err.message || err));
+      return;
+    }
+
+    _syncBufferSideText(targetSide, newText);
+    setTimeout(updateSummary, 60);
+    showFeedback(targetSide === 'left' ? 'Хунк перенесён в левую версию' : 'Хунк перенесён в правую версию', 'success');
+  }
+
+  async function saveComparedFile() {
+    if (!_canSaveFromDiff()) return;
+    const scope = _activeSpec && _activeSpec.scope;
+    if (!scope || !isFn(scope.save)) return;
+
+    showError('');
+    let result = null;
+    try {
+      result = await Promise.resolve(scope.save());
+    } catch (err) {
+      showError('Сохранение: ' + String(err && err.message || err));
+      return;
+    }
+    if (result === false) return;
+
+    if (scope.saveClosesOwner) {
+      close('save');
+      return;
+    }
+
+    await _refreshSideFromDescriptor('left');
+    await _refreshSideFromDescriptor('right');
+    refreshActionButtons();
+    setTimeout(updateSummary, 60);
   }
 
   async function applyHunkFromRight() {
+    return applyHunkToSide('left');
     if (!_canApplyHunk()) return;
     const scope = _activeSpec && _activeSpec.scope;
     const leftText = asString(_activeSpec.left && _activeSpec.left.text);
@@ -1043,7 +1297,7 @@
           diffApi.logDiff(scopeDef.scope || '', lk, rk);
         }
       } catch (e) {}
-      refreshApplyButton();
+      refreshActionButtons();
     } catch (err) {
       showError(String(err && err.message || err));
       showFeedback('Не удалось открыть сравнение: ' + (err && err.message || err), 'error');

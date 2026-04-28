@@ -19,6 +19,10 @@
   //     applyText?(newText),         // void|Promise<void> — write back into the
   //                                   // active editor buffer; required for the
   //                                   // diff-modal "apply hunk" toolbar (Phase 5)
+  //     applyTextToSide?(side, text),// optional bidirectional apply hook;
+  //                                   // `side` is 'left' | 'right'
+  //     save?(),                     // optional save hook for the active editor
+  //     saveClosesOwner?: boolean,   // true when save closes the parent editor/modal
   //   })
   //   XKeen.ui.diff.unregisterScope(scope)
   //   XKeen.ui.diff.getScope(scope)
@@ -49,6 +53,9 @@
       listSnapshots: isFn(o.listSnapshots) ? o.listSnapshots : null,
       readSnapshot: isFn(o.readSnapshot) ? o.readSnapshot : null,
       applyText: isFn(o.applyText) ? o.applyText : null,
+      applyTextToSide: isFn(o.applyTextToSide) ? o.applyTextToSide : null,
+      save: isFn(o.save) ? o.save : null,
+      saveClosesOwner: !!o.saveClosesOwner,
     };
   }
 

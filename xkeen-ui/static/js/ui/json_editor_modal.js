@@ -139,6 +139,17 @@ import {
         applyText: (newText) => {
           try { setCurrentValue(String(newText == null ? '' : newText)); } catch (e) {}
         },
+        applyTextToSide: (_side, newText) => {
+          try { setCurrentValue(String(newText == null ? '' : newText)); } catch (e) {}
+        },
+        save: async () => {
+          const modal = el('json-editor-modal');
+          const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));
+          await save();
+          const isClosed = !!(modal && modal.classList && modal.classList.contains('hidden'));
+          return wasOpen ? isClosed : false;
+        },
+        saveClosesOwner: true,
       });
       _diffScopeRegistered = true;
       return true;
@@ -1288,11 +1299,11 @@ import {
   async function save() {
     ensureWired();
 
-    if (!_currentTarget) return;
+    if (!_currentTarget) return false;
 
     const target = _currentTarget;
     const text = String(getCurrentValue() || '');
-    if (text === null || typeof text !== 'string') return;
+    if (text === null || typeof text !== 'string') return false;
     const validation = validateCurrentJson(text, { silent: false });
     if (validation && validation.ok === false) {
       const msg = String(validation.summary || 'Ошибка JSON.');
@@ -1302,7 +1313,7 @@ import {
         const fac = getActiveFacade();
         if (fac && typeof fac.focus === 'function') fac.focus();
       } catch (e) {}
-      return;
+      return false;
     }
     // Send raw JSON/JSONC text to backend (keeps comments).
     const url = target === 'inbounds'

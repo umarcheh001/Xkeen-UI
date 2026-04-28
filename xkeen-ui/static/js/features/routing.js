@@ -156,6 +156,11 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
           try { setEditorTextAll(String(newText == null ? '' : newText), { reason: 'diff.apply' }); }
           catch (e) {}
         },
+        applyTextToSide: (_side, newText) => {
+          try { setEditorTextAll(String(newText == null ? '' : newText), { reason: 'diff.apply.side' }); }
+          catch (e) {}
+        },
+        save: () => save(),
       });
       _diffScopeRegistered = true;
       return true;

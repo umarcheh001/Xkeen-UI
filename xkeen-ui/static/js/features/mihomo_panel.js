@@ -1172,6 +1172,10 @@ let mihomoPanelModuleApi = null;
         applyText: (newText) => {
           try { setEditorText(String(newText == null ? '' : newText)); } catch (e) {}
         },
+        applyTextToSide: (_side, newText) => {
+          try { setEditorText(String(newText == null ? '' : newText)); } catch (e) {}
+        },
+        save: () => MP.saveConfig(),
       });
       _diffScopeRegistered = true;
       return true;
@@ -1886,6 +1890,7 @@ let mihomoPanelModuleApi = null;
         return false;
       }
       markEditorClean();
+      _diffBaselineText = content;
       try { setXkeenPageConfigValue('flags.mihomoConfigExists', true); } catch (e) {}
       try {
         if (typeof window.updateLastActivity === 'function') {
@@ -2058,6 +2063,7 @@ let mihomoPanelModuleApi = null;
 
       // Config is saved at this point.
       markEditorClean();
+      _diffBaselineText = content;
       bumpLastActivity('saved');
 
       setStatus('Перезапуск в очереди (job ' + String(jobId) + ')…', false, true);
