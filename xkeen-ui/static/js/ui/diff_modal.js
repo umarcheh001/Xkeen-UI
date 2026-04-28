@@ -31,6 +31,7 @@
   let _modalEl = null;
   let _hostEl = null;
   let _titleEl = null;
+  let _labelsRowEl = null;
   let _leftLabelEl = null;
   let _rightLabelEl = null;
   let _leftSelectEl = null;
@@ -64,6 +65,7 @@
   let _dirtySinceOpen = false;
   let _baselineLeft = '';
   let _baselineRight = '';
+  let _lastAppliedTransferCount = 0;
   let _activeMonacoHunk = null;
   let _activeMonacoDecorationIds = { left: [], right: [] };
   let _ignoreTrimWhitespace = false;
@@ -194,6 +196,7 @@
 
     const labels = document.createElement('div');
     labels.className = 'xkeen-diff-labels';
+    _labelsRowEl = labels;
 
     const leftWrap = document.createElement('div');
     leftWrap.className = 'xkeen-diff-side xkeen-diff-side-left';
@@ -400,8 +403,38 @@
   }
 
   function setSelectorsHidden(hidden) {
+    if (_labelsRowEl) _labelsRowEl.classList.toggle('hidden', !!hidden);
     if (_leftSelectEl) _leftSelectEl.classList.toggle('hidden', !!hidden);
     if (_rightSelectEl) _rightSelectEl.classList.toggle('hidden', !!hidden);
+  }
+
+  function _setAppliedSummaryCount(count) {
+    _lastAppliedTransferCount = Math.max(0, Number(count || 0) || 0);
+  }
+
+  function _resetAppliedSummaryCount() {
+    _lastAppliedTransferCount = 0;
+  }
+
+  function _formatSummaryText(base) {
+    const baseText = asString(base).trim();
+    if (!_lastAppliedTransferCount) return baseText;
+    if (!baseText) return 'перенесено: ' + _lastAppliedTransferCount;
+    return baseText + '  ·  перенесено: ' + _lastAppliedTransferCount;
+  }
+
+  function _getDiffChunkCount() {
+    if (_backendKind === 'monaco') {
+      try {
+        return _diffEditor && isFn(_diffEditor.getLineChanges) ? (_diffEditor.getLineChanges() || []).length : 0;
+      } catch (e) {
+        return 0;
+      }
+    }
+    if (_backendKind === 'cm6') {
+      try { return Number(cm6Stats().count || 0); } catch (e2) { return 0; }
+    }
+    return 0;
   }
 
   async function _refreshSourceOptions(scopeDef) {
@@ -450,6 +483,7 @@
         error: '',
       });
     }
+    _resetAppliedSummaryCount();
     _setSideDraft(side, false);
     if (!_dirtySinceOpen && !_hasAnyDraft()) _captureBaselineState();
     refreshActionButtons();
@@ -705,17 +739,17 @@
         const stats = cm6Stats();
         if (!stats.count) {
           _clearActiveMonacoHunkHighlight();
-          _summaryEl.textContent = 'Различий нет';
+          _summaryEl.textContent = _formatSummaryText('Различий нет');
           return;
         }
         _clearActiveMonacoHunkHighlight();
-        _summaryEl.textContent = 'Изменений: ' + stats.count + '  ·  +' + stats.added + ' / −' + stats.removed;
+        _summaryEl.textContent = _formatSummaryText('Изменений: ' + stats.count + '  ·  +' + stats.added + ' / −' + stats.removed);
         return;
       }
       const changes = _diffEditor && isFn(_diffEditor.getLineChanges) ? (_diffEditor.getLineChanges() || []) : [];
       if (!changes.length) {
         _clearActiveMonacoHunkHighlight();
-        _summaryEl.textContent = 'Различий нет';
+        _summaryEl.textContent = _formatSummaryText('Различий нет');
         return;
       }
       let added = 0;
@@ -729,11 +763,11 @@
         if (me >= ms && ms > 0) added += (me - ms + 1);
         if (oe >= os && os > 0) removed += (oe - os + 1);
       }
-      _summaryEl.textContent = 'Изменений: ' + changes.length + '  ·  +' + added + ' / −' + removed;
+      _summaryEl.textContent = _formatSummaryText('Изменений: ' + changes.length + '  ·  +' + added + ' / −' + removed);
       _syncActiveMonacoHunkHighlight('right');
     } catch (e) {
       _clearActiveMonacoHunkHighlight();
-      _summaryEl.textContent = '';
+      _summaryEl.textContent = _formatSummaryText('');
     }
     try { refreshActionButtons(); } catch (e) {}
   }
@@ -1381,13 +1415,14 @@
     const targetDescriptor = _activeSpec && _activeSpec[targetSide] ? _activeSpec[targetSide].descriptor : null;
     const writesLiveBuffer = _isBufferDescriptor(targetDescriptor);
     const sourceText = asString(_activeSpec && _activeSpec[sourceSide] && _activeSpec[sourceSide].text);
+    const appliedCount = _getDiffChunkCount();
 
     if (!writesLiveBuffer) {
       _setSideTextState(targetSide, sourceText, true);
       _dirtySinceOpen = true;
+      _setAppliedSummaryCount(appliedCount);
       refreshActionButtons();
       setTimeout(updateSummary, 60);
-      showFeedback(targetSide === 'left' ? 'Все изменения перенесены в левую версию' : 'Все изменения перенесены в правую версию', 'success');
       return;
     }
 
@@ -1400,9 +1435,9 @@
 
     _syncBufferSideText(targetSide, sourceText);
     _dirtySinceOpen = true;
+    _setAppliedSummaryCount(appliedCount);
     refreshActionButtons();
     setTimeout(updateSummary, 60);
-    showFeedback(targetSide === 'left' ? 'Все изменения перенесены в левую версию' : 'Все изменения перенесены в правую версию', 'success');
   }
 
   async function applyHunkToSide(side) {
@@ -1455,9 +1490,9 @@
     if (!writesLiveBuffer) {
       _setSideTextState(targetSide, newText, true);
       _dirtySinceOpen = true;
+      _setAppliedSummaryCount(1);
       refreshActionButtons();
       _scheduleNextDiffNavigation();
-      showFeedback(targetSide === 'left' ? 'Хунк перенесён в левую версию' : 'Хунк перенесён в правую версию', 'success');
       return;
     }
 
@@ -1470,9 +1505,9 @@
 
     _syncBufferSideText(targetSide, newText);
     _dirtySinceOpen = true;
+    _setAppliedSummaryCount(1);
     refreshActionButtons();
     _scheduleNextDiffNavigation();
-    showFeedback(targetSide === 'left' ? 'Хунк перенесён в левую версию' : 'Хунк перенесён в правую версию', 'success');
   }
 
   async function revertComparedChanges() {
@@ -1506,6 +1541,7 @@
     }
 
     _dirtySinceOpen = false;
+    _resetAppliedSummaryCount();
     refreshActionButtons();
     setTimeout(updateSummary, 60);
     showFeedback('Изменения отменены', 'success');
@@ -1558,6 +1594,7 @@
     await _refreshSideFromDescriptor('left');
     await _refreshSideFromDescriptor('right');
     _captureBaselineState();
+    _resetAppliedSummaryCount();
     refreshActionButtons();
     setTimeout(updateSummary, 60);
   }
@@ -1596,6 +1633,7 @@
     _draftSideState = { left: false, right: false };
     _dirtySinceOpen = false;
     _ignoreTrimWhitespace = !!o.ignoreTrimWhitespace;
+    _resetAppliedSummaryCount();
     _captureBaselineState();
     _syncIgnoreWhitespaceToggle();
 
@@ -1749,6 +1787,7 @@
     _sourceOptions = [];
     _draftSideState = { left: false, right: false };
     _dirtySinceOpen = false;
+    _resetAppliedSummaryCount();
     _resetBaselineState();
     const resolver = _resolveOpen;
     _resolveOpen = null;

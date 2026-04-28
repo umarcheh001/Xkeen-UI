@@ -41,6 +41,9 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function _syncIgnoreWhitespaceToggle()" in diff_modal
     assert "function setIgnoreTrimWhitespace(flag)" in diff_modal
     assert "async function _refreshSourceOptions(scopeDef)" in diff_modal
+    assert "function _setAppliedSummaryCount(count)" in diff_modal
+    assert "function _resetAppliedSummaryCount()" in diff_modal
+    assert "function _formatSummaryText(base)" in diff_modal
     assert "function _getMonacoInnerEditor(side)" in diff_modal
     assert "function _applyActiveMonacoHunkHighlight(change)" in diff_modal
     assert "function _syncActiveMonacoHunkHighlight(preferredSide)" in diff_modal
@@ -55,11 +58,15 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "_scheduleNextDiffNavigation();" in diff_modal
     assert "_captureBaselineState();" in diff_modal
     assert "_resetBaselineState();" in diff_modal
+    assert "_resetAppliedSummaryCount();" in diff_modal
     assert "_syncActiveMonacoHunkHighlight('right')" in diff_modal
     assert "await _refreshSourceOptions(scope);" in diff_modal
     assert "ignoreTrimWhitespace: !!_ignoreTrimWhitespace" in diff_modal
     assert "scope.saveClosesOwner" in diff_modal
     assert "String(ev.key || '').toLowerCase() === 's'" in diff_modal
+    assert "_labelsRowEl.classList.toggle('hidden', !!hidden);" in diff_modal
+    assert "перенесено: " in diff_modal
+    assert "Хунк перенесён" not in diff_modal
 
     assert "function _hasAnyDiff()" in diff_modal
     assert "function _hasAnyDraft()" in diff_modal
@@ -99,4 +106,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260428-diff9" in editor_shared
+    assert "?v=20260428-diff10" in editor_shared
