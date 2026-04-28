@@ -20,6 +20,10 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function refreshActionButtons()" in diff_modal
     assert "async function applyHunkToSide(side)" in diff_modal
     assert "async function saveComparedFile()" in diff_modal
+    assert "let _draftSideState = { left: false, right: false };" in diff_modal
+    assert "function _getDraftSaveSide()" in diff_modal
+    assert "_setSideTextState(targetSide, newText, true);" in diff_modal
+    assert "const draftSaveSide = _getDraftSaveSide();" in diff_modal
     assert "return applyHunkToSide('left');" in diff_modal
     assert "scope.saveClosesOwner" in diff_modal
     assert "String(ev.key || '').toLowerCase() === 's'" in diff_modal

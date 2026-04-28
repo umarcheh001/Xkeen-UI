@@ -54,6 +54,7 @@
   let _resizeBound = false;
   let _resolveOpen = null;
   let _sourceOptions = [];
+  let _draftSideState = { left: false, right: false };
 
   // 'monaco' | 'cm6' — chosen at open() time per the active editor engine.
   let _backendKind = null;
@@ -400,6 +401,7 @@
         error: '',
       });
     }
+    _setSideDraft(side, false);
     refreshActionButtons();
     try {
       const leftDesc = _activeSpec && _activeSpec.left && _activeSpec.left.descriptor;
@@ -861,16 +863,50 @@
     return !kind || kind === 'buffer';
   }
 
+  function _hasWritableScope() {
+    const scope = _activeSpec && _activeSpec.scope;
+    return !!(scope && (isFn(scope.applyTextToSide) || isFn(scope.applyText)));
+  }
+
+  function _getVisibleBufferSide() {
+    if (!_activeSpec) return '';
+    if (_isBufferDescriptor(_activeSpec.left && _activeSpec.left.descriptor)) return 'left';
+    if (_isBufferDescriptor(_activeSpec.right && _activeSpec.right.descriptor)) return 'right';
+    return '';
+  }
+
+  function _hasWritableBufferSide() {
+    return !!(_hasWritableScope() && _getVisibleBufferSide());
+  }
+
+  function _isSideDraft(side) {
+    const sideKey = side === 'right' ? 'right' : 'left';
+    return !!(_draftSideState && _draftSideState[sideKey]);
+  }
+
+  function _setSideDraft(side, flag) {
+    const sideKey = side === 'right' ? 'right' : 'left';
+    if (!_draftSideState || typeof _draftSideState !== 'object') {
+      _draftSideState = { left: false, right: false };
+    }
+    _draftSideState[sideKey] = !!flag;
+  }
+
+  function _getDraftSaveSide() {
+    if (_isSideDraft('left')) return 'left';
+    if (_isSideDraft('right')) return 'right';
+    return '';
+  }
+
   function _canWriteSide(side) {
     if (!_activeSpec) return false;
-    const scope = _activeSpec.scope;
-    if (!scope) return false;
-    if (!isFn(scope.applyTextToSide) && !isFn(scope.applyText)) return false;
     const mode = String(_activeSpec.mode || 'split').toLowerCase();
     if (mode === 'inline') return false;
+    if (!_hasWritableScope()) return false;
     const sideKey = side === 'right' ? 'right' : 'left';
     const descriptor = _activeSpec[sideKey] && _activeSpec[sideKey].descriptor;
-    return _isBufferDescriptor(descriptor);
+    if (_isBufferDescriptor(descriptor)) return true;
+    return _canSaveFromDiff() && _hasWritableBufferSide();
   }
 
   function _hasVisibleBufferSide() {
@@ -882,7 +918,7 @@
   function _canSaveFromDiff() {
     if (!_activeSpec) return false;
     const scope = _activeSpec && _activeSpec.scope;
-    return !!(scope && isFn(scope.save) && _hasVisibleBufferSide());
+    return !!(scope && isFn(scope.save) && _hasWritableBufferSide());
   }
 
   function refreshActionButtons() {
@@ -979,20 +1015,25 @@
     } catch (e) {}
   }
 
-  function _syncBufferSideText(side, text) {
+  function _setSideTextState(side, text, draft) {
     const sideKey = side === 'right' ? 'right' : 'left';
-    const otherKey = sideKey === 'left' ? 'right' : 'left';
     const value = asString(text);
     if (_activeSpec) {
       const cur = _activeSpec[sideKey] || {};
       _activeSpec[sideKey] = Object.assign({}, cur, { text: value, error: '' });
     }
     _setRenderedSideText(sideKey, value);
+    _setSideDraft(sideKey, !!draft);
+  }
+
+  function _syncBufferSideText(side, text) {
+    const sideKey = side === 'right' ? 'right' : 'left';
+    const otherKey = sideKey === 'left' ? 'right' : 'left';
+    const value = asString(text);
+    _setSideTextState(sideKey, value, false);
 
     if (_activeSpec && _isBufferDescriptor(_activeSpec[otherKey] && _activeSpec[otherKey].descriptor)) {
-      const otherCur = _activeSpec[otherKey] || {};
-      _activeSpec[otherKey] = Object.assign({}, otherCur, { text: value, error: '' });
-      _setRenderedSideText(otherKey, value);
+      _setSideTextState(otherKey, value, false);
     }
   }
 
@@ -1009,6 +1050,7 @@
     try {
       const text = await Promise.resolve(diffApi.resolveSourceText(scopeDef, descriptor));
       _setRenderedSideText(sideKey, text);
+      _setSideDraft(sideKey, false);
       if (_activeSpec) {
         _activeSpec[sideKey] = Object.assign({}, current, {
           text: asString(text),
@@ -1026,6 +1068,8 @@
     const targetSide = side === 'right' ? 'right' : 'left';
     if (!_canWriteSide(targetSide)) return;
     const sourceSide = targetSide === 'left' ? 'right' : 'left';
+    const targetDescriptor = _activeSpec && _activeSpec[targetSide] ? _activeSpec[targetSide].descriptor : null;
+    const writesLiveBuffer = _isBufferDescriptor(targetDescriptor);
     const targetText = asString(_activeSpec && _activeSpec[targetSide] && _activeSpec[targetSide].text);
     const sourceText = asString(_activeSpec && _activeSpec[sourceSide] && _activeSpec[sourceSide].text);
 
@@ -1067,6 +1111,14 @@
       return;
     }
 
+    if (!writesLiveBuffer) {
+      _setSideTextState(targetSide, newText, true);
+      refreshActionButtons();
+      setTimeout(updateSummary, 60);
+      showFeedback(targetSide === 'left' ? 'Хунк перенесён в левую версию' : 'Хунк перенесён в правую версию', 'success');
+      return;
+    }
+
     try {
       await _writeTextToSide(targetSide, newText);
     } catch (err) {
@@ -1075,6 +1127,7 @@
     }
 
     _syncBufferSideText(targetSide, newText);
+    refreshActionButtons();
     setTimeout(updateSummary, 60);
     showFeedback(targetSide === 'left' ? 'Хунк перенесён в левую версию' : 'Хунк перенесён в правую версию', 'success');
   }
@@ -1083,6 +1136,23 @@
     if (!_canSaveFromDiff()) return;
     const scope = _activeSpec && _activeSpec.scope;
     if (!scope || !isFn(scope.save)) return;
+    const draftSaveSide = _getDraftSaveSide();
+    if (draftSaveSide) {
+      const bufferSide = _getVisibleBufferSide();
+      const saveText = asString(_activeSpec && _activeSpec[draftSaveSide] && _activeSpec[draftSaveSide].text);
+      if (!bufferSide) {
+        showError('Сохранение: нет активного буфера для записи');
+        return;
+      }
+      try {
+        await _writeTextToSide(bufferSide, saveText);
+      } catch (err) {
+        showError('Сохранение: ' + String(err && err.message || err));
+        return;
+      }
+      _syncBufferSideText(bufferSide, saveText);
+      refreshActionButtons();
+    }
 
     showError('');
     let result = null;
@@ -1207,6 +1277,7 @@
     const scopeDef = (spec && spec.scope) ? spec.scope : null;
     o.scope = scopeDef;
     _activeSpec = o;
+    _draftSideState = { left: false, right: false };
 
     if (_titleEl) _titleEl.textContent = asString(o.title) || 'Сравнить версии';
 
@@ -1319,6 +1390,7 @@
     _activeMonaco = null;
     _activeSpec = null;
     _sourceOptions = [];
+    _draftSideState = { left: false, right: false };
     const r = _resolveOpen;
     _resolveOpen = null;
     if (isFn(r)) {
