@@ -7809,6 +7809,70 @@ html[data-theme="light"] .xk-mi-status.error {
   max-width: 520px;
 }
 
+.xk-sub-form .xk-sub-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+}
+
+.xk-sub-form .xk-sub-url-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 520px;
+}
+
+.xk-sub-form .xk-sub-url-field > input {
+  width: 100%;
+}
+
+.xk-sub-form .xk-sub-url-preview {
+  flex: 0 0 auto;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.xk-sub-form .xk-sub-url-preview .xk-sub-icon-glyph {
+  font-size: calc(14px * var(--xk-font-scale));
+  line-height: 1;
+}
+
+.xk-sub-form .xk-sub-url-preview .xk-sub-url-preview-label {
+  font-size: calc(12px * var(--xk-font-scale));
+  font-weight: 600;
+}
+
+.xk-sub-show-hidden-btn {
+  height: 28px;
+  padding: 0 10px;
+  font-size: calc(11px * var(--xk-font-scale));
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 999px;
+}
+
+.xk-sub-show-hidden-btn[hidden] {
+  display: none;
+}
+
+.xk-sub-show-hidden-btn.is-active {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22) 0%, rgba(180, 83, 9, 0.18) 100%);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fde68a;
+}
+
+html[data-theme="light"] .xk-sub-show-hidden-btn.is-active {
+  background: linear-gradient(135deg, rgba(234, 88, 12, 0.18) 0%, rgba(194, 65, 12, 0.12) 100%);
+  border-color: rgba(234, 88, 12, 0.55);
+  color: #9a3412;
+}
+
 .xk-sub-draft-badge {
   display: inline-block;
   margin-left: 8px;
@@ -9034,6 +9098,23 @@ html[data-theme="light"] .xk-sub-draft-badge {
   justify-content: flex-end;
 }
 
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-form .xk-sub-url-row,
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-form .xk-sub-url-row {
+  flex-wrap: wrap;
+}
+
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-form .xk-sub-url-field,
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-form .xk-sub-url-field {
+  max-width: none;
+  width: 100%;
+}
+
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-form .xk-sub-url-preview,
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-form .xk-sub-url-preview {
+  width: 100%;
+  justify-content: center;
+}
+
 @media (max-width: 720px) {
   #outbounds-pool-modal {
     padding: 6px;
@@ -9090,6 +9171,20 @@ html[data-theme="light"] .xk-sub-draft-badge {
     align-items: stretch;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .xk-sub-form .xk-sub-url-row {
+    flex-wrap: wrap;
+  }
+
+  .xk-sub-form .xk-sub-url-field {
+    max-width: none;
+    width: 100%;
+  }
+
+  .xk-sub-form .xk-sub-url-preview {
+    width: 100%;
+    justify-content: center;
   }
 
   .xk-sub-brief {

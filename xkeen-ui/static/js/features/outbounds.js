@@ -3555,6 +3555,7 @@ let outboundsModuleApi = null;
       nodesCaption: 'outbounds-subscriptions-nodes-caption',
       nodesSummary: 'outbounds-subscriptions-nodes-summary',
       nodesPingAll: 'outbounds-subscriptions-nodes-pingall',
+      nodesShowHidden: 'outbounds-subscriptions-nodes-show-hidden',
       nodesList: 'outbounds-subscriptions-nodes-list',
       nodesEmpty: 'outbounds-subscriptions-nodes-empty',
     };
@@ -3564,6 +3565,7 @@ let outboundsModuleApi = null;
     let _subscriptionNodePingState = Object.create(null);
     let _subscriptionPingAllBusy = false;
     let _subscriptionPreview = null;
+    let _subscriptionShowHidden = false;
     const SUB_DEFAULT_INTERVAL_HOURS = 24;
 
     function subsDecorateActionButtons(modal) {
@@ -3584,9 +3586,8 @@ let outboundsModuleApi = null;
         }
         const previewBtn = root.querySelector(`#${SUB_IDS.preview}`);
         if (previewBtn) {
-          previewBtn.classList.add('xk-sub-icon-btn');
-          previewBtn.setAttribute('aria-label', String(previewBtn.getAttribute('title') || 'Preview'));
-          previewBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">&#128065;</span><span class="xk-visually-hidden">Preview</span>';
+          previewBtn.setAttribute('aria-label', String(previewBtn.getAttribute('title') || 'Скачать подписку'));
+          previewBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">&#128065;</span><span class="xk-sub-url-preview-label">Скачать подписку</span>';
         }
       } catch (e) {}
     }
@@ -3657,10 +3658,13 @@ let outboundsModuleApi = null;
                       <span class="xk-pool-fieldlabel">Обновлять, ч</span>
                       <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" data-tooltip="Как часто панель будет обновлять подписку: от 1 до 168 часов. Рекомендация провайдера не меняет выбранное значение.">
                     </label>
-                    <label class="xk-sub-wide" data-tooltip="HTTP(S) URL подписки. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
-                      <span class="xk-pool-fieldlabel">URL</span>
-                      <input id="outbounds-subscriptions-url" class="xray-log-filter" type="url" placeholder="https://..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки. Панель скачает nodes и создаст отдельный outbounds-фрагмент.">
-                    </label>
+                    <div class="xk-sub-wide xk-sub-url-row">
+                      <label class="xk-sub-url-field" data-tooltip="HTTP(S) URL подписки. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
+                        <span class="xk-pool-fieldlabel">URL</span>
+                        <input id="outbounds-subscriptions-url" class="xray-log-filter" type="url" placeholder="https://..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки. Панель скачает nodes и создаст отдельный outbounds-фрагмент.">
+                      </label>
+                      <button type="button" id="outbounds-subscriptions-preview-btn" class="btn-secondary btn-compact xk-sub-url-preview" title="Скачать подписку (предпросмотр)" data-tooltip="Скачать подписку и показать узлы в карточке справа без сохранения и без перезапуска xkeen. Используй фильтры и × у узла, чтобы исключить лишние, потом нажми «Сохранить».">Скачать подписку</button>
+                    </div>
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по имени ноды из подписки. Например: Germany|Netherlands|SG. Пусто — без фильтра.">
                       <span class="xk-pool-fieldlabel">Имя</span>
                       <input id="outbounds-subscriptions-name-filter" class="xray-log-filter" type="text" placeholder="Germany|Netherlands|SG" title="Фильтр имени" data-tooltip="Оставить только ноды, чьё имя совпадает с regex. Например: Germany|Netherlands|SG.">
@@ -3687,7 +3691,6 @@ let outboundsModuleApi = null;
                         </select>
                       </label>
                       <div class="xk-sub-actions">
-                        <button type="button" id="outbounds-subscriptions-preview-btn" class="btn-secondary btn-compact" title="Предпросмотр" data-tooltip="Скачать подписку и показать узлы в карточке справа без сохранения и без перезапуска xkeen. Используй фильтры и × у узла, чтобы исключить лишние, потом нажми «Сохранить».">Предпросмотр</button>
                         <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Новая подписка" data-tooltip="Очистить форму и добавить новую подписку.">Новая</button>
                         <button type="submit" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить подписку" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
                       </div>
@@ -3731,6 +3734,7 @@ let outboundsModuleApi = null;
                     <div id="outbounds-subscriptions-nodes-caption" class="xk-sub-muted">Нажми ✎ у нужной подписки, чтобы посмотреть состав и transport.</div>
                   </div>
                   <div class="xk-sub-nodes-head-actions">
+                    <button type="button" id="outbounds-subscriptions-nodes-show-hidden" class="btn-secondary btn-compact xk-sub-show-hidden-btn" title="Показать скрытые узлы" data-tooltip="Показать узлы, которые сейчас скрыты фильтрами или исключены кнопкой ×. Нажми ещё раз, чтобы снова скрыть их." hidden>Показать скрытые</button>
                     <button type="button" id="outbounds-subscriptions-nodes-pingall" class="btn-secondary btn-compact xk-sub-icon-btn" title="Пинг всех узлов" data-tooltip="Запустить проверку задержки для всех активных узлов, входящих в generated fragment." aria-label="Пинг всех узлов" disabled>
                       <span class="xk-sub-icon-glyph xk-sub-pingall-glyph" aria-hidden="true">⏱</span>
                       <span class="xk-sub-pingall-spinner" aria-hidden="true"></span>
@@ -4134,6 +4138,7 @@ let outboundsModuleApi = null;
     function subsResetForm() {
       _subscriptionEditId = '';
       _subscriptionPreview = null;
+      _subscriptionShowHidden = false;
       try { $(SUB_IDS.id).value = ''; } catch (e) {}
       try { $(SUB_IDS.name).value = ''; } catch (e) {}
       try { $(SUB_IDS.tag).value = ''; } catch (e) {}
@@ -4156,7 +4161,10 @@ let outboundsModuleApi = null;
       const s = sub && typeof sub === 'object' ? sub : {};
       const opts = options && typeof options === 'object' ? options : {};
       const nextId = String(s.id || '');
-      if (nextId !== String(_subscriptionEditId || '')) _subscriptionPreview = null;
+      if (nextId !== String(_subscriptionEditId || '')) {
+        _subscriptionPreview = null;
+        _subscriptionShowHidden = false;
+      }
       _subscriptionEditId = nextId;
       try { $(SUB_IDS.id).value = _subscriptionEditId; } catch (e) {}
       try { $(SUB_IDS.name).value = String(s.name || ''); } catch (e) {}
@@ -4306,6 +4314,7 @@ let outboundsModuleApi = null;
       const summary = $(SUB_IDS.nodesSummary);
       const listEl = $(SUB_IDS.nodesList);
       const empty = $(SUB_IDS.nodesEmpty);
+      const showHiddenBtn = $(SUB_IDS.nodesShowHidden);
       if (!panel || !caption || !summary || !listEl || !empty) return;
 
       const subId = String(_subscriptionEditId || '').trim();
@@ -4316,10 +4325,11 @@ let outboundsModuleApi = null;
         || (isPreview ? { id: '', name: 'Черновик', tag: String(preview.tagPrefix || ''), last_nodes: preview.nodes } : null);
       if (!sub) {
         listEl.innerHTML = '';
-        empty.textContent = 'Нажми «Предпросмотр» в форме слева, чтобы скачать узлы без сохранения, или выбери существующую подписку справа.';
+        empty.textContent = 'Нажми «Скачать подписку» в форме слева, чтобы скачать узлы без сохранения, или выбери существующую подписку справа.';
         empty.style.display = 'block';
         summary.textContent = '0';
-        caption.textContent = 'Выбери подписку или нажми «Предпросмотр».';
+        caption.textContent = 'Выбери подписку или нажми «Скачать подписку».';
+        if (showHiddenBtn) showHiddenBtn.hidden = true;
         return;
       }
 
@@ -4333,6 +4343,7 @@ let outboundsModuleApi = null;
       const rows = [];
       let enabledCount = 0;
       let hiddenCount = 0;
+      const showHidden = !!_subscriptionShowHidden;
       const excluded = new Set(Array.isArray(draft.excludedKeys) ? draft.excludedKeys : []);
 
       nodes.forEach((node) => {
@@ -4340,6 +4351,7 @@ let outboundsModuleApi = null;
         const enabled = reasons.length === 0;
         if (enabled) enabledCount += 1;
         else hiddenCount += 1;
+        if (!enabled && !showHidden) return;
         const key = escapeHtml(String(node && node.key ? node.key : ''));
         const name = escapeHtml(String(node && node.name ? node.name : 'node'));
         const protocol = escapeHtml(String(node && node.protocol ? node.protocol : ''));
@@ -4400,14 +4412,39 @@ let outboundsModuleApi = null;
       });
 
       summary.textContent = `${enabledCount}/${nodes.length}`;
+      const captionHidden = hiddenCount
+        ? (showHidden ? ` · показано скрытых ${hiddenCount}` : ` · скрыто ${hiddenCount}`)
+        : '';
       caption.textContent = isPreview
-        ? `Черновик · включено ${enabledCount}${hiddenCount ? ` · скрыто ${hiddenCount}` : ''} · нажми «Сохранить», чтобы применить.`
-        : `${String(sub.name || sub.tag || sub.id || 'Подписка')} · включено ${enabledCount}${hiddenCount ? ` · скрыто ${hiddenCount}` : ''}`;
+        ? `Черновик · включено ${enabledCount}${captionHidden} · нажми «Сохранить», чтобы применить.`
+        : `${String(sub.name || sub.tag || sub.id || 'Подписка')} · включено ${enabledCount}${captionHidden}`;
+
+      if (showHiddenBtn) {
+        if (hiddenCount > 0) {
+          showHiddenBtn.hidden = false;
+          showHiddenBtn.textContent = showHidden
+            ? `Скрыть исключённые (${hiddenCount})`
+            : `Показать скрытые (${hiddenCount})`;
+          showHiddenBtn.classList.toggle('is-active', showHidden);
+          showHiddenBtn.setAttribute(
+            'aria-pressed',
+            showHidden ? 'true' : 'false'
+          );
+        } else {
+          showHiddenBtn.hidden = true;
+          showHiddenBtn.classList.remove('is-active');
+          showHiddenBtn.removeAttribute('aria-pressed');
+        }
+      }
 
       listEl.innerHTML = rows.join('');
-      empty.textContent = nodes.length
-        ? 'Нет совпадений по текущим фильтрам.'
-        : 'Список узлов появится после обновления этой подписки.';
+      if (!nodes.length) {
+        empty.textContent = 'Список узлов появится после обновления этой подписки.';
+      } else if (enabledCount === 0 && hiddenCount > 0 && !showHidden) {
+        empty.textContent = `Все ${hiddenCount} узлов скрыты фильтрами или исключены вручную. Нажми «Показать скрытые», чтобы вернуть их.`;
+      } else {
+        empty.textContent = 'Нет совпадений по текущим фильтрам.';
+      }
       empty.style.display = rows.length ? 'none' : 'block';
 
       try { subsUpdatePingAllBtnState(); } catch (e) {}
@@ -5059,6 +5096,10 @@ let outboundsModuleApi = null;
       wireButton(SUB_IDS.preview, () => { subsPreview(); });
       wireButton(SUB_IDS.nodesPingAll, () => {
         subsProbeAllNodes();
+      });
+      wireButton(SUB_IDS.nodesShowHidden, () => {
+        _subscriptionShowHidden = !_subscriptionShowHidden;
+        try { subsRenderNodeList(); } catch (e) {}
       });
 
       const urlEl = $(SUB_IDS.url);
