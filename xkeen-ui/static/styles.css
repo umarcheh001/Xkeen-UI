@@ -28577,6 +28577,12 @@ html[data-theme="light"] .xk-routing-monaco-menu-sep {
   white-space: nowrap;
 }
 
+.xkeen-diff-modal .xkeen-diff-apply-btn.is-disabled,
+.xkeen-diff-modal .xkeen-diff-save-btn.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .xkeen-diff-modal .xkeen-diff-close-x {
   font-size: 18px;
   line-height: 1;

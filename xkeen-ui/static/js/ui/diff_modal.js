@@ -528,6 +528,7 @@
     } catch (e) {
       _summaryEl.textContent = '';
     }
+    try { refreshActionButtons(); } catch (e) {}
   }
 
   async function ensureMonaco() {
@@ -898,15 +899,20 @@
     return '';
   }
 
-  function _canWriteSide(side) {
+  function _isApplyStructurallyAvailable(side) {
     if (!_activeSpec) return false;
-    const mode = String(_activeSpec.mode || 'split').toLowerCase();
-    if (mode === 'inline') return false;
     if (!_hasWritableScope()) return false;
     const sideKey = side === 'right' ? 'right' : 'left';
     const descriptor = _activeSpec[sideKey] && _activeSpec[sideKey].descriptor;
     if (_isBufferDescriptor(descriptor)) return true;
     return _canSaveFromDiff() && _hasWritableBufferSide();
+  }
+
+  function _canWriteSide(side) {
+    if (!_isApplyStructurallyAvailable(side)) return false;
+    const mode = String(_activeSpec.mode || 'split').toLowerCase();
+    if (mode === 'inline') return false;
+    return true;
   }
 
   function _hasVisibleBufferSide() {
@@ -921,16 +927,62 @@
     return !!(scope && isFn(scope.save) && _hasWritableBufferSide());
   }
 
+  function _hasAnyDiff() {
+    if (_backendKind === 'monaco') {
+      if (!_diffEditor || !isFn(_diffEditor.getLineChanges)) return false;
+      try { return (_diffEditor.getLineChanges() || []).length > 0; } catch (e) { return false; }
+    }
+    if (_backendKind === 'cm6') {
+      try { return cm6Stats().count > 0; } catch (e) { return false; }
+    }
+    return false;
+  }
+
+  function _hasAnyDraft() {
+    return _isSideDraft('left') || _isSideDraft('right');
+  }
+
+  function _applyDisabledReason(side) {
+    if (!_isApplyStructurallyAvailable(side)) return null;
+    const mode = String(_activeSpec.mode || 'split').toLowerCase();
+    if (mode === 'inline') return 'Перенос хунков доступен только в режиме «Бок-о-бок»';
+    if (!_hasAnyDiff()) return 'Нет изменений для переноса';
+    return '';
+  }
+
+  function _saveDisabledReason() {
+    if (!_canSaveFromDiff()) return null;
+    if (!_hasAnyDiff() && !_hasAnyDraft()) return 'Нет изменений для сохранения';
+    return '';
+  }
+
+  function _setBtnState(btn, reason, defaultTip) {
+    if (!btn) return;
+    if (reason === null) {
+      try { btn.classList.add('hidden'); } catch (e) {}
+      return;
+    }
+    try {
+      btn.classList.remove('hidden');
+      const disabled = !!reason;
+      btn.classList.toggle('is-disabled', disabled);
+      if (disabled) {
+        btn.setAttribute('aria-disabled', 'true');
+        btn.setAttribute('data-tooltip', reason);
+      } else {
+        btn.removeAttribute('aria-disabled');
+        if (defaultTip) btn.setAttribute('data-tooltip', defaultTip);
+      }
+    } catch (e) {}
+  }
+
   function refreshActionButtons() {
-    if (_applyToLeftBtnEl) {
-      try { _applyToLeftBtnEl.classList.toggle('hidden', !_canWriteSide('left')); } catch (e) {}
-    }
-    if (_applyToRightBtnEl) {
-      try { _applyToRightBtnEl.classList.toggle('hidden', !_canWriteSide('right')); } catch (e) {}
-    }
-    if (_saveBtnEl) {
-      try { _saveBtnEl.classList.toggle('hidden', !_canSaveFromDiff()); } catch (e) {}
-    }
+    _setBtnState(_applyToLeftBtnEl, _applyDisabledReason('left'),
+      'Перенести текущий хунк из правой версии в левую');
+    _setBtnState(_applyToRightBtnEl, _applyDisabledReason('right'),
+      'Перенести текущий хунк из левой версии в правую');
+    _setBtnState(_saveBtnEl, _saveDisabledReason(),
+      'Сохранить активный буфер в файл (Ctrl+S)');
   }
 
   function _reverseMonacoHunk(change) {
@@ -1134,6 +1186,10 @@
 
   async function saveComparedFile() {
     if (!_canSaveFromDiff()) return;
+    if (!_hasAnyDiff() && !_hasAnyDraft()) {
+      showFeedback('Нет изменений для сохранения', 'info');
+      return;
+    }
     const scope = _activeSpec && _activeSpec.scope;
     if (!scope || !isFn(scope.save)) return;
     const draftSaveSide = _getDraftSaveSide();
@@ -1173,77 +1229,6 @@
     await _refreshSideFromDescriptor('right');
     refreshActionButtons();
     setTimeout(updateSummary, 60);
-  }
-
-  async function applyHunkFromRight() {
-    return applyHunkToSide('left');
-    if (!_canApplyHunk()) return;
-    const scope = _activeSpec && _activeSpec.scope;
-    const leftText = asString(_activeSpec.left && _activeSpec.left.text);
-    const rightText = asString(_activeSpec.right && _activeSpec.right.text);
-
-    let newText = '';
-    if (_backendKind === 'monaco' && _diffEditor && isFn(_diffEditor.getLineChanges)) {
-      const changes = _diffEditor.getLineChanges() || [];
-      if (!changes.length) {
-        showFeedback('Различий нет', 'info');
-        return;
-      }
-      const inner = isFn(_diffEditor.getOriginalEditor) ? _diffEditor.getOriginalEditor() : null;
-      const pos = inner && isFn(inner.getPosition) ? inner.getPosition() : null;
-      const cur = pos ? Number(pos.lineNumber || 1) : 1;
-      const chunk = _pickMonacoHunk(changes, cur, 1);
-      if (!chunk) return;
-      newText = _applyMonacoHunk(leftText, rightText, chunk);
-    } else if (_backendKind === 'cm6' && _cm6Runtime && _cm6Runtime.merge && isFn(_cm6Runtime.merge.getChunks)) {
-      const view = cm6PrimaryView();
-      if (!view) return;
-      let chunks = [];
-      try {
-        const got = _cm6Runtime.merge.getChunks(view.state);
-        if (got && Array.isArray(got.chunks)) chunks = got.chunks;
-      } catch (e) {}
-      if (!chunks.length) {
-        showFeedback('Различий нет', 'info');
-        return;
-      }
-      const head = view.state.selection && view.state.selection.main ? view.state.selection.main.head : 0;
-      // For split mode the cursor sits in pane B; for inline the cursor is in
-      // the merged view. Either way we use offsets in B for the lookup.
-      const docB = (_cm6BackendMode === 'inline') ? view.state.doc
-        : (_cm6MergeView && _cm6MergeView.b && _cm6MergeView.b.state ? _cm6MergeView.b.state.doc : view.state.doc);
-      const docA = (_cm6BackendMode === 'inline')
-        ? (isFn(_cm6Runtime.merge.getOriginalDoc) ? _cm6Runtime.merge.getOriginalDoc(view.state) : null)
-        : (_cm6MergeView && _cm6MergeView.a && _cm6MergeView.a.state ? _cm6MergeView.a.state.doc : null);
-      const chunk = _pickCm6Chunk(chunks, docB, Number(head || 0));
-      if (!chunk) return;
-      const aText = docA ? docA.toString() : leftText;
-      const bText = docB ? docB.toString() : rightText;
-      newText = _applyCm6Chunk(aText, bText, chunk);
-    } else {
-      showFeedback('Apply: backend недоступен', 'error');
-      return;
-    }
-
-    try {
-      await Promise.resolve(scope.applyText(newText));
-    } catch (err) {
-      showError('Apply: ' + String(err && err.message || err));
-      return;
-    }
-
-    // Reflect the new buffer in the modal so subsequent navigations and apply
-    // operations see the post-apply state.
-    if (_activeSpec) {
-      _activeSpec.left = Object.assign({}, _activeSpec.left || {}, { text: newText });
-    }
-    if (_backendKind === 'cm6') {
-      try { cm6SetText('left', newText); } catch (e) {}
-    } else if (_originalModel && isFn(_originalModel.setValue)) {
-      try { _originalModel.setValue(newText); } catch (e) {}
-    }
-    setTimeout(updateSummary, 60);
-    showFeedback('Хунк применён', 'success');
   }
 
   function bindLayoutHooks(monaco) {

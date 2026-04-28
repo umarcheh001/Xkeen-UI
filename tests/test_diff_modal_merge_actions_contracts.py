@@ -24,13 +24,28 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function _getDraftSaveSide()" in diff_modal
     assert "_setSideTextState(targetSide, newText, true);" in diff_modal
     assert "const draftSaveSide = _getDraftSaveSide();" in diff_modal
-    assert "return applyHunkToSide('left');" in diff_modal
+    assert "() => applyHunkToSide('left')" in diff_modal
+    assert "() => applyHunkToSide('right')" in diff_modal
     assert "scope.saveClosesOwner" in diff_modal
     assert "String(ev.key || '').toLowerCase() === 's'" in diff_modal
+
+    # Disabled-state contracts: apply/save buttons must surface a tooltip reason
+    # rather than disappearing when the action is structurally available but
+    # contextually blocked (inline mode, no diff, nothing to save).
+    assert "function _hasAnyDiff()" in diff_modal
+    assert "function _hasAnyDraft()" in diff_modal
+    assert "function _applyDisabledReason(side)" in diff_modal
+    assert "function _saveDisabledReason()" in diff_modal
+    assert "Перенос хунков доступен только в режиме «Бок-о-бок»" in diff_modal
+    assert "Нет изменений для переноса" in diff_modal
+    assert "Нет изменений для сохранения" in diff_modal
+    assert "btn.classList.toggle('is-disabled', disabled);" in diff_modal
 
     assert ".xkeen-diff-apply-group {" in styles
     assert ".xkeen-diff-foot-actions {" in styles
     assert ".xkeen-diff-save-btn {" in styles
+    assert ".xkeen-diff-apply-btn.is-disabled" in styles
+    assert ".xkeen-diff-save-btn.is-disabled" in styles
 
     assert "reason: 'diff.apply.side'" in routing
     assert "applyTextToSide: (_side, newText) => {" in routing
@@ -43,4 +58,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260428-diff2" in editor_shared
+    assert "?v=20260428-diff3" in editor_shared
