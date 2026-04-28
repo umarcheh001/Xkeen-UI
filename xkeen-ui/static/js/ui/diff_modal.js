@@ -404,6 +404,16 @@
     if (_rightSelectEl) _rightSelectEl.classList.toggle('hidden', !!hidden);
   }
 
+  async function _refreshSourceOptions(scopeDef) {
+    if (!scopeDef) return;
+    const snaps = await loadSnapshotList(scopeDef);
+    _sourceOptions = buildOptions(scopeDef, snaps);
+    const leftValue = descriptorToValue(_activeSpec && _activeSpec.left && _activeSpec.left.descriptor);
+    const rightValue = descriptorToValue(_activeSpec && _activeSpec.right && _activeSpec.right.descriptor);
+    populateSelect(_leftSelectEl, _sourceOptions, leftValue);
+    populateSelect(_rightSelectEl, _sourceOptions, rightValue);
+  }
+
   async function onSourceChanged(side) {
     const scopeDef = _activeSpec && _activeSpec.scope;
     if (!scopeDef) return;
@@ -1544,6 +1554,7 @@
       return;
     }
 
+    await _refreshSourceOptions(scope);
     await _refreshSideFromDescriptor('left');
     await _refreshSideFromDescriptor('right');
     _captureBaselineState();
