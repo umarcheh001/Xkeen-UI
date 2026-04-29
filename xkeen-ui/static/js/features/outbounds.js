@@ -3544,6 +3544,9 @@ let outboundsModuleApi = null;
       transportFilter: 'outbounds-subscriptions-transport-filter',
       transportFilterNote: 'outbounds-subscriptions-transport-filter-note',
       routingMode: 'outbounds-subscriptions-routing-mode',
+      routingAutoRule: 'outbounds-subscriptions-routing-auto-rule',
+      routingBalancers: 'outbounds-subscriptions-routing-balancers',
+      routingBalancersNote: 'outbounds-subscriptions-routing-balancers-note',
       excludedKeys: 'outbounds-subscriptions-excluded-keys',
       interval: 'outbounds-subscriptions-interval',
       intervalNote: 'outbounds-subscriptions-interval-note',
@@ -3573,6 +3576,7 @@ let outboundsModuleApi = null;
     };
 
     let _subscriptions = [];
+    let _subscriptionRoutingBalancers = [];
     let _subscriptionEditId = '';
     let _subscriptionNodePingState = Object.create(null);
     let _subscriptionPingAllBusy = false;
@@ -3642,6 +3646,80 @@ let outboundsModuleApi = null;
       return raw.slice(0, 32).replace(/^[_.:-]+|[_.:-]+$/g, '') || 'sub';
     }
 
+    function subsNormalizeBalancerTags(value) {
+      const items = Array.isArray(value) ? value : [];
+      const known = new Set((_subscriptionRoutingBalancers || []).map((item) => String(item && item.tag || '').trim()).filter(Boolean));
+      const seen = new Set();
+      return items
+        .map((item) => String(item || '').trim())
+        .filter((tag) => !!tag && known.has(tag) && !seen.has(tag) && seen.add(tag));
+    }
+
+    function subsSelectedBalancerTags() {
+      const root = $(SUB_IDS.routingBalancers);
+      if (!root || !root.querySelectorAll) return [];
+      const values = Array.from(root.querySelectorAll('input[type="checkbox"][data-balancer-tag]:checked'))
+        .map((input) => String(input && input.getAttribute('data-balancer-tag') || '').trim());
+      return subsNormalizeBalancerTags(values);
+    }
+
+    function subsSetSelectedBalancerTags(value) {
+      const selected = new Set(subsNormalizeBalancerTags(value));
+      const root = $(SUB_IDS.routingBalancers);
+      if (!root || !root.querySelectorAll) return;
+      Array.from(root.querySelectorAll('input[type="checkbox"][data-balancer-tag]')).forEach((input) => {
+        const tag = String(input && input.getAttribute('data-balancer-tag') || '').trim();
+        try { input.checked = selected.has(tag); } catch (e) {}
+      });
+    }
+
+    function subsRenderRoutingBalancers(selectedTags) {
+      const root = $(SUB_IDS.routingBalancers);
+      const note = $(SUB_IDS.routingBalancersNote);
+      if (!root) return;
+      const selected = new Set(subsNormalizeBalancerTags(selectedTags));
+      const items = Array.isArray(_subscriptionRoutingBalancers) ? _subscriptionRoutingBalancers.slice() : [];
+      if (!items.length) {
+        root.innerHTML = '<div class="xk-sub-balancers-empty">В routing.balancers пока нет готовых selector-пулов. Можно оставить только общий leastPing pool.</div>';
+        if (note) {
+          note.textContent = 'Чекбоксы появятся, когда в 05_routing.json будут настроены balancers[].tag.';
+          note.hidden = false;
+        }
+        return;
+      }
+      root.innerHTML = items.map((item) => {
+        const tag = String(item && item.tag || '').trim();
+        const strategy = String(item && item.strategy_type || '').trim();
+        const fallback = String(item && item.fallback_tag || '').trim();
+        const selectorCount = Number(item && item.selector_count || 0);
+        const autoManaged = !!(item && item.auto_managed);
+        const title = [
+          strategy ? `strategy: ${strategy}` : '',
+          fallback ? `fallback: ${fallback}` : '',
+          selectorCount > 0 ? `selector: ${selectorCount}` : 'selector пуст',
+        ].filter(Boolean).join(' · ');
+        const meta = [
+          strategy || 'balancer',
+          fallback ? `fallback ${fallback}` : '',
+          selectorCount > 0 ? `${selectorCount} selector` : '',
+          autoManaged ? 'auto pool' : '',
+        ].filter(Boolean).join(' · ');
+        return `
+          <label class="xk-sub-check xk-sub-balancer-check" title="${escapeHtml(title)}" data-tooltip="${escapeHtml(title)}">
+            <input type="checkbox" data-balancer-tag="${escapeHtml(tag)}" ${selected.has(tag) ? 'checked' : ''}>
+            <span class="xk-sub-balancer-copy">
+              <span class="xk-sub-balancer-tag">${escapeHtml(tag)}</span>
+              <span class="xk-sub-balancer-meta">${escapeHtml(meta)}</span>
+            </span>
+          </label>
+        `;
+      }).join('');
+      if (note) {
+        note.textContent = 'Отметь balancer-ы, в чьи selector-ы нужно автоматически добавлять tag prefix этой подписки.';
+        note.hidden = false;
+      }
+    }
+
     function subsReadFormState() {
       return {
         id: String(($(SUB_IDS.id) && $(SUB_IDS.id).value) || _subscriptionEditId || '').trim(),
@@ -3652,6 +3730,8 @@ let outboundsModuleApi = null;
         type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim(),
         transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim(),
         routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback',
+        routing_auto_rule: !!($(SUB_IDS.routingAutoRule) && $(SUB_IDS.routingAutoRule).checked),
+        routing_balancer_tags: subsSelectedBalancerTags(),
         excluded_node_keys: subsGetExcludedKeysValue().slice().sort(),
         interval_raw: String(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || '').trim(),
         enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
@@ -3697,6 +3777,8 @@ let outboundsModuleApi = null;
         type_filter: String(state.type_filter || '').trim(),
         transport_filter: String(state.transport_filter || '').trim(),
         routing_mode: String(state.routing_mode || 'safe-fallback').trim() || 'safe-fallback',
+        routing_auto_rule: !!state.routing_auto_rule,
+        routing_balancer_tags: subsNormalizeBalancerTags(state.routing_balancer_tags),
         excluded_node_keys: (Array.isArray(state.excluded_node_keys) ? state.excluded_node_keys : []).map((item) => String(item || '').trim()).filter(Boolean).sort(),
         interval_raw: String(state.interval_raw || '').trim(),
         enabled: !!state.enabled,
@@ -3925,6 +4007,18 @@ let outboundsModuleApi = null;
       subsSetFieldNote(SUB_IDS.nameFilterNote, validation.errors.nameFilter, validation.errors.nameFilter ? 'error' : '');
       subsSetFieldNote(SUB_IDS.typeFilterNote, validation.errors.typeFilter, validation.errors.typeFilter ? 'error' : '');
       subsSetFieldNote(SUB_IDS.transportFilterNote, validation.errors.transportFilter, validation.errors.transportFilter ? 'error' : '');
+      const routingModeEl = $(SUB_IDS.routingMode);
+      if (routingModeEl) {
+        routingModeEl.disabled = !formState.routing_auto_rule;
+        try {
+          routingModeEl.setAttribute(
+            'data-tooltip',
+            formState.routing_auto_rule
+              ? 'Безопасно: leastPing-balancer и fallback синхронизируются, но явные правила на vless-reality остаются. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула.'
+              : 'Режим «Применение» влияет только на общий auto-managed leastPing pool. Включи «Общий pool», чтобы менять это поведение.'
+          );
+        } catch (e4) {}
+      }
 
       const saveBtn = $(SUB_IDS.save);
       if (saveBtn) {
@@ -4009,6 +4103,9 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.enabled).checked = baseline ? !!baseline.enabled : true; } catch (e) {}
       try { $(SUB_IDS.ping).checked = baseline ? !!baseline.ping_enabled : true; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = String((baseline && baseline.routing_mode) || 'safe-fallback') || 'safe-fallback'; } catch (e) {}
+      try { $(SUB_IDS.routingAutoRule).checked = baseline ? baseline.routing_auto_rule !== false : true; } catch (e) {}
+      try { subsRenderRoutingBalancers(baseline && baseline.routing_balancer_tags); } catch (e) {}
+      try { subsSetSelectedBalancerTags(baseline && baseline.routing_balancer_tags); } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = refreshNow; } catch (e) {}
       try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
       try { subsSyncSelection(); } catch (e) {}
@@ -4029,6 +4126,8 @@ let outboundsModuleApi = null;
         type_filter: state.type_filter,
         transport_filter: state.transport_filter,
         routing_mode: state.routing_mode,
+        routing_auto_rule: !!state.routing_auto_rule,
+        routing_balancer_tags: state.routing_balancer_tags.slice(),
         excluded_node_keys: state.excluded_node_keys.slice(),
         interval_hours: Number(state.interval_raw || SUB_DEFAULT_INTERVAL_HOURS),
         enabled: !!state.enabled,
@@ -4173,10 +4272,21 @@ let outboundsModuleApi = null;
                           <option value="migrate-vless-rules">Жёстко · pool</option>
                         </select>
                       </label>
+                      <label class="xk-sub-check xk-sub-auto-rule-check" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool и держать служебное правило xk_auto_leastPing. Выключи, если подписка должна работать только через выбранные ниже balancer-ы.">
+                        <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked title="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool.">
+                        <span>Общий pool</span>
+                      </label>
                       <div class="xk-sub-actions">
                         <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Новая подписка" data-tooltip="Очистить форму и добавить новую подписку.">Новая</button>
                         <button type="submit" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить подписку" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
                       </div>
+                    </div>
+                    <div class="xk-sub-balancers">
+                      <div class="xk-sub-balancers-head">
+                        <span class="xk-pool-fieldlabel">Balancer selectors</span>
+                        <span id="outbounds-subscriptions-routing-balancers-note" class="xk-sub-field-note xk-sub-balancers-note" hidden></span>
+                      </div>
+                      <div id="outbounds-subscriptions-routing-balancers" class="xk-sub-balancers-list"></div>
                     </div>
                   </form>
                 </section>
@@ -4275,6 +4385,7 @@ let outboundsModuleApi = null;
         }
       } catch (e2) {}
       try { subsDecorateActionButtons(modal); } catch (e3) {}
+      try { subsRenderRoutingBalancers([]); } catch (e4) {}
       return modal;
     }
 
@@ -4895,6 +5006,9 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.enabled).checked = true; } catch (e) {}
       try { $(SUB_IDS.ping).checked = true; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = 'safe-fallback'; } catch (e) {}
+      try { $(SUB_IDS.routingAutoRule).checked = true; } catch (e) {}
+      try { subsRenderRoutingBalancers([]); } catch (e) {}
+      try { subsSetSelectedBalancerTags([]); } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = true; } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
       try { subsRenderNodeList(); } catch (e2) {}
@@ -4926,6 +5040,9 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.enabled).checked = s.enabled !== false; } catch (e) {}
       try { $(SUB_IDS.ping).checked = s.ping_enabled !== false; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = String(s.routing_mode || 'safe-fallback') || 'safe-fallback'; } catch (e) {}
+      try { $(SUB_IDS.routingAutoRule).checked = s.routing_auto_rule !== false; } catch (e) {}
+      try { subsRenderRoutingBalancers(s.routing_balancer_tags); } catch (e) {}
+      try { subsSetSelectedBalancerTags(s.routing_balancer_tags); } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = opts.keepRefreshNow === true ? !!($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked) : false; } catch (e) {}
       try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
@@ -5522,6 +5639,7 @@ let outboundsModuleApi = null;
           throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
         }
         _subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+        _subscriptionRoutingBalancers = Array.isArray(data.routing_balancers) ? data.routing_balancers : [];
         try {
           _subscriptionOutputFiles = new Set(_subscriptions.map((sub) => baseName(sub && sub.output_file)).filter(Boolean));
           _subscriptionOutputFilesTs = Date.now();
@@ -5529,6 +5647,9 @@ let outboundsModuleApi = null;
         const active = _subscriptions.find((sub) => String(sub && sub.id || '') === String(_subscriptionEditId || '')) || null;
         if (active) subsFillForm(active, { focus: false, keepRefreshNow: true });
         else if (_subscriptionEditId) subsResetForm();
+        else {
+          try { subsRenderRoutingBalancers(subsSelectedBalancerTags()); } catch (e4) {}
+        }
         subsRender();
         try { subsSyncSubscriptionFormState(); } catch (e3) {}
         return true;
@@ -5662,9 +5783,18 @@ let outboundsModuleApi = null;
         const filterNote = filteredOutCount > 0 && sourceCount > 0
           ? ` · по фильтру ${Number(data.count || 0)} из ${sourceCount}`
           : '';
-        const routingNote = data.routing_changed
-          ? ` · leastPing → ${String(data.routing_balancer_tag || 'proxy')} (${Number(data.routing_selector_count || 0)} tag)`
-          : '';
+        const manualBalancers = Array.isArray(data.routing_manual_balancer_tags)
+          ? data.routing_manual_balancer_tags.map((item) => String(item || '').trim()).filter(Boolean)
+          : [];
+        const routingParts = data.routing_changed
+          ? [
+              data.routing_balancer_tag
+                ? `leastPing → ${String(data.routing_balancer_tag || 'proxy')} (${Number(data.routing_selector_count || 0)} tag)`
+                : '',
+              manualBalancers.length ? `balancers → ${manualBalancers.join(', ')}` : '',
+            ].filter(Boolean)
+          : [];
+        const routingNote = routingParts.length ? (' · ' + routingParts.join(' · ')) : '';
         const routingModeNote = data.routing_mode === 'migrate-vless-rules'
           ? (Number(data.routing_migrated_rules || 0) > 0
             ? ` · strict: ${Number(data.routing_migrated_rules || 0)} rule → pool`
@@ -5962,6 +6092,10 @@ let outboundsModuleApi = null;
           id: SUB_IDS.routingMode,
           event: 'change',
         },
+        {
+          id: SUB_IDS.routingAutoRule,
+          event: 'change',
+        },
       ].forEach((binding) => {
         const el = $(binding.id);
         if (!el || (el.dataset && el.dataset.xkSubFieldBound === '1')) return;
@@ -5973,6 +6107,15 @@ let outboundsModuleApi = null;
         });
         if (el.dataset) el.dataset.xkSubFieldBound = '1';
       });
+      const balancersRoot = $(SUB_IDS.routingBalancers);
+      if (balancersRoot && (!balancersRoot.dataset || balancersRoot.dataset.xkSubBalancersBound !== '1')) {
+        balancersRoot.addEventListener('change', (event) => {
+          const target = event && event.target ? event.target : null;
+          if (!target || String(target.type || '').toLowerCase() !== 'checkbox') return;
+          try { subsSyncSubscriptionFormState(); } catch (e) {}
+        });
+        if (balancersRoot.dataset) balancersRoot.dataset.xkSubBalancersBound = '1';
+      }
       [SUB_IDS.nameFilter, SUB_IDS.typeFilter, SUB_IDS.transportFilter].forEach((id) => {
         const el = $(id);
         if (!el || (el.dataset && el.dataset.xkSubFilterBound === '1')) return;

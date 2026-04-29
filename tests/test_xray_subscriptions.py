@@ -117,7 +117,7 @@ def test_refresh_subscription_writes_generated_fragment_and_observatory(tmp_path
     assert generated["outbounds"][0]["protocol"] == "vless"
 
     observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
-    assert observatory["observatory"]["subjectSelector"] == ["demo--Fast_Node"]
+    assert observatory["observatory"]["subjectSelector"] == ["demo"]
 
     state = subs.load_subscription_state(str(ui_state_dir))
     saved = state["subscriptions"][0]
@@ -618,20 +618,124 @@ def test_refresh_subscription_auto_syncs_routing_and_keeps_vless_reality(tmp_pat
     assert result["routing_selector_count"] == 2
 
     observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
-    assert observatory["observatory"]["subjectSelector"] == ["cdn.pecan.run--WS_Germany", "vless-reality"]
+    assert observatory["observatory"]["subjectSelector"] == ["cdn.pecan.run", "vless-reality"]
 
     routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
     balancers = routing["routing"]["balancers"]
     assert len(balancers) == 1
     assert balancers[0]["tag"] == "proxy"
     assert balancers[0]["strategy"]["type"] == "leastPing"
-    assert balancers[0]["selector"] == ["cdn.pecan.run--WS_Germany", "vless-reality"]
+    assert balancers[0]["selector"] == ["cdn.pecan.run", "vless-reality"]
 
     rules = routing["routing"]["rules"]
     assert rules[0]["outboundTag"] == "vless-reality"
     assert rules[1]["ruleTag"] == "xk_auto_leastPing"
     assert rules[1]["balancerTag"] == "proxy"
     assert rules[2]["outboundTag"] == "direct"
+
+
+def test_refresh_subscription_syncs_selected_manual_balancers_without_auto_pool(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "balancers": [
+                        {
+                            "tag": "fast_web_balancer",
+                            "selector": ["VPS_"],
+                            "strategy": {"type": "leastPing"},
+                            "fallbackTag": "direct",
+                        },
+                        {
+                            "tag": "backup_pool",
+                            "selector": ["RESERVE_"],
+                            "strategy": {"type": "leastPing"},
+                            "fallbackTag": "direct",
+                        },
+                    ],
+                    "rules": [
+                        {
+                            "type": "field",
+                            "ruleTag": "manual_direct",
+                            "outboundTag": "direct",
+                        }
+                    ],
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "manual-only",
+            "tag": "demo",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_auto_rule": False,
+            "routing_balancer_tags": ["fast_web_balancer", "backup_pool"],
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "manual-only",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    assert result["routing_changed"] is True
+    assert result["routing_balancer_tag"] == ""
+    assert result["routing_manual_balancer_tags"] == ["backup_pool", "fast_web_balancer"]
+    assert result["routing_selector_count"] == 0
+
+    observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
+    assert observatory["observatory"]["subjectSelector"] == ["demo"]
+
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    balancers = {item["tag"]: item for item in routing["routing"]["balancers"]}
+    assert balancers["fast_web_balancer"]["selector"] == ["VPS_", "demo"]
+    assert balancers["backup_pool"]["selector"] == ["RESERVE_", "demo"]
+    assert all(rule.get("ruleTag") != "xk_auto_leastPing" for rule in routing["routing"]["rules"])
 
 
 def test_refresh_subscription_preserves_user_routing_jsonc_comments(tmp_path: Path, monkeypatch):
@@ -878,7 +982,7 @@ def test_refresh_subscription_strict_mode_migrates_and_reverts_vless_rules(tmp_p
 
     assert safe["ok"] is True
     assert safe["routing_mode"] == "safe-fallback"
-    assert safe["routing_reverted_rules"] == 1
+    assert safe["routing_reverted_rules"] == 0
 
     routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
     rules = routing["routing"]["rules"]
@@ -1332,12 +1436,12 @@ def test_delete_subscription_rebuilds_runtime_from_baseline_for_remaining_subscr
     assert not (jsonc_dir / "04_outbounds.alpha.jsonc").exists()
 
     observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
-    assert observatory["observatory"]["subjectSelector"] == ["beta--TCP_Sweden"]
+    assert observatory["observatory"]["subjectSelector"] == ["beta"]
 
     routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
     balancers = routing["routing"]["balancers"]
     assert len(balancers) == 1
-    assert balancers[0]["selector"] == ["beta--TCP_Sweden"]
+    assert balancers[0]["selector"] == ["beta"]
     rules = routing["routing"]["rules"]
     assert rules[0]["ruleTag"] == "xk_auto_leastPing"
     assert rules[0]["balancerTag"] == "proxy"

@@ -16,9 +16,12 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert "nameFilter: 'outbounds-subscriptions-name-filter'" in outbounds_src
     assert "typeFilter: 'outbounds-subscriptions-type-filter'" in outbounds_src
     assert "routingMode: 'outbounds-subscriptions-routing-mode'" in outbounds_src
+    assert "routingAutoRule: 'outbounds-subscriptions-routing-auto-rule'" in outbounds_src
+    assert "routingBalancers: 'outbounds-subscriptions-routing-balancers'" in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Имя</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Тип</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Транспорт</span>' in outbounds_src
+    assert '<span class="xk-pool-fieldlabel">Balancer selectors</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Обновлять, ч</span>' in outbounds_src
     assert "const SUB_DEFAULT_INTERVAL_HOURS = 24;" in outbounds_src
     assert "xk-sub-interval-note" in outbounds_src
@@ -31,6 +34,8 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert "name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim()," in outbounds_src
     assert "type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim()," in outbounds_src
     assert "routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback'," in outbounds_src
+    assert "routing_auto_rule: !!($(SUB_IDS.routingAutoRule) && $(SUB_IDS.routingAutoRule).checked)," in outbounds_src
+    assert "routing_balancer_tags: subsSelectedBalancerTags()," in outbounds_src
     assert "function subsFilterSummary(sub) {" in outbounds_src
     assert "data.filtered_out_count" in outbounds_src
 
@@ -104,16 +109,21 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert 'delete modal.dataset.modalNodrag;' in outbounds_src
     assert "transportFilter: 'outbounds-subscriptions-transport-filter'" in outbounds_src
     assert "routingMode: 'outbounds-subscriptions-routing-mode'" in outbounds_src
+    assert "routingAutoRule: 'outbounds-subscriptions-routing-auto-rule'" in outbounds_src
+    assert "routingBalancers: 'outbounds-subscriptions-routing-balancers'" in outbounds_src
     assert "excludedKeys: 'outbounds-subscriptions-excluded-keys'" in outbounds_src
     assert "nodesPanel: 'outbounds-subscriptions-nodes-panel'" in outbounds_src
     assert "nodesList: 'outbounds-subscriptions-nodes-list'" in outbounds_src
     assert "nodesSummary: 'outbounds-subscriptions-nodes-summary'" in outbounds_src
     assert "transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim()," in outbounds_src
     assert "routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback'," in outbounds_src
+    assert "routing_auto_rule: !!state.routing_auto_rule," in outbounds_src
+    assert "routing_balancer_tags: state.routing_balancer_tags.slice()," in outbounds_src
     assert "excluded_node_keys: state.excluded_node_keys.slice()," in outbounds_src
     assert "function subsRenderNodeList() {" in outbounds_src
     assert "function subsSyncModalLayout() {" in outbounds_src
     assert "function subsDecorateActionButtons(modal) {" in outbounds_src
+    assert "function subsRenderRoutingBalancers(selectedTags) {" in outbounds_src
     assert "function subsTransportFilterText(transport, protocol) {" in outbounds_src
     assert "function subsProtocolFilterText(protocol) {" in outbounds_src
     assert "xk-sub-update-note" in outbounds_src

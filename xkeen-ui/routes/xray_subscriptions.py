@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, request
 from routes.common.errors import error_response, exception_response
 from services.xray_subscriptions import (
     delete_subscription,
+    list_subscription_routing_balancers,
     list_subscriptions,
     preview_subscription,
     probe_subscription_node_latency,
@@ -40,7 +41,16 @@ def create_xray_subscriptions_blueprint(
     @bp.get("/api/xray/subscriptions")
     def api_list_xray_subscriptions():
         try:
-            return jsonify({"ok": True, "subscriptions": list_subscriptions(ui_state_dir)}), 200
+            return (
+                jsonify(
+                    {
+                        "ok": True,
+                        "subscriptions": list_subscriptions(ui_state_dir),
+                        "routing_balancers": list_subscription_routing_balancers(xray_configs_dir),
+                    }
+                ),
+                200,
+            )
         except Exception as exc:
             return exception_response(
                 "Не удалось прочитать список подписок Xray.",

@@ -93,9 +93,16 @@ NAME_FILTER_KEYS = ("name_filter", "nameFilter", "name_regex", "nameRegex")
 TYPE_FILTER_KEYS = ("type_filter", "typeFilter", "type_regex", "typeRegex")
 TRANSPORT_FILTER_KEYS = ("transport_filter", "transportFilter", "transport_regex", "transportRegex")
 EXCLUDED_NODE_KEYS_KEYS = ("excluded_node_keys", "excludedNodeKeys", "exclude_node_keys", "excludeNodeKeys")
+ROUTING_BALANCER_TAGS_KEYS = ("routing_balancer_tags", "routingBalancerTags")
+ROUTING_AUTO_RULE_KEYS = ("routing_auto_rule", "routingAutoRule")
 LAST_NODES_KEYS = ("last_nodes", "lastNodes")
 NODE_LATENCY_KEYS = ("node_latency", "nodeLatency")
 LAST_WARNINGS_KEYS = ("last_warnings", "lastWarnings")
+LAST_SELECTOR_TERMS_KEYS = ("last_selector_terms", "lastSelectorTerms")
+LAST_RUNTIME_BALANCER_TAGS_KEYS = ("last_routing_balancer_tags", "lastRoutingBalancerTags")
+LAST_RUNTIME_AUTO_RULE_KEYS = ("last_routing_auto_rule", "lastRoutingAutoRule")
+LAST_RUNTIME_ROUTING_MODE_KEYS = ("last_routing_mode", "lastRoutingMode")
+LAST_RUNTIME_ACTIVE_KEYS = ("last_runtime_active", "lastRuntimeActive")
 
 DEFAULT_PROBE_URL = "https://www.gstatic.com/generate_204"
 DEFAULT_PROBE_TIMEOUT_SECONDS = 8.0
@@ -231,6 +238,55 @@ def _has_any_key(data: Any, keys: tuple[str, ...]) -> bool:
     if not isinstance(data, dict):
         return False
     return any(key in data for key in keys)
+
+
+def _read_bool_value(data: Any, keys: tuple[str, ...], default: bool) -> bool:
+    if not isinstance(data, dict):
+        return bool(default)
+    for key in keys:
+        if key in data:
+            return bool(data.get(key))
+    return bool(default)
+
+
+def _derive_selector_terms_from_tags(tags: Any) -> List[str]:
+    values = _clean_string_list(tags)
+    if not values:
+        return []
+    prefixes: List[str] = []
+    for tag in values:
+        if "--" not in tag:
+            return values
+        prefix = str(tag.split("--", 1)[0] or "").strip()
+        if not prefix:
+            return values
+        prefixes.append(prefix)
+    if prefixes and all(prefix == prefixes[0] for prefix in prefixes[1:]):
+        return [prefixes[0]]
+    return values
+
+
+def _ensure_runtime_snapshot_defaults(item: Any) -> Dict[str, Any]:
+    data = dict(item) if isinstance(item, dict) else {}
+    last_tags = _clean_string_list(data.get("last_tags"))
+    if not last_tags:
+        data.setdefault("last_selector_terms", [])
+        data.setdefault("last_routing_balancer_tags", [])
+        data.setdefault("last_routing_auto_rule", True)
+        data.setdefault("last_routing_mode", _clean_routing_mode(data.get("routing_mode")))
+        data.setdefault("last_runtime_active", False)
+        return data
+    if not _has_any_key(data, LAST_SELECTOR_TERMS_KEYS):
+        data["last_selector_terms"] = _derive_selector_terms_from_tags(last_tags)
+    if not _has_any_key(data, LAST_RUNTIME_BALANCER_TAGS_KEYS):
+        data["last_routing_balancer_tags"] = []
+    if not _has_any_key(data, LAST_RUNTIME_AUTO_RULE_KEYS):
+        data["last_routing_auto_rule"] = True
+    if not _has_any_key(data, LAST_RUNTIME_ROUTING_MODE_KEYS):
+        data["last_routing_mode"] = _clean_routing_mode(data.get("routing_mode"))
+    if not _has_any_key(data, LAST_RUNTIME_ACTIVE_KEYS):
+        data["last_runtime_active"] = bool(data.get("ping_enabled", True))
+    return data
 
 
 def _normalize_last_nodes(value: Any) -> List[Dict[str, Any]]:
@@ -513,9 +569,16 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
             + TYPE_FILTER_KEYS[1:]
             + TRANSPORT_FILTER_KEYS[1:]
             + EXCLUDED_NODE_KEYS_KEYS[1:]
+            + ROUTING_BALANCER_TAGS_KEYS[1:]
+            + ROUTING_AUTO_RULE_KEYS[1:]
             + LAST_WARNINGS_KEYS[1:]
             + LAST_NODES_KEYS[1:]
             + NODE_LATENCY_KEYS[1:]
+            + LAST_SELECTOR_TERMS_KEYS[1:]
+            + LAST_RUNTIME_BALANCER_TAGS_KEYS[1:]
+            + LAST_RUNTIME_AUTO_RULE_KEYS[1:]
+            + LAST_RUNTIME_ROUTING_MODE_KEYS[1:]
+            + LAST_RUNTIME_ACTIVE_KEYS[1:]
         ):
             clean.pop(alias, None)
         clean.update(
@@ -531,6 +594,8 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 "enabled": bool(item.get("enabled", True)),
                 "ping_enabled": bool(item.get("ping_enabled", item.get("pingEnabled", True))),
                 "routing_mode": _clean_routing_mode(item.get("routing_mode", item.get("routingMode"))),
+                "routing_balancer_tags": _read_string_list_value(item, ROUTING_BALANCER_TAGS_KEYS),
+                "routing_auto_rule": _read_bool_value(item, ROUTING_AUTO_RULE_KEYS, True),
                 "interval_hours": interval,
                 "output_file": output_file,
                 "last_warnings": last_warnings,
@@ -539,9 +604,16 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 "last_tags": [str(x) for x in item.get("last_tags", []) if str(x or "").strip()]
                 if isinstance(item.get("last_tags"), list)
                 else [],
+                "last_selector_terms": _read_string_list_value(item, LAST_SELECTOR_TERMS_KEYS),
+                "last_routing_balancer_tags": _read_string_list_value(item, LAST_RUNTIME_BALANCER_TAGS_KEYS),
+                "last_routing_auto_rule": _read_bool_value(item, LAST_RUNTIME_AUTO_RULE_KEYS, True),
+                "last_routing_mode": _clean_routing_mode(
+                    item.get("last_routing_mode", item.get("lastRoutingMode", item.get("routing_mode")))
+                ),
+                "last_runtime_active": _read_bool_value(item, LAST_RUNTIME_ACTIVE_KEYS, bool(item.get("ping_enabled", True))),
             }
         )
-        clean_subs.append(clean)
+        clean_subs.append(_ensure_runtime_snapshot_defaults(clean))
     state = {"version": STATE_VERSION, "subscriptions": clean_subs}
     baselines = _normalize_managed_baselines(obj.get(MANAGED_BASELINES_KEY))
     if baselines:
@@ -591,7 +663,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
             sub_id = _unique_id(data.get("tag") or data.get("name") or _default_id_from_url(url), existing_ids)
             idx, existing = -1, None
 
-        base = dict(existing or {})
+        base = _ensure_runtime_snapshot_defaults(dict(existing or {}))
         tag = _clean_tag_prefix(data.get("tag") or base.get("tag") or sub_id, sub_id)
         interval = _clamp_interval(data.get("interval_hours") or data.get("intervalHours") or base.get("interval_hours") or DEFAULT_INTERVAL_HOURS)
         output_file = str(base.get("output_file") or _subscription_output_file(sub_id)).strip()
@@ -616,6 +688,16 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
             _stored_filter_value(base, TRANSPORT_FILTER_KEYS) if transport_filter_raw is _MISSING else transport_filter_raw
         )
         routing_mode = _clean_routing_mode(data.get("routing_mode", data.get("routingMode", base.get("routing_mode"))))
+        routing_balancer_tags = (
+            _read_string_list_value(data, ROUTING_BALANCER_TAGS_KEYS)
+            if _has_any_key(data, ROUTING_BALANCER_TAGS_KEYS)
+            else _read_string_list_value(base, ROUTING_BALANCER_TAGS_KEYS)
+        )
+        routing_auto_rule = _read_bool_value(
+            data,
+            ROUTING_AUTO_RULE_KEYS,
+            _read_bool_value(base, ROUTING_AUTO_RULE_KEYS, True),
+        )
         _compile_regex_filter(name_filter, "фильтра имени")
         _compile_regex_filter(type_filter, "фильтра типа")
         _compile_regex_filter(transport_filter, "фильтра транспорта")
@@ -627,9 +709,16 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
             + TYPE_FILTER_KEYS[1:]
             + TRANSPORT_FILTER_KEYS[1:]
             + EXCLUDED_NODE_KEYS_KEYS[1:]
+            + ROUTING_BALANCER_TAGS_KEYS[1:]
+            + ROUTING_AUTO_RULE_KEYS[1:]
             + LAST_WARNINGS_KEYS[1:]
             + LAST_NODES_KEYS[1:]
             + NODE_LATENCY_KEYS[1:]
+            + LAST_SELECTOR_TERMS_KEYS[1:]
+            + LAST_RUNTIME_BALANCER_TAGS_KEYS[1:]
+            + LAST_RUNTIME_AUTO_RULE_KEYS[1:]
+            + LAST_RUNTIME_ROUTING_MODE_KEYS[1:]
+            + LAST_RUNTIME_ACTIVE_KEYS[1:]
         ):
             sub.pop(alias, None)
         sub.update(
@@ -645,6 +734,8 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
                 "enabled": bool(data.get("enabled", base.get("enabled", True))),
                 "ping_enabled": bool(data.get("ping_enabled", data.get("pingEnabled", base.get("ping_enabled", True)))),
                 "routing_mode": routing_mode,
+                "routing_balancer_tags": routing_balancer_tags,
+                "routing_auto_rule": routing_auto_rule,
                 "interval_hours": interval,
                 "output_file": output_file,
                 "node_latency": _prune_node_latency_map(base.get("node_latency"), _normalize_last_nodes(base.get("last_nodes"))),
@@ -709,37 +800,19 @@ def delete_subscription(
     routing_changed = False
     routing_sync: Dict[str, Any] = {}
     old_tags = removed.get("last_tags") if removed else []
-    remaining_tags = _collect_runtime_subscription_tags(remaining_state)
     restored_baseline = False
     if remaining_state.get(MANAGED_BASELINES_KEY):
-        restore_stats = _restore_subscription_managed_baselines(
+        rebuild_stats = _rebuild_subscription_runtime(
             ui_state_dir,
             xray_configs_dir=xray_configs_dir,
             snapshot=snapshot,
+            state_override=remaining_state,
         )
-        restored_baseline = bool(restore_stats.get("restored"))
-        observatory_changed = bool(restore_stats.get("observatory_changed"))
-        routing_changed = bool(restore_stats.get("routing_changed"))
-        if remaining_tags:
-            preserved_tags = _preserved_balancer_tags(xray_configs_dir)
-            observatory_changed = bool(
-                sync_observatory_subjects(
-                    xray_configs_dir=xray_configs_dir,
-                    add_tags=remaining_tags + preserved_tags,
-                    remove_tags=[],
-                    snapshot=snapshot,
-                )
-                or observatory_changed
-            )
-            routing_sync = sync_subscription_routing(
-                xray_configs_dir=xray_configs_dir,
-                add_tags=remaining_tags,
-                remove_tags=[],
-                routing_mode=_effective_runtime_routing_mode_from_state(remaining_state),
-                snapshot=snapshot,
-            )
-            routing_changed = bool(routing_sync.get("changed") or routing_changed)
-        else:
+        restored_baseline = bool(rebuild_stats.get("baseline_restored"))
+        observatory_changed = bool(rebuild_stats.get("observatory_changed"))
+        routing_changed = bool(rebuild_stats.get("routing_changed"))
+        routing_sync = rebuild_stats.get("routing_sync") if isinstance(rebuild_stats.get("routing_sync"), dict) else {}
+        if not rebuild_stats.get("has_runtime_targets"):
             _clear_subscription_managed_baselines(ui_state_dir)
     elif isinstance(old_tags, list) and old_tags:
         preserved_tags = _preserved_balancer_tags(xray_configs_dir)
@@ -774,6 +847,8 @@ def delete_subscription(
         "observatory_changed": observatory_changed,
         "routing_changed": routing_changed,
         "routing_file": str(routing_sync.get("routing_file") or ""),
+        "routing_balancer_tag": str(routing_sync.get("balancer_tag") or ""),
+        "routing_manual_balancer_tags": list(routing_sync.get("manual_balancer_tags") or []),
         "baseline_restored": restored_baseline,
         "restarted": restarted,
     }
@@ -1551,6 +1626,25 @@ def _restore_managed_file_baseline(
     return changed
 
 
+def _managed_file_snapshot(path: str) -> Tuple[str | None, str | None]:
+    try:
+        main_text = load_text(path, default=None)
+    except Exception:
+        main_text = None
+    try:
+        jsonc = jsonc_path_for(path)
+    except Exception:
+        jsonc = ""
+    if jsonc:
+        try:
+            jsonc_text = load_text(jsonc, default=None)
+        except Exception:
+            jsonc_text = None
+    else:
+        jsonc_text = None
+    return main_text, jsonc_text
+
+
 def _restore_subscription_managed_baselines(
     ui_state_dir: str,
     *,
@@ -2110,6 +2204,32 @@ def _find_least_ping_balancer(routing: Dict[str, Any]) -> Dict[str, Any] | None:
     return None
 
 
+def list_subscription_routing_balancers(xray_configs_dir: str) -> List[Dict[str, Any]]:
+    routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
+    _cfg, routing, _normalized = _ensure_routing_model(_read_json_file(routing_path, {}))
+    auto_tag = _choose_auto_balancer_tag(routing)
+    items: List[Dict[str, Any]] = []
+    for balancer in routing.get("balancers") if isinstance(routing, dict) else []:
+        if not isinstance(balancer, dict):
+            continue
+        tag = str(balancer.get("tag") or "").strip()
+        if not tag:
+            continue
+        strategy = str(((balancer.get("strategy") or {}).get("type") if isinstance(balancer.get("strategy"), dict) else "") or "").strip()
+        selector = _clean_tags_list(balancer.get("selector") if isinstance(balancer.get("selector"), list) else [])
+        items.append(
+            {
+                "tag": tag,
+                "selector": selector,
+                "selector_count": len(selector),
+                "strategy_type": strategy,
+                "fallback_tag": str(balancer.get("fallbackTag") or "").strip(),
+                "auto_managed": tag == auto_tag,
+            }
+        )
+    return items
+
+
 def _rule_inbound_tags(rule: Any) -> List[str]:
     if not isinstance(rule, dict):
         return []
@@ -2297,6 +2417,70 @@ def _effective_subscription_routing_mode(ui_state_dir: str) -> str:
         if _clean_routing_mode(item.get("routing_mode")) == ROUTING_MODE_STRICT:
             return ROUTING_MODE_STRICT
     return ROUTING_MODE_SAFE
+
+
+def _subscription_runtime_selector_terms(item: Any) -> List[str]:
+    if not isinstance(item, dict):
+        return []
+    explicit = _read_string_list_value(item, LAST_SELECTOR_TERMS_KEYS)
+    if explicit:
+        return explicit
+    return _derive_selector_terms_from_tags(item.get("last_tags"))
+
+
+def _subscription_runtime_active(item: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if _read_bool_value(item, LAST_RUNTIME_ACTIVE_KEYS, False):
+        return bool(_subscription_runtime_selector_terms(item))
+    raw = item.get("last_tags")
+    return bool(item.get("ping_enabled", True)) and isinstance(raw, list) and any(str(tag or "").strip() for tag in raw)
+
+
+def _build_runtime_sync_plan(state: Any) -> Dict[str, Any]:
+    observatory_terms: List[str] = []
+    auto_terms: List[str] = []
+    manual_balancers: Dict[str, List[str]] = {}
+    seen_observatory: set[str] = set()
+    seen_auto: set[str] = set()
+    strict_enabled = False
+
+    for raw_item in state.get("subscriptions") if isinstance(state, dict) else []:
+        item = _ensure_runtime_snapshot_defaults(raw_item)
+        if not _subscription_runtime_active(item):
+            continue
+        terms = _subscription_runtime_selector_terms(item)
+        if not terms:
+            continue
+        for term in terms:
+            if term not in seen_observatory:
+                seen_observatory.add(term)
+                observatory_terms.append(term)
+
+        if _read_bool_value(item, LAST_RUNTIME_AUTO_RULE_KEYS, True):
+            for term in terms:
+                if term not in seen_auto:
+                    seen_auto.add(term)
+                    auto_terms.append(term)
+            if _clean_routing_mode(item.get("last_routing_mode")) == ROUTING_MODE_STRICT:
+                strict_enabled = True
+
+        for balancer_tag in _read_string_list_value(item, LAST_RUNTIME_BALANCER_TAGS_KEYS):
+            bucket = manual_balancers.setdefault(balancer_tag, [])
+            seen_bucket = set(bucket)
+            for term in terms:
+                if term in seen_bucket:
+                    continue
+                seen_bucket.add(term)
+                bucket.append(term)
+
+    return {
+        "observatory_terms": observatory_terms,
+        "auto_terms": auto_terms,
+        "manual_balancers": manual_balancers,
+        "routing_mode": ROUTING_MODE_STRICT if strict_enabled and auto_terms else ROUTING_MODE_SAFE,
+        "has_runtime_targets": bool(observatory_terms or auto_terms or manual_balancers),
+    }
 
 
 def _collect_runtime_subscription_tags(state: Any) -> List[str]:
@@ -2536,6 +2720,204 @@ def sync_subscription_routing(
     }
 
 
+def _merge_selector_terms(current: Any, extra: Iterable[str]) -> List[str]:
+    selector: List[str] = []
+    seen: set[str] = set()
+    for tag in _clean_tags_list(current if isinstance(current, list) else []):
+        if tag in seen:
+            continue
+        seen.add(tag)
+        selector.append(tag)
+    for tag in _clean_tags_list(extra):
+        if tag in seen:
+            continue
+        seen.add(tag)
+        selector.append(tag)
+    return selector
+
+
+def _update_existing_balancer_selector(
+    routing: Dict[str, Any],
+    *,
+    balancer_tag: str,
+    selector_terms: Iterable[str],
+) -> bool:
+    balancers = routing.get("balancers")
+    if not isinstance(balancers, list):
+        return False
+    balancer = _find_balancer_by_tag(balancers, balancer_tag)
+    if balancer is None:
+        return False
+    before = copy.deepcopy(balancer)
+    balancer["selector"] = _merge_selector_terms(balancer.get("selector"), selector_terms)
+    return before != balancer
+
+
+def sync_subscription_routing_plan(
+    *,
+    xray_configs_dir: str,
+    auto_selector_terms: Iterable[str],
+    manual_balancers: Dict[str, List[str]] | None = None,
+    routing_mode: str = ROUTING_MODE_SAFE,
+    snapshot: SnapshotCallback | None = None,
+) -> Dict[str, Any]:
+    auto_terms = _clean_tags_list(auto_selector_terms)
+    manual_targets = {
+        str(tag or "").strip(): _clean_tags_list(values)
+        for tag, values in (manual_balancers or {}).items()
+        if str(tag or "").strip() and _clean_tags_list(values)
+    }
+    if not auto_terms and not manual_targets:
+        return {
+            "changed": False,
+            "selector": [],
+            "balancer_tag": "",
+            "routing_file": "",
+            "routing_mode": ROUTING_MODE_SAFE,
+            "migrated_rules": 0,
+            "reverted_rules": 0,
+            "skipped_rules": 0,
+            "manual_balancer_tags": [],
+        }
+
+    routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
+    cfg, routing, normalized_model = _ensure_routing_model(_read_json_file(routing_path, {}))
+    changed = bool(normalized_model)
+    selector: List[str] = []
+    balancer_tag = ""
+    migrated_rules = 0
+    reverted_rules = 0
+    skipped_rules = 0
+    applied_manual_tags: List[str] = []
+
+    if auto_terms:
+        balancer_tag = _choose_auto_balancer_tag(routing)
+        balancer = _find_balancer_by_tag(routing.get("balancers", []), balancer_tag)
+        current_selector = _clean_tags_list(
+            balancer.get("selector") if isinstance(balancer, dict) and isinstance(balancer.get("selector"), list) else []
+        )
+        selector = _merge_selector_terms(current_selector, auto_terms)
+        for tag in _preserved_balancer_tags(xray_configs_dir):
+            if tag not in selector:
+                selector.append(tag)
+        changed = bool(
+            _ensure_least_ping_balancer(
+                routing,
+                balancer_tag=balancer_tag,
+                selector_tags=selector,
+            )
+            or changed
+        )
+        changed = bool(_ensure_default_balancer_rule(routing, balancer_tag=balancer_tag) or changed)
+        strict_enabled = (
+            _clean_routing_mode(routing_mode) == ROUTING_MODE_STRICT
+            and any(tag not in AUTO_BALANCER_PRESERVE_TAGS for tag in selector)
+        )
+        migrate_stats = _sync_vless_reality_rules_to_balancer(
+            routing,
+            balancer_tag=balancer_tag,
+            enabled=strict_enabled,
+        )
+        changed = bool(changed or migrate_stats.get("changed"))
+        migrated_rules = int(migrate_stats.get("migrated") or 0)
+        reverted_rules = int(migrate_stats.get("reverted") or 0)
+        skipped_rules = int(migrate_stats.get("skipped") or 0)
+    else:
+        strict_enabled = False
+
+    for tag in sorted(manual_targets):
+        if _update_existing_balancer_selector(routing, balancer_tag=tag, selector_terms=manual_targets.get(tag) or []):
+            changed = True
+        if _find_balancer_by_tag(routing.get("balancers", []), tag) is not None:
+            applied_manual_tags.append(tag)
+
+    if not changed:
+        return {
+            "changed": False,
+            "selector": selector,
+            "balancer_tag": balancer_tag,
+            "routing_file": os.path.basename(routing_path),
+            "routing_mode": ROUTING_MODE_STRICT if strict_enabled else ROUTING_MODE_SAFE,
+            "migrated_rules": migrated_rules,
+            "reverted_rules": reverted_rules,
+            "skipped_rules": skipped_rules,
+            "manual_balancer_tags": applied_manual_tags,
+        }
+
+    main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
+    raw_changed = _write_jsonc_sidecar_if_changed(
+        routing_path,
+        cfg,
+        header="// Generated by XKeen UI subscriptions (routing sync)",
+        snapshot=snapshot,
+        preserve_existing_comments=True,
+    )
+    return {
+        "changed": bool(main_changed or raw_changed),
+        "selector": selector,
+        "balancer_tag": balancer_tag,
+        "routing_file": os.path.basename(routing_path),
+        "routing_mode": ROUTING_MODE_STRICT if strict_enabled else ROUTING_MODE_SAFE,
+        "migrated_rules": migrated_rules,
+        "reverted_rules": reverted_rules,
+        "skipped_rules": skipped_rules,
+        "manual_balancer_tags": applied_manual_tags,
+    }
+
+
+def _rebuild_subscription_runtime(
+    ui_state_dir: str,
+    *,
+    xray_configs_dir: str,
+    snapshot: SnapshotCallback | None = None,
+    state_override: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
+    observatory_path = os.path.join(str(xray_configs_dir or ""), "07_observatory.json")
+    routing_before = _managed_file_snapshot(routing_path)
+    observatory_before = _managed_file_snapshot(observatory_path)
+    restore_stats = _restore_subscription_managed_baselines(
+        ui_state_dir,
+        xray_configs_dir=xray_configs_dir,
+        snapshot=snapshot,
+    )
+    state = _normalize_state(state_override) if isinstance(state_override, dict) else load_subscription_state(ui_state_dir)
+    plan = _build_runtime_sync_plan(state)
+    observatory_changed = bool(restore_stats.get("observatory_changed"))
+    routing_changed = bool(restore_stats.get("routing_changed"))
+    routing_sync: Dict[str, Any] = {}
+
+    if plan.get("has_runtime_targets"):
+        preserved_tags = _preserved_balancer_tags(xray_configs_dir)
+        sync_observatory_subjects(
+            xray_configs_dir=xray_configs_dir,
+            add_tags=list(plan.get("observatory_terms") or []) + preserved_tags,
+            remove_tags=[],
+            snapshot=snapshot,
+        )
+        routing_sync = sync_subscription_routing_plan(
+            xray_configs_dir=xray_configs_dir,
+            auto_selector_terms=plan.get("auto_terms") or [],
+            manual_balancers=plan.get("manual_balancers") if isinstance(plan.get("manual_balancers"), dict) else {},
+            routing_mode=str(plan.get("routing_mode") or ROUTING_MODE_SAFE),
+            snapshot=snapshot,
+        )
+    routing_after = _managed_file_snapshot(routing_path)
+    observatory_after = _managed_file_snapshot(observatory_path)
+    observatory_changed = observatory_before != observatory_after
+    routing_changed = routing_before != routing_after
+    if routing_sync:
+        routing_sync["changed"] = routing_changed
+
+    return {
+        "baseline_restored": bool(restore_stats.get("restored")),
+        "observatory_changed": observatory_changed,
+        "routing_changed": routing_changed,
+        "routing_sync": routing_sync,
+        "has_runtime_targets": bool(plan.get("has_runtime_targets")),
+    }
+
+
 def sync_observatory_subjects(
     *,
     xray_configs_dir: str,
@@ -2766,44 +3148,6 @@ def refresh_subscription(
         except Exception:
             pass
 
-        previous_tags = [str(t) for t in sub.get("last_tags", []) if str(t or "").strip()] if isinstance(sub.get("last_tags"), list) else []
-        observatory_changed = False
-        routing_changed = False
-        preserved_tags = _preserved_balancer_tags(xray_configs_dir)
-        effective_routing_mode = _effective_subscription_routing_mode(ui_state_dir)
-        if bool(sub.get("ping_enabled", True)):
-            _ensure_subscription_managed_baselines(ui_state_dir, xray_configs_dir)
-            observatory_changed = sync_observatory_subjects(
-                xray_configs_dir=xray_configs_dir,
-                add_tags=tags + preserved_tags,
-                remove_tags=previous_tags,
-                snapshot=snapshot,
-            )
-            routing_sync = sync_subscription_routing(
-                xray_configs_dir=xray_configs_dir,
-                add_tags=tags,
-                remove_tags=previous_tags,
-                routing_mode=effective_routing_mode,
-                snapshot=snapshot,
-            )
-            routing_changed = bool(routing_sync.get("changed"))
-        elif previous_tags:
-            _ensure_subscription_managed_baselines(ui_state_dir, xray_configs_dir)
-            observatory_changed = sync_observatory_subjects(
-                xray_configs_dir=xray_configs_dir,
-                add_tags=preserved_tags,
-                remove_tags=previous_tags,
-                snapshot=snapshot,
-            )
-            routing_sync = sync_subscription_routing(
-                xray_configs_dir=xray_configs_dir,
-                add_tags=[],
-                remove_tags=previous_tags,
-                routing_mode=effective_routing_mode,
-                snapshot=snapshot,
-            )
-            routing_changed = bool(routing_sync.get("changed"))
-
         interval = _clamp_interval(sub.get("interval_hours") or DEFAULT_INTERVAL_HOURS)
         profile_interval = _parse_profile_interval_hours(headers)
         if profile_interval is not None:
@@ -2825,14 +3169,55 @@ def refresh_subscription(
                 "last_nodes": preview_nodes,
                 "node_latency": node_latency,
                 "last_tags": tags,
+                "last_selector_terms": [_clean_tag_prefix(sub.get("tag") or sub.get("id") or "sub", str(sub.get("id") or "sub"))]
+                if bool(sub.get("ping_enabled", True)) and tags
+                else [],
+                "last_routing_balancer_tags": _read_string_list_value(sub, ROUTING_BALANCER_TAGS_KEYS),
+                "last_routing_auto_rule": _read_bool_value(sub, ROUTING_AUTO_RULE_KEYS, True),
+                "last_routing_mode": _clean_routing_mode(sub.get("routing_mode")),
+                "last_runtime_active": bool(sub.get("ping_enabled", True)) and bool(tags),
                 "last_hash": _content_hash(output_obj),
-                "last_changed": bool(changed),
-                "last_observatory_changed": bool(observatory_changed),
-                "last_routing_changed": bool(routing_changed),
                 "last_errors": errors,
                 "last_source_format": source_format,
                 "next_update_ts": now_ts + (interval * 3600) if bool(sub.get("enabled", True)) else None,
                 "interval_hours": interval,
+            }
+        )
+
+        _ensure_subscription_managed_baselines(ui_state_dir, xray_configs_dir)
+        state_for_runtime = load_subscription_state(ui_state_dir)
+        subs_for_runtime = state_for_runtime.get("subscriptions")
+        if not isinstance(subs_for_runtime, list):
+            subs_for_runtime = []
+        replaced = False
+        for pos, existing_sub in enumerate(subs_for_runtime):
+            if not isinstance(existing_sub, dict):
+                continue
+            if _clean_id(existing_sub.get("id")) != _clean_id(sub.get("id")):
+                continue
+            subs_for_runtime[pos] = dict(sub)
+            replaced = True
+            break
+        if not replaced:
+            subs_for_runtime.append(dict(sub))
+        state_for_runtime["subscriptions"] = subs_for_runtime
+        rebuild_stats = _rebuild_subscription_runtime(
+            ui_state_dir,
+            xray_configs_dir=xray_configs_dir,
+            snapshot=snapshot,
+            state_override=state_for_runtime,
+        )
+        observatory_changed = bool(rebuild_stats.get("observatory_changed"))
+        routing_changed = bool(rebuild_stats.get("routing_changed"))
+        routing_sync = rebuild_stats.get("routing_sync") if isinstance(rebuild_stats.get("routing_sync"), dict) else {}
+        if not rebuild_stats.get("has_runtime_targets"):
+            _clear_subscription_managed_baselines(ui_state_dir)
+
+        sub.update(
+            {
+                "last_changed": bool(changed),
+                "last_observatory_changed": bool(observatory_changed),
+                "last_routing_changed": bool(routing_changed),
             }
         )
 
@@ -2866,6 +3251,7 @@ def refresh_subscription(
                 "profile_update_interval_hours": sub.get("profile_update_interval_hours"),
                 "routing_file": (routing_sync.get("routing_file") if "routing_sync" in locals() else ""),
                 "routing_balancer_tag": (routing_sync.get("balancer_tag") if "routing_sync" in locals() else ""),
+                "routing_manual_balancer_tags": list(routing_sync.get("manual_balancer_tags") or []) if "routing_sync" in locals() else [],
                 "routing_selector_count": len(routing_sync.get("selector") or []) if "routing_sync" in locals() else 0,
                 "routing_mode": (routing_sync.get("routing_mode") if "routing_sync" in locals() else _clean_routing_mode(sub.get("routing_mode"))),
                 "routing_migrated_rules": int(routing_sync.get("migrated_rules") or 0) if "routing_sync" in locals() else 0,

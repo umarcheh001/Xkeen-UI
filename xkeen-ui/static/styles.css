@@ -7849,7 +7849,8 @@ html[data-theme="light"] .xk-mi-status.error {
 .xk-sub-wide,
 .xk-sub-options,
 .xk-sub-actions,
-.xk-sub-controls {
+.xk-sub-controls,
+.xk-sub-balancers {
   grid-column: 1 / -1;
 }
 
@@ -7980,6 +7981,10 @@ html[data-theme="light"] .xk-sub-draft-badge {
   padding-bottom: 18px;
 }
 
+.xk-sub-auto-rule-check {
+  justify-self: start;
+}
+
 .xk-sub-controls .xk-sub-options,
 .xk-sub-controls .xk-sub-actions {
   grid-column: auto;
@@ -8044,6 +8049,70 @@ html[data-theme="light"] .xk-sub-draft-badge {
 .xk-sub-check:hover {
   border-color: rgba(96, 165, 250, 0.28);
   background: rgba(15, 23, 42, 0.58);
+}
+
+.xk-sub-balancers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: -4px;
+}
+
+.xk-sub-balancers-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.xk-sub-balancers-note {
+  min-height: 0;
+  margin-top: 0;
+  text-align: right;
+}
+
+.xk-sub-balancers-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.xk-sub-balancer-check {
+  align-items: flex-start;
+  min-width: min(100%, 320px);
+  max-width: 100%;
+  padding: 8px 10px;
+  white-space: normal;
+}
+
+.xk-sub-balancer-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.xk-sub-balancer-tag {
+  color: #e2e8f0;
+  font-weight: 700;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.xk-sub-balancer-meta {
+  color: #94a3b8;
+  font-size: calc(10.5px * var(--xk-font-scale));
+  line-height: 1.25;
+}
+
+.xk-sub-balancers-empty {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.18);
+  color: #94a3b8;
+  font-size: calc(11px * var(--xk-font-scale));
 }
 
 .xk-sub-field-note {
@@ -9382,6 +9451,11 @@ html[data-theme="light"] .xk-sub-draft-badge {
   flex-wrap: wrap;
 }
 
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-auto-rule-check,
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-balancers {
+  grid-column: 1 / -1;
+}
+
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-controls .xk-sub-actions {
   grid-column: 2 / 3;
   width: auto;
@@ -9414,6 +9488,11 @@ html[data-theme="light"] .xk-sub-draft-badge {
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-options {
   flex-wrap: wrap;
+}
+
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-auto-rule-check,
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-balancers {
+  grid-column: 1 / -1;
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-routing-mode {
