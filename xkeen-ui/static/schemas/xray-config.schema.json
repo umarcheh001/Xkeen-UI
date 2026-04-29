@@ -539,6 +539,58 @@
       "required": ["tag", "selector"]
     },
 
+    "inboundDokodemoSettings": {
+      "type": "object",
+      "description": "Настройки `dokodemo-door`/transparent inbound. Используются для прозрачного перехвата через tproxy/redirect или для простого port-mapping на один удалённый адрес.",
+      "properties": {
+        "address": {
+          "type": "string",
+          "default": "localhost",
+          "description": "Адрес назначения для port-mapping или fallback-маршрута. Может быть IPv4, IPv6 или доменом.",
+          "examples": ["8.8.8.8", "mc.hypixel.net", "localhost"]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Порт назначения. `0` или отсутствие поля означает «использовать тот же порт, на который пришёл трафик».",
+          "examples": [53, 25565, 0]
+        },
+        "portMap": {
+          "type": "object",
+          "description": "Таблица переопределения назначения по локальному порту. Ключ — локальный порт, значение — строка вида `host:port`, `:port` или `host:`.",
+          "additionalProperties": {
+            "type": "string",
+            "examples": ["1.1.1.1:7777", ":8888", "example.com:"]
+          }
+        },
+        "network": {
+          "type": "string",
+          "enum": ["tcp", "udp", "tcp,udp"],
+          "default": "tcp",
+          "description": "Какие типы трафика принимает inbound. Для transparent proxy на роутере обычно используют `tcp,udp`, для точечного mapping — `tcp` или `udp`."
+        },
+        "followRedirect": {
+          "type": "boolean",
+          "default": false,
+          "description": "Когда `true`, dokodemo-door пытается взять реальный адрес назначения из redirected/tproxy-трафика и игнорирует статическое `address`/`port` там, где доступен оригинальный target."
+        },
+        "userLevel": {
+          "type": "integer",
+          "default": 0,
+          "description": "User level для local policy. Если отдельные policy-level не используются, обычно оставляют `0`."
+        }
+      }
+    },
+
+    "inboundSettings": {
+      "type": "object",
+      "description": "Настройки, специфичные для inbound-протокола. Сейчас схема детально подсказывает поля `dokodemo-door` (`network`, `followRedirect`, `address`, `port`, `portMap`, `userLevel`).",
+      "allOf": [
+        { "$ref": "#/definitions/inboundDokodemoSettings" }
+      ]
+    },
+
     "outboundUserEntry": {
       "type": "object",
       "description": "Параметры одной учётки на удалённом сервере. Для VLESS/VMess здесь обычно лежат `id`, `encryption`, `level` и `flow`; для некоторых других протоколов могут использоваться парольные поля.",
@@ -970,8 +1022,7 @@
           "description": "Протокол"
         },
         "settings": {
-          "type": "object",
-          "description": "Настройки протокола (зависят от protocol)"
+          "$ref": "#/definitions/inboundSettings"
         },
         "streamSettings": { "$ref": "#/definitions/streamSettings" },
         "tag": { "type": "string", "description": "Уникальный тег" },

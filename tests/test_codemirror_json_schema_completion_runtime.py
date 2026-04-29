@@ -231,6 +231,75 @@ def test_inbounds_schema_completion_supports_inbound_object_keys():
     assert "settings" in labels
 
 
+def test_inbounds_schema_completion_supports_dokodemo_settings_keys():
+    labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "inbounds": [',
+            "    {",
+            '      "protocol": "dokodemo-door",',
+            '      "settings": {',
+            '        __CURSOR__',
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-inbounds.schema.json",
+    )
+
+    assert labels is not None
+    assert "network" in labels
+    assert "followRedirect" in labels
+    assert "address" in labels
+
+
+def test_inbounds_schema_hover_supports_dokodemo_follow_redirect():
+    hover = _run_hover_info(
+        "\n".join([
+            "{",
+            '  "inbounds": [',
+            "    {",
+            '      "protocol": "dokodemo-door",',
+            '      "settings": {',
+            '        "follow__CURSOR__Redirect": true,',
+            '        "network": "tcp,udp"',
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-inbounds.schema.json",
+    )
+
+    config_labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "inbounds": [',
+            "    {",
+            '      "protocol": "dokodemo-door",',
+            '      "settings": {',
+            '        __CURSOR__',
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-config.schema.json",
+    )
+
+    assert hover is not None
+    assert hover["pointer"] == "/inbounds/0/settings/followRedirect"
+    assert "реальный адрес назначения" in str(hover["plain"]).lower()
+
+    assert config_labels is not None
+    assert "network" in config_labels
+    assert "followRedirect" in config_labels
+
+
 def test_outbounds_schema_completion_supports_outbound_object_keys():
     labels = _run_completion_labels(
         "\n".join([
