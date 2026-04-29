@@ -2,6 +2,7 @@ import { getBackupsApi } from './backups.js';
 import { getRestartLogApi } from './restart_log.js';
 import { getRoutingApi } from './routing.js';
 import {
+  confirmXkeenAction,
   getXkeenConfigDirtyApi,
   getXkeenFilePath,
   getXkeenUiConfigShellApi,
@@ -3532,14 +3533,21 @@ let outboundsModuleApi = null;
       form: 'outbounds-subscriptions-form',
       id: 'outbounds-subscriptions-id',
       name: 'outbounds-subscriptions-name',
+      nameNote: 'outbounds-subscriptions-name-note',
       tag: 'outbounds-subscriptions-tag',
+      tagNote: 'outbounds-subscriptions-tag-note',
       url: 'outbounds-subscriptions-url',
+      urlNote: 'outbounds-subscriptions-url-note',
       nameFilter: 'outbounds-subscriptions-name-filter',
+      nameFilterNote: 'outbounds-subscriptions-name-filter-note',
       typeFilter: 'outbounds-subscriptions-type-filter',
+      typeFilterNote: 'outbounds-subscriptions-type-filter-note',
       transportFilter: 'outbounds-subscriptions-transport-filter',
+      transportFilterNote: 'outbounds-subscriptions-transport-filter-note',
       routingMode: 'outbounds-subscriptions-routing-mode',
       excludedKeys: 'outbounds-subscriptions-excluded-keys',
       interval: 'outbounds-subscriptions-interval',
+      intervalNote: 'outbounds-subscriptions-interval-note',
       enabled: 'outbounds-subscriptions-enabled',
       ping: 'outbounds-subscriptions-ping',
       refreshNow: 'outbounds-subscriptions-refresh-now',
@@ -3566,7 +3574,377 @@ let outboundsModuleApi = null;
     let _subscriptionPingAllBusy = false;
     let _subscriptionPreview = null;
     let _subscriptionShowHidden = false;
+    let _subscriptionBaseline = null;
+    let _subscriptionPreviewBusy = false;
+    let _subscriptionSaveBusy = false;
     const SUB_DEFAULT_INTERVAL_HOURS = 24;
+    const SUB_RESERVED_TAGS = new Set([
+      'direct',
+      'block',
+      'dns',
+      'freedom',
+      'blackhole',
+      'reject',
+      'bypass',
+      'api',
+      'xray-api',
+      'metrics',
+    ]);
+
+    function subsFindById(subId) {
+      const target = subsCleanId(subId);
+      if (!target) return null;
+      return _subscriptions.find((item) => subsCleanId(item && item.id) === target) || null;
+    }
+
+    function subsCleanId(value) {
+      let raw = String(value || '').trim().toLowerCase();
+      raw = raw.replace(/[^a-z0-9_.-]+/g, '-');
+      raw = raw.replace(/-{2,}/g, '-').replace(/^[-._]+|[-._]+$/g, '');
+      if (!raw) raw = 'sub';
+      if (/^\d/.test(raw)) raw = 'sub-' + raw;
+      return raw.slice(0, 40).replace(/^[-._]+|[-._]+$/g, '') || 'sub';
+    }
+
+    function subsUniqueId(base, existing) {
+      const used = new Set((Array.isArray(existing) ? existing : []).map((item) => String(item || '')));
+      const candidate = subsCleanId(base);
+      if (!used.has(candidate)) return candidate;
+      const root = candidate.slice(0, 34).replace(/^[-._]+|[-._]+$/g, '') || 'sub';
+      let idx = 2;
+      while (true) {
+        const nextId = `${root}-${idx}`;
+        if (!used.has(nextId)) return nextId;
+        idx += 1;
+      }
+    }
+
+    function subsDefaultIdFromUrl(url) {
+      try {
+        const parsed = new URL(String(url || '').trim());
+        return subsCleanId(parsed.hostname || 'subscription');
+      } catch (e) {}
+      return subsCleanId('subscription');
+    }
+
+    function subsCleanTagPrefix(value, fallback) {
+      let raw = String(value || '').trim();
+      if (!raw) raw = String(fallback || '').trim();
+      raw = raw.replace(/\s+/g, '_');
+      raw = raw.replace(/[^A-Za-z0-9_.:-]+/g, '_');
+      raw = raw.replace(/^[_.:-]+|[_.:-]+$/g, '');
+      if (!raw) raw = String(fallback || 'sub').trim() || 'sub';
+      if (SUB_RESERVED_TAGS.has(raw.toLowerCase())) raw += '_sub';
+      return raw.slice(0, 32).replace(/^[_.:-]+|[_.:-]+$/g, '') || 'sub';
+    }
+
+    function subsReadFormState() {
+      return {
+        id: String(($(SUB_IDS.id) && $(SUB_IDS.id).value) || _subscriptionEditId || '').trim(),
+        name: String(($(SUB_IDS.name) && $(SUB_IDS.name).value) || '').trim(),
+        tag: String(($(SUB_IDS.tag) && $(SUB_IDS.tag).value) || '').trim(),
+        url: String(($(SUB_IDS.url) && $(SUB_IDS.url).value) || '').trim(),
+        name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim(),
+        type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim(),
+        transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim(),
+        routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback',
+        excluded_node_keys: subsGetExcludedKeysValue().slice().sort(),
+        interval_raw: String(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || '').trim(),
+        enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
+        ping_enabled: !!($(SUB_IDS.ping) && $(SUB_IDS.ping).checked),
+      };
+    }
+
+    function subsResolveDraftDefaults(formState) {
+      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      const rawId = String(state.id || '').trim();
+      let subId = '';
+      let existing = null;
+      if (rawId) {
+        subId = subsCleanId(rawId);
+        existing = subsFindById(subId);
+      } else {
+        const existingIds = _subscriptions.map((item) => String(item && item.id || '')).filter(Boolean);
+        subId = subsUniqueId(state.tag || state.name || subsDefaultIdFromUrl(state.url), existingIds);
+      }
+      const base = existing && typeof existing === 'object' ? existing : {};
+      const tag = subsCleanTagPrefix(state.tag || base.tag || subId, subId);
+      const name = String(state.name || base.name || tag).trim() || tag;
+      return {
+        subId,
+        tag,
+        name,
+        base,
+        existing,
+        keepsSavedName: !state.name && !!String(base.name || '').trim(),
+        keepsSavedTag: !state.tag && !!String(base.tag || '').trim(),
+        normalizesTag: !!state.tag && String(state.tag || '').trim() !== tag,
+      };
+    }
+
+    function subsDraftSnapshot(formState) {
+      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      return {
+        id: String(state.id || '').trim(),
+        name: String(state.name || '').trim(),
+        tag: String(state.tag || '').trim(),
+        url: String(state.url || '').trim(),
+        name_filter: String(state.name_filter || '').trim(),
+        type_filter: String(state.type_filter || '').trim(),
+        transport_filter: String(state.transport_filter || '').trim(),
+        routing_mode: String(state.routing_mode || 'safe-fallback').trim() || 'safe-fallback',
+        excluded_node_keys: (Array.isArray(state.excluded_node_keys) ? state.excluded_node_keys : []).map((item) => String(item || '').trim()).filter(Boolean).sort(),
+        interval_raw: String(state.interval_raw || '').trim(),
+        enabled: !!state.enabled,
+        ping_enabled: !!state.ping_enabled,
+        preview_active: !!_subscriptionPreview,
+      };
+    }
+
+    function subsCaptureBaseline(formState) {
+      _subscriptionBaseline = subsDraftSnapshot(formState);
+      return _subscriptionBaseline;
+    }
+
+    function subsHasDirtyDraft(formState) {
+      if (!_subscriptionBaseline) return false;
+      return JSON.stringify(subsDraftSnapshot(formState)) !== JSON.stringify(_subscriptionBaseline);
+    }
+
+    function subsSetFieldInvalid(inputId, invalid) {
+      const el = $(inputId);
+      if (!el) return;
+      try { el.classList.toggle('is-invalid', !!invalid); } catch (e) {}
+      try { el.setAttribute('aria-invalid', invalid ? 'true' : 'false'); } catch (e2) {}
+    }
+
+    function subsSetFieldNote(noteId, message, kind) {
+      const el = $(noteId);
+      if (!el) return;
+      const text = String(message || '').trim();
+      const tone = String(kind || '').trim().toLowerCase();
+      try { el.textContent = text; } catch (e) {}
+      try { el.hidden = !text; } catch (e2) {}
+      try {
+        el.classList.toggle('is-error', tone === 'error');
+        el.classList.toggle('is-auto', tone === 'auto');
+        el.classList.toggle('is-info', tone === 'info');
+      } catch (e3) {}
+    }
+
+    function subsValidateRegex(raw, label) {
+      const text = String(raw || '').trim();
+      if (!text) return '';
+      try {
+        new RegExp(text, 'i');
+        return '';
+      } catch (e) {
+        return `Некорректный regex для ${label}: ${String((e && e.message) || e || 'ошибка')}`;
+      }
+    }
+
+    function subsValidateFormState(formState) {
+      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      const errors = {
+        name: '',
+        tag: '',
+        url: '',
+        interval: '',
+        nameFilter: subsValidateRegex(state.name_filter, 'фильтра имени'),
+        typeFilter: subsValidateRegex(state.type_filter, 'фильтра типа'),
+        transportFilter: subsValidateRegex(state.transport_filter, 'фильтра транспорта'),
+      };
+
+      if (!state.url) {
+        errors.url = 'URL обязателен.';
+      } else {
+        try {
+          const parsed = new URL(state.url);
+          if (!/^https?:$/i.test(String(parsed.protocol || '')) || !String(parsed.hostname || '').trim()) {
+            throw new Error('bad-protocol');
+          }
+        } catch (e) {
+          errors.url = 'Укажи корректный HTTP(S) URL.';
+        }
+      }
+
+      const intervalRaw = String(state.interval_raw || '').trim();
+      if (intervalRaw) {
+        const intervalValue = Number(intervalRaw);
+        if (!Number.isFinite(intervalValue) || !Number.isInteger(intervalValue) || intervalValue < 1 || intervalValue > 168) {
+          errors.interval = 'Укажи целое число от 1 до 168 часов.';
+        }
+      }
+
+      const fields = ['url', 'interval', 'nameFilter', 'typeFilter', 'transportFilter'];
+      return {
+        errors,
+        valid: fields.every((key) => !errors[key]),
+      };
+    }
+
+    function subsFirstValidationError(validation) {
+      const errors = validation && validation.errors ? validation.errors : {};
+      return String(
+        errors.url
+        || errors.interval
+        || errors.nameFilter
+        || errors.typeFilter
+        || errors.transportFilter
+        || ''
+      ).trim();
+    }
+
+    function subsNameNote(formState, resolved) {
+      const state = formState || subsReadFormState();
+      const info = resolved || subsResolveDraftDefaults(state);
+      if (state.name) return { text: '', kind: '' };
+      if (info.keepsSavedName) {
+        return { text: `Пустое поле сохранит текущее имя: ${info.name}.`, kind: 'info' };
+      }
+      if (!state.url && !state.tag) {
+        return { text: 'Оставь поле пустым, и имя появится после ввода URL.', kind: 'auto' };
+      }
+      return { text: `Авто: ${info.name}.`, kind: 'auto' };
+    }
+
+    function subsTagNote(formState, resolved) {
+      const state = formState || subsReadFormState();
+      const info = resolved || subsResolveDraftDefaults(state);
+      if (!state.tag) {
+        if (info.keepsSavedTag) {
+          return { text: `Пустое поле сохранит текущий prefix: ${info.tag}.`, kind: 'info' };
+        }
+        if (!state.url && !state.name) {
+          return { text: 'Оставь поле пустым, и prefix появится после ввода URL.', kind: 'auto' };
+        }
+        return { text: `Авто: ${info.tag}.`, kind: 'auto' };
+      }
+      if (info.normalizesTag) {
+        return { text: `После сохранения будет использован prefix: ${info.tag}.`, kind: 'info' };
+      }
+      return { text: '', kind: '' };
+    }
+
+    function subsSyncSubscriptionFormState() {
+      const formState = subsReadFormState();
+      const resolved = subsResolveDraftDefaults(formState);
+      const validation = subsValidateFormState(formState);
+      const dirty = subsHasDirtyDraft(formState);
+
+      subsSetFieldInvalid(SUB_IDS.url, !!validation.errors.url);
+      subsSetFieldInvalid(SUB_IDS.interval, !!validation.errors.interval);
+      subsSetFieldInvalid(SUB_IDS.nameFilter, !!validation.errors.nameFilter);
+      subsSetFieldInvalid(SUB_IDS.typeFilter, !!validation.errors.typeFilter);
+      subsSetFieldInvalid(SUB_IDS.transportFilter, !!validation.errors.transportFilter);
+
+      const nameNote = subsNameNote(formState, resolved);
+      const tagNote = subsTagNote(formState, resolved);
+      subsSetFieldNote(SUB_IDS.nameNote, nameNote.text, nameNote.kind);
+      subsSetFieldNote(SUB_IDS.tagNote, tagNote.text, tagNote.kind);
+      subsSetFieldNote(SUB_IDS.urlNote, validation.errors.url, validation.errors.url ? 'error' : '');
+      subsSetFieldNote(
+        SUB_IDS.intervalNote,
+        validation.errors.interval || (!formState.interval_raw ? `Пусто → будет использовано ${SUB_DEFAULT_INTERVAL_HOURS} ч.` : ''),
+        validation.errors.interval ? 'error' : (!formState.interval_raw ? 'info' : '')
+      );
+      subsSetFieldNote(SUB_IDS.nameFilterNote, validation.errors.nameFilter, validation.errors.nameFilter ? 'error' : '');
+      subsSetFieldNote(SUB_IDS.typeFilterNote, validation.errors.typeFilter, validation.errors.typeFilter ? 'error' : '');
+      subsSetFieldNote(SUB_IDS.transportFilterNote, validation.errors.transportFilter, validation.errors.transportFilter ? 'error' : '');
+
+      const saveBtn = $(SUB_IDS.save);
+      if (saveBtn) {
+        saveBtn.disabled = !validation.valid || _subscriptionSaveBusy;
+        saveBtn.classList.toggle('is-dirty', !!dirty && !saveBtn.disabled);
+      }
+      const previewBtn = $(SUB_IDS.preview);
+      if (previewBtn) {
+        previewBtn.disabled = !validation.valid || _subscriptionPreviewBusy;
+      }
+      try { subsUpdateDraftBadge(formState, dirty); } catch (e) {}
+
+      return { formState, resolved, validation, dirty };
+    }
+
+    async function subsConfirmDiscardDraft(opts) {
+      const options = (opts && typeof opts === 'object') ? opts : {};
+      const formState = subsReadFormState();
+      if (!subsHasDirtyDraft(formState)) return true;
+      const ok = !!(await confirmXkeenAction({
+        title: 'Несохранённые изменения',
+        message: String(options.message || 'В форме подписки есть несохранённые изменения. Продолжить и потерять их?'),
+        details: options.details || [
+          _subscriptionPreview
+            ? 'Черновик предпросмотра и ручные исключения узлов не будут сохранены.'
+            : 'Текущие правки формы не будут сохранены.',
+        ],
+        okText: String(options.okText || 'Продолжить'),
+        cancelText: String(options.cancelText || 'Остаться'),
+        danger: options.danger !== false,
+        focus: 'cancel',
+      }, String(options.message || 'Продолжить?')));
+      if (ok && options.restore !== false) {
+        try { subsRestoreBaseline({ focus: false }); } catch (e) {}
+      }
+      return ok;
+    }
+
+    function subsRestoreBaseline(options) {
+      const opts = (options && typeof options === 'object') ? options : {};
+      const baseline = _subscriptionBaseline && typeof _subscriptionBaseline === 'object'
+        ? _subscriptionBaseline
+        : null;
+      const refreshNow = !!($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked);
+
+      if (baseline && baseline.id) {
+        const saved = subsFindById(baseline.id);
+        if (saved) {
+          subsFillForm(saved, { focus: opts.focus !== false, keepRefreshNow: true });
+          try { $(SUB_IDS.refreshNow).checked = refreshNow; } catch (e) {}
+          return true;
+        }
+      }
+
+      _subscriptionEditId = String((baseline && baseline.id) || '').trim();
+      _subscriptionPreview = null;
+      _subscriptionShowHidden = false;
+      try { $(SUB_IDS.id).value = _subscriptionEditId; } catch (e) {}
+      try { $(SUB_IDS.name).value = String((baseline && baseline.name) || ''); } catch (e) {}
+      try { $(SUB_IDS.tag).value = String((baseline && baseline.tag) || ''); } catch (e) {}
+      try { $(SUB_IDS.url).value = String((baseline && baseline.url) || ''); } catch (e) {}
+      try { $(SUB_IDS.nameFilter).value = String((baseline && baseline.name_filter) || ''); } catch (e) {}
+      try { $(SUB_IDS.typeFilter).value = String((baseline && baseline.type_filter) || ''); } catch (e) {}
+      try { $(SUB_IDS.transportFilter).value = String((baseline && baseline.transport_filter) || ''); } catch (e) {}
+      subsSetExcludedKeysValue(Array.isArray(baseline && baseline.excluded_node_keys) ? baseline.excluded_node_keys : []);
+      try { $(SUB_IDS.interval).value = String((baseline && baseline.interval_raw) || SUB_DEFAULT_INTERVAL_HOURS); } catch (e) {}
+      try { $(SUB_IDS.enabled).checked = baseline ? !!baseline.enabled : true; } catch (e) {}
+      try { $(SUB_IDS.ping).checked = baseline ? !!baseline.ping_enabled : true; } catch (e) {}
+      try { $(SUB_IDS.routingMode).value = String((baseline && baseline.routing_mode) || 'safe-fallback') || 'safe-fallback'; } catch (e) {}
+      try { $(SUB_IDS.refreshNow).checked = refreshNow; } catch (e) {}
+      try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
+      try { subsSyncSelection(); } catch (e) {}
+      try { subsRenderNodeList(); } catch (e) {}
+      try { subsSyncSubscriptionFormState(); } catch (e) {}
+      return true;
+    }
+
+    function subsBuildPayload(formState) {
+      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      return {
+        id: state.id,
+        name: state.name,
+        tag: state.tag,
+        url: state.url,
+        name_filter: state.name_filter,
+        type_filter: state.type_filter,
+        transport_filter: state.transport_filter,
+        routing_mode: state.routing_mode,
+        excluded_node_keys: state.excluded_node_keys.slice(),
+        interval_hours: Number(state.interval_raw || SUB_DEFAULT_INTERVAL_HOURS),
+        enabled: !!state.enabled,
+        ping_enabled: !!state.ping_enabled,
+      };
+    }
 
     function subsDecorateActionButtons(modal) {
       const root = modal || $(SUB_IDS.modal);
@@ -3649,33 +4027,40 @@ let outboundsModuleApi = null;
                     <label class="xk-sub-span-5" data-tooltip="Короткое имя подписки в списке. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
                       <span class="xk-pool-fieldlabel">Название</span>
                       <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription" title="Название подписки" data-tooltip="Короткое имя подписки в списке. Если оставить поле пустым, имя будет сгенерировано автоматически при сохранении.">
+                      <span id="outbounds-subscriptions-name-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-span-4" data-tooltip="Префикс для generated outbound tags, например sub--node. Его удобно выбирать в LeastPing. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
                       <span class="xk-pool-fieldlabel">Tag prefix</span>
                       <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Используй его в selector/balancer LeastPing. Если оставить поле пустым, префикс будет сгенерирован автоматически при сохранении.">
+                      <span id="outbounds-subscriptions-tag-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-span-3" data-tooltip="Локальный интервал автообновления. По умолчанию 24 часа; серверный profile-update-interval показывается как рекомендация и не перезаписывает это поле.">
                       <span class="xk-pool-fieldlabel">Обновлять, ч</span>
                       <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" data-tooltip="Как часто панель будет обновлять подписку: от 1 до 168 часов. Рекомендация провайдера не меняет выбранное значение.">
+                      <span id="outbounds-subscriptions-interval-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <div class="xk-sub-wide xk-sub-url-row">
                       <label class="xk-sub-url-field" data-tooltip="HTTP(S) URL подписки. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
                         <span class="xk-pool-fieldlabel">URL</span>
                         <input id="outbounds-subscriptions-url" class="xray-log-filter" type="url" placeholder="https://..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки. Панель скачает nodes и создаст отдельный outbounds-фрагмент.">
+                        <span id="outbounds-subscriptions-url-note" class="xk-sub-field-note" hidden></span>
                       </label>
                       <button type="button" id="outbounds-subscriptions-preview-btn" class="btn-secondary btn-compact xk-sub-url-preview" title="Скачать подписку (предпросмотр)" data-tooltip="Скачать подписку и показать узлы в карточке справа без сохранения и без перезапуска xkeen. Используй фильтры и × у узла, чтобы исключить лишние, потом нажми «Сохранить».">Скачать подписку</button>
                     </div>
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по имени ноды из подписки. Например: Germany|Netherlands|SG. Пусто — без фильтра.">
                       <span class="xk-pool-fieldlabel">Имя</span>
                       <input id="outbounds-subscriptions-name-filter" class="xray-log-filter" type="text" placeholder="Germany|Netherlands|SG" title="Фильтр имени" data-tooltip="Оставить только ноды, чьё имя совпадает с regex. Например: Germany|Netherlands|SG.">
+                      <span id="outbounds-subscriptions-name-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по типу прокси/протоколу. Например: vless|trojan|vmess. Пусто — без фильтра.">
                       <span class="xk-pool-fieldlabel">Тип</span>
                       <input id="outbounds-subscriptions-type-filter" class="xray-log-filter" type="text" placeholder="vless|trojan|vmess" title="Фильтр типа" data-tooltip="Оставить только указанные типы нод. Например: vless|trojan|vmess|ss|hy2.">
+                      <span id="outbounds-subscriptions-type-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по транспорту. Например: ws|grpc|tcp|xhttp. Пусто — без фильтра.">
                       <span class="xk-pool-fieldlabel">Транспорт</span>
                       <input id="outbounds-subscriptions-transport-filter" class="xray-log-filter" type="text" placeholder="ws|grpc|tcp|xhttp" title="Фильтр транспорта" data-tooltip="Оставить только ноды с нужным transport/network. Например: ws|grpc|tcp|xhttp|quic.">
+                      <span id="outbounds-subscriptions-transport-filter-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <div class="xk-sub-controls">
                       <div class="xk-sub-options">
@@ -4155,17 +4540,20 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.ping).checked = true; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = 'safe-fallback'; } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = true; } catch (e) {}
-      try { subsUpdateDraftBadge(); } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
       try { subsRenderNodeList(); } catch (e2) {}
+      try { subsCaptureBaseline(); } catch (e3) {}
+      try { subsSyncSubscriptionFormState(); } catch (e4) {}
     }
 
     function subsFillForm(sub, options) {
       const s = sub && typeof sub === 'object' ? sub : {};
       const opts = options && typeof options === 'object' ? options : {};
       const nextId = String(s.id || '');
-      if (nextId !== String(_subscriptionEditId || '')) {
+      if (opts.keepPreview !== true) {
         _subscriptionPreview = null;
+      }
+      if (nextId !== String(_subscriptionEditId || '') || opts.keepPreview !== true) {
         _subscriptionShowHidden = false;
       }
       _subscriptionEditId = nextId;
@@ -4182,10 +4570,11 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.ping).checked = s.ping_enabled !== false; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = String(s.routing_mode || 'safe-fallback') || 'safe-fallback'; } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = opts.keepRefreshNow === true ? !!($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked) : false; } catch (e) {}
-      try { subsUpdateDraftBadge(); } catch (e) {}
       try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
       try { subsRenderNodeList(); } catch (e2) {}
+      try { subsCaptureBaseline(); } catch (e3) {}
+      try { subsSyncSubscriptionFormState(); } catch (e4) {}
     }
 
     function subsRender() {
@@ -4299,11 +4688,21 @@ let outboundsModuleApi = null;
       });
 
       Array.from(tbody.querySelectorAll('tr[data-sub-id]')).forEach((row) => {
-        row.addEventListener('click', (e) => {
+        row.addEventListener('click', async (e) => {
           const target = e && e.target ? e.target : null;
           if (target && target.closest && target.closest('button')) return;
           const id = row.getAttribute('data-sub-id') || '';
           const sub = _subscriptions.find((item) => String(item && item.id || '') === id);
+          const isCurrent = id === String(_subscriptionEditId || '');
+          const ok = await subsConfirmDiscardDraft({
+            message: isCurrent
+              ? 'Вернуть сохранённую версию этой подписки и потерять текущий черновик?'
+              : 'Открыть другую подписку и потерять текущий черновик?',
+            okText: isCurrent ? 'Вернуть' : 'Открыть',
+            cancelText: 'Остаться',
+            restore: false,
+          });
+          if (!ok) return;
           if (sub) subsFillForm(sub, { focus: false, keepRefreshNow: true });
         });
       });
@@ -4462,8 +4861,7 @@ let outboundsModuleApi = null;
           else next.add(nodeKey);
           subsSetExcludedKeysValue(Array.from(next));
           subsRenderNodeList();
-          const changedSub = _subscriptions.find((item) => String(item && item.id || '') === subId);
-          if (changedSub) changedSub.excluded_node_keys = Array.from(next);
+          try { subsSyncSubscriptionFormState(); } catch (e2) {}
           subsSetStatus('Список узлов обновлён. Сохрани подписку, чтобы применить изменения к generated fragment.', false, true);
         });
       });
@@ -4763,6 +5161,7 @@ let outboundsModuleApi = null;
         if (active) subsFillForm(active, { focus: false, keepRefreshNow: true });
         else if (_subscriptionEditId) subsResetForm();
         subsRender();
+        try { subsSyncSubscriptionFormState(); } catch (e3) {}
         return true;
       } catch (e) {
         subsSetStatus('Ошибка загрузки: ' + String(e && e.message ? e.message : e), true);
@@ -4771,41 +5170,49 @@ let outboundsModuleApi = null;
     }
 
     function subsClearPreview(silent) {
-      if (!_subscriptionPreview) return;
+      if (!_subscriptionPreview) {
+        try { subsSyncSubscriptionFormState(); } catch (e) {}
+        return;
+      }
       _subscriptionPreview = null;
-      try { subsUpdateDraftBadge(); } catch (e) {}
       try { subsRenderNodeList(); } catch (e) {}
+      try { subsSyncSubscriptionFormState(); } catch (e2) {}
       if (!silent) {
         try { subsSetStatus('', false); } catch (e) {}
       }
     }
 
-    function subsUpdateDraftBadge() {
+    function subsUpdateDraftBadge(formState, dirty) {
       const badge = document.getElementById('outbounds-subscriptions-nodes-draft');
       if (!badge) return;
-      const active = !!_subscriptionPreview;
+      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      const active = typeof dirty === 'boolean' ? dirty : subsHasDirtyDraft(state);
       badge.hidden = !active;
+      badge.textContent = _subscriptionPreview
+        ? 'Черновик · нажми «Сохранить»'
+        : 'Есть правки · нажми «Сохранить»';
     }
 
     async function subsPreview() {
-      const url = String(($(SUB_IDS.url) && $(SUB_IDS.url).value) || '').trim();
-      if (!url) {
-        subsSetStatus('Сначала вставь URL подписки.', true);
+      const sync = subsSyncSubscriptionFormState();
+      const validationMsg = subsFirstValidationError(sync.validation);
+      if (!sync.validation.valid) {
+        subsSetStatus(validationMsg || 'Проверь форму подписки.', true);
         return false;
       }
+      const formState = sync.formState;
       const payload = {
-        url,
-        tag: String(($(SUB_IDS.tag) && $(SUB_IDS.tag).value) || '').trim(),
-        name: String(($(SUB_IDS.name) && $(SUB_IDS.name).value) || '').trim(),
-        name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim(),
-        type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim(),
-        transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim(),
-        excluded_node_keys: subsGetExcludedKeysValue(),
+        url: formState.url,
+        tag: formState.tag,
+        name: formState.name,
+        name_filter: formState.name_filter,
+        type_filter: formState.type_filter,
+        transport_filter: formState.transport_filter,
+        excluded_node_keys: formState.excluded_node_keys.slice(),
       };
-      const previewBtn = $(SUB_IDS.preview);
-      const wasDisabled = previewBtn ? previewBtn.disabled : false;
+      _subscriptionPreviewBusy = true;
+      subsSyncSubscriptionFormState();
       try {
-        if (previewBtn) previewBtn.disabled = true;
         subsSetStatus('Скачиваю предпросмотр…', false);
         const res = await fetch('/api/xray/subscriptions/preview', {
           method: 'POST',
@@ -4817,7 +5224,7 @@ let outboundsModuleApi = null;
           throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
         }
         _subscriptionPreview = {
-          url,
+          url: formState.url,
           nodes: Array.isArray(data.nodes) ? data.nodes : [],
           sourceCount: Number(data.source_count || 0),
           filteredOutCount: Number(data.filtered_out_count || 0),
@@ -4825,8 +5232,8 @@ let outboundsModuleApi = null;
           tagPrefix: String(data.tag_prefix || payload.tag || ''),
           ts: Date.now(),
         };
-        subsUpdateDraftBadge();
         subsRenderNodeList();
+        subsSyncSubscriptionFormState();
         const nodeCount = _subscriptionPreview.nodes.length;
         const okCount = Number(data.count || 0);
         const filteredNote = _subscriptionPreview.filteredOutCount > 0
@@ -4843,13 +5250,20 @@ let outboundsModuleApi = null;
         try { toastXkeen(msg, 'error'); } catch (e) {}
         return false;
       } finally {
-        if (previewBtn) previewBtn.disabled = wasDisabled;
+        _subscriptionPreviewBusy = false;
+        try { subsSyncSubscriptionFormState(); } catch (e) {}
       }
     }
 
     async function subsRefresh(id) {
       const subId = String(id || '').trim();
       if (!subId) return false;
+      const ok = await subsConfirmDiscardDraft({
+        message: 'Обновить подписку и потерять текущий черновик формы?',
+        okText: 'Обновить',
+        cancelText: 'Остаться',
+      });
+      if (!ok) return false;
       const prevActive = getActiveFragment();
       subsSetStatus('Обновляю подписку…', false);
       const restart = shouldRestartAfterSave();
@@ -4925,6 +5339,12 @@ let outboundsModuleApi = null;
     }
 
     async function subsRefreshDue() {
+      const ok = await subsConfirmDiscardDraft({
+        message: 'Обновить due-подписки и потерять текущий черновик формы?',
+        okText: 'Обновить due',
+        cancelText: 'Остаться',
+      });
+      if (!ok) return false;
       subsSetStatus('Проверяю due-подписки…', false);
       const prevActive = getActiveFragment();
       const restart = shouldRestartAfterSave();
@@ -4968,32 +5388,26 @@ let outboundsModuleApi = null;
           try { toastXkeen(`Подписки Xray обновлены: ${changedCount}.` + restartNote, 'success'); } catch (e4) {}
         }
         await subsLoad();
+        return true;
       } catch (e) {
         subsSetStatus('Ошибка: ' + String(e && e.message ? e.message : e), true);
+        await subsLoad();
+        return false;
       }
     }
 
     async function subsSave(e) {
       if (e && typeof e.preventDefault === 'function') e.preventDefault();
-      const payload = {
-        id: String(($(SUB_IDS.id) && $(SUB_IDS.id).value) || _subscriptionEditId || '').trim(),
-        name: String(($(SUB_IDS.name) && $(SUB_IDS.name).value) || '').trim(),
-        tag: String(($(SUB_IDS.tag) && $(SUB_IDS.tag).value) || '').trim(),
-        url: String(($(SUB_IDS.url) && $(SUB_IDS.url).value) || '').trim(),
-        name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim(),
-        type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim(),
-        transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim(),
-        routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback',
-        excluded_node_keys: subsGetExcludedKeysValue(),
-        interval_hours: Number(($(SUB_IDS.interval) && $(SUB_IDS.interval).value) || SUB_DEFAULT_INTERVAL_HOURS),
-        enabled: !!($(SUB_IDS.enabled) && $(SUB_IDS.enabled).checked),
-        ping_enabled: !!($(SUB_IDS.ping) && $(SUB_IDS.ping).checked),
-      };
-      if (!payload.url) {
-        subsSetStatus('URL обязателен.', true);
+      const sync = subsSyncSubscriptionFormState();
+      const validationMsg = subsFirstValidationError(sync.validation);
+      if (!sync.validation.valid) {
+        subsSetStatus(validationMsg || 'Проверь форму подписки.', true);
         return false;
       }
+      const payload = subsBuildPayload(sync.formState);
 
+      _subscriptionSaveBusy = true;
+      subsSyncSubscriptionFormState();
       subsSetStatus('Сохраняю…', false);
       try {
         const res = await fetch('/api/xray/subscriptions', {
@@ -5008,7 +5422,6 @@ let outboundsModuleApi = null;
         const sub = data.subscription || {};
         const id = String(sub.id || payload.id || '');
         _subscriptionPreview = null;
-        try { subsUpdateDraftBadge(); } catch (eBadge) {}
         subsSetStatus('Сохранено.', false, true);
         await subsLoad();
         if ($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked && id) {
@@ -5016,13 +5429,15 @@ let outboundsModuleApi = null;
         } else {
           try { toastXkeen('Подписка сохранена', 'success'); } catch (e2) {}
         }
-        subsFillForm(sub);
         return true;
       } catch (err) {
         const msg = 'Ошибка сохранения: ' + String(err && err.message ? err.message : err);
         subsSetStatus(msg, true);
         try { toastXkeen(msg, 'error'); } catch (e2) {}
         return false;
+      } finally {
+        _subscriptionSaveBusy = false;
+        try { subsSyncSubscriptionFormState(); } catch (e3) {}
       }
     }
 
@@ -5033,6 +5448,12 @@ let outboundsModuleApi = null;
       try {
         if (!window.confirm('Удалить подписку и сгенерированный outbounds-файл?')) return false;
       } catch (e) {}
+      const ok = await subsConfirmDiscardDraft({
+        message: 'Удалить подписку и потерять текущий черновик формы?',
+        okText: 'Продолжить',
+        cancelText: 'Остаться',
+      });
+      if (!ok) return false;
       const restart = shouldRestartAfterSave();
       subsSetStatus('Удаляю…', false);
       try {
@@ -5059,20 +5480,32 @@ let outboundsModuleApi = null;
         return true;
       } catch (err) {
         subsSetStatus('Ошибка удаления: ' + String(err && err.message ? err.message : err), true);
+        await subsLoad();
         return false;
       }
     }
 
     async function subsOpen() {
       subsEnsureModal();
+      if (!_subscriptionBaseline) {
+        try { subsResetForm(); } catch (e) {}
+      }
       subsShow(true);
       subsSetStatus('', false);
       await subsLoad();
+      try { subsSyncSubscriptionFormState(); } catch (e) {}
       try { $(SUB_IDS.url).focus(); } catch (e) {}
     }
 
-    function subsClose() {
+    async function subsClose() {
+      const ok = await subsConfirmDiscardDraft({
+        message: 'Закрыть окно подписок и потерять текущий черновик?',
+        okText: 'Закрыть',
+        cancelText: 'Остаться',
+      });
+      if (!ok) return false;
       subsShow(false);
+      return true;
     }
 
     function wireSubscriptionsModal() {
@@ -5082,50 +5515,91 @@ let outboundsModuleApi = null;
 
       openBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        subsOpen();
+        void subsOpen();
       });
       if (openBtn.dataset) openBtn.dataset.xkSubWired = '1';
 
       const modal = subsEnsureModal();
       if (!modal || (modal.dataset && modal.dataset.xkWired === '1')) return;
 
-      wireButton(SUB_IDS.close, subsClose);
-      wireButton(SUB_IDS.cancel, subsClose);
-      wireButton(SUB_IDS.reset, () => {
+      wireButton(SUB_IDS.close, () => { void subsClose(); });
+      wireButton(SUB_IDS.cancel, () => { void subsClose(); });
+      wireButton(SUB_IDS.reset, async () => {
+        const ok = await subsConfirmDiscardDraft({
+          message: 'Очистить форму подписки и потерять текущий черновик?',
+          okText: 'Очистить',
+          cancelText: 'Остаться',
+          restore: false,
+        });
+        if (!ok) return;
         subsResetForm();
         subsSetStatus('', false);
       });
-      wireButton(SUB_IDS.refreshDue, subsRefreshDue);
-      wireButton(SUB_IDS.preview, () => { subsPreview(); });
+      wireButton(SUB_IDS.refreshDue, () => { void subsRefreshDue(); });
+      wireButton(SUB_IDS.preview, () => { void subsPreview(); });
       wireButton(SUB_IDS.nodesPingAll, () => {
-        subsProbeAllNodes();
+        void subsProbeAllNodes();
       });
       wireButton(SUB_IDS.nodesShowHidden, () => {
         _subscriptionShowHidden = !_subscriptionShowHidden;
         try { subsRenderNodeList(); } catch (e) {}
       });
 
-      const urlEl = $(SUB_IDS.url);
-      if (urlEl && !(urlEl.dataset && urlEl.dataset.xkSubPreviewBound === '1')) {
-        urlEl.addEventListener('input', () => {
-          if (!_subscriptionPreview) return;
-          const current = String(urlEl.value || '').trim();
-          if (current !== String(_subscriptionPreview.url || '')) subsClearPreview(true);
-        });
-        if (urlEl.dataset) urlEl.dataset.xkSubPreviewBound = '1';
-      }
-
       const form = $(SUB_IDS.form);
       if (form) {
         form.addEventListener('submit', subsSave);
       }
+      [
+        {
+          id: SUB_IDS.url,
+          event: 'input',
+          clearPreview: (el) => _subscriptionPreview && String(el.value || '').trim() !== String(_subscriptionPreview.url || ''),
+        },
+        {
+          id: SUB_IDS.name,
+          event: 'input',
+          clearPreview: () => !!_subscriptionPreview,
+        },
+        {
+          id: SUB_IDS.tag,
+          event: 'input',
+          clearPreview: () => !!_subscriptionPreview,
+        },
+        {
+          id: SUB_IDS.interval,
+          event: 'input',
+        },
+        {
+          id: SUB_IDS.enabled,
+          event: 'change',
+        },
+        {
+          id: SUB_IDS.ping,
+          event: 'change',
+        },
+        {
+          id: SUB_IDS.routingMode,
+          event: 'change',
+        },
+      ].forEach((binding) => {
+        const el = $(binding.id);
+        if (!el || (el.dataset && el.dataset.xkSubFieldBound === '1')) return;
+        el.addEventListener(binding.event, () => {
+          if (binding.clearPreview && binding.clearPreview(el)) {
+            subsClearPreview(true);
+          }
+          try { subsSyncSubscriptionFormState(); } catch (e) {}
+        });
+        if (el.dataset) el.dataset.xkSubFieldBound = '1';
+      });
       [SUB_IDS.nameFilter, SUB_IDS.typeFilter, SUB_IDS.transportFilter].forEach((id) => {
         const el = $(id);
-        if (!el || (el.dataset && el.dataset.xkSubPreviewBound === '1')) return;
+        if (!el || (el.dataset && el.dataset.xkSubFilterBound === '1')) return;
         el.addEventListener('input', () => {
+          try { subsSyncSubscriptionFormState(); } catch (e) {}
           try { subsRenderNodeList(); } catch (e) {}
         });
-        if (el.dataset) el.dataset.xkSubPreviewBound = '1';
+        if (el.dataset) el.dataset.xkSubFilterBound = '1';
       });
       if (!(modal.dataset && modal.dataset.xkSubResizeBound === '1')) {
         window.addEventListener('resize', () => {
@@ -5146,13 +5620,13 @@ let outboundsModuleApi = null;
       }
 
       modal.addEventListener('click', (e) => {
-        try { if (e && e.target === modal) subsClose(); } catch (e2) {}
+        try { if (e && e.target === modal) void subsClose(); } catch (e2) {}
       });
 
       document.addEventListener('keydown', (e) => {
         if (!e || e.key !== 'Escape') return;
         const m = $(SUB_IDS.modal);
-        if (m && !m.classList.contains('hidden')) subsClose();
+        if (m && !m.classList.contains('hidden')) void subsClose();
       });
 
       if (modal.dataset) modal.dataset.xkWired = '1';

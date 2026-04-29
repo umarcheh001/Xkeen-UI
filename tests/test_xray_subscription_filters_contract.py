@@ -110,7 +110,7 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "nodesSummary: 'outbounds-subscriptions-nodes-summary'" in outbounds_src
     assert "transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim()," in outbounds_src
     assert "routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback'," in outbounds_src
-    assert "excluded_node_keys: subsGetExcludedKeysValue()," in outbounds_src
+    assert "excluded_node_keys: state.excluded_node_keys.slice()," in outbounds_src
     assert "function subsRenderNodeList() {" in outbounds_src
     assert "function subsSyncModalLayout() {" in outbounds_src
     assert "function subsDecorateActionButtons(modal) {" in outbounds_src
@@ -202,3 +202,37 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert ".xk-sub-update-title {" in styles_src
     assert ".xk-sub-node-pill-transport" in styles_src
     assert ".xk-sub-table tbody tr.is-selected" in styles_src
+
+
+def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    styles_src = _read("xkeen-ui/static/styles.css")
+
+    assert "nameNote: 'outbounds-subscriptions-name-note'" in outbounds_src
+    assert "tagNote: 'outbounds-subscriptions-tag-note'" in outbounds_src
+    assert "urlNote: 'outbounds-subscriptions-url-note'" in outbounds_src
+    assert "intervalNote: 'outbounds-subscriptions-interval-note'" in outbounds_src
+    assert "nameFilterNote: 'outbounds-subscriptions-name-filter-note'" in outbounds_src
+    assert "typeFilterNote: 'outbounds-subscriptions-type-filter-note'" in outbounds_src
+    assert "transportFilterNote: 'outbounds-subscriptions-transport-filter-note'" in outbounds_src
+    assert "function subsResolveDraftDefaults(formState) {" in outbounds_src
+    assert "function subsValidateFormState(formState) {" in outbounds_src
+    assert "function subsSyncSubscriptionFormState() {" in outbounds_src
+    assert "function subsConfirmDiscardDraft(opts) {" in outbounds_src
+    assert "function subsRestoreBaseline(options) {" in outbounds_src
+    assert "saveBtn.disabled = !validation.valid || _subscriptionSaveBusy;" in outbounds_src
+    assert "previewBtn.disabled = !validation.valid || _subscriptionPreviewBusy;" in outbounds_src
+    assert "badge.textContent = _subscriptionPreview" in outbounds_src
+    assert "Есть правки · нажми «Сохранить»" in outbounds_src
+    assert "Пустое поле сохранит текущее имя:" in outbounds_src
+    assert "Пустое поле сохранит текущий prefix:" in outbounds_src
+    assert "Оставь поле пустым, и имя появится после ввода URL." in outbounds_src
+    assert "После сохранения будет использован prefix:" in outbounds_src
+    assert "Закрыть окно подписок и потерять текущий черновик?" in outbounds_src
+    assert "Очистить форму подписки и потерять текущий черновик?" in outbounds_src
+    assert "Обновить due-подписки и потерять текущий черновик формы?" in outbounds_src
+    assert "Удалить подписку и потерять текущий черновик формы?" in outbounds_src
+    assert "Некорректный regex для" in outbounds_src
+    assert ".xk-sub-field-note {" in styles_src
+    assert ".xk-sub-field-note.is-error {" in styles_src
+    assert ".xk-sub-icon-btn.btn-compact.is-dirty {" in styles_src
