@@ -19,6 +19,7 @@ from services.command_jobs import create_command_job
 
 from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.request_limits import PayloadTooLargeError, get_routing_save_max_bytes, read_request_bytes_limited
+from utils.fs import load_text
 
 from services.routing.templates import _paths_for_routing
 
@@ -82,6 +83,13 @@ def _shorten_text(s: str, limit: int = 4000) -> str:
     if not tail:
         return s[-limit:]
     return head + marker + tail
+
+
+def _load_routing_text(path: str) -> str:
+    text = load_text(path, default=None)
+    if text is None:
+        raise FileNotFoundError(path)
+    return text
 
 
 def _safe_tag(value: Any) -> str:
@@ -447,8 +455,7 @@ def register_config_routes(
         if (not raw_exists) and legacy_exists:
             try:
                 ensure_xray_jsonc_dir()
-                with open(sel_raw_legacy, "r", encoding="utf-8") as f:
-                    legacy_text = f.read()
+                legacy_text = _load_routing_text(sel_raw_legacy)
                 # Write canonical raw and remove legacy file.
                 _atomic_write_text(sel_raw, legacy_text.rstrip("\n") + "\n")
                 try:
@@ -485,11 +492,9 @@ def register_config_routes(
                     # Main JSON is newer — could be a genuine external edit,
                     # or xkeen restart just touched the file.  Compare content
                     # to tell the difference before discarding JSONC comments.
-                    with open(sel_main, "r", encoding="utf-8") as f:
-                        main_text = f.read()
+                    main_text = _load_routing_text(sel_main)
                     try:
-                        with open(raw_for_read, "r", encoding="utf-8") as f:
-                            raw_text = f.read()
+                        raw_text = _load_routing_text(raw_for_read)
                         stripped = strip_json_comments_text(raw_text)
                         main_obj = json.loads(main_text or "{}")
                         raw_obj = json.loads(stripped or "{}")
@@ -506,8 +511,7 @@ def register_config_routes(
 
         if raw_for_read:
             try:
-                with open(raw_for_read, "r", encoding="utf-8") as f:
-                    raw = f.read()
+                raw = _load_routing_text(raw_for_read)
                 return _wrap(raw, found=True, using_raw=True)
             except FileNotFoundError:
                 pass
@@ -515,8 +519,7 @@ def register_config_routes(
         # One-time auto-migration if main JSON contains comments.
         if main_exists and (not raw_exists) and (not legacy_exists):
             try:
-                with open(sel_main, "r", encoding="utf-8") as f:
-                    main_text = f.read()
+                main_text = _load_routing_text(sel_main)
 
                 cleaned_main = strip_json_comments_text(main_text)
 
@@ -571,11 +574,17 @@ def register_config_routes(
             except Exception as e:
                 _core_log("warning", "routing: automigrate: unexpected error", err=str(e))
 
-        data = load_json(sel_main, default={})
-        if data is None:
+        text = load_text(sel_main, default=None)
+        if text is None:
             text = ""
         else:
-            text = json.dumps(data, ensure_ascii=False, indent=2)
+            try:
+                cleaned = strip_json_comments_text(text)
+                data = json.loads(cleaned) if cleaned.strip() else None
+            except Exception:
+                data = None
+            if data is not None:
+                text = json.dumps(data, ensure_ascii=False, indent=2)
         return _wrap(text, found=(raw_exists or legacy_exists), using_raw=False)
 
     @bp.post("/api/routing")

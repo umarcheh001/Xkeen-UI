@@ -254,3 +254,40 @@ def test_clean_json_returned_when_main_reformatted_externally(routing_env):
             body = resp.get_data(as_text=True)
             assert "//" in body, "JSONC should be returned when semantic content matches"
             assert resp.headers.get("X-XKeen-JSONC-Using") == "1"
+
+
+def test_routing_get_loads_cp1251_legacy_json_without_empty_file_fallback(routing_env):
+    env = routing_env
+    legacy_obj = {
+        "routing": {
+            "rules": [
+                {
+                    "type": "field",
+                    "outboundTag": "direct",
+                    "domain": ["domain:рф", "domain:рус", "domain:москва", "domain:бел"],
+                }
+            ]
+        }
+    }
+    env["main_file"].write_text(
+        json.dumps(legacy_obj, indent=2, ensure_ascii=False) + "\n",
+        encoding="cp1251",
+    )
+
+    with patch.object(_routing_config_mod, "XRAY_JSONC_DIR_REAL", env["jsonc_dir"]), \
+         patch.object(_xcf_mod, "XRAY_JSONC_DIR", env["jsonc_dir"]):
+        app = _make_app(
+            routing_file=str(env["main_file"]),
+            routing_file_raw=str(env["raw_file"]),
+            xray_configs_dir=env["configs_dir"],
+            xray_configs_dir_real=env["configs_dir"],
+        )
+        with app.test_client() as c:
+            resp = c.get("/api/routing")
+            assert resp.status_code == 200
+            body = resp.get_data(as_text=True)
+            assert "domain:рф" in body
+            assert "domain:рус" in body
+            assert "domain:москва" in body
+            assert "domain:бел" in body
+            assert resp.headers.get("X-XKeen-JSONC-Using") == "0"

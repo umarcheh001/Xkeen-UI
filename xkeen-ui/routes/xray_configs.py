@@ -26,6 +26,7 @@ from flask import Blueprint, jsonify, request
 
 from services.command_jobs import create_command_job
 from services.io.atomic import _atomic_write_json, _atomic_write_text
+from utils.fs import load_text
 
 from services.xray_backups import atomic_write_bytes as _atomic_write_bytes
 from services.xray_config_files import (
@@ -177,8 +178,7 @@ def create_xray_configs_blueprint(
 
     def _read_text_silent(path: str) -> str:
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                return f.read()
+            return load_text(path, default="")
         except Exception:
             return ""
 
