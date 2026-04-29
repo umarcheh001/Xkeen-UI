@@ -373,6 +373,77 @@ def create_xray_configs_blueprint(
 
         return tags
 
+    def _collect_loopback_inbound_tags_from_outbounds(*, default_path: str, all_fragments: bool) -> list[str]:
+        tags: list[str] = []
+        seen: set[str] = set()
+
+        def _append(value: Any) -> None:
+            if not isinstance(value, str):
+                return
+            tag = value.strip()
+            if not tag or tag in seen:
+                return
+            seen.add(tag)
+            tags.append(tag)
+
+        def _collect_from_path(sel_path: str) -> None:
+            chosen_path, _raw_path, _raw_exists = _choose_raw_or_main(sel_path)
+            text = _read_text_silent(chosen_path)
+
+            try:
+                obj: Any = None
+                if text.strip():
+                    cleaned = strip_json_comments_text(text)
+                    obj = json.loads(cleaned) if cleaned.strip() else None
+                else:
+                    obj = load_json(sel_path, default=None)
+
+                items = None
+                if isinstance(obj, dict):
+                    items = obj.get("outbounds")
+                elif isinstance(obj, list):
+                    items = obj
+
+                if not isinstance(items, list):
+                    return
+
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    protocol = str(item.get("protocol") or "").strip().lower()
+                    if protocol != "loopback":
+                        continue
+                    settings = item.get("settings")
+                    if not isinstance(settings, dict):
+                        continue
+                    raw = settings.get("inboundTag")
+                    if isinstance(raw, list):
+                        for value in raw:
+                            _append(value)
+                        continue
+                    _append(raw)
+            except Exception:
+                return
+
+        if all_fragments:
+            try:
+                for item in list_xray_fragments("outbounds"):
+                    name = str((item or {}).get("name") or "")
+                    if not name:
+                        continue
+                    sel_path = resolve_xray_fragment_file(name, kind="outbounds", default_path=default_path)
+                    sel_path = _normalize_main_json_path(sel_path)
+                    _collect_from_path(sel_path)
+            except Exception:
+                return []
+        else:
+            file_arg = request.args.get("file", "")
+            sel_path = resolve_xray_fragment_file(file_arg, kind="outbounds", default_path=default_path)
+            sel_path = _normalize_main_json_path(sel_path)
+            _collect_from_path(sel_path)
+
+        return tags
+
     def _restart_response(*, source: str, restart_flag: bool, extra: dict[str, Any] | None = None):
         payload: dict[str, Any] = {"ok": True}
         if extra:
@@ -596,6 +667,12 @@ def create_xray_configs_blueprint(
             default_path=INBOUNDS_FILE,
             all_fragments=_is_true_flag(request.args.get("all", None)),
         )
+        for tag in _collect_loopback_inbound_tags_from_outbounds(
+            default_path=OUTBOUNDS_FILE,
+            all_fragments=_is_true_flag(request.args.get("all", None)),
+        ):
+            if tag not in tags:
+                tags.append(tag)
         return jsonify({"ok": True, "tags": tags}), 200
 
 # --- API: outbounds ---

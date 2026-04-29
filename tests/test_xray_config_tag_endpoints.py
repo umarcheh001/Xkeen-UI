@@ -223,6 +223,101 @@ def test_xray_inbound_tags_all_collects_tags_across_all_fragments_and_jsonc(tmp_
     ]
 
 
+def test_xray_inbound_tags_all_includes_loopback_outbound_inboundtag_refs(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    configs_dir.mkdir()
+    jsonc_dir.mkdir()
+
+    inbounds_name = "03_inbounds.json"
+    outbounds_name = "04_outbounds.json"
+    extra_outbounds_name = "04_outbounds.extra.json"
+
+    (configs_dir / inbounds_name).write_text(
+        json.dumps(
+            {
+                "inbounds": [
+                    {"tag": "redirect", "protocol": "dokodemo-door"},
+                    {"tag": "tproxy", "protocol": "dokodemo-door"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / outbounds_name).write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "direct", "protocol": "freedom"},
+                    {
+                        "tag": "rezerv_VPS",
+                        "protocol": "loopback",
+                        "settings": {"inboundTag": "toSecondVPS"},
+                    },
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / extra_outbounds_name).write_text(
+        json.dumps({"outbounds": []}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (jsonc_dir / f"{extra_outbounds_name}c").write_text(
+        "\n".join(
+            [
+                "// extra raw sidecar",
+                "{",
+                '  "outbounds": [',
+                '    { "tag": "reserve-chain", "protocol": "loopback", "settings": { "inboundTag": "toThirdVPS" } }',
+                "  ]",
+                "}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    os.utime(jsonc_dir / f"{extra_outbounds_name}c", None)
+
+    def _list_fragments(kind: str):
+        if kind == "inbounds":
+            return [{"name": inbounds_name}]
+        if kind == "outbounds":
+            return [{"name": outbounds_name}, {"name": extra_outbounds_name}]
+        return []
+
+    def _resolve_fragment(file_arg: str, *, kind: str, default_path: str) -> str:
+        base = configs_dir if kind in {"inbounds", "outbounds"} else tmp_path
+        name = file_arg or Path(default_path).name
+        return str(base / name)
+
+    monkeypatch.setattr(xray_configs_mod, "list_xray_fragments", _list_fragments)
+    monkeypatch.setattr(xray_configs_mod, "resolve_xray_fragment_file", _resolve_fragment)
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "jsonc_path_for",
+        lambda main_path: str(jsonc_dir / (Path(main_path).name + "c")),
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.get("/api/xray/inbound-tags?all=1")
+
+    assert response.status_code == 200
+    assert response.get_json()["tags"] == [
+        "redirect",
+        "tproxy",
+        "toSecondVPS",
+        "toThirdVPS",
+    ]
+
+
 def test_api_set_outbounds_matches_single_link_tag_to_current_routing_vless_reality(tmp_path, monkeypatch):
     configs_dir = tmp_path / "configs"
     configs_dir.mkdir()

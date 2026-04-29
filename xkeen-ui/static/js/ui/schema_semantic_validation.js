@@ -620,6 +620,26 @@ function collectXrayTagsFromArray(list, field = 'tag') {
   return uniqueSorted(tags);
 }
 
+function collectXrayLoopbackInboundTags(list) {
+  const tags = [];
+  (Array.isArray(list) ? list : []).forEach((item) => {
+    if (!isPlainObject(item)) return;
+    if (cleanName(item.protocol).toLowerCase() !== 'loopback') return;
+    const settings = isPlainObject(item.settings) ? item.settings : {};
+    const raw = settings.inboundTag;
+    if (Array.isArray(raw)) {
+      raw.forEach((value) => {
+        const tag = cleanName(value);
+        if (tag) tags.push(tag);
+      });
+      return;
+    }
+    const tag = cleanName(raw);
+    if (tag) tags.push(tag);
+  });
+  return uniqueSorted(tags);
+}
+
 function xrayItemPointer(basePointer, index) {
   const base = cleanName(basePointer);
   return base ? `${base}/${index}` : `/${index}`;
@@ -733,7 +753,9 @@ function collectXrayKnownTags(shape, options, kind) {
     : ['contextInbounds', 'context', 'externalInbounds'];
   const docTags = kind === 'outbound'
     ? collectXrayTagsFromArray(shape && shape.outbounds, 'tag')
-    : collectXrayTagsFromArray(shape && shape.inbounds, 'tag');
+    : collectXrayTagsFromArray(shape && shape.inbounds, 'tag').concat(
+        collectXrayLoopbackInboundTags(shape && shape.outbounds),
+      );
   const out = [...docTags];
 
   directField.forEach((key) => {
