@@ -31,6 +31,7 @@ from services.xray_backups import atomic_write_bytes as _atomic_write_bytes
 from services.xray_config_files import (
     INBOUNDS_FILE,
     OUTBOUNDS_FILE,
+    ROUTING_FILE,
     XRAY_CONFIGS_DIR,
     ensure_xray_jsonc_dir,
     jsonc_path_for,
@@ -46,6 +47,7 @@ from services.xray_inbounds import (
     merge_inbounds_preset,
 )
 from services.xray_outbounds import (
+    PROXY_OUTBOUND_TAG,
     build_outbounds_config_from_link,
     build_proxy_outbound_from_link,
     build_proxy_url_from_config,
@@ -210,6 +212,48 @@ def create_xray_configs_blueprint(
             "text": text,
             "config": cfg,
         }
+
+    _ROUTING_SERVICE_OUTBOUND_TAGS = {
+        "direct",
+        "block",
+        "dns",
+        "freedom",
+        "blackhole",
+        "reject",
+        "bypass",
+        "api",
+        "xray-api",
+        "metrics",
+        "loopback",
+    }
+
+    def _routing_proxy_outbound_tags(cfg: Any) -> list[str]:
+        root = cfg if isinstance(cfg, dict) else {}
+        routing = root.get("routing") if isinstance(root.get("routing"), dict) else root
+        rules = routing.get("rules") if isinstance(routing, dict) else []
+        tags: list[str] = []
+        seen: set[str] = set()
+        for rule in rules if isinstance(rules, list) else []:
+            if not isinstance(rule, dict):
+                continue
+            tag = str(rule.get("outboundTag") or "").strip()
+            if not tag:
+                continue
+            if tag.lower() in _ROUTING_SERVICE_OUTBOUND_TAGS:
+                continue
+            if tag in seen:
+                continue
+            seen.add(tag)
+            tags.append(tag)
+        return tags
+
+    def _single_link_outbound_tags_for_current_routing() -> list[str]:
+        try:
+            routing_cfg = load_json(ROUTING_FILE, default=None)
+        except Exception:
+            routing_cfg = None
+        tags = _routing_proxy_outbound_tags(routing_cfg)
+        return tags or [PROXY_OUTBOUND_TAG]
 
     def _outbounds_node_latency_state_path() -> str:
         root = str(ui_state_dir or "").strip()
@@ -682,7 +726,10 @@ def create_xray_configs_blueprint(
             if not url:
                 return error_response("url is required", 400, ok=False)
             try:
-                cfg = build_outbounds_config_from_link(url)
+                cfg = build_outbounds_config_from_link(
+                    url,
+                    proxy_tags=_single_link_outbound_tags_for_current_routing(),
+                )
             except Exception:
                 return _xray_error(
                     "Ссылка прокси имеет некорректный или неподдерживаемый формат.",

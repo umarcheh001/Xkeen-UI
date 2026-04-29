@@ -31,6 +31,22 @@ PROXY_OUTBOUND_TAG = "proxy"
 LEGACY_VLESS_TAG = "vless-reality"
 
 
+def _normalize_proxy_tags(tags: Any, fallback: str = PROXY_OUTBOUND_TAG) -> List[str]:
+    values: List[str] = []
+    seen: set[str] = set()
+    raw_items = tags if isinstance(tags, (list, tuple)) else ([tags] if tags is not None else [])
+    for item in raw_items:
+        tag = str(item or "").strip()
+        if not tag or tag in seen:
+            continue
+        seen.add(tag)
+        values.append(tag)
+    if values:
+        return values
+    safe_fallback = str(fallback or PROXY_OUTBOUND_TAG).strip() or PROXY_OUTBOUND_TAG
+    return [safe_fallback]
+
+
 def _b64_decode_relaxed(s: str) -> bytes:
     """Base64 decode с поддержкой URL-safe и отсутствия padding."""
     s = (s or "").strip()
@@ -584,23 +600,23 @@ def build_proxy_url_from_config(cfg):
     return None
 
 
-def build_outbounds_config_from_link(url: str) -> Dict[str, Any]:
+def build_outbounds_config_from_link(url: str, *, proxy_tags: Optional[List[str]] = None) -> Dict[str, Any]:
     """Собирает 04_outbounds.json по ссылке (vless/trojan/vmess/ss/hy2)."""
     parsed = urlparse((url or "").strip())
     scheme = (parsed.scheme or "").strip().lower()
 
     if scheme == "vless":
-        return build_outbounds_config_from_vless(url)
+        return build_outbounds_config_from_vless(url, proxy_tags=proxy_tags)
     if scheme == "trojan":
-        return build_outbounds_config_from_trojan(url)
+        return build_outbounds_config_from_trojan(url, proxy_tags=proxy_tags)
     if scheme == "vmess":
-        return build_outbounds_config_from_vmess(url)
+        return build_outbounds_config_from_vmess(url, proxy_tags=proxy_tags)
     if scheme in ("ss", "shadowsocks"):
-        return build_outbounds_config_from_ss(url)
+        return build_outbounds_config_from_ss(url, proxy_tags=proxy_tags)
 
     # Hysteria2 (Xray: protocol=hysteria + version=2)
     if scheme in ("hy2", "hysteria2", "hysteria"):
-        return build_outbounds_config_from_hysteria2(url)
+        return build_outbounds_config_from_hysteria2(url, proxy_tags=proxy_tags)
 
     raise ValueError("Поддерживаются ссылки vless://, trojan://, vmess://, ss://, hy2://")
 
@@ -636,7 +652,7 @@ def build_proxy_outbound_from_link(url: str, tag: str) -> Dict[str, Any]:
     return ob2
 
 
-def build_outbounds_config_from_hysteria2(url: str) -> Dict[str, Any]:
+def build_outbounds_config_from_hysteria2(url: str, *, proxy_tags: Optional[List[str]] = None) -> Dict[str, Any]:
     """Build 04_outbounds.json from Hysteria2 share link.
 
     Поддерживаем схемы:
@@ -761,10 +777,10 @@ def build_outbounds_config_from_hysteria2(url: str) -> Dict[str, Any]:
         "streamSettings": stream_settings,
     }
 
-    return _wrap_outbounds_with_common(outbound)
+    return _wrap_outbounds_with_common(outbound, proxy_tags=proxy_tags)
 
 
-def build_outbounds_config_from_vless(url):
+def build_outbounds_config_from_vless(url, *, proxy_tags: Optional[List[str]] = None):
     """Собирает 04_outbounds.json из VLESS ссылки.
 
     В панели поле подписано как VLESS, но на практике ссылки бывают разными:
@@ -970,47 +986,27 @@ def build_outbounds_config_from_vless(url):
     if flow:
         outbound["settings"]["vnext"][0]["users"][0]["flow"] = flow
 
-    # Для совместимости с ранними версиями панели добавляем алиас-выход.
-    # Это не влияет на работу, но позволяет старым правилам с outboundTag=vless-reality
-    # продолжить работать после пересохранения.
-    outbounds = [outbound]
-    try:
-        if outbound.get("tag") != LEGACY_VLESS_TAG:
-            alias = json.loads(json.dumps(outbound))  # безопасное deepcopy без import copy
-            alias["tag"] = LEGACY_VLESS_TAG
-            outbounds.append(alias)
-    except Exception:
-        pass
-
-    outbounds.extend([
-        {"tag": "direct", "protocol": "freedom"},
-        {
-            "tag": "block",
-            "protocol": "blackhole",
-            "settings": {"response": {"type": "http"}},
-        },
-    ])
-
-    cfg = {"outbounds": outbounds}
-    return cfg
+    return _wrap_outbounds_with_common(outbound, proxy_tags=proxy_tags)
 
 
 
 # --- Additional protocol builders: trojan/vmess/ss ---
 
-def _wrap_outbounds_with_common(outbound: dict) -> dict:
+def _wrap_outbounds_with_common(outbound: dict, *, proxy_tags: Optional[List[str]] = None) -> dict:
     """Wrap a single proxy outbound into full 04_outbounds.json.
 
-    Adds a legacy tag alias, plus 'direct' and 'block' outbounds.
+    Adds only the proxy tags required by the current routing, plus
+    'direct' and 'block' service outbounds.
     """
-    outbounds = [outbound]
-    try:
-        if outbound.get('tag') != LEGACY_VLESS_TAG:
-            alias = json.loads(json.dumps(outbound))
-            alias['tag'] = LEGACY_VLESS_TAG
-            outbounds.append(alias)
-    except Exception:
-        pass
+    tags = _normalize_proxy_tags(proxy_tags, fallback=str(outbound.get("tag") or PROXY_OUTBOUND_TAG))
+    outbounds = []
+    for idx, tag in enumerate(tags):
+        try:
+            item = outbound if idx == 0 else json.loads(json.dumps(outbound))
+        except Exception:
+            item = dict(outbound)
+        item["tag"] = tag
+        outbounds.append(item)
 
     outbounds.extend([
         {'tag': 'direct', 'protocol': 'freedom'},
@@ -1163,7 +1159,7 @@ def _build_stream_settings_from_qs(qs: dict, host_fallback: str, default_securit
     return stream_settings
 
 
-def build_outbounds_config_from_trojan(url: str) -> dict:
+def build_outbounds_config_from_trojan(url: str, *, proxy_tags: Optional[List[str]] = None) -> dict:
     """Build 04_outbounds.json from trojan:// link (Generator-compatible)."""
     parsed = urlparse((url or '').strip())
     if parsed.scheme.lower() != 'trojan':
@@ -1203,10 +1199,10 @@ def build_outbounds_config_from_trojan(url: str) -> dict:
         'streamSettings': stream_settings,
     }
 
-    return _wrap_outbounds_with_common(outbound)
+    return _wrap_outbounds_with_common(outbound, proxy_tags=proxy_tags)
 
 
-def build_outbounds_config_from_ss(url: str) -> dict:
+def build_outbounds_config_from_ss(url: str, *, proxy_tags: Optional[List[str]] = None) -> dict:
     """Build 04_outbounds.json from ss:// (Shadowsocks) link."""
     parsed = urlparse((url or '').strip())
     if parsed.scheme.lower() not in ('ss', 'shadowsocks'):
@@ -1255,10 +1251,10 @@ def build_outbounds_config_from_ss(url: str) -> dict:
         },
     }
 
-    return _wrap_outbounds_with_common(outbound)
+    return _wrap_outbounds_with_common(outbound, proxy_tags=proxy_tags)
 
 
-def build_outbounds_config_from_vmess(url: str) -> dict:
+def build_outbounds_config_from_vmess(url: str, *, proxy_tags: Optional[List[str]] = None) -> dict:
     """Build 04_outbounds.json from vmess:// (base64 JSON) link."""
     raw = (url or '').strip()
     if not raw.lower().startswith('vmess://'):
@@ -1358,6 +1354,5 @@ def build_outbounds_config_from_vmess(url: str) -> dict:
         'streamSettings': stream_settings,
     }
 
-    return _wrap_outbounds_with_common(outbound)
-
+    return _wrap_outbounds_with_common(outbound, proxy_tags=proxy_tags)
 

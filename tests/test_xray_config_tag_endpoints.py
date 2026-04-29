@@ -57,6 +57,13 @@ def _save_json(path: str, data) -> None:
     Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _vless_url() -> str:
+    return (
+        "vless://11111111-1111-4111-8111-111111111111@example.com:443"
+        "?type=tcp&security=reality&sni=edge.example.com&pbk=pubkey&fp=chrome&encryption=none"
+    )
+
+
 def _make_app() -> Flask:
     app = Flask(__name__)
     app.config["TESTING"] = True
@@ -214,3 +221,85 @@ def test_xray_inbound_tags_all_collects_tags_across_all_fragments_and_jsonc(tmp_
         "tproxy",
         "socks-in",
     ]
+
+
+def test_api_set_outbounds_matches_single_link_tag_to_current_routing_vless_reality(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    configs_dir.mkdir()
+    outbounds_path = configs_dir / "04_outbounds.json"
+    routing_path = configs_dir / "05_routing.json"
+    routing_path.write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "rules": [
+                        {"type": "field", "outboundTag": "block", "network": "udp", "port": "443"},
+                        {"type": "field", "outboundTag": "vless-reality", "network": "tcp,udp"},
+                    ]
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(xray_configs_mod, "ROUTING_FILE", str(routing_path))
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(outbounds_path),
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.post("/api/outbounds", json={"url": _vless_url(), "restart": False})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+
+    saved = json.loads(outbounds_path.read_text(encoding="utf-8"))
+    assert [item["tag"] for item in saved["outbounds"]] == ["vless-reality", "direct", "block"]
+
+
+def test_api_set_outbounds_matches_single_link_tag_to_current_routing_proxy(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    configs_dir.mkdir()
+    outbounds_path = configs_dir / "04_outbounds.json"
+    routing_path = configs_dir / "05_routing.json"
+    routing_path.write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "rules": [
+                        {"type": "field", "outboundTag": "block", "network": "udp", "port": "443"},
+                        {"type": "field", "outboundTag": "proxy", "network": "tcp,udp"},
+                    ]
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(xray_configs_mod, "ROUTING_FILE", str(routing_path))
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(outbounds_path),
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.post("/api/outbounds", json={"url": _vless_url(), "restart": False})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+
+    saved = json.loads(outbounds_path.read_text(encoding="utf-8"))
+    assert [item["tag"] for item in saved["outbounds"]] == ["proxy", "direct", "block"]
