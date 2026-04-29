@@ -259,7 +259,8 @@ def _pick_xray_config_file(default_name: str, alt_name: str) -> str:
     Priority:
       1) default_name if exists
       2) alt_name (e.g. *_hys2.json) if exists
-      3) default_name (for new installs)
+      3) another prefixed routing variant (e.g. 05_routing-2.json)
+      4) default_name (for new installs)
     """
     default_path = os.path.join(XRAY_CONFIGS_DIR, default_name)
     alt_path = os.path.join(XRAY_CONFIGS_DIR, alt_name)
@@ -268,6 +269,26 @@ def _pick_xray_config_file(default_name: str, alt_name: str) -> str:
             return default_path
         if os.path.exists(alt_path):
             return alt_path
+        default_stem = os.path.splitext(os.path.basename(default_name))[0]
+        if default_stem == "05_routing":
+            candidates = []
+            for name in os.listdir(XRAY_CONFIGS_DIR):
+                if not str(name).lower().endswith(".json"):
+                    continue
+                if name in {default_name, alt_name}:
+                    continue
+                stem = os.path.splitext(name)[0]
+                if not stem.startswith(default_stem):
+                    continue
+                suffix = stem[len(default_stem) :]
+                if not suffix or suffix[0] not in {"-", "_", "(", " "}:
+                    continue
+                cand = os.path.join(XRAY_CONFIGS_DIR, name)
+                if os.path.isfile(cand):
+                    candidates.append(cand)
+            if candidates:
+                candidates.sort(key=lambda path: (len(os.path.basename(path)), os.path.basename(path).lower()))
+                return candidates[0]
     except Exception:
         # Any failure -> fall back to default
         pass

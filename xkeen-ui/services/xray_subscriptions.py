@@ -30,6 +30,7 @@ from services.io.atomic import _atomic_write_json, _atomic_write_text
 from services.url_policy import URLPolicy, env_flag, is_url_allowed
 from services.xray_config_files import OUTBOUNDS_FILE, ROUTING_FILE, ensure_xray_jsonc_dir, jsonc_path_for
 from services.xray_outbounds import LEGACY_VLESS_TAG, build_proxy_outbound_from_link
+from utils.fs import load_text
 
 
 STATE_VERSION = 1
@@ -126,8 +127,10 @@ def _now() -> float:
 
 def _read_json_file(path: str, default: Any) -> Any:
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        text = load_text(path, default=None)
+        if text is None:
+            return default
+        return json.loads(text)
     except Exception:
         return default
 
@@ -1431,9 +1434,8 @@ def _content_hash(obj: Any) -> str:
 def _write_json_if_changed(path: str, obj: Any, *, snapshot: SnapshotCallback | None = None) -> bool:
     new_text = json.dumps(obj, ensure_ascii=False, indent=2) + "\n"
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            if f.read() == new_text:
-                return False
+        if load_text(path, default=None) == new_text:
+            return False
     except Exception:
         pass
     if snapshot and os.path.exists(path):
@@ -1446,9 +1448,8 @@ def _write_json_if_changed(path: str, obj: Any, *, snapshot: SnapshotCallback | 
 def _write_text_if_changed(path: str, text: str, *, snapshot: SnapshotCallback | None = None) -> bool:
     next_text = str(text or "")
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            if f.read() == next_text:
-                return False
+        if load_text(path, default=None) == next_text:
+            return False
     except Exception:
         pass
     if snapshot and os.path.exists(path):
@@ -1486,8 +1487,9 @@ def _capture_managed_file_baseline(state: Dict[str, Any], *, key: str, path: str
 
     entry: Dict[str, Any] = {"path": os.path.basename(path), "exists": False, "jsonc_exists": False}
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            entry["text"] = f.read()
+        text = load_text(path, default=None)
+        if text is not None:
+            entry["text"] = text
             entry["exists"] = True
     except Exception:
         pass
@@ -1498,8 +1500,9 @@ def _capture_managed_file_baseline(state: Dict[str, Any], *, key: str, path: str
         jsonc = ""
     if jsonc:
         try:
-            with open(jsonc, "r", encoding="utf-8") as f:
-                entry["jsonc_text"] = f.read()
+            jsonc_text = load_text(jsonc, default=None)
+            if jsonc_text is not None:
+                entry["jsonc_text"] = jsonc_text
                 entry["jsonc_exists"] = True
         except Exception:
             pass

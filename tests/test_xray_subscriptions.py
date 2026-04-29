@@ -1039,6 +1039,125 @@ def test_delete_last_subscription_restores_pre_subscription_runtime_state(tmp_pa
     assert subs.MANAGED_BASELINES_KEY not in state
 
 
+def test_refresh_subscription_preserves_cp1251_custom_routing_variant_and_restores_on_delete(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+    from utils.fs import load_text
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(subs, "ROUTING_FILE", "05_routing-2.json")
+    monkeypatch.setattr(
+        subs,
+        "MANAGED_BASELINE_TARGETS",
+        {**subs.MANAGED_BASELINE_TARGETS, subs.MANAGED_BASELINE_ROUTING_KEY: "05_routing-2.json"},
+    )
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    routing_before = {
+        "routing": {
+            "domainStrategy": "IPIfNonMatch",
+            "balancers": [
+                {
+                    "tag": "fast_web_balancer",
+                    "selector": ["VPS_"],
+                    "fallbackTag": "direct",
+                    "strategy": {"type": "leastPing"},
+                }
+            ],
+            "rules": [
+                {
+                    "type": "field",
+                    "ruleTag": "manual_direct_ru",
+                    "domain": ["domain:пример.рф"],
+                    "outboundTag": "direct",
+                }
+            ],
+        }
+    }
+    (xray_dir / "05_routing-2.json").write_text(
+        json.dumps(routing_before, ensure_ascii=False, indent=2) + "\n",
+        encoding="cp1251",
+    )
+    observatory_before = json.dumps({"observatory": {"subjectSelector": ["VPS_"]}}, ensure_ascii=False, indent=2) + "\n"
+    (xray_dir / "07_observatory.json").write_text(observatory_before, encoding="utf-8")
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "legacy-routing",
+            "tag": "demo",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+        },
+    )
+
+    refreshed = subs.refresh_subscription(
+        str(ui_state_dir),
+        "legacy-routing",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert refreshed["ok"] is True
+    assert refreshed["routing_changed"] is True
+    assert refreshed["routing_file"] == "05_routing-2.json"
+    assert not (xray_dir / "05_routing.json").exists()
+
+    routing_after = json.loads((xray_dir / "05_routing-2.json").read_text(encoding="utf-8"))
+    assert routing_after["routing"]["domainStrategy"] == "IPIfNonMatch"
+    assert routing_after["routing"]["balancers"][0]["tag"] == "fast_web_balancer"
+    rules = routing_after["routing"]["rules"]
+    assert rules[0]["ruleTag"] == "manual_direct_ru"
+    assert any(rule.get("ruleTag") == "xk_auto_leastPing" for rule in rules)
+
+    state = subs.load_subscription_state(str(ui_state_dir))
+    baseline = state[subs.MANAGED_BASELINES_KEY]["routing"]
+    assert baseline["path"] == "05_routing-2.json"
+    assert baseline["exists"] is True
+    assert "пример.рф" in baseline["text"]
+
+    deleted = subs.delete_subscription(
+        str(ui_state_dir),
+        "legacy-routing",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        remove_file=True,
+        restart_xkeen=None,
+    )
+
+    assert deleted["baseline_restored"] is True
+    restored = json.loads(load_text(str(xray_dir / "05_routing-2.json"), default=""))
+    assert restored == routing_before
+
+
 def test_delete_subscription_removes_empty_generated_balancer(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 
