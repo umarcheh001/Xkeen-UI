@@ -394,6 +394,102 @@ console.log(JSON.stringify(result.map((item) => ({
     assert any("protocol: vless" in message for message in messages)
 
 
+def test_xray_semantic_validation_accepts_compact_vless_outbound_without_vnext():
+    script = """
+import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayConfigSemantics({
+  outbounds: [
+    {
+      tag: 'VPS_NL',
+      protocol: 'vless',
+      settings: {
+        address: 'nl.example.com',
+        port: 443,
+        id: '11111111-1111-1111-1111-111111111111',
+        encryption: 'none',
+        flow: 'xtls-rprx-vision-udp443',
+        level: 0
+      }
+    }
+  ]
+}, {
+  kind: 'xray-outbounds'
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  severity: item.severity || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    pointers = [str(item["pointer"]) for item in payload]
+    codes = [str(item["code"]) for item in payload]
+    messages = [str(item["message"]) for item in payload]
+
+    assert "/outbounds/0/settings/vnext" not in pointers
+    assert "outbound-vless-vnext-missing" not in codes
+    assert "outbound-vless-address-missing" not in codes
+    assert "outbound-vless-port-missing" not in codes
+    assert "outbound-vless-id-missing" not in codes
+    assert not messages
+
+
+def test_xray_semantic_validation_uses_compact_vless_flow_for_mux_and_network_checks():
+    script = """
+import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayConfigSemantics({
+  outbounds: [
+    {
+      tag: 'compact-vless',
+      protocol: 'vless',
+      settings: {
+        address: 'edge.example.com',
+        port: 443,
+        id: '11111111-1111-1111-1111-111111111111',
+        encryption: 'none',
+        flow: 'xtls-rprx-vision'
+      },
+      streamSettings: {
+        network: 'xhttp',
+        security: 'tls',
+        tlsSettings: {
+          serverName: 'edge.example.com'
+        }
+      },
+      mux: {
+        enabled: true
+      }
+    }
+  ]
+}, {
+  kind: 'xray-outbounds'
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  severity: item.severity || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    codes = [str(item["code"]) for item in payload]
+    messages = [str(item["message"]) for item in payload]
+    pointers = [str(item["pointer"]) for item in payload]
+
+    assert "outbound-flow-mux-incompatible" in codes
+    assert "outbound-flow-network-incompatible" in codes
+    assert "/outbounds/0/mux/enabled" in pointers
+    assert "/outbounds/0/streamSettings/network" in pointers
+    assert any("flow: xtls-rprx-vision" in message for message in messages)
+
+
 def test_mihomo_semantic_validation_reports_proxy_group_cycles():
     script = """
 import { validateMihomoConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';

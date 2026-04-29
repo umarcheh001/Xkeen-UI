@@ -826,6 +826,13 @@ function collectXrayFlowValues(item, role) {
   const flows = [];
   if (!isPlainObject(item) || !isPlainObject(item.settings)) return flows;
   if (role === 'outbound') {
+    const rootFlow = cleanName(item.settings.flow);
+    if (rootFlow) flows.push(rootFlow);
+    const rootUsers = Array.isArray(item.settings.users) ? item.settings.users : [];
+    rootUsers.forEach((user) => {
+      const flow = cleanName(user && user.flow);
+      if (flow) flows.push(flow);
+    });
     const vnext = Array.isArray(item.settings.vnext) ? item.settings.vnext : [];
     vnext.forEach((server) => {
       const users = Array.isArray(server && server.users) ? server.users : [];
@@ -849,6 +856,27 @@ function hasConfiguredScalar(value) {
   if (typeof value === 'number') return Number.isFinite(value);
   if (typeof value === 'boolean') return true;
   return !!cleanName(value);
+}
+
+function hasConfiguredArrayItems(value) {
+  return Array.isArray(value) && value.length > 0;
+}
+
+function hasXrayCompactOutboundSettings(settings) {
+  if (!isPlainObject(settings)) return false;
+  return (
+    hasConfiguredScalar(settings.address)
+    || hasConfiguredScalar(settings.port)
+    || hasConfiguredScalar(settings.id)
+    || hasConfiguredArrayItems(settings.users)
+    || hasConfiguredScalar(settings.encryption)
+    || hasConfiguredScalar(settings.security)
+    || hasConfiguredScalar(settings.flow)
+    || hasConfiguredScalar(settings.level)
+    || hasConfiguredScalar(settings.password)
+    || hasConfiguredScalar(settings.method)
+    || hasConfiguredScalar(settings.experiments)
+  );
 }
 
 function validateXraySettingsCollection(diagnostics, pointer, roleLabel, itemLabel, protocol, collection, field, spec) {
@@ -923,6 +951,56 @@ function validateXrayUserCollection(diagnostics, pointer, roleLabel, itemLabel, 
   return list;
 }
 
+function validateXrayCompactOutboundSettings(diagnostics, pointer, roleLabel, itemLabel, protocol, settings) {
+  if (!hasXrayCompactOutboundSettings(settings)) return false;
+
+  if (!hasConfiguredScalar(settings.address)) {
+    pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/address`, `${roleLabel} "${itemLabel}" с \`protocol: ${protocol}\` в актуальном compact-формате ожидает поле \`address\` прямо в \`settings\`. Без адреса Xray не поймёт, к какому серверу подключаться.`, {
+      source: 'xray-semantic',
+      code: `${roleLabel.toLowerCase()}-${protocol}-address-missing`,
+    }));
+  }
+
+  if (!hasConfiguredScalar(settings.port)) {
+    pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/port`, `${roleLabel} "${itemLabel}" с \`protocol: ${protocol}\` в актуальном compact-формате ожидает поле \`port\` прямо в \`settings\`. Без порта нельзя собрать endpoint для remote-сервера.`, {
+      source: 'xray-semantic',
+      code: `${roleLabel.toLowerCase()}-${protocol}-port-missing`,
+    }));
+  }
+
+  const compactUsers = hasConfiguredArrayItems(settings.users) ? settings.users : [];
+  if (compactUsers.length) {
+    validateXrayUserCollection(diagnostics, `${pointer}/users`, roleLabel, itemLabel, protocol, compactUsers, 'users', {
+      required: [
+        { key: 'id', hint: 'Это UUID пользователя/клиента на удалённом сервере.' },
+      ],
+    });
+  } else if (!hasConfiguredScalar(settings.id)) {
+    pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/id`, `${roleLabel} "${itemLabel}" с \`protocol: ${protocol}\` в актуальном compact-формате ожидает поле \`id\` прямо в \`settings\`. Это UUID пользователя/клиента на удалённом сервере.`, {
+      source: 'xray-semantic',
+      code: `${roleLabel.toLowerCase()}-${protocol}-id-missing`,
+    }));
+  }
+
+  if (protocol === 'vless') {
+    const encryption = cleanName(settings.encryption);
+    if (!encryption && !compactUsers.length) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/encryption`, `${roleLabel} "${itemLabel}" использует \`protocol: vless\` в compact-формате, но не указывает \`encryption\`. По актуальной документации Xray это поле нельзя оставлять пустым; чтобы отключить шифрование, задайте \`\"none\"\`.`, {
+        source: 'xray-semantic',
+        code: `${roleLabel.toLowerCase()}-vless-encryption-missing`,
+      }));
+    } else if (encryption && encryption !== 'none') {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/encryption`, `${roleLabel} "${itemLabel}" использует \`protocol: vless\`, но указывает \`encryption: ${encryption}\`. Для VLESS здесь обычно ожидается только \`none\`.`, {
+        severity: 'warning',
+        source: 'xray-semantic',
+        code: `${roleLabel.toLowerCase()}-vless-encryption-invalid`,
+      }));
+    }
+  }
+
+  return true;
+}
+
 function validateXrayOutboundProtocolSettingsItem(item, pointer, diagnostics) {
   if (!isPlainObject(item)) return;
   const settings = isPlainObject(item.settings) ? item.settings : {};
@@ -931,6 +1009,10 @@ function validateXrayOutboundProtocolSettingsItem(item, pointer, diagnostics) {
   const roleLabel = 'Outbound';
 
   if (protocol === 'vless' || protocol === 'vmess') {
+    const hasLegacyVnext = Array.isArray(settings.vnext) && settings.vnext.length > 0;
+    if (!hasLegacyVnext && validateXrayCompactOutboundSettings(diagnostics, `${pointer}/settings`, roleLabel, itemLabel, protocol, settings)) {
+      return;
+    }
     const vnext = validateXraySettingsCollection(diagnostics, `${pointer}/settings/vnext`, roleLabel, itemLabel, protocol, settings.vnext, 'vnext', [
       { key: 'address', hint: 'Без адреса Xray не поймёт, к какому серверу подключаться.' },
       { key: 'port', hint: 'Без порта нельзя собрать endpoint для remote-сервера.' },
@@ -1228,7 +1310,7 @@ function validateXrayStreamSettingsItem(item, pointer, role, diagnostics) {
       }));
     }
     if (muxEnabled && flowValues.includes('xtls-rprx-vision')) {
-      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/mux/enabled`, `Outbound "${itemLabel}" включает mux, но среди пользователей есть \`flow: xtls-rprx-vision\`. Vision ожидает отдельный поток и плохо сочетается с mux.`, {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/mux/enabled`, `Outbound "${itemLabel}" включает mux, но в настройках есть \`flow: xtls-rprx-vision\`. Vision ожидает отдельный поток и плохо сочетается с mux.`, {
         source: 'xray-semantic',
         code: 'outbound-flow-mux-incompatible',
       }));

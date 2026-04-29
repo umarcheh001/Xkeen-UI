@@ -1070,7 +1070,7 @@
       "description": "Исходящее подключение — маршрут наружу: freedom (прямое соединение), blackhole (отбрасывание) или прокси-протокол до удалённого сервера.",
       "x-ui-explain": "Outbound — это «выход» трафика: куда Xray направляет запрос. На outbound ссылаются правила (`routing.rules[].outboundTag`) и балансировщики (`balancers[].selector`).",
       "x-ui-use-case": "Стандартный набор: `direct` (freedom — напрямую в интернет), `block` (blackhole — дропнуть) и один-несколько прокси-outbound (vless/trojan/shadowsocks) до ваших серверов.",
-      "x-ui-example": "{\n  \"tag\": \"proxy-1\",\n  \"protocol\": \"vless\",\n  \"settings\": { \"vnext\": [{ \"address\": \"example.com\", \"port\": 443, \"users\": [...] }] },\n  \"streamSettings\": { \"network\": \"tcp\", \"security\": \"reality\" }\n}",
+      "x-ui-example": "{\n  \"tag\": \"proxy-1\",\n  \"protocol\": \"vless\",\n  \"settings\": { \"address\": \"example.com\", \"port\": 443, \"id\": \"11111111-1111-1111-1111-111111111111\", \"encryption\": \"none\", \"flow\": \"xtls-rprx-vision\" },\n  \"streamSettings\": { \"network\": \"tcp\", \"security\": \"reality\" }\n}",
       "x-ui-warning": "Тег outbound должен быть уникальным: если два outbound имеют одинаковый `tag`, поведение зависит от порядка в конфиге и может стать непредсказуемым. На выбор outbound также влияет `routing.domainStrategy`.",
       "properties": {
         "sendThrough": {

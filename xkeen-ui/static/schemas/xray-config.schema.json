@@ -708,7 +708,7 @@
 
     "outboundSettings": {
       "type": "object",
-      "description": "Настройки, специфичные для выбранного outbound-протокола. Для VLESS/VMess обычно используются `vnext` и `users`, для blackhole — `response`, для loopback — `inboundTag`, для некоторых современных VLESS-конфигов допустима и прямая запись `address`/`port`/`id` в корне `settings`.",
+      "description": "Настройки, специфичные для выбранного outbound-протокола. По актуальной документации Xray для VLESS/VMess поддерживается compact-формат с `address`/`port`/`id` прямо в корне `settings`; legacy-массив `vnext` тоже поддерживается для совместимости. Для blackhole используется `response`, для loopback — `inboundTag`.",
       "properties": {
         "address": {
           "type": "string",
