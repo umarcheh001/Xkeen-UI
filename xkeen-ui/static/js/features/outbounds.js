@@ -4141,15 +4141,15 @@ let outboundsModuleApi = null;
       try {
         const resetBtn = root.querySelector(`#${SUB_IDS.reset}`);
         if (resetBtn) {
-          resetBtn.classList.add('xk-sub-icon-btn');
-          resetBtn.setAttribute('aria-label', String(resetBtn.getAttribute('title') || 'New'));
-          resetBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">&#10133;</span><span class="xk-visually-hidden">New</span>';
+          resetBtn.classList.add('xk-sub-head-chip');
+          resetBtn.setAttribute('aria-label', String(resetBtn.getAttribute('title') || 'Очистить форму'));
+          resetBtn.textContent = 'Очистить';
         }
         const saveBtn = root.querySelector(`#${SUB_IDS.save}`);
         if (saveBtn) {
-          saveBtn.classList.add('xk-sub-icon-btn');
-          saveBtn.setAttribute('aria-label', String(saveBtn.getAttribute('title') || 'Save'));
-          saveBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">&#128190;</span><span class="xk-visually-hidden">Save</span>';
+          saveBtn.classList.add('xk-sub-head-chip', 'is-primary');
+          saveBtn.setAttribute('aria-label', String(saveBtn.getAttribute('title') || 'Сохранить настройки'));
+          saveBtn.textContent = 'Сохранить';
         }
         const previewBtn = root.querySelector(`#${SUB_IDS.preview}`);
         if (previewBtn) {
@@ -4204,10 +4204,14 @@ let outboundsModuleApi = null;
               </div>
               <div class="xk-sub-grid">
                 <section class="xk-sub-panel xk-sub-form-panel">
-                  <div class="xk-sub-panelhead">
+                  <div class="xk-sub-panelhead xk-sub-form-head">
                     <div>
                       <div class="xk-pool-kicker">Источник</div>
                       <div class="terminal-menu-title" style="margin:0;">HTTP(S) subscription</div>
+                    </div>
+                    <div class="xk-sub-head-actions">
+                      <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Очистить форму" data-tooltip="Очистить форму и подготовить новую подписку.">Очистить</button>
+                      <button type="submit" form="outbounds-subscriptions-form" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить настройки" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
                     </div>
                   </div>
                   <form id="outbounds-subscriptions-form" class="xk-sub-form">
@@ -4276,10 +4280,6 @@ let outboundsModuleApi = null;
                         <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked title="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool.">
                         <span>Общий pool</span>
                       </label>
-                      <div class="xk-sub-actions">
-                        <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Новая подписка" data-tooltip="Очистить форму и добавить новую подписку.">Новая</button>
-                        <button type="submit" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить подписку" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
-                      </div>
                     </div>
                     <div class="xk-sub-balancers">
                       <div class="xk-sub-balancers-head">

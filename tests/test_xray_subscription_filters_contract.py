@@ -155,11 +155,11 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "имя будет сгенерировано автоматически при сохранении" in outbounds_src
     assert "префикс будет сгенерирован автоматически при сохранении" in outbounds_src
     assert "xk-sub-node-toggle" in outbounds_src
-    assert "resetBtn.classList.add('xk-sub-icon-btn');" in outbounds_src
-    assert "saveBtn.classList.add('xk-sub-icon-btn');" in outbounds_src
-    assert "xk-visually-hidden" in outbounds_src
-    assert "&#10133;" in outbounds_src
-    assert "&#128190;" in outbounds_src
+    assert "resetBtn.classList.add('xk-sub-head-chip');" in outbounds_src
+    assert "saveBtn.classList.add('xk-sub-head-chip', 'is-primary');" in outbounds_src
+    assert '<div class="xk-sub-head-actions">' in outbounds_src
+    assert 'title="Очистить форму"' in outbounds_src
+    assert 'title="Сохранить настройки"' in outbounds_src
     assert "btn-danger btn-compact xk-sub-node-toggle" in outbounds_src
     assert "xk-sub-node-toggle-restore" in outbounds_src
     assert "outbounds-subscriptions-routing-mode" in outbounds_src
