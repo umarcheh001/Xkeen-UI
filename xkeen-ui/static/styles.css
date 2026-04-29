@@ -8275,6 +8275,52 @@ html[data-theme="light"] .xk-sub-draft-badge {
   line-height: 1.2;
 }
 
+.xk-sub-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.xk-sub-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.38);
+  color: #cbd5e1;
+  font-size: calc(10px * var(--xk-font-scale));
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.xk-sub-badge.is-error {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+}
+
+.xk-sub-badge.is-due {
+  border-color: rgba(251, 191, 36, 0.34);
+  background: rgba(120, 53, 15, 0.26);
+  color: #fde68a;
+}
+
+.xk-sub-badge.is-updated {
+  border-color: rgba(56, 189, 248, 0.28);
+  background: rgba(14, 116, 144, 0.22);
+  color: #bae6fd;
+}
+
+.xk-sub-badge.is-filtered {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(30, 41, 59, 0.48);
+  color: #cbd5e1;
+}
+
 .xk-sub-muted {
   margin-top: 3px;
   color: #94a3b8;
@@ -9476,6 +9522,36 @@ html[data-theme="light"] .xk-sub-list-panel {
 
 html[data-theme="light"] .xk-sub-main {
   color: #1d2b44;
+}
+
+html[data-theme="light"] .xk-sub-badge {
+  border-color: rgba(172, 188, 214, 0.42);
+  background: rgba(255, 255, 255, 0.9);
+  color: #465975;
+}
+
+html[data-theme="light"] .xk-sub-badge.is-error {
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(254, 242, 242, 0.96);
+  color: #991b1b;
+}
+
+html[data-theme="light"] .xk-sub-badge.is-due {
+  border-color: rgba(217, 119, 6, 0.26);
+  background: rgba(254, 243, 199, 0.96);
+  color: #92400e;
+}
+
+html[data-theme="light"] .xk-sub-badge.is-updated {
+  border-color: rgba(14, 165, 233, 0.22);
+  background: rgba(224, 242, 254, 0.96);
+  color: #0c4a6e;
+}
+
+html[data-theme="light"] .xk-sub-badge.is-filtered {
+  border-color: rgba(172, 188, 214, 0.42);
+  background: rgba(241, 245, 249, 0.96);
+  color: #475569;
 }
 
 html[data-theme="light"] .xk-sub-interval-note {

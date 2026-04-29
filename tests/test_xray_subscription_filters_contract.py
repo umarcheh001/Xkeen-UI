@@ -224,7 +224,9 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert "function subsSyncSubscriptionFormState() {" in outbounds_src
     assert "function subsConfirmDiscardDraft(opts) {" in outbounds_src
     assert "function subsRestoreBaseline(options) {" in outbounds_src
+    assert "async function subsRefresh(id, options) {" in outbounds_src
     assert "window.confirm(subsBuildDiscardConfirmText(confirmOptions))" in outbounds_src
+    assert "if (opts.skipDraftConfirm !== true) {" in outbounds_src
     assert 'class="xk-sub-url-action"' in outbounds_src
     assert 'class="xk-pool-fieldlabel xk-sub-url-action-label"' in outbounds_src
     assert 'id="outbounds-subscriptions-interval-apply-btn"' in outbounds_src
@@ -244,6 +246,11 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert "applyBtn.classList.add('is-provider');" in outbounds_src
     assert "profileUpdateIntervalHours: Number(data.profile_update_interval_hours || 0)," in outbounds_src
     assert "Интервал обновления установлен по рекомендации провайдера:" in outbounds_src
+    assert "const rawId = String(sub.id || payload.id || '').trim();" in outbounds_src
+    assert "const id = rawId ? subsCleanId(rawId) : '';" in outbounds_src
+    assert "_subscriptionEditId = id;" in outbounds_src
+    assert "try { $(SUB_IDS.id).value = id; } catch (e2) {}" in outbounds_src
+    assert "await subsRefresh(id, { skipDraftConfirm: true });" in outbounds_src
     assert "Закрыть окно подписок и потерять текущий черновик?" in outbounds_src
     assert "Очистить форму подписки и потерять текущий черновик?" in outbounds_src
     assert "Обновить due-подписки и потерять текущий черновик формы?" in outbounds_src
@@ -261,3 +268,37 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert ".xk-sub-form .xk-sub-url-action-label {" in styles_src
     assert ".xk-sub-form .xk-sub-url-row {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;" in styles_src
     assert "const floor = isConfirm ? Math.max(Z_BASE + 40, 130) : Z_BASE;" in modal_src
+
+
+def test_xray_subscription_list_surfaces_operational_status_badges():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    styles_src = _read("xkeen-ui/static/styles.css")
+
+    assert "function subsIsDue(sub, nowTs) {" in outbounds_src
+    assert "function subsRelativeUpdateLabel(ts, nowTs) {" in outbounds_src
+    assert "function subsOperationalRank(sub, nowTs) {" in outbounds_src
+    assert "function subsCompareSubscriptions(a, b, nowTs) {" in outbounds_src
+    assert "function subsSortSubscriptions(items) {" in outbounds_src
+    assert "function subsBuildStatusBadges(sub, nowTs) {" in outbounds_src
+    assert "const items = subsSortSubscriptions(_subscriptions);" in outbounds_src
+    assert "if (hasError && due) return 0;" in outbounds_src
+    assert "if (hasError) return 1;" in outbounds_src
+    assert "if (due) return 2;" in outbounds_src
+    assert "if (delta < 45) return 'обновлено только что';" in outbounds_src
+    assert "return `обновлено ${Math.max(1, Math.floor(delta / 60))} мин назад`;" in outbounds_src
+    assert "return `обновлено ${Math.max(1, Math.floor(delta / 3600))} ч назад`;" in outbounds_src
+    assert "label: 'ошибка'," in outbounds_src
+    assert "label: 'due'," in outbounds_src
+    assert "label: `скрыто ${filteredOutCount}`," in outbounds_src
+    assert "title: `Фильтрами скрыто ${filteredOutCount} узл.`," in outbounds_src
+    assert '<div class="xk-sub-badges">${badgesHtml}</div>' in outbounds_src
+    assert 'return `<span class="xk-sub-badge is-${tone}" title="${tooltip}" data-tooltip="${tooltip}">${label}</span>`;' in outbounds_src
+    assert ".xk-sub-badges {" in styles_src
+    assert ".xk-sub-badge {" in styles_src
+    assert ".xk-sub-badge.is-error {" in styles_src
+    assert ".xk-sub-badge.is-due {" in styles_src
+    assert ".xk-sub-badge.is-updated {" in styles_src
+    assert ".xk-sub-badge.is-filtered {" in styles_src
+    assert "html[data-theme=\"light\"] .xk-sub-badge {" in styles_src
+    assert "html[data-theme=\"light\"] .xk-sub-badge.is-error {" in styles_src
+    assert "html[data-theme=\"light\"] .xk-sub-badge.is-due {" in styles_src

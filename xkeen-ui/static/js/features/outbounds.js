@@ -4615,6 +4615,119 @@ let outboundsModuleApi = null;
       return parts.join(' · ');
     }
 
+    function subsTimestamp(value) {
+      const ts = Number(value || 0);
+      return Number.isFinite(ts) && ts > 0 ? ts : 0;
+    }
+
+    function subsLastUpdateTs(sub) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      return subsTimestamp(s.last_update_ts || s.updated_ts);
+    }
+
+    function subsNowTs() {
+      return Math.floor(Date.now() / 1000);
+    }
+
+    function subsIsDue(sub, nowTs) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      if (s.enabled === false) return false;
+      const nextTs = subsTimestamp(s.next_update_ts);
+      const currentTs = subsTimestamp(nowTs) || subsNowTs();
+      return nextTs > 0 && nextTs <= currentTs;
+    }
+
+    function subsRelativeUpdateLabel(ts, nowTs) {
+      const stamp = subsTimestamp(ts);
+      const currentTs = subsTimestamp(nowTs) || subsNowTs();
+      if (!stamp || !currentTs) return '';
+      const delta = Math.max(0, currentTs - stamp);
+      if (delta < 45) return 'обновлено только что';
+      if (delta < 3600) return `обновлено ${Math.max(1, Math.floor(delta / 60))} мин назад`;
+      if (delta < 86400) return `обновлено ${Math.max(1, Math.floor(delta / 3600))} ч назад`;
+      return `обновлено ${Math.max(1, Math.floor(delta / 86400))} д назад`;
+    }
+
+    function subsOperationalRank(sub, nowTs) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      const hasError = s.last_ok === false;
+      const due = subsIsDue(s, nowTs);
+      const lastUpdateTs = subsLastUpdateTs(s);
+      if (hasError && due) return 0;
+      if (hasError) return 1;
+      if (due) return 2;
+      if (lastUpdateTs <= 0) return 3;
+      return 4;
+    }
+
+    function subsCompareSubscriptions(a, b, nowTs) {
+      const rankDiff = subsOperationalRank(a, nowTs) - subsOperationalRank(b, nowTs);
+      if (rankDiff) return rankDiff;
+
+      const aDue = subsIsDue(a, nowTs);
+      const bDue = subsIsDue(b, nowTs);
+      if (aDue || bDue) {
+        const aNext = subsTimestamp(a && a.next_update_ts) || Number.MAX_SAFE_INTEGER;
+        const bNext = subsTimestamp(b && b.next_update_ts) || Number.MAX_SAFE_INTEGER;
+        if (aNext !== bNext) return aNext - bNext;
+      }
+
+      const updatedDiff = subsLastUpdateTs(b) - subsLastUpdateTs(a);
+      if (updatedDiff) return updatedDiff;
+
+      const aLabel = String((a && (a.tag || a.name || a.id)) || '').trim();
+      const bLabel = String((b && (b.tag || b.name || b.id)) || '').trim();
+      return aLabel.localeCompare(bLabel, 'ru');
+    }
+
+    function subsSortSubscriptions(items) {
+      const list = Array.isArray(items) ? items.slice() : [];
+      const nowTs = subsNowTs();
+      return list.sort((a, b) => subsCompareSubscriptions(a, b, nowTs));
+    }
+
+    function subsBuildStatusBadges(sub, nowTs) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      const currentTs = subsTimestamp(nowTs) || subsNowTs();
+      const badges = [];
+      const lastUpdateTs = subsLastUpdateTs(s);
+      const filteredOutCount = Number(s.last_filtered_out_count || 0);
+      const due = subsIsDue(s, currentTs);
+      const errorText = String(s.last_error || '').trim();
+
+      if (s.last_ok === false) {
+        badges.push({
+          label: 'ошибка',
+          tone: 'error',
+          title: errorText || 'Последнее обновление завершилось ошибкой.',
+        });
+      }
+      if (due) {
+        badges.push({
+          label: 'due',
+          tone: 'due',
+          title: s.next_update_ts
+            ? `Срок обновления наступил: ${subsFormatTime(s.next_update_ts)}.`
+            : 'Срок обновления наступил.',
+        });
+      }
+      if (lastUpdateTs > 0) {
+        badges.push({
+          label: subsRelativeUpdateLabel(lastUpdateTs, currentTs),
+          tone: 'updated',
+          title: `Последнее обновление: ${subsFormatTime(lastUpdateTs)}.`,
+        });
+      }
+      if (Number.isFinite(filteredOutCount) && filteredOutCount > 0) {
+        badges.push({
+          label: `скрыто ${filteredOutCount}`,
+          tone: 'filtered',
+          title: `Фильтрами скрыто ${filteredOutCount} узл.`,
+        });
+      }
+      return badges;
+    }
+
     function subsResetForm() {
       _subscriptionEditId = '';
       _subscriptionPreview = null;
@@ -4674,7 +4787,8 @@ let outboundsModuleApi = null;
       const empty = $(SUB_IDS.empty);
       const summary = $(SUB_IDS.summary);
       if (!tbody) return;
-      const items = Array.isArray(_subscriptions) ? _subscriptions : [];
+      const items = subsSortSubscriptions(_subscriptions);
+      const nowTs = subsNowTs();
       tbody.innerHTML = '';
 
       items.forEach((sub) => {
@@ -4685,13 +4799,15 @@ let outboundsModuleApi = null;
         } catch (e0) {}
         const ok = sub && sub.last_ok === true;
         const bad = sub && sub.last_ok === false;
+        const due = subsIsDue(sub, nowTs);
         const count = Number(sub && sub.last_count ? sub.last_count : 0);
         const rawSourceCount = Number(sub && sub.last_source_count ? sub.last_source_count : 0);
         const sourceCount = Number.isFinite(rawSourceCount) && rawSourceCount > 0 ? rawSourceCount : count;
         const filteredOutCount = Number(sub && sub.last_filtered_out_count ? sub.last_filtered_out_count : 0);
+        const lastUpdateTs = subsLastUpdateTs(sub);
         const statusText = ok
           ? (`OK · ${count}` + (sourceCount > count ? ` из ${sourceCount}` : ''))
-          : (bad ? ('Ошибка · ' + escapeHtml(String(sub.last_error || ''))) : '—');
+          : (bad ? 'Ошибка обновления' : (lastUpdateTs > 0 ? 'Обновление без ошибок' : 'Ожидает обновления'));
         const next = subsFormatTime(sub && sub.next_update_ts);
         const title = escapeHtml(String(sub && sub.name ? sub.name : sub && sub.id ? sub.id : ''));
         const tag = escapeHtml(String(sub && sub.tag ? sub.tag : ''));
@@ -4705,11 +4821,18 @@ let outboundsModuleApi = null;
         if (title) metaBits.push(title);
         if (url) metaBits.push(url);
         if (filterText) metaBits.push(filterText);
-        const nextBits = ['next: ' + next, subsIntervalSummary(sub)];
-        if (filteredOutCount > 0) nextBits.push('фильтр: -' + String(filteredOutCount));
+        const nextBits = [due ? 'next: due' : ('next: ' + next), subsIntervalSummary(sub)];
+        const badges = subsBuildStatusBadges(sub, nowTs);
+        const badgesHtml = badges.map((badge) => {
+          const label = escapeHtml(String(badge && badge.label ? badge.label : ''));
+          const tone = escapeHtml(String(badge && badge.tone ? badge.tone : 'muted'));
+          const tooltip = escapeHtml(String(badge && badge.title ? badge.title : label));
+          return `<span class="xk-sub-badge is-${tone}" title="${tooltip}" data-tooltip="${tooltip}">${label}</span>`;
+        }).join('');
         tr.innerHTML = `
           <td>
             <div class="xk-sub-main">${tag || id}</div>
+            ${badgesHtml ? `<div class="xk-sub-badges">${badgesHtml}</div>` : ''}
             <div class="xk-sub-muted">${metaBits.join(' · ')}</div>
           </td>
           <td>
@@ -5348,15 +5471,18 @@ let outboundsModuleApi = null;
       }
     }
 
-    async function subsRefresh(id) {
+    async function subsRefresh(id, options) {
       const subId = String(id || '').trim();
       if (!subId) return false;
-      const ok = await subsConfirmDiscardDraft({
-        message: 'Обновить подписку и потерять текущий черновик формы?',
-        okText: 'Обновить',
-        cancelText: 'Остаться',
-      });
-      if (!ok) return false;
+      const opts = (options && typeof options === 'object') ? options : {};
+      if (opts.skipDraftConfirm !== true) {
+        const ok = await subsConfirmDiscardDraft({
+          message: 'Обновить подписку и потерять текущий черновик формы?',
+          okText: 'Обновить',
+          cancelText: 'Остаться',
+        });
+        if (!ok) return false;
+      }
       const prevActive = getActiveFragment();
       subsSetStatus('Обновляю подписку…', false);
       const restart = shouldRestartAfterSave();
@@ -5513,24 +5639,29 @@ let outboundsModuleApi = null;
           throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
         }
         const sub = data.subscription || {};
-        const id = String(sub.id || payload.id || '');
+        const rawId = String(sub.id || payload.id || '').trim();
+        const id = rawId ? subsCleanId(rawId) : '';
         _subscriptionPreview = null;
+        if (id) {
+          _subscriptionEditId = id;
+          try { $(SUB_IDS.id).value = id; } catch (e2) {}
+        }
         subsSetStatus('Сохранено.', false, true);
         await subsLoad();
         if ($(SUB_IDS.refreshNow) && $(SUB_IDS.refreshNow).checked && id) {
-          await subsRefresh(id);
+          await subsRefresh(id, { skipDraftConfirm: true });
         } else {
-          try { toastXkeen('Подписка сохранена', 'success'); } catch (e2) {}
+          try { toastXkeen('Подписка сохранена', 'success'); } catch (e3) {}
         }
         return true;
       } catch (err) {
         const msg = 'Ошибка сохранения: ' + String(err && err.message ? err.message : err);
         subsSetStatus(msg, true);
-        try { toastXkeen(msg, 'error'); } catch (e2) {}
+        try { toastXkeen(msg, 'error'); } catch (e4) {}
         return false;
       } finally {
         _subscriptionSaveBusy = false;
-        try { subsSyncSubscriptionFormState(); } catch (e3) {}
+        try { subsSyncSubscriptionFormState(); } catch (e5) {}
       }
     }
 
