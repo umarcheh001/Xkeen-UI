@@ -25,5 +25,5 @@ def test_package_json_exposes_local_user_archive_commands():
     package_json = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
     scripts = package_json.get("scripts") or {}
 
-    assert scripts.get("archive:user") == "python scripts/build_user_archive.py"
-    assert scripts.get("archive:user:skip-build") == "python scripts/build_user_archive.py --skip-frontend-build"
+    assert scripts.get("archive:user") == "node scripts/run_python.mjs scripts/build_user_archive.py"
+    assert scripts.get("archive:user:skip-build") == "node scripts/run_python.mjs scripts/build_user_archive.py --skip-frontend-build"

@@ -20,6 +20,7 @@ const REQUIRED_PRETTIER_VENDOR_FILES = [
   'prettier/plugins/estree.js',
   'prettier/plugins/yaml.js',
 ];
+const IGNORED_BUILD_FILENAMES = new Set(['.DS_Store', 'Thumbs.db']);
 const KNOWN_MODULE_EXTENSIONS = ['.js', '.mjs', '.cjs', '.json', '.node'];
 const RELATIVE_IMPORT_PATTERNS = [
   /\bfrom\s*["'](\.{1,2}\/[^"'?#]+(?:[?#][^"']*)?)["']/g,
@@ -157,6 +158,7 @@ function verifyNoStaleBuildFiles() {
         continue;
       }
       if (!entry.isFile()) continue;
+      if (IGNORED_BUILD_FILENAMES.has(entry.name)) continue;
       allFiles.push(path.relative(buildRoot, fullPath).replace(/\\/g, '/'));
     }
   }

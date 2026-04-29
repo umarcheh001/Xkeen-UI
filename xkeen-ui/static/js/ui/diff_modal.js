@@ -794,6 +794,66 @@
     return support.api;
   }
 
+  function reportBackendFallback(fromKind, err) {
+    const reason = String((err && err.message) || err || '').trim();
+    try {
+      console.warn('[xkeen-diff] backend fallback', {
+        from: String(fromKind || ''),
+        to: 'monaco',
+        reason,
+      });
+    } catch (e) {}
+    showFeedback('CodeMirror diff временно недоступен, открываю сравнение через Monaco', 'warn');
+  }
+
+  async function renderMonacoDiff(host, spec) {
+    const monaco = await ensureMonaco();
+    _activeMonaco = monaco;
+    bindLayoutHooks(monaco);
+
+    while (host && host.firstChild) host.removeChild(host.firstChild);
+
+    const lang = languageFor(monaco, spec.language || 'text');
+    _originalModel = monaco.editor.createModel(asString(spec.leftText), lang);
+    _modifiedModel = monaco.editor.createModel(asString(spec.rightText), lang);
+
+    _diffEditor = monaco.editor.createDiffEditor(host, {
+      renderSideBySide: spec.mode !== 'inline',
+      readOnly: spec.readOnly !== false,
+      originalEditable: false,
+      automaticLayout: true,
+      scrollBeyondLastLine: false,
+      minimap: { enabled: false },
+      renderOverviewRuler: true,
+      ignoreTrimWhitespace: !!_ignoreTrimWhitespace,
+      diffWordWrap: 'on',
+    });
+
+    _diffEditor.setModel({ original: _originalModel, modified: _modifiedModel });
+    _backendKind = 'monaco';
+
+    try {
+      if (isFn(_diffEditor.onDidUpdateDiff)) {
+        _diffEditor.onDidUpdateDiff(updateSummary);
+      }
+    } catch (e) {}
+    try {
+      const originalEditor = _getMonacoInnerEditor('left');
+      if (originalEditor && isFn(originalEditor.onDidChangeCursorPosition)) {
+        originalEditor.onDidChangeCursorPosition(() => _syncActiveMonacoHunkHighlight('left'));
+      }
+    } catch (e2) {}
+    try {
+      const modifiedEditor = _getMonacoInnerEditor('right');
+      if (modifiedEditor && isFn(modifiedEditor.onDidChangeCursorPosition)) {
+        modifiedEditor.onDidChangeCursorPosition(() => _syncActiveMonacoHunkHighlight('right'));
+      }
+    } catch (e3) {}
+    setTimeout(updateSummary, 80);
+
+    try { if (isFn(_diffEditor.layout)) _diffEditor.layout(); } catch (e) {}
+  }
+
   function disposeDiff() {
     _clearActiveMonacoHunkHighlight();
     try { if (_diffEditor && isFn(_diffEditor.dispose)) _diffEditor.dispose(); } catch (e) {}
@@ -2027,61 +2087,35 @@
       disposeDiff();
 
       if (useCM6) {
-        await renderCM6Diff(_hostEl, {
+        try {
+          await renderCM6Diff(_hostEl, {
+            leftText: o.left.text,
+            rightText: o.right.text,
+            language: o.language || 'text',
+            mode: o.mode || 'split',
+            readOnly: o.readOnly !== false,
+          });
+          bindLayoutHooks(null);
+          setTimeout(updateSummary, 60);
+        } catch (cm6Error) {
+          reportBackendFallback('cm6', cm6Error);
+          disposeDiff();
+          await renderMonacoDiff(_hostEl, {
+            leftText: o.left.text,
+            rightText: o.right.text,
+            language: o.language || 'text',
+            mode: o.mode || 'split',
+            readOnly: o.readOnly !== false,
+          });
+        }
+      } else {
+        await renderMonacoDiff(_hostEl, {
           leftText: o.left.text,
           rightText: o.right.text,
           language: o.language || 'text',
           mode: o.mode || 'split',
           readOnly: o.readOnly !== false,
         });
-        bindLayoutHooks(null);
-        setTimeout(updateSummary, 60);
-      } else {
-        const monaco = await ensureMonaco();
-        _activeMonaco = monaco;
-        bindLayoutHooks(monaco);
-
-        while (_hostEl && _hostEl.firstChild) _hostEl.removeChild(_hostEl.firstChild);
-
-        const lang = languageFor(monaco, o.language || 'text');
-        _originalModel = monaco.editor.createModel(asString(o.left.text), lang);
-        _modifiedModel = monaco.editor.createModel(asString(o.right.text), lang);
-
-        _diffEditor = monaco.editor.createDiffEditor(_hostEl, {
-          renderSideBySide: o.mode !== 'inline',
-          readOnly: o.readOnly !== false,
-          originalEditable: false,
-          automaticLayout: true,
-          scrollBeyondLastLine: false,
-          minimap: { enabled: false },
-          renderOverviewRuler: true,
-          ignoreTrimWhitespace: !!_ignoreTrimWhitespace,
-          diffWordWrap: 'on',
-        });
-
-        _diffEditor.setModel({ original: _originalModel, modified: _modifiedModel });
-        _backendKind = 'monaco';
-
-        try {
-          if (isFn(_diffEditor.onDidUpdateDiff)) {
-            _diffEditor.onDidUpdateDiff(updateSummary);
-          }
-        } catch (e) {}
-        try {
-          const originalEditor = _getMonacoInnerEditor('left');
-          if (originalEditor && isFn(originalEditor.onDidChangeCursorPosition)) {
-            originalEditor.onDidChangeCursorPosition(() => _syncActiveMonacoHunkHighlight('left'));
-          }
-        } catch (e2) {}
-        try {
-          const modifiedEditor = _getMonacoInnerEditor('right');
-          if (modifiedEditor && isFn(modifiedEditor.onDidChangeCursorPosition)) {
-            modifiedEditor.onDidChangeCursorPosition(() => _syncActiveMonacoHunkHighlight('right'));
-          }
-        } catch (e3) {}
-        setTimeout(updateSummary, 80);
-
-        try { if (isFn(_diffEditor.layout)) _diffEditor.layout(); } catch (e) {}
       }
 
       try {

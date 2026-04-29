@@ -14,6 +14,7 @@ PACKAGE_LOCK = ROOT / 'package-lock.json'
 VITE_CONFIG = ROOT / 'vite.config.mjs'
 VERIFY_SCRIPT = ROOT / 'scripts' / 'verify_frontend_build.mjs'
 VENDOR_SYNC_SCRIPT = ROOT / 'scripts' / 'sync_frontend_vendor.py'
+PYTHON_RUNNER = ROOT / 'scripts' / 'run_python.mjs'
 BUILD_WORKFLOW_DOC = ROOT / 'docs' / 'frontend-build-workflow.md'
 RAW_BUILD_MANIFEST = ROOT / 'xkeen-ui' / 'static' / 'frontend-build' / '.vite' / 'manifest.build.json'
 CI_WORKFLOW = ROOT / '.github' / 'workflows' / 'ci.yml'
@@ -26,6 +27,7 @@ def test_frontend_build_toolchain_files_exist_and_are_wired_up():
     assert VITE_CONFIG.is_file(), 'stage 7 requires a checked-in vite.config.mjs'
     assert VERIFY_SCRIPT.is_file(), 'stage 7 requires a build verification script'
     assert VENDOR_SYNC_SCRIPT.is_file(), 'stage 7 requires a vendor sync script for runtime importmap assets'
+    assert PYTHON_RUNNER.is_file(), 'frontend npm scripts must keep the portable Python launcher checked in'
     assert BUILD_WORKFLOW_DOC.is_file(), 'stage 7 workflow must be documented'
 
     package = json.loads(PACKAGE_JSON.read_text(encoding='utf-8'))
@@ -33,8 +35,9 @@ def test_frontend_build_toolchain_files_exist_and_are_wired_up():
     dev_dependencies = package.get('devDependencies') or {}
 
     frontend_build_script = scripts.get('frontend:build') or ''
-    assert scripts.get('frontend:vendor') == 'python scripts/sync_frontend_vendor.py'
+    assert scripts.get('frontend:vendor') == 'node scripts/run_python.mjs scripts/sync_frontend_vendor.py'
     assert 'scripts/sync_frontend_vendor.py' in frontend_build_script
+    assert 'node scripts/run_python.mjs' in frontend_build_script
     assert 'vite build --config vite.config.mjs' in frontend_build_script
     assert 'scripts/sync_frontend_build_manifest.py' in frontend_build_script
     assert scripts.get('frontend:verify:static') == 'node scripts/verify_frontend_build.mjs'

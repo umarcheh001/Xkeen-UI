@@ -113,6 +113,9 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "_bindCm6ScrollSync();" in diff_modal
     assert "@codemirror/language" in diff_modal
     assert "@lezer/highlight" in diff_modal
+    assert "function reportBackendFallback(fromKind, err)" in diff_modal
+    assert "CodeMirror diff временно недоступен, открываю сравнение через Monaco" in diff_modal
+    assert "await renderMonacoDiff(_hostEl, {" in diff_modal
     # CM6 palette must cascade to .xkeen-diff-host so var(--xk-cm-keyword) etc.
     # resolve to the shared dark-Monaco-like palette and selection stays visible.
     assert "--xk-cm-keyword: #569cd6;" in styles

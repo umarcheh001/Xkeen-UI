@@ -445,6 +445,7 @@ def test_codemirror6_importmap_template_exists_and_maps_required_packages():
 
     assert 'type="importmap"' in text
     assert 'data-xkeen-cm6-importmap="1"' in text
+    assert "vendor/npm/@codemirror/merge/dist/index.js" in text
     assert "vendor/npm/@codemirror/state/dist/index.js" in text
     assert "vendor/npm/@codemirror/view/dist/index.js" in text
     assert "vendor/npm/codemirror/dist/index.js" in text
@@ -752,6 +753,7 @@ def test_mihomo_schema_tracks_xhttp_transport_and_multiplexing_fields():
 
 def test_runtime_vendor_assets_exist_after_frontend_build():
     required = [
+        Path('xkeen-ui/static/vendor/npm/@codemirror/merge/dist/index.js'),
         Path('xkeen-ui/static/vendor/npm/@codemirror/state/dist/index.js'),
         Path('xkeen-ui/static/vendor/npm/@codemirror/view/dist/index.js'),
         Path('xkeen-ui/static/vendor/npm/codemirror/dist/index.js'),
