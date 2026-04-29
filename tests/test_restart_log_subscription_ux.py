@@ -25,7 +25,8 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
 
 def test_outbounds_subscription_refresh_relies_on_restart_log_for_changed_restarts():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
-    subs_refresh_src = outbounds_src.split("async function subsRefresh(id) {", 1)[1].split("async function subsRefreshDue() {", 1)[0]
+    refresh_marker = "async function subsRefresh("
+    subs_refresh_src = outbounds_src.split(refresh_marker, 1)[1].split("async function subsRefreshDue() {", 1)[0]
     subs_refresh_due_src = outbounds_src.split("async function subsRefreshDue() {", 1)[1]
 
     assert "const changed = !!(data.changed || data.observatory_changed);" in outbounds_src
