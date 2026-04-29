@@ -142,6 +142,8 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "btn.disabled = false;" in outbounds_src
     assert "Нет активных узлов в generated fragment." in outbounds_src
     assert "Tag prefix" in outbounds_src
+    assert "имя будет сгенерировано автоматически при сохранении" in outbounds_src
+    assert "префикс будет сгенерирован автоматически при сохранении" in outbounds_src
     assert "xk-sub-node-toggle" in outbounds_src
     assert "resetBtn.classList.add('xk-sub-icon-btn');" in outbounds_src
     assert "saveBtn.classList.add('xk-sub-icon-btn');" in outbounds_src

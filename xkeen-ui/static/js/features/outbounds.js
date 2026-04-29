@@ -3646,13 +3646,13 @@ let outboundsModuleApi = null;
                   <form id="outbounds-subscriptions-form" class="xk-sub-form">
                     <input id="outbounds-subscriptions-id" type="hidden">
                     <input id="outbounds-subscriptions-excluded-keys" type="hidden">
-                    <label class="xk-sub-span-5" data-tooltip="Короткое имя подписки в списке. Можно оставить пустым.">
+                    <label class="xk-sub-span-5" data-tooltip="Короткое имя подписки в списке. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
                       <span class="xk-pool-fieldlabel">Название</span>
-                      <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription" title="Название подписки" data-tooltip="Короткое имя подписки в списке.">
+                      <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription" title="Название подписки" data-tooltip="Короткое имя подписки в списке. Если оставить поле пустым, имя будет сгенерировано автоматически при сохранении.">
                     </label>
-                    <label class="xk-sub-span-4" data-tooltip="Префикс для generated outbound tags, например sub--node. Его удобно выбирать в LeastPing.">
+                    <label class="xk-sub-span-4" data-tooltip="Префикс для generated outbound tags, например sub--node. Его удобно выбирать в LeastPing. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
                       <span class="xk-pool-fieldlabel">Tag prefix</span>
-                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Используй его в selector/balancer LeastPing.">
+                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Используй его в selector/balancer LeastPing. Если оставить поле пустым, префикс будет сгенерирован автоматически при сохранении.">
                     </label>
                     <label class="xk-sub-span-3" data-tooltip="Локальный интервал автообновления. По умолчанию 24 часа; серверный profile-update-interval показывается как рекомендация и не перезаписывает это поле.">
                       <span class="xk-pool-fieldlabel">Обновлять, ч</span>
