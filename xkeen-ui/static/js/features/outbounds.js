@@ -2,7 +2,6 @@ import { getBackupsApi } from './backups.js';
 import { getRestartLogApi } from './restart_log.js';
 import { getRoutingApi } from './routing.js';
 import {
-  confirmXkeenAction,
   getXkeenConfigDirtyApi,
   getXkeenFilePath,
   getXkeenUiConfigShellApi,
@@ -3866,11 +3865,23 @@ let outboundsModuleApi = null;
       return { formState, resolved, validation, dirty };
     }
 
+    function subsBuildDiscardConfirmText(opts) {
+      const options = (opts && typeof opts === 'object') ? opts : {};
+      const parts = [
+        'Несохранённые изменения',
+        String(options.message || 'В форме подписки есть несохранённые изменения. Продолжить и потерять их?').trim(),
+      ];
+      const details = Array.isArray(options.details)
+        ? options.details.map((item) => String(item || '').trim()).filter(Boolean)
+        : [String(options.details || '').trim()].filter(Boolean);
+      return parts.concat(details).filter(Boolean).join('\n\n');
+    }
+
     async function subsConfirmDiscardDraft(opts) {
       const options = (opts && typeof opts === 'object') ? opts : {};
       const formState = subsReadFormState();
       if (!subsHasDirtyDraft(formState)) return true;
-      const ok = !!(await confirmXkeenAction({
+      const confirmOptions = Object.assign({}, options, {
         title: 'Несохранённые изменения',
         message: String(options.message || 'В форме подписки есть несохранённые изменения. Продолжить и потерять их?'),
         details: options.details || [
@@ -3878,11 +3889,13 @@ let outboundsModuleApi = null;
             ? 'Черновик предпросмотра и ручные исключения узлов не будут сохранены.'
             : 'Текущие правки формы не будут сохранены.',
         ],
-        okText: String(options.okText || 'Продолжить'),
-        cancelText: String(options.cancelText || 'Остаться'),
-        danger: options.danger !== false,
-        focus: 'cancel',
-      }, String(options.message || 'Продолжить?')));
+      });
+      let ok = false;
+      try {
+        ok = !!window.confirm(subsBuildDiscardConfirmText(confirmOptions));
+      } catch (e) {
+        ok = false;
+      }
       if (ok && options.restore !== false) {
         try { subsRestoreBaseline({ focus: false }); } catch (e) {}
       }
@@ -4045,7 +4058,10 @@ let outboundsModuleApi = null;
                         <input id="outbounds-subscriptions-url" class="xray-log-filter" type="url" placeholder="https://..." title="URL подписки" data-tooltip="Вставь HTTP(S) URL подписки. Панель скачает nodes и создаст отдельный outbounds-фрагмент.">
                         <span id="outbounds-subscriptions-url-note" class="xk-sub-field-note" hidden></span>
                       </label>
-                      <button type="button" id="outbounds-subscriptions-preview-btn" class="btn-secondary btn-compact xk-sub-url-preview" title="Скачать подписку (предпросмотр)" data-tooltip="Скачать подписку и показать узлы в карточке справа без сохранения и без перезапуска xkeen. Используй фильтры и × у узла, чтобы исключить лишние, потом нажми «Сохранить».">Скачать подписку</button>
+                      <div class="xk-sub-url-action">
+                        <span class="xk-pool-fieldlabel xk-sub-url-action-label" aria-hidden="true">Предпросмотр</span>
+                        <button type="button" id="outbounds-subscriptions-preview-btn" class="btn-secondary btn-compact xk-sub-url-preview" title="Скачать подписку (предпросмотр)" data-tooltip="Скачать подписку и показать узлы в карточке справа без сохранения и без перезапуска xkeen. Используй фильтры и × у узла, чтобы исключить лишние, потом нажми «Сохранить».">Скачать подписку</button>
+                      </div>
                     </div>
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по имени ноды из подписки. Например: Germany|Netherlands|SG. Пусто — без фильтра.">
                       <span class="xk-pool-fieldlabel">Имя</span>

@@ -207,6 +207,7 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
 def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")
+    modal_src = _read("xkeen-ui/static/js/ui/modal.js")
 
     assert "nameNote: 'outbounds-subscriptions-name-note'" in outbounds_src
     assert "tagNote: 'outbounds-subscriptions-tag-note'" in outbounds_src
@@ -220,6 +221,9 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert "function subsSyncSubscriptionFormState() {" in outbounds_src
     assert "function subsConfirmDiscardDraft(opts) {" in outbounds_src
     assert "function subsRestoreBaseline(options) {" in outbounds_src
+    assert "window.confirm(subsBuildDiscardConfirmText(confirmOptions))" in outbounds_src
+    assert 'class="xk-sub-url-action"' in outbounds_src
+    assert 'class="xk-pool-fieldlabel xk-sub-url-action-label"' in outbounds_src
     assert "saveBtn.disabled = !validation.valid || _subscriptionSaveBusy;" in outbounds_src
     assert "previewBtn.disabled = !validation.valid || _subscriptionPreviewBusy;" in outbounds_src
     assert "badge.textContent = _subscriptionPreview" in outbounds_src
@@ -236,3 +240,7 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert ".xk-sub-field-note {" in styles_src
     assert ".xk-sub-field-note.is-error {" in styles_src
     assert ".xk-sub-icon-btn.btn-compact.is-dirty {" in styles_src
+    assert ".xk-sub-form .xk-sub-url-action {" in styles_src
+    assert ".xk-sub-form .xk-sub-url-action-label {" in styles_src
+    assert ".xk-sub-form .xk-sub-url-row {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;" in styles_src
+    assert "const floor = isConfirm ? Math.max(Z_BASE + 40, 130) : Z_BASE;" in modal_src

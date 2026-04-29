@@ -451,11 +451,10 @@
 
   function bringModalToFront(modalEl) {
     if (!modalEl) return;
-    // Confirm modal uses z-index:70 in CSS; keep it above others.
     const isConfirm = (modalEl.id === 'confirm-modal');
-    if (isConfirm) return;
     try {
-      _z = Math.max(_z + 1, Z_BASE);
+      const floor = isConfirm ? Math.max(Z_BASE + 40, 130) : Z_BASE;
+      _z = Math.max(_z + 1, floor);
       modalEl.style.zIndex = String(_z);
     } catch (e) {}
   }
