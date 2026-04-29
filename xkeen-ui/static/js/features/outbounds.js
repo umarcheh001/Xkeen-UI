@@ -3547,6 +3547,7 @@ let outboundsModuleApi = null;
       excludedKeys: 'outbounds-subscriptions-excluded-keys',
       interval: 'outbounds-subscriptions-interval',
       intervalNote: 'outbounds-subscriptions-interval-note',
+      intervalApply: 'outbounds-subscriptions-interval-apply-btn',
       enabled: 'outbounds-subscriptions-enabled',
       ping: 'outbounds-subscriptions-ping',
       refreshNow: 'outbounds-subscriptions-refresh-now',
@@ -3794,6 +3795,80 @@ let outboundsModuleApi = null;
       ).trim();
     }
 
+    function subsCurrentIntervalHours(formState) {
+      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      const raw = String(state.interval_raw || '').trim();
+      if (!raw) return SUB_DEFAULT_INTERVAL_HOURS;
+      const value = Number(raw);
+      if (!Number.isFinite(value) || !Number.isInteger(value) || value < 1 || value > 168) return null;
+      return value;
+    }
+
+    function subsProviderIntervalHours(formState) {
+      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      const currentUrl = String(state.url || '').trim();
+      const previewUrl = String((_subscriptionPreview && _subscriptionPreview.url) || '').trim();
+      if (_subscriptionPreview && currentUrl && currentUrl === previewUrl) {
+        const previewHours = Number(_subscriptionPreview.profileUpdateIntervalHours || 0);
+        if (Number.isFinite(previewHours) && previewHours > 0) return previewHours;
+      }
+      const currentId = String(state.id || _subscriptionEditId || '').trim();
+      if (!currentId) return 0;
+      const saved = subsFindById(currentId);
+      if (!saved) return 0;
+      const savedUrl = String(saved.url || '').trim();
+      if (currentUrl && savedUrl && currentUrl !== savedUrl) return 0;
+      const savedHours = Number(saved.profile_update_interval_hours || 0);
+      return Number.isFinite(savedHours) && savedHours > 0 ? savedHours : 0;
+    }
+
+    function subsSyncIntervalRecommendation(formState, validation) {
+      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      const currentInterval = subsCurrentIntervalHours(state);
+      const providerHours = subsProviderIntervalHours(state);
+      const applyBtn = $(SUB_IDS.intervalApply);
+      const canApply = providerHours > 0 && (!Number.isFinite(currentInterval) || currentInterval !== providerHours);
+
+      if (applyBtn) {
+        applyBtn.hidden = !canApply;
+        applyBtn.disabled = !canApply;
+        applyBtn.textContent = canApply ? `${providerHours} ч` : '';
+        try {
+          if (canApply) {
+            applyBtn.setAttribute('data-hours', String(providerHours));
+            const tooltip = `Принять рекомендацию провайдера: обновлять подписку каждые ${providerHours} ч.`;
+            applyBtn.setAttribute('title', tooltip);
+            applyBtn.setAttribute('data-tooltip', tooltip);
+            applyBtn.setAttribute('aria-label', tooltip);
+            applyBtn.classList.add('is-provider');
+          } else {
+            applyBtn.removeAttribute('data-hours');
+            applyBtn.removeAttribute('title');
+            applyBtn.removeAttribute('data-tooltip');
+            applyBtn.removeAttribute('aria-label');
+            applyBtn.classList.remove('is-provider');
+          }
+        } catch (e) {}
+      }
+
+      let noteText = '';
+      let noteKind = '';
+      if (validation && validation.errors && validation.errors.interval) {
+        noteText = validation.errors.interval;
+        noteKind = 'error';
+      } else if (providerHours > 0) {
+        if (Number.isFinite(currentInterval) && currentInterval === providerHours) {
+          noteText = `Рекомендовано: ${providerHours} ч`;
+          noteKind = 'info';
+        }
+      } else if (!state.interval_raw) {
+        noteText = `По умолчанию: ${SUB_DEFAULT_INTERVAL_HOURS} ч`;
+        noteKind = 'info';
+      }
+
+      subsSetFieldNote(SUB_IDS.intervalNote, noteText, noteKind);
+    }
+
     function subsNameNote(formState, resolved) {
       const state = formState || subsReadFormState();
       const info = resolved || subsResolveDraftDefaults(state);
@@ -3842,11 +3917,7 @@ let outboundsModuleApi = null;
       subsSetFieldNote(SUB_IDS.nameNote, nameNote.text, nameNote.kind);
       subsSetFieldNote(SUB_IDS.tagNote, tagNote.text, tagNote.kind);
       subsSetFieldNote(SUB_IDS.urlNote, validation.errors.url, validation.errors.url ? 'error' : '');
-      subsSetFieldNote(
-        SUB_IDS.intervalNote,
-        validation.errors.interval || (!formState.interval_raw ? `Пусто → будет использовано ${SUB_DEFAULT_INTERVAL_HOURS} ч.` : ''),
-        validation.errors.interval ? 'error' : (!formState.interval_raw ? 'info' : '')
-      );
+      subsSyncIntervalRecommendation(formState, validation);
       subsSetFieldNote(SUB_IDS.nameFilterNote, validation.errors.nameFilter, validation.errors.nameFilter ? 'error' : '');
       subsSetFieldNote(SUB_IDS.typeFilterNote, validation.errors.typeFilter, validation.errors.typeFilter ? 'error' : '');
       subsSetFieldNote(SUB_IDS.transportFilterNote, validation.errors.transportFilter, validation.errors.transportFilter ? 'error' : '');
@@ -4047,10 +4118,15 @@ let outboundsModuleApi = null;
                       <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Используй его в selector/balancer LeastPing. Если оставить поле пустым, префикс будет сгенерирован автоматически при сохранении.">
                       <span id="outbounds-subscriptions-tag-note" class="xk-sub-field-note" hidden></span>
                     </label>
-                    <label class="xk-sub-span-3" data-tooltip="Локальный интервал автообновления. По умолчанию 24 часа; серверный profile-update-interval показывается как рекомендация и не перезаписывает это поле.">
+                    <label class="xk-sub-span-3 xk-sub-interval-field" data-tooltip="Локальный интервал автообновления. По умолчанию 24 часа; серверный profile-update-interval показывается как рекомендация и не перезаписывает это поле.">
                       <span class="xk-pool-fieldlabel">Обновлять, ч</span>
-                      <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" data-tooltip="Как часто панель будет обновлять подписку: от 1 до 168 часов. Рекомендация провайдера не меняет выбранное значение.">
-                      <span id="outbounds-subscriptions-interval-note" class="xk-sub-field-note" hidden></span>
+                      <div class="xk-sub-interval-inline">
+                        <input id="outbounds-subscriptions-interval" class="xray-log-filter" type="number" min="1" max="168" step="1" value="${SUB_DEFAULT_INTERVAL_HOURS}" title="Интервал обновления" data-tooltip="Как часто панель будет обновлять подписку: от 1 до 168 часов. Рекомендация провайдера не меняет выбранное значение.">
+                        <button type="button" id="outbounds-subscriptions-interval-apply-btn" class="btn-secondary btn-compact xk-sub-interval-apply" hidden></button>
+                      </div>
+                      <div class="xk-sub-interval-meta">
+                        <span id="outbounds-subscriptions-interval-note" class="xk-sub-field-note xk-sub-interval-note-inline" hidden></span>
+                      </div>
                     </label>
                     <div class="xk-sub-wide xk-sub-url-row">
                       <label class="xk-sub-url-field" data-tooltip="HTTP(S) URL подписки. Поддерживаются share-ссылки, base64 и Xray JSON outbounds.">
@@ -5245,6 +5321,7 @@ let outboundsModuleApi = null;
           sourceCount: Number(data.source_count || 0),
           filteredOutCount: Number(data.filtered_out_count || 0),
           warnings: Array.isArray(data.warnings) ? data.warnings : [],
+          profileUpdateIntervalHours: Number(data.profile_update_interval_hours || 0),
           tagPrefix: String(data.tag_prefix || payload.tag || ''),
           ts: Date.now(),
         };
@@ -5617,6 +5694,18 @@ let outboundsModuleApi = null;
         });
         if (el.dataset) el.dataset.xkSubFilterBound = '1';
       });
+      const intervalApplyBtn = $(SUB_IDS.intervalApply);
+      if (intervalApplyBtn && !(intervalApplyBtn.dataset && intervalApplyBtn.dataset.xkSubApplyBound === '1')) {
+        intervalApplyBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const hours = Number(intervalApplyBtn.getAttribute('data-hours') || 0);
+          if (!Number.isFinite(hours) || hours <= 0) return;
+          try { $(SUB_IDS.interval).value = String(hours); } catch (e2) {}
+          try { subsSyncSubscriptionFormState(); } catch (e3) {}
+          subsSetStatus(`Интервал обновления установлен по рекомендации провайдера: ${hours} ч.`, false, true);
+        });
+        if (intervalApplyBtn.dataset) intervalApplyBtn.dataset.xkSubApplyBound = '1';
+      }
       if (!(modal.dataset && modal.dataset.xkSubResizeBound === '1')) {
         window.addEventListener('resize', () => {
           const m = $(SUB_IDS.modal);

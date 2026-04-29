@@ -8068,6 +8068,78 @@ html[data-theme="light"] .xk-sub-draft-badge {
   color: #fca5a5;
 }
 
+.xk-sub-interval-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-height: 0;
+  margin-top: 3px;
+}
+
+.xk-sub-interval-note-inline {
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  margin-top: 0;
+  flex: 0 1 auto;
+  font-size: calc(9.5px * var(--xk-font-scale));
+  line-height: 1.15;
+}
+
+.xk-sub-interval-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.xk-sub-interval-field .xk-sub-interval-inline .xray-log-filter {
+  flex: 0 0 72px;
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+}
+
+.xk-sub-interval-apply {
+  align-self: center;
+  margin-top: 0;
+  min-height: 28px;
+  height: 28px;
+  min-width: 0;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: calc(10px * var(--xk-font-scale));
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.xk-sub-interval-apply[hidden] {
+  display: none;
+}
+
+.xk-sub-interval-apply.is-provider {
+  border-color: rgba(251, 191, 36, 0.44);
+  background:
+    linear-gradient(180deg, rgba(251, 191, 36, 0.20), rgba(245, 158, 11, 0.12)),
+    rgba(120, 53, 15, 0.26);
+  color: #fde68a;
+  box-shadow:
+    0 0 0 1px rgba(245, 158, 11, 0.08),
+    0 3px 10px rgba(245, 158, 11, 0.14);
+}
+
+.xk-sub-interval-apply.is-provider:hover {
+  border-color: rgba(252, 211, 77, 0.58);
+  background:
+    linear-gradient(180deg, rgba(252, 211, 77, 0.24), rgba(245, 158, 11, 0.15)),
+    rgba(146, 64, 14, 0.30);
+  color: #fef3c7;
+}
+
 .xk-sub-actions {
   justify-content: flex-end;
 }
@@ -9207,6 +9279,11 @@ html[data-theme="light"] .xk-sub-draft-badge {
   justify-content: center;
 }
 
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-interval-inline,
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-interval-inline {
+  flex-wrap: wrap;
+}
+
 @media (max-width: 720px) {
   #outbounds-pool-modal {
     padding: 6px;
@@ -9281,6 +9358,10 @@ html[data-theme="light"] .xk-sub-draft-badge {
   .xk-sub-form .xk-sub-url-preview {
     width: 100%;
     justify-content: center;
+  }
+
+  .xk-sub-interval-inline {
+    flex-wrap: wrap;
   }
 
   .xk-sub-brief {
@@ -9511,6 +9592,25 @@ html[data-theme="light"] .xk-sub-field-note.is-info {
 
 html[data-theme="light"] .xk-sub-field-note.is-error {
   color: #b91c1c;
+}
+
+html[data-theme="light"] .xk-sub-interval-apply.is-provider {
+  border-color: rgba(217, 119, 6, 0.34);
+  background:
+    linear-gradient(180deg, rgba(254, 243, 199, 0.98), rgba(253, 230, 138, 0.90)),
+    rgba(254, 243, 199, 0.82);
+  color: #92400e;
+  box-shadow:
+    0 0 0 1px rgba(217, 119, 6, 0.05),
+    0 3px 10px rgba(245, 158, 11, 0.10);
+}
+
+html[data-theme="light"] .xk-sub-interval-apply.is-provider:hover {
+  border-color: rgba(217, 119, 6, 0.46);
+  background:
+    linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(253, 230, 138, 0.94)),
+    rgba(255, 251, 235, 0.86);
+  color: #78350f;
 }
 
 html[data-theme="light"] .xk-sub-icon-btn.btn-compact.is-busy {

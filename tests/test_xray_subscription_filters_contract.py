@@ -27,7 +27,7 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert 'xk-sub-filter-field xk-sub-span-4' in outbounds_src
     assert 'class="xk-sub-span-5"' in outbounds_src
     assert 'class="xk-sub-span-4"' in outbounds_src
-    assert 'class="xk-sub-span-3"' in outbounds_src
+    assert 'class="xk-sub-span-3 xk-sub-interval-field"' in outbounds_src
     assert "name_filter: String(($(SUB_IDS.nameFilter) && $(SUB_IDS.nameFilter).value) || '').trim()," in outbounds_src
     assert "type_filter: String(($(SUB_IDS.typeFilter) && $(SUB_IDS.typeFilter).value) || '').trim()," in outbounds_src
     assert "routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback'," in outbounds_src
@@ -213,17 +213,23 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert "tagNote: 'outbounds-subscriptions-tag-note'" in outbounds_src
     assert "urlNote: 'outbounds-subscriptions-url-note'" in outbounds_src
     assert "intervalNote: 'outbounds-subscriptions-interval-note'" in outbounds_src
+    assert "intervalApply: 'outbounds-subscriptions-interval-apply-btn'" in outbounds_src
     assert "nameFilterNote: 'outbounds-subscriptions-name-filter-note'" in outbounds_src
     assert "typeFilterNote: 'outbounds-subscriptions-type-filter-note'" in outbounds_src
     assert "transportFilterNote: 'outbounds-subscriptions-transport-filter-note'" in outbounds_src
     assert "function subsResolveDraftDefaults(formState) {" in outbounds_src
     assert "function subsValidateFormState(formState) {" in outbounds_src
+    assert "function subsProviderIntervalHours(formState) {" in outbounds_src
+    assert "function subsSyncIntervalRecommendation(formState, validation) {" in outbounds_src
     assert "function subsSyncSubscriptionFormState() {" in outbounds_src
     assert "function subsConfirmDiscardDraft(opts) {" in outbounds_src
     assert "function subsRestoreBaseline(options) {" in outbounds_src
     assert "window.confirm(subsBuildDiscardConfirmText(confirmOptions))" in outbounds_src
     assert 'class="xk-sub-url-action"' in outbounds_src
     assert 'class="xk-pool-fieldlabel xk-sub-url-action-label"' in outbounds_src
+    assert 'id="outbounds-subscriptions-interval-apply-btn"' in outbounds_src
+    assert 'class="xk-sub-span-3 xk-sub-interval-field"' in outbounds_src
+    assert 'class="xk-sub-interval-inline"' in outbounds_src
     assert "saveBtn.disabled = !validation.valid || _subscriptionSaveBusy;" in outbounds_src
     assert "previewBtn.disabled = !validation.valid || _subscriptionPreviewBusy;" in outbounds_src
     assert "badge.textContent = _subscriptionPreview" in outbounds_src
@@ -232,6 +238,12 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert "Пустое поле сохранит текущий prefix:" in outbounds_src
     assert "Оставь поле пустым, и имя появится после ввода URL." in outbounds_src
     assert "После сохранения будет использован prefix:" in outbounds_src
+    assert "applyBtn.textContent = canApply ? `${providerHours} ч` : '';" in outbounds_src
+    assert "Рекомендовано: ${providerHours} ч" in outbounds_src
+    assert "Принять рекомендацию провайдера: обновлять подписку каждые ${providerHours} ч." in outbounds_src
+    assert "applyBtn.classList.add('is-provider');" in outbounds_src
+    assert "profileUpdateIntervalHours: Number(data.profile_update_interval_hours || 0)," in outbounds_src
+    assert "Интервал обновления установлен по рекомендации провайдера:" in outbounds_src
     assert "Закрыть окно подписок и потерять текущий черновик?" in outbounds_src
     assert "Очистить форму подписки и потерять текущий черновик?" in outbounds_src
     assert "Обновить due-подписки и потерять текущий черновик формы?" in outbounds_src
@@ -239,6 +251,11 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert "Некорректный regex для" in outbounds_src
     assert ".xk-sub-field-note {" in styles_src
     assert ".xk-sub-field-note.is-error {" in styles_src
+    assert ".xk-sub-interval-apply {" in styles_src
+    assert ".xk-sub-interval-apply.is-provider {" in styles_src
+    assert ".xk-sub-interval-inline {" in styles_src
+    assert ".xk-sub-interval-field .xk-sub-interval-inline .xray-log-filter {" in styles_src
+    assert ".xk-sub-interval-note-inline {" in styles_src
     assert ".xk-sub-icon-btn.btn-compact.is-dirty {" in styles_src
     assert ".xk-sub-form .xk-sub-url-action {" in styles_src
     assert ".xk-sub-form .xk-sub-url-action-label {" in styles_src
