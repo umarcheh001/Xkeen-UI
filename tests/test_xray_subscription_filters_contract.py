@@ -323,9 +323,10 @@ def test_xray_subscription_modal_surfaces_refresh_diagnostics_details():
     assert "function subsRenderDiagnostics() {" in outbounds_src
     assert "__xkDiagnosticsKind: 'preview'" in outbounds_src
     assert "errors: Array.isArray(data.errors) ? data.errors : []," in outbounds_src
-    assert "Фильтрами скрыто:" in outbounds_src
+    assert "Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и ошибки узлов." in outbounds_src
     assert "Ошибка refresh" in outbounds_src
     assert "Последнее обновление прошло без ошибок и дополнительных предупреждений." in outbounds_src
+    assert "Сводка" not in outbounds_src
     assert ".xk-sub-diagnostics {" in styles_src
     assert ".xk-sub-diag-head {" in styles_src
     assert ".xk-sub-diag-pills {" in styles_src
