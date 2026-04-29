@@ -4215,7 +4215,7 @@ let outboundsModuleApi = null;
                       <div id="outbounds-subscriptions-diagnostics-pills" class="xk-sub-diag-pills"></div>
                     </div>
                     <div id="outbounds-subscriptions-diagnostics-body" class="xk-sub-diag-body">
-                      <div class="xk-sub-diag-empty">Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и сводку по фильтрам.</div>
+                      <div class="xk-sub-diag-empty">Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и ошибки узлов.</div>
                     </div>
                   </div>
                   <div id="outbounds-subscriptions-status" class="modal-hint xk-sub-status"></div>
@@ -4805,67 +4805,16 @@ let outboundsModuleApi = null;
       const warnings = subsStringList(s.last_warnings);
       const errors = subsFormatResultErrors(s.last_errors);
       const refreshError = String(s.last_error || '').trim();
-      const lastUpdateTs = subsLastUpdateTs(s);
-      const nextUpdateTs = subsTimestamp(s.next_update_ts);
-      const sourceCount = Number(s.last_source_count || 0);
-      const nodeCount = Array.isArray(s.last_nodes) ? s.last_nodes.length : 0;
-      const activeCountRaw = Number(s.last_count || 0);
-      const activeCount = Number.isFinite(activeCountRaw) && activeCountRaw >= 0 ? activeCountRaw : nodeCount;
-      const filteredOutCount = Number(s.last_filtered_out_count || 0);
-      const filterText = subsFilterSummary(s);
-      const manualExcludedCount = Array.isArray(s.excluded_node_keys)
-        ? s.excluded_node_keys.map((item) => String(item || '').trim()).filter(Boolean).length
-        : 0;
-      const providerHours = Number(s.profile_update_interval_hours || 0);
       const title = String(s.name || s.tag || s.id || (kind === 'preview' ? 'Черновик' : 'Подписка')).trim() || 'Подписка';
       const pills = [];
       if (refreshError || s.last_ok === false) pills.push({ label: 'refresh error', tone: 'error', title: refreshError || 'Последнее обновление завершилось ошибкой.' });
       if (warnings.length) pills.push({ label: `${warnings.length} warning`, tone: 'warning', title: warnings[0] });
       if (errors.length) pills.push({ label: `${errors.length} parse`, tone: 'error-list', title: errors[0] });
-      if (filteredOutCount > 0) pills.push({ label: `скрыто ${filteredOutCount}`, tone: 'filtered', title: `Фильтрами скрыто ${filteredOutCount} узл.` });
-
-      const summaryLines = [];
-      if (kind === 'preview') {
-        const previewTs = Number(s.preview_ts || 0);
-        if (previewTs > 0) {
-          try {
-            summaryLines.push(`Черновик скачан: ${new Date(previewTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}.`);
-          } catch (e) {
-            summaryLines.push('Черновик предпросмотра активен.');
-          }
-        } else {
-          summaryLines.push('Черновик предпросмотра активен.');
-        }
-      } else if (lastUpdateTs > 0) {
-        summaryLines.push(`Последнее обновление: ${subsFormatTime(lastUpdateTs)}.`);
-      } else {
-        summaryLines.push('Подписка ещё не обновлялась.');
-      }
-      if (nextUpdateTs > 0 && kind !== 'preview') {
-        summaryLines.push(`Следующее обновление: ${subsFormatTime(nextUpdateTs)}${subsIsDue(s, subsNowTs()) ? ' · due' : ''}.`);
-      }
-      if (sourceCount > 0) {
-        summaryLines.push(`После фильтров: ${activeCount} из ${sourceCount} узлов.`);
-      } else if (activeCount > 0) {
-        summaryLines.push(`Активных узлов: ${activeCount}.`);
-      }
-      if (filteredOutCount > 0) {
-        summaryLines.push(`Фильтрами скрыто: ${filteredOutCount}.`);
-      }
-      if (manualExcludedCount > 0) {
-        summaryLines.push(`Исключено вручную: ${manualExcludedCount}.`);
-      }
-      if (providerHours > 0) {
-        summaryLines.push(`Рекомендация провайдера: ${providerHours} ч.`);
-      }
-      summaryLines.push(`Интервал: ${subsIntervalSummary(s)}.`);
-      summaryLines.push(filterText ? `Фильтры: ${filterText}.` : 'Фильтры: не заданы.');
 
       return {
         kind,
         title,
         pills,
-        summaryLines,
         warnings,
         errors,
         refreshError,
@@ -4883,7 +4832,7 @@ let outboundsModuleApi = null;
       if (!target) {
         titleEl.textContent = 'Выбери подписку';
         pillsEl.innerHTML = '';
-        bodyEl.innerHTML = '<div class="xk-sub-diag-empty">Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и сводку по фильтрам.</div>';
+        bodyEl.innerHTML = '<div class="xk-sub-diag-empty">Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и ошибки узлов.</div>';
         return;
       }
 
@@ -4904,12 +4853,7 @@ let outboundsModuleApi = null;
         return `<span class="xk-sub-diag-pill is-${tone}" title="${tooltip}" data-tooltip="${tooltip}">${label}</span>`;
       }).join('');
 
-      const summaryItems = snapshot.summaryLines
-        .map((line) => `<li>${escapeHtml(String(line || ''))}</li>`)
-        .join('');
-      const groups = [
-        `<div class="xk-sub-diag-group is-neutral"><div class="xk-sub-diag-label">Сводка</div><ul class="xk-sub-diag-list">${summaryItems}</ul></div>`,
-      ];
+      const groups = [];
 
       if (snapshot.refreshError) {
         groups.push(
