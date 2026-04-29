@@ -8477,6 +8477,145 @@ html[data-theme="light"] .xk-sub-draft-badge {
   white-space: nowrap;
 }
 
+.xk-sub-diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(8, 15, 28, 0.72), rgba(3, 10, 22, 0.78)),
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.08), transparent 46%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 0 1px rgba(148, 163, 184, 0.03);
+}
+
+.xk-sub-diag-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.xk-sub-diag-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.xk-sub-diag-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.34);
+  color: #cbd5e1;
+  font-size: calc(10px * var(--xk-font-scale));
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.xk-sub-diag-pill.is-error {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+}
+
+.xk-sub-diag-pill.is-warning {
+  border-color: rgba(251, 191, 36, 0.32);
+  background: rgba(120, 53, 15, 0.24);
+  color: #fde68a;
+}
+
+.xk-sub-diag-pill.is-error-list {
+  border-color: rgba(251, 146, 60, 0.30);
+  background: rgba(124, 45, 18, 0.24);
+  color: #fdba74;
+}
+
+.xk-sub-diag-pill.is-filtered {
+  border-color: rgba(148, 163, 184, 0.24);
+  background: rgba(30, 41, 59, 0.48);
+  color: #cbd5e1;
+}
+
+.xk-sub-diag-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 228px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.xk-sub-diag-group {
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(2, 6, 23, 0.24);
+}
+
+.xk-sub-diag-group.is-error {
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(69, 10, 10, 0.22);
+}
+
+.xk-sub-diag-group.is-warning {
+  border-color: rgba(251, 191, 36, 0.22);
+  background: rgba(120, 53, 15, 0.16);
+}
+
+.xk-sub-diag-group.is-error-list {
+  border-color: rgba(251, 146, 60, 0.22);
+  background: rgba(124, 45, 18, 0.15);
+}
+
+.xk-sub-diag-label {
+  margin-bottom: 6px;
+  color: #94a3b8;
+  font-size: calc(10px * var(--xk-font-scale));
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.xk-sub-diag-list {
+  margin: 0;
+  padding-left: 16px;
+  color: #dbeafe;
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.35;
+}
+
+.xk-sub-diag-list li + li {
+  margin-top: 4px;
+}
+
+.xk-sub-diag-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #fecaca;
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.35;
+}
+
+.xk-sub-diag-empty {
+  padding: 10px 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.18);
+  border-radius: 10px;
+  color: #94a3b8;
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.35;
+}
+
 .xk-sub-status {
   min-height: 18px;
   color: #a8b3c5;
@@ -9552,6 +9691,76 @@ html[data-theme="light"] .xk-sub-badge.is-filtered {
   border-color: rgba(172, 188, 214, 0.42);
   background: rgba(241, 245, 249, 0.96);
   color: #475569;
+}
+
+html[data-theme="light"] .xk-sub-diagnostics {
+  border-color: rgba(172, 188, 214, 0.42);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.10), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 248, 255, 0.94));
+}
+
+html[data-theme="light"] .xk-sub-diag-pill {
+  border-color: rgba(172, 188, 214, 0.42);
+  background: rgba(255, 255, 255, 0.92);
+  color: #465975;
+}
+
+html[data-theme="light"] .xk-sub-diag-pill.is-error {
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(254, 242, 242, 0.96);
+  color: #991b1b;
+}
+
+html[data-theme="light"] .xk-sub-diag-pill.is-warning {
+  border-color: rgba(217, 119, 6, 0.26);
+  background: rgba(254, 243, 199, 0.96);
+  color: #92400e;
+}
+
+html[data-theme="light"] .xk-sub-diag-pill.is-error-list {
+  border-color: rgba(234, 88, 12, 0.24);
+  background: rgba(255, 237, 213, 0.96);
+  color: #9a3412;
+}
+
+html[data-theme="light"] .xk-sub-diag-pill.is-filtered {
+  border-color: rgba(172, 188, 214, 0.42);
+  background: rgba(241, 245, 249, 0.96);
+  color: #475569;
+}
+
+html[data-theme="light"] .xk-sub-diag-group {
+  border-color: rgba(172, 188, 214, 0.38);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+html[data-theme="light"] .xk-sub-diag-group.is-error {
+  border-color: rgba(239, 68, 68, 0.22);
+  background: rgba(254, 242, 242, 0.90);
+}
+
+html[data-theme="light"] .xk-sub-diag-group.is-warning {
+  border-color: rgba(217, 119, 6, 0.22);
+  background: rgba(255, 251, 235, 0.94);
+}
+
+html[data-theme="light"] .xk-sub-diag-group.is-error-list {
+  border-color: rgba(234, 88, 12, 0.20);
+  background: rgba(255, 237, 213, 0.92);
+}
+
+html[data-theme="light"] .xk-sub-diag-label,
+html[data-theme="light"] .xk-sub-diag-empty {
+  color: #465975;
+}
+
+html[data-theme="light"] .xk-sub-diag-list {
+  color: #1d2b44;
+}
+
+html[data-theme="light"] .xk-sub-diag-pre {
+  color: #991b1b;
 }
 
 html[data-theme="light"] .xk-sub-interval-note {

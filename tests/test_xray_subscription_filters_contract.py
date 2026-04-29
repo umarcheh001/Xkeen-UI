@@ -302,3 +302,38 @@ def test_xray_subscription_list_surfaces_operational_status_badges():
     assert "html[data-theme=\"light\"] .xk-sub-badge {" in styles_src
     assert "html[data-theme=\"light\"] .xk-sub-badge.is-error {" in styles_src
     assert "html[data-theme=\"light\"] .xk-sub-badge.is-due {" in styles_src
+
+
+def test_xray_subscription_modal_surfaces_refresh_diagnostics_details():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    styles_src = _read("xkeen-ui/static/styles.css")
+
+    assert "diagnostics: 'outbounds-subscriptions-diagnostics'" in outbounds_src
+    assert "diagnosticsTitle: 'outbounds-subscriptions-diagnostics-title'" in outbounds_src
+    assert "diagnosticsPills: 'outbounds-subscriptions-diagnostics-pills'" in outbounds_src
+    assert "diagnosticsBody: 'outbounds-subscriptions-diagnostics-body'" in outbounds_src
+    assert 'id="outbounds-subscriptions-diagnostics"' in outbounds_src
+    assert 'id="outbounds-subscriptions-diagnostics-title"' in outbounds_src
+    assert 'id="outbounds-subscriptions-diagnostics-pills"' in outbounds_src
+    assert 'id="outbounds-subscriptions-diagnostics-body"' in outbounds_src
+    assert "function subsStringList(value) {" in outbounds_src
+    assert "function subsFormatResultErrors(items) {" in outbounds_src
+    assert "function subsActiveDiagnosticsTarget() {" in outbounds_src
+    assert "function subsDiagnosticsSnapshot(sub) {" in outbounds_src
+    assert "function subsRenderDiagnostics() {" in outbounds_src
+    assert "__xkDiagnosticsKind: 'preview'" in outbounds_src
+    assert "errors: Array.isArray(data.errors) ? data.errors : []," in outbounds_src
+    assert "Фильтрами скрыто:" in outbounds_src
+    assert "Ошибка refresh" in outbounds_src
+    assert "Последнее обновление прошло без ошибок и дополнительных предупреждений." in outbounds_src
+    assert ".xk-sub-diagnostics {" in styles_src
+    assert ".xk-sub-diag-head {" in styles_src
+    assert ".xk-sub-diag-pills {" in styles_src
+    assert ".xk-sub-diag-pill {" in styles_src
+    assert ".xk-sub-diag-pill.is-warning {" in styles_src
+    assert ".xk-sub-diag-group {" in styles_src
+    assert ".xk-sub-diag-pre {" in styles_src
+    assert ".xk-sub-diag-empty {" in styles_src
+    assert "html[data-theme=\"light\"] .xk-sub-diagnostics {" in styles_src
+    assert "html[data-theme=\"light\"] .xk-sub-diag-pill.is-error {" in styles_src
+    assert "html[data-theme=\"light\"] .xk-sub-diag-group.is-warning {" in styles_src

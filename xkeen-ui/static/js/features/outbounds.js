@@ -3557,6 +3557,10 @@ let outboundsModuleApi = null;
       refreshDue: 'outbounds-subscriptions-refresh-due-btn',
       tbody: 'outbounds-subscriptions-tbody',
       empty: 'outbounds-subscriptions-empty',
+      diagnostics: 'outbounds-subscriptions-diagnostics',
+      diagnosticsTitle: 'outbounds-subscriptions-diagnostics-title',
+      diagnosticsPills: 'outbounds-subscriptions-diagnostics-pills',
+      diagnosticsBody: 'outbounds-subscriptions-diagnostics-body',
       status: 'outbounds-subscriptions-status',
       summary: 'outbounds-subscriptions-summary',
       nodesPanel: 'outbounds-subscriptions-nodes-panel',
@@ -3932,6 +3936,7 @@ let outboundsModuleApi = null;
         previewBtn.disabled = !validation.valid || _subscriptionPreviewBusy;
       }
       try { subsUpdateDraftBadge(formState, dirty); } catch (e) {}
+      try { subsRenderDiagnostics(); } catch (e2) {}
 
       return { formState, resolved, validation, dirty };
     }
@@ -4008,7 +4013,8 @@ let outboundsModuleApi = null;
       try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
       try { subsSyncSelection(); } catch (e) {}
       try { subsRenderNodeList(); } catch (e) {}
-      try { subsSyncSubscriptionFormState(); } catch (e) {}
+      try { subsRenderDiagnostics(); } catch (e2) {}
+      try { subsSyncSubscriptionFormState(); } catch (e3) {}
       return true;
     }
 
@@ -4199,6 +4205,18 @@ let outboundsModuleApi = null;
                       <tbody id="outbounds-subscriptions-tbody"></tbody>
                     </table>
                     <div id="outbounds-subscriptions-empty" class="xk-pool-empty">Подписок пока нет.</div>
+                  </div>
+                  <div id="outbounds-subscriptions-diagnostics" class="xk-sub-diagnostics">
+                    <div class="xk-sub-diag-head">
+                      <div>
+                        <div class="xk-pool-kicker">Диагностика</div>
+                        <div id="outbounds-subscriptions-diagnostics-title" class="terminal-menu-title" style="margin:0;">Выбери подписку</div>
+                      </div>
+                      <div id="outbounds-subscriptions-diagnostics-pills" class="xk-sub-diag-pills"></div>
+                    </div>
+                    <div id="outbounds-subscriptions-diagnostics-body" class="xk-sub-diag-body">
+                      <div class="xk-sub-diag-empty">Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и сводку по фильтрам.</div>
+                    </div>
                   </div>
                   <div id="outbounds-subscriptions-status" class="modal-hint xk-sub-status"></div>
                 </section>
@@ -4728,6 +4746,195 @@ let outboundsModuleApi = null;
       return badges;
     }
 
+    function subsStringList(value) {
+      if (Array.isArray(value)) {
+        return value.map((item) => String(item || '').trim()).filter(Boolean);
+      }
+      const text = String(value || '').trim();
+      return text ? [text] : [];
+    }
+
+    function subsFormatResultErrors(items) {
+      return (Array.isArray(items) ? items : [])
+        .map((item) => {
+          if (typeof item === 'string') return String(item || '').trim();
+          if (!item || typeof item !== 'object') return '';
+          const idx = Number(item.idx);
+          const tag = String(item.tag || '').trim();
+          const message = String(item.error || item.message || '').trim();
+          const parts = [];
+          if (Number.isFinite(idx) && idx >= 0) parts.push(`#${idx + 1}`);
+          if (tag) parts.push(tag);
+          const prefix = parts.join(' · ');
+          if (prefix && message) return `${prefix}: ${message}`;
+          return prefix || message;
+        })
+        .filter(Boolean);
+    }
+
+    function subsActiveDiagnosticsTarget() {
+      if (_subscriptionPreview) {
+        const formState = subsReadFormState();
+        const resolved = subsResolveDraftDefaults(formState);
+        return {
+          __xkDiagnosticsKind: 'preview',
+          id: String(formState.id || _subscriptionEditId || '').trim(),
+          name: resolved.name || 'Черновик',
+          tag: resolved.tag || '',
+          url: String(formState.url || '').trim(),
+          name_filter: String(formState.name_filter || '').trim(),
+          type_filter: String(formState.type_filter || '').trim(),
+          transport_filter: String(formState.transport_filter || '').trim(),
+          excluded_node_keys: Array.isArray(formState.excluded_node_keys) ? formState.excluded_node_keys.slice() : [],
+          interval_hours: subsCurrentIntervalHours(formState) || SUB_DEFAULT_INTERVAL_HOURS,
+          profile_update_interval_hours: Number(_subscriptionPreview.profileUpdateIntervalHours || 0),
+          last_count: Array.isArray(_subscriptionPreview.nodes) ? _subscriptionPreview.nodes.length : 0,
+          last_source_count: Number(_subscriptionPreview.sourceCount || 0),
+          last_filtered_out_count: Number(_subscriptionPreview.filteredOutCount || 0),
+          last_warnings: Array.isArray(_subscriptionPreview.warnings) ? _subscriptionPreview.warnings.slice() : [],
+          last_errors: Array.isArray(_subscriptionPreview.errors) ? _subscriptionPreview.errors.slice() : [],
+          preview_ts: Number(_subscriptionPreview.ts || 0),
+        };
+      }
+      return subsFindById(_subscriptionEditId);
+    }
+
+    function subsDiagnosticsSnapshot(sub) {
+      const s = sub && typeof sub === 'object' ? sub : {};
+      const kind = String(s.__xkDiagnosticsKind || 'saved').trim() || 'saved';
+      const warnings = subsStringList(s.last_warnings);
+      const errors = subsFormatResultErrors(s.last_errors);
+      const refreshError = String(s.last_error || '').trim();
+      const lastUpdateTs = subsLastUpdateTs(s);
+      const nextUpdateTs = subsTimestamp(s.next_update_ts);
+      const sourceCount = Number(s.last_source_count || 0);
+      const nodeCount = Array.isArray(s.last_nodes) ? s.last_nodes.length : 0;
+      const activeCountRaw = Number(s.last_count || 0);
+      const activeCount = Number.isFinite(activeCountRaw) && activeCountRaw >= 0 ? activeCountRaw : nodeCount;
+      const filteredOutCount = Number(s.last_filtered_out_count || 0);
+      const filterText = subsFilterSummary(s);
+      const manualExcludedCount = Array.isArray(s.excluded_node_keys)
+        ? s.excluded_node_keys.map((item) => String(item || '').trim()).filter(Boolean).length
+        : 0;
+      const providerHours = Number(s.profile_update_interval_hours || 0);
+      const title = String(s.name || s.tag || s.id || (kind === 'preview' ? 'Черновик' : 'Подписка')).trim() || 'Подписка';
+      const pills = [];
+      if (refreshError || s.last_ok === false) pills.push({ label: 'refresh error', tone: 'error', title: refreshError || 'Последнее обновление завершилось ошибкой.' });
+      if (warnings.length) pills.push({ label: `${warnings.length} warning`, tone: 'warning', title: warnings[0] });
+      if (errors.length) pills.push({ label: `${errors.length} parse`, tone: 'error-list', title: errors[0] });
+      if (filteredOutCount > 0) pills.push({ label: `скрыто ${filteredOutCount}`, tone: 'filtered', title: `Фильтрами скрыто ${filteredOutCount} узл.` });
+
+      const summaryLines = [];
+      if (kind === 'preview') {
+        const previewTs = Number(s.preview_ts || 0);
+        if (previewTs > 0) {
+          try {
+            summaryLines.push(`Черновик скачан: ${new Date(previewTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}.`);
+          } catch (e) {
+            summaryLines.push('Черновик предпросмотра активен.');
+          }
+        } else {
+          summaryLines.push('Черновик предпросмотра активен.');
+        }
+      } else if (lastUpdateTs > 0) {
+        summaryLines.push(`Последнее обновление: ${subsFormatTime(lastUpdateTs)}.`);
+      } else {
+        summaryLines.push('Подписка ещё не обновлялась.');
+      }
+      if (nextUpdateTs > 0 && kind !== 'preview') {
+        summaryLines.push(`Следующее обновление: ${subsFormatTime(nextUpdateTs)}${subsIsDue(s, subsNowTs()) ? ' · due' : ''}.`);
+      }
+      if (sourceCount > 0) {
+        summaryLines.push(`После фильтров: ${activeCount} из ${sourceCount} узлов.`);
+      } else if (activeCount > 0) {
+        summaryLines.push(`Активных узлов: ${activeCount}.`);
+      }
+      if (filteredOutCount > 0) {
+        summaryLines.push(`Фильтрами скрыто: ${filteredOutCount}.`);
+      }
+      if (manualExcludedCount > 0) {
+        summaryLines.push(`Исключено вручную: ${manualExcludedCount}.`);
+      }
+      if (providerHours > 0) {
+        summaryLines.push(`Рекомендация провайдера: ${providerHours} ч.`);
+      }
+      summaryLines.push(`Интервал: ${subsIntervalSummary(s)}.`);
+      summaryLines.push(filterText ? `Фильтры: ${filterText}.` : 'Фильтры: не заданы.');
+
+      return {
+        kind,
+        title,
+        pills,
+        summaryLines,
+        warnings,
+        errors,
+        refreshError,
+      };
+    }
+
+    function subsRenderDiagnostics() {
+      const root = $(SUB_IDS.diagnostics);
+      const titleEl = $(SUB_IDS.diagnosticsTitle);
+      const pillsEl = $(SUB_IDS.diagnosticsPills);
+      const bodyEl = $(SUB_IDS.diagnosticsBody);
+      if (!root || !titleEl || !pillsEl || !bodyEl) return;
+
+      const target = subsActiveDiagnosticsTarget();
+      if (!target) {
+        titleEl.textContent = 'Выбери подписку';
+        pillsEl.innerHTML = '';
+        bodyEl.innerHTML = '<div class="xk-sub-diag-empty">Выбери подписку справа, чтобы увидеть полный текст ошибки refresh, warnings транспорта и сводку по фильтрам.</div>';
+        return;
+      }
+
+      const snapshot = subsDiagnosticsSnapshot(target);
+      const title = snapshot.kind === 'preview'
+        ? `${snapshot.title} · черновик`
+        : snapshot.title;
+      titleEl.textContent = title;
+      try {
+        titleEl.setAttribute('data-tooltip', title);
+        titleEl.setAttribute('title', title);
+      } catch (e) {}
+
+      pillsEl.innerHTML = snapshot.pills.map((pill) => {
+        const label = escapeHtml(String(pill && pill.label ? pill.label : ''));
+        const tone = escapeHtml(String(pill && pill.tone ? pill.tone : 'neutral'));
+        const tooltip = escapeHtml(String(pill && pill.title ? pill.title : label));
+        return `<span class="xk-sub-diag-pill is-${tone}" title="${tooltip}" data-tooltip="${tooltip}">${label}</span>`;
+      }).join('');
+
+      const summaryItems = snapshot.summaryLines
+        .map((line) => `<li>${escapeHtml(String(line || ''))}</li>`)
+        .join('');
+      const groups = [
+        `<div class="xk-sub-diag-group is-neutral"><div class="xk-sub-diag-label">Сводка</div><ul class="xk-sub-diag-list">${summaryItems}</ul></div>`,
+      ];
+
+      if (snapshot.refreshError) {
+        groups.push(
+          `<div class="xk-sub-diag-group is-error"><div class="xk-sub-diag-label">Ошибка refresh</div><pre class="xk-sub-diag-pre">${escapeHtml(snapshot.refreshError)}</pre></div>`
+        );
+      }
+      if (snapshot.warnings.length) {
+        groups.push(
+          `<div class="xk-sub-diag-group is-warning"><div class="xk-sub-diag-label">Warnings</div><ul class="xk-sub-diag-list">${snapshot.warnings.map((line) => `<li>${escapeHtml(String(line || ''))}</li>`).join('')}</ul></div>`
+        );
+      }
+      if (snapshot.errors.length) {
+        groups.push(
+          `<div class="xk-sub-diag-group is-error-list"><div class="xk-sub-diag-label">Ошибки узлов</div><ul class="xk-sub-diag-list">${snapshot.errors.map((line) => `<li>${escapeHtml(String(line || ''))}</li>`).join('')}</ul></div>`
+        );
+      }
+      if (!snapshot.refreshError && !snapshot.warnings.length && !snapshot.errors.length) {
+        groups.push(
+          '<div class="xk-sub-diag-empty">Последнее обновление прошло без ошибок и дополнительных предупреждений.</div>'
+        );
+      }
+
+      bodyEl.innerHTML = groups.join('');
+    }
+
     function subsResetForm() {
       _subscriptionEditId = '';
       _subscriptionPreview = null;
@@ -4747,8 +4954,9 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.refreshNow).checked = true; } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
       try { subsRenderNodeList(); } catch (e2) {}
-      try { subsCaptureBaseline(); } catch (e3) {}
-      try { subsSyncSubscriptionFormState(); } catch (e4) {}
+      try { subsRenderDiagnostics(); } catch (e3) {}
+      try { subsCaptureBaseline(); } catch (e4) {}
+      try { subsSyncSubscriptionFormState(); } catch (e5) {}
     }
 
     function subsFillForm(sub, options) {
@@ -4778,8 +4986,9 @@ let outboundsModuleApi = null;
       try { if (opts.focus !== false) $(SUB_IDS.url).focus(); } catch (e) {}
       try { subsSyncSelection(); } catch (e2) {}
       try { subsRenderNodeList(); } catch (e2) {}
-      try { subsCaptureBaseline(); } catch (e3) {}
-      try { subsSyncSubscriptionFormState(); } catch (e4) {}
+      try { subsRenderDiagnostics(); } catch (e3) {}
+      try { subsCaptureBaseline(); } catch (e4) {}
+      try { subsSyncSubscriptionFormState(); } catch (e5) {}
     }
 
     function subsRender() {
@@ -4923,6 +5132,7 @@ let outboundsModuleApi = null;
       });
 
       try { subsRenderNodeList(); } catch (e) {}
+      try { subsRenderDiagnostics(); } catch (e2) {}
     }
 
     function subsRenderNodeList() {
@@ -5391,7 +5601,8 @@ let outboundsModuleApi = null;
       }
       _subscriptionPreview = null;
       try { subsRenderNodeList(); } catch (e) {}
-      try { subsSyncSubscriptionFormState(); } catch (e2) {}
+      try { subsRenderDiagnostics(); } catch (e2) {}
+      try { subsSyncSubscriptionFormState(); } catch (e3) {}
       if (!silent) {
         try { subsSetStatus('', false); } catch (e) {}
       }
@@ -5444,11 +5655,13 @@ let outboundsModuleApi = null;
           sourceCount: Number(data.source_count || 0),
           filteredOutCount: Number(data.filtered_out_count || 0),
           warnings: Array.isArray(data.warnings) ? data.warnings : [],
+          errors: Array.isArray(data.errors) ? data.errors : [],
           profileUpdateIntervalHours: Number(data.profile_update_interval_hours || 0),
           tagPrefix: String(data.tag_prefix || payload.tag || ''),
           ts: Date.now(),
         };
         subsRenderNodeList();
+        subsRenderDiagnostics();
         subsSyncSubscriptionFormState();
         const nodeCount = _subscriptionPreview.nodes.length;
         const okCount = Number(data.count || 0);
