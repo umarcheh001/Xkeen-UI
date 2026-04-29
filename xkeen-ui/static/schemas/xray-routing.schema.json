@@ -105,12 +105,13 @@
         },
         "protocol": {
           "type": "array",
-          "description": "Протоколы, определённые sniffing'ом. Требует включённого sniffing на соответствующем inbound'е, иначе правило не сработает.",
+          "description": "Протоколы, определённые sniffing'ом. По официальной документации Xray для routing поддерживаются `http`, `tls`, `quic`, `bittorrent`. Требует включённого sniffing на соответствующем inbound'е, иначе правило не сработает.",
           "items": {
             "type": "string",
             "enum": [
               "http",
               "tls",
+              "quic",
               "bittorrent"
             ]
           }

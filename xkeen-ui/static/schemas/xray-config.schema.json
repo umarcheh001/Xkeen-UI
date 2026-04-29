@@ -513,7 +513,7 @@
         "source": { "type": "array", "items": { "type": "string" }, "description": "IP-адреса источника" },
         "user": { "type": "array", "items": { "type": "string" }, "description": "Email-адреса пользователей" },
         "inboundTag": { "type": "array", "items": { "type": "string", "examples": ["redirect", "tproxy"] }, "description": "Теги inbound" },
-        "protocol": { "type": "array", "items": { "type": "string", "enum": ["http", "tls", "bittorrent"] } },
+        "protocol": { "type": "array", "description": "Протоколы, распознанные sniffing'ом для routing (`http`, `tls`, `quic`, `bittorrent`). Требует включённого sniffing на inbound.", "items": { "type": "string", "enum": ["http", "tls", "quic", "bittorrent"] } },
         "attrs": { "type": "object", "description": "Атрибуты для сопоставления" },
         "outboundTag": { "type": "string", "description": "Тег outbound для маршрутизации", "examples": ["direct", "block", "dns", "vless-reality"] },
         "balancerTag": { "type": "string", "description": "Тег балансировщика", "examples": ["proxy"] },

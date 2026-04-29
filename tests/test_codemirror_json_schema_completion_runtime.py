@@ -158,6 +158,26 @@ def test_routing_schema_completion_supports_example_tags_for_inbound_arrays():
     assert "tproxy" in labels
 
 
+def test_routing_schema_completion_supports_quic_for_protocol_arrays():
+    labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "routing": {',
+            '    "rules": [',
+            "      {",
+            '        "protocol": ["q__CURSOR__"]',
+            "      }",
+            "    ]",
+            "  }",
+            "}",
+            "",
+        ])
+    )
+
+    assert labels is not None
+    assert "quic" in labels
+
+
 def test_inbounds_schema_completion_supports_inbound_object_keys():
     labels = _run_completion_labels(
         "\n".join([
@@ -264,6 +284,26 @@ def test_routing_schema_linter_reports_jsonc_line_path_and_case_hint():
     assert tag_diag["text"] == '"Tag"'
     assert "путь routing.balancers[0].Tag" in str(tag_diag["message"])
     assert "используйте `tag`" in str(tag_diag["message"])
+
+
+def test_routing_schema_linter_accepts_quic_protocol_matcher():
+    diagnostics = _run_linter_diagnostics(
+        "\n".join([
+            "{",
+            '  "routing": {',
+            '    "rules": [',
+            "      {",
+            '        "protocol": ["quic"],',
+            '        "outboundTag": "direct"',
+            "      }",
+            "    ]",
+            "  }",
+            "}",
+            "",
+        ])
+    )
+
+    assert not any(str(item["text"]) == '"quic"' for item in diagnostics)
 
 
 def test_outbounds_schema_linter_warns_when_grpc_transport_is_used():
