@@ -539,6 +539,180 @@
       "required": ["tag", "selector"]
     },
 
+    "outboundUserEntry": {
+      "type": "object",
+      "description": "Параметры одной учётки на удалённом сервере. Для VLESS/VMess здесь обычно лежат `id`, `encryption`, `level` и `flow`; для некоторых других протоколов могут использоваться парольные поля.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "UUID или строковый идентификатор пользователя на удалённом сервере. Для VLESS/VMess должен совпадать с серверной учёткой.",
+          "examples": ["f3131569-259f-4c4e-8fd9-67daf2212223"]
+        },
+        "encryption": {
+          "type": "string",
+          "description": "Режим шифрования учётки. Для VLESS почти всегда `none`; в других legacy-сценариях значение зависит от конкретного протокола/ядра.",
+          "examples": ["none", "auto", "aes-128-gcm"]
+        },
+        "level": {
+          "type": "integer",
+          "default": 0,
+          "description": "User level для policy. Если политика уровней не используется, обычно оставляют `0`."
+        },
+        "flow": {
+          "type": "string",
+          "description": "Режим XTLS/VLESS. Для Reality/Vision чаще всего используют `xtls-rprx-vision` или `xtls-rprx-vision-udp443`.",
+          "examples": ["xtls-rprx-vision", "xtls-rprx-vision-udp443", ""]
+        },
+        "email": {
+          "type": "string",
+          "description": "Читаемая метка пользователя. Полезна для статистики и логов, если ядро собирает user-based stats."
+        },
+        "security": {
+          "type": "string",
+          "description": "Legacy-параметр VMess (`auto`, `aes-128-gcm` и т.п.). Для VLESS обычно не нужен.",
+          "examples": ["auto", "aes-128-gcm", "chacha20-poly1305", "none"]
+        },
+        "alterId": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Legacy-параметр VMess. В современных конфигурациях обычно `0`."
+        },
+        "password": {
+          "type": "string",
+          "description": "Пароль учётки для протоколов, которые используют пароль вместо UUID."
+        }
+      }
+    },
+
+    "outboundRemoteEndpoint": {
+      "type": "object",
+      "description": "Описание одного удалённого узла назначения для outbound (`vnext`/`servers`).",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "Адрес удалённого сервера. Поддерживаются домены, IPv4 и IPv6.",
+          "examples": ["example.com", "1.2.3.4", "2001:db8::1"]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Порт удалённого сервера.",
+          "examples": [443, 8443]
+        },
+        "users": {
+          "type": "array",
+          "description": "Список учёток для этого узла. Для VLESS/VMess чаще всего здесь один элемент.",
+          "items": { "$ref": "#/definitions/outboundUserEntry" }
+        },
+        "id": {
+          "type": "string",
+          "description": "Прямая client-конфигурация VLESS/VMess без `users[]`: UUID или строковый идентификатор пользователя."
+        },
+        "encryption": {
+          "type": "string",
+          "description": "Прямая client-конфигурация VLESS/VMess без `users[]`: режим шифрования (`none`, `auto` и т.п.)."
+        },
+        "level": {
+          "type": "integer",
+          "description": "Прямая client-конфигурация: user level для policy."
+        },
+        "flow": {
+          "type": "string",
+          "description": "Прямая client-конфигурация: режим XTLS/VLESS (`xtls-rprx-vision` и т.п.)."
+        },
+        "password": {
+          "type": "string",
+          "description": "Пароль сервера/учётки для Trojan, Shadowsocks и других password-based outbound'ов."
+        },
+        "method": {
+          "type": "string",
+          "description": "Метод шифрования/алгоритм для Shadowsocks-подобных outbound'ов.",
+          "examples": ["chacha20-ietf-poly1305", "aes-128-gcm"]
+        },
+        "ota": {
+          "type": "boolean",
+          "description": "Legacy OTA-флаг для старых Shadowsocks-конфигов."
+        },
+        "email": {
+          "type": "string",
+          "description": "Дополнительная читаемая метка для сервера/учётки."
+        }
+      }
+    },
+
+    "outboundBlackholeResponse": {
+      "type": "object",
+      "description": "Ответ Blackhole-outbound перед закрытием соединения. Если блок не задан, соединение просто закрывается без ответа.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["none", "http"],
+          "default": "none",
+          "description": "`none` — сразу закрыть соединение; `http` — вернуть простой HTTP 403 и затем закрыть соединение."
+        }
+      }
+    },
+
+    "outboundSettings": {
+      "type": "object",
+      "description": "Настройки, специфичные для выбранного outbound-протокола. Для VLESS/VMess обычно используются `vnext` и `users`, для blackhole — `response`, для loopback — `inboundTag`, для некоторых современных VLESS-конфигов допустима и прямая запись `address`/`port`/`id` в корне `settings`.",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "Прямой адрес удалённого сервера в client-конфигурации без массива `vnext`."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Прямой порт удалённого сервера в client-конфигурации без массива `vnext`."
+        },
+        "id": {
+          "type": "string",
+          "description": "Прямой идентификатор пользователя (обычно UUID) в compact client-конфигурации VLESS/VMess."
+        },
+        "encryption": {
+          "type": "string",
+          "description": "Прямой режим шифрования учётки в compact client-конфигурации."
+        },
+        "level": {
+          "type": "integer",
+          "description": "Прямой user level в compact client-конфигурации."
+        },
+        "flow": {
+          "type": "string",
+          "description": "Прямой режим XTLS/VLESS в compact client-конфигурации."
+        },
+        "users": {
+          "type": "array",
+          "description": "Список учёток для compact client-конфигурации или для вложенного endpoint-объекта.",
+          "items": { "$ref": "#/definitions/outboundUserEntry" }
+        },
+        "vnext": {
+          "type": "array",
+          "description": "Список удалённых узлов для VLESS/VMess outbound в legacy/распространённой схеме Xray-конфигов.",
+          "items": { "$ref": "#/definitions/outboundRemoteEndpoint" }
+        },
+        "servers": {
+          "type": "array",
+          "description": "Список серверов для Trojan, Shadowsocks, HTTP, SOCKS и других outbound'ов, где используется `servers`.",
+          "items": { "$ref": "#/definitions/outboundRemoteEndpoint" }
+        },
+        "response": {
+          "$ref": "#/definitions/outboundBlackholeResponse"
+        },
+        "inboundTag": {
+          "type": "string",
+          "description": "Для `protocol: loopback` задаёт виртуальный inbound-tag, под которым трафик повторно заходит в routing."
+        },
+        "reverse": {
+          "type": "object",
+          "description": "Минималистичная reverse-proxy-конфигурация VLESS. Используется редко."
+        }
+      }
+    },
+
     "streamSettings": {
       "type": "object",
       "description": "Настройки транспорта",
@@ -603,6 +777,10 @@
             "privateKey": { "type": "string" },
             "publicKey": { "type": "string" },
             "shortIds": { "type": "array", "items": { "type": "string" } },
+            "shortId": {
+              "type": "string",
+              "description": "Один из `shortIds`, разрешённых на сервере. Может быть пустой строкой; непустое значение должно быть hex-строкой чётной длины до 16 символов."
+            },
             "fingerprint": { "type": "string" },
             "serverName": { "type": "string" },
             "spiderX": { "type": "string" },
@@ -833,8 +1011,7 @@
           "description": "Протокол"
         },
         "settings": {
-          "type": "object",
-          "description": "Настройки протокола (зависят от protocol)"
+          "$ref": "#/definitions/outboundSettings"
         },
         "tag": { "type": "string", "description": "Уникальный тег" },
         "streamSettings": { "$ref": "#/definitions/streamSettings" },

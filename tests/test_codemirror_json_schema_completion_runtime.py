@@ -97,6 +97,38 @@ def _run_linter_messages(doc: str, schema_path: str = "./xkeen-ui/static/schemas
     return [str(item["message"]) for item in _run_linter_diagnostics(doc, schema_path)]
 
 
+def _run_hover_info(doc_with_marker: str, schema_path: str = "./xkeen-ui/static/schemas/xray-routing.schema.json") -> dict[str, object] | None:
+    if shutil.which("node") is None:
+        pytest.skip("node is not available in this environment")
+
+    script = f"""
+import fs from 'node:fs';
+import {{ buildJsonSchemaHoverInfo }} from './xkeen-ui/static/js/vendor/codemirror_json_schema.js';
+
+const schema = JSON.parse(fs.readFileSync({json.dumps(schema_path)}, 'utf8'));
+const marker = '__CURSOR__';
+const docWithMarker = {json.dumps(doc_with_marker)};
+const offset = docWithMarker.indexOf(marker);
+const doc = docWithMarker.replace(marker, '');
+const result = buildJsonSchemaHoverInfo(doc, schema, offset, {{}});
+console.log(JSON.stringify(result));
+"""
+
+    result = subprocess.run(
+        ["node", "--input-type=module"],
+        input=script,
+        capture_output=True,
+        cwd=str(ROOT),
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    return json.loads(result.stdout.strip())
+
+
 def test_routing_schema_completion_supports_rule_value_enum_inside_array_items():
     labels = _run_completion_labels(
         "\n".join([
@@ -218,6 +250,189 @@ def test_outbounds_schema_completion_supports_outbound_object_keys():
     assert "protocol" in labels
     assert "tag" in labels
     assert "streamSettings" in labels
+
+
+def test_outbounds_schema_completion_supports_protocol_specific_nested_keys():
+    labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "vless",',
+            '      "settings": {',
+            '        "vnext": [',
+            "          {",
+            '            __CURSOR__',
+            "          }",
+            "        ]",
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    assert labels is not None
+    assert "address" in labels
+    assert "port" in labels
+    assert "users" in labels
+
+
+def test_outbounds_schema_completion_supports_vnext_user_identity_fields():
+    labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "vless",',
+            '      "settings": {',
+            '        "vnext": [',
+            "          {",
+            '            "users": [',
+            "              {",
+            '                __CURSOR__',
+            "              }",
+            "            ]",
+            "          }",
+            "        ]",
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    assert labels is not None
+    assert "id" in labels
+    assert "encryption" in labels
+    assert "level" in labels
+    assert "flow" in labels
+
+
+def test_outbounds_schema_completion_supports_reality_shortid_and_blackhole_response():
+    reality_labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "vless",',
+            '      "streamSettings": {',
+            '        "security": "reality",',
+            '        "realitySettings": {',
+            '          "short__CURSOR__"',
+            "        }",
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    response_labels = _run_completion_labels(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "blackhole",',
+            '      "settings": {',
+            '        "r__CURSOR__"',
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    assert reality_labels is not None
+    assert "shortId" in reality_labels
+    assert response_labels is not None
+    assert "response" in response_labels
+
+
+def test_outbounds_schema_hover_supports_nested_protocol_specific_fields():
+    vnext_hover = _run_hover_info(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "vless",',
+            '      "settings": {',
+            '        "vne__CURSOR__xt": [',
+            "          {",
+            '            "address": "umarwelder.xyz",',
+            '            "port": 443,',
+            '            "users": [',
+            '              { "id": "f3131569-259f-4c4e-8fd9-67daf2212223", "encryption": "none", "level": 0, "flow": "xtls-rprx-vision-udp443" }',
+            "            ]",
+            "          }",
+            "        ]",
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    shortid_hover = _run_hover_info(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "vless",',
+            '      "streamSettings": {',
+            '        "security": "reality",',
+            '        "realitySettings": {',
+            '          "short__CURSOR__Id": "ff5f69b37fd16f"',
+            "        }",
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    response_type_hover = _run_hover_info(
+        "\n".join([
+            "{",
+            '  "outbounds": [',
+            "    {",
+            '      "protocol": "blackhole",',
+            '      "settings": {',
+            '        "response": {',
+            '          "ty__CURSOR__pe": "http"',
+            "        }",
+            "      }",
+            "    }",
+            "  ]",
+            "}",
+            "",
+        ]),
+        schema_path="./xkeen-ui/static/schemas/xray-outbounds.schema.json",
+    )
+
+    assert vnext_hover is not None
+    assert vnext_hover["pointer"] == "/outbounds/0/settings/vnext"
+    assert "legacy/распространённой схеме" in str(vnext_hover["plain"])
+
+    assert shortid_hover is not None
+    assert shortid_hover["pointer"] == "/outbounds/0/streamSettings/realitySettings/shortId"
+    assert "один из `shortids`" in str(shortid_hover["plain"]).lower()
+
+    assert response_type_hover is not None
+    assert response_type_hover["pointer"] == "/outbounds/0/settings/response/type"
+    assert "http 403" in str(response_type_hover["plain"]).lower()
 
 
 def test_routing_schema_linter_prefers_nested_anyof_branch_errors_over_root_mismatch():
