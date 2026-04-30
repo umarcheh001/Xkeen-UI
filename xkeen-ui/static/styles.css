@@ -7806,32 +7806,39 @@ html[data-theme="light"] .xk-mi-status.error {
 }
 
 .xk-sub-form-head {
+  align-items: center;
   gap: 12px;
 }
 
 .xk-sub-head-actions {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
+  margin-left: auto;
   justify-content: flex-end;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .xk-sub-head-chip {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  height: 28px;
-  padding: 0 11px;
+  width: auto;
+  min-height: 0;
+  height: 24px;
+  padding: 0 10px;
   border-radius: 999px;
-  font-size: calc(11px * var(--xk-font-scale));
+  font-size: calc(10.5px * var(--xk-font-scale));
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  line-height: 1;
   white-space: nowrap;
 }
 
 .xk-sub-head-chip.is-primary {
-  box-shadow: 0 6px 18px rgba(59, 130, 246, 0.18);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
 }
 
 .xk-sub-nodes-head-actions {
@@ -8002,24 +8009,24 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-controls {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  display: flex;
   align-items: center;
-  gap: 10px 12px;
+  flex-wrap: nowrap;
+  gap: 10px;
   margin-top: 2px;
   padding-bottom: 18px;
 }
 
 .xk-sub-auto-rule-check {
-  justify-self: start;
+  flex: 0 0 auto;
 }
 
 .xk-sub-routing-mode {
   position: relative;
-  display: block;
-  min-width: 0;
-  width: max-content;
-  justify-self: start;
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-width: 128px;
+  width: auto;
   padding: 0;
 }
 
@@ -9454,15 +9461,16 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-controls {
-  grid-template-columns: minmax(0, 1fr) auto;
+  flex-wrap: wrap;
+  align-items: flex-start;
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-routing-mode {
-  grid-column: 1 / 2;
+  min-width: 128px;
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-options {
-  grid-column: 1 / -1;
+  width: 100%;
   flex-wrap: wrap;
 }
 
@@ -9490,13 +9498,16 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls {
-  grid-template-columns: 1fr;
+  flex-wrap: wrap;
+  align-items: flex-start;
   padding-bottom: 0;
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-head-actions {
   width: 100%;
-  justify-content: flex-start;
+  margin-left: 0;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-head-chip {

@@ -4143,13 +4143,13 @@ let outboundsModuleApi = null;
         if (resetBtn) {
           resetBtn.classList.add('xk-sub-head-chip');
           resetBtn.setAttribute('aria-label', String(resetBtn.getAttribute('title') || 'Очистить форму'));
-          resetBtn.textContent = 'Очистить';
+          resetBtn.textContent = 'Очистить форму';
         }
         const saveBtn = root.querySelector(`#${SUB_IDS.save}`);
         if (saveBtn) {
           saveBtn.classList.add('xk-sub-head-chip', 'is-primary');
           saveBtn.setAttribute('aria-label', String(saveBtn.getAttribute('title') || 'Сохранить настройки'));
-          saveBtn.textContent = 'Сохранить';
+          saveBtn.textContent = 'Сохранить настройки';
         }
         const previewBtn = root.querySelector(`#${SUB_IDS.preview}`);
         if (previewBtn) {
@@ -4370,22 +4370,8 @@ let outboundsModuleApi = null;
           delete modal.dataset.modalNodrag;
         }
       } catch (e) {}
-      try {
-        const resetBtn = $(SUB_IDS.reset);
-        if (resetBtn) {
-          resetBtn.classList.add('xk-sub-icon-btn');
-          resetBtn.setAttribute('aria-label', String(resetBtn.getAttribute('title') || 'New'));
-          resetBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">✚</span><span class="xk-visually-hidden">New</span>';
-        }
-        const saveBtn = $(SUB_IDS.save);
-        if (saveBtn) {
-          saveBtn.classList.add('xk-sub-icon-btn');
-          saveBtn.setAttribute('aria-label', String(saveBtn.getAttribute('title') || 'Save'));
-          saveBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">💾</span><span class="xk-visually-hidden">Save</span>';
-        }
-      } catch (e2) {}
-      try { subsDecorateActionButtons(modal); } catch (e3) {}
-      try { subsRenderRoutingBalancers([]); } catch (e4) {}
+      try { subsDecorateActionButtons(modal); } catch (e2) {}
+      try { subsRenderRoutingBalancers([]); } catch (e3) {}
       return modal;
     }
 
