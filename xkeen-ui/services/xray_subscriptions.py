@@ -112,6 +112,7 @@ PROBE_BATCH_CONCURRENCY = 3
 NODE_LATENCY_HISTORY_LIMIT = 5
 AUTO_BALANCER_RULE_TAG = "xk_auto_leastPing"
 AUTO_BALANCER_TAG = "proxy"
+AUTO_BALANCER_ALT_TAG = "xk-subscriptions-proxy"
 AUTO_BALANCER_FALLBACK_TAG = "direct"
 AUTO_BALANCER_PRESERVE_TAGS = ("vless-reality",)
 AUTO_MIGRATED_RULE_TAG_PREFIX = "xk_auto_vless_pool_"
@@ -2204,10 +2205,18 @@ def _find_least_ping_balancer(routing: Dict[str, Any]) -> Dict[str, Any] | None:
     return None
 
 
+def _existing_auto_balancer_tag(routing: Dict[str, Any]) -> str:
+    rules = routing.get("rules") if isinstance(routing, dict) else []
+    idx = _find_auto_rule_idx(rules if isinstance(rules, list) else [])
+    if idx >= 0 and isinstance(rules[idx], dict):
+        return str(rules[idx].get("balancerTag") or "").strip()
+    return ""
+
+
 def list_subscription_routing_balancers(xray_configs_dir: str) -> List[Dict[str, Any]]:
     routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
     _cfg, routing, _normalized = _ensure_routing_model(_read_json_file(routing_path, {}))
-    auto_tag = _choose_auto_balancer_tag(routing)
+    auto_tag = _existing_auto_balancer_tag(routing)
     items: List[Dict[str, Any]] = []
     for balancer in routing.get("balancers") if isinstance(routing, dict) else []:
         if not isinstance(balancer, dict):
@@ -2310,22 +2319,24 @@ def _unique_balancer_tag(balancers: List[Any], preferred: str) -> str:
 
 
 def _choose_auto_balancer_tag(routing: Dict[str, Any]) -> str:
-    rules = routing.get("rules") if isinstance(routing, dict) else []
-    idx = _find_auto_rule_idx(rules if isinstance(rules, list) else [])
-    if idx >= 0 and isinstance(rules[idx], dict):
-        tag = str(rules[idx].get("balancerTag") or "").strip()
-        if tag:
-            return tag
-    least = _find_least_ping_balancer(routing)
-    if least is not None:
-        tag = str(least.get("tag") or "").strip()
-        if tag:
-            return tag
+    tag = _existing_auto_balancer_tag(routing)
+    if tag:
+        return tag
+
     balancers = routing.get("balancers") if isinstance(routing, dict) else []
-    preferred = _find_balancer_by_tag(balancers if isinstance(balancers, list) else [], AUTO_BALANCER_TAG)
-    if preferred is not None and _balancer_strategy_type(preferred) not in {"", "leastping"}:
-        return _unique_balancer_tag(balancers if isinstance(balancers, list) else [], "xk-subscriptions-proxy")
-    return AUTO_BALANCER_TAG
+    if not isinstance(balancers, list):
+        balancers = []
+
+    preferred = _find_balancer_by_tag(balancers, AUTO_BALANCER_TAG)
+    if preferred is None:
+        return AUTO_BALANCER_TAG
+
+    alt = _find_balancer_by_tag(balancers, AUTO_BALANCER_ALT_TAG)
+    if alt is None:
+        return AUTO_BALANCER_ALT_TAG
+    if _balancer_strategy_type(alt) in {"", "leastping"}:
+        return AUTO_BALANCER_ALT_TAG
+    return _unique_balancer_tag(balancers, AUTO_BALANCER_ALT_TAG)
 
 
 def _auto_migrated_rule_tag(rule: Any) -> str:
