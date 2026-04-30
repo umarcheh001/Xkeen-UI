@@ -29330,8 +29330,26 @@ html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-source option {
   color: var(--text, #111827);
 }
 
+html[data-theme="light"] .xkeen-diff-modal .xkeen-diff-helper {
+  background: rgba(37, 99, 235, 0.06);
+  border-color: rgba(37, 99, 235, 0.14);
+  color: #475569;
+}
+
 .xkeen-diff-modal .xkeen-diff-source.hidden {
   display: none;
+}
+
+.xkeen-diff-modal .xkeen-diff-helper {
+  flex: 0 0 auto;
+  margin: -2px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  background: rgba(96, 165, 250, 0.06);
+  color: var(--muted, #9ca3af);
+  font-size: calc(11.5px * var(--xk-font-scale, 1));
+  line-height: 1.45;
 }
 
 .xkeen-diff-modal .xkeen-diff-error {

@@ -36,6 +36,7 @@
   let _rightLabelEl = null;
   let _leftSelectEl = null;
   let _rightSelectEl = null;
+  let _helperEl = null;
   let _summaryEl = null;
   let _errorEl = null;
   let _modeBtnSplitEl = null;
@@ -61,11 +62,13 @@
   let _resizeBound = false;
   let _resolveOpen = null;
   let _sourceOptions = [];
+  let _customSourceOptions = { left: null, right: null };
   let _draftSideState = { left: false, right: false };
   let _dirtySinceOpen = false;
   let _baselineLeft = '';
   let _baselineRight = '';
   let _lastAppliedTransferCount = 0;
+  let _textSourceSeq = 0;
   let _activeMonacoHunk = null;
   let _activeMonacoDecorationIds = { left: [], right: [] };
   let _activeCm6Chunk = null;
@@ -210,7 +213,7 @@
     _leftSelectEl = document.createElement('select');
     _leftSelectEl.className = 'xkeen-diff-source';
     _leftSelectEl.setAttribute('aria-label', 'Источник слева');
-    _leftSelectEl.setAttribute('data-tooltip', 'Источник для левой стороны: текущий буфер редактора, файл с диска или сохранённый снэпшот');
+    _leftSelectEl.setAttribute('data-tooltip', 'Источник слева: текущий редактор, сохранённая версия, перечитанный файл с диска, буфер обмена, локальный файл или снэпшот');
     _leftSelectEl.addEventListener('change', () => onSourceChanged('left'));
     leftWrap.appendChild(_leftLabelEl);
     leftWrap.appendChild(_leftSelectEl);
@@ -227,7 +230,7 @@
     _rightSelectEl = document.createElement('select');
     _rightSelectEl.className = 'xkeen-diff-source';
     _rightSelectEl.setAttribute('aria-label', 'Источник справа');
-    _rightSelectEl.setAttribute('data-tooltip', 'Источник для правой стороны: текущий буфер редактора, файл с диска или сохранённый снэпшот');
+    _rightSelectEl.setAttribute('data-tooltip', 'Источник справа: текущий редактор, сохранённая версия, перечитанный файл с диска, буфер обмена, локальный файл или снэпшот');
     _rightSelectEl.addEventListener('change', () => onSourceChanged('right'));
     rightWrap.appendChild(_rightLabelEl);
     rightWrap.appendChild(_rightSelectEl);
@@ -235,6 +238,11 @@
     labels.appendChild(leftWrap);
     labels.appendChild(sep);
     labels.appendChild(rightWrap);
+
+    const helper = document.createElement('div');
+    helper.className = 'xkeen-diff-helper';
+    helper.textContent = 'Окно сравнивает текущий редактор, сохранённую версию и внешний текст. Для подстановки другого содержимого используйте «Вставить из буфера» или «Загрузить из файла».';
+    _helperEl = helper;
 
     const errorBanner = document.createElement('div');
     errorBanner.className = 'xkeen-diff-error hidden';
@@ -259,7 +267,7 @@
       'Вернуть обе стороны к состоянию на момент открытия сравнения');
     _saveBtnEl = makeBtn('Сохранить файл', 'btn-primary xkeen-diff-save-btn hidden',
       () => saveComparedFile(),
-      'Сохранить активный буфер в файл (Ctrl+S)');
+      'Сохранить активный редактор в файл (Ctrl+S)');
     _closeBtnEl = makeBtn('Закрыть', 'btn-secondary', () => close('close'), 'Закрыть окно сравнения (Esc)');
     footActions.appendChild(_revertBtnEl);
     footActions.appendChild(_saveBtnEl);
@@ -269,6 +277,7 @@
 
     card.appendChild(head);
     card.appendChild(labels);
+    card.appendChild(helper);
     card.appendChild(errorBanner);
     card.appendChild(host);
     card.appendChild(foot);
@@ -343,14 +352,35 @@
       const id = String(d.id || d.snapshotId || '').trim();
       return id ? ('snapshot:' + id) : 'snapshot';
     }
-    if (kind === 'reload') return 'disk';
+    if (kind === 'text') {
+      const id = String(d.optionId || d.id || '').trim();
+      return id ? ('text:' + id) : 'text';
+    }
+    if (kind === 'action') {
+      const action = String(d.action || '').trim().toLowerCase();
+      return action ? ('action:' + action) : 'action';
+    }
+    if (kind === 'reload') return 'reload';
     return kind || 'buffer';
   }
 
-  function findOption(value) {
+  function _sideKey(side) {
+    return side === 'right' ? 'right' : 'left';
+  }
+
+  function _optionsForSide(side) {
+    const sideKey = _sideKey(side);
+    const out = Array.isArray(_sourceOptions) ? _sourceOptions.slice() : [];
+    const custom = _customSourceOptions && _customSourceOptions[sideKey];
+    if (custom && custom.value) out.push(custom);
+    return out;
+  }
+
+  function findOption(value, side) {
     const v = String(value == null ? '' : value);
-    for (let i = 0; i < _sourceOptions.length; i += 1) {
-      if (_sourceOptions[i] && _sourceOptions[i].value === v) return _sourceOptions[i];
+    const options = side ? _optionsForSide(side) : (_sourceOptions || []);
+    for (let i = 0; i < options.length; i += 1) {
+      if (options[i] && options[i].value === v) return options[i];
     }
     return null;
   }
@@ -359,11 +389,16 @@
     const out = [];
     if (!scopeDef) return out;
     if (isFn(scopeDef.getCurrent)) {
-      out.push({ value: 'buffer', label: 'Текущий буфер', descriptor: { source: 'buffer' } });
+      out.push({ value: 'buffer', label: 'Текущий редактор', descriptor: { source: 'buffer' } });
     }
-    if (isFn(scopeDef.getBaseline) || isFn(scopeDef.reloadFromDisk)) {
-      out.push({ value: 'disk', label: 'Сохранённый файл', descriptor: { source: 'disk' } });
+    if (isFn(scopeDef.getBaseline)) {
+      out.push({ value: 'disk', label: 'Последняя сохранённая версия', descriptor: { source: 'disk' } });
     }
+    if (isFn(scopeDef.reloadFromDisk)) {
+      out.push({ value: 'reload', label: 'Файл с диска (перечитать)', descriptor: { source: 'reload' } });
+    }
+    out.push({ value: 'action:clipboard', label: 'Вставить из буфера…', descriptor: { source: 'action', action: 'clipboard' } });
+    out.push({ value: 'action:upload', label: 'Загрузить из файла…', descriptor: { source: 'action', action: 'upload' } });
     const list = Array.isArray(snapshots) ? snapshots : [];
     list.forEach((s) => {
       if (!s || typeof s !== 'object') return;
@@ -379,6 +414,168 @@
     return out;
   }
 
+  function _setCustomSourceOption(side, option) {
+    const sideKey = _sideKey(side);
+    _customSourceOptions[sideKey] = option && option.value ? option : null;
+  }
+
+  function _makeTextSourceOption(label, text, prefix) {
+    _textSourceSeq += 1;
+    const id = String(prefix || 'text') + '-' + String(_textSourceSeq);
+    return {
+      value: 'text:' + id,
+      label: String(label || 'Внешний текст'),
+      descriptor: {
+        source: 'text',
+        text: asString(text),
+        label: String(label || 'Внешний текст'),
+        optionId: id,
+      },
+    };
+  }
+
+  function _seedCustomOptionFromSpec(side, specSide) {
+    const descriptor = specSide && specSide.descriptor ? specSide.descriptor : null;
+    if (!descriptor || String(descriptor.source || '').trim().toLowerCase() !== 'text') {
+      _setCustomSourceOption(side, null);
+      return;
+    }
+    const optionId = String(descriptor.optionId || descriptor.id || '').trim();
+    const label = String(descriptor.label || (specSide && specSide.title) || 'Внешний текст').trim() || 'Внешний текст';
+    if (optionId) {
+      _setCustomSourceOption(side, {
+        value: 'text:' + optionId,
+        label: label,
+        descriptor: Object.assign({}, descriptor, { label: label, optionId: optionId }),
+      });
+      return;
+    }
+    _setCustomSourceOption(side, _makeTextSourceOption(label, descriptor.text, 'seed'));
+  }
+
+  function _populateSideSelect(side, selectedValue) {
+    const sideKey = _sideKey(side);
+    const selectEl = sideKey === 'left' ? _leftSelectEl : _rightSelectEl;
+    populateSelect(selectEl, _optionsForSide(sideKey), selectedValue);
+  }
+
+  function _readClipboardText() {
+    const clipboard = (typeof navigator !== 'undefined' && navigator.clipboard && isFn(navigator.clipboard.readText))
+      ? navigator.clipboard
+      : null;
+    if (!clipboard) return Promise.reject(new Error('Буфер обмена недоступен в этом браузере'));
+    return Promise.resolve(clipboard.readText()).then((text) => {
+      const value = asString(text);
+      if (!value) throw new Error('Буфер обмена пуст');
+      return value;
+    });
+  }
+
+  function _readFileAsText(file) {
+    if (!file) return Promise.reject(new Error('Файл не выбран'));
+    if (isFn(file.text)) {
+      return Promise.resolve(file.text()).then((text) => asString(text));
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        const reader = new FileReader();
+        reader.onload = () => resolve(asString(reader.result));
+        reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+        reader.readAsText(file);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  function _pickLocalTextFile() {
+    return new Promise((resolve, reject) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,.jsonc,.txt,.yaml,.yml,.conf,.log,text/*,application/json';
+      input.hidden = true;
+      let settled = false;
+      const cleanup = () => {
+        try { window.removeEventListener('focus', onFocusBack, true); } catch (e) {}
+        try { input.removeEventListener('cancel', onCancel); } catch (e2) {}
+        try { input.removeEventListener('change', onChange); } catch (e3) {}
+        try { if (input.parentNode) input.parentNode.removeChild(input); } catch (e4) {}
+      };
+      const settleResolve = (value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+      const settleReject = (err) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(err);
+      };
+      const onCancel = () => settleResolve(null);
+      const onFocusBack = () => {
+        setTimeout(() => {
+          try {
+            if (!settled && (!input.files || !input.files.length)) settleResolve(null);
+          } catch (e) {}
+        }, 0);
+      };
+      const onChange = () => {
+        const file = input.files && input.files[0] ? input.files[0] : null;
+        if (!file) {
+          settleResolve(null);
+          return;
+        }
+        _readFileAsText(file)
+          .then((text) => settleResolve({ file: file, text: text }))
+          .catch((err) => settleReject(err));
+      };
+      input.addEventListener('cancel', onCancel, { once: true });
+      input.addEventListener('change', onChange, { once: true });
+      window.addEventListener('focus', onFocusBack, true);
+      document.body.appendChild(input);
+      try { input.click(); } catch (err) { settleReject(err); }
+    });
+  }
+
+  async function _resolveActionSource(side, descriptor) {
+    const action = String(descriptor && descriptor.action || '').trim().toLowerCase();
+    if (action === 'clipboard') {
+      const text = await _readClipboardText();
+      return _makeTextSourceOption('Буфер обмена', text, _sideKey(side) + '-clipboard');
+    }
+    if (action === 'upload') {
+      const picked = await _pickLocalTextFile();
+      if (!picked) return null;
+      const name = picked.file && picked.file.name ? String(picked.file.name) : 'Локальный файл';
+      return _makeTextSourceOption('Локальный файл · ' + name, picked.text, _sideKey(side) + '-file');
+    }
+    throw new Error('Неизвестное действие источника');
+  }
+
+  function _applyResolvedSideSource(side, descriptor, label, text) {
+    const sideKey = _sideKey(side);
+    const value = asString(text);
+    if (_backendKind === 'cm6') {
+      cm6SetText(sideKey, value);
+    } else {
+      const model = sideKey === 'left' ? _originalModel : _modifiedModel;
+      try {
+        if (model && isFn(model.setValue)) model.setValue(value);
+      } catch (e) {}
+    }
+    if (_activeSpec) {
+      const cur = _activeSpec[sideKey] || {};
+      _activeSpec[sideKey] = Object.assign({}, cur, {
+        text: value,
+        descriptor: descriptor,
+        title: label,
+        error: '',
+      });
+    }
+  }
+
   function populateSelect(selectEl, options, selectedValue) {
     if (!selectEl) return;
     while (selectEl.firstChild) selectEl.removeChild(selectEl.firstChild);
@@ -389,7 +586,8 @@
       selectEl.appendChild(o);
     });
     const want = String(selectedValue == null ? '' : selectedValue);
-    if (want && findOption(want)) {
+    const hasWant = !!(options || []).find((opt) => opt && opt.value === want);
+    if (want && hasWant) {
       selectEl.value = want;
     } else if (options.length) {
       selectEl.value = options[0].value;
@@ -447,48 +645,49 @@
     _sourceOptions = buildOptions(scopeDef, snaps);
     const leftValue = descriptorToValue(_activeSpec && _activeSpec.left && _activeSpec.left.descriptor);
     const rightValue = descriptorToValue(_activeSpec && _activeSpec.right && _activeSpec.right.descriptor);
-    populateSelect(_leftSelectEl, _sourceOptions, leftValue);
-    populateSelect(_rightSelectEl, _sourceOptions, rightValue);
+    _populateSideSelect('left', leftValue);
+    _populateSideSelect('right', rightValue);
   }
 
   async function onSourceChanged(side) {
     const scopeDef = _activeSpec && _activeSpec.scope;
     if (!scopeDef) return;
-    const sel = side === 'left' ? _leftSelectEl : _rightSelectEl;
+    const sideKey = _sideKey(side);
+    const sel = sideKey === 'left' ? _leftSelectEl : _rightSelectEl;
     if (!sel) return;
-    const opt = findOption(sel.value);
+    const previousDescriptor = _activeSpec && _activeSpec[sideKey] ? _activeSpec[sideKey].descriptor : { source: 'buffer' };
+    const previousValue = descriptorToValue(previousDescriptor);
+    const opt = findOption(sel.value, sideKey);
     if (!opt) return;
-    const descriptor = opt.descriptor || { source: 'buffer' };
+    let descriptor = opt.descriptor || { source: 'buffer' };
+    let label = opt.label || '';
     const diffApi = (XKeen.ui && XKeen.ui.diff) || null;
     if (!diffApi || !isFn(diffApi.resolveSourceText)) return;
     showError('');
     let text = '';
     try {
-      text = await diffApi.resolveSourceText(scopeDef, descriptor);
+      if (String(descriptor.source || '').trim().toLowerCase() === 'action') {
+        const actionOption = await _resolveActionSource(sideKey, descriptor);
+        if (!actionOption) {
+          _populateSideSelect(sideKey, previousValue);
+          return;
+        }
+        _setCustomSourceOption(sideKey, actionOption);
+        descriptor = actionOption.descriptor;
+        label = actionOption.label;
+        text = asString(actionOption.descriptor && actionOption.descriptor.text);
+        _populateSideSelect(sideKey, actionOption.value);
+      } else {
+        text = await diffApi.resolveSourceText(scopeDef, descriptor);
+      }
     } catch (err) {
+      _populateSideSelect(sideKey, previousValue);
       showError((side === 'left' ? 'Слева: ' : 'Справа: ') + String(err && err.message || err));
       return;
     }
-    if (_backendKind === 'cm6') {
-      cm6SetText(side, asString(text));
-    } else {
-      const model = side === 'left' ? _originalModel : _modifiedModel;
-      try {
-        if (model && isFn(model.setValue)) model.setValue(asString(text));
-      } catch (e) {}
-    }
-    if (_activeSpec) {
-      const sideKey = side === 'left' ? 'left' : 'right';
-      const cur = _activeSpec[sideKey] || {};
-      _activeSpec[sideKey] = Object.assign({}, cur, {
-        text: asString(text),
-        descriptor: descriptor,
-        title: opt.label,
-        error: '',
-      });
-    }
+    _applyResolvedSideSource(sideKey, descriptor, label, text);
     _resetAppliedSummaryCount();
-    _setSideDraft(side, false);
+    _setSideDraft(sideKey, false);
     if (!_dirtySinceOpen && !_hasAnyDraft()) _captureBaselineState();
     refreshActionButtons();
     try {
@@ -1657,7 +1856,7 @@
     const saveActive = _saveDisabledReason() === '';
     const saveTip = (_dirtySinceOpen && saveActive)
       ? 'Сохранить · есть несохранённые изменения (Ctrl+S)'
-      : 'Сохранить активный буфер в файл (Ctrl+S)';
+      : 'Сохранить активный редактор в файл (Ctrl+S)';
     _setBtnState(_saveBtnEl, _saveDisabledReason(), saveTip);
     if (_saveBtnEl) {
       try { _saveBtnEl.classList.toggle('is-dirty', !!(_dirtySinceOpen && saveActive)); } catch (e) {}
@@ -1775,7 +1974,7 @@
     const sideKey = side === 'right' ? 'right' : 'left';
     const current = _activeSpec && _activeSpec[sideKey] ? _activeSpec[sideKey] : {};
     const descriptor = current && current.descriptor ? current.descriptor : { source: 'buffer' };
-    const opt = findOption(descriptorToValue(descriptor));
+    const opt = findOption(descriptorToValue(descriptor), sideKey);
     const title = opt && opt.label ? opt.label : (current && current.title) || '';
     showError('');
     try {
@@ -1974,7 +2173,7 @@
       const bufferSide = _getVisibleBufferSide();
       const saveText = asString(_activeSpec && _activeSpec[draftSaveSide] && _activeSpec[draftSaveSide].text);
       if (!bufferSide) {
-        showError('Сохранение: нет активного буфера для записи');
+        showError('Сохранение: нет активного редактора для записи');
         return;
       }
       try {
@@ -2050,6 +2249,10 @@
     _resetAppliedSummaryCount();
     _captureBaselineState();
     _syncIgnoreWhitespaceToggle();
+    _customSourceOptions = { left: null, right: null };
+    _textSourceSeq = 0;
+    _seedCustomOptionFromSpec('left', o.left);
+    _seedCustomOptionFromSpec('right', o.right);
 
     if (_titleEl) _titleEl.textContent = asString(o.title) || 'Сравнить версии';
 
@@ -2058,8 +2261,8 @@
       _sourceOptions = buildOptions(scopeDef, snaps);
       const leftValue = descriptorToValue(o.left && o.left.descriptor);
       const rightValue = descriptorToValue(o.right && o.right.descriptor);
-      populateSelect(_leftSelectEl, _sourceOptions, leftValue);
-      populateSelect(_rightSelectEl, _sourceOptions, rightValue);
+      _populateSideSelect('left', leftValue);
+      _populateSideSelect('right', rightValue);
       setSelectorsHidden(false);
       if (_leftLabelEl) _leftLabelEl.textContent = 'Слева';
       if (_rightLabelEl) _rightLabelEl.textContent = 'Справа';
@@ -2173,8 +2376,10 @@
     _activeMonaco = null;
     _activeSpec = null;
     _sourceOptions = [];
+    _customSourceOptions = { left: null, right: null };
     _draftSideState = { left: false, right: false };
     _dirtySinceOpen = false;
+    _textSourceSeq = 0;
     _resetAppliedSummaryCount();
     _resetBaselineState();
     const resolver = _resolveOpen;

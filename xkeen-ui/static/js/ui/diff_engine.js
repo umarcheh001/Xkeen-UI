@@ -211,9 +211,9 @@
   function describeSource(d) {
     if (!d || typeof d !== 'object') return 'Текст';
     const kind = trimKey(d.source);
-    if (kind === 'buffer') return 'Текущий буфер';
-    if (kind === 'disk') return 'Сохранённый файл';
-    if (kind === 'reload') return 'Файл с диска (свежее)';
+    if (kind === 'buffer') return 'Текущий редактор';
+    if (kind === 'disk') return 'Последняя сохранённая версия';
+    if (kind === 'reload') return 'Файл с диска (перечитать)';
     if (kind === 'snapshot') return 'Снэпшот' + (d.label ? ' · ' + d.label : '');
     if (kind === 'text') return d.label ? String(d.label) : 'Текст';
     return kind || 'Источник';

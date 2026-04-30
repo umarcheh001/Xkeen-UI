@@ -42,6 +42,12 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function _supportsIgnoreTrimWhitespace()" in diff_modal
     assert "function _syncIgnoreWhitespaceToggle()" in diff_modal
     assert "function setIgnoreTrimWhitespace(flag)" in diff_modal
+    assert "let _customSourceOptions = { left: null, right: null };" in diff_modal
+    assert "let _textSourceSeq = 0;" in diff_modal
+    assert "function _readClipboardText()" in diff_modal
+    assert "function _pickLocalTextFile()" in diff_modal
+    assert "async function _resolveActionSource(side, descriptor)" in diff_modal
+    assert "function _applyResolvedSideSource(side, descriptor, label, text)" in diff_modal
     assert "rt.view.EditorView.lineWrapping" in diff_modal
     assert "async function _refreshSourceOptions(scopeDef)" in diff_modal
     assert "function _setAppliedSummaryCount(count)" in diff_modal
@@ -76,6 +82,12 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "scope.saveClosesOwner" in diff_modal
     assert "String(ev.key || '').toLowerCase() === 's'" in diff_modal
     assert "_labelsRowEl.classList.toggle('hidden', !!hidden);" in diff_modal
+    assert "Окно сравнивает текущий редактор, сохранённую версию и внешний текст." in diff_modal
+    assert "Вставить из буфера…" in diff_modal
+    assert "Загрузить из файла…" in diff_modal
+    assert "Текущий редактор" in diff_modal
+    assert "Последняя сохранённая версия" in diff_modal
+    assert "Файл с диска (перечитать)" in diff_modal
     assert "перенесено: " in diff_modal
     assert "Хунк перенесён" not in diff_modal
 
@@ -92,6 +104,7 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "if (r !== 'save' && _hasAnyDraft()) {" in diff_modal
 
     assert ".xkeen-diff-apply-group {" in styles
+    assert ".xkeen-diff-modal .xkeen-diff-helper {" in styles
     assert ".xkeen-diff-foot-actions {" in styles
     assert ".xkeen-diff-save-btn {" in styles
     assert ".xkeen-diff-revert-btn {" in styles
@@ -145,4 +158,4 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "const wasOpen = !!(modal && modal.classList && !modal.classList.contains('hidden'));" in json_modal
     assert "return wasOpen ? isClosed : false;" in json_modal
 
-    assert "?v=20260429-diff18" in editor_shared
+    assert "?v=20260430-diff19" in editor_shared

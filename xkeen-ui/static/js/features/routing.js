@@ -4415,7 +4415,7 @@ function closeHelp() {
         bar.appendChild(buildRoutingToolbarButton({
           actionId: 'compare',
           label: 'Сравнить',
-          tip: 'Сравнить с диском',
+          tip: 'Сравнить редактор с сохранённой версией',
           svg: icons.compare || '',
           fallbackText: '⇄',
           onClick: () => {
