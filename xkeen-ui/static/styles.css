@@ -7912,7 +7912,7 @@ html[data-theme="light"] .xk-mi-status.error {
 
 .xk-sub-form .xk-sub-url-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 520px) minmax(120px, 1fr);
   gap: 8px;
   align-items: start;
 }
@@ -7922,7 +7922,8 @@ html[data-theme="light"] .xk-mi-status.error {
   flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
-  max-width: 520px;
+  max-width: none;
+  width: 100%;
 }
 
 .xk-sub-form .xk-sub-url-field > input {
@@ -7932,7 +7933,8 @@ html[data-theme="light"] .xk-mi-status.error {
 .xk-sub-form .xk-sub-url-action {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
+  width: 100%;
 }
 
 .xk-sub-form .xk-sub-url-action-label {
@@ -7946,6 +7948,13 @@ html[data-theme="light"] .xk-mi-status.error {
   gap: 6px;
   height: 34px;
   flex-wrap: nowrap;
+  width: 100%;
+}
+
+.xk-sub-form .xk-sub-url-actions > .xk-sub-head-chip {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 28px;
 }
 
 .xk-sub-form .xk-sub-url-preview {

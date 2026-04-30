@@ -282,7 +282,7 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert ".xk-sub-head-chip.is-dirty {" in styles_src
     assert ".xk-sub-form .xk-sub-url-action {" in styles_src
     assert ".xk-sub-form .xk-sub-url-action-label {" in styles_src
-    assert ".xk-sub-form .xk-sub-url-row {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;" in styles_src
+    assert ".xk-sub-form .xk-sub-url-row {\n  display: grid;\n  grid-template-columns: minmax(0, 520px) minmax(120px, 1fr);" in styles_src
     assert "const floor = isConfirm ? Math.max(Z_BASE + 40, 130) : Z_BASE;" in modal_src
 
 
