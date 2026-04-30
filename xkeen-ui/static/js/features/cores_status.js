@@ -118,6 +118,12 @@ let coresStatusModuleApi = null;
     return `printf '%s\\n' ${shSingleQuote(String(text == null ? '' : text))}`;
   }
 
+  function buildShellScript(lines) {
+    return (Array.isArray(lines) ? lines : [])
+      .map((line) => String(line == null ? '' : line))
+      .join('\n');
+  }
+
   async function getJSON(url) {
     const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
     const data = await res.json().catch(() => ({}));
@@ -197,7 +203,7 @@ let coresStatusModuleApi = null;
       '',
     ];
 
-    return [
+    return buildShellScript([
       ...introLines.map((line) => buildShellPrintfLine(line)),
       `printf '%s\\n%s\\n' '9' ${shSingleQuote(normalizedTag)} | xkeen ${normalizedFlag}`,
       '__xk_prerelease_status="$?"',
@@ -207,7 +213,236 @@ let coresStatusModuleApi = null;
       `  printf '%s\\n' "[Xkeen UI] Сценарий завершился с кодом $__xk_prerelease_status. Проверьте вывод выше."`,
       'fi',
       'unset __xk_prerelease_status',
-    ].join('; ');
+    ]);
+  }
+
+  function normalizePrereleaseInstallAssets(installMeta) {
+    const assets = Array.isArray(installMeta && installMeta.assets) ? installMeta.assets : [];
+    return assets
+      .map((asset) => ({
+        name: String((asset && asset.name) || '').trim(),
+        url: String((asset && asset.url) || '').trim(),
+      }))
+      .filter((asset) => asset.name && asset.url);
+  }
+
+  function getPrereleaseInstallMeta(btn) {
+    if (!btn || !btn.__xkPrereleaseInstallMeta || typeof btn.__xkPrereleaseInstallMeta !== 'object') {
+      return null;
+    }
+    return btn.__xkPrereleaseInstallMeta;
+  }
+
+  function isDirectAssetPrereleaseInstall(installMeta) {
+    if (!installMeta || typeof installMeta !== 'object') return false;
+    return String(installMeta.mode || '').trim() === 'direct_asset';
+  }
+
+  function buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel) {
+    const normalizedTag = String(tag || '').trim();
+    const normalizedCore = String(coreLabel || '').trim() || 'Mihomo';
+    const releaseInstall = (installMeta && typeof installMeta === 'object') ? installMeta : null;
+    const assets = normalizePrereleaseInstallAssets(releaseInstall);
+    if (!normalizedTag || !assets.length) return '';
+
+    const arch = String((releaseInstall && releaseInstall.arch) || '').trim() || 'unknown';
+    const opkgArch = String((releaseInstall && releaseInstall.opkg_arch) || '').trim();
+    const endian = String((releaseInstall && releaseInstall.endian) || '').trim() || 'unknown';
+    const note = String((releaseInstall && releaseInstall.note) || '').trim();
+    const checksumUrl = String((releaseInstall && releaseInstall.checksum_url) || '').trim();
+
+    const introLines = [
+      '',
+      `[Xkeen UI] Direct install ${normalizedCore} pre-release ${normalizedTag}`,
+      `[Xkeen UI] Router arch: ${arch}${opkgArch ? ` | opkg: ${opkgArch}` : ''}${endian ? ` | endian: ${endian}` : ''}`,
+    ];
+    if (note) introLines.push(`[Xkeen UI] ${note}`);
+    introLines.push('[Xkeen UI] Candidate GitHub assets:');
+    assets.forEach((asset, index) => {
+      introLines.push(`  ${index + 1}) ${asset.name}`);
+    });
+    introLines.push('');
+
+    const lines = [
+      ...introLines.map((line) => buildShellPrintfLine(line)),
+      '__xk_tmpdir="$(mktemp -d /tmp/xkeen-mihomo-pre.XXXXXX 2>/dev/null || true)"',
+      'if [ -z "$__xk_tmpdir" ]; then',
+      '  __xk_tmpdir="/tmp/xkeen-mihomo-pre.$$"',
+      '  mkdir -p "$__xk_tmpdir" || exit 1',
+      'fi',
+      '__xk_cleanup() {',
+      '  rm -rf "$__xk_tmpdir"',
+      '}',
+      '__xk_fetch() {',
+      '  _url="$1"',
+      '  _out="$2"',
+      '  if command -v curl >/dev/null 2>&1; then',
+      '    curl -fsSL "$_url" -o "$_out"',
+      '    return "$?"',
+      '  fi',
+      '  if command -v wget >/dev/null 2>&1; then',
+      '    wget -O "$_out" "$_url"',
+      '    return "$?"',
+      '  fi',
+      `  ${buildShellPrintfLine('[Xkeen UI] curl/wget not found.')}`,
+      '  return 127',
+      '}',
+      '__xk_unpack_gzip() {',
+      '  _archive="$1"',
+      '  _out="$2"',
+      '  if command -v gzip >/dev/null 2>&1; then',
+      '    gzip -dc "$_archive" > "$_out"',
+      '    return "$?"',
+      '  fi',
+      '  if command -v gunzip >/dev/null 2>&1; then',
+      '    gunzip -c "$_archive" > "$_out"',
+      '    return "$?"',
+      '  fi',
+      `  ${buildShellPrintfLine('[Xkeen UI] gzip/gunzip not found for .gz unpacking.')}`,
+      '  return 127',
+      '}',
+      '__xk_checksum_file=""',
+    ];
+
+    if (checksumUrl) {
+      lines.push(
+        '__xk_checksum_file="$__xk_tmpdir/checksums.txt"',
+        `if __xk_fetch ${shSingleQuote(checksumUrl)} "$__xk_checksum_file"; then`,
+        `  ${buildShellPrintfLine('[Xkeen UI] checksums.txt downloaded, checksum verification is enabled when possible.')}`,
+        'else',
+        `  ${buildShellPrintfLine('[Xkeen UI] checksums.txt download failed, continuing without checksum verification.')}`,
+        '  __xk_checksum_file=""',
+        'fi',
+      );
+    }
+
+    lines.push(
+      '__xk_verify_checksum() {',
+      '  _asset_name="$1"',
+      '  _archive="$2"',
+      '  if [ -z "$__xk_checksum_file" ] || [ ! -f "$__xk_checksum_file" ]; then',
+      '    return 0',
+      '  fi',
+      "  _expected=\"$(grep -F \" ./$_asset_name\" \"$__xk_checksum_file\" | cut -d ' ' -f 1 | head -n 1)\"",
+      '  if [ -z "$_expected" ]; then',
+      '    return 0',
+      '  fi',
+      '  if command -v sha256sum >/dev/null 2>&1; then',
+      "    _actual=\"$(sha256sum \"$_archive\" | cut -d ' ' -f 1)\"",
+      '  elif command -v openssl >/dev/null 2>&1; then',
+      "    _actual=\"$(openssl dgst -sha256 \"$_archive\" | awk '{print $NF}')\"",
+      '  else',
+      '    return 0',
+      '  fi',
+      '  [ "$_expected" = "$_actual" ]',
+      '}',
+      '__xk_try_asset() {',
+      '  _asset_name="$1"',
+      '  _asset_url="$2"',
+      '  _archive="$__xk_tmpdir/$_asset_name"',
+      '  _binary="$__xk_tmpdir/$_asset_name.bin"',
+      '  rm -f "$_archive" "$_binary"',
+      '  printf \'%s\\n\' "[Xkeen UI] Downloading $_asset_name..."',
+      '  if ! __xk_fetch "$_asset_url" "$_archive"; then',
+      '    printf \'%s\\n\' "[Xkeen UI] Download failed for $_asset_name, trying the next asset."',
+      '    return 1',
+      '  fi',
+      '  if ! __xk_verify_checksum "$_asset_name" "$_archive"; then',
+      '    printf \'%s\\n\' "[Xkeen UI] Checksum mismatch for $_asset_name, trying the next asset."',
+      '    return 1',
+      '  fi',
+      '  if ! __xk_unpack_gzip "$_archive" "$_binary"; then',
+      '    printf \'%s\\n\' "[Xkeen UI] Unpack failed for $_asset_name, trying the next asset."',
+      '    return 1',
+      '  fi',
+      '  chmod 755 "$_binary" || return 1',
+      '  _version_out="$("$_binary" -v 2>&1)"',
+      '  _version_rc="$?"',
+      '  if [ "$_version_rc" -ne 0 ]; then',
+      '    printf \'%s\\n\' "$_version_out"',
+      '    printf \'%s\\n\' "[Xkeen UI] Candidate $_asset_name is not runnable on this router, trying the next asset."',
+      '    return 1',
+      '  fi',
+      '  printf \'%s\\n\' "$_version_out"',
+      '  __xk_selected_asset_name="$_asset_name"',
+      '  __xk_selected_binary="$_binary"',
+      '  return 0',
+      '}',
+      '__xk_selected_asset_name=""',
+      '__xk_selected_binary=""',
+    );
+
+    assets.forEach((asset) => {
+      lines.push(`if __xk_try_asset ${shSingleQuote(asset.name)} ${shSingleQuote(asset.url)}; then`);
+      lines.push('  break');
+      lines.push('fi');
+    });
+
+    lines.push(
+      'if [ -z "$__xk_selected_binary" ] || [ ! -f "$__xk_selected_binary" ]; then',
+      `  ${buildShellPrintfLine('[Xkeen UI] No runnable Mihomo pre-release asset was found for this router.')}`,
+      '  __xk_cleanup',
+      '  exit 1',
+      'fi',
+      'mkdir -p /opt/sbin /opt/backups || true',
+      '__xk_backup=""',
+      'if [ -f /opt/sbin/mihomo ]; then',
+      '  __xk_backup="/opt/backups/mihomo.backup.$(date +%Y%m%d-%H%M%S 2>/dev/null || echo current)"',
+      `  ${buildShellPrintfLine('[Xkeen UI] Saving the current Mihomo binary as backup.')}`,
+      '  if ! cp /opt/sbin/mihomo "$__xk_backup"; then',
+      `    ${buildShellPrintfLine('[Xkeen UI] Backup copy failed, continuing without it.')}`,
+      '    __xk_backup=""',
+      '  fi',
+      'fi',
+      `  ${buildShellPrintfLine('[Xkeen UI] Stopping xkeen...')}`,
+      'xkeen -stop',
+      '__xk_stop_rc="$?"',
+      'if [ "$__xk_stop_rc" -ne 0 ]; then',
+      '  printf \'%s\\n\' "[Xkeen UI] xkeen -stop exited with $__xk_stop_rc, continuing with the binary replacement."',
+      'fi',
+      'if ! cp "$__xk_selected_binary" /opt/sbin/mihomo.new; then',
+      `  ${buildShellPrintfLine('[Xkeen UI] Failed to write /opt/sbin/mihomo.new.')}`,
+      '  xkeen -start >/dev/null 2>&1 || true',
+      '  __xk_cleanup',
+      '  exit 1',
+      'fi',
+      'chmod 755 /opt/sbin/mihomo.new || true',
+      'if ! mv /opt/sbin/mihomo.new /opt/sbin/mihomo; then',
+      `  ${buildShellPrintfLine('[Xkeen UI] Failed to replace /opt/sbin/mihomo.')}`,
+      '  if [ -n "$__xk_backup" ] && [ -f "$__xk_backup" ]; then',
+      '    cp "$__xk_backup" /opt/sbin/mihomo >/dev/null 2>&1 || true',
+      '  fi',
+      '  xkeen -start >/dev/null 2>&1 || true',
+      '  __xk_cleanup',
+      '  exit 1',
+      'fi',
+      `  ${buildShellPrintfLine('[Xkeen UI] Starting xkeen...')}`,
+      'xkeen -start',
+      '__xk_start_rc="$?"',
+      'if [ "$__xk_start_rc" -ne 0 ]; then',
+      '  printf \'%s\\n\' "[Xkeen UI] xkeen -start exited with $__xk_start_rc."',
+      '  if [ -n "$__xk_backup" ] && [ -f "$__xk_backup" ]; then',
+      `    ${buildShellPrintfLine('[Xkeen UI] Restoring the previous Mihomo backup.')}`,
+      '    cp "$__xk_backup" /opt/sbin/mihomo >/dev/null 2>&1 || true',
+      '    chmod 755 /opt/sbin/mihomo >/dev/null 2>&1 || true',
+      '    xkeen -start >/dev/null 2>&1 || true',
+      '  fi',
+      '  __xk_cleanup',
+      '  exit 1',
+      'fi',
+      `  ${buildShellPrintfLine('[Xkeen UI] Checking the installed Mihomo version...')}`,
+      '/opt/sbin/mihomo -v 2>&1',
+      '__xk_final_rc="$?"',
+      'if [ "$__xk_final_rc" -eq 0 ]; then',
+      `  ${buildShellPrintfLine('[Xkeen UI] Mihomo pre-release install finished.')}`,
+      'else',
+      '  printf \'%s\\n\' "[Xkeen UI] Mihomo was replaced, but version check exited with $__xk_final_rc."',
+      'fi',
+      '__xk_cleanup',
+      'unset __xk_selected_asset_name __xk_selected_binary __xk_checksum_file __xk_tmpdir __xk_backup __xk_stop_rc __xk_start_rc __xk_final_rc',
+    );
+
+    return buildShellScript(lines);
   }
 
   async function runTerminalCommand(command, source = 'cores_status') {
@@ -290,7 +525,23 @@ let coresStatusModuleApi = null;
     const flag = String(btn.dataset.prereleaseFlag || '').trim();
     const tag = String(btn.dataset.prereleaseTag || '').trim();
     const coreLabel = String(btn.dataset.prereleaseCore || '').trim() || 'ядра';
-    const command = buildPrereleaseUpdateCommand(flag, tag, coreLabel);
+    const installMeta = getPrereleaseInstallMeta(btn);
+    const mode = String(btn.dataset.prereleaseMode || '').trim();
+    let command = '';
+    if (mode === 'direct_asset') {
+      if (!isDirectAssetPrereleaseInstall(installMeta)) {
+        toastMsg(`Не удалось подготовить прямую установку pre-release для ${coreLabel}.`, 'error');
+        return;
+      }
+      if (installMeta.supported === false) {
+        const note = String(installMeta.note || '').trim();
+        toastMsg(note || `Для ${coreLabel} pre-release не найден подходящий asset под архитектуру роутера.`, 'error');
+        return;
+      }
+      command = buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel);
+    } else {
+      command = buildPrereleaseUpdateCommand(flag, tag, coreLabel);
+    }
     if (!command) {
       toastMsg(`Не удалось определить pre-release для ${coreLabel}.`, 'error');
       return;
@@ -303,7 +554,11 @@ let coresStatusModuleApi = null;
         toastMsg(`Не удалось запустить обновление ${coreLabel} до pre-release.`, 'error');
         return;
       }
-      toastMsg(`${coreLabel}: авто-обновление до pre-release ${tag} запущено, в терминале показаны подсказки по шагам.`, 'info');
+      if (mode === 'direct_asset') {
+        toastMsg(`${coreLabel}: запущена прямая установка pre-release ${tag}, детали показываются в терминале.`, 'info');
+      } else {
+        toastMsg(`${coreLabel}: авто-обновление до pre-release ${tag} запущено, в терминале показаны подсказки по шагам.`, 'info');
+      }
     } finally {
       setBusy(btn, false);
     }
@@ -312,20 +567,35 @@ let coresStatusModuleApi = null;
   function configurePrereleaseAction(btn, release, installedVersion, { flag, coreLabel } = {}) {
     if (!btn) return;
     const tag = String((release && release.tag) || '').trim();
+    const releaseInstall = (release && release.install && typeof release.install === 'object') ? release.install : null;
     const shouldShow = !!tag && normVer(installedVersion) !== normVer(tag);
     show(btn, shouldShow);
     if (!shouldShow) {
       btn.removeAttribute('data-prerelease-tag');
       btn.removeAttribute('data-prerelease-flag');
       btn.removeAttribute('data-prerelease-core');
+      btn.removeAttribute('data-prerelease-mode');
       btn.title = '';
       btn.removeAttribute('data-tooltip');
+      btn.__xkPrereleaseInstallMeta = null;
       return;
     }
     btn.dataset.prereleaseTag = tag;
     btn.dataset.prereleaseFlag = String(flag || '').trim();
     btn.dataset.prereleaseCore = String(coreLabel || '').trim();
-    btn.title = `Запустить обновление ${coreLabel} до pre-release ${tag} через терминал с авто-вводом: 9 и выбранный тег.`;
+    if (isDirectAssetPrereleaseInstall(releaseInstall)) {
+      btn.dataset.prereleaseMode = 'direct_asset';
+      btn.__xkPrereleaseInstallMeta = releaseInstall;
+      if (releaseInstall.supported === false) {
+        btn.title = String(releaseInstall.note || `Для ${coreLabel} pre-release не найден подходящий asset под архитектуру роутера.`).trim();
+      } else {
+        btn.title = `Установить ${coreLabel} pre-release ${tag} напрямую из GitHub asset под архитектуру роутера.`;
+      }
+    } else {
+      btn.dataset.prereleaseMode = 'xkeen_prompt';
+      btn.__xkPrereleaseInstallMeta = null;
+      btn.title = `Запустить обновление ${coreLabel} до pre-release ${tag} через терминал с авто-вводом: 9 и выбранный тег.`;
+    }
     btn.dataset.tooltip = btn.title;
   }
 

@@ -45,7 +45,11 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "let _customSourceOptions = { left: null, right: null };" in diff_modal
     assert "let _textSourceSeq = 0;" in diff_modal
     assert "function _readClipboardText()" in diff_modal
+    assert "function _readClipboardShadowText()" in diff_modal
+    assert "function _promptClipboardText()" in diff_modal
     assert "function _pickLocalTextFile()" in diff_modal
+    assert "function _stylePickerInput(input)" in diff_modal
+    assert "function _openFilePickerInput(input)" in diff_modal
     assert "async function _resolveActionSource(side, descriptor)" in diff_modal
     assert "function _applyResolvedSideSource(side, descriptor, label, text)" in diff_modal
     assert "rt.view.EditorView.lineWrapping" in diff_modal
@@ -82,6 +86,11 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "scope.saveClosesOwner" in diff_modal
     assert "String(ev.key || '').toLowerCase() === 's'" in diff_modal
     assert "_labelsRowEl.classList.toggle('hidden', !!hidden);" in diff_modal
+    assert "window.__xkLastClipboardText" in diff_modal
+    assert "Вставьте текст из буфера обмена и нажмите OK:" in diff_modal
+    assert "input.showPicker();" in diff_modal
+    assert "let focusBackTimer = 0;" in diff_modal
+    assert "}, 180);" in diff_modal
     assert "Окно сравнивает текущий редактор, сохранённую версию и внешний текст." in diff_modal
     assert "Вставить из буфера…" in diff_modal
     assert "Загрузить из файла…" in diff_modal
