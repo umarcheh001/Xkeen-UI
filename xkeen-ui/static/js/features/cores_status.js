@@ -235,7 +235,7 @@ let coresStatusModuleApi = null;
     if (!normalizedFlag || !normalizedTag) return '';
     const releaseLabel = formatReleaseLabel(normalizedTag, { preferV: true });
     const versionSummaryCommand = buildPrereleaseVersionSummaryCommand(normalizedFlag, normalizedCore);
-    const parts = [
+    const lines = [
       `${buildShellPrintfLine('')};`,
       `${buildShellPrintfLine(`[Xkeen UI] Запускаем обновление ${normalizedCore} до pre-release ${releaseLabel}.`)};`,
       `${buildShellPrintfLine('[Xkeen UI] Xkeen ниже выполнит установку и покажет свой прогресс.')};`,
@@ -248,7 +248,7 @@ let coresStatusModuleApi = null;
       '  unset __xk_prerelease_status;',
       'fi',
     ];
-    return parts.filter(Boolean).join(' ');
+    return buildQuietTerminalScript(lines.filter(Boolean));
   }
 
   function normalizePrereleaseInstallAssets(installMeta) {

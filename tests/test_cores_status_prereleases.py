@@ -138,12 +138,14 @@ def test_commands_panel_has_dedicated_prerelease_links_and_styles():
     assert '/opt/sbin/xray version 2>/dev/null | head -n 1' in script
     assert 'Текущая версия ${normalizedCore}: $__xk_installed_version' in script
     assert 'stty -echo 2>/dev/null || true' in script
+    assert 'return buildQuietTerminalScript(lines.filter(Boolean));' in script
     assert "btn.dataset.prereleaseMode = 'direct_asset';" in script
     assert "command = buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel);" in script
     assert 'const installedIsCurrentDirect = !!installedToken && buildIds.includes(installedToken);' in script
     assert "const displayTag = String((release && (release.display_tag || release.tag)) || '').trim();" in script
     assert ".join('\\n');" in script
     assert ".join('; ');" not in script
+    assert "return parts.filter(Boolean).join(' ');" not in script
     assert 'btn.dataset.tooltip = btn.title;' in script
     assert "const xPre = x.prerelease || null;" in script
     assert "const mPre = m.prerelease || null;" in script
