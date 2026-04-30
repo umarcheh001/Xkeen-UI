@@ -8064,37 +8064,35 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-controls {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 8px 10px;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 5px;
   width: 100%;
   margin-top: 2px;
-  padding-bottom: 22px;
+  min-width: 0;
+  padding-bottom: 18px;
 }
 
 .xk-sub-controls > .xk-sub-check {
   min-width: 0;
-  width: 100%;
-  justify-content: flex-start;
+  width: auto;
+  flex: 0 1 auto;
+  justify-content: center;
 }
 
 .xk-sub-auto-rule-check {
-  grid-column: auto;
   min-width: 0;
-  justify-content: flex-start;
 }
 
 .xk-sub-routing-mode {
   position: relative;
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex: 0 0 132px;
   min-width: 0;
-  width: 100%;
-  max-width: 340px;
+  width: 132px;
   padding: 0;
-  justify-self: start;
+  margin-left: auto;
 }
 
 .xk-sub-inline-label {
@@ -8122,21 +8120,22 @@ html[data-theme="light"] .xk-sub-draft-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 38px;
-  padding: 6px 12px;
+  min-height: 34px;
+  padding: 0 8px;
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(2, 6, 23, 0.28);
   color: #cbd5e1;
-  font-size: calc(12px * var(--xk-font-scale));
+  font-size: calc(11px * var(--xk-font-scale));
   cursor: pointer;
   user-select: none;
-  white-space: normal;
-  line-height: 1.25;
+  white-space: nowrap;
+  line-height: 1;
 }
 
 .xk-sub-check span:last-child {
   min-width: 0;
+  white-space: nowrap;
 }
 
 .xk-sub-check:hover {
@@ -9537,7 +9536,8 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-controls {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   align-items: flex-start;
 }
 
@@ -9547,9 +9547,8 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-routing-mode {
-  grid-column: 1 / -1;
-  max-width: none;
-  justify-self: stretch;
+  flex: 0 0 128px;
+  width: 128px;
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-balancers {
