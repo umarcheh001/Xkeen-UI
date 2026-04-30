@@ -3826,6 +3826,16 @@ let outboundsModuleApi = null;
           try { input.setAttribute('data-tooltip', inputTooltip || text); } catch (e3) {}
         }
       };
+      const setTooltipPlacement = (id, placement) => {
+        const input = $(id);
+        if (input) {
+          try { input.setAttribute('data-tooltip-placement', placement); } catch (e) {}
+          const label = input.closest ? input.closest('label') : null;
+          if (label) {
+            try { label.setAttribute('data-tooltip-placement', placement); } catch (e2) {}
+          }
+        }
+      };
 
       setCheckCopy(
         SUB_IDS.ping,
@@ -3839,6 +3849,11 @@ let outboundsModuleApi = null;
         '\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443 \u043a routing \u0447\u0435\u0440\u0435\u0437 \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u0439 auto-managed balancer \u0438 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u043e xk_auto_leastPing. \u0412\u0430\u0448\u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044e\u0449\u0438\u0435 balancer-\u044b \u043d\u0435 \u043c\u0435\u043d\u044f\u044e\u0442\u0441\u044f.',
         '\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool \u0438 \u043f\u0440\u0430\u0432\u0438\u043b\u043e xk_auto_leastPing.'
       );
+      setTooltipPlacement(SUB_IDS.enabled, 'bottom');
+      setTooltipPlacement(SUB_IDS.ping, 'bottom');
+      setTooltipPlacement(SUB_IDS.refreshNow, 'bottom');
+      setTooltipPlacement(SUB_IDS.routingAutoRule, 'bottom');
+      setTooltipPlacement(SUB_IDS.routingMode, 'bottom');
 
       const routingModeLabel = document.querySelector(`label[for="${SUB_IDS.routingMode}"]`);
       if (routingModeLabel) {
@@ -3848,6 +3863,7 @@ let outboundsModuleApi = null;
           ? '\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e: \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 leastPing pool \u0438 fallback \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u044e\u0442\u0441\u044f, \u0430 \u044f\u0432\u043d\u044b\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u043d\u0430 vless-reality \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u044e\u0442\u0441\u044f. \u0416\u0451\u0441\u0442\u043a\u043e: auto-\u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u043d\u0430 vless-reality \u043f\u0435\u0440\u0435\u0435\u0437\u0436\u0430\u044e\u0442 \u0432 balancerTag pool.'
           : '\u0420\u0435\u0436\u0438\u043c Auto routing \u0432\u043b\u0438\u044f\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u0430 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool. \u0412\u043a\u043b\u044e\u0447\u0438 \u00ab\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool\u00bb, \u0447\u0442\u043e\u0431\u044b \u044d\u0442\u043e\u0442 \u0440\u0435\u0436\u0438\u043c \u043f\u0440\u0438\u043c\u0435\u043d\u044f\u043b\u0441\u044f.';
         try { routingModeLabel.setAttribute('data-tooltip', tooltip); } catch (e4) {}
+        try { routingModeLabel.setAttribute('data-tooltip-placement', 'bottom'); } catch (e4a) {}
         const select = $(SUB_IDS.routingMode);
         if (select) {
           try { select.setAttribute('data-tooltip', tooltip); } catch (e5) {}

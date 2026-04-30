@@ -218,6 +218,21 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "white-space: nowrap;" in styles_src
     assert "text-overflow: ellipsis;" in styles_src
     assert ".xk-sub-span-5" in styles_src
+
+
+def test_subscription_control_tooltips_can_prefer_bottom_placement():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    tooltips_src = _read("xkeen-ui/static/js/ui/tooltips_auto.js")
+    styles_src = _read("xkeen-ui/static/styles.css")
+
+    assert "const PLACEMENT_ATTR = 'data-tooltip-placement';" in tooltips_src
+    assert "function tooltipPlacementPreference(el) {" in tooltips_src
+    assert "const preferredPos = tooltipPlacementPreference(el);" in tooltips_src
+    assert "setTooltipPlacement(SUB_IDS.enabled, 'bottom');" in outbounds_src
+    assert "setTooltipPlacement(SUB_IDS.ping, 'bottom');" in outbounds_src
+    assert "setTooltipPlacement(SUB_IDS.refreshNow, 'bottom');" in outbounds_src
+    assert "setTooltipPlacement(SUB_IDS.routingAutoRule, 'bottom');" in outbounds_src
+    assert "setTooltipPlacement(SUB_IDS.routingMode, 'bottom');" in outbounds_src
     assert ".xk-sub-filter-field .xk-pool-fieldlabel" in styles_src
     assert ".xk-sub-interval-note {" in styles_src
     assert ".xk-sub-update-note {" in styles_src

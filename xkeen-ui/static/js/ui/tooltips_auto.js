@@ -16,6 +16,7 @@
   'use strict';
 
   const ATTR = 'data-tooltip';
+  const PLACEMENT_ATTR = 'data-tooltip-placement';
   // We skip only <option> because it behaves inconsistently across browsers.
   // Inputs/selects/textarea are supported by the portal tooltip renderer.
   const SKIP_TAGS = new Set(['OPTION', 'SCRIPT', 'STYLE']);
@@ -43,6 +44,13 @@
   function normalizeText(s) {
     if (!s) return '';
     return String(s).replace(/\s+/g, ' ').trim();
+  }
+
+  function tooltipPlacementPreference(el) {
+    if (!el || el.nodeType !== 1) return '';
+    const value = normalizeText(el.getAttribute(PLACEMENT_ATTR)).toLowerCase();
+    if (value === 'top' || value === 'bottom') return value;
+    return '';
   }
 
   function isInteractiveEl(el) {
@@ -286,10 +294,18 @@
       const margin = 10;
       const arrowGap = 10;
 
-      // Prefer "top" placement, but flip if it would go out of viewport.
+      // Prefer element-defined placement first, then fall back to "top".
       const fitsTop = rect.top >= (bb.height + arrowGap + margin);
       const fitsBottom = (vh - rect.bottom) >= (bb.height + arrowGap + margin);
-      const pos = fitsTop ? 'top' : (fitsBottom ? 'bottom' : 'top');
+      const preferredPos = tooltipPlacementPreference(el);
+      let pos = 'top';
+      if (preferredPos === 'bottom') {
+        pos = fitsBottom ? 'bottom' : (fitsTop ? 'top' : 'bottom');
+      } else if (preferredPos === 'top') {
+        pos = fitsTop ? 'top' : (fitsBottom ? 'bottom' : 'top');
+      } else {
+        pos = fitsTop ? 'top' : (fitsBottom ? 'bottom' : 'top');
+      }
       portal.dataset.pos = pos;
 
       const centerX = rect.left + rect.width / 2;
