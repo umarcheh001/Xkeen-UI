@@ -8064,9 +8064,9 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
   gap: 8px;
   width: 100%;
   margin-top: 2px;
@@ -8074,22 +8074,24 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-controls > .xk-sub-check {
-  flex: 1 1 0;
   min-width: 0;
+  width: 100%;
   justify-content: center;
 }
 
 .xk-sub-auto-rule-check {
-  flex: 1 1 0;
+  grid-column: 1 / span 2;
   min-width: 0;
+  justify-content: flex-start;
 }
 
 .xk-sub-routing-mode {
   position: relative;
-  display: inline-flex;
-  flex: 1 1 0;
-  min-width: 128px;
-  width: auto;
+  display: grid;
+  grid-column: 3;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  width: 100%;
   padding: 0;
 }
 
@@ -9528,14 +9530,18 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-controls {
-  flex-wrap: wrap;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: flex-start;
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-controls > .xk-sub-check,
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-controls > .xk-sub-routing-mode {
-  flex: 1 1 130px;
-  min-width: 130px;
+  min-width: 0;
+}
+
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-auto-rule-check,
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-routing-mode {
+  grid-column: 1 / -1;
 }
 
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-balancers {
@@ -9561,19 +9567,19 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls {
-  flex-wrap: wrap;
+  grid-template-columns: 1fr;
   align-items: flex-start;
   padding-bottom: 0;
 }
 
-.xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls > .xk-sub-check {
-  flex: 1 1 calc(50% - 4px);
-  min-width: 130px;
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls > .xk-sub-check,
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls > .xk-sub-routing-mode {
+  grid-column: 1;
+  min-width: 0;
+  width: 100%;
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls > .xk-sub-routing-mode {
-  flex: 1 1 100%;
-  width: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 4px;
