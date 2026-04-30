@@ -87,6 +87,21 @@ let coresStatusModuleApi = null;
     return raw;
   }
 
+  function formatInstalledVersionLabel(version) {
+    const raw = String(version || '').trim();
+    if (!raw) return 'v?';
+    return formatReleaseLabel(raw);
+  }
+
+  function normalizeVersionCompareToken(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (isSemverLikeTag(raw) || raw.toLowerCase().startsWith('v')) {
+      return normVer(raw).toLowerCase();
+    }
+    return raw.toLowerCase();
+  }
+
   function formatReleaseTitle(baseTitle, release) {
     const parts = [String(baseTitle || '').trim()].filter(Boolean);
     const publishedAt = String((release && release.published_at) || '').trim();
@@ -124,6 +139,18 @@ let coresStatusModuleApi = null;
       .join('\n');
   }
 
+  function buildQuietTerminalScript(lines) {
+    return buildShellScript([
+      'stty -echo 2>/dev/null || true',
+      '(',
+      ...(Array.isArray(lines) ? lines : []),
+      ')',
+      '__xk_script_status="$?"',
+      'stty echo 2>/dev/null || true',
+      'unset __xk_script_status',
+    ]);
+  }
+
   async function getJSON(url) {
     const res = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
     const data = await res.json().catch(() => ({}));
@@ -146,7 +173,8 @@ let coresStatusModuleApi = null;
     show(linkEl, has);
     if (!has) return;
     const verSpan = versionSelector ? linkEl.querySelector(versionSelector) : null;
-    if (verSpan) verSpan.textContent = formatReleaseLabel(release.tag, { preferV });
+    const displayTag = String((release && (release.display_tag || release.tag)) || '').trim();
+    if (verSpan) verSpan.textContent = formatReleaseLabel(displayTag, { preferV });
     try { linkEl.href = release.url || '#'; } catch (e) {}
     const nextTitle = formatReleaseTitle(title, release);
     if (nextTitle) linkEl.title = nextTitle;
@@ -203,7 +231,7 @@ let coresStatusModuleApi = null;
       '',
     ];
 
-    return buildShellScript([
+    return buildQuietTerminalScript([
       ...introLines.map((line) => buildShellPrintfLine(line)),
       `printf '%s\\n%s\\n' '9' ${shSingleQuote(normalizedTag)} | xkeen ${normalizedFlag}`,
       '__xk_prerelease_status="$?"',
@@ -224,6 +252,13 @@ let coresStatusModuleApi = null;
         url: String((asset && asset.url) || '').trim(),
       }))
       .filter((asset) => asset.name && asset.url);
+  }
+
+  function normalizePrereleaseBuildIds(installMeta) {
+    const buildIds = Array.isArray(installMeta && installMeta.build_ids) ? installMeta.build_ids : [];
+    return buildIds
+      .map((buildId) => normalizeVersionCompareToken(buildId))
+      .filter(Boolean);
   }
 
   function getPrereleaseInstallMeta(btn) {
@@ -251,20 +286,11 @@ let coresStatusModuleApi = null;
     const note = String((releaseInstall && releaseInstall.note) || '').trim();
     const checksumUrl = String((releaseInstall && releaseInstall.checksum_url) || '').trim();
 
-    const introLines = [
-      '',
-      `[Xkeen UI] Direct install ${normalizedCore} pre-release ${normalizedTag}`,
-      `[Xkeen UI] Router arch: ${arch}${opkgArch ? ` | opkg: ${opkgArch}` : ''}${endian ? ` | endian: ${endian}` : ''}`,
-    ];
-    if (note) introLines.push(`[Xkeen UI] ${note}`);
-    introLines.push('[Xkeen UI] Candidate GitHub assets:');
-    assets.forEach((asset, index) => {
-      introLines.push(`  ${index + 1}) ${asset.name}`);
-    });
-    introLines.push('');
-
     const lines = [
-      ...introLines.map((line) => buildShellPrintfLine(line)),
+      buildShellPrintfLine(''),
+      buildShellPrintfLine(`[Xkeen UI] Установка ${normalizedCore} pre-release ${normalizedTag}`),
+      buildShellPrintfLine(`[Xkeen UI] Архитектура: ${arch}${opkgArch ? ` | opkg: ${opkgArch}` : ''}${endian ? ` | endian: ${endian}` : ''}`),
+      ...(note ? [buildShellPrintfLine(`[Xkeen UI] ${note}`)] : []),
       '__xk_tmpdir="$(mktemp -d /tmp/xkeen-mihomo-pre.XXXXXX 2>/dev/null || true)"',
       'if [ -z "$__xk_tmpdir" ]; then',
       '  __xk_tmpdir="/tmp/xkeen-mihomo-pre.$$"',
@@ -284,7 +310,7 @@ let coresStatusModuleApi = null;
       '    wget -O "$_out" "$_url"',
       '    return "$?"',
       '  fi',
-      `  ${buildShellPrintfLine('[Xkeen UI] curl/wget not found.')}`,
+      `  ${buildShellPrintfLine('[Xkeen UI] Не найден curl или wget для скачивания.')}`,
       '  return 127',
       '}',
       '__xk_unpack_gzip() {',
@@ -298,7 +324,7 @@ let coresStatusModuleApi = null;
       '    gunzip -c "$_archive" > "$_out"',
       '    return "$?"',
       '  fi',
-      `  ${buildShellPrintfLine('[Xkeen UI] gzip/gunzip not found for .gz unpacking.')}`,
+      `  ${buildShellPrintfLine('[Xkeen UI] Не найден gzip или gunzip для распаковки .gz.')}`,
       '  return 127',
       '}',
       '__xk_checksum_file=""',
@@ -308,9 +334,8 @@ let coresStatusModuleApi = null;
       lines.push(
         '__xk_checksum_file="$__xk_tmpdir/checksums.txt"',
         `if __xk_fetch ${shSingleQuote(checksumUrl)} "$__xk_checksum_file"; then`,
-        `  ${buildShellPrintfLine('[Xkeen UI] checksums.txt downloaded, checksum verification is enabled when possible.')}`,
+        '  :',
         'else',
-        `  ${buildShellPrintfLine('[Xkeen UI] checksums.txt download failed, continuing without checksum verification.')}`,
         '  __xk_checksum_file=""',
         'fi',
       );
@@ -342,28 +367,26 @@ let coresStatusModuleApi = null;
       '  _archive="$__xk_tmpdir/$_asset_name"',
       '  _binary="$__xk_tmpdir/$_asset_name.bin"',
       '  rm -f "$_archive" "$_binary"',
-      '  printf \'%s\\n\' "[Xkeen UI] Downloading $_asset_name..."',
+      '  printf \'%s\\n\' "[Xkeen UI] Скачиваем $_asset_name..."',
       '  if ! __xk_fetch "$_asset_url" "$_archive"; then',
-      '    printf \'%s\\n\' "[Xkeen UI] Download failed for $_asset_name, trying the next asset."',
+      '    printf \'%s\\n\' "[Xkeen UI] Не удалось скачать $_asset_name, пробуем следующий вариант."',
       '    return 1',
       '  fi',
       '  if ! __xk_verify_checksum "$_asset_name" "$_archive"; then',
-      '    printf \'%s\\n\' "[Xkeen UI] Checksum mismatch for $_asset_name, trying the next asset."',
+      '    printf \'%s\\n\' "[Xkeen UI] Контрольная сумма не совпала для $_asset_name, пробуем следующий вариант."',
       '    return 1',
       '  fi',
       '  if ! __xk_unpack_gzip "$_archive" "$_binary"; then',
-      '    printf \'%s\\n\' "[Xkeen UI] Unpack failed for $_asset_name, trying the next asset."',
+      '    printf \'%s\\n\' "[Xkeen UI] Не удалось распаковать $_asset_name, пробуем следующий вариант."',
       '    return 1',
       '  fi',
       '  chmod 755 "$_binary" || return 1',
       '  _version_out="$("$_binary" -v 2>&1)"',
       '  _version_rc="$?"',
       '  if [ "$_version_rc" -ne 0 ]; then',
-      '    printf \'%s\\n\' "$_version_out"',
-      '    printf \'%s\\n\' "[Xkeen UI] Candidate $_asset_name is not runnable on this router, trying the next asset."',
+      '    printf \'%s\\n\' "[Xkeen UI] $_asset_name не запускается на этом роутере, пробуем следующий вариант."',
       '    return 1',
       '  fi',
-      '  printf \'%s\\n\' "$_version_out"',
       '  __xk_selected_asset_name="$_asset_name"',
       '  __xk_selected_binary="$_binary"',
       '  return 0',
@@ -380,35 +403,37 @@ let coresStatusModuleApi = null;
 
     lines.push(
       'if [ -z "$__xk_selected_binary" ] || [ ! -f "$__xk_selected_binary" ]; then',
-      `  ${buildShellPrintfLine('[Xkeen UI] No runnable Mihomo pre-release asset was found for this router.')}`,
+      `  ${buildShellPrintfLine('[Xkeen UI] Не удалось подобрать рабочий Mihomo pre-release для этого роутера.')}`,
       '  __xk_cleanup',
       '  exit 1',
       'fi',
+      'printf \'%s\\n\' "[Xkeen UI] Выбран asset: $__xk_selected_asset_name"',
       'mkdir -p /opt/sbin /opt/backups || true',
       '__xk_backup=""',
       'if [ -f /opt/sbin/mihomo ]; then',
       '  __xk_backup="/opt/backups/mihomo.backup.$(date +%Y%m%d-%H%M%S 2>/dev/null || echo current)"',
-      `  ${buildShellPrintfLine('[Xkeen UI] Saving the current Mihomo binary as backup.')}`,
+      `  ${buildShellPrintfLine('[Xkeen UI] Сохраняем резервную копию текущего Mihomo.')}`,
       '  if ! cp /opt/sbin/mihomo "$__xk_backup"; then',
-      `    ${buildShellPrintfLine('[Xkeen UI] Backup copy failed, continuing without it.')}`,
+      `    ${buildShellPrintfLine('[Xkeen UI] Не удалось сохранить резервную копию, продолжаем без неё.')}`,
       '    __xk_backup=""',
       '  fi',
       'fi',
-      `  ${buildShellPrintfLine('[Xkeen UI] Stopping xkeen...')}`,
+      `  ${buildShellPrintfLine('[Xkeen UI] Останавливаем xkeen...')}`,
       'xkeen -stop',
       '__xk_stop_rc="$?"',
       'if [ "$__xk_stop_rc" -ne 0 ]; then',
-      '  printf \'%s\\n\' "[Xkeen UI] xkeen -stop exited with $__xk_stop_rc, continuing with the binary replacement."',
+      '  printf \'%s\\n\' "[Xkeen UI] xkeen -stop завершился с кодом $__xk_stop_rc, продолжаем замену бинарника."',
       'fi',
+      `  ${buildShellPrintfLine('[Xkeen UI] Обновляем бинарник Mihomo...')}`,
       'if ! cp "$__xk_selected_binary" /opt/sbin/mihomo.new; then',
-      `  ${buildShellPrintfLine('[Xkeen UI] Failed to write /opt/sbin/mihomo.new.')}`,
+      `  ${buildShellPrintfLine('[Xkeen UI] Не удалось записать /opt/sbin/mihomo.new.')}`,
       '  xkeen -start >/dev/null 2>&1 || true',
       '  __xk_cleanup',
       '  exit 1',
       'fi',
       'chmod 755 /opt/sbin/mihomo.new || true',
       'if ! mv /opt/sbin/mihomo.new /opt/sbin/mihomo; then',
-      `  ${buildShellPrintfLine('[Xkeen UI] Failed to replace /opt/sbin/mihomo.')}`,
+      `  ${buildShellPrintfLine('[Xkeen UI] Не удалось заменить /opt/sbin/mihomo.')}`,
       '  if [ -n "$__xk_backup" ] && [ -f "$__xk_backup" ]; then',
       '    cp "$__xk_backup" /opt/sbin/mihomo >/dev/null 2>&1 || true',
       '  fi',
@@ -416,13 +441,13 @@ let coresStatusModuleApi = null;
       '  __xk_cleanup',
       '  exit 1',
       'fi',
-      `  ${buildShellPrintfLine('[Xkeen UI] Starting xkeen...')}`,
+      `  ${buildShellPrintfLine('[Xkeen UI] Запускаем xkeen...')}`,
       'xkeen -start',
       '__xk_start_rc="$?"',
       'if [ "$__xk_start_rc" -ne 0 ]; then',
-      '  printf \'%s\\n\' "[Xkeen UI] xkeen -start exited with $__xk_start_rc."',
+      '  printf \'%s\\n\' "[Xkeen UI] xkeen -start завершился с кодом $__xk_start_rc."',
       '  if [ -n "$__xk_backup" ] && [ -f "$__xk_backup" ]; then',
-      `    ${buildShellPrintfLine('[Xkeen UI] Restoring the previous Mihomo backup.')}`,
+      `    ${buildShellPrintfLine('[Xkeen UI] Восстанавливаем предыдущий Mihomo из резервной копии.')}`,
       '    cp "$__xk_backup" /opt/sbin/mihomo >/dev/null 2>&1 || true',
       '    chmod 755 /opt/sbin/mihomo >/dev/null 2>&1 || true',
       '    xkeen -start >/dev/null 2>&1 || true',
@@ -430,19 +455,19 @@ let coresStatusModuleApi = null;
       '  __xk_cleanup',
       '  exit 1',
       'fi',
-      `  ${buildShellPrintfLine('[Xkeen UI] Checking the installed Mihomo version...')}`,
+      `  ${buildShellPrintfLine('[Xkeen UI] Проверяем установленную версию Mihomo...')}`,
       '/opt/sbin/mihomo -v 2>&1',
       '__xk_final_rc="$?"',
       'if [ "$__xk_final_rc" -eq 0 ]; then',
-      `  ${buildShellPrintfLine('[Xkeen UI] Mihomo pre-release install finished.')}`,
+      `  ${buildShellPrintfLine('[Xkeen UI] Установка Mihomo pre-release завершена.')}`,
       'else',
-      '  printf \'%s\\n\' "[Xkeen UI] Mihomo was replaced, but version check exited with $__xk_final_rc."',
+      '  printf \'%s\\n\' "[Xkeen UI] Mihomo заменён, но проверка версии завершилась с кодом $__xk_final_rc."',
       'fi',
       '__xk_cleanup',
       'unset __xk_selected_asset_name __xk_selected_binary __xk_checksum_file __xk_tmpdir __xk_backup __xk_stop_rc __xk_start_rc __xk_final_rc',
     );
 
-    return buildShellScript(lines);
+    return buildQuietTerminalScript(lines);
   }
 
   async function runTerminalCommand(command, source = 'cores_status') {
@@ -568,7 +593,11 @@ let coresStatusModuleApi = null;
     if (!btn) return;
     const tag = String((release && release.tag) || '').trim();
     const releaseInstall = (release && release.install && typeof release.install === 'object') ? release.install : null;
-    const shouldShow = !!tag && normVer(installedVersion) !== normVer(tag);
+    const installedToken = normalizeVersionCompareToken(installedVersion);
+    const releaseToken = normalizeVersionCompareToken((release && (release.display_tag || release.tag)) || '');
+    const buildIds = normalizePrereleaseBuildIds(releaseInstall);
+    const installedIsCurrentDirect = !!installedToken && buildIds.includes(installedToken);
+    const shouldShow = !!tag && !installedIsCurrentDirect && (!installedToken || installedToken !== releaseToken);
     show(btn, shouldShow);
     if (!shouldShow) {
       btn.removeAttribute('data-prerelease-tag');
@@ -611,8 +640,8 @@ let coresStatusModuleApi = null;
     const mihomo = (cores && cores.mihomo) ? cores.mihomo : {};
     lastInstalled = { xray, mihomo };
 
-    setText($('core-xray-installed'), xray.installed ? (xray.version ? `v${normVer(xray.version)}` : 'v?') : NOT_INSTALLED_LABEL);
-    setText($('core-mihomo-installed'), mihomo.installed ? (mihomo.version ? `v${normVer(mihomo.version)}` : 'v?') : NOT_INSTALLED_LABEL);
+    setText($('core-xray-installed'), xray.installed ? formatInstalledVersionLabel(xray.version) : NOT_INSTALLED_LABEL);
+    setText($('core-mihomo-installed'), mihomo.installed ? formatInstalledVersionLabel(mihomo.version) : NOT_INSTALLED_LABEL);
 
     const pillX = $('core-pill-xray');
     const pillM = $('core-pill-mihomo');

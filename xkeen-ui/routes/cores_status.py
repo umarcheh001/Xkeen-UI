@@ -24,7 +24,7 @@ from flask import Blueprint, jsonify, request
 from routes.common.errors import log_route_exception
 
 
-_CACHE_FORMAT_VERSION = 2
+_CACHE_FORMAT_VERSION = 3
 
 
 def _env_int(name: str, default: int) -> int:
@@ -166,6 +166,7 @@ def _run_cmd(cmd: List[str], *, timeout_s: float = 2.5) -> Tuple[int, str]:
 
 
 _RE_SEMVER = re.compile(r"\bv?(\d+\.\d+\.\d+)\b")
+_RE_MIHOMO_PRERELEASE_BUILD = re.compile(r"\b((?:alpha|beta|rc)[-._][0-9A-Za-z.]+)\b", re.IGNORECASE)
 
 
 def _parse_xray_version(output: str) -> Optional[str]:
@@ -184,7 +185,10 @@ def _parse_mihomo_version(output: str) -> Optional[str]:
     if not output:
         return None
     m = _RE_SEMVER.search(output)
-    return m.group(1) if m else None
+    if m:
+        return m.group(1)
+    pre = _RE_MIHOMO_PRERELEASE_BUILD.search(output)
+    return pre.group(1) if pre else None
 
 
 def _read_json(path: str) -> Optional[dict]:
@@ -256,6 +260,16 @@ def _iter_release_assets(raw_release: Optional[dict]) -> List[Dict[str, str]]:
             continue
         out.append({"name": name, "url": url})
     return out
+
+
+def _mihomo_asset_build_id(name: Optional[str]) -> str:
+    raw = os.path.basename(str(name or "").strip())
+    if raw.endswith(".gz"):
+        raw = raw[:-3]
+    match = re.search(r"((?:alpha|beta|rc)[-._][0-9A-Za-z.]+)$", raw, re.IGNORECASE)
+    if not match:
+        return ""
+    return str(match.group(1) or "").strip().lower().replace("_", "-")
 
 
 def _mihomo_platform_install_plan(
@@ -367,6 +381,15 @@ def _resolve_mihomo_prerelease_install(
         if not note:
             note = "Для текущей архитектуры не найден подходящий .gz asset Mihomo pre-release."
 
+    build_ids: List[str] = []
+    seen_build_ids: set[str] = set()
+    for asset in candidates:
+        build_id = _mihomo_asset_build_id(asset.get("name"))
+        if not build_id or build_id in seen_build_ids:
+            continue
+        seen_build_ids.add(build_id)
+        build_ids.append(build_id)
+
     return {
         "mode": "direct_asset",
         "supported": bool(candidates),
@@ -376,6 +399,8 @@ def _resolve_mihomo_prerelease_install(
         "opkg_arch": plan.get("opkg_arch") or "",
         "endian": plan.get("endian") or "",
         "assets": candidates,
+        "build_id": build_ids[0] if build_ids else "",
+        "build_ids": build_ids,
         "checksum_url": checksum_url,
     }
 
@@ -471,6 +496,10 @@ def _github_release_snapshot(repo: str, *, timeout_s: float) -> Dict[str, Any]:
             prerelease_release = _release_summary(prerelease_raw)
             if prerelease_release is not None and str(repo or "").strip().lower() == "metacubex/mihomo":
                 prerelease_release["install"] = _resolve_mihomo_prerelease_install(prerelease_raw)
+                install = prerelease_release.get("install") if isinstance(prerelease_release.get("install"), dict) else {}
+                display_tag = str((install or {}).get("build_id") or "").strip()
+                if display_tag:
+                    prerelease_release["display_tag"] = display_tag
             primary = stable_release or prerelease_release or {}
             return {
                 "ok": True,

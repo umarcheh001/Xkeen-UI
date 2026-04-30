@@ -44,6 +44,11 @@ def test_is_update_available_uses_version_order_not_raw_inequality():
     assert cores_status._is_update_available("1.0.0-rc1", "1.0.0") is True
 
 
+def test_parse_mihomo_version_supports_alpha_build_output():
+    output = "Mihomo Meta alpha-df1c5e5 linux arm64 with go1.26.2 Tue Apr 28 02:05:15 UTC 2026"
+    assert cores_status._parse_mihomo_version(output) == "alpha-df1c5e5"
+
+
 def test_pick_release_selects_latest_release_within_each_channel():
     releases = [
         {"tag_name": "alpha-1", "prerelease": True, "draft": False, "published_at": "2024-08-12T10:00:00Z"},
@@ -80,6 +85,8 @@ def test_resolve_mihomo_prerelease_install_selects_arch_specific_gz_asset():
     assert plan["supported"] is True
     assert plan["checksum_url"] == "https://example.test/checksums.txt"
     assert [asset["name"] for asset in plan["assets"]] == ["mihomo-linux-arm64-alpha-abc123.gz"]
+    assert plan["build_id"] == "alpha-abc123"
+    assert plan["build_ids"] == ["alpha-abc123"]
 
 
 def test_resolve_mihomo_prerelease_install_prefers_softfloat_first_on_mips():
@@ -102,6 +109,8 @@ def test_resolve_mihomo_prerelease_install_prefers_softfloat_first_on_mips():
         "mihomo-linux-mipsle-softfloat-alpha-abc123.gz",
         "mihomo-linux-mipsle-hardfloat-alpha-abc123.gz",
     ]
+    assert plan["build_id"] == "alpha-abc123"
+    assert plan["build_ids"] == ["alpha-abc123"]
     assert "softfloat" in plan["note"]
 
 
@@ -118,12 +127,17 @@ def test_commands_panel_has_dedicated_prerelease_links_and_styles():
     assert '.commands-status-row .btn-prerelease-action {' in styles
     assert 'function buildPrereleaseUpdateCommand(flag, tag, coreLabel)' in script
     assert 'function buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel)' in script
+    assert 'function buildQuietTerminalScript(lines)' in script
     assert 'function buildShellScript(lines)' in script
+    assert 'function formatInstalledVersionLabel(version)' in script
     assert "Авто-обновление ${normalizedCore} до pre-release ${normalizedTag}" in script
     assert "UI автоматически ответит в меню xkeen:" in script
     assert "printf '%s\\\\n%s\\\\n' '9'" in script
+    assert 'stty -echo 2>/dev/null || true' in script
     assert "btn.dataset.prereleaseMode = 'direct_asset';" in script
     assert "command = buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel);" in script
+    assert 'const installedIsCurrentDirect = !!installedToken && buildIds.includes(installedToken);' in script
+    assert "const displayTag = String((release && (release.display_tag || release.tag)) || '').trim();" in script
     assert ".join('\\n');" in script
     assert ".join('; ');" not in script
     assert 'btn.dataset.tooltip = btn.title;' in script
