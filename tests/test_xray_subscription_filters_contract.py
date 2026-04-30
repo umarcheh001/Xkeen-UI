@@ -160,9 +160,11 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "xk-sub-head-chip-glyph" in outbounds_src
     assert "&#8634;" in outbounds_src
     assert "&#128190;" in outbounds_src
-    assert '<div class="xk-sub-head-actions">' in outbounds_src
+    assert '<div class="xk-sub-url-actions">' in outbounds_src
     assert 'title="Очистить форму"' in outbounds_src
     assert 'title="Сохранить настройки"' in outbounds_src
+    assert "previewBtn.classList.add('xk-sub-head-chip');" in outbounds_src
+    assert "previewBtn.classList.toggle('is-armed', armed);" in outbounds_src
     assert "btn-danger btn-compact xk-sub-node-toggle" in outbounds_src
     assert "xk-sub-node-toggle-restore" in outbounds_src
     assert "outbounds-subscriptions-routing-mode" in outbounds_src

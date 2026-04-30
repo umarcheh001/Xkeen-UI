@@ -4028,6 +4028,10 @@ let outboundsModuleApi = null;
       const previewBtn = $(SUB_IDS.preview);
       if (previewBtn) {
         previewBtn.disabled = !validation.valid || _subscriptionPreviewBusy;
+        const urlValue = String(formState.url || '').trim();
+        const previewMatches = !!_subscriptionPreview && String(_subscriptionPreview.url || '') === urlValue;
+        const armed = !previewBtn.disabled && urlValue.length > 0 && !previewMatches;
+        previewBtn.classList.toggle('is-armed', armed);
       }
       try { subsUpdateDraftBadge(formState, dirty); } catch (e) {}
       try { subsRenderDiagnostics(); } catch (e2) {}
@@ -4153,8 +4157,9 @@ let outboundsModuleApi = null;
         }
         const previewBtn = root.querySelector(`#${SUB_IDS.preview}`);
         if (previewBtn) {
+          previewBtn.classList.add('xk-sub-head-chip');
           previewBtn.setAttribute('aria-label', String(previewBtn.getAttribute('title') || 'Скачать подписку'));
-          previewBtn.innerHTML = '<span class="xk-sub-icon-glyph" aria-hidden="true">&#128065;</span><span class="xk-sub-url-preview-label">Скачать подписку</span>';
+          previewBtn.innerHTML = '<span class="xk-sub-head-chip-glyph" aria-hidden="true">&#128065;</span><span class="xk-visually-hidden">Скачать подписку</span>';
         }
       } catch (e) {}
     }
@@ -4209,10 +4214,6 @@ let outboundsModuleApi = null;
                       <div class="xk-pool-kicker">Источник</div>
                       <div class="terminal-menu-title" style="margin:0;">HTTP(S) subscription</div>
                     </div>
-                    <div class="xk-sub-head-actions">
-                      <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Очистить форму" data-tooltip="Очистить форму и подготовить новую подписку.">Очистить</button>
-                      <button type="submit" form="outbounds-subscriptions-form" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить настройки" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
-                    </div>
                   </div>
                   <form id="outbounds-subscriptions-form" class="xk-sub-form">
                     <input id="outbounds-subscriptions-id" type="hidden">
@@ -4244,8 +4245,12 @@ let outboundsModuleApi = null;
                         <span id="outbounds-subscriptions-url-note" class="xk-sub-field-note" hidden></span>
                       </label>
                       <div class="xk-sub-url-action">
-                        <span class="xk-pool-fieldlabel xk-sub-url-action-label" aria-hidden="true">Предпросмотр</span>
-                        <button type="button" id="outbounds-subscriptions-preview-btn" class="btn-secondary btn-compact xk-sub-url-preview" title="Скачать подписку (предпросмотр)" data-tooltip="Скачать подписку и показать узлы в карточке справа без сохранения и без перезапуска xkeen. Используй фильтры и × у узла, чтобы исключить лишние, потом нажми «Сохранить».">Скачать подписку</button>
+                        <span class="xk-pool-fieldlabel xk-sub-url-action-label" aria-hidden="true">Действия</span>
+                        <div class="xk-sub-url-actions">
+                          <button type="button" id="outbounds-subscriptions-preview-btn" class="btn-secondary btn-compact xk-sub-url-preview" title="Скачать подписку (предпросмотр)" data-tooltip="Скачать подписку и показать узлы в карточке справа без сохранения и без перезапуска xkeen. Используй фильтры и × у узла, чтобы исключить лишние, потом нажми «Сохранить».">Скачать подписку</button>
+                          <button type="button" id="outbounds-subscriptions-reset-btn" class="btn-secondary btn-compact" title="Очистить форму" data-tooltip="Очистить форму и подготовить новую подписку.">Очистить</button>
+                          <button type="submit" form="outbounds-subscriptions-form" id="outbounds-subscriptions-save-btn" class="btn-primary btn-compact" title="Сохранить настройки" data-tooltip="Сохранить настройки подписки. Если включено «Обновить сразу», фрагмент будет создан немедленно.">Сохранить</button>
+                        </div>
                       </div>
                     </div>
                     <label class="xk-sub-filter-field xk-sub-span-4" data-tooltip="Regex по имени ноды из подписки. Например: Germany|Netherlands|SG. Пусто — без фильтра.">
