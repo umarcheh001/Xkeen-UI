@@ -59,6 +59,52 @@ def test_pick_release_selects_latest_release_within_each_channel():
     assert prerelease["tag_name"] == "alpha-2"
 
 
+def test_resolve_mihomo_prerelease_install_selects_arch_specific_gz_asset():
+    raw_release = {
+        "assets": [
+            {"name": "checksums.txt", "browser_download_url": "https://example.test/checksums.txt"},
+            {"name": "mihomo-linux-arm64-alpha-abc123.gz", "browser_download_url": "https://example.test/arm64.gz"},
+            {"name": "mihomo-linux-arm64-alpha-abc123.deb", "browser_download_url": "https://example.test/arm64.deb"},
+            {"name": "mihomo-linux-amd64-alpha-abc123.gz", "browser_download_url": "https://example.test/amd64.gz"},
+        ]
+    }
+
+    plan = cores_status._resolve_mihomo_prerelease_install(
+        raw_release,
+        arch="aarch64",
+        opkg_arch="aarch64_generic",
+        endian="le",
+    )
+
+    assert plan["mode"] == "direct_asset"
+    assert plan["supported"] is True
+    assert plan["checksum_url"] == "https://example.test/checksums.txt"
+    assert [asset["name"] for asset in plan["assets"]] == ["mihomo-linux-arm64-alpha-abc123.gz"]
+
+
+def test_resolve_mihomo_prerelease_install_prefers_softfloat_first_on_mips():
+    raw_release = {
+        "assets": [
+            {"name": "mihomo-linux-mipsle-hardfloat-alpha-abc123.gz", "browser_download_url": "https://example.test/mipsle-hardfloat.gz"},
+            {"name": "mihomo-linux-mipsle-softfloat-alpha-abc123.gz", "browser_download_url": "https://example.test/mipsle-softfloat.gz"},
+        ]
+    }
+
+    plan = cores_status._resolve_mihomo_prerelease_install(
+        raw_release,
+        arch="mipsel",
+        opkg_arch="mipsel_24kc",
+        endian="le",
+    )
+
+    assert plan["supported"] is True
+    assert [asset["name"] for asset in plan["assets"]] == [
+        "mihomo-linux-mipsle-softfloat-alpha-abc123.gz",
+        "mihomo-linux-mipsle-hardfloat-alpha-abc123.gz",
+    ]
+    assert "softfloat" in plan["note"]
+
+
 def test_commands_panel_has_dedicated_prerelease_links_and_styles():
     template = (ROOT / "xkeen-ui" / "templates" / "panel.html").read_text(encoding="utf-8")
     styles = (ROOT / "xkeen-ui" / "static" / "styles.css").read_text(encoding="utf-8")
@@ -71,9 +117,15 @@ def test_commands_panel_has_dedicated_prerelease_links_and_styles():
     assert '.commands-status-row .core-prerelease {' in styles
     assert '.commands-status-row .btn-prerelease-action {' in styles
     assert 'function buildPrereleaseUpdateCommand(flag, tag, coreLabel)' in script
+    assert 'function buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel)' in script
+    assert 'function buildShellScript(lines)' in script
     assert "Авто-обновление ${normalizedCore} до pre-release ${normalizedTag}" in script
     assert "UI автоматически ответит в меню xkeen:" in script
     assert "printf '%s\\\\n%s\\\\n' '9'" in script
+    assert "btn.dataset.prereleaseMode = 'direct_asset';" in script
+    assert "command = buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel);" in script
+    assert ".join('\\n');" in script
+    assert ".join('; ');" not in script
     assert 'btn.dataset.tooltip = btn.title;' in script
     assert "const xPre = x.prerelease || null;" in script
     assert "const mPre = m.prerelease || null;" in script

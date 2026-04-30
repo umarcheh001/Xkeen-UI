@@ -24,6 +24,9 @@ from flask import Blueprint, jsonify, request
 from routes.common.errors import log_route_exception
 
 
+_CACHE_FORMAT_VERSION = 2
+
+
 def _env_int(name: str, default: int) -> int:
     v = os.environ.get(name)
     if v is None:
@@ -204,6 +207,179 @@ def _write_json_atomic(path: str, data: dict) -> None:
     os.replace(tmp, path)
 
 
+def _opkg_primary_arch() -> str:
+    rc, txt = _run_cmd(["opkg", "print-architecture"], timeout_s=3.0)
+    if rc != 0 or not txt:
+        return ""
+
+    candidates: List[str] = []
+    for line in txt.splitlines():
+        raw = str(line or "").strip()
+        if not raw.startswith("arch "):
+            continue
+        parts = raw.split()
+        if len(parts) >= 3:
+            candidates.append(parts[1])
+
+    for arch in candidates:
+        arch_l = str(arch or "").lower()
+        if arch_l and arch_l not in ("all", "noarch"):
+            return arch
+    return candidates[0] if candidates else ""
+
+
+def _cpu_endianness() -> str:
+    try:
+        if os.path.exists("/proc/cpuinfo"):
+            data = open("/proc/cpuinfo", "r", encoding="utf-8", errors="ignore").read().lower()
+            if "little endian" in data:
+                return "le"
+            if "big endian" in data:
+                return "be"
+            if "byte order" in data and "little" in data:
+                return "le"
+            if "byte order" in data and "big" in data:
+                return "be"
+    except Exception:
+        pass
+    return ""
+
+
+def _iter_release_assets(raw_release: Optional[dict]) -> List[Dict[str, str]]:
+    out: List[Dict[str, str]] = []
+    for raw_asset in ((raw_release or {}).get("assets") or []):
+        if not isinstance(raw_asset, dict):
+            continue
+        name = str(raw_asset.get("name") or "").strip()
+        url = str(raw_asset.get("browser_download_url") or "").strip()
+        if not name or not url:
+            continue
+        out.append({"name": name, "url": url})
+    return out
+
+
+def _mihomo_platform_install_plan(
+    *,
+    arch: Optional[str] = None,
+    opkg_arch: Optional[str] = None,
+    endian: Optional[str] = None,
+) -> Dict[str, Any]:
+    machine = str(arch or "").strip()
+    if not machine:
+        try:
+            machine = str(os.uname().machine or "")
+        except Exception:
+            machine = ""
+    machine_l = machine.lower()
+
+    opkg_value = str(opkg_arch or "").strip() or _opkg_primary_arch()
+    opkg_l = opkg_value.lower()
+
+    endian_value = str(endian or "").strip().lower() or _cpu_endianness()
+
+    prefixes: List[str] = []
+    note = ""
+
+    if "aarch64" in machine_l or "arm64" in machine_l or "aarch64" in opkg_l or "arm64" in opkg_l:
+        prefixes = ["mihomo-linux-arm64-"]
+    elif "x86_64" in machine_l or "amd64" in machine_l or "x86_64" in opkg_l or "amd64" in opkg_l:
+        prefixes = ["mihomo-linux-amd64-"]
+    elif re.search(r"\barmv?7", machine_l) or "armv7" in opkg_l:
+        prefixes = ["mihomo-linux-armv7-"]
+    elif re.search(r"\barmv?6", machine_l) or "armv6" in opkg_l:
+        prefixes = ["mihomo-linux-armv6-"]
+    elif "arm" in machine_l or "arm" in opkg_l:
+        prefixes = ["mihomo-linux-armv5-"]
+    elif "mips64le" in machine_l or "mips64le" in opkg_l or "mips64el" in opkg_l:
+        prefixes = ["mihomo-linux-mips64le-"]
+    elif "mips64" in machine_l or "mips64" in opkg_l:
+        prefixes = ["mihomo-linux-mips64-"]
+    elif "mips" in machine_l or "mips" in opkg_l:
+        is_little_endian = (
+            "mipsel" in machine_l
+            or "mipsle" in machine_l
+            or "mipsel" in opkg_l
+            or "mipsle" in opkg_l
+            or endian_value == "le"
+        )
+        note = "Для MIPS используется безопасный порядок установки: softfloat, затем hardfloat."
+        if is_little_endian:
+            prefixes = [
+                "mihomo-linux-mipsle-softfloat-",
+                "mihomo-linux-mipsle-hardfloat-",
+            ]
+        else:
+            prefixes = [
+                "mihomo-linux-mips-softfloat-",
+                "mihomo-linux-mips-hardfloat-",
+            ]
+    elif "386" in machine_l or "i686" in machine_l or "i386" in machine_l or "386" in opkg_l:
+        prefixes = ["mihomo-linux-386-"]
+    else:
+        note = f"Неизвестная архитектура роутера: {machine or 'unknown'}"
+
+    return {
+        "arch": machine,
+        "opkg_arch": opkg_value,
+        "endian": endian_value,
+        "prefixes": prefixes,
+        "note": note,
+    }
+
+
+def _resolve_mihomo_prerelease_install(
+    raw_release: Optional[dict],
+    *,
+    arch: Optional[str] = None,
+    opkg_arch: Optional[str] = None,
+    endian: Optional[str] = None,
+) -> Dict[str, Any]:
+    plan = _mihomo_platform_install_plan(arch=arch, opkg_arch=opkg_arch, endian=endian)
+    assets = _iter_release_assets(raw_release)
+
+    candidates: List[Dict[str, str]] = []
+    seen_names: set[str] = set()
+    for prefix in plan.get("prefixes") or []:
+        for asset in assets:
+            name = asset.get("name") or ""
+            if not name.endswith(".gz"):
+                continue
+            if not name.startswith(str(prefix)):
+                continue
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+            candidates.append({"name": name, "url": asset.get("url") or ""})
+            break
+
+    checksum_url = ""
+    for asset in assets:
+        if str(asset.get("name") or "").strip() == "checksums.txt":
+            checksum_url = str(asset.get("url") or "").strip()
+            break
+
+    note = str(plan.get("note") or "").strip()
+    reason = ""
+    if not (plan.get("prefixes") or []):
+        reason = "unsupported_arch"
+    elif not candidates:
+        reason = "asset_not_found"
+        if not note:
+            note = "Для текущей архитектуры не найден подходящий .gz asset Mihomo pre-release."
+
+    return {
+        "mode": "direct_asset",
+        "supported": bool(candidates),
+        "reason": reason,
+        "note": note,
+        "arch": plan.get("arch") or "",
+        "opkg_arch": plan.get("opkg_arch") or "",
+        "endian": plan.get("endian") or "",
+        "assets": candidates,
+        "checksum_url": checksum_url,
+    }
+
+
 def _release_summary(raw: Optional[dict]) -> Optional[Dict[str, Any]]:
     if not isinstance(raw, dict):
         return None
@@ -289,8 +465,12 @@ def _github_release_snapshot(repo: str, *, timeout_s: float) -> Dict[str, Any]:
             data = json.loads(raw)
             if not isinstance(data, list):
                 raise ValueError("bad_releases_payload")
-            stable_release = _release_summary(_pick_release(data, prerelease=False))
-            prerelease_release = _release_summary(_pick_release(data, prerelease=True))
+            stable_raw = _pick_release(data, prerelease=False)
+            prerelease_raw = _pick_release(data, prerelease=True)
+            stable_release = _release_summary(stable_raw)
+            prerelease_release = _release_summary(prerelease_raw)
+            if prerelease_release is not None and str(repo or "").strip().lower() == "metacubex/mihomo":
+                prerelease_release["install"] = _resolve_mihomo_prerelease_install(prerelease_raw)
             primary = stable_release or prerelease_release or {}
             return {
                 "ok": True,
@@ -397,7 +577,7 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
             try:
                 if cached and float(cached.get("checked_ts") or 0) > 0:
                     age = now - float(cached.get("checked_ts") or 0)
-                    if age < float(cached.get("ttl_s") or ttl_s):
+                    if int(cached.get("format_version") or 0) == _CACHE_FORMAT_VERSION and age < float(cached.get("ttl_s") or ttl_s):
                         data = cached.get("data") if isinstance(cached.get("data"), dict) else None
                         if data:
                             installed = _detect_installed()
@@ -479,7 +659,16 @@ def create_cores_status_blueprint(ui_state_dir: str) -> Blueprint:
         }
 
         try:
-            _write_json_atomic(cache_path, {"checked_ts": now, "ttl_s": ttl_s, "stale": False, "data": {"ok": ok, "latest": latest}})
+            _write_json_atomic(
+                cache_path,
+                {
+                    "format_version": _CACHE_FORMAT_VERSION,
+                    "checked_ts": now,
+                    "ttl_s": ttl_s,
+                    "stale": False,
+                    "data": {"ok": ok, "latest": latest},
+                },
+            )
         except Exception:
             pass
 

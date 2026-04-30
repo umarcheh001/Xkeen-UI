@@ -539,6 +539,134 @@
     });
   }
 
+  function _readClipboardShadowText() {
+    try {
+      const value = asString(window.__xkLastClipboardText);
+      return value || '';
+    } catch (e) {}
+    return '';
+  }
+
+  function _promptClipboardText() {
+    let raw = null;
+    try {
+      raw = window.prompt('Вставьте текст из буфера обмена и нажмите OK:', '');
+    } catch (e) {
+      raw = null;
+    }
+    if (raw == null) throw new Error('Вставка из буфера отменена');
+    const value = asString(raw);
+    if (!value) throw new Error('Буфер обмена пуст');
+    try { window.__xkLastClipboardText = value; } catch (e2) {}
+    return value;
+  }
+
+  function _readClipboardText() {
+    const clipboard = (typeof navigator !== 'undefined' && navigator.clipboard && isFn(navigator.clipboard.readText))
+      ? navigator.clipboard
+      : null;
+    if (clipboard) {
+      return Promise.resolve(clipboard.readText())
+        .then((text) => {
+          const value = asString(text);
+          if (!value) throw new Error('Буфер обмена пуст');
+          try { window.__xkLastClipboardText = value; } catch (e) {}
+          return value;
+        })
+        .catch(() => {
+          const shadow = _readClipboardShadowText();
+          if (shadow) return shadow;
+          return _promptClipboardText();
+        });
+    }
+    const shadow = _readClipboardShadowText();
+    if (shadow) return Promise.resolve(shadow);
+    return Promise.resolve(_promptClipboardText());
+  }
+
+  function _stylePickerInput(input) {
+    if (!input) return;
+    input.style.position = 'fixed';
+    input.style.left = '-9999px';
+    input.style.top = '0';
+    input.style.width = '1px';
+    input.style.height = '1px';
+    input.style.opacity = '0';
+    input.style.pointerEvents = 'none';
+  }
+
+  function _openFilePickerInput(input) {
+    if (!input) throw new Error('Поле выбора файла недоступно');
+    if (isFn(input.showPicker)) {
+      try {
+        input.showPicker();
+        return;
+      } catch (e) {}
+    }
+    input.click();
+  }
+
+  function _pickLocalTextFile() {
+    return new Promise((resolve, reject) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,.jsonc,.txt,.yaml,.yml,.conf,.log,text/*,application/json';
+      _stylePickerInput(input);
+      let settled = false;
+      let focusBackTimer = 0;
+      const clearFocusBackTimer = () => {
+        if (!focusBackTimer) return;
+        try { clearTimeout(focusBackTimer); } catch (e) {}
+        focusBackTimer = 0;
+      };
+      const cleanup = () => {
+        clearFocusBackTimer();
+        try { window.removeEventListener('focus', onFocusBack, true); } catch (e) {}
+        try { input.removeEventListener('cancel', onCancel); } catch (e2) {}
+        try { input.removeEventListener('change', onChange); } catch (e3) {}
+        try { if (input.parentNode) input.parentNode.removeChild(input); } catch (e4) {}
+      };
+      const settleResolve = (value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+      const settleReject = (err) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(err);
+      };
+      const onCancel = () => settleResolve(null);
+      const onFocusBack = () => {
+        clearFocusBackTimer();
+        focusBackTimer = setTimeout(() => {
+          try {
+            if (!settled && (!input.files || !input.files.length)) settleResolve(null);
+          } catch (e) {}
+        }, 180);
+      };
+      const onChange = () => {
+        clearFocusBackTimer();
+        const file = input.files && input.files[0] ? input.files[0] : null;
+        if (!file) {
+          settleResolve(null);
+          return;
+        }
+        _readFileAsText(file)
+          .then((text) => settleResolve({ file: file, text: text }))
+          .catch((err) => settleReject(err));
+      };
+      input.addEventListener('cancel', onCancel, { once: true });
+      input.addEventListener('change', onChange, { once: true });
+      window.addEventListener('focus', onFocusBack, true);
+      document.body.appendChild(input);
+      try { input.value = ''; } catch (e) {}
+      try { _openFilePickerInput(input); } catch (err) { settleReject(err); }
+    });
+  }
+
   async function _resolveActionSource(side, descriptor) {
     const action = String(descriptor && descriptor.action || '').trim().toLowerCase();
     if (action === 'clipboard') {
