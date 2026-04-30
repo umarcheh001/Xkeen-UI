@@ -157,6 +157,9 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "xk-sub-node-toggle" in outbounds_src
     assert "resetBtn.classList.add('xk-sub-head-chip');" in outbounds_src
     assert "saveBtn.classList.add('xk-sub-head-chip', 'is-primary');" in outbounds_src
+    assert "xk-sub-head-chip-glyph" in outbounds_src
+    assert "&#8634;" in outbounds_src
+    assert "&#128190;" in outbounds_src
     assert '<div class="xk-sub-head-actions">' in outbounds_src
     assert 'title="Очистить форму"' in outbounds_src
     assert 'title="Сохранить настройки"' in outbounds_src
@@ -274,6 +277,7 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert ".xk-sub-interval-field .xk-sub-interval-inline .xray-log-filter {" in styles_src
     assert ".xk-sub-interval-note-inline {" in styles_src
     assert ".xk-sub-icon-btn.btn-compact.is-dirty {" in styles_src
+    assert ".xk-sub-head-chip.is-dirty {" in styles_src
     assert ".xk-sub-form .xk-sub-url-action {" in styles_src
     assert ".xk-sub-form .xk-sub-url-action-label {" in styles_src
     assert ".xk-sub-form .xk-sub-url-row {\n  display: grid;\n  grid-template-columns: minmax(0, 1fr) auto;" in styles_src

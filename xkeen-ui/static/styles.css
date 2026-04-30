@@ -7825,20 +7825,36 @@ html[data-theme="light"] .xk-mi-status.error {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: auto;
+  width: 28px;
+  min-width: 28px;
   min-height: 0;
-  height: 24px;
-  padding: 0 10px;
+  height: 28px;
+  padding: 0;
   border-radius: 999px;
-  font-size: calc(10.5px * var(--xk-font-scale));
+  font-size: calc(12px * var(--xk-font-scale));
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1;
   white-space: nowrap;
 }
 
+.xk-sub-head-chip-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(13px * var(--xk-font-scale));
+  line-height: 1;
+  transform: translateY(-0.25px);
+}
+
 .xk-sub-head-chip.is-primary {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.xk-sub-head-chip.is-dirty {
+  box-shadow:
+    0 0 0 1px rgba(245, 158, 11, 0.45),
+    0 0 0 4px rgba(245, 158, 11, 0.14);
 }
 
 .xk-sub-nodes-head-actions {
@@ -9511,8 +9527,9 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-head-chip {
-  flex: 1 1 calc(50% - 3px);
-  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  flex: 0 0 auto;
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-options {
@@ -10012,6 +10029,12 @@ html[data-theme="light"] .xk-sub-icon-btn.btn-compact.is-busy {
 }
 
 html[data-theme="light"] .xk-sub-icon-btn.btn-compact.is-dirty {
+  box-shadow:
+    0 0 0 1px rgba(234, 88, 12, 0.36),
+    0 0 0 4px rgba(251, 146, 60, 0.14);
+}
+
+html[data-theme="light"] .xk-sub-head-chip.is-dirty {
   box-shadow:
     0 0 0 1px rgba(234, 88, 12, 0.36),
     0 0 0 4px rgba(251, 146, 60, 0.14);
