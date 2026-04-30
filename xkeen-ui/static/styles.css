@@ -8067,19 +8067,27 @@ html[data-theme="light"] .xk-sub-draft-badge {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 10px;
+  gap: 8px;
+  width: 100%;
   margin-top: 2px;
   padding-bottom: 18px;
 }
 
+.xk-sub-controls > .xk-sub-check {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+}
+
 .xk-sub-auto-rule-check {
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .xk-sub-routing-mode {
   position: relative;
   display: inline-flex;
-  flex: 0 0 auto;
+  flex: 1 1 0;
   min-width: 128px;
   width: auto;
   padding: 0;
@@ -8101,9 +8109,8 @@ html[data-theme="light"] .xk-sub-draft-badge {
 
 .xk-sub-routing-mode .xray-log-filter {
   display: block;
-  width: auto;
+  width: 100%;
   min-width: 128px;
-  max-width: 148px;
   height: 34px;
 }
 
@@ -8150,14 +8157,14 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-sub-balancers-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 8px;
 }
 
 .xk-sub-balancer-check {
   align-items: flex-start;
-  min-width: min(100%, 320px);
+  min-width: 0;
   max-width: 100%;
   padding: 8px 10px;
   white-space: normal;
@@ -9520,16 +9527,12 @@ html[data-theme="light"] .xk-sub-draft-badge {
   align-items: flex-start;
 }
 
-.xk-sub-modal.xk-sub-modal-compact .xk-sub-routing-mode {
-  min-width: 128px;
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-controls > .xk-sub-check,
+.xk-sub-modal.xk-sub-modal-compact .xk-sub-controls > .xk-sub-routing-mode {
+  flex: 1 1 130px;
+  min-width: 130px;
 }
 
-.xk-sub-modal.xk-sub-modal-compact .xk-sub-options {
-  width: 100%;
-  flex-wrap: wrap;
-}
-
-.xk-sub-modal.xk-sub-modal-compact .xk-sub-auto-rule-check,
 .xk-sub-modal.xk-sub-modal-compact .xk-sub-balancers {
   grid-column: 1 / -1;
 }
@@ -9558,6 +9561,19 @@ html[data-theme="light"] .xk-sub-draft-badge {
   padding-bottom: 0;
 }
 
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls > .xk-sub-check {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 130px;
+}
+
+.xk-sub-modal.xk-sub-modal-narrow .xk-sub-controls > .xk-sub-routing-mode {
+  flex: 1 1 100%;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-head-actions {
   width: 100%;
   margin-left: 0;
@@ -9571,28 +9587,12 @@ html[data-theme="light"] .xk-sub-draft-badge {
   flex: 0 0 auto;
 }
 
-.xk-sub-modal.xk-sub-modal-narrow .xk-sub-options {
-  flex-wrap: wrap;
-}
-
-.xk-sub-modal.xk-sub-modal-narrow .xk-sub-auto-rule-check,
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-balancers {
   grid-column: 1 / -1;
 }
 
-.xk-sub-modal.xk-sub-modal-narrow .xk-sub-routing-mode {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 4px;
-}
-
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-inline-label {
   position: static;
-}
-
-.xk-sub-modal.xk-sub-modal-narrow .xk-sub-routing-mode {
-  grid-column: 1 / -1;
-  width: 100%;
 }
 
 .xk-sub-modal.xk-sub-modal-narrow .xk-sub-routing-mode .xray-log-filter {
