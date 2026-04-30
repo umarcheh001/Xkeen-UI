@@ -126,13 +126,17 @@ def test_commands_panel_has_dedicated_prerelease_links_and_styles():
     assert '.commands-status-row .core-prerelease {' in styles
     assert '.commands-status-row .btn-prerelease-action {' in styles
     assert 'function buildPrereleaseUpdateCommand(flag, tag, coreLabel)' in script
+    assert 'function buildPrereleaseVersionSummaryCommand(flag, coreLabel)' in script
     assert 'function buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel)' in script
     assert 'function buildQuietTerminalScript(lines)' in script
     assert 'function buildShellScript(lines)' in script
     assert 'function formatInstalledVersionLabel(version)' in script
-    assert "Авто-обновление ${normalizedCore} до pre-release ${normalizedTag}" in script
-    assert "UI автоматически ответит в меню xkeen:" in script
+    assert "Запускаем обновление ${normalizedCore} до pre-release ${releaseLabel}." in script
+    assert "Xkeen ниже выполнит установку и покажет свой прогресс." in script
+    assert "Обновление ${normalizedCore} завершено." in script
     assert "printf '%s\\\\n%s\\\\n' '9'" in script
+    assert '/opt/sbin/xray version 2>/dev/null | head -n 1' in script
+    assert 'Текущая версия ${normalizedCore}: $__xk_installed_version' in script
     assert 'stty -echo 2>/dev/null || true' in script
     assert "btn.dataset.prereleaseMode = 'direct_asset';" in script
     assert "command = buildMihomoPrereleaseInstallCommand(tag, installMeta, coreLabel);" in script

@@ -216,32 +216,39 @@ let coresStatusModuleApi = null;
     );
   }
 
+  function buildPrereleaseVersionSummaryCommand(flag, coreLabel) {
+    const normalizedFlag = String(flag || '').trim();
+    const normalizedCore = String(coreLabel || '').trim() || 'ядра';
+    if (normalizedFlag === '-ux') {
+      return `__xk_installed_version="$(/opt/sbin/xray version 2>/dev/null | head -n 1)"; if [ -n "$__xk_installed_version" ]; then printf '%s\\n' "[Xkeen UI] Текущая версия ${normalizedCore}: $__xk_installed_version"; fi; unset __xk_installed_version`;
+    }
+    if (normalizedFlag === '-um') {
+      return `__xk_installed_version="$(/opt/sbin/mihomo -v 2>/dev/null | head -n 1)"; if [ -n "$__xk_installed_version" ]; then printf '%s\\n' "[Xkeen UI] Текущая версия ${normalizedCore}: $__xk_installed_version"; fi; unset __xk_installed_version`;
+    }
+    return '';
+  }
+
   function buildPrereleaseUpdateCommand(flag, tag, coreLabel) {
     const normalizedFlag = String(flag || '').trim();
     const normalizedTag = String(tag || '').trim();
     const normalizedCore = String(coreLabel || '').trim() || 'core';
     if (!normalizedFlag || !normalizedTag) return '';
-
-    const introLines = [
-      '',
-      `[Xkeen UI] Авто-обновление ${normalizedCore} до pre-release ${normalizedTag}`,
-      '[Xkeen UI] UI автоматически ответит в меню xkeen:',
-      '  1) 9 - ручной ввод версии',
-      `  2) ${normalizedTag} - выбранный pre-release`,
-      '',
-    ];
-
-    return buildQuietTerminalScript([
-      ...introLines.map((line) => buildShellPrintfLine(line)),
-      `printf '%s\\n%s\\n' '9' ${shSingleQuote(normalizedTag)} | xkeen ${normalizedFlag}`,
-      '__xk_prerelease_status="$?"',
-      'if [ "$__xk_prerelease_status" -eq 0 ]; then',
-      `  ${buildShellPrintfLine('[Xkeen UI] Сценарий обновления завершён.')}`,
+    const releaseLabel = formatReleaseLabel(normalizedTag, { preferV: true });
+    const versionSummaryCommand = buildPrereleaseVersionSummaryCommand(normalizedFlag, normalizedCore);
+    const parts = [
+      `${buildShellPrintfLine('')};`,
+      `${buildShellPrintfLine(`[Xkeen UI] Запускаем обновление ${normalizedCore} до pre-release ${releaseLabel}.`)};`,
+      `${buildShellPrintfLine('[Xkeen UI] Xkeen ниже выполнит установку и покажет свой прогресс.')};`,
+      `if printf '%s\\n%s\\n' '9' ${shSingleQuote(normalizedTag)} | xkeen ${normalizedFlag}; then`,
+      `  ${buildShellPrintfLine(`[Xkeen UI] Обновление ${normalizedCore} завершено.`)};`,
+      versionSummaryCommand ? `  ${versionSummaryCommand};` : '',
       'else',
-      `  printf '%s\\n' "[Xkeen UI] Сценарий завершился с кодом $__xk_prerelease_status. Проверьте вывод выше."`,
+      '  __xk_prerelease_status="$?";',
+      `  printf '%s\\n' "[Xkeen UI] Обновление ${normalizedCore} до pre-release ${releaseLabel} завершилось с кодом $__xk_prerelease_status. Проверьте вывод выше.";`,
+      '  unset __xk_prerelease_status;',
       'fi',
-      'unset __xk_prerelease_status',
-    ]);
+    ];
+    return parts.filter(Boolean).join(' ');
   }
 
   function normalizePrereleaseInstallAssets(installMeta) {
