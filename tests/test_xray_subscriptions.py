@@ -868,6 +868,57 @@ def test_refresh_subscription_syncs_selected_manual_balancers_without_auto_pool(
     assert all(rule.get("ruleTag") != "xk_auto_leastPing" for rule in routing["routing"]["rules"])
 
 
+def test_get_subscription_routing_meta_reports_shadowing_catch_all_rule(tmp_path: Path):
+    from services import xray_subscriptions as subs
+
+    xray_dir = tmp_path / "xray" / "configs"
+    xray_dir.mkdir(parents=True)
+
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "balancers": [
+                        {
+                            "tag": "fast_web_balancer",
+                            "selector": ["VPS_"],
+                            "strategy": {"type": "leastPing"},
+                            "fallbackTag": "direct",
+                        }
+                    ],
+                    "rules": [
+                        {
+                            "type": "field",
+                            "ruleTag": "manual_ru_domains",
+                            "outboundTag": "direct",
+                            "domain": ["geosite:ru"],
+                        },
+                        {
+                            "type": "field",
+                            "ruleTag": "log_07_catch_all_fast_web_balancer",
+                            "balancerTag": "fast_web_balancer",
+                            "inboundTag": ["redirect", "tproxy"],
+                        },
+                    ],
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    meta = subs.get_subscription_routing_meta(str(xray_dir))
+
+    assert meta["existing_auto_balancer_tag"] == ""
+    assert meta["auto_balancer_candidate_tag"] == "proxy"
+    assert meta["auto_rule_shadowing_rule_tag"] == "log_07_catch_all_fast_web_balancer"
+    assert meta["auto_rule_shadowing_target_kind"] == "balancer"
+    assert meta["auto_rule_shadowing_target_tag"] == "fast_web_balancer"
+    assert meta["auto_rule_shadowing_target_label"] == 'balancer "fast_web_balancer"'
+
+
 def test_refresh_subscription_preserves_user_routing_jsonc_comments(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, request
 from routes.common.errors import error_response, exception_response
 from services.xray_subscriptions import (
     delete_subscription,
+    get_subscription_routing_meta,
     list_subscription_routing_balancers,
     list_subscriptions,
     preview_subscription,
@@ -47,6 +48,7 @@ def create_xray_subscriptions_blueprint(
                         "ok": True,
                         "subscriptions": list_subscriptions(ui_state_dir),
                         "routing_balancers": list_subscription_routing_balancers(xray_configs_dir),
+                        "routing_meta": get_subscription_routing_meta(xray_configs_dir),
                     }
                 ),
                 200,

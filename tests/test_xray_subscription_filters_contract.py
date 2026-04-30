@@ -36,6 +36,10 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert "routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback'," in outbounds_src
     assert "routing_auto_rule: !!($(SUB_IDS.routingAutoRule) && $(SUB_IDS.routingAutoRule).checked)," in outbounds_src
     assert "routing_balancer_tags: subsSelectedBalancerTags()," in outbounds_src
+    assert "let _subscriptionRoutingMeta = Object.create(null);" in outbounds_src
+    assert "function subsRoutingMetaText(key) {" in outbounds_src
+    assert "function subsBuildDraftIntegrationPlan(formState) {" in outbounds_src
+    assert "function subsApplySubscriptionCopy(formState) {" in outbounds_src
     assert "function subsFilterSummary(sub) {" in outbounds_src
     assert "data.filtered_out_count" in outbounds_src
 
@@ -124,6 +128,9 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "function subsSyncModalLayout() {" in outbounds_src
     assert "function subsDecorateActionButtons(modal) {" in outbounds_src
     assert "function subsRenderRoutingBalancers(selectedTags) {" in outbounds_src
+    assert "_subscriptionRoutingMeta = data && typeof data.routing_meta === 'object' && data.routing_meta" in outbounds_src
+    assert "subsSuggestedAutoRuleDefault()" in outbounds_src
+    assert "xk-sub-diag-group is-plan" in outbounds_src
     assert "function subsTransportFilterText(transport, protocol) {" in outbounds_src
     assert "function subsProtocolFilterText(protocol) {" in outbounds_src
     assert "xk-sub-update-note" in outbounds_src
@@ -215,8 +222,10 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert ".xk-sub-interval-note {" in styles_src
     assert ".xk-sub-update-note {" in styles_src
     assert ".xk-sub-update-title {" in styles_src
+    assert ".xk-sub-diag-group.is-plan {" in styles_src
     assert ".xk-sub-node-pill-transport" in styles_src
     assert ".xk-sub-table tbody tr.is-selected" in styles_src
+    assert "html[data-theme=\"light\"] .xk-sub-diag-group.is-plan {" in styles_src
 
 
 def test_xray_subscription_modal_protects_drafts_and_explains_autofill():

@@ -2239,6 +2239,77 @@ def list_subscription_routing_balancers(xray_configs_dir: str) -> List[Dict[str,
     return items
 
 
+def _rule_target_summary(rule: Any) -> Dict[str, str]:
+    if not isinstance(rule, dict):
+        return {"kind": "", "tag": "", "label": ""}
+    balancer_tag = str(rule.get("balancerTag") or "").strip()
+    if balancer_tag:
+        return {"kind": "balancer", "tag": balancer_tag, "label": f'balancer "{balancer_tag}"'}
+    outbound_tag = str(rule.get("outboundTag") or "").strip()
+    if outbound_tag:
+        return {"kind": "outbound", "tag": outbound_tag, "label": f'outbound "{outbound_tag}"'}
+    return {"kind": "", "tag": "", "label": ""}
+
+
+def _is_proxy_inbound_catchall_rule(rule: Any) -> bool:
+    if not isinstance(rule, dict) or not _rule_touches_proxy_inbound(rule):
+        return False
+    if str(rule.get("ruleTag") or "").strip() == AUTO_BALANCER_RULE_TAG:
+        return False
+    target = _rule_target_summary(rule)
+    if not target.get("tag"):
+        return False
+    for key in ("domain", "ip", "source", "sourcePort", "user", "protocol", "attrs", "app", "apps"):
+        if key in rule:
+            return False
+    if "port" in rule and str(rule.get("port") or "").strip():
+        return False
+    network = str(rule.get("network") or "").strip().lower().replace(" ", "")
+    if network and network not in {"tcp", "udp", "tcp,udp", "udp,tcp"}:
+        return False
+    return True
+
+
+def _subscription_auto_rule_shadow_info(routing: Dict[str, Any]) -> Dict[str, Any]:
+    rules = routing.get("rules") if isinstance(routing, dict) else []
+    if not isinstance(rules, list) or not rules:
+        return {"rule_tag": "", "target_kind": "", "target_tag": "", "target_label": ""}
+
+    insert_at = _choose_insert_index(rules)
+    candidate: Dict[str, Any] | None = None
+    for idx, rule in enumerate(rules):
+        if idx >= insert_at:
+            break
+        if not _is_proxy_inbound_catchall_rule(rule):
+            continue
+        candidate = rule if isinstance(rule, dict) else None
+
+    if not isinstance(candidate, dict):
+        return {"rule_tag": "", "target_kind": "", "target_tag": "", "target_label": ""}
+
+    target = _rule_target_summary(candidate)
+    return {
+        "rule_tag": str(candidate.get("ruleTag") or "").strip(),
+        "target_kind": str(target.get("kind") or "").strip(),
+        "target_tag": str(target.get("tag") or "").strip(),
+        "target_label": str(target.get("label") or "").strip(),
+    }
+
+
+def get_subscription_routing_meta(xray_configs_dir: str) -> Dict[str, Any]:
+    routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
+    _cfg, routing, _normalized = _ensure_routing_model(_read_json_file(routing_path, {}))
+    shadow = _subscription_auto_rule_shadow_info(routing)
+    return {
+        "existing_auto_balancer_tag": _existing_auto_balancer_tag(routing),
+        "auto_balancer_candidate_tag": _choose_auto_balancer_tag(routing),
+        "auto_rule_shadowing_rule_tag": str(shadow.get("rule_tag") or ""),
+        "auto_rule_shadowing_target_kind": str(shadow.get("target_kind") or ""),
+        "auto_rule_shadowing_target_tag": str(shadow.get("target_tag") or ""),
+        "auto_rule_shadowing_target_label": str(shadow.get("target_label") or ""),
+    }
+
+
 def _rule_inbound_tags(rule: Any) -> List[str]:
     if not isinstance(rule, dict):
         return []

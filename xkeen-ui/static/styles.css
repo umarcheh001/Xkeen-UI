@@ -8715,6 +8715,11 @@ html[data-theme="light"] .xk-sub-draft-badge {
   background: rgba(2, 6, 23, 0.24);
 }
 
+.xk-sub-diag-group.is-plan {
+  border-color: rgba(56, 189, 248, 0.26);
+  background: rgba(8, 47, 73, 0.22);
+}
+
 .xk-sub-diag-group.is-error {
   border-color: rgba(248, 113, 113, 0.24);
   background: rgba(69, 10, 10, 0.22);
@@ -9889,6 +9894,11 @@ html[data-theme="light"] .xk-sub-diag-pill.is-filtered {
 html[data-theme="light"] .xk-sub-diag-group {
   border-color: rgba(172, 188, 214, 0.38);
   background: rgba(255, 255, 255, 0.84);
+}
+
+html[data-theme="light"] .xk-sub-diag-group.is-plan {
+  border-color: rgba(56, 189, 248, 0.24);
+  background: rgba(239, 246, 255, 0.94);
 }
 
 html[data-theme="light"] .xk-sub-diag-group.is-error {

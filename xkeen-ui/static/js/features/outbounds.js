@@ -3577,6 +3577,7 @@ let outboundsModuleApi = null;
 
     let _subscriptions = [];
     let _subscriptionRoutingBalancers = [];
+    let _subscriptionRoutingMeta = Object.create(null);
     let _subscriptionEditId = '';
     let _subscriptionNodePingState = Object.create(null);
     let _subscriptionPingAllBusy = false;
@@ -3655,6 +3656,96 @@ let outboundsModuleApi = null;
         .filter((tag) => !!tag && known.has(tag) && !seen.has(tag) && seen.add(tag));
     }
 
+    function subsRoutingMetaText(key) {
+      const meta = _subscriptionRoutingMeta && typeof _subscriptionRoutingMeta === 'object' ? _subscriptionRoutingMeta : {};
+      return String(meta && meta[key] ? meta[key] : '').trim();
+    }
+
+    function subsHasManualStrategyBalancers() {
+      return (_subscriptionRoutingBalancers || []).some((item) => {
+        if (!item || item.auto_managed) return false;
+        const strategy = String(item.strategy_type || '').trim().toLowerCase();
+        return strategy === 'leastping' || strategy === 'leastload';
+      });
+    }
+
+    function subsSuggestedAutoRuleDefault() {
+      return !subsHasManualStrategyBalancers();
+    }
+
+    function subsQuotedTag(tag) {
+      const value = String(tag || '').trim();
+      return value ? `"${value}"` : '';
+    }
+
+    function subsDraftAutoBalancerTag() {
+      return (
+        subsRoutingMetaText('existing_auto_balancer_tag')
+        || subsRoutingMetaText('auto_balancer_candidate_tag')
+        || 'proxy'
+      );
+    }
+
+    function subsBuildDraftIntegrationPlan(formState) {
+      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      const resolved = subsResolveDraftDefaults(state);
+      const manualTags = subsNormalizeBalancerTags(state.routing_balancer_tags);
+      const tagPrefix = String(resolved.tag || '').trim();
+      const items = [];
+      const warnings = [];
+      const hasContext = !!(
+        String(state.url || '').trim()
+        || String(state.name || '').trim()
+        || String(state.tag || '').trim()
+        || manualTags.length
+        || !state.ping_enabled
+        || state.routing_auto_rule !== subsSuggestedAutoRuleDefault()
+      );
+
+      if (!hasContext) {
+        return { items, warnings, hasPlan: false };
+      }
+
+      if (state.ping_enabled && tagPrefix) {
+        items.push(`Observatory: \u0432 subjectSelector \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u0441\u044f prefix ${subsQuotedTag(tagPrefix)} \u0434\u043b\u044f leastPing-\u043f\u0440\u043e\u0432\u0435\u0440\u043e\u043a.`);
+      }
+
+      if (state.routing_auto_rule) {
+        const autoTag = subsDraftAutoBalancerTag();
+        const hasExistingAutoPool = !!subsRoutingMetaText('existing_auto_balancer_tag');
+        if (tagPrefix) {
+          items.push(
+            hasExistingAutoPool
+              ? `Routing: \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0430 \u0434\u043e\u0431\u0430\u0432\u0438\u0442 prefix ${subsQuotedTag(tagPrefix)} \u0432 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool ${subsQuotedTag(autoTag)}.`
+              : `Routing: \u0431\u0443\u0434\u0435\u0442 \u0441\u043e\u0437\u0434\u0430\u043d \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool ${subsQuotedTag(autoTag)} \u0441 leastPing \u0434\u043b\u044f prefix ${subsQuotedTag(tagPrefix)}.`
+          );
+        } else {
+          items.push(`Routing: \u0431\u0443\u0434\u0435\u0442 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool ${subsQuotedTag(autoTag)}.`);
+        }
+        items.push('Routing: \u0431\u0443\u0434\u0435\u0442 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e \u0438\u043b\u0438 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u043e \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u043e xk_auto_leastPing \u0434\u043b\u044f inbound redirect/tproxy.');
+      }
+
+      if (manualTags.length) {
+        items.push(`User balancers: \u0431\u0443\u0434\u0443\u0442 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u044b selector \u0443 ${manualTags.map((tag) => subsQuotedTag(tag)).join(', ')}. \u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044e\u0449\u0438\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f \u043d\u0435 \u0443\u0434\u0430\u043b\u044f\u044e\u0442\u0441\u044f.`);
+      }
+
+      if (!state.routing_auto_rule && !manualTags.length) {
+        items.push('Routing: \u043d\u0435 \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u0441\u044f, \u043f\u043e\u043a\u0430 \u043d\u0435 \u0432\u043a\u043b\u044e\u0447\u0451\u043d \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool \u0438 \u043d\u0435 \u043e\u0442\u043c\u0435\u0447\u0435\u043d\u044b user balancer-\u044b.');
+      }
+
+      if (state.routing_auto_rule) {
+        const shadowRuleTag = subsRoutingMetaText('auto_rule_shadowing_rule_tag');
+        const shadowTargetLabel = subsRoutingMetaText('auto_rule_shadowing_target_label');
+        if (shadowRuleTag && shadowTargetLabel) {
+          warnings.push(`\u0412 05_routing.json \u043f\u0440\u0430\u0432\u0438\u043b\u043e ${subsQuotedTag(shadowRuleTag)} \u0434\u043b\u044f ${shadowTargetLabel} \u0441\u0442\u043e\u0438\u0442 \u0440\u0430\u043d\u044c\u0448\u0435 \u0438, \u0432\u0435\u0440\u043e\u044f\u0442\u043d\u043e, \u043f\u0435\u0440\u0435\u0445\u0432\u0430\u0442\u0438\u0442 \u0442\u0440\u0430\u0444\u0438\u043a \u0434\u043e xk_auto_leastPing.`);
+        } else if (shadowRuleTag) {
+          warnings.push(`\u0412 05_routing.json \u043f\u0440\u0430\u0432\u0438\u043b\u043e ${subsQuotedTag(shadowRuleTag)} \u0441\u0442\u043e\u0438\u0442 \u0440\u0430\u043d\u044c\u0448\u0435 \u0438, \u0432\u0435\u0440\u043e\u044f\u0442\u043d\u043e, \u043f\u0435\u0440\u0435\u0445\u0432\u0430\u0442\u0438\u0442 \u0442\u0440\u0430\u0444\u0438\u043a \u0434\u043e xk_auto_leastPing.`);
+        }
+      }
+
+      return { items, warnings, hasPlan: items.length > 0 || warnings.length > 0 };
+    }
+
     function subsSelectedBalancerTags() {
       const root = $(SUB_IDS.routingBalancers);
       if (!root || !root.querySelectorAll) return [];
@@ -3673,7 +3764,7 @@ let outboundsModuleApi = null;
       });
     }
 
-    function subsRenderRoutingBalancers(selectedTags) {
+    function subsRenderRoutingBalancersLegacy__unused(selectedTags) {
       const root = $(SUB_IDS.routingBalancers);
       const note = $(SUB_IDS.routingBalancersNote);
       if (!root) return;
@@ -3718,6 +3809,117 @@ let outboundsModuleApi = null;
         note.textContent = 'Отметь balancer-ы, в чьи selector-ы нужно автоматически добавлять tag prefix этой подписки.';
         note.hidden = false;
       }
+    }
+
+    function subsApplySubscriptionCopy(formState) {
+      const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
+      const setCheckCopy = (id, text, labelTooltip, inputTooltip) => {
+        const input = $(id);
+        const label = input && input.closest ? input.closest('label') : null;
+        if (label) {
+          try { label.setAttribute('data-tooltip', labelTooltip); } catch (e) {}
+          const span = label.querySelector ? label.querySelector('span:last-of-type') : null;
+          if (span) span.textContent = text;
+        }
+        if (input) {
+          try { input.setAttribute('title', inputTooltip || text); } catch (e2) {}
+          try { input.setAttribute('data-tooltip', inputTooltip || text); } catch (e3) {}
+        }
+      };
+
+      setCheckCopy(
+        SUB_IDS.ping,
+        '\u041f\u0438\u043d\u0433 observatory',
+        '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c prefix \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0438 \u0432 07_observatory.json. \u041d\u0430 routing \u043d\u0435 \u0432\u043b\u0438\u044f\u0435\u0442.',
+        '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c prefix \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0438 \u0432 07_observatory.json \u0434\u043b\u044f leastPing.'
+      );
+      setCheckCopy(
+        SUB_IDS.routingAutoRule,
+        '\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool',
+        '\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443 \u043a routing \u0447\u0435\u0440\u0435\u0437 \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u0439 auto-managed balancer \u0438 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u043e xk_auto_leastPing. \u0412\u0430\u0448\u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044e\u0449\u0438\u0435 balancer-\u044b \u043d\u0435 \u043c\u0435\u043d\u044f\u044e\u0442\u0441\u044f.',
+        '\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool \u0438 \u043f\u0440\u0430\u0432\u0438\u043b\u043e xk_auto_leastPing.'
+      );
+
+      const routingModeLabel = document.querySelector(`label[for="${SUB_IDS.routingMode}"]`);
+      if (routingModeLabel) {
+        const caption = routingModeLabel.querySelector ? routingModeLabel.querySelector('.xk-sub-inline-label') : null;
+        if (caption) caption.textContent = 'Auto routing';
+        const tooltip = state.routing_auto_rule
+          ? '\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e: \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 leastPing pool \u0438 fallback \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u044e\u0442\u0441\u044f, \u0430 \u044f\u0432\u043d\u044b\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u043d\u0430 vless-reality \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u044e\u0442\u0441\u044f. \u0416\u0451\u0441\u0442\u043a\u043e: auto-\u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u043d\u0430 vless-reality \u043f\u0435\u0440\u0435\u0435\u0437\u0436\u0430\u044e\u0442 \u0432 balancerTag pool.'
+          : '\u0420\u0435\u0436\u0438\u043c Auto routing \u0432\u043b\u0438\u044f\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u0430 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool. \u0412\u043a\u043b\u044e\u0447\u0438 \u00ab\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool\u00bb, \u0447\u0442\u043e\u0431\u044b \u044d\u0442\u043e\u0442 \u0440\u0435\u0436\u0438\u043c \u043f\u0440\u0438\u043c\u0435\u043d\u044f\u043b\u0441\u044f.';
+        try { routingModeLabel.setAttribute('data-tooltip', tooltip); } catch (e4) {}
+        const select = $(SUB_IDS.routingMode);
+        if (select) {
+          try { select.setAttribute('data-tooltip', tooltip); } catch (e5) {}
+          try { select.setAttribute('title', tooltip); } catch (e6) {}
+        }
+      }
+
+      const balancersHead = document.querySelector('.xk-sub-balancers-head .xk-pool-fieldlabel');
+      if (balancersHead) balancersHead.textContent = 'User balancers';
+
+      const balancersRoot = $(SUB_IDS.routingBalancers);
+      if (balancersRoot && balancersRoot.querySelectorAll) {
+        Array.from(balancersRoot.querySelectorAll('.xk-sub-balancer-meta')).forEach((node) => {
+          const text = String(node && node.textContent ? node.textContent : '').trim();
+          if (text && text.indexOf('auto pool') >= 0) {
+            node.textContent = text.replace('auto pool', 'service pool');
+          }
+        });
+        const empty = balancersRoot.querySelector('.xk-sub-balancers-empty');
+        if (empty) {
+          empty.textContent = '\u0412 routing.balancers \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0433\u043e\u0442\u043e\u0432\u044b\u0445 selector-\u043f\u0443\u043b\u043e\u0432. \u041c\u043e\u0436\u043d\u043e \u043e\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool.';
+        }
+      }
+    }
+
+    function subsRenderRoutingBalancers(selectedTags) {
+      const root = $(SUB_IDS.routingBalancers);
+      const note = $(SUB_IDS.routingBalancersNote);
+      if (!root) return;
+      const selected = new Set(subsNormalizeBalancerTags(selectedTags));
+      const items = Array.isArray(_subscriptionRoutingBalancers) ? _subscriptionRoutingBalancers.slice() : [];
+      if (!items.length) {
+        root.innerHTML = '<div class="xk-sub-balancers-empty">\u0412 routing.balancers \u043f\u043e\u043a\u0430 \u043d\u0435\u0442 \u0433\u043e\u0442\u043e\u0432\u044b\u0445 selector-\u043f\u0443\u043b\u043e\u0432. \u041c\u043e\u0436\u043d\u043e \u043e\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u0442\u043e\u043b\u044c\u043a\u043e \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool.</div>';
+        if (note) {
+          note.textContent = '\u0427\u0435\u043a\u0431\u043e\u043a\u0441\u044b \u043f\u043e\u044f\u0432\u044f\u0442\u0441\u044f, \u043a\u043e\u0433\u0434\u0430 \u0432 05_routing.json \u0431\u0443\u0434\u0443\u0442 \u043d\u0430\u0441\u0442\u0440\u043e\u0435\u043d\u044b balancers[].tag.';
+          note.hidden = false;
+        }
+        try { subsApplySubscriptionCopy(); } catch (e0) {}
+        return;
+      }
+      root.innerHTML = items.map((item) => {
+        const tag = String(item && item.tag || '').trim();
+        const strategy = String(item && item.strategy_type || '').trim();
+        const fallback = String(item && item.fallback_tag || '').trim();
+        const selectorCount = Number(item && item.selector_count || 0);
+        const autoManaged = !!(item && item.auto_managed);
+        const title = [
+          strategy ? `strategy: ${strategy}` : '',
+          fallback ? `fallback: ${fallback}` : '',
+          selectorCount > 0 ? `selector: ${selectorCount}` : 'selector \u043f\u0443\u0441\u0442',
+        ].filter(Boolean).join(' · ');
+        const meta = [
+          strategy || 'balancer',
+          fallback ? `fallback ${fallback}` : '',
+          selectorCount > 0 ? `${selectorCount} selector` : '',
+          autoManaged ? 'service pool' : '',
+        ].filter(Boolean).join(' · ');
+        return `
+          <label class="xk-sub-check xk-sub-balancer-check" title="${escapeHtml(title)}" data-tooltip="${escapeHtml(title)}">
+            <input type="checkbox" data-balancer-tag="${escapeHtml(tag)}" ${selected.has(tag) ? 'checked' : ''}>
+            <span class="xk-sub-balancer-copy">
+              <span class="xk-sub-balancer-tag">${escapeHtml(tag)}</span>
+              <span class="xk-sub-balancer-meta">${escapeHtml(meta)}</span>
+            </span>
+          </label>
+        `;
+      }).join('');
+      if (note) {
+        note.textContent = '\u041e\u0442\u043c\u0435\u0447\u0435\u043d\u043d\u044b\u0435 user balancer-\u044b \u0431\u0443\u0434\u0443\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u044b: \u0432 selector \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u0441\u044f tag prefix \u044d\u0442\u043e\u0439 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0438, \u0431\u0435\u0437 \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f \u0442\u0435\u043a\u0443\u0449\u0438\u0445 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0439.';
+        note.hidden = false;
+      }
+      try { subsApplySubscriptionCopy(); } catch (e1) {}
     }
 
     function subsReadFormState() {
@@ -3986,7 +4188,7 @@ let outboundsModuleApi = null;
       return { text: '', kind: '' };
     }
 
-    function subsSyncSubscriptionFormState() {
+    function subsSyncSubscriptionFormStateLegacy__unused() {
       const formState = subsReadFormState();
       const resolved = subsResolveDraftDefaults(formState);
       const validation = subsValidateFormState(formState);
@@ -4019,6 +4221,59 @@ let outboundsModuleApi = null;
           );
         } catch (e4) {}
       }
+
+      const saveBtn = $(SUB_IDS.save);
+      if (saveBtn) {
+        saveBtn.disabled = !validation.valid || _subscriptionSaveBusy;
+        saveBtn.classList.toggle('is-dirty', !!dirty && !saveBtn.disabled);
+      }
+      const previewBtn = $(SUB_IDS.preview);
+      if (previewBtn) {
+        previewBtn.disabled = !validation.valid || _subscriptionPreviewBusy;
+        const urlValue = String(formState.url || '').trim();
+        const previewMatches = !!_subscriptionPreview && String(_subscriptionPreview.url || '') === urlValue;
+        const armed = !previewBtn.disabled && urlValue.length > 0 && !previewMatches;
+        previewBtn.classList.toggle('is-armed', armed);
+      }
+      try { subsUpdateDraftBadge(formState, dirty); } catch (e) {}
+      try { subsRenderDiagnostics(); } catch (e2) {}
+
+      return { formState, resolved, validation, dirty };
+    }
+
+    function subsSyncSubscriptionFormState() {
+      const formState = subsReadFormState();
+      const resolved = subsResolveDraftDefaults(formState);
+      const validation = subsValidateFormState(formState);
+      const dirty = subsHasDirtyDraft(formState);
+
+      subsSetFieldInvalid(SUB_IDS.url, !!validation.errors.url);
+      subsSetFieldInvalid(SUB_IDS.interval, !!validation.errors.interval);
+      subsSetFieldInvalid(SUB_IDS.nameFilter, !!validation.errors.nameFilter);
+      subsSetFieldInvalid(SUB_IDS.typeFilter, !!validation.errors.typeFilter);
+      subsSetFieldInvalid(SUB_IDS.transportFilter, !!validation.errors.transportFilter);
+
+      const nameNote = subsNameNote(formState, resolved);
+      const tagNote = subsTagNote(formState, resolved);
+      subsSetFieldNote(SUB_IDS.nameNote, nameNote.text, nameNote.kind);
+      subsSetFieldNote(SUB_IDS.tagNote, tagNote.text, tagNote.kind);
+      subsSetFieldNote(SUB_IDS.urlNote, validation.errors.url, validation.errors.url ? 'error' : '');
+      subsSyncIntervalRecommendation(formState, validation);
+      subsSetFieldNote(SUB_IDS.nameFilterNote, validation.errors.nameFilter, validation.errors.nameFilter ? 'error' : '');
+      subsSetFieldNote(SUB_IDS.typeFilterNote, validation.errors.typeFilter, validation.errors.typeFilter ? 'error' : '');
+      subsSetFieldNote(SUB_IDS.transportFilterNote, validation.errors.transportFilter, validation.errors.transportFilter ? 'error' : '');
+
+      const routingModeEl = $(SUB_IDS.routingMode);
+      if (routingModeEl) {
+        routingModeEl.disabled = !formState.routing_auto_rule;
+        const tooltip = formState.routing_auto_rule
+          ? '\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e: \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 leastPing pool \u0438 fallback \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u044e\u0442\u0441\u044f, \u0430 \u044f\u0432\u043d\u044b\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u043d\u0430 vless-reality \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u044e\u0442\u0441\u044f. \u0416\u0451\u0441\u0442\u043a\u043e: auto-\u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u043d\u0430 vless-reality \u043f\u0435\u0440\u0435\u0435\u0437\u0436\u0430\u044e\u0442 \u0432 balancerTag pool.'
+          : '\u0420\u0435\u0436\u0438\u043c Auto routing \u0432\u043b\u0438\u044f\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u0430 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool. \u0412\u043a\u043b\u044e\u0447\u0438 \u00ab\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool\u00bb, \u0447\u0442\u043e\u0431\u044b \u044d\u0442\u043e\u0442 \u0440\u0435\u0436\u0438\u043c \u043f\u0440\u0438\u043c\u0435\u043d\u044f\u043b\u0441\u044f.';
+        try { routingModeEl.setAttribute('data-tooltip', tooltip); } catch (e4) {}
+        try { routingModeEl.setAttribute('title', tooltip); } catch (e5) {}
+      }
+
+      try { subsApplySubscriptionCopy(formState); } catch (e6) {}
 
       const saveBtn = $(SUB_IDS.save);
       if (saveBtn) {
@@ -4107,7 +4362,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.enabled).checked = baseline ? !!baseline.enabled : true; } catch (e) {}
       try { $(SUB_IDS.ping).checked = baseline ? !!baseline.ping_enabled : true; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = String((baseline && baseline.routing_mode) || 'safe-fallback') || 'safe-fallback'; } catch (e) {}
-      try { $(SUB_IDS.routingAutoRule).checked = baseline ? baseline.routing_auto_rule !== false : true; } catch (e) {}
+      try { $(SUB_IDS.routingAutoRule).checked = baseline ? baseline.routing_auto_rule !== false : subsSuggestedAutoRuleDefault(); } catch (e) {}
       try { subsRenderRoutingBalancers(baseline && baseline.routing_balancer_tags); } catch (e) {}
       try { subsSetSelectedBalancerTags(baseline && baseline.routing_balancer_tags); } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = refreshNow; } catch (e) {}
@@ -4921,7 +5176,7 @@ let outboundsModuleApi = null;
       };
     }
 
-    function subsRenderDiagnostics() {
+    function subsRenderDiagnosticsLegacy__unused() {
       const root = $(SUB_IDS.diagnostics);
       const titleEl = $(SUB_IDS.diagnosticsTitle);
       const pillsEl = $(SUB_IDS.diagnosticsPills);
@@ -4979,6 +5234,105 @@ let outboundsModuleApi = null;
       bodyEl.innerHTML = groups.join('');
     }
 
+    function subsRenderDiagnostics() {
+      const root = $(SUB_IDS.diagnostics);
+      const titleEl = $(SUB_IDS.diagnosticsTitle);
+      const pillsEl = $(SUB_IDS.diagnosticsPills);
+      const bodyEl = $(SUB_IDS.diagnosticsBody);
+      if (!root || !titleEl || !pillsEl || !bodyEl) return;
+
+      const formState = subsReadFormState();
+      const resolved = subsResolveDraftDefaults(formState);
+      const plan = subsBuildDraftIntegrationPlan(formState);
+      const target = subsActiveDiagnosticsTarget();
+
+      if (!target && !plan.hasPlan) {
+        titleEl.textContent = '\u0412\u044b\u0431\u0435\u0440\u0438 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443';
+        pillsEl.innerHTML = '';
+        bodyEl.innerHTML = '<div class="xk-sub-diag-empty">\u0412\u044b\u0431\u0435\u0440\u0438 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0443 \u0441\u043f\u0440\u0430\u0432\u0430, \u0447\u0442\u043e\u0431\u044b \u0443\u0432\u0438\u0434\u0435\u0442\u044c \u043f\u043e\u043b\u043d\u044b\u0439 \u0442\u0435\u043a\u0441\u0442 \u043e\u0448\u0438\u0431\u043a\u0438 refresh, warnings \u0442\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442\u0430 \u0438 \u043e\u0448\u0438\u0431\u043a\u0438 \u0443\u0437\u043b\u043e\u0432.</div>';
+        return;
+      }
+
+      const snapshot = target
+        ? subsDiagnosticsSnapshot(target)
+        : {
+            kind: 'draft',
+            title: resolved.name || '\u0427\u0435\u0440\u043d\u043e\u0432\u0438\u043a',
+            pills: [],
+            warnings: [],
+            errors: [],
+            refreshError: '',
+          };
+      const title = snapshot.kind === 'preview'
+        ? `${snapshot.title} · \u0447\u0435\u0440\u043d\u043e\u0432\u0438\u043a`
+        : snapshot.kind === 'draft'
+          ? `${snapshot.title} · \u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446\u0438\u044f`
+          : snapshot.title;
+      titleEl.textContent = title;
+      try {
+        titleEl.setAttribute('data-tooltip', title);
+        titleEl.setAttribute('title', title);
+      } catch (e) {}
+
+      const pills = Array.isArray(snapshot.pills) ? snapshot.pills.slice() : [];
+      if (plan.items.length) {
+        pills.unshift({
+          label: `${plan.items.length} change`,
+          tone: 'filtered',
+          title: '\u0427\u0442\u043e \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u0441\u044f \u0432 observatory, routing \u0438 user balancer-\u0430\u0445 \u043f\u043e\u0441\u043b\u0435 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u044f.',
+        });
+      }
+      if (plan.warnings.length) {
+        pills.unshift({
+          label: `${plan.warnings.length} warning`,
+          tone: 'warning',
+          title: plan.warnings[0],
+        });
+      }
+
+      pillsEl.innerHTML = pills.map((pill) => {
+        const label = escapeHtml(String(pill && pill.label ? pill.label : ''));
+        const tone = escapeHtml(String(pill && pill.tone ? pill.tone : 'neutral'));
+        const tooltip = escapeHtml(String(pill && pill.title ? pill.title : label));
+        return `<span class="xk-sub-diag-pill is-${tone}" title="${tooltip}" data-tooltip="${tooltip}">${label}</span>`;
+      }).join('');
+
+      const groups = [];
+
+      if (plan.items.length) {
+        groups.push(
+          `<div class="xk-sub-diag-group is-plan"><div class="xk-sub-diag-label">\u0427\u0442\u043e \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u0441\u044f</div><ul class="xk-sub-diag-list">${plan.items.map((line) => `<li>${escapeHtml(String(line || ''))}</li>`).join('')}</ul></div>`
+        );
+      }
+      if (plan.warnings.length) {
+        groups.push(
+          `<div class="xk-sub-diag-group is-warning"><div class="xk-sub-diag-label">\u0412\u043e\u0437\u043c\u043e\u0436\u043d\u044b\u0439 \u043a\u043e\u043d\u0444\u043b\u0438\u043a\u0442 routing</div><ul class="xk-sub-diag-list">${plan.warnings.map((line) => `<li>${escapeHtml(String(line || ''))}</li>`).join('')}</ul></div>`
+        );
+      }
+      if (snapshot.refreshError) {
+        groups.push(
+          `<div class="xk-sub-diag-group is-error"><div class="xk-sub-diag-label">\u041e\u0448\u0438\u0431\u043a\u0430 refresh</div><pre class="xk-sub-diag-pre">${escapeHtml(snapshot.refreshError)}</pre></div>`
+        );
+      }
+      if (snapshot.warnings.length) {
+        groups.push(
+          `<div class="xk-sub-diag-group is-warning"><div class="xk-sub-diag-label">Warnings</div><ul class="xk-sub-diag-list">${snapshot.warnings.map((line) => `<li>${escapeHtml(String(line || ''))}</li>`).join('')}</ul></div>`
+        );
+      }
+      if (snapshot.errors.length) {
+        groups.push(
+          `<div class="xk-sub-diag-group is-error-list"><div class="xk-sub-diag-label">\u041e\u0448\u0438\u0431\u043a\u0438 \u0443\u0437\u043b\u043e\u0432</div><ul class="xk-sub-diag-list">${snapshot.errors.map((line) => `<li>${escapeHtml(String(line || ''))}</li>`).join('')}</ul></div>`
+        );
+      }
+      if (!groups.length) {
+        groups.push(
+          '<div class="xk-sub-diag-empty">\u041f\u043e\u0441\u043b\u0435\u0434\u043d\u0435\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 \u043f\u0440\u043e\u0448\u043b\u043e \u0431\u0435\u0437 \u043e\u0448\u0438\u0431\u043e\u043a \u0438 \u0434\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0445 \u043f\u0440\u0435\u0434\u0443\u043f\u0440\u0435\u0436\u0434\u0435\u043d\u0438\u0439.</div>'
+        );
+      }
+
+      bodyEl.innerHTML = groups.join('');
+    }
+
     function subsResetForm() {
       _subscriptionEditId = '';
       _subscriptionPreview = null;
@@ -4995,7 +5349,7 @@ let outboundsModuleApi = null;
       try { $(SUB_IDS.enabled).checked = true; } catch (e) {}
       try { $(SUB_IDS.ping).checked = true; } catch (e) {}
       try { $(SUB_IDS.routingMode).value = 'safe-fallback'; } catch (e) {}
-      try { $(SUB_IDS.routingAutoRule).checked = true; } catch (e) {}
+      try { $(SUB_IDS.routingAutoRule).checked = subsSuggestedAutoRuleDefault(); } catch (e) {}
       try { subsRenderRoutingBalancers([]); } catch (e) {}
       try { subsSetSelectedBalancerTags([]); } catch (e) {}
       try { $(SUB_IDS.refreshNow).checked = true; } catch (e) {}
@@ -5629,6 +5983,9 @@ let outboundsModuleApi = null;
         }
         _subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
         _subscriptionRoutingBalancers = Array.isArray(data.routing_balancers) ? data.routing_balancers : [];
+        _subscriptionRoutingMeta = data && typeof data.routing_meta === 'object' && data.routing_meta
+          ? data.routing_meta
+          : Object.create(null);
         try {
           _subscriptionOutputFiles = new Set(_subscriptions.map((sub) => baseName(sub && sub.output_file)).filter(Boolean));
           _subscriptionOutputFilesTs = Date.now();
@@ -5637,7 +5994,12 @@ let outboundsModuleApi = null;
         if (active) subsFillForm(active, { focus: false, keepRefreshNow: true });
         else if (_subscriptionEditId) subsResetForm();
         else {
-          try { subsRenderRoutingBalancers(subsSelectedBalancerTags()); } catch (e4) {}
+          try {
+            if (!_subscriptionBaseline || !subsHasDirtyDraft()) {
+              $(SUB_IDS.routingAutoRule).checked = subsSuggestedAutoRuleDefault();
+            }
+          } catch (e4) {}
+          try { subsRenderRoutingBalancers(subsSelectedBalancerTags()); } catch (e5) {}
         }
         subsRender();
         try { subsSyncSubscriptionFormState(); } catch (e3) {}
