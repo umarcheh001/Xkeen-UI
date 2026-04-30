@@ -1732,6 +1732,61 @@ def test_build_subscription_outbounds_applies_transport_filter_and_manual_exclus
     assert stats["filtered_out_count"] == 2
 
 
+def test_build_subscription_json_outbounds_keeps_distinct_keys_for_same_config_with_different_names():
+    from services import xray_subscriptions as subs
+
+    shared_outbound = {
+        "tag": "proxy",
+        "protocol": "vless",
+        "settings": {
+            "vnext": [
+                {
+                    "address": "103.88.240.173",
+                    "port": 443,
+                    "users": [{"id": "user", "encryption": "none"}],
+                }
+            ]
+        },
+        "streamSettings": {
+            "network": "xhttp",
+            "security": "tls",
+            "xhttpSettings": {"path": "/api/v2/"},
+        },
+    }
+    body = json.dumps(
+        [
+            {"remarks": "SE-YYY-Sweden.e026", "outbounds": [shared_outbound]},
+            {"remarks": "RU-Anti-06.e026", "outbounds": [shared_outbound]},
+        ]
+    )
+
+    outbounds, errors, stats = subs.build_subscription_json_outbounds(
+        body,
+        tag_prefix="flt",
+    )
+
+    assert errors == []
+    assert [item["tag"] for item in outbounds] == ["flt--SE-YYY-Sweden.e026", "flt--RU-Anti-06.e026"]
+    assert stats["source_count"] == 2
+    assert stats["filtered_out_count"] == 0
+
+    keys = [item["key"] for item in stats["nodes"]]
+    assert len(keys) == 2
+    assert len(set(keys)) == 2
+
+    sweden_key = next(item["key"] for item in stats["nodes"] if item["name"] == "SE-YYY-Sweden.e026")
+    outbounds, errors, stats = subs.build_subscription_json_outbounds(
+        body,
+        tag_prefix="flt",
+        excluded_node_keys=[sweden_key],
+    )
+
+    assert errors == []
+    assert [item["tag"] for item in outbounds] == ["flt--RU-Anti-06.e026"]
+    assert stats["source_count"] == 2
+    assert stats["filtered_out_count"] == 1
+
+
 def test_refresh_subscription_accepts_xray_json_config_arrays(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

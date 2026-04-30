@@ -1284,7 +1284,15 @@ def _json_outbound_node_meta(source: Dict[str, Any], name_hint: str, index: int)
     )
 
     try:
-        fingerprint_payload = json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        fingerprint_payload = json.dumps(
+            {
+                "name": name,
+                "source": source,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
     except Exception:
         fingerprint_payload = f"{protocol}|{name}|{host}|{port}|{transport}|{security}"
 
