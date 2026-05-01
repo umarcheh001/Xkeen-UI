@@ -38,6 +38,7 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert "routing_balancer_tags: subsSelectedBalancerTags()," in outbounds_src
     assert "let _subscriptionRoutingMeta = Object.create(null);" in outbounds_src
     assert "function subsRoutingMetaText(key) {" in outbounds_src
+    assert "function subsRoutingMetaNumber(key) {" in outbounds_src
     assert "function subsBuildDraftIntegrationPlan(formState) {" in outbounds_src
     assert "function subsApplySubscriptionCopy(formState) {" in outbounds_src
     assert "function subsFilterSummary(sub) {" in outbounds_src
@@ -130,6 +131,8 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "function subsRenderRoutingBalancers(selectedTags) {" in outbounds_src
     assert "_subscriptionRoutingMeta = data && typeof data.routing_meta === 'object' && data.routing_meta" in outbounds_src
     assert "subsSuggestedAutoRuleDefault()" in outbounds_src
+    assert "ru_direct_rule_count" in outbounds_src
+    assert "direct-\\u043f\\u0440\\u0430\\u0432\\u0438\\u043b\\u0430" in outbounds_src
     assert "xk-sub-diag-group is-plan" in outbounds_src
     assert "function subsTransportFilterText(transport, protocol) {" in outbounds_src
     assert "function subsProtocolFilterText(protocol) {" in outbounds_src

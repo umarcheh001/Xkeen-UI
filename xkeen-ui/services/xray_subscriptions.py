@@ -2314,6 +2314,51 @@ def _rule_target_summary(rule: Any) -> Dict[str, str]:
     return {"kind": "", "tag": "", "label": ""}
 
 
+def _rule_string_terms(rule: Any, key: str) -> List[str]:
+    if not isinstance(rule, dict):
+        return []
+    raw = rule.get(key)
+    if isinstance(raw, list):
+        return [str(item or "").strip() for item in raw if str(item or "").strip()]
+    term = str(raw or "").strip()
+    return [term] if term else []
+
+
+def _rule_targets_direct(rule: Any) -> bool:
+    return isinstance(rule, dict) and str(rule.get("outboundTag") or "").strip().lower() == "direct"
+
+
+def _looks_like_ru_direct_term(value: Any) -> bool:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return False
+    if ":!ru" in raw:
+        return False
+    if any(token in raw for token in ("geosite:ru", "geoip:ru", "category-ru")):
+        return True
+    if any(token in raw for token in ("domain:ru", "domain:рф", "domain:рус", "domain:москва")):
+        return True
+    if any(token in raw for token in ("xn--p1ai", "xn--p1acf", "xn--80adx1ks")):
+        return True
+    return False
+
+
+def _routing_direct_rule_summary(routing: Dict[str, Any]) -> Dict[str, int]:
+    direct_rule_count = 0
+    ru_direct_rule_count = 0
+    for rule in routing.get("rules") if isinstance(routing, dict) else []:
+        if not _rule_targets_direct(rule):
+            continue
+        direct_rule_count += 1
+        terms = _rule_string_terms(rule, "domain") + _rule_string_terms(rule, "ip")
+        if any(_looks_like_ru_direct_term(term) for term in terms):
+            ru_direct_rule_count += 1
+    return {
+        "direct_rule_count": int(direct_rule_count),
+        "ru_direct_rule_count": int(ru_direct_rule_count),
+    }
+
+
 def _is_proxy_inbound_catchall_rule(rule: Any) -> bool:
     if not isinstance(rule, dict) or not _rule_touches_proxy_inbound(rule):
         return False
@@ -2363,6 +2408,7 @@ def get_subscription_routing_meta(xray_configs_dir: str) -> Dict[str, Any]:
     routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
     _cfg, routing, _normalized = _ensure_routing_model(_read_json_file(routing_path, {}))
     shadow = _subscription_auto_rule_shadow_info(routing)
+    direct_summary = _routing_direct_rule_summary(routing)
     return {
         "existing_auto_balancer_tag": _existing_auto_balancer_tag(routing),
         "auto_balancer_candidate_tag": _choose_auto_balancer_tag(routing),
@@ -2370,6 +2416,8 @@ def get_subscription_routing_meta(xray_configs_dir: str) -> Dict[str, Any]:
         "auto_rule_shadowing_target_kind": str(shadow.get("target_kind") or ""),
         "auto_rule_shadowing_target_tag": str(shadow.get("target_tag") or ""),
         "auto_rule_shadowing_target_label": str(shadow.get("target_label") or ""),
+        "direct_rule_count": int(direct_summary.get("direct_rule_count") or 0),
+        "ru_direct_rule_count": int(direct_summary.get("ru_direct_rule_count") or 0),
     }
 
 

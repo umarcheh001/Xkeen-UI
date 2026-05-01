@@ -997,6 +997,226 @@ def test_get_subscription_routing_meta_reports_shadowing_catch_all_rule(tmp_path
     assert meta["auto_rule_shadowing_target_kind"] == "balancer"
     assert meta["auto_rule_shadowing_target_tag"] == "fast_web_balancer"
     assert meta["auto_rule_shadowing_target_label"] == 'balancer "fast_web_balancer"'
+    assert meta["direct_rule_count"] == 1
+    assert meta["ru_direct_rule_count"] == 1
+
+
+def test_refresh_subscription_preserves_ru_direct_rules_with_shadowed_auto_pool(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "balancers": [
+                        {
+                            "tag": "fast_web_balancer",
+                            "selector": ["VPS_"],
+                            "strategy": {"type": "leastPing"},
+                            "fallbackTag": "direct",
+                        }
+                    ],
+                    "rules": [
+                        {
+                            "type": "field",
+                            "ruleTag": "log_01_messengers_quic_domain",
+                            "domain": ["ext:geosite_v2fly.dat:telegram"],
+                            "protocol": ["quic"],
+                            "balancerTag": "fast_web_balancer",
+                        },
+                        {
+                            "type": "field",
+                            "ruleTag": "log_05_direct_ru_by_domains",
+                            "outboundTag": "direct",
+                            "domain": ["ext:geosite_v2fly.dat:category-ru", "domain:xn--p1ai"],
+                        },
+                        {
+                            "type": "field",
+                            "ruleTag": "log_06_direct_ru_ip",
+                            "outboundTag": "direct",
+                            "ip": ["ext:geoip_zkeenip.dat:ru"],
+                        },
+                        {
+                            "type": "field",
+                            "ruleTag": "log_07_catch_all_fast_web_balancer",
+                            "balancerTag": "fast_web_balancer",
+                            "network": "tcp,udp",
+                        },
+                    ],
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "ru-direct-safe",
+            "tag": "demo",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_auto_rule": True,
+            "routing_mode": "safe-fallback",
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "ru-direct-safe",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    assert result["routing_balancer_tag"] == "proxy"
+
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    rules = routing["routing"]["rules"]
+    assert [rule.get("ruleTag") for rule in rules] == [
+        "log_01_messengers_quic_domain",
+        "log_05_direct_ru_by_domains",
+        "log_06_direct_ru_ip",
+        "log_07_catch_all_fast_web_balancer",
+        "xk_auto_leastPing",
+    ]
+    assert rules[1]["outboundTag"] == "direct"
+    assert rules[1]["domain"] == ["ext:geosite_v2fly.dat:category-ru", "domain:xn--p1ai"]
+    assert rules[2]["outboundTag"] == "direct"
+    assert rules[2]["ip"] == ["ext:geoip_zkeenip.dat:ru"]
+
+
+def test_refresh_subscription_strict_mode_keeps_ru_direct_rules_before_migrated_pool_rule(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "vless-reality", "protocol": "vless"},
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "rules": [
+                        {
+                            "type": "field",
+                            "ruleTag": "manual_direct_ru",
+                            "domain": ["geosite:ru"],
+                            "outboundTag": "direct",
+                        },
+                        {
+                            "type": "field",
+                            "domain": ["ext:geosite_v2fly.dat:openai"],
+                            "outboundTag": "vless-reality",
+                        },
+                        {
+                            "type": "field",
+                            "outboundTag": "direct",
+                        },
+                    ]
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "ru-direct-strict",
+            "tag": "demo",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_mode": "migrate-vless-rules",
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "ru-direct-strict",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    assert result["routing_mode"] == "migrate-vless-rules"
+    assert result["routing_migrated_rules"] == 1
+
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    rules = routing["routing"]["rules"]
+    assert rules[0]["ruleTag"] == "manual_direct_ru"
+    assert rules[0]["outboundTag"] == "direct"
+    assert rules[1]["ruleTag"].startswith("xk_auto_vless_pool_")
+    assert rules[1]["balancerTag"] == "proxy"
+    assert rules[2]["ruleTag"] == "xk_auto_leastPing"
+    assert rules[3]["outboundTag"] == "direct"
 
 
 def test_refresh_subscription_preserves_user_routing_jsonc_comments(tmp_path: Path, monkeypatch):

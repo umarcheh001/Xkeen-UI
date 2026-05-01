@@ -3661,6 +3661,12 @@ let outboundsModuleApi = null;
       return String(meta && meta[key] ? meta[key] : '').trim();
     }
 
+    function subsRoutingMetaNumber(key) {
+      const meta = _subscriptionRoutingMeta && typeof _subscriptionRoutingMeta === 'object' ? _subscriptionRoutingMeta : {};
+      const value = Number(meta && meta[key]);
+      return Number.isFinite(value) ? value : 0;
+    }
+
     function subsHasManualStrategyBalancers() {
       return (_subscriptionRoutingBalancers || []).some((item) => {
         if (!item || item.auto_managed) return false;
@@ -3731,6 +3737,16 @@ let outboundsModuleApi = null;
 
       if (!state.routing_auto_rule && !manualTags.length) {
         items.push('Routing: \u043d\u0435 \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u0441\u044f, \u043f\u043e\u043a\u0430 \u043d\u0435 \u0432\u043a\u043b\u044e\u0447\u0451\u043d \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool \u0438 \u043d\u0435 \u043e\u0442\u043c\u0435\u0447\u0435\u043d\u044b user balancer-\u044b.');
+      }
+
+      const directRuleCount = subsRoutingMetaNumber('direct_rule_count');
+      const ruDirectRuleCount = subsRoutingMetaNumber('ru_direct_rule_count');
+      if (directRuleCount > 0) {
+        items.push(
+          ruDirectRuleCount > 0
+            ? `Routing: \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c\u0441\u043a\u0438\u0435 direct-\u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u0431\u0443\u0434\u0443\u0442 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b (${directRuleCount}, RU: ${ruDirectRuleCount}).`
+            : `Routing: \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c\u0441\u043a\u0438\u0435 direct-\u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u0431\u0443\u0434\u0443\u0442 \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u044b (${directRuleCount}).`
+        );
       }
 
       if (state.routing_auto_rule) {
