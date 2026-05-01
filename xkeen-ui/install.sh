@@ -522,6 +522,45 @@ migrate_legacy_jsonc_files() {
 
 # --- Определяем существующую установку и её порт ---
 
+sync_bundled_template_dir() {
+  src_dir="$1"
+  dest_dir="$2"
+  label="$3"
+
+  if [ ! -d "$src_dir" ]; then
+    echo "[*] Шаблоны $label не найдены в архиве (пропуск)"
+    return 0
+  fi
+
+  echo "[*] Устанавливаю шаблоны $label в $dest_dir..."
+  mkdir -p "$dest_dir"
+
+  if command -v date >/dev/null 2>&1; then
+    TS="$(date +%Y%m%d-%H%M%S 2>/dev/null || date 2>/dev/null || echo "no-date")"
+  else
+    TS="no-date"
+  fi
+
+  for f in "$src_dir"/*.json "$src_dir"/*.jsonc; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    dest="$dest_dir/$base"
+
+    if [ -f "$dest" ] && cmp -s "$f" "$dest" 2>/dev/null; then
+      continue
+    fi
+
+    if [ -f "$dest" ]; then
+      cp -f "$dest" "$dest.dist-$TS" 2>/dev/null || true
+      echo "[*] ~ обновляю built-in шаблон $base (backup: $base.dist-$TS)"
+    else
+      echo "[*] + $base"
+    fi
+
+    cp -f "$f" "$dest"
+  done
+}
+
 cleanup_frontend_build_dir() {
   BUILD_DIR="$1"
   [ -n "$BUILD_DIR" ] || return 0
@@ -1210,43 +1249,12 @@ if [ -d "$SRC_MIHOMO_TEMPLATES" ]; then
   fi
 fi
 
-# --- Шаблоны Xray (Routing) ---
+# --- Шаблоны Xray (Routing / Observatory) ---
 
-if [ -d "$SRC_XRAY_ROUTING_TEMPLATES" ]; then
-  echo "[*] Устанавливаю шаблоны роутинга Xray в $XRAY_ROUTING_TEMPLATES_DIR..."
-  mkdir -p "$XRAY_ROUTING_TEMPLATES_DIR"
-
-  # Не перезаписываем существующие файлы пользователя.
-  for f in "$SRC_XRAY_ROUTING_TEMPLATES"/*.json "$SRC_XRAY_ROUTING_TEMPLATES"/*.jsonc; do
-    [ -f "$f" ] || continue
-    base="$(basename "$f")"
-    if [ ! -f "$XRAY_ROUTING_TEMPLATES_DIR/$base" ]; then
-      cp -f "$f" "$XRAY_ROUTING_TEMPLATES_DIR/$base"
-      echo "[*] + $base"
-    fi
-  done
-else
-  echo "[*] Шаблоны роутинга Xray не найдены в архиве (пропуск)"
-fi
-
-# --- Шаблоны Xray (Observatory) ---
-
-if [ -d "$SRC_XRAY_OBSERVATORY_TEMPLATES" ]; then
-  echo "[*] Устанавливаю шаблоны observatory Xray в $XRAY_OBSERVATORY_TEMPLATES_DIR..."
-  mkdir -p "$XRAY_OBSERVATORY_TEMPLATES_DIR"
-
-  # Не перезаписываем существующие файлы пользователя.
-  for f in "$SRC_XRAY_OBSERVATORY_TEMPLATES"/*.json "$SRC_XRAY_OBSERVATORY_TEMPLATES"/*.jsonc; do
-    [ -f "$f" ] || continue
-    base="$(basename "$f")"
-    if [ ! -f "$XRAY_OBSERVATORY_TEMPLATES_DIR/$base" ]; then
-      cp -f "$f" "$XRAY_OBSERVATORY_TEMPLATES_DIR/$base"
-      echo "[*] + $base"
-    fi
-  done
-else
-  echo "[*] Шаблоны observatory Xray не найдены в архиве (пропуск)"
-fi
+# Обновляем только встроенные шаблоны, которые пришли в архиве.
+# Кастомные файлы пользователя с другими именами не трогаем.
+sync_bundled_template_dir "$SRC_XRAY_ROUTING_TEMPLATES" "$XRAY_ROUTING_TEMPLATES_DIR" "роутинга Xray"
+sync_bundled_template_dir "$SRC_XRAY_OBSERVATORY_TEMPLATES" "$XRAY_OBSERVATORY_TEMPLATES_DIR" "observatory Xray"
 
 # --- Compat fix: обеспечить доступность DAT-файлов для Xray (ext:*.dat:...) ---
 
