@@ -51,10 +51,12 @@ def test_outbounds_proxy_pool_uses_fragment_summary_without_hiding_pool_button()
 
     assert "function setOutboundsSummaryFragmentMode(mode, fileName, summary) {" in outbounds_src
     assert "body.classList.toggle('xk-outbounds-pool-fragment', normalizedMode === 'pool');" in outbounds_src
+    assert "function isSubscriptionGeneratedText(text) {" in outbounds_src
     assert "function isPoolGeneratedText(text) {" in outbounds_src
     assert "function outboundsPoolSignatureValue(value) {" in outbounds_src
     assert "function outboundsProxySignature(ob) {" in outbounds_src
     assert "function outboundsDistinctProxySignatureCount(cfg) {" in outbounds_src
+    assert "isSubscriptionGeneratedText(data && data.text) || await isSubscriptionOutputFragment(fileName)" in outbounds_src
     assert "isPoolGeneratedText(data && data.text)" in outbounds_src
     assert "outboundsDistinctProxySignatureCount(data && data.config) > 1" in outbounds_src
     assert "outbounds-load-pool-fragment" in outbounds_src
@@ -74,7 +76,7 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert 'id="outbounds-nodes-pingall"' in template_src
     assert 'id="outbounds-nodes-list"' in template_src
     assert "OUTBOUND_NODE_IDS" in outbounds_src
-    assert "function refreshOutboundsNodes(visible) {" in outbounds_src
+    assert "function refreshOutboundsNodes(visible, opts) {" in outbounds_src
     assert "function outboundsProbeNode(nodeKey) {" in outbounds_src
     assert "function outboundsProbeAllNodes() {" in outbounds_src
     assert "/api/xray/outbounds/nodes" in outbounds_src
@@ -107,6 +109,21 @@ def test_outbounds_pool_nodes_relayout_after_card_open_and_async_load():
     assert "export function onShowOutbounds(...args) {" in outbounds_src
     assert "if (typeof api.onShow === 'function') {" in config_shell_src
     assert "safe(() => configShell.activateOutboundsView({ reason: 'tab' }));" in panel_runtime_src
+
+
+def test_outbounds_fragment_switch_ignores_stale_load_and_nodes_responses():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+
+    assert "let _outboundsLoadSeq = 0;" in outbounds_src
+    assert "let _outboundsNodesLoadSeq = 0;" in outbounds_src
+    assert "function isCurrentOutboundsFragmentRequest(fragment, seq, kind) {" in outbounds_src
+    assert "const requestSeq = ++_outboundsNodesLoadSeq;" in outbounds_src
+    assert "const requestFragment = String((opts && opts.fragment) != null ? opts.fragment : getActiveFragment() || '').trim();" in outbounds_src
+    assert "if (!isCurrentOutboundsFragmentRequest(requestFragment, requestSeq, 'nodes')) return false;" in outbounds_src
+    assert "const loadSeq = ++_outboundsLoadSeq;" in outbounds_src
+    assert "if (!isCurrentOutboundsFragmentRequest(requestFragment, loadSeq, 'load')) return;" in outbounds_src
+    assert "await refreshOutboundsNodes(true, { fragment: requestFragment });" in outbounds_src
+    assert "await refreshOutboundsNodes(false, { fragment: requestFragment });" in outbounds_src
 
 
 def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions():
@@ -152,6 +169,7 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "xk-sub-list-action xk-sub-list-action-refresh xk-sub-refresh" in outbounds_src
     assert "xk-sub-list-action xk-sub-list-action-delete xk-sub-delete" in outbounds_src
     assert "Array.from(tbody.querySelectorAll('.xk-sub-file-link')).forEach((btn) => {" in outbounds_src
+    assert "restoreFragmentSelection($(IDS.fragmentSelect), name, _fragmentDir, _fragmentItems);" in outbounds_src
     assert "xk-sub-open" not in outbounds_src
     assert "xk-sub-edit" not in outbounds_src
     assert "/nodes/ping" in outbounds_src

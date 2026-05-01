@@ -39,6 +39,8 @@ let outboundsModuleApi = null;
     let _outboundsNodePingState = Object.create(null);
     let _outboundsPingAllBusy = false;
     let _outboundsNodeLayoutSeq = 0;
+    let _outboundsLoadSeq = 0;
+    let _outboundsNodesLoadSeq = 0;
 
     const IDS = {
       fragmentSelect: 'outbounds-fragment-select',
@@ -449,6 +451,10 @@ let outboundsModuleApi = null;
       return /Generated\s+by\s+XKeen\s+UI\s+\(outbounds\s+pool\)/i.test(String(text || ''));
     }
 
+    function isSubscriptionGeneratedText(text) {
+      return /Generated\s+by\s+XKeen\s+UI\s+subscription\b/i.test(String(text || ''));
+    }
+
     function shouldUsePoolFragmentSummary(data, summary) {
       const s = summary || summarizeOutboundsConfig(null);
       const proxyCount = Array.isArray(s.proxies) ? s.proxies.length : 0;
@@ -458,9 +464,9 @@ let outboundsModuleApi = null;
       return !((data && data.url) || '') && proxyCount > 0;
     }
 
-    function outboundsNodesApiUrl(suffix) {
+    function outboundsNodesApiUrl(suffix, fragment) {
       let url = '/api/xray/outbounds/nodes' + String(suffix || '');
-      const f = getActiveFragment();
+      const f = (fragment != null) ? fragment : getActiveFragment();
       if (f) url += '?file=' + encodeURIComponent(String(f));
       return url;
     }
@@ -486,6 +492,13 @@ let outboundsModuleApi = null;
       const panel = $(OUTBOUND_NODE_IDS.panel);
       if (!panel) return;
       try { panel.classList.toggle('hidden', !visible); } catch (e) {}
+    }
+
+    function isCurrentOutboundsFragmentRequest(fragment, seq, kind) {
+      const active = String(getActiveFragment() || '').trim();
+      const expected = String(fragment || '').trim();
+      const currentSeq = kind === 'nodes' ? _outboundsNodesLoadSeq : _outboundsLoadSeq;
+      return seq === currentSeq && active === expected;
     }
 
     function outboundsCanRelayoutNodeList() {
@@ -559,15 +572,18 @@ let outboundsModuleApi = null;
       return reason;
     }
 
-    async function refreshOutboundsNodes(visible) {
+    async function refreshOutboundsNodes(visible, opts) {
+      const requestSeq = ++_outboundsNodesLoadSeq;
+      const requestFragment = String((opts && opts.fragment) != null ? opts.fragment : getActiveFragment() || '').trim();
       if (isSubscriptionFragmentMode()) {
         outboundsSetNodes([], {});
         outboundsSetNodesVisible(false);
         return false;
       }
       try {
-        const res = await fetch(outboundsNodesApiUrl(''), { cache: 'no-store' });
+        const res = await fetch(outboundsNodesApiUrl('', requestFragment), { cache: 'no-store' });
         const data = await res.json().catch(() => ({}));
+        if (!isCurrentOutboundsFragmentRequest(requestFragment, requestSeq, 'nodes')) return false;
         if (!res.ok || !data || data.ok === false) {
           outboundsSetNodes([], {});
           outboundsSetNodesVisible(false);
@@ -582,6 +598,7 @@ let outboundsModuleApi = null;
         if (visible !== false && hasNodes) scheduleOutboundsNodeListLayout();
         return hasNodes;
       } catch (e) {
+        if (!isCurrentOutboundsFragmentRequest(requestFragment, requestSeq, 'nodes')) return false;
         outboundsSetNodes([], {});
         outboundsSetNodesVisible(false);
         return false;
@@ -1894,25 +1911,30 @@ let outboundsModuleApi = null;
       const statusEl = $('outbounds-status');
       const input = $('outbounds-url');
       if (!input) return;
+      const loadSeq = ++_outboundsLoadSeq;
+      const requestFragment = String(getActiveFragment() || '').trim();
 
       publishLifecycleState({ loading: true, initialized: false }, 'outbounds-load-start');
       try {
-        const file = getActiveFragment();
+        const file = requestFragment;
         const url = file ? ('/api/outbounds?file=' + encodeURIComponent(file)) : '/api/outbounds';
         const res = await fetch(url, { cache: 'no-store' });
+        if (!isCurrentOutboundsFragmentRequest(requestFragment, loadSeq, 'load')) return;
         if (!res.ok) {
           if (statusEl) statusEl.textContent = 'Не удалось загрузить outbounds.';
           return;
         }
         const data = await res.json().catch(() => ({}));
+        if (!isCurrentOutboundsFragmentRequest(requestFragment, loadSeq, 'load')) return;
         const fileName = baseName((data && data.file) || file || '');
         const summary = summarizeOutboundsConfig(data && data.config);
-        const isSubscriptionFragment = await isSubscriptionOutputFragment(fileName);
+        const isSubscriptionFragment = isSubscriptionGeneratedText(data && data.text) || await isSubscriptionOutputFragment(fileName);
+        if (!isCurrentOutboundsFragmentRequest(requestFragment, loadSeq, 'load')) return;
 
         if (isSubscriptionFragment) {
           _savedUrl = '';
           setSubscriptionFragmentMode(true, fileName, summary);
-          try { await refreshOutboundsNodes(false); } catch (e) {}
+          try { await refreshOutboundsNodes(false, { fragment: requestFragment }); } catch (e) {}
           try { syncDirtyState(false); } catch (e) {}
           publishLifecycleState({
             savedValue: '',
@@ -1934,7 +1956,7 @@ let outboundsModuleApi = null;
         if (shouldUsePoolFragmentSummary(data, summary)) {
           _savedUrl = '';
           setPoolFragmentMode(true, fileName, summary);
-          try { await refreshOutboundsNodes(true); } catch (e) {}
+          try { await refreshOutboundsNodes(true, { fragment: requestFragment }); } catch (e) {}
           try { syncDirtyState(false); } catch (e) {}
           publishLifecycleState({
             savedValue: '',
@@ -1959,7 +1981,7 @@ let outboundsModuleApi = null;
           input.value = _savedUrl;
           updateHintsFromUrl(_savedUrl);
           validateAndUpdateUI();
-          try { await refreshOutboundsNodes(true); } catch (e) {}
+          try { await refreshOutboundsNodes(true, { fragment: requestFragment }); } catch (e) {}
           publishLifecycleState({
             savedValue: String(_savedUrl || ''),
             currentValue: String(getCurrentUrl() || _savedUrl || ''),
@@ -1975,7 +1997,7 @@ let outboundsModuleApi = null;
         } else {
           _savedUrl = '';
           input.value = '';
-          try { await refreshOutboundsNodes(false); } catch (e) {}
+          try { await refreshOutboundsNodes(false, { fragment: requestFragment }); } catch (e) {}
           if (statusEl) statusEl.textContent = 'Файл outbounds отсутствует или не содержит прокси-конфиг.';
           updateHintsFromUrl('');
           validateAndUpdateUI();
@@ -1993,9 +2015,11 @@ let outboundsModuleApi = null;
         }
       } catch (e) {
         console.error(e);
-        if (statusEl) statusEl.textContent = 'Ошибка загрузки outbounds.';
+        if (isCurrentOutboundsFragmentRequest(requestFragment, loadSeq, 'load') && statusEl) statusEl.textContent = 'Ошибка загрузки outbounds.';
       } finally {
-        publishLifecycleState({ loading: false, initialized: true }, 'outbounds-load-finished');
+        if (isCurrentOutboundsFragmentRequest(requestFragment, loadSeq, 'load')) {
+          publishLifecycleState({ loading: false, initialized: true }, 'outbounds-load-finished');
+        }
       }
     }
 
@@ -5976,7 +6000,7 @@ let outboundsModuleApi = null;
       if (!name) return false;
 
       async function commitOpen() {
-        applyActiveFragment(name, _fragmentDir, _fragmentItems);
+        restoreFragmentSelection($(IDS.fragmentSelect), name, _fragmentDir, _fragmentItems);
         try { await load(); } catch (e) {}
         subsShow(false);
         const opened = openXkeenJsonEditor('outbounds');
