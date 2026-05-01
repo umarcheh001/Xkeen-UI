@@ -209,6 +209,41 @@ def create_backups_blueprint(
             return None
         return safe_child_realpath(BACKUP_DIR, filename)
 
+    def _snapshot_realpath(name: Any) -> Optional[str]:
+        """Resolve a snapshot backup within BACKUP_DIR."""
+        try:
+            filename = str(name or "").strip()
+        except Exception:
+            return None
+        if not is_snapshot_filename(filename):
+            return None
+        return safe_child_realpath(BACKUP_DIR, filename)
+
+    def _list_snapshot_items() -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        if not os.path.isdir(BACKUP_DIR):
+            return items
+
+        for name in os.listdir(BACKUP_DIR):
+            if not is_snapshot_filename(name):
+                continue
+            full = _snapshot_realpath(name)
+            if not full:
+                continue
+            try:
+                st = os.stat(full)
+            except OSError:
+                continue
+            items.append(
+                {
+                    "name": name,
+                    "size": int(st.st_size),
+                    "mtime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(st.st_mtime)),
+                }
+            )
+        items.sort(key=lambda x: x.get("mtime") or "", reverse=True)
+        return items
+
     # ---- pages ----
 
     @bp.get("/backups")
@@ -262,36 +297,15 @@ def create_backups_blueprint(
 
     @bp.get("/api/xray/snapshots")
     def api_xray_snapshots_list() -> Any:
-        items: list[dict[str, Any]] = []
-        if not os.path.isdir(BACKUP_DIR):
-            return jsonify(items), 200
-
-        for name in os.listdir(BACKUP_DIR):
-            if not is_snapshot_filename(name):
-                continue
-            full = os.path.join(BACKUP_DIR, name)
-            try:
-                st = os.stat(full)
-            except OSError:
-                continue
-            items.append(
-                {
-                    "name": name,
-                    "size": int(st.st_size),
-                    "mtime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(st.st_mtime)),
-                }
-            )
-        items.sort(key=lambda x: x.get("mtime") or "", reverse=True)
-        return jsonify(items), 200
+        return jsonify(_list_snapshot_items()), 200
 
     @bp.get("/api/xray/snapshots/read")
     def api_xray_snapshots_read() -> Any:
         name = request.args.get("name", "")
-        if not is_snapshot_filename(name):
+        src = _snapshot_realpath(name)
+        if not src:
             return error_response("bad_name", 400, ok=False)
-
-        src = safe_child_realpath(BACKUP_DIR, name)
-        if not src or not os.path.isfile(src):
+        if not os.path.isfile(src):
             return error_response("not_found", 404, ok=False)
 
         text, truncated, size = read_text_limited(src, max_bytes=512 * 1024)
@@ -303,11 +317,10 @@ def create_backups_blueprint(
         name = payload.get("name") or ""
         restart_flag = bool(payload.get("restart", True))
 
-        if not is_snapshot_filename(name):
+        src = _snapshot_realpath(name)
+        if not src:
             return error_response("bad_name", 400, ok=False)
-
-        src = safe_child_realpath(BACKUP_DIR, name)
-        if not src or not os.path.isfile(src):
+        if not os.path.isfile(src):
             return error_response("not_found", 404, ok=False)
 
         dst = _configs_child_realpath(name)
@@ -361,6 +374,62 @@ def create_backups_blueprint(
             remote_addr=str(request.remote_addr or ""),
         )
         return jsonify({"ok": True, "restarted": bool(restarted), "file": os.path.basename(dst)}), 200
+
+    @bp.post("/api/xray/snapshots/delete")
+    def api_xray_snapshots_delete() -> Any:
+        payload = request.get_json(silent=True) or {}
+        name = payload.get("name") or ""
+
+        path = _snapshot_realpath(name)
+        if not path:
+            return error_response("bad_name", 400, ok=False)
+        if not os.path.isfile(path):
+            return error_response("not_found", 404, ok=False)
+
+        try:
+            os.remove(path)
+        except OSError:
+            return error_response("delete_failed", 500, ok=False)
+
+        _core_log(
+            "info",
+            "snapshot.delete",
+            name=os.path.basename(path),
+            remote_addr=str(request.remote_addr or ""),
+        )
+        return jsonify({"ok": True, "name": os.path.basename(path)}), 200
+
+    @bp.post("/api/xray/snapshots/delete-all")
+    def api_xray_snapshots_delete_all() -> Any:
+        payload = request.get_json(silent=True) or {}
+        if not bool(payload.get("confirm", False)):
+            return error_response("confirm_required", 400, ok=False)
+
+        deleted: list[str] = []
+        failed: list[str] = []
+
+        for item in _list_snapshot_items():
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            path = _snapshot_realpath(name)
+            if not path or not os.path.isfile(path):
+                continue
+            try:
+                os.remove(path)
+                deleted.append(name)
+            except OSError:
+                failed.append(name)
+
+        status = 200 if not failed else 500
+        _core_log(
+            "info" if not failed else "warning",
+            "snapshot.delete_all",
+            deleted=len(deleted),
+            failed=len(failed),
+            remote_addr=str(request.remote_addr or ""),
+        )
+        return jsonify({"ok": not failed, "deleted": len(deleted), "failed": failed}), status
 
     # ---- API: create backups ----
 

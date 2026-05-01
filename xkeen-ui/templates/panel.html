@@ -571,6 +571,15 @@
         <p>Каталог бэкапов: <code>{{ backup_dir }}</code></p>
 
 
+        <div class="xk-backups-toolbar">
+          <button
+            type="button"
+            id="backups-clear-snapshots-btn"
+            class="btn-secondary xk-backups-toolbar-btn"
+            data-tooltip="Удалить все rollback-снимки из этой карточки. History-backup и auto-backup не затрагиваются."
+          >Удалить все</button>
+        </div>
+
         <table id="backups-table" data-mode="snapshots">
           <thead>
             <tr>

@@ -20,6 +20,7 @@ let backupsModuleApi = null;
   const UI = getXkeenSharedPrimitivesApi();
 
   let _inited = false;
+  let _lastSnapshotItems = [];
 
   // Snapshot preview modal
   let _snapWired = false;
@@ -1075,12 +1076,40 @@ let backupsModuleApi = null;
     restoreBtn.innerHTML = '<img src="/static/icons/restore.svg" alt="Восстановить" class="backup-icon">';
     restoreBtn.addEventListener('click', () => restoreSnapshot(String(s && s.name ? s.name : '')));
 
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'backup-icon-btn backup-delete-btn';
+    deleteBtn.title = 'Удалить снимок';
+    deleteBtn.setAttribute('data-tooltip', 'Удалить');
+    deleteBtn.innerHTML = '<img src="/static/icons/trash.svg" alt="Удалить" class="backup-icon">';
+    deleteBtn.addEventListener('click', () => deleteSnapshot(String(s && s.name ? s.name : '')));
+
     actionsDiv.appendChild(viewBtn);
     actionsDiv.appendChild(restoreBtn);
+    actionsDiv.appendChild(deleteBtn);
     actionTd.appendChild(actionsDiv);
     tr.appendChild(actionTd);
 
     tbody.appendChild(tr);
+  }
+
+  function setSnapshotsToolbarState(items) {
+    const clearBtn = el('backups-clear-snapshots-btn');
+    if (!clearBtn) return;
+    const count = Array.isArray(items) ? items.length : 0;
+    clearBtn.disabled = count <= 0;
+    clearBtn.setAttribute('aria-disabled', count <= 0 ? 'true' : 'false');
+    clearBtn.title = count > 0
+      ? ('Удалить все текущие снимки (' + count + ')')
+      : 'Снимков пока нет';
+  }
+
+  function clearCurrentSnapshotPreviewIfDeleted(names) {
+    const deleted = new Set((Array.isArray(names) ? names : [names]).map((item) => String(item || '').trim()).filter(Boolean));
+    if (!_snapCurrentName || !deleted.has(String(_snapCurrentName || '').trim())) return;
+    closeSnapModal();
+    _snapLastText = '';
+    _snapCurrentName = '';
   }
 
   async function loadSnapshots() {
@@ -1093,11 +1122,15 @@ let backupsModuleApi = null;
     try {
       const res = await fetch('/api/xray/snapshots', { method: 'GET' });
       if (!res.ok) {
+        _lastSnapshotItems = [];
+        setSnapshotsToolbarState([]);
         renderEmptyRow(tbody, 'Не удалось загрузить список снимков.');
         setStatus('Не удалось загрузить список снимков.', true);
         return;
       }
       const items = await res.json();
+      _lastSnapshotItems = Array.isArray(items) ? items.slice() : [];
+      setSnapshotsToolbarState(_lastSnapshotItems);
       if (!Array.isArray(items) || items.length === 0) {
         renderEmptyRow(tbody, 'Снимков пока нет. Они появятся после сохранения конфигов.');
         return;
@@ -1107,6 +1140,8 @@ let backupsModuleApi = null;
       items.forEach((s) => renderRowSnapshot(tbody, s));
     } catch (e) {
       console.error(e);
+      _lastSnapshotItems = [];
+      setSnapshotsToolbarState([]);
       renderEmptyRow(tbody, 'Ошибка загрузки списка снимков.');
       setStatus('Ошибка загрузки списка снимков.', true);
     }
@@ -1239,6 +1274,118 @@ let backupsModuleApi = null;
     }
   }
 
+  async function deleteSnapshot(name) {
+    const n = String(name || '').trim();
+    if (!n) {
+      toast('Не указан снимок.', true);
+      return;
+    }
+
+    const ok = await confirmAction({
+      title: 'Удалить снимок',
+      message: 'Удалить снимок ' + n + '?',
+      details: [
+        'Это действие необратимо.',
+        'Diff-сравнение и rollback по этому снимку пропадут до следующего сохранения файла.',
+      ],
+      okText: 'Удалить',
+      cancelText: 'Отменить',
+      danger: true,
+      cancelMessage: 'Удаление снимка отменено.',
+      cancelKind: 'info',
+    });
+    if (!ok) {
+      writeStatus(el('backups-status'), 'Удаление снимка отменено.', false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/xray/snapshots/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: n }),
+      });
+
+      let data = null;
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok || !data || data.ok !== true) {
+        const msg = 'Ошибка удаления снимка: ' + ((data && data.error) || res.statusText || ('HTTP ' + res.status));
+        setStatus(msg, true);
+        return;
+      }
+
+      clearCurrentSnapshotPreviewIfDeleted(n);
+      setStatus('Снимок удалён: ' + n, false);
+      await loadSnapshots();
+    } catch (e) {
+      console.error(e);
+      setStatus('Ошибка при удалении снимка.', true);
+    }
+  }
+
+  async function deleteAllSnapshots() {
+    const items = Array.isArray(_lastSnapshotItems) ? _lastSnapshotItems.slice() : [];
+    if (!items.length) {
+      setStatus('Снимки для удаления не найдены.', true);
+      return;
+    }
+
+    const ok = await confirmAction({
+      title: 'Удалить все снимки',
+      message: 'Удалить все снимки Xray (' + items.length + ')?',
+      details: [
+        'Удалятся только rollback-снимки из карточки. History-backup и auto-backup не затронутся.',
+        'Diff-сравнение и restore по текущим снимкам пропадут до следующего сохранения конфига.',
+      ],
+      okText: 'Удалить все',
+      cancelText: 'Отменить',
+      danger: true,
+      cancelMessage: 'Очистка снимков отменена.',
+      cancelKind: 'info',
+    });
+    if (!ok) {
+      writeStatus(el('backups-status'), 'Очистка снимков отменена.', false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/xray/snapshots/delete-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true }),
+      });
+
+      let data = null;
+      try { data = await res.json(); } catch (e) {}
+
+      if (!res.ok || !data || data.ok !== true) {
+        const msg = 'Ошибка очистки снимков: ' + ((data && data.error) || res.statusText || ('HTTP ' + res.status));
+        setStatus(msg, true);
+        return;
+      }
+
+      clearCurrentSnapshotPreviewIfDeleted(items.map((item) => item && item.name ? item.name : ''));
+      setStatus('Снимки удалены: ' + String(data.deleted || 0), false);
+      await loadSnapshots();
+    } catch (e) {
+      console.error(e);
+      setStatus('Ошибка при очистке снимков.', true);
+    }
+  }
+
+  function wireSnapshotsToolbarOnce() {
+    const clearBtn = el('backups-clear-snapshots-btn');
+    if (!clearBtn) return;
+    if (clearBtn.dataset && clearBtn.dataset.xkeenWired === '1') return;
+    if (clearBtn.dataset) clearBtn.dataset.xkeenWired = '1';
+    clearBtn.addEventListener('click', (e) => {
+      if (e && e.preventDefault) e.preventDefault();
+      deleteAllSnapshots();
+    });
+    setSnapshotsToolbarState(_lastSnapshotItems);
+  }
+
   // ------------------------- shared API -------------------------
   async function load() {
     const tbody = getTableBody();
@@ -1246,6 +1393,7 @@ let backupsModuleApi = null;
 
     // Mark module as initialized even if load() was called directly.
     if (!_inited) _inited = true;
+    wireSnapshotsToolbarOnce();
 
     const m = getMode();
     if (m === 'snapshots') return loadSnapshots();
@@ -1344,6 +1492,7 @@ let backupsModuleApi = null;
 
   function init() {
     if (!_inited) _inited = true;
+    wireSnapshotsToolbarOnce();
     return load();
   }
 
@@ -1358,6 +1507,8 @@ let backupsModuleApi = null;
     deleteBackup,
     viewSnapshot,
     restoreSnapshot,
+    deleteSnapshot,
+    deleteAllSnapshots,
     restoreAuto,
   };
 

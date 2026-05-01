@@ -109,6 +109,59 @@ def test_api_delete_rejects_traversal_filename(tmp_path: Path):
     assert _read_json(outside_backup) == {"keep": True}
 
 
+def test_api_snapshot_delete_rejects_traversal_filename(tmp_path: Path):
+    client, _paths = _build_client(tmp_path)
+    outside_snapshot = tmp_path / "05_routing.json"
+    outside_snapshot.write_text('{"outside":true}', encoding="utf-8")
+
+    response = client.post("/api/xray/snapshots/delete", json={"name": "../05_routing.json"})
+
+    assert response.status_code == 400
+    assert outside_snapshot.exists()
+
+
+def test_api_snapshot_delete_and_delete_all_only_touch_snapshot_files(tmp_path: Path):
+    client, paths = _build_client(tmp_path)
+    paths["backup_dir"].mkdir(parents=True, exist_ok=True)
+    snapshot_a = paths["backup_dir"] / "05_routing.json"
+    snapshot_b = paths["backup_dir"] / "07_observatory.json"
+    history_backup = paths["backup_dir"] / "05_routing-20260408-223000.json"
+    auto_backup = paths["backup_dir"] / "05_routing.json.auto-backup-20260408-223000"
+
+    snapshot_a.write_text('{"routing":"snap-a"}', encoding="utf-8")
+    snapshot_b.write_text('{"observatory":"snap-b"}', encoding="utf-8")
+    _write_json(history_backup, {"routing": "history"})
+    auto_backup.write_text('{"routing":"auto"}', encoding="utf-8")
+
+    delete_one = client.post("/api/xray/snapshots/delete", json={"name": snapshot_a.name})
+    assert delete_one.status_code == 200
+    assert delete_one.get_json() == {"ok": True, "name": snapshot_a.name}
+    assert not snapshot_a.exists()
+    assert snapshot_b.exists()
+    assert history_backup.exists()
+    assert auto_backup.exists()
+
+    delete_all = client.post("/api/xray/snapshots/delete-all", json={"confirm": True})
+    assert delete_all.status_code == 200
+    assert delete_all.get_json() == {"ok": True, "deleted": 1, "failed": []}
+    assert not snapshot_b.exists()
+    assert history_backup.exists()
+    assert auto_backup.exists()
+
+
+def test_api_snapshot_delete_all_requires_confirm_flag(tmp_path: Path):
+    client, paths = _build_client(tmp_path)
+    paths["backup_dir"].mkdir(parents=True, exist_ok=True)
+    snapshot = paths["backup_dir"] / "05_routing.json"
+    snapshot.write_text('{"routing":"snap"}', encoding="utf-8")
+
+    response = client.post("/api/xray/snapshots/delete-all", json={})
+
+    assert response.status_code == 400
+    assert response.get_json() == {"ok": False, "error": "confirm_required"}
+    assert snapshot.exists()
+
+
 def test_html_legacy_backup_routes_ignore_traversal_names(tmp_path: Path):
     client, paths = _build_client(tmp_path)
     outside_backup = tmp_path / "escape.json"

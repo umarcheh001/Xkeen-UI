@@ -24590,6 +24590,18 @@ body.panel-page .routing-side-card .backup-actions {
   gap: 8px;
 }
 
+.xk-backups-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 10px 0 12px;
+}
+
+.xk-backups-toolbar-btn.btn-secondary {
+  min-height: 34px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
 body.panel-page .routing-side-card .xk-card-help-row {
   margin-bottom: 0;
 }
