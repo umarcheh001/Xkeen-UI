@@ -115,6 +115,9 @@ def test_refresh_subscription_writes_generated_fragment_and_observatory(tmp_path
     assert len(generated["outbounds"]) == 1
     assert generated["outbounds"][0]["tag"] == "demo--Fast_Node"
     assert generated["outbounds"][0]["protocol"] == "vless"
+    assert generated["outbounds"][0]["settings"]["address"] == "example.com"
+    assert generated["outbounds"][0]["settings"]["id"] == "user"
+    assert "vnext" not in generated["outbounds"][0]["settings"]
 
     observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
     assert observatory["observatory"]["subjectSelector"] == ["demo"]

@@ -97,6 +97,41 @@ def _normalize_xhttp_mode(value: Any) -> str | None:
         return lowered
     return text
 
+
+def _extract_vless_endpoint_and_user(settings: Any) -> tuple[str, Any, Dict[str, Any]] | None:
+    if not isinstance(settings, dict):
+        return None
+
+    address = str(settings.get("address") or "").strip()
+    port = settings.get("port")
+    compact_user: Dict[str, Any] = {
+        "id": settings.get("id"),
+        "encryption": settings.get("encryption"),
+        "flow": settings.get("flow"),
+        "level": settings.get("level"),
+    }
+    compact_users = settings.get("users") if isinstance(settings.get("users"), list) else []
+    first_compact_user = compact_users[0] if compact_users and isinstance(compact_users[0], dict) else {}
+
+    if address and port not in (None, ""):
+        compact_id = str(compact_user.get("id") or "").strip()
+        if compact_id:
+            return address, port, compact_user
+        if str(first_compact_user.get("id") or "").strip():
+            return address, port, first_compact_user
+
+    vnext = (((settings.get("vnext") or [None])[0]) if isinstance(settings.get("vnext"), list) else None)
+    if not isinstance(vnext, dict):
+        return None
+    users = vnext.get("users") if isinstance(vnext.get("users"), list) else []
+    user = users[0] if users and isinstance(users[0], dict) else {}
+    addr = str(vnext.get("address") or "").strip()
+    vport = vnext.get("port")
+    if not (addr and vport not in (None, "") and str(user.get("id") or "").strip()):
+        return None
+    return addr, vport, user
+
+
 def build_vless_url_from_config(cfg):
     """Пытается восстановить VLESS ссылку из 04_outbounds.json.
 
@@ -110,29 +145,29 @@ def build_vless_url_from_config(cfg):
 
         # Ищем первый VLESS outbound (не обязательно первый в списке)
         main = None
+        endpoint = None
         for ob in outbounds:
             try:
                 if ob.get("protocol") == "vless":
-                    vnext = (((ob.get("settings") or {}).get("vnext") or [None])[0])
-                    if vnext and (vnext.get("users") or []):
+                    candidate = _extract_vless_endpoint_and_user(ob.get("settings") or {})
+                    if candidate:
                         main = ob
+                        endpoint = candidate
                         break
             except Exception:
                 continue
 
-        if not main:
+        if not main or endpoint is None:
             return None
 
-        vnext = main["settings"]["vnext"][0]
-        addr = vnext.get("address")
-        port = vnext.get("port")
-        user = (vnext.get("users") or [{}])[0]
-        uid = user.get("id")
+        settings = main.get("settings") or {}
+        addr, port, user = endpoint
+        uid = user.get("id") or settings.get("id")
         if not (addr and uid and port):
             return None
 
-        enc = user.get("encryption") or "none"
-        flow = user.get("flow")
+        enc = user.get("encryption") or settings.get("encryption") or "none"
+        flow = user.get("flow") or settings.get("flow")
 
         stream = main.get("streamSettings") or {}
         network = stream.get("network") or "tcp"
@@ -961,30 +996,22 @@ def build_outbounds_config_from_vless(url, *, proxy_tags: Optional[List[str]] = 
         xhttp = {k: v for k, v in xhttp.items() if v is not None}
         stream_settings["xhttpSettings"] = xhttp
 
+    settings = {
+        "address": host,
+        "port": port,
+        "id": uid,
+        "encryption": enc,
+        "level": 0,
+    }
+    if flow:
+        settings["flow"] = flow
+
     outbound = {
         "tag": PROXY_OUTBOUND_TAG,
         "protocol": "vless",
-        "settings": {
-            "vnext": [
-                {
-                    "address": host,
-                    "port": port,
-                    "users": [
-                        {
-                            "id": uid,
-                            "encryption": enc,
-                            "level": 0,
-                        }
-                    ],
-                }
-            ]
-        },
+        "settings": settings,
         "streamSettings": stream_settings,
     }
-
-    # flow опционален
-    if flow:
-        outbound["settings"]["vnext"][0]["users"][0]["flow"] = flow
 
     return _wrap_outbounds_with_common(outbound, proxy_tags=proxy_tags)
 
@@ -1355,4 +1382,3 @@ def build_outbounds_config_from_vmess(url: str, *, proxy_tags: Optional[List[str
     }
 
     return _wrap_outbounds_with_common(outbound, proxy_tags=proxy_tags)
-

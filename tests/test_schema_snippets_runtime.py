@@ -252,6 +252,34 @@ console.log(JSON.stringify({
     assert '"queryStrategy": "UseIP"' in payload["insertText"]
 
 
+def test_xray_vless_snippets_prefer_compact_settings_format():
+    payload = _run_node_json(
+        """
+import { getXraySnippets } from './xkeen-ui/static/js/ui/schema_snippets.js';
+
+const snippets = getXraySnippets({
+  schemaKind: 'xray-outbounds',
+  pointer: '/outbounds',
+});
+
+const realitySnippet = snippets.find((item) => item && item.id === 'xray-outbound-vless-reality');
+const xhttpSnippet = snippets.find((item) => item && item.id === 'xray-outbound-vless-xhttp');
+
+console.log(JSON.stringify({
+  realityInsertText: realitySnippet ? realitySnippet.insertText : '',
+  xhttpInsertText: xhttpSnippet ? xhttpSnippet.insertText : '',
+}));
+"""
+    )
+
+    assert '"address": "example.com"' in payload["realityInsertText"]
+    assert '"id": "00000000-0000-0000-0000-000000000000"' in payload["realityInsertText"]
+    assert '"vnext"' not in payload["realityInsertText"]
+    assert '"address": "example.com"' in payload["xhttpInsertText"]
+    assert '"id": "00000000-0000-0000-0000-000000000000"' in payload["xhttpInsertText"]
+    assert '"vnext"' not in payload["xhttpInsertText"]
+
+
 def test_mihomo_sniffer_snippet_stays_minimal_for_common_router_setup():
     payload = _run_node_json(
         """
