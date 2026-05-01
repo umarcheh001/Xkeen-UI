@@ -774,8 +774,10 @@ def delete_subscription(
 ) -> Dict[str, Any]:
     removed: Dict[str, Any] | None = None
     remaining_state: Dict[str, Any] = {"subscriptions": []}
+    previous_state: Dict[str, Any] = {"subscriptions": []}
     with _STATE_LOCK:
         state = load_subscription_state(ui_state_dir)
+        previous_state = _normalize_state(copy.deepcopy(state))
         idx, sub = _find_subscription(state, sub_id)
         if idx < 0 or sub is None:
             raise KeyError("subscription not found")
@@ -800,38 +802,20 @@ def delete_subscription(
     observatory_changed = False
     routing_changed = False
     routing_sync: Dict[str, Any] = {}
-    old_tags = removed.get("last_tags") if removed else []
     restored_baseline = False
-    if remaining_state.get(MANAGED_BASELINES_KEY):
-        rebuild_stats = _rebuild_subscription_runtime(
-            ui_state_dir,
-            xray_configs_dir=xray_configs_dir,
-            snapshot=snapshot,
-            state_override=remaining_state,
-        )
-        restored_baseline = bool(rebuild_stats.get("baseline_restored"))
-        observatory_changed = bool(rebuild_stats.get("observatory_changed"))
-        routing_changed = bool(rebuild_stats.get("routing_changed"))
-        routing_sync = rebuild_stats.get("routing_sync") if isinstance(rebuild_stats.get("routing_sync"), dict) else {}
-        if not rebuild_stats.get("has_runtime_targets"):
-            _clear_subscription_managed_baselines(ui_state_dir)
-    elif isinstance(old_tags, list) and old_tags:
-        preserved_tags = _preserved_balancer_tags(xray_configs_dir)
-        effective_routing_mode = _effective_subscription_routing_mode(ui_state_dir)
-        observatory_changed = sync_observatory_subjects(
-            xray_configs_dir=xray_configs_dir,
-            add_tags=preserved_tags,
-            remove_tags=[str(t) for t in old_tags],
-            snapshot=snapshot,
-        )
-        routing_sync = sync_subscription_routing(
-            xray_configs_dir=xray_configs_dir,
-            add_tags=preserved_tags,
-            remove_tags=[str(t) for t in old_tags],
-            routing_mode=effective_routing_mode,
-            snapshot=snapshot,
-        )
-        routing_changed = bool(routing_sync.get("changed"))
+    rebuild_stats = _rebuild_subscription_runtime(
+        ui_state_dir,
+        xray_configs_dir=xray_configs_dir,
+        snapshot=snapshot,
+        previous_state=previous_state,
+        state_override=remaining_state,
+    )
+    restored_baseline = bool(rebuild_stats.get("baseline_restored"))
+    observatory_changed = bool(rebuild_stats.get("observatory_changed"))
+    routing_changed = bool(rebuild_stats.get("routing_changed"))
+    routing_sync = rebuild_stats.get("routing_sync") if isinstance(rebuild_stats.get("routing_sync"), dict) else {}
+    if not rebuild_stats.get("has_runtime_targets"):
+        _clear_subscription_managed_baselines(ui_state_dir)
 
     restarted = False
     if restart_xkeen and (output_removed or observatory_changed or routing_changed):
@@ -2239,6 +2223,16 @@ def _ensure_routing_model(cfg: Any) -> Tuple[Dict[str, Any], Dict[str, Any], boo
     return obj, routing, normalized
 
 
+def _prune_empty_routing_collections(routing: Dict[str, Any]) -> bool:
+    if not isinstance(routing, dict):
+        return False
+    changed = False
+    if isinstance(routing.get("balancers"), list) and not routing.get("balancers"):
+        routing.pop("balancers", None)
+        changed = True
+    return changed
+
+
 def _find_balancer_by_tag(balancers: List[Any], tag: str) -> Dict[str, Any] | None:
     target = str(tag or "").strip()
     if not target:
@@ -2893,6 +2887,7 @@ def sync_subscription_routing(
             "skipped_rules": 0,
         }
 
+    _prune_empty_routing_collections(routing)
     main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
     raw_changed = _write_jsonc_sidecar_if_changed(
         routing_path,
@@ -2929,6 +2924,36 @@ def _merge_selector_terms(current: Any, extra: Iterable[str]) -> List[str]:
     return selector
 
 
+def _subtract_selector_terms(current: Any, removed: Iterable[str]) -> List[str]:
+    remove = set(_clean_tags_list(removed))
+    if not remove:
+        return _clean_tags_list(current if isinstance(current, list) else [])
+    return [
+        tag
+        for tag in _clean_tags_list(current if isinstance(current, list) else [])
+        if tag not in remove
+    ]
+
+
+def _replace_existing_balancer_selector_terms(
+    routing: Dict[str, Any],
+    *,
+    balancer_tag: str,
+    remove_terms: Iterable[str],
+    add_terms: Iterable[str],
+) -> bool:
+    balancers = routing.get("balancers")
+    if not isinstance(balancers, list):
+        return False
+    balancer = _find_balancer_by_tag(balancers, balancer_tag)
+    if balancer is None:
+        return False
+    before = copy.deepcopy(balancer)
+    selector = _subtract_selector_terms(balancer.get("selector"), remove_terms)
+    balancer["selector"] = _merge_selector_terms(selector, add_terms)
+    return before != balancer
+
+
 def _update_existing_balancer_selector(
     routing: Dict[str, Any],
     *,
@@ -2944,6 +2969,164 @@ def _update_existing_balancer_selector(
     before = copy.deepcopy(balancer)
     balancer["selector"] = _merge_selector_terms(balancer.get("selector"), selector_terms)
     return before != balancer
+
+
+def _remove_balancer_by_tag_if_leastping(
+    routing: Dict[str, Any],
+    *,
+    balancer_tag: str,
+) -> bool:
+    balancers = routing.get("balancers")
+    if not isinstance(balancers, list):
+        return False
+    tag = str(balancer_tag or AUTO_BALANCER_TAG).strip() or AUTO_BALANCER_TAG
+    for idx, item in enumerate(balancers):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("tag") or "").strip() != tag:
+            continue
+        if _balancer_strategy_type(item) != "leastping":
+            return False
+        balancers.pop(idx)
+        return True
+    return False
+
+
+def _normalize_runtime_manual_balancers(plan: Any) -> Dict[str, List[str]]:
+    raw = plan.get("manual_balancers") if isinstance(plan, dict) else {}
+    out: Dict[str, List[str]] = {}
+    for tag, values in raw.items() if isinstance(raw, dict) else []:
+        clean_tag = str(tag or "").strip()
+        clean_values = _clean_tags_list(values if isinstance(values, list) else [])
+        if not clean_tag:
+            continue
+        out[clean_tag] = clean_values
+    return out
+
+
+def sync_subscription_runtime_plan_delta(
+    *,
+    xray_configs_dir: str,
+    previous_plan: Dict[str, Any] | None = None,
+    next_plan: Dict[str, Any] | None = None,
+    snapshot: SnapshotCallback | None = None,
+) -> Dict[str, Any]:
+    prev = previous_plan if isinstance(previous_plan, dict) else {}
+    nxt = next_plan if isinstance(next_plan, dict) else {}
+
+    prev_observatory_terms = _clean_tags_list(prev.get("observatory_terms") or [])
+    next_observatory_terms = _clean_tags_list(nxt.get("observatory_terms") or [])
+    prev_auto_terms = _clean_tags_list(prev.get("auto_terms") or [])
+    next_auto_terms = _clean_tags_list(nxt.get("auto_terms") or [])
+    prev_manual_targets = _normalize_runtime_manual_balancers(prev)
+    next_manual_targets = _normalize_runtime_manual_balancers(nxt)
+    next_has_runtime_targets = bool(nxt.get("has_runtime_targets"))
+    preserved_tags = _preserved_balancer_tags(xray_configs_dir)
+
+    observatory_changed = sync_observatory_subjects(
+        xray_configs_dir=xray_configs_dir,
+        add_tags=next_observatory_terms + (preserved_tags if next_has_runtime_targets else []),
+        remove_tags=[tag for tag in prev_observatory_terms if tag not in set(next_observatory_terms)],
+        managed_active=next_has_runtime_targets,
+        snapshot=snapshot,
+    )
+
+    routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
+    cfg, routing, normalized_model = _ensure_routing_model(_read_json_file(routing_path, {}))
+    changed = bool(normalized_model)
+    selector: List[str] = []
+    balancer_tag = _choose_auto_balancer_tag(routing)
+    applied_manual_tags: List[str] = []
+
+    balancer = _find_balancer_by_tag(routing.get("balancers", []), balancer_tag)
+    current_selector = _clean_tags_list(
+        balancer.get("selector") if isinstance(balancer, dict) and isinstance(balancer.get("selector"), list) else []
+    )
+
+    if next_auto_terms:
+        selector = _subtract_selector_terms(current_selector, prev_auto_terms)
+        selector = _merge_selector_terms(selector, next_auto_terms)
+        selector = _merge_selector_terms(selector, preserved_tags)
+        changed = bool(
+            _ensure_least_ping_balancer(
+                routing,
+                balancer_tag=balancer_tag,
+                selector_tags=selector,
+            )
+            or changed
+        )
+        changed = bool(_ensure_default_balancer_rule(routing, balancer_tag=balancer_tag) or changed)
+    else:
+        changed = bool(_remove_auto_balancer_rule(routing) or changed)
+        if isinstance(balancer, dict):
+            selector = _subtract_selector_terms(current_selector, prev_auto_terms)
+            non_preserved_selector = [tag for tag in selector if tag not in preserved_tags]
+            if non_preserved_selector:
+                before_balancer = copy.deepcopy(balancer)
+                balancer["selector"] = selector
+                changed = bool(before_balancer != balancer or changed)
+            else:
+                changed = bool(_remove_balancer_by_tag_if_leastping(routing, balancer_tag=balancer_tag) or changed)
+                selector = []
+
+    manual_tags = sorted(set(prev_manual_targets) | set(next_manual_targets))
+    for tag in manual_tags:
+        if _replace_existing_balancer_selector_terms(
+            routing,
+            balancer_tag=tag,
+            remove_terms=prev_manual_targets.get(tag) or [],
+            add_terms=next_manual_targets.get(tag) or [],
+        ):
+            changed = True
+        if (next_manual_targets.get(tag) or []) and _find_balancer_by_tag(routing.get("balancers", []), tag) is not None:
+            applied_manual_tags.append(tag)
+
+    strict_enabled = (
+        _clean_routing_mode(nxt.get("routing_mode")) == ROUTING_MODE_STRICT
+        and any(tag not in AUTO_BALANCER_PRESERVE_TAGS for tag in next_auto_terms)
+    )
+    migrate_stats = _sync_vless_reality_rules_to_balancer(
+        routing,
+        balancer_tag=balancer_tag,
+        enabled=strict_enabled,
+    )
+    changed = bool(changed or migrate_stats.get("changed"))
+
+    routing_changed = False
+    if changed:
+        routing_header = (
+            "// Generated by XKeen UI subscriptions (routing sync)"
+            if next_has_runtime_targets
+            else ""
+        )
+        _prune_empty_routing_collections(routing)
+        main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
+        raw_changed = _write_jsonc_sidecar_if_changed(
+            routing_path,
+            cfg,
+            header=routing_header,
+            snapshot=snapshot,
+            preserve_existing_comments=True,
+        )
+        routing_changed = bool(main_changed or raw_changed)
+
+    return {
+        "baseline_restored": False,
+        "observatory_changed": bool(observatory_changed),
+        "routing_changed": bool(routing_changed),
+        "routing_sync": {
+            "changed": bool(routing_changed),
+            "selector": selector,
+            "balancer_tag": balancer_tag if next_auto_terms else "",
+            "routing_file": os.path.basename(routing_path),
+            "routing_mode": ROUTING_MODE_STRICT if strict_enabled else ROUTING_MODE_SAFE,
+            "migrated_rules": int(migrate_stats.get("migrated") or 0),
+            "reverted_rules": int(migrate_stats.get("reverted") or 0),
+            "skipped_rules": int(migrate_stats.get("skipped") or 0),
+            "manual_balancer_tags": applied_manual_tags,
+        },
+        "has_runtime_targets": next_has_runtime_targets,
+    }
 
 
 def sync_subscription_routing_plan(
@@ -3037,6 +3220,7 @@ def sync_subscription_routing_plan(
             "manual_balancer_tags": applied_manual_tags,
         }
 
+    _prune_empty_routing_collections(routing)
     main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
     raw_changed = _write_jsonc_sidecar_if_changed(
         routing_path,
@@ -3063,52 +3247,19 @@ def _rebuild_subscription_runtime(
     *,
     xray_configs_dir: str,
     snapshot: SnapshotCallback | None = None,
+    previous_state: Dict[str, Any] | None = None,
     state_override: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
-    observatory_path = os.path.join(str(xray_configs_dir or ""), "07_observatory.json")
-    routing_before = _managed_file_snapshot(routing_path)
-    observatory_before = _managed_file_snapshot(observatory_path)
-    restore_stats = _restore_subscription_managed_baselines(
-        ui_state_dir,
+    prev_state = _normalize_state(previous_state) if isinstance(previous_state, dict) else load_subscription_state(ui_state_dir)
+    next_state = _normalize_state(state_override) if isinstance(state_override, dict) else load_subscription_state(ui_state_dir)
+    prev_plan = _build_runtime_sync_plan(prev_state)
+    next_plan = _build_runtime_sync_plan(next_state)
+    return sync_subscription_runtime_plan_delta(
         xray_configs_dir=xray_configs_dir,
+        previous_plan=prev_plan,
+        next_plan=next_plan,
         snapshot=snapshot,
     )
-    state = _normalize_state(state_override) if isinstance(state_override, dict) else load_subscription_state(ui_state_dir)
-    plan = _build_runtime_sync_plan(state)
-    observatory_changed = bool(restore_stats.get("observatory_changed"))
-    routing_changed = bool(restore_stats.get("routing_changed"))
-    routing_sync: Dict[str, Any] = {}
-
-    if plan.get("has_runtime_targets"):
-        preserved_tags = _preserved_balancer_tags(xray_configs_dir)
-        sync_observatory_subjects(
-            xray_configs_dir=xray_configs_dir,
-            add_tags=list(plan.get("observatory_terms") or []) + preserved_tags,
-            remove_tags=[],
-            snapshot=snapshot,
-        )
-        routing_sync = sync_subscription_routing_plan(
-            xray_configs_dir=xray_configs_dir,
-            auto_selector_terms=plan.get("auto_terms") or [],
-            manual_balancers=plan.get("manual_balancers") if isinstance(plan.get("manual_balancers"), dict) else {},
-            routing_mode=str(plan.get("routing_mode") or ROUTING_MODE_SAFE),
-            snapshot=snapshot,
-        )
-    routing_after = _managed_file_snapshot(routing_path)
-    observatory_after = _managed_file_snapshot(observatory_path)
-    observatory_changed = observatory_before != observatory_after
-    routing_changed = routing_before != routing_after
-    if routing_sync:
-        routing_sync["changed"] = routing_changed
-
-    return {
-        "baseline_restored": bool(restore_stats.get("restored")),
-        "observatory_changed": observatory_changed,
-        "routing_changed": routing_changed,
-        "routing_sync": routing_sync,
-        "has_runtime_targets": bool(plan.get("has_runtime_targets")),
-    }
 
 
 def sync_observatory_subjects(
@@ -3116,6 +3267,7 @@ def sync_observatory_subjects(
     xray_configs_dir: str,
     add_tags: Iterable[str],
     remove_tags: Iterable[str] | None = None,
+    managed_active: bool | None = None,
     snapshot: SnapshotCallback | None = None,
 ) -> bool:
     add = [str(t or "").strip() for t in add_tags if str(t or "").strip()]
@@ -3126,6 +3278,7 @@ def sync_observatory_subjects(
     dst_json = os.path.join(str(xray_configs_dir or ""), "07_observatory.json")
     cfg = _load_observatory(dst_json)
     obs = cfg.get("observatory")
+    created_observatory = not isinstance(obs, dict)
     if not isinstance(obs, dict):
         obs = {}
 
@@ -3147,33 +3300,26 @@ def sync_observatory_subjects(
         subjects.append(tag)
 
     obs["subjectSelector"] = subjects
-    obs.setdefault("probeUrl", "https://www.gstatic.com/generate_204")
-    obs.setdefault("probeInterval", "60s")
-    obs.setdefault("enableConcurrency", True)
+    if created_observatory or not obs:
+        obs.setdefault("probeUrl", "https://www.gstatic.com/generate_204")
+        obs.setdefault("probeInterval", "60s")
+        obs.setdefault("enableConcurrency", True)
     cfg["observatory"] = obs
 
     changed = _write_json_if_changed(dst_json, cfg, snapshot=snapshot)
-    ensure_xray_jsonc_dir()
-    jsonc = jsonc_path_for(dst_json)
-    jsonc_text = (
-        "// Generated by XKeen UI subscriptions (observatory subjects)\n"
-        + json.dumps(cfg, ensure_ascii=False, indent=2)
-        + "\n"
+    observatory_header = (
+        "// Generated by XKeen UI subscriptions (observatory subjects)"
+        if (bool(add) if managed_active is None else bool(managed_active))
+        else ""
     )
-    try:
-        old = ""
-        try:
-            with open(jsonc, "r", encoding="utf-8") as f:
-                old = f.read()
-        except Exception:
-            old = ""
-        if old != jsonc_text:
-            if snapshot and os.path.exists(jsonc):
-                snapshot(jsonc)
-            _atomic_write_text(jsonc, jsonc_text)
-            changed = True
-    except Exception:
-        pass
+    jsonc_changed = _write_jsonc_sidecar_if_changed(
+        dst_json,
+        cfg,
+        header=observatory_header,
+        snapshot=snapshot,
+        preserve_existing_comments=True,
+    )
+    changed = bool(changed or jsonc_changed)
 
     return changed
 
@@ -3379,6 +3525,7 @@ def refresh_subscription(
 
         _ensure_subscription_managed_baselines(ui_state_dir, xray_configs_dir)
         state_for_runtime = load_subscription_state(ui_state_dir)
+        previous_state_for_runtime = _normalize_state(copy.deepcopy(state_for_runtime))
         subs_for_runtime = state_for_runtime.get("subscriptions")
         if not isinstance(subs_for_runtime, list):
             subs_for_runtime = []
@@ -3398,6 +3545,7 @@ def refresh_subscription(
             ui_state_dir,
             xray_configs_dir=xray_configs_dir,
             snapshot=snapshot,
+            previous_state=previous_state_for_runtime,
             state_override=state_for_runtime,
         )
         observatory_changed = bool(rebuild_stats.get("observatory_changed"))
