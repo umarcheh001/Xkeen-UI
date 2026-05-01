@@ -133,6 +133,8 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "subsSuggestedAutoRuleDefault()" in outbounds_src
     assert "ru_direct_rule_count" in outbounds_src
     assert "direct-\\u043f\\u0440\\u0430\\u0432\\u0438\\u043b\\u0430" in outbounds_src
+    assert "else if (shadowTargetLabel)" in outbounds_src
+    assert "\\u0431\\u043e\\u043b\\u0435\\u0435 \\u0440\\u0430\\u043d\\u043d\\u0435\\u0435 \\u043f\\u0440\\u0430\\u0432\\u0438\\u043b\\u043e \\u0434\\u043b\\u044f" in outbounds_src
     assert "xk-sub-diag-group is-plan" in outbounds_src
     assert "function subsTransportFilterText(transport, protocol) {" in outbounds_src
     assert "function subsProtocolFilterText(protocol) {" in outbounds_src

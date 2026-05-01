@@ -1001,6 +1001,56 @@ def test_get_subscription_routing_meta_reports_shadowing_catch_all_rule(tmp_path
     assert meta["ru_direct_rule_count"] == 1
 
 
+def test_template_routing_meta_detects_shadowed_auto_pool_and_ru_direct_rules(tmp_path: Path):
+    from services import xray_subscriptions as subs
+
+    repo_root = Path(__file__).resolve().parents[1]
+    template_path = repo_root / "xkeen-ui" / "opt" / "etc" / "xray" / "templates" / "routing" / "05_routing_all_proxy_except_ru.jsonc"
+    raw = template_path.read_text(encoding="utf-8")
+
+    xray_dir = tmp_path / "xray" / "configs"
+    xray_dir.mkdir(parents=True)
+    parsed = json.loads(subs._strip_jsonc_comments(raw))
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(parsed, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    meta = subs.get_subscription_routing_meta(str(xray_dir))
+
+    assert meta["auto_rule_shadowing_rule_tag"] == ""
+    assert meta["auto_rule_shadowing_target_kind"] == "outbound"
+    assert meta["auto_rule_shadowing_target_tag"] == "vless-reality"
+    assert meta["auto_rule_shadowing_target_label"] == 'outbound "vless-reality"'
+    assert meta["direct_rule_count"] == 3
+    assert meta["ru_direct_rule_count"] == 1
+
+
+def test_template_zkeen_only_meta_detects_direct_catch_all_shadowing(tmp_path: Path):
+    from services import xray_subscriptions as subs
+
+    repo_root = Path(__file__).resolve().parents[1]
+    template_path = repo_root / "xkeen-ui" / "opt" / "etc" / "xray" / "templates" / "routing" / "05_routing_zkeen_only.jsonc"
+    raw = template_path.read_text(encoding="utf-8")
+
+    xray_dir = tmp_path / "xray" / "configs"
+    xray_dir.mkdir(parents=True)
+    parsed = json.loads(subs._strip_jsonc_comments(raw))
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(parsed, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    meta = subs.get_subscription_routing_meta(str(xray_dir))
+
+    assert meta["auto_rule_shadowing_rule_tag"] == ""
+    assert meta["auto_rule_shadowing_target_kind"] == "outbound"
+    assert meta["auto_rule_shadowing_target_tag"] == "direct"
+    assert meta["auto_rule_shadowing_target_label"] == 'outbound "direct"'
+    assert meta["direct_rule_count"] == 1
+    assert meta["ru_direct_rule_count"] == 0
+
+
 def test_refresh_subscription_preserves_ru_direct_rules_with_shadowed_auto_pool(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 
