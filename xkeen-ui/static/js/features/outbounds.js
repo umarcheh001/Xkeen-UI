@@ -3692,6 +3692,29 @@ let outboundsModuleApi = null;
       );
     }
 
+    function subsSelectorPrefixHint(tagPrefix) {
+      const prefix = String(tagPrefix || '').trim();
+      if (!prefix) return '';
+      const previewNodes = _subscriptionPreview && Array.isArray(_subscriptionPreview.nodes)
+        ? _subscriptionPreview.nodes
+        : [];
+      const sampleTags = [];
+      const seen = new Set();
+      for (let idx = 0; idx < previewNodes.length; idx += 1) {
+        const item = previewNodes[idx];
+        const tag = String(item && item.tag ? item.tag : '').trim();
+        if (!tag || seen.has(tag)) continue;
+        seen.add(tag);
+        sampleTags.push(tag);
+        if (sampleTags.length >= 2) break;
+      }
+      if (sampleTags.length) {
+        const suffix = previewNodes.length > sampleTags.length ? ' и другие generated tags.' : '.';
+        return `${subsQuotedTag(prefix)} матчится на ${sampleTags.map((tag) => subsQuotedTag(tag)).join(', ')}${suffix}`;
+      }
+      return `${subsQuotedTag(prefix)} матчится на generated tags вида ${subsQuotedTag(prefix + '--node')}.`;
+    }
+
     function subsBuildDraftIntegrationPlan(formState) {
       const state = (formState && typeof formState === 'object') ? formState : subsReadFormState();
       const resolved = subsResolveDraftDefaults(state);
@@ -3713,7 +3736,7 @@ let outboundsModuleApi = null;
       }
 
       if (state.ping_enabled && tagPrefix) {
-        items.push(`Observatory: \u0432 subjectSelector \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u0441\u044f prefix ${subsQuotedTag(tagPrefix)} \u0434\u043b\u044f leastPing-\u043f\u0440\u043e\u0432\u0435\u0440\u043e\u043a.`);
+        items.push(`Observatory: в subjectSelector добавится prefix ${subsQuotedTag(tagPrefix)} для leastPing-проверок. Prefix-match Xray: ${subsSelectorPrefixHint(tagPrefix)}`);
       }
 
       if (state.routing_auto_rule) {
@@ -3732,7 +3755,7 @@ let outboundsModuleApi = null;
       }
 
       if (manualTags.length) {
-        items.push(`User balancers: \u0431\u0443\u0434\u0443\u0442 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u044b selector \u0443 ${manualTags.map((tag) => subsQuotedTag(tag)).join(', ')}. \u0421\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044e\u0449\u0438\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f \u043d\u0435 \u0443\u0434\u0430\u043b\u044f\u044e\u0442\u0441\u044f.`);
+        items.push(`User balancers: будут расширены selector у ${manualTags.map((tag) => subsQuotedTag(tag)).join(', ')}. Prefix-match Xray: ${subsSelectorPrefixHint(tagPrefix)} Существующие значения не удаляются.`);
       }
 
       if (!state.routing_auto_rule && !manualTags.length) {
@@ -3824,7 +3847,7 @@ let outboundsModuleApi = null;
         `;
       }).join('');
       if (note) {
-        note.textContent = 'Отметь balancer-ы, в чьи selector-ы нужно автоматически добавлять tag prefix этой подписки.';
+        note.textContent = 'Отметь balancer-ы, в чьи selector-ы нужно автоматически добавлять tag prefix этой подписки. Xray читает selector по префиксу: "sub" найдёт generated tags вида "sub--node".';
         note.hidden = false;
       }
     }
@@ -3864,8 +3887,8 @@ let outboundsModuleApi = null;
       setCheckCopy(
         SUB_IDS.ping,
         '\u041f\u0438\u043d\u0433',
-        '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c prefix \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0438 \u0432 07_observatory.json. \u041d\u0430 routing \u043d\u0435 \u0432\u043b\u0438\u044f\u0435\u0442.',
-        '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c prefix \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0438 \u0432 07_observatory.json \u0434\u043b\u044f leastPing.'
+        'Добавить tag prefix подписки в 07_observatory.json через subjectSelector. Xray сопоставляет его по началу generated tag. На routing не влияет.',
+        'Добавить tag prefix подписки в 07_observatory.json через subjectSelector для leastPing.'
       );
       setCheckCopy(
         SUB_IDS.refreshNow,
@@ -3962,7 +3985,7 @@ let outboundsModuleApi = null;
         `;
       }).join('');
       if (note) {
-        note.textContent = '\u041e\u0442\u043c\u0435\u0447\u0435\u043d\u043d\u044b\u0435 user balancer-\u044b \u0431\u0443\u0434\u0443\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u044b: \u0432 selector \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u0441\u044f tag prefix \u044d\u0442\u043e\u0439 \u043f\u043e\u0434\u043f\u0438\u0441\u043a\u0438, \u0431\u0435\u0437 \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f \u0442\u0435\u043a\u0443\u0449\u0438\u0445 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0439.';
+        note.textContent = 'Отмеченные user balancer-ы будут только расширены: в selector добавится tag prefix этой подписки, без удаления текущих значений. Xray читает selector по префиксу, поэтому "sub" матчится на generated tags вида "sub--node".';
         note.hidden = false;
       }
       try { subsApplySubscriptionCopy(); } catch (e1) {}
@@ -4475,7 +4498,7 @@ let outboundsModuleApi = null;
       if (hasPingable) {
         return 'Запустить проверку задержки для всех активных узлов, входящих в generated fragment.';
       }
-      return 'Нет активных узлов в generated fragment. Сначала обнови подписку кнопкой ↻ в списке справа или сохрани её с флагом «Обновить сразу». Поле Tag prefix задаёт только префикс, а сами generated tags назначаются узлам автоматически после обновления подписки.';
+      return 'Нет активных узлов в generated fragment. Сначала обнови подписку кнопкой ↻ в списке справа или сохрани её с флагом «Обновить сразу». Поле Tag prefix задаёт только префикс: Xray использует его в selector и subjectSelector по prefix-match, а сами generated tags назначаются узлам автоматически после обновления подписки.';
     }
 
     function subsEnsureModal() {
@@ -4501,7 +4524,7 @@ let outboundsModuleApi = null;
               <div class="xk-sub-brief">
                 <div class="xk-sub-brief-main">
                   <div class="xk-sub-brief-title">LeastPing и generated fragments</div>
-                  <div class="xk-sub-brief-text">Подписка создаёт отдельный <code>04_outbounds.&lt;tag&gt;.json</code>, использует <code>Tag prefix</code> как <code>selector</code>-префикс для leastPing и при включённом «Пинг» добавляет generated tags в <code>07_observatory.json</code>. Режим <b>Применение</b> управляет только синхронизацией routing с пулом.</div>
+                  <div class="xk-sub-brief-text">Подписка создаёт отдельный <code>04_outbounds.&lt;tag&gt;.json</code>, использует <code>Tag prefix</code> как prefix для <code>selector</code> и <code>subjectSelector</code>: Xray сопоставляет его по началу тега, поэтому <code>sub</code> найдёт generated outbounds вида <code>sub--node</code>. При включённом «Пинг» этот prefix добавляется в <code>07_observatory.json</code>. Режим <b>Применение</b> управляет только синхронизацией routing с пулом.</div>
                 </div>
                 <div class="xk-sub-update-note">
                   <div class="xk-sub-update-title">Автообновление</div>
@@ -4524,9 +4547,9 @@ let outboundsModuleApi = null;
                       <input id="outbounds-subscriptions-name" class="xray-log-filter" type="text" placeholder="My subscription" title="Название подписки" data-tooltip="Короткое имя подписки в списке. Если оставить поле пустым, имя будет сгенерировано автоматически при сохранении.">
                       <span id="outbounds-subscriptions-name-note" class="xk-sub-field-note" hidden></span>
                     </label>
-                    <label class="xk-sub-span-4" data-tooltip="Префикс для generated outbound tags, например sub--node. Его удобно выбирать в LeastPing. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
+                    <label class="xk-sub-span-4" data-tooltip="Префикс для generated outbound tags, например sub--node. Xray использует его в selector и subjectSelector по prefix-match: значение sub найдёт generated tags вида sub--node. Можно оставить пустым: при сохранении панель сгенерирует его автоматически.">
                       <span class="xk-pool-fieldlabel">Tag prefix</span>
-                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Используй его в selector/balancer LeastPing. Если оставить поле пустым, префикс будет сгенерирован автоматически при сохранении.">
+                      <input id="outbounds-subscriptions-tag" class="xray-log-filter" type="text" placeholder="sub" title="Tag prefix" data-tooltip="Префикс для generated outbound tags. Xray использует его в selector и subjectSelector по prefix-match: значение sub найдёт generated tags вида sub--node. Если оставить поле пустым, префикс будет сгенерирован автоматически при сохранении.">
                       <span id="outbounds-subscriptions-tag-note" class="xk-sub-field-note" hidden></span>
                     </label>
                     <label class="xk-sub-span-3 xk-sub-interval-field" data-tooltip="Локальный интервал автообновления. По умолчанию 24 часа; серверный profile-update-interval показывается как рекомендация и не перезаписывает это поле.">
@@ -4571,7 +4594,7 @@ let outboundsModuleApi = null;
                     </label>
                     <div class="xk-sub-controls">
                       <label class="xk-sub-check" data-tooltip="Включить плановое автообновление этой подписки."><input id="outbounds-subscriptions-enabled" type="checkbox" checked title="Автообновление" data-tooltip="Включить плановое автообновление этой подписки."><span>Авто</span></label>
-                      <label class="xk-sub-check" data-tooltip="Добавлять generated tags в observatory для leastPing-проверок."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" data-tooltip="Добавлять generated outbound tags в 07_observatory.json для LeastPing."><span>Пинг</span></label>
+                      <label class="xk-sub-check" data-tooltip="Добавлять tag prefix подписки в observatory через subjectSelector для leastPing-проверок. Xray сопоставляет его по началу generated tag."><input id="outbounds-subscriptions-ping" type="checkbox" checked title="Пинг observatory" data-tooltip="Добавлять tag prefix подписки в 07_observatory.json через subjectSelector для LeastPing."><span>Пинг</span></label>
                       <label class="xk-sub-check" data-tooltip="После сохранения сразу скачать подписку и создать фрагмент."><input id="outbounds-subscriptions-refresh-now" type="checkbox" checked title="Обновить сразу" data-tooltip="Сразу скачать подписку после сохранения."><span>Обновить сразу</span></label>
                       <label class="xk-sub-check xk-sub-auto-rule-check" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool и держать служебное правило xk_auto_leastPing. Выключи, если подписка должна работать только через выбранные ниже balancer-ы.">
                         <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked title="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool.">
