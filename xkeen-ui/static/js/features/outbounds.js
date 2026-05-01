@@ -337,6 +337,37 @@ let outboundsModuleApi = null;
       return { outbounds, proxies, protocolCounts, tags };
     }
 
+    function outboundsPoolSignatureValue(value) {
+      if (Array.isArray(value)) return value.map(outboundsPoolSignatureValue);
+      if (!value || typeof value !== 'object') return value;
+      const out = {};
+      Object.keys(value)
+        .sort()
+        .forEach((key) => {
+          if (key === 'tag') return;
+          out[key] = outboundsPoolSignatureValue(value[key]);
+        });
+      return out;
+    }
+
+    function outboundsProxySignature(ob) {
+      if (!isProxyOutbound(ob)) return '';
+      try {
+        return JSON.stringify(outboundsPoolSignatureValue(ob));
+      } catch (e) {}
+      return '';
+    }
+
+    function outboundsDistinctProxySignatureCount(cfg) {
+      const proxies = summarizeOutboundsConfig(cfg).proxies || [];
+      const seen = new Set();
+      proxies.forEach((ob) => {
+        const signature = outboundsProxySignature(ob);
+        if (signature) seen.add(signature);
+      });
+      return seen.size;
+    }
+
     function renderOutboundsFragmentSummary(fileName, summary, opts) {
       const el = $('outbounds-fragment-summary');
       if (!el) return;
@@ -423,6 +454,7 @@ let outboundsModuleApi = null;
       const proxyCount = Array.isArray(s.proxies) ? s.proxies.length : 0;
       if (proxyCount <= 0) return false;
       if (isPoolGeneratedText(data && data.text)) return true;
+      if (outboundsDistinctProxySignatureCount(data && data.config) > 1) return true;
       return !((data && data.url) || '') && proxyCount > 0;
     }
 

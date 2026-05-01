@@ -52,7 +52,11 @@ def test_outbounds_proxy_pool_uses_fragment_summary_without_hiding_pool_button()
     assert "function setOutboundsSummaryFragmentMode(mode, fileName, summary) {" in outbounds_src
     assert "body.classList.toggle('xk-outbounds-pool-fragment', normalizedMode === 'pool');" in outbounds_src
     assert "function isPoolGeneratedText(text) {" in outbounds_src
+    assert "function outboundsPoolSignatureValue(value) {" in outbounds_src
+    assert "function outboundsProxySignature(ob) {" in outbounds_src
+    assert "function outboundsDistinctProxySignatureCount(cfg) {" in outbounds_src
     assert "isPoolGeneratedText(data && data.text)" in outbounds_src
+    assert "outboundsDistinctProxySignatureCount(data && data.config) > 1" in outbounds_src
     assert "outbounds-load-pool-fragment" in outbounds_src
     assert "Пул прокси загружен:" in outbounds_src
     assert "#outbounds-body.xk-outbounds-summary-fragment #outbounds-save-btn" in styles_src
