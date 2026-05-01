@@ -271,6 +271,86 @@ def test_preview_subscription_applies_filters_and_exclusions(tmp_path, monkeypat
     assert result["filtered_out_count"] == 1
 
 
+def test_refresh_subscription_keeps_preview_exclusions_when_reality_sid_and_spx_rotate(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    reality_1 = (
+        "vless://user@cp.landing-nl.rfid-technologies.org:443"
+        "?encryption=none&flow=xtls-rprx-vision&fp=firefox&pbk=pub"
+        "&security=reality&sid=1111111111111111&sni=landing-nl.rfid-technologies.org"
+        "&spx=%2Fpreview111&type=tcp#VLESS-REALITY-NL-Keenetic-Digus"
+    )
+    reality_2 = (
+        "vless://user@cp.landing-nl.rfid-technologies.org:443"
+        "?encryption=none&flow=xtls-rprx-vision&fp=firefox&pbk=pub"
+        "&security=reality&sid=2222222222222222&sni=landing-nl.rfid-technologies.org"
+        "&spx=%2Frefresh222&type=tcp#VLESS-REALITY-NL-Keenetic-Digus"
+    )
+    xhttp = (
+        "vless://user@cp.landing-nl.rfid-technologies.org:443"
+        "?encryption=none&mode=packet-up&path=%2FznyHydKmI6&security=tls&type=xhttp"
+        "#VLESS-XHTTP-NL-Keenetic-Digu-X"
+    )
+
+    preview_body = base64.b64encode(f"{reality_1}\n{xhttp}\n".encode("utf-8")).decode("ascii")
+    refresh_body = base64.b64encode(f"{reality_2}\n{xhttp}\n".encode("utf-8")).decode("ascii")
+    responses = iter([(preview_body, {}), (refresh_body, {})])
+    monkeypatch.setattr(subs, "fetch_subscription_body", lambda _url: next(responses))
+
+    preview = subs.preview_subscription(
+        {
+            "url": "https://example.com/sub",
+            "tag": "cp.landing-nl-rfid-technologies",
+        }
+    )
+    reality_key = next(item["key"] for item in preview["nodes"] if "REALITY" in item["name"])
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "cp.landing-nl-rfid-technologies",
+            "name": "cp.landing-nl-rfid-technologies",
+            "tag": "cp.landing-nl-rfid-technologies",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "excluded_node_keys": [reality_key],
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "cp.landing-nl-rfid-technologies",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    assert result["filtered_out_count"] == 1
+    generated = json.loads((xray_dir / "04_outbounds.cp.landing-nl-rfid-technologies.json").read_text(encoding="utf-8"))
+    assert [item["tag"] for item in generated["outbounds"]] == [
+        "cp.landing-nl-rfid-technologies--VLESS-XHTTP-NL-Keenetic-Digu-X"
+    ]
+
+    saved = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]
+    assert saved["excluded_node_keys"] == [reality_key]
+    assert {item["name"] for item in saved["last_nodes"] if item.get("tag")} == {
+        "VLESS-XHTTP-NL-Keenetic-Digu-X"
+    }
+
+
 def test_preview_subscription_requires_url():
     from services import xray_subscriptions as subs
 
@@ -1785,6 +1865,138 @@ def test_build_subscription_json_outbounds_keeps_distinct_keys_for_same_config_w
     assert [item["tag"] for item in outbounds] == ["flt--RU-Anti-06.e026"]
     assert stats["source_count"] == 2
     assert stats["filtered_out_count"] == 1
+
+
+def test_refresh_subscription_persists_preview_exclusions_and_applies_saved_exclusion_edits(
+    tmp_path: Path,
+    monkeypatch,
+):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    shared_outbound = {
+        "tag": "proxy",
+        "protocol": "vless",
+        "settings": {
+            "vnext": [
+                {
+                    "address": "103.88.240.173",
+                    "port": 443,
+                    "users": [{"id": "user", "encryption": "none"}],
+                }
+            ]
+        },
+        "streamSettings": {
+            "network": "xhttp",
+            "security": "tls",
+            "xhttpSettings": {"path": "/api/v2/"},
+        },
+    }
+    germany_outbound = {
+        "tag": "proxy",
+        "protocol": "trojan",
+        "settings": {
+            "servers": [{"address": "198.51.100.10", "port": 443, "password": "secret"}]
+        },
+        "streamSettings": {"network": "tcp", "security": "tls"},
+    }
+    subscription_body = json.dumps(
+        [
+            {"remarks": "SE-YYY-Sweden.e026", "outbounds": [shared_outbound]},
+            {"remarks": "RU-Anti-06.e026", "outbounds": [shared_outbound]},
+            {"remarks": "DE-Germany.0005", "outbounds": [germany_outbound]},
+        ]
+    )
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (subscription_body, {"content-type": "application/json"}),
+    )
+
+    preview = subs.preview_subscription({"url": "https://example.com/json", "tag": "flt"})
+    sweden_key = next(item["key"] for item in preview["nodes"] if item["name"] == "SE-YYY-Sweden.e026")
+    russia_key = next(item["key"] for item in preview["nodes"] if item["name"] == "RU-Anti-06.e026")
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "json-edit",
+            "name": "JSON Edit",
+            "tag": "flt",
+            "url": "https://example.com/json",
+            "enabled": True,
+            "ping_enabled": True,
+            "excluded_node_keys": [russia_key],
+        },
+    )
+
+    first = subs.refresh_subscription(
+        str(ui_state_dir),
+        "json-edit",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert first["ok"] is True
+    assert first["filtered_out_count"] == 1
+    assert [item["tag"] for item in json.loads((xray_dir / "04_outbounds.json-edit.json").read_text(encoding="utf-8"))["outbounds"]] == [
+        "flt--SE-YYY-Sweden.e026",
+        "flt--DE-Germany.0005",
+    ]
+
+    saved = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]
+    assert saved["excluded_node_keys"] == [russia_key]
+    assert {item["name"] for item in saved["last_nodes"] if item.get("tag")} == {
+        "SE-YYY-Sweden.e026",
+        "DE-Germany.0005",
+    }
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "json-edit",
+            "name": "JSON Edit",
+            "tag": "flt",
+            "url": "https://example.com/json",
+            "enabled": True,
+            "ping_enabled": True,
+            "excluded_node_keys": [sweden_key],
+        },
+    )
+
+    second = subs.refresh_subscription(
+        str(ui_state_dir),
+        "json-edit",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert second["ok"] is True
+    assert second["filtered_out_count"] == 1
+    assert [item["tag"] for item in json.loads((xray_dir / "04_outbounds.json-edit.json").read_text(encoding="utf-8"))["outbounds"]] == [
+        "flt--RU-Anti-06.e026",
+        "flt--DE-Germany.0005",
+    ]
+
+    saved = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]
+    assert saved["excluded_node_keys"] == [sweden_key]
+    assert {item["name"] for item in saved["last_nodes"] if item.get("tag")} == {
+        "RU-Anti-06.e026",
+        "DE-Germany.0005",
+    }
 
 
 def test_refresh_subscription_accepts_xray_json_config_arrays(tmp_path: Path, monkeypatch):

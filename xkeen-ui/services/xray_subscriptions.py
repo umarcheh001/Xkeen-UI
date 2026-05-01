@@ -1153,6 +1153,61 @@ def _node_fingerprint(value: Any) -> str:
     return hashlib.sha1(raw).hexdigest()[:16]
 
 
+VOLATILE_LINK_QUERY_KEYS = {"sid", "spx"}
+
+
+def _stable_link_fingerprint_payload(raw: str, protocol: str, name: str) -> str:
+    source = str(raw or "").strip()
+    proto = str(protocol or "").strip().lower()
+    node_name = str(name or "").strip()
+
+    if proto == "vmess":
+        try:
+            payload = source[8:].strip().replace("-", "+").replace("_", "/")
+            payload += "=" * (-len(payload) % 4)
+            data = json.loads(base64.b64decode(payload.encode("utf-8")).decode("utf-8", errors="replace"))
+            return json.dumps(
+                {
+                    "protocol": proto,
+                    "name": node_name,
+                    "data": data,
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        except Exception:
+            return source
+
+    try:
+        parsed = urlparse(source)
+        query = parse_qs(parsed.query)
+        normalized_query: Dict[str, List[str]] = {}
+        for raw_key, values in sorted(query.items()):
+            key = str(raw_key or "").strip().lower()
+            if not key or key in VOLATILE_LINK_QUERY_KEYS:
+                continue
+            clean_values = [unquote(str(item or "").strip()) for item in values if str(item or "").strip()]
+            if clean_values:
+                normalized_query[key] = clean_values
+        return json.dumps(
+            {
+                "protocol": proto,
+                "name": node_name,
+                "username": unquote(str(parsed.username or "").strip()),
+                "password": unquote(str(parsed.password or "").strip()),
+                "host": str(parsed.hostname or "").strip(),
+                "port": parsed.port or "",
+                "query": normalized_query,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except Exception:
+        return source
+
+
 def _build_node_detail(parts: Iterable[str]) -> str:
     out: List[str] = []
     for part in parts:
@@ -1221,7 +1276,7 @@ def _link_node_meta(link: str, index: int) -> Dict[str, Any]:
             pass
 
     return {
-        "key": _node_fingerprint(raw),
+        "key": _node_fingerprint(_stable_link_fingerprint_payload(raw, protocol, name)),
         "name": name,
         "protocol": protocol,
         "transport": str(transport or "").strip().lower(),
