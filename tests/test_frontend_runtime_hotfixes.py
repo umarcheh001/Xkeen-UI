@@ -964,6 +964,15 @@ def test_p9_backups_and_xkeen_screen_modules_keep_runtime_reactivation_safe():
     assert 'function init() {' in backups
     assert 'if (!_inited) _inited = true;' in backups
     assert 'isInitialized() {' in backups
+    assert 'let _snapshotsBusy = false;' in backups
+    assert 'function setSnapshotsBusyState(isBusy) {' in backups
+    assert "clearBtn.setAttribute('aria-busy', _snapshotsBusy ? 'true' : 'false');" in backups
+    assert "try { tbody.setAttribute('aria-busy', _snapshotsBusy ? 'true' : 'false'); } catch (e) {}" in backups
+    assert "writeStatus(el('backups-status'), 'Удаляю снимки…', false);" in backups
+    assert "if (_snapshotsBusy) return;" in backups
+    assert "if (tbody) renderEmptyRow(tbody, 'Удаляю снимки…');" in backups
+    assert "emitOutcome(" in backups
+    assert "'Список снимков обновлён после частично успешной очистки.'" in backups
 
     assert 'function hasServiceStatusHost() {' in service_status
     assert 'if (!hasServiceStatusHost()) return null;' in service_status

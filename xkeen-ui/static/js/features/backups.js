@@ -21,6 +21,7 @@ let backupsModuleApi = null;
 
   let _inited = false;
   let _lastSnapshotItems = [];
+  let _snapshotsBusy = false;
 
   // Snapshot preview modal
   let _snapWired = false;
@@ -1097,11 +1098,36 @@ let backupsModuleApi = null;
     const clearBtn = el('backups-clear-snapshots-btn');
     if (!clearBtn) return;
     const count = Array.isArray(items) ? items.length : 0;
-    clearBtn.disabled = count <= 0;
-    clearBtn.setAttribute('aria-disabled', count <= 0 ? 'true' : 'false');
-    clearBtn.title = count > 0
-      ? ('Удалить все текущие снимки (' + count + ')')
-      : 'Снимков пока нет';
+    const disabled = _snapshotsBusy || count <= 0;
+    clearBtn.disabled = disabled;
+    clearBtn.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    clearBtn.setAttribute('aria-busy', _snapshotsBusy ? 'true' : 'false');
+    clearBtn.title = _snapshotsBusy
+      ? 'Удаление снимков выполняется…'
+      : (count > 0
+          ? ('Удалить все текущие снимки (' + count + ')')
+          : 'Снимков пока нет');
+  }
+
+  function syncSnapshotActionButtonsDisabled() {
+    const tbody = getTableBody();
+    if (!tbody) return;
+    Array.from(tbody.querySelectorAll('.backup-icon-btn')).forEach((btn) => {
+      try {
+        btn.disabled = !!_snapshotsBusy;
+        btn.setAttribute('aria-disabled', _snapshotsBusy ? 'true' : 'false');
+      } catch (e) {}
+    });
+  }
+
+  function setSnapshotsBusyState(isBusy) {
+    _snapshotsBusy = !!isBusy;
+    setSnapshotsToolbarState(_lastSnapshotItems);
+    const tbody = getTableBody();
+    if (tbody) {
+      try { tbody.setAttribute('aria-busy', _snapshotsBusy ? 'true' : 'false'); } catch (e) {}
+    }
+    syncSnapshotActionButtonsDisabled();
   }
 
   function clearCurrentSnapshotPreviewIfDeleted(names) {
@@ -1133,11 +1159,13 @@ let backupsModuleApi = null;
       setSnapshotsToolbarState(_lastSnapshotItems);
       if (!Array.isArray(items) || items.length === 0) {
         renderEmptyRow(tbody, 'Снимков пока нет. Они появятся после сохранения конфигов.');
+        syncSnapshotActionButtonsDisabled();
         return;
       }
 
       tbody.innerHTML = '';
       items.forEach((s) => renderRowSnapshot(tbody, s));
+      syncSnapshotActionButtonsDisabled();
     } catch (e) {
       console.error(e);
       _lastSnapshotItems = [];
@@ -1275,6 +1303,7 @@ let backupsModuleApi = null;
   }
 
   async function deleteSnapshot(name) {
+    if (_snapshotsBusy) return;
     const n = String(name || '').trim();
     if (!n) {
       toast('Не указан снимок.', true);
@@ -1300,6 +1329,8 @@ let backupsModuleApi = null;
     }
 
     try {
+      setSnapshotsBusyState(true);
+      writeStatus(el('backups-status'), 'Удаляю снимок ' + n + '…', false);
       const res = await fetch('/api/xray/snapshots/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1316,15 +1347,19 @@ let backupsModuleApi = null;
       }
 
       clearCurrentSnapshotPreviewIfDeleted(n);
-      setStatus('Снимок удалён: ' + n, false);
       await loadSnapshots();
+      writeStatus(el('backups-status'), 'Снимок удалён: ' + n, false);
+      toast('Снимок удалён: ' + n, 'success');
     } catch (e) {
       console.error(e);
       setStatus('Ошибка при удалении снимка.', true);
+    } finally {
+      setSnapshotsBusyState(false);
     }
   }
 
   async function deleteAllSnapshots() {
+    if (_snapshotsBusy) return;
     const items = Array.isArray(_lastSnapshotItems) ? _lastSnapshotItems.slice() : [];
     if (!items.length) {
       setStatus('Снимки для удаления не найдены.', true);
@@ -1350,6 +1385,10 @@ let backupsModuleApi = null;
     }
 
     try {
+      setSnapshotsBusyState(true);
+      writeStatus(el('backups-status'), 'Удаляю снимки…', false);
+      const tbody = getTableBody();
+      if (tbody) renderEmptyRow(tbody, 'Удаляю снимки…');
       const res = await fetch('/api/xray/snapshots/delete-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1358,19 +1397,51 @@ let backupsModuleApi = null;
 
       let data = null;
       try { data = await res.json(); } catch (e) {}
+      const deletedCount = Number(data && data.deleted ? data.deleted : 0);
+      const failedItems = Array.isArray(data && data.failed) ? data.failed.slice() : [];
+      const failedCount = failedItems.length;
+      let reloaded = false;
+
+      if (deletedCount > 0) {
+        clearCurrentSnapshotPreviewIfDeleted(items.map((item) => item && item.name ? item.name : ''));
+        await loadSnapshots();
+        reloaded = true;
+      }
 
       if (!res.ok || !data || data.ok !== true) {
+        if (deletedCount > 0) {
+          emitOutcome(
+            el('backups-status'),
+            'Снимки удалены: ' + deletedCount,
+            [
+              failedCount > 0
+                ? ('Не удалось удалить: ' + failedCount + '. Проверь логи и попробуй ещё раз.')
+                : 'Список снимков обновлён после частично успешной очистки.',
+            ],
+          );
+          return;
+        }
         const msg = 'Ошибка очистки снимков: ' + ((data && data.error) || res.statusText || ('HTTP ' + res.status));
         setStatus(msg, true);
         return;
       }
 
-      clearCurrentSnapshotPreviewIfDeleted(items.map((item) => item && item.name ? item.name : ''));
-      setStatus('Снимки удалены: ' + String(data.deleted || 0), false);
-      await loadSnapshots();
+      if (!reloaded) await loadSnapshots();
+      if (failedCount > 0) {
+        emitOutcome(
+          el('backups-status'),
+          'Снимки удалены: ' + deletedCount,
+          ['Не удалось удалить: ' + failedCount + '. Проверь логи и попробуй ещё раз.'],
+        );
+      } else {
+        writeStatus(el('backups-status'), 'Снимки удалены: ' + deletedCount, false);
+        toast('Снимки удалены: ' + deletedCount, 'success');
+      }
     } catch (e) {
       console.error(e);
       setStatus('Ошибка при очистке снимков.', true);
+    } finally {
+      setSnapshotsBusyState(false);
     }
   }
 
