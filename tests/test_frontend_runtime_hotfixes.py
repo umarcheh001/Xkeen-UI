@@ -280,6 +280,32 @@ def test_xray_live_logs_clear_uses_portal_confirm_modal():
     assert 'window.confirm(' not in xray_logs
 
 
+def test_xray_live_logs_card_uses_russian_visible_labels():
+    panel = Path('xkeen-ui/templates/panel.html').read_text(encoding='utf-8')
+    devtools = Path('xkeen-ui/templates/devtools.html').read_text(encoding='utf-8')
+    layout_prefs = Path('xkeen-ui/static/js/features/layout_prefs.js').read_text(encoding='utf-8')
+    xray_logs = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
+
+    logs_panel = panel.split('<div id="view-xray-logs"', 1)[1].split('<!-- Xray log: context modal -->', 1)[0]
+
+    assert 'Логи Xray онлайн' in logs_panel
+    assert '<span class="dt-switch-label">Онлайн</span>' in logs_panel
+    assert '<span class="dt-log-interval-label">каждые</span>' in logs_panel
+    assert '<span class="dt-switch-label">В конец</span>' in logs_panel
+    assert '⏸ Пауза' in logs_panel
+    assert 'К последним' in logs_panel
+    assert 'Скопировать выделенное' in logs_panel
+    assert 'Загрузить ещё' in logs_panel
+    assert 'Логи Xray онлайн' in devtools
+    assert "{ key: 'view:xray-logs', label: 'Логи Xray онлайн' }" in layout_prefs
+    assert "label = 'Вручную / В конец';" in xray_logs
+    assert "label = 'Онлайн / В конец';" in xray_logs
+    assert "btn.textContent = '⏸ Пауза';" in xray_logs
+    assert 'Copy selection' not in logs_panel
+    assert 'Load more' not in logs_panel
+    assert '>Manual<' not in logs_panel
+
+
 def test_devtools_host_defers_noncritical_init_and_mihomo_generator_persists_session_draft():
     devtools_host = Path('xkeen-ui/static/js/features/devtools.js').read_text(encoding='utf-8')
     devtools_logs = Path('xkeen-ui/static/js/features/devtools/logs.js').read_text(encoding='utf-8')

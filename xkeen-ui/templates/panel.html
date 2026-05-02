@@ -215,7 +215,7 @@
         </button>
         {% if has_xray %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-logs" data-view="xray-logs" data-xk-section="xray-logs">
-          Live логи Xray
+          Логи Xray онлайн
         </button>
         {% endif %}
         <button class="top-tab-btn xk-top-tab xk-top-tab-commands" data-view="commands" data-xk-section="commands">
@@ -1470,7 +1470,7 @@
     <div id="view-xray-logs" class="view-section" style="display:none;" data-xk-section="xray-logs">
       <section class="card log-card">
         <div class="log-header-row">
-          <h2>Live логи Xray <span id="xray-log-lamp" class="xray-log-lamp" data-state="unknown" title="Статус логов Xray неизвестен"></span></h2>
+          <h2>Логи Xray онлайн <span id="xray-log-lamp" class="xray-log-lamp" data-state="unknown" title="Статус логов Xray неизвестен"></span></h2>
           <div class="log-header-actions">
             <select id="xray-log-file" class="xray-log-select">
               <option value="access" selected>access.log</option>
@@ -1481,10 +1481,10 @@
               class="xray-log-select"
               title="Уровень логирования Xray (loglevel) для error.log. Это минимальный уровень: debug включает info/warning/error, info включает warning/error и т.д. При смене уровня, если логи уже включены, уровень применяется сразу. Также используется как фильтр отображения в окне."
             >
-              <option value="warning" selected>warning</option>
-              <option value="info">info</option>
-              <option value="debug">debug</option>
-              <option value="error">error</option>
+              <option value="warning" selected>предупреждения</option>
+              <option value="info">информация</option>
+              <option value="debug">отладка</option>
+              <option value="error">ошибки</option>
             </select>
             <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-view-btn" title="Просмотреть логи" aria-label="Просмотреть логи">🔍</button>
             <button type="button" class="btn-secondary log-btn icon-only" id="xray-log-enable-btn" title="Включить логи" aria-label="Включить логи">▶</button>
@@ -1512,15 +1512,15 @@
             ✖
           </button>
         </div>
-        <div class="dt-log-controls xray-log-controls" aria-label="Xray log controls">
-          <label class="dt-switch" title="Live режим: авто‑обновление новых строк.">
+        <div class="dt-log-controls xray-log-controls" aria-label="Управление логами Xray">
+          <label class="dt-switch" title="Онлайн-режим: автообновление новых строк.">
             <input id="xray-log-live" type="checkbox" />
             <span class="dt-switch-slider" aria-hidden="true"></span>
-            <span class="dt-switch-label">Live</span>
+            <span class="dt-switch-label">Онлайн</span>
           </label>
 
           <div class="dt-log-interval" title="Интервал авто‑обновления (используется при HTTP‑поллинге).">
-            <span class="dt-log-interval-label">every</span>
+            <span class="dt-log-interval-label">каждые</span>
             <select id="xray-log-interval" class="xray-log-select" aria-label="Интервал">
               <option value="1000">1s</option>
               <option value="2000" selected>2s</option>
@@ -1533,27 +1533,27 @@
           <label class="dt-switch" title="Авто‑прокрутка в конец при обновлении.">
             <input id="xray-log-follow" type="checkbox" checked />
             <span class="dt-switch-slider" aria-hidden="true"></span>
-            <span class="dt-switch-label">Follow</span>
+            <span class="dt-switch-label">В конец</span>
           </label>
 
-          <button type="button" id="xray-log-pause" class="btn-secondary dt-log-btn" title="Пауза: заморозить вывод (строки продолжают собираться)." aria-label="Пауза">⏸ Pause</button>
+          <button type="button" id="xray-log-pause" class="btn-secondary dt-log-btn" title="Пауза: заморозить вывод (строки продолжают собираться)." aria-label="Пауза">⏸ Пауза</button>
 
-          <button type="button" id="xray-log-scroll-bottom" class="btn-secondary dt-log-btn xray-log-scroll-btn" title="Scroll to the latest rendered lines." aria-label="Scroll to latest log lines" hidden>Latest</button>
+          <button type="button" id="xray-log-scroll-bottom" class="btn-secondary dt-log-btn xray-log-scroll-btn" title="Прокрутить к последним показанным строкам." aria-label="Прокрутить к последним строкам лога" hidden>К последним</button>
 
           <details class="dt-log-menu" id="xray-log-more">
             <summary class="btn-secondary dt-log-btn" title="Дополнительно" aria-label="Дополнительно">⋯</summary>
             <div class="dt-log-menu-panel" role="menu" aria-label="Дополнительные действия">
   <div class="dt-log-menu-row" aria-label="Окно логов">
-    <span class="small" style="opacity:0.85;">Lines</span>
+    <span class="small" style="opacity:0.85;">Строк</span>
     <input id="xray-log-lines" class="dt-log-lines-input" type="number" min="50" max="5000" step="50" value="800" aria-label="Количество строк" />
   </div>
-  <button type="button" id="xray-log-copy-selection" class="btn-secondary dt-log-btn" title="Скопировать выделенное в буфер обмена.">Copy selection</button>
-  <button type="button" id="xray-log-download" class="btn-secondary dt-log-btn" title="Скачать текущий логфайл.">Download</button>
-  <button type="button" id="xray-log-load-more" class="btn-secondary dt-log-btn" title="Подгрузить более старые строки (увеличить окно назад).">Load more</button>
+  <button type="button" id="xray-log-copy-selection" class="btn-secondary dt-log-btn" title="Скопировать выделенное в буфер обмена.">Скопировать выделенное</button>
+  <button type="button" id="xray-log-download" class="btn-secondary dt-log-btn" title="Скачать текущий логфайл.">Скачать</button>
+  <button type="button" id="xray-log-load-more" class="btn-secondary dt-log-btn" title="Подгрузить более старые строки (увеличить окно назад).">Загрузить ещё</button>
 </div>
           </details>
 
-          <span class="small xray-log-mode" id="xray-log-mode" aria-live="polite">Manual</span>
+          <span class="small xray-log-mode" id="xray-log-mode" aria-live="polite">Вручную</span>
           <span class="small dt-log-stats" id="xray-log-stats" aria-live="polite"></span>
         </div>
 

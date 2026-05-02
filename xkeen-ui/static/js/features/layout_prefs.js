@@ -12,7 +12,7 @@ let layoutPrefsModuleApi = null;
     { key: 'view:routing', label: 'Роутинг Xray' },
     { key: 'view:mihomo', label: 'Роутинг Mihomo' },
     { key: 'view:xkeen', label: 'Порты и Исключения' },
-    { key: 'view:xray-logs', label: 'Live логи Xray' },
+    { key: 'view:xray-logs', label: 'Логи Xray онлайн' },
     { key: 'view:commands', label: 'Команды' },
     { key: 'view:files', label: 'Файлы' },
     { key: 'id:top-tab-mihomo-generator', label: 'Mihomo Генератор' },

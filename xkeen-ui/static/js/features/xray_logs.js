@@ -694,31 +694,31 @@ let xrayLogsModuleApi = null;
     const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
 
     let state = 'manual';
-    let label = 'Manual';
-    let title = 'Manual log view without active live streaming.';
+    let label = 'Вручную';
+    let title = 'Ручной просмотр логов без активного онлайн-потока.';
 
     if (paused) {
       state = 'paused';
-      label = pending ? ('Paused +' + pending) : 'Paused';
+      label = pending ? ('Пауза +' + pending) : 'Пауза';
       title = pending
-        ? ('Rendering is paused. ' + pending + ' line(s) are buffered.')
-        : 'Rendering is paused while incoming lines continue buffering.';
+        ? ('Вывод на паузе. В буфере уже ' + pending + ' строк.')
+        : 'Вывод на паузе, входящие строки продолжают собираться.';
     } else if (liveActive && followEnabled) {
       state = 'live';
-      label = 'Live / Follow';
-      title = 'Live stream is active and the view stays pinned to the latest lines.';
+      label = 'Онлайн / В конец';
+      title = 'Онлайн-поток активен, вывод закреплен на последних строках.';
     } else if (liveActive) {
       state = 'browse';
-      label = 'Live / Browse';
-      title = 'Live stream is active while Follow is disabled, so you can inspect older lines.';
+      label = 'Онлайн / Просмотр';
+      title = 'Онлайн-поток активен, автопрокрутка выключена для просмотра старых строк.';
     } else if (liveWanted) {
       state = 'armed';
-      label = 'Live / Ready';
-      title = 'Live mode is selected, but the stream is currently idle.';
+      label = 'Онлайн / Готов';
+      title = 'Онлайн-режим выбран, но поток сейчас не активен.';
     } else if (followEnabled) {
       state = 'manual-follow';
-      label = 'Manual / Follow';
-      title = 'Manual log view with Follow enabled for the next render.';
+      label = 'Вручную / В конец';
+      title = 'Ручной просмотр логов с автопрокруткой при следующем выводе.';
     }
 
     return {
@@ -741,7 +741,7 @@ let xrayLogsModuleApi = null;
 
     const mode = modeState || readXrayLogsModeState(refs, runtimeState);
     el.dataset.state = String(mode.state || 'manual');
-    el.textContent = String(mode.label || 'Manual');
+    el.textContent = String(mode.label || 'Вручную');
     syncTooltipText(el, String(mode.title || ''));
   }
 
@@ -760,17 +760,17 @@ let xrayLogsModuleApi = null;
     btn.dataset.state = visible ? 'visible' : 'hidden';
 
     if (!visible) {
-      btn.textContent = 'Latest';
-      syncTooltipText(btn, 'Scroll to the latest rendered lines.');
+      btn.textContent = 'К последним';
+      syncTooltipText(btn, 'Прокрутить к последним показанным строкам.');
       return;
     }
 
-    btn.textContent = mode.liveActive ? 'Latest' : 'Bottom';
+    btn.textContent = mode.liveActive ? 'К последним' : 'Вниз';
     syncTooltipText(
       btn,
       mode.liveActive
-        ? 'Scroll to the latest rendered lines without enabling Follow.'
-        : 'Scroll to the bottom of the current log output.'
+        ? 'Прокрутить к последним показанным строкам без включения автопрокрутки.'
+        : 'Прокрутить вниз текущего вывода логов.'
     );
   }
 
@@ -822,7 +822,7 @@ let xrayLogsModuleApi = null;
       title = nextLevel && nextLevel !== 'none'
         ? ('Логи Xray включены (loglevel=' + nextLevel + ').')
         : 'Логи Xray включены.';
-      if (nextLive === 'on') title += ' Live stream активен.';
+      if (nextLive === 'on') title += ' Онлайн-поток активен.';
     }
 
     syncTooltipText(badge, title, title);
@@ -855,16 +855,16 @@ let xrayLogsModuleApi = null;
     try {
       if (runtime.ws && typeof WebSocket !== 'undefined') {
         if (runtime.ws.readyState === WebSocket.OPEN) {
-          return _isWs2Socket(runtime.ws) ? 'WS2 live' : 'WS live';
+          return _isWs2Socket(runtime.ws) ? 'WS2 онлайн' : 'WS онлайн';
         }
         if (runtime.ws.readyState === WebSocket.CONNECTING) {
-          return _isWs2Socket(runtime.ws) ? 'WS2 connect' : 'WS connect';
+          return _isWs2Socket(runtime.ws) ? 'WS2 подключение' : 'WS подключение';
         }
       }
     } catch (e) {}
 
     if (runtime.streaming && runtime.useWs) {
-      return _shouldUseWs2() ? 'WS2 retry' : 'WS retry';
+      return _shouldUseWs2() ? 'WS2 повтор' : 'WS повтор';
     }
     if (runtime.streaming) return 'HTTP/' + pollLabel;
     return '';
@@ -892,29 +892,29 @@ let xrayLogsModuleApi = null;
         tone = 'muted';
         message = pending
           ? ('Вывод на паузе, в буфере уже +' + pending + ' строк.')
-          : 'Вывод на паузе. Новые строки будут показаны после Resume.';
+          : 'Вывод на паузе. Новые строки будут показаны после продолжения.';
       } else if (wsConnecting) {
         phase = 'connecting';
         tone = 'muted';
         message = transport
           ? ('Подключаю ' + transport + ' для ' + fileLabel + '...')
-          : ('Подключаю live transport для ' + fileLabel + '...');
+          : ('Подключаю онлайн-транспорт для ' + fileLabel + '...');
       } else if (runtime.useWs && wsOpen) {
         phase = 'streaming';
         tone = 'muted';
         message = transport
-          ? ('Подключен ' + transport + '. Идёт live stream для ' + fileLabel + '.')
-          : ('Live transport подключен для ' + fileLabel + '.');
+          ? ('Подключен ' + transport + '. Идёт онлайн-поток для ' + fileLabel + '.')
+          : ('Онлайн-транспорт подключен для ' + fileLabel + '.');
       } else if (runtime.streaming && runtime.useWs) {
         phase = 'reconnecting';
         tone = 'muted';
         message = transport
           ? ('Поднимаю ' + transport + ' для ' + fileLabel + '...')
-          : ('Поднимаю live transport для ' + fileLabel + '...');
+          : ('Поднимаю онлайн-транспорт для ' + fileLabel + '...');
       } else if (runtime.streaming) {
         phase = 'streaming';
         tone = 'muted';
-        message = 'Live stream идет через HTTP polling каждые ' + formatXrayLogPollLabel(runtime.pollMs) + '.';
+        message = 'Онлайн-поток идет через HTTP-опрос каждые ' + formatXrayLogPollLabel(runtime.pollMs) + '.';
       } else if (_isErrorFileName(runtime.currentFile) && String(runtime.activeLogLevel || 'none') === 'none') {
         phase = 'idle';
         tone = 'muted';
@@ -922,7 +922,7 @@ let xrayLogsModuleApi = null;
       } else {
         phase = 'idle';
         tone = 'muted';
-        message = 'Нажмите View для снимка или включите Live, чтобы ждать новые строки.';
+        message = 'Нажмите просмотр для снимка или включите онлайн-режим, чтобы ждать новые строки.';
       }
     }
 
@@ -959,8 +959,8 @@ let xrayLogsModuleApi = null;
 
     if (!runtime.streaming) {
       btn.disabled = true;
-      btn.textContent = '⏸ Pause';
-      btn.title = 'Пауза доступна только в Live режиме.';
+      btn.textContent = '⏸ Пауза';
+      btn.title = 'Пауза доступна только в онлайн-режиме.';
       btn.dataset.state = 'off';
       syncTooltipText(btn, btn.getAttribute('title') || '');
       return;
@@ -970,14 +970,14 @@ let xrayLogsModuleApi = null;
 
     if (runtime.paused) {
       const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
-      btn.textContent = pending ? `▶ Resume (+${pending})` : '▶ Resume';
+      btn.textContent = pending ? `▶ Продолжить (+${pending})` : '▶ Продолжить';
       btn.title = 'Возобновить обновление экрана (накопленные строки будут показаны).';
       btn.dataset.state = 'on';
       syncTooltipText(btn, btn.getAttribute('title') || '');
       return;
     }
 
-    btn.textContent = '⏸ Pause';
+    btn.textContent = '⏸ Пауза';
     btn.title = 'Пауза: заморозить вывод (строки продолжают собираться).';
     btn.dataset.state = 'off';
     syncTooltipText(btn, btn.getAttribute('title') || '');
@@ -997,7 +997,7 @@ let xrayLogsModuleApi = null;
     if (transport) parts.push(transport);
     if (runtime.paused) {
       const pending = Math.max(0, parseInt(runtime.pendingCount || 0, 10) || 0);
-      parts.push(pending ? ('+' + pending + ' queued') : 'buffering');
+      parts.push(pending ? ('+' + pending + ' в очереди') : 'буферизация');
     }
 
     el.textContent = parts.join(' • ');
@@ -1084,7 +1084,7 @@ let xrayLogsModuleApi = null;
         title: 'Вывод на паузе',
         detail: pending
           ? ('Поток продолжает читать ' + fileLabel + ', в буфере уже +' + pending + ' строк.')
-          : 'Экран заморожен до Resume. Новые строки появятся после продолжения вывода.',
+          : 'Экран заморожен. Новые строки появятся после продолжения вывода.',
       };
     }
 
@@ -1099,7 +1099,7 @@ let xrayLogsModuleApi = null;
     if (uiStatus.phase === 'connecting' || uiStatus.phase === 'reconnecting' || uiStatus.phase === 'fallback') {
       return {
         tone: uiStatus.tone === 'error' ? 'warning' : 'info',
-        title: 'Подключаю live transport',
+        title: 'Подключаю онлайн-транспорт',
         detail: String(uiStatus.message || ('Жду первые строки из ' + fileLabel + '.')),
       };
     }
@@ -1108,7 +1108,7 @@ let xrayLogsModuleApi = null;
       return {
         tone: 'warning',
         title: 'Логирование Xray выключено',
-        detail: 'Backend сейчас отвечает с loglevel=none, поэтому error.log может оставаться пустым, пока вы не включите логи.',
+        detail: 'Сервер сейчас отвечает с loglevel=none, поэтому error.log может оставаться пустым, пока вы не включите логи.',
       };
     }
 
@@ -1117,15 +1117,15 @@ let xrayLogsModuleApi = null;
         tone: 'muted',
         title: fileLabel + ' пока пуст',
         detail: runtime.useWs
-          ? 'Live transport уже поднимается, но новых строк в журнале пока нет.'
-          : ('HTTP polling проверяет ' + fileLabel + ' каждые ' + formatXrayLogPollLabel(runtime.pollMs) + '.'),
+          ? 'Онлайн-транспорт уже поднимается, но новых строк в журнале пока нет.'
+          : ('HTTP-опрос проверяет ' + fileLabel + ' каждые ' + formatXrayLogPollLabel(runtime.pollMs) + '.'),
       };
     }
 
     return {
       tone: 'muted',
       title: fileLabel + ' пока пуст',
-      detail: 'Нажмите View, чтобы запросить снимок, или включите Live для ожидания новых строк.',
+      detail: 'Нажмите просмотр, чтобы запросить снимок, или включите онлайн-режим для ожидания новых строк.',
     };
   }
 
@@ -2369,7 +2369,7 @@ let xrayLogsModuleApi = null;
         phase: 'fallback',
         tone: 'warning',
         transport: 'HTTP/' + formatXrayLogPollLabel(_pollMs),
-        message: 'Не удалось получить WS token, переключаюсь на HTTP polling.',
+        message: 'Не удалось получить WS token, переключаюсь на HTTP-опрос.',
         file,
       });
       if (statusEl) statusEl.textContent = 'Не удалось получить WS token, использую HTTP.';
@@ -2636,7 +2636,7 @@ let xrayLogsModuleApi = null;
         phase: 'fallback',
         tone: 'warning',
         transport: 'HTTP/' + formatXrayLogPollLabel(_pollMs),
-        message: 'Не удалось получить WS token, переключаюсь на HTTP polling.',
+        message: 'Не удалось получить WS token, переключаюсь на HTTP-опрос.',
         file,
       });
       if (statusEl) statusEl.textContent = 'Не удалось получить WS token, использую HTTP.';
@@ -2654,8 +2654,8 @@ let xrayLogsModuleApi = null;
     setXrayLogUiStatus({
       phase: 'connecting',
       tone: 'muted',
-      transport: 'WS connect',
-      message: 'Подключаю WebSocket live stream для ' + formatXrayLogFileLabel(file) + '...',
+      transport: 'WS подключение',
+      message: 'Подключаю онлайн-поток WebSocket для ' + formatXrayLogFileLabel(file) + '...',
       file,
     });
 
@@ -2673,7 +2673,7 @@ let xrayLogsModuleApi = null;
         phase: 'fallback',
         tone: 'warning',
         transport: 'HTTP/' + formatXrayLogPollLabel(_pollMs),
-        message: 'Не удалось создать WebSocket, переключаюсь на HTTP polling.',
+        message: 'Не удалось создать WebSocket, переключаюсь на HTTP-опрос.',
         file,
       });
       if (statusEl) statusEl.textContent = 'Не удалось создать WebSocket, использую HTTP.';
@@ -2767,7 +2767,7 @@ let xrayLogsModuleApi = null;
           phase: 'fallback',
           tone: 'warning',
           transport: 'HTTP/' + formatXrayLogPollLabel(_pollMs),
-          message: 'WebSocket недоступен, переключаюсь на HTTP polling.',
+          message: 'WebSocket недоступен, переключаюсь на HTTP-опрос.',
           file,
         });
         if (statusEl) statusEl.textContent = 'WebSocket недоступен, использую HTTP.';
@@ -2782,7 +2782,7 @@ let xrayLogsModuleApi = null;
       setXrayLogUiStatus({
         phase: 'reconnecting',
         tone: 'warning',
-        transport: 'WS retry',
+        transport: 'WS повтор',
         message: 'WebSocket разорван, пытаюсь переподключиться...',
         file,
       });
@@ -2831,11 +2831,11 @@ let xrayLogsModuleApi = null;
       phase: 'connecting',
       tone: 'muted',
       transport: (_useWs && 'WebSocket' in window)
-        ? (_shouldUseWs2() ? 'WS2 connect' : 'WS connect')
+        ? (_shouldUseWs2() ? 'WS2 подключение' : 'WS подключение')
         : ('HTTP/' + formatXrayLogPollLabel(_pollMs)),
       message: (_useWs && 'WebSocket' in window)
-        ? ('Поднимаю live stream для ' + formatXrayLogFileLabel(_currentFile || 'access') + '...')
-        : ('Запускаю HTTP polling для ' + formatXrayLogFileLabel(_currentFile || 'access') + '...'),
+        ? ('Поднимаю онлайн-поток для ' + formatXrayLogFileLabel(_currentFile || 'access') + '...')
+        : ('Запускаю HTTP-опрос для ' + formatXrayLogFileLabel(_currentFile || 'access') + '...'),
       file: _currentFile || 'access',
     });
     try { updateXrayLogStats(); } catch (e) {}
@@ -2861,7 +2861,7 @@ let xrayLogsModuleApi = null;
       phase: 'streaming',
       tone: 'muted',
       transport: 'HTTP/' + formatXrayLogPollLabel(_pollMs),
-      message: 'Live stream идет через HTTP polling каждые ' + formatXrayLogPollLabel(_pollMs) + '.',
+      message: 'Онлайн-поток идет через HTTP-опрос каждые ' + formatXrayLogPollLabel(_pollMs) + '.',
       file: _currentFile || 'access',
     });
     _timer = setInterval(() => fetchXrayLogsOnce('poll'), _pollMs);
@@ -2883,7 +2883,7 @@ let xrayLogsModuleApi = null;
       phase: 'idle',
       tone: 'muted',
       transport: '',
-      message: 'Live stream остановлен.',
+      message: 'Онлайн-поток остановлен.',
       file: _currentFile || 'access',
     });
     try { updateXrayLogStats(); } catch (e) {}
@@ -3195,8 +3195,8 @@ function updatePauseButton() {
 
   if (!_streaming) {
     btn.disabled = true;
-    btn.textContent = '⏸ Pause';
-    btn.title = 'Пауза доступна только в Live режиме.';
+    btn.textContent = '⏸ Пауза';
+    btn.title = 'Пауза доступна только в онлайн-режиме.';
     btn.dataset.state = 'off';
     return;
   }
@@ -3205,11 +3205,11 @@ function updatePauseButton() {
 
   if (_paused) {
     const n = Math.max(0, parseInt(_pendingCount || 0, 10) || 0);
-    btn.textContent = n ? `▶ Resume (+${n})` : '▶ Resume';
+    btn.textContent = n ? `▶ Продолжить (+${n})` : '▶ Продолжить';
     btn.title = 'Возобновить обновление экрана (накопленные строки будут показаны).';
     btn.dataset.state = 'on';
   } else {
-    btn.textContent = '⏸ Pause';
+    btn.textContent = '⏸ Пауза';
     btn.title = 'Пауза: заморозить вывод (строки продолжают собираться).';
     btn.dataset.state = 'off';
   }
@@ -3266,10 +3266,10 @@ function handleLogTokenClick(linkEl, e) {
         case 'domain': return 'Домен';
         case 'email': return 'Email';
         case 'uuid': return 'UUID';
-        case 'inbound': return 'Inbound tag';
-        case 'outbound': return 'Outbound tag';
+        case 'inbound': return 'Inbound-тег';
+        case 'outbound': return 'Outbound-тег';
         case 'sni': return 'SNI';
-        case 'path': return 'Path';
+        case 'path': return 'Путь';
         default: return 'Токен';
       }
     })();
@@ -3343,8 +3343,8 @@ function ensureLineMenu() {
   menu.id = 'xray-line-menu';
   menu.className = 'dt-log-menu-panel xray-line-menu hidden';
   menu.innerHTML = `
-    <button type="button" class="btn-secondary dt-log-btn" id="xray-line-menu-copy">Copy line</button>
-    <button type="button" class="btn-secondary dt-log-btn" id="xray-line-menu-context">Context ±20</button>
+    <button type="button" class="btn-secondary dt-log-btn" id="xray-line-menu-copy">Скопировать строку</button>
+    <button type="button" class="btn-secondary dt-log-btn" id="xray-line-menu-context">Контекст ±20</button>
   `;
   document.body.appendChild(menu);
 
@@ -3445,7 +3445,7 @@ function openXrayContextModal(idx, radius) {
 
   if (title) {
     const file = _currentFile || 'access';
-    title.textContent = `Xray ${file}.log — context (±${r})`;
+    title.textContent = `Xray ${file}.log — контекст (±${r})`;
   }
 
   out.textContent = lines.join('\n');
@@ -3980,7 +3980,7 @@ function bindFilterUi() {
     try { refreshXrayLogStatus(); } catch (e) {}
 
     // Also poll status in background to keep the header badge up to date
-    // even when the user does not open the "Live логи Xray" tab.
+    // even when the user does not open the "Логи Xray онлайн" tab.
     try {
       if (!_statusTimer) _statusTimer = setInterval(() => {
         try { void refreshXrayLogStatus(); } catch (e) {}
