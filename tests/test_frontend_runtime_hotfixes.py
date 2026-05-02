@@ -269,6 +269,17 @@ def test_bfcache_lifecycle_uses_pagehide_instead_of_beforeunload_for_p0_paths():
     assert "document.addEventListener('visibilitychange'" in xray_logs
 
 
+def test_xray_live_logs_clear_uses_portal_confirm_modal():
+    xray_logs = Path('xkeen-ui/static/js/features/xray_logs.js').read_text(encoding='utf-8')
+
+    assert 'async function confirmAction(options) {' in xray_logs
+    assert 'const ok = await confirmXkeenAction(opts, buildConfirmText(opts));' in xray_logs
+    assert "title: 'Очистить логфайлы'," in xray_logs
+    assert "message: 'Очистить ' + formatXrayLogFileLabel(file) + '?'," in xray_logs
+    assert 'nativeConfirm' not in xray_logs
+    assert 'window.confirm(' not in xray_logs
+
+
 def test_devtools_host_defers_noncritical_init_and_mihomo_generator_persists_session_draft():
     devtools_host = Path('xkeen-ui/static/js/features/devtools.js').read_text(encoding='utf-8')
     devtools_logs = Path('xkeen-ui/static/js/features/devtools/logs.js').read_text(encoding='utf-8')

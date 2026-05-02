@@ -58,16 +58,7 @@ let xrayLogsModuleApi = null;
 
   async function confirmAction(options) {
     const opts = (options && typeof options === 'object') ? options : {};
-    let ok = false;
-    if (opts.nativeConfirm) {
-      try {
-        ok = !!window.confirm(buildConfirmText(opts));
-      } catch (e) {
-        ok = false;
-      }
-    } else {
-      ok = await confirmXkeenAction(opts, buildConfirmText(opts));
-    }
+    const ok = await confirmXkeenAction(opts, buildConfirmText(opts));
     if (!ok && opts.cancelMessage) {
       actionToast('xray-logs-confirm-cancel', String(opts.cancelMessage || ''), String(opts.cancelKind || 'info'));
     }
@@ -3131,7 +3122,6 @@ let xrayLogsModuleApi = null;
       cancelText: 'Отменить',
       focus: 'cancel',
       danger: true,
-      nativeConfirm: true,
       cancelMessage: 'Очистка логфайлов отменена.',
       cancelKind: 'info',
     });
