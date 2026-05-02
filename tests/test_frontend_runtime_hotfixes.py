@@ -428,6 +428,31 @@ def test_json_editor_modal_tracks_modal_resize_and_stretches_monaco_and_cm6_host
     assert 'layoutEditorSoon(true);' in editor
 
 
+def test_confirm_modal_stacks_above_dynamic_editor_modal_z_indexes():
+    modal = Path('xkeen-ui/static/js/ui/modal.js').read_text(encoding='utf-8')
+    confirm = Path('xkeen-ui/static/js/ui/confirm_modal.js').read_text(encoding='utf-8')
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    bring_block = modal.split('function bringModalToFront(modalEl) {', 1)[1].split('\n  function onModalOpen', 1)[0]
+    confirm_show_block = confirm.split('function showModal(modal) {', 1)[1].split('\n  function hideModal', 1)[0]
+
+    assert 'const Z_CONFIRM_FLOOR = 130;' in modal
+    assert 'const Z_TOP_LIMIT = 2147483000;' in modal
+    assert 'function visibleModalZCeiling(exceptModalEl, options) {' in modal
+    assert "if (!includeConfirm && modalEl.id === 'confirm-modal') return;" in modal
+    assert 'function clampModalZ(value) {' in modal
+    assert 'Modal.bringToFront = function (modalElOrId) {' in modal
+    assert 'if (inlineZ != null && computedZ != null) return Math.max(inlineZ, computedZ);' in modal
+    assert '? Math.max(Z_BASE + 40, Z_CONFIRM_FLOOR, visibleModalZCeiling(modalEl, { includeConfirm: true }) + 1)' in bring_block
+    assert ': Math.max(Z_BASE, visibleModalZCeiling(modalEl, { includeConfirm: false }) + 1);' in bring_block
+    assert 'function ensureBodyPortal(modal) {' in confirm
+    assert 'document.body.appendChild(modal);' in confirm
+    assert 'ensureBodyPortal(modal);' in confirm_show_block
+    assert '_z = clampModalZ(Math.max(_z + 1, floor));' in bring_block
+    assert "if (typeof api.bringToFront === 'function') api.bringToFront(modal);" in confirm_show_block
+    assert '#confirm-modal {\n  z-index: 2147482990 !important;\n}' in styles
+
+
 def test_codemirror6_source_bridge_is_opt_in_and_does_not_inject_importmap_dynamically():
     path = Path('xkeen-ui/static/js/pages/codemirror6.shared.js')
     text = path.read_text(encoding='utf-8')

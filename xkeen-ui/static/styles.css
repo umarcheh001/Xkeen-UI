@@ -6105,7 +6105,7 @@ html[data-theme="light"] body.xk-backups-page footer {
 
 /* Confirm dialog must stay above other modals (e.g. file manager operations modal). */
 #confirm-modal {
-  z-index: 130;
+  z-index: 2147482990 !important;
 }
 
 .modal.hidden {

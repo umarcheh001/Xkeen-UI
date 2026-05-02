@@ -36,6 +36,15 @@
     return 'info';
   }
 
+  function ensureBodyPortal(modal) {
+    if (!modal) return;
+    try {
+      if (document.body && modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+      }
+    } catch (e) {}
+  }
+
   function buildConfirmMessageText(opts) {
     const options = (opts && typeof opts === 'object') ? opts : {};
     const primary = normalizeText(options.message || options.text || options.body, 'Вы уверены?');
@@ -65,11 +74,17 @@
 
   function showModal(modal) {
     if (!modal) return;
+    ensureBodyPortal(modal);
     const api = getModalApi();
     try {
-      if (api && typeof api.open === 'function') return api.open(modal, { source: 'confirm_modal' });
+      if (api && typeof api.open === 'function') {
+        const opened = api.open(modal, { source: 'confirm_modal' });
+        try { if (typeof api.bringToFront === 'function') api.bringToFront(modal); } catch (e1) {}
+        return opened;
+      }
     } catch (e) {}
     try { modal.classList.remove('hidden'); } catch (e2) {}
+    try { if (api && typeof api.bringToFront === 'function') api.bringToFront(modal); } catch (e2a) {}
     try {
       if (api && typeof api.syncBodyScrollLock === 'function') api.syncBodyScrollLock();
       else document.body.classList.add('modal-open');

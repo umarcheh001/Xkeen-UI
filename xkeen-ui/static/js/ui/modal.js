@@ -178,8 +178,10 @@
   // ---------------------------------------------------------------------------
   const PAD = 8;
   // Put dragged/opened modals above toasts (#toast-container is z-index:80),
-  // while keeping the confirm dialog on top (#confirm-modal is higher in CSS).
+  // and keep nested confirmations above the currently visible modal stack.
   const Z_BASE = 90; // keep above .modal (60)
+  const Z_CONFIRM_FLOOR = 130; // CSS fallback for #confirm-modal
+  const Z_TOP_LIMIT = 2147483000; // leave room for tooltip/context-menu portals
   let _z = Z_BASE;
   
   // Persisted geometry (position + size)
@@ -453,8 +455,10 @@
     if (!modalEl) return;
     const isConfirm = (modalEl.id === 'confirm-modal');
     try {
-      const floor = isConfirm ? Math.max(Z_BASE + 40, 130) : Z_BASE;
-      _z = Math.max(_z + 1, floor);
+      const floor = isConfirm
+        ? Math.max(Z_BASE + 40, Z_CONFIRM_FLOOR, visibleModalZCeiling(modalEl, { includeConfirm: true }) + 1)
+        : Math.max(Z_BASE, visibleModalZCeiling(modalEl, { includeConfirm: false }) + 1);
+      _z = clampModalZ(Math.max(_z + 1, floor));
       modalEl.style.zIndex = String(_z);
     } catch (e) {}
   }
@@ -538,16 +542,42 @@
 
   function modalZIndex(modalEl) {
     if (!modalEl) return 0;
+    let inlineZ = null;
+    let computedZ = null;
     try {
       const inline = Number.parseInt(String(modalEl.style && modalEl.style.zIndex ? modalEl.style.zIndex : ''), 10);
-      if (Number.isFinite(inline)) return inline;
+      if (Number.isFinite(inline)) inlineZ = inline;
     } catch (e) {}
     try {
       const cs = window.getComputedStyle ? window.getComputedStyle(modalEl) : null;
       const value = Number.parseInt(String(cs && cs.zIndex ? cs.zIndex : ''), 10);
-      if (Number.isFinite(value)) return value;
+      if (Number.isFinite(value)) computedZ = value;
     } catch (e2) {}
+    if (inlineZ != null && computedZ != null) return Math.max(inlineZ, computedZ);
+    if (inlineZ != null) return inlineZ;
+    if (computedZ != null) return computedZ;
     return 0;
+  }
+
+  function clampModalZ(value) {
+    const z = Number(value);
+    if (!Number.isFinite(z)) return Z_BASE;
+    return Math.min(Z_TOP_LIMIT, Math.max(Z_BASE, Math.floor(z)));
+  }
+
+  function visibleModalZCeiling(exceptModalEl, options) {
+    const includeConfirm = !!(options && options.includeConfirm);
+    let ceiling = Z_BASE;
+    try {
+      const modals = document.querySelectorAll('.modal');
+      modals.forEach((modalEl) => {
+        if (!modalEl || modalEl === exceptModalEl) return;
+        if (!includeConfirm && modalEl.id === 'confirm-modal') return;
+        if (!isVisibleModal(modalEl)) return;
+        ceiling = Math.max(ceiling, clampModalZ(modalZIndex(modalEl)));
+      });
+    } catch (e) {}
+    return ceiling;
   }
 
   function getTopmostVisibleModal() {
@@ -1021,6 +1051,9 @@
   };
   Modal.focus = function (modalElOrId) {
     try { focusModal(resolveModal(modalElOrId)); } catch (e) {}
+  };
+  Modal.bringToFront = function (modalElOrId) {
+    try { bringModalToFront(resolveModal(modalElOrId)); } catch (e) {}
   };
   Modal.open = function (modalElOrId, meta) {
     const modalEl = resolveModal(modalElOrId);
