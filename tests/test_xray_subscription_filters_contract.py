@@ -296,7 +296,9 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert "function subsConfirmDiscardDraft(opts) {" in outbounds_src
     assert "function subsRestoreBaseline(options) {" in outbounds_src
     assert "async function subsRefresh(id, options) {" in outbounds_src
-    assert "window.confirm(subsBuildDiscardConfirmText(confirmOptions))" in outbounds_src
+    assert "confirmXkeenAction(confirmOptions, confirmOptions.message)" in outbounds_src
+    assert "Удалить подписку?" in outbounds_src
+    assert "window.confirm(" not in outbounds_src
     assert "if (opts.skipDraftConfirm !== true) {" in outbounds_src
     assert 'class="xk-sub-url-action"' in outbounds_src
     assert 'class="xk-pool-fieldlabel xk-sub-url-action-label"' in outbounds_src
@@ -339,7 +341,9 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert ".xk-sub-form .xk-sub-url-action {" in styles_src
     assert ".xk-sub-form .xk-sub-url-action-label {" in styles_src
     assert ".xk-sub-form .xk-sub-url-row {\n  display: grid;\n  grid-template-columns: minmax(0, 520px) minmax(120px, 1fr);" in styles_src
-    assert "const floor = isConfirm ? Math.max(Z_BASE + 40, 130) : Z_BASE;" in modal_src
+    assert "const Z_CONFIRM_FLOOR = 130;" in modal_src
+    assert "visibleModalZCeiling(modalEl, { includeConfirm: true })" in modal_src
+    assert "visibleModalZCeiling(modalEl, { includeConfirm: false })" in modal_src
 
 
 def test_xray_subscription_list_surfaces_operational_status_badges():

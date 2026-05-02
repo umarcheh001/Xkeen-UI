@@ -2,6 +2,7 @@ import { getBackupsApi } from './backups.js';
 import { getRestartLogApi } from './restart_log.js';
 import { getRoutingApi } from './routing.js';
 import {
+  confirmXkeenAction,
   getXkeenConfigDirtyApi,
   getXkeenFilePath,
   getXkeenUiConfigShellApi,
@@ -4419,18 +4420,6 @@ let outboundsModuleApi = null;
       return { formState, resolved, validation, dirty };
     }
 
-    function subsBuildDiscardConfirmText(opts) {
-      const options = (opts && typeof opts === 'object') ? opts : {};
-      const parts = [
-        'Несохранённые изменения',
-        String(options.message || 'В форме подписки есть несохранённые изменения. Продолжить и потерять их?').trim(),
-      ];
-      const details = Array.isArray(options.details)
-        ? options.details.map((item) => String(item || '').trim()).filter(Boolean)
-        : [String(options.details || '').trim()].filter(Boolean);
-      return parts.concat(details).filter(Boolean).join('\n\n');
-    }
-
     async function subsConfirmDiscardDraft(opts) {
       const options = (opts && typeof opts === 'object') ? opts : {};
       const formState = subsReadFormState();
@@ -4446,7 +4435,7 @@ let outboundsModuleApi = null;
       });
       let ok = false;
       try {
-        ok = !!window.confirm(subsBuildDiscardConfirmText(confirmOptions));
+        ok = !!(await confirmXkeenAction(confirmOptions, confirmOptions.message));
       } catch (e) {
         ok = false;
       }
@@ -6433,8 +6422,17 @@ let outboundsModuleApi = null;
       if (!subId) return false;
       const prevActive = getActiveFragment();
       try {
-        if (!window.confirm('Удалить подписку и сгенерированный outbounds-файл?')) return false;
-      } catch (e) {}
+        const deleteOk = await confirmXkeenAction({
+          title: 'Удалить подписку?',
+          message: 'Удалить подписку и сгенерированный outbounds-файл?',
+          okText: 'Удалить',
+          cancelText: 'Отмена',
+          danger: true,
+        });
+        if (!deleteOk) return false;
+      } catch (e) {
+        return false;
+      }
       const ok = await subsConfirmDiscardDraft({
         message: 'Удалить подписку и потерять текущий черновик формы?',
         okText: 'Продолжить',
