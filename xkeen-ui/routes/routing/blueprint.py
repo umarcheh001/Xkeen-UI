@@ -45,6 +45,7 @@ def create_routing_blueprint(
     strip_json_comments_text: Callable[[str], str],
     restart_xkeen: Callable[..., bool],
     append_restart_log: Callable[..., None] | None = None,
+    save_operation_diagnostic: Callable[..., None] | None = None,
 ) -> Blueprint:
     """Create blueprint with /api/routing endpoints.
 
@@ -69,6 +70,7 @@ def create_routing_blueprint(
         strip_json_comments_text=strip_json_comments_text,
         restart_xkeen=restart_xkeen,
         append_restart_log=append_restart_log,
+        save_operation_diagnostic=save_operation_diagnostic,
     )
     register_templates_routes(
         bp,

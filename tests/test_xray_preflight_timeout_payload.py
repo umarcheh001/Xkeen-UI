@@ -179,6 +179,7 @@ def test_run_xray_preflight_blocks_dangling_outbound_reference_before_xray(tmp_p
 
 def test_routing_save_logs_failed_xray_preflight_with_modal_ref(tmp_path, monkeypatch):
     seen: list[tuple[bool, str, dict[str, object]]] = []
+    saved: list[tuple[str, dict[str, object], str]] = []
 
     monkeypatch.setattr(
         routing_config,
@@ -210,6 +211,7 @@ def test_routing_save_logs_failed_xray_preflight_with_modal_ref(tmp_path, monkey
         strip_json_comments_text=lambda text: text,
         restart_xkeen=lambda source="routing": True,
         append_restart_log=lambda ok, source="api", **meta: seen.append((ok, source, meta)),
+        save_operation_diagnostic=lambda ref, payload, kind="generic": saved.append((ref, payload, kind)),
     )
     app = Flask("routing-preflight-log-test")
     app.register_blueprint(bp)
@@ -230,6 +232,12 @@ def test_routing_save_logs_failed_xray_preflight_with_modal_ref(tmp_path, monkey
     assert meta["phase"] == "xray_test"
     assert meta["returncode"] == 23
     assert meta["preflight_ref"] == payload["preflight_ref"]
+    assert saved
+    saved_ref, saved_payload, saved_kind = saved[-1]
+    assert saved_ref == payload["preflight_ref"]
+    assert saved_kind == "xray-preflight"
+    assert saved_payload["preflight_ref"] == payload["preflight_ref"]
+    assert saved_payload["stderr"] == "missing outboundTag proxy"
 
 
 def test_run_xray_preflight_refreshes_xray_dat_assets_before_check(tmp_path, monkeypatch):

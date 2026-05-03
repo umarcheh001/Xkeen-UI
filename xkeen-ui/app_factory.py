@@ -460,6 +460,10 @@ def create_app(*, ws_runtime: bool = False):
         restart_xkeen as _svc_restart_xkeen,
     )
     from services.restart_log import clear_restart_log as _svc_clear_restart_log
+    from services.operation_diagnostics import (
+        read_operation_diagnostic as _svc_read_operation_diagnostic,
+        save_operation_diagnostic as _svc_save_operation_diagnostic,
+    )
     from services.xray import restart_xray_core as _svc_restart_xray_core
 
     def append_restart_log(ok, source: str = "api", **meta):
@@ -470,6 +474,12 @@ def create_app(*, ws_runtime: bool = False):
 
     def clear_restart_log():
         return _svc_clear_restart_log(RESTART_LOG_FILE)
+
+    def save_operation_diagnostic(ref: str, payload: dict, *, kind: str = "generic"):
+        return _svc_save_operation_diagnostic(UI_STATE_DIR, ref, payload, kind=kind)
+
+    def read_operation_diagnostic(ref: str):
+        return _svc_read_operation_diagnostic(UI_STATE_DIR, ref)
 
     def restart_xkeen(source: str = "api"):
         return _svc_restart_xkeen(XKEEN_RESTART_CMD, RESTART_LOG_FILE, source=source)
@@ -581,6 +591,8 @@ def create_app(*, ws_runtime: bool = False):
         find_latest_auto_backup_for=_find_latest_auto_backup_for,
         restart_xkeen=restart_xkeen,
         append_restart_log=append_restart_log,
+        save_operation_diagnostic=save_operation_diagnostic,
+        read_operation_diagnostic=read_operation_diagnostic,
         read_restart_log=read_restart_log,
         clear_restart_log=clear_restart_log,
         ws_debug=ws_debug,

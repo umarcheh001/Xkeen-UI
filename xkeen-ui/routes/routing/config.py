@@ -390,6 +390,7 @@ def register_config_routes(
     strip_json_comments_text: Callable[[str], str],
     restart_xkeen: Callable[..., bool],
     append_restart_log: Callable[..., None] | None = None,
+    save_operation_diagnostic: Callable[..., None] | None = None,
 ) -> None:
     def _append_operation_log(ok: bool, source: str, **meta: object) -> None:
         if append_restart_log is None:
@@ -399,6 +400,19 @@ def register_config_routes(
         except TypeError:
             try:
                 append_restart_log(ok, source=source)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def _save_operation_diagnostic(ref: str, payload: Dict[str, Any], *, kind: str = "generic") -> None:
+        if save_operation_diagnostic is None:
+            return
+        try:
+            save_operation_diagnostic(ref, payload, kind=kind)
+        except TypeError:
+            try:
+                save_operation_diagnostic(ref, payload)
             except Exception:
                 pass
         except Exception:
@@ -687,14 +701,7 @@ def register_config_routes(
                 preflight_ref=preflight_ref,
                 summary=preflight_summary,
             )
-            _core_log(
-                "warning",
-                "routing.save.preflight_failed",
-                file=os.path.basename(str(sel_main or "")),
-                returncode=preflight.get("returncode"),
-                error=str(preflight.get("error") or ""),
-            )
-            return jsonify({
+            preflight_payload = {
                 "ok": False,
                 "error": preflight.get("error") or "xray preflight failed",
                 "phase": preflight.get("phase"),
@@ -707,7 +714,16 @@ def register_config_routes(
                 "hint": preflight.get("hint"),
                 "summary": preflight.get("summary"),
                 "preflight_ref": preflight_ref,
-            }), 400
+            }
+            _save_operation_diagnostic(preflight_ref, preflight_payload, kind="xray-preflight")
+            _core_log(
+                "warning",
+                "routing.save.preflight_failed",
+                file=os.path.basename(str(sel_main or "")),
+                returncode=preflight.get("returncode"),
+                error=str(preflight.get("error") or ""),
+            )
+            return jsonify(preflight_payload), 400
 
         try:
             if _snapshot_before_overwrite and backup_dir and backup_dir_real:

@@ -85,6 +85,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             strip_json_comments_text=ctx.strip_json_comments_text,
             restart_xkeen=ctx.restart_xkeen,
             append_restart_log=ctx.append_restart_log,
+            save_operation_diagnostic=ctx.save_operation_diagnostic,
         )
     )
 
@@ -141,6 +142,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             XRAY_ERROR_LOG=ctx.xray_error_log,
             read_restart_log=ctx.read_restart_log,
             clear_restart_log=ctx.clear_restart_log,
+            read_operation_diagnostic=ctx.read_operation_diagnostic,
         )
     )
 

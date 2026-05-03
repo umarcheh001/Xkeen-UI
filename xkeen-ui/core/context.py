@@ -60,6 +60,8 @@ class AppContext:
 
     restart_xkeen: Callable[..., Any]
     append_restart_log: Callable[..., Any]
+    save_operation_diagnostic: Optional[Callable[..., Any]] = None
+    read_operation_diagnostic: Optional[Callable[..., Any]] = None
     read_restart_log: Optional[Callable[..., Any]] = None
     clear_restart_log: Optional[Callable[..., Any]] = None
 

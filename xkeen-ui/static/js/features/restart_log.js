@@ -17,6 +17,8 @@ let restartLogModuleApi = null;
   RL._preflightPayloads = RL._preflightPayloads instanceof Map ? RL._preflightPayloads : new Map();
 
   const RESTART_LOG_POLL_MS = 15000;
+  const RESTART_LOG_TITLE = 'Журнал операций Xkeen';
+  const LEGACY_RESTART_LOG_TITLE_RE = /^журнал\s+перезапуска$/i;
   const PREFLIGHT_PAYLOAD_STORAGE_PREFIX = 'xkeen.restartLog.preflight.';
   const PREFLIGHT_PAYLOAD_INDEX_KEY = 'xkeen.restartLog.preflight.index';
   const PREFLIGHT_PAYLOAD_LIMIT = 8;
@@ -520,11 +522,43 @@ let restartLogModuleApi = null;
     }
   }
 
+  function extractPreflightPayloadFromDiagnostic(data, refValue) {
+    if (!data || typeof data !== 'object') return null;
+    const ref = normalizePreflightRef(refValue || data.preflight_ref || data.ref);
+    const rawPayload = data.payload && typeof data.payload === 'object' ? data.payload : data;
+    if (!rawPayload || typeof rawPayload !== 'object') return null;
+    const payloadRef = normalizePreflightRef(rawPayload.preflight_ref || ref);
+    if (!payloadRef) return null;
+    return Object.assign({}, rawPayload, { preflight_ref: payloadRef });
+  }
+
+  async function fetchPreflightPayload(refValue) {
+    const ref = normalizePreflightRef(refValue);
+    if (!ref) return null;
+    try {
+      const res = await fetch(`/api/operation-diagnostics/${encodeURIComponent(ref)}`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      if (!res || !res.ok) return null;
+      const data = await res.json();
+      const payload = extractPreflightPayloadFromDiagnostic(data, ref);
+      if (!payload) return null;
+      rememberPreflightPayload(payload);
+      return payload;
+    } catch (error) {
+      return null;
+    }
+  }
+
   async function openPreflightPayload(ref) {
-    const payload = readPreflightPayload(ref);
+    let payload = readPreflightPayload(ref);
+    if (!payload) {
+      payload = await fetchPreflightPayload(ref);
+    }
     if (!payload) {
       try {
-        toastXkeen('Диагностика preflight недоступна в этом браузере. Повторите сохранение конфига, чтобы открыть разбор.', 'warning');
+        toastXkeen('Диагностика preflight недоступна. Повторите сохранение конфига, чтобы открыть разбор.', 'warning');
       } catch (error) {}
       return false;
     }
@@ -1080,7 +1114,85 @@ let restartLogModuleApi = null;
     } catch (error) {}
   }
 
+  function normalizeRestartLogTitleText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function isRestartLogTitleText(value) {
+    const text = normalizeRestartLogTitleText(value);
+    return text === RESTART_LOG_TITLE || LEGACY_RESTART_LOG_TITLE_RE.test(text);
+  }
+
+  function insertRestartLogButton(actions, btn, before) {
+    if (!actions || !btn) return;
+    try {
+      if (before && before.parentElement === actions) actions.insertBefore(btn, before);
+      else actions.appendChild(btn);
+    } catch (error) {}
+  }
+
+  function ensureRestartLogFilterButton(actions, value, text) {
+    if (!actions || !value) return;
+    try {
+      if (actions.querySelector(`[data-xk-restart-log-filter="${value}"]`)) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-secondary log-btn restart-log-filter-btn';
+      btn.setAttribute('data-xk-restart-log-filter', value);
+      btn.setAttribute('aria-pressed', value === RL._filter ? 'true' : 'false');
+      btn.textContent = text;
+      const anchor = actions.querySelector('[data-xk-restart-log-action]');
+      insertRestartLogButton(actions, btn, anchor);
+    } catch (error) {}
+  }
+
+  function ensureRestartLogActionButton(actions, action, text) {
+    if (!actions || !action) return;
+    try {
+      if (actions.querySelector(`[data-xk-restart-log-action="${action}"]`)) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-secondary log-btn';
+      btn.setAttribute('data-xk-restart-log-action', action);
+      btn.textContent = text;
+      const anchor = action === 'refresh'
+        ? actions.querySelector('[data-xk-restart-log-action="clear"]')
+        : null;
+      insertRestartLogButton(actions, btn, anchor);
+    } catch (error) {}
+  }
+
+  function normalizeRestartLogChrome() {
+    try {
+      const cards = new Set();
+      getLogEls().forEach((el) => {
+        const card = el && typeof el.closest === 'function' ? el.closest('.log-card') : null;
+        if (card) cards.add(card);
+      });
+      document.querySelectorAll('.log-card').forEach((card) => {
+        try {
+          if (card.querySelector('[data-xk-restart-log="1"], #restart-log')) cards.add(card);
+        } catch (error) {}
+      });
+      cards.forEach((card) => {
+        try {
+          const title = Array.from(card.querySelectorAll('h1,h2,h3')).find((node) => isRestartLogTitleText(node.textContent));
+          if (title && normalizeRestartLogTitleText(title.textContent) !== RESTART_LOG_TITLE) {
+            title.textContent = RESTART_LOG_TITLE;
+          }
+          const actions = card.querySelector('.log-header-actions');
+          if (!actions) return;
+          ensureRestartLogFilterButton(actions, 'all', 'Все');
+          ensureRestartLogFilterButton(actions, 'errors', 'Ошибки');
+          ensureRestartLogActionButton(actions, 'refresh', 'Обновить');
+        } catch (error) {}
+      });
+    } catch (error) {}
+  }
+
   RL.init = function init() {
+    normalizeRestartLogChrome();
+
     try {
       const buttons = document.querySelectorAll('[data-xk-restart-log-action]');
       buttons.forEach((btn) => {

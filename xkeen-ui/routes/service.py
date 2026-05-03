@@ -47,6 +47,7 @@ def create_service_blueprint(
     broadcast_event: Callable[[dict], None] | None = None,
     read_restart_log: Callable[..., list[str]] | None = None,
     clear_restart_log: Callable[..., None] | None = None,
+    read_operation_diagnostic: Callable[..., dict[str, Any] | None] | None = None,
 ) -> Blueprint:
     """Create blueprint with xkeen service-control endpoints."""
     bp = Blueprint("service", __name__)
@@ -105,6 +106,10 @@ def create_service_blueprint(
 
     if clear_restart_log is None:
         def clear_restart_log():  # type: ignore[no-redef]
+            return None
+
+    if read_operation_diagnostic is None:
+        def read_operation_diagnostic(ref: str):  # type: ignore[no-redef]
             return None
 
     def _append_restart_log(ok: bool, source: str = "api", **meta: object) -> None:
@@ -181,6 +186,26 @@ def create_service_blueprint(
             return _service_exception(
                 "Не удалось очистить лог перезапуска.",
                 code="restart_log_clear_failed",
+                hint="Подробности смотрите в server logs.",
+                exc=e,
+            )
+
+    @bp.get("/api/operation-diagnostics/<ref>")
+    def api_operation_diagnostic(ref: str) -> Any:
+        try:
+            data = read_operation_diagnostic(ref)
+            if not data:
+                return _service_error(
+                    "Диагностика операции не найдена.",
+                    404,
+                    code="operation_diagnostic_not_found",
+                    hint="Повторите операцию, чтобы создать свежий диагностический снимок.",
+                )
+            return jsonify(data), 200
+        except Exception as e:  # noqa: BLE001
+            return _service_exception(
+                "Не удалось прочитать диагностику операции.",
+                code="operation_diagnostic_read_failed",
                 hint="Подробности смотрите в server logs.",
                 exc=e,
             )

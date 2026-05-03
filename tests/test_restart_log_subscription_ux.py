@@ -20,6 +20,11 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert "'xray-preflight': {" in restart_log_src
     assert "parseRestartMeta" in restart_log_src
     assert "цель: ${core}" in restart_log_src
+    assert "const RESTART_LOG_TITLE = 'Журнал операций Xkeen';" in restart_log_src
+    assert "LEGACY_RESTART_LOG_TITLE_RE" in restart_log_src
+    assert "normalizeRestartLogChrome" in restart_log_src
+    assert "fetchPreflightPayload" in restart_log_src
+    assert "/api/operation-diagnostics/" in restart_log_src
     assert "data-xk-restart-log-filter" in restart_log_src
     assert "data-xk-restart-log-detail-toggle" in restart_log_src
     assert "data-xk-restart-log-preflight-ref" in restart_log_src
