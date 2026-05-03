@@ -16,10 +16,14 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
 
     assert "const RESTART_LOG_POLL_MS = 15000;" in restart_log_src
     assert "'xray-subscription-refresh': {" in restart_log_src
+    assert "'core-switch': {" in restart_log_src
+    assert "parseRestartMeta" in restart_log_src
+    assert "цель: ${core}" in restart_log_src
     assert "label: 'Подписка Xray'" in restart_log_src
     assert "showSubscriptionRefreshToast" in restart_log_src
     assert "toastNewSubscription" in restart_log_src
     assert "restart-log-pill-subscription" in styles_src
+    assert "restart-log-pill-core" in styles_src
     assert ".log-card .log-line-success" in styles_src
 
 

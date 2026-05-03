@@ -5309,7 +5309,7 @@ html[data-theme="light"] .xray-log-select option{
   background: rgba(15, 23, 42, 0.42);
   font-size: 0.92em;
   font-weight: 700;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
 }
 
 .log-card .restart-log-pill-subscription {
@@ -5328,6 +5328,30 @@ html[data-theme="light"] .xray-log-select option{
   border-color: color-mix(in srgb, var(--sem-warning, #fbbf24) 38%, transparent);
   background: color-mix(in srgb, var(--sem-warning, #fbbf24) 14%, rgba(15, 23, 42, 0.78));
   color: color-mix(in srgb, var(--sem-warning, #fbbf24) 84%, white 16%);
+}
+
+.log-card .restart-log-pill-core {
+  border-color: color-mix(in srgb, var(--accent, #38bdf8) 40%, transparent);
+  background: color-mix(in srgb, var(--accent, #38bdf8) 15%, rgba(15, 23, 42, 0.78));
+  color: color-mix(in srgb, var(--accent, #38bdf8) 84%, white 16%);
+}
+
+.log-card .restart-log-pill-routing {
+  border-color: color-mix(in srgb, var(--sem-info, #93c5fd) 34%, transparent);
+  background: color-mix(in srgb, var(--sem-info, #93c5fd) 12%, rgba(15, 23, 42, 0.78));
+  color: color-mix(in srgb, var(--sem-info, #93c5fd) 82%, white 18%);
+}
+
+.log-card .restart-log-pill-xray {
+  border-color: color-mix(in srgb, var(--sem-success, #4ade80) 32%, transparent);
+  background: color-mix(in srgb, var(--sem-success, #4ade80) 12%, rgba(15, 23, 42, 0.78));
+  color: color-mix(in srgb, var(--sem-success, #4ade80) 82%, white 18%);
+}
+
+.log-card .restart-log-pill-backup {
+  border-color: color-mix(in srgb, var(--sem-debug, #a1a1aa) 36%, transparent);
+  background: color-mix(in srgb, var(--sem-debug, #a1a1aa) 13%, rgba(15, 23, 42, 0.78));
+  color: color-mix(in srgb, var(--sem-debug, #a1a1aa) 86%, white 14%);
 }
 
 .log-card .restart-log-pill-generic {
@@ -5366,6 +5390,30 @@ html[data-theme="light"] .log-card .restart-log-pill-mihomo {
   border-color: color-mix(in srgb, var(--sem-warning, #d97706) 24%, rgba(15, 23, 42, 0.08));
   background: color-mix(in srgb, var(--sem-warning, #d97706) 10%, white 90%);
   color: color-mix(in srgb, var(--sem-warning, #d97706) 82%, #78350f 18%);
+}
+
+html[data-theme="light"] .log-card .restart-log-pill-core {
+  border-color: color-mix(in srgb, var(--accent, #0284c7) 26%, rgba(15, 23, 42, 0.08));
+  background: color-mix(in srgb, var(--accent, #0284c7) 10%, white 90%);
+  color: color-mix(in srgb, var(--accent, #0284c7) 82%, #0c4a6e 18%);
+}
+
+html[data-theme="light"] .log-card .restart-log-pill-routing {
+  border-color: color-mix(in srgb, var(--sem-info, #2563eb) 22%, rgba(15, 23, 42, 0.08));
+  background: color-mix(in srgb, var(--sem-info, #2563eb) 8%, white 92%);
+  color: color-mix(in srgb, var(--sem-info, #2563eb) 78%, #1e3a8a 22%);
+}
+
+html[data-theme="light"] .log-card .restart-log-pill-xray {
+  border-color: color-mix(in srgb, var(--sem-success, #16a34a) 22%, rgba(15, 23, 42, 0.08));
+  background: color-mix(in srgb, var(--sem-success, #16a34a) 8%, white 92%);
+  color: color-mix(in srgb, var(--sem-success, #16a34a) 78%, #14532d 22%);
+}
+
+html[data-theme="light"] .log-card .restart-log-pill-backup {
+  border-color: color-mix(in srgb, var(--sem-debug, #64748b) 22%, rgba(15, 23, 42, 0.08));
+  background: color-mix(in srgb, var(--sem-debug, #64748b) 8%, white 92%);
+  color: color-mix(in srgb, var(--sem-debug, #64748b) 76%, #334155 24%);
 }
 
 

@@ -5,16 +5,48 @@ Keeps read/clear operations out of app.py. The log file path is passed in explic
 from __future__ import annotations
 
 import os
+import re
 import time
+from urllib.parse import quote
 from typing import List
 
 
-def append_restart_log(log_file: str, ok: bool, source: str = "api") -> None:
+_META_KEY_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+
+
+def _format_meta_key(key: object) -> str:
+    raw = str(key or "").strip().lower()
+    raw = _META_KEY_RE.sub("_", raw).strip("_.-")
+    return raw[:48]
+
+
+def _format_meta_value(value: object) -> str:
+    raw = str(value if value is not None else "").strip()
+    if len(raw) > 160:
+        raw = raw[:157] + "..."
+    return quote(raw, safe="-._:/")
+
+
+def _format_restart_meta(meta: dict[str, object]) -> str:
+    parts: list[str] = []
+    for key, value in (meta or {}).items():
+        meta_key = _format_meta_key(key)
+        if not meta_key or value is None:
+            continue
+        meta_value = _format_meta_value(value)
+        if not meta_value:
+            continue
+        parts.append(f"{meta_key}={meta_value}")
+    return (" " + " ".join(parts)) if parts else ""
+
+
+def append_restart_log(log_file: str, ok: bool, source: str = "api", **meta: object) -> None:
     """Append a single line about restart result to the restart log."""
-    line = "[{ts}] source={src} result={res}\n".format(
+    line = "[{ts}] source={src} result={res}{meta}\n".format(
         ts=time.strftime("%Y-%m-%d %H:%M:%S"),
-        src=source,
+        src=_format_meta_value(source or "api") or "api",
         res="OK" if ok else "FAIL",
+        meta=_format_restart_meta(meta),
     )
     log_dir = os.path.dirname(log_file)
     if log_dir and not os.path.isdir(log_dir):

@@ -15,12 +15,18 @@ let restartLogModuleApi = null;
   RL._pollTimer = RL._pollTimer || null;
 
   const RESTART_LOG_POLL_MS = 15000;
-  const RESTART_SUMMARY_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+source=([^\s]+)\s+result=([A-Z]+)\s*$/i;
+  const RESTART_SUMMARY_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+source=([^\s]+)\s+result=([A-Z]+)(?:\s+(.*?))?\s*$/i;
   const RESTART_SOURCE_META = Object.freeze({
     api: {
       label: 'Xkeen',
       successText: 'перезапущен успешно',
       failureText: 'перезапуск завершился ошибкой',
+      bucket: 'service',
+    },
+    'api-button': {
+      label: 'Xkeen',
+      successText: 'перезапущен вручную',
+      failureText: 'ручной перезапуск завершился ошибкой',
       bucket: 'service',
     },
     'api-start': {
@@ -35,11 +41,101 @@ let restartLogModuleApi = null;
       failureText: 'не удалось остановить',
       bucket: 'service',
     },
+    'core-switch': {
+      label: 'Ядро Xkeen',
+      successText: 'ядро переключено, xkeen перезапущен',
+      failureText: 'смена ядра завершилась ошибкой',
+      bucket: 'core',
+    },
+    routing: {
+      label: 'Routing',
+      successText: 'сохранён, xkeen перезапущен',
+      failureText: 'сохранён, но перезапуск xkeen завершился ошибкой',
+      bucket: 'routing',
+    },
+    inbounds: {
+      label: 'Inbounds',
+      successText: 'сохранены, xkeen перезапущен',
+      failureText: 'сохранены, но перезапуск xkeen завершился ошибкой',
+      bucket: 'xray',
+    },
+    outbounds: {
+      label: 'Outbounds',
+      successText: 'сохранены, xkeen перезапущен',
+      failureText: 'сохранены, но перезапуск xkeen завершился ошибкой',
+      bucket: 'xray',
+    },
+    'observatory-preset': {
+      label: 'Observatory',
+      successText: 'пресет применён, xkeen перезапущен',
+      failureText: 'пресет применён, но перезапуск xkeen завершился ошибкой',
+      bucket: 'xray',
+    },
     'mihomo-config': {
       label: 'Mihomo',
       successText: 'конфиг применён, xkeen перезапущен',
       failureText: 'конфиг применён, но перезапуск xkeen завершился ошибкой',
       bucket: 'mihomo',
+    },
+    'mihomo-profile-activate': {
+      label: 'Mihomo',
+      successText: 'профиль активирован, xkeen перезапущен',
+      failureText: 'профиль активирован, но перезапуск xkeen завершился ошибкой',
+      bucket: 'mihomo',
+    },
+    'mihomo-backup-restore': {
+      label: 'Mihomo',
+      successText: 'бэкап восстановлен, xkeen перезапущен',
+      failureText: 'бэкап восстановлен, но перезапуск xkeen завершился ошибкой',
+      bucket: 'mihomo',
+    },
+    'manual-mihomo': {
+      label: 'Xkeen',
+      successText: 'перезапущен вручную',
+      failureText: 'ручной перезапуск завершился ошибкой',
+      bucket: 'service',
+    },
+    'snapshot-restore': {
+      label: 'Бэкап',
+      successText: 'восстановлен, xkeen перезапущен',
+      failureText: 'восстановлен, но перезапуск xkeen завершился ошибкой',
+      bucket: 'backup',
+    },
+    'backups-page': {
+      label: 'Бэкап',
+      successText: 'операция выполнена, xkeen перезапущен',
+      failureText: 'операция выполнена, но перезапуск xkeen завершился ошибкой',
+      bucket: 'backup',
+    },
+    'port-proxying': {
+      label: 'Port proxying',
+      successText: 'список сохранён, xkeen перезапущен',
+      failureText: 'список сохранён, но перезапуск xkeen завершился ошибкой',
+      bucket: 'service',
+    },
+    'port-exclude': {
+      label: 'Port exclude',
+      successText: 'список сохранён, xkeen перезапущен',
+      failureText: 'список сохранён, но перезапуск xkeen завершился ошибкой',
+      bucket: 'service',
+    },
+    'ip-exclude': {
+      label: 'IP exclude',
+      successText: 'список сохранён, xkeen перезапущен',
+      failureText: 'список сохранён, но перезапуск xkeen завершился ошибкой',
+      bucket: 'service',
+    },
+    'xkeen-config': {
+      label: 'xkeen.json',
+      successText: 'сохранён, xkeen перезапущен',
+      failureText: 'сохранён, но перезапуск xkeen завершился ошибкой',
+      bucket: 'service',
+    },
+    'xray-subscription-delete': {
+      label: 'Подписка Xray',
+      successText: 'удалена, xkeen перезапущен',
+      failureText: 'удалена, но перезапуск xkeen завершился ошибкой',
+      bucket: 'subscription',
     },
     'xray-subscription-refresh': {
       label: 'Подписка Xray',
@@ -79,6 +175,79 @@ let restartLogModuleApi = null;
     return titleCaseWords(raw.replace(/[-_]+/g, ' '));
   }
 
+  function decodeRestartMetaValue(value) {
+    const raw = String(value || '');
+    if (!raw) return '';
+    try {
+      return decodeURIComponent(raw.replace(/\+/g, '%20'));
+    } catch (error) {
+      return raw;
+    }
+  }
+
+  function parseRestartMeta(rawText) {
+    const text = String(rawText || '').trim();
+    if (!text) return {};
+
+    const out = {};
+    const re = /([A-Za-z0-9_.-]+)=([^\s]+)/g;
+    let match = null;
+    while ((match = re.exec(text))) {
+      const key = String(match[1] || '').trim();
+      if (!key) continue;
+      out[key] = decodeRestartMetaValue(match[2]);
+    }
+    return out;
+  }
+
+  function humanCoreName(core) {
+    const value = String(core || '').trim().toLowerCase();
+    if (value === 'xray') return 'Xray';
+    if (value === 'mihomo') return 'Mihomo';
+    if (value === 'unknown') return 'неизвестно';
+    return value ? titleCaseWords(value.replace(/[-_]+/g, ' ')) : '';
+  }
+
+  function formatDurationMs(value) {
+    const ms = Number(value);
+    if (!Number.isFinite(ms) || ms <= 0) return '';
+    if (ms >= 1000) {
+      const seconds = ms / 1000;
+      return `${seconds.toFixed(seconds >= 10 ? 0 : 1)}с`;
+    }
+    return `${Math.round(ms)}мс`;
+  }
+
+  function formatRestartMetaDetails(source, details) {
+    const meta = details && typeof details === 'object' ? details : {};
+    const parts = [];
+
+    if (source === 'core-switch') {
+      const core = humanCoreName(meta.core);
+      const previous = humanCoreName(meta.previous);
+      if (core) parts.push(`цель: ${core}`);
+      if (previous && previous !== core) parts.push(`было: ${previous}`);
+      if (meta.phase) parts.push(`этап: ${meta.phase}`);
+      if (meta.returncode) parts.push(`код: ${meta.returncode}`);
+    }
+
+    const duration = formatDurationMs(meta.duration_ms);
+    if (duration) parts.push(duration);
+
+    return parts.join(' · ');
+  }
+
+  function buildRestartSummaryMessage(source, ok, baseMessage, details) {
+    const message = String(baseMessage || '');
+    if (source !== 'core-switch') return message;
+
+    const core = humanCoreName(details && details.core);
+    if (!core) return message;
+    return ok
+      ? `переключено на ${core}, xkeen перезапущен`
+      : `не удалось переключить на ${core}`;
+  }
+
   function parseStructuredRestartLine(line) {
     const raw = String(line || '');
     if (!raw) return null;
@@ -87,23 +256,27 @@ let restartLogModuleApi = null;
     if (!match) return null;
 
     const ts = String(match[1] || '').trim();
-    const source = String(match[2] || '').trim();
+    const source = decodeRestartMetaValue(match[2] || '').trim();
     const result = String(match[3] || '').trim().toUpperCase();
+    const details = parseRestartMeta(match[4] || '');
     const ok = result === 'OK';
     const meta = RESTART_SOURCE_META[source] || null;
     const label = meta && meta.label ? meta.label : fallbackRestartSourceLabel(source);
-    const message = ok
+    const baseMessage = ok
       ? (meta && meta.successText ? meta.successText : 'операция завершилась успешно')
       : (meta && meta.failureText ? meta.failureText : 'операция завершилась с ошибкой');
+    const message = buildRestartSummaryMessage(source, ok, baseMessage, details);
     const kind = ok ? 'success' : 'error';
     const bucket = meta && meta.bucket ? meta.bucket : 'generic';
-    const copyText = `[${ts}] ${label} — ${message}`;
-    const rawSourceText = meta ? '' : `Источник: ${source}`;
+    const detailsText = formatRestartMetaDetails(source, details);
+    const copyText = `[${ts}] ${label} — ${message}${detailsText ? ` · ${detailsText}` : ''}`;
+    const rawSourceText = detailsText || (meta ? '' : `Источник: ${source}`);
 
     return {
       ts,
       source,
       result,
+      details,
       ok,
       kind,
       bucket,
@@ -585,13 +758,17 @@ let restartLogModuleApi = null;
           bindOnce(btn, (event) => { event.preventDefault(); RL.clear(); });
         } else if (action === 'copy') {
           bindOnce(btn, (event) => { event.preventDefault(); RL.copy(); });
+        } else if (action === 'refresh') {
+          bindOnce(btn, (event) => { event.preventDefault(); RL.load({ toastNewSubscription: false }); });
         }
       });
     } catch (error) {}
 
     try {
+      const refreshBtn = document.getElementById('restart-log-refresh-btn');
       const clearBtn = document.getElementById('restart-log-clear-btn');
       const copyBtn = document.getElementById('restart-log-copy-btn');
+      bindOnce(refreshBtn, (event) => { event.preventDefault(); RL.load({ toastNewSubscription: false }); });
       bindOnce(clearBtn, (event) => { event.preventDefault(); RL.clear(); });
       bindOnce(copyBtn, (event) => { event.preventDefault(); RL.copy(); });
     } catch (error) {}

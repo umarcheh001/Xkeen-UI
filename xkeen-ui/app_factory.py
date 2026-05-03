@@ -462,8 +462,8 @@ def create_app(*, ws_runtime: bool = False):
     from services.restart_log import clear_restart_log as _svc_clear_restart_log
     from services.xray import restart_xray_core as _svc_restart_xray_core
 
-    def append_restart_log(ok, source: str = "api"):
-        return _svc_append_restart_log(RESTART_LOG_FILE, ok, source=source)
+    def append_restart_log(ok, source: str = "api", **meta):
+        return _svc_append_restart_log(RESTART_LOG_FILE, ok, source=source, **meta)
 
     def read_restart_log(limit: int = 100):
         return _svc_read_restart_log(RESTART_LOG_FILE, limit=limit)

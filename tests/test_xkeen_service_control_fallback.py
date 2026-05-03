@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from flask import Flask
+
 from services import xkeen as xkeen_service
 
 
@@ -81,6 +83,36 @@ def test_service_routes_use_verified_control_helper_for_start_and_stop():
     assert 'ok = control_xkeen_action("stop", prefer_init=True)' in text
     assert 'subprocess.check_call(build_xkeen_cmd("-start"))' not in text
     assert 'subprocess.check_call(build_xkeen_cmd("-stop"))' not in text
+
+
+def test_core_switch_route_writes_restart_log_entry_with_metadata(monkeypatch, tmp_path):
+    from routes import service
+
+    seen: list[tuple[bool, str, dict[str, object]]] = []
+
+    monkeypatch.setattr(service, 'get_cores_status', lambda: (['xray', 'mihomo'], 'xray'))
+    monkeypatch.setattr(service, 'switch_core', lambda core, error_log: None)
+
+    app = Flask('service-core-switch-log')
+    app.register_blueprint(
+        service.create_service_blueprint(
+            restart_xkeen=lambda **_kwargs: True,
+            append_restart_log=lambda ok, source='api', **meta: seen.append((ok, source, meta)),
+            XRAY_ERROR_LOG=str(tmp_path / 'xray-error.log'),
+        )
+    )
+
+    response = app.test_client().post('/api/xkeen/core', json={'core': 'mihomo'})
+
+    assert response.status_code == 200
+    assert response.get_json()['restarted'] is True
+    assert seen
+    ok, source, meta = seen[-1]
+    assert ok is True
+    assert source == 'core-switch'
+    assert meta['core'] == 'mihomo'
+    assert meta['previous'] == 'xray'
+    assert isinstance(meta['duration_ms'], int)
 
 
 def test_service_status_restart_button_uses_background_restart_job_with_pty_log_stream():

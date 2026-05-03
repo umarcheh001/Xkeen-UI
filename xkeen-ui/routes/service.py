@@ -1,6 +1,7 @@
 """Service-control API routes for xkeen as a Flask Blueprint."""
 from __future__ import annotations
 import subprocess
+import time
 
 from flask import Blueprint, request, jsonify
 from typing import Any, Callable
@@ -41,7 +42,7 @@ from services.cores import CoreSwitchError, get_cores_status, switch_core
 
 def create_service_blueprint(
     restart_xkeen: Callable[..., bool],
-    append_restart_log: Callable[[str, bool, str], None] | Callable[..., None],
+    append_restart_log: Callable[..., None],
     XRAY_ERROR_LOG: str,
     broadcast_event: Callable[[dict], None] | None = None,
     read_restart_log: Callable[..., list[str]] | None = None,
@@ -106,6 +107,50 @@ def create_service_blueprint(
         def clear_restart_log():  # type: ignore[no-redef]
             return None
 
+    def _append_restart_log(ok: bool, source: str = "api", **meta: object) -> None:
+        try:
+            append_restart_log(ok, source=source, **meta)
+        except TypeError:
+            try:
+                append_restart_log(ok, source=source)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def _restart_log_elapsed_ms(started_at: float) -> int:
+        try:
+            return max(0, int(round((time.monotonic() - started_at) * 1000)))
+        except Exception:
+            return 0
+
+    def _detect_core_for_restart_log() -> str:
+        try:
+            _, current_core = get_cores_status()
+            return str(current_core or "")
+        except Exception:
+            return ""
+
+    def _core_switch_meta(
+        *,
+        core: str,
+        previous_core: str,
+        started_at: float,
+        phase: str = "",
+        returncode: object = None,
+    ) -> dict[str, object]:
+        meta: dict[str, object] = {
+            "core": core or "unknown",
+            "duration_ms": _restart_log_elapsed_ms(started_at),
+        }
+        if previous_core:
+            meta["previous"] = previous_core
+        if phase:
+            meta["phase"] = phase
+        if returncode is not None:
+            meta["returncode"] = returncode
+        return meta
+
     @bp.get("/api/restart-log")
     def api_restart_log() -> Any:
         try:
@@ -138,14 +183,14 @@ def create_service_blueprint(
     def api_xkeen_start() -> Any:
         try:
             ok = control_xkeen_action("start", prefer_init=True)
-            append_restart_log(ok, source="api-start")
+            _append_restart_log(ok, source="api-start")
             if ok:
                 _core_log("info", "xkeen.start", source="api-start")
                 return jsonify({"ok": True}), 200
             _core_log("error", "xkeen.start_failed", source="api-start")
             return jsonify({"ok": False}), 500
         except Exception:
-            append_restart_log(False, source="api-start")
+            _append_restart_log(False, source="api-start")
             _core_log("error", "xkeen.start_failed", source="api-start")
             return jsonify({"ok": False}), 500
 
@@ -154,14 +199,14 @@ def create_service_blueprint(
     def api_xkeen_stop() -> Any:
         try:
             ok = control_xkeen_action("stop", prefer_init=True)
-            append_restart_log(ok, source="api-stop")
+            _append_restart_log(ok, source="api-stop")
             if ok:
                 _core_log("info", "xkeen.stop", source="api-stop")
                 return jsonify({"ok": True}), 200
             _core_log("error", "xkeen.stop_failed", source="api-stop")
             return jsonify({"ok": False}), 500
         except Exception:
-            append_restart_log(False, source="api-stop")
+            _append_restart_log(False, source="api-stop")
             _core_log("error", "xkeen.stop_failed", source="api-stop")
             return jsonify({"ok": False}), 500
 
@@ -261,12 +306,25 @@ def create_service_blueprint(
     def api_xkeen_core_set() -> Any:
         """Смена ядра xkeen через сервисный модуль (switch_core)."""
         core = ""
+        started_at = time.monotonic()
+        previous_core = ""
         try:
             payload = request.get_json(silent=True) or {}
             core = str(payload.get("core", "")).strip()
+            previous_core = _detect_core_for_restart_log()
             try:
                 switch_core(core, XRAY_ERROR_LOG)
             except ValueError:
+                _append_restart_log(
+                    False,
+                    source="core-switch",
+                    **_core_switch_meta(
+                        core=core,
+                        previous_core=previous_core,
+                        started_at=started_at,
+                        phase="validate",
+                    ),
+                )
                 return _service_error(
                     "Недопустимое ядро.",
                     400,
@@ -274,6 +332,18 @@ def create_service_blueprint(
                     hint="Укажите допустимое ядро: xray или mihomo.",
                 )
             except CoreSwitchError as e:
+                details = e.details or {}
+                _append_restart_log(
+                    False,
+                    source="core-switch",
+                    **_core_switch_meta(
+                        core=core,
+                        previous_core=previous_core,
+                        started_at=started_at,
+                        phase=str(details.get("phase") or ""),
+                        returncode=details.get("returncode"),
+                    ),
+                )
                 _core_log("error", "xkeen.core_set_failed", core=core, error=str(e), **(e.details or {}))
                 return _service_exception(
                     "Не удалось переключить ядро xkeen.",
@@ -283,6 +353,16 @@ def create_service_blueprint(
                     log_extra={"core": core},
                 )
             except RuntimeError as e:
+                _append_restart_log(
+                    False,
+                    source="core-switch",
+                    **_core_switch_meta(
+                        core=core,
+                        previous_core=previous_core,
+                        started_at=started_at,
+                        phase="runtime",
+                    ),
+                )
                 _core_log("error", "xkeen.core_set_failed", core=core, error=str(e))
                 return _service_exception(
                     "Не удалось переключить ядро xkeen.",
@@ -295,10 +375,29 @@ def create_service_blueprint(
             # Уведомляем всех WS-подписчиков о смене ядра.
             _emit_event({"event": "core_changed", "core": core, "ok": True})
 
+            _append_restart_log(
+                True,
+                source="core-switch",
+                **_core_switch_meta(
+                    core=core,
+                    previous_core=previous_core,
+                    started_at=started_at,
+                ),
+            )
             _core_log("info", "xkeen.core_set", core=core)
-            return jsonify({"ok": True, "core": core}), 200
+            return jsonify({"ok": True, "core": core, "restarted": True}), 200
         except Exception as e:
             _emit_event({"event": "core_change_error", "core": core, "ok": False, "error": "core_switch_failed"})
+            _append_restart_log(
+                False,
+                source="core-switch",
+                **_core_switch_meta(
+                    core=core,
+                    previous_core=previous_core,
+                    started_at=started_at,
+                    phase="exception",
+                ),
+            )
             return _service_exception(
                 "Не удалось переключить ядро xkeen.",
                 code="core_switch_failed",

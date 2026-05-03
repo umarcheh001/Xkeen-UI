@@ -287,9 +287,22 @@
       return;
     }
 
+    function refreshRestartLogSoon() {
+      try {
+        setTimeout(function () {
+          import('../features/restart_log.js').then(function (mod) {
+            if (mod && typeof mod.loadRestartLog === 'function') {
+              mod.loadRestartLog({ toastNewSubscription: false, silent: true });
+            }
+          }).catch(function () {});
+        }, 300);
+      } catch (e) {}
+    }
+
     try {
       response.clone().json().then(function (data) {
         if (!data || !data.restarted) return;
+        refreshRestartLogSoon();
 
         // Unified "restart + context" toast to avoid duplicates across modules.
         const msg = restartToastMessageForUrl(url);

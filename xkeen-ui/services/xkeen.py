@@ -2,42 +2,23 @@
 
 from __future__ import annotations
 
-import os
 import time
 import subprocess
 from typing import Iterable, List, Sequence
 
+from services.restart_log import append_restart_log as _append_restart_log
+from services.restart_log import read_restart_log as _read_restart_log
 from services.xkeen_commands_catalog import build_xkeen_cmd, resolve_xkeen_init_script
 
 
-def append_restart_log(log_file: str, ok: bool, source: str = "api") -> None:
+def append_restart_log(log_file: str, ok: bool, source: str = "api", **meta: object) -> None:
     """Append a single line about restart result to the restart log."""
-    line = "[{ts}] source={src} result={res}\n".format(
-        ts=time.strftime("%Y-%m-%d %H:%M:%S"),
-        src=source,
-        res="OK" if ok else "FAIL",
-    )
-    log_dir = os.path.dirname(log_file)
-    if log_dir and not os.path.isdir(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
-    try:
-        with open(log_file, "a") as f:
-            f.write(line)
-    except Exception:
-        # Logging errors are non-critical
-        pass
+    return _append_restart_log(log_file, ok, source=source, **meta)
 
 
 def read_restart_log(log_file: str, limit: int = 100) -> List[str]:
     """Read last ``limit`` lines from restart log file, if it exists."""
-    if not os.path.isfile(log_file):
-        return []
-    try:
-        with open(log_file, "r") as f:
-            lines = f.readlines()
-        return lines[-limit:]
-    except Exception:
-        return []
+    return _read_restart_log(log_file, limit=limit)
 
 
 def is_xkeen_running() -> bool:
