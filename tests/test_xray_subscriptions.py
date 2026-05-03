@@ -147,6 +147,81 @@ def test_refresh_subscription_writes_generated_fragment_and_observatory(tmp_path
     assert restarts == []
 
 
+def test_refresh_subscription_does_not_restart_when_provider_reorders_nodes(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    links = [
+        _vless_transport("Alpha", "tcp", host="alpha.example.com"),
+        _vless_transport("Beta", "tcp", host="beta.example.com"),
+    ]
+    bodies = ["\n".join(links), "\n".join(reversed(links))]
+
+    def fetch_subscription_body(_url):
+        return bodies.pop(0), {}
+
+    monkeypatch.setattr(subs, "fetch_subscription_body", fetch_subscription_body)
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "demo",
+            "name": "Demo",
+            "tag": "demo",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": False,
+        },
+    )
+
+    restarts = []
+    first = subs.refresh_subscription(
+        str(ui_state_dir),
+        "demo",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **kwargs: restarts.append(kwargs) or True,
+        restart=True,
+    )
+
+    assert first["ok"] is True
+    assert first["changed"] is True
+    assert first["restarted"] is True
+
+    out_path = xray_dir / "04_outbounds.demo.json"
+    raw_path = jsonc_dir / "04_outbounds.demo.jsonc"
+    first_output = out_path.read_text(encoding="utf-8")
+    first_raw = raw_path.read_text(encoding="utf-8")
+    first_hash = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]["last_hash"]
+
+    restarts.clear()
+    second = subs.refresh_subscription(
+        str(ui_state_dir),
+        "demo",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **kwargs: restarts.append(kwargs) or True,
+        restart=True,
+    )
+
+    assert second["ok"] is True
+    assert second["changed"] is False
+    assert second["restarted"] is False
+    assert restarts == []
+    assert out_path.read_text(encoding="utf-8") == first_output
+    assert raw_path.read_text(encoding="utf-8") == first_raw
+    assert subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]["last_hash"] == first_hash
+
+
 def test_new_subscription_defaults_to_daily_interval(tmp_path: Path):
     from services import xray_subscriptions as subs
 

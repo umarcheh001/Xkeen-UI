@@ -1554,6 +1554,48 @@ def _content_hash(obj: Any) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _subscription_outbound_compare_key(item: Any) -> Tuple[str, str]:
+    tag = str(item.get("tag") or "").strip() if isinstance(item, dict) else ""
+    try:
+        payload = json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    except Exception:
+        payload = str(item)
+    return tag, payload
+
+
+def _canonical_subscription_output_for_compare(obj: Any) -> Any:
+    data = copy.deepcopy(obj)
+    if isinstance(data, dict) and isinstance(data.get("outbounds"), list):
+        data["outbounds"] = sorted(data["outbounds"], key=_subscription_outbound_compare_key)
+    return data
+
+
+def _subscription_output_hash(obj: Any) -> str:
+    return _content_hash(_canonical_subscription_output_for_compare(obj))
+
+
+def _write_subscription_output_if_changed(path: str, obj: Any, *, snapshot: SnapshotCallback | None = None) -> bool:
+    new_text = json.dumps(obj, ensure_ascii=False, indent=2) + "\n"
+    try:
+        old_text = load_text(path, default=None)
+        if old_text == new_text:
+            return False
+        if isinstance(old_text, str):
+            try:
+                old_obj = json.loads(old_text)
+            except Exception:
+                old_obj = None
+            if old_obj is not None and _subscription_output_hash(old_obj) == _subscription_output_hash(obj):
+                return False
+    except Exception:
+        pass
+    if snapshot and os.path.exists(path):
+        snapshot(path)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    _atomic_write_text(path, new_text)
+    return True
+
+
 def _write_json_if_changed(path: str, obj: Any, *, snapshot: SnapshotCallback | None = None) -> bool:
     new_text = json.dumps(obj, ensure_ascii=False, indent=2) + "\n"
     try:
@@ -3463,7 +3505,7 @@ def refresh_subscription(
         tags = [str(ob.get("tag") or "").strip() for ob in outbounds if isinstance(ob, dict) and ob.get("tag")]
         output_obj = {"outbounds": outbounds}
         output_path = _subscription_output_path(xray_configs_dir, sub)
-        changed = _write_json_if_changed(output_path, output_obj, snapshot=snapshot)
+        changed = _write_subscription_output_if_changed(output_path, output_obj, snapshot=snapshot)
 
         ensure_xray_jsonc_dir()
         raw_path = jsonc_path_for(output_path)
@@ -3473,17 +3515,17 @@ def refresh_subscription(
             + "\n"
         )
         try:
-            raw_old = ""
-            try:
-                with open(raw_path, "r", encoding="utf-8") as f:
-                    raw_old = f.read()
-            except Exception:
+            if changed or not os.path.exists(raw_path):
                 raw_old = ""
-            if raw_old != raw_text:
-                if snapshot and os.path.exists(raw_path):
-                    snapshot(raw_path)
-                _atomic_write_text(raw_path, raw_text)
-                changed = True
+                try:
+                    with open(raw_path, "r", encoding="utf-8") as f:
+                        raw_old = f.read()
+                except Exception:
+                    raw_old = ""
+                if raw_old != raw_text:
+                    if snapshot and os.path.exists(raw_path):
+                        snapshot(raw_path)
+                    _atomic_write_text(raw_path, raw_text)
         except Exception:
             pass
 
@@ -3515,7 +3557,7 @@ def refresh_subscription(
                 "last_routing_auto_rule": _read_bool_value(sub, ROUTING_AUTO_RULE_KEYS, True),
                 "last_routing_mode": _clean_routing_mode(sub.get("routing_mode")),
                 "last_runtime_active": bool(sub.get("ping_enabled", True)) and bool(tags),
-                "last_hash": _content_hash(output_obj),
+                "last_hash": _subscription_output_hash(output_obj),
                 "last_errors": errors,
                 "last_source_format": source_format,
                 "next_update_ts": now_ts + (interval * 3600) if bool(sub.get("enabled", True)) else None,
