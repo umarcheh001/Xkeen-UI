@@ -39,6 +39,7 @@ BACKUP_START_TS=""
 LAST_BACKUP_FINAL_BYTES=0
 LAST_BACKUP_ELAPSED=0
 LAST_BACKUP_AVG_SPEED_BPS=0
+BACKUP_STAGING_DIR=""
 
 # ---------------------------------------------------------------------------
 #  Formatting helpers
@@ -203,6 +204,17 @@ stop_backup_monitor() {
   # Clear the monitor line.
   printf "\r\033[K" 2>/dev/null || true
   BACKUP_MONITOR_PID=""
+}
+
+cleanup_staging_backup() {
+  staging_dir="$BACKUP_STAGING_DIR"
+  [ -n "$staging_dir" ] || return 0
+  case "$(basename "$staging_dir" 2>/dev/null)" in
+    .xkeen-entware-backup.*)
+      rm -rf "$staging_dir" 2>/dev/null || true
+      ;;
+  esac
+  BACKUP_STAGING_DIR=""
 }
 
 # Print summary line after backup completes.
@@ -593,42 +605,58 @@ backup_entware() {
 
   backup_file="$selected_drive/$(get_architecture)_entware_backup_$DATE.tar.gz"
   bn=$(basename "$backup_file")
+  staging_dir="$selected_drive/.xkeen-entware-backup.$$"
+  backup_work_file="$staging_dir/$bn.part"
   session_start_ts=$(date +%s 2>/dev/null)
   [ -n "$session_start_ts" ] || session_start_ts=0
+
+  if ! mkdir -p "$staging_dir" 2>/dev/null; then
+    print_message "Не удалось создать временный каталог для бэкапа" "$RED"
+    exit 1
+  fi
+  BACKUP_STAGING_DIR="$staging_dir"
 
   print_message "Создаю бэкап Entware" "$CYAN"
   printf "  Архив: %s\n" "$bn"
   printf "  Назначение: %s\n\n" "$selected_drive"
 
   # --- Start real-time monitor ---
-  start_backup_monitor "$selected_drive" "*_entware_backup_*.tar.gz"
+  start_backup_monitor "$staging_dir" "*.part"
 
   # Build exclude list: skip old backups, current backup, and temp/cache files
-  excl=""
+  set --
   # Exclude all previous entware backup archives anywhere under /opt
   for old_bak in "$OPT_DIR"/*_entware_backup_*.tar.gz; do
     [ -f "$old_bak" ] || continue
     old_bn=$(basename "$old_bak")
-    excl="$excl --exclude=./$old_bn"
+    set -- "$@" "--exclude=./$old_bn"
   done
   # Also check selected_drive — it may be inside /opt (e.g. /opt/mnt/...)
   for old_bak in "$selected_drive"/*_entware_backup_*.tar.gz; do
     [ -f "$old_bak" ] || continue
     # Convert to path relative to OPT_DIR
     rel="${old_bak#$OPT_DIR/}"
-    excl="$excl --exclude=./$rel"
+    if [ "$rel" != "$old_bak" ]; then
+      set -- "$@" "--exclude=./$rel"
+    else
+      set -- "$@" "--exclude=./$(basename "$old_bak")"
+    fi
   done
-  # Exclude current backup filename (safety)
-  excl="$excl --exclude=$bn"
+  # Exclude current/future backup artifacts. This is critical when the selected
+  # destination is the same Entware partition exposed via /tmp/mnt/... and /opt:
+  # tar must not read the archive while it is being written.
+  set -- "$@" "--exclude=$bn"
+  set -- "$@" "--exclude=./$bn"
+  set -- "$@" "--exclude=./.xkeen-entware-backup.*"
   # Exclude common temp/cache that shouldn't be in backup
-  excl="$excl --exclude=./tmp/*"
-  excl="$excl --exclude=./var/cache/opkg"
-  excl="$excl --exclude=./var/run/*"
-  excl="$excl --exclude=./var/lock/*"
+  set -- "$@" "--exclude=./tmp/*"
+  set -- "$@" "--exclude=./var/cache/opkg"
+  set -- "$@" "--exclude=./var/run/*"
+  set -- "$@" "--exclude=./var/lock/*"
 
-  tar_output=$(eval tar cvzf \"\$backup_file\" -C \"\$OPT_DIR\" $excl . 2>&1)
+  tar_output=$(tar czf "$backup_work_file" -C "$OPT_DIR" "$@" . 2>&1)
   rc=$?
-  log_operation=$(echo "$tar_output" | tail -n 4)
+  log_operation=$(echo "$tar_output" | tail -n 8)
 
   # --- Stop monitor ---
   stop_backup_monitor
@@ -636,6 +664,7 @@ backup_entware() {
   if [ "$rc" -ne 0 ] || echo "$log_operation" | grep -iq "error\|no space left on device"; then
     print_message "Ошибка при создании бэкапа" "$RED"
     [ -n "$log_operation" ] && echo "$log_operation"
+    cleanup_staging_backup
 
     # Offer to clean up failed backup
     cleanup_failed_backups "$selected_drive" "$session_start_ts"
@@ -644,14 +673,23 @@ backup_entware() {
 
   # --- Validate archive integrity ---
   printf "  Проверяю целостность архива..."
-  if validate_archive "$backup_file"; then
+  if validate_archive "$backup_work_file"; then
     printf " OK\n"
   else
     printf " ОШИБКА\n"
     print_message "Архив повреждён или не содержит структуру Entware" "$RED"
+    cleanup_staging_backup
     cleanup_failed_backups "$selected_drive" "$session_start_ts"
     exit 1
   fi
+
+  if ! mv -f "$backup_work_file" "$backup_file" 2>/dev/null; then
+    printf " ОШИБКА\n"
+    print_message "Не удалось переместить архив в каталог назначения" "$RED"
+    cleanup_staging_backup
+    exit 1
+  fi
+  cleanup_staging_backup
 
   # --- Print summary ---
   print_backup_summary "$backup_file" "$session_start_ts"
@@ -672,6 +710,7 @@ backup_entware() {
 cleanup() {
   rc=$?
   stop_backup_monitor 2>/dev/null
+  cleanup_staging_backup 2>/dev/null
   [ -n "$BACKUP_MONITOR_STATE_FILE" ] && rm -f "$BACKUP_MONITOR_STATE_FILE" 2>/dev/null
   exit "$rc"
 }

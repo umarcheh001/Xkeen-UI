@@ -210,3 +210,88 @@ def test_entware_backup_deduplicates_same_device_mounted_via_opt(tmp_path: Path)
     assert result.returncode == 0, output
     assert output.count("USB: Entware") == 1
     assert "USB: Rezerv" in output
+
+
+def test_entware_backup_stages_archive_when_destination_is_entware_root(tmp_path: Path) -> None:
+    opt_dir = tmp_path / "opt"
+    tmp_dir = tmp_path / "tmp"
+    bin_dir = tmp_path / "bin"
+    mounts_file = tmp_path / "mounts.txt"
+
+    for rel in ("bin", "etc", "include/python3.13/greenlet", "lib", "sbin", "usr", "var"):
+        (opt_dir / rel).mkdir(parents=True, exist_ok=True)
+    (opt_dir / "etc" / "settings.conf").write_text("ok\n", encoding="utf-8")
+    (opt_dir / "include" / "python3.13" / "greenlet" / "greenlet.h").write_text("header\n", encoding="utf-8")
+    (opt_dir / "lib" / "libc.so").write_text("ok\n", encoding="utf-8")
+    tmp_dir.mkdir()
+    bin_dir.mkdir()
+    mounts_file.write_text("", encoding="utf-8")
+
+    script_text = SCRIPT_SRC.read_text(encoding="utf-8")
+    script_text = script_text.replace('TMP_DIR="/tmp"', f'TMP_DIR="{_to_sh_path(tmp_dir)}"')
+    script_text = script_text.replace('OPT_DIR="/opt"', f'OPT_DIR="{_to_sh_path(opt_dir)}"')
+    script_text = script_text.replace(
+        'LOCAL_BACKUP_DIR="${XKEEN_LOCAL_BACKUP_DIR:-/opt/backups}"',
+        f'LOCAL_BACKUP_DIR="${{XKEEN_LOCAL_BACKUP_DIR:-{_to_sh_path(opt_dir)}}}"',
+    )
+    script_text = script_text.replace('STORAGE_DIR="/storage"', 'STORAGE_DIR="/definitely-missing-storage"')
+
+    script_dst = tmp_path / "entware_backup.sh"
+    script_dst.write_text(script_text, encoding="utf-8")
+    script_dst.chmod(script_dst.stat().st_mode | stat.S_IEXEC)
+
+    _write_exec(
+        bin_dir / "opkg",
+        "#!/bin/sh\n"
+        "case \"$1\" in\n"
+        "  list-installed)\n"
+        "    printf '%s\\n' 'tar - 1.0'\n"
+        "    printf '%s\\n' 'libacl - 1.0'\n"
+        "    ;;\n"
+        "  print-architecture)\n"
+        "    printf '%s\\n' 'aarch64-3'\n"
+        "    ;;\n"
+        "esac\n"
+        "exit 0\n",
+    )
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
+    env["XKEEN_UI_STATE_DIR"] = _to_sh_path(tmp_path / "state")
+    env["XKEEN_PROC_MOUNTS_FILE"] = _to_sh_path(mounts_file)
+
+    result = subprocess.run(
+        [SH_PATH, str(script_dst)],
+        cwd=str(tmp_path),
+        env=env,
+        input="0\n",
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+
+    output = _strip_ansi(result.stdout + result.stderr)
+
+    assert result.returncode == 0, output
+    assert "file changed as we read it" not in output
+    assert "Бэкап успешно сохранён" in output
+    assert not list(opt_dir.glob(".xkeen-entware-backup.*"))
+
+    archives = list(opt_dir.glob("*_entware_backup_*.tar.gz"))
+    assert len(archives) == 1
+
+    tar_cmd = shutil.which("tar")
+    assert tar_cmd is not None
+    listing = subprocess.run(
+        [tar_cmd, "-tzf", str(archives[0])],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=False,
+    )
+    assert listing.returncode == 0, listing.stderr
+    assert "aarch64_entware_backup_" not in listing.stdout
+    assert ".xkeen-entware-backup" not in listing.stdout
