@@ -13,9 +13,28 @@ let restartLogModuleApi = null;
   RL._knownEntryKeys = RL._knownEntryKeys instanceof Set ? RL._knownEntryKeys : new Set();
   RL._hasBaseline = !!RL._hasBaseline;
   RL._pollTimer = RL._pollTimer || null;
+  RL._filter = RL._filter === 'errors' ? 'errors' : 'all';
 
   const RESTART_LOG_POLL_MS = 15000;
   const RESTART_SUMMARY_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+source=([^\s]+)\s+result=([A-Z]+)(?:\s+(.*?))?\s*$/i;
+  const RESTART_DETAIL_LABELS = Object.freeze({
+    core: 'Целевое ядро',
+    previous: 'Предыдущее ядро',
+    runtime_status: 'Статус после операции',
+    runtime_core: 'Активное ядро',
+    duration_ms: 'Длительность',
+    phase: 'Этап',
+    returncode: 'Код возврата',
+  });
+  const RESTART_DETAIL_ORDER = Object.freeze([
+    'core',
+    'previous',
+    'runtime_status',
+    'runtime_core',
+    'duration_ms',
+    'phase',
+    'returncode',
+  ]);
   const RESTART_SOURCE_META = Object.freeze({
     api: {
       label: 'Xkeen',
@@ -202,6 +221,7 @@ let restartLogModuleApi = null;
 
   function humanCoreName(core) {
     const value = String(core || '').trim().toLowerCase();
+    if (!value || value === 'none' || value === 'null' || value === '-') return '';
     if (value === 'xray') return 'Xray';
     if (value === 'mihomo') return 'Mihomo';
     if (value === 'unknown') return 'неизвестно';
@@ -218,6 +238,31 @@ let restartLogModuleApi = null;
     return `${Math.round(ms)}мс`;
   }
 
+  function formatRuntimeStatus(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (raw === 'running' || raw === 'run' || raw === 'started' || raw === '1' || raw === 'true') return 'работает';
+    if (raw === 'stopped' || raw === 'stop' || raw === '0' || raw === 'false') return 'остановлен';
+    return raw ? titleCaseWords(raw.replace(/[-_]+/g, ' ')) : '';
+  }
+
+  function formatRestartDetailLabel(key) {
+    const raw = String(key || '').trim();
+    if (!raw) return 'Параметр';
+    return RESTART_DETAIL_LABELS[raw] || titleCaseWords(raw.replace(/[-_]+/g, ' '));
+  }
+
+  function formatRestartDetailValue(key, value) {
+    const rawKey = String(key || '').trim();
+    const rawValue = String(value == null ? '' : value).trim();
+    if (!rawValue) return '';
+    if (rawKey === 'duration_ms') return formatDurationMs(rawValue);
+    if (rawKey === 'core' || rawKey === 'previous' || rawKey === 'runtime_core') {
+      return humanCoreName(rawValue);
+    }
+    if (rawKey === 'runtime_status') return formatRuntimeStatus(rawValue);
+    return rawValue;
+  }
+
   function formatRestartMetaDetails(source, details) {
     const meta = details && typeof details === 'object' ? details : {};
     const parts = [];
@@ -230,6 +275,11 @@ let restartLogModuleApi = null;
       if (meta.phase) parts.push(`этап: ${meta.phase}`);
       if (meta.returncode) parts.push(`код: ${meta.returncode}`);
     }
+
+    const runtimeStatus = formatRuntimeStatus(meta.runtime_status);
+    const runtimeCore = humanCoreName(meta.runtime_core);
+    if (runtimeStatus) parts.push(`статус: ${runtimeStatus}`);
+    if (runtimeCore) parts.push(`ядро: ${runtimeCore}`);
 
     const duration = formatDurationMs(meta.duration_ms);
     if (duration) parts.push(duration);
@@ -376,7 +426,63 @@ let restartLogModuleApi = null;
     }
   }
 
-  function buildStructuredLineHtml(summary) {
+  function stableHash(text) {
+    const raw = String(text || '');
+    let hash = 0;
+    for (let i = 0; i < raw.length; i += 1) {
+      hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash);
+  }
+
+  function buildRestartDetailRows(summary) {
+    if (!summary) return [];
+    const details = summary.details && typeof summary.details === 'object' ? summary.details : {};
+    const keys = [];
+    RESTART_DETAIL_ORDER.forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(details, key)) keys.push(key);
+    });
+    Object.keys(details).sort().forEach((key) => {
+      if (keys.indexOf(key) === -1) keys.push(key);
+    });
+
+    const rows = [
+      ['Время', summary.ts],
+      ['Источник', summary.source],
+      ['Результат', summary.ok ? 'OK' : 'FAIL'],
+    ];
+
+    keys.forEach((key) => {
+      const value = formatRestartDetailValue(key, details[key]);
+      if (!value) return;
+      rows.push([formatRestartDetailLabel(key), value]);
+    });
+
+    return rows;
+  }
+
+  function buildStructuredDetailsHtml(summary, entry) {
+    const rows = buildRestartDetailRows(summary);
+    const detailsCount = summary && summary.details && typeof summary.details === 'object'
+      ? Object.keys(summary.details).length
+      : 0;
+    if (!detailsCount && summary && RESTART_SOURCE_META[summary.source]) return '';
+
+    const id = `restart-log-detail-${entry && typeof entry.index === 'number' ? entry.index : 0}-${stableHash(entry && entry.key)}`;
+    const rowsHtml = rows.map(([label, value]) => [
+      '<span class="restart-log-detail-row">',
+      `<span class="restart-log-detail-label">${safeEscapeHtml(label)}</span>`,
+      `<span class="restart-log-detail-value">${safeEscapeHtml(value)}</span>`,
+      '</span>',
+    ].join('')).join('');
+
+    return [
+      `<button type="button" class="restart-log-details-toggle" data-xk-restart-log-detail-toggle="1" aria-expanded="false" aria-controls="${id}">Детали</button>`,
+      `<span class="restart-log-details" id="${id}" hidden>${rowsHtml}</span>`,
+    ].join('');
+  }
+
+  function buildStructuredLineHtml(summary, entry) {
     if (!summary) return '';
 
     const bucket = String(summary.bucket || 'generic').trim().toLowerCase() || 'generic';
@@ -384,13 +490,17 @@ let restartLogModuleApi = null;
     const labelHtml = safeEscapeHtml(summary.label || 'Событие');
     const messageHtml = safeEscapeHtml(summary.message || '');
     const rawSourceHtml = summary.rawSourceText ? safeEscapeHtml(summary.rawSourceText) : '';
+    const detailsHtml = buildStructuredDetailsHtml(summary, entry || null);
 
     return [
+      '<span class="restart-log-entry-wrap">',
       '<span class="restart-log-entry">',
       `<span class="log-ts restart-log-ts">${tsHtml}</span>`,
       `<span class="restart-log-pill restart-log-pill-${bucket}">${labelHtml}</span>`,
       `<span class="restart-log-message">${messageHtml}</span>`,
       rawSourceHtml ? `<span class="restart-log-meta">${rawSourceHtml}</span>` : '',
+      '</span>',
+      detailsHtml,
       '</span>',
     ].join('');
   }
@@ -428,6 +538,42 @@ let restartLogModuleApi = null;
     if (hasTrailingNl && lines.length && lines[lines.length - 1] === '') lines.pop();
     const normalized = lines.map(normalizeLineForTerminal).join('\n');
     return hasTrailingNl ? `${normalized}\n` : normalized;
+  }
+
+  function rawLineLooksLikeError(line) {
+    const lower = String(line || '').toLowerCase();
+    return (
+      lower.includes('error') ||
+      lower.includes('fail') ||
+      lower.includes('failed') ||
+      lower.includes('fatal') ||
+      lower.includes('timeout') ||
+      lower.includes('ошиб')
+    );
+  }
+
+  function entryMatchesCurrentFilter(entry) {
+    if (RL._filter !== 'errors') return true;
+    if (!entry) return false;
+    if (entry.summary) return !entry.summary.ok;
+    return rawLineLooksLikeError(entry.raw);
+  }
+
+  function filterRenderedEntries(entries) {
+    const list = Array.isArray(entries) ? entries : [];
+    return list.filter(entryMatchesCurrentFilter);
+  }
+
+  function syncFilterButtons() {
+    const active = RL._filter === 'errors' ? 'errors' : 'all';
+    try {
+      document.querySelectorAll('[data-xk-restart-log-filter]').forEach((btn) => {
+        const value = String(btn.getAttribute('data-xk-restart-log-filter') || '').trim();
+        const pressed = value === active;
+        btn.classList.toggle('is-active', pressed);
+        btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      });
+    } catch (error) {}
   }
 
   function getLogEls() {
@@ -519,13 +665,14 @@ let restartLogModuleApi = null;
 
   function renderInto(el, rawText) {
     if (!el) return;
-    const entries = parseRenderedEntries(rawText || '');
+    const allEntries = parseRenderedEntries(rawText || '');
+    const entries = filterRenderedEntries(allEntries);
     const html = entries
       .map((entry) => {
         const summary = entry && entry.summary ? entry.summary : null;
         if (summary) {
           const cls = `log-line restart-log-line log-line-${summary.kind} restart-log-line-${summary.bucket}`;
-          return `<span class="${cls}">${buildStructuredLineHtml(summary)}</span>`;
+          return `<span class="${cls}">${buildStructuredLineHtml(summary, entry)}</span>`;
         }
 
         const normalized = normalizeLineForTerminal(entry && entry.raw ? entry.raw : '');
@@ -553,7 +700,7 @@ let restartLogModuleApi = null;
       })
       .join('');
 
-    el.innerHTML = html;
+    el.innerHTML = html || `<span class="log-line restart-log-empty">${RL._filter === 'errors' ? 'Ошибок нет.' : 'Журнал пуст.'}</span>`;
     try { el.scrollTop = el.scrollHeight; } catch (error) {}
   }
 
@@ -565,6 +712,7 @@ let restartLogModuleApi = null;
       try { el.dataset.rawText = raw; } catch (error) {}
       renderInto(el, raw);
     });
+    syncFilterButtons();
   }
 
   function ensurePolling() {
@@ -628,6 +776,47 @@ let restartLogModuleApi = null;
       console.error(error);
     }
   };
+
+  RL.setFilter = function setFilter(filter) {
+    const next = String(filter || '').trim() === 'errors' ? 'errors' : 'all';
+    if (RL._filter === next) {
+      syncFilterButtons();
+      return;
+    }
+    RL._filter = next;
+    renderAll();
+  };
+
+  function bindLogInteractions() {
+    getLogEls().forEach((el) => {
+      if (!el) return;
+      try {
+        if (el.dataset && el.dataset.xkeenRestartLogInteractions === '1') return;
+        el.addEventListener('click', (event) => {
+          const target = event && event.target;
+          const button = target && typeof target.closest === 'function'
+            ? target.closest('[data-xk-restart-log-detail-toggle]')
+            : null;
+          if (!button || !el.contains(button)) return;
+          event.preventDefault();
+
+          const id = button.getAttribute('aria-controls') || '';
+          let details = id ? document.getElementById(id) : null;
+          if (!details) {
+            const next = button.nextElementSibling;
+            if (next && next.classList && next.classList.contains('restart-log-details')) details = next;
+          }
+          if (!details) return;
+
+          const expanded = button.getAttribute('aria-expanded') === 'true';
+          button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+          button.textContent = expanded ? 'Детали' : 'Скрыть';
+          details.hidden = expanded;
+        });
+        if (el.dataset) el.dataset.xkeenRestartLogInteractions = '1';
+      } catch (error) {}
+    });
+  }
 
   RL.reveal = function reveal(options) {
     const opts = options && typeof options === 'object' ? options : {};
@@ -765,6 +954,16 @@ let restartLogModuleApi = null;
     } catch (error) {}
 
     try {
+      document.querySelectorAll('[data-xk-restart-log-filter]').forEach((btn) => {
+        const value = btn.getAttribute('data-xk-restart-log-filter') || 'all';
+        bindOnce(btn, (event) => {
+          event.preventDefault();
+          RL.setFilter(value);
+        });
+      });
+    } catch (error) {}
+
+    try {
       const refreshBtn = document.getElementById('restart-log-refresh-btn');
       const clearBtn = document.getElementById('restart-log-clear-btn');
       const copyBtn = document.getElementById('restart-log-copy-btn');
@@ -772,6 +971,9 @@ let restartLogModuleApi = null;
       bindOnce(clearBtn, (event) => { event.preventDefault(); RL.clear(); });
       bindOnce(copyBtn, (event) => { event.preventDefault(); RL.copy(); });
     } catch (error) {}
+
+    bindLogInteractions();
+    syncFilterButtons();
 
     try {
       if (getLogEls().length) RL.load({ toastNewSubscription: false });
@@ -815,6 +1017,10 @@ export function clearRestartLog(...args) {
   return callRestartLogApi('clear', ...args);
 }
 
+export function setRestartLogFilter(...args) {
+  return callRestartLogApi('setFilter', ...args);
+}
+
 export function copyRestartLog(...args) {
   return callRestartLogApi('copy', ...args);
 }
@@ -842,6 +1048,7 @@ export const restartLogApi = Object.freeze({
   append: appendRestartLog,
   setRaw: setRestartLogRaw,
   clear: clearRestartLog,
+  setFilter: setRestartLogFilter,
   copy: copyRestartLog,
   reveal: revealRestartLog,
   prepareLiveStream: prepareRestartLogLiveStream,

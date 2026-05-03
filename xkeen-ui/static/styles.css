@@ -5286,6 +5286,11 @@ html[data-theme="light"] .xray-log-select option{
 
 .log-card .restart-log-line {
   padding: 4px 0 4px 8px;
+  white-space: normal;
+}
+
+.log-card .restart-log-entry-wrap {
+  display: block;
 }
 
 .log-card .restart-log-entry {
@@ -5369,6 +5374,65 @@ html[data-theme="light"] .xray-log-select option{
   font-size: 0.92em;
 }
 
+.log-card .restart-log-details-toggle {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.4);
+  color: color-mix(in srgb, var(--text, #e5e7eb) 84%, white 16%);
+  font: inherit;
+  font-size: 0.88em;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.log-card .restart-log-details-toggle:hover {
+  border-color: rgba(148, 163, 184, 0.4);
+  background: rgba(30, 41, 59, 0.58);
+}
+
+.log-card .restart-log-details {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.log-card .restart-log-details[hidden] {
+  display: none;
+}
+
+.log-card .restart-log-detail-row {
+  display: contents;
+}
+
+.log-card .restart-log-detail-label {
+  color: color-mix(in srgb, var(--muted, #94a3b8) 82%, white 18%);
+  font-weight: 700;
+}
+
+.log-card .restart-log-detail-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.log-card .restart-log-empty {
+  color: var(--muted, #94a3b8);
+  box-shadow: none;
+}
+
+.log-card .restart-log-filter-btn[aria-pressed="true"],
+.log-card .restart-log-filter-btn.is-active {
+  border-color: color-mix(in srgb, var(--accent, #38bdf8) 36%, transparent);
+  background: color-mix(in srgb, var(--accent, #38bdf8) 18%, rgba(15, 23, 42, 0.78));
+  color: color-mix(in srgb, var(--accent, #38bdf8) 86%, white 14%);
+}
+
 html[data-theme="light"] .log-card .restart-log-pill {
   border-color: rgba(15, 23, 42, 0.12);
   background: rgba(255, 255, 255, 0.9);
@@ -5414,6 +5478,24 @@ html[data-theme="light"] .log-card .restart-log-pill-backup {
   border-color: color-mix(in srgb, var(--sem-debug, #64748b) 22%, rgba(15, 23, 42, 0.08));
   background: color-mix(in srgb, var(--sem-debug, #64748b) 8%, white 92%);
   color: color-mix(in srgb, var(--sem-debug, #64748b) 76%, #334155 24%);
+}
+
+html[data-theme="light"] .log-card .restart-log-details-toggle {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.86);
+  color: color-mix(in srgb, var(--text, #0f172a) 88%, #1e293b 12%);
+}
+
+html[data-theme="light"] .log-card .restart-log-details {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+html[data-theme="light"] .log-card .restart-log-filter-btn[aria-pressed="true"],
+html[data-theme="light"] .log-card .restart-log-filter-btn.is-active {
+  border-color: color-mix(in srgb, var(--accent, #0284c7) 24%, rgba(15, 23, 42, 0.08));
+  background: color-mix(in srgb, var(--accent, #0284c7) 10%, white 90%);
+  color: color-mix(in srgb, var(--accent, #0284c7) 80%, #0c4a6e 20%);
 }
 
 

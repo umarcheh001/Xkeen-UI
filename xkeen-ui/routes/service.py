@@ -7,7 +7,7 @@ from flask import Blueprint, request, jsonify
 from typing import Any, Callable
 
 from routes.common.errors import error_response, exception_response
-from services.xkeen import control_xkeen_action
+from services.xkeen import control_xkeen_action, get_xkeen_runtime_status
 
 # --- core.log helpers (never fail) ---
 try:
@@ -124,6 +124,16 @@ def create_service_blueprint(
         except Exception:
             return 0
 
+    def _restart_log_runtime_meta(started_at=None) -> dict[str, object]:
+        meta: dict[str, object] = {}
+        try:
+            meta.update(get_xkeen_runtime_status())
+        except Exception:
+            pass
+        if started_at is not None:
+            meta["duration_ms"] = _restart_log_elapsed_ms(started_at)
+        return meta
+
     def _detect_core_for_restart_log() -> str:
         try:
             _, current_core = get_cores_status()
@@ -139,10 +149,8 @@ def create_service_blueprint(
         phase: str = "",
         returncode: object = None,
     ) -> dict[str, object]:
-        meta: dict[str, object] = {
-            "core": core or "unknown",
-            "duration_ms": _restart_log_elapsed_ms(started_at),
-        }
+        meta: dict[str, object] = _restart_log_runtime_meta(started_at)
+        meta["core"] = core or "unknown"
         if previous_core:
             meta["previous"] = previous_core
         if phase:
@@ -181,32 +189,34 @@ def create_service_blueprint(
 
     @bp.post("/api/xkeen/start")
     def api_xkeen_start() -> Any:
+        started_at = time.monotonic()
         try:
             ok = control_xkeen_action("start", prefer_init=True)
-            _append_restart_log(ok, source="api-start")
+            _append_restart_log(ok, source="api-start", **_restart_log_runtime_meta(started_at))
             if ok:
                 _core_log("info", "xkeen.start", source="api-start")
                 return jsonify({"ok": True}), 200
             _core_log("error", "xkeen.start_failed", source="api-start")
             return jsonify({"ok": False}), 500
         except Exception:
-            _append_restart_log(False, source="api-start")
+            _append_restart_log(False, source="api-start", **_restart_log_runtime_meta(started_at))
             _core_log("error", "xkeen.start_failed", source="api-start")
             return jsonify({"ok": False}), 500
 
 
     @bp.post("/api/xkeen/stop")
     def api_xkeen_stop() -> Any:
+        started_at = time.monotonic()
         try:
             ok = control_xkeen_action("stop", prefer_init=True)
-            _append_restart_log(ok, source="api-stop")
+            _append_restart_log(ok, source="api-stop", **_restart_log_runtime_meta(started_at))
             if ok:
                 _core_log("info", "xkeen.stop", source="api-stop")
                 return jsonify({"ok": True}), 200
             _core_log("error", "xkeen.stop_failed", source="api-stop")
             return jsonify({"ok": False}), 500
         except Exception:
-            _append_restart_log(False, source="api-stop")
+            _append_restart_log(False, source="api-stop", **_restart_log_runtime_meta(started_at))
             _core_log("error", "xkeen.stop_failed", source="api-stop")
             return jsonify({"ok": False}), 500
 

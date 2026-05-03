@@ -21,8 +21,8 @@ def read_restart_log(log_file: str, limit: int = 100) -> List[str]:
     return _read_restart_log(log_file, limit=limit)
 
 
-def is_xkeen_running() -> bool:
-    """Return True when xkeen-managed core process is currently running."""
+def detect_xkeen_runtime_core() -> str:
+    """Return the currently running xkeen-managed core name, if detected."""
     for core_name in ("xray", "mihomo"):
         try:
             res = subprocess.run(
@@ -35,8 +35,23 @@ def is_xkeen_running() -> bool:
         except Exception:
             continue
         if res.returncode == 0:
-            return True
-    return False
+            return core_name
+    return ""
+
+
+def is_xkeen_running() -> bool:
+    """Return True when xkeen-managed core process is currently running."""
+    return bool(detect_xkeen_runtime_core())
+
+
+def get_xkeen_runtime_status() -> dict[str, object]:
+    """Return compact runtime status fields for restart-log metadata."""
+    core = detect_xkeen_runtime_core()
+    running = bool(core)
+    return {
+        "runtime_status": "running" if running else "stopped",
+        "runtime_core": core or "none",
+    }
 
 
 def build_xkeen_control_cmds(
@@ -182,6 +197,7 @@ def restart_xkeen(
     the init.d/CLI compatibility candidates when the primary command exits yet
     the managed core never comes back.
     """
+    started_at = time.monotonic()
     ok = control_xkeen_action(
         "restart",
         primary_cmd=restart_cmd,
@@ -189,5 +205,6 @@ def restart_xkeen(
         dispatch_timeout=dispatch_timeout,
         settle_timeout=8.0,
     )
-    append_restart_log(log_file, ok, source=source)
+    duration_ms = max(0, int(round((time.monotonic() - started_at) * 1000)))
+    append_restart_log(log_file, ok, source=source, duration_ms=duration_ms, **get_xkeen_runtime_status())
     return ok

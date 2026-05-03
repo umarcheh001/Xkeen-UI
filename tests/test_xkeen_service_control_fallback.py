@@ -65,6 +65,7 @@ def test_restart_xkeen_logs_result_from_verified_control_flow(tmp_path, monkeypa
         return True
 
     monkeypatch.setattr(xkeen_service, 'control_xkeen_action', fake_control)
+    monkeypatch.setattr(xkeen_service, 'detect_xkeen_runtime_core', lambda: 'xray')
 
     ok = xkeen_service.restart_xkeen(['xkeen', '-restart'], str(log_file), source='api-button')
 
@@ -73,6 +74,9 @@ def test_restart_xkeen_logs_result_from_verified_control_flow(tmp_path, monkeypa
     text = log_file.read_text(encoding='utf-8')
     assert 'source=api-button' in text
     assert 'result=OK' in text
+    assert 'runtime_status=running' in text
+    assert 'runtime_core=xray' in text
+    assert 'duration_ms=' in text
 
 
 
@@ -91,6 +95,10 @@ def test_core_switch_route_writes_restart_log_entry_with_metadata(monkeypatch, t
     seen: list[tuple[bool, str, dict[str, object]]] = []
 
     monkeypatch.setattr(service, 'get_cores_status', lambda: (['xray', 'mihomo'], 'xray'))
+    monkeypatch.setattr(service, 'get_xkeen_runtime_status', lambda: {
+        'runtime_status': 'running',
+        'runtime_core': 'mihomo',
+    })
     monkeypatch.setattr(service, 'switch_core', lambda core, error_log: None)
 
     app = Flask('service-core-switch-log')
@@ -112,6 +120,8 @@ def test_core_switch_route_writes_restart_log_entry_with_metadata(monkeypatch, t
     assert source == 'core-switch'
     assert meta['core'] == 'mihomo'
     assert meta['previous'] == 'xray'
+    assert meta['runtime_status'] == 'running'
+    assert meta['runtime_core'] == 'mihomo'
     assert isinstance(meta['duration_ms'], int)
 
 

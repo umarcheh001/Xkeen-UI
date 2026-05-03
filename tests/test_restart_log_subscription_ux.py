@@ -19,11 +19,16 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert "'core-switch': {" in restart_log_src
     assert "parseRestartMeta" in restart_log_src
     assert "цель: ${core}" in restart_log_src
+    assert "data-xk-restart-log-filter" in restart_log_src
+    assert "data-xk-restart-log-detail-toggle" in restart_log_src
+    assert "runtime_status" in restart_log_src
     assert "label: 'Подписка Xray'" in restart_log_src
     assert "showSubscriptionRefreshToast" in restart_log_src
     assert "toastNewSubscription" in restart_log_src
     assert "restart-log-pill-subscription" in styles_src
     assert "restart-log-pill-core" in styles_src
+    assert "restart-log-details-toggle" in styles_src
+    assert "restart-log-filter-btn" in styles_src
     assert ".log-card .log-line-success" in styles_src
 
 
