@@ -1,5 +1,5 @@
 import { getXrayLogLineClass } from './xray_log_line_class.js';
-import { ansiToXkeenHtml, escapeXkeenHtml, getXkeenCommandJobApi, toastXkeen } from './xkeen_runtime.js';
+import { ansiToXkeenHtml, escapeXkeenHtml, getXkeenCommandJobApi, getXkeenUiApi, toastXkeen } from './xkeen_runtime.js';
 
 let restartLogModuleApi = null;
 
@@ -14,8 +14,12 @@ let restartLogModuleApi = null;
   RL._hasBaseline = !!RL._hasBaseline;
   RL._pollTimer = RL._pollTimer || null;
   RL._filter = RL._filter === 'errors' ? 'errors' : 'all';
+  RL._preflightPayloads = RL._preflightPayloads instanceof Map ? RL._preflightPayloads : new Map();
 
   const RESTART_LOG_POLL_MS = 15000;
+  const PREFLIGHT_PAYLOAD_STORAGE_PREFIX = 'xkeen.restartLog.preflight.';
+  const PREFLIGHT_PAYLOAD_INDEX_KEY = 'xkeen.restartLog.preflight.index';
+  const PREFLIGHT_PAYLOAD_LIMIT = 8;
   const RESTART_SUMMARY_RE = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]\s+source=([^\s]+)\s+result=([A-Z]+)(?:\s+(.*?))?\s*$/i;
   const RESTART_DETAIL_LABELS = Object.freeze({
     core: 'Целевое ядро',
@@ -25,8 +29,14 @@ let restartLogModuleApi = null;
     duration_ms: 'Длительность',
     phase: 'Этап',
     returncode: 'Код возврата',
+    file: 'Файл',
+    timeout_s: 'Таймаут',
+    timed_out: 'Таймаут сработал',
+    preflight_ref: 'Диагностика',
+    summary: 'Причина',
   });
   const RESTART_DETAIL_ORDER = Object.freeze([
+    'file',
     'core',
     'previous',
     'runtime_status',
@@ -34,6 +44,10 @@ let restartLogModuleApi = null;
     'duration_ms',
     'phase',
     'returncode',
+    'timeout_s',
+    'timed_out',
+    'summary',
+    'preflight_ref',
   ]);
   const RESTART_SOURCE_META = Object.freeze({
     api: {
@@ -164,6 +178,12 @@ let restartLogModuleApi = null;
       toastSuccess: 'Подписка Xray обновлена. xkeen перезапущен.',
       toastFailure: 'Подписка Xray обновлена, но перезапуск xkeen завершился ошибкой.',
     },
+    'xray-preflight': {
+      label: 'Xray preflight',
+      successText: 'конфиг прошёл проверку',
+      failureText: 'конфиг отклонён, xkeen не перезапускался',
+      bucket: 'preflight',
+    },
   });
 
   const XRAY_TS_LINE_RE = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s*(?:\[([^\]]+)\])?\s*(.*)$/;
@@ -245,6 +265,14 @@ let restartLogModuleApi = null;
     return raw ? titleCaseWords(raw.replace(/[-_]+/g, ' ')) : '';
   }
 
+  function formatBooleanValue(value) {
+    const raw = String(value == null ? '' : value).trim().toLowerCase();
+    if (!raw) return '';
+    if (raw === 'true' || raw === '1' || raw === 'yes' || raw === 'on') return 'да';
+    if (raw === 'false' || raw === '0' || raw === 'no' || raw === 'off') return 'нет';
+    return raw;
+  }
+
   function formatRestartDetailLabel(key) {
     const raw = String(key || '').trim();
     if (!raw) return 'Параметр';
@@ -256,6 +284,8 @@ let restartLogModuleApi = null;
     const rawValue = String(value == null ? '' : value).trim();
     if (!rawValue) return '';
     if (rawKey === 'duration_ms') return formatDurationMs(rawValue);
+    if (rawKey === 'timeout_s') return `${rawValue}с`;
+    if (rawKey === 'timed_out') return formatBooleanValue(rawValue);
     if (rawKey === 'core' || rawKey === 'previous' || rawKey === 'runtime_core') {
       return humanCoreName(rawValue);
     }
@@ -289,6 +319,10 @@ let restartLogModuleApi = null;
 
   function buildRestartSummaryMessage(source, ok, baseMessage, details) {
     const message = String(baseMessage || '');
+    if (source === 'xray-preflight') {
+      return ok ? message : 'конфиг отклонён preflight-проверкой';
+    }
+
     if (source !== 'core-switch') return message;
 
     const core = humanCoreName(details && details.core);
@@ -426,6 +460,95 @@ let restartLogModuleApi = null;
     }
   }
 
+  function normalizePreflightRef(value) {
+    return String(value || '').trim();
+  }
+
+  function readStoredPreflightIndex() {
+    try {
+      const raw = window.localStorage ? window.localStorage.getItem(PREFLIGHT_PAYLOAD_INDEX_KEY) : '';
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.map(normalizePreflightRef).filter(Boolean) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function writeStoredPreflightIndex(refs) {
+    try {
+      if (!window.localStorage) return;
+      window.localStorage.setItem(PREFLIGHT_PAYLOAD_INDEX_KEY, JSON.stringify(refs || []));
+    } catch (error) {}
+  }
+
+  function rememberPreflightPayload(payload) {
+    const data = payload && typeof payload === 'object' ? payload : {};
+    const ref = normalizePreflightRef(data.preflight_ref || data.preflightRef);
+    if (!ref) return false;
+
+    const safePayload = Object.assign({}, data, { preflight_ref: ref });
+    RL._preflightPayloads.set(ref, safePayload);
+
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem(PREFLIGHT_PAYLOAD_STORAGE_PREFIX + ref, JSON.stringify(safePayload));
+        const ordered = [ref].concat(readStoredPreflightIndex().filter((item) => item !== ref));
+        const nextIndex = ordered.slice(0, PREFLIGHT_PAYLOAD_LIMIT);
+        writeStoredPreflightIndex(nextIndex);
+        ordered.slice(PREFLIGHT_PAYLOAD_LIMIT).forEach((oldRef) => {
+          try { window.localStorage.removeItem(PREFLIGHT_PAYLOAD_STORAGE_PREFIX + oldRef); } catch (error) {}
+        });
+      }
+    } catch (error) {}
+
+    return true;
+  }
+
+  function readPreflightPayload(refValue) {
+    const ref = normalizePreflightRef(refValue);
+    if (!ref) return null;
+    if (RL._preflightPayloads.has(ref)) return RL._preflightPayloads.get(ref);
+    try {
+      const raw = window.localStorage ? window.localStorage.getItem(PREFLIGHT_PAYLOAD_STORAGE_PREFIX + ref) : '';
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      RL._preflightPayloads.set(ref, parsed);
+      return parsed;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async function openPreflightPayload(ref) {
+    const payload = readPreflightPayload(ref);
+    if (!payload) {
+      try {
+        toastXkeen('Диагностика preflight недоступна в этом браузере. Повторите сохранение конфига, чтобы открыть разбор.', 'warning');
+      } catch (error) {}
+      return false;
+    }
+
+    const present = () => {
+      try {
+        const ui = getXkeenUiApi();
+        if (ui && typeof ui.showXrayPreflightError === 'function') {
+          ui.showXrayPreflightError(payload);
+          return true;
+        }
+      } catch (error) {}
+      return false;
+    };
+
+    if (present()) return true;
+    try {
+      await import('../ui/xray_preflight_modal.js');
+    } catch (error) {}
+    if (present()) return true;
+    try { toastXkeen('Не удалось открыть окно диагностики Xray.', 'error'); } catch (error) {}
+    return false;
+  }
+
   function stableHash(text) {
     const raw = String(text || '');
     let hash = 0;
@@ -475,10 +598,16 @@ let restartLogModuleApi = null;
       `<span class="restart-log-detail-value">${safeEscapeHtml(value)}</span>`,
       '</span>',
     ].join('')).join('');
+    const preflightRef = summary && summary.source === 'xray-preflight'
+      ? normalizePreflightRef(summary.details && summary.details.preflight_ref)
+      : '';
+    const preflightActionHtml = preflightRef
+      ? `<button type="button" class="restart-log-preflight-open" data-xk-restart-log-preflight-ref="${safeEscapeHtml(preflightRef)}">Открыть разбор ошибки</button>`
+      : '';
 
     return [
       `<button type="button" class="restart-log-details-toggle" data-xk-restart-log-detail-toggle="1" aria-expanded="false" aria-controls="${id}">Детали</button>`,
-      `<span class="restart-log-details" id="${id}" hidden>${rowsHtml}</span>`,
+      `<span class="restart-log-details" id="${id}" hidden>${rowsHtml}${preflightActionHtml}</span>`,
     ].join('');
   }
 
@@ -787,6 +916,10 @@ let restartLogModuleApi = null;
     renderAll();
   };
 
+  RL.rememberXrayPreflightPayload = function rememberXrayPreflightPayload(payload) {
+    return rememberPreflightPayload(payload);
+  };
+
   function bindLogInteractions() {
     getLogEls().forEach((el) => {
       if (!el) return;
@@ -794,6 +927,16 @@ let restartLogModuleApi = null;
         if (el.dataset && el.dataset.xkeenRestartLogInteractions === '1') return;
         el.addEventListener('click', (event) => {
           const target = event && event.target;
+          const preflightButton = target && typeof target.closest === 'function'
+            ? target.closest('[data-xk-restart-log-preflight-ref]')
+            : null;
+          if (preflightButton && el.contains(preflightButton)) {
+            event.preventDefault();
+            const ref = preflightButton.getAttribute('data-xk-restart-log-preflight-ref') || '';
+            void openPreflightPayload(ref);
+            return;
+          }
+
           const button = target && typeof target.closest === 'function'
             ? target.closest('[data-xk-restart-log-detail-toggle]')
             : null;
@@ -1021,6 +1164,10 @@ export function setRestartLogFilter(...args) {
   return callRestartLogApi('setFilter', ...args);
 }
 
+export function rememberXrayPreflightPayload(...args) {
+  return callRestartLogApi('rememberXrayPreflightPayload', ...args);
+}
+
 export function copyRestartLog(...args) {
   return callRestartLogApi('copy', ...args);
 }
@@ -1049,6 +1196,7 @@ export const restartLogApi = Object.freeze({
   setRaw: setRestartLogRaw,
   clear: clearRestartLog,
   setFilter: setRestartLogFilter,
+  rememberXrayPreflightPayload,
   copy: copyRestartLog,
   reveal: revealRestartLog,
   prepareLiveStream: prepareRestartLogLiveStream,

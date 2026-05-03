@@ -607,7 +607,7 @@ tag2
       setStatus('Сохраняю и перезапускаю…', false);
       const ok = await saveWithForcedRestart();
       if (ok) {
-        setStatus('Готово. Лог перезапуска — в “Журнал перезапуска”.', false, true);
+        setStatus('Готово. Лог операции — в “Журнал операций Xkeen”.', false, true);
         toast('Готово', false);
         closeModal();
         return true;

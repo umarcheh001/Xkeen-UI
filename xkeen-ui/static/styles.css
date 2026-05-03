@@ -5359,6 +5359,12 @@ html[data-theme="light"] .xray-log-select option{
   color: color-mix(in srgb, var(--sem-debug, #a1a1aa) 86%, white 14%);
 }
 
+.log-card .restart-log-pill-preflight {
+  border-color: color-mix(in srgb, var(--sem-error, #f87171) 38%, transparent);
+  background: color-mix(in srgb, var(--sem-error, #f87171) 14%, rgba(15, 23, 42, 0.78));
+  color: color-mix(in srgb, var(--sem-error, #f87171) 84%, white 16%);
+}
+
 .log-card .restart-log-pill-generic {
   border-color: rgba(148, 163, 184, 0.24);
   background: rgba(15, 23, 42, 0.5);
@@ -5421,6 +5427,26 @@ html[data-theme="light"] .xray-log-select option{
   overflow-wrap: anywhere;
 }
 
+.log-card .restart-log-preflight-open {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--sem-error, #f87171) 34%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sem-error, #f87171) 12%, rgba(15, 23, 42, 0.72));
+  color: color-mix(in srgb, var(--sem-error, #f87171) 86%, white 14%);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.log-card .restart-log-preflight-open:hover {
+  border-color: color-mix(in srgb, var(--sem-error, #f87171) 52%, transparent);
+  background: color-mix(in srgb, var(--sem-error, #f87171) 18%, rgba(15, 23, 42, 0.78));
+}
+
 .log-card .restart-log-empty {
   color: var(--muted, #94a3b8);
   box-shadow: none;
@@ -5480,6 +5506,12 @@ html[data-theme="light"] .log-card .restart-log-pill-backup {
   color: color-mix(in srgb, var(--sem-debug, #64748b) 76%, #334155 24%);
 }
 
+html[data-theme="light"] .log-card .restart-log-pill-preflight {
+  border-color: color-mix(in srgb, var(--sem-error, #dc2626) 24%, rgba(15, 23, 42, 0.08));
+  background: color-mix(in srgb, var(--sem-error, #dc2626) 9%, white 91%);
+  color: color-mix(in srgb, var(--sem-error, #dc2626) 80%, #7f1d1d 20%);
+}
+
 html[data-theme="light"] .log-card .restart-log-details-toggle {
   border-color: rgba(15, 23, 42, 0.12);
   background: rgba(255, 255, 255, 0.86);
@@ -5496,6 +5528,12 @@ html[data-theme="light"] .log-card .restart-log-filter-btn.is-active {
   border-color: color-mix(in srgb, var(--accent, #0284c7) 24%, rgba(15, 23, 42, 0.08));
   background: color-mix(in srgb, var(--accent, #0284c7) 10%, white 90%);
   color: color-mix(in srgb, var(--accent, #0284c7) 80%, #0c4a6e 20%);
+}
+
+html[data-theme="light"] .log-card .restart-log-preflight-open {
+  border-color: color-mix(in srgb, var(--sem-error, #dc2626) 24%, rgba(15, 23, 42, 0.08));
+  background: color-mix(in srgb, var(--sem-error, #dc2626) 8%, white 92%);
+  color: color-mix(in srgb, var(--sem-error, #dc2626) 82%, #7f1d1d 18%);
 }
 
 

@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import uuid
 from typing import Any, Callable, Dict, Optional
 
 from flask import Blueprint, request, jsonify, current_app
@@ -388,7 +389,21 @@ def register_config_routes(
     load_json: Callable[[str, Dict[str, Any]], Optional[Dict[str, Any]]],
     strip_json_comments_text: Callable[[str], str],
     restart_xkeen: Callable[..., bool],
+    append_restart_log: Callable[..., None] | None = None,
 ) -> None:
+    def _append_operation_log(ok: bool, source: str, **meta: object) -> None:
+        if append_restart_log is None:
+            return
+        try:
+            append_restart_log(ok, source=source, **meta)
+        except TypeError:
+            try:
+                append_restart_log(ok, source=source)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
     @bp.get("/api/routing")
     def api_get_routing() -> Any:
         """Return routing config as raw text with comments if available.
@@ -654,6 +669,24 @@ def register_config_routes(
             obj=obj,
         )
         if not preflight.get("ok"):
+            preflight_ref = "pf-" + uuid.uuid4().hex[:12]
+            preflight_summary = str(
+                preflight.get("summary")
+                or preflight.get("hint")
+                or preflight.get("error")
+                or "xray preflight failed"
+            )
+            _append_operation_log(
+                False,
+                source="xray-preflight",
+                phase=preflight.get("phase") or "xray_test",
+                file=os.path.basename(str(sel_main or "")),
+                returncode=preflight.get("returncode"),
+                timeout_s=preflight.get("timeout_s"),
+                timed_out=bool(preflight.get("timed_out")),
+                preflight_ref=preflight_ref,
+                summary=preflight_summary,
+            )
             _core_log(
                 "warning",
                 "routing.save.preflight_failed",
@@ -673,6 +706,7 @@ def register_config_routes(
                 "stderr": preflight.get("stderr"),
                 "hint": preflight.get("hint"),
                 "summary": preflight.get("summary"),
+                "preflight_ref": preflight_ref,
             }), 400
 
         try:

@@ -736,7 +736,7 @@ geoip:private"></textarea>
       setStatus('Сохраняю и перезапускаю…', false);
       const ok = await saveWithForcedRestart();
       if (ok) {
-        setStatus('Готово. Лог перезапуска — в “Журнал перезапуска”.', false);
+        setStatus('Готово. Лог операции — в “Журнал операций Xkeen”.', false);
         toast('Готово', false);
         closeModal();
         return true;

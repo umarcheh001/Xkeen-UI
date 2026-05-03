@@ -84,6 +84,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
             load_json=ctx.load_json,
             strip_json_comments_text=ctx.strip_json_comments_text,
             restart_xkeen=ctx.restart_xkeen,
+            append_restart_log=ctx.append_restart_log,
         )
     )
 

@@ -346,6 +346,17 @@
           errorCode === 'routing semantic validation failed';
         if (!isRoutingValidationFailure) return;
 
+        try {
+          import('../features/restart_log.js').then(function (mod) {
+            if (mod && typeof mod.rememberXrayPreflightPayload === 'function') {
+              mod.rememberXrayPreflightPayload(data);
+            }
+            if (mod && typeof mod.loadRestartLog === 'function') {
+              mod.loadRestartLog({ toastNewSubscription: false, silent: true });
+            }
+          }).catch(function () {});
+        } catch (e) {}
+
         const presentModal = function () {
           try {
             if (window.XKeen && XKeen.ui && typeof XKeen.ui.showXrayPreflightError === 'function') {

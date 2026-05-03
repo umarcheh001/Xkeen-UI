@@ -7,6 +7,8 @@ import sys
 import types
 from pathlib import Path
 
+from flask import Blueprint, Flask
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "xkeen-ui" / "routes" / "routing" / "config.py"
@@ -173,6 +175,61 @@ def test_run_xray_preflight_blocks_dangling_outbound_reference_before_xray(tmp_p
     assert 'outboundTag "vless-reality-00"' in result["stdout"]
     assert 'Создайте outbound с tag "vless-reality-00"' in result["hint"]
     assert calls == []
+
+
+def test_routing_save_logs_failed_xray_preflight_with_modal_ref(tmp_path, monkeypatch):
+    seen: list[tuple[bool, str, dict[str, object]]] = []
+
+    monkeypatch.setattr(
+        routing_config,
+        "_run_xray_preflight",
+        lambda **_kwargs: {
+            "ok": False,
+            "error": "xray test failed",
+            "phase": "xray_test",
+            "cmd": "xray -test -confdir /tmp/xray",
+            "returncode": 23,
+            "timeout_s": 15,
+            "timed_out": False,
+            "stderr": "missing outboundTag proxy",
+            "summary": "missing outboundTag proxy",
+            "hint": "Исправьте ссылку на outbound.",
+        },
+    )
+
+    bp = Blueprint("routing_preflight_log_test", __name__)
+    routing_config.register_config_routes(
+        bp,
+        routing_file=str(tmp_path / "05_routing.json"),
+        routing_file_raw=str(tmp_path / "jsonc" / "05_routing.jsonc"),
+        xray_configs_dir=str(tmp_path),
+        xray_configs_dir_real=str(tmp_path),
+        backup_dir=str(tmp_path / "backups"),
+        backup_dir_real=str(tmp_path / "backups"),
+        load_json=lambda path, default=None: default,
+        strip_json_comments_text=lambda text: text,
+        restart_xkeen=lambda source="routing": True,
+        append_restart_log=lambda ok, source="api", **meta: seen.append((ok, source, meta)),
+    )
+    app = Flask("routing-preflight-log-test")
+    app.register_blueprint(bp)
+
+    response = app.test_client().post(
+        "/api/routing",
+        data=json.dumps({"rules": []}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["preflight_ref"].startswith("pf-")
+    assert seen
+    ok, source, meta = seen[-1]
+    assert ok is False
+    assert source == "xray-preflight"
+    assert meta["phase"] == "xray_test"
+    assert meta["returncode"] == 23
+    assert meta["preflight_ref"] == payload["preflight_ref"]
 
 
 def test_run_xray_preflight_refreshes_xray_dat_assets_before_check(tmp_path, monkeypatch):
