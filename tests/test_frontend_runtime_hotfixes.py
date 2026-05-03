@@ -678,6 +678,22 @@ def test_xray_routing_schema_covers_subscription_generated_fragments():
         assert fragment_schema['definitions']['routingRule']['additionalProperties'] is False
 
 
+def test_routing_monaco_suppresses_native_json_markers_during_syntax_errors():
+    routing = Path('xkeen-ui/static/js/features/routing.js').read_text(encoding='utf-8')
+
+    assert "let _monacoNativeJsonMarkersSuppressed = false;" in routing
+    assert "function clearMonacoNativeJsonMarkers()" in routing
+    assert "api.editor.getModelMarkers({ resource: model.uri })" in routing
+    assert "owner === 'json' || owner === 'jsonc'" in routing
+    assert "api.editor.setModelMarkers(model, owner, [])" in routing
+    assert "function ensureMonacoNativeJsonMarkerSuppressor()" in routing
+    assert "api.editor.onDidChangeMarkers((uris) => {" in routing
+    assert "function setMonacoNativeJsonMarkerSuppression(active)" in routing
+    assert routing.count("setMonacoNativeJsonMarkerSuppression(true);") >= 2
+    assert routing.count("setMonacoNativeJsonMarkerSuppression(false);") >= 2
+    assert "source: 'jsonc-parser'" in routing
+
+
 def test_xray_stream_network_schema_marks_grpc_as_deprecated():
     for schema_path in [
         Path('xkeen-ui/static/schemas/xray-config.schema.json'),

@@ -267,6 +267,9 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
 
   // Monaco diagnostics debounce (markers).
   let _monacoDiagTimer = null;
+  let _monacoNativeJsonMarkersSuppressed = false;
+  let _monacoNativeJsonMarkerSuppressor = null;
+  let _monacoNativeJsonMarkerClearing = false;
   let _routingSemanticContext = {
     key: '',
     outboundTags: [],
@@ -3022,6 +3025,84 @@ function closeHelp() {
     } catch (e) {}
   }
 
+  function getCurrentMonacoModel() {
+    try {
+      if (!_monaco || typeof _monaco.getModel !== 'function') return null;
+      return _monaco.getModel() || null;
+    } catch (e) {}
+    return null;
+  }
+
+  function clearMonacoNativeJsonMarkers() {
+    if (_monacoNativeJsonMarkerClearing) return;
+    try {
+      const api = window.monaco;
+      if (!api || !api.editor || typeof api.editor.setModelMarkers !== 'function') return;
+      const model = getCurrentMonacoModel();
+      if (!model || !model.uri) return;
+      const owners = new Set();
+      try {
+        if (typeof api.editor.getModelMarkers === 'function') {
+          const markers = api.editor.getModelMarkers({ resource: model.uri }) || [];
+          markers.forEach((marker) => {
+            const owner = String(marker && marker.owner || '').toLowerCase();
+            if (owner === 'json' || owner === 'jsonc') owners.add(owner);
+          });
+        }
+      } catch (e2) {}
+      if (!owners.size) return;
+      _monacoNativeJsonMarkerClearing = true;
+      owners.forEach((owner) => {
+        try { api.editor.setModelMarkers(model, owner, []); } catch (e3) {}
+      });
+    } catch (e) {
+    } finally {
+      _monacoNativeJsonMarkerClearing = false;
+    }
+  }
+
+  function ensureMonacoNativeJsonMarkerSuppressor() {
+    try {
+      if (_monacoNativeJsonMarkerSuppressor) return;
+      const api = window.monaco;
+      if (!api || !api.editor || typeof api.editor.onDidChangeMarkers !== 'function') return;
+      _monacoNativeJsonMarkerSuppressor = api.editor.onDidChangeMarkers((uris) => {
+        try {
+          if (!_monacoNativeJsonMarkersSuppressed) return;
+          const model = getCurrentMonacoModel();
+          if (!model || !model.uri) return;
+          const list = Array.isArray(uris) ? uris : [];
+          const modelUri = String(model.uri && typeof model.uri.toString === 'function' ? model.uri.toString() : model.uri);
+          const touched = !list.length || list.some((uri) => {
+            try {
+              return String(uri && typeof uri.toString === 'function' ? uri.toString() : uri) === modelUri;
+            } catch (e2) {
+              return false;
+            }
+          });
+          if (!touched) return;
+          setTimeout(() => {
+            if (_monacoNativeJsonMarkersSuppressed) clearMonacoNativeJsonMarkers();
+          }, 0);
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
+  function setMonacoNativeJsonMarkerSuppression(active) {
+    _monacoNativeJsonMarkersSuppressed = !!active;
+    if (!active) return;
+    ensureMonacoNativeJsonMarkerSuppressor();
+    clearMonacoNativeJsonMarkers();
+    [80, 300, 900].forEach((delay) => {
+      try {
+        setTimeout(() => {
+          if (_monacoNativeJsonMarkersSuppressed) clearMonacoNativeJsonMarkers();
+        }, delay);
+      } catch (e) {}
+    });
+  }
+
   function setMonacoMarkers(markers) {
     try {
       if (!_monaco) return;
@@ -3071,6 +3152,7 @@ function closeHelp() {
           endLineNumber: 1,
           endColumn: 2,
         }]);
+        setMonacoNativeJsonMarkerSuppression(true);
       } catch (e) {}
       return false;
     }
@@ -3087,6 +3169,7 @@ function closeHelp() {
       if (semanticSummary) setError('Semantic error: ' + semanticSummary, null);
       else setError('', null);
       clearJsonErrorLocation();
+      setMonacoNativeJsonMarkerSuppression(false);
       if (semanticMarkers.length) setMonacoMarkers(semanticMarkers);
       else clearMonacoMarkers();
       _maybeUpdateModeFromParsed(obj);
@@ -3105,11 +3188,13 @@ function closeHelp() {
         setMonacoMarkers([{
           severity: sev,
           message: msg || 'JSON parse error',
+          source: 'jsonc-parser',
           startLineNumber: lc.line,
           startColumn: lc.col,
           endLineNumber: lc.line,
           endColumn: lc.col + 1,
         }]);
+        setMonacoNativeJsonMarkerSuppression(true);
       } catch (e3) {}
 
       const errMsg = 'Ошибка JSON: ' + msg;
@@ -3499,6 +3584,7 @@ function closeHelp() {
           endLineNumber: 1,
           endColumn: 2,
         }]);
+        setMonacoNativeJsonMarkerSuppression(true);
       } catch (e) {}
       return false;
     }
@@ -3507,6 +3593,7 @@ function closeHelp() {
     if (analysis.ok) {
       setError('', null);
       clearJsonErrorLocation();
+      setMonacoNativeJsonMarkerSuppression(false);
       clearMonacoMarkers();
       _maybeUpdateModeFromParsed(analysis.parsed);
       setRoutingValidationState(true, 'JSON is valid', 'ok');
@@ -3538,11 +3625,13 @@ function closeHelp() {
         setMonacoMarkers([{
           severity: sev,
           message: msg,
+          source: 'jsonc-parser',
           startLineNumber: loc.line,
           startColumn: loc.col,
           endLineNumber: loc.line,
           endColumn: loc.col + 1,
         }]);
+        setMonacoNativeJsonMarkerSuppression(true);
       } catch (e) {}
     } else {
       clearMonacoMarkers();
@@ -5495,6 +5584,7 @@ function closeHelp() {
       // Leave Monaco: clear markers and cancel pending diagnostics.
       try { if (_monacoDiagTimer) clearTimeout(_monacoDiagTimer); } catch (e) {}
       _monacoDiagTimer = null;
+      setMonacoNativeJsonMarkerSuppression(false);
       try { clearMonacoMarkers(); } catch (e) {}
 
       showMonaco(false);
