@@ -99,6 +99,7 @@ LAST_NODES_KEYS = ("last_nodes", "lastNodes")
 NODE_LATENCY_KEYS = ("node_latency", "nodeLatency")
 LAST_WARNINGS_KEYS = ("last_warnings", "lastWarnings")
 LAST_SELECTOR_TERMS_KEYS = ("last_selector_terms", "lastSelectorTerms")
+LAST_GENERATED_OUTBOUNDS_KEYS = ("last_generated_outbounds", "lastGeneratedOutbounds")
 LAST_RUNTIME_BALANCER_TAGS_KEYS = ("last_routing_balancer_tags", "lastRoutingBalancerTags")
 LAST_RUNTIME_AUTO_RULE_KEYS = ("last_routing_auto_rule", "lastRoutingAutoRule")
 LAST_RUNTIME_ROUTING_MODE_KEYS = ("last_routing_mode", "lastRoutingMode")
@@ -323,6 +324,21 @@ def _normalize_last_nodes(value: Any) -> List[Dict[str, Any]]:
                 clean[field] = text
         if clean.get("key") and clean.get("name"):
             out.append(clean)
+    return out
+
+
+def _normalize_generated_outbound_baselines(value: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in value if isinstance(value, list) else []:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key") or "").strip()
+        outbound = item.get("outbound")
+        if not key or key in seen or not isinstance(outbound, dict):
+            continue
+        seen.add(key)
+        out.append({"key": key, "outbound": copy.deepcopy(outbound)})
     return out
 
 
@@ -560,6 +576,11 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
         last_nodes = _normalize_last_nodes(
             item.get("last_nodes") if "last_nodes" in item else item.get("lastNodes")
         )
+        last_generated_outbounds = _normalize_generated_outbound_baselines(
+            item.get("last_generated_outbounds")
+            if "last_generated_outbounds" in item
+            else item.get("lastGeneratedOutbounds")
+        )
         node_latency = _normalize_node_latency_map(
             item.get("node_latency") if "node_latency" in item else item.get("nodeLatency")
         )
@@ -576,6 +597,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
             + LAST_NODES_KEYS[1:]
             + NODE_LATENCY_KEYS[1:]
             + LAST_SELECTOR_TERMS_KEYS[1:]
+            + LAST_GENERATED_OUTBOUNDS_KEYS[1:]
             + LAST_RUNTIME_BALANCER_TAGS_KEYS[1:]
             + LAST_RUNTIME_AUTO_RULE_KEYS[1:]
             + LAST_RUNTIME_ROUTING_MODE_KEYS[1:]
@@ -601,6 +623,7 @@ def _normalize_state(obj: Any) -> Dict[str, Any]:
                 "output_file": output_file,
                 "last_warnings": last_warnings,
                 "last_nodes": last_nodes,
+                "last_generated_outbounds": last_generated_outbounds,
                 "node_latency": _prune_node_latency_map(node_latency, last_nodes),
                 "last_tags": [str(x) for x in item.get("last_tags", []) if str(x or "").strip()]
                 if isinstance(item.get("last_tags"), list)
@@ -716,6 +739,7 @@ def upsert_subscription(ui_state_dir: str, payload: Dict[str, Any]) -> Dict[str,
             + LAST_NODES_KEYS[1:]
             + NODE_LATENCY_KEYS[1:]
             + LAST_SELECTOR_TERMS_KEYS[1:]
+            + LAST_GENERATED_OUTBOUNDS_KEYS[1:]
             + LAST_RUNTIME_BALANCER_TAGS_KEYS[1:]
             + LAST_RUNTIME_AUTO_RULE_KEYS[1:]
             + LAST_RUNTIME_ROUTING_MODE_KEYS[1:]
@@ -1572,6 +1596,206 @@ def _canonical_subscription_output_for_compare(obj: Any) -> Any:
 
 def _subscription_output_hash(obj: Any) -> str:
     return _content_hash(_canonical_subscription_output_for_compare(obj))
+
+
+def _subscription_outbounds_from_obj(obj: Any) -> List[Dict[str, Any]]:
+    raw = obj.get("outbounds") if isinstance(obj, dict) else obj if isinstance(obj, list) else []
+    return [item for item in raw if isinstance(item, dict)] if isinstance(raw, list) else []
+
+
+def _load_subscription_output_obj(path: str) -> Dict[str, Any] | None:
+    obj = _read_json_file(path, None)
+    if isinstance(obj, dict) and isinstance(obj.get("outbounds"), list):
+        return obj
+    if isinstance(obj, list):
+        return {"outbounds": obj}
+    return None
+
+
+def _outbound_hash_without_tag(obj: Any) -> str:
+    data = copy.deepcopy(obj) if isinstance(obj, dict) else obj
+    if isinstance(data, dict):
+        data.pop("tag", None)
+    return _content_hash(data)
+
+
+def _subscription_node_key_by_tag(nodes: Iterable[Any]) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    for item in nodes:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key") or "").strip()
+        tag = str(item.get("tag") or "").strip()
+        if key and tag and tag not in out:
+            out[tag] = key
+    return out
+
+
+def _subscription_generated_baselines(outbounds: List[Dict[str, Any]], nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    key_by_tag = _subscription_node_key_by_tag(nodes)
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for outbound in outbounds:
+        tag = str(outbound.get("tag") or "").strip()
+        key = key_by_tag.get(tag, "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append({"key": key, "outbound": copy.deepcopy(outbound)})
+    return out
+
+
+def _unique_outbound_hash_to_key(baselines_by_key: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
+    buckets: Dict[str, List[str]] = {}
+    for key, outbound in baselines_by_key.items():
+        buckets.setdefault(_outbound_hash_without_tag(outbound), []).append(key)
+    return {hash_value: keys[0] for hash_value, keys in buckets.items() if len(keys) == 1}
+
+
+def _merge_user_json_value(baseline: Any, current: Any, generated: Any) -> Any:
+    if current == baseline:
+        return copy.deepcopy(generated)
+    if generated == baseline or current == generated:
+        return copy.deepcopy(current)
+    if isinstance(baseline, dict) and isinstance(current, dict) and isinstance(generated, dict):
+        result: Dict[str, Any] = {}
+        keys = list(generated.keys()) + [key for key in current.keys() if key not in generated]
+        for key in keys:
+            has_baseline = key in baseline
+            has_current = key in current
+            has_generated = key in generated
+            if not has_current:
+                if has_baseline:
+                    continue
+                if has_generated:
+                    result[key] = copy.deepcopy(generated[key])
+                continue
+            if not has_baseline:
+                result[key] = copy.deepcopy(current[key])
+                continue
+            if not has_generated:
+                if current[key] != baseline[key]:
+                    result[key] = copy.deepcopy(current[key])
+                continue
+            result[key] = _merge_user_json_value(baseline[key], current[key], generated[key])
+        return result
+    return copy.deepcopy(current)
+
+
+def _collect_subscription_manual_overrides(
+    sub: Dict[str, Any],
+    output_path: str,
+    generated_outbounds: List[Dict[str, Any]],
+    preview_nodes: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    current_obj = _load_subscription_output_obj(output_path)
+    if current_obj is None:
+        return {"current_by_key": {}, "deleted_node_keys": [], "baseline_by_key": {}, "current_hash": ""}
+
+    current_hash = _subscription_output_hash(current_obj)
+    stored_baselines = _normalize_generated_outbound_baselines(sub.get("last_generated_outbounds"))
+    if not stored_baselines:
+        last_hash = str(sub.get("last_hash") or "").strip()
+        if last_hash and current_hash == last_hash:
+            return {"current_by_key": {}, "deleted_node_keys": [], "baseline_by_key": {}, "current_hash": current_hash}
+        stored_baselines = _subscription_generated_baselines(generated_outbounds, preview_nodes)
+
+    baseline_by_key = {
+        str(item.get("key") or "").strip(): copy.deepcopy(item.get("outbound"))
+        for item in stored_baselines
+        if str(item.get("key") or "").strip() and isinstance(item.get("outbound"), dict)
+    }
+    if not baseline_by_key:
+        return {"current_by_key": {}, "deleted_node_keys": [], "baseline_by_key": {}, "current_hash": current_hash}
+
+    key_by_tag = _subscription_node_key_by_tag(sub.get("last_nodes") or [])
+    for key, outbound in baseline_by_key.items():
+        tag = str(outbound.get("tag") or "").strip()
+        if tag and tag not in key_by_tag:
+            key_by_tag[tag] = key
+
+    key_by_hash_without_tag = _unique_outbound_hash_to_key(baseline_by_key)
+    current_by_key: Dict[str, Dict[str, Any]] = {}
+    used_keys: set[str] = set()
+    for outbound in _subscription_outbounds_from_obj(current_obj):
+        tag = str(outbound.get("tag") or "").strip()
+        key = key_by_tag.get(tag, "")
+        if not key:
+            key = key_by_hash_without_tag.get(_outbound_hash_without_tag(outbound), "")
+        if not key or key in used_keys or key not in baseline_by_key:
+            continue
+        used_keys.add(key)
+        current_by_key[key] = copy.deepcopy(outbound)
+
+    current_source_keys = {
+        str(item.get("key") or "").strip()
+        for item in preview_nodes
+        if isinstance(item, dict) and str(item.get("key") or "").strip()
+    }
+    previous_active_keys = {
+        str(item.get("key") or "").strip()
+        for item in _normalize_last_nodes(sub.get("last_nodes"))
+        if str(item.get("key") or "").strip() and str(item.get("tag") or "").strip()
+    }
+    deleted_node_keys = [
+        key
+        for key in previous_active_keys
+        if key in current_source_keys and key in baseline_by_key and key not in current_by_key
+    ]
+
+    return {
+        "current_by_key": current_by_key,
+        "deleted_node_keys": deleted_node_keys,
+        "baseline_by_key": baseline_by_key,
+        "current_hash": current_hash,
+    }
+
+
+def _apply_subscription_manual_overrides(
+    generated_outbounds: List[Dict[str, Any]],
+    preview_nodes: List[Dict[str, Any]],
+    overrides: Dict[str, Any],
+) -> Tuple[List[Dict[str, Any]], int]:
+    current_by_key = overrides.get("current_by_key") if isinstance(overrides, dict) else {}
+    baseline_by_key = overrides.get("baseline_by_key") if isinstance(overrides, dict) else {}
+    if not isinstance(current_by_key, dict) or not isinstance(baseline_by_key, dict) or not current_by_key:
+        return generated_outbounds, 0
+
+    key_by_tag = _subscription_node_key_by_tag(preview_nodes)
+    final_tag_by_key: Dict[str, str] = {}
+    merged_count = 0
+    out: List[Dict[str, Any]] = []
+    for outbound in generated_outbounds:
+        tag = str(outbound.get("tag") or "").strip()
+        key = key_by_tag.get(tag, "")
+        current = current_by_key.get(key)
+        baseline = baseline_by_key.get(key)
+        if isinstance(current, dict) and isinstance(baseline, dict):
+            merged = _merge_user_json_value(baseline, current, outbound)
+            if merged != outbound:
+                merged_count += 1
+        else:
+            merged = copy.deepcopy(outbound)
+        final_tag = str(merged.get("tag") or "").strip() if isinstance(merged, dict) else ""
+        if key and final_tag:
+            final_tag_by_key[key] = final_tag
+        out.append(merged)
+
+    if final_tag_by_key:
+        for node in preview_nodes:
+            if not isinstance(node, dict):
+                continue
+            key = str(node.get("key") or "").strip()
+            if key in final_tag_by_key:
+                node["tag"] = final_tag_by_key[key]
+    return out, merged_count
+
+
+def _jsonc_semantically_matches_subscription_output(text: str, obj: Any) -> bool:
+    parsed = _load_jsonc_text(text)
+    if parsed is None:
+        return False
+    return _subscription_output_hash(parsed) == _subscription_output_hash(obj)
 
 
 def _write_subscription_output_if_changed(path: str, obj: Any, *, snapshot: SnapshotCallback | None = None) -> bool:
@@ -3461,6 +3685,8 @@ def refresh_subscription(
         "tags": [],
         "errors": [],
         "source_format": "",
+        "manual_edits_preserved": 0,
+        "manual_exclusions_added": 0,
     }
     now_ts = _now()
     source_count = 0
@@ -3472,6 +3698,7 @@ def refresh_subscription(
         body, headers = fetch_subscription_body(str(sub.get("url") or ""))
         links = parse_subscription_links(body)
         source_format = "links"
+        excluded_node_keys = _read_string_list_value(sub, EXCLUDED_NODE_KEYS_KEYS)
         if links:
             outbounds, errors, stats = build_subscription_outbounds(
                 links,
@@ -3479,7 +3706,7 @@ def refresh_subscription(
                 name_filter=str(sub.get("name_filter") or ""),
                 type_filter=str(sub.get("type_filter") or ""),
                 transport_filter=str(sub.get("transport_filter") or ""),
-                excluded_node_keys=_read_string_list_value(sub, EXCLUDED_NODE_KEYS_KEYS),
+                excluded_node_keys=excluded_node_keys,
             )
         else:
             source_format = "xray-json"
@@ -3489,7 +3716,7 @@ def refresh_subscription(
                 name_filter=str(sub.get("name_filter") or ""),
                 type_filter=str(sub.get("type_filter") or ""),
                 transport_filter=str(sub.get("transport_filter") or ""),
-                excluded_node_keys=_read_string_list_value(sub, EXCLUDED_NODE_KEYS_KEYS),
+                excluded_node_keys=excluded_node_keys,
             )
         source_count = int(stats.get("source_count") or 0)
         filtered_out_count = int(stats.get("filtered_out_count") or 0)
@@ -3502,10 +3729,56 @@ def refresh_subscription(
         if not outbounds:
             raise RuntimeError("no_valid_outbounds")
 
+        output_path = _subscription_output_path(xray_configs_dir, sub)
+        manual_overrides = _collect_subscription_manual_overrides(sub, output_path, outbounds, preview_nodes)
+        manual_deleted_keys = _clean_string_list(manual_overrides.get("deleted_node_keys"))
+        manual_exclusions_added = 0
+        if manual_deleted_keys:
+            merged_excluded = _clean_string_list(excluded_node_keys + manual_deleted_keys)
+            manual_exclusions_added = max(0, len(merged_excluded) - len(excluded_node_keys))
+            if manual_exclusions_added:
+                excluded_node_keys = merged_excluded
+                sub["excluded_node_keys"] = excluded_node_keys
+                if links:
+                    outbounds, errors, stats = build_subscription_outbounds(
+                        links,
+                        tag_prefix=str(sub.get("tag") or sub.get("id") or "sub"),
+                        name_filter=str(sub.get("name_filter") or ""),
+                        type_filter=str(sub.get("type_filter") or ""),
+                        transport_filter=str(sub.get("transport_filter") or ""),
+                        excluded_node_keys=excluded_node_keys,
+                    )
+                else:
+                    outbounds, errors, stats = build_subscription_json_outbounds(
+                        body,
+                        tag_prefix=str(sub.get("tag") or sub.get("id") or "sub"),
+                        name_filter=str(sub.get("name_filter") or ""),
+                        type_filter=str(sub.get("type_filter") or ""),
+                        transport_filter=str(sub.get("transport_filter") or ""),
+                        excluded_node_keys=excluded_node_keys,
+                    )
+                source_count = int(stats.get("source_count") or 0)
+                filtered_out_count = int(stats.get("filtered_out_count") or 0)
+                preview_nodes = _normalize_last_nodes(stats.get("nodes"))
+                node_latency = _prune_node_latency_map(node_latency, preview_nodes)
+                if source_count > 0 and not outbounds and filtered_out_count >= source_count:
+                    raise RuntimeError("Ни один узел не подошёл под фильтры подписки.")
+                if not outbounds:
+                    raise RuntimeError("no_valid_outbounds")
+
+        generated_baselines = _subscription_generated_baselines(outbounds, preview_nodes)
+        outbounds, manual_edits_preserved = _apply_subscription_manual_overrides(outbounds, preview_nodes, manual_overrides)
         tags = [str(ob.get("tag") or "").strip() for ob in outbounds if isinstance(ob, dict) and ob.get("tag")]
         output_obj = {"outbounds": outbounds}
-        output_path = _subscription_output_path(xray_configs_dir, sub)
         changed = _write_subscription_output_if_changed(output_path, output_obj, snapshot=snapshot)
+        current_file_hash = str(manual_overrides.get("current_hash") or "").strip() if isinstance(manual_overrides, dict) else ""
+        previous_output_hash = str(sub.get("last_hash") or "").strip()
+        accepted_manual_file_change = bool(
+            (manual_edits_preserved or manual_exclusions_added)
+            and current_file_hash
+            and current_file_hash != previous_output_hash
+        )
+        changed = bool(changed or accepted_manual_file_change)
 
         ensure_xray_jsonc_dir()
         raw_path = jsonc_path_for(output_path)
@@ -3523,6 +3796,12 @@ def refresh_subscription(
                 except Exception:
                     raw_old = ""
                 if raw_old != raw_text:
+                    if snapshot and os.path.exists(raw_path):
+                        snapshot(raw_path)
+                    _atomic_write_text(raw_path, raw_text)
+            else:
+                raw_old = load_text(raw_path, default="")
+                if isinstance(raw_old, str) and raw_old != raw_text and not _jsonc_semantically_matches_subscription_output(raw_old, output_obj):
                     if snapshot and os.path.exists(raw_path):
                         snapshot(raw_path)
                     _atomic_write_text(raw_path, raw_text)
@@ -3550,14 +3829,13 @@ def refresh_subscription(
                 "last_nodes": preview_nodes,
                 "node_latency": node_latency,
                 "last_tags": tags,
-                "last_selector_terms": [_clean_tag_prefix(sub.get("tag") or sub.get("id") or "sub", str(sub.get("id") or "sub"))]
-                if bool(sub.get("ping_enabled", True)) and tags
-                else [],
+                "last_selector_terms": _derive_selector_terms_from_tags(tags) if bool(sub.get("ping_enabled", True)) and tags else [],
                 "last_routing_balancer_tags": _read_string_list_value(sub, ROUTING_BALANCER_TAGS_KEYS),
                 "last_routing_auto_rule": _read_bool_value(sub, ROUTING_AUTO_RULE_KEYS, True),
                 "last_routing_mode": _clean_routing_mode(sub.get("routing_mode")),
                 "last_runtime_active": bool(sub.get("ping_enabled", True)) and bool(tags),
                 "last_hash": _subscription_output_hash(output_obj),
+                "last_generated_outbounds": generated_baselines,
                 "last_errors": errors,
                 "last_source_format": source_format,
                 "next_update_ts": now_ts + (interval * 3600) if bool(sub.get("enabled", True)) else None,
@@ -3629,6 +3907,8 @@ def refresh_subscription(
                 "tags": tags,
                 "errors": errors,
                 "source_format": source_format,
+                "manual_edits_preserved": int(manual_edits_preserved),
+                "manual_exclusions_added": int(manual_exclusions_added),
                 "output_file": os.path.basename(output_path),
                 "interval_hours": interval,
                 "profile_update_interval_hours": sub.get("profile_update_interval_hours"),

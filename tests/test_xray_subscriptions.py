@@ -16,6 +16,15 @@ def _vless(name: str = "Node") -> str:
     )
 
 
+def _vless_reality(name: str = "Node", *, sid: str = "") -> str:
+    safe_name = str(name or "").replace(" ", "%20")
+    return (
+        "vless://user@example.com:443"
+        f"?type=tcp&security=reality&sni=edge.example.com&pbk=pubkey&sid={sid}&spx=%2F&encryption=none"
+        f"#{safe_name}"
+    )
+
+
 def _trojan(name: str = "Node") -> str:
     safe_name = str(name or "").replace(" ", "%20")
     return f"trojan://secret@example.net:443?security=tls&sni=edge.example.com#{safe_name}"
@@ -220,6 +229,135 @@ def test_refresh_subscription_does_not_restart_when_provider_reorders_nodes(tmp_
     assert out_path.read_text(encoding="utf-8") == first_output
     assert raw_path.read_text(encoding="utf-8") == first_raw
     assert subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]["last_hash"] == first_hash
+
+
+def test_refresh_subscription_preserves_manual_outbound_edits_on_update(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    bodies = [_vless_reality("Alpha", sid="old"), _vless_reality("Alpha", sid="new")]
+    monkeypatch.setattr(subs, "fetch_subscription_body", lambda _url: (bodies.pop(0), {}))
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "manual-edit",
+            "name": "Manual Edit",
+            "tag": "demo",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": False,
+        },
+    )
+
+    first = subs.refresh_subscription(
+        str(ui_state_dir),
+        "manual-edit",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+    assert first["ok"] is True
+
+    out_path = xray_dir / "04_outbounds.manual-edit.json"
+    current = json.loads(out_path.read_text(encoding="utf-8"))
+    current["outbounds"][0]["sendThrough"] = "127.0.0.1"
+    current["outbounds"][0]["streamSettings"]["realitySettings"]["fingerprint"] = "firefox"
+    out_path.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    second = subs.refresh_subscription(
+        str(ui_state_dir),
+        "manual-edit",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert second["ok"] is True
+    assert second["manual_edits_preserved"] == 1
+
+    refreshed = json.loads(out_path.read_text(encoding="utf-8"))["outbounds"][0]
+    assert refreshed["sendThrough"] == "127.0.0.1"
+    assert refreshed["streamSettings"]["realitySettings"]["fingerprint"] == "firefox"
+    assert refreshed["streamSettings"]["realitySettings"]["shortId"] == "new"
+
+
+def test_refresh_subscription_turns_manual_node_deletion_into_saved_exclusion(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: ("\n".join([_vless_reality("Alpha"), _vless_reality("Beta")]), {}),
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "manual-delete",
+            "name": "Manual Delete",
+            "tag": "demo",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": False,
+        },
+    )
+
+    first = subs.refresh_subscription(
+        str(ui_state_dir),
+        "manual-delete",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+    assert first["ok"] is True
+
+    state = subs.load_subscription_state(str(ui_state_dir))
+    beta_key = next(item["key"] for item in state["subscriptions"][0]["last_nodes"] if item["name"] == "Beta")
+
+    out_path = xray_dir / "04_outbounds.manual-delete.json"
+    current = json.loads(out_path.read_text(encoding="utf-8"))
+    current["outbounds"] = [item for item in current["outbounds"] if item["tag"] != "demo--Beta"]
+    out_path.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    second = subs.refresh_subscription(
+        str(ui_state_dir),
+        "manual-delete",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=False,
+    )
+
+    assert second["ok"] is True
+    assert second["changed"] is True
+    assert second["manual_exclusions_added"] == 1
+    assert [item["tag"] for item in json.loads(out_path.read_text(encoding="utf-8"))["outbounds"]] == ["demo--Alpha"]
+
+    saved = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]
+    assert saved["excluded_node_keys"] == [beta_key]
+    assert next(item for item in saved["last_nodes"] if item["name"] == "Beta").get("tag") in ("", None)
 
 
 def test_new_subscription_defaults_to_daily_interval(tmp_path: Path):
