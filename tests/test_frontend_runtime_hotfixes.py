@@ -692,6 +692,10 @@ def test_routing_monaco_suppresses_native_json_markers_during_syntax_errors():
     assert routing.count("setMonacoNativeJsonMarkerSuppression(true);") >= 2
     assert routing.count("setMonacoNativeJsonMarkerSuppression(false);") >= 2
     assert "source: 'jsonc-parser'" in routing
+    assert "function isJsonSyntaxTokenBoundary(ch)" in routing
+    assert "function buildMonacoJsonSyntaxMarkerRange(text, loc)" in routing
+    assert "while (endIndex < raw.length && !isJsonSyntaxTokenBoundary(raw[endIndex]))" in routing
+    assert "endColumn: range.endColumn" in routing
 
 
 def test_xray_stream_network_schema_marks_grpc_as_deprecated():

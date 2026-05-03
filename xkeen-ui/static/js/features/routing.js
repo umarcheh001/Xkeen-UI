@@ -3131,6 +3131,43 @@ function closeHelp() {
     return { line, col };
   }
 
+  function isJsonSyntaxTokenBoundary(ch) {
+    return !ch || /\s/.test(ch) || ch === '{' || ch === '}' || ch === '[' || ch === ']' || ch === ':' || ch === ',' || ch === '"';
+  }
+
+  function buildMonacoJsonSyntaxMarkerRange(text, loc) {
+    const raw = String(text ?? '');
+    const line = Math.max(1, Number.isFinite(loc && loc.line) ? Math.floor(loc.line) : 1);
+    const col = Math.max(1, Number.isFinite(loc && loc.col) ? Math.floor(loc.col) : 1);
+    let startIndex = Number.isFinite(loc && loc.index) ? Math.floor(loc.index) : lineColToIndex(raw, line, col);
+    startIndex = Math.max(0, Math.min(startIndex, raw.length));
+
+    while (startIndex < raw.length && raw.charCodeAt(startIndex) !== 10 && /\s/.test(raw[startIndex])) {
+      startIndex++;
+    }
+
+    let endIndex = startIndex;
+    if (endIndex < raw.length && !isJsonSyntaxTokenBoundary(raw[endIndex])) {
+      while (endIndex < raw.length && !isJsonSyntaxTokenBoundary(raw[endIndex])) {
+        endIndex++;
+      }
+    } else {
+      endIndex = Math.min(raw.length, startIndex + 1);
+    }
+
+    const start = indexToMonacoLineCol(raw, startIndex);
+    let end = indexToMonacoLineCol(raw, endIndex);
+    if (end.line !== start.line || end.col <= start.col) {
+      end = { line: start.line, col: start.col + 1 };
+    }
+    return {
+      startLineNumber: start.line,
+      startColumn: start.col,
+      endLineNumber: end.line,
+      endColumn: end.col,
+    };
+  }
+
   function runMonacoDiagnostics() {
     // Validate JSONC (strip comments) and show errors as Monaco markers (no auto-fix).
     const raw = getEditorText();
@@ -3181,6 +3218,7 @@ function closeHelp() {
       const loc = extractJsonErrorLocation(e, raw, sm);
       const msg = String(loc && loc.message ? loc.message : ((e && e.message) ? e.message : e));
       const lc = { line: loc.line, col: loc.col };
+      const range = buildMonacoJsonSyntaxMarkerRange(raw, loc);
 
       try {
         const api = window.monaco;
@@ -3189,10 +3227,10 @@ function closeHelp() {
           severity: sev,
           message: msg || 'JSON parse error',
           source: 'jsonc-parser',
-          startLineNumber: lc.line,
-          startColumn: lc.col,
-          endLineNumber: lc.line,
-          endColumn: lc.col + 1,
+          startLineNumber: range.startLineNumber,
+          startColumn: range.startColumn,
+          endLineNumber: range.endLineNumber,
+          endColumn: range.endColumn,
         }]);
         setMonacoNativeJsonMarkerSuppression(true);
       } catch (e3) {}
@@ -3622,14 +3660,15 @@ function closeHelp() {
       try {
         const api = window.monaco;
         const sev = (api && api.MarkerSeverity && api.MarkerSeverity.Error) ? api.MarkerSeverity.Error : 8;
+        const range = buildMonacoJsonSyntaxMarkerRange(raw, loc);
         setMonacoMarkers([{
           severity: sev,
           message: msg,
           source: 'jsonc-parser',
-          startLineNumber: loc.line,
-          startColumn: loc.col,
-          endLineNumber: loc.line,
-          endColumn: loc.col + 1,
+          startLineNumber: range.startLineNumber,
+          startColumn: range.startColumn,
+          endLineNumber: range.endLineNumber,
+          endColumn: range.endColumn,
         }]);
         setMonacoNativeJsonMarkerSuppression(true);
       } catch (e) {}
