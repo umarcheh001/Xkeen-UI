@@ -135,6 +135,47 @@
 
 }
 
+/* Pointer cursor for any clickable surface in the panel.
+   Kept near the top so per-element overrides (cursor: default on :disabled,
+   drag handles, etc.) win on source-order tiebreaks. */
+button:not(:disabled):not([aria-disabled="true"]),
+a[href],
+summary,
+label[for],
+select:not(:disabled),
+input[type="button"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="reset"]:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="file"]:not(:disabled),
+input[type="color"]:not(:disabled),
+input[type="image"]:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]),
+[role="link"]:not([aria-disabled="true"]),
+[role="menuitem"]:not([aria-disabled="true"]),
+[role="menuitemcheckbox"]:not([aria-disabled="true"]),
+[role="menuitemradio"]:not([aria-disabled="true"]),
+[role="option"]:not([aria-disabled="true"]),
+[role="checkbox"]:not([aria-disabled="true"]),
+[role="radio"]:not([aria-disabled="true"]),
+[role="switch"]:not([aria-disabled="true"]),
+[role="treeitem"]:not([aria-disabled="true"]),
+[onclick]:not(:disabled):not([aria-disabled="true"]),
+[data-action]:not(:disabled):not([aria-disabled="true"]),
+[data-act]:not(:disabled):not([aria-disabled="true"]),
+[data-tab]:not([aria-disabled="true"]),
+[data-nav-href]:not([aria-disabled="true"]),
+[data-modal-dismiss]:not([aria-disabled="true"]),
+[data-dismiss]:not([aria-disabled="true"]),
+[data-modal-key]:not([aria-disabled="true"]),
+[data-copy]:not([aria-disabled="true"]),
+[data-help-target]:not([aria-disabled="true"]),
+[data-collapsible]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
 /* Mihomo validation modal (panel routing card) */
 #mihomo-validation-modal .modal-content {
   width: min(92vw, 880px);
@@ -14878,6 +14919,8 @@ html:not([data-theme="light"]) .fm-target-select optgroup{
   outline: 1px dashed color-mix(in srgb, var(--accent, #60a5fa) 65%, transparent);
 }
 
+.fm-row[data-name]{ cursor: pointer; }
+.fm-sort-cell{ cursor: pointer; }
 .fm-row[draggable="true"]{ cursor: grab; }
 .fm-row[draggable="true"]:active{ cursor: grabbing; }
 
