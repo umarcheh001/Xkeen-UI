@@ -2515,6 +2515,25 @@ def test_build_subscription_json_outbounds_keeps_distinct_keys_for_same_config_w
     assert stats["filtered_out_count"] == 1
 
 
+def test_build_subscription_outbounds_shrinks_long_prefix_to_preserve_node_name():
+    from services import xray_subscriptions as subs
+
+    long_prefix = "cp.landing-us.rfid-technologies"
+    node_name = "VLESS-XHTTP-US-Keenetic-Dnepr-16k3"
+    outbounds, errors, stats = subs.build_subscription_outbounds(
+        [_vless_transport(node_name, "xhttp")],
+        tag_prefix=long_prefix,
+    )
+
+    assert errors == []
+    assert len(outbounds) == 1
+    tag = outbounds[0]["tag"]
+    assert len(tag) <= 64
+    assert tag.endswith("--" + node_name)
+    assert long_prefix.startswith(tag.split("--", 1)[0])
+    assert stats["nodes"][0]["tag"] == tag
+
+
 def test_refresh_subscription_persists_preview_exclusions_and_applies_saved_exclusion_edits(
     tmp_path: Path,
     monkeypatch,

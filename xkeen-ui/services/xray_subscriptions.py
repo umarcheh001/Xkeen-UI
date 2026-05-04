@@ -1425,18 +1425,30 @@ def _clean_node_name(name: str, fallback: str) -> str:
     return value[:36].strip("_.:-") or fallback
 
 
-def _unique_tag(base: str, used: set[str]) -> str:
-    tag = base[:64].strip("_.:-") or "sub"
+_TAG_MAX_LEN = 64
+_TAG_SEPARATOR = "--"
+
+
+def _unique_tag(prefix: str, node: str, used: set[str]) -> str:
+    prefix_part = str(prefix or "").strip("_.:-") or "sub"
+    node_part = str(node or "").strip("_.:-") or "sub"
+
+    overflow = len(prefix_part) + len(_TAG_SEPARATOR) + len(node_part) - _TAG_MAX_LEN
+    if overflow > 0:
+        budget = max(1, len(prefix_part) - overflow)
+        prefix_part = prefix_part[:budget].strip("_.:-") or "sub"
+
+    tag = f"{prefix_part}{_TAG_SEPARATOR}{node_part}"[:_TAG_MAX_LEN].strip("_.:-") or "sub"
     if tag.lower() in RESERVED_TAGS:
         tag = tag + "_sub"
     if tag not in used:
         used.add(tag)
         return tag
 
-    root = tag[:58].strip("_.:-") or "sub"
+    root = tag[: _TAG_MAX_LEN - 6].strip("_.:-") or "sub"
     idx = 2
     while True:
-        cand = f"{root}-{idx}"[:64].strip("_.:-")
+        cand = f"{root}-{idx}"[:_TAG_MAX_LEN].strip("_.:-")
         if cand not in used:
             used.add(cand)
             return cand
@@ -1484,7 +1496,7 @@ def build_subscription_outbounds(
 
     for idx, (link, meta, preview_idx) in enumerate(filtered_links):
         node = _clean_node_name(str(meta.get("name") or ""), f"node{idx + 1}")
-        tag = _unique_tag(f"{prefix}--{node}", used)
+        tag = _unique_tag(prefix, node, used)
         preview_nodes[preview_idx]["tag"] = tag
         try:
             outbound = build_proxy_outbound_from_link(link, tag)
@@ -1549,7 +1561,7 @@ def build_subscription_json_outbounds(
         protocol = str(source.get("protocol") or "node").strip() or "node"
         fallback = f"node{idx + 1}"
         node = _clean_node_name(str(meta.get("name") or protocol), fallback)
-        tag = _unique_tag(f"{prefix}--{node}", used)
+        tag = _unique_tag(prefix, node, used)
         preview_nodes[preview_idx]["tag"] = tag
         try:
             outbound = copy.deepcopy(source)
