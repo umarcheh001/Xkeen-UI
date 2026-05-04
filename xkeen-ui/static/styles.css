@@ -5304,6 +5304,61 @@ html[data-theme="light"] .xray-log-select option{
   white-space: pre;
 }
 
+.log-card .restart-log-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: color-mix(in srgb, var(--card-bg, #020617) 70%, transparent);
+  font-size: calc(12px * var(--xk-font-scale));
+  line-height: 1.4;
+}
+
+.log-card .restart-log-summary[hidden] {
+  display: none;
+}
+
+.log-card .restart-log-summary-part {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.log-card .restart-log-summary-label {
+  color: var(--muted, #94a3b8);
+  font-weight: 500;
+}
+
+.log-card .restart-log-summary-value {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--text, #e5e7eb) 92%, white 8%);
+}
+
+.log-card .restart-log-summary-part-success .restart-log-summary-value {
+  color: color-mix(in srgb, var(--sem-success, #4ade80) 86%, white 14%);
+}
+
+.log-card .restart-log-summary-part-error .restart-log-summary-value {
+  color: color-mix(in srgb, var(--sem-error, #f87171) 86%, white 14%);
+}
+
+.log-card .restart-log-summary-part-info .restart-log-summary-value {
+  color: color-mix(in srgb, var(--sem-info, #93c5fd) 86%, white 14%);
+}
+
+.log-card .restart-log-summary-part-muted .restart-log-summary-value {
+  color: var(--muted, #94a3b8);
+}
+
+.log-card .restart-log-summary-sep {
+  color: rgba(148, 163, 184, 0.5);
+  user-select: none;
+}
+
 .log-card .log-line-info {
   color: color-mix(in srgb, var(--sem-info, #93c5fd) 80%, white 20%);
 }

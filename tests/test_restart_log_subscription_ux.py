@@ -74,6 +74,23 @@ def test_append_restart_log_swallows_broadcast_failures(monkeypatch, tmp_path):
     assert log_file.read_text(encoding="utf-8").startswith("[")
 
 
+def test_restart_log_renders_summary_above_block():
+    panel_src = _read("xkeen-ui/templates/panel.html")
+    restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")
+    styles_src = _read("xkeen-ui/static/styles.css")
+
+    assert panel_src.count('data-xk-restart-log-summary="1"') == 3
+    assert "buildRestartLogSummary" in restart_log_src
+    assert "renderAllSummary" in restart_log_src
+    assert "Последний перезапуск" in restart_log_src
+    assert "Активное ядро" in restart_log_src
+    assert "Всего ошибок" in restart_log_src
+    assert "formatSummaryTimestamp" in restart_log_src
+    assert ".restart-log-summary" in styles_src
+    assert ".restart-log-summary-part-success" in styles_src
+    assert ".restart-log-summary-part-error" in styles_src
+
+
 def test_restart_log_subscribes_to_events_ws_for_instant_refresh():
     restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")
 

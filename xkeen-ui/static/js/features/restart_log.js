@@ -755,6 +755,108 @@ let restartLogModuleApi = null;
     return els;
   }
 
+  function getSummaryEls() {
+    const els = [];
+    try {
+      document.querySelectorAll('[data-xk-restart-log-summary="1"]').forEach((el) => {
+        if (el) els.push(el);
+      });
+    } catch (error) {}
+    return els;
+  }
+
+  function formatSummaryTimestamp(ts) {
+    const raw = String(ts || '').trim();
+    if (!raw) return '';
+    const match = raw.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})(?::\d{2})?$/);
+    if (!match) return raw;
+    try {
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      if (match[1] === todayStr) return match[2];
+    } catch (error) {}
+    return `${match[1]} ${match[2]}`;
+  }
+
+  function buildRestartLogSummary(entries) {
+    const list = Array.isArray(entries) ? entries : [];
+    let lastSummary = null;
+    let lastCore = '';
+    let errorCount = 0;
+    let totalStructured = 0;
+
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const entry = list[i];
+      if (!entry || !entry.summary) continue;
+      totalStructured += 1;
+      if (!lastSummary) lastSummary = entry.summary;
+      if (!lastCore) {
+        const details = entry.summary.details && typeof entry.summary.details === 'object'
+          ? entry.summary.details
+          : {};
+        const detailsCore = humanCoreName(details.runtime_core || details.core);
+        if (detailsCore && detailsCore !== 'неизвестно') lastCore = detailsCore;
+      }
+      if (!entry.summary.ok) errorCount += 1;
+    }
+
+    if (!totalStructured) {
+      return { hidden: true, parts: [] };
+    }
+
+    const parts = [];
+    if (lastSummary) {
+      const time = formatSummaryTimestamp(lastSummary.ts) || lastSummary.ts || '';
+      const status = lastSummary.ok ? 'успешно' : 'ошибка';
+      parts.push({
+        label: 'Последний перезапуск',
+        value: time ? `${status}, ${time}` : status,
+        kind: lastSummary.ok ? 'success' : 'error',
+      });
+    }
+    if (lastCore) {
+      parts.push({ label: 'Активное ядро', value: lastCore, kind: 'info' });
+    }
+    parts.push({
+      label: 'Всего ошибок',
+      value: String(errorCount),
+      kind: errorCount ? 'error' : 'muted',
+    });
+
+    return { hidden: parts.length === 0, parts };
+  }
+
+  function renderSummaryInto(el, summary) {
+    if (!el) return;
+    if (!summary || summary.hidden || !Array.isArray(summary.parts) || !summary.parts.length) {
+      el.hidden = true;
+      el.innerHTML = '';
+      return;
+    }
+    const html = summary.parts
+      .map((part) => {
+        const kind = String(part && part.kind ? part.kind : '').trim();
+        const cls = `restart-log-summary-part${kind ? ' restart-log-summary-part-' + kind : ''}`;
+        return [
+          `<span class="${cls}">`,
+          `<span class="restart-log-summary-label">${safeEscapeHtml(part.label)}:</span>`,
+          ' ',
+          `<span class="restart-log-summary-value">${safeEscapeHtml(part.value)}</span>`,
+          '</span>',
+        ].join('');
+      })
+      .join('<span class="restart-log-summary-sep" aria-hidden="true">·</span>');
+    el.hidden = false;
+    el.innerHTML = html;
+  }
+
+  function renderAllSummary(allEntries) {
+    const els = getSummaryEls();
+    if (!els.length) return;
+    const summary = buildRestartLogSummary(allEntries);
+    els.forEach((el) => renderSummaryInto(el, summary));
+  }
+
   function isElementVisible(el) {
     if (!el) return false;
     try {
@@ -869,13 +971,15 @@ let restartLogModuleApi = null;
 
   function renderAll() {
     const els = getLogEls();
-    if (!els.length) return;
     const raw = RL._rawText || '';
-    els.forEach((el) => {
-      try { el.dataset.rawText = raw; } catch (error) {}
-      renderInto(el, raw);
-    });
+    if (els.length) {
+      els.forEach((el) => {
+        try { el.dataset.rawText = raw; } catch (error) {}
+        renderInto(el, raw);
+      });
+    }
     syncFilterButtons();
+    renderAllSummary(parseRenderedEntries(raw));
   }
 
   function ensurePolling() {
