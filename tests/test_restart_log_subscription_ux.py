@@ -42,6 +42,52 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert ".log-card .log-line-success" in styles_src
 
 
+def test_append_restart_log_broadcasts_appended_event(monkeypatch, tmp_path):
+    from services import restart_log
+    from services import events as events_module
+
+    captured: list[dict] = []
+    monkeypatch.setattr(events_module, "broadcast_event", lambda payload: captured.append(dict(payload)))
+
+    log_file = tmp_path / "restart.log"
+    restart_log.append_restart_log(str(log_file), True, source="routing", duration_ms=120)
+    restart_log.append_restart_log(str(log_file), False, source="core-switch")
+
+    assert log_file.read_text(encoding="utf-8").count("\n") == 2
+    assert len(captured) == 2
+    assert captured[0] == {"event": "restart_log_appended", "source": "routing", "ok": True}
+    assert captured[1] == {"event": "restart_log_appended", "source": "core-switch", "ok": False}
+
+
+def test_append_restart_log_swallows_broadcast_failures(monkeypatch, tmp_path):
+    from services import restart_log
+    from services import events as events_module
+
+    def _boom(_payload):
+        raise RuntimeError("ws broken")
+
+    monkeypatch.setattr(events_module, "broadcast_event", _boom)
+
+    log_file = tmp_path / "restart.log"
+    restart_log.append_restart_log(str(log_file), True, source="routing")
+
+    assert log_file.read_text(encoding="utf-8").startswith("[")
+
+
+def test_restart_log_subscribes_to_events_ws_for_instant_refresh():
+    restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")
+
+    assert "RESTART_LOG_WS_EVENTS" in restart_log_src
+    assert "'restart_log_appended'" in restart_log_src
+    assert "'xkeen_restarted'" in restart_log_src
+    assert "'core_changed'" in restart_log_src
+    assert "scope: 'events'" in restart_log_src
+    assert "/ws/events?token=" in restart_log_src
+    assert "ensureRestartLogWs" in restart_log_src
+    assert "debouncedRestartLogReload" in restart_log_src
+    assert "scheduleRestartLogWsReconnect" in restart_log_src
+
+
 def test_outbounds_subscription_refresh_relies_on_restart_log_for_changed_restarts():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     refresh_marker = "async function subsRefresh("

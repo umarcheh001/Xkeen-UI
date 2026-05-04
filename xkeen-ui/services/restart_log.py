@@ -58,6 +58,17 @@ def append_restart_log(log_file: str, ok: bool, source: str = "api", **meta: obj
         # Logging errors are non-critical
         pass
 
+    try:
+        from services.events import broadcast_event
+
+        broadcast_event({
+            "event": "restart_log_appended",
+            "source": str(source or ""),
+            "ok": bool(ok),
+        })
+    except Exception:
+        pass
+
 
 def write_restart_log(log_file: str, raw_text: str) -> None:
     """Overwrite restart log with full raw output."""

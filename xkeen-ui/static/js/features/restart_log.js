@@ -887,6 +887,114 @@ let restartLogModuleApi = null;
     }, RESTART_LOG_POLL_MS);
   }
 
+  const RESTART_LOG_WS_BACKOFF_MIN_MS = 1500;
+  const RESTART_LOG_WS_BACKOFF_MAX_MS = 30000;
+  const RESTART_LOG_WS_REFRESH_DEBOUNCE_MS = 250;
+  const RESTART_LOG_WS_EVENTS = new Set([
+    'restart_log_appended',
+    'xkeen_restarted',
+    'core_changed',
+    'core_change_error',
+  ]);
+
+  RL._wsBackoffMs = Number(RL._wsBackoffMs) > 0 ? Number(RL._wsBackoffMs) : RESTART_LOG_WS_BACKOFF_MIN_MS;
+  RL._ws = RL._ws || null;
+  RL._wsRefreshTimer = RL._wsRefreshTimer || null;
+  RL._wsAttached = !!RL._wsAttached;
+  RL._wsReconnectTimer = RL._wsReconnectTimer || null;
+
+  function isRestartLogRelevantEvent(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    const name = String(payload.event || '').trim().toLowerCase();
+    return RESTART_LOG_WS_EVENTS.has(name);
+  }
+
+  async function fetchEventsWsToken() {
+    try {
+      const res = await fetch('/api/ws-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ scope: 'events' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data && data.ok && data.token) return String(data.token || '');
+    } catch (error) {}
+    return '';
+  }
+
+  function scheduleRestartLogWsReconnect() {
+    if (RL._wsReconnectTimer) return;
+    const delay = RL._wsBackoffMs;
+    RL._wsBackoffMs = Math.min(RESTART_LOG_WS_BACKOFF_MAX_MS, Math.round(RL._wsBackoffMs * 2));
+    RL._wsReconnectTimer = setTimeout(() => {
+      RL._wsReconnectTimer = null;
+      connectRestartLogWs().catch(() => {});
+    }, delay);
+  }
+
+  function debouncedRestartLogReload() {
+    if (RL._wsRefreshTimer) return;
+    RL._wsRefreshTimer = setTimeout(() => {
+      RL._wsRefreshTimer = null;
+      try { RL.load({ silent: true, toastNewSubscription: true }); } catch (error) {}
+    }, RESTART_LOG_WS_REFRESH_DEBOUNCE_MS);
+  }
+
+  async function connectRestartLogWs() {
+    if (typeof window === 'undefined' || !window.WebSocket) return;
+    const existing = RL._ws;
+    if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    const token = await fetchEventsWsToken();
+    if (!token) {
+      scheduleRestartLogWsReconnect();
+      return;
+    }
+
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${proto}//${window.location.host}/ws/events?token=${encodeURIComponent(token)}`;
+
+    let ws;
+    try {
+      ws = new WebSocket(url);
+    } catch (error) {
+      scheduleRestartLogWsReconnect();
+      return;
+    }
+
+    RL._ws = ws;
+
+    ws.addEventListener('open', () => {
+      RL._wsBackoffMs = RESTART_LOG_WS_BACKOFF_MIN_MS;
+    });
+
+    ws.addEventListener('message', (event) => {
+      let payload = null;
+      try { payload = JSON.parse(String((event && event.data) || '')); } catch (e) {}
+      if (!isRestartLogRelevantEvent(payload)) return;
+      debouncedRestartLogReload();
+    });
+
+    ws.addEventListener('close', () => {
+      if (RL._ws === ws) RL._ws = null;
+      scheduleRestartLogWsReconnect();
+    });
+
+    ws.addEventListener('error', () => {
+      try { ws.close(); } catch (e) {}
+    });
+  }
+
+  function ensureRestartLogWs() {
+    if (RL._wsAttached) return;
+    if (!getLogEls().length) return;
+    RL._wsAttached = true;
+    connectRestartLogWs().catch(() => {});
+  }
+
   RL.renderFromRaw = function renderFromRaw(rawText, options) {
     RL._rawText = String(rawText || '');
     syncKnownEntries(parseRenderedEntries(RL._rawText), options);
@@ -1235,6 +1343,7 @@ let restartLogModuleApi = null;
     } catch (error) {}
 
     ensurePolling();
+    ensureRestartLogWs();
   };
 })();
 
