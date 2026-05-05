@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from services.xray_assets import ensure_xray_dat_assets
 from services.xkeen_commands_catalog import build_xkeen_cmd
@@ -47,6 +47,17 @@ def _core_log(level: str, msg: str, **extra) -> None:
             _CORE_LOGGER.info(full)
     except Exception:
         return
+
+
+def _coerce_subprocess_output(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8", errors="replace")
+        except Exception:
+            return value.decode(errors="replace")
+    return str(value)
 
 
 def _is_arm_platform() -> bool:
@@ -133,7 +144,7 @@ def get_cores_status() -> Tuple[List[str], Optional[str]]:
     return cores, current_core
 
 
-def switch_core(core: str, error_log_path: str) -> None:
+def switch_core(core: str, error_log_path: str, runtime_log: Callable[[str], None] | None = None) -> None:
     """Switch xkeen core to `core` ('xray' or 'mihomo') and restart service.
 
     This replicates behaviour of the previous api_xkeen_core_set implementation:
@@ -182,14 +193,41 @@ def switch_core(core: str, error_log_path: str) -> None:
                 except Exception:
                     log_handle = None
 
+        def _write_runtime_log(text: object) -> None:
+            if not callable(runtime_log):
+                return
+            raw = _coerce_subprocess_output(text)
+            if not raw:
+                return
+            try:
+                runtime_log(raw if raw.endswith("\n") else raw + "\n")
+            except Exception:
+                return
+
         def _write_diag(line: str) -> None:
             if log_handle is None:
+                _write_runtime_log(line)
                 return
             try:
                 log_handle.write(line.rstrip("\n") + "\n")
                 log_handle.flush()
             except Exception:
+                pass
+            _write_runtime_log(line)
+
+        def _write_command_output(output: object) -> None:
+            text = _coerce_subprocess_output(output)
+            if not text:
                 return
+            if log_handle is not None:
+                try:
+                    log_handle.write(text)
+                    if not text.endswith("\n"):
+                        log_handle.write("\n")
+                    log_handle.flush()
+                except Exception:
+                    pass
+            _write_runtime_log(text)
 
         def run_cmd(cmd, *, phase: str, timeout: int) -> None:
             cmd_s = " ".join(str(x) for x in cmd)
@@ -197,12 +235,20 @@ def switch_core(core: str, error_log_path: str) -> None:
             _write_diag(f"[xkeen-ui] {phase}: start cmd={cmd_s} timeout={timeout}s")
             t0 = time.monotonic()
             try:
-                if log_handle is not None:
-                    subprocess.run(cmd, stdout=log_handle, stderr=log_handle, check=True, timeout=timeout)
-                else:
-                    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=timeout)
+                completed = subprocess.run(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    check=True,
+                    timeout=timeout,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                )
+                _write_command_output(getattr(completed, "stdout", ""))
             except subprocess.TimeoutExpired as exc:
                 dt = round(time.monotonic() - t0, 3)
+                _write_command_output(getattr(exc, "output", ""))
                 _core_log("error", "xkeen.cmd_timeout", phase=phase, cmd=cmd_s, elapsed_s=dt)
                 _write_diag(f"[xkeen-ui] {phase}: TIMEOUT after {dt}s cmd={cmd_s}")
                 raise CoreSwitchError(
@@ -217,6 +263,7 @@ def switch_core(core: str, error_log_path: str) -> None:
                 ) from exc
             except subprocess.CalledProcessError as exc:
                 dt = round(time.monotonic() - t0, 3)
+                _write_command_output(getattr(exc, "output", ""))
                 _core_log("error", "xkeen.cmd_failed", phase=phase, cmd=cmd_s, rc=getattr(exc, "returncode", None), elapsed_s=dt)
                 _write_diag(
                     f"[xkeen-ui] {phase}: FAILED rc={getattr(exc,'returncode',None)} after {dt}s cmd={cmd_s}"
@@ -284,10 +331,17 @@ def switch_core(core: str, error_log_path: str) -> None:
                     _core_log("info", "xkeen.cmd_start", phase="xray_test", cmd=cmd_s, timeout=test_timeout)
                     _write_diag(f"[xkeen-ui] xray_test: start cmd={cmd_s} timeout={test_timeout}s")
                     t0t = time.monotonic()
-                    if log_handle is not None:
-                        subprocess.run(cmd, stdout=log_handle, stderr=log_handle, check=True, timeout=test_timeout)
-                    else:
-                        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=test_timeout)
+                    completed = subprocess.run(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        check=True,
+                        timeout=test_timeout,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                    )
+                    _write_command_output(getattr(completed, "stdout", ""))
                     dtt = round(time.monotonic() - t0t, 3)
                     _core_log("info", "xkeen.cmd_ok", phase="xray_test", cmd=cmd_s, elapsed_s=dtt)
                     _write_diag(f"[xkeen-ui] xray_test: ok elapsed={dtt}s cmd={cmd_s}")
@@ -296,6 +350,7 @@ def switch_core(core: str, error_log_path: str) -> None:
                     pass
                 except subprocess.TimeoutExpired as exc:
                     dtt = round(time.monotonic() - t0t, 3) if 't0t' in locals() else None
+                    _write_command_output(getattr(exc, "output", ""))
                     _core_log("error", "xkeen.cmd_timeout", phase="xray_test", cmd=cmd_s if 'cmd_s' in locals() else 'xray -test', elapsed_s=dtt)
                     _write_diag(f"[xkeen-ui] xray_test: TIMEOUT after {dtt}s cmd={cmd_s}")
                     raise CoreSwitchError(
@@ -310,6 +365,7 @@ def switch_core(core: str, error_log_path: str) -> None:
                     ) from exc
                 except subprocess.CalledProcessError as exc:
                     dtt = round(time.monotonic() - t0t, 3) if 't0t' in locals() else None
+                    _write_command_output(getattr(exc, "output", ""))
                     _core_log("error", "xkeen.cmd_failed", phase="xray_test", cmd=cmd_s if 'cmd_s' in locals() else 'xray -test', rc=getattr(exc, 'returncode', None), elapsed_s=dtt)
                     _write_diag(f"[xkeen-ui] xray_test: FAILED rc={getattr(exc,'returncode',None)} after {dtt}s cmd={cmd_s}")
                     raise CoreSwitchError(

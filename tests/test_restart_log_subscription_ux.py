@@ -27,6 +27,8 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert "/api/operation-diagnostics/" in restart_log_src
     assert "data-xk-restart-log-filter" in restart_log_src
     assert "data-xk-restart-log-detail-toggle" in restart_log_src
+    render_all_src = restart_log_src.split("function renderAll()", 1)[1].split("function ensurePolling()", 1)[0]
+    assert "bindLogInteractions();" in render_all_src
     assert "data-xk-restart-log-preflight-ref" in restart_log_src
     assert "rememberXrayPreflightPayload" in restart_log_src
     assert "runtime_status" in restart_log_src

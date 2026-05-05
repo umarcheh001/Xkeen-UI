@@ -93,19 +93,26 @@ def test_core_switch_route_writes_restart_log_entry_with_metadata(monkeypatch, t
     from routes import service
 
     seen: list[tuple[bool, str, dict[str, object]]] = []
+    runtime_logs: list[str] = []
 
     monkeypatch.setattr(service, 'get_cores_status', lambda: (['xray', 'mihomo'], 'xray'))
     monkeypatch.setattr(service, 'get_xkeen_runtime_status', lambda: {
         'runtime_status': 'running',
         'runtime_core': 'mihomo',
     })
-    monkeypatch.setattr(service, 'switch_core', lambda core, error_log: None)
+    def fake_switch_core(core, error_log, runtime_log=None):
+        if runtime_log:
+            runtime_log('[xkeen-ui] start: start cmd=xkeen -start timeout=60s\n')
+            runtime_log('Proxy-client started\n')
+
+    monkeypatch.setattr(service, 'switch_core', fake_switch_core)
 
     app = Flask('service-core-switch-log')
     app.register_blueprint(
         service.create_service_blueprint(
             restart_xkeen=lambda **_kwargs: True,
             append_restart_log=lambda ok, source='api', **meta: seen.append((ok, source, meta)),
+            append_restart_log_text=lambda text: runtime_logs.append(text),
             XRAY_ERROR_LOG=str(tmp_path / 'xray-error.log'),
         )
     )
@@ -123,6 +130,7 @@ def test_core_switch_route_writes_restart_log_entry_with_metadata(monkeypatch, t
     assert meta['runtime_status'] == 'running'
     assert meta['runtime_core'] == 'mihomo'
     assert isinstance(meta['duration_ms'], int)
+    assert runtime_logs == ['[xkeen-ui] start: start cmd=xkeen -start timeout=60s\nProxy-client started\n']
 
 
 def test_service_status_restart_button_uses_background_restart_job_with_pty_log_stream():

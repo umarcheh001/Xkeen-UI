@@ -139,6 +139,7 @@ def register_blueprints(app, ctx: Optional[AppContext] = None):
         create_service_blueprint(
             restart_xkeen=ctx.restart_xkeen,
             append_restart_log=ctx.append_restart_log,
+            append_restart_log_text=ctx.append_restart_log_text,
             XRAY_ERROR_LOG=ctx.xray_error_log,
             read_restart_log=ctx.read_restart_log,
             clear_restart_log=ctx.clear_restart_log,

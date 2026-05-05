@@ -7,6 +7,7 @@ import subprocess
 from typing import Iterable, List, Sequence
 
 from services.restart_log import append_restart_log as _append_restart_log
+from services.restart_log import append_restart_log_text as _append_restart_log_text
 from services.restart_log import read_restart_log as _read_restart_log
 from services.xkeen_commands_catalog import build_xkeen_cmd, resolve_xkeen_init_script
 
@@ -14,6 +15,11 @@ from services.xkeen_commands_catalog import build_xkeen_cmd, resolve_xkeen_init_
 def append_restart_log(log_file: str, ok: bool, source: str = "api", **meta: object) -> None:
     """Append a single line about restart result to the restart log."""
     return _append_restart_log(log_file, ok, source=source, **meta)
+
+
+def append_restart_log_text(log_file: str, raw_text: str) -> None:
+    """Append raw runtime output to the restart log."""
+    return _append_restart_log_text(log_file, raw_text)
 
 
 def read_restart_log(log_file: str, limit: int = 100) -> List[str]:

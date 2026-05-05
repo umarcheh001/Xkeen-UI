@@ -1114,6 +1114,7 @@ let restartLogModuleApi = null;
     }
     syncFilterButtons();
     renderAllSummary(parseRenderedEntries(raw));
+    bindLogInteractions();
   }
 
   function ensurePolling() {

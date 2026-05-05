@@ -70,6 +70,23 @@ def append_restart_log(log_file: str, ok: bool, source: str = "api", **meta: obj
         pass
 
 
+def append_restart_log_text(log_file: str, raw_text: str) -> None:
+    """Append raw runtime output to the restart log."""
+    text = str(raw_text or "")
+    if not text:
+        return
+    if not text.endswith("\n"):
+        text += "\n"
+    log_dir = os.path.dirname(log_file)
+    if log_dir and not os.path.isdir(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+    try:
+        with open(log_file, "a", encoding="utf-8", errors="replace") as f:
+            f.write(text)
+    except Exception:
+        pass
+
+
 def write_restart_log(log_file: str, raw_text: str) -> None:
     """Overwrite restart log with full raw output."""
     log_dir = os.path.dirname(log_file)

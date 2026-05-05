@@ -45,6 +45,7 @@ def create_service_blueprint(
     append_restart_log: Callable[..., None],
     XRAY_ERROR_LOG: str,
     broadcast_event: Callable[[dict], None] | None = None,
+    append_restart_log_text: Callable[..., None] | None = None,
     read_restart_log: Callable[..., list[str]] | None = None,
     clear_restart_log: Callable[..., None] | None = None,
     read_operation_diagnostic: Callable[..., dict[str, Any] | None] | None = None,
@@ -120,6 +121,14 @@ def create_service_blueprint(
                 append_restart_log(ok, source=source)
             except Exception:
                 pass
+        except Exception:
+            pass
+
+    def _append_restart_log_text(raw_text: str) -> None:
+        if not append_restart_log_text:
+            return
+        try:
+            append_restart_log_text(raw_text)
         except Exception:
             pass
 
@@ -343,13 +352,28 @@ def create_service_blueprint(
         core = ""
         started_at = time.monotonic()
         previous_core = ""
+        runtime_log_chunks: list[str] = []
+
+        def _capture_runtime_log(text: str) -> None:
+            raw = str(text or "")
+            if raw:
+                runtime_log_chunks.append(raw)
+
+        def _flush_runtime_log() -> None:
+            if not runtime_log_chunks:
+                return
+            raw = "".join(runtime_log_chunks)
+            runtime_log_chunks.clear()
+            _append_restart_log_text(raw)
+
         try:
             payload = request.get_json(silent=True) or {}
             core = str(payload.get("core", "")).strip()
             previous_core = _detect_core_for_restart_log()
             try:
-                switch_core(core, XRAY_ERROR_LOG)
+                switch_core(core, XRAY_ERROR_LOG, runtime_log=_capture_runtime_log)
             except ValueError:
+                _flush_runtime_log()
                 _append_restart_log(
                     False,
                     source="core-switch",
@@ -367,6 +391,7 @@ def create_service_blueprint(
                     hint="Укажите допустимое ядро: xray или mihomo.",
                 )
             except CoreSwitchError as e:
+                _flush_runtime_log()
                 details = e.details or {}
                 _append_restart_log(
                     False,
@@ -388,6 +413,7 @@ def create_service_blueprint(
                     log_extra={"core": core},
                 )
             except RuntimeError as e:
+                _flush_runtime_log()
                 _append_restart_log(
                     False,
                     source="core-switch",
@@ -410,6 +436,7 @@ def create_service_blueprint(
             # Уведомляем всех WS-подписчиков о смене ядра.
             _emit_event({"event": "core_changed", "core": core, "ok": True})
 
+            _flush_runtime_log()
             _append_restart_log(
                 True,
                 source="core-switch",
@@ -422,6 +449,7 @@ def create_service_blueprint(
             _core_log("info", "xkeen.core_set", core=core)
             return jsonify({"ok": True, "core": core, "restarted": True}), 200
         except Exception as e:
+            _flush_runtime_log()
             _emit_event({"event": "core_change_error", "core": core, "ok": False, "error": "core_switch_failed"})
             _append_restart_log(
                 False,

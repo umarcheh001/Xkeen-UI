@@ -456,6 +456,7 @@ def create_app(*, ws_runtime: bool = False):
     # -------- helpers for blueprints
     from services.xkeen import (
         append_restart_log as _svc_append_restart_log,
+        append_restart_log_text as _svc_append_restart_log_text,
         read_restart_log as _svc_read_restart_log,
         restart_xkeen as _svc_restart_xkeen,
     )
@@ -468,6 +469,9 @@ def create_app(*, ws_runtime: bool = False):
 
     def append_restart_log(ok, source: str = "api", **meta):
         return _svc_append_restart_log(RESTART_LOG_FILE, ok, source=source, **meta)
+
+    def append_restart_log_text(raw_text: str):
+        return _svc_append_restart_log_text(RESTART_LOG_FILE, raw_text)
 
     def read_restart_log(limit: int = 100):
         return _svc_read_restart_log(RESTART_LOG_FILE, limit=limit)
@@ -591,6 +595,7 @@ def create_app(*, ws_runtime: bool = False):
         find_latest_auto_backup_for=_find_latest_auto_backup_for,
         restart_xkeen=restart_xkeen,
         append_restart_log=append_restart_log,
+        append_restart_log_text=append_restart_log_text,
         save_operation_diagnostic=save_operation_diagnostic,
         read_operation_diagnostic=read_operation_diagnostic,
         read_restart_log=read_restart_log,
