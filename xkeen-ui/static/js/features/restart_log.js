@@ -190,6 +190,7 @@ let restartLogModuleApi = null;
 
   const XRAY_TS_LINE_RE = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s*(?:(?:\[([^\]]+)\])|((?:INFO|WARN|WARNING|ERROR|ERRO|FATA|DEBUG)))?\s*(.*)$/i;
   const XRAY_BRACKET_LINE_RE = /^(INFO|WARN|WARNING|ERROR|ERRO|FATA|DEBUG)\[([^\]]+)\]\s*(.*)$/i;
+  const RUNTIME_LOGFMT_LINE_RE = /^time=(?:"([^"]+)"|([^\s]+))\s+level=(?:"?([A-Za-z]+)"?)\s+msg=(?:"((?:\\.|[^"\\])*)"|(.+))\s*$/i;
 
   function safeEscapeHtml(text) {
     try {
@@ -205,6 +206,17 @@ let restartLogModuleApi = null;
 
   function ansiToHtml(line) {
     return ansiToXkeenHtml(line || '');
+  }
+
+  function decodeLogfmtValue(value) {
+    const raw = String(value || '');
+    if (!raw) return '';
+    return raw
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r')
+      .replace(/\\t/g, '\t')
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\');
   }
 
   function titleCaseWords(text) {
@@ -744,13 +756,24 @@ let restartLogModuleApi = null;
     }
 
     const bracketMatch = raw.match(XRAY_BRACKET_LINE_RE);
-    if (!bracketMatch) return null;
-    const level = normalizeRuntimeLevel(bracketMatch[1]);
+    if (bracketMatch) {
+      const level = normalizeRuntimeLevel(bracketMatch[1]);
+      return {
+        level,
+        kind: runtimeLevelKind(level),
+        ts: formatRuntimeTimestamp(bracketMatch[2]),
+        message: String(bracketMatch[3] || '').replace(/^\s+/, ''),
+      };
+    }
+
+    const logfmtMatch = raw.match(RUNTIME_LOGFMT_LINE_RE);
+    if (!logfmtMatch) return null;
+    const level = normalizeRuntimeLevel(logfmtMatch[3]);
     return {
       level,
       kind: runtimeLevelKind(level),
-      ts: formatRuntimeTimestamp(bracketMatch[2]),
-      message: String(bracketMatch[3] || '').replace(/^\s+/, ''),
+      ts: formatRuntimeTimestamp(logfmtMatch[1] || logfmtMatch[2]),
+      message: decodeLogfmtValue(logfmtMatch[4] || logfmtMatch[5] || '').replace(/^\s+/, ''),
     };
   }
 

@@ -130,3 +130,12 @@ def test_outbounds_subscription_refresh_relies_on_restart_log_for_changed_restar
     assert "const restartedCount = results.filter((item) => !!(item && item.restarted)).length;" in outbounds_src
     assert "toastXkeen(msg, 'success');" not in subs_refresh_src
     assert "toastXkeen(msg, 'success');" not in subs_refresh_due_src
+
+
+def test_restart_log_parses_mihomo_logfmt_runtime_lines():
+    restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")
+
+    assert "RUNTIME_LOGFMT_LINE_RE" in restart_log_src
+    assert "decodeLogfmtValue" in restart_log_src
+    assert "logfmtMatch[3]" in restart_log_src
+    assert "logfmtMatch[4] || logfmtMatch[5]" in restart_log_src

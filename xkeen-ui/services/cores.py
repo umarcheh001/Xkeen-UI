@@ -121,21 +121,36 @@ def _is_restart_log_start_summary_line(line: str) -> bool:
     )
 
 
-def _select_restart_log_output(phase: str, output: object, *, ok: bool) -> str:
+def _core_mode_label(core: str) -> str:
+    value = str(core or "").strip().lower()
+    if value == "xray":
+        return "Hybrid"
+    if value == "mihomo":
+        return "Mihomo"
+    return value or "unknown"
+
+
+def _select_restart_log_output(phase: str, output: object, *, ok: bool, core: str = "") -> str:
+    phase = str(phase or "").strip().lower()
     text = _coerce_subprocess_output(output).replace("\r\n", "\n").replace("\r", "\n")
     if not text:
+        if ok and phase == "start" and core:
+            return f"Прокси-клиент запущен в режиме {_core_mode_label(core)}\n"
         return ""
 
     lines = [line.rstrip() for line in text.split("\n") if line.strip()]
     if not lines:
+        if ok and phase == "start" and core:
+            return f"Прокси-клиент запущен в режиме {_core_mode_label(core)}\n"
         return ""
 
-    phase = str(phase or "").strip().lower()
     if ok and phase in {"switch_core", "xray_test"}:
         return ""
 
     if ok and phase == "start":
         selected = [line for line in lines if _is_restart_log_start_summary_line(line)]
+        if core and not any(_is_restart_log_service_line(line) for line in selected):
+            selected.append(f"Прокси-клиент запущен в режиме {_core_mode_label(core)}")
         return ("\n".join(selected) + "\n") if selected else ""
 
     selected = [line for line in lines if _is_restart_log_service_line(line) or _is_restart_log_error_line(line)]
@@ -275,9 +290,10 @@ def switch_core(core: str, error_log_path: str, runtime_log: Callable[[str], Non
 
         def _write_command_output(output: object, *, phase: str, ok: bool) -> None:
             text = _coerce_subprocess_output(output)
-            if not text:
+            runtime_text = _select_restart_log_output(phase, text, ok=ok, core=core)
+            if not text and not runtime_text:
                 return
-            if log_handle is not None:
+            if text and log_handle is not None:
                 try:
                     log_handle.write(text)
                     if not text.endswith("\n"):
@@ -285,7 +301,7 @@ def switch_core(core: str, error_log_path: str, runtime_log: Callable[[str], Non
                     log_handle.flush()
                 except Exception:
                     pass
-            _write_runtime_log(_select_restart_log_output(phase, text, ok=ok))
+            _write_runtime_log(runtime_text)
 
         def run_cmd(cmd, *, phase: str, timeout: int) -> None:
             cmd_s = " ".join(str(x) for x in cmd)

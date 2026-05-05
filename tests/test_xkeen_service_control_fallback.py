@@ -187,6 +187,21 @@ def test_core_switch_start_does_not_wait_for_foreground_start_command(monkeypatc
     assert 'TIMEOUT' not in combined
 
 
+def test_core_switch_start_logfmt_output_keeps_mode_line():
+    from services import cores
+
+    output = (
+        'time="2026-05-05T22:38:46.295139987Z" level=info msg="Start initial configuration in progress"\n'
+        'time="2026-05-05T22:38:46.360145096Z" level=info msg="Initial configuration complete, total time: 10ms"\n'
+    )
+
+    selected = cores._select_restart_log_output("start", output, ok=True, core="mihomo")
+
+    assert 'time="2026-05-05T22:38:46.295139987Z" level=info' in selected
+    assert "Initial configuration complete" in selected
+    assert "Прокси-клиент запущен в режиме Mihomo" in selected
+
+
 def test_service_status_restart_button_uses_background_restart_job_with_pty_log_stream():
     text = Path('xkeen-ui/static/js/features/service_status.js').read_text(encoding='utf-8')
 
