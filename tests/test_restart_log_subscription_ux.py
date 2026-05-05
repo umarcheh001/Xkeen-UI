@@ -33,12 +33,20 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert "label: 'Подписка Xray'" in restart_log_src
     assert "showSubscriptionRefreshToast" in restart_log_src
     assert "toastNewSubscription" in restart_log_src
+    assert "XRAY_BRACKET_LINE_RE" in restart_log_src
+    assert "match[5] || match[6]" in restart_log_src
+    assert "buildRuntimeLogLineHtml" in restart_log_src
+    assert "restart-log-runtime-line" in restart_log_src
+    assert "restart-log-service-line" in restart_log_src
     assert "restart-log-pill-subscription" in styles_src
     assert "restart-log-pill-core" in styles_src
     assert "restart-log-details-toggle" in styles_src
     assert "restart-log-pill-preflight" in styles_src
     assert "restart-log-preflight-open" in styles_src
     assert "restart-log-filter-btn" in styles_src
+    assert "restart-log-level-info" in styles_src
+    assert "restart-log-runtime-source" in styles_src
+    assert "scrollbar-color" in styles_src
     assert ".log-card .log-line-success" in styles_src
 
 

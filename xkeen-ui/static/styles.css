@@ -5301,7 +5301,44 @@ html[data-theme="light"] .xray-log-select option{
 
 /* Restart log cards: terminal-like level colors (helps Xray logs look closer to Mihomo) */
 .log-card .log-block {
-  white-space: pre;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.86), rgba(2, 6, 23, 0.96)),
+    #020617;
+  border-color: rgba(59, 130, 246, 0.24);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-height: 124px;
+  max-height: 224px;
+  white-space: normal;
+  color: color-mix(in srgb, var(--text, #e5e7eb) 90%, #c7d2fe 10%);
+  font-size: calc(12.5px * var(--xk-font-scale));
+  line-height: 1.45;
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.08),
+    inset 0 0 0 1px rgba(15, 23, 42, 0.55),
+    0 14px 34px rgba(2, 6, 23, 0.22);
+  scrollbar-color: rgba(96, 165, 250, 0.46) rgba(15, 23, 42, 0.7);
+  scrollbar-width: thin;
+}
+
+.log-card .log-block::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.log-card .log-block::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.72);
+  border-radius: 999px;
+}
+
+.log-card .log-block::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(15, 23, 42, 0.72);
+  border-radius: 999px;
+  background: rgba(96, 165, 250, 0.46);
+}
+
+.log-card .log-block::-webkit-scrollbar-thumb:hover {
+  background: rgba(147, 197, 253, 0.62);
 }
 
 .log-card .restart-log-summary {
@@ -5381,8 +5418,121 @@ html[data-theme="light"] .xray-log-select option{
 }
 
 .log-card .restart-log-line {
-  padding: 4px 0 4px 8px;
+  padding: 2px 6px;
   white-space: normal;
+}
+
+.log-card .restart-log-line.log-line-info,
+.log-card .restart-log-line.log-line-warning,
+.log-card .restart-log-line.log-line-success,
+.log-card .restart-log-line.log-line-error,
+.log-card .restart-log-line.log-line-debug,
+.log-card .restart-log-terminal-entry.log-line-info,
+.log-card .restart-log-terminal-entry.log-line-warning,
+.log-card .restart-log-terminal-entry.log-line-success,
+.log-card .restart-log-terminal-entry.log-line-error,
+.log-card .restart-log-terminal-entry.log-line-debug {
+  box-shadow: none;
+}
+
+.log-card .restart-log-terminal-entry {
+  min-width: max-content;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.log-card .restart-log-terminal-entry:hover {
+  background: rgba(30, 41, 59, 0.28);
+}
+
+.log-card .restart-log-runtime-line {
+  display: grid;
+  grid-template-columns: 202px 50px minmax(0, max-content);
+  align-items: baseline;
+  column-gap: 10px;
+  min-width: max-content;
+}
+
+.log-card .restart-log-runtime-ts {
+  color: color-mix(in srgb, var(--muted, #94a3b8) 82%, #e0f2fe 18%);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.log-card .restart-log-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  min-height: 18px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background:
+    linear-gradient(180deg, rgba(51, 65, 85, 0.82), rgba(15, 23, 42, 0.76));
+  color: color-mix(in srgb, var(--text, #e5e7eb) 84%, #bfdbfe 16%);
+  font-size: 0.86em;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 4px rgba(0, 0, 0, 0.22);
+}
+
+.log-card .restart-log-level-info {
+  border-color: color-mix(in srgb, var(--sem-info, #93c5fd) 34%, transparent);
+}
+
+.log-card .restart-log-level-warning {
+  border-color: color-mix(in srgb, var(--sem-warning, #fbbf24) 38%, transparent);
+  color: color-mix(in srgb, var(--sem-warning, #fbbf24) 78%, white 22%);
+}
+
+.log-card .restart-log-level-error {
+  border-color: color-mix(in srgb, var(--sem-error, #f87171) 42%, transparent);
+  color: color-mix(in srgb, var(--sem-error, #f87171) 78%, white 22%);
+}
+
+.log-card .restart-log-level-debug {
+  color: color-mix(in srgb, var(--sem-debug, #a1a1aa) 78%, white 22%);
+}
+
+.log-card .restart-log-runtime-message,
+.log-card .restart-log-raw-line {
+  color: color-mix(in srgb, var(--text, #e5e7eb) 88%, #bfdbfe 12%);
+  white-space: pre;
+}
+
+.log-card .restart-log-runtime-source {
+  color: color-mix(in srgb, var(--sem-info, #93c5fd) 72%, white 28%);
+  font-weight: 700;
+}
+
+.log-card .restart-log-service-line {
+  display: inline-grid;
+  grid-template-columns: 16px max-content;
+  align-items: baseline;
+  column-gap: 8px;
+  min-width: max-content;
+  font-weight: 700;
+  white-space: pre;
+}
+
+.log-card .restart-log-service-spacer {
+  width: 16px;
+}
+
+.log-card .restart-log-service-success {
+  color: color-mix(in srgb, var(--sem-success, #4ade80) 84%, white 16%);
+}
+
+.log-card .restart-log-service-error {
+  color: color-mix(in srgb, var(--sem-error, #f87171) 84%, white 16%);
+}
+
+.log-card .restart-log-service-warning {
+  color: color-mix(in srgb, var(--sem-warning, #fbbf24) 78%, white 22%);
 }
 
 .log-card .restart-log-entry-wrap {

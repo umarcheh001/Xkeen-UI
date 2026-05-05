@@ -188,7 +188,8 @@ let restartLogModuleApi = null;
     },
   });
 
-  const XRAY_TS_LINE_RE = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s*(?:\[([^\]]+)\])?\s*(.*)$/;
+  const XRAY_TS_LINE_RE = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s*(?:(?:\[([^\]]+)\])|((?:INFO|WARN|WARNING|ERROR|ERRO|FATA|DEBUG)))?\s*(.*)$/i;
+  const XRAY_BRACKET_LINE_RE = /^(INFO|WARN|WARNING|ERROR|ERRO|FATA|DEBUG)\[([^\]]+)\]\s*(.*)$/i;
 
   function safeEscapeHtml(text) {
     try {
@@ -682,15 +683,148 @@ let restartLogModuleApi = null;
     if (!match) return s;
 
     const iso = `${match[1]}-${match[2]}-${match[3]}T${match[4]}`;
-    const levelRaw = String(match[5] || '').trim().toLowerCase();
+    const levelRaw = String(match[5] || match[6] || '').trim().toLowerCase();
     let level = 'INFO';
     if (levelRaw.startsWith('warn')) level = 'WARN';
     else if (levelRaw.startsWith('error')) level = 'ERROR';
     else if (levelRaw.startsWith('fatal')) level = 'FATA';
     else if (levelRaw.startsWith('debug')) level = 'DEBUG';
 
-    const message = String(match[6] || '').replace(/^\s+/, '');
+    const message = String(match[7] || '').replace(/^\s+/, '');
     return message ? `${level}[${iso}] ${message}` : `${level}[${iso}]`;
+  }
+
+  function normalizeRuntimeLevel(value) {
+    const raw = String(value || '').trim().toUpperCase();
+    if (!raw) return 'INFO';
+    if (raw === 'WARNING') return 'WARN';
+    if (raw === 'ERROR') return 'ERRO';
+    return raw;
+  }
+
+  function runtimeLevelKind(level) {
+    const raw = normalizeRuntimeLevel(level).toLowerCase();
+    if (raw === 'warn' || raw === 'warning') return 'warning';
+    if (raw === 'erro' || raw === 'error' || raw === 'fata' || raw === 'fatal') return 'error';
+    if (raw === 'debug') return 'debug';
+    return 'info';
+  }
+
+  function formatRuntimeTimestamp(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})T(.+)$/);
+    if (iso) return `${iso[1]}/${iso[2]}/${iso[3]} ${iso[4]}`;
+    return raw;
+  }
+
+  function splitRuntimeMessage(message) {
+    const raw = String(message || '').replace(/^\s+/, '');
+    const match = raw.match(/^([A-Za-z0-9_.\/-]+):\s+(.*)$/);
+    if (!match) return { source: '', body: raw };
+    return {
+      source: String(match[1] || '').trim(),
+      body: String(match[2] || '').trim(),
+    };
+  }
+
+  function parseRuntimeLogLine(line) {
+    const raw = String(line || '');
+    if (!raw) return null;
+
+    const tsMatch = raw.match(XRAY_TS_LINE_RE);
+    if (tsMatch) {
+      const level = normalizeRuntimeLevel(tsMatch[5] || tsMatch[6] || 'INFO');
+      return {
+        level,
+        kind: runtimeLevelKind(level),
+        ts: `${tsMatch[1]}/${tsMatch[2]}/${tsMatch[3]} ${tsMatch[4]}`,
+        message: String(tsMatch[7] || '').replace(/^\s+/, ''),
+      };
+    }
+
+    const bracketMatch = raw.match(XRAY_BRACKET_LINE_RE);
+    if (!bracketMatch) return null;
+    const level = normalizeRuntimeLevel(bracketMatch[1]);
+    return {
+      level,
+      kind: runtimeLevelKind(level),
+      ts: formatRuntimeTimestamp(bracketMatch[2]),
+      message: String(bracketMatch[3] || '').replace(/^\s+/, ''),
+    };
+  }
+
+  function buildRuntimeLogLineHtml(line) {
+    const parsed = parseRuntimeLogLine(line);
+    if (!parsed) return '';
+    const parts = splitRuntimeMessage(parsed.message);
+    const sourceHtml = parts.source
+      ? `<span class="restart-log-runtime-source">${safeEscapeHtml(parts.source)}:</span>`
+      : '';
+    const bodyHtml = parts.body ? safeEscapeHtml(parts.body) : '';
+    return [
+      `<span class="restart-log-runtime-line restart-log-runtime-${parsed.kind}">`,
+      `<span class="restart-log-runtime-ts">${safeEscapeHtml(parsed.ts)}</span>`,
+      `<span class="restart-log-level restart-log-level-${parsed.kind}">${safeEscapeHtml(parsed.level)}</span>`,
+      '<span class="restart-log-runtime-message">',
+      sourceHtml,
+      sourceHtml && bodyHtml ? ' ' : '',
+      bodyHtml,
+      '</span>',
+      '</span>',
+    ].join('');
+  }
+
+  function serviceStatusKind(line) {
+    const lower = String(line || '').toLowerCase();
+    if (!lower.trim()) return '';
+    if (
+      lower.includes('остановлен') ||
+      lower.includes('не активна') ||
+      lower.includes('not active') ||
+      lower.includes('stopped')
+    ) {
+      return 'error';
+    }
+    if (
+      lower.includes('запущен') ||
+      lower.includes('started') ||
+      lower.includes('running')
+    ) {
+      return 'success';
+    }
+    if (
+      lower.includes('прокси-клиент') ||
+      lower.includes('прозрачного прокси') ||
+      lower.includes('mihomo') ||
+      lower.includes('xkeen')
+    ) {
+      return 'warning';
+    }
+    return '';
+  }
+
+  function buildServiceStatusLineHtml(line) {
+    const raw = String(line || '').trim();
+    const kind = serviceStatusKind(raw);
+    if (!raw || !kind) return '';
+    return [
+      `<span class="restart-log-service-line restart-log-service-${kind}">`,
+      '<span class="restart-log-service-spacer" aria-hidden="true"></span>',
+      `<span class="restart-log-service-message">${ansiToHtml(raw)}</span>`,
+      '</span>',
+    ].join('');
+  }
+
+  function buildPlainLogLineHtml(rawLine, normalizedLine) {
+    const raw = String(rawLine || '');
+    const normalized = String(normalizedLine || raw);
+    return (
+      buildRuntimeLogLineHtml(raw) ||
+      buildRuntimeLogLineHtml(normalized) ||
+      buildServiceStatusLineHtml(raw) ||
+      `<span class="restart-log-raw-line">${ansiToHtml(normalized)}</span>`
+    );
   }
 
   function normalizeTextForTerminal(text) {
@@ -961,7 +1095,7 @@ let restartLogModuleApi = null;
             cls = 'log-line log-line-debug';
           }
         }
-        return `<span class="${cls}">${ansiToHtml(normalized)}</span>`;
+        return `<span class="${cls} restart-log-terminal-entry">${buildPlainLogLineHtml(entry && entry.raw ? entry.raw : '', normalized)}</span>`;
       })
       .join('');
 
