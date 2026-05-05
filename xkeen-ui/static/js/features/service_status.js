@@ -1202,6 +1202,8 @@ let serviceStatusModuleApi = null;
     coreButtons.forEach((btn) => {
       btn.disabled = true;
     });
+    _coreModalLoading = true;
+    syncCoreModalSelectionUi();
 
     try {
       const res = await fetch('/api/xkeen/core', {
@@ -1214,6 +1216,7 @@ let serviceStatusModuleApi = null;
 
       if (!ok) {
         setCoreModalStatus(data && data.error ? `Ошибка: ${data.error}` : 'Не удалось сменить ядро.', 'error');
+        _coreModalLoading = false;
         confirmBtn.disabled = false;
         coreButtons.forEach((btn) => {
           if (btn.style.display !== 'none') btn.disabled = false;
@@ -1242,6 +1245,7 @@ let serviceStatusModuleApi = null;
     } catch (err) {
       console.error('core change error', err);
       setCoreModalStatus('Ошибка при смене ядра.', 'error');
+      _coreModalLoading = false;
       confirmBtn.disabled = false;
       coreButtons.forEach((btn) => {
         if (btn.style.display !== 'none') btn.disabled = false;

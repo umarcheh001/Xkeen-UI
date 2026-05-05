@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from flask import Flask
 
@@ -133,6 +134,58 @@ def test_core_switch_route_writes_restart_log_entry_with_metadata(monkeypatch, t
     assert runtime_logs == ['[xkeen-ui] start: start cmd=xkeen -start timeout=60s\nProxy-client started\n']
 
 
+def test_core_switch_start_does_not_wait_for_foreground_start_command(monkeypatch, tmp_path):
+    from services import cores
+
+    runtime_logs: list[str] = []
+    start_seen = {'value': False}
+
+    monkeypatch.setenv('XKEEN_CORE_START_GRACE_AFTER_RUNNING_MS', '0')
+    monkeypatch.setattr(cores, 'build_xkeen_cmd', lambda flag: ['xkeen', flag])
+    monkeypatch.setattr(cores, 'detect_running_core', lambda: 'mihomo' if start_seen['value'] else 'xray')
+    monkeypatch.setattr(
+        cores.subprocess,
+        'run',
+        lambda *_args, **_kwargs: SimpleNamespace(stdout='Прокси-клиент остановлен\n  Выполнена смена ядра на Mihomo\n'),
+    )
+
+    class FakeStartProcess:
+        returncode = None
+
+        def __init__(self, _cmd, stdin=None, stdout=None, stderr=None):
+            start_seen['value'] = True
+            if stdout is not None:
+                output = (
+                    'Прокси-клиент запущен в режиме Mihomo\n'
+                    'infra/conf/serial: Reading config: noisy.yaml\n'
+                    'INFO[2026-05-05T18:05:24Z] Initial configuration complete, total time: 8ms\n'
+                )
+                stdout.write(output.encode('utf-8'))
+                stdout.flush()
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.returncode = -15
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    monkeypatch.setattr(cores.subprocess, 'Popen', FakeStartProcess)
+
+    cores.switch_core('mihomo', str(tmp_path / 'xray-error.log'), runtime_log=runtime_logs.append)
+
+    combined = ''.join(runtime_logs)
+    assert 'Прокси-клиент запущен в режиме Mihomo' in combined
+    assert 'Initial configuration complete' in combined
+    assert 'infra/conf/serial' not in combined
+    assert 'TIMEOUT' not in combined
+
+
 def test_service_status_restart_button_uses_background_restart_job_with_pty_log_stream():
     text = Path('xkeen-ui/static/js/features/service_status.js').read_text(encoding='utf-8')
 
@@ -146,3 +199,11 @@ def test_service_status_polls_runtime_status_without_http_cache():
 
     assert "fetch('/api/xkeen/status', {" in text
     assert "cache: 'no-store'" in text
+
+
+def test_core_switch_modal_sets_loading_during_submit():
+    text = Path('xkeen-ui/static/js/features/service_status.js').read_text(encoding='utf-8')
+    confirm_src = text.split('async function confirmXkeenCoreChange()', 1)[1].split('function bindCoreModalUI()', 1)[0]
+
+    assert '_coreModalLoading = true;' in confirm_src
+    assert confirm_src.count('_coreModalLoading = false;') >= 2

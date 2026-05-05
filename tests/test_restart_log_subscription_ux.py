@@ -48,6 +48,8 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert "restart-log-filter-btn" in styles_src
     assert "restart-log-level-info" in styles_src
     assert "restart-log-runtime-source" in styles_src
+    assert "grid-template-columns: 202px max-content minmax(0, max-content);" in styles_src
+    assert "box-sizing: border-box;" in styles_src
     assert "scrollbar-color" in styles_src
     assert ".log-card .log-line-success" in styles_src
 
