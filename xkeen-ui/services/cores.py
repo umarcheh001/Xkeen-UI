@@ -272,7 +272,6 @@ def switch_core(core: str, error_log_path: str, runtime_log: Callable[[str], Non
                 log_handle.flush()
             except Exception:
                 pass
-            _write_runtime_log(line)
 
         def _write_command_output(output: object, *, phase: str, ok: bool) -> None:
             text = _coerce_subprocess_output(output)

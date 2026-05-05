@@ -183,6 +183,7 @@ def test_core_switch_start_does_not_wait_for_foreground_start_command(monkeypatc
     assert 'Прокси-клиент запущен в режиме Mihomo' in combined
     assert 'Initial configuration complete' in combined
     assert 'infra/conf/serial' not in combined
+    assert '[xkeen-ui]' not in combined
     assert 'TIMEOUT' not in combined
 
 
