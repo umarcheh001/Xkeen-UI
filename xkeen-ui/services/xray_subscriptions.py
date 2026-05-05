@@ -120,6 +120,10 @@ AUTO_MIGRATED_RULE_TAG_PREFIX = "xk_auto_vless_pool_"
 ROUTING_MODE_SAFE = "safe-fallback"
 ROUTING_MODE_STRICT = "migrate-vless-rules"
 ROUTING_ROOT_KEYS = ("domainStrategy", "domainMatcher", "rules", "balancers")
+_TAG_PREFIX_MAX_LEN = 64
+_NODE_NAME_MAX_LEN = 36
+_TAG_MAX_LEN = 128
+_TAG_SEPARATOR = "--"
 
 
 SnapshotCallback = Callable[[str], None]
@@ -180,7 +184,7 @@ def _clean_tag_prefix(value: Any, fallback: str) -> str:
         raw = fallback or "sub"
     if raw.lower() in RESERVED_TAGS:
         raw = raw + "_sub"
-    return raw[:32].strip("_.:-") or "sub"
+    return raw[:_TAG_PREFIX_MAX_LEN].strip("_.:-") or "sub"
 
 
 def _clean_regex_filter(value: Any) -> str:
@@ -1422,11 +1426,7 @@ def _clean_node_name(name: str, fallback: str) -> str:
     value = value.strip("_.:-")
     if not value:
         value = fallback
-    return value[:36].strip("_.:-") or fallback
-
-
-_TAG_MAX_LEN = 64
-_TAG_SEPARATOR = "--"
+    return value[:_NODE_NAME_MAX_LEN].strip("_.:-") or fallback
 
 
 def _unique_tag(prefix: str, node: str, used: set[str]) -> str:

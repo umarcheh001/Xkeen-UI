@@ -3644,6 +3644,7 @@ let outboundsModuleApi = null;
     let _subscriptionPreviewBusy = false;
     let _subscriptionSaveBusy = false;
     const SUB_DEFAULT_INTERVAL_HOURS = 24;
+    const SUB_TAG_PREFIX_MAX_LEN = 64;
     const SUB_RESERVED_TAGS = new Set([
       'direct',
       'block',
@@ -3701,7 +3702,7 @@ let outboundsModuleApi = null;
       raw = raw.replace(/^[_.:-]+|[_.:-]+$/g, '');
       if (!raw) raw = String(fallback || 'sub').trim() || 'sub';
       if (SUB_RESERVED_TAGS.has(raw.toLowerCase())) raw += '_sub';
-      return raw.slice(0, 32).replace(/^[_.:-]+|[_.:-]+$/g, '') || 'sub';
+      return raw.slice(0, SUB_TAG_PREFIX_MAX_LEN).replace(/^[_.:-]+|[_.:-]+$/g, '') || 'sub';
     }
 
     function subsNormalizeBalancerTags(value) {

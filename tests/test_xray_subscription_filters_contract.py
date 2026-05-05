@@ -282,6 +282,9 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
 
     assert "nameNote: 'outbounds-subscriptions-name-note'" in outbounds_src
     assert "tagNote: 'outbounds-subscriptions-tag-note'" in outbounds_src
+    assert "const SUB_TAG_PREFIX_MAX_LEN = 64;" in outbounds_src
+    assert "raw.slice(0, SUB_TAG_PREFIX_MAX_LEN)" in outbounds_src
+    assert "raw.slice(0, 32)" not in outbounds_src
     assert "urlNote: 'outbounds-subscriptions-url-note'" in outbounds_src
     assert "intervalNote: 'outbounds-subscriptions-interval-note'" in outbounds_src
     assert "intervalApply: 'outbounds-subscriptions-interval-apply-btn'" in outbounds_src

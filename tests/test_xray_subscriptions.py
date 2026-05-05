@@ -2515,10 +2515,76 @@ def test_build_subscription_json_outbounds_keeps_distinct_keys_for_same_config_w
     assert stats["filtered_out_count"] == 1
 
 
-def test_build_subscription_outbounds_shrinks_long_prefix_to_preserve_node_name():
+def test_refresh_subscription_keeps_long_provider_prefix_in_runtime_selectors(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 
-    long_prefix = "cp.landing-us.rfid-technologies"
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (
+            "\n".join(
+                [
+                    _vless_transport("VLESS-REALITY-US-Keenetic-Digus", "tcp"),
+                    _vless_transport("VLESS-XHTTP-US-Keenetic-Digus-X", "xhttp"),
+                ]
+            ),
+            {},
+        ),
+    )
+
+    url = "https://cp.landing-us.rfid-technologies.org/LVCtszWBwo/w1n2j520ym5xq0ca"
+    sub = subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "url": url,
+            "enabled": True,
+            "ping_enabled": True,
+        },
+    )
+
+    assert sub["id"] == "cp.landing-us.rfid-technologies.org"
+    assert sub["tag"] == "cp.landing-us.rfid-technologies.org"
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        sub["id"],
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    generated = json.loads((xray_dir / result["output_file"]).read_text(encoding="utf-8"))
+    tags = [item["tag"] for item in generated["outbounds"]]
+    assert tags == [
+        "cp.landing-us.rfid-technologies.org--VLESS-REALITY-US-Keenetic-Digus",
+        "cp.landing-us.rfid-technologies.org--VLESS-XHTTP-US-Keenetic-Digus-X",
+    ]
+
+    observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
+    assert observatory["observatory"]["subjectSelector"] == ["cp.landing-us.rfid-technologies.org"]
+
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    assert routing["routing"]["balancers"][0]["selector"] == ["cp.landing-us.rfid-technologies.org"]
+
+    state = subs.load_subscription_state(str(ui_state_dir))
+    assert state["subscriptions"][0]["last_selector_terms"] == ["cp.landing-us.rfid-technologies.org"]
+
+
+def test_build_subscription_outbounds_shrinks_extreme_prefix_to_preserve_node_name():
+    from services import xray_subscriptions as subs
+
+    long_prefix = "provider-" + ("very-long-" * 14)
     node_name = "VLESS-XHTTP-US-Keenetic-Dnepr-16k3"
     outbounds, errors, stats = subs.build_subscription_outbounds(
         [_vless_transport(node_name, "xhttp")],
@@ -2528,7 +2594,7 @@ def test_build_subscription_outbounds_shrinks_long_prefix_to_preserve_node_name(
     assert errors == []
     assert len(outbounds) == 1
     tag = outbounds[0]["tag"]
-    assert len(tag) <= 64
+    assert len(tag) <= subs._TAG_MAX_LEN
     assert tag.endswith("--" + node_name)
     assert long_prefix.startswith(tag.split("--", 1)[0])
     assert stats["nodes"][0]["tag"] == tag
