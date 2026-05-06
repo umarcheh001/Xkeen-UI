@@ -5447,7 +5447,7 @@ html[data-theme="light"] .xray-log-select option{
 
 .log-card .restart-log-runtime-line {
   display: grid;
-  grid-template-columns: 202px max-content minmax(0, max-content);
+  grid-template-columns: max-content max-content minmax(0, max-content);
   align-items: baseline;
   column-gap: 10px;
   min-width: max-content;

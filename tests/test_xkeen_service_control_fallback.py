@@ -156,7 +156,7 @@ def test_core_switch_start_does_not_wait_for_foreground_start_command(monkeypatc
             start_seen['value'] = True
             if stdout is not None:
                 output = (
-                    'Прокси-клиент запущен в режиме Mihomo\n'
+                    'Прокси-клиент запущен в режиме Hybrid\n'
                     'infra/conf/serial: Reading config: noisy.yaml\n'
                     'INFO[2026-05-05T18:05:24Z] Initial configuration complete, total time: 8ms\n'
                 )
@@ -180,7 +180,7 @@ def test_core_switch_start_does_not_wait_for_foreground_start_command(monkeypatc
     cores.switch_core('mihomo', str(tmp_path / 'xray-error.log'), runtime_log=runtime_logs.append)
 
     combined = ''.join(runtime_logs)
-    assert 'Прокси-клиент запущен в режиме Mihomo' in combined
+    assert 'Прокси-клиент запущен в режиме Hybrid' in combined
     assert 'Initial configuration complete' in combined
     assert 'infra/conf/serial' not in combined
     assert '[xkeen-ui]' not in combined
@@ -199,7 +199,7 @@ def test_core_switch_start_logfmt_output_keeps_mode_line():
 
     assert 'time="2026-05-05T22:38:46.295139987Z" level=info' in selected
     assert "Initial configuration complete" in selected
-    assert "Прокси-клиент запущен в режиме Mihomo" in selected
+    assert "Прокси-клиент запущен в режиме Hybrid" in selected
 
 
 def test_service_status_restart_button_uses_background_restart_job_with_pty_log_stream():

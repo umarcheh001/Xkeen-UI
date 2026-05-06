@@ -123,10 +123,8 @@ def _is_restart_log_start_summary_line(line: str) -> bool:
 
 def _core_mode_label(core: str) -> str:
     value = str(core or "").strip().lower()
-    if value == "xray":
+    if value in {"xray", "mihomo"}:
         return "Hybrid"
-    if value == "mihomo":
-        return "Mihomo"
     return value or "unknown"
 
 
