@@ -13,6 +13,7 @@ This module now adds:
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import tempfile
@@ -121,11 +122,31 @@ def _is_restart_log_start_summary_line(line: str) -> bool:
     )
 
 
-def _core_mode_label(core: str) -> str:
-    value = str(core or "").strip().lower()
-    if value in {"xray", "mihomo"}:
-        return "Hybrid"
-    return value or "unknown"
+def _detect_proxy_mode_label() -> str:
+    try:
+        from services import xray_config_files
+        from services.xray_inbounds import detect_inbounds_mode
+
+        with open(xray_config_files.INBOUNDS_FILE, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        mode = str(detect_inbounds_mode(data=data) or "").strip().lower()
+    except Exception:
+        return ""
+
+    return {
+        "mixed": "Hybrid",
+        "tproxy": "TProxy",
+        "redirect": "Redirect",
+    }.get(mode, "")
+
+
+def _started_proxy_client_line(core: str) -> str:
+    mode = _detect_proxy_mode_label()
+    if not mode and str(core or "").strip().lower() in {"xray", "mihomo"}:
+        mode = "Hybrid"
+    if mode:
+        return f"Прокси-клиент запущен в режиме {mode}"
+    return "Прокси-клиент запущен"
 
 
 def _select_restart_log_output(phase: str, output: object, *, ok: bool, core: str = "") -> str:
@@ -133,13 +154,13 @@ def _select_restart_log_output(phase: str, output: object, *, ok: bool, core: st
     text = _coerce_subprocess_output(output).replace("\r\n", "\n").replace("\r", "\n")
     if not text:
         if ok and phase == "start" and core:
-            return f"Прокси-клиент запущен в режиме {_core_mode_label(core)}\n"
+            return f"{_started_proxy_client_line(core)}\n"
         return ""
 
     lines = [line.rstrip() for line in text.split("\n") if line.strip()]
     if not lines:
         if ok and phase == "start" and core:
-            return f"Прокси-клиент запущен в режиме {_core_mode_label(core)}\n"
+            return f"{_started_proxy_client_line(core)}\n"
         return ""
 
     if ok and phase in {"switch_core", "xray_test"}:
@@ -148,7 +169,7 @@ def _select_restart_log_output(phase: str, output: object, *, ok: bool, core: st
     if ok and phase == "start":
         selected = [line for line in lines if _is_restart_log_start_summary_line(line)]
         if core and not any(_is_restart_log_service_line(line) for line in selected):
-            selected.append(f"Прокси-клиент запущен в режиме {_core_mode_label(core)}")
+            selected.append(_started_proxy_client_line(core))
         return ("\n".join(selected) + "\n") if selected else ""
 
     selected = [line for line in lines if _is_restart_log_service_line(line) or _is_restart_log_error_line(line)]

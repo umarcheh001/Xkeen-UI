@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -200,6 +201,21 @@ def test_core_switch_start_logfmt_output_keeps_mode_line():
     assert 'time="2026-05-05T22:38:46.295139987Z" level=info' in selected
     assert "Initial configuration complete" in selected
     assert "Прокси-клиент запущен в режиме Hybrid" in selected
+
+
+def test_core_switch_start_fallback_uses_configured_tproxy_mode(monkeypatch, tmp_path):
+    from services import cores, xray_config_files
+    from services.xray_inbounds import TPROXY_INBOUNDS
+
+    inbounds_file = tmp_path / "03_inbounds.json"
+    inbounds_file.write_text(json.dumps(TPROXY_INBOUNDS), encoding="utf-8")
+    monkeypatch.setattr(xray_config_files, "INBOUNDS_FILE", str(inbounds_file))
+
+    output = 'time="2026-05-05T22:38:46Z" level=info msg="Initial configuration complete, total time: 10ms"\n'
+    selected = cores._select_restart_log_output("start", output, ok=True, core="xray")
+
+    assert "Прокси-клиент запущен в режиме TProxy" in selected
+    assert "Прокси-клиент запущен в режиме Hybrid" not in selected
 
 
 def test_service_status_restart_button_uses_background_restart_job_with_pty_log_stream():
