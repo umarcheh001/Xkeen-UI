@@ -436,7 +436,6 @@ def create_service_blueprint(
             # Уведомляем всех WS-подписчиков о смене ядра.
             _emit_event({"event": "core_changed", "core": core, "ok": True})
 
-            _flush_runtime_log()
             _append_restart_log(
                 True,
                 source="core-switch",

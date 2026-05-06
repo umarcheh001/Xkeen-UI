@@ -13,7 +13,6 @@ This module now adds:
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import tempfile
@@ -110,67 +109,18 @@ def _is_restart_log_error_line(line: str) -> bool:
     )
 
 
-def _is_restart_log_start_summary_line(line: str) -> bool:
-    lower = str(line or "").lower()
-    if _is_restart_log_service_line(line) or _is_restart_log_error_line(line):
-        return True
-    return (
-        "start initial configuration" in lower
-        or "geodata loader mode" in lower
-        or "geosite matcher implementation" in lower
-        or "initial configuration complete" in lower
-    )
-
-
-def _detect_proxy_mode_label() -> str:
-    try:
-        from services import xray_config_files
-        from services.xray_inbounds import detect_inbounds_mode
-
-        with open(xray_config_files.INBOUNDS_FILE, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
-        mode = str(detect_inbounds_mode(data=data) or "").strip().lower()
-    except Exception:
-        return ""
-
-    return {
-        "mixed": "Hybrid",
-        "tproxy": "TProxy",
-        "redirect": "Redirect",
-    }.get(mode, "")
-
-
-def _started_proxy_client_line(core: str) -> str:
-    mode = _detect_proxy_mode_label()
-    if not mode and str(core or "").strip().lower() in {"xray", "mihomo"}:
-        mode = "Hybrid"
-    if mode:
-        return f"Прокси-клиент запущен в режиме {mode}"
-    return "Прокси-клиент запущен"
-
-
 def _select_restart_log_output(phase: str, output: object, *, ok: bool, core: str = "") -> str:
     phase = str(phase or "").strip().lower()
+    if ok and phase in {"switch_core", "xray_test", "start"}:
+        return ""
+
     text = _coerce_subprocess_output(output).replace("\r\n", "\n").replace("\r", "\n")
     if not text:
-        if ok and phase == "start" and core:
-            return f"{_started_proxy_client_line(core)}\n"
         return ""
 
     lines = [line.rstrip() for line in text.split("\n") if line.strip()]
     if not lines:
-        if ok and phase == "start" and core:
-            return f"{_started_proxy_client_line(core)}\n"
         return ""
-
-    if ok and phase in {"switch_core", "xray_test"}:
-        return ""
-
-    if ok and phase == "start":
-        selected = [line for line in lines if _is_restart_log_start_summary_line(line)]
-        if core and not any(_is_restart_log_service_line(line) for line in selected):
-            selected.append(_started_proxy_client_line(core))
-        return ("\n".join(selected) + "\n") if selected else ""
 
     selected = [line for line in lines if _is_restart_log_service_line(line) or _is_restart_log_error_line(line)]
     if not selected:
