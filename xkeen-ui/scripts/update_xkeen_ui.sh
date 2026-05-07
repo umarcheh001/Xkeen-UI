@@ -327,6 +327,7 @@ trap cleanup EXIT
 
 download() {
   url="$1"; out="$2"; max_bytes="${3:-}"; label="${4:-file}"; show_progress="${5:-0}"
+  downloaded_by_python="0"
 
   # --- allow-list check (scheme + host) ---
   if ! "$PY" - "$url" "$ALLOW_HOSTS_RAW" "$ALLOW_HTTP" <<'PY'
@@ -567,23 +568,38 @@ except Exception as e:
 sys.exit(0)
 PY
     then
-      # Downloaded by Python with progress; continue.
-      return 0
+      # Downloaded by Python with progress; still validate the resulting file below.
+      downloaded_by_python="1"
     else
       log "[!] Python progress download failed; falling back to curl/wget."
       # fall through
     fi
   fi
 
-  if command -v curl >/dev/null 2>&1; then
-    # -f: fail on HTTP errors, -L: follow redirects
-    curl -f -L --connect-timeout "$CONNECT_TIMEOUT" --max-time "$DOWNLOAD_TIMEOUT" -A "xkeen-ui-updater" -o "$out" "$url" >>"$LOG_FILE" 2>&1
-  elif command -v wget >/dev/null 2>&1; then
-    # BusyBox wget: --timeout is seconds (connect + read), no redirect limit.
-    wget -O "$out" --timeout="$DOWNLOAD_TIMEOUT" "$url" >>"$LOG_FILE" 2>&1
-  else
-    log "[!] Не найден curl/wget для скачивания."
-    return 1
+  if [ "$downloaded_by_python" != "1" ]; then
+    dl_rc=0
+    if command -v curl >/dev/null 2>&1; then
+      # -f: fail on HTTP errors, -L: follow redirects, -sS: concise error without progress spam.
+      curl -fsS -L --connect-timeout "$CONNECT_TIMEOUT" --max-time "$DOWNLOAD_TIMEOUT" -A "xkeen-ui-updater" -o "$out" "$url" >>"$LOG_FILE" 2>&1 || dl_rc=$?
+    elif command -v wget >/dev/null 2>&1; then
+      # BusyBox wget: --timeout is seconds (connect + read), no redirect limit.
+      wget -q -O "$out" --timeout="$DOWNLOAD_TIMEOUT" "$url" >>"$LOG_FILE" 2>&1 || dl_rc=$?
+    else
+      log "[!] Не найден curl/wget для скачивания."
+      return 1
+    fi
+
+    if [ "$dl_rc" -ne 0 ]; then
+      rm -f "$out" "$out.part" 2>/dev/null || true
+      log "[!] Не удалось скачать $label (rc=$dl_rc). Проверь интернет/DNS/блокировки для URL с роутера."
+      return 1
+    fi
+  fi
+
+  if [ ! -s "$out" ]; then
+    rm -f "$out" "$out.part" 2>/dev/null || true
+    log "[!] Скачанный $label пустой или не создан. Дальше checksum/extract не запускаем."
+    return 8
   fi
 
   # --- size check ---
@@ -1281,8 +1297,14 @@ fi
 TARBALL="$WORK_DIR/$ASSET_NAME"
 log "[*] Downloading to: $TARBALL"
 if ! download "$ASSET_URL" "$TARBALL" "$MAX_BYTES" "asset" "1"; then
-  log "[!] Download failed."
-  write_status "failed" "download" "Download failed" "download failed"
+  log "[!] Не удалось скачать архив обновления. Установка не начиналась; backup сохранён, текущая версия не изменена."
+  write_status "failed" "download" "Не удалось скачать архив обновления" "asset download failed"
+  exit 5
+fi
+
+if [ ! -s "$TARBALL" ]; then
+  log "[!] Архив обновления отсутствует или пустой после скачивания. Extract не запускаем."
+  write_status "failed" "download" "Не удалось скачать архив обновления" "asset download missing"
   exit 5
 fi
 
@@ -1557,12 +1579,17 @@ PY
       exit 6
     else
       log "[!] Verify error (rc=$rc): $VERIFY_OUT"
-      log "[!] Проверку SHA256 пропускаем"
+      if [ "$SHA_STRICT" = "1" ] && [ "$CHANNEL" = "stable" ]; then
+        write_status "failed" "verify" "Ошибка проверки checksum" "checksum verify failed"
+        exit 6
+      else
+        log "[!] Проверку SHA256 пропускаем"
+      fi
     fi
   else
-    log "[!] Failed to download checksum"
+    log "[!] Не удалось скачать checksum. Это обычно та же проблема сети/DNS/блокировки, что и при скачивании архива."
     if [ "$SHA_STRICT" = "1" ] && [ "$CHANNEL" = "stable" ]; then
-      write_status "failed" "verify" "Checksum download failed" "checksum download failed"
+      write_status "failed" "verify" "Не удалось скачать checksum" "checksum download failed"
       exit 6
     else
       log "[!] Проверку SHA256 пропускаем"
