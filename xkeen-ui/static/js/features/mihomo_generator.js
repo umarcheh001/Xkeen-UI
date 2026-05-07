@@ -187,6 +187,7 @@ let mihomoGeneratorModuleApi = null;
         const bulkImportBtn = document.getElementById("bulkImportBtn");
         const normalizeProxiesBtn = document.getElementById("normalizeProxiesBtn");
         const generateBtn = document.getElementById("generateBtn");
+        const resetPreviewBtn = document.getElementById("resetPreviewBtn");
         const saveBtn = document.getElementById("saveBtn");
         const validateBtn = document.getElementById("validateBtn");
         const applyBtn = document.getElementById("applyBtn");
@@ -1762,22 +1763,29 @@ function initEngineToggle() {
             intervalInput.value = String(intervalHours);
             intervalInput.className = "mihomo-managed-sub-interval";
             intervalInput.title = "Интервал обновления: от 1 до 168 часов";
-            const saveBtn = document.createElement("button");
-            saveBtn.type = "button";
-            saveBtn.className = "btn btn-ghost btn-xs";
-            saveBtn.textContent = "Сохранить";
-            saveBtn.onclick = () => saveManagedSubscriptionSettings(String(sub.id || ""), intervalInput.value, { draftOnly: isDraftOnly });
+            const saveBtn = makeManagedSubIconButton(
+              "💾",
+              "Сохранить интервал обновления",
+              () => saveManagedSubscriptionSettings(String(sub.id || ""), intervalInput.value, { draftOnly: isDraftOnly })
+            );
             actions.appendChild(intervalInput);
             actions.appendChild(intervalLabel);
             actions.appendChild(saveBtn);
             if (!isDraftOnly) {
-              const btn = document.createElement("button");
-              btn.type = "button";
-              btn.className = "btn btn-ghost btn-xs";
-              btn.textContent = "Обновить";
-              btn.onclick = () => refreshManagedSubscription(String(sub.id || ""));
-              actions.appendChild(btn);
+              const refreshBtn = makeManagedSubIconButton(
+                "↻",
+                "Обновить подписку сейчас",
+                () => refreshManagedSubscription(String(sub.id || ""))
+              );
+              actions.appendChild(refreshBtn);
             }
+            const deleteBtn = makeManagedSubIconButton(
+              "🗑",
+              isDraftOnly ? "Убрать автообновление из черновика" : "Удалить запись автообновления",
+              () => deleteManagedSubscription(sub, { draftOnly: isDraftOnly }),
+              "mihomo-managed-sub-icon-btn--danger"
+            );
+            actions.appendChild(deleteBtn);
 
             item.appendChild(copy);
             item.appendChild(actions);
@@ -1848,6 +1856,36 @@ function initEngineToggle() {
           } catch (e) {}
         }
 
+        function clearManagedSubscriptionMeta(subscription) {
+          const sub = subscription || {};
+          const subId = String(sub.id || "").trim();
+          const subUrl = String(sub.url || "").trim();
+          try {
+            proxyControllers.forEach((ctrl) => {
+              if (!ctrl || typeof ctrl.getXrayJsonSubscription !== "function") return;
+              const meta = ctrl.getXrayJsonSubscription();
+              if (!meta) return;
+              const sameId = subId && String(meta.id || "") === subId;
+              const sameUrl = subUrl && String(meta.url || "") === subUrl;
+              if ((sameId || sameUrl) && typeof ctrl.clearXrayJsonSubscription === "function") {
+                ctrl.clearXrayJsonSubscription();
+              }
+            });
+          } catch (e) {}
+        }
+
+        function makeManagedSubIconButton(icon, label, onClick, extraClass = "") {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn btn-ghost btn-xs mihomo-managed-sub-icon-btn" + (extraClass ? " " + extraClass : "");
+          btn.textContent = String(icon || "");
+          btn.setAttribute("aria-label", String(label || ""));
+          btn.setAttribute("title", String(label || ""));
+          btn.setAttribute("data-tooltip", String(label || ""));
+          btn.onclick = onClick;
+          return btn;
+        }
+
         async function saveManagedSubscriptionSettings(id, intervalValue, opts = {}) {
           const subId = String(id || "").trim();
           if (!subId) return;
@@ -1878,6 +1916,61 @@ function initEngineToggle() {
             try { scheduleSessionDraftSave(60); } catch (e) {}
           } catch (e) {
             const msg = "Не удалось сохранить интервал: " + (e && e.message ? e.message : e);
+            setStatus(msg, "err");
+            try { toast(msg, "error"); } catch (e2) {}
+            await loadManagedSubscriptions(true);
+          }
+        }
+
+        async function deleteManagedSubscription(sub, opts = {}) {
+          const item = sub && typeof sub === "object" ? sub : {};
+          const subId = String(item.id || "").trim();
+          const isDraftOnly = !!(opts && opts.draftOnly);
+          if (!subId) return;
+
+          const ok = await confirmMihomoAction({
+            title: isDraftOnly ? "Убрать Xray-JSON автообновление из черновика?" : "Удалить Xray-JSON автообновление?",
+            message: isDraftOnly
+              ? "YAML-узел останется в форме как обычный статический proxy, но плановое обновление для него не будет создано."
+              : "YAML-узел останется статическим, а панель больше не будет обновлять его из исходной подписки.",
+            details: [
+              "Чтобы полностью очистить форму и предпросмотр, после удаления нажмите кнопку сброса рядом с предпросмотром.",
+            ],
+            okText: "Удалить",
+            cancelText: "Отмена",
+            danger: true,
+          }, "Удалить запись автообновления Xray-JSON?");
+          if (!ok) return;
+
+          if (isDraftOnly) {
+            clearManagedSubscriptionMeta(item);
+            renderManagedSubscriptions(_managedServerSubscriptions);
+            schedulePreview();
+            try { scheduleSessionDraftSave(60); } catch (e) {}
+            const msg = "Автообновление удалено из черновика. YAML-узел остался статическим.";
+            setStatus(msg, "ok");
+            try { toast(msg, "success"); } catch (e) {}
+            return;
+          }
+
+          setStatus("Удаляю запись автообновления Mihomo...", "ok");
+          try {
+            const res = await fetch("/api/mihomo/subscriptions/" + encodeURIComponent(subId), {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ remove_blocks: false }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) throw new Error((data && data.error) || ("HTTP " + res.status));
+            clearManagedSubscriptionMeta(data.subscription || item);
+            await loadManagedSubscriptions(true);
+            schedulePreview();
+            try { scheduleSessionDraftSave(60); } catch (e) {}
+            const msg = "Запись автообновления удалена. YAML-узел остался статическим.";
+            setStatus(msg, "ok");
+            try { toast(msg, "success"); } catch (e) {}
+          } catch (e) {
+            const msg = "Не удалось удалить автообновление: " + (e && e.message ? e.message : e);
             setStatus(msg, "err");
             try { toast(msg, "error"); } catch (e2) {}
             await loadManagedSubscriptions(true);
@@ -2332,6 +2425,10 @@ function initEngineToggle() {
                 url: next.url || xrayJsonSubscription.url,
                 tag: next.tag || xrayJsonSubscription.tag,
               };
+              return true;
+            },
+            clearXrayJsonSubscription: () => {
+              xrayJsonSubscription = null;
               return true;
             },
           };
@@ -3541,6 +3638,29 @@ function initEngineToggle() {
           try { refreshLayout(); } catch (e) {}
           return true;
         }
+
+        async function resetPreviewToDefault() {
+          const current = getEditorText();
+          const changed = String(current || "").replace(/\r\n/g, "\n").trim() !== String(SKELETON || "").replace(/\r\n/g, "\n").trim();
+          if (changed) {
+            const ok = await confirmMihomoAction({
+              title: "Сбросить предпросмотр?",
+              message: "Текущий YAML в окне предпросмотра будет заменён на начальный шаблон. Исходные поля слева не изменятся.",
+              okText: "Сбросить",
+              cancelText: "Отмена",
+              danger: false,
+            }, "Сбросить окно предпросмотра к состоянию по умолчанию?");
+            if (!ok) return;
+          }
+          _previewRequestSeq += 1;
+          _previewDirtyWhileEditable = false;
+          setEditorText(SKELETON);
+          try { updateStateSummary(collectState()); } catch (e) {}
+          setStatus("Предпросмотр сброшен к состоянию по умолчанию. Исходные поля не изменены.", "ok");
+          try { toast("Предпросмотр сброшен.", "success"); } catch (e2) {}
+          try { scheduleSessionDraftSave(40); } catch (e3) {}
+          try { refreshLayout(); } catch (e4) {}
+        }
       
         // ----- generate demo preview on client -----
         function generatePreviewDemo(manual = false) {
@@ -4532,6 +4652,7 @@ function initEngineToggle() {
         if (bulkImportApplyBtn) bulkImportApplyBtn.onclick = () => doBulkImport();
         if (bulkImportApplyExistingBtn) bulkImportApplyExistingBtn.onclick = () => applyTemplatesToExistingProxies();
         generateBtn.onclick = () => generatePreviewDemo(true);
+        if (resetPreviewBtn) resetPreviewBtn.onclick = () => resetPreviewToDefault();
         saveBtn.onclick = downloadConfig;
         validateBtn.onclick = () => { validateConfigOnServer(true, true); };
         applyBtn.onclick = () => applyToRouter(true);

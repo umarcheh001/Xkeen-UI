@@ -534,20 +534,39 @@
     .mihomo-managed-sub-actions {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 4px;
       flex-wrap: nowrap;
     }
     .mihomo-managed-sub-interval {
-      width: 72px;
-      min-width: 72px;
-      height: 28px;
-      padding: 4px 6px;
+      width: 54px;
+      min-width: 54px;
+      height: 26px;
+      padding: 2px 6px;
       font-size: 12px;
+      font-weight: 700;
+      text-align: center;
     }
     .mihomo-managed-sub-interval-label {
       color: #93a4bf;
       font-size: 11px;
       white-space: nowrap;
+    }
+    .mihomo-managed-sub-icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      min-width: 26px;
+      height: 26px;
+      padding: 0;
+      border-radius: 8px;
+      line-height: 1;
+      font-size: 13px;
+    }
+    .mihomo-managed-sub-icon-btn--danger {
+      color: #fecaca;
+      border-color: rgba(248,113,113,0.38);
+      background: rgba(127,29,29,0.18);
     }
     .btn {
       border-radius: 7px;
@@ -957,6 +976,12 @@
     html[data-theme="light"] .mihomo-managed-sub-meta,
     html[data-theme="light"] .mihomo-managed-sub-interval-label {
       color: #64748b;
+    }
+
+    html[data-theme="light"] .mihomo-managed-sub-icon-btn--danger {
+      color: #b91c1c;
+      border-color: rgba(248,113,113,0.32);
+      background: rgba(254,242,242,0.88);
     }
 
     html[data-theme="light"] .proxy-header-type {
@@ -2124,6 +2149,9 @@
               </label>
               <button type="button" id="generateBtn" class="btn btn-primary btn-icon" title="Сгенерировать/обновить предпросмотр" aria-label="Сгенерировать предпросмотр">
                 ⚙️
+              </button>
+              <button type="button" id="resetPreviewBtn" class="btn btn-icon" title="Сбросить предпросмотр к состоянию по умолчанию" aria-label="Сбросить предпросмотр" data-tooltip="Сбросить предпросмотр к состоянию по умолчанию">
+                ↺
               </button>
               <button type="button" id="copyBtn" class="btn" title="Копировать в буфер обмена">
                 📋
