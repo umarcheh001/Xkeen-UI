@@ -28,6 +28,7 @@ from typing import Any, Dict
 from urllib.parse import urlparse
 
 from services.net import net_call
+from services.url_policy import URLPolicy, env_flag, is_url_allowed
 
 
 _B64_RE = re.compile(r"^[A-Za-z0-9+/=]+$")
@@ -341,13 +342,57 @@ class _ProbeMeta:
     timing_ms: int
 
 
-def _make_error(code: str, message: str, hint: str = "", retryable: bool = True):
-    return {
+_URL_POLICY_ENV_PREFIX = "XKEEN_MIHOMO_HWID"
+
+
+def _hwid_subscription_policy() -> URLPolicy:
+    """URL policy for user-provided Mihomo HWID subscription URLs.
+
+    Subscription URLs are expected to be arbitrary provider endpoints, so public
+    custom HTTPS hosts are allowed. Local/private targets and plain HTTP stay
+    opt-in to avoid SSRF-style access from the panel process.
+    """
+
+    return URLPolicy(
+        allow_hosts=(),
+        allow_http=env_flag(f"{_URL_POLICY_ENV_PREFIX}_ALLOW_HTTP", False),
+        allow_private_hosts=env_flag(f"{_URL_POLICY_ENV_PREFIX}_ALLOW_PRIVATE_HOSTS", False),
+        allow_custom_urls=True,
+    )
+
+
+def _url_blocked_hint(reason: str) -> str:
+    r = str(reason or "").strip()
+    if r == "http_not_allowed":
+        return (
+            "По умолчанию HWID-подписки принимаются только по HTTPS. "
+            f"Для plain HTTP явно включите {_URL_POLICY_ENV_PREFIX}_ALLOW_HTTP=1."
+        )
+    if r.startswith("private_host_not_allowed:"):
+        return (
+            "Локальные и private адреса заблокированы для защиты панели. "
+            f"Если это осознанно нужный локальный endpoint, включите "
+            f"{_URL_POLICY_ENV_PREFIX}_ALLOW_PRIVATE_HOSTS=1."
+        )
+    return "Разрешены публичные http/https URL, с HTTPS по умолчанию."
+
+
+def _make_error(
+    code: str,
+    message: str,
+    hint: str = "",
+    retryable: bool = True,
+    **extra: Any,
+):
+    payload = {
         "code": code,
         "message": message,
         "hint": hint or None,
         "retryable": bool(retryable),
     }
+    if extra:
+        payload.update(extra)
+    return payload
 
 
 def _probe_once(
@@ -357,6 +402,7 @@ def _probe_once(
     headers: Dict[str, str],
     insecure: bool,
     timeout: float,
+    policy: URLPolicy,
 ) -> tuple[_ProbeMeta, Dict[str, Any], list[Dict[str, Any]]]:
     """Low-level probe attempt. May raise urllib exceptions."""
 
@@ -367,8 +413,19 @@ def _probe_once(
     req = urllib.request.Request(url, headers=req_headers, method=method.upper())
     ctx = ssl._create_unverified_context() if insecure else None
 
+    class SafeRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401,N803
+            ok, reason = is_url_allowed(newurl, policy)
+            if not ok:
+                raise urllib.error.URLError("url_blocked:" + reason)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
     start = time.monotonic()
-    with urllib.request.urlopen(req, timeout=float(timeout), context=ctx) as resp:
+    handlers: list[Any] = [SafeRedirect]
+    if ctx is not None:
+        handlers.append(urllib.request.HTTPSHandler(context=ctx))
+    opener = urllib.request.build_opener(*handlers)
+    with opener.open(req, timeout=float(timeout)) as resp:
         elapsed_ms = int(max(0.0, (time.monotonic() - start) * 1000.0))
         try:
             resolved = resp.geturl()
@@ -428,6 +485,7 @@ def probe_subscription(
     insecure: bool = False,
     timeout: float = 8.0,
     prefer: str = "head_then_range_get",
+    policy: URLPolicy | None = None,
 ) -> Dict[str, Any]:
     """Probe a HWID subscription URL.
 
@@ -467,6 +525,37 @@ def probe_subscription(
             ),
         }
 
+    effective_policy = policy or _hwid_subscription_policy()
+    ok_url, reason = is_url_allowed(u, effective_policy)
+    if not ok_url:
+        return {
+            "ok": False,
+            "probe": {
+                "url": u,
+                "resolved_url": None,
+                "method": None,
+                "http_status": None,
+                "content_type": None,
+                "content_length": None,
+                "timing_ms": 0,
+            },
+            "profile": {
+                "profile_title": None,
+                "profile_title_raw": None,
+                "profile_title_encoding": None,
+                "suggested_name": None,
+            },
+            "headers_used": dict(headers or {}),
+            "warnings": [],
+            "error": _make_error(
+                "URL_BLOCKED",
+                "URL HWID-подписки заблокирован политикой безопасности панели.",
+                _url_blocked_hint(reason),
+                retryable=False,
+                reason=reason,
+            ),
+        }
+
     hdrs: Dict[str, str] = dict(headers or {})
 
     # Strategy: HEAD first (cheap), then Range GET fallback.
@@ -485,7 +574,12 @@ def probe_subscription(
     for m in methods:
         try:
             meta, profile, warnings = _probe_once(
-                u, method=m, headers=hdrs, insecure=insecure, timeout=timeout
+                u,
+                method=m,
+                headers=hdrs,
+                insecure=insecure,
+                timeout=timeout,
+                policy=effective_policy,
             )
             return {
                 "ok": True,
@@ -555,6 +649,35 @@ def probe_subscription(
             }
         except urllib.error.URLError as e:
             msg = str(getattr(e, "reason", e))
+            if msg.startswith("url_blocked:"):
+                reason = msg.split(":", 1)[1]
+                return {
+                    "ok": False,
+                    "probe": {
+                        "url": u,
+                        "resolved_url": None,
+                        "method": m,
+                        "http_status": None,
+                        "content_type": None,
+                        "content_length": None,
+                        "timing_ms": 0,
+                    },
+                    "profile": {
+                        "profile_title": None,
+                        "profile_title_raw": None,
+                        "profile_title_encoding": None,
+                        "suggested_name": None,
+                    },
+                    "headers_used": hdrs,
+                    "warnings": [],
+                    "error": _make_error(
+                        "URL_BLOCKED",
+                        "Редирект HWID-подписки заблокирован политикой безопасности панели.",
+                        _url_blocked_hint(reason),
+                        retryable=False,
+                        reason=reason,
+                    ),
+                }
             code = "NETWORK_ERROR"
             hint = "Проверьте доступ к интернету/домену и попробуйте снова."
             if (
@@ -670,13 +793,19 @@ def probe_subscription_safe(
     insecure: bool = False,
     timeout: float = 8.0,
     prefer: str = "head_then_range_get",
+    policy: URLPolicy | None = None,
 ) -> Dict[str, Any]:
     """Run probe in a worker thread to avoid blocking the UI server."""
     wait_seconds = max(1.0, float(timeout) + 1.0)
     try:
         return net_call(
             lambda: probe_subscription(
-                url, headers=headers, insecure=insecure, timeout=timeout, prefer=prefer
+                url,
+                headers=headers,
+                insecure=insecure,
+                timeout=timeout,
+                prefer=prefer,
+                policy=policy,
             ),
             wait_seconds,
         )

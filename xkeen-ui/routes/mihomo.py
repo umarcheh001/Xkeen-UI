@@ -100,6 +100,7 @@ from services.mihomo_hwid_sub import (
     ensure_unique_provider_name as _mh_hwid_ensure_unique_provider_name,
 )
 
+from services.url_policy import URLPolicy, env_flag, is_url_allowed
 from services.mihomo_yaml import validate_yaml_syntax
 from utils.fs import load_text, save_text
 
@@ -152,6 +153,78 @@ def _mihomo_exception(
         log_tag=f"mihomo.{code}",
         **extra,
     )
+
+
+_MIHOMO_HWID_URL_POLICY_ENV_PREFIX = "XKEEN_MIHOMO_HWID"
+
+
+def _mihomo_hwid_url_policy() -> URLPolicy:
+    return URLPolicy(
+        allow_hosts=(),
+        allow_http=env_flag(f"{_MIHOMO_HWID_URL_POLICY_ENV_PREFIX}_ALLOW_HTTP", False),
+        allow_private_hosts=env_flag(f"{_MIHOMO_HWID_URL_POLICY_ENV_PREFIX}_ALLOW_PRIVATE_HOSTS", False),
+        allow_custom_urls=True,
+    )
+
+
+def _mihomo_hwid_url_blocked_hint(reason: str) -> str:
+    r = str(reason or "").strip()
+    if r == "http_not_allowed":
+        return (
+            "По умолчанию HWID-подписки принимаются только по HTTPS. "
+            f"Для plain HTTP явно включите {_MIHOMO_HWID_URL_POLICY_ENV_PREFIX}_ALLOW_HTTP=1."
+        )
+    if r.startswith("private_host_not_allowed:"):
+        return (
+            "Локальные и private адреса заблокированы для защиты панели. "
+            f"Если это осознанно нужный локальный endpoint, включите "
+            f"{_MIHOMO_HWID_URL_POLICY_ENV_PREFIX}_ALLOW_PRIVATE_HOSTS=1."
+        )
+    return "Разрешены публичные http/https URL, с HTTPS по умолчанию."
+
+
+def _mihomo_hwid_url_blocked_result(url: str, reason: str) -> Dict[str, Any]:
+    return {
+        "ok": False,
+        "probe": {
+            "url": str(url or "").strip(),
+            "resolved_url": None,
+            "method": None,
+            "http_status": None,
+            "content_type": None,
+            "content_length": None,
+            "timing_ms": 0,
+        },
+        "profile": {
+            "profile_title": None,
+            "profile_title_raw": None,
+            "profile_title_encoding": None,
+            "suggested_name": None,
+        },
+        "headers_used": None,
+        "warnings": [],
+        "error": {
+            "code": "URL_BLOCKED",
+            "message": "URL HWID-подписки заблокирован политикой безопасности панели.",
+            "hint": _mihomo_hwid_url_blocked_hint(reason),
+            "reason": reason,
+            "retryable": False,
+        },
+    }
+
+
+def _mihomo_hwid_policy_block_reason(url: str, policy: URLPolicy) -> str | None:
+    url_s = str(url or "").strip()
+    if not url_s:
+        return None
+    try:
+        scheme = (urllib.parse.urlparse(url_s).scheme or "").lower()
+    except Exception:
+        return None
+    if scheme not in ("http", "https"):
+        return None
+    ok, reason = is_url_allowed(url_s, policy)
+    return None if ok else reason
 
 
 def _mihomo_yaml_invalid(*, stage: str | None = None):
@@ -319,6 +392,11 @@ def create_mihomo_blueprint(
         insecure = bool(data.get("insecure", False))
         prefer = (data.get("prefer") or "head_then_range_get").strip() or "head_then_range_get"
 
+        policy = _mihomo_hwid_url_policy()
+        reason = _mihomo_hwid_policy_block_reason(url, policy)
+        if reason:
+            return jsonify(_mihomo_hwid_url_blocked_result(url, reason)), 400
+
         timeout_ms = data.get("timeout_ms", 8000)
         try:
             timeout_ms = int(timeout_ms)
@@ -335,6 +413,7 @@ def create_mihomo_blueprint(
             insecure=insecure,
             timeout=timeout_s,
             prefer=prefer,
+            policy=policy,
         )
 
         # UX: autodetect "обычная" подписка.
@@ -347,6 +426,7 @@ def create_mihomo_blueprint(
                     insecure=insecure,
                     timeout=timeout_s,
                     prefer=prefer,
+                    policy=policy,
                 )
                 if isinstance(plain, dict):
                     result["no_headers_ok"] = True if plain.get("ok") is True else False
@@ -367,6 +447,8 @@ def create_mihomo_blueprint(
             status = 400
         elif code == "TIMEOUT":
             status = 504
+        elif code == "URL_BLOCKED":
+            status = 400
         return jsonify(result), status
 
     @bp.post("/api/mihomo/hwid/apply")
@@ -393,6 +475,12 @@ def create_mihomo_blueprint(
         template_inline = data.get("template")  # optional inline YAML
 
         # Reuse probe logic to validate URL and get suggested name.
+        policy = _mihomo_hwid_url_policy()
+        reason = _mihomo_hwid_policy_block_reason(url, policy)
+        if reason:
+            blocked = _mihomo_hwid_url_blocked_result(url, reason)
+            return jsonify({"ok": False, "stage": "probe", "probe": blocked}), 400
+
         info = _mh_hwid_get_device_info()
         headers = info.get("headers") or {}
 
@@ -403,6 +491,7 @@ def create_mihomo_blueprint(
             insecure=insecure,
             timeout=8.0,
             prefer="head_then_range_get",
+            policy=policy,
         )
 
         if not (probe and isinstance(probe, dict) and probe.get("ok") is True):
@@ -414,6 +503,8 @@ def create_mihomo_blueprint(
                 status = 400
             elif code == "TIMEOUT":
                 status = 504
+            elif code == "URL_BLOCKED":
+                status = 400
             return jsonify({"ok": False, "stage": "probe", "probe": probe}), status
 
         suggested = ((probe.get("profile") or {}) if isinstance(probe, dict) else {}).get(
