@@ -123,6 +123,23 @@ def test_mihomo_generator_initializes_preview_toolbar_without_engine_toggle():
     assert text.index("try { attachPreviewToolbar(); } catch (e) {}") < text.index("try { wireLazyPreviewToolbar(); } catch (e) {}")
 
 
+def test_mihomo_generator_xray_subscription_prompt_uses_theme_confirm_modal():
+    script = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
+    bootstrap = Path('xkeen-ui/static/js/pages/mihomo_generator.screen.bootstrap.js').read_text(encoding='utf-8')
+    template = Path('xkeen-ui/templates/mihomo_generator.html').read_text(encoding='utf-8')
+
+    assert 'confirmMihomoAction,' in script
+    assert 'await confirmMihomoAction({' in script
+    assert 'title: "Конвертировать Xray-JSON подписку?",' in script
+    assert 'okText: "Конвертировать",' in script
+    assert 'cancelText: "Оставить как подписку",' in script
+    assert 'window.confirm(' not in script
+    assert "import '../ui/confirm_modal.js';" in bootstrap
+    assert 'id="confirm-modal"' in template
+    assert 'id="confirm-modal-ok-btn"' in template
+    assert 'data-modal-key="mihomo-generator-confirm"' in template
+
+
 def test_mihomo_result_modal_collapses_empty_log_column_and_uses_compact_sections():
     script = Path('xkeen-ui/static/js/features/mihomo_generator.js').read_text(encoding='utf-8')
     template = Path('xkeen-ui/templates/mihomo_generator.html').read_text(encoding='utf-8')

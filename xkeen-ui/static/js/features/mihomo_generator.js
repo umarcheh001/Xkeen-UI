@@ -1,4 +1,5 @@
 import {
+  confirmMihomoAction,
   getMihomoCommandJobApi,
   getMihomoEditorActionsApi,
   getMihomoEditorEngineApi,
@@ -1408,12 +1409,27 @@ function initEngineToggle() {
 
           const count = Number(data.count || 0);
           const sample = (data.proxies && data.proxies[0] && data.proxies[0].proxy_name) || "";
-          const message =
+          const fallbackMessage =
             "Это Xray-JSON подписка (" + count + " " + plural(count, ["узел", "узла", "узлов"]) + ").\n" +
             (sample ? ("Например: " + sample + "\n") : "") +
             "\nMihomo не умеет читать такие подписки напрямую как proxy-provider.\n" +
             "Конвертировать в YAML-блок прокси? Auto-обновление будет потеряно — для обновления нужно будет переимпортировать вручную.";
-          if (!window.confirm(message)) {
+          const ok = await confirmMihomoAction({
+            title: "Конвертировать Xray-JSON подписку?",
+            message:
+              "Это Xray-JSON подписка: " + count + " " +
+              plural(count, ["узел", "узла", "узлов"]) +
+              ". Mihomo не умеет читать её напрямую как proxy-provider.",
+            details: [
+              sample ? ("Например: " + sample) : "",
+              "Можно конвертировать её в YAML-блок прокси.",
+              "Auto-обновление будет потеряно — для обновления нужно будет переимпортировать вручную.",
+            ],
+            okText: "Конвертировать",
+            cancelText: "Оставить как подписку",
+            danger: false,
+          }, fallbackMessage);
+          if (!ok) {
             return;
           }
 

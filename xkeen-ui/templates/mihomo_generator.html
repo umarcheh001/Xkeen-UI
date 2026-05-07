@@ -2279,6 +2279,22 @@ trojan://..."></textarea>
   </div>
 </div>
 
+<div id="confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Подтверждение">
+  <div class="modal-content" style="max-width: 560px;" data-modal-key="mihomo-generator-confirm">
+    <div class="modal-header">
+      <span class="modal-title" id="confirm-modal-title">Подтверждение</span>
+      <button type="button" class="modal-close" id="confirm-modal-close-btn" title="Закрыть">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-modal-message" class="modal-description" style="white-space: pre-line; margin: 0;"></p>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button type="button" id="confirm-modal-cancel-btn" class="btn btn-ghost">Отменить</button>
+      <button type="button" id="confirm-modal-ok-btn" class="btn btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast-container"></div>
 </body>
 </html>
