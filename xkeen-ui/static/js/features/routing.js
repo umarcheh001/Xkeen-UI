@@ -1384,6 +1384,24 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
     return null;
   }
 
+  function fragmentBaseName(value) {
+    try {
+      const parts = String(value || '').split(/[\\/]+/);
+      return String(parts[parts.length - 1] || '').trim();
+    } catch (e) {}
+    return String(value || '').trim();
+  }
+
+  function collectFragmentBasenames(values) {
+    const list = Array.isArray(values) ? values : [values];
+    return new Set(list.map((value) => fragmentBaseName(value)).filter(Boolean));
+  }
+
+  function isRemovedFragmentName(value, removedFiles) {
+    const name = fragmentBaseName(value);
+    return !!(name && removedFiles && removedFiles.has(name));
+  }
+
   function rememberActiveFragment(name) {
     try {
       if (name) _storeSet('xkeen.routing.fragment', String(name));
@@ -1417,6 +1435,16 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
       if (v) return String(v);
     } catch (e) {}
     return null;
+  }
+
+  function forgetRememberedFragmentIfRemoved(removedFiles) {
+    if (!removedFiles || !removedFiles.size) return;
+    try {
+      const remembered = restoreRememberedFragment();
+      if (isRemovedFragmentName(remembered, removedFiles)) {
+        _storeRemove('xkeen.routing.fragment');
+      }
+    } catch (e) {}
   }
 
   function getActiveFragment() {
@@ -1932,6 +1960,8 @@ function _setRoutingMode(mode, reason) {
 
     const notify = !!(opts && opts.notify);
     const syncActive = !(opts && opts.syncActive === false);
+    const removedFiles = collectFragmentBasenames(opts && (opts.removedFiles || opts.removedFile));
+    forgetRememberedFragmentIfRemoved(removedFiles);
     let data = null;
     try {
       const coreHttp = getXkeenCoreHttpApi();
@@ -1954,9 +1984,16 @@ function _setRoutingMode(mode, reason) {
       return;
     }
 
-    const currentDefault = (data.current || sel.dataset.current || '').toString();
-    const remembered = restoreRememberedFragment();
-    const preferred = (getActiveFragment() || remembered || currentDefault || (data.items[0] ? data.items[0].name : '')).toString();
+    const items = removedFiles.size
+      ? data.items.filter((it) => !isRemovedFragmentName(it && it.name, removedFiles))
+      : data.items.slice();
+    const rawCurrentDefault = (data.current || sel.dataset.current || '').toString();
+    const currentDefault = isRemovedFragmentName(rawCurrentDefault, removedFiles) ? '' : rawCurrentDefault;
+    const rememberedRaw = restoreRememberedFragment();
+    const remembered = isRemovedFragmentName(rememberedRaw, removedFiles) ? '' : rememberedRaw;
+    const activeRaw = getActiveFragment();
+    const activePreferred = isRemovedFragmentName(activeRaw, removedFiles) ? '' : activeRaw;
+    const preferred = (activePreferred || remembered || currentDefault || (items[0] ? items[0].name : '')).toString();
 
     // Optional UX: when switching from "All files" -> routing-only list,
     // explain why selection may jump back to the routing file.
@@ -1966,7 +2003,7 @@ function _setRoutingMode(mode, reason) {
     // Rebuild options
     try { if (sel.dataset) sel.dataset.dir = String(data.dir || ''); } catch (e) {}
     sel.innerHTML = '';
-    const names = data.items.map((it) => String(it.name || '')).filter(Boolean);
+    const names = items.map((it) => String(it.name || '')).filter(Boolean);
 
     // If currentDefault isn't in list, keep it as "custom"
     if (currentDefault && names.indexOf(currentDefault) === -1) {
@@ -1976,7 +2013,7 @@ function _setRoutingMode(mode, reason) {
       sel.appendChild(opt);
     }
 
-    data.items.forEach((it) => {
+    items.forEach((it) => {
       const name = String(it.name || '');
       if (!name) return;
       const opt = document.createElement('option');
@@ -1991,9 +2028,9 @@ function _setRoutingMode(mode, reason) {
       if (finalChoice) sel.value = finalChoice;
       const dir = data.dir ? String(data.dir).replace(/\/+$/, '') : '';
       _fragmentDir = dir;
-      _fragmentItems = data.items.slice();
-      if (syncActive) applyActiveFragment(sel.value || finalChoice || null, dir, data.items);
-      else syncShellState(dir, data.items);
+      _fragmentItems = items.slice();
+      if (syncActive) applyActiveFragment(sel.value || finalChoice || null, dir, items);
+      else syncShellState(dir, items);
     } catch (e) {}
 
     // If scope was reduced and a non-routing file disappeared from the list, clarify the jump.
@@ -5897,6 +5934,7 @@ function closeHelp() {
     sortRules,
     backup,
     restoreAuto,
+    refreshFragments: refreshFragmentsList,
     toggleCard,
     openHelp,
     closeHelp,

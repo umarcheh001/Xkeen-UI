@@ -293,6 +293,26 @@ let outboundsModuleApi = null;
       return String(value || '').trim();
     }
 
+    function collectFragmentBasenames(values) {
+      const list = Array.isArray(values) ? values : [values];
+      return new Set(list.map((value) => baseName(value)).filter(Boolean));
+    }
+
+    function isRemovedFragmentName(value, removedFiles) {
+      const name = baseName(value);
+      return !!(name && removedFiles && removedFiles.has(name));
+    }
+
+    function forgetRememberedFragmentIfRemoved(removedFiles) {
+      if (!removedFiles || !removedFiles.size) return;
+      try {
+        const remembered = restoreRememberedFragment();
+        if (isRemovedFragmentName(remembered, removedFiles)) {
+          localStorage.removeItem('xkeen.outbounds.fragment');
+        }
+      } catch (e) {}
+    }
+
     async function refreshSubscriptionOutputFiles(force) {
       const now = Date.now();
       if (!force && _subscriptionOutputFiles && (now - _subscriptionOutputFilesTs) < 15000) {
@@ -827,6 +847,8 @@ let outboundsModuleApi = null;
       if (!sel) return;
 
       const notify = !!(opts && opts.notify);
+      const removedFiles = collectFragmentBasenames(opts && (opts.removedFiles || opts.removedFile));
+      forgetRememberedFragmentIfRemoved(removedFiles);
 
       let data = null;
       try {
@@ -840,14 +862,21 @@ let outboundsModuleApi = null;
         return;
       }
 
-      const currentDefault = (data.current || sel.dataset.current || '').toString();
-      const remembered = restoreRememberedFragment();
-      const preferred = (getActiveFragment() || remembered || currentDefault || (data.items[0] ? data.items[0].name : '')).toString();
+      const items = removedFiles.size
+        ? data.items.filter((it) => !isRemovedFragmentName(it && it.name, removedFiles))
+        : data.items.slice();
+      const rawCurrentDefault = (data.current || sel.dataset.current || '').toString();
+      const currentDefault = isRemovedFragmentName(rawCurrentDefault, removedFiles) ? '' : rawCurrentDefault;
+      const rememberedRaw = restoreRememberedFragment();
+      const remembered = isRemovedFragmentName(rememberedRaw, removedFiles) ? '' : rememberedRaw;
+      const activeRaw = getActiveFragment();
+      const activePreferred = isRemovedFragmentName(activeRaw, removedFiles) ? '' : activeRaw;
+      const preferred = (activePreferred || remembered || currentDefault || (items[0] ? items[0].name : '')).toString();
 
       try { if (sel.dataset) sel.dataset.dir = String(data.dir || ''); } catch (e) {}
       sel.innerHTML = '';
 
-      const names = data.items.map((it) => String(it.name || '')).filter(Boolean);
+      const names = items.map((it) => String(it.name || '')).filter(Boolean);
       if (currentDefault && names.indexOf(currentDefault) === -1) {
         const opt = document.createElement('option');
         opt.value = currentDefault;
@@ -855,7 +884,7 @@ let outboundsModuleApi = null;
         sel.appendChild(opt);
       }
 
-      data.items.forEach((it) => {
+      items.forEach((it) => {
         const name = String(it.name || '');
         if (!name) return;
         const opt = document.createElement('option');
@@ -868,7 +897,7 @@ let outboundsModuleApi = null;
         const finalChoice = names.indexOf(preferred) !== -1 ? preferred : (currentDefault || (names[0] || ''));
         if (finalChoice) sel.value = finalChoice;
         const dir = data.dir ? String(data.dir).replace(/\/+$/, '') : '';
-        applyActiveFragment(sel.value || finalChoice || null, dir, data.items);
+        applyActiveFragment(sel.value || finalChoice || null, dir, items);
       } catch (e) {}
 
       // Wire refresh button
@@ -6039,13 +6068,23 @@ let outboundsModuleApi = null;
           .map((value) => baseName(value))
           .filter(Boolean)
       );
+      const removedFiles = collectFragmentBasenames(opts.removedFiles || opts.removedFile);
+      if (touchedFiles.size || removedFiles.size) {
+        _subscriptionOutputFiles = null;
+        _subscriptionOutputFilesTs = 0;
+      }
 
-      try { await refreshFragmentsList({ notify: false }); } catch (e) {}
+      try {
+        await refreshFragmentsList({
+          notify: false,
+          removedFiles: Array.from(removedFiles),
+        });
+      } catch (e) {}
 
       const nextActive = baseName(getActiveFragment() || '');
       const selectionChanged = !!(prevActive && prevActive !== nextActive);
       const activeTouched = !!(nextActive && touchedFiles.has(nextActive));
-      const removedActive = !!(prevActive && touchedFiles.has(prevActive) && prevActive !== nextActive);
+      const removedActive = !!(prevActive && (touchedFiles.has(prevActive) || removedFiles.has(prevActive)) && prevActive !== nextActive);
 
       if (!selectionChanged && !activeTouched && !removedActive) return false;
 
@@ -6072,15 +6111,29 @@ let outboundsModuleApi = null;
       const opts = (options && typeof options === 'object') ? options : {};
       const routingChanged = !!opts.routingChanged;
       const observatoryChanged = !!opts.observatoryChanged;
-      if (!routingChanged && !observatoryChanged) return false;
+      const removedFiles = collectFragmentBasenames(opts.removedFiles || opts.removedFile);
+      if (!routingChanged && !observatoryChanged && !removedFiles.size) return false;
 
       const routingApi = getRoutingApi();
       if (!routingApi || typeof routingApi.load !== 'function') return false;
 
+      const previousRoutingFile = baseName(getActiveRoutingFragmentName() || '');
+      let routingSelectionChanged = false;
+      if (typeof routingApi.refreshFragments === 'function') {
+        try {
+          await routingApi.refreshFragments({
+            notify: false,
+            removedFiles: Array.from(removedFiles),
+          });
+        } catch (e) {}
+        const refreshedRoutingFile = baseName(getActiveRoutingFragmentName() || '');
+        routingSelectionChanged = !!(previousRoutingFile && refreshedRoutingFile && previousRoutingFile !== refreshedRoutingFile);
+      }
+
       const activeRoutingFile = baseName(getActiveRoutingFragmentName() || '');
       const touchedRoutingFile = baseName(opts.routingFile || '');
       const observatoryFile = baseName(opts.observatoryFile || '07_observatory.json');
-      const routingTouched = !!(routingChanged && (!touchedRoutingFile || !activeRoutingFile || touchedRoutingFile === activeRoutingFile));
+      const routingTouched = !!(routingSelectionChanged || (routingChanged && (!touchedRoutingFile || !activeRoutingFile || touchedRoutingFile === activeRoutingFile)));
       const observatoryTouched = !!(observatoryChanged && observatoryFile && activeRoutingFile === observatoryFile);
       if (!routingTouched && !observatoryTouched) {
         return false;
@@ -6472,12 +6525,14 @@ let outboundsModuleApi = null;
         await subsSyncOutboundsViewAfterMutation({
           prevActive,
           touchedFiles: [data && data.deleted && data.deleted.output_file],
+          removedFiles: [data && data.deleted && data.deleted.output_file],
         });
         await subsSyncRoutingViewAfterMutation({
           routingChanged: !!(data && data.routing_changed),
           routingFile: data && data.routing_file,
           observatoryChanged: !!(data && data.observatory_changed),
           observatoryFile: '07_observatory.json',
+          removedFiles: [data && data.deleted && data.deleted.output_file],
         });
         await subsLoad();
         return true;

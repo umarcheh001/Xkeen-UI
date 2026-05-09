@@ -142,6 +142,24 @@ def test_outbounds_fragment_switch_ignores_stale_load_and_nodes_responses():
     assert "await refreshOutboundsNodes(false, { fragment: requestFragment });" in outbounds_src
 
 
+def test_xray_subscription_delete_refreshes_main_fragment_selectors():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    routing_src = _read("xkeen-ui/static/js/features/routing.js")
+
+    assert "function collectFragmentBasenames(values) {" in outbounds_src
+    assert "function forgetRememberedFragmentIfRemoved(removedFiles) {" in outbounds_src
+    assert "forgetRememberedFragmentIfRemoved(removedFiles);" in outbounds_src
+    assert "data.items.filter((it) => !isRemovedFragmentName(it && it.name, removedFiles))" in outbounds_src
+    assert "removedFiles: [data && data.deleted && data.deleted.output_file]," in outbounds_src
+    assert "await refreshFragmentsList({\n          notify: false,\n          removedFiles: Array.from(removedFiles),\n        });" in outbounds_src
+    assert "await routingApi.refreshFragments({\n            notify: false,\n            removedFiles: Array.from(removedFiles),\n          });" in outbounds_src
+
+    assert "function fragmentBaseName(value) {" in routing_src
+    assert "function forgetRememberedFragmentIfRemoved(removedFiles) {" in routing_src
+    assert "data.items.filter((it) => !isRemovedFragmentName(it && it.name, removedFiles))" in routing_src
+    assert "refreshFragments: refreshFragmentsList," in routing_src
+
+
 def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")
