@@ -186,6 +186,50 @@ def test_core_switch_start_does_not_wait_for_foreground_start_command(monkeypatc
     assert 'TIMEOUT' not in combined
 
 
+def test_core_switch_waits_for_target_core_after_start_command_exits_zero(monkeypatch, tmp_path):
+    from services import cores
+
+    runtime_logs: list[str] = []
+    detect_calls = {'count': 0}
+
+    monkeypatch.setenv('XKEEN_CORE_START_GRACE_AFTER_RUNNING_MS', '0')
+    monkeypatch.setattr(cores, 'build_xkeen_cmd', lambda flag: ['xkeen', flag])
+
+    def fake_detect_running_core():
+        detect_calls['count'] += 1
+        return 'mihomo' if detect_calls['count'] >= 3 else 'xray'
+
+    monkeypatch.setattr(cores, 'detect_running_core', fake_detect_running_core)
+    monkeypatch.setattr(cores.subprocess, 'run', lambda *_args, **_kwargs: SimpleNamespace(stdout=''))
+
+    class FakeStartProcess:
+        returncode = 0
+
+        def __init__(self, _cmd, stdin=None, stdout=None, stderr=None):
+            if stdout is not None:
+                stdout.write(b'start accepted\n')
+                stdout.flush()
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            self.returncode = -15
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+    monkeypatch.setattr(cores.subprocess, 'Popen', FakeStartProcess)
+
+    cores.switch_core('mihomo', str(tmp_path / 'xray-error.log'), runtime_log=runtime_logs.append)
+
+    assert detect_calls['count'] >= 3
+    assert runtime_logs == []
+
+
 def test_core_switch_success_start_output_stays_out_of_operation_log():
     from services import cores
 

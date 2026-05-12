@@ -388,7 +388,7 @@ def switch_core(core: str, error_log_path: str, runtime_log: Callable[[str], Non
                         while proc.poll() is None and time.monotonic() < grace_deadline:
                             time.sleep(0.1)
                         break
-                    if rc is not None:
+                    if rc is not None and rc != 0:
                         break
                     if time.monotonic() >= deadline:
                         break
@@ -420,8 +420,12 @@ def switch_core(core: str, error_log_path: str, runtime_log: Callable[[str], Non
                     details={"phase": phase, "cmd": cmd_s, "timeout_s": timeout, "elapsed_s": dt, "log": log_file},
                 )
 
-            _core_log("error", "xkeen.cmd_failed", phase=phase, cmd=cmd_s, rc=rc, elapsed_s=dt)
-            _write_diag(f"[xkeen-ui] {phase}: FAILED rc={rc} after {dt}s cmd={cmd_s}")
+            if rc == 0:
+                _core_log("error", "xkeen.cmd_not_ready", phase=phase, cmd=cmd_s, rc=rc, elapsed_s=dt)
+                _write_diag(f"[xkeen-ui] {phase}: NOT_READY rc={rc} after {dt}s cmd={cmd_s}")
+            else:
+                _core_log("error", "xkeen.cmd_failed", phase=phase, cmd=cmd_s, rc=rc, elapsed_s=dt)
+                _write_diag(f"[xkeen-ui] {phase}: FAILED rc={rc} after {dt}s cmd={cmd_s}")
             raise CoreSwitchError(
                 "РљРѕРјР°РЅРґР° Р·Р°РІРµСЂС€РёР»Р°СЃСЊ СЃ РѕС€РёР±РєРѕР№",
                 details={"phase": phase, "cmd": cmd_s, "returncode": rc, "elapsed_s": dt, "log": log_file},
