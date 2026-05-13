@@ -23,6 +23,9 @@ def test_xray_subscription_form_exposes_regex_filters_and_payload_fields():
     assert '<span class="xk-pool-fieldlabel">Транспорт</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Balancer selectors</span>' in outbounds_src
     assert '<span class="xk-pool-fieldlabel">Обновлять, ч</span>' in outbounds_src
+    assert '<option value="subscription-only">Только подписка</option>' in outbounds_src
+    assert "const SUB_ROUTING_MODE_SUBSCRIPTION_ONLY = 'subscription-only';" in outbounds_src
+    assert "function subsRoutingModeTooltip(autoRuleEnabled) {" in outbounds_src
     assert "const SUB_DEFAULT_INTERVAL_HOURS = 24;" in outbounds_src
     assert "xk-sub-interval-note" in outbounds_src
     assert "function subsIntervalSummary(sub) {" in outbounds_src
@@ -178,6 +181,7 @@ def test_xray_subscription_modal_exposes_transport_preview_and_manual_exclusions
     assert "transport_filter: String(($(SUB_IDS.transportFilter) && $(SUB_IDS.transportFilter).value) || '').trim()," in outbounds_src
     assert "routing_mode: String(($(SUB_IDS.routingMode) && $(SUB_IDS.routingMode).value) || 'safe-fallback').trim() || 'safe-fallback'," in outbounds_src
     assert "routing_auto_rule: !!state.routing_auto_rule," in outbounds_src
+    assert "Только подписка: служебный pool и observatory работают без vless-reality." in outbounds_src
     assert "routing_balancer_tags: state.routing_balancer_tags.slice()," in outbounds_src
     assert "excluded_node_keys: state.excluded_node_keys.slice()," in outbounds_src
     assert "function subsRenderNodeList() {" in outbounds_src

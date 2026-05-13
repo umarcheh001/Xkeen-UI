@@ -119,6 +119,7 @@ AUTO_BALANCER_PRESERVE_TAGS = ("vless-reality",)
 AUTO_MIGRATED_RULE_TAG_PREFIX = "xk_auto_vless_pool_"
 ROUTING_MODE_SAFE = "safe-fallback"
 ROUTING_MODE_STRICT = "migrate-vless-rules"
+ROUTING_MODE_SUBSCRIPTION_ONLY = "subscription-only"
 ROUTING_ROOT_KEYS = ("domainStrategy", "domainMatcher", "rules", "balancers")
 _TAG_PREFIX_MAX_LEN = 64
 _NODE_NAME_MAX_LEN = 36
@@ -194,12 +195,36 @@ def _clean_regex_filter(value: Any) -> str:
 def _clean_routing_mode(value: Any) -> str:
     raw = str(value or "").strip().lower()
     if raw in {
+        ROUTING_MODE_SUBSCRIPTION_ONLY,
+        "subscription_only",
+        "subscriptions-only",
+        "subscriptions_only",
+        "only-subscription",
+        "only-subscriptions",
+        "sub-only",
+        "subs-only",
+        "generated-only",
+    }:
+        return ROUTING_MODE_SUBSCRIPTION_ONLY
+    if raw in {
         ROUTING_MODE_STRICT,
         "migrate_vless_rules",
         "strict",
         "pool",
         "prefer-subscription-pool",
     }:
+        return ROUTING_MODE_STRICT
+    return ROUTING_MODE_SAFE
+
+
+def _routing_mode_migrates_vless(value: Any) -> bool:
+    return _clean_routing_mode(value) in {ROUTING_MODE_STRICT, ROUTING_MODE_SUBSCRIPTION_ONLY}
+
+
+def _runtime_routing_mode(*, subscription_only: bool, strict: bool, has_auto_terms: bool) -> str:
+    if subscription_only and has_auto_terms:
+        return ROUTING_MODE_SUBSCRIPTION_ONLY
+    if strict and has_auto_terms:
         return ROUTING_MODE_STRICT
     return ROUTING_MODE_SAFE
 
@@ -2874,14 +2899,18 @@ def _sync_vless_reality_rules_to_balancer(
 
 def _effective_subscription_routing_mode(ui_state_dir: str) -> str:
     state = load_subscription_state(ui_state_dir)
+    strict_enabled = False
     for item in state.get("subscriptions") if isinstance(state, dict) else []:
         if not isinstance(item, dict):
             continue
         if item.get("enabled", True) is False:
             continue
-        if _clean_routing_mode(item.get("routing_mode")) == ROUTING_MODE_STRICT:
-            return ROUTING_MODE_STRICT
-    return ROUTING_MODE_SAFE
+        mode = _clean_routing_mode(item.get("routing_mode"))
+        if mode == ROUTING_MODE_SUBSCRIPTION_ONLY:
+            return ROUTING_MODE_SUBSCRIPTION_ONLY
+        if mode == ROUTING_MODE_STRICT:
+            strict_enabled = True
+    return ROUTING_MODE_STRICT if strict_enabled else ROUTING_MODE_SAFE
 
 
 def _subscription_runtime_selector_terms(item: Any) -> List[str]:
@@ -2909,6 +2938,7 @@ def _build_runtime_sync_plan(state: Any) -> Dict[str, Any]:
     seen_observatory: set[str] = set()
     seen_auto: set[str] = set()
     strict_enabled = False
+    subscription_only_enabled = False
 
     for raw_item in state.get("subscriptions") if isinstance(state, dict) else []:
         item = _ensure_runtime_snapshot_defaults(raw_item)
@@ -2927,7 +2957,10 @@ def _build_runtime_sync_plan(state: Any) -> Dict[str, Any]:
                 if term not in seen_auto:
                     seen_auto.add(term)
                     auto_terms.append(term)
-            if _clean_routing_mode(item.get("last_routing_mode")) == ROUTING_MODE_STRICT:
+            mode = _clean_routing_mode(item.get("last_routing_mode"))
+            if mode == ROUTING_MODE_SUBSCRIPTION_ONLY:
+                subscription_only_enabled = True
+            elif mode == ROUTING_MODE_STRICT:
                 strict_enabled = True
 
         for balancer_tag in _read_string_list_value(item, LAST_RUNTIME_BALANCER_TAGS_KEYS):
@@ -2943,7 +2976,12 @@ def _build_runtime_sync_plan(state: Any) -> Dict[str, Any]:
         "observatory_terms": observatory_terms,
         "auto_terms": auto_terms,
         "manual_balancers": manual_balancers,
-        "routing_mode": ROUTING_MODE_STRICT if strict_enabled and auto_terms else ROUTING_MODE_SAFE,
+        "routing_mode": _runtime_routing_mode(
+            subscription_only=subscription_only_enabled,
+            strict=strict_enabled,
+            has_auto_terms=bool(auto_terms),
+        ),
+        "subscription_only": bool(subscription_only_enabled and auto_terms),
         "has_runtime_targets": bool(observatory_terms or auto_terms or manual_balancers),
     }
 
@@ -2969,6 +3007,7 @@ def _collect_runtime_subscription_tags(state: Any) -> List[str]:
 
 
 def _effective_runtime_routing_mode_from_state(state: Any) -> str:
+    strict_enabled = False
     for item in state.get("subscriptions") if isinstance(state, dict) else []:
         if not isinstance(item, dict):
             continue
@@ -2979,9 +3018,12 @@ def _effective_runtime_routing_mode_from_state(state: Any) -> str:
             continue
         if not any(str(tag or "").strip() for tag in raw_tags):
             continue
-        if _clean_routing_mode(item.get("routing_mode")) == ROUTING_MODE_STRICT:
-            return ROUTING_MODE_STRICT
-    return ROUTING_MODE_SAFE
+        mode = _clean_routing_mode(item.get("routing_mode"))
+        if mode == ROUTING_MODE_SUBSCRIPTION_ONLY:
+            return ROUTING_MODE_SUBSCRIPTION_ONLY
+        if mode == ROUTING_MODE_STRICT:
+            strict_enabled = True
+    return ROUTING_MODE_STRICT if strict_enabled else ROUTING_MODE_SAFE
 
 
 def _ensure_least_ping_balancer(
@@ -3091,6 +3133,8 @@ def sync_subscription_routing(
     remove = set(_clean_tags_list(remove_tags or []))
     if not add and not remove:
         return {"changed": False, "selector": [], "balancer_tag": "", "routing_file": ""}
+    mode = _clean_routing_mode(routing_mode)
+    subscription_only = mode == ROUTING_MODE_SUBSCRIPTION_ONLY
 
     routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
     cfg, routing, normalized_model = _ensure_routing_model(_read_json_file(routing_path, {}))
@@ -3105,6 +3149,8 @@ def sync_subscription_routing(
     for tag in current_selector:
         if tag in remove or tag in seen:
             continue
+        if subscription_only and tag in AUTO_BALANCER_PRESERVE_TAGS:
+            continue
         seen.add(tag)
         selector.append(tag)
     for tag in add:
@@ -3113,7 +3159,7 @@ def sync_subscription_routing(
         seen.add(tag)
         selector.append(tag)
 
-    if selector:
+    if selector and not subscription_only:
         for tag in _preserved_balancer_tags(xray_configs_dir):
             if tag in seen:
                 continue
@@ -3122,8 +3168,13 @@ def sync_subscription_routing(
 
     changed = bool(normalized_model)
     strict_enabled = (
-        _clean_routing_mode(routing_mode) == ROUTING_MODE_STRICT
+        _routing_mode_migrates_vless(mode)
         and any(tag not in AUTO_BALANCER_PRESERVE_TAGS for tag in selector)
+    )
+    effective_mode = _runtime_routing_mode(
+        subscription_only=subscription_only,
+        strict=strict_enabled,
+        has_auto_terms=bool(selector),
     )
     if selector:
         balancer_changed = _ensure_least_ping_balancer(
@@ -3145,10 +3196,13 @@ def sync_subscription_routing(
             enabled=False,
         )
         rule_changed = _remove_auto_balancer_rule(routing)
+        removed_for_balancer = set(remove)
+        if subscription_only:
+            removed_for_balancer.update(AUTO_BALANCER_PRESERVE_TAGS)
         balancer_changed = _remove_auto_least_ping_balancer(
             routing,
             balancer_tag=balancer_tag,
-            removed_tags=remove,
+            removed_tags=removed_for_balancer,
             previous_selector=current_selector,
         )
         changed = bool(changed or rule_changed or balancer_changed or migrate_stats.get("changed"))
@@ -3159,7 +3213,7 @@ def sync_subscription_routing(
             "selector": selector,
             "balancer_tag": balancer_tag,
             "routing_file": os.path.basename(routing_path),
-            "routing_mode": _clean_routing_mode(routing_mode),
+            "routing_mode": effective_mode,
             "migrated_rules": 0,
             "reverted_rules": 0,
             "skipped_rules": 0,
@@ -3179,7 +3233,7 @@ def sync_subscription_routing(
         "selector": selector,
         "balancer_tag": balancer_tag,
         "routing_file": os.path.basename(routing_path),
-        "routing_mode": ROUTING_MODE_STRICT if strict_enabled else ROUTING_MODE_SAFE,
+        "routing_mode": effective_mode,
         "migrated_rules": int(migrate_stats.get("migrated") or 0),
         "reverted_rules": int(migrate_stats.get("reverted") or 0),
         "skipped_rules": int(migrate_stats.get("skipped") or 0),
@@ -3300,11 +3354,15 @@ def sync_subscription_runtime_plan_delta(
     next_manual_targets = _normalize_runtime_manual_balancers(nxt)
     next_has_runtime_targets = bool(nxt.get("has_runtime_targets"))
     preserved_tags = _preserved_balancer_tags(xray_configs_dir)
+    next_subscription_only = bool(nxt.get("subscription_only")) and bool(next_auto_terms)
+    observatory_remove_tags = [tag for tag in prev_observatory_terms if tag not in set(next_observatory_terms)]
+    if next_subscription_only:
+        observatory_remove_tags = _clean_tags_list(observatory_remove_tags + preserved_tags)
 
     observatory_changed = sync_observatory_subjects(
         xray_configs_dir=xray_configs_dir,
-        add_tags=next_observatory_terms + (preserved_tags if next_has_runtime_targets else []),
-        remove_tags=[tag for tag in prev_observatory_terms if tag not in set(next_observatory_terms)],
+        add_tags=next_observatory_terms + (preserved_tags if next_has_runtime_targets and not next_subscription_only else []),
+        remove_tags=observatory_remove_tags,
         managed_active=next_has_runtime_targets,
         snapshot=snapshot,
     )
@@ -3322,9 +3380,11 @@ def sync_subscription_runtime_plan_delta(
     )
 
     if next_auto_terms:
-        selector = _subtract_selector_terms(current_selector, prev_auto_terms)
+        remove_terms = prev_auto_terms + (preserved_tags if next_subscription_only else [])
+        selector = _subtract_selector_terms(current_selector, remove_terms)
         selector = _merge_selector_terms(selector, next_auto_terms)
-        selector = _merge_selector_terms(selector, preserved_tags)
+        if not next_subscription_only:
+            selector = _merge_selector_terms(selector, preserved_tags)
         changed = bool(
             _ensure_least_ping_balancer(
                 routing,
@@ -3360,8 +3420,13 @@ def sync_subscription_runtime_plan_delta(
             applied_manual_tags.append(tag)
 
     strict_enabled = (
-        _clean_routing_mode(nxt.get("routing_mode")) == ROUTING_MODE_STRICT
+        _routing_mode_migrates_vless(nxt.get("routing_mode"))
         and any(tag not in AUTO_BALANCER_PRESERVE_TAGS for tag in next_auto_terms)
+    )
+    effective_mode = _runtime_routing_mode(
+        subscription_only=next_subscription_only,
+        strict=strict_enabled,
+        has_auto_terms=bool(next_auto_terms),
     )
     migrate_stats = _sync_vless_reality_rules_to_balancer(
         routing,
@@ -3397,7 +3462,7 @@ def sync_subscription_runtime_plan_delta(
             "selector": selector,
             "balancer_tag": balancer_tag if next_auto_terms else "",
             "routing_file": os.path.basename(routing_path),
-            "routing_mode": ROUTING_MODE_STRICT if strict_enabled else ROUTING_MODE_SAFE,
+            "routing_mode": effective_mode,
             "migrated_rules": int(migrate_stats.get("migrated") or 0),
             "reverted_rules": int(migrate_stats.get("reverted") or 0),
             "skipped_rules": int(migrate_stats.get("skipped") or 0),
@@ -3416,6 +3481,8 @@ def sync_subscription_routing_plan(
     snapshot: SnapshotCallback | None = None,
 ) -> Dict[str, Any]:
     auto_terms = _clean_tags_list(auto_selector_terms)
+    mode = _clean_routing_mode(routing_mode)
+    subscription_only = mode == ROUTING_MODE_SUBSCRIPTION_ONLY
     manual_targets = {
         str(tag or "").strip(): _clean_tags_list(values)
         for tag, values in (manual_balancers or {}).items()
@@ -3451,9 +3518,12 @@ def sync_subscription_routing_plan(
             balancer.get("selector") if isinstance(balancer, dict) and isinstance(balancer.get("selector"), list) else []
         )
         selector = _merge_selector_terms(current_selector, auto_terms)
-        for tag in _preserved_balancer_tags(xray_configs_dir):
-            if tag not in selector:
-                selector.append(tag)
+        if subscription_only:
+            selector = [tag for tag in selector if tag not in AUTO_BALANCER_PRESERVE_TAGS]
+        else:
+            for tag in _preserved_balancer_tags(xray_configs_dir):
+                if tag not in selector:
+                    selector.append(tag)
         changed = bool(
             _ensure_least_ping_balancer(
                 routing,
@@ -3464,7 +3534,7 @@ def sync_subscription_routing_plan(
         )
         changed = bool(_ensure_default_balancer_rule(routing, balancer_tag=balancer_tag) or changed)
         strict_enabled = (
-            _clean_routing_mode(routing_mode) == ROUTING_MODE_STRICT
+            _routing_mode_migrates_vless(mode)
             and any(tag not in AUTO_BALANCER_PRESERVE_TAGS for tag in selector)
         )
         migrate_stats = _sync_vless_reality_rules_to_balancer(
@@ -3478,6 +3548,11 @@ def sync_subscription_routing_plan(
         skipped_rules = int(migrate_stats.get("skipped") or 0)
     else:
         strict_enabled = False
+    effective_mode = _runtime_routing_mode(
+        subscription_only=subscription_only,
+        strict=strict_enabled,
+        has_auto_terms=bool(auto_terms),
+    )
 
     for tag in sorted(manual_targets):
         if _update_existing_balancer_selector(routing, balancer_tag=tag, selector_terms=manual_targets.get(tag) or []):
@@ -3491,7 +3566,7 @@ def sync_subscription_routing_plan(
             "selector": selector,
             "balancer_tag": balancer_tag,
             "routing_file": os.path.basename(routing_path),
-            "routing_mode": ROUTING_MODE_STRICT if strict_enabled else ROUTING_MODE_SAFE,
+            "routing_mode": effective_mode,
             "migrated_rules": migrated_rules,
             "reverted_rules": reverted_rules,
             "skipped_rules": skipped_rules,
@@ -3512,7 +3587,7 @@ def sync_subscription_routing_plan(
         "selector": selector,
         "balancer_tag": balancer_tag,
         "routing_file": os.path.basename(routing_path),
-        "routing_mode": ROUTING_MODE_STRICT if strict_enabled else ROUTING_MODE_SAFE,
+        "routing_mode": effective_mode,
         "migrated_rules": migrated_rules,
         "reverted_rules": reverted_rules,
         "skipped_rules": skipped_rules,

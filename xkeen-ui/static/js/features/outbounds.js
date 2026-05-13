@@ -3783,6 +3783,20 @@ let outboundsModuleApi = null;
       return !subsHasManualStrategyBalancers();
     }
 
+    const SUB_ROUTING_MODE_SUBSCRIPTION_ONLY = 'subscription-only';
+
+    function subsRoutingModeTooltip(autoRuleEnabled) {
+      if (!autoRuleEnabled) {
+        return 'Режим «Применение» влияет только на служебный pool. Включи «Служебный пул», чтобы менять это поведение.';
+      }
+      return 'Безопасно: leastPing-balancer и fallback синхронизируются, а явные правила на vless-reality остаются. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула. Только подписка: служебный pool работает без vless-reality, а совместимые auto-правила переводятся на подписочный balancer.';
+    }
+
+    function subsRoutingModeValue(value) {
+      const mode = String(value || 'safe-fallback').trim() || 'safe-fallback';
+      return mode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY ? SUB_ROUTING_MODE_SUBSCRIPTION_ONLY : mode;
+    }
+
     function subsQuotedTag(tag) {
       const value = String(tag || '').trim();
       return value ? `"${value}"` : '';
@@ -3846,6 +3860,7 @@ let outboundsModuleApi = null;
       if (state.routing_auto_rule) {
         const autoTag = subsDraftAutoBalancerTag();
         const hasExistingAutoPool = !!subsRoutingMetaText('existing_auto_balancer_tag');
+        const routingMode = subsRoutingModeValue(state.routing_mode);
         if (tagPrefix) {
           items.push(
             hasExistingAutoPool
@@ -3856,6 +3871,11 @@ let outboundsModuleApi = null;
           items.push(`Routing: \u0431\u0443\u0434\u0435\u0442 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u043d \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool ${subsQuotedTag(autoTag)}.`);
         }
         items.push('Routing: \u0431\u0443\u0434\u0435\u0442 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043e \u0438\u043b\u0438 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u043e \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u043e\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u043e xk_auto_leastPing \u0434\u043b\u044f inbound redirect/tproxy.');
+        if (routingMode === 'migrate-vless-rules') {
+          items.push('Применение: совместимые auto-правила на vless-reality будут переведены на balancerTag служебного pool.');
+        } else if (routingMode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY) {
+          items.push('Применение: только подписка. vless-reality не попадёт в служебный pool и observatory, а совместимые auto-правила перейдут на подписочный balancer.');
+        }
       }
 
       if (manualTags.length) {
@@ -4016,9 +4036,7 @@ let outboundsModuleApi = null;
       if (routingModeLabel) {
         const caption = routingModeLabel.querySelector ? routingModeLabel.querySelector('.xk-sub-inline-label') : null;
         if (caption) caption.textContent = '\u041f\u0440\u0438\u043c\u0435\u043d\u0435\u043d\u0438\u0435';
-        const tooltip = state.routing_auto_rule
-          ? '\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e: \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 leastPing pool \u0438 fallback \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u044e\u0442\u0441\u044f, \u0430 \u044f\u0432\u043d\u044b\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u043d\u0430 vless-reality \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u044e\u0442\u0441\u044f. \u0416\u0451\u0441\u0442\u043a\u043e: auto-\u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u043d\u0430 vless-reality \u043f\u0435\u0440\u0435\u0435\u0437\u0436\u0430\u044e\u0442 \u0432 balancerTag pool.'
-          : '\u0420\u0435\u0436\u0438\u043c Auto routing \u0432\u043b\u0438\u044f\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u0430 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool. \u0412\u043a\u043b\u044e\u0447\u0438 \u00ab\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool\u00bb, \u0447\u0442\u043e\u0431\u044b \u044d\u0442\u043e\u0442 \u0440\u0435\u0436\u0438\u043c \u043f\u0440\u0438\u043c\u0435\u043d\u044f\u043b\u0441\u044f.';
+        const tooltip = subsRoutingModeTooltip(state.routing_auto_rule);
         try { routingModeLabel.setAttribute('data-tooltip', tooltip); } catch (e4) {}
         try { routingModeLabel.setAttribute('data-tooltip-placement', 'bottom'); } catch (e4a) {}
         const select = $(SUB_IDS.routingMode);
@@ -4388,9 +4406,7 @@ let outboundsModuleApi = null;
         try {
           routingModeEl.setAttribute(
             'data-tooltip',
-            formState.routing_auto_rule
-              ? 'Безопасно: leastPing-balancer и fallback синхронизируются, но явные правила на vless-reality остаются. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула.'
-              : 'Режим «Применение» влияет только на общий auto-managed leastPing pool. Включи «Общий pool», чтобы менять это поведение.'
+            subsRoutingModeTooltip(formState.routing_auto_rule)
           );
         } catch (e4) {}
       }
@@ -4439,9 +4455,7 @@ let outboundsModuleApi = null;
       const routingModeEl = $(SUB_IDS.routingMode);
       if (routingModeEl) {
         routingModeEl.disabled = !formState.routing_auto_rule;
-        const tooltip = formState.routing_auto_rule
-          ? '\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e: \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 leastPing pool \u0438 fallback \u0441\u0438\u043d\u0445\u0440\u043e\u043d\u0438\u0437\u0438\u0440\u0443\u044e\u0442\u0441\u044f, \u0430 \u044f\u0432\u043d\u044b\u0435 \u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u043d\u0430 vless-reality \u0441\u043e\u0445\u0440\u0430\u043d\u044f\u044e\u0442\u0441\u044f. \u0416\u0451\u0441\u0442\u043a\u043e: auto-\u043f\u0440\u0430\u0432\u0438\u043b\u0430 \u043d\u0430 vless-reality \u043f\u0435\u0440\u0435\u0435\u0437\u0436\u0430\u044e\u0442 \u0432 balancerTag pool.'
-          : '\u0420\u0435\u0436\u0438\u043c Auto routing \u0432\u043b\u0438\u044f\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u043d\u0430 \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool. \u0412\u043a\u043b\u044e\u0447\u0438 \u00ab\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0439 pool\u00bb, \u0447\u0442\u043e\u0431\u044b \u044d\u0442\u043e\u0442 \u0440\u0435\u0436\u0438\u043c \u043f\u0440\u0438\u043c\u0435\u043d\u044f\u043b\u0441\u044f.';
+        const tooltip = subsRoutingModeTooltip(formState.routing_auto_rule);
         try { routingModeEl.setAttribute('data-tooltip', tooltip); } catch (e4) {}
         try { routingModeEl.setAttribute('title', tooltip); } catch (e5) {}
       }
@@ -4616,7 +4630,7 @@ let outboundsModuleApi = null;
               <div class="xk-sub-brief">
                 <div class="xk-sub-brief-main">
                   <div class="xk-sub-brief-title">LeastPing и generated fragments</div>
-                  <div class="xk-sub-brief-text">Подписка создаёт отдельный <code>04_outbounds.&lt;tag&gt;.json</code>, использует <code>Tag prefix</code> как prefix для <code>selector</code> и <code>subjectSelector</code>: Xray сопоставляет его по началу тега, поэтому <code>sub</code> найдёт generated outbounds вида <code>sub--node</code>. При включённом «Пинг» этот prefix добавляется в <code>07_observatory.json</code>. Режим <b>Применение</b> управляет только синхронизацией routing с пулом.</div>
+                  <div class="xk-sub-brief-text">Подписка создаёт отдельный <code>04_outbounds.&lt;tag&gt;.json</code>, использует <code>Tag prefix</code> как prefix для <code>selector</code> и <code>subjectSelector</code>: Xray сопоставляет его по началу тега, поэтому <code>sub</code> найдёт generated outbounds вида <code>sub--node</code>. При включённом «Пинг» этот prefix добавляется в <code>07_observatory.json</code>. Режим <b>Применение</b> выбирает, оставить ли одиночный <code>vless-reality</code> рядом с подпиской или вести служебный pool только через generated nodes.</div>
                 </div>
                 <div class="xk-sub-update-note">
                   <div class="xk-sub-update-title">Автообновление</div>
@@ -4692,11 +4706,12 @@ let outboundsModuleApi = null;
                         <input id="outbounds-subscriptions-routing-auto-rule" type="checkbox" checked title="Общий leastPing pool" data-tooltip="Добавлять tag prefix этой подписки в общий auto-managed leastPing pool.">
                         <span>Общий pool</span>
                       </label>
-                      <label class="xk-sub-routing-mode" for="outbounds-subscriptions-routing-mode" data-tooltip="Как панель должна подвязывать подписку к маршрутизации. Безопасно: selector/fallback leastPing синхронизируются, а явные правила на vless-reality сохраняются. Жёстко: auto-правила с outboundTag=vless-reality автоматически переводятся на общий balancerTag пула.">
+                      <label class="xk-sub-routing-mode" for="outbounds-subscriptions-routing-mode" data-tooltip="Как панель должна подвязывать подписку к маршрутизации. Безопасно сохраняет vless-reality рядом с подпиской. Жёстко переводит совместимые auto-правила на общий balancerTag пула. Только подписка исключает vless-reality из служебного pool и observatory.">
                         <span class="xk-sub-inline-label">Применение</span>
-                        <select id="outbounds-subscriptions-routing-mode" class="xray-log-filter" title="Режим маршрутизации подписки" data-tooltip="Безопасно: leastPing-balancer и fallback синхронизируются, но явные правила на vless-reality остаются. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула.">
+                        <select id="outbounds-subscriptions-routing-mode" class="xray-log-filter" title="Режим маршрутизации подписки" data-tooltip="Безопасно: leastPing-balancer и fallback синхронизируются, а vless-reality остаётся. Жёстко: auto-правила на vless-reality переезжают в balancerTag пула. Только подписка: служебный pool и observatory работают без vless-reality.">
                           <option value="safe-fallback">Безопасно</option>
                           <option value="migrate-vless-rules">Жёстко · pool</option>
+                          <option value="subscription-only">Только подписка</option>
                         </select>
                       </label>
                     </div>
@@ -6331,13 +6346,17 @@ let outboundsModuleApi = null;
             ].filter(Boolean)
           : [];
         const routingNote = routingParts.length ? (' · ' + routingParts.join(' · ')) : '';
-        const routingModeNote = data.routing_mode === 'migrate-vless-rules'
+        const routingModeNote = data.routing_mode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY
           ? (Number(data.routing_migrated_rules || 0) > 0
-            ? ` · strict: ${Number(data.routing_migrated_rules || 0)} rule → pool`
-            : ' · strict mode')
-          : (Number(data.routing_reverted_rules || 0) > 0
-            ? ` · safe: ${Number(data.routing_reverted_rules || 0)} rule ← vless`
-            : '');
+            ? ` · only subscription: ${Number(data.routing_migrated_rules || 0)} rule → pool`
+            : ' · only subscription')
+          : data.routing_mode === 'migrate-vless-rules'
+            ? (Number(data.routing_migrated_rules || 0) > 0
+              ? ` · strict: ${Number(data.routing_migrated_rules || 0)} rule → pool`
+              : ' · strict mode')
+            : (Number(data.routing_reverted_rules || 0) > 0
+              ? ` · safe: ${Number(data.routing_reverted_rules || 0)} rule ← vless`
+              : '');
         const msg = `Готово: ${Number(data.count || 0)} outbound` + filterNote + (data.changed ? ' · файл обновлён' : ' · без изменений');
         const fileNote = data.output_file ? (' · ' + String(data.output_file)) : '';
         subsSetStatus(msg + fileNote + routingNote + routingModeNote + (warningList.length ? ` В· warning: ${warningList[0]}` : ''), false, true);
@@ -6353,9 +6372,11 @@ let outboundsModuleApi = null;
         } else if (!data.restarted) {
           const restartNote = restart ? ' Перезапуск xkeen не выполнялся.' : ' Авто-перезапуск xkeen выключен.';
           const routeToast = data.routing_changed ? ' leastPing и routing тоже синхронизированы.' : '';
-          const modeToast = data.routing_mode === 'migrate-vless-rules'
-            ? ' Включён жёсткий режим pool.'
-            : '';
+          const modeToast = data.routing_mode === SUB_ROUTING_MODE_SUBSCRIPTION_ONLY
+            ? ' Включён режим «Только подписка».'
+            : data.routing_mode === 'migrate-vless-rules'
+              ? ' Включён жёсткий режим pool.'
+              : '';
           try { toastXkeen('Подписка Xray обновлена.' + routeToast + modeToast + restartNote, 'success'); } catch (e5) {}
         }
         await subsSyncOutboundsViewAfterMutation({
