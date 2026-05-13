@@ -54,6 +54,24 @@ def test_restart_log_formats_subscription_refresh_entries_and_polls_for_updates(
     assert ".log-card .log-line-success" in styles_src
 
 
+def test_restart_log_details_toggle_resolves_panel_inside_clicked_log_container():
+    restart_log_src = _read("xkeen-ui/static/js/features/restart_log.js")
+
+    assert "function getRestartLogScopeId(el)" in restart_log_src
+    assert "safeDomIdPart(scopeId)" in restart_log_src
+    assert "buildStructuredLineHtml(summary, entry, scopeId)" in restart_log_src
+
+    assert "function findRestartLogDetailsForToggle(button, root)" in restart_log_src
+    helper_src = restart_log_src.split("function findRestartLogDetailsForToggle(button, root)", 1)[1].split("function normalizeLineForTerminal", 1)[0]
+    assert "button.nextElementSibling" in helper_src
+    assert "root.querySelectorAll('.restart-log-details')" in helper_src
+    assert "root.contains(globalMatch)" in helper_src
+
+    bind_src = restart_log_src.split("function bindLogInteractions()", 1)[1].split("RL.reveal = function reveal", 1)[0]
+    assert "findRestartLogDetailsForToggle(button, el)" in bind_src
+    assert "document.getElementById(id)" not in bind_src
+
+
 def test_append_restart_log_broadcasts_appended_event(monkeypatch, tmp_path):
     from services import restart_log
     from services import events as events_module

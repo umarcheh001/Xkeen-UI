@@ -15,6 +15,7 @@ let restartLogModuleApi = null;
   RL._pollTimer = RL._pollTimer || null;
   RL._filter = RL._filter === 'errors' ? 'errors' : 'all';
   RL._preflightPayloads = RL._preflightPayloads instanceof Map ? RL._preflightPayloads : new Map();
+  let restartLogScopeSeq = 0;
 
   const RESTART_LOG_POLL_MS = 15000;
   const RESTART_LOG_TITLE = 'Журнал операций Xkeen';
@@ -605,6 +606,24 @@ let restartLogModuleApi = null;
     return Math.abs(hash);
   }
 
+  function safeDomIdPart(value) {
+    return String(value || 'root').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'root';
+  }
+
+  function getRestartLogScopeId(el) {
+    if (!el) return 'root';
+    try {
+      if (!el.dataset) return 'root';
+      const current = String(el.dataset.xkRestartLogScope || '').trim();
+      if (current) return current;
+      restartLogScopeSeq += 1;
+      const next = `log-${restartLogScopeSeq}`;
+      el.dataset.xkRestartLogScope = next;
+      return next;
+    } catch (error) {}
+    return 'root';
+  }
+
   function buildRestartDetailRows(summary) {
     if (!summary) return [];
     const details = summary.details && typeof summary.details === 'object' ? summary.details : {};
@@ -631,14 +650,15 @@ let restartLogModuleApi = null;
     return rows;
   }
 
-  function buildStructuredDetailsHtml(summary, entry) {
+  function buildStructuredDetailsHtml(summary, entry, scopeId) {
     const rows = buildRestartDetailRows(summary);
     const detailsCount = summary && summary.details && typeof summary.details === 'object'
       ? Object.keys(summary.details).length
       : 0;
     if (!detailsCount && summary && RESTART_SOURCE_META[summary.source]) return '';
 
-    const id = `restart-log-detail-${entry && typeof entry.index === 'number' ? entry.index : 0}-${stableHash(entry && entry.key)}`;
+    const scope = safeDomIdPart(scopeId);
+    const id = `restart-log-detail-${scope}-${entry && typeof entry.index === 'number' ? entry.index : 0}-${stableHash(entry && entry.key)}`;
     const rowsHtml = rows.map(([label, value]) => [
       '<span class="restart-log-detail-row">',
       `<span class="restart-log-detail-label">${safeEscapeHtml(label)}</span>`,
@@ -658,7 +678,7 @@ let restartLogModuleApi = null;
     ].join('');
   }
 
-  function buildStructuredLineHtml(summary, entry) {
+  function buildStructuredLineHtml(summary, entry, scopeId) {
     if (!summary) return '';
 
     const bucket = String(summary.bucket || 'generic').trim().toLowerCase() || 'generic';
@@ -666,7 +686,7 @@ let restartLogModuleApi = null;
     const labelHtml = safeEscapeHtml(summary.label || 'Событие');
     const messageHtml = safeEscapeHtml(summary.message || '');
     const rawSourceHtml = summary.rawSourceText ? safeEscapeHtml(summary.rawSourceText) : '';
-    const detailsHtml = buildStructuredDetailsHtml(summary, entry || null);
+    const detailsHtml = buildStructuredDetailsHtml(summary, entry || null, scopeId);
 
     return [
       '<span class="restart-log-entry-wrap">',
@@ -679,6 +699,45 @@ let restartLogModuleApi = null;
       detailsHtml,
       '</span>',
     ].join('');
+  }
+
+  function findRestartLogDetailsForToggle(button, root) {
+    if (!button) return null;
+    const isPanel = (node) => !!(node && node.classList && node.classList.contains('restart-log-details'));
+
+    try {
+      const next = button.nextElementSibling;
+      if (isPanel(next)) return next;
+    } catch (error) {}
+
+    const id = String(button.getAttribute('aria-controls') || '').trim();
+
+    try {
+      const wrap = button.closest('.restart-log-entry-wrap');
+      if (wrap && typeof wrap.querySelectorAll === 'function') {
+        const panels = Array.from(wrap.querySelectorAll('.restart-log-details'));
+        const match = id ? panels.find((node) => node && node.id === id) : panels[0];
+        if (isPanel(match)) return match;
+      }
+    } catch (error) {}
+
+    try {
+      if (id && root && typeof root.querySelectorAll === 'function') {
+        const panels = Array.from(root.querySelectorAll('.restart-log-details'));
+        const match = panels.find((node) => node && node.id === id);
+        if (isPanel(match)) return match;
+      }
+    } catch (error) {}
+
+    try {
+      if (id) {
+        const doc = button.ownerDocument || document;
+        const globalMatch = doc.getElementById(id);
+        if (isPanel(globalMatch) && (!root || root.contains(globalMatch))) return globalMatch;
+      }
+    } catch (error) {}
+
+    return null;
   }
 
   function normalizeLineForTerminal(line) {
@@ -1089,12 +1148,13 @@ let restartLogModuleApi = null;
     if (!el) return;
     const allEntries = parseRenderedEntries(rawText || '');
     const entries = filterRenderedEntries(allEntries);
+    const scopeId = getRestartLogScopeId(el);
     const html = entries
       .map((entry) => {
         const summary = entry && entry.summary ? entry.summary : null;
         if (summary) {
           const cls = `log-line restart-log-line log-line-${summary.kind} restart-log-line-${summary.bucket}`;
-          return `<span class="${cls}">${buildStructuredLineHtml(summary, entry)}</span>`;
+          return `<span class="${cls}">${buildStructuredLineHtml(summary, entry, scopeId)}</span>`;
         }
 
         const normalized = normalizeLineForTerminal(entry && entry.raw ? entry.raw : '');
@@ -1347,12 +1407,7 @@ let restartLogModuleApi = null;
           if (!button || !el.contains(button)) return;
           event.preventDefault();
 
-          const id = button.getAttribute('aria-controls') || '';
-          let details = id ? document.getElementById(id) : null;
-          if (!details) {
-            const next = button.nextElementSibling;
-            if (next && next.classList && next.classList.contains('restart-log-details')) details = next;
-          }
+          const details = findRestartLogDetailsForToggle(button, el);
           if (!details) return;
 
           const expanded = button.getAttribute('aria-expanded') === 'true';
