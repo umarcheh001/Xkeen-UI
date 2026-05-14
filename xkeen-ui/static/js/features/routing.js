@@ -236,6 +236,9 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
     // Global flag
     autoRestart: 'global-autorestart-xkeen',
 
+    scenarioHeader: 'routing-scenario-header',
+    scenarioBody: 'routing-scenario-body',
+    scenarioArrow: 'routing-scenario-arrow',
     scenarioNormal: 'routing-scenario-normal',
     scenarioMobile: 'routing-scenario-mobile',
     scenarioApply: 'routing-scenario-apply-btn',
@@ -436,6 +439,8 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
   }
 
   let _restartLogModulePromise = null;
+  const ROUTING_SCENARIO_OPEN_KEY = 'xk.routing.scenario.open.v1';
+  let _routingScenarioCollapseWired = false;
   let _routingScenarioWired = false;
 
   function getRoutingShellApi() {
@@ -4191,6 +4196,71 @@ function closeHelp() {
     if (btn.dataset) btn.dataset.xkeenWired = '1';
   }
 
+  function setRoutingScenarioCardOpen(open) {
+    const header = $(IDS.scenarioHeader);
+    const body = $(IDS.scenarioBody);
+    const arrow = $(IDS.scenarioArrow);
+    if (!body || !arrow) return;
+    const isOpen = !!open;
+    body.style.display = isOpen ? '' : 'none';
+    arrow.textContent = isOpen ? '▲' : '▼';
+    try { if (header) header.setAttribute('aria-expanded', isOpen ? 'true' : 'false'); } catch (e) {}
+    try { if (header && header.dataset) header.dataset.xkCollapseOpen = isOpen ? '1' : '0'; } catch (e2) {}
+    if (isOpen) {
+      try { syncRoutingScenarioUiFromEditor('card-open'); } catch (e3) {}
+    }
+  }
+
+  function getStoredRoutingScenarioOpen() {
+    try {
+      const stored = _storeGet(ROUTING_SCENARIO_OPEN_KEY);
+      if (stored === '1') return true;
+      if (stored === '0') return false;
+    } catch (e) {}
+    return false;
+  }
+
+  function toggleRoutingScenarioCard() {
+    const body = $(IDS.scenarioBody);
+    if (!body) return;
+    const willOpen = body.style.display === 'none';
+    setRoutingScenarioCardOpen(willOpen);
+    try { _storeSet(ROUTING_SCENARIO_OPEN_KEY, willOpen ? '1' : '0'); } catch (e) {}
+  }
+
+  function wireRoutingScenarioCollapse() {
+    if (_routingScenarioCollapseWired) return;
+    const header = $(IDS.scenarioHeader);
+    const body = $(IDS.scenarioBody);
+    const arrow = $(IDS.scenarioArrow);
+    if (!header || !body || !arrow) return;
+
+    try {
+      header.setAttribute('role', 'button');
+      header.setAttribute('tabindex', header.getAttribute('tabindex') || '0');
+      header.setAttribute('aria-controls', IDS.scenarioBody);
+    } catch (e) {}
+
+    setRoutingScenarioCardOpen(getStoredRoutingScenarioOpen());
+
+    header.addEventListener('click', (event) => {
+      const target = event && event.target ? event.target : null;
+      if (target && target.closest && target.closest('button, a, input, textarea, select, label')) return;
+      try { event.preventDefault(); } catch (e) {}
+      toggleRoutingScenarioCard();
+    });
+
+    header.addEventListener('keydown', (event) => {
+      const keyName = String(event && event.key || '');
+      if (keyName !== 'Enter' && keyName !== ' ') return;
+      try { event.preventDefault(); } catch (e) {}
+      toggleRoutingScenarioCard();
+    });
+
+    if (header.dataset) header.dataset.xkeenScenarioCollapseWired = '1';
+    _routingScenarioCollapseWired = true;
+  }
+
   function selectedRoutingScenarioMode() {
     const normal = $(IDS.scenarioNormal);
     const mobile = $(IDS.scenarioMobile);
@@ -4320,6 +4390,7 @@ function closeHelp() {
   }
 
   function wireRoutingScenarioSwitcher() {
+    wireRoutingScenarioCollapse();
     if (_routingScenarioWired) return;
     const applyBtn = $(IDS.scenarioApply);
     const normal = $(IDS.scenarioNormal);

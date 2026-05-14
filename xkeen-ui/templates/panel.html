@@ -442,12 +442,13 @@
 
 	    <!-- Routing scenario switcher -->
 	    <section class="card routing-side-card routing-side-card--scenario xk-only-routing">
-	      <div class="commands-header" id="routing-scenario-header">
+	      <div class="commands-header" id="routing-scenario-header" role="button" tabindex="0" aria-controls="routing-scenario-body" aria-expanded="false">
 	        <h2>Сценарий маршрутизации</h2>
 	        <span id="routing-scenario-badge">—</span>
+	        <span id="routing-scenario-arrow">▼</span>
 	      </div>
 
-	      <div id="routing-scenario-body">
+	      <div id="routing-scenario-body" style="display:none;">
 	        <div class="routing-scenario-options" role="radiogroup" aria-label="Сценарий маршрутизации Xray">
 	          <label class="mode-item routing-scenario-option">
 	            <input id="routing-scenario-normal" type="radio" name="routing_scenario" value="normal" checked>

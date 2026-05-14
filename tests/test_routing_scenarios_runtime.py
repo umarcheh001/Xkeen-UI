@@ -119,12 +119,18 @@ def test_routing_scenario_switcher_is_wired_into_panel():
     assert 'id="routing-scenario-normal"' in template
     assert 'id="routing-scenario-mobile"' in template
     assert 'id="routing-scenario-apply-btn"' in template
+    assert 'id="routing-scenario-arrow"' in template
+    assert 'aria-controls="routing-scenario-body"' in template
+    assert 'id="routing-scenario-body" style="display:none;"' in template
     assert "routing-side-card--scenario" in template
 
     assert "applyRoutingScenarioText" in routing_src
     assert "function wireRoutingScenarioSwitcher()" in routing_src
+    assert "function wireRoutingScenarioCollapse()" in routing_src
+    assert "xk.routing.scenario.open.v1" in routing_src
     assert "ROUTING_SCENARIO_MOBILE_BALANCER_TAG" in routing_src
     assert "xkeen:routing-editor-content" in routing_src
 
     assert "body.panel-page .routing-side-card--scenario" in styles
+    assert "body.panel-page .routing-side-card--scenario .commands-header h2" in styles
     assert ".routing-scenario-status.is-success" in styles
