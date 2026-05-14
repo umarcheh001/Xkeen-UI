@@ -449,6 +449,28 @@
 	      </div>
 
 	      <div id="routing-scenario-body" style="display:none;">
+	        <div class="xk-card-help-row routing-scenario-help-row">
+	          <details class="xk-card-help-popover routing-scenario-help-popover">
+	            <summary class="xk-card-help-trigger"
+	                     aria-label="Справка по сценарию маршрутизации"
+	                     title="О сценарии маршрутизации"
+	                     data-tooltip="О сценарии маршрутизации">
+	              <span class="xk-card-help-icon" aria-hidden="true">?</span>
+	              <span class="xk-card-help-label">Как это работает</span>
+	            </summary>
+	            <div class="xk-card-help-panel routing-scenario-help-panel">
+	              <p><b>Сценарий маршрутизации</b> быстро перестраивает текущий routing-файл под тип подключения.</p>
+	              <ul>
+	                <li><b>Обычный</b> режим убирает управляемый аварийный блок и оставляет ваши текущие правила: заблокированное через VPS/резерв, остальное по текущему routing.</li>
+	                <li><b>Мобильный white-list</b> нужен для провайдеров с жёсткими белыми списками. Он добавляет правила: локальные сети и российские сервисы идут в <code>direct</code>, всё остальное идёт через balancer <code>xk_mobile_whitelist</code>.</li>
+	                <li>Balancer <code>xk_mobile_whitelist</code> выбирает outbounds по selector <code>white_list</code>, поэтому в подписках должен быть профиль с тегом/префиксом <code>white_list</code>.</li>
+	                <li>В карточке <b>Прокси</b> откройте <b>Подписки</b>, добавьте или разделите нужную подписку в профиль <code>white_list</code>, обновите её и проверьте, что outbounds получили теги вида <code>white_list--...</code>.</li>
+	                <li>Для профиля <code>white_list</code> лучше выключить авто-правило routing: этот сценарий сам добавляет нужный catch-all, а обычный режим после возврата останется чище.</li>
+	              </ul>
+	              <p>Перед применением панель проверит, найден ли пул <code>white_list</code>, сколько outbound-ов он содержит, и предупредит, если у подписки включено авто-routing.</p>
+	            </div>
+	          </details>
+	        </div>
 	        <div class="routing-scenario-options" role="radiogroup" aria-label="Сценарий маршрутизации Xray">
 	          <label class="mode-item routing-scenario-option">
 	            <input id="routing-scenario-normal" type="radio" name="routing_scenario" value="normal" checked>

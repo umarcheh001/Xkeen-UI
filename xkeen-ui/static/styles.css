@@ -25460,6 +25460,33 @@ body.panel-page .routing-scenario-options {
   gap: 8px;
 }
 
+body.panel-page .routing-scenario-help-row {
+  margin: 0 0 12px;
+}
+
+body.panel-page .routing-scenario-help-popover .xk-card-help-trigger {
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+body.panel-page .routing-scenario-help-panel ul {
+  margin: 8px 0 10px;
+  padding-left: 18px;
+}
+
+body.panel-page .routing-scenario-help-panel li {
+  margin: 0 0 7px;
+}
+
+body.panel-page .routing-scenario-help-panel li:last-child {
+  margin-bottom: 0;
+}
+
+body.panel-page .routing-scenario-help-panel b {
+  color: #f8fbff;
+  font-weight: 700;
+}
+
 body.panel-page .routing-side-card--scenario .routing-scenario-option {
   cursor: pointer;
 }
@@ -25654,6 +25681,10 @@ html[data-theme="light"] body.panel-page .routing-side-card--scenario #routing-s
   color: #23539b;
   background: rgba(255, 255, 255, 0.84);
   border-color: rgba(63, 111, 203, 0.12);
+}
+
+html[data-theme="light"] body.panel-page .routing-scenario-help-panel b {
+  color: #162033;
 }
 
 html[data-theme="light"] body.panel-page .routing-side-card--scenario .routing-scenario-option code {

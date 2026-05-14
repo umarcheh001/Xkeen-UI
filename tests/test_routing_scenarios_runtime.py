@@ -172,6 +172,10 @@ def test_routing_scenario_switcher_is_wired_into_panel():
     assert 'id="routing-scenario-mobile"' in template
     assert 'id="routing-scenario-apply-btn"' in template
     assert 'id="routing-scenario-arrow"' in template
+    assert "routing-scenario-help-popover" in template
+    assert "Как это работает" in template
+    assert "white_list--..." in template
+    assert "авто-правило routing" in template
     assert 'aria-controls="routing-scenario-body"' in template
     assert 'id="routing-scenario-body" style="display:none;"' in template
     assert "routing-side-card--scenario" in template
@@ -189,6 +193,8 @@ def test_routing_scenario_switcher_is_wired_into_panel():
 
     assert "body.panel-page .routing-side-card--scenario" in styles
     assert "body.panel-page .routing-side-card--scenario .commands-header h2" in styles
+    assert "body.panel-page .routing-scenario-help-row" in styles
+    assert "body.panel-page .routing-scenario-help-panel ul" in styles
     assert ".routing-scenario-status.is-success" in styles
 
 
