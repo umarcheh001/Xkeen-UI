@@ -48,6 +48,9 @@ MIN_INTERVAL_HOURS = 1
 MAX_INTERVAL_HOURS = 168
 DEFAULT_FETCH_TIMEOUT_SECONDS = 20
 DEFAULT_MAX_BODY_BYTES = 1024 * 1024
+DEFAULT_ERROR_RETRY_SECONDS = 15 * 60
+MIN_ERROR_RETRY_SECONDS = 60
+MAX_ERROR_RETRY_SECONDS = 6 * 3600
 
 SUPPORTED_SCHEMES = (
     "vless://",
@@ -161,6 +164,17 @@ def _clamp_interval(value: Any) -> int:
     except Exception:
         hours = DEFAULT_INTERVAL_HOURS
     return max(MIN_INTERVAL_HOURS, min(MAX_INTERVAL_HOURS, hours))
+
+
+def _refresh_error_retry_seconds(interval_hours: Any) -> int:
+    """Return a short, bounded retry delay after a failed subscription refresh."""
+    try:
+        retry = int(float(str(os.environ.get("XKEEN_SUBSCRIPTION_ERROR_RETRY_SECONDS", DEFAULT_ERROR_RETRY_SECONDS))))
+    except Exception:
+        retry = DEFAULT_ERROR_RETRY_SECONDS
+    retry = max(MIN_ERROR_RETRY_SECONDS, min(MAX_ERROR_RETRY_SECONDS, retry))
+    interval_seconds = _clamp_interval(interval_hours or DEFAULT_INTERVAL_HOURS) * 3600
+    return int(max(MIN_ERROR_RETRY_SECONDS, min(interval_seconds, retry)))
 
 
 def _clean_id(value: Any) -> str:
@@ -3903,6 +3917,7 @@ def refresh_subscription(
             sub.pop("profile_update_interval_hours", None)
 
         warnings = _subscription_result_warnings(preview_nodes)
+        sub.pop("last_error_retry_seconds", None)
 
         sub.update(
             {
@@ -4012,6 +4027,7 @@ def refresh_subscription(
         )
     except Exception as exc:
         interval = _clamp_interval(sub.get("interval_hours") or DEFAULT_INTERVAL_HOURS)
+        retry_seconds = _refresh_error_retry_seconds(interval)
         sub.update(
             {
                 "last_ok": False,
@@ -4021,7 +4037,8 @@ def refresh_subscription(
                 "last_filtered_out_count": filtered_out_count,
                 "last_nodes": preview_nodes or _normalize_last_nodes(sub.get("last_nodes")),
                 "node_latency": _prune_node_latency_map(node_latency, preview_nodes or _normalize_last_nodes(sub.get("last_nodes"))),
-                "next_update_ts": now_ts + (interval * 3600) if bool(sub.get("enabled", True)) else None,
+                "next_update_ts": now_ts + retry_seconds if bool(sub.get("enabled", True)) else None,
+                "last_error_retry_seconds": retry_seconds,
             }
         )
         result.update(
@@ -4033,6 +4050,7 @@ def refresh_subscription(
                 "last_nodes": preview_nodes,
                 "node_latency": node_latency,
                 "next_update_ts": sub.get("next_update_ts"),
+                "retry_after_seconds": retry_seconds,
             }
         )
 

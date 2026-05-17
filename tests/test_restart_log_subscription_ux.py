@@ -172,6 +172,10 @@ def test_outbounds_subscription_refresh_relies_on_restart_log_for_changed_restar
     assert "Подписка проверена: изменений нет." in outbounds_src
     assert "Подписка Xray обновлена." in outbounds_src
     assert "const restartedCount = results.filter((item) => !!(item && item.restarted)).length;" in outbounds_src
+    assert "const failedItems = results.filter((item) => item && item.ok === false);" in subs_refresh_due_src
+    assert "Due-подписки: успешно" in subs_refresh_due_src
+    assert "Due-подписки не обновились" in subs_refresh_due_src
+    assert "Ошибка due-обновления:" in subs_refresh_due_src
     assert "toastXkeen(msg, 'success');" not in subs_refresh_src
     assert "toastXkeen(msg, 'success');" not in subs_refresh_due_src
 

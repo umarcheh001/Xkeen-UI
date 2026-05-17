@@ -6519,8 +6519,13 @@ let outboundsModuleApi = null;
           throw new Error(String((data && (data.error || data.message)) || ('HTTP ' + res.status)));
         }
         const results = Array.isArray(data.results) ? data.results : [];
-        const msg = `Due обновлены: ${Number(data.ok_count || 0)} / ${Number(data.updated || 0)}`;
-        subsSetStatus(msg, false, true);
+        const updatedCount = Number(data.updated || 0);
+        const okCount = Number(data.ok_count || 0);
+        const failedItems = results.filter((item) => item && item.ok === false);
+        const failedCount = failedItems.length;
+        const firstError = String((failedItems[0] && (failedItems[0].error || failedItems[0].message)) || '').trim();
+        const msg = `Due обновлены: ${okCount} / ${updatedCount}` + (failedCount ? ` · ошибок ${failedCount}` : '');
+        subsSetStatus(msg, !!failedCount, !failedCount);
         await subsSyncOutboundsViewAfterMutation({
           prevActive,
           touchedFiles: results
@@ -6538,8 +6543,14 @@ let outboundsModuleApi = null;
         try { await refreshRestartLog(); } catch (e2) {}
         const changedCount = results.filter((item) => !!(item && (item.changed || item.observatory_changed || item.routing_changed))).length;
         const restartedCount = results.filter((item) => !!(item && item.restarted)).length;
-        if (!changedCount) {
-          const idleMsg = Number(data.updated || 0) > 0
+        if (failedCount) {
+          const errorNote = firstError ? ` Последняя ошибка: ${firstError}` : '';
+          const failureMsg = okCount > 0
+            ? `Due-подписки: успешно ${okCount}, ошибок ${failedCount}.${errorNote}`
+            : `Due-подписки не обновились: ошибок ${failedCount}.${errorNote}`;
+          try { toastXkeen(failureMsg, okCount > 0 ? 'warning' : 'error'); } catch (eFail) {}
+        } else if (!changedCount) {
+          const idleMsg = updatedCount > 0
             ? 'Due-подписки проверены: изменений нет.'
             : 'Due-подписки: обновлять пока нечего.';
           try { toastXkeen(idleMsg, 'info'); } catch (e3) {}
@@ -6550,7 +6561,9 @@ let outboundsModuleApi = null;
         await subsLoad();
         return true;
       } catch (e) {
-        subsSetStatus('Ошибка: ' + String(e && e.message ? e.message : e), true);
+        const errText = String(e && e.message ? e.message : e);
+        subsSetStatus('Ошибка: ' + errText, true);
+        try { toastXkeen('Ошибка due-обновления: ' + errText, 'error'); } catch (e2) {}
         await subsLoad();
         return false;
       }

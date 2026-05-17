@@ -466,6 +466,73 @@ def test_new_disabled_subscription_keeps_next_update_null(tmp_path: Path):
     assert sub["next_update_ts"] is None
 
 
+def test_refresh_subscription_failure_schedules_short_retry_and_preserves_fragment(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setenv("XKEEN_SUBSCRIPTION_ERROR_RETRY_SECONDS", str(subs.DEFAULT_ERROR_RETRY_SECONDS))
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(subs, "fetch_subscription_body", lambda _url: (_vless("Stable Node"), {}))
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "demo",
+            "name": "Demo",
+            "tag": "demo",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "interval_hours": 24,
+        },
+    )
+
+    first = subs.refresh_subscription(
+        str(ui_state_dir),
+        "demo",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **_kwargs: True,
+        restart=True,
+    )
+    assert first["ok"] is True
+    out_path = xray_dir / "04_outbounds.demo.json"
+    generated_before = out_path.read_text(encoding="utf-8")
+
+    def _fail_fetch(_url: str):
+        raise RuntimeError("network down")
+
+    restarts = []
+    monkeypatch.setattr(subs, "fetch_subscription_body", _fail_fetch)
+    failed = subs.refresh_subscription(
+        str(ui_state_dir),
+        "demo",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=lambda **kwargs: restarts.append(kwargs) or True,
+        restart=True,
+    )
+
+    assert failed["ok"] is False
+    assert failed["error"] == "network down"
+    assert failed["retry_after_seconds"] == subs.DEFAULT_ERROR_RETRY_SECONDS
+    assert restarts == []
+    assert out_path.read_text(encoding="utf-8") == generated_before
+
+    saved = subs.load_subscription_state(str(ui_state_dir))["subscriptions"][0]
+    assert saved["last_ok"] is False
+    assert saved["last_error"] == "network down"
+    assert saved["last_error_retry_seconds"] == subs.DEFAULT_ERROR_RETRY_SECONDS
+    assert saved["next_update_ts"] - saved["last_update_ts"] == pytest.approx(subs.DEFAULT_ERROR_RETRY_SECONDS)
+    assert saved["last_count"] == 1
+
+
 def test_preview_subscription_returns_nodes_without_state_changes(tmp_path: Path, monkeypatch):
     """Preview must fetch+parse only — no state file, no disk writes,
     no observatory/routing sync, no restart side-effects.
