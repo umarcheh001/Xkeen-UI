@@ -127,6 +127,9 @@ def test_hwid_device_info_uses_uuid_node_fallback_when_mac_missing(monkeypatch):
     assert info["hwid_source"] == "uuid_node"
     assert info["headers"]["x-hwid"] == "6488FA3B0CF4"
     assert info["headers"]["User-Agent"] == "mihomo/v1.19.25"
+    assert "Обычно этого достаточно" in info["hwid_warning"]
+    assert "DevTools → ENV" in info["hwid_warning"]
+    assert "XKEEN_MIHOMO_HWID" in info["hwid_warning"]
 
 
 def test_hwid_provider_entry_uses_mihomo_provider_defaults():
