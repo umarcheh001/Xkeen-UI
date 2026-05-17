@@ -201,17 +201,8 @@ def _validate_routing_outbound_refs(confdir: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _is_arm_platform() -> bool:
-    """Detect ARM-based routers where Xray preflight needs more time."""
-    try:
-        machine = os.uname().machine.lower()
-        return 'aarch64' in machine or 'arm' in machine
-    except Exception:
-        return False
-
-
 def _xray_test_timeout_seconds() -> int:
-    default_timeout = 30 if _is_arm_platform() else 15
+    default_timeout = 30
     raw = os.environ.get('XKEEN_XRAY_TEST_TIMEOUT', str(default_timeout))
     try:
         value = int(float(str(raw).strip() or str(default_timeout)))

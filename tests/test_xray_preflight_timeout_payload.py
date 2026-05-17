@@ -68,6 +68,29 @@ def _load_routing_config_module():
 routing_config = _load_routing_config_module()
 
 
+def test_run_xray_preflight_defaults_to_30_second_timeout_for_all_routers(tmp_path, monkeypatch):
+    confdir = tmp_path / "configs"
+    confdir.mkdir()
+    (confdir / "00_base.json").write_text('{"log":{}}\n', encoding="utf-8")
+
+    monkeypatch.delenv("XKEEN_XRAY_TEST_TIMEOUT", raising=False)
+
+    def fake_run(cmd, capture_output, text, timeout, check):
+        assert timeout == 30
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(routing_config.subprocess, "run", fake_run)
+
+    result = routing_config._run_xray_preflight(
+        xray_configs_dir_real=str(confdir),
+        sel_main=str(confdir / "03_routing.json"),
+        obj={"routing": {"rules": []}},
+    )
+
+    assert result["ok"] is True
+    assert result["timeout_s"] == 30
+
+
 def test_run_xray_preflight_includes_timeout_limit_on_failed_check(tmp_path, monkeypatch):
     confdir = tmp_path / "configs"
     confdir.mkdir()

@@ -149,14 +149,6 @@ class EnvItem:
     readonly: bool = False
 
 
-def _is_arm_like_platform() -> bool:
-    try:
-        machine = os.uname().machine.lower()
-        return "aarch64" in machine or "arm" in machine
-    except Exception:
-        return False
-
-
 def _default_effective_value(
     key: str,
     ui_state_dir: str,
@@ -454,7 +446,7 @@ def _default_effective_value(
     if k == "XKEEN_XRAY_LOG_TZ_OFFSET":
         return "3"
     if k == "XKEEN_XRAY_TEST_TIMEOUT":
-        return "30" if _is_arm_like_platform() else "15"
+        return "30"
 
     # Xray fragment/config paths (keep in sync with app.py).
     if k == "XKEEN_XRAY_CONFIGS_DIR":
