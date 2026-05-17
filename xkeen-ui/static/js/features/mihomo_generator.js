@@ -2288,6 +2288,7 @@ function initEngineToggle() {
           body.className = "proxy-body";
       
           const typeWrap = document.createElement("div");
+          typeWrap.className = "full";
           const typeLabel = document.createElement("label");
           typeLabel.textContent = "Тип узла";
           const typeSelect = document.createElement("select");
@@ -2311,42 +2312,42 @@ function initEngineToggle() {
       
           const nameWrap = document.createElement("div");
           const nameLabel = document.createElement("label");
-          nameLabel.textContent = "Имя узла";
+          nameLabel.textContent = "Переименовать";
           const nameInput = document.createElement("input");
           nameInput.type = "text";
-          nameInput.placeholder = "My Node";
-          nameInput.title = "Имя узла (отображается в Clash/Mihomo UI и в селекторах).";
+          nameInput.placeholder = "авто из ссылки";
+          nameInput.title = "Оставьте пустым, чтобы генератор взял имя из ссылки или конфига.";
           nameWrap.appendChild(nameLabel);
           nameWrap.appendChild(nameInput);
 
           const prioWrap = document.createElement("div");
           const prioLabel = document.createElement("label");
-          prioLabel.textContent = "Приоритет (опц.)";
+          prioLabel.textContent = "Порядок";
           const prioInput = document.createElement("input");
           prioInput.type = "number";
           prioInput.min = "0";
           prioInput.step = "1";
-          prioInput.placeholder = "0";
-          prioInput.title = "Приоритет узла (опционально). Можно использовать для сортировки/удобства. 0 = по умолчанию.";
+          prioInput.placeholder = "авто";
+          prioInput.title = "Опциональный порядок добавления. Пусто = как обычно. Пример: 1 = добавить раньше остальных, 10 = позже.";
           prioWrap.appendChild(prioLabel);
           prioWrap.appendChild(prioInput);
 
           const iconWrap = document.createElement("div");
           const iconLabel = document.createElement("label");
-          iconLabel.textContent = "Icon URL (опц.)";
+          iconLabel.textContent = "Иконка";
           const iconInput = document.createElement("input");
           iconInput.type = "text";
           iconInput.placeholder = "https://.../icon.png";
-          iconInput.title = "URL иконки (опционально). Используется в Clash/Mihomo UI как значок узла.";
+          iconInput.title = "Опциональный URL иконки для Mihomo UI.";
           iconWrap.appendChild(iconLabel);
           iconWrap.appendChild(iconInput);
           const tagsWrap = document.createElement("div");
           const tagsLabel = document.createElement("label");
-          tagsLabel.textContent = "Теги (опц.)";
+          tagsLabel.textContent = "Теги";
           const tagsInput = document.createElement("input");
           tagsInput.type = "text";
           tagsInput.placeholder = "work,home";
-          tagsInput.title = "Теги узла (опционально). Укажите через запятую: work,home";
+          tagsInput.title = "Опциональные теги через запятую.";
           tagsWrap.appendChild(tagsLabel);
           tagsWrap.appendChild(tagsInput);
 
@@ -2354,11 +2355,11 @@ function initEngineToggle() {
           const groupsWrap = document.createElement("div");
           groupsWrap.className = "full";
           const groupsLabel = document.createElement("label");
-          groupsLabel.textContent = "Группы (через запятую)";
+          groupsLabel.textContent = "Добавить в группы";
           const groupsInput = document.createElement("input");
           groupsInput.type = "text";
-          groupsInput.placeholder = "Заблок. сервисы,YouTube";
-          groupsInput.title = "Группы (через запятую). Узел будет добавлен в эти селекторы/группы.";
+          groupsInput.placeholder = "Заблок. сервисы, YouTube";
+          groupsInput.title = "Оставьте пустым, чтобы использовать группы по умолчанию. Несколько групп укажите через запятую.";
           groupsWrap.appendChild(groupsLabel);
           groupsWrap.appendChild(groupsInput);
       
@@ -2367,19 +2368,43 @@ function initEngineToggle() {
           const dataLabel = document.createElement("label");
           dataLabel.textContent = "VLESS ссылка";
           const dataArea = document.createElement("textarea");
-          dataArea.rows = 4;
+          dataArea.rows = 3;
           dataArea.placeholder = "vless://...";
           dataArea.title = "Вставьте ссылку/конфиг для узла. Тип зависит от выбранного формата выше.";
           dataWrap.appendChild(dataLabel);
           dataWrap.appendChild(dataArea);
+
+          const advancedDetails = document.createElement("details");
+          advancedDetails.className = "proxy-advanced";
+          const advancedSummary = document.createElement("summary");
+          advancedSummary.textContent = "Дополнительно";
+          const advancedGrid = document.createElement("div");
+          advancedGrid.className = "proxy-advanced-grid";
+          advancedDetails.appendChild(advancedSummary);
+          advancedDetails.appendChild(advancedGrid);
       
           body.appendChild(typeWrap);
-          body.appendChild(nameWrap);
-          body.appendChild(prioWrap);
-          body.appendChild(iconWrap);
-          body.appendChild(tagsWrap);
-          body.appendChild(groupsWrap);
           body.appendChild(dataWrap);
+          advancedGrid.appendChild(nameWrap);
+          advancedGrid.appendChild(groupsWrap);
+          advancedGrid.appendChild(prioWrap);
+          advancedGrid.appendChild(iconWrap);
+          advancedGrid.appendChild(tagsWrap);
+          body.appendChild(advancedDetails);
+
+          function updateAdvancedSummary() {
+            const filled = [
+              nameInput,
+              groupsInput,
+              prioInput,
+              iconInput,
+              tagsInput,
+            ].reduce((count, input) => count + (String(input.value || "").trim() ? 1 : 0), 0);
+            advancedSummary.textContent = filled ? ("Дополнительно (" + filled + ")") : "Дополнительно";
+          }
+          [nameInput, groupsInput, prioInput, iconInput, tagsInput].forEach((input) => {
+            input.addEventListener("input", updateAdvancedSummary);
+          });
       
           function updateTypeUI() {
             const t = typeSelect.value;
@@ -2388,13 +2413,13 @@ function initEngineToggle() {
               dataLabel.textContent = "Ссылка (auto)";
               dataArea.placeholder = "vless://... или https://sub...";
               dataArea.title = "Авто-режим: вставьте ссылку (vless/trojan/vmess/ss/hysteria2/hy2/tailscale) или URL подписки (https://...).";
-              dataArea.rows = 4;
+              dataArea.rows = 3;
             } else if (t === "provider") {
               typeBadge.textContent = "Тип: provider";
               dataLabel.textContent = "URL подписки";
               dataArea.placeholder = "https://example.com/subscription";
               dataArea.title = "URL подписки (proxy-provider). Будет добавлен в proxy-providers.";
-              dataArea.rows = 3;
+              dataArea.rows = 2;
             } else if (t === "vless" || t === "trojan" || t === "vmess" || t === "ss" || t === "hysteria2") {
               typeBadge.textContent = `Тип: ${t}`;
               if (t === "vless") {
@@ -2418,7 +2443,7 @@ function initEngineToggle() {
                 dataArea.placeholder = "hysteria2://... или hy2://...";
                 dataArea.title = "Вставьте Hysteria2 ссылку (hysteria2://... или hy2://...).";
               }
-              dataArea.rows = 4;
+              dataArea.rows = 3;
             } else if (t === "wireguard") {
               typeBadge.textContent = "Тип: wireguard";
               dataLabel.textContent = "WireGuard конфиг";
@@ -2458,6 +2483,7 @@ function initEngineToggle() {
             if (initial.data) dataArea.value = initial.data;
             updateTypeUI();
           }
+          updateAdvancedSummary();
       
           wrapper.appendChild(header);
           wrapper.appendChild(body);

@@ -189,6 +189,19 @@
       align-items: center;
       flex-wrap: wrap;
     }
+    .proxies-list + .generator-action-row {
+      margin-top: 8px;
+    }
+    .generator-action-row .btn {
+      margin-left: 0;
+      align-self: center;
+    }
+    .generator-action-row .btn-xs {
+      min-height: 26px;
+      padding-top: 0;
+      padding-bottom: 0;
+      line-height: 1;
+    }
     .generator-preview-shell {
       padding: 14px;
       border-radius: 22px;
@@ -646,8 +659,36 @@
     .proxy-body .full {
       grid-column: 1 / -1;
     }
+    .proxy-advanced {
+      grid-column: 1 / -1;
+      border-radius: 9px;
+      border: 1px solid rgba(148,163,184,0.16);
+      background: rgba(2, 6, 23, 0.22);
+    }
+    .proxy-advanced summary {
+      cursor: pointer;
+      padding: 6px 8px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 700;
+      list-style-position: inside;
+      user-select: none;
+    }
+    .proxy-advanced[open] summary {
+      border-bottom: 1px solid rgba(148,163,184,0.12);
+    }
+    .proxy-advanced-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 6px 8px;
+      padding: 8px;
+    }
+    .proxy-advanced-grid .full {
+      grid-column: 1 / -1;
+    }
     @media (max-width: 960px) {
-      .proxy-body {
+      .proxy-body,
+      .proxy-advanced-grid {
         grid-template-columns: minmax(0, 1fr);
       }
     }
@@ -961,6 +1002,19 @@
     html[data-theme="light"] .proxy-card {
       background: #ffffff;
       border-color: #d1d5db;
+    }
+
+    html[data-theme="light"] .proxy-advanced {
+      background: #f8fafc;
+      border-color: #dbe3ee;
+    }
+
+    html[data-theme="light"] .proxy-advanced summary {
+      color: #334155;
+    }
+
+    html[data-theme="light"] .proxy-advanced[open] summary {
+      border-bottom-color: #dbe3ee;
     }
 
     html[data-theme="light"] .mihomo-managed-sub-item {
@@ -2069,9 +2123,6 @@
                 <button type="button" id="normalizeProxiesBtn" class="btn btn-ghost btn-xs" title="Заполнить пустые имена/группы и нормализовать текущие узлы по шаблонам из импорта">
                   ✨ Нормализовать
                 </button>
-              </div>
-              <div class="hint xk-card-desc">
-                Поддерживаются ссылки (auto/VLESS/Trojan/VMess/SS/Hysteria2), WireGuard/OpenVPN/Tailscale-конфиги, подписки (https://... как proxy-provider) и готовые YAML-блоки proxy.
               </div>
             </div>
           </div>
