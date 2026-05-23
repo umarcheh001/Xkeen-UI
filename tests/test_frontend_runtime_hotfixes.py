@@ -1377,6 +1377,8 @@ def test_xray_preflight_modal_exposes_explainer_block_and_problem_line_rendering
     assert 'renderTerminalOutput(els.stdout, stdout, \'stdout пуст\');' in modal_text
     assert 'scrollTerminalToDiagnostic(els.stdout, preferredDiagnosticText);' in modal_text
     assert "Код 23 здесь означает только то, что `xray -test` завершился с ошибкой" in modal_text
+    assert "id: 'geodata_lookup'" in modal_text
+    assert "XRAY_LOCATION_ASSET=/opt/etc/xray/dat" in modal_text
     assert '.xk-preflight-block--explainer {' in css_text
     assert '.xk-preflight-code-trigger {' in css_text
     assert '.xk-preflight-action-chip {' in css_text

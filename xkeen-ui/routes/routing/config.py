@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -217,6 +218,49 @@ def _detect_oom_in_output(stderr: str, stdout: str) -> bool:
     return 'out of memory' in combined or 'cannot allocate memory' in combined
 
 
+def _xray_asset_lookup_dir(dat_dir: str, asset_dir: str) -> str:
+    """Choose the DAT asset directory for `xray -test`.
+
+    Xray resolves `ext:<file>.dat:<tag>` through its asset lookup, not through
+    the config directory.  The runtime normally sees DAT files from
+    /opt/etc/xray/dat; preflight must point Xray there explicitly because it runs
+    from a temporary confdir.
+    """
+
+    for raw in (
+        os.environ.get('XKEEN_XRAY_PREFLIGHT_ASSET_DIR'),
+        os.environ.get('XRAY_LOCATION_ASSET'),
+        os.environ.get('xray.location.asset'),
+        dat_dir,
+        asset_dir,
+    ):
+        value = str(raw or '').strip()
+        if value and os.path.isdir(value):
+            return value
+    return ''
+
+
+def _xray_test_env_and_cwd(*, dat_dir: str, asset_dir: str) -> tuple[Dict[str, str], Optional[str]]:
+    env = os.environ.copy()
+    lookup_dir = _xray_asset_lookup_dir(dat_dir, asset_dir)
+    if lookup_dir:
+        env['XRAY_LOCATION_ASSET'] = lookup_dir
+        env['xray.location.asset'] = lookup_dir
+        return env, lookup_dir
+    return env, None
+
+
+def _geodata_failure_hint(stderr: str, stdout: str) -> str:
+    text = f'{stderr or ""}\n{stdout or ""}'
+    if not re.search(r'(?:common/geodata|illegal domain rule|failed to check code|\.dat)', text, re.IGNORECASE):
+        return ''
+    return (
+        'Xray не смог проверить GeoSite/GeoIP DAT во время preflight. '
+        'Проверьте, что нужный *.dat доступен в /opt/etc/xray/dat; '
+        'preflight запускается с XRAY_LOCATION_ASSET, чтобы использовать тот же DAT-каталог, что и Xray runtime.'
+    )
+
+
 def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) -> Dict[str, Any]:
     """Validate Xray configs with edited fragment injected into a temp confdir."""
     xray_bin = '/opt/sbin/xray' if os.path.exists('/opt/sbin/xray') else 'xray'
@@ -260,9 +304,11 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
             if semantic_issue:
                 return semantic_issue
 
+            dat_dir = os.environ.get('XRAY_DAT_DIR') or '/opt/etc/xray/dat'
+            asset_dir = os.environ.get('XRAY_ASSET_DIR') or '/opt/sbin'
+            preflight_env, preflight_cwd = _xray_test_env_and_cwd(dat_dir=dat_dir, asset_dir=asset_dir)
+
             try:
-                dat_dir = os.environ.get('XRAY_DAT_DIR') or '/opt/etc/xray/dat'
-                asset_dir = os.environ.get('XRAY_ASSET_DIR') or '/opt/sbin'
                 ensure_xray_dat_assets(
                     dat_dir=dat_dir,
                     asset_dir=asset_dir,
@@ -280,7 +326,15 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
             cmd = [xray_bin, '-test', '-confdir', tmpdir]
             cmd_text = ' '.join(cmd)
             try:
-                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=test_timeout, check=False)
+                proc = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=test_timeout,
+                    check=False,
+                    env=preflight_env,
+                    cwd=preflight_cwd,
+                )
             except subprocess.TimeoutExpired as exc:
                 exc_stdout = _shorten_text(getattr(exc, 'stdout', '') or '')
                 exc_stderr = _shorten_text(getattr(exc, 'stderr', '') or '')
@@ -311,6 +365,7 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
                     'stdout': exc_stdout,
                     'stderr': exc_stderr,
                     'hint': hint,
+                    'asset_dir': preflight_cwd or '',
                 }
             stdout = _shorten_text(proc.stdout or '')
             stderr = _shorten_text(proc.stderr or '')
@@ -323,6 +378,7 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
                     'timed_out': False,
                     'stdout': stdout,
                     'stderr': stderr,
+                    'asset_dir': preflight_cwd or '',
                 }
             is_oom = _detect_oom_in_output(stderr, stdout)
             if is_oom:
@@ -337,12 +393,14 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
                     'oom': True,
                     'stdout': stdout,
                     'stderr': stderr,
+                    'asset_dir': preflight_cwd or '',
                     'hint': (
                         'Xray не хватило памяти при загрузке GeoSite/GeoIP. '
                         'Попробуйте уменьшить количество доменов в routing rules, '
                         'отключить observatory или увеличить объём доступной памяти.'
                     ),
                 }
+            geodata_hint = _geodata_failure_hint(stderr, stdout)
             return {
                 'ok': False,
                 'error': 'xray test failed',
@@ -353,7 +411,8 @@ def _run_xray_preflight(*, xray_configs_dir_real: str, sel_main: str, obj: Any) 
                 'timed_out': False,
                 'stdout': stdout,
                 'stderr': stderr,
-                'hint': 'Xray не принял конфиг. Исправьте ошибку и повторите сохранение.',
+                'asset_dir': preflight_cwd or '',
+                'hint': geodata_hint or 'Xray не принял конфиг. Исправьте ошибку и повторите сохранение.',
             }
     except FileNotFoundError:
         return {
@@ -731,6 +790,7 @@ def register_config_routes(
                     "can_skip_preflight": can_skip_preflight,
                     "stdout": preflight.get("stdout"),
                     "stderr": preflight.get("stderr"),
+                    "asset_dir": preflight.get("asset_dir"),
                     "hint": preflight.get("hint"),
                     "summary": preflight.get("summary"),
                     "preflight_ref": preflight_ref,

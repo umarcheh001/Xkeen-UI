@@ -357,6 +357,16 @@
       };
     }
 
+    if (/(?:common\/geodata|illegal domain rule|failed to check code|ext:[^:\s]+\.dat:)/i.test(source)) {
+      return {
+        id: 'geodata_lookup',
+        summary: 'Xray не смог проверить GeoSite/GeoIP категорию из DAT-файла.',
+        where: 'Проверьте DAT-файл и asset-каталог Xray: preflight должен видеть тот же /opt/etc/xray/dat, что и реальный запуск Xray.',
+        action: 'Обновите нужный *.dat через Dat Explorer или проверьте, что preflight запускается с XRAY_LOCATION_ASSET=/opt/etc/xray/dat.',
+        rootCause: 'Xray не нашёл или не смог прочитать указанную GeoSite/GeoIP категорию в DAT.',
+      };
+    }
+
     if (((/\b(?:balancerTag|balancer)\b[^\n]{0,80}\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b/i.test(source)) ||
         (/\b(?:not found|missing|does not exist|unknown|undefined|no such|non[- ]existent)\b[^\n]{0,80}\b(?:balancerTag|balancer)\b/i.test(source)))) {
       const balancerRef = extractBalancerReference(source);

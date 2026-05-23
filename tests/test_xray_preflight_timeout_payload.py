@@ -75,7 +75,7 @@ def test_run_xray_preflight_defaults_to_30_second_timeout_for_all_routers(tmp_pa
 
     monkeypatch.delenv("XKEEN_XRAY_TEST_TIMEOUT", raising=False)
 
-    def fake_run(cmd, capture_output, text, timeout, check):
+    def fake_run(cmd, capture_output, text, timeout, check, **_kwargs):
         assert timeout == 30
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
@@ -98,7 +98,7 @@ def test_run_xray_preflight_includes_timeout_limit_on_failed_check(tmp_path, mon
 
     monkeypatch.setenv("XKEEN_XRAY_TEST_TIMEOUT", "9")
 
-    def fake_run(cmd, capture_output, text, timeout, check):
+    def fake_run(cmd, capture_output, text, timeout, check, **_kwargs):
         assert capture_output is True
         assert text is True
         assert check is False
@@ -127,7 +127,7 @@ def test_run_xray_preflight_timeout_uses_temp_confdir_in_command(tmp_path, monke
 
     monkeypatch.setenv("XKEEN_XRAY_TEST_TIMEOUT", "11")
 
-    def fake_run(cmd, capture_output, text, timeout, check):
+    def fake_run(cmd, capture_output, text, timeout, check, **_kwargs):
         raise subprocess.TimeoutExpired(cmd, timeout, output="stdout timeout", stderr="stderr timeout")
 
     monkeypatch.setattr(routing_config.subprocess, "run", fake_run)
@@ -179,7 +179,7 @@ def test_run_xray_preflight_blocks_dangling_outbound_reference_before_xray(tmp_p
 
     calls = []
 
-    def fake_run(cmd, capture_output, text, timeout, check):
+    def fake_run(cmd, capture_output, text, timeout, check, **_kwargs):
         calls.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout="should not run", stderr="")
 
@@ -358,16 +358,20 @@ def test_run_xray_preflight_refreshes_xray_dat_assets_before_check(tmp_path, mon
     confdir.mkdir()
     (confdir / "00_base.json").write_text('{"log":{}}\n', encoding="utf-8")
 
-    monkeypatch.setenv("XRAY_DAT_DIR", str(tmp_path / "dat"))
-    monkeypatch.setenv("XRAY_ASSET_DIR", str(tmp_path / "asset"))
+    dat_dir = tmp_path / "dat"
+    asset_dir = tmp_path / "asset"
+    dat_dir.mkdir()
+    asset_dir.mkdir()
+    monkeypatch.setenv("XRAY_DAT_DIR", str(dat_dir))
+    monkeypatch.setenv("XRAY_ASSET_DIR", str(asset_dir))
 
     calls = []
 
     def fake_ensure_xray_dat_assets(*, dat_dir, asset_dir, log=None, diag=None):
         calls.append(("assets", dat_dir, asset_dir, callable(log), callable(diag)))
 
-    def fake_run(cmd, capture_output, text, timeout, check):
-        calls.append(("run", cmd))
+    def fake_run(cmd, capture_output, text, timeout, check, **kwargs):
+        calls.append(("run", cmd, kwargs.get("env"), kwargs.get("cwd")))
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
     monkeypatch.setattr(routing_config, "ensure_xray_dat_assets", fake_ensure_xray_dat_assets)
@@ -380,5 +384,44 @@ def test_run_xray_preflight_refreshes_xray_dat_assets_before_check(tmp_path, mon
     )
 
     assert result["ok"] is True
-    assert calls[0] == ("assets", str(tmp_path / "dat"), str(tmp_path / "asset"), True, False)
+    assert result["asset_dir"] == str(dat_dir)
+    assert calls[0] == ("assets", str(dat_dir), str(asset_dir), True, False)
     assert calls[1][0] == "run"
+    assert calls[1][2]["XRAY_LOCATION_ASSET"] == str(dat_dir)
+    assert calls[1][2]["xray.location.asset"] == str(dat_dir)
+    assert calls[1][3] == str(dat_dir)
+
+
+def test_run_xray_preflight_geodata_failure_explains_dat_asset_lookup(tmp_path, monkeypatch):
+    confdir = tmp_path / "configs"
+    dat_dir = tmp_path / "dat"
+    confdir.mkdir()
+    dat_dir.mkdir()
+    (confdir / "00_base.json").write_text('{"log":{}}\n', encoding="utf-8")
+
+    monkeypatch.setenv("XRAY_DAT_DIR", str(dat_dir))
+
+    def fake_run(cmd, capture_output, text, timeout, check, **kwargs):
+        assert kwargs.get("cwd") == str(dat_dir)
+        assert kwargs.get("env", {}).get("XRAY_LOCATION_ASSET") == str(dat_dir)
+        stderr = (
+            "Failed to start: main: failed to load config files: [05_routing.json] "
+            "> infra/conf: failed to build routing configuration "
+            "> common/geodata: illegal domain rule: ext:geosite_v2fly.dat:category-ads-all "
+            "> common/geodata: failed to check code CATEGORY-ADS-ALL from geosite_v2fly.dat > EOF"
+        )
+        return subprocess.CompletedProcess(cmd, 23, stdout="", stderr=stderr)
+
+    monkeypatch.setattr(routing_config.subprocess, "run", fake_run)
+
+    result = routing_config._run_xray_preflight(
+        xray_configs_dir_real=str(confdir),
+        sel_main=str(confdir / "05_routing.json"),
+        obj={"routing": {"rules": [{"type": "field", "domain": ["ext:geosite_v2fly.dat:category-ads-all"]}]}},
+    )
+
+    assert result["ok"] is False
+    assert result["returncode"] == 23
+    assert result["asset_dir"] == str(dat_dir)
+    assert "GeoSite/GeoIP DAT" in result["hint"]
+    assert "XRAY_LOCATION_ASSET" in result["hint"]
