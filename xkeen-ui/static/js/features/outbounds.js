@@ -562,6 +562,7 @@ let outboundsModuleApi = null;
           try { outboundsRenderNodeList(); } catch (e) {}
         }
       } else {
+        if (statusEl) statusEl.classList.add('hidden');
         outboundsRenderActiveStatus();
       }
       return enabled;
@@ -708,7 +709,7 @@ let outboundsModuleApi = null;
       const runtime = _outboundsActiveRuntime && typeof _outboundsActiveRuntime === 'object' ? _outboundsActiveRuntime : {};
       const hasActive = !!(runtime.active && typeof runtime.active === 'object');
       el.textContent = outboundsActiveRuntimeText();
-      el.classList.remove('hidden');
+      el.classList.add('hidden');
       el.classList.toggle('is-active', hasActive);
       el.classList.toggle('is-unknown', !hasActive);
     }
@@ -908,9 +909,16 @@ let outboundsModuleApi = null;
       if (!panel || !caption || !summary || !listEl || !empty) return;
 
       const nodes = Array.isArray(_outboundsNodes) ? _outboundsNodes : [];
+      const renderedNodes = nodes
+        .map((node, index) => ({ node, index, active: outboundsNodeIsActive(node) }))
+        .sort((a, b) => {
+          if (a.active !== b.active) return a.active ? -1 : 1;
+          return a.index - b.index;
+        });
       const isSubscription = isSubscriptionFragmentMode();
       const rows = [];
-      nodes.forEach((node) => {
+      renderedNodes.forEach((entry) => {
+        const node = entry.node;
         const keyText = String(node && node.key ? node.key : '').trim();
         const tagText = String(node && node.tag ? node.tag : '').trim();
         const key = escapeHtml(keyText);
@@ -930,13 +938,14 @@ let outboundsModuleApi = null;
         const latencyLabel = escapeHtml(subsNodeLatencyLabel(latencyEntry, pingBusy, canPing));
         const latencyTooltip = escapeHtml(subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing));
         const latencyClass = subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
-        const isActiveRoute = outboundsNodeIsActive(node);
+        const isActiveRoute = !!entry.active;
+        const activeTooltip = isActiveRoute ? escapeHtml(outboundsActiveRuntimeText()) : '';
         const activePill = isActiveRoute
-          ? '<span class="xk-sub-node-pill xk-sub-node-pill-active-route">активен</span>'
+          ? '<span class="xk-sub-node-pill xk-sub-node-pill-active-route">сейчас</span>'
           : '';
         const finalStateLabel = isActiveRoute ? 'сейчас' : stateLabel;
         rows.push(`
-          <div class="xk-sub-node-item xk-outbounds-node-item is-enabled ${isActiveRoute ? 'is-active-route' : ''}" data-node-key="${key}">
+          <div class="xk-sub-node-item xk-outbounds-node-item is-enabled ${isActiveRoute ? 'is-active-route' : ''}" data-node-key="${key}" ${activeTooltip ? `title="${activeTooltip}"` : ''}>
             <div class="xk-sub-node-main">
               <div class="xk-sub-node-name">${name}</div>
               <div class="xk-sub-node-meta">

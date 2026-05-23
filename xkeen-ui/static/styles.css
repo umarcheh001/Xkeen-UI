@@ -9614,29 +9614,29 @@ html[data-theme="light"] .xk-sub-draft-badge {
 }
 
 .xk-outbounds-active-status.is-active {
-  border-color: rgba(34, 197, 94, 0.28);
-  background: rgba(21, 128, 61, 0.16);
-  color: #bbf7d0;
+  border-color: rgba(245, 158, 11, 0.32);
+  background: rgba(120, 53, 15, 0.18);
+  color: #fde68a;
 }
 
 .xk-outbounds-node-item.is-active-route {
-  border-color: rgba(34, 197, 94, 0.46);
+  border-color: rgba(245, 158, 11, 0.58);
   background:
-    linear-gradient(180deg, rgba(20, 83, 45, 0.42), rgba(15, 23, 42, 0.50));
+    linear-gradient(180deg, rgba(113, 63, 18, 0.44), rgba(15, 23, 42, 0.54));
   box-shadow:
-    inset 3px 0 0 rgba(34, 197, 94, 0.90),
+    inset 3px 0 0 rgba(245, 158, 11, 0.95),
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 12px 28px rgba(22, 163, 74, 0.12);
+    0 12px 28px rgba(245, 158, 11, 0.14);
 }
 
 .xk-sub-node-pill-active-route {
-  border-color: rgba(34, 197, 94, 0.30);
-  background: rgba(21, 128, 61, 0.18);
-  color: #bbf7d0;
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(120, 53, 15, 0.22);
+  color: #fde68a;
 }
 
 .xk-sub-node-state.is-active-route {
-  color: #bbf7d0;
+  color: #fde68a;
   font-weight: 800;
 }
 
@@ -10691,19 +10691,19 @@ html[data-theme="light"] .xk-outbounds-active-status {
 }
 
 html[data-theme="light"] .xk-outbounds-active-status.is-active {
-  border-color: rgba(22, 163, 74, 0.26);
-  background: rgba(220, 252, 231, 0.86);
-  color: #166534;
+  border-color: rgba(217, 119, 6, 0.32);
+  background: rgba(254, 243, 199, 0.92);
+  color: #92400e;
 }
 
 html[data-theme="light"] .xk-outbounds-node-item.is-active-route {
-  border-color: rgba(22, 163, 74, 0.38);
+  border-color: rgba(217, 119, 6, 0.46);
   background:
-    linear-gradient(180deg, rgba(240, 253, 244, 0.98), rgba(236, 253, 245, 0.90));
+    linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(254, 243, 199, 0.88));
   box-shadow:
-    inset 3px 0 0 rgba(22, 163, 74, 0.82),
+    inset 3px 0 0 rgba(217, 119, 6, 0.88),
     inset 0 1px 0 rgba(255, 255, 255, 0.94),
-    0 12px 28px rgba(22, 163, 74, 0.10);
+    0 12px 28px rgba(217, 119, 6, 0.10);
 }
 
 html[data-theme="light"] .xk-sub-list-panel {
@@ -11017,9 +11017,9 @@ html[data-theme="light"] .xk-sub-node-pill-warning {
 }
 
 html[data-theme="light"] .xk-sub-node-pill-active-route {
-  border-color: rgba(22, 163, 74, 0.24);
-  background: rgba(220, 252, 231, 0.86);
-  color: #166534;
+  border-color: rgba(217, 119, 6, 0.28);
+  background: rgba(254, 243, 199, 0.92);
+  color: #92400e;
 }
 
 html[data-theme="light"] .xk-sub-node-detail {
