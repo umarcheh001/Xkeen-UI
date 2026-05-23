@@ -156,6 +156,56 @@ console.log(JSON.stringify(result.map((item) => ({
     assert any("dup" in message for message in messages)
 
 
+def test_xray_semantic_validation_accepts_balancer_fallback_generated_prefix():
+    script = """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayRoutingSemantics({
+  routing: {
+    balancers: [
+      {
+        tag: 'balancer_selective',
+        selector: ['my_proxy', 'white_list'],
+        strategy: { type: 'leastPing' },
+        fallbackTag: 'white_list'
+      },
+      {
+        tag: 'balancer_bad',
+        selector: ['my_proxy'],
+        fallbackTag: 'missing_pool'
+      }
+    ],
+    rules: [
+      { balancerTag: 'balancer_selective' }
+    ]
+  }
+}, {
+  knownOutboundTags: ['block', 'direct', 'my_proxy', 'white_list--Germany.001', 'white_list--Latvia.002']
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  severity: item.severity || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    fallback_errors = [
+        item for item in payload
+        if str(item["code"]) == "balancer-fallback-tag-missing"
+    ]
+
+    assert len(fallback_errors) == 1
+    assert fallback_errors[0]["pointer"] == "/routing/balancers/1/fallbackTag"
+    assert "missing_pool" in str(fallback_errors[0]["message"])
+    assert not any(
+        item["pointer"] == "/routing/balancers/0/fallbackTag"
+        for item in payload
+    )
+
+
 def test_xray_config_semantic_validation_reports_transport_and_reference_gaps():
     script = """
 import { validateXrayConfigSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';

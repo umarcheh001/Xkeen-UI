@@ -186,7 +186,7 @@
         },
         "fallbackTag": {
           "type": "string",
-          "description": "Запасной outbound, если ни один из `selector` не доступен. Требует включённого `observatory`.",
+          "description": "Запасной outbound tag или префикс сгенерированных outbound'ов, если ни один из `selector` не доступен. Требует включённого `observatory`.",
           "examples": [
             "direct",
             "block"

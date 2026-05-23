@@ -1164,8 +1164,8 @@ function validateXrayBalancers(shape, options, diagnostics) {
     });
 
     const fallbackTag = cleanName(balancer.fallbackTag);
-    if (fallbackTag && outboundTags.length && !outboundTags.includes(fallbackTag)) {
-      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/fallbackTag`, `Balancer "${tag || index}" использует fallbackTag "${fallbackTag}", но такого outbound нет.${previewNames(outboundTags) ? ` Сейчас доступны: ${previewNames(outboundTags)}.` : ''}`, {
+    if (fallbackTag && outboundTags.length && !selectorMatchesAnyTag(fallbackTag, outboundTags)) {
+      pushDiagnostic(diagnostics, createJsonDiagnostic(`${pointer}/fallbackTag`, `Balancer "${tag || index}" использует fallbackTag "${fallbackTag}", но такого outbound tag или префикса нет.${previewNames(outboundTags) ? ` Сейчас доступны: ${previewNames(outboundTags)}.` : ''}`, {
         source: 'xray-semantic',
         code: 'balancer-fallback-tag-missing',
       }));

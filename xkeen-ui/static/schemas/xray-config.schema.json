@@ -528,7 +528,7 @@
       "properties": {
         "tag": { "type": "string", "examples": ["proxy"] },
         "selector": { "type": "array", "items": { "type": "string", "examples": ["vless-reality", "direct", "block"] } },
-        "fallbackTag": { "type": "string", "examples": ["direct", "block"] },
+        "fallbackTag": { "type": "string", "description": "Запасной outbound tag или префикс сгенерированных outbound'ов, если ни один из selector не доступен.", "examples": ["direct", "block"] },
         "strategy": {
           "type": "object",
           "properties": {

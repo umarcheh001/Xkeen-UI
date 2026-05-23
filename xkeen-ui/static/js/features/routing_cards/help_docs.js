@@ -129,7 +129,7 @@ import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
         'tag — идентификатор балансировщика (нужен для balancerTag в правилах).',
         'selector — список префиксов outboundTag (выбираются все outbound, чьи теги начинаются с префикса).',
         'strategy — алгоритм выбора (например random или leastPing).',
-        'fallbackTag — запасной outbound, если выбранные недоступны (обычно требует observatory).',
+        'fallbackTag — запасной outbound tag или префикс сгенерированных outbound, если выбранные недоступны (обычно требует observatory).',
       ],
     },
     ruleTag: {
@@ -152,7 +152,7 @@ import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
     },
     'balancer.fallbackTag': {
       title: 'balancer.fallbackTag',
-      desc: 'Запасной outbound, если все выбранные недоступны.',
+      desc: 'Запасной outbound tag или префикс сгенерированных outbound, если все выбранные недоступны.',
       note: 'Требуется observatory или burstObservatory.',
     },
     'balancer.strategy': {

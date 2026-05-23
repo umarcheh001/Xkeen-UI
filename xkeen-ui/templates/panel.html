@@ -2135,7 +2135,7 @@
                 <li><code>tag</code> — имя балансировщика (его потом указывают в <code>balancerTag</code> у правил).</li>
                 <li><code>selector</code> — список <b>префиксов</b> outbound‑тегов. Xray выберет все outbounds, чьи <code>tag</code> начинаются с этих строк.</li>
                 <li><code>strategy</code> — алгоритм: <code>leastPing</code> / <code>leastLoad</code> / <code>random</code>.</li>
-                <li><code>fallbackTag</code> — запасной outbound (обычно <code>direct</code>).</li>
+                <li><code>fallbackTag</code> — запасной outbound tag или префикс сгенерированных outbound (обычно <code>direct</code>).</li>
               </ul>
               <div class="xk-balancer-help-callout" style="margin-top:10px;">
                 <b>selector — префикс, не точный тег!</b> Если у вас теги <code>vless-1</code> и <code>vless-10</code>, selector <code>vless-1</code> захватит оба. Делайте теги уникальными без пересечений.
