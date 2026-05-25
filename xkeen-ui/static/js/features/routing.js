@@ -35,7 +35,11 @@ import {
 } from './xkeen_runtime.js';
 import { stripJsonComments as stripJsonCommentsUtil } from '../util/strip_json_comments.js';
 import {
-  ROUTING_SCENARIO_MOBILE_BALANCER_TAG,
+  ROUTING_SCENARIO_MAIN_BALANCER_TAG,
+  ROUTING_SCENARIO_RESERVE_BALANCER_TAG,
+  ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG,
+  ROUTING_SCENARIO_LOOPBACK_TO_RESERVE,
+  ROUTING_SCENARIO_LOOPBACK_TO_WHITE,
   ROUTING_SCENARIO_MOBILE_SELECTOR,
   ROUTING_SCENARIO_MOBILE_WHITELIST,
   ROUTING_SCENARIO_NORMAL,
@@ -443,8 +447,11 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
 
   let _restartLogModulePromise = null;
   const ROUTING_SCENARIO_OPEN_KEY = 'xk.routing.scenario.open.v1';
+  const ROUTING_SCENARIO_VISIBILITY_FIX_KEY = 'xk.routing.scenario.visibility.fix.v1';
   let _routingScenarioCollapseWired = false;
   let _routingScenarioWired = false;
+  let _routingScenarioSettingsEventWired = false;
+  let _routingScenarioSettingVisible = null;
   let _routingScenarioPreflightSeq = 0;
   let _routingScenarioPreflightCache = null;
   let _routingScenarioPreflightPromise = null;
@@ -1862,6 +1869,7 @@ import { createXrayQuickFixProvider } from '../ui/schema_quickfixes.js';
       const els = root.querySelectorAll ? root.querySelectorAll('.xk-only-routing') : [];
       (els || []).forEach((el) => _setElHidden(el, !isRouting));
     } catch (e) {}
+    try { applyRoutingScenarioCardSetting(); } catch (e) {}
 
     // Keep tooltips in sync with the active file / semantic mode.
     try {
@@ -4224,15 +4232,35 @@ function closeHelp() {
   }
 
   function applyRoutingScenarioCardSetting(settingsSnapshot) {
-    const visible = routingScenarioCardVisible(settingsSnapshot);
+    const settingVisible = routingScenarioCardVisible(settingsSnapshot);
+    const visible = settingVisible && String(_routingMode || '') === 'routing';
+    const firstKnownVisibleSetting = _routingScenarioSettingVisible === null && settingVisible === true;
+    const becameVisibleBySetting = _routingScenarioSettingVisible === false && settingVisible === true;
+    _routingScenarioSettingVisible = settingVisible;
     try {
       const card = document.querySelector('.routing-side-card--scenario');
       if (card) {
+        if (card.dataset) {
+          card.dataset.xkUiSettingVisible = settingVisible ? '1' : '0';
+          try { delete card.dataset.xkPrevDisplay; } catch (e0) {}
+        }
         card.hidden = !visible;
         card.style.display = visible ? '' : 'none';
         card.setAttribute('aria-hidden', visible ? 'false' : 'true');
       }
     } catch (e) {}
+    let shouldOpenAfterSetting = visible && becameVisibleBySetting;
+    if (visible && firstKnownVisibleSetting) {
+      try {
+        shouldOpenAfterSetting = shouldOpenAfterSetting
+          || (_storeGet(ROUTING_SCENARIO_OPEN_KEY) === '0' && _storeGet(ROUTING_SCENARIO_VISIBILITY_FIX_KEY) !== '1');
+      } catch (e4) {}
+    }
+    if (visible && shouldOpenAfterSetting) {
+      try { setRoutingScenarioCardOpen(true); } catch (e2) {}
+      try { _storeSet(ROUTING_SCENARIO_OPEN_KEY, '1'); } catch (e3) {}
+      try { _storeSet(ROUTING_SCENARIO_VISIBILITY_FIX_KEY, '1'); } catch (e4) {}
+    }
     if (!visible) {
       try { setRoutingScenarioStatus('', ''); } catch (e2) {}
     }
@@ -4380,7 +4408,7 @@ function closeHelp() {
     const opts = options && typeof options === 'object' ? options : {};
     const seq = ++_routingScenarioPreflightSeq;
     if (opts.loading !== false && selectedRoutingScenarioMode() === ROUTING_SCENARIO_MOBILE_WHITELIST) {
-      setRoutingScenarioStatus(`Проверяю пул ${ROUTING_SCENARIO_MOBILE_SELECTOR} и настройки подписки…`, 'warning');
+      setRoutingScenarioStatus(`Проверяю цепочку fallback и пул ${ROUTING_SCENARIO_MOBILE_SELECTOR}…`, 'warning');
     }
 
     const preflight = await loadRoutingScenarioPreflight({ force: !!opts.force });
@@ -4418,6 +4446,15 @@ function closeHelp() {
     return mode === ROUTING_SCENARIO_MOBILE_WHITELIST ? 'Мобильный white-list' : 'Обычный';
   }
 
+  function routingScenarioPreflightReady(preflight) {
+    if (!preflight || !preflight.tagsChecked) return true;
+    try {
+      const checks = Array.isArray(preflight.selectorChecks) ? preflight.selectorChecks : [];
+      if (checks.length && checks.some((item) => Number(item && item.count || 0) <= 0)) return false;
+    } catch (e) {}
+    return Number(preflight.outboundCount || 0) > 0;
+  }
+
   function syncRoutingScenarioUiFromEditor(reason) {
     if (!routingScenarioCardVisible()) return;
     const normal = $(IDS.scenarioNormal);
@@ -4440,7 +4477,7 @@ function closeHelp() {
       try { if (normal) normal.checked = false; } catch (e4) {}
       try { if (badge) badge.textContent = 'White-list'; } catch (e5) {}
       setRoutingScenarioStatus(
-        `Активен аварийный режим: Россия идёт напрямую, остальное через ${ROUTING_SCENARIO_MOBILE_SELECTOR}.`,
+        `Активна fallback-цепочка: ${ROUTING_SCENARIO_MAIN_BALANCER_TAG} → ${ROUTING_SCENARIO_RESERVE_BALANCER_TAG} → ${ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG}.`,
         'success'
       );
       void updateRoutingScenarioPreflightStatus({ loading: false });
@@ -4471,7 +4508,7 @@ function closeHelp() {
     let preflight = null;
     if (mode === ROUTING_SCENARIO_MOBILE_WHITELIST) {
       preflight = await updateRoutingScenarioPreflightStatus({ loading: true, force: true });
-      if (preflight && preflight.tagsChecked && Number(preflight.outboundCount || 0) <= 0) {
+      if (!routingScenarioPreflightReady(preflight)) {
         const formatted = formatRoutingScenarioPreflightMessage(preflight);
         setRoutingScenarioStatus(formatted.message, 'error');
         return false;
@@ -4480,12 +4517,13 @@ function closeHelp() {
 
     let details = mode === ROUTING_SCENARIO_MOBILE_WHITELIST
       ? [
-          `Будет создан balancer ${ROUTING_SCENARIO_MOBILE_BALANCER_TAG} с selector ${ROUTING_SCENARIO_MOBILE_SELECTOR}.`,
-          'В начало rules будет добавлен direct для РФ и catch-all на anti white-list пул.',
-          'Существующие ручные правила останутся ниже управляемого блока.',
+          `Будут созданы balancer-ы ${ROUTING_SCENARIO_MAIN_BALANCER_TAG}, ${ROUTING_SCENARIO_RESERVE_BALANCER_TAG}, ${ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG}.`,
+          `${ROUTING_SCENARIO_MAIN_BALANCER_TAG} fallback отправляет в ${ROUTING_SCENARIO_LOOPBACK_TO_RESERVE}, затем from_balancer_main возвращается в routing на ${ROUTING_SCENARIO_RESERVE_BALANCER_TAG}.`,
+          `${ROUTING_SCENARIO_RESERVE_BALANCER_TAG} fallback отправляет в ${ROUTING_SCENARIO_LOOPBACK_TO_WHITE}, затем from_balancer_reserv возвращается в routing на ${ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG}.`,
+          'Локальные сети, RU-сервисы, торренты и обычный дефолт остаются direct; заблокированные домены/IP идут через основной balancer.',
         ]
       : [
-          'Управляемый аварийный white-list блок будет удалён.',
+          'Управляемая fallback-цепочка и её правила будут удалены.',
           'Остальные правила и balancer-ы routing-файла останутся как есть.',
         ];
     if (preflight && mode === ROUTING_SCENARIO_MOBILE_WHITELIST) {
@@ -4550,7 +4588,7 @@ function closeHelp() {
       input.addEventListener('change', () => {
         if (selectedRoutingScenarioMode() === ROUTING_SCENARIO_MOBILE_WHITELIST) {
           setRoutingScenarioStatus(
-            `Выбран аварийный режим: после применения весь не-RU трафик пойдёт через ${ROUTING_SCENARIO_MOBILE_SELECTOR}.`,
+            'Выбран аварийный режим: после применения будет создана fallback-цепочка через loopback и резервные balancer-ы.',
             'warning'
           );
           void updateRoutingScenarioPreflightStatus({ loading: true, force: true });
@@ -5190,22 +5228,36 @@ function closeHelp() {
     _routingUiSettingsSyncWired = true;
     try {
       const settingsApi = getUiSettingsApi();
-      if (!settingsApi || typeof settingsApi.subscribe !== 'function') return;
-      settingsApi.subscribe((snapshot) => {
-        let scenarioVisible = true;
-        try { scenarioVisible = applyRoutingScenarioCardSetting(snapshot); } catch (e0) {}
-        try { syncRoutingToolbarUi(_engine); } catch (e) {}
-        try { applyRoutingSemanticValidationState(); } catch (e2) {}
-        try {
-          const active = _engine === 'monaco' ? applyRoutingSchemaToMonaco() : applyRoutingSchemaToCodeMirror();
-          Promise.resolve(active).catch(() => null);
-        } catch (e3) {}
-        try { validate(); } catch (e4) {}
-        if (scenarioVisible) {
-          try { syncRoutingScenarioUiFromEditor('settings'); } catch (e5) {}
-        }
-      });
+      if (settingsApi && typeof settingsApi.subscribe === 'function') {
+        settingsApi.subscribe((snapshot) => {
+          let scenarioVisible = true;
+          try { scenarioVisible = applyRoutingScenarioCardSetting(snapshot); } catch (e0) {}
+          try { syncRoutingToolbarUi(_engine); } catch (e) {}
+          try { applyRoutingSemanticValidationState(); } catch (e2) {}
+          try {
+            const active = _engine === 'monaco' ? applyRoutingSchemaToMonaco() : applyRoutingSchemaToCodeMirror();
+            Promise.resolve(active).catch(() => null);
+          } catch (e3) {}
+          try { validate(); } catch (e4) {}
+          if (scenarioVisible) {
+            try { syncRoutingScenarioUiFromEditor('settings'); } catch (e5) {}
+          }
+        });
+      }
     } catch (e) {}
+    if (!_routingScenarioSettingsEventWired) {
+      _routingScenarioSettingsEventWired = true;
+      try {
+        document.addEventListener('xkeen:ui-settings-changed', (event) => {
+          const snapshot = event && event.detail && event.detail.settings ? event.detail.settings : null;
+          let scenarioVisible = true;
+          try { scenarioVisible = applyRoutingScenarioCardSetting(snapshot); } catch (e0) {}
+          if (scenarioVisible) {
+            try { syncRoutingScenarioUiFromEditor('settings-event'); } catch (e1) {}
+          }
+        });
+      } catch (e2) {}
+    }
   }
 
   // ------------------------ editor engine toggle (CodeMirror / Monaco) ------------------------

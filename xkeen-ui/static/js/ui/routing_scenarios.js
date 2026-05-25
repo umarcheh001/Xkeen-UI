@@ -5,13 +5,36 @@ export const ROUTING_SCENARIO_MOBILE_WHITELIST = 'mobile-whitelist';
 
 export const ROUTING_SCENARIO_RULE_PREFIX = 'xk_scenario_mobile_whitelist_';
 export const ROUTING_SCENARIO_MOBILE_BALANCER_TAG = 'xk_mobile_whitelist';
+export const ROUTING_SCENARIO_MAIN_BALANCER_TAG = 'balancer_main';
+export const ROUTING_SCENARIO_RESERVE_BALANCER_TAG = 'balancer_reserv';
+export const ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG = 'balancer_white_list';
+export const ROUTING_SCENARIO_MAIN_SELECTOR = 'my_proxy';
+export const ROUTING_SCENARIO_RESERVE_SELECTOR = 'reserve_proxy';
 export const ROUTING_SCENARIO_MOBILE_SELECTOR = 'white_list';
+export const ROUTING_SCENARIO_LOOPBACK_TO_RESERVE = 'loopback_to_reserv';
+export const ROUTING_SCENARIO_LOOPBACK_TO_WHITE = 'loopback_to_white';
+export const ROUTING_SCENARIO_FROM_MAIN = 'from_balancer_main';
+export const ROUTING_SCENARIO_FROM_RESERVE = 'from_balancer_reserv';
 
-const DIRECT_INBOUNDS = Object.freeze(['redirect', 'tproxy']);
+const DIRECT_INBOUNDS = Object.freeze(['redirect', 'tproxy', 'socks-in']);
+const RESERVED_CIDRS = Object.freeze([
+  '127.0.0.0/8',
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  '169.254.0.0/16',
+  'fc00::/7',
+  'fe80::/10',
+]);
 
 const RU_SERVICE_DOMAINS = Object.freeze([
+  'ext:geosite_v2fly.dat:ru-available-only-inside',
   'ext:geosite_v2fly.dat:category-ru',
   'ext:geosite_v2fly.dat:steam',
+  'ext:geosite_v2fly.dat:category-bank-ru',
+  'ext:geosite_v2fly.dat:category-gov-ru',
+  'ext:geosite_v2fly.dat:ozon',
+  'ext:geosite_v2fly.dat:wildberries',
   'domain:ozon.ru',
   'domain:wildberries.ru',
   'domain:wb.ru',
@@ -38,7 +61,31 @@ const RU_SERVICE_DOMAINS = Object.freeze([
 ]);
 
 const RU_IPCIDR = Object.freeze([
-  'ext:zkeenip.dat:ru',
+  'ext:geoip_v2fly.dat:RU-WHITELIST',
+]);
+
+const BLOCKED_DOMAINS = Object.freeze([
+  'ext:geosite_v2fly.dat:rutracker',
+  'ext:geosite_v2fly.dat:tmdb',
+  'ext:geosite_v2fly.dat:facebook',
+  'ext:geosite_v2fly.dat:meta',
+  'ext:geosite_v2fly.dat:telegram',
+  'ext:geosite_v2fly.dat:twitter',
+  'ext:geosite_v2fly.dat:instagram',
+  'ext:geosite_v2fly.dat:whatsapp',
+  'ext:geosite_v2fly.dat:tiktok',
+  'ext:geosite_v2fly.dat:github',
+  'domain:nnmclub.to',
+  'domain:clamav.net',
+  'domain:2ip.io',
+]);
+
+const BLOCKED_IPS = Object.freeze([
+  'ext:geoip_v2fly.dat:cloudflare',
+  'ext:geoip_v2fly.dat:cloudfront',
+  'ext:geoip_v2fly.dat:telegram',
+  'ext:geoip_v2fly.dat:twitter',
+  'ext:geoip_v2fly.dat:facebook',
 ]);
 
 function cloneJson(value) {
@@ -132,7 +179,21 @@ function isManagedScenarioRule(rule) {
 }
 
 function isManagedScenarioBalancer(item) {
-  return isPlainObject(item) && String(item.tag || '').trim() === ROUTING_SCENARIO_MOBILE_BALANCER_TAG;
+  if (!isPlainObject(item)) return false;
+  const tag = String(item.tag || '').trim();
+  const selector = cleanScenarioStringList(item.selector);
+  const fallback = cleanScenarioString(item.fallbackTag);
+  if (tag === ROUTING_SCENARIO_MOBILE_BALANCER_TAG) return true;
+  if (tag === ROUTING_SCENARIO_MAIN_BALANCER_TAG) {
+    return selector.length === 1 && selector[0] === ROUTING_SCENARIO_MAIN_SELECTOR && fallback === ROUTING_SCENARIO_LOOPBACK_TO_RESERVE;
+  }
+  if (tag === ROUTING_SCENARIO_RESERVE_BALANCER_TAG) {
+    return selector.length === 1 && selector[0] === ROUTING_SCENARIO_RESERVE_SELECTOR && fallback === ROUTING_SCENARIO_LOOPBACK_TO_WHITE;
+  }
+  if (tag === ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG) {
+    return selector.length === 1 && selector[0] === ROUTING_SCENARIO_MOBILE_SELECTOR;
+  }
+  return false;
 }
 
 function routingTarget(root) {
@@ -155,13 +216,7 @@ function mobileRules() {
       ruleTag: `${ROUTING_SCENARIO_RULE_PREFIX}direct_private`,
       inboundTag: Array.from(DIRECT_INBOUNDS),
       outboundTag: 'direct',
-      ip: [
-        '127.0.0.0/8',
-        '10.0.0.0/8',
-        '172.16.0.0/12',
-        '192.168.0.0/16',
-        '169.254.0.0/16',
-      ],
+      ip: Array.from(RESERVED_CIDRS),
     },
     {
       type: 'field',
@@ -185,6 +240,7 @@ function mobileRules() {
       outboundTag: 'block',
       network: 'udp',
       port: '443,8443',
+      ip: ['ext:geoip_zkeenip.dat:!ru'],
     },
     {
       type: 'field',
@@ -209,21 +265,69 @@ function mobileRules() {
     },
     {
       type: 'field',
-      ruleTag: `${ROUTING_SCENARIO_RULE_PREFIX}catch_all`,
+      ruleTag: `${ROUTING_SCENARIO_RULE_PREFIX}blocked_domains_main`,
       inboundTag: Array.from(DIRECT_INBOUNDS),
-      balancerTag: ROUTING_SCENARIO_MOBILE_BALANCER_TAG,
+      balancerTag: ROUTING_SCENARIO_MAIN_BALANCER_TAG,
+      domain: Array.from(BLOCKED_DOMAINS),
+    },
+    {
+      type: 'field',
+      ruleTag: `${ROUTING_SCENARIO_RULE_PREFIX}blocked_ips_main`,
+      inboundTag: Array.from(DIRECT_INBOUNDS),
+      balancerTag: ROUTING_SCENARIO_MAIN_BALANCER_TAG,
+      ip: Array.from(BLOCKED_IPS),
+    },
+    {
+      type: 'field',
+      ruleTag: `${ROUTING_SCENARIO_RULE_PREFIX}default_direct`,
+      inboundTag: Array.from(DIRECT_INBOUNDS),
+      outboundTag: 'direct',
+      network: 'tcp,udp',
+    },
+    {
+      type: 'field',
+      ruleTag: `${ROUTING_SCENARIO_RULE_PREFIX}fallback_from_main`,
+      inboundTag: [ROUTING_SCENARIO_FROM_MAIN],
+      balancerTag: ROUTING_SCENARIO_RESERVE_BALANCER_TAG,
+      network: 'tcp,udp',
+    },
+    {
+      type: 'field',
+      ruleTag: `${ROUTING_SCENARIO_RULE_PREFIX}fallback_from_reserve`,
+      inboundTag: [ROUTING_SCENARIO_FROM_RESERVE],
+      balancerTag: ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG,
       network: 'tcp,udp',
     },
   ];
 }
 
-function mobileBalancer() {
-  return {
-    tag: ROUTING_SCENARIO_MOBILE_BALANCER_TAG,
-    selector: [ROUTING_SCENARIO_MOBILE_SELECTOR],
-    strategy: { type: 'leastPing' },
-    fallbackTag: 'block',
-  };
+function mobileBalancers() {
+  return [
+    {
+      tag: ROUTING_SCENARIO_MAIN_BALANCER_TAG,
+      selector: [ROUTING_SCENARIO_MAIN_SELECTOR],
+      strategy: { type: 'leastPing' },
+      fallbackTag: ROUTING_SCENARIO_LOOPBACK_TO_RESERVE,
+    },
+    {
+      tag: ROUTING_SCENARIO_RESERVE_BALANCER_TAG,
+      selector: [ROUTING_SCENARIO_RESERVE_SELECTOR],
+      strategy: { type: 'leastPing' },
+      fallbackTag: ROUTING_SCENARIO_LOOPBACK_TO_WHITE,
+    },
+    {
+      tag: ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG,
+      selector: [ROUTING_SCENARIO_MOBILE_SELECTOR],
+      strategy: { type: 'leastPing' },
+    },
+  ];
+}
+
+function isScenarioTerminalRule(rule) {
+  const tag = managedRuleTag(rule);
+  return tag === `${ROUTING_SCENARIO_RULE_PREFIX}default_direct`
+    || tag === `${ROUTING_SCENARIO_RULE_PREFIX}fallback_from_main`
+    || tag === `${ROUTING_SCENARIO_RULE_PREFIX}fallback_from_reserve`;
 }
 
 export function parseRoutingScenarioText(text) {
@@ -267,8 +371,11 @@ export function applyRoutingScenarioToObject(config, mode) {
 
   if (nextMode === ROUTING_SCENARIO_MOBILE_WHITELIST) {
     if (!routing.domainStrategy) routing.domainStrategy = 'IPIfNonMatch';
-    routing.rules = mobileRules().concat(userRules);
-    routing.balancers = [mobileBalancer()].concat(userBalancers);
+    const generatedRules = mobileRules();
+    const leadingRules = generatedRules.filter((rule) => !isScenarioTerminalRule(rule));
+    const terminalRules = generatedRules.filter(isScenarioTerminalRule);
+    routing.rules = leadingRules.concat(userRules, terminalRules);
+    routing.balancers = mobileBalancers().concat(userBalancers);
   } else {
     routing.rules = userRules;
     routing.balancers = userBalancers;
@@ -291,6 +398,13 @@ export function applyRoutingScenarioText(text, mode) {
 
 export function analyzeRoutingScenarioPreflight(input = {}) {
   const selector = cleanScenarioString(input.selector || ROUTING_SCENARIO_MOBILE_SELECTOR);
+  const selectors = [
+    ROUTING_SCENARIO_MAIN_SELECTOR,
+    ROUTING_SCENARIO_RESERVE_SELECTOR,
+    selector,
+    ROUTING_SCENARIO_LOOPBACK_TO_RESERVE,
+    ROUTING_SCENARIO_LOOPBACK_TO_WHITE,
+  ];
   const outboundTags = Array.isArray(input.outboundTags) ? cleanScenarioStringList(input.outboundTags) : null;
   const subscriptions = Array.isArray(input.subscriptions) ? input.subscriptions.filter(isPlainObject) : null;
   const matchingOutboundTags = outboundTags
@@ -300,9 +414,19 @@ export function analyzeRoutingScenarioPreflight(input = {}) {
     ? subscriptions.filter((item) => subscriptionMatchesScenarioSelector(item, selector))
     : [];
   const autoRuleSubscriptions = matchingSubscriptions.filter(subscriptionRoutingAutoRuleEnabled);
+  const selectorChecks = selectors.map((item) => {
+    const matches = outboundTags ? outboundTags.filter((tag) => scenarioSelectorMatchesTag(item, tag)) : [];
+    return {
+      selector: item,
+      count: matches.length,
+      matchingOutboundTags: matches,
+    };
+  });
 
   return {
     selector,
+    selectors,
+    selectorChecks,
     tagsChecked: Array.isArray(outboundTags),
     subscriptionsChecked: Array.isArray(subscriptions),
     matchingOutboundTags,
@@ -330,16 +454,34 @@ export function formatRoutingScenarioPreflightMessage(preflight) {
   let tone = 'success';
 
   if (data.tagsChecked) {
-    const count = Number(data.outboundCount || 0);
-    if (count > 0) {
-      parts.push(`Пул ${selector} найден: ${count} outbound.`);
-    } else {
-      parts.push(`Пул ${selector} не найден. Сначала обновите подписку/профиль ${selector}.`);
+    const checks = Array.isArray(data.selectorChecks) ? data.selectorChecks : [];
+    const missing = checks.filter((item) => Number(item.count || 0) <= 0).map((item) => cleanScenarioString(item.selector)).filter(Boolean);
+    if (!missing.length && checks.length) {
+      parts.push(`Цепочка найдена: ${checks.map((item) => `${item.selector}=${Number(item.count || 0)}`).join(', ')}.`);
+    } else if (checks.length) {
+      parts.push(`В цепочке не найдены: ${missing.join(', ')}. Проверьте подписки и loopback outbounds.`);
       tone = 'error';
+    } else {
+      const count = Number(data.outboundCount || 0);
+      if (count > 0) {
+        parts.push(`Пул ${selector} найден: ${count} outbound.`);
+      } else {
+        parts.push(`Пул ${selector} не найден. Сначала обновите подписку/профиль ${selector}.`);
+        tone = 'error';
+      }
     }
   } else {
-    parts.push(`Не удалось проверить пул ${selector}: список outbound недоступен.`);
+    parts.push('Не удалось проверить цепочку: список outbound недоступен.');
     tone = 'warning';
+  }
+
+  if (data.tagsChecked) {
+    const count = Number(data.outboundCount || 0);
+    if (count > 0 && !String(parts[0] || '').includes(`white_list=${count}`)) {
+      parts.push(`Пул ${selector} найден: ${count} outbound.`);
+    } else {
+      if (count <= 0 && tone !== 'error') tone = 'error';
+    }
   }
 
   if (data.subscriptionsChecked) {
@@ -371,6 +513,11 @@ export const routingScenarios = Object.freeze({
   mobileWhitelist: ROUTING_SCENARIO_MOBILE_WHITELIST,
   managedRulePrefix: ROUTING_SCENARIO_RULE_PREFIX,
   mobileBalancerTag: ROUTING_SCENARIO_MOBILE_BALANCER_TAG,
+  mainBalancerTag: ROUTING_SCENARIO_MAIN_BALANCER_TAG,
+  reserveBalancerTag: ROUTING_SCENARIO_RESERVE_BALANCER_TAG,
+  whiteListBalancerTag: ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG,
+  mainSelector: ROUTING_SCENARIO_MAIN_SELECTOR,
+  reserveSelector: ROUTING_SCENARIO_RESERVE_SELECTOR,
   mobileSelector: ROUTING_SCENARIO_MOBILE_SELECTOR,
   applyText: applyRoutingScenarioText,
   detectText: detectRoutingScenarioFromText,

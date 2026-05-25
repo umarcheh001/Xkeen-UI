@@ -47,7 +47,7 @@ const source = JSON.stringify({
       { type: 'field', ruleTag: 'manual_match', outboundTag: 'direct' },
     ],
     balancers: [
-      { tag: 'proxy', selector: ['my_proxy', 'vni_hosting'], strategy: { type: 'leastPing' }, fallbackTag: 'direct' },
+      { tag: 'proxy', selector: ['my_proxy', 'reserve_proxy'], strategy: { type: 'leastPing' }, fallbackTag: 'direct' },
     ],
   },
 }, null, 2);
@@ -57,21 +57,35 @@ const parsed = JSON.parse(result.text);
 console.log(JSON.stringify({
   mode: detectRoutingScenarioFromText(result.text),
   firstRule: parsed.routing.rules[0],
-  catchAll: parsed.routing.rules.find((rule) => rule.ruleTag === 'xk_scenario_mobile_whitelist_catch_all'),
+  blockedDomains: parsed.routing.rules.find((rule) => rule.ruleTag === 'xk_scenario_mobile_whitelist_blocked_domains_main'),
+  fallbackMain: parsed.routing.rules.find((rule) => rule.ruleTag === 'xk_scenario_mobile_whitelist_fallback_from_main'),
+  fallbackReserve: parsed.routing.rules.find((rule) => rule.ruleTag === 'xk_scenario_mobile_whitelist_fallback_from_reserve'),
   manualRuleIndex: parsed.routing.rules.findIndex((rule) => rule.ruleTag === 'manual_blocked'),
+  defaultDirectIndex: parsed.routing.rules.findIndex((rule) => rule.ruleTag === 'xk_scenario_mobile_whitelist_default_direct'),
   firstBalancer: parsed.routing.balancers[0],
+  secondBalancer: parsed.routing.balancers[1],
+  thirdBalancer: parsed.routing.balancers[2],
 }));
 """
     )
 
     assert payload["mode"] == "mobile-whitelist"
     assert payload["firstRule"]["ruleTag"] == "xk_scenario_mobile_whitelist_direct_private"
-    assert payload["catchAll"]["balancerTag"] == "xk_mobile_whitelist"
-    assert payload["catchAll"]["network"] == "tcp,udp"
+    assert payload["blockedDomains"]["balancerTag"] == "balancer_main"
+    assert payload["fallbackMain"]["inboundTag"] == ["from_balancer_main"]
+    assert payload["fallbackMain"]["balancerTag"] == "balancer_reserv"
+    assert payload["fallbackReserve"]["inboundTag"] == ["from_balancer_reserv"]
+    assert payload["fallbackReserve"]["balancerTag"] == "balancer_white_list"
     assert payload["manualRuleIndex"] > 0
-    assert payload["firstBalancer"]["tag"] == "xk_mobile_whitelist"
-    assert payload["firstBalancer"]["selector"] == ["white_list"]
-    assert payload["firstBalancer"]["fallbackTag"] == "block"
+    assert payload["defaultDirectIndex"] > payload["manualRuleIndex"]
+    assert payload["firstBalancer"]["tag"] == "balancer_main"
+    assert payload["firstBalancer"]["selector"] == ["my_proxy"]
+    assert payload["firstBalancer"]["fallbackTag"] == "loopback_to_reserv"
+    assert payload["secondBalancer"]["tag"] == "balancer_reserv"
+    assert payload["secondBalancer"]["selector"] == ["reserve_proxy"]
+    assert payload["secondBalancer"]["fallbackTag"] == "loopback_to_white"
+    assert payload["thirdBalancer"]["tag"] == "balancer_white_list"
+    assert payload["thirdBalancer"]["selector"] == ["white_list"]
 
 
 def test_mobile_whitelist_preflight_reports_pool_and_subscription_risks():
@@ -83,13 +97,13 @@ import {
 } from './xkeen-ui/static/js/ui/routing_scenarios.js';
 
 const ready = analyzeRoutingScenarioPreflight({
-  outboundTags: ['direct', 'white_list--A', 'white_list--B'],
+  outboundTags: ['direct', 'my_proxy--A', 'reserve_proxy--A', 'white_list--A', 'white_list--B', 'loopback_to_reserv', 'loopback_to_white'],
   subscriptions: [
     { id: 'white_list', tag: 'white_list', routing_auto_rule: false, last_tags: ['white_list--A'] },
   ],
 });
 const risky = analyzeRoutingScenarioPreflight({
-  outboundTags: ['white_list--A'],
+  outboundTags: ['my_proxy--A', 'reserve_proxy--A', 'white_list--A', 'loopback_to_reserv', 'loopback_to_white'],
   subscriptions: [
     { id: 'white_list', tag: 'white_list', routing_auto_rule: true, last_tags: ['white_list--A'] },
   ],
@@ -113,7 +127,8 @@ console.log(JSON.stringify({
     assert payload["ready"]["outboundCount"] == 2
     assert payload["ready"]["autoRuleSubscriptions"] == []
     assert payload["readyMessage"]["tone"] == "success"
-    assert "Пул white_list найден: 2 outbound." in payload["readyMessage"]["message"]
+    assert "Цепочка найдена" in payload["readyMessage"]["message"]
+    assert "white_list=2" in payload["readyMessage"]["message"]
     assert "Авто-routing подписки выключен." in payload["readyMessage"]["message"]
 
     assert payload["risky"]["outboundCount"] == 1
@@ -123,7 +138,7 @@ console.log(JSON.stringify({
 
     assert payload["missing"]["outboundCount"] == 0
     assert payload["missingMessage"]["tone"] == "error"
-    assert "Пул white_list не найден" in payload["missingMessage"]["message"]
+    assert "В цепочке не найдены" in payload["missingMessage"]["message"]
 
 
 def test_normal_scenario_removes_only_managed_mobile_whitelist_block():
@@ -176,8 +191,8 @@ def test_routing_scenario_switcher_is_wired_into_panel():
     assert 'id="routing-scenario-arrow"' in template
     assert "routing-scenario-help-popover" in template
     assert "Как это работает" in template
+    assert "reserve_proxy--..." in template
     assert "white_list--..." in template
-    assert "авто-правило routing" in template
     assert 'aria-controls="routing-scenario-body"' in template
     assert 'id="routing-scenario-body" style="display:none;"' in template
     assert "routing-side-card--scenario" in template
@@ -190,9 +205,24 @@ def test_routing_scenario_switcher_is_wired_into_panel():
     assert "'/api/xray/subscriptions'" in routing_src
     assert "formatRoutingScenarioPreflightMessage(preflight)" in routing_src
     assert "xk.routing.scenario.open.v1" in routing_src
-    assert "ROUTING_SCENARIO_MOBILE_BALANCER_TAG" in routing_src
+    assert "ROUTING_SCENARIO_MAIN_BALANCER_TAG" in routing_src
+    assert "ROUTING_SCENARIO_RESERVE_BALANCER_TAG" in routing_src
+    assert "ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG" in routing_src
     assert "xkeen:routing-editor-content" in routing_src
     assert "function applyRoutingScenarioCardSetting(settingsSnapshot)" in routing_src
+    assert "xk.routing.scenario.visibility.fix.v1" in routing_src
+    assert "let _routingScenarioSettingVisible = null;" in routing_src
+    assert "const firstKnownVisibleSetting = _routingScenarioSettingVisible === null && settingVisible === true;" in routing_src
+    assert "const becameVisibleBySetting = _routingScenarioSettingVisible === false && settingVisible === true;" in routing_src
+    assert "_storeGet(ROUTING_SCENARIO_OPEN_KEY) === '0'" in routing_src
+    assert "_storeGet(ROUTING_SCENARIO_VISIBILITY_FIX_KEY) !== '1'" in routing_src
+    assert "setRoutingScenarioCardOpen(true);" in routing_src
+    assert "_storeSet(ROUTING_SCENARIO_OPEN_KEY, '1');" in routing_src
+    assert "_storeSet(ROUTING_SCENARIO_VISIBILITY_FIX_KEY, '1');" in routing_src
+    assert "card.dataset.xkUiSettingVisible = settingVisible ? '1' : '0';" in routing_src
+    assert "try { delete card.dataset.xkPrevDisplay; } catch (e0) {}" in routing_src
+    assert "document.addEventListener('xkeen:ui-settings-changed'" in routing_src
+    assert "try { applyRoutingScenarioCardSetting(); } catch (e) {}" in routing_src
     assert "routing.showScenarioCard" in settings_panel_src
     assert "Показывать карточку «Сценарий маршрутизации»" in settings_panel_src
     assert "showScenarioCard: true" in settings_src

@@ -462,12 +462,13 @@
 	              <p><b>Сценарий маршрутизации</b> быстро перестраивает текущий routing-файл под тип подключения.</p>
 	              <ul>
 	                <li><b>Обычный</b> режим убирает управляемый аварийный блок и оставляет ваши текущие правила: заблокированное через VPS/резерв, остальное по текущему routing.</li>
-	                <li><b>Мобильный white-list</b> нужен для провайдеров с жёсткими белыми списками. Он добавляет правила: локальные сети и российские сервисы идут в <code>direct</code>, всё остальное идёт через balancer <code>xk_mobile_whitelist</code>.</li>
-	                <li>Balancer <code>xk_mobile_whitelist</code> выбирает outbounds по selector <code>white_list</code>, поэтому в подписках должен быть профиль с тегом/префиксом <code>white_list</code>.</li>
-	                <li>В карточке <b>Прокси</b> откройте <b>Подписки</b>, добавьте или разделите нужную подписку в профиль <code>white_list</code>, обновите её и проверьте, что outbounds получили теги вида <code>white_list--...</code>.</li>
-	                <li>Для профиля <code>white_list</code> лучше выключить авто-правило routing: этот сценарий сам добавляет нужный catch-all, а обычный режим после возврата останется чище.</li>
+	                <li><b>Мобильный white-list</b> нужен для провайдеров с жёсткими белыми списками. Он создаёт fallback-цепочку <code>balancer_main</code> → <code>balancer_reserv</code> → <code>balancer_white_list</code>.</li>
+	                <li><code>balancer_main</code> использует selector <code>my_proxy</code> и fallback <code>loopback_to_reserv</code>; <code>balancer_reserv</code> использует <code>reserve_proxy</code> и fallback <code>loopback_to_white</code>.</li>
+	                <li>Loopback outbounds должны вернуть трафик в routing с inboundTag <code>from_balancer_main</code> и <code>from_balancer_reserv</code>; эти теги сценарий перехватывает отдельными правилами.</li>
+	                <li>Финальный balancer <code>balancer_white_list</code> выбирает outbounds по selector <code>white_list</code>, поэтому в подписках должен быть профиль с тегом/префиксом <code>white_list</code>.</li>
+	                <li>В карточке <b>Прокси</b> откройте <b>Подписки</b>, разделите подписку на профили <code>reserve_proxy</code> и <code>white_list</code>, обновите их и проверьте, что outbounds получили теги вида <code>reserve_proxy--...</code> и <code>white_list--...</code>.</li>
 	              </ul>
-	              <p>Перед применением панель проверит, найден ли пул <code>white_list</code>, сколько outbound-ов он содержит, и предупредит, если у подписки включено авто-routing.</p>
+	              <p>Перед применением панель проверит, найдены ли <code>my_proxy</code>, <code>reserve_proxy</code>, <code>white_list</code> и loopback outbounds.</p>
 	            </div>
 	          </details>
 	        </div>
@@ -484,7 +485,7 @@
 	            <input id="routing-scenario-mobile" type="radio" name="routing_scenario" value="mobile-whitelist">
 	            <div>
 	              <strong>Мобильный white-list</strong><br>
-	              <small class="xk-card-desc">Россия напрямую, всё остальное через пул <code>white_list</code>.</small>
+	              <small class="xk-card-desc">Fallback через <code>my_proxy</code>, <code>reserve_proxy</code> и <code>white_list</code>.</small>
 	            </div>
 	          </label>
 	        </div>
