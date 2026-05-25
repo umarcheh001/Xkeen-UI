@@ -1879,7 +1879,7 @@ html[data-theme="light"] .xk-routing-engine-select option {
 .CodeMirror {
   border-radius: 8px;
   border: 1px solid #111827;
-  background: #020617;
+  background: #01030a;
   /* Let CodeMirror grow with content; avoid conflicting manual resize */
   height: auto;
   min-height: 300px;
@@ -2014,7 +2014,7 @@ html[data-theme="light"] .xkeen-mini-editor{
 /* Make scrolling predictable and avoid white gaps */
 .CodeMirror-scroll {
   max-height: 76vh;
-  background-color: #020617;
+  background-color: #01030a;
 
   /* Keep scrolling predictable */
   overflow: auto !important;
@@ -3928,6 +3928,7 @@ html[data-theme="light"] #view-commands .log-card .log-block {
 /* XKeen editors: make CodeMirror text brighter and comments более заметными */
 .cm-s-material-darker.CodeMirror {
   color: #e5e7eb;
+  background: #01030a;
 }
 
 /* Комментарии: приглушённые серо-синие в тёмной теме */
@@ -23619,7 +23620,7 @@ body.panel-page textarea#json-editor-textarea,
 body.panel-page .xkeen-textarea,
 body.panel-page .routing-json-textarea {
   border-color: rgba(96, 165, 250, 0.14);
-  background: #020617;
+  background: #01030a;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.02),
     0 14px 28px rgba(2,8,23,0.22);
@@ -23637,7 +23638,7 @@ body.panel-page .CodeMirror.CodeMirror-fullscreen {
   border: 0 !important;
   z-index: 10040 !important;
   box-shadow: none !important;
-  background: #020617 !important;
+  background: #01030a !important;
 }
 
 body.panel-page .CodeMirror.CodeMirror-fullscreen .CodeMirror-scroll {
@@ -23701,7 +23702,7 @@ body.panel-page textarea#json-editor-textarea,
 body.panel-page .xkeen-textarea,
 body.panel-page .routing-json-textarea {
   border-color: rgba(96, 165, 250, 0.18);
-  background: linear-gradient(180deg, rgba(0, 3, 11, 0.995), rgba(1, 6, 16, 0.985));
+  background: linear-gradient(180deg, rgba(0, 2, 8, 0.998), rgba(1, 4, 12, 0.992));
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.02),
     0 0 0 1px rgba(96, 165, 250, 0.04),
@@ -28813,7 +28814,7 @@ html[data-theme="light"] body.devtools-page header .header-actions .theme-toggle
 
 /* CM6 premium dark/light theme */
 .xkeen-cm6-host {
-  --xk-cm-bg: #020817;
+  --xk-cm-bg: #01030a;
   --xk-cm-fg: #d4d4d4;
   --xk-cm-caret: #d4d4d4;
   --xk-cm-selection: #2d4f8e;
@@ -28822,7 +28823,7 @@ html[data-theme="light"] body.devtools-page header .header-actions .theme-toggle
   --xk-cm-active-line: transparent;
   --xk-cm-active-line-gutter: transparent;
   --xk-cm-active-line-fg: #c6c6c6;
-  --xk-cm-gutter-bg: #020817;
+  --xk-cm-gutter-bg: #01030a;
   --xk-cm-gutter-fg: #858585;
   --xk-cm-gutter-border: transparent;
   --xk-cm-search-bg: rgba(45, 79, 142, 0.42);
@@ -28833,7 +28834,7 @@ html[data-theme="light"] body.devtools-page header .header-actions .theme-toggle
   --xk-cm-fold-bg: #283457;
   --xk-cm-fold-border: #7aa2f7;
   --xk-cm-fold-fg: #565f89;
-  --xk-cm-popup-bg: #020817;
+  --xk-cm-popup-bg: #01030a;
   --xk-cm-popup-fg: #c0caf5;
   --xk-cm-popup-border: rgba(122, 162, 247, 0.28);
   --xk-cm-popup-shadow: rgba(8, 14, 29, 0.55);
@@ -28875,7 +28876,7 @@ html[data-theme="light"] body.devtools-page header .header-actions .theme-toggle
   --xk-cm-yaml-bracket-depth-1: #c586c0;
   --xk-cm-yaml-bracket-depth-2: #4fc1ff;
   --xk-cm-invalid: #f7768e;
-  --xk-cm-surface: #020817;
+  --xk-cm-surface: #01030a;
   --xk-cm-editor-border: rgba(15, 23, 42, 0.96);
   --xk-cm-editor-shadow: none;
   position: relative;

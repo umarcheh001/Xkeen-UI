@@ -674,23 +674,23 @@ import {
       const darkUi = _getWidgetPalette('dark');
       const lightUi = _getWidgetPalette('light');
 
-      // Keep colors close to our panel cards (styles.css: .card background is #020617)
+      // Keep colors close to our panel cards, but a touch deeper for editor focus.
       monaco.editor.defineTheme('xkeen-dark', {
         base: 'vs-dark',
         inherit: true,
         rules: [],
         colors: {
-          'editor.background': '#020617',
+          'editor.background': '#01030a',
           'editor.foreground': '#e5e7eb',
           'editorLineNumber.foreground': '#64748b',
           'editorLineNumber.activeForeground': '#e5e7eb',
           'editorCursor.foreground': darkUi.accent,
           'editor.selectionBackground': '#1d4ed850',
           'editor.inactiveSelectionBackground': '#1d4ed820',
-          'editorIndentGuide.background1': '#1f2937',
-          'editorIndentGuide.activeBackground1': '#334155',
-          'editorRuler.foreground': '#111827',
-          'editorGutter.background': '#020617',
+          'editorIndentGuide.background1': '#172033',
+          'editorIndentGuide.activeBackground1': '#2a3a56',
+          'editorRuler.foreground': '#0b1020',
+          'editorGutter.background': '#01030a',
           'editorWhitespace.foreground': '#334155',
           'editorWidget.background': darkUi.modalBg,
           'editorWidget.foreground': darkUi.modalText,
