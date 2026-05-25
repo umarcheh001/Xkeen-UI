@@ -1841,15 +1841,33 @@ def test_routing_field_help_clicks_do_not_leak_to_adjacent_remove_buttons():
 
 def test_codemirror_lint_tooltips_are_scrollable_and_width_limited_inside_editor():
     styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+    boot = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
 
     assert '.xkeen-cm6-host .cm-tooltip-lint {' in styles
     assert 'max-width: min(560px, calc(100% - 16px), calc(100vw - 32px));' in styles
+    assert '.cm-tooltip.cm-tooltip-lint {' in styles
+    assert 'max-width: min(560px, calc(100vw - 32px)) !important;' in styles
+    assert '.cm-tooltip.cm-tooltip-hover {' in styles
     assert '.xkeen-cm6-host .cm-tooltip-lint > ul {' in styles
+    assert '.cm-tooltip.cm-tooltip-lint > ul {' in styles
+    assert '.cm-tooltip.cm-tooltip-hover > * {' in styles
     assert 'max-height: min(220px, 38vh);' in styles
     assert 'overflow-y: auto;' in styles
     assert 'overflow-x: hidden;' in styles
     assert '.xkeen-cm6-host .cm-tooltip-lint .cm-diagnosticText,' in styles
+    assert '.cm-tooltip.cm-tooltip-lint .cm-diagnosticText,' in styles
+    assert '.cm-tooltip.cm-tooltip-hover .cm-diagnosticText,' in styles
+    assert '.cm-tooltip .cm6-json-schema-hover {' in styles
+    assert 'max-width: min(520px, calc(100vw - 48px));' in styles
     assert 'overflow-wrap: anywhere;' in styles
+    assert "'.cm-tooltip-lint': {" in boot
+    assert "'.cm-tooltip-hover': {" in boot
+    assert "maxWidth: 'min(560px, calc(100vw - 32px))'," in boot
+    assert "'.cm-tooltip-lint > ul': {" in boot
+    assert "'.cm-tooltip-hover > *': {" in boot
+    assert "'.cm6-json-schema-hover': {" in boot
+    assert "maxWidth: 'min(520px, calc(100vw - 48px))'," in boot
+    assert "overflowWrap: 'anywhere'," in boot
 
 
 def test_terminal_xray_tail_reclaims_pty_after_stop_or_disable():

@@ -29090,6 +29090,17 @@ html[data-theme="light"] .xkeen-cm6-host {
   max-width: min(560px, calc(100% - 16px), calc(100vw - 32px));
 }
 
+.cm-tooltip.cm-tooltip-lint {
+  box-sizing: border-box;
+  max-width: min(560px, calc(100vw - 32px)) !important;
+}
+
+.cm-tooltip.cm-tooltip-hover {
+  box-sizing: border-box;
+  max-width: min(560px, calc(100vw - 32px)) !important;
+  overflow: hidden;
+}
+
 .xkeen-cm6-host .cm-tooltip-lint > ul {
   max-width: 100%;
   max-height: min(220px, 38vh);
@@ -29100,9 +29111,35 @@ html[data-theme="light"] .xkeen-cm6-host {
   list-style: none;
 }
 
+.cm-tooltip.cm-tooltip-lint > ul {
+  max-width: 100%;
+  max-height: min(220px, 38vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  list-style: none;
+}
+
+.cm-tooltip.cm-tooltip-hover > * {
+  max-width: 100%;
+}
+
 .xkeen-cm6-host .cm-tooltip-lint .cm-diagnostic,
 .xkeen-cm6-host .cm-tooltip-lint .cm-diagnosticText,
 .xkeen-cm6-host .cm-tooltip-lint .cm-diagnosticSource {
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.cm-tooltip.cm-tooltip-lint .cm-diagnostic,
+.cm-tooltip.cm-tooltip-lint .cm-diagnosticText,
+.cm-tooltip.cm-tooltip-lint .cm-diagnosticSource,
+.cm-tooltip.cm-tooltip-hover .cm-diagnostic,
+.cm-tooltip.cm-tooltip-hover .cm-diagnosticText,
+.cm-tooltip.cm-tooltip-hover .cm-diagnosticSource {
   max-width: 100%;
   white-space: normal;
   word-break: break-word;
@@ -29122,13 +29159,25 @@ html[data-theme="light"] .xkeen-cm6-host {
   overflow-wrap: anywhere;
 }
 
+.cm-tooltip .cm6-json-schema-hover {
+  box-sizing: border-box;
+  max-width: min(520px, calc(100vw - 48px));
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .xkeen-cm6-host.xkeen-cm6-light .cm6-json-schema-hover,
 html[data-theme="light"] .xkeen-cm6-host .cm6-json-schema-hover {
   color: #0f172a;
 }
 
 .xkeen-cm6-host .cm6-json-schema-hover pre,
-.xkeen-cm6-host .cm6-json-schema-hover code {
+.xkeen-cm6-host .cm6-json-schema-hover code,
+.cm-tooltip .cm6-json-schema-hover pre,
+.cm-tooltip .cm6-json-schema-hover code {
   white-space: pre-wrap;
   word-break: break-word;
 }
