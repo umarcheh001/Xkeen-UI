@@ -1157,6 +1157,109 @@ def test_refresh_subscription_only_mode_excludes_vless_reality_from_runtime_pool
     assert rules[2]["outboundTag"] == "direct"
 
 
+def test_refresh_subscription_only_mode_removes_existing_manual_proxy_from_runtime_pool(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "proxy", "protocol": "vless"},
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "07_observatory.json").write_text(
+        json.dumps(
+            {"observatory": {"subjectSelector": ["proxy"]}},
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "balancers": [
+                        {
+                            "tag": "proxy",
+                            "selector": ["proxy"],
+                            "strategy": {"type": "leastPing"},
+                            "fallbackTag": "direct",
+                        }
+                    ],
+                    "rules": [
+                        {
+                            "type": "field",
+                            "balancerTag": "proxy",
+                            "inboundTag": ["redirect", "tproxy"],
+                            "ruleTag": "xk_auto_leastPing",
+                        }
+                    ],
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "only-subscription",
+            "tag": "cdn.pecan.run",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_mode": "subscription-only",
+        },
+    )
+
+    result = subs.refresh_subscription(
+        str(ui_state_dir),
+        "only-subscription",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert result["ok"] is True
+    assert result["routing_mode"] == "subscription-only"
+
+    observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
+    assert observatory["observatory"]["subjectSelector"] == ["cdn.pecan.run"]
+
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    balancers = {item["tag"]: item for item in routing["routing"]["balancers"]}
+    assert balancers["proxy"]["selector"] == ["cdn.pecan.run"]
+
+
 def test_refresh_subscription_only_mode_does_not_require_single_outbound(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

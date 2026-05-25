@@ -2607,10 +2607,34 @@ def _load_outbound_tags(path: str) -> List[str]:
     return tags
 
 
+def _load_proxy_outbound_tags(path: str) -> List[str]:
+    obj = _read_json_file(path, {})
+    outbounds = obj if isinstance(obj, list) else obj.get("outbounds") if isinstance(obj, dict) else []
+    if not isinstance(outbounds, list):
+        return []
+    tags: List[str] = []
+    seen: set[str] = set()
+    for item in outbounds:
+        if not isinstance(item, dict):
+            continue
+        tag = str(item.get("tag") or "").strip()
+        protocol = str(item.get("protocol") or "").strip().lower()
+        if not tag or tag in seen or not protocol or protocol in IGNORED_OUTBOUND_PROTOCOLS:
+            continue
+        seen.add(tag)
+        tags.append(tag)
+    return tags
+
+
 def _preserved_balancer_tags(xray_configs_dir: str) -> List[str]:
     path = _config_fragment_path(xray_configs_dir, OUTBOUNDS_FILE)
     available = set(_load_outbound_tags(path))
     return [tag for tag in AUTO_BALANCER_PRESERVE_TAGS if tag in available]
+
+
+def _subscription_only_excluded_runtime_tags(xray_configs_dir: str) -> List[str]:
+    path = _config_fragment_path(xray_configs_dir, OUTBOUNDS_FILE)
+    return _clean_tags_list(_load_proxy_outbound_tags(path))
 
 
 def _routing_field_missing(routing: Dict[str, Any], key: str) -> bool:
@@ -3259,6 +3283,7 @@ def sync_subscription_routing(
     routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
     cfg, routing, normalized_model = _ensure_routing_model(_read_json_file(routing_path, {}))
     balancer_tag = _choose_auto_balancer_tag(routing)
+    subscription_only_excluded_tags = _subscription_only_excluded_runtime_tags(xray_configs_dir) if subscription_only else []
     balancer = _find_balancer_by_tag(routing.get("balancers", []), balancer_tag)
     current_selector = _clean_tags_list(
         balancer.get("selector") if isinstance(balancer, dict) and isinstance(balancer.get("selector"), list) else []
@@ -3269,7 +3294,7 @@ def sync_subscription_routing(
     for tag in current_selector:
         if tag in remove or tag in seen:
             continue
-        if subscription_only and tag in AUTO_BALANCER_PRESERVE_TAGS:
+        if subscription_only and tag in subscription_only_excluded_tags:
             continue
         seen.add(tag)
         selector.append(tag)
@@ -3318,7 +3343,7 @@ def sync_subscription_routing(
         rule_changed = _remove_auto_balancer_rule(routing)
         removed_for_balancer = set(remove)
         if subscription_only:
-            removed_for_balancer.update(AUTO_BALANCER_PRESERVE_TAGS)
+            removed_for_balancer.update(subscription_only_excluded_tags)
         balancer_changed = _remove_auto_least_ping_balancer(
             routing,
             balancer_tag=balancer_tag,
@@ -3475,9 +3500,10 @@ def sync_subscription_runtime_plan_delta(
     next_has_runtime_targets = bool(nxt.get("has_runtime_targets"))
     preserved_tags = _preserved_balancer_tags(xray_configs_dir)
     next_subscription_only = bool(nxt.get("subscription_only")) and bool(next_auto_terms)
+    subscription_only_excluded_tags = _subscription_only_excluded_runtime_tags(xray_configs_dir) if next_subscription_only else []
     observatory_remove_tags = [tag for tag in prev_observatory_terms if tag not in set(next_observatory_terms)]
     if next_subscription_only:
-        observatory_remove_tags = _clean_tags_list(observatory_remove_tags + preserved_tags)
+        observatory_remove_tags = _clean_tags_list(observatory_remove_tags + subscription_only_excluded_tags)
 
     observatory_changed = sync_observatory_subjects(
         xray_configs_dir=xray_configs_dir,
@@ -3500,7 +3526,7 @@ def sync_subscription_runtime_plan_delta(
     )
 
     if next_auto_terms:
-        remove_terms = prev_auto_terms + (preserved_tags if next_subscription_only else [])
+        remove_terms = prev_auto_terms + (subscription_only_excluded_tags if next_subscription_only else [])
         selector = _subtract_selector_terms(current_selector, remove_terms)
         selector = _merge_selector_terms(selector, next_auto_terms)
         if not next_subscription_only:
@@ -3633,13 +3659,14 @@ def sync_subscription_routing_plan(
 
     if auto_terms:
         balancer_tag = _choose_auto_balancer_tag(routing)
+        subscription_only_excluded_tags = _subscription_only_excluded_runtime_tags(xray_configs_dir) if subscription_only else []
         balancer = _find_balancer_by_tag(routing.get("balancers", []), balancer_tag)
         current_selector = _clean_tags_list(
             balancer.get("selector") if isinstance(balancer, dict) and isinstance(balancer.get("selector"), list) else []
         )
         selector = _merge_selector_terms(current_selector, auto_terms)
         if subscription_only:
-            selector = [tag for tag in selector if tag not in AUTO_BALANCER_PRESERVE_TAGS]
+            selector = [tag for tag in selector if tag not in subscription_only_excluded_tags]
         else:
             for tag in _preserved_balancer_tags(xray_configs_dir):
                 if tag not in selector:
