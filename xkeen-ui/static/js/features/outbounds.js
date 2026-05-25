@@ -508,9 +508,9 @@ let outboundsModuleApi = null;
     }
 
     function outboundsActiveApiUrl(fragment) {
-      let url = '/api/xray/outbounds/active';
+      let url = '/api/xray/outbounds/active?all=1';
       const f = (fragment != null) ? fragment : getActiveFragment();
-      if (f) url += '?file=' + encodeURIComponent(String(f));
+      if (f) url += '&file=' + encodeURIComponent(String(f));
       return url;
     }
 
@@ -685,6 +685,7 @@ let outboundsModuleApi = null;
         const lastSeen = String(active.last_seen || '').trim();
         const source = String(active.source || '').trim();
         const tail = [
+          active.file ? `файл ${active.file}` : '',
           lastSeen ? `лог ${lastSeen}` : '',
           source ? source : '',
         ].filter(Boolean).join(' · ');
@@ -713,9 +714,9 @@ let outboundsModuleApi = null;
       const runtime = _outboundsActiveRuntime && typeof _outboundsActiveRuntime === 'object' ? _outboundsActiveRuntime : {};
       const hasActive = !!(runtime.active && typeof runtime.active === 'object');
       el.textContent = outboundsActiveRuntimeText();
-      el.hidden = true;
-      el.style.display = 'none';
-      el.classList.add('hidden');
+      el.hidden = false;
+      el.style.display = '';
+      el.classList.remove('hidden');
       el.classList.toggle('is-active', hasActive);
       el.classList.toggle('is-unknown', !hasActive);
     }
@@ -940,11 +941,16 @@ let outboundsModuleApi = null;
         const endpoint = [host, port].filter(Boolean).join(':');
         const canPing = !!(keyText && tagText);
         const pingBusy = !!_outboundsNodePingState[outboundsNodePingStateKey(keyText)];
-        const latencyEntry = outboundsNodeLatencyEntry(keyText);
-        const latencyLabel = escapeHtml(subsNodeLatencyLabel(latencyEntry, pingBusy, canPing));
-        const latencyTooltip = escapeHtml(subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing));
-        const latencyClass = subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
         const isActiveRoute = !!entry.active;
+        const latencyEntry = outboundsNodeLatencyEntry(keyText);
+        const latencyHasDelay = !!(latencyEntry && latencyEntry.delay_ms != null && latencyEntry.delay_ms !== '' && Number.isFinite(Number(latencyEntry.delay_ms)) && Number(latencyEntry.delay_ms) >= 0);
+        const latencyStatus = String(latencyEntry && latencyEntry.status || '').trim().toLowerCase();
+        const showRuntimeActiveInsteadOfFail = isActiveRoute && !pingBusy && canPing && !latencyHasDelay && latencyStatus === 'error';
+        const latencyLabel = escapeHtml(showRuntimeActiveInsteadOfFail ? 'активен' : subsNodeLatencyLabel(latencyEntry, pingBusy, canPing));
+        const latencyTooltip = escapeHtml(showRuntimeActiveInsteadOfFail
+          ? `${outboundsActiveRuntimeText()}. Последний ping этого узла завершился ошибкой, но Xray сейчас выбирает его по логам.`
+          : subsNodeLatencyTooltip(latencyEntry, pingBusy, canPing));
+        const latencyClass = showRuntimeActiveInsteadOfFail ? 'is-active-route' : subsNodeLatencyTone(latencyEntry, pingBusy, canPing);
         const activeTooltip = isActiveRoute ? escapeHtml(outboundsActiveRuntimeText()) : '';
         const activePill = isActiveRoute
           ? '<span class="xk-sub-node-pill xk-sub-node-pill-active-route">сейчас</span>'

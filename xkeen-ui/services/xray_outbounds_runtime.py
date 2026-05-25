@@ -126,6 +126,8 @@ def infer_active_xray_outbound(
         "key": str(node.get("key") or ""),
         "tag": str(node.get("tag") or ""),
         "name": str(node.get("name") or node.get("tag") or ""),
+        "fragment": str(node.get("fragment") or node.get("file") or ""),
+        "file": str(node.get("file") or node.get("fragment") or ""),
         "protocol": str(node.get("protocol") or ""),
         "transport": str(node.get("transport") or ""),
         "security": str(node.get("security") or ""),

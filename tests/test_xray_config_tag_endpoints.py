@@ -380,6 +380,112 @@ def test_xray_outbounds_active_endpoint_marks_last_observed_node(tmp_path, monke
     assert payload["active"]["last_seen"] == "2026/05/22 20:10:05"
 
 
+def test_xray_outbounds_active_all_searches_across_outbound_fragments(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    configs_dir.mkdir()
+    jsonc_dir.mkdir()
+
+    main_name = "04_outbounds.json"
+    reserve_name = "04_outbounds.reserve.json"
+    white_name = "04_outbounds.white_list.json"
+
+    (configs_dir / main_name).write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {
+                        "tag": "my_proxy",
+                        "protocol": "vless",
+                        "settings": {"address": "main.example", "port": 443},
+                    }
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / reserve_name).write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {
+                        "tag": "reserve_proxy",
+                        "protocol": "vless",
+                        "settings": {"address": "reserve.example", "port": 443},
+                    }
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / white_name).write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {
+                        "tag": "white_list",
+                        "protocol": "vless",
+                        "settings": {"address": "white.example", "port": 443},
+                    }
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "list_xray_fragments",
+        lambda kind: [
+            {"name": main_name},
+            {"name": reserve_name},
+            {"name": white_name},
+        ]
+        if kind == "outbounds"
+        else [],
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(configs_dir / (file_arg or Path(default_path).name)),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "jsonc_path_for",
+        lambda main_path: str(jsonc_dir / (Path(main_path).name + "c")),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "read_xray_outbound_runtime_log_sources",
+        lambda max_lines=1200: {
+            "access": [
+                "2026/05/22 20:10:01 tcp:10.0.0.2:50000 accepted tcp:example.com:443 [my_proxy]\n",
+            ]
+        },
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.get(f"/api/xray/outbounds/active?file={reserve_name}&all=1")
+
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["available"] is True
+    assert payload["all_fragments"] is True
+    assert payload["nodes_count"] == 3
+    assert payload["active"]["tag"] == "my_proxy"
+    assert payload["active"]["file"] == main_name
+
+
 def test_api_set_outbounds_matches_single_link_tag_to_current_routing_vless_reality(tmp_path, monkeypatch):
     configs_dir = tmp_path / "configs"
     configs_dir.mkdir()

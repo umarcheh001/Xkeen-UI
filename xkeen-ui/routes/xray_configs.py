@@ -217,6 +217,40 @@ def create_xray_configs_blueprint(
             "config": cfg,
         }
 
+    def _load_outbounds_nodes_all_fragments() -> list[dict[str, Any]]:
+        nodes: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        try:
+            fragments = list_xray_fragments("outbounds")
+        except Exception:
+            fragments = []
+        if not fragments:
+            fragments = [{"name": os.path.basename(OUTBOUNDS_FILE)}]
+        for item in fragments:
+            name = str((item or {}).get("name") or "").strip()
+            if not name:
+                continue
+            try:
+                selection = _load_outbounds_selection(name)
+                fragment_nodes = build_xray_outbounds_nodes(selection.get("config"))
+            except Exception:
+                continue
+            fragment_file = os.path.basename(str(selection.get("path") or name)) or name
+            for node in fragment_nodes:
+                if not isinstance(node, dict):
+                    continue
+                tag = str(node.get("tag") or "").strip()
+                key = str(node.get("key") or tag or "").strip()
+                dedupe_key = tag or key
+                if not dedupe_key or dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                item_node = dict(node)
+                item_node.setdefault("fragment", fragment_file)
+                item_node.setdefault("file", fragment_file)
+                nodes.append(item_node)
+        return nodes
+
     _ROUTING_SERVICE_OUTBOUND_TAGS = {
         "direct",
         "block",
@@ -881,8 +915,13 @@ def create_xray_configs_blueprint(
     @bp.get("/api/xray/outbounds/active")
     def api_xray_outbounds_active():
         file_arg = request.args.get("file", "")
-        selection = _load_outbounds_selection(file_arg)
-        nodes = build_xray_outbounds_nodes(selection.get("config"))
+        all_fragments = _is_true_flag(request.args.get("all", None))
+        if all_fragments:
+            selection = {"path": "all"}
+            nodes = _load_outbounds_nodes_all_fragments()
+        else:
+            selection = _load_outbounds_selection(file_arg)
+            nodes = build_xray_outbounds_nodes(selection.get("config"))
         try:
             log_sources = read_xray_outbound_runtime_log_sources(max_lines=1200)
             runtime = infer_active_xray_outbound(nodes, log_sources)
@@ -897,9 +936,10 @@ def create_xray_configs_blueprint(
             jsonify(
                 {
                     "ok": True,
-                    "file": os.path.basename(str(selection.get("path") or "")),
+                    "file": "all" if all_fragments else os.path.basename(str(selection.get("path") or "")),
                     "path": selection.get("path"),
                     "nodes_count": len(nodes),
+                    "all_fragments": all_fragments,
                     **runtime,
                 }
             ),

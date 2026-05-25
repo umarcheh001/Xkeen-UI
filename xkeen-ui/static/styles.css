@@ -9631,10 +9631,6 @@ html[data-theme="light"] .xk-sub-draft-badge {
   margin-left: auto;
 }
 
-.xk-outbounds-node-panel .xk-outbounds-active-status {
-  display: none !important;
-}
-
 .xk-outbounds-node-list {
   grid-template-columns: 1fr;
   gap: 8px;
@@ -9692,6 +9688,12 @@ html[data-theme="light"] .xk-sub-draft-badge {
 .xk-sub-node-state.is-active-route {
   color: #fde68a;
   font-weight: 800;
+}
+
+.xk-sub-node-latency.is-active-route {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(120, 53, 15, 0.22);
+  color: #fde68a;
 }
 
 #outbounds-body.xk-outbounds-subscription-fragment .xk-outbounds-node-panel {
@@ -10954,6 +10956,12 @@ html[data-theme="light"] .xk-sub-node-latency.is-mid {
 
 html[data-theme="light"] .xk-sub-node-latency.is-slow {
   border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(254, 243, 199, 0.92);
+  color: #92400e;
+}
+
+html[data-theme="light"] .xk-sub-node-latency.is-active-route {
+  border-color: rgba(217, 119, 6, 0.32);
   background: rgba(254, 243, 199, 0.92);
   color: #92400e;
 }
