@@ -3027,6 +3027,17 @@ html[data-theme="light"] .btn-link:hover {
   position: relative;
 }
 
+html:not([data-theme="light"]) .log-card.xk-restart-log-card {
+  background:
+    linear-gradient(180deg, rgba(3, 8, 20, 0.96), rgba(1, 4, 9, 0.98)),
+    #010409;
+  border-color: color-mix(in srgb, var(--accent, #60a5fa) 30%, rgba(51,65,85,0.86));
+  box-shadow:
+    0 0 0 1px rgba(96,165,250,0.08),
+    0 18px 42px rgba(2,6,23,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
 .log-card.xk-restart-log-card.is-fullscreen {
   z-index: 10100;
   isolation: isolate;
@@ -5415,6 +5426,17 @@ html[data-theme="light"] .xray-log-select option{
   scrollbar-width: thin;
 }
 
+html:not([data-theme="light"]) .log-card.xk-restart-log-card .log-block {
+  background:
+    linear-gradient(180deg, rgba(2,6,23,0.32), rgba(1,4,9,0.78)),
+    #010409;
+  border-color: color-mix(in srgb, var(--accent, #60a5fa) 34%, rgba(30,41,59,0.82));
+  box-shadow:
+    inset 0 1px 0 rgba(148,163,184,0.08),
+    inset 0 0 0 1px rgba(2,6,23,0.78),
+    0 12px 30px rgba(0,0,0,0.24);
+}
+
 .log-card .log-block::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -5447,6 +5469,13 @@ html[data-theme="light"] .xray-log-select option{
   background: color-mix(in srgb, var(--card-bg, #020617) 70%, transparent);
   font-size: calc(12px * var(--xk-font-scale));
   line-height: 1.4;
+}
+
+html:not([data-theme="light"]) .log-card.xk-restart-log-card .restart-log-summary {
+  background:
+    linear-gradient(180deg, rgba(3,8,20,0.9), rgba(1,4,9,0.94)),
+    #02050b;
+  border-color: rgba(96,165,250,0.18);
 }
 
 .log-card .restart-log-summary[hidden] {
