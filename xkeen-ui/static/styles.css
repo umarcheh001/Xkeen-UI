@@ -18127,29 +18127,81 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 }
 
 .routing-rule-card {
-  border-radius: 12px;
-  padding: 12px;
-  border: 1px solid #1f2937;
-  background: linear-gradient(180deg, rgba(2, 6, 23, 0.95), rgba(15, 23, 42, 0.65));
-  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.4);
-  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  --routing-rule-accent-rgb: 96, 165, 250;
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid rgba(var(--routing-rule-accent-rgb), 0.18);
+  background:
+    radial-gradient(circle at 0 0, rgba(var(--routing-rule-accent-rgb), 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(15, 23, 42, 0.72));
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.38);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.routing-rule-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.routing-rule-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, rgba(var(--routing-rule-accent-rgb), 0.95), rgba(var(--routing-rule-accent-rgb), 0.28));
+  opacity: 0.9;
+}
+
+.routing-rule-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.routing-rule-card.is-target-balancer {
+  --routing-rule-accent-rgb: 34, 197, 94;
+}
+
+.routing-rule-card.is-target-direct {
+  --routing-rule-accent-rgb: 45, 212, 191;
+}
+
+.routing-rule-card.is-target-block {
+  --routing-rule-accent-rgb: 248, 113, 113;
 }
 
 .routing-rule-card:hover {
   transform: translateY(-2px);
-  border-color: #334155;
-  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.5);
+  border-color: rgba(var(--routing-rule-accent-rgb), 0.42);
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.52), 0 0 0 1px rgba(var(--routing-rule-accent-rgb), 0.10);
+}
+
+.routing-rule-card[data-open="1"] {
+  border-color: rgba(var(--routing-rule-accent-rgb), 0.48);
+  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.54), 0 0 0 1px rgba(var(--routing-rule-accent-rgb), 0.12);
+}
+
+.routing-rule-card[data-open="1"]::before {
+  width: 4px;
 }
 
 .routing-rule-card.is-disabled {
+  --routing-rule-accent-rgb: 245, 158, 11;
   border-color: rgba(245, 158, 11, 0.35);
-  background: linear-gradient(180deg, rgba(69, 26, 3, 0.32), rgba(15, 23, 42, 0.72));
-  box-shadow: inset 4px 0 0 rgba(245, 158, 11, 0.72), 0 12px 24px rgba(2, 6, 23, 0.4);
+  background:
+    radial-gradient(circle at 0 0, rgba(245, 158, 11, 0.16), transparent 44%),
+    linear-gradient(180deg, rgba(69, 26, 3, 0.32), rgba(15, 23, 42, 0.72));
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.4);
 }
 
 .routing-rule-card.is-disabled:hover {
   border-color: rgba(245, 158, 11, 0.52);
-  box-shadow: inset 4px 0 0 rgba(251, 191, 36, 0.82), 0 16px 30px rgba(2, 6, 23, 0.5);
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.5), 0 0 0 1px rgba(245, 158, 11, 0.14);
 }
 
 .routing-rule-card.is-draggable {
@@ -18253,6 +18305,7 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-rule-head {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: flex-start;
 }
@@ -18260,7 +18313,7 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-rule-main {
   /* Allow the left part of the header to shrink in flex rows.
      Without min-width:0 long match strings can push action buttons outside the card. */
-  flex: 1 1 auto;
+  flex: 1 1 220px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -18279,8 +18332,17 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 }
 
 .routing-rule-index {
-  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(59, 130, 246, 0.36);
+  background: rgba(37, 99, 235, 0.14);
+  color: #93c5fd;
   font-size: calc(12px * var(--xk-font-scale));
+  font-weight: 700;
 }
 
 .routing-rule-outbound {
@@ -18336,6 +18398,30 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
   white-space: nowrap;
 }
 
+.routing-rule-badge.is-target-outbound {
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(37, 99, 235, 0.12);
+  color: #bfdbfe;
+}
+
+.routing-rule-badge.is-target-balancer {
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(22, 163, 74, 0.14);
+  color: #bbf7d0;
+}
+
+.routing-rule-badge.is-target-direct {
+  border-color: rgba(45, 212, 191, 0.42);
+  background: rgba(20, 184, 166, 0.13);
+  color: #99f6e4;
+}
+
+.routing-rule-badge.is-target-block {
+  border-color: rgba(248, 113, 113, 0.46);
+  background: rgba(185, 28, 28, 0.16);
+  color: #fecaca;
+}
+
 .routing-rule-badge.is-count {
   border-color: rgba(168, 85, 247, 0.35);
   color: #e9d5ff;
@@ -18345,6 +18431,42 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
   border-color: rgba(148, 163, 184, 0.28);
   color: #cbd5e1;
   background: rgba(15, 23, 42, 0.55);
+}
+
+.routing-rule-badge.is-cond-domain {
+  border-color: rgba(248, 113, 113, 0.38);
+  background: rgba(127, 29, 29, 0.18);
+  color: #fecaca;
+}
+
+.routing-rule-badge.is-cond-ip {
+  border-color: rgba(59, 130, 246, 0.42);
+  background: rgba(30, 64, 175, 0.18);
+  color: #bfdbfe;
+}
+
+.routing-rule-badge.is-cond-inbound {
+  border-color: rgba(34, 197, 94, 0.38);
+  background: rgba(20, 83, 45, 0.20);
+  color: #bbf7d0;
+}
+
+.routing-rule-badge.is-cond-port {
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(120, 53, 15, 0.20);
+  color: #fde68a;
+}
+
+.routing-rule-badge.is-cond-transport {
+  border-color: rgba(168, 85, 247, 0.42);
+  background: rgba(88, 28, 135, 0.18);
+  color: #e9d5ff;
+}
+
+.routing-rule-badge.is-cond-meta {
+  border-color: rgba(148, 163, 184, 0.32);
+  background: rgba(51, 65, 85, 0.20);
+  color: #dbeafe;
 }
 
 .routing-rule-badge.is-disabled {
@@ -18453,6 +18575,7 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-rule-actions {
   display: flex;
   flex-direction: row;
+  flex: 0 0 auto;
   gap: 8px;
   align-items: center;
   justify-content: flex-end;
@@ -18530,15 +18653,15 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
   display: grid;
   gap: 8px;
   padding: 8px;
-  border-radius: 10px;
-  border: 1px dashed #1f2937;
-  background: rgba(2, 6, 23, 0.5);
+  border-radius: 8px;
+  border: 1px dashed rgba(59, 130, 246, 0.24);
+  background: rgba(2, 6, 23, 0.52);
 }
 
 
 .routing-rule-target-pick {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   width: 100%;
 }
@@ -18568,6 +18691,24 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
   grid-template-columns: auto minmax(90px, 120px) 1fr;
   gap: 8px;
   align-items: center;
+  min-height: 42px;
+  padding: 5px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.routing-rule-target-row input[type="radio"] {
+  accent-color: #60a5fa;
+}
+
+.routing-rule-target-row:has(input[type="radio"]:checked) {
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(37, 99, 235, 0.10);
+}
+
+.routing-rule-target-row:has(input[value="balancer"]:checked) {
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(22, 163, 74, 0.10);
 }
 
 .routing-rule-field {
@@ -18579,11 +18720,53 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 
 .routing-rule-field-optional .routing-rule-key {
   align-items: center;
+  column-gap: 7px;
+}
+
+.routing-rule-field[data-field-key] {
+  --routing-field-accent-rgb: 148, 163, 184;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(var(--routing-field-accent-rgb), 0.20);
+  background: rgba(2, 6, 23, 0.30);
+}
+
+.routing-rule-field[data-field-key="domain"],
+.routing-rule-field[data-field-key="domainMatcher"] {
+  --routing-field-accent-rgb: 248, 113, 113;
+}
+
+.routing-rule-field[data-field-key="ip"],
+.routing-rule-field[data-field-key="sourceIP"],
+.routing-rule-field[data-field-key="localIP"] {
+  --routing-field-accent-rgb: 59, 130, 246;
+}
+
+.routing-rule-field[data-field-key="inboundTag"] {
+  --routing-field-accent-rgb: 34, 197, 94;
+}
+
+.routing-rule-field[data-field-key="port"],
+.routing-rule-field[data-field-key="sourcePort"],
+.routing-rule-field[data-field-key="localPort"] {
+  --routing-field-accent-rgb: 245, 158, 11;
+}
+
+.routing-rule-field[data-field-key="network"],
+.routing-rule-field[data-field-key="protocol"],
+.routing-rule-field[data-field-key="vlessRoute"] {
+  --routing-field-accent-rgb: 168, 85, 247;
+}
+
+.routing-rule-field[data-field-key] .routing-rule-key {
+  color: rgb(var(--routing-field-accent-rgb));
 }
 
 .routing-rule-remove-field {
   width: 20px;
   height: 20px;
+  flex: 0 0 20px;
+  margin-inline-start: 3px;
   border-radius: 999px;
   border: 1px solid rgba(51, 65, 85, 0.9);
   background: rgba(15, 23, 42, 0.75);
@@ -18595,6 +18778,7 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  touch-action: manipulation;
 }
 
 .routing-rule-remove-field:hover {
@@ -18607,8 +18791,10 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
   grid-template-columns: minmax(90px, 130px) 1fr;
   gap: 10px;
   align-items: start;
-  padding: 10px 0 2px;
-  border-top: 1px dashed rgba(51, 65, 85, 0.65);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px dashed rgba(96, 165, 250, 0.24);
+  background: rgba(15, 23, 42, 0.26);
 }
 
 .routing-rule-add-field-label {
@@ -18657,6 +18843,7 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
 .routing-help-btn {
   width: 18px;
   height: 18px;
+  flex: 0 0 18px;
   border-radius: 999px;
   border: 1px solid #374151;
   background: rgba(15, 23, 42, 0.7);
@@ -18670,6 +18857,7 @@ html[data-theme="light"] .xk-mihomo-menu-panel .terminal-tool-btn:hover{
   justify-content: center;
   text-transform: none;
   user-select: none;
+  touch-action: manipulation;
 }
 
 .routing-help-btn:hover {
@@ -18761,6 +18949,38 @@ html[data-theme="light"] .routing-help-btn:hover {
   padding: 4px 9px;
   font-size: calc(12px * var(--xk-font-scale));
   line-height: 1.2;
+}
+
+.routing-rule-field[data-field-key] .routing-chip {
+  border-color: rgba(var(--routing-field-accent-rgb), 0.38);
+  background: rgba(var(--routing-field-accent-rgb), 0.13);
+}
+
+.routing-rule-field[data-field-key="domain"] .routing-chip,
+.routing-rule-field[data-field-key="domainMatcher"] .routing-chip {
+  color: #fecaca;
+}
+
+.routing-rule-field[data-field-key="ip"] .routing-chip,
+.routing-rule-field[data-field-key="sourceIP"] .routing-chip,
+.routing-rule-field[data-field-key="localIP"] .routing-chip {
+  color: #bfdbfe;
+}
+
+.routing-rule-field[data-field-key="inboundTag"] .routing-chip {
+  color: #bbf7d0;
+}
+
+.routing-rule-field[data-field-key="port"] .routing-chip,
+.routing-rule-field[data-field-key="sourcePort"] .routing-chip,
+.routing-rule-field[data-field-key="localPort"] .routing-chip {
+  color: #fde68a;
+}
+
+.routing-rule-field[data-field-key="network"] .routing-chip,
+.routing-rule-field[data-field-key="protocol"] .routing-chip,
+.routing-rule-field[data-field-key="vlessRoute"] .routing-chip {
+  color: #e9d5ff;
 }
 
 .routing-chip-text {
@@ -20320,6 +20540,124 @@ html[data-theme="light"] .routing-rule-empty {
 }
 
 /* Балансировщики */
+html[data-theme="light"] .routing-rule-index {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.07);
+  color: #1d4ed8;
+}
+
+html[data-theme="light"] .routing-rule-badge.is-target-outbound {
+  border-color: rgba(37, 99, 235, 0.24);
+  background: rgba(37, 99, 235, 0.07);
+  color: #1d4ed8;
+}
+
+html[data-theme="light"] .routing-rule-badge.is-target-balancer {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: rgba(22, 163, 74, 0.08);
+  color: #166534;
+}
+
+html[data-theme="light"] .routing-rule-badge.is-target-direct {
+  border-color: rgba(13, 148, 136, 0.24);
+  background: rgba(13, 148, 136, 0.08);
+  color: #0f766e;
+}
+
+html[data-theme="light"] .routing-rule-badge.is-target-block {
+  border-color: rgba(220, 38, 38, 0.24);
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+html[data-theme="light"] .routing-rule-badge.is-cond-domain {
+  border-color: rgba(220, 38, 38, 0.22);
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+html[data-theme="light"] .routing-rule-badge.is-cond-ip {
+  border-color: rgba(37, 99, 235, 0.24);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+}
+
+html[data-theme="light"] .routing-rule-badge.is-cond-inbound {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: rgba(22, 163, 74, 0.08);
+  color: #166534;
+}
+
+html[data-theme="light"] .routing-rule-badge.is-cond-port {
+  border-color: rgba(217, 119, 6, 0.24);
+  background: rgba(217, 119, 6, 0.09);
+  color: #92400e;
+}
+
+html[data-theme="light"] .routing-rule-badge.is-cond-transport {
+  border-color: rgba(126, 34, 206, 0.22);
+  background: rgba(126, 34, 206, 0.08);
+  color: #6b21a8;
+}
+
+html[data-theme="light"] .routing-rule-badge.is-cond-meta {
+  border-color: rgba(71, 85, 105, 0.18);
+  background: rgba(71, 85, 105, 0.06);
+  color: #334155;
+}
+
+html[data-theme="light"] .routing-rule-target {
+  border-color: rgba(37, 99, 235, 0.18);
+  background: rgba(37, 99, 235, 0.025);
+}
+
+html[data-theme="light"] .routing-rule-target-row:has(input[type="radio"]:checked) {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: rgba(37, 99, 235, 0.06);
+}
+
+html[data-theme="light"] .routing-rule-target-row:has(input[value="balancer"]:checked) {
+  border-color: rgba(22, 163, 74, 0.26);
+  background: rgba(22, 163, 74, 0.06);
+}
+
+html[data-theme="light"] .routing-rule-field[data-field-key] {
+  border-color: rgba(var(--routing-field-accent-rgb), 0.18);
+  background: rgba(248, 250, 252, 0.74);
+}
+
+html[data-theme="light"] .routing-rule-field[data-field-key] .routing-chip {
+  border-color: rgba(var(--routing-field-accent-rgb), 0.22);
+  background: rgba(var(--routing-field-accent-rgb), 0.08);
+}
+
+html[data-theme="light"] .routing-rule-field[data-field-key="domain"] .routing-chip,
+html[data-theme="light"] .routing-rule-field[data-field-key="domainMatcher"] .routing-chip {
+  color: #b91c1c;
+}
+
+html[data-theme="light"] .routing-rule-field[data-field-key="ip"] .routing-chip,
+html[data-theme="light"] .routing-rule-field[data-field-key="sourceIP"] .routing-chip,
+html[data-theme="light"] .routing-rule-field[data-field-key="localIP"] .routing-chip {
+  color: #1d4ed8;
+}
+
+html[data-theme="light"] .routing-rule-field[data-field-key="inboundTag"] .routing-chip {
+  color: #166534;
+}
+
+html[data-theme="light"] .routing-rule-field[data-field-key="port"] .routing-chip,
+html[data-theme="light"] .routing-rule-field[data-field-key="sourcePort"] .routing-chip,
+html[data-theme="light"] .routing-rule-field[data-field-key="localPort"] .routing-chip {
+  color: #92400e;
+}
+
+html[data-theme="light"] .routing-rule-field[data-field-key="network"] .routing-chip,
+html[data-theme="light"] .routing-rule-field[data-field-key="protocol"] .routing-chip,
+html[data-theme="light"] .routing-rule-field[data-field-key="vlessRoute"] .routing-chip {
+  color: #6b21a8;
+}
+
 html[data-theme="light"] .routing-balancers-title,
 html[data-theme="light"] .routing-balancer-title {
   color: #111827;

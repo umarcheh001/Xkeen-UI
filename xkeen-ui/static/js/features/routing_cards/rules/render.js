@@ -349,6 +349,46 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
   }
 
 
+  const ROUTING_TARGET_TONE_CLASSES = [
+    'is-target-outbound',
+    'is-target-balancer',
+    'is-target-direct',
+    'is-target-block',
+  ];
+
+  function getRuleTargetTone(sum) {
+    const targetKind = String(sum && sum.targetKind ? sum.targetKind : '').toLowerCase();
+    const target = String(sum && sum.target ? sum.target : '').trim().toLowerCase();
+    if (targetKind === 'balancer') return 'balancer';
+    if (target === 'direct' || target === 'freedom') return 'direct';
+    if (target === 'block' || target === 'reject' || target === 'blackhole') return 'block';
+    return 'outbound';
+  }
+
+  function applyRuleTargetTone(el, sum) {
+    if (!el || !el.classList) return;
+    ROUTING_TARGET_TONE_CLASSES.forEach((cls) => el.classList.remove(cls));
+    el.classList.add('is-target-' + getRuleTargetTone(sum));
+    try {
+      el.dataset.targetKind = String(sum && sum.targetKind ? sum.targetKind : '');
+      el.dataset.target = String(sum && sum.target ? sum.target : '');
+    } catch (e) {}
+  }
+
+  function getConditionTone(key) {
+    const k = String(key || '').trim();
+    if (k === 'domain' || k === 'domainMatcher') return 'domain';
+    if (k === 'ip' || k === 'sourceIP' || k === 'localIP') return 'ip';
+    if (k === 'inboundTag') return 'inbound';
+    if (k === 'port' || k === 'sourcePort' || k === 'localPort') return 'port';
+    if (k === 'network' || k === 'protocol' || k === 'vlessRoute') return 'transport';
+    return 'meta';
+  }
+
+  function getConditionBadgeClassName(key) {
+    return 'routing-rule-badge is-cond is-cond-' + getConditionTone(key);
+  }
+
   function updateJsonPreview(pre, rule) {
     if (!pre) return;
     try {
@@ -366,7 +406,11 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
     try {
       if (refs.typeBadge) refs.typeBadge.textContent = String(sum.type || 'field');
       if (refs.ruleTagBadge && !refs.ruleTagBadge.classList.contains('is-editing')) refs.ruleTagBadge.textContent = sum.ruleTag || 'без тега';
-      if (refs.targetBadge) refs.targetBadge.textContent = `${sum.targetKind}: ${sum.target}`;
+      if (refs.card) applyRuleTargetTone(refs.card, sum);
+      if (refs.targetBadge) {
+        refs.targetBadge.textContent = `${sum.targetKind}: ${sum.target}`;
+        applyRuleTargetTone(refs.targetBadge, sum);
+      }
       if (refs.conditionBadge) refs.conditionBadge.textContent = `${sum.conditionCount} усл.`;
       if (refs.matchEl) refs.matchEl.textContent = sum.match;
       if (refs.geoBadgeEl) refs.geoBadgeEl.style.display = sum.geo ? '' : 'none';
@@ -374,7 +418,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         refs.condBadgesWrap.innerHTML = '';
         sum.conditionKeys.slice(0, 3).forEach((key) => {
           const badge = document.createElement('span');
-          badge.className = 'routing-rule-badge is-cond';
+          badge.className = getConditionBadgeClassName(key);
           badge.textContent = key;
           refs.condBadgesWrap.appendChild(badge);
         });
@@ -475,7 +519,8 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
         removeBtn.setAttribute('title', 'Убрать поле');
         removeBtn.addEventListener('click', (ev) => {
           ev.preventDefault();
-          ev.stopPropagation();
+          if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+          else ev.stopPropagation();
           clearRuleField(rule, fieldKey);
           if (typeof onChanged === 'function') onChanged();
           rerenderRuleForm('');
@@ -2148,6 +2193,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
 
       card.dataset.idx = String(idx);
       card.dataset.open = isOpen ? '1' : '0';
+      applyRuleTargetTone(card, sum);
       if (dragEnabled) {
         // In pointer mode we use our own ghost/placeholder logic; in native mode enable HTML5 drag.
         card.draggable = !supportsPointerDnD();
@@ -2186,6 +2232,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       const targetBadge = document.createElement('span');
       targetBadge.className = 'routing-rule-badge is-target';
       targetBadge.textContent = `${sum.targetKind}: ${sum.target}`;
+      applyRuleTargetTone(targetBadge, sum);
 
       title.appendChild(idxSpan);
       title.appendChild(ruleTagEditor);
@@ -2357,7 +2404,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       pre.className = 'routing-json-pre';
       updateJsonPreview(pre, rule || {});
 
-      const refs = { typeBadge, ruleTagBadge, targetBadge, conditionBadge, condBadgesWrap, matchEl: match, geoBadgeEl: geoBadge };
+      const refs = { card, typeBadge, ruleTagBadge, targetBadge, conditionBadge, condBadgesWrap, matchEl: match, geoBadgeEl: geoBadge };
       const onRuleChanged = () => {
         markDirty(true);
         updateRuleHeadDom(rule, refs);
@@ -2391,6 +2438,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       card.className = 'routing-rule-card is-disabled';
       card.dataset.disabled = '1';
       card.dataset.open = '1';
+      applyRuleTargetTone(card, sum);
 
       const head = document.createElement('div');
       head.className = 'routing-rule-head';
@@ -2412,6 +2460,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       const targetBadge = document.createElement('span');
       targetBadge.className = 'routing-rule-badge is-target';
       targetBadge.textContent = `${sum.targetKind}: ${sum.target}`;
+      applyRuleTargetTone(targetBadge, sum);
 
       title.appendChild(idxSpan);
       title.appendChild(ruleTagBadge);

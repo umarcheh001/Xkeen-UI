@@ -154,20 +154,27 @@ import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
 
   function wireRoutingHelpButtons() {
     if (_routingHelpWired) return;
-    document.addEventListener('click', (e) => {
-      const btn = e.target && e.target.classList && e.target.classList.contains('routing-help-btn') ? e.target : null;
-      if (!btn) return;
+    function getHelpButtonTarget(e) {
+      const raw = e && e.target && typeof e.target.closest === 'function' ? e.target : null;
+      return raw ? raw.closest('.routing-help-btn') : null;
+    }
+    function stopHelpEvent(e) {
       e.preventDefault();
-      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+      else e.stopPropagation();
+    }
+    document.addEventListener('click', (e) => {
+      const btn = getHelpButtonTarget(e);
+      if (!btn) return;
+      stopHelpEvent(e);
       const key = btn.dataset ? btn.dataset.doc : '';
       openFieldHelp(key);
     }, true);
     document.addEventListener('keydown', (e) => {
-      const btn = e.target && e.target.classList && e.target.classList.contains('routing-help-btn') ? e.target : null;
+      const btn = getHelpButtonTarget(e);
       if (!btn) return;
       if (e.key !== 'Enter' && e.key !== ' ') return;
-      e.preventDefault();
-      e.stopPropagation();
+      stopHelpEvent(e);
       const key = btn.dataset ? btn.dataset.doc : '';
       openFieldHelp(key);
     }, true);

@@ -1797,6 +1797,20 @@ def test_quick_balancer_wizard_normalizes_default_rule_and_reports_observatory_n
     assert "observatoryNote ? 'Готово: observatory не менялся' : 'Готово'" in text
 
 
+def test_routing_field_help_clicks_do_not_leak_to_adjacent_remove_buttons():
+    modal = Path('xkeen-ui/static/js/features/routing_cards/help_modal.js').read_text(encoding='utf-8')
+    render = Path('xkeen-ui/static/js/features/routing_cards/rules/render.js').read_text(encoding='utf-8')
+    styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
+
+    assert "raw.closest('.routing-help-btn')" in modal
+    assert "if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();" in modal
+    assert "if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();" in render
+    assert '.routing-rule-field-optional .routing-rule-key {' in styles
+    assert 'column-gap: 7px;' in styles
+    assert 'flex: 0 0 18px;' in styles
+    assert 'flex: 0 0 20px;' in styles
+
+
 def test_codemirror_lint_tooltips_are_scrollable_and_width_limited_inside_editor():
     styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
 
