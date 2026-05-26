@@ -885,7 +885,7 @@ import { getRoutingCardsNamespace } from '../../routing_cards_namespace.js';
       }
     });
 
-    form.appendChild(buildField('extra (JSON)', extraTextarea, null));
+    form.appendChild(buildField('extra (JSON)', extraTextarea, 'rule.extra'));
 
     requestAnimationFrame(() => {
       try {
@@ -1705,7 +1705,7 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       }
     });
     try { extraTa.classList.add('routing-balancer-json-ta'); } catch (e) {}
-    form.appendChild(buildField('extra (JSON)', extraTa, null));
+    form.appendChild(buildField('extra (JSON)', extraTa, 'balancer.extra'));
 
     requestAnimationFrame(() => {
       try {

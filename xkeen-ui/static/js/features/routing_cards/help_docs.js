@@ -122,6 +122,16 @@ import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
       desc: 'Тег балансировщика (используется вместо outboundTag).',
       note: 'Нужно указать либо outboundTag, либо balancerTag; при наличии обоих используется outboundTag.',
     },
+    'rule.extra': {
+      title: 'extra (JSON)',
+      desc: 'Дополнительные raw-поля правила Xray, которых нет в визуальной форме выше.',
+      items: [
+        'Введите JSON-объект: его ключи будут добавлены прямо в текущее routing rule.',
+        'Оставьте пустым, если все нужные условия и target уже заданы обычными полями.',
+        'Не дублируйте здесь поля, которые редактируются выше, например inboundTag, domain, outboundTag или balancerTag.',
+      ],
+      note: 'Некорректный JSON подсвечивается и не применяется.',
+    },
     balancer: {
       title: 'balancer (routing.balancers)',
       desc: 'Балансировщик выбирает outbound из набора selector и используется в правилах через balancerTag.',
@@ -158,6 +168,15 @@ import { getRoutingCardsNamespace } from '../routing_cards_namespace.js';
     'balancer.strategy': {
       title: 'balancer.strategy',
       desc: 'StrategyObject: JSON с алгоритмом балансировки (random/leastLoad и др.).',
+    },
+    'balancer.extra': {
+      title: 'balancer extra (JSON)',
+      desc: 'Дополнительные raw-поля balancingRule Xray, которых нет в визуальной форме балансировщика.',
+      items: [
+        'Введите JSON-объект: его ключи будут добавлены прямо в текущий balancer.',
+        'Оставьте пустым, если хватает tag, selector, strategy и fallbackTag.',
+      ],
+      note: 'Некорректный JSON подсвечивается и не применяется.',
     },
   };
 })();

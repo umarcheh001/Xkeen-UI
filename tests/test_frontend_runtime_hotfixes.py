@@ -1917,12 +1917,17 @@ def test_routing_field_help_clicks_do_not_leak_to_adjacent_remove_buttons():
 
 def test_routing_rule_cards_do_not_render_duplicate_json_preview_under_extra_field():
     render = Path('xkeen-ui/static/js/features/routing_cards/rules/render.js').read_text(encoding='utf-8')
+    docs = Path('xkeen-ui/static/js/features/routing_cards/help_docs.js').read_text(encoding='utf-8')
 
     rule_form = render.split('function buildRuleForm', 1)[1].split('// -------- Balancer selector UI', 1)[0]
+    balancer_form = render.split('function buildBalancerForm', 1)[1].split('function renderBalancers', 1)[0]
     active_card = render.split('const buildRuleCard =', 1)[1].split('const buildDisabledRuleCard =', 1)[0]
     disabled_card = render.split('const buildDisabledRuleCard =', 1)[1].split('const appendVisibleChunk =', 1)[0]
 
-    assert "form.appendChild(buildField('extra (JSON)', extraTextarea, null));" in rule_form
+    assert "form.appendChild(buildField('extra (JSON)', extraTextarea, 'rule.extra'));" in rule_form
+    assert "form.appendChild(buildField('extra (JSON)', extraTa, 'balancer.extra'));" in balancer_form
+    assert "'rule.extra': {" in docs
+    assert "'balancer.extra': {" in docs
     assert "const form = buildRuleForm(" in active_card
     assert "const pre = document.createElement('pre');" not in active_card
     assert "body.appendChild(pre);" not in active_card
