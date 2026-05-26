@@ -2400,15 +2400,10 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
       const body = document.createElement('div');
       body.className = 'routing-rule-body';
 
-      const pre = document.createElement('pre');
-      pre.className = 'routing-json-pre';
-      updateJsonPreview(pre, rule || {});
-
       const refs = { card, typeBadge, ruleTagBadge, targetBadge, conditionBadge, condBadgesWrap, matchEl: match, geoBadgeEl: geoBadge };
       const onRuleChanged = () => {
         markDirty(true);
         updateRuleHeadDom(rule, refs);
-        updateJsonPreview(pre, rule || {});
         if (filter) {
           try { card.style.display = ruleMatchesFilter(rule, filter) ? '' : 'none'; } catch (e) {}
         }
@@ -2424,7 +2419,6 @@ function updateBalancerTitleDom(bal, titleEl, idx) {
         body.appendChild(form);
       }
 
-      body.appendChild(pre);
       card.appendChild(body);
 
       return card;

@@ -1915,6 +1915,24 @@ def test_routing_field_help_clicks_do_not_leak_to_adjacent_remove_buttons():
     assert '.routing-help-tip' in styles
 
 
+def test_routing_rule_cards_do_not_render_duplicate_json_preview_under_extra_field():
+    render = Path('xkeen-ui/static/js/features/routing_cards/rules/render.js').read_text(encoding='utf-8')
+
+    rule_form = render.split('function buildRuleForm', 1)[1].split('// -------- Balancer selector UI', 1)[0]
+    active_card = render.split('const buildRuleCard =', 1)[1].split('const buildDisabledRuleCard =', 1)[0]
+    disabled_card = render.split('const buildDisabledRuleCard =', 1)[1].split('const appendVisibleChunk =', 1)[0]
+
+    assert "form.appendChild(buildField('extra (JSON)', extraTextarea, null));" in rule_form
+    assert "const form = buildRuleForm(" in active_card
+    assert "const pre = document.createElement('pre');" not in active_card
+    assert "body.appendChild(pre);" not in active_card
+    assert "updateJsonPreview(pre, rule || {});" not in active_card
+
+    assert "const pre = document.createElement('pre');" in disabled_card
+    assert "updateJsonPreview(pre, safeRule);" in disabled_card
+    assert "body.appendChild(pre);" in disabled_card
+
+
 def test_codemirror_lint_tooltips_are_scrollable_and_width_limited_inside_editor():
     styles = Path('xkeen-ui/static/styles.css').read_text(encoding='utf-8')
     boot = Path('xkeen-ui/static/js/ui/codemirror6_boot.js').read_text(encoding='utf-8')
