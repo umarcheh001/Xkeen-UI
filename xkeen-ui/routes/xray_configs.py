@@ -295,6 +295,101 @@ def create_xray_configs_blueprint(
     def _single_link_tags_from_existing_outbounds(cfg: Any) -> list[str]:
         return _outbound_tags_from_config(cfg, proxy_only=True)
 
+    def _routing_balancer_tags_from_config(cfg: Any) -> list[str]:
+        root = cfg if isinstance(cfg, dict) else {}
+        routing = root.get("routing") if isinstance(root.get("routing"), dict) else root
+        balancers = routing.get("balancers") if isinstance(routing, dict) else []
+        tags: list[str] = []
+        seen: set[str] = set()
+        for balancer in balancers if isinstance(balancers, list) else []:
+            if not isinstance(balancer, dict):
+                continue
+            tag = str(balancer.get("tag") or "").strip()
+            if not tag or tag in seen:
+                continue
+            seen.add(tag)
+            tags.append(tag)
+        return tags
+
+    def _inbound_tags_from_config(cfg: Any) -> list[str]:
+        raw = cfg.get("inbounds") if isinstance(cfg, dict) else cfg if isinstance(cfg, list) else []
+        if not isinstance(raw, list):
+            return []
+        tags: list[str] = []
+        seen: set[str] = set()
+        for inbound in raw:
+            if not isinstance(inbound, dict):
+                continue
+            tag = str(inbound.get("tag") or "").strip()
+            if not tag or tag in seen:
+                continue
+            seen.add(tag)
+            tags.append(tag)
+        return tags
+
+    def _xray_named_tags_from_config(cfg: Any) -> set[str]:
+        tags: set[str] = set()
+        tags.update(_outbound_tags_from_config(cfg, proxy_only=False))
+        tags.update(_inbound_tags_from_config(cfg))
+        tags.update(_routing_balancer_tags_from_config(cfg))
+        return {tag for tag in tags if tag}
+
+    def _iter_xray_config_json_paths(sel_path: str) -> list[str]:
+        paths: list[str] = []
+        seen: set[str] = set()
+        try:
+            base_dir = os.path.dirname(os.path.realpath(str(sel_path or "")))
+        except Exception:
+            base_dir = ""
+        if not base_dir:
+            try:
+                base_dir = os.path.dirname(os.path.realpath(str(OUTBOUNDS_FILE or "")))
+            except Exception:
+                base_dir = ""
+        try:
+            if base_dir and os.path.isdir(base_dir):
+                for name in os.listdir(base_dir):
+                    if not str(name or "").lower().endswith(".json"):
+                        continue
+                    path = os.path.realpath(os.path.join(base_dir, name))
+                    if not os.path.isfile(path) or path in seen:
+                        continue
+                    seen.add(path)
+                    paths.append(path)
+        except Exception:
+            pass
+        try:
+            for path in (INBOUNDS_FILE, OUTBOUNDS_FILE, ROUTING_FILE, sel_path):
+                if not path:
+                    continue
+                real = os.path.realpath(str(path))
+                if real in seen or not os.path.isfile(real):
+                    continue
+                seen.add(real)
+                paths.append(real)
+        except Exception:
+            pass
+        return paths
+
+    def _xray_config_tags_for_single_link(sel_path: str, *, include_selected: bool) -> set[str]:
+        tags: set[str] = set()
+        try:
+            selected_real = os.path.realpath(str(sel_path or ""))
+        except Exception:
+            selected_real = ""
+        for path in _iter_xray_config_json_paths(sel_path):
+            try:
+                real = os.path.realpath(path)
+            except Exception:
+                real = str(path or "")
+            if not include_selected and selected_real and real == selected_real:
+                continue
+            try:
+                tags.update(_xray_named_tags_from_config(load_json(path, default={})))
+            except Exception:
+                continue
+        return tags
+
     def _clean_single_link_tag(value: Any, fallback: str) -> str:
         raw = str(value or "").strip()
         if not raw:
@@ -340,20 +435,7 @@ def create_xray_configs_blueprint(
             idx += 1
 
     def _all_outbound_tags_for_single_link(sel_path: str) -> set[str]:
-        tags: set[str] = set()
-        try:
-            for item in list_xray_fragments("outbounds"):
-                name = str(item.get("name") or "").strip() if isinstance(item, dict) else ""
-                if not name:
-                    continue
-                path = resolve_xray_fragment_file(name, kind="outbounds", default_path=OUTBOUNDS_FILE)
-                tags.update(_outbound_tags_from_config(load_json(path, default={}), proxy_only=False))
-        except Exception:
-            pass
-        try:
-            tags.update(_outbound_tags_from_config(load_json(sel_path, default={}), proxy_only=False))
-        except Exception:
-            pass
+        tags: set[str] = set(_xray_config_tags_for_single_link(sel_path, include_selected=True))
         try:
             routing_cfg = load_json(ROUTING_FILE, default=None)
         except Exception:
@@ -389,6 +471,31 @@ def create_xray_configs_blueprint(
 
         used_tags = _all_outbound_tags_for_single_link(sel_path)
         return [_unique_single_link_tag(_single_link_base_tag_from_url(url), used_tags)]
+
+    def _drop_single_link_duplicate_service_outbounds(cfg: Any, sel_path: str) -> int:
+        if not isinstance(cfg, dict):
+            return 0
+        outbounds = cfg.get("outbounds")
+        if not isinstance(outbounds, list):
+            return 0
+        external_tags = _xray_config_tags_for_single_link(sel_path, include_selected=False)
+        if not external_tags:
+            return 0
+        next_outbounds: list[Any] = []
+        removed = 0
+        for outbound in outbounds:
+            if not isinstance(outbound, dict):
+                next_outbounds.append(outbound)
+                continue
+            tag = str(outbound.get("tag") or "").strip()
+            protocol = str(outbound.get("protocol") or "").strip().lower()
+            if tag and tag in external_tags and protocol in _SINGLE_LINK_SERVICE_OUTBOUND_PROTOCOLS:
+                removed += 1
+                continue
+            next_outbounds.append(outbound)
+        if removed:
+            cfg["outbounds"] = next_outbounds
+        return removed
 
     def _outbounds_node_latency_state_path() -> str:
         root = str(ui_state_dir or "").strip()
@@ -945,6 +1052,7 @@ def create_xray_configs_blueprint(
                 )
                 mark_profile = collect_sockopt_mark_profile(previous_cfg)
                 apply_sockopt_mark_profile(cfg, mark_profile)
+                _drop_single_link_duplicate_service_outbounds(cfg, sel_path)
             except Exception:
                 return _xray_error(
                     "Ссылка прокси имеет некорректный или неподдерживаемый формат.",

@@ -694,14 +694,20 @@ def test_api_set_outbounds_creates_unique_single_tag_when_pool_fragment_exists(t
     configs_dir.mkdir()
     outbounds_path = configs_dir / "04_outbounds.json"
     pool_path = configs_dir / "04_outbounds_All.json"
+    inbounds_path = configs_dir / "03_inbounds.json"
     routing_path = configs_dir / "05_routing.json"
     routing_payload = {
         "routing": {
-            "balancers": [{"tag": "proxy", "selector": ["MyVPN_hy2_NLS"], "fallbackTag": "direct"}],
+            "balancers": [
+                {"tag": "proxy", "selector": ["MyVPN_hy2_NLS"], "fallbackTag": "direct"},
+                {"tag": "MyVPN_hy2_NLS-2", "selector": ["bydpi_myNAS"], "fallbackTag": "direct"},
+            ],
             "rules": [{"type": "field", "balancerTag": "proxy", "inboundTag": ["redirect", "tproxy"]}],
         }
     }
     routing_path.write_text(json.dumps(routing_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    inbounds_payload = {"inbounds": [{"tag": "MyVPN_hy2_NLS-3", "protocol": "dokodemo-door"}]}
+    inbounds_path.write_text(json.dumps(inbounds_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     pool_payload = {
         "outbounds": [
             {"tag": "bydpi_myNAS", "protocol": "vless"},
@@ -729,7 +735,8 @@ def test_api_set_outbounds_creates_unique_single_tag_when_pool_fragment_exists(t
     assert payload["ok"] is True
 
     saved = json.loads(outbounds_path.read_text(encoding="utf-8"))
-    assert [item["tag"] for item in saved["outbounds"]] == ["MyVPN_hy2_NLS-2", "direct", "block"]
+    assert [item["tag"] for item in saved["outbounds"]] == ["MyVPN_hy2_NLS-4"]
     assert saved["outbounds"][0]["protocol"] == "hysteria"
     assert json.loads(pool_path.read_text(encoding="utf-8")) == pool_payload
+    assert json.loads(inbounds_path.read_text(encoding="utf-8")) == inbounds_payload
     assert json.loads(routing_path.read_text(encoding="utf-8")) == routing_payload
