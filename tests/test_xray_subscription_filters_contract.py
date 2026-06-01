@@ -144,6 +144,8 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "function nodeCountryFlagInfo(node) {" in outbounds_src
     assert "function nodeDisplayNameWithCountry(node, fallback) {" in outbounds_src
     assert "'subscription_node_name'," in outbounds_src
+    assert "const COUNTRY_FLAG_SVG = Object.freeze({" in outbounds_src
+    assert "xk-sub-node-country-svg" in outbounds_src
     assert "countryFlagBadgeHtml(nodeCountryFlagInfo(node))" in outbounds_src
     assert "xk-sub-node-country" in outbounds_src
     assert 'id="outbounds-active-node-status"' in template_src
@@ -168,6 +170,7 @@ def test_outbounds_card_exposes_current_proxy_nodes_and_ping_controls():
     assert "-webkit-line-clamp: 2;" in styles_src
     assert ".xk-sub-node-country[data-country=\"DE\"]" in styles_src
     assert ".xk-sub-node-country[data-country=\"RU\"]" in styles_src
+    assert ".xk-sub-node-country-svg" in styles_src
     assert ".xk-sub-node-country.is-globe" in styles_src
     assert "#outbounds-body.xk-outbounds-subscription-fragment .xk-outbounds-node-item .xk-sub-node-side {\n  min-width: 54px;" in styles_src
 

@@ -9937,6 +9937,12 @@ html[data-theme="light"] .xk-sub-draft-badge {
   display: none;
 }
 
+.xk-sub-node-country-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .xk-sub-node-country[data-country="DE"] {
   background: linear-gradient(to bottom, #000 0 33.333%, #dd0000 33.333% 66.666%, #ffce00 66.666%);
 }
