@@ -58,6 +58,17 @@ def test_devtools_env_help_button_keeps_required_modal_shell_ids():
     assert "const body = byId('dt-env-help-body');" in env_text
 
 
+def test_devtools_dark_theme_select_options_use_dark_palette():
+    styles = Path('xkeen-ui/static/devtools.css').read_text(encoding='utf-8')
+
+    assert 'color-scheme: dark;' in styles
+    assert 'body.devtools-page select.dt-pill-field option' in styles
+    assert 'body.devtools-page select.xray-log-select option' in styles
+    assert 'background-color: #071225;' in styles
+    assert 'html[data-theme="light"] body.devtools-page select.dt-pill-field option' in styles
+    assert 'color-scheme: light;' in styles
+
+
 def test_settings_panel_logout_redirects_to_login_after_api_logout():
     text = Path('xkeen-ui/static/js/ui/settings_panel.js').read_text(encoding='utf-8')
 
