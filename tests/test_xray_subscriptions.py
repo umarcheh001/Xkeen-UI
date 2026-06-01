@@ -2324,6 +2324,347 @@ def test_refresh_subscription_only_mode_replaces_manual_runtime_and_bypasses_sha
     assert rules[5]["balancerTag"] == "proxy"
 
 
+def test_refresh_subscription_only_preserves_manual_edits_after_activation(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    responses = iter(
+        [
+            (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+            (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+        ]
+    )
+    monkeypatch.setattr(subs, "fetch_subscription_body", lambda _url: next(responses))
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "vless-reality", "protocol": "vless"},
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(
+            {
+                "routing": {
+                    "rules": [
+                        {
+                            "type": "field",
+                            "ruleTag": "pre_existing_proxy_rule",
+                            "outboundTag": "vless-reality",
+                            "domain": ["ext:geosite_v2fly.dat:openai"],
+                        },
+                        {
+                            "type": "field",
+                            "ruleTag": "pre_existing_direct",
+                            "outboundTag": "direct",
+                            "domain": ["domain:example.ru"],
+                        },
+                    ]
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "07_observatory.json").write_text(
+        json.dumps({"observatory": {"subjectSelector": ["vless-reality"]}}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "only-subscription",
+            "tag": "subscription.example",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_auto_rule": True,
+            "routing_mode": "subscription-only",
+        },
+    )
+
+    first = subs.refresh_subscription(
+        str(ui_state_dir),
+        "only-subscription",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+    assert first["ok"] is True
+
+    routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    routing["routing"]["rules"].insert(
+        0,
+        {
+            "type": "field",
+            "ruleTag": "manual_added_direct_after_subscription",
+            "outboundTag": "direct",
+            "domain": ["domain:manual-after.example"],
+        },
+    )
+    routing["routing"]["rules"].insert(
+        1,
+        {
+            "type": "field",
+            "ruleTag": "manual_added_proxy_after_subscription",
+            "outboundTag": "vless-reality",
+            "ip": ["203.0.113.0/24"],
+        },
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(routing, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
+    observatory["observatory"]["subjectSelector"].append("manual-added-after-subscription")
+    (xray_dir / "07_observatory.json").write_text(
+        json.dumps(observatory, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    second = subs.refresh_subscription(
+        str(ui_state_dir),
+        "only-subscription",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert second["ok"] is True
+
+    final_routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    rules = final_routing["routing"]["rules"]
+    manual_direct = next(rule for rule in rules if rule.get("ruleTag") == "manual_added_direct_after_subscription")
+    manual_proxy = next(rule for rule in rules if rule.get("ruleTag") == "manual_added_proxy_after_subscription")
+    assert manual_direct["outboundTag"] == "direct"
+    assert manual_proxy["balancerTag"] == "proxy"
+    assert "outboundTag" not in manual_proxy
+    assert any(rule.get("ruleTag") == "pre_existing_direct" for rule in rules)
+    assert any(rule.get("ruleTag") == "pre_existing_proxy_rule" for rule in rules)
+
+    final_observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
+    assert final_observatory["observatory"]["subjectSelector"] == [
+        "subscription.example",
+        "manual-added-after-subscription",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("routing_mode", "tag_prefix"),
+    [
+        ("safe-fallback", "white_list"),
+        ("migrate-vless-rules", "white_list"),
+        ("subscription-only", "white_list"),
+    ],
+)
+def test_subscription_refresh_preserves_mobile_scenario_after_switch(
+    tmp_path: Path,
+    monkeypatch,
+    routing_mode: str,
+    tag_prefix: str,
+):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+
+    responses = iter(
+        [
+            (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+            (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+        ]
+    )
+    monkeypatch.setattr(subs, "fetch_subscription_body", lambda _url: next(responses))
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps({"routing": {"rules": []}}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "07_observatory.json").write_text(
+        json.dumps({"observatory": {"subjectSelector": []}}, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "mobile-sub",
+            "tag": tag_prefix,
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_auto_rule": True,
+            "routing_mode": routing_mode,
+        },
+    )
+    first = subs.refresh_subscription(
+        str(ui_state_dir),
+        "mobile-sub",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+    assert first["ok"] is True
+
+    mobile_routing = {
+        "routing": {
+            "domainStrategy": "IPIfNonMatch",
+            "balancers": [
+                {
+                    "tag": "balancer_main",
+                    "selector": ["my_proxy"],
+                    "strategy": {"type": "leastPing"},
+                    "fallbackTag": "loopback_to_reserv",
+                },
+                {
+                    "tag": "balancer_reserv",
+                    "selector": ["reserve_proxy"],
+                    "strategy": {"type": "leastPing"},
+                    "fallbackTag": "loopback_to_white",
+                },
+                {
+                    "tag": "balancer_white_list",
+                    "selector": ["white_list"],
+                    "strategy": {"type": "leastPing"},
+                },
+            ],
+            "rules": [
+                {
+                    "type": "field",
+                    "ruleTag": "xk_scenario_mobile_whitelist_direct_private",
+                    "inboundTag": ["redirect", "tproxy", "socks-in"],
+                    "outboundTag": "direct",
+                    "ip": ["127.0.0.0/8"],
+                },
+                {
+                    "type": "field",
+                    "ruleTag": "manual_after_mobile_switch",
+                    "outboundTag": "direct",
+                    "domain": ["domain:manual-mobile.example"],
+                },
+                {
+                    "type": "field",
+                    "ruleTag": "xk_scenario_mobile_whitelist_blocked_domains_main",
+                    "inboundTag": ["redirect", "tproxy"],
+                    "balancerTag": "balancer_main",
+                    "domain": ["ext:geosite_v2fly.dat:telegram"],
+                },
+                {
+                    "type": "field",
+                    "ruleTag": "xk_scenario_mobile_whitelist_default_direct",
+                    "inboundTag": ["redirect", "tproxy"],
+                    "outboundTag": "direct",
+                    "network": "tcp,udp",
+                },
+                {
+                    "type": "field",
+                    "ruleTag": "xk_scenario_mobile_whitelist_fallback_from_main",
+                    "inboundTag": ["from_balancer_main"],
+                    "balancerTag": "balancer_reserv",
+                    "network": "tcp,udp",
+                },
+                {
+                    "type": "field",
+                    "ruleTag": "xk_scenario_mobile_whitelist_fallback_from_reserve",
+                    "inboundTag": ["from_balancer_reserv"],
+                    "balancerTag": "balancer_white_list",
+                    "network": "tcp,udp",
+                },
+            ],
+        }
+    }
+    (xray_dir / "05_routing.json").write_text(
+        json.dumps(mobile_routing, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (xray_dir / "07_observatory.json").write_text(
+        json.dumps(
+            {"observatory": {"subjectSelector": ["white_list", "manual-mobile-observer"]}},
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    second = subs.refresh_subscription(
+        str(ui_state_dir),
+        "mobile-sub",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert second["ok"] is True
+    assert second["routing_balancer_tag"] == ""
+    assert second["routing_selector_count"] == 0
+
+    final_routing = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    balancers = {item["tag"]: item for item in final_routing["routing"].get("balancers", [])}
+    assert balancers["balancer_main"]["selector"] == ["my_proxy"]
+    assert balancers["balancer_reserv"]["selector"] == ["reserve_proxy"]
+    assert balancers["balancer_white_list"]["selector"] == ["white_list"]
+    assert "proxy" not in balancers
+
+    rules = final_routing["routing"]["rules"]
+    assert any(rule.get("ruleTag") == "manual_after_mobile_switch" for rule in rules)
+    assert all(rule.get("ruleTag") != "xk_auto_leastPing" for rule in rules)
+    assert any(
+        str(rule.get("ruleTag") or "").startswith("xk_scenario_mobile_whitelist_")
+        for rule in rules
+    )
+
+    final_observatory = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
+    assert final_observatory["observatory"]["subjectSelector"] == ["white_list", "manual-mobile-observer"]
+
+
 def test_refresh_subscription_strict_mode_keeps_ru_direct_rules_before_migrated_pool_rule(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

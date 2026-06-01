@@ -3734,6 +3734,7 @@ def sync_subscription_runtime_plan_delta(
         next_has_runtime_targets = bool(next_observatory_terms or next_auto_terms or next_manual_targets)
 
     next_subscription_only = bool(nxt.get("subscription_only")) and bool(next_auto_terms)
+    entering_subscription_only = next_subscription_only and not bool(prev.get("subscription_only"))
     subscription_only_excluded_tags = _subscription_only_excluded_runtime_tags(xray_configs_dir) if next_subscription_only else []
     observatory_remove_tags = [tag for tag in prev_observatory_terms if tag not in set(next_observatory_terms)]
     if next_subscription_only:
@@ -3745,7 +3746,7 @@ def sync_subscription_runtime_plan_delta(
         remove_tags=observatory_remove_tags,
         managed_active=next_has_runtime_targets,
         snapshot=snapshot,
-        replace_subjects=next_subscription_only and bool(next_observatory_terms),
+        replace_subjects=entering_subscription_only and bool(next_observatory_terms),
     )
 
     selector: List[str] = []
@@ -4019,9 +4020,11 @@ def _rebuild_subscription_runtime(
     next_state = _normalize_state(state_override) if isinstance(state_override, dict) else load_subscription_state(ui_state_dir)
     prev_plan = _build_runtime_sync_plan(prev_state)
     next_plan = _build_runtime_sync_plan(next_state)
+    prev_subscription_only = bool(prev_plan.get("subscription_only"))
+    next_subscription_only = bool(next_plan.get("subscription_only"))
     should_restore_baseline = bool(
         rebuild_from_baseline
-        and (prev_plan.get("subscription_only") or next_plan.get("subscription_only"))
+        and (prev_subscription_only != next_subscription_only)
         and _normalize_managed_baselines(next_state.get(MANAGED_BASELINES_KEY))
     )
     if should_restore_baseline:
