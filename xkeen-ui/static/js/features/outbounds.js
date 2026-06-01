@@ -7484,7 +7484,18 @@ let outboundsModuleApi = null;
     }
 
     async function subsOpen() {
-      subsEnsureModal();
+      let modal = null;
+      try {
+        modal = subsEnsureModal();
+      } catch (err) {
+        const msg = 'Не удалось открыть окно подписок: ' + String(err && err.message ? err.message : err);
+        try { toastXkeen(msg, 'error'); } catch (e) {}
+        const statusEl = $('outbounds-status');
+        if (statusEl) statusEl.textContent = msg;
+        return;
+      }
+      if (!modal) return;
+      try { wireSubscriptionsModalControls(modal); } catch (e) {}
       if (!_subscriptionBaseline) {
         try { subsResetForm(); } catch (e) {}
       }
@@ -7506,18 +7517,8 @@ let outboundsModuleApi = null;
       return true;
     }
 
-    function wireSubscriptionsModal() {
-      const openBtn = $(SUB_IDS.open);
-      if (!openBtn) return;
-      if (openBtn.dataset && openBtn.dataset.xkSubWired === '1') return;
-
-      openBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        void subsOpen();
-      });
-      if (openBtn.dataset) openBtn.dataset.xkSubWired = '1';
-
-      const modal = subsEnsureModal();
+    function wireSubscriptionsModalControls(modalEl) {
+      const modal = modalEl || $(SUB_IDS.modal);
       if (!modal || (modal.dataset && modal.dataset.xkWired === '1')) return;
 
       wireButton(SUB_IDS.close, () => { void subsClose(); });
@@ -7658,6 +7659,20 @@ let outboundsModuleApi = null;
       if (modal.dataset) modal.dataset.xkWired = '1';
     }
 
+    function wireSubscriptionsModal() {
+      const openBtn = $(SUB_IDS.open);
+      if (!openBtn) return;
+      if (openBtn.dataset && openBtn.dataset.xkSubWired === '1') return;
+
+      openBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        void subsOpen();
+      });
+      if (openBtn.dataset) openBtn.dataset.xkSubWired = '1';
+
+      try { wireSubscriptionsModalControls($(SUB_IDS.modal)); } catch (e) {}
+    }
+
 
     function init() {
       const hasAny =
@@ -7680,21 +7695,32 @@ let outboundsModuleApi = null;
         }, 'outbounds-init');
       } catch (e) {}
 
-      wireOutboundsSettings();
-      outboundsApplyActiveDisplaySetting(null, { render: false });
+      const safeInitStep = (label, fn) => {
+        try { return fn(); } catch (err) {
+          try { console.warn('[outbounds:init]', label, err); } catch (e) {}
+          return null;
+        }
+      };
+
+      safeInitStep('settings', () => wireOutboundsSettings());
+      safeInitStep('active-display', () => outboundsApplyActiveDisplaySetting(null, { render: false }));
       void outboundsEnsureSettingsLoaded();
 
-      setCollapsedFromStorage();
-      wireHeader('outbounds-header', toggleCard);
+      safeInitStep('collapse-state', () => setCollapsedFromStorage());
+      safeInitStep('header', () => wireHeader('outbounds-header', toggleCard));
 
       // Fragment selector
-      const initialFragmentsReady = refreshFragmentsList();
+      const initialFragmentsReady = safeInitStep('fragments', () => refreshFragmentsList());
+
+      Promise.resolve(initialFragmentsReady)
+        .catch(() => null)
+        .then(() => load());
 
       // Buttons
-      bindConfigAction('outbounds-save-btn', save);
-      bindConfigAction('outbounds-normalize-btn', normalizeCurrentUrl);
-      bindConfigAction('outbounds-backup-btn', backup, { kind: 'backup' });
-      bindConfigAction('outbounds-restore-auto-btn', () => {
+      safeInitStep('save-button', () => bindConfigAction('outbounds-save-btn', save));
+      safeInitStep('normalize-button', () => bindConfigAction('outbounds-normalize-btn', normalizeCurrentUrl));
+      safeInitStep('backup-button', () => bindConfigAction('outbounds-backup-btn', backup, { kind: 'backup' }));
+      safeInitStep('restore-button', () => bindConfigAction('outbounds-restore-auto-btn', () => {
         try {
           const backupsApi = getBackupsApi();
           if (backupsApi && typeof backupsApi.restoreAuto === 'function') {
@@ -7703,8 +7729,8 @@ let outboundsModuleApi = null;
             if (typeof showToast === 'function') showToast('Модуль бэкапов не загружен.', true);
           }
         } catch (e) {}
-      }, { kind: 'restoreAuto' });
-      bindConfigAction('outbounds-open-editor-btn', () => {
+      }, { kind: 'restoreAuto' }));
+      safeInitStep('editor-button', () => bindConfigAction('outbounds-open-editor-btn', () => {
         try {
           if (openXkeenJsonEditor('outbounds') != null) {
             return;
@@ -7712,22 +7738,19 @@ let outboundsModuleApi = null;
             if (typeof showToast === 'function') showToast('Модуль JSON-редактора не загружен.', true);
           }
         } catch (e) {}
-      }, { kind: 'openEditor' });
+      }, { kind: 'openEditor' }));
 
       // Initial load
-      wireHints();
-      wireEntwareMarkButton(ENTWARE_MARK_IDS.single, () => {
+      safeInitStep('hints', () => wireHints());
+      safeInitStep('entware-mark', () => wireEntwareMarkButton(ENTWARE_MARK_IDS.single, () => {
         try { syncDirtyState(); } catch (e) {}
-      });
-      wireGeneratorModal();
-      wirePoolModal();
-      wireSubscriptionsModal();
-      wireButton(OUTBOUND_NODE_IDS.pingAll, () => {
+      }));
+      safeInitStep('generator-modal', () => wireGeneratorModal());
+      safeInitStep('pool-modal', () => wirePoolModal());
+      safeInitStep('subscriptions-modal', () => wireSubscriptionsModal());
+      safeInitStep('nodes-pingall', () => wireButton(OUTBOUND_NODE_IDS.pingAll, () => {
         outboundsProbeAllNodes();
-      });
-      Promise.resolve(initialFragmentsReady)
-        .catch(() => null)
-        .then(() => load());
+      }));
     }
 
     return {

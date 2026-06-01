@@ -237,6 +237,20 @@ def test_outbounds_fragment_switch_ignores_stale_load_and_nodes_responses():
     assert "await refreshOutboundsNodes(false, { fragment: requestFragment });" in outbounds_src
 
 
+def test_outbounds_initial_load_is_not_blocked_by_subscription_modal_wiring():
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+
+    assert "const safeInitStep = (label, fn) => {" in outbounds_src
+    assert "const initialFragmentsReady = safeInitStep('fragments', () => refreshFragmentsList());" in outbounds_src
+    assert "Promise.resolve(initialFragmentsReady)" in outbounds_src
+    assert outbounds_src.index("Promise.resolve(initialFragmentsReady)") < outbounds_src.index("safeInitStep('subscriptions-modal'")
+    assert "function wireSubscriptionsModalControls(modalEl) {" in outbounds_src
+    assert "function wireSubscriptionsModal() {" in outbounds_src
+    wire_block = outbounds_src.split("function wireSubscriptionsModal() {", 1)[1].split("function init() {", 1)[0]
+    assert "subsEnsureModal()" not in wire_block
+    assert "void subsOpen();" in wire_block
+
+
 def test_xray_subscription_delete_refreshes_main_fragment_selectors():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     routing_src = _read("xkeen-ui/static/js/features/routing.js")
