@@ -2797,6 +2797,110 @@ def test_delete_last_subscription_restores_pre_subscription_runtime_state(tmp_pa
     assert subs.MANAGED_BASELINES_KEY not in state
 
 
+def test_delete_subscription_only_restores_manual_observatory_selector(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+    )
+
+    routing_before = (
+        json.dumps(
+            {
+                "routing": {
+                    "balancers": [
+                        {
+                            "tag": "proxy",
+                            "selector": ["vless-reality"],
+                            "fallbackTag": "direct",
+                            "strategy": {"type": "leastPing"},
+                        }
+                    ],
+                    "rules": [
+                        {
+                            "type": "field",
+                            "inboundTag": ["redirect", "tproxy"],
+                            "balancerTag": "proxy",
+                        }
+                    ],
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n"
+    )
+    observatory_before = (
+        json.dumps(
+            {
+                "observatory": {
+                    "subjectSelector": ["vless-reality"],
+                    "probeUrl": "https://probe.example.com",
+                    "probeInterval": "120s",
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n"
+    )
+    (xray_dir / "05_routing.json").write_text(routing_before, encoding="utf-8")
+    (xray_dir / "07_observatory.json").write_text(observatory_before, encoding="utf-8")
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "subscription-only",
+            "tag": "subscription.example",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_mode": "subscription-only",
+        },
+    )
+    refreshed = subs.refresh_subscription(
+        str(ui_state_dir),
+        "subscription-only",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert refreshed["ok"] is True
+    observatory_active = json.loads((xray_dir / "07_observatory.json").read_text(encoding="utf-8"))
+    assert observatory_active["observatory"]["subjectSelector"] == ["subscription.example"]
+    routing_active = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    active_balancers = routing_active["routing"]["balancers"]
+    assert any(item.get("selector") == ["subscription.example"] for item in active_balancers)
+
+    deleted = subs.delete_subscription(
+        str(ui_state_dir),
+        "subscription-only",
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        remove_file=True,
+        restart_xkeen=None,
+    )
+
+    assert deleted["baseline_restored"] is True
+    assert (xray_dir / "05_routing.json").read_text(encoding="utf-8") == routing_before
+    assert (xray_dir / "07_observatory.json").read_text(encoding="utf-8") == observatory_before
+    state = subs.load_subscription_state(str(ui_state_dir))
+    assert subs.MANAGED_BASELINES_KEY not in state
+
+
 def test_refresh_subscription_preserves_cp1251_custom_routing_variant_and_restores_on_delete(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
     from utils.fs import load_text

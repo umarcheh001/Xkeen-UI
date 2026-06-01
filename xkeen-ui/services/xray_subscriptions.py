@@ -950,6 +950,7 @@ def delete_subscription(
         snapshot=snapshot,
         previous_state=previous_state,
         state_override=remaining_state,
+        rebuild_from_baseline=True,
     )
     restored_baseline = bool(rebuild_stats.get("baseline_restored"))
     observatory_changed = bool(rebuild_stats.get("observatory_changed"))
@@ -3964,11 +3965,49 @@ def _rebuild_subscription_runtime(
     snapshot: SnapshotCallback | None = None,
     previous_state: Dict[str, Any] | None = None,
     state_override: Dict[str, Any] | None = None,
+    rebuild_from_baseline: bool = False,
 ) -> Dict[str, Any]:
     prev_state = _normalize_state(previous_state) if isinstance(previous_state, dict) else load_subscription_state(ui_state_dir)
     next_state = _normalize_state(state_override) if isinstance(state_override, dict) else load_subscription_state(ui_state_dir)
     prev_plan = _build_runtime_sync_plan(prev_state)
     next_plan = _build_runtime_sync_plan(next_state)
+    should_restore_baseline = bool(
+        rebuild_from_baseline
+        and (prev_plan.get("subscription_only") or next_plan.get("subscription_only"))
+        and _normalize_managed_baselines(next_state.get(MANAGED_BASELINES_KEY))
+    )
+    if should_restore_baseline:
+        restored = _restore_subscription_managed_baselines(
+            ui_state_dir,
+            xray_configs_dir=xray_configs_dir,
+            snapshot=snapshot,
+        )
+        if not next_plan.get("has_runtime_targets"):
+            return {
+                "baseline_restored": bool(restored.get("restored")),
+                "observatory_changed": bool(restored.get("observatory_changed")),
+                "routing_changed": bool(restored.get("routing_changed")),
+                "routing_sync": {
+                    "changed": False,
+                    "selector": [],
+                    "balancer_tag": "",
+                    "routing_file": ROUTING_FILE,
+                },
+                "has_runtime_targets": False,
+            }
+        empty_plan = _build_runtime_sync_plan({"subscriptions": []})
+        rebuilt = sync_subscription_runtime_plan_delta(
+            xray_configs_dir=xray_configs_dir,
+            previous_plan=empty_plan,
+            next_plan=next_plan,
+            snapshot=snapshot,
+        )
+        rebuilt["baseline_restored"] = bool(restored.get("restored"))
+        rebuilt["observatory_changed"] = bool(
+            restored.get("observatory_changed") or rebuilt.get("observatory_changed")
+        )
+        rebuilt["routing_changed"] = bool(restored.get("routing_changed") or rebuilt.get("routing_changed"))
+        return rebuilt
     return sync_subscription_runtime_plan_delta(
         xray_configs_dir=xray_configs_dir,
         previous_plan=prev_plan,
