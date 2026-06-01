@@ -5011,6 +5011,19 @@ let outboundsModuleApi = null;
       return JSON.stringify(subsDraftSnapshot(formState)) !== JSON.stringify(_subscriptionBaseline);
     }
 
+    function subsHasProtectedDirtyDraft(formState) {
+      if (!_subscriptionBaseline) return false;
+      const current = subsDraftSnapshot(formState);
+      if (JSON.stringify(current) === JSON.stringify(_subscriptionBaseline)) return false;
+      if (current.preview_active) return true;
+      if (String(current.id || _subscriptionBaseline.id || '').trim()) return true;
+
+      const changedKeys = Object.keys(current).filter((key) => {
+        return JSON.stringify(current[key]) !== JSON.stringify(_subscriptionBaseline[key]);
+      });
+      return changedKeys.some((key) => key !== 'url');
+    }
+
     function subsSetFieldInvalid(inputId, invalid) {
       const el = $(inputId);
       if (!el) return;
@@ -5305,7 +5318,7 @@ let outboundsModuleApi = null;
     async function subsConfirmDiscardDraft(opts) {
       const options = (opts && typeof opts === 'object') ? opts : {};
       const formState = subsReadFormState();
-      if (!subsHasDirtyDraft(formState)) return true;
+      if (!subsHasProtectedDirtyDraft(formState)) return true;
       const confirmOptions = Object.assign({}, options, {
         title: 'Несохранённые изменения',
         message: String(options.message || 'В форме подписки есть несохранённые изменения. Продолжить и потерять их?'),

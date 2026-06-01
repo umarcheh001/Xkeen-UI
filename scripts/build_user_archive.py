@@ -30,6 +30,9 @@ EXCLUDED_FILE_SUFFIXES = {
     ".pyo",
     ".tmp",
 }
+EXCLUDED_PROJECT_RELATIVE_DIRS = {
+    Path("opt/etc/mihomo/backup"),
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -90,7 +93,15 @@ def git_short_head(repo_root: Path) -> str:
 
 def ignore_project_entries(_src_dir: str, names: list[str]) -> set[str]:
     ignored: set[str] = set()
+    try:
+        rel_dir = Path(_src_dir).resolve().relative_to(PROJECT_ROOT)
+    except ValueError:
+        rel_dir = Path()
     for name in names:
+        rel_path = rel_dir / name
+        if rel_path in EXCLUDED_PROJECT_RELATIVE_DIRS:
+            ignored.add(name)
+            continue
         if name in EXCLUDED_DIR_NAMES or name in EXCLUDED_FILE_NAMES:
             ignored.add(name)
             continue

@@ -448,6 +448,9 @@ def test_xray_subscription_modal_protects_drafts_and_explains_autofill():
     assert "function subsSyncIntervalRecommendation(formState, validation) {" in outbounds_src
     assert "function subsSyncSubscriptionFormState() {" in outbounds_src
     assert "function subsConfirmDiscardDraft(opts) {" in outbounds_src
+    assert "function subsHasProtectedDirtyDraft(formState) {" in outbounds_src
+    assert "return changedKeys.some((key) => key !== 'url');" in outbounds_src
+    assert "if (!subsHasProtectedDirtyDraft(formState)) return true;" in outbounds_src
     assert "function subsRestoreBaseline(options) {" in outbounds_src
     assert "async function subsRefresh(id, options) {" in outbounds_src
     assert "confirmXkeenAction(confirmOptions, confirmOptions.message)" in outbounds_src
