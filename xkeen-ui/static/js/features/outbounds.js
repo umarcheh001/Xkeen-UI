@@ -28,6 +28,7 @@ let outboundsModuleApi = null;
   outboundsModuleApi = (() => {
     let inited = false;
     let _savedUrl = '';
+    let _savedOutboundTag = 'proxy';
 
     // Active outbounds fragment file (basename or absolute). Controlled by dropdown.
     let _activeFragment = null;
@@ -317,6 +318,37 @@ let outboundsModuleApi = null;
       return '';
     }
 
+    function cleanOutboundTag(value) {
+      let tag = String(value || '').trim();
+      tag = tag.replace(/\s+/g, '_').replace(/[^A-Za-z0-9_.:-]+/g, '_');
+      tag = tag.replace(/^[_:.-]+|[_:.-]+$/g, '');
+      return tag || 'proxy';
+    }
+
+    function getCurrentOutboundTag() {
+      try {
+        const input = $('outbounds-tag');
+        return cleanOutboundTag(input ? input.value : 'proxy');
+      } catch (e) {}
+      return 'proxy';
+    }
+
+    function setOutboundTag(value) {
+      try {
+        const input = $('outbounds-tag');
+        if (input) input.value = cleanOutboundTag(value || 'proxy');
+        const trigger = $('outbounds-tag-trigger');
+        if (trigger) trigger.title = `Tag outbound: ${cleanOutboundTag(value || 'proxy')}`;
+      } catch (e) {}
+    }
+
+    function getOutboundsFormState() {
+      return JSON.stringify({
+        url: String(getCurrentUrl() || ''),
+        tag: String(getCurrentOutboundTag() || 'proxy'),
+      });
+    }
+
     function syncDirtyUi(dirty) {
       try {
         const saveBtn = $('outbounds-save-btn');
@@ -325,8 +357,11 @@ let outboundsModuleApi = null;
     }
 
     function syncDirtyState(forceDirty) {
-      const currentValue = String(getCurrentUrl() || '');
-      const savedValue = String(_savedUrl || '');
+      const currentValue = getOutboundsFormState();
+      const savedValue = JSON.stringify({
+        url: String(_savedUrl || ''),
+        tag: String(_savedOutboundTag || 'proxy'),
+      });
       const dirty = (typeof forceDirty === 'boolean')
         ? !!forceDirty
         : (currentValue !== savedValue);
@@ -342,8 +377,8 @@ let outboundsModuleApi = null;
         cancelText: 'Остаться',
         label: 'Ссылка outbounds',
         summary: dirty ? 'Текущая ссылка отличается от последней сохранённой версии.' : '',
-        currentValue,
-        savedValue,
+        currentValue: String(getCurrentUrl() || ''),
+        savedValue: String(_savedUrl || ''),
       };
 
       const lifecycle = getFeatureLifecycle();
@@ -551,6 +586,7 @@ let outboundsModuleApi = null;
           input.value = '';
           input.classList.remove('xk-invalid');
         }
+        try { setOutboundTag('proxy'); } catch (e) {}
         try { renderParsePreview({ ok: false, scheme: '', fields: {}, errors: [], warnings: [] }); } catch (e) {}
         const isPool = normalizedMode === 'pool';
         if (normalizedMode === 'subscription') {
@@ -2222,6 +2258,7 @@ let outboundsModuleApi = null;
 
     function updateHintsFromUrl(url) {
       const input = $('outbounds-url');
+      const tagInput = $('outbounds-tag');
       const protoSel = $('outbounds-proto');
       const typeSel = $('outbounds-type');
       const secSel = $('outbounds-security');
@@ -2564,6 +2601,28 @@ let outboundsModuleApi = null;
         try { updateHintsFromUrl(input.value); } catch (e) {}
         try { validateAndUpdateUI(); } catch (e) {}
       });
+      if (tagInput) {
+        const tagMenu = document.querySelector('.outbounds-tag-menu');
+        if (tagMenu) {
+          tagMenu.addEventListener('toggle', () => {
+            if (tagMenu.open) {
+              setTimeout(() => {
+                try {
+                  tagInput.focus();
+                  tagInput.select();
+                } catch (e) {}
+              }, 0);
+            }
+          });
+        }
+        tagInput.addEventListener('input', () => {
+          try { syncDirtyState(); } catch (e) {}
+        });
+        tagInput.addEventListener('blur', () => {
+          try { setOutboundTag(tagInput.value); } catch (e) {}
+          try { syncDirtyState(); } catch (e) {}
+        });
+      }
 
       protoSel.addEventListener('change', () => {
         try {
@@ -2704,7 +2763,9 @@ let outboundsModuleApi = null;
         setSubscriptionFragmentMode(false, fileName, summary);
         if (data && data.url) {
           _savedUrl = String(data.url || '');
+          _savedOutboundTag = cleanOutboundTag(data.outbound_tag || 'proxy');
           input.value = _savedUrl;
+          setOutboundTag(_savedOutboundTag);
           updateHintsFromUrl(_savedUrl);
           validateAndUpdateUI();
           try { await refreshOutboundsNodes(true, { fragment: requestFragment }); } catch (e) {}
@@ -2722,7 +2783,9 @@ let outboundsModuleApi = null;
           } catch (e) {}
         } else {
           _savedUrl = '';
+          _savedOutboundTag = 'proxy';
           input.value = '';
+          setOutboundTag('proxy');
           try { await refreshOutboundsNodes(false, { fragment: requestFragment }); } catch (e) {}
           if (statusEl) statusEl.textContent = 'Файл outbounds отсутствует или не содержит прокси-конфиг.';
           updateHintsFromUrl('');
@@ -2762,6 +2825,7 @@ let outboundsModuleApi = null;
       let streamedRestart = false;
       try {
         const url = String(input.value || '').trim();
+        const outboundTag = getCurrentOutboundTag();
         if (!url) {
           if (statusEl) statusEl.textContent = 'Введи ссылку прокси (vless / trojan / vmess / ss).';
           return;
@@ -2790,6 +2854,7 @@ let outboundsModuleApi = null;
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               url,
+              outbound_tag: outboundTag,
               restart,
               sockopt_mark_255: isEntwareMarkEnabled(ENTWARE_MARK_IDS.single),
             }),
@@ -2800,6 +2865,7 @@ let outboundsModuleApi = null;
             let msg = 'Outbounds сохранены.';
             if (statusEl) statusEl.textContent = msg;
             _savedUrl = url;
+            _savedOutboundTag = outboundTag;
             try { await refreshFragmentsList({ notify: false }); } catch (e) {}
             try { syncDirtyState(false); } catch (e) {}
             publishLifecycleState({

@@ -66,6 +66,24 @@ def test_outbounds_entware_mark_controls_are_wired_to_payloads():
     assert ".xk-entware-mark-toggle" in styles_src
 
 
+def test_outbounds_single_link_tag_control_is_wired_to_payload():
+    template_src = _read("xkeen-ui/templates/panel.html")
+    outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
+    styles_src = _read("xkeen-ui/static/styles.css")
+    routes_src = _read("xkeen-ui/routes/xray_configs.py")
+
+    assert 'id="outbounds-tag"' in template_src
+    assert "Tag outbound" in template_src
+    assert "outbound_tag: outboundTag" in outbounds_src
+    assert "_savedOutboundTag" in outbounds_src
+    assert "data.outbound_tag" in outbounds_src
+    assert '"outbound_tag": outbound_tag' in routes_src
+    assert 'payload.get("outbound_tag", payload.get("tag"))' in routes_src
+    assert 'id="outbounds-tag-trigger"' in template_src
+    assert ".outbounds-tag-menu" in styles_src
+    assert ".outbounds-tag-panel" in styles_src
+
+
 def test_outbounds_proxy_pool_uses_fragment_summary_without_hiding_pool_button():
     outbounds_src = _read("xkeen-ui/static/js/features/outbounds.js")
     styles_src = _read("xkeen-ui/static/styles.css")

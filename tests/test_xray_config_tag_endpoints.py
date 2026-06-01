@@ -634,6 +634,40 @@ def test_api_set_outbounds_uses_new_single_tag_instead_of_routing_proxy(tmp_path
     assert [item["tag"] for item in saved["outbounds"]] == ["vless", "direct", "block"]
 
 
+def test_api_set_outbounds_accepts_user_single_link_tag(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    configs_dir.mkdir()
+    outbounds_path = configs_dir / "04_outbounds.json"
+    routing_path = configs_dir / "05_routing.json"
+    routing_path.write_text(json.dumps({"routing": {"rules": []}}, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    monkeypatch.setattr(xray_configs_mod, "ROUTING_FILE", str(routing_path))
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(outbounds_path),
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.post(
+            "/api/outbounds",
+            json={"url": _vless_url(), "outbound_tag": "my_proxy", "restart": False},
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+
+    saved = json.loads(outbounds_path.read_text(encoding="utf-8"))
+    assert [item["tag"] for item in saved["outbounds"]] == ["my_proxy", "direct", "block"]
+
+    with app.test_client() as client:
+        loaded = client.get("/api/outbounds")
+
+    assert loaded.status_code == 200
+    assert loaded.get_json()["outbound_tag"] == "my_proxy"
+
+
 def test_api_set_outbounds_preserves_existing_sockopt_marks_for_generated_link(tmp_path, monkeypatch):
     configs_dir = tmp_path / "configs"
     configs_dir.mkdir()

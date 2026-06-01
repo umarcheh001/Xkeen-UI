@@ -413,6 +413,8 @@ def create_xray_configs_blueprint(
                 if not path:
                     continue
                 real = os.path.realpath(str(path))
+                if base_dir and os.path.dirname(real) != base_dir:
+                    continue
                 if real in seen or not os.path.isfile(real):
                     continue
                 seen.add(real)
@@ -514,8 +516,19 @@ def create_xray_configs_blueprint(
             tags.append(tag)
         return tags
 
-    def _single_link_outbound_tags_for_save(url: str, sel_path: str, existing_cfg: Any = None) -> list[str]:
+    def _single_link_outbound_tags_for_save(
+        url: str,
+        sel_path: str,
+        existing_cfg: Any = None,
+        preferred_tag: Any = None,
+    ) -> list[str]:
         existing_tags = _single_link_tags_from_existing_outbounds(existing_cfg)
+        preferred = _clean_single_link_tag(preferred_tag, "") if str(preferred_tag or "").strip() else ""
+        if preferred:
+            used_tags = _all_outbound_tags_for_single_link(sel_path)
+            for tag in existing_tags:
+                used_tags.discard(tag)
+            return [_unique_single_link_tag(preferred, used_tags)]
         if len(existing_tags) == 1:
             return existing_tags
 
@@ -989,11 +1002,14 @@ def create_xray_configs_blueprint(
             cfg = load_json(sel_path, default=None)
 
         url = None
+        outbound_tag = ""
         if cfg:
             try:
                 url = build_proxy_url_from_config(cfg)
             except Exception:
                 url = None
+            tags = _single_link_tags_from_existing_outbounds(cfg)
+            outbound_tag = tags[0] if len(tags) == 1 else ""
 
         if not text.strip():
             try:
@@ -1006,6 +1022,7 @@ def create_xray_configs_blueprint(
                 {
                     "ok": True,
                     "url": url,
+                    "outbound_tag": outbound_tag,
                     "config": cfg,
                     "text": text,
                     "file": os.path.basename(sel_path),
@@ -1100,7 +1117,12 @@ def create_xray_configs_blueprint(
                 previous_cfg = load_json(sel_path, default={})
                 cfg = build_outbounds_config_from_link(
                     url,
-                    proxy_tags=_single_link_outbound_tags_for_save(url, sel_path, previous_cfg),
+                    proxy_tags=_single_link_outbound_tags_for_save(
+                        url,
+                        sel_path,
+                        previous_cfg,
+                        payload.get("outbound_tag", payload.get("tag")),
+                    ),
                 )
                 mark_profile = collect_sockopt_mark_profile(previous_cfg)
                 apply_sockopt_mark_profile(cfg, mark_profile)

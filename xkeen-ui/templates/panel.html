@@ -590,6 +590,17 @@
 
       <div class="outbounds-url-row">
         <input id="outbounds-url" type="text" placeholder="vless://... / trojan://... / vmess://... / ss://... / hy2://...">
+        <details class="outbounds-tag-menu">
+          <summary id="outbounds-tag-trigger"
+                   class="outbounds-tag-trigger"
+                   aria-label="Tag outbound"
+                   title="Tag outbound"
+                   data-tooltip="Tag outbound для одиночного outbound.">tag</summary>
+          <div class="outbounds-tag-panel">
+            <label for="outbounds-tag">Tag outbound</label>
+            <input id="outbounds-tag" type="text" value="proxy" placeholder="proxy">
+          </div>
+        </details>
         <button type="button" id="outbounds-entware-mark-btn" class="xk-entware-mark-toggle" aria-label="Entware mark 255" aria-pressed="false" title="Добавлять sockopt.mark=255 для проксирования Entware" data-tooltip="Добавлять sockopt.mark=255 для проксирования Entware.">↯</button>
       </div>
 
