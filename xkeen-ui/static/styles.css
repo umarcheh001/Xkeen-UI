@@ -29682,7 +29682,7 @@ html[data-theme="light"] .xkeen-cm6-host {
   box-sizing: border-box;
   max-width: min(560px, calc(100vw - 32px)) !important;
   overflow: hidden;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .xkeen-cm6-host .cm-tooltip-lint > ul {
@@ -29751,7 +29751,10 @@ html[data-theme="light"] .xkeen-cm6-host {
   overflow-x: hidden;
   overflow-wrap: anywhere;
   word-break: break-word;
-  pointer-events: none;
+  pointer-events: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 
 .xkeen-cm6-host.xkeen-cm6-light .cm6-json-schema-hover,

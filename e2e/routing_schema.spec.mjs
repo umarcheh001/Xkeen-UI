@@ -506,6 +506,47 @@ test('routing CodeMirror keeps JSONC diagnostics and exposes fragment schema hel
   await saveSchemaHoverEnabled(page, true);
 });
 
+test('routing CodeMirror schema hover tooltip scrolls long help content', async ({ page }) => {
+  await page.goto('/');
+  await waitForRoutingEditor(page);
+  await ensureCodeMirrorRouting(page);
+  await waitForRoutingSchema(page);
+  await waitForUiSettings(page);
+  await saveSchemaHoverEnabled(page, true);
+
+  await replaceRoutingText(page, SUBSCRIPTION_ROUTING);
+  await clearEditorTooltips(page);
+  await hoverRenderedToken(page, '"rules"');
+
+  const hover = page.locator('.cm6-json-schema-hover').first();
+  await expect(hover).toBeVisible();
+  await expect(hover).toContainText('outboundTag');
+
+  await expect.poll(() => page.evaluate(() => {
+    const node = document.querySelector('.cm6-json-schema-hover');
+    if (!node) return null;
+    const style = window.getComputedStyle(node);
+    return {
+      scrollable: node.scrollHeight > node.clientHeight + 4,
+      pointerEvents: style.pointerEvents,
+      overscroll: style.overscrollBehaviorY || style.overscrollBehavior || '',
+    };
+  })).toEqual({
+    scrollable: true,
+    pointerEvents: 'auto',
+    overscroll: 'contain',
+  });
+
+  const box = await hover.boundingBox();
+  expect(box, 'schema hover tooltip should have a visible box').toBeTruthy();
+  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height - 12, 90));
+  await page.mouse.wheel(0, 260);
+  await expect.poll(() => page.evaluate(() => {
+    const node = document.querySelector('.cm6-json-schema-hover');
+    return node ? Number(node.scrollTop || 0) : 0;
+  })).toBeGreaterThan(0);
+});
+
 test('routing Monaco shows Xray schema hover in browser', async ({ page }) => {
   await page.goto('/');
   await waitForRoutingEditor(page);

@@ -1075,7 +1075,7 @@ function createThemeExtension(theme) {
         boxSizing: 'border-box',
         maxWidth: 'min(560px, calc(100vw - 32px))',
         overflow: 'hidden',
-        pointerEvents: 'none',
+        pointerEvents: 'auto',
       },
       '.cm-tooltip-lint > ul': {
         maxWidth: '100%',
@@ -1108,7 +1108,10 @@ function createThemeExtension(theme) {
         overflowX: 'hidden',
         overflowWrap: 'anywhere',
         wordBreak: 'break-word',
-        pointerEvents: 'none',
+        pointerEvents: 'auto',
+        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarGutter: 'stable',
       },
       '.cm6-json-schema-hover pre, .cm6-json-schema-hover code': {
         whiteSpace: 'pre-wrap',
