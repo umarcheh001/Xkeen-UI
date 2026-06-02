@@ -847,37 +847,66 @@
         },
         "udp": {
           "type": "boolean",
-          "default": true,
-          "description": "Поддержка UDP через прокси (только если серверная сторона это умеет)."
+          "default": false,
+          "description": "Разрешить UDP через этот прокси. По документации для обычных TCP-протоколов по умолчанию выключено; для UDP-based типов вроде TUIC и для `direct`/`dns` Mihomo включает поддержку автоматически.",
+          "x-ui-explain": "Это пропускает через узел DNS, QUIC, игры, VoIP и другой UDP-трафик, если сам сервер и протокол это поддерживают.",
+          "x-ui-use-case": "Включайте для VLESS/VMess/Trojan/SS, когда через этот узел должны работать QUIC/UDP/игры; оставляйте выключенным, если сервер UDP не поддерживает или нужно запретить UDP утечки.",
+          "x-ui-example": "udp: true",
+          "x-ui-warning": "`udp: true` не добавляет UDP на сервере магически: если провайдер или протокол его не поддерживает, UDP-трафик всё равно будет падать."
         },
         "tfo": {
           "type": "boolean",
           "default": false,
-          "description": "TCP Fast Open. Снижает задержку установки соединения. Поддерживается не всеми роутерами/ядрами."
+          "description": "TCP Fast Open. Ускоряет старт TCP-соединений за счёт отправки данных уже на этапе handshake. Работает только для TCP и требует поддержки ядра/сети.",
+          "x-ui-explain": "Это маленькая TCP-оптимизация: меньше ожидания при открытии нового соединения, но только если клиент, сервер и сеть её принимают.",
+          "x-ui-use-case": "Можно включать для современных TCP-прокси, если роутер и сервер поддерживают TFO; при странных обрывах или проблемах с подключением лучше выключить.",
+          "x-ui-example": "tfo: true",
+          "x-ui-warning": "На некоторых провайдерах, NAT и старых ядрах TFO может не дать пользы или ломать отдельные подключения."
         },
         "mptcp": {
           "type": "boolean",
           "default": false,
-          "description": "Multipath TCP. Требует поддержки на сервере и в ядре Linux 5.6+."
+          "description": "Multipath TCP. Позволяет одному TCP-соединению использовать несколько сетевых путей, если это поддерживают ядро и сервер. Работает только для TCP.",
+          "x-ui-explain": "Это продвинутый режим TCP: соединение может идти по нескольким маршрутам, но только в сетях, где MPTCP реально поддержан.",
+          "x-ui-use-case": "Имеет смысл для специфичных серверов и Linux-окружений с включённым MPTCP; для обычного домашнего роутера чаще оставляют `false`.",
+          "x-ui-example": "mptcp: false",
+          "x-ui-warning": "Если сервер или ядро не поддерживает MPTCP, включение не ускорит трафик и может усложнить диагностику."
         },
         "ip-version": {
           "type": "string",
           "enum": ["dual", "ipv4", "ipv6", "ipv4-prefer", "ipv6-prefer"],
-          "description": "Предпочтение семейства адресов при резолве сервера. На Keenetic без IPv6 безопасно задать `ipv4`."
+          "default": "dual",
+          "description": "Семейство IP для подключения к серверу, когда `server` задан доменом. `dual` использует IPv4/IPv6, `ipv4` или `ipv6` жёстко выбирают одно семейство, `*-prefer` предпочитают одно семейство при dual-stack.",
+          "x-ui-explain": "Это выбор, какой IP-адрес брать у домена сервера: IPv4, IPv6 или оба варианта.",
+          "x-ui-use-case": "На Keenetic без стабильного IPv6 обычно безопаснее `ipv4` или `ipv4-prefer`, чтобы не ловить долгие IPv6-таймауты.",
+          "x-ui-example": "ip-version: ipv4-prefer",
+          "x-ui-warning": "`ipv6` или `ipv6-prefer` используйте только если у роутера и провайдера действительно есть рабочий IPv6."
         },
         "dialer-proxy": {
           "type": "string",
-          "description": "Имя другого прокси, через который будет установлено соединение к данному серверу (цепочка).",
+          "description": "Имя другого прокси или группы, через которые этот узел будет устанавливать исходящее соединение. Так собирают цепочку вида текущий прокси -> dialer-proxy -> интернет.",
+          "x-ui-explain": "Это “прокси для подключения к прокси”: текущий узел сначала идёт через указанный узел или группу.",
+          "x-ui-use-case": "Нужно для цепочек, jump-host, WARP/Tailscale как промежуточного выхода или когда сервер доступен только через другой маршрут.",
+          "x-ui-example": "dialer-proxy: warp",
+          "x-ui-warning": "Не создавайте циклы: если A ссылается на B, а B обратно на A, соединение не сможет установиться.",
           "examples": ["warp", "jumphost"]
         },
         "interface-name": {
           "type": "string",
-          "description": "Имя исходящего сетевого интерфейса для этого прокси.",
+          "description": "Имя сетевого интерфейса, с которого этот прокси будет открывать исходящие соединения.",
+          "x-ui-explain": "Это привязка узла к конкретному WAN/VPN-интерфейсу роутера.",
+          "x-ui-use-case": "Полезно на роутерах с несколькими выходами: WAN, LTE, Tailscale, WireGuard или отдельная policy-route таблица.",
+          "x-ui-example": "interface-name: nwan0",
+          "x-ui-warning": "Неверное имя интерфейса приведёт к тому, что узел не сможет подключиться наружу.",
           "examples": ["nwan0", "tailscale0", "eth0"]
         },
         "routing-mark": {
           "type": "integer",
-          "description": "fwmark для исходящих соединений этого прокси."
+          "description": "Linux fwmark для исходящих соединений этого прокси. Используется policy routing / iptables / nftables правилами.",
+          "x-ui-explain": "Это числовая метка пакетов: ОС и правила маршрутизации могут отправить такой трафик по отдельной таблице маршрутов.",
+          "x-ui-use-case": "Нужно только в продвинутых схемах с policy routing, несколькими WAN или кастомными правилами XKeen.",
+          "x-ui-example": "routing-mark: 233",
+          "x-ui-warning": "Случайная метка без соответствующих правил маршрутизации обычно бесполезна, а иногда отправляет трафик не туда."
         },
 
         "proto": {
@@ -1458,42 +1487,78 @@
     "proxyProvider": {
       "type": "object",
       "description": "Провайдер прокси — внешний источник списка серверов (подписка по HTTP, локальный файл или inline-список).",
-      "x-ui-explain": "Это источник, из которого Mihomo загружает список прокси. Сам provider не маршрутизирует трафик, он только приносит узлы в конфиг.",
+      "x-ui-explain": "Это источник, из которого Mihomo загружает список прокси. Сам provider не маршрутизирует трафик, он только приносит узлы в конфиг и обновляет их по расписанию.",
       "x-ui-use-case": "Используется для подписок и больших наборов серверов, которые нужно периодически обновлять без ручного редактирования `proxies`.",
-      "x-ui-example": "{ type: \"http\", url: \"https://sub.example.com/clash\", path: \"./providers/sub.yaml\", interval: 21600 }",
-      "x-ui-warning": "Чтобы узлы из provider-а реально начали использоваться, его имя нужно потом подключить в `proxy-groups[].use` или иным образом включить в группу.",
+      "x-ui-example": "{ type: \"http\", url: \"https://sub.example.com/clash\", path: \"./providers/sub.yaml\", interval: 21600, health-check: { enable: true } }",
+      "x-ui-warning": "Чтобы узлы из provider-а реально начали использоваться, его имя нужно подключить в `proxy-groups[].use`, `include-all-providers` или другую группу. Provider сам по себе не меняет маршрут.",
+      "x-ui-doc-link": "https://wiki.metacubex.one/en/config/proxy-providers/",
       "properties": {
         "type": {
           "type": "string",
           "enum": ["http", "file", "inline"],
-          "description": "Источник. `http` — скачать по URL (подписка), `file` — локальный YAML/JSON, `inline` — задать `payload` прямо в конфиге."
+          "description": "Источник списка узлов. `http` — скачать подписку по URL, `file` — читать локальный файл, `inline` — взять список из `payload` прямо в конфиге.",
+          "x-ui-explain": "Это отвечает на вопрос “откуда брать прокси”: из интернета, из файла или из текущего YAML.",
+          "x-ui-use-case": "`http` подходит для подписок провайдера, `file` — для локально подготовленных списков, `inline` — для маленьких списков без отдельного файла.",
+          "x-ui-example": "type: http",
+          "x-ui-warning": "Для `http` обязателен `url`, для `file` обязателен `path`, для `inline` обязателен `payload`."
         },
         "url": {
           "type": "string",
           "format": "uri",
-          "description": "URL подписки (для `type: http`). Может быть обычным YAML/Clash Meta форматом или Base64 от provider'а.",
+          "description": "URL подписки (для `type: http`). Mihomo скачивает отсюда список прокси и сохраняет его в `path` или в автоматически выбранный кэш-файл.",
+          "x-ui-explain": "Это адрес, по которому Mihomo забирает свежий список серверов.",
+          "x-ui-use-case": "Вставьте сюда ссылку подписки от провайдера. Если ссылка доступна только через прокси, задайте рядом поле `proxy`.",
+          "x-ui-example": "url: \"https://sub.example.com/clash/?token=abc123\"",
+          "x-ui-warning": "Не публикуйте этот URL: часто он содержит токен доступа к подписке.",
           "examples": [
             "https://sub.example.com/clash/?token=abc123"
           ]
         },
         "path": {
           "type": "string",
-          "description": "Локальный путь — для `type: file` это источник, для `type: http` — кэш скачанной подписки. Относительные пути — от рабочего каталога Mihomo.",
+          "description": "Локальный путь. Для `type: file` это файл-источник, для `type: http` — файл кэша скачанной подписки. Если у HTTP-provider путь не задан, Mihomo может сгенерировать имя файла автоматически.",
+          "x-ui-explain": "Это место на роутере, где лежит или будет лежать YAML/JSON со списком узлов.",
+          "x-ui-use-case": "Задавайте `path`, когда хотите контролировать имя файла кэша или подключаете локальный provider.",
+          "x-ui-example": "path: ./proxy_providers/main.yaml",
+          "x-ui-warning": "Путь должен быть доступен Mihomo. Вне разрешённых каталогов Mihomo может отказать в чтении/записи.",
           "examples": ["./providers/subscribe.yaml", "/opt/etc/mihomo/providers/sub.yaml"]
         },
         "interval": {
           "type": "integer",
-          "description": "Интервал обновления в секундах (для `type: http`). Типовые значения: 21600 (6 ч), 86400 (сутки).",
+          "description": "Интервал обновления provider-а в секундах (для `type: http`). Это частота скачивания подписки, а не частота проверки задержки узлов.",
+          "x-ui-explain": "Это как часто Mihomo заново скачивает список серверов по `url`.",
+          "x-ui-use-case": "Для подписок обычно ставят 21600 (6 часов) или 86400 (сутки). Частые значения вроде 300 нужны редко и создают лишние запросы к провайдеру.",
+          "x-ui-example": "interval: 21600",
+          "x-ui-warning": "Не путайте с `health-check.interval`: там проверяются уже загруженные узлы, здесь обновляется сама подписка.",
           "examples": [3600, 21600, 86400]
         },
         "proxy": {
           "type": "string",
-          "description": "Имя прокси/группы, через которую скачивать подписку (если сам URL недоступен напрямую).",
+          "description": "Имя прокси или группы, через которые скачивать/обновлять подписку.",
+          "x-ui-explain": "Это маршрут только для загрузки provider-а: через него Mihomo ходит к `url` подписки.",
+          "x-ui-use-case": "Используйте `DIRECT`, если ссылка открывается напрямую, или имя рабочей группы/узла, если URL подписки заблокирован или доступен только через прокси.",
+          "x-ui-example": "proxy: DIRECT",
+          "x-ui-warning": "Это поле не выбирает прокси для пользовательского трафика; оно влияет только на скачивание provider-а.",
           "examples": ["DIRECT", "fallback"]
+        },
+        "size-limit": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Максимальный размер скачиваемого provider-файла в байтах. `0` означает без ограничения.",
+          "x-ui-explain": "Это защитный лимит: Mihomo не примет слишком большой ответ от URL подписки.",
+          "x-ui-use-case": "Оставьте `0`, если доверяете источнику; задайте лимит, если хотите защититься от случайно огромной подписки или неверного URL.",
+          "x-ui-example": "size-limit: 1048576",
+          "x-ui-warning": "Слишком маленький лимит оборвёт нормальную большую подписку и provider не обновится.",
+          "examples": [0, 1048576]
         },
         "header": {
           "type": "object",
-          "description": "Дополнительные HTTP-заголовки для подписки (например, HWID/User-Agent для premium-подписок). Значения Mihomo обычно задаёт строкой или списком строк.",
+          "description": "Дополнительные HTTP-заголовки для скачивания подписки: User-Agent, Authorization, HWID и другие требования provider-а. Значения можно задавать строкой или списком строк.",
+          "x-ui-explain": "Это дополнительные данные, которые Mihomo отправляет серверу подписки вместе с запросом.",
+          "x-ui-use-case": "Нужно для premium/HWID-подписок, авторизации по токену в заголовке или когда provider требует конкретный User-Agent.",
+          "x-ui-example": "header: { User-Agent: [\"mihomo/1.18.3\"], Authorization: [\"token 123\"] }",
+          "x-ui-warning": "Секретные токены в `Authorization` так же чувствительны, как URL подписки: не публикуйте их.",
           "additionalProperties": {
             "oneOf": [
               { "type": "string" },
@@ -1545,21 +1610,30 @@
         },
         "health-check": {
           "type": "object",
-          "description": "Параметры health-check всех прокси из этого провайдера.",
-          "x-ui-explain": "Это фоновые проверки доступности и задержки узлов из provider-а.",
-          "x-ui-use-case": "Нужны для auto/url-test/fallback сценариев, чтобы не выбирать мёртвые или слишком медленные узлы.",
-          "x-ui-example": "{ enable: true, url: \"https://www.gstatic.com/generate_204\", interval: 300 }",
-          "x-ui-warning": "Слишком частые проверки расходуют трафик и ресурсы роутера, а слишком редкие медленно замечают падение узлов.",
+          "description": "Параметры проверки доступности и задержки всех прокси из этого provider-а.",
+          "x-ui-explain": "Это отдельные фоновые пробы уже загруженных узлов: Mihomo ходит через каждый узел на короткий URL и понимает, жив ли он и какая задержка.",
+          "x-ui-use-case": "Нужно для `url-test`, `fallback`, `load-balance` и ручного выбора в dashboard, чтобы не выбирать мёртвые или слишком медленные узлы.",
+          "x-ui-example": "{ enable: true, url: \"https://www.gstatic.com/generate_204\", interval: 300, timeout: 5000, lazy: true, expected-status: 204 }",
+          "x-ui-warning": "Это не обновление подписки. За скачивание provider-а отвечает `proxy-providers.<name>.interval`, а `health-check.interval` проверяет уже загруженные узлы.",
+          "x-ui-doc-link": "https://wiki.metacubex.one/en/config/proxy-providers/#health-check",
           "properties": {
             "enable": {
               "type": "boolean",
               "default": true,
-              "description": "Включить health-check."
+              "description": "Включить health-check для узлов этого provider-а.",
+              "x-ui-explain": "Когда `true`, Mihomo будет периодически проверять доступность узлов из подписки.",
+              "x-ui-use-case": "Оставьте `true`, если узлы участвуют в `url-test`/`fallback` или вы хотите видеть задержку в dashboard.",
+              "x-ui-example": "enable: true",
+              "x-ui-warning": "Если выключить, автоматические группы будут хуже понимать, какие узлы живы."
             },
             "url": {
               "type": "string",
               "default": "https://www.gstatic.com/generate_204",
-              "description": "URL для проверки. Должен быстро отвечать (204 No Content).",
+              "description": "URL для проверки доступности. Обычно используют короткий endpoint, который быстро возвращает 204 No Content.",
+              "x-ui-explain": "Это адрес, к которому Mihomo пробует подключиться через каждый узел, чтобы измерить задержку и убедиться, что через узел есть интернет.",
+              "x-ui-use-case": "Для универсальной проверки подходят `https://www.gstatic.com/generate_204` или `https://cp.cloudflare.com`.",
+              "x-ui-example": "url: https://www.gstatic.com/generate_204",
+              "x-ui-warning": "Если URL заблокирован в вашей сети или отвечает не тем статусом, живые узлы могут выглядеть нерабочими.",
               "examples": [
                 "https://www.gstatic.com/generate_204",
                 "https://cp.cloudflare.com/generate_204"
@@ -1568,39 +1642,181 @@
             "interval": {
               "type": "integer",
               "default": 300,
-              "description": "Интервал проверки в секундах."
+              "description": "Интервал health-check в секундах: как часто проверять задержку и доступность узлов.",
+              "x-ui-explain": "Это период повторной проверки уже загруженных прокси, не период скачивания подписки.",
+              "x-ui-use-case": "300 секунд — нормальный баланс для роутера: узлы обновляются достаточно быстро, но без постоянного фона.",
+              "x-ui-example": "interval: 300",
+              "x-ui-warning": "Маленькие значения создают много одновременных запросов, особенно если в подписке десятки или сотни узлов.",
+              "examples": [300, 600, 1800]
             },
             "timeout": {
               "type": "integer",
               "default": 5000,
-              "description": "Таймаут отдельной проверки в миллисекундах."
+              "description": "Таймаут одной health-check проверки в миллисекундах. Если узел не ответил за это время, проверка считается неуспешной.",
+              "x-ui-explain": "Это максимальное время ожидания ответа от проверочного URL через конкретный узел.",
+              "x-ui-use-case": "5000 мс подходит для большинства домашних роутеров. Уменьшайте для строгого отбора быстрых узлов, увеличивайте для дальних/нестабильных локаций.",
+              "x-ui-example": "timeout: 5000",
+              "x-ui-warning": "Слишком маленький timeout пометит медленные, но рабочие узлы как мёртвые; слишком большой замедлит реакцию на реальные падения.",
+              "examples": [3000, 5000, 8000]
             },
             "lazy": {
               "type": "boolean",
               "default": true,
-              "description": "Ленивая проверка — пинговать только реально используемые узлы."
+              "description": "Ленивый режим health-check. По умолчанию `true`: если узлы provider-а сейчас не используются, плановая проверка для них не выполняется.",
+              "x-ui-explain": "Mihomo экономит ресурсы: не гоняет тесты по тем узлам, которые сейчас не участвуют в выбранном маршруте.",
+              "x-ui-use-case": "На роутере обычно лучше `true`. Ставьте `false`, если хотите заранее прогревать статистику по всем узлам и готовы платить ресурсами.",
+              "x-ui-example": "lazy: true",
+              "x-ui-warning": "При `lazy: true` dashboard может показать задержку не сразу, пока группа или узел не начнут использоваться."
             },
             "expected-status": {
               "type": ["integer", "string"],
-              "description": "Ожидаемый HTTP-статус. Можно задавать как число (200) или строку с диапазоном (`\"200-299\"`).",
-              "examples": [204, 200, "200-299", "2xx"]
+              "description": "Ожидаемый HTTP-статус ответа health-check URL. Узел считается доступным только если статус совпал. Поддерживаются число, список через `/` и диапазон через `-`.",
+              "x-ui-explain": "Это фильтр “какой HTTP-ответ считать нормальным” для проверки доступности.",
+              "x-ui-use-case": "Для `generate_204` обычно ставят `204`. Если endpoint может вернуть несколько успешных статусов, используйте `200/204` или диапазон `200-299`.",
+              "x-ui-example": "expected-status: 204",
+              "x-ui-warning": "Не используйте `2xx`: официальная схема expected-status описывает точные коды, `/` и диапазоны через `-`, например `200/302/400-503`.",
+              "examples": [204, 200, "200/302", "200-299", "200/302/400-503"]
             }
           }
         },
         "override": {
           "type": "object",
-          "description": "Перезаписать общие параметры всех прокси из этого провайдера (используется, когда провайдер отдаёт неподходящие для данного роутера настройки).",
+          "description": "Переопределить параметры всех прокси, загруженных из этого provider-а. Эти значения накладываются поверх того, что пришло в подписке.",
+          "x-ui-explain": "Это массовая правка узлов из подписки: например включить UDP всем узлам, добавить префикс к названиям или отключить TFO.",
+          "x-ui-use-case": "Полезно, когда provider отдаёт настройки, которые не подходят вашему роутеру, или когда нужно привести имена/UDP/TFO/IP-version к одному виду.",
+          "x-ui-example": "{ udp: true, tfo: false, additional-prefix: \"sub |\" }",
+          "x-ui-warning": "Override применяется ко всем узлам provider-а. Ошибка здесь может сломать сразу всю подписку.",
+          "x-ui-doc-link": "https://wiki.metacubex.one/en/config/proxy-providers/#override",
           "properties": {
-            "tfo": { "type": "boolean", "description": "Глобально включить/выключить TCP Fast Open." },
-            "mptcp": { "type": "boolean", "description": "Глобально переопределить MPTCP." },
-            "udp": { "type": "boolean", "description": "Глобально переопределить UDP-поддержку." },
-            "up": { "type": "string", "description": "Uplink (для hysteria/tuic/hy2)." },
-            "down": { "type": "string", "description": "Downlink (для hysteria/tuic/hy2)." },
-            "skip-cert-verify": { "type": "boolean", "description": "Переопределить проверку сертификата." },
-            "dialer-proxy": { "type": "string", "description": "Переопределить dialer-proxy для всех прокси." },
-            "interface-name": { "type": "string", "description": "Переопределить interface-name." },
-            "routing-mark": { "type": "integer", "description": "Переопределить routing-mark." },
-            "ip-version": { "type": "string", "description": "Переопределить ip-version." }
+            "tfo": {
+              "type": "boolean",
+              "description": "Массово включить или выключить TCP Fast Open для узлов provider-а.",
+              "x-ui-explain": "Это перезаписывает `tfo` у каждого узла из подписки.",
+              "x-ui-use-case": "Ставьте `false`, если TFO вызывает проблемы на роутере; `true` — только если уверены в поддержке сети и сервера.",
+              "x-ui-example": "tfo: false",
+              "x-ui-warning": "Работает только для TCP и может не дать эффекта без поддержки ядра/сервера."
+            },
+            "mptcp": {
+              "type": "boolean",
+              "description": "Массово переопределить MPTCP для узлов provider-а.",
+              "x-ui-explain": "Это включает/выключает Multipath TCP у всех узлов подписки.",
+              "x-ui-use-case": "Обычно оставляют `false`; включайте только для окружений, где MPTCP точно поддержан.",
+              "x-ui-example": "mptcp: false",
+              "x-ui-warning": "MPTCP работает только для TCP и требует поддержки на обеих сторонах."
+            },
+            "udp": {
+              "type": "boolean",
+              "description": "Массово переопределить UDP-поддержку у узлов provider-а.",
+              "x-ui-explain": "Это быстро включает или выключает UDP для всех серверов подписки.",
+              "x-ui-use-case": "Частый сценарий — `udp: true`, чтобы через подписку работали QUIC, DNS, игры и VoIP, если provider это поддерживает.",
+              "x-ui-example": "udp: true",
+              "x-ui-warning": "Если часть серверов не умеет UDP, массовое включение не сделает их рабочими для UDP."
+            },
+            "udp-over-tcp": {
+              "type": "boolean",
+              "description": "Массово переопределить UDP-over-TCP для Shadowsocks-подобных узлов, если такой режим поддерживается сервером.",
+              "x-ui-explain": "Это упаковывает UDP в TCP для поддерживаемых узлов, когда обычный UDP нежелателен или недоступен.",
+              "x-ui-use-case": "Используйте только если provider явно требует UDP-over-TCP или обычный UDP блокируется.",
+              "x-ui-example": "udp-over-tcp: false",
+              "x-ui-warning": "UDP-over-TCP часто увеличивает задержки и подходит не всем протоколам."
+            },
+            "up": {
+              "type": "string",
+              "description": "Лимит/заявленная скорость uplink для Hysteria/Hysteria2/TUIC-подобных узлов.",
+              "x-ui-explain": "Это скорость отправки, которую используют некоторые UDP-based протоколы для контроля congestion.",
+              "x-ui-use-case": "Задавайте, если provider или серверная настройка требует конкретные значения `up`/`down`.",
+              "x-ui-example": "up: \"10 Mbps\"",
+              "x-ui-warning": "Неверные скорости могут ухудшить стабильность Hysteria/Hysteria2."
+            },
+            "down": {
+              "type": "string",
+              "description": "Лимит/заявленная скорость downlink для Hysteria/Hysteria2/TUIC-подобных узлов.",
+              "x-ui-explain": "Это ожидаемая скорость скачивания для протоколов, которым нужна оценка пропускной способности.",
+              "x-ui-use-case": "Задавайте вместе с `up`, если этого требует provider или сервер.",
+              "x-ui-example": "down: \"50 Mbps\"",
+              "x-ui-warning": "Слишком завышенные или заниженные значения могут испортить работу congestion control."
+            },
+            "skip-cert-verify": {
+              "type": "boolean",
+              "description": "Массово переопределить проверку TLS-сертификата.",
+              "x-ui-explain": "Когда `true`, Mihomo не проверяет доверенность сертификата сервера.",
+              "x-ui-use-case": "Используйте только для диагностики или self-signed серверов, которым доверяете.",
+              "x-ui-example": "skip-cert-verify: false",
+              "x-ui-warning": "В рабочем конфиге `true` опасно: клиент перестаёт нормально проверять подлинность сервера."
+            },
+            "dialer-proxy": {
+              "type": "string",
+              "description": "Массово задать `dialer-proxy` для всех прокси provider-а.",
+              "x-ui-explain": "Все узлы подписки будут подключаться наружу через указанный узел или группу.",
+              "x-ui-use-case": "Нужно для цепочек через WARP/Tailscale/jump-host или для вывода всей подписки через отдельный интерфейс.",
+              "x-ui-example": "dialer-proxy: warp",
+              "x-ui-warning": "Проверьте, что указанное имя существует и не создаёт циклическую цепочку."
+            },
+            "interface-name": {
+              "type": "string",
+              "description": "Массово задать исходящий интерфейс для узлов provider-а.",
+              "x-ui-explain": "Все узлы подписки будут открывать соединения с конкретного сетевого интерфейса.",
+              "x-ui-use-case": "Полезно при нескольких WAN/VPN-интерфейсах на роутере.",
+              "x-ui-example": "interface-name: nwan0",
+              "x-ui-warning": "Неверное имя интерфейса сломает подключение у всех узлов provider-а."
+            },
+            "routing-mark": {
+              "type": "integer",
+              "description": "Массово задать fwmark для исходящих соединений узлов provider-а.",
+              "x-ui-explain": "Все соединения от узлов подписки получат одну routing mark.",
+              "x-ui-use-case": "Нужно для policy routing и кастомных правил маршрутизации.",
+              "x-ui-example": "routing-mark: 233",
+              "x-ui-warning": "Без соответствующих правил в системе эта метка может не иметь эффекта."
+            },
+            "ip-version": {
+              "type": "string",
+              "enum": ["dual", "ipv4", "ipv6", "ipv4-prefer", "ipv6-prefer"],
+              "description": "Массово переопределить IP-family при подключении к доменным серверам provider-а.",
+              "x-ui-explain": "Это заставляет все узлы подписки предпочитать IPv4/IPv6 или использовать только одно семейство.",
+              "x-ui-use-case": "На роутере без стабильного IPv6 часто ставят `ipv4` или `ipv4-prefer` для всей подписки.",
+              "x-ui-example": "ip-version: ipv4-prefer",
+              "x-ui-warning": "`ipv6` выбирайте только если IPv6 реально работает на роутере и у provider-а."
+            },
+            "additional-prefix": {
+              "type": "string",
+              "description": "Добавить фиксированный префикс к имени каждого узла provider-а.",
+              "x-ui-explain": "Mihomo допишет этот текст в начало названия каждого прокси из подписки.",
+              "x-ui-use-case": "Удобно помечать источник: например `sub | NL-01`, чтобы отличать одинаковые страны из разных подписок.",
+              "x-ui-example": "additional-prefix: \"sub | \"",
+              "x-ui-warning": "После переименования изменятся имена узлов, на которые могут ссылаться ручные группы."
+            },
+            "additional-suffix": {
+              "type": "string",
+              "description": "Добавить фиксированный суффикс к имени каждого узла provider-а.",
+              "x-ui-explain": "Mihomo допишет этот текст в конец названия каждого прокси из подписки.",
+              "x-ui-use-case": "Полезно помечать provider, тариф или назначение узлов.",
+              "x-ui-example": "additional-suffix: \" | main\"",
+              "x-ui-warning": "Суффикс влияет на отображаемые имена и ручные ссылки на узлы."
+            },
+            "proxy-name": {
+              "type": "array",
+              "description": "Правила переименования узлов по регулярным выражениям.",
+              "x-ui-explain": "Это массовая замена частей имени: `pattern` ищет текст, `target` задаёт новое имя или шаблон.",
+              "x-ui-use-case": "Нужно, чтобы привести шумные названия provider-а к понятному виду: убрать тарифы, эмодзи, множители, лишние слова.",
+              "x-ui-example": "proxy-name: [{ pattern: \"IPLC-(.*?)倍\", target: \"iplc x $1\" }]",
+              "x-ui-warning": "Неправильный regex может переименовать все узлы неожиданно или сделать имена одинаковыми.",
+              "items": {
+                "type": "object",
+                "required": ["pattern", "target"],
+                "properties": {
+                  "pattern": {
+                    "type": "string",
+                    "description": "Регулярное выражение, которое ищет часть имени узла.",
+                    "examples": ["IPLC-(.*?)倍", "(?i)hong ?kong|hk"]
+                  },
+                  "target": {
+                    "type": "string",
+                    "description": "Строка замены. Можно использовать группы regex вроде `$1`.",
+                    "examples": ["iplc x $1", "Hong Kong"]
+                  }
+                }
+              }
+            }
           }
         },
         "filter": {
@@ -1668,6 +1884,7 @@
       "x-ui-use-case": "`select` подходит для ручного выбора, `url-test` — для автоподбора самого быстрого, `fallback` — для резервирования.",
       "x-ui-example": "{ name: \"PROXY\", type: \"url-test\", use: [\"main-sub\"], url: \"https://www.gstatic.com/generate_204\" }",
       "x-ui-warning": "Группа должна ссылаться только на существующие `proxies`/`proxy-providers`, а циклы вида группа -> группа ломают выбор маршрута.",
+      "x-ui-doc-link": "https://wiki.metacubex.one/en/config/proxy-groups/",
       "required": ["name", "type"],
       "properties": {
         "name": {
@@ -1703,55 +1920,99 @@
         },
         "include-all": {
           "type": "boolean",
-          "description": "Включить все прокси из proxies + все providers. Синоним `include-all-proxies: true` + `include-all-providers: true`."
+          "description": "Включить все верхнеуровневые `proxies` и все `proxy-providers`, отсортированные по имени. Не включает другие proxy-groups.",
+          "x-ui-explain": "Это быстрый способ собрать группу из всех доступных одиночных узлов и всех provider-ов.",
+          "x-ui-use-case": "Подходит для общей группы выбора, когда вы хотите видеть все серверы из конфига и подписок без ручного перечисления.",
+          "x-ui-example": "include-all: true",
+          "x-ui-warning": "Proxy-groups автоматически не включаются; другие группы добавляйте вручную через `proxies`."
         },
         "include-all-proxies": {
           "type": "boolean",
-          "description": "Включить все прокси из секции `proxies` на верхнем уровне."
+          "description": "Включить все одиночные прокси из верхнеуровневой секции `proxies`, отсортированные по имени. Proxy-groups не включаются.",
+          "x-ui-explain": "Группа возьмёт все узлы, которые перечислены вручную в `proxies`.",
+          "x-ui-use-case": "Используйте, когда нужно включить ручные узлы, но не provider-ы подписок.",
+          "x-ui-example": "include-all-proxies: true",
+          "x-ui-warning": "Если вы ждёте узлы из подписок, нужен `include-all-providers` или `use`."
         },
         "include-all-providers": {
           "type": "boolean",
-          "description": "Включить все `proxy-providers` автоматически."
+          "description": "Включить все proxy-providers автоматически, отсортировав их по имени.",
+          "x-ui-explain": "Группа возьмёт узлы из всех подписок/provider-ов, которые описаны в `proxy-providers`.",
+          "x-ui-use-case": "Удобно для общей auto/select группы, когда все подписки должны участвовать без перечисления `use`.",
+          "x-ui-example": "include-all-providers: true",
+          "x-ui-warning": "По документации это делает ручное перечисление provider-ов через `use` лишним для такой группы."
         },
         "filter": {
           "type": "string",
-          "description": "Regex: оставить только прокси с подходящим именем.",
+          "description": "Regex-фильтр по имени: оставить в группе только подходящие узлы. Для proxy-groups применяется к включённым provider-ам и include-all наборам.",
+          "x-ui-explain": "Это сито по названиям узлов: всё, что не совпало с регулярным выражением, не попадёт в группу.",
+          "x-ui-use-case": "Используйте для групп по странам/назначениям: например Германия, Нидерланды, стриминг, игры.",
+          "x-ui-example": "filter: \"(?i)germany|de|🇩🇪\"",
+          "x-ui-warning": "Regex чувствителен к ошибкам. Если группа стала пустой, сначала проверьте `filter`.",
           "examples": ["(?i)germany", "🇩🇪|🇳🇱"]
         },
         "exclude-filter": {
           "type": "string",
-          "description": "Regex: исключить прокси с подходящим именем.",
+          "description": "Regex-фильтр исключения по имени: убрать из группы узлы, которые совпали с выражением.",
+          "x-ui-explain": "Это чёрный список по названиям узлов.",
+          "x-ui-use-case": "Полезно исключать тестовые, истёкшие, перегруженные или рекламные строки provider-а.",
+          "x-ui-example": "exclude-filter: \"(?i)expire|traffic|test\"",
+          "x-ui-warning": "Слишком широкий regex может случайно убрать хорошие узлы.",
           "examples": ["(?i)expire|traffic"]
         },
         "exclude-type": {
           "type": "string",
-          "description": "Исключить прокси по типу (`|`-разделённый список).",
+          "description": "Исключить узлы по типу протокола. Это не regex: типы перечисляются через `|`, например `ss|http`.",
+          "x-ui-explain": "Это фильтр по `type` узла, а не по имени.",
+          "x-ui-use-case": "Используйте, если хотите убрать устаревшие или нежелательные типы вроде `ssr`, `http`, `vmess`.",
+          "x-ui-example": "exclude-type: \"ssr|http\"",
+          "x-ui-warning": "Пишите именно типы узлов из конфигурации; регулярные выражения здесь не поддерживаются.",
           "examples": ["ssr", "vmess|ssr"]
         },
         "url": {
           "type": "string",
-          "description": "URL для проверки (для `url-test`/`fallback`/`load-balance`).",
+          "description": "URL для проверки задержки/доступности в группах `url-test`, `fallback` и `load-balance`.",
+          "x-ui-explain": "Группа ходит через кандидатов на этот адрес и по результату выбирает быстрый или рабочий узел.",
+          "x-ui-use-case": "Для обычной проверки используйте короткий endpoint вроде `https://www.gstatic.com/generate_204`.",
+          "x-ui-example": "url: https://www.gstatic.com/generate_204",
+          "x-ui-warning": "В proxy-groups этот URL проверяет только узлы из поля `proxies`; узлы, подключённые через `use`, проверяются health-check provider-а.",
           "examples": ["https://www.gstatic.com/generate_204"]
         },
         "interval": {
           "type": "integer",
-          "description": "Интервал проверки доступности в секундах.",
+          "description": "Интервал проверки доступности в секундах. Если не `0`, группа периодически запускает проверки.",
+          "x-ui-explain": "Это как часто группа перепроверяет кандидатов и обновляет выбор.",
+          "x-ui-use-case": "300 секунд — частый баланс между свежестью статуса и нагрузкой на роутер.",
+          "x-ui-example": "interval: 300",
+          "x-ui-warning": "Это не `proxy-providers.interval`: здесь проверяется группа, а там скачивается подписка.",
           "examples": [60, 300, 600]
         },
         "timeout": {
           "type": "integer",
-          "description": "Таймаут одиночной проверки в миллисекундах.",
+          "description": "Таймаут одной проверки группы в миллисекундах. Если кандидат не ответил вовремя, проверка считается неуспешной.",
+          "x-ui-explain": "Это сколько группа ждёт ответа от проверочного URL через конкретный узел.",
+          "x-ui-use-case": "Обычно 5000 мс достаточно. Меньше — строже к медленным узлам, больше — терпимее к дальним локациям.",
+          "x-ui-example": "timeout: 5000",
+          "x-ui-warning": "Слишком маленький timeout может исключать рабочие, но дальние узлы.",
           "examples": [5000]
         },
         "lazy": {
           "type": "boolean",
           "default": true,
-          "description": "Проверять только тот прокси, который в данный момент используется (экономит ресурсы)."
+          "description": "Ленивый режим проверки группы. По умолчанию `true`: если группа сейчас не выбрана, плановые проверки не выполняются.",
+          "x-ui-explain": "Mihomo экономит CPU/трафик и не тестирует неактивную группу до необходимости.",
+          "x-ui-use-case": "На роутере обычно оставляют `true`; `false` нужен, если хотите всегда иметь заранее прогретые задержки.",
+          "x-ui-example": "lazy: true",
+          "x-ui-warning": "При `lazy: true` задержки в dashboard могут появляться не сразу."
         },
         "expected-status": {
           "type": ["integer", "string"],
-          "description": "Ожидаемый HTTP-статус.",
-          "examples": [204, "200-299"]
+          "description": "Ожидаемый HTTP-статус ответа при проверке группы. Если задан, кандидат считается доступным только при совпадении. Поддерживаются число, список через `/` и диапазоны через `-`.",
+          "x-ui-explain": "Это правило, какой HTTP-ответ считать успешной проверкой.",
+          "x-ui-use-case": "Для `generate_204` обычно `204`; для endpoint-ов с разными успешными ответами используйте `200/204` или `200-299`.",
+          "x-ui-example": "expected-status: 204",
+          "x-ui-warning": "Пишите `200/302` или `200-299`, а не `2xx`: документация Mihomo описывает slash/range синтаксис.",
+          "examples": [204, "200/302", "200-299", "200/302/400-503"]
         },
         "tolerance": {
           "type": "integer",
@@ -1759,7 +2020,12 @@
         },
         "max-failed-times": {
           "type": "integer",
-          "description": "Число подряд неудачных проверок, после которого узел считается мёртвым (для `fallback`)."
+          "default": 5,
+          "description": "Максимум подряд неудачных проверок; после превышения Mihomo принудительно запускает health-check. По документации значение по умолчанию 5.",
+          "x-ui-explain": "Это терпимость к временным сбоям перед тем, как группа начнёт активно перепроверять узел.",
+          "x-ui-use-case": "Оставьте 5 для обычной стабильной работы; уменьшайте, если нужно быстрее реагировать на падения.",
+          "x-ui-example": "max-failed-times: 5",
+          "x-ui-warning": "Слишком маленькое значение может вызвать лишние переключения при кратких сетевых сбоях."
         },
         "strategy": {
           "type": "string",
@@ -1769,15 +2035,27 @@
         "disable-udp": {
           "type": "boolean",
           "default": false,
-          "description": "Отключить UDP через эту группу (полезно, если серверы группы не поддерживают UDP)."
+          "description": "Отключить UDP через эту proxy-group.",
+          "x-ui-explain": "Даже если отдельные узлы умеют UDP, группа может запретить UDP на своём уровне.",
+          "x-ui-use-case": "Включайте, если у серверов группы нестабильный UDP или нужно принудительно убрать QUIC/UDP-трафик из этой политики.",
+          "x-ui-example": "disable-udp: true",
+          "x-ui-warning": "Это может сломать QUIC, часть игр, VoIP и DNS-over-UDP через эту группу."
         },
         "interface-name": {
           "type": "string",
-          "description": "Переопределить исходящий интерфейс для группы."
+          "description": "Переопределить исходящий интерфейс для группы. В документации поле помечено как устаревшее: лучше задавать `interface-name` на конкретном proxy node.",
+          "x-ui-explain": "Группа будет пытаться отправлять исходящие соединения через указанный сетевой интерфейс.",
+          "x-ui-use-case": "Используйте только для совместимости; предпочтительнее настроить интерфейс у отдельных узлов.",
+          "x-ui-example": "interface-name: nwan0",
+          "x-ui-warning": "У этого поля ниже приоритет, чем у proxy node, и оно deprecated в пользу `proxies[].interface-name`."
         },
         "routing-mark": {
           "type": "integer",
-          "description": "Переопределить fwmark для группы."
+          "description": "Переопределить fwmark для группы. В документации поле помечено как устаревшее: лучше задавать `routing-mark` на конкретном proxy node.",
+          "x-ui-explain": "Соединения группы получают Linux routing mark для policy routing.",
+          "x-ui-use-case": "Используйте только если у вас есть системные правила, которые читают эту метку.",
+          "x-ui-example": "routing-mark: 233",
+          "x-ui-warning": "У этого поля ниже приоритет, чем у proxy node, и оно deprecated в пользу `proxies[].routing-mark`."
         },
         "icon": {
           "type": "string",
@@ -1812,17 +2090,21 @@
       "x-ui-use-case": "Используется, когда не хочется вручную перечислять тысячи доменов, подсетей или рекламных списков.",
       "x-ui-example": "{ type: \"http\", behavior: \"domain\", format: \"mrs\", url: \"https://example.com/youtube.mrs\", interval: 86400 }",
       "x-ui-warning": "Самое важное здесь — правильно выбрать `behavior`: если тип содержимого и описание набора не совпадут, правила будут работать непредсказуемо.",
+      "x-ui-doc-link": "https://wiki.metacubex.one/en/config/rule-providers/",
       "properties": {
         "type": {
           "type": "string",
           "enum": ["http", "file", "inline"],
-          "description": "Источник. `http` — скачать по URL, `file` — локальный файл, `inline` — задать `payload` в конфиге."
+          "description": "Источник набора правил. `http` — скачать по URL, `file` — читать локальный файл, `inline` — задать `payload` прямо в конфиге.",
+          "x-ui-explain": "Это откуда Mihomo берёт rule-set: из интернета, из файла или из inline-списка.",
+          "x-ui-use-case": "`http` — для готовых rule-set из репозиториев, `file` — для локальных правил, `inline` — для небольших собственных списков.",
+          "x-ui-example": "type: http",
+          "x-ui-warning": "Для `http` нужен `url`, для `file` нужен `path`, для `inline` нужен `payload`."
         },
         "behavior": {
           "type": "string",
           "enum": ["domain", "ipcidr", "classical"],
-          "description": "Тип правил в наборе. `domain` — только домены/суффиксы, `ipcidr` — только IP/CIDR, `classical` — смешанный формат (DOMAIN-SUFFIX, IP-CIDR и т.д., как в основных `rules`)."
-          ,
+          "description": "Тип правил в наборе. `domain` — только домены/суффиксы, `ipcidr` — только IP/CIDR, `classical` — смешанный формат (DOMAIN-SUFFIX, IP-CIDR и т.д., как в основных `rules`).",
           "x-ui-explain": "Это подсказка Mihomo, что именно лежит внутри rule-provider: домены, IP-подсети или смешанные правила.",
           "x-ui-use-case": "`domain` берут для geosite/списков доменов, `ipcidr` — для IP-подсетей, `classical` — для строк формата `DOMAIN-SUFFIX,...` и похожих.",
           "x-ui-example": "\"behavior\": \"domain\"",
@@ -1831,7 +2113,12 @@
         "format": {
           "type": "string",
           "enum": ["yaml", "text", "mrs"],
-          "description": "Формат файла. `yaml` — YAML-список с `payload:`, `text` — простой текстовый список (строка=правило), `mrs` — бинарный формат Mihomo (максимум производительности для больших rule-set)."
+          "default": "yaml",
+          "description": "Формат файла. `yaml` — YAML-список с `payload:`, `text` — простой текстовый список, `mrs` — бинарный формат Mihomo для больших rule-set.",
+          "x-ui-explain": "Это как именно упакован файл rule-provider-а.",
+          "x-ui-use-case": "`mrs` быстрее для больших списков, но по документации поддерживает только `behavior: domain` и `behavior: ipcidr`.",
+          "x-ui-example": "format: mrs",
+          "x-ui-warning": "Не используйте `format: mrs` с `behavior: classical`: официальная документация ограничивает MRS доменными и IP-наборами."
         },
         "url": {
           "type": "string",
@@ -1849,17 +2136,54 @@
         },
         "interval": {
           "type": "integer",
-          "description": "Интервал обновления в секундах (для `type: http`).",
+          "description": "Интервал обновления rule-provider-а в секундах (для `type: http`). Это частота скачивания набора правил.",
+          "x-ui-explain": "Это как часто Mihomo заново скачивает внешний список правил.",
+          "x-ui-use-case": "Для публичных rule-set обычно достаточно 21600 или 86400 секунд.",
+          "x-ui-example": "interval: 86400",
+          "x-ui-warning": "Не ставьте слишком частое обновление без необходимости: большие rule-set создают нагрузку на роутер и источник.",
           "examples": [86400, 21600]
         },
         "proxy": {
           "type": "string",
-          "description": "Прокси/группа для загрузки rule-set (если URL недоступен напрямую).",
+          "description": "Прокси или группа для загрузки rule-set, если URL недоступен напрямую.",
+          "x-ui-explain": "Это маршрут только для скачивания файла правил.",
+          "x-ui-use-case": "Используйте `DIRECT`, если файл доступен напрямую, или имя группы/узла, если источник заблокирован.",
+          "x-ui-example": "proxy: DIRECT",
+          "x-ui-warning": "Это не target правила. Куда отправлять совпавший трафик, задаётся в строке `RULE-SET,...` в секции `rules`.",
           "examples": ["DIRECT", "fallback"]
+        },
+        "size-limit": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Максимальный размер скачиваемого rule-provider файла в байтах. `0` означает без ограничения.",
+          "x-ui-explain": "Это защитный лимит на размер внешнего списка правил.",
+          "x-ui-use-case": "Оставьте `0` для доверенных источников; задайте лимит, если хотите защититься от ошибочного URL или слишком большого файла.",
+          "x-ui-example": "size-limit: 1048576",
+          "x-ui-warning": "Если лимит меньше реального размера rule-set, provider не обновится.",
+          "examples": [0, 1048576]
+        },
+        "header": {
+          "type": "object",
+          "description": "Дополнительные HTTP-заголовки для скачивания rule-provider-а: User-Agent, Authorization и другие требования источника.",
+          "x-ui-explain": "Это дополнительные данные, которые Mihomo отправляет серверу при загрузке списка правил.",
+          "x-ui-use-case": "Нужно для приватных rule-set, токенов авторизации или источников, которые требуют конкретный User-Agent.",
+          "x-ui-example": "header: { User-Agent: [\"mihomo/1.18.3\"] }",
+          "x-ui-warning": "Не публикуйте токены из `Authorization` и похожих заголовков.",
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" } }
+            ]
+          }
         },
         "payload": {
           "type": "array",
           "description": "Inline-список правил (для `type: inline`).",
+          "x-ui-explain": "Это правила, записанные прямо внутри текущего YAML вместо отдельного файла.",
+          "x-ui-use-case": "Подходит для коротких собственных списков, которые не хочется выносить в отдельный provider-файл.",
+          "x-ui-example": "payload: [\"DOMAIN-SUFFIX,example.com\", \"IP-CIDR,203.0.113.0/24\"]",
+          "x-ui-warning": "Для больших списков лучше использовать `type: http` или `file`, иначе конфиг станет тяжёлым и неудобным.",
           "items": { "type": "string", "examples": ["DOMAIN-SUFFIX,google.com", "IP-CIDR,8.8.8.8/32"] }
         }
       },

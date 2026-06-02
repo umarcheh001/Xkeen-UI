@@ -183,12 +183,21 @@ def test_mihomo_definition_has_beginner_metadata(definition):
 @pytest.mark.parametrize(
     "definition,property_name",
     [
+        ("proxy", "udp"),
+        ("proxy", "tfo"),
+        ("proxy", "mptcp"),
+        ("proxy", "ip-version"),
         ("proxy", "network"),
         ("proxy", "reality-opts"),
+        ("proxyProvider", "interval"),
         ("proxyProvider", "health-check"),
+        ("proxyProvider", "override"),
         ("proxyGroup", "proxies"),
         ("proxyGroup", "use"),
+        ("proxyGroup", "interval"),
+        ("proxyGroup", "expected-status"),
         ("ruleProvider", "behavior"),
+        ("ruleProvider", "format"),
     ],
 )
 def test_mihomo_nested_beginner_metadata_covers_confusing_fields(definition, property_name):
@@ -199,7 +208,89 @@ def test_mihomo_nested_beginner_metadata_covers_confusing_fields(definition, pro
     _assert_beginner_meta(node, f"mihomo.{definition}.{property_name}")
 
 
+@pytest.mark.parametrize(
+    "definition,path",
+    [
+        ("proxyProvider", ("health-check", "interval")),
+        ("proxyProvider", ("health-check", "timeout")),
+        ("proxyProvider", ("health-check", "lazy")),
+        ("proxyProvider", ("health-check", "expected-status")),
+        ("proxyProvider", ("override", "tfo")),
+        ("proxyProvider", ("override", "mptcp")),
+        ("proxyProvider", ("override", "udp")),
+        ("proxyProvider", ("override", "ip-version")),
+        ("proxyGroup", ("timeout",)),
+        ("proxyGroup", ("lazy",)),
+        ("proxyGroup", ("disable-udp",)),
+        ("ruleProvider", ("interval",)),
+        ("ruleProvider", ("proxy",)),
+        ("ruleProvider", ("payload",)),
+    ],
+)
+def test_mihomo_deep_beginner_metadata_covers_timing_and_override_fields(definition, path):
+    schema = _load(SCHEMAS_DIR / "mihomo-config.schema.json")
+    node = (schema.get("definitions") or {}).get(definition)
+    for key in path:
+        node = ((node or {}).get("properties") or {}).get(key)
+    joined = ".".join((definition, *path))
+    assert node is not None, f"mihomo.{joined}: missing schema node"
+    _assert_beginner_meta(node, f"mihomo.{joined}")
+
+
 # ---------- Runtime hover assembly ----------
+
+
+@pytest.mark.parametrize(
+    "doc_with_marker,expected_path,expected_substring",
+    [
+        (
+            "\n".join([
+                "proxy-providers:",
+                "  premium:",
+                "    type: http",
+                "    url: https://sub.example.com/clash",
+                "    health-check:",
+                "      enable: true",
+                "      timeout__CURSOR__: 8000",
+                "",
+            ]),
+            "proxy-providers.premium.health-check.timeout",
+            "Таймаут одной health-check проверки",
+        ),
+        (
+            "\n".join([
+                "proxy-providers:",
+                "  premium:",
+                "    type: http",
+                "    url: https://sub.example.com/clash",
+                "    override:",
+                "      tfo__CURSOR__: true",
+                "",
+            ]),
+            "proxy-providers.premium.override.tfo",
+            "Массово включить или выключить TCP Fast Open",
+        ),
+    ],
+)
+def test_mihomo_yaml_hover_uses_beginner_metadata_for_provider_details(doc_with_marker, expected_path, expected_substring):
+    script = f"""
+import fs from 'node:fs';
+import {{ hoverYamlTextFromSchema }} from './xkeen-ui/static/js/ui/yaml_schema.js';
+
+const schema = JSON.parse(fs.readFileSync('./xkeen-ui/static/schemas/mihomo-config.schema.json', 'utf8'));
+const marker = '__CURSOR__';
+const docWithMarker = {json.dumps(doc_with_marker)};
+const offset = docWithMarker.indexOf(marker);
+const doc = docWithMarker.replace(marker, '');
+const result = hoverYamlTextFromSchema(doc, schema, {{ offset, beginnerMode: true }});
+console.log(JSON.stringify(result));
+"""
+
+    payload = _run_node_json(script)
+    assert payload is not None
+    assert payload["path"] == expected_path
+    assert "Простыми словами:" in payload["plain"]
+    assert expected_substring in payload["plain"]
 
 
 @pytest.mark.parametrize(
