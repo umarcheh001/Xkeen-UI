@@ -39,6 +39,7 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function _scheduleNextDiffNavigation()" in diff_modal
     assert "function _canRevertFromDiff()" in diff_modal
     assert "function _revertDisabledReason()" in diff_modal
+    assert "function _hasSaveScope()" in diff_modal
     assert "function _supportsIgnoreTrimWhitespace()" in diff_modal
     assert "function _syncIgnoreWhitespaceToggle()" in diff_modal
     assert "function setIgnoreTrimWhitespace(flag)" in diff_modal
@@ -104,7 +105,13 @@ def test_diff_modal_exposes_bidirectional_apply_and_save_contracts():
     assert "function _hasAnyDraft()" in diff_modal
     assert "function _applyDisabledReason(side)" in diff_modal
     assert "function _saveDisabledReason()" in diff_modal
+    assert "if (!_activeSpec || !_hasSaveScope()) return null;" in diff_modal
+    assert "if (!_hasWritableBufferSide()) return 'Выберите «Текущий редактор» слева или справа, чтобы сохранить файл';" in diff_modal
+    assert "return !!(_hasSaveScope() && _hasWritableBufferSide());" in diff_modal
     assert "btn.classList.toggle('is-disabled', disabled);" in diff_modal
+    assert "btn.disabled = disabled;" in diff_modal
+    assert "btn.setAttribute('title', reason);" in diff_modal
+    assert "btn.setAttribute('title', defaultTip);" in diff_modal
 
     assert "_dirtySinceOpen = true;" in diff_modal
     assert "_dirtySinceOpen = false;" in diff_modal

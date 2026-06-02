@@ -257,6 +257,23 @@ test('CodeMirror diff modal keeps both panes visible after apply-left', async ({
   expect(after.rightVisibleText.join('\n')).toContain('"bbb",');
 });
 
+test('CodeMirror diff modal keeps save file visible and clickable for writable scopes', async ({ page }) => {
+  await page.goto('/');
+  await waitForRoutingEditor(page);
+  await ensureCodeMirrorRouting(page);
+  await page.waitForFunction(() => !!window.XKeen?.ui?.diffModal?.open);
+  await installProbeScope(page);
+  await openProbeDiff(page);
+
+  const saveBtn = page.locator('#xkeen-diff-modal .xkeen-diff-save-btn');
+  await expect(saveBtn).toBeVisible();
+  await expect(saveBtn).toBeEnabled();
+  await saveBtn.click();
+  await expect.poll(async () => {
+    return page.evaluate(() => Number(window.__xkeenDiffProbe?.saved || 0));
+  }).toBe(1);
+});
+
 test('CodeMirror diff modal keeps panes stable across apply-right, apply-all, and revert', async ({ page }) => {
   await page.goto('/');
   await waitForRoutingEditor(page);

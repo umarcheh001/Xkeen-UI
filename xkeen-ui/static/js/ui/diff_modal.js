@@ -1842,6 +1842,11 @@
     return !!(scope && (isFn(scope.applyTextToSide) || isFn(scope.applyText)));
   }
 
+  function _hasSaveScope() {
+    const scope = _activeSpec && _activeSpec.scope;
+    return !!(scope && isFn(scope.save));
+  }
+
   function _getVisibleBufferSide() {
     if (!_activeSpec) return '';
     if (_isBufferDescriptor(_activeSpec.left && _activeSpec.left.descriptor)) return 'left';
@@ -1906,8 +1911,7 @@
 
   function _canSaveFromDiff() {
     if (!_activeSpec) return false;
-    const scope = _activeSpec && _activeSpec.scope;
-    return !!(scope && isFn(scope.save) && _hasWritableBufferSide());
+    return !!(_hasSaveScope() && _hasWritableBufferSide());
   }
 
   function _canRevertFromDiff() {
@@ -1939,7 +1943,8 @@
   }
 
   function _saveDisabledReason() {
-    if (!_canSaveFromDiff()) return null;
+    if (!_activeSpec || !_hasSaveScope()) return null;
+    if (!_hasWritableBufferSide()) return 'Выберите «Текущий редактор» слева или справа, чтобы сохранить файл';
     if (!_hasAnyDiff() && !_hasAnyDraft()) return 'Нет изменений для сохранения';
     return '';
   }
@@ -1953,19 +1958,28 @@
   function _setBtnState(btn, reason, defaultTip) {
     if (!btn) return;
     if (reason === null) {
-      try { btn.classList.add('hidden'); } catch (e) {}
+      try {
+        btn.classList.add('hidden');
+        btn.disabled = true;
+        btn.setAttribute('aria-disabled', 'true');
+      } catch (e) {}
       return;
     }
     try {
       btn.classList.remove('hidden');
       const disabled = !!reason;
+      btn.disabled = disabled;
       btn.classList.toggle('is-disabled', disabled);
       if (disabled) {
         btn.setAttribute('aria-disabled', 'true');
         btn.setAttribute('data-tooltip', reason);
+        btn.setAttribute('title', reason);
       } else {
         btn.removeAttribute('aria-disabled');
-        if (defaultTip) btn.setAttribute('data-tooltip', defaultTip);
+        if (defaultTip) {
+          btn.setAttribute('data-tooltip', defaultTip);
+          btn.setAttribute('title', defaultTip);
+        }
       }
     } catch (e) {}
   }
