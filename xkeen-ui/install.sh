@@ -99,6 +99,7 @@ DEFAULT_PORT=8088
 ALT_PORT=8091
 PIP_PRIMARY_INDEX_DEFAULT="https://pypi.org/simple"
 PIP_FALLBACK_INDEX_DEFAULT="https://mirrors.aliyun.com/pypi/simple/"
+PIP_REPAIR_ATTEMPTED=0
 
 append_pip_index_candidate() {
   URL="$1"
@@ -127,6 +128,70 @@ print_pip_index_candidates() {
   echo "[*] pip index fallback order: $PIP_INDEX_CANDIDATES"
 }
 
+ensure_opkg_bin() {
+  if [ -n "${OPKG_BIN:-}" ] && [ -x "$OPKG_BIN" ]; then
+    return 0
+  fi
+
+  if command -v opkg >/dev/null 2>&1; then
+    OPKG_BIN="$(command -v opkg)"
+    return 0
+  fi
+
+  if [ -x "/opt/bin/opkg" ]; then
+    OPKG_BIN="/opt/bin/opkg"
+    return 0
+  fi
+
+  return 1
+}
+
+repair_python3_pip_package() {
+  REPAIR_REASON="$1"
+
+  if [ "${PIP_REPAIR_ATTEMPTED:-0}" -eq 1 ]; then
+    echo "[!] Ремонт python3-pip уже выполнялся, повторно не запускаю."
+    return 1
+  fi
+  PIP_REPAIR_ATTEMPTED=1
+
+  if ! ensure_opkg_bin; then
+    echo "[!] Не найден opkg для автоматического ремонта python3-pip."
+    return 1
+  fi
+
+  echo "[!] python3-pip выглядит поврежденным: $REPAIR_REASON"
+  echo "[*] Автоматический ремонт: opkg remove python3-pip -> opkg update -> opkg install python3-pip..."
+  "$OPKG_BIN" remove python3-pip >/dev/null 2>&1 || true
+  "$OPKG_BIN" update >/dev/null 2>&1 || true
+  if ! "$OPKG_BIN" install python3-pip; then
+    echo "[!] Не удалось переустановить python3-pip через opkg."
+    return 1
+  fi
+
+  if ! "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
+    echo "[!] python3-pip переустановлен, но модуль pip всё ещё недоступен из $PYTHON_BIN."
+    return 1
+  fi
+
+  echo "[*] python3-pip успешно восстановлен."
+  return 0
+}
+
+pip_failure_needs_repair() {
+  PIP_ERROR_LOG="$1"
+  [ -f "$PIP_ERROR_LOG" ] || return 1
+
+  # Entware can keep stale pip files after Python package upgrades. In that
+  # state `pip --version` may work, but every network install crashes while
+  # building the SSL truststore/certifi context.
+  grep -Fq "load_verify_locations(certifi.where())" "$PIP_ERROR_LOG" && return 0
+  grep -Fq "/pip/_vendor/truststore/" "$PIP_ERROR_LOG" && return 0
+  grep -Fq "No module named 'pip'" "$PIP_ERROR_LOG" && return 0
+  grep -Fq 'No module named "pip"' "$PIP_ERROR_LOG" && return 0
+  return 1
+}
+
 pip_install_with_fallback() {
   PHASE="$1"
   shift
@@ -142,16 +207,44 @@ pip_install_with_fallback() {
     [ -n "$INDEX_URL" ] || continue
 
     echo "[*] [$PHASE] pip install через индекс: $INDEX_URL"
+    PIP_LOG="${TMPDIR:-/tmp}/xkeen-pip-$PHASE-$$.log"
+    rm -f "$PIP_LOG" 2>/dev/null || true
+
     if "$PYTHON_BIN" -m pip install \
       --upgrade \
       --index-url "$INDEX_URL" \
       --default-timeout "${XKEEN_PIP_TIMEOUT:-60}" \
-      "$@"; then
+      "$@" >"$PIP_LOG" 2>&1; then
+      cat "$PIP_LOG"
+      rm -f "$PIP_LOG" 2>/dev/null || true
       echo "[*] [$PHASE] pip install успешно через: $INDEX_URL"
       return 0
+    else
+      LAST_STATUS=$?
     fi
 
-    LAST_STATUS=$?
+    cat "$PIP_LOG"
+    if pip_failure_needs_repair "$PIP_LOG"; then
+      if repair_python3_pip_package "pip падает при SSL truststore/certifi или модуль pip поврежден"; then
+        echo "[*] [$PHASE] Повторяю pip install после ремонта python3-pip: $INDEX_URL"
+        rm -f "$PIP_LOG" 2>/dev/null || true
+        if "$PYTHON_BIN" -m pip install \
+          --upgrade \
+          --index-url "$INDEX_URL" \
+          --default-timeout "${XKEEN_PIP_TIMEOUT:-60}" \
+          "$@" >"$PIP_LOG" 2>&1; then
+          cat "$PIP_LOG"
+          rm -f "$PIP_LOG" 2>/dev/null || true
+          echo "[*] [$PHASE] pip install успешно через: $INDEX_URL"
+          return 0
+        else
+          LAST_STATUS=$?
+          cat "$PIP_LOG"
+        fi
+      fi
+    fi
+
+    rm -f "$PIP_LOG" 2>/dev/null || true
     echo "[!] [$PHASE] pip install не удался через: $INDEX_URL"
   done
 
@@ -257,28 +350,13 @@ if [ "$NEED_FLASK" -eq 1 ] || [ "$NEED_GEVENT" -eq 1 ]; then
   fi
 
   # Auto-repair python3-pip if an Entware update left it structurally broken.
-  # Symptom: opkg reports "Package python3-pip ... is up to date" but
-  # `python3 -m pip` raises ModuleNotFoundError: No module named 'pip'.
-  # opkg install is idempotent — it won't re-extract files for an already
-  # "installed" package, so we have to remove first to force a clean reinstall.
   if ! "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
-    echo "[!] python3-pip установлен пакетом, но модуль pip недоступен (часто после обновления Entware)."
-    echo "[*] Автоматический ремонт: opkg remove python3-pip -> opkg update -> opkg install python3-pip..."
-    "$OPKG_BIN" remove python3-pip >/dev/null 2>&1 || true
-    "$OPKG_BIN" update >/dev/null 2>&1 || true
-    if ! "$OPKG_BIN" install python3-pip; then
-      echo "[!] Не удалось переустановить python3-pip через opkg."
+    if ! repair_python3_pip_package "pip --version failed after Entware package install"; then
+      echo "[!] Не удалось автоматически восстановить python3-pip."
       echo "    Выполни вручную и запусти установщик ещё раз:"
       echo "      opkg remove python3-pip && opkg update && opkg install python3-pip"
       exit 1
     fi
-    if ! "$PYTHON_BIN" -m pip --version >/dev/null 2>&1; then
-      echo "[!] python3-pip переустановлен, но модуль pip всё ещё недоступен из $PYTHON_BIN."
-      echo "    Выполни вручную и запусти установщик ещё раз:"
-      echo "      opkg remove python3-pip && opkg update && opkg install python3-pip"
-      exit 1
-    fi
-    echo "[*] python3-pip успешно восстановлен."
   fi
 
   print_pip_index_candidates

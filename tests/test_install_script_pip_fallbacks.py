@@ -17,6 +17,18 @@ def test_install_script_supports_pip_mirror_fallbacks_for_flask_and_gevent():
     assert 'export XKEEN_GEVENT_PIP_SPEC=${XKEEN_GEVENT_PIP_SPEC:-$GEVENT_PIP_SPEC}' in text
 
 
+def test_install_script_repairs_entware_pip_truststore_failures():
+    text = Path("xkeen-ui/install.sh").read_text(encoding="utf-8")
+
+    assert "PIP_REPAIR_ATTEMPTED=0" in text
+    assert "repair_python3_pip_package() {" in text
+    assert "pip_failure_needs_repair() {" in text
+    assert 'grep -Fq "load_verify_locations(certifi.where())"' in text
+    assert 'grep -Fq "/pip/_vendor/truststore/"' in text
+    assert "Повторяю pip install после ремонта python3-pip" in text
+    assert 'repair_python3_pip_package "pip падает при SSL truststore/certifi или модуль pip поврежден"' in text
+
+
 def test_install_script_refreshes_bundled_xray_templates_without_touching_custom_names():
     text = Path("xkeen-ui/install.sh").read_text(encoding="utf-8")
 
