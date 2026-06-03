@@ -3052,6 +3052,208 @@ def test_refresh_subscription_preserves_user_routing_jsonc_comments(tmp_path: Pa
     json.loads(subs._strip_jsonc_comments(raw_after))
 
 
+def test_due_refresh_preserves_commented_main_routing_jsonc(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {"tag": "direct", "protocol": "freedom"},
+                    {"tag": "block", "protocol": "blackhole"},
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    routing_jsonc = "\n".join(
+        [
+            "{",
+            '  "routing": {',
+            '    "domainStrategy": "IPIfNonMatch",',
+            '    "rules": [',
+            "      // 1. LOCAL NETWORKS AND RESERVES",
+            "      {",
+            '        "type": "field",',
+            '        "inboundTag": ["redirect", "tproxy", "socks-in", "from_balancer_main"],',
+            '        "outboundTag": "direct",',
+            '        "ip": ["127.0.0.0/8", "10.0.0.0/8"]',
+            "      },",
+            "      // 8. BLOCKED DOMAINS -> balancer_main",
+            "      {",
+            '        "type": "field",',
+            '        "inboundTag": ["redirect", "tproxy", "socks-in"],',
+            '        "balancerTag": "balancer_main",',
+            '        "domain": ["ext:geosite_v2fly.dat:telegram"]',
+            "      },",
+            "      // 10. DEFAULT DIRECT",
+            "      {",
+            '        "type": "field",',
+            '        "inboundTag": ["redirect", "tproxy", "socks-in"],',
+            '        "outboundTag": "direct",',
+            '        "network": "tcp,udp"',
+            "      },",
+            "      // 11. FALLBACK FROM MAIN",
+            "      {",
+            '        "type": "field",',
+            '        "inboundTag": ["from_balancer_main"],',
+            '        "balancerTag": "balancer_reserv",',
+            '        "network": "tcp,udp"',
+            "      }",
+            "    ],",
+            '    "balancers": [',
+            "      // Level 1: main balancer",
+            "      {",
+            '        "tag": "balancer_main",',
+            '        "selector": ["my_proxy"],',
+            '        "strategy": {"type": "leastPing"},',
+            '        "fallbackTag": "loopback_to_reserv"',
+            "      },",
+            "      // Level 2: reserve balancer",
+            "      {",
+            '        "tag": "balancer_reserv",',
+            '        "selector": ["reserve_proxy"],',
+            '        "strategy": {"type": "leastPing"},',
+            '        "fallbackTag": "loopback_to_white"',
+            "      },",
+            "      // Level 3: white-list balancer",
+            "      {",
+            '        "tag": "balancer_white_list",',
+            '        "selector": ["white_list"],',
+            '        "strategy": {"type": "leastPing"}',
+            "      }",
+            "    ]",
+            "  }",
+            "}",
+            "",
+        ]
+    )
+    expected_before = json.loads(subs._strip_jsonc_comments(routing_jsonc))
+    (xray_dir / "05_routing.json").write_text(routing_jsonc, encoding="utf-8")
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "commented-main-routing",
+            "tag": "cdn.pecan.run",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_auto_rule": True,
+            "routing_mode": "safe-fallback",
+        },
+    )
+    state = subs.load_subscription_state(str(ui_state_dir))
+    state["subscriptions"][0]["next_update_ts"] = 0
+    subs._write_state(str(ui_state_dir), state)
+
+    results = subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert len(results) == 1
+    assert results[0]["ok"] is True
+    assert results[0]["routing_changed"] is True
+
+    final = json.loads((xray_dir / "05_routing.json").read_text(encoding="utf-8"))
+    final_rules = final["routing"]["rules"]
+    final_balancers = {item["tag"]: item for item in final["routing"]["balancers"]}
+
+    for rule in expected_before["routing"]["rules"]:
+        assert any(candidate == rule for candidate in final_rules)
+    assert len(final_rules) == len(expected_before["routing"]["rules"]) + 1
+    assert any(rule.get("ruleTag") == "xk_auto_leastPing" for rule in final_rules)
+
+    assert final["routing"]["domainStrategy"] == "IPIfNonMatch"
+    assert final_balancers["balancer_main"]["selector"] == ["my_proxy"]
+    assert final_balancers["balancer_reserv"]["selector"] == ["reserve_proxy"]
+    assert final_balancers["balancer_white_list"]["selector"] == ["white_list"]
+    assert final_balancers["proxy"]["selector"] == ["cdn.pecan.run"]
+
+    raw_after = (jsonc_dir / "05_routing.jsonc").read_text(encoding="utf-8")
+    assert "Generated by XKeen UI subscriptions" in raw_after
+    assert "LOCAL NETWORKS AND RESERVES" in raw_after
+    assert "Level 2: reserve balancer" in raw_after
+    json.loads(subs._strip_jsonc_comments(raw_after))
+
+
+def test_due_refresh_does_not_overwrite_invalid_routing_file(tmp_path: Path, monkeypatch):
+    from services import xray_subscriptions as subs
+
+    ui_state_dir = tmp_path / "state"
+    xray_dir = tmp_path / "xray" / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    ui_state_dir.mkdir()
+    xray_dir.mkdir(parents=True)
+    jsonc_dir.mkdir()
+
+    monkeypatch.setattr(subs, "jsonc_path_for", lambda path: str(jsonc_dir / (Path(path).name + "c")))
+    monkeypatch.setattr(subs, "ensure_xray_jsonc_dir", lambda: None)
+    monkeypatch.setattr(
+        subs,
+        "fetch_subscription_body",
+        lambda _url: (_vless_transport("WS Germany", "ws", host="ws.example.com"), {}),
+    )
+
+    (xray_dir / "04_outbounds.json").write_text(
+        json.dumps({"outbounds": [{"tag": "direct", "protocol": "freedom"}]}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    broken_routing = '{\n  "routing": {\n    "rules": [\n'
+    (xray_dir / "05_routing.json").write_text(broken_routing, encoding="utf-8")
+
+    subs.upsert_subscription(
+        str(ui_state_dir),
+        {
+            "id": "invalid-routing",
+            "tag": "cdn.pecan.run",
+            "url": "https://example.com/sub",
+            "enabled": True,
+            "ping_enabled": True,
+            "routing_auto_rule": True,
+        },
+    )
+    state = subs.load_subscription_state(str(ui_state_dir))
+    state["subscriptions"][0]["next_update_ts"] = 0
+    subs._write_state(str(ui_state_dir), state)
+
+    results = subs.refresh_due_subscriptions(
+        str(ui_state_dir),
+        xray_configs_dir=str(xray_dir),
+        snapshot=lambda _path: None,
+        restart_xkeen=None,
+        restart=False,
+    )
+
+    assert len(results) == 1
+    assert results[0]["ok"] is False
+    assert "05_routing.json is not valid JSON/JSONC" in results[0]["error"]
+    assert (xray_dir / "05_routing.json").read_text(encoding="utf-8") == broken_routing
+    assert not (jsonc_dir / "05_routing.jsonc").exists()
+
+
 def test_refresh_subscription_strict_mode_migrates_and_reverts_vless_rules(tmp_path: Path, monkeypatch):
     from services import xray_subscriptions as subs
 

@@ -170,9 +170,44 @@ def _read_json_file(path: str, default: Any) -> Any:
         text = load_text(path, default=None)
         if text is None:
             return default
-        return json.loads(text)
     except Exception:
         return default
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    try:
+        parsed = _load_jsonc_text(text)
+    except Exception:
+        parsed = None
+    return default if parsed is None else parsed
+
+
+def _read_managed_json_file(path: str, default: Any) -> Any:
+    try:
+        text = load_text(path, default=None)
+    except Exception as exc:
+        raise RuntimeError(f"{os.path.basename(path) or path} is not readable") from exc
+    if text is None:
+        return default
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    try:
+        parsed = _load_jsonc_text(text)
+    except Exception:
+        parsed = None
+    if parsed is None:
+        raise ValueError(f"{os.path.basename(path) or path} is not valid JSON/JSONC")
+    return parsed
+
+
+def _read_routing_file_for_update(path: str) -> Dict[str, Any]:
+    obj = _read_managed_json_file(path, {})
+    if not isinstance(obj, dict):
+        raise ValueError(f"{os.path.basename(path) or path} must be a JSON object")
+    return obj
 
 
 def _write_state(ui_state_dir: str, state: Dict[str, Any]) -> None:
@@ -2663,9 +2698,15 @@ def _write_jsonc_sidecar_if_changed(
                 old = f.read()
         except Exception:
             old = ""
-        if preserve_existing_comments and old:
-            old_obj = _load_jsonc_text(old)
-            comments = _collect_jsonc_comments_by_semantic_key(old, old_obj if old_obj is not None else obj)
+        comment_source = old
+        if preserve_existing_comments and not comment_source:
+            try:
+                comment_source = load_text(main_path, default="") or ""
+            except Exception:
+                comment_source = ""
+        if preserve_existing_comments and comment_source:
+            old_obj = _load_jsonc_text(comment_source)
+            comments = _collect_jsonc_comments_by_semantic_key(comment_source, old_obj if old_obj is not None else obj)
             text = _render_jsonc_with_comments(obj, comments, header=header)
         else:
             text = str(header or "")
@@ -2682,8 +2723,10 @@ def _write_jsonc_sidecar_if_changed(
         return False
 
 
-def _load_observatory(path: str) -> Dict[str, Any]:
-    obj = _read_json_file(path, {})
+def _load_observatory(path: str, *, strict_existing: bool = False) -> Dict[str, Any]:
+    obj = _read_managed_json_file(path, {}) if strict_existing else _read_json_file(path, {})
+    if strict_existing and not isinstance(obj, dict):
+        raise ValueError(f"{os.path.basename(path) or path} must be a JSON object")
     return obj if isinstance(obj, dict) else {}
 
 
@@ -3396,7 +3439,6 @@ def _sync_subscription_only_base_outbounds(
 
     next_obj = copy.deepcopy(obj)
     next_obj["outbounds"] = next_outbounds
-    main_changed = _write_json_if_changed(path, next_obj, snapshot=snapshot)
     raw_changed = _write_jsonc_sidecar_if_changed(
         path,
         next_obj,
@@ -3404,6 +3446,7 @@ def _sync_subscription_only_base_outbounds(
         snapshot=snapshot,
         preserve_existing_comments=True,
     )
+    main_changed = _write_json_if_changed(path, next_obj, snapshot=snapshot)
     return {"changed": bool(disabled_changed or main_changed or raw_changed), "removed": removed}
 
 
@@ -3655,7 +3698,7 @@ def sync_subscription_routing(
     subscription_only = mode == ROUTING_MODE_SUBSCRIPTION_ONLY
 
     routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
-    cfg, routing, normalized_model = _ensure_routing_model(_read_json_file(routing_path, {}))
+    cfg, routing, normalized_model = _ensure_routing_model(_read_routing_file_for_update(routing_path))
     balancer_tag = _choose_auto_balancer_tag(routing)
     subscription_only_excluded_tags = _subscription_only_excluded_runtime_tags(xray_configs_dir, add) if subscription_only else []
     balancer = _find_balancer_by_tag(routing.get("balancers", []), balancer_tag)
@@ -3743,7 +3786,6 @@ def sync_subscription_routing(
         }
 
     _prune_empty_routing_collections(routing)
-    main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
     raw_changed = _write_jsonc_sidecar_if_changed(
         routing_path,
         cfg,
@@ -3751,6 +3793,7 @@ def sync_subscription_routing(
         snapshot=snapshot,
         preserve_existing_comments=True,
     )
+    main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
     return {
         "changed": bool(main_changed or raw_changed),
         "selector": selector,
@@ -3896,7 +3939,7 @@ def sync_subscription_runtime_plan_delta(
     preserved_tags = _preserved_balancer_tags(xray_configs_dir)
 
     routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
-    cfg, routing, normalized_model = _ensure_routing_model(_read_json_file(routing_path, {}))
+    cfg, routing, normalized_model = _ensure_routing_model(_read_routing_file_for_update(routing_path))
     changed = bool(normalized_model)
 
     scenario_skipped_auto_terms = _scenario_owned_auto_terms(routing, next_auto_terms)
@@ -4050,7 +4093,6 @@ def sync_subscription_runtime_plan_delta(
             else ""
         )
         _prune_empty_routing_collections(routing)
-        main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
         raw_changed = _write_jsonc_sidecar_if_changed(
             routing_path,
             cfg,
@@ -4058,6 +4100,7 @@ def sync_subscription_runtime_plan_delta(
             snapshot=snapshot,
             preserve_existing_comments=True,
         )
+        main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
         routing_changed = bool(main_changed or raw_changed)
 
     return {
@@ -4116,7 +4159,7 @@ def sync_subscription_routing_plan(
         }
 
     routing_path = _config_fragment_path(xray_configs_dir, ROUTING_FILE)
-    cfg, routing, normalized_model = _ensure_routing_model(_read_json_file(routing_path, {}))
+    cfg, routing, normalized_model = _ensure_routing_model(_read_routing_file_for_update(routing_path))
     changed = bool(normalized_model)
     selector: List[str] = []
     balancer_tag = ""
@@ -4214,7 +4257,6 @@ def sync_subscription_routing_plan(
         }
 
     _prune_empty_routing_collections(routing)
-    main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
     raw_changed = _write_jsonc_sidecar_if_changed(
         routing_path,
         cfg,
@@ -4222,6 +4264,7 @@ def sync_subscription_routing_plan(
         snapshot=snapshot,
         preserve_existing_comments=True,
     )
+    main_changed = _write_json_if_changed(routing_path, cfg, snapshot=snapshot)
     return {
         "changed": bool(main_changed or raw_changed),
         "selector": selector,
@@ -4312,7 +4355,7 @@ def sync_observatory_subjects(
         return False
 
     dst_json = os.path.join(str(xray_configs_dir or ""), "07_observatory.json")
-    cfg = _load_observatory(dst_json)
+    cfg = _load_observatory(dst_json, strict_existing=True)
     obs = cfg.get("observatory")
     created_observatory = not isinstance(obs, dict)
     if not isinstance(obs, dict):
@@ -4342,7 +4385,6 @@ def sync_observatory_subjects(
         obs.setdefault("enableConcurrency", True)
     cfg["observatory"] = obs
 
-    changed = _write_json_if_changed(dst_json, cfg, snapshot=snapshot)
     observatory_header = (
         "// Generated by XKeen UI subscriptions (observatory subjects)"
         if (bool(add) if managed_active is None else bool(managed_active))
@@ -4355,6 +4397,7 @@ def sync_observatory_subjects(
         snapshot=snapshot,
         preserve_existing_comments=True,
     )
+    changed = _write_json_if_changed(dst_json, cfg, snapshot=snapshot)
     changed = bool(changed or jsonc_changed)
 
     return changed
