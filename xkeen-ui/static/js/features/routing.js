@@ -4546,11 +4546,6 @@ function closeHelp() {
     }, `Применить сценарий: ${modeLabel}?`);
     if (!ok) return false;
 
-    if (hasUserComments(raw)) {
-      const commentsOk = await confirmCommentsLoss('Сценарий маршрутизации');
-      if (!commentsOk) return false;
-    }
-
     let result = null;
     try {
       result = applyRoutingScenarioText(raw, mode);
@@ -4559,6 +4554,11 @@ function closeHelp() {
       setRoutingScenarioStatus(msg, 'error');
       setError(msg);
       return false;
+    }
+
+    if (hasUserComments(raw) && (!result || result.preserved !== true)) {
+      const commentsOk = await confirmCommentsLoss('Сценарий маршрутизации');
+      if (!commentsOk) return false;
     }
 
     replaceEditorText(result.text, {

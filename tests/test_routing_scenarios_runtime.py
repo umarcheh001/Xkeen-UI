@@ -314,6 +314,81 @@ console.log(JSON.stringify({
     assert [balancer["tag"] for balancer in payload["balancers"]] == ["proxy"]
 
 
+def test_routing_scenario_apply_preserves_user_jsonc_comments():
+    payload = _run_node_json(
+        """
+import {
+  ROUTING_SCENARIO_MOBILE_WHITELIST,
+  ROUTING_SCENARIO_NORMAL,
+  applyRoutingScenarioText,
+  parseRoutingScenarioText,
+} from './xkeen-ui/static/js/ui/routing_scenarios.js';
+
+const source = `{
+  // user routing header
+  "routing": {
+    // user domain strategy note
+    "domainStrategy": "IPIfNonMatch",
+    // user rules section note
+    "rules": [
+      // user manual rule note
+      {
+        "type": "field",
+        "ruleTag": "manual_keep",
+        "outboundTag": "direct",
+        "domain": ["domain:example.org"]
+      }
+    ],
+    // user balancers section note
+    "balancers": [
+      // user manual balancer note
+      {
+        "tag": "manual_proxy",
+        "selector": ["manual_proxy"],
+        "strategy": {"type": "leastPing"},
+        "fallbackTag": "direct"
+      }
+    ]
+  }
+}
+`;
+
+const mobile = applyRoutingScenarioText(source, ROUTING_SCENARIO_MOBILE_WHITELIST);
+const normal = applyRoutingScenarioText(mobile.text, ROUTING_SCENARIO_NORMAL);
+const mobileParsed = parseRoutingScenarioText(mobile.text);
+const normalParsed = parseRoutingScenarioText(normal.text);
+
+console.log(JSON.stringify({
+  mobilePreserved: mobile.preserved,
+  normalPreserved: normal.preserved,
+  mobileHasHeader: mobile.text.includes('// user routing header'),
+  mobileHasRuleComment: mobile.text.includes('// user manual rule note'),
+  mobileHasBalancerComment: mobile.text.includes('// user manual balancer note'),
+  mobileManagedRuleCount: mobileParsed.routing.rules.filter((rule) => String(rule.ruleTag || '').startsWith('xk_scenario_mobile_whitelist_')).length,
+  normalHasHeader: normal.text.includes('// user routing header'),
+  normalHasRuleComment: normal.text.includes('// user manual rule note'),
+  normalHasBalancerComment: normal.text.includes('// user manual balancer note'),
+  normalHasManagedScenarioText: normal.text.includes('xk_scenario_mobile_whitelist_'),
+  normalRuleTags: normalParsed.routing.rules.map((rule) => rule.ruleTag || ''),
+  normalBalancerTags: normalParsed.routing.balancers.map((item) => item.tag || ''),
+}));
+"""
+    )
+
+    assert payload["mobilePreserved"] is True
+    assert payload["normalPreserved"] is True
+    assert payload["mobileHasHeader"] is True
+    assert payload["mobileHasRuleComment"] is True
+    assert payload["mobileHasBalancerComment"] is True
+    assert payload["mobileManagedRuleCount"] == 12
+    assert payload["normalHasHeader"] is True
+    assert payload["normalHasRuleComment"] is True
+    assert payload["normalHasBalancerComment"] is True
+    assert payload["normalHasManagedScenarioText"] is False
+    assert payload["normalRuleTags"] == ["manual_keep"]
+    assert payload["normalBalancerTags"] == ["manual_proxy"]
+
+
 def test_routing_scenario_switcher_is_wired_into_panel():
     template = (ROOT / "xkeen-ui/templates/panel.html").read_text(encoding="utf-8")
     routing_src = (ROOT / "xkeen-ui/static/js/features/routing.js").read_text(encoding="utf-8")
@@ -344,6 +419,7 @@ def test_routing_scenario_switcher_is_wired_into_panel():
     assert "ROUTING_SCENARIO_MAIN_BALANCER_TAG" in routing_src
     assert "ROUTING_SCENARIO_RESERVE_BALANCER_TAG" in routing_src
     assert "ROUTING_SCENARIO_WHITE_LIST_BALANCER_TAG" in routing_src
+    assert "result.preserved !== true" in routing_src
     assert "xkeen:routing-editor-content" in routing_src
     assert "function applyRoutingScenarioCardSetting(settingsSnapshot)" in routing_src
     assert "xk.routing.scenario.visibility.fix.v1" in routing_src

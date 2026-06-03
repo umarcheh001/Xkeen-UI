@@ -1,4 +1,5 @@
 import { stripJsonComments } from '../util/strip_json_comments.js';
+import { getRoutingJsoncPreserveApi } from '../features/routing_jsonc_preserve.js';
 
 export const ROUTING_SCENARIO_NORMAL = 'normal';
 export const ROUTING_SCENARIO_MOBILE_WHITELIST = 'mobile-whitelist';
@@ -442,6 +443,90 @@ function isScenarioTerminalRule(rule) {
     || tag === `${ROUTING_SCENARIO_RULE_PREFIX}fallback_from_reserve`;
 }
 
+function getRoutingJsoncPreserve() {
+  try { return getRoutingJsoncPreserveApi(); } catch (e) { return null; }
+}
+
+function requireJsoncPreserveFns(jp) {
+  const needFns = [
+    'locateRoutingObject',
+    'locateArrayByKey',
+    'splitJsoncArrayElements',
+    'renderRulesArray',
+    'renderBalancersArray',
+    'renderObjectArrayLiteral',
+    'detectObjectIndents',
+    'insertKeyValueInObject',
+    'applyDomainStrategy',
+  ];
+  for (let i = 0; i < needFns.length; i += 1) {
+    const fn = needFns[i];
+    if (!jp || typeof jp[fn] !== 'function') return false;
+  }
+  return true;
+}
+
+function routingPatchModel(root) {
+  const target = routingTarget(root);
+  const routing = target.routing;
+  return {
+    rules: Array.isArray(routing.rules) ? routing.rules : [],
+    balancers: Array.isArray(routing.balancers) ? routing.balancers : [],
+    domainStrategy: cleanScenarioString(routing.domainStrategy || ''),
+  };
+}
+
+function tryApplyRoutingScenarioJsoncText(text, nextRoot) {
+  const before = String(text ?? '');
+  const jp = getRoutingJsoncPreserve();
+  if (!requireJsoncPreserveFns(jp)) return null;
+
+  const model = routingPatchModel(nextRoot);
+  let nextText = before;
+  let routingRange = jp.locateRoutingObject(nextText);
+  if (!routingRange) return null;
+
+  let rulesRange = jp.locateArrayByKey(nextText, routingRange, 'rules');
+  if (rulesRange) {
+    const segments = jp.splitJsoncArrayElements(nextText, rulesRange) || [];
+    const rendered = jp.renderRulesArray(nextText, rulesRange, segments, model.rules);
+    if (!rendered || !rendered.ok || typeof rendered.text !== 'string') return null;
+    nextText = nextText.slice(0, rulesRange.start) + rendered.text + nextText.slice(rulesRange.end);
+  } else {
+    const ind = jp.detectObjectIndents(nextText, routingRange);
+    if (!ind) return null;
+    const arrText = jp.renderObjectArrayLiteral(ind.childIndent, String(ind.childIndent || '') + '  ', model.rules);
+    const inserted = jp.insertKeyValueInObject(nextText, routingRange, 'rules', arrText);
+    if (!inserted || !inserted.ok || typeof inserted.text !== 'string') return null;
+    nextText = inserted.text;
+  }
+
+  routingRange = jp.locateRoutingObject(nextText);
+  if (!routingRange) return null;
+
+  let balancersRange = jp.locateArrayByKey(nextText, routingRange, 'balancers');
+  if (balancersRange) {
+    const segments = jp.splitJsoncArrayElements(nextText, balancersRange) || [];
+    const rendered = jp.renderBalancersArray(nextText, balancersRange, segments, model.balancers);
+    if (!rendered || !rendered.ok || typeof rendered.text !== 'string') return null;
+    nextText = nextText.slice(0, balancersRange.start) + rendered.text + nextText.slice(balancersRange.end);
+  } else if (model.balancers.length) {
+    const ind = jp.detectObjectIndents(nextText, routingRange);
+    if (!ind) return null;
+    const arrText = jp.renderObjectArrayLiteral(ind.childIndent, String(ind.childIndent || '') + '  ', model.balancers);
+    const inserted = jp.insertKeyValueInObject(nextText, routingRange, 'balancers', arrText);
+    if (!inserted || !inserted.ok || typeof inserted.text !== 'string') return null;
+    nextText = inserted.text;
+  }
+
+  routingRange = jp.locateRoutingObject(nextText);
+  if (!routingRange) return null;
+
+  const ds = jp.applyDomainStrategy(nextText, routingRange, model.domainStrategy);
+  if (!ds || !ds.ok || typeof ds.text !== 'string') return null;
+  return ds.text;
+}
+
 export function parseRoutingScenarioText(text) {
   const cleaned = stripJsonComments(String(text ?? ''));
   return JSON.parse(cleaned || '{}');
@@ -500,11 +585,14 @@ export function applyRoutingScenarioText(text, mode) {
   const before = String(text ?? '');
   const parsed = parseRoutingScenarioText(before);
   const next = applyRoutingScenarioToObject(parsed, mode);
-  const nextText = JSON.stringify(next, null, 2) + '\n';
+  const preservedText = tryApplyRoutingScenarioJsoncText(before, next);
+  const preserved = typeof preservedText === 'string';
+  const nextText = preserved ? preservedText : JSON.stringify(next, null, 2) + '\n';
   return {
     mode: normalizeMode(mode),
     text: nextText,
     changed: nextText !== before,
+    preserved,
   };
 }
 
