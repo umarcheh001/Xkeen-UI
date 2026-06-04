@@ -200,6 +200,99 @@ def test_run_xray_preflight_blocks_dangling_outbound_reference_before_xray(tmp_p
     assert calls == []
 
 
+def test_run_xray_preflight_accepts_vless_reverse_client_outbound_tag(tmp_path, monkeypatch):
+    confdir = tmp_path / "configs"
+    confdir.mkdir()
+    (confdir / "03_inbounds.json").write_text(
+        json.dumps(
+            {
+                "inbounds": [
+                    {
+                        "tag": "vless-in",
+                        "protocol": "vless",
+                        "settings": {
+                            "clients": [
+                                {
+                                    "id": "11111111-1111-4111-8111-111111111111",
+                                    "reverse": {"tag": "reverse"},
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (confdir / "04_outbounds.json").write_text(
+        json.dumps({"outbounds": [{"tag": "direct", "protocol": "freedom"}]}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    calls = []
+
+    def fake_run(cmd, capture_output, text, timeout, check, **_kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(routing_config, "ensure_xray_dat_assets", lambda **_kwargs: None)
+    monkeypatch.setattr(routing_config.subprocess, "run", fake_run)
+
+    result = routing_config._run_xray_preflight(
+        xray_configs_dir_real=str(confdir),
+        sel_main=str(confdir / "10_routing_reverse.json"),
+        obj={"routing": {"rules": [{"type": "field", "outboundTag": "reverse"}]}},
+    )
+
+    assert result["ok"] is True
+    assert result["phase"] == "xray_test"
+    assert calls
+
+
+def test_run_xray_preflight_accepts_legacy_reverse_portal_outbound_tag(tmp_path, monkeypatch):
+    confdir = tmp_path / "configs"
+    confdir.mkdir()
+    (confdir / "04_outbounds.json").write_text(
+        json.dumps({"outbounds": [{"tag": "direct", "protocol": "freedom"}]}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    (confdir / "09_reverse.json").write_text(
+        json.dumps(
+            {
+                "reverse": {
+                    "portals": [
+                        {"tag": "portal", "domain": "reverse-proxy.xray.internal"}
+                    ]
+                }
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    calls = []
+
+    def fake_run(cmd, capture_output, text, timeout, check, **_kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(routing_config, "ensure_xray_dat_assets", lambda **_kwargs: None)
+    monkeypatch.setattr(routing_config.subprocess, "run", fake_run)
+
+    result = routing_config._run_xray_preflight(
+        xray_configs_dir_real=str(confdir),
+        sel_main=str(confdir / "10_routing_reverse.json"),
+        obj={"routing": {"rules": [{"type": "field", "outboundTag": "portal"}]}},
+    )
+
+    assert result["ok"] is True
+    assert result["phase"] == "xray_test"
+    assert calls
+
+
 def test_routing_save_logs_failed_xray_preflight_with_modal_ref(tmp_path, monkeypatch):
     seen: list[tuple[bool, str, dict[str, object]]] = []
     saved: list[tuple[str, dict[str, object], str]] = []

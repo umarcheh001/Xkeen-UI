@@ -134,6 +134,43 @@ def _format_available_tags(tags: set[str], limit: int = 6) -> str:
     return ', '.join(shown)
 
 
+def _collect_reverse_outbound_tags(obj: Any) -> set[str]:
+    tags: set[str] = set()
+    if not isinstance(obj, (dict, list)):
+        return tags
+
+    reverse = obj.get('reverse') if isinstance(obj, dict) else None
+    portals = reverse.get('portals') if isinstance(reverse, dict) else None
+    if isinstance(portals, list):
+        for portal in portals:
+            if not isinstance(portal, dict):
+                continue
+            tag = _safe_tag(portal.get('tag'))
+            if tag:
+                tags.add(tag)
+
+    inbounds = obj.get('inbounds') if isinstance(obj, dict) else obj if isinstance(obj, list) else None
+    if isinstance(inbounds, list):
+        for inbound in inbounds:
+            if not isinstance(inbound, dict):
+                continue
+            settings = inbound.get('settings')
+            clients = settings.get('clients') if isinstance(settings, dict) else None
+            if not isinstance(clients, list):
+                continue
+            for client in clients:
+                if not isinstance(client, dict):
+                    continue
+                reverse = client.get('reverse')
+                if not isinstance(reverse, dict):
+                    continue
+                tag = _safe_tag(reverse.get('tag'))
+                if tag:
+                    tags.add(tag)
+
+    return tags
+
+
 def _validate_routing_outbound_refs(confdir: str) -> Optional[Dict[str, Any]]:
     loaded = _iter_conf_json_objects(confdir)
     if loaded is None:
@@ -145,6 +182,7 @@ def _validate_routing_outbound_refs(confdir: str) -> Optional[Dict[str, Any]]:
             continue
         outbounds = obj.get('outbounds')
         if not isinstance(outbounds, list):
+            outbound_tags.update(_collect_reverse_outbound_tags(obj))
             continue
         for outbound in outbounds:
             if not isinstance(outbound, dict):
@@ -152,6 +190,7 @@ def _validate_routing_outbound_refs(confdir: str) -> Optional[Dict[str, Any]]:
             tag = _safe_tag(outbound.get('tag'))
             if tag:
                 outbound_tags.add(tag)
+        outbound_tags.update(_collect_reverse_outbound_tags(obj))
 
     for name, obj in loaded:
         if not isinstance(obj, dict):

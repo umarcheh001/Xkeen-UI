@@ -156,6 +156,71 @@ console.log(JSON.stringify(result.map((item) => ({
     assert any("dup" in message for message in messages)
 
 
+def test_xray_semantic_validation_accepts_reverse_proxy_virtual_tags():
+    script = """
+import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';
+
+const result = validateXrayRoutingSemantics({
+  inbounds: [
+    {
+      tag: 'public-vless',
+      protocol: 'vless',
+      settings: {
+        clients: [
+          {
+            id: '11111111-1111-4111-8111-111111111111',
+            reverse: { tag: 'reverse-out' }
+          }
+        ]
+      }
+    }
+  ],
+  outbounds: [
+    {
+      tag: 'local-service',
+      protocol: 'freedom'
+    },
+    {
+      tag: 'bridge-out',
+      protocol: 'vless',
+      settings: {
+        reverse: { tag: 'reverse-in' }
+      }
+    }
+  ],
+  reverse: {
+    bridges: [
+      { tag: 'legacy-bridge', domain: 'reverse-proxy.xray.internal' }
+    ],
+    portals: [
+      { tag: 'legacy-portal', domain: 'reverse-proxy.xray.internal' }
+    ]
+  },
+  routing: {
+    rules: [
+      { inboundTag: ['public-vless'], outboundTag: 'reverse-out' },
+      { inboundTag: ['legacy-bridge'], outboundTag: 'legacy-portal' },
+      { inboundTag: ['reverse-in'], outboundTag: 'local-service' }
+    ]
+  }
+});
+
+console.log(JSON.stringify(result.map((item) => ({
+  pointer: item.pointer || '',
+  code: item.code || '',
+  message: item.message || '',
+}))));
+"""
+
+    payload = _run_node_json(script)
+    missing = [
+        item for item in payload
+        if str(item["code"]) in {"outbound-tag-missing", "inbound-tag-missing"}
+    ]
+
+    assert missing == []
+
+
 def test_xray_semantic_validation_accepts_balancer_fallback_generated_prefix():
     script = """
 import { validateXrayRoutingSemantics } from './xkeen-ui/static/js/ui/schema_semantic_validation.js';

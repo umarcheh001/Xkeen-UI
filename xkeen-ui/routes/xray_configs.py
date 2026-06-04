@@ -377,10 +377,67 @@ def create_xray_configs_blueprint(
             tags.append(tag)
         return tags
 
+    def _reverse_tags_from_config(cfg: Any, *, side: str) -> list[str]:
+        root = cfg if isinstance(cfg, dict) else {}
+        reverse = root.get("reverse") if isinstance(root.get("reverse"), dict) else {}
+        key = "portals" if side == "outbound" else "bridges"
+        items = reverse.get(key) if isinstance(reverse, dict) else []
+        tags: list[str] = []
+        seen: set[str] = set()
+        for item in items if isinstance(items, list) else []:
+            if not isinstance(item, dict):
+                continue
+            tag = str(item.get("tag") or "").strip()
+            if not tag or tag in seen:
+                continue
+            seen.add(tag)
+            tags.append(tag)
+        return tags
+
+    def _vless_reverse_outbound_tags_from_config(cfg: Any) -> list[str]:
+        raw = cfg.get("inbounds") if isinstance(cfg, dict) else cfg if isinstance(cfg, list) else []
+        tags: list[str] = []
+        seen: set[str] = set()
+        for inbound in raw if isinstance(raw, list) else []:
+            if not isinstance(inbound, dict):
+                continue
+            settings = inbound.get("settings")
+            clients = settings.get("clients") if isinstance(settings, dict) else []
+            for client in clients if isinstance(clients, list) else []:
+                if not isinstance(client, dict):
+                    continue
+                reverse = client.get("reverse")
+                tag = str((reverse or {}).get("tag") if isinstance(reverse, dict) else "").strip()
+                if not tag or tag in seen:
+                    continue
+                seen.add(tag)
+                tags.append(tag)
+        return tags
+
+    def _vless_reverse_inbound_tags_from_config(cfg: Any) -> list[str]:
+        raw = cfg.get("outbounds") if isinstance(cfg, dict) else cfg if isinstance(cfg, list) else []
+        tags: list[str] = []
+        seen: set[str] = set()
+        for outbound in raw if isinstance(raw, list) else []:
+            if not isinstance(outbound, dict):
+                continue
+            settings = outbound.get("settings")
+            reverse = settings.get("reverse") if isinstance(settings, dict) else None
+            tag = str((reverse or {}).get("tag") if isinstance(reverse, dict) else "").strip()
+            if not tag or tag in seen:
+                continue
+            seen.add(tag)
+            tags.append(tag)
+        return tags
+
     def _xray_named_tags_from_config(cfg: Any) -> set[str]:
         tags: set[str] = set()
         tags.update(_outbound_tags_from_config(cfg, proxy_only=False))
         tags.update(_inbound_tags_from_config(cfg))
+        tags.update(_reverse_tags_from_config(cfg, side="outbound"))
+        tags.update(_reverse_tags_from_config(cfg, side="inbound"))
+        tags.update(_vless_reverse_outbound_tags_from_config(cfg))
+        tags.update(_vless_reverse_inbound_tags_from_config(cfg))
         tags.update(_routing_balancer_tags_from_config(cfg))
         return {tag for tag in tags if tag}
 
@@ -678,6 +735,79 @@ def create_xray_configs_blueprint(
 
         return tags
 
+    def _append_unique_tag(tags: list[str], seen: set[str], value: Any) -> None:
+        if not isinstance(value, str):
+            return
+        tag = value.strip()
+        if not tag or tag in seen:
+            return
+        seen.add(tag)
+        tags.append(tag)
+
+    def _load_xray_fragment_obj(sel_path: str) -> Any:
+        chosen_path, _raw_path, _raw_exists = _choose_raw_or_main(sel_path)
+        text = _read_text_silent(chosen_path)
+        if text.strip():
+            cleaned = strip_json_comments_text(text)
+            return json.loads(cleaned) if cleaned.strip() else None
+        return load_json(sel_path, default=None)
+
+    def _iter_semantic_tag_context_paths(*, all_fragments: bool) -> list[str]:
+        paths: list[str] = []
+        seen: set[str] = set()
+
+        def _append_path(path: str) -> None:
+            try:
+                value = os.path.realpath(str(path or ""))
+            except Exception:
+                value = str(path or "")
+            if not value or value in seen:
+                return
+            seen.add(value)
+            paths.append(value)
+
+        for path in (INBOUNDS_FILE, OUTBOUNDS_FILE, ROUTING_FILE):
+            _append_path(path)
+
+        if all_fragments:
+            for kind, default_path in (
+                ("inbounds", INBOUNDS_FILE),
+                ("outbounds", OUTBOUNDS_FILE),
+                ("routing", ROUTING_FILE),
+            ):
+                try:
+                    fragments = list_xray_fragments(kind)
+                except Exception:
+                    fragments = []
+                for item in fragments:
+                    name = str((item or {}).get("name") or "")
+                    if not name:
+                        continue
+                    try:
+                        sel_path = resolve_xray_fragment_file(name, kind=kind, default_path=default_path)
+                        _append_path(_normalize_main_json_path(sel_path))
+                    except Exception:
+                        continue
+
+        return paths
+
+    def _collect_reverse_semantic_tags(*, side: str, all_fragments: bool) -> list[str]:
+        tags: list[str] = []
+        seen: set[str] = set()
+        for path in _iter_semantic_tag_context_paths(all_fragments=all_fragments):
+            try:
+                obj = _load_xray_fragment_obj(path)
+            except Exception:
+                continue
+            values = _reverse_tags_from_config(obj, side=side)
+            if side == "outbound":
+                values += _vless_reverse_outbound_tags_from_config(obj)
+            else:
+                values += _vless_reverse_inbound_tags_from_config(obj)
+            for tag in values:
+                _append_unique_tag(tags, seen, tag)
+        return tags
+
     def _collect_loopback_inbound_tags_from_outbounds(*, default_path: str, all_fragments: bool) -> list[str]:
         tags: list[str] = []
         seen: set[str] = set()
@@ -966,16 +1096,20 @@ def create_xray_configs_blueprint(
 
     @bp.get("/api/xray/inbound-tags")
     def api_xray_inbound_tags():
+        all_fragments = _is_true_flag(request.args.get("all", None))
         tags = _collect_fragment_tags(
             kind="inbounds",
             tag_field="tag",
             default_path=INBOUNDS_FILE,
-            all_fragments=_is_true_flag(request.args.get("all", None)),
+            all_fragments=all_fragments,
         )
         for tag in _collect_loopback_inbound_tags_from_outbounds(
             default_path=OUTBOUNDS_FILE,
-            all_fragments=_is_true_flag(request.args.get("all", None)),
+            all_fragments=all_fragments,
         ):
+            if tag not in tags:
+                tags.append(tag)
+        for tag in _collect_reverse_semantic_tags(side="inbound", all_fragments=all_fragments):
             if tag not in tags:
                 tags.append(tag)
         return jsonify({"ok": True, "tags": tags}), 200
@@ -1167,12 +1301,16 @@ def create_xray_configs_blueprint(
 
     @bp.get("/api/xray/outbound-tags")
     def api_xray_outbound_tags():
+        all_fragments = _is_true_flag(request.args.get("all", None))
         tags = _collect_fragment_tags(
             kind="outbounds",
             tag_field="tag",
             default_path=OUTBOUNDS_FILE,
-            all_fragments=_is_true_flag(request.args.get("all", None)),
+            all_fragments=all_fragments,
         )
+        for tag in _collect_reverse_semantic_tags(side="outbound", all_fragments=all_fragments):
+            if tag not in tags:
+                tags.append(tag)
         return jsonify({"ok": True, "tags": tags}), 200
 
     # --- API: current outbounds nodes + latency probes ---

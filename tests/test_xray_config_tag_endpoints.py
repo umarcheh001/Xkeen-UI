@@ -157,6 +157,94 @@ def test_xray_outbound_tags_all_collects_tags_across_all_fragments_and_jsonc(tmp
     ]
 
 
+def test_xray_outbound_tags_all_includes_reverse_proxy_virtual_tags(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    configs_dir.mkdir()
+    jsonc_dir.mkdir()
+
+    inbounds_name = "03_inbounds.reverse.json"
+    outbounds_name = "04_outbounds.json"
+    routing_name = "10_routing_reverse.json"
+
+    (configs_dir / inbounds_name).write_text(
+        json.dumps(
+            {
+                "inbounds": [
+                    {
+                        "tag": "vless-in",
+                        "protocol": "vless",
+                        "settings": {
+                            "clients": [
+                                {
+                                    "id": "11111111-1111-4111-8111-111111111111",
+                                    "reverse": {"tag": "reverse-out"},
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / outbounds_name).write_text(
+        json.dumps({"outbounds": [{"tag": "direct", "protocol": "freedom"}]}, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / routing_name).write_text(
+        json.dumps(
+            {
+                "reverse": {
+                    "portals": [
+                        {"tag": "legacy-portal", "domain": "reverse-proxy.xray.internal"}
+                    ]
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def _list_fragments(kind: str):
+        if kind == "inbounds":
+            return [{"name": inbounds_name}]
+        if kind == "outbounds":
+            return [{"name": outbounds_name}]
+        if kind == "routing":
+            return [{"name": routing_name}]
+        return []
+
+    monkeypatch.setattr(xray_configs_mod, "list_xray_fragments", _list_fragments)
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(configs_dir / (file_arg or Path(default_path).name)),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "jsonc_path_for",
+        lambda main_path: str(jsonc_dir / (Path(main_path).name + "c")),
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.get("/api/xray/outbound-tags?all=1")
+
+    assert response.status_code == 200
+    assert response.get_json()["tags"] == [
+        "direct",
+        "reverse-out",
+        "legacy-portal",
+    ]
+
+
 def test_xray_outbounds_nodes_include_subscription_source_name(tmp_path, monkeypatch):
     configs_dir = tmp_path / "configs"
     configs_dir.mkdir()
@@ -381,6 +469,87 @@ def test_xray_inbound_tags_all_includes_loopback_outbound_inboundtag_refs(tmp_pa
         "tproxy",
         "toSecondVPS",
         "toThirdVPS",
+    ]
+
+
+def test_xray_inbound_tags_all_includes_reverse_proxy_virtual_tags(tmp_path, monkeypatch):
+    configs_dir = tmp_path / "configs"
+    jsonc_dir = tmp_path / "jsonc"
+    configs_dir.mkdir()
+    jsonc_dir.mkdir()
+
+    inbounds_name = "03_inbounds.json"
+    outbounds_name = "04_outbounds.reverse.json"
+    routing_name = "10_routing_reverse.json"
+
+    (configs_dir / inbounds_name).write_text(
+        json.dumps({"inbounds": [{"tag": "redirect", "protocol": "dokodemo-door"}]}, ensure_ascii=False, indent=2)
+        + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / outbounds_name).write_text(
+        json.dumps(
+            {
+                "outbounds": [
+                    {
+                        "tag": "bridge-out",
+                        "protocol": "vless",
+                        "settings": {"reverse": {"tag": "reverse-in"}},
+                    }
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (configs_dir / routing_name).write_text(
+        json.dumps(
+            {
+                "reverse": {
+                    "bridges": [
+                        {"tag": "legacy-bridge", "domain": "reverse-proxy.xray.internal"}
+                    ]
+                }
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def _list_fragments(kind: str):
+        if kind == "inbounds":
+            return [{"name": inbounds_name}]
+        if kind == "outbounds":
+            return [{"name": outbounds_name}]
+        if kind == "routing":
+            return [{"name": routing_name}]
+        return []
+
+    monkeypatch.setattr(xray_configs_mod, "list_xray_fragments", _list_fragments)
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "resolve_xray_fragment_file",
+        lambda file_arg, *, kind, default_path: str(configs_dir / (file_arg or Path(default_path).name)),
+    )
+    monkeypatch.setattr(
+        xray_configs_mod,
+        "jsonc_path_for",
+        lambda main_path: str(jsonc_dir / (Path(main_path).name + "c")),
+    )
+
+    app = _make_app()
+    with app.test_client() as client:
+        response = client.get("/api/xray/inbound-tags?all=1")
+
+    assert response.status_code == 200
+    assert response.get_json()["tags"] == [
+        "redirect",
+        "reverse-in",
+        "legacy-bridge",
     ]
 
 

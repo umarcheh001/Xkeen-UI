@@ -640,6 +640,46 @@ function collectXrayLoopbackInboundTags(list) {
   return uniqueSorted(tags);
 }
 
+function collectXrayLegacyReverseTags(reverse, side) {
+  const tags = [];
+  if (!isPlainObject(reverse)) return tags;
+  const key = side === 'outbound' ? 'portals' : 'bridges';
+  const list = Array.isArray(reverse[key]) ? reverse[key] : [];
+  list.forEach((item) => {
+    if (!isPlainObject(item)) return;
+    const tag = cleanName(item.tag);
+    if (tag) tags.push(tag);
+  });
+  return uniqueSorted(tags);
+}
+
+function collectXrayVlessReverseOutboundTags(inbounds) {
+  const tags = [];
+  (Array.isArray(inbounds) ? inbounds : []).forEach((item) => {
+    if (!isPlainObject(item)) return;
+    const settings = isPlainObject(item.settings) ? item.settings : {};
+    const clients = Array.isArray(settings.clients) ? settings.clients : [];
+    clients.forEach((client) => {
+      if (!isPlainObject(client) || !isPlainObject(client.reverse)) return;
+      const tag = cleanName(client.reverse.tag);
+      if (tag) tags.push(tag);
+    });
+  });
+  return uniqueSorted(tags);
+}
+
+function collectXrayVlessReverseInboundTags(outbounds) {
+  const tags = [];
+  (Array.isArray(outbounds) ? outbounds : []).forEach((item) => {
+    if (!isPlainObject(item)) return;
+    const settings = isPlainObject(item.settings) ? item.settings : {};
+    const reverse = isPlainObject(settings.reverse) ? settings.reverse : null;
+    const tag = cleanName(reverse && reverse.tag);
+    if (tag) tags.push(tag);
+  });
+  return uniqueSorted(tags);
+}
+
 function xrayItemPointer(basePointer, index) {
   const base = cleanName(basePointer);
   return base ? `${base}/${index}` : `/${index}`;
@@ -752,9 +792,14 @@ function collectXrayKnownTags(shape, options, kind) {
     ? ['contextOutbounds', 'context', 'externalOutbounds']
     : ['contextInbounds', 'context', 'externalInbounds'];
   const docTags = kind === 'outbound'
-    ? collectXrayTagsFromArray(shape && shape.outbounds, 'tag')
+    ? collectXrayTagsFromArray(shape && shape.outbounds, 'tag').concat(
+        collectXrayLegacyReverseTags(shape && shape.data && shape.data.reverse, 'outbound'),
+        collectXrayVlessReverseOutboundTags(shape && shape.inbounds),
+      )
     : collectXrayTagsFromArray(shape && shape.inbounds, 'tag').concat(
         collectXrayLoopbackInboundTags(shape && shape.outbounds),
+        collectXrayLegacyReverseTags(shape && shape.data && shape.data.reverse, 'inbound'),
+        collectXrayVlessReverseInboundTags(shape && shape.outbounds),
       );
   const out = [...docTags];
 
