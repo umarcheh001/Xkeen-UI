@@ -29,6 +29,20 @@ def test_install_script_repairs_entware_pip_truststore_failures():
     assert 'repair_python3_pip_package "pip падает при SSL truststore/certifi или модуль pip поврежден"' in text
 
 
+def test_install_script_falls_back_to_trusted_http_pip_mirrors_without_ssl():
+    text = Path("xkeen-ui/install.sh").read_text(encoding="utf-8")
+
+    assert 'PIP_HTTP_FALLBACK_INDEX_DEFAULT="http://mirrors.aliyun.com/pypi/simple/"' in text
+    assert 'PIP_HTTP_EXTRA_INDEX_DEFAULT="http://mirror.yandex.ru/pypi/simple/"' in text
+    assert 'PIP_TRUSTED_HOSTS_DEFAULT="mirrors.aliyun.com mirror.yandex.ru"' in text
+    assert 'python_ssl_available() {' in text
+    assert 'append_pip_index_candidate "${XKEEN_PIP_HTTP_INDEX_URL:-$PIP_HTTP_FALLBACK_INDEX_DEFAULT}"' in text
+    assert 'append_pip_index_candidate "${XKEEN_PIP_HTTP_EXTRA_INDEX_URL:-$PIP_HTTP_EXTRA_INDEX_DEFAULT}"' in text
+    assert 'build_pip_trusted_host_args' in text
+    assert '--trusted-host $HOST' in text
+    assert '$PIP_TRUSTED_HOST_ARGS \\' in text
+
+
 def test_install_script_refreshes_bundled_xray_templates_without_touching_custom_names():
     text = Path("xkeen-ui/install.sh").read_text(encoding="utf-8")
 

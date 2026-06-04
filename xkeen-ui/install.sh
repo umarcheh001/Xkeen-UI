@@ -99,6 +99,9 @@ DEFAULT_PORT=8088
 ALT_PORT=8091
 PIP_PRIMARY_INDEX_DEFAULT="https://pypi.org/simple"
 PIP_FALLBACK_INDEX_DEFAULT="https://mirrors.aliyun.com/pypi/simple/"
+PIP_HTTP_FALLBACK_INDEX_DEFAULT="http://mirrors.aliyun.com/pypi/simple/"
+PIP_HTTP_EXTRA_INDEX_DEFAULT="http://mirror.yandex.ru/pypi/simple/"
+PIP_TRUSTED_HOSTS_DEFAULT="mirrors.aliyun.com mirror.yandex.ru"
 PIP_REPAIR_ATTEMPTED=0
 
 append_pip_index_candidate() {
@@ -116,16 +119,96 @@ append_pip_index_candidate() {
   fi
 }
 
+python_ssl_available() {
+  [ -x "$PYTHON_BIN" ] || return 1
+  "$PYTHON_BIN" -c "import ssl" >/dev/null 2>&1
+}
+
 build_pip_index_candidates() {
   PIP_INDEX_CANDIDATES=""
   append_pip_index_candidate "${XKEEN_PIP_INDEX_URL:-}"
-  append_pip_index_candidate "$PIP_PRIMARY_INDEX_DEFAULT"
-  append_pip_index_candidate "${XKEEN_PIP_FALLBACK_INDEX_URL:-$PIP_FALLBACK_INDEX_DEFAULT}"
+  if python_ssl_available; then
+    append_pip_index_candidate "$PIP_PRIMARY_INDEX_DEFAULT"
+    append_pip_index_candidate "${XKEEN_PIP_FALLBACK_INDEX_URL:-$PIP_FALLBACK_INDEX_DEFAULT}"
+  else
+    append_pip_index_candidate "${XKEEN_PIP_HTTP_INDEX_URL:-$PIP_HTTP_FALLBACK_INDEX_DEFAULT}"
+    append_pip_index_candidate "${XKEEN_PIP_HTTP_EXTRA_INDEX_URL:-$PIP_HTTP_EXTRA_INDEX_DEFAULT}"
+    append_pip_index_candidate "${XKEEN_PIP_FALLBACK_INDEX_URL:-}"
+  fi
+}
+
+append_pip_trusted_host_candidate() {
+  HOST="$1"
+  [ -n "$HOST" ] || return 0
+
+  case "$HOST" in
+    *[!A-Za-z0-9._-]*) return 0 ;;
+  esac
+
+  case " $PIP_TRUSTED_HOST_CANDIDATES " in
+    *" $HOST "*) return 0 ;;
+  esac
+
+  if [ -n "${PIP_TRUSTED_HOST_CANDIDATES:-}" ]; then
+    PIP_TRUSTED_HOST_CANDIDATES="$PIP_TRUSTED_HOST_CANDIDATES $HOST"
+  else
+    PIP_TRUSTED_HOST_CANDIDATES="$HOST"
+  fi
+}
+
+pip_index_host() {
+  URL="$1"
+  case "$URL" in
+    http://*|https://*)
+      HOST="${URL#*://}"
+      HOST="${HOST%%/*}"
+      HOST="${HOST%%:*}"
+      echo "$HOST"
+      ;;
+  esac
+}
+
+build_pip_trusted_host_candidates() {
+  PIP_TRUSTED_HOST_CANDIDATES=""
+  HAS_HTTP_PIP_INDEX=0
+
+  if [ -n "${XKEEN_PIP_TRUSTED_HOSTS:-}" ]; then
+    for HOST in $XKEEN_PIP_TRUSTED_HOSTS; do
+      append_pip_trusted_host_candidate "$HOST"
+    done
+  fi
+
+  for INDEX_URL in $PIP_INDEX_CANDIDATES; do
+    case "$INDEX_URL" in
+      http://*)
+        HAS_HTTP_PIP_INDEX=1
+        append_pip_trusted_host_candidate "$(pip_index_host "$INDEX_URL")"
+        ;;
+    esac
+  done
+
+  if [ "$HAS_HTTP_PIP_INDEX" -eq 1 ]; then
+    for HOST in $PIP_TRUSTED_HOSTS_DEFAULT; do
+      append_pip_trusted_host_candidate "$HOST"
+    done
+  fi
+}
+
+build_pip_trusted_host_args() {
+  build_pip_trusted_host_candidates
+  PIP_TRUSTED_HOST_ARGS=""
+  for HOST in $PIP_TRUSTED_HOST_CANDIDATES; do
+    PIP_TRUSTED_HOST_ARGS="$PIP_TRUSTED_HOST_ARGS --trusted-host $HOST"
+  done
 }
 
 print_pip_index_candidates() {
   build_pip_index_candidates
   echo "[*] pip index fallback order: $PIP_INDEX_CANDIDATES"
+  build_pip_trusted_host_candidates
+  if [ -n "${PIP_TRUSTED_HOST_CANDIDATES:-}" ]; then
+    echo "[*] pip trusted-host fallback: $PIP_TRUSTED_HOST_CANDIDATES"
+  fi
 }
 
 ensure_opkg_bin() {
@@ -203,6 +286,7 @@ pip_install_with_fallback() {
   fi
 
   LAST_STATUS=1
+  build_pip_trusted_host_args
   for INDEX_URL in $PIP_INDEX_CANDIDATES; do
     [ -n "$INDEX_URL" ] || continue
 
@@ -213,6 +297,7 @@ pip_install_with_fallback() {
     if "$PYTHON_BIN" -m pip install \
       --upgrade \
       --index-url "$INDEX_URL" \
+      $PIP_TRUSTED_HOST_ARGS \
       --default-timeout "${XKEEN_PIP_TIMEOUT:-60}" \
       "$@" >"$PIP_LOG" 2>&1; then
       cat "$PIP_LOG"
@@ -231,6 +316,7 @@ pip_install_with_fallback() {
         if "$PYTHON_BIN" -m pip install \
           --upgrade \
           --index-url "$INDEX_URL" \
+          $PIP_TRUSTED_HOST_ARGS \
           --default-timeout "${XKEEN_PIP_TIMEOUT:-60}" \
           "$@" >"$PIP_LOG" 2>&1; then
           cat "$PIP_LOG"
